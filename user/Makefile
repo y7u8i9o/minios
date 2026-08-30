@@ -10,7 +10,7 @@ CRT0   := $(BUILD)/libc/crt0.o
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term compositor panel desktop
+PROGS  := init sh hello edit mint term compositor panel desktop calc
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(patsubst apps/%.c,%,$(wildcard apps/*.c))

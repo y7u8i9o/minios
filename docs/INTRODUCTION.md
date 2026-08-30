@@ -67,12 +67,14 @@ MiniOS is a monolithic x86_64 kernel written in C, booted by the Limine bootload
 
 ### User Space
 
-- Own minimal libc (`libc/`) with stdio, stdlib, string, unistd, fcntl, dirent, sys/wait, sys/stat, errno, assert, ctype, termios, signal and mman headers
+- Own minimal libc (`libc/`) with stdio, stdlib, string, math, unistd, fcntl, dirent, sys/wait, sys/stat, errno, assert, ctype, termios, signal and mman headers
+- User-space scalar libm for float, double and x87 long double, hexadecimal and decimal conversion, floating-environment control, printf floating formatting, and an SSE2 `f32x4`/`f64x2` vector API with vectorized array operations
 - Shell with quoting, environment variables, background jobs, pipes and redirection
 - Coreutils: `ls`, `cat`, `echo`, `mkdir`, `rm`, `rmdir`, `cp`, `mv`, `touch`, `pwd`, `ps`, `kill`, `mount`, `sync`, `wc`, `head`, `hexdump`, `sleep`, `clear`, `shutdown`, `reboot`, `halt`
 - Modal text editor (`edit`)
 - Scripting interpreter (`mint`)
-- GUI applications: terminal emulator, file browser, text viewer, clock, paint, pong
+- GUI applications: terminal emulator, file browser, text viewer, RPN/algebraic
+  scientific calculator, clock, paint, pong
 
 ## Repository Layout
 
@@ -100,7 +102,7 @@ minios/
   libgui/               GUI toolkit and widget framework
   protocol/             protocol definitions in XML
   user/
-    init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  apps/  tests/
+    init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  calc/  apps/  tests/
   tools/
     mkfs/               builds an mfs disk image from a directory tree
     gensyms/            kernel symbol table generator

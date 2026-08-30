@@ -1,0 +1,6 @@
+calc: mode rpn
+calc: result 7
+calc: mode algebraic
+calc: result 14
+gui_calc: RPN and algebraic input ok
+TEST PASS

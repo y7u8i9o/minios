@@ -3,6 +3,7 @@ Terminal=/bin/term
 Files=/bin/files
 Viewer=/bin/view
 Editor=/bin/gedit
+Calculator=/bin/calc
 Paint=/bin/paint
 Pong=/bin/pong
 Clock=/bin/clock

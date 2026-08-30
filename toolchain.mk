@@ -35,9 +35,11 @@ KLDFLAGS := -nostdlib -static -z max-page-size=0x1000 --no-dynamic-linker
 
 AR      := $(CROSS)ar
 
-# User space flags: static, no PIC, red zone allowed. SSE and x87 are
-# available since M23 saves the FPU state on context switches.
+# User space flags: static, no PIC, red zone allowed. M23 saves x87 and all
+# 128-bit XMM registers. Keep AVX disabled until the kernel migrates from
+# FXSAVE to XSAVE/XRSTOR and enables the matching XCR0 state components.
 UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
+            -msse2 -mfpmath=sse -mno-avx -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
 UASFLAGS := -g

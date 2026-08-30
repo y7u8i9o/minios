@@ -446,13 +446,12 @@ static void test_gui_wm(void)
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(45, 160) == 0x0040c040, "beta covers alpha %08x", pixel(45, 160));
-    /* The launcher menu (seven entries, the clock last) starts the
-     * clock; Alt+F4 closes it. */
+    /* The launcher menu starts the clock; Alt+F4 closes it. */
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(200);
-    int menu_y = sh - 28 + 4 - (14 * 20 + 4);
-    mouse_move_to(&cx, &cy, 40, menu_y + 2 + 6 * 20 + 10, 0);
+    int menu_y = sh - 28 + 4 - (15 * 20 + 4);
+    mouse_move_to(&cx, &cy, 40, menu_y + 2 + 7 * 20 + 10, 0);
     mouse_click(1);
     sleep_ms(1500);
     alt_key(0x3e);
@@ -700,6 +699,54 @@ static void test_gui_app(void)
     kprintf("gui_app: application framework ok\n");
 }
 KTEST_DEFINE("gui_app", test_gui_app);
+
+/* The calculator starts in RPN mode, accepts direct keyboard input and
+ * changes to algebraic input through its mode selector. */
+static void test_gui_calc(void)
+{
+    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/calc", (char *const[]){ "calc", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start calc");
+    sleep_ms(1200);
+    ktest_assert(pixel(42, 50) == 0x00204060,
+                 "calculator window has an active title bar: %08x", pixel(42, 50));
+
+    press_key(0x04);                    /* 3 ENTER 4 + */
+    press_key(0x1c);
+    press_key(0x05);
+    ps2kbd_feed_scancode(0x2a);
+    press_key(0x0d);
+    ps2kbd_feed_scancode(0xaa);
+    sleep_ms(300);
+
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 150, 79, 0);  /* mode combo in the first row */
+    feed_packet_wheel(0, 0, 0, 1);        /* RPN -> Algebraic */
+    sleep_ms(300);
+    mouse_move_to(&cx, &cy, 300, 130, 0); /* restore canvas keyboard focus */
+    mouse_click(1);
+    press_key(0x03);                    /* 2 + 3 * 4 ENTER */
+    ps2kbd_feed_scancode(0x2a);
+    press_key(0x0d);
+    ps2kbd_feed_scancode(0xaa);
+    press_key(0x04);
+    ps2kbd_feed_scancode(0x2a);
+    press_key(0x09);
+    ps2kbd_feed_scancode(0xaa);
+    press_key(0x05);
+    press_key(0x1c);
+    sleep_ms(300);
+
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "calc status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_calc: RPN and algebraic input ok\n");
+}
+KTEST_DEFINE("gui_calc", test_gui_calc);
 
 /* The progressive Mandelbrot plotter: a 640x480 window at (40,60) whose
  * canvas lies below the tool bar. The centre of the home view (-0.6) is

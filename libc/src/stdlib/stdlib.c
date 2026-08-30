@@ -2,6 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #define LONG_MAX_PLUS_ONE (1UL << 63)
@@ -14,6 +15,260 @@ int atoi(const char *s)
 long atol(const char *s)
 {
     return strtol(s, NULL, 10);
+}
+
+static int ascii_equal_fold(const char *s, const char *word)
+{
+    while (*word) {
+        char c = *s++;
+        if (c >= 'A' && c <= 'Z')
+            c = (char)(c - 'A' + 'a');
+        if (c != *word++)
+            return 0;
+    }
+    return 1;
+}
+
+/* Scale by a decimal exponent without requiring the transcendental libm
+ * functions. Decimal input is rounded once when it is converted to double. */
+static double scale_decimal(double value, int exp10)
+{
+    static const double powers[] = {
+        1e1, 1e2, 1e4, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256
+    };
+    unsigned exp;
+    if (exp10 < 0)
+        exp = exp10 < -511 ? 512U : (unsigned)-exp10;
+    else
+        exp = exp10 > 511 ? 512U : (unsigned)exp10;
+
+    for (unsigned bit = 0; exp && bit < sizeof(powers) / sizeof(powers[0]); bit++) {
+        if (exp & 1U)
+            value = exp10 < 0 ? value / powers[bit] : value * powers[bit];
+        exp >>= 1;
+    }
+    if (exp)
+        return exp10 < 0 ? 0.0 : __builtin_huge_val();
+    return value;
+}
+
+static int hex_digit_value(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static double scale_binary(double value, long long exponent)
+{
+    if (exponent > 2048)
+        return __builtin_huge_val();
+    if (exponent < -2048)
+        return 0.0;
+    while (exponent > 0) {
+        int step = exponent > 512 ? 512 : (int)exponent;
+        value *= step == 512 ? 0x1p512 : (union { uint64_t bits; double value; }){
+            .bits = (uint64_t)(step + 1023) << 52
+        }.value;
+        exponent -= step;
+    }
+    while (exponent < 0) {
+        int step = exponent < -512 ? -512 : (int)exponent;
+        value *= step == -512 ? 0x1p-512 : (union { uint64_t bits; double value; }){
+            .bits = (uint64_t)(step + 1023) << 52
+        }.value;
+        exponent -= step;
+    }
+    return value;
+}
+
+static double parse_hex_double(const char *s, const char **parsed_end)
+{
+    const char *p = s + 2;
+    uint64_t mantissa = 0;
+    long long fractional_digits = 0, dropped = 0;
+    int kept = 0, after_point = 0, first_dropped = -1;
+    for (;;) {
+        if (*p == '.' && !after_point) {
+            after_point = 1;
+            p++;
+            continue;
+        }
+        int digit = hex_digit_value(*p);
+        if (digit < 0)
+            break;
+        p++;
+        if (after_point && fractional_digits < 1000000)
+            fractional_digits++;
+        if (kept == 0 && digit == 0)
+            continue;
+        if (kept < 15) {
+            mantissa = mantissa * 16U + (unsigned)digit;
+            kept++;
+        } else {
+            if (first_dropped < 0)
+                first_dropped = digit;
+            if (dropped < 1000000)
+                dropped++;
+        }
+    }
+
+    long long explicit_exponent = 0;
+    if (*p == 'p' || *p == 'P') {
+        const char *exponent_mark = p++;
+        int negative = 0;
+        if (*p == '+' || *p == '-') {
+            negative = *p == '-';
+            p++;
+        }
+        if (!isdigit((unsigned char)*p)) {
+            p = exponent_mark;
+        } else {
+            while (isdigit((unsigned char)*p)) {
+                if (explicit_exponent < 1000000)
+                    explicit_exponent = explicit_exponent * 10 + (*p - '0');
+                p++;
+            }
+            if (negative)
+                explicit_exponent = -explicit_exponent;
+        }
+    }
+    *parsed_end = p;
+    if (first_dropped >= 8)
+        mantissa++;
+    long long exponent = explicit_exponent - 4 * fractional_digits + 4 * dropped;
+    double value = scale_binary((double)mantissa, exponent);
+    if (mantissa && (__builtin_isinf(value) || value == 0.0))
+        errno = ERANGE;
+    return value;
+}
+
+double strtod(const char *s, char **end)
+{
+    const char *original = s;
+    while (isspace((unsigned char)*s))
+        s++;
+
+    int negative = 0;
+    if (*s == '+' || *s == '-') {
+        negative = *s == '-';
+        s++;
+    }
+
+    if (ascii_equal_fold(s, "inf")) {
+        s += 3;
+        if (ascii_equal_fold(s, "inity"))
+            s += 5;
+        if (end)
+            *end = (char *)s;
+        double value = __builtin_huge_val();
+        return negative ? -value : value;
+    }
+    if (ascii_equal_fold(s, "nan")) {
+        s += 3;
+        if (*s == '(') {
+            const char *payload = s + 1;
+            while (isalnum((unsigned char)*payload) || *payload == '_')
+                payload++;
+            if (*payload == ')')
+                s = payload + 1;
+        }
+        if (end)
+            *end = (char *)s;
+        double value = __builtin_nan("");
+        return negative ? -value : value;
+    }
+
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') &&
+        (hex_digit_value(s[2]) >= 0 || (s[2] == '.' && hex_digit_value(s[3]) >= 0))) {
+        const char *parsed_end;
+        double value = parse_hex_double(s, &parsed_end);
+        if (end)
+            *end = (char *)parsed_end;
+        return negative ? -value : value;
+    }
+
+    uint64_t mantissa = 0;
+    int kept = 0, dropped = 0, decimal_digits = 0;
+    int first_dropped = -1, seen_digit = 0, after_point = 0;
+    for (;;) {
+        if (*s == '.' && !after_point) {
+            after_point = 1;
+            s++;
+            continue;
+        }
+        if (!isdigit((unsigned char)*s))
+            break;
+        int digit = *s++ - '0';
+        seen_digit = 1;
+        if (after_point)
+            decimal_digits++;
+        if (kept == 0 && digit == 0)
+            continue;
+        if (kept < 18) {
+            mantissa = mantissa * 10U + (unsigned)digit;
+            kept++;
+        } else {
+            if (first_dropped < 0)
+                first_dropped = digit;
+            dropped++;
+        }
+    }
+    if (!seen_digit) {
+        if (end)
+            *end = (char *)original;
+        return 0.0;
+    }
+
+    int explicit_exp = 0;
+    if (*s == 'e' || *s == 'E') {
+        const char *exponent_mark = s++;
+        int exponent_negative = 0;
+        if (*s == '+' || *s == '-') {
+            exponent_negative = *s == '-';
+            s++;
+        }
+        if (!isdigit((unsigned char)*s)) {
+            s = exponent_mark;
+        } else {
+            while (isdigit((unsigned char)*s)) {
+                if (explicit_exp < 100000)
+                    explicit_exp = explicit_exp * 10 + (*s - '0');
+                s++;
+            }
+            if (exponent_negative)
+                explicit_exp = -explicit_exp;
+        }
+    }
+    if (end)
+        *end = (char *)s;
+
+    if (first_dropped >= 5)
+        mantissa++;
+    int exp10 = explicit_exp - decimal_digits + dropped;
+    double value = scale_decimal((double)mantissa, exp10);
+    if (mantissa && (__builtin_isinf(value) || value == 0.0))
+        errno = ERANGE;
+    return negative ? -value : value;
+}
+
+double atof(const char *s)
+{
+    return strtod(s, NULL);
+}
+
+float strtof(const char *s, char **end)
+{
+    double value = strtod(s, end);
+    float narrowed = (float)value;
+    if (__builtin_isfinite(value) &&
+        ((__builtin_isinf(narrowed)) || (narrowed == 0.0f && value != 0.0)))
+        errno = ERANGE;
+    return narrowed;
 }
 
 /* Parse sign, optional base prefix and digits. Returns the magnitude,
