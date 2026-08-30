@@ -1,0 +1,9 @@
+this line reaches cat
+\^C
+\[cat terminated by signal 2\]
+PID +PPID +PGID +STATE +NAME
+running +sh
+running +ps
+kill: 99999: No such process
+sh exited with status 0x400
+TEST PASS

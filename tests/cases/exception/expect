@@ -1,0 +1,4 @@
+exception 6: #UD invalid opcode
+RIP=ffffffff8[0-9a-f]{7}
+RSP=[0-9a-f]{16}
+kernel panic: unhandled exception 6

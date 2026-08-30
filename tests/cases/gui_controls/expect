@@ -1,0 +1,8 @@
+widgettest: combo 2 'blue'
+widgettest: spinner 6
+widgettest: slider 50
+widgettest: tab 1
+widgettest: quit
+widgettest: done
+gui_controls: controls ok
+TEST PASS

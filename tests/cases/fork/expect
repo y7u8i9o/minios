@@ -1,0 +1,4 @@
+forktest: pid [0-9]+ ppid 0
+hello from user mode
+forktest: 0 failures
+TEST PASS

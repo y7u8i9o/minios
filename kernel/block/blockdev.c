@@ -1,0 +1,113 @@
+#define KLOG_SUBSYS "block"
+#include <block/blockdev.h>
+#include <block/bcache.h>
+#include <fs/vfs.h>
+#include <fs/devfs.h>
+#include <lib/string.h>
+#include <klog.h>
+#include <errno.h>
+
+/* Registered devices. Protected by blockdev_lock. */
+static LIST_HEAD(blockdevs);
+static DEFINE_SPINLOCK(blockdev_lock);
+
+void blockdev_init(void)
+{
+    bcache_init();
+}
+
+/* /dev/<name>: byte addressed access through the block cache. */
+static long bdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    struct blockdev *dev = f->inode->priv;
+    uint64_t size = blockdev_size(dev);
+    if (*pos >= size)
+        return 0;
+    if (n > size - *pos)
+        n = size - *pos;
+    size_t done = 0;
+    while (done < n) {
+        uint64_t block = *pos / BCACHE_BLOCK_SIZE;
+        size_t off = *pos % BCACHE_BLOCK_SIZE;
+        size_t chunk = MIN(n - done, BCACHE_BLOCK_SIZE - off);
+        struct buf *b = bread(dev, block);
+        if (!b)
+            return done ? (long)done : -EIO;
+        memcpy(buf + done, b->data + off, chunk);
+        brelse(b);
+        done += chunk;
+        *pos += chunk;
+    }
+    return (long)done;
+}
+
+static long bdev_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
+{
+    struct blockdev *dev = f->inode->priv;
+    uint64_t size = blockdev_size(dev);
+    if (*pos >= size)
+        return -ENOSPC;
+    if (n > size - *pos)
+        n = size - *pos;
+    size_t done = 0;
+    while (done < n) {
+        uint64_t block = *pos / BCACHE_BLOCK_SIZE;
+        size_t off = *pos % BCACHE_BLOCK_SIZE;
+        size_t chunk = MIN(n - done, BCACHE_BLOCK_SIZE - off);
+        struct buf *b = bread(dev, block);
+        if (!b)
+            return done ? (long)done : -EIO;
+        memcpy(b->data + off, buf + done, chunk);
+        bwrite(b);
+        brelse(b);
+        done += chunk;
+        *pos += chunk;
+    }
+    return (long)done;
+}
+
+static const struct file_ops bdev_fops = {
+    .read = bdev_read,
+    .write = bdev_write,
+};
+
+int blockdev_register(struct blockdev *dev)
+{
+    if (blockdev_find(dev->name))
+        return -EEXIST;
+    spin_lock(&blockdev_lock);
+    list_add_tail(&dev->link, &blockdevs);
+    spin_unlock(&blockdev_lock);
+    return devfs_register(dev->name, S_IFBLK | 0600, &bdev_fops, dev, blockdev_size(dev));
+}
+
+struct blockdev *blockdev_find(const char *name)
+{
+    struct list_head *pos;
+    struct blockdev *found = NULL;
+    spin_lock(&blockdev_lock);
+    list_for_each(pos, &blockdevs) {
+        struct blockdev *d = list_entry(pos, struct blockdev, link);
+        if (strcmp(d->name, name) == 0) {
+            found = d;
+            break;
+        }
+    }
+    spin_unlock(&blockdev_lock);
+    return found;
+}
+
+int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf)
+{
+    return dev->rw(dev, sector, count, buf, false);
+}
+
+int blockdev_write(struct blockdev *dev, uint64_t sector, uint32_t count, const void *buf)
+{
+    return dev->rw(dev, sector, count, (void *)buf, true);
+}
+
+uint64_t blockdev_size(struct blockdev *dev)
+{
+    return dev->nsectors * dev->sector_size;
+}

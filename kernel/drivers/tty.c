@@ -1,0 +1,328 @@
+#define KLOG_SUBSYS "tty"
+#include <drivers/tty.h>
+#include <drivers/fbcon.h>
+#include <ipc/signal.h>
+#include <ipc/mqueue.h>
+#include <sched/thread.h>
+#include <mm/vma.h>
+#include <sched/proc.h>
+#include <lib/string.h>
+#include <console.h>
+#include <klog.h>
+#include <errno.h>
+
+static DEFINE_WAITQ(tty_intr_waitq);     /* ttyd, condition lock console_tty.lock */
+
+static void console_output(struct tty *t, const char *s, size_t n)
+{
+    console_write(s, n);
+}
+
+struct tty console_tty;
+
+void tty_init(struct tty *t, const char *name, tty_output_fn output, bool defer_signals)
+{
+    memset(t, 0, sizeof *t);
+    t->name = name;
+    spinlock_init(&t->lock, "tty");
+    waitq_init(&t->rd_waitq, "tty_rd");
+    t->lflag = ICANON | ECHO | ISIG;
+    t->output = output;
+    t->defer_signals = defer_signals;
+    t->cols = 80;
+    t->rows = 25;
+}
+
+/* Caller holds t->lock. */
+static void ready_push(struct tty *t, char c)
+{
+    if (t->count == TTY_READY_MAX)
+        return;
+    t->ready[t->tail] = c;
+    t->tail = (t->tail + 1) % TTY_READY_MAX;
+    t->count++;
+}
+
+static void echo(struct tty *t, const char *s, size_t n)
+{
+    if ((t->lflag & ECHO) && t->output)
+        t->output(t, s, n);
+}
+
+/* Line discipline with the lock held. Returns true if control C must be
+ * delivered to the foreground group. */
+static bool input_locked(struct tty *t, char c)
+{
+    if (c == 0x03 && (t->lflag & ISIG)) {
+        echo(t, "^C\n", 3);
+        t->line_len = 0;
+        return true;
+    }
+    if (!(t->lflag & ICANON)) {
+        echo(t, &c, 1);
+        ready_push(t, c);
+        return false;
+    }
+    if (c == '\b' || c == 127) {
+        if (t->line_len > 0) {
+            t->line_len--;
+            echo(t, "\b \b", 3);
+        }
+        return false;
+    }
+    if (c == 0x15) {   /* control U */
+        while (t->line_len > 0) {
+            t->line_len--;
+            echo(t, "\b \b", 3);
+        }
+        return false;
+    }
+    if (c == '\n' || c == '\r') {
+        echo(t, "\n", 1);
+        for (size_t i = 0; i < t->line_len; i++)
+            ready_push(t, t->line[i]);
+        ready_push(t, '\n');
+        t->line_len = 0;
+        return false;
+    }
+    if (c == 0x04) {   /* control D: end of file when the line is empty */
+        if (t->line_len == 0) {
+            t->hangup = true;
+        } else {
+            for (size_t i = 0; i < t->line_len; i++)
+                ready_push(t, t->line[i]);
+            t->line_len = 0;
+        }
+        return false;
+    }
+    if (t->line_len < TTY_LINE_MAX - 1) {
+        t->line[t->line_len++] = c;
+        echo(t, &c, 1);
+    }
+    return false;
+}
+
+void tty_input_char(struct tty *t, char c)
+{
+    spin_lock(&t->lock);
+    bool intr = input_locked(t, c);
+    int pgid = t->fg_pgid;
+    if (intr && t->defer_signals) {
+        t->intr_pending = true;
+        waitq_wake_all(&tty_intr_waitq);
+    }
+    waitq_wake_all(&t->rd_waitq);
+    spin_unlock(&t->lock);
+    poll_notify();
+    if (intr && !t->defer_signals && pgid > 0)
+        signal_send_pgrp(pgid, SIGINT);
+}
+
+void tty_input_raw(struct tty *t, const char *s, size_t n)
+{
+    spin_lock(&t->lock);
+    for (size_t i = 0; i < n; i++)
+        ready_push(t, s[i]);
+    waitq_wake_all(&t->rd_waitq);
+    spin_unlock(&t->lock);
+    poll_notify();
+}
+
+long tty_read(struct tty *t, char *buf, size_t n)
+{
+    if (n == 0)
+        return 0;
+    char tmp[TTY_LINE_MAX];
+    spin_lock(&t->lock);
+    while (t->count == 0) {
+        if (t->hangup) {
+            /* A control D ends one read; the next one blocks again. */
+            t->hangup = false;
+            spin_unlock(&t->lock);
+            return 0;
+        }
+        if (signal_should_interrupt()) {
+            spin_unlock(&t->lock);
+            return -EINTR;
+        }
+        waitq_wait(&t->rd_waitq, &t->lock);
+    }
+    size_t got = 0;
+    bool canon = (t->lflag & ICANON) && !(t->lflag & KBD_SCANCODES);
+    while (got < n && got < sizeof tmp && t->count) {
+        char c = t->ready[t->head];
+        t->head = (t->head + 1) % TTY_READY_MAX;
+        t->count--;
+        tmp[got++] = c;
+        if (c == '\n' && canon)
+            break;
+    }
+    spin_unlock(&t->lock);
+    /* User memory is copied without the lock: the copy may fault. */
+    memcpy(buf, tmp, got);
+    return (long)got;
+}
+
+int tty_poll(struct tty *t)
+{
+    spin_lock(&t->lock);
+    int r = (t->count || t->hangup) ? POLLIN : 0;
+    spin_unlock(&t->lock);
+    return r | POLLOUT;
+}
+
+int tty_getc(struct tty *t)
+{
+    int c = -1;
+    spin_lock(&t->lock);
+    if (t->count) {
+        c = (uint8_t)t->ready[t->head];
+        t->head = (t->head + 1) % TTY_READY_MAX;
+        t->count--;
+    }
+    spin_unlock(&t->lock);
+    return c;
+}
+
+size_t tty_available(struct tty *t)
+{
+    spin_lock(&t->lock);
+    size_t n = t->count;
+    spin_unlock(&t->lock);
+    return n;
+}
+
+uint32_t tty_get_lflag(struct tty *t)
+{
+    spin_lock(&t->lock);
+    uint32_t f = t->lflag;
+    spin_unlock(&t->lock);
+    return f;
+}
+
+void tty_set_lflag(struct tty *t, uint32_t lflag)
+{
+    spin_lock(&t->lock);
+    t->lflag = lflag & (ICANON | ECHO | ISIG | KBD_SCANCODES);
+    if (!(t->lflag & ICANON) && t->line_len) {
+        for (size_t i = 0; i < t->line_len; i++)
+            ready_push(t, t->line[i]);
+        t->line_len = 0;
+        waitq_wake_all(&t->rd_waitq);
+    }
+    spin_unlock(&t->lock);
+}
+
+int tty_get_fg_pgid(struct tty *t)
+{
+    spin_lock(&t->lock);
+    int p = t->fg_pgid;
+    spin_unlock(&t->lock);
+    return p;
+}
+
+void tty_set_fg_pgid(struct tty *t, int pgid)
+{
+    spin_lock(&t->lock);
+    t->fg_pgid = pgid;
+    spin_unlock(&t->lock);
+}
+
+void tty_hangup(struct tty *t)
+{
+    spin_lock(&t->lock);
+    t->hangup = true;
+    waitq_wake_all(&t->rd_waitq);
+    spin_unlock(&t->lock);
+    poll_notify();
+}
+
+long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg)
+{
+    struct proc *p = thread_current()->proc;
+    switch (req) {
+    case TCGETS: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct termios), true))
+            return -EFAULT;
+        struct termios tm = { .c_lflag = tty_get_lflag(t) };
+        memcpy((void *)arg, &tm, sizeof tm);
+        return 0;
+    }
+    case TCSETS: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct termios), false))
+            return -EFAULT;
+        struct termios tm;
+        memcpy(&tm, (void *)arg, sizeof tm);
+        tty_set_lflag(t, tm.c_lflag);
+        return 0;
+    }
+    case TIOCGWINSZ: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct winsize), true))
+            return -EFAULT;
+        struct winsize ws;
+        spin_lock(&t->lock);
+        ws.ws_col = t->cols;
+        ws.ws_row = t->rows;
+        spin_unlock(&t->lock);
+        memcpy((void *)arg, &ws, sizeof ws);
+        return 0;
+    }
+    case TIOCSWINSZ: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct winsize), false))
+            return -EFAULT;
+        struct winsize ws;
+        memcpy(&ws, (void *)arg, sizeof ws);
+        spin_lock(&t->lock);
+        bool changed = t->cols != ws.ws_col || t->rows != ws.ws_row;
+        t->cols = ws.ws_col;
+        t->rows = ws.ws_row;
+        int pgid = t->fg_pgid;
+        spin_unlock(&t->lock);
+        if (changed && pgid > 0)
+            signal_send_pgrp(pgid, SIGWINCH);
+        return 0;
+    }
+    case TIOCGPGRP:
+        return tty_get_fg_pgid(t);
+    case TIOCSPGRP:
+        if ((int)arg <= 0)
+            return -EINVAL;
+        tty_set_fg_pgid(t, (int)arg);
+        return 0;
+    }
+    return -ENOTTY;
+}
+
+/* Console control C arrives in the keyboard interrupt, where process
+ * locks cannot be taken; this thread posts the signal. */
+static void ttyd(void *arg)
+{
+    struct tty *t = &console_tty;
+    for (;;) {
+        spin_lock(&t->lock);
+        while (!t->intr_pending)
+            waitq_wait(&tty_intr_waitq, &t->lock);
+        t->intr_pending = false;
+        int pgid = t->fg_pgid;
+        spin_unlock(&t->lock);
+        if (pgid > 0)
+            signal_send_pgrp(pgid, SIGINT);
+    }
+}
+
+void tty_start_daemon(void)
+{
+    if (!thread_create("ttyd", ttyd, NULL, 0))
+        klog_error("cannot start ttyd");
+}
+
+
+/* Initialized early by console_tty_init from ps2kbd_init. */
+void console_tty_init(void)
+{
+    tty_init(&console_tty, "console", console_output, true);
+    uint16_t cols, rows;
+    fbcon_get_size(&cols, &rows);
+    console_tty.cols = cols;
+    console_tty.rows = rows;
+}

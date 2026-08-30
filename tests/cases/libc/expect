@@ -1,0 +1,6 @@
+libctest: fputs to stdout
+libctest: fprintf to stderr
+libctest: puts
+libctest: 0 failures
+libctest: atexit handler ran
+TEST PASS

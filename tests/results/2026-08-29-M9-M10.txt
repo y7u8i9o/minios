@@ -1,0 +1,486 @@
+minios boot test record
+date: Sat Aug 29 04:03:58 AWST 2026
+kernel: build/kernel.elf
+
+ make test 
+PASS backtrace
+PASS boot
+PASS exception
+PASS fork
+PASS kbd
+PASS libc
+PASS pmm
+PASS sched
+PASS shell
+PASS slab_redzone
+PASS slab
+PASS timer
+PASS vmm
+tests: 13 passed, 0 failed
+
+ case backtrace (cmdline: test=backtrace) 
+exit code: 3
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=backtrace"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62993700 ticks/s at divider 16, 62993 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test backtrace
+test_bt_c: depth 3, faulting
+
+exception 14: #PF page fault
+page fault at fffffffe00000000: kernel read not present
+
+*** kernel panic: unhandled exception 14 (#PF page fault) ***
+thread kinit (tid 2), process kernel (pid 0)
+vector=14 error=0x0
+RIP=ffffffff8000a9bb CS=0008 RFLAGS=0000000000010286
+RSP=ffffffc000004f00 SS=0010
+RAX=000000000000001d RBX=ffffffff80011e00 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000246 RDI=ffffffff8000fb80 RBP=ffffffc000004f00
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff80010570 R11=ffff8000fd17c000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=fffffffe00000000 CR3=000000001ff64000
+backtrace from trap frame:
+  [<ffffffff8000a9bb>] test_bt_c+0x1b/0x40
+  [<ffffffff8000a9ec>] test_bt_b+0xc/0x20
+  [<ffffffff8000aa0c>] test_bt_a+0xc/0x20
+  [<ffffffff8000aa2e>] test_backtrace+0xe/0x20
+  [<ffffffff8000a959>] ktest_run_selected+0x69/0xb0
+  [<ffffffff800003cd>] kinit+0xd/0xb0
+  [<ffffffff8000767e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+ case boot (cmdline: test=boot) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=boot"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62881200 ticks/s at divider 16, 62881 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test boot
+kprintf works: ok 1 beef
+TEST PASS
+
+ case exception (cmdline: test=exception) 
+exit code: 3
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=exception"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62875000 ticks/s at divider 16, 62875 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test exception
+triggering #UD
+
+exception 6: #UD invalid opcode
+
+*** kernel panic: unhandled exception 6 (#UD invalid opcode) ***
+thread kinit (tid 2), process kernel (pid 0)
+vector=6 error=0x0
+RIP=ffffffff8000ad42 CS=0008 RFLAGS=0000000000010282
+RSP=ffffffc000004f30 SS=0010
+RAX=000000000000000f RBX=ffffffff80011e20 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000246 RDI=ffffffff800131e0 RBP=ffffffc000004f30
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff80010570 R11=ffff8000fd17c000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=0000000000000000 CR3=000000001ff64000
+backtrace from trap frame:
+  [<ffffffff8000ad42>] test_exception+0x12/0x30
+  [<ffffffff8000a959>] ktest_run_selected+0x69/0xb0
+  [<ffffffff800003cd>] kinit+0xd/0xb0
+  [<ffffffff8000767e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+ case fork (cmdline: test=run prog=/bin/forktest) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/forktest"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62912500 ticks/s at divider 16, 62912 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test run
+[I user] process forktest (pid 1) from /bin/forktest, entry 400a70
+forktest: pid 1 ppid 0
+hello from user mode, pid 4, ppid 1, argc 3
+  argv[0] = "/bin/hello"
+  argv[1] = "one"
+  argv[2] = "two"
+
+exception 14: #PF page fault
+page fault at 0000000000000008: user write not present
+[E trap] process forktest (pid 7) killed by exception 14 at rip 400958
+vector=14 error=0x6
+RIP=0000000000400958 CS=0023 RFLAGS=0000000000010246
+RSP=00007ffffffb3ed0 SS=001b
+RAX=0000000000000000 RBX=0000000000000006 RCX=0000000000403090 RDX=0000000000000000
+RSI=0000000000000000 RDI=0000000000000000 RBP=00007fffffffef50
+R8 =0000000000000000 R9 =0000000000000000 R10=0000000000000000 R11=0000000000000216
+R12=00007fffffffefb8 R13=0000000000000002 R14=0000000000000000 R15=0000000000000000
+CR2=0000000000000008 CR3=000000001fefa000
+forktest: 0 failures
+/bin/forktest exited with status 0x0
+TEST PASS
+
+ case kbd (cmdline: test=kbd) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=kbd"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 63112500 ticks/s at divider 16, 63112 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test kbd
+Hi
+ab c
+X1
+TEST PASS
+
+ case libc (cmdline: test=run prog=/bin/libctest) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/libctest"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62843700 ticks/s at divider 16, 62843 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test run
+[I user] process libctest (pid 1) from /bin/libctest, entry 400fa7
+libctest: fputs to stdout
+libctest: fprintf to stderr
+xyz
+libctest: puts
+!
+libctest: 0 failures
+libctest: atexit handler ran
+/bin/libctest exited with status 0x0
+TEST PASS
+
+ case pmm (cmdline: test=pmm) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=pmm"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62850000 ticks/s at divider 16, 62850 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test pmm
+pmm: 129847 pages total, 129573 free, 768 reserved (page array)
+  order  0 (      4 KiB): 1 free blocks
+  order  1 (      8 KiB): 0 free blocks
+  order  2 (     16 KiB): 3 free blocks
+  order  3 (     32 KiB): 3 free blocks
+  order  4 (     64 KiB): 2 free blocks
+  order  5 (    128 KiB): 3 free blocks
+  order  6 (    256 KiB): 2 free blocks
+  order  7 (    512 KiB): 0 free blocks
+  order  8 (   1024 KiB): 1 free blocks
+  order  9 (   2048 KiB): 0 free blocks
+  order 10 (   4096 KiB): 126 free blocks
+pmm: 129847 pages total, 129573 free, 768 reserved (page array)
+  order  0 (      4 KiB): 1 free blocks
+  order  1 (      8 KiB): 0 free blocks
+  order  2 (     16 KiB): 3 free blocks
+  order  3 (     32 KiB): 3 free blocks
+  order  4 (     64 KiB): 2 free blocks
+  order  5 (    128 KiB): 3 free blocks
+  order  6 (    256 KiB): 2 free blocks
+  order  7 (    512 KiB): 0 free blocks
+  order  8 (   1024 KiB): 1 free blocks
+  order  9 (   2048 KiB): 0 free blocks
+  order 10 (   4096 KiB): 126 free blocks
+TEST PASS
+
+ case sched (cmdline: test=sched) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=sched"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62875000 ticks/s at divider 16, 62875 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test sched
+worker 0 level 0 iteration 0
+worker 0 level 0 iteration 200
+worker 0 level 0 iteration 400
+worker 1 level 2 iteration 0
+worker 1 level 2 iteration 200
+worker 1 level 2 iteration 400
+worker 2 level 4 iteration 0
+worker 2 level 4 iteration 200
+worker 2 level 4 iteration 400
+worker 3 level 6 iteration 0
+worker 3 level 6 iteration 200
+worker 3 level 6 iteration 400
+spinner ran 18919012 loops, finished at level 4
+run queues:
+  level 0:
+  level 1:
+  level 2:
+  level 3:
+  level 4:
+  level 5:
+  level 6:
+  level 7:
+sched: uptime 1268 ms
+TEST PASS
+
+ case shell (cmdline: test=shell) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=shell"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 63006200 ticks/s at divider 16, 63006 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test shell
+help
+echo hello from sh
+pwd
+cd /bin
+pwd
+hello one two
+nosuchprogram
+cd /nowhere
+cd
+exit 3
+[I user] process sh (pid 1) from /bin/sh, entry 4001f4
+/ $ builtins: cd exit pwd help; programs are searched in PATH
+/ $ hello from sh
+/ $ /
+/ $ /bin $ /bin
+/bin $ hello from user mode, pid 3, ppid 1, argc 3
+  argv[0] = "hello"
+  argv[1] = "one"
+  argv[2] = "two"
+/bin $ nosuchprogram: No such file or directory
+/bin $ cd: /nowhere: No such file or directory
+/bin $ / $ sh exited with status 0x300
+TEST PASS
+
+ case slab_redzone (cmdline: test=slab_redzone) 
+exit code: 3
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=slab_redzone"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62900000 ticks/s at divider 16, 62900 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test slab_redzone
+
+*** kernel panic: slab kmalloc-64: redzone after object 0xffff800000003040 corrupted ***
+thread kinit (tid 2), process kernel (pid 0)
+backtrace:
+  [<ffffffff8000320e>] cache_free_locked+0x22e/0x230
+  [<ffffffff800038d5>] kfree+0x115/0x150
+  [<ffffffff8000bd18>] test_slab_redzone+0x38/0x60
+  [<ffffffff8000a959>] ktest_run_selected+0x69/0xb0
+  [<ffffffff800003cd>] kinit+0xd/0xb0
+  [<ffffffff8000767e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+ case slab (cmdline: test=slab) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=slab"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62843700 ticks/s at divider 16, 62843 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test slab
+slab caches:
+  kmem_cache     obj   152 stride   192 order 0 per slab  21 slabs    1 objects 10
+  kmalloc-16     obj    16 stride    48 order 0 per slab  84 slabs    1 objects 46
+  kmalloc-32     obj    32 stride    64 order 0 per slab  63 slabs    1 objects 38
+  kmalloc-64     obj    64 stride    96 order 0 per slab  42 slabs    4 objects 87
+  kmalloc-128    obj   128 stride   160 order 0 per slab  25 slabs   13 objects 166
+  kmalloc-256    obj   256 stride   288 order 0 per slab  14 slabs   46 objects 368
+  kmalloc-512    obj   512 stride   544 order 0 per slab   7 slabs    7 objects 46
+  kmalloc-1024   obj  1024 stride  1056 order 1 per slab   7 slabs   22 objects 152
+  kmalloc-2048   obj  2048 stride  2080 order 2 per slab   7 slabs   45 objects 310
+  kmalloc-4096   obj  4096 stride  4128 order 3 per slab   7 slabs   85 objects 592
+  kmalloc-8192   obj  8192 stride  8224 order 4 per slab   7 slabs   51 objects 167
+TEST PASS
+
+ case timer (cmdline: test=timer) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=timer"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62887500 ticks/s at divider 16, 62887 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test timer
+timer: 100 ticks for 10 x 10 ms, uptime 152 ms
+TEST PASS
+
+ case vmm (cmdline: test=vmm) 
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 536 symbols, 14102 bytes
+[I boot] kernel at phys 1fe9e000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=vmm"
+[I pmm] 509 MiB usable, 129634 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1ff64000
+[I pmm] reclaimed 213 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 7 entries in 583168 bytes
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62900000 ticks/s at divider 16, 62900 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I syscall] syscall entry at 0xffffffff8000dcc7, 16 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I ktest] running test vmm
+vmm: 129573 pages before, 129571 after
+TEST PASS

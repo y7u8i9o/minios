@@ -1,0 +1,79 @@
+minios boot test record, M18, 2026-08-29 18:16 AWST
+command: make test (every case with -smp 4, CONFIG_LOCKDEBUG=1)
+
+PASS backtrace
+PASS blk
+PASS boot
+PASS ctrlc
+PASS editor
+PASS exception
+PASS fb0
+PASS fork
+PASS fs
+PASS gui_term
+PASS gui
+PASS kbd
+PASS libc
+PASS mfs_user
+PASS mfs
+PASS mint
+PASS mouse
+PASS mq
+PASS pipes
+PASS pmm
+PASS pty
+PASS sched
+PASS script
+PASS shell
+PASS shell2
+PASS shutdown_cmd
+PASS shutdown
+PASS signals
+PASS slab_redzone
+PASS slab
+PASS smp_user
+PASS smp
+PASS swap
+PASS timer
+PASS vmm
+tests: 35 passed, 0 failed
+
+Second run after the TSC clock, the utilities and the games (2026-08-29 18:47 AWST):
+PASS backtrace
+PASS blk
+PASS boot
+PASS ctrlc
+PASS editor
+PASS exception
+PASS fb0
+PASS fork
+PASS fs
+PASS games
+PASS gui_term
+PASS gui
+PASS kbd
+PASS libc
+PASS mfs_user
+PASS mfs
+PASS mint
+PASS mouse
+PASS mq
+PASS pipes
+PASS pmm
+PASS pty
+PASS sched
+PASS script
+PASS shell
+PASS shell2
+PASS shutdown_cmd
+PASS shutdown
+PASS signals
+PASS slab_redzone
+PASS slab
+PASS smp_user
+PASS smp
+PASS swap
+PASS timer
+PASS utils
+PASS vmm
+tests: 37 passed, 0 failed

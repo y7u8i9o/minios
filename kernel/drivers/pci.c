@@ -1,0 +1,211 @@
+#define KLOG_SUBSYS "pci"
+#include <drivers/pci.h>
+#include <arch/io.h>
+#include <arch/apic.h>
+#include <mm/vmm.h>
+#include <klog.h>
+#include <errno.h>
+
+#define PCI_CONFIG_ADDR 0xcf8
+#define PCI_CONFIG_DATA 0xcfc
+
+static struct pci_dev devices[PCI_MAX_DEVICES];
+static size_t ndevices;
+
+static uint32_t cfg_addr(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
+{
+    return 0x80000000u | ((uint32_t)bus << 16) | ((uint32_t)slot << 11) |
+           ((uint32_t)func << 8) | (off & 0xfc);
+}
+
+static uint32_t raw_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
+{
+    outl(PCI_CONFIG_ADDR, cfg_addr(bus, slot, func, off));
+    return inl(PCI_CONFIG_DATA);
+}
+
+uint32_t pci_read32(const struct pci_dev *d, uint8_t off)
+{
+    return raw_read32(d->bus, d->slot, d->func, off);
+}
+
+uint16_t pci_read16(const struct pci_dev *d, uint8_t off)
+{
+    return (uint16_t)(pci_read32(d, off) >> ((off & 2) * 8));
+}
+
+uint8_t pci_read8(const struct pci_dev *d, uint8_t off)
+{
+    return (uint8_t)(pci_read32(d, off) >> ((off & 3) * 8));
+}
+
+void pci_write32(const struct pci_dev *d, uint8_t off, uint32_t v)
+{
+    outl(PCI_CONFIG_ADDR, cfg_addr(d->bus, d->slot, d->func, off));
+    outl(PCI_CONFIG_DATA, v);
+}
+
+void pci_write16(const struct pci_dev *d, uint8_t off, uint16_t v)
+{
+    uint32_t old = pci_read32(d, off);
+    unsigned shift = (off & 2) * 8;
+    old &= ~(0xffffu << shift);
+    old |= (uint32_t)v << shift;
+    pci_write32(d, off, old);
+}
+
+void pci_write8(const struct pci_dev *d, uint8_t off, uint8_t v)
+{
+    uint32_t old = pci_read32(d, off);
+    unsigned shift = (off & 3) * 8;
+    old &= ~(0xffu << shift);
+    old |= (uint32_t)v << shift;
+    pci_write32(d, off, old);
+}
+
+static void read_bars(struct pci_dev *d)
+{
+    for (int i = 0; i < 6; i++) {
+        uint32_t lo = pci_read32(d, (uint8_t)(0x10 + i * 4));
+        if (lo == 0)
+            continue;
+        if (lo & 1) {
+            d->bar[i] = lo & ~3u;
+            d->bar_is_io[i] = true;
+            continue;
+        }
+        uint64_t base = lo & ~0xfu;
+        if (((lo >> 1) & 3) == 2 && i < 5) {
+            base |= (uint64_t)pci_read32(d, (uint8_t)(0x10 + (i + 1) * 4)) << 32;
+            d->bar[i] = base;
+            i++;
+            continue;
+        }
+        d->bar[i] = base;
+    }
+}
+
+static void probe(uint8_t bus, uint8_t slot, uint8_t func)
+{
+    uint32_t id = raw_read32(bus, slot, func, 0);
+    if ((id & 0xffff) == 0xffff || ndevices == PCI_MAX_DEVICES)
+        return;
+    struct pci_dev *d = &devices[ndevices++];
+    d->bus = bus;
+    d->slot = slot;
+    d->func = func;
+    d->vendor = (uint16_t)id;
+    d->device = (uint16_t)(id >> 16);
+    uint32_t cls = pci_read32(d, 0x08);
+    d->class = (uint8_t)(cls >> 24);
+    d->subclass = (uint8_t)(cls >> 16);
+    d->prog_if = (uint8_t)(cls >> 8);
+    d->header_type = pci_read8(d, 0x0e) & 0x7f;
+    uint32_t irq = pci_read32(d, 0x3c);
+    d->irq_line = (uint8_t)irq;
+    d->irq_pin = (uint8_t)(irq >> 8);
+    if (d->header_type == 0)
+        read_bars(d);
+    klog_info("%02x:%02x.%u %04x:%04x class %02x%02x", bus, slot, func,
+              d->vendor, d->device, d->class, d->subclass);
+}
+
+void pci_init(void)
+{
+    for (unsigned bus = 0; bus < 256; bus++) {
+        for (uint8_t slot = 0; slot < 32; slot++) {
+            uint32_t id = raw_read32((uint8_t)bus, slot, 0, 0);
+            if ((id & 0xffff) == 0xffff)
+                continue;
+            uint8_t ht = (uint8_t)(raw_read32((uint8_t)bus, slot, 0, 0x0c) >> 16);
+            uint8_t nfunc = (ht & 0x80) ? 8 : 1;
+            for (uint8_t f = 0; f < nfunc; f++)
+                probe((uint8_t)bus, slot, f);
+        }
+    }
+    klog_info("%zu functions", ndevices);
+}
+
+size_t pci_count(void)
+{
+    return ndevices;
+}
+
+struct pci_dev *pci_device(size_t index)
+{
+    return index < ndevices ? &devices[index] : NULL;
+}
+
+struct pci_dev *pci_find(uint16_t vendor, uint16_t device)
+{
+    for (size_t i = 0; i < ndevices; i++)
+        if (devices[i].vendor == vendor && devices[i].device == device)
+            return &devices[i];
+    return NULL;
+}
+
+uint8_t pci_find_capability(const struct pci_dev *d, uint8_t id)
+{
+    if (!(pci_read16(d, 0x06) & (1 << 4)))
+        return 0;
+    uint8_t off = pci_read8(d, 0x34) & 0xfc;
+    for (int guard = 0; off && guard < 48; guard++) {
+        if (pci_read8(d, off) == id)
+            return off;
+        off = pci_read8(d, (uint8_t)(off + 1)) & 0xfc;
+    }
+    return 0;
+}
+
+void pci_enable_bus_master(const struct pci_dev *d)
+{
+    uint16_t cmd = pci_read16(d, 0x04);
+    cmd |= (1 << 1) | (1 << 2);     /* memory space, bus master */
+    pci_write16(d, 0x04, cmd);
+}
+
+/* MSI-X table, mapped on first use. */
+static volatile uint32_t *msix_table(const struct pci_dev *d, uint8_t cap, unsigned *nentries)
+{
+    uint32_t tbl = pci_read32(d, (uint8_t)(cap + 4));
+    unsigned bir = tbl & 7;
+    uint64_t off = tbl & ~7u;
+    *nentries = (pci_read16(d, (uint8_t)(cap + 2)) & 0x7ff) + 1;
+    uint64_t pa = d->bar[bir] + off;
+    size_t size = ALIGN_UP((pa & (PAGE_SIZE - 1)) + *nentries * 16, PAGE_SIZE);
+    volatile uint8_t *va = vmm_map_mmio(pa & PAGE_MASK, size, VM_READ | VM_WRITE | VM_NOCACHE);
+    if (!va)
+        return NULL;
+    return (volatile uint32_t *)(va + (pa & (PAGE_SIZE - 1)));
+}
+
+int pci_msix_enable(const struct pci_dev *d)
+{
+    uint8_t cap = pci_find_capability(d, PCI_CAP_MSIX);
+    if (!cap)
+        return -ENODEV;
+    uint16_t ctl = pci_read16(d, (uint8_t)(cap + 2));
+    ctl |= 1 << 15;         /* enable */
+    ctl &= ~(1 << 14);      /* clear function mask */
+    pci_write16(d, (uint8_t)(cap + 2), ctl);
+    return 0;
+}
+
+int pci_msix_set_vector(const struct pci_dev *d, unsigned index, uint8_t vector)
+{
+    uint8_t cap = pci_find_capability(d, PCI_CAP_MSIX);
+    if (!cap)
+        return -ENODEV;
+    unsigned n;
+    volatile uint32_t *tbl = msix_table(d, cap, &n);
+    if (!tbl)
+        return -ENOMEM;
+    if (index >= n)
+        return -EINVAL;
+    volatile uint32_t *e = tbl + index * 4;
+    e[0] = 0xfee00000u | (lapic_id() << 12);
+    e[1] = 0;
+    e[2] = vector;
+    e[3] = 0;               /* unmask */
+    return 0;
+}

@@ -1,0 +1,4 @@
+fb0: 24 bpp, r8@16 g8@8 b8@0
+fbtest: 1024x768 24 bpp
+fb0: pattern verified
+TEST PASS

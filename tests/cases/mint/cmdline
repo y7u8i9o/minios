@@ -1,0 +1,1 @@
+test=run prog=/bin/mint args=/etc/tests/test.mint,first

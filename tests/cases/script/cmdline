@@ -1,0 +1,1 @@
+test=run prog=/bin/sh args=/etc/tests/shell.sh,x,y status=7

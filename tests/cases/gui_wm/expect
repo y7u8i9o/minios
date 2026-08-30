@@ -1,0 +1,17 @@
+guitest: window 2 wheel 1
+comp: alt-tab
+comp: toplevel 1 activated
+comp: toplevel 1 minimized
+panel: task click alpha
+comp: toplevel 1 shown
+comp: toplevel 2 maximized
+panel: menu opened
+panel: launch /bin/clock
+comp: toplevel 3 'clock' mapped
+comp: toplevel 3 close requested
+comp: toplevel 3 destroyed
+comp: toplevel 2 close requested
+comp: toplevel 1 close requested
+guitest: done after 0 keys
+gui_wm: window management ok
+TEST PASS

@@ -1,0 +1,15 @@
+# Launcher menu of the window server: title=program
+Terminal=/bin/term
+Files=/bin/files
+Viewer=/bin/view
+Editor=/bin/gedit
+Paint=/bin/paint
+Pong=/bin/pong
+Clock=/bin/clock
+System monitor=/bin/sysmon
+Kernel log=/bin/logview
+Hex viewer=/bin/hexview
+Event viewer=/bin/evtest
+Settings=/bin/settings
+Compositor settings=/bin/compsettings
+Log out=@logout

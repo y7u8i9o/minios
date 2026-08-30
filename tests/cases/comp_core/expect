@@ -1,0 +1,15 @@
+comp: started 1024x768
+comp: client 1 connected
+comptest: 2 formats, output 1024x768, 1 modes
+comp: surface 1 created for client 1
+comp: surface 1 mapped at 40,60 200x150
+comptest: frame 1 at
+comp: buffer released
+comptest: buffer 1 released
+comptest: frame 2, 1 releases
+comptest: done
+comp: surface 1 destroyed
+comp: client 1 disconnected
+comp: stopped
+comp_core: compositor core ok
+TEST PASS

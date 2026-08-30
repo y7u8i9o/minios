@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Input (M25): a seat with a pointer and a keyboard. Coordinates are
+     24.8 fixed point in surface space; every input event carries a
+     serial used by grabs, moves and the data device. -->
+<protocol name="seat">
+  <interface name="seat" version="1">
+    <request name="get_pointer"><arg name="id" type="new_id" interface="pointer"/></request>
+    <request name="get_keyboard"><arg name="id" type="new_id" interface="keyboard"/></request>
+    <event name="capabilities"><arg name="capabilities" type="uint"/></event>
+    <event name="name"><arg name="name" type="string"/></event>
+  </interface>
+
+  <interface name="pointer" version="1">
+    <request name="set_cursor">
+      <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface" allow-null="true"/>
+      <arg name="hotspot_x" type="int"/><arg name="hotspot_y" type="int"/>
+    </request>
+    <request name="destroy" type="destructor"/>
+    <event name="enter">
+      <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/><arg name="x" type="fixed"/><arg name="y" type="fixed"/>
+    </event>
+    <event name="leave"><arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/></event>
+    <event name="motion"><arg name="time" type="uint"/><arg name="x" type="fixed"/><arg name="y" type="fixed"/></event>
+    <event name="button">
+      <arg name="serial" type="uint"/><arg name="time" type="uint"/><arg name="button" type="uint"/><arg name="state" type="uint"/>
+    </event>
+    <event name="axis"><arg name="time" type="uint"/><arg name="axis" type="uint"/><arg name="value" type="fixed"/></event>
+    <event name="frame"/>
+  </interface>
+
+  <interface name="keyboard" version="1">
+    <request name="destroy" type="destructor"/>
+    <event name="keymap"><arg name="format" type="uint"/><arg name="fd" type="fd"/><arg name="size" type="uint"/></event>
+    <event name="enter">
+      <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/><arg name="keys" type="array"/>
+    </event>
+    <event name="leave"><arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/></event>
+    <event name="key">
+      <arg name="serial" type="uint"/><arg name="time" type="uint"/><arg name="key" type="uint"/><arg name="state" type="uint"/>
+    </event>
+    <event name="modifiers">
+      <arg name="serial" type="uint"/><arg name="depressed" type="uint"/><arg name="latched" type="uint"/><arg name="locked" type="uint"/><arg name="group" type="uint"/>
+    </event>
+    <event name="repeat_info"><arg name="rate" type="int"/><arg name="delay" type="int"/></event>
+  </interface>
+</protocol>

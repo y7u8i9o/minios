@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Shell roles (M25): toplevels, popups, layer surfaces, decorations
+     and the toplevel manager used by the panel. -->
+<protocol name="shell">
+  <interface name="shell" version="1">
+    <request name="get_toplevel">
+      <arg name="id" type="new_id" interface="toplevel"/>
+      <arg name="surface" type="object" interface="surface"/>
+    </request>
+    <request name="get_popup">
+      <arg name="id" type="new_id" interface="popup"/>
+      <arg name="surface" type="object" interface="surface"/>
+      <arg name="parent" type="object" interface="surface"/>
+      <arg name="positioner" type="object" interface="positioner"/>
+    </request>
+    <request name="create_positioner">
+      <arg name="id" type="new_id" interface="positioner"/>
+    </request>
+    <request name="get_layer_surface">
+      <arg name="id" type="new_id" interface="layer_surface"/>
+      <arg name="surface" type="object" interface="surface"/>
+      <arg name="layer" type="uint"/>
+      <arg name="namespace" type="string"/>
+    </request>
+    <request name="get_decoration">
+      <arg name="id" type="new_id" interface="decoration"/>
+      <arg name="toplevel" type="object" interface="toplevel"/>
+    </request>
+  </interface>
+
+  <interface name="toplevel" version="1">
+    <request name="set_title"><arg name="title" type="string"/></request>
+    <request name="set_app_id"><arg name="app_id" type="string"/></request>
+    <request name="set_min_size"><arg name="width" type="int"/><arg name="height" type="int"/></request>
+    <request name="set_max_size"><arg name="width" type="int"/><arg name="height" type="int"/></request>
+    <request name="move"><arg name="seat" type="object" interface="seat"/><arg name="serial" type="uint"/></request>
+    <request name="resize">
+      <arg name="seat" type="object" interface="seat"/><arg name="serial" type="uint"/><arg name="edges" type="uint"/>
+    </request>
+    <request name="set_maximized"/>
+    <request name="unset_maximized"/>
+    <request name="set_minimized"/>
+    <request name="ack_configure"><arg name="serial" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="configure">
+      <arg name="serial" type="uint"/><arg name="width" type="int"/><arg name="height" type="int"/><arg name="states" type="array"/>
+    </event>
+    <event name="close"/>
+  </interface>
+
+  <interface name="popup" version="1">
+    <request name="grab"><arg name="seat" type="object" interface="seat"/><arg name="serial" type="uint"/></request>
+    <request name="ack_configure"><arg name="serial" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="configure">
+      <arg name="serial" type="uint"/><arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </event>
+    <event name="done"/>
+  </interface>
+
+  <interface name="positioner" version="1">
+    <request name="set_size"><arg name="width" type="int"/><arg name="height" type="int"/></request>
+    <request name="set_anchor_rect">
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </request>
+    <request name="set_anchor"><arg name="anchor" type="uint"/></request>
+    <request name="set_gravity"><arg name="gravity" type="uint"/></request>
+    <request name="set_offset"><arg name="x" type="int"/><arg name="y" type="int"/></request>
+    <request name="set_constraint_adjustment"><arg name="adjustment" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+  </interface>
+
+  <interface name="layer_surface" version="1">
+    <request name="set_anchor"><arg name="anchor" type="uint"/></request>
+    <request name="set_exclusive_zone"><arg name="zone" type="int"/></request>
+    <request name="set_size"><arg name="width" type="int"/><arg name="height" type="int"/></request>
+    <request name="set_keyboard_interactivity"><arg name="mode" type="uint"/></request>
+    <request name="ack_configure"><arg name="serial" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="configure"><arg name="serial" type="uint"/><arg name="width" type="int"/><arg name="height" type="int"/></event>
+    <event name="closed"/>
+  </interface>
+
+  <interface name="decoration" version="1">
+    <request name="set_mode"><arg name="mode" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="mode"><arg name="mode" type="uint"/></event>
+  </interface>
+
+  <interface name="toplevel_manager" version="1">
+    <request name="destroy" type="destructor"/>
+    <event name="toplevel"><arg name="id" type="new_id" interface="toplevel_handle"/></event>
+  </interface>
+
+  <interface name="toplevel_handle" version="1">
+    <request name="activate"><arg name="seat" type="object" interface="seat"/></request>
+    <request name="minimize"/>
+    <request name="close"/>
+    <request name="destroy" type="destructor"/>
+    <event name="title"><arg name="title" type="string"/></event>
+    <event name="app_id"><arg name="app_id" type="string"/></event>
+    <event name="state"><arg name="states" type="array"/></event>
+    <event name="closed"/>
+  </interface>
+</protocol>

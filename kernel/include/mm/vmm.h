@@ -1,0 +1,80 @@
+#pragma once
+#include <kernel.h>
+#include <sync/spinlock.h>
+#include <lib/list.h>
+#include <arch/cpu.h>
+
+/* Mapping flags. */
+#define VM_READ     (1u << 0)
+#define VM_WRITE    (1u << 1)
+#define VM_EXEC     (1u << 2)
+#define VM_USER     (1u << 3)
+#define VM_NOCACHE  (1u << 4)   /* uncacheable, device memory */
+#define VM_WC       (1u << 5)   /* write combining, framebuffers */
+#define VM_GLOBAL   (1u << 6)   /* kept across CR3 loads, kernel mappings */
+#define VM_MMAP     (1u << 7)   /* region created by mmap, removable by munmap */
+#define VM_DEVICE   (1u << 8)   /* frames are device memory, not managed pages */
+#define VM_SHARED   (1u << 9)   /* shared mapping: fork shares frames without copy on write */
+#define VM_KERNEL_RW (VM_READ | VM_WRITE | VM_GLOBAL)
+
+/* Virtual layout. Lower half belongs to user space. */
+#define USER_BASE       0x0000000000001000UL
+#define USER_TOP        0x00007fffffffffffUL
+#define USER_STACK_TOP  0x00007ffffffff000UL
+#define USER_STACK_SIZE (1UL << 20)
+#define KMMIO_BASE      0xffffffa000000000UL   /* device mappings, 64 GiB */
+#define KMMIO_SIZE      (64UL << 30)
+#define KSTACK_BASE     0xffffffc000000000UL   /* kernel stacks with guards */
+#define KSTACK_SIZE     (16UL << 10)
+#define KSTACK_SLOT     (KSTACK_SIZE + PAGE_SIZE)
+#define KSTACK_SLOTS    4096
+#define USER_MMAP_TOP   0x00007f0000000000UL   /* mmap regions grow down from here */
+#define KHEAP_BASE      0xffffffd000000000UL   /* reserved for vmalloc style use */
+
+/* An address space. lock protects the page tables reachable from pml4_phys,
+ * the region list and the heap break. The kernel's instance is
+ * kernel_vmspace and its lock is kvm_lock. */
+struct vmspace {
+    uintptr_t pml4_phys;
+    struct spinlock lock;
+    struct list_head vmas;      /* struct vma, sorted by start */
+    uintptr_t brk_start;        /* heap region start, 0 if none */
+    uintptr_t brk;              /* current break, page aligned */
+    bool pinned;                /* kswapd must not evict from this space */
+    struct list_head link;      /* vmspaces, protected by vmspaces_lock */
+    cpu_mask_t cpu_mask;        /* CPUs with this space in CR3, atomic updates in vmspace_activate */
+};
+
+extern struct vmspace kernel_vmspace;
+/* Every user address space, for the swap daemon. */
+extern struct list_head vmspaces;
+extern struct spinlock vmspaces_lock;
+
+void vmm_init(void);
+
+int vmm_map(struct vmspace *vm, uintptr_t va, uintptr_t pa, size_t size, unsigned flags);
+int vmm_unmap(struct vmspace *vm, uintptr_t va, size_t size);
+int vmm_protect(struct vmspace *vm, uintptr_t va, size_t size, unsigned flags);
+bool vmm_translate(struct vmspace *vm, uintptr_t va, uintptr_t *pa, unsigned *flags);
+
+struct vmspace *vmspace_create(void);
+/* Unmap every 4 KiB frame mapped in the lower half, dropping a reference
+ * on each. */
+void vmspace_free_user_pages(struct vmspace *vm);
+void vmspace_destroy(struct vmspace *vm);
+void vmspace_activate(struct vmspace *vm);
+struct vmspace *vmspace_current(void);
+
+#include <mm/tlb.h>
+
+/* Map device memory into the kernel space. Returns the virtual address. */
+void *vmm_map_mmio(uintptr_t pa, size_t size, unsigned flags);
+
+/* Kernel stacks: KSTACK_SIZE bytes preceded by an unmapped guard page.
+ * Returns the top of the stack. */
+void *kstack_alloc(void);
+void kstack_free(void *top);
+
+/* Page fault entry from the trap handler. Returns true if resolved. */
+struct trapframe;
+bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr);

@@ -1,0 +1,20 @@
+A kernel that never panics has never been tested.
+%
+There are only two hard problems in operating systems: cache invalidation,
+naming things, and TLB shootdown.
+%
+The best debugger is a serial port and a patient mind.
+%
+An idle CPU sleeping in hlt is still doing its job.
+%
+Every unmap goes through tlb_flush_range. Every single one.
+%
+Locks are cheap. Lock ordering documents are cheaper. Deadlocks are not.
+%
+If it works on one CPU, run it on four.
+%
+Copy on write: the art of promising memory you have not given yet.
+%
+The initrd is read only. The disk is not. Choose wisely.
+%
+A page fault is not an error. It is a request.

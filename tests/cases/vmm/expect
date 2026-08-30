@@ -1,0 +1,3 @@
+kernel page tables active
+reclaimed [0-9]+ bootloader pages
+TEST PASS

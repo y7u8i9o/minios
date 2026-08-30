@@ -1,0 +1,15 @@
+apptest: started
+app: damage 0,0 400x300
+apptest: tick 1
+apptest: tick 3
+apptest: pipe readable
+apptest: clicked
+app: damage 6,6 388x30
+apptest: changed 'h'
+apptest: changed 'hi'
+apptest: selected 2
+apptest: close one
+apptest: close two
+apptest: exit 0
+gui_app: application framework ok
+TEST PASS

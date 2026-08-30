@@ -1,0 +1,124 @@
+minios boot test record
+date: Sat Aug 29 03:14:06 AWST 2026
+kernel: build/kernel.elf
+
+make test
+PASS backtrace
+PASS boot
+PASS exception
+PASS pmm
+tests: 4 passed, 0 failed
+
+case backtrace (cmdline: test=backtrace)
+exit code: 3
+limine: Loading executable `boot():/boot/kernel.elf`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 354 symbols, 8794 bytes
+[I boot] kernel at phys 1ff01000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=backtrace"
+[I pmm] 510 MiB usable, 129880 pages managed, page array 3072 KiB at 100000
+[I ktest] running test backtrace
+test_bt_c: depth 3, faulting
+
+exception 14: #PF page fault
+page fault at fffffffe00000000: kernel read not present
+
+*** kernel panic: unhandled exception 14 (#PF page fault) ***
+vector=14 error=0x0
+RIP=ffffffff800030bb CS=0008 RFLAGS=0000000000010082
+RSP=ffffffff80019280 SS=0010
+RAX=000000000000001d RBX=ffffffff80007800 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000046 RDI=ffffffff80005c10 RBP=ffffffff80019280
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff800061d0 R11=ffff8000fd0b4000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=fffffffe00000000 CR3=000000001ff7d000
+backtrace from trap frame:
+  [<ffffffff800030bb>] test_bt_c+0x1b/0x3c
+  [<ffffffff800030ec>] test_bt_b+0xc/0x19
+  [<ffffffff8000310c>] test_bt_a+0xc/0x19
+  [<ffffffff8000312e>] test_backtrace+0xe/0x1c
+  [<ffffffff80003059>] ktest_run_selected+0x69/0xa2
+  [<ffffffff80000180>] kmain+0x80/0x11b
+  [<ffffffff800049cb>] _start+0xf/0x13
+panic: exiting through isa-debug-exit
+panic: system halted
+
+case boot (cmdline: test=boot)
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 354 symbols, 8794 bytes
+[I boot] kernel at phys 1ff01000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=boot"
+[I pmm] 510 MiB usable, 129880 pages managed, page array 3072 KiB at 100000
+[I ktest] running test boot
+kprintf works: ok 1 beef
+TEST PASS
+
+case exception (cmdline: test=exception)
+exit code: 3
+limine: Loading executable `boot():/boot/kernel.elf`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 354 symbols, 8794 bytes
+[I boot] kernel at phys 1ff01000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=exception"
+[I pmm] 510 MiB usable, 129880 pages managed, page array 3072 KiB at 100000
+[I ktest] running test exception
+triggering #UD
+
+exception 6: #UD invalid opcode
+
+*** kernel panic: unhandled exception 6 (#UD invalid opcode) ***
+vector=6 error=0x0
+RIP=ffffffff80003442 CS=0008 RFLAGS=0000000000010086
+RSP=ffffffff800192b0 SS=0010
+RAX=000000000000000f RBX=ffffffff80007820 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000046 RDI=ffffffff80008040 RBP=ffffffff800192b0
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff800061d0 R11=ffff8000fd0b4000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=0000000000000000 CR3=000000001ff7d000
+backtrace from trap frame:
+  [<ffffffff80003442>] test_exception+0x12/0x22
+  [<ffffffff80003059>] ktest_run_selected+0x69/0xa2
+  [<ffffffff80000180>] kmain+0x80/0x11b
+  [<ffffffff800049cb>] _start+0xf/0x13
+panic: exiting through isa-debug-exit
+panic: system ha
+case pmm (cmdline: test=pmm)
+exit code: 1
+limine: Loading executable `boot():/boot/kernel.elf`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 354 symbols, 8794 bytes
+[I boot] kernel at phys 1ff01000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=pmm"
+[I pmm] 510 MiB usable, 129880 pages managed, page array 3072 KiB at 100000
+[I ktest] running test pmm
+pmm: 129880 pages total, 129880 free, 768 reserved (page array)
+  order  0 (      4 KiB): 2 free blocks
+  order  1 (      8 KiB): 3 free blocks
+  order  2 (     16 KiB): 4 free blocks
+  order  3 (     32 KiB): 2 free blocks
+  order  4 (     64 KiB): 3 free blocks
+  order  5 (    128 KiB): 2 free blocks
+  order  6 (    256 KiB): 1 free blocks
+  order  7 (    512 KiB): 1 free blocks
+  order  8 (   1024 KiB): 0 free blocks
+  order  9 (   2048 KiB): 1 free blocks
+  order 10 (   4096 KiB): 126 free blocks
+pmm: 129880 pages total, 129880 free, 768 reserved (page array)
+  order  0 (      4 KiB): 2 free blocks
+  order  1 (      8 KiB): 3 free blocks
+  order  2 (     16 KiB): 4 free blocks
+  order  3 (     32 KiB): 2 free blocks
+  order  4 (     64 KiB): 3 free blocks
+  order  5 (    128 KiB): 2 free blocks
+  order  6 (    256 KiB): 1 free blocks
+  order  7 (    512 KiB): 1 free blocks
+  order  8 (   1024 KiB): 0 free blocks
+  order  9 (   2048 KiB): 1 free blocks
+  order 10 (   4096 KiB): 126 free blocks
+TEST PASS

@@ -1,0 +1,5 @@
+mlfq scheduler with 8 levels
+worker 0 level
+worker 3 level
+spinner ran [0-9]+ loops, finished at level [1-7]
+TEST PASS

@@ -1,0 +1,214 @@
+#include <tests/ktest.h>
+#include <sched/user.h>
+#include <sched/proc.h>
+#include <drivers/ps2kbd.h>
+#include <mm/pmm.h>
+#include <console.h>
+#include <fs/vfs.h>
+#include <lib/string.h>
+#include <drivers/timer.h>
+
+/* M10: type a session into the keyboard buffer, then run the shell on it.
+ * The typed commands exercise builtins, PATH lookup, argument passing and
+ * the error path; the last command makes the shell exit with status 3. */
+static uint8_t scancode_for(char c)
+{
+    static const char row1[] = "1234567890-=";
+    static const char row2[] = "qwertyuiop[]";
+    static const char row3[] = "asdfghjkl;'`";
+    static const char row4[] = "\\zxcvbnm,./";
+    for (int i = 0; row1[i]; i++) if (row1[i] == c) return (uint8_t)(0x02 + i);
+    for (int i = 0; row2[i]; i++) if (row2[i] == c) return (uint8_t)(0x10 + i);
+    for (int i = 0; row3[i]; i++) if (row3[i] == c) return (uint8_t)(0x1e + i);
+    for (int i = 0; row4[i]; i++) if (row4[i] == c) return (uint8_t)(0x2b + i);
+    if (c == ' ') return 0x39;
+    if (c == '\n') return 0x1c;
+    return 0;
+}
+
+void type_ctrl(char c)
+{
+    ps2kbd_feed_scancode(0x1d);
+    uint8_t code = scancode_for(c);
+    ps2kbd_feed_scancode(code);
+    ps2kbd_feed_scancode(code | 0x80);
+    ps2kbd_feed_scancode(0x1d | 0x80);
+}
+
+void type_line(const char *s)
+{
+    for (; *s; s++) {
+        char c = *s;
+        bool shift = false;
+        static const char shifted[] = "<,>.|\\$4&7\"'_-(9)0:;*8?/!1";
+        for (const char *m = shifted; *m; m += 2) {
+            if (m[0] == c) {
+                c = m[1];
+                shift = true;
+                break;
+            }
+        }
+        if (c >= 'A' && c <= 'Z') {
+            c = (char)(c - 'A' + 'a');
+            shift = true;
+        }
+        if (shift)
+            ps2kbd_feed_scancode(0x2a);
+        uint8_t code = scancode_for(c);
+        ktest_assert(code != 0, "no scancode for '%c'", *s);
+        ps2kbd_feed_scancode(code);
+        ps2kbd_feed_scancode(code | 0x80);
+        if (shift)
+            ps2kbd_feed_scancode(0x2a | 0x80);
+    }
+}
+
+static void test_shell(void)
+{
+    type_line("help\n");
+    type_line("echo hello from sh\n");
+    type_line("pwd\n");
+    type_line("cd /bin\n");
+    type_line("pwd\n");
+    type_line("hello one two\n");
+    type_line("nosuchprogram\n");
+    type_line("cd /nowhere\n");
+    type_line("cd\n");
+    type_line("exit 3\n");
+
+    struct pmm_stats before, after;
+    pmm_get_stats(&before);
+    char *const argv[] = { "sh", NULL };
+    char *const envp[] = { "PATH=/bin", NULL };
+    struct proc *p = proc_create_user("/bin/sh", argv, envp, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/sh");
+    int status = proc_reap(p);
+    kprintf("sh exited with status 0x%x\n", status);
+    ktest_assert(status == PROC_STATUS_EXITED(3), "sh status 0x%x", status);
+    pmm_get_stats(&after);
+    ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
+                 (long)before.free_pages - (long)after.free_pages);
+}
+KTEST_DEFINE("shell", test_shell);
+
+/* M11: pipelines, redirections and directory listing through the shell. */
+static void test_pipes(void)
+{
+    type_line("ls /dev\n");
+    type_line("cat < /etc/motd\n");
+    type_line("cat /etc/motd | wc\n");
+    type_line("echo redirected to the console > /dev/console\n");
+    type_line("echo dropped > /dev/null\n");
+    type_line("cat /etc/motd | cat | cat | wc -l > /dev/null\n");
+    type_line("exit 5\n");
+
+    struct pmm_stats before, after;
+    pmm_get_stats(&before);
+    char *const argv[] = { "sh", NULL };
+    char *const envp[] = { "PATH=/bin", NULL };
+    struct proc *p = proc_create_user("/bin/sh", argv, envp, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/sh");
+    int status = proc_reap(p);
+    kprintf("sh exited with status 0x%x\n", status);
+    ktest_assert(status == PROC_STATUS_EXITED(5), "sh status 0x%x", status);
+    pmm_get_stats(&after);
+    ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
+                 (long)before.free_pages - (long)after.free_pages);
+}
+KTEST_DEFINE("pipes", test_pipes);
+
+/* M15: control C terminates the foreground program, ps lists processes,
+ * kill sends signals. */
+static void test_ctrlc(void)
+{
+    type_line("cat\n");
+    type_line("this line reaches cat\n");
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/sh");
+    /* Let the shell start cat and cat echo its line, then interrupt it
+     * while it blocks on the console. */
+    sleep_ms(1500);
+    type_ctrl('c');
+    sleep_ms(500);
+    type_line("ps\n");
+    type_line("kill -2 99999\n");
+    type_line("exit 4\n");
+    int status = proc_reap(p);
+    kprintf("sh exited with status 0x%x\n", status);
+    ktest_assert(status == PROC_STATUS_EXITED(4), "sh status 0x%x", status);
+}
+KTEST_DEFINE("ctrlc", test_ctrlc);
+
+/* M15: the shutdown utility signals init, which performs the orderly
+ * power off through reboot(). The host checks the image afterwards. */
+static void test_shutdown_cmd(void)
+{
+    type_line("echo before shutdown > /marker.txt\n");
+    type_line("cat /marker.txt\n");
+    type_line("shutdown\n");
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    int status = proc_reap(p);
+    ktest_fail("init exited with status 0x%x", status);
+}
+KTEST_DEFINE("shutdown_cmd", test_shutdown_cmd);
+
+/* M16: quoting, variables, lists and background jobs typed into an
+ * interactive shell. */
+static void test_shell2(void)
+{
+    type_line("x=/bin\n");
+    type_line("echo 'literal $HOME' and expanded $x\n");
+    type_line("sleep 0.5 &\n");
+    type_line("wait\n");
+    type_line("echo after wait\n");
+    type_line("true && echo first ok || echo not shown\n");
+    type_line("echo \"a b\" c | wc -w\n");
+    type_line("exit 9\n");
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/sh");
+    int status = proc_reap(p);
+    kprintf("sh exited with status 0x%x\n", status);
+    ktest_assert(status == PROC_STATUS_EXITED(9), "sh status 0x%x", status);
+}
+KTEST_DEFINE("shell2", test_shell2);
+
+/* M16: the editor in raw keyboard mode. Two lines are queued before it
+ * starts; cursor up, Home, an insertion, save and quit follow once it
+ * runs. */
+static void test_editor(void)
+{
+    type_line("hello\nworld");
+    struct proc *p = proc_create_user("/bin/edit", (char *const[]){ "edit", "/edited.txt", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/edit");
+    /* Cursor keys only exist in raw mode, so wait until the editor has
+     * switched the terminal. */
+    for (int i = 0; i < 100 && (ps2kbd_get_lflag() & ICANON); i++)
+        sleep_ms(50);
+    ktest_assert(!(ps2kbd_get_lflag() & ICANON), "editor did not enter raw mode");
+    ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0x48);   /* up */
+    ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0xc8);
+    ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0x47);   /* home */
+    ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0xc7);
+    type_line("1");
+    type_ctrl('s');
+    type_ctrl('q');
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "edit status 0x%x", status);
+    struct file *f;
+    ktest_assert(vfs_open("/edited.txt", O_RDONLY, 0, &f) == 0, "open /edited.txt");
+    char buf[64];
+    long n = file_read(f, buf, sizeof buf - 1);
+    file_put(f);
+    ktest_assert(n > 0, "read");
+    buf[n] = '\0';
+    ktest_assert(strcmp(buf, "1hello\nworld\n") == 0, "content '%s'", buf);
+    ktest_assert(ps2kbd_get_lflag() == (ICANON | ECHO | ISIG), "terminal mode not restored");
+    kprintf("edited file matches\n");
+}
+KTEST_DEFINE("editor", test_editor);

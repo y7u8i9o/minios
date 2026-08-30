@@ -1,0 +1,110 @@
+/* Host replacement for client.c: windows are plain buffers, damage is
+ * recorded, and events come from a queue the tests fill. */
+#include <gui/client.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
+#include "fake.h"
+
+static int next_id = 1;
+static struct wmsg queue[256];
+static int qhead, qtail;
+struct rect fake_last_damage;
+int fake_damage_count;
+static char clip[WSRV_CLIP_MAX];
+static int clip_len;
+
+long uptime_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+void fake_push(const struct wmsg *m)
+{
+    queue[qtail] = *m;
+    qtail = (qtail + 1) % 256;
+}
+
+int gui_connect(void) { return 0; }
+void gui_disconnect(void) {}
+int gui_screen_width(void) { return 1024; }
+int gui_screen_height(void) { return 768; }
+
+static void alloc_surfaces(struct gui_window *w, int width, int height)
+{
+    free(w->surf.pixels);
+    w->width = width;
+    w->height = height;
+    w->surf = (struct surface){ calloc((size_t)width * height, 4), width, height, width };
+}
+
+struct gui_window *gui_create_window(int width, int height, const char *title)
+{
+    struct gui_window *w = calloc(1, sizeof *w);
+    w->id = next_id++;
+    alloc_surfaces(w, width, height);
+    return w;
+}
+
+struct gui_window *gui_create_layer_window(int width, int height, int layer, int anchor, int exclusive,
+                                           int keyboard, const char *ns)
+{
+    return gui_create_window(width > 0 ? width : 1024, height > 0 ? height : 740, ns);
+}
+
+void gui_destroy_window(struct gui_window *w)
+{
+    free(w->surf.pixels);
+    free(w);
+}
+
+void gui_damage(struct gui_window *w, int x, int y, int width, int height)
+{
+    struct rect r = { x, y, width, height };
+    fake_last_damage = r;
+    fake_damage_count++;
+}
+
+void gui_flush(void) {}
+
+void gui_move(struct gui_window *w, int x, int y) {}
+void gui_set_title(struct gui_window *w, const char *title) {}
+void gui_set_min_size(struct gui_window *w, int width, int height) {}
+
+void gui_resize(struct gui_window *w, int width, int height)
+{
+    alloc_surfaces(w, width, height);
+    struct wmsg m = { .type = WM_RESIZED, .window = w->id, .a = width, .b = height };
+    fake_push(&m);
+}
+
+int gui_clipboard_set(const char *text, int len)
+{
+    if (len > WSRV_CLIP_MAX) len = WSRV_CLIP_MAX;
+    memcpy(clip, text, (size_t)len);
+    clip_len = len;
+    return 0;
+}
+
+int gui_clipboard_get(char *buf, int size)
+{
+    int n = clip_len < size ? clip_len : size;
+    memcpy(buf, clip, (size_t)n);
+    if (n < size)
+        buf[n] = '\0';
+    return n;
+}
+
+int gui_next_event(struct wmsg *ev, int timeout_ms)
+{
+    if (qhead == qtail)
+        return 0;
+    *ev = queue[qhead];
+    qhead = (qhead + 1) % 256;
+    return 1;
+}
+
+int gui_event_fd(void) { return -1; }

@@ -1,0 +1,13 @@
+comptest: window 'source' ready
+comptest: window 'target' ready
+comptest: drag requested
+comp: selection set by client 1 \(text/plain\)
+comp: drag started by client 1
+comp: drag enter surface 2
+comp: drop on surface 2
+comptest: drop
+comptest: source sent text/plain
+comptest: drop received 'hello from the source' as text/plain
+comptest: source finished
+comp_data: data device ok
+TEST PASS

@@ -1,0 +1,15 @@
+args: 2 x y all=x y
+hello world single \$NAME brace world!
+escaped \$NAME quoted "inner"
+child sees yes
+status after false: 1
+and-ran
+or-ran
+one
+two
+      2
+background started
+background finished
+      1
+done
+/bin/sh exited with status 0x700

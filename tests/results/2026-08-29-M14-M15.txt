@@ -1,0 +1,1408 @@
+minios boot test record, M14 to M15, 2026-08-29 13:47 AWST
+command: make test
+
+PASS backtrace
+PASS blk
+PASS boot
+PASS ctrlc
+PASS exception
+PASS fork
+PASS fs
+PASS kbd
+PASS libc
+PASS mfs_user
+PASS mfs
+PASS pipes
+PASS pmm
+PASS sched
+PASS shell
+PASS shutdown_cmd
+PASS shutdown
+PASS signals
+PASS slab_redzone
+PASS slab
+PASS swap
+PASS timer
+PASS vmm
+tests: 23 passed, 0 failed
+
+===== backtrace (cmdline: test=backtrace) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=backtrace"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62893700 ticks/s at divider 16, 62893 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test backtrace
+test_bt_c: depth 3, faulting
+
+exception 14: #PF page fault
+page fault at fffffffe00000000: kernel read not present
+
+*** kernel panic: unhandled exception 14 (#PF page fault) ***
+thread kinit (tid 2), process kernel (pid 0)
+vector=14 error=0x0
+RIP=ffffffff800161fb CS=0008 RFLAGS=0000000000010282
+RSP=ffffffc000004e80 SS=0010
+RAX=000000000000001d RBX=ffffffff80020420 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000246 RDI=ffffffff8001d9c8 RBP=ffffffc000004e80
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff8001eb30 R11=ffff8000fd384000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=fffffffe00000000 CR3=000000001fe16000
+backtrace from trap frame:
+  [<ffffffff800161fb>] test_bt_c+0x1b/0x40
+  [<ffffffff8001622c>] test_bt_b+0xc/0x20
+  [<ffffffff8001624c>] test_bt_a+0xc/0x20
+  [<ffffffff8001626e>] test_backtrace+0xe/0x20
+  [<ffffffff80016199>] ktest_run_selected+0x69/0xb0
+  [<ffffffff80000473>] kinit+0xb3/0x230
+  [<ffffffff8000960e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+===== blk (cmdline: test=blk root=initrd) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=blk root=initrd"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62993700 ticks/s at divider 16, 62993 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I vfs] mounted initrd (initrd) on /
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test blk
+blk: 1000 x 4 KiB reads in 1285 ms, writes in 1309 ms
+TEST PASS
+
+===== boot (cmdline: test=boot) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=boot"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62825000 ticks/s at divider 16, 62825 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test boot
+kprintf works: ok 1 beef
+TEST PASS
+
+===== ctrlc (cmdline: test=ctrlc) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=ctrlc"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62806200 ticks/s at divider 16, 62806 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test ctrlc
+cat
+this line reaches cat
+[I user] process sh (pid 1) from /bin/sh, entry 4002e3
+/ $ this line reaches cat
+^C
+[I signal] process cat (pid 2) terminated by signal 2
+[cat terminated by signal 2]
+/ $ ps
+kill -2 99999
+exit 4
+  PID  PPID  PGID STATE    NAME
+    0     0     0 running  kernel
+    1     0     1 running  sh
+    3     1     3 running  ps
+/ $ kill: 99999: No such process
+/ $ sh exited with status 0x400
+TEST PASS
+
+===== exception (cmdline: test=exception) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=exception"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62812500 ticks/s at divider 16, 62812 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test exception
+triggering #UD
+
+exception 6: #UD invalid opcode
+
+*** kernel panic: unhandled exception 6 (#UD invalid opcode) ***
+thread kinit (tid 2), process kernel (pid 0)
+vector=6 error=0x0
+RIP=ffffffff80016e22 CS=0008 RFLAGS=0000000000010286
+RSP=ffffffc000004eb0 SS=0010
+RAX=000000000000000f RBX=ffffffff80020450 RCX=0000000000000008 RDX=0000000000aaaaaa
+RSI=0000000000000246 RDI=ffffffff800214e0 RBP=ffffffc000004eb0
+R8 =0000000000aaaaaa R9 =0000000000000000 R10=ffffffff8001eb30 R11=ffff8000fd384000
+R12=0000000000000000 R13=0000000000000000 R14=0000000000000000 R15=0000000000000000
+CR2=0000000000000000 CR3=000000001fe16000
+backtrace from trap frame:
+  [<ffffffff80016e22>] test_exception+0x12/0x30
+  [<ffffffff80016199>] ktest_run_selected+0x69/0xb0
+  [<ffffffff80000473>] kinit+0xb3/0x230
+  [<ffffffff8000960e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+===== fork (cmdline: test=run prog=/bin/forktest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/forktest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 63000000 ticks/s at divider 16, 63000 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process forktest (pid 1) from /bin/forktest, entry 400a70
+forktest: pid 1 ppid 0
+hello from user mode, pid 4, ppid 1, argc 3
+  argv[0] = "/bin/hello"
+  argv[1] = "one"
+  argv[2] = "two"
+[I signal] process forktest (pid 5) terminated by signal 15
+
+exception 14: #PF page fault
+page fault at 0000000000000008: user write not present
+[E trap] process forktest (pid 7) killed by exception 14 at rip 400958
+vector=14 error=0x6
+RIP=0000000000400958 CS=0023 RFLAGS=0000000000010246
+RSP=00007ffffffb3ed0 SS=001b
+RAX=0000000000000000 RBX=0000000000000006 RCX=0000000000403cb0 RDX=0000000000000000
+RSI=0000000000000000 RDI=0000000000000000 RBP=00007fffffffef50
+R8 =0000000000000000 R9 =0000000000000000 R10=0000000000000000 R11=0000000000000216
+R12=00007fffffffefb8 R13=0000000000000002 R14=0000000000000000 R15=0000000000000000
+CR2=0000000000000008 CR3=000000001fec6000
+forktest: 0 failures
+/bin/forktest exited with status 0x0
+TEST PASS
+
+===== fs (cmdline: test=run prog=/bin/fstest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/fstest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62856200 ticks/s at divider 16, 62856 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process fstest (pid 1) from /bin/fstest, entry 401233
+fstest: pid 1
+fstest: 0 failures
+/bin/fstest exited with status 0x0
+TEST PASS
+
+===== kbd (cmdline: test=kbd) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=kbd"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62831200 ticks/s at divider 16, 62831 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test kbd
+Hi
+ab c
+q^C
+X1
+TEST PASS
+
+===== libc (cmdline: test=run prog=/bin/libctest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/libctest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62868700 ticks/s at divider 16, 62868 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process libctest (pid 1) from /bin/libctest, entry 401004
+libctest: fputs to stdout
+libctest: fprintf to stderr
+xyz
+libctest: puts
+!
+libctest: 0 failures
+libctest: atexit handler ran
+/bin/libctest exited with status 0x0
+TEST PASS
+
+===== mfs_user (cmdline: test=run prog=/bin/mfstest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/mfstest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62843700 ticks/s at divider 16, 62843 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process mfstest (pid 1) from /bin/mfstest, entry 4008da
+mfstest: pid 1
+mfstest: 0 failures
+/bin/mfstest exited with status 0x0
+TEST PASS
+
+===== mfs (cmdline: test=mfs) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=mfs"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62875000 ticks/s at divider 16, 62875 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test mfs
+mfs: 3383 free blocks at start
+mfs: /big uses 1155 blocks
+TEST PASS
+
+===== pipes (cmdline: test=pipes) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=pipes"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62906200 ticks/s at divider 16, 62906 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test pipes
+ls /dev
+cat < /etc/motd
+cat /etc/motd | wc
+echo redirected to the console > /dev/console
+echo dropped > /dev/null
+cat /etc/motd | cat | cat | wc -l > /dev/null
+exit 5
+[I user] process sh (pid 1) from /bin/sh, entry 4002e3
+/ $ console
+kbd
+meminfo
+null
+proc
+vda
+zero
+/ $ Welcome to minios.
+This message lives on the initrd.
+/ $       2       9      53
+/ $ redirected to the console
+/ $ / $ / $ sh exited with status 0x500
+TEST PASS
+
+===== pmm (cmdline: test=pmm) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=pmm"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62850000 ticks/s at divider 16, 62850 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test pmm
+pmm: 129310 pages total, 128727 free, 768 reserved (page array)
+  order  0 (      4 KiB): 1 free blocks
+  order  1 (      8 KiB): 1 free blocks
+  order  2 (     16 KiB): 1 free blocks
+  order  3 (     32 KiB): 0 free blocks
+  order  4 (     64 KiB): 1 free blocks
+  order  5 (    128 KiB): 0 free blocks
+  order  6 (    256 KiB): 1 free blocks
+  order  7 (    512 KiB): 1 free blocks
+  order  8 (   1024 KiB): 0 free blocks
+  order  9 (   2048 KiB): 1 free blocks
+  order 10 (   4096 KiB): 125 free blocks
+pmm: 129310 pages total, 128727 free, 768 reserved (page array)
+  order  0 (      4 KiB): 1 free blocks
+  order  1 (      8 KiB): 1 free blocks
+  order  2 (     16 KiB): 1 free blocks
+  order  3 (     32 KiB): 0 free blocks
+  order  4 (     64 KiB): 1 free blocks
+  order  5 (    128 KiB): 0 free blocks
+  order  6 (    256 KiB): 1 free blocks
+  order  7 (    512 KiB): 1 free blocks
+  order  8 (   1024 KiB): 0 free blocks
+  order  9 (   2048 KiB): 1 free blocks
+  order 10 (   4096 KiB): 125 free blocks
+TEST PASS
+
+===== sched (cmdline: test=sched) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=sched"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62831200 ticks/s at divider 16, 62831 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test sched
+worker 0 level 0 iteration 0
+worker 0 level 0 iteration 200
+worker 0 level 0 iteration 400
+worker 1 level 2 iteration 0
+worker 1 level 2 iteration 200
+worker 1 level 2 iteration 400
+worker 2 level 4 iteration 0
+worker 2 level 4 iteration 200
+worker 2 level 4 iteration 400
+worker 3 level 6 iteration 0
+worker 3 level 6 iteration 200
+worker 3 level 6 iteration 400
+spinner ran 16033472 loops, finished at level 4
+run queues:
+  level 0:
+  level 1:
+  level 2:
+  level 3:
+  level 4:
+  level 5:
+  level 6:
+  level 7:
+sched: uptime 1282 ms
+TEST PASS
+
+===== shell (cmdline: test=shell) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=shell"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62825000 ticks/s at divider 16, 62825 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test shell
+help
+echo hello from sh
+pwd
+cd /bin
+pwd
+hello one two
+nosuchprogram
+cd /nowhere
+cd
+exit 3
+[I user] process sh (pid 1) from /bin/sh, entry 4002e3
+/ $ builtins: cd exit pwd help; programs are searched in PATH
+redirections: < file, > file, >> file; pipelines with |
+/ $ hello from sh
+/ $ /
+/ $ /bin $ /bin
+/bin $ hello from user mode, pid 3, ppid 1, argc 3
+  argv[0] = "hello"
+  argv[1] = "one"
+  argv[2] = "two"
+/bin $ nosuchprogram: No such file or directory
+/bin $ cd: /nowhere: No such file or directory
+/bin $ / $ sh exited with status 0x300
+TEST PASS
+
+===== shutdown_cmd (cmdline: test=shutdown_cmd) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=shutdown_cmd"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62850000 ticks/s at divider 16, 62850 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test shutdown_cmd
+echo before shutdown > /marker.txt
+cat /marker.txt
+shutdown
+[I user] process init (pid 1) from /bin/init, entry 40022f
+init: pid 1
+/ $ / $ before shutdown
+/ $ init: powering off
+[I kernel] reboot(0) requested by init
+[I signal] process sh (pid 2) terminated by signal 15
+[I vfs] unmounted /initrd
+[I mfs] vda unmounted clean, 3382 free blocks
+[I vfs] unmounted /
+system powering off
+
+===== shutdown (cmdline: init=/bin/shutdowntest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "init=/bin/shutdowntest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62812500 ticks/s at divider 16, 62812 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I user] process shutdowntest (pid 1) from /bin/shutdowntest, entry 4001dc
+[I boot] boot complete
+shutdowntest: shutting down
+[I kernel] reboot(0) requested by init
+[I vfs] unmounted /initrd
+[I mfs] vda unmounted clean, 3381 free blocks
+[I vfs] unmounted /
+system powering off
+
+===== signals (cmdline: test=run prog=/bin/sigtest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/sigtest"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62931200 ticks/s at divider 16, 62931 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process sigtest (pid 1) from /bin/sigtest, entry 400a20
+sigtest: pid 1
+[I signal] process sigtest (pid 2) terminated by signal 15
+
+exception 14: #PF page fault
+page fault at 0000000000000000: user write not present
+[I signal] process sigtest (pid 7) terminated by signal 13
+[I signal] process cat (pid 8) terminated by signal 2
+[I signal] process sigtest (pid 9) terminated by signal 15
+[I signal] process sigtest (pid 10) terminated by signal 15
+sigtest: 0 failures
+/bin/sigtest exited with status 0x0
+TEST PASS
+
+===== slab_redzone (cmdline: test=slab_redzone) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=slab_redzone"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 63025000 ticks/s at divider 16, 63025 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test slab_redzone
+
+*** kernel panic: slab kmalloc-64: redzone after object 0xffff800000005040 corrupted ***
+thread kinit (tid 2), process kernel (pid 0)
+backtrace:
+  [<ffffffff8000380e>] cache_free_locked+0x22e/0x230
+  [<ffffffff80003ed5>] kfree+0x115/0x150
+  [<ffffffff80018f38>] test_slab_redzone+0x38/0x60
+  [<ffffffff80016199>] ktest_run_selected+0x69/0xb0
+  [<ffffffff80000473>] kinit+0xb3/0x230
+  [<ffffffff8000960e>] thread_start+0x2e/0x40
+panic: exiting through isa-debug-exit
+
+===== slab (cmdline: test=slab) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=slab"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 63006200 ticks/s at divider 16, 63006 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test slab
+slab caches:
+  kmem_cache     obj   152 stride   192 order 0 per slab  21 slabs    1 objects 10
+  kmalloc-16     obj    16 stride    48 order 0 per slab  84 slabs    1 objects 46
+  kmalloc-32     obj    32 stride    64 order 0 per slab  63 slabs    1 objects 38
+  kmalloc-64     obj    64 stride    96 order 0 per slab  42 slabs    4 objects 87
+  kmalloc-128    obj   128 stride   160 order 0 per slab  25 slabs   14 objects 176
+  kmalloc-256    obj   256 stride   288 order 0 per slab  14 slabs   46 objects 371
+  kmalloc-512    obj   512 stride   544 order 0 per slab   7 slabs    7 objects 49
+  kmalloc-1024   obj  1024 stride  1056 order 1 per slab   7 slabs   22 objects 152
+  kmalloc-2048   obj  2048 stride  2080 order 2 per slab   7 slabs   45 objects 311
+  kmalloc-4096   obj  4096 stride  4128 order 3 per slab   7 slabs  122 objects 848
+  kmalloc-8192   obj  8192 stride  8224 order 4 per slab   7 slabs   51 objects 167
+TEST PASS
+
+===== swap (cmdline: test=run prog=/bin/swaptest) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 7e11000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=run prog=/bin/swaptest"
+[I pmm] 122 MiB usable, 31267 pages managed, page array 764 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 7e0a000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62956200 ticks/s at divider 16, 62956 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:04.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 8 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/vdb registered
+[I virtio-blk] vdb: 196608 sectors (96 MiB), queue 128, vector 41, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] vdb: 24575 slots (95 MiB)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test run
+[I user] process swaptest (pid 1) from /bin/swaptest, entry 400834
+swaptest: pid 1, MemTotal 126284 kB, SwapTotal 98300 kB
+swaptest: filling 154 MiB
+swaptest: fill at 0 MiB
+swaptest: fill at 32 MiB
+swaptest: fill at 64 MiB
+swaptest: fill at 96 MiB
+swaptest: fill at 128 MiB
+swaptest: verifying, swapped out 8896
+swaptest: verify at 0 MiB
+swaptest: verify at 32 MiB
+swaptest: verify at 64 MiB
+swaptest: verify at 96 MiB
+swaptest: verify at 128 MiB
+swaptest: fill at 0 MiB
+swaptest: fill at 32 MiB
+swaptest: fill at 64 MiB
+swaptest: fill at 96 MiB
+swaptest: fill at 128 MiB
+swaptest: verify at 0 MiB
+swaptest: verify at 32 MiB
+swaptest: verify at 64 MiB
+swaptest: verify at 96 MiB
+swaptest: verify at 128 MiB
+swaptest: swapped out 127383, in 118279, MemFree 2248 kB
+swaptest: 0 failures
+/bin/swaptest exited with status 0x0
+swap: 127415 pages out, 118279 in
+TEST PASS
+
+===== timer (cmdline: test=timer) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=timer"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62831200 ticks/s at divider 16, 62831 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test timer
+timer: 100 ticks for 10 x 10 ms, uptime 160 ms
+TEST PASS
+
+===== vmm (cmdline: test=vmm) =====
+limine: Loading executable `boot():/boot/kernel.elf`...
+limine: Loading module `boot():/boot/initrd.tar`...
+[I fbcon] 1280x800 framebuffer, 160x50 text cells
+minios booting
+[I ksyms] 743 symbols, 20087 bytes
+[I boot] kernel at phys 1fe1d000 virt ffffffff80000000, hhdm offset ffff800000000000
+[I boot] cmdline: "test=vmm"
+[I pmm] 506 MiB usable, 129006 pages managed, page array 3072 KiB at 100000
+[I vmm] kernel page tables active, pml4 at 1fe16000
+[I pmm] reclaimed 304 bootloader pages
+[I slab] slab allocator ready, 10 kmalloc size classes, debug 1
+[I initrd] 28 entries in 2625536 bytes
+[I vfs] vfs ready
+[I vfs] filesystem initrd registered
+[I vfs] filesystem devfs registered
+[I devfs] /dev/console registered
+[I devfs] /dev/kbd registered
+[I devfs] /dev/null registered
+[I devfs] /dev/zero registered
+[I devfs] /dev/proc registered
+[I vfs] filesystem mfs registered
+[I apic] local apic at fee00000, id 0
+[I apic] i/o apic at fec00000, 24 redirection entries
+[I apic] timer: 62868700 ticks/s at divider 16, 62868 per interrupt at 1000 Hz
+[I ps2kbd] ps/2 keyboard on irq 33
+[I pci] 00:00.0 8086:29c0 class 0600
+[I pci] 00:01.0 1234:1111 class 0300
+[I pci] 00:02.0 8086:10d3 class 0200
+[I pci] 00:03.0 1af4:1001 class 0100
+[I pci] 00:1f.0 8086:2918 class 0601
+[I pci] 00:1f.2 8086:2922 class 0106
+[I pci] 00:1f.3 8086:2930 class 0c05
+[I pci] 7 functions
+[I bcache] 256 buffers of 4096 bytes
+[I devfs] /dev/vda registered
+[I virtio-blk] vda: 32768 sectors (16 MiB), queue 128, vector 40, flush 1
+[I devfs] /dev/meminfo registered
+[I swap] no swap device (vdb)
+[I syscall] syscall entry at 0xffffffff8001aee7, 43 calls
+[I sched] mlfq scheduler with 8 levels, base slice 10 ms
+[I mfs] vda: 4096 blocks, 1024 inodes, 3383 free blocks, mount 1, clean
+[I vfs] mounted mfs (vda) on /
+[I vfs] mounted initrd (initrd) on /initrd
+[I vfs] mounted devfs (devfs) on /dev
+[I ktest] running test vmm
+vmm: 128727 pages before, 128725 after
+TEST PASS

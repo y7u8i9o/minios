@@ -1,0 +1,5 @@
+# type program
+text/* /bin/gedit
+image/* /bin/view
+inode/directory /bin/files
+* /bin/hexview

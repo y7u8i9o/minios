@@ -1,0 +1,370 @@
+#include <syscall/syscalls.h>
+#include <arch/trap.h>
+#include <sched/thread.h>
+#include <sched/proc.h>
+#include <fs/vfs.h>
+#include <fs/fdtable.h>
+#include <ipc/pipe.h>
+#include <lib/string.h>
+#include <errno.h>
+
+static struct fdtable *cur_fds(void)
+{
+    return &thread_current()->proc->fds;
+}
+
+long sys_write(struct trapframe *tf)
+{
+    int fd = (int)SYSARG0(tf);
+    uintptr_t buf = SYSARG1(tf);
+    size_t len = SYSARG2(tf);
+    if (!user_range_ok(buf, len, false))
+        return -EFAULT;
+    struct file *f = fdtable_get(cur_fds(), fd);
+    if (!f)
+        return -EBADF;
+    long r = file_write(f, (const char *)buf, len);
+    file_put(f);
+    return r;
+}
+
+long sys_read(struct trapframe *tf)
+{
+    int fd = (int)SYSARG0(tf);
+    uintptr_t buf = SYSARG1(tf);
+    size_t len = SYSARG2(tf);
+    if (!user_range_ok(buf, len, true))
+        return -EFAULT;
+    struct file *f = fdtable_get(cur_fds(), fd);
+    if (!f)
+        return -EBADF;
+    long r = file_read(f, (char *)buf, len);
+    file_put(f);
+    return r;
+}
+
+long sys_open(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    int flags = (int)SYSARG1(tf);
+    uint32_t mode = (uint32_t)SYSARG2(tf);
+    struct file *f;
+    r = vfs_open(path, flags, mode, &f);
+    if (r < 0)
+        return r;
+    r = fdtable_install(cur_fds(), f, 0);
+    if (r < 0)
+        file_put(f);
+    else if (flags & O_CLOEXEC)
+        fdtable_set_cloexec(cur_fds(), (int)r, true);
+    return r;
+}
+
+/* fcntl(fd, cmd, arg): descriptor flags, file status flags, dup. */
+long sys_fcntl(struct trapframe *tf)
+{
+    int fd = (int)SYSARG0(tf), cmd = (int)SYSARG1(tf);
+    long arg = (long)SYSARG2(tf);
+    struct file *f = fdtable_get(cur_fds(), fd);
+    if (!f)
+        return -EBADF;
+    long r = 0;
+    switch (cmd) {
+    case F_GETFD:
+        r = fdtable_get_cloexec(cur_fds(), fd) ? FD_CLOEXEC : 0;
+        break;
+    case F_SETFD:
+        fdtable_set_cloexec(cur_fds(), fd, (arg & FD_CLOEXEC) != 0);
+        break;
+    case F_GETFL:
+        r = f->flags;
+        break;
+    case F_SETFL:
+        f->flags = (f->flags & ~(O_NONBLOCK | O_APPEND)) | (int)(arg & (O_NONBLOCK | O_APPEND));
+        break;
+    case F_DUPFD:
+    case F_DUPFD_CLOEXEC:
+        file_ref(f);
+        r = fdtable_install(cur_fds(), f, (int)arg);
+        if (r < 0)
+            file_put(f);
+        else if (cmd == F_DUPFD_CLOEXEC)
+            fdtable_set_cloexec(cur_fds(), (int)r, true);
+        break;
+    default:
+        r = -EINVAL;
+    }
+    file_put(f);
+    return r;
+}
+
+long sys_close(struct trapframe *tf)
+{
+    return fdtable_close(cur_fds(), (int)SYSARG0(tf));
+}
+
+long sys_lseek(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = file_lseek(f, (long)SYSARG1(tf), (int)SYSARG2(tf));
+    file_put(f);
+    return r;
+}
+
+long sys_dup(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = fdtable_install(cur_fds(), f, 0);
+    if (r < 0)
+        file_put(f);
+    return r;
+}
+
+long sys_dup2(struct trapframe *tf)
+{
+    int oldfd = (int)SYSARG0(tf), newfd = (int)SYSARG1(tf);
+    if (newfd < 0 || newfd >= OPEN_MAX)
+        return -EBADF;
+    struct file *f = fdtable_get(cur_fds(), oldfd);
+    if (!f)
+        return -EBADF;
+    if (oldfd == newfd) {
+        file_put(f);
+        return newfd;
+    }
+    return fdtable_install_at(cur_fds(), f, newfd);
+}
+
+long sys_stat(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    uintptr_t st = SYSARG1(tf);
+    if (!user_range_ok(st, sizeof(struct stat), true))
+        return -EFAULT;
+    struct inode *ino;
+    r = vfs_lookup(path, &ino);
+    if (r < 0)
+        return r;
+    inode_stat(ino, (struct stat *)st);
+    inode_put(ino);
+    return 0;
+}
+
+long sys_fstat(struct trapframe *tf)
+{
+    uintptr_t st = SYSARG1(tf);
+    if (!user_range_ok(st, sizeof(struct stat), true))
+        return -EFAULT;
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    if (f->inode) {
+        inode_stat(f->inode, (struct stat *)st);
+    } else {
+        memset((void *)st, 0, sizeof(struct stat));
+        ((struct stat *)st)->st_mode = S_IFIFO | 0600;
+    }
+    file_put(f);
+    return 0;
+}
+
+long sys_getdents(struct trapframe *tf)
+{
+    uintptr_t buf = SYSARG1(tf);
+    size_t count = SYSARG2(tf);
+    if (!user_range_ok(buf, count, true))
+        return -EFAULT;
+    if (count < sizeof(struct dirent))
+        return -EINVAL;
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = file_getdents(f, (struct dirent *)buf, count);
+    file_put(f);
+    return r;
+}
+
+/* Helpers for the single path operations. */
+static long path_op(struct trapframe *tf, int (*fn)(const char *))
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    return fn(path);
+}
+
+static long path2_op(struct trapframe *tf, int (*fn)(const char *, const char *))
+{
+    char a[USER_PATH_MAX], b[USER_PATH_MAX];
+    long r = copy_string_from_user(a, SYSARG0(tf), sizeof a);
+    if (r < 0)
+        return r;
+    r = copy_string_from_user(b, SYSARG1(tf), sizeof b);
+    if (r < 0)
+        return r;
+    return fn(a, b);
+}
+
+long sys_mkdir(struct trapframe *tf)
+{
+    return path_op(tf, vfs_mkdir);
+}
+
+long sys_unlink(struct trapframe *tf)
+{
+    return path_op(tf, vfs_unlink);
+}
+
+long sys_rmdir(struct trapframe *tf)
+{
+    return path_op(tf, vfs_rmdir);
+}
+
+long sys_rename(struct trapframe *tf)
+{
+    return path2_op(tf, vfs_rename);
+}
+
+long sys_link(struct trapframe *tf)
+{
+    return path2_op(tf, vfs_link);
+}
+
+static long pipe_common(uintptr_t fds, int flags);
+
+long sys_pipe(struct trapframe *tf)
+{
+    return pipe_common(SYSARG0(tf), 0);
+}
+
+/* pipe2(fds, flags): O_NONBLOCK and O_CLOEXEC. */
+long sys_pipe2(struct trapframe *tf)
+{
+    return pipe_common(SYSARG0(tf), (int)SYSARG1(tf) & (O_NONBLOCK | O_CLOEXEC));
+}
+
+static long pipe_common(uintptr_t fds, int flags)
+{
+    if (!user_range_ok(fds, 2 * sizeof(int), true))
+        return -EFAULT;
+    struct file *rd, *wr;
+    int r = pipe_create(&rd, &wr);
+    if (r < 0)
+        return r;
+    int rfd = fdtable_install(cur_fds(), rd, 0);
+    if (rfd < 0) {
+        file_put(rd);
+        file_put(wr);
+        return rfd;
+    }
+    int wfd = fdtable_install(cur_fds(), wr, 0);
+    if (wfd < 0) {
+        fdtable_close(cur_fds(), rfd);
+        file_put(wr);
+        return wfd;
+    }
+    rd->flags |= flags & O_NONBLOCK;
+    wr->flags |= flags & O_NONBLOCK;
+    if (flags & O_CLOEXEC) {
+        fdtable_set_cloexec(cur_fds(), rfd, true);
+        fdtable_set_cloexec(cur_fds(), wfd, true);
+    }
+    ((int *)fds)[0] = rfd;
+    ((int *)fds)[1] = wfd;
+    return 0;
+}
+
+long sys_mount(struct trapframe *tf)
+{
+    char source[USER_PATH_MAX], target[USER_PATH_MAX], type[32];
+    long r = copy_string_from_user(source, SYSARG0(tf), sizeof source);
+    if (r < 0)
+        return r;
+    r = copy_string_from_user(target, SYSARG1(tf), sizeof target);
+    if (r < 0)
+        return r;
+    r = copy_string_from_user(type, SYSARG2(tf), sizeof type);
+    if (r < 0)
+        return r;
+    return vfs_mount(type, source, target);
+}
+
+long sys_umount(struct trapframe *tf)
+{
+    return path_op(tf, vfs_umount);
+}
+
+long sys_sync(struct trapframe *tf)
+{
+    return vfs_sync();
+}
+
+long sys_chdir(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    struct proc *p = thread_current()->proc;
+    char resolved[PROC_CWD_LEN];
+    spin_lock(&p->lock);
+    r = vfs_canonicalize(p->cwd, path, resolved, sizeof resolved);
+    spin_unlock(&p->lock);
+    if (r < 0)
+        return r;
+    struct inode *ino;
+    r = vfs_lookup(resolved, &ino);
+    if (r < 0)
+        return r;
+    bool is_dir = S_ISDIR(ino->mode);
+    inode_put(ino);
+    if (!is_dir)
+        return -ENOTDIR;
+    spin_lock(&p->lock);
+    strlcpy(p->cwd, resolved, sizeof p->cwd);
+    spin_unlock(&p->lock);
+    return 0;
+}
+
+long sys_getcwd(struct trapframe *tf)
+{
+    uintptr_t buf = SYSARG0(tf);
+    size_t size = SYSARG1(tf);
+    struct proc *p = thread_current()->proc;
+    if (!user_range_ok(buf, size, true))
+        return -EFAULT;
+    char cwd[PROC_CWD_LEN];
+    spin_lock(&p->lock);
+    strlcpy(cwd, p->cwd, sizeof cwd);
+    spin_unlock(&p->lock);
+    size_t n = strlen(cwd);
+    if (n + 1 > size)
+        return -ERANGE;
+    /* User memory is touched without a spinlock held: the copy may fault
+     * on a swapped page. */
+    memcpy((char *)buf, cwd, n + 1);
+    return (long)n;
+}
+
+long sys_ioctl(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = -ENOTTY;
+    if (f->ops && f->ops->ioctl)
+        r = f->ops->ioctl(f, SYSARG1(tf), SYSARG2(tf));
+    file_put(f);
+    return r;
+}

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Data transfer (M25): selection (clipboard) and drag and drop with
+     mime types; contents flow through passed pipe descriptors. -->
+<protocol name="data">
+  <interface name="data_device_manager" version="1">
+    <request name="create_data_source"><arg name="id" type="new_id" interface="data_source"/></request>
+    <request name="get_data_device"><arg name="id" type="new_id" interface="data_device"/><arg name="seat" type="object" interface="seat"/></request>
+  </interface>
+
+  <interface name="data_source" version="1">
+    <request name="offer"><arg name="mime_type" type="string"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="send"><arg name="mime_type" type="string"/><arg name="fd" type="fd"/></event>
+    <event name="cancelled"/>
+    <event name="dnd_drop_performed"/>
+    <event name="dnd_finished"/>
+  </interface>
+
+  <interface name="data_offer" version="1">
+    <request name="accept"><arg name="serial" type="uint"/><arg name="mime_type" type="string" allow-null="true"/></request>
+    <request name="receive"><arg name="mime_type" type="string"/><arg name="fd" type="fd"/></request>
+    <request name="finish"/>
+    <request name="destroy" type="destructor"/>
+    <event name="offer"><arg name="mime_type" type="string"/></event>
+  </interface>
+
+  <interface name="data_device" version="1">
+    <request name="set_selection">
+      <arg name="source" type="object" interface="data_source" allow-null="true"/><arg name="serial" type="uint"/>
+    </request>
+    <request name="start_drag">
+      <arg name="source" type="object" interface="data_source" allow-null="true"/>
+      <arg name="origin" type="object" interface="surface"/>
+      <arg name="icon" type="object" interface="surface" allow-null="true"/>
+      <arg name="serial" type="uint"/>
+    </request>
+    <request name="destroy" type="destructor"/>
+    <event name="data_offer"><arg name="id" type="new_id" interface="data_offer"/></event>
+    <event name="enter">
+      <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/>
+      <arg name="x" type="fixed"/><arg name="y" type="fixed"/><arg name="offer" type="object" interface="data_offer" allow-null="true"/>
+    </event>
+    <event name="leave"/>
+    <event name="motion"><arg name="time" type="uint"/><arg name="x" type="fixed"/><arg name="y" type="fixed"/></event>
+    <event name="drop"/>
+    <event name="selection"><arg name="offer" type="object" interface="data_offer" allow-null="true"/></event>
+  </interface>
+</protocol>

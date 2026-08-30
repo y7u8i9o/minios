@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Debugging and settings interfaces of the compositor. -->
+<protocol name="debug">
+  <interface name="debug" version="1">
+    <request name="get_stats"/>
+    <request name="get_surfaces"/>
+    <request name="read_pixel"><arg name="x" type="int"/><arg name="y" type="int"/></request>
+    <event name="stats">
+      <arg name="uptime_ms" type="uint"/><arg name="compositions" type="uint"/><arg name="compose_ms" type="uint"/>
+      <arg name="compose_max_ms" type="uint"/><arg name="clients" type="uint"/><arg name="surfaces" type="uint"/>
+      <arg name="frame_ms" type="uint"/>
+    </event>
+    <event name="surface">
+      <arg name="id" type="uint"/><arg name="client" type="uint"/><arg name="role" type="string"/><arg name="title" type="string"/>
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+      <arg name="mapped" type="uint"/><arg name="format" type="uint"/>
+    </event>
+    <event name="surfaces_done"/>
+    <event name="pixel"><arg name="x" type="int"/><arg name="y" type="int"/><arg name="value" type="uint"/></event>
+  </interface>
+
+  <interface name="settings" version="1">
+    <request name="set"><arg name="key" type="string"/><arg name="value" type="int"/></request>
+    <request name="get_all"/>
+    <event name="value"><arg name="key" type="string"/><arg name="value" type="int"/></event>
+    <event name="done"/>
+  </interface>
+</protocol>

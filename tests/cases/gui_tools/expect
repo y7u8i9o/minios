@@ -1,0 +1,6 @@
+comp: setting frame_ms = 33
+compsettings: set frame_ms 33
+evtest: press at
+compsettings: up
+gui_tools: debugging tools ok
+TEST PASS

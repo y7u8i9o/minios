@@ -1,0 +1,13 @@
+comp: layer surface 2 \(desktop\)
+desktop: wallpaper /usr/share/wallpapers/default.png mode 0
+desktop: config applied
+desktop: started with 4 entries
+desktop: open /home/desktop/Clock.app
+comp: toplevel 1 'clock' mapped
+desktop: menu desktop
+desktop: menu readme.txt
+settings: set wallpaper_mode tile
+desktop: wallpaper /usr/share/wallpapers/default.png mode 2
+comp: toplevel 2 'settings' mapped
+gui_desktop: desktop ok
+TEST PASS

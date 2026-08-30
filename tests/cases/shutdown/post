@@ -1,0 +1,9 @@
+#!/bin/sh
+# QEMU must have exited through ACPI power off (exit code 0) and the disk
+# must be marked clean with the written file present.
+MKFS="$BUILD/host/mkfs"
+[ "$EXITCODE" = "0" ] || { echo "  qemu exit code $EXITCODE, expected 0 (ACPI power off)"; exit 1; }
+"$MKFS" --dump "$DISK" | head -1 | grep -q ' clean$' || { echo "  image not clean"; "$MKFS" --dump "$DISK" | head -1; exit 1; }
+"$MKFS" --dump "$DISK" | grep -q '^/persist.d/ ' || { echo "  /persist.d missing"; exit 1; }
+[ "$("$MKFS" --cat "$DISK" /persist.txt)" = "written before shutdown" ] || { echo "  /persist.txt content wrong"; exit 1; }
+exit 0

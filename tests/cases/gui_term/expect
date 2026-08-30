@@ -1,0 +1,8 @@
+comp: toplevel 1 'terminal' mapped at 40,60 960x600
+term: shell pid [0-9]+ on /dev/pts[0-9]
+term: shell exited
+gui_term: shell output reached the file and the window
+TEST PASS
+comp: toplevel 1 configured 720x504
+term: size 60x21
+term: view 10

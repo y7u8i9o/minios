@@ -1,0 +1,4 @@
+local apic at fee00000
+timer: [0-9]+ ticks/s
+ps/2 keyboard on irq 33
+TEST PASS

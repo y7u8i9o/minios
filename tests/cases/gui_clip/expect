@@ -1,0 +1,5 @@
+comp: selection set by client 2 \(text/plain\)
+guitest: clipboard set ok
+guitest: clipboard 'hello clipboard' \(15 bytes\)
+gui_clip: clipboard ok
+TEST PASS

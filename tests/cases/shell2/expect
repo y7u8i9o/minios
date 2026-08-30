@@ -1,0 +1,8 @@
+literal \$HOME and expanded /bin
+\[1\] [0-9]+
+\[1\] Done  sleep 0.5 &
+after wait
+first ok
+      3
+sh exited with status 0x900
+TEST PASS
