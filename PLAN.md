@@ -965,6 +965,91 @@ starts the compositor, drives both input modes through actual keyboard and
 combo-box events, checks the reported results, and closes the window. Host
 framework checks pass and the complete boot suite passes (69 passed, 0 failed).
 
+### M31. Audio playback stack (completed 2026-09-02)
+
+1. A kernel PCM layer registers exclusive raw playback devices and defines a
+   versioned capability, configuration, lifecycle and status ABI.  Exact-period
+   blocking and nonblocking writes integrate with `poll`; the poll notification
+   generation closes the readiness-scan-to-sleep race for all descriptor types.
+2. The virtio-snd driver selects a 48 kHz stereo S16 output stream, implements
+   control and TX virtqueues, manages two to eight reusable DMA periods, and
+   reports playback position, queued frames, transfer errors and underruns.
+3. `/bin/audiod` owns `/dev/pcm0`.  Its output-device clock drives a fixed-
+   quantum mixer over any number of playback streams.  Per-client memfd pools,
+   explicit buffer ownership, control events and per-stream gain preserve the
+   useful server/data-plane separation of PipeWire without introducing a
+   general graph or session manager.
+4. `protocol/audio.xml` and generated libwire bindings define stream creation,
+   configuration, queueing, state, drain and xrun messages.  `libaudio` wraps
+   registry discovery, descriptor passing, mapping, buffer recycling and event
+   dispatch; `playtone` provides a minimal client, while `synth` provides an
+   interactive subtractive-synthesis client with an ADSR envelope, an
+   envelope swept resonant low-pass filter and an oscilloscope.
+5. The desktop-session supervisor starts and stops `audiod` when a PCM device
+   is present. `make run` attaches virtio-snd and selects Core Audio by default
+   on macOS, while other hosts retain the silent backend until configured.
+   `docs/design/audio.md` records the boundaries and
+   future extension points.
+
+Tests: `audio_pcm` validates the raw device, configuration failures, exact
+periods, readiness, drain and frame accounting.  `audio_server` plays two
+concurrent shared-memory streams through `libaudio`, validates server shutdown,
+and checks the emitted WAV payload for stereo 16-bit nonzero mixed samples.
+The complete QEMU suite passes with 72 tests and no failures.
+
+### M32. virtio-gpu display and virtio-input tablet (completed 2026-09-02)
+
+1. A display layer in the kernel: `fb_screen` describes the active
+   framebuffer (the Limine one until a GPU driver takes over), the console
+   and `/dev/fb0` draw into it, and a GPU driver registers flush and mode
+   set operations. `struct fb_info` gains `caps` and `size`; `FBIO_FLUSH`
+   pushes a rectangle to the host and `FBIO_SET_MODE` changes the
+   resolution and the pixel scale at run time for the display owner.
+2. The virtio-gpu driver (`virtio-vga` in QEMU) owns one 16 MiB guest
+   buffer for every mode, creates a 2D resource per mode, sets the
+   scanout and transfers damaged rectangles. The console accumulates a
+   dirty rectangle under `console_lock` that a kernel thread flushes
+   every 20 ms; the panic path flushes by polling the used ring.
+3. The virtio-input driver takes the tablet's absolute events, buttons
+   and wheel and delivers them through the shared `/dev/mouse` ring
+   (`drivers/mouse.c`, also used by the PS/2 driver) as events flagged
+   `MOUSE_ABSOLUTE`. The QEMU window then needs no mouse grab.
+4. The compositor positions the cursor from absolute events, applies the
+   `display_mode` setting (`WxH@S` packed in one integer) by setting the
+   mode, reallocating its back buffer and re-announcing the output to
+   every client, and re-layouts layer surfaces and clamps windows. The
+   desktop applies `display_mode` from `/etc/desktop.conf`; the settings
+   application gets a Display page.
+5. `tools/run.sh` attaches `-vga virtio` and a virtio tablet by default
+   (`--vga std`, `--no-tablet` restore the old machine); the test runner
+   takes `vga` and `tablet` case files. `docs/design/display.md`.
+
+Tests: `gpu_mode` (virtio-vga: takeover at boot, flush, mode change with
+the console following), `input_tablet` (absolute events through the ring
+and the real device's probe), `gui_tablet` (the compositor's cursor
+follows absolute events), and the GUI cases run on virtio-vga. The
+complete QEMU suite passes with 76 tests and no failures.
+
+### M33. Toolkit side HiDPI
+
+The output announces scale 2 when the mode has a pixel scale; libgui
+renders at that scale (fonts, metrics, images) into buffers with
+`set_buffer_scale(2)`; the compositor composes in device pixels, copying
+scaled buffers 1:1 and doubling unscaled ones, and draws decorations and
+the cursor at the scale. Text and icons become sharp on high density
+displays. Tests: `gui_scale2` (a scaled client's buffer appears 1:1, an
+unscaled client's buffer is doubled, decorations are drawn at scale).
+
+### M34. Audio follow-ups
+
+Capture through the virtio-snd RX queue (`/dev/pcm0` read side, capture
+streams in audiod, `libaudio` capture API), a mixer applet in the panel
+(stream list and per-stream volume through a control interface of
+audiod), a WAV player with a waveform view, and a step sequencer on top
+of the synth engine. Tests: `audio_capture` (loopback through the wav
+backend), `audio_mixer` (per-stream gain through the control interface),
+`audio_player` (a WAV file plays to the end).
+
 ## 4. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

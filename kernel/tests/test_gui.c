@@ -99,7 +99,7 @@ KTEST_DEFINE("mouse_wheel", test_mouse_wheel);
  * kernel verifies pixel by pixel; the console is handed over and back. */
 static void test_fb0(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     vfs_unlink("/fb.ready");
     struct proc *p = proc_create_user("/bin/fbtest", (char *const[]){ "fbtest", NULL },
                                       (char *const[]){ NULL }, &kernel_proc);
@@ -110,7 +110,7 @@ static void test_fb0(void)
         sleep_ms(50);
     ktest_assert(marker != NULL, "fbtest did not signal readiness");
     inode_put(marker);
-    const struct limine_framebuffer *lfb = &bootinfo.framebuffer;
+    const struct limine_framebuffer *lfb = &fb_screen;
     kprintf("fb0: %u bpp, r%u@%u g%u@%u b%u@%u\n", lfb->bpp, lfb->red_mask_size, lfb->red_mask_shift,
             lfb->green_mask_size, lfb->green_mask_shift, lfb->blue_mask_size, lfb->blue_mask_shift);
     uint32_t crc = 0;
@@ -164,7 +164,7 @@ static void mouse_click(int buttons)
 
 static uint32_t pixel(int x, int y)
 {
-    return fb_read_rgb(&bootinfo.framebuffer, (uint32_t)x, (uint32_t)y);
+    return fb_read_rgb(&fb_screen, (uint32_t)x, (uint32_t)y);
 }
 
 static struct proc *start_server(void);
@@ -172,7 +172,7 @@ static void stop_server(struct proc *srv);
 
 static void test_gui(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     sleep_ms(200);
     ktest_assert(pixel(0, 0) == 0x00306080, "desktop pixel %08x", pixel(0, 0));
@@ -188,7 +188,7 @@ static void test_gui(void)
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00707070, "alpha title bar inactive %08x", pixel(42, 50));
     ktest_assert(pixel(40 + 5, 60 + 100) == 0x00dcdcdc, "alpha contents %08x", pixel(45, 160));
 
-    int cx = (int)bootinfo.framebuffer.width / 2, cy = (int)bootinfo.framebuffer.height / 2;
+    int cx = (int)fb_screen.width / 2, cy = (int)fb_screen.height / 2;
     /* Click inside beta, then type a key. */
     mouse_move_to(&cx, &cy, 100, 120, 0);
     mouse_click(1);
@@ -242,7 +242,7 @@ KTEST_DEFINE("gui", test_gui);
  * drawn glyph. */
 static void test_gui_term(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     vfs_unlink("/gterm.txt");
     struct proc *srv = start_server();
     struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", NULL },
@@ -274,10 +274,10 @@ static void test_gui_term(void)
     ktest_assert(drawn, "no text rendered in the terminal");
     /* M19: drag the grip so the window shrinks by 240x96 pixels (20
      * columns and 4 rows of the 12x24 cells); the shell sees the size. */
-    int sw = (int)bootinfo.framebuffer.width;
+    int sw = (int)fb_screen.width;
     int wx = 40, wy = 60;                       /* 960x600 at the cascade origin */
     ktest_assert(sw == 1024, "test assumes 1024 pixels of width");
-    int cx = sw / 2, cy = (int)bootinfo.framebuffer.height / 2;
+    int cx = sw / 2, cy = (int)fb_screen.height / 2;
     mouse_move_to(&cx, &cy, wx + 960 - 4, wy + 600 - 4, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
@@ -320,6 +320,14 @@ static void test_gui_term(void)
 KTEST_DEFINE("gui_term", test_gui_term);
 
 /* ---- M19 stage 2 ---- */
+
+/* Geometry of the launcher popup, which the panel builds from
+ * user/etc/launcher: one 20 px row per entry, opened above the 28 px
+ * panel.  Keep these in step with that file. */
+#define LAUNCHER_ENTRIES 17
+#define LAUNCHER_CLOCK   9      /* index of Clock=/bin/clock */
+#define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 20 + 4))
+#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 2 + (i) * 20 + 10)
 
 static void press_key(uint8_t code)
 {
@@ -366,8 +374,8 @@ static void stop_server(struct proc *srv)
  * the client refills the window green after every resize. */
 static void test_gui_resize(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     int dh = sh - 28;                          /* desktop above the task bar */
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", "resize", NULL },
@@ -413,8 +421,8 @@ KTEST_DEFINE("gui_resize", test_gui_resize);
  * occlusion culling, the launcher menu and Alt+F4. */
 static void test_gui_wm(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -450,8 +458,7 @@ static void test_gui_wm(void)
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(200);
-    int menu_y = sh - 28 + 4 - (15 * 20 + 4);
-    mouse_move_to(&cx, &cy, 40, menu_y + 2 + 7 * 20 + 10, 0);
+    mouse_move_to(&cx, &cy, 40, LAUNCHER_ROW(sh, LAUNCHER_CLOCK), 0);
     mouse_click(1);
     sleep_ms(1500);
     alt_key(0x3e);
@@ -472,7 +479,7 @@ KTEST_DEFINE("gui_wm", test_gui_wm);
 /* Two clients exchange text through the clipboard. */
 static void test_gui_clip(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     struct proc *c1 = proc_create_user("/bin/guitest", (char *const[]){ "guitest", "clipset", "hello clipboard", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -502,8 +509,8 @@ static void ctrl_key(uint8_t code)
 
 static void test_gui_widgets(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -554,8 +561,8 @@ KTEST_DEFINE("gui_widgets", test_gui_widgets);
  * combo 6..32, spinner 38..64, slider 70..96, tabs from 102. */
 static void test_gui_controls(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "controls", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -590,7 +597,7 @@ KTEST_DEFINE("gui_controls", test_gui_controls);
 /* M22: gedit types C source, highlights the keyword, saves with Ctrl+S. */
 static void test_gui_editor(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     vfs_unlink("/gedit.c");
     struct proc *cl = proc_create_user("/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
@@ -631,7 +638,7 @@ KTEST_DEFINE("gui_editor", test_gui_editor);
  * background; a CRC of the text rows is logged for reference. */
 static void test_gui_ttf(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", "ttf", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -669,8 +676,8 @@ KTEST_DEFINE("gui_ttf", test_gui_ttf);
  * the text field. */
 static void test_gui_app(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/apptest", (char *const[]){ "apptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -704,8 +711,8 @@ KTEST_DEFINE("gui_app", test_gui_app);
  * changes to algebraic input through its mode selector. */
 static void test_gui_calc(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/calc", (char *const[]){ "calc", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -755,8 +762,8 @@ KTEST_DEFINE("gui_calc", test_gui_calc);
  * ends the program. */
 static void test_gui_mandel(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/mandel", (char *const[]){ "mandel", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -789,8 +796,8 @@ KTEST_DEFINE("gui_mandel", test_gui_mandel);
  * server reports compositions slower than 20 ms. */
 static void test_gui_drag(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/term", (char *const[]){ "term", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start term");
@@ -840,7 +847,7 @@ static struct proc *start_compositor(void)
 
 static void test_comp_core(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_compositor();
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -859,13 +866,47 @@ static void test_comp_core(void)
 }
 KTEST_DEFINE("comp_core", test_comp_core);
 
+/* video=WxH@2: the compositor composes at half the framebuffer size and
+ * writes every logical pixel as a 2x2 block, so the comptest surface
+ * appears at doubled coordinates and neighbouring pixels are equal. */
+static void test_comp_scale(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    ktest_assert(bootinfo.fb_scale == 2, "fb scale %u, expected 2 (video=WxH@2)", bootinfo.fb_scale);
+    struct proc *srv = start_compositor();
+    struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start comptest");
+    sleep_ms(1500);
+    ktest_assert(pixel(2 * (40 + 100), 2 * (60 + 75)) == 0x0000ff00, "green buffer at doubled position: %08x",
+                 pixel(280, 270));
+    /* Logical (250,135) is right of the 200 wide surface at 40. */
+    ktest_assert(pixel(2 * 250, 2 * 135) != 0x0000ff00, "right of the surface at doubled x: %08x", pixel(500, 270));
+    /* Scan a row through the surface's left edge and the desktop. */
+    for (int x = 30; x < 60; x++)
+        for (int y = 130; y < 140; y++) {
+            uint32_t v = pixel(2 * x, 2 * y);
+            ktest_assert(pixel(2 * x + 1, 2 * y) == v && pixel(2 * x, 2 * y + 1) == v && pixel(2 * x + 1, 2 * y + 1) == v,
+                         "pixel block at %d,%d not uniform", x, y);
+        }
+    ktest_assert(pixel(2 * 40, 2 * 135) == 0x0000ff00, "surface edge at doubled x: %08x", pixel(80, 270));
+    ktest_assert(pixel(2 * 39, 2 * 135) != 0x0000ff00, "left of the surface at doubled x: %08x", pixel(78, 270));
+    kprintf("comp_scale: pixels doubled\n");
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "comptest status 0x%x", status);
+    signal_send(srv, SIGTERM);
+    status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+}
+KTEST_DEFINE("comp_scale", test_comp_scale);
+
 /* A client killed without disconnecting must not block the server: its
  * queue fills, the server drops it after two seconds and keeps serving
  * a new client. */
 static void test_gui_dead_client(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -907,8 +948,8 @@ static struct proc *start_client(const char *mode)
 
 static void test_comp_shell(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_compositor();
     struct proc *cl = start_client("shell");
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00dcdcdc, "window contents %08x", pixel(140, 135));
@@ -951,8 +992,8 @@ KTEST_DEFINE("comp_shell", test_comp_shell);
 /* M25: pointer and keyboard events with serials, keymap translation. */
 static void test_comp_seat(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_compositor();
     struct proc *cl = start_client("seat");
     int cx = sw / 2, cy = sh / 2;
@@ -983,8 +1024,8 @@ KTEST_DEFINE("comp_seat", test_comp_seat);
  * 40,60) to the target window (surface 2 at 70,90, on top). */
 static void test_comp_data(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_compositor();
     struct proc *src = start_client("data-source");
     struct proc *dst = start_client("data-target");
@@ -1011,8 +1052,8 @@ KTEST_DEFINE("comp_data", test_comp_data);
  * runs on wsrv until M26, so the launch itself is what is checked). */
 static void test_comp_panel(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
@@ -1043,8 +1084,7 @@ static void test_comp_panel(void)
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(400);
-    int menu_y = sh - 28 + 4 - (14 * 20 + 4);
-    mouse_move_to(&cx, &cy, 40, menu_y + 2 + 6 * 20 + 10, 0);
+    mouse_move_to(&cx, &cy, 40, LAUNCHER_ROW(sh, LAUNCHER_CLOCK), 0);
     mouse_click(1);
     sleep_ms(1200);
     alt_key(0x3e);                      /* closes the clock, which is on top */
@@ -1064,7 +1104,7 @@ KTEST_DEFINE("comp_panel", test_comp_panel);
  * in its cooked mode, because /dev/kbd's close resets it. */
 static void test_gui_kbd_restore(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    ktest_assert(fb_screen_present, "no framebuffer");
     /* Pid 1 is treated as init and cannot be killed: use up that pid. */
     struct proc *first = proc_create_user("/bin/hello", (char *const[]){ "hello", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(first != NULL, "cannot start hello");
@@ -1087,8 +1127,8 @@ KTEST_DEFINE("gui_kbd_restore", test_gui_kbd_restore);
  * click; sysmon, logview and hexview open and close. */
 static void test_gui_tools(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", "set", "frame_ms", "33", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1129,8 +1169,8 @@ KTEST_DEFINE("gui_tools", test_gui_tools);
  * window still appears promptly. */
 static void test_gui_unicode(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/unicode", (char *const[]){ "unicode", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1153,14 +1193,15 @@ static void test_gui_unicode(void)
 KTEST_DEFINE("gui_unicode", test_gui_unicode);
 
 /* Desktop layer (wallpaper, icons, context menus) and the settings
- * application: the wallpaper replaces the plain desktop colour, a double
+ * application: the desktop starts as a solid colour, a wallpaper set with
+ * "settings set" replaces it, a double
  * click on the Clock icon starts the clock, right clicks open the two
  * context menus, "settings set" changes the configuration file which the
  * desktop applies, and the settings window opens and closes. */
 static void test_gui_desktop(void)
 {
-    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
-    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
@@ -1168,9 +1209,19 @@ static void test_gui_desktop(void)
     struct proc *desktop = proc_create_user("/bin/desktop", (char *const[]){ "desktop", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(desktop != NULL, "cannot start the desktop");
     sleep_ms(2000);
-    uint32_t mid = pixel(sw / 2, sh / 2);
-    ktest_assert(mid != 0x00306080, "wallpaper drawn in the middle of the screen: %08x", mid);
+    /* Sample away from the cursor, which sits at the centre. */
+    uint32_t mid = pixel(sw / 2 + 100, sh / 2 + 50);
+    ktest_assert(mid == 0x00306080, "solid desktop colour by default: %08x", mid);
     ktest_assert(pixel(sw / 2, sh - 14) == 0x00202830, "panel above the desktop: %08x", pixel(sw / 2, sh - 14));
+    /* A wallpaper set from the command line is applied within a second. */
+    struct proc *cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "wallpaper", "/usr/share/wallpapers/default.png", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start settings");
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "settings status 0x%x", status);
+    sleep_ms(1800);
+    mid = pixel(sw / 2 + 100, sh / 2 + 50);
+    ktest_assert(mid != 0x00306080, "wallpaper drawn in the middle of the screen: %08x", mid);
     int cx = sw / 2, cy = sh / 2;
     /* Double click on the first icon (Clock.app). */
     mouse_move_to(&cx, &cy, 55, 50, 0);
@@ -1193,11 +1244,11 @@ static void test_gui_desktop(void)
     mouse_move_to(&cx, &cy, 800, 500, 0);
     mouse_click(1);
     sleep_ms(300);
-    /* Settings from the command line, applied by the desktop within a second. */
-    struct proc *cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "wallpaper_mode", "tile", NULL },
-                                       (char *const[]){ NULL }, &kernel_proc);
+    /* Another setting from the command line. */
+    cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "wallpaper_mode", "tile", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
-    int status = proc_reap(cl);
+    status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
     sleep_ms(1800);
     /* The settings window (toplevel 2 cascades to 70,90). */

@@ -2,6 +2,7 @@
 #include <lib/printf.h>
 #include <drivers/serial.h>
 #include <drivers/fbcon.h>
+#include <drivers/fbdev.h>
 #include <sync/spinlock.h>
 #include <debug/panic.h>
 
@@ -84,4 +85,24 @@ void console_set_fb_enabled(bool enabled)
     spin_lock_irqsave(&console_lock, &flags);
     fbcon_set_enabled(enabled);
     spin_unlock_irqrestore(&console_lock, flags);
+}
+
+void console_set_screen(const struct limine_framebuffer *screen, uint32_t scale)
+{
+    unsigned long flags;
+    spin_lock_irqsave(&console_lock, &flags);
+    fb_screen = *screen;
+    fb_screen_present = true;
+    fb_screen_scale = scale;
+    fbcon_screen_changed();
+    spin_unlock_irqrestore(&console_lock, flags);
+}
+
+bool console_take_dirty(struct fb_rect *r)
+{
+    unsigned long flags;
+    spin_lock_irqsave(&console_lock, &flags);
+    bool dirty = fbcon_take_dirty(r);
+    spin_unlock_irqrestore(&console_lock, flags);
+    return dirty;
 }

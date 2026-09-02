@@ -145,7 +145,7 @@ static int combining(uint32_t cp)
 }
 
 static int shape_outline(const struct font *f, const char *text, int n,
-                         struct gui_glyph *out, int max, int32_t *width)
+                         struct gui_glyph *out, int max, int32_t *width, int scale)
 {
     int len = n < 0 ? (int)strlen(text) : n, count = 0;
     int32_t pen = 0, base_x = 0, base_advance = 0;
@@ -163,14 +163,14 @@ static int shape_outline(const struct font *f, const char *text, int n,
                 glyph = alt;
             }
         }
-        int32_t advance = font_scale(use->outline, font_advance(use->outline, glyph), use->px);
+        int32_t advance = font_scale(use->outline, font_advance(use->outline, glyph), use->px * scale);
         int32_t gx = pen;
         if (combining(cp) && count) {
             gx = base_x + (base_advance - advance) / 2;
             advance = 0;
         } else {
             if (prev_glyph && prev_font == use)
-                pen += font_scale(use->outline, font_kern(use->outline, prev_glyph, glyph), use->px);
+                pen += font_scale(use->outline, font_kern(use->outline, prev_glyph, glyph), use->px * scale);
             gx = pen;
             base_x = gx;
             base_advance = advance;
@@ -193,32 +193,36 @@ static int shape_outline(const struct font *f, const char *text, int n,
     return count < max ? count : max;
 }
 
-static void text_outline(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg)
+static void text_outline(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg,
+                         int scale)
 {
     int n = (int)strlen(text);
     struct gui_glyph *sh = malloc((size_t)(n + 1) * sizeof *sh);
     if (!sh)
         return;
     int32_t width;
-    int count = shape_outline(f, text, n, sh, n, &width);
+    int count = shape_outline(f, text, n, sh, n, &width, scale);
     if (bg != 0xffffffffu)
-        gfx_fill_rect(s, x, y, (width + 63) >> 6, f->height, bg);
+        gfx_fill_rect(s, x, y, (width + 63) >> 6, f->height * scale, bg);
     for (int i = 0; i < count; i++) {
         const struct font *use = sh[i].font;
-        const struct font_glyph *g = font_render(use->outline, sh[i].glyph, use->px);
+        const struct font_glyph *g = font_render(use->outline, sh[i].glyph, use->px * scale);
         if (!g || !g->bitmap)
             continue;
         int gx = x + ((sh[i].x + 32) >> 6) + g->left;
-        int gy = y + f->ascent + g->top;
+        int gy = y + f->ascent * scale + g->top;
         gfx_blend_mask(s, gx, gy, g->bitmap, g->width, g->height, fg);
     }
     free(sh);
 }
 
-void gfx_text_font(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg)
+void gfx_text_font_scaled(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg,
+                          uint32_t bg, int scale)
 {
+    if (scale < 1)
+        scale = 1;
     if (f->outline) {
-        text_outline(s, f, x, y, text, fg, bg);
+        text_outline(s, f, x, y, text, fg, bg, scale);
         return;
     }
     int len = (int)strlen(text);
@@ -229,49 +233,66 @@ void gfx_text_font(struct surface *s, const struct font *f, int x, int y, const 
         const uint32_t *glyph = f->bits + c * f->height;
         int adv = f->advance[c];
         if (bg != 0xffffffffu)
-            gfx_fill_rect(s, x, y, adv, f->height, bg);
+            gfx_fill_rect(s, x, y, adv * scale, f->height * scale, bg);
         int w = f->width[c];
         for (int row = 0; row < f->height; row++) {
-            int py = y + row;
-            if (py < 0 || py >= s->height)
-                continue;
             uint32_t bits = glyph[row];
             if (!bits)
                 continue;
             for (int col = 0; col < w; col++) {
-                int px = x + col;
-                if (px >= 0 && px < s->width && (bits & (0x80000000u >> col)))
-                    s->pixels[(size_t)py * s->stride + px] = fg;
+                if (!(bits & (0x80000000u >> col)))
+                    continue;
+                if (scale == 1) {
+                    int px = x + col, py = y + row;
+                    if (px >= 0 && px < s->width && py >= 0 && py < s->height)
+                        s->pixels[(size_t)py * s->stride + px] = fg;
+                } else {
+                    gfx_fill_rect(s, x + col * scale, y + row * scale, scale, scale, fg);
+                }
             }
         }
-        x += adv;
+        x += adv * scale;
     }
 }
 
-int gfx_text_width_font(const struct font *f, const char *text, int n)
+void gfx_text_font(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg)
 {
+    gfx_text_font_scaled(s, f, x, y, text, fg, bg, 1);
+}
+
+int gfx_text_width_font_scaled(const struct font *f, const char *text, int n, int scale)
+{
+    if (scale < 1)
+        scale = 1;
     if (f->outline) {
         int32_t width;
-        shape_outline(f, text, n, NULL, 0, &width);
+        shape_outline(f, text, n, NULL, 0, &width, scale);
         return (width + 32) >> 6;
     }
     int w = 0, len = n < 0 ? (int)strlen(text) : n;
     for (int i = 0; i < len;) {
         unsigned c = gui_utf8_decode(text, len, &i);
-        w += f->advance[c <= 255 ? c : '?'];
+        w += f->advance[c <= 255 ? c : '?'] * scale;
     }
     return w;
 }
 
-int gfx_text_index_font(const struct font *f, const char *text, int n, int px)
+int gfx_text_width_font(const struct font *f, const char *text, int n)
 {
+    return gfx_text_width_font_scaled(f, text, n, 1);
+}
+
+int gfx_text_index_font_scaled(const struct font *f, const char *text, int n, int px, int scale)
+{
+    if (scale < 1)
+        scale = 1;
     if (f->outline) {
         int len = n < 0 ? (int)strlen(text) : n;
         struct gui_glyph *sh = malloc((size_t)(len + 1) * sizeof *sh);
         if (!sh)
             return 0;
         int32_t width;
-        int count = shape_outline(f, text, len, sh, len, &width);
+        int count = shape_outline(f, text, len, sh, len, &width, scale);
         int i, result = len;
         for (i = 0; i < count; i++) {
             int32_t next = i + 1 < count ? sh[i + 1].x : width;
@@ -287,10 +308,15 @@ int gfx_text_index_font(const struct font *f, const char *text, int n, int px)
     for (int i = 0; i < len;) {
         int byte = i;
         unsigned c = gui_utf8_decode(text, len, &i);
-        int adv = f->advance[c <= 255 ? c : '?'];
+        int adv = f->advance[c <= 255 ? c : '?'] * scale;
         if (px < x + adv / 2)
             return byte;
         x += adv;
     }
     return len;
+}
+
+int gfx_text_index_font(const struct font *f, const char *text, int n, int px)
+{
+    return gfx_text_index_font_scaled(f, text, n, px, 1);
 }

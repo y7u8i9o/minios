@@ -179,7 +179,28 @@ static void on_output_scale(void *user, struct wire_proxy *o, int32_t factor)
 { ((struct output_state *)user)->info.scale = factor > 0 ? factor : 1; }
 static void on_output_transform(void *user, struct wire_proxy *o, uint32_t transform)
 { ((struct output_state *)user)->info.transform = (int)transform; }
-static void on_output_done(void *user, struct wire_proxy *o) { output_bounds(); }
+/* The scale of the output windows live on; windows are re-created at
+ * the new scale when it changes. */
+static int output_scale(void)
+{
+    for (int i = 0; i < 8; i++)
+        if (outputs[i].active)
+            return outputs[i].info.scale > 0 ? outputs[i].info.scale : 1;
+    return 1;
+}
+static void surface_resize(struct gui_window *w, int width, int height);
+static void on_output_done(void *user, struct wire_proxy *o)
+{
+    output_bounds();
+    int s = output_scale();
+    for (struct gui_window *w = wins; w; w = w->next) {
+        if (w->scale == s || !w->surf.pixels)
+            continue;
+        surface_resize(w, w->width, w->height);
+        struct wmsg m = { WM_RESIZED, 0, w->id, w->width, w->height, 0, 0, "" };
+        push(&m);
+    }
+}
 const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
 static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y)
@@ -498,29 +519,35 @@ static void on_release(void *user, struct wire_proxy *b)
 }
 const struct buffer_listener buffer_events = { on_release };
 
+/* Size the surface and the buffers for width by height logical pixels
+ * at the output's scale. Damage is kept in device pixels. */
 static void surface_resize(struct gui_window *w, int width, int height)
 {
     struct win *wi = w->priv;
-    uint32_t *px = malloc((size_t)width * height * 4);
+    int scale = output_scale();
+    int dw = width * scale, dh = height * scale;
+    uint32_t *px = malloc((size_t)dw * dh * 4);
     if (!px)
         return;
-    memset(px, 0xdc, (size_t)width * height * 4);
+    memset(px, 0xdc, (size_t)dw * dh * 4);
     if (w->surf.pixels) {
-        struct surface n = { px, width, height, width };
+        struct surface n = { px, dw, dh, dw };
         gfx_blit(&n, 0, 0, &w->surf, NULL);
         free(w->surf.pixels);
     }
     w->surf.pixels = px;
-    w->surf.width = width;
-    w->surf.height = height;
-    w->surf.stride = width;
+    w->surf.width = dw;
+    w->surf.height = dh;
+    w->surf.stride = dw;
     w->width = width;
     w->height = height;
-    pool_alloc(wi, width, height);
+    w->scale = scale;
+    pool_alloc(wi, dw, dh);
+    surface_set_buffer_scale(wi->surface, scale);
     struct rect opaque = { 0, 0, width, height };
     struct wire_array region = { &opaque, sizeof opaque };
     surface_set_opaque_region(wi->surface, &region);
-    wi->damage = (struct rect){ 0, 0, width, height };
+    wi->damage = (struct rect){ 0, 0, dw, dh };
     wi->has_damage = 1;
 }
 
@@ -560,12 +587,15 @@ static void commit_now(struct gui_window *w)
     }
     int index = (int)(wb - wi->bufs);
     struct surface dst = { (uint32_t *)(wi->map + (size_t)index * wi->buf_w * wi->buf_h * 4), wi->buf_w, wi->buf_h, wi->buf_w };
-    struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, w->width, w->height });
+    struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, w->surf.width, w->surf.height });
     gfx_copy_rect(&dst, &w->surf, &r);
     wb->has_stale = 0;
     wb->busy = 1;
     surface_attach(wi->surface, wb->proxy, 0, 0);
-    surface_damage(wi->surface, r.x, r.y, r.w, r.h);
+    /* The protocol takes surface (logical) coordinates: round outwards. */
+    int s = w->scale > 0 ? w->scale : 1;
+    int lx0 = r.x / s, ly0 = r.y / s, lx1 = (r.x + r.w + s - 1) / s, ly1 = (r.y + r.h + s - 1) / s;
+    surface_damage(wi->surface, lx0, ly0, lx1 - lx0, ly1 - ly0);
     struct wire_proxy *cb = surface_frame(wi->surface);
     callback_add_listener(cb, &frame_events, w);
     surface_commit(wi->surface);
@@ -834,7 +864,9 @@ void gui_destroy_window(struct gui_window *w)
 void gui_damage(struct gui_window *w, int x, int y, int width, int height)
 {
     struct win *wi = w->priv;
-    struct rect r = rect_intersect((struct rect){ x, y, width, height }, (struct rect){ 0, 0, w->width, w->height });
+    int s = w->scale > 0 ? w->scale : 1;
+    struct rect r = rect_intersect((struct rect){ x * s, y * s, width * s, height * s },
+                                   (struct rect){ 0, 0, w->surf.width, w->surf.height });
     if (rect_empty(r))
         return;
     wi->damage = wi->has_damage ? rect_union(wi->damage, r) : r;

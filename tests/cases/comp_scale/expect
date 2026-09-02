@@ -1,0 +1,6 @@
+virtio-gpu\] 2560x1600 scanout in a 16 MiB buffer
+x12: started 1280x800 scale 2
+comptest: 2 formats, output 1280x800, 1 modes
+comp_scale: pixels doubled
+x12: stopped
+TEST PASS

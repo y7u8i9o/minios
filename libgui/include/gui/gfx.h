@@ -47,6 +47,13 @@ void gfx_font_free(struct font *f);
 /* Blend an 8 bit coverage bitmap of color fg at (x, y). */
 void gfx_blend_mask(struct surface *s, int x, int y, const uint8_t *mask, int w, int h, uint32_t fg);
 void gfx_text_font(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg);
+/* The same at an integer device scale: outline fonts are rasterized at
+ * px * scale, bitmap fonts are drawn with scale by scale blocks; x, y and
+ * the returned widths are device pixels. Heights are height * scale. */
+void gfx_text_font_scaled(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg,
+                          uint32_t bg, int scale);
+int gfx_text_width_font_scaled(const struct font *f, const char *text, int n, int scale);
+int gfx_text_index_font_scaled(const struct font *f, const char *text, int n, int px, int scale);
 /* Width of the first n characters (n < 0: the whole string). */
 int gfx_text_width_font(const struct font *f, const char *text, int n);
 /* Index of the character boundary nearest to pixel offset px. */

@@ -12,6 +12,12 @@
 static struct rect damage[MAX_DAMAGE * 2];
 static int ndamage;
 static int shown_x, shown_y;            /* where the cursor was drawn */
+/* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
+ * keeps 60 percent of the background's brightness. */
+#define CURSOR_W 12
+#define CURSOR_H 18
+#define CURSOR_SHADOW 1
+#define CURSOR_SHADE 154
 static long stat_count, stat_ms, stat_max;
 
 void scene_init(void)
@@ -66,7 +72,7 @@ static struct rect cursor_rect(void)
         return (struct rect){ 0, 0, 0, 0 };
     if (s && s->mapped && s->current.buffer)
         return surface_rect(s);
-    struct rect r = { shown_x, shown_y, 12, 18 };
+    struct rect r = { shown_x, shown_y, CURSOR_W + CURSOR_SHADOW, CURSOR_H + CURSOR_SHADOW };
     return r;
 }
 
@@ -256,20 +262,33 @@ static void draw_cursor(struct rect clip)
         draw_surface(cursor, clip);
         return;
     }
-    static const char *shape[18] = {
-        "X...........", "XX..........", "X.X.........", "X..X........", "X...X.......",
-        "X....X......", "X.....X.....", "X......X....", "X.......X...", "X........X..",
-        "X.....XXXXX.", "X..X..X.....", "X.X.X..X....", "XX..X..X....", "X....X..X...",
-        ".....X..X...", "......XX....", "............",
+    /* X: black outline, o: white fill, .: transparent. */
+    static const char *shape[CURSOR_H] = {
+        "X...........", "XX..........", "XoX.........", "XooX........", "XoooX.......",
+        "XooooX......", "XoooooX.....", "XooooooX....", "XoooooooX...", "XooooooooX..",
+        "XoooooXXXXX.", "XooXooX.....", "XoX.XooX....", "XX..XooX....", "X....XooX...",
+        ".....XooX...", "......XX....", "............",
     };
-    for (int j = 0; j < 18; j++)
-        for (int i = 0; i < 12; i++) {
+    for (int j = 0; j < CURSOR_H + CURSOR_SHADOW; j++)
+        for (int i = 0; i < CURSOR_W + CURSOR_SHADOW; i++) {
             int px = shown_x + i, py = shown_y + j;
-            if (shape[j][i] == '.' || !rect_contains(clip, px, py) || px >= screen_w || py >= screen_h)
+            if (!rect_contains(clip, px, py) || px >= screen_w || py >= screen_h)
                 continue;
-            int inside = i > 0 && i < 11 && j > 0 && j < 17 && shape[j][i - 1] != '.' && shape[j][i + 1] != '.' &&
-                         shape[j - 1][i] != '.' && shape[j + 1][i] != '.';
-            back.pixels[(size_t)py * back.stride + px] = inside ? 0x00ffffff : 0x00000000;
+            uint32_t *dst = &back.pixels[(size_t)py * back.stride + px];
+            char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
+            if (c == 'X') {
+                *dst = 0x00000000;
+            } else if (c == 'o') {
+                *dst = 0x00ffffff;
+            } else if (i >= CURSOR_SHADOW && j >= CURSOR_SHADOW &&
+                       shape[j - CURSOR_SHADOW][i - CURSOR_SHADOW] != '.') {
+                /* Drop shadow: the background darkened under the shape
+                 * shifted down and right. */
+                uint32_t v = *dst;
+                *dst = ((((v >> 16) & 0xff) * CURSOR_SHADE / 256) << 16) |
+                       ((((v >> 8) & 0xff) * CURSOR_SHADE / 256) << 8) |
+                       ((v & 0xff) * CURSOR_SHADE / 256);
+            }
         }
 }
 

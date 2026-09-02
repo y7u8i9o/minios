@@ -409,16 +409,30 @@ static void bind_compositor(struct wire_client *c, void *data, uint32_t version,
         wire_resource_set_listener(r, &compositor_handlers, NULL, NULL);
 }
 
-static void bind_output(struct wire_client *c, void *data, uint32_t version, uint32_t id)
+static void announce_output(struct wire_resource *r)
 {
-    struct wire_resource *r = wire_resource_create(c, &output_interface, (int)version, id);
-    if (!r)
-        return;
     output_send_geometry(r, 0, 0, screen_w, screen_h);
     output_send_mode(r, screen_w, screen_h, 60);
     output_send_scale(r, 1);
     output_send_transform(r, 0);
     output_send_done(r);
+}
+
+static void bind_output(struct wire_client *c, void *data, uint32_t version, uint32_t id)
+{
+    struct wire_resource *r = wire_resource_create(c, &output_interface, (int)version, id);
+    if (r)
+        announce_output(r);
+}
+
+static struct wire_server *server;
+
+void output_changed(void)
+{
+    for (struct wire_client *k = wire_server_first_client(server); k; k = wire_client_next(k))
+        for (struct wire_resource *r = wire_client_first_resource(k); r; r = r->next)
+            if (r->obj.interface == &output_interface)
+                announce_output(r);
 }
 
 int surface_accepts_input(const struct csurface *s, int x, int y)
@@ -447,6 +461,7 @@ static void client_gone(struct wire_client *wc, void *data)
 
 void surfaces_init(struct wire_server *srv)
 {
+    server = srv;
     wire_global_create(srv, &compositor_interface, 1, bind_compositor, NULL);
     wire_global_create(srv, &shm_interface, 1, bind_shm, NULL);
     wire_global_create(srv, &output_interface, 1, bind_output, NULL);

@@ -45,6 +45,7 @@ static void alloc_surfaces(struct gui_window *w, int width, int height)
     free(w->surf.pixels);
     w->width = width;
     w->height = height;
+    w->scale = 1;
     w->surf = (struct surface){ calloc((size_t)width * height, 4), width, height, width };
 }
 

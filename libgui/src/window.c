@@ -56,6 +56,17 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
     painter_pop(p);
 }
 
+/* The painter's clip is in device pixels; damage is reported in logical
+ * pixels, rounded outwards. */
+static struct rect device_to_logical(struct rect r, int scale)
+{
+    if (scale <= 1)
+        return r;
+    int x0 = r.x / scale, y0 = r.y / scale;
+    int x1 = (r.x + r.w + scale - 1) / scale, y1 = (r.y + r.h + scale - 1) / scale;
+    return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
+}
+
 struct rect window_paint(struct widget *window)
 {
     struct window_state *ws = window_state_of(window);
@@ -73,20 +84,26 @@ struct rect window_paint(struct widget *window)
     if (!window->dirty && !window->child_dirty)
         return none;
     struct painter p;
-    painter_init(&p, &ws->win->surf, app_theme(window->app));
+    int scale = ws->win->scale > 0 ? ws->win->scale : 1;
+    painter_init_scaled(&p, &ws->win->surf, app_theme(window->app), scale);
     struct rect damage = none;
     int has = 0;
     paint_tree(window, &p, window->dirty, &damage, &has, ws->popup_win ? ws->popup : NULL);
-    if (has)
+    if (has) {
+        damage = device_to_logical(damage, scale);
         gui_damage(ws->win, damage.x, damage.y, damage.w, damage.h);
+    }
     if (ws->popup_win && ws->popup) {
         struct painter pp;
-        painter_init(&pp, &ws->popup_win->surf, app_theme(window->app));
+        int pscale = ws->popup_win->scale > 0 ? ws->popup_win->scale : 1;
+        painter_init_scaled(&pp, &ws->popup_win->surf, app_theme(window->app), pscale);
         struct rect pd = none;
         int phas = 0;
         paint_tree(ws->popup, &pp, 1, &pd, &phas, NULL);
-        if (phas)
+        if (phas) {
+            pd = device_to_logical(pd, pscale);
             gui_damage(ws->popup_win, pd.x, pd.y, pd.w, pd.h);
+        }
     }
     return has ? damage : none;
 }

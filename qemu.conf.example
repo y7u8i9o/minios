@@ -1,0 +1,52 @@
+# Local settings for tools/run.sh (`make run`, `make gdb`).
+# Copy to qemu.conf in the repository root; qemu.conf is ignored by git.
+# The file is sourced by /bin/sh. Environment variables and command line
+# options override anything set here. See tools/run.sh --help.
+
+# Audio backend attached to virtio-snd: coreaudio (macOS), pa or pipewire
+# (Linux), none (silent), wav (write build/audio.wav), ...
+#QEMU_AUDIO=coreaudio
+
+# Extra -audiodev properties, comma separated.
+#QEMU_AUDIO_OPTS=out.frequency=48000,out.buffer-length=20000
+
+# Output file for the wav backend.
+#QEMU_WAV=build/audio.wav
+
+# Set to 0 to boot without a sound device.
+#QEMU_SOUND=1
+
+# Machine.
+#QEMU_MEM=1G
+#QEMU_SMP=2
+#QEMU_ACCEL=tcg
+
+# -display and -serial arguments.
+#QEMU_DISPLAY=cocoa,show-cursor=on
+
+# Start in full screen with the guest scaled to fit (1 or 0).
+#QEMU_FULLSCREEN=1
+
+# Display adapter: virtio (virtio-vga, any mode up to 2560x1600 at run time,
+# the default), std (VGA BIOS modes only) or none.
+#QEMU_VGA=virtio
+
+# A virtio tablet gives the guest absolute pointer positions, so the window
+# never grabs the mouse. 0 leaves only the PS/2 mouse.
+#QEMU_TABLET=1
+
+# Framebuffer mode, WxH[xBPP][@SCALE], put on the kernel command line when
+# the image is built by `make run` or `tools/run.sh --build`. @2 draws every
+# pixel twice for high density displays: the desktop keeps its size and is
+# sharp. On macOS with a Retina display the default is 2560x1600@2 (a
+# 1280x800 point window); set 1024x768 for the plain mode. The virtio-gpu
+# driver sets any size whose 32 bit frame fits 16 MiB; with QEMU_VGA=std
+# only the VGA BIOS modes work (1600x1200, 1920x1080, 1920x1200, 2560x1440,
+# 2560x1600; 2048x1536 is not among them). The mode can also be changed
+# from the desktop: Settings > Display, stored as display_mode in
+# /etc/desktop.conf.
+#QEMU_VIDEO=2560x1600@2
+#QEMU_SERIAL=stdio
+
+# Anything else, appended to the QEMU command line.
+#QEMU_EXTRA="-monitor telnet:127.0.0.1:4444,server,nowait"

@@ -32,13 +32,17 @@ struct mqueue {
 static struct mqueue *queues[MQ_MAX];
 static DEFINE_SPINLOCK(mq_table_lock);
 
-/* poll: a single wait queue woken by every producer. */
+/* poll: a single wait queue woken by every producer.  poll_generation
+ * closes the check-to-sleep race: a waiter snapshots it before scanning
+ * descriptors and sleeps only when no producer notified in the meantime. */
 static DEFINE_SPINLOCK(poll_lock);
 static DEFINE_WAITQ(poll_waitq);
+static uint64_t poll_generation;
 
 void poll_notify(void)
 {
     spin_lock(&poll_lock);
+    poll_generation++;
     waitq_wake_all(&poll_waitq);
     spin_unlock(&poll_lock);
 }
@@ -220,6 +224,10 @@ long poll_files(struct file **files, struct pollfd *pfds, size_t n, long timeout
 {
     uint64_t deadline = timeout_ms > 0 ? timer_ms() + (uint64_t)timeout_ms : 0;
     for (;;) {
+        spin_lock(&poll_lock);
+        uint64_t generation = poll_generation;
+        spin_unlock(&poll_lock);
+
         long ready = 0;
         for (size_t i = 0; i < n; i++) {
             pfds[i].revents = 0;
@@ -238,12 +246,16 @@ long poll_files(struct file **files, struct pollfd *pfds, size_t n, long timeout
         if (signal_should_interrupt())
             return -EINTR;
         /* Sleep until a producer wakes poll or, with a timeout, for a
-         * bounded slice so the deadline is honoured. */
+         * bounded slice so the deadline is honoured.  Recheck the
+         * generation while holding poll_lock so a notification between
+         * the readiness scan and waiter registration cannot be lost. */
         spin_lock(&poll_lock);
-        if (timeout_ms < 0)
-            waitq_wait(&poll_waitq, &poll_lock);
-        else
-            waitq_wait_timeout(&poll_waitq, &poll_lock, deadline);
+        if (poll_generation == generation) {
+            if (timeout_ms < 0)
+                waitq_wait(&poll_waitq, &poll_lock);
+            else
+                waitq_wait_timeout(&poll_waitq, &poll_lock, deadline);
+        }
         spin_unlock(&poll_lock);
     }
 }

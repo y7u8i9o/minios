@@ -4,6 +4,7 @@ Files=/bin/files
 Viewer=/bin/view
 Editor=/bin/gedit
 Calculator=/bin/calc
+Synthesizer=/bin/synth
 Paint=/bin/paint
 Pong=/bin/pong
 Unicode viewer=/bin/unicode

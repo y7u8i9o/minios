@@ -2,7 +2,7 @@
 #include <kernel.h>
 #include <lib/list.h>
 
-#define PMM_MAX_ORDER 10    /* 4 KiB .. 4 MiB blocks */
+#define PMM_MAX_ORDER 12    /* 4 KiB .. 16 MiB blocks (the GPU scanout buffer is one block) */
 
 #define PG_RESERVED  (1u << 0)   /* not managed by the allocator */
 #define PG_FREE      (1u << 1)   /* head of a free block, order is valid */

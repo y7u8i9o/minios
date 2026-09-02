@@ -1,0 +1,124 @@
+/* M32: virtio-gpu mode changes and virtio-input tablet events. */
+#include <tests/ktest.h>
+#include <drivers/fbdev.h>
+#include <drivers/fbcon.h>
+#include <drivers/virtio/virtio_gpu.h>
+#include <drivers/virtio/virtio_input.h>
+#include <drivers/timer.h>
+#include <drivers/ps2kbd.h>
+#include <fs/vfs.h>
+#include <sched/proc.h>
+#include <sched/user.h>
+#include <ipc/signal.h>
+#include <lib/string.h>
+#include <console.h>
+#include <errno.h>
+
+static uint32_t pixel(int x, int y)
+{
+    return fb_read_rgb(&fb_screen, (uint32_t)x, (uint32_t)y);
+}
+
+/* The GPU driver took over at boot; the console follows a mode change
+ * done from the kernel; fbmodetest changes the mode through the ioctl,
+ * draws and flushes. */
+static void test_gpu_mode(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    ktest_assert(virtio_gpu_present() && fb_has_gpu(), "virtio-gpu not registered");
+    ktest_assert(fb_screen.bpp == 32 && fb_screen.red_mask_shift == 16, "gpu buffer layout");
+    ktest_assert(fb_map_size() == 16u << 20, "map size %zu", fb_map_size());
+    uint16_t cols, rows;
+    fbcon_get_size(&cols, &rows);
+    ktest_assert(cols == 128 && rows == 48, "console %ux%u cells at boot", cols, rows);
+
+    ktest_assert(fb_set_mode(1600, 1200, 2) == 0, "set 1600x1200@2");
+    ktest_assert(fb_screen.width == 1600 && fb_screen.height == 1200 && fb_screen.pitch == 6400,
+                 "geometry after the change: %lux%lu pitch %lu", fb_screen.width, fb_screen.height, fb_screen.pitch);
+    ktest_assert(fb_screen_scale == 2, "scale %u", fb_screen_scale);
+    fbcon_get_size(&cols, &rows);
+    ktest_assert(cols == 100 && rows == 37, "console %ux%u cells at 1600x1200@2", cols, rows);
+    kprintf("gpu_mode: console follows the mode\n");
+    ktest_assert(fb_set_mode(8192, 8192, 1) == -EINVAL, "oversized mode refused");
+    ktest_assert(fb_set_mode(1024, 768, 1) == 0, "back to 1024x768");
+
+    vfs_unlink("/fb.ready");
+    struct proc *p = proc_create_user("/bin/fbmodetest", (char *const[]){ "fbmodetest", NULL },
+                                      (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/fbmodetest");
+    struct inode *marker = NULL;
+    for (int i = 0; i < 200 && vfs_lookup("/fb.ready", &marker) < 0; i++)
+        sleep_ms(50);
+    ktest_assert(marker != NULL, "fbmodetest did not signal readiness");
+    inode_put(marker);
+    ktest_assert(fb_screen.width == 1280 && fb_screen.height == 800, "mode set through the ioctl: %lux%lu",
+                 fb_screen.width, fb_screen.height);
+    ktest_assert(pixel(10, 10) == 0x00336699, "fill colour %08x", pixel(10, 10));
+    ktest_assert(pixel(101, 100) == 0x00ff8800 && pixel(100, 100) == 0x000044ff, "pattern %08x %08x",
+                 pixel(100, 100), pixel(101, 100));
+    ktest_assert(pixel(1279, 799) == 0x00336699, "last pixel of the new mode %08x", pixel(1279, 799));
+    kprintf("gpu_mode: user mode change and flush ok\n");
+    ps2kbd_feed_scancode(0x1c);
+    ps2kbd_feed_scancode(0x9c);
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "fbmodetest status 0x%x", status);
+    ktest_assert(fb_screen.width == 1024 && fb_screen.height == 768, "mode restored by fbmodetest");
+    fbcon_get_size(&cols, &rows);
+    ktest_assert(cols == 128 && rows == 48, "console restored %ux%u", cols, rows);
+    kprintf("gpu_mode: ok\n");
+}
+KTEST_DEFINE("gpu_mode", test_gpu_mode);
+
+/* Absolute events, buttons and the wheel reach /dev/mouse. */
+static void test_input_tablet(void)
+{
+    struct file *f;
+    ktest_assert(vfs_open("/dev/mouse", O_RDONLY, 0, &f) == 0, "open /dev/mouse");
+    virtio_input_feed(EV_ABS, ABS_X, 16384);
+    virtio_input_feed(EV_ABS, ABS_Y, 8192);
+    virtio_input_feed(EV_KEY, BTN_LEFT, 1);
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);
+    virtio_input_feed(EV_REL, REL_WHEEL, (uint32_t)-1);
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);
+    virtio_input_feed(EV_KEY, BTN_LEFT, 0);
+    virtio_input_feed(EV_KEY, BTN_RIGHT, 1);
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);      /* nothing changed: no event */
+    struct mouse_event ev[4];
+    long n = file_read(f, (char *)ev, sizeof ev);
+    ktest_assert(n == 3 * (long)sizeof ev[0], "read %ld bytes", n);
+    ktest_assert((ev[0].flags & MOUSE_ABSOLUTE) && ev[0].ax == 16384 && ev[0].ay == 8192 && ev[0].buttons == 1 &&
+                 ev[0].dx == 0 && ev[0].dy == 0, "event 0: flags %u %u,%u buttons %u", ev[0].flags, ev[0].ax,
+                 ev[0].ay, ev[0].buttons);
+    ktest_assert(ev[1].dz == 1 && ev[1].buttons == 1 && ev[1].ax == 16384, "event 1: dz %d buttons %u",
+                 ev[1].dz, ev[1].buttons);
+    ktest_assert(ev[2].buttons == 2 && ev[2].dz == 0, "event 2: buttons %u dz %d", ev[2].buttons, ev[2].dz);
+    file_put(f);
+    kprintf("input_tablet: absolute events ok\n");
+}
+KTEST_DEFINE("input_tablet", test_input_tablet);
+
+/* The compositor places the cursor from absolute events. */
+static void test_gui_tablet(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    sleep_ms(1200);
+    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    /* x = ax * sw / 32768, so ax = x * 32768 / sw lands exactly. */
+    int x = 300, y = 200;
+    virtio_input_feed(EV_ABS, ABS_X, (uint32_t)(x * 32768 / sw));
+    virtio_input_feed(EV_ABS, ABS_Y, (uint32_t)((y * 32768 + sh - 1) / sh));
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);
+    sleep_ms(300);
+    ktest_assert(pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff,
+                 "cursor at %d,%d: %08x %08x", x, y, pixel(x, y), pixel(x + 1, y + 2));
+    ktest_assert(pixel(sw / 2, sh / 2) == 0x00306080, "old cursor position repainted: %08x", pixel(sw / 2, sh / 2));
+    kprintf("gui_tablet: cursor follows absolute events\n");
+    signal_send(srv, SIGTERM);
+    int status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+}
+KTEST_DEFINE("gui_tablet", test_gui_tablet);

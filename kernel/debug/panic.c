@@ -5,6 +5,7 @@
 #include <arch/trap.h>
 #include <arch/power.h>
 #include <console.h>
+#include <drivers/fbdev.h>
 #include <drivers/debugexit.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
@@ -16,6 +17,7 @@ volatile int panic_in_progress;
 
 static __noreturn void panic_finish(void)
 {
+    fb_panic_flush();
 #if CONFIG_PANIC_EXIT
     kprintf("panic: exiting through isa-debug-exit\n");
     debugexit_exit(PANIC_EXIT_CODE);

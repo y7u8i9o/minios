@@ -3,6 +3,7 @@
  * a second; file type handlers are stored in /etc/mime.apps.
  * "settings set KEY VALUE" changes one desktop.conf entry and exits. */
 #include <gui/app.h>
+#include <gui/client.h>
 #include <gui/mime.h>
 #include <gui/model.h>
 #include <dirent.h>
@@ -16,13 +17,19 @@
 #define CONF_PATH "/etc/desktop.conf"
 #define WALLPAPER_DIR "/usr/share/wallpapers"
 
-static const char *const keys[] = { "wallpaper", "wallpaper_mode", "desktop_color", "repeat_rate", "repeat_delay" };
-#define NKEYS 5
-static char values[NKEYS][128] = { "/usr/share/wallpapers/default.png", "fill", "0x306080", "30", "500" };
+static const char *const keys[] = { "wallpaper", "wallpaper_mode", "desktop_color", "repeat_rate", "repeat_delay",
+                                    "display_mode" };
+#define NKEYS 6
+static char values[NKEYS][128] = { "", "fill", "0x306080", "30", "500", "" };
+/* Modes any virtio-gpu scanout accepts; the 16 MiB buffer holds up to 2560x1600. */
+static const char *const resolutions[] = { "1024x768", "1280x800", "1280x1024", "1440x900", "1600x1200",
+                                           "1680x1050", "1920x1080", "1920x1200", "2560x1440", "2560x1600" };
+#define NRES 10
 static const char *const modes[] = { "fill", "center", "tile", "stretch" };
 
 static struct app *app;
 static struct widget *wall_combo, *mode_combo, *red, *green, *blue, *swatch, *rate_spin, *delay_spin;
+static struct widget *res_combo, *scale_combo;
 static struct widget *apps_table, *prog_field, *type_label;
 static char wallpapers[16][128];
 static int nwallpapers;
@@ -105,6 +112,9 @@ static int on_apply(struct widget *w, void *args, void *arg)
     snprintf(values[2], sizeof values[2], "0x%02x%02x%02x", red->value, green->value, blue->value);
     snprintf(values[3], sizeof values[3], "%d", rate_spin->value);
     snprintf(values[4], sizeof values[4], "%d", delay_spin->value);
+    if (res_combo->value >= 0 && res_combo->value < NRES)
+        snprintf(values[5], sizeof values[5], "%s@%d", resolutions[res_combo->value],
+                 scale_combo->value > 0 ? 2 : 1);
     if (conf_write() < 0) {
         static const char *const buttons[] = { "OK" };
         app_dialog(app, "Settings", "The settings file cannot be written.", buttons, 1);
@@ -171,6 +181,44 @@ static void build_keyboard(struct widget *page)
     widget_set_grid(label_new(grid, "Key repeat delay (ms)"), 1, 0, 1, 1);
     delay_spin = spinner_new(grid, 50, 2000, atoi(values[4]));
     widget_set_grid(delay_spin, 1, 1, 1, 1);
+}
+
+/* ---- display ---- */
+
+static void build_display(struct widget *page)
+{
+    struct widget *grid = grid_new(page);
+    widget_set_stretch(grid, 1, 0);
+    grid_set_stretch(grid, -1, 1, 1);
+    /* The current mode: the file's value, else what the compositor shows. */
+    char current[32];
+    struct gui_output_info info;
+    if (values[5][0]) {
+        strlcpy(current, values[5], sizeof current);
+    } else if (gui_get_output(0, &info) == 0) {
+        snprintf(current, sizeof current, "%dx%d@%d", info.width * info.scale, info.height * info.scale, info.scale);
+    } else {
+        current[0] = '\0';
+    }
+    int scale = strchr(current, '@') ? atoi(strchr(current, '@') + 1) : 1;
+    widget_set_grid(label_new(grid, "Resolution"), 0, 0, 1, 1);
+    res_combo = combobox_new(grid);
+    int selected = 0;
+    for (int i = 0; i < NRES; i++) {
+        combobox_add(res_combo, resolutions[i]);
+        if (strncmp(resolutions[i], current, strlen(resolutions[i])) == 0 &&
+            (current[strlen(resolutions[i])] == '@' || current[strlen(resolutions[i])] == '\0'))
+            selected = i;
+    }
+    combobox_select(res_combo, selected);
+    widget_set_grid(res_combo, 0, 1, 1, 1);
+    widget_set_grid(label_new(grid, "Pixel scale"), 1, 0, 1, 1);
+    scale_combo = combobox_new(grid);
+    combobox_add(scale_combo, "1x");
+    combobox_add(scale_combo, "2x (high density displays)");
+    combobox_select(scale_combo, scale >= 2 ? 1 : 0);
+    widget_set_grid(scale_combo, 1, 1, 1, 1);
+    label_new(page, "Applied by the desktop within a second; needs the virtio-gpu display.");
 }
 
 /* ---- file types ---- */
@@ -289,6 +337,7 @@ int main(int argc, char **argv)
     widget_set_stretch(tabs, 1, 1);
     build_appearance(tabs_add(tabs, "Appearance"));
     build_keyboard(tabs_add(tabs, "Keyboard"));
+    build_display(tabs_add(tabs, "Display"));
     build_apps(tabs_add(tabs, "File types"));
     build_about(tabs_add(tabs, "About"));
     if (argc > 1 && strcmp(argv[1], "appearance") == 0)

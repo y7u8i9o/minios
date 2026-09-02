@@ -140,7 +140,13 @@ struct client {
 /* debug.c: tunable settings */
 struct comp_settings {
     int frame_ms, desktop_color, repeat_rate, repeat_delay, decor_default, verbose;
+    int display_mode;               /* DISPLAY_MODE_PACK of the current mode */
 };
+/* display_mode packs width, height (up to 16383) and the pixel scale (1..4). */
+#define DISPLAY_MODE_PACK(w, h, s) (((s) << 28) | ((w) << 14) | (h))
+#define DISPLAY_MODE_W(m) (((m) >> 14) & 0x3fff)
+#define DISPLAY_MODE_H(m) ((m) & 0x3fff)
+#define DISPLAY_MODE_S(m) (((m) >> 28) & 7)
 extern struct comp_settings settings;
 void debug_init(struct wire_server *srv);
 void frame_clock_set(int ms);                   /* main.c */
@@ -149,6 +155,7 @@ void scene_stat_values(long *count, long *ms, long *max);   /* scene.c */
 
 /* main.c */
 extern int screen_w, screen_h;
+extern int screen_scale;                /* framebuffer pixels per logical pixel */
 extern int cursor_x, cursor_y;
 void comp_log(const char *fmt, ...);
 uint32_t comp_serial(void);
@@ -175,6 +182,16 @@ int scene_order(struct csurface **out, int max);           /* bottom to top */
 extern struct surface back;
 int backend_init(void);
 void backend_flush(struct rect r);
+int backend_can_set_mode(void);
+/* Change the framebuffer mode; screen_w, screen_h, screen_scale and the
+ * back buffer follow. */
+int backend_set_mode(int width, int height, int scale);
+/* main.c: apply a mode to the backend, the shell and every client. */
+int comp_set_mode(int width, int height, int scale);
+/* surface.c: re-announce the output to every bound output resource. */
+void output_changed(void);
+/* shell.c: the screen size changed; re-layout layers, clamp windows. */
+void shell_output_changed(void);
 void backend_release(void);
 /* shell.c */
 void shell_init(struct wire_server *srv);

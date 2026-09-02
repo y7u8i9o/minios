@@ -15,7 +15,7 @@ MKFS     := $(BUILD)/host/mkfs
 
 export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS SWAP
 
-.PHONY: all kernel libc libfont libwire libgui user initrd disk image run gdb test check clean tools $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test check clean tools $(DISK)
 
 all: kernel libc user
 
@@ -45,10 +45,13 @@ libfont: libc
 libwire: libc
 	$(MAKE) -C libwire
 
+libaudio: libc libwire
+	$(MAKE) -C libaudio
+
 libgui: libc libfont libwire
 	$(MAKE) -C libgui
 
-user: libc libfont libwire libgui
+user: libc libfont libwire libaudio libgui
 	$(MAKE) -C user
 
 # The initrd is a ustar archive of build/initrd_root, populated by user/.
@@ -70,18 +73,30 @@ $(SWAP):
 
 disk: $(DISK) $(SWAP)
 
-QEMU_DISK := -drive file=$(DISK),if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0 \
-             -drive file=$(SWAP),if=none,id=vd1,format=raw -device virtio-blk-pci,drive=vd1
+# QEMU is started by tools/run.sh, which reads qemu.conf, QEMU_* variables
+# and RUNFLAGS. Variables given on the make command line are exported so
+# that `make QEMU_AUDIO=none run` keeps working. `run` and `gdb` let the
+# script build the image, since the framebuffer mode it picks (VIDEO, or
+# QEMU_VIDEO, or a doubled mode on a Retina display) is baked into it.
+RUN := tools/run.sh
+$(foreach v,QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
+            QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VIDEO QEMU_SERIAL QEMU_EXTRA \
+            QEMU_CONF CMDLINE, \
+    $(if $(filter command line,$(origin $(v))),$(eval export $(v))))
+ifeq ($(origin VIDEO),command line)
+export QEMU_VIDEO := $(VIDEO)
+endif
 
+# VIDEO=WxH[xBPP][@SCALE] selects the framebuffer mode (video= on the
+# kernel command line); @2 doubles every pixel for high density displays.
 image: kernel initrd $(LIMINE) $(DISK) $(SWAP)
-	LIMINE=$(LIMINE) INITRD=$(INITRD) tools/mkiso.sh $(KERNEL) $(ISO) "$(CMDLINE)"
+	LIMINE=$(LIMINE) INITRD=$(INITRD) tools/mkiso.sh $(KERNEL) $(ISO) "$(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"
 
-run: image
-	$(QEMU) $(QEMU_FLAGS) $(QEMU_DISK) -cdrom $(ISO)
+run:
+	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) $(RUN) --build $(RUNFLAGS)
 
-gdb: image
-	@echo "Connect with: $(GDB) -iex 'set auto-load safe-path $(TOP)'"
-	$(QEMU) $(QEMU_FLAGS) $(QEMU_DISK) -cdrom $(ISO) -s -S
+gdb:
+	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) $(RUN) --build --gdb $(RUNFLAGS)
 
 test: kernel initrd $(LIMINE) $(DISK)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases

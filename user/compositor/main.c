@@ -49,7 +49,17 @@ static void handle_mouse(void)
     struct mouse_event ev[8];
     ssize_t n = read(mouse_fd, ev, sizeof ev);
     for (ssize_t i = 0; i < n / (ssize_t)sizeof ev[0]; i++) {
-        if (ev[i].dx || ev[i].dy) {
+        if (ev[i].flags & MOUSE_ABSOLUTE) {
+            /* Tablets: the position maps onto the screen. */
+            int x = (int)((long)ev[i].ax * screen_w / (MOUSE_ABS_MAX + 1));
+            int y = (int)((long)ev[i].ay * screen_h / (MOUSE_ABS_MAX + 1));
+            if (x != cursor_x || y != cursor_y) {
+                cursor_x = x;
+                cursor_y = y;
+                scene_set_cursor(cursor_x, cursor_y);
+                seat_pointer_motion();
+            }
+        } else if (ev[i].dx || ev[i].dy) {
             cursor_x += ev[i].dx;
             cursor_y += ev[i].dy;
             if (cursor_x < 0) cursor_x = 0;
@@ -147,6 +157,23 @@ static void frame(void)
     }
 }
 
+int comp_set_mode(int width, int height, int scale)
+{
+    if (width < 640 || height < 480 || scale < 1 || scale > 4)
+        return -1;
+    if (backend_set_mode(width, height, scale) < 0)
+        return -1;
+    settings.display_mode = DISPLAY_MODE_PACK(screen_w * screen_scale, screen_h * screen_scale, screen_scale);
+    if (cursor_x >= screen_w) cursor_x = screen_w - 1;
+    if (cursor_y >= screen_h) cursor_y = screen_h - 1;
+    scene_set_cursor(cursor_x, cursor_y);
+    shell_output_changed();
+    output_changed();
+    scene_damage_all();
+    comp_log("mode %dx%d scale %d", screen_w, screen_h, screen_scale);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     signal(SIGTERM, on_term);
@@ -184,7 +211,11 @@ int main(int argc, char **argv)
     timerfd_settime(frame_fd, &spec);
     scene_damage_all();
     report_at = uptime_ms() + 10000;
-    comp_log("started %dx%d", screen_w, screen_h);
+    settings.display_mode = DISPLAY_MODE_PACK(screen_w * screen_scale, screen_h * screen_scale, screen_scale);
+    if (screen_scale > 1)
+        comp_log("started %dx%d scale %d", screen_w, screen_h, screen_scale);
+    else
+        comp_log("started %dx%d", screen_w, screen_h);
     while (running) {
         struct pollfd pf[OPEN_MAX];
         int n = 0;

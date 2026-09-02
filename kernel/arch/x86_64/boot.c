@@ -29,9 +29,13 @@
 #include <drivers/ps2kbd.h>
 #include <drivers/pci.h>
 #include <drivers/ps2mouse.h>
+#include <drivers/mouse.h>
+#include <drivers/virtio/virtio_gpu.h>
+#include <drivers/virtio/virtio_input.h>
 #include <drivers/fbdev.h>
 #include <drivers/pty.h>
 #include <drivers/virtio/virtio_blk.h>
+#include <drivers/virtio/virtio_snd.h>
 #include <block/blockdev.h>
 #include <mm/swap.h>
 #include <sched/sched.h>
@@ -84,6 +88,8 @@ static volatile uint64_t limine_requests_end[] = LIMINE_REQUESTS_END_MARKER;
 struct bootinfo bootinfo;
 uintptr_t hhdm_offset;
 
+static void boot_parse_video(void);
+
 void boot_init(void)
 {
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision))
@@ -114,6 +120,36 @@ void boot_init(void)
     }
     hhdm_offset = bootinfo.hhdm_offset;
     cmdline_init(bootinfo.cmdline);
+    boot_parse_video();
+}
+
+/* video=WxH[xBPP][@SCALE]: the mode itself is applied by Limine (the image
+ * builder copies it into limine.conf); the @SCALE suffix asks for an
+ * integer UI scale on high density displays, used by the framebuffer
+ * console and reported through /dev/fb0 to the window server. */
+static void boot_parse_video(void)
+{
+    char val[32];
+    bootinfo.fb_scale = 1;
+    if (!cmdline_lookup("video", val, sizeof val))
+        return;
+    const char *at = strchr(val, '@');
+    if (at && at[1] >= '1' && at[1] <= '4' && at[2] == '\0')
+        bootinfo.fb_scale = (uint32_t)(at[1] - '0');
+    /* WxH[xBPP]: Limine may not offer the mode; the GPU driver can. */
+    uint32_t w = 0, h = 0;
+    const char *p = val;
+    while (*p >= '0' && *p <= '9')
+        w = w * 10 + (uint32_t)(*p++ - '0');
+    if (*p == 'x') {
+        p++;
+        while (*p >= '0' && *p <= '9')
+            h = h * 10 + (uint32_t)(*p++ - '0');
+    }
+    if (w >= 320 && h >= 200 && w <= 8192 && h <= 8192) {
+        bootinfo.fb_req_width = w;
+        bootinfo.fb_req_height = h;
+    }
 }
 
 static void boot_apply_cmdline(void)
@@ -149,6 +185,11 @@ static void mount_root(void)
 static void kinit(void *arg)
 {
     mount_root();
+    /* virtio-snd discovery sends synchronous control messages and therefore
+     * requires interrupt delivery and a schedulable current thread. */
+    virtio_snd_init();
+    virtio_gpu_init();
+    virtio_input_init();
     swap_start_daemon();
     ps2kbd_start_ttyd();
 #if CONFIG_TESTS
@@ -174,7 +215,8 @@ __noreturn void kmain(void)
     serial_init();
     console_init();
     boot_init();
-    fbcon_init(bootinfo.have_framebuffer ? &bootinfo.framebuffer : NULL);
+    fb_screen_init();
+    fbcon_init();
     kprintf("minios booting\n");
 
     boot_apply_cmdline();
@@ -205,6 +247,7 @@ __noreturn void kmain(void)
     tlb_init();
     timer_init();
     ps2kbd_init();
+    mouse_init();
     ps2mouse_init();
     fbdev_init();
     pty_init();

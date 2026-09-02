@@ -44,10 +44,12 @@ before the code that uses them.
 | `proc.lock` (extended) | spinlock | also `sig_pending` and `sig_actions`; `pgid` joins `proc_tree_lock` | M15 |
 | `mouse_lock` | spinlock | mouse packet assembly and event ring, taken in the IRQ handler, condition lock of `mouse_waitq` | M17 |
 | `fbdev_lock` | spinlock | owner of the display | M17 |
+| `pcm_device.owner_lock` | spinlock | exclusive owner of one raw PCM device | audio |
+| `virtio_snd.control_lock` | mutex | serializes one sound device's set-params, prepare, start, stop and release commands | audio |
 | `shm_lock` | spinlock | table of named shared memory objects and their reference counts | M17 |
 | `mqueue.lock` | spinlock | ring of one message queue, condition lock of its wait queues | M17 |
 | `mq_table_lock` | spinlock | table of named message queues and their reference counts | M17 |
-| `poll_lock` | spinlock | condition lock of `poll_waitq`, woken by every producer | M17 |
+| `poll_lock` | spinlock | condition lock of `poll_waitq` and its notification generation, woken by every producer | M17 |
 | `tty.lock` | spinlock | line discipline state and ready bytes of one terminal, taken in the keyboard IRQ for the console, condition lock of `tty.rd_waitq` and (console) `tty_intr_waitq`; replaces `kbd_lock` for that state | M17 |
 | `kbd_lock` (reduced) | spinlock | keyboard modifier state only | M17 |
 | `pty.lock` | spinlock | output ring of one pseudo terminal pair, condition lock of `pty.out_waitq` | M17 |
@@ -60,6 +62,7 @@ Locks are listed from outermost to innermost. A CPU holding a lock may only
 acquire locks that appear later in this list.
 
 1. `file.lock` (mutex)
+1a. `virtio_snd.control_lock` (mutex)
 2. `inode.lock` (mutex, two directories in inode number order for rename)
 3. `mfs_sb.lock` (mutex)
 4. `buf.lock` (mutex)
@@ -75,7 +78,7 @@ acquire locks that appear later in this list.
 13. `kmem_caches_lock`
 14. `kmem_cache.lock`
 15. `pmm_lock`
-16. `proc_list_lock`, `tid_lock`, `fdtable.lock`, `files_lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`
+16. `proc_list_lock`, `tid_lock`, `fdtable.lock`, `files_lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `pcm_device.owner_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`
 17. `console_lock`
 
 `proc_tree_lock` sits above `proc.lock` because `wait4` reads the exiting
@@ -124,7 +127,10 @@ whose data is still in flight.
 
 `signal_send` takes `proc.lock` and then `waitq.lock` through
 `waitq_interrupt`, and `proc_exit_notify` sends `SIGCHLD` with no lock
-held. `proc_collect_pgrp` takes `proc_tree_lock` and then
+held. After releasing `proc.lock`, signal posting also calls `poll_notify`,
+which takes `poll_lock`; this prevents an unmasked signal from being lost
+between `poll`'s pending-signal check and its wait registration.
+`proc_collect_pgrp` takes `proc_tree_lock` and then
 `proc_list_lock` and returns pids, so the signals are posted afterwards
 without either lock. The control C path in the keyboard interrupt only
 wakes `ttyd` under `kbd_lock`; `ttyd` posts the signal from thread
@@ -167,3 +173,25 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   condition lock in `waitq_wait_timeout`, and before `wq->lock` inside
   `waitq_interrupt` from the timer interrupt.
 - `eventfd->lock` is leaf.
+
+## M32 additions
+
+- `mouse_lock` (the `/dev/mouse` ring in `drivers/mouse.c`) is taken from
+  the PS/2 interrupt handler after the driver's own packet lock, and from
+  virtio-input completion callbacks under the event queue's `vq->lock`
+  and the device's report lock: `ps2 mouse_lock -> mouse_lock`,
+  `vq->lock -> input_dev->lock -> mouse_lock`. It is the condition lock of
+  `mouse_waitq`; `poll_notify` is called while it is held, as before.
+- `fb_mode_lock` (mutex; the geometry of `fb_screen` for `/dev/fb0`
+  readers and mode changes) is taken before the GPU driver's mutex and
+  before `console_lock`: `fb_mode_lock -> virtio_gpu->lock -> vq->lock`
+  and `fb_mode_lock -> console_lock`. `console_set_screen` takes only
+  `console_lock`; the console never calls the GPU driver (it records a
+  dirty rectangle that `gpu_flushd` fetches with `console_take_dirty`,
+  releasing `console_lock` before touching the device).
+- `virtio_gpu->lock` (mutex; the scanout resource ids and every control
+  sequence) is taken before the control queue's `vq->lock`. The panic
+  path skips the mutex and the flush entirely when the queue lock is held.
+- `input_dev->lock` (the report assembled between `SYN_REPORT` events) is
+  taken under `vq->lock` in the completion callback and alone by
+  `virtio_input_feed`.

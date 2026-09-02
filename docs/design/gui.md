@@ -21,8 +21,15 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
   across `fork`), and hands the display over with `FBIO_ACQUIRE`, which
   stops the text console from drawing while its cell buffer keeps
   receiving output. `FBIO_RELEASE`, or closing the descriptor, redraws
-  the text console. `video=WxH` on the command line selects the mode
-  through Limine; the default is 1024x768.
+  the text console. `video=WxH[xBPP][@SCALE]` on the command line selects the mode
+  through Limine; the default is 1024x768. `@2` is kept out of the Limine
+  mode and parsed by the kernel into `bootinfo.fb_scale`: the console
+  draws glyphs twice as large and `struct fb_info.scale` tells the
+  compositor to compose a half size desktop and double every pixel
+  (high density displays, see `build.md`). Since M32 the framebuffer is
+  `fb_screen` (`display.md`): the virtio-gpu driver replaces the Limine
+  one at boot, `FBIO_FLUSH` pushes rectangles and `FBIO_SET_MODE` changes
+  the mode at run time.
 - Keyboard: the `KBD_SCANCODES` flag delivers raw scancodes (press,
   release and the `0xe0` prefix) so the server tracks modifiers itself.
 - IPC (`ipc/mqueue.c`, `ipc/shm.c`): named message queues carry fixed

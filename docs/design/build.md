@@ -31,12 +31,53 @@ passed to the compiler as `CONFIG_*` macros:
 |---|---|
 | `make` | `build/kernel.elf`, plus libc and user programs once they exist |
 | `make image` | `build/minios.iso`, bootable under BIOS and UEFI |
-| `make run` | boots the ISO with `-M q35 -m 512M -serial stdio` |
+| `make run` | builds the image and boots it through `tools/run.sh` (see below) |
 | `make gdb` | boots with `-s -S` and prints the GDB command line |
 | `make test` | runs every case under `tests/cases/` |
 | `make clean` | removes `build/` |
 
-`make image` accepts `CMDLINE="..."` to set the kernel command line.
+`make image` accepts `CMDLINE="..."` to set the kernel command line and
+`VIDEO=WxH[xBPP][@SCALE]` to select the framebuffer mode (`video=` on the
+command line, applied by Limine). `@2` asks the console and the compositor
+to draw every pixel twice, see "High density displays" below.
+
+## Running
+
+`tools/run.sh` builds the QEMU command line for `make run` and `make gdb`:
+`-M q35`, the accelerator, memory, CPU count, `-serial stdio`, the root and
+swap virtio-blk devices, a virtio-snd device with an audio backend and the
+ISO. Settings come from four layers, each overriding the previous one:
+
+1. built-in defaults: 512M, 4 CPUs, HVF or KVM when the QEMU binary offers
+   it and TCG otherwise, Core Audio on macOS and the silent `none` backend
+   elsewhere;
+2. `qemu.conf` in the repository root, a shell fragment that is ignored by
+   git (`qemu.conf.example` lists every setting);
+3. `QEMU_*` environment variables, also accepted on the make command line,
+   for example `make QEMU_AUDIO=none run`;
+4. command line options, passed through make as `RUNFLAGS`, for example
+   `make RUNFLAGS="--audio wav --smp 2" run`.
+
+| Option | Variable | Meaning |
+|---|---|---|
+| `--audio BACKEND` | `QEMU_AUDIO` | `-audiodev` backend for virtio-snd: `coreaudio`, `none`, `wav`, `pa`, `pipewire`, ... |
+| `--audio-opts OPTS` | `QEMU_AUDIO_OPTS` | extra `-audiodev` properties such as `out.frequency=48000` |
+| `--wav FILE` | `QEMU_WAV` | output of the `wav` backend, default `build/audio.wav` |
+| `--no-sound` | `QEMU_SOUND=0` | boot without a virtio-snd device |
+| `--mem SIZE`, `--smp N`, `--accel NAME` | `QEMU_MEM`, `QEMU_SMP`, `QEMU_ACCEL` | machine |
+| `--display SPEC`, `--serial SPEC` | `QEMU_DISPLAY`, `QEMU_SERIAL` | `-display` and `-serial` arguments |
+| `--full-screen` | `QEMU_FULLSCREEN=1` | `full-screen=on,zoom-to-fit=on` on the display |
+| `--vga TYPE` | `QEMU_VGA` | `virtio` (default, run time modes through virtio-gpu), `std` or `none` |
+| `--no-tablet` | `QEMU_TABLET=0` | no virtio tablet: the window grabs the mouse |
+| `--video MODE` | `QEMU_VIDEO` | framebuffer mode `WxH[xBPP][@SCALE]`, applied when the image is built |
+| `--extra ARGS` | `QEMU_EXTRA` | appended to the command line; the same as arguments after `--` |
+| `--gdb` | | `-s -S`, what `make gdb` passes |
+| `--build` | | run `make image VIDEO=$QEMU_VIDEO` first; what `make run` passes |
+| `--dry-run`, `--verbose` | | print the QEMU command line |
+| `--config FILE` | `QEMU_CONF` | read another configuration file |
+
+The script rejects an audio backend that the QEMU binary does not list in
+`-audiodev help`. `tools/run.sh --help` prints the full option list.
 
 ## Kernel link
 
@@ -65,9 +106,35 @@ is compiled from `third_party/limine/limine.c` into `build/host/limine`.
 At entry `start.S` switches to a 16 KiB static boot stack, clears `rbp` so
 backtraces terminate, and calls `kmain`.
 
+## High density displays
+
+QEMU's cocoa window shows one guest pixel per screen pixel, so on a Retina
+display the default 1024x768 mode covers a quarter of the screen. The
+answer is a doubled mode: `make VIDEO=2560x1600@2 run` boots a 2560x1600
+framebuffer whose `@2` suffix reaches the kernel as `bootinfo.fb_scale`.
+The framebuffer console draws its glyphs at twice the size, `/dev/fb0`
+reports `scale` in `struct fb_info`, and the compositor composes a
+1280x800 desktop and writes every logical pixel as a 2x2 block. Windows
+keep their size on screen and stay sharp; clients are unchanged. On macOS
+`tools/run.sh` picks `2560x1600@2` by itself when the main display is a
+Retina display and the cocoa window is used; `QEMU_VIDEO=1024x768` in
+`qemu.conf` restores the plain mode. With the default `virtio-vga` the
+kernel's virtio-gpu driver sets the `video=` size itself, so any mode
+whose frame fits 16 MiB works, and the mode can be changed later from
+Settings > Display (`display.md`). With `--vga std` only the VGA BIOS
+modes exist, and 2048x1536 is not among them, which is why the doubled
+default is 2560x1600. The `video=` mode is baked into the ISO, so
+`--video` only takes effect when the image is built (`make run`, or
+`tools/run.sh --build`). `--full-screen` is the alternative that scales
+the plain mode to the screen with interpolation.
+`tests/cases/comp_scale` boots `video=2560x1600@2` and checks that the
+compositor's surface appears at doubled coordinates as uniform 2x2 blocks.
+
 ## Tests
 
-`tests/run_qemu_test.sh` boots one case with `-display none`, serial output to
+`tests/run_qemu_test.sh` boots one case with `-display none` (and `-vga std`
+unless the case's `vga` file says `virtio`; a `tablet` file attaches a
+virtio tablet), serial output to
 a file and `-device isa-debug-exit,iobase=0xf4,iosize=0x4`. A case directory
 contains `cmdline`, `expect` (one extended regular expression per line, all
 must match the serial log), optionally `reject` and `timeout`. Any line
@@ -75,4 +142,4 @@ containing `TEST FAIL` fails the case. `tests/run_all.sh` runs every case and
 prints a summary. Test images and logs are written to `build/tests/<case>/`.
 
 Tests run under TCG for determinism. `make run` uses HVF when the installed
-QEMU offers it and TCG otherwise (`QEMU_ACCEL` in `toolchain.mk`).
+QEMU offers it and TCG otherwise (`QEMU_ACCEL`, see Running above).

@@ -1,4 +1,6 @@
 x12: layer surface 2 \(desktop\)
+desktop: wallpaper none mode 0
+settings: set wallpaper /usr/share/wallpapers/default.png
 desktop: wallpaper /usr/share/wallpapers/default.png mode 0
 desktop: config applied
 desktop: started with 4 entries

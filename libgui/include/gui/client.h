@@ -39,8 +39,9 @@ struct wmsg {
 
 struct gui_window {
     int id;
-    int width, height;
-    struct surface surf;        /* draw here, then gui_damage */
+    int width, height;          /* logical pixels */
+    int scale;                  /* device pixels per logical pixel (the output's scale) */
+    struct surface surf;        /* width * scale by height * scale device pixels; draw here, then gui_damage */
     struct gui_window *next;
     void *priv;                 /* library state */
 };
@@ -72,7 +73,7 @@ void gui_text_input_set(struct gui_window *window, int enabled);
 struct gui_window *gui_create_layer_window(int width, int height, int layer, int anchor, int exclusive,
                                            int keyboard, const char *ns);
 void gui_destroy_window(struct gui_window *w);
-/* Mark a rectangle changed; it is committed with the next frame. */
+/* Mark a rectangle (logical pixels) changed; it is committed with the next frame. */
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);
 /* Surface hints are committed atomically with the next buffer update. */
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count);

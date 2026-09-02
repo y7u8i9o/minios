@@ -29,7 +29,14 @@ window roles, and composition.
   alpha blending for `ARGB8888`, the cursor), and frame statistics.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
-  server).
+  server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
+  buffer and every coordinate above it are logical pixels, the screen is
+  `width/2` by `height/2`, and the flush expands each logical row once
+  and writes it to two framebuffer rows. Clients see an ordinary output
+  of the logical size; `output.scale` stays 1. Every copied rectangle is
+  flushed with `FBIO_FLUSH` (a no-op on plain VGA), and
+  `backend_set_mode` changes the resolution through `FBIO_SET_MODE`
+  (`display.md`).
 
 ## Frame clock and callbacks
 

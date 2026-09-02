@@ -1,5 +1,6 @@
 #define KLOG_SUBSYS "mmap"
 #include <mm/vma.h>
+#include <mm/pmm.h>
 #include <mm/slab.h>
 #include <kassert.h>
 #include <klog.h>
@@ -118,5 +119,11 @@ long vma_map_device(struct vmspace *vm, uintptr_t hint, uintptr_t pa, size_t len
         vma_munmap(vm, (uintptr_t)va, len);
         return r;
     }
+    /* A driver buffer in RAM (the GPU scanout buffer) is unmapped like any
+     * other frame, with a page_put per page, so take the references here;
+     * the driver's own reference keeps the block alive. */
+    for (size_t off = 0; off < len; off += PAGE_SIZE)
+        if (pmm_is_ram(pa + off))
+            page_get(phys_to_page(pa + off));
     return va;
 }

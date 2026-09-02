@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include "comp.h"
 
-struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0 };
+struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -63,7 +63,8 @@ static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint
 
 /* ---- settings ---- */
 
-static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose" };
+static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
+                                    "display_mode" };
 
 static int *slot(const char *key)
 {
@@ -73,6 +74,7 @@ static int *slot(const char *key)
     if (strcmp(key, "repeat_delay") == 0) return &settings.repeat_delay;
     if (strcmp(key, "decorations") == 0) return &settings.decor_default;
     if (strcmp(key, "verbose") == 0) return &settings.verbose;
+    if (strcmp(key, "display_mode") == 0) return &settings.display_mode;
     return NULL;
 }
 
@@ -85,6 +87,16 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.repeat_rate && (value < 1 || value > 100)) return;
     if (p == &settings.repeat_delay && (value < 50 || value > 2000)) return;
     if (p == &settings.decor_default && value != DECOR_SERVER && value != DECOR_CLIENT) return;
+    if (p == &settings.display_mode) {
+        if (value == settings.display_mode)
+            return;
+        if (comp_set_mode(DISPLAY_MODE_W(value), DISPLAY_MODE_H(value), DISPLAY_MODE_S(value)) < 0) {
+            comp_log("setting display_mode %dx%d@%d refused", DISPLAY_MODE_W(value), DISPLAY_MODE_H(value),
+                     DISPLAY_MODE_S(value));
+            return;
+        }
+        value = settings.display_mode;      /* what the backend reports */
+    }
     *p = value;
     comp_log("setting %s = %d", key, value);
     if (p == &settings.frame_ms)

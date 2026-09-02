@@ -24,7 +24,7 @@
 #define CLOCK_W 80
 #define MENU_ITEM_H 20
 #define MENU_W 176
-#define MAX_ENTRIES 16
+#define MAX_ENTRIES 32
 #define MAX_TASKS 16
 
 struct entry { char title[24]; char path[64]; };

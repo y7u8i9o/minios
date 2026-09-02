@@ -1,0 +1,3 @@
+virtio-input\] QEMU Virtio Tablet: absolute pointer, 0..32767 x 0..32767
+input_tablet: absolute events ok
+TEST PASS

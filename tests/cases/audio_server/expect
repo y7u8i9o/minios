@@ -1,0 +1,5 @@
+audiod: started 48000 Hz stereo
+audiod: stream 'integration-440' configured
+audiod: stream 'integration-660' configured
+audiointtest: 0 failures
+TEST PASS

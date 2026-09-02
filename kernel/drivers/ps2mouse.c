@@ -1,14 +1,10 @@
 #define KLOG_SUBSYS "ps2mouse"
 #include <drivers/ps2mouse.h>
-#include <drivers/timer.h>
+#include <drivers/mouse.h>
+#include <sync/spinlock.h>
 #include <arch/apic.h>
 #include <arch/irq.h>
 #include <arch/io.h>
-#include <fs/vfs.h>
-#include <fs/devfs.h>
-#include <ipc/signal.h>
-#include <ipc/mqueue.h>
-#include <sched/wait.h>
 #include <lib/string.h>
 #include <klog.h>
 #include <errno.h>
@@ -16,18 +12,14 @@
 #define PS2_DATA    0x60
 #define PS2_STATUS  0x64
 #define PS2_CMD     0x64
-#define MOUSE_EVENTS 64
 
-/* Packet assembly and the event ring. Protected by mouse_lock, taken in
- * the interrupt handler; condition lock of mouse_waitq. */
+/* Packet assembly. Protected by mouse_lock, taken in the interrupt
+ * handler; events go to the ring in drivers/mouse.c. */
 static DEFINE_SPINLOCK(mouse_lock);
-static DEFINE_WAITQ(mouse_waitq);
 static struct {
     uint8_t packet[4];
     unsigned npacket;
     unsigned packet_len;        /* 3, or 4 with a wheel */
-    struct mouse_event ring[MOUSE_EVENTS];
-    unsigned head, tail, count;
     bool present;
 } mouse;
 
@@ -78,19 +70,13 @@ void ps2mouse_feed_byte(uint8_t b)
             int dz = mouse.packet_len == 4 ? (int)(mouse.packet[3] & 0x0f) : 0;
             if (dz & 0x08)
                 dz -= 16;
-            if (mouse.count < MOUSE_EVENTS) {
-                struct mouse_event *e = &mouse.ring[mouse.tail];
-                e->dx = (int16_t)dx;
-                e->dy = (int16_t)-dy;
-                e->buttons = f & 7;
-                e->dz = (int8_t)dz;
-                memset(e->pad, 0, sizeof e->pad);
-                e->time_ms = (uint32_t)timer_ms();
-                mouse.tail = (mouse.tail + 1) % MOUSE_EVENTS;
-                mouse.count++;
-                waitq_wake_all(&mouse_waitq);
-                poll_notify();
-            }
+            struct mouse_event e = {
+                .dx = (int16_t)dx,
+                .dy = (int16_t)-dy,
+                .buttons = f & 7,
+                .dz = (int8_t)dz,
+            };
+            mouse_push(&e);
         }
     }
     spin_unlock(&mouse_lock);
@@ -107,41 +93,6 @@ static void mouse_irq(struct trapframe *tf, void *arg)
             ps2mouse_feed_byte(b);
     }
 }
-
-static long mouse_read(struct file *f, char *buf, size_t n, uint64_t *pos)
-{
-    if (n < sizeof(struct mouse_event))
-        return -EINVAL;
-    struct mouse_event tmp[8];
-    size_t want = MIN(n / sizeof tmp[0], ARRAY_SIZE(tmp));
-    spin_lock(&mouse_lock);
-    while (mouse.count == 0) {
-        if (signal_should_interrupt()) {
-            spin_unlock(&mouse_lock);
-            return -EINTR;
-        }
-        waitq_wait(&mouse_waitq, &mouse_lock);
-    }
-    size_t got = 0;
-    while (got < want && mouse.count) {
-        tmp[got++] = mouse.ring[mouse.head];
-        mouse.head = (mouse.head + 1) % MOUSE_EVENTS;
-        mouse.count--;
-    }
-    spin_unlock(&mouse_lock);
-    memcpy(buf, tmp, got * sizeof tmp[0]);
-    return (long)(got * sizeof tmp[0]);
-}
-
-static int mouse_poll(struct file *f)
-{
-    spin_lock(&mouse_lock);
-    int r = mouse.count ? POLLIN : 0;
-    spin_unlock(&mouse_lock);
-    return r;
-}
-
-static const struct file_ops mouse_fops = { .read = mouse_read, .poll = mouse_poll };
 
 bool ps2mouse_has_wheel(void)
 {
@@ -192,7 +143,6 @@ void ps2mouse_init(void)
     mouse.present = a1 == 0xfa && a2 == 0xfa;
     irq_register(IRQ_MOUSE, mouse_irq, NULL);
     ioapic_route(GSI_MOUSE, IRQ_MOUSE, false);
-    devfs_register("mouse", S_IFCHR | 0444, &mouse_fops, NULL, 0);
     klog_info("ps/2 mouse on irq %u%s%s", IRQ_MOUSE, mouse.packet_len == 4 ? " with wheel" : "",
               mouse.present ? "" : " (no acknowledgement)");
 }

@@ -7,9 +7,13 @@
 
 #define PAINTER_DEPTH 16
 
+/* Local coordinates are logical pixels; the surface holds scale by scale
+ * device pixels per logical pixel (1 unless the window is on a high
+ * density output). Origin and clip are kept in device pixels. */
 struct painter {
     struct surface *s;
     const struct theme *theme;
+    int scale;                  /* device pixels per logical pixel */
     int ox, oy;                 /* origin of local coordinates in the surface */
     struct rect clip;           /* current clip in surface coordinates */
     struct rect stack[PAINTER_DEPTH];
@@ -18,6 +22,8 @@ struct painter {
 };
 
 void painter_init(struct painter *p, struct surface *s, const struct theme *theme);
+/* The same for a surface with scale device pixels per logical pixel. */
+void painter_init_scaled(struct painter *p, struct surface *s, const struct theme *theme, int scale);
 /* Enter a child area: translate the origin and intersect the clip. */
 void painter_push(struct painter *p, int x, int y, int w, int h);
 void painter_pop(struct painter *p);

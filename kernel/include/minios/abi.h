@@ -144,9 +144,13 @@ struct mouse_event {
     int16_t dx, dy;         /* movement, dy positive downwards */
     uint8_t buttons;        /* bit 0 left, 1 right, 2 middle */
     int8_t dz;              /* wheel, positive towards the user (down) */
-    uint8_t pad[2];
+    uint8_t flags;          /* MOUSE_ABSOLUTE: ax, ay hold the position, dx, dy are 0 */
+    uint8_t pad;
     uint32_t time_ms;
+    uint16_t ax, ay;        /* absolute position in 0..MOUSE_ABS_MAX (tablets) */
 };
+#define MOUSE_ABSOLUTE 1
+#define MOUSE_ABS_MAX  32767
 
 /* Raw scancode mode for /dev/kbd and /dev/console: bytes from the
  * keyboard controller are delivered untranslated (press and release,
@@ -172,11 +176,77 @@ struct fb_info {
     uint8_t red_size, red_shift;
     uint8_t green_size, green_shift;
     uint8_t blue_size, blue_shift;
-    uint8_t pad[2];
+    uint8_t scale;          /* integer UI scale (video=WxH@N or FBIO_SET_MODE), 1 by default */
+    uint8_t pad;
+    uint32_t caps;          /* FB_CAP_* */
+    uint32_t size;          /* bytes mmap may map; the whole GPU buffer with FB_CAP_SET_MODE */
+};
+#define FB_CAP_FLUSH    1   /* changes reach the display with FBIO_FLUSH (virtio-gpu) */
+#define FB_CAP_SET_MODE 2   /* FBIO_SET_MODE changes the resolution at run time */
+
+struct fb_rect {
+    int32_t x, y, w, h;
+};
+struct fb_mode {
+    uint32_t width, height; /* pixels; width * height * 4 must fit in fb_info.size */
+    uint32_t scale;         /* 1..4, reported back in fb_info.scale */
 };
 #define FBIOGET_INFO 0x4600
 #define FBIO_ACQUIRE 0x4601  /* stop the kernel text console from drawing */
 #define FBIO_RELEASE 0x4602  /* restore the text console */
+#define FBIO_FLUSH   0x4603  /* struct fb_rect: push a rectangle to the display, no-op without FB_CAP_FLUSH */
+#define FBIO_SET_MODE 0x4604 /* struct fb_mode: display owner only; the mapping stays valid, geometry changes */
+
+/* Raw PCM audio devices.  Clients normally use audiod rather than opening
+ * /dev/pcmN directly.  Structures have fixed-width fields so the ABI can be
+ * extended without depending on compiler enum sizes. */
+#define AUDIO_ABI_VERSION 1
+#define AUDIO_CAP_PLAYBACK (1u << 0)
+#define AUDIO_FORMAT_S16_LE (1u << 0)
+#define AUDIO_RATE_48000    (1u << 0)
+
+#define AUDIO_STATE_CLOSED   0
+#define AUDIO_STATE_OPEN     1
+#define AUDIO_STATE_PREPARED 2
+#define AUDIO_STATE_RUNNING  3
+#define AUDIO_STATE_ERROR    4
+
+struct audio_info {
+    uint32_t abi_version;
+    uint32_t capabilities;
+    uint32_t formats;
+    uint32_t rates;
+    uint32_t channels_min;
+    uint32_t channels_max;
+    uint32_t period_frames_min;
+    uint32_t period_frames_max;
+    uint32_t periods_min;
+    uint32_t periods_max;
+};
+
+struct audio_params {
+    uint32_t format;
+    uint32_t rate;
+    uint32_t channels;
+    uint32_t period_frames;
+    uint32_t periods;
+};
+
+struct audio_status {
+    uint32_t state;
+    uint32_t queued_frames;
+    uint64_t played_frames;
+    uint32_t xruns;
+    int32_t last_error;
+};
+
+#define AUDIO_GET_INFO    0x4100
+#define AUDIO_SET_PARAMS  0x4101
+#define AUDIO_PREPARE     0x4102
+#define AUDIO_START       0x4103
+#define AUDIO_DROP        0x4104
+#define AUDIO_DRAIN       0x4105
+#define AUDIO_GET_STATUS  0x4106
 
 #define MAP_SHARED 0x01
 

@@ -6,17 +6,18 @@ LIBC   := $(BUILD)/libc/libc.a
 LIBGUI := $(BUILD)/libgui/libgui.a
 LIBFONT := $(BUILD)/libfont/libfont.a
 LIBWIRE := $(BUILD)/libwire/libwire.a
+LIBAUDIO := $(BUILD)/libaudio/libaudio.a
 CRT0   := $(BUILD)/libc/crt0.o
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term x12 panel desktop calc
+PROGS  := init sh hello edit mint term x12 panel desktop calc audiod
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS))
 
-UCPP   := -I../libc/include -I../kernel/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated
+UCPP   := -I../libc/include -I../kernel/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
 SHARE  := $(patsubst share/%,$(ROOT)/usr/share/%,$(wildcard share/*/*))
@@ -60,43 +61,43 @@ $(ROOT)/etc/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 $(ROOT)/dev $(ROOT)/initrd:
 	mkdir -p $@
 
-$(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/$*.elf $@
 
 # X12 keeps its implementation in compositor/ for source-history
 # continuity; the installed server and user-facing name are X12.
-$(ROOT)/bin/x12: compositor/*.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/x12: compositor/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/x12.elf $@
 
-$(ROOT)/bin/x12settings: apps/compsettings.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/x12settings: apps/compsettings.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/x12settings.elf $@
 
 # Named explicitly so that the generated block table is a prerequisite;
 # the generic apps rule below tracks only the .c file.
-$(ROOT)/bin/unicode: apps/unicode.c apps/unicode_blocks.h $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/unicode: apps/unicode.c apps/unicode_blocks.h $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/unicode.elf $@
 
-$(ROOT)/bin/%: coreutils/%.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: coreutils/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/$*.elf $@
 
-$(ROOT)/bin/%: apps/%.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: apps/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/$*.elf $@
 
-$(ROOT)/bin/%: tests/%.c $(LIBC) $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: tests/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
 	cp $(OUT)/$*.elf $@
 
 clean:

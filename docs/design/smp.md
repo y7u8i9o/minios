@@ -1,7 +1,7 @@
 # Symmetric multiprocessing (M18)
 
-The kernel runs on every processor QEMU provides (`-smp N`, `QEMU_SMP` in
-`make run`, the `cpus` file of a test case, default 4). All CPUs execute
+The kernel runs on every processor QEMU provides (`-smp N`, `QEMU_SMP` or
+`--smp` for `make run`, the `cpus` file of a test case, default 4). All CPUs execute
 the same kernel with the same page tables. Each CPU has a `struct cpu`
 reached through the GS base, its own idle thread, kernel stack, GDT, TSS,
 local APIC timer and run queues. Shared structures keep the locks they

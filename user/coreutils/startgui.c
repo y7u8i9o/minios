@@ -1,8 +1,9 @@
-/* startgui [program]: start X12 and the panel, run the
- * program (the terminal by default) and stop both when it exits. */
+/* startgui [program]: start the desktop session services, run the
+ * program (the terminal by default) and stop the services on logout. */
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 static pid_t spawn(const char *path)
@@ -19,6 +20,10 @@ static pid_t spawn(const char *path)
 
 int main(int argc, char **argv)
 {
+    struct stat st;
+    pid_t audio = stat("/dev/pcm0", &st) == 0 ? spawn("audiod") : -1;
+    if (audio > 0)
+        sleep_ms(100);
     pid_t server = spawn("x12");
     sleep_ms(400);
     pid_t panel = spawn("panel");
@@ -37,6 +42,11 @@ int main(int argc, char **argv)
             break;
         if (done == client) {
             client = -1;
+            continue;
+        }
+        if (done == audio) {
+            fprintf(stderr, "startgui: audiod ended with status 0x%x\n", status);
+            audio = -1;
             continue;
         }
         if (done == server)
@@ -72,5 +82,9 @@ int main(int argc, char **argv)
     waitpid(desktop, NULL, 0);
     kill(server, SIGTERM);
     waitpid(server, NULL, 0);
+    if (audio > 0) {
+        kill(audio, SIGTERM);
+        waitpid(audio, NULL, 0);
+    }
     return 0;
 }

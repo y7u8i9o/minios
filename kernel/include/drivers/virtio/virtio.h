@@ -117,3 +117,5 @@ int virtq_alloc_chain(struct virtqueue *vq, unsigned n, uint16_t *ids);
 void virtq_free_chain(struct virtqueue *vq, uint16_t head);
 /* Publish head in the avail ring and notify the device. Caller holds vq->lock. */
 void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie);
+/* Process completions without an interrupt (panic path). Caller holds vq->lock. */
+void virtq_poll_locked(struct virtqueue *vq);

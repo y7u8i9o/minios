@@ -45,8 +45,5 @@ UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
 UASFLAGS := -g
 ULDFLAGS := -nostdlib -static -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000
 
-QEMU_MEM   ?= 512M
-# Use the macOS hypervisor framework when this QEMU build offers it.
-QEMU_ACCEL ?= $(shell $(QEMU) -accel help 2>/dev/null | grep -q '^hvf$$' && echo hvf || echo tcg)
-QEMU_SMP   ?= 4
-QEMU_FLAGS := -M q35 -accel $(QEMU_ACCEL) -m $(QEMU_MEM) -smp $(QEMU_SMP) -serial stdio -no-reboot
+# Machine size and accelerator for `make run` live in tools/run.sh
+# (QEMU_MEM, QEMU_SMP, QEMU_ACCEL, QEMU_AUDIO, see qemu.conf.example).

@@ -11,12 +11,15 @@
 #define FBCON_BG 0x00000000
 
 /* Framebuffer console state. Protected by console_lock in drivers/console.c,
- * the only caller. */
+ * the only caller. lfb points at fb_screen. */
 static struct {
-    struct limine_framebuffer *lfb;
+    const struct limine_framebuffer *lfb;
     uint32_t width, height;
+    int32_t dirty_x0, dirty_y0, dirty_x1, dirty_y1;   /* drawn since the last fbcon_take_dirty */
+    bool dirty;
     uint32_t fg, bg;                /* packed in the framebuffer layout */
     uint32_t cols, rows;
+    uint32_t scale;                 /* pixels per glyph pixel, from video=WxH@N */
     uint32_t cx, cy;
     bool present;
     bool disabled;                  /* a user process owns the display */
@@ -27,6 +30,31 @@ static struct {
     unsigned esc_nargs;
 } fb;
 
+static void mark_dirty(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
+{
+    if (!fb.dirty) {
+        fb.dirty_x0 = x0;
+        fb.dirty_y0 = y0;
+        fb.dirty_x1 = x1;
+        fb.dirty_y1 = y1;
+        fb.dirty = true;
+        return;
+    }
+    fb.dirty_x0 = MIN(fb.dirty_x0, x0);
+    fb.dirty_y0 = MIN(fb.dirty_y0, y0);
+    fb.dirty_x1 = MAX(fb.dirty_x1, x1);
+    fb.dirty_y1 = MAX(fb.dirty_y1, y1);
+}
+
+bool fbcon_take_dirty(struct fb_rect *r)
+{
+    if (!fb.dirty)
+        return false;
+    *r = (struct fb_rect){ fb.dirty_x0, fb.dirty_y0, fb.dirty_x1 - fb.dirty_x0, fb.dirty_y1 - fb.dirty_y0 };
+    fb.dirty = false;
+    return true;
+}
+
 static void fbcon_draw_glyph(uint32_t col, uint32_t row, char c, bool inverted)
 {
     if (fb.disabled)
@@ -34,31 +62,51 @@ static void fbcon_draw_glyph(uint32_t col, uint32_t row, char c, bool inverted)
     const uint8_t *glyph = font8x16[(uint8_t)c];
     uint32_t fg = inverted ? fb.bg : fb.fg;
     uint32_t bg = inverted ? fb.fg : fb.bg;
-    uint32_t px = col * FONT_WIDTH, py = row * FONT_HEIGHT;
+    uint32_t s = fb.scale;
+    uint32_t px = col * FONT_WIDTH * s, py = row * FONT_HEIGHT * s;
+    mark_dirty((int32_t)px, (int32_t)py, (int32_t)(px + FONT_WIDTH * s), (int32_t)(py + FONT_HEIGHT * s));
+    /* Each glyph pixel covers an s by s block. */
     if (fb.lfb->bpp == 32) {
         volatile uint32_t *dst = (volatile uint32_t *)((volatile uint8_t *)fb.lfb->address +
                                                        py * fb.lfb->pitch) + px;
         uint32_t pitch = (uint32_t)(fb.lfb->pitch / 4);
         for (int y = 0; y < FONT_HEIGHT; y++) {
             uint8_t bits = glyph[y];
-            for (int x = 0; x < FONT_WIDTH; x++)
-                dst[x] = (bits & (0x80 >> x)) ? fg : bg;
-            dst += pitch;
+            for (uint32_t r = 0; r < s; r++) {
+                for (uint32_t x = 0; x < FONT_WIDTH; x++) {
+                    uint32_t pix = (bits & (0x80 >> x)) ? fg : bg;
+                    for (uint32_t k = 0; k < s; k++)
+                        dst[x * s + k] = pix;
+                }
+                dst += pitch;
+            }
         }
         return;
     }
     for (int y = 0; y < FONT_HEIGHT; y++) {
         uint8_t bits = glyph[y];
-        for (int x = 0; x < FONT_WIDTH; x++)
-            fb_write_pixel(fb.lfb, px + (uint32_t)x, py + (uint32_t)y, (bits & (0x80 >> x)) ? fg : bg);
+        for (uint32_t r = 0; r < s; r++)
+            for (uint32_t x = 0; x < FONT_WIDTH; x++) {
+                uint32_t pix = (bits & (0x80 >> x)) ? fg : bg;
+                for (uint32_t k = 0; k < s; k++)
+                    fb_write_pixel(fb.lfb, px + x * s + k, py + (uint32_t)y * s + r, pix);
+            }
     }
 }
 
 static void fbcon_clear_screen(void)
 {
-    for (uint32_t y = 0; y < fb.height; y++)
-        for (uint32_t x = 0; x < fb.width; x++)
-            fb_write_pixel(fb.lfb, x, y, fb.bg);
+    if (fb.lfb->bpp == 32 && fb.lfb->pitch == fb.width * 4) {
+        /* Rows are contiguous: fill in one pass. */
+        volatile uint32_t *dst = fb.lfb->address;
+        for (size_t i = 0; i < (size_t)fb.width * fb.height; i++)
+            dst[i] = fb.bg;
+    } else {
+        for (uint32_t y = 0; y < fb.height; y++)
+            for (uint32_t x = 0; x < fb.width; x++)
+                fb_write_pixel(fb.lfb, x, y, fb.bg);
+    }
+    mark_dirty(0, 0, (int32_t)fb.width, (int32_t)fb.height);
 }
 
 static void fbcon_draw_row(uint32_t row)
@@ -192,25 +240,73 @@ static void fbcon_put_raw(char c)
     }
 }
 
-void fbcon_init(struct limine_framebuffer *lfb)
+static bool screen_usable(void)
 {
-    if (!lfb || (lfb->bpp != 32 && lfb->bpp != 24) || lfb->memory_model != LIMINE_FRAMEBUFFER_RGB) {
+    return fb_screen_present && (fb_screen.bpp == 32 || fb_screen.bpp == 24) &&
+           fb_screen.memory_model == LIMINE_FRAMEBUFFER_RGB;
+}
+
+/* Take the geometry and the pixel layout from fb_screen. */
+static void fbcon_setup(void)
+{
+    fb.lfb = &fb_screen;
+    fb.width = (uint32_t)fb_screen.width;
+    fb.height = (uint32_t)fb_screen.height;
+    fb.fg = fb_pack_pixel(fb.lfb, FBCON_FG);
+    fb.bg = fb_pack_pixel(fb.lfb, FBCON_BG);
+    fb.scale = fb_screen_scale ? fb_screen_scale : 1;
+    /* A scale the mode cannot hold (fewer than 40x12 cells) is ignored. */
+    if (fb.width / (FONT_WIDTH * fb.scale) < 40 || fb.height / (FONT_HEIGHT * fb.scale) < 12)
+        fb.scale = 1;
+    fb.cols = MIN(fb.width / (FONT_WIDTH * fb.scale), FBCON_MAX_COLS);
+    fb.rows = MIN(fb.height / (FONT_HEIGHT * fb.scale), FBCON_MAX_ROWS);
+}
+
+void fbcon_init(void)
+{
+    if (!screen_usable()) {
         klog_warn("no usable 24 or 32 bpp framebuffer, console is serial only");
         return;
     }
-    fb.lfb = lfb;
-    fb.width = (uint32_t)lfb->width;
-    fb.height = (uint32_t)lfb->height;
-    fb.fg = fb_pack_pixel(lfb, FBCON_FG);
-    fb.bg = fb_pack_pixel(lfb, FBCON_BG);
-    fb.cols = MIN(fb.width / FONT_WIDTH, FBCON_MAX_COLS);
-    fb.rows = MIN(fb.height / FONT_HEIGHT, FBCON_MAX_ROWS);
+    fbcon_setup();
     fb.cx = 0;
     fb.cy = 0;
     memset(fb.cells, ' ', sizeof fb.cells);
     fbcon_clear_screen();
     fb.present = true;
-    klog_info("%ux%u framebuffer, %u bpp, %ux%u text cells", fb.width, fb.height, lfb->bpp, fb.cols, fb.rows);
+    klog_info("%ux%u framebuffer, %u bpp, %ux%u text cells, scale %u", fb.width, fb.height, fb.lfb->bpp,
+              fb.cols, fb.rows, fb.scale);
+}
+
+void fbcon_screen_changed(void)
+{
+    if (!screen_usable()) {
+        fb.present = false;
+        return;
+    }
+    bool was_present = fb.present;
+    fbcon_setup();
+    if (!was_present) {
+        fb.cx = 0;
+        fb.cy = 0;
+        memset(fb.cells, ' ', sizeof fb.cells);
+    }
+    if (fb.cx >= fb.cols)
+        fb.cx = fb.cols - 1;
+    if (fb.cy >= fb.rows) {
+        /* Keep the last rows of text when the grid shrinks. */
+        uint32_t drop = fb.cy - (fb.rows - 1);
+        memmove(fb.cells[0], fb.cells[drop], (size_t)(FBCON_MAX_ROWS - drop) * FBCON_MAX_COLS);
+        memset(fb.cells[FBCON_MAX_ROWS - drop], ' ', (size_t)drop * FBCON_MAX_COLS);
+        fb.cy = fb.rows - 1;
+    }
+    fb.present = true;
+    if (fb.disabled)
+        return;
+    fbcon_clear_screen();
+    for (uint32_t r = 0; r < fb.rows; r++)
+        fbcon_draw_row(r);
+    fbcon_draw_glyph(fb.cx, fb.cy, fb.cells[fb.cy][fb.cx], true);
 }
 
 bool fbcon_present(void)

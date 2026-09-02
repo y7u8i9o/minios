@@ -1,0 +1,3 @@
+virtio-snd.*pcm0
+audiotest: 0 failures
+TEST PASS

@@ -7,6 +7,7 @@
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
 #include <mm/slab.h>
+#include <ipc/mqueue.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
@@ -107,25 +108,46 @@ int virtio_negotiate(struct virtio_dev *dev, uint64_t wanted)
     return 0;
 }
 
+/* Drain the used ring. Caller holds vq->lock. Returns true if any
+ * chain completed. */
+static bool virtq_drain_locked(struct virtqueue *vq)
+{
+    bool completed = false;
+    mb();
+    while (vq->last_used != vq->used->idx) {
+        completed = true;
+        struct virtq_used_elem e = vq->used->ring[vq->last_used % vq->size];
+        vq->last_used++;
+        if (vq->complete)
+            vq->complete(vq, (uint16_t)e.id, e.len);
+        virtq_free_chain(vq, (uint16_t)e.id);
+    }
+    return completed;
+}
+
+void virtq_poll_locked(struct virtqueue *vq)
+{
+    virtq_drain_locked(vq);
+}
+
 static void virtio_irq(struct trapframe *tf, void *arg)
 {
     struct virtio_dev *dev = arg;
+    bool completed = false;
     for (unsigned i = 0; i < dev->nqueues && i < ARRAY_SIZE(dev->queues); i++) {
         struct virtqueue *vq = dev->queues[i];
         if (!vq)
             continue;
         spin_lock(&vq->lock);
-        mb();
-        while (vq->last_used != vq->used->idx) {
-            struct virtq_used_elem e = vq->used->ring[vq->last_used % vq->size];
-            vq->last_used++;
-            if (vq->complete)
-                vq->complete(vq, (uint16_t)e.id, e.len);
-            virtq_free_chain(vq, (uint16_t)e.id);
-        }
+        if (virtq_drain_locked(vq))
+            completed = true;
         waitq_wake_all(&vq->waitq);
         spin_unlock(&vq->lock);
     }
+    /* Poll readiness callbacks commonly depend on device completions.  Wake
+     * the global poll wait queue only after every virtqueue lock is gone. */
+    if (completed)
+        poll_notify();
 }
 
 struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,

@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+import os
+import struct
+from pathlib import Path
+
+wav = Path(os.environ["SERIAL"]).with_name("audio.wav")
+if not wav.exists():
+    print("audio_server post: audio.wav was not created")
+    raise SystemExit(1)
+data = wav.read_bytes()
+if len(data) < 10000 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+    print(f"audio_server post: invalid WAV container ({len(data)} bytes)")
+    raise SystemExit(1)
+if len(data) < 44 or struct.unpack_from("<H", data, 22)[0] != 2 or \
+        struct.unpack_from("<H", data, 34)[0] != 16:
+    print("audio_server post: expected stereo 16-bit PCM")
+    raise SystemExit(1)
+samples = struct.unpack_from(f"<{(len(data) - 44) // 2}h", data, 44)
+if not samples or min(samples) > -5000 or max(samples) < 5000:
+    print("audio_server post: PCM payload contains no expected signal")
+    raise SystemExit(1)
+print(f"audio_server post: verified {len(samples) // 2} stereo frames")

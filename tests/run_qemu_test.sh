@@ -10,6 +10,9 @@
 #   mem       QEMU memory size in MiB (optional, default 512)
 #   cpus      number of CPUs (optional, default $CPUS or 4)
 #   swap      size in MiB of a zero filled swap image attached as vdb (optional)
+#   audio     QEMU audio backend for a virtio-sound device: none or wav
+#   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver)
+#   tablet    present: attach a virtio-tablet-pci device
 #   disk.img  a private root image instead of the shared one (optional)
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
@@ -52,6 +55,21 @@ if [ -f "$CASE/disk.img" ]; then
 elif [ -n "$DISK" ] && [ -f "$DISK" ]; then
     clone "$DISK" "$OUTDIR/disk.img"
 fi
+SOUNDFLAGS=""
+if [ -f "$CASE/audio" ]; then
+    AUDIO_BACKEND="$(cat "$CASE/audio")"
+    if [ "$AUDIO_BACKEND" = wav ]; then
+        SOUNDFLAGS="-audiodev wav,id=minios_audio,path=$OUTDIR/audio.wav -device virtio-sound-pci,audiodev=minios_audio"
+    elif [ "$AUDIO_BACKEND" = none ]; then
+        SOUNDFLAGS="-audiodev none,id=minios_audio -device virtio-sound-pci,audiodev=minios_audio"
+    else
+        echo "FAIL $NAME (unknown audio backend: $AUDIO_BACKEND)"
+        exit 1
+    fi
+fi
+VGAFLAGS="-vga std"
+[ -f "$CASE/vga" ] && VGAFLAGS="-vga $(cat "$CASE/vga")"
+[ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
 if [ -f "$OUTDIR/disk.img" ]; then
     DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0"
 fi
@@ -67,7 +85,7 @@ fi
 "$QEMU" -M q35 -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
     -serial "file:$SERIAL" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x4 \
-    $DISKFLAGS \
+    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS \
     -cdrom "$ISO" >"$OUTDIR/qemu.log" 2>&1 &
 QPID=$!
 ELAPSED=0

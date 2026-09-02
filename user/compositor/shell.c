@@ -881,6 +881,39 @@ void shell_surface_committed(struct csurface *s, int first_map)
     }
 }
 
+void shell_output_changed(void)
+{
+    for (struct csurface *s = surface_first(); s; s = s->next) {
+        if (s->role == ROLE_LAYER && s->layer) {
+            struct layer *l = s->layer;
+            struct rect d = shell_desktop();
+            int lr = l->anchor & (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT);
+            int tb = l->anchor & (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM);
+            s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x : 0;
+            s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y : 0;
+            if (l->w <= 0 || l->h <= 0 || lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ||
+                tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM))
+                layer_configure(l);
+        }
+    }
+    for (struct csurface *s = surface_first(); s; s = s->next) {
+        if (s->role != ROLE_TOPLEVEL || !s->toplevel)
+            continue;
+        struct toplevel *t = s->toplevel;
+        if (t->maximized) {
+            struct rect d = shell_desktop();
+            int top = decor_has(s) ? TITLE_H + BORDER : 0;
+            int bw = decor_has(s) ? BORDER : 0;
+            s->x = d.x + bw;
+            s->y = d.y + top;
+            send_configure(t, d.w - 2 * bw, d.h - top - bw);
+        } else {
+            clamp_toplevel(s);
+        }
+    }
+    scene_damage_all();
+}
+
 void shell_surface_gone(struct csurface *s)
 {
     if (s->role == ROLE_TOPLEVEL && s->toplevel)

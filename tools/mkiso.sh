@@ -16,8 +16,10 @@ mkdir -p "$ROOT/boot/limine" "$ROOT/EFI/BOOT"
 cp "$KERNEL" "$ROOT/boot/kernel.elf"
 cp "$INITRD" "$ROOT/boot/initrd.tar"
 sed "s|^    cmdline: .*|    cmdline: $CMDLINE|" "$TOP/limine.conf" > "$ROOT/boot/limine/limine.conf"
-# video=WxH on the command line selects the framebuffer mode.
+# video=WxH[xBPP][@SCALE] on the command line selects the framebuffer mode;
+# the scale suffix is for the kernel and is not part of the Limine mode.
 VIDEO="$(printf '%s' "$CMDLINE" | tr ' ' '\n' | sed -n 's/^video=//p' | head -1)"
+VIDEO="${VIDEO%@*}"
 [ -n "$VIDEO" ] && sed -i.bak "s|^    resolution: .*|    resolution: $VIDEO|" "$ROOT/boot/limine/limine.conf" && rm -f "$ROOT/boot/limine/limine.conf.bak"
 true
 cp "$LIMINE_DIR/limine-bios.sys" "$LIMINE_DIR/limine-bios-cd.bin" \

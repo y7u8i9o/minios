@@ -35,6 +35,7 @@ struct entry {
 
 struct conf {
     char wallpaper[128];
+    int display_mode;               /* packed WxH@S, 0 when the file has none */
     int mode;
     uint32_t color;
     int repeat_rate, repeat_delay;
@@ -45,7 +46,7 @@ static struct widget *win, *desk, *item_menu, *desk_menu;
 static struct wire_proxy *settings;
 static struct entry entries[MAX_ENTRIES];
 static int nentries, selected = -1;
-static struct conf conf = { "/usr/share/wallpapers/default.png", MODE_FILL, 0x00306080, 30, 500 };
+static struct conf conf = { "", MODE_FILL, 0x00306080, 30, 500 };  /* solid colour by default */
 static char conf_text[1024];
 static struct image *wallpaper;
 static struct surface bg;       /* wallpaper scaled to the window */
@@ -272,6 +273,21 @@ static int read_conf(char *buf, size_t size)
     return 0;
 }
 
+/* "WxH" or "WxH@S" packed as the compositor's display_mode setting:
+ * scale in bits 28..30, width in 14..27, height in 0..13. */
+static int parse_display_mode(const char *v)
+{
+    char *end;
+    long w = strtol(v, &end, 10);
+    if (*end != 'x')
+        return 0;
+    long h = strtol(end + 1, &end, 10);
+    long s = *end == '@' ? strtol(end + 1, NULL, 10) : 1;
+    if (w < 640 || h < 480 || w > 8192 || h > 8192 || s < 1 || s > 4)
+        return 0;
+    return (int)((s << 28) | (w << 14) | h);
+}
+
 static void apply_conf(int first)
 {
     struct conf c = conf;
@@ -288,6 +304,7 @@ static void apply_conf(int first)
         else if (strcmp(line, "desktop_color") == 0) c.color = (uint32_t)strtoul(v, NULL, 0) & 0xffffff;
         else if (strcmp(line, "repeat_rate") == 0) c.repeat_rate = atoi(v);
         else if (strcmp(line, "repeat_delay") == 0) c.repeat_delay = atoi(v);
+        else if (strcmp(line, "display_mode") == 0) c.display_mode = parse_display_mode(v);
     }
     int wall_changed = first || strcmp(c.wallpaper, conf.wallpaper) != 0 || c.mode != conf.mode || c.color != conf.color;
     if (settings && (first || c.color != conf.color))
@@ -296,6 +313,8 @@ static void apply_conf(int first)
         settings_set(settings, "repeat_rate", c.repeat_rate);
     if (settings && (first || c.repeat_delay != conf.repeat_delay))
         settings_set(settings, "repeat_delay", c.repeat_delay);
+    if (settings && c.display_mode && (first || c.display_mode != conf.display_mode))
+        settings_set(settings, "display_mode", c.display_mode);
     conf = c;
     if (wall_changed)
         load_wallpaper();

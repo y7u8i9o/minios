@@ -1,0 +1,7 @@
+virtio-gpu\] 1024x768 scanout in a 16 MiB buffer
+fbdev\] mode 1600x1200 scale 2
+gpu_mode: console follows the mode
+fbmodetest: mode 1280x800 pitch 5120 scale 1
+gpu_mode: user mode change and flush ok
+gpu_mode: ok
+TEST PASS

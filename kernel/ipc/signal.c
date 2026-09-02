@@ -1,5 +1,6 @@
 #define KLOG_SUBSYS "signal"
 #include <ipc/signal.h>
+#include <ipc/mqueue.h>
 #include <arch/fpu.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
@@ -65,11 +66,18 @@ int signal_send(struct proc *p, int sig)
     spin_lock(&p->lock);
     void (*h)(int) = p->sig_actions[sig].handler;
     bool ignored = h == SIG_IGN || (h == SIG_DFL && ((DEFAULT_IGNORE & SIGBIT(sig)) || is_init));
+    bool queued = false;
     if (!ignored && !p->exiting) {
         p->sig_pending |= SIGBIT(sig);
         interrupt_threads(p, sig);
+        queued = true;
     }
     spin_unlock(&p->lock);
+    /* A signal can arrive after poll checks signal_should_interrupt but
+     * before it registers on poll_waitq.  Advancing poll's generation
+     * after posting the signal closes that check-to-sleep race. */
+    if (queued)
+        poll_notify();
     klog_debug("signal %d to pid %d%s", sig, p->pid, ignored ? " (ignored)" : "");
     return 0;
 }

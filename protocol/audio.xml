@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MiniOS audio control protocol.  PCM payloads live in passed memfd
+     pools; protocol messages only transfer configuration and ownership. -->
+<protocol name="audio">
+  <interface name="audio_manager" version="1">
+    <request name="create_playback_stream">
+      <arg name="id" type="new_id" interface="audio_stream"/>
+      <arg name="name" type="string"/>
+    </request>
+  </interface>
+
+  <interface name="audio_stream" version="1">
+    <request name="configure">
+      <arg name="format" type="uint"/>
+      <arg name="rate" type="uint"/>
+      <arg name="channels" type="uint"/>
+    </request>
+    <request name="queue_buffer">
+      <arg name="index" type="uint"/>
+      <arg name="frames" type="uint"/>
+    </request>
+    <request name="set_active"><arg name="active" type="uint"/></request>
+    <!-- Q16.16 linear gain: 65536 is unity. -->
+    <request name="set_volume"><arg name="volume" type="uint"/></request>
+    <request name="drain"/>
+    <request name="destroy" type="destructor"/>
+
+    <event name="configured">
+      <arg name="fd" type="fd"/>
+      <arg name="size" type="uint"/>
+      <arg name="format" type="uint"/>
+      <arg name="rate" type="uint"/>
+      <arg name="channels" type="uint"/>
+      <arg name="quantum" type="uint"/>
+      <arg name="buffers" type="uint"/>
+    </event>
+    <event name="buffer_ready"><arg name="index" type="uint"/></event>
+    <event name="state"><arg name="state" type="uint"/><arg name="error" type="int"/></event>
+    <event name="drained"/>
+    <event name="xrun"><arg name="count" type="uint"/></event>
+  </interface>
+</protocol>
