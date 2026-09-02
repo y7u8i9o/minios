@@ -18,6 +18,7 @@
 #include "shell-client.h"
 #include "seat-client.h"
 #include "data-client.h"
+#include "text-client.h"
 
 #define QUEUE_MAX 256
 
@@ -30,7 +31,7 @@ struct wbuf {
 
 struct win {
     struct gui_window *w;
-    struct wire_proxy *surface, *toplevel, *layer;
+    struct wire_proxy *surface, *toplevel, *popup, *layer;
     struct wire_proxy *pool;
     int fd;
     uint8_t *map;
@@ -50,14 +51,26 @@ struct win {
 
 static struct wire_display *display;
 static struct wire_proxy *compositor, *shm, *shell, *seat, *pointer, *keyboard, *data_manager, *data_device;
+static struct wire_proxy *text_manager, *text_input;
 static struct gui_window *wins;
 static int screen_w = 1024, screen_h = 768;
+struct output_state {
+    struct wire_proxy *proxy;
+    uint32_t name;
+    int active;
+    struct gui_output_info info;
+};
+static struct output_state outputs[8];
+static int noutputs;
 static struct wmsg queue[QUEUE_MAX];
 static int qhead, qtail;
 static struct keymap *keymap;
 static int modifiers;
 static uint32_t last_serial;
 static struct gui_window *pointer_win, *keyboard_win;
+static struct gui_window *text_win;
+static int text_active;
+static uint32_t text_serial;
 static int next_id = 1;
 static struct wire_proxy *selection_offer, *selection_source;
 static char *clip_text;
@@ -96,6 +109,26 @@ static struct { uint32_t name; char iface[32]; uint32_t version; } globals[32];
 static int nglobals;
 static struct wire_proxy *registry_proxy;
 
+static void output_bounds(void)
+{
+    if (!noutputs)
+        return;
+    int first = -1;
+    for (int i = 0; i < 8; i++) if (outputs[i].active) { first = i; break; }
+    if (first < 0) return;
+    int x0 = outputs[first].info.x, y0 = outputs[first].info.y;
+    int x1 = x0 + outputs[first].info.width, y1 = y0 + outputs[first].info.height;
+    for (int i = first + 1; i < 8; i++) {
+        if (!outputs[i].active) continue;
+        if (outputs[i].info.x < x0) x0 = outputs[i].info.x;
+        if (outputs[i].info.y < y0) y0 = outputs[i].info.y;
+        if (outputs[i].info.x + outputs[i].info.width > x1) x1 = outputs[i].info.x + outputs[i].info.width;
+        if (outputs[i].info.y + outputs[i].info.height > y1) y1 = outputs[i].info.y + outputs[i].info.height;
+    }
+    screen_w = x1 - x0;
+    screen_h = y1 - y0;
+}
+
 static void on_global(void *user, struct wire_proxy *registry, uint32_t name, const char *iface, uint32_t version)
 {
     if (nglobals < 32) {
@@ -109,17 +142,45 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
     else if (strcmp(iface, "shell") == 0) shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
     else if (strcmp(iface, "seat") == 0) seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
     else if (strcmp(iface, "data_device_manager") == 0) data_manager = registry_bind(registry, name, iface, version, &data_device_manager_interface, 1);
+    else if (strcmp(iface, "text_input_manager") == 0) text_manager = registry_bind(registry, name, iface, version, &text_input_manager_interface, 1);
     else if (strcmp(iface, "output") == 0) {
         extern const struct output_listener output_events;
-        struct wire_proxy *o = registry_bind(registry, name, iface, version, &output_interface, 1);
-        output_add_listener(o, &output_events, NULL);
+        if (noutputs < (int)(sizeof outputs / sizeof outputs[0])) {
+            struct output_state *o = NULL;
+            for (int i = 0; i < 8; i++) if (!outputs[i].active) { o = &outputs[i]; break; }
+            if (!o) return;
+            memset(o, 0, sizeof *o);
+            o->active = 1;
+            noutputs++;
+            o->name = name;
+            o->info.scale = 1;
+            o->proxy = registry_bind(registry, name, iface, version, &output_interface, 1);
+            output_add_listener(o->proxy, &output_events, o);
+        }
     }
 }
-static void on_global_remove(void *user, struct wire_proxy *registry, uint32_t name) {}
+static void on_global_remove(void *user, struct wire_proxy *registry, uint32_t name)
+{
+    for (int i = 0; i < 8; i++)
+        if (outputs[i].active && outputs[i].name == name) {
+            wire_proxy_destroy(outputs[i].proxy);
+            memset(&outputs[i], 0, sizeof outputs[i]);
+            noutputs--;
+            output_bounds();
+            break;
+        }
+}
 static const struct registry_listener registry_events = { on_global, on_global_remove };
-static void on_geometry(void *user, struct wire_proxy *o, int32_t x, int32_t y, int32_t w, int32_t h) { screen_w = w; screen_h = h; }
-static void on_mode(void *user, struct wire_proxy *o, int32_t w, int32_t h, int32_t r) {}
-const struct output_listener output_events = { on_geometry, on_mode };
+static void on_geometry(void *user, struct wire_proxy *o, int32_t x, int32_t y, int32_t w, int32_t h)
+{ struct output_state *s = user; s->info.x = x; s->info.y = y; s->info.width = w; s->info.height = h; }
+static void on_mode(void *user, struct wire_proxy *o, int32_t w, int32_t h, int32_t r)
+{ struct output_state *s = user; s->info.width = w; s->info.height = h; s->info.refresh_hz = r; }
+static void on_output_scale(void *user, struct wire_proxy *o, int32_t factor)
+{ ((struct output_state *)user)->info.scale = factor > 0 ? factor : 1; }
+static void on_output_transform(void *user, struct wire_proxy *o, uint32_t transform)
+{ ((struct output_state *)user)->info.transform = (int)transform; }
+static void on_output_done(void *user, struct wire_proxy *o) { output_bounds(); }
+const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
 static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y)
 {
@@ -203,6 +264,8 @@ static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t t
     int ch = keymap_translate(keymap, key, modifiers);
     if (keysym_is_symbol(ch))
         ch = 0;
+    if (text_active && ch >= 32 && !(modifiers & (WMOD_CTRL | WMOD_ALT)))
+        ch = 0;
     struct wmsg m = { WM_KEY, 0, keyboard_win->id, (int32_t)key, state ? 1 : 0, modifiers, ch, "" };
     push(&m);
 }
@@ -210,6 +273,43 @@ static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint
 { modifiers = (int)dep; }
 static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t delay) {}
 static const struct keyboard_listener keyboard_events = { on_keymap, on_kbd_enter, on_kbd_leave, on_key, on_modifiers, on_repeat };
+
+/* ---- text input ---- */
+
+static void on_text_enter(void *user, struct wire_proxy *ti, struct wire_proxy *surface)
+{
+    text_win = window_of_surface(surface);
+    text_active = text_win != NULL;
+}
+
+static void on_text_leave(void *user, struct wire_proxy *ti, struct wire_proxy *surface)
+{
+    struct gui_window *w = window_of_surface(surface);
+    if (text_win == w) {
+        text_win = NULL;
+        text_active = 0;
+    }
+}
+
+static void push_text(uint32_t type, const char *text, int a, int b)
+{
+    if (!text_win)
+        return;
+    struct wmsg m = { type, 0, text_win->id, a, b, 0, 0, "" };
+    strlcpy(m.text, text ? text : "", sizeof m.text);
+    push(&m);
+}
+
+static void on_preedit(void *user, struct wire_proxy *ti, const char *text, int32_t begin, int32_t end)
+{ push_text(WM_PREEDIT, text, begin, end); }
+static void on_commit_string(void *user, struct wire_proxy *ti, const char *text)
+{ push_text(WM_TEXT, text, 0, 0); }
+static void on_delete_surrounding(void *user, struct wire_proxy *ti, uint32_t before, uint32_t after)
+{ push_text(WM_TEXT_DELETE, "", (int)before, (int)after); }
+static void on_text_done(void *user, struct wire_proxy *ti, uint32_t serial) {}
+static const struct text_input_listener text_events = {
+    on_text_enter, on_text_leave, on_preedit, on_commit_string, on_delete_surrounding, on_text_done,
+};
 
 /* ---- data device (clipboard) ---- */
 
@@ -235,7 +335,11 @@ static void on_dev_offer(void *user, struct wire_proxy *dev, struct wire_proxy *
     offer->obj.interface = &data_offer_interface;
     data_offer_add_listener(offer, &offer_events, NULL);
 }
-static void on_dev_enter(void *user, struct wire_proxy *dev, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y, struct wire_proxy *offer) {}
+static void on_dev_enter(void *user, struct wire_proxy *dev, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y, struct wire_proxy *offer)
+{
+    if (offer)
+        data_offer_accept(offer, serial, offer_mime[0] ? offer_mime : "text/plain");
+}
 static void on_dev_leave(void *user, struct wire_proxy *dev) {}
 static void on_dev_motion(void *user, struct wire_proxy *dev, uint32_t time, int32_t x, int32_t y) {}
 static void on_dev_drop(void *user, struct wire_proxy *dev) {}
@@ -275,6 +379,10 @@ int gui_connect(void)
     pointer_add_listener(pointer, &pointer_events, NULL);
     keyboard = seat_get_keyboard(seat);
     keyboard_add_listener(keyboard, &keyboard_events, NULL);
+    if (text_manager) {
+        text_input = text_input_manager_get_text_input(text_manager, seat);
+        text_input_add_listener(text_input, &text_events, NULL);
+    }
     if (data_manager) {
         data_device = data_device_manager_get_data_device(data_manager, seat);
         data_device_add_listener(data_device, &device_events, NULL);
@@ -306,6 +414,18 @@ struct wire_proxy *gui_bind_global(const char *iface, const struct wire_interfac
 
 int gui_screen_width(void) { return screen_w; }
 int gui_screen_height(void) { return screen_h; }
+int gui_output_count(void) { return noutputs; }
+int gui_get_output(int index, struct gui_output_info *out)
+{
+    if (index < 0 || index >= noutputs || !out)
+        return -1;
+    for (int i = 0; i < 8; i++)
+        if (outputs[i].active && index-- == 0) {
+            *out = outputs[i].info;
+            return 0;
+        }
+    return -1;
+}
 int gui_event_fd(void) { return display ? wire_display_fd(display) : -1; }
 
 /* ---- buffers ---- */
@@ -397,6 +517,9 @@ static void surface_resize(struct gui_window *w, int width, int height)
     w->width = width;
     w->height = height;
     pool_alloc(wi, width, height);
+    struct rect opaque = { 0, 0, width, height };
+    struct wire_array region = { &opaque, sizeof opaque };
+    surface_set_opaque_region(wi->surface, &region);
     wi->damage = (struct rect){ 0, 0, width, height };
     wi->has_damage = 1;
 }
@@ -514,6 +637,34 @@ static void on_layer_closed(void *user, struct wire_proxy *l)
 }
 static const struct layer_surface_listener layer_events = { on_layer_configure, on_layer_closed };
 
+static struct gui_window *window_of_popup(struct wire_proxy *p)
+{
+    for (struct gui_window *w = wins; w; w = w->next)
+        if (((struct win *)w->priv)->popup == p)
+            return w;
+    return NULL;
+}
+
+static void on_popup_configure(void *user, struct wire_proxy *p, uint32_t serial, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    struct gui_window *w = window_of_popup(p);
+    if (!w)
+        return;
+    popup_ack_configure(p, serial);
+    if (width > 0 && height > 0 && (width != w->width || height != w->height))
+        surface_resize(w, width, height);
+}
+
+static void on_popup_done(void *user, struct wire_proxy *p)
+{
+    struct gui_window *w = window_of_popup(p);
+    if (w) {
+        struct wmsg m = { WM_CLOSE, 0, w->id, 0, 0, 0, 0, "" };
+        push(&m);
+    }
+}
+static const struct popup_listener popup_events = { on_popup_configure, on_popup_done };
+
 static struct gui_window *window_alloc(void)
 {
     struct gui_window *w = calloc(1, sizeof *w);
@@ -572,7 +723,76 @@ struct gui_window *gui_create_window(int width, int height, const char *title)
     wi->toplevel = shell_get_toplevel(shell, wi->surface);
     toplevel_add_listener(wi->toplevel, &toplevel_events, NULL);
     toplevel_set_title(wi->toplevel, title);
+    /* A role must receive and acknowledge its initial configure before
+     * the first non-NULL buffer is committed. */
+    roundtrip();
     surface_resize(w, width, height);
+    gui_flush();
+    return w;
+}
+
+struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width, int height, const char *title)
+{
+    if (!display)
+        return NULL;
+    struct gui_window *w = window_alloc();
+    if (!w)
+        return NULL;
+    struct win *wi = w->priv, *pi = parent ? parent->priv : NULL;
+    wi->toplevel = shell_get_toplevel(shell, wi->surface);
+    toplevel_add_listener(wi->toplevel, &toplevel_events, NULL);
+    toplevel_set_title(wi->toplevel, title);
+    if (pi && pi->toplevel) {
+        toplevel_set_parent(wi->toplevel, pi->toplevel);
+        toplevel_set_modal(wi->toplevel, 1);
+    }
+    roundtrip();
+    surface_resize(w, width, height);
+    gui_flush();
+    return w;
+}
+
+int gui_has_popup_surfaces(void) { return display != NULL; }
+
+void gui_text_input_set(struct gui_window *window, int enabled)
+{
+    if (!text_input || !window)
+        return;
+    struct win *wi = window->priv;
+    if (enabled) {
+        text_input_enable(text_input, wi->surface);
+        text_input_set_surrounding_text(text_input, "", 0, 0);
+        text_input_set_content_type(text_input, 0, 0);
+    } else {
+        text_input_disable(text_input);
+        text_active = 0;
+        text_win = NULL;
+    }
+    text_input_commit(text_input, ++text_serial);
+}
+
+struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab)
+{
+    if (!display || !parent)
+        return NULL;
+    struct gui_window *w = window_alloc();
+    if (!w)
+        return NULL;
+    struct win *wi = w->priv, *pi = parent->priv;
+    struct wire_proxy *pos = shell_create_positioner(shell);
+    positioner_set_size(pos, width, height);
+    positioner_set_anchor_rect(pos, x, y, 1, 1);
+    positioner_set_anchor(pos, 5);             /* top-left */
+    positioner_set_gravity(pos, 8);            /* extend down and right */
+    positioner_set_constraint_adjustment(pos, 63); /* flip, slide, then resize on both axes */
+    wi->popup = shell_get_popup(shell, wi->surface, pi->surface, pos);
+    popup_add_listener(wi->popup, &popup_events, NULL);
+    positioner_destroy(pos);
+    roundtrip();
+    if (w->width == 0)
+        surface_resize(w, width, height);
+    if (grab)
+        popup_grab(wi->popup, seat, last_serial);
     gui_flush();
     return w;
 }
@@ -591,6 +811,8 @@ void gui_destroy_window(struct gui_window *w)
         toplevel_destroy(wi->toplevel);
     if (wi->layer)
         layer_surface_destroy(wi->layer);
+    if (wi->popup)
+        popup_destroy(wi->popup);
     if (wi->surface)
         surface_destroy(wi->surface);
     for (int i = 0; i < 2; i++)
@@ -617,6 +839,22 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
         return;
     wi->damage = wi->has_damage ? rect_union(wi->damage, r) : r;
     wi->has_damage = 1;
+}
+
+void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count)
+{
+    if (!w || count < 0)
+        return;
+    struct wire_array a = { (void *)rects, (size_t)count * sizeof *rects };
+    surface_set_opaque_region(((struct win *)w->priv)->surface, &a);
+}
+
+void gui_set_input_region(struct gui_window *w, const struct rect *rects, int count)
+{
+    if (!w || count < 0)
+        return;
+    struct wire_array a = { (void *)rects, (size_t)count * sizeof *rects };
+    surface_set_input_region(((struct win *)w->priv)->surface, &a);
 }
 
 void gui_move(struct gui_window *w, int x, int y) {}

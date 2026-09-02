@@ -11,7 +11,7 @@ all: $(LIB)
 
 # Regenerate the marshalling code from the protocol files.
 generate:
-	for p in core shell seat data debug; do python3 ../tools/wscan/wscan.py ../protocol/$$p.xml generated; done
+	for p in core shell seat data text debug; do python3 ../tools/wscan/wscan.py ../protocol/$$p.xml generated; done
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)

@@ -19,7 +19,9 @@ struct theme {
     int scale;                  /* percent */
     const struct font *font;    /* set by theme_apply */
     char font_path[128];        /* outline font file, empty for the builtin font */
+    char fallback_path[128];    /* optional Unicode fallback outline font */
     struct font *owned_font;
+    struct font *owned_fallback;
 };
 
 /* The compiled in defaults: DejaVu Sans at 14 pixels when the file

@@ -32,6 +32,13 @@ int gui_connect(void) { return 0; }
 void gui_disconnect(void) {}
 int gui_screen_width(void) { return 1024; }
 int gui_screen_height(void) { return 768; }
+int gui_output_count(void) { return 1; }
+int gui_get_output(int index, struct gui_output_info *out)
+{
+    if (index || !out) return -1;
+    *out = (struct gui_output_info){ 0, 0, 1024, 768, 1, 0, 60000 };
+    return 0;
+}
 
 static void alloc_surfaces(struct gui_window *w, int width, int height)
 {
@@ -47,6 +54,19 @@ struct gui_window *gui_create_window(int width, int height, const char *title)
     w->id = next_id++;
     alloc_surfaces(w, width, height);
     return w;
+}
+
+struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width, int height, const char *title)
+{
+    return gui_create_window(width, height, title);
+}
+
+int gui_has_popup_surfaces(void) { return 0; }
+void gui_text_input_set(struct gui_window *window, int enabled) { (void)window; (void)enabled; }
+
+struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab)
+{
+    return NULL;
 }
 
 struct gui_window *gui_create_layer_window(int width, int height, int layer, int anchor, int exclusive,
@@ -67,6 +87,8 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
     fake_last_damage = r;
     fake_damage_count++;
 }
+void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
+void gui_set_input_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
 
 void gui_flush(void) {}
 

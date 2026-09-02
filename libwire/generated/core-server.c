@@ -80,3 +80,23 @@ void output_send_mode(struct wire_resource *output, int32_t width, int32_t heigh
     wire_resource_post(output, 1, args);
 }
 
+void output_send_scale(struct wire_resource *output, int32_t factor)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].i = factor;
+    wire_resource_post(output, 2, args);
+}
+
+void output_send_transform(struct wire_resource *output, uint32_t transform)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = transform;
+    wire_resource_post(output, 3, args);
+}
+
+void output_send_done(struct wire_resource *output)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(output, 4, args);
+}
+

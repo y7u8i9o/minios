@@ -16,6 +16,7 @@ struct theme *app_theme(struct app *a);
 /* Apply theme changes (font, scale) to every window. */
 void app_theme_changed(struct app *a);
 struct widget *app_window(struct app *a, int width, int height, const char *title);
+struct widget *app_modal_window(struct app *a, struct widget *parent, int width, int height, const char *title);
 /* A window on a layer surface (see gui_create_layer_window); it has no
  * decorations and its size follows the compositor's configure. */
 struct widget *app_layer_window(struct app *a, int width, int height, int layer, int anchor, int exclusive,

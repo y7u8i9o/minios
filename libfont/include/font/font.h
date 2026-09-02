@@ -61,12 +61,15 @@ const struct font_glyph *font_render(struct ofont *f, int glyph, int px);
 /* Scale font units to 26.6 pixels at px pixels per em. */
 int32_t font_scale(const struct ofont *f, int units, int px);
 
-/* Shaping: glyph ids and pen positions (26.6 pixels) for a string of
- * bytes interpreted as ISO 8859-1, with kerning applied. Returns the
+/* Shaping: glyph ids, UTF-8 byte offsets and pen positions (26.6 pixels)
+ * for a UTF-8 string, with kerning applied. Invalid sequences become
+ * U+FFFD. Returns the
  * number of glyphs written (at most max); *width receives the total
  * advance in 26.6 pixels. */
 struct font_shaped {
     int glyph;
     int32_t x;                  /* pen x in 26.6 pixels */
+    int byte;                   /* UTF-8 byte offset of this glyph */
+    uint32_t codepoint;
 };
 int font_shape(const struct ofont *f, const char *text, int n, int px, struct font_shaped *out, int max, int32_t *width);

@@ -156,3 +156,34 @@ void surface_destroy(struct wire_proxy *surface)
     wire_proxy_destroy(surface);
 }
 
+void surface_set_input_region(struct wire_proxy *surface, const struct wire_array * rects)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].a = rects;
+    wire_proxy_marshal(surface, 6, args, NULL);
+}
+
+void surface_set_buffer_scale(struct wire_proxy *surface, int32_t scale)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].i = scale;
+    wire_proxy_marshal(surface, 7, args, NULL);
+}
+
+void surface_set_buffer_transform(struct wire_proxy *surface, uint32_t transform)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = transform;
+    wire_proxy_marshal(surface, 8, args, NULL);
+}
+
+void surface_damage_buffer(struct wire_proxy *surface, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].i = x;
+    args[1].i = y;
+    args[2].i = width;
+    args[3].i = height;
+    wire_proxy_marshal(surface, 9, args, NULL);
+}
+

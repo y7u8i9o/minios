@@ -49,7 +49,10 @@ static void on_format(void *user, struct wire_proxy *p, uint32_t format) { forma
 static const struct shm_listener shm_events = { on_format };
 static void on_geometry(void *user, struct wire_proxy *p, int32_t x, int32_t y, int32_t w, int32_t h) { out_w = w; out_h = h; }
 static void on_mode(void *user, struct wire_proxy *p, int32_t w, int32_t h, int32_t refresh) { modes++; }
-static const struct output_listener output_events = { on_geometry, on_mode };
+static void on_scale(void *user, struct wire_proxy *p, int32_t factor) {}
+static void on_transform(void *user, struct wire_proxy *p, uint32_t transform) {}
+static void on_output_done(void *user, struct wire_proxy *p) {}
+static const struct output_listener output_events = { on_geometry, on_mode, on_scale, on_transform, on_output_done };
 static void on_done(void *user, struct wire_proxy *cb, uint32_t t) { frames++; last_frame_time = t; wire_proxy_destroy(cb); }
 static const struct callback_listener callback_events = { on_done };
 static void on_release(void *user, struct wire_proxy *b) { releases++; LOG("buffer %d released", (int)(long)user); }
@@ -110,7 +113,7 @@ static void on_configure(void *user, struct wire_proxy *t, uint32_t serial, int3
     if (w > 0 && h > 0 && (w != win->w || h != win->h))
         window_resize(win, w, h);
     win->configured = 1;
-    redraw(win);
+    redraw(win);                    /* ack precedes the buffer commit on the wire */
 }
 static void on_close(void *user, struct wire_proxy *t) { struct window *win = user; win->closed = 1; LOG("close event"); }
 static const struct toplevel_listener toplevel_events = { on_configure, on_close };
@@ -125,7 +128,6 @@ static void window_create(struct window *win, const char *title, uint32_t color,
     toplevel_set_title(win->toplevel, title);
     toplevel_set_app_id(win->toplevel, "comptest");
     window_resize(win, w, h);
-    redraw(win);
 }
 
 /* ---- seat ---- */
@@ -202,7 +204,12 @@ static void on_dev_offer(void *user, struct wire_proxy *dev, struct wire_proxy *
     data_offer_add_listener(offer, &offer_events, NULL);
 }
 static void on_dev_enter(void *user, struct wire_proxy *dev, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y, struct wire_proxy *offer)
-{ drag_offer = offer; LOG("drag enter"); }
+{
+    drag_offer = offer;
+    if (offer)
+        data_offer_accept(offer, serial, offered_mime);
+    LOG("drag enter");
+}
 static void on_dev_leave(void *user, struct wire_proxy *dev) { LOG("drag leave"); drag_offer = NULL; }
 static void on_dev_motion(void *user, struct wire_proxy *dev, uint32_t time, int32_t x, int32_t y) {}
 static void on_dev_drop(void *user, struct wire_proxy *dev)

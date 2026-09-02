@@ -149,6 +149,20 @@ void toplevel_destroy(struct wire_proxy *toplevel)
     wire_proxy_destroy(toplevel);
 }
 
+void toplevel_set_parent(struct wire_proxy *toplevel, struct wire_proxy * parent)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].o = parent ? parent->obj.id : 0;
+    wire_proxy_marshal(toplevel, 11, args, NULL);
+}
+
+void toplevel_set_modal(struct wire_proxy *toplevel, uint32_t modal)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = modal;
+    wire_proxy_marshal(toplevel, 12, args, NULL);
+}
+
 void popup_grab(struct wire_proxy *popup, struct wire_proxy * seat, uint32_t serial)
 {
     union wire_arg args[2] = { { 0 } };

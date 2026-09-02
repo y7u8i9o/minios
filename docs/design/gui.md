@@ -284,5 +284,5 @@ clipboard object are gone. `libgui/src/client.c` implements the same
   on its socket and destroyed with its surfaces.
 
 `startgui` starts the compositor, the panel and the program. The GUI
-boot tests run on the compositor and the panel; their expectations use
-the `comp:` and `panel:` log lines.
+boot tests run on X12 and the panel; their expectations use the `x12:`
+and `panel:` log lines.

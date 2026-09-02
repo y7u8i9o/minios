@@ -1,4 +1,4 @@
-/* startgui [program]: start the compositor and the panel, run the
+/* startgui [program]: start X12 and the panel, run the
  * program (the terminal by default) and stop both when it exits. */
 #include <stdio.h>
 #include <signal.h>
@@ -19,7 +19,7 @@ static pid_t spawn(const char *path)
 
 int main(int argc, char **argv)
 {
-    pid_t server = spawn("compositor");
+    pid_t server = spawn("x12");
     sleep_ms(400);
     pid_t panel = spawn("panel");
     sleep_ms(200);
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     /* The session lasts while the compositor and the panel run; the
      * program may exit (other programs are started from the panel).
      * "Log out" in the panel's menu ends the panel and so the session;
-     * a crashed compositor ends it too. */
+     * a crashed X12 server ends it too. */
     int status = 0, restarts = 0;
     for (;;) {
         pid_t done = waitpid(-1, &status, 0);

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <gui/utf8.h>
 #include "editor_internal.h"
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
@@ -436,6 +437,12 @@ static void editor_paint(struct widget *w, struct painter *p)
         }
         if (w->focused && !ed->readonly && l == ed->cl && ed->cc >= start && (ed->cc < start + len || (ed->cc == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
             int cx = PAD - ed->scroll_x + gfx_text_width_font(t->font, s + start, ed->cc - start);
+            if (ed->preedit[0]) {
+                painter_text(p, cx, ty, ed->preedit, t->color[TC_TEXT]);
+                int pw = painter_text_width(p, ed->preedit, -1);
+                painter_line(p, cx, y + lh - 1, cx + pw, y + lh - 1, t->color[TC_ACCENT]);
+                cx += pw;
+            }
             painter_line(p, cx, y, cx, y + lh - 1, t->color[TC_TEXT]);
         }
     }
@@ -534,8 +541,8 @@ static int editor_key(struct editor *ed, struct event *e)
         }
     }
     switch (e->code) {
-    case 0xcb: if (ed->cc > 0) ed->cc--; else if (ed->cl > 0) { ed->cl--; ed->cc = llen(ed, ed->cl); } break;
-    case 0xcd: if (ed->cc < llen(ed, ed->cl)) ed->cc++; else if (ed->cl + 1 < ed->nlines) { ed->cl++; ed->cc = 0; } break;
+    case 0xcb: if (ed->cc > 0) ed->cc = gui_utf8_prev_boundary(ed->lines[ed->cl], ed->cc); else if (ed->cl > 0) { ed->cl--; ed->cc = llen(ed, ed->cl); } break;
+    case 0xcd: if (ed->cc < llen(ed, ed->cl)) ed->cc = gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc); else if (ed->cl + 1 < ed->nlines) { ed->cl++; ed->cc = 0; } break;
     case 0xc8: move_vertical(ed, -1); break;
     case 0xd0: move_vertical(ed, 1); break;
     case 0xc9: move_vertical(ed, -vis); break;
@@ -561,12 +568,12 @@ static int editor_key(struct editor *ed, struct event *e)
         return 0;
     if (e->code == 0xd3) {
         if (!delete_selection(ed)) {
-            if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, ed->cc + 1);
+            if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc));
             else if (ed->cl + 1 < ed->nlines) delete_range(ed, ed->cl, ed->cc, ed->cl + 1, 0);
         }
     } else if (e->ch == '\b') {
         if (!delete_selection(ed)) {
-            if (ed->cc > 0) delete_range(ed, ed->cl, ed->cc - 1, ed->cl, ed->cc);
+            if (ed->cc > 0) delete_range(ed, ed->cl, gui_utf8_prev_boundary(ed->lines[ed->cl], ed->cc), ed->cl, ed->cc);
             else if (ed->cl > 0) delete_range(ed, ed->cl - 1, llen(ed, ed->cl - 1), ed->cl, 0);
         }
     } else if (e->ch == '\n') {
@@ -575,10 +582,11 @@ static int editor_key(struct editor *ed, struct event *e)
     } else if (e->ch == '\t') {
         delete_selection(ed);
         insert_text(ed, "    ", 4, 0);
-    } else if (e->ch >= 32 && e->ch < 127 && !ctrl) {
-        char c = (char)e->ch;
+    } else if (e->ch >= 32 && !ctrl) {
+        char c[4];
+        int n = gui_utf8_encode((uint32_t)e->ch, c);
         int had = delete_selection(ed);
-        insert_text(ed, &c, 1, !had);
+        insert_text(ed, c, n, !had);
     } else {
         return 0;
     }
@@ -635,6 +643,30 @@ static int editor_event(struct widget *w, struct event *e)
     }
     case EV_KEY_DOWN:
         return editor_key(ed, e);
+    case EV_TEXT:
+        if (!ed->readonly && e->text && *e->text) {
+            ed->preedit[0] = '\0';
+            delete_selection(ed);
+            insert_text(ed, e->text, (int)strlen(e->text), 0);
+            cursor_moved(ed);
+        }
+        return 1;
+    case EV_PREEDIT:
+        strlcpy(ed->preedit, e->text ? e->text : "", sizeof ed->preedit);
+        widget_invalidate(w);
+        return 1;
+    case EV_TEXT_DELETE:
+        if (!ed->readonly && e->before >= 0 && e->after >= 0) {
+            int len = llen(ed, ed->cl);
+            int a = ed->cc - e->before, b = ed->cc + e->after;
+            if (a < 0) a = 0;
+            if (b > len) b = len;
+            while (a > 0 && ((unsigned char)ed->lines[ed->cl][a] & 0xc0) == 0x80) a--;
+            while (b < len && ((unsigned char)ed->lines[ed->cl][b] & 0xc0) == 0x80) b++;
+            delete_range(ed, ed->cl, a, ed->cl, b);
+            cursor_moved(ed);
+        }
+        return 1;
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
         widget_invalidate(w);
         return 1;

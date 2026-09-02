@@ -104,6 +104,25 @@
     </request>
     <request name="commit"/>
     <request name="destroy" type="destructor"/>
+    <!-- Rectangles are packed as signed x,y,width,height tuples.  An
+         empty opaque region means no opacity hint; an empty input region
+         disables content input. -->
+    <request name="set_input_region">
+      <arg name="rects" type="array"/>
+    </request>
+    <request name="set_buffer_scale">
+      <arg name="scale" type="int"/>
+    </request>
+    <!-- 0, 1, 2 and 3 are rotations by 0, 90, 180 and 270 degrees. -->
+    <request name="set_buffer_transform">
+      <arg name="transform" type="uint"/>
+    </request>
+    <request name="damage_buffer">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
     <event name="enter">
       <arg name="output" type="object" interface="output"/>
     </event>
@@ -121,5 +140,8 @@
       <arg name="height" type="int"/>
       <arg name="refresh" type="int"/>
     </event>
+    <event name="scale"><arg name="factor" type="int"/></event>
+    <event name="transform"><arg name="transform" type="uint"/></event>
+    <event name="done"/>
   </interface>
 </protocol>

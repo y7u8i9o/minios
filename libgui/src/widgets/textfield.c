@@ -1,5 +1,6 @@
 /* Single line text field with cursor, selection and the clipboard. */
 #include <gui/app.h>
+#include <gui/utf8.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,6 +10,7 @@ struct textfield {
     struct widget w;
     int cursor, sel;            /* sel: anchor, -1 none */
     int scroll_x;
+    char preedit[WSRV_TITLE_MAX];
 };
 
 static void changed(struct textfield *f)
@@ -97,6 +99,12 @@ static void textfield_paint(struct widget *w, struct painter *p)
     painter_text(p, tx, ty, text, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     if (w->focused) {
         int cx = tx + painter_text_width(p, text, f->cursor);
+        if (f->preedit[0]) {
+            painter_text(p, cx, ty, f->preedit, t->color[TC_TEXT]);
+            int pw = painter_text_width(p, f->preedit, -1);
+            painter_line(p, cx, ty + th, cx + pw, ty + th, t->color[TC_ACCENT]);
+            cx += pw;
+        }
         painter_line(p, cx, ty - 1, cx, ty + th, t->color[TC_TEXT]);
     }
     painter_pop(p);
@@ -151,8 +159,8 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     switch (e->code) {
-    case 0xcb: if (f->cursor > 0) f->cursor--; break;
-    case 0xcd: if (f->cursor < len) f->cursor++; break;
+    case 0xcb: f->cursor = gui_utf8_prev_boundary(widget_text(&f->w), f->cursor); break;
+    case 0xcd: f->cursor = gui_utf8_next_boundary(widget_text(&f->w), len, f->cursor); break;
     case 0xc7: f->cursor = 0; break;
     case 0xcf: f->cursor = len; break;
     default: moved = 0;
@@ -169,21 +177,25 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     if (e->code == 0xd3) {                       /* Delete */
-        if (!delete_selection(f) && f->cursor < len)
-            memmove(f->w.text + f->cursor, f->w.text + f->cursor + 1, (size_t)(len - f->cursor));
+        if (!delete_selection(f) && f->cursor < len) {
+            int next = gui_utf8_next_boundary(f->w.text, len, f->cursor);
+            memmove(f->w.text + f->cursor, f->w.text + next, (size_t)(len - next + 1));
+        }
     } else if (e->ch == '\b') {
         if (!delete_selection(f) && f->cursor > 0) {
-            memmove(f->w.text + f->cursor - 1, f->w.text + f->cursor, (size_t)(len - f->cursor + 1));
-            f->cursor--;
+            int prev = gui_utf8_prev_boundary(f->w.text, f->cursor);
+            memmove(f->w.text + prev, f->w.text + f->cursor, (size_t)(len - f->cursor + 1));
+            f->cursor = prev;
         }
     } else if (e->ch == '\n') {
         struct sig_change c = { 0, widget_text(&f->w) };
         widget_emit(&f->w, "activate", &c);
         return 1;
-    } else if (e->ch >= 32 && e->ch < 127 && !ctrl) {
-        char ch = (char)e->ch;
+    } else if (e->ch >= 32 && !ctrl) {
+        char ch[4];
+        int n = gui_utf8_encode((uint32_t)e->ch, ch);
         delete_selection(f);
-        insert(f, &ch, 1);
+        insert(f, ch, n);
     } else {
         return 0;
     }
@@ -220,6 +232,39 @@ static int textfield_event(struct widget *w, struct event *e)
     case EV_KEY_DOWN:
         clamp(f);
         return key(f, e);
+    case EV_TEXT:
+        if (e->text && *e->text) {
+            f->preedit[0] = '\0';
+            int n = (int)strlen(e->text);
+            char *copy = malloc((size_t)n);
+            if (!copy)
+                return 1;
+            for (int i = 0; i < n; i++)
+                copy[i] = e->text[i] == '\n' || e->text[i] == '\r' ? ' ' : e->text[i];
+            delete_selection(f);
+            insert(f, copy, n);
+            free(copy);
+            changed(f);
+            scroll_to_cursor(f, widget_theme(w));
+        }
+        return 1;
+    case EV_PREEDIT:
+        strlcpy(f->preedit, e->text ? e->text : "", sizeof f->preedit);
+        widget_invalidate(w);
+        return 1;
+    case EV_TEXT_DELETE:
+        if (e->before >= 0 && e->after >= 0) {
+            int len = len_of(f);
+            int a = f->cursor - e->before, b = f->cursor + e->after;
+            if (a < 0) a = 0;
+            if (b > len) b = len;
+            while (a > 0 && ((unsigned char)f->w.text[a] & 0xc0) == 0x80) a--;
+            while (b < len && ((unsigned char)f->w.text[b] & 0xc0) == 0x80) b++;
+            memmove(f->w.text + a, f->w.text + b, (size_t)(len - b + 1));
+            f->cursor = a;
+            changed(f);
+        }
+        return 1;
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
         widget_invalidate(w);
         return 1;
@@ -237,6 +282,7 @@ struct widget *textfield_new(struct widget *parent, const char *text)
         return NULL;
     struct textfield *f = (struct textfield *)w;
     w->focusable = 1;
+    w->accepts_text = 1;
     widget_set_text(w, text);
     f->cursor = len_of(f);
     f->sel = -1;

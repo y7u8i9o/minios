@@ -49,7 +49,7 @@ static int screen_w = 1024, screen_h = 768;
 static int menu_open, hover_item = -1;
 static int px, py;                       /* pointer in the panel */
 static struct wire_proxy *pointer_surface;
-static uint32_t last_serial;
+static uint32_t press_serial;
 static int layer_configured;
 
 static void log_line(const char *fmt, ...);
@@ -159,7 +159,14 @@ static void launch(const struct entry *e)
 
 static void on_popup_configure(void *user, struct wire_proxy *p, uint32_t serial, int32_t x, int32_t y, int32_t w, int32_t h)
 {
+    if (p != popup)
+        return;
     popup_ack_configure(p, serial);
+    popup_grab(popup, seat, press_serial);
+    menu_open = 1;
+    draw_menu();
+    log_line("menu opened");
+    draw_panel();
 }
 static void menu_teardown(void);
 static void on_popup_done(void *user, struct wire_proxy *p)
@@ -188,10 +195,8 @@ static void menu_show(void)
     popup = shell_get_popup(shell, menu.surface, panel.surface, pos);
     popup_add_listener(popup, &popup_events, NULL);
     positioner_destroy(pos);
-    popup_grab(popup, seat, last_serial);
-    menu_open = 1;
-    draw_menu();
-    log_line("menu opened");
+    menu_open = 1;                    /* opening; configure finishes it */
+    wire_display_flush(display);
     draw_panel();
 }
 
@@ -231,7 +236,6 @@ static void on_enter(void *user, struct wire_proxy *p, uint32_t serial, struct w
     pointer_surface = surface;
     px = wire_fixed_to_int(x);
     py = wire_fixed_to_int(y);
-    last_serial = serial;
 }
 static void on_leave(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *surface)
 {
@@ -253,7 +257,8 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
 }
 static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
-    last_serial = serial;
+    if (state == 1)
+        press_serial = serial;
     if (button != 1 || state != 1)
         return;
     if (pointer_surface == menu.surface) {
@@ -357,7 +362,10 @@ static const struct layer_surface_listener layer_events = { on_layer_configure, 
 
 static void on_geometry(void *user, struct wire_proxy *o, int32_t x, int32_t y, int32_t w, int32_t h) { screen_w = w; screen_h = h; }
 static void on_mode(void *user, struct wire_proxy *o, int32_t w, int32_t h, int32_t r) {}
-static const struct output_listener output_events = { on_geometry, on_mode };
+static void on_scale(void *user, struct wire_proxy *o, int32_t factor) {}
+static void on_transform(void *user, struct wire_proxy *o, uint32_t transform) {}
+static void on_output_done(void *user, struct wire_proxy *o) {}
+static const struct output_listener output_events = { on_geometry, on_mode, on_scale, on_transform, on_output_done };
 
 static void on_global(void *user, struct wire_proxy *registry, uint32_t name, const char *iface, uint32_t version)
 {
@@ -393,7 +401,7 @@ int main(void)
     signal(SIGPIPE, SIG_IGN);
     display = wire_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "panel: no compositor\n");
+        fprintf(stderr, "panel: no X12 server\n");
         return 1;
     }
     struct wire_proxy *registry = display_get_registry(wire_display_proxy(display));

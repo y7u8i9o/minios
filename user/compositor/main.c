@@ -1,6 +1,6 @@
-/* The compositor: a listening socket, clients, the input devices and a
+/* X12: a listening socket, clients, the input devices and a
  * 60 Hz frame clock in one poll loop. Every notable event is logged as
- * "comp: ..." for the tests. */
+ * "x12: ..." for the tests. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -31,7 +31,7 @@ void comp_log(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    printf("comp: ");
+    printf("x12: ");
     vprintf(fmt, ap);
     printf("\n");
     va_end(ap);
@@ -124,13 +124,17 @@ static void frame(void)
 {
     uint64_t expirations;
     read(frame_fd, &expirations, 8);
-    if (scene_has_damage()) {
+    int presented = scene_has_damage();
+    if (presented) {
         scene_compose();
         frames_since_report++;
         if (settings.verbose)
             comp_log("frame");
     }
-    surfaces_frame_done((uint32_t)uptime_ms());
+    /* Completion means the back buffer has actually been copied to the
+     * framebuffer.  Idle timer ticks are not presentations. */
+    if (presented)
+        surfaces_frame_done((uint32_t)uptime_ms());
     flush_clients();
     /* One line every ten seconds while frames are composed, instead of
      * a line per frame. */
@@ -149,13 +153,13 @@ int main(int argc, char **argv)
     signal(SIGINT, on_term);
     signal(SIGPIPE, SIG_IGN);           /* a dead client must not kill the compositor */
     if (backend_init() < 0) {
-        perror("compositor: framebuffer");
+        perror("x12: framebuffer");
         return 1;
     }
     mouse_fd = open("/dev/mouse", O_RDONLY | O_CLOEXEC);
     kbd_fd = open("/dev/kbd", O_RDONLY | O_CLOEXEC);
     if (mouse_fd < 0 || kbd_fd < 0) {
-        perror("compositor: input devices");
+        perror("x12: input devices");
         return 1;
     }
     tcgetattr(kbd_fd, &saved_kbd);
@@ -163,13 +167,14 @@ int main(int argc, char **argv)
     tcsetattr(kbd_fd, TCSANOW, &raw);
     srv = wire_server_create(argc > 1 ? argv[1] : "display");
     if (!srv) {
-        perror("compositor: listen");
+        perror("x12: listen");
         return 1;
     }
     surfaces_init(srv);
     shell_init(srv);
     seat_init(srv);
     data_init(srv);
+    text_init(srv);
     debug_init(srv);
     scene_init();
     cursor_x = screen_w / 2;

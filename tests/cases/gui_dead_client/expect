@@ -1,5 +1,5 @@
-comp: client 2 disconnected
-comp: client 3 connected
+x12: client 2 disconnected
+x12: client 3 connected
 comptest: done
 gui_dead_client: server survived a dead client
 TEST PASS

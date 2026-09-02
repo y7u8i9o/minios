@@ -1,14 +1,14 @@
-comp: layer surface 1 \(panel\)
+x12: layer surface 1 \(panel\)
 panel: started
 panel: toplevel listed
 panel: task click alpha
-comp: toplevel 1 minimized
-comp: toplevel 1 shown
+x12: toplevel 1 minimized
+x12: toplevel 1 shown
 panel: menu opened
-comp: popup 3 shown at
-comp: popup 3 dismissed
+x12: popup 3 shown at
+x12: popup 3 dismissed
 panel: menu closed
-comp: popup 4 shown at
+x12: popup 4 shown at
 panel: launch /bin/clock
 comp_panel: panel ok
 TEST PASS

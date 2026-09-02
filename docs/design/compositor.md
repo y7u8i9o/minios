@@ -1,15 +1,17 @@
-# Compositor
+# X12 display server
 
-`user/compositor/` replaces the M17 window server's core (`wsrv`
-remains until M26). M24 implements the core: clients, shared memory
-pools and buffers, surfaces with double buffered state, a frame clock,
-and composition to the framebuffer.
+X12 is the display server and window manager. Its implementation remains
+in `user/compositor/` for source-history continuity, while the installed
+server is `/bin/x12` and its log prefix is `x12:`. It replaces the M17
+window server's core (`wsrv` remains as historical code until M26).
+The server owns the framebuffer, input devices, surface lifecycle,
+window roles, and composition.
 
 ## Structure
 
 - `main.c`: the poll loop over the listening socket, the client
   sockets, `/dev/mouse`, `/dev/kbd` (raw scancodes) and a `timerfd`
-  firing every 16 ms; `comp: ...` log lines for the tests; `SIGTERM`
+  firing every 16 ms; `x12: ...` log lines for the tests; `SIGTERM`
   stops it and prints frame statistics.
 - `surface.c`: the globals `compositor`, `shm` and `output`; pools map
   the passed memfd with `mmap` and are shared by their buffers
@@ -32,11 +34,29 @@ and composition to the framebuffer.
 ## Frame clock and callbacks
 
 The frame timer expires every 16 ms. When damage exists the scene is
-composed and flushed; then every frame callback registered by a
-commit since the previous frame receives `callback.done` with the
-time in milliseconds, and the clients are flushed. Clients that draw
-on frame callbacks therefore render at most once per compositor
-frame, which bounds the work during bursts of damage.
+composed and flushed; only after that successful flush does every frame
+callback registered by a commit since the previous frame receive
+`callback.done` with the time in milliseconds. Clients are flushed with
+the presentation event. The framebuffer ABI currently exposes a mapped
+front buffer and has no page-flip or vblank primitive, so this is a
+software presentation clock rather than a claim of hardware vsync.
+
+## P0 and P1 semantics
+
+P0 makes the wire state explicit: a role sends an initial configure and
+the client must acknowledge it before committing a new-size buffer;
+pending surface state is atomic at commit; buffer scale, quarter-turn
+transforms, attach offsets and buffer-space damage are converted before
+composition; input and opaque regions participate in hit testing and
+occlusion; cursor surfaces are accepted only from the focused client and
+serial; and input, popup, move/resize, selection and drag serials are
+validated against their owning client.
+
+P1 adds compositor-managed popup and modal roles, including constrained
+flip/slide/resize placement and popup grabs; output scale/transform/done
+events and client output tracking; UTF-8 editing and outline-font cmap,
+fallback and combining-mark support; the text-input protocol with a
+built-in Ctrl+Shift+U Unicode preedit; and server-side shadows.
 
 ## Tests
 
@@ -49,26 +69,26 @@ framebuffer and the compositor's log.
 
 ## Robustness (after M26)
 
-- The compositor, the panel and libgui clients ignore `SIGPIPE`; a
+- X12, the panel and libgui clients ignore `SIGPIPE`; a
   write to a vanished peer is reported as an error and the client (or
   the connection) is dropped instead of the process dying.
 - Client sockets are accepted non blocking; a client whose socket
   stays full for two seconds (it stopped reading, for example because
   it is blocked elsewhere) is dropped, so one client cannot stall the
-  compositor. The terminal keeps its pseudo terminal master non
+  display server. The terminal keeps its pseudo terminal master non
   blocking for the same reason.
 - Closing `/dev/kbd` leaves raw scancode mode (`kbddev_release` in
   `kernel/fs/devfs.c`), so a compositor that dies leaves the console
-  keyboard usable; `startgui` ends the session when any of the
-  compositor, the panel or the program exits.
-- Logging: one `comp: N frames in the last 10 s` line instead of a
+  keyboard usable; `startgui` ends the session when any of X12, the
+  panel or the program exits.
+- Logging: one `x12: N frames in the last 10 s` line instead of a
   line per frame; `slow frame` lines remain for compositions over 20
   ms; `frame stats` at exit. Tests: `gui_dead_client`,
   `gui_kbd_restore`.
 
 ## Panel popups and session survival
 
-A popup that the compositor dismisses (an outside click sends
+A popup that X12 dismisses (an outside click sends
 `popup.done`) still exists as a client object. The panel destroys the
 popup and its surface in the `done` handler, because a later
 `shell.get_popup` on the same surface would be refused with
@@ -76,4 +96,6 @@ popup and its surface in the `done` handler, because a later
 client. `startgui` treats a normal panel exit as "Log out" and restarts
 a panel that ends with an abnormal status (up to three times), so a
 panel defect no longer ends the session. The `comp_panel` boot test
-covers the dismiss and reopen sequence.
+covers the dismiss and reopen sequence. Popup creation is asynchronous:
+the panel records the button-down serial, acknowledges the configure,
+and requests the grab only after the server has supplied that configure.

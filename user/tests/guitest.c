@@ -58,6 +58,18 @@ int main(int argc, char **argv)
     const char *mode = argc > 1 ? argv[1] : "";
     if (strcmp(mode, "clipset") == 0) {
         const char *text = argc > 2 ? argv[2] : "clip";
+        /* Selection authority is an input serial. Map a real surface and
+         * wait for keyboard focus instead of relying on a forged serial. */
+        a = gui_create_window(80, 40, "clipboard owner");
+        if (!a)
+            return 1;
+        gfx_fill(&a->surf, 0x00ffffff);
+        gui_damage(a, 0, 0, a->width, a->height);
+        struct wmsg focus;
+        int focused = 0;
+        for (int i = 0; i < 20 && !focused; i++)
+            if (gui_next_event(&focus, 100) == 1 && focus.type == WM_FOCUS && focus.a)
+                focused = 1;
         int r = gui_clipboard_set(text, (int)strlen(text));
         printf("guitest: clipboard set %s\n", r == 0 ? "ok" : "failed");
         gui_disconnect();

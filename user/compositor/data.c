@@ -24,6 +24,9 @@ struct offer {
     struct wire_resource *res;
     struct source *source;
     int is_drag;
+    uint32_t enter_serial;
+    char accepted[48];
+    int dropped;
 };
 
 static struct source *selection;
@@ -135,13 +138,40 @@ static void h_create_source(struct wire_client *c, struct wire_resource *self, u
 
 /* ---- offers ---- */
 
-static void h_offer_accept(struct wire_client *c, struct wire_resource *self, uint32_t serial, const char *mime) {}
+static int source_has_mime(const struct source *s, const char *mime)
+{
+    if (!s || !mime)
+        return 0;
+    for (int i = 0; i < s->nmimes; i++)
+        if (strcmp(s->mimes[i], mime) == 0)
+            return 1;
+    return 0;
+}
+
+static void h_offer_accept(struct wire_client *c, struct wire_resource *self, uint32_t serial, const char *mime)
+{
+    struct offer *o = self->data;
+    if (!o->is_drag || serial != o->enter_serial)
+        return;
+    if (mime && !source_has_mime(o->source, mime))
+        return;
+    strlcpy(o->accepted, mime ? mime : "", sizeof o->accepted);
+}
 static void h_offer_receive(struct wire_client *c, struct wire_resource *self, const char *mime, int fd)
 {
     struct offer *o = self->data;
+    if (!source_has_mime(o->source, mime)) {
+        close(fd);
+        return;
+    }
     if (o->source == &stored_source) {
-        if (store_data)
-            write(fd, store_data, store_len);
+        size_t off = 0;
+        while (store_data && off < store_len) {
+            ssize_t n = write(fd, store_data + off, store_len - off);
+            if (n <= 0)
+                break;
+            off += (size_t)n;
+        }
     } else if (o->source && o->source->res) {
         data_source_send_send(o->source->res, mime, fd);
     }
@@ -151,7 +181,7 @@ static void h_offer_receive(struct wire_client *c, struct wire_resource *self, c
 static void h_offer_finish(struct wire_client *c, struct wire_resource *self)
 {
     struct offer *o = self->data;
-    if (o->is_drag && o->source && o->source->res)
+    if (o->is_drag && o->dropped && o->accepted[0] && o->source && o->source->res)
         data_source_send_dnd_finished(o->source->res);
 }
 static void h_offer_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
@@ -190,10 +220,12 @@ static struct offer *offer_create(struct client *cl, struct source *src, int is_
 static void h_set_selection(struct wire_client *c, struct wire_resource *self, struct wire_resource *source, uint32_t serial)
 {
     struct source *s = source ? source->data : NULL;
+    struct client *cl = wire_client_get_user_data(c);
+    if (!cl || !seat_validate_serial(cl, serial) || (s && s->client != cl))
+        return;
     if (selection && selection != s && selection->res)
         data_source_send_cancelled(selection->res);
     selection = s;
-    struct client *cl = wire_client_get_user_data(c);
     comp_log("selection set by client %d (%s)", cl ? cl->number : 0, s && s->nmimes ? s->mimes[0] : "none");
     if (s)
         fetch_start(s);
@@ -205,11 +237,16 @@ static void h_set_selection(struct wire_client *c, struct wire_resource *self, s
 static void h_start_drag(struct wire_client *c, struct wire_resource *self, struct wire_resource *source,
                          struct wire_resource *origin, struct wire_resource *icon, uint32_t serial)
 {
-    if (serial != seat_last_serial() || !source)
+    struct client *cl = wire_client_get_user_data(c);
+    struct source *src = source ? source->data : NULL;
+    struct csurface *from = origin ? origin->data : NULL;
+    struct csurface *ic = icon ? icon->data : NULL;
+    if (!cl || !src || !from || src->client != cl || from->client != cl ||
+        (ic && (ic->client != cl || ic->role != ROLE_NONE)) || !seat_validate_drag(cl, from, serial))
         return;
-    drag_source = source->data;
+    drag_source = src;
     drag_source->is_drag = 1;
-    drag_icon = icon ? icon->data : NULL;
+    drag_icon = ic;
     if (drag_icon && drag_icon->role == ROLE_NONE)
         drag_icon->role = ROLE_DND_ICON;
     drag_target = NULL;
@@ -283,7 +320,10 @@ void data_pointer_motion(void)
         drag_offer = NULL;
         if (t && t->client->data_device) {
             drag_offer = offer_create(t->client, drag_source, 1);
-            data_device_send_enter(t->client->data_device, comp_serial(), t->res, wire_fixed_from_int(cursor_x - t->x),
+            uint32_t enter_serial = comp_serial();
+            if (drag_offer)
+                drag_offer->enter_serial = enter_serial;
+            data_device_send_enter(t->client->data_device, enter_serial, t->res, wire_fixed_from_int(cursor_x - t->x),
                                    wire_fixed_from_int(cursor_y - t->y), drag_offer ? drag_offer->res : NULL);
             comp_log("drag enter surface %d", t->id);
         }
@@ -299,10 +339,16 @@ void data_pointer_release(void)
     if (!src)
         return;
     if (drag_target && drag_target->client->data_device) {
-        data_device_send_drop(drag_target->client->data_device);
-        if (src->res)
+        if (drag_offer && drag_offer->accepted[0]) {
+            drag_offer->dropped = 1;
+            data_device_send_drop(drag_target->client->data_device);
+        }
+        if (src->res && drag_offer && drag_offer->accepted[0])
             data_source_send_dnd_drop_performed(src->res);
-        comp_log("drop on surface %d", drag_target->id);
+        if (drag_offer && drag_offer->accepted[0])
+            comp_log("drop on surface %d", drag_target->id);
+        else if (src->res)
+            data_source_send_cancelled(src->res);
     } else if (src->res) {
         data_source_send_cancelled(src->res);
         comp_log("drag cancelled");

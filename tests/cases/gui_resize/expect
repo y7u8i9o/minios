@@ -1,11 +1,11 @@
-comp: toplevel 1 'alpha' mapped at 40,60 300x200
-comp: toplevel 1 configured 400x250
+x12: toplevel 1 'alpha' mapped at 40,60 300x200
+x12: toplevel 1 configured 400x250
 guitest: window 1 resized 400x250
-comp: toplevel 1 maximized
+x12: toplevel 1 maximized
 guitest: window 1 resized 1022x718
-comp: toplevel 1 restored
+x12: toplevel 1 restored
 guitest: window 1 resized 400x250
-comp: toplevel 1 close requested
-comp: toplevel 1 destroyed
+x12: toplevel 1 close requested
+x12: toplevel 1 destroyed
 gui_resize: resize, maximize, restore and close ok
 TEST PASS

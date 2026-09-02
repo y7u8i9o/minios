@@ -32,6 +32,8 @@ struct toplevel_impl {
     void (*set_minimized)(struct wire_client *client, struct wire_resource *self);
     void (*ack_configure)(struct wire_client *client, struct wire_resource *self, uint32_t serial);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_parent)(struct wire_client *client, struct wire_resource *self, struct wire_resource * parent);
+    void (*set_modal)(struct wire_client *client, struct wire_resource *self, uint32_t modal);
 };
 void toplevel_send_configure(struct wire_resource *toplevel, uint32_t serial, int32_t width, int32_t height, const struct wire_array * states);
 void toplevel_send_close(struct wire_resource *toplevel);

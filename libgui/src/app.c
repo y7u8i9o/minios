@@ -138,6 +138,19 @@ struct widget *app_window(struct app *a, int width, int height, const char *titl
     return register_window(a, w, a->connected ? gui_create_window(width, height, title) : NULL, title);
 }
 
+struct widget *app_modal_window(struct app *a, struct widget *parent, int width, int height, const char *title)
+{
+    struct widget *w = widget_new(&window_class, NULL);
+    if (!w)
+        return NULL;
+    w->app = a;
+    w->window = w;
+    w->w = width;
+    w->h = height;
+    struct gui_window *pw = parent ? window_state_of(parent)->win : NULL;
+    return register_window(a, w, a->connected ? gui_create_dialog_window(pw, width, height, title) : NULL, title);
+}
+
 struct widget *app_layer_window(struct app *a, int width, int height, int layer, int anchor, int exclusive,
                                 int keyboard, const char *ns)
 {
@@ -169,7 +182,7 @@ static struct widget *window_by_id(struct app *a, int id)
 {
     for (int i = 0; i < a->nwindows; i++) {
         struct window_state *ws = window_state_of(a->windows[i]);
-        if (ws->win && ws->win->id == id)
+        if (window_owns_id(a->windows[i], id))
             return a->windows[i];
     }
     return NULL;

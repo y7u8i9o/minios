@@ -168,7 +168,7 @@ int main(int argc, char **argv)
     calc_reset(&calculator);
     application = app_create();
     if (!application) {
-        fprintf(stderr, "calc: cannot connect to compositor\n");
+        fprintf(stderr, "calc: cannot connect to X12\n");
         return 1;
     }
     struct widget *window = app_window(application, 520, 500, "calculator");

@@ -319,6 +319,8 @@ void widget_focus(struct widget *w)
         return;
     struct widget *old = ws->focus;
     ws->focus = w;
+    if (ws->win)
+        gui_text_input_set(ws->win, w && w->accepts_text);
     if (old) {
         old->focused = 0;
         struct event e = { .type = EV_FOCUS_OUT };

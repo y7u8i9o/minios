@@ -93,10 +93,29 @@ disabled), so the numeric programs use integer or fixed point
 arithmetic.
 
 GUI programs in `user/apps/`, started from the terminal window: `clock`,
-`files`, `view`, `paint` (mouse drawing, keys 1 to 7 pick a color, `+`
-and `-` change the brush, `c` clears), `pong` (left paddle `w`/`s`,
-right paddle arrow keys, Escape quits) and `mandel` (the Mandelbrot set
-on the application framework, see below).
+`files`, `view`, `unicode` (a Unicode code-point grid described below),
+`paint` (mouse drawing, keys
+1 to 7 pick a color, `+` and `-` change the brush, `c` clears), `pong`
+(left paddle `w`/`s`, right paddle arrow keys, Escape quits) and `mandel`
+(the Mandelbrot set on the application framework, see below).
+
+`unicode` browses the code space with one font at a time, chosen from a
+toolbar list of the installed fonts and defaulting to Unifont. A cell is
+drawn only when `font_glyph_index` returns a non-zero glyph for its code
+point; cells without a glyph keep the window background and carry their
+hexadecimal label alone, so the grid shows the repertoire of the selected
+font instead of a row of empty boxes. No fallback font is installed on
+the grid font, because a fallback would fill those cells from another
+font and misreport the coverage. The "Covered only" checkbox switches the
+grid between all 1114112 code points and the covered ones packed
+together; for the second mode the program walks the code space once per
+font and stores the covered set as contiguous runs, each run recording
+how many covered code points precede it, so a cell index becomes a
+binary search. Selection moves with the arrow and page keys, the mouse,
+the scroll bar and a hexadecimal entry field. The panel above the grid
+shows the code point at 64 pixels, its block name from the table
+generated in `user/apps/unicode_blocks.h`, its UTF-8 bytes and its glyph
+id in the selected font.
 
 `mandel` renders progressively. The complex plane is held in 64 bit
 fixed point with 26 fraction bits, the view is a centre and a scale in

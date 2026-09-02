@@ -11,7 +11,7 @@
 #define GUI_CLIP_MAX WSRV_CLIP_MAX
 
 enum wmsg_type {
-    WM_KEY = 36, WM_MOUSE, WM_FOCUS, WM_CLOSE, WM_RESIZED,
+    WM_KEY = 36, WM_MOUSE, WM_FOCUS, WM_CLOSE, WM_RESIZED, WM_TEXT, WM_PREEDIT, WM_TEXT_DELETE,
 };
 
 #define WMOUSE_MOVE  0
@@ -27,7 +27,8 @@ enum wmsg_type {
  * b = 1 down / 0 up, c = modifiers, d = translated character or 0.
  * WM_MOUSE: a = x, b = y in window contents coordinates, c = buttons
  * (WMOUSE_WHEEL: the delta), d = kind. WM_FOCUS: a = 1 gained / 0 lost.
- * WM_RESIZED: a = width, b = height (the surface is already resized). */
+ * WM_RESIZED: a = width, b = height (the surface is already resized).
+ * WM_TEXT: text is a UTF-8 commit from the text-input protocol. */
 struct wmsg {
     uint32_t type;
     int32_t pid;
@@ -49,7 +50,18 @@ int gui_connect(void);
 void gui_disconnect(void);
 int gui_screen_width(void);
 int gui_screen_height(void);
+struct gui_output_info {
+    int x, y, width, height, scale, transform, refresh_hz;
+};
+int gui_output_count(void);
+int gui_get_output(int index, struct gui_output_info *out);
 struct gui_window *gui_create_window(int width, int height, const char *title);
+/* A transient/modal toplevel and a compositor managed popup. */
+struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width, int height, const char *title);
+struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab);
+int gui_has_popup_surfaces(void);
+/* Enable the text-input protocol for the focused text widget. */
+void gui_text_input_set(struct gui_window *window, int enabled);
 /* A layer surface (no decorations): layer 0 background, 1 bottom, 2 top,
  * 3 overlay; anchor is a mask of GUI_ANCHOR_* edges; a dimension of 0
  * takes the free desktop area; keyboard 1 asks for key events. */
@@ -62,6 +74,9 @@ struct gui_window *gui_create_layer_window(int width, int height, int layer, int
 void gui_destroy_window(struct gui_window *w);
 /* Mark a rectangle changed; it is committed with the next frame. */
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);
+/* Surface hints are committed atomically with the next buffer update. */
+void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count);
+void gui_set_input_region(struct gui_window *w, const struct rect *rects, int count);
 void gui_move(struct gui_window *w, int x, int y);
 void gui_set_title(struct gui_window *w, const char *title);
 /* Ask for a new size; WM_RESIZED follows (also after resizes started by

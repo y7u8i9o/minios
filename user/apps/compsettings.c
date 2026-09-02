@@ -1,7 +1,7 @@
-/* compsettings: the compositor's settings (frame interval, desktop
+/* x12settings: X12's settings (frame interval, desktop
  * colour, key repeat, decorations, logging) and its state (statistics
  * and the surface list) through the settings and debug globals.
- * "compsettings set KEY VALUE" applies one setting without a window. */
+ * "x12settings set KEY VALUE" applies one setting without a window. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +77,7 @@ static void on_stats(void *user, struct wire_proxy *p, uint32_t uptime, uint32_t
              uptime / 1000, comps, ms, max, clients, surfaces, frame_ms);
     if (stats_label)
         widget_set_text(stats_label, s);
-    printf("compsettings: %s\n", s);
+    printf("x12settings: %s\n", s);
     fflush(stdout);
 }
 static void on_surface(void *user, struct wire_proxy *p, uint32_t id, uint32_t client, const char *role, const char *title,
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
     settings = gui_bind_global("settings", &settings_interface, 1);
     debug = gui_bind_global("debug", &debug_interface, 1);
     if (!settings || !debug) {
-        fprintf(stderr, "compsettings: the compositor has no settings interface\n");
+        fprintf(stderr, "x12settings: X12 has no settings interface\n");
         return 1;
     }
     settings_add_listener(settings, &settings_events, NULL);
@@ -149,12 +149,12 @@ int main(int argc, char **argv)
         gui_flush();
         struct wmsg ev;
         gui_next_event(&ev, 200);
-        printf("compsettings: set %s %s\n", argv[2], argv[3]);
+        printf("x12settings: set %s %s\n", argv[2], argv[3]);
         fflush(stdout);
         app_destroy(app);
         return 0;
     }
-    struct widget *win = app_window(app, 560, 420, "compositor settings");
+    struct widget *win = app_window(app, 560, 420, "X12 settings");
     if (!win)
         return 1;
     struct widget *tabs = tabs_new(win);

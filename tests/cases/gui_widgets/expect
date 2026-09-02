@@ -1,7 +1,7 @@
 widgettest: theme font height 17
 widgettest: field 'a'
 widgettest: field 'ab'
-comp: selection set by client 2 \(text/plain\)
+x12: selection set by client 2 \(text/plain\)
 widgettest: area 2 bytes
 widgettest: area 3 bytes
 widgettest: area 4 bytes

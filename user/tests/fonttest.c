@@ -66,11 +66,75 @@ static void check_font(const char *path, int cff, int upem, int glyphs, int gid_
     font_close(f);
 }
 
+/* Unifont is the glyph source of the Unicode viewer. It exercises two
+ * paths the Latin UI fonts never reach: outlines derived from a 16 pixel
+ * bitmap grid leave only 64 units per em, and the coverage above the BMP
+ * is reachable only through a format 12 cmap subtable. */
+static void check_unifont(void)
+{
+    static const struct {
+        uint32_t cp;
+        const char *script;
+    } covered[] = {
+        { 0x4e00, "CJK" },       { 0x3042, "hiragana" }, { 0x05d0, "hebrew" },
+        { 0x0627, "arabic" },    { 0xac00, "hangul" },   { 0x0905, "devanagari" },
+        { 0x10a0, "georgian" },  { 0x2000b, "CJK extension B, above the BMP" },
+    };
+    struct ofont *f = font_open("/etc/fonts/unifont.otf");
+    CHECK(f != NULL, "open unifont");
+    if (!f)
+        return;
+    CHECK(font_is_cff(f) == 1, "unifont cff flag %d", font_is_cff(f));
+    CHECK(font_units_per_em(f) == 64, "unifont upem %d", font_units_per_em(f));
+    CHECK(font_glyph_count(f) == 58911, "unifont glyph count %d", font_glyph_count(f));
+    for (int i = 0; i < (int)(sizeof covered / sizeof covered[0]); i++)
+        CHECK(font_glyph_index(f, covered[i].cp) != 0, "unifont covers %s", covered[i].script);
+    /* Colour emoji are not part of Unifont; the viewer reports them as
+     * absent rather than drawing a blank cell. */
+    CHECK(font_glyph_index(f, 0x1f600) == 0, "unifont has no emoji");
+
+    /* Rasterize U+4E2D at 32 pixels, which the 64 unit em has to survive.
+     * U+4E00 would be a poor choice here because it is a single
+     * horizontal stroke and its bitmap is only two pixels tall; U+4E2D
+     * has strokes along both axes. */
+    int g = font_glyph_index(f, 0x4e2d);
+    const struct font_glyph *bm = font_render(f, g, 32);
+    CHECK(bm != NULL && bm->bitmap != NULL, "unifont renders U+4E2D");
+    if (bm && bm->bitmap) {
+        long sum = 0;
+        for (int i = 0; i < bm->width * bm->height; i++)
+            sum += bm->bitmap[i];
+        CHECK(bm->width > 8 && bm->height > 8, "unifont U+4E2D bitmap %dx%d", bm->width, bm->height);
+        CHECK(sum > 0, "unifont U+4E2D is blank");
+        printf("fonttest: unifont U+4E2D at 32px: %dx%d, sum %ld\n", bm->width, bm->height, sum);
+    }
+    font_close(f);
+}
+
+/* Noto Sans is the Latin, Greek and Cyrillic family. The other scripts
+ * live in separate Noto families, so their absence here is by design and
+ * not a truncated download; the Unicode viewer offers Unifont for them. */
+static void check_noto_scope(void)
+{
+    struct ofont *f = font_open("/etc/fonts/NotoSans-Regular.ttf");
+    CHECK(f != NULL, "open noto sans");
+    if (!f)
+        return;
+    CHECK(font_glyph_index(f, 'A') != 0, "noto sans covers Latin");
+    CHECK(font_glyph_index(f, 0x0416) != 0, "noto sans covers Cyrillic");
+    CHECK(font_glyph_index(f, 0x4e00) == 0, "noto sans has no CJK");
+    CHECK(font_glyph_index(f, 0x3042) == 0, "noto sans has no kana");
+    CHECK(font_glyph_index(f, 0xac00) == 0, "noto sans has no hangul");
+    font_close(f);
+}
+
 int main(void)
 {
     check_font("/etc/fonts/DejaVuSans.ttf", 0, 2048, 6241, 36, 1401, -131, -348, 0, 16, 0, 1384, 1493);
     /* Latin Modern kerns round pairs apart through its class table. */
     check_font("/etc/fonts/lmroman10-regular.otf", 1, 1000, 821, 27, 750, -111, -83, 28, 32, 0, 717, 716);
+    check_unifont();
+    check_noto_scope();
     CHECK(font_open("/etc/fonts/sans18.mfnt") == NULL, "a bitmap font file is rejected");
     CHECK(font_open("/nonexistent.ttf") == NULL, "a missing file is rejected");
     printf("fonttest: %d failures\n", failures);

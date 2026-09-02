@@ -42,9 +42,9 @@ character, and window resize and focus changes. Every event is appended
 to an editor inside the window and printed as `evtest: ...` on standard
 output, so the tool also serves as a protocol check for the seat.
 
-## compsettings
+## x12settings
 
-`compsettings` binds the compositor's `settings` and `debug` globals
+`x12settings` binds X12's `settings` and `debug` globals
 (`protocol/debug.xml`). The Settings tab edits the frame interval, the
 key repeat rate and delay, the default decoration mode, the verbose
 flag and the desktop colour. Each change is sent with `settings.set`
@@ -53,7 +53,7 @@ resource, so several instances stay in agreement. The Surfaces tab
 requests `debug.get_stats` and `debug.get_surfaces` once per second and
 shows the composition counters and the surface list with role, title,
 geometry, mapping state and buffer format. The command form
-`compsettings set KEY VALUE` applies one setting and exits, which the
+`x12settings set KEY VALUE` applies one setting and exits, which the
 `gui_tools` boot test uses.
 
 Settings keys: `frame_ms` (4 to 200), `desktop_color` (0xRRGGBB),
@@ -62,8 +62,8 @@ Settings keys: `frame_ms` (4 to 200), `desktop_color` (0xRRGGBB),
 
 ## Boot test
 
-`tests/cases/gui_tools` starts the compositor and the panel, applies a
-setting through `compsettings set`, starts each tool in turn, checks
+`tests/cases/gui_tools` starts X12 and the panel, applies a setting
+through `x12settings set`, starts each tool in turn, checks
 that its window has the active title bar at its cascade position,
 clicks inside `evtest`, closes every window with Alt+F4, and verifies
 that each process exits with status 0.

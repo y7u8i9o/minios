@@ -1,6 +1,7 @@
-# Shell, seat, data device and panel
+# X12 shell, seat, data device and panel
 
-M25 gives surfaces roles and delivers input and data transfers.
+M25 gives surfaces roles and delivers input and data transfers; X12 keeps
+the protocol interface names stable for clients.
 Protocol definitions: `protocol/shell.xml`, `seat.xml`, `data.xml`;
 compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
 `data.c`; the panel: `user/panel/panel.c`.
@@ -21,9 +22,11 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
   `close` asks the client to close.
 - `shell.get_popup(surface, parent, positioner)`: placed relative to
   the parent by the positioner (size, anchor rectangle, anchor and
-  gravity points, offset) and slid to stay on the screen;
-  `configure(serial, x, y, w, h)` reports the position; `grab(seat,
-  serial)` makes an outside click or Escape dismiss it with `done`.
+  gravity points, offset) and constrained with flip, slide and resize;
+  `configure(serial, x, y, w, h)` reports the final position. The
+  client acknowledges that serial before attaching the first buffer.
+  `grab(seat, serial)` is accepted only for the initiating pointer
+  press and makes an outside click or Escape dismiss it with `done`.
 - `shell.get_layer_surface(surface, layer, namespace)`: anchored to
   screen edges with `set_anchor`, a size, an exclusive zone that
   shrinks the desktop area for toplevels, and keyboard interactivity;
@@ -59,20 +62,24 @@ as a memfd (`/usr/share/keymaps/us.mkm` copied at start), `repeat_info
 Alt 4). Compositor shortcuts: Alt+Tab cycles toplevels, Alt+F4 sends
 `close`, Escape dismisses a grabbed popup. Keymaps
 (`tools/genkeymap/genkeymap.py`) hold four levels per key code;
-`libgui/include/gui/keymap.h` loads them and translates codes.
+`libgui/include/gui/keymap.h` loads them and translates codes. X12
+records a short per-client serial history so selection ownership can be
+checked without accepting another client's serial.
 
 ## Data device (`data.c`)
 
-`data_device_manager` creates sources (which `offer` mime types) and a
+`data_device_manager` creates sources (which `offer` MIME types) and a
 data device per client. `set_selection(source, serial)` makes the
 source the selection; the client with keyboard focus receives a
 `data_offer` with `offer` events and `selection(offer)`, and reads it
-by passing a pipe to `receive(mime, fd)`, which the compositor forwards
-to the source as `send(mime, fd)`. `start_drag(source, origin, icon,
-serial)` starts a drag on the current button press: the surface under
-the cursor gets `data_offer`, `enter`, `motion`, `leave` and `drop`,
-transfers with `receive`, and `finish` ends the drag with
-`dnd_finished` at the source.
+by passing a pipe to `receive(mime, fd)`, which X12 forwards to the
+source as `send(mime, fd)`. `start_drag(source, origin, icon, serial)`
+validates the source, origin and initiating input serial, then the
+surface under the cursor gets `data_offer`, `enter`, `motion`, `leave`
+and `drop`. The normal serial is the button press; the legacy client
+path may use the still-current pointer-enter serial while no button is
+held. The target must accept the offered MIME type for a drop; `finish`
+ends the drag with `dnd_finished` at the source.
 
 ## Panel (`user/panel/`)
 

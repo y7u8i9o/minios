@@ -45,7 +45,7 @@ static void clamp_toplevel(struct csurface *s)
 
 static void damage_surface(struct csurface *s)
 {
-    scene_damage(decor_has(s) ? decor_frame(s) : surface_rect(s));
+    scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
 }
 
 /* ---- toplevel manager ---- */
@@ -179,8 +179,30 @@ struct toplevel *toplevel_focused(void)
     return best;
 }
 
+static struct toplevel *modal_child(struct toplevel *parent)
+{
+    struct toplevel *best = NULL;
+    for (struct csurface *s = surface_first(); s; s = s->next)
+        if (s->role == ROLE_TOPLEVEL && s->mapped && !s->toplevel->minimized && s->toplevel->modal &&
+            s->toplevel->parent == parent && (!best || s->stack > best->s->stack))
+            best = s->toplevel;
+    return best;
+}
+
+int toplevel_blocked(struct toplevel *t)
+{
+    struct toplevel *modal = modal_child(t);
+    if (!modal)
+        return 0;
+    toplevel_activate(modal);
+    return 1;
+}
+
 void toplevel_activate(struct toplevel *t)
 {
+    struct toplevel *modal = modal_child(t);
+    if (modal)
+        t = modal;
     struct toplevel *old = toplevel_focused();
     if (old == t && t->s->stack == next_stack - 1)
         return;
@@ -253,6 +275,9 @@ void toplevel_set_minimized(struct toplevel *t, int on)
 
 void toplevel_close(struct toplevel *t)
 {
+    struct toplevel *modal = modal_child(t);
+    if (modal)
+        t = modal;
     comp_log("toplevel %d close requested", t->number);
     toplevel_send_close(t->res);
 }
@@ -302,13 +327,13 @@ static void h_set_max_size(struct wire_client *c, struct wire_resource *self, in
 static void h_move(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial)
 {
     struct toplevel *t = self->data;
-    if (serial == seat_last_serial() && !t->maximized)
+    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized)
         decor_press(t->s, 1 | 0x100);           /* a move grab from the client */
 }
 static void h_resize(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial, uint32_t edges)
 {
     struct toplevel *t = self->data;
-    if (serial == seat_last_serial() && !t->maximized)
+    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized)
         decor_press(t->s, 1 | 0x200 | (int)(edges << 16));
 }
 static void h_set_maximized(struct wire_client *c, struct wire_resource *self) { toplevel_set_maximized(self->data, 1); }
@@ -317,12 +342,31 @@ static void h_set_minimized(struct wire_client *c, struct wire_resource *self) {
 static void h_ack_configure(struct wire_client *c, struct wire_resource *self, uint32_t serial)
 {
     struct toplevel *t = self->data;
+    if (!t->configure_serial || serial != t->configure_serial) {
+        wire_client_post_error(c, self, 21, "invalid configure serial");
+        return;
+    }
     t->acked_serial = serial;
 }
 static void h_toplevel_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
+static void h_set_parent(struct wire_client *c, struct wire_resource *self, struct wire_resource *parent)
+{
+    struct toplevel *t = self->data;
+    struct toplevel *p = parent ? parent->data : NULL;
+    if (p == t) {
+        wire_client_post_error(c, self, 22, "toplevel cannot parent itself");
+        return;
+    }
+    t->parent = p;
+}
+static void h_set_modal(struct wire_client *c, struct wire_resource *self, uint32_t modal)
+{
+    struct toplevel *t = self->data;
+    t->modal = modal != 0;
+}
 static const struct toplevel_impl toplevel_handlers = {
     h_set_title, h_set_app_id, h_set_min_size, h_set_max_size, h_move, h_resize, h_set_maximized,
-    h_unset_maximized, h_set_minimized, h_ack_configure, h_toplevel_destroy,
+    h_unset_maximized, h_set_minimized, h_ack_configure, h_toplevel_destroy, h_set_parent, h_set_modal,
 };
 
 static void toplevel_gone(struct wire_resource *r)
@@ -339,6 +383,9 @@ static void toplevel_gone(struct wire_resource *r)
     seat_surface_gone(t->s);
     if (t->decoration)
         t->decoration->data = NULL;
+    for (struct csurface *s = surface_first(); s; s = s->next)
+        if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->parent == t)
+            s->toplevel->parent = NULL;
     free(t);
     if (was_active) {
         struct toplevel *next = NULL;
@@ -442,13 +489,25 @@ static void h_create_positioner(struct wire_client *c, struct wire_resource *sel
     wire_resource_set_listener(r, &positioner_handlers, p, positioner_gone);
 }
 
-/* Place a popup of size w x h relative to the parent from the
- * positioner, keeping it on the screen by sliding. */
-void positioner_place(const struct positioner *p, int parent_x, int parent_y, int w, int h, int *x, int *y);
-void positioner_place(const struct positioner *p, int parent_x, int parent_y, int w, int h, int *x, int *y)
+static int flip_x(int a)
+{
+    static const int map[] = { 0, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_RIGHT, ANCHOR_LEFT,
+        ANCHOR_TOP_RIGHT, ANCHOR_BOTTOM_RIGHT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_LEFT };
+    return a >= 0 && a <= ANCHOR_BOTTOM_RIGHT ? map[a] : a;
+}
+
+static int flip_y(int a)
+{
+    static const int map[] = { 0, ANCHOR_BOTTOM, ANCHOR_TOP, ANCHOR_LEFT, ANCHOR_RIGHT,
+        ANCHOR_BOTTOM_LEFT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_RIGHT, ANCHOR_TOP_RIGHT };
+    return a >= 0 && a <= ANCHOR_BOTTOM_RIGHT ? map[a] : a;
+}
+
+static void position_raw(const struct positioner *p, int anchor, int gravity, int ox, int oy,
+                         int w, int h, int *x, int *y)
 {
     int ax = p->ax, ay = p->ay;
-    switch (p->anchor) {
+    switch (anchor) {
     case ANCHOR_TOP: ax += p->aw / 2; break;
     case ANCHOR_BOTTOM: ax += p->aw / 2; ay += p->ah; break;
     case ANCHOR_LEFT: ay += p->ah / 2; break;
@@ -460,7 +519,7 @@ void positioner_place(const struct positioner *p, int parent_x, int parent_y, in
     default: ax += p->aw / 2; ay += p->ah / 2; break;
     }
     int px = ax, py = ay;
-    switch (p->gravity) {
+    switch (gravity) {
     case ANCHOR_TOP: px -= w / 2; py -= h; break;
     case ANCHOR_BOTTOM: px -= w / 2; break;
     case ANCHOR_LEFT: px -= w; py -= h / 2; break;
@@ -471,33 +530,88 @@ void positioner_place(const struct positioner *p, int parent_x, int parent_y, in
     case ANCHOR_BOTTOM_RIGHT: break;
     default: px -= w / 2; py -= h / 2; break;
     }
-    px += p->ox;
-    py += p->oy;
-    /* Slide to stay inside the screen. */
-    int sx = parent_x + px, sy = parent_y + py;
-    if (sx + w > screen_w) sx = screen_w - w;
-    if (sy + h > screen_h) sy = screen_h - h;
-    if (sx < 0) sx = 0;
-    if (sy < 0) sy = 0;
-    *x = sx - parent_x;
-    *y = sy - parent_y;
+    *x = px + ox;
+    *y = py + oy;
+}
+
+static int overflow(int p, int size, int limit)
+{
+    int n = p < 0 ? -p : 0;
+    if (p + size > limit)
+        n += p + size - limit;
+    return n;
+}
+
+/* Apply the xdg-style flip/slide/resize constraint sequence. The
+ * resulting coordinates are relative to the parent and the size can
+ * be reduced when the requested popup is larger than the output. */
+static void positioner_place(const struct positioner *p, int parent_x, int parent_y,
+                             int *w, int *h, int *x, int *y)
+{
+    int px, py;
+    position_raw(p, p->anchor, p->gravity, p->ox, p->oy, *w, *h, &px, &py);
+    int gx = parent_x + px, gy = parent_y + py;
+    if ((p->adjust & ADJUST_FLIP_X) && overflow(gx, *w, screen_w)) {
+        int tx, ty;
+        position_raw(p, flip_x(p->anchor), flip_x(p->gravity), -p->ox, p->oy, *w, *h, &tx, &ty);
+        if (overflow(parent_x + tx, *w, screen_w) < overflow(gx, *w, screen_w))
+            gx = parent_x + tx;
+    }
+    if ((p->adjust & ADJUST_FLIP_Y) && overflow(gy, *h, screen_h)) {
+        int tx, ty;
+        position_raw(p, flip_y(p->anchor), flip_y(p->gravity), p->ox, -p->oy, *w, *h, &tx, &ty);
+        if (overflow(parent_y + ty, *h, screen_h) < overflow(gy, *h, screen_h))
+            gy = parent_y + ty;
+    }
+    if (p->adjust & ADJUST_SLIDE_X) {
+        if (gx + *w > screen_w) gx = screen_w - *w;
+        if (gx < 0) gx = 0;
+    }
+    if (p->adjust & ADJUST_SLIDE_Y) {
+        if (gy + *h > screen_h) gy = screen_h - *h;
+        if (gy < 0) gy = 0;
+    }
+    if ((p->adjust & ADJUST_RESIZE_X) && overflow(gx, *w, screen_w)) {
+        if (gx < 0) gx = 0;
+        *w = screen_w - gx;
+        if (*w < 1) *w = 1;
+    }
+    if ((p->adjust & ADJUST_RESIZE_Y) && overflow(gy, *h, screen_h)) {
+        if (gy < 0) gy = 0;
+        *h = screen_h - gy;
+        if (*h < 1) *h = 1;
+    }
+    *x = gx - parent_x;
+    *y = gy - parent_y;
 }
 
 static void popup_configure(struct popup *p)
 {
     int w = p->pos.w > 0 ? p->pos.w : p->s->width, h = p->pos.h > 0 ? p->pos.h : p->s->height;
-    positioner_place(&p->pos, p->parent->x, p->parent->y, w, h, &p->x, &p->y);
+    positioner_place(&p->pos, p->parent->x, p->parent->y, &w, &h, &p->x, &p->y);
     p->serial = comp_serial();
+    p->pending_w = w;
+    p->pending_h = h;
     popup_send_configure(p->res, p->serial, p->x, p->y, w, h);
 }
 
 static void h_popup_grab(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial)
 {
     struct popup *p = self->data;
+    if (!seat_validate_grab(p->s->client, p->parent, serial))
+        return;
     p->grab = 1;
     seat_set_keyboard_focus(p->s);
 }
-static void h_popup_ack(struct wire_client *c, struct wire_resource *self, uint32_t serial) {}
+static void h_popup_ack(struct wire_client *c, struct wire_resource *self, uint32_t serial)
+{
+    struct popup *p = self->data;
+    if (!p->serial || serial != p->serial) {
+        wire_client_post_error(c, self, 21, "invalid popup configure serial");
+        return;
+    }
+    p->acked_serial = serial;
+}
 static void h_popup_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
 static const struct popup_impl popup_handlers = { h_popup_grab, h_popup_ack, h_popup_destroy };
 
@@ -572,6 +686,8 @@ static void layer_configure(struct layer *l)
     struct rect d = shell_desktop();
     int w = l->w > 0 ? l->w : d.w, h = l->h > 0 ? l->h : d.h;
     l->serial = comp_serial();
+    l->pending_w = w;
+    l->pending_h = h;
     layer_surface_send_configure(l->res, l->serial, w, h);
 }
 
@@ -580,7 +696,15 @@ static void h_layer_set_zone(struct wire_client *c, struct wire_resource *self, 
 static void h_layer_set_size(struct wire_client *c, struct wire_resource *self, int32_t w, int32_t h)
 { struct layer *l = self->data; l->w = w; l->h = h; layer_configure(l); }
 static void h_layer_set_kbd(struct wire_client *c, struct wire_resource *self, uint32_t m) { ((struct layer *)self->data)->interactive = (int)m; }
-static void h_layer_ack(struct wire_client *c, struct wire_resource *self, uint32_t serial) {}
+static void h_layer_ack(struct wire_client *c, struct wire_resource *self, uint32_t serial)
+{
+    struct layer *l = self->data;
+    if (!l->serial || serial != l->serial) {
+        wire_client_post_error(c, self, 21, "invalid layer configure serial");
+        return;
+    }
+    l->acked_serial = serial;
+}
 static void h_layer_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
 static const struct layer_surface_impl layer_handlers = {
     h_layer_set_anchor, h_layer_set_zone, h_layer_set_size, h_layer_set_kbd, h_layer_ack, h_layer_destroy,
@@ -632,6 +756,73 @@ static void bind_shell(struct wire_client *c, void *data, uint32_t version, uint
 
 /* ---- commits ---- */
 
+static void logical_buffer_size(const struct csurface *s, const struct buffer *b, int *w, int *h)
+{
+    int scale = s->pending.state_set ? s->pending.scale : s->current.scale;
+    int transform = s->pending.state_set ? s->pending.transform : s->current.transform;
+    if (scale < 1)
+        scale = 1;
+    int bw = b->width / scale, bh = b->height / scale;
+    *w = transform & 1 ? bh : bw;
+    *h = transform & 1 ? bw : bh;
+}
+
+int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buffer *b)
+{
+    if (!b)
+        return 1;
+    uint32_t serial = 0, acked = 0;
+    int want_w = 0, want_h = 0;
+    switch (s->role) {
+    case ROLE_TOPLEVEL:
+        serial = s->toplevel->configure_serial;
+        acked = s->toplevel->acked_serial;
+        want_w = s->toplevel->pending_w;
+        want_h = s->toplevel->pending_h;
+        break;
+    case ROLE_POPUP:
+        serial = s->popup->serial;
+        acked = s->popup->acked_serial;
+        want_w = s->popup->pending_w;
+        want_h = s->popup->pending_h;
+        break;
+    case ROLE_LAYER:
+        serial = s->layer->serial;
+        acked = s->layer->acked_serial;
+        want_w = s->layer->pending_w;
+        want_h = s->layer->pending_h;
+        break;
+    default:
+        return 1;
+    }
+    if (serial && acked != serial) {
+        /* A state-only configure does not make the already mapped
+         * geometry unsafe. Keep accepting matching old-size buffers
+         * while the event is in flight; do not consume the configure. */
+        if (s->mapped && (want_w <= 0 || want_w == s->width) &&
+            (want_h <= 0 || want_h == s->height))
+            return 1;
+        if (s->mapped && (!s->pending.has_buffer || b == s->current.buffer))
+            return 1;
+        wire_client_post_error(c, s->res, 23, "buffer committed before configure acknowledgement");
+        return 0;
+    }
+    int w, h;
+    logical_buffer_size(s, b, &w, &h);
+    if ((want_w > 0 && w != want_w) || (want_h > 0 && h != want_h)) {
+        wire_client_post_error(c, s->res, 24, "buffer size does not match acknowledged configure");
+        return 0;
+    }
+    if (s->role == ROLE_TOPLEVEL) {
+        s->toplevel->configure_serial = s->toplevel->acked_serial = 0;
+    } else if (s->role == ROLE_POPUP) {
+        s->popup->serial = s->popup->acked_serial = 0;
+    } else if (s->role == ROLE_LAYER) {
+        s->layer->serial = s->layer->acked_serial = 0;
+    }
+    return 1;
+}
+
 void shell_surface_committed(struct csurface *s, int first_map)
 {
     switch (s->role) {
@@ -639,10 +830,15 @@ void shell_surface_committed(struct csurface *s, int first_map)
         struct toplevel *t = s->toplevel;
         if (first_map && !t->placed) {
             t->placed = 1;
-            int n = (t->number - 1) % 8;
             struct rect d = shell_desktop();
-            s->x = d.x + 40 + n * 30;
-            s->y = d.y + 40 + TITLE_H + n * 30;
+            if (t->parent && t->parent->s && t->parent->s->mapped) {
+                s->x = t->parent->s->x + (t->parent->s->width - s->width) / 2;
+                s->y = t->parent->s->y + (t->parent->s->height - s->height) / 2;
+            } else {
+                int n = (t->number - 1) % 8;
+                s->x = d.x + 40 + n * 30;
+                s->y = d.y + 40 + TITLE_H + n * 30;
+            }
             if (s->x + s->width > d.x + d.w) s->x = d.x + d.w - s->width;
             if (s->y + s->height > d.y + d.h) s->y = d.y + d.h - s->height;
             clamp_toplevel(s);

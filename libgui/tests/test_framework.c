@@ -1,6 +1,7 @@
 /* Host unit tests of the M21 framework: layout, signals, partial
  * redraw, focus traversal and text editing. */
 #include <gui/app.h>
+#include <gui/utf8.h>
 #include <stdio.h>
 #include <string.h>
 #include "fake.h"
@@ -168,6 +169,32 @@ static void test_textfield(struct app *a)
     window_close(win);
 }
 
+static void test_utf8_text(struct app *a)
+{
+    struct widget *win = app_window(a, 300, 100, "utf8");
+    struct widget *f = textfield_new(win, "");
+    window_paint(win);
+    widget_focus(f);
+    struct wmsg text = { .type = WM_TEXT, .window = window_state_of(win)->win->id };
+    strlcpy(text.text, "A\xc3\xa9\xe7\x95\x8c", sizeof text.text); /* A, e acute, CJK world */
+    window_message(win, &text);
+    CHECK(strcmp(widget_text(f), "A\xc3\xa9\xe7\x95\x8c") == 0, "UTF-8 commit preserved: '%s'", widget_text(f));
+    struct wmsg left = key_msg(win, 0xcb, 0, 0);
+    struct wmsg back = key_msg(win, 0x0e, '\b', 0);
+    window_message(win, &left);
+    window_message(win, &back);
+    CHECK(strcmp(widget_text(f), "A\xe7\x95\x8c") == 0, "UTF-8 backspace removes one code point: '%s'", widget_text(f));
+    struct wmsg preedit = { .type = WM_PREEDIT, .window = window_state_of(win)->win->id };
+    strlcpy(preedit.text, "u4e16", sizeof preedit.text);
+    window_message(win, &preedit);
+    CHECK(!rect_empty(window_paint(win)), "preedit invalidates and paints the field");
+    int at = 0;
+    CHECK(gui_utf8_decode("\xf0\x9f\x98\x80", 4, &at) == 0x1f600 && at == 4,
+          "UTF-8 decoder handles a supplementary-plane code point");
+    CHECK(gui_utf8_prev_boundary("A\xc3\xa9", 3) == 1, "previous UTF-8 boundary is a byte offset");
+    window_close(win);
+}
+
 static void test_listview(struct app *a)
 {
     struct widget *win = app_window(a, 200, 100, "list");
@@ -198,6 +225,7 @@ void run_framework_tests(void)
     test_partial_redraw(a);
     test_focus(a);
     test_textfield(a);
+    test_utf8_text(a);
     test_listview(a);
     app_step(a, 0);
     app_destroy(a);

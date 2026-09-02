@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <limits.h>
 #include "comp.h"
 
 static struct csurface *surfaces;        /* newest first */
@@ -20,7 +21,7 @@ struct csurface *surface_by_resource(struct wire_resource *r)
 void surface_unmap(struct csurface *s)
 {
     if (s->mapped)
-        scene_damage(decor_has(s) ? decor_frame(s) : surface_rect(s));
+        scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
     s->mapped = 0;
 }
 
@@ -70,7 +71,7 @@ static void h_create_buffer(struct wire_client *c, struct wire_resource *self, u
                             int32_t width, int32_t height, int32_t stride, uint32_t format)
 {
     struct pool *p = self->data;
-    if (width <= 0 || height <= 0 || stride < width * 4 || offset < 0 ||
+    if (width <= 0 || height <= 0 || width > INT_MAX / 4 || stride < width * 4 || offset < 0 ||
         (size_t)offset + (size_t)stride * (size_t)height > p->size ||
         (format != FORMAT_XRGB8888 && format != FORMAT_ARGB8888)) {
         wire_client_post_error(c, self, 10, "invalid buffer geometry or format");
@@ -154,7 +155,7 @@ static void surface_resource_destroy(struct wire_resource *r)
             break;
         }
     if (s->mapped)
-        scene_damage(decor_has(s) ? decor_frame(s) : surface_rect(s));
+        scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
     if (s->current.buffer)
         s->current.buffer->busy = 0;
     seat_surface_gone(s);
@@ -171,11 +172,15 @@ static void h_attach(struct wire_client *c, struct wire_resource *self, struct w
     struct csurface *s = self->data;
     s->pending.buffer = buffer ? buffer->data : NULL;
     s->pending.has_buffer = 1;
+    s->pending.attach_x = x;
+    s->pending.attach_y = y;
 }
 
 static void h_damage(struct wire_client *c, struct wire_resource *self, int32_t x, int32_t y, int32_t w, int32_t h)
 {
     struct csurface *s = self->data;
+    if (w <= 0 || h <= 0)
+        return;
     struct rect r = { x, y, w, h };
     if (s->pending.ndamage == MAX_DAMAGE) {
         for (int i = 1; i < s->pending.ndamage; i++)
@@ -197,12 +202,130 @@ static void h_frame(struct wire_client *c, struct wire_resource *self, uint32_t 
         wire_resource_destroy(cb);
 }
 
-static void h_opaque(struct wire_client *c, struct wire_resource *self, const struct wire_array *rects) {}
+static int region_copy(struct rect out[MAX_REGION], const struct wire_array *a)
+{
+    if (!a || a->size % sizeof(struct rect) != 0)
+        return -1;
+    size_t n = a->size / sizeof(struct rect);
+    if (n > MAX_REGION)
+        n = MAX_REGION;
+    const struct rect *in = a->data;
+    int used = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (in[i].w <= 0 || in[i].h <= 0)
+            continue;
+        out[used++] = in[i];
+    }
+    return used;
+}
+
+static void h_opaque(struct wire_client *c, struct wire_resource *self, const struct wire_array *rects)
+{
+    struct csurface *s = self->data;
+    int n = region_copy(s->pending.opaque, rects);
+    if (n < 0) {
+        wire_client_post_error(c, self, 12, "malformed opaque region");
+        return;
+    }
+    s->pending.nopaque = n;
+    s->pending.opaque_set = 1;
+}
+
+static void h_input(struct wire_client *c, struct wire_resource *self, const struct wire_array *rects)
+{
+    struct csurface *s = self->data;
+    int n = region_copy(s->pending.input, rects);
+    if (n < 0) {
+        wire_client_post_error(c, self, 12, "malformed input region");
+        return;
+    }
+    s->pending.ninput = n;
+    s->pending.input_set = 1;
+}
+
+static void begin_state(struct csurface *s)
+{
+    if (s->pending.state_set)
+        return;
+    s->pending.scale = s->current.scale > 0 ? s->current.scale : 1;
+    s->pending.transform = s->current.transform;
+    s->pending.state_set = 1;
+}
+
+static void h_scale(struct wire_client *c, struct wire_resource *self, int32_t scale)
+{
+    struct csurface *s = self->data;
+    if (scale < 1 || scale > 8) {
+        wire_client_post_error(c, self, 13, "invalid buffer scale");
+        return;
+    }
+    begin_state(s);
+    s->pending.scale = scale;
+}
+
+static void h_transform(struct wire_client *c, struct wire_resource *self, uint32_t transform)
+{
+    struct csurface *s = self->data;
+    if (transform > 3) {
+        wire_client_post_error(c, self, 13, "invalid buffer transform");
+        return;
+    }
+    begin_state(s);
+    s->pending.transform = (int)transform;
+}
+
+static struct rect buffer_to_surface_damage(const struct csurface *s, struct rect r)
+{
+    int scale = s->pending.state_set ? s->pending.scale : s->current.scale;
+    int transform = s->pending.state_set ? s->pending.transform : s->current.transform;
+    if (scale < 1)
+        scale = 1;
+    int x0 = r.x / scale, y0 = r.y / scale;
+    int x1 = (r.x + r.w + scale - 1) / scale;
+    int y1 = (r.y + r.h + scale - 1) / scale;
+    int bw = s->pending.buffer ? s->pending.buffer->width / scale : s->width;
+    int bh = s->pending.buffer ? s->pending.buffer->height / scale : s->height;
+    switch (transform) {
+    case 1: return (struct rect){ bh - y1, x0, y1 - y0, x1 - x0 };
+    case 2: return (struct rect){ bw - x1, bh - y1, x1 - x0, y1 - y0 };
+    case 3: return (struct rect){ y0, bw - x1, y1 - y0, x1 - x0 };
+    default: return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
+    }
+}
+
+static void h_damage_buffer(struct wire_client *c, struct wire_resource *self, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    if (w <= 0 || h <= 0)
+        return;
+    struct csurface *s = self->data;
+    struct rect r = buffer_to_surface_damage(s, (struct rect){ x, y, w, h });
+    h_damage(c, self, r.x, r.y, r.w, r.h);
+}
 
 static void h_commit(struct wire_client *c, struct wire_resource *self)
 {
     struct csurface *s = self->data;
-    struct rect old = { s->x, s->y, s->width, s->height };
+    struct buffer *next = s->pending.has_buffer ? s->pending.buffer : s->current.buffer;
+    if (!surface_commit_allowed(c, s, next))
+        return;
+    struct rect old = decor_has(s) ? decor_extent(s) : surface_rect(s);
+    if (s->pending.state_set) {
+        s->current.scale = s->pending.scale;
+        s->current.transform = s->pending.transform;
+        s->pending.state_set = 0;
+    }
+    if (s->pending.opaque_set) {
+        memcpy(s->current.opaque, s->pending.opaque, (size_t)s->pending.nopaque * sizeof s->current.opaque[0]);
+        s->current.nopaque = s->pending.nopaque;
+        s->current.opaque_set = 1;
+        s->pending.opaque_set = 0;
+    }
+    if (s->pending.input_set) {
+        memcpy(s->current.input, s->pending.input, (size_t)s->pending.ninput * sizeof s->current.input[0]);
+        s->current.ninput = s->pending.ninput;
+        s->current.input_set = 1;
+        s->pending.input_set = 0;
+    }
     if (s->pending.has_buffer) {
         struct buffer *prev = s->current.buffer, *b = s->pending.buffer;
         if (prev && prev != b && prev->res) {
@@ -213,8 +336,12 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         s->current.buffer = b;
         if (b) {
             b->busy = 1;
-            s->width = b->width;
-            s->height = b->height;
+            int scale = s->current.scale > 0 ? s->current.scale : 1;
+            int bw = b->width / scale, bh = b->height / scale;
+            s->width = s->current.transform & 1 ? bh : bw;
+            s->height = s->current.transform & 1 ? bw : bh;
+            s->x += s->pending.attach_x;
+            s->y += s->pending.attach_y;
             int first = !s->mapped;
             s->mapped = 1;
             if (first && s->role == ROLE_NONE)
@@ -225,9 +352,10 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         }
         s->pending.has_buffer = 0;
         s->pending.buffer = NULL;
+        s->pending.attach_x = s->pending.attach_y = 0;
         scene_damage(old);
         if (decor_has(s))
-            scene_damage(decor_frame(s));
+            scene_damage(decor_extent(s));
         else
             scene_damage((struct rect){ s->x, s->y, s->width, s->height });
     } else {
@@ -240,11 +368,16 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     for (int i = 0; i < s->pending.ncallbacks && s->nframe_cbs < 8; i++)
         s->frame_cbs[s->nframe_cbs++] = s->pending.callbacks[i];
     s->pending.ncallbacks = 0;
+    if (s->nframe_cbs && s->mapped)
+        scene_damage(surface_rect(s));
     comp_log("surface %d committed", s->id);
 }
 
 static void h_surface_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
-static const struct surface_impl surface_handlers = { h_attach, h_damage, h_frame, h_opaque, h_commit, h_surface_destroy };
+static const struct surface_impl surface_handlers = {
+    h_attach, h_damage, h_frame, h_opaque, h_commit, h_surface_destroy,
+    h_input, h_scale, h_transform, h_damage_buffer,
+};
 
 static void h_create_surface(struct wire_client *c, struct wire_resource *self, uint32_t id)
 {
@@ -257,6 +390,7 @@ static void h_create_surface(struct wire_client *c, struct wire_resource *self, 
     s->res = r;
     s->client = wire_client_get_user_data(c);
     s->id = next_surface++;
+    s->current.scale = s->pending.scale = 1;
     /* Surfaces without a role are cascaded; roles reposition them. */
     int n = (s->id - 1) % 8;
     s->x = 40 + n * 30;
@@ -282,6 +416,22 @@ static void bind_output(struct wire_client *c, void *data, uint32_t version, uin
         return;
     output_send_geometry(r, 0, 0, screen_w, screen_h);
     output_send_mode(r, screen_w, screen_h, 60);
+    output_send_scale(r, 1);
+    output_send_transform(r, 0);
+    output_send_done(r);
+}
+
+int surface_accepts_input(const struct csurface *s, int x, int y)
+{
+    int lx = x - s->x, ly = y - s->y;
+    if (lx < 0 || ly < 0 || lx >= s->width || ly >= s->height)
+        return 0;
+    if (!s->current.input_set)
+        return 1;
+    for (int i = 0; i < s->current.ninput; i++)
+        if (rect_contains(s->current.input[i], lx, ly))
+            return 1;
+    return 0;
 }
 
 /* ---- clients ---- */
@@ -290,6 +440,7 @@ static void client_gone(struct wire_client *wc, void *data)
 {
     struct client *c = data;
     data_client_gone(c);
+    text_client_gone(c);
     comp_log("client %d disconnected", c->number);
     free(c);
 }

@@ -66,6 +66,10 @@ static const struct wire_message surface_requests[] = {
     { "set_opaque_region", "a", 1, (const char *const[]){ NULL }, 0 },
     { "commit", "", 0, (const char *const[]){ NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_input_region", "a", 1, (const char *const[]){ NULL }, 0 },
+    { "set_buffer_scale", "i", 1, (const char *const[]){ NULL }, 0 },
+    { "set_buffer_transform", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "damage_buffer", "iiii", 4, (const char *const[]){ NULL, NULL, NULL, NULL }, 0 },
 };
 static const struct wire_message surface_events[] = {
     { "enter", "o", 1, (const char *const[]){ "output" }, 0 },
@@ -76,6 +80,9 @@ static const struct wire_message output_requests[] = {
 static const struct wire_message output_events[] = {
     { "geometry", "iiii", 4, (const char *const[]){ NULL, NULL, NULL, NULL }, 0 },
     { "mode", "iii", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
+    { "scale", "i", 1, (const char *const[]){ NULL }, 0 },
+    { "transform", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "done", "", 0, (const char *const[]){ NULL }, 0 },
 };
 const struct wire_interface display_interface = { "display", 1, 2, display_requests, 2, display_events };
 const struct wire_interface registry_interface = { "registry", 1, 1, registry_requests, 2, registry_events };
@@ -84,5 +91,5 @@ const struct wire_interface compositor_interface = { "compositor", 1, 1, composi
 const struct wire_interface shm_interface = { "shm", 1, 1, shm_requests, 1, shm_events };
 const struct wire_interface shm_pool_interface = { "shm_pool", 1, 3, shm_pool_requests, 0, shm_pool_events };
 const struct wire_interface buffer_interface = { "buffer", 1, 1, buffer_requests, 1, buffer_events };
-const struct wire_interface surface_interface = { "surface", 1, 6, surface_requests, 1, surface_events };
-const struct wire_interface output_interface = { "output", 1, 0, output_requests, 2, output_events };
+const struct wire_interface surface_interface = { "surface", 1, 10, surface_requests, 1, surface_events };
+const struct wire_interface output_interface = { "output", 1, 0, output_requests, 5, output_events };

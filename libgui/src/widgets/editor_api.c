@@ -14,6 +14,7 @@ struct widget *editor_new(struct widget *parent)
     ed->rows_dirty = 1;
     ed->wanted_x = -1;
     w->focusable = 1;
+    w->accepts_text = 1;
     widget_set_stretch(w, 1, 1);
     return w;
 }

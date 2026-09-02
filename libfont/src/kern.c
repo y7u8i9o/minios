@@ -276,17 +276,52 @@ int font_kern(const struct ofont *f, int left, int right)
 
 /* ---- shaping ---- */
 
+static uint32_t utf8_next(const char *s, int n, int *at)
+{
+    int i = *at;
+    unsigned c = (unsigned char)s[i++];
+    if (c < 0x80) {
+        *at = i;
+        return c;
+    }
+    int need = c >= 0xc2 && c <= 0xdf ? 1 : c >= 0xe0 && c <= 0xef ? 2 : c >= 0xf0 && c <= 0xf4 ? 3 : -1;
+    uint32_t cp = need == 1 ? c & 0x1f : need == 2 ? c & 0x0f : need == 3 ? c & 7 : 0xfffd;
+    if (need < 0) {
+        *at = i;
+        return 0xfffd;
+    }
+    for (int k = 0; k < need; k++) {
+        if (i >= n || ((unsigned char)s[i] & 0xc0) != 0x80) {
+            *at = i;
+            return 0xfffd;
+        }
+        cp = cp << 6 | ((unsigned char)s[i++] & 0x3f);
+    }
+    if ((need == 2 && cp < 0x800) || (need == 3 && cp < 0x10000) ||
+        cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+        *at = i;
+        return 0xfffd;
+    }
+    *at = i;
+    return cp;
+}
+
 int font_shape(const struct ofont *f, const char *text, int n, int px, struct font_shaped *out, int max, int32_t *width)
 {
     int32_t pen = 0;
     int prev = 0, count = 0;
-    for (int i = 0; (n < 0 ? text[i] != '\0' : i < n); i++) {
-        int g = font_glyph_index(f, (unsigned char)text[i]);
+    int len = n < 0 ? (int)strlen(text) : n;
+    for (int i = 0; i < len;) {
+        int byte = i;
+        uint32_t cp = utf8_next(text, len, &i);
+        int g = font_glyph_index(f, cp);
         if (prev && g)
             pen += font_scale(f, font_kern(f, prev, g), px);
         if (count < max) {
             out[count].glyph = g;
             out[count].x = pen;
+            out[count].byte = byte;
+            out[count].codepoint = cp;
         }
         count++;
         pen += font_scale(f, font_advance(f, g), px);

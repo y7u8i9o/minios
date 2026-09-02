@@ -1,17 +1,17 @@
-comp: started 1024x768
-comp: client [0-9]+ connected
-comp: toplevel 1 'alpha' mapped at 40,60 300x200
-comp: toplevel 2 'beta' mapped at 70,90 240x160
-comp: toplevel 2 activated
+x12: started 1024x768
+x12: client [0-9]+ connected
+x12: toplevel 1 'alpha' mapped at 40,60 300x200
+x12: toplevel 2 'beta' mapped at 70,90 240x160
+x12: toplevel 2 activated
 guitest: window 2 mouse down at 30,30
 guitest: window 2 key 0x1e char 97
-comp: toplevel 1 activated
-comp: toplevel 1 close requested
+x12: toplevel 1 activated
+x12: toplevel 1 close requested
 guitest: window 1 close request
-comp: toplevel 1 destroyed
-comp: toplevel 2 close requested
-comp: toplevel 2 destroyed
+x12: toplevel 1 destroyed
+x12: toplevel 2 close requested
+x12: toplevel 2 destroyed
 guitest: done after 1 keys
-comp: stopped
+x12: stopped
 gui: server stopped, console restored
 TEST PASS

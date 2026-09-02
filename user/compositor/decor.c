@@ -28,6 +28,42 @@ struct rect decor_frame(const struct csurface *s)
     return r;
 }
 
+struct rect decor_extent(const struct csurface *s)
+{
+    struct rect r = decor_frame(s);
+    if (!s->toplevel->maximized) {
+        r.x -= SHADOW;
+        r.y -= SHADOW;
+        r.w += 2 * SHADOW;
+        r.h += 2 * SHADOW;
+    }
+    return r;
+}
+
+void decor_draw_shadow(struct csurface *s, struct rect clip)
+{
+    if (!decor_has(s) || s->toplevel->maximized)
+        return;
+    struct rect frame = decor_frame(s);
+    struct rect r = rect_intersect(decor_extent(s), clip);
+    for (int y = r.y; y < r.y + r.h; y++)
+        for (int x = r.x; x < r.x + r.w; x++) {
+            if (rect_contains(frame, x, y))
+                continue;
+            int dx = x < frame.x ? frame.x - x : x >= frame.x + frame.w ? x - (frame.x + frame.w - 1) : 0;
+            int dy = y < frame.y ? frame.y - y : y >= frame.y + frame.h ? y - (frame.y + frame.h - 1) : 0;
+            int d = dx > dy ? dx : dy;
+            int a = (SHADOW + 1 - d) * 8;
+            if (a <= 0)
+                continue;
+            uint32_t *p = &back.pixels[(size_t)y * back.stride + x];
+            uint32_t c = *p, ia = (uint32_t)(256 - a);
+            *p = ((c >> 16 & 0xff) * ia >> 8) << 16 |
+                 ((c >> 8 & 0xff) * ia >> 8) << 8 |
+                 ((c & 0xff) * ia >> 8);
+        }
+}
+
 static struct rect button_rect(const struct csurface *s, int n)
 {
     struct rect r = { s->x + s->width - 16 - n * (TITLE_BTN + 2), s->y - TITLE_H + 2, TITLE_BTN, TITLE_BTN };

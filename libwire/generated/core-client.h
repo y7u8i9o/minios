@@ -76,10 +76,17 @@ struct wire_proxy * surface_frame(struct wire_proxy *surface);
 void surface_set_opaque_region(struct wire_proxy *surface, const struct wire_array * rects);
 void surface_commit(struct wire_proxy *surface);
 void surface_destroy(struct wire_proxy *surface);
+void surface_set_input_region(struct wire_proxy *surface, const struct wire_array * rects);
+void surface_set_buffer_scale(struct wire_proxy *surface, int32_t scale);
+void surface_set_buffer_transform(struct wire_proxy *surface, uint32_t transform);
+void surface_damage_buffer(struct wire_proxy *surface, int32_t x, int32_t y, int32_t width, int32_t height);
 
 struct output_listener {
     void (*geometry)(void *user, struct wire_proxy *self, int32_t x, int32_t y, int32_t width, int32_t height);
     void (*mode)(void *user, struct wire_proxy *self, int32_t width, int32_t height, int32_t refresh);
+    void (*scale)(void *user, struct wire_proxy *self, int32_t factor);
+    void (*transform)(void *user, struct wire_proxy *self, uint32_t transform);
+    void (*done)(void *user, struct wire_proxy *self);
 };
 static inline int output_add_listener(struct wire_proxy *p, const struct output_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }

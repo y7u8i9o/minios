@@ -8,16 +8,19 @@
 #include "shell-server.h"
 #include "seat-server.h"
 #include "data-server.h"
+#include "text-server.h"
 #include "debug-server.h"
 
 #define FORMAT_XRGB8888 1
 #define FORMAT_ARGB8888 2
 #define MAX_DAMAGE 16
+#define MAX_REGION 32
 #define FRAME_MS 16
 #define TITLE_H 20
 #define BORDER 1
 #define GRIP 12
 #define TITLE_BTN 14
+#define SHADOW 4
 
 enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
@@ -26,6 +29,8 @@ enum { ANCHOR_NONE, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_LEFT, ANCHOR_RIGHT, ANCHOR
        ANCHOR_TOP_RIGHT, ANCHOR_BOTTOM_RIGHT };
 enum { LAYER_ANCHOR_TOP = 1, LAYER_ANCHOR_BOTTOM = 2, LAYER_ANCHOR_LEFT = 4, LAYER_ANCHOR_RIGHT = 8 };
 enum { EDGE_TOP = 1, EDGE_BOTTOM = 2, EDGE_LEFT = 4, EDGE_RIGHT = 8 };
+enum { ADJUST_FLIP_X = 1, ADJUST_FLIP_Y = 2, ADJUST_SLIDE_X = 4, ADJUST_SLIDE_Y = 8,
+       ADJUST_RESIZE_X = 16, ADJUST_RESIZE_Y = 32 };
 
 struct pool {
     struct wire_resource *res;
@@ -50,6 +55,12 @@ struct surface_state {
     int ndamage;
     struct wire_resource *callbacks[8];
     int ncallbacks;
+    struct rect opaque[MAX_REGION], input[MAX_REGION];
+    int nopaque, ninput;
+    int opaque_set, input_set;
+    int attach_x, attach_y;
+    int scale, transform;
+    int state_set;
 };
 
 struct positioner {
@@ -71,6 +82,8 @@ struct toplevel {
     int handle_count;
     int number;                             /* creation order, used by the logs */
     int placed;
+    struct toplevel *parent;
+    int modal;
 };
 
 struct popup {
@@ -80,6 +93,8 @@ struct popup {
     int grab;
     struct positioner pos;
     uint32_t serial;
+    uint32_t acked_serial;
+    int pending_w, pending_h;
 };
 
 struct layer {
@@ -88,6 +103,8 @@ struct layer {
     int anchor, exclusive, w, h, interactive;
     uint32_t layer;
     uint32_t serial;
+    uint32_t acked_serial;
+    int pending_w, pending_h;
 };
 
 struct csurface {
@@ -113,6 +130,9 @@ struct client {
     int number;
     long stall_since;                       /* uptime when its socket first stayed full */
     struct wire_resource *pointer, *keyboard, *data_device;
+    struct wire_resource *text_input;
+    uint32_t input_serials[16];
+    int ninput_serials;
     struct wire_resource *seat_res;
     struct wire_resource *manager;
 };
@@ -138,6 +158,8 @@ struct csurface *surface_first(void);
 struct csurface *surface_by_resource(struct wire_resource *r);
 void surface_unmap(struct csurface *s);
 struct rect surface_rect(const struct csurface *s);
+int surface_accepts_input(const struct csurface *s, int x, int y);
+int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buffer *b);
 /* scene.c */
 void scene_init(void);
 void scene_damage(struct rect r);
@@ -145,6 +167,7 @@ void scene_damage_all(void);
 int scene_has_damage(void);
 void scene_compose(void);
 void scene_set_cursor(int x, int y);
+void scene_cursor_changed(void);
 void scene_stats(void);
 struct csurface *scene_surface_at(int x, int y);           /* content hit, topmost */
 int scene_order(struct csurface **out, int max);           /* bottom to top */
@@ -165,12 +188,15 @@ void toplevel_close(struct toplevel *t);
 void toplevel_configure(struct toplevel *t, int w, int h);
 void toplevel_move(struct toplevel *t, int x, int y);
 struct toplevel *toplevel_focused(void);
+int toplevel_blocked(struct toplevel *t);        /* activates its modal child */
 void toplevel_cycle(void);
 void popup_dismiss_all(void);
 struct csurface *popup_grab_surface(void);
 /* decor.c */
 struct rect decor_frame(const struct csurface *s);         /* frame including the title bar */
+struct rect decor_extent(const struct csurface *s);        /* frame plus server-side shadow */
 int decor_has(const struct csurface *s);
+void decor_draw_shadow(struct csurface *s, struct rect clip);
 void decor_draw(struct csurface *s, struct rect clip);
 /* Returns 1 when the press at the cursor was consumed by decorations. */
 int decor_press(struct csurface *s, int button);
@@ -188,6 +214,18 @@ struct csurface *seat_keyboard_focus(void);
 void seat_surface_gone(struct csurface *s);
 uint32_t seat_last_serial(void);
 int seat_modifiers(void);
+int seat_validate_serial(struct client *client, uint32_t serial);
+int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t serial);
+int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t serial);
+struct csurface *seat_cursor_surface(void);
+int seat_cursor_hidden(void);
+int seat_translate(uint32_t key, int mods);
+/* text.c */
+void text_init(struct wire_server *srv);
+void text_focus_changed(struct csurface *old, struct csurface *now);
+void text_key(uint32_t key, int pressed, int mods);
+void text_surface_gone(struct csurface *s);
+void text_client_gone(struct client *c);
 /* data.c */
 void data_init(struct wire_server *srv);
 void data_keyboard_focus_changed(struct client *c);

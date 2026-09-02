@@ -26,6 +26,7 @@ struct editor {
     int *row_line, *row_start, *row_len;
     int nrows, rows_dirty, rows_width;
     int wanted_x;               /* column pixel to keep on vertical moves */
+    char preedit[WSRV_TITLE_MAX];
 };
 
 #define LH(ed) (widget_theme(&(ed)->w)->font->height + 2)

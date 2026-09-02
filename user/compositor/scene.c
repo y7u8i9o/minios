@@ -61,22 +61,39 @@ int scene_has_damage(void)
 
 static struct rect cursor_rect(void)
 {
+    struct csurface *s = seat_cursor_surface();
+    if (seat_cursor_hidden())
+        return (struct rect){ 0, 0, 0, 0 };
+    if (s && s->mapped && s->current.buffer)
+        return surface_rect(s);
     struct rect r = { shown_x, shown_y, 12, 18 };
     return r;
 }
 
+void scene_cursor_changed(void)
+{
+    struct rect r = cursor_rect();
+    if (!rect_empty(r))
+        scene_damage(r);
+}
+
 void scene_set_cursor(int x, int y)
 {
-    scene_damage(cursor_rect());
+    scene_cursor_changed();
     shown_x = x;
     shown_y = y;
-    scene_damage(cursor_rect());
+    struct csurface *s = seat_cursor_surface();
+    if (s) {
+        s->x = x - s->hotspot_x;
+        s->y = y - s->hotspot_y;
+    }
+    scene_cursor_changed();
 }
 
 /* Extent drawn for a surface: its decorations frame when it has one. */
 static struct rect extent(const struct csurface *s)
 {
-    return decor_has(s) ? decor_frame(s) : surface_rect(s);
+    return decor_has(s) ? decor_extent(s) : surface_rect(s);
 }
 
 static int visible(const struct csurface *s)
@@ -97,7 +114,9 @@ static long sort_key(const struct csurface *s)
     switch (s->role) {
     case ROLE_LAYER: return s->layer->layer >= 2 ? 3000000L + s->id : s->id;
     case ROLE_TOPLEVEL: return 1000000L + s->stack;
-    case ROLE_POPUP: return 4000000L + s->id;
+    case ROLE_POPUP:
+        return s->popup && s->popup->parent && s->popup->parent->role == ROLE_LAYER &&
+               s->popup->parent->layer->layer >= 2 ? 3500000L + s->id : 2000000L + s->id;
     case ROLE_DND_ICON: return 5000000L + s->id;
     default: return 2000000L + s->id;
     }
@@ -124,7 +143,7 @@ struct csurface *scene_surface_at(int x, int y)
     struct csurface *order[256];
     int n = scene_order(order, 256);
     for (int i = n - 1; i >= 0; i--)
-        if (order[i]->role != ROLE_DND_ICON && rect_contains(surface_rect(order[i]), x, y))
+        if (order[i]->role != ROLE_DND_ICON && surface_accepts_input(order[i], x, y))
             return order[i];
     return NULL;
 }
@@ -170,7 +189,9 @@ static void draw_surface(struct csurface *s, struct rect clip)
     struct rect r = rect_intersect(surface_rect(s), clip);
     if (rect_empty(r))
         return;
-    for (int j = 0; j < r.h; j++) {
+    int scale = s->current.scale > 0 ? s->current.scale : 1;
+    if (scale == 1 && s->current.transform == 0) {
+      for (int j = 0; j < r.h; j++) {
         int sy = r.y - s->y + j;
         const uint32_t *from = (const uint32_t *)(b->pool->map + b->offset + (size_t)sy * b->stride) + (r.x - s->x);
         uint32_t *to = back.pixels + (size_t)(r.y + j) * back.stride + r.x;
@@ -190,11 +211,51 @@ static void draw_surface(struct csurface *s, struct rect clip)
                         (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
             }
         }
+      }
+      return;
+    }
+    int ow = b->width / scale, oh = b->height / scale;
+    for (int j = 0; j < r.h; j++) {
+        uint32_t *to = back.pixels + (size_t)(r.y + j) * back.stride + r.x;
+        int ly = r.y - s->y + j;
+        for (int i = 0; i < r.w; i++) {
+            int lx = r.x - s->x + i, ox, oy;
+            switch (s->current.transform) {
+            case 1: ox = ly; oy = oh - 1 - lx; break;
+            case 2: ox = ow - 1 - lx; oy = oh - 1 - ly; break;
+            case 3: ox = ow - 1 - ly; oy = lx; break;
+            default: ox = lx; oy = ly; break;
+            }
+            if (ox < 0 || oy < 0 || ox >= ow || oy >= oh)
+                continue;
+            const uint32_t *row = (const uint32_t *)(b->pool->map + b->offset + (size_t)(oy * scale) * b->stride);
+            uint32_t c = row[ox * scale];
+            if (b->format == FORMAT_XRGB8888) {
+                to[i] = c & 0x00ffffff;
+            } else {
+                uint32_t a = c >> 24;
+                if (a == 255) to[i] = c & 0x00ffffff;
+                else if (a) {
+                    uint32_t d = to[i], ia = 256 - (a + (a >> 7));
+                    a += a >> 7;
+                    to[i] = (((d >> 16 & 0xff) * ia + (c >> 16 & 0xff) * a) >> 8) << 16 |
+                            (((d >> 8 & 0xff) * ia + (c >> 8 & 0xff) * a) >> 8) << 8 |
+                            (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
+                }
+            }
+        }
     }
 }
 
 static void draw_cursor(struct rect clip)
 {
+    struct csurface *cursor = seat_cursor_surface();
+    if (seat_cursor_hidden())
+        return;
+    if (cursor && cursor->mapped && cursor->current.buffer) {
+        draw_surface(cursor, clip);
+        return;
+    }
     static const char *shape[18] = {
         "X...........", "XX..........", "X.X.........", "X..X........", "X...X.......",
         "X....X......", "X.....X.....", "X......X....", "X.......X...", "X........X..",
@@ -216,33 +277,45 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
 {
     struct rect pieces[MAX_PIECES];
     int np = 1;
-    pieces[0] = r;
-    for (int i = 0; i < n; i++)
-        if (!pieces_subtract(pieces, &np, surface_rect(order[i]))) {
-            pieces[0] = r;
-            np = 1;
-            break;
-        }
-    for (int i = 0; i < np; i++)
-        gfx_fill_rect(&back, pieces[i].x, pieces[i].y, pieces[i].w, pieces[i].h, (uint32_t)settings.desktop_color);
+    gfx_fill_rect(&back, r.x, r.y, r.w, r.h, (uint32_t)settings.desktop_color);
     for (int i = 0; i < n; i++) {
         struct csurface *s = order[i];
         pieces[0] = rect_intersect(extent(s), r);
         np = rect_empty(pieces[0]) ? 0 : 1;
         int exact = 1;
-        for (int j = i + 1; j < n && np; j++)
-            if (order[j]->current.buffer && order[j]->current.buffer->format == FORMAT_XRGB8888 &&
-                !pieces_subtract(pieces, &np, extent(order[j]))) {
-                exact = 0;
-                break;
+        for (int j = i + 1; j < n && np; j++) {
+            struct csurface *cover = order[j];
+            if (!cover->current.buffer)
+                continue;
+            if (cover->current.buffer->format == FORMAT_XRGB8888) {
+                struct rect opaque = decor_has(cover) ? decor_frame(cover) : surface_rect(cover);
+                if (!pieces_subtract(pieces, &np, opaque)) {
+                    exact = 0;
+                    break;
+                }
+            } else {
+                for (int q = 0; q < cover->current.nopaque && np; q++) {
+                    struct rect o = cover->current.opaque[q];
+                    o.x += cover->x;
+                    o.y += cover->y;
+                    if (!pieces_subtract(pieces, &np, o)) {
+                        exact = 0;
+                        break;
+                    }
+                }
+                if (!exact)
+                    break;
             }
+        }
         if (!exact) {
             pieces[0] = rect_intersect(extent(s), r);
             np = 1;
         }
         for (int k = 0; k < np; k++) {
-            if (decor_has(s))
+            if (decor_has(s)) {
+                decor_draw_shadow(s, pieces[k]);
                 decor_draw(s, pieces[k]);
+            }
             draw_surface(s, pieces[k]);
         }
     }

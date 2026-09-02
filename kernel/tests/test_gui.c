@@ -340,7 +340,7 @@ static struct proc *panel_proc;
 /* The compositor and the panel; returns the compositor. */
 static struct proc *start_server(void)
 {
-    struct proc *srv = proc_create_user("/bin/compositor", (char *const[]){ "compositor", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(600);
@@ -831,7 +831,7 @@ KTEST_DEFINE("gui_drag", test_gui_drag);
  * pixel at (10,10). */
 static struct proc *start_compositor(void)
 {
-    struct proc *srv = proc_create_user("/bin/compositor", (char *const[]){ "compositor", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(1200);
@@ -1069,7 +1069,7 @@ static void test_gui_kbd_restore(void)
     struct proc *first = proc_create_user("/bin/hello", (char *const[]){ "hello", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(first != NULL, "cannot start hello");
     proc_reap(first);
-    struct proc *srv = proc_create_user("/bin/compositor", (char *const[]){ "compositor", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(800);
@@ -1090,11 +1090,11 @@ static void test_gui_tools(void)
     ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
     int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/compsettings", (char *const[]){ "compsettings", "set", "frame_ms", "33", NULL },
+    struct proc *cl = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", "set", "frame_ms", "33", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(cl != NULL, "cannot start compsettings");
+    ktest_assert(cl != NULL, "cannot start x12settings");
     int status = proc_reap(cl);
-    ktest_assert(status == 0, "compsettings status 0x%x", status);
+    ktest_assert(status == 0, "x12settings status 0x%x", status);
     const char *tools[] = { "evtest", "sysmon", "logview", "hexview" };
     int cx = sw / 2, cy = sh / 2;
     for (int i = 0; i < 4; i++) {
@@ -1113,16 +1113,44 @@ static void test_gui_tools(void)
         status = proc_reap(cl);
         ktest_assert(status == 0, "%s status 0x%x", tools[i], status);
     }
-    cl = proc_create_user("/bin/compsettings", (char *const[]){ "compsettings", NULL }, (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(cl != NULL, "cannot start compsettings");
+    cl = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start x12settings");
     sleep_ms(1500);
     alt_key(0x3e);
     status = proc_reap(cl);
-    ktest_assert(status == 0, "compsettings window status 0x%x", status);
+    ktest_assert(status == 0, "x12settings window status 0x%x", status);
     stop_server(srv);
     kprintf("gui_tools: debugging tools ok\n");
 }
 KTEST_DEFINE("gui_tools", test_gui_tools);
+
+/* The Unicode viewer walks the whole code space once at startup to record
+ * which code points its font covers, so this test also measures that the
+ * window still appears promptly. */
+static void test_gui_unicode(void)
+{
+    ktest_assert(bootinfo.have_framebuffer, "no framebuffer");
+    int sw = (int)bootinfo.framebuffer.width, sh = (int)bootinfo.framebuffer.height;
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/unicode", (char *const[]){ "unicode", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start unicode");
+    sleep_ms(2000);
+    ktest_assert(pixel(42, 50) == 0x00204060, "unicode window has an active title bar: %08x", pixel(42, 50));
+    /* Click a cell in the grid, which starts below the toolbar and the
+     * preview panel, and let the selection repaint. */
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 40 + 100, 60 + 230, 0);
+    mouse_click(1);
+    sleep_ms(400);
+    ktest_assert(pixel(42, 50) == 0x00204060, "unicode window survives a grid click: %08x", pixel(42, 50));
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "unicode status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_unicode: viewer ok\n");
+}
+KTEST_DEFINE("gui_unicode", test_gui_unicode);
 
 /* Desktop layer (wallpaper, icons, context menus) and the settings
  * application: the wallpaper replaces the plain desktop colour, a double

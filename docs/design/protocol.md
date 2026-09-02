@@ -1,6 +1,6 @@
-# Display protocol and libwire
+# X12 display protocol and libwire
 
-M24 introduces the protocol between the compositor and its clients and
+M24 introduces the protocol between X12 and its clients and
 the library both sides use. It is Wayland inspired but its own: object
 ids, opcodes and a binary wire format over a Unix domain socket with
 descriptor passing, interfaces described in XML, and a scanner that
@@ -19,7 +19,7 @@ generates the C marshalling code. No `wl_` or `xdg_` names are used.
   (`i u f s a o n h`, with `?` before a nullable argument).
 - Clients allocate ids from 1 upwards and reuse an id after the
   server's `display.delete_id`; the server allocates from `0xff000000`.
-- The compositor listens on the abstract socket name `display`
+- X12 listens on the abstract socket name `display`
   (`user/compositor/main.c`); clients connect through
   `wire_display_connect`.
 
@@ -30,9 +30,13 @@ get_registry; error, delete_id), `registry` (bind; global,
 global_remove), `callback` (done), `compositor` (create_surface),
 `shm` (create_pool; format), `shm_pool` (create_buffer, resize,
 destroy), `buffer` (destroy; release), `surface` (attach, damage,
-frame, set_opaque_region, commit, destroy; enter) and `output`
-(geometry, mode). Requests marked `type="destructor"` destroy their
-object; the server removes the resource after the handler ran.
+frame, set_opaque_region, set_input_region, set_buffer_scale,
+set_buffer_transform, damage_buffer, commit, destroy; enter) and
+`output` (geometry, mode, scale, transform, done). The shell protocol
+adds toplevel parent/modal state and popup configure/acknowledge/grab;
+`protocol/text.xml` carries UTF-8 text-input and preedit events.
+Requests marked `type="destructor"` destroy their object; the server
+removes the resource after the handler ran.
 
 `tools/wscan/wscan.py` reads the XML and writes into
 `libwire/generated/`: `core-client.h/.c` (one function per request,

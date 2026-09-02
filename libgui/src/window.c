@@ -31,9 +31,9 @@ static void layout_tree(struct widget *w)
             layout_tree(c);
 }
 
-static void paint_tree(struct widget *w, struct painter *p, int force, struct rect *damage, int *has)
+static void paint_tree(struct widget *w, struct painter *p, int force, struct rect *damage, int *has, struct widget *skip)
 {
-    if (!w->visible)
+    if (!w->visible || w == skip)
         return;
     painter_push(p, w->x, w->y, w->w, w->h);
     if (force || w->dirty) {
@@ -45,11 +45,11 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
             *has = 1;
         }
         for (struct widget *c = w->first; c; c = c->next)
-            paint_tree(c, p, 1, damage, has);
+            paint_tree(c, p, 1, damage, has, skip);
     } else if (w->child_dirty) {
         for (struct widget *c = w->first; c; c = c->next)
             if (c->dirty || c->child_dirty)
-                paint_tree(c, p, 0, damage, has);
+                paint_tree(c, p, 0, damage, has, skip);
     }
     w->dirty = 0;
     w->child_dirty = 0;
@@ -76,9 +76,18 @@ struct rect window_paint(struct widget *window)
     painter_init(&p, &ws->win->surf, app_theme(window->app));
     struct rect damage = none;
     int has = 0;
-    paint_tree(window, &p, window->dirty, &damage, &has);
+    paint_tree(window, &p, window->dirty, &damage, &has, ws->popup_win ? ws->popup : NULL);
     if (has)
         gui_damage(ws->win, damage.x, damage.y, damage.w, damage.h);
+    if (ws->popup_win && ws->popup) {
+        struct painter pp;
+        painter_init(&pp, &ws->popup_win->surf, app_theme(window->app));
+        struct rect pd = none;
+        int phas = 0;
+        paint_tree(ws->popup, &pp, 1, &pd, &phas, NULL);
+        if (phas)
+            gui_damage(ws->popup_win, pd.x, pd.y, pd.w, pd.h);
+    }
     return has ? damage : none;
 }
 
@@ -86,24 +95,32 @@ struct rect window_paint(struct widget *window)
 
 /* ---- popups and tooltips ---- */
 
-void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height)
+static void popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height, int grab)
 {
     window_popup_close(window);
     struct window_state *ws = window_state_of(window);
     w->floating = 1;
     if (w->parent != window)
         widget_add(window, w);
-    w->x = x;
-    w->y = y;
+    ws->popup_win = gui_has_popup_surfaces() && ws->win ? gui_create_popup_window(ws->win, x, y, width, height, grab) : NULL;
+    w->x = ws->popup_win ? 0 : x;
+    w->y = ws->popup_win ? 0 : y;
     w->w = width;
     w->h = height;
-    if (x + width > window->w) w->x = window->w - width;
-    if (y + height > window->h) w->y = window->h - height;
-    if (w->x < 0) w->x = 0;
-    if (w->y < 0) w->y = 0;
+    if (!ws->popup_win) {
+        if (x + width > window->w) w->x = window->w - width;
+        if (y + height > window->h) w->y = window->h - height;
+        if (w->x < 0) w->x = 0;
+        if (w->y < 0) w->y = 0;
+    }
     ws->popup = w;
     widget_relayout(w);
     widget_invalidate(window);
+}
+
+void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height)
+{
+    popup_open(window, w, x, y, width, height, 1);
 }
 
 void window_popup_close(struct widget *window)
@@ -113,6 +130,10 @@ void window_popup_close(struct widget *window)
         return;
     struct widget *p = ws->popup;
     ws->popup = NULL;
+    if (ws->popup_win) {
+        gui_destroy_window(ws->popup_win);
+        ws->popup_win = NULL;
+    }
     widget_destroy(p);
     widget_invalidate(window);
 }
@@ -133,9 +154,14 @@ static void tip_hide(struct widget *window)
         ws->tip_timer = NULL;
     }
     if (ws->tip) {
-        widget_destroy(ws->tip);
-        ws->tip = NULL;
-        widget_invalidate(window);
+        if (ws->tip == ws->popup) {
+            ws->tip = NULL;
+            window_popup_close(window);
+        } else {
+            widget_destroy(ws->tip);
+            ws->tip = NULL;
+            widget_invalidate(window);
+        }
     }
     ws->tip_owner = NULL;
 }
@@ -146,21 +172,16 @@ static void tip_show(void *arg)
     struct window_state *ws = window_state_of(window);
     ws->tip_timer = NULL;
     struct widget *o = ws->tip_owner;
-    if (!o || !o->tip)
+    if (!o || !o->tip || ws->popup)
         return;
     struct widget *l = label_new(NULL, o->tip);
-    l->floating = 1;
-    widget_add(window, l);
     const struct theme *t = app_theme(window->app);
     int ax, ay;
     widget_abs(o, &ax, &ay);
     l->w = gfx_text_width_font(t->font, o->tip, -1) + 8;
     l->h = t->font->height + 6;
-    l->x = ax;
-    l->y = ay + o->h + 2;
-    if (l->x + l->w > window->w) l->x = window->w - l->w;
-    if (l->y + l->h > window->h) l->y = ay - l->h - 2;
     l->value = 1;                       /* label paints as a tooltip */
+    popup_open(window, l, ax, ay + o->h + 2, l->w, l->h, 0);
     ws->tip = l;
     widget_invalidate(l);
 }
@@ -193,14 +214,16 @@ static void set_hover(struct widget *window, struct widget *w)
 static void mouse_message(struct widget *window, struct wmsg *m)
 {
     struct window_state *ws = window_state_of(window);
-    struct widget *target = ws->capture ? ws->capture : widget_at(window, m->a, m->b);
+    int from_popup = ws->popup_win && m->window == ws->popup_win->id;
+    struct widget *root = from_popup ? ws->popup : window;
+    struct widget *target = ws->capture ? ws->capture : widget_at(root, m->a, m->b);
     if (ws->tip && target == ws->tip)
         target = NULL;
     if (m->d == WMOUSE_MOVE || m->d == WMOUSE_DOWN)
         set_hover(window, ws->capture ? ws->capture : target);
     if (m->d == WMOUSE_DOWN) {
         tip_hide(window);
-        if (ws->popup && !inside(ws->popup, target)) {
+        if (ws->popup && !from_popup && !inside(ws->popup, target)) {
             window_popup_close(window);
             return;
         }
@@ -209,6 +232,12 @@ static void mouse_message(struct widget *window, struct wmsg *m)
         return;
     int ax, ay;
     widget_abs(target, &ax, &ay);
+    if (from_popup && ws->popup) {
+        int px, py;
+        widget_abs(ws->popup, &px, &py);
+        ax -= px;
+        ay -= py;
+    }
     struct event e = { .x = m->a - ax, .y = m->b - ay, .button = m->c, .mods = 0 };
     switch (m->d) {
     case WMOUSE_DOWN:
@@ -287,8 +316,19 @@ static void key_message(struct widget *window, struct wmsg *m)
     widget_emit(window, "key", &k);
 }
 
+static void text_message(struct widget *window, struct wmsg *m, enum event_type type)
+{
+    struct window_state *ws = window_state_of(window);
+    struct widget *target = ws->focus ? ws->focus : window;
+    if (ws->popup && !inside(ws->popup, target))
+        target = ws->popup;
+    struct event e = { .type = type, .text = m->text, .before = m->a, .after = m->b };
+    widget_dispatch(target, &e);
+}
+
 void window_message(struct widget *window, struct wmsg *m)
 {
+    struct window_state *ws = window_state_of(window);
     switch (m->type) {
     case WM_MOUSE:
         mouse_message(window, m);
@@ -296,22 +336,47 @@ void window_message(struct widget *window, struct wmsg *m)
     case WM_KEY:
         key_message(window, m);
         break;
+    case WM_TEXT:
+        text_message(window, m, EV_TEXT);
+        break;
+    case WM_PREEDIT:
+        text_message(window, m, EV_PREEDIT);
+        break;
+    case WM_TEXT_DELETE:
+        text_message(window, m, EV_TEXT_DELETE);
+        break;
     case WM_FOCUS: {
         struct sig_change c = { m->a, NULL };
         widget_emit(window, "focus", &c);
         break;
     }
     case WM_RESIZED: {
+        if (ws->popup_win && m->window == ws->popup_win->id) {
+            ws->popup->w = m->a;
+            ws->popup->h = m->b;
+            widget_relayout(ws->popup);
+            break;
+        }
         widget_relayout(window);
         struct sig_resize r = { m->a, m->b };
         widget_emit(window, "resize", &r);
         break;
     }
     case WM_CLOSE:
+        if (ws->popup_win && m->window == ws->popup_win->id) {
+            window_popup_close(window);
+            break;
+        }
         if (!widget_emit(window, "close", NULL))
             window_close(window);
         break;
     }
+}
+
+int window_owns_id(struct widget *window, int id)
+{
+    struct window_state *ws = window_state_of(window);
+    return (ws->win && ws->win->id == id) || (ws->popup_win && ws->popup_win->id == id);
 }
 
 void window_close(struct widget *window)
@@ -350,6 +415,8 @@ static void window_destroy(struct widget *w)
     struct window_state *ws = window_state_of(w);
     if (ws->tip_timer && w->app)
         app_timer_remove(w->app, ws->tip_timer);
+    if (ws->popup_win)
+        gui_destroy_window(ws->popup_win);
     if (ws->win)
         gui_destroy_window(ws->win);
     ws->win = NULL;

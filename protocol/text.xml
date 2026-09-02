@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Text input separates physical key events from committed UTF-8.  The
+     manager is intentionally provider-neutral: X12's built-in Unicode
+     composer is the first input method, and another provider can drive
+     the same preedit/commit contract later. -->
+<protocol name="text">
+  <interface name="text_input_manager" version="1">
+    <request name="get_text_input">
+      <arg name="id" type="new_id" interface="text_input"/>
+      <arg name="seat" type="object" interface="seat"/>
+    </request>
+  </interface>
+
+  <interface name="text_input" version="1">
+    <request name="enable"><arg name="surface" type="object" interface="surface"/></request>
+    <request name="disable"/>
+    <request name="set_surrounding_text">
+      <arg name="text" type="string"/><arg name="cursor" type="uint"/><arg name="anchor" type="uint"/>
+    </request>
+    <request name="set_content_type"><arg name="hints" type="uint"/><arg name="purpose" type="uint"/></request>
+    <request name="commit"><arg name="serial" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="enter"><arg name="surface" type="object" interface="surface"/></event>
+    <event name="leave"><arg name="surface" type="object" interface="surface"/></event>
+    <event name="preedit_string"><arg name="text" type="string"/><arg name="cursor_begin" type="int"/><arg name="cursor_end" type="int"/></event>
+    <event name="commit_string"><arg name="text" type="string"/></event>
+    <event name="delete_surrounding_text"><arg name="before" type="uint"/><arg name="after" type="uint"/></event>
+    <event name="done"><arg name="serial" type="uint"/></event>
+  </interface>
+</protocol>

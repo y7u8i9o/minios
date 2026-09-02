@@ -91,12 +91,12 @@ with four tabs:
 Apply writes `/etc/desktop.conf`, which the desktop client applies. The
 file type tab writes `/etc/mime.apps` immediately. `settings set KEY
 VALUE` changes one entry of `/etc/desktop.conf` without a window.
-`settings` is distinct from `compsettings`, which edits the
-compositor's live parameters through the debug protocol.
+`settings` is distinct from `x12settings`, which edits X12's live
+parameters through the debug protocol.
 
 ## Session
 
-`startgui` starts the compositor, the panel and the desktop, then the
+`startgui` starts X12, the panel and the desktop, then the
 requested program. A desktop or panel that ends abnormally is
 restarted up to three times. The `gui_desktop` boot test covers the
 wallpaper, opening a launcher by double click, both context menus, a

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <font/font.h>
-#include <font/font.h>
+#include <gui/utf8.h>
 
 static struct font builtin;
 static uint32_t builtin_bits[256][GFX_FONT_H];
@@ -86,6 +86,12 @@ struct font *gfx_font_open_ttf(const char *path, int px)
     return f;
 }
 
+void gfx_font_set_fallback(struct font *f, const struct font *fallback)
+{
+    if (f)
+        f->fallback = fallback;
+}
+
 void gfx_font_free(struct font *f)
 {
     if (f && f != &builtin) {
@@ -125,18 +131,81 @@ void gfx_blend_mask(struct surface *s, int x, int y, const uint8_t *mask, int w,
     }
 }
 
+struct gui_glyph {
+    const struct font *font;
+    int glyph, byte;
+    int32_t x;
+};
+
+static int combining(uint32_t cp)
+{
+    return (cp >= 0x0300 && cp <= 0x036f) || (cp >= 0x1ab0 && cp <= 0x1aff) ||
+           (cp >= 0x1dc0 && cp <= 0x1dff) || (cp >= 0x20d0 && cp <= 0x20ff) ||
+           (cp >= 0xfe20 && cp <= 0xfe2f);
+}
+
+static int shape_outline(const struct font *f, const char *text, int n,
+                         struct gui_glyph *out, int max, int32_t *width)
+{
+    int len = n < 0 ? (int)strlen(text) : n, count = 0;
+    int32_t pen = 0, base_x = 0, base_advance = 0;
+    const struct font *prev_font = NULL;
+    int prev_glyph = 0;
+    for (int at = 0; at < len;) {
+        int byte = at;
+        uint32_t cp = gui_utf8_decode(text, len, &at);
+        const struct font *use = f;
+        int glyph = font_glyph_index(f->outline, cp);
+        if (!glyph && f->fallback && f->fallback->outline) {
+            int alt = font_glyph_index(f->fallback->outline, cp);
+            if (alt) {
+                use = f->fallback;
+                glyph = alt;
+            }
+        }
+        int32_t advance = font_scale(use->outline, font_advance(use->outline, glyph), use->px);
+        int32_t gx = pen;
+        if (combining(cp) && count) {
+            gx = base_x + (base_advance - advance) / 2;
+            advance = 0;
+        } else {
+            if (prev_glyph && prev_font == use)
+                pen += font_scale(use->outline, font_kern(use->outline, prev_glyph, glyph), use->px);
+            gx = pen;
+            base_x = gx;
+            base_advance = advance;
+        }
+        if (count < max) {
+            out[count].font = use;
+            out[count].glyph = glyph;
+            out[count].byte = byte;
+            out[count].x = gx;
+        }
+        count++;
+        pen += advance;
+        if (!combining(cp)) {
+            prev_font = use;
+            prev_glyph = glyph;
+        }
+    }
+    if (width)
+        *width = pen;
+    return count < max ? count : max;
+}
+
 static void text_outline(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg)
 {
     int n = (int)strlen(text);
-    struct font_shaped *sh = malloc((size_t)(n + 1) * sizeof *sh);
+    struct gui_glyph *sh = malloc((size_t)(n + 1) * sizeof *sh);
     if (!sh)
         return;
     int32_t width;
-    int count = font_shape(f->outline, text, n, f->px, sh, n, &width);
+    int count = shape_outline(f, text, n, sh, n, &width);
     if (bg != 0xffffffffu)
         gfx_fill_rect(s, x, y, (width + 63) >> 6, f->height, bg);
     for (int i = 0; i < count; i++) {
-        const struct font_glyph *g = font_render(f->outline, sh[i].glyph, f->px);
+        const struct font *use = sh[i].font;
+        const struct font_glyph *g = font_render(use->outline, sh[i].glyph, use->px);
         if (!g || !g->bitmap)
             continue;
         int gx = x + ((sh[i].x + 32) >> 6) + g->left;
@@ -152,8 +221,11 @@ void gfx_text_font(struct surface *s, const struct font *f, int x, int y, const 
         text_outline(s, f, x, y, text, fg, bg);
         return;
     }
-    for (; *text; text++) {
-        unsigned c = (unsigned char)*text;
+    int len = (int)strlen(text);
+    for (int at = 0; at < len;) {
+        unsigned c = gui_utf8_decode(text, len, &at);
+        if (c > 255)
+            c = '?';
         const uint32_t *glyph = f->bits + c * f->height;
         int adv = f->advance[c];
         if (bg != 0xffffffffu)
@@ -180,12 +252,14 @@ int gfx_text_width_font(const struct font *f, const char *text, int n)
 {
     if (f->outline) {
         int32_t width;
-        font_shape(f->outline, text, n, f->px, NULL, 0, &width);
+        shape_outline(f, text, n, NULL, 0, &width);
         return (width + 32) >> 6;
     }
-    int w = 0;
-    for (int i = 0; text[i] && (n < 0 || i < n); i++)
-        w += f->advance[(unsigned char)text[i]];
+    int w = 0, len = n < 0 ? (int)strlen(text) : n;
+    for (int i = 0; i < len;) {
+        unsigned c = gui_utf8_decode(text, len, &i);
+        w += f->advance[c <= 255 ? c : '?'];
+    }
     return w;
 }
 
@@ -193,26 +267,30 @@ int gfx_text_index_font(const struct font *f, const char *text, int n, int px)
 {
     if (f->outline) {
         int len = n < 0 ? (int)strlen(text) : n;
-        struct font_shaped *sh = malloc((size_t)(len + 1) * sizeof *sh);
+        struct gui_glyph *sh = malloc((size_t)(len + 1) * sizeof *sh);
         if (!sh)
             return 0;
         int32_t width;
-        int count = font_shape(f->outline, text, len, f->px, sh, len, &width);
-        int i;
+        int count = shape_outline(f, text, len, sh, len, &width);
+        int i, result = len;
         for (i = 0; i < count; i++) {
             int32_t next = i + 1 < count ? sh[i + 1].x : width;
-            if (px * 64 < (sh[i].x + next) / 2)
+            if (px * 64 < (sh[i].x + next) / 2) {
+                result = sh[i].byte;
                 break;
+            }
         }
         free(sh);
-        return i;
+        return result;
     }
-    int x = 0, i;
-    for (i = 0; text[i] && (n < 0 || i < n); i++) {
-        int adv = f->advance[(unsigned char)text[i]];
+    int x = 0, len = n < 0 ? (int)strlen(text) : n;
+    for (int i = 0; i < len;) {
+        int byte = i;
+        unsigned c = gui_utf8_decode(text, len, &i);
+        int adv = f->advance[c <= 255 ? c : '?'];
         if (px < x + adv / 2)
-            return i;
+            return byte;
         x += adv;
     }
-    return i;
+    return len;
 }

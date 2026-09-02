@@ -1,7 +1,7 @@
 comptest: keymap loaded, 2056 bytes
 comptest: repeat 30/500
 comptest: pointer motion 50,40
-comp: pointer enter surface 1
+x12: pointer enter surface 1
 comptest: pointer button 1 down serial
 comptest: pointer button 1 up serial
 comptest: pointer axis 15

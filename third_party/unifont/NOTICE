@@ -1,0 +1,25 @@
+GNU Unifont
+
+Copyright (C) 1998-2025 Roman Czyborra, Paul Hardy, and the Unifont
+contributors.
+
+This font is dual licensed. Either license may be used:
+
+  - SIL Open Font License, version 1.1
+    https://scripts.sil.org/OFL
+  - GNU General Public License, version 2 or later, with the GNU font
+    embedding exception, which allows documents that embed the font to
+    stay under their own terms.
+
+Upstream: https://unifoundry.com/unifont/
+Source file: unifont-17.0.05.otf, release 17.0.05.
+
+The file is kept unmodified so that the Unicode coverage and font
+metadata remain intact. It is a CFF flavoured OpenType font with 58910
+code points, covering the Basic Multilingual Plane along with parts of
+the supplementary planes, and 64 units per em because the outlines are
+derived from a 16 pixel bitmap grid. The Unicode viewer (/bin/unicode)
+uses it as its glyph source; it renders at multiples of 16 pixels so
+that the bitmap grid lands on whole pixels.
+
+Colour emoji are not part of Unifont and are not covered here.

@@ -13,7 +13,8 @@ struct window_state;
 
 enum event_type {
     EV_MOUSE_DOWN, EV_MOUSE_UP, EV_MOUSE_MOVE, EV_MOUSE_WHEEL,
-    EV_KEY_DOWN, EV_KEY_UP, EV_FOCUS_IN, EV_FOCUS_OUT, EV_ENTER, EV_LEAVE,
+    EV_KEY_DOWN, EV_KEY_UP, EV_TEXT, EV_PREEDIT, EV_TEXT_DELETE,
+    EV_FOCUS_IN, EV_FOCUS_OUT, EV_ENTER, EV_LEAVE,
 };
 
 struct event {
@@ -22,6 +23,8 @@ struct event {
     int button;                 /* bit mask of held buttons, or wheel delta */
     int mods;                   /* WMOD_* */
     int code, ch;               /* keys: scancode, translated character */
+    const char *text;           /* EV_TEXT: committed UTF-8, event lifetime */
+    int before, after;          /* EV_TEXT_DELETE: UTF-8 bytes around cursor */
 };
 
 /* ---- size hints and layout ---- */
@@ -73,6 +76,7 @@ struct widget {
     struct widget *window;      /* top level ancestor */
     int x, y, w, h;             /* inside the parent */
     unsigned visible : 1, enabled : 1, focusable : 1, focused : 1, hover : 1, pressed : 1;
+    unsigned accepts_text : 1;
     unsigned dirty : 1, child_dirty : 1, needs_layout : 1;
     unsigned floating : 1;      /* positioned by its owner, skipped by layout (popups) */
     struct size_hint hint;      /* set by the application; measure fills the rest */
@@ -151,6 +155,7 @@ struct window_state {
     int has_damage;
     int closed;
     struct widget *popup;       /* floating child closed by an outside click */
+    struct gui_window *popup_win; /* compositor popup surface when available */
     struct widget *tip;         /* the tooltip label, when shown */
     struct widget *tip_owner;
     struct timer *tip_timer;
@@ -165,6 +170,7 @@ void window_close(struct widget *window);
  * destroyed by window_popup_close, by a click outside it or by Escape. */
 void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height);
 void window_popup_close(struct widget *window);
+int window_owns_id(struct widget *window, int id);
 
 /* ---- containers and core widgets (the widgets directory) ---- */
 

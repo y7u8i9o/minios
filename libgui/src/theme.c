@@ -28,6 +28,7 @@ void theme_init_default(struct theme *t)
     t->metric[TM_CONTROL_H] = 26;
     t->scale = 100;
     strlcpy(t->font_path, "/etc/fonts/DejaVuSans.ttf", sizeof t->font_path);
+    strlcpy(t->fallback_path, "/etc/fonts/DejaVuSansMono.ttf", sizeof t->fallback_path);
     t->font = gfx_font_builtin();
 }
 
@@ -39,11 +40,19 @@ int theme_px(const struct theme *t, enum theme_metric m)
 void theme_apply(struct theme *t)
 {
     struct font *f = NULL;
+    struct font *fallback = NULL;
     if (t->font_path[0])
         f = gfx_font_open_ttf(t->font_path, theme_px(t, TM_FONT_PX));
+    if (f && t->fallback_path[0] && strcmp(t->fallback_path, t->font_path) != 0)
+        fallback = gfx_font_open_ttf(t->fallback_path, theme_px(t, TM_FONT_PX));
     if (t->owned_font)
         gfx_font_free(t->owned_font);
+    if (t->owned_fallback)
+        gfx_font_free(t->owned_fallback);
     t->owned_font = f;
+    t->owned_fallback = fallback;
+    if (f)
+        gfx_font_set_fallback(f, fallback);
     t->font = f ? f : gfx_font_builtin();
 }
 
@@ -51,6 +60,9 @@ void theme_release(struct theme *t)
 {
     if (t->owned_font)
         gfx_font_free(t->owned_font);
+    if (t->owned_fallback)
+        gfx_font_free(t->owned_fallback);
     t->owned_font = NULL;
+    t->owned_fallback = NULL;
     t->font = gfx_font_builtin();
 }

@@ -35,12 +35,14 @@ struct font {
      * and rasterized with antialiasing at px pixels per em. */
     struct ofont *outline;
     int px;
+    const struct font *fallback; /* non-owning, used when a glyph is absent */
 };
 
 const struct font *gfx_font_builtin(void);      /* the 8x16 font */
 struct font *gfx_font_load(const char *path);   /* .mfnt; NULL with errno on failure */
 /* TrueType or OpenType file rendered at px pixels per em. */
 struct font *gfx_font_open_ttf(const char *path, int px);
+void gfx_font_set_fallback(struct font *font, const struct font *fallback);
 void gfx_font_free(struct font *f);
 /* Blend an 8 bit coverage bitmap of color fg at (x, y). */
 void gfx_blend_mask(struct surface *s, int x, int y, const uint8_t *mask, int w, int h, uint32_t fg);

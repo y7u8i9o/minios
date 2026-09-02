@@ -1,6 +1,6 @@
-comp: setting frame_ms = 33
-compsettings: set frame_ms 33
+x12: setting frame_ms = 33
+x12settings: set frame_ms 33
 evtest: press at
-compsettings: up
+x12settings: up
 gui_tools: debugging tools ok
 TEST PASS

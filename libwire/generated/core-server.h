@@ -57,6 +57,10 @@ struct surface_impl {
     void (*set_opaque_region)(struct wire_client *client, struct wire_resource *self, const struct wire_array * rects);
     void (*commit)(struct wire_client *client, struct wire_resource *self);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_input_region)(struct wire_client *client, struct wire_resource *self, const struct wire_array * rects);
+    void (*set_buffer_scale)(struct wire_client *client, struct wire_resource *self, int32_t scale);
+    void (*set_buffer_transform)(struct wire_client *client, struct wire_resource *self, uint32_t transform);
+    void (*damage_buffer)(struct wire_client *client, struct wire_resource *self, int32_t x, int32_t y, int32_t width, int32_t height);
 };
 void surface_send_enter(struct wire_resource *surface, struct wire_resource * output);
 
@@ -65,4 +69,7 @@ struct output_impl {
 };
 void output_send_geometry(struct wire_resource *output, int32_t x, int32_t y, int32_t width, int32_t height);
 void output_send_mode(struct wire_resource *output, int32_t width, int32_t height, int32_t refresh);
+void output_send_scale(struct wire_resource *output, int32_t factor);
+void output_send_transform(struct wire_resource *output, uint32_t transform);
+void output_send_done(struct wire_resource *output);
 
