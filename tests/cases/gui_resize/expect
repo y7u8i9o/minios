@@ -1,11 +1,10 @@
-x12: toplevel 1 'alpha' mapped at 40,60 300x200
-x12: toplevel 1 configured 400x250
+x12: toplevel 1 'alpha' mapped at 40,30 300x230
+x12: toplevel 1 configured 400x280
 guitest: window 1 resized 400x250
 x12: toplevel 1 maximized
-guitest: window 1 resized 1022x718
+guitest: window 1 resized 1024x710
 x12: toplevel 1 restored
 guitest: window 1 resized 400x250
-x12: toplevel 1 close requested
 x12: toplevel 1 destroyed
 gui_resize: resize, maximize, restore and close ok
 TEST PASS

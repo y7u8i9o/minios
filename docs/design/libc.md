@@ -69,3 +69,11 @@ buffer through `ps2kbd_feed_scancode` and then starts `/bin/sh`, checking
 the builtin output, PATH lookup with arguments, the error messages and the
 exit status of `exit 3`. The interactive path was also verified manually
 by booting the default image and typing through QEMU's monitor.
+
+## Large allocations (M33)
+
+`malloc` serves requests of 256 KiB or more with a private anonymous
+`mmap` of their own and `free` unmaps them, while smaller blocks stay on
+the first fit list over `sbrk`. Window surfaces and buffer pools are
+re-created at every mode change; on the list they fragmented the heap
+and each new size cost another 30 MiB that never came back.

@@ -33,7 +33,7 @@ passed to the compiler as `CONFIG_*` macros:
 | `make image` | `build/minios.iso`, bootable under BIOS and UEFI |
 | `make run` | builds the image and boots it through `tools/run.sh` (see below) |
 | `make gdb` | boots with `-s -S` and prints the GDB command line |
-| `make test` | runs every case under `tests/cases/` |
+| `make test CASES="case ..."` | runs the named cases under `tests/cases/` (without `CASES` every case, which is too slow to use) |
 | `make clean` | removes `build/` |
 
 `make image` accepts `CMDLINE="..."` to set the kernel command line and

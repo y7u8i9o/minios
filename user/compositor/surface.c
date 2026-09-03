@@ -260,6 +260,8 @@ static void h_scale(struct wire_client *c, struct wire_resource *self, int32_t s
         return;
     }
     begin_state(s);
+    if (scale != s->pending.scale && (scale != 1 || s->current.scale != 1))
+        comp_log("surface %d buffer scale %d", s->id, scale);
     s->pending.scale = scale;
 }
 
@@ -328,6 +330,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     }
     if (s->pending.has_buffer) {
         struct buffer *prev = s->current.buffer, *b = s->pending.buffer;
+        int was_mapped = s->mapped;
         if (prev && prev != b && prev->res) {
             prev->busy = 0;
             buffer_send_release(prev->res);
@@ -353,11 +356,17 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         s->pending.has_buffer = 0;
         s->pending.buffer = NULL;
         s->pending.attach_x = s->pending.attach_y = 0;
-        scene_damage(old);
-        if (decor_has(s))
-            scene_damage(decor_extent(s));
-        else
-            scene_damage((struct rect){ s->x, s->y, s->width, s->height });
+        /* A new buffer for an unchanged geometry (the usual frame of a
+         * double buffered client) changes the contents only; the
+         * decorations and the shadow around them stay as drawn. */
+        struct rect now = decor_has(s) ? decor_extent(s) : surface_rect(s);
+        int same = was_mapped && b && old.x == now.x && old.y == now.y && old.w == now.w && old.h == now.h;
+        if (same) {
+            scene_damage(surface_rect(s));
+        } else {
+            scene_damage(old);
+            scene_damage(now);
+        }
     } else {
         for (int i = 0; i < s->pending.ndamage; i++) {
             struct rect d = s->pending.damage[i];
@@ -413,7 +422,7 @@ static void announce_output(struct wire_resource *r)
 {
     output_send_geometry(r, 0, 0, screen_w, screen_h);
     output_send_mode(r, screen_w, screen_h, 60);
-    output_send_scale(r, 1);
+    output_send_scale(r, screen_scale);
     output_send_transform(r, 0);
     output_send_done(r);
 }

@@ -220,3 +220,12 @@ decoding in the target), `gui_widgets` (rewritten for the framework
 client), `gui_controls` (combo popup, spinner, slider, tabs through
 injected input) and `gui_editor` (typing C source into gedit, keyword
 colour on screen, Ctrl+S writes the file).
+
+## High density outputs (M33)
+
+Windows render at the output's integer scale: `gui_window.scale` device
+pixels per logical pixel, buffers with `set_buffer_scale`. `struct
+painter` carries the scale, so widget code keeps drawing in logical
+pixels while text is rasterized at `px * scale` and lines are `scale`
+pixels thick; see `display.md`. Only code that writes into
+`gui_window.surf` directly sees device pixels.

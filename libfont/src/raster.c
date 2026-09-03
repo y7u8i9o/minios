@@ -246,13 +246,14 @@ static int render_edges(struct edges *es, struct font_glyph *g)
                 if (sy < e->y0 || sy >= e->y1)
                     continue;
                 int64_t x = e->x0 + ((int64_t)(e->x1 - e->x0) * (sy - e->y0)) / (e->y1 - e->y0);
+                int32_t rx = (int32_t)x - ox;       /* relative to the bitmap, like cr[].x */
                 /* Insertion sort by x. */
                 int j = nc++;
-                while (j > 0 && cr[j - 1].x > x) {
+                while (j > 0 && cr[j - 1].x > rx) {
                     cr[j] = cr[j - 1];
                     j--;
                 }
-                cr[j].x = (int32_t)x - ox;
+                cr[j].x = rx;
                 cr[j].dir = e->dir;
             }
             int wind = 0;

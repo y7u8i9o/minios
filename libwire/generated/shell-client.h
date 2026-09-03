@@ -42,6 +42,7 @@ void toplevel_ack_configure(struct wire_proxy *toplevel, uint32_t serial);
 void toplevel_destroy(struct wire_proxy *toplevel);
 void toplevel_set_parent(struct wire_proxy *toplevel, struct wire_proxy * parent);
 void toplevel_set_modal(struct wire_proxy *toplevel, uint32_t modal);
+void toplevel_set_window_geometry(struct wire_proxy *toplevel, int32_t x, int32_t y, int32_t width, int32_t height);
 
 struct popup_listener {
     void (*configure)(void *user, struct wire_proxy *self, uint32_t serial, int32_t x, int32_t y, int32_t width, int32_t height);

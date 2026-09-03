@@ -1,11 +1,11 @@
 comptest: configure 0x0 states \[\]
-x12: toplevel 1 'alpha' mapped at 40,60 200x150
+x12: toplevel 1 'alpha' mapped at 40,30 202x180
 x12: toplevel 1 activated
 comptest: configure 200x150 states \[2\]
 x12: toplevel 1 configured 300x200
 comptest: configure 300x200 states \[2\]
 x12: toplevel 1 maximized
-comptest: configure 1022x746 states \[1,2\]
+comptest: configure 1022x738 states \[1,2\]
 x12: toplevel 1 restored
 x12: toplevel 1 close requested
 comptest: close event

@@ -20,8 +20,11 @@ window roles, and composition.
   state (buffer, damage rectangles, frame callbacks) that `commit`
   moves into the current state. A commit with a new buffer releases
   the previous one (`buffer.release`) and damages the old and new
-  extents; a commit without a new buffer damages the listed
-  rectangles. Surfaces are placed in a cascade until M25 gives them
+  extents, or only the contents when the geometry is unchanged (the
+  usual frame of a double buffered client, whose decorations and shadow
+  stay as drawn); a commit without a new buffer damages the listed
+  rectangles. A damage rectangle lying entirely inside one opaque
+  surface skips the desktop fill. Surfaces are placed in a cascade until M25 gives them
   roles and positions; a surface is mapped once it has a buffer.
 - `scene.c`: the damage list with merging of touching rectangles,
   occlusion culling of surfaces below opaque (`XRGB8888`) surfaces,
@@ -32,11 +35,19 @@ window roles, and composition.
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
   buffer and every coordinate above it are logical pixels, the screen is
   `width/2` by `height/2`, and the flush expands each logical row once
-  and writes it to two framebuffer rows. Clients see an ordinary output
-  of the logical size; `output.scale` stays 1. Every copied rectangle is
-  flushed with `FBIO_FLUSH` (a no-op on plain VGA), and
-  `backend_set_mode` changes the resolution through `FBIO_SET_MODE`
-  (`display.md`).
+  (M32). Since M33 the back buffer holds device pixels: the scene
+  composes at `screen_scale` device pixels per logical pixel, buffers
+  with the output's scale are copied 1:1 and others resampled, and
+  decorations and the cursor are drawn at the scale (`display.md`).
+  Every copied rectangle is flushed with `FBIO_FLUSH` (a no-op on plain
+  VGA), and `backend_set_mode` changes the resolution through
+  `FBIO_SET_MODE`.
+
+A buffer committed while a configure is unacknowledged is accepted when
+it has the surface's current geometry (a frame sent before the configure
+arrived, see `display.md`); a buffer of another size is a protocol
+error. libwire's server logs every protocol error it posts and every
+failed send on stderr.
 
 ## Frame clock and callbacks
 

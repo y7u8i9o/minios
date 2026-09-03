@@ -163,6 +163,16 @@ void toplevel_set_modal(struct wire_proxy *toplevel, uint32_t modal)
     wire_proxy_marshal(toplevel, 12, args, NULL);
 }
 
+void toplevel_set_window_geometry(struct wire_proxy *toplevel, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].i = x;
+    args[1].i = y;
+    args[2].i = width;
+    args[3].i = height;
+    wire_proxy_marshal(toplevel, 13, args, NULL);
+}
+
 void popup_grab(struct wire_proxy *popup, struct wire_proxy * seat, uint32_t serial)
 {
     union wire_arg args[2] = { { 0 } };

@@ -12,17 +12,16 @@ void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int va
 {
     const struct theme *t = p->theme;
     painter_fill(p, x, y, w, h, t->color[TC_TRACK]);
-    painter_frame(p, x, y, w, h, t->color[TC_BORDER]);
     if (max <= 0 || page >= max)
         return;
-    int track = (vertical ? h : w) - 2;
+    int track = (vertical ? h : w) - 4;
     int th = track * page / max;
     if (th < 8) th = 8;
-    int off = 1 + (track - th) * value / (max - page);
+    int off = 2 + (track - th) * value / (max - page);
     if (vertical)
-        painter_rounded(p, x + 2, y + off, w - 4, th, t->color[TC_THUMB], 0xffffffffu);
+        painter_rounded(p, x + 3, y + off, w - 6, th, t->color[TC_THUMB], 0xffffffffu);
     else
-        painter_rounded(p, x + off, y + 2, th, h - 4, t->color[TC_THUMB], 0xffffffffu);
+        painter_rounded(p, x + off, y + 3, th, h - 6, t->color[TC_THUMB], 0xffffffffu);
 }
 
 static int clamp(struct scrollbar *s, int v)

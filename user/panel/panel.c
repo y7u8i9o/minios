@@ -1,6 +1,7 @@
 /* panel: a layer surface at the bottom of the screen with a launcher
  * menu (a popup), one button per toplevel from the toplevel manager,
- * and a clock. Built directly on libwire and gfx. */
+ * and a clock. Built directly on libwire and the libgui painter; the
+ * buffers are rendered at the output's scale. */
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -14,6 +15,8 @@
 #include <sys/timerfd.h>
 #include <wire/client.h>
 #include <gui/gfx.h>
+#include <gui/paint.h>
+#include <gui/theme.h>
 #include "core-client.h"
 #include "shell-client.h"
 #include "seat-client.h"
@@ -22,19 +25,36 @@
 #define MENU_BTN_W 64
 #define TASK_BTN_W 120
 #define CLOCK_W 80
-#define MENU_ITEM_H 20
-#define MENU_W 176
+#define MENU_ITEM_H 24
+#define MENU_PAD 6
+#define MENU_W 184
+
+/* Colours: a dark neutral bar, pill shaped buttons, a light menu. */
+#define PANEL_BG        0x0023272c
+#define PANEL_LINE      0x00343a41
+#define PANEL_TEXT      0x00e6e8eb
+#define PANEL_TEXT_DIM  0x00a0a6ae
+#define BUTTON_BG       0x002e343b
+#define BUTTON_ACTIVE   0x003f4854
+#define BUTTON_OPEN     0x004a5563
+#define ACCENT          0x005b9cf5
+#define MENU_BG         0x00fafbfc
+#define MENU_BORDER     0x00c5cad1
+#define MENU_HOVER      0x00dce8fa
+#define MENU_TEXT       0x00202428
 #define MAX_ENTRIES 32
 #define MAX_TASKS 16
 
 struct entry { char title[24]; char path[64]; };
 struct task { struct wire_proxy *handle; char title[48]; int active, minimized; };
 
-/* A drawable surface backed by one shm buffer. */
+/* A drawable surface backed by one shm buffer of lw by lh logical
+ * pixels at the output scale. */
 struct canvas {
     struct wire_proxy *surface, *buffer, *pool;
     struct surface s;
     int fd;
+    int lw, lh, scale;
 };
 
 static struct wire_display *display;
@@ -51,70 +71,127 @@ static int px, py;                       /* pointer in the panel */
 static struct wire_proxy *pointer_surface;
 static uint32_t press_serial;
 static int layer_configured;
+static int output_scale = 1;
+static struct theme ui;
 
 static void log_line(const char *fmt, ...);
 
 /* ---- canvases ---- */
 
-static int canvas_create(struct canvas *c, int w, int h)
+static void canvas_release_buffer(struct canvas *c)
 {
-    size_t size = (size_t)w * h * 4;
+    if (c->buffer)
+        buffer_destroy(c->buffer);
+    if (c->pool)
+        shm_pool_destroy(c->pool);
+    if (c->s.pixels)
+        munmap(c->s.pixels, (size_t)c->s.width * c->s.height * 4);
+    if (c->fd >= 0)
+        close(c->fd);
+    c->buffer = c->pool = NULL;
+    c->s.pixels = NULL;
+    c->fd = -1;
+}
+
+/* Allocate the buffer for lw by lh logical pixels at the output scale;
+ * the surface keeps its role. */
+static int canvas_alloc(struct canvas *c, int w, int h)
+{
+    canvas_release_buffer(c);
+    int scale = output_scale > 0 ? output_scale : 1;
+    int dw = w * scale, dh = h * scale;
+    size_t size = (size_t)dw * dh * 4;
     c->fd = memfd_create("panel", MFD_CLOEXEC);
     if (c->fd < 0 || ftruncate(c->fd, (long)size) < 0)
         return -1;
     c->s.pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, c->fd, 0);
-    if (c->s.pixels == MAP_FAILED)
+    if (c->s.pixels == MAP_FAILED) {
+        c->s.pixels = NULL;
         return -1;
-    c->s.width = w;
-    c->s.height = h;
-    c->s.stride = w;
+    }
+    c->s.width = dw;
+    c->s.height = dh;
+    c->s.stride = dw;
+    c->lw = w;
+    c->lh = h;
+    c->scale = scale;
     c->pool = shm_create_pool(shm, c->fd, (int32_t)size);
-    c->buffer = shm_pool_create_buffer(c->pool, 0, w, h, w * 4, 1);
-    c->surface = compositor_create_surface(compositor);
+    c->buffer = shm_pool_create_buffer(c->pool, 0, dw, dh, dw * 4, 1);
+    surface_set_buffer_scale(c->surface, scale);
     return 0;
+}
+
+static int canvas_create(struct canvas *c, int w, int h)
+{
+    memset(c, 0, sizeof *c);
+    c->fd = -1;
+    c->surface = compositor_create_surface(compositor);
+    return canvas_alloc(c, w, h);
 }
 
 static void canvas_commit(struct canvas *c)
 {
     surface_attach(c->surface, c->buffer, 0, 0);
-    surface_damage(c->surface, 0, 0, c->s.width, c->s.height);
+    surface_damage(c->surface, 0, 0, c->lw, c->lh);
     surface_commit(c->surface);
+}
+
+static void canvas_painter(struct painter *p, struct canvas *c)
+{
+    painter_init_scaled(p, &c->s, &ui, c->scale);
 }
 
 /* ---- drawing ---- */
 
+/* A label vertically centred in a box, clipped to it, optionally
+ * centred horizontally. */
+static void label(struct painter *p, int x, int y, int w, int h, const char *text, uint32_t color, int centre)
+{
+    int th = painter_text_height(p);
+    int tw = painter_text_width(p, text, -1);
+    int tx = centre && tw < w - 8 ? (w - tw) / 2 : 6;
+    painter_push(p, x, y, w, h);
+    painter_text(p, tx, (h - th) / 2, text, color);
+    painter_pop(p);
+}
+
 static void draw_panel(void)
 {
-    struct surface *s = &panel.s;
-    gfx_fill(s, 0x00202830);
-    gfx_hline(s, 0, 0, s->width, 0x00101010);
-    gfx_fill_rect(s, 4, 4, MENU_BTN_W, PANEL_H - 8, menu_open ? 0x00405870 : 0x00303c48);
-    gfx_text(s, 20, 6, "Menu", 0x00e0e0e0, 0xffffffffu);
-    int limit = (screen_w - CLOCK_W - MENU_BTN_W - 16) / (TASK_BTN_W + 4);
+    struct painter p;
+    canvas_painter(&p, &panel);
+    int w = panel.lw, h = panel.lh;
+    painter_fill(&p, 0, 0, w, h, PANEL_BG);
+    painter_fill(&p, 0, 0, w, 1, PANEL_LINE);
+    painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, menu_open ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
+    label(&p, 4, 4, MENU_BTN_W, h - 8, "Menu", PANEL_TEXT, 1);
+    int limit = (w - CLOCK_W - MENU_BTN_W - 16) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
-        gfx_fill_rect(s, x, 4, TASK_BTN_W, PANEL_H - 8, tasks[i].active && !tasks[i].minimized ? 0x00405870 : 0x00303c48);
-        char label[16];
-        snprintf(label, sizeof label, "%s%.13s", tasks[i].minimized ? "_" : "", tasks[i].title);
-        gfx_text(s, x + 4, 6, label, 0x00e0e0e0, 0xffffffffu);
+        int active = tasks[i].active && !tasks[i].minimized;
+        painter_rounded(&p, x, 4, TASK_BTN_W, h - 8, active ? BUTTON_ACTIVE : BUTTON_BG, 0xffffffffu);
+        if (active)
+            painter_fill(&p, x + 8, h - 6, TASK_BTN_W - 16, 2, ACCENT);
+        label(&p, x + 6, 4, TASK_BTN_W - 12, h - 8, tasks[i].title, tasks[i].minimized ? PANEL_TEXT_DIM : PANEL_TEXT, 0);
     }
     long sec = uptime_ms() / 1000;
     char t[16];
     snprintf(t, sizeof t, "%02ld:%02ld:%02ld", sec / 3600, (sec / 60) % 60, sec % 60);
-    gfx_text(s, s->width - CLOCK_W + 8, 6, t, 0x00e0e0e0, 0xffffffffu);
+    label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
     canvas_commit(&panel);
 }
 
 static void draw_menu(void)
 {
-    struct surface *s = &menu.s;
-    gfx_fill(s, 0x00f0f0f0);
-    gfx_rect(s, 0, 0, s->width, s->height, 0x00101010);
+    struct painter p;
+    canvas_painter(&p, &menu);
+    int w = menu.lw, h = menu.lh;
+    painter_fill(&p, 0, 0, w, h, MENU_BG);
+    painter_frame(&p, 0, 0, w, h, MENU_BORDER);
     for (int i = 0; i < nentries; i++) {
-        int y = 2 + i * MENU_ITEM_H;
+        int y = MENU_PAD + i * MENU_ITEM_H;
         if (i == hover_item)
-            gfx_fill_rect(s, 1, y, s->width - 2, MENU_ITEM_H, 0x00c0d0e0);
-        gfx_text(s, 8, y + 2, entries[i].title, 0x00000000, 0xffffffffu);
+            painter_rounded(&p, 4, y, w - 8, MENU_ITEM_H, MENU_HOVER, 0xffffffffu);
+        label(&p, 8, y, w - 16, MENU_ITEM_H, entries[i].title, MENU_TEXT, 0);
     }
     canvas_commit(&menu);
 }
@@ -184,7 +261,7 @@ static const struct popup_listener popup_events = { on_popup_configure, on_popup
 
 static void menu_show(void)
 {
-    int h = nentries * MENU_ITEM_H + 4;
+    int h = nentries * MENU_ITEM_H + 2 * MENU_PAD;
     if (!menu.surface && canvas_create(&menu, MENU_W, h) < 0)
         return;
     struct wire_proxy *pos = shell_create_positioner(shell);
@@ -221,10 +298,7 @@ static void menu_teardown(void)
     surface_attach(menu.surface, NULL, 0, 0);
     surface_commit(menu.surface);
     surface_destroy(menu.surface);
-    buffer_destroy(menu.buffer);
-    shm_pool_destroy(menu.pool);
-    munmap(menu.s.pixels, (size_t)menu.s.width * menu.s.height * 4);
-    close(menu.fd);
+    canvas_release_buffer(&menu);
     memset(&menu, 0, sizeof menu);
     draw_panel();
 }
@@ -247,7 +321,7 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
     px = wire_fixed_to_int(x);
     py = wire_fixed_to_int(y);
     if (menu_open && pointer_surface == menu.surface) {
-        int item = (py - 2) / MENU_ITEM_H;
+        int item = py < MENU_PAD ? -1 : (py - MENU_PAD) / MENU_ITEM_H;
         if (item >= nentries) item = -1;
         if (item != hover_item) {
             hover_item = item;
@@ -262,7 +336,7 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
     if (button != 1 || state != 1)
         return;
     if (pointer_surface == menu.surface) {
-        int item = (py - 2) / MENU_ITEM_H;
+        int item = py < MENU_PAD ? -1 : (py - MENU_PAD) / MENU_ITEM_H;
         menu_hide();
         if (item >= 0 && item < nentries)
             launch(&entries[item]);
@@ -355,6 +429,14 @@ static const struct toplevel_manager_listener manager_events = { on_toplevel };
 static void on_layer_configure(void *user, struct wire_proxy *l, uint32_t serial, int32_t w, int32_t h)
 {
     layer_surface_ack_configure(l, serial);
+    /* A new width (mode change) or scale needs a new buffer. */
+    if (w > 0 && (w != panel.lw || output_scale != panel.scale)) {
+        if (canvas_alloc(&panel, w, PANEL_H) < 0)
+            exit(1);
+        screen_w = w;
+        if (layer_configured)
+            draw_panel();
+    }
     layer_configured = 1;
 }
 static void on_layer_closed(void *user, struct wire_proxy *l) { exit(0); }
@@ -362,9 +444,11 @@ static const struct layer_surface_listener layer_events = { on_layer_configure, 
 
 static void on_geometry(void *user, struct wire_proxy *o, int32_t x, int32_t y, int32_t w, int32_t h) { screen_w = w; screen_h = h; }
 static void on_mode(void *user, struct wire_proxy *o, int32_t w, int32_t h, int32_t r) {}
-static void on_scale(void *user, struct wire_proxy *o, int32_t factor) {}
-static void on_transform(void *user, struct wire_proxy *o, uint32_t transform) {}
+/* A scale change comes with a layer configure, which reallocates the
+ * buffer; committing here would race with that configure's serial. */
+static void on_scale(void *user, struct wire_proxy *o, int32_t factor) { output_scale = factor > 0 ? factor : 1; }
 static void on_output_done(void *user, struct wire_proxy *o) {}
+static void on_transform(void *user, struct wire_proxy *o, uint32_t transform) {}
 static const struct output_listener output_events = { on_geometry, on_mode, on_scale, on_transform, on_output_done };
 
 static void on_global(void *user, struct wire_proxy *registry, uint32_t name, const char *iface, uint32_t version)
@@ -416,6 +500,10 @@ int main(void)
     pointer_add_listener(pointer, &pointer_events, NULL);
     toplevel_manager_add_listener(manager, &manager_events, NULL);
     load_entries();
+    theme_init_default(&ui);
+    ui.metric[TM_FONT_PX] = 13;
+    ui.metric[TM_RADIUS] = 5;
+    theme_apply(&ui);
     if (canvas_create(&panel, screen_w, PANEL_H) < 0)
         return 1;
     layer = shell_get_layer_surface(shell, panel.surface, 2, "panel");

@@ -98,11 +98,14 @@ run:
 gdb:
 	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) $(RUN) --build --gdb $(RUNFLAGS)
 
+# CASES="gui gui_wm" runs only those cases; the whole suite takes too
+# long to run for every change.
 test: kernel initrd $(LIMINE) $(DISK)
-	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 
 # Host unit tests of the GUI framework.
 check:
+	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
 

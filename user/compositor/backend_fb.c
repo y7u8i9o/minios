@@ -1,11 +1,11 @@
 /* Framebuffer backend: the device mapping, a 32 bit back buffer and the
  * copy with format conversion (from the M19 window server).
  *
- * The back buffer and everything above it use logical pixels. When the
- * mode was chosen with video=WxH@N (high density displays), /dev/fb0
- * reports scale N and the screen is width/N by height/N logical pixels;
- * the flush writes every logical pixel as an N by N block, so windows
- * and text keep their size on screen and stay crisp. */
+ * The back buffer holds device pixels; the scene composes into it at
+ * screen_scale device pixels per logical pixel (video=WxH@N, high
+ * density displays), so scaled client buffers and decorations are sharp.
+ * The scene, the shell and input work in logical pixels: width/N by
+ * height/N. The flush copies device rows. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,10 +42,10 @@ static int backend_setup(void)
                 fbinfo.green_size == 8 && fbinfo.green_shift == 8 && fbinfo.blue_size == 8 && fbinfo.blue_shift == 0;
     free(back.pixels);
     free(line);
-    back.width = screen_w;
-    back.height = screen_h;
-    back.stride = screen_w;
-    back.pixels = malloc((size_t)screen_w * screen_h * 4);
+    back.width = screen_w * screen_scale;
+    back.height = screen_h * screen_scale;
+    back.stride = back.width;
+    back.pixels = malloc((size_t)back.width * back.height * 4);
     line = malloc((size_t)fbinfo.width * 4);
     return back.pixels && line ? 0 : -1;
 }
@@ -92,38 +92,35 @@ void backend_flush(struct rect r)
 {
     int s = screen_scale;
     size_t bpp = fbinfo.bpp / 8;
-    for (int j = 0; j < r.h; j++) {
-        const uint32_t *from = back.pixels + (size_t)(r.y + j) * back.stride + r.x;
-        uint8_t *to = fbmem + (size_t)(r.y + j) * s * fbinfo.pitch + (size_t)r.x * (size_t)s * bpp;
-        if (fb_native && s == 1) {
-            memcpy(to, from, (size_t)r.w * 4);
+    /* Logical rectangle to device rows, clipped to the back buffer. */
+    struct rect d = { r.x * s, r.y * s, r.w * s, r.h * s };
+    d = rect_intersect(d, (struct rect){ 0, 0, back.width, back.height });
+    if (rect_empty(d))
+        return;
+    for (int j = 0; j < d.h; j++) {
+        const uint32_t *from = back.pixels + (size_t)(d.y + j) * back.stride + d.x;
+        uint8_t *to = fbmem + (size_t)(d.y + j) * fbinfo.pitch + (size_t)d.x * bpp;
+        if (fb_native) {
+            memcpy(to, from, (size_t)d.w * 4);
             continue;
         }
-        /* Expand the row once, then copy it to each of the s rows. */
-        size_t bytes = (size_t)r.w * (size_t)s * bpp;
         if (fbinfo.bpp == 32) {
             uint32_t *out = (uint32_t *)line;
-            for (int i = 0; i < r.w; i++) {
-                uint32_t pix = fb_native ? from[i] : pack(from[i]);
-                for (int k = 0; k < s; k++)
-                    *out++ = pix;
-            }
+            for (int i = 0; i < d.w; i++)
+                out[i] = pack(from[i]);
         } else {
             uint8_t *out = line;
-            for (int i = 0; i < r.w; i++) {
+            for (int i = 0; i < d.w; i++) {
                 uint32_t pix = pack(from[i]);
-                for (int k = 0; k < s; k++) {
-                    *out++ = (uint8_t)pix;
-                    *out++ = (uint8_t)(pix >> 8);
-                    *out++ = (uint8_t)(pix >> 16);
-                }
+                *out++ = (uint8_t)pix;
+                *out++ = (uint8_t)(pix >> 8);
+                *out++ = (uint8_t)(pix >> 16);
             }
         }
-        for (int k = 0; k < s; k++)
-            memcpy(to + (size_t)k * fbinfo.pitch, line, bytes);
+        memcpy(to, line, (size_t)d.w * bpp);
     }
     if (fbinfo.caps & FB_CAP_FLUSH) {
-        struct fb_rect fr = { r.x * s, r.y * s, r.w * s, r.h * s };
+        struct fb_rect fr = { d.x, d.y, d.w, d.h };
         ioctl(fb_fd, FBIO_FLUSH, &fr);
     }
 }

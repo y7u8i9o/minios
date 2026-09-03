@@ -1,15 +1,13 @@
 x12: started 1024x768
 x12: client [0-9]+ connected
-x12: toplevel 1 'alpha' mapped at 40,60 300x200
-x12: toplevel 2 'beta' mapped at 70,90 240x160
+x12: toplevel 1 'alpha' mapped at 40,30 300x230
+x12: toplevel 2 'beta' mapped at 70,60 240x190
 x12: toplevel 2 activated
 guitest: window 2 mouse down at 30,30
 guitest: window 2 key 0x1e char 97
 x12: toplevel 1 activated
-x12: toplevel 1 close requested
 guitest: window 1 close request
 x12: toplevel 1 destroyed
-x12: toplevel 2 close requested
 x12: toplevel 2 destroyed
 guitest: done after 1 keys
 x12: stopped

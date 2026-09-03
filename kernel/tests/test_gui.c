@@ -162,7 +162,26 @@ static void mouse_click(int buttons)
     sleep_ms(100);
 }
 
+/* A logical pixel of the composed screen: the GUI tests describe the
+ * desktop in logical coordinates and run at any pixel scale. */
 static uint32_t pixel(int x, int y)
+{
+    uint32_t s = fb_screen_scale ? fb_screen_scale : 1;
+    return fb_read_rgb(&fb_screen, (uint32_t)x * s, (uint32_t)y * s);
+}
+
+/* The desktop's logical size. */
+static int logical_w(void)
+{
+    return (int)(fb_screen.width / (fb_screen_scale ? fb_screen_scale : 1));
+}
+
+static int logical_h(void)
+{
+    return (int)(fb_screen.height / (fb_screen_scale ? fb_screen_scale : 1));
+}
+
+static uint32_t device_pixel(int x, int y)
 {
     return fb_read_rgb(&fb_screen, (uint32_t)x, (uint32_t)y);
 }
@@ -184,22 +203,23 @@ static void test_gui(void)
     /* Window 1 "alpha" 300x200 at (40,60), window 2 "beta" 240x160 at
      * (70,90); beta was created last and is focused. */
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00ff0000, "beta red rect pixel %08x", pixel(120, 130));
-    ktest_assert(pixel(70 + 2, 90 - 10) == 0x00204060, "beta title bar active %08x", pixel(72, 80));
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00707070, "alpha title bar inactive %08x", pixel(42, 50));
+    ktest_assert(pixel(70 + 2, 90 - 10) == 0x00ebebeb, "beta title bar active %08x", pixel(72, 80));
+    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00fafafa, "alpha title bar inactive %08x", pixel(42, 50));
     ktest_assert(pixel(40 + 5, 60 + 100) == 0x00dcdcdc, "alpha contents %08x", pixel(45, 160));
 
-    int cx = (int)fb_screen.width / 2, cy = (int)fb_screen.height / 2;
+    int cx = logical_w() / 2, cy = logical_h() / 2;
     /* Click inside beta, then type a key. */
     mouse_move_to(&cx, &cy, 100, 120, 0);
     mouse_click(1);
     ps2kbd_feed_scancode(0x1e);
     ps2kbd_feed_scancode(0x9e);
     sleep_ms(100);
-    /* Click alpha's contents: it comes to the front and gets focus. */
-    mouse_move_to(&cx, &cy, 60, 200, 0);
+    /* Click alpha's contents left of beta (whose frame and its resize
+     * border start at x 60): it comes to the front and gets focus. */
+    mouse_move_to(&cx, &cy, 50, 200, 0);
     mouse_click(1);
     sleep_ms(100);
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00204060, "alpha title bar active after click %08x", pixel(42, 50));
+    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "alpha title bar active after click %08x", pixel(42, 50));
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00dcdcdc, "alpha now covers beta: %08x", pixel(120, 130));
     /* Drag alpha by its title bar 100 pixels to the right. */
     mouse_move_to(&cx, &cy, 150, 50, 0);
@@ -211,11 +231,12 @@ static void test_gui(void)
     ktest_assert(pixel(140 + 5, 60 + 100) == 0x00dcdcdc, "alpha moved: %08x", pixel(145, 160));
     ktest_assert(pixel(40 + 5, 60 + 100) == 0x00306080 || pixel(40 + 5, 60 + 100) == 0x00c8f0c8,
                  "old alpha area repainted: %08x", pixel(45, 160));
-    /* Close alpha (close box at the right of its title bar), then beta. */
-    mouse_move_to(&cx, &cy, 140 + 300 - 8, 60 - 10, 0);
+    /* Close alpha (the close button at the right of its header bar,
+     * 19 px from the edge, 16 px above the contents), then beta. */
+    mouse_move_to(&cx, &cy, 140 + 300 - 19, 60 - 16, 0);
     mouse_click(1);
     sleep_ms(200);
-    mouse_move_to(&cx, &cy, 70 + 240 - 8, 90 - 10, 0);
+    mouse_move_to(&cx, &cy, 70 + 240 - 19, 90 - 16, 0);
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);
@@ -274,14 +295,14 @@ static void test_gui_term(void)
     ktest_assert(drawn, "no text rendered in the terminal");
     /* M19: drag the grip so the window shrinks by 240x96 pixels (20
      * columns and 4 rows of the 12x24 cells); the shell sees the size. */
-    int sw = (int)fb_screen.width;
+    int sw = logical_w();
     int wx = 40, wy = 60;                       /* 960x600 at the cascade origin */
     ktest_assert(sw == 1024, "test assumes 1024 pixels of width");
-    int cx = sw / 2, cy = (int)fb_screen.height / 2;
-    mouse_move_to(&cx, &cy, wx + 960 - 4, wy + 600 - 4, 0);
+    int cx = sw / 2, cy = logical_h() / 2;
+    mouse_move_to(&cx, &cy, wx + 960 + 3, wy + 600 + 3, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, wx + 720 - 4, wy + 504 - 4, 1);
+    mouse_move_to(&cx, &cy, wx + 720 + 3, wy + 504 + 3, 1);
     feed_packet(0, 0, 0);
     sleep_ms(500);
     vfs_unlink("/gterm2.txt");
@@ -322,12 +343,12 @@ KTEST_DEFINE("gui_term", test_gui_term);
 /* ---- M19 stage 2 ---- */
 
 /* Geometry of the launcher popup, which the panel builds from
- * user/etc/launcher: one 20 px row per entry, opened above the 28 px
- * panel.  Keep these in step with that file. */
+ * user/etc/launcher: one 24 px row per entry inside 6 px of padding,
+ * opened above the 28 px panel.  Keep these in step with that file. */
 #define LAUNCHER_ENTRIES 17
 #define LAUNCHER_CLOCK   9      /* index of Clock=/bin/clock */
-#define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 20 + 4))
-#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 2 + (i) * 20 + 10)
+#define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 24 + 12))
+#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + (i) * 24 + 12)
 
 static void press_key(uint8_t code)
 {
@@ -375,38 +396,43 @@ static void stop_server(struct proc *srv)
 static void test_gui_resize(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     int dh = sh - 28;                          /* desktop above the task bar */
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", "resize", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
     sleep_ms(800);
-    /* Window 1 "alpha" 300x200 at (40,60). Drag its grip by (100,50). */
+    /* Window 1 "alpha" 300x200 at (40,60). Drag its bottom right
+     * resize border (in the shadow outside the frame) by (100,50). */
     int cx = sw / 2, cy = sh / 2;
-    mouse_move_to(&cx, &cy, 40 + 300 - 4, 60 + 200 - 4, 0);
+    mouse_move_to(&cx, &cy, 40 + 300 + 3, 60 + 200 + 3, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, 40 + 400 - 4, 60 + 250 - 4, 1);
+    mouse_move_to(&cx, &cy, 40 + 400 + 3, 60 + 250 + 3, 1);
     feed_packet(0, 0, 0);
     sleep_ms(500);
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "resized contents %08x", pixel(390, 280));
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00204060, "title bar after resize %08x", pixel(42, 50));
-    /* Maximize: second box from the right of the title bar. */
-    mouse_move_to(&cx, &cy, 40 + 400 - 16 - 16 + 7, 60 - 20 + 2 + 7, 0);
+    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "title bar after resize %08x", pixel(42, 50));
+    /* Maximize: second button from the right of the header bar (22 px
+     * buttons 6 px apart, the close button 8 px from the right edge;
+     * the bar is 30 px tall, its buttons centred 16 px above the
+     * contents). */
+    mouse_move_to(&cx, &cy, 40 + 400 - 47, 60 - 16, 0);
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(sw - 10, dh - 10) == 0x0040c040, "maximized contents %08x", pixel(sw - 10, dh - 10));
-    ktest_assert(pixel(sw / 2, sh - 14) == 0x00202830 || pixel(sw / 2, sh - 14) == 0x00303c48,
+    ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c || pixel(sw / 2, sh - 14) == 0x002e343b,
                  "task bar visible %08x", pixel(sw / 2, sh - 14));
-    /* Restore through the same box, now at the top right of the screen. */
-    mouse_move_to(&cx, &cy, 1 + (sw - 2) - 16 - 16 + 7, 21 - 20 + 2 + 7, 0);
+    /* Restore through the same button, now at the top right of the
+     * screen (the maximized frame starts at the top left corner). */
+    mouse_move_to(&cx, &cy, sw - 47, 14, 0);
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(sw - 10, dh - 10) == 0x00306080, "desktop after restore %08x", pixel(sw - 10, dh - 10));
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "restored contents %08x", pixel(390, 280));
-    /* Close box. */
-    mouse_move_to(&cx, &cy, 40 + 400 - 16 + 7, 60 - 20 + 2 + 7, 0);
+    /* Close button of the header bar. */
+    mouse_move_to(&cx, &cy, 40 + 400 - 19, 60 - 16, 0);
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);
@@ -422,7 +448,7 @@ KTEST_DEFINE("gui_resize", test_gui_resize);
 static void test_gui_wm(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -435,10 +461,11 @@ static void test_gui_wm(void)
     sleep_ms(150);
     /* Alt+Tab brings alpha, the lowest window, to the top. */
     alt_key(0x0f);
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00204060, "alpha active after alt-tab %08x", pixel(42, 50));
+    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "alpha active after alt-tab %08x", pixel(42, 50));
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00dcdcdc, "alpha above beta %08x", pixel(120, 130));
-    /* Minimize alpha: third box from the right. */
-    mouse_move_to(&cx, &cy, 40 + 300 - 16 - 32 + 7, 60 - 20 + 2 + 7, 0);
+    /* Minimize alpha: the third button from the right of its header
+     * bar (22 px buttons 6 px apart, close 8 px from the edge). */
+    mouse_move_to(&cx, &cy, 40 + 300 - 75, 60 - 16, 0);
     mouse_click(1);
     sleep_ms(300);
     ktest_assert(pixel(45, 160) == 0x00306080, "alpha hidden %08x", pixel(45, 160));
@@ -450,7 +477,7 @@ static void test_gui_wm(void)
     ktest_assert(pixel(45, 160) == 0x00dcdcdc, "alpha restored %08x", pixel(45, 160));
     /* Bring beta to the top and maximize it: alpha is fully covered. */
     alt_key(0x0f);
-    mouse_move_to(&cx, &cy, 70 + 240 - 16 - 16 + 7, 90 - 20 + 2 + 7, 0);
+    mouse_move_to(&cx, &cy, 70 + 240 - 47, 90 - 16, 0);
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(45, 160) == 0x0040c040, "beta covers alpha %08x", pixel(45, 160));
@@ -510,7 +537,7 @@ static void ctrl_key(uint8_t code)
 static void test_gui_widgets(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -562,7 +589,7 @@ KTEST_DEFINE("gui_widgets", test_gui_widgets);
 static void test_gui_controls(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "controls", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -677,7 +704,7 @@ KTEST_DEFINE("gui_ttf", test_gui_ttf);
 static void test_gui_app(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/apptest", (char *const[]){ "apptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -687,7 +714,7 @@ static void test_gui_app(void)
     mouse_move_to(&cx, &cy, 70 + 6 + 194, 90 + 6 + 15, 0);
     mouse_click(1);
     sleep_ms(300);
-    ktest_assert(pixel(70 + 6 + 100, 90 + 6 + 15) == 0x00c8d8f0, "hovered button colour %08x", pixel(176, 111));
+    ktest_assert(pixel(70 + 6 + 100, 90 + 6 + 15) == 0x00d0d0d0, "hovered button colour %08x", pixel(176, 111));
     press_key(0x0f);                    /* Tab: focus moves to the field */
     sleep_ms(150);
     press_key(0x23);                    /* h */
@@ -712,13 +739,13 @@ KTEST_DEFINE("gui_app", test_gui_app);
 static void test_gui_calc(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/calc", (char *const[]){ "calc", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start calc");
     sleep_ms(1200);
-    ktest_assert(pixel(42, 50) == 0x00204060,
+    ktest_assert(pixel(42, 50) == 0x00ebebeb,
                  "calculator window has an active title bar: %08x", pixel(42, 50));
 
     press_key(0x04);                    /* 3 ENTER 4 + */
@@ -763,7 +790,7 @@ KTEST_DEFINE("gui_calc", test_gui_calc);
 static void test_gui_mandel(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/mandel", (char *const[]){ "mandel", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -797,7 +824,7 @@ KTEST_DEFINE("gui_mandel", test_gui_mandel);
 static void test_gui_drag(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/term", (char *const[]){ "term", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start term");
@@ -820,7 +847,7 @@ static void test_gui_drag(void)
     int settled = 0;
     for (int i = 0; i < 200 && !settled; i++) {
         sleep_ms(10);
-        settled = pixel(40 + 2, 60 - 10) == 0x00204060;
+        settled = pixel(40 + 2, 60 - 10) == 0x00ebebeb;
     }
     uint64_t dt = timer_ms() - t0;
     kprintf("gui_drag: 200 packets in %lu ms, settled %d\n", (unsigned long)dt, settled);
@@ -878,19 +905,19 @@ static void test_comp_scale(void)
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
     sleep_ms(1500);
-    ktest_assert(pixel(2 * (40 + 100), 2 * (60 + 75)) == 0x0000ff00, "green buffer at doubled position: %08x",
-                 pixel(280, 270));
+    ktest_assert(device_pixel(2 * (40 + 100), 2 * (60 + 75)) == 0x0000ff00, "green buffer at doubled position: %08x",
+                 device_pixel(280, 270));
     /* Logical (250,135) is right of the 200 wide surface at 40. */
-    ktest_assert(pixel(2 * 250, 2 * 135) != 0x0000ff00, "right of the surface at doubled x: %08x", pixel(500, 270));
+    ktest_assert(device_pixel(2 * 250, 2 * 135) != 0x0000ff00, "right of the surface at doubled x: %08x", device_pixel(500, 270));
     /* Scan a row through the surface's left edge and the desktop. */
     for (int x = 30; x < 60; x++)
         for (int y = 130; y < 140; y++) {
-            uint32_t v = pixel(2 * x, 2 * y);
-            ktest_assert(pixel(2 * x + 1, 2 * y) == v && pixel(2 * x, 2 * y + 1) == v && pixel(2 * x + 1, 2 * y + 1) == v,
+            uint32_t v = device_pixel(2 * x, 2 * y);
+            ktest_assert(device_pixel(2 * x + 1, 2 * y) == v && device_pixel(2 * x, 2 * y + 1) == v && device_pixel(2 * x + 1, 2 * y + 1) == v,
                          "pixel block at %d,%d not uniform", x, y);
         }
-    ktest_assert(pixel(2 * 40, 2 * 135) == 0x0000ff00, "surface edge at doubled x: %08x", pixel(80, 270));
-    ktest_assert(pixel(2 * 39, 2 * 135) != 0x0000ff00, "left of the surface at doubled x: %08x", pixel(78, 270));
+    ktest_assert(device_pixel(2 * 40, 2 * 135) == 0x0000ff00, "surface edge at doubled x: %08x", device_pixel(80, 270));
+    ktest_assert(device_pixel(2 * 39, 2 * 135) != 0x0000ff00, "left of the surface at doubled x: %08x", device_pixel(78, 270));
     kprintf("comp_scale: pixels doubled\n");
     int status = proc_reap(cl);
     ktest_assert(status == 0, "comptest status 0x%x", status);
@@ -906,7 +933,7 @@ KTEST_DEFINE("comp_scale", test_comp_scale);
 static void test_gui_dead_client(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -949,34 +976,37 @@ static struct proc *start_client(const char *mode)
 static void test_comp_shell(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_compositor();
     struct proc *cl = start_client("shell");
+    /* Server decorations: the frame cascades to (40,30), so the 200x150
+     * contents start at (41,59) under the 28 px title bar. */
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00dcdcdc, "window contents %08x", pixel(140, 135));
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00204060, "active title bar %08x", pixel(42, 50));
+    ktest_assert(pixel(40 + 2, 59 - 12) == 0x00e9ecf0, "active title bar %08x", pixel(42, 47));
     int cx = sw / 2, cy = sh / 2;
     /* Grip drag: +100,+50. */
-    mouse_move_to(&cx, &cy, 40 + 200 - 4, 60 + 150 - 4, 0);
+    mouse_move_to(&cx, &cy, 41 + 200 - 4, 59 + 150 - 4, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, 40 + 300 - 4, 60 + 200 - 4, 1);
+    mouse_move_to(&cx, &cy, 41 + 300 - 4, 59 + 200 - 4, 1);
     feed_packet(0, 0, 0);
     sleep_ms(500);
     ktest_assert(pixel(40 + 250, 60 + 175) == 0x00dcdcdc, "resized contents %08x", pixel(290, 235));
-    /* Maximize box, then restore. */
-    mouse_move_to(&cx, &cy, 40 + 300 - 16 - 16 + 7, 60 - 20 + 2 + 7, 0);
+    /* Maximize button (second from the right, 14 px buttons 4 px
+     * apart), then restore. */
+    mouse_move_to(&cx, &cy, 41 + 300 - 27, 59 - 14, 0);
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(sw - 10, sh - 10) == 0x00dcdcdc, "maximized contents %08x", pixel(sw - 10, sh - 10));
-    mouse_move_to(&cx, &cy, 1 + (sw - 2) - 16 - 16 + 7, 21 - 20 + 2 + 7, 0);
+    mouse_move_to(&cx, &cy, sw - 28, 29 - 14, 0);
     mouse_click(1);
     sleep_ms(500);
     ktest_assert(pixel(sw - 10, sh - 10) == 0x00306080, "desktop after restore %08x", pixel(sw - 10, sh - 10));
     /* Move by the title bar: +60,+40. */
-    mouse_move_to(&cx, &cy, 40 + 100, 60 - 10, 0);
+    mouse_move_to(&cx, &cy, 40 + 100, 59 - 12, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, 40 + 160, 60 + 30, 1);
+    mouse_move_to(&cx, &cy, 40 + 160, 59 - 12 + 40, 1);
     feed_packet(0, 0, 0);
     sleep_ms(300);
     ktest_assert(pixel(100 + 250, 100 + 175) == 0x00dcdcdc, "moved contents %08x", pixel(350, 275));
@@ -993,11 +1023,12 @@ KTEST_DEFINE("comp_shell", test_comp_shell);
 static void test_comp_seat(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_compositor();
     struct proc *cl = start_client("seat");
     int cx = sw / 2, cy = sh / 2;
-    mouse_move_to(&cx, &cy, 40 + 50, 60 + 40, 0);
+    /* The surface sits at (41,59) inside the server side frame. */
+    mouse_move_to(&cx, &cy, 41 + 50, 59 + 40, 0);
     sleep_ms(150);
     mouse_click(1);
     feed_packet_wheel(0, 0, 0, 1);
@@ -1025,7 +1056,7 @@ KTEST_DEFINE("comp_seat", test_comp_seat);
 static void test_comp_data(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_compositor();
     struct proc *src = start_client("data-source");
     struct proc *dst = start_client("data-target");
@@ -1053,14 +1084,14 @@ KTEST_DEFINE("comp_data", test_comp_data);
 static void test_comp_panel(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(1000);
-    ktest_assert(pixel(sw / 2, sh - 14) == 0x00202830, "panel drawn at the bottom: %08x", pixel(sw / 2, sh - 14));
+    ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel drawn at the bottom: %08x", pixel(sw / 2, sh - 14));
     struct proc *cl = start_client("shell");
-    ktest_assert(pixel(64 + 12 + 10, sh - 14) == 0x00405870, "task button for the active window: %08x", pixel(86, sh - 14));
+    ktest_assert(pixel(64 + 12 + 4, sh - 14) == 0x003f4854, "task button for the active window: %08x", pixel(80, sh - 14));
     int cx = sw / 2, cy = sh / 2;
     /* Minimize through the task button, restore through it. */
     mouse_move_to(&cx, &cy, 64 + 12 + 40, sh - 14, 0);
@@ -1080,7 +1111,7 @@ static void test_comp_panel(void)
     mouse_move_to(&cx, &cy, sw - 100, 100, 0);
     mouse_click(1);
     sleep_ms(400);
-    ktest_assert(pixel(sw / 2, sh - 14) == 0x00202830, "panel alive after the dismissal: %08x", pixel(sw / 2, sh - 14));
+    ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel alive after the dismissal: %08x", pixel(sw / 2, sh - 14));
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(400);
@@ -1128,7 +1159,7 @@ KTEST_DEFINE("gui_kbd_restore", test_gui_kbd_restore);
 static void test_gui_tools(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", "set", "frame_ms", "33", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1143,7 +1174,7 @@ static void test_gui_tools(void)
         ktest_assert(cl != NULL, "cannot start %s", tools[i]);
         sleep_ms(1200);
         int wx = 40 + i * 30, wy = 60 + i * 30;   /* cascade by creation number */
-        ktest_assert(pixel(wx + 2, wy - 10) == 0x00204060, "%s window has an active title bar: %08x", tools[i], pixel(wx + 2, wy - 10));
+        ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s window has an active title bar: %08x", tools[i], pixel(wx + 2, wy - 10));
         if (i == 0) {
             mouse_move_to(&cx, &cy, 40 + 100, 60 + 40, 0);
             mouse_click(1);
@@ -1170,20 +1201,24 @@ KTEST_DEFINE("gui_tools", test_gui_tools);
 static void test_gui_unicode(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/unicode", (char *const[]){ "unicode", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start unicode");
-    sleep_ms(2000);
-    ktest_assert(pixel(42, 50) == 0x00204060, "unicode window has an active title bar: %08x", pixel(42, 50));
+    int active = 0;
+    for (int i = 0; i < 120 && !active; i++) {
+        sleep_ms(100);
+        active = pixel(42, 50) == 0x00ebebeb;
+    }
+    ktest_assert(active, "unicode window has an active title bar: %08x", pixel(42, 50));
     /* Click a cell in the grid, which starts below the toolbar and the
      * preview panel, and let the selection repaint. */
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 230, 0);
     mouse_click(1);
     sleep_ms(400);
-    ktest_assert(pixel(42, 50) == 0x00204060, "unicode window survives a grid click: %08x", pixel(42, 50));
+    ktest_assert(pixel(42, 50) == 0x00ebebeb, "unicode window survives a grid click: %08x", pixel(42, 50));
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "unicode status 0x%x", status);
@@ -1201,7 +1236,7 @@ KTEST_DEFINE("gui_unicode", test_gui_unicode);
 static void test_gui_desktop(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
+    int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
@@ -1212,7 +1247,7 @@ static void test_gui_desktop(void)
     /* Sample away from the cursor, which sits at the centre. */
     uint32_t mid = pixel(sw / 2 + 100, sh / 2 + 50);
     ktest_assert(mid == 0x00306080, "solid desktop colour by default: %08x", mid);
-    ktest_assert(pixel(sw / 2, sh - 14) == 0x00202830, "panel above the desktop: %08x", pixel(sw / 2, sh - 14));
+    ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel above the desktop: %08x", pixel(sw / 2, sh - 14));
     /* A wallpaper set from the command line is applied within a second. */
     struct proc *cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "wallpaper", "/usr/share/wallpapers/default.png", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1228,7 +1263,7 @@ static void test_gui_desktop(void)
     mouse_click(1);
     mouse_click(1);
     sleep_ms(1500);
-    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00204060, "clock window opened from the desktop: %08x", pixel(42, 50));
+    ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "clock window opened from the desktop: %08x", pixel(42, 50));
     alt_key(0x3e);
     sleep_ms(400);
     /* Context menus: on the desktop, then on the fourth icon (readme.txt). */
@@ -1255,7 +1290,7 @@ static void test_gui_desktop(void)
     cl = proc_create_user("/bin/settings", (char *const[]){ "settings", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
     sleep_ms(1800);
-    ktest_assert(pixel(70 + 2, 90 - 10) == 0x00204060, "settings window has an active title bar: %08x", pixel(72, 80));
+    ktest_assert(pixel(70 + 2, 90 - 10) == 0x00ebebeb, "settings window has an active title bar: %08x", pixel(72, 80));
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "settings window status 0x%x", status);

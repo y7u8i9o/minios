@@ -63,6 +63,11 @@ int seat_validate_serial(struct client *client, uint32_t n)
     return 0;
 }
 
+int seat_buttons(void)
+{
+    return buttons;
+}
+
 int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t n)
 {
     return n != 0 && n == grab_serial && client == grab_client && (!origin || origin == grab_origin);
@@ -297,7 +302,8 @@ void seat_pointer_button(int button, int pressed)
             data_pointer_release();
             return;
         }
-        if (decor_release())
+        /* A drag the client asked for still owes it the release. */
+        if (decor_release() == 1)
             return;
         if (!buttons)
             press_focus = NULL;

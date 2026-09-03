@@ -51,7 +51,7 @@ static void dropdown_paint(struct widget *w, struct painter *p)
 {
     struct dropdown *d = (struct dropdown *)w;
     const struct theme *t = p->theme;
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_BUTTON]);
+    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
     painter_frame(p, 0, 0, w->w, w->h, t->color[TC_BORDER]);
     int y = 1, i = 0;
     for (struct widget *it = d->menu->first; it; it = it->next, i++) {
@@ -165,7 +165,7 @@ static void menubar_measure(struct widget *w, struct size_hint *h)
 static void menubar_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_BUTTON]);
+    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     painter_line(p, 0, w->h - 1, w->w - 1, w->h - 1, t->color[TC_BORDER]);
     int x = 0, i = 0;
     for (struct widget *m = w->first; m; m = m->next, i++) {

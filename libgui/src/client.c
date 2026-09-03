@@ -1,9 +1,12 @@
 /* Window client over libwire: toplevel surfaces with two shared memory
  * buffers, damage committed once per compositor frame, input events
  * translated with the seat's keymap, the clipboard through the data
- * device. */
+ * device. Toplevels carry client side decorations (csd.c): the drawing
+ * surface holds the chrome around the contents, gui_window.surf is the
+ * view of the contents, and the compositor is told the window geometry. */
 #include <gui/client.h>
 #include <gui/keymap.h>
+#include "csd.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,8 +49,43 @@ struct win {
     uint8_t *old_map;
     size_t old_map_size;
     int old_fd;
-    int px, py;                 /* last pointer position */
+    int px, py;                 /* last pointer position, surface coordinates */
+    struct csd csd;
+    struct surface full;        /* the whole drawing surface; surf views the contents */
+    struct wire_proxy *decoration;
+    int press_zone;             /* zone of the current button press */
+    uint32_t last_click;        /* release time of the previous header click (double click) */
 };
+
+/* Logical origin of the contents inside the surface. */
+static void content_origin(struct gui_window *w, int *ox, int *oy)
+{
+    struct win *wi = w->priv;
+    struct rect c = csd_content(&wi->csd, w->width, w->height);
+    *ox = c.x;
+    *oy = c.y;
+}
+
+static void add_damage(struct win *wi, struct rect r)
+{
+    r = rect_intersect(r, (struct rect){ 0, 0, wi->full.width, wi->full.height });
+    if (rect_empty(r))
+        return;
+    wi->damage = wi->has_damage ? rect_union(wi->damage, r) : r;
+    wi->has_damage = 1;
+}
+
+/* Repaint the chrome (or the header bar only) and damage it. */
+static void chrome_repaint(struct gui_window *w, int header_only)
+{
+    struct win *wi = w->priv;
+    if (!wi->csd.enabled || !wi->full.pixels)
+        return;
+    int s = w->scale > 0 ? w->scale : 1;
+    struct rect r = header_only ? csd_paint_header(&wi->full, s, &wi->csd, w->width, w->height)
+                                : csd_paint(&wi->full, s, &wi->csd, w->width, w->height);
+    add_damage(wi, r);
+}
 
 static struct wire_display *display;
 static struct wire_proxy *compositor, *shm, *shell, *seat, *pointer, *keyboard, *data_manager, *data_device;
@@ -203,6 +241,30 @@ static void on_output_done(void *user, struct wire_proxy *o)
 }
 const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
+/* The zone under the pointer, with the button hover state kept up to
+ * date; a press holds its zone until the release. */
+static enum csd_zone pointer_zone(struct gui_window *w, int *edges)
+{
+    struct win *wi = w->priv;
+    enum csd_zone z = csd_hit(&wi->csd, w->width, w->height, wi->px, wi->py, edges);
+    int hover = z == CSD_CLOSE || z == CSD_MAXIMIZE || z == CSD_MINIMIZE ? (int)z : 0;
+    if (hover != wi->csd.hover) {
+        wi->csd.hover = hover;
+        chrome_repaint(w, 1);
+    }
+    return z;
+}
+
+/* A pointer message to the application in contents coordinates. */
+static void push_mouse(struct gui_window *w, int c, int kind)
+{
+    struct win *wi = w->priv;
+    int ox, oy;
+    content_origin(w, &ox, &oy);
+    struct wmsg m = { WM_MOUSE, 0, w->id, wi->px - ox, wi->py - oy, c, kind, "" };
+    push(&m);
+}
+
 static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y)
 {
     last_serial = serial;
@@ -211,13 +273,22 @@ static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, stru
         struct win *wi = pointer_win->priv;
         wi->px = wire_fixed_to_int(x);
         wi->py = wire_fixed_to_int(y);
-        struct wmsg m = { WM_MOUSE, 0, pointer_win->id, wi->px, wi->py, wi->buttons, WMOUSE_MOVE, "" };
-        push(&m);
+        int edges;
+        if (pointer_zone(pointer_win, &edges) == CSD_CONTENT)
+            push_mouse(pointer_win, wi->buttons, WMOUSE_MOVE);
     }
 }
 static void on_ptr_leave(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s)
 {
-    if (pointer_win == window_of_surface(s))
+    struct gui_window *w = window_of_surface(s);
+    if (w) {
+        struct win *wi = w->priv;
+        if (wi->csd.hover) {
+            wi->csd.hover = 0;
+            chrome_repaint(w, 1);
+        }
+    }
+    if (pointer_win == w)
         pointer_win = NULL;
 }
 static void on_ptr_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x, int32_t y)
@@ -227,27 +298,73 @@ static void on_ptr_motion(void *user, struct wire_proxy *p, uint32_t time, int32
     struct win *wi = pointer_win->priv;
     wi->px = wire_fixed_to_int(x);
     wi->py = wire_fixed_to_int(y);
-    struct wmsg m = { WM_MOUSE, 0, pointer_win->id, wi->px, wi->py, wi->buttons, WMOUSE_MOVE, "" };
-    push(&m);
+    int edges;
+    enum csd_zone z = pointer_zone(pointer_win, &edges);
+    if (wi->buttons ? wi->press_zone == CSD_CONTENT : z == CSD_CONTENT)
+        push_mouse(pointer_win, wi->buttons, WMOUSE_MOVE);
 }
 static void on_ptr_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
     last_serial = serial;
     if (!pointer_win)
         return;
-    struct win *wi = pointer_win->priv;
-    int bit = 1 << (button - 1);
+    struct gui_window *w = pointer_win;
+    struct win *wi = w->priv;
+    int bit = 1 << (button - 1), edges;
+    int first = wi->buttons == 0;
     wi->buttons = state ? wi->buttons | bit : wi->buttons & ~bit;
-    struct wmsg m = { WM_MOUSE, 0, pointer_win->id, wi->px, wi->py, wi->buttons, state ? WMOUSE_DOWN : WMOUSE_UP, "" };
-    push(&m);
+    enum csd_zone z = pointer_zone(w, &edges);
+    if (state && first)
+        wi->press_zone = (int)z;
+    if (wi->press_zone == CSD_CONTENT) {
+        push_mouse(w, wi->buttons, state ? WMOUSE_DOWN : WMOUSE_UP);
+        return;
+    }
+    if (button != 1)
+        return;
+    if (state) {
+        switch (wi->press_zone) {
+        case CSD_HEADER_BAR:
+            /* A second press within 400 ms of a completed click toggles
+             * maximized; a press repeated during a drag does not. */
+            if (wi->last_click && time - wi->last_click < 400 && wi->toplevel) {
+                if (wi->csd.maximized) toplevel_unset_maximized(wi->toplevel);
+                else toplevel_set_maximized(wi->toplevel);
+                wi->last_click = 0;
+            } else if (wi->toplevel && !wi->csd.maximized) {
+                toplevel_move(wi->toplevel, seat, serial);
+            }
+            break;
+        case CSD_RESIZE:
+            if (wi->toplevel)
+                toplevel_resize(wi->toplevel, seat, serial, (uint32_t)edges);
+            break;
+        default:
+            break;
+        }
+    } else if ((int)z == wi->press_zone && wi->toplevel) {
+        /* The buttons act on release over the same button. */
+        if (z == CSD_HEADER_BAR) {
+            wi->last_click = time;
+        } else if (z == CSD_CLOSE) {
+            struct wmsg m = { WM_CLOSE, 0, w->id, 0, 0, 0, 0, "" };
+            push(&m);
+        } else if (z == CSD_MAXIMIZE) {
+            if (wi->csd.maximized) toplevel_unset_maximized(wi->toplevel);
+            else toplevel_set_maximized(wi->toplevel);
+        } else if (z == CSD_MINIMIZE) {
+            toplevel_set_minimized(wi->toplevel);
+        }
+    }
 }
 static void on_ptr_axis(void *user, struct wire_proxy *p, uint32_t time, uint32_t axis, int32_t value)
 {
     if (!pointer_win)
         return;
     struct win *wi = pointer_win->priv;
-    struct wmsg m = { WM_MOUSE, 0, pointer_win->id, wi->px, wi->py, wire_fixed_to_int(value) / 15, WMOUSE_WHEEL, "" };
-    push(&m);
+    int edges;
+    if (csd_hit(&wi->csd, pointer_win->width, pointer_win->height, wi->px, wi->py, &edges) == CSD_CONTENT)
+        push_mouse(pointer_win, wire_fixed_to_int(value) / 15, WMOUSE_WHEEL);
 }
 static void on_ptr_frame(void *user, struct wire_proxy *p) {}
 static const struct pointer_listener pointer_events = { on_ptr_enter, on_ptr_leave, on_ptr_motion, on_ptr_button, on_ptr_axis, on_ptr_frame };
@@ -474,12 +591,18 @@ static void release_old(struct win *wi)
 
 static int pool_alloc(struct win *wi, int w, int h)
 {
+    uint32_t format = wi->csd.enabled ? 2 : 1;      /* ARGB8888 for the chrome's shadow */
     size_t size = (size_t)w * h * 4 * 2;
     int fd = memfd_create("gui", MFD_CLOEXEC);
-    if (fd < 0 || ftruncate(fd, (long)size) < 0)
+    if (fd < 0 || ftruncate(fd, (long)size) < 0) {
+        fprintf(stderr, "gui: cannot allocate a %dx%d buffer pool (%zu bytes): %s\n", w, h, size, strerror(errno));
+        if (fd >= 0)
+            close(fd);
         return -1;
+    }
     uint8_t *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) {
+        fprintf(stderr, "gui: cannot map a %zu byte buffer pool: %s\n", size, strerror(errno));
         close(fd);
         return -1;
     }
@@ -501,7 +624,7 @@ static int pool_alloc(struct win *wi, int w, int h)
     wi->buf_h = h;
     wi->pool = shm_create_pool(shm, fd, (int32_t)size);
     for (int i = 0; i < 2; i++) {
-        wi->bufs[i].proxy = shm_pool_create_buffer(wi->pool, i * w * h * 4, w, h, w * 4, 1);
+        wi->bufs[i].proxy = shm_pool_create_buffer(wi->pool, i * w * h * 4, w, h, w * 4, format);
         wire_proxy_set_user_data(wi->bufs[i].proxy, &wi->bufs[i]);
         extern const struct buffer_listener buffer_events;
         buffer_add_listener(wi->bufs[i].proxy, &buffer_events, &wi->bufs[i]);
@@ -519,34 +642,47 @@ static void on_release(void *user, struct wire_proxy *b)
 }
 const struct buffer_listener buffer_events = { on_release };
 
-/* Size the surface and the buffers for width by height logical pixels
- * at the output's scale. Damage is kept in device pixels. */
+/* Size the surface and the buffers for contents of width by height
+ * logical pixels at the output's scale, with the chrome around them.
+ * Damage is kept in device pixels of the whole surface. */
 static void surface_resize(struct gui_window *w, int width, int height)
 {
     struct win *wi = w->priv;
     int scale = output_scale();
-    int dw = width * scale, dh = height * scale;
-    uint32_t *px = malloc((size_t)dw * dh * 4);
+    int bw, bh;
+    csd_buffer_size(&wi->csd, width, height, &bw, &bh);
+    int dw = bw * scale, dh = bh * scale;
+    uint32_t *px = calloc((size_t)dw * dh, 4);
     if (!px)
         return;
-    memset(px, 0xdc, (size_t)dw * dh * 4);
+    struct surface full = { px, dw, dh, dw };
+    struct rect c = csd_content(&wi->csd, width, height);
+    struct surface view = { px + (size_t)c.y * scale * dw + (size_t)c.x * scale, width * scale, height * scale, dw };
+    gfx_fill(&view, 0x00dcdcdc);
     if (w->surf.pixels) {
-        struct surface n = { px, dw, dh, dw };
-        gfx_blit(&n, 0, 0, &w->surf, NULL);
-        free(w->surf.pixels);
+        gfx_blit(&view, 0, 0, &w->surf, NULL);
+        free(wi->full.pixels);
     }
-    w->surf.pixels = px;
-    w->surf.width = dw;
-    w->surf.height = dh;
-    w->surf.stride = dw;
+    wi->full = full;
+    w->surf = view;
     w->width = width;
     w->height = height;
     w->scale = scale;
     pool_alloc(wi, dw, dh);
     surface_set_buffer_scale(wi->surface, scale);
-    struct rect opaque = { 0, 0, width, height };
-    struct wire_array region = { &opaque, sizeof opaque };
+    struct rect rects[4];
+    int n = csd_opaque_region(&wi->csd, width, height, rects);
+    struct wire_array region = { rects, sizeof rects[0] * (size_t)n };
     surface_set_opaque_region(wi->surface, &region);
+    if (wi->csd.enabled) {
+        n = csd_input_region(&wi->csd, width, height, rects);
+        struct wire_array input = { rects, sizeof rects[0] * (size_t)n };
+        surface_set_input_region(wi->surface, &input);
+        struct rect f = csd_frame(&wi->csd, width, height);
+        if (wi->toplevel)
+            toplevel_set_window_geometry(wi->toplevel, f.x, f.y, f.w, f.h);
+        csd_paint(&wi->full, scale, &wi->csd, width, height);
+    }
     wi->damage = (struct rect){ 0, 0, dw, dh };
     wi->has_damage = 1;
 }
@@ -587,8 +723,8 @@ static void commit_now(struct gui_window *w)
     }
     int index = (int)(wb - wi->bufs);
     struct surface dst = { (uint32_t *)(wi->map + (size_t)index * wi->buf_w * wi->buf_h * 4), wi->buf_w, wi->buf_h, wi->buf_w };
-    struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, w->surf.width, w->surf.height });
-    gfx_copy_rect(&dst, &w->surf, &r);
+    struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, wi->full.width, wi->full.height });
+    csd_copy(&dst, &wi->full, r, w->scale > 0 ? w->scale : 1, &wi->csd, w->width, w->height);
     wb->has_stale = 0;
     wb->busy = 1;
     surface_attach(wi->surface, wb->proxy, 0, 0);
@@ -622,13 +758,53 @@ static void on_configure(void *user, struct wire_proxy *t, uint32_t serial, int3
         return;
     struct win *wi = w->priv;
     toplevel_ack_configure(t, serial);
-    if (width > 0 && height > 0 && (width != w->width || height != w->height)) {
+    int maximized = 0, active = 0;
+    const uint32_t *st = states->data;
+    for (size_t i = 0; i < states->size / 4; i++) {
+        if (st[i] == 1) maximized = 1;
+        if (st[i] == 2) active = 1;
+    }
+    int chrome_changed = wi->csd.enabled && (maximized != wi->csd.maximized || active != wi->csd.active);
+    int layout_changed = wi->csd.enabled && maximized != wi->csd.maximized;
+    wi->csd.maximized = maximized;
+    wi->csd.active = active;
+    /* The size describes the window geometry: the header bar is part of it. */
+    if (width > 0 && height > 0) {
+        height -= csd_header(&wi->csd);
         if (wi->min_w && width < wi->min_w) width = wi->min_w;
         if (wi->min_h && height < wi->min_h) height = wi->min_h;
-        surface_resize(w, width, height);
-        struct wmsg m = { WM_RESIZED, 0, w->id, width, height, 0, 0, "" };
-        push(&m);
+        if (height < 1) height = 1;
     }
+    if (width > 0 && height > 0 && (width != w->width || height != w->height || layout_changed)) {
+        int changed = width != w->width || height != w->height;
+        surface_resize(w, width, height);
+        if (changed) {
+            struct wmsg m = { WM_RESIZED, 0, w->id, width, height, 0, 0, "" };
+            push(&m);
+        }
+    } else if (layout_changed && w->surf.pixels) {
+        surface_resize(w, w->width, w->height);
+    } else if (chrome_changed) {
+        chrome_repaint(w, 0);
+    }
+}
+static void on_decor_mode(void *user, struct wire_proxy *d, uint32_t mode)
+{
+    struct gui_window *w = user;
+    struct win *wi = w->priv;
+    wi->csd.enabled = mode == 2;
+}
+static const struct decoration_listener decor_events = { on_decor_mode };
+
+/* Ask for client side decorations; the compositor's answer arrives with
+ * the roundtrip that follows. */
+static void decorate(struct gui_window *w, const char *title)
+{
+    struct win *wi = w->priv;
+    strlcpy(wi->csd.title, title ? title : "", sizeof wi->csd.title);
+    wi->decoration = shell_get_decoration(shell, wi->toplevel);
+    decoration_add_listener(wi->decoration, &decor_events, w);
+    decoration_set_mode(wi->decoration, 2);
 }
 static void on_close(void *user, struct wire_proxy *t)
 {
@@ -753,6 +929,7 @@ struct gui_window *gui_create_window(int width, int height, const char *title)
     wi->toplevel = shell_get_toplevel(shell, wi->surface);
     toplevel_add_listener(wi->toplevel, &toplevel_events, NULL);
     toplevel_set_title(wi->toplevel, title);
+    decorate(w, title);
     /* A role must receive and acknowledge its initial configure before
      * the first non-NULL buffer is committed. */
     roundtrip();
@@ -776,6 +953,7 @@ struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width
         toplevel_set_parent(wi->toplevel, pi->toplevel);
         toplevel_set_modal(wi->toplevel, 1);
     }
+    decorate(w, title);
     roundtrip();
     surface_resize(w, width, height);
     gui_flush();
@@ -809,9 +987,11 @@ struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int
     if (!w)
         return NULL;
     struct win *wi = w->priv, *pi = parent->priv;
+    int ox, oy;
+    content_origin(parent, &ox, &oy);
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, width, height);
-    positioner_set_anchor_rect(pos, x, y, 1, 1);
+    positioner_set_anchor_rect(pos, x + ox, y + oy, 1, 1);
     positioner_set_anchor(pos, 5);             /* top-left */
     positioner_set_gravity(pos, 8);            /* extend down and right */
     positioner_set_constraint_adjustment(pos, 63); /* flip, slide, then resize on both axes */
@@ -837,6 +1017,8 @@ void gui_destroy_window(struct gui_window *w)
         }
     if (pointer_win == w) pointer_win = NULL;
     if (keyboard_win == w) keyboard_win = NULL;
+    if (wi->decoration)
+        decoration_destroy(wi->decoration);
     if (wi->toplevel)
         toplevel_destroy(wi->toplevel);
     if (wi->layer)
@@ -856,7 +1038,7 @@ void gui_destroy_window(struct gui_window *w)
         close(wi->fd);
     release_old(wi);
     wire_display_flush(display);
-    free(w->surf.pixels);
+    free(wi->full.pixels);
     free(wi);
     free(w);
 }
@@ -869,23 +1051,39 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
                                    (struct rect){ 0, 0, w->surf.width, w->surf.height });
     if (rect_empty(r))
         return;
-    wi->damage = wi->has_damage ? rect_union(wi->damage, r) : r;
-    wi->has_damage = 1;
+    int ox, oy;
+    content_origin(w, &ox, &oy);
+    r.x += ox * s;
+    r.y += oy * s;
+    add_damage(wi, r);
+}
+
+/* Regions given in contents coordinates, moved into the surface. */
+static void offset_region(struct gui_window *w, const struct rect *rects, int count, struct rect *out)
+{
+    int ox, oy;
+    content_origin(w, &ox, &oy);
+    for (int i = 0; i < count; i++)
+        out[i] = (struct rect){ rects[i].x + ox, rects[i].y + oy, rects[i].w, rects[i].h };
 }
 
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count)
 {
-    if (!w || count < 0)
+    if (!w || count < 0 || count > 16)
         return;
-    struct wire_array a = { (void *)rects, (size_t)count * sizeof *rects };
+    struct rect moved[16];
+    offset_region(w, rects, count, moved);
+    struct wire_array a = { moved, (size_t)count * sizeof *rects };
     surface_set_opaque_region(((struct win *)w->priv)->surface, &a);
 }
 
 void gui_set_input_region(struct gui_window *w, const struct rect *rects, int count)
 {
-    if (!w || count < 0)
+    if (!w || count < 0 || count > 16)
         return;
-    struct wire_array a = { (void *)rects, (size_t)count * sizeof *rects };
+    struct rect moved[16];
+    offset_region(w, rects, count, moved);
+    struct wire_array a = { moved, (size_t)count * sizeof *rects };
     surface_set_input_region(((struct win *)w->priv)->surface, &a);
 }
 
@@ -896,6 +1094,8 @@ void gui_set_title(struct gui_window *w, const char *title)
     struct win *wi = w->priv;
     if (wi->toplevel)
         toplevel_set_title(wi->toplevel, title);
+    strlcpy(wi->csd.title, title ? title : "", sizeof wi->csd.title);
+    chrome_repaint(w, 1);
 }
 
 void gui_resize(struct gui_window *w, int width, int height)
@@ -913,7 +1113,7 @@ void gui_set_min_size(struct gui_window *w, int width, int height)
     wi->min_w = width;
     wi->min_h = height;
     if (wi->toplevel)
-        toplevel_set_min_size(wi->toplevel, width, height);
+        toplevel_set_min_size(wi->toplevel, width, height + csd_header(&wi->csd));
 }
 
 /* ---- clipboard ---- */

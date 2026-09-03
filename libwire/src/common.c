@@ -2,6 +2,7 @@
  * descriptor records, message framing and decoding. */
 #include <wire/common.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -132,6 +133,8 @@ int wire_conn_flush(struct wire_conn *c)
                 continue;
             if (errno == EAGAIN)
                 break;
+            fprintf(stderr, "wire: send of %zu bytes and %d descriptors failed: %s\n", c->out_len - off, nfds,
+                    strerror(errno));
             c->error = 1;
             return -1;
         }

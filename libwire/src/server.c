@@ -194,6 +194,8 @@ struct wire_resource *wire_client_first_resource(struct wire_client *c) { return
 
 void wire_client_post_error(struct wire_client *c, struct wire_resource *r, uint32_t code, const char *message)
 {
+    fprintf(stderr, "wire: protocol error on object %u (%s) code %u: %s\n", r ? r->obj.id : 0,
+            r ? r->obj.interface->name : "-", code, message);
     union wire_arg args[3] = { { .u = r ? r->obj.id : 0 }, { .u = code }, { .s = message } };
     wire_resource_post(c->display, 0, args);
     wire_conn_flush(&c->conn);

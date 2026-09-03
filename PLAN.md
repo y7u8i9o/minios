@@ -1030,7 +1030,7 @@ and the real device's probe), `gui_tablet` (the compositor's cursor
 follows absolute events), and the GUI cases run on virtio-vga. The
 complete QEMU suite passes with 76 tests and no failures.
 
-### M33. Toolkit side HiDPI
+### M33. Toolkit side HiDPI (completed 2026-09-03)
 
 The output announces scale 2 when the mode has a pixel scale; libgui
 renders at that scale (fonts, metrics, images) into buffers with
@@ -1038,7 +1038,10 @@ renders at that scale (fonts, metrics, images) into buffers with
 scaled buffers 1:1 and doubling unscaled ones, and draws decorations and
 the cursor at the scale. Text and icons become sharp on high density
 displays. Tests: `gui_scale2` (a scaled client's buffer appears 1:1, an
-unscaled client's buffer is doubled, decorations are drawn at scale).
+unscaled client's buffer is doubled, decorations are drawn at scale) and
+`gui_term_scale2` (the terminal, whose 18 MiB buffer pool needs the
+raised shared memory limit, at scale 2). The complete QEMU suite passes
+with 78 tests and no failures.
 
 ### M34. Audio follow-ups
 
@@ -1055,7 +1058,7 @@ backend), `audio_mixer` (per-stream gain through the control interface),
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.
 - Kernel self tests are compiled in when `CONFIG_TESTS=1` and selected by a Limine command line argument such as `test=pmm`.
 - User space tests in `user/tests/` run under a `runtests` program once M10 is reached and report the same markers.
-- `make test` runs all cases and prints a summary.
+- `make test CASES="case ..."` runs the named cases and prints a summary. Only the cases of the modules a change touches are run; the full suite has grown too large to run for every change and is never run as a whole.
 - The shutdown path is itself tested: a case boots to user space, runs `shutdown`, and asserts that the block cache was flushed (the mfs clean flag is set on the resulting image) and that QEMU exited through the ACPI power off rather than the timeout.
 
 ## 5. Conventions
@@ -1081,3 +1084,21 @@ Graphical tools `sysmon`, `logview` (over `/dev/klog`), `hexview`, `evtest` and 
 ## Desktop and settings (completed 2026-08-30)
 
 Desktop layer client with wallpaper, icons of `/home/desktop`, context menus, MIME tables (`gui/mime.h`), the user settings application `settings` and layer surface windows in libgui. Documented in `docs/design/desktop.md`, tested by `tests/cases/gui_desktop` and the libgui host test.
+
+## Desktop look refresh (completed 2026-09-03)
+
+Decorations moved to the GTK 4 model: libgui toplevels draw a light
+header bar, outline, rounded corners and shadow in their own ARGB
+buffers (`libgui/src/csd.c`), negotiate the mode through
+the decoration interface and report their window geometry with the new
+`toplevel.set_window_geometry` request; the server places, clamps,
+maximizes and resizes by that geometry, copies opaque rows of ARGB
+buffers and skips the desktop fill under opaque windows. The server
+side decorations remain for clients without their own, redrawn in the
+same style (title font, round buttons, soft shadow computed only in the
+band around the frame). The panel draws through the libgui painter at
+the output scale and libgui's rounded rectangles use circular corners.
+Documented in
+`docs/design/shell.md`, `docs/design/gui.md` and
+`docs/design/protocol.md`; the decoration expectations of the `gui_*`
+and `comp_*` cases were updated.

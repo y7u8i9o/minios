@@ -87,3 +87,13 @@ events with arguments, destructor requests and id reuse after
 protocol in the target against the compositor.
 
 Messages carry at most 16 arguments (`WIRE_MAX_ARGS`). The listener and handler trampolines in `libwire/src/client.c` and `server.c` cover 0 to 12 arguments, so a message with more arguments must be split.
+
+## Window geometry
+
+`toplevel.set_window_geometry(x, y, width, height)` (added with the
+client side decorations) tells the server which part of the surface is
+the visible window: the header bar and contents without the shadow
+margins around them. Configure sizes, placement, clamping and the
+maximized size refer to that rectangle; a buffer committed after an
+acknowledged configure must carry a geometry of the configured size. A
+width or height of 0 clears it and the whole surface counts again.

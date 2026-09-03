@@ -139,7 +139,7 @@ make VIDEO=2560x1600@2 run       # doubled pixels for a Retina display (the
                                  # Settings > Display changes the mode later
 tools/run.sh --help            # every QEMU option; qemu.conf holds local defaults
 make gdb        # boot QEMU halted with gdbstub on port 1234
-make test       # run all boot tests
+make test CASES="gui gui_wm"   # run the named boot tests (never the whole suite)
 ```
 
 ## Code Size

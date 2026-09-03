@@ -1,3 +1,4 @@
+x12: started 1024x768 scale 2
 x12: toplevel 1 'terminal' mapped at 40,30 960x630
 term: shell pid [0-9]+ on /dev/pts[0-9]
 term: shell exited

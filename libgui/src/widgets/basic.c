@@ -96,9 +96,9 @@ static void button_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    uint32_t fill = !w->enabled ? t->color[TC_WINDOW] : w->pressed ? t->color[TC_BUTTON_PRESSED]
-                    : w->hover ? t->color[TC_HIGHLIGHT] : t->color[TC_BUTTON];
-    painter_rounded(p, 0, 0, w->w, w->h, fill, t->color[TC_BORDER]);
+    uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->pressed ? t->color[TC_BUTTON_PRESSED]
+                    : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_BUTTON];
+    painter_rounded(p, 0, 0, w->w, w->h, fill, 0xffffffffu);
     char buf[256];
     int mn;
     caption(w, buf, sizeof buf, &mn);

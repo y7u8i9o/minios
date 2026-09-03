@@ -23,22 +23,23 @@ static void tabs_measure(struct widget *w, struct size_hint *h)
         if (c->measured.pref_w > pw) pw = c->measured.pref_w;
         if (c->measured.pref_h > ph) ph = c->measured.pref_h;
     }
-    h->pref_w = pw + 2;
-    h->pref_h = ph + hh + 2;
+    h->pref_w = pw;
+    h->pref_h = ph + hh + theme_px(widget_theme(w), TM_SPACING);
     h->min_w = 40;
     h->min_h = hh + 20;
 }
 
 static void tabs_layout(struct widget *w)
 {
-    int hh = tabs_header_h(w);
+    /* The page starts one spacing below the header row's hairline. */
+    int hh = tabs_header_h(w), gap = theme_px(widget_theme(w), TM_SPACING);
     int i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
         c->visible = i == w->value;
-        c->x = 1;
-        c->y = hh;
-        c->w = w->w - 2;
-        c->h = w->h - hh - 1;
+        c->x = 0;
+        c->y = hh + gap;
+        c->w = w->w;
+        c->h = w->h - hh - gap;
         c->dirty = 1;
     }
 }
@@ -62,20 +63,19 @@ static void tabs_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     int hh = tabs_header_h(w);
+    /* Tab titles in a row over a hairline; the current one is marked
+     * by an accent underline instead of a box. */
     painter_fill(p, 0, 0, w->w, hh, t->color[TC_WINDOW]);
-    painter_frame(p, 0, hh - 1, w->w, w->h - hh + 1, t->color[TC_BORDER]);
+    painter_fill(p, 0, hh - 1, w->w, 1, t->color[TC_BORDER]);
     int i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
         int tw;
         int x = tab_x(w, p, i, &tw);
         int current = i == w->value;
-        painter_fill(p, x, current ? 0 : 3, tw, hh - (current ? 1 : 3), current ? t->color[TC_WINDOW] : t->color[TC_TRACK]);
-        painter_line(p, x, current ? 0 : 3, x + tw - 1, current ? 0 : 3, t->color[TC_BORDER]);
-        painter_line(p, x, 0, x, hh - 1, t->color[TC_BORDER]);
-        painter_line(p, x + tw - 1, 0, x + tw - 1, hh - 1, t->color[TC_BORDER]);
         if (current)
-            painter_line(p, x + 1, hh - 1, x + tw - 2, hh - 1, t->color[TC_WINDOW]);
-        painter_text(p, x + TAB_PAD, (hh - painter_text_height(p)) / 2 + (current ? 0 : 1), widget_text(c), t->color[TC_TEXT]);
+            painter_fill(p, x, hh - 3, tw, 3, t->color[TC_ACCENT]);
+        painter_text(p, x + TAB_PAD, (hh - 3 - painter_text_height(p)) / 2, widget_text(c),
+                     t->color[current ? TC_TEXT : TC_TEXT_DISABLED]);
     }
     if (w->focused) {
         int tw;
@@ -196,9 +196,9 @@ static void split_paint(struct widget *w, struct painter *p)
     if (!a)
         return;
     if (w->value)
-        painter_fill(p, 0, a->h + 2, w->w, 2, p->theme->color[TC_BORDER]);
+        painter_fill(p, 0, a->h + 2, w->w, 2, p->theme->color[TC_TRACK]);
     else
-        painter_fill(p, a->w + 2, 0, 2, w->h, p->theme->color[TC_BORDER]);
+        painter_fill(p, a->w + 2, 0, 2, w->h, p->theme->color[TC_TRACK]);
 }
 
 static int split_event(struct widget *w, struct event *e)

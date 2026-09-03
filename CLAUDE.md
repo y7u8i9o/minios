@@ -19,7 +19,7 @@ A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. T
 - `make image` builds the bootable image in `build/`.
 - `make run` boots QEMU with serial on stdio.
 - `make gdb` boots QEMU halted with the gdbstub on port 1234.
-- `make test` runs all boot tests in `tests/cases/`.
+- `make test CASES="case ..."` runs the named boot tests from `tests/cases/`; `make test` alone runs all of them, which takes far too long and is not used.
 
 ## Conventions
 
@@ -37,5 +37,5 @@ A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. T
 ## Working style
 
 - Complete one milestone at a time in PLAN.md order. Do not start a later milestone before the boot test of the current one passes.
-- Run `make test` before considering any change finished.
+- Never run the full test suite. Before considering a change finished, run only the cases of the modules the change touches (`make test CASES="..."`, for example the `gui_*` and `comp_*` cases for a compositor change); pick them from the files changed, not by guessing.
 - Keep files under roughly 800 lines. Split by subsystem, not by arbitrary size.

@@ -49,7 +49,7 @@ static void h_read_pixel(struct wire_client *c, struct wire_resource *self, int3
 {
     uint32_t v = 0;
     if (x >= 0 && y >= 0 && x < screen_w && y < screen_h)
-        v = back.pixels[(size_t)y * back.stride + x];
+        v = back.pixels[(size_t)(y * screen_scale) * back.stride + (size_t)(x * screen_scale)];
     debug_send_pixel(self, x, y, v);
 }
 static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel };

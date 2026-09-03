@@ -204,6 +204,7 @@ int main(int argc, char **argv)
     text_init(srv);
     debug_init(srv);
     scene_init();
+    decor_init();
     cursor_x = screen_w / 2;
     cursor_y = screen_h / 2;
     frame_fd = timerfd_create(TFD_NONBLOCK | TFD_CLOEXEC);

@@ -128,3 +128,12 @@ cancels it.
   with the system compiler against `libfont/src/*.c`) is not part of the
   tree; the library has no dependencies beyond `stdio`, `stdlib` and
   `string`, so it compiles unchanged on the host.
+
+## Host test
+
+`make check` runs `libfont/tests/test_raster.c` against the bundled
+DejaVu Sans: narrow glyphs (`.`, `!`, `i`, `l`, `:`) and `o` must get
+coverage at 12 to 40 pixels. It guards the scan converter's crossing
+sort, which once compared a shifted x with an unshifted one and left
+glyphs whose left edge lies past the first pixel column empty (`.` at
+28 px, `!` at 14 px).

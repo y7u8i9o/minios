@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #define SHM_MAX 32
-#define SHM_MAX_PAGES 4096
+#define SHM_MAX_PAGES 16384     /* 64 MiB: a double buffered 2560x1600 window at scale 2 needs 33 MiB */
 
 /* A named shared memory object: frames that several address spaces map.
  * The object holds one reference on every frame; mappings add their own

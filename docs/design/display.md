@@ -105,3 +105,65 @@ command line `video=` remains the boot and console mode.
   points and repaints the old position.
 - `comp_scale`, `gui` and `gui_desktop` run on virtio-vga; `comp_scale`
   boots `video=2560x1600@2`, a mode only the GPU can set.
+
+## Toolkit side HiDPI (M33)
+
+The output announces `scale` = the screen's pixel scale. libgui windows
+keep logical sizes (`gui_window.width`, `height`) and get a `scale`; the
+surface and the two shared memory buffers are `width * scale` by
+`height * scale` device pixels and the surface carries
+`set_buffer_scale(scale)`. `gui_damage` takes logical rectangles, damage
+is tracked in device pixels and reported to the compositor in logical
+pixels rounded outwards. When the output's `done` event reports another
+scale (a mode change from Settings > Display), every window is
+re-created at the new scale and receives `WM_RESIZED`.
+
+`struct painter` gained `scale`: local coordinates stay logical, the
+origin and clip are device pixels, fills, frames and lines are `scale`
+pixels thick, rounded rectangles get a `scale` pixel border, images,
+blits and masks are enlarged with nearest neighbour, and text is
+rasterized at `px * scale` (outline fonts) or drawn as `scale` by
+`scale` blocks (bitmap fonts) through `gfx_text_font_scaled`. Widths
+returned to layout are logical (`ceil(device / scale)`), heights are the
+logical font height, so layout does not depend on the scale. Widgets and
+canvas paint handlers are unchanged; programs that write into
+`gui_window.surf` directly must use its device size (`guitest` draws a
+device checkerboard that way).
+
+The compositor's back buffer holds device pixels. Damage, surface
+positions, input and the shell stay logical; `compose_rect` converts
+each rectangle with `dev()`. `draw_surface` copies a buffer whose scale
+equals the screen scale row by row and resamples other buffers (nearest
+neighbour through the buffer scale and transform), so an unscaled client
+is doubled and a scaled one is sharp. The cursor shape is drawn in
+`scale` by `scale` blocks, shadows are computed in device pixels, and
+`decor_draw` paints frames, buttons and the title through a painter at
+the screen scale. `backend_flush` copies device rows and flushes the
+device rectangle.
+
+Buffers grow four times at scale 2: a 960x600 terminal needs an 18 MiB
+double buffered pool, so the per object limit of anonymous shared memory
+(`SHM_MAX_PAGES` in `ipc/shm.c`) is 64 MiB, enough for a 2560x1600
+window at scale 2; libgui reports a failed pool allocation on stderr
+instead of leaving the window without buffers. `gui_term_scale2` runs
+the terminal test at `video=2048x1536@2`; the GUI tests read pixels in
+logical coordinates (`pixel` scales by `fb_screen_scale`) so they run at
+any scale.
+
+A run time mode change sends every layer surface a configure while
+clients may still have a frame in flight. The commit rule in
+`shell.c` therefore accepts a new buffer of the surface's old geometry
+while a configure is unacknowledged, from either half of a client's
+buffer pair; only a buffer of some third size is a protocol error. Before
+this the desktop was dropped on the second mode change with "buffer
+committed before configure acknowledgement" and every later change was
+lost. `gui_modes` cycles 1024x768@1, 2560x1600@2 and 1920x1200@1 six
+times with the panel, the desktop and the terminal running and prints
+the free page count after each change; with libc's large blocks mapped
+separately (`libc.md`) the count returns to its starting value whenever
+the mode does.
+
+`gui_scale2` boots `video=2048x1536@2` on virtio-vga: the compositor
+starts at 1024x768 scale 2, guitest announces buffer scale 2, its device
+checkerboard appears 1:1, beta's contents are at doubled coordinates, and
+the title bar border and height are two and forty device rows.

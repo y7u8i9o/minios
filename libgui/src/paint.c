@@ -119,6 +119,24 @@ void painter_line(struct painter *p, int x0, int y0, int x1, int y1, uint32_t co
     }
 }
 
+static int isqrt(int n)
+{
+    int r = 0;
+    while ((r + 1) * (r + 1) <= n)
+        r++;
+    return r;
+}
+
+/* Pixels left out at both ends of row i (from the top or the bottom) of
+ * a corner of radius r: the circle's chord at the row's centre. */
+static int corner_cut(int r, int i)
+{
+    int dy = 2 * r - 2 * i - 1;                 /* twice the distance to the centre */
+    int dx = isqrt(4 * r * r - dy * dy);        /* twice the half chord */
+    int cut = r - (dx + 1) / 2;
+    return cut < 0 ? 0 : cut > r ? r : cut;
+}
+
 /* Filled rounded rectangle without a border, in device pixels. */
 static void rounded_fill(struct surface *v, int x, int y, int w, int h, int r, uint32_t fill)
 {
@@ -129,9 +147,7 @@ static void rounded_fill(struct surface *v, int x, int y, int w, int h, int r, u
     gfx_fill_rect(v, x, y + r, r, h - 2 * r, fill);
     gfx_fill_rect(v, x + w - r, y + r, r, h - 2 * r, fill);
     for (int i = 0; i < r; i++) {
-        int inset = r - 1 - i;
-        int cut = inset > 0 ? (inset + 1) / 2 + (inset > 1 ? 1 : 0) : 0;
-        if (cut > r) cut = r;
+        int cut = corner_cut(r, i);
         gfx_hline(v, x + cut, y + i, w - 2 * cut, fill);
         gfx_hline(v, x + cut, y + h - 1 - i, w - 2 * cut, fill);
     }
@@ -161,10 +177,7 @@ void painter_rounded(struct painter *p, int x, int y, int w, int h, uint32_t fil
     gfx_fill_rect(&v, x + dx, y + dy + r, r, h - 2 * r, fill);
     gfx_fill_rect(&v, x + dx + w - r, y + dy + r, r, h - 2 * r, fill);
     for (int i = 0; i < r; i++) {
-        /* Inset of row i from the top (and bottom) inside the corner. */
-        int inset = r - 1 - i;
-        int cut = inset > 0 ? (inset + 1) / 2 + (inset > 1 ? 1 : 0) : 0;
-        if (cut > r) cut = r;
+        int cut = corner_cut(r, i);
         gfx_hline(&v, x + dx + cut, y + dy + i, w - 2 * cut, fill);
         gfx_hline(&v, x + dx + cut, y + dy + h - 1 - i, w - 2 * cut, fill);
         if (border != 0xffffffffu) {

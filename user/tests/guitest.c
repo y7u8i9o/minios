@@ -115,6 +115,14 @@ int main(int argc, char **argv)
     }
     gfx_fill(&a->surf, gfx_rgb(220, 220, 220));
     gfx_text(&a->surf, 10, 10, "window alpha", 0, 0xffffffffu);
+    if (a->scale > 1) {
+        /* A device pixel checkerboard: on screen 1:1 only when the
+         * compositor copies a scaled buffer without resampling. */
+        for (int j = 0; j < 8; j++)
+            for (int i = 0; i < 8; i++)
+                a->surf.pixels[(size_t)(40 + j) * a->surf.stride + 20 + i] = ((i ^ j) & 1) ? 0x00ffffff : 0;
+        printf("guitest: device checkerboard at scale %d\n", a->scale);
+    }
     gui_damage(a, 0, 0, a->width, a->height);
     if (b) {
         gfx_fill(&b->surf, gfx_rgb(200, 240, 200));

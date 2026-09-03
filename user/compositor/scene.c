@@ -1,6 +1,8 @@
 /* Scene: the ordered surfaces, damage merging, occlusion culling and
  * per rectangle composition into the back buffer (from the M19 server),
- * plus the cursor. */
+ * plus the cursor. Rectangles, positions and damage are logical pixels;
+ * the back buffer holds screen_scale device pixels per logical pixel:
+ * buffers with the output's scale are copied 1:1, others are resampled. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +21,27 @@ static int shown_x, shown_y;            /* where the cursor was drawn */
 #define CURSOR_SHADOW 1
 #define CURSOR_SHADE 154
 static long stat_count, stat_ms, stat_max;
+
+/* Logical rectangle to device pixels. */
+static struct rect dev(struct rect r)
+{
+    int s = screen_scale;
+    return (struct rect){ r.x * s, r.y * s, r.w * s, r.h * s };
+}
+
+static inline uint32_t blend_px(uint32_t d, uint32_t c)
+{
+    uint32_t a = c >> 24;
+    if (a == 255)
+        return c & 0x00ffffff;
+    if (!a)
+        return d;
+    uint32_t ia = 256 - (a + (a >> 7));
+    a += a >> 7;
+    return (((d >> 16 & 0xff) * ia + (c >> 16 & 0xff) * a) >> 8) << 16 |
+           (((d >> 8 & 0xff) * ia + (c >> 8 & 0xff) * a) >> 8) << 8 |
+           (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
+}
 
 void scene_init(void)
 {
@@ -186,7 +209,7 @@ static int pieces_subtract(struct rect *pieces, int *n, struct rect cover)
     return 1;
 }
 
-/* Blit a surface's buffer clipped to clip (screen coordinates). */
+/* Blit a surface's buffer clipped to clip (logical screen coordinates). */
 static void draw_surface(struct csurface *s, struct rect clip)
 {
     struct buffer *b = s->current.buffer;
@@ -195,60 +218,67 @@ static void draw_surface(struct csurface *s, struct rect clip)
     struct rect r = rect_intersect(surface_rect(s), clip);
     if (rect_empty(r))
         return;
-    int scale = s->current.scale > 0 ? s->current.scale : 1;
-    if (scale == 1 && s->current.transform == 0) {
-      for (int j = 0; j < r.h; j++) {
-        int sy = r.y - s->y + j;
-        const uint32_t *from = (const uint32_t *)(b->pool->map + b->offset + (size_t)sy * b->stride) + (r.x - s->x);
-        uint32_t *to = back.pixels + (size_t)(r.y + j) * back.stride + r.x;
-        if (b->format == FORMAT_XRGB8888) {
-            memcpy(to, from, (size_t)r.w * 4);
-            continue;
-        }
-        for (int i = 0; i < r.w; i++) {
-            uint32_t c = from[i], a = c >> 24;
-            if (a == 255) {
-                to[i] = c & 0x00ffffff;
-            } else if (a) {
-                uint32_t d = to[i], ia = 256 - (a + (a >> 7));
-                a += a >> 7;
-                to[i] = (((d >> 16 & 0xff) * ia + (c >> 16 & 0xff) * a) >> 8) << 16 |
-                        (((d >> 8 & 0xff) * ia + (c >> 8 & 0xff) * a) >> 8) << 8 |
-                        (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
-            }
-        }
-      }
-      return;
-    }
-    int ow = b->width / scale, oh = b->height / scale;
-    for (int j = 0; j < r.h; j++) {
-        uint32_t *to = back.pixels + (size_t)(r.y + j) * back.stride + r.x;
-        int ly = r.y - s->y + j;
-        for (int i = 0; i < r.w; i++) {
-            int lx = r.x - s->x + i, ox, oy;
-            switch (s->current.transform) {
-            case 1: ox = ly; oy = oh - 1 - lx; break;
-            case 2: ox = ow - 1 - lx; oy = oh - 1 - ly; break;
-            case 3: ox = ow - 1 - ly; oy = lx; break;
-            default: ox = lx; oy = ly; break;
-            }
-            if (ox < 0 || oy < 0 || ox >= ow || oy >= oh)
-                continue;
-            const uint32_t *row = (const uint32_t *)(b->pool->map + b->offset + (size_t)(oy * scale) * b->stride);
-            uint32_t c = row[ox * scale];
-            if (b->format == FORMAT_XRGB8888) {
-                to[i] = c & 0x00ffffff;
-            } else {
-                uint32_t a = c >> 24;
-                if (a == 255) to[i] = c & 0x00ffffff;
-                else if (a) {
-                    uint32_t d = to[i], ia = 256 - (a + (a >> 7));
-                    a += a >> 7;
-                    to[i] = (((d >> 16 & 0xff) * ia + (c >> 16 & 0xff) * a) >> 8) << 16 |
-                            (((d >> 8 & 0xff) * ia + (c >> 8 & 0xff) * a) >> 8) << 8 |
-                            (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
+    int bs = s->current.scale > 0 ? s->current.scale : 1;
+    int S = screen_scale;
+    struct rect R = dev(r);
+    int ox = s->x * S, oy = s->y * S;               /* the surface's device origin */
+    if (bs == S && s->current.transform == 0) {
+        /* Rows inside the client's opaque region are copied, the rest
+         * is blended (an ARGB buffer with client side shadows). */
+        struct rect opaque = { 0, 0, 0, 0 };
+        if (b->format == FORMAT_XRGB8888)
+            opaque = R;
+        else
+            for (int q = 0; q < s->current.nopaque; q++) {
+                struct rect o = s->current.opaque[q];
+                o = dev((struct rect){ o.x + s->x, o.y + s->y, o.w, o.h });
+                if (rect_contains(o, R.x, R.y) && rect_contains(o, R.x + R.w - 1, R.y + R.h - 1)) {
+                    opaque = R;
+                    break;
                 }
+                struct rect i = rect_intersect(o, R);
+                if (i.w * i.h > opaque.w * opaque.h)
+                    opaque = i;
             }
+        for (int j = 0; j < R.h; j++) {
+            int y = R.y + j, sy = y - oy;
+            const uint32_t *from = (const uint32_t *)(b->pool->map + b->offset + (size_t)sy * b->stride) + (R.x - ox);
+            uint32_t *to = back.pixels + (size_t)y * back.stride + R.x;
+            int x0 = 0, x1 = 0;
+            if (y >= opaque.y && y < opaque.y + opaque.h) {
+                x0 = opaque.x - R.x;
+                x1 = x0 + opaque.w;
+            }
+            if (b->format == FORMAT_XRGB8888) {
+                memcpy(to, from, (size_t)R.w * 4);
+                continue;
+            }
+            for (int i = 0; i < x0; i++)
+                to[i] = blend_px(to[i], from[i]);
+            for (int i = x0; i < x1; i++)
+                to[i] = from[i] & 0x00ffffff;
+            for (int i = x1 > x0 ? x1 : x0; i < R.w; i++)
+                to[i] = blend_px(to[i], from[i]);
+        }
+        return;
+    }
+    /* Nearest neighbour through the buffer scale and transform. */
+    int bw = b->width, bh = b->height;
+    for (int j = 0; j < R.h; j++) {
+        uint32_t *to = back.pixels + (size_t)(R.y + j) * back.stride + R.x;
+        int v = (R.y - oy + j) * bs / S;
+        for (int i = 0; i < R.w; i++) {
+            int u = (R.x - ox + i) * bs / S, bx, by;
+            switch (s->current.transform) {
+            case 1: bx = v; by = bh - bs - u; break;
+            case 2: bx = bw - bs - u; by = bh - bs - v; break;
+            case 3: bx = bw - bs - v; by = u; break;
+            default: bx = u; by = v; break;
+            }
+            if (bx < 0 || by < 0 || bx >= bw || by >= bh)
+                continue;
+            uint32_t c = ((const uint32_t *)(b->pool->map + b->offset + (size_t)by * b->stride))[bx];
+            to[i] = b->format == FORMAT_XRGB8888 ? (c & 0x00ffffff) : blend_px(to[i], c);
         }
     }
 }
@@ -262,19 +292,23 @@ static void draw_cursor(struct rect clip)
         draw_surface(cursor, clip);
         return;
     }
-    /* X: black outline, o: white fill, .: transparent. */
+    /* X: black outline, o: white fill, .: transparent. Every cell is an
+     * S by S block of device pixels. */
     static const char *shape[CURSOR_H] = {
         "X...........", "XX..........", "XoX.........", "XooX........", "XoooX.......",
         "XooooX......", "XoooooX.....", "XooooooX....", "XoooooooX...", "XooooooooX..",
         "XoooooXXXXX.", "XooXooX.....", "XoX.XooX....", "XX..XooX....", "X....XooX...",
         ".....XooX...", "......XX....", "............",
     };
-    for (int j = 0; j < CURSOR_H + CURSOR_SHADOW; j++)
-        for (int i = 0; i < CURSOR_W + CURSOR_SHADOW; i++) {
-            int px = shown_x + i, py = shown_y + j;
-            if (!rect_contains(clip, px, py) || px >= screen_w || py >= screen_h)
-                continue;
-            uint32_t *dst = &back.pixels[(size_t)py * back.stride + px];
+    int S = screen_scale;
+    struct rect area = rect_intersect(cursor_rect(), clip);
+    if (rect_empty(area))
+        return;
+    struct rect R = dev(area);
+    for (int Y = R.y; Y < R.y + R.h && Y < back.height; Y++)
+        for (int X = R.x; X < R.x + R.w && X < back.width; X++) {
+            int i = (X - shown_x * S) / S, j = (Y - shown_y * S) / S;
+            uint32_t *dst = &back.pixels[(size_t)Y * back.stride + X];
             char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
             if (c == 'X') {
                 *dst = 0x00000000;
@@ -296,7 +330,28 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
 {
     struct rect pieces[MAX_PIECES];
     int np = 1;
-    gfx_fill_rect(&back, r.x, r.y, r.w, r.h, (uint32_t)settings.desktop_color);
+    struct rect R = dev(r);
+    /* The desktop colour under everything, unless one opaque surface
+     * covers the whole rectangle (a frame of a large window). */
+    int covered = 0;
+    for (int i = 0; i < n && !covered; i++) {
+        struct csurface *s = order[i];
+        if (!s->current.buffer)
+            continue;
+        if (s->current.buffer->format == FORMAT_XRGB8888) {
+            struct rect o = decor_has(s) ? decor_opaque(s) : surface_rect(s);
+            covered = rect_contains(o, r.x, r.y) && rect_contains(o, r.x + r.w - 1, r.y + r.h - 1);
+        } else {
+            for (int q = 0; q < s->current.nopaque && !covered; q++) {
+                struct rect o = s->current.opaque[q];
+                o.x += s->x;
+                o.y += s->y;
+                covered = rect_contains(o, r.x, r.y) && rect_contains(o, r.x + r.w - 1, r.y + r.h - 1);
+            }
+        }
+    }
+    if (!covered)
+        gfx_fill_rect(&back, R.x, R.y, R.w, R.h, (uint32_t)settings.desktop_color);
     for (int i = 0; i < n; i++) {
         struct csurface *s = order[i];
         pieces[0] = rect_intersect(extent(s), r);
@@ -307,7 +362,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             if (!cover->current.buffer)
                 continue;
             if (cover->current.buffer->format == FORMAT_XRGB8888) {
-                struct rect opaque = decor_has(cover) ? decor_frame(cover) : surface_rect(cover);
+                struct rect opaque = decor_has(cover) ? decor_opaque(cover) : surface_rect(cover);
                 if (!pieces_subtract(pieces, &np, opaque)) {
                     exact = 0;
                     break;

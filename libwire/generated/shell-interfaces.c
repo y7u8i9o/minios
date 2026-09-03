@@ -35,6 +35,7 @@ static const struct wire_message toplevel_requests[] = {
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
     { "set_parent", "?o", 1, (const char *const[]){ "toplevel" }, 0 },
     { "set_modal", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "set_window_geometry", "iiii", 4, (const char *const[]){ NULL, NULL, NULL, NULL }, 0 },
 };
 static const struct wire_message toplevel_events[] = {
     { "configure", "uiia", 4, (const char *const[]){ NULL, NULL, NULL, NULL }, 0 },
@@ -99,7 +100,7 @@ static const struct wire_message toplevel_handle_events[] = {
     { "closed", "", 0, (const char *const[]){ NULL }, 0 },
 };
 const struct wire_interface shell_interface = { "shell", 1, 5, shell_requests, 0, shell_events };
-const struct wire_interface toplevel_interface = { "toplevel", 1, 13, toplevel_requests, 2, toplevel_events };
+const struct wire_interface toplevel_interface = { "toplevel", 1, 14, toplevel_requests, 2, toplevel_events };
 const struct wire_interface popup_interface = { "popup", 1, 3, popup_requests, 2, popup_events };
 const struct wire_interface positioner_interface = { "positioner", 1, 7, positioner_requests, 0, positioner_events };
 const struct wire_interface layer_surface_interface = { "layer_surface", 1, 6, layer_surface_requests, 2, layer_surface_events };

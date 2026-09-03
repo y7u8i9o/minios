@@ -1,0 +1,6 @@
+virtio-gpu\] 2048x1536 scanout
+x12: started 1024x768 scale 2
+x12: surface [0-9]+ buffer scale 2
+guitest: device checkerboard at scale 2
+gui_scale2: clients render at scale 2
+TEST PASS

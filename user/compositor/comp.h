@@ -16,11 +16,14 @@
 #define MAX_DAMAGE 16
 #define MAX_REGION 32
 #define FRAME_MS 16
-#define TITLE_H 20
+#define TITLE_H 28
 #define BORDER 1
 #define GRIP 12
 #define TITLE_BTN 14
-#define SHADOW 4
+#define RADIUS 8                /* rounded top corners of the frame */
+#define SHADOW 14               /* reach of the drop shadow around the frame */
+#define SHADOW_DY 3             /* the shadow is shifted down by this much */
+#define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
 enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
@@ -84,6 +87,8 @@ struct toplevel {
     int placed;
     struct toplevel *parent;
     int modal;
+    struct rect geo;                        /* window geometry inside the surface (client decorations) */
+    int geo_set;
 };
 
 struct popup {
@@ -198,6 +203,12 @@ void shell_init(struct wire_server *srv);
 void shell_surface_committed(struct csurface *s, int first_map);
 void shell_surface_gone(struct csurface *s);
 struct rect shell_desktop(void);                           /* area left by layer surfaces */
+/* The visible frame of a toplevel on screen: the server decorations,
+ * or the client's window geometry, or the surface. */
+struct rect toplevel_frame(const struct toplevel *t);
+/* The size a configure describes: the surface for server decorations,
+ * the window geometry for client ones. */
+void toplevel_configure_size(const struct toplevel *t, int *w, int *h);
 void toplevel_activate(struct toplevel *t);
 void toplevel_set_maximized(struct toplevel *t, int on);
 void toplevel_set_minimized(struct toplevel *t, int on);
@@ -210,15 +221,17 @@ void toplevel_cycle(void);
 void popup_dismiss_all(void);
 struct csurface *popup_grab_surface(void);
 /* decor.c */
+void decor_init(void);                                     /* loads the title font */
 struct rect decor_frame(const struct csurface *s);         /* frame including the title bar */
 struct rect decor_extent(const struct csurface *s);        /* frame plus server-side shadow */
+struct rect decor_opaque(const struct csurface *s);        /* part of the frame without rounded corners */
 int decor_has(const struct csurface *s);
 void decor_draw_shadow(struct csurface *s, struct rect clip);
 void decor_draw(struct csurface *s, struct rect clip);
 /* Returns 1 when the press at the cursor was consumed by decorations. */
 int decor_press(struct csurface *s, int button);
 int decor_motion(void);
-int decor_release(void);
+int decor_release(void);                 /* 1: server drag ended, 2: client requested drag ended */
 int decor_dragging(void);
 /* seat.c */
 void seat_init(struct wire_server *srv);
@@ -231,6 +244,7 @@ struct csurface *seat_keyboard_focus(void);
 void seat_surface_gone(struct csurface *s);
 uint32_t seat_last_serial(void);
 int seat_modifiers(void);
+int seat_buttons(void);                  /* pointer buttons held, bit 0 = left */
 int seat_validate_serial(struct client *client, uint32_t serial);
 int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t serial);
 int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t serial);

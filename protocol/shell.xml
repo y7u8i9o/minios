@@ -44,6 +44,11 @@
     <request name="destroy" type="destructor"/>
     <request name="set_parent"><arg name="parent" type="object" interface="toplevel" allow-null="true"/></request>
     <request name="set_modal"><arg name="modal" type="uint"/></request>
+    <!-- The visible window inside the surface, without client side
+         shadows; configure sizes and placement refer to it. -->
+    <request name="set_window_geometry">
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </request>
     <event name="configure">
       <arg name="serial" type="uint"/><arg name="width" type="int"/><arg name="height" type="int"/><arg name="states" type="array"/>
     </event>

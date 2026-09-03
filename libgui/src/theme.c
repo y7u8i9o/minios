@@ -6,23 +6,26 @@
 void theme_init_default(struct theme *t)
 {
     memset(t, 0, sizeof *t);
-    t->color[TC_WINDOW] = 0x00e4e4e4;
-    t->color[TC_TEXT] = 0x00101010;
-    t->color[TC_TEXT_DISABLED] = 0x00808080;
+    /* Light neutral greys with faint borders, matching the window
+     * chrome drawn by csd.c (header 0xebebeb, outline 20 percent black). */
+    t->color[TC_WINDOW] = 0x00ebebeb;       /* the header bar's grey */
+    t->color[TC_TEXT] = 0x002a2a2a;
+    t->color[TC_TEXT_DISABLED] = 0x009a9a9a;
     t->color[TC_FIELD] = 0x00ffffff;
-    t->color[TC_SELECTION] = 0x003060b0;
+    t->color[TC_SELECTION] = 0x003c78c8;
     t->color[TC_SELECTION_TEXT] = 0x00ffffff;
-    t->color[TC_ACCENT] = 0x002050a0;
-    t->color[TC_BORDER] = 0x00505050;
-    t->color[TC_HIGHLIGHT] = 0x00c8d8f0;
-    t->color[TC_BUTTON] = 0x00f4f4f4;
-    t->color[TC_BUTTON_PRESSED] = 0x00b0b0b0;
-    t->color[TC_TRACK] = 0x00c8c8c8;
-    t->color[TC_THUMB] = 0x00808080;
+    t->color[TC_ACCENT] = 0x003c78c8;
+    t->color[TC_BORDER] = 0x00b0b0b0;
+    t->color[TC_HIGHLIGHT] = 0x00d6e2f4;
+    t->color[TC_BUTTON] = 0x00dcdcdc;
+    t->color[TC_BUTTON_HOVER] = 0x00d0d0d0;
+    t->color[TC_BUTTON_PRESSED] = 0x00bcbcbc;
+    t->color[TC_TRACK] = 0x00dedede;
+    t->color[TC_THUMB] = 0x00a8a8a8;
     t->metric[TM_PADDING] = 6;
     t->metric[TM_SPACING] = 6;
     t->metric[TM_BORDER] = 1;
-    t->metric[TM_RADIUS] = 3;
+    t->metric[TM_RADIUS] = 5;
     t->metric[TM_SCROLLBAR] = 14;
     t->metric[TM_FONT_PX] = 14;
     t->metric[TM_CONTROL_H] = 26;

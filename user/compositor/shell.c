@@ -33,14 +33,36 @@ struct rect shell_desktop(void)
     return d;
 }
 
+struct rect toplevel_frame(const struct toplevel *t)
+{
+    if (decor_has(t->s))
+        return decor_frame(t->s);
+    if (t->geo_set)
+        return (struct rect){ t->s->x + t->geo.x, t->s->y + t->geo.y, t->geo.w, t->geo.h };
+    return surface_rect(t->s);
+}
+
+void toplevel_configure_size(const struct toplevel *t, int *w, int *h)
+{
+    if (!decor_has(t->s) && t->geo_set) {
+        *w = t->geo.w;
+        *h = t->geo.h;
+    } else {
+        *w = t->s->width;
+        *h = t->s->height;
+    }
+}
+
+/* Keep 40 pixels of the frame on screen horizontally and its top row
+ * (the title bar) inside the desktop area. */
 static void clamp_toplevel(struct csurface *s)
 {
     struct rect d = shell_desktop();
-    int top = decor_has(s) ? TITLE_H + BORDER : 0;
-    if (s->x + s->width < d.x + 40) s->x = d.x + 40 - s->width;
-    if (s->x > d.x + d.w - 40) s->x = d.x + d.w - 40;
-    if (s->y - top < d.y) s->y = d.y + top;
-    if (s->y - top > d.y + d.h - TITLE_H) s->y = d.y + d.h - TITLE_H + top;
+    struct rect f = toplevel_frame(s->toplevel);
+    if (f.x + f.w < d.x + 40) s->x += d.x + 40 - (f.x + f.w);
+    if (f.x > d.x + d.w - 40) s->x -= f.x - (d.x + d.w - 40);
+    if (f.y < d.y) s->y += d.y - f.y;
+    if (f.y > d.y + d.h - TITLE_H) s->y -= f.y - (d.y + d.h - TITLE_H);
 }
 
 static void damage_surface(struct csurface *s)
@@ -206,16 +228,19 @@ void toplevel_activate(struct toplevel *t)
     struct toplevel *old = toplevel_focused();
     if (old == t && t->s->stack == next_stack - 1)
         return;
+    int w, h;
     if (old && old != t) {
         old->activated = 0;
         damage_surface(old->s);
-        send_configure(old, old->s->width, old->s->height);
+        toplevel_configure_size(old, &w, &h);
+        send_configure(old, w, h);
         for_each_handle(old, send_handle_state);
     }
     t->activated = 1;
     t->s->stack = next_stack++;
     damage_surface(t->s);
-    send_configure(t, t->s->width, t->s->height);
+    toplevel_configure_size(t, &w, &h);
+    send_configure(t, w, h);
     for_each_handle(t, send_handle_state);
     seat_set_keyboard_focus(t->s);
     comp_log("toplevel %d activated", t->number);
@@ -230,8 +255,7 @@ void toplevel_set_maximized(struct toplevel *t, int on)
     if (on) {
         t->saved_x = t->s->x;
         t->saved_y = t->s->y;
-        t->saved_w = t->s->width;
-        t->saved_h = t->s->height;
+        toplevel_configure_size(t, &t->saved_w, &t->saved_h);
         t->maximized = 1;
         int top = decor_has(t->s) ? TITLE_H + BORDER : 0;
         int bw = decor_has(t->s) ? BORDER : 0;
@@ -259,7 +283,9 @@ void toplevel_set_minimized(struct toplevel *t, int on)
     comp_log("toplevel %d %s", t->number, on ? "minimized" : "shown");
     if (on && t->activated) {
         t->activated = 0;
-        send_configure(t, t->s->width, t->s->height);
+        int w, h;
+        toplevel_configure_size(t, &w, &h);
+        send_configure(t, w, h);
         struct toplevel *next = NULL;
         for (struct csurface *s = surface_first(); s; s = s->next)
             if (s->role == ROLE_TOPLEVEL && !s->toplevel->minimized && s->mapped && (!next || s->stack > next->s->stack))
@@ -327,13 +353,15 @@ static void h_set_max_size(struct wire_client *c, struct wire_resource *self, in
 static void h_move(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial)
 {
     struct toplevel *t = self->data;
-    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized)
+    /* The press must still be held: a request that arrives after the
+     * release (a client that answered late) would drag with no button. */
+    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized && seat_buttons())
         decor_press(t->s, 1 | 0x100);           /* a move grab from the client */
 }
 static void h_resize(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial, uint32_t edges)
 {
     struct toplevel *t = self->data;
-    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized)
+    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized && seat_buttons())
         decor_press(t->s, 1 | 0x200 | (int)(edges << 16));
 }
 static void h_set_maximized(struct wire_client *c, struct wire_resource *self) { toplevel_set_maximized(self->data, 1); }
@@ -359,6 +387,16 @@ static void h_set_parent(struct wire_client *c, struct wire_resource *self, stru
     }
     t->parent = p;
 }
+static void h_set_window_geometry(struct wire_client *c, struct wire_resource *self, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    struct toplevel *t = self->data;
+    if (w <= 0 || h <= 0) {
+        t->geo_set = 0;
+        return;
+    }
+    t->geo = (struct rect){ x, y, w, h };
+    t->geo_set = 1;
+}
 static void h_set_modal(struct wire_client *c, struct wire_resource *self, uint32_t modal)
 {
     struct toplevel *t = self->data;
@@ -367,6 +405,7 @@ static void h_set_modal(struct wire_client *c, struct wire_resource *self, uint3
 static const struct toplevel_impl toplevel_handlers = {
     h_set_title, h_set_app_id, h_set_min_size, h_set_max_size, h_move, h_resize, h_set_maximized,
     h_unset_maximized, h_set_minimized, h_ack_configure, h_toplevel_destroy, h_set_parent, h_set_modal,
+    h_set_window_geometry,
 };
 
 static void toplevel_gone(struct wire_resource *r)
@@ -802,13 +841,25 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         if (s->mapped && (want_w <= 0 || want_w == s->width) &&
             (want_h <= 0 || want_h == s->height))
             return 1;
-        if (s->mapped && (!s->pending.has_buffer || b == s->current.buffer))
+        if (s->mapped && !s->pending.has_buffer)
+            return 1;
+        /* A frame sent before the configure arrived: a buffer of the old
+         * geometry, from either half of the client's buffer pair. */
+        int bw, bh;
+        logical_buffer_size(s, b, &bw, &bh);
+        if (s->mapped && bw == s->width && bh == s->height)
             return 1;
         wire_client_post_error(c, s->res, 23, "buffer committed before configure acknowledgement");
         return 0;
     }
     int w, h;
     logical_buffer_size(s, b, &w, &h);
+    if (s->role == ROLE_TOPLEVEL && s->toplevel->geo_set) {
+        /* The configure described the window geometry, sent before
+         * this commit. */
+        w = s->toplevel->geo.w;
+        h = s->toplevel->geo.h;
+    }
     if ((want_w > 0 && w != want_w) || (want_h > 0 && h != want_h)) {
         wire_client_post_error(c, s->res, 24, "buffer size does not match acknowledged configure");
         return 0;
@@ -829,20 +880,30 @@ void shell_surface_committed(struct csurface *s, int first_map)
     case ROLE_TOPLEVEL: {
         struct toplevel *t = s->toplevel;
         if (first_map && !t->placed) {
+            /* Placement works on the visible frame: centred on the
+             * parent, or cascading from (40, 30) of the desktop area,
+             * which puts the contents under a 30 pixel toolkit header
+             * bar at y 60. */
             t->placed = 1;
             struct rect d = shell_desktop();
+            struct rect f = toplevel_frame(t);
+            int fx, fy;
             if (t->parent && t->parent->s && t->parent->s->mapped) {
-                s->x = t->parent->s->x + (t->parent->s->width - s->width) / 2;
-                s->y = t->parent->s->y + (t->parent->s->height - s->height) / 2;
+                struct rect pf = toplevel_frame(t->parent);
+                fx = pf.x + (pf.w - f.w) / 2;
+                fy = pf.y + (pf.h - f.h) / 2;
             } else {
                 int n = (t->number - 1) % 8;
-                s->x = d.x + 40 + n * 30;
-                s->y = d.y + 40 + TITLE_H + n * 30;
+                fx = d.x + 40 + n * 30;
+                fy = d.y + 30 + n * 30;
             }
-            if (s->x + s->width > d.x + d.w) s->x = d.x + d.w - s->width;
-            if (s->y + s->height > d.y + d.h) s->y = d.y + d.h - s->height;
+            if (fx + f.w > d.x + d.w) fx = d.x + d.w - f.w;
+            if (fy + f.h > d.y + d.h) fy = d.y + d.h - f.h;
+            s->x += fx - f.x;
+            s->y += fy - f.y;
             clamp_toplevel(s);
-            comp_log("toplevel %d '%s' mapped at %d,%d %dx%d", t->number, t->title, s->x, s->y, s->width, s->height);
+            f = toplevel_frame(t);
+            comp_log("toplevel %d '%s' mapped at %d,%d %dx%d", t->number, t->title, f.x, f.y, f.w, f.h);
             toplevel_activate(t);
         } else if (t->minimized) {
             s->mapped = 1;      /* keeps its buffer; hidden by the scene */

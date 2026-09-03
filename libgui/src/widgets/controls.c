@@ -256,7 +256,7 @@ static void slider_paint(struct widget *w, struct painter *p)
     painter_fill(p, THUMB_W / 2, cy - 2, w->w - THUMB_W, 4, t->color[TC_TRACK]);
     int tx = slider_thumb_x(w);
     painter_fill(p, THUMB_W / 2, cy - 2, tx, 4, t->color[TC_ACCENT]);
-    painter_rounded(p, tx, cy - 8, THUMB_W, 16, w->pressed ? t->color[TC_BUTTON_PRESSED] : t->color[TC_BUTTON], t->color[TC_BORDER]);
+    painter_rounded(p, tx, cy - 8, THUMB_W, 16, w->pressed ? t->color[TC_BUTTON_PRESSED] : t->color[TC_THUMB], 0xffffffffu);
     if (w->focused)
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
@@ -335,7 +335,7 @@ static void progress_measure(struct widget *w, struct size_hint *h)
 static void progress_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_TRACK], t->color[TC_BORDER]);
+    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_TRACK], 0xffffffffu);
     int span = w->max > w->min ? (w->w - 2) * (w->value - w->min) / (w->max - w->min) : 0;
     if (span > 0)
         painter_fill(p, 1, 1, span, w->h - 2, t->color[TC_ACCENT]);

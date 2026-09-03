@@ -39,14 +39,63 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
   events (maximized 1, activated 2, minimized 3) and `closed`; handles
   accept `activate`, `minimize` and `close`.
 
-## Decorations (`decor.c`)
+## Decorations
 
-Server side decorations are drawn into the scene around the surface
-(title bar of 20 pixels, a border, close, maximize and minimize boxes,
-a grip in the bottom right corner of the contents). Presses on them
-never reach the client: the title bar moves, the boxes act, the grip
-resizes on release with a configure of the new size. Alt with the left
-button moves from anywhere.
+Decorations follow the GTK 4 model: the toolkit draws its own header
+bar, outline, rounded corners and shadow (client side decorations,
+`libgui/src/csd.c`, see `gui.md`), and the server only composites,
+places the window and drives its move and resize drags. A client asks
+for that through `shell.get_decoration` and `decoration.set_mode(2)`;
+the server grants the client's choice and answers with `mode`. Clients
+that never ask (comptest) get the mode of the `decorations` setting,
+server side by default.
+
+`toplevel.set_window_geometry(x, y, w, h)` names the visible window
+inside the surface, without the client's shadow margins. The server
+keeps it in `struct toplevel.geo` and works on the visible frame,
+`toplevel_frame` (the server decorations, the geometry, or the surface):
+configure sizes are geometry sizes (`toplevel_configure_size`), the
+cascade puts the frame of the n-th new window at (40, 24) plus n times
+(30, 30) of the desktop area, so that the contents under a 36 pixel
+header bar start at y 60; a modal child is centred on its parent's
+frame; `clamp_toplevel` keeps 40 pixels of the frame and its top row on
+screen; a maximized window's geometry is the desktop area. The commit
+check compares the acknowledged configure with the geometry when one is
+set. The `mapped at` log line reports the frame.
+
+Server side decorations (`decor.c`) remain for clients without their own,
+drawn into the scene around the surface at the screen scale, antialiased
+where shapes are curved:
+
+- a 28 pixel title bar with rounded top corners (`RADIUS` 8), light
+  (`0xe9ecf0` active, `0xf4f5f7` inactive) under a one pixel border and
+  above a one pixel separator; the title in the interface font (DejaVu
+  Sans 13 px, the builtin font when the file is missing), centred when
+  it fits left of the buttons;
+- three round buttons at the right, from the right: close (red with a
+  white cross), maximize and minimize; inactive windows draw them grey;
+- a soft drop shadow of `SHADOW` pixels reach, shifted `SHADOW_DY` down,
+  fading quadratically, stronger for the active window, computed only
+  for the band of the damage outside `decor_opaque` (the frame minus its
+  rounded top rows, also the opaque cover for occlusion) from a table by
+  squared distance built once per scale; the antialiased corner math runs
+  only inside the two corner squares;
+- maximized windows have square corners and no shadow.
+
+Presses on server decorations never reach the client: the title bar
+moves, the buttons act, an invisible `RESIZE_MARGIN` around the frame and
+the bottom right grip of the contents resize on release with a configure
+of the new size; margins near a corner take both edges. Alt with the
+left button moves any toplevel from anywhere, whichever side decorates.
+
+A move or resize the client requested (`toplevel.move`, `toplevel.resize`
+with the press serial) is driven by the same drag code, but the release
+that ends it is still delivered to the client, so its button state stays
+consistent (`decor_release` returns 2 for such drags). A move or resize
+request is honoured only while a pointer button is held: one that
+arrives after the release, for example from a client that answered late,
+is ignored instead of starting a drag with no button held. Popup grabs
+keep accepting the press serial after the release, as the panel needs.
 
 ## Seat (`seat.c`)
 
@@ -84,10 +133,16 @@ ends the drag with `dnd_finished` at the source.
 ## Panel (`user/panel/`)
 
 A layer surface anchored to the bottom (28 pixels, exclusive zone)
-built directly on libwire and gfx: a Menu button opening the launcher
-as a grabbed popup, one button per toplevel from the manager
-(activate, minimize), a clock from a timerfd. It launches programs
-from `/etc/launcher` and reaps them.
+built directly on libwire and the libgui painter: a Menu button opening
+the launcher as a grabbed popup, one pill shaped button per toplevel
+from the manager (activate, minimize; the active one carries an accent
+underline, minimized ones dim their title), a clock from a timerfd.
+Text uses the interface font at 13 px. The buffers are allocated at the
+output's scale with `set_buffer_scale`; a layer configure with a new
+width (mode change) or a new output scale reallocates them, and the
+panel never commits from an output event, since that would race with
+the configure's serial. The menu has 24 pixel rows inside 6 pixels of
+padding. It launches programs from `/etc/launcher` and reaps them.
 
 ## Tests
 

@@ -293,3 +293,43 @@ clipboard object are gone. `libgui/src/client.c` implements the same
 `startgui` starts the compositor, the panel and the program. The GUI
 boot tests run on X12 and the panel; their expectations use the `x12:`
 and `panel:` log lines.
+
+## Client side decorations (`libgui/src/csd.c`)
+
+Toplevels of libgui draw their own chrome, the way GTK 4 does under
+Wayland, in a light style that matches the rest of the toolkit. The
+drawing surface of a window is the whole buffer: a `CSD_MARGIN` (16 px)
+band for the shadow around the frame, and inside the frame a
+`CSD_HEADER` (36 px) header bar above the contents; `gui_window.surf` is a view of the contents, so applications,
+the framework and `gui_damage` keep their contents coordinates, and the
+client layer adds the offset to damage, popup anchors, regions and
+pointer coordinates. The buffers are ARGB; `csd_copy` makes the frame
+opaque while copying into them and blends the contents over the chrome
+at the four rounded corners (`CSD_RADIUS` 6). The margins hold the
+outline (one logical pixel of 20 percent black) and the shadow (black,
+`(1 - t)^2` over an 8 px reach, shifted 2 px down, half as strong for
+inactive windows); they are painted once per resize or state change,
+not per frame.
+
+The header bar is flat (`0xebebeb`, `0xfafafa` in the backdrop), with a
+hairline under it, the title centred in DejaVu Sans 13 px, and three
+20 px round buttons at the right: close, maximize (a restore glyph when maximized) and minimize,
+with a hover shade. The toolkit handles the pointer over the chrome:
+the header bar starts `toplevel.move` (a double click toggles
+maximized), an 8 px zone outside the frame starts `toplevel.resize`
+with the edges (corners within 20 px take two), the buttons act on
+release. The compositor learns the frame through `set_window_geometry`,
+an opaque region of the frame minus its corner squares, and an input
+region covering the frame and the resize zone. Maximized windows drop
+the margins and the corners; the configure states drive `active` and
+`maximized`. A compositor answering `decoration.mode` with server side
+decorations turns all of this off and the window is plain again.
+
+
+The default theme uses the same light neutral greys as the chrome:
+the window body is the header bar's `0xebebeb`, borders `0xb0b0b0`,
+buttons `0xdcdcdc` without borders (hover `0xd0d0d0`, pressed
+`0xbcbcbc`), accent `0x3c78c8`; tabs are marked by an accent underline,
+scrollbar tracks and progress bars have no frame, and the theme radius
+is 5 px. A top level window keeps the theme padding around its
+contents.
