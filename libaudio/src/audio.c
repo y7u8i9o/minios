@@ -1,8 +1,5 @@
 /* Blocking convenience API over the audiod shared-buffer protocol. */
-#include <audio/audio.h>
-#include <wire/client.h>
-#include "core-client.h"
-#include "audio-client.h"
+#include "internal.h"
 #include <sys/audio.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
@@ -13,48 +10,14 @@
 #include <string.h>
 #include <unistd.h>
 
-#define AUDIO_SOCKET "audio"
-#define AUDIO_CHANNELS 2
-#define MAX_BUFFERS 16
-#define DISPATCH_TIMEOUT_MS 5000
-
-struct audio_connection {
-    struct wire_display *display;
-    struct wire_proxy *registry;
-    struct wire_proxy *manager;
-    struct audio_playback *playbacks;
-};
-
-struct audio_playback {
-    struct audio_connection *connection;
-    struct wire_proxy *proxy;
-    int16_t *map;
-    size_t map_size;
-    uint32_t rate;
-    uint32_t channels;
-    uint32_t quantum;
-    uint32_t buffers;
-    uint8_t ready[MAX_BUFFERS];
-    uint8_t queue[MAX_BUFFERS];
-    unsigned qhead;
-    unsigned qtail;
-    unsigned qcount;
-    uint32_t xruns;
-    int configured;
-    int state;
-    int error;
-    int drained;
-    struct audio_playback *next;
-};
-
 static void global(void *data, struct wire_proxy *registry, uint32_t name,
                    const char *interface, uint32_t version)
 {
     struct audio_connection *connection = data;
-    if (!connection->manager && version >= 1 &&
+    if (!connection->manager && version >= 2 &&
         strcmp(interface, "audio_manager") == 0)
-        connection->manager = registry_bind(registry, name, interface, 1,
-                                             &audio_manager_interface, 1);
+        connection->manager = registry_bind(registry, name, interface, 2,
+                                             &audio_manager_interface, 2);
 }
 
 static void global_remove(void *data, struct wire_proxy *registry, uint32_t name)
@@ -130,12 +93,18 @@ static void xrun(void *data, struct wire_proxy *proxy, uint32_t count)
     ((struct audio_playback *)data)->xruns = count;
 }
 
+static void captured(void *data, struct wire_proxy *proxy, uint32_t index,
+                     uint32_t frames)
+{
+}
+
 static const struct audio_stream_listener stream_events = {
     .configured = configured,
     .buffer_ready = buffer_ready,
     .state = state,
     .drained = drained,
     .xrun = xrun,
+    .captured = captured,
 };
 
 int audio_connection_dispatch(struct audio_connection *connection,
@@ -148,8 +117,10 @@ int audio_connection_dispatch(struct audio_connection *connection,
     int dispatched = wire_display_dispatch_pending(connection->display);
     if (dispatched < 0)
         return -1;
-    if (dispatched > 0 || timeout_ms == 0)
+    if (dispatched > 0)
         return dispatched;
+    /* Nothing queued: read what the socket holds, waiting up to
+     * timeout_ms (0 only takes what has already arrived). */
     if (wire_display_flush(connection->display) < 0)
         return -1;
     struct pollfd pfd = {
@@ -166,16 +137,15 @@ int audio_connection_dispatch(struct audio_connection *connection,
     return wire_display_dispatch(connection->display);
 }
 
-static int wait_stream(struct audio_playback *playback,
-                       int (*condition)(const struct audio_playback *))
+int audio_wait(struct audio_connection *connection, int (*condition)(const void *arg),
+               const void *arg, const int *error)
 {
-    while (!condition(playback)) {
-        if (playback->error) {
-            errno = playback->error;
+    while (!condition(arg)) {
+        if (*error) {
+            errno = *error;
             return -1;
         }
-        int dispatched = audio_connection_dispatch(playback->connection,
-                                                   DISPATCH_TIMEOUT_MS);
+        int dispatched = audio_connection_dispatch(connection, DISPATCH_TIMEOUT_MS);
         if (dispatched < 0)
             return -1;
         if (dispatched == 0) {
@@ -186,18 +156,27 @@ static int wait_stream(struct audio_playback *playback,
     return 0;
 }
 
-static int is_configured(const struct audio_playback *playback)
+static int wait_stream(struct audio_playback *playback,
+                       int (*condition)(const void *))
 {
+    return audio_wait(playback->connection, condition, playback, &playback->error);
+}
+
+static int is_configured(const void *arg)
+{
+    const struct audio_playback *playback = arg;
     return playback->configured;
 }
 
-static int has_buffer(const struct audio_playback *playback)
+static int has_buffer(const void *arg)
 {
+    const struct audio_playback *playback = arg;
     return playback->qcount != 0;
 }
 
-static int is_drained(const struct audio_playback *playback)
+static int is_drained(const void *arg)
 {
+    const struct audio_playback *playback = arg;
     return playback->drained;
 }
 
@@ -235,6 +214,15 @@ fail:
     free(connection);
     errno = saved_errno ? saved_errno : ECONNREFUSED;
     return NULL;
+}
+
+int audio_connection_sync(struct audio_connection *connection)
+{
+    if (!connection || !connection->display) {
+        errno = EINVAL;
+        return -1;
+    }
+    return wire_display_roundtrip(connection->display) < 0 ? -1 : 0;
 }
 
 int audio_connection_fd(const struct audio_connection *connection)
@@ -304,6 +292,10 @@ void audio_disconnect(struct audio_connection *connection)
         return;
     while (connection->playbacks)
         audio_playback_destroy(connection->playbacks);
+    while (connection->captures)
+        audio_capture_destroy(connection->captures);
+    while (connection->mixers)
+        audio_mixer_destroy(connection->mixers);
     if (connection->display)
         wire_display_disconnect(connection->display);
     free(connection);

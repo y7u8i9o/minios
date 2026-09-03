@@ -9,6 +9,7 @@ struct pcm_device;
  * exclusive-open policy; the driver owns format and queue state. */
 struct pcm_ops {
     int (*open)(struct pcm_device *dev, struct file *f);
+    long (*read)(struct pcm_device *dev, struct file *f, char *buf, size_t n);    /* capture, optional */
     long (*write)(struct pcm_device *dev, struct file *f, const char *buf, size_t n);
     long (*ioctl)(struct pcm_device *dev, struct file *f, unsigned long req, uintptr_t arg);
     int (*poll)(struct pcm_device *dev, struct file *f);

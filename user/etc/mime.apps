@@ -1,5 +1,6 @@
 # type program
 text/* /bin/gedit
 image/* /bin/view
+audio/* /bin/player
 inode/directory /bin/files
 * /bin/hexview

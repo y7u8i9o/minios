@@ -4,9 +4,12 @@
 
 extern const struct wire_interface audio_manager_interface;
 extern const struct wire_interface audio_stream_interface;
+extern const struct wire_interface audio_control_interface;
 
 static const struct wire_message audio_manager_requests[] = {
     { "create_playback_stream", "ns", 2, (const char *const[]){ "audio_stream", NULL }, 0 },
+    { "create_capture_stream", "nsu", 3, (const char *const[]){ "audio_stream", NULL, NULL }, 0 },
+    { "get_control", "n", 1, (const char *const[]){ "audio_control" }, 0 },
 };
 static const struct wire_message audio_manager_events[] = {
     { NULL, "", 0, NULL, 0 },
@@ -25,6 +28,19 @@ static const struct wire_message audio_stream_events[] = {
     { "state", "ui", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "drained", "", 0, (const char *const[]){ NULL }, 0 },
     { "xrun", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "captured", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
 };
-const struct wire_interface audio_manager_interface = { "audio_manager", 1, 1, audio_manager_requests, 0, audio_manager_events };
-const struct wire_interface audio_stream_interface = { "audio_stream", 1, 6, audio_stream_requests, 5, audio_stream_events };
+static const struct wire_message audio_control_requests[] = {
+    { "set_stream_volume", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
+    { "set_master_volume", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+};
+static const struct wire_message audio_control_events[] = {
+    { "master_volume", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "stream", "usuuu", 5, (const char *const[]){ NULL, NULL, NULL, NULL, NULL }, 0 },
+    { "stream_removed", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "level", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
+};
+const struct wire_interface audio_manager_interface = { "audio_manager", 2, 3, audio_manager_requests, 0, audio_manager_events };
+const struct wire_interface audio_stream_interface = { "audio_stream", 2, 6, audio_stream_requests, 6, audio_stream_events };
+const struct wire_interface audio_control_interface = { "audio_control", 1, 3, audio_control_requests, 4, audio_control_events };

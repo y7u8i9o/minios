@@ -86,6 +86,22 @@ int main(void)
     CHECK(status.played_frames == (uint64_t)total_periods * params.period_frames,
           "played frames %lu", (unsigned long)status.played_frames);
     CHECK(status.last_error == 0, "last error %d", status.last_error);
+    /* The capture side under a host backend without a capture voice (the
+     * wav backend of this test): periods never arrive, and dropping the
+     * stream returns promptly because the release hands them back. */
+    if (info.capabilities & AUDIO_CAP_CAPTURE) {
+        CHECK(ioctl(fd, AUDIO_SET_CAPTURE_PARAMS, &params) == 0, "set capture params");
+        CHECK(ioctl(fd, AUDIO_CAPTURE_PREPARE) == 0, "capture prepare");
+        CHECK(ioctl(fd, AUDIO_CAPTURE_START) == 0, "capture start");
+        pf.events = POLLIN;
+        pf.revents = 0;
+        int ready = poll(&pf, 1, 100);
+        CHECK(ready == 0 || (pf.revents & POLLIN), "capture poll %d", ready);
+        CHECK(ioctl(fd, AUDIO_CAPTURE_DROP) == 0, "capture drop");
+        CHECK(ioctl(fd, AUDIO_GET_CAPTURE_STATUS, &status) == 0 &&
+              status.state == AUDIO_STATE_OPEN, "capture stopped %u", status.state);
+        printf("audiotest: capture dropped after %lu frames\n", (unsigned long)status.played_frames);
+    }
     free(period);
     close(fd);
     printf("audiotest: %d failures\n", failures);

@@ -15,6 +15,32 @@ struct wire_proxy * audio_manager_create_playback_stream(struct wire_proxy *audi
     return created;
 }
 
+struct wire_proxy * audio_manager_create_capture_stream(struct wire_proxy *audio_manager, const char * name, uint32_t source)
+{
+    union wire_arg args[3] = { { 0 } };
+    struct wire_proxy *created = NULL;
+    created = wire_proxy_create(audio_manager, &audio_stream_interface, audio_stream_interface.version);
+    if (!created)
+        return NULL;
+    args[0].n = created->obj.id;
+    args[1].s = name;
+    args[2].u = source;
+    wire_proxy_marshal(audio_manager, 1, args, created);
+    return created;
+}
+
+struct wire_proxy * audio_manager_get_control(struct wire_proxy *audio_manager)
+{
+    union wire_arg args[1] = { { 0 } };
+    struct wire_proxy *created = NULL;
+    created = wire_proxy_create(audio_manager, &audio_control_interface, audio_control_interface.version);
+    if (!created)
+        return NULL;
+    args[0].n = created->obj.id;
+    wire_proxy_marshal(audio_manager, 2, args, created);
+    return created;
+}
+
 void audio_stream_configure(struct wire_proxy *audio_stream, uint32_t format, uint32_t rate, uint32_t channels)
 {
     union wire_arg args[3] = { { 0 } };
@@ -57,5 +83,27 @@ void audio_stream_destroy(struct wire_proxy *audio_stream)
     union wire_arg args[1] = { { 0 } };
     wire_proxy_marshal(audio_stream, 5, args, NULL);
     wire_proxy_destroy(audio_stream);
+}
+
+void audio_control_set_stream_volume(struct wire_proxy *audio_control, uint32_t stream, uint32_t volume)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = stream;
+    args[1].u = volume;
+    wire_proxy_marshal(audio_control, 0, args, NULL);
+}
+
+void audio_control_set_master_volume(struct wire_proxy *audio_control, uint32_t volume)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = volume;
+    wire_proxy_marshal(audio_control, 1, args, NULL);
+}
+
+void audio_control_destroy(struct wire_proxy *audio_control)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(audio_control, 2, args, NULL);
+    wire_proxy_destroy(audio_control);
 }
 

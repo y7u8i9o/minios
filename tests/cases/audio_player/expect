@@ -1,0 +1,6 @@
+audiod: started 48000 Hz stereo
+player: playing chime.wav
+player: finished chime.wav
+player: playing chime.wav
+audio_player: player ok
+TEST PASS

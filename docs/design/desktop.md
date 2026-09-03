@@ -99,6 +99,10 @@ parameters through the debug protocol.
 
 ## Session
 
+The panel also carries the audio applet described in `docs/design/audio.md`:
+a speaker button left of the clock opens a popup with the master volume and
+the streams of the audio server.
+
 `startgui` starts `audiod` when a PCM device is present, then X12, the panel,
 the desktop and the requested program. It stops the audio server with the
 desktop session. A desktop or panel that ends abnormally is

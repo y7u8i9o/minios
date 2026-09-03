@@ -5,6 +5,7 @@
 
 extern const struct wire_interface audio_manager_interface;
 extern const struct wire_interface audio_stream_interface;
+extern const struct wire_interface audio_control_interface;
 
 struct audio_manager_listener {
     int unused;
@@ -12,6 +13,8 @@ struct audio_manager_listener {
 static inline int audio_manager_add_listener(struct wire_proxy *p, const struct audio_manager_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
 struct wire_proxy * audio_manager_create_playback_stream(struct wire_proxy *audio_manager, const char * name);
+struct wire_proxy * audio_manager_create_capture_stream(struct wire_proxy *audio_manager, const char * name, uint32_t source);
+struct wire_proxy * audio_manager_get_control(struct wire_proxy *audio_manager);
 
 struct audio_stream_listener {
     void (*configured)(void *user, struct wire_proxy *self, int fd, uint32_t size, uint32_t format, uint32_t rate, uint32_t channels, uint32_t quantum, uint32_t buffers);
@@ -19,6 +22,7 @@ struct audio_stream_listener {
     void (*state)(void *user, struct wire_proxy *self, uint32_t state, int32_t error);
     void (*drained)(void *user, struct wire_proxy *self);
     void (*xrun)(void *user, struct wire_proxy *self, uint32_t count);
+    void (*captured)(void *user, struct wire_proxy *self, uint32_t index, uint32_t frames);
 };
 static inline int audio_stream_add_listener(struct wire_proxy *p, const struct audio_stream_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
@@ -28,4 +32,16 @@ void audio_stream_set_active(struct wire_proxy *audio_stream, uint32_t active);
 void audio_stream_set_volume(struct wire_proxy *audio_stream, uint32_t volume);
 void audio_stream_drain(struct wire_proxy *audio_stream);
 void audio_stream_destroy(struct wire_proxy *audio_stream);
+
+struct audio_control_listener {
+    void (*master_volume)(void *user, struct wire_proxy *self, uint32_t volume);
+    void (*stream)(void *user, struct wire_proxy *self, uint32_t stream, const char * name, uint32_t direction, uint32_t volume, uint32_t state);
+    void (*stream_removed)(void *user, struct wire_proxy *self, uint32_t stream);
+    void (*level)(void *user, struct wire_proxy *self, uint32_t stream, uint32_t peak);
+};
+static inline int audio_control_add_listener(struct wire_proxy *p, const struct audio_control_listener *l, void *user)
+{ return wire_proxy_add_listener(p, (const void *)l, user); }
+void audio_control_set_stream_volume(struct wire_proxy *audio_control, uint32_t stream, uint32_t volume);
+void audio_control_set_master_volume(struct wire_proxy *audio_control, uint32_t volume);
+void audio_control_destroy(struct wire_proxy *audio_control);
 

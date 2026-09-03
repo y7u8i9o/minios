@@ -1043,15 +1043,42 @@ unscaled client's buffer is doubled, decorations are drawn at scale) and
 raised shared memory limit, at scale 2). The complete QEMU suite passes
 with 78 tests and no failures.
 
-### M34. Audio follow-ups
+### M34. Audio follow-ups (completed 2026-09-03)
 
-Capture through the virtio-snd RX queue (`/dev/pcm0` read side, capture
-streams in audiod, `libaudio` capture API), a mixer applet in the panel
-(stream list and per-stream volume through a control interface of
-audiod), a WAV player with a waveform view, and a step sequencer on top
-of the synth engine. Tests: `audio_capture` (loopback through the wav
-backend), `audio_mixer` (per-stream gain through the control interface),
-`audio_player` (a WAV file plays to the end).
+1. Capture through the virtio-snd RX queue: the driver (split into
+   `virtio_snd.c` and `virtio_snd_stream.c`) runs a capture stream next to
+   the playback stream on the same exclusive `/dev/pcm0`; the ABI (version 2,
+   `AUDIO_CAP_CAPTURE`) adds the `AUDIO_*CAPTURE*` requests, reads of exactly
+   one period and `POLLIN`.  Every capture period is submitted at prepare and
+   resubmitted after it is read; a drop releases the stream and waits a
+   bounded time for the device to hand the periods back, so host backends
+   without a capture voice (`wav`, Core Audio) cannot stall the server.
+2. `audiod` (split into `main.c`, `stream.c` and `control.c`) adds capture
+   streams from two sources, the device input (through an input ring read on
+   `POLLIN`) and the monitor of the mix, both clocked by the output; a master
+   volume; and the `audio_control` interface: the stream list with volumes
+   and states, master and per-stream volume requests and peak levels.
+3. `libaudio` adds `audio_capture_*` (blocking reads with partial buffer
+   consumption), `audio_mixer_*` (the mixer view) and
+   `audio_connection_sync`.
+4. The panel's audio applet (`user/panel/mixer.c`): a speaker button opens a
+   popup with the master volume and one row per stream (name, state, volume
+   bar, peak meter), set by clicking or dragging.
+5. `/bin/player` plays PCM WAV files of any rate with a waveform view, play
+   head, seeking, loop and volume; `.wav` files open with it from the file
+   manager.  `/bin/sequencer` is a sixteen step, eight note polyphonic step
+   sequencer on the synthesizer voice, which moved to
+   `user/apps/synthvoice.h` and is shared with `/bin/synth`.
+   `docs/design/audio.md` describes all of it.
+
+Tests: `audio_capture` (raw capture and, through `audiod`, a tone played
+back through the monitor source sample-exact, silent input periods, partial
+reads and xruns for a late reader), `audio_mixer` (the mixer view from a
+second connection with volume changes verified through the monitor
+capture), `audio_player`, `audio_sequencer` and `gui_mixer` (the desktop
+applications and the panel applet against the server); `audio_pcm` also
+covers a capture drop under the `wav` backend.  The GUI test helpers moved
+to `kernel/tests/gui_helpers.h` for `test_audio_gui.c`.
 
 ## 4. Testing Strategy
 

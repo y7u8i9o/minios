@@ -200,8 +200,9 @@ struct fb_mode {
 /* Raw PCM audio devices.  Clients normally use audiod rather than opening
  * /dev/pcmN directly.  Structures have fixed-width fields so the ABI can be
  * extended without depending on compiler enum sizes. */
-#define AUDIO_ABI_VERSION 1
+#define AUDIO_ABI_VERSION 2
 #define AUDIO_CAP_PLAYBACK (1u << 0)
+#define AUDIO_CAP_CAPTURE  (1u << 1)    /* the read side: AUDIO_*CAPTURE* requests */
 #define AUDIO_FORMAT_S16_LE (1u << 0)
 #define AUDIO_RATE_48000    (1u << 0)
 
@@ -232,6 +233,10 @@ struct audio_params {
     uint32_t periods;
 };
 
+/* Playback: queued_frames are submitted and not yet played, xruns count
+ * empty rings while running.  Capture: queued_frames are captured and
+ * not yet read, played_frames counts captured frames, xruns count
+ * periods the device could not fill because the reader was late. */
 struct audio_status {
     uint32_t state;
     uint32_t queued_frames;
@@ -247,6 +252,13 @@ struct audio_status {
 #define AUDIO_DROP        0x4104
 #define AUDIO_DRAIN       0x4105
 #define AUDIO_GET_STATUS  0x4106
+/* The capture stream of a device with AUDIO_CAP_CAPTURE.  Reads are
+ * exactly one configured period; poll(POLLIN) reports a full period. */
+#define AUDIO_SET_CAPTURE_PARAMS 0x4107
+#define AUDIO_CAPTURE_PREPARE    0x4108
+#define AUDIO_CAPTURE_START      0x4109
+#define AUDIO_CAPTURE_DROP       0x410a
+#define AUDIO_GET_CAPTURE_STATUS 0x410b
 
 #define MAP_SHARED 0x01
 

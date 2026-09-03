@@ -2,19 +2,33 @@
 <!-- MiniOS audio control protocol.  PCM payloads live in passed memfd
      pools; protocol messages only transfer configuration and ownership. -->
 <protocol name="audio">
-  <interface name="audio_manager" version="1">
+  <interface name="audio_manager" version="2">
     <request name="create_playback_stream">
       <arg name="id" type="new_id" interface="audio_stream"/>
       <arg name="name" type="string"/>
     </request>
+    <!-- source: 0 captures the input device, 1 the monitor of the mix
+         sent to the output. -->
+    <request name="create_capture_stream">
+      <arg name="id" type="new_id" interface="audio_stream"/>
+      <arg name="name" type="string"/>
+      <arg name="source" type="uint"/>
+    </request>
+    <!-- The mixer view: every stream of every client and the master
+         volume. -->
+    <request name="get_control">
+      <arg name="id" type="new_id" interface="audio_control"/>
+    </request>
   </interface>
 
-  <interface name="audio_stream" version="1">
+  <interface name="audio_stream" version="2">
     <request name="configure">
       <arg name="format" type="uint"/>
       <arg name="rate" type="uint"/>
       <arg name="channels" type="uint"/>
     </request>
+    <!-- Playback: the buffer holds frames frames to mix.  Capture: the
+         buffer is returned to the server for filling (frames is 0). -->
     <request name="queue_buffer">
       <arg name="index" type="uint"/>
       <arg name="frames" type="uint"/>
@@ -34,9 +48,37 @@
       <arg name="quantum" type="uint"/>
       <arg name="buffers" type="uint"/>
     </event>
+    <!-- Playback: the buffer is the client's to fill. -->
     <event name="buffer_ready"><arg name="index" type="uint"/></event>
     <event name="state"><arg name="state" type="uint"/><arg name="error" type="int"/></event>
     <event name="drained"/>
     <event name="xrun"><arg name="count" type="uint"/></event>
+    <!-- Capture: the buffer holds frames captured frames for the client. -->
+    <event name="captured"><arg name="index" type="uint"/><arg name="frames" type="uint"/></event>
+  </interface>
+
+  <!-- Streams are identified by server wide numbers; volumes are Q16.16
+       gains.  A stream event announces a stream or reports a change. -->
+  <interface name="audio_control" version="1">
+    <request name="set_stream_volume">
+      <arg name="stream" type="uint"/>
+      <arg name="volume" type="uint"/>
+    </request>
+    <request name="set_master_volume"><arg name="volume" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+
+    <event name="master_volume"><arg name="volume" type="uint"/></event>
+    <!-- direction: 0 playback, 1 capture; state: 0 paused, 1 running -->
+    <event name="stream">
+      <arg name="stream" type="uint"/>
+      <arg name="name" type="string"/>
+      <arg name="direction" type="uint"/>
+      <arg name="volume" type="uint"/>
+      <arg name="state" type="uint"/>
+    </event>
+    <event name="stream_removed"><arg name="stream" type="uint"/></event>
+    <!-- Peak of the last period as a 0 to 32767 sample value, sent for
+         every running stream while a control client exists. -->
+    <event name="level"><arg name="stream" type="uint"/><arg name="peak" type="uint"/></event>
   </interface>
 </protocol>

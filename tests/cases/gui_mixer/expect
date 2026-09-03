@@ -1,0 +1,6 @@
+audiod: started 48000 Hz stereo
+panel: mixer opened, 1 streams
+panel: mixer master 50
+panel: mixer closed
+gui_mixer: mixer applet ok
+TEST PASS

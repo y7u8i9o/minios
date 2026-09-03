@@ -5,9 +5,12 @@
 
 extern const struct wire_interface audio_manager_interface;
 extern const struct wire_interface audio_stream_interface;
+extern const struct wire_interface audio_control_interface;
 
 struct audio_manager_impl {
     void (*create_playback_stream)(struct wire_client *client, struct wire_resource *self, uint32_t id, const char * name);
+    void (*create_capture_stream)(struct wire_client *client, struct wire_resource *self, uint32_t id, const char * name, uint32_t source);
+    void (*get_control)(struct wire_client *client, struct wire_resource *self, uint32_t id);
 };
 
 struct audio_stream_impl {
@@ -23,4 +26,15 @@ void audio_stream_send_buffer_ready(struct wire_resource *audio_stream, uint32_t
 void audio_stream_send_state(struct wire_resource *audio_stream, uint32_t state, int32_t error);
 void audio_stream_send_drained(struct wire_resource *audio_stream);
 void audio_stream_send_xrun(struct wire_resource *audio_stream, uint32_t count);
+void audio_stream_send_captured(struct wire_resource *audio_stream, uint32_t index, uint32_t frames);
+
+struct audio_control_impl {
+    void (*set_stream_volume)(struct wire_client *client, struct wire_resource *self, uint32_t stream, uint32_t volume);
+    void (*set_master_volume)(struct wire_client *client, struct wire_resource *self, uint32_t volume);
+    void (*destroy)(struct wire_client *client, struct wire_resource *self);
+};
+void audio_control_send_master_volume(struct wire_resource *audio_control, uint32_t volume);
+void audio_control_send_stream(struct wire_resource *audio_control, uint32_t stream, const char * name, uint32_t direction, uint32_t volume, uint32_t state);
+void audio_control_send_stream_removed(struct wire_resource *audio_control, uint32_t stream);
+void audio_control_send_level(struct wire_resource *audio_control, uint32_t stream, uint32_t peak);
 

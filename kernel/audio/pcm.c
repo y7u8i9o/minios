@@ -29,6 +29,14 @@ static int pcm_open(struct inode *ino, struct file *f)
     return 0;
 }
 
+static long pcm_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    struct pcm_device *dev = f->priv;
+    if (!dev || !dev->ops->read)
+        return -EINVAL;
+    return dev->ops->read(dev, f, buf, n);
+}
+
 static long pcm_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
 {
     struct pcm_device *dev = f->priv;
@@ -68,6 +76,7 @@ static void pcm_release(struct file *f)
 
 static const struct file_ops pcm_fops = {
     .open = pcm_open,
+    .read = pcm_read,
     .write = pcm_write,
     .ioctl = pcm_ioctl,
     .poll = pcm_poll,

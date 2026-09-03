@@ -13,72 +13,36 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/timerfd.h>
-#include <wire/client.h>
-#include <gui/gfx.h>
-#include <gui/paint.h>
-#include <gui/theme.h>
-#include "core-client.h"
-#include "shell-client.h"
-#include "seat-client.h"
+#include "panel.h"
 
-#define PANEL_H 28
-#define MENU_BTN_W 64
-#define TASK_BTN_W 120
-#define CLOCK_W 80
-#define MENU_ITEM_H 24
-#define MENU_PAD 6
-#define MENU_W 184
-
-/* Colours: a dark neutral bar, pill shaped buttons, a light menu. */
-#define PANEL_BG        0x0023272c
-#define PANEL_LINE      0x00343a41
-#define PANEL_TEXT      0x00e6e8eb
-#define PANEL_TEXT_DIM  0x00a0a6ae
-#define BUTTON_BG       0x002e343b
-#define BUTTON_ACTIVE   0x003f4854
-#define BUTTON_OPEN     0x004a5563
-#define ACCENT          0x005b9cf5
-#define MENU_BG         0x00fafbfc
-#define MENU_BORDER     0x00c5cad1
-#define MENU_HOVER      0x00dce8fa
-#define MENU_TEXT       0x00202428
 #define MAX_ENTRIES 32
 #define MAX_TASKS 16
 
 struct entry { char title[24]; char path[64]; };
 struct task { struct wire_proxy *handle; char title[48]; int active, minimized; };
 
-/* A drawable surface backed by one shm buffer of lw by lh logical
- * pixels at the output scale. */
-struct canvas {
-    struct wire_proxy *surface, *buffer, *pool;
-    struct surface s;
-    int fd;
-    int lw, lh, scale;
-};
-
-static struct wire_display *display;
-static struct wire_proxy *compositor, *shm, *shell, *seat, *pointer, *manager;
-static struct canvas panel, menu;
+struct wire_display *display;
+struct wire_proxy *compositor, *shm, *shell, *seat;
+static struct wire_proxy *pointer, *manager;
+struct canvas panel;
+static struct canvas menu;
 static struct wire_proxy *layer, *popup;
 static struct entry entries[MAX_ENTRIES];
 static int nentries;
 static struct task tasks[MAX_TASKS];
 static int ntasks;
-static int screen_w = 1024, screen_h = 768;
+int screen_w = 1024, screen_h = 768;
 static int menu_open, hover_item = -1;
 static int px, py;                       /* pointer in the panel */
 static struct wire_proxy *pointer_surface;
-static uint32_t press_serial;
+uint32_t press_serial;
 static int layer_configured;
-static int output_scale = 1;
-static struct theme ui;
-
-static void log_line(const char *fmt, ...);
+int output_scale = 1;
+struct theme ui;
 
 /* ---- canvases ---- */
 
-static void canvas_release_buffer(struct canvas *c)
+void canvas_release_buffer(struct canvas *c)
 {
     if (c->buffer)
         buffer_destroy(c->buffer);
@@ -121,7 +85,7 @@ static int canvas_alloc(struct canvas *c, int w, int h)
     return 0;
 }
 
-static int canvas_create(struct canvas *c, int w, int h)
+int canvas_create(struct canvas *c, int w, int h)
 {
     memset(c, 0, sizeof *c);
     c->fd = -1;
@@ -129,23 +93,21 @@ static int canvas_create(struct canvas *c, int w, int h)
     return canvas_alloc(c, w, h);
 }
 
-static void canvas_commit(struct canvas *c)
+void canvas_commit(struct canvas *c)
 {
     surface_attach(c->surface, c->buffer, 0, 0);
     surface_damage(c->surface, 0, 0, c->lw, c->lh);
     surface_commit(c->surface);
 }
 
-static void canvas_painter(struct painter *p, struct canvas *c)
+void canvas_painter(struct painter *p, struct canvas *c)
 {
     painter_init_scaled(p, &c->s, &ui, c->scale);
 }
 
 /* ---- drawing ---- */
 
-/* A label vertically centred in a box, clipped to it, optionally
- * centred horizontally. */
-static void label(struct painter *p, int x, int y, int w, int h, const char *text, uint32_t color, int centre)
+void panel_label(struct painter *p, int x, int y, int w, int h, const char *text, uint32_t color, int centre)
 {
     int th = painter_text_height(p);
     int tw = painter_text_width(p, text, -1);
@@ -155,7 +117,7 @@ static void label(struct painter *p, int x, int y, int w, int h, const char *tex
     painter_pop(p);
 }
 
-static void draw_panel(void)
+void draw_panel(void)
 {
     struct painter p;
     canvas_painter(&p, &panel);
@@ -163,20 +125,21 @@ static void draw_panel(void)
     painter_fill(&p, 0, 0, w, h, PANEL_BG);
     painter_fill(&p, 0, 0, w, 1, PANEL_LINE);
     painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, menu_open ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
-    label(&p, 4, 4, MENU_BTN_W, h - 8, "Menu", PANEL_TEXT, 1);
-    int limit = (w - CLOCK_W - MENU_BTN_W - 16) / (TASK_BTN_W + 4);
+    panel_label(&p, 4, 4, MENU_BTN_W, h - 8, "Menu", PANEL_TEXT, 1);
+    int limit = (w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
         int active = tasks[i].active && !tasks[i].minimized;
         painter_rounded(&p, x, 4, TASK_BTN_W, h - 8, active ? BUTTON_ACTIVE : BUTTON_BG, 0xffffffffu);
         if (active)
             painter_fill(&p, x + 8, h - 6, TASK_BTN_W - 16, 2, ACCENT);
-        label(&p, x + 6, 4, TASK_BTN_W - 12, h - 8, tasks[i].title, tasks[i].minimized ? PANEL_TEXT_DIM : PANEL_TEXT, 0);
+        panel_label(&p, x + 6, 4, TASK_BTN_W - 12, h - 8, tasks[i].title, tasks[i].minimized ? PANEL_TEXT_DIM : PANEL_TEXT, 0);
     }
     long sec = uptime_ms() / 1000;
     char t[16];
     snprintf(t, sizeof t, "%02ld:%02ld:%02ld", sec / 3600, (sec / 60) % 60, sec % 60);
-    label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
+    panel_label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
+    mixer_draw_button(&p);
     canvas_commit(&panel);
 }
 
@@ -191,7 +154,7 @@ static void draw_menu(void)
         int y = MENU_PAD + i * MENU_ITEM_H;
         if (i == hover_item)
             painter_rounded(&p, 4, y, w - 8, MENU_ITEM_H, MENU_HOVER, 0xffffffffu);
-        label(&p, 8, y, w - 16, MENU_ITEM_H, entries[i].title, MENU_TEXT, 0);
+        panel_label(&p, 8, y, w - 16, MENU_ITEM_H, entries[i].title, MENU_TEXT, 0);
     }
     canvas_commit(&menu);
 }
@@ -320,6 +283,10 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
 {
     px = wire_fixed_to_int(x);
     py = wire_fixed_to_int(y);
+    if (mixer_owns(pointer_surface)) {
+        mixer_pointer_motion(px, py);
+        return;
+    }
     if (menu_open && pointer_surface == menu.surface) {
         int item = py < MENU_PAD ? -1 : (py - MENU_PAD) / MENU_ITEM_H;
         if (item >= nentries) item = -1;
@@ -333,6 +300,10 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
 {
     if (state == 1)
         press_serial = serial;
+    if (mixer_owns(pointer_surface)) {
+        mixer_pointer_button(button, state, px, py);
+        return;
+    }
     if (button != 1 || state != 1)
         return;
     if (pointer_surface == menu.surface) {
@@ -351,7 +322,11 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
             menu_show();
         return;
     }
-    int limit = (screen_w - CLOCK_W - MENU_BTN_W - 16) / (TASK_BTN_W + 4);
+    if (px >= mixer_button_x() && px < mixer_button_x() + MIXER_BTN_W) {
+        mixer_toggle();
+        return;
+    }
+    int limit = (screen_w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
         if (px >= x && px < x + TASK_BTN_W) {
@@ -466,7 +441,7 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
 static void on_global_remove(void *user, struct wire_proxy *registry, uint32_t name) {}
 static const struct registry_listener registry_events = { on_global, on_global_remove };
 
-static void log_line(const char *fmt, ...)
+void log_line(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -521,9 +496,11 @@ int main(void)
     timerfd_settime(tfd, &spec);
     for (;;) {
         wire_display_flush(display);
-        struct pollfd pf[2] = { { wire_display_fd(display), POLLIN, 0 }, { tfd, POLLIN, 0 } };
-        if (poll(pf, 2, 1000) < 0)
+        struct pollfd pf[3] = { { wire_display_fd(display), POLLIN, 0 }, { tfd, POLLIN, 0 }, { mixer_fd(), POLLIN, 0 } };
+        if (poll(pf, pf[2].fd >= 0 ? 3 : 2, 1000) < 0)
             continue;
+        if (pf[2].fd >= 0 && pf[2].revents)
+            mixer_dispatch(pf[2].revents);
         while (waitpid(-1, NULL, WNOHANG) > 0)
             ;
         if (pf[1].revents & POLLIN) {

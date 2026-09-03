@@ -1,8 +1,9 @@
 /* synth: a small monophonic subtractive synthesizer for audiod.
  *
- * Signal path: oscillator (saw, square or triangle, octave shifted)
- * -> ADSR amplitude envelope -> resonant state-variable low-pass filter
- * whose cutoff follows the envelope -> soft clipper -> audiod stream.
+ * Signal path (synthvoice.h): oscillator (saw, square or triangle,
+ * octave shifted) -> ADSR amplitude envelope -> resonant state-variable
+ * low-pass filter whose cutoff follows the envelope -> soft clipper
+ * -> audiod stream.
  *
  * Audio runs from the application event loop: whenever the audiod
  * connection becomes readable, every buffer the server has handed back is
@@ -10,17 +11,13 @@
  * late wakeup of up to three periods does not cause an xrun. */
 #include <audio/audio.h>
 #include <gui/app.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
+#include "synthvoice.h"
 
-#define RATE 48000
 #define NOTES 13
-#define OVERSAMPLE 2
 #define SCOPE_EVERY 6           /* periods between oscilloscope repaints */
-
-enum stage { ENV_IDLE, ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_RELEASE };
 
 static struct app *app;
 static struct audio_connection *audio;
@@ -34,8 +31,7 @@ static struct widget *sustain_label, *release_label;
 static struct widget *status, *keys, *scope;
 static int16_t *period;
 static uint32_t quantum;
-static float phase, envelope, low, band;
-static enum stage stage = ENV_IDLE;
+static struct synth_voice voice;
 static int active_note = -1, active_code, gate, mouse_gate;
 static uint32_t shown_xruns, periods_rendered;
 
@@ -50,6 +46,12 @@ static const int note_codes[NOTES] = {
     0x1e, 0x11, 0x1f, 0x12, 0x20, 0x21, 0x14,
     0x22, 0x15, 0x23, 0x16, 0x24, 0x25
 };
+
+/* The frequency of a pad at the current octave setting. */
+static float note_frequency(int note)
+{
+    return (float)frequencies[note] * (float)(1 << (octave->value + 2)) / 4.0f;
+}
 
 static void update_status(void)
 {
@@ -72,16 +74,11 @@ static void note_on(int note, int code, int mouse)
 {
     if (note < 0 || note >= NOTES)
         return;
-    /* Restart the waveform only when nothing is sounding; otherwise the
-     * phase continues so that a retrigger or a legato change is free of
-     * clicks. */
-    if (stage == ENV_IDLE)
-        phase = 0.0f;
     active_note = note;
     active_code = code;
     mouse_gate = mouse;
     gate = 1;
-    stage = ENV_ATTACK;
+    synth_voice_on(&voice, note_frequency(note));
     update_status();
     widget_invalidate(keys);
 }
@@ -93,106 +90,32 @@ static void note_off(int code, int mouse)
     gate = 0;
     active_code = 0;
     mouse_gate = 0;
-    stage = ENV_RELEASE;
+    synth_voice_off(&voice);
     widget_invalidate(keys);
-}
-
-static float oscillator_sample(float increment)
-{
-    float sample;
-    if (wave->value == 1)
-        sample = phase < 0.5f ? 1.0f : -1.0f;
-    else if (wave->value == 2)
-        sample = 1.0f - 4.0f * fabsf(phase - 0.5f);
-    else
-        sample = phase * 2.0f - 1.0f;
-    phase += increment;
-    if (phase >= 1.0f)
-        phase -= 1.0f;
-    return sample;
-}
-
-/* Linear ADSR, advanced once per output sample. */
-static float envelope_sample(float attack_step, float decay_step,
-                             float sustain_level, float release_step)
-{
-    switch (stage) {
-    case ENV_ATTACK:
-        envelope += attack_step;
-        if (envelope >= 1.0f) {
-            envelope = 1.0f;
-            stage = ENV_DECAY;
-        }
-        break;
-    case ENV_DECAY:
-        envelope -= decay_step;
-        if (envelope <= sustain_level) {
-            envelope = sustain_level;
-            stage = ENV_SUSTAIN;
-        }
-        break;
-    case ENV_SUSTAIN:
-        envelope = sustain_level;
-        break;
-    case ENV_RELEASE:
-        envelope -= release_step;
-        if (envelope <= 0.0f) {
-            envelope = 0.0f;
-            stage = ENV_IDLE;
-            widget_invalidate(keys);
-        }
-        break;
-    case ENV_IDLE:
-        envelope = 0.0f;
-        break;
-    }
-    return envelope;
-}
-
-/* Cubic saturation: transparent for small signals, no hard edge at full
- * scale.  The filter can overshoot at high resonance. */
-static float soft_clip(float x)
-{
-    if (x > 1.5f)
-        x = 1.5f;
-    else if (x < -1.5f)
-        x = -1.5f;
-    return x - x * x * x * (4.0f / 27.0f);
 }
 
 static void render_period(void)
 {
-    int frequency = frequencies[active_note >= 0 ? active_note : 0];
-    float increment = (float)frequency * (float)(1 << (octave->value + 2)) /
-                      (4.0f * RATE);
-    float damping = 1.9f - 1.6f * resonance->value / 100.0f;
-    float attack_step = 1.0f / (attack->value * (RATE / 1000.0f));
-    float decay_step = 1.0f / (decay->value * (RATE / 1000.0f));
-    float sustain_level = sustain->value / 100.0f;
-    float release_step = 1.0f / (release->value * (RATE / 1000.0f));
-    float base_cutoff = (float)cutoff->value;
-    float sweep = envelope_amount->value / 100.0f * 6000.0f;
-
+    struct synth_params params = {
+        .wave = (enum synth_wave)wave->value,
+        .cutoff = (float)cutoff->value,
+        .resonance = resonance->value / 100.0f,
+        .envelope_amount = envelope_amount->value / 100.0f,
+        .attack_ms = (float)attack->value,
+        .decay_ms = (float)decay->value,
+        .release_ms = (float)release->value,
+        .sustain = sustain->value / 100.0f,
+    };
+    struct synth_coeffs coeffs;
+    synth_coeffs_set(&coeffs, &params);
+    int was_active = synth_voice_active(&voice);
     for (uint32_t i = 0; i < quantum; i++) {
-        float level = envelope_sample(attack_step, decay_step,
-                                      sustain_level, release_step);
-        float input = oscillator_sample(increment) * level * 0.6f;
-        /* The Chamberlin filter runs twice per sample at half the
-         * coefficient: this keeps it stable up to the highest cutoff the
-         * envelope can sweep to and reduces aliasing of the resonance. */
-        float fc = base_cutoff + sweep * level;
-        if (fc > 12000.0f)
-            fc = 12000.0f;
-        float f = (float)M_PI * fc / (OVERSAMPLE * RATE);
-        for (int k = 0; k < OVERSAMPLE; k++) {
-            low += f * band;
-            float high = input - low - damping * band;
-            band += f * high;
-        }
-        int16_t pcm = (int16_t)(soft_clip(low) * 24000.0f);
+        int16_t pcm = (int16_t)(synth_voice_sample(&voice, &coeffs) * 24000.0f);
         period[i * 2] = pcm;
         period[i * 2 + 1] = pcm;
     }
+    if (was_active && !synth_voice_active(&voice))
+        widget_invalidate(keys);        /* the release ended: the pad goes quiet */
     if (++periods_rendered % SCOPE_EVERY == 0)
         widget_invalidate(scope);
 }
@@ -251,8 +174,11 @@ static int on_control(struct widget *w, void *args, void *arg)
 {
     if (w == volume)
         audio_playback_set_volume(playback, (unsigned)volume->value);
-    if (w == octave)
+    if (w == octave) {
+        if (active_note >= 0 && synth_voice_active(&voice))
+            voice.increment = note_frequency(active_note) / SYNTH_RATE;
         update_status();
+    }
     update_controls();
     return 1;
 }
@@ -266,7 +192,7 @@ static int on_paint(struct widget *w, void *args, void *arg)
     for (int i = 0; i < NOTES; i++) {
         int x = i * width;
         int right = i == NOTES - 1 ? w->w : x + width;
-        uint32_t fill = i == active_note && stage != ENV_IDLE ?
+        uint32_t fill = i == active_note && synth_voice_active(&voice) ?
                         t->color[TC_ACCENT] : t->color[TC_FIELD];
         painter_fill(p, x + 1, 1, right - x - 2, w->h - 2, fill);
         painter_frame(p, x, 0, right - x, w->h, t->color[TC_BORDER]);
@@ -341,6 +267,8 @@ static void shift_octave(int delta)
     if (value < octave->min || value > octave->max)
         return;
     widget_set_value(octave, value);
+    if (active_note >= 0 && synth_voice_active(&voice))
+        voice.increment = note_frequency(active_note) / SYNTH_RATE;
     update_status();
 }
 

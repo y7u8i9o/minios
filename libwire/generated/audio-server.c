@@ -43,3 +43,44 @@ void audio_stream_send_xrun(struct wire_resource *audio_stream, uint32_t count)
     wire_resource_post(audio_stream, 4, args);
 }
 
+void audio_stream_send_captured(struct wire_resource *audio_stream, uint32_t index, uint32_t frames)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = index;
+    args[1].u = frames;
+    wire_resource_post(audio_stream, 5, args);
+}
+
+void audio_control_send_master_volume(struct wire_resource *audio_control, uint32_t volume)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = volume;
+    wire_resource_post(audio_control, 0, args);
+}
+
+void audio_control_send_stream(struct wire_resource *audio_control, uint32_t stream, const char * name, uint32_t direction, uint32_t volume, uint32_t state)
+{
+    union wire_arg args[5] = { { 0 } };
+    args[0].u = stream;
+    args[1].s = name;
+    args[2].u = direction;
+    args[3].u = volume;
+    args[4].u = state;
+    wire_resource_post(audio_control, 1, args);
+}
+
+void audio_control_send_stream_removed(struct wire_resource *audio_control, uint32_t stream)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = stream;
+    wire_resource_post(audio_control, 2, args);
+}
+
+void audio_control_send_level(struct wire_resource *audio_control, uint32_t stream, uint32_t peak)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = stream;
+    args[1].u = peak;
+    wire_resource_post(audio_control, 3, args);
+}
+
