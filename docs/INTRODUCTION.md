@@ -118,6 +118,8 @@ minios/
     init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  calc/  apps/  tests/
   tools/
     mkfs/               builds an mfs disk image from a directory tree
+    fsck/               replays the mfs journal, checks and repairs an image
+    mkfat/              builds FAT12/16/32 images from a directory tree
     gensyms/            kernel symbol table generator
     genfont/            bitmap font generator
   tests/

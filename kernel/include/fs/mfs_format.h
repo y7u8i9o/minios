@@ -1,11 +1,12 @@
 #pragma once
-/* On disk format of mfs, shared with tools/mkfs. All fields are little
- * endian. Block 0 holds the superblock, followed by the inode bitmap,
- * the block bitmap, the inode table and the data blocks. */
+/* On disk format of mfs, shared with tools/mkfs and tools/fsck. All fields
+ * are little endian. Block 0 holds the superblock, followed by the inode
+ * bitmap, the block bitmap, the inode table, the journal and the data
+ * blocks. */
 #include <stdint.h>
 
 #define MFS_MAGIC          0x3153464du   /* "MFS1" */
-#define MFS_VERSION        1
+#define MFS_VERSION        2             /* 2: journal region (M36) */
 #define MFS_BLOCK_SIZE     4096
 #define MFS_NDIRECT        12
 #define MFS_INODE_SIZE     128
@@ -35,6 +36,8 @@ struct mfs_superblock {
     uint64_t free_blocks;
     uint32_t free_inodes;
     uint32_t mount_count;
+    uint32_t journal_start;         /* version 2: header block of the journal */
+    uint32_t journal_blocks;        /* header plus MFS_JOURNAL_SLOTS data slots */
 };
 
 struct mfs_dinode {
@@ -56,3 +59,22 @@ struct mfs_dirent {
 /* Byte capacity limits. */
 #define MFS_MAX_FILE_BLOCKS \
     (MFS_NDIRECT + MFS_PTRS_PER_BLOCK + (uint64_t)MFS_PTRS_PER_BLOCK * MFS_PTRS_PER_BLOCK)
+
+/* The journal (M36): a write ahead log of metadata blocks. One transaction
+ * is in the journal at a time. Its blocks are written to the slots after
+ * the header, then the header is written with the count and a CRC-32 over
+ * the header fields and the slot contents. Only a header whose checksum
+ * matches describes a committed transaction; once the blocks have reached
+ * their home locations the header is written again with count 0. */
+#define MFS_JOURNAL_MAGIC  0x4c4e524au   /* "JRNL" */
+#define MFS_JOURNAL_SLOTS  127
+#define MFS_JOURNAL_BLOCKS (1 + MFS_JOURNAL_SLOTS)
+
+struct mfs_journal_header {
+    uint32_t magic;
+    uint32_t count;                 /* blocks in the transaction, 0 when empty */
+    uint64_t sequence;              /* incremented per commit */
+    uint32_t checksum;              /* crc32 of this header (field zero) and the slots */
+    uint32_t pad;
+    uint32_t block[MFS_JOURNAL_SLOTS];  /* home block of each slot */
+};

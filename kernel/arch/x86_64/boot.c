@@ -20,6 +20,7 @@
 #include <fs/initrd.h>
 #include <fs/vfs.h>
 #include <fs/initrdfs.h>
+#include <fs/fat.h>
 #include <fs/devfs.h>
 #include <arch/apic.h>
 #include <arch/smp.h>
@@ -244,6 +245,7 @@ __noreturn void kmain(void)
     initrdfs_init();
     devfs_init();
     mfs_init();
+    fat_init();
     lapic_init();
     ioapic_init();
     tlb_init();

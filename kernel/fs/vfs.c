@@ -488,6 +488,7 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
         if (r < 0)
             return r;
         size_t len = strlen(name);
+        vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
         r = dir->ops && dir->ops->lookup ? dir->ops->lookup(dir, name, len, &ino) : -ENOENT;
         if (r == 0 && (flags & O_EXCL)) {
@@ -500,6 +501,7 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
                 r = dir->ops->create(dir, name, len, S_IFREG | (mode & 0777), &ino);
         }
         mutex_unlock(&dir->lock);
+        vfs_op_end(dir->sb);
         inode_put(dir);
         if (r < 0)
             return r;
@@ -526,9 +528,11 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
             r = -EROFS;
             goto fail;
         }
+        vfs_op_begin(ino->sb);
         mutex_lock(&ino->lock);
         r = ino->ops->truncate(ino, 0);
         mutex_unlock(&ino->lock);
+        vfs_op_end(ino->sb);
         if (r < 0)
             goto fail;
     }
@@ -573,9 +577,11 @@ static int dir_op(const char *path, enum dir_op_kind kind)
         inode_put(dir);
         return -EROFS;
     }
+    vfs_op_begin(dir->sb);
     mutex_lock(&dir->lock);
     r = fn(dir, name, strlen(name));
     mutex_unlock(&dir->lock);
+    vfs_op_end(dir->sb);
     inode_put(dir);
     return r;
 }
@@ -615,9 +621,11 @@ int vfs_link(const char *oldpath, const char *newpath)
     else if (!dir->ops || !dir->ops->link)
         r = -EROFS;
     else {
+        vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
         r = dir->ops->link(dir, name, strlen(name), target);
         mutex_unlock(&dir->lock);
+        vfs_op_end(dir->sb);
     }
     inode_put(dir);
     inode_put(target);
@@ -648,6 +656,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
             first = newdir;
             second = olddir;
         }
+        vfs_op_begin(olddir->sb);
         mutex_lock(&first->lock);
         if (first != second)
             mutex_lock(&second->lock);
@@ -655,6 +664,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
         if (first != second)
             mutex_unlock(&second->lock);
         mutex_unlock(&first->lock);
+        vfs_op_end(olddir->sb);
     }
     inode_put(newdir);
     inode_put(olddir);
@@ -662,6 +672,18 @@ int vfs_rename(const char *oldpath, const char *newpath)
 }
 
 /* ---- helpers ---- */
+
+void vfs_op_begin(struct superblock *sb)
+{
+    if (sb && sb->ops->op_begin)
+        sb->ops->op_begin(sb);
+}
+
+void vfs_op_end(struct superblock *sb)
+{
+    if (sb && sb->ops->op_end)
+        sb->ops->op_end(sb);
+}
 
 uint8_t vfs_mode_to_dtype(uint32_t mode)
 {

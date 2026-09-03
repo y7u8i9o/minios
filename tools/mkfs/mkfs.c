@@ -4,7 +4,9 @@
  *   mkfs --dump <image>               print superblock state and tree
  *   mkfs --cat <image> <path>         print the contents of a file
  *
- * Exits non zero on any error. --dump reports "clean" or "unclean".
+ * Exits non zero on any error. --dump reports "clean" or "unclean" and
+ * the state of the journal. Images are written in format version 2, which
+ * places a journal between the inode table and the data blocks.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -219,11 +221,17 @@ static void format(uint64_t nblocks)
     sb->block_bitmap_blocks = (uint32_t)((nblocks + MFS_BLOCK_SIZE * 8 - 1) / (MFS_BLOCK_SIZE * 8));
     sb->inode_table_start = sb->block_bitmap_start + sb->block_bitmap_blocks;
     sb->inode_table_blocks = ninodes / MFS_INODES_PER_BLOCK;
-    sb->data_start = sb->inode_table_start + sb->inode_table_blocks;
+    sb->journal_start = sb->inode_table_start + sb->inode_table_blocks;
+    sb->journal_blocks = MFS_JOURNAL_BLOCKS;
+    sb->data_start = sb->journal_start + sb->journal_blocks;
     if (sb->data_start >= nblocks)
         die("image too small");
     for (uint32_t b = 0; b < sb->data_start; b++)
         bitmap_set(sb->block_bitmap_start, b);
+    struct mfs_journal_header *jh = (struct mfs_journal_header *)block(sb->journal_start);
+    jh->magic = MFS_JOURNAL_MAGIC;
+    jh->count = 0;
+    jh->sequence = 1;
     sb->free_blocks = nblocks - sb->data_start;
     bitmap_set(sb->inode_bitmap_start, 0);
     sb->free_inodes = ninodes - 1;
@@ -248,6 +256,8 @@ static void load(const char *path)
     sb = (struct mfs_superblock *)img;
     if (sb->magic != MFS_MAGIC)
         die("not an mfs image");
+    if (sb->version != MFS_VERSION)
+        die("unsupported format version (rebuild the image)");
     if (sb->nblocks > img_blocks)
         die("image truncated");
 }
@@ -302,6 +312,10 @@ int main(int argc, char **argv)
         printf("mfs: %llu blocks, %u inodes, %llu free blocks, %u free inodes, mounts %u, %s\n",
                (unsigned long long)sb->nblocks, sb->ninodes, (unsigned long long)sb->free_blocks,
                sb->free_inodes, sb->mount_count, sb->flags & MFS_FLAG_CLEAN ? "clean" : "unclean");
+        struct mfs_journal_header *jh = (struct mfs_journal_header *)block(sb->journal_start);
+        printf("journal: blocks %u..%u, sequence %llu, %u pending block%s\n", sb->journal_start,
+               sb->journal_start + sb->journal_blocks - 1, (unsigned long long)jh->sequence,
+               jh->count, jh->count == 1 ? "" : "s");
         dump_tree(MFS_ROOT_INO, "", 0);
         return 0;
     }

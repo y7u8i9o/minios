@@ -95,7 +95,7 @@ static int destructor_runs;
 
 static void key_destructor(void *value)
 {
-    destructor_runs += (int)(long)value;
+    __atomic_fetch_add(&destructor_runs, (int)(long)value, __ATOMIC_RELAXED);
 }
 
 static void *key_worker(void *arg)

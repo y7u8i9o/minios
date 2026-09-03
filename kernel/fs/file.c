@@ -73,6 +73,8 @@ long file_write(struct file *f, const char *buf, size_t n)
         return -EINVAL;
     if (n == 0)
         return 0;
+    struct superblock *sb = f->inode ? f->inode->sb : NULL;
+    vfs_op_begin(sb);
     mutex_lock(&f->lock);
     uint64_t pos = f->pos;
     if ((f->flags & O_APPEND) && f->inode)
@@ -80,6 +82,7 @@ long file_write(struct file *f, const char *buf, size_t n)
     long r = f->ops->write(f, buf, n, &pos);
     f->pos = pos;
     mutex_unlock(&f->lock);
+    vfs_op_end(sb);
     return r;
 }
 

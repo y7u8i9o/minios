@@ -38,6 +38,8 @@ before the code that uses them.
 | `bcache_lock` | spinlock | buffer LRU list, buffer identity, reference counts and flags | M12 |
 | `blockdev_lock` | spinlock | list of block devices | M12 |
 | `mfs_sb.lock` | mutex | inode and block bitmaps and the superblock counters of one mfs mount | M13 |
+| `mfs_journal.lock` | spinlock | operation and reservation counters, the committing flag and the pinned buffer list of one mfs journal; condition lock of its wait queue | M36 |
+| `fat_sb.lock` | mutex | the allocation table, the free cluster count and the search hint of one FAT mount | M36 |
 | `swap_io_lock` | mutex | serializes swap reads and writes | M14 |
 | `vmspaces_lock` | spinlock | list of user address spaces walked by kswapd | M14 |
 | `swap_lock` | spinlock | swap slot bitmap and counters, condition lock of `swap_waitq` | M14 |
@@ -64,7 +66,7 @@ acquire locks that appear later in this list.
 1. `file.lock` (mutex)
 1a. `virtio_snd.control_lock` (mutex)
 2. `inode.lock` (mutex, two directories in inode number order for rename)
-3. `mfs_sb.lock` (mutex)
+3. `mfs_sb.lock`, `fat_sb.lock` (mutex)
 4. `buf.lock` (mutex)
 5. `swap_io_lock` (mutex)
 6. `condvar.lock`
@@ -205,3 +207,17 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   `waitq_wait_timeout`. It is never taken from an interrupt. The RTC
   epoch offset is a single 64-bit word written by `rtc_init` and
   `clock_settime` and read by `clock_gettime`; it needs no lock.
+
+## M36 additions
+
+- `mfs_journal.lock` (spinlock; the counters and the pinned buffer list
+  of one journal) is a condition lock: `mfs_journal.lock -> waitq.lock ->
+  sched_lock`. It is taken from `op_begin` and `op_end`, which the VFS
+  calls with no inode or file lock held, and from `mfs_journal_write`
+  under an inode mutex, `mfs_sb.lock` and a buffer mutex; it is never held
+  across a device transfer. The commit itself runs with `committing` set
+  and the spinlock released, taking one `buf.lock` at a time.
+- `fat_sb.lock` (mutex; the allocation table) sits where `mfs_sb.lock`
+  does: under an inode mutex, above `buf.lock`, because cluster
+  allocation happens inside a write and reads and writes table entries
+  through the cache.

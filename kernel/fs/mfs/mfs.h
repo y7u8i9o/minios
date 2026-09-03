@@ -5,6 +5,32 @@
 #include <block/blockdev.h>
 #include <block/bcache.h>
 #include <sync/mutex.h>
+#include <sched/wait.h>
+
+/* Blocks one operation may add to the transaction; op_begin waits until
+ * this many slots are free. */
+#define MFS_JOURNAL_RESERVE 16
+
+/* The journal of one mount (M36). lock protects every counter and the
+ * buffer list and is the condition lock of wq; the header block and the
+ * sequence number are used only by the committing thread. */
+struct mfs_journal {
+    struct spinlock lock;
+    struct waitq wq;
+    int outstanding;                /* operations between op_begin and op_end */
+    int reserved;                   /* slots reserved by those operations */
+    int flush_waiters;              /* threads waiting to commit in mfs_journal_flush */
+    bool committing;
+    int nbufs;                      /* pinned buffers of the open transaction */
+    struct buf *bufs[MFS_JOURNAL_SLOTS];
+    uint64_t sequence;
+    struct mfs_journal_header *header;  /* one block, written raw */
+    int crash;                      /* test hook, see mfs_journal_set_crash */
+};
+
+#define MFS_CRASH_NONE          0
+#define MFS_CRASH_BEFORE_COMMIT 1   /* nothing of the transaction reaches the disk */
+#define MFS_CRASH_AFTER_COMMIT  2   /* the journal is durable, the home blocks are not */
 
 /* Per mount state. lock protects the bitmaps and the counters in sb; the
  * other fields are constant after mount. */
@@ -12,6 +38,7 @@ struct mfs_sb {
     struct blockdev *dev;
     struct mfs_superblock sb;
     struct mutex lock;
+    struct mfs_journal journal;
 };
 
 /* Per inode state: the on disk block pointers. Protected by inode->lock. */
@@ -27,7 +54,10 @@ extern const struct file_ops mfs_file_fops;
 
 /* super.c */
 void mfs_init(void);
+/* Write the superblock directly (mount and unmount, outside transactions). */
 int mfs_write_super(struct mfs_sb *m);
+/* Write the superblock counters through the journal. Caller holds m->lock. */
+int mfs_super_journal(struct mfs_sb *m);
 /* Write the inode metadata to the inode table. Caller holds ino->lock or
  * is the only user of a fresh inode. */
 int mfs_inode_flush(struct inode *ino);
@@ -47,3 +77,22 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
 int mfs_truncate_locked(struct inode *ino, uint64_t size);
 /* Release every data block; used when an unlinked inode goes away. */
 void mfs_free_all_blocks(struct inode *ino);
+
+/* journal.c */
+int mfs_journal_init(struct mfs_sb *m);
+void mfs_journal_destroy(struct mfs_sb *m);
+/* Replay a committed transaction left in the journal. Returns the number
+ * of blocks written, or -errno. */
+int mfs_journal_recover(struct mfs_sb *m);
+/* Enter and leave a transaction; nested calls by the same thread are
+ * counted. The last op_end commits the group. */
+void mfs_journal_begin(struct mfs_sb *m);
+void mfs_journal_end(struct mfs_sb *m);
+/* Add a locked, modified metadata buffer to the current transaction. */
+void mfs_journal_write(struct mfs_sb *m, struct buf *b);
+/* Wait for running operations, then commit whatever is pending. */
+int mfs_journal_flush(struct mfs_sb *m);
+/* Test hooks: make the next commit stop at the given point, and throw
+ * away everything that was not written. */
+void mfs_journal_set_crash(struct superblock *sb, int mode);
+void mfs_journal_discard(struct mfs_sb *m);

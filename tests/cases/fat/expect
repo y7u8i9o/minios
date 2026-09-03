@@ -1,0 +1,4 @@
+fat: vdb FAT12 ok
+fat: vdc FAT16 ok
+fat: vdd FAT32 ok
+TEST PASS

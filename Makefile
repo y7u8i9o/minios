@@ -12,16 +12,26 @@ SWAP_MB  ?= 64
 LIMINE   := $(BUILD)/host/limine
 GENSYMS  := $(BUILD)/host/gensyms
 MKFS     := $(BUILD)/host/mkfs
+FSCK     := $(BUILD)/host/fsck
+MKFAT    := $(BUILD)/host/mkfat
 
-export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS SWAP
+export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT SWAP
 
 .PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test check clean tools $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT)
 
 $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
+	@mkdir -p $(dir $@)
+	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+
+$(FSCK): tools/fsck/fsck.c kernel/include/fs/mfs_format.h
+	@mkdir -p $(dir $@)
+	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+
+$(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
@@ -100,8 +110,8 @@ gdb:
 
 # CASES="gui gui_wm" runs only those cases; the whole suite takes too
 # long to run for every change.
-test: kernel initrd $(LIMINE) $(DISK)
-	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT)
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 
 # Host unit tests of the GUI framework.
 check:

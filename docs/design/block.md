@@ -70,6 +70,14 @@ dirty buffer of one device or of all devices and then issues the device
 flush. The `sync` system call runs the filesystem sync hooks and then
 `bcache_sync(NULL)`.
 
+M36 adds pinned buffers for the mfs journal: `bpin` marks a locked buffer
+dirty and pinned and takes a reference, so neither eviction nor
+`bcache_sync` writes it; the filesystem writes it itself with `bwrite_now`
+once the journal holds a copy and releases it with `bunpin`. `bforget`
+drops the contents of a buffer and `bcache_discard` forgets every
+unreferenced buffer of a device; both exist for the simulated crashes of
+the journal test.
+
 Locks: `bcache_lock` protects the LRU list and the identity, reference
 count and flags of every buffer; `buf.lock` is a mutex held between
 `bread` and `brelse` and during write back. `virtqueue.lock` protects the
@@ -82,7 +90,11 @@ ring bookkeeping and is taken from the interrupt handler. See
 overrides the size). `make run` and `make gdb` attach it as
 `virtio-blk-pci`. The test runner copies the image for every case so
 cases start from identical contents and do not affect each other; a case
-may ship its own `disk.img`.
+may ship its own `disk.img`. A case file `swap` adds a zero filled swap
+device, `mfs2` an empty mfs image of the given size in MiB (`DISK2` in
+the post script) and `fat` one FAT image per line (`<size_mb> <12|16|32>
+[dir]`, built by `mkfat`; `FATIMG` and `FATIMGS` in the post script), in
+that order after the root disk.
 
 The `blk` case checks the geometry reported by the device, raw single
 sector, 128 sector and past the end transfers, delayed write back through

@@ -76,13 +76,18 @@ struct inode {
  * and may free filesystem resources of an unlinked inode. free_inode
  * releases what read_inode attached to an inode that is discarded without
  * ever being published, because another CPU read the same inode first;
- * optional. */
+ * optional. op_begin and op_end (optional, M36) bracket every modifying
+ * operation the VFS issues (create, write, truncate, mkdir, unlink, rmdir,
+ * link, rename); they are called with no inode or file lock held, so a
+ * journaling filesystem may block in op_begin for log space. */
 struct sb_ops {
     int (*read_inode)(struct superblock *sb, uint64_t ino, struct inode *ino_out);
     void (*put_inode)(struct inode *ino);
     void (*free_inode)(struct inode *ino);
     int (*sync)(struct superblock *sb);
     void (*unmount)(struct superblock *sb);
+    void (*op_begin)(struct superblock *sb);
+    void (*op_end)(struct superblock *sb);
 };
 
 /* One mounted filesystem instance. lock protects inodes and the refcounts
@@ -175,4 +180,7 @@ int vfs_link(const char *oldpath, const char *newpath);
 
 /* Generic helpers for filesystems. */
 long vfs_generic_lseek(struct file *f, long off, int whence);
+/* Call the superblock's op_begin / op_end hooks when it has them. */
+void vfs_op_begin(struct superblock *sb);
+void vfs_op_end(struct superblock *sb);
 uint8_t vfs_mode_to_dtype(uint32_t mode);

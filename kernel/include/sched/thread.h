@@ -47,6 +47,8 @@ struct thread {
     void *fpu;                      /* fxsave area, 16 byte aligned inside fpu_raw (M23) */
     void *fpu_raw;
     uint64_t fs_base;               /* user FS base (thread local storage), loaded at every switch (M35) */
+    void *fs_txn;                   /* filesystem transaction the thread is inside, if any (M36) */
+    int fs_txn_depth;               /* nesting of op_begin calls for fs_txn */
     char name[THREAD_NAME_LEN];
 };
 

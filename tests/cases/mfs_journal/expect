@@ -1,0 +1,3 @@
+vdb: journal replayed, [0-9]+ blocks
+journal: root left with a committed transaction
+TEST PASS

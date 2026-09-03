@@ -12,12 +12,15 @@ kernel (`kernel/fs/mfs/`) and the host tool (`tools/mkfs/`).
 | inode bitmap | `inode_bitmap_start` | one bit per inode number, bit 0 always set |
 | block bitmap | `block_bitmap_start` | one bit per block, metadata blocks set |
 | inode table | `inode_table_start` | 32 `struct mfs_dinode` of 128 bytes per block |
+| journal | `journal_start`, 128 blocks | header block and 127 slots (format version 2, M36) |
 | data | `data_start` .. `nblocks` | file, directory and indirect blocks |
 
 The superblock records the region boundaries, the free block and inode
 counts, a mount counter and the flags word. `MFS_FLAG_CLEAN` is cleared
 when the filesystem is mounted and set again by unmount; a mount that finds
-the flag clear logs `previous shutdown was unclean`.
+the flag clear logs `previous shutdown was unclean`. Version 1 images
+(without a journal) are refused by the kernel and the tools; `make disk`
+rebuilds the image in version 2.
 
 An inode holds the mode, link count, size, twelve direct block pointers,
 one indirect pointer (1024 blocks) and one double indirect pointer
@@ -37,8 +40,22 @@ free and is reused by the next create. Every directory starts with `.` and
   tree under `dir`. Hidden files are skipped. The inode count is one per
   four blocks with a minimum of 64.
 - `mkfs --dump <image>` prints the superblock summary, including `clean`
-  or `unclean`, and the tree with inode numbers, sizes and link counts.
+  or `unclean`, the journal state (sequence number and pending blocks),
+  and the tree with inode numbers, sizes and link counts.
 - `mkfs --cat <image> <path>` writes a file's contents to standard output.
+
+`build/host/fsck`, built from `tools/fsck/fsck.c` (M36), checks and
+repairs an image: `fsck [-n | -y] [-v] <image>`. It replays the journal
+first, then runs five passes: inodes (mode, link count, block pointers
+in range and used once, size against the block count), the directory
+tree from the root (`.` and `..`, entries pointing at usable inodes, a
+directory linked once), connectivity (unreferenced inodes are moved to
+`/lost+found`, created when missing, as `#<inode>`; link counts are
+recomputed), the bitmaps against the blocks in use, and the free counts.
+Without `-y` problems are only reported; `-n` never writes the image, so
+the replay happens in memory. An image with no problems left is marked
+clean. The exit status is 0 (no problems), 1 (repaired), 4 (problems
+left) or 8 (usage or I/O error).
 
 `make disk` (a dependency of `make image` and `make test`) builds
 `build/disk.img` from `build/initrd_root`, so the disk carries the same
@@ -73,8 +90,57 @@ changes, which discards files written during earlier runs.
   and adjusts both parents' link counts. `getdents` walks the entry slots
   using `file->pos` as the slot index.
 
-Every metadata change goes through `bwrite`, so it becomes durable at the
-next `sync`, unmount, or cache eviction.
+## Journal
+
+Since M36 metadata changes are journaled (`journal.c`): the inode table,
+both bitmaps, the superblock counters, indirect blocks and directory
+contents. File data is not journaled.
+
+Every modifying VFS operation runs between the superblock hooks
+`op_begin` and `op_end` (see `vfs.md`); `mfs_journal_begin` waits while a
+commit is in progress or fewer than 16 slots are free, then counts the
+operation in. Metadata buffers changed by the operation go through
+`mfs_journal_write`, which pins them in the block cache (`bpin`): they
+stay dirty in memory and are neither evicted nor written by
+`bcache_sync`. Nested operations by the same thread (an unlinked inode
+released while its directory entry is removed) are counted in
+`thread.fs_txn_depth` and join the outer transaction; the release of an
+unlinked file at its last close, outside any operation, opens a
+transaction of its own.
+
+When the last operation of a group ends, that thread commits:
+
+1. `bcache_sync` writes the dirty data blocks of the device, so no
+   committed metadata points at data that never reached the disk
+   (ordered mode); the pinned blocks are skipped.
+2. Each pinned block is written to its journal slot and folded into a
+   CRC-32, then the device cache is flushed.
+3. The header block is written with the sequence number, the count, the
+   home block numbers and the checksum over header and slots, and the
+   device is flushed again. From this point the transaction is durable.
+4. The blocks are written to their home locations with `bwrite_now`,
+   unpinned, and the device is flushed.
+5. The header is written with count zero.
+
+`sync` and unmount call `mfs_journal_flush`, which waits for running
+operations and commits what is pending. A mount reads the header raw: a
+non zero count whose checksum matches is replayed by copying the slots
+home through the cache (the superblock is re-read afterwards) and logged
+as `journal replayed, N blocks`; a mismatch means the crash happened
+before step 3 and the transaction is discarded. Journal blocks are never
+accessed through the block cache, so the raw writes of the commit cannot
+be shadowed by stale cached copies.
+
+The journal holds one transaction of up to 127 blocks; a single operation
+touches around ten metadata blocks at most (`free_from` no longer clears
+the entries of an indirect table that is released as a whole), so with
+the 16 block reservation up to seven operations run concurrently and
+further ones wait in `op_begin`, where no lock is held.
+
+`mfs_journal_set_crash` is a test hook: mode 1 makes the next commit do
+nothing, mode 2 stops it after step 3; while a crash mode is set, `sync`
+writes nothing and unmount discards every pinned and cached buffer of the
+device (`mfs_journal_discard`), which models a power loss.
 
 ## Root filesystem and shutdown
 
@@ -102,6 +168,20 @@ persistent filesystem that is still busy is reported and left unclean.
 - `mfs_user`: `/bin/mfstest` performs the same operations through system
   calls and libc streams, including `cp` and a pipeline redirected into a
   file through the shell.
+- `mfs_journal` (`kernel/tests/test_journal.c`): a second, empty mfs
+  image (case file `mfs2`) is mounted on `/mnt`. With crash mode 2 a
+  20000 byte file is written, a directory created and a file removed; the
+  device is unmounted as after a power loss and mounted again, and the
+  changes must be there. With crash mode 1 a file write and a rename must
+  leave no trace. Eight kernel threads then create, write and unlink files
+  concurrently (more than seven, so some wait for journal space); the
+  superblock counters must agree with the bitmaps after every step. The
+  root image is finally left with a committed, not checkpointed
+  transaction; the `post` script runs `fsck` on both images: the second
+  reports no problems, the first prints `journal: replaying transaction`
+  and afterwards holds `/journaled.txt`, and a second `fsck` run finds it
+  clean. Repair paths of `fsck` were checked by hand on images corrupted
+  with `dd` (bitmap zeroed, link count wrong, entry removed).
 - `shutdown`: boots with `init=/bin/shutdowntest`, which writes
   `/persist.txt`, creates `/persist.d` and calls `shutdown_system`. The
   case's `post` script checks that QEMU exited through ACPI power off (exit

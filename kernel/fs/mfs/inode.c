@@ -27,7 +27,7 @@ static int ptr_set(struct mfs_sb *m, uint32_t block, uint32_t index, uint32_t v)
     if (!b)
         return -EIO;
     ((uint32_t *)b->data)[index] = v;
-    bwrite(b);
+    mfs_journal_write(m, b);
     brelse(b);
     return 0;
 }
@@ -121,9 +121,12 @@ long mfs_read_locked(struct inode *ino, char *buf, size_t n, uint64_t off)
     return (long)done;
 }
 
+/* Directory contents are metadata and go through the journal; file data
+ * is written back by the cache (before the transaction commits). */
 long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off)
 {
     struct mfs_sb *m = mfs_of(ino);
+    bool metadata = S_ISDIR(ino->mode);
     if ((off + n) / MFS_BLOCK_SIZE >= MFS_MAX_FILE_BLOCKS)
         return -EFBIG;
     size_t done = 0;
@@ -138,7 +141,10 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
         if (!b)
             return done ? (long)done : -EIO;
         memcpy(b->data + boff, buf + done, chunk);
-        bwrite(b);
+        if (metadata)
+            mfs_journal_write(m, b);
+        else
+            bwrite(b);
         brelse(b);
         done += chunk;
         off += chunk;
@@ -150,7 +156,9 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
     return (long)done;
 }
 
-/* Free every block with index >= first. */
+/* Free every block with index >= first. A table that is released as a
+ * whole is not rewritten first; only tables that stay have their freed
+ * entries cleared (through the journal). */
 static void free_from(struct inode *ino, uint64_t first)
 {
     struct mfs_sb *m = mfs_of(ino);
@@ -163,16 +171,15 @@ static void free_from(struct inode *ino, uint64_t first)
     }
     if (info->indirect) {
         uint64_t base = MFS_NDIRECT;
-        bool keep = false;
+        bool keep = first > base;
         for (uint32_t i = 0; i < MFS_PTRS_PER_BLOCK; i++) {
-            if (base + i < first) {
-                keep = true;
+            if (base + i < first)
                 continue;
-            }
             uint32_t v = ptr_get(m, info->indirect, i);
             if (v) {
                 mfs_free_block(m, v);
-                ptr_set(m, info->indirect, i, 0);
+                if (keep)
+                    ptr_set(m, info->indirect, i, 0);
             }
         }
         if (!keep) {
@@ -182,28 +189,27 @@ static void free_from(struct inode *ino, uint64_t first)
     }
     if (info->dindirect) {
         uint64_t base = MFS_NDIRECT + MFS_PTRS_PER_BLOCK;
-        bool keep_l1 = false;
+        bool keep_l1 = first > base;
         for (uint32_t i1 = 0; i1 < MFS_PTRS_PER_BLOCK; i1++) {
             uint32_t l1 = ptr_get(m, info->dindirect, i1);
             if (!l1)
                 continue;
-            bool keep_l2 = false;
+            uint64_t l1_base = base + (uint64_t)i1 * MFS_PTRS_PER_BLOCK;
+            bool keep_l2 = first > l1_base;
             for (uint32_t i2 = 0; i2 < MFS_PTRS_PER_BLOCK; i2++) {
-                if (base + (uint64_t)i1 * MFS_PTRS_PER_BLOCK + i2 < first) {
-                    keep_l2 = true;
+                if (l1_base + i2 < first)
                     continue;
-                }
                 uint32_t v = ptr_get(m, l1, i2);
                 if (v) {
                     mfs_free_block(m, v);
-                    ptr_set(m, l1, i2, 0);
+                    if (keep_l2)
+                        ptr_set(m, l1, i2, 0);
                 }
             }
-            if (keep_l2) {
-                keep_l1 = true;
-            } else {
+            if (!keep_l2) {
                 mfs_free_block(m, l1);
-                ptr_set(m, info->dindirect, i1, 0);
+                if (keep_l1)
+                    ptr_set(m, info->dindirect, i1, 0);
             }
         }
         if (!keep_l1) {

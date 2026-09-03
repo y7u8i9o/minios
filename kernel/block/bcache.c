@@ -141,7 +141,7 @@ int bcache_sync(struct blockdev *dev)
     for (size_t i = 0; i < BCACHE_NBUF; i++) {
         struct buf *b = &bufs[i];
         spin_lock(&bcache_lock);
-        bool want = b->dirty && b->dev && (!dev || b->dev == dev);
+        bool want = b->dirty && !b->pinned && b->dev && (!dev || b->dev == dev);
         if (want)
             b->refcount++;
         spin_unlock(&bcache_lock);
@@ -164,6 +164,63 @@ int bcache_sync(struct blockdev *dev)
     else if (dev && dev->flush)
         dev->flush(dev);
     return r;
+}
+
+bool bpin(struct buf *b)
+{
+    kassert(mutex_held(&b->lock));
+    spin_lock(&bcache_lock);
+    b->dirty = true;
+    bool fresh = !b->pinned;
+    if (fresh) {
+        b->pinned = true;
+        b->refcount++;
+    }
+    spin_unlock(&bcache_lock);
+    return fresh;
+}
+
+void bunpin(struct buf *b)
+{
+    kassert(mutex_held(&b->lock));
+    spin_lock(&bcache_lock);
+    kassert(b->pinned && b->refcount > 0);
+    b->pinned = false;
+    b->refcount--;
+    spin_unlock(&bcache_lock);
+}
+
+int bwrite_now(struct buf *b)
+{
+    kassert(mutex_held(&b->lock));
+    return write_back(b);
+}
+
+void bforget(struct buf *b)
+{
+    kassert(mutex_held(&b->lock));
+    spin_lock(&bcache_lock);
+    b->dirty = false;
+    b->valid = false;
+    spin_unlock(&bcache_lock);
+}
+
+void bcache_discard(struct blockdev *dev)
+{
+    spin_lock(&bcache_lock);
+    for (size_t i = 0; i < BCACHE_NBUF; i++) {
+        struct buf *b = &bufs[i];
+        if (b->dev != dev)
+            continue;
+        if (b->refcount) {
+            klog_warn("block %lu of %s is referenced, not discarded", b->block, dev->name);
+            continue;
+        }
+        b->dirty = false;
+        b->valid = false;
+        b->dev = NULL;
+    }
+    spin_unlock(&bcache_lock);
 }
 
 size_t bcache_dirty_count(void)

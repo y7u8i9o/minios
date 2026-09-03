@@ -13,7 +13,15 @@ system call boundary (`struct stat`, `struct dirent`, open flags) live in
   superblock from a source string. Types register with `vfs_register_fs`.
 - `struct superblock` is one mounted instance. It carries the root inode
   number, a `dev` identifier and the cache of inodes currently in use.
-  `sb_ops` provides `read_inode`, `put_inode`, `sync` and `unmount`.
+  `sb_ops` provides `read_inode`, `put_inode`, `sync` and `unmount`, and
+  since M36 the optional `op_begin` and `op_end`, which the VFS calls
+  around every modifying operation (create, write, truncate, mkdir,
+  unlink, rmdir, link, rename) before it takes any inode or file lock. A
+  journaling filesystem groups the changes between them into one
+  transaction and may block in `op_begin` for log space; the calling
+  thread records the transaction it is inside in `thread.fs_txn`, so
+  nested calls (an unlinked inode released inside an operation) do not
+  start a second one.
 - `struct inode` holds the metadata of one object: mode, link count,
   size, device number for device nodes, the operation tables and a
   filesystem private pointer. Inodes are reference counted. `inode_get`

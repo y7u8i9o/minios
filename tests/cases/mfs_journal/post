@@ -1,0 +1,16 @@
+#!/bin/sh
+# The second image was unmounted cleanly and must check out; the root
+# image holds a committed transaction that fsck replays.
+FSCK="$BUILD/host/fsck"
+MKFS="$BUILD/host/mkfs"
+"$FSCK" "$DISK2" > "$DISK2.fsck" 2>&1 || { echo "  fsck of the second image failed"; cat "$DISK2.fsck"; exit 1; }
+grep -q '0 problems' "$DISK2.fsck" || { echo "  second image has problems"; cat "$DISK2.fsck"; exit 1; }
+"$MKFS" --dump "$DISK2" | grep -q '^/dir/after.txt ino [0-9]* size 20000 ' || { echo "  after.txt missing"; exit 1; }
+"$FSCK" -y "$DISK" > "$DISK.fsck" 2>&1
+RC=$?
+grep -q 'journal: replaying transaction' "$DISK.fsck" || { echo "  fsck did not replay the journal"; cat "$DISK.fsck"; exit 1; }
+[ "$RC" = 0 ] || [ "$RC" = 1 ] || { echo "  fsck -y exit $RC"; cat "$DISK.fsck"; exit 1; }
+[ "$("$MKFS" --cat "$DISK" /journaled.txt)" = "replayed by fsck" ] || { echo "  /journaled.txt content wrong"; exit 1; }
+"$FSCK" "$DISK" > "$DISK.fsck2" 2>&1 || { echo "  root image has problems after replay"; cat "$DISK.fsck2"; exit 1; }
+"$MKFS" --dump "$DISK" | head -1 | grep -q ' clean$' || { echo "  root not marked clean by fsck"; exit 1; }
+exit 0

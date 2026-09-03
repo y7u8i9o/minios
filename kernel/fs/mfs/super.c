@@ -24,6 +24,18 @@ int mfs_write_super(struct mfs_sb *m)
     return 0;
 }
 
+int mfs_super_journal(struct mfs_sb *m)
+{
+    kassert(mutex_held(&m->lock));
+    struct buf *b = bread(m->dev, 0);
+    if (!b)
+        return -EIO;
+    memcpy(b->data, &m->sb, sizeof m->sb);
+    mfs_journal_write(m, b);
+    brelse(b);
+    return 0;
+}
+
 /* Locate the on disk inode: block and offset inside it. */
 static struct buf *dinode_buf(struct mfs_sb *m, uint64_t ino, struct mfs_dinode **out)
 {
@@ -80,7 +92,7 @@ int mfs_inode_flush(struct inode *ino)
     memcpy(d->direct, info->direct, sizeof d->direct);
     d->indirect = info->indirect;
     d->dindirect = info->dindirect;
-    bwrite(b);
+    mfs_journal_write(m, b);
     brelse(b);
     return 0;
 }
@@ -100,7 +112,7 @@ struct inode *mfs_inode_new(struct superblock *sb, uint32_t mode, uint32_t nlink
     memset(d, 0, sizeof *d);
     d->mode = mode;
     d->nlink = nlink;
-    bwrite(b);
+    mfs_journal_write(m, b);
     brelse(b);
     struct inode *ino = inode_get(sb, num);
     if (!ino)
@@ -112,8 +124,13 @@ static void mfs_put_inode(struct inode *ino)
 {
     struct mfs_sb *m = mfs_of(ino->sb);
     if (ino->nlink == 0) {
+        /* The last reference to an unlinked inode may go away outside any
+         * operation (the close of an unlinked file); release its storage
+         * in a transaction of its own then. */
+        mfs_journal_begin(m);
         mfs_free_all_blocks(ino);
         mfs_free_inode(m, (uint32_t)ino->ino);
+        mfs_journal_end(m);
     }
     kfree(ino->priv);
 }
@@ -126,22 +143,43 @@ static void mfs_drop_inode(struct inode *ino)
 static int mfs_sync(struct superblock *sb)
 {
     struct mfs_sb *m = mfs_of(sb);
-    int r = mfs_write_super(m);
-    int e = bcache_sync(m->dev);
+    if (m->journal.crash)
+        return 0;                   /* simulated power loss: nothing reaches the disk */
+    int r = mfs_journal_flush(m);
+    int e = mfs_write_super(m);
+    if (e == 0)
+        e = bcache_sync(m->dev);
     return r ? r : e;
 }
 
 static void mfs_unmount(struct superblock *sb)
 {
     struct mfs_sb *m = mfs_of(sb);
-    mutex_lock(&m->lock);
-    m->sb.flags |= MFS_FLAG_CLEAN;
-    mutex_unlock(&m->lock);
-    mfs_write_super(m);
-    bcache_sync(m->dev);
-    klog_info("%s unmounted clean, %lu free blocks", m->dev->name, m->sb.free_blocks);
+    if (m->journal.crash) {
+        mfs_journal_discard(m);
+        klog_warn("%s unmounted after a simulated crash", m->dev->name);
+    } else {
+        mfs_journal_flush(m);
+        mutex_lock(&m->lock);
+        m->sb.flags |= MFS_FLAG_CLEAN;
+        mutex_unlock(&m->lock);
+        mfs_write_super(m);
+        bcache_sync(m->dev);
+        klog_info("%s unmounted clean, %lu free blocks", m->dev->name, m->sb.free_blocks);
+    }
+    mfs_journal_destroy(m);
     kfree(m);
     kfree(sb);
+}
+
+static void mfs_op_begin(struct superblock *sb)
+{
+    mfs_journal_begin(mfs_of(sb));
+}
+
+static void mfs_op_end(struct superblock *sb)
+{
+    mfs_journal_end(mfs_of(sb));
 }
 
 static const struct sb_ops mfs_sb_ops = {
@@ -150,53 +188,94 @@ static const struct sb_ops mfs_sb_ops = {
     .free_inode = mfs_drop_inode,
     .sync = mfs_sync,
     .unmount = mfs_unmount,
+    .op_begin = mfs_op_begin,
+    .op_end = mfs_op_end,
 };
+
+static int read_super(struct mfs_sb *m)
+{
+    struct buf *b = bread(m->dev, 0);
+    if (!b)
+        return -EIO;
+    memcpy(&m->sb, b->data, sizeof m->sb);
+    brelse(b);
+    return 0;
+}
 
 static int mfs_mount(const struct fs_type *type, const char *source, struct superblock **out)
 {
     struct blockdev *dev = blockdev_find(source);
     if (!dev)
         return -ENODEV;
-    struct buf *b = bread(dev, 0);
-    if (!b)
-        return -EIO;
     struct mfs_sb *m = kzalloc(sizeof *m);
-    if (!m) {
-        brelse(b);
+    if (!m)
         return -ENOMEM;
-    }
-    memcpy(&m->sb, b->data, sizeof m->sb);
-    brelse(b);
-    if (m->sb.magic != MFS_MAGIC || m->sb.version != MFS_VERSION ||
-        m->sb.block_size != MFS_BLOCK_SIZE) {
-        kfree(m);
-        return -EINVAL;
-    }
-    if (m->sb.nblocks * MFS_BLOCK_SIZE > blockdev_size(dev)) {
-        klog_error("%s: filesystem larger than device", source);
-        kfree(m);
-        return -EINVAL;
-    }
     m->dev = dev;
+    int r = read_super(m);
+    if (r < 0) {
+        kfree(m);
+        return r;
+    }
+    if (m->sb.magic != MFS_MAGIC || m->sb.block_size != MFS_BLOCK_SIZE) {
+        kfree(m);
+        return -EINVAL;
+    }
+    if (m->sb.version != MFS_VERSION) {
+        klog_error("%s: format version %u, expected %u (rebuild the image)", source,
+                   m->sb.version, MFS_VERSION);
+        kfree(m);
+        return -EINVAL;
+    }
+    if (m->sb.nblocks * MFS_BLOCK_SIZE > blockdev_size(dev) ||
+        m->sb.journal_blocks != MFS_JOURNAL_BLOCKS ||
+        m->sb.data_start != m->sb.journal_start + m->sb.journal_blocks ||
+        m->sb.data_start >= m->sb.nblocks) {
+        klog_error("%s: superblock geometry invalid", source);
+        kfree(m);
+        return -EINVAL;
+    }
     mutex_init(&m->lock, "mfs");
+    r = mfs_journal_init(m);
+    if (r < 0) {
+        kfree(m);
+        return r;
+    }
+    bool was_clean = m->sb.flags & MFS_FLAG_CLEAN;
+    int replayed = mfs_journal_recover(m);
+    if (replayed < 0) {
+        klog_error("%s: journal recovery failed: %d", source, replayed);
+        mfs_journal_destroy(m);
+        kfree(m);
+        return replayed;
+    }
+    if (replayed > 0) {
+        klog_info("%s: journal replayed, %d blocks", source, replayed);
+        r = read_super(m);      /* the transaction may have held block 0 */
+        if (r < 0) {
+            mfs_journal_destroy(m);
+            kfree(m);
+            return r;
+        }
+    }
     struct superblock *sb = sb_alloc(type, &mfs_sb_ops);
     if (!sb) {
+        mfs_journal_destroy(m);
         kfree(m);
         return -ENOMEM;
     }
     sb->priv = m;
     sb->root_ino = MFS_ROOT_INO;
     sb->dev = dev->nsectors;    /* any stable non zero identifier */
-    bool was_clean = m->sb.flags & MFS_FLAG_CLEAN;
     if (!was_clean)
         klog_warn("%s: previous shutdown was unclean", source);
     m->sb.flags &= ~MFS_FLAG_CLEAN;
     m->sb.mount_count++;
-    int r = mfs_write_super(m);
+    r = mfs_write_super(m);
     if (r == 0)
         r = bcache_sync(dev);
     if (r < 0) {
         kfree(sb);
+        mfs_journal_destroy(m);
         kfree(m);
         return r;
     }

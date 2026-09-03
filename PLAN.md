@@ -52,7 +52,7 @@ minios/
     sched/                 thread.c, proc.c, mlfq.c, wait.c
     sync/                  spinlock.c, mutex.c, semaphore.c, condvar.c
     ipc/                   pipe.c, signal.c
-    fs/                    vfs.c, mount.c, file.c, devfs.c, mfs/ (superblock.c, inode.c, dir.c, bitmap.c), initrd.c
+    fs/                    vfs.c, mount.c, file.c, devfs.c, mfs/ (superblock.c, inode.c, dir.c, bitmap.c, journal.c), fat/ (super.c, table.c, dir.c, file.c), initrd.c
     drivers/               serial.c, fbcon.c, font.c, ps2kbd.c, pci.c, virtio/ (virtio.c, virtio_blk.c), debugexit.c
     syscall/               table.c, sys_proc.c, sys_fs.c, sys_mm.c, sys_misc.c
     debug/                 panic.c, backtrace.c, symbols.c
@@ -65,6 +65,8 @@ minios/
     init/  sh/  coreutils/ (ls, cat, echo, mkdir, rm, cp, mv, ps, kill, mount, ...)  edit/  interp/  tests/
   tools/
     mkfs/                  host tool: builds an mfs disk image from a directory tree
+    fsck/                  host tool: replays the mfs journal and checks or repairs an image
+    mkfat/                 host tool: builds FAT12/16/32 images from a directory tree
     gensyms/               host tool: converts nm output into the kernel symbol table blob
   tests/
     run_qemu_test.sh       boots an image headless, captures serial, asserts on markers
@@ -1107,6 +1109,41 @@ waits, per-thread errno, keys, once, detached threads, malloc and stdio
 from several threads, spin and read-write locks) and `time` (both clocks,
 sleeping, calendar round trips, formatting, setting the clock, the RTC
 boot line).
+
+### M36. mfs journaling, fsck and FAT (completed 2026-09-04)
+
+1. mfs format version 2 places a journal of 128 blocks between the inode
+   table and the data blocks (`kernel/include/fs/mfs_format.h`; `mkfs`
+   writes it, `--dump` shows its state). The kernel journals metadata
+   (`kernel/fs/mfs/journal.c`): every modifying VFS operation runs between
+   the new superblock hooks `op_begin` and `op_end`, metadata buffers are
+   pinned in the block cache, and the last operation of a group commits:
+   dirty data first, then the pinned blocks to the journal slots, then the
+   header with count and CRC-32, then the blocks to their home locations.
+   A mount replays a committed transaction and discards an incomplete one.
+   Test hooks simulate a crash before and after the commit.
+2. `tools/fsck` (`build/host/fsck`): replays the journal, then checks
+   inodes and block pointers, the directory tree, connectivity (with
+   `lost+found`), the bitmaps and the counters; `-y` repairs, `-n` never
+   writes; exit status 0, 1 (repaired), 4 (problems left) or 8.
+3. FAT12, FAT16 and FAT32 in `kernel/fs/fat/`: reading and writing with
+   long file names, case insensitive lookup, create, mkdir, unlink, rmdir,
+   rename, truncate, timestamps from the real time clock, the FAT32 FSInfo
+   sector. `tools/mkfat` builds images of any of the three types from a
+   directory tree and inspects them (`--dump`, `--cat`).
+4. The test runner attaches extra devices: `mfs2` (an empty mfs image) and
+   `fat` (one image per line, built by mkfat from a directory under the
+   case); the post script sees them as `DISK2` and `FATIMGS`.
+   `docs/design/mfs.md` and `docs/design/fat.md` describe it.
+
+Tests: `mfs_journal` (crash after and before a commit on a second image,
+concurrent operations sharing transactions, bitmap and counter agreement,
+a committed transaction left on the root image and replayed by `fsck` in
+the post script), `fat` (the same tree on all three types: long names,
+case folding, writes of 100000 bytes, short name uniqueness, renames,
+truncation, unlink of an open file, cluster accounting across a remount,
+the result read by `mkfat` on the host) and `fat_user` (`/bin/fattest`
+through `mount`, stdio and `dirent`).
 
 ## 4. Testing Strategy
 

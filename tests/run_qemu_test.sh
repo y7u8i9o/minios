@@ -10,6 +10,11 @@
 #   mem       QEMU memory size in MiB (optional, default 512)
 #   cpus      number of CPUs (optional, default $CPUS or 4)
 #   swap      size in MiB of a zero filled swap image attached as vdb (optional)
+#   mfs2      size in MiB of an empty mfs image attached as the next virtio-blk
+#             device (optional); the post script sees it as DISK2
+#   fat       one line per FAT image to attach, "<size_mb> <12|16|32> [dir]"
+#             built by mkfat from the directory under the case (optional);
+#             the post script sees the first as FATIMG, all as FATIMGS
 #   audio     QEMU audio backend for a virtio-sound device: none or wav
 #   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver)
 #   tablet    present: attach a virtio-tablet-pci device
@@ -46,7 +51,7 @@ clone() {
     cp -c "$1" "$2" 2>/dev/null || cp "$1" "$2"
 }
 cleanup_images() {
-    rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/test.iso"
+    rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso"
 }
 trap cleanup_images EXIT
 DISKFLAGS=""
@@ -73,9 +78,38 @@ VGAFLAGS="-vga std"
 if [ -f "$OUTDIR/disk.img" ]; then
     DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0"
 fi
+NDISK=1
 if [ -f "$CASE/swap" ]; then
     dd if=/dev/zero of="$OUTDIR/swap.img" bs=1048576 count="$(cat "$CASE/swap")" status=none
-    DISKFLAGS="$DISKFLAGS -drive file=$OUTDIR/swap.img,if=none,id=vd1,format=raw -device virtio-blk-pci,drive=vd1"
+    DISKFLAGS="$DISKFLAGS -drive file=$OUTDIR/swap.img,if=none,id=vd$NDISK,format=raw -device virtio-blk-pci,drive=vd$NDISK"
+    NDISK=$((NDISK + 1))
+fi
+DISK2=""
+if [ -f "$CASE/mfs2" ]; then
+    mkdir -p "$OUTDIR/empty"
+    "${MKFS:-$(dirname "$BUILD")/host/mkfs}" "$OUTDIR/disk2.img" "$(cat "$CASE/mfs2")" "$OUTDIR/empty" >/dev/null || { echo "FAIL $NAME (mfs2 image)"; exit 1; }
+    DISK2="$OUTDIR/disk2.img"
+    DISKFLAGS="$DISKFLAGS -drive file=$DISK2,if=none,id=vd$NDISK,format=raw -device virtio-blk-pci,drive=vd$NDISK"
+    NDISK=$((NDISK + 1))
+fi
+FATIMG=""
+FATIMGS=""
+if [ -f "$CASE/fat" ]; then
+    NFAT=0
+    while read -r size type dir; do
+        [ -z "$size" ] && continue
+        IMG="$OUTDIR/fat$NFAT.img"
+        if [ -n "$dir" ]; then
+            "${MKFAT:-$(dirname "$BUILD")/host/mkfat}" -t "$type" "$IMG" "$size" "$CASE/$dir" >/dev/null || { echo "FAIL $NAME (fat image)"; exit 1; }
+        else
+            "${MKFAT:-$(dirname "$BUILD")/host/mkfat}" -t "$type" "$IMG" "$size" >/dev/null || { echo "FAIL $NAME (fat image)"; exit 1; }
+        fi
+        [ -z "$FATIMG" ] && FATIMG="$IMG"
+        FATIMGS="$FATIMGS $IMG"
+        DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=vd$NDISK,format=raw -device virtio-blk-pci,drive=vd$NDISK"
+        NDISK=$((NDISK + 1))
+        NFAT=$((NFAT + 1))
+    done < "$CASE/fat"
 fi
 # The hypervisor framework when this QEMU offers it (ACCEL=tcg forces
 # binary translation).
@@ -127,8 +161,8 @@ if [ -f "$CASE/reject" ]; then
     done < "$CASE/reject"
 fi
 if [ -x "$CASE/post" ]; then
-    if ! DISK="$OUTDIR/disk.img" SERIAL="$SERIAL" EXITCODE="$(cat "$OUTDIR/exitcode")" TOP="$TOP" \
-         BUILD="$(dirname "$BUILD")" "$CASE/post"; then
+    if ! DISK="$OUTDIR/disk.img" DISK2="$DISK2" FATIMG="$FATIMG" FATIMGS="$FATIMGS" SERIAL="$SERIAL" \
+         EXITCODE="$(cat "$OUTDIR/exitcode")" TOP="$TOP" BUILD="$(dirname "$BUILD")" "$CASE/post"; then
         echo "FAIL $NAME: post check failed"
         STATUS=1
     fi
