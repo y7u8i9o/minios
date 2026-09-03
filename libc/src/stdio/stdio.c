@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include "../thread/tcb.h"
 
 typedef void (*emit_fn)(char c, void *arg);
 int __vformat(emit_fn emit, void *arg, const char *fmt, va_list ap);
@@ -16,8 +17,12 @@ struct FILE {
     size_t size;
     size_t wpos;            /* bytes pending in buf for writing */
     size_t rpos, rlen;      /* read buffer window */
+    struct __libc_lock lock; /* one operation at a time per stream (M35) */
     char inbuf[BUFSIZ];
 };
+
+#define LOCK(f) __libc_lock_lock(&(f)->lock)
+#define UNLOCK(f) __libc_lock_unlock(&(f)->lock)
 
 static struct FILE files[3];
 FILE *stdin = &files[0], *stdout = &files[1], *stderr = &files[2];
@@ -47,17 +52,20 @@ int fflush(FILE *f)
                 fflush(open_streams[i]);
         return 0;
     }
+    LOCK(f);
     size_t off = 0;
     while (off < f->wpos) {
         ssize_t n = write(f->fd, f->buf + off, f->wpos - off);
         if (n < 0) {
             f->error = 1;
             f->wpos = 0;
+            UNLOCK(f);
             return EOF;
         }
         off += (size_t)n;
     }
     f->wpos = 0;
+    UNLOCK(f);
     return 0;
 }
 
@@ -68,13 +76,19 @@ void __stdio_flush_all(void)
 
 int fputc(int c, FILE *f)
 {
-    if (f->wpos == f->size && fflush(f) == EOF)
+    LOCK(f);
+    if (f->wpos == f->size && fflush(f) == EOF) {
+        UNLOCK(f);
         return EOF;
+    }
     f->buf[f->wpos++] = (char)c;
     if (f->mode == _IONBF || (f->mode == _IOLBF && c == '\n')) {
-        if (fflush(f) == EOF)
+        if (fflush(f) == EOF) {
+            UNLOCK(f);
             return EOF;
+        }
     }
+    UNLOCK(f);
     return (unsigned char)c;
 }
 
@@ -90,28 +104,37 @@ int putchar(int c)
 
 int fputs(const char *s, FILE *f)
 {
+    LOCK(f);
     while (*s) {
-        if (fputc(*s++, f) == EOF)
+        if (fputc(*s++, f) == EOF) {
+            UNLOCK(f);
             return EOF;
+        }
     }
+    UNLOCK(f);
     return 0;
 }
 
 int puts(const char *s)
 {
-    if (fputs(s, stdout) == EOF || fputc('\n', stdout) == EOF)
-        return EOF;
-    return 0;
+    LOCK(stdout);
+    int r = fputs(s, stdout) == EOF || fputc('\n', stdout) == EOF ? EOF : 0;
+    UNLOCK(stdout);
+    return r;
 }
 
 size_t fwrite(const void *p, size_t size, size_t n, FILE *f)
 {
     const char *s = p;
     size_t total = size * n;
+    LOCK(f);
     for (size_t i = 0; i < total; i++) {
-        if (fputc(s[i], f) == EOF)
+        if (fputc(s[i], f) == EOF) {
+            UNLOCK(f);
             return i / size;
+        }
     }
+    UNLOCK(f);
     return n;
 }
 
@@ -122,10 +145,11 @@ static void file_emit(char c, void *arg)
 
 int vfprintf(FILE *f, const char *fmt, va_list ap)
 {
+    LOCK(f);
     int n = __vformat(file_emit, f, fmt, ap);
-    if (f->error)
-        return -1;
-    return n;
+    int error = f->error;
+    UNLOCK(f);
+    return error ? -1 : n;
 }
 
 int fprintf(FILE *f, const char *fmt, ...)
@@ -182,9 +206,12 @@ static int fill(FILE *f)
 
 int fgetc(FILE *f)
 {
-    if (f->rpos >= f->rlen && fill(f) == EOF)
-        return EOF;
-    return (unsigned char)f->inbuf[f->rpos++];
+    LOCK(f);
+    int c = EOF;
+    if (f->rpos < f->rlen || fill(f) != EOF)
+        c = (unsigned char)f->inbuf[f->rpos++];
+    UNLOCK(f);
+    return c;
 }
 
 int getc(FILE *f)
@@ -199,6 +226,7 @@ int getchar(void)
 
 char *fgets(char *buf, int size, FILE *f)
 {
+    LOCK(f);
     int i = 0;
     while (i < size - 1) {
         int c = fgetc(f);
@@ -208,6 +236,7 @@ char *fgets(char *buf, int size, FILE *f)
         if (c == '\n')
             break;
     }
+    UNLOCK(f);
     if (i == 0)
         return NULL;
     buf[i] = '\0';
@@ -216,6 +245,7 @@ char *fgets(char *buf, int size, FILE *f)
 
 size_t fread(void *p, size_t size, size_t n, FILE *f)
 {
+    LOCK(f);
     char *d = p;
     size_t total = size * n, i;
     for (i = 0; i < total; i++) {
@@ -224,6 +254,7 @@ size_t fread(void *p, size_t size, size_t n, FILE *f)
             break;
         d[i] = (char)c;
     }
+    UNLOCK(f);
     return i / size;
 }
 

@@ -123,6 +123,11 @@ pid_t wait(int *status)
 }
 
 
+int gettid(void)
+{
+    return (int)syscall0(SYS_gettid);
+}
+
 int thread_create(thread_t *out, void (*fn)(void *), void *arg, void *stack, size_t stack_size)
 {
     unsigned long top = ((unsigned long)stack + stack_size) & ~15UL;

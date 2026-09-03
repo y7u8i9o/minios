@@ -20,6 +20,8 @@ void *sbrk(intptr_t increment);
 int chdir(const char *path);
 char *getcwd(char *buf, size_t size);
 int sched_yield(void);
+/* The kernel id of the calling thread (M35). */
+int gettid(void);
 int close(int fd);
 off_t lseek(int fd, off_t off, int whence);
 int dup(int fd);

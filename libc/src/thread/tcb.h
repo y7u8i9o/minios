@@ -1,0 +1,47 @@
+#pragma once
+/* libc thread internals (M35). Every thread has a control block whose
+ * address is its FS base: the self pointer sits at %fs:0, so
+ * pthread_self and errno are one load away. */
+#include <pthread.h>
+#include <stdint.h>
+
+struct pthread {
+    struct pthread *self;           /* %fs:0 */
+    int tid;                        /* kernel thread id */
+    int errno_value;
+    void *(*start)(void *);
+    void *arg;
+    void *result;
+    void *mapping;                  /* stack and control block, NULL for the main thread */
+    size_t mapping_size;
+    int detached;                   /* protected by __threads_lock */
+    int exited;                     /* protected by __threads_lock */
+    const void *keys[PTHREAD_KEYS_MAX];
+    struct pthread *next;           /* __threads list, protected by __threads_lock */
+};
+
+/* A recursive lock for libc's own structures (malloc, stdio, the thread
+ * list): futex based, so a contended thread sleeps. */
+struct __libc_lock {
+    int state;                      /* 0 free, 1 held, 2 held with waiters */
+    int owner;                      /* tid */
+    int count;
+};
+
+#define __LIBC_LOCK_INIT { 0, 0, 0 }
+
+static inline struct pthread *__pthread_current(void)
+{
+    struct pthread *self;
+    __asm__ volatile("movq %%fs:0, %0" : "=r"(self));
+    return self;
+}
+
+void __libc_lock_lock(struct __libc_lock *l);
+void __libc_lock_unlock(struct __libc_lock *l);
+/* The raw futex operations; return the kernel's result. */
+long __futex_wait(int *addr, int value, unsigned long timeout_ms);
+long __futex_wake(int *addr, int count);
+/* Install the control block of the main thread; run before anything
+ * touches errno. */
+void __pthread_init_main(void);

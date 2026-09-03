@@ -26,6 +26,8 @@
 #include <arch/irq.h>
 #include <mm/tlb.h>
 #include <drivers/timer.h>
+#include <drivers/rtc.h>
+#include <ipc/futex.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/pci.h>
 #include <drivers/ps2mouse.h>
@@ -246,6 +248,7 @@ __noreturn void kmain(void)
     ioapic_init();
     tlb_init();
     timer_init();
+    rtc_init();
     ps2kbd_init();
     mouse_init();
     ps2mouse_init();
@@ -257,6 +260,7 @@ __noreturn void kmain(void)
     swap_init();
     syscall_init();
     proc_init();
+    futex_init();
     sched_init();
     sti();
     smp_start_aps();

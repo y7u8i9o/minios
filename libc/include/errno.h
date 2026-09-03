@@ -1,5 +1,7 @@
 #pragma once
-extern int errno;
+/* errno lives in the calling thread's control block (M35). */
+int *__errno_location(void);
+#define errno (*__errno_location())
 
 #define EPERM        1
 #define ENOENT       2
@@ -28,6 +30,7 @@ extern int errno;
 #define EFBIG       27
 #define ENOSPC      28
 #define ESPIPE      29
+#define EDEADLK     35
 #define EROFS       30
 #define EMLINK      31
 #define EPIPE       32

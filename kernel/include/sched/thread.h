@@ -46,6 +46,7 @@ struct thread {
     uint64_t sig_mask;              /* blocked signals, used by the thread itself */
     void *fpu;                      /* fxsave area, 16 byte aligned inside fpu_raw (M23) */
     void *fpu_raw;
+    uint64_t fs_base;               /* user FS base (thread local storage), loaded at every switch (M35) */
     char name[THREAD_NAME_LEN];
 };
 

@@ -73,7 +73,9 @@ refused with `-EBUSY` while other threads exist.
 process with `rdi = arg`; `thread_exit(code)` ends it; `thread_join(tid)`
 waits for the `finished` flag, returns the code and frees the thread.
 Exited threads wait on `proc->zombies` until joined or until the process
-is reaped.
+is reaped. M35 adds thread local storage (`set_tls`, the FS base kept per
+thread), `gettid` and futexes; `docs/design/threads.md` describes them and
+the POSIX interface in libc.
 
 ## System calls added
 

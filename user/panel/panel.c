@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/timerfd.h>
+#include <time.h>
 #include "panel.h"
 
 #define MAX_ENTRIES 32
@@ -135,9 +136,11 @@ void draw_panel(void)
             painter_fill(&p, x + 8, h - 6, TASK_BTN_W - 16, 2, ACCENT);
         panel_label(&p, x + 6, 4, TASK_BTN_W - 12, h - 8, tasks[i].title, tasks[i].minimized ? PANEL_TEXT_DIM : PANEL_TEXT, 0);
     }
-    long sec = uptime_ms() / 1000;
+    time_t now = time(NULL);
+    struct tm tm;
+    gmtime_r(&now, &tm);
     char t[16];
-    snprintf(t, sizeof t, "%02ld:%02ld:%02ld", sec / 3600, (sec / 60) % 60, sec % 60);
+    snprintf(t, sizeof t, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     panel_label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
     mixer_draw_button(&p);
     canvas_commit(&panel);

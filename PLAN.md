@@ -1080,6 +1080,34 @@ applications and the panel applet against the server); `audio_pcm` also
 covers a capture drop under the `wav` backend.  The GUI test helpers moved
 to `kernel/tests/gui_helpers.h` for `test_audio_gui.c`.
 
+### M35. POSIX threads and time (completed 2026-09-03)
+
+1. Thread local storage: the kernel keeps an FS base per thread
+   (`set_tls`, loaded at every switch and first run, inherited by fork and
+   raw threads, cleared by exec) and adds `gettid`. libc gives every thread
+   a control block at its FS base; `errno` lives there.
+2. `futex` (`kernel/ipc/futex.c`): private wait and wake on a word of the
+   process, with timeouts and signal interruption, hashed into buckets
+   with per-waiter wait queues.
+3. `pthread.h` in libc: threads with mmap'd stacks, join, detach (reclaimed
+   by later calls), attributes, three state futex mutexes (normal,
+   recursive, error checking, timed), sequence based condition variables
+   with timed waits, keys with destructors, once, spin locks, read-write
+   locks. `malloc`, every `FILE` and `atexit` are locked.
+4. The CMOS real time clock read at boot (`drivers/rtc.c`), `clock_gettime`
+   and `clock_settime` with `CLOCK_REALTIME` and `CLOCK_MONOTONIC` at
+   nanosecond scale (`timer_ns`), and `time.h`/`sys/time.h` in libc:
+   `time`, `clock`, `nanosleep`, `gettimeofday`, `gmtime`, `mktime`,
+   `strftime`, `asctime`, `ctime`. `date` and `cal` in coreutils; the panel
+   and the clock application show the time of day.
+   `docs/design/threads.md` and `docs/design/time.md` describe it.
+
+Tests: `pthreads` (contention, producers and consumers, mutex types, timed
+waits, per-thread errno, keys, once, detached threads, malloc and stdio
+from several threads, spin and read-write locks) and `time` (both clocks,
+sleeping, calendar round trips, formatting, setting the clock, the RTC
+boot line).
+
 ## 4. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

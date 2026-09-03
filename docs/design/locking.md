@@ -195,3 +195,13 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
 - `input_dev->lock` (the report assembled between `SYN_REPORT` events) is
   taken under `vq->lock` in the completion callback and alone by
   `virtio_input_feed`.
+
+## M35 additions
+
+- `futex_bucket.lock` (one per hash bucket of `ipc/futex.c`; the list of
+  waiters keyed by process and address) is the condition lock of every
+  waiter's private wait queue: `futex_bucket.lock -> waitq.lock ->
+  sched_lock`, and `futex_bucket.lock -> timed_lock` through
+  `waitq_wait_timeout`. It is never taken from an interrupt. The RTC
+  epoch offset is a single 64-bit word written by `rtc_init` and
+  `clock_settime` and read by `clock_gettime`; it needs no lock.

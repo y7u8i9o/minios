@@ -9,6 +9,7 @@
 #include <console.h>
 #include <errno.h>
 #include <drivers/timer.h>
+#include <drivers/rtc.h>
 #include <arch/smp.h>
 #include <lib/string.h>
 #include <minios/abi.h>
@@ -30,6 +31,43 @@ long sys_sleep_ms(struct trapframe *tf)
 long sys_uptime_ms(struct trapframe *tf)
 {
     return (long)timer_ms();
+}
+
+/* clock_gettime(clock, ts): CLOCK_MONOTONIC counts from boot,
+ * CLOCK_REALTIME adds the epoch offset the RTC gave at boot (or the one
+ * set by clock_settime). */
+long sys_clock_gettime(struct trapframe *tf)
+{
+    uint32_t clock = (uint32_t)SYSARG0(tf);
+    uintptr_t ptr = SYSARG1(tf);
+    if (clock != CLOCK_REALTIME && clock != CLOCK_MONOTONIC)
+        return -EINVAL;
+    if (!user_range_ok(ptr, sizeof(struct timespec), true))
+        return -EFAULT;
+    uint64_t ns = timer_ns();
+    if (clock == CLOCK_REALTIME)
+        ns += rtc_epoch_offset_ns();
+    struct timespec ts = { .tv_sec = (int64_t)(ns / 1000000000), .tv_nsec = (int64_t)(ns % 1000000000) };
+    memcpy((void *)ptr, &ts, sizeof ts);
+    return 0;
+}
+
+long sys_clock_settime(struct trapframe *tf)
+{
+    uint32_t clock = (uint32_t)SYSARG0(tf);
+    uintptr_t ptr = SYSARG1(tf);
+    if (clock != CLOCK_REALTIME)
+        return -EINVAL;
+    if (!user_range_ok(ptr, sizeof(struct timespec), false))
+        return -EFAULT;
+    struct timespec ts;
+    memcpy(&ts, (void *)ptr, sizeof ts);
+    if (ts.tv_sec < 0 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000)
+        return -EINVAL;
+    uint64_t now = (uint64_t)ts.tv_sec * 1000000000 + (uint64_t)ts.tv_nsec;
+    uint64_t up = timer_ns();
+    rtc_set_epoch_offset_ns(now > up ? now - up : 0);
+    return 0;
 }
 
 /* nproc(): number of processors. */

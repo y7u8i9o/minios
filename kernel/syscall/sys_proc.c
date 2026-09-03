@@ -1,5 +1,6 @@
 #include <syscall/syscalls.h>
 #include <arch/trap.h>
+#include <arch/cpu.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <sched/sched.h>
@@ -130,6 +131,24 @@ long sys_thread_create(struct trapframe *tf)
 long sys_thread_exit(struct trapframe *tf)
 {
     thread_exit((int)SYSARG0(tf));
+}
+
+long sys_gettid(struct trapframe *tf)
+{
+    return thread_current()->tid;
+}
+
+/* set_tls(base): the FS base of the calling thread, the anchor of its
+ * thread local storage.  Every later switch to the thread reloads it. */
+long sys_set_tls(struct trapframe *tf)
+{
+    uintptr_t base = SYSARG0(tf);
+    if (base && !user_range_ok(base, 8, false))
+        return -EFAULT;
+    struct thread *t = thread_current();
+    t->fs_base = base;
+    wrmsr(MSR_FS_BASE, base);
+    return 0;
 }
 
 long sys_thread_join(struct trapframe *tf)

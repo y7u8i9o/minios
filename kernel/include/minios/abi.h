@@ -358,6 +358,23 @@ struct cmsghdr {
 #define TFD_NONBLOCK O_NONBLOCK
 #define TFD_CLOEXEC O_CLOEXEC
 
+/* ---- M35: threads and time ---- */
+
+/* futex(addr, op, value, timeout_ms): FUTEX_WAIT sleeps while *addr ==
+ * value (0 woken, -ETIMEDOUT, -EAGAIN when the value differs, -EINTR);
+ * FUTEX_WAKE wakes up to value waiters and returns how many. Private to
+ * the calling process. timeout_ms 0 waits without limit. */
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
+#define CLOCK_REALTIME  0
+#define CLOCK_MONOTONIC 1
+
+struct timespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+};
+
 /* Timer descriptors count in milliseconds. */
 struct timerfd_spec {
     uint64_t initial_ms;            /* 0 disarms */

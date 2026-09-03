@@ -73,4 +73,9 @@
 #define SYS_timerfd_gettime 69
 #define SYS_fcntl         70
 #define SYS_pipe2         71
-#define SYS_MAX           72
+#define SYS_set_tls       72
+#define SYS_futex         73
+#define SYS_clock_gettime 74
+#define SYS_clock_settime 75
+#define SYS_gettid        76
+#define SYS_MAX           77

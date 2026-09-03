@@ -107,8 +107,10 @@ static struct thread *start_thread(struct proc *p, const char *name, struct trap
     if (!t)
         return NULL;
     t->user_frame = tf;
-    if (thread_current()->proc != &kernel_proc)
+    if (thread_current()->proc != &kernel_proc) {
         t->sig_mask = thread_current()->sig_mask;
+        t->fs_base = thread_current()->fs_base;
+    }
     sched_add(t);
     return t;
 }
@@ -179,6 +181,7 @@ struct proc *proc_fork(struct trapframe *tf)
         goto fail;
     }
     fpu_save(t->fpu);                   /* the child starts with the parent's registers */
+    t->fs_base = cur->fs_base;
     return child;
 fail:
     proc_free(child);
@@ -214,6 +217,8 @@ int proc_exec(struct trapframe *tf, const char *path, char *const argv[], char *
     fdtable_close_exec(&p->fds);
     fpu_init_state(cur->fpu);
     fpu_restore(cur->fpu);
+    cur->fs_base = 0;                   /* the new image sets up its own thread local storage */
+    wrmsr(MSR_FS_BASE, 0);
     frame_init(tf, entry, rsp);
     return 0;
 }

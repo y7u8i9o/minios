@@ -3,9 +3,10 @@
 #include <unistd.h>
 #include <minios/syscall.h>
 #include <errno.h>
+#include "thread/tcb.h"
 
-int errno;
 char **environ;
+void __pthread_init_main(void);
 
 int main(int argc, char **argv, char **envp);
 void __stdio_init(void);
@@ -23,13 +24,18 @@ long __syscall_ret(long r)
 #define ATEXIT_MAX 16
 static void (*atexit_fns[ATEXIT_MAX])(void);
 static int atexit_count;
+static struct __libc_lock atexit_lock = __LIBC_LOCK_INIT;
 
 int atexit(void (*fn)(void))
 {
-    if (atexit_count == ATEXIT_MAX)
-        return -1;
-    atexit_fns[atexit_count++] = fn;
-    return 0;
+    __libc_lock_lock(&atexit_lock);
+    int r = -1;
+    if (atexit_count < ATEXIT_MAX) {
+        atexit_fns[atexit_count++] = fn;
+        r = 0;
+    }
+    __libc_lock_unlock(&atexit_lock);
+    return r;
 }
 
 void exit(int status)
@@ -60,6 +66,7 @@ void __assert_fail(const char *expr, const char *file, int line, const char *fun
 
 __attribute__((noreturn)) void __libc_start(int argc, char **argv, char **envp)
 {
+    __pthread_init_main();
     environ = envp;
     __stdio_init();
     exit(main(argc, argv, envp));

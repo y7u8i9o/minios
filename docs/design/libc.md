@@ -46,6 +46,12 @@ result into `-1` with `errno` set. Numbers come from
 - `fcntl.h`, `dirent.h`, `sys/stat.h`: types and constants now, functions
   returning `ENOSYS` until M11. `errno.h`, `assert.h`, `ctype.h`,
   `sys/types.h`.
+- `pthread.h` (M35): threads, mutexes, condition variables, keys, once,
+  spin and read-write locks on the kernel's threads and futexes; `errno`
+  is per thread. `time.h` and `sys/time.h` (M35): the real time and
+  monotonic clocks, calendar conversion in UTC, `strftime`, `nanosleep`.
+  `malloc` and every `FILE` are locked. See `docs/design/threads.md` and
+  `docs/design/time.md`.
 
 ## Programs
 

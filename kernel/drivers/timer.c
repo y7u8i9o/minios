@@ -71,6 +71,15 @@ uint64_t timer_ms(void)
     return (rdtsc() - tsc_base) / tsc_per_ms;
 }
 
+uint64_t timer_ns(void)
+{
+    if (!tsc_per_ms)
+        return 0;
+    uint64_t t = rdtsc() - tsc_base;
+    /* Whole milliseconds, then the remainder scaled without overflow. */
+    return (t / tsc_per_ms) * 1000000 + (t % tsc_per_ms) * 1000000 / tsc_per_ms;
+}
+
 uint64_t timer_ticks(void)
 {
     return timer_ms() * (TIMER_HZ / 1000);

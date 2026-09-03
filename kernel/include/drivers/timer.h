@@ -10,6 +10,8 @@ void timer_init(void);
 void timer_init_cpu(void);
 /* Monotonic milliseconds since timer_init, read from the TSC. */
 uint64_t timer_ms(void);
+/* The same time in nanoseconds. */
+uint64_t timer_ns(void);
 /* The same time in scheduler ticks (TIMER_HZ per second). */
 uint64_t timer_ticks(void);
 /* Number of timer interrupts taken by the boot CPU. */

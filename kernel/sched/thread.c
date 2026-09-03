@@ -31,6 +31,7 @@ void thread_start(void)
 {
     fpu_restore(thread_current()->fpu);
     struct thread *t = thread_current();
+    wrmsr(MSR_FS_BASE, t->fs_base);
     sched_finish_switch();
     spin_unlock(&sched_lock);
     t->entry(t->arg);

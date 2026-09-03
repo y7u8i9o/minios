@@ -198,6 +198,7 @@ void sched_switch_locked(void)
     c = cpu_current();
     if (c->current->fpu)
         fpu_restore(c->current->fpu);
+    wrmsr(MSR_FS_BASE, c->current->fs_base);
     c->int_enabled = intena;
     sched_finish_switch();
 }

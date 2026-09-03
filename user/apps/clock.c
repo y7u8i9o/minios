@@ -1,5 +1,6 @@
-/* clock: uptime on a canvas, redrawn every second by a timer. */
+/* clock: the time of day (UTC) on a canvas, redrawn every second by a timer. */
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #include <gui/app.h>
 
@@ -9,9 +10,11 @@ static int draw(struct widget *w, void *args, void *arg)
 {
     struct painter *p = ((struct sig_paint *)args)->p;
     painter_fill(p, 0, 0, w->w, w->h, 0x00ffffff);
-    long sec = uptime_ms() / 1000;
-    char buf[32];
-    snprintf(buf, sizeof buf, "%02ld:%02ld:%02ld", sec / 3600, (sec / 60) % 60, sec % 60);
+    time_t now = time(NULL);
+    struct tm tm;
+    gmtime_r(&now, &tm);
+    char buf[16];
+    snprintf(buf, sizeof buf, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     int tw = painter_text_width(p, buf, -1);
     painter_text(p, (w->w - tw) / 2, (w->h - painter_text_height(p)) / 2, buf, 0x00000000);
     return 1;

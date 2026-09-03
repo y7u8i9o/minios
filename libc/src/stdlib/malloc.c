@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include "../thread/tcb.h"
 
 /* First fit allocator over sbrk. Every block carries a header with its
  * size and a free flag; free blocks are coalesced with their successor.
@@ -36,6 +37,8 @@ static void *malloc_mapped(size_t size)
 }
 
 static struct block *head;
+/* Protects the block list and the break (M35). */
+static struct __libc_lock heap_lock = __LIBC_LOCK_INIT;
 
 static struct block *grow(size_t size)
 {
@@ -74,7 +77,7 @@ static void split(struct block *b, size_t size)
     }
 }
 
-void *malloc(size_t size)
+static void *malloc_unlocked(size_t size)
 {
     if (size == 0)
         size = 1;
@@ -96,7 +99,7 @@ void *malloc(size_t size)
     return (char *)b + HDR;
 }
 
-void free(void *p)
+static void free_unlocked(void *p)
 {
     if (!p)
         return;
@@ -125,21 +128,46 @@ void *calloc(size_t n, size_t size)
     return p;
 }
 
-void *realloc(void *p, size_t size)
+static void *realloc_unlocked(void *p, size_t size)
 {
     if (!p)
-        return malloc(size);
+        return malloc_unlocked(size);
     if (size == 0) {
-        free(p);
+        free_unlocked(p);
         return NULL;
     }
     struct block *b = (struct block *)((char *)p - HDR);
     if (b->size >= size)
         return p;
-    void *n = malloc(size);
+    void *n = malloc_unlocked(size);
     if (!n)
         return NULL;
     memcpy(n, p, b->size);
-    free(p);
+    free_unlocked(p);
     return n;
+}
+
+void *malloc(size_t size)
+{
+    __libc_lock_lock(&heap_lock);
+    void *p = malloc_unlocked(size);
+    __libc_lock_unlock(&heap_lock);
+    return p;
+}
+
+void free(void *p)
+{
+    if (!p)
+        return;
+    __libc_lock_lock(&heap_lock);
+    free_unlocked(p);
+    __libc_lock_unlock(&heap_lock);
+}
+
+void *realloc(void *p, size_t size)
+{
+    __libc_lock_lock(&heap_lock);
+    void *q = realloc_unlocked(p, size);
+    __libc_lock_unlock(&heap_lock);
+    return q;
 }
