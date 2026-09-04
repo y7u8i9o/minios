@@ -2,6 +2,7 @@
 #include <gui/theme.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 void theme_init_default(struct theme *t)
 {
@@ -33,6 +34,48 @@ void theme_init_default(struct theme *t)
     strlcpy(t->font_path, "/etc/fonts/DejaVuSans.ttf", sizeof t->font_path);
     strlcpy(t->fallback_path, "/etc/fonts/DejaVuSansMono.ttf", sizeof t->fallback_path);
     t->font = gfx_font_builtin();
+    theme_read_conf(t);
+}
+
+/* The interface font, its size and the scale come from /etc/desktop.conf
+ * (ui_font, ui_font_px, ui_scale), written by the settings program. A
+ * missing file keeps the defaults. */
+static const struct { const char *name; const char *path; } ui_fonts[] = {
+    { "DejaVu Sans", "/etc/fonts/DejaVuSans.ttf" },
+    { "Noto Sans", "/etc/fonts/NotoSans-Regular.ttf" },
+    { "Latin Modern Roman", "/etc/fonts/lmroman10-regular.otf" },
+    { "Builtin bitmap font", "" },
+};
+
+void theme_read_conf(struct theme *t)
+{
+    FILE *f = fopen("/etc/desktop.conf", "r");
+    if (!f)
+        return;
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        char *eq = strchr(line, '=');
+        if (line[0] == '#' || !eq)
+            continue;
+        *eq = '\0';
+        const char *v = eq + 1;
+        if (strcmp(line, "ui_font") == 0) {
+            for (size_t i = 0; i < sizeof ui_fonts / sizeof ui_fonts[0]; i++)
+                if (strcmp(ui_fonts[i].name, v) == 0)
+                    strlcpy(t->font_path, ui_fonts[i].path, sizeof t->font_path);
+        } else if (strcmp(line, "ui_font_px") == 0) {
+            int px = atoi(v);
+            if (px >= 8 && px <= 32)
+                t->metric[TM_FONT_PX] = px;
+        } else if (strcmp(line, "ui_scale") == 0) {
+            int s = atoi(v);
+            if (s >= 50 && s <= 300)
+                t->scale = s;
+        }
+    }
+    fclose(f);
 }
 
 int theme_px(const struct theme *t, enum theme_metric m)

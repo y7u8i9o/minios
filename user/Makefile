@@ -11,7 +11,7 @@ CRT0   := $(BUILD)/libc/crt0.o
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term x12 panel desktop calc audiod
+PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings

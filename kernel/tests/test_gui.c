@@ -1073,8 +1073,12 @@ static void test_gui_tools(void)
         cl = proc_create_user(i == 3 ? "/bin/hexview" : tools[i][0] == 'e' ? "/bin/evtest" : tools[i][0] == 's' ? "/bin/sysmon" : "/bin/logview",
                               (char *const[]){ (char *)tools[i], NULL }, (char *const[]){ NULL }, &kernel_proc);
         ktest_assert(cl != NULL, "cannot start %s", tools[i]);
-        sleep_ms(1200);
         int wx = 40 + i * 30, wy = 60 + i * 30;   /* cascade by creation number */
+        uint64_t t0 = timer_ms();
+        while (pixel(wx + 2, wy - 10) != 0x00ebebeb && timer_ms() - t0 < 4000)
+            sleep_ms(50);
+        kprintf("gui_tools: %s mapped after %lu ms\n", tools[i], timer_ms() - t0);
+        sleep_ms(300);
         ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s window has an active title bar: %08x", tools[i], pixel(wx + 2, wy - 10));
         if (i == 0) {
             mouse_move_to(&cx, &cy, 40 + 100, 60 + 40, 0);

@@ -39,6 +39,9 @@ struct conf {
     int mode;
     uint32_t color;
     int repeat_rate, repeat_delay;
+    int frame_ms;                   /* 0 when the file has none */
+    int decorations;                /* 0 none, 1 server, 2 client */
+    char keymap[32];
 };
 
 static struct app *app;
@@ -305,6 +308,9 @@ static void apply_conf(int first)
         else if (strcmp(line, "repeat_rate") == 0) c.repeat_rate = atoi(v);
         else if (strcmp(line, "repeat_delay") == 0) c.repeat_delay = atoi(v);
         else if (strcmp(line, "display_mode") == 0) c.display_mode = parse_display_mode(v);
+        else if (strcmp(line, "frame_ms") == 0) c.frame_ms = atoi(v);
+        else if (strcmp(line, "decorations") == 0) c.decorations = strcmp(v, "server") == 0 ? 1 : strcmp(v, "client") == 0 ? 2 : 0;
+        else if (strcmp(line, "keymap") == 0) strlcpy(c.keymap, v, sizeof c.keymap);
     }
     int wall_changed = first || strcmp(c.wallpaper, conf.wallpaper) != 0 || c.mode != conf.mode || c.color != conf.color;
     if (settings && (first || c.color != conf.color))
@@ -315,6 +321,12 @@ static void apply_conf(int first)
         settings_set(settings, "repeat_delay", c.repeat_delay);
     if (settings && c.display_mode && (first || c.display_mode != conf.display_mode))
         settings_set(settings, "display_mode", c.display_mode);
+    if (settings && c.frame_ms && (first || c.frame_ms != conf.frame_ms))
+        settings_set(settings, "frame_ms", c.frame_ms);
+    if (settings && c.decorations && (first || c.decorations != conf.decorations))
+        settings_set(settings, "decorations", c.decorations);
+    if (settings && c.keymap[0] && (first || strcmp(c.keymap, conf.keymap) != 0))
+        settings_set(settings, "keymap_reload", 1);
     conf = c;
     if (wall_changed)
         load_wallpaper();

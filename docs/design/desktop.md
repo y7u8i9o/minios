@@ -82,20 +82,45 @@ application opens files through `mime_open`.
 
 ## Settings application
 
-`user/apps/settings.c` (`/bin/settings`) is the user's settings window
-with four tabs:
+`user/settings/` (`/bin/settings`) is the user's settings window: a
+category list on the left and one page on the right. Every change is
+written to `/etc/desktop.conf` at once (there is no Apply button); the
+desktop client reads the file within a second and pushes the values X12
+owns through the settings protocol. `settings set KEY VALUE` changes one
+entry without a window, `settings PAGE` opens on a page (`appearance`,
+`display`, `keyboard`, `sound`, `time`, `filetypes`, `launcher`,
+`system`).
 
 - Appearance: wallpaper (the files of `/usr/share/wallpapers` or none),
-  wallpaper mode, desktop colour sliders with a preview.
-- Keyboard: repeat rate and delay.
-- File types: the handler table with a program field, Set and Add type.
-- About: kernel name and release, memory summary, screen size.
+  placement, desktop colour sliders with a preview, the interface font
+  (`ui_font`: DejaVu Sans, Noto Sans, Latin Modern Roman or the builtin
+  bitmap font), its size (`ui_font_px`) and the interface scale
+  (`ui_scale`, 100, 125 or 150 percent). libgui reads the three `ui_`
+  keys in `theme_init_default` (`theme_read_conf`), so they apply to
+  programs started afterwards.
+- Display: the current mode, resolution and pixel density
+  (`display_mode`), the frame interval (`frame_ms`) and the decoration
+  side (`decorations`, `client` or `server`); the desktop pushes the last
+  two to X12 like the colour and the key repeat.
+- Keyboard: the layout (`keymap`, the `.mkm` files of
+  `/usr/share/keymaps`; the desktop sends `keymap_reload` and X12 reloads
+  the file, which reaches clients bound afterwards) and the repeat rate
+  and delay.
+- Sound: the master volume and the streams of the audio server with a
+  volume slider for the selected stream, through the mixer interface of
+  libaudio; without `audiod` the page shows "No audio server".
+- Date and time: the clock in UTC, fields for a new date and time, and
+  Set clock (`settimeofday`).
+- File types: the handler table with a program field, Set and Add type;
+  writes `/etc/mime.apps` immediately.
+- Launcher: the entries of `/etc/launcher` with fields for the title and
+  program, Save, New, Remove, Move up and Move down; the panel reads the
+  file when it starts.
+- System: kernel name and release, processors, display, uptime, memory
+  and swap in use, and buttons that start the system monitor, the kernel
+  log and the X12 tool.
 
-Apply writes `/etc/desktop.conf`, which the desktop client applies. The
-file type tab writes `/etc/mime.apps` immediately. `settings set KEY
-VALUE` changes one entry of `/etc/desktop.conf` without a window.
-`settings` is distinct from `x12settings`, which edits X12's live
-parameters through the debug protocol.
+`x12settings` changes the running server (see `tools.md`).
 
 ## Session
 

@@ -189,26 +189,52 @@ static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint3
 }
 
 /* The keymap file is copied into a memfd, which clients map. */
+int seat_load_keymap(const char *name)
+{
+    char path[128];
+    snprintf(path, sizeof path, "/usr/share/keymaps/%s.mkm", name);
+    struct keymap *k = keymap_load(path);
+    if (!k)
+        return -1;
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        keymap_free(k);
+        return -1;
+    }
+    char buf[4096];
+    ssize_t n = read(fd, buf, sizeof buf);
+    close(fd);
+    if (n <= 0) {
+        keymap_free(k);
+        return -1;
+    }
+    int mfd = memfd_create("keymap", MFD_CLOEXEC);
+    if (mfd < 0 || ftruncate(mfd, 4096) < 0) {
+        keymap_free(k);
+        return -1;
+    }
+    void *map = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mfd, 0);
+    if (map == MAP_FAILED) {
+        close(mfd);
+        keymap_free(k);
+        return -1;
+    }
+    memcpy(map, buf, (size_t)n);
+    munmap(map, 4096);
+    if (server_keymap)
+        keymap_free(server_keymap);
+    if (keymap_fd >= 0)
+        close(keymap_fd);
+    server_keymap = k;
+    keymap_fd = mfd;
+    keymap_size = (uint32_t)n;
+    comp_log("keymap %s", name);
+    return 0;
+}
+
 void seat_init(struct wire_server *srv)
 {
-    server_keymap = keymap_load("/usr/share/keymaps/us.mkm");
-    int fd = open("/usr/share/keymaps/us.mkm", O_RDONLY | O_CLOEXEC);
-    if (fd >= 0) {
-        char buf[4096];
-        ssize_t n = read(fd, buf, sizeof buf);
-        close(fd);
-        if (n > 0) {
-            keymap_fd = memfd_create("keymap", MFD_CLOEXEC);
-            if (keymap_fd >= 0 && ftruncate(keymap_fd, 4096) == 0) {
-                void *map = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, keymap_fd, 0);
-                if (map != MAP_FAILED) {
-                    memcpy(map, buf, (size_t)n);
-                    munmap(map, 4096);
-                    keymap_size = (uint32_t)n;
-                }
-            }
-        }
-    }
+    seat_load_keymap("us");
     server_of_seat = srv;
     wire_global_create(srv, &seat_interface, 1, bind_seat, NULL);
 }

@@ -235,6 +235,8 @@ int decor_release(void);                 /* 1: server drag ended, 2: client requ
 int decor_dragging(void);
 /* seat.c */
 void seat_init(struct wire_server *srv);
+/* Load /usr/share/keymaps/<name>.mkm for the server and for clients bound from now on. */
+int seat_load_keymap(const char *name);
 void seat_pointer_motion(void);
 void seat_pointer_button(int button, int pressed);
 void seat_pointer_axis(int delta);

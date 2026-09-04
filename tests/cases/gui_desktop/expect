@@ -10,6 +10,6 @@ desktop: menu desktop
 desktop: menu readme.txt
 settings: set wallpaper_mode tile
 desktop: wallpaper /usr/share/wallpapers/default.png mode 2
-x12: toplevel 2 'settings' mapped
+x12: toplevel 2 'Settings' mapped
 gui_desktop: desktop ok
 TEST PASS

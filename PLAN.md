@@ -1362,6 +1362,19 @@ Tests: `slab`, `pmm`, `vmm`, `swap`, `hugepages` unchanged, `prof_gui`
 with `kmalloc-*` and `pmm_lock` rows near zero for the steady state and
 `vmspace` holds under 100 microseconds.
 
+## Settings rework (completed 2026-09-04)
+
+`/bin/settings` moved to `user/settings/` and became a category window
+(Appearance, Display, Keyboard, Sound, Date and time, File types,
+Launcher, System) that writes `/etc/desktop.conf` on every change; new
+keys `frame_ms`, `decorations`, `keymap`, `ui_font`, `ui_font_px` and
+`ui_scale` are applied by the desktop client, X12 (`keymap_reload`) and
+libgui (`theme_read_conf`). `x12settings` shows the server's status,
+surfaces, live settings and a pixel inspector. Documented in
+`docs/design/desktop.md` and `docs/design/tools.md`, tested by
+`tests/cases/gui_settings` (every page and the X12 tool open and close on
+the desktop).
+
 ## 4. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

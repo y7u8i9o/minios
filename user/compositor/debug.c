@@ -78,8 +78,32 @@ static int *slot(const char *key)
     return NULL;
 }
 
+/* The keymap name lives in /etc/desktop.conf; the settings client asks
+ * for a reload with keymap_reload after changing it. */
+static void reload_keymap(void)
+{
+    FILE *f = fopen("/etc/desktop.conf", "r");
+    if (!f)
+        return;
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        if (strncmp(line, "keymap=", 7) == 0 && line[7]) {
+            if (seat_load_keymap(line + 7) < 0)
+                comp_log("keymap %s not found", line + 7);
+            break;
+        }
+    }
+    fclose(f);
+}
+
 static void h_set(struct wire_client *c, struct wire_resource *self, const char *key, int32_t value)
 {
+    if (strcmp(key, "keymap_reload") == 0) {
+        reload_keymap();
+        return;
+    }
     int *p = slot(key);
     if (!p)
         return;
