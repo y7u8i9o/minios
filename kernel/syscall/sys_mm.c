@@ -11,9 +11,28 @@
 #include <minios/abi.h>
 #include <errno.h>
 
+/* True if adding extra bytes of regions stays within RLIMIT_AS. */
+static bool within_as(struct proc *p, size_t extra)
+{
+    uint64_t lim = proc_rlimit_cur(p, RLIMIT_AS);
+    return lim == RLIM_INFINITY || vma_total_size(p->vm) + extra <= lim;
+}
+
 long sys_sbrk(struct trapframe *tf)
 {
-    return vma_brk(thread_current()->proc->vm, (intptr_t)SYSARG0(tf));
+    struct proc *p = thread_current()->proc;
+    intptr_t inc = (intptr_t)SYSARG0(tf);
+    if (inc > 0) {
+        if (!within_as(p, (size_t)inc))
+            return -ENOMEM;
+        uint64_t data = proc_rlimit_cur(p, RLIMIT_DATA);
+        spin_lock(&p->vm->lock);
+        uint64_t heap = p->vm->brk - p->vm->brk_start;
+        spin_unlock(&p->vm->lock);
+        if (data != RLIM_INFINITY && heap + (uint64_t)inc > data)
+            return -ENOMEM;
+    }
+    return vma_brk(p->vm, inc);
 }
 
 static unsigned prot_to_vmflags(int prot)
@@ -86,8 +105,11 @@ long sys_mmap(struct trapframe *tf)
     unsigned vmflags = prot_to_vmflags(prot);
     if (shared)
         vmflags |= VM_SHARED;
-    struct vmspace *vm = thread_current()->proc->vm;
+    struct proc *p = thread_current()->proc;
+    struct vmspace *vm = p->vm;
     bool fixed = flags & MAP_FIXED;
+    if (!within_as(p, len))
+        return -ENOMEM;
     if (fixed) {
         if (!IS_ALIGNED(addr, PAGE_SIZE) || addr < USER_BASE || addr + len - 1 > USER_TOP || addr + len < addr)
             return -EINVAL;

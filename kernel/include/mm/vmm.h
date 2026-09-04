@@ -27,7 +27,8 @@
 #define USER_BASE       0x0000000000001000UL
 #define USER_TOP        0x00007fffffffffffUL
 #define USER_STACK_TOP  0x00007ffffffff000UL
-#define USER_STACK_SIZE (1UL << 20)
+#define USER_STACK_SIZE (1UL << 20)     /* legacy default, exec sizes the stack by RLIMIT_STACK (M40) */
+#define USER_STACK_MIN  (64UL << 10)
 #define KMMIO_BASE      0xffffffa000000000UL   /* device mappings, 64 GiB */
 #define KMMIO_SIZE      (64UL << 30)
 #define KSTACK_BASE     0xffffffc000000000UL   /* kernel stacks with guards */

@@ -81,4 +81,8 @@
 #define SYS_mprotect      77
 #define SYS_msync         78
 #define SYS_madvise       79
-#define SYS_MAX           80
+#define SYS_getrlimit     80
+#define SYS_setrlimit     81
+#define SYS_prlimit       82
+#define SYS_getrusage     83
+#define SYS_MAX           84

@@ -11,7 +11,7 @@
 
 #define MAX_PROCS 64
 
-struct proc_row { int pid, ppid, pgid; char state[12], name[32]; };
+struct proc_row { int pid, ppid, pgid; long ticks, rss; char state[12], name[32]; };
 
 static struct app *app;
 static struct widget *table, *mem_label, *status;
@@ -69,6 +69,8 @@ static void refresh(void)
             int k = 0;
             while (*end && *end != ' ' && k < 11) r.state[k++] = *end++;
             r.state[k] = '\0';
+            r.ticks = strtol(end, &end, 10);
+            r.rss = strtol(end, &end, 10);
             while (*end == ' ') end++;
             k = 0;
             while (*end && *end != ' ' && k < 31) r.name[k++] = *end++;

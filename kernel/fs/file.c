@@ -1,6 +1,9 @@
 #define KLOG_SUBSYS "file"
 #include <fs/vfs.h>
 #include <mm/filemap.h>
+#include <sched/thread.h>
+#include <sched/proc.h>
+#include <ipc/signal.h>
 #include <fs/fdtable.h>
 #include <mm/slab.h>
 #include <lib/string.h>
@@ -83,6 +86,20 @@ long file_write(struct file *f, const char *buf, size_t n)
     uint64_t pos = f->pos;
     if ((f->flags & O_APPEND) && f->inode)
         pos = f->inode->size;
+    if (f->inode && S_ISREG(f->inode->mode)) {
+        /* RLIMIT_FSIZE: a regular file may not grow past the limit. */
+        struct proc *p = thread_current()->proc;
+        uint64_t limit = proc_rlimit_cur(p, RLIMIT_FSIZE);
+        if (limit != RLIM_INFINITY && pos + n > limit) {
+            if (pos >= limit) {
+                mutex_unlock(&f->lock);
+                vfs_op_end(sb);
+                signal_send(p, SIGXFSZ);
+                return -EFBIG;
+            }
+            n = (size_t)(limit - pos);
+        }
+    }
     long r = f->ops->write(f, buf, n, &pos);
     if (r > 0 && f->inode && f->inode->mapping)
         filemap_write_through(f->inode, buf, pos - (uint64_t)r, (size_t)r);
@@ -119,7 +136,15 @@ void fdtable_init(struct fdtable *t)
 {
     memset(t->fds, 0, sizeof t->fds);
     t->cloexec = 0;
+    t->limit = OPEN_MAX;
     spinlock_init(&t->lock, "fdtable");
+}
+
+void fdtable_set_limit(struct fdtable *t, int limit)
+{
+    spin_lock(&t->lock);
+    t->limit = limit < 0 ? 0 : limit > OPEN_MAX ? OPEN_MAX : limit;
+    spin_unlock(&t->lock);
 }
 
 int fdtable_install(struct fdtable *t, struct file *f, int min)
@@ -127,7 +152,7 @@ int fdtable_install(struct fdtable *t, struct file *f, int min)
     if (min < 0 || min >= OPEN_MAX)
         return -EINVAL;
     spin_lock(&t->lock);
-    for (int i = min; i < OPEN_MAX; i++) {
+    for (int i = min; i < t->limit; i++) {
         if (!t->fds[i]) {
             t->fds[i] = f;
             t->cloexec &= ~(1ULL << i);
@@ -144,6 +169,10 @@ int fdtable_install_at(struct fdtable *t, struct file *f, int fd)
     if (fd < 0 || fd >= OPEN_MAX)
         return -EBADF;
     spin_lock(&t->lock);
+    if (fd >= t->limit) {
+        spin_unlock(&t->lock);
+        return -EBADF;
+    }
     struct file *old = t->fds[fd];
     t->fds[fd] = f;
     t->cloexec &= ~(1ULL << fd);
@@ -218,6 +247,7 @@ void fdtable_copy(struct fdtable *dst, struct fdtable *src)
             file_ref(dst->fds[i]);
     }
     dst->cloexec = src->cloexec;
+    dst->limit = src->limit;
     spin_unlock(&src->lock);
 }
 

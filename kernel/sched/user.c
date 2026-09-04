@@ -39,8 +39,20 @@ static void frame_init(struct trapframe *tf, uintptr_t rip, uintptr_t rsp)
 }
 
 /* Build a new address space from an ELF on the initrd. */
+/* The main stack size for a new image: RLIMIT_STACK of the creating
+ * process, kept between 64 KiB and 1 GiB and page aligned. */
+static size_t stack_size_for(struct proc *p)
+{
+    uint64_t lim = p ? proc_rlimit_cur(p, RLIMIT_STACK) : 8UL << 20;
+    if (lim == RLIM_INFINITY || lim > (1UL << 30))
+        lim = 1UL << 30;
+    if (lim < USER_STACK_MIN)
+        lim = USER_STACK_MIN;
+    return ALIGN_UP(lim, PAGE_SIZE);
+}
+
 static int load_image(const char *path, char *const argv[], char *const envp[],
-                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp)
+                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size)
 {
     struct file *f;
     int r = vfs_open(path, O_RDONLY, 0, &f);
@@ -78,7 +90,7 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
     r = elf_load(vm, image, size, entry);
     kfree(image);
     if (r == 0)
-        r = user_stack_setup(vm, argv, envp, rsp);
+        r = user_stack_setup(vm, argv, envp, rsp, stack_size);
     if (r < 0) {
         vma_remove_all(vm);
         vmspace_destroy(vm);
@@ -120,7 +132,7 @@ struct proc *proc_create_user(const char *path, char *const argv[], char *const 
 {
     struct vmspace *vm;
     uintptr_t entry, rsp;
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp);
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(parent));
     if (r < 0) {
         klog_error("cannot load %s: %d", path, r);
         return NULL;
@@ -200,7 +212,7 @@ int proc_exec(struct trapframe *tf, const char *path, char *const argv[], char *
 
     struct vmspace *vm;
     uintptr_t entry, rsp;
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp);
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(p));
     if (r < 0)
         return r;
 

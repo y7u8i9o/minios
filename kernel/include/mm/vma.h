@@ -79,6 +79,8 @@ bool vma_range_ok(struct vmspace *vm, uintptr_t addr, size_t len, bool write);
 bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool present);
 /* madvise on [addr, addr + len) (mm/madvise.c). */
 long vma_madvise(struct vmspace *vm, uintptr_t addr, size_t len, int advice);
+/* Number of frames present in the lower half (M40, counted on demand). */
+size_t vma_count_resident(struct vmspace *vm);
 /* Sum of the sizes of every region. */
 size_t vma_total_size(struct vmspace *vm);
 

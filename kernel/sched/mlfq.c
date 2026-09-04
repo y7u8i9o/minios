@@ -183,6 +183,13 @@ void sched_switch_locked(void)
         prev->state = THREAD_RUNNING;
         return;
     }
+    if (prev->state == THREAD_READY) {
+        prev->nivcsw++;
+        __atomic_fetch_add(&prev->proc->nivcsw, 1, __ATOMIC_RELAXED);
+    } else {
+        prev->nvcsw++;
+        __atomic_fetch_add(&prev->proc->nvcsw, 1, __ATOMIC_RELAXED);
+    }
     next->state = THREAD_RUNNING;
     next->cpu = c->id;
     c->current = next;

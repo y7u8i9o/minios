@@ -109,6 +109,8 @@ struct dirent {
 #define SIGALRM  14
 #define SIGTERM  15
 #define SIGCHLD  17
+#define SIGXCPU  24     /* CPU time limit exceeded (M40) */
+#define SIGXFSZ  25     /* file size limit exceeded (M40) */
 #define SIGWINCH 28
 #define NSIG     32
 
@@ -395,4 +397,52 @@ struct timespec {
 struct timerfd_spec {
     uint64_t initial_ms;            /* 0 disarms */
     uint64_t interval_ms;           /* 0 for a single expiration */
+};
+
+/* ---- M40: resource limits and usage ---- */
+
+#define RLIMIT_CPU     0    /* seconds of CPU time */
+#define RLIMIT_FSIZE   1    /* bytes a file may grow to */
+#define RLIMIT_DATA    2    /* bytes of heap */
+#define RLIMIT_STACK   3    /* bytes of main stack, applied by exec */
+#define RLIMIT_CORE    4    /* stored only */
+#define RLIMIT_RSS     5    /* stored only */
+#define RLIMIT_NPROC   6    /* user processes */
+#define RLIMIT_NOFILE  7    /* descriptor slots, at most OPEN_MAX */
+#define RLIMIT_MEMLOCK 8    /* stored only */
+#define RLIMIT_AS      9    /* bytes of address space (sum of the regions) */
+#define RLIMIT_NLIMITS 10
+#define RLIM_INFINITY  (~0UL)
+
+struct rlimit {
+    uint64_t rlim_cur;      /* soft limit, the one enforced */
+    uint64_t rlim_max;      /* hard limit, ceiling for rlim_cur */
+};
+
+struct abi_timeval {
+    int64_t tv_sec;
+    int64_t tv_usec;
+};
+
+#define RUSAGE_SELF      0
+#define RUSAGE_CHILDREN (-1)
+#define RUSAGE_THREAD    1
+
+struct rusage {
+    struct abi_timeval ru_utime;    /* user CPU time */
+    struct abi_timeval ru_stime;    /* system CPU time */
+    int64_t ru_maxrss;              /* resident pages in KiB, counted when asked */
+    int64_t ru_ixrss;
+    int64_t ru_idrss;
+    int64_t ru_isrss;
+    int64_t ru_minflt;              /* faults served from memory */
+    int64_t ru_majflt;              /* faults that read swap or a file */
+    int64_t ru_nswap;
+    int64_t ru_inblock;
+    int64_t ru_oublock;
+    int64_t ru_msgsnd;
+    int64_t ru_msgrcv;
+    int64_t ru_nsignals;
+    int64_t ru_nvcsw;               /* voluntary context switches */
+    int64_t ru_nivcsw;              /* involuntary context switches */
 };

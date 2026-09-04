@@ -103,6 +103,10 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_mprotect]      = sys_mprotect,
     [SYS_msync]         = sys_msync,
     [SYS_madvise]       = sys_madvise,
+    [SYS_getrlimit]     = sys_getrlimit,
+    [SYS_setrlimit]     = sys_setrlimit,
+    [SYS_prlimit]       = sys_prlimit,
+    [SYS_getrusage]     = sys_getrusage,
 };
 
 void syscall_init_cpu(void)

@@ -240,3 +240,13 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   hardware dirty bits) and under `mapping.lock` (writeback).
 - `filemap_lock` is a leaf in level 16; it is taken while a `vmspace.lock`
   is held only through `filemap_ref`, which is atomic and takes no lock.
+
+## M40 additions
+
+- No new lock. `proc.rlim` is written under `proc.lock` and read without
+  it by the timer tick and the enforcement points; the CPU time, fault and
+  switch counters of a process are updated atomically from the tick, the
+  fault handler and `sched_switch_locked` (which holds `sched_lock`). The
+  tick calls `signal_send` for `RLIMIT_CPU`, taking `proc.lock` from the
+  timer interrupt like `waitq_interrupt` already did; no spinlock is held
+  when an interrupt arrives, so the ordering is unaffected.

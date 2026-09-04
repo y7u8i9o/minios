@@ -7,6 +7,7 @@
 #include <sched/user.h>
 #include <ipc/signal.h>
 #include <mm/vma.h>
+#include <syscall/rlimit.h>
 #include <lib/string.h>
 #include <errno.h>
 
@@ -38,6 +39,10 @@ long sys_yield(struct trapframe *tf)
 
 long sys_fork(struct trapframe *tf)
 {
+    struct proc *p = thread_current()->proc;
+    uint64_t lim = proc_rlimit_cur(p, RLIMIT_NPROC);
+    if (lim != RLIM_INFINITY && (uint64_t)proc_count_users() >= lim)
+        return -EAGAIN;
     struct proc *child = proc_fork(tf);
     return child ? child->pid : -ENOMEM;
 }
@@ -73,8 +78,11 @@ long sys_wait4(struct trapframe *tf)
     int pid = (int)SYSARG0(tf);
     uintptr_t status_ptr = SYSARG1(tf);
     int options = (int)SYSARG2(tf);
+    uintptr_t rusage_ptr = SYSARG3(tf);
     struct proc *self = thread_current()->proc;
     if (status_ptr && !user_range_ok(status_ptr, sizeof(int), true))
+        return -EFAULT;
+    if (rusage_ptr && !user_range_ok(rusage_ptr, sizeof(struct rusage), true))
         return -EFAULT;
 
     spin_lock(&proc_tree_lock);
@@ -99,9 +107,14 @@ long sys_wait4(struct trapframe *tf)
             list_init(&zombie->sibling);
             spin_unlock(&proc_tree_lock);
             int cpid = zombie->pid;
+            struct rusage ru;
+            if (rusage_ptr)
+                rusage_of_proc(zombie, &ru, false);
             int status = proc_reap(zombie);
             if (status_ptr)
                 *(int *)status_ptr = status;
+            if (rusage_ptr)
+                *(struct rusage *)rusage_ptr = ru;
             return cpid;
         }
         if (!any) {

@@ -10,6 +10,7 @@ struct proc;
 struct fdtable {
     struct file *fds[OPEN_MAX];
     uint64_t cloexec;               /* bit per descriptor, lock */
+    int limit;                      /* slots usable, RLIMIT_NOFILE (M40), lock */
     struct spinlock lock;
 };
 
@@ -30,3 +31,5 @@ void fdtable_close_all(struct fdtable *t);
 void fdtable_set_cloexec(struct fdtable *t, int fd, bool on);
 bool fdtable_get_cloexec(struct fdtable *t, int fd);
 void fdtable_close_exec(struct fdtable *t);
+/* Number of usable slots (M40). Open descriptors above it stay open. */
+void fdtable_set_limit(struct fdtable *t, int limit);

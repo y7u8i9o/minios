@@ -44,6 +44,15 @@ struct proc {
     int pgid;                       /* process group */
     uint64_t sig_pending;
     struct ksigaction sig_actions[NSIG];
+    /* Resource limits (M40): written under lock, read without it by the
+     * timer tick and the enforcement points, which tolerate a stale value. */
+    struct rlimit rlim[RLIMIT_NLIMITS];
+    /* CPU accounting in timer ticks and event counters, atomic updates;
+     * the c* fields sum reaped children and are protected by lock. */
+    uint64_t utime, stime;
+    uint64_t minflt, majflt;
+    uint64_t nvcsw, nivcsw;
+    uint64_t cutime, cstime, cminflt, cmajflt, cnvcsw, cnivcsw;
 };
 
 /* wait4 status encoding. */
@@ -75,6 +84,15 @@ int proc_count_others(void);
 int proc_collect_pgrp(int pgid, int *pids, int max);
 /* Format "PID PPID PGID STATE NAME" lines into buf. Returns the length. */
 size_t proc_format_table(char *buf, size_t size);
+/* Number of live user processes (everything but the kernel process). */
+int proc_count_users(void);
+/* Charge the running thread and its process with one timer tick, user or
+ * system depending on the interrupted mode, and enforce RLIMIT_CPU. Called
+ * from the timer interrupt of every CPU. */
+struct trapframe;
+void proc_account_tick(const struct trapframe *tf);
+/* The soft limit of a resource of the current process. */
+uint64_t proc_rlimit_cur(struct proc *p, int resource);
 /* Check point on the way back to user mode. */
 void proc_exit_check(void);
 /* Registered by kinit once init exists, target of reparenting. */

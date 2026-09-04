@@ -136,9 +136,10 @@ static size_t count_strings(char *const list[])
     return n;
 }
 
-int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[], uintptr_t *rsp)
+int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[], uintptr_t *rsp,
+                     size_t stack_size)
 {
-    uintptr_t bottom = USER_STACK_TOP - USER_STACK_SIZE;
+    uintptr_t bottom = USER_STACK_TOP - stack_size;
     int r = vma_add(vm, bottom, USER_STACK_TOP, VM_READ | VM_WRITE);
     if (r < 0)
         return r;
@@ -151,7 +152,7 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
     for (size_t i = 0; i < envc; i++)
         bytes += strlen(envp[i]) + 1;
     size_t vectors = (1 + argc + 1 + envc + 1) * sizeof(uint64_t);
-    if (bytes + vectors + 64 > USER_STACK_SIZE / 2)
+    if (bytes + vectors + 64 > stack_size / 2)
         return -E2BIG;
 
     /* Strings at the top, then the pointer vectors below, 16 byte aligned

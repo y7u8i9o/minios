@@ -11,6 +11,10 @@
 #include <errno.h>
 #include <debug/panic.h>
 #include <lib/printf.h>
+#include <ipc/signal.h>
+#include <arch/trap.h>
+#include <arch/cpu.h>
+#include <drivers/timer.h>
 
 /* All processes and the pid counter. Protected by proc_list_lock. */
 static LIST_HEAD(proc_list);
@@ -38,6 +42,17 @@ static void proc_setup(struct proc *p, int pid, const char *name, struct proc *p
     strlcpy(p->name, name, sizeof p->name);
     strlcpy(p->cwd, parent ? parent->cwd : "/", sizeof p->cwd);
     fdtable_init(&p->fds);
+    if (parent) {
+        spin_lock(&parent->lock);
+        memcpy(p->rlim, parent->rlim, sizeof p->rlim);
+        spin_unlock(&parent->lock);
+    } else {
+        for (int i = 0; i < RLIMIT_NLIMITS; i++)
+            p->rlim[i].rlim_cur = p->rlim[i].rlim_max = RLIM_INFINITY;
+        p->rlim[RLIMIT_NOFILE].rlim_cur = p->rlim[RLIMIT_NOFILE].rlim_max = OPEN_MAX;
+        p->rlim[RLIMIT_STACK].rlim_cur = 8UL << 20;
+    }
+    fdtable_set_limit(&p->fds, (int)MIN(p->rlim[RLIMIT_NOFILE].rlim_cur, (uint64_t)OPEN_MAX));
     spin_lock(&proc_list_lock);
     list_add_tail(&p->link, &proc_list);
     spin_unlock(&proc_list_lock);
@@ -168,8 +183,70 @@ int proc_reap(struct proc *p)
         spin_lock(&p->lock);
     }
     spin_unlock(&p->lock);
+    /* The child's consumption joins the reaper's children totals. */
+    struct proc *self = thread_current()->proc;
+    spin_lock(&self->lock);
+    self->cutime += p->utime + p->cutime;
+    self->cstime += p->stime + p->cstime;
+    self->cminflt += p->minflt + p->cminflt;
+    self->cmajflt += p->majflt + p->cmajflt;
+    self->cnvcsw += p->nvcsw + p->cnvcsw;
+    self->cnivcsw += p->nivcsw + p->cnivcsw;
+    spin_unlock(&self->lock);
     proc_free(p);
     return status;
+}
+
+int proc_count_users(void)
+{
+    int n = 0;
+    spin_lock(&proc_tree_lock);
+    spin_lock(&proc_list_lock);
+    struct list_head *pos;
+    list_for_each(pos, &proc_list) {
+        struct proc *p = list_entry(pos, struct proc, link);
+        if (p != &kernel_proc && p->state != PROC_ZOMBIE)
+            n++;
+    }
+    spin_unlock(&proc_list_lock);
+    spin_unlock(&proc_tree_lock);
+    return n;
+}
+
+uint64_t proc_rlimit_cur(struct proc *p, int resource)
+{
+    return __atomic_load_n(&p->rlim[resource].rlim_cur, __ATOMIC_RELAXED);
+}
+
+void proc_account_tick(const struct trapframe *tf)
+{
+    struct cpu *c = cpu_current();
+    struct thread *t = c->current;
+    if (!t || t == c->idle)
+        return;
+    struct proc *p = t->proc;
+    bool user = (tf->cs & 3) == 3;
+    if (user) {
+        t->utime++;
+        __atomic_fetch_add(&p->utime, 1, __ATOMIC_RELAXED);
+    } else {
+        t->stime++;
+        __atomic_fetch_add(&p->stime, 1, __ATOMIC_RELAXED);
+    }
+    if (p == &kernel_proc)
+        return;
+    uint64_t soft = proc_rlimit_cur(p, RLIMIT_CPU);
+    uint64_t hard = __atomic_load_n(&p->rlim[RLIMIT_CPU].rlim_max, __ATOMIC_RELAXED);
+    if (soft == RLIM_INFINITY && hard == RLIM_INFINITY)
+        return;
+    uint64_t total = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
+    if (hard != RLIM_INFINITY && total >= hard * TIMER_HZ) {
+        signal_send(p, SIGKILL);
+        return;
+    }
+    /* SIGXCPU when the soft limit is reached and once per second after. */
+    if (soft != RLIM_INFINITY && total >= soft * TIMER_HZ && (total - soft * TIMER_HZ) % TIMER_HZ == 0)
+        signal_send(p, SIGXCPU);
 }
 
 int proc_count_others(void)
@@ -224,7 +301,7 @@ int proc_collect_pgrp(int pgid, int *pids, int max)
 size_t proc_format_table(char *buf, size_t size)
 {
     size_t off = 0;
-    off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %s\n", "PID", "PPID", "PGID", "STATE", "NAME");
+    off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %8s %8s %s\n", "PID", "PPID", "PGID", "STATE", "TIME", "RSS", "NAME");
     spin_lock(&proc_tree_lock);
     spin_lock(&proc_list_lock);
     struct list_head *pos;
@@ -232,9 +309,11 @@ size_t proc_format_table(char *buf, size_t size)
         struct proc *p = list_entry(pos, struct proc, link);
         if (off >= size - 1)
             break;
-        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %s\n", p->pid,
+        uint64_t ticks = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
+        size_t rss = p->vm && p->state != PROC_ZOMBIE ? vma_count_resident(p->vm) * (PAGE_SIZE / 1024) : 0;
+        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", p->pid,
                                  p->parent ? p->parent->pid : 0, p->pgid,
-                                 p->state == PROC_ZOMBIE ? "zombie" : "running", p->name);
+                                 p->state == PROC_ZOMBIE ? "zombie" : "running", ticks, rss, p->name);
     }
     spin_unlock(&proc_list_lock);
     spin_unlock(&proc_tree_lock);

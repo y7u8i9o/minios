@@ -10,6 +10,8 @@
 #include <arch/cpu.h>
 #include <arch/trap.h>
 #include <fs/vfs.h>
+#include <sched/thread.h>
+#include <sched/proc.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
@@ -323,6 +325,15 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
     return true;
 }
 
+/* Account a resolved fault to the current process. */
+static void count_fault(bool major)
+{
+    struct thread *t = thread_current();
+    if (!t)
+        return;
+    __atomic_fetch_add(major ? &t->proc->majflt : &t->proc->minflt, 1, __ATOMIC_RELAXED);
+}
+
 bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool present)
 {
     bool ok = false;
@@ -341,13 +352,19 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
             ok = do_cow_locked(vm, va, entry) == 0;
     } else if (w == 1 && (*entry & PTE_SWAPPED)) {
         spin_unlock(&vm->lock);
-        return swap_in_page(vm, va) == 0;
+        ok = swap_in_page(vm, va) == 0;
+        if (ok)
+            count_fault(true);
+        return ok;
     } else if (w == 1 && (*entry & PTE_PROTNONE)) {
         /* Cannot happen: mprotect makes the entries of a readable region
          * present again. */
         goto out;
     } else if (v->flags & VM_FILE) {
-        return filemap_fault(vm, va, write);
+        ok = filemap_fault(vm, va, write);
+        if (ok)
+            count_fault(true);
+        return ok;
     } else {
         if ((v->flags & VM_HUGE) && (w == 0 || (w == 1 && *entry == 0))) {
             int h = huge_fault_locked(vm, v, va);
@@ -365,7 +382,40 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
     }
 out:
     spin_unlock(&vm->lock);
+    if (ok)
+        count_fault(false);
     return ok;
+}
+
+size_t vma_count_resident(struct vmspace *vm)
+{
+    size_t n = 0;
+    spin_lock(&vm->lock);
+    uint64_t *pml4 = P2V(vm->pml4_phys);
+    for (int i = 0; i < PT_ENTRIES / 2; i++) {
+        if (!(pml4[i] & PTE_P))
+            continue;
+        uint64_t *pdpt = P2V(pml4[i] & PTE_ADDR_MASK);
+        for (int j = 0; j < PT_ENTRIES; j++) {
+            if (!(pdpt[j] & PTE_P))
+                continue;
+            uint64_t *pd = P2V(pdpt[j] & PTE_ADDR_MASK);
+            for (int k = 0; k < PT_ENTRIES; k++) {
+                if (!(pd[k] & PTE_P))
+                    continue;
+                if (pd[k] & PTE_PS) {
+                    n += PT_ENTRIES;
+                    continue;
+                }
+                uint64_t *pt = P2V(pd[k] & PTE_ADDR_MASK);
+                for (int l = 0; l < PT_ENTRIES; l++)
+                    if (pt[l] & PTE_P)
+                        n++;
+            }
+        }
+    }
+    spin_unlock(&vm->lock);
+    return n;
 }
 
 bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)

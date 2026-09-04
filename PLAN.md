@@ -1217,7 +1217,7 @@ integrity across fork and copy on write of a huge page, partial `munmap`
 and `mprotect` splitting with the remaining data intact, fallback when
 the buddy allocator has no order 9 block, and no leak).
 
-### M40. Per process resource limits and CPU accounting
+### M40. Per process resource limits and CPU accounting (completed 2026-09-04)
 
 1. Every process carries `struct rlimit rlim[RLIMIT_NLIMITS]`, inherited
    by fork, kept by exec, read and written with `getrlimit`, `setrlimit`
