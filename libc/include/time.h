@@ -6,6 +6,7 @@
 #include <minios/abi.h>
 
 #define CLOCKS_PER_SEC 1000000L
+#define TIME_UTC 1
 
 typedef long clock_t;
 typedef int clockid_t;
@@ -31,6 +32,8 @@ clock_t clock(void);
 double difftime(time_t a, time_t b);
 /* Sleeps in whole milliseconds, rounded up; the remainder is always 0. */
 int nanosleep(const struct timespec *request, struct timespec *remain);
+int timespec_get(struct timespec *ts, int base);
+int timespec_getres(struct timespec *res, int base);
 
 /* Calendar conversion, UTC only. localtime is gmtime. */
 struct tm *gmtime(const time_t *t);
@@ -47,3 +50,9 @@ char *asctime(const struct tm *tm);
 char *asctime_r(const struct tm *tm, char *buf);   /* at least 26 bytes */
 char *ctime(const time_t *t);
 char *ctime_r(const time_t *t, char *buf);
+
+/* MiniOS has no time-zone database: the sole zone is UTC. */
+extern char *tzname[2];
+extern long timezone;
+extern int daylight;
+void tzset(void);

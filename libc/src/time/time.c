@@ -50,7 +50,7 @@ clock_t clock(void)
 
 double difftime(time_t a, time_t b)
 {
-    return (double)(a - b);
+    return (double)a - (double)b;
 }
 
 int nanosleep(const struct timespec *request, struct timespec *remain)
@@ -67,6 +67,20 @@ int nanosleep(const struct timespec *request, struct timespec *remain)
         remain->tv_nsec = 0;
     }
     return 0;
+}
+
+int timespec_get(struct timespec *ts, int base)
+{
+    if (base != TIME_UTC || !ts)
+        return 0;
+    return clock_gettime(CLOCK_REALTIME, ts) == 0 ? base : 0;
+}
+
+int timespec_getres(struct timespec *res, int base)
+{
+    if (base != TIME_UTC || !res)
+        return 0;
+    return clock_getres(CLOCK_REALTIME, res) == 0 ? base : 0;
 }
 
 int gettimeofday(struct timeval *tv, struct timezone *tz)

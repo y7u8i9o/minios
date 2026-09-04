@@ -5,7 +5,7 @@ LIB   := $(OUT)/libc.a
 CRT0  := $(OUT)/crt0.o
 
 SRCS  := $(wildcard src/*/*.c) $(wildcard src/*.c)
-ASRCS := src/syscall.S
+ASRCS := src/syscall.S src/setjmp.S
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(patsubst %.S,$(OUT)/%.o,$(ASRCS))
 
 .PHONY: all clean

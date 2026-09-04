@@ -52,6 +52,19 @@ result into `-1` with `errno` set. Numbers come from
   monotonic clocks, calendar conversion in UTC, `strftime`, `nanosleep`.
   `malloc` and every `FILE` are locked. See `docs/design/threads.md` and
   `docs/design/time.md`.
+- `setjmp.h`: x86-64 System V `setjmp` and `longjmp`, including the rule
+  that a zero value passed to `longjmp` is observed as one. `locale.h`
+  supplies the deterministic `C`/`POSIX` locale and its complete
+  `lconv`. `wchar.h` supplies wide strings and memory operations,
+  restartable strict UTF-8 conversion, wide numeric conversion and
+  wide-character stream input/output. `regex.h` supplies compiled POSIX
+  basic and extended byte regular expressions, captures, BRE back
+  references, counted repetition, named character classes, anchors and
+  the `REG_ICASE`, `REG_NEWLINE`, `REG_NOSUB` and `REG_STARTEND` modes.
+  Collation and character classes follow the sole C locale.
+- `time.h` additionally exposes the C `TIME_UTC`, `timespec_get` and
+  `timespec_getres` interfaces and the POSIX UTC timezone state
+  (`tzname`, `timezone`, `daylight`, `tzset`).
 
 ## Programs
 
@@ -70,6 +83,11 @@ result into `-1` with `errno` set. Numbers come from
 `tests/cases/libc` runs `/bin/libctest`, which checks the formatter, the
 string functions, `ctype`, number parsing including overflow, the
 allocator, `qsort`, the environment, the streams and `atexit`.
+`tests/cases/libc_ext` runs `/bin/libcexttest`, covering non-local jumps,
+the C locale, UTF-8 split-sequence conversion and rejection, wide
+strings and numbers, BRE/ERE matching and captures, leftmost-longest
+alternation, back references, newline anchors, bounded execution and the
+new `time.h` interfaces.
 `tests/cases/shell` (`test=shell`) types a session into the keyboard line
 buffer through `ps2kbd_feed_scancode` and then starts `/bin/sh`, checking
 the builtin output, PATH lookup with arguments, the error messages and the
