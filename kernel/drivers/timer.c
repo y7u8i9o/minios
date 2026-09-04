@@ -103,7 +103,9 @@ void timer_set_tick_handler(timer_tick_fn fn)
 
 void sleep_ms(uint64_t ms)
 {
-    uint64_t until = timer_ticks() + ms * (TIMER_HZ / 1000);
+    /* The start lies somewhere inside the current tick; counting from the
+     * next tick boundary makes the sleep last at least ms. */
+    uint64_t until = (timer_ns() + 999999) / 1000000 * (TIMER_HZ / 1000) + ms * (TIMER_HZ / 1000);
     if (sched_started()) {
         sched_sleep_until(until);
         return;
