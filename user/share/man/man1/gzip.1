@@ -1,0 +1,23 @@
+GZIP(1)                     User Commands                    GZIP(1)
+
+NAME
+    gzip - compress or decompress files in gzip format
+
+SYNOPSIS
+    gzip [-cdkt] [file...]
+
+DESCRIPTION
+    gzip creates standards-compatible gzip streams using DEFLATE fixed
+    Huffman coding and LZ77 matching. -d decompresses and verifies streams.
+
+OPTIONS
+    -c   write to standard output and preserve input files
+    -d   decompress
+    -k   keep input files after successful conversion
+    -t   test compressed data without writing output
+
+    Compression appends .gz. Decompression removes a final .gz suffix.
+    Without files, gzip reads standard input and writes standard output.
+
+SEE ALSO
+    xargs(1)

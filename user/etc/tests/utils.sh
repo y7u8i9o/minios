@@ -52,5 +52,27 @@ test -f /u.txt || echo "FAIL test-f"
 test -d /bin || echo "FAIL test-d"
 test 3 -lt 5 || echo "FAIL test-lt"
 test ! -e /nonexistent || echo "FAIL test-not"
-rm /u.txt /u2.txt /u3.txt /u4.txt
+
+mkdir /ufind
+mkdir /ufind/sub
+printf 'alpha\n' > /ufind/a.txt
+printf 'beta\n' > /ufind/sub/b.txt
+printf 'skip\n' > /ufind/sub/c.log
+test "$(find /ufind -type f -name '*.txt' | sort | tr '\n' ' ')" = "/ufind/a.txt /ufind/sub/b.txt " || echo "FAIL find-name-type"
+test "$(find /ufind -maxdepth 1 -type f)" = "/ufind/a.txt" || echo "FAIL find-maxdepth"
+test "$(find /ufind -type f -print0 | xargs -0 -n 2 echo | wc -w | tr -d ' ')" = "3" || echo "FAIL find-print0-xargs"
+test "$(printf "'two words' one\n" | xargs -n 1 echo | tr '\n' ',')" = "two words,one," || echo "FAIL xargs-quotes"
+test "$(printf 'red\nblue\n' | xargs -I '{}' echo color='{}' | tr '\n' ' ')" = "color=red color=blue " || echo "FAIL xargs-replace"
+
+printf 'compress me compress me compress me compress me\n' > /gzip.txt
+gzip -c /gzip.txt > /gzip.txt.gz
+gzip -t /gzip.txt.gz || echo "FAIL gzip-test"
+test "$(gzip -dc /gzip.txt.gz)" = "compress me compress me compress me compress me" || echo "FAIL gzip-roundtrip"
+test "$(pager /gzip.txt)" = "compress me compress me compress me compress me" || echo "FAIL pager-pipe"
+test "$(man -w find)" = "/usr/share/man/man1/find.1" || echo "FAIL man-where"
+test "$(man -f xargs | grep -c 'build and execute')" = "1" || echo "FAIL man-whatis"
+
+rm /u.txt /u2.txt /u3.txt /u4.txt /gzip.txt /gzip.txt.gz
+rm /ufind/a.txt /ufind/sub/b.txt /ufind/sub/c.log
+rmdir /ufind/sub /ufind
 echo "utils: done"

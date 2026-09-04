@@ -127,8 +127,10 @@ void proc_begin_exit(struct proc *p, int status)
     struct list_head *pos;
     list_for_each(pos, &p->threads) {
         struct thread *t = list_entry(pos, struct thread, proc_link);
-        if (t != thread_current())
+        if (t != thread_current()) {
             waitq_interrupt(t);
+            sched_wake(t);          /* SIGKILL must also release stopped threads */
+        }
     }
     spin_unlock(&p->lock);
 }
@@ -301,7 +303,7 @@ int proc_collect_pgrp(int pgid, int *pids, int max)
 /* One row of /dev/proc, copied out of the process under the locks. */
 struct proc_row {
     int pid, ppid, pgid;
-    bool zombie;
+    bool zombie, stopped;
     uint64_t ticks;
     struct vmspace *vm;
     char name[PROC_NAME_LEN];
@@ -329,6 +331,7 @@ size_t proc_format_table(char *buf, size_t size)
         r->ppid = p->parent ? p->parent->pid : 0;
         r->pgid = p->pgid;
         r->zombie = p->state == PROC_ZOMBIE;
+        r->stopped = p->stopped;
         r->ticks = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
         r->vm = r->zombie ? NULL : p->vm;
         memcpy(r->name, p->name, sizeof r->name);
@@ -350,7 +353,8 @@ size_t proc_format_table(char *buf, size_t size)
             spin_unlock(&proc_tree_lock);
         }
         off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", r->pid, r->ppid, r->pgid,
-                                 r->zombie ? "zombie" : "running", r->ticks, rss, r->name);
+                                 r->zombie ? "zombie" : r->stopped ? "stopped" : "running",
+                                 r->ticks, rss, r->name);
     }
     return off < size ? off : size - 1;
 }

@@ -1,0 +1,28 @@
+FIND(1)                     User Commands                    FIND(1)
+
+NAME
+    find - recursively search a directory hierarchy
+
+SYNOPSIS
+    find [path...] [expression]
+
+DESCRIPTION
+    find visits each starting path and its descendants. With no path it starts
+    at the current directory. All supplied tests must match.
+
+EXPRESSIONS
+    -name pattern       match the final path component using *, ?, and []
+    -type f | -type d   select regular files or directories
+    -mindepth number    suppress entries above the given depth
+    -maxdepth number    do not descend below the given depth
+    -print              print each matching path followed by a newline
+    -print0             print each matching path followed by a NUL byte
+    -exec command {} ;  execute command once for each match, replacing every
+                        {} occurrence with the path
+
+EXAMPLES
+    find /etc -type f -name '*.conf'
+    find . -print0 | xargs -0 wc -l
+
+SEE ALSO
+    xargs(1)

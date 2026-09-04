@@ -17,8 +17,7 @@
 
 
 
-/* sleep_ms(ms): block for at least ms milliseconds. Not interruptible by
- * signals; they are delivered when the sleep ends. */
+/* sleep_ms(ms): block until the deadline or until a signal wakes the thread. */
 long sys_sleep_ms(struct trapframe *tf)
 {
     uint64_t ms = SYSARG0(tf);

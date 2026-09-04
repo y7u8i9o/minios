@@ -69,6 +69,8 @@ long sys_execve(struct trapframe *tf)
 }
 
 #define WNOHANG 1
+#define WUNTRACED 2
+#define WCONTINUED 8
 
 /* wait4(pid, status, options, rusage): pid -1 waits for any child, pid
  * < -1 for any child in that process group. WNOHANG returns 0 instead of
@@ -89,7 +91,9 @@ long sys_wait4(struct trapframe *tf)
     for (;;) {
         struct list_head *pos;
         bool any = false;
-        struct proc *zombie = NULL;
+        struct proc *event = NULL;
+        int event_status = 0;
+        bool reap = false;
         list_for_each(pos, &self->children) {
             struct proc *c = list_entry(pos, struct proc, sibling);
             if (pid > 0 && c->pid != pid)
@@ -98,19 +102,34 @@ long sys_wait4(struct trapframe *tf)
                 continue;
             any = true;
             if (c->state == PROC_ZOMBIE) {
-                zombie = c;
+                event = c;
+                reap = true;
+                break;
+            }
+            if ((options & WUNTRACED) && c->stopped && !c->stop_reported) {
+                c->stop_reported = true;
+                event = c;
+                event_status = PROC_STATUS_STOPPED(c->stop_signal);
+                break;
+            }
+            if ((options & WCONTINUED) && c->continued) {
+                c->continued = false;
+                event = c;
+                event_status = PROC_STATUS_CONTINUED;
                 break;
             }
         }
-        if (zombie) {
-            list_del(&zombie->sibling);
-            list_init(&zombie->sibling);
+        if (event) {
+            if (reap) {
+                list_del(&event->sibling);
+                list_init(&event->sibling);
+            }
             spin_unlock(&proc_tree_lock);
-            int cpid = zombie->pid;
+            int cpid = event->pid;
             struct rusage ru;
             if (rusage_ptr)
-                rusage_of_proc(zombie, &ru, false);
-            int status = proc_reap(zombie);
+                rusage_of_proc(event, &ru, false);
+            int status = reap ? proc_reap(event) : event_status;
             if (status_ptr)
                 *(int *)status_ptr = status;
             if (rusage_ptr)

@@ -49,14 +49,19 @@ static void echo(struct tty *t, const char *s, size_t n)
         t->output(t, s, n);
 }
 
-/* Line discipline with the lock held. Returns true if control C must be
- * delivered to the foreground group. */
-static bool input_locked(struct tty *t, char c)
+/* Line discipline with the lock held. Returns the signal that must be
+ * delivered to the foreground group, or zero for ordinary input. */
+static int input_locked(struct tty *t, char c)
 {
     if (c == 0x03 && (t->lflag & ISIG)) {
         echo(t, "^C\n", 3);
         t->line_len = 0;
-        return true;
+        return SIGINT;
+    }
+    if (c == 0x1a && (t->lflag & ISIG)) {
+        echo(t, "^Z\n", 3);
+        t->line_len = 0;
+        return SIGTSTP;
     }
     if (!(t->lflag & ICANON)) {
         echo(t, &c, 1);
@@ -105,17 +110,17 @@ static bool input_locked(struct tty *t, char c)
 void tty_input_char(struct tty *t, char c)
 {
     spin_lock(&t->lock);
-    bool intr = input_locked(t, c);
+    int sig = input_locked(t, c);
     int pgid = t->fg_pgid;
-    if (intr && t->defer_signals) {
-        t->intr_pending = true;
+    if (sig && t->defer_signals) {
+        t->signal_pending = sig;
         waitq_wake_all(&tty_intr_waitq);
     }
     waitq_wake_all(&t->rd_waitq);
     spin_unlock(&t->lock);
     poll_notify();
-    if (intr && !t->defer_signals && pgid > 0)
-        signal_send_pgrp(pgid, SIGINT);
+    if (sig && !t->defer_signals && pgid > 0)
+        signal_send_pgrp(pgid, sig);
 }
 
 void tty_input_raw(struct tty *t, const char *s, size_t n)
@@ -132,6 +137,17 @@ long tty_read(struct tty *t, char *buf, size_t n)
 {
     if (n == 0)
         return 0;
+    struct proc *p = thread_current()->proc;
+    if (p != &kernel_proc) {
+        spin_lock(&proc_tree_lock);
+        int pgid = p->pgid;
+        spin_unlock(&proc_tree_lock);
+        int foreground = tty_get_fg_pgid(t);
+        if (foreground > 0 && pgid != foreground) {
+            signal_send_pgrp(pgid, SIGTTIN);
+            return -EINTR;
+        }
+    }
     char tmp[TTY_LINE_MAX];
     spin_lock(&t->lock);
     while (t->count == 0) {
@@ -293,20 +309,21 @@ long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg)
     return -ENOTTY;
 }
 
-/* Console control C arrives in the keyboard interrupt, where process
- * locks cannot be taken; this thread posts the signal. */
+/* Console control characters arrive in the keyboard interrupt, where
+ * process locks cannot be taken; this thread posts the signal. */
 static void ttyd(void *arg)
 {
     struct tty *t = &console_tty;
     for (;;) {
         spin_lock(&t->lock);
-        while (!t->intr_pending)
+        while (!t->signal_pending)
             waitq_wait(&tty_intr_waitq, &t->lock);
-        t->intr_pending = false;
+        int sig = t->signal_pending;
+        t->signal_pending = 0;
         int pgid = t->fg_pgid;
         spin_unlock(&t->lock);
         if (pgid > 0)
-            signal_send_pgrp(pgid, SIGINT);
+            signal_send_pgrp(pgid, sig);
     }
 }
 

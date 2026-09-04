@@ -177,6 +177,35 @@ static void test_shell2(void)
 }
 KTEST_DEFINE("shell2", test_shell2);
 
+/* Foreground process groups can be stopped with control Z, resumed in
+ * the background, and brought back to the terminal with fg. */
+static void test_jobcontrol(void)
+{
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/sh");
+    sleep_ms(500);
+    type_line("yes > /dev/null\n");
+    sleep_ms(500);
+    type_ctrl('z');
+    sleep_ms(300);
+    type_line("jobs\n");
+    sleep_ms(200);
+    type_line("bg\n");
+    sleep_ms(200);
+    type_line("jobs\n");
+    sleep_ms(200);
+    type_line("fg\n");
+    sleep_ms(300);
+    type_ctrl('c');
+    sleep_ms(300);
+    type_line("exit 6\n");
+    int status = proc_reap(p);
+    kprintf("sh exited with status 0x%x\n", status);
+    ktest_assert(status == PROC_STATUS_EXITED(6), "sh status 0x%x", status);
+}
+KTEST_DEFINE("jobcontrol", test_jobcontrol);
+
 /* M16: the editor in raw keyboard mode. Two lines are queued before it
  * starts; cursor up, Home, an insertion, save and quit follow once it
  * runs. */

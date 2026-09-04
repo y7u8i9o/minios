@@ -136,7 +136,8 @@ void sched_add(struct thread *t)
 void sched_wake(struct thread *t)
 {
     spin_lock(&sched_lock);
-    if (t->state == THREAD_BLOCKED || t->state == THREAD_SLEEPING) {
+    if (t->state == THREAD_BLOCKED || t->state == THREAD_SLEEPING ||
+        t->state == THREAD_STOPPED) {
         if (t->state == THREAD_SLEEPING)
             list_del(&t->run_link);
         /* Blocking before the slice ran out earns a promotion. */

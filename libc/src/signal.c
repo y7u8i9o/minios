@@ -67,6 +67,11 @@ const char *strsignal(int sig)
     case SIGALRM: return "Alarm clock";
     case SIGTERM: return "Terminated";
     case SIGCHLD: return "Child exited";
+    case SIGCONT: return "Continued";
+    case SIGSTOP: return "Stopped (signal)";
+    case SIGTSTP: return "Stopped";
+    case SIGTTIN: return "Stopped (tty input)";
+    case SIGTTOU: return "Stopped (tty output)";
     default: return "Unknown signal";
     }
 }

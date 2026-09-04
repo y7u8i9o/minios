@@ -13,19 +13,18 @@ they need (raw keyboard mode, console cursor control, a sleep call).
   delivered as soon as it is typed and the cursor keys (arrows, Home,
   End, PageUp, PageDown, Delete) arrive as VT100 escape sequences; the
   Escape key itself sends `ESC`. Leaving canonical mode releases a
-  partially typed line. Control C keeps sending `SIGINT` while `ISIG` is
-  set. libc provides `tcgetattr` and `tcsetattr` (`termios.h`) and
+  partially typed line. Control C sends `SIGINT` and control Z sends
+  `SIGTSTP` while `ISIG` is set. libc provides `tcgetattr` and `tcsetattr` (`termios.h`) and
   `ioctl` (`sys/ioctl.h`).
 - Console escapes. `drivers/fbcon.c` parses CSI sequences: `ESC[row;colH`
   (cursor position), `ESC[2J` (clear screen), `ESC[J` (clear to the end
   of the screen), `ESC[K` (clear to the end of the line) and `ESC[nA` to
   `ESC[nD` (cursor movement). Unknown sequences are ignored. The serial
   console passes the bytes through to the host terminal.
-- `sleep_ms(ms)` blocks the calling thread; it is not interruptible by
-  signals, which are delivered when it returns. libc exposes `sleep`,
-  `usleep` and `sleep_ms`.
-- `wait4` accepts `WNOHANG` and negative pids for process groups, which
-  the shell uses to reap background jobs without blocking.
+- `sleep_ms(ms)` blocks the calling thread until its deadline or a signal.
+  libc exposes `sleep`, `usleep` and `sleep_ms`.
+- `wait4` accepts `WNOHANG`, `WUNTRACED`, `WCONTINUED`, and negative pids
+  for process groups. Stop and continue events do not reap the child.
 - `SIGHUP` to init requests `RB_HALT`.
 
 ## Shell
@@ -44,12 +43,15 @@ runs command lists.
 - Lists: `;`, `&&`, `||` and a trailing `&`. Pipelines with `|`;
   redirections `<`, `>`, `>>` per command; redirected builtins run in a
   child.
-- Background jobs get their own process group with standard input from
-  `/dev/null`; `[n] pid` is printed at start and `[n] Done` when the
-  shell notices completion (before each prompt, on `jobs` and on
-  `wait`). Foreground pipelines own the console through `tcsetpgrp`.
-- Builtins: `cd`, `exit`, `pwd`, `export`, `unset`, `set`, `jobs`,
-  `wait`, `true`, `false`, `help`.
+- Every pipeline gets its own process group. Foreground pipelines own the
+  console through `tcsetpgrp`; control Z stops them and records a job.
+  Interactive background readers are stopped with `SIGTTIN`. `jobs`
+  reports Running and Stopped state, `bg [%n]` continues a job without
+  giving it the terminal, and `fg [%n]` gives it the terminal and waits.
+  Non-interactive background commands without redirection retain
+  `/dev/null` as standard input.
+- Builtins: `cd`, `exit`, `pwd`, `export`, `unset`, `set`, `jobs`, `fg`,
+  `bg`, `wait`, `true`, `false`, `ulimit`, `help`.
 - `sh file args...` runs a script with `$1`.. bound, `sh -c 'cmd'` runs
   one line. An interactive shell ignores `SIGINT` and `SIGPIPE` and
   restores the defaults in its children. `exit` from the last shell
@@ -70,8 +72,12 @@ Added after M18, all in `user/coreutils/`:
   (`-r -n -u`), `uniq` (`-c -d`), `tr` (ranges, escapes, `-d -s`), `cut`
   (`-d -f`, `-c`), `rev`, `nl`, `tee` (`-a`), `seq`, `yes`, `printf`,
   `cmp`, `diff` (longest common subsequence, `<`/`>` output), `more`
-  (pager, space, enter, q), `banner` (letters rendered from the GUI
-  font).
+  (forward pager), `pager` (full-screen forward/backward navigation and
+  search), `find` (name, type and depth tests, NUL output and `-exec`),
+  `xargs` (quoted and NUL input, batching and replacement), `gzip`
+  (interoperable DEFLATE compression/decompression with CRC checking),
+  and `man` (section lookup, whatis/apropos search and installed pages),
+  `banner` (letters rendered from the GUI font).
 - System: `env`, `printenv`, `test` (string, integer and file tests,
   `!`), `expr` (integer arithmetic and comparisons), `which`, `stat`,
   `ln`, `du` (`-s`), `free` (`/dev/meminfo`), `uptime` (time since boot
@@ -180,6 +186,9 @@ evaluated directly; errors report the line number and exit with status
   exit status 7.
 - `shell2` types an interactive session: an assignment, quoting, a
   background job with its `Done` report, `&&`/`||` and a pipeline.
+- `jobcontrol` stops a foreground process group with control Z, checks `jobs`,
+  resumes it with `bg`, returns it with `fg`, and terminates it with
+  control C.
 - `editor` starts `edit` on a new file with two lines queued, waits for
   raw mode, sends cursor up, Home, an insertion, control S and control
   Q, then checks the file contents and that canonical mode was restored.

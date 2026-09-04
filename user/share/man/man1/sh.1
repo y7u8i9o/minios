@@ -1,0 +1,29 @@
+SH(1)                       User Commands                      SH(1)
+
+NAME
+    sh - MiniOS command interpreter
+
+SYNOPSIS
+    sh [-c command [argument...]]
+    sh [script [argument...]]
+
+DESCRIPTION
+    sh reads commands interactively, from a script, or from -c. It supports
+    pipelines, foreground and background process groups, redirections, quoted
+    words, parameter expansion, command substitution, and conditional lists.
+
+JOB CONTROL
+    Append & to run a pipeline in the background. Ctrl-Z stops the foreground
+    pipeline. jobs lists jobs; bg [%job] resumes a job in the background; fg
+    [%job] resumes it in the foreground. With no operand, fg and bg select the
+    most recently allocated job. A numeric job may be written as 2 or %2.
+
+BUILTINS
+    cd, exit, pwd, export, unset, set, jobs, fg, bg, wait, true, false,
+    ulimit, help.
+
+EXPANSIONS
+    $NAME, ${NAME}, $?, $$, $#, $0 through $9, $@, and $(command).
+
+SEE ALSO
+    find(1), xargs(1), pager(1), man(1)

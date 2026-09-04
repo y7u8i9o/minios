@@ -11,7 +11,8 @@ the thread itself. Signal numbers and `struct sigaction` are defined in
 `signal_send(p, sig)` is the single entry point. `SIGKILL` terminates
 the process immediately through `proc_begin_exit`. Otherwise the
 disposition decides: a signal that is ignored, or whose default action is
-to ignore (`SIGCHLD`), is dropped; any other signal sets its pending bit
+to ignore (`SIGCHLD`, `SIGWINCH`, and `SIGCONT` after it performs the
+continue action), is dropped; any other signal sets its pending bit
 and wakes threads blocked in the kernel that do not block it, using
 `waitq_interrupt`. Process 1 is never terminated by a default action: a
 signal without a handler is dropped and `SIGKILL` is refused, so a stray
@@ -29,9 +30,13 @@ set. `exec` resets caught signals to the default and keeps ignored ones.
 
 `signal_deliver` runs on every return to user mode, after the exit check
 in `syscall_dispatch` and `trap_dispatch`. It takes the lowest pending
-unblocked signal and clears it. The default action for every signal
-except `SIGCHLD` terminates the process with status
-`PROC_STATUS_SIGNALED(sig)`, which `wait4` reports.
+unblocked signal and clears it. The default action for every signal except
+the ignored signals and the job-control stop signals terminates the process
+with status `PROC_STATUS_SIGNALED(sig)`, which `wait4` reports. `SIGSTOP`,
+`SIGTSTP`, `SIGTTIN`, and `SIGTTOU` stop every thread in the process;
+`SIGCONT` returns stopped threads to the run queues. `SIGSTOP` cannot be
+caught, ignored, or blocked. `wait4` reports these transitions with
+`WUNTRACED` and `WCONTINUED` without reaping the process.
 
 For a handler the kernel pushes a `struct sigframe` on the user stack,
 below the 128 byte red zone and 16 byte aligned as after a call: the
@@ -59,20 +64,24 @@ signal 0 to probe), `setpgid`, `getpgid`, `tcsetpgrp`, `tcgetpgrp` (the
 console is the only terminal, the descriptor is ignored) and `reboot`.
 libc adds `signal`, `raise`, the `sigset_t` helpers and `strsignal`.
 
-## Process groups and control C
+## Process groups and terminal job control
 
 Each process has a group id under `proc_tree_lock`, initially its own
 pid, inherited across `fork`. The keyboard line discipline treats control
-C as an interrupt: it echoes `^C`, discards the partial line and wakes
-the `ttyd` kernel thread, which sends `SIGINT` to the foreground group
+C as an interrupt and control Z as a stop request: it echoes the control
+key, discards the partial line and wakes the `ttyd` kernel thread, which
+sends `SIGINT` or `SIGTSTP` to the foreground group
 recorded by `tcsetpgrp`. Posting a signal takes process locks, which is
 why it happens in a thread rather than in the interrupt handler.
 
-The shell ignores `SIGINT` and `SIGPIPE` itself, puts every pipeline into
-the group of its first process, makes that group the foreground group
-while the pipeline runs, restores the defaults in each child before
-`exec`, and takes the console back afterwards. `init` puts the shell
-into its own group.
+The shell ignores `SIGINT`, `SIGPIPE`, `SIGTSTP`, `SIGTTIN`, and `SIGTTOU`
+itself, puts every pipeline into the group of its first process, makes that
+group the foreground group while the pipeline runs, restores the defaults
+in each child before `exec`, and takes the console back afterwards. A
+process group that reads the console while it is not foreground receives
+`SIGTTIN`. The `fg` and `bg` builtins continue stopped groups with
+`SIGCONT`; only `fg` transfers the console. `init` puts the shell into its
+own group.
 
 ## Process listing
 
@@ -106,6 +115,8 @@ waits after the ACPI write so the ACPI exit is not overtaken by the
   feeds control C through the keyboard driver and expects
   `[cat terminated by signal 2]`, then checks `ps` output and `kill` on a
   missing pid.
+- `jobcontrol` exercises control Z, stopped/continued wait statuses,
+  `jobs`, `bg`, `fg`, background state, and final control C delivery.
 - `shutdown_cmd` types `shutdown` into a session run by the real init and
   verifies on the host that QEMU exited through ACPI with a clean image
   containing the file written before.

@@ -1,0 +1,25 @@
+MAN(1)                      User Commands                     MAN(1)
+
+NAME
+    man - display MiniOS manual pages
+
+SYNOPSIS
+    man [-w] [section] name
+    man -k keyword
+    man -f name
+
+DESCRIPTION
+    man searches /usr/share/man by section and displays a page through pager
+    when output is a terminal. MANPAGER, then PAGER, selects another pager.
+
+OPTIONS
+    -w   print the selected manual page path
+    -k   search page names and one-line descriptions
+    -f   print the one-line description for an exact page name
+
+SECTIONS
+    1 user commands, 2 system calls, 3 library interfaces, 4 special files,
+    5 file formats, 7 conventions, and 8 administration commands.
+
+SEE ALSO
+    pager(1)

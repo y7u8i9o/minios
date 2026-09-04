@@ -1,0 +1,26 @@
+XARGS(1)                    User Commands                   XARGS(1)
+
+NAME
+    xargs - build and execute command lines from standard input
+
+SYNOPSIS
+    xargs [-0rt] [-n count] [-s size] [-I replace] [command [argument...]]
+
+DESCRIPTION
+    xargs parses quoted, backslash-escaped, whitespace-separated input and
+    appends items to command. The default command is echo.
+
+OPTIONS
+    -0           read NUL-separated items without quote processing
+    -n count     use at most count input items per invocation
+    -s size      limit the approximate command-line byte count
+    -r           do not run the command when input is empty
+    -t           print each command before executing it
+    -I replace   read one item per line and replace occurrences in arguments
+
+EXIT STATUS
+    0 indicates success, 123 a command failure, 126 an unexecutable command,
+    and 127 a command that could not be found.
+
+SEE ALSO
+    find(1)

@@ -26,7 +26,7 @@ struct tty {
     char ready[TTY_READY_MAX];      /* bytes for readers */
     size_t head, tail, count;
     bool hangup;                    /* readers get end of file */
-    bool intr_pending;              /* control C seen, delivered by ttyd */
+    int signal_pending;             /* control key seen, delivered by ttyd */
     bool defer_signals;             /* input arrives in interrupt context */
     tty_output_fn output;           /* echo and control sequences */
 };
@@ -52,6 +52,6 @@ size_t tty_available(struct tty *t);
 
 /* The console terminal, fed by the keyboard driver, output to the console. */
 extern struct tty console_tty;
-/* Thread turning console control C into SIGINT. Needs the scheduler. */
+/* Thread turning console control keys into signals. Needs the scheduler. */
 void tty_start_daemon(void);
 void console_tty_init(void);

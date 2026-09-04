@@ -8,7 +8,8 @@
 static const struct { const char *name; int sig; } names[] = {
     { "HUP", SIGHUP }, { "INT", SIGINT }, { "KILL", SIGKILL }, { "USR1", SIGUSR1 },
     { "SEGV", SIGSEGV }, { "USR2", SIGUSR2 }, { "PIPE", SIGPIPE }, { "TERM", SIGTERM },
-    { "CHLD", SIGCHLD },
+    { "CHLD", SIGCHLD }, { "CONT", SIGCONT }, { "STOP", SIGSTOP },
+    { "TSTP", SIGTSTP }, { "TTIN", SIGTTIN }, { "TTOU", SIGTTOU },
 };
 
 int main(int argc, char **argv)

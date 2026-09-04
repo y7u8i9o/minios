@@ -32,6 +32,10 @@ struct proc {
     struct list_head children;
     struct list_head sibling;       /* parent->children */
     enum proc_state state;
+    bool stopped;                   /* protected by proc_tree_lock */
+    bool stop_reported;             /* wait4 has reported this stop */
+    bool continued;                 /* continuation waiting for wait4 */
+    int stop_signal;
     bool exiting;                   /* threads must exit at the next kernel exit */
     int exit_status;                /* wait4 status encoding */
     struct spinlock lock;
@@ -58,6 +62,8 @@ struct proc {
 /* wait4 status encoding. */
 #define PROC_STATUS_EXITED(code)   (((code) & 0xff) << 8)
 #define PROC_STATUS_SIGNALED(sig)  ((sig) & 0x7f)
+#define PROC_STATUS_STOPPED(sig)   ((((sig) & 0xff) << 8) | 0x7f)
+#define PROC_STATUS_CONTINUED      0xffff
 
 /* Process 0, owner of every kernel thread. */
 extern struct proc kernel_proc;

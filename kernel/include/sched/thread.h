@@ -11,6 +11,7 @@ enum thread_state {
     THREAD_RUNNING,
     THREAD_BLOCKED,     /* on a wait queue */
     THREAD_SLEEPING,    /* on the sleep list, woken by the timer */
+    THREAD_STOPPED,     /* process stopped by job-control signal */
     THREAD_ZOMBIE,      /* finished, waiting to be joined */
 };
 

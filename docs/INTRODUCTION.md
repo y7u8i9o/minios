@@ -35,7 +35,7 @@ MiniOS is a monolithic x86_64 kernel written in C, booted by the Limine bootload
 ### Interprocess Communication
 
 - Pipes with shell redirection support
-- POSIX style signals (`SIGKILL`, `SIGTERM`, `SIGINT`, `SIGCHLD`, `SIGSEGV`, `SIGUSR1`, `SIGUSR2`)
+- POSIX style signals, including stop/continue job-control signals
 - Shared memory objects
 - Message queues
 
@@ -80,8 +80,10 @@ MiniOS is a monolithic x86_64 kernel written in C, booted by the Limine bootload
 - Desktop-session audio server, a minimal `playtone` client and an interactive
   subtractive synthesizer
 - User-space scalar libm for float, double and x87 long double, hexadecimal and decimal conversion, floating-environment control, printf floating formatting, and an SSE2 `f32x4`/`f64x2` vector API with vectorized array operations
-- Shell with quoting, environment variables, background jobs, pipes and redirection
-- Coreutils: `ls`, `cat`, `echo`, `mkdir`, `rm`, `rmdir`, `cp`, `mv`, `touch`, `pwd`, `ps`, `kill`, `mount`, `sync`, `wc`, `head`, `hexdump`, `sleep`, `clear`, `shutdown`, `reboot`, `halt`
+- Shell with quoting, environment variables, pipelines, redirection, and
+  foreground/background job control (`jobs`, `fg`, `bg`, control Z)
+- Userland tools include `find`, `xargs`, `pager`, `gzip`, `man`, and the
+  conventional file, text, process, and system utilities
 - Modal text editor (`edit`)
 - Scripting interpreter (`mint`)
 - GUI applications: terminal emulator, file browser, text viewer, RPN/algebraic

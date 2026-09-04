@@ -1,0 +1,10 @@
+\^Z
+\[1\] Stopped  yes > /dev/null
+\[1\] Stopped  yes > /dev/null
+\[1\] [0-9]+  yes > /dev/null
+\[1\] Running  yes > /dev/null
+yes > /dev/null
+\^C
+\[yes > /dev/null terminated by signal 2\]
+sh exited with status 0x600
+TEST PASS

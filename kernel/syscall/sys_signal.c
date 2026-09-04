@@ -19,7 +19,7 @@ long sys_sigaction(struct trapframe *tf)
 {
     int sig = (int)SYSARG0(tf);
     uintptr_t act = SYSARG1(tf), oldact = SYSARG2(tf);
-    if (sig < 1 || sig >= NSIG || sig == SIGKILL)
+    if (sig < 1 || sig >= NSIG || sig == SIGKILL || sig == SIGSTOP)
         return -EINVAL;
     if (act && !user_range_ok(act, sizeof(struct sigaction), false))
         return -EFAULT;
@@ -65,7 +65,7 @@ long sys_sigprocmask(struct trapframe *tf)
         case SIG_SETMASK: t->sig_mask = s; break;
         default: return -EINVAL;
         }
-        t->sig_mask &= ~(1UL << SIGKILL);
+        t->sig_mask &= ~((1UL << SIGKILL) | (1UL << SIGSTOP));
     }
     if (oldset)
         *(uint64_t *)oldset = old;
