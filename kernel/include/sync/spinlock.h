@@ -2,6 +2,7 @@
 #include <kernel.h>
 
 struct cpu;
+struct lockstat;
 
 /* Spinlock. spin_lock disables interrupts through push_cli so a lock can be
  * taken from thread context and from interrupt handlers alike. Ordering
@@ -12,6 +13,10 @@ struct spinlock {
 #if CONFIG_LOCKDEBUG
     struct cpu *cpu;        /* owning CPU while locked */
     void *caller;           /* return address of the acquiring spin_lock */
+#endif
+#if CONFIG_LOCKSTAT
+    struct lockstat *stat;  /* per name counters, resolved at the first acquisition */
+    uint64_t acquired_tsc;  /* time of the current acquisition */
 #endif
 };
 
@@ -34,3 +39,21 @@ bool spin_holding(struct spinlock *lk);
  * must restore the interrupted state precisely. */
 void spin_lock_irqsave(struct spinlock *lk, unsigned long *flags);
 void spin_unlock_irqrestore(struct spinlock *lk, unsigned long flags);
+
+/* Lock statistics (CONFIG_LOCKSTAT): counters aggregated by lock name,
+ * read through /dev/lockstat. See docs/design/lockstat.md. */
+struct lockstat {
+    const char *name;
+    uint64_t acquires;      /* successful acquisitions */
+    uint64_t contended;     /* acquisitions that found the lock taken */
+    uint64_t spin_cycles;   /* TSC cycles spent waiting */
+    uint64_t hold_cycles;   /* TSC cycles held, summed */
+    uint64_t max_hold;      /* longest single hold */
+    void *max_hold_caller;  /* acquirer of the longest hold (CONFIG_LOCKDEBUG) */
+};
+#define LOCKSTAT_MAX 128
+/* The table and the number of names in use, for /dev/lockstat. */
+extern struct lockstat lockstat_table[LOCKSTAT_MAX];
+extern unsigned lockstat_count;
+void lockstat_reset(void);
+void lockstat_init(void);

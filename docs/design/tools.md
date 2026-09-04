@@ -18,7 +18,9 @@ without a selection) through `/dev/profile`, the table lists the hottest
 symbols with their share, refreshed every second, the checkbox includes
 or excludes kernel samples, and Stop freezes the result. User addresses
 are symbolized with the `.symtab` of `/bin/<name>` of the sampled process,
-kernel addresses with `/dev/ksyms` (see `profile.md`).
+kernel addresses with `/dev/ksyms` (see `profile.md`). Kernel samples
+taken inside a spinlock section are attributed to the lock holder and
+marked `(locked)` since M42.
 
 ## logview
 

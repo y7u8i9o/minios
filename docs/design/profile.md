@@ -45,6 +45,17 @@ address to the preceding symbol up to the start of the next one, so return
 addresses after `noreturn` calls resolve) and keeps a histogram of string
 keys (`prof_hist_add`, `prof_hist_sort`).
 
+## Lock attribution (M42)
+
+A kernel sample whose innermost frames are the lock primitives
+(`pop_cli`, `push_cli`, `spin_lock`, `spin_unlock` and the `irqsave`
+variants) is attributed by `prof_attribute` to the first frame outside
+them and marked `(locked)`: the timer interrupt was pending while
+interrupts were disabled and fired on the `sti` of the release. `prof -a`
+samples every process, prints a table of samples per process and
+symbolizes each sample with the binary of its own process. See
+`lockstat.md`.
+
 ## Tools
 
 `prof command args...` starts the command behind a pipe so sampling is on

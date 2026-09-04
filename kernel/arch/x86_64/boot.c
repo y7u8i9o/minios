@@ -13,6 +13,7 @@
 #include <drivers/fbcon.h>
 #include <debug/symbols.h>
 #include <debug/profile.h>
+#include <sync/spinlock.h>
 #include <debug/panic.h>
 #include <mm/memlayout.h>
 #include <mm/pmm.h>
@@ -262,6 +263,7 @@ __noreturn void kmain(void)
     virtio_blk_init();
     swap_init();
     profile_init();
+    lockstat_init();
     syscall_init();
     proc_init();
     futex_init();

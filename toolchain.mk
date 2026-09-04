@@ -15,12 +15,14 @@ XORRISO ?= xorriso
 CONFIG_TESTS      ?= 1   # compile kernel self tests, selected with test=<name>
 CONFIG_PANIC_EXIT ?= 1   # panic exits QEMU through isa-debug-exit instead of halting
 CONFIG_LOCKDEBUG  ?= 1   # spinlock owner tracking and misuse detection
+CONFIG_LOCKSTAT   ?= 1   # per lock name acquisition, contention and hold time counters, /dev/lockstat
 CONFIG_SLABDEBUG  ?= 1   # slab redzones and poisoning on free
 CONFIG_LOG_LEVEL  ?= 1   # compile time klog threshold: 0 debug, 1 info, 2 warn, 3 error
 
 CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
                -DCONFIG_PANIC_EXIT=$(strip $(CONFIG_PANIC_EXIT)) \
                -DCONFIG_LOCKDEBUG=$(strip $(CONFIG_LOCKDEBUG)) \
+               -DCONFIG_LOCKSTAT=$(strip $(CONFIG_LOCKSTAT)) \
                -DCONFIG_SLABDEBUG=$(strip $(CONFIG_SLABDEBUG)) \
                -DCONFIG_LOG_LEVEL=$(strip $(CONFIG_LOG_LEVEL))
 

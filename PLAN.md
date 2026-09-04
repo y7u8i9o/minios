@@ -1278,6 +1278,90 @@ kernel symbols, call chains reaching `main`, filtering by pid, the
 divider, stop and restart, and ring overflow accounting) and the
 existing `gui_tools` case with sysmon.
 
+### M42. Lock statistics and lock aware profiling (completed 2026-09-04)
+
+1. `CONFIG_LOCKSTAT` (`kernel/sync/spinlock.c`, `kernel/sync/lockstat.c`):
+   every spinlock counts acquisitions, contended acquisitions, cycles
+   spent spinning, cycles held and the longest hold with its acquirer,
+   aggregated by lock name; `/dev/lockstat` prints the table and a write
+   resets it.
+2. The profiler attributes kernel samples taken with interrupts disabled
+   to the code that held the lock (`prof_attribute` in libc, marked
+   `(locked)` in `prof` and sysmon); `prof -a` samples every process with
+   a per process table.
+3. `/dev/proc` no longer walks page tables under `proc_list_lock`.
+   `docs/design/lockstat.md` holds the measurements of the desktop and
+   `docs/design/lockfree.md` the design and plan for M43 to M46.
+
+Tests: `prof_gui` (the desktop headless with a terminal, `mandel`,
+sysmon and the clock, pointer motion, `prof -k -c -a` for ten seconds and
+the lock table on the serial log).
+
+### M43. Lock-free system call paths
+
+1. `kernel/sync/atomic.h`, `percpu.h`, `rcu.h`, `mpsc.h`: reference counts
+   with `refcount_inc_not_zero`, per CPU counters, RCU for the
+   non-preemptible kernel (grace periods counted at context switches and
+   in the idle loop, deferred frees on a per CPU MPSC list reclaimed from
+   the tick) and the MPSC stack it needs.
+2. The signal and exit checks on system call entry and exit read atomic
+   words and take `proc.lock` only when a signal is pending.
+3. `struct file` reference counts are atomic and `files_lock` is removed;
+   `fdtable_get` looks descriptors up without the table lock through an
+   acquire load and `refcount_inc_not_zero`, closed files are freed
+   through RCU.
+4. `user_range_ok` walks an RCU protected region list without
+   `vmspace.lock`; if time allows, `copy_from_user` and `copy_to_user`
+   with a fault fixup table replace the walk.
+5. `poll` registers on a wait queue per object and producers wake only
+   their own queue; `poll_notify`, `poll_lock` and the global generation
+   are removed; readiness checks read atomic counts.
+   `docs/design/lockfree.md` gains the implemented details.
+
+Tests: `lockfree` (the primitives on four CPUs: counters, refcounts,
+RCU readers against a writer freeing nodes, the MPSC stack), `poll_wake`
+(one producer wakes only its own consumer, measured with the switch
+counters of `getrusage`), and `prof_gui` with the `proc`, `files_lock`
+and `poll_lock` rows gone.
+
+### M44. Per CPU scheduler
+
+1. One run queue lock per CPU; wakeups for another CPU go through its
+   MPSC list and a reschedule IPI; stealing takes the victim's lock only.
+2. The tick accounts the running thread's slice without a lock; sleepers
+   and the boost are per CPU.
+3. `docs/design/sched.md` and `locking.md` describe the new ordering.
+
+Tests: `sched`, `smp`, `smp_user`, `pthreads` unchanged, plus `prof_gui`
+with no `sched_lock` row and run queue contention under one percent.
+
+### M45. Lock-free byte streams and the console
+
+1. `kernel/sync/ring.h`: the single producer, single consumer ring used
+   by pipes, pseudo terminals, the console tty, the socket data path, the
+   kernel log, the mouse and keyboard event rings and one profiler ring
+   per CPU.
+2. `console_write` appends to the log ring and a console thread drives
+   the UART and the framebuffer console; the panic path writes directly.
+
+Tests: `pipes`, `pty`, `sockets`, `kbd`, `mouse`, `profile` unchanged,
+`ring` (producer and consumer on different CPUs, wrap around, full and
+empty transitions), and `prof_gui` with the `console` row under one
+millisecond of hold time.
+
+### M46. Per CPU allocators and address space counters
+
+1. Per CPU magazines in front of the slab caches and per CPU single page
+   lists in front of the buddy allocator; allocator statistics as per CPU
+   counters.
+2. `vma_populate` zeroes pages before taking the space lock; a per CPU
+   resident counter per address space replaces `vma_count_resident`;
+   `munmap` batches its TLB shootdowns.
+
+Tests: `slab`, `pmm`, `vmm`, `swap`, `hugepages` unchanged, `prof_gui`
+with `kmalloc-*` and `pmm_lock` rows near zero for the steady state and
+`vmspace` holds under 100 microseconds.
+
 ## 4. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

@@ -1,6 +1,7 @@
 /* prof: sampling profiler front end.
  *   prof [-d seconds] [-k] [-c] [-n top] command [args...]
  *   prof -p pid [-d seconds] [-k] [-c] [-n top]
+ *   prof -a [-d seconds] [-k] [-c] [-n top]        (every process)
  * Samples come from /dev/profile at the timer rate on every CPU. User
  * addresses are symbolized with the .symtab of /bin/<name>, kernel
  * addresses (-k) with /dev/ksyms. -c prints the most frequent call chains. */
@@ -17,8 +18,32 @@
 
 static struct prof_hist flat, chains;
 static struct prof_symtab *usyms, *ksyms;
+static int all_pids;
+static struct prof_hist per_proc;   /* -a: samples per process, key "pid name" */
+/* -a: one symbol table per process name, found through /dev/proc. */
+static struct { int pid; struct prof_symtab *syms; } pid_syms[64];
+static int npid_syms;
+static char *proc_name(pid_t pid);
+
+static struct prof_symtab *syms_for_pid(int pid)
+{
+    if (!all_pids)
+        return usyms;
+    for (int i = 0; i < npid_syms; i++)
+        if (pid_syms[i].pid == pid)
+            return pid_syms[i].syms;
+    if (npid_syms == 64)
+        return NULL;
+    char *name = proc_name(pid);
+    char path[128];
+    snprintf(path, sizeof path, "/bin/%s", name ? name : "?");
+    pid_syms[npid_syms].pid = pid;
+    pid_syms[npid_syms].syms = name ? prof_symtab_load_elf(path) : NULL;
+    return pid_syms[npid_syms++].syms;
+}
 static int want_kernel, want_chains;
 static int gate[2];             /* the child waits here until sampling runs */
+static unsigned locked_samples; /* kernel samples taken with interrupts disabled */
 
 static void consume(int fd)
 {
@@ -30,14 +55,28 @@ static void consume(int fd)
             int kernel = !(s->flags & PROF_FLAG_USER);
             if (kernel && !want_kernel)
                 continue;
+            if (all_pids && (pid_t)s->pid == getpid())
+                continue;           /* not the profiler itself */
+            if (all_pids) {
+                char key[64];
+                char *pname = proc_name((pid_t)s->pid);
+                snprintf(key, sizeof key, "%u %s", s->pid, pname ? pname : "?");
+                prof_hist_add(&per_proc, key, kernel);
+            }
             char name[128];
-            prof_format_addr(usyms, ksyms, kernel, s->chain[0], 0, name, sizeof name);
+            int locked;
+            struct prof_symtab *us = syms_for_pid((int)s->pid);
+            prof_attribute(us, ksyms, s, &locked, name, sizeof name);
+            if (locked) {
+                locked_samples++;
+                strncat(name, " (locked)", sizeof name - strlen(name) - 1);
+            }
             prof_hist_add(&flat, name, kernel);
             if (want_chains) {
                 char chain[1024];
                 size_t used = 0;
                 for (unsigned d = 0; d < s->depth && used < sizeof chain - 130; d++) {
-                    prof_format_addr(usyms, ksyms, kernel, s->chain[d], 0, name, sizeof name);
+                    prof_format_addr(us, ksyms, kernel, s->chain[d], 0, name, sizeof name);
                     used += (size_t)snprintf(chain + used, sizeof chain - used, "%s%s", d ? " < " : "", name);
                 }
                 prof_hist_add(&chains, chain, kernel);
@@ -104,11 +143,12 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) duration = atof(argv[++i]);
         else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) top = atoi(argv[++i]);
         else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) pid = atoi(argv[++i]);
+        else if (strcmp(argv[i], "-a") == 0) all_pids = 1;
         else usage();
     }
-    if (!pid && i >= argc)
+    if (!pid && !all_pids && i >= argc)
         usage();
-    if (pid && duration <= 0)
+    if ((pid || all_pids) && duration <= 0)
         duration = 5;
 
     int fd = prof_open();
@@ -118,7 +158,9 @@ int main(int argc, char **argv)
     }
     const char *binary_name;
     pid_t child = 0;
-    if (pid) {
+    if (all_pids) {
+        binary_name = "all processes";
+    } else if (pid) {
         binary_name = proc_name(pid);
         if (!binary_name) {
             fprintf(stderr, "prof: no process %d\n", pid);
@@ -151,13 +193,16 @@ int main(int argc, char **argv)
     }
     char path[128];
     snprintf(path, sizeof path, "/bin/%s", binary_name);
-    usyms = prof_symtab_load_elf(path);
-    if (!usyms)
-        fprintf(stderr, "prof: no symbols in %s, user addresses stay numeric\n", path);
+    if (!all_pids) {
+        usyms = prof_symtab_load_elf(path);
+        if (!usyms)
+            fprintf(stderr, "prof: no symbols in %s, user addresses stay numeric\n", path);
+    }
     if (want_kernel)
         ksyms = prof_symtab_load_kernel();
     prof_hist_init(&flat);
     prof_hist_init(&chains);
+    prof_hist_init(&per_proc);
 
     if (prof_start(fd, pid) < 0) {
         fprintf(stderr, "prof: start: %s\n", strerror(errno));
@@ -188,8 +233,10 @@ int main(int argc, char **argv)
     consume(fd);
     struct prof_stats st;
     prof_get_stats(fd, &st);
-    printf("prof: %lu samples, %lu dropped, pid %d (%s)\n", (unsigned long)st.samples, (unsigned long)st.dropped,
-           pid, binary_name);
+    printf("prof: %lu samples, %lu dropped, pid %d (%s), %u kernel samples with interrupts disabled\n",
+           (unsigned long)st.samples, (unsigned long)st.dropped, pid, binary_name, locked_samples);
+    if (all_pids)
+        report(&per_proc, "Samples per process (pid name; [kernel] marks kernel only, [mixed] both modes)", top);
     report(&flat, "Flat profile", top);
     if (want_chains)
         report(&chains, "Call chains", top);

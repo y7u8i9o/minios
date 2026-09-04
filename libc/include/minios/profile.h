@@ -51,6 +51,13 @@ void prof_hist_clear(struct prof_hist *h);
 void prof_hist_add(struct prof_hist *h, const char *key, int kernel);
 /* Sort buckets by descending count. */
 void prof_hist_sort(struct prof_hist *h);
+/* Attribute a sample to a symbol. A kernel sample whose innermost frames
+ * are the lock primitives (pop_cli, spin_unlock, ...) is attributed to the
+ * first frame outside them, the code that held the lock, and *locked is
+ * set; the timer interrupt lands in pop_cli when it was pending while
+ * interrupts were disabled. */
+void prof_attribute(const struct prof_symtab *user, const struct prof_symtab *kernel, const struct prof_sample *s,
+                    int *locked, char *buf, size_t size);
 /* Format an address through user and kernel tables: "name+0xoff" or the
  * hexadecimal address. */
 void prof_format_addr(const struct prof_symtab *user, const struct prof_symtab *kernel, int is_kernel,

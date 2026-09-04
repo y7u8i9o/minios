@@ -298,24 +298,59 @@ int proc_collect_pgrp(int pgid, int *pids, int max)
     return n;
 }
 
+/* One row of /dev/proc, copied out of the process under the locks. */
+struct proc_row {
+    int pid, ppid, pgid;
+    bool zombie;
+    uint64_t ticks;
+    struct vmspace *vm;
+    char name[PROC_NAME_LEN];
+};
+
 size_t proc_format_table(char *buf, size_t size)
 {
     size_t off = 0;
     off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %8s %8s %s\n", "PID", "PPID", "PGID", "STATE", "TIME", "RSS", "NAME");
+    /* Snapshot first: counting resident pages walks page tables and must
+     * not run under the process locks. The rows hold pids only, so a
+     * process that exits meanwhile is reported without its size. */
+    enum { MAX_ROWS = 64 };
+    static struct proc_row rows[MAX_ROWS];  /* procdev_read is serialized by the file lock */
+    int n = 0;
     spin_lock(&proc_tree_lock);
     spin_lock(&proc_list_lock);
     struct list_head *pos;
     list_for_each(pos, &proc_list) {
         struct proc *p = list_entry(pos, struct proc, link);
-        if (off >= size - 1)
+        if (n == MAX_ROWS)
             break;
-        uint64_t ticks = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
-        size_t rss = p->vm && p->state != PROC_ZOMBIE ? vma_count_resident(p->vm) * (PAGE_SIZE / 1024) : 0;
-        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", p->pid,
-                                 p->parent ? p->parent->pid : 0, p->pgid,
-                                 p->state == PROC_ZOMBIE ? "zombie" : "running", ticks, rss, p->name);
+        struct proc_row *r = &rows[n++];
+        r->pid = p->pid;
+        r->ppid = p->parent ? p->parent->pid : 0;
+        r->pgid = p->pgid;
+        r->zombie = p->state == PROC_ZOMBIE;
+        r->ticks = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
+        r->vm = r->zombie ? NULL : p->vm;
+        memcpy(r->name, p->name, sizeof r->name);
     }
     spin_unlock(&proc_list_lock);
     spin_unlock(&proc_tree_lock);
+    for (int i = 0; i < n && off < size - 1; i++) {
+        struct proc_row *r = &rows[i];
+        /* The process may have been reaped meanwhile. proc_tree_lock keeps
+         * it from being reaped during the walk (proc_reap takes it) and
+         * sits above vmspace.lock in the lock order; proc_list_lock, a
+         * leaf, is not held while the page tables are walked. */
+        size_t rss = 0;
+        if (r->vm) {
+            spin_lock(&proc_tree_lock);
+            struct proc *p = proc_find(r->pid);
+            if (p && p->state != PROC_ZOMBIE && p->vm == r->vm)
+                rss = vma_count_resident(r->vm) * (PAGE_SIZE / 1024);
+            spin_unlock(&proc_tree_lock);
+        }
+        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", r->pid, r->ppid, r->pgid,
+                                 r->zombie ? "zombie" : "running", r->ticks, rss, r->name);
+    }
     return off < size ? off : size - 1;
 }

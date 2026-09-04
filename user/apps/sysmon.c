@@ -125,8 +125,10 @@ static void prof_consume(int fd, int revents, void *arg)
             if (kernel && !with_kernel)
                 continue;
             char name[96];
-            prof_format_addr(kernel ? NULL : symtab_for(name_of_pid((int)s->pid)), ksyms, kernel, s->chain[0], 0,
-                             name, sizeof name);
+            int locked;
+            prof_attribute(kernel ? NULL : symtab_for(name_of_pid((int)s->pid)), ksyms, s, &locked, name, sizeof name);
+            if (locked)
+                strncat(name, " (locked)", sizeof name - strlen(name) - 1);
             prof_hist_add(&hist, name, kernel);
         }
     }

@@ -298,3 +298,34 @@ void prof_format_addr(const struct prof_symtab *user, const struct prof_symtab *
     else
         snprintf(buf, size, "%s", s->name);
 }
+
+static int is_lock_primitive(const char *name)
+{
+    static const char *const names[] = {
+        "pop_cli", "push_cli", "spin_lock", "spin_unlock", "spin_lock_irqsave", "spin_unlock_irqrestore",
+        "tlb_shootdown_poll", "spin_holding",
+    };
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++)
+        if (strcmp(name, names[i]) == 0)
+            return 1;
+    return 0;
+}
+
+void prof_attribute(const struct prof_symtab *user, const struct prof_symtab *kernel, const struct prof_sample *s,
+                    int *locked, char *buf, size_t size)
+{
+    int is_kernel = !(s->flags & PROF_FLAG_USER);
+    *locked = 0;
+    if (is_kernel && kernel) {
+        for (unsigned d = 0; d < s->depth; d++) {
+            const struct prof_sym *sym = prof_symtab_lookup(kernel, s->chain[d], NULL);
+            if (sym && is_lock_primitive(sym->name)) {
+                *locked = 1;
+                continue;
+            }
+            prof_format_addr(user, kernel, 1, s->chain[d], 0, buf, size);
+            return;
+        }
+    }
+    prof_format_addr(user, kernel, is_kernel, s->chain[0], 0, buf, size);
+}

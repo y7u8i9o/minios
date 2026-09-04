@@ -260,3 +260,15 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   which the sampler calls after releasing it. The sampler also takes the
   interrupted process's `vmspace.lock` through `vmm_translate` while
   walking a user frame chain, with no other lock held.
+
+## M42 additions
+
+- `CONFIG_LOCKSTAT` adds counters to every spinlock; the rows of the
+  statistics table are appended under a raw `xchg` word (`table_lock` in
+  `spinlock.c`) that is not itself a `struct spinlock`, taken with
+  interrupts already disabled inside the acquiring lock's critical
+  section, so it nests below everything and counts nothing.
+- `proc_format_table` no longer takes `vmspace.lock` under
+  `proc_list_lock`, which the order forbids (level 16 above level 11). It
+  snapshots the rows under both process locks, then counts resident pages
+  under `proc_tree_lock` alone, which is above `vmspace.lock`.
