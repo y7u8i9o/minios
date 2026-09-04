@@ -12,6 +12,7 @@
 #include <drivers/serial.h>
 #include <drivers/fbcon.h>
 #include <debug/symbols.h>
+#include <debug/profile.h>
 #include <debug/panic.h>
 #include <mm/memlayout.h>
 #include <mm/pmm.h>
@@ -260,6 +261,7 @@ __noreturn void kmain(void)
     blockdev_init();
     virtio_blk_init();
     swap_init();
+    profile_init();
     syscall_init();
     proc_init();
     futex_init();

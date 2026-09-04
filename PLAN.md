@@ -1248,7 +1248,7 @@ ceiling, `EINVAL` and `EPERM` cases, `RLIMIT_AS` refusing `mmap` and
 `RLIMIT_CPU` killing a spinning child with `SIGXCPU` then `SIGKILL`,
 `getrusage` times growing under load, `prlimit` on another pid).
 
-### M41. Sampling profiler
+### M41. Sampling profiler (completed 2026-09-04)
 
 1. `kernel/debug/profile.c`: the timer interrupt of every CPU records the
    interrupted instruction pointer, up to 8 frame pointer chained return

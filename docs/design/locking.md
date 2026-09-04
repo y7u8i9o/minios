@@ -57,6 +57,7 @@ before the code that uses them.
 | `pty.lock` | spinlock | output ring of one pseudo terminal pair, condition lock of `pty.out_waitq` | M17 |
 | `pty_table_lock` | spinlock | allocation of pseudo terminal pairs | M17 |
 | `tlb_lock` | spinlock | the TLB shootdown request in flight and its statistics, held by the sender while it waits for acknowledgements | M18 |
+| `prof_lock` | spinlock | the profiler's sample ring and session state, taken in the timer interrupt | M41 |
 | `filemap_lock` | spinlock | `inode->mapping` pointers and the reference counts of mappings | M37 |
 | `mapping.lock` | mutex | the page array of one file mapping, held while a page is read from the file or written back | M37 |
 | `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is held | M37 |
@@ -250,3 +251,12 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   tick calls `signal_send` for `RLIMIT_CPU`, taking `proc.lock` from the
   timer interrupt like `waitq_interrupt` already did; no spinlock is held
   when an interrupt arrives, so the ordering is unaffected.
+
+## M41 additions
+
+- `prof_lock` (spinlock; the sample ring, its indexes and the session
+  state) is taken from the timer interrupt of every CPU and by readers of
+  `/dev/profile`. It is a leaf except for `poll_notify` (`poll_lock`),
+  which the sampler calls after releasing it. The sampler also takes the
+  interrupted process's `vmspace.lock` through `vmm_translate` while
+  walking a user frame chain, with no other lock held.

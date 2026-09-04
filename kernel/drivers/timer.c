@@ -9,6 +9,7 @@
 #include <klog.h>
 #include <sched/sched.h>
 #include <sched/proc.h>
+#include <debug/profile.h>
 
 /* Time is read from the TSC, which QEMU derives from host time, so it does
  * not lose accuracy when timer interrupts are delayed or dropped under
@@ -28,8 +29,10 @@ static void timer_irq(struct trapframe *tf, void *arg)
 {
     struct cpu *c = cpu_current();
     c->ticks++;
-    if (sched_started())
+    if (sched_started()) {
         proc_account_tick(tf);
+        profile_sample(tf);
+    }
     if (c->id != 0) {
         sched_tick_cpu();
         return;

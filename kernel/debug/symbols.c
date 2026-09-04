@@ -50,6 +50,15 @@ size_t ksyms_count(void)
     return count;
 }
 
+const char *ksyms_entry(size_t i, uintptr_t *addr, size_t *size)
+{
+    if (i >= count)
+        return NULL;
+    *addr = entries[i].addr;
+    *size = entries[i].size;
+    return strtab + entries[i].name_off;
+}
+
 const char *ksyms_lookup(uintptr_t addr, uintptr_t *offset, size_t *size)
 {
     if (!count)

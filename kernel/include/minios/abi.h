@@ -446,3 +446,35 @@ struct rusage {
     int64_t ru_nvcsw;               /* voluntary context switches */
     int64_t ru_nivcsw;              /* involuntary context switches */
 };
+
+/* ---- M41: sampling profiler, /dev/profile ---- */
+
+#define PROF_MAX_FRAMES 8
+#define PROF_FLAG_USER  1       /* the sample interrupted user mode */
+
+/* One sample: the interrupted instruction pointer in chain[0] followed by
+ * depth - 1 return addresses walked through frame pointers. */
+struct prof_sample {
+    uint32_t pid;
+    uint32_t tid;
+    uint32_t cpu;
+    uint32_t flags;
+    uint32_t depth;
+    uint32_t pad;
+    uint64_t chain[PROF_MAX_FRAMES];
+};
+
+struct prof_stats {
+    uint64_t samples;           /* recorded since PROF_START */
+    uint64_t dropped;           /* lost because the ring was full */
+    uint64_t pending;           /* waiting to be read */
+    uint32_t enabled;
+    uint32_t pid;               /* filter, 0 for every process */
+    uint32_t divider;           /* ticks between samples on each CPU */
+    uint32_t ring;              /* capacity in samples */
+};
+
+#define PROF_START       0x5000     /* arg: pid to profile, 0 for all */
+#define PROF_STOP        0x5001
+#define PROF_SET_DIVIDER 0x5002     /* arg: 1..1000 ticks */
+#define PROF_GET_STATS   0x5003     /* arg: struct prof_stats * */

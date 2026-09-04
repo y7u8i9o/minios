@@ -7,10 +7,18 @@ a terminal as well. Each tool is built into `/bin`.
 ## sysmon
 
 `sysmon` shows the process table. It reads `/dev/proc` once per second,
-parses the `PID PPID PGID STATE NAME` rows without `sscanf` (the libc has
-none), and lists them in a table. The label above the table shows the
-memory summary from `/dev/meminfo`. The Terminate and Kill buttons send
-`SIGTERM` or `SIGKILL` to the selected process.
+parses the `PID PPID PGID STATE TIME RSS NAME` rows without `sscanf` (the
+libc has none), and lists them in a table with the CPU share of each
+process (the growth of its `TIME` ticks over the refresh interval) and
+its resident size. The label below the table shows the memory summary
+from `/dev/meminfo`. The Terminate and Kill buttons send `SIGTERM` or
+`SIGKILL` to the selected process. Since M41 a second tab holds the
+sampling profiler: Start samples the selected process (or every process
+without a selection) through `/dev/profile`, the table lists the hottest
+symbols with their share, refreshed every second, the checkbox includes
+or excludes kernel samples, and Stop freezes the result. User addresses
+are symbolized with the `.symtab` of `/bin/<name>` of the sampled process,
+kernel addresses with `/dev/ksyms` (see `profile.md`).
 
 ## logview
 

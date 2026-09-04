@@ -76,7 +76,7 @@ into its own group.
 
 ## Process listing
 
-`/dev/proc` renders the process table (`PID PPID PGID STATE NAME`) on
+`/dev/proc` renders the process table (`PID PPID PGID STATE TIME RSS NAME` since M40) on
 every read; the `ps` utility prints it. `kill [-SIG] pid...` sends
 signals by number or name.
 
