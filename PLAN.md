@@ -1194,7 +1194,7 @@ regions, `DONTNEED` on a swapped range, `FREE` followed by a rewrite that
 must survive kswapd, `FREE` on an untouched range that kswapd reclaims
 under memory pressure, `DONTFORK` regions absent in the child, errors).
 
-### M39. Huge pages
+### M39. Huge pages (completed 2026-09-04)
 
 1. Anonymous regions flagged `VM_HUGE` (`MAP_HUGETLB`, or `MADV_HUGEPAGE`
    on a region) are backed by 2 MiB frames from the buddy allocator

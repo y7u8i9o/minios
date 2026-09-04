@@ -3,6 +3,7 @@
 #include <mm/pmm.h>
 #include <mm/slab.h>
 #include <mm/filemap.h>
+#include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <fs/vfs.h>
@@ -25,7 +26,7 @@ static bool range_free(struct vmspace *vm, uintptr_t start, uintptr_t end)
 /* Pick the address of a new region of len bytes: the hint when it is
  * free (or required), otherwise the highest gap below USER_MMAP_TOP.
  * Caller holds vm->lock. Returns 0 when there is no room. */
-static uintptr_t choose_range(struct vmspace *vm, uintptr_t hint, size_t len, bool fixed)
+static uintptr_t choose_range(struct vmspace *vm, uintptr_t hint, size_t len, bool fixed, size_t align)
 {
     if (fixed) {
         if (IS_ALIGNED(hint, PAGE_SIZE) && hint >= USER_BASE && hint + len - 1 <= USER_TOP &&
@@ -33,20 +34,23 @@ static uintptr_t choose_range(struct vmspace *vm, uintptr_t hint, size_t len, bo
             return hint;
         return 0;
     }
-    if (hint && IS_ALIGNED(hint, PAGE_SIZE) && hint >= USER_BASE && hint + len <= USER_MMAP_TOP &&
+    if (hint && IS_ALIGNED(hint, align) && hint >= USER_BASE && hint + len <= USER_MMAP_TOP &&
         range_free(vm, hint, hint + len))
         return hint;
-    /* Top down: find the highest gap below USER_MMAP_TOP. */
+    /* Top down: find the highest gap below USER_MMAP_TOP whose aligned
+     * top leaves room for len. */
     uintptr_t end = USER_MMAP_TOP;
     struct list_head *pos;
     for (pos = vm->vmas.prev; pos != &vm->vmas; pos = pos->prev) {
         struct vma *v = list_entry(pos, struct vma, link);
         if (v->end > end)
             continue;
-        if (end - v->end >= len)
-            return end - len;
+        uintptr_t top = ALIGN_DOWN(end, align);
+        if (top >= v->end && top - v->end >= len)
+            return top - len;
         end = v->start;
     }
+    end = ALIGN_DOWN(end, align);
     if (end >= USER_BASE + len)
         return end - len;
     return 0;
@@ -61,7 +65,7 @@ long vma_mmap_file(struct vmspace *vm, uintptr_t hint, size_t len, unsigned flag
     if (!n)
         return -ENOMEM;
     spin_lock(&vm->lock);
-    uintptr_t start = choose_range(vm, hint, len, fixed);
+    uintptr_t start = choose_range(vm, hint, len, fixed, (flags & VM_HUGE) ? PAGE_2M : PAGE_SIZE);
     if (!start) {
         spin_unlock(&vm->lock);
         kfree(n);
@@ -154,6 +158,14 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
     LIST_HEAD(dead);
     LIST_HEAD(jobs);
     spin_lock(&vm->lock);
+    /* Huge pages cut by the range are split before anything changes. */
+    r = huge_split_at(vm, addr);
+    if (r == 0)
+        r = huge_split_at(vm, end);
+    if (r < 0) {
+        spin_unlock(&vm->lock);
+        return r;
+    }
     struct list_head *pos, *tmp;
     list_for_each_safe(pos, tmp, &vm->vmas) {
         struct vma *v = list_entry(pos, struct vma, link);
@@ -206,7 +218,19 @@ static void reprotect_range_locked(struct vmspace *vm, struct vma *v, uintptr_t 
     bool track_dirty = (v->flags & (VM_FILE | VM_SHARED)) == (VM_FILE | VM_SHARED);
     for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
         uint64_t *entry;
-        if (paging_walk(vm->pml4_phys, va, false, &entry) != 1)
+        int w = paging_walk(vm->pml4_phys, va, false, &entry);
+        if (w == 2) {
+            /* A whole huge page (the caller split the boundaries and
+             * PROT_NONE ranges): rewrite the directory entry. */
+            uint64_t e = *entry;
+            uint64_t bits = want | PTE_PS;
+            if (e & PTE_COW)
+                bits &= ~PTE_W;
+            *entry = (e & (PTE_ADDR_MASK | PTE_COW | PTE_A | PTE_D)) | bits;
+            va += PAGE_2M - PAGE_SIZE;
+            continue;
+        }
+        if (w != 1)
             continue;
         uint64_t e = *entry;
         if (!(e & (PTE_P | PTE_PROTNONE)))
@@ -253,6 +277,17 @@ int vma_mprotect(struct vmspace *vm, uintptr_t addr, size_t len, unsigned prot)
             return -EACCES;
         }
         va = v->end;
+    }
+    /* Huge pages cut by the range are split; PROT_NONE needs small entries
+     * because the software bit lives in not present entries. */
+    int r = huge_split_at(vm, addr);
+    if (r == 0)
+        r = huge_split_at(vm, end);
+    if (r == 0 && !(prot & VM_READ))
+        r = huge_split_range(vm, addr, end);
+    if (r < 0) {
+        spin_unlock(&vm->lock);
+        return r;
     }
     struct list_head *pos;
     list_for_each(pos, &vm->vmas) {

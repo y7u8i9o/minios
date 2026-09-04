@@ -246,6 +246,21 @@ struct page *pmm_alloc_page(void)
     return pmm_alloc(0);
 }
 
+void pmm_split_block(struct page *head, unsigned order)
+{
+    uint64_t pfn = page_to_pfn(head);
+    kassert(IS_ALIGNED(pfn, 1UL << order));
+    spin_lock(&pmm_lock);
+    kassert(!(head->flags & PG_FREE) && head->order == order);
+    for (uint64_t i = 0; i < (1UL << order); i++) {
+        page_array[pfn + i].order = 0;
+        page_array[pfn + i].flags &= (uint16_t)~PG_FREE;
+        if (i)
+            page_array[pfn + i].refcount = 0;   /* the head keeps the block's count */
+    }
+    spin_unlock(&pmm_lock);
+}
+
 bool page_put(struct page *page)
 {
     uint32_t old = __atomic_fetch_sub(&page->refcount, 1, __ATOMIC_SEQ_CST);

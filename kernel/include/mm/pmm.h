@@ -36,6 +36,9 @@ struct page *pmm_alloc(unsigned order);
 void pmm_free(struct page *page, unsigned order);
 struct page *pmm_alloc_page(void);
 void pmm_free_page(struct page *page);
+/* Turn an allocated block of 2^order pages into 2^order independent single
+ * page allocations, each freeable with pmm_free_page or page_put (M39). */
+void pmm_split_block(struct page *head, unsigned order);
 
 uintptr_t page_to_phys(const struct page *page);
 struct page *phys_to_page(uintptr_t pa);

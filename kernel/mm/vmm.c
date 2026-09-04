@@ -3,6 +3,7 @@
 #include <mm/pmm.h>
 #include <mm/slab.h>
 #include <mm/swap.h>
+#include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <arch/boot.h>
@@ -191,6 +192,8 @@ static void free_user_level(uint64_t *table, int level)
             if (pmm_is_ram(e & PTE_ADDR_MASK))
                 page_put(phys_to_page(e & PTE_ADDR_MASK));
             table[i] = 0;
+        } else if (level == 2 && (e & PTE_PS)) {
+            huge_unmap_locked(&table[i]);
         } else if (!(e & PTE_PS)) {
             free_user_level(P2V(e & PTE_ADDR_MASK), level - 1);
         }

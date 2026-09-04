@@ -1,0 +1,191 @@
+#define KLOG_SUBSYS "huge"
+#include <mm/huge.h>
+#include <mm/vma.h>
+#include <mm/pmm.h>
+#include <mm/memlayout.h>
+#include <arch/paging.h>
+#include <lib/string.h>
+#include <kassert.h>
+#include <klog.h>
+#include <errno.h>
+
+/* Counters, atomic updates. */
+static struct huge_stats stats;
+
+void huge_get_stats(struct huge_stats *out)
+{
+    out->mapped = __atomic_load_n(&stats.mapped, __ATOMIC_RELAXED);
+    out->splits = __atomic_load_n(&stats.splits, __ATOMIC_RELAXED);
+    out->fallbacks = __atomic_load_n(&stats.fallbacks, __ATOMIC_RELAXED);
+}
+
+void huge_put(struct page *head)
+{
+    uint32_t old = __atomic_fetch_sub(&head->refcount, 1, __ATOMIC_SEQ_CST);
+    kassert(old > 0);
+    if (old == 1)
+        pmm_free(head, HUGE_ORDER);
+}
+
+void huge_unmap_locked(uint64_t *pde)
+{
+    kassert((*pde & (PTE_P | PTE_PS)) == (PTE_P | PTE_PS));
+    struct page *head = phys_to_page(*pde & PTE_ADDR_MASK);
+    *pde = 0;
+    huge_put(head);
+    __atomic_fetch_sub(&stats.mapped, 1, __ATOMIC_RELAXED);
+}
+
+/* Allocate and zero a 2 MiB block. */
+static struct page *alloc_huge_zeroed(void)
+{
+    struct page *pg = pmm_alloc(HUGE_ORDER);
+    if (!pg)
+        return NULL;
+    memset(P2V(page_to_phys(pg)), 0, PAGE_2M);
+    return pg;
+}
+
+int huge_fault_locked(struct vmspace *vm, struct vma *v, uintptr_t va)
+{
+    uintptr_t block = ALIGN_DOWN(va, PAGE_2M);
+    if (block < v->start || block + PAGE_2M > v->end || (v->flags & (VM_FILE | VM_SHARED | VM_DEVICE)))
+        return 0;
+    uint64_t *pde;
+    int r = paging_pde(vm->pml4_phys, va, false, &pde);
+    if (r == 1 && (*pde & PTE_P)) {
+        if (*pde & PTE_PS)
+            return 0;
+        /* A page table covers the block, left behind by earlier small
+         * pages. It only stands in the way while it is empty. */
+        uint64_t *table = P2V(*pde & PTE_ADDR_MASK);
+        for (int i = 0; i < PT_ENTRIES; i++)
+            if (table[i])
+                return 0;
+        paging_free_table(*pde & PTE_ADDR_MASK);
+        *pde = 0;
+    }
+    unsigned flags = v->flags;
+    spin_unlock(&vm->lock);
+    struct page *pg = alloc_huge_zeroed();
+    spin_lock(&vm->lock);
+    if (!pg) {
+        __atomic_fetch_add(&stats.fallbacks, 1, __ATOMIC_RELAXED);
+        return 0;
+    }
+    /* The space may have changed while the lock was dropped. */
+    struct vma *cur = vma_find_locked(vm, va);
+    r = paging_pde(vm->pml4_phys, va, true, &pde);
+    if (r < 0 || cur != v || block < cur->start || block + PAGE_2M > cur->end || !(cur->flags & VM_HUGE) ||
+        (*pde & PTE_P)) {
+        pmm_free(pg, HUGE_ORDER);
+        return r < 0 ? r : 0;
+    }
+    page_get(pg);
+    *pde = page_to_phys(pg) | vma_pte_flags(flags) | PTE_PS;
+    tlb_flush_range(vm, block, PAGE_2M);    /* a freed empty table may be cached by the page walker */
+    __atomic_fetch_add(&stats.mapped, 1, __ATOMIC_RELAXED);
+    return 1;
+}
+
+/* Replace the huge entry pde covering block by a page table. With an
+ * exclusively owned block the small entries point into it; a shared block
+ * is copied into small frames first. Caller holds vm->lock. */
+static int split_locked(struct vmspace *vm, uintptr_t block, uint64_t *pde)
+{
+    uint64_t e = *pde;
+    kassert((e & (PTE_P | PTE_PS)) == (PTE_P | PTE_PS));
+    struct page *head = phys_to_page(e & PTE_ADDR_MASK);
+    uint64_t bits = e & PTE_FLAGS_MASK & ~PTE_PS;
+    uintptr_t pt = paging_alloc_table();
+    if (!pt)
+        return -ENOMEM;
+    uint64_t *table = P2V(pt);
+    if (__atomic_load_n(&head->refcount, __ATOMIC_SEQ_CST) == 1) {
+        pmm_split_block(head, HUGE_ORDER);
+        for (int i = 0; i < PT_ENTRIES; i++) {
+            struct page *pg = head + i;
+            if (i)
+                page_get(pg);   /* the head already carries its mapping reference */
+            table[i] = page_to_phys(pg) | bits;
+        }
+    } else {
+        /* Shared after fork: the copy is exclusively ours, so it may be
+         * writable again where the region allows it. */
+        struct vma *v = vma_find_locked(vm, block);
+        uint64_t nbits = (bits & ~PTE_COW & ~PTE_W) | (v && (v->flags & VM_WRITE) ? PTE_W : 0);
+        for (int i = 0; i < PT_ENTRIES; i++) {
+            struct page *pg = pmm_alloc_page();
+            if (!pg) {
+                for (int j = 0; j < i; j++)
+                    page_put(phys_to_page(table[j] & PTE_ADDR_MASK));
+                paging_free_table(pt);
+                return -ENOMEM;
+            }
+            memcpy(P2V(page_to_phys(pg)), (char *)P2V(page_to_phys(head)) + (size_t)i * PAGE_SIZE, PAGE_SIZE);
+            page_get(pg);
+            table[i] = page_to_phys(pg) | nbits;
+        }
+        huge_put(head);
+    }
+    *pde = pt | PTE_P | PTE_W | PTE_U;
+    tlb_flush_range(vm, block, PAGE_2M);
+    __atomic_fetch_sub(&stats.mapped, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&stats.splits, 1, __ATOMIC_RELAXED);
+    return 0;
+}
+
+int huge_split_at(struct vmspace *vm, uintptr_t addr)
+{
+    if (IS_ALIGNED(addr, PAGE_2M) || addr > USER_TOP)
+        return 0;
+    uint64_t *pde;
+    if (paging_pde(vm->pml4_phys, addr, false, &pde) != 1 || (*pde & (PTE_P | PTE_PS)) != (PTE_P | PTE_PS))
+        return 0;
+    return split_locked(vm, ALIGN_DOWN(addr, PAGE_2M), pde);
+}
+
+int huge_split_range(struct vmspace *vm, uintptr_t start, uintptr_t end)
+{
+    for (uintptr_t block = ALIGN_DOWN(start, PAGE_2M); block < end; block += PAGE_2M) {
+        uint64_t *pde;
+        if (paging_pde(vm->pml4_phys, block, false, &pde) != 1 || (*pde & (PTE_P | PTE_PS)) != (PTE_P | PTE_PS))
+            continue;
+        int r = split_locked(vm, block, pde);
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
+
+void huge_share_locked(uint64_t *src, uint64_t *dst)
+{
+    uint64_t e = (*src & ~PTE_W) | PTE_COW;
+    *src = e;
+    *dst = e;
+    page_get(phys_to_page(e & PTE_ADDR_MASK));
+    __atomic_fetch_add(&stats.mapped, 1, __ATOMIC_RELAXED);
+}
+
+int huge_cow_locked(struct vmspace *vm, uintptr_t va, uint64_t *pde)
+{
+    uintptr_t block = ALIGN_DOWN(va, PAGE_2M);
+    struct page *old = phys_to_page(*pde & PTE_ADDR_MASK);
+    uint64_t flags = (*pde & PTE_FLAGS_MASK & ~PTE_COW) | PTE_W;
+    if (__atomic_load_n(&old->refcount, __ATOMIC_SEQ_CST) == 1) {
+        *pde = (*pde & PTE_ADDR_MASK) | flags;
+    } else {
+        struct page *pg = pmm_alloc(HUGE_ORDER);
+        if (!pg) {
+            /* No 2 MiB frame: copy into small pages instead. */
+            __atomic_fetch_add(&stats.fallbacks, 1, __ATOMIC_RELAXED);
+            return split_locked(vm, block, pde);
+        }
+        memcpy(P2V(page_to_phys(pg)), P2V(page_to_phys(old)), PAGE_2M);
+        page_get(pg);
+        *pde = page_to_phys(pg) | flags;
+        huge_put(old);
+    }
+    tlb_flush_range(vm, block, PAGE_2M);
+    return 0;
+}

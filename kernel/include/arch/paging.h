@@ -37,6 +37,12 @@ void paging_free_table(uintptr_t pa);
  * -ENOMEM. *entry receives a pointer to the entry through the HHDM. */
 int paging_walk(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry);
 
+/* Find the page directory entry covering va, creating the upper tables
+ * with create. Returns 1 with *entry set, 0 when a table is missing
+ * without create, or -ENOMEM. The entry may be a 2 MiB page (PTE_PS), a
+ * table pointer or empty. */
+int paging_pde(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry);
+
 /* Map a range with 2 MiB pages wherever alignment allows. Kernel use only. */
 int paging_map_large(uintptr_t pml4_phys, uintptr_t va, uintptr_t pa, size_t size, uint64_t flags);
 

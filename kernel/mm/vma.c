@@ -4,6 +4,7 @@
 #include <mm/slab.h>
 #include <mm/swap.h>
 #include <mm/filemap.h>
+#include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <arch/cpu.h>
@@ -84,6 +85,9 @@ int vma_add(struct vmspace *vm, uintptr_t start, uintptr_t end, unsigned flags)
 struct vma *vma_split_locked(struct vmspace *vm, struct vma *v, uintptr_t addr)
 {
     kassert(addr > v->start && addr < v->end && IS_ALIGNED(addr, PAGE_SIZE));
+    /* A huge page never straddles a region boundary. */
+    if (huge_split_at(vm, addr) < 0)
+        return NULL;
     struct vma *tail = kzalloc(sizeof *tail);
     if (!tail)
         return NULL;
@@ -142,7 +146,7 @@ int vma_populate(struct vmspace *vm, uintptr_t start, uintptr_t end)
         }
         uint64_t *entry;
         int w = paging_walk(vm->pml4_phys, va, false, &entry);
-        if (w == 1 && (*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED)))
+        if (w == 2 || (w == 1 && (*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED))))
             continue;
         r = map_zero_page(vm, va, v->flags);
     }
@@ -155,7 +159,15 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
     bool track_dirty = v && (v->flags & VM_FILE) && (v->flags & VM_SHARED);
     for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
         uint64_t *entry;
-        if (paging_walk(vm->pml4_phys, va, false, &entry) != 1)
+        int w = paging_walk(vm->pml4_phys, va, false, &entry);
+        if (w == 2) {
+            /* Whole huge pages only: the callers split at the boundaries. */
+            kassert(IS_ALIGNED(va, PAGE_2M) && end - va >= PAGE_2M);
+            huge_unmap_locked(entry);
+            va += PAGE_2M - PAGE_SIZE;
+            continue;
+        }
+        if (w != 1)
             continue;
         uint64_t e = *entry;
         if (e & (PTE_P | PTE_PROTNONE)) {
@@ -223,6 +235,10 @@ long vma_brk(struct vmspace *vm, intptr_t increment)
     } else if (increment < 0) {
         if (new_brk < vm->brk_start + PAGE_SIZE)
             new_brk = vm->brk_start + PAGE_SIZE;
+        if (huge_split_at(vm, new_brk) < 0) {
+            spin_unlock(&vm->lock);
+            return -ENOMEM;
+        }
         vma_unmap_range_locked(vm, heap, new_brk, heap->end);
         heap->end = new_brk;
     }
@@ -319,7 +335,9 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
     uint64_t *entry;
     int w = paging_walk(vm->pml4_phys, va, false, &entry);
     if (present) {
-        if (w == 1 && (*entry & PTE_P) && write && (*entry & PTE_COW))
+        if (w == 2 && write && (*entry & PTE_COW))
+            ok = huge_cow_locked(vm, va, entry) == 0;
+        else if (w == 1 && (*entry & PTE_P) && write && (*entry & PTE_COW))
             ok = do_cow_locked(vm, va, entry) == 0;
     } else if (w == 1 && (*entry & PTE_SWAPPED)) {
         spin_unlock(&vm->lock);
@@ -331,6 +349,18 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
     } else if (v->flags & VM_FILE) {
         return filemap_fault(vm, va, write);
     } else {
+        if ((v->flags & VM_HUGE) && (w == 0 || (w == 1 && *entry == 0))) {
+            int h = huge_fault_locked(vm, v, va);
+            if (h != 0) {
+                ok = h > 0;
+                goto out;
+            }
+            /* The lock was dropped meanwhile; fall back to a small page
+             * if the region is still there. */
+            v = vma_find_locked(vm, va);
+            if (!v || !(v->flags & VM_READ))
+                goto out;
+        }
         ok = fault_in_zero_page(vm, va);
     }
 out:
@@ -377,6 +407,12 @@ static int share_level(struct vmspace *vm, uint64_t *src, uint64_t *dst, int lev
         } else {
             if (!(e & PTE_P))
                 continue;
+            if (level == 2 && (e & PTE_PS)) {
+                struct vma *v = vma_find_locked(vm, va);
+                if (v && !(v->flags & VM_DONTFORK))
+                    huge_share_locked(&src[i], &dst[i]);
+                continue;
+            }
             uintptr_t table = paging_alloc_table();
             if (!table)
                 return -ENOMEM;

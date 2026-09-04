@@ -5,6 +5,7 @@
 #include <mm/pmm.h>
 #include <mm/slab.h>
 #include <mm/filemap.h>
+#include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <block/blockdev.h>
@@ -141,8 +142,8 @@ static uint64_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *v
             continue;
         }
         uint64_t e2 = ((uint64_t *)P2V(e3 & PTE_ADDR_MASK))[PD_INDEX(va)];
-        if (!(e2 & PTE_P)) {
-            va = ALIGN_DOWN(va, 1UL << 21) + (1UL << 21);
+        if (!(e2 & PTE_P) || (e2 & PTE_PS)) {
+            va = ALIGN_DOWN(va, 1UL << 21) + (1UL << 21);   /* empty or a huge page */
             continue;
         }
         uint64_t *pt = P2V(e2 & PTE_ADDR_MASK);
@@ -415,7 +416,7 @@ static bool find_swapped(struct vmspace *vm, uintptr_t *va)
         uint64_t e3 = ((uint64_t *)P2V(e4 & PTE_ADDR_MASK))[PDPT_INDEX(a)];
         if (!(e3 & PTE_P)) { a = ALIGN_DOWN(a, 1UL << 30) + (1UL << 30); continue; }
         uint64_t e2 = ((uint64_t *)P2V(e3 & PTE_ADDR_MASK))[PD_INDEX(a)];
-        if (!(e2 & PTE_P)) { a = ALIGN_DOWN(a, 1UL << 21) + (1UL << 21); continue; }
+        if (!(e2 & PTE_P) || (e2 & PTE_PS)) { a = ALIGN_DOWN(a, 1UL << 21) + (1UL << 21); continue; }
         uint64_t *pt = P2V(e2 & PTE_ADDR_MASK);
         for (unsigned i = PT_INDEX(a); i < PT_ENTRIES; i++, a += PAGE_SIZE) {
             if (pt[i] & PTE_SWAPPED) {
@@ -450,15 +451,19 @@ static long meminfo_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     struct pmm_stats st;
     struct swap_stats ss;
     struct filemap_stats fs;
+    struct huge_stats hs;
     pmm_get_stats(&st);
     swap_get_stats(&ss);
     filemap_get_stats(&fs);
+    huge_get_stats(&hs);
     char text[512];
     int len = ksnprintf(text, sizeof text,
                         "MemTotal: %lu kB\nMemFree: %lu kB\nSwapTotal: %lu kB\nSwapFree: %lu kB\n"
-                        "SwappedOut: %lu\nSwappedIn: %lu\nLazyFreed: %lu\nFileMapped: %lu\n",
+                        "SwappedOut: %lu\nSwappedIn: %lu\nLazyFreed: %lu\nFileMapped: %lu\n"
+                        "HugePages: %lu\nHugeSplits: %lu\nHugeFallbacks: %lu\n",
                         st.total_pages * 4, st.free_pages * 4, ss.total_slots * 4, ss.free_slots * 4,
-                        ss.swapped_out, ss.swapped_in, ss.lazy_freed, fs.cached_pages);
+                        ss.swapped_out, ss.swapped_in, ss.lazy_freed, fs.cached_pages,
+                        hs.mapped, hs.splits, hs.fallbacks);
     if (*pos >= (uint64_t)len)
         return 0;
     size_t avail = (size_t)len - *pos;

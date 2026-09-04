@@ -73,6 +73,20 @@ int paging_walk(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry
     return 1;
 }
 
+int paging_pde(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry)
+{
+    bool user = va <= USER_TOP;
+    uint64_t *pml4 = P2V(pml4_phys);
+    uint64_t *pdpt = next_level(&pml4[PML4_INDEX(va)], create, user);
+    if (!pdpt)
+        return create ? -ENOMEM : 0;
+    uint64_t *pd = next_level(&pdpt[PDPT_INDEX(va)], create, user);
+    if (!pd)
+        return create ? -ENOMEM : 0;
+    *entry = &pd[PD_INDEX(va)];
+    return 1;
+}
+
 int paging_map_large(uintptr_t pml4_phys, uintptr_t va, uintptr_t pa, size_t size, uint64_t flags)
 {
     uintptr_t end = va + size;

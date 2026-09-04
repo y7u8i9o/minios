@@ -3,6 +3,7 @@
 #include <mm/pmm.h>
 #include <mm/swap.h>
 #include <mm/slab.h>
+#include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <minios/abi.h>
@@ -79,6 +80,10 @@ static int lazyfree_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
         if (v->flags & (VM_FILE | VM_SHARED))
             return -EINVAL;
     }
+    /* kswapd reclaims small pages only. */
+    int r = huge_split_range(vm, addr, end);
+    if (r < 0)
+        return r;
     for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
         uint64_t *entry;
         if (paging_walk(vm->pml4_phys, va, false, &entry) != 1)
@@ -130,6 +135,10 @@ long vma_madvise(struct vmspace *vm, uintptr_t addr, size_t len, int advice)
     int r;
     spin_lock(&vm->lock);
     r = check_range_locked(vm, addr, end);
+    if (r == 0)
+        r = huge_split_at(vm, addr);
+    if (r == 0)
+        r = huge_split_at(vm, end);
     if (r < 0) {
         spin_unlock(&vm->lock);
         return r;

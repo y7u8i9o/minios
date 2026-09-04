@@ -4,6 +4,7 @@
 #include <sched/proc.h>
 #include <mm/vma.h>
 #include <mm/filemap.h>
+#include <arch/paging.h>
 #include <fs/vfs.h>
 #include <fs/fdtable.h>
 #include <ipc/mqueue.h>
@@ -95,6 +96,12 @@ long sys_mmap(struct trapframe *tf)
         int r = vma_munmap(vm, addr, len);
         if (r < 0)
             return r;
+    }
+    if (flags & MAP_HUGETLB) {
+        if (!(flags & MAP_ANONYMOUS) || shared || !IS_ALIGNED(len, PAGE_2M) ||
+            (fixed && !IS_ALIGNED(addr, PAGE_2M)))
+            return -EINVAL;
+        vmflags |= VM_HUGE;
     }
     if (flags & MAP_ANONYMOUS) {
         if (shared)
