@@ -100,6 +100,8 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_pipe2]         = sys_pipe2,
     [SYS_mmap]          = sys_mmap,
     [SYS_munmap]        = sys_munmap,
+    [SYS_mprotect]      = sys_mprotect,
+    [SYS_msync]         = sys_msync,
 };
 
 void syscall_init_cpu(void)

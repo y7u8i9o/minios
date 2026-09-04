@@ -10,6 +10,7 @@ struct file;
 struct superblock;
 struct blockdev;
 struct vmspace;
+struct mapping;
 
 #define VFS_PATH_MAX 256
 
@@ -69,6 +70,7 @@ struct inode {
     int refcount;
     struct mutex lock;
     struct list_head link;          /* sb->inodes */
+    struct mapping *mapping;        /* mapped pages of the file, filemap_lock (M37) */
 };
 
 /* Superblock operations. read_inode fills a freshly allocated inode for

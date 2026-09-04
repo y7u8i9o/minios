@@ -1145,6 +1145,139 @@ truncation, unlink of an open file, cluster accounting across a remount,
 the result read by `mkfat` on the host) and `fat_user` (`/bin/fattest`
 through `mount`, stdio and `dirent`).
 
+### M37. File backed mappings and mprotect (completed 2026-09-04)
+
+1. `mmap` of regular files (`kernel/mm/filemap.c`): a region carries the
+   open file, its offset and a reference on the inode's `struct mapping`,
+   the cache of file pages that are mapped somewhere. A fault reads the
+   page through the file's read operation into a fresh frame and maps it;
+   `MAP_SHARED` maps the cached frame itself, so every mapper of the file
+   sees the same memory, `MAP_PRIVATE` maps it read only with copy on
+   write. Pages beyond the end of the file fault (`SIGSEGV`). Hardware
+   dirty bits are gathered into the mapping's dirty bitmap when a shared
+   region is unmapped or synced, and dirty pages are written back through
+   the file; the cache is dropped with the last mapper, so a file that is
+   not mapped costs nothing. `read` overlays the cached pages and `write`
+   copies through them, so ordinary I/O and mappings stay coherent.
+   `msync` writes the dirty pages of a range.
+2. `mprotect` splits regions at the boundaries and rewrites present
+   entries; copy on write frames keep their protection. `PROT_NONE`
+   entries keep their frame behind the software bit `PTE_PROTNONE`.
+   `MAP_FIXED` replaces whatever the range held.
+3. libc: `mprotect`, `msync`, `MAP_SHARED`, `MAP_FIXED`, `MS_*`.
+   `docs/design/filemap.md` describes it.
+
+Tests: `mmap_file` (`/bin/mmapfiletest`: private and shared mappings of a
+file on the root disk, offsets, aliasing inside one process and across
+fork, coherence with `read` and `write`, writeback through `msync` and
+through the last `munmap`, private copies that never reach the file, a
+fault beyond the end of the file, `mprotect` splitting and `PROT_NONE`,
+`MAP_FIXED`, and the leak check of the `run` harness).
+
+### M38. madvise
+
+1. `madvise` (`kernel/mm/madvise.c`): `MADV_NORMAL`, `MADV_RANDOM` and
+   `MADV_SEQUENTIAL` are recorded, `MADV_WILLNEED` populates a range
+   (zero pages or file pages), `MADV_DONTNEED` drops the frames and swap
+   slots of a range so the next touch yields zero pages or file contents
+   again, `MADV_FREE` clears the dirty bits and tags the entries with
+   `PTE_LAZYFREE`: kswapd frees such a frame instead of swapping it when
+   the dirty bit is still clear, and a page written again in the meantime
+   is kept. `MADV_DONTFORK` and `MADV_DOFORK` set and clear `VM_DONTFORK`,
+   which `vmspace_fork` skips. `MADV_HUGEPAGE` and `MADV_NOHUGEPAGE` set
+   the flag M39 acts on. Regions are split as needed.
+2. `/dev/meminfo` gains `LazyFreed:`, the count of frames reclaimed
+   through `MADV_FREE`. `docs/design/madvise.md` describes it.
+
+Tests: `madvise` (`/bin/madvisetest`: every advice on anonymous and file
+regions, `DONTNEED` on a swapped range, `FREE` followed by a rewrite that
+must survive kswapd, `FREE` on an untouched range that kswapd reclaims
+under memory pressure, `DONTFORK` regions absent in the child, errors).
+
+### M39. Huge pages
+
+1. Anonymous regions flagged `VM_HUGE` (`MAP_HUGETLB`, or `MADV_HUGEPAGE`
+   on a region) are backed by 2 MiB frames from the buddy allocator
+   (order 9) wherever a 2 MiB aligned block lies entirely inside the
+   region and no 4 KiB table exists there yet (`kernel/mm/huge.c`). The
+   frame is mapped by a page directory entry with `PTE_PS`; fork shares
+   it copy on write like a small page and a write fault copies the whole
+   2 MiB. `munmap`, `mprotect` and `madvise` that cut through a huge page
+   split it first: a private block is broken into 512 page table entries
+   with one reference per frame (`pmm_split_block`), a shared block is
+   copied. kswapd, `swap_in_all` and the kernel's user accessors skip or
+   handle level 2 entries. When no 2 MiB frame is available the fault
+   falls back to 4 KiB pages.
+2. `/dev/meminfo` reports `HugePages:` (mapped 2 MiB frames) and
+   `HugeSplits:`. `docs/design/hugepages.md` describes it.
+
+Tests: `hugepages` (`/bin/hugetest`: `MAP_HUGETLB` alignment and the
+count in meminfo, `MADV_HUGEPAGE` on an aligned anonymous region, data
+integrity across fork and copy on write of a huge page, partial `munmap`
+and `mprotect` splitting with the remaining data intact, fallback when
+the buddy allocator has no order 9 block, and no leak).
+
+### M40. Per process resource limits and CPU accounting
+
+1. Every process carries `struct rlimit rlim[RLIMIT_NLIMITS]`, inherited
+   by fork, kept by exec, read and written with `getrlimit`, `setrlimit`
+   and `prlimit` (any pid). Enforced: `RLIMIT_AS` (sum of region sizes,
+   checked by `mmap`, `sbrk` and thread stacks), `RLIMIT_DATA` (heap
+   size), `RLIMIT_STACK` (size of the main stack region set up by exec,
+   between 64 KiB and 1 GiB), `RLIMIT_NOFILE` (descriptor slots, at most
+   `OPEN_MAX`), `RLIMIT_NPROC` (user processes, `fork` fails with
+   `EAGAIN`), `RLIMIT_FSIZE` (`write` stops at the limit with `EFBIG` and
+   `SIGXFSZ`), `RLIMIT_CPU` (`SIGXCPU` at the soft limit, `SIGKILL` at the
+   hard one). `RLIMIT_CORE`, `RLIMIT_RSS`, `RLIMIT_MEMLOCK` are stored
+   only.
+2. CPU time: the timer tick charges the running thread's process with a
+   user or system tick (`proc_account_tick`), summed into the parent's
+   children totals when a child is reaped. `getrusage` (`RUSAGE_SELF`,
+   `RUSAGE_CHILDREN`, `RUSAGE_THREAD`) reports user and system time, page
+   faults (`minflt`), resident pages (`maxrss`, counted on demand) and
+   context switches; `wait4` fills its `rusage` argument. `/dev/proc`
+   gains `TIME` (ticks) and `RSS` (KiB) columns, `ps` prints them.
+3. `ulimit` builtin in the shell, `prlimit` and `time` in coreutils.
+   libc: `sys/resource.h`. `docs/design/rlimit.md` describes it.
+
+Tests: `rlimit` (`/bin/rlimittest`: get, set, inheritance, the hard limit
+ceiling, `EINVAL` and `EPERM` cases, `RLIMIT_AS` refusing `mmap` and
+`sbrk`, `RLIMIT_DATA`, `RLIMIT_NOFILE` refusing `open` and `dup`,
+`RLIMIT_NPROC` refusing `fork`, `RLIMIT_FSIZE` with `SIGXFSZ`,
+`RLIMIT_STACK` visible as the main stack size of an exec'd child,
+`RLIMIT_CPU` killing a spinning child with `SIGXCPU` then `SIGKILL`,
+`getrusage` times growing under load, `prlimit` on another pid).
+
+### M41. Sampling profiler
+
+1. `kernel/debug/profile.c`: the timer interrupt of every CPU records the
+   interrupted instruction pointer, up to 8 frame pointer chained return
+   addresses (walked through the page tables so a bad pointer never
+   faults), pid, tid, CPU and a user/kernel flag into a ring of samples
+   when profiling is on for that process (or all). `/dev/profile` starts
+   and stops sampling with `ioctl` (`PROF_START` for a pid or 0, `PROF_STOP`,
+   `PROF_SET_DIVIDER` for the sampling period in ticks), `read` returns
+   whole `struct prof_sample` records and `poll` reports data. Dropped
+   samples are counted. `/dev/ksyms` lists the kernel symbol table as
+   `addr size name` lines so user space can symbolize kernel addresses.
+2. libc `minios/profile.h`: the ring reader and a symbolizer that loads
+   the `.symtab` of a static ELF (`/bin/<name>`) or `/dev/ksyms` and
+   aggregates samples by symbol, with or without call chains.
+3. `prof` in coreutils: `prof [-d seconds] [-k] [-c] command args...` or
+   `prof -p pid`, printing the flat profile (percent, samples, symbol,
+   binary or kernel) and optionally the top call chains.
+4. `sysmon` gains a CPU column computed from the `TIME` ticks of
+   `/dev/proc`, a memory column from `RSS`, and a Profile tab: profiling
+   the selected process (or the whole system) shows the live top symbols
+   refreshed every second, with a kernel/user toggle.
+   `docs/design/profile.md` describes it.
+
+Tests: `profile` (`/bin/proftest`: a hot function dominating the user
+samples of its own process, samples attributed to a child pid and to
+kernel symbols, call chains reaching `main`, filtering by pid, the
+divider, stop and restart, and ring overflow accounting) and the
+existing `gui_tools` case with sysmon.
+
 ## 4. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

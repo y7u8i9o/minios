@@ -15,6 +15,12 @@
 #define VM_MMAP     (1u << 7)   /* region created by mmap, removable by munmap */
 #define VM_DEVICE   (1u << 8)   /* frames are device memory, not managed pages */
 #define VM_SHARED   (1u << 9)   /* shared mapping: fork shares frames without copy on write */
+#define VM_FILE     (1u << 10)  /* backed by a file through struct mapping (M37) */
+#define VM_HUGE     (1u << 11)  /* anonymous region backed by 2 MiB frames where possible (M39) */
+#define VM_DONTFORK (1u << 12)  /* MADV_DONTFORK: not copied by vmspace_fork (M38) */
+#define VM_SEQUENTIAL (1u << 13) /* MADV_SEQUENTIAL recorded (M38) */
+#define VM_RANDOM   (1u << 14)  /* MADV_RANDOM recorded (M38) */
+#define VM_PROT_MASK (VM_READ | VM_WRITE | VM_EXEC)
 #define VM_KERNEL_RW (VM_READ | VM_WRITE | VM_GLOBAL)
 
 /* Virtual layout. Lower half belongs to user space. */

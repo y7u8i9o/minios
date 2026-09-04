@@ -73,7 +73,12 @@ struct dirent {
 #define MAP_PRIVATE   0x02
 #define MAP_FIXED     0x10
 #define MAP_ANONYMOUS 0x20
+#define MAP_HUGETLB   0x40000
 #define MAP_FAILED ((void *)-1)
+/* msync flags */
+#define MS_ASYNC      1
+#define MS_INVALIDATE 2
+#define MS_SYNC       4
 
 /* Per process descriptor table size. */
 #define OPEN_MAX 64

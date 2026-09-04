@@ -78,4 +78,6 @@
 #define SYS_clock_gettime 74
 #define SYS_clock_settime 75
 #define SYS_gettid        76
-#define SYS_MAX           77
+#define SYS_mprotect      77
+#define SYS_msync         78
+#define SYS_MAX           79

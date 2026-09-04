@@ -1,5 +1,6 @@
 #define KLOG_SUBSYS "vfs"
 #include <fs/vfs.h>
+#include <mm/filemap.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <block/bcache.h>
@@ -535,6 +536,8 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
         vfs_op_end(ino->sb);
         if (r < 0)
             goto fail;
+        if (ino->mapping)
+            filemap_truncate(ino, 0);
     }
     struct file *f = file_alloc(ino, ino->fops, flags);
     if (!f) {

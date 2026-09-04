@@ -312,16 +312,6 @@ struct page *swap_alloc_user_frame(void)
 
 /* ---- swap in ---- */
 
-static uint64_t pte_flags_for(unsigned flags)
-{
-    uint64_t pte = PTE_P | PTE_U;
-    if (flags & VM_WRITE)
-        pte |= PTE_W;
-    if (!(flags & VM_EXEC))
-        pte |= PTE_NX;
-    return pte;
-}
-
 int swap_in_page(struct vmspace *vm, uintptr_t va)
 {
     va = ALIGN_DOWN(va, PAGE_SIZE);
@@ -382,7 +372,7 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
         w = i < n ? paging_walk(vm->pml4_phys, a, false, &entry) : 0;
         if (w == 1 && (*entry & PTE_SWAPPED) && (*entry >> 12) == slot + i && v) {
             page_get(pages[i]);
-            *entry = page_to_phys(pages[i]) | pte_flags_for(v->flags);
+            *entry = page_to_phys(pages[i]) | vma_pte_flags(v->flags);
             tlb_flush_range(vm, a, PAGE_SIZE);
             swap_free_slot(slot + i);
             spin_lock(&swap_lock);

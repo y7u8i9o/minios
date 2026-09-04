@@ -179,6 +179,12 @@ static void free_user_level(uint64_t *table, int level)
             table[i] = 0;
             continue;
         }
+        if (level == 1 && (e & PTE_PROTNONE)) {
+            if (pmm_is_ram(e & PTE_ADDR_MASK))
+                page_put(phys_to_page(e & PTE_ADDR_MASK));
+            table[i] = 0;
+            continue;
+        }
         if (!(e & PTE_P))
             continue;
         if (level == 1) {

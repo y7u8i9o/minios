@@ -357,6 +357,16 @@ int munmap(void *addr, size_t len)
     return (int)syscall2(SYS_munmap, addr, len);
 }
 
+int mprotect(void *addr, size_t len, int prot)
+{
+    return (int)syscall3(SYS_mprotect, addr, len, prot);
+}
+
+int msync(void *addr, size_t len, int flags)
+{
+    return (int)syscall3(SYS_msync, addr, len, flags);
+}
+
 int ioctl(int fd, unsigned long req, ...)
 {
     va_list ap;

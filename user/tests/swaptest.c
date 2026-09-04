@@ -75,7 +75,11 @@ int main(int argc, char **argv)
     CHECK(mmap(NULL, 0, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) == MAP_FAILED && errno == EINVAL, "zero length");
     CHECK(mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, 99, 0) == MAP_FAILED && errno == EBADF, "bad descriptor refused");
     int motd = open("/etc/motd", O_RDONLY);
-    CHECK(mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, motd, 0) == MAP_FAILED && errno == ENODEV, "regular file mapping refused");
+    void *fm = mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, motd, 0);
+    CHECK(fm != MAP_FAILED, "regular file mapping (M37): %s", strerror(errno));
+    CHECK(fm != MAP_FAILED && *(char *)fm != '\0', "file mapping readable");
+    if (fm != MAP_FAILED)
+        munmap(fm, 4096);
     close(motd);
     void *hint = (void *)0x10000000;
     void *h = mmap(hint, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

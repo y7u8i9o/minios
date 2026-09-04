@@ -1,5 +1,6 @@
 #define KLOG_SUBSYS "file"
 #include <fs/vfs.h>
+#include <mm/filemap.h>
 #include <fs/fdtable.h>
 #include <mm/slab.h>
 #include <lib/string.h>
@@ -57,7 +58,10 @@ long file_read(struct file *f, char *buf, size_t n)
         return 0;
     mutex_lock(&f->lock);
     uint64_t pos = f->pos;
+    uint64_t start = pos;
     long r = f->ops->read(f, buf, n, &pos);
+    if (r > 0 && f->inode && f->inode->mapping)
+        filemap_read_overlay(f->inode, buf, start, (size_t)r);
     f->pos = pos;
     mutex_unlock(&f->lock);
     return r;
@@ -80,6 +84,8 @@ long file_write(struct file *f, const char *buf, size_t n)
     if ((f->flags & O_APPEND) && f->inode)
         pos = f->inode->size;
     long r = f->ops->write(f, buf, n, &pos);
+    if (r > 0 && f->inode && f->inode->mapping)
+        filemap_write_through(f->inode, buf, pos - (uint64_t)r, (size_t)r);
     f->pos = pos;
     mutex_unlock(&f->lock);
     vfs_op_end(sb);

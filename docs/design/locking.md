@@ -57,6 +57,9 @@ before the code that uses them.
 | `pty.lock` | spinlock | output ring of one pseudo terminal pair, condition lock of `pty.out_waitq` | M17 |
 | `pty_table_lock` | spinlock | allocation of pseudo terminal pairs | M17 |
 | `tlb_lock` | spinlock | the TLB shootdown request in flight and its statistics, held by the sender while it waits for acknowledgements | M18 |
+| `filemap_lock` | spinlock | `inode->mapping` pointers and the reference counts of mappings | M37 |
+| `mapping.lock` | mutex | the page array of one file mapping, held while a page is read from the file or written back | M37 |
+| `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is held | M37 |
 
 ## Ordering
 
@@ -221,3 +224,19 @@ The panic path bypasses `console_lock` once `panic_in_progress` is set.
   does: under an inode mutex, above `buf.lock`, because cluster
   allocation happens inside a write and reads and writes table entries
   through the cache.
+
+## M37 additions
+
+- `mapping.lock` (mutex) sits between `file.lock` and `inode.lock`:
+  `file_read` and `file_write` hold `file.lock` and take it to overlay or
+  copy through cached pages, and a page fill or writeback takes it and then
+  calls the filesystem's read or write operation, which takes `inode.lock`.
+  `filemap_writeback` calls `vfs_op_begin` before taking it, as the VFS
+  does for writes. The fault handler and the unmap paths never hold a
+  `vmspace.lock` while taking it: `filemap_fault` releases the space lock
+  first and the unmap and msync paths queue their writebacks and run them
+  after the space lock is released.
+- `mapping.dirty_lock` is a leaf taken under `vmspace.lock` (gathering
+  hardware dirty bits) and under `mapping.lock` (writeback).
+- `filemap_lock` is a leaf in level 16; it is taken while a `vmspace.lock`
+  is held only through `filemap_ref`, which is atomic and takes no lock.
