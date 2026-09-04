@@ -42,12 +42,17 @@ static uint16_t le16(const uint8_t *p)
     return (uint16_t)(p[0] | p[1] << 8);
 }
 
-/* One sample of the file as a 16-bit value. */
+/* One sample of the file as a 16-bit value: 8-bit unsigned, 16, 24 and
+ * 32-bit signed little endian, the wider ones by their top 16 bits. */
 static int16_t file_sample(const uint8_t *data, uint32_t index, int bits)
 {
-    if (bits == 8)
-        return (int16_t)((data[index] - 128) << 8);
-    return (int16_t)le16(data + index * 2);
+    const uint8_t *p = data + (size_t)index * (bits / 8);
+    switch (bits) {
+    case 8: return (int16_t)((p[0] - 128) << 8);
+    case 24: return (int16_t)(p[1] | p[2] << 8);
+    case 32: return (int16_t)(p[2] | p[3] << 8);
+    default: return (int16_t)le16(p);
+    }
 }
 
 static int decode(const uint8_t *file, size_t size)
@@ -76,7 +81,7 @@ static int decode(const uint8_t *file, size_t size)
         at += 8 + len + (len & 1);
     }
     if ((format != 1 && format != 0xfffe) || !data || rate == 0 ||
-        (channels != 1 && channels != 2) || (bits != 8 && bits != 16))
+        (channels != 1 && channels != 2) || (bits != 8 && bits != 16 && bits != 24 && bits != 32))
         return -1;
     uint32_t frame_bytes = channels * bits / 8;
     uint32_t in_frames = data_size / frame_bytes;

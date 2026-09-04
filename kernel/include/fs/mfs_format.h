@@ -6,14 +6,14 @@
 #include <stdint.h>
 
 #define MFS_MAGIC          0x3153464du   /* "MFS1" */
-#define MFS_VERSION        2             /* 2: journal region (M36) */
+#define MFS_VERSION        3             /* 2: journal region (M36), 3: 256 byte directory entries */
 #define MFS_BLOCK_SIZE     4096
 #define MFS_NDIRECT        12
 #define MFS_INODE_SIZE     128
 #define MFS_INODES_PER_BLOCK (MFS_BLOCK_SIZE / MFS_INODE_SIZE)
 #define MFS_PTRS_PER_BLOCK (MFS_BLOCK_SIZE / 4)
-#define MFS_NAME_MAX       59
-#define MFS_DIRENT_SIZE    64
+#define MFS_NAME_MAX       251
+#define MFS_DIRENT_SIZE    256
 #define MFS_ROOT_INO       1
 
 /* flags */

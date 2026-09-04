@@ -1,3 +1,7 @@
 build/
 *.o
 qemu.conf
+# bought media stays out of the repository; chime.wav is the system sound
+user/share/sounds/*
+!user/share/sounds/chime.wav
+/*.wav

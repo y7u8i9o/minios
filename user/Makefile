@@ -20,20 +20,22 @@ BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS))
 UCPP   := -I../libc/include -I../kernel/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
-SHARE  := $(patsubst share/%,$(ROOT)/usr/share/%,$(wildcard share/*/*))
 HOME   := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*))
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(BINS) $(ETC) $(SHARE) $(HOME) $(FONTS) $(ROOT)/dev $(ROOT)/initrd
+all: $(BINS) $(ETC) share-tree $(HOME) $(FONTS) $(ROOT)/dev $(ROOT)/initrd
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
 	@if [ -f $< ]; then cp $< $@; else mkdir -p $@; fi
 
-$(ROOT)/usr/share/%: share/%
-	@mkdir -p $(dir $@)
-	cp $< $@
+# The share tree is copied whole: make cannot name files with spaces, and
+# media files may carry them.
+.PHONY: share-tree
+share-tree:
+	@mkdir -p $(ROOT)/usr/share
+	@cp -Rp share/. $(ROOT)/usr/share/
 
 $(ROOT)/home/%: home/%
 	@mkdir -p $(dir $@)

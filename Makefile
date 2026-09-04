@@ -66,7 +66,7 @@ user: libc libfont libwire libaudio libgui
 
 # The initrd is a ustar archive of build/initrd_root, populated by user/.
 initrd: user
-	cd $(BUILD)/initrd_root && tar --format ustar --exclude .DS_Store -cf $(INITRD) .
+	cd $(BUILD)/initrd_root && tar --format ustar --exclude .DS_Store --exclude ./usr/share/sounds -cf $(INITRD) .
 
 # The disk image is attached as a virtio-blk device and holds the root
 # filesystem: an mfs image built from build/initrd_root (M13). It is

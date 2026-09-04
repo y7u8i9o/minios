@@ -27,8 +27,10 @@ one indirect pointer (1024 blocks) and one double indirect pointer
 (1024 x 1024 blocks). Unused pointers are zero; reading such a block yields
 zeros, which gives sparse files. Inode 1 is the root directory.
 
-Directories are arrays of 64 byte entries: a 32 bit inode number followed
-by a NUL terminated name of up to 59 characters. An entry with inode 0 is
+Directories are arrays of 256 byte entries (format version 3; version 2
+used 64 byte entries and 59 character names): a 32 bit inode number
+followed by a NUL terminated name of up to 251 characters, any bytes but
+`/` and NUL. An entry with inode 0 is
 free and is reused by the next create. Every directory starts with `.` and
 `..`. A directory's link count is 2 plus the number of subdirectories.
 

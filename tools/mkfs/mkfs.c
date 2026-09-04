@@ -5,7 +5,7 @@
  *   mkfs --cat <image> <path>         print the contents of a file
  *
  * Exits non zero on any error. --dump reports "clean" or "unclean" and
- * the state of the journal. Images are written in format version 2, which
+ * the state of the journal. Images are written in format version 3, which
  * places a journal between the inode table and the data blocks.
  */
 #include <stdio.h>

@@ -8,6 +8,7 @@
 #include <sched/proc.h>
 #include <ipc/signal.h>
 #include <console.h>
+#include <fs/vfs.h>
 #include "gui_helpers.h"
 
 #define PANEL_H 28
@@ -69,6 +70,28 @@ static void test_audio_player(void)
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "player status 0x%x", status);
+    /* The packed 24-bit track, when the image carries it: 38 MB read and
+     * resampled before the window appears. */
+    const char *track = "/usr/share/sounds/58_Hammer_of_Justice.wav";
+    struct inode *ino;
+    if (vfs_lookup(track, &ino) == 0) {
+        inode_put(ino);
+        cl = proc_create_user("/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
+                              &kernel_proc);
+        ktest_assert(cl != NULL, "cannot start player");
+        uint64_t t0 = timer_ms();
+        while (pixel(72, 80) != 0x00ebebeb && timer_ms() - t0 < 60000)
+            sleep_ms(200);
+        kprintf("audio_player: track loaded after %lu ms\n", timer_ms() - t0);
+        ktest_assert(pixel(72, 80) == 0x00ebebeb, "player window for the track: %08x", pixel(72, 80));
+        sleep_ms(1500);
+        accent = count_color(70 + 10, 90 + 70, 540, 190, ACCENT);
+        ktest_assert(accent > 500, "track waveform drawn: %d accent pixels", accent);
+        alt_key(0x3e);
+        status = proc_reap(cl);
+        ktest_assert(status == 0, "player status for the track 0x%x", status);
+        kprintf("audio_player: 24-bit track ok\n");
+    }
     stop_server(srv);
     stop_audiod(audiod);
     kprintf("audio_player: player ok\n");
