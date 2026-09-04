@@ -367,6 +367,11 @@ int msync(void *addr, size_t len, int flags)
     return (int)syscall3(SYS_msync, addr, len, flags);
 }
 
+int madvise(void *addr, size_t len, int advice)
+{
+    return (int)syscall3(SYS_madvise, addr, len, advice);
+}
+
 int ioctl(int fd, unsigned long req, ...)
 {
     va_list ap;

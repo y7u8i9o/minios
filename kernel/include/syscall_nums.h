@@ -80,4 +80,5 @@
 #define SYS_gettid        76
 #define SYS_mprotect      77
 #define SYS_msync         78
-#define SYS_MAX           79
+#define SYS_madvise       79
+#define SYS_MAX           80

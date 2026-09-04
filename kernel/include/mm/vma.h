@@ -73,6 +73,12 @@ long vma_brk(struct vmspace *vm, intptr_t increment);
 /* True if every page of [addr, addr + len) lies inside a region with the
  * required access. */
 bool vma_range_ok(struct vmspace *vm, uintptr_t addr, size_t len, bool write);
+/* Resolve a fault at the page va as the hardware reported it: write and
+ * present are the error code bits. Used by the trap path and by
+ * MADV_WILLNEED. Returns true when the access can be retried. */
+bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool present);
+/* madvise on [addr, addr + len) (mm/madvise.c). */
+long vma_madvise(struct vmspace *vm, uintptr_t addr, size_t len, int advice);
 /* Sum of the sizes of every region. */
 size_t vma_total_size(struct vmspace *vm);
 

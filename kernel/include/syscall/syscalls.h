@@ -44,6 +44,7 @@ long sys_thread_join(struct trapframe *tf);
 long sys_sbrk(struct trapframe *tf);
 long sys_mprotect(struct trapframe *tf);
 long sys_msync(struct trapframe *tf);
+long sys_madvise(struct trapframe *tf);
 long sys_chdir(struct trapframe *tf);
 long sys_getcwd(struct trapframe *tf);
 long sys_open(struct trapframe *tf);

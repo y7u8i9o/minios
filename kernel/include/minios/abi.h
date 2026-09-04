@@ -75,6 +75,17 @@ struct dirent {
 #define MAP_ANONYMOUS 0x20
 #define MAP_HUGETLB   0x40000
 #define MAP_FAILED ((void *)-1)
+/* madvise advice (M38) */
+#define MADV_NORMAL     0
+#define MADV_RANDOM     1
+#define MADV_SEQUENTIAL 2
+#define MADV_WILLNEED   3
+#define MADV_DONTNEED   4
+#define MADV_FREE       8
+#define MADV_DONTFORK   10
+#define MADV_DOFORK     11
+#define MADV_HUGEPAGE   14
+#define MADV_NOHUGEPAGE 15
 /* msync flags */
 #define MS_ASYNC      1
 #define MS_INVALIDATE 2

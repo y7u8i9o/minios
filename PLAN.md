@@ -1174,7 +1174,7 @@ through the last `munmap`, private copies that never reach the file, a
 fault beyond the end of the file, `mprotect` splitting and `PROT_NONE`,
 `MAP_FIXED`, and the leak check of the `run` harness).
 
-### M38. madvise
+### M38. madvise (completed 2026-09-04)
 
 1. `madvise` (`kernel/mm/madvise.c`): `MADV_NORMAL`, `MADV_RANDOM` and
    `MADV_SEQUENTIAL` are recorded, `MADV_WILLNEED` populates a range

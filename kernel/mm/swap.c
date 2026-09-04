@@ -4,6 +4,7 @@
 #include <mm/vma.h>
 #include <mm/pmm.h>
 #include <mm/slab.h>
+#include <mm/filemap.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <block/blockdev.h>
@@ -35,7 +36,7 @@ static struct blockdev *swapdev;
 static DEFINE_SPINLOCK(swap_lock);
 static uint64_t *slot_bitmap;
 static uint64_t nslots, free_slots, slot_hint;
-static uint64_t swapped_out, swapped_in;
+static uint64_t swapped_out, swapped_in, lazy_freed;
 /* Serializes swap I/O so a swap in never reads a slot whose write is in
  * flight. */
 static struct mutex swap_io_lock;
@@ -108,6 +109,7 @@ void swap_get_stats(struct swap_stats *out)
     out->free_slots = free_slots;
     out->swapped_out = swapped_out;
     out->swapped_in = swapped_in;
+    out->lazy_freed = lazy_freed;
     spin_unlock(&swap_lock);
 }
 
@@ -149,6 +151,21 @@ static uint64_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *v
             if (!(e & PTE_P) || !(e & PTE_U) || !pmm_is_ram(e & PTE_ADDR_MASK))
                 continue;
             struct page *pg = phys_to_page(e & PTE_ADDR_MASK);
+            if (e & PTE_LAZYFREE) {
+                /* MADV_FREE: a page written since keeps its data, a clean
+                 * one is discarded instead of swapped. */
+                if (e & PTE_D) {
+                    pt[i] = e & ~PTE_LAZYFREE;
+                } else {
+                    pt[i] = 0;
+                    tlb_flush_range(vm, va, PAGE_SIZE);
+                    page_put(pg);
+                    spin_lock(&swap_lock);
+                    lazy_freed++;
+                    spin_unlock(&swap_lock);
+                    continue;
+                }
+            }
             if (__atomic_load_n(&pg->refcount, __ATOMIC_SEQ_CST) != 1)
                 continue;
             if (e & PTE_A) {
@@ -432,14 +449,16 @@ static long meminfo_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
     struct pmm_stats st;
     struct swap_stats ss;
+    struct filemap_stats fs;
     pmm_get_stats(&st);
     swap_get_stats(&ss);
-    char text[256];
+    filemap_get_stats(&fs);
+    char text[512];
     int len = ksnprintf(text, sizeof text,
                         "MemTotal: %lu kB\nMemFree: %lu kB\nSwapTotal: %lu kB\nSwapFree: %lu kB\n"
-                        "SwappedOut: %lu\nSwappedIn: %lu\n",
+                        "SwappedOut: %lu\nSwappedIn: %lu\nLazyFreed: %lu\nFileMapped: %lu\n",
                         st.total_pages * 4, st.free_pages * 4, ss.total_slots * 4, ss.free_slots * 4,
-                        ss.swapped_out, ss.swapped_in);
+                        ss.swapped_out, ss.swapped_in, ss.lazy_freed, fs.cached_pages);
     if (*pos >= (uint64_t)len)
         return 0;
     size_t avail = (size_t)len - *pos;

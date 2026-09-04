@@ -135,3 +135,8 @@ long sys_msync(struct trapframe *tf)
         return -EINVAL;
     return vma_msync(thread_current()->proc->vm, SYSARG0(tf), SYSARG1(tf));
 }
+
+long sys_madvise(struct trapframe *tf)
+{
+    return vma_madvise(thread_current()->proc->vm, SYSARG0(tf), SYSARG1(tf), (int)SYSARG2(tf));
+}

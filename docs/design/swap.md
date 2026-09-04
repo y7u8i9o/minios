@@ -100,3 +100,6 @@ fills every page with an offset dependent pattern, verifies it, repeats
 with a second pattern and checks the swap counters. The kernel side
 verifies that every frame and slot is returned after the process exits,
 after waiting for an in flight eviction batch with `swap_drain`.
+
+Since M38 the victim scan also discards clean pages tagged by `MADV_FREE`
+instead of writing them out (see `madvise.md`).

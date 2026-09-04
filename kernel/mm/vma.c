@@ -307,16 +307,9 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
     return true;
 }
 
-bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
+bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool present)
 {
-    struct vmspace *vm = cpu_current()->vm;
-    if (!vm || vm == &kernel_vmspace || addr > USER_TOP)
-        return false;
-    bool write = tf->error & 2;
-    bool present = tf->error & 1;
-    uintptr_t va = ALIGN_DOWN(addr, PAGE_SIZE);
     bool ok = false;
-
     spin_lock(&vm->lock);
     struct vma *v = vma_find_locked(vm, va);
     if (!v || !(v->flags & VM_READ))
@@ -343,6 +336,14 @@ bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
 out:
     spin_unlock(&vm->lock);
     return ok;
+}
+
+bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
+{
+    struct vmspace *vm = cpu_current()->vm;
+    if (!vm || vm == &kernel_vmspace || addr > USER_TOP)
+        return false;
+    return vma_resolve_fault(vm, ALIGN_DOWN(addr, PAGE_SIZE), tf->error & 2, tf->error & 1);
 }
 
 /* Share every page of the parent with the child. Frames of private

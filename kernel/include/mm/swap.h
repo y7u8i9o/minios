@@ -31,6 +31,7 @@ int swap_in_all(struct vmspace *vm);
 struct swap_stats {
     uint64_t total_slots, free_slots;
     uint64_t swapped_out, swapped_in;
+    uint64_t lazy_freed;        /* frames discarded through MADV_FREE (M38) */
 };
 void swap_get_stats(struct swap_stats *out);
 /* Wait until no eviction batch is in flight, for exact accounting in tests. */
