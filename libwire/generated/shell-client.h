@@ -13,7 +13,7 @@ extern const struct wire_interface toplevel_manager_interface;
 extern const struct wire_interface toplevel_handle_interface;
 
 struct shell_listener {
-    int unused;
+    void (*ping)(void *user, struct wire_proxy *self, uint32_t serial);
 };
 static inline int shell_add_listener(struct wire_proxy *p, const struct shell_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
@@ -22,6 +22,8 @@ struct wire_proxy * shell_get_popup(struct wire_proxy *shell, struct wire_proxy 
 struct wire_proxy * shell_create_positioner(struct wire_proxy *shell);
 struct wire_proxy * shell_get_layer_surface(struct wire_proxy *shell, struct wire_proxy * surface, uint32_t layer, const char * namespace);
 struct wire_proxy * shell_get_decoration(struct wire_proxy *shell, struct wire_proxy * toplevel);
+void shell_pong(struct wire_proxy *shell, uint32_t serial);
+void shell_set_pid(struct wire_proxy *shell, uint32_t pid);
 
 struct toplevel_listener {
     void (*configure)(void *user, struct wire_proxy *self, uint32_t serial, int32_t width, int32_t height, const struct wire_array * states);

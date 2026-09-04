@@ -70,6 +70,20 @@ struct wire_proxy * shell_get_decoration(struct wire_proxy *shell, struct wire_p
     return created;
 }
 
+void shell_pong(struct wire_proxy *shell, uint32_t serial)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = serial;
+    wire_proxy_marshal(shell, 5, args, NULL);
+}
+
+void shell_set_pid(struct wire_proxy *shell, uint32_t pid)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = pid;
+    wire_proxy_marshal(shell, 6, args, NULL);
+}
+
 void toplevel_set_title(struct wire_proxy *toplevel, const char * title)
 {
     union wire_arg args[1] = { { 0 } };

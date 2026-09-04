@@ -10,6 +10,7 @@
 #include <arch/boot.h>
 #include <fs/vfs.h>
 #include <lib/string.h>
+#include <lib/cmdline.h>
 #include <lib/crc32.h>
 #include <console.h>
 #include <errno.h>
@@ -951,6 +952,56 @@ static void test_comp_seat(void)
     kprintf("comp_seat: seat ok\n");
 }
 KTEST_DEFINE("comp_seat", test_comp_seat);
+
+/* A client that stops answering pings is dimmed and gets the not
+ * responding dialog; Wait hides it, the client recovers; a client that
+ * hangs for good is killed through Force quit. comptest windows are
+ * 200x150, the dialog 184x96 centred with two 76x26 buttons. */
+static void test_comp_hang(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = start_compositor();
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "hang", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start comptest");
+    /* Toplevel 1 at (40,60): dimmed 0xd0d0ff is 0x88889f. */
+    uint64_t t0 = timer_ms();
+    while (pixel(45, 65) != 0x0088889f && timer_ms() - t0 < 8000)
+        sleep_ms(100);
+    kprintf("comp_hang: dialog after %lu ms\n", timer_ms() - t0);
+    ktest_assert(pixel(45, 65) == 0x0088889f, "hung window dimmed: %08x", pixel(45, 65));
+    ktest_assert(pixel(56, 95) == 0x00f4f5f7, "dialog box drawn: %08x", pixel(56, 95));
+    /* Wait: the dialog goes away although the client still hangs. */
+    mouse_move_to(&cx, &cy, 60 + 38, 145 + 13, 0);
+    mouse_click(1);
+    sleep_ms(300);
+    ktest_assert(pixel(45, 65) == 0x00d0d0ff, "window shown again after Wait: %08x", pixel(45, 65));
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "hanging client status 0x%x", status);
+
+    /* Toplevel 2 at (70,90) hangs for good; Force quit kills it. */
+    cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "hang-forever", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start comptest");
+    t0 = timer_ms();
+    while (pixel(75, 95) != 0x0088889f && timer_ms() - t0 < 8000)
+        sleep_ms(100);
+    ktest_assert(pixel(75, 95) == 0x0088889f, "second hung window dimmed: %08x", pixel(75, 95));
+    char hold[8];
+    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+        sleep_ms(8000);                 /* screenshots of the dialog */
+    mouse_move_to(&cx, &cy, 174 + 38, 175 + 13, 0);
+    mouse_click(1);
+    status = proc_reap(cl);
+    ktest_assert(status == PROC_STATUS_SIGNALED(SIGKILL), "force quit killed the client: 0x%x", status);
+    sleep_ms(300);
+    ktest_assert(pixel(75, 95) == 0x00306080, "window gone after Force quit: %08x", pixel(75, 95));
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+    kprintf("comp_hang: ok\n");
+}
+KTEST_DEFINE("comp_hang", test_comp_hang);
 
 /* M25: the selection and a drag from the source window (surface 1 at
  * 40,60) to the target window (surface 2 at 70,90, on top). */

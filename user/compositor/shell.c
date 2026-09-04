@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "comp.h"
 
 static struct wire_server *server;
@@ -784,13 +785,31 @@ static void h_get_layer_surface(struct wire_client *c, struct wire_resource *sel
     comp_log("layer surface %d (%s)", s->id, ns);
 }
 
-static const struct shell_impl shell_handlers = { h_get_toplevel, h_get_popup, h_create_positioner, h_get_layer_surface, h_get_decoration };
+static void h_pong(struct wire_client *c, struct wire_resource *self, uint32_t serial)
+{
+    struct client *cl = wire_client_get_user_data(c);
+    if (cl && serial == cl->ping_serial)
+        cl->last_pong = uptime_ms();
+}
+
+static void h_set_pid(struct wire_client *c, struct wire_resource *self, uint32_t pid)
+{
+    struct client *cl = wire_client_get_user_data(c);
+    if (cl)
+        cl->pid = (int)pid;
+}
+
+static const struct shell_impl shell_handlers = { h_get_toplevel, h_get_popup, h_create_positioner, h_get_layer_surface,
+                                                  h_get_decoration, h_pong, h_set_pid };
 
 static void bind_shell(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
     struct wire_resource *r = wire_resource_create(c, &shell_interface, (int)version, id);
     if (r)
         wire_resource_set_listener(r, &shell_handlers, NULL, NULL);
+    struct client *cl = wire_client_get_user_data(c);
+    if (cl)
+        cl->shell_res = r;
 }
 
 /* ---- commits ---- */

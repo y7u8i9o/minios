@@ -491,6 +491,15 @@ static const struct data_device_listener device_events = { on_dev_offer, on_dev_
 
 /* ---- connection ---- */
 
+/* The server's liveness ping; an answer that arrives late makes the
+ * window show as not responding until it does. */
+static void on_ping(void *user, struct wire_proxy *sh, uint32_t serial)
+{
+    shell_pong(sh, serial);
+    wire_display_flush(display);
+}
+static const struct shell_listener shell_events = { on_ping };
+
 int gui_connect(void)
 {
     signal(SIGPIPE, SIG_IGN);           /* a vanished compositor is reported as an error, not a signal */
@@ -513,6 +522,8 @@ int gui_connect(void)
         errno = ENOENT;
         return -1;
     }
+    shell_add_listener(shell, &shell_events, NULL);
+    shell_set_pid(shell, (uint32_t)getpid());
     pointer = seat_get_pointer(seat);
     pointer_add_listener(pointer, &pointer_events, NULL);
     keyboard = seat_get_keyboard(seat);

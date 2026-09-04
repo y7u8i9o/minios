@@ -32,7 +32,9 @@ global_remove), `callback` (done), `compositor` (create_surface),
 destroy), `buffer` (destroy; release), `surface` (attach, damage,
 frame, set_opaque_region, set_input_region, set_buffer_scale,
 set_buffer_transform, damage_buffer, commit, destroy; enter) and
-`output` (geometry, mode, scale, transform, done). The shell protocol
+`output` (geometry, mode, scale, transform, done). The `shell` global
+also carries the liveness pair `ping` (event) and `pong` (request) and
+`set_pid`, used for the not responding dialog (`compositor.md`). The shell protocol
 adds toplevel parent/modal state and popup configure/acknowledge/grab;
 `protocol/text.xml` carries UTF-8 text-input and preedit events.
 Requests marked `type="destructor"` destroy their object; the server

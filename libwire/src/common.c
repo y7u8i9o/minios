@@ -58,9 +58,14 @@ int wire_conn_marshal(struct wire_conn *c, uint32_t id, uint32_t opcode, const s
         nfds += *s == 'h';
     if (size > WIRE_MAX_MESSAGE)
         return -1;
-    if (c->out_len + size > sizeof c->out || c->nout_fds + nfds > 16)
+    if (c->out_len + size > sizeof c->out || c->nout_fds + nfds > 16) {
         if (wire_conn_flush(c) < 0)
             return -1;
+        /* The peer is not reading: the message is dropped, the
+         * connection kept (the server shows the client as not responding). */
+        if (c->out_len + size > sizeof c->out || c->nout_fds + nfds > 16)
+            return -1;
+    }
     uint8_t *p = c->out + c->out_len;
     wr32(p, id);
     wr16(p + 4, opcode);

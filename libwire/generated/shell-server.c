@@ -2,6 +2,13 @@
 #include "shell-server.h"
 #include <stddef.h>
 
+void shell_send_ping(struct wire_resource *shell, uint32_t serial)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = serial;
+    wire_resource_post(shell, 0, args);
+}
+
 void toplevel_send_configure(struct wire_resource *toplevel, uint32_t serial, int32_t width, int32_t height, const struct wire_array * states)
 {
     union wire_arg args[4] = { { 0 } };

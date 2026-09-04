@@ -290,6 +290,8 @@ void seat_pointer_button(int button, int pressed)
     if (pressed) {
         if (data_dragging())
             return;
+        if (hang_press(cursor_x, cursor_y))
+            return;
         struct csurface *grab = popup_grab_surface();
         struct csurface *target = scene_surface_at(cursor_x, cursor_y);
         if (grab && (!target || target->role != ROLE_POPUP)) {

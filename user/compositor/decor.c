@@ -504,3 +504,15 @@ int decor_hit(const struct csurface *s, int x, int y)
     }
     return rect_contains(zone, x, y);
 }
+
+const struct font *decor_font(void)
+{
+    decor_fonts();
+    return title_font;
+}
+
+const struct theme *decor_theme_ptr(void)
+{
+    decor_fonts();
+    return &decor_theme;
+}

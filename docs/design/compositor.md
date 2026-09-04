@@ -90,11 +90,23 @@ framebuffer and the compositor's log.
 - X12, the panel and libgui clients ignore `SIGPIPE`; a
   write to a vanished peer is reported as an error and the client (or
   the connection) is dropped instead of the process dying.
-- Client sockets are accepted non blocking; a client whose socket
-  stays full for two seconds (it stopped reading, for example because
-  it is blocked elsewhere) is dropped, so one client cannot stall the
-  display server. The terminal keeps its pseudo terminal master non
-  blocking for the same reason.
+- Client sockets are accepted non blocking, so one client cannot stall
+  the display server; when a client's socket is full, libwire drops the
+  event instead of blocking or overflowing its buffer. The terminal keeps
+  its pseudo terminal master non blocking for the same reason.
+- Unresponsive clients (`user/compositor/hang.c`): X12 sends `shell.ping`
+  to every client once a second and the client answers with
+  `shell.pong` (libgui does this in its event dispatch). A client that
+  has not answered for three seconds, or whose socket has stayed full
+  that long, is shown as not responding: its toplevels are dimmed and
+  carry a dialog drawn by the server with "<title> is not responding",
+  Wait and Force quit. Wait hides the dialog for fifteen seconds; Force
+  quit sends `SIGKILL` to the pid the client reported with
+  `shell.set_pid` (libgui sends it at connect) and drops the connection;
+  a client that answers again gets its windows back unchanged. Clicks on
+  a dimmed window go nowhere. Test: `comp_hang` (a `comptest` client
+  that hangs for six seconds, Wait, recovery, then one that hangs for
+  good and is killed through the button).
 - Closing `/dev/kbd` leaves raw scancode mode (`kbddev_release` in
   `kernel/fs/devfs.c`), so a compositor that dies leaves the console
   keyboard usable; `startgui` ends the session when any of X12, the

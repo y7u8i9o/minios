@@ -80,11 +80,15 @@ static void test_audio_player(void)
                               &kernel_proc);
         ktest_assert(cl != NULL, "cannot start player");
         uint64_t t0 = timer_ms();
-        while (pixel(72, 80) != 0x00ebebeb && timer_ms() - t0 < 60000)
-            sleep_ms(200);
-        kprintf("audio_player: track loaded after %lu ms\n", timer_ms() - t0);
+        while (pixel(72, 80) != 0x00ebebeb && timer_ms() - t0 < 10000)
+            sleep_ms(100);
+        kprintf("audio_player: track window after %lu ms\n", timer_ms() - t0);
         ktest_assert(pixel(72, 80) == 0x00ebebeb, "player window for the track: %08x", pixel(72, 80));
-        sleep_ms(1500);
+        ktest_assert(timer_ms() - t0 < 5000, "the window must not wait for the load");
+        /* The loader thread reads and decodes 38 MB while the window answers. */
+        while (count_color(70 + 10, 90 + 70, 540, 190, ACCENT) <= 500 && timer_ms() - t0 < 90000)
+            sleep_ms(500);
+        kprintf("audio_player: track loaded after %lu ms\n", timer_ms() - t0);
         accent = count_color(70 + 10, 90 + 70, 540, 190, ACCENT);
         ktest_assert(accent > 500, "track waveform drawn: %d accent pixels", accent);
         alt_key(0x3e);

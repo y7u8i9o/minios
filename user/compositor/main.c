@@ -107,13 +107,13 @@ void frame_clock_set(int ms)
     timerfd_settime(frame_fd, &spec);
 }
 
-/* A client whose socket stays full for two seconds (it stopped
- * reading, or died without closing) is dropped. */
+/* Flush every client and note since when a socket has stayed full; a
+ * client that stops reading or answering pings is shown as not
+ * responding (hang.c) and dropped only through its Force quit button. */
 static void flush_clients(void)
 {
     long now = uptime_ms();
-    for (struct wire_client *c = wire_server_first_client(srv); c;) {
-        struct wire_client *next = wire_client_next(c);
+    for (struct wire_client *c = wire_server_first_client(srv); c; c = wire_client_next(c)) {
         wire_client_flush(c);
         struct client *cl = wire_client_get_user_data(c);
         if (cl) {
@@ -121,13 +121,9 @@ static void flush_clients(void)
                 cl->stall_since = 0;
             else if (!cl->stall_since)
                 cl->stall_since = now;
-            else if (now - cl->stall_since > 2000) {
-                comp_log("client %d stopped reading, dropping it", cl->number);
-                wire_client_destroy(c);
-            }
         }
-        c = next;
     }
+    hang_tick(now);
 }
 
 static void frame(void)
@@ -199,6 +195,7 @@ int main(int argc, char **argv)
     }
     surfaces_init(srv);
     shell_init(srv);
+    hang_init(srv);
     seat_init(srv);
     data_init(srv);
     text_init(srv);

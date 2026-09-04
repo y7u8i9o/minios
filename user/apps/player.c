@@ -8,6 +8,7 @@
  * every buffer the server hands back is refilled at once. */
 #include <audio/audio.h>
 #include <gui/app.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,7 +56,23 @@ static int16_t file_sample(const uint8_t *data, uint32_t index, int bits)
     }
 }
 
-static int decode(const uint8_t *file, size_t size)
+/* A file being read and decoded by the loader thread; the main loop takes
+ * the result at the next tick. lock protects done. */
+struct load_job {
+    char path[256];
+    int16_t *samples;
+    uint32_t frames;
+    char format[64];
+    int error;
+    int done;
+    int autoplay;
+};
+static struct load_job job;
+static pthread_t loader;
+static pthread_mutex_t job_lock = PTHREAD_MUTEX_INITIALIZER;
+static int loading;
+
+static int decode(const uint8_t *file, size_t size, struct load_job *j)
 {
     if (size < 12 || memcmp(file, "RIFF", 4) != 0 || memcmp(file + 8, "WAVE", 4) != 0)
         return -1;
@@ -106,42 +123,85 @@ static int decode(const uint8_t *file, size_t size)
             out[i * 2 + c] = (int16_t)(a + (((b - a) * (int32_t)frac) >> 16));
         }
     }
-    free(samples);
-    samples = out;
-    frames = (uint32_t)out_frames;
-    snprintf(format_text, sizeof format_text, "%u Hz %s %u-bit", rate,
-             channels == 2 ? "stereo" : "mono", bits);
+    j->samples = out;
+    j->frames = (uint32_t)out_frames;
+    snprintf(j->format, sizeof j->format, "%u Hz %s %u-bit", rate, channels == 2 ? "stereo" : "mono", bits);
     return 0;
 }
 
-static int load(const char *path)
+/* The loader thread: reads and decodes the file without touching the
+ * user interface, so the window keeps answering the server meanwhile. */
+static void *load_thread(void *arg)
 {
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return -1;
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (size <= 0) {
-        fclose(f);
-        return -1;
-    }
-    uint8_t *buf = malloc((size_t)size);
-    if (!buf || fread(buf, 1, (size_t)size, f) != (size_t)size) {
+    struct load_job *j = arg;
+    int r = -1;
+    FILE *f = fopen(j->path, "r");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t *buf = size > 0 ? malloc((size_t)size) : NULL;
+        if (buf && fread(buf, 1, (size_t)size, f) == (size_t)size)
+            r = decode(buf, (size_t)size, j);
         free(buf);
         fclose(f);
-        return -1;
     }
-    fclose(f);
-    int r = decode(buf, (size_t)size);
-    free(buf);
-    if (r < 0)
+    pthread_mutex_lock(&job_lock);
+    j->error = r < 0;
+    j->done = 1;
+    pthread_mutex_unlock(&job_lock);
+    return NULL;
+}
+
+/* Start loading path; returns -1 when a load is already running. */
+static int load_start(const char *path, int autoplay)
+{
+    if (loading)
         return -1;
+    memset(&job, 0, sizeof job);
+    snprintf(job.path, sizeof job.path, "%s", path);
+    job.autoplay = autoplay;
+    if (pthread_create(&loader, NULL, load_thread, &job) != 0)
+        return -1;
+    loading = 1;
     const char *base = strrchr(path, '/');
-    snprintf(file_name, sizeof file_name, "%s", base ? base + 1 : path);
+    char text[300];
+    snprintf(text, sizeof text, "Loading %s", base ? base + 1 : path);
+    widget_set_text(info, text);
+    return 0;
+}
+
+static void show_info(void);
+static void set_playing(int on);
+
+/* Take a finished load: the main loop owns samples and the view. */
+static void load_finish(void)
+{
+    pthread_mutex_lock(&job_lock);
+    int done = job.done;
+    pthread_mutex_unlock(&job_lock);
+    if (!loading || !done)
+        return;
+    pthread_join(loader, NULL);
+    loading = 0;
+    if (job.error) {
+        static const char *const buttons[] = { "Close" };
+        show_info();
+        app_dialog(app, "Error", "The file is not a PCM WAV file.", buttons, 1);
+        return;
+    }
+    free(samples);
+    samples = job.samples;
+    frames = job.frames;
+    snprintf(format_text, sizeof format_text, "%s", job.format);
+    const char *base = strrchr(job.path, '/');
+    snprintf(file_name, sizeof file_name, "%s", base ? base + 1 : job.path);
     position = 0;
     columns = 0;                    /* the overview is rebuilt on the next paint */
-    return 0;
+    if (job.autoplay)
+        set_playing(1);
+    show_info();
+    widget_invalidate(wave);
 }
 
 /* ---- audio ---- */
@@ -218,6 +278,7 @@ static void audio_event(int fd, int revents, void *arg)
 
 static void on_tick(void *arg)
 {
+    load_finish();
     update_time();
     widget_invalidate(wave);
 }
@@ -333,10 +394,8 @@ static int on_open(struct widget *w, void *args, void *arg)
     static const char *const buttons[] = { "Close" };
     if (app_prompt(app, "Open", "File:", name, sizeof name)) {
         set_playing(0);
-        if (load(name) < 0)
-            app_dialog(app, "Error", "The file is not a PCM WAV file.", buttons, 1);
-        show_info();
-        widget_invalidate(wave);
+        if (load_start(name, 1) < 0)
+            app_dialog(app, "Error", "A file is still being loaded.", buttons, 1);
     }
     return 1;
 }
@@ -424,13 +483,9 @@ int main(int argc, char **argv)
     widget_focus(wave);
     info = label_new(win, "");
 
-    if (argc > 1) {
-        if (load(argv[1]) < 0)
-            fprintf(stderr, "player: cannot open %s\n", argv[1]);
-        else
-            set_playing(1);
-    }
     show_info();
+    if (argc > 1)
+        load_start(argv[1], 1);
 
     if (fill_ready_buffers() < 0 || audio_playback_start(playback) < 0) {
         audio_disconnect(audio);

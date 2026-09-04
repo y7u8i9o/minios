@@ -26,6 +26,18 @@
       <arg name="id" type="new_id" interface="decoration"/>
       <arg name="toplevel" type="object" interface="toplevel"/>
     </request>
+    <!-- Liveness: the server pings every client once a second; a client
+         that has not answered for three seconds is shown as not
+         responding. set_pid lets the server end the process on request. -->
+    <request name="pong">
+      <arg name="serial" type="uint"/>
+    </request>
+    <request name="set_pid">
+      <arg name="pid" type="uint"/>
+    </request>
+    <event name="ping">
+      <arg name="serial" type="uint"/>
+    </event>
   </interface>
 
   <interface name="toplevel" version="1">

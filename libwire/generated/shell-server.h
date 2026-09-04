@@ -18,7 +18,10 @@ struct shell_impl {
     void (*create_positioner)(struct wire_client *client, struct wire_resource *self, uint32_t id);
     void (*get_layer_surface)(struct wire_client *client, struct wire_resource *self, uint32_t id, struct wire_resource * surface, uint32_t layer, const char * namespace);
     void (*get_decoration)(struct wire_client *client, struct wire_resource *self, uint32_t id, struct wire_resource * toplevel);
+    void (*pong)(struct wire_client *client, struct wire_resource *self, uint32_t serial);
+    void (*set_pid)(struct wire_client *client, struct wire_resource *self, uint32_t pid);
 };
+void shell_send_ping(struct wire_resource *shell, uint32_t serial);
 
 struct toplevel_impl {
     void (*set_title)(struct wire_client *client, struct wire_resource *self, const char * title);

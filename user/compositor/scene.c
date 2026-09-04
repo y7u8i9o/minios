@@ -391,6 +391,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
                 decor_draw(s, pieces[k]);
             }
             draw_surface(s, pieces[k]);
+            hang_draw(s, pieces[k]);
         }
     }
     draw_cursor(r);

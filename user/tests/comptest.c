@@ -287,6 +287,39 @@ static int run_core(void)
     return 0;
 }
 
+static void on_ping(void *user, struct wire_proxy *sh, uint32_t serial) { shell_pong(sh, serial); }
+static const struct shell_listener shell_events = { on_ping };
+
+/* A client that maps a window and then stops answering: for hang_ms
+ * milliseconds it neither reads nor writes, then it resumes for two
+ * seconds and leaves. hang_ms 0 hangs until it is killed. */
+static int run_hang(int hang_ms)
+{
+    shell_set_pid(shell, (uint32_t)getpid());
+    struct window win = { 0 };
+    window_create(&win, "hang", 0x00d0d0ff, W, H);
+    /* The configure arrives in the first round trip and the buffer goes
+     * out in the second, so the window is on screen before the hang. */
+    wire_display_roundtrip(d);
+    wire_display_roundtrip(d);
+    wire_display_flush(d);
+    LOG("window 'hang' ready, hanging for %d ms", hang_ms);
+    if (hang_ms == 0)
+        for (;;)
+            sleep_ms(1000);
+    sleep_ms((unsigned long)hang_ms);
+    LOG("resuming");
+    long until = uptime_ms() + 2000;
+    while (uptime_ms() < until && !win.closed) {
+        struct pollfd pf = { wire_display_fd(d), POLLIN, 0 };
+        wire_display_flush(d);
+        if (poll(&pf, 1, 200) > 0 && wire_display_dispatch(d) < 0)
+            return 1;
+    }
+    LOG("window 'hang' done");
+    return 0;
+}
+
 static int run_window(const char *title, uint32_t color, int with_seat, int with_data, int is_source)
 {
     if (with_seat) {
@@ -343,6 +376,7 @@ int main(int argc, char **argv)
     }
     shm_add_listener(shm, &shm_events, NULL);
     output_add_listener(output, &output_events, NULL);
+    shell_add_listener(shell, &shell_events, NULL);
     wire_display_roundtrip(d);
     LOG("%d formats, output %dx%d, %d modes", formats, out_w, out_h, modes);
     int r;
@@ -351,6 +385,8 @@ int main(int argc, char **argv)
     else if (strcmp(mode, "seat") == 0) r = run_window("seat", 0x00c8f0c8, 1, 0, 0);
     else if (strcmp(mode, "data-source") == 0) r = run_window("source", 0x00ffe0a0, 1, 1, 1);
     else if (strcmp(mode, "data-target") == 0) r = run_window("target", 0x00a0e0ff, 1, 1, 0);
+    else if (strcmp(mode, "hang") == 0) r = run_hang(6000);
+    else if (strcmp(mode, "hang-forever") == 0) r = run_hang(0);
     else r = 2;
     wire_display_disconnect(d);
     return r;

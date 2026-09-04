@@ -17,9 +17,11 @@ static const struct wire_message shell_requests[] = {
     { "create_positioner", "n", 1, (const char *const[]){ "positioner" }, 0 },
     { "get_layer_surface", "nous", 4, (const char *const[]){ "layer_surface", "surface", NULL, NULL }, 0 },
     { "get_decoration", "no", 2, (const char *const[]){ "decoration", "toplevel" }, 0 },
+    { "pong", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "set_pid", "u", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message shell_events[] = {
-    { NULL, "", 0, NULL, 0 },
+    { "ping", "u", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message toplevel_requests[] = {
     { "set_title", "s", 1, (const char *const[]){ NULL }, 0 },
@@ -99,7 +101,7 @@ static const struct wire_message toplevel_handle_events[] = {
     { "state", "a", 1, (const char *const[]){ NULL }, 0 },
     { "closed", "", 0, (const char *const[]){ NULL }, 0 },
 };
-const struct wire_interface shell_interface = { "shell", 1, 5, shell_requests, 0, shell_events };
+const struct wire_interface shell_interface = { "shell", 1, 7, shell_requests, 1, shell_events };
 const struct wire_interface toplevel_interface = { "toplevel", 1, 14, toplevel_requests, 2, toplevel_events };
 const struct wire_interface popup_interface = { "popup", 1, 3, popup_requests, 2, popup_events };
 const struct wire_interface positioner_interface = { "positioner", 1, 7, positioner_requests, 0, positioner_events };

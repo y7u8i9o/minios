@@ -140,7 +140,27 @@ struct client {
     int ninput_serials;
     struct wire_resource *seat_res;
     struct wire_resource *manager;
+    /* Liveness (hang.c): pings on the shell global, the pid the client
+     * reported, and the not responding state. */
+    struct wire_resource *shell_res;
+    int pid;
+    uint32_t ping_serial;
+    long ping_sent, last_pong;              /* uptime ms; last_pong is the connect time until the first pong */
+    int unresponsive;
+    long snooze_until;                      /* Wait pressed: the overlay stays away until then */
 };
+
+/* hang.c: unresponsive clients. */
+void hang_init(struct wire_server *srv);
+void hang_client_attached(struct client *c);
+void hang_tick(long now);
+/* Draw the dimming and the dialog over an unresponsive toplevel. */
+void hang_draw(struct csurface *s, struct rect clip);
+/* A press at (x, y): 1 when it hit an unresponsive window (buttons handled). */
+int hang_press(int x, int y);
+/* decor.c: the title font and theme for server side text. */
+const struct font *decor_font(void);
+const struct theme *decor_theme_ptr(void);
 
 /* debug.c: tunable settings */
 struct comp_settings {

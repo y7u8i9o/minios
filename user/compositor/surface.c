@@ -485,6 +485,7 @@ void client_attach(struct wire_client *wc)
     c->wc = wc;
     c->number = next_client++;
     wire_client_set_user_data(wc, c, client_gone);
+    hang_client_attached(c);
     comp_log("client %d connected", c->number);
 }
 

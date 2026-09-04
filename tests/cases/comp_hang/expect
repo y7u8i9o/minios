@@ -1,0 +1,7 @@
+x12: client 1 not responding
+x12: client 1: wait
+x12: client 1 responding again
+x12: client 2 not responding
+x12: client 2 force quit
+comp_hang: ok
+TEST PASS
