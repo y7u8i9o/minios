@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 struct ext_entry { char type[48]; char ext[16]; };
 struct app_entry { char type[48]; char program[64]; };
@@ -203,12 +204,25 @@ pid_t mime_open(const char *path)
         argv[1] = (char *)path;
         argv[2] = NULL;
     }
+    int r = mime_spawn(argv);
+    return r < 0 ? r : 1;
+}
+
+int mime_spawn(char *const argv[])
+{
     pid_t pid = fork();
     if (pid < 0)
         return -errno;
     if (pid == 0) {
-        execvp(argv[0], argv);
-        _exit(127);
+        pid_t grandchild = fork();
+        if (grandchild == 0) {
+            execvp(argv[0], argv);
+            _exit(127);
+        }
+        _exit(grandchild < 0 ? 1 : 0);
     }
-    return pid;
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+        ;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -EAGAIN;
 }

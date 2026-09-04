@@ -27,3 +27,8 @@ const char *mime_icon(const char *type);
 /* Start the program for path in a child process; returns its pid or
  * -errno. A launcher file runs its exec= line instead. */
 pid_t mime_open(const char *path);
+/* Start argv[0] with argv as a child of init: the launcher forks twice
+ * and reaps the intermediate child at once, so the program is reaped by
+ * init when it exits and never lingers as a zombie of a window that has
+ * no wait loop. Returns 0 or -errno. */
+int mime_spawn(char *const argv[]);

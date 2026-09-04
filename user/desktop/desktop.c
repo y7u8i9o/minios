@@ -58,13 +58,8 @@ static int last_click_entry = -1;
 
 static pid_t spawn(const char *prog, const char *arg)
 {
-    pid_t pid = fork();
-    if (pid == 0) {
-        char *const args[] = { (char *)prog, (char *)arg, NULL };
-        execv(prog, args);
-        _exit(127);
-    }
-    return pid;
+    char *const args[] = { (char *)prog, (char *)arg, NULL };
+    return mime_spawn(args);
 }
 
 static void logline(const char *fmt, ...)

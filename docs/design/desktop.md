@@ -78,7 +78,12 @@ returns the child's pid. A launcher file (`application/x-launcher`,
 extension `.app`) is opened by running the command in its `exec=`
 line instead. `mime_icon(type)` names the icon in `/usr/share/icons`.
 `mime_set_handler` and `mime_save` edit the handler table. The Files
-application opens files through `mime_open`.
+application opens files through `mime_open`. Programs are started by
+`mime_spawn`, which forks twice and reaps the intermediate child, so the
+program becomes a child of init and is reaped there when it exits; a
+launcher without a wait loop (Files, the desktop, Settings) therefore
+never accumulates zombies. The `gui_desktop` case checks that the clock
+opened by a double click is not the desktop's zombie.
 
 ## Settings application
 

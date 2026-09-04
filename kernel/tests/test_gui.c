@@ -1189,6 +1189,50 @@ KTEST_DEFINE("gui_unicode", test_gui_unicode);
  * click on the Clock icon starts the clock, right clicks open the two
  * context menus, "settings set" changes the configuration file which the
  * desktop applies, and the settings window opens and closes. */
+/* Parse "PID PPID PGID STATE ..." of a /dev/proc row. */
+static bool ksscanf_row(const char *line, int *pid, int *ppid, int *pgid, char *state, size_t size)
+{
+    const char *p = line;
+    int *fields[3] = { pid, ppid, pgid };
+    for (int i = 0; i < 3; i++) {
+        while (*p == ' ')
+            p++;
+        if (*p < '0' || *p > '9')
+            return false;
+        int v = 0;
+        while (*p >= '0' && *p <= '9')
+            v = v * 10 + (*p++ - '0');
+        *fields[i] = v;
+    }
+    while (*p == ' ')
+        p++;
+    size_t k = 0;
+    while (*p && *p != ' ' && k + 1 < size)
+        state[k++] = *p++;
+    state[k] = '\0';
+    return true;
+}
+
+/* Zombie children of ppid in the process table; ppid 0 is the kernel
+ * process, which adopts orphans when no init runs. */
+static int zombies_of(int ppid)
+{
+    static char text[8192];
+    proc_format_table(text, sizeof text);
+    int n = 0;
+    for (char *line = text; line && *line; ) {
+        char *nl = strchr(line, '\n');
+        if (nl)
+            *nl = '\0';
+        int pid, parent, pgid;
+        char state[16];
+        if (ksscanf_row(line, &pid, &parent, &pgid, state, sizeof state) && parent == ppid && strcmp(state, "zombie") == 0)
+            n++;
+        line = nl ? nl + 1 : NULL;
+    }
+    return n;
+}
+
 static void test_gui_desktop(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
@@ -1221,7 +1265,11 @@ static void test_gui_desktop(void)
     sleep_ms(1500);
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "clock window opened from the desktop: %08x", pixel(42, 50));
     alt_key(0x3e);
-    sleep_ms(400);
+    sleep_ms(600);
+    /* The desktop starts programs as children of init, so the clock is
+     * not its zombie; here the kernel process adopted and holds it. */
+    ktest_assert(zombies_of(desktop->pid) == 0, "the desktop left a zombie child");
+    ktest_assert(zombies_of(0) == 1, "the clock became the kernel's orphan: %d", zombies_of(0));
     /* Context menus: on the desktop, then on the fourth icon (readme.txt). */
     mouse_move_to(&cx, &cy, 600, 300, 0);
     mouse_click(2);

@@ -439,11 +439,7 @@ static void system_tick(void *arg)
 static int on_launch(struct widget *w, void *args, void *arg)
 {
     const char *prog = arg;
-    pid_t pid = fork();
-    if (pid == 0) {
-        execv(prog, (char *const[]){ (char *)prog, NULL });
-        _exit(127);
-    }
+    mime_spawn((char *const[]){ (char *)prog, NULL });
     return 1;
 }
 
