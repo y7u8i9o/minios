@@ -12,8 +12,9 @@
 #   -a, --audio BACKEND    QEMU_AUDIO        audio backend for virtio-snd
 #                                            (coreaudio, none, wav, pa, alsa,
 #                                            pipewire, sdl, dbus, ...);
-#                                            default coreaudio on macOS, none
-#                                            elsewhere
+#                                            default coreaudio on macOS, on
+#                                            Linux the first of pipewire, pa,
+#                                            alsa and sdl that QEMU offers
 #       --audio-opts OPTS  QEMU_AUDIO_OPTS   extra -audiodev properties, for
 #                                            example out.frequency=48000
 #       --wav FILE         QEMU_WAV          output file of the wav backend
@@ -134,7 +135,16 @@ QEMU_WAV="${QEMU_WAV:-$BUILD/audio.wav}"
 if [ -z "$QEMU_AUDIO" ]; then
     case "$(uname -s)" in
         Darwin) QEMU_AUDIO=coreaudio ;;
-        *)      QEMU_AUDIO=none ;;
+        *)
+            # The first backend this QEMU offers, in order of preference.
+            for b in pipewire pa alsa sdl; do
+                if "$QEMU" -audiodev help 2>/dev/null | grep -qx "$b"; then
+                    QEMU_AUDIO=$b
+                    break
+                fi
+            done
+            [ -n "$QEMU_AUDIO" ] || QEMU_AUDIO=none
+            ;;
     esac
 fi
 

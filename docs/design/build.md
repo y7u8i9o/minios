@@ -54,8 +54,10 @@ swap virtio-blk devices, a virtio-snd device with an audio backend and the
 ISO. Settings come from four layers, each overriding the previous one:
 
 1. built-in defaults: 512M, 4 CPUs, HVF on macOS when the QEMU binary offers
-   it and TCG elsewhere, Core Audio on macOS and the silent `none` backend
-   elsewhere (`QEMU_ACCEL=kvm` opts into KVM on Linux);
+   it and TCG elsewhere, Core Audio on macOS and on Linux the first of
+   pipewire, pulseaudio (`pa`), alsa and sdl that the QEMU binary offers,
+   `none` when it offers none of them (`QEMU_ACCEL=kvm` opts into KVM on
+   Linux);
 2. `qemu.conf` in the repository root, a shell fragment that is ignored by
    git (`qemu.conf.example` lists every setting);
 3. `QEMU_*` environment variables, also accepted on the make command line,
