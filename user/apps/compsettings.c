@@ -170,7 +170,7 @@ static const char *m_header(struct model *m, int col)
     static const char *const names[] = { "Id", "Client", "Role", "Title", "Geometry", "State" };
     return names[col];
 }
-static struct model model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL };
+static struct model model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL, NULL };
 
 static void tick(void *arg)
 {

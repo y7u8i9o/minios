@@ -290,18 +290,23 @@ static int mnemonic_of(const struct widget *w)
     return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
 }
 
-static int activate_accel(struct widget *w, int code, int ch, int mods)
+/* Accelerators of items in closed menus stay active; their mnemonics
+ * do not (those belong to the open menu). */
+static int activate_accel(struct widget *w, int code, int ch, int mods, int in_closed_menu)
 {
-    if (!w->visible || !w->enabled)
+    int menu = w->cls == &menu_class, item = w->cls == &menuitem_class;
+    if (!w->enabled || (!w->visible && !menu && !(item && in_closed_menu)))
         return 0;
+    if (menu && !w->visible)
+        in_closed_menu = 1;
     if ((w->accel_key && w->accel_key == code && w->accel_mods == mods) ||
-        ((mods & WMOD_ALT) && ch && mnemonic_of(w) == ch)) {
+        (!in_closed_menu && (mods & WMOD_ALT) && ch && mnemonic_of(w) == ch)) {
         struct sig_click c = { 1, 0, 0 };
         widget_emit(w, "clicked", &c);
         return 1;
     }
     for (struct widget *c = w->first; c; c = c->next)
-        if (activate_accel(c, code, ch, mods))
+        if (activate_accel(c, code, ch, mods, in_closed_menu))
             return 1;
     return 0;
 }
@@ -327,7 +332,7 @@ static void key_message(struct widget *window, struct wmsg *m)
         widget_focus_next(window, m->c & WMOD_SHIFT);
         return;
     }
-    if (activate_accel(window, m->a, m->d, m->c))
+    if (activate_accel(window, m->a, m->d, m->c, 0))
         return;
     struct sig_key k = { m->a, m->d, m->c };
     widget_emit(window, "key", &k);

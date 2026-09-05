@@ -1454,3 +1454,22 @@ Documented in
 `docs/design/shell.md`, `docs/design/gui.md` and
 `docs/design/protocol.md`; the decoration expectations of the `gui_*`
 and `comp_*` cases were updated.
+
+## Terminal and Files rework (completed 2026-09-05)
+
+The terminal window was rebuilt on a separate emulator (`user/term/vt.c`):
+UTF-8, 16, 256 and 24 bit colours with bold, faint, underline, reverse
+and strike, a scrolling region, the alternate screen, cursor
+visibility, bracketed paste, cursor position and device reports and OSC
+titles; the window draws DejaVu Sans Mono antialiased at
+`term_font_px` (13), has tabs, a scrollback bar, a mouse selection with
+copy and paste, zoom keys and a context menu. The file manager
+(`user/files/`) has a places list, a table with icons, size, type and
+date columns, history, hidden files, new folder and file, rename,
+delete with confirmation, copy, cut, paste, properties, Open with, Open
+in terminal, a context menu and a listing that follows other programs.
+The data views gained icons, a `context` signal, double click
+activation and `view_select`; tabs can hide their title row. Documented
+in `docs/design/terminal.md` and `docs/design/files.md`; tested by
+`gui_term`, `gui_term_scale2` (updated to the 8x17 cells) and the new
+`gui_files` case.

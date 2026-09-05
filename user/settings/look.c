@@ -18,7 +18,8 @@ static const struct { const char *name; const char *path; } fonts[] = {
 };
 #define NFONTS 4
 
-static struct widget *wall_combo, *mode_combo, *red, *green, *blue, *swatch, *font_combo, *size_spin, *scale_combo;
+static struct widget *wall_combo, *mode_combo, *red, *green, *blue, *swatch, *font_combo, *size_spin, *scale_combo,
+                     *term_spin;
 static char wallpapers[16][128];
 static int nwallpapers;
 static int building;
@@ -64,6 +65,13 @@ static int on_font_size(struct widget *w, void *args, void *arg)
     conf_set_int("ui_font_px", w->value);
     return 1;
 }
+static int on_term_font_size(struct widget *w, void *args, void *arg)
+{
+    if (!building)
+        conf_set_int("term_font_px", term_spin->value);
+    return 1;
+}
+
 static int on_scale(struct widget *w, void *args, void *arg)
 {
     if (building) return 1;
@@ -147,6 +155,10 @@ void build_appearance(struct widget *page)
     size_spin = spinner_new(grid, 10, 24, conf_int("ui_font_px", 14));
     widget_connect(size_spin, "changed", on_font_size, NULL);
     widget_set_grid(size_spin, r++, 1, 1, 1);
+    row_label(grid, r, "Terminal font size (px)");
+    term_spin = spinner_new(grid, 8, 32, conf_int("term_font_px", 13));
+    widget_connect(term_spin, "changed", on_term_font_size, NULL);
+    widget_set_grid(term_spin, r++, 1, 1, 1);
     row_label(grid, r, "Interface scale");
     scale_combo = combobox_new(grid);
     combobox_add(scale_combo, "100 %");

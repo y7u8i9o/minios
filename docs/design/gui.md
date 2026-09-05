@@ -100,14 +100,11 @@ callback. `ui_run` redraws on demand, routes mouse and key events to
 widgets, keeps keyboard focus, calls a periodic tick, and stops on
 `WM_CLOSE`; unhandled keys reach `ui->on_key`.
 
-Applications: `term` (the terminal emulator: 80x25 cells, the VT100
-subset of the console, cursor as an inverted cell, keys and cursor
-sequences written to the pseudo terminal master, the shell on the slave
-in its own process group), `clock` (canvas redrawn every second from
-`uptime_ms`), `files` (directory list box with navigation, a path field
-and `view` for files), `view` (scrolling text viewer), `mandel` (the
-progressive Mandelbrot plotter on the application framework, described
-in `userland.md`).
+Applications: `term` (the terminal emulator, described in
+`terminal.md`), `clock` (canvas redrawn every second from
+`uptime_ms`), `files` (the file manager, described in `files.md`),
+`view` (scrolling text viewer), `mandel` (the progressive Mandelbrot
+plotter on the application framework, described in `userland.md`).
 
 ## Tests
 
@@ -125,8 +122,8 @@ in `userland.md`).
   movement, clicks, a drag and a key press are checked against the
   server and client logs and against pixels of the composed screen.
 - `gui_term`: the terminal window; a command typed through the keyboard
-  driver reaches the shell, which writes a file, and text is rendered in
-  the window.
+  driver reaches the shell, which writes a file, text is rendered in
+  the window, and a resize reaches the shell (see `terminal.md`).
 
 ## M19 enhancements
 

@@ -1,0 +1,8 @@
+x12: toplevel 1 'desktop - Files' mapped at 40,30
+files: mkdir /home/desktop/testdir
+files: rename /home/desktop/testdir -> /home/desktop/renamed
+files: delete /home/desktop/renamed
+files: open /home/desktop/readme.txt
+x12: toplevel [0-9]+ 'gedit' mapped
+gui_files: ok
+TEST PASS

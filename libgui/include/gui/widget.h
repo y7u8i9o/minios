@@ -232,6 +232,8 @@ extern const struct widget_class statusbar_class;
 struct widget *tabs_new(struct widget *parent);
 struct widget *tabs_add(struct widget *tabs, const char *title);    /* returns the page (a vertical box) */
 void tabs_select(struct widget *tabs, int index);
+/* Hide the title row while the tabs hold a single page. */
+void tabs_set_autohide(struct widget *tabs, int on);
 struct widget *splitpane_new(struct widget *parent, int vertical);  /* two children added by the caller */
 void splitpane_set_position(struct widget *w, int pos);
 struct widget *toolbar_new(struct widget *parent);
@@ -241,7 +243,10 @@ struct widget *statusbar_add(struct widget *bar, int stretch);      /* a label *
 
 /* ---- data views (widgets/models.c), see gui/model.h ---- */
 
-extern const struct widget_class treeview_class;   /* "selected", "activate" (sig_select: row id) */
+/* "selected" and "activate" (sig_select: row id); "activate" also on a
+ * double click. A right click selects the row and emits "context"
+ * (sig_click, local coordinates) for a popup menu. */
+extern const struct widget_class treeview_class;
 extern const struct widget_class table_class;
 struct model;
 struct widget *treeview_new(struct widget *parent);
@@ -250,6 +255,7 @@ void view_set_model(struct widget *w, struct model *m);   /* both classes */
 void view_refresh(struct widget *w);                      /* after the model changed */
 int view_visible_rows(const struct widget *w);           /* flattened rows */
 int view_row_at(const struct widget *w, int index);      /* row id of a flattened row */
+void view_select(struct widget *w, int row);             /* select and scroll to a row id */
 void treeview_expand(struct widget *w, int row, int expanded);
 int treeview_is_expanded(const struct widget *w, int row);
 void table_set_column_width(struct widget *w, int col, int width);

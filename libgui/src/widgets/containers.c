@@ -9,8 +9,15 @@ void widget_measure(struct widget *w);
 
 #define TAB_PAD 10
 
+struct tabs {
+    struct widget w;
+    int autohide;               /* no title row while there is one page */
+};
+
 static int tabs_header_h(const struct widget *w)
 {
+    if (((const struct tabs *)w)->autohide && (!w->first || w->first == w->last))
+        return 0;
     return theme_px(widget_theme(w), TM_CONTROL_H);
 }
 
@@ -24,7 +31,7 @@ static void tabs_measure(struct widget *w, struct size_hint *h)
         if (c->measured.pref_h > ph) ph = c->measured.pref_h;
     }
     h->pref_w = pw;
-    h->pref_h = ph + hh + theme_px(widget_theme(w), TM_SPACING);
+    h->pref_h = ph + hh + (hh ? theme_px(widget_theme(w), TM_SPACING) : 0);
     h->min_w = 40;
     h->min_h = hh + 20;
 }
@@ -32,7 +39,7 @@ static void tabs_measure(struct widget *w, struct size_hint *h)
 static void tabs_layout(struct widget *w)
 {
     /* The page starts one spacing below the header row's hairline. */
-    int hh = tabs_header_h(w), gap = theme_px(widget_theme(w), TM_SPACING);
+    int hh = tabs_header_h(w), gap = hh ? theme_px(widget_theme(w), TM_SPACING) : 0;
     int i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
         c->visible = i == w->value;
@@ -63,6 +70,8 @@ static void tabs_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     int hh = tabs_header_h(w);
+    if (!hh)
+        return;
     /* Tab titles in a row over a hairline; the current one is marked
      * by an accent underline instead of a box. */
     painter_fill(p, 0, 0, w->w, hh, t->color[TC_WINDOW]);
@@ -112,7 +121,7 @@ static int tabs_event(struct widget *w, struct event *e)
     return 0;
 }
 
-const struct widget_class tabs_class = { "tabs", sizeof(struct widget), tabs_measure, tabs_layout, tabs_paint, tabs_event, NULL };
+const struct widget_class tabs_class = { "tabs", sizeof(struct tabs), tabs_measure, tabs_layout, tabs_paint, tabs_event, NULL };
 
 struct widget *tabs_new(struct widget *parent)
 {
@@ -130,6 +139,12 @@ struct widget *tabs_add(struct widget *tabs, const char *title)
     if (page)
         widget_set_text(page, title);
     return page;
+}
+
+void tabs_set_autohide(struct widget *tabs, int on)
+{
+    ((struct tabs *)tabs)->autohide = on;
+    widget_relayout(tabs);
 }
 
 void tabs_select(struct widget *tabs, int index)

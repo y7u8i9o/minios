@@ -154,8 +154,10 @@ static void test_gui_term(void)
                                          (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(term != NULL, "cannot start term");
     sleep_ms(1500);
-    /* Window 1 at (40,60), 640x400, dark background with a prompt. */
-    ktest_assert(pixel(40 + 300, 60 + 200) == 0x00101010, "terminal background %08x", pixel(340, 260));
+    /* Window 1 at (40,60), 662x431 (80x25 cells of 8x17 plus 4+4 and
+     * 3+3 pixels of padding and the 14 pixel scrollback bar), dark
+     * background with a prompt. */
+    ktest_assert(pixel(40 + 300, 60 + 200) == 0x001e1e1e, "terminal background %08x", pixel(340, 260));
     type_line("echo typed into the terminal > /gterm.txt\n");
     type_line("cat /gterm.txt\n");
     struct inode *marker = NULL;
@@ -171,22 +173,26 @@ static void test_gui_term(void)
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
     ktest_assert(strcmp(buf, "typed into the terminal\n") == 0, "file content '%s'", buf);
-    /* The prompt row was drawn: some pixel in the first text row is light. */
+    /* The prompt row was drawn: the antialiased text has some pixel of
+     * the first text row brighter than half. */
     bool drawn = false;
-    for (int x = 0; x < 640 && !drawn; x++)
-        if (pixel(40 + x, 60 + 18) == 0x00e0e0e0)
-            drawn = true;
+    for (int y = 3; y < 20 && !drawn; y++)
+        for (int x = 4; x < 640 && !drawn; x++)
+            if ((pixel(40 + x, 60 + y) & 0xff) >= 0xa0)
+                drawn = true;
     ktest_assert(drawn, "no text rendered in the terminal");
-    /* M19: drag the grip so the window shrinks by 240x96 pixels (20
-     * columns and 4 rows of the 12x24 cells); the shell sees the size. */
+    /* M19: drag the grip so the window shrinks by 240x96 pixels (30
+     * columns and 6 rows of the 8x17 cells: 422 - 8 - 14 = 400 pixels
+     * hold 50 columns, 335 - 6 = 329 hold 19 rows); the shell sees the
+     * size. */
     int sw = logical_w();
-    int wx = 40, wy = 60;                       /* 960x600 at the cascade origin */
+    int wx = 40, wy = 60;                       /* 662x431 at the cascade origin */
     ktest_assert(sw == 1024, "test assumes 1024 pixels of width");
     int cx = sw / 2, cy = logical_h() / 2;
-    mouse_move_to(&cx, &cy, wx + 960 + 3, wy + 600 + 3, 0);
+    mouse_move_to(&cx, &cy, wx + 662 + 3, wy + 431 + 3, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, wx + 720 + 3, wy + 504 + 3, 1);
+    mouse_move_to(&cx, &cy, wx + 422 + 3, wy + 335 + 3, 1);
     feed_packet(0, 0, 0);
     sleep_ms(500);
     vfs_unlink("/gterm2.txt");
@@ -201,7 +207,7 @@ static void test_gui_term(void)
     n = file_read(f, buf, sizeof buf - 1);
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
-    ktest_assert(strcmp(buf, "21 60\n") == 0, "window size seen by the shell '%s'", buf);
+    ktest_assert(strcmp(buf, "19 50\n") == 0, "window size seen by the shell '%s'", buf);
     /* Scrollback: 60 lines of output, then Shift+PageUp. */
     type_line("seq 1 60\n");
     sleep_ms(800);

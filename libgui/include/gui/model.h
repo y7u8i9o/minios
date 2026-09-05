@@ -4,6 +4,8 @@
  * large data is never copied. */
 #include <stddef.h>
 
+struct image;
+
 struct model {
     int (*rows)(struct model *m, int parent);               /* number of children of parent */
     int (*child)(struct model *m, int parent, int index);   /* row id of the index-th child */
@@ -13,4 +15,6 @@ struct model {
     const char *(*header)(struct model *m, int col);        /* may be NULL */
     void (*sort)(struct model *m, int col, int descending); /* may be NULL */
     void *user;
+    /* Icon drawn before the first column of a row; may be NULL. */
+    const struct image *(*icon)(struct model *m, int row);
 };

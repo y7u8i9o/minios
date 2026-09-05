@@ -99,7 +99,7 @@ disabled), so the numeric programs use integer or fixed point
 arithmetic.
 
 GUI programs in `user/apps/`, started from the terminal window: `clock`,
-`files`, `view`, `unicode` (a Unicode code-point grid described below),
+`view`, `unicode` (a Unicode code-point grid described below),
 `paint` (mouse drawing, keys
 1 to 7 pick a color, `+` and `-` change the brush, `c` clears), `pong`
 (left paddle `w`/`s`, right paddle arrow keys, Escape quits) and `mandel`

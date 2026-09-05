@@ -1,9 +1,9 @@
 x12: started 1024x768 scale 2
-x12: toplevel 1 'terminal' mapped at 40,30 960x630
+x12: toplevel 1 'Terminal' mapped at 40,30 662x461
 term: shell pid [0-9]+ on /dev/pts[0-9]
 term: shell exited
 gui_term: shell output reached the file and the window
 TEST PASS
-x12: toplevel 1 configured 720x534
-term: size 60x21
-term: view 10
+x12: toplevel 1 configured 422x365
+term: size 50x19
+term: view 9

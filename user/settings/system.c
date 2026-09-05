@@ -41,7 +41,7 @@ static const char *s_header(struct model *m, int col)
     static const char *const names[] = { "Stream", "Direction", "Volume", "State" };
     return names[col];
 }
-static struct model stream_model = { s_rows, s_child, s_columns, s_cell, s_header, NULL, NULL };
+static struct model stream_model = { s_rows, s_child, s_columns, s_cell, s_header, NULL, NULL, NULL };
 
 static void sound_refresh(void)
 {
@@ -214,7 +214,7 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
     return col == 0 ? mime_handler_type(row) : mime_handler_program(row);
 }
 static const char *m_header(struct model *m, int col) { return col == 0 ? "Type" : "Program"; }
-static struct model apps_model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL };
+static struct model apps_model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL, NULL };
 
 static int on_type_selected(struct widget *w, void *args, void *arg)
 {
@@ -317,7 +317,7 @@ static const char *l_cell(struct model *m, int row, int col, char *buf, size_t s
     return col == 0 ? entries[row].title : entries[row].program;
 }
 static const char *l_header(struct model *m, int col) { return col == 0 ? "Menu entry" : "Program"; }
-static struct model launch_model = { l_rows, l_child, l_columns, l_cell, l_header, NULL, NULL };
+static struct model launch_model = { l_rows, l_child, l_columns, l_cell, l_header, NULL, NULL, NULL };
 
 static int on_entry_selected(struct widget *w, void *args, void *arg)
 {

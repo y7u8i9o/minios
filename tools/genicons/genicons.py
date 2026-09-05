@@ -116,6 +116,30 @@ ICONS = {
         ".....kbbbbk.....", ".....kbbbbk.....", ".....kbbbbk.....", ".....kbbbbk.....",
         ".....kbbbbk.....", ".....kkkkkk.....", "................", "................",
     ],
+    "back": [
+        "................", "................", ".......kk.......", "......kbbk......",
+        ".....kbbbk......", "....kbbbbkkkkkk.", "...kbbbbbbbbbbk.", "..kbbbbbbbbbbbk.",
+        "..kbbbbbbbbbbbk.", "...kbbbbbbbbbbk.", "....kbbbbkkkkkk.", ".....kbbbk......",
+        "......kbbk......", ".......kk.......", "................", "................",
+    ],
+    "forward": [
+        "................", "................", ".......kk.......", "......kbbk......",
+        "......kbbbk.....", ".kkkkkkbbbbk....", ".kbbbbbbbbbbk...", ".kbbbbbbbbbbbk..",
+        ".kbbbbbbbbbbbk..", ".kbbbbbbbbbbk...", ".kkkkkkbbbbk....", "......kbbbk.....",
+        "......kbbk......", ".......kk.......", "................", "................",
+    ],
+    "home": [
+        "................", ".......kk.......", "......kbbk......", ".....kbbbbk.....",
+        "....kbbbbbbk....", "...kbbbbbbbbk...", "..kbbbbbbbbbbk..", ".kkkbbbbbbbbkkk.",
+        "...kbbbbbbbbk...", "...kbbbkkbbbk...", "...kbbbkwkbbk...", "...kbbbkwkbbk...",
+        "...kbbbkwkbbk...", "...kkkkkkkkkk...", "................", "................",
+    ],
+    "refresh": [
+        "................", ".....kkkkkk.....", "...kkbbbbbbkk...", "..kbbkkkkkkbbk..",
+        ".kbbk......kbbk.", ".kbk.....kkkbbbk", ".kbk.....kbbbbbk", ".........kkkkkkk",
+        "kkkkkkk.........", "kbbbbbk.....kbk.", "kbbbkkk.....kbk.", ".kbbk......kbbk.",
+        "..kbbkkkkkkbbk..", "...kkbbbbbbkk...", ".....kkkkkk.....", "................",
+    ],
     "edit": [
         "................", "...........kkk..", "..........kbbbk.", ".........kbbbbk.",
         "........kbbbbk..", ".......kbbbbk...", "......kbbbbk....", ".....kbbbbk.....",

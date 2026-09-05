@@ -49,7 +49,7 @@ static const char *m_header(struct model *m, int col)
     static const char *const names[] = { "PID", "PPID", "PGID", "State", "CPU %", "RSS KiB", "Name" };
     return names[col];
 }
-static struct model model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL };
+static struct model model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL, NULL };
 
 /* ---- profile ---- */
 
@@ -83,7 +83,7 @@ static const char *p_header(struct model *m, int col)
     static const char *const names[] = { "%", "Samples", "Symbol", "Mode" };
     return names[col];
 }
-static struct model prof_model = { p_rows, m_child, p_columns, p_cell, p_header, NULL, NULL };
+static struct model prof_model = { p_rows, m_child, p_columns, p_cell, p_header, NULL, NULL, NULL };
 
 static const char *name_of_pid(int pid)
 {
