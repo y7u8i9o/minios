@@ -330,7 +330,8 @@ struct fields expand_words(struct word *w)
                 }
             }
         }
-        glob_field(&f, &b, start, b.n, b.keep && !emitted);
+        int trailing_argument = b.n && (b.q[b.n - 1] & BOUNDARY);
+        glob_field(&f, &b, start, b.n, trailing_argument || (b.keep && !emitted));
         free(b.s);
         free(b.q);
     }

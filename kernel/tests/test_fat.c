@@ -91,6 +91,13 @@ static void exercise(const char *dev, int type)
     ktest_assert(m->type == type, "%s: type %d, expected %d", dev, m->type, type);
     ktest_assert(m->free_clusters == fat_count_free(m), "free count at mount");
     uint32_t free0 = m->free_clusters;
+    struct inode *root;
+    ktest_assert(vfs_lookup("/mnt", &root) == 0, "statfs root");
+    struct fs_space space;
+    ktest_assert(root->sb->ops->statfs && root->sb->ops->statfs(root->sb, &space) == 0, "fat statfs");
+    ktest_assert(space.blocks == m->nclusters && space.free_blocks == free0 &&
+                 space.block_size == m->cluster_bytes, "FAT%d space accounting", type);
+    inode_put(root);
 
     /* The tree written by mkfat, with long names and case folding. */
     static char big[20000];

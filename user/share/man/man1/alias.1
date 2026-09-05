@@ -1,0 +1,18 @@
+ALIAS(1)                       User Commands
+
+NAME
+    alias - define shell command aliases
+
+SYNOPSIS
+    alias [name[=value]...]
+    unalias name...
+
+DESCRIPTION
+    With no arguments, lists aliases. name=value sets an alias, and name
+    alone displays it. unalias removes named aliases. Quote values containing
+    spaces. An alias is expanded when the shell executes a simple command;
+    nested expansion is limited to sixteen levels. /etc/profile defines
+    ll='ls -lh' and la='ls -a' for interactive shells.
+
+SEE ALSO
+    sh(1), man(1), index(7)

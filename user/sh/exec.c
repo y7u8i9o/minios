@@ -37,10 +37,7 @@ int command_run(int argc, char **argv, int allow_functions)
         }
         /* Copy before executing: a function may redefine itself. */
         struct node *body = node_clone(function);
-        char **old_argv = script_argv;
-        int old_argc = script_argc;
-        script_argv = argv;
-        script_argc = argc;
+        struct parameters previous = parameters_push(argc, argv);
         int old_child = in_child;
         in_child = 0;
         scope_push();
@@ -48,8 +45,7 @@ int command_run(int argc, char **argv, int allow_functions)
         int result = exec_node(body);
         function_depth--;
         scope_pop();
-        script_argv = old_argv;
-        script_argc = old_argc;
+        parameters_pop(previous);
         in_child = old_child;
         if (flow == FLOW_RETURN)
             flow = FLOW_NORMAL;
@@ -223,6 +219,7 @@ static int pipeline(struct node *first, int background, int one)
         previous = fds[0];
     }
     if (background) {
+        last_background = pgid;
         job_add(pgid, pids, count, first->text ? first->text : "pipeline", JOB_RUNNING, 1);
         return 0;
     }

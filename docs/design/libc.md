@@ -4,7 +4,7 @@
 
 `libc/Makefile` produces `build/libc/libc.a` and `build/libc/crt0.o`.
 User programs are compiled with `UCFLAGS` from `toolchain.mk` (static, no
-PIC, SSE disabled because the kernel does not save FPU state yet) and
+PIC, SSE2 enabled with saved FPU state, AVX disabled) and
 linked with `-nostdlib -static -Ttext-segment=0x400000`, `crt0.o`,
 `libc.a` and `libgcc`. `user/Makefile` builds one binary per directory
 listed in `PROGS`, one per file under `coreutils/` and one per file under
@@ -65,6 +65,24 @@ result into `-1` with `errno` set. Numbers come from
 - `time.h` additionally exposes the C `TIME_UTC`, `timespec_get` and
   `timespec_getres` interfaces and the POSIX UTC timezone state
   (`tzname`, `timezone`, `daylight`, `tzset`).
+
+## Terminal userland helpers
+
+- `fnmatch.h`: wildcard matching with `*`, `?`, brackets and character
+  classes; pathname, leading-period, no-escape and case-fold flags.
+- `glob.h`: directory walking and sorted path matches, with append,
+  offset, mark, no-check and no-sort modes. `globfree` owns the result
+  cleanup. The VFS has no symbolic links.
+- `wchar.h`: `wcwidth`/`wcswidth` report zero-width combining and
+  double-width ranges for cursor and column arithmetic.
+- `stdio.h`: `getline`/`getdelim` grow a caller-owned allocation, retain
+  the delimiter and return the byte count or -1 at EOF/error.
+- `term.h`: `term_use_color(fd)` requires a tty, nonempty nondumb TERM,
+  and an unset NO_COLOR; `term_columns(fd)` uses the window size, then
+  COLUMNS, then 80. `term_sgr` returns a small thread-local SGR string.
+
+`libc_ext` additionally checks these helpers, including glob fixtures,
+quoting flags, combining/wide characters and dynamically grown lines.
 
 ## Programs
 

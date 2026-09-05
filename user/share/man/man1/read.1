@@ -1,0 +1,19 @@
+READ(1)                       User Commands
+
+NAME
+    read - read a line into shell variables
+
+SYNOPSIS
+    read [-r] [name...]
+
+DESCRIPTION
+    Reads one line from stdin. Fields are separated using IFS; the last name
+    receives the remaining fields. With no names, stores the line in REPLY.
+    Backslash escapes the next character unless -r is used; backslash-newline
+    continues a line. Returns 1 on EOF, including a final unterminated line.
+    Example: read first rest <<EOF
+                 hello two words
+             EOF
+
+SEE ALSO
+    sh(1), man(1), index(7)

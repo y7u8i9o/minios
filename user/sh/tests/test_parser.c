@@ -82,6 +82,13 @@ static void expansion_tests(void)
 
 static void execution_tests(void)
 {
+    assert(run_line("args() { shift; test \"$1\" = two; }; args one two") == 0);
+    assert(run_line("set -- 'a b' ''; test $# -eq 2; test \"$2\" = ''") == 0);
+    struct word all = { .text = "\"$@\"" };
+    struct fields arguments = expand_words(&all);
+    assert(arguments.n == 2 && !strcmp(arguments.v[0], "a b") && !*arguments.v[1]);
+    fields_free(&arguments);
+    assert(run_line("shift; test $# -eq 1 && test \"$1\" = ''") == 0);
     assert(run_line("x=0; for i in 1 2 3; do x=$((x+i)); done; test $x -eq 6") == 0);
     assert(run_line("while test $x -gt 0; do x=$((x-1)); done; test $x -eq 0") == 0);
     assert(run_line("until test $x -eq 2; do x=$((x+1)); done; test $x -eq 2") == 0);

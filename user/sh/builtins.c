@@ -243,11 +243,11 @@ int builtin(int argc, char **argv)
         if (argc > 1 && !strcmp(argv[1], "--")) {
             /* Positional parameters outlive the expanded command arguments. */
             char **args = sh_alloc((size_t)argc * sizeof *args);
-            args[0] = strdup(script_argc ? script_argv[0] : "sh");
+            args[0] = script_argc ? script_argv[0] : "sh";
             for (int i = 2; i < argc; i++)
-                args[i - 1] = strdup(argv[i]);
-            script_argc = argc - 1;
-            script_argv = args;
+                args[i - 1] = argv[i];
+            parameters_replace(argc - 1, args);
+            free(args);
         } else {
             vars_print();
         }
@@ -257,9 +257,13 @@ int builtin(int argc, char **argv)
         int count = argc > 1 ? atoi(argv[1]) : 1;
         if (count < 0 || count >= script_argc)
             return 1;
-        for (int i = 1; i + count < script_argc; i++)
-            script_argv[i] = script_argv[i + count];
-        script_argc -= count;
+        int argc_new = script_argc - count;
+        char **args = sh_alloc((size_t)(argc_new + 1) * sizeof *args);
+        args[0] = script_argv[0];
+        for (int i = 1; i < argc_new; i++)
+            args[i] = script_argv[i + count];
+        parameters_replace(argc_new, args);
+        free(args);
         return 0;
     }
     if (!strcmp(name, "break") || !strcmp(name, "continue")) {

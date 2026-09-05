@@ -13,6 +13,43 @@ struct definition {
 static struct variable *variables;
 static struct definition *aliases, *functions;
 static int level;
+static int parameters_owned;
+
+static void parameters_free(void)
+{
+    if (parameters_owned) {
+        for (int i = 0; i < script_argc; i++)
+            free(script_argv[i]);
+        free(script_argv);
+    }
+}
+
+void parameters_replace(int argc, char **argv)
+{
+    char **copy = sh_alloc((size_t)(argc + 1) * sizeof *copy);
+    for (int i = 0; i < argc; i++)
+        copy[i] = strdup(argv[i]);
+    parameters_free();
+    script_argc = argc;
+    script_argv = copy;
+    parameters_owned = 1;
+}
+
+struct parameters parameters_push(int argc, char **argv)
+{
+    struct parameters previous = { .argc = script_argc, .argv = script_argv, .owned = parameters_owned };
+    parameters_owned = 0;
+    parameters_replace(argc, argv);
+    return previous;
+}
+
+void parameters_pop(struct parameters previous)
+{
+    parameters_free();
+    script_argc = previous.argc;
+    script_argv = previous.argv;
+    parameters_owned = previous.owned;
+}
 
 int valid_name(const char *s)
 {
@@ -156,6 +193,13 @@ void vars_print(void)
 }
 const char *var_lookup(const char *name, char *tmp, size_t size)
 {
+    if (!strcmp(name, "!")) {
+        if (last_background)
+            snprintf(tmp, size, "%d", last_background);
+        else
+            tmp[0] = 0;
+        return tmp;
+    }
     if (!strcmp(name, "?")) {
         snprintf(tmp, size, "%d", last_status);
         return tmp;

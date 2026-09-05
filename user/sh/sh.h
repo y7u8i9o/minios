@@ -89,6 +89,7 @@ struct reader {
 enum exec_flow { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_EXIT };
 extern int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
 extern char **script_argv;
+extern pid_t last_background;
 extern enum exec_flow flow;
 struct job {
     int used, state;
@@ -101,6 +102,13 @@ struct fields {
     char **v;
     int n;
 };
+struct parameters {
+    int argc, owned;
+    char **argv;
+};
+void parameters_replace(int argc, char **argv);
+struct parameters parameters_push(int argc, char **argv);
+void parameters_pop(struct parameters previous);
 struct saved_fd {
     int fd, saved;
     pid_t writer;

@@ -1,25 +1,13 @@
-PAGER(1)                    User Commands                   PAGER(1)
+PAGER(1)                       User Commands
 
 NAME
-    pager - browse text one screen at a time
+    pager - compatibility command for less
 
 SYNOPSIS
-    pager [file...]
+    pager [-RNS] [file...]
 
 DESCRIPTION
-    pager reads files or standard input into memory and displays a full-screen
-    view. Piped input can therefore be searched and revisited.
-
-KEYS
-    Space or f   move forward one page
-    b            move backward one page
-    Enter or j   move forward one line
-    k            move backward one line
-    g, G         move to the beginning or final page
-    /text        search forward
-    n            repeat the search
-    h            show key help
-    q            quit
+    Runs less with the supplied arguments. See less(1) for keys and options.
 
 SEE ALSO
-    man(1), more(1)
+    sh(1), man(1), index(7)

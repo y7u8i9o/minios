@@ -249,6 +249,62 @@ static long condev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 
 static const struct file_ops procdev_fops = { .read = procdev_read };
 
+struct mount_snapshot {
+    char *text;
+    size_t length;
+};
+
+static int mounts_open(struct inode *ino, struct file *file)
+{
+    struct mount_snapshot *snapshot = kzalloc(sizeof *snapshot);
+    if (!snapshot)
+        return -ENOMEM;
+    size_t size = 4096;
+    long length;
+    for (;;) {
+        snapshot->text = kmalloc(size);
+        if (!snapshot->text) {
+            kfree(snapshot);
+            return -ENOMEM;
+        }
+        length = vfs_format_mounts(snapshot->text, size);
+        if (length != -ENOSPC)
+            break;
+        kfree(snapshot->text);
+        size *= 2;
+    }
+    if (length < 0) {
+        kfree(snapshot->text);
+        kfree(snapshot);
+        return (int)length;
+    }
+    snapshot->length = (size_t)length;
+    file->priv = snapshot;
+    return 0;
+}
+
+static long mounts_read(struct file *file, char *buf, size_t n, uint64_t *pos)
+{
+    struct mount_snapshot *snapshot = file->priv;
+    if (*pos >= snapshot->length)
+        return 0;
+    n = MIN(n, snapshot->length - (size_t)*pos);
+    memcpy(buf, snapshot->text + *pos, n);
+    *pos += n;
+    return (long)n;
+}
+
+static void mounts_release(struct file *file)
+{
+    struct mount_snapshot *snapshot = file->priv;
+    kfree(snapshot->text);
+    kfree(snapshot);
+}
+
+static const struct file_ops mounts_fops = {
+    .open = mounts_open, .read = mounts_read, .release = mounts_release,
+};
+
 /* /dev/klog: the kernel log ring. The file position is the absolute
  * offset in the log; a read returns what was appended since. */
 static long klogdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
@@ -311,4 +367,5 @@ void devfs_init(void)
     devfs_register("null", S_IFCHR | 0666, &null_fops, NULL, 0);
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);
     devfs_register("proc", S_IFCHR | 0444, &procdev_fops, NULL, 0);
+    devfs_register("mounts", S_IFCHR | 0444, &mounts_fops, NULL, 0);
 }

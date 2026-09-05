@@ -1,0 +1,17 @@
+ECHO(1)                       User Commands
+
+NAME
+    echo - print arguments
+
+SYNOPSIS
+    echo [-n] [-e|-E] [argument...]
+
+DESCRIPTION
+    The shell builtin prints arguments separated by spaces and a newline.
+    -n omits the newline, -e interprets backslash escapes and -E disables
+    them. Escapes include \n, \t, \r, \b, \a, \e, \\, \0NNN and \c
+    (stop output). The standalone /bin/echo is intended for plain output;
+    use the shell builtin for these options.
+
+SEE ALSO
+    sh(1), man(1), index(7)

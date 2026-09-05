@@ -1,0 +1,19 @@
+TEST(1)                       User Commands
+
+NAME
+    test - evaluate a condition
+
+SYNOPSIS
+    test expression
+    [ expression ]
+
+DESCRIPTION
+    Returns 0 for true, 1 for false and 2 for an invalid builtin expression.
+    The shell builtin supports = != < >, -eq -ne -lt -le -gt -ge,
+    -z -n, -e -f -d -b -c -r -w -x -s -t, !, parentheses, -a and -o.
+    Quote expanded values and escape parentheses and < > from the shell.
+    The standalone /bin/test supports the basic string, integer and file
+    tests; the builtin is used by default.
+
+SEE ALSO
+    sh(1), man(1), index(7)

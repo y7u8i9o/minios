@@ -1,0 +1,17 @@
+TAIL(1)                       User Commands
+
+NAME
+    tail - print the end of a file and follow additions
+
+SYNOPSIS
+    tail [-f] [-n count | -c count] [file...]
+
+DESCRIPTION
+    Prints the last ten lines by default. -n selects lines, -c selects bytes.
+    Counts must be nonnegative. Long lines are kept intact. -f polls regular
+    files for appended bytes every 200 ms and resumes at the start after
+    truncation. It follows the open file, not a replacement at the same path.
+    Ctrl-C stops following. With no files or -, reads stdin.
+
+SEE ALSO
+    sh(1), man(1), index(7)

@@ -72,6 +72,45 @@ test "$(pager /gzip.txt)" = "compress me compress me compress me compress me" ||
 test "$(man -w find)" = "/usr/share/man/man1/find.1" || echo "FAIL man-where"
 test "$(man -f xargs | grep -c 'build and execute')" = "1" || echo "FAIL man-whatis"
 
+# Terminal utility options, including redirected output without colour.
+echo 'utils: terminal options'
+test "$(ls -1 /ufind)" = "$(printf 'a.txt\nsub')" || echo 'FAIL ls-one'
+test "$(ls -d /ufind)" = /ufind || echo 'FAIL ls-directory'
+test "$(ls -F /ufind | tail -n 1)" = sub/ || echo 'FAIL ls-classify'
+test "$(ls -r1 /ufind | head -n 1)" = sub || echo 'FAIL ls-reverse'
+ls -lh /u.txt | grep -F u.txt > /dev/null || echo 'FAIL ls-long'
+test "$(grep -E -c '^(apple|cherry)$' /u.txt)" = 3 || echo 'FAIL grep-ere'
+test "$(grep -c '^apple$' /u.txt)" = 2 || echo 'FAIL grep-bre'
+test "$(grep -F -c '^apple$' /u.txt)" = 0 || echo 'FAIL grep-fixed'
+test "$(printf 'cat\nconcatenate\ncat!\n' | grep -w -c cat)" = 2 || echo 'FAIL grep-word'
+test "$(grep -rh beta /ufind)" = beta || echo 'FAIL grep-recursive'
+test "$(grep -H alpha /ufind/a.txt)" = /ufind/a.txt:alpha || echo 'FAIL grep-filename'
+echo 'utils: grep options checked'
+test "$(head -c 3 /u.txt)" = ban || echo 'FAIL head-bytes'
+test "$(tail -c 4 /u.txt)" = ple || echo 'FAIL tail-bytes'
+test "$(tail -n 0 /u.txt)" = '' || echo 'FAIL tail-zero'
+test "$(printf 'a\n\n\nb\n' | cat -s | wc -l | tr -d ' ')" = 3 || echo 'FAIL cat-squeeze'
+test "$(printf 'a\n\nb\n' | cat -b | grep -c '2')" = 1 || echo 'FAIL cat-nonblank'
+test "$(printf 'a\tb\n' | cat -A)" = 'a^Ib$' || echo 'FAIL cat-visible'
+test "$(cat -n /u.txt | tail -n 1 | tr -s ' ')" = "$(printf ' 4\tapple')" || echo 'FAIL cat-number'
+tree -L 1 /ufind | grep sub > /dev/null || echo 'FAIL tree-depth'
+tree -d /ufind | grep a.txt > /dev/null && echo 'FAIL tree-directories'
+echo 'utils: text and tree checked'
+test "$(less -RNS /u2.txt)" = copy || echo 'FAIL less-pipe'
+test "$(df | grep -c '^mfs ')" = 1 || echo 'FAIL df-mfs'
+test "$(ps | head -n 1 | tr -s ' ')" = ' PID PPID PGID STATE TIME RSS NAME' || echo 'FAIL ps-columns'
+echo 'utils: system options checked'
+echo first > /follow.txt
+tail -n 0 -f /follow.txt > /follow.out &
+follower=$!
+sleep 0.5
+echo appended >> /follow.txt
+sleep 0.5
+kill -15 "$follower"
+wait
+test "$(cat /follow.out)" = appended || echo 'FAIL tail-follow'
+rm /follow.txt /follow.out
+
 rm /u.txt /u2.txt /u3.txt /u4.txt /gzip.txt /gzip.txt.gz
 rm /ufind/a.txt /ufind/sub/b.txt /ufind/sub/c.log
 rmdir /ufind/sub /ufind

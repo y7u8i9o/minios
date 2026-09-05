@@ -87,6 +87,11 @@ struct inode {
  * operation the VFS issues (create, write, truncate, mkdir, unlink, rmdir,
  * link, rename); they are called with no inode or file lock held, so a
  * journaling filesystem may block in op_begin for log space. */
+struct fs_space {
+    uint64_t blocks, free_blocks;
+    uint32_t block_size;
+};
+
 struct sb_ops {
     int (*read_inode)(struct superblock *sb, uint64_t ino, struct inode *ino_out);
     void (*put_inode)(struct inode *ino);
@@ -95,6 +100,7 @@ struct sb_ops {
     void (*unmount)(struct superblock *sb);
     void (*op_begin)(struct superblock *sb);
     void (*op_end)(struct superblock *sb);
+    int (*statfs)(struct superblock *sb, struct fs_space *space);
 };
 
 /* One mounted filesystem instance. lock protects inodes and the refcounts
@@ -124,6 +130,7 @@ struct mount {
     struct superblock *parent_sb;   /* NULL for the root mount */
     uint64_t parent_ino;
     char path[VFS_PATH_MAX];
+    unsigned readers;             /* statfs snapshots pin this mount */
     struct list_head link;
 };
 
@@ -156,6 +163,8 @@ struct superblock *sb_alloc(const struct fs_type *type, const struct sb_ops *ops
 int vfs_mount(const char *fstype, const char *source, const char *target);
 int vfs_umount(const char *target);
 int vfs_sync(void);
+/* Text records: path type total-blocks free-blocks block-size. */
+long vfs_format_mounts(char *buf, size_t size);
 /* Sync everything and unmount every filesystem that is not busy, most
  * recent first. Used by shutdown. Returns the number of busy mounts. */
 int vfs_umount_all(void);

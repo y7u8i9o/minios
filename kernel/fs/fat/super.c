@@ -223,12 +223,24 @@ static void fat_unmount(struct superblock *sb)
     kfree(sb);
 }
 
+static int fat_statfs(struct superblock *sb, struct fs_space *space)
+{
+    struct fat_sb *m = sb->priv;
+    mutex_lock(&m->lock);
+    space->blocks = m->nclusters;
+    space->free_blocks = m->free_clusters;
+    space->block_size = m->cluster_bytes;
+    mutex_unlock(&m->lock);
+    return 0;
+}
+
 static const struct sb_ops fat_sb_ops = {
     .read_inode = fat_read_inode,
     .put_inode = fat_put_inode,
     .free_inode = fat_drop_inode,
     .sync = fat_sync,
     .unmount = fat_unmount,
+    .statfs = fat_statfs,
 };
 
 /* ---- mount ---- */

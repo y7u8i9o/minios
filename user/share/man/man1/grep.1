@@ -1,0 +1,19 @@
+GREP(1)                       User Commands
+
+NAME
+    grep - search text with regular expressions
+
+SYNOPSIS
+    grep [-EFinvclrhHw] pattern [file...]
+
+DESCRIPTION
+    Prints matching lines. Patterns are basic regular expressions by default;
+    -E selects extended expressions and -F matches a fixed string. -i ignores
+    case, -n prints line numbers, -v inverts selection, -c prints counts,
+    -l prints matching filenames, -w requires whole words. -r recursively
+    searches directories. -h hides filenames; -H always shows them.
+    A file named - means standard input. -- ends options. Matching text is
+    red on capable terminals. Exit status: 0 matches, 1 none, 2 an error.
+
+SEE ALSO
+    sh(1), man(1), index(7)

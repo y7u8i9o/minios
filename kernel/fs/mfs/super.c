@@ -185,6 +185,17 @@ static void mfs_op_end(struct superblock *sb)
     mfs_journal_end(mfs_of(sb));
 }
 
+static int mfs_statfs(struct superblock *sb, struct fs_space *space)
+{
+    struct mfs_sb *m = mfs_of(sb);
+    mutex_lock(&m->lock);
+    space->blocks = m->sb.nblocks;
+    space->free_blocks = m->sb.free_blocks;
+    space->block_size = MFS_BLOCK_SIZE;
+    mutex_unlock(&m->lock);
+    return 0;
+}
+
 static const struct sb_ops mfs_sb_ops = {
     .read_inode = mfs_read_inode,
     .put_inode = mfs_put_inode,
@@ -193,6 +204,7 @@ static const struct sb_ops mfs_sb_ops = {
     .unmount = mfs_unmount,
     .op_begin = mfs_op_begin,
     .op_end = mfs_op_end,
+    .statfs = mfs_statfs,
 };
 
 static int read_super(struct mfs_sb *m)

@@ -1,0 +1,21 @@
+LESS(1)                       User Commands
+
+NAME
+    less - page through text with navigation and regex search
+
+SYNOPSIS
+    less [-RNS] [file...]
+
+DESCRIPTION
+    Loads logical lines so pipes can be navigated backwards. With redirected
+    output, copies the input unchanged. -R passes SGR colours through while
+    excluding their bytes from display width. -N shows line numbers.
+    -S truncates long lines; < and > move horizontally in eight-column steps.
+    Space/f moves a page forward, b back, j/Enter a line down, k up,
+    g to the start and G to the last page. / searches forward and ? backward
+    using extended regular expressions; n repeats and N reverses direction.
+    Type a number followed by % to jump to a percentage. q or Ctrl-C quits.
+    The terminal mode is restored on exit.
+
+SEE ALSO
+    sh(1), man(1), index(7)

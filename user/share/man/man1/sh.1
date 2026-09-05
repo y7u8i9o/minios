@@ -51,3 +51,21 @@ REDIRECTIONS
 
 SEE ALSO
     find(1), xargs(1), pager(1), man(1)
+
+INTERACTIVE EDITING
+    Arrows move or recall history. Home/End and Ctrl-A/E move to line ends;
+    Ctrl-B/F move a character, Alt-B/F a word. Backspace/Ctrl-H and Delete
+    erase characters; Ctrl-K erases to the end, Ctrl-U to the start, Ctrl-W
+    the preceding word. Tab completes paths and executable names. Ctrl-R
+    searches backwards through history; repeat it for earlier matches.
+    Ctrl-C cancels a line, Ctrl-D on an empty line exits, Ctrl-L redraws.
+
+STARTUP AND ENVIRONMENT
+    Interactive shells read /etc/profile and then $HOME/.shrc. HOME defaults
+    to /home in init and Terminal. History is stored in HISTFILE, default
+    $HOME/.sh_history, with HISTSIZE entries (default 500).
+    PS1 supports \u user, \h host, \w directory, \W basename, \$ prompt,
+    \t time, \n newline, \e escape, \[ and \] invisible-sequence markers,
+    and \\ for a backslash. The built-in default is '\w \$ '. PS2 defaults
+    to '> ' for incomplete commands. The profile adds colour when TERM
+    permits it. $! is the most recently started background pipeline's PID.

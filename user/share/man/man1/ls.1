@@ -1,0 +1,20 @@
+LS(1)                       User Commands
+
+NAME
+    ls - list directory contents
+
+SYNOPSIS
+    ls [-1ClhatrSdF] [file...]
+
+DESCRIPTION
+    Lists names in columns on a terminal, one per line in a pipe. -1 forces
+    one name per line; -C forces columns. -l shows permissions, link count,
+    size and modification date; -h uses KiB-based units. -a includes hidden
+    names. -t sorts by modification time, -S by size, -r reverses order.
+    -d lists directories themselves, -F adds / for directories, * for
+    executables and | for pipes. Names are sorted alphabetically otherwise.
+    Colours distinguish directories, executable files and devices when
+    stdout is a terminal, TERM is set and NO_COLOR is absent.
+
+SEE ALSO
+    sh(1), man(1), index(7)

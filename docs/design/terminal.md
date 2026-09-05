@@ -11,6 +11,14 @@ share.
 Without a command the shell runs; `-d` sets the working directory of
 the program (the Files program opens terminals this way).
 
+Each child starts with `PATH=/bin`, `HOME=/home`, `USER=user`,
+`SHELL=/bin/sh` and `TERM=xterm-256color`. The interactive shell loads
+the same profile, `.shrc` and history as the framebuffer-console shell;
+the latter starts with `TERM=minios`. See [Shell](sh.md) and
+[libedit](libedit.md). Terminal descriptors are read/write, so a pager
+whose stdin is a pipe can read keys through a duplicate of stdout without
+opening the unrelated framebuffer console.
+
 ## Emulator (`vt.c`)
 
 `struct vt` holds a grid of `struct vcell` (code point, foreground,

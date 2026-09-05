@@ -29,38 +29,14 @@ they need (raw keyboard mode, console cursor control, a sleep call).
 
 ## Shell
 
-`user/sh/sh.c` reads a line, tokenizes it with quoting and expansion, and
-runs command lists.
-
-- Quoting: `'...'` is literal, `"..."` keeps spaces and expands `$`,
-  backslash escapes the next character.
-- Expansion: `$NAME`, `${NAME}`, `$?` (last status), `$$` (pid), `$#`,
-  `$0`..`$9` and `$@`/`$*` (script arguments). Variables live in the
-  environment: `NAME=value` alone on a line sets one, `export NAME[=v]`
-  and `unset NAME` manage them, `set` prints them. A `#` starts a
-  comment. `$(command)` runs the command in a child with its output
-  captured, trailing newlines removed (added after M18).
-- Lists: `;`, `&&`, `||` and a trailing `&`. Pipelines with `|`;
-  redirections `<`, `>`, `>>` per command; redirected builtins run in a
-  child.
-- Every pipeline gets its own process group. Foreground pipelines own the
-  console through `tcsetpgrp`; control Z stops them and records a job.
-  Interactive background readers are stopped with `SIGTTIN`. `jobs`
-  reports Running and Stopped state, `bg [%n]` continues a job without
-  giving it the terminal, and `fg [%n]` gives it the terminal and waits.
-  Non-interactive background commands without redirection retain
-  `/dev/null` as standard input.
-- Builtins: `cd`, `exit`, `pwd`, `export`, `unset`, `set`, `jobs`, `fg`,
-  `bg`, `wait`, `true`, `false`, `ulimit`, `help`.
-- `sh file args...` runs a script with `$1`.. bound, `sh -c 'cmd'` runs
-  one line. An interactive shell ignores `SIGINT` and `SIGPIPE` and
-  restores the defaults in its children. `exit` from the last shell
-  returns to init, which starts a new shell; it does not shut down.
+The tree parser, expansion, builtins, startup and job control are described
+in [Shell](sh.md). Interactive history, completion and key handling live in
+the reusable [line editor](libedit.md).
 
 ## Coreutils
 
-`cat`, `cp`, `clear`, `echo`, `halt`, `head` (`-n`), `hexdump`, `kill`
-(`-SIG`), `ls` (`-l -a`), `mkdir`, `mount` (`mount type source target`,
+`cat` (`-n -b -s -A`), `cp`, `clear`, `echo`, `halt`, `head` (`-n -c`), `hexdump`, `kill`
+(`-SIG`), `ls` (`-1 -C -l -h -a -t -r -S -d -F`), `mkdir`, `mount` (`mount type source target`,
 `mount -u target`), `mv`, `ps`, `pwd`, `reboot`, `rm` (`-d`), `rmdir`,
 `shutdown` (`-r`), `sleep` (fractional seconds), `sync`, `touch`, `wc`
 (`-l -w -c`). `shutdown`, `reboot` and `halt` signal init with
@@ -68,12 +44,13 @@ runs command lists.
 
 Added after M18, all in `user/coreutils/`:
 
-- Text: `grep` (`-i -n -v -c -l`, fixed strings), `tail` (`-n`), `sort`
+- Text: `grep` (BRE by default, `-E -F -i -n -v -c -l -r -h -H -w`), `tail` (`-n -c -f`), `sort`
   (`-r -n -u`), `uniq` (`-c -d`), `tr` (ranges, escapes, `-d -s`), `cut`
   (`-d -f`, `-c`), `rev`, `nl`, `tee` (`-a`), `seq`, `yes`, `printf`,
   `cmp`, `diff` (longest common subsequence, `<`/`>` output), `more`
-  (forward pager), `pager` (full-screen forward/backward navigation and
-  search), `find` (name, type and depth tests, NUL output and `-exec`),
+  (forward pager), `less` (`-R -N -S`, regex search, paging and percentage
+  jumps), `pager` (compatibility wrapper for `less`), `tree` (`-L -a -d`),
+  `find` (name, type and depth tests, NUL output and `-exec`),
   `xargs` (quoted and NUL input, batching and replacement), `gzip`
   (interoperable DEFLATE compression/decompression with CRC checking),
   and `man` (section lookup, whatis/apropos search and installed pages),
@@ -83,7 +60,8 @@ Added after M18, all in `user/coreutils/`:
   `ln`, `du` (`-s`), `free` (`/dev/meminfo`), `uptime` (time since boot
   and CPU count), `nproc`, `uname` (`-a -s -n -r -v -m`, from the `uname`
   syscall; the release number follows the milestone), `basename`,
-  `dirname`.
+  `dirname`, `df` (filesystem capacity from `/dev/mounts`). `ps` aligns
+  the process fields from `/dev/proc`, retaining spaces in process names.
 - Amusements: `fortune` (entries in `/etc/fortunes` separated by `%`
   lines), `cowsay`, `sl` (a locomotive crosses the terminal), `matrix`
   (character rain until a key is pressed), `life` (`-g -w -h -q -r`),
@@ -94,9 +72,10 @@ Added after M18, all in `user/coreutils/`:
 
 The terminal programs use `TIOCGWINSZ` for the screen size, turn off
 `ICANON` and `ECHO` for keys, and use `poll` on standard input for
-timed input. No floating point is available in user space (SSE is
-disabled), so the numeric programs use integer or fixed point
-arithmetic.
+timed input. `term.h` centralizes width lookup and colour gating: output
+must be a tty, TERM must be set and not dumb, and NO_COLOR must be unset.
+`ls` and `tree` colour names by type; `grep` colours matching spans.
+User space has SSE2 floating point support; AVX remains disabled.
 
 GUI programs in `user/apps/`, started from the terminal window: `clock`,
 `view`, `unicode` (a Unicode code-point grid described below),
@@ -180,6 +159,10 @@ evaluated directly; errors report the line number and exit with status
 
 ## Tests
 
+- `utils` checks text flags, sorting/listing, recursive matching, tree,
+  piped pager output, mount capacities, process columns and `tail -f`.
+- `script2`, `lineedit`, and `lineedit_screen` cover the new shell language,
+  interactive editor and rendered-console regression; see [Shell](sh.md).
 - `script` runs `sh /etc/tests/shell.sh x y` and checks quoting,
   expansion, `export` visibility in a child shell, `$?`, `&&`/`||`,
   `;`, pipelines, a background job with `wait`, redirection and the

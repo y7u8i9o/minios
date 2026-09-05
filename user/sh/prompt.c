@@ -25,17 +25,44 @@ char *prompt_render(int secondary)
         const char *value = NULL;
         char literal[2] = {0};
         switch (*++p) {
-        case 'u': value = var_get("USER"); if (!value) value = "user"; break;
-        case 'h': value = "minios"; break;
-        case 'w': value = cwd; break;
-        case 'W': value = strrchr(cwd, '/'); value = value && value[1] ? value + 1 : cwd; break;
-        case '$': value = "$"; break;
-        case 't': value = clock; break;
-        case 'n': value = "\n"; break;
-        case 'e': value = "\033"; break;
-        case '[': case ']': value = ""; break;
-        case '\\': value = "\\"; break;
-        default: literal[0] = *p; value = literal; break;
+        case 'u':
+            value = var_get("USER");
+            if (!value)
+                value = "user";
+            break;
+        case 'h':
+            value = "minios";
+            break;
+        case 'w':
+            value = cwd;
+            break;
+        case 'W':
+            value = strrchr(cwd, '/');
+            value = value && value[1] ? value + 1 : cwd;
+            break;
+        case '$':
+            value = "$";
+            break;
+        case 't':
+            value = clock;
+            break;
+        case 'n':
+            value = "\n";
+            break;
+        case 'e':
+            value = "\033";
+            break;
+        case '[':
+        case ']':
+            value = "";
+            break;
+        case '\\':
+            value = "\\";
+            break;
+        default:
+            literal[0] = *p;
+            value = literal;
+            break;
         }
         size_t n = strlen(value);
         memcpy(out + used, value, n);

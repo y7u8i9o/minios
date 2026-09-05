@@ -7,6 +7,7 @@ static char *history_path;
 
 int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
 char **script_argv;
+pid_t last_background;
 enum exec_flow flow;
 
 int run_reader(struct reader *reader)
@@ -39,16 +40,16 @@ int run_reader(struct reader *reader)
         } else
 #endif
         {
-        if (reader->interactive) {
-            jobs_reap(0);
-            char cwd[1024];
-            if (length)
-                printf("> ");
-            else
-                printf("%s $ ", getcwd(cwd, sizeof cwd) ? cwd : "?");
-            fflush(stdout);
-        }
-        count = getline(&line, &capacity, reader->file);
+            if (reader->interactive) {
+                jobs_reap(0);
+                char cwd[1024];
+                if (length)
+                    printf("> ");
+                else
+                    printf("%s $ ", getcwd(cwd, sizeof cwd) ? cwd : "?");
+                fflush(stdout);
+            }
+            count = getline(&line, &capacity, reader->file);
         }
         if (count < 0) {
             if (length) {
@@ -90,7 +91,7 @@ int run_file(const char *path)
         return 1;
     }
     fcntl(fileno(file), F_SETFD, FD_CLOEXEC);
-    struct reader reader = { .file = file };
+    struct reader reader = {.file = file};
     int result = run_reader(&reader);
     fclose(file);
     return result;
@@ -157,7 +158,7 @@ int main(int argc, char **argv)
         if (history_path && *history_path)
             edit_history_load(editor, history_path);
     }
-    struct reader reader = { .file = stdin, .interactive = interactive };
+    struct reader reader = {.file = stdin, .interactive = interactive};
     int result = run_reader(&reader);
     jobs_reap(0);
     if (editor) {

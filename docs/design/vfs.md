@@ -88,6 +88,24 @@ between the same pair cannot deadlock.
 on the initrd) before any program runs. New user processes created from
 the kernel get `/dev/console` on descriptors 0, 1 and 2.
 
+## Mount capacity snapshots
+
+The optional `sb_ops.statfs` fills `struct fs_space` with total blocks,
+free blocks and block size. mfs reads its superblock counters under the
+filesystem mutex; FAT reports data-cluster and free-cluster counts using
+the cluster size (the in-memory count also maintains FSInfo). Virtual
+filesystems without the operation report zero capacity.
+
+Opening read-only `/dev/mounts` creates a text snapshot, one record per
+mount: `path type total-blocks free-blocks block-size`. `vfs_format_mounts`
+pins mounts with a reader count while collecting statistics outside the
+mount spinlock, since filesystem mutexes may sleep. Unmount reports busy
+while a snapshot is being constructed. The open file owns only the
+finished text, not mount references, and successive reads use its offset.
+`df` skips zero-block-size records and converts capacity to 1 KiB units.
+The `mfs` and `fat` tests check the statistics against allocation counters;
+`utils` exercises the devfs-to-df path.
+
 ## Pipes
 
 `ipc/pipe.c` implements anonymous pipes as two files without an inode

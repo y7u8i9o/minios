@@ -69,7 +69,7 @@ static int show_page(const char *path)
     if (!pager || !*pager)
         pager = getenv("PAGER");
     if (!pager || !*pager)
-        pager = "pager";
+        pager = "less";
     char *av[] = { (char *)pager, (char *)path, NULL };
     pid_t pid = fork();
     if (pid < 0)
@@ -143,6 +143,8 @@ static int apropos(const char *word, int exact)
 
 int main(int argc, char **argv)
 {
+    if (argc == 1)
+        return apropos("", 0);
     if (argc == 3 && strcmp(argv[1], "-k") == 0)
         return apropos(argv[2], 0);
     if (argc == 3 && strcmp(argv[1], "-f") == 0)

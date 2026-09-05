@@ -58,6 +58,10 @@ static void test_mfs(void)
     struct inode *root;
     ktest_assert(vfs_lookup("/", &root) == 0, "lookup root");
     ktest_assert(strcmp(root->sb->type->name, "mfs") == 0, "root is %s, not mfs", root->sb->type->name);
+    struct fs_space space;
+    ktest_assert(root->sb->ops->statfs && root->sb->ops->statfs(root->sb, &space) == 0, "mfs statfs");
+    ktest_assert(space.block_size == MFS_BLOCK_SIZE && space.free_blocks == free_blocks() &&
+                 space.blocks > space.free_blocks, "mfs space accounting");
     inode_put(root);
     ktest_assert(!(sb_flags() & MFS_FLAG_CLEAN), "clean flag not cleared on mount");
     ktest_assert(vfs_sync() == 0, "sync");

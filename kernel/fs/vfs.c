@@ -298,6 +298,53 @@ int vfs_lookup_parent(const char *path, struct inode **dir, char *name, size_t n
 
 /* ---- mounts ---- */
 
+long vfs_format_mounts(char *buf, size_t size)
+{
+    size_t capacity = 0;
+    struct list_head *pos;
+    spin_lock(&mount_lock);
+    list_for_each(pos, &mounts)
+        capacity++;
+    spin_unlock(&mount_lock);
+    if (!capacity)
+        return 0;
+    struct mount **snapshot = kmalloc(capacity * sizeof *snapshot);
+    if (!snapshot)
+        return -ENOMEM;
+    size_t count = 0;
+    spin_lock(&mount_lock);
+    list_for_each(pos, &mounts) {
+        if (count == capacity)
+            break;
+        struct mount *m = list_entry(pos, struct mount, link);
+        m->readers++;
+        snapshot[count++] = m;
+    }
+    spin_unlock(&mount_lock);
+
+    size_t used = 0;
+    long error = 0;
+    for (size_t i = 0; i < count; i++) {
+        struct mount *m = snapshot[i];
+        struct fs_space space = {0};
+        if (m->sb->ops->statfs)
+            m->sb->ops->statfs(m->sb, &space);
+        if (!error) {
+            int n = ksnprintf(buf + used, size - used, "%s %s %lu %lu %u\n",
+                m->path, m->sb->type->name, space.blocks, space.free_blocks, space.block_size);
+            if (n < 0 || (size_t)n >= size - used)
+                error = -ENOSPC;
+            else
+                used += (size_t)n;
+        }
+        spin_lock(&mount_lock);
+        m->readers--;
+        spin_unlock(&mount_lock);
+    }
+    kfree(snapshot);
+    return error ? error : (long)used;
+}
+
 int vfs_mount(const char *fstype, const char *source, const char *target)
 {
     struct fs_type *type = fs_type_find(fstype);
@@ -380,7 +427,7 @@ int vfs_umount(const char *target)
         spin_unlock(&mount_lock);
         return -EINVAL;
     }
-    if (m == root_mount) {
+    if (m == root_mount || m->readers) {
         spin_unlock(&mount_lock);
         return -EBUSY;
     }
@@ -420,7 +467,7 @@ int vfs_umount_all(void)
         for (struct list_head *pos = mounts.prev; pos != &mounts; pos = pos->prev) {
             struct mount *o = list_entry(pos, struct mount, link);
             spin_lock(&o->sb->lock);
-            bool inuse = !list_empty(&o->sb->inodes);
+            bool inuse = !list_empty(&o->sb->inodes) || o->readers;
             spin_unlock(&o->sb->lock);
             if (!inuse) {
                 m = o;
