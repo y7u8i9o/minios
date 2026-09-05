@@ -34,12 +34,15 @@
 #define MiB(x)          (KiB(x) * 1024UL)
 #define GiB(x)          (MiB(x) * 1024UL)
 
-/* Identification reported by uname. The release follows the milestone
- * number of PLAN.md. */
+/* Identification reported by uname. The release is the semantic version
+ * in VERSION; the version string ("#build commit date") and the build
+ * number come from build/kernel/version.c, written by tools/version.sh
+ * at every kernel link. */
 #define KERNEL_SYSNAME  "minios"
-#define KERNEL_RELEASE  "0.18"
-#define KERNEL_VERSION  "M18 SMP"
 #define KERNEL_MACHINE  "x86_64"
+extern const char kernel_release[];
+extern const char kernel_version[];
+extern const unsigned kernel_build_number;
 
 /* Kernel entry, defined in arch/x86_64/boot.c. */
 __noreturn void kmain(void);

@@ -5,3 +5,4 @@ qemu.conf
 user/share/sounds/*
 !user/share/sounds/chime.wav
 /*.wav
+BUILDNUM

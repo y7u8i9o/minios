@@ -90,8 +90,8 @@ long sys_uname(struct trapframe *tf)
     struct utsname *u = (struct utsname *)addr;
     strlcpy(u->sysname, KERNEL_SYSNAME, UTS_LEN);
     strlcpy(u->nodename, KERNEL_SYSNAME, UTS_LEN);
-    strlcpy(u->release, KERNEL_RELEASE, UTS_LEN);
-    strlcpy(u->version, KERNEL_VERSION, UTS_LEN);
+    strlcpy(u->release, kernel_release, UTS_LEN);
+    strlcpy(u->version, kernel_version, UTS_LEN);
     strlcpy(u->machine, KERNEL_MACHINE, UTS_LEN);
     return 0;
 }

@@ -37,8 +37,12 @@ $(OUT)/ksyms_empty.o: $(OUT)/ksyms_empty.bin
 	printf '.section .ksyms,"a"\n.incbin "%s"\n' $< > $(OUT)/ksyms_empty.S
 	$(CC) $(KASFLAGS) -c -o $@ $(OUT)/ksyms_empty.S
 
-$(OUT)/kernel_pass1.elf: linker.ld $(OBJS) $(OUT)/ksyms_empty.o
-	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/ksyms_empty.o
+# The identification (VERSION, the build number, the commit) is generated
+# before pass 1 so that both passes link the same objects.
+$(OUT)/kernel_pass1.elf: linker.ld $(OBJS) $(OUT)/ksyms_empty.o ../tools/version.sh ../VERSION
+	../tools/version.sh .. $(OUT)/version.c
+	$(CC) $(KCFLAGS) $(CPPFLAGS) -c -o $(OUT)/version.o $(OUT)/version.c
+	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms_empty.o
 
 # Pass 2: extract symbols and relink with the populated .ksyms section.
 # .ksyms is the last section in the image, so no other address changes.
@@ -50,7 +54,7 @@ $(OUT)/ksyms.o: $(OUT)/ksyms.bin
 	$(CC) $(KASFLAGS) -c -o $@ $(OUT)/ksyms.S
 
 $(KERNEL): linker.ld $(OBJS) $(OUT)/ksyms.o
-	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/ksyms.o
+	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms.o
 
 clean:
 	rm -rf $(OUT) $(KERNEL)

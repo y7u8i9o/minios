@@ -227,6 +227,7 @@ __noreturn void kmain(void)
     fb_screen_init();
     fbcon_init();
     kprintf("minios booting\n");
+    kprintf("minios %s build %u (%s)\n", kernel_release, kernel_build_number, kernel_version);
 
     boot_apply_cmdline();
     gdt_init();

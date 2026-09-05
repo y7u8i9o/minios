@@ -1482,3 +1482,10 @@ creation, writes and truncation and set by `mkfs` from the host files;
 FAT decodes the entry's date and time; the initrd parses the tar
 header; devfs dates its nodes from the boot. Tested by additions to
 `mfs`, `fat` and `mfs_user`.
+
+## Versioning (completed 2026-09-05)
+
+Releases follow semantic versioning in `VERSION` (0.1.0) instead of the
+milestone numbers; `tools/version.sh` numbers every kernel link in
+`BUILDNUM` and records the commit and date, reported by `uname`, the
+boot log and the System page. Documented in `docs/design/build.md`.
