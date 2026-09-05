@@ -47,8 +47,16 @@ the same core.
 | 0x28 | TSS |
 
 The order of the user descriptors is fixed by `sysret`, which loads `SS` from
-`STAR[63:48] + 8` and `CS` from `STAR[63:48] + 16`. The TSS `rsp0` points at
-the boot stack and `IST1` at a dedicated 8 KiB double fault stack.
+`STAR[63:48] + 8` and `CS` from `STAR[63:48] + 16`. `STAR[63:48]` is 0x13,
+the kernel data selector with RPL 3: Intel processors OR 3 into the two
+selectors, AMD processors do not, so the RPL must already be in the base.
+With 0x10, an AMD processor under KVM ran user code with `SS` = 0x18, and
+the first `iretq` back to user mode after a page fault faulted with
+`#GP(0x18)` because `SS.RPL` differed from `CS.RPL`; QEMU's TCG follows
+the Intel rule and did not show it. AMD processors also leave the cached
+`SS` attributes unchanged on `sysret`; that has no effect on this kernel's
+64 bit only user programs. The TSS `rsp0` points at the boot stack and
+`IST1` at a dedicated 8 KiB double fault stack.
 
 ## Interrupts
 

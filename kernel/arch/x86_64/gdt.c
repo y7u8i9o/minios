@@ -20,7 +20,7 @@ struct gdt_ptr {
 } __packed;
 
 /* Selector layout is fixed by the syscall/sysret conventions in M8:
- * STAR sysret base 0x10 requires user data at 0x18 and user code at 0x20.
+ * STAR sysret base 0x13 requires user data at 0x18 and user code at 0x20.
  * Every CPU has its own table and TSS because rsp0 and the double fault
  * stack are per CPU. Written by the owning CPU only. */
 struct cpu_tables {

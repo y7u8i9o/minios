@@ -111,9 +111,13 @@ static const syscall_fn syscall_table[SYS_MAX] = {
 
 void syscall_init_cpu(void)
 {
-    /* STAR: syscall loads CS=0x08, SS=0x10; sysret loads CS=0x10+16=0x20|3,
-     * SS=0x10+8=0x18|3, matching the GDT layout. */
-    wrmsr(MSR_STAR, ((uint64_t)GDT_KERNEL_DATA << 48) | ((uint64_t)GDT_KERNEL_CODE << 32));
+    /* STAR: syscall loads CS=0x08, SS=0x10. sysret loads CS from
+     * STAR[63:48]+16 and SS from STAR[63:48]+8. Intel processors OR 3
+     * into both selectors, AMD processors do not, so the base carries
+     * RPL 3 itself: 0x13 gives CS=0x23 and SS=0x1b on both. With 0x10 an
+     * AMD processor ran user code with SS=0x18, and the next iretq back
+     * to user mode faulted with #GP(0x18). */
+    wrmsr(MSR_STAR, ((uint64_t)(GDT_KERNEL_DATA | 3) << 48) | ((uint64_t)GDT_KERNEL_CODE << 32));
     wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
     wrmsr(MSR_SFMASK, RFLAGS_IF | RFLAGS_TF | RFLAGS_DF | RFLAGS_AC);
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_SCE);

@@ -116,12 +116,12 @@ void trap_dump_extra(const struct trapframe *tf)
     __asm__ volatile("movw %%ds, %0" : "=r"(ds));
     __asm__ volatile("movq %%cr0, %0" : "=r"(cr0));
     __asm__ volatile("movq %%cr4, %0" : "=r"(cr4));
-    /* The frame a faulting iretq or sysret was about to consume. */
+    /* The five word frame a faulting iretq was about to consume: rip,
+     * cs, rflags, rsp, ss. It ends at the top of the kernel stack, so
+     * nothing beyond it is read. */
     const uint64_t *frame = (const uint64_t *)tf->rsp;
-    kprintf("stack at rsp: ");
-    for (int i = 0; i < 6; i++)
-        kprintf("%016lx ", frame[i]);
-    kprintf("\n");
+    kprintf("frame at rsp: rip=%016lx cs=%04lx rflags=%016lx rsp=%016lx ss=%04lx\n",
+            frame[0], frame[1], frame[2], frame[3], frame[4]);
     kprintf("live cs=%x ss=%x ds=%x tr=%x cr0=%lx cr4=%lx efer=%lx\n",
             cs, ss, ds, tr, cr0, cr4, rdmsr(MSR_EFER));
     kprintf("gdtr=%016lx/%x idtr=%016lx/%x gs_base=%016lx kernel_gs_base=%016lx\n",
