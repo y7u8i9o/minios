@@ -108,6 +108,13 @@ void proc_free(struct proc *p)
     spin_lock(&proc_list_lock);
     list_del(&p->link);
     spin_unlock(&proc_list_lock);
+    /* A child whose fork failed before it ran is still in its parent's
+     * children list; leaving it there would make the parent wait forever
+     * on freed memory. Reaped processes are already unlinked. */
+    spin_lock(&proc_tree_lock);
+    if (!list_empty(&p->sibling))
+        list_del(&p->sibling);
+    spin_unlock(&proc_tree_lock);
     fdtable_close_all(&p->fds);
     if (p->vm) {
         vma_remove_all(p->vm);
@@ -166,8 +173,10 @@ int proc_reap(struct proc *p)
     spin_lock(&proc_tree_lock);
     while (p->state != PROC_ZOMBIE)
         waitq_wait(&p->exit_waitq, &proc_tree_lock);
-    if (!list_empty(&p->sibling))
+    if (!list_empty(&p->sibling)) {
         list_del(&p->sibling);
+        list_init(&p->sibling);
+    }
     spin_unlock(&proc_tree_lock);
 
     /* Every thread has exited; wait until each has switched away. */

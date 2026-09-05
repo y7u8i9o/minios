@@ -86,7 +86,11 @@ between the same pair cannot deadlock.
 
 `kinit` mounts `initrd` on `/` and `devfs` on `/dev` (an empty directory
 on the initrd) before any program runs. New user processes created from
-the kernel get `/dev/console` on descriptors 0, 1 and 2.
+the kernel get `/dev/console` on descriptors 0, 1 and 2, each opened
+read/write as a terminal is on Unix: a program whose input is a pipe can
+read keys from the terminal behind its output (`less` does this with
+`dup(1)`) without opening `/dev/console`, which inside a terminal window
+would be another terminal.
 
 ## Mount capacity snapshots
 
@@ -114,7 +118,11 @@ two wait queues, all under `pipe.lock`. A read on an empty pipe blocks
 until data arrives or the last writer closes, in which case it returns 0.
 A write blocks while the buffer is full and fails with `EPIPE` once no
 reader remains. Blocked readers and writers return `EINTR` when their
-process is being terminated. The pipe is freed with its last end.
+process is being terminated. Each end holds a reference (`pipe.refs`);
+`pipe_release` drops it as its last step, after waking the peers and the
+pollers, so the pipe outlives both releases even when the two ends are
+closed at the same moment on different CPUs, as happens when the
+processes of a pipeline exit together.
 
 ## System calls
 
@@ -149,3 +157,7 @@ initrd until the disk filesystem of M13 is mounted.
 - `pipes` types `ls /dev`, `cat < /etc/motd`, `cat /etc/motd | wc`, output
   redirection and a four stage pipeline into the keyboard buffer and runs
   the shell on it, checking the output and that no physical page leaks.
+- `pipe_close` (`kernel/tests/test_pipe.c`) has two kernel threads release
+  the read ends and the write ends of 256 pipes in step, forty rounds, so
+  both ends of a pipe are closed at the same moment on different CPUs; it
+  hung before `pipe_release` held its own reference across the wakeups.

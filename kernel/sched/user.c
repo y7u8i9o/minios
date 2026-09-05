@@ -100,12 +100,16 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
     return 0;
 }
 
-/* Give a new process the console on descriptors 0, 1 and 2. */
+/* Give a new process the console on descriptors 0, 1 and 2. All three are
+ * opened read/write, as a terminal is on Unix, so a program whose input is
+ * a pipe can still read keys from the terminal behind its output (less,
+ * for example) without opening /dev/console, which in a terminal window
+ * would be another terminal. */
 static int open_std_fds(struct proc *p)
 {
     for (int fd = 0; fd < 3; fd++) {
         struct file *f;
-        int r = vfs_open("/dev/console", fd == 0 ? O_RDONLY : O_WRONLY, 0, &f);
+        int r = vfs_open("/dev/console", O_RDWR, 0, &f);
         if (r < 0)
             return r;
         fdtable_install_at(&p->fds, f, fd);

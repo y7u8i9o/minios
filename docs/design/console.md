@@ -88,7 +88,11 @@ message and a backtrace, and then either exits QEMU through isa-debug-exit
 with code 1 (`CONFIG_PANIC_EXIT=1`) or halts. The drain goes to the serial
 port only, because the console daemon may have been halted in the middle of
 a framebuffer update; `fbcon_write` finishes a pending scroll before it
-draws, and `fbcon_draw_glyph` ignores positions outside the screen.
+draws, and `fbcon_draw_glyph` ignores positions outside the screen. The
+halt IPI cannot stop a CPU that is already inside a fault of its own, so a
+second CPU entering `panic` parks itself silently and the first report,
+with its frame and backtrace, still completes; only a nested panic on the
+reporting CPU prints `nested panic:` and exits at once.
 
 For a fault in kernel mode, `panic_trap` also prints `trap_dump_extra`
 (`arch/x86_64/idt.c`): the six words at the stack pointer (the frame a

@@ -12,6 +12,7 @@
 #include <sched/proc.h>
 
 volatile int panic_in_progress;
+static volatile int panic_cpu = -1;     /* the CPU writing the report */
 
 #define PANIC_EXIT_CODE 1
 
@@ -30,13 +31,20 @@ static void panic_begin(const char *fmt, va_list ap)
 {
     cli();
     if (panic_in_progress) {
-        /* Nested panic: print what we can and stop. */
+        /* A CPU that faults while the first report is being written (the
+         * halt IPI cannot stop a CPU already inside a fault) parks itself,
+         * so the report with the frame and the backtrace still completes.
+         * A nested panic on the reporting CPU prints what it can and stops. */
+        if (sched_started() && (int)cpu_current()->id != panic_cpu)
+            cpu_halt_forever();
         kprintf("\nnested panic: ");
         kvprintf(fmt, ap);
         kprintf("\n");
         panic_finish();
     }
     panic_in_progress = 1;
+    if (sched_started())
+        panic_cpu = (int)cpu_current()->id;
     smp_halt_others();
     console_panic_drain();
     kprintf("\n*** kernel panic: ");

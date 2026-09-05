@@ -7,6 +7,7 @@
 #include <ipc/signal.h>
 #include <ipc/poll.h>
 #include <sync/ring.h>
+#include <sync/atomic.h>
 #include <mm/slab.h>
 #include <lib/string.h>
 #include <kassert.h>
@@ -16,12 +17,15 @@
 #define PIPE_SIZE 4096
 
 /* File I/O serializes the sole producer and consumer.  The byte path is an
- * SPSC ring; lock covers endpoint counts and lost-wakeup avoidance only. */
+ * SPSC ring; lock covers endpoint counts and lost-wakeup avoidance only.
+ * refs is atomic: one reference per end, dropped as the last step of
+ * pipe_release, so the pipe outlives both releases. */
 struct pipe {
     struct spinlock lock;
     char buf[PIPE_SIZE];
     struct spsc_ring ring;
     int readers, writers;
+    refcount_t refs;
     struct waitq rd_waitq;          /* readers waiting for data */
     struct waitq wr_waitq;          /* writers waiting for room */
     struct poll_source poll;
@@ -116,12 +120,14 @@ static void pipe_release(struct file *f)
         p->readers--;
     else
         p->writers--;
-    bool gone = p->readers == 0 && p->writers == 0;
     waitq_wake_all(&p->rd_waitq);
     waitq_wake_all(&p->wr_waitq);
     spin_unlock(&p->lock);
     poll_source_notify(&p->poll);
-    if (gone)
+    /* The other end may be released on another CPU at the same moment
+     * (a pipeline whose processes exit together). Whoever drops the last
+     * reference frees the pipe, after both ends have finished with it. */
+    if (refcount_dec_and_test(&p->refs))
         kfree(p);
 }
 
@@ -182,6 +188,7 @@ int pipe_create(struct file **rd, struct file **wr)
     poll_source_init(&p->poll, "pipe_poll");
     p->readers = 1;
     p->writers = 1;
+    refcount_set(&p->refs, 2);
     struct file *r = file_alloc(NULL, &pipe_rd_fops, O_RDONLY);
     struct file *w = file_alloc(NULL, &pipe_wr_fops, O_WRONLY);
     if (!r || !w) {
