@@ -1,0 +1,4 @@
+# Personal interactive shell settings. Examples:
+# PS1='\w \$ '
+# HISTSIZE=500
+# alias ll='ls -lh'

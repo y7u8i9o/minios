@@ -48,6 +48,7 @@ static uint8_t scancode_for(char c)
     for (int i = 0; row4[i]; i++) if (row4[i] == c) return (uint8_t)(0x2b + i);
     if (c == ' ') return 0x39;
     if (c == '\n') return 0x1c;
+    if (c == '\t') return 0x0f;
     return 0;
 }
 
@@ -65,7 +66,7 @@ void type_line(const char *s)
     for (; *s; s++) {
         char c = *s;
         bool shift = false;
-        static const char shifted[] = "<,>.|\\$4&7\"'_-(9)0:;*8?/!1";
+        static const char shifted[] = "<,>.|\\$4&7\"'_-(9)0:;*8?/!1{[}]~`#3%5^6+=@2";
         for (const char *m = shifted; *m; m += 2) {
             if (m[0] == c) {
                 c = m[1];
@@ -117,6 +118,47 @@ static void test_shell(void)
                  (long)before.free_pages - (long)after.free_pages);
 }
 KTEST_DEFINE("shell", test_shell);
+
+static void type_key(uint8_t code)
+{
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(code);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(code | 0x80);
+}
+
+static void lineedit_wait(void)
+{
+    for (int i = 0; i < 100 && (tty_get_lflag(&console_tty) & ICANON); i++)
+        sleep_ms(50);
+    ktest_assert(!(tty_get_lflag(&console_tty) & ICANON), "line editor did not enter raw mode");
+}
+
+static void test_lineedit(void)
+{
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start shell");
+    lineedit_wait();
+    type_line("cho hello");
+    type_key(0x47); /* Home */
+    type_line("e\n");
+    sleep_ms(200);
+    lineedit_wait();
+    type_line("hexd\t /dev/null\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_key(0x48); /* Up */
+    type_line("\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_line("exit 12\n");
+    int status = proc_reap(p);
+    ktest_assert(status == PROC_STATUS_EXITED(12), "lineedit status 0x%x", status);
+    ktest_assert(tty_get_lflag(&console_tty) & ICANON, "line editor left raw mode");
+    kprintf("lineedit: completion, history and Home editing passed\n");
+}
+KTEST_DEFINE("lineedit", test_lineedit);
 
 /* M11: pipelines, redirections and directory listing through the shell. */
 static void test_pipes(void)

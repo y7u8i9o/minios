@@ -1,4 +1,9 @@
 #include "sh.h"
+#ifndef SH_TEST
+#include <edit.h>
+static struct edit *editor;
+static char *history_path;
+#endif
 
 int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
 char **script_argv;
@@ -10,6 +15,30 @@ int run_reader(struct reader *reader)
     size_t capacity = 0, length = 0;
     int status = 0;
     while (flow == FLOW_NORMAL) {
+        ssize_t count;
+#ifndef SH_TEST
+        if (reader->interactive && editor) {
+            if (!line) {
+                capacity = WORD_MAX;
+                line = sh_alloc(capacity);
+            }
+            jobs_reap(0);
+            char *prompt = prompt_render(length != 0);
+            count = edit_readline(editor, prompt, line, capacity - 1);
+            free(prompt);
+            if (count == -EINTR) {
+                length = 0;
+                last_status = 130;
+                continue;
+            }
+            if (count >= 0) {
+                edit_history_add(editor, line);
+                line[count++] = '\n';
+                line[count] = 0;
+            }
+        } else
+#endif
+        {
         if (reader->interactive) {
             jobs_reap(0);
             char cwd[1024];
@@ -19,7 +48,8 @@ int run_reader(struct reader *reader)
                 printf("%s $ ", getcwd(cwd, sizeof cwd) ? cwd : "?");
             fflush(stdout);
         }
-        ssize_t count = getline(&line, &capacity, reader->file);
+        count = getline(&line, &capacity, reader->file);
+        }
         if (count < 0) {
             if (length) {
                 fprintf(stderr, "sh: unexpected end of input\n");
@@ -66,11 +96,14 @@ int run_file(const char *path)
     return result;
 }
 
-/* Replaced by the libedit history integration in the interactive stage. */
 void shell_history(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+#ifndef SH_TEST
+    if (!editor)
+        return;
+    for (size_t i = 0; i < edit_history_count(editor); i++)
+        printf("%5lu  %s\n", (unsigned long)i + 1, edit_history_get(editor, i));
+#endif
 }
 
 #ifndef SH_TEST
@@ -104,10 +137,35 @@ int main(int argc, char **argv)
         signal(SIGTTOU, SIG_IGN);
         setpgid(0, 0);
         tcsetpgrp(0, getpgrp());
+        prompt_startup();
+        editor = edit_open(0, 1);
+        if (!editor) {
+            fprintf(stderr, "sh: cannot open line editor\n");
+            return 1;
+        }
+        const char *limit = var_get("HISTSIZE");
+        int count = limit ? atoi(limit) : 500;
+        edit_history_limit(editor, count >= 0 && count <= 100000 ? (size_t)count : 500);
+        const char *file = var_get("HISTFILE"), *home = var_get("HOME");
+        if (file)
+            history_path = strdup(file);
+        else if (home) {
+            size_t size = strlen(home) + 14;
+            history_path = sh_alloc(size);
+            snprintf(history_path, size, "%s/.sh_history", home);
+        }
+        if (history_path && *history_path)
+            edit_history_load(editor, history_path);
     }
     struct reader reader = { .file = stdin, .interactive = interactive };
     int result = run_reader(&reader);
     jobs_reap(0);
+    if (editor) {
+        if (history_path && *history_path)
+            edit_history_save(editor, history_path);
+        edit_close(editor);
+        free(history_path);
+    }
     return result;
 }
 #endif

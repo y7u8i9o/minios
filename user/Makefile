@@ -7,6 +7,7 @@ LIBGUI := $(BUILD)/libgui/libgui.a
 LIBFONT := $(BUILD)/libfont/libfont.a
 LIBWIRE := $(BUILD)/libwire/libwire.a
 LIBAUDIO := $(BUILD)/libaudio/libaudio.a
+LIBEDIT := $(BUILD)/libedit/libedit.a
 CRT0   := $(BUILD)/libc/crt0.o
 
 # Every directory holding a main program: one binary per directory named
@@ -18,13 +19,14 @@ APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c)))
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS))
 
 UCPP   := -I../libc/include -I../kernel/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
+UCPP   += -I../libedit/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
-HOME   := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*))
+HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/home/.shrc
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(BINS) $(ETC) share-tree $(HOME) $(FONTS) $(ROOT)/dev $(ROOT)/initrd
+all: $(BINS) $(ETC) share-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -64,9 +66,9 @@ $(ROOT)/etc/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 $(ROOT)/dev $(ROOT)/initrd:
 	mkdir -p $@
 
-$(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(LIBC) -lgcc
 	cp $(OUT)/$*.elf $@
 
 # X12 keeps its implementation in compositor/ for source-history

@@ -1,0 +1,7 @@
+# Shared defaults for interactive console and Terminal sessions.
+export PAGER=less
+alias ll='ls -lh'
+alias la='ls -a'
+if test -n "$TERM" && test "$TERM" != dumb && test -z "$NO_COLOR"; then
+    PS1='\[\e[32m\]\u\[\e[0m\]:\[\e[34m\]\w\[\e[0m\] \$ '
+fi

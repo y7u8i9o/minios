@@ -377,6 +377,9 @@ static struct tab *open_tab(char *const argv[], const char *dir)
             close(tab_list[i]->master);
         tcsetpgrp(0, getpgrp());
         setenv("TERM", "xterm-256color", 1);
+        setenv("HOME", "/home", 1);
+        setenv("USER", "user", 1);
+        setenv("SHELL", "/bin/sh", 1);
         if (dir && dir[0])
             chdir(dir);
         execvp(argv[0], argv);

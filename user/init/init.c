@@ -39,6 +39,11 @@ int main(int argc, char **argv)
         if (shell < 0) {
             shell = fork();
             if (shell == 0) {
+                setenv("PATH", "/bin", 1);
+                setenv("HOME", "/home", 1);
+                setenv("USER", "user", 1);
+                setenv("SHELL", "/bin/sh", 1);
+                setenv("TERM", "minios", 1);
                 setpgid(0, 0);
                 tcsetpgrp(0, getpid());
                 char *const args[] = { "sh", NULL };

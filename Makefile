@@ -61,7 +61,10 @@ libaudio: libc libwire
 libgui: libc libfont libwire
 	$(MAKE) -C libgui
 
-user: libc libfont libwire libaudio libgui
+libedit: libc
+	$(MAKE) -C libedit
+
+user: libc libfont libwire libaudio libgui libedit
 	$(MAKE) -C user
 
 # The initrd is a ustar archive of build/initrd_root, populated by user/.
@@ -125,7 +128,7 @@ check:
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
 
-.PHONY: check-sh
+.PHONY: check-sh libedit
 check-sh:
 	@mkdir -p $(BUILD)/sh/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -DSH_TEST -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -Wextra \
