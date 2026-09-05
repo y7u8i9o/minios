@@ -9,6 +9,29 @@
 #include <fs/vfs.h>
 #include <lib/string.h>
 #include <drivers/timer.h>
+#include <sync/rcu.h>
+
+struct shell_reclaim {
+    struct rcu_head head;
+    bool done;
+};
+
+static void shell_reclaim_done(struct rcu_head *head)
+{
+    struct shell_reclaim *reclaim = container_of(head, struct shell_reclaim, head);
+    __atomic_store_n(&reclaim->done, true, __ATOMIC_RELEASE);
+}
+
+/* Process teardown defers VMA freeing through RCU. Measure after those
+ * callbacks complete so the assertion counts leaks, not pending frees. */
+static void shell_memory_drain(void)
+{
+    struct shell_reclaim reclaim = {0};
+    rcu_call(&reclaim.head, shell_reclaim_done);
+    while (!__atomic_load_n(&reclaim.done, __ATOMIC_ACQUIRE))
+        sleep_ms(1);
+    swap_drain();
+}
 
 /* M10: type a session into the keyboard buffer, then run the shell on it.
  * The typed commands exercise builtins, PATH lookup, argument passing and
@@ -79,7 +102,7 @@ static void test_shell(void)
     type_line("exit 3\n");
 
     struct pmm_stats before, after;
-    swap_drain();
+    shell_memory_drain();
     pmm_get_stats(&before);
     char *const argv[] = { "sh", NULL };
     char *const envp[] = { "PATH=/bin", NULL };
@@ -88,7 +111,7 @@ static void test_shell(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(3), "sh status 0x%x", status);
-    swap_drain();
+    shell_memory_drain();
     pmm_get_stats(&after);
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);
@@ -107,7 +130,7 @@ static void test_pipes(void)
     type_line("exit 5\n");
 
     struct pmm_stats before, after;
-    swap_drain();
+    shell_memory_drain();
     pmm_get_stats(&before);
     char *const argv[] = { "sh", NULL };
     char *const envp[] = { "PATH=/bin", NULL };
@@ -116,7 +139,7 @@ static void test_pipes(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(5), "sh status 0x%x", status);
-    swap_drain();
+    shell_memory_drain();
     pmm_get_stats(&after);
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);

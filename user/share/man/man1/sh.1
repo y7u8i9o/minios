@@ -4,7 +4,7 @@ NAME
     sh - MiniOS command interpreter
 
 SYNOPSIS
-    sh [-c command [argument...]]
+    sh [-c command [name [argument...]]]
     sh [script [argument...]]
 
 DESCRIPTION
@@ -20,10 +20,34 @@ JOB CONTROL
 
 BUILTINS
     cd, exit, pwd, export, unset, set, jobs, fg, bg, wait, true, false,
-    ulimit, help.
+    ulimit, help, test, [, echo, read, shift, local, return, source, .,
+    alias, unalias, eval, type, command, break, continue, history, :.
 
 EXPANSIONS
-    $NAME, ${NAME}, $?, $$, $#, $0 through $9, $@, and $(command).
+    Expansion happens when a command executes: tilde, parameters, arithmetic
+    $((expression)), command substitution $(command), splitting on IFS,
+    filename patterns (* ? [...]), then quote removal. Single quotes protect
+    everything; double quotes allow expansion without splitting or globbing.
+    "$@" preserves separate arguments. ${name:-word}, :=, :+, :?, #, ##, %,
+    and %% provide defaults, assignment, checks and pattern trimming.
+
+CONTROL FLOW
+    if commands; then commands; elif commands; then commands; else commands; fi
+    for name in words; do commands; done
+    while commands; do commands; done
+    until commands; do commands; done
+    case word in pattern|pattern) commands;; pattern) commands;; esac
+    name() { commands; }
+    (commands) runs in a subshell; { commands; } runs in the current shell.
+    Functions have their own positional arguments. local creates a binding
+    restored when the function returns. break and continue accept a loop count.
+
+REDIRECTIONS
+    [fd]<file, [fd]>file, [fd]>>file, [fd]<&number and [fd]>&number are applied
+    from left to right. A descriptor target of - closes it. <<delimiter reads
+    a here document; quote the delimiter to suppress expansion. <<- strips
+    leading tabs. Builtin and compound-command redirections are restored
+    after execution.
 
 SEE ALSO
     find(1), xargs(1), pager(1), man(1)

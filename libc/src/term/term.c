@@ -14,7 +14,8 @@ int term_use_color(int fd)
 int term_columns(int fd)
 {
     struct winsize ws;
-    if (ioctl(fd, TIOCGWINSZ, &ws) == 0 && ws.ws_col) return ws.ws_col;
+    if (ioctl(fd, TIOCGWINSZ, &ws) == 0 && ws.ws_col)
+        return ws.ws_col;
     const char *value = getenv("COLUMNS");
     int n = value ? atoi(value) : 0;
     return n > 0 && n <= 65535 ? n : 80;

@@ -125,5 +125,13 @@ check:
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
 
+.PHONY: check-sh
+check-sh:
+	@mkdir -p $(BUILD)/sh/host
+	$(HOSTCC) $(HOSTCPPFLAGS) -DSH_TEST -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -Wextra \
+	    -Wno-unused-parameter -include user/sh/tests/host_compat.h -Iuser/sh \
+	    -o $(BUILD)/sh/host/test_parser user/sh/*.c user/sh/tests/test_parser.c
+	$(BUILD)/sh/host/test_parser
+
 clean:
 	rm -rf $(BUILD)
