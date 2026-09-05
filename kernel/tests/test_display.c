@@ -17,6 +17,25 @@
 #include <console.h>
 #include <errno.h>
 
+static void test_console_sgr(void)
+{
+    ktest_assert(fbcon_present(), "no framebuffer console");
+    const char *text = "\033[2J\033[H\033[1;31mX\033[0mY\033[44;93;7mZ\033[27;22;39;49mW";
+    console_write(text, strlen(text));
+    console_flush();
+    char c; uint8_t attr;
+    ktest_assert(fbcon_get_cell(0, 0, &c, &attr) && c == 'X' && attr == 9, "bright red: %u", attr);
+    ktest_assert(fbcon_get_cell(1, 0, &c, &attr) && c == 'Y' && attr == 7, "reset: %u", attr);
+    ktest_assert(fbcon_get_cell(2, 0, &c, &attr) && c == 'Z' && attr == 0xb4, "reverse: %u", attr);
+    ktest_assert(fbcon_get_cell(3, 0, &c, &attr) && c == 'W' && attr == 7, "defaults: %u", attr);
+    text = "\033[H\n\033[1A\033[K";
+    console_write(text, strlen(text));
+    console_flush();
+    ktest_assert(fbcon_get_cell(0, 0, &c, &attr) && c == ' ' && attr == 7, "erase attributes");
+    kprintf("console_sgr: ok\n");
+}
+KTEST_DEFINE("console_sgr", test_console_sgr);
+
 static uint32_t pixel(int x, int y)
 {
     return fb_read_rgb(&fb_screen, (uint32_t)x, (uint32_t)y);

@@ -14,6 +14,8 @@ bool fbcon_take_dirty(struct fb_rect *r);
 bool fbcon_present(void);
 /* Text size in cells; 80x25 when no framebuffer exists. */
 void fbcon_get_size(uint16_t *cols, uint16_t *rows);
+/* Read backing cells under console_lock, or in an isolated console test. */
+bool fbcon_get_cell(uint32_t col, uint32_t row, char *c, uint8_t *attr);
 /* Stop or resume drawing; resuming redraws the text from the cell buffer.
  * Output while disabled still updates the cells. */
 void fbcon_set_enabled(bool enabled);

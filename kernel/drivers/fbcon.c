@@ -10,6 +10,12 @@
 #define FBCON_FG 0x00aaaaaa
 #define FBCON_BG 0x00000000
 
+/* Terminal window palette; index 7 retains the console's historical grey. */
+static const uint32_t palette[16] = {
+    0x000000, 0xcd3131, 0x0dbc79, 0xe5e510, 0x2472c8, 0xbc3fbc, 0x11a8cd, 0xaaaaaa,
+    0x666666, 0xf14c4c, 0x23d18b, 0xf5f543, 0x3b8eea, 0xd670d6, 0x29b8db, 0xffffff,
+};
+
 /* Framebuffer console state. Protected by console_lock in drivers/console.c,
  * the only caller. lfb points at fb_screen. */
 static struct {
@@ -24,11 +30,28 @@ static struct {
     bool present;
     bool disabled;                  /* a user process owns the display */
     char cells[FBCON_MAX_ROWS][FBCON_MAX_COLS];
+    uint8_t attrs[FBCON_MAX_ROWS][FBCON_MAX_COLS];
+    uint8_t fg_index, bg_index;
+    bool bold, reverse;
     /* Escape sequence parser: 0 idle, 1 after ESC, 2 inside CSI. */
     int esc_state;
-    unsigned esc_args[4];
+    unsigned esc_args[8];
     unsigned esc_nargs;
 } fb;
+
+static uint8_t current_attr(void)
+{
+    uint8_t fg = fb.fg_index | (fb.bold ? 8 : 0), bg = fb.bg_index;
+    return fb.reverse ? (uint8_t)(fg << 4 | bg) : (uint8_t)(bg << 4 | fg);
+}
+
+bool fbcon_get_cell(uint32_t col, uint32_t row, char *c, uint8_t *attr)
+{
+    if (!fb.present || col >= fb.cols || row >= fb.rows) return false;
+    if (c) *c = fb.cells[row][col];
+    if (attr) *attr = fb.attrs[row][col];
+    return true;
+}
 
 static void mark_dirty(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
@@ -60,8 +83,9 @@ static void fbcon_draw_glyph(uint32_t col, uint32_t row, char c, bool inverted)
     if (fb.disabled || col >= fb.cols || row >= fb.rows)
         return;
     const uint8_t *glyph = font8x16[(uint8_t)c];
-    uint32_t fg = inverted ? fb.bg : fb.fg;
-    uint32_t bg = inverted ? fb.fg : fb.bg;
+    uint8_t attr = fb.attrs[row][col];
+    uint32_t fg = fb_pack_pixel(fb.lfb, palette[inverted ? attr >> 4 : attr & 15]);
+    uint32_t bg = fb_pack_pixel(fb.lfb, palette[inverted ? attr & 15 : attr >> 4]);
     uint32_t s = fb.scale;
     uint32_t px = col * FONT_WIDTH * s, py = row * FONT_HEIGHT * s;
     mark_dirty((int32_t)px, (int32_t)py, (int32_t)(px + FONT_WIDTH * s), (int32_t)(py + FONT_HEIGHT * s));
@@ -119,6 +143,8 @@ static void fbcon_scroll(void)
 {
     memmove(fb.cells[0], fb.cells[1], (size_t)(fb.rows - 1) * FBCON_MAX_COLS);
     memset(fb.cells[fb.rows - 1], ' ', FBCON_MAX_COLS);
+    memmove(fb.attrs[0], fb.attrs[1], (size_t)(fb.rows - 1) * FBCON_MAX_COLS);
+    memset(fb.attrs[fb.rows - 1], current_attr(), FBCON_MAX_COLS);
     for (uint32_t r = 0; r < fb.rows; r++)
         fbcon_draw_row(r);
 }
@@ -127,6 +153,7 @@ static void fbcon_clear_cells(uint32_t row, uint32_t from, uint32_t to)
 {
     for (uint32_t c = from; c < to && c < fb.cols; c++) {
         fb.cells[row][c] = ' ';
+        fb.attrs[row][c] = current_attr();
         fbcon_draw_glyph(c, row, ' ', false);
     }
 }
@@ -139,6 +166,22 @@ static void fbcon_csi(char cmd)
     unsigned a0 = fb.esc_nargs > 0 ? fb.esc_args[0] : 0;
     unsigned a1 = fb.esc_nargs > 1 ? fb.esc_args[1] : 0;
     switch (cmd) {
+    case 'm':
+        for (unsigned i = 0; i < (fb.esc_nargs ? fb.esc_nargs : 1); i++) {
+            unsigned a = fb.esc_args[i];
+            if (a == 0) { fb.fg_index = 7; fb.bg_index = 0; fb.bold = fb.reverse = false; }
+            else if (a == 1) fb.bold = true;
+            else if (a == 22) fb.bold = false;
+            else if (a == 7) fb.reverse = true;
+            else if (a == 27) fb.reverse = false;
+            else if (a >= 30 && a <= 37) fb.fg_index = a - 30;
+            else if (a == 39) fb.fg_index = 7;
+            else if (a >= 40 && a <= 47) fb.bg_index = a - 40;
+            else if (a == 49) fb.bg_index = 0;
+            else if (a >= 90 && a <= 97) fb.fg_index = a - 90 + 8;
+            else if (a >= 100 && a <= 107) fb.bg_index = a - 100 + 8;
+        }
+        break;
     case 'H':
     case 'f':
         fb.cy = a0 ? MIN(a0, fb.rows) - 1 : 0;
@@ -226,6 +269,7 @@ static void fbcon_put_raw(char c)
         break;
     default:
         fb.cells[fb.cy][fb.cx] = c;
+        fb.attrs[fb.cy][fb.cx] = current_attr();
         fbcon_draw_glyph(fb.cx, fb.cy, c, false);
         fb.cx++;
         break;
@@ -271,6 +315,10 @@ void fbcon_init(void)
     fbcon_setup();
     fb.cx = 0;
     fb.cy = 0;
+    fb.fg_index = 7;
+    fb.bg_index = 0;
+    fb.bold = fb.reverse = false;
+    memset(fb.attrs, 7, sizeof fb.attrs);
     memset(fb.cells, ' ', sizeof fb.cells);
     fbcon_clear_screen();
     fb.present = true;
@@ -290,6 +338,7 @@ void fbcon_screen_changed(void)
         fb.cx = 0;
         fb.cy = 0;
         memset(fb.cells, ' ', sizeof fb.cells);
+        memset(fb.attrs, 7, sizeof fb.attrs);
     }
     if (fb.cx >= fb.cols)
         fb.cx = fb.cols - 1;
@@ -297,6 +346,8 @@ void fbcon_screen_changed(void)
         /* Keep the last rows of text when the grid shrinks. */
         uint32_t drop = fb.cy - (fb.rows - 1);
         memmove(fb.cells[0], fb.cells[drop], (size_t)(FBCON_MAX_ROWS - drop) * FBCON_MAX_COLS);
+        memmove(fb.attrs[0], fb.attrs[drop], (size_t)(FBCON_MAX_ROWS - drop) * FBCON_MAX_COLS);
+        memset(fb.attrs[FBCON_MAX_ROWS - drop], 7, (size_t)drop * FBCON_MAX_COLS);
         memset(fb.cells[FBCON_MAX_ROWS - drop], ' ', (size_t)drop * FBCON_MAX_COLS);
         fb.cy = fb.rows - 1;
     }
