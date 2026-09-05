@@ -46,6 +46,7 @@ static void test_names(void)
     close(fd);
     struct stat st;
     CHECK(stat(spaced, &st) == 0 && st.st_size == 6, "stat the spaced name");
+    CHECK(st.st_mtime > 1600000000, "modification time %ld", (long)st.st_mtime);
     CHECK(stat(longname, &st) == 0 && st.st_size == 4, "stat the long name");
     int seen_long = 0, seen_spaced = 0;
     DIR *d = opendir(".");

@@ -23,8 +23,12 @@ system call boundary (`struct stat`, `struct dirent`, open flags) live in
   nested calls (an unlinked inode released inside an operation) do not
   start a second one.
 - `struct inode` holds the metadata of one object: mode, link count,
-  size, device number for device nodes, the operation tables and a
-  filesystem private pointer. Inodes are reference counted. `inode_get`
+  size, modification time (seconds since the epoch, reported as
+  `st_mtime`; `vfs_now` reads it from the real time clock), device
+  number for device nodes, the operation tables and a filesystem
+  private pointer. mfs stores the time in its inode, FAT converts the
+  entry's date and time, the initrd takes it from the tar header and
+  devfs dates its nodes from the boot. Inodes are reference counted. `inode_get`
   returns the cached inode for a number or reads it through the
   superblock. When the last reference drops the inode is removed from the
   cache and freed, after `put_inode` gave the filesystem a chance to

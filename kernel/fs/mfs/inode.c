@@ -130,6 +130,8 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
     if ((off + n) / MFS_BLOCK_SIZE >= MFS_MAX_FILE_BLOCKS)
         return -EFBIG;
     size_t done = 0;
+    bool flushed = false;
+    ino->mtime = vfs_now();
     while (done < n) {
         uint64_t idx = off / MFS_BLOCK_SIZE;
         size_t boff = off % MFS_BLOCK_SIZE;
@@ -151,8 +153,11 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
         if (off > ino->size) {
             ino->size = off;
             mfs_inode_flush(ino);
+            flushed = true;
         }
     }
+    if (done && !flushed)
+        mfs_inode_flush(ino);           /* the modification time */
     return (long)done;
 }
 
@@ -241,6 +246,7 @@ int mfs_truncate_locked(struct inode *ino, uint64_t size)
         }
     }
     ino->size = size;
+    ino->mtime = vfs_now();
     return mfs_inode_flush(ino);
 }
 

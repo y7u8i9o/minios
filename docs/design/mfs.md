@@ -71,7 +71,11 @@ changes, which discards files written during earlier runs.
   flag, increments the mount counter and writes block 0 back before
   returning. `read_inode` and `mfs_inode_flush` copy between
   `struct inode` plus `struct mfs_inode_info` (the block pointers) and the
-  inode table through the block cache. `put_inode` runs when the last
+  inode table through the block cache; the `mtime` field of the disk
+  inode holds the modification time in seconds since the epoch, set by
+  `mkfs` from the host file, by `mfs_inode_new`, and by every write and
+  truncation (a write that does not grow the file flushes the inode once
+  at its end). `put_inode` runs when the last
   reference to an inode goes away and frees its blocks and inode number if
   the link count is zero, so an unlinked open file keeps its data until it
   is closed. `sync` writes the superblock and flushes the cache; `unmount`

@@ -63,6 +63,7 @@ static int mfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     i->mode = d->mode;
     i->nlink = d->nlink;
     i->size = d->size;
+    i->mtime = (int64_t)d->mtime;
     memcpy(info->direct, d->direct, sizeof info->direct);
     info->indirect = d->indirect;
     info->dindirect = d->dindirect;
@@ -89,6 +90,7 @@ int mfs_inode_flush(struct inode *ino)
     d->mode = ino->mode;
     d->nlink = ino->nlink;
     d->size = ino->size;
+    d->mtime = (uint64_t)ino->mtime;
     memcpy(d->direct, info->direct, sizeof d->direct);
     d->indirect = info->indirect;
     d->dindirect = info->dindirect;
@@ -112,6 +114,7 @@ struct inode *mfs_inode_new(struct superblock *sb, uint32_t mode, uint32_t nlink
     memset(d, 0, sizeof *d);
     d->mode = mode;
     d->nlink = nlink;
+    d->mtime = (uint64_t)vfs_now();
     mfs_journal_write(m, b);
     brelse(b);
     struct inode *ino = inode_get(sb, num);

@@ -99,6 +99,7 @@ static int initrd_read_inode(struct superblock *sb, uint64_t ino, struct inode *
         i->ops = &initrd_dir_ops;
         i->fops = &initrd_dir_fops;
         i->priv = NULL;
+        i->mtime = (int64_t)initrd_newest_mtime();
         return 0;
     }
     const struct initrd_entry *e = initrd_entry(ino - 2);
@@ -106,6 +107,7 @@ static int initrd_read_inode(struct superblock *sb, uint64_t ino, struct inode *
         return -ENOENT;
     i->priv = (void *)e;
     i->nlink = 1;
+    i->mtime = (int64_t)e->mtime;
     if (e->type == INITRD_DIR) {
         i->mode = S_IFDIR | 0755;
         i->ops = &initrd_dir_ops;

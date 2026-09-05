@@ -10,6 +10,8 @@
 #include <kassert.h>
 #include <klog.h>
 #include <errno.h>
+#include <drivers/rtc.h>
+#include <drivers/timer.h>
 
 /* Registered filesystem types. Protected by fs_types_lock. */
 static LIST_HEAD(fs_types);
@@ -700,6 +702,11 @@ uint8_t vfs_mode_to_dtype(uint32_t mode)
     }
 }
 
+int64_t vfs_now(void)
+{
+    return (int64_t)((rtc_epoch_offset_ns() + timer_ns()) / 1000000000ull);
+}
+
 void inode_stat(struct inode *ino, struct stat *st)
 {
     memset(st, 0, sizeof *st);
@@ -709,6 +716,7 @@ void inode_stat(struct inode *ino, struct stat *st)
     st->st_nlink = ino->nlink;
     st->st_rdev = ino->rdev;
     st->st_size = (int64_t)ino->size;
+    st->st_mtime = ino->mtime;
     st->st_blksize = 4096;
     st->st_blocks = (int64_t)((ino->size + 511) / 512);
 }

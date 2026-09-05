@@ -34,6 +34,26 @@ int fat_rw(struct fat_sb *m, uint64_t off, void *buf, size_t n, bool write)
     return 0;
 }
 
+/* Days since the epoch for a calendar date (proleptic Gregorian). */
+static int64_t days_from_civil(int y, int m, int d)
+{
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+/* Seconds since the epoch from a directory entry's date and time. */
+static int64_t fat_epoch(uint16_t date, uint16_t time)
+{
+    int y = 1980 + (date >> 9), mo = (date >> 5) & 15, d = date & 31;
+    if (mo < 1 || mo > 12 || d < 1)
+        return 0;
+    return days_from_civil(y, mo, d) * 86400 + (time >> 11) * 3600 + ((time >> 5) & 63) * 60 + (time & 31) * 2;
+}
+
 /* Calendar date from days since the epoch (proleptic Gregorian). */
 static void civil_from_days(int64_t z, int *y, int *mo, int *d)
 {
@@ -121,6 +141,7 @@ static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     info->cdate = e.cdate;
     info->ctime_tenths = e.ctime_tenths;
     info->adate = e.adate;
+    i->mtime = fat_epoch(e.mdate, e.mtime);
     if (e.attr & FAT_ATTR_DIRECTORY) {
         i->mode = S_IFDIR | 0755;
         i->nlink = 2;
@@ -151,6 +172,7 @@ int fat_inode_flush(struct inode *ino)
     fat_now(&date, &time);
     e.mdate = e.adate = date;
     e.mtime = time;
+    ino->mtime = vfs_now();
     return fat_write(m, info->entry_off, &e, sizeof e);
 }
 

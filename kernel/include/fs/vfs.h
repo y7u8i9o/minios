@@ -68,6 +68,7 @@ struct inode {
     uint32_t nlink;
     uint64_t size;
     uint64_t rdev;
+    int64_t mtime;                  /* seconds since the epoch; lock */
     const struct inode_ops *ops;
     const struct file_ops *fops;
     void *priv;                     /* filesystem private */
@@ -178,6 +179,8 @@ long file_read(struct file *f, char *buf, size_t n);
 long file_write(struct file *f, const char *buf, size_t n);
 long file_lseek(struct file *f, long off, int whence);
 long file_getdents(struct file *f, struct dirent *buf, size_t count);
+/* Seconds since the Unix epoch from the real time clock, for time stamps. */
+int64_t vfs_now(void);
 void inode_stat(struct inode *ino, struct stat *st);
 
 int vfs_mkdir(const char *path);

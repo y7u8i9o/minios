@@ -18,9 +18,12 @@ struct initrd_entry {
     enum initrd_type type;
     const uint8_t *data;
     size_t size;
+    uint64_t mtime;                   /* seconds since the epoch, from the tar header */
 };
 
 void initrd_init(void);
+/* The newest modification time of any entry (the root directory's). */
+uint64_t initrd_newest_mtime(void);
 /* Look up a normalized absolute path such as "/bin/init". */
 const struct initrd_entry *initrd_lookup(const char *path);
 size_t initrd_count(void);

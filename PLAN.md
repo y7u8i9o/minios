@@ -1473,3 +1473,12 @@ activation and `view_select`; tabs can hide their title row. Documented
 in `docs/design/terminal.md` and `docs/design/files.md`; tested by
 `gui_term`, `gui_term_scale2` (updated to the 8x17 cells) and the new
 `gui_files` case.
+
+## Modification times (completed 2026-09-05)
+
+`struct inode` carries `mtime`, reported by `stat` as `st_mtime`. mfs
+reads and writes the field its disk inode already reserved, updated on
+creation, writes and truncation and set by `mkfs` from the host files;
+FAT decodes the entry's date and time; the initrd parses the tar
+header; devfs dates its nodes from the boot. Tested by additions to
+`mfs`, `fat` and `mfs_user`.

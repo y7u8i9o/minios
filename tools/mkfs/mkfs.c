@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <stdint.h>
 #include <errno.h>
 #include <dirent.h>
@@ -176,6 +177,7 @@ static void add_tree(uint32_t dir, const char *path)
             die(full);
         if (S_ISDIR(st.st_mode)) {
             uint32_t sub = make_dir(dir);
+            dinode(sub)->mtime = (uint64_t)st.st_mtime;
             add_dirent(dir, e->d_name, sub);
             add_tree(sub, full);
         } else if (S_ISREG(st.st_mode)) {
@@ -190,6 +192,7 @@ static void add_tree(uint32_t dir, const char *path)
             struct mfs_dinode *di = dinode(ino);
             di->mode = S_IFREG_ | 0755;
             di->nlink = 1;
+            di->mtime = (uint64_t)st.st_mtime;
             write_data(ino, data, (uint64_t)st.st_size);
             free(data);
             add_dirent(dir, e->d_name, ino);
@@ -236,6 +239,7 @@ static void format(uint64_t nblocks)
     bitmap_set(sb->inode_bitmap_start, 0);
     sb->free_inodes = ninodes - 1;
     uint32_t root = make_dir(0);
+    dinode(root)->mtime = (uint64_t)time(NULL);
     if (root != MFS_ROOT_INO)
         die("root inode is not 1");
 }

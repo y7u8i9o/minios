@@ -119,8 +119,14 @@ static void exercise(const char *dev, int type)
     pattern[25] = 'x';
     write_all(f, pattern, sizeof pattern);
     ktest_assert(f->inode->size == sizeof pattern, "size %lu", f->inode->size);
+    ktest_assert(f->inode->mtime > 1600000000 && vfs_now() - f->inode->mtime < 30, "mtime %ld", f->inode->mtime);
     file_put(f);
     ktest_assert(file_holds("/mnt/kept/written BY the KERNEL.txt", pattern, sizeof pattern), "read back");
+    /* The time survives the directory entry: read the inode again. */
+    struct inode *written;
+    ktest_assert(vfs_lookup("/mnt/kept/Written by the kernel.txt", &written) == 0, "lookup written");
+    ktest_assert(written->mtime > 1600000000, "entry time %ld", written->mtime);
+    inode_put(written);
     ktest_assert(vfs_open("/mnt/kept/Written by the kernel.txt", O_WRONLY | O_CREAT | O_EXCL, 0644, &f) == -EEXIST,
                  "O_EXCL");
     uint32_t per_file = (sizeof pattern + m->cluster_bytes - 1) / m->cluster_bytes;

@@ -27,6 +27,10 @@ struct tar_header {
 static struct initrd_entry entries[INITRD_MAX_ENTRIES];
 static size_t nentries;
 
+static uint64_t newest_mtime;
+
+uint64_t initrd_newest_mtime(void) { return newest_mtime; }
+
 static size_t parse_octal(const char *s, size_t n)
 {
     size_t v = 0;
@@ -81,6 +85,9 @@ void initrd_init(void)
             e->type = h->typeflag == '5' ? INITRD_DIR : INITRD_FILE;
             e->data = p + 512;
             e->size = e->type == INITRD_DIR ? 0 : size;
+            e->mtime = parse_octal(h->mtime, sizeof h->mtime);
+            if (e->mtime > newest_mtime)
+                newest_mtime = e->mtime;
             if (e->name[0] != '\0')
                 nentries++;
         }

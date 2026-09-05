@@ -146,6 +146,7 @@ static const struct file_ops devfs_dir_fops = {
 
 static int devfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
 {
+    i->mtime = vfs_now();               /* device nodes date from the boot */
     if (ino == ROOT_INO) {
         i->mode = S_IFDIR | 0755;
         i->nlink = 2;

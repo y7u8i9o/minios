@@ -77,6 +77,9 @@ static void test_mfs(void)
         write_all(f, chunk, 65536);
     }
     ktest_assert(f->inode->size == big, "size %lu", f->inode->size);
+    /* The modification time follows the real time clock. */
+    int64_t now = vfs_now();
+    ktest_assert(f->inode->mtime > 1600000000 && now - f->inode->mtime < 30, "mtime %ld at %ld", f->inode->mtime, now);
     ktest_assert(file_lseek(f, 0, SEEK_SET) == 0, "rewind");
     for (size_t off = 0; off < big; off += 65536) {
         read_all(f, chunk, 65536);
@@ -174,6 +177,7 @@ static void test_mfs(void)
     /* Programs on the disk root run. */
     struct inode *sh;
     ktest_assert(vfs_lookup("/bin/sh", &sh) == 0 && S_ISREG(sh->mode) && sh->size > 1000, "/bin/sh on disk");
+    ktest_assert(sh->mtime > 1600000000, "mkfs kept the host time: %ld", sh->mtime);
     inode_put(sh);
     ktest_assert(vfs_lookup("/initrd/bin/sh", &sh) == 0, "initrd on /initrd");
     inode_put(sh);
