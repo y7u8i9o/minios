@@ -234,22 +234,33 @@ linux_screen() {
         gtk*|sdl*) ;;
         *) return 1 ;;
     esac
-    command -v xrandr >/dev/null 2>&1 || return 1
-    out="$(xrandr --current 2>/dev/null)" || return 1
-    line="$(echo "$out" | grep ' connected primary')"
-    [ -n "$line" ] || line="$(echo "$out" | grep ' connected' | head -1)"
-    [ -n "$line" ] || return 1
-    echo "$line" | awk '{
-        for (i = 1; i <= NF; i++) {
-            if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) geom = $i
-            if ($i ~ /^[0-9]+mm$/ && mm == "") mm = $i
-        }
-        if (geom == "") exit 1
-        split(geom, a, /[x+]/)
-        sub(/mm/, "", mm)
-        dpi = (mm + 0 > 0) ? int(a[1] * 25.4 / mm) : 96
-        print a[1], a[2], dpi
-    }'
+    if command -v xrandr >/dev/null 2>&1 && out="$(xrandr --current 2>/dev/null)"; then
+        # set -e must not end the substitution when a grep finds nothing.
+        line="$(echo "$out" | grep ' connected primary' || true)"
+        [ -n "$line" ] || line="$(echo "$out" | grep ' connected' | head -1 || true)"
+        if [ -n "$line" ]; then
+            echo "$line" | awk '{
+                for (i = 1; i <= NF; i++) {
+                    if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) geom = $i
+                    if ($i ~ /^[0-9]+mm$/ && mm == "") mm = $i
+                }
+                if (geom == "") exit 1
+                split(geom, a, /[x+]/)
+                sub(/mm/, "", mm)
+                dpi = (mm + 0 > 0) ? int(a[1] * 25.4 / mm) : 96
+                print a[1], a[2], dpi
+            }' && return 0
+        fi
+    fi
+    # Without xrandr (or with no output marked connected, as under some
+    # XWayland versions) the root window size and its physical size.
+    command -v xdpyinfo >/dev/null 2>&1 || return 1
+    xdpyinfo 2>/dev/null | awk '/dimensions:/ {
+        split($2, a, "x")
+        mm = $3; gsub(/[()]/, "", mm); split(mm, m, "x")
+        dpi = (m[1] + 0 > 0) ? int(a[1] * 25.4 / m[1]) : 96
+        print a[1], a[2], dpi; found = 1; exit
+    } END { exit !found }'
 }
 if [ -z "${QEMU_VIDEO+set}" ]; then
     if hidpi_display; then
@@ -267,7 +278,12 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
             # A window of the screen's size does not fit next to panels;
             # let gtk scale it to the space it gets.
             [ -z "$QEMU_DISPLAY" ] && QEMU_DISPLAY=gtk,zoom-to-fit=on
+            echo "run.sh: primary screen ${w}x${h}, $dpi dpi: video $QEMU_VIDEO, display $QEMU_DISPLAY" >&2
+        else
+            echo "run.sh: primary screen ${w}x${h} exceeds the 16 MiB framebuffer, using the image default" >&2
         fi
+    elif [ "$(uname -s)" = Linux ]; then
+        echo "run.sh: no screen size from xrandr or xdpyinfo (session ${XDG_SESSION_TYPE:-unknown}, display ${QEMU_DISPLAY:-gtk}), using the image default video mode" >&2
     fi
 fi
 
