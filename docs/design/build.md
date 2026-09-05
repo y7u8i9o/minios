@@ -150,7 +150,12 @@ panel with 150 percent scaling appears as 3840x2160 with no physical
 size, which gives `2560x1440@2`; a 2560x1440 laptop panel at 189 dpi
 gives `2304x1296@2`; a 1920x1080 monitor gives `1728x968@1`. `QEMU_DISPLAY`
 values other than gtk and sdl, and systems without `xrandr` or
-`xdpyinfo`, keep the image default. `QEMU_VIDEO` in
+`xdpyinfo`, keep the image default. Limine cannot set these modes on
+`virtio-vga`, so the guest boots at 1024x768 and the kernel's virtio-gpu
+driver switches to the mode a few seconds later; a gtk window on a
+native Wayland session does not follow that change, so on Wayland
+sessions the script sets `GDK_BACKEND=x11` and the window runs through
+XWayland, where it does. `QEMU_VIDEO` in
 `qemu.conf` or `--video` overrides the choice.
 `tests/cases/comp_scale` boots `video=2560x1600@2` and checks that the
 compositor's surface appears at doubled coordinates as uniform 2x2 blocks.

@@ -302,7 +302,13 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
         done
         if [ $((mw * mh * 4)) -le $max ]; then
             QEMU_VIDEO="${mw}x${mh}@${scale}"
-            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO" >&2
+            # A native Wayland gtk window does not follow a guest resolution
+            # change (QEMU issue 1876); through XWayland it does, and the
+            # screen size xrandr reported is the one that window sees.
+            if [ "${XDG_SESSION_TYPE:-}" = wayland ] && [ -z "${GDK_BACKEND:-}" ]; then
+                export GDK_BACKEND=x11
+            fi
+            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO${GDK_BACKEND:+, gtk through $GDK_BACKEND}" >&2
         else
             echo "run.sh: primary screen $screen exceeds the 16 MiB framebuffer, using the image default" >&2
         fi
