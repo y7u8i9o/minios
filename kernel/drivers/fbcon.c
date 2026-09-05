@@ -57,7 +57,7 @@ bool fbcon_take_dirty(struct fb_rect *r)
 
 static void fbcon_draw_glyph(uint32_t col, uint32_t row, char c, bool inverted)
 {
-    if (fb.disabled)
+    if (fb.disabled || col >= fb.cols || row >= fb.rows)
         return;
     const uint8_t *glyph = font8x16[(uint8_t)c];
     uint32_t fg = inverted ? fb.bg : fb.fg;
@@ -318,6 +318,13 @@ void fbcon_write(const char *s, size_t n)
 {
     if (!fb.present)
         return;
+    /* The panic path prints from a CPU that halted the console daemon,
+     * possibly between advancing the cursor past the last row and the
+     * scroll that follows. Finish that scroll before drawing anything. */
+    if (fb.cy >= fb.rows) {
+        fbcon_scroll();
+        fb.cy = fb.rows - 1;
+    }
     /* Erase the cursor, write, redraw the cursor at the new position. */
     fbcon_draw_glyph(fb.cx, fb.cy, fb.cells[fb.cy][fb.cx], false);
     for (size_t i = 0; i < n; i++)

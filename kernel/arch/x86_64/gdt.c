@@ -44,6 +44,11 @@ void tss_set_rsp0(uintptr_t rsp0)
     tables[cpu_current()->id].tss.rsp0 = rsp0;
 }
 
+uintptr_t tss_get_rsp0(void)
+{
+    return tables[cpu_current()->id].tss.rsp0;
+}
+
 void gdt_init(void)
 {
     gdt_init_cpu(0, (uintptr_t)boot_stack_top);

@@ -39,6 +39,12 @@ write access in place, otherwise it copies the frame into a fresh one and
 drops the old reference. `CR0.WP` (set in M4) makes kernel writes through
 user mappings take the same path.
 
+`proc_fork` copies the parent's trap frame, saves the parent's FPU state
+into the child's area and copies the FS base, and only then queues the
+child with `sched_add`. With several CPUs the child can start on another
+CPU as soon as it is queued, so everything it reads in `thread_start`
+must be complete before that call.
+
 ## ELF loading and the initial stack
 
 `sched/elf.c` accepts static `ET_EXEC` x86_64 files. Each `PT_LOAD`

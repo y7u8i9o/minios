@@ -414,6 +414,8 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
             ok = huge_cow_locked(vm, va, entry) == 0;
         else if (w == 1 && (*entry & PTE_P) && write && (*entry & PTE_COW))
             ok = do_cow_locked(vm, va, entry) == 0;
+        else if (w >= 1 && (*entry & PTE_P) && write && (*entry & PTE_W))
+            ok = true;  /* another thread resolved it first; the stale TLB entry refaulted */
     } else if (w == 1 && (*entry & PTE_SWAPPED)) {
         spin_unlock(&vm->lock);
         ok = swap_in_page(vm, va) == 0;

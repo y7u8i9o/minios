@@ -113,7 +113,10 @@ static int open_std_fds(struct proc *p)
     return 0;
 }
 
-static struct thread *start_thread(struct proc *p, const char *name, struct trapframe *tf)
+/* Allocate a user thread that enters tf. The caller finishes any per
+ * thread state and then makes it runnable with sched_add; on another CPU
+ * the thread starts running the moment it is queued. */
+static struct thread *prepare_thread(struct proc *p, const char *name, struct trapframe *tf)
 {
     struct thread *t = thread_alloc(p, name, user_thread_entry, tf, 0);
     if (!t)
@@ -123,7 +126,14 @@ static struct thread *start_thread(struct proc *p, const char *name, struct trap
         t->sig_mask = thread_current()->sig_mask;
         t->fs_base = thread_current()->fs_base;
     }
-    sched_add(t);
+    return t;
+}
+
+static struct thread *start_thread(struct proc *p, const char *name, struct trapframe *tf)
+{
+    struct thread *t = prepare_thread(p, name, tf);
+    if (t)
+        sched_add(t);
     return t;
 }
 
@@ -187,13 +197,16 @@ struct proc *proc_fork(struct trapframe *tf)
         goto fail;
     *ctf = *tf;
     ctf->rax = 0;
-    struct thread *t = start_thread(child, cur->name, ctf);
+    struct thread *t = prepare_thread(child, cur->name, ctf);
     if (!t) {
         kfree(ctf);
         goto fail;
     }
-    fpu_save(t->fpu);                   /* the child starts with the parent's registers */
+    /* The child starts with the parent's registers. Its FPU image must be
+     * complete before it can run, so it is queued only afterwards. */
+    fpu_save(t->fpu);
     t->fs_base = cur->fs_base;
+    sched_add(t);
     return child;
 fail:
     proc_free(child);

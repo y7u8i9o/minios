@@ -86,6 +86,62 @@ void idt_init(void)
     pic_mask_all();
 }
 
+/* Record what the CPU pushed for an entry from user mode so a fault on the
+ * way back can be compared against it. */
+static void trap_record_user_entry(const struct trapframe *tf)
+{
+    struct cpu *c = cpu_current();
+    c->last_user_vector = tf->vector;
+    c->last_user_error = tf->error;
+    c->last_user_rip = tf->rip;
+    c->last_user_cs = tf->cs;
+    c->last_user_rsp = tf->rsp;
+    c->last_user_ss = tf->ss;
+    c->last_user_cr3 = read_cr3();
+    c->last_user_frame = (void *)tf;
+}
+
+void trap_dump_extra(const struct trapframe *tf)
+{
+    if ((tf->cs & 3) != 0)
+        return;
+    struct idt_ptr gdtr, idtr;
+    uint16_t tr, cs, ss, ds;
+    uint64_t cr0, cr4;
+    __asm__ volatile("sgdt %0" : "=m"(gdtr));
+    __asm__ volatile("sidt %0" : "=m"(idtr));
+    __asm__ volatile("str %0" : "=r"(tr));
+    __asm__ volatile("movw %%cs, %0" : "=r"(cs));
+    __asm__ volatile("movw %%ss, %0" : "=r"(ss));
+    __asm__ volatile("movw %%ds, %0" : "=r"(ds));
+    __asm__ volatile("movq %%cr0, %0" : "=r"(cr0));
+    __asm__ volatile("movq %%cr4, %0" : "=r"(cr4));
+    /* The frame a faulting iretq or sysret was about to consume. */
+    const uint64_t *frame = (const uint64_t *)tf->rsp;
+    kprintf("stack at rsp: ");
+    for (int i = 0; i < 6; i++)
+        kprintf("%016lx ", frame[i]);
+    kprintf("\n");
+    kprintf("live cs=%x ss=%x ds=%x tr=%x cr0=%lx cr4=%lx efer=%lx\n",
+            cs, ss, ds, tr, cr0, cr4, rdmsr(MSR_EFER));
+    kprintf("gdtr=%016lx/%x idtr=%016lx/%x gs_base=%016lx kernel_gs_base=%016lx\n",
+            gdtr.base, gdtr.limit, idtr.base, idtr.limit,
+            rdmsr(MSR_GS_BASE), rdmsr(MSR_KERNEL_GS_BASE));
+    kprintf("star=%016lx lstar=%016lx sfmask=%016lx\n",
+            rdmsr(MSR_STAR), rdmsr(MSR_LSTAR), rdmsr(MSR_SFMASK));
+    const uint64_t *gdt = (const uint64_t *)gdtr.base;
+    kprintf("gdt:");
+    for (unsigned i = 0; i * 8 <= gdtr.limit && i < 16; i++)
+        kprintf(" %016lx", gdt[i]);
+    kprintf("\n");
+    struct cpu *c = cpu_current();
+    kprintf("cpu %u self=%p kstack_top=%p tss.rsp0=%016lx current=%p vm=%p\n",
+            c->id, c->self, c->kstack_top, tss_get_rsp0(), c->current, c->vm);
+    kprintf("last user entry: vector=%lu error=%lx rip=%016lx cs=%04lx rsp=%016lx ss=%04lx cr3=%lx frame=%p\n",
+            c->last_user_vector, c->last_user_error, c->last_user_rip, c->last_user_cs,
+            c->last_user_rsp, c->last_user_ss, c->last_user_cr3, c->last_user_frame);
+}
+
 void trap_dump_frame(const struct trapframe *tf)
 {
     kprintf("vector=%lu error=0x%lx\n", tf->vector, tf->error);
@@ -100,6 +156,8 @@ void trap_dump_frame(const struct trapframe *tf)
 
 void trap_dispatch(struct trapframe *tf)
 {
+    if ((tf->cs & 3) == 3)
+        trap_record_user_entry(tf);
     if (tf->vector < 32) {
         uintptr_t cr2 = read_cr2();
         if (tf->vector == T_PGFLT && vmm_handle_fault(tf, cr2))

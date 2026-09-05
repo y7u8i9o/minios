@@ -232,6 +232,7 @@ __noreturn void kmain(void)
     klog_ring_init();
     idt_init();
     ksyms_init();
+    cpu_log_identity();
 
     klog_info("kernel at phys %lx virt %lx, hhdm offset %lx",
               bootinfo.kernel_phys_base, bootinfo.kernel_virt_base, bootinfo.hhdm_offset);

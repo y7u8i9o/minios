@@ -70,6 +70,22 @@ void console_flush(void)
     mutex_unlock(&console_drain_mutex);
 }
 
+/* Panic path: the daemon is gone and other CPUs are halted, so write out
+ * whatever the CPU rings still hold before the panic text follows it. Only
+ * the serial port receives it: the daemon may have been halted in the
+ * middle of a framebuffer update, and the panic text itself still reaches
+ * the screen through fb_panic_flush. */
+void console_panic_drain(void)
+{
+    char tmp[256];
+    unsigned ncpu = smp_cpu_count();
+    for (unsigned i = 0; i < ncpu; i++) {
+        size_t n;
+        while ((n = ring_read(&console_rings[i].ring, tmp, sizeof tmp)) != 0)
+            serial_write(tmp, n);
+    }
+}
+
 void console_write(const char *s, size_t n)
 {
     /* A panicking CPU may hold the lock already: print without it. */

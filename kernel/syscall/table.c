@@ -198,6 +198,15 @@ void free_user_vector(char **vec)
 
 void syscall_dispatch(struct trapframe *tf)
 {
+    struct cpu *c = cpu_current();
+    c->last_user_vector = tf->vector;
+    c->last_user_error = 0;
+    c->last_user_rip = tf->rip;
+    c->last_user_cs = tf->cs;
+    c->last_user_rsp = tf->rsp;
+    c->last_user_ss = tf->ss;
+    c->last_user_cr3 = read_cr3();
+    c->last_user_frame = (void *)tf;
     /* The entry masked IF. The kernel runs with interrupts enabled. */
     sti();
     uint64_t nr = tf->rax;

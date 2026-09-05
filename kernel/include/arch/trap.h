@@ -38,3 +38,7 @@ void idt_init(void);
 void idt_load(void);
 void trap_dispatch(struct trapframe *tf);
 void trap_dump_frame(const struct trapframe *tf);
+/* Extra state for a kernel mode fault: the frame a faulting iretq was
+ * consuming, the descriptor tables, and what the last user mode entry on
+ * this CPU pushed. */
+void trap_dump_extra(const struct trapframe *tf);

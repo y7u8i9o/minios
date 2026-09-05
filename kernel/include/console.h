@@ -11,6 +11,8 @@ void console_start_daemon(void);
 void console_putc(char c);
 void console_write(const char *s, size_t n);
 void console_flush(void);
+/* Write the queued output of every CPU directly; panic path only. */
+void console_panic_drain(void);
 int kprintf(const char *fmt, ...) __printf(1, 2);
 int kvprintf(const char *fmt, va_list ap);
 /* Hand the framebuffer to user space or take it back, under console_lock. */

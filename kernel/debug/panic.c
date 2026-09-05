@@ -38,6 +38,7 @@ static void panic_begin(const char *fmt, va_list ap)
     }
     panic_in_progress = 1;
     smp_halt_others();
+    console_panic_drain();
     kprintf("\n*** kernel panic: ");
     kvprintf(fmt, ap);
     kprintf(" ***\n");
@@ -67,6 +68,7 @@ __noreturn void panic_trap(struct trapframe *tf, const char *fmt, ...)
     panic_begin(fmt, ap);
     va_end(ap);
     trap_dump_frame(tf);
+    trap_dump_extra(tf);
     kprintf("backtrace from trap frame:\n");
     backtrace_print_from(tf->rip, tf->rbp);
     panic_finish();

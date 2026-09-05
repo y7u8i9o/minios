@@ -1,5 +1,8 @@
+#define KLOG_SUBSYS "cpu"
 #include <arch/cpu.h>
 #include <debug/panic.h>
+#include <klog.h>
+#include <lib/string.h>
 
 extern char boot_stack_top[];
 
@@ -31,6 +34,43 @@ void cpu_init_boot(void)
     spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
     wrmsr(MSR_GS_BASE, (uint64_t)c);
     wrmsr(MSR_KERNEL_GS_BASE, (uint64_t)c);
+}
+
+static void cpuid(uint32_t leaf, uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d)
+{
+    __asm__ volatile("cpuid" : "=a"(*a), "=b"(*b), "=c"(*c), "=d"(*d) : "a"(leaf), "c"(0));
+}
+
+/* Log the processor the kernel runs on: vendor, family and model, and
+ * whether a hypervisor announces itself, so that behaviour that differs
+ * between emulation and hardware virtualization can be told apart. */
+void cpu_log_identity(void)
+{
+    uint32_t a, b, c, d;
+    char vendor[13];
+    cpuid(0, &a, &b, &c, &d);
+    memcpy(vendor, &b, 4);
+    memcpy(vendor + 4, &d, 4);
+    memcpy(vendor + 8, &c, 4);
+    vendor[12] = 0;
+    uint32_t max_leaf = a;
+    cpuid(1, &a, &b, &c, &d);
+    unsigned family = (a >> 8) & 0xf, model = (a >> 4) & 0xf, stepping = a & 0xf;
+    if (family == 0xf)
+        family += (a >> 20) & 0xff;
+    if (family == 6 || family >= 0xf)
+        model |= ((a >> 16) & 0xf) << 4;
+    bool hypervisor = (c >> 31) & 1;
+    char hv[13] = "";
+    if (hypervisor && max_leaf >= 0x40000000) {
+        cpuid(0x40000000, &a, &b, &c, &d);
+        memcpy(hv, &b, 4);
+        memcpy(hv + 4, &c, 4);
+        memcpy(hv + 8, &d, 4);
+        hv[12] = 0;
+    }
+    klog_info("%s family %u model %u stepping %u, %s%s", vendor, family, model, stepping,
+              hypervisor ? "hypervisor " : "no hypervisor", hv);
 }
 
 void push_cli(void)

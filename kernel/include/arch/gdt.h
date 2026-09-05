@@ -13,3 +13,4 @@ void gdt_init(void);
 void gdt_init_cpu(unsigned id, uintptr_t rsp0);
 /* Set the stack used when an interrupt arrives from ring 3. */
 void tss_set_rsp0(uintptr_t rsp0);
+uintptr_t tss_get_rsp0(void);

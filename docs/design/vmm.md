@@ -72,6 +72,14 @@ write and demand paging exist it returns false and the trap handler prints
 the faulting address, error code decoding and instruction pointer, then
 panics with a backtrace.
 
+A write fault on a present page whose entry already carries `PTE_W` is
+treated as resolved. It occurs when two threads of one process fault on
+the same copy on write page at the same time: the first one copies the
+frame and sends the shootdown, the second one takes the fault from a
+stale TLB entry, services the shootdown while spinning on the space
+lock, and then finds the entry writable. Before this rule the second
+thread was killed with `SIGSEGV`.
+
 ## Test
 
 `tests/cases/vmm` maps, translates, protects and unmaps a page in the

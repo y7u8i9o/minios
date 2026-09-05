@@ -62,8 +62,23 @@ the timer milestone.
 
 ## Panic and power
 
-`debug/panic.c` prints the message, a backtrace, and then either exits QEMU
-through isa-debug-exit with code 1 (`CONFIG_PANIC_EXIT=1`) or halts.
+`debug/panic.c` halts the other CPUs, writes the console text still queued
+in the per CPU rings to the serial port (`console_panic_drain`), prints the
+message and a backtrace, and then either exits QEMU through isa-debug-exit
+with code 1 (`CONFIG_PANIC_EXIT=1`) or halts. The drain goes to the serial
+port only, because the console daemon may have been halted in the middle of
+a framebuffer update; `fbcon_write` finishes a pending scroll before it
+draws, and `fbcon_draw_glyph` ignores positions outside the screen.
+
+For a fault in kernel mode, `panic_trap` also prints `trap_dump_extra`
+(`arch/x86_64/idt.c`): the six words at the stack pointer (the frame a
+failing `iretq` was consuming), the live segment selectors, `CR0`, `CR4`,
+`EFER`, GDTR, IDTR, the GDT entries, both GS base registers, the `syscall`
+MSRs, the TSS `rsp0`, and the values the CPU pushed at the last entry from
+user mode on that CPU (`cpu.last_user_*`, recorded by `trap_dispatch` and
+`syscall_dispatch`). The boot log prints the CPU vendor, family, model and
+the hypervisor signature (`cpu_log_identity`), so output from emulation
+and from hardware virtualization can be told apart.
 
 `arch/x86_64/power.c`: `power_off` writes `0x2000` to port `0x604` (the q35
 ACPI PM1a control register), falls back to isa-debug-exit and finally halts.

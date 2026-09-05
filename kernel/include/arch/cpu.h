@@ -48,6 +48,16 @@ struct cpu {
     struct spinlock pmm_cache_lock; /* this CPU's single-page cache */
     struct page *pmm_cache[32];
     unsigned pmm_cache_count;
+    /* Last trap or interrupt taken from user mode on this CPU, as the CPU
+     * pushed it, kept for the panic dump (diagnostics only). */
+    uint64_t last_user_vector;
+    uint64_t last_user_error;
+    uint64_t last_user_rip;
+    uint64_t last_user_cs;
+    uint64_t last_user_rsp;
+    uint64_t last_user_ss;
+    uint64_t last_user_cr3;
+    void *last_user_frame;
 };
 
 /* Offsets used by syscall.S. */
@@ -138,6 +148,8 @@ static inline void cpu_relax(void)
 
 /* Set up the boot CPU structure and load its GS base. */
 void cpu_init_boot(void);
+/* Log vendor, family, model and hypervisor identification. */
+void cpu_log_identity(void);
 /* Return the structure of CPU id (0 is the boot CPU). Valid ids are below
  * smp_cpu_count(). */
 struct cpu *cpu_by_id(unsigned id);
