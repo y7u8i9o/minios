@@ -269,18 +269,29 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
         set -- $screen "$@"
         w=$1; h=$2; dpi=$3; shift 3
         scale=1
-        if [ "${GDK_SCALE:-1}" -ge 2 ] || [ "$dpi" -ge 150 ]; then
+        # A screen reported 3000 pixels wide or more is a high density
+        # screen even when no physical size is known: XWayland reports a
+        # 2560x1440 panel with 150 percent scaling as 3840x2160, 0 mm.
+        if [ "${GDK_SCALE:-1}" -ge 2 ] || [ "$dpi" -ge 150 ] || [ "$w" -ge 3000 ]; then
             scale=2
         fi
-        # The frame must fit the 16 MiB virtio-gpu buffer.
-        if [ $((w * h * 4)) -le $((16 * 1024 * 1024)) ]; then
-            QEMU_VIDEO="${w}x${h}@${scale}"
+        # The frame must fit the 16 MiB virtio-gpu buffer; reduce the
+        # size with the aspect ratio kept until it does.
+        screen="${w}x${h}"
+        max=$((16 * 1024 * 1024))
+        for r in "1 1" "3 4" "2 3" "1 2" "1 3" "1 4"; do
+            num=${r% *}; den=${r#* }
+            mw=$((w * num / den / 8 * 8)); mh=$((h * num / den / 8 * 8))
+            [ $((mw * mh * 4)) -le $max ] && break
+        done
+        if [ $((mw * mh * 4)) -le $max ]; then
+            QEMU_VIDEO="${mw}x${mh}@${scale}"
             # A window of the screen's size does not fit next to panels;
             # let gtk scale it to the space it gets.
             [ -z "$QEMU_DISPLAY" ] && QEMU_DISPLAY=gtk,zoom-to-fit=on
-            echo "run.sh: primary screen ${w}x${h}, $dpi dpi: video $QEMU_VIDEO, display $QEMU_DISPLAY" >&2
+            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO, display $QEMU_DISPLAY" >&2
         else
-            echo "run.sh: primary screen ${w}x${h} exceeds the 16 MiB framebuffer, using the image default" >&2
+            echo "run.sh: primary screen $screen exceeds the 16 MiB framebuffer, using the image default" >&2
         fi
     elif [ "$(uname -s)" = Linux ]; then
         echo "run.sh: no screen size from xrandr or xdpyinfo (session ${XDG_SESSION_TYPE:-unknown}, display ${QEMU_DISPLAY:-gtk}), using the image default video mode" >&2

@@ -141,9 +141,13 @@ screen has 150 dpi or more or `GDK_SCALE` is 2, and `@1` otherwise; a
 2560x1440 laptop gets `2560x1440@2`, a 2560x1440 27 inch monitor
 `2560x1440@1`. Because a window of the screen's size does not fit next to
 panels, the default display becomes `gtk,zoom-to-fit=on`, which scales the
-guest to the window it gets. Modes whose frame exceeds the 16 MiB
-virtio-gpu buffer, `QEMU_DISPLAY` values other than gtk and sdl, and
-systems without `xrandr` keep the image default. `QEMU_VIDEO` in
+guest to the window it gets. XWayland reports a scaled size: a 2560x1440
+panel with 150 percent scaling appears as 3840x2160 with no physical
+size. A reported width of 3000 pixels or more therefore also selects
+`@2`, and a frame that exceeds the 16 MiB virtio-gpu buffer is reduced
+with its aspect ratio kept (3840x2160 becomes 2560x1440). `QEMU_DISPLAY`
+values other than gtk and sdl, and systems without `xrandr` or
+`xdpyinfo`, keep the image default. `QEMU_VIDEO` in
 `qemu.conf` or `--video` overrides the choice.
 `tests/cases/comp_scale` boots `video=2560x1600@2` and checks that the
 compositor's surface appears at doubled coordinates as uniform 2x2 blocks.
