@@ -42,6 +42,8 @@ struct conf {
     int frame_ms;                   /* 0 when the file has none */
     int decorations;                /* 0 none, 1 server, 2 client */
     char keymap[32];
+    int pointer_speed;              /* -100..100 */
+    int pointer_accel;              /* 0 flat, 1 adaptive, -1 when the file has none */
 };
 
 static struct app *app;
@@ -49,7 +51,8 @@ static struct widget *win, *desk, *item_menu, *desk_menu;
 static struct wire_proxy *settings;
 static struct entry entries[MAX_ENTRIES];
 static int nentries, selected = -1;
-static struct conf conf = { "", MODE_FILL, 0x00306080, 30, 500 };  /* solid colour by default */
+static struct conf conf = { .mode = MODE_FILL, .color = 0x00306080, .repeat_rate = 30, .repeat_delay = 500,
+                            .pointer_accel = -1 };  /* solid colour by default */
 static char conf_text[1024];
 static struct image *wallpaper;
 static struct surface bg;       /* wallpaper scaled to the window */
@@ -306,6 +309,8 @@ static void apply_conf(int first)
         else if (strcmp(line, "frame_ms") == 0) c.frame_ms = atoi(v);
         else if (strcmp(line, "decorations") == 0) c.decorations = strcmp(v, "server") == 0 ? 1 : strcmp(v, "client") == 0 ? 2 : 0;
         else if (strcmp(line, "keymap") == 0) strlcpy(c.keymap, v, sizeof c.keymap);
+        else if (strcmp(line, "pointer_speed") == 0) c.pointer_speed = atoi(v);
+        else if (strcmp(line, "pointer_accel") == 0) c.pointer_accel = strcmp(v, "flat") == 0 ? 0 : 1;
     }
     int wall_changed = first || strcmp(c.wallpaper, conf.wallpaper) != 0 || c.mode != conf.mode || c.color != conf.color;
     if (settings && (first || c.color != conf.color))
@@ -322,6 +327,10 @@ static void apply_conf(int first)
         settings_set(settings, "decorations", c.decorations);
     if (settings && c.keymap[0] && (first || strcmp(c.keymap, conf.keymap) != 0))
         settings_set(settings, "keymap_reload", 1);
+    if (settings && (first || c.pointer_speed != conf.pointer_speed))
+        settings_set(settings, "pointer_speed", c.pointer_speed);
+    if (settings && c.pointer_accel >= 0 && (first || c.pointer_accel != conf.pointer_accel))
+        settings_set(settings, "pointer_accel", c.pointer_accel);
     conf = c;
     if (wall_changed)
         load_wallpaper();
@@ -407,8 +416,8 @@ static int desk_event(struct widget *w, struct event *e)
     }
     case EV_KEY_DOWN:
         if (e->ch == '\n' && selected >= 0) { open_entry(selected); return 1; }
-        if (e->code == 0x3f) { refresh(); return 1; }                   /* F5 */
-        if (e->code == 0xd3 && selected >= 0) {                          /* Delete */
+        if (e->code == KEY_F5) { refresh(); return 1; }
+        if (e->code == KEY_DELETE && selected >= 0) {
             struct sig_click c = { 1, 0, 0 };
             widget_emit(widget_find(item_menu, "delete"), "clicked", &c);
             return 1;

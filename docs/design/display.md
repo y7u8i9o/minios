@@ -56,16 +56,14 @@ when the queue lock is held.
 
 ## virtio-input
 
-`drivers/virtio/virtio_input.c` accepts virtio-input devices (0x1052)
-that report `ABS_X`/`ABS_Y` (tablets) or `REL_X`/`REL_Y` (mice); keyboards
-stay with the PS/2 driver. The event queue holds 32 posted 8 byte event
-buffers, each re-posted from its completion callback. Events accumulate
-until `SYN_REPORT`, which pushes one `struct mouse_event` into the ring of
-`drivers/mouse.c`, shared with the PS/2 driver (which now only assembles
-packets). Absolute positions are scaled to `0..MOUSE_ABS_MAX` (32767) and
-flagged `MOUSE_ABSOLUTE`; `REL_WHEEL` is negated because `/dev/mouse`
-counts positive towards the user. `virtio_input_feed` injects events for
-tests, through the first device or a virtual tablet.
+`drivers/virtio/virtio_input.c` accepts virtio-input devices (0x1052):
+tablets, mice and, since M47, keyboards. The event queue holds 32
+posted 8 byte event buffers, each re-posted from its completion
+callback; every event is reported unchanged to the input core
+(`input.md`), which delivers it through `/dev/input/eventN`. The
+capabilities and axis ranges come from the configuration space.
+`virtio_input_feed` injects events for tests, through the first pointer
+device or a virtual tablet.
 
 With a tablet attached QEMU's window no longer grabs the mouse: the host
 pointer position is delivered as is. `tools/run.sh` attaches
@@ -100,7 +98,7 @@ command line `video=` remains the boot and console mode.
   flushes and restores the boot mode.
 - `input_tablet` (virtio tablet attached): the device probes as an
   absolute pointer; injected absolute, button and wheel events arrive as
-  three `/dev/mouse` events with the expected fields.
+  the expected `/dev/input` events with its axis range.
 - `gui_tablet`: the compositor draws the cursor where an absolute event
   points and repaints the old position.
 - `comp_scale`, `gui` and `gui_desktop` run on virtio-vga; `comp_scale`

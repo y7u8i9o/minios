@@ -1,6 +1,7 @@
 #include <tests/ktest.h>
 #include <drivers/ps2mouse.h>
 #include <drivers/ps2kbd.h>
+#include <input/input.h>
 #include <drivers/tty.h>
 #include <sched/thread.h>
 #include <sched/wait.h>
@@ -17,72 +18,6 @@
 #include <drivers/timer.h>
 #include "gui_helpers.h"
 
-
-
-static void test_mouse(void)
-{
-    struct file *f;
-    ktest_assert(vfs_open("/dev/mouse", O_RDONLY, 0, &f) == 0, "open /dev/mouse");
-    ps2mouse_feed_byte(0x00);                 /* garbage without the sync bit */
-    feed_packet(0x01, 5, 3);                  /* left button, right and up */
-    feed_packet(0x00, -2, -7);                /* release, left and down */
-    feed_packet(0x40, 1, 1);                  /* overflow, dropped */
-    feed_packet(0x04, 0, 0);                  /* middle button */
-    struct mouse_event ev[4];
-    long n = file_read(f, (char *)ev, sizeof ev);
-    ktest_assert(n == 3 * (long)sizeof ev[0], "read %ld bytes", n);
-    ktest_assert(ev[0].dx == 5 && ev[0].dy == -3 && ev[0].buttons == 1, "event 0: %d %d %u", ev[0].dx, ev[0].dy, ev[0].buttons);
-    ktest_assert(ev[1].dx == -2 && ev[1].dy == 7 && ev[1].buttons == 0, "event 1: %d %d %u", ev[1].dx, ev[1].dy, ev[1].buttons);
-    ktest_assert(ev[2].dx == 0 && ev[2].dy == 0 && ev[2].buttons == 4, "event 2");
-    ktest_assert(file_read(f, (char *)ev, 4) == -EINVAL, "short read rejected");
-    file_put(f);
-
-    /* Raw scancode mode delivers bytes untranslated. */
-    ps2kbd_set_lflag(KBD_SCANCODES);
-    ps2kbd_feed_scancode(0x2a);
-    ps2kbd_feed_scancode(0xe0);
-    ps2kbd_feed_scancode(0x48);
-    ps2kbd_feed_scancode(0xaa);
-    ktest_assert(vfs_open("/dev/kbd", O_RDONLY, 0, &f) == 0, "open /dev/kbd");
-    uint8_t codes[8];
-    n = file_read(f, (char *)codes, sizeof codes);
-    ktest_assert(n == 4 && codes[0] == 0x2a && codes[1] == 0xe0 && codes[2] == 0x48 && codes[3] == 0xaa,
-                 "raw scancodes: %ld bytes", n);
-    file_put(f);
-    ps2kbd_set_lflag(ICANON | ECHO | ISIG);
-    kprintf("mouse: events and raw scancodes ok\n");
-}
-KTEST_DEFINE("mouse", test_mouse);
-
-/* M19 stage 1: four byte IntelliMouse packets carry the wheel delta;
- * the packet length follows the detected device. */
-static void test_mouse_wheel(void)
-{
-    bool had_wheel = ps2mouse_has_wheel();
-    ktest_assert(had_wheel, "QEMU's mouse did not report id 3");
-    struct file *f;
-    ktest_assert(vfs_open("/dev/mouse", O_RDONLY, 0, &f) == 0, "open /dev/mouse");
-    feed_packet_wheel(0x00, 0, 0, 1);         /* wheel down */
-    feed_packet_wheel(0x02, 3, -1, -1);       /* right button, wheel up */
-    feed_packet_wheel(0x00, 0, 0, -8);        /* largest negative delta */
-    struct mouse_event ev[4];
-    long n = file_read(f, (char *)ev, sizeof ev);
-    ktest_assert(n == 3 * (long)sizeof ev[0], "read %ld bytes", n);
-    ktest_assert(ev[0].dz == 1 && ev[0].dx == 0 && ev[0].buttons == 0, "event 0: dz %d", ev[0].dz);
-    ktest_assert(ev[1].dz == -1 && ev[1].dx == 3 && ev[1].dy == 1 && ev[1].buttons == 2,
-                 "event 1: %d %d dz %d buttons %u", ev[1].dx, ev[1].dy, ev[1].dz, ev[1].buttons);
-    ktest_assert(ev[2].dz == -8, "event 2: dz %d", ev[2].dz);
-    /* A device without a wheel keeps three byte packets. */
-    ps2mouse_set_wheel(false);
-    feed_packet(0x01, 2, 2);
-    n = file_read(f, (char *)ev, sizeof ev);
-    ktest_assert(n == (long)sizeof ev[0] && ev[0].dx == 2 && ev[0].dy == -2 && ev[0].dz == 0 && ev[0].buttons == 1,
-                 "three byte packet: %ld bytes, %d %d dz %d", n, ev[0].dx, ev[0].dy, ev[0].dz);
-    ps2mouse_set_wheel(had_wheel);
-    file_put(f);
-    kprintf("mouse_wheel: wheel events ok\n");
-}
-KTEST_DEFINE("mouse_wheel", test_mouse_wheel);
 
 /* M17 stage 1: a user program maps /dev/fb0 and draws a pattern that the
  * kernel verifies pixel by pixel; the console is handed over and back. */
@@ -201,7 +136,7 @@ static void test_gui(void)
     signal_send(srv, SIGTERM);
     status = proc_reap(srv);
     ktest_assert(status == 0, "compositor status 0x%x", status);
-    ktest_assert(ps2kbd_get_lflag() == (ICANON | ECHO | ISIG), "keyboard mode not restored");
+    ktest_assert(tty_get_lflag(&console_tty) == (ICANON | ECHO | ISIG), "keyboard mode not restored");
     kprintf("gui: server stopped, console restored\n");
 }
 KTEST_DEFINE("gui", test_gui);
@@ -1083,8 +1018,8 @@ static void test_comp_panel(void)
 }
 KTEST_DEFINE("comp_panel", test_comp_panel);
 
-/* A compositor that dies (here killed) must leave the console keyboard
- * in its cooked mode, because /dev/kbd's close resets it. */
+/* A compositor that dies (here killed) must give the keyboard back to
+ * the console: closing its descriptor drops the EVIOCGRAB grab. */
 static void test_gui_kbd_restore(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
@@ -1096,11 +1031,13 @@ static void test_gui_kbd_restore(void)
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(800);
-    ktest_assert(tty_get_lflag(&console_tty) & KBD_SCANCODES, "compositor put the keyboard in raw mode");
+    ktest_assert(input_dev_grabbed(ps2kbd_device()), "compositor did not grab the keyboard");
+    ktest_assert(input_dev_grabbed(ps2mouse_device()), "compositor did not grab the mouse");
     signal_send(srv, SIGKILL);
     proc_reap(srv);
     sleep_ms(100);
-    ktest_assert(!(tty_get_lflag(&console_tty) & KBD_SCANCODES), "keyboard back in cooked mode after the compositor died");
+    ktest_assert(!input_dev_grabbed(ps2kbd_device()), "keyboard still grabbed after the compositor died");
+    ktest_assert(tty_get_lflag(&console_tty) == (ICANON | ECHO | ISIG), "console mode changed");
     kprintf("gui_kbd_restore: keyboard mode restored\n");
 }
 KTEST_DEFINE("gui_kbd_restore", test_gui_kbd_restore);

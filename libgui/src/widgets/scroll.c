@@ -111,10 +111,10 @@ static int scrollbar_event(struct widget *w, struct event *e)
         return 1;
     case EV_KEY_DOWN:
         switch (e->code) {
-        case 0xc8: case 0xcb: set_value(s, w->value - 1); return 1;
-        case 0xd0: case 0xcd: set_value(s, w->value + 1); return 1;
-        case 0xc9: set_value(s, w->value - s->page); return 1;
-        case 0xd1: set_value(s, w->value + s->page); return 1;
+        case KEY_UP: case KEY_LEFT: set_value(s, w->value - 1); return 1;
+        case KEY_DOWN: case KEY_RIGHT: set_value(s, w->value + 1); return 1;
+        case KEY_PAGEUP: set_value(s, w->value - s->page); return 1;
+        case KEY_PAGEDOWN: set_value(s, w->value + s->page); return 1;
         }
         return 0;
     default:

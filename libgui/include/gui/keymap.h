@@ -1,18 +1,21 @@
 #pragma once
-/* Keymaps shared by the compositor (M25): key codes and modifier
- * levels to characters or symbols. Symbols are values >= 0xe000. */
+/* Keymaps shared by the compositor (M25): key codes (the Linux codes of
+ * minios/input.h, KEY_*) and modifier levels to characters or symbols.
+ * Symbols are values >= 0xe000. */
 #include <stdint.h>
 #include <stddef.h>
+#include <minios/input.h>
 
 enum keysym {
-    KEY_ESC = 0xe001, KEY_UP = 0xe010, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_HOME, KEY_END, KEY_PGUP, KEY_PGDN,
-    KEY_INSERT, KEY_DELETE, KEY_F1 = 0xe021, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9,
-    KEY_F10, KEY_F11, KEY_F12, KEY_SHIFT = 0xe030, KEY_CTRL, KEY_ALT, KEY_CAPS,
+    KS_ESC = 0xe001, KS_UP = 0xe010, KS_DOWN, KS_LEFT, KS_RIGHT, KS_HOME, KS_END, KS_PGUP, KS_PGDN,
+    KS_INSERT, KS_DELETE, KS_F1 = 0xe021, KS_F2, KS_F3, KS_F4, KS_F5, KS_F6, KS_F7, KS_F8, KS_F9,
+    KS_F10, KS_F11, KS_F12, KS_SHIFT = 0xe030, KS_CTRL, KS_ALT, KS_CAPS, KS_LOGO, KS_MENU,
 };
 
 #define KEYMAP_MOD_SHIFT 1
 #define KEYMAP_MOD_CTRL 2
 #define KEYMAP_MOD_ALT 4
+#define KEYMAP_MOD_LOGO 8
 
 struct keymap {
     int entries, levels;

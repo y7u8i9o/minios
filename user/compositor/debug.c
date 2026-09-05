@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include "comp.h"
 
-struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0 };
+struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -64,7 +64,7 @@ static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint
 /* ---- settings ---- */
 
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
-                                    "display_mode" };
+                                    "display_mode", "pointer_speed", "pointer_accel" };
 
 static int *slot(const char *key)
 {
@@ -75,6 +75,8 @@ static int *slot(const char *key)
     if (strcmp(key, "decorations") == 0) return &settings.decor_default;
     if (strcmp(key, "verbose") == 0) return &settings.verbose;
     if (strcmp(key, "display_mode") == 0) return &settings.display_mode;
+    if (strcmp(key, "pointer_speed") == 0) return &settings.pointer_speed;
+    if (strcmp(key, "pointer_accel") == 0) return &settings.pointer_accel;
     return NULL;
 }
 
@@ -111,6 +113,8 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.repeat_rate && (value < 1 || value > 100)) return;
     if (p == &settings.repeat_delay && (value < 50 || value > 2000)) return;
     if (p == &settings.decor_default && value != DECOR_SERVER && value != DECOR_CLIENT) return;
+    if (p == &settings.pointer_speed && (value < -100 || value > 100)) return;
+    if (p == &settings.pointer_accel && value != POINTER_ACCEL_FLAT && value != POINTER_ACCEL_ADAPTIVE) return;
     if (p == &settings.display_mode) {
         if (value == settings.display_mode)
             return;

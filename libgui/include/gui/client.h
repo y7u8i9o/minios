@@ -4,6 +4,7 @@
  * struct wmsg records, kept from the M17 design so the framework and
  * the applications are unchanged. */
 #include <gui/gfx.h>
+#include <minios/input.h>
 #include <stdint.h>
 
 #define WSRV_TITLE_MAX 48
@@ -22,9 +23,12 @@ enum wmsg_type {
 #define WMOD_SHIFT 1
 #define WMOD_CTRL  2
 #define WMOD_ALT   4
+#define WMOD_LOGO  8
 
-/* WM_KEY: a = key code (PS/2 set 1, 0x80 added for the 0xe0 prefix),
- * b = 1 down / 0 up, c = modifiers, d = translated character or 0.
+/* WM_KEY: a = key code (the Linux codes KEY_* of minios/input.h),
+ * b = 1 down / 0 up, c = modifiers, d = translated character or 0. A
+ * held key repeats after the compositor's delay at its rate: the
+ * library queues further WM_KEY down messages until the release.
  * WM_MOUSE: a = x, b = y in window contents coordinates, c = buttons
  * (WMOUSE_WHEEL: the delta), d = kind. WM_FOCUS: a = 1 gained / 0 lost.
  * WM_RESIZED: a = width, b = height (the surface is already resized).
@@ -94,6 +98,10 @@ int gui_clipboard_get(char *buf, int size);
 int gui_next_event(struct wmsg *ev, int timeout_ms);
 /* Descriptor of the connection, for callers with their own poll loop. */
 int gui_event_fd(void);
+/* Milliseconds until the next key repeat is due, or -1 when no key is
+ * held; callers with their own poll loop cap their timeout with it and
+ * call gui_next_event(ev, 0) afterwards. */
+int gui_repeat_timeout(void);
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
 struct wire_display;

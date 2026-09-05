@@ -476,14 +476,14 @@ static int on_key(struct widget *w, void *args, void *arg)
     struct sig_key *k = args;
     int page = visible_rows() * COLS;
     switch (k->code) {
-    case 0x4b: case 0xcb: move(-1); return 1;
-    case 0x4d: case 0xcd: move(1); return 1;
-    case 0x48: case 0xc8: move(-COLS); return 1;
-    case 0x50: case 0xd0: move(COLS); return 1;
-    case 0x49: case 0xc9: move(-page); return 1;
-    case 0x51: case 0xd1: move(page); return 1;
-    case 0xc7: select_codepoint(0); return 1;
-    case 0xcf: select_codepoint(UNICODE_MAX); return 1;
+    case KEY_KP4: case KEY_LEFT: move(-1); return 1;
+    case KEY_KP6: case KEY_RIGHT: move(1); return 1;
+    case KEY_KP8: case KEY_UP: move(-COLS); return 1;
+    case KEY_KP2: case KEY_DOWN: move(COLS); return 1;
+    case KEY_KP9: case KEY_PAGEUP: move(-page); return 1;
+    case KEY_KP3: case KEY_PAGEDOWN: move(page); return 1;
+    case KEY_HOME: select_codepoint(0); return 1;
+    case KEY_END: select_codepoint(UNICODE_MAX); return 1;
     }
     return 0;
 }

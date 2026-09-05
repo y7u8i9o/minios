@@ -29,6 +29,7 @@ struct widget *row_label(struct widget *grid, int row, const char *text);
 void build_appearance(struct widget *page);
 void build_display(struct widget *page);
 void build_keyboard(struct widget *page);
+void build_mouse(struct widget *page);
 void build_sound(struct widget *page);
 void build_datetime(struct widget *page);
 void build_filetypes(struct widget *page);

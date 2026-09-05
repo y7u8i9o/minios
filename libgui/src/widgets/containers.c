@@ -102,8 +102,8 @@ static int tabs_event(struct widget *w, struct event *e)
         return 1;
     }
     if (e->type == EV_KEY_DOWN) {
-        if (e->code == 0xcd) { tabs_select(w, w->value + 1); return 1; }
-        if (e->code == 0xcb) { tabs_select(w, w->value - 1); return 1; }
+        if (e->code == KEY_RIGHT) { tabs_select(w, w->value + 1); return 1; }
+        if (e->code == KEY_LEFT) { tabs_select(w, w->value - 1); return 1; }
     }
     if (e->type == EV_FOCUS_IN || e->type == EV_FOCUS_OUT) {
         widget_invalidate(w);

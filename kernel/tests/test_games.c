@@ -2,6 +2,7 @@
 #include <sched/user.h>
 #include <sched/proc.h>
 #include <drivers/ps2kbd.h>
+#include <drivers/tty.h>
 #include <drivers/timer.h>
 #include <fs/vfs.h>
 #include <lib/string.h>
@@ -24,9 +25,9 @@ static bool contains(const char *hay, const char *needle)
 
 static void wait_raw(void)
 {
-    for (int i = 0; i < 100 && (ps2kbd_get_lflag() & ICANON); i++)
+    for (int i = 0; i < 100 && (tty_get_lflag(&console_tty) & ICANON); i++)
         sleep_ms(50);
-    ktest_assert(!(ps2kbd_get_lflag() & ICANON), "program did not enter raw mode");
+    ktest_assert(!(tty_get_lflag(&console_tty) & ICANON), "program did not enter raw mode");
 }
 
 static void arrow(uint8_t code)
@@ -72,7 +73,7 @@ static void test_games(void)
     sleep_ms(400);
     type_line("q");
     ktest_assert(proc_reap(p) == 0, "snake status");
-    ktest_assert(ps2kbd_get_lflag() & ICANON, "snake left the console in raw mode");
+    ktest_assert(tty_get_lflag(&console_tty) & ICANON, "snake left the console in raw mode");
     read_file("/snake.out", buf, sizeof buf);
     ktest_assert(contains(buf, "Quit, score") || contains(buf, "Game over"),
                  "snake did not print its final line");
@@ -86,7 +87,7 @@ static void test_games(void)
     sleep_ms(200);
     type_line("q");
     ktest_assert(proc_reap(p) == 0, "2048 status");
-    ktest_assert(ps2kbd_get_lflag() & ICANON, "2048 left the console in raw mode");
+    ktest_assert(tty_get_lflag(&console_tty) & ICANON, "2048 left the console in raw mode");
     read_file("/2048.out", buf, sizeof buf);
     ktest_assert(contains(buf, "2048    score"), "2048 did not draw its board");
     kprintf("games: 2048 ran and quit\n");
@@ -96,7 +97,7 @@ static void test_games(void)
     sleep_ms(500);
     type_line("x");
     ktest_assert(proc_reap(p) == 0, "matrix status");
-    ktest_assert(ps2kbd_get_lflag() & ICANON, "matrix left the console in raw mode");
+    ktest_assert(tty_get_lflag(&console_tty) & ICANON, "matrix left the console in raw mode");
     read_file("/matrix.out", buf, sizeof buf);
     ktest_assert(contains(buf, "\033[2J"), "matrix did not draw");
     kprintf("games: matrix ran until a key\n");

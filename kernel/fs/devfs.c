@@ -1,7 +1,6 @@
 #define KLOG_SUBSYS "devfs"
 #include <fs/devfs.h>
 #include <fs/vfs.h>
-#include <drivers/ps2kbd.h>
 #include <drivers/tty.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
@@ -14,10 +13,13 @@
 #include <errno.h>
 
 /* Device nodes. The list is protected by devfs_lock. Nodes are never
- * removed, so an inode may keep a pointer to its node without a lock. */
+ * removed, so an inode may keep a pointer to its node without a lock.
+ * A node registered with S_IFDIR is a directory; parent is the inode of
+ * the directory holding the node (ROOT_INO for /dev itself). */
 struct devnode {
     char name[32];
     uint64_t ino;
+    uint64_t parent;
     uint32_t mode;
     const struct file_ops *fops;
     void *priv;
@@ -34,14 +36,14 @@ static struct superblock *devfs_sb;
 static const struct inode_ops devfs_dir_ops;
 static const struct file_ops devfs_dir_fops;
 
-static struct devnode *devnode_find(const char *name, size_t len)
+static struct devnode *devnode_find(uint64_t parent, const char *name, size_t len)
 {
     struct list_head *pos;
     struct devnode *found = NULL;
     spin_lock(&devfs_lock);
     list_for_each(pos, &devnodes) {
         struct devnode *n = list_entry(pos, struct devnode, link);
-        if (strlen(n->name) == len && memcmp(n->name, name, len) == 0) {
+        if (n->parent == parent && strlen(n->name) == len && memcmp(n->name, name, len) == 0) {
             found = n;
             break;
         }
@@ -69,12 +71,23 @@ static struct devnode *devnode_by_ino(uint64_t ino)
 int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops, void *priv,
                    uint64_t size)
 {
-    if (devnode_find(name, strlen(name)))
+    /* "dir/name" registers under a directory node registered before. */
+    uint64_t parent = ROOT_INO;
+    const char *slash = strchr(name, '/');
+    if (slash) {
+        struct devnode *dir = devnode_find(ROOT_INO, name, (size_t)(slash - name));
+        if (!dir || !S_ISDIR(dir->mode))
+            return -ENOENT;
+        parent = dir->ino;
+        name = slash + 1;
+    }
+    if (devnode_find(parent, name, strlen(name)))
         return -EEXIST;
     struct devnode *n = kzalloc(sizeof *n);
     if (!n)
         return -ENOMEM;
     strlcpy(n->name, name, sizeof n->name);
+    n->parent = parent;
     n->mode = mode;
     n->fops = fops;
     n->priv = priv;
@@ -83,13 +96,16 @@ int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops,
     n->ino = next_ino++;
     list_add_tail(&n->link, &devnodes);
     spin_unlock(&devfs_lock);
-    klog_info("/dev/%s registered", name);
+    if (S_ISDIR(mode))
+        klog_info("/dev/%s/ registered", name);
+    else if (parent == ROOT_INO)
+        klog_info("/dev/%s registered", name);
     return 0;
 }
 
 static int devfs_lookup(struct inode *dir, const char *name, size_t len, struct inode **out)
 {
-    struct devnode *n = devnode_find(name, len);
+    struct devnode *n = devnode_find(dir->ino, name, len);
     if (!n)
         return -ENOENT;
     *out = inode_get(dir->sb, n->ino);
@@ -101,13 +117,16 @@ static long devfs_getdents(struct file *f, struct dirent *buf, size_t count)
     size_t max = count / sizeof(struct dirent);
     size_t filled = 0, index = 0;
     struct list_head *pos;
+    uint64_t parent = f->inode->ino;
     spin_lock(&devfs_lock);
     list_for_each(pos, &devnodes) {
+        struct devnode *n = list_entry(pos, struct devnode, link);
+        if (n->parent != parent)
+            continue;
         if (filled == max)
             break;
         if (index++ < f->pos)
             continue;
-        struct devnode *n = list_entry(pos, struct devnode, link);
         buf[filled].d_ino = n->ino;
         buf[filled].d_type = vfs_mode_to_dtype(n->mode);
         strlcpy(buf[filled].d_name, n->name, sizeof buf[filled].d_name);
@@ -138,6 +157,12 @@ static int devfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i
     if (!n)
         return -ENOENT;
     i->mode = n->mode;
+    if (S_ISDIR(n->mode)) {
+        i->nlink = 2;
+        i->ops = &devfs_dir_ops;
+        i->fops = &devfs_dir_fops;
+        return 0;
+    }
     i->nlink = 1;
     i->fops = n->fops;
     i->priv = n->priv;
@@ -172,7 +197,7 @@ static struct fs_type devfs_type = {
 
 static long condev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
-    return ps2kbd_read(buf, n);
+    return tty_read(&console_tty, buf, n);
 }
 
 static long condev_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
@@ -262,7 +287,7 @@ static const struct file_ops klogdev_fops = {
 };
 static int condev_poll(struct file *f)
 {
-    return ps2kbd_poll();
+    return tty_poll(&console_tty);
 }
 
 static struct poll_source *condev_source(struct file *f)
@@ -274,16 +299,6 @@ static const struct file_ops condev_fops = { .read = condev_read, .write = conde
                                              .ioctl = condev_ioctl, .poll = condev_poll,
                                              .poll_source = condev_source };
 
-/* Closing /dev/kbd leaves raw scancode mode, so a display server that
- * dies does not leave the console keyboard unusable. */
-static void kbddev_release(struct file *f)
-{
-    tty_set_lflag(&console_tty, tty_get_lflag(&console_tty) & ~KBD_SCANCODES);
-}
-
-static const struct file_ops kbddev_fops = { .read = condev_read, .write = condev_write, .ioctl = condev_ioctl,
-                                             .poll = condev_poll, .poll_source = condev_source,
-                                             .release = kbddev_release };
 static const struct file_ops null_fops = { .read = null_read, .write = null_write };
 static const struct file_ops zero_fops = { .read = zero_read, .write = null_write };
 
@@ -291,7 +306,6 @@ void devfs_init(void)
 {
     vfs_register_fs(&devfs_type);
     devfs_register("console", S_IFCHR | 0666, &condev_fops, NULL, 0);
-    devfs_register("kbd", S_IFCHR | 0444, &kbddev_fops, NULL, 0);
     devfs_register("klog", S_IFCHR | 0444, &klogdev_fops, NULL, 0);
     devfs_register("null", S_IFCHR | 0666, &null_fops, NULL, 0);
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);

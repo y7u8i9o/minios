@@ -79,8 +79,8 @@ static int combo_event(struct widget *w, struct event *e)
         combobox_select(w, w->value + (e->button > 0 ? 1 : -1));
         return 1;
     case EV_KEY_DOWN:
-        if (e->code == 0xd0) { combobox_select(w, w->value + 1); return 1; }
-        if (e->code == 0xc8) { combobox_select(w, w->value - 1); return 1; }
+        if (e->code == KEY_DOWN) { combobox_select(w, w->value + 1); return 1; }
+        if (e->code == KEY_UP) { combobox_select(w, w->value - 1); return 1; }
         if (e->ch == '\n' || e->ch == ' ') { combo_open(w); return 1; }
         return 0;
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
@@ -204,10 +204,10 @@ static int spinner_event(struct widget *w, struct event *e)
         spinner_set(w, w->value - e->button);
         return 1;
     case EV_KEY_DOWN:
-        if (e->code == 0xc8) { spinner_set(w, w->value + 1); return 1; }
-        if (e->code == 0xd0) { spinner_set(w, w->value - 1); return 1; }
-        if (e->code == 0xc9) { spinner_set(w, w->value + 10); return 1; }
-        if (e->code == 0xd1) { spinner_set(w, w->value - 10); return 1; }
+        if (e->code == KEY_UP) { spinner_set(w, w->value + 1); return 1; }
+        if (e->code == KEY_DOWN) { spinner_set(w, w->value - 1); return 1; }
+        if (e->code == KEY_PAGEUP) { spinner_set(w, w->value + 10); return 1; }
+        if (e->code == KEY_PAGEDOWN) { spinner_set(w, w->value - 10); return 1; }
         return 0;
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
         widget_invalidate(w);
@@ -295,10 +295,10 @@ static int slider_event(struct widget *w, struct event *e)
         spinner_set(w, w->value - e->button);
         return 1;
     case EV_KEY_DOWN:
-        if (e->code == 0xcd || e->code == 0xc8) { spinner_set(w, w->value + 1); return 1; }
-        if (e->code == 0xcb || e->code == 0xd0) { spinner_set(w, w->value - 1); return 1; }
-        if (e->code == 0xc7) { spinner_set(w, w->min); return 1; }
-        if (e->code == 0xcf) { spinner_set(w, w->max); return 1; }
+        if (e->code == KEY_RIGHT || e->code == KEY_UP) { spinner_set(w, w->value + 1); return 1; }
+        if (e->code == KEY_LEFT || e->code == KEY_DOWN) { spinner_set(w, w->value - 1); return 1; }
+        if (e->code == KEY_HOME) { spinner_set(w, w->min); return 1; }
+        if (e->code == KEY_END) { spinner_set(w, w->max); return 1; }
         return 0;
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
         widget_invalidate(w);

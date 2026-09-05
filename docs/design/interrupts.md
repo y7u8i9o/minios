@@ -47,7 +47,9 @@ needs no lock.
 
 ## PS/2 keyboard
 
-`drivers/ps2kbd.c` reads scancode set 1 from port `0x60`. Shift, control,
+`drivers/ps2kbd.c` reads scancode set 1 from port `0x60`. Since M47 it
+reports key codes to the input core (`input.md`), which owns the state
+described below (this section is the M6 design). Shift, control,
 alt and caps lock are tracked, `0xe0` prefixed keys are ignored for now.
 Control combined with a letter yields the corresponding control character.
 The line discipline echoes characters, handles backspace and control U, and

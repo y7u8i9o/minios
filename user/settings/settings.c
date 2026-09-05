@@ -2,7 +2,7 @@
  * change is written to /etc/desktop.conf immediately; the desktop client
  * notices the file within a second and applies it, pushing the values
  * X12 owns (colour, key repeat, display mode, frame interval, decorations,
- * keymap) through the settings protocol. "settings set KEY VALUE" changes
+ * keymap, pointer speed and acceleration) through the settings protocol. "settings set KEY VALUE" changes
  * one entry and exits; "settings PAGE" opens on that page. */
 #include "settings.h"
 #include <stdio.h>
@@ -13,13 +13,13 @@ struct app *app;
 
 /* ---- the configuration file ---- */
 
-#define NKEYS 12
+#define NKEYS 14
 static const char *const keys[NKEYS] = {
     "wallpaper", "wallpaper_mode", "desktop_color", "repeat_rate", "repeat_delay", "display_mode",
-    "frame_ms", "decorations", "keymap", "ui_font", "ui_font_px", "ui_scale",
+    "frame_ms", "decorations", "keymap", "ui_font", "ui_font_px", "ui_scale", "pointer_speed", "pointer_accel",
 };
 static char values[NKEYS][128] = {
-    "", "fill", "0x306080", "30", "500", "", "16", "client", "us", "DejaVu Sans", "14", "100",
+    "", "fill", "0x306080", "30", "500", "", "16", "client", "us", "DejaVu Sans", "14", "100", "0", "adaptive",
 };
 
 static int key_index(const char *key)
@@ -121,6 +121,7 @@ static struct category categories[] = {
     { "Appearance", "appearance", build_appearance, NULL },
     { "Display", "display", build_display, NULL },
     { "Keyboard", "keyboard", build_keyboard, NULL },
+    { "Mouse", "mouse", build_mouse, NULL },
     { "Sound", "sound", build_sound, NULL },
     { "Date and time", "time", build_datetime, NULL },
     { "File types", "filetypes", build_filetypes, NULL },

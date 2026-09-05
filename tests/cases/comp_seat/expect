@@ -10,6 +10,6 @@ comptest: key 0x1e -> a \(0x61\)
 comptest: modifiers 1
 comptest: key 0x1e -> A \(0x41\)
 comptest: modifiers 0
-comptest: key 0xc8 -> sym   \(0xe010\)
+comptest: key 0x67 -> sym   \(0xe010\)
 comp_seat: seat ok
 TEST PASS

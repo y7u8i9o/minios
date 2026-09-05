@@ -1,4 +1,4 @@
-/* Appearance, display and keyboard pages. */
+/* Appearance, display, keyboard and mouse pages. */
 #include "settings.h"
 #include <gui/client.h>
 #include <dirent.h>
@@ -313,5 +313,51 @@ void build_keyboard(struct widget *page)
     widget_connect(delay_slider, "changed", on_delay, NULL);
     widget_set_grid(delay_slider, r++, 0, 1, 2);
     show_rates();
+    building = 0;
+}
+
+/* ---- mouse ---- */
+
+static struct widget *speed_slider, *speed_label, *accel_combo;
+
+static void show_speed(void)
+{
+    char text[48];
+    snprintf(text, sizeof text, "Pointer speed: %d", speed_slider->value);
+    widget_set_text(speed_label, text);
+}
+static int on_speed(struct widget *w, void *args, void *arg)
+{
+    show_speed();
+    if (!building) conf_set_int("pointer_speed", speed_slider->value);
+    return 1;
+}
+static int on_accel(struct widget *w, void *args, void *arg)
+{
+    if (!building && w->value >= 0)
+        conf_set("pointer_accel", w->value == 0 ? "flat" : "adaptive");
+    return 1;
+}
+
+void build_mouse(struct widget *page)
+{
+    building = 1;
+    struct widget *grid = grid_new(page);
+    widget_set_stretch(grid, 1, 0);
+    grid_set_stretch(grid, -1, 1, 1);
+    int r = 0;
+    row_label(grid, r, "Acceleration");
+    accel_combo = combobox_new(grid);
+    combobox_add(accel_combo, "Flat");
+    combobox_add(accel_combo, "Adaptive");
+    combobox_select(accel_combo, strcmp(conf_get("pointer_accel"), "flat") == 0 ? 0 : 1);
+    widget_connect(accel_combo, "changed", on_accel, NULL);
+    widget_set_grid(accel_combo, r++, 1, 1, 1);
+    speed_label = label_new(grid, "");
+    widget_set_grid(speed_label, r++, 0, 1, 2);
+    speed_slider = slider_new(grid, -100, 100, conf_int("pointer_speed", 0));
+    widget_connect(speed_slider, "changed", on_speed, NULL);
+    widget_set_grid(speed_slider, r++, 0, 1, 2);
+    show_speed();
     building = 0;
 }

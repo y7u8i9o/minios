@@ -323,13 +323,13 @@ void data_pointer_motion(void)
             uint32_t enter_serial = comp_serial();
             if (drag_offer)
                 drag_offer->enter_serial = enter_serial;
-            data_device_send_enter(t->client->data_device, enter_serial, t->res, wire_fixed_from_int(cursor_x - t->x),
-                                   wire_fixed_from_int(cursor_y - t->y), drag_offer ? drag_offer->res : NULL);
+            data_device_send_enter(t->client->data_device, enter_serial, t->res, (int32_t)((cursor_fx - t->x) * 256.0),
+                                   (int32_t)((cursor_fy - t->y) * 256.0), drag_offer ? drag_offer->res : NULL);
             comp_log("drag enter surface %d", t->id);
         }
     } else if (t && t->client->data_device) {
-        data_device_send_motion(t->client->data_device, (uint32_t)uptime_ms(), wire_fixed_from_int(cursor_x - t->x),
-                                wire_fixed_from_int(cursor_y - t->y));
+        data_device_send_motion(t->client->data_device, (uint32_t)uptime_ms(), (int32_t)((cursor_fx - t->x) * 256.0),
+                                (int32_t)((cursor_fy - t->y) * 256.0));
     }
 }
 

@@ -34,6 +34,7 @@
 #                                            kernel's virtio-gpu driver sets any
 #                                            mode up to 2560x1600 at run time),
 #                                            std (VGA BIOS modes only) or none
+#       --no-keyboard      QEMU_KEYBOARD=0   no virtio keyboard; keys go to the PS/2 port
 #       --no-tablet        QEMU_TABLET=0     no virtio tablet; the window grabs
 #                                            the mouse and moves it relatively
 #       --video MODE       QEMU_VIDEO        framebuffer mode WxH[xBPP][@SCALE]
@@ -88,7 +89,7 @@ die() {
 # Environment variables must beat the file, so remember them, source the
 # file, then put them back.
 VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
-      QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_VIDEO \
+      QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_VIDEO \
       QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP"
 
 CONF="${QEMU_CONF:-$TOP/qemu.conf}"
@@ -133,6 +134,7 @@ QEMU_SERIAL="${QEMU_SERIAL:-stdio}"
 QEMU_SOUND="${QEMU_SOUND:-1}"
 QEMU_VGA="${QEMU_VGA:-virtio}"
 QEMU_TABLET="${QEMU_TABLET:-1}"
+QEMU_KEYBOARD="${QEMU_KEYBOARD:-1}"
 QEMU_WAV="${QEMU_WAV:-$BUILD/audio.wav}"
 if [ -z "$QEMU_AUDIO" ]; then
     case "$(uname -s)" in
@@ -176,6 +178,7 @@ while [ $# -gt 0 ]; do
         --vga)            QEMU_VGA="$2"; shift ;;
         --vga=*)          QEMU_VGA="${1#*=}" ;;
         --no-tablet)      QEMU_TABLET=0 ;;
+        --no-keyboard)    QEMU_KEYBOARD=0 ;;
         --video)          QEMU_VIDEO="$2"; shift ;;
         --video=*)        QEMU_VIDEO="${1#*=}" ;;
         --serial)         QEMU_SERIAL="$2"; shift ;;
@@ -354,6 +357,7 @@ set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
        -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1 \
        "$@"
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
+[ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
 if [ "$QEMU_SOUND" != 0 ]; then
     audiodev="$QEMU_AUDIO,id=minios_audio"
     [ "$QEMU_AUDIO" = wav ] && audiodev="$audiodev,path=$QEMU_WAV"

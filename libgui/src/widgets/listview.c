@@ -108,12 +108,12 @@ static int listview_event(struct widget *w, struct event *e)
         return 1;
     case EV_KEY_DOWN:
         switch (e->code) {
-        case 0xc8: select(l, w->value - 1, "selected"); return 1;
-        case 0xd0: select(l, w->value + 1, "selected"); return 1;
-        case 0xc9: select(l, w->value - rows < 0 ? 0 : w->value - rows, "selected"); return 1;
-        case 0xd1: select(l, w->value + rows >= l->nitems ? l->nitems - 1 : w->value + rows, "selected"); return 1;
-        case 0xc7: select(l, 0, "selected"); return 1;
-        case 0xcf: select(l, l->nitems - 1, "selected"); return 1;
+        case KEY_UP: select(l, w->value - 1, "selected"); return 1;
+        case KEY_DOWN: select(l, w->value + 1, "selected"); return 1;
+        case KEY_PAGEUP: select(l, w->value - rows < 0 ? 0 : w->value - rows, "selected"); return 1;
+        case KEY_PAGEDOWN: select(l, w->value + rows >= l->nitems ? l->nitems - 1 : w->value + rows, "selected"); return 1;
+        case KEY_HOME: select(l, 0, "selected"); return 1;
+        case KEY_END: select(l, l->nitems - 1, "selected"); return 1;
         }
         if (e->ch == '\n' && w->value >= 0) {
             select(l, w->value, "activate");

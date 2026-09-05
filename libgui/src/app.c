@@ -308,6 +308,9 @@ int app_step(struct app *a, int timeout_ms)
         if (wait < 0 || d < wait)
             wait = (int)d;
     }
+    int rt = a->connected ? gui_repeat_timeout() : -1;
+    if (rt >= 0 && (wait < 0 || rt < wait))
+        wait = rt;
     int nw = 1;
     for (struct watch *w = a->watches; w; w = w->next)
         nw++;

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <gui/paint.h>
+#include <gui/keymap.h>
 #include "comp.h"
 
 /* Colours of the active window, then of inactive windows. */
@@ -418,7 +419,7 @@ int decor_press(struct csurface *s, int button)
     by_client = 0;
     if (!decor_has(s) || !(button & 1))
         return 0;
-    if (seat_modifiers() & 4) {                 /* Alt drag from anywhere */
+    if (seat_modifiers() & KEYMAP_MOD_ALT) {    /* Alt drag from anywhere */
         if (!t->maximized)
             start_move(t);
         return 1;

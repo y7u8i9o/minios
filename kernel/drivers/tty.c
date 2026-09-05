@@ -162,7 +162,7 @@ long tty_read(struct tty *t, char *buf, size_t n)
         waitq_wait(&t->rd_waitq, &t->lock);
     }
     size_t got = 0;
-    bool canon = (t->lflag & ICANON) && !(t->lflag & KBD_SCANCODES);
+    bool canon = (t->lflag & ICANON) != 0;
     spin_unlock(&t->lock);
     while (got < n && got < sizeof tmp) {
         char c;
@@ -220,7 +220,7 @@ uint32_t tty_get_lflag(struct tty *t)
 void tty_set_lflag(struct tty *t, uint32_t lflag)
 {
     spin_lock(&t->lock);
-    t->lflag = lflag & (ICANON | ECHO | ISIG | KBD_SCANCODES);
+    t->lflag = lflag & (ICANON | ECHO | ISIG);
     if (!(t->lflag & ICANON) && t->line_len) {
         for (size_t i = 0; i < t->line_len; i++)
             ready_push(t, t->line[i]);
@@ -336,7 +336,7 @@ void tty_start_daemon(void)
 }
 
 
-/* Initialized early by console_tty_init from ps2kbd_init. */
+/* Initialized early, before the keyboard drivers. */
 void console_tty_init(void)
 {
     tty_init(&console_tty, "console", console_output, true);

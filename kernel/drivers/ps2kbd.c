@@ -1,149 +1,88 @@
+/* The PS/2 keyboard on the first 8042 port: scancode set 1 bytes are
+ * translated to key codes and reported to the input core, which keeps
+ * the key state, repeats held keys and feeds the console terminal. */
 #define KLOG_SUBSYS "ps2kbd"
 #include <drivers/ps2kbd.h>
+#include <drivers/ps2mouse.h>
+#include <input/input.h>
 #include <arch/apic.h>
 #include <arch/irq.h>
 #include <arch/io.h>
 #include <sync/spinlock.h>
-#include <console.h>
 #include <klog.h>
-#include <sched/wait.h>
-#include <sched/thread.h>
-#include <sched/proc.h>
-#include <ipc/signal.h>
-#include <ipc/mqueue.h>
-#include <errno.h>
-#include <minios/abi.h>
-#include <drivers/ps2mouse.h>
-#include <drivers/tty.h>
-#include <lib/string.h>
 
 #define PS2_DATA    0x60
 #define PS2_STATUS  0x64
 
-/* Scancode set 1, unshifted and shifted, for codes 0 to 0x57. */
-static const char keymap[128] = {
-    0, 27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b', '\t',
-    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', 0, 'a', 's',
-    'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0, '\\', 'z', 'x', 'c', 'v',
-    'b', 'n', 'm', ',', '.', '/', 0, '*', 0, ' ', 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6', '+', '1',
-    '2', '3', '0', '.', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-static const char keymap_shift[128] = {
-    0, 27, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b', '\t',
-    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n', 0, 'A', 'S',
-    'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0, '|', 'Z', 'X', 'C', 'V',
-    'B', 'N', 'M', '<', '>', '?', 0, '*', 0, ' ', 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, '7', '8', '9', '-', '4', '5', '6', '+', '1',
-    '2', '3', '0', '.', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#define SC_EXTENDED  0xe0
+#define SC_PAUSE     0xe1
+
+/* Key codes of the 0xe0 prefixed scancodes (the unprefixed ones 1..88
+ * equal their key codes). */
+static const uint8_t extended_keys[128] = {
+    [0x10] = KEY_PREVIOUSSONG, [0x19] = KEY_NEXTSONG, [0x1c] = KEY_KPENTER, [0x1d] = KEY_RIGHTCTRL,
+    [0x20] = KEY_MUTE, [0x22] = KEY_PLAYPAUSE, [0x24] = KEY_STOPCD, [0x2e] = KEY_VOLUMEDOWN,
+    [0x30] = KEY_VOLUMEUP, [0x35] = KEY_KPSLASH, [0x37] = KEY_SYSRQ, [0x38] = KEY_RIGHTALT,
+    [0x46] = KEY_PAUSE, [0x47] = KEY_HOME, [0x48] = KEY_UP, [0x49] = KEY_PAGEUP, [0x4b] = KEY_LEFT,
+    [0x4d] = KEY_RIGHT, [0x4f] = KEY_END, [0x50] = KEY_DOWN, [0x51] = KEY_PAGEDOWN, [0x52] = KEY_INSERT,
+    [0x53] = KEY_DELETE, [0x5b] = KEY_LEFTMETA, [0x5c] = KEY_RIGHTMETA, [0x5d] = KEY_COMPOSE,
+    [0x5e] = KEY_POWER, [0x5f] = KEY_SLEEP, [0x63] = KEY_WAKEUP,
 };
 
-#define SC_LSHIFT   0x2a
-#define SC_RSHIFT   0x36
-#define SC_CTRL     0x1d
-#define SC_ALT      0x38
-#define SC_CAPS     0x3a
-#define SC_EXTENDED 0xe0
+static struct input_dev ps2kbd_dev;
 
-/* Modifier state. Protected by kbd_lock, taken in the interrupt handler. */
+/* Prefix state of the scancode stream. Protected by kbd_lock, taken in
+ * the interrupt handler. */
 static DEFINE_SPINLOCK(kbd_lock);
 static struct {
-    bool shift, ctrl, alt, caps, extended;
+    bool extended;
+    int pause;                  /* bytes of an 0xe1 sequence still expected */
 } kbd;
-
-static void line_input(char c)
-{
-    tty_input_char(&console_tty, c);
-}
-
-static void raw_push(const char *s)
-{
-    tty_input_raw(&console_tty, s, strlen(s));
-}
-
-static void feed_locked(uint8_t code)
-{
-    if (code == SC_EXTENDED) {
-        kbd.extended = true;
-        return;
-    }
-    bool release = code & 0x80;
-    code &= 0x7f;
-    bool ext = kbd.extended;
-    kbd.extended = false;
-
-    switch (code) {
-    case SC_LSHIFT:
-    case SC_RSHIFT:
-        kbd.shift = !release;
-        return;
-    case SC_CTRL:
-        kbd.ctrl = !release;
-        return;
-    case SC_ALT:
-        kbd.alt = !release;
-        return;
-    case SC_CAPS:
-        if (!release)
-            kbd.caps = !kbd.caps;
-        return;
-    }
-    if (release)
-        return;
-    if (ext) {
-        /* Cursor and editing keys become VT100 sequences in raw mode and
-         * are ignored in canonical mode, except keypad enter. */
-        const char *seq = NULL;
-        switch (code) {
-        case 0x48: seq = "\033[A"; break;
-        case 0x50: seq = "\033[B"; break;
-        case 0x4d: seq = "\033[C"; break;
-        case 0x4b: seq = "\033[D"; break;
-        case 0x47: seq = "\033[H"; break;
-        case 0x4f: seq = "\033[F"; break;
-        case 0x49: seq = "\033[5~"; break;
-        case 0x51: seq = "\033[6~"; break;
-        case 0x53: seq = "\033[3~"; break;
-        case 0x1c: line_input('\n'); return;
-        }
-        if (seq && !(tty_get_lflag(&console_tty) & ICANON))
-            raw_push(seq);
-        return;
-    }
-
-    char c = kbd.shift ? keymap_shift[code] : keymap[code];
-    if (!c)
-        return;
-    if (kbd.caps && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
-        c ^= 0x20;
-    if (kbd.ctrl) {
-        if (c >= 'a' && c <= 'z')
-            c = c - 'a' + 1;
-        else if (c >= 'A' && c <= 'Z')
-            c = c - 'A' + 1;
-        else if (c == '[')
-            c = 27;
-        else
-            return;
-    }
-    if (c == 27 && !kbd.ctrl && !(tty_get_lflag(&console_tty) & ICANON)) {
-        /* The Escape key itself. */
-        raw_push("\033");
-        return;
-    }
-    line_input(c);
-}
 
 void ps2kbd_feed_scancode(uint8_t code)
 {
-    if (tty_get_lflag(&console_tty) & KBD_SCANCODES) {
-        char c = (char)code;
-        tty_input_raw(&console_tty, &c, 1);
+    spin_lock(&kbd_lock);
+    if (kbd.pause) {
+        /* 0xe1 0x1d 0x45 is Pause pressed, 0xe1 0x9d 0xc5 released; the
+         * key has no separate release, so a press releases at once. */
+        bool press = --kbd.pause == 0 && !(code & 0x80);
+        spin_unlock(&kbd_lock);
+        if (press) {
+            input_report_key(&ps2kbd_dev, KEY_PAUSE, 1);
+            input_sync(&ps2kbd_dev);
+            input_report_key(&ps2kbd_dev, KEY_PAUSE, 0);
+            input_sync(&ps2kbd_dev);
+        }
         return;
     }
-    spin_lock(&kbd_lock);
-    feed_locked(code);
+    if (code == SC_PAUSE) {
+        kbd.pause = 2;
+        spin_unlock(&kbd_lock);
+        return;
+    }
+    if (code == SC_EXTENDED) {
+        kbd.extended = true;
+        spin_unlock(&kbd_lock);
+        return;
+    }
+    bool ext = kbd.extended;
+    kbd.extended = false;
     spin_unlock(&kbd_lock);
+
+    bool release = code & 0x80;
+    code &= 0x7f;
+    uint16_t key;
+    if (ext) {
+        /* 0xe0 0x2a and 0xe0 0x36 are the fake shifts around the
+         * navigation keys and Print Screen. */
+        key = extended_keys[code];
+    } else {
+        key = code <= KEY_F12 ? code : 0;
+    }
+    if (!key)
+        return;
+    input_report_key(&ps2kbd_dev, key, !release);
+    input_sync(&ps2kbd_dev);
 }
 
 static void kbd_irq(struct trapframe *tf, void *arg)
@@ -158,58 +97,25 @@ static void kbd_irq(struct trapframe *tf, void *arg)
     }
 }
 
-int ps2kbd_getc(void)
+struct input_dev *ps2kbd_device(void)
 {
-    return tty_getc(&console_tty);
-}
-
-size_t ps2kbd_available(void)
-{
-    return tty_available(&console_tty);
+    return &ps2kbd_dev;
 }
 
 void ps2kbd_init(void)
 {
-    console_tty_init();
+    input_dev_init(&ps2kbd_dev, "AT Translated Set 2 keyboard", BUS_I8042);
+    for (unsigned code = KEY_ESC; code <= KEY_F12; code++)
+        input_set_key_cap(&ps2kbd_dev, code);
+    for (unsigned i = 0; i < ARRAY_SIZE(extended_keys); i++)
+        if (extended_keys[i])
+            input_set_key_cap(&ps2kbd_dev, extended_keys[i]);
+    input_set_repeat(&ps2kbd_dev, PS2KBD_REPEAT_DELAY_MS, PS2KBD_REPEAT_PERIOD_MS);
+    input_register_device(&ps2kbd_dev);
     /* Drain anything pending, then unmask the line. */
     while (inb(PS2_STATUS) & 0x01)
         (void)inb(PS2_DATA);
     irq_register(IRQ_KEYBOARD, kbd_irq, NULL);
     ioapic_route(GSI_KEYBOARD, IRQ_KEYBOARD, false);
     klog_info("ps/2 keyboard on irq %u", IRQ_KEYBOARD);
-}
-
-long ps2kbd_read(char *buf, size_t n)
-{
-    return tty_read(&console_tty, buf, n);
-}
-
-void ps2kbd_set_fg_pgid(int pgid)
-{
-    tty_set_fg_pgid(&console_tty, pgid);
-}
-
-int ps2kbd_get_fg_pgid(void)
-{
-    return tty_get_fg_pgid(&console_tty);
-}
-
-void ps2kbd_start_ttyd(void)
-{
-    tty_start_daemon();
-}
-
-uint32_t ps2kbd_get_lflag(void)
-{
-    return tty_get_lflag(&console_tty);
-}
-
-void ps2kbd_set_lflag(uint32_t lflag)
-{
-    tty_set_lflag(&console_tty, lflag);
-}
-
-int ps2kbd_poll(void)
-{
-    return tty_poll(&console_tty);
 }

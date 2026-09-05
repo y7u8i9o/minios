@@ -1,0 +1,3 @@
+virtio-input\] QEMU Virtio Keyboard: keyboard
+input_keyboard: virtio keyboard ok
+TEST PASS

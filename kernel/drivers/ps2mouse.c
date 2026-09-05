@@ -1,20 +1,22 @@
+/* The PS/2 mouse on the second 8042 port: packets become relative
+ * motion, button and wheel events of an input core device. */
 #define KLOG_SUBSYS "ps2mouse"
 #include <drivers/ps2mouse.h>
-#include <drivers/mouse.h>
+#include <input/input.h>
 #include <sync/spinlock.h>
 #include <arch/apic.h>
 #include <arch/irq.h>
 #include <arch/io.h>
-#include <lib/string.h>
 #include <klog.h>
-#include <errno.h>
 
 #define PS2_DATA    0x60
 #define PS2_STATUS  0x64
 #define PS2_CMD     0x64
 
+static struct input_dev ps2mouse_dev;
+
 /* Packet assembly. Protected by mouse_lock, taken in the interrupt
- * handler; events go to the ring in drivers/mouse.c. */
+ * handler; complete packets are reported to the input core. */
 static DEFINE_SPINLOCK(mouse_lock);
 static struct {
     uint8_t packet[4];
@@ -60,26 +62,33 @@ void ps2mouse_feed_byte(uint8_t b)
         return;
     }
     mouse.packet[mouse.npacket++] = b;
-    if (mouse.npacket == mouse.packet_len) {
-        mouse.npacket = 0;
-        uint8_t f = mouse.packet[0];
-        if (!(f & 0xc0)) {   /* drop overflow packets */
-            int dx = mouse.packet[1] - ((f & 0x10) ? 256 : 0);
-            int dy = mouse.packet[2] - ((f & 0x20) ? 256 : 0);
-            /* IntelliMouse: the low nibble of byte 3 is the signed wheel delta. */
-            int dz = mouse.packet_len == 4 ? (int)(mouse.packet[3] & 0x0f) : 0;
-            if (dz & 0x08)
-                dz -= 16;
-            struct mouse_event e = {
-                .dx = (int16_t)dx,
-                .dy = (int16_t)-dy,
-                .buttons = f & 7,
-                .dz = (int8_t)dz,
-            };
-            mouse_push(&e);
-        }
+    if (mouse.npacket < mouse.packet_len) {
+        spin_unlock(&mouse_lock);
+        return;
     }
+    mouse.npacket = 0;
+    uint8_t f = mouse.packet[0];
+    int dx = mouse.packet[1] - ((f & 0x10) ? 256 : 0);
+    int dy = mouse.packet[2] - ((f & 0x20) ? 256 : 0);
+    /* IntelliMouse: the low nibble of byte 3 is the signed wheel delta,
+     * positive towards the user. */
+    int dz = mouse.packet_len == 4 ? (int)(mouse.packet[3] & 0x0f) : 0;
+    if (dz & 0x08)
+        dz -= 16;
+    bool overflow = (f & 0xc0) != 0;
     spin_unlock(&mouse_lock);
+    if (overflow)
+        return;
+    struct input_dev *d = &ps2mouse_dev;
+    /* The packet counts y upwards, REL_Y counts downwards; REL_WHEEL
+     * counts away from the user. */
+    input_report_rel(d, REL_X, dx);
+    input_report_rel(d, REL_Y, -dy);
+    input_report_rel(d, REL_WHEEL, -dz);
+    input_report_key(d, BTN_LEFT, f & 1);
+    input_report_key(d, BTN_RIGHT, f & 2);
+    input_report_key(d, BTN_MIDDLE, f & 4);
+    input_sync(d);
 }
 
 static void mouse_irq(struct trapframe *tf, void *arg)
@@ -108,6 +117,11 @@ void ps2mouse_set_wheel(bool wheel)
     mouse.packet_len = wheel ? 4 : 3;
     mouse.npacket = 0;
     spin_unlock(&mouse_lock);
+}
+
+struct input_dev *ps2mouse_device(void)
+{
+    return &ps2mouse_dev;
 }
 
 /* Set the sample rate; part of the IntelliMouse enabling sequence. */
@@ -141,6 +155,17 @@ void ps2mouse_init(void)
     }
     uint8_t a2 = mouse_cmd(0xf4);    /* enable reporting */
     mouse.present = a1 == 0xfa && a2 == 0xfa;
+
+    input_dev_init(&ps2mouse_dev, mouse.packet_len == 4 ? "ImPS/2 Generic Wheel Mouse" : "PS/2 Generic Mouse",
+                   BUS_I8042);
+    input_set_rel_cap(&ps2mouse_dev, REL_X);
+    input_set_rel_cap(&ps2mouse_dev, REL_Y);
+    input_set_rel_cap(&ps2mouse_dev, REL_WHEEL);
+    input_set_key_cap(&ps2mouse_dev, BTN_LEFT);
+    input_set_key_cap(&ps2mouse_dev, BTN_RIGHT);
+    input_set_key_cap(&ps2mouse_dev, BTN_MIDDLE);
+    input_register_device(&ps2mouse_dev);
+
     irq_register(IRQ_MOUSE, mouse_irq, NULL);
     ioapic_route(GSI_MOUSE, IRQ_MOUSE, false);
     klog_info("ps/2 mouse on irq %u%s%s", IRQ_MOUSE, mouse.packet_len == 4 ? " with wheel" : "",

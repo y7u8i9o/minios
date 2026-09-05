@@ -188,7 +188,15 @@ the framebuffer state and framebuffer write.
 
 ## M32 additions
 
-- `mouse_lock` (the `/dev/mouse` ring in `drivers/mouse.c`) is taken from
+- M47: `input_dev.lock` protects one input device's key state, repeat
+  state and reader queues; it is taken from interrupt handlers and
+  virtqueue completions and nests above `waitq.lock` and
+  `poll_source.lock`. `input_devices_lock` (the device list, condition
+  lock of `repeat_waitq`) is taken before `input_dev.lock` by the repeat
+  thread. The console keyboard state `kbd_lock` (`input/keyboard.c`) and
+  `console_tty.lock` are taken only after `input_dev.lock` has been
+  released. `mouse_lock` is now the PS/2 packet assembly only.
+- `mouse_lock` (the `/dev/mouse` ring in `drivers/mouse.c`, until M47) is taken from
   the PS/2 interrupt handler after the driver's own packet lock, and from
   virtio-input completion callbacks under the event queue's `vq->lock`
   and the device's report lock: `ps2 mouse_lock -> mouse_lock`,

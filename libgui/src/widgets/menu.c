@@ -125,15 +125,15 @@ static int dropdown_event(struct widget *w, struct event *e)
         activate(d, item_at(d, e->y));
         return 1;
     case EV_KEY_DOWN:
-        if (e->code == 0xd0) { d->hover = d->hover + 1 < n ? d->hover + 1 : 0; widget_invalidate(w); return 1; }
-        if (e->code == 0xc8) { d->hover = d->hover > 0 ? d->hover - 1 : n - 1; widget_invalidate(w); return 1; }
+        if (e->code == KEY_DOWN) { d->hover = d->hover + 1 < n ? d->hover + 1 : 0; widget_invalidate(w); return 1; }
+        if (e->code == KEY_UP) { d->hover = d->hover > 0 ? d->hover - 1 : n - 1; widget_invalidate(w); return 1; }
         if (e->ch == '\n') { activate(d, d->hover); return 1; }
-        if ((e->code == 0xcb || e->code == 0xcd) && d->bar) {
+        if ((e->code == KEY_LEFT || e->code == KEY_RIGHT) && d->bar) {
             struct widget *bar = d->bar;
             int count = 0;
             for (struct widget *m = bar->first; m; m = m->next)
                 count++;
-            menubar_open(bar, (bar->value + (e->code == 0xcd ? 1 : count - 1)) % count);
+            menubar_open(bar, (bar->value + (e->code == KEY_RIGHT ? 1 : count - 1)) % count);
             return 1;
         }
         return 1;

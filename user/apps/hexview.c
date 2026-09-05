@@ -74,12 +74,12 @@ static int on_key(struct widget *w, void *args, void *arg)
 {
     struct sig_key *k = args;
     switch (k->code) {
-    case 0xc8: go_to(offset - ROW); return 1;
-    case 0xd0: go_to(offset + ROW); return 1;
-    case 0xc9: go_to(offset - LINES * ROW); return 1;
-    case 0xd1: go_to(offset + LINES * ROW); return 1;
-    case 0xc7: go_to(0); return 1;
-    case 0xcf: go_to(size); return 1;
+    case KEY_UP: go_to(offset - ROW); return 1;
+    case KEY_DOWN: go_to(offset + ROW); return 1;
+    case KEY_PAGEUP: go_to(offset - LINES * ROW); return 1;
+    case KEY_PAGEDOWN: go_to(offset + LINES * ROW); return 1;
+    case KEY_HOME: go_to(0); return 1;
+    case KEY_END: go_to(size); return 1;
     }
     return 0;
 }

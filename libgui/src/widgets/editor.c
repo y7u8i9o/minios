@@ -541,18 +541,18 @@ static int editor_key(struct editor *ed, struct event *e)
         }
     }
     switch (e->code) {
-    case 0xcb: if (ed->cc > 0) ed->cc = gui_utf8_prev_boundary(ed->lines[ed->cl], ed->cc); else if (ed->cl > 0) { ed->cl--; ed->cc = llen(ed, ed->cl); } break;
-    case 0xcd: if (ed->cc < llen(ed, ed->cl)) ed->cc = gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc); else if (ed->cl + 1 < ed->nlines) { ed->cl++; ed->cc = 0; } break;
-    case 0xc8: move_vertical(ed, -1); break;
-    case 0xd0: move_vertical(ed, 1); break;
-    case 0xc9: move_vertical(ed, -vis); break;
-    case 0xd1: move_vertical(ed, vis); break;
-    case 0xc7: if (ctrl) { ed->cl = 0; } ed->cc = 0; break;
-    case 0xcf: if (ctrl) ed->cl = ed->nlines - 1; ed->cc = llen(ed, ed->cl); break;
+    case KEY_LEFT: if (ed->cc > 0) ed->cc = gui_utf8_prev_boundary(ed->lines[ed->cl], ed->cc); else if (ed->cl > 0) { ed->cl--; ed->cc = llen(ed, ed->cl); } break;
+    case KEY_RIGHT: if (ed->cc < llen(ed, ed->cl)) ed->cc = gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc); else if (ed->cl + 1 < ed->nlines) { ed->cl++; ed->cc = 0; } break;
+    case KEY_UP: move_vertical(ed, -1); break;
+    case KEY_DOWN: move_vertical(ed, 1); break;
+    case KEY_PAGEUP: move_vertical(ed, -vis); break;
+    case KEY_PAGEDOWN: move_vertical(ed, vis); break;
+    case KEY_HOME: if (ctrl) { ed->cl = 0; } ed->cc = 0; break;
+    case KEY_END: if (ctrl) ed->cl = ed->nlines - 1; ed->cc = llen(ed, ed->cl); break;
     default: moved = 0;
     }
     if (moved) {
-        if (e->code != 0xc8 && e->code != 0xd0 && e->code != 0xc9 && e->code != 0xd1)
+        if (e->code != KEY_UP && e->code != KEY_DOWN && e->code != KEY_PAGEUP && e->code != KEY_PAGEDOWN)
             ed->wanted_x = -1;
         if (shift) {
             if (!ed->has_sel) { ed->al = bl; ed->ac = bc; ed->has_sel = 1; }
@@ -566,7 +566,7 @@ static int editor_key(struct editor *ed, struct event *e)
     ed->wanted_x = -1;
     if (ed->readonly)
         return 0;
-    if (e->code == 0xd3) {
+    if (e->code == KEY_DELETE) {
         if (!delete_selection(ed)) {
             if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc));
             else if (ed->cl + 1 < ed->nlines) delete_range(ed, ed->cl, ed->cc, ed->cl + 1, 0);

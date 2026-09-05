@@ -4,7 +4,7 @@ OUT      := $(BUILD)/kernel
 KERNEL   ?= $(BUILD)/kernel.elf
 GENSYMS  ?= $(BUILD)/host/gensyms
 
-SUBDIRS  := arch/x86_64 lib mm sync sched syscall fs fs/mfs fs/fat ipc block audio drivers drivers/virtio debug
+SUBDIRS  := arch/x86_64 lib mm sync sched syscall fs fs/mfs fs/fat ipc block audio input drivers drivers/virtio debug
 ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif

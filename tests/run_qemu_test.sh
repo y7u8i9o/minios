@@ -18,6 +18,7 @@
 #   audio     QEMU audio backend for a virtio-sound device: none or wav
 #   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver)
 #   tablet    present: attach a virtio-tablet-pci device
+#   keyboard  present: attach a virtio-keyboard-pci device
 #   disk.img  a private root image instead of the shared one (optional)
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
@@ -75,6 +76,7 @@ fi
 VGAFLAGS="-vga std"
 [ -f "$CASE/vga" ] && VGAFLAGS="-vga $(cat "$CASE/vga")"
 [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
+[ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
 if [ -f "$OUTDIR/disk.img" ]; then
     DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0"
 fi

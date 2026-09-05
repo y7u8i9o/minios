@@ -55,6 +55,7 @@ struct win {
     struct wire_proxy *decoration;
     int press_zone;             /* zone of the current button press */
     uint32_t last_click;        /* release time of the previous header click (double click) */
+    int32_t wheel_acc;          /* axis motion below one wheel click, 24.8 pixels */
 };
 
 /* Logical origin of the contents inside the surface. */
@@ -106,6 +107,11 @@ static struct keymap *keymap;
 static int modifiers;
 static uint32_t last_serial;
 static struct gui_window *pointer_win, *keyboard_win;
+/* Key repeat from the seat's repeat_info: the held key and the time of
+ * its next repeat (0: none). */
+static int repeat_rate = 30, repeat_delay = 500;
+static uint32_t repeat_key;
+static long repeat_at;
 static struct gui_window *text_win;
 static int text_active;
 static uint32_t text_serial;
@@ -363,8 +369,16 @@ static void on_ptr_axis(void *user, struct wire_proxy *p, uint32_t time, uint32_
         return;
     struct win *wi = pointer_win->priv;
     int edges;
-    if (csd_hit(&wi->csd, pointer_win->width, pointer_win->height, wi->px, wi->py, &edges) == CSD_CONTENT)
-        push_mouse(pointer_win, wire_fixed_to_int(value) / 15, WMOUSE_WHEEL);
+    if (csd_hit(&wi->csd, pointer_win->width, pointer_win->height, wi->px, wi->py, &edges) != CSD_CONTENT)
+        return;
+    /* One wheel click is 15 logical pixels; finer motion accumulates
+     * until it reaches a click. */
+    wi->wheel_acc += value;
+    int clicks = wi->wheel_acc / (15 * 256);
+    if (clicks) {
+        wi->wheel_acc -= clicks * 15 * 256;
+        push_mouse(pointer_win, clicks, WMOUSE_WHEEL);
+    }
 }
 static void on_ptr_frame(void *user, struct wire_proxy *p) {}
 static const struct pointer_listener pointer_events = { on_ptr_enter, on_ptr_leave, on_ptr_motion, on_ptr_button, on_ptr_axis, on_ptr_frame };
@@ -386,6 +400,7 @@ static void on_kbd_enter(void *user, struct wire_proxy *k, uint32_t serial, stru
 }
 static void on_kbd_leave(void *user, struct wire_proxy *k, uint32_t serial, struct wire_proxy *s)
 {
+    repeat_at = 0;
     struct gui_window *w = window_of_surface(s);
     if (w) {
         struct wmsg m = { WM_FOCUS, 0, w->id, 0, 0, 0, 0, "" };
@@ -394,22 +409,75 @@ static void on_kbd_leave(void *user, struct wire_proxy *k, uint32_t serial, stru
     if (keyboard_win == w)
         keyboard_win = NULL;
 }
-static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
+static void push_key(uint32_t key, int down)
 {
-    last_serial = serial;
-    if (!keyboard_win)
-        return;
     int ch = keymap_translate(keymap, key, modifiers);
     if (keysym_is_symbol(ch))
         ch = 0;
     if (text_active && ch >= 32 && !(modifiers & (WMOD_CTRL | WMOD_ALT)))
         ch = 0;
-    struct wmsg m = { WM_KEY, 0, keyboard_win->id, (int32_t)key, state ? 1 : 0, modifiers, ch, "" };
+    struct wmsg m = { WM_KEY, 0, keyboard_win->id, (int32_t)key, down, modifiers, ch, "" };
     push(&m);
+}
+
+static int is_modifier_key(uint32_t key)
+{
+    switch (key) {
+    case KEY_LEFTSHIFT: case KEY_RIGHTSHIFT: case KEY_LEFTCTRL: case KEY_RIGHTCTRL:
+    case KEY_LEFTALT: case KEY_RIGHTALT: case KEY_LEFTMETA: case KEY_RIGHTMETA: case KEY_CAPSLOCK:
+        return 1;
+    }
+    return 0;
+}
+
+static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
+{
+    last_serial = serial;
+    if (state) {
+        if (!is_modifier_key(key) && repeat_rate > 0) {
+            repeat_key = key;
+            repeat_at = uptime_ms() + repeat_delay;
+        }
+    } else if (key == repeat_key) {
+        repeat_at = 0;
+    }
+    if (!keyboard_win)
+        return;
+    push_key(key, state ? 1 : 0);
 }
 static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t group)
 { modifiers = (int)dep; }
-static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t delay) {}
+static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t delay)
+{
+    repeat_rate = rate;
+    repeat_delay = delay;
+    repeat_at = 0;
+}
+
+/* Queue the repeat of the held key when its time has come. */
+static void repeat_tick(void)
+{
+    if (!repeat_at || !keyboard_win)
+        return;
+    long now = uptime_ms();
+    if (now < repeat_at)
+        return;
+    push_key(repeat_key, 1);
+    int period = repeat_rate > 0 ? 1000 / repeat_rate : 0;
+    if (period < 1)
+        period = 1;
+    repeat_at += period;
+    if (repeat_at <= now)
+        repeat_at = now + period;
+}
+
+int gui_repeat_timeout(void)
+{
+    if (!repeat_at || !keyboard_win)
+        return -1;
+    long d = repeat_at - uptime_ms();
+    return d < 0 ? 0 : (int)d;
+}
 static const struct keyboard_listener keyboard_events = { on_keymap, on_kbd_enter, on_kbd_leave, on_key, on_modifiers, on_repeat };
 
 /* ---- text input ---- */
@@ -1221,6 +1289,7 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
         return -1;
     for (;;) {
         gui_flush();
+        repeat_tick();
         if (qhead != qtail) {
             *ev = queue[qhead];
             qhead = (qhead + 1) % QUEUE_MAX;
@@ -1234,10 +1303,16 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
             continue;
         if (timeout_ms == 0)
             return 0;
+        int wait = timeout_ms, rt = gui_repeat_timeout();
+        if (rt >= 0 && (wait < 0 || rt < wait))
+            wait = rt;
         struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
-        int r = poll(&pf, 1, timeout_ms);
-        if (r == 0)
+        int r = poll(&pf, 1, wait);
+        if (r == 0) {
+            if (wait != timeout_ms)
+                continue;           /* a repeat is due */
             return 0;
+        }
         if (r < 0 && errno != EINTR)
             return -1;
         if (wire_display_dispatch(display) < 0)

@@ -162,24 +162,6 @@ struct winsize {
     uint16_t ws_col;
 };
 
-/* /dev/mouse delivers fixed size events. */
-struct mouse_event {
-    int16_t dx, dy;         /* movement, dy positive downwards */
-    uint8_t buttons;        /* bit 0 left, 1 right, 2 middle */
-    int8_t dz;              /* wheel, positive towards the user (down) */
-    uint8_t flags;          /* MOUSE_ABSOLUTE: ax, ay hold the position, dx, dy are 0 */
-    uint8_t pad;
-    uint32_t time_ms;
-    uint16_t ax, ay;        /* absolute position in 0..MOUSE_ABS_MAX (tablets) */
-};
-#define MOUSE_ABSOLUTE 1
-#define MOUSE_ABS_MAX  32767
-
-/* Raw scancode mode for /dev/kbd and /dev/console: bytes from the
- * keyboard controller are delivered untranslated (press and release,
- * with the 0xe0 prefix), no echo, no line editing, no SIGINT. */
-#define KBD_SCANCODES 0x100
-
 /* uname */
 #define UTS_LEN 32
 struct utsname {

@@ -12,7 +12,7 @@
 #include <console.h>
 #include "gui_helpers.h"
 
-static const char *const pages[] = { "appearance", "display", "keyboard", "sound", "time", "filetypes", "launcher",
+static const char *const pages[] = { "appearance", "display", "keyboard", "mouse", "sound", "time", "filetypes", "launcher",
                                      "system" };
 
 static int windows;             /* toplevels created so far: the server cascades by 30 px each */

@@ -1,0 +1,6 @@
+x12: input AT Translated Set 2 keyboard: keyboard
+x12: input virtual tablet: absolute pointer
+x12: setting pointer_accel = 0
+x12: setting pointer_speed = 100
+gui_pointer: acceleration ok
+TEST PASS

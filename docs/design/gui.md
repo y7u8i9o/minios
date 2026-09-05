@@ -11,10 +11,9 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
 - Mouse (`drivers/ps2mouse.c`): the auxiliary 8042 port is enabled and
   the device set to streaming mode. Both keyboard and mouse bytes arrive
   through port 0x60; bit 5 of the status register tells them apart, and
-  both interrupt handlers drain the port accordingly. Three byte packets
-  become `struct mouse_event` records (dx, dy with y downwards, buttons,
-  time) in a ring read from `/dev/mouse`; reads block, return whole
-  events and are interruptible.
+  both interrupt handlers drain the port accordingly. Since M47 packets
+  are reported to the input core and read from `/dev/input/eventN`
+  (`input.md`); `/dev/mouse` no longer exists.
 - Framebuffer (`drivers/fbdev.c`): `/dev/fb0` reports the mode with
   `FBIOGET_INFO`, maps the framebuffer with `mmap` (write combining,
   `VM_DEVICE` regions whose frames are not reference counted, shared
@@ -30,8 +29,9 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
   `fb_screen` (`display.md`): the virtio-gpu driver replaces the Limine
   one at boot, `FBIO_FLUSH` pushes rectangles and `FBIO_SET_MODE` changes
   the mode at run time.
-- Keyboard: the `KBD_SCANCODES` flag delivers raw scancodes (press,
-  release and the `0xe0` prefix) so the server tracks modifiers itself.
+- Keyboard: since M47 the server reads key codes from the keyboard's
+  `/dev/input` node and grabs it (`input.md`); the `KBD_SCANCODES` mode
+  and `/dev/kbd` no longer exist.
 - IPC (`ipc/mqueue.c`, `ipc/shm.c`): named message queues carry fixed
   size messages (up to 256 bytes, 64 deep) with blocking send and receive;
   named shared memory objects are page sets that several address spaces

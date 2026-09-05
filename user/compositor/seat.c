@@ -8,12 +8,14 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <gui/keymap.h>
+#include <minios/input.h>
 #include "comp.h"
 
 int decor_hit(const struct csurface *s, int x, int y);
 
 static struct csurface *pointer_focus, *keyboard_focus, *press_focus, *cursor_surface;
 static int buttons, modifiers;
+static uint8_t mod_shift, mod_ctrl, mod_alt, mod_logo;   /* bit 0 left key, bit 1 right key */
 static uint32_t last_serial;
 static uint32_t cursor_serial, grab_serial;
 static struct client *cursor_client, *grab_client;
@@ -86,6 +88,11 @@ int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t 
 
 static uint32_t now_ms(void) { return (uint32_t)uptime_ms(); }
 
+/* Pointer coordinates relative to a surface, with the fraction of the
+ * logical pixel the cursor is at. */
+static int32_t fixed_x(const struct csurface *s) { return (int32_t)((cursor_fx - s->x) * 256.0); }
+static int32_t fixed_y(const struct csurface *s) { return (int32_t)((cursor_fy - s->y) * 256.0); }
+
 /* ---- resources ---- */
 
 static void h_set_cursor(struct wire_client *c, struct wire_resource *self, uint32_t serial_, struct wire_resource *surface, int32_t hx, int32_t hy)
@@ -154,8 +161,7 @@ static void h_get_pointer(struct wire_client *c, struct wire_resource *self, uin
         uint32_t n = serial_for(cl);
         cursor_serial = n;
         cursor_client = cl;
-        pointer_send_enter(r, n, pointer_focus->res, wire_fixed_from_int(cursor_x - pointer_focus->x),
-                           wire_fixed_from_int(cursor_y - pointer_focus->y));
+        pointer_send_enter(r, n, pointer_focus->res, fixed_x(pointer_focus), fixed_y(pointer_focus));
     }
 }
 
@@ -254,8 +260,7 @@ static void set_pointer_focus(struct csurface *s)
         uint32_t n = serial_for(s->client);
         cursor_serial = n;
         cursor_client = s->client;
-        pointer_send_enter(s->client->pointer, n, s->res, wire_fixed_from_int(cursor_x - s->x),
-                           wire_fixed_from_int(cursor_y - s->y));
+        pointer_send_enter(s->client->pointer, n, s->res, fixed_x(s), fixed_y(s));
         pointer_send_frame(s->client->pointer);
         comp_log("pointer enter surface %d", s->id);
     }
@@ -277,8 +282,7 @@ void seat_pointer_motion(void)
     }
     set_pointer_focus(target);
     if (target && target->client->pointer) {
-        pointer_send_motion(target->client->pointer, now_ms(), wire_fixed_from_int(cursor_x - target->x),
-                            wire_fixed_from_int(cursor_y - target->y));
+        pointer_send_motion(target->client->pointer, now_ms(), fixed_x(target), fixed_y(target));
         pointer_send_frame(target->client->pointer);
     }
 }
@@ -318,7 +322,7 @@ void seat_pointer_button(int button, int pressed)
             else if (target->role == ROLE_LAYER && target->layer->interactive)
                 seat_set_keyboard_focus(target);
             press_focus = target;
-            if (button == 1 && (modifiers & 4) && target->role == ROLE_TOPLEVEL) {
+            if (button == 1 && (modifiers & KEYMAP_MOD_ALT) && target->role == ROLE_TOPLEVEL) {
                 decor_press(target, 1);
                 press_focus = NULL;
                 return;
@@ -350,13 +354,13 @@ void seat_pointer_button(int button, int pressed)
     }
 }
 
-void seat_pointer_axis(int delta)
+void seat_pointer_axis(int value)
 {
     struct csurface *t = scene_surface_at(cursor_x, cursor_y);
     if (t && t->client->pointer) {
-        pointer_send_axis(t->client->pointer, now_ms(), 0, wire_fixed_from_int(delta * 15));
+        pointer_send_axis(t->client->pointer, now_ms(), 0, value);
         pointer_send_frame(t->client->pointer);
-        comp_log("axis %d in surface %d", delta, t->id);
+        comp_log("axis %d in surface %d", value / (15 * 256), t->id);
     }
 }
 
@@ -379,24 +383,44 @@ void seat_set_keyboard_focus(struct csurface *s)
     }
 }
 
+/* Modifier keys: both keys of a pair count, and the modifier stays
+ * down until both are released. */
+static uint8_t *modifier_of(uint32_t key, int *side)
+{
+    switch (key) {
+    case KEY_LEFTSHIFT:  *side = 0; return &mod_shift;
+    case KEY_RIGHTSHIFT: *side = 1; return &mod_shift;
+    case KEY_LEFTCTRL:   *side = 0; return &mod_ctrl;
+    case KEY_RIGHTCTRL:  *side = 1; return &mod_ctrl;
+    case KEY_LEFTALT:    *side = 0; return &mod_alt;
+    case KEY_RIGHTALT:   *side = 1; return &mod_alt;
+    case KEY_LEFTMETA:   *side = 0; return &mod_logo;
+    case KEY_RIGHTMETA:  *side = 1; return &mod_logo;
+    }
+    return NULL;
+}
+
 void seat_key(uint32_t key, int pressed)
 {
-    int bit = key == 0x2a || key == 0x36 ? 1 : key == 0x1d ? 2 : key == 0x38 ? 4 : 0;
-    if (bit) {
-        modifiers = pressed ? modifiers | bit : modifiers & ~bit;
+    int side;
+    uint8_t *mod = modifier_of(key, &side);
+    if (mod) {
+        *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
+        modifiers = (mod_shift ? KEYMAP_MOD_SHIFT : 0) | (mod_ctrl ? KEYMAP_MOD_CTRL : 0) |
+                    (mod_alt ? KEYMAP_MOD_ALT : 0) | (mod_logo ? KEYMAP_MOD_LOGO : 0);
         if (keyboard_focus && keyboard_focus->client->keyboard)
             keyboard_send_modifiers(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), (uint32_t)modifiers, 0, 0, 0);
         return;
     }
     if (pressed) {
-        if ((modifiers & 4) && key == 0x0f) { toplevel_cycle(); return; }
-        if ((modifiers & 4) && key == 0x3e) {
+        if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_TAB) { toplevel_cycle(); return; }
+        if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_F4) {
             struct toplevel *t = toplevel_focused();
             if (t)
                 toplevel_close(t);
             return;
         }
-        if (key == 0x01 && popup_grab_surface()) {
+        if (key == KEY_ESC && popup_grab_surface()) {
             popup_dismiss_all();
             return;
         }

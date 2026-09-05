@@ -312,7 +312,7 @@ static void key_message(struct widget *window, struct wmsg *m)
     struct event e = { .type = m->b ? EV_KEY_DOWN : EV_KEY_UP, .code = m->a, .ch = m->d, .mods = m->c };
     if (m->b)
         tip_hide(window);
-    if (m->b && m->a == 0x01 && ws->popup) {
+    if (m->b && m->a == KEY_ESC && ws->popup) {
         window_popup_close(window);
         return;
     }
@@ -323,7 +323,7 @@ static void key_message(struct widget *window, struct wmsg *m)
         return;
     if (!m->b)
         return;
-    if (m->a == 0x0f && !(m->c & (WMOD_CTRL | WMOD_ALT))) {     /* Tab */
+    if (m->a == KEY_TAB && !(m->c & (WMOD_CTRL | WMOD_ALT))) {
         widget_focus_next(window, m->c & WMOD_SHIFT);
         return;
     }

@@ -166,7 +166,11 @@ const struct theme *decor_theme_ptr(void);
 struct comp_settings {
     int frame_ms, desktop_color, repeat_rate, repeat_delay, decor_default, verbose;
     int display_mode;               /* DISPLAY_MODE_PACK of the current mode */
+    int pointer_speed;              /* -100..100, 0 is unscaled */
+    int pointer_accel;              /* POINTER_ACCEL_* */
 };
+#define POINTER_ACCEL_FLAT 0
+#define POINTER_ACCEL_ADAPTIVE 1
 /* display_mode packs width, height (up to 16383) and the pixel scale (1..4). */
 #define DISPLAY_MODE_PACK(w, h, s) (((s) << 28) | ((w) << 14) | (h))
 #define DISPLAY_MODE_W(m) (((m) >> 14) & 0x3fff)
@@ -181,8 +185,18 @@ void scene_stat_values(long *count, long *ms, long *max);   /* scene.c */
 /* main.c */
 extern int screen_w, screen_h;
 extern int screen_scale;                /* framebuffer pixels per logical pixel */
-extern int cursor_x, cursor_y;
+extern int cursor_x, cursor_y;              /* logical pixel under the cursor */
 void comp_log(const char *fmt, ...);
+/* input.c: the devices under /dev/input, and the cursor position in
+ * fractions of a logical pixel (cursor_x is its floor). */
+extern double cursor_fx, cursor_fy;
+int input_init(void);
+struct pollfd;
+int input_fill_pollfds(struct pollfd *pf, int max);
+void input_handle(const struct pollfd *pf, int n);
+void input_close(void);
+/* Place the cursor at the centre of a logical pixel. */
+void input_place_cursor(int x, int y);
 uint32_t comp_serial(void);
 /* surface.c */
 void surfaces_init(struct wire_server *srv);
@@ -259,7 +273,8 @@ void seat_init(struct wire_server *srv);
 int seat_load_keymap(const char *name);
 void seat_pointer_motion(void);
 void seat_pointer_button(int button, int pressed);
-void seat_pointer_axis(int delta);
+/* value: logical pixels in 24.8 fixed point, positive towards the user. */
+void seat_pointer_axis(int value);
 void seat_key(uint32_t key, int pressed);
 void seat_set_keyboard_focus(struct csurface *s);
 struct csurface *seat_keyboard_focus(void);

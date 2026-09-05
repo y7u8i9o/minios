@@ -7,6 +7,8 @@
 #include <drivers/timer.h>
 #include <mm/pmm.h>
 #include <drivers/ps2kbd.h>
+#include <input/input.h>
+#include <lib/printf.h>
 #include <fs/vfs.h>
 #include <sched/proc.h>
 #include <sched/user.h>
@@ -73,11 +75,18 @@ static void test_gpu_mode(void)
 }
 KTEST_DEFINE("gpu_mode", test_gpu_mode);
 
-/* Absolute events, buttons and the wheel reach /dev/mouse. */
+/* Absolute events, buttons and the wheel of the attached tablet reach
+ * its /dev/input node unchanged; the axis ranges come from the device. */
 static void test_input_tablet(void)
 {
+    struct input_dev *d = input_device_by_name("QEMU Virtio Tablet");
+    ktest_assert(d != NULL, "no virtio tablet device");
+    ktest_assert(d->abs[ABS_X].maximum == 32767 && d->abs[ABS_Y].maximum == 32767, "axis range %d, %d",
+                 d->abs[ABS_X].maximum, d->abs[ABS_Y].maximum);
+    char path[32];
+    ksnprintf(path, sizeof path, "/dev/input/event%u", d->index);
     struct file *f;
-    ktest_assert(vfs_open("/dev/mouse", O_RDONLY, 0, &f) == 0, "open /dev/mouse");
+    ktest_assert(vfs_open(path, O_RDONLY, 0, &f) == 0, "open %s", path);
     virtio_input_feed(EV_ABS, ABS_X, 16384);
     virtio_input_feed(EV_ABS, ABS_Y, 8192);
     virtio_input_feed(EV_KEY, BTN_LEFT, 1);
@@ -88,15 +97,17 @@ static void test_input_tablet(void)
     virtio_input_feed(EV_KEY, BTN_RIGHT, 1);
     virtio_input_feed(EV_SYN, SYN_REPORT, 0);
     virtio_input_feed(EV_SYN, SYN_REPORT, 0);      /* nothing changed: no event */
-    struct mouse_event ev[4];
+    struct input_event ev[16];
     long n = file_read(f, (char *)ev, sizeof ev);
-    ktest_assert(n == 3 * (long)sizeof ev[0], "read %ld bytes", n);
-    ktest_assert((ev[0].flags & MOUSE_ABSOLUTE) && ev[0].ax == 16384 && ev[0].ay == 8192 && ev[0].buttons == 1 &&
-                 ev[0].dx == 0 && ev[0].dy == 0, "event 0: flags %u %u,%u buttons %u", ev[0].flags, ev[0].ax,
-                 ev[0].ay, ev[0].buttons);
-    ktest_assert(ev[1].dz == 1 && ev[1].buttons == 1 && ev[1].ax == 16384, "event 1: dz %d buttons %u",
-                 ev[1].dz, ev[1].buttons);
-    ktest_assert(ev[2].buttons == 2 && ev[2].dz == 0, "event 2: buttons %u dz %d", ev[2].buttons, ev[2].dz);
+    ktest_assert(n == 9 * (long)sizeof ev[0], "read %ld bytes", n);
+    static const struct { uint16_t type, code; int32_t value; } want[9] = {
+        { EV_ABS, ABS_X, 16384 }, { EV_ABS, ABS_Y, 8192 }, { EV_KEY, BTN_LEFT, 1 }, { EV_SYN, SYN_REPORT, 0 },
+        { EV_REL, REL_WHEEL, -1 }, { EV_SYN, SYN_REPORT, 0 },
+        { EV_KEY, BTN_LEFT, 0 }, { EV_KEY, BTN_RIGHT, 1 }, { EV_SYN, SYN_REPORT, 0 },
+    };
+    for (int i = 0; i < 9; i++)
+        ktest_assert(ev[i].type == want[i].type && ev[i].code == want[i].code && ev[i].value == want[i].value,
+                     "event %d: %u %u %d", i, ev[i].type, ev[i].code, ev[i].value);
     file_put(f);
     kprintf("input_tablet: absolute events ok\n");
 }

@@ -214,21 +214,21 @@ static int on_resize(struct widget *w, void *args, void *arg)
 
 static int send_key(int code, int ch, int mods)
 {
-    if ((mods & WMOD_SHIFT) && (code == 0xc9 || code == 0xd1)) {
-        set_view(view + (code == 0xc9 ? rows / 2 : -rows / 2));
+    if ((mods & WMOD_SHIFT) && (code == KEY_PAGEUP || code == KEY_PAGEDOWN)) {
+        set_view(view + (code == KEY_PAGEUP ? rows / 2 : -rows / 2));
         return 1;
     }
     const char *seq = NULL;
     switch (code) {
-    case 0xc8: seq = "\033[A"; break;
-    case 0xd0: seq = "\033[B"; break;
-    case 0xcd: seq = "\033[C"; break;
-    case 0xcb: seq = "\033[D"; break;
-    case 0xc7: seq = "\033[H"; break;
-    case 0xcf: seq = "\033[F"; break;
-    case 0xd3: seq = "\033[3~"; break;
-    case 0xc9: seq = "\033[5~"; break;
-    case 0xd1: seq = "\033[6~"; break;
+    case KEY_UP: seq = "\033[A"; break;
+    case KEY_DOWN: seq = "\033[B"; break;
+    case KEY_RIGHT: seq = "\033[C"; break;
+    case KEY_LEFT: seq = "\033[D"; break;
+    case KEY_HOME: seq = "\033[H"; break;
+    case KEY_END: seq = "\033[F"; break;
+    case KEY_DELETE: seq = "\033[3~"; break;
+    case KEY_PAGEUP: seq = "\033[5~"; break;
+    case KEY_PAGEDOWN: seq = "\033[6~"; break;
     }
     set_view(0);
     if (seq) {

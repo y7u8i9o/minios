@@ -57,6 +57,9 @@ it, `stretch` scales both dimensions independently.
   desktop is the solid `desktop_color` until a wallpaper is chosen.
 - `wallpaper_mode`: `fill`, `center`, `tile` or `stretch`.
 - `desktop_color`: `0xRRGGBB`, the colour under and around the wallpaper.
+- `pointer_speed` (-100..100) and `pointer_accel` (flat or adaptive):
+  the compositor's pointer acceleration (`input.md`), forwarded like the
+  key repeat; the Mouse page of the settings program edits them.
 - `repeat_rate` and `repeat_delay`: keyboard repeat, forwarded to the
   compositor.
 - `display_mode`: `WxH` or `WxH@S`, forwarded as the compositor's packed

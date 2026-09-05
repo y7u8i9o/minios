@@ -5,6 +5,7 @@
 #include <tests/ktest.h>
 #include <drivers/ps2mouse.h>
 #include <drivers/ps2kbd.h>
+#include <drivers/virtio/virtio_input.h>
 #include <drivers/fbdev.h>
 #include <drivers/timer.h>
 #include <sched/user.h>
@@ -13,7 +14,8 @@
 
 static struct proc *panel_proc;
 
-/* M17 stage 1: mouse packets become events on /dev/mouse. */
+/* PS/2 mouse packets: buttons and the wheel (the drivers report them
+ * to the input core, the compositor reads /dev/input). */
 static inline void feed_packet_wheel(uint8_t flags, int dx, int dy, int dz)
 {
     ps2mouse_feed_byte((uint8_t)(0x08 | flags | (dx < 0 ? 0x10 : 0) | (dy < 0 ? 0x20 : 0)));
@@ -28,19 +30,25 @@ static inline void feed_packet(uint8_t flags, int dx, int dy)
     feed_packet_wheel(flags, dx, dy, 0);
 }
 
+static inline int logical_w(void);
+static inline int logical_h(void);
+
+/* Place the cursor at a logical position through the tablet (the
+ * attached virtio tablet, or the virtual one): absolute events are
+ * exact, relative motion of the PS/2 mouse is accelerated by the
+ * compositor. held is unused: the buttons pressed through PS/2 packets
+ * stay pressed across the move. */
 static inline void mouse_move_to(int *cx, int *cy, int x, int y, int held)
 {
-    while (*cx != x || *cy != y) {
-        int dx = x - *cx, dy = y - *cy;
-        if (dx > 100) dx = 100;
-        if (dx < -100) dx = -100;
-        if (dy > 100) dy = 100;
-        if (dy < -100) dy = -100;
-        /* The driver flips dy: positive packet dy means up. */
-        feed_packet((uint8_t)held, dx, -dy);
-        *cx += dx;
-        *cy += dy;
-    }
+    (void)held;
+    /* The compositor maps ax to floor(ax * width / 32768). */
+    int w = logical_w(), h = logical_h();
+    virtio_input_feed(EV_ABS, ABS_X, (uint32_t)((x * (VIRTIO_INPUT_ABS_MAX + 1) + w - 1) / w));
+    virtio_input_feed(EV_ABS, ABS_Y, (uint32_t)((y * (VIRTIO_INPUT_ABS_MAX + 1) + h - 1) / h));
+    virtio_input_feed(EV_SYN, SYN_REPORT, 0);
+    *cx = x;
+    *cy = y;
+    sleep_ms(30);
 }
 
 static inline void mouse_click(int buttons)

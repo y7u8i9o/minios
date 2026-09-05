@@ -265,17 +265,17 @@ static int view_event(struct widget *w, struct event *e)
     case EV_KEY_DOWN: {
         int idx = flat_index_of(v, w->value);
         switch (e->code) {
-        case 0xc8: select_flat(v, idx < 0 ? 0 : idx - 1, "selected"); return 1;
-        case 0xd0: select_flat(v, idx + 1, "selected"); return 1;
-        case 0xc9: select_flat(v, idx - rows < 0 ? 0 : idx - rows, "selected"); return 1;
-        case 0xd1: select_flat(v, idx + rows >= v->nflat ? v->nflat - 1 : idx + rows, "selected"); return 1;
-        case 0xc7: select_flat(v, 0, "selected"); return 1;
-        case 0xcf: select_flat(v, v->nflat - 1, "selected"); return 1;
-        case 0xcd:
+        case KEY_UP: select_flat(v, idx < 0 ? 0 : idx - 1, "selected"); return 1;
+        case KEY_DOWN: select_flat(v, idx + 1, "selected"); return 1;
+        case KEY_PAGEUP: select_flat(v, idx - rows < 0 ? 0 : idx - rows, "selected"); return 1;
+        case KEY_PAGEDOWN: select_flat(v, idx + rows >= v->nflat ? v->nflat - 1 : idx + rows, "selected"); return 1;
+        case KEY_HOME: select_flat(v, 0, "selected"); return 1;
+        case KEY_END: select_flat(v, v->nflat - 1, "selected"); return 1;
+        case KEY_RIGHT:
             if (!v->header && idx >= 0 && !is_expanded(v, w->value) && v->m->rows(v->m, w->value) > 0)
                 toggle_expand(v, w->value);
             return 1;
-        case 0xcb:
+        case KEY_LEFT:
             if (!v->header && idx >= 0 && is_expanded(v, w->value))
                 toggle_expand(v, w->value);
             return 1;

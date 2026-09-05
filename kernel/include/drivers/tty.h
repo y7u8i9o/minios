@@ -21,7 +21,7 @@ struct tty {
     struct spinlock lock;
     struct waitq rd_waitq;
     struct poll_source poll;
-    uint32_t lflag;                 /* ICANON, ECHO, ISIG, KBD_SCANCODES */
+    uint32_t lflag;                 /* ICANON, ECHO, ISIG */
     int fg_pgid;
     uint16_t cols, rows;
     char line[TTY_LINE_MAX];
@@ -54,7 +54,8 @@ void tty_hangup(struct tty *t);
 int tty_getc(struct tty *t);
 size_t tty_available(struct tty *t);
 
-/* The console terminal, fed by the keyboard driver, output to the console. */
+/* The console terminal, fed by the console keyboard handler of the input
+ * core, output to the console. */
 extern struct tty console_tty;
 /* Thread turning console control keys into signals. Needs the scheduler. */
 void tty_start_daemon(void);

@@ -1,0 +1,4 @@
+evtest: key code 0x1e
+evtest: repeat code 0x1e
+gui_repeat: key repeat ok
+TEST PASS

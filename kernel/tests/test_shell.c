@@ -2,6 +2,7 @@
 #include <sched/user.h>
 #include <sched/proc.h>
 #include <drivers/ps2kbd.h>
+#include <drivers/tty.h>
 #include <mm/pmm.h>
 #include <mm/swap.h>
 #include <console.h>
@@ -222,9 +223,9 @@ static void test_editor(void)
     ktest_assert(p != NULL, "cannot start /bin/edit");
     /* Cursor keys only exist in raw mode, so wait until the editor has
      * switched the terminal. */
-    for (int i = 0; i < 100 && (ps2kbd_get_lflag() & ICANON); i++)
+    for (int i = 0; i < 100 && (tty_get_lflag(&console_tty) & ICANON); i++)
         sleep_ms(50);
-    ktest_assert(!(ps2kbd_get_lflag() & ICANON), "editor did not enter raw mode");
+    ktest_assert(!(tty_get_lflag(&console_tty) & ICANON), "editor did not enter raw mode");
     ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0x48);   /* up */
     ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0xc8);
     ps2kbd_feed_scancode(0xe0); ps2kbd_feed_scancode(0x47);   /* home */
@@ -242,7 +243,7 @@ static void test_editor(void)
     ktest_assert(n > 0, "read");
     buf[n] = '\0';
     ktest_assert(strcmp(buf, "1hello\nworld\n") == 0, "content '%s'", buf);
-    ktest_assert(ps2kbd_get_lflag() == (ICANON | ECHO | ISIG), "terminal mode not restored");
+    ktest_assert(tty_get_lflag(&console_tty) == (ICANON | ECHO | ISIG), "terminal mode not restored");
     kprintf("edited file matches\n");
 }
 KTEST_DEFINE("editor", test_editor);

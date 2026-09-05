@@ -40,6 +40,10 @@
 # never grabs the mouse. 0 leaves only the PS/2 mouse.
 #QEMU_TABLET=1
 
+# A virtio keyboard delivers Linux key codes directly. 0 leaves only the
+# PS/2 keyboard.
+#QEMU_KEYBOARD=1
+
 # Framebuffer mode, WxH[xBPP][@SCALE], put on the kernel command line when
 # the image is built by `make run` or `tools/run.sh --build`. @2 draws every
 # pixel twice for high density displays: the desktop keeps its size and is

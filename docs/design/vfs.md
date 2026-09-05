@@ -77,7 +77,7 @@ between the same pair cannot deadlock.
 - `devfs` (`fs/devfs.c`) is a flat in memory directory of nodes registered
   by drivers with `devfs_register(name, mode, fops, priv)`. It provides
   `/dev/console` (keyboard line discipline for reading, console for
-  writing), `/dev/kbd`, `/dev/null` and `/dev/zero`. Block devices add
+  writing), `/dev/input/eventN` (M47), `/dev/null` and `/dev/zero`. Block devices add
   `/dev/vda` in M12.
 
 `kinit` mounts `initrd` on `/` and `devfs` on `/dev` (an empty directory

@@ -89,11 +89,11 @@ static int on_keys(struct widget *w, void *args, void *arg)
     struct sig_key *k = args;
     int down = arg != NULL;
     switch (k->code) {
-    case 0x11: lup = down; break;
-    case 0x1f: ldown = down; break;
-    case 0xc8: rup = down; break;
-    case 0xd0: rdown = down; break;
-    case 0x01: if (down) app_quit(app, 0); break;
+    case KEY_W: lup = down; break;
+    case KEY_S: ldown = down; break;
+    case KEY_UP: rup = down; break;
+    case KEY_DOWN: rdown = down; break;
+    case KEY_ESC: if (down) app_quit(app, 0); break;
     }
     return 1;
 }

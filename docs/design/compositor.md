@@ -10,7 +10,7 @@ window roles, and composition.
 ## Structure
 
 - `main.c`: the poll loop over the listening socket, the client
-  sockets, `/dev/mouse`, `/dev/kbd` (raw scancodes) and a `timerfd`
+  sockets, the `/dev/input` devices (`input.c`, `input.md`) and a `timerfd`
   firing every 16 ms; `x12: ...` log lines for the tests; `SIGTERM`
   stops it and prints frame statistics.
 - `surface.c`: the globals `compositor`, `shm` and `output`; pools map
@@ -107,7 +107,7 @@ framebuffer and the compositor's log.
   a dimmed window go nowhere. Test: `comp_hang` (a `comptest` client
   that hangs for six seconds, Wait, recovery, then one that hangs for
   good and is killed through the button).
-- Closing `/dev/kbd` leaves raw scancode mode (`kbddev_release` in
+- Closing the `/dev/input` descriptors drops their grabs (M47; before, closing `/dev/kbd` left raw scancode mode, `kbddev_release` in
   `kernel/fs/devfs.c`), so a compositor that dies leaves the console
   keyboard usable; `startgui` ends the session when any of X12, the
   panel or the program exits.

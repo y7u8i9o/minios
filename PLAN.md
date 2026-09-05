@@ -23,7 +23,7 @@
 | libc | Own minimal libc (`libc/`) |
 | User space | Shell, coreutils, text editor, scripting interpreter |
 | Console | Framebuffer text console with bitmap font, serial (COM1) mirror |
-| Input | PS/2 keyboard |
+| Input | Input core (`/dev/input/eventN`), PS/2 keyboard and mouse, virtio-input |
 | Timer | Local APIC timer calibrated against the PIT |
 | Networking | None |
 | Graphics | Text only initially. Windowing system as a late milestone |
@@ -53,7 +53,8 @@ minios/
     sync/                  spinlock.c, mutex.c, semaphore.c, condvar.c
     ipc/                   pipe.c, signal.c
     fs/                    vfs.c, mount.c, file.c, devfs.c, mfs/ (superblock.c, inode.c, dir.c, bitmap.c, journal.c), fat/ (super.c, table.c, dir.c, file.c), initrd.c
-    drivers/               serial.c, fbcon.c, font.c, ps2kbd.c, pci.c, virtio/ (virtio.c, virtio_blk.c), debugexit.c
+    input/                 core.c (devices, key state, repeat, /dev/input), keyboard.c (console keyboard)
+    drivers/               serial.c, fbcon.c, font.c, ps2kbd.c, ps2mouse.c, pci.c, virtio/ (virtio.c, virtio_blk.c, virtio_input.c), debugexit.c
     syscall/               table.c, sys_proc.c, sys_fs.c, sys_mm.c, sys_misc.c
     debug/                 panic.c, backtrace.c, symbols.c
   libc/
@@ -1361,6 +1362,35 @@ millisecond of hold time.
 Tests: `slab`, `pmm`, `vmm`, `swap`, `hugepages` unchanged, `prof_gui`
 with `kmalloc-*` and `pmm_lock` rows near zero for the steady state and
 `vmspace` holds under 100 microseconds.
+
+### M47. Input subsystem (completed 2026-09-05)
+
+1. An input core (`kernel/input/`): drivers register `struct input_dev`
+   with capabilities and report evdev style events (Linux key codes,
+   `REL_*`, `ABS_*`, `SYN_REPORT`) with microsecond timestamps. The core
+   keeps the keys down per device, drops presses of keys already down,
+   repeats the held key in software, delivers to `/dev/input/eventN`
+   readers (queues of 1024 events, `SYN_DROPPED` on overflow, `EVIOCGRAB`,
+   `EVIOCGCAPS`, `EVIOCGKEY`, `EVIOCGABS`, `EVIOCGREP`/`EVIOCSREP`) and
+   feeds ungrabbed keyboards to the console terminal through
+   `input/keyboard.c`, which counts both keys of every modifier pair.
+   `/dev/mouse`, `/dev/kbd` and `KBD_SCANCODES` are gone; devfs has one
+   level of directories.
+2. The PS/2 keyboard translates scancode set 1 to key codes; the PS/2
+   mouse and virtio-input (now including keyboards, attached by
+   `tools/run.sh` as `virtio-keyboard-pci`) report to the core.
+3. The compositor reads and grabs every `/dev/input` device; the cursor
+   is kept in fractions of a pixel with an acceleration profile
+   (`pointer_speed`, `pointer_accel` flat or adaptive, in the settings
+   program's Mouse page); motion and wheel values are fixed point.
+4. libgui repeats a held key from `repeat_info`; key codes in the
+   toolkit and the applications are the `KEY_*` names.
+
+Tests: `input`, `mouse`, `mouse_wheel`, `kbd`, `input_tablet`,
+`input_keyboard`, `gui_kbd_restore`, `gui_pointer`, `gui_repeat`,
+`gui_tools` (no repeat for a released key), `comp_seat` and the GUI
+cases, which place the cursor through the virtual tablet.
+`docs/design/input.md`.
 
 ## Settings rework (completed 2026-09-04)
 

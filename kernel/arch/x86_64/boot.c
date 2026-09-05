@@ -34,7 +34,8 @@
 #include <drivers/ps2kbd.h>
 #include <drivers/pci.h>
 #include <drivers/ps2mouse.h>
-#include <drivers/mouse.h>
+#include <input/input.h>
+#include <drivers/tty.h>
 #include <drivers/virtio/virtio_gpu.h>
 #include <drivers/virtio/virtio_input.h>
 #include <drivers/fbdev.h>
@@ -198,7 +199,8 @@ static void kinit(void *arg)
     virtio_gpu_init();
     virtio_input_init();
     swap_start_daemon();
-    ps2kbd_start_ttyd();
+    tty_start_daemon();
+    input_start_daemon();
 #if CONFIG_TESTS
     ktest_run_selected();
 #endif
@@ -256,8 +258,9 @@ __noreturn void kmain(void)
     tlb_init();
     timer_init();
     rtc_init();
+    console_tty_init();
+    input_init();
     ps2kbd_init();
-    mouse_init();
     ps2mouse_init();
     fbdev_init();
     pty_init();
