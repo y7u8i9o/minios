@@ -9,6 +9,11 @@
 #include <locale.h>
 #include <wchar.h>
 #include <regex.h>
+#include <fnmatch.h>
+#include <glob.h>
+#include <unistd.h>
+
+static void test_terminal_libc(void);
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("libcexttest: FAIL " __VA_ARGS__); printf("\n"); } } while (0)
@@ -158,6 +163,42 @@ int main(void)
     test_wchar();
     test_regex();
     test_time_additions();
+    test_terminal_libc();
     printf("libcexttest: %d failures\n", failures);
     return failures ? 1 : 0;
+}
+
+static void test_terminal_libc(void)
+{
+    CHECK(fnmatch("a*[0-9]?", "abc7x", 0) == 0, "fnmatch range");
+    CHECK(fnmatch("[[:alpha:]]", "Z", 0) == 0, "fnmatch class");
+    CHECK(fnmatch("*", ".hidden", FNM_PERIOD) == FNM_NOMATCH, "hidden match");
+    CHECK(fnmatch("a/*", "a/b/c", FNM_PATHNAME) == FNM_NOMATCH, "pathname match");
+    CHECK(fnmatch("a\\*", "a*", 0) == 0, "escaped wildcard");
+    CHECK(fnmatch("[!a-c]", "z", 0) == 0, "negated range");
+    glob_t g = {0};
+    CHECK(glob("/bin/sh", 0, NULL, &g) == 0 && g.gl_pathc == 1 &&
+          !strcmp(g.gl_pathv[0], "/bin/sh"), "glob literal");
+    globfree(&g);
+    CHECK(glob("/bin/*", 0, NULL, &g) == 0 && g.gl_pathc > 10, "glob directory");
+    for (size_t i = 1; i < g.gl_pathc; i++)
+        CHECK(strcmp(g.gl_pathv[i-1], g.gl_pathv[i]) <= 0, "glob sort");
+    globfree(&g);
+    CHECK(glob("/no-such-terminal-file*", GLOB_NOCHECK, NULL, &g) == 0 &&
+          g.gl_pathc == 1, "glob no match fallback");
+    globfree(&g);
+    CHECK(wcwidth(L'A') == 1 && wcwidth(0x301) == 0 && wcwidth(0x4e00) == 2 &&
+          wcwidth('\n') == -1 && wcswidth(L"A\u0301\u4e00", 3) == 3, "display widths");
+    FILE *f = fopen("/getline-test", "w");
+    CHECK(f != NULL, "getline fixture");
+    if (!f) return;
+    for (int i = 0; i < 300; i++) fputc('x', f);
+    fputs("\nlast", f); fclose(f);
+    f = fopen("/getline-test", "r");
+    if (!f) { CHECK(0, "getline reopen"); return; }
+    char *line = NULL; size_t capacity = 0;
+    CHECK(getline(&line, &capacity, f) == 301 && line[300] == '\n', "getline growth");
+    CHECK(getline(&line, &capacity, f) == 4 && !strcmp(line, "last"), "getline final line");
+    CHECK(getline(&line, &capacity, f) == -1 && feof(f), "getline EOF");
+    free(line); fclose(f); unlink("/getline-test");
 }

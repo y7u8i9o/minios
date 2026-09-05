@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include "../thread/tcb.h"
 
 typedef void (*emit_fn)(char c, void *arg);
@@ -202,6 +203,37 @@ static int fill(FILE *f)
     f->rpos = 0;
     f->rlen = (size_t)n;
     return 0;
+}
+
+ssize_t getdelim(char **line, size_t *capacity, int delimiter, FILE *f)
+{
+    if (!line || !capacity || !f) { errno = EINVAL; return -1; }
+    LOCK(f);
+    size_t used = 0;
+    for (;;) {
+        if (!*line || used + 1 >= *capacity) {
+            size_t size = *line && *capacity ? *capacity * 2 : 128;
+            if (size <= used + 1 || size > (size_t)PTRDIFF_MAX) {
+                errno = EOVERFLOW; UNLOCK(f); return -1;
+            }
+            char *new_line = realloc(*line, size);
+            if (!new_line) { UNLOCK(f); return -1; }
+            *line = new_line; *capacity = size;
+        }
+        int c = fgetc(f);
+        if (c == EOF) break;
+        (*line)[used++] = (char)c;
+        if ((unsigned char)c == (unsigned char)delimiter) break;
+    }
+    (*line)[used] = 0;
+    ssize_t result = used ? (ssize_t)used : -1;
+    UNLOCK(f);
+    return result;
+}
+
+ssize_t getline(char **line, size_t *capacity, FILE *f)
+{
+    return getdelim(line, capacity, '\n', f);
 }
 
 int fgetc(FILE *f)

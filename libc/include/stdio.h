@@ -31,6 +31,8 @@ int getchar(void);
 int fgetc(FILE *f);
 int getc(FILE *f);
 char *fgets(char *buf, int size, FILE *f);
+ssize_t getdelim(char **line, size_t *capacity, int delimiter, FILE *f);
+ssize_t getline(char **line, size_t *capacity, FILE *f);
 size_t fread(void *p, size_t size, size_t n, FILE *f);
 int fflush(FILE *f);
 int ferror(FILE *f);
