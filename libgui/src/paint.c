@@ -289,21 +289,25 @@ void painter_mask(struct painter *p, int x, int y, const uint8_t *mask, int w, i
     }
 }
 
+/* An image of image_lw by image_lh logical pixels: copied one to one
+ * when its scale is the painter's, resampled by nearest pixel
+ * otherwise (a PNG icon is doubled on a scale 2 output). */
 void painter_image(struct painter *p, int x, int y, const struct image *img)
 {
-    int dx, dy, s = p->scale;
+    int dx, dy, s = p->scale, is = img->scale > 1 ? img->scale : 1;
+    int lw = image_lw(img), lh = image_lh(img);
     struct surface v = view(p, &dx, &dy);
-    for (int j = 0; j < img->h * s; j++) {
+    for (int j = 0; j < lh * s; j++) {
         int py = y * s + dy + j;
         if (py < 0 || py >= v.height)
             continue;
         uint32_t *row = v.pixels + (size_t)py * v.stride;
-        const uint32_t *from = img->pixels + (size_t)(j / s) * img->w;
-        for (int i = 0; i < img->w * s; i++) {
+        const uint32_t *from = img->pixels + (size_t)(j * is / s) * img->w;
+        for (int i = 0; i < lw * s; i++) {
             int px = x * s + dx + i;
             if (px < 0 || px >= v.width)
                 continue;
-            uint32_t c = from[i / s];
+            uint32_t c = from[i * is / s];
             unsigned a = c >> 24;
             if (!a)
                 continue;

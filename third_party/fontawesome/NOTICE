@@ -1,0 +1,9 @@
+Font Awesome Free 6 (https://fontawesome.com), by Fonticons, Inc.
+
+The SVG icons in svgs/ are from the Free set, solid style, downloaded
+by tools/fetch_icons.sh from the 6.x branch of
+https://github.com/FortAwesome/Font-Awesome and renamed to the icon
+names minios uses (see the table in the script). Icons: CC BY 4.0
+License (https://creativecommons.org/licenses/by/4.0/); the full
+license text of the package is in LICENSE.txt. Attribution: "Font
+Awesome Free by Fonticons, Inc., CC BY 4.0". The files are unmodified.

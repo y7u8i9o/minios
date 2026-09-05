@@ -128,6 +128,7 @@ struct image *image_decode(const uint8_t *data, size_t len)
     }
     img->w = w;
     img->h = h;
+    img->scale = 1;
     for (int y = 0; y < h; y++) {
         const uint8_t *row = raw + (size_t)y * (stride + 1) + 1;
         for (int x = 0; x < w; x++) {

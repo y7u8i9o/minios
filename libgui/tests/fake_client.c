@@ -131,3 +131,6 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
 }
 
 int gui_event_fd(void) { return -1; }
+
+/* No key repeat in the fake client. */
+int gui_repeat_timeout(void) { return 0; }

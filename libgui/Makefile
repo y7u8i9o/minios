@@ -15,6 +15,7 @@ HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(
 check: $(OUT)/font.c
 	@mkdir -p $(OUT)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -include tests/host_compat.h -Iinclude -I../libfont/include -Itests \
+	    -idirafter ../kernel/include \
 	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c
 	$(OUT)/host/test_framework
 

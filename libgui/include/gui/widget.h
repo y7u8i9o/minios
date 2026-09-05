@@ -304,5 +304,8 @@ void editor_set_modified(struct widget *w, int modified);
 void highlight_c(const char *line, int len, unsigned char *classes, int *state, void *arg);
 void highlight_sh(const char *line, int len, unsigned char *classes, int *state, void *arg);
 
-/* Icons from /usr/share/icons/<name>.png, cached per process. */
+/* Icons from /usr/share/icons: <name>.svg rendered 16 logical pixels
+ * high at the output's scale, else <name>.png; cached per process. */
 const struct image *icon_get(const char *name);
+/* The SVG icon rendered px logical pixels high; NULL without an SVG. */
+const struct image *icon_get_size(const char *name, int px);

@@ -63,7 +63,7 @@ static void dropdown_paint(struct widget *w, struct painter *p)
                 painter_fill(p, 1, y, w->w - 2, ih, t->color[TC_HIGHLIGHT]);
             int x = MENU_PAD;
             if (it->icon) {
-                painter_image(p, 4, y + (ih - it->icon->h) / 2, it->icon);
+                painter_image(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon);
                 x = 24;
             }
             painter_text(p, x, y + ITEM_H_EXTRA / 2, widget_text(it), t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);

@@ -1496,3 +1496,13 @@ The display server logs to `/var/log/x12.log` instead of the serial
 line; `-s` mirrors the log to standard output for the boot tests, and
 the per frame, per key and per commit lines need the verbose setting
 (`-v`). Documented in `docs/design/compositor.md`.
+
+## SVG icons (completed 2026-09-05)
+
+libgui renders a subset of SVG (`libgui/src/svg.c`: view box, paths
+with fills, both fill rules, curves and arcs, antialiased) into images
+that carry their device scale; `icon_get` prefers `<name>.svg` in
+`/usr/share/icons` and keeps the PNG fallback. The icons are Font
+Awesome Free (solid), downloaded by `tools/fetch_icons.sh` into
+`third_party/fontawesome/`. Documented in `docs/design/icons.md`,
+tested by `libgui/tests/test_svg.c`.

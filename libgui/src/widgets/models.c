@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
+long uptime_ms(void);
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 #define INDENT 16
@@ -162,7 +163,7 @@ static void view_paint(struct widget *w, struct painter *p)
                 painter_push(p, x, y, v->widths[c] - 1, lh);
                 int tx = 4;
                 if (c == 0 && icon) {
-                    painter_image(p, 4, (lh - icon->h) / 2, icon);
+                    painter_image(p, 4, (lh - image_lh(icon)) / 2, icon);
                     tx += ICON_W;
                 }
                 painter_text(p, tx, ty - y, s ? s : "", fg);
@@ -172,7 +173,7 @@ static void view_paint(struct widget *w, struct painter *p)
         } else {
             int x = 4 + v->depth[idx] * INDENT;
             if (icon) {
-                painter_image(p, x + INDENT, y + (lh - icon->h) / 2, icon);
+                painter_image(p, x + INDENT, y + (lh - image_lh(icon)) / 2, icon);
                 x += ICON_W;
             }
             if (v->m->rows(v->m, row) > 0) {

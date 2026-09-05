@@ -86,12 +86,16 @@ static const struct image *icon_big(const char *name)
     for (int i = 0; i < 8; i++)
         if (icons[i].name && strcmp(icons[i].name, name) == 0)
             return icons[i].img;
+    const struct image *svg = icon_get_size(name, 32);
+    if (svg)
+        return svg;
     const struct image *src = icon_get(name);
     if (!src)
         return NULL;
     struct image *big = malloc(sizeof *big);
     if (!big)
         return NULL;
+    big->scale = 1;
     big->w = src->w * 2;
     big->h = src->h * 2;
     big->pixels = malloc((size_t)big->w * big->h * 4);

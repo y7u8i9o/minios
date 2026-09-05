@@ -138,7 +138,8 @@ grey, RGB, palette, grey with alpha and RGBA samples at 8 bits to
 reads a file. `painter_image` blends with straight alpha.
 `tools/genicons/genicons.py` writes PNG files without external
 libraries: the 16x16 icons in `user/share/icons/` (installed under
-`/usr/share/icons/`, cached per process by `icon_get`) and the test
+`/usr/share/icons/`, cached per process by `icon_get`, which prefers
+an SVG file of the same name; see `icons.md`) and the test
 images in `libgui/tests/data/`, whose rows cycle through all filter
 types and whose pixels follow formulas the tests recompute.
 

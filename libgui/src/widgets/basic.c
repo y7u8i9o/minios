@@ -28,10 +28,10 @@ static void text_measure(struct widget *w, struct size_hint *h)
     caption(w, buf, sizeof buf, &mn);
     h->pref_w = (buf[0] ? gfx_text_width_font(t->font, buf, -1) : 0) + 2 * theme_px(t, TM_PADDING);
     if (w->icon)
-        h->pref_w += w->icon->w + (buf[0] ? 4 : 0);
+        h->pref_w += image_lw(w->icon) + (buf[0] ? 4 : 0);
     h->pref_h = theme_px(t, TM_CONTROL_H);
-    if (w->icon && w->icon->h + 8 > h->pref_h)
-        h->pref_h = w->icon->h + 8;
+    if (w->icon && image_lh(w->icon) + 8 > h->pref_h)
+        h->pref_h = image_lh(w->icon) + 8;
     h->min_w = h->pref_w;
     h->min_h = t->font->height;
 }
@@ -61,8 +61,8 @@ static void label_paint(struct widget *w, struct painter *p)
     painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
     int x = 0;
     if (w->icon) {
-        painter_image(p, 0, (w->h - w->icon->h) / 2, w->icon);
-        x = w->icon->w + 4;
+        painter_image(p, 0, (w->h - image_lh(w->icon)) / 2, w->icon);
+        x = image_lw(w->icon) + 4;
     }
     int y = (w->h - painter_text_height(p)) / 2;
     draw_caption(w, p, x, y, p->theme->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
@@ -73,11 +73,11 @@ static void label_measure(struct widget *w, struct size_hint *h)
     text_measure(w, h);
     h->pref_w -= 2 * theme_px(widget_theme(w), TM_PADDING);
     if (w->icon)
-        h->pref_w += w->icon->w + 4;
+        h->pref_w += image_lw(w->icon) + 4;
     h->min_w = h->pref_w;
     h->pref_h = widget_theme(w)->font->height + 2;
-    if (w->icon && w->icon->h > h->pref_h)
-        h->pref_h = w->icon->h;
+    if (w->icon && image_lh(w->icon) > h->pref_h)
+        h->pref_h = image_lh(w->icon);
 }
 
 const struct widget_class label_class = { "label", sizeof(struct widget), label_measure, NULL, label_paint, NULL, NULL };
@@ -103,10 +103,10 @@ static void button_paint(struct widget *w, struct painter *p)
     int mn;
     caption(w, buf, sizeof buf, &mn);
     int tw = buf[0] ? painter_text_width(p, buf, -1) : 0;
-    int iw = w->icon ? w->icon->w + (buf[0] ? 4 : 0) : 0;
+    int iw = w->icon ? image_lw(w->icon) + (buf[0] ? 4 : 0) : 0;
     int x = (w->w - tw - iw) / 2;
     if (w->icon) {
-        painter_image(p, x, (w->h - w->icon->h) / 2, w->icon);
+        painter_image(p, x, (w->h - image_lh(w->icon)) / 2, w->icon);
         x += iw;
     }
     if (buf[0])

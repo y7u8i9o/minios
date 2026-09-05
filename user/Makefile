@@ -36,6 +36,7 @@ $(ROOT)/etc/%: etc/%
 share-tree:
 	@mkdir -p $(ROOT)/usr/share
 	@cp -Rp share/. $(ROOT)/usr/share/
+	@if [ -d ../third_party/fontawesome/svgs ]; then cp ../third_party/fontawesome/svgs/*.svg $(ROOT)/usr/share/icons/; fi
 
 $(ROOT)/home/%: home/%
 	@mkdir -p $(dir $@)
