@@ -25,23 +25,23 @@ tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT)
 
 $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
 $(FSCK): tools/fsck/fsck.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
 $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
 $(LIMINE): third_party/limine/limine.c
 	@mkdir -p $(dir $@)
-	$(HOSTCC) -O2 -std=c99 -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -o $@ $<
 
 $(GENSYMS): tools/gensyms/gensyms.c
 	@mkdir -p $(dir $@)
-	$(HOSTCC) -O2 -std=c99 -Wall -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
 
 kernel: $(GENSYMS)
 	$(MAKE) -C kernel

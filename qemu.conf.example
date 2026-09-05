@@ -19,6 +19,8 @@
 # Machine.
 #QEMU_MEM=1G
 #QEMU_SMP=2
+# QEMU_ACCEL=kvm opts into hardware acceleration on Linux. The default is
+# HVF on macOS when available and TCG elsewhere.
 #QEMU_ACCEL=tcg
 
 # -display and -serial arguments.

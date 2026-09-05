@@ -111,10 +111,15 @@ if [ -f "$CASE/fat" ]; then
         NFAT=$((NFAT + 1))
     done < "$CASE/fat"
 fi
-# The hypervisor framework when this QEMU offers it (ACCEL=tcg forces
-# binary translation).
+# Use HVF on macOS when offered. Tests use TCG elsewhere for deterministic
+# behavior; ACCEL can explicitly select another accelerator.
 if [ -z "$ACCEL" ]; then
-    if "$QEMU" -accel help 2>/dev/null | grep -q '^hvf$'; then ACCEL=hvf; else ACCEL=tcg; fi
+    ACCELS="$("$QEMU" -accel help 2>/dev/null)"
+    if [ "$(uname -s)" = Darwin ] && echo "$ACCELS" | grep -q '^hvf$'; then
+        ACCEL=hvf
+    else
+        ACCEL=tcg
+    fi
 fi
 "$QEMU" -M q35 -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
     -serial "file:$SERIAL" \

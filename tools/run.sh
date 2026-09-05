@@ -21,8 +21,9 @@
 #       --no-sound         QEMU_SOUND=0      do not attach virtio-snd at all
 #   -m, --mem SIZE         QEMU_MEM          guest memory (default 512M)
 #   -s, --smp N            QEMU_SMP          number of CPUs (default 4)
-#       --accel NAME       QEMU_ACCEL        hvf, tcg, kvm (default: hvf or
-#                                            kvm when offered, else tcg)
+#       --accel NAME       QEMU_ACCEL        hvf, tcg, kvm (default: hvf on
+#                                            macOS when offered, else tcg;
+#                                            select kvm explicitly on Linux)
 #   -d, --display SPEC     QEMU_DISPLAY      -display argument (default: the
 #                                            QEMU default window)
 #   -f, --full-screen      QEMU_FULLSCREEN=1 full screen, guest scaled to fit
@@ -190,10 +191,8 @@ command -v "$QEMU" >/dev/null 2>&1 || [ -x "$QEMU" ] || die "QEMU not found: $QE
 
 if [ -z "$QEMU_ACCEL" ]; then
     accels="$("$QEMU" -accel help 2>/dev/null)"
-    if echo "$accels" | grep -q '^hvf$'; then
+    if [ "$(uname -s)" = Darwin ] && echo "$accels" | grep -q '^hvf$'; then
         QEMU_ACCEL=hvf
-    elif echo "$accels" | grep -q '^kvm$' && [ -w /dev/kvm ]; then
-        QEMU_ACCEL=kvm
     else
         QEMU_ACCEL=tcg
     fi

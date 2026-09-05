@@ -1,12 +1,24 @@
 # Toolchain and global build settings shared by every Makefile.
 
-CROSS   ?= x86_64-elf-
+# A native x86_64 Linux GCC/binutils toolchain produces the same freestanding
+# ELF binaries as the prefixed cross toolchain.  macOS still needs cross tools
+# because its native compiler and linker target Mach-O.
+HOST_OS   := $(shell uname -s)
+HOST_ARCH := $(shell uname -m)
+ifeq ($(origin CROSS),undefined)
+  ifeq ($(HOST_OS)-$(HOST_ARCH),Linux-x86_64)
+    CROSS :=
+  else
+    CROSS := x86_64-elf-
+  endif
+endif
 CC      := $(CROSS)gcc
 LD      := $(CROSS)ld
 NM      := $(CROSS)nm
 OBJCOPY := $(CROSS)objcopy
 GDB     := $(CROSS)gdb
 HOSTCC  ?= cc
+HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 QEMU    ?= qemu-system-x86_64
 XORRISO ?= xorriso
 

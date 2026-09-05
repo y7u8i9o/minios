@@ -2,9 +2,14 @@
 
 ## Toolchain
 
-`toolchain.mk` is included by every Makefile. It selects the `x86_64-elf-`
-cross tools, the host compiler for the helper programs under `tools/`, and
-QEMU. The kernel is compiled with:
+`toolchain.mk` is included by every Makefile. On x86_64 Linux it uses the
+native GCC and GNU binutils, which can emit the freestanding x86_64 ELF files
+directly. Other hosts default to the `x86_64-elf-` cross tools. Set `CROSS`
+explicitly to override either choice (for example, `CROSS=x86_64-elf-`). It
+also selects the host compiler for the helper programs under `tools/`, and
+QEMU. Host utilities request POSIX.1-2008 declarations so they compile under
+the strict C modes used by both glibc and macOS libc. The kernel is compiled
+with:
 
     -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie
     -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387
@@ -48,9 +53,9 @@ to draw every pixel twice, see "High density displays" below.
 swap virtio-blk devices, a virtio-snd device with an audio backend and the
 ISO. Settings come from four layers, each overriding the previous one:
 
-1. built-in defaults: 512M, 4 CPUs, HVF or KVM when the QEMU binary offers
-   it and TCG otherwise, Core Audio on macOS and the silent `none` backend
-   elsewhere;
+1. built-in defaults: 512M, 4 CPUs, HVF on macOS when the QEMU binary offers
+   it and TCG elsewhere, Core Audio on macOS and the silent `none` backend
+   elsewhere (`QEMU_ACCEL=kvm` opts into KVM on Linux);
 2. `qemu.conf` in the repository root, a shell fragment that is ignored by
    git (`qemu.conf.example` lists every setting);
 3. `QEMU_*` environment variables, also accepted on the make command line,
@@ -141,5 +146,6 @@ must match the serial log), optionally `reject` and `timeout`. Any line
 containing `TEST FAIL` fails the case. `tests/run_all.sh` runs every case and
 prints a summary. Test images and logs are written to `build/tests/<case>/`.
 
-Tests run under TCG for determinism. `make run` uses HVF when the installed
-QEMU offers it and TCG otherwise (`QEMU_ACCEL`, see Running above).
+Tests use HVF on macOS when the installed QEMU offers it and TCG elsewhere.
+Set `ACCEL` to override that choice. `make run` follows the same default and
+uses `QEMU_ACCEL` for an override (see Running above).

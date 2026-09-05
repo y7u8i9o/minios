@@ -24,7 +24,7 @@ $(LIB): $(OBJS)
 # Host unit tests over a socketpair.
 check:
 	@mkdir -p $(OUT)/host
-	$(HOSTCC) -std=c17 -O1 -g -Wall -DMINIOS_HOST -Iinclude -Igenerated -Itests \
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -Iinclude -Igenerated -Itests \
 	    -o $(OUT)/host/test_wire $(SRCS) tests/test_wire.c
 	$(OUT)/host/test_wire
 
