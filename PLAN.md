@@ -1489,3 +1489,10 @@ Releases follow semantic versioning in `VERSION` (0.1.0) instead of the
 milestone numbers; `tools/version.sh` numbers every kernel link in
 `BUILDNUM` and records the commit and date, reported by `uname`, the
 boot log and the System page. Documented in `docs/design/build.md`.
+
+## X12 log file (completed 2026-09-05)
+
+The display server logs to `/var/log/x12.log` instead of the serial
+line; `-s` mirrors the log to standard output for the boot tests, and
+the per frame, per key and per commit lines need the verbose setting
+(`-v`). Documented in `docs/design/compositor.md`.

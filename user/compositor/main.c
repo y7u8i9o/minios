@@ -2,6 +2,7 @@
  * 60 Hz frame clock in one poll loop. Every notable event is logged as
  * "x12: ..." for the tests. */
 #include <stdio.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -25,15 +26,56 @@ static uint32_t serial = 1;
 static int frame_fd;
 int cursor_x, cursor_y;
 
+/* The log goes to /var/log/x12.log (truncated at start); -s mirrors it
+ * to standard output, which the boot tests read on the serial line, and
+ * the file's absence (a read-only root) falls back to standard output.
+ * comp_debug lines (per frame, per key, per commit) need the verbose
+ * setting (-v or the debug interface). */
+static FILE *logfile;
+static int log_serial;
+
+static void vlog(const char *fmt, va_list ap)
+{
+    if (logfile) {
+        va_list copy;
+        va_copy(copy, ap);
+        fprintf(logfile, "x12: ");
+        vfprintf(logfile, fmt, copy);
+        fputc('\n', logfile);
+        fflush(logfile);
+        va_end(copy);
+    }
+    if (log_serial || !logfile) {
+        printf("x12: ");
+        vprintf(fmt, ap);
+        printf("\n");
+        fflush(stdout);
+    }
+}
+
 void comp_log(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    printf("x12: ");
-    vprintf(fmt, ap);
-    printf("\n");
+    vlog(fmt, ap);
     va_end(ap);
-    fflush(stdout);
+}
+
+void comp_debug(const char *fmt, ...)
+{
+    if (!settings.verbose)
+        return;
+    va_list ap;
+    va_start(ap, fmt);
+    vlog(fmt, ap);
+    va_end(ap);
+}
+
+static void log_open(void)
+{
+    mkdir("/var", 0755);
+    mkdir("/var/log", 0755);
+    logfile = fopen("/var/log/x12.log", "w");
 }
 
 uint32_t comp_serial(void) { return serial++; }
@@ -75,8 +117,7 @@ static void frame(void)
     if (presented) {
         scene_compose();
         frames_since_report++;
-        if (settings.verbose)
-            comp_log("frame");
+        comp_debug("frame");
     }
     /* Completion means the back buffer has actually been copied to the
      * framebuffer.  Idle timer ticks are not presentations. */
@@ -88,7 +129,7 @@ static void frame(void)
     long now = uptime_ms();
     if (now >= report_at) {
         if (frames_since_report)
-            comp_log("%ld frames in the last %ld s", frames_since_report, (now - (report_at - 10000)) / 1000);
+            comp_debug("%ld frames in the last %ld s", frames_since_report, (now - (report_at - 10000)) / 1000);
         frames_since_report = 0;
         report_at = now + 10000;
     }
@@ -110,8 +151,20 @@ int comp_set_mode(int width, int height, int scale)
     return 0;
 }
 
+/* x12 [-s] [-v] [socket name] */
 int main(int argc, char **argv)
 {
+    const char *name = "display";
+    int verbose = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-s") == 0)
+            log_serial = 1;
+        else if (strcmp(argv[i], "-v") == 0)
+            verbose = 1;
+        else
+            name = argv[i];
+    }
+    log_open();
     signal(SIGTERM, on_term);
     signal(SIGINT, on_term);
     signal(SIGPIPE, SIG_IGN);           /* a dead client must not kill the compositor */
@@ -123,7 +176,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "x12: no keyboard and pointer under /dev/input\n");
         return 1;
     }
-    srv = wire_server_create(argc > 1 ? argv[1] : "display");
+    srv = wire_server_create(name);
     if (!srv) {
         perror("x12: listen");
         return 1;
@@ -135,6 +188,8 @@ int main(int argc, char **argv)
     data_init(srv);
     text_init(srv);
     debug_init(srv);
+    if (verbose)
+        settings.verbose = 1;
     scene_init();
     decor_init();
     input_place_cursor(screen_w / 2, screen_h / 2);
@@ -196,5 +251,7 @@ int main(int argc, char **argv)
     input_close();
     backend_release();
     comp_log("stopped");
+    if (logfile)
+        fclose(logfile);
     return 0;
 }

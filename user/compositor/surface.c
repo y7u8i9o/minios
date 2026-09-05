@@ -334,7 +334,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         if (prev && prev != b && prev->res) {
             prev->busy = 0;
             buffer_send_release(prev->res);
-            comp_log("buffer released");
+            comp_debug("buffer released");
         }
         s->current.buffer = b;
         if (b) {
@@ -379,7 +379,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     s->pending.ncallbacks = 0;
     if (s->nframe_cbs && s->mapped)
         scene_damage(surface_rect(s));
-    comp_log("surface %d committed", s->id);
+    comp_debug("surface %d committed", s->id);
 }
 
 static void h_surface_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }

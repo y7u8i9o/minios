@@ -99,7 +99,7 @@ static inline void alt_key(uint8_t code)
 /* The compositor and the panel; returns the compositor. */
 static inline struct proc *start_server(void)
 {
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(600);

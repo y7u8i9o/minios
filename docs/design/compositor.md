@@ -7,12 +7,27 @@ window server's core (`wsrv` remains as historical code until M26).
 The server owns the framebuffer, input devices, surface lifecycle,
 window roles, and composition.
 
+## Log
+
+`comp_log` writes `x12: ...` lines to `/var/log/x12.log`, truncated
+when the server starts (the directories are created if missing; when
+the file cannot be opened, on a read-only root, the lines go to
+standard output instead). The option `-s` mirrors the log to standard
+output, which reaches the serial line; the boot tests start the server
+with it and match the lines. Frequent lines (each frame, the ten second
+frame count, each key delivered, pointer enter, buttons, axes, each
+commit and buffer release) go through `comp_debug`, which writes only
+while the `verbose` setting is on: the option `-v` or the debug
+interface. The protocol cases (`comp_*`) start the server with `-s -v`.
+`startgui` starts it without options, so a desktop session leaves the
+serial line to the kernel and the programs.
+
 ## Structure
 
 - `main.c`: the poll loop over the listening socket, the client
   sockets, the `/dev/input` devices (`input.c`, `input.md`) and a `timerfd`
-  firing every 16 ms; `x12: ...` log lines for the tests; `SIGTERM`
-  stops it and prints frame statistics.
+  firing every 16 ms; the log (below); `SIGTERM` stops it and prints
+  frame statistics.
 - `surface.c`: the globals `compositor`, `shm` and `output`; pools map
   the passed memfd with `mmap` and are shared by their buffers
   (`XRGB8888` = 1, `ARGB8888` = 2, stride at least 4 times the width,

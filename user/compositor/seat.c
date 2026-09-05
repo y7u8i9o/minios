@@ -114,7 +114,7 @@ static void h_set_cursor(struct wire_client *c, struct wire_resource *self, uint
     }
     if (s->role == ROLE_NONE) {
         s->role = ROLE_CURSOR;
-        comp_log("cursor surface %d", s->id);
+        comp_debug("cursor surface %d", s->id);
     }
     s->hotspot_x = hx;
     s->hotspot_y = hy;
@@ -262,7 +262,7 @@ static void set_pointer_focus(struct csurface *s)
         cursor_client = s->client;
         pointer_send_enter(s->client->pointer, n, s->res, fixed_x(s), fixed_y(s));
         pointer_send_frame(s->client->pointer);
-        comp_log("pointer enter surface %d", s->id);
+        comp_debug("pointer enter surface %d", s->id);
     }
 }
 
@@ -350,7 +350,7 @@ void seat_pointer_button(int button, int pressed)
         }
         pointer_send_button(t->client->pointer, n, now_ms(), (uint32_t)button, pressed ? 1 : 0);
         pointer_send_frame(t->client->pointer);
-        comp_log("button %d %s in surface %d", button, pressed ? "down" : "up", t->id);
+        comp_debug("button %d %s in surface %d", button, pressed ? "down" : "up", t->id);
     }
 }
 
@@ -360,7 +360,7 @@ void seat_pointer_axis(int value)
     if (t && t->client->pointer) {
         pointer_send_axis(t->client->pointer, now_ms(), 0, value);
         pointer_send_frame(t->client->pointer);
-        comp_log("axis %d in surface %d", value / (15 * 256), t->id);
+        comp_debug("axis %d in surface %d", value / (15 * 256), t->id);
     }
 }
 
@@ -378,7 +378,7 @@ void seat_set_keyboard_focus(struct csurface *s)
     if (s) {
         if (s->client->keyboard)
             send_keyboard_enter(s->client, s);
-        comp_log("keyboard focus surface %d", s->id);
+        comp_debug("keyboard focus surface %d", s->id);
         data_keyboard_focus_changed(s->client);
     }
 }
@@ -437,7 +437,7 @@ void seat_key(uint32_t key, int pressed)
         text_key(key, pressed, modifiers);
         keyboard_send_key(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), now_ms(), key, pressed ? 1 : 0);
         if (pressed)
-            comp_log("key 0x%02x to surface %d", key, keyboard_focus->id);
+            comp_debug("key 0x%02x to surface %d", key, keyboard_focus->id);
     }
 }
 

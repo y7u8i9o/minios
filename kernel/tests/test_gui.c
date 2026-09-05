@@ -708,7 +708,7 @@ KTEST_DEFINE("gui_drag", test_gui_drag);
  * pixel at (10,10). */
 static struct proc *start_compositor(void)
 {
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", "-v", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(1200);
@@ -1033,7 +1033,7 @@ static void test_gui_kbd_restore(void)
     struct proc *first = proc_create_user("/bin/hello", (char *const[]){ "hello", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(first != NULL, "cannot start hello");
     proc_reap(first);
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(800);

@@ -117,7 +117,7 @@ KTEST_DEFINE("input_tablet", test_input_tablet);
 static void test_gui_tablet(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL }, (char *const[]){ NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
                                         &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(1200);
@@ -146,7 +146,7 @@ static void test_gui_scale2(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(fb_screen_scale == 2, "scale %u, expected 2 (video=WxH@2)", fb_screen_scale);
     int S = 2;
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL }, (char *const[]){ NULL },
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
                                         &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(1200);
@@ -205,7 +205,7 @@ static void set_mode(const char *mode)
 static void test_gui_modes(void)
 {
     ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
-    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", NULL });
+    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
     sleep_ms(1200);
     struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
     sleep_ms(500);

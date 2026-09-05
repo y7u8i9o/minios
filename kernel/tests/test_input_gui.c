@@ -33,7 +33,7 @@ static void set_setting(const char *key, const char *value)
 static void test_gui_pointer(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
     sleep_ms(1200);
     int sw = logical_w(), sh = logical_h();

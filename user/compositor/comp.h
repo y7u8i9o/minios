@@ -187,6 +187,8 @@ extern int screen_w, screen_h;
 extern int screen_scale;                /* framebuffer pixels per logical pixel */
 extern int cursor_x, cursor_y;              /* logical pixel under the cursor */
 void comp_log(const char *fmt, ...);
+/* Frequent lines (frames, keys, commits, releases), only when verbose. */
+void comp_debug(const char *fmt, ...);
 /* input.c: the devices under /dev/input, and the cursor position in
  * fractions of a logical pixel (cursor_x is its floor). */
 extern double cursor_fx, cursor_fy;
