@@ -41,11 +41,13 @@
 #                                            on macOS with a Retina display and
 #                                            the cocoa window: 2560x1600@2; on
 #                                            Linux with an X display: the
-#                                            primary screen's size, @2 when it
-#                                            is 150 dpi or more or GDK_SCALE is
-#                                            2, in a gtk window with
-#                                            zoom-to-fit; elsewhere the image
-#                                            default, 1024x768. With --vga std only the
+#                                            largest mode within 90 percent of
+#                                            the primary screen and the 16 MiB
+#                                            framebuffer, @2 when the screen is
+#                                            150 dpi or more, 3000 pixels wide
+#                                            or more, or GDK_SCALE is 2;
+#                                            elsewhere the image default,
+#                                            1024x768. With --vga std only the
 #                                            VGA BIOS modes work (1600x1200,
 #                                            1920x1080, 1920x1200, 2560x1440,
 #                                            2560x1600, ...).
@@ -275,21 +277,22 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
         if [ "${GDK_SCALE:-1}" -ge 2 ] || [ "$dpi" -ge 150 ] || [ "$w" -ge 3000 ]; then
             scale=2
         fi
-        # The frame must fit the 16 MiB virtio-gpu buffer; reduce the
-        # size with the aspect ratio kept until it does.
+        # The gtk window follows the guest resolution (zoom-to-fit is off),
+        # so the mode must leave room for panels and the title bar: at
+        # most 90 percent of the screen in each direction. The frame must
+        # also fit the 16 MiB virtio-gpu buffer. The size is reduced with
+        # the aspect ratio kept until both conditions are met.
         screen="${w}x${h}"
         max=$((16 * 1024 * 1024))
-        for r in "1 1" "3 4" "2 3" "1 2" "1 3" "1 4"; do
+        limw=$((w * 9 / 10)); limh=$((h * 9 / 10))
+        for r in "9 10" "4 5" "3 4" "2 3" "1 2" "1 3" "1 4"; do
             num=${r% *}; den=${r#* }
             mw=$((w * num / den / 8 * 8)); mh=$((h * num / den / 8 * 8))
-            [ $((mw * mh * 4)) -le $max ] && break
+            [ $((mw * mh * 4)) -le $max ] && [ $mw -le $limw ] && [ $mh -le $limh ] && break
         done
         if [ $((mw * mh * 4)) -le $max ]; then
             QEMU_VIDEO="${mw}x${mh}@${scale}"
-            # A window of the screen's size does not fit next to panels;
-            # let gtk scale it to the space it gets.
-            [ -z "$QEMU_DISPLAY" ] && QEMU_DISPLAY=gtk,zoom-to-fit=on
-            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO, display $QEMU_DISPLAY" >&2
+            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO" >&2
         else
             echo "run.sh: primary screen $screen exceeds the 16 MiB framebuffer, using the image default" >&2
         fi

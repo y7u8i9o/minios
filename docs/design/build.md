@@ -136,16 +136,17 @@ the plain mode to the screen with interpolation.
 On Linux the gtk and sdl windows also show one guest pixel per screen
 pixel, and a 2560x1440 laptop screen at 190 dpi shows the 1024x768 mode
 as a small window. `tools/run.sh` therefore reads the primary screen from
-`xrandr --current` and uses its pixel size as the mode, `@2` when the
-screen has 150 dpi or more or `GDK_SCALE` is 2, and `@1` otherwise; a
-2560x1440 laptop gets `2560x1440@2`, a 2560x1440 27 inch monitor
-`2560x1440@1`. Because a window of the screen's size does not fit next to
-panels, the default display becomes `gtk,zoom-to-fit=on`, which scales the
-guest to the window it gets. XWayland reports a scaled size: a 2560x1440
+`xrandr --current` (or `xdpyinfo`) and chooses the largest mode, with the
+screen's aspect ratio, that is at most 90 percent of the screen in each
+direction and whose frame fits the 16 MiB virtio-gpu buffer. The gtk
+window resizes to the guest resolution on every mode change (QEMU's
+default, `zoom-to-fit=off`), so the 90 percent limit keeps it inside the
+screen next to panels and the title bar. The mode is `@2` when the screen
+has 150 dpi or more, is reported 3000 pixels wide or more, or `GDK_SCALE`
+is 2, and `@1` otherwise. XWayland reports a scaled size: a 2560x1440
 panel with 150 percent scaling appears as 3840x2160 with no physical
-size. A reported width of 3000 pixels or more therefore also selects
-`@2`, and a frame that exceeds the 16 MiB virtio-gpu buffer is reduced
-with its aspect ratio kept (3840x2160 becomes 2560x1440). `QEMU_DISPLAY`
+size, which gives `2560x1440@2`; a 2560x1440 laptop panel at 189 dpi
+gives `2304x1296@2`; a 1920x1080 monitor gives `1728x968@1`. `QEMU_DISPLAY`
 values other than gtk and sdl, and systems without `xrandr` or
 `xdpyinfo`, keep the image default. `QEMU_VIDEO` in
 `qemu.conf` or `--video` overrides the choice.
