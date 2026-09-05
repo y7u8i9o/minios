@@ -53,11 +53,11 @@ to draw every pixel twice, see "High density displays" below.
 swap virtio-blk devices, a virtio-snd device with an audio backend and the
 ISO. Settings come from four layers, each overriding the previous one:
 
-1. built-in defaults: 512M, 4 CPUs, HVF on macOS when the QEMU binary offers
-   it and TCG elsewhere, Core Audio on macOS and on Linux the first of
-   pipewire, pulseaudio (`pa`), alsa and sdl that the QEMU binary offers,
-   `none` when it offers none of them (`QEMU_ACCEL=kvm` opts into KVM on
-   Linux);
+1. built-in defaults: 512M, 4 CPUs, HVF on macOS and KVM on Linux when the
+   QEMU binary offers them and `/dev/kvm` is writable, TCG otherwise, the
+   sdl display on Linux when the binary offers it, Core Audio on macOS and
+   on Linux the first of pipewire, pulseaudio (`pa`), alsa and sdl that
+   the binary offers, `none` when it offers none of them;
 2. `qemu.conf` in the repository root, a shell fragment that is ignored by
    git (`qemu.conf.example` lists every setting);
 3. `QEMU_*` environment variables, also accepted on the make command line,
@@ -152,10 +152,14 @@ gives `2304x1296@2`; a 1920x1080 monitor gives `1728x968@1`. `QEMU_DISPLAY`
 values other than gtk and sdl, and systems without `xrandr` or
 `xdpyinfo`, keep the image default. Limine cannot set these modes on
 `virtio-vga`, so the guest boots at 1024x768 and the kernel's virtio-gpu
-driver switches to the mode a few seconds later; a gtk window on a
-native Wayland session does not follow that change, so on Wayland
-sessions the script sets `GDK_BACKEND=x11` and the window runs through
-XWayland, where it does. `QEMU_VIDEO` in
+driver switches to the mode a few seconds later. A gtk window on a
+native Wayland session does not follow that change, and an sdl window
+there is sized in logical points, so a 2560x1440 guest fills a 2560x1440
+screen with 150 percent scaling. The script therefore prefers the sdl
+display on Linux and, on Wayland sessions, sets `GDK_BACKEND=x11` and
+`SDL_VIDEODRIVER=x11` so the window runs through XWayland, sized in the
+pixels `xrandr` reported: a 2560x1440 guest is two thirds of that screen.
+`QEMU_VIDEO` selects a smaller mode when a smaller window is wanted. `QEMU_VIDEO` in
 `qemu.conf` or `--video` overrides the choice.
 `tests/cases/comp_scale` boots `video=2560x1600@2` and checks that the
 compositor's surface appears at doubled coordinates as uniform 2x2 blocks.

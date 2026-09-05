@@ -23,10 +23,12 @@
 #   -m, --mem SIZE         QEMU_MEM          guest memory (default 512M)
 #   -s, --smp N            QEMU_SMP          number of CPUs (default 4)
 #       --accel NAME       QEMU_ACCEL        hvf, tcg, kvm (default: hvf on
-#                                            macOS when offered, else tcg;
-#                                            select kvm explicitly on Linux)
-#   -d, --display SPEC     QEMU_DISPLAY      -display argument (default: the
-#                                            QEMU default window)
+#                                            macOS and kvm on Linux when
+#                                            offered and /dev/kvm is
+#                                            writable, else tcg)
+#   -d, --display SPEC     QEMU_DISPLAY      -display argument (default: sdl
+#                                            on Linux when QEMU offers it,
+#                                            else the QEMU default window)
 #   -f, --full-screen      QEMU_FULLSCREEN=1 full screen, guest scaled to fit
 #       --vga TYPE         QEMU_VGA          virtio (default: virtio-vga, the
 #                                            kernel's virtio-gpu driver sets any
@@ -209,9 +211,18 @@ if [ -z "$QEMU_ACCEL" ]; then
     accels="$("$QEMU" -accel help 2>/dev/null)"
     if [ "$(uname -s)" = Darwin ] && echo "$accels" | grep -q '^hvf$'; then
         QEMU_ACCEL=hvf
+    elif [ "$(uname -s)" = Linux ] && echo "$accels" | grep -q '^kvm$' && [ -w /dev/kvm ]; then
+        QEMU_ACCEL=kvm
     else
         QEMU_ACCEL=tcg
     fi
+fi
+
+# Linux: the sdl window follows the guest resolution on every session
+# type; the gtk window does not on a native Wayland session.
+if [ -z "$QEMU_DISPLAY" ] && [ "$(uname -s)" = Linux ] &&
+   "$QEMU" -display help 2>/dev/null | grep -qx sdl; then
+    QEMU_DISPLAY=sdl
 fi
 
 if [ "$QEMU_SOUND" != 0 ]; then
@@ -302,13 +313,16 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
         done
         if [ $((mw * mh * 4)) -le $max ]; then
             QEMU_VIDEO="${mw}x${mh}@${scale}"
-            # A native Wayland gtk window does not follow a guest resolution
-            # change (QEMU issue 1876); through XWayland it does, and the
-            # screen size xrandr reported is the one that window sees.
-            if [ "${XDG_SESSION_TYPE:-}" = wayland ] && [ -z "${GDK_BACKEND:-}" ]; then
-                export GDK_BACKEND=x11
+            # On a native Wayland session a gtk window does not follow a
+            # guest resolution change (QEMU issue 1876), and an sdl window
+            # is sized in logical points, so a 2560x1440 guest fills a
+            # 2560x1440 screen with 150 percent scaling. Through XWayland
+            # both windows are sized in the pixels xrandr reported.
+            if [ "${XDG_SESSION_TYPE:-}" = wayland ]; then
+                [ -n "${GDK_BACKEND:-}" ] || export GDK_BACKEND=x11
+                [ -n "${SDL_VIDEODRIVER:-}" ] || export SDL_VIDEODRIVER=x11
             fi
-            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO${GDK_BACKEND:+, gtk through $GDK_BACKEND}" >&2
+            echo "run.sh: primary screen $screen, $dpi dpi: video $QEMU_VIDEO, display ${QEMU_DISPLAY:-gtk}${SDL_VIDEODRIVER:+ through $SDL_VIDEODRIVER}" >&2
         else
             echo "run.sh: primary screen $screen exceeds the 16 MiB framebuffer, using the image default" >&2
         fi
