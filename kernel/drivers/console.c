@@ -70,6 +70,22 @@ void console_flush(void)
     mutex_unlock(&console_drain_mutex);
 }
 
+void console_write_user(const char *s, size_t n)
+{
+    /* Finish queued echo and diagnostics before drawing a user's next
+     * terminal update. Hold the same mutex as consoleout for the complete
+     * write so CPU migration cannot reorder successive user writes. */
+    console_flush();
+    mutex_lock(&console_drain_mutex);
+    while (n) {
+        size_t count = MIN(n, 256);
+        console_write_async_chunk(s, count);
+        s += count;
+        n -= count;
+    }
+    mutex_unlock(&console_drain_mutex);
+}
+
 /* Panic path: the daemon is gone and other CPUs are halted, so write out
  * whatever the CPU rings still hold before the panic text follows it. Only
  * the serial port receives it: the daemon may have been halted in the

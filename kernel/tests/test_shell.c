@@ -10,6 +10,7 @@
 #include <lib/string.h>
 #include <drivers/timer.h>
 #include <sync/rcu.h>
+#include <drivers/fbcon.h>
 
 struct shell_reclaim {
     struct rcu_head head;
@@ -159,6 +160,48 @@ static void test_lineedit(void)
     kprintf("lineedit: completion, history and Home editing passed\n");
 }
 KTEST_DEFINE("lineedit", test_lineedit);
+
+static void screen_line(uint32_t row, char *text, uint16_t columns)
+{
+    for (uint16_t col = 0; col < columns; col++)
+        ktest_assert(fbcon_get_cell(col, row, &text[col], NULL), "missing console cell");
+    text[columns] = 0;
+    for (size_t n = columns; n && text[n - 1] == ' '; n--)
+        text[n - 1] = 0;
+}
+
+static void test_lineedit_screen(void)
+{
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
+        (char *const[]){ "PATH=/bin", "TERM=minios", "USER=user", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start shell");
+    lineedit_wait();
+    type_line("printf '\\033[2J\\033[H'\n");
+    sleep_ms(300);
+    lineedit_wait();
+    for (int repetition = 0; repetition < 3; repetition++) {
+        type_line("thisisnotacommand\n");
+        sleep_ms(300);
+        lineedit_wait();
+    }
+    console_flush();
+    uint16_t columns, rows;
+    fbcon_get_size(&columns, &rows);
+    char text[257];
+    ktest_assert(columns <= 256 && rows > 7, "console geometry");
+    for (uint32_t row = 0; row < 6; row++) {
+        screen_line(row, text, columns);
+        const char *expected = row % 2 == 0 ? "user:/ $ thisisnotacommand"
+                                            : "thisisnotacommand: No such file or directory";
+        ktest_assert(!strcmp(text, expected), "screen row %u: '%s' expected '%s'", row, text, expected);
+    }
+    screen_line(6, text, columns);
+    ktest_assert(!strcmp(text, "user:/ $"), "final prompt contains stale text: '%s'", text);
+    type_line("exit 0\n");
+    ktest_assert(proc_reap(p) == 0, "shell exit");
+    kprintf("lineedit_screen: repeated commands render without duplicate or stale text\n");
+}
+KTEST_DEFINE("lineedit_screen", test_lineedit_screen);
 
 /* M11: pipelines, redirections and directory listing through the shell. */
 static void test_pipes(void)

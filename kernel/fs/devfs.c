@@ -203,7 +203,7 @@ static long condev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 
 static long condev_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
 {
-    console_write(buf, n);
+    console_write_user(buf, n);
     return (long)n;
 }
 

@@ -10,6 +10,9 @@ void console_init(void);
 void console_start_daemon(void);
 void console_putc(char c);
 void console_write(const char *s, size_t n);
+/* Process-context output: ordered and lossless, may sleep. Unlike kernel
+ * logging, terminal control sequences must not use per-CPU lossy queues. */
+void console_write_user(const char *s, size_t n);
 void console_flush(void);
 /* Write the queued output of every CPU directly; panic path only. */
 void console_panic_drain(void);
