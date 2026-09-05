@@ -149,7 +149,7 @@ Each milestone ends with a visible result and a boot test in `tests/cases/`. Mil
 - Context switch in assembly (`context.S`), saving callee saved registers and `rsp`.
 - MLFQ: 8 queues, time slice doubling per level (10 ms at the top), demotion on slice exhaustion, promotion on block, periodic priority boost every 1 s to prevent starvation.
 - `mutex`, `semaphore`, `condvar` built on a wait queue, each internally protected by a spinlock from M2. Blocking primitives are never used from interrupt context.
-- Run queues protected by `sched_lock`. The scheduler reads `cpu_current()->thread`, never a global. Per CPU run queues in M17 replace the single queue behind `sched_pick_next` without changing callers.
+- The original run queue was protected by `sched_lock`. M18 introduced per CPU queues behind `sched_pick_next`; M44 replaced the remaining global scheduler lock with one lock and one remote-wake MPSC inbox per CPU. The scheduler always reads `cpu_current()->thread`, never a global current-thread pointer.
 - Idle thread, `thread_create`, `thread_exit`, `yield`, `sleep_ms` blocking variant.
 - Result: several kernel threads print interleaved output at different priorities.
 
@@ -1297,7 +1297,7 @@ Tests: `prof_gui` (the desktop headless with a terminal, `mandel`,
 sysmon and the clock, pointer motion, `prof -k -c -a` for ten seconds and
 the lock table on the serial log).
 
-### M43. Lock-free system call paths
+### M43. Lock-free system call paths (completed 2026-09-05)
 
 1. `kernel/sync/atomic.h`, `percpu.h`, `rcu.h`, `mpsc.h`: reference counts
    with `refcount_inc_not_zero`, per CPU counters, RCU for the
@@ -1324,7 +1324,7 @@ RCU readers against a writer freeing nodes, the MPSC stack), `poll_wake`
 counters of `getrusage`), and `prof_gui` with the `proc`, `files_lock`
 and `poll_lock` rows gone.
 
-### M44. Per CPU scheduler
+### M44. Per CPU scheduler (completed 2026-09-05)
 
 1. One run queue lock per CPU; wakeups for another CPU go through its
    MPSC list and a reschedule IPI; stealing takes the victim's lock only.
@@ -1335,7 +1335,7 @@ and `poll_lock` rows gone.
 Tests: `sched`, `smp`, `smp_user`, `pthreads` unchanged, plus `prof_gui`
 with no `sched_lock` row and run queue contention under one percent.
 
-### M45. Lock-free byte streams and the console
+### M45. Lock-free byte streams and the console (completed 2026-09-05)
 
 1. `kernel/sync/ring.h`: the single producer, single consumer ring used
    by pipes, pseudo terminals, the console tty, the socket data path, the
@@ -1349,11 +1349,11 @@ Tests: `pipes`, `pty`, `sockets`, `kbd`, `mouse`, `profile` unchanged,
 empty transitions), and `prof_gui` with the `console` row under one
 millisecond of hold time.
 
-### M46. Per CPU allocators and address space counters
+### M46. Per CPU allocators and address space counters (completed 2026-09-05)
 
 1. Per CPU magazines in front of the slab caches and per CPU single page
-   lists in front of the buddy allocator; allocator statistics as per CPU
-   counters.
+   lists in front of the buddy allocator; reported allocator totals include
+   objects and pages held in those per CPU caches.
 2. `vma_populate` zeroes pages before taking the space lock; a per CPU
    resident counter per address space replaces `vma_count_resident`;
    `munmap` batches its TLB shootdowns.

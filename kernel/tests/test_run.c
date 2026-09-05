@@ -24,6 +24,7 @@ static void test_run(void)
     char path[128];
     ktest_assert(cmdline_lookup("prog", path, sizeof path) && path[0], "prog= missing");
     struct pmm_stats before, after;
+    swap_drain();
     pmm_get_stats(&before);
 
     /* args=a,b,c supplies arguments; otherwise two fixed ones. */
@@ -57,6 +58,7 @@ static void test_run(void)
     /* Another CPU may still be finishing the last switch away from an
      * exited thread; give deferred frees a moment before judging. */
     for (int i = 0; i < 100; i++) {
+        swap_drain();
         pmm_get_stats(&after);
         if (after.free_pages == before.free_pages)
             break;

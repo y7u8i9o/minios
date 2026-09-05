@@ -26,14 +26,14 @@ static int tid_alloc(void)
 }
 
 /* First code run by a new thread, entered through context_switch's ret.
- * sched_lock is held across the switch and released here. */
+ * The local run-queue lock is held across the switch and released here. */
 void thread_start(void)
 {
     fpu_restore(thread_current()->fpu);
     struct thread *t = thread_current();
     wrmsr(MSR_FS_BASE, t->fs_base);
     sched_finish_switch();
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
     t->entry(t->arg);
     thread_exit(0);
 }
@@ -58,7 +58,7 @@ struct thread *thread_alloc(struct proc *proc, const char *name, thread_fn fn, v
     fpu_init_state(t->fpu);
     t->proc = proc;
     t->tid = tid_alloc();
-    t->state = THREAD_READY;
+    t->state = THREAD_NEW;
     t->level = level < 0 ? 0 : level >= MLFQ_LEVELS ? MLFQ_LEVELS - 1 : level;
     t->slice_left = 10 << t->level;
     t->cpu = cpu_current()->id;
@@ -116,15 +116,15 @@ __noreturn void thread_exit(int code)
      * explicit exit status supplies its own code. */
     if (p != &kernel_proc) {
         list_add_tail(&t->proc_link, &p->zombies);
-        if (last && !p->exiting) {
-            p->exiting = true;
+        if (last && !__atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
+            __atomic_store_n(&p->exiting, true, __ATOMIC_RELEASE);
             p->exit_status = PROC_STATUS_EXITED(code);
         }
     }
     spin_unlock(&p->lock);
     if (last && p != &kernel_proc)
         proc_exit_notify(p);
-    spin_lock(&sched_lock);
+    sched_lock_current();
     t->state = THREAD_ZOMBIE;
     /* Joiners are woken by the next thread once this stack is no longer
      * in use, see sched_switch_locked. */

@@ -119,8 +119,8 @@ void proc_free(struct proc *p)
 void proc_begin_exit(struct proc *p, int status)
 {
     spin_lock(&p->lock);
-    if (!p->exiting) {
-        p->exiting = true;
+    if (!__atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
+        __atomic_store_n(&p->exiting, true, __ATOMIC_RELEASE);
         p->exit_status = status;
     }
     /* Kick threads blocked in the kernel so they notice. */
@@ -273,10 +273,7 @@ void proc_exit_check(void)
     struct proc *p = t->proc;
     if (p == &kernel_proc)
         return;
-    spin_lock(&p->lock);
-    bool exiting = p->exiting;
-    spin_unlock(&p->lock);
-    if (exiting)
+    if (__atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE))
         thread_exit(0);
 }
 

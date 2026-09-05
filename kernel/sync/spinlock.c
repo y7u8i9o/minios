@@ -165,6 +165,19 @@ void spin_lock(struct spinlock *lk)
     stat_acquired(lk, contended, start);
 }
 
+bool spin_try_lock(struct spinlock *lk)
+{
+    push_cli();
+    debug_check_acquire(lk);
+    if (!try_acquire(lk)) {
+        pop_cli();
+        return false;
+    }
+    debug_acquired(lk, __builtin_return_address(0));
+    stat_acquired(lk, false, 0);
+    return true;
+}
+
 void spin_unlock(struct spinlock *lk)
 {
 #if CONFIG_LOCKDEBUG && CONFIG_LOCKSTAT

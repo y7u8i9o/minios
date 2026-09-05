@@ -2,7 +2,7 @@
 #include <drivers/tty.h>
 #include <drivers/fbcon.h>
 #include <ipc/signal.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <sched/thread.h>
 #include <mm/vma.h>
 #include <sched/proc.h>
@@ -26,6 +26,8 @@ void tty_init(struct tty *t, const char *name, tty_output_fn output, bool defer_
     t->name = name;
     spinlock_init(&t->lock, "tty");
     waitq_init(&t->rd_waitq, "tty_rd");
+    poll_source_init(&t->poll, "tty_poll");
+    ring_init(&t->ready_ring, t->ready, sizeof t->ready);
     t->lflag = ICANON | ECHO | ISIG;
     t->output = output;
     t->defer_signals = defer_signals;
@@ -36,11 +38,7 @@ void tty_init(struct tty *t, const char *name, tty_output_fn output, bool defer_
 /* Caller holds t->lock. */
 static void ready_push(struct tty *t, char c)
 {
-    if (t->count == TTY_READY_MAX)
-        return;
-    t->ready[t->tail] = c;
-    t->tail = (t->tail + 1) % TTY_READY_MAX;
-    t->count++;
+    ring_write(&t->ready_ring, &c, 1);
 }
 
 static void echo(struct tty *t, const char *s, size_t n)
@@ -118,7 +116,7 @@ void tty_input_char(struct tty *t, char c)
     }
     waitq_wake_all(&t->rd_waitq);
     spin_unlock(&t->lock);
-    poll_notify();
+    poll_source_notify(&t->poll);
     if (sig && !t->defer_signals && pgid > 0)
         signal_send_pgrp(pgid, sig);
 }
@@ -130,7 +128,7 @@ void tty_input_raw(struct tty *t, const char *s, size_t n)
         ready_push(t, s[i]);
     waitq_wake_all(&t->rd_waitq);
     spin_unlock(&t->lock);
-    poll_notify();
+    poll_source_notify(&t->poll);
 }
 
 long tty_read(struct tty *t, char *buf, size_t n)
@@ -150,7 +148,7 @@ long tty_read(struct tty *t, char *buf, size_t n)
     }
     char tmp[TTY_LINE_MAX];
     spin_lock(&t->lock);
-    while (t->count == 0) {
+    while (ring_count(&t->ready_ring) == 0) {
         if (t->hangup) {
             /* A control D ends one read; the next one blocks again. */
             t->hangup = false;
@@ -165,15 +163,15 @@ long tty_read(struct tty *t, char *buf, size_t n)
     }
     size_t got = 0;
     bool canon = (t->lflag & ICANON) && !(t->lflag & KBD_SCANCODES);
-    while (got < n && got < sizeof tmp && t->count) {
-        char c = t->ready[t->head];
-        t->head = (t->head + 1) % TTY_READY_MAX;
-        t->count--;
+    spin_unlock(&t->lock);
+    while (got < n && got < sizeof tmp) {
+        char c;
+        if (ring_read(&t->ready_ring, &c, 1) != 1)
+            break;
         tmp[got++] = c;
         if (c == '\n' && canon)
             break;
     }
-    spin_unlock(&t->lock);
     /* User memory is copied without the lock: the copy may fault. */
     memcpy(buf, tmp, got);
     return (long)got;
@@ -182,20 +180,23 @@ long tty_read(struct tty *t, char *buf, size_t n)
 int tty_poll(struct tty *t)
 {
     spin_lock(&t->lock);
-    int r = (t->count || t->hangup) ? POLLIN : 0;
+    int r = (ring_count(&t->ready_ring) || t->hangup) ? POLLIN : 0;
     spin_unlock(&t->lock);
     return r | POLLOUT;
+}
+
+struct poll_source *tty_poll_source(struct tty *t)
+{
+    return &t->poll;
 }
 
 int tty_getc(struct tty *t)
 {
     int c = -1;
     spin_lock(&t->lock);
-    if (t->count) {
-        c = (uint8_t)t->ready[t->head];
-        t->head = (t->head + 1) % TTY_READY_MAX;
-        t->count--;
-    }
+    uint8_t byte;
+    if (ring_read(&t->ready_ring, &byte, 1) == 1)
+        c = byte;
     spin_unlock(&t->lock);
     return c;
 }
@@ -203,7 +204,7 @@ int tty_getc(struct tty *t)
 size_t tty_available(struct tty *t)
 {
     spin_lock(&t->lock);
-    size_t n = t->count;
+    size_t n = ring_count(&t->ready_ring);
     spin_unlock(&t->lock);
     return n;
 }
@@ -227,6 +228,7 @@ void tty_set_lflag(struct tty *t, uint32_t lflag)
         waitq_wake_all(&t->rd_waitq);
     }
     spin_unlock(&t->lock);
+    poll_source_notify(&t->poll);
 }
 
 int tty_get_fg_pgid(struct tty *t)
@@ -250,7 +252,7 @@ void tty_hangup(struct tty *t)
     t->hangup = true;
     waitq_wake_all(&t->rd_waitq);
     spin_unlock(&t->lock);
-    poll_notify();
+    poll_source_notify(&t->poll);
 }
 
 long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg)

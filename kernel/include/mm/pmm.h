@@ -8,6 +8,7 @@
 #define PG_FREE      (1u << 1)   /* head of a free block, order is valid */
 #define PG_SLAB      (1u << 2)   /* part of a slab, order is the slab order */
 #define PG_LARGE     (1u << 3)   /* part of a large kmalloc block */
+#define PG_CPUCACHE  (1u << 4)   /* free in one CPU's order-0 cache */
 
 /* One entry per physical page frame. lru, flags and order are protected by
  * pmm_lock. refcount counts user mappings of an allocated frame and is
@@ -36,6 +37,9 @@ struct page *pmm_alloc(unsigned order);
 void pmm_free(struct page *page, unsigned order);
 struct page *pmm_alloc_page(void);
 void pmm_free_page(struct page *page);
+/* Return every per-CPU order-zero cache to the buddy allocator. The caller
+ * must not hold an allocator lock. */
+void pmm_reclaim_cpu_caches(void);
 /* Turn an allocated block of 2^order pages into 2^order independent single
  * page allocations, each freeable with pmm_free_page or page_put (M39). */
 void pmm_split_block(struct page *head, unsigned order);

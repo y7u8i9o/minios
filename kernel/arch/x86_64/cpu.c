@@ -28,6 +28,7 @@ void cpu_init_boot(void)
     c->int_enabled = 0;
     c->online = true;
     c->started = true;
+    spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
     wrmsr(MSR_GS_BASE, (uint64_t)c);
     wrmsr(MSR_KERNEL_GS_BASE, (uint64_t)c);
 }

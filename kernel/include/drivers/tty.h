@@ -3,6 +3,8 @@
 #include <sync/spinlock.h>
 #include <sched/wait.h>
 #include <minios/abi.h>
+#include <ipc/poll.h>
+#include <sync/ring.h>
 
 #define TTY_LINE_MAX  256
 #define TTY_READY_MAX 1024
@@ -18,13 +20,14 @@ struct tty {
     const char *name;
     struct spinlock lock;
     struct waitq rd_waitq;
+    struct poll_source poll;
     uint32_t lflag;                 /* ICANON, ECHO, ISIG, KBD_SCANCODES */
     int fg_pgid;
     uint16_t cols, rows;
     char line[TTY_LINE_MAX];
     size_t line_len;
     char ready[TTY_READY_MAX];      /* bytes for readers */
-    size_t head, tail, count;
+    struct spsc_ring ready_ring;
     bool hangup;                    /* readers get end of file */
     int signal_pending;             /* control key seen, delivered by ttyd */
     bool defer_signals;             /* input arrives in interrupt context */
@@ -40,6 +43,7 @@ void tty_input_raw(struct tty *t, const char *s, size_t n);
 /* Blocking read for a process; returns -EINTR on a signal, 0 at hangup. */
 long tty_read(struct tty *t, char *buf, size_t n);
 int tty_poll(struct tty *t);
+struct poll_source *tty_poll_source(struct tty *t);
 long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg);
 uint32_t tty_get_lflag(struct tty *t);
 void tty_set_lflag(struct tty *t, uint32_t lflag);

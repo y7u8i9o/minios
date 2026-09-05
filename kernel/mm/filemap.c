@@ -294,6 +294,7 @@ bool filemap_fault(struct vmspace *vm, uintptr_t va, bool write)
         ok = true;
     } else {
         *entry = pte;
+        percpu_counter_inc(&vm->resident);
         ok = true;
     }
     spin_unlock(&vm->lock);

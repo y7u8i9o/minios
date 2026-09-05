@@ -28,6 +28,7 @@ void ktest_run_selected(void)
 __noreturn void ktest_pass(void)
 {
     kprintf("TEST PASS\n");
+    console_flush();
     debugexit_exit(0);
     cpu_halt_forever();
 }
@@ -40,6 +41,7 @@ __noreturn void ktest_fail(const char *fmt, ...)
     kvprintf(fmt, ap);
     va_end(ap);
     kprintf("\n");
+    console_flush();
     debugexit_exit(1);
     cpu_halt_forever();
 }

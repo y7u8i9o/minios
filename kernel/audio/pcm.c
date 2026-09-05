@@ -61,6 +61,12 @@ static int pcm_poll(struct file *f)
     return dev->ops->poll(dev, f);
 }
 
+static struct poll_source *pcm_poll_source(struct file *f)
+{
+    struct pcm_device *dev = f->priv;
+    return dev ? &dev->poll : NULL;
+}
+
 static void pcm_release(struct file *f)
 {
     struct pcm_device *dev = f->priv;
@@ -80,6 +86,7 @@ static const struct file_ops pcm_fops = {
     .write = pcm_write,
     .ioctl = pcm_ioctl,
     .poll = pcm_poll,
+    .poll_source = pcm_poll_source,
     .release = pcm_release,
 };
 
@@ -93,6 +100,7 @@ int pcm_register(struct pcm_device *dev, const char *name,
     dev->ops = ops;
     dev->priv = priv;
     spinlock_init(&dev->owner_lock, "pcm_owner");
+    poll_source_init(&dev->poll, "pcm_poll");
     int r = devfs_register(dev->name, S_IFCHR | 0600, &pcm_fops, dev, 0);
     if (r == 0)
         klog_info("/dev/%s registered", dev->name);

@@ -4,7 +4,7 @@
  * is taken from interrupt context, so holders disable interrupts
  * (spin_lock does). */
 #include <ipc/eventfd.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <ipc/signal.h>
 #include <sched/wait.h>
 #include <drivers/timer.h>
@@ -18,6 +18,7 @@ struct timerfd {
     uint64_t next_ms, interval_ms, expirations;
     bool armed;
     struct waitq waitq;
+    struct poll_source poll;
 };
 
 static LIST_HEAD(timers);
@@ -26,7 +27,6 @@ static DEFINE_SPINLOCK(timerfd_lock);
 void timerfd_tick(void)
 {
     uint64_t now = timer_ms();
-    bool woke = false;
     spin_lock(&timerfd_lock);
     struct list_head *pos;
     list_for_each(pos, &timers) {
@@ -42,11 +42,9 @@ void timerfd_tick(void)
             t->armed = false;
         }
         waitq_wake_all(&t->waitq);
-        woke = true;
+        poll_source_notify(&t->poll);
     }
     spin_unlock(&timerfd_lock);
-    if (woke)
-        poll_notify();
 }
 
 static long timerfd_read(struct file *f, char *buf, size_t n, uint64_t *pos)
@@ -82,6 +80,11 @@ static int timerfd_poll(struct file *f)
     return r;
 }
 
+static struct poll_source *timerfd_poll_source(struct file *f)
+{
+    return &((struct timerfd *)f->priv)->poll;
+}
+
 static void timerfd_release(struct file *f)
 {
     struct timerfd *t = f->priv;
@@ -94,6 +97,7 @@ static void timerfd_release(struct file *f)
 static const struct file_ops timerfd_fops = {
     .read = timerfd_read,
     .poll = timerfd_poll,
+    .poll_source = timerfd_poll_source,
     .release = timerfd_release,
 };
 
@@ -103,6 +107,7 @@ int timerfd_create(int flags, struct file **out)
     if (!t)
         return -ENOMEM;
     waitq_init(&t->waitq, "timerfd");
+    poll_source_init(&t->poll, "timerfd_poll");
     struct file *f = file_alloc(NULL, &timerfd_fops, O_RDONLY | (flags & O_NONBLOCK));
     if (!f) {
         kfree(t);

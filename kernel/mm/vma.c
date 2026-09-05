@@ -16,6 +16,36 @@
 #include <kassert.h>
 #include <klog.h>
 #include <errno.h>
+#include <sync/rcu.h>
+
+/* The forward link is the RCU publication edge.  Removed nodes retain
+ * their links until their grace-period callback, so a reader already on a
+ * node can continue to its successor safely. */
+static void vma_link_before_rcu(struct list_head *n, struct list_head *next)
+{
+    struct list_head *prev = next->prev;
+    n->next = next;
+    n->prev = prev;
+    next->prev = n;
+    __atomic_store_n(&prev->next, n, __ATOMIC_RELEASE);
+}
+
+static void vma_link_after_rcu(struct list_head *n, struct list_head *prev)
+{
+    struct list_head *next = prev->next;
+    n->next = next;
+    n->prev = prev;
+    next->prev = n;
+    __atomic_store_n(&prev->next, n, __ATOMIC_RELEASE);
+}
+
+static void vma_unlink_rcu(struct list_head *n)
+{
+    struct list_head *prev = n->prev;
+    struct list_head *next = n->next;
+    next->prev = prev;
+    __atomic_store_n(&prev->next, next, __ATOMIC_RELEASE);
+}
 
 uint64_t vma_pte_flags(unsigned flags)
 {
@@ -50,7 +80,7 @@ static void vma_insert_locked(struct vmspace *vm, struct vma *n)
     struct list_head *pos = vm->vmas.next;
     while (pos != &vm->vmas && list_entry(pos, struct vma, link)->start < n->start)
         pos = pos->next;
-    list_add_tail(&n->link, pos);
+    vma_link_before_rcu(&n->link, pos);
 }
 
 static int vma_add_locked(struct vmspace *vm, uintptr_t start, uintptr_t end, unsigned flags)
@@ -103,13 +133,14 @@ struct vma *vma_split_locked(struct vmspace *vm, struct vma *v, uintptr_t addr)
         filemap_ref(tail->mapping);
         tail->offset = v->offset + (addr - v->start);
     }
-    v->end = addr;
-    list_add(&tail->link, &v->link);
+    __atomic_store_n(&v->end, addr, __ATOMIC_RELEASE);
+    vma_link_after_rcu(&tail->link, &v->link);
     return tail;
 }
 
-void vma_release(struct vma *v)
+static void vma_free_rcu(struct rcu_head *head)
 {
+    struct vma *v = container_of(head, struct vma, rcu);
     if (v->file)
         file_put(v->file);
     if (v->mapping)
@@ -117,42 +148,57 @@ void vma_release(struct vma *v)
     kfree(v);
 }
 
-/* Map a fresh zero page at va with the region's protection. */
-static int map_zero_page(struct vmspace *vm, uintptr_t va, unsigned flags)
+void vma_release(struct vma *v)
 {
-    struct page *pg = pmm_alloc_page();
-    if (!pg)
-        return -ENOMEM;
-    memset(P2V(page_to_phys(pg)), 0, PAGE_SIZE);
-    uint64_t *entry;
-    int r = paging_walk(vm->pml4_phys, va, true, &entry);
-    if (r < 0) {
-        pmm_free_page(pg);
-        return r;
-    }
-    kassert(r == 1 && !(*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED)));
-    page_get(pg);
-    *entry = page_to_phys(pg) | vma_pte_flags(flags);
-    return 0;
+    rcu_call(&v->rcu, vma_free_rcu);
 }
 
 int vma_populate(struct vmspace *vm, uintptr_t start, uintptr_t end)
 {
     int r = 0;
-    spin_lock(&vm->lock);
     for (uintptr_t va = ALIGN_DOWN(start, PAGE_SIZE); va < end && r == 0; va += PAGE_SIZE) {
+        struct page *pg = pmm_alloc_page();
+        if (!pg)
+            return -ENOMEM;
+        memset(P2V(page_to_phys(pg)), 0, PAGE_SIZE);
+        uintptr_t tables[3];
+        unsigned table_count = 0;
+        while (table_count < ARRAY_SIZE(tables)) {
+            uintptr_t pa = paging_alloc_table();
+            if (!pa)
+                break;
+            tables[table_count++] = pa;
+        }
+        if (table_count != ARRAY_SIZE(tables)) {
+            for (unsigned i = 0; i < table_count; i++)
+                paging_free_table(tables[i]);
+            pmm_free_page(pg);
+            return -ENOMEM;
+        }
+        spin_lock(&vm->lock);
         struct vma *v = vma_find_locked(vm, va);
+        unsigned tables_used = 0;
         if (!v || (v->flags & VM_FILE)) {
             r = -EFAULT;
-            break;
+        } else {
+            uint64_t *entry;
+            int w = paging_walk_preallocated(vm->pml4_phys, va, tables,
+                                             table_count, &tables_used, &entry);
+            if (w < 0)
+                r = w;
+            else if (w == 1 && !(*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED))) {
+                page_get(pg);
+                *entry = page_to_phys(pg) | vma_pte_flags(v->flags);
+                percpu_counter_inc(&vm->resident);
+                pg = NULL;
+            }
         }
-        uint64_t *entry;
-        int w = paging_walk(vm->pml4_phys, va, false, &entry);
-        if (w == 2 || (w == 1 && (*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED))))
-            continue;
-        r = map_zero_page(vm, va, v->flags);
+        spin_unlock(&vm->lock);
+        for (unsigned i = tables_used; i < table_count; i++)
+            paging_free_table(tables[i]);
+        if (pg)
+            pmm_free_page(pg);
     }
-    spin_unlock(&vm->lock);
     return r;
 }
 
@@ -166,6 +212,7 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
             /* Whole huge pages only: the callers split at the boundaries. */
             kassert(IS_ALIGNED(va, PAGE_2M) && end - va >= PAGE_2M);
             huge_unmap_locked(entry);
+            percpu_counter_add(&vm->resident, -(int64_t)PT_ENTRIES);
             va += PAGE_2M - PAGE_SIZE;
             continue;
         }
@@ -177,6 +224,7 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
                 if (track_dirty && (e & PTE_D))
                     filemap_mark_dirty(v->mapping, (v->offset >> PAGE_SHIFT) + ((va - v->start) >> PAGE_SHIFT));
                 page_put(phys_to_page(e & PTE_ADDR_MASK));
+                percpu_counter_dec(&vm->resident);
             }
             *entry = 0;
         } else if (e & PTE_SWAPPED) {
@@ -184,14 +232,13 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
             *entry = 0;
         }
     }
-    tlb_flush_range(vm, start, end - start);
 }
 
 static void release_list(struct list_head *dead)
 {
     while (!list_empty(dead)) {
-        struct vma *v = list_first_entry(dead, struct vma, link);
-        list_del(&v->link);
+        struct vma *v = list_first_entry(dead, struct vma, reclaim_link);
+        list_del(&v->reclaim_link);
         vma_release(v);
     }
 }
@@ -205,8 +252,8 @@ void vma_remove_all(struct vmspace *vm)
         struct vma *v = list_first_entry(&vm->vmas, struct vma, link);
         vma_unmap_range_locked(vm, v, v->start, v->end);
         vma_queue_sync(&jobs, v, v->start, v->end);
-        list_del(&v->link);
-        list_add_tail(&v->link, &dead);
+        vma_unlink_rcu(&v->link);
+        list_add_tail(&v->reclaim_link, &dead);
     }
     vm->brk_start = vm->brk = 0;
     spin_unlock(&vm->lock);
@@ -233,7 +280,7 @@ long vma_brk(struct vmspace *vm, intptr_t increment)
             spin_unlock(&vm->lock);
             return -ENOMEM;
         }
-        heap->end = new_brk;
+        __atomic_store_n(&heap->end, new_brk, __ATOMIC_RELEASE);
     } else if (increment < 0) {
         if (new_brk < vm->brk_start + PAGE_SIZE)
             new_brk = vm->brk_start + PAGE_SIZE;
@@ -242,7 +289,8 @@ long vma_brk(struct vmspace *vm, intptr_t increment)
             return -ENOMEM;
         }
         vma_unmap_range_locked(vm, heap, new_brk, heap->end);
-        heap->end = new_brk;
+        tlb_flush_range(vm, new_brk, heap->end - new_brk);
+        __atomic_store_n(&heap->end, new_brk, __ATOMIC_RELEASE);
     }
     vm->brk = new_brk;
     spin_unlock(&vm->lock);
@@ -255,17 +303,31 @@ bool vma_range_ok(struct vmspace *vm, uintptr_t addr, size_t len, bool write)
         return false;
     uintptr_t end = addr + len;
     bool ok = true;
-    spin_lock(&vm->lock);
+    rcu_read_lock();
     uintptr_t va = addr;
     while (va < end) {
-        struct vma *v = vma_find_locked(vm, va);
-        if (!v || !(v->flags & VM_READ) || (write && !(v->flags & VM_WRITE))) {
+        struct vma *found = NULL;
+        struct list_head *pos = __atomic_load_n(&vm->vmas.next, __ATOMIC_ACQUIRE);
+        while (pos != &vm->vmas) {
+            struct vma *v = list_entry(pos, struct vma, link);
+            uintptr_t vstart = __atomic_load_n(&v->start, __ATOMIC_ACQUIRE);
+            uintptr_t vend = __atomic_load_n(&v->end, __ATOMIC_ACQUIRE);
+            if (va < vstart)
+                break;
+            if (va < vend) {
+                found = v;
+                break;
+            }
+            pos = __atomic_load_n(&pos->next, __ATOMIC_ACQUIRE);
+        }
+        unsigned flags = found ? __atomic_load_n(&found->flags, __ATOMIC_ACQUIRE) : 0;
+        if (!found || !(flags & VM_READ) || (write && !(flags & VM_WRITE))) {
             ok = false;
             break;
         }
-        va = v->end;
+        va = __atomic_load_n(&found->end, __ATOMIC_ACQUIRE);
     }
-    spin_unlock(&vm->lock);
+    rcu_read_unlock();
     return ok;
 }
 
@@ -309,6 +371,8 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
 {
     spin_unlock(&vm->lock);
     struct page *pg = swap_alloc_user_frame();
+    if (pg)
+        memset(P2V(page_to_phys(pg)), 0, PAGE_SIZE);
     spin_lock(&vm->lock);
     if (!pg)
         return false;
@@ -319,9 +383,9 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
         pmm_free_page(pg);
         return v != NULL && w == 1;
     }
-    memset(P2V(page_to_phys(pg)), 0, PAGE_SIZE);
     page_get(pg);
     *entry = page_to_phys(pg) | vma_pte_flags(v->flags);
+    percpu_counter_inc(&vm->resident);
     return true;
 }
 
@@ -389,33 +453,8 @@ out:
 
 size_t vma_count_resident(struct vmspace *vm)
 {
-    size_t n = 0;
-    spin_lock(&vm->lock);
-    uint64_t *pml4 = P2V(vm->pml4_phys);
-    for (int i = 0; i < PT_ENTRIES / 2; i++) {
-        if (!(pml4[i] & PTE_P))
-            continue;
-        uint64_t *pdpt = P2V(pml4[i] & PTE_ADDR_MASK);
-        for (int j = 0; j < PT_ENTRIES; j++) {
-            if (!(pdpt[j] & PTE_P))
-                continue;
-            uint64_t *pd = P2V(pdpt[j] & PTE_ADDR_MASK);
-            for (int k = 0; k < PT_ENTRIES; k++) {
-                if (!(pd[k] & PTE_P))
-                    continue;
-                if (pd[k] & PTE_PS) {
-                    n += PT_ENTRIES;
-                    continue;
-                }
-                uint64_t *pt = P2V(pd[k] & PTE_ADDR_MASK);
-                for (int l = 0; l < PT_ENTRIES; l++)
-                    if (pt[l] & PTE_P)
-                        n++;
-            }
-        }
-    }
-    spin_unlock(&vm->lock);
-    return n;
+    int64_t n = percpu_counter_sum(&vm->resident);
+    return n > 0 ? (size_t)n : 0;
 }
 
 bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
@@ -430,7 +469,8 @@ bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
  * regions become read only and tagged COW in both spaces, whether or not
  * they were writable, so a later mprotect never grants write access to a
  * shared frame. */
-static int share_level(struct vmspace *vm, uint64_t *src, uint64_t *dst, int level, uintptr_t base)
+static int share_level(struct vmspace *vm, struct vmspace *child, uint64_t *src,
+                       uint64_t *dst, int level, uintptr_t base)
 {
     for (int i = 0; i < PT_ENTRIES; i++) {
         uint64_t e = src[i];
@@ -448,12 +488,14 @@ static int share_level(struct vmspace *vm, uint64_t *src, uint64_t *dst, int lev
             if (v->flags & VM_SHARED) {
                 dst[i] = e;     /* shared object: both map the same frame */
                 page_get(phys_to_page(e & PTE_ADDR_MASK));
+                percpu_counter_inc(&child->resident);
                 continue;
             }
             e = (e & ~PTE_W) | PTE_COW;
             src[i] = e;
             dst[i] = e;
             page_get(phys_to_page(e & PTE_ADDR_MASK));
+            percpu_counter_inc(&child->resident);
         } else {
             if (!(e & PTE_P))
                 continue;
@@ -461,13 +503,15 @@ static int share_level(struct vmspace *vm, uint64_t *src, uint64_t *dst, int lev
                 struct vma *v = vma_find_locked(vm, va);
                 if (v && !(v->flags & VM_DONTFORK))
                     huge_share_locked(&src[i], &dst[i]);
+                if (v && !(v->flags & VM_DONTFORK))
+                    percpu_counter_add(&child->resident, PT_ENTRIES);
                 continue;
             }
             uintptr_t table = paging_alloc_table();
             if (!table)
                 return -ENOMEM;
             dst[i] = table | (e & PTE_FLAGS_MASK);
-            int r = share_level(vm, P2V(e & PTE_ADDR_MASK), P2V(table), level - 1, va);
+            int r = share_level(vm, child, P2V(e & PTE_ADDR_MASK), P2V(table), level - 1, va);
             if (r < 0)
                 return r;
         }
@@ -535,7 +579,8 @@ struct vmspace *vmspace_fork(struct vmspace *vm)
                 break;
             }
             dst[i] = table | (src[i] & PTE_FLAGS_MASK);
-            r = share_level(vm, P2V(src[i] & PTE_ADDR_MASK), P2V(table), 3, (uintptr_t)i << 39);
+            r = share_level(vm, child, P2V(src[i] & PTE_ADDR_MASK), P2V(table), 3,
+                            (uintptr_t)i << 39);
         }
         child->brk_start = vm->brk_start;
         child->brk = vm->brk;

@@ -37,5 +37,8 @@ void klog_print(int level, const char *subsys, const char *fmt, ...) __printf(3,
 #include <stdint.h>
 void klog_ring_init(void);          /* after cpu_init_boot */
 void klog_ring_append(const char *text, size_t n);
+void klog_ring_drain(void);
 size_t klog_ring_read(uint64_t *pos, char *buf, size_t n);
 uint64_t klog_ring_head(void);
+struct poll_source;
+struct poll_source *klog_poll_source(void);

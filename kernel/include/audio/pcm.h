@@ -2,6 +2,7 @@
 #include <kernel.h>
 #include <fs/vfs.h>
 #include <sync/spinlock.h>
+#include <ipc/poll.h>
 
 struct pcm_device;
 
@@ -22,6 +23,7 @@ struct pcm_device {
     void *priv;
     struct spinlock owner_lock;     /* protects owner */
     struct file *owner;
+    struct poll_source poll;
 };
 
 /* Register a flat devfs node, normally pcm0, pcm1, ... */

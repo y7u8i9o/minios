@@ -2,6 +2,15 @@
 #include <kernel.h>
 #include <lib/list.h>
 #include <sync/spinlock.h>
+#include <arch/cpu.h>
+
+#define KMEM_MAG_SIZE 16
+
+struct kmem_magazine {
+    void *objects[KMEM_MAG_SIZE];
+    unsigned count;
+    struct spinlock lock;       /* local fast path; remote reclaim is rare */
+};
 
 /* A cache of equally sized objects. lock protects the slab lists and the
  * free lists inside the slabs. link is protected by kmem_caches_lock. */
@@ -19,7 +28,8 @@ struct kmem_cache {
     struct spinlock lock;
     struct list_head link;
     uint64_t nr_slabs;
-    uint64_t nr_objects;        /* currently allocated */
+    uint64_t nr_objects;        /* currently allocated, atomic */
+    struct kmem_magazine magazines[MAX_CPUS]; /* owner CPU only */
 };
 
 void slab_init(void);
@@ -38,3 +48,5 @@ void *kzalloc(size_t size);
 void kfree(void *ptr);
 
 void slab_dump_stats(void);
+/* Return every cached magazine object to its slab and release empty slabs. */
+void slab_reclaim(void);

@@ -10,6 +10,7 @@
 #include <kassert.h>
 #include <klog.h>
 #include <errno.h>
+#include <ipc/poll.h>
 
 #define MQ_MAX 32
 
@@ -22,6 +23,7 @@ struct mqueue {
     bool unlinked;
     struct spinlock lock;
     struct waitq rd_waitq, wr_waitq;
+    struct poll_source poll;
     struct {
         uint16_t len;
         uint8_t data[MQ_MSG_MAX];
@@ -31,21 +33,6 @@ struct mqueue {
 
 static struct mqueue *queues[MQ_MAX];
 static DEFINE_SPINLOCK(mq_table_lock);
-
-/* poll: a single wait queue woken by every producer.  poll_generation
- * closes the check-to-sleep race: a waiter snapshots it before scanning
- * descriptors and sleeps only when no producer notified in the meantime. */
-static DEFINE_SPINLOCK(poll_lock);
-static DEFINE_WAITQ(poll_waitq);
-static uint64_t poll_generation;
-
-void poll_notify(void)
-{
-    spin_lock(&poll_lock);
-    poll_generation++;
-    waitq_wake_all(&poll_waitq);
-    spin_unlock(&poll_lock);
-}
 
 static long mq_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
@@ -69,7 +56,7 @@ static long mq_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     q->count--;
     waitq_wake_all(&q->wr_waitq);
     spin_unlock(&q->lock);
-    poll_notify();
+    poll_source_notify(&q->poll);
     if (len > n)
         len = n;
     memcpy(buf, tmp, len);
@@ -101,7 +88,7 @@ static long mq_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
     q->count++;
     waitq_wake_all(&q->rd_waitq);
     spin_unlock(&q->lock);
-    poll_notify();
+    poll_source_notify(&q->poll);
     return (long)n;
 }
 
@@ -112,6 +99,11 @@ static int mq_poll(struct file *f)
     int r = (q->count ? POLLIN : 0) | (q->count < MQ_DEPTH ? POLLOUT : 0);
     spin_unlock(&q->lock);
     return r;
+}
+
+static struct poll_source *mq_poll_source(struct file *f)
+{
+    return &((struct mqueue *)f->priv)->poll;
 }
 
 static void mq_release(struct file *f)
@@ -133,6 +125,7 @@ static const struct file_ops mq_fops = {
     .read = mq_read,
     .write = mq_write,
     .poll = mq_poll,
+    .poll_source = mq_poll_source,
     .release = mq_release,
     .lseek = NULL,
 };
@@ -171,6 +164,7 @@ int mq_open(const char *name, int flags, struct file **out)
         spinlock_init(&q->lock, "mqueue");
         waitq_init(&q->rd_waitq, "mq_rd");
         waitq_init(&q->wr_waitq, "mq_wr");
+        poll_source_init(&q->poll, "mq_poll");
         spin_lock(&mq_table_lock);
         /* Recheck: another thread may have created it meanwhile. */
         struct mqueue *other = NULL;
@@ -218,44 +212,4 @@ int mq_unlink(const char *name)
     }
     spin_unlock(&mq_table_lock);
     return -ENOENT;
-}
-
-long poll_files(struct file **files, struct pollfd *pfds, size_t n, long timeout_ms)
-{
-    uint64_t deadline = timeout_ms > 0 ? timer_ms() + (uint64_t)timeout_ms : 0;
-    for (;;) {
-        spin_lock(&poll_lock);
-        uint64_t generation = poll_generation;
-        spin_unlock(&poll_lock);
-
-        long ready = 0;
-        for (size_t i = 0; i < n; i++) {
-            pfds[i].revents = 0;
-            if (!files[i]) {
-                continue;
-            }
-            int r = files[i]->ops && files[i]->ops->poll ? files[i]->ops->poll(files[i]) : POLLIN | POLLOUT;
-            pfds[i].revents = (int16_t)(r & (pfds[i].events | POLLHUP | POLLERR | POLLNVAL));
-            if (pfds[i].revents)
-                ready++;
-        }
-        if (ready || timeout_ms == 0)
-            return ready;
-        if (timeout_ms > 0 && timer_ms() >= deadline)
-            return 0;
-        if (signal_should_interrupt())
-            return -EINTR;
-        /* Sleep until a producer wakes poll or, with a timeout, for a
-         * bounded slice so the deadline is honoured.  Recheck the
-         * generation while holding poll_lock so a notification between
-         * the readiness scan and waiter registration cannot be lost. */
-        spin_lock(&poll_lock);
-        if (poll_generation == generation) {
-            if (timeout_ms < 0)
-                waitq_wait(&poll_waitq, &poll_lock);
-            else
-                waitq_wait_timeout(&poll_waitq, &poll_lock, deadline);
-        }
-        spin_unlock(&poll_lock);
-    }
 }

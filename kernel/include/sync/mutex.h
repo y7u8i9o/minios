@@ -5,8 +5,8 @@
 
 struct thread;
 
-/* Sleeping lock. lock protects locked and owner. Ordering:
- * mutex.lock -> waitq.lock -> sched_lock. */
+/* Sleeping lock. lock protects locked and owner. Blocking order:
+ * mutex.lock -> waitq.lock -> the calling CPU's run_queue.lock. */
 struct mutex {
     struct spinlock lock;
     bool locked;

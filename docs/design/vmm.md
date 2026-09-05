@@ -15,7 +15,8 @@
 
 `arch/x86_64/paging.c` holds the entry level operations: table allocation
 from the buddy allocator, `paging_walk` (returns the level 1 PTE or a 2 MiB
-PDE), `paging_map_large` for the kernel's bulk mappings and
+PDE), `paging_walk_preallocated` for consuming table pages prepared before a
+space lock is taken, `paging_map_large` for the kernel's bulk mappings and
 `paging_free_user_tables`. `paging_enable_features` turns on `EFER.NXE`,
 `CR0.WP` (so kernel writes honour read only pages, needed for copy on write)
 and `CR4.PGE`, and programs PAT entry 1 as write combining, which `PTE_PWT`
@@ -36,12 +37,12 @@ framebuffer description out of Limine's memory into `struct bootinfo`.
 
 ## Address spaces
 
-`struct vmspace` carries the PML4 physical address and a spinlock protecting
-its page tables. The kernel instance is `kernel_vmspace` and its lock is
-`kvm_lock`. `vmspace_create` allocates a new PML4 with the kernel half
-shared. `vmspace_destroy` frees the lower half tables and the PML4; the
-mapped frames belong to the process layer (M9). `vmspace_activate` loads CR3
-and records the space in `cpu_current()->vm`.
+`struct vmspace` carries the PML4 physical address, a spinlock protecting its
+page tables and an M46 per-CPU resident-page counter. The kernel instance is
+`kernel_vmspace` and its lock is `kvm_lock`. `vmspace_create` allocates a new
+PML4 with the kernel half shared. `vmspace_destroy` frees the lower half
+tables and the PML4; the mapped frames belong to the process layer (M9).
+`vmspace_activate` loads CR3 and records the space in `cpu_current()->vm`.
 
 `vmm_map`, `vmm_unmap`, `vmm_protect` and `vmm_translate` work on 4 KiB
 pages. Flags are `VM_READ`, `VM_WRITE`, `VM_EXEC`, `VM_USER`, `VM_NOCACHE`,
@@ -52,6 +53,14 @@ A user space rejects kernel addresses with `-EINVAL`.
 unmap and protect. It uses `invlpg` for kernel addresses (global pages
 survive CR3 reloads) and for short user ranges, and a CR3 reload for long
 user ranges. Since M18 the function lives in `mm/tlb.c` and sends shootdown IPIs to the other CPUs that hold the space (see `smp.md`).
+
+M46 moves user-frame and populate-time page-table allocation and zeroing
+outside `vmspace.lock`. The locked phase revalidates the VMA, consumes any
+preallocated table pages it needs and publishes the final PTE. Multi-page
+unmap clears entries under the lock and performs one range shootdown after
+the batch rather than one shootdown per page. Whole-space removal is used only
+immediately before `vmspace_destroy`; its mandatory TLB-drop round therefore
+serves as the teardown shootdown as well.
 
 Kernel stacks come from `kstack_alloc`, which takes a slot from a bitmap,
 maps `KSTACK_SIZE` bytes above an unmapped guard page and returns the top.

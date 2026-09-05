@@ -139,7 +139,10 @@ long sys_dup2(struct trapframe *tf)
         file_put(f);
         return newfd;
     }
-    return fdtable_install_at(cur_fds(), f, newfd);
+    long r = fdtable_install_at(cur_fds(), f, newfd);
+    if (r < 0)
+        file_put(f);
+    return r;
 }
 
 long sys_stat(struct trapframe *tf)

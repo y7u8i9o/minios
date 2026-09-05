@@ -36,6 +36,12 @@ void paging_free_table(uintptr_t pa);
  * 2 MiB PDE), 0 if the walk hit a non present entry without create, or
  * -ENOMEM. *entry receives a pointer to the entry through the HHDM. */
 int paging_walk(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry);
+/* Walk while consuming already allocated and zeroed table pages instead of
+ * allocating under the address-space lock. *used receives the number of
+ * entries consumed from tables. */
+int paging_walk_preallocated(uintptr_t pml4_phys, uintptr_t va,
+                             const uintptr_t *tables, unsigned table_count,
+                             unsigned *used, uint64_t **entry);
 
 /* Find the page directory entry covering va, creating the upper tables
  * with create. Returns 1 with *entry set, 0 when a table is missing

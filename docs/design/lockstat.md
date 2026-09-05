@@ -1,5 +1,10 @@
 # Lock statistics and the lock hot paths (M42)
 
+This document records the M42 baseline that motivated M43-M46. Names such as
+`files_lock`, `poll_lock` and `sched_lock` in the measurements and findings
+describe that baseline; the later implementation removes them as documented
+in `lockfree.md` and `sched.md`.
+
 ## Instrumentation
 
 `CONFIG_LOCKSTAT` (default 1, `toolchain.mk`) adds two words to every
@@ -112,3 +117,25 @@ cost per call is what the following milestones reduce, the client
 behaviour is noted for libgui.
 
 The plan that follows from these numbers is in `lockfree.md`.
+
+## M43-M46 validation
+
+A controlled four-CPU TCG run of `tests/cases/prof_gui` on 2026-09-05 after
+M46 produced the following relevant rows. The removed `files_lock`,
+`poll_lock` and `sched_lock` names were absent.
+
+| Lock | Acquisitions | Contended | Longest hold |
+|---|---:|---:|---:|
+| `run_queue` | 50,223 | 3 (0.006%) | 96 us |
+| `console` | 317 | 0 | 399 us |
+| `console_drain` | 11,079 | 0 | 15 us |
+| `pmm_lock` | 3,503 | 33 | 24 us |
+| `pmm_cpu_cache` | 832 | 0 | 3 us |
+| `slab_magazine` | 17,564 | 0 | 29 us |
+
+The UART work is serialized by the sleeping console drain mutex, so the
+`console_drain` row measures only its internal condition spinlock; the slow
+polled serial write does not hold a spinlock. `vmspace` had no acquisition
+after the test reset the counters: `vma_populate` no longer allocates or
+zeroes data or page-table frames under the space lock, and whole-space
+teardown relies on the mandatory drop performed by `vmspace_destroy`.

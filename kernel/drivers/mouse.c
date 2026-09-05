@@ -5,7 +5,8 @@
 #include <fs/devfs.h>
 #include <ipc/signal.h>
 #include <sched/wait.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
+#include <sync/ring.h>
 #include <lib/string.h>
 #include <klog.h>
 #include <errno.h>
@@ -17,22 +18,21 @@
  * mouse_waitq. */
 static DEFINE_SPINLOCK(mouse_lock);
 static DEFINE_WAITQ(mouse_waitq);
+static struct poll_source mouse_poll_source;
 static struct {
     struct mouse_event ring[MOUSE_EVENTS];
-    unsigned head, tail, count;
+    struct spsc_ring bytes;
 } mouse;
 
 void mouse_push(const struct mouse_event *e)
 {
     spin_lock(&mouse_lock);
-    if (mouse.count < MOUSE_EVENTS) {
-        struct mouse_event *slot = &mouse.ring[mouse.tail];
-        *slot = *e;
-        slot->time_ms = (uint32_t)timer_ms();
-        mouse.tail = (mouse.tail + 1) % MOUSE_EVENTS;
-        mouse.count++;
+    if (ring_space(&mouse.bytes) >= sizeof *e) {
+        struct mouse_event event = *e;
+        event.time_ms = (uint32_t)timer_ms();
+        ring_write(&mouse.bytes, &event, sizeof event);
         waitq_wake_all(&mouse_waitq);
-        poll_notify();
+        poll_source_notify(&mouse_poll_source);
     }
     spin_unlock(&mouse_lock);
 }
@@ -44,20 +44,15 @@ static long mouse_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     struct mouse_event tmp[8];
     size_t want = MIN(n / sizeof tmp[0], ARRAY_SIZE(tmp));
     spin_lock(&mouse_lock);
-    while (mouse.count == 0) {
+    while (ring_count(&mouse.bytes) < sizeof(struct mouse_event)) {
         if (signal_should_interrupt()) {
             spin_unlock(&mouse_lock);
             return -EINTR;
         }
         waitq_wait(&mouse_waitq, &mouse_lock);
     }
-    size_t got = 0;
-    while (got < want && mouse.count) {
-        tmp[got++] = mouse.ring[mouse.head];
-        mouse.head = (mouse.head + 1) % MOUSE_EVENTS;
-        mouse.count--;
-    }
     spin_unlock(&mouse_lock);
+    size_t got = ring_read(&mouse.bytes, tmp, want * sizeof tmp[0]) / sizeof tmp[0];
     memcpy(buf, tmp, got * sizeof tmp[0]);
     return (long)(got * sizeof tmp[0]);
 }
@@ -65,14 +60,23 @@ static long mouse_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 static int mouse_poll(struct file *f)
 {
     spin_lock(&mouse_lock);
-    int r = mouse.count ? POLLIN : 0;
+    int r = ring_count(&mouse.bytes) >= sizeof(struct mouse_event) ? POLLIN : 0;
     spin_unlock(&mouse_lock);
     return r;
 }
 
-static const struct file_ops mouse_fops = { .read = mouse_read, .poll = mouse_poll };
+static struct poll_source *mouse_source(struct file *f)
+{
+    return &mouse_poll_source;
+}
+
+static const struct file_ops mouse_fops = {
+    .read = mouse_read, .poll = mouse_poll, .poll_source = mouse_source
+};
 
 void mouse_init(void)
 {
+    ring_init(&mouse.bytes, mouse.ring, sizeof mouse.ring);
+    poll_source_init(&mouse_poll_source, "mouse_poll");
     devfs_register("mouse", S_IFCHR | 0444, &mouse_fops, NULL, 0);
 }

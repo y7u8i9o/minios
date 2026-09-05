@@ -5,8 +5,9 @@ The kernel runs on every processor QEMU provides (`-smp N`, `QEMU_SMP` or
 the same kernel with the same page tables. Each CPU has a `struct cpu`
 reached through the GS base, its own idle thread, kernel stack, GDT, TSS,
 local APIC timer and run queues. Shared structures keep the locks they
-have carried since their introduction; this milestone added one lock
-(`tlb_lock`) and no new ordering level.
+have carried since their introduction. M18 added `tlb_lock`; M44 later
+replaced the scheduler's global lock with one run-queue lock and one
+remote-wake inbox per CPU.
 
 ## Processor startup
 
@@ -43,34 +44,34 @@ CPU live in `struct cpu_tables` in `gdt.c`, indexed by CPU id.
 `lapic_timer_calibrate` measures the APIC timer against the PIT once on
 the boot CPU. `lapic_timer_start` programs the calling CPU's timer at
 `TIMER_HZ` from that measurement. Every CPU takes `IRQ_TIMER`; only the
-boot CPU counts interrupts and runs the scheduler's global work
-(`sched_tick`: sleepers and the priority boost). The other CPUs run
-`sched_tick_cpu`, which accounts the running thread's slice and requests a
-reschedule when a queue holds work. Each CPU counts its own interrupts in
-`cpu.ticks`.
+boot CPU updates the system-wide tick count. Every CPU runs its local
+`sched_tick_cpu`, which drains its remote-wake inbox, accounts the running
+thread's slice, expires that CPU's sleepers, performs its local priority
+boost and requests a reschedule when work is ready. Each CPU counts its own
+interrupts in `cpu.ticks`.
 
 ## Scheduler
 
-`sched/mlfq.c` keeps one set of MLFQ run queues per CPU under the single
-`sched_lock`. The lock is already held across every context switch, so
-per queue locks would add ordering rules without shortening any critical
-section that matters on a small number of CPUs.
+`sched/mlfq.c` keeps one set of MLFQ run queues, a sorted sleeper list and an
+MPSC remote-wake inbox per CPU. Each run queue has its own lock, held across
+the local context switch. A remote waker publishes to the inbox and sends
+`IRQ_RESCHED`; it does not take the destination queue's lock.
 
-- A thread that becomes ready is placed on an idle CPU when one exists
-  (its previous CPU first), otherwise on the CPU that last ran it
-  (`thread.cpu`).
+- A new thread is placed on the least-loaded started CPU. A blocked thread
+  normally keeps its home CPU so the local consumer can remove it from that
+  CPU's sleeper list before making it ready.
 - `sched_pick_next` takes the best thread from the calling CPU's queues.
   When they are empty it steals the highest priority ready thread of any
   other CPU, and falls back to the CPU's idle thread.
-- The priority boost every second walks the queues of every CPU and the
-  running thread of every started CPU.
+- Each CPU performs its own one-second priority boost under its local lock.
 - `need_resched` and `zombie_pending` are per CPU. A thread that exits is
-  finished by the next thread that runs on the same CPU, exactly as
-  before, because `sched_lock` is held from the state change through the
-  switch. The same holds for `waitq_wait`: a waker on another CPU cannot
-  enqueue a thread until the sleeping CPU has switched away from it.
-- An idle CPU sits in `hlt`; its timer tick every millisecond notices new
-  work, so no wakeup IPI is used.
+  finished by the next thread on the same CPU while that CPU retains its
+  local queue lock across the switch.
+- `waitq_wait` links the waiter before publishing `THREAD_BLOCKED`. A remote
+  waker removes the waiter and queues its intrusive wake node; the target
+  consumes that node after the old context has completed its switch.
+- An idle CPU sits in `hlt`. `IRQ_RESCHED` wakes it immediately when a remote
+  CPU publishes runnable work.
 
 Threads running in user mode on another CPU learn about signals and
 process exit at their next kernel entry, at the latest at their next

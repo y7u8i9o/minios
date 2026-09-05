@@ -89,6 +89,10 @@ int vmm_map(struct vmspace *vm, uintptr_t va, uintptr_t pa, size_t size, unsigne
         return -EINVAL;
     spin_lock(&vm->lock);
     int r = map_locked(vm, va, pa, size, flags);
+    if (r == 0 && vm != &kernel_vmspace)
+        for (size_t off = 0; off < size; off += PAGE_SIZE)
+            if (pmm_is_ram(pa + off))
+                percpu_counter_inc(&vm->resident);
     spin_unlock(&vm->lock);
     return r;
 }
@@ -101,8 +105,11 @@ int vmm_unmap(struct vmspace *vm, uintptr_t va, size_t size)
     for (size_t off = 0; off < size; off += PAGE_SIZE) {
         uint64_t *entry;
         int r = paging_walk(vm->pml4_phys, va + off, false, &entry);
-        if (r == 1)
+        if (r == 1) {
+            if (vm != &kernel_vmspace && (*entry & PTE_P) && pmm_is_ram(*entry & PTE_ADDR_MASK))
+                percpu_counter_dec(&vm->resident);
             *entry = 0;
+        }
         else if (r == 2)
             panic("vmm_unmap: %lx is inside a 2 MiB mapping", va + off);
     }
@@ -155,6 +162,7 @@ struct vmspace *vmspace_create(void)
         return NULL;
     spinlock_init(&vm->lock, "vmspace");
     list_init(&vm->vmas);
+    percpu_counter_init(&vm->resident, 0);
     vm->pml4_phys = paging_alloc_table();
     if (!vm->pml4_phys) {
         kfree(vm);
@@ -210,6 +218,7 @@ void vmspace_free_user_pages(struct vmspace *vm)
             free_user_level(P2V(pml4[i] & PTE_ADDR_MASK), 3);
     }
     tlb_flush_range(vm, 0, USER_TOP + 1);
+    percpu_counter_init(&vm->resident, 0);
     spin_unlock(&vm->lock);
 }
 

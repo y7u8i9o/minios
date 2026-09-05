@@ -5,6 +5,7 @@
 #include <fs/vfs.h>
 #include <fs/fdtable.h>
 #include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <mm/slab.h>
 #include <lib/string.h>
 #include <errno.h>

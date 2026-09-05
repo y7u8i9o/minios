@@ -3,6 +3,7 @@
 #include <debug/symbols.h>
 #include <arch/trap.h>
 #include <arch/cpu.h>
+#include <arch/smp.h>
 #include <arch/paging.h>
 #include <mm/vmm.h>
 #include <mm/slab.h>
@@ -11,7 +12,7 @@
 #include <sched/proc.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <lib/string.h>
 #include <lib/printf.h>
 #include <minios/abi.h>
@@ -19,17 +20,22 @@
 #include <klog.h>
 #include <errno.h>
 
-#define PROF_RING 8192
+#define PROF_CPU_RING 1024
 
-/* The ring and the control state. Protected by prof_lock, which the timer
- * interrupt takes on every sample. */
+/* Each timer interrupt is the sole producer for its CPU ring.  Device reads
+ * are the sole consumer; prof_lock only serializes session reconfiguration. */
 static DEFINE_SPINLOCK(prof_lock);
-static struct prof_sample *ring;
-static uint32_t head, tail;             /* indexes into ring, head == tail: empty */
+struct prof_cpu_ring {
+    struct prof_sample *data;
+    uint32_t head, tail;
+    uint64_t samples, dropped;
+    unsigned active;
+} __aligned(64);
+static struct prof_cpu_ring cpu_rings[MAX_CPUS];
 static bool enabled;
 static uint32_t filter_pid;
 static uint32_t divider = 1;
-static uint64_t samples, dropped;
+static struct poll_source prof_poll_source;
 
 /* Read one 8 byte word of user memory through the page tables of vm.
  * Called with interrupts disabled from the timer; the space lock is taken
@@ -79,18 +85,20 @@ static uint32_t walk_chain(const struct trapframe *tf, struct thread *t, struct 
 
 void profile_sample(const struct trapframe *tf)
 {
-    if (!__atomic_load_n(&enabled, __ATOMIC_RELAXED))
-        return;
     struct cpu *c = cpu_current();
+    struct prof_cpu_ring *r = &cpu_rings[c->id];
+    __atomic_fetch_add(&r->active, 1, __ATOMIC_ACQUIRE);
+    if (!__atomic_load_n(&enabled, __ATOMIC_ACQUIRE))
+        goto out;
     struct thread *t = c->current;
     if (!t || t == c->idle)
-        return;
+        goto out;
     uint32_t div = __atomic_load_n(&divider, __ATOMIC_RELAXED);
     if (div > 1 && c->ticks % div)
-        return;
+        goto out;
     uint32_t pid = __atomic_load_n(&filter_pid, __ATOMIC_RELAXED);
     if (pid && (uint32_t)t->proc->pid != pid)
-        return;
+        goto out;
     struct prof_sample s;
     memset(&s, 0, sizeof s);
     s.pid = (uint32_t)t->proc->pid;
@@ -100,73 +108,98 @@ void profile_sample(const struct trapframe *tf)
     s.chain[0] = tf->rip;
     s.depth = walk_chain(tf, t, &s);
 
-    bool was_empty;
-    spin_lock(&prof_lock);
-    if (!enabled || !ring) {
-        spin_unlock(&prof_lock);
-        return;
-    }
-    uint32_t next = (head + 1) % PROF_RING;
-    was_empty = head == tail;
+    struct prof_sample *data = __atomic_load_n(&r->data, __ATOMIC_ACQUIRE);
+    if (!__atomic_load_n(&enabled, __ATOMIC_ACQUIRE) || !data)
+        goto out;
+    uint32_t head = __atomic_load_n(&r->head, __ATOMIC_RELAXED);
+    uint32_t tail = __atomic_load_n(&r->tail, __ATOMIC_ACQUIRE);
+    uint32_t next = (head + 1) & (PROF_CPU_RING - 1);
+    bool was_empty = head == tail;
     if (next == tail) {
-        dropped++;
+        __atomic_fetch_add(&r->dropped, 1, __ATOMIC_RELAXED);
     } else {
-        ring[head] = s;
-        head = next;
-        samples++;
+        data[head] = s;
+        __atomic_store_n(&r->head, next, __ATOMIC_RELEASE);
+        __atomic_fetch_add(&r->samples, 1, __ATOMIC_RELAXED);
     }
-    spin_unlock(&prof_lock);
     if (was_empty)
-        poll_notify();
+        poll_source_notify(&prof_poll_source);
+out:
+    __atomic_fetch_sub(&r->active, 1, __ATOMIC_RELEASE);
 }
 
 static long profdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
     size_t max = n / sizeof(struct prof_sample);
     size_t got = 0;
-    spin_lock(&prof_lock);
-    while (got < max && ring && tail != head) {
-        memcpy(buf + got * sizeof(struct prof_sample), &ring[tail], sizeof(struct prof_sample));
-        tail = (tail + 1) % PROF_RING;
-        got++;
+    unsigned cpus = smp_cpu_count();
+    for (unsigned cpu = 0; cpu < cpus && got < max; cpu++) {
+        struct prof_cpu_ring *r = &cpu_rings[cpu];
+        struct prof_sample *data = __atomic_load_n(&r->data, __ATOMIC_ACQUIRE);
+        if (!data)
+            continue;
+        uint32_t tail = __atomic_load_n(&r->tail, __ATOMIC_RELAXED);
+        uint32_t head = __atomic_load_n(&r->head, __ATOMIC_ACQUIRE);
+        while (got < max && tail != head) {
+            struct prof_sample sample = data[tail];
+            tail = (tail + 1) & (PROF_CPU_RING - 1);
+            __atomic_store_n(&r->tail, tail, __ATOMIC_RELEASE);
+            memcpy(buf + got * sizeof sample, &sample, sizeof sample);
+            got++;
+        }
     }
-    spin_unlock(&prof_lock);
     return (long)(got * sizeof(struct prof_sample));
 }
 
 static int profdev_poll(struct file *f)
 {
-    spin_lock(&prof_lock);
-    int r = head != tail ? POLLIN : 0;
-    spin_unlock(&prof_lock);
-    return r;
+    unsigned cpus = smp_cpu_count();
+    for (unsigned i = 0; i < cpus; i++)
+        if (__atomic_load_n(&cpu_rings[i].head, __ATOMIC_ACQUIRE) !=
+            __atomic_load_n(&cpu_rings[i].tail, __ATOMIC_ACQUIRE))
+            return POLLIN;
+    return 0;
+}
+
+static struct poll_source *profdev_source(struct file *f)
+{
+    return &prof_poll_source;
 }
 
 static long profdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 {
     switch (req) {
     case PROF_START: {
-        struct prof_sample *buf = kmalloc(PROF_RING * sizeof *buf);
-        spin_lock(&prof_lock);
-        if (!ring) {
-            if (!buf) {
-                spin_unlock(&prof_lock);
-                return -ENOMEM;
+        unsigned cpus = smp_cpu_count();
+        struct prof_sample *fresh[MAX_CPUS] = { 0 };
+        for (unsigned i = 0; i < cpus; i++) {
+            if (!cpu_rings[i].data) {
+                fresh[i] = kmalloc(PROF_CPU_RING * sizeof *fresh[i]);
+                if (!fresh[i]) {
+                    for (unsigned j = 0; j < i; j++)
+                        kfree(fresh[j]);
+                    return -ENOMEM;
+                }
             }
-            ring = buf;
-            buf = NULL;
         }
-        head = tail = 0;
-        samples = dropped = 0;
+        spin_lock(&prof_lock);
+        __atomic_store_n(&enabled, false, __ATOMIC_RELEASE);
+        for (unsigned i = 0; i < cpus; i++) {
+            if (!cpu_rings[i].data)
+                __atomic_store_n(&cpu_rings[i].data, fresh[i], __ATOMIC_RELEASE);
+            else
+                kfree(fresh[i]);
+            cpu_rings[i].head = cpu_rings[i].tail = 0;
+            cpu_rings[i].samples = cpu_rings[i].dropped = 0;
+        }
         filter_pid = (uint32_t)arg;
-        enabled = true;
+        __atomic_store_n(&enabled, true, __ATOMIC_RELEASE);
         spin_unlock(&prof_lock);
-        kfree(buf);
         return 0;
     }
     case PROF_STOP:
         spin_lock(&prof_lock);
-        enabled = false;
+        __atomic_store_n(&enabled, false, __ATOMIC_RELEASE);
         spin_unlock(&prof_lock);
         return 0;
     case PROF_SET_DIVIDER:
@@ -177,15 +210,21 @@ static long profdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
     case PROF_GET_STATS: {
         if (!user_range_ok(arg, sizeof(struct prof_stats), true))
             return -EFAULT;
-        struct prof_stats st;
+        struct prof_stats st = { 0 };
         spin_lock(&prof_lock);
-        st.samples = samples;
-        st.dropped = dropped;
-        st.pending = (head + PROF_RING - tail) % PROF_RING;
         st.enabled = enabled;
         st.pid = filter_pid;
         st.divider = divider;
-        st.ring = PROF_RING - 1;
+        unsigned cpus = smp_cpu_count();
+        for (unsigned i = 0; i < cpus; i++) {
+            struct prof_cpu_ring *r = &cpu_rings[i];
+            st.samples += __atomic_load_n(&r->samples, __ATOMIC_RELAXED);
+            st.dropped += __atomic_load_n(&r->dropped, __ATOMIC_RELAXED);
+            uint32_t head = __atomic_load_n(&r->head, __ATOMIC_ACQUIRE);
+            uint32_t tail = __atomic_load_n(&r->tail, __ATOMIC_ACQUIRE);
+            st.pending += (head + PROF_CPU_RING - tail) & (PROF_CPU_RING - 1);
+        }
+        st.ring = PROF_CPU_RING * cpus - cpus;
         spin_unlock(&prof_lock);
         memcpy((void *)arg, &st, sizeof st);
         return 0;
@@ -197,20 +236,29 @@ static long profdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 
 static void profdev_release(struct file *f)
 {
-    /* Closing the device ends the session: sampling stops and the ring is
-     * released with whatever it still held. */
+    struct prof_sample *old[MAX_CPUS] = { 0 };
     spin_lock(&prof_lock);
-    enabled = false;
-    struct prof_sample *old = ring;
-    ring = NULL;
-    head = tail = 0;
+    __atomic_store_n(&enabled, false, __ATOMIC_RELEASE);
+    unsigned cpus = smp_cpu_count();
     spin_unlock(&prof_lock);
-    kfree(old);
+    for (unsigned i = 0; i < cpus; i++)
+        while (__atomic_load_n(&cpu_rings[i].active, __ATOMIC_ACQUIRE) != 0)
+            cpu_relax();
+    spin_lock(&prof_lock);
+    for (unsigned i = 0; i < cpus; i++) {
+        old[i] = cpu_rings[i].data;
+        __atomic_store_n(&cpu_rings[i].data, NULL, __ATOMIC_RELEASE);
+        cpu_rings[i].head = cpu_rings[i].tail = 0;
+    }
+    spin_unlock(&prof_lock);
+    for (unsigned i = 0; i < cpus; i++)
+        kfree(old[i]);
 }
 
 static const struct file_ops profdev_fops = {
     .read = profdev_read,
     .poll = profdev_poll,
+    .poll_source = profdev_source,
     .ioctl = profdev_ioctl,
     .release = profdev_release,
 };
@@ -247,6 +295,7 @@ static const struct file_ops ksymsdev_fops = { .read = ksymsdev_read };
 
 void profile_init(void)
 {
+    poll_source_init(&prof_poll_source, "profile_poll");
     devfs_register("profile", S_IFCHR | 0666, &profdev_fops, NULL, 0);
     devfs_register("ksyms", S_IFCHR | 0444, &ksymsdev_fops, NULL, 0);
 }

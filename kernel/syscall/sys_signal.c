@@ -37,7 +37,7 @@ long sys_sigaction(struct trapframe *tf)
         p->sig_actions[sig].flags = copy.sa_flags;
         p->sig_actions[sig].restorer = copy.sa_restorer;
         if (copy.sa_handler == SIG_IGN)
-            p->sig_pending &= ~(1UL << sig);
+            __atomic_fetch_and(&p->sig_pending, ~(1UL << sig), __ATOMIC_RELEASE);
     }
     spin_unlock(&p->lock);
     if (oldact) {

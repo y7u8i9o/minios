@@ -81,7 +81,11 @@ long vma_mmap_file(struct vmspace *vm, uintptr_t hint, size_t len, unsigned flag
     struct list_head *pos = vm->vmas.next;
     while (pos != &vm->vmas && list_entry(pos, struct vma, link)->start < start)
         pos = pos->next;
-    list_add_tail(&n->link, pos);
+    struct list_head *prev = pos->prev;
+    n->link.next = pos;
+    n->link.prev = prev;
+    pos->prev = &n->link;
+    __atomic_store_n(&prev->next, &n->link, __ATOMIC_RELEASE);
     spin_unlock(&vm->lock);
     return (long)start;
 }
@@ -149,14 +153,55 @@ int vma_run_sync_jobs(struct list_head *jobs)
     return r;
 }
 
+/* Detach empty leaf tables touched by munmap. Their frames stay allocated
+ * until the range shootdown completes, because another CPU may still have
+ * a cached paging-structure entry referring to them. Skip absent upper
+ * levels so a large sparse munmap does not walk every 2 MiB hole. */
+static void detach_empty_pts(struct vmspace *vm, uintptr_t start, uintptr_t end,
+                             struct list_head *tables)
+{
+    uint64_t *pml4 = P2V(vm->pml4_phys);
+    for (uintptr_t va = ALIGN_DOWN(start, PAGE_2M); va < end;) {
+        uint64_t e = pml4[PML4_INDEX(va)];
+        if (!(e & PTE_P)) {
+            va = ALIGN_DOWN(va, 1UL << 39) + (1UL << 39);
+            continue;
+        }
+        uint64_t *pdpt = P2V(e & PTE_ADDR_MASK);
+        e = pdpt[PDPT_INDEX(va)];
+        if (!(e & PTE_P) || (e & PTE_PS)) {
+            va = ALIGN_DOWN(va, 1UL << 30) + (1UL << 30);
+            continue;
+        }
+        uint64_t *pd = P2V(e & PTE_ADDR_MASK);
+        uint64_t *pde = &pd[PD_INDEX(va)];
+        e = *pde;
+        if ((e & (PTE_P | PTE_PS)) == PTE_P) {
+            uint64_t *pt = P2V(e & PTE_ADDR_MASK);
+            int i = 0;
+            while (i < PT_ENTRIES && pt[i] == 0)
+                i++;
+            /* Non-present swap and PROT_NONE entries still own resources. */
+            if (i == PT_ENTRIES) {
+                *pde = 0;
+                struct page *pg = phys_to_page(e & PTE_ADDR_MASK);
+                list_add_tail(&pg->lru, tables);
+            }
+        }
+        va += PAGE_2M;
+    }
+}
+
 int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
 {
-    if (!IS_ALIGNED(addr, PAGE_SIZE) || len == 0 || addr < USER_BASE || addr + len - 1 > USER_TOP)
+    if (!IS_ALIGNED(addr, PAGE_SIZE) || len == 0 || addr < USER_BASE ||
+        addr > USER_TOP || len > USER_TOP - addr + 1)
         return -EINVAL;
     uintptr_t end = ALIGN_UP(addr + len, PAGE_SIZE);
     int r = 0;
     LIST_HEAD(dead);
     LIST_HEAD(jobs);
+    LIST_HEAD(tables);
     spin_lock(&vm->lock);
     /* Huge pages cut by the range are split before anything changes. */
     r = huge_split_at(vm, addr);
@@ -187,23 +232,35 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
         vma_unmap_range_locked(vm, v, s, e);
         vma_queue_sync(&jobs, v, s, e);
         if (s == v->start && e == v->end) {
-            list_del(&v->link);
-            list_add_tail(&v->link, &dead);
+            struct list_head *prev = v->link.prev;
+            struct list_head *next = v->link.next;
+            next->prev = prev;
+            __atomic_store_n(&prev->next, next, __ATOMIC_RELEASE);
+            list_add_tail(&v->reclaim_link, &dead);
         } else if (s == v->start) {
             if (v->flags & VM_FILE)
                 v->offset += e - v->start;
-            v->start = e;
+            __atomic_store_n(&v->start, e, __ATOMIC_RELEASE);
         } else {
-            v->end = s;
+            __atomic_store_n(&v->end, s, __ATOMIC_RELEASE);
         }
+    }
+    detach_empty_pts(vm, addr, end, &tables);
+    tlb_flush_range(vm, addr, end - addr);
+    while (!list_empty(&tables)) {
+        struct page *pg = list_first_entry(&tables, struct page, lru);
+        list_del(&pg->lru);
+        /* Return directly to the buddy allocator so the empty tables do
+         * not keep otherwise free huge-page blocks fragmented in a cache. */
+        pmm_free(pg, 0);
     }
     spin_unlock(&vm->lock);
     int w = vma_run_sync_jobs(&jobs);
     if (r == 0)
         r = w;
     while (!list_empty(&dead)) {
-        struct vma *v = list_first_entry(&dead, struct vma, link);
-        list_del(&v->link);
+        struct vma *v = list_first_entry(&dead, struct vma, reclaim_link);
+        list_del(&v->reclaim_link);
         vma_release(v);
     }
     return r;
@@ -307,7 +364,7 @@ int vma_mprotect(struct vmspace *vm, uintptr_t addr, size_t len, unsigned prot)
             spin_unlock(&vm->lock);
             return -ENOMEM;
         }
-        v->flags = (v->flags & ~VM_PROT_MASK) | prot;
+        __atomic_store_n(&v->flags, (v->flags & ~VM_PROT_MASK) | prot, __ATOMIC_RELEASE);
         reprotect_range_locked(vm, v, v->start, v->end, v->flags);
     }
     spin_unlock(&vm->lock);

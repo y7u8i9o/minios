@@ -1,6 +1,8 @@
 #include <tests/ktest.h>
 #include <mm/vmm.h>
 #include <mm/pmm.h>
+#include <mm/vma.h>
+#include <arch/paging.h>
 #include <mm/memlayout.h>
 #include <arch/cpu.h>
 #include <lib/string.h>
@@ -100,3 +102,38 @@ static void test_vmm(void)
     kprintf("vmm: %lu pages before, %lu after\n", before.free_pages, after.free_pages);
 }
 KTEST_DEFINE("vmm", test_vmm);
+
+static void test_munmap_tables(void)
+{
+    struct vmspace *vm = vmspace_create();
+    ktest_assert(vm != NULL, "munmap test address space");
+    uintptr_t base = 0x400000;
+    unsigned flags = VM_READ | VM_WRITE | VM_USER | VM_MMAP;
+    ktest_assert(vma_add(vm, base, base + 3 * PAGE_SIZE, flags) == 0 &&
+                 vma_populate(vm, base, base + 3 * PAGE_SIZE) == 0, "populate three pages");
+    ktest_assert(vma_mprotect(vm, base + PAGE_SIZE, PAGE_SIZE, 0) == 0, "protect middle page");
+    ktest_assert(vma_munmap(vm, base, PAGE_SIZE) == 0 &&
+                 vma_munmap(vm, base + 2 * PAGE_SIZE, PAGE_SIZE) == 0, "unmap outside pages");
+    uint64_t *entry;
+    ktest_assert(paging_walk(vm->pml4_phys, base + PAGE_SIZE, false, &entry) == 1 &&
+                 (*entry & PTE_PROTNONE), "PROT_NONE page lost its table");
+    ktest_assert(vma_munmap(vm, base + PAGE_SIZE, PAGE_SIZE) == 0, "unmap middle page");
+    ktest_assert(paging_pde(vm->pml4_phys, base, false, &entry) == 1 && *entry == 0,
+                 "empty leaf table retained");
+    ktest_assert(vma_munmap(vm, (uintptr_t)-PAGE_SIZE, 2 * PAGE_SIZE) == -EINVAL,
+                 "overflowing kernel range accepted");
+    ktest_assert(vma_munmap(vm, base, (size_t)-PAGE_SIZE) == -EINVAL,
+                 "overflowing user range accepted");
+
+    /* A sparse range spans absent PML4 and PDPT entries. */
+    uintptr_t far = 1UL << 46;
+    ktest_assert(vma_add(vm, far, far + PAGE_SIZE, flags) == 0 &&
+                 vma_populate(vm, far, far + PAGE_SIZE) == 0, "populate distant page");
+    ktest_assert(vma_munmap(vm, USER_BASE, USER_TOP - USER_BASE + 1) == 0,
+                 "sparse whole-user-range unmap");
+    ktest_assert(paging_pde(vm->pml4_phys, far, false, &entry) == 1 && *entry == 0,
+                 "distant empty table retained");
+    vmspace_destroy(vm);
+    kprintf("munmap_tables: protected entries retained, empty tables reclaimed, sparse ranges checked\n");
+}
+KTEST_DEFINE("munmap_tables", test_munmap_tables);

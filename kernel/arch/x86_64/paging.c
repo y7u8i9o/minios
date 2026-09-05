@@ -73,6 +73,50 @@ int paging_walk(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry
     return 1;
 }
 
+static uint64_t *next_level_preallocated(uint64_t *entry, bool user,
+                                         const uintptr_t *tables,
+                                         unsigned table_count, unsigned *used)
+{
+    if (*entry & PTE_P) {
+        if (*entry & PTE_PS)
+            return NULL;
+        return table_of(*entry);
+    }
+    if (*used >= table_count)
+        return NULL;
+    uintptr_t pa = tables[(*used)++];
+    *entry = pa | PTE_P | PTE_W | (user ? PTE_U : 0);
+    return P2V(pa);
+}
+
+int paging_walk_preallocated(uintptr_t pml4_phys, uintptr_t va,
+                             const uintptr_t *tables, unsigned table_count,
+                             unsigned *used, uint64_t **entry)
+{
+    bool user = va <= USER_TOP;
+    uint64_t *pml4 = P2V(pml4_phys);
+    *used = 0;
+    uint64_t *pdpt = next_level_preallocated(&pml4[PML4_INDEX(va)], user,
+                                             tables, table_count, used);
+    if (!pdpt)
+        return -ENOMEM;
+    uint64_t *pd = next_level_preallocated(&pdpt[PDPT_INDEX(va)], user,
+                                           tables, table_count, used);
+    if (!pd)
+        return -ENOMEM;
+    uint64_t *pde = &pd[PD_INDEX(va)];
+    if ((*pde & PTE_P) && (*pde & PTE_PS)) {
+        *entry = pde;
+        return 2;
+    }
+    uint64_t *pt = next_level_preallocated(pde, user, tables,
+                                           table_count, used);
+    if (!pt)
+        return -ENOMEM;
+    *entry = &pt[PT_INDEX(va)];
+    return 1;
+}
+
 int paging_pde(uintptr_t pml4_phys, uintptr_t va, bool create, uint64_t **entry)
 {
     bool user = va <= USER_TOP;

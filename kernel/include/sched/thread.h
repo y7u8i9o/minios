@@ -2,11 +2,13 @@
 #include <kernel.h>
 #include <lib/list.h>
 #include <sched/wait.h>
+#include <sync/mpsc.h>
 
 #define THREAD_NAME_LEN 32
 #define MLFQ_LEVELS 8
 
 enum thread_state {
+    THREAD_NEW,         /* allocated, not yet published to a run queue */
     THREAD_READY,       /* on a run queue */
     THREAD_RUNNING,
     THREAD_BLOCKED,     /* on a wait queue */
@@ -20,9 +22,9 @@ struct trapframe;
 
 typedef void (*thread_fn)(void *arg);
 
-/* A schedulable thread. state, level, slice_left, wake_at and run_link are
- * protected by sched_lock. The remaining fields are set at creation or
- * only touched by the thread itself. */
+/* Scheduling fields are owned by the thread's per-CPU run queue.  State is
+ * acquire/release published because remote wake producers inspect it before
+ * placing wake_node on that CPU's MPSC inbox. */
 struct thread {
     uint64_t *ctx;                  /* saved stack pointer while switched out */
     void *kstack_top;
@@ -34,6 +36,8 @@ struct thread {
     int slice_left;                 /* ms left in the current slice */
     uint64_t wake_at;               /* tick to wake a sleeping thread */
     struct list_head run_link;      /* run queue, sleep list or wait queue */
+    struct mpsc_node wake_node;     /* remote runnable notification */
+    bool wake_queued;               /* atomically claims wake_node */
     struct waitq *waiting_on;       /* wait queue holding run_link, wq->lock */
     struct list_head proc_link;     /* proc->threads, proc->lock */
     thread_fn entry;
@@ -49,7 +53,7 @@ struct thread {
     void *fpu_raw;
     uint64_t fs_base;               /* user FS base (thread local storage), loaded at every switch (M35) */
     uint64_t utime, stime;          /* timer ticks charged to this thread, written by its CPU's tick (M40) */
-    uint64_t nvcsw, nivcsw;         /* voluntary and involuntary switches away, sched_lock */
+    uint64_t nvcsw, nivcsw;         /* voluntary and involuntary switches away */
     void *fs_txn;                   /* filesystem transaction the thread is inside, if any (M36) */
     int fs_txn_depth;               /* nesting of op_begin calls for fs_txn */
     char name[THREAD_NAME_LEN];

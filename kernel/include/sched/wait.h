@@ -6,7 +6,8 @@
 struct spinlock;
 
 /* A queue of blocked threads. lock protects waiters. Ordering:
- * caller's condition lock -> waitq.lock -> sched_lock. */
+ * caller's condition lock -> waitq.lock.  Runnable publication uses the
+ * destination CPU's lock-free MPSC inbox. */
 struct waitq {
     struct spinlock lock;
     struct list_head waiters;

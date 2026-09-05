@@ -18,8 +18,8 @@ struct vmspace;
 struct thread;
 
 /* A process: an address space and a set of threads.
- * lock protects threads, zombies, nthreads, exiting, exit_status, cwd,
- * sig_pending and sig_actions. fds has its own lock. pgid is protected
+ * lock protects threads, zombies, nthreads, exit_status, cwd and
+ * sig_actions. exiting and sig_pending are atomic words. fds has its own lock. pgid is protected
  * by proc_tree_lock.
  * parent, children, sibling and state are protected by proc_tree_lock. */
 struct proc {
@@ -36,7 +36,7 @@ struct proc {
     bool stop_reported;             /* wait4 has reported this stop */
     bool continued;                 /* continuation waiting for wait4 */
     int stop_signal;
-    bool exiting;                   /* threads must exit at the next kernel exit */
+    bool exiting;                   /* atomic: threads exit at the next kernel exit */
     int exit_status;                /* wait4 status encoding */
     struct spinlock lock;
     struct list_head link;          /* proc_list */
@@ -46,7 +46,7 @@ struct proc {
     char cwd[PROC_CWD_LEN];
     struct fdtable fds;             /* open files */
     int pgid;                       /* process group */
-    uint64_t sig_pending;
+    uint64_t sig_pending;           /* atomic pending-signal bitmap */
     struct ksigaction sig_actions[NSIG];
     /* Resource limits (M40): written under lock, read without it by the
      * timer tick and the enforcement points, which tolerate a stale value. */

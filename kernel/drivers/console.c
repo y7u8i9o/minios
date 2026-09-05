@@ -4,15 +4,36 @@
 #include <drivers/fbcon.h>
 #include <drivers/fbdev.h>
 #include <sync/spinlock.h>
+#include <sync/mutex.h>
+#include <sync/ring.h>
+#include <sched/thread.h>
+#include <drivers/timer.h>
+#include <arch/cpu.h>
+#include <arch/smp.h>
 #include <debug/panic.h>
+#include <klog.h>
 
 /* Serializes output to the serial port and framebuffer. Uses the irqsave
  * form because kprintf runs before struct cpu exists and inside handlers. */
 static DEFINE_SPINLOCK(console_lock);
+static struct mutex console_drain_mutex;
+
+#define CONSOLE_CPU_RING 4096
+struct console_cpu_ring {
+    char data[CONSOLE_CPU_RING];
+    struct spsc_ring ring;
+    uint64_t dropped;
+} __aligned(64);
+static struct console_cpu_ring console_rings[MAX_CPUS];
+static bool console_async;
 
 void console_init(void)
 {
     spinlock_init(&console_lock, "console");
+    mutex_init(&console_drain_mutex, "console_drain");
+    for (unsigned i = 0; i < MAX_CPUS; i++)
+        ring_init(&console_rings[i].ring, console_rings[i].data,
+                  sizeof console_rings[i].data);
 }
 
 static void console_write_unlocked(const char *s, size_t n)
@@ -22,6 +43,33 @@ static void console_write_unlocked(const char *s, size_t n)
         fbcon_write(s, n);
 }
 
+/* Once async output starts, consoleout is the sole serial producer. Keep the
+ * slow polled UART outside console_lock; the lock is needed only around the
+ * framebuffer state shared with mode changes and the GPU flush thread. */
+static void console_write_async_chunk(const char *s, size_t n)
+{
+    serial_write(s, n);
+    unsigned long flags;
+    spin_lock_irqsave(&console_lock, &flags);
+    if (fbcon_present())
+        fbcon_write(s, n);
+    spin_unlock_irqrestore(&console_lock, flags);
+}
+
+void console_flush(void)
+{
+    char tmp[256];
+    klog_ring_drain();
+    mutex_lock(&console_drain_mutex);
+    unsigned ncpu = smp_cpu_count();
+    for (unsigned i = 0; i < ncpu; i++) {
+        size_t n;
+        while ((n = ring_read(&console_rings[i].ring, tmp, sizeof tmp)) != 0)
+            console_write_async_chunk(tmp, n);
+    }
+    mutex_unlock(&console_drain_mutex);
+}
+
 void console_write(const char *s, size_t n)
 {
     /* A panicking CPU may hold the lock already: print without it. */
@@ -29,10 +77,37 @@ void console_write(const char *s, size_t n)
         console_write_unlocked(s, n);
         return;
     }
+    if (__atomic_load_n(&console_async, __ATOMIC_ACQUIRE)) {
+        push_cli();
+        struct console_cpu_ring *q = &console_rings[cpu_current()->id];
+        size_t wrote = ring_write(&q->ring, s, n);
+        if (wrote < n)
+            q->dropped += n - wrote;
+        pop_cli();
+        return;
+    }
     unsigned long flags;
     spin_lock_irqsave(&console_lock, &flags);
     console_write_unlocked(s, n);
     spin_unlock_irqrestore(&console_lock, flags);
+}
+
+static void consoleout(void *arg)
+{
+    for (;;) {
+        console_flush();
+        sleep_ms(1);
+    }
+}
+
+void console_start_daemon(void)
+{
+    __atomic_store_n(&console_async, true, __ATOMIC_RELEASE);
+    if (!thread_create("consoleout", consoleout, NULL, 0)) {
+        __atomic_store_n(&console_async, false, __ATOMIC_RELEASE);
+        console_flush();
+        return;
+    }
 }
 
 void console_putc(char c)

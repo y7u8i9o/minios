@@ -124,6 +124,7 @@ void snd_tx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     struct snd_stream *s = stream_of(vq);
     if (p->generation != s->generation) {
         p->state = SND_PERIOD_FREE;
+        poll_source_notify(&s->dev->pcm.poll);
         return;
     }
     if (s->queued_frames >= p->frames)
@@ -137,6 +138,7 @@ void snd_tx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     p->state = SND_PERIOD_FREE;
     if (s->state == AUDIO_STATE_RUNNING && s->queued_frames == 0 && !s->draining)
         s->xruns++;
+    poll_source_notify(&s->dev->pcm.poll);
 }
 
 /* A capture period came back.  The device writes the status after the
@@ -150,6 +152,7 @@ void snd_rx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     struct snd_stream *s = stream_of(vq);
     if (p->generation != s->generation) {
         p->state = SND_PERIOD_FREE;
+        poll_source_notify(&s->dev->pcm.poll);
         return;
     }
     if (s->inflight)
@@ -168,6 +171,7 @@ void snd_rx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     if (s->draining || s->state != AUDIO_STATE_RUNNING) {
         /* Not capturing any more: the data is dropped, the period is idle. */
         p->state = SND_PERIOD_FREE;
+        poll_source_notify(&s->dev->pcm.poll);
         return;
     }
     p->state = SND_PERIOD_FULL;
@@ -175,6 +179,7 @@ void snd_rx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     s->transferred_frames += p->frames;
     if (s->inflight == 0)
         s->xruns++;             /* the reader is late: the device has nothing to fill */
+    poll_source_notify(&s->dev->pcm.poll);
 }
 
 /* Submit period p to the RX queue.  Caller holds vq->lock. */

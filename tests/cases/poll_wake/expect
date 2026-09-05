@@ -1,0 +1,2 @@
+poll_wake: object-local wake after [0-9]+ ms
+TEST PASS

@@ -40,9 +40,10 @@ checks `RLIMIT_CPU`. The idle thread is not charged.
 ready as involuntary and every other switch as voluntary
 (`nvcsw`/`nivcsw` on thread and process). `vma_resolve_fault` counts
 faults: swap ins and file page reads are major, everything else minor.
-Resident size is not maintained as a counter; `vma_count_resident` walks
-the page tables when someone asks (`/dev/proc`, `getrusage`), counting a
-huge page as 512 frames.
+Since M46, every address space maintains a per-CPU resident-page counter at
+each present-PTE installation and removal point. `vma_count_resident` sums
+the slots for `/dev/proc` and `getrusage`; a huge mapping adds or removes 512
+pages at once, so neither interface walks page tables.
 
 `proc_reap` adds the child's totals (and the child's own children totals)
 to the reaper's `c*` fields under the reaper's lock. `getrusage` reports
@@ -74,3 +75,8 @@ delivering `SIGXFSZ` (handled and default), `RLIMIT_STACK` measured by an
 exec'd child probing below its stack, `RLIMIT_CPU` terminating a spinning
 child with `SIGXCPU` and then `SIGKILL`, and `getrusage`/`wait4` times,
 faults, resident size and switches.
+
+The `dup2` failure above the soft descriptor limit must drop the temporary
+reference acquired by `fdtable_get`. Otherwise the file and its inode stay
+allocated after process teardown even though every user-visible limit check
+passes. The test runner's unchanged physical-page comparison catches this.

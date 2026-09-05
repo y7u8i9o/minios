@@ -19,7 +19,10 @@ the access against the region flags and maps a zeroed frame. Kernel code
 that writes into user memory before the process runs (ELF loading, the
 initial stack) calls `vma_populate` first. Kernel accesses from system
 calls fault the same way because the process address space is active;
-`user_range_ok` verifies beforehand that the range lies inside regions.
+`user_range_ok` verifies beforehand that the range lies inside regions. Since
+M43 that validation walks the RCU-published VMA forward links without taking
+`vmspace.lock`; removed VMAs and their file references are reclaimed after a
+grace period.
 
 `struct page` gained a 32 bit `refcount` (flags shrank to 16 bits). A frame
 mapped into user space holds one reference per mapping; `page_put` frees

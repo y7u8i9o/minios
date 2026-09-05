@@ -4,6 +4,10 @@
 #include <lib/cmdline.h>
 #include <lib/printf.h>
 #include <lib/string.h>
+#include <ipc/poll.h>
+#include <sync/ring.h>
+#include <arch/cpu.h>
+#include <arch/smp.h>
 
 int klog_runtime_level = CONFIG_LOG_LEVEL;
 
@@ -47,31 +51,70 @@ void klog_print(int level, const char *subsys, const char *fmt, ...)
 /* ---- the kernel log ring read through /dev/klog ---- */
 
 #define KLOG_RING 16384
+#define KLOG_STAGE 16384
 static char ring[KLOG_RING];
 static uint64_t ring_head;          /* total bytes ever appended */
 static DEFINE_SPINLOCK(ring_lock);  /* protects ring and ring_head; taken in interrupt context */
 static bool ring_locked;            /* the lock is usable once the boot CPU is set up */
+static struct poll_source ring_poll;
+struct klog_stage {
+    char data[KLOG_STAGE];
+    struct spsc_ring ring;
+    uint64_t dropped;
+} __aligned(64);
+static struct klog_stage stages[MAX_CPUS];
 
 void klog_ring_init(void)
 {
+    poll_source_init(&ring_poll, "klog_poll");
+    for (unsigned i = 0; i < MAX_CPUS; i++)
+        ring_init(&stages[i].ring, stages[i].data, sizeof stages[i].data);
     ring_locked = true;
 }
 
 void klog_ring_append(const char *text, size_t n)
 {
-    if (ring_locked)
-        spin_lock(&ring_lock);
-    for (size_t i = 0; i < n; i++)
-        ring[(ring_head + i) % KLOG_RING] = text[i];
-    ring_head += n;
-    if (ring_locked)
-        spin_unlock(&ring_lock);
+    if (!ring_locked) {
+        for (size_t i = 0; i < n; i++)
+            ring[(ring_head + i) % KLOG_RING] = text[i];
+        ring_head += n;
+        return;
+    }
+    push_cli();
+    struct klog_stage *s = &stages[cpu_current()->id];
+    size_t wrote = ring_write(&s->ring, text, n);
+    if (wrote < n)
+        s->dropped += n - wrote;
+    pop_cli();
+}
+
+void klog_ring_drain(void)
+{
+    if (!ring_locked)
+        return;
+    char tmp[256];
+    bool appended = false;
+    spin_lock(&ring_lock);
+    unsigned cpus = smp_cpu_count();
+    for (unsigned cpu = 0; cpu < cpus; cpu++) {
+        size_t n;
+        while ((n = ring_read(&stages[cpu].ring, tmp, sizeof tmp)) != 0) {
+            for (size_t i = 0; i < n; i++)
+                ring[(ring_head + i) % KLOG_RING] = tmp[i];
+            ring_head += n;
+            appended = true;
+        }
+    }
+    spin_unlock(&ring_lock);
+    if (appended)
+        poll_source_notify(&ring_poll);
 }
 
 /* Copy up to n bytes starting at absolute offset *pos; an offset that
  * fell out of the ring is moved to the oldest byte kept. */
 size_t klog_ring_read(uint64_t *pos, char *buf, size_t n)
 {
+    klog_ring_drain();
     spin_lock(&ring_lock);
     uint64_t oldest = ring_head > KLOG_RING ? ring_head - KLOG_RING : 0;
     if (*pos < oldest)
@@ -88,8 +131,14 @@ size_t klog_ring_read(uint64_t *pos, char *buf, size_t n)
 
 uint64_t klog_ring_head(void)
 {
+    klog_ring_drain();
     spin_lock(&ring_lock);
     uint64_t h = ring_head;
     spin_unlock(&ring_lock);
     return h;
+}
+
+struct poll_source *klog_poll_source(void)
+{
+    return &ring_poll;
 }

@@ -4,6 +4,9 @@
 #include <sched/sched.h>
 #include <sched/thread.h>
 #include <kassert.h>
+#include <sync/rcu.h>
+#include <debug/panic.h>
+#include <arch/cpu.h>
 
 void waitq_init(struct waitq *wq, const char *name)
 {
@@ -15,20 +18,22 @@ void waitq_wait(struct waitq *wq, struct spinlock *held)
 {
     struct thread *t = thread_current();
     kassert(t != NULL);
+    kassert(t != cpu_current()->idle);
+    if (rcu_read_held())
+        panic("sleep inside RCU read section");
 
     /* Register as a waiter and mark blocked before releasing the condition
-     * lock, so a wakeup between the release and the switch is not lost:
-     * the waker needs wq->lock to find us and sched_lock to change state. */
+     * lock, so a wakeup between release and switch cannot be lost. */
     spin_lock(&wq->lock);
     list_add_tail(&t->run_link, &wq->waiters);
     t->waiting_on = wq;
-    spin_lock(&sched_lock);
+    sched_lock_current();
     t->state = THREAD_BLOCKED;
     spin_unlock(&wq->lock);
     if (held)
         spin_unlock(held);
     sched_switch_locked();
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
     if (held)
         spin_lock(held);
 }
@@ -39,6 +44,9 @@ static int wake(struct waitq *wq, bool all)
     spin_lock(&wq->lock);
     while (!list_empty(&wq->waiters)) {
         struct thread *t = list_first_entry(&wq->waiters, struct thread, run_link);
+        if (t->waiting_on != wq || !t->run_link.prev || !t->run_link.next)
+            panic("bad waiter wq %p next %p prev %p thread %p tid %d state %d waiting %p", wq,
+                  wq->waiters.next, wq->waiters.prev, t, t->tid, t->state, t->waiting_on);
         list_del(&t->run_link);
         t->waiting_on = NULL;
         sched_wake(t);

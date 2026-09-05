@@ -10,6 +10,7 @@
 /* Inter processor interrupts. */
 #define IRQ_TLB_SHOOTDOWN 0xf0
 #define IRQ_HALT          0xf1
+#define IRQ_RESCHED       0xf2
 #define IRQ_SPURIOUS      0xff
 
 /* Legacy IRQ lines as they appear on the I/O APIC (ISA identity mapping,

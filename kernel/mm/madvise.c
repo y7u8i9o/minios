@@ -49,7 +49,7 @@ static int set_flags_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end, u
         }
         if (v->end > end && !vma_split_locked(vm, v, end))
             return -ENOMEM;
-        v->flags = (v->flags | set) & ~clear;
+        __atomic_store_n(&v->flags, (v->flags | set) & ~clear, __ATOMIC_RELEASE);
     }
     return 0;
 }
@@ -65,6 +65,7 @@ static int dontneed_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
             continue;
         vma_unmap_range_locked(vm, v, MAX(v->start, addr), MIN(v->end, end));
     }
+    tlb_flush_range(vm, addr, end - addr);
     return 0;
 }
 

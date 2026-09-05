@@ -1,7 +1,7 @@
 /* eventfd: a 64 bit counter readable when non zero. lock protects the
  * counter and is the condition lock of waitq. */
 #include <ipc/eventfd.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <ipc/signal.h>
 #include <sched/wait.h>
 #include <mm/slab.h>
@@ -12,6 +12,7 @@ struct eventfd {
     struct spinlock lock;
     uint64_t count;
     struct waitq waitq;
+    struct poll_source poll;
 };
 
 static long eventfd_read(struct file *f, char *buf, size_t n, uint64_t *pos)
@@ -36,7 +37,7 @@ static long eventfd_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     waitq_wake_all(&e->waitq);
     spin_unlock(&e->lock);
     memcpy(buf, &v, 8);
-    poll_notify();
+    poll_source_notify(&e->poll);
     return 8;
 }
 
@@ -64,7 +65,7 @@ static long eventfd_write(struct file *f, const char *buf, size_t n, uint64_t *p
     e->count += v;
     waitq_wake_all(&e->waitq);
     spin_unlock(&e->lock);
-    poll_notify();
+    poll_source_notify(&e->poll);
     return 8;
 }
 
@@ -77,6 +78,11 @@ static int eventfd_poll(struct file *f)
     return r;
 }
 
+static struct poll_source *eventfd_poll_source(struct file *f)
+{
+    return &((struct eventfd *)f->priv)->poll;
+}
+
 static void eventfd_release(struct file *f)
 {
     kfree(f->priv);
@@ -86,6 +92,7 @@ static const struct file_ops eventfd_fops = {
     .read = eventfd_read,
     .write = eventfd_write,
     .poll = eventfd_poll,
+    .poll_source = eventfd_poll_source,
     .release = eventfd_release,
 };
 
@@ -96,6 +103,7 @@ int eventfd_create(uint64_t initval, int flags, struct file **out)
         return -ENOMEM;
     spinlock_init(&e->lock, "eventfd");
     waitq_init(&e->waitq, "eventfd");
+    poll_source_init(&e->poll, "eventfd_poll");
     e->count = initval;
     struct file *f = file_alloc(NULL, &eventfd_fops, O_RDWR | (flags & O_NONBLOCK));
     if (!f) {

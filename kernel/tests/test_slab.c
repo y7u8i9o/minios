@@ -34,6 +34,7 @@ static void verify(const void *p, size_t n, unsigned seed, const char *what)
 static void expect_free(uint64_t baseline, const char *what)
 {
     struct pmm_stats st;
+    slab_reclaim();
     pmm_get_stats(&st);
     ktest_assert(st.free_pages == baseline, "%s: %lu free pages, expected %lu", what, st.free_pages, baseline);
 }
@@ -41,6 +42,7 @@ static void expect_free(uint64_t baseline, const char *what)
 static void test_slab(void)
 {
     struct pmm_stats st;
+    slab_reclaim();
     pmm_get_stats(&st);
     uint64_t baseline = st.free_pages;
 

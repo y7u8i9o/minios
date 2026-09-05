@@ -7,8 +7,9 @@
  * pipe.c. */
 #define KLOG_SUBSYS "socket"
 #include <ipc/socket.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
 #include <ipc/signal.h>
+#include <sync/ring.h>
 #include <sched/wait.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -37,7 +38,7 @@ struct fdrec {
 struct sock_dir {
     struct page *pages;
     uint8_t *buf;
-    size_t head, tail, count;
+    struct spsc_ring ring;
     uint64_t wpos, rpos;
     struct fdrec recs[SOCK_MAX_RECS];
     int rec_head, nrecs;
@@ -49,6 +50,7 @@ struct conn {
     struct spinlock lock;
     struct sock_dir dir[2];                 /* dir[i] is written by side i */
     int refs;
+    struct poll_source poll[2];
 };
 
 struct sock {
@@ -60,6 +62,7 @@ struct sock {
     struct conn *backlog[SOMAXCONN];
     int nbacklog;
     struct waitq accept_waitq;
+    struct poll_source poll;
 };
 
 static struct sock *listeners[SOCK_MAX_LISTENERS];
@@ -100,8 +103,10 @@ static struct conn *conn_create(void)
             return NULL;
         }
         d->buf = P2V(page_to_phys(d->pages));
+        ring_init(&d->ring, d->buf, SOCK_BUF);
         waitq_init(&d->rd_waitq, "sock_rd");
         waitq_init(&d->wr_waitq, "sock_wr");
+        poll_source_init(&c->poll[i], "sock_poll");
     }
     c->refs = 2;
     return c;
@@ -128,7 +133,8 @@ static void conn_close_side(struct conn *c, int side)
     waitq_wake_all(&c->dir[side].rd_waitq);
     waitq_wake_all(&c->dir[1 - side].wr_waitq);
     spin_unlock(&c->lock);
-    poll_notify();
+    poll_source_notify(&c->poll[0]);
+    poll_source_notify(&c->poll[1]);
 }
 
 /* ---- sockets ---- */
@@ -140,6 +146,7 @@ static struct sock *sock_alloc(void)
         return NULL;
     spinlock_init(&s->lock, "sock");
     waitq_init(&s->accept_waitq, "sock_accept");
+    poll_source_init(&s->poll, "sock_listen_poll");
     return s;
 }
 
@@ -272,7 +279,7 @@ int socket_connect(struct file *f, const char *name)
     s->conn = c;
     s->side = 0;
     s->state = 2;
-    poll_notify();
+    poll_source_notify(&l->poll);
     return 0;
 }
 
@@ -331,7 +338,8 @@ int socket_shutdown(struct file *f, int how)
         waitq_wake_all(&c->dir[1 - s->side].wr_waitq);
     }
     spin_unlock(&c->lock);
-    poll_notify();
+    poll_source_notify(&c->poll[0]);
+    poll_source_notify(&c->poll[1]);
     return 0;
 }
 
@@ -375,7 +383,7 @@ long socket_send(struct file *f, const char *buf, size_t n, struct file **files,
                 signal_send(thread_current()->proc, SIGPIPE);
                 return -EPIPE;
             }
-            if (d->count == SOCK_BUF) {
+            if (ring_space(&d->ring) == 0) {
                 if (f->flags & O_NONBLOCK) {
                     spin_unlock(&c->lock);
                     return done + off ? (long)(done + off) : -EAGAIN;
@@ -387,17 +395,14 @@ long socket_send(struct file *f, const char *buf, size_t n, struct file **files,
                 waitq_wait(&d->wr_waitq, &c->lock);
                 continue;
             }
-            size_t room = SOCK_BUF - d->count, tail_room = SOCK_BUF - d->tail;
-            size_t k = MIN(chunk - off, MIN(room, tail_room));
-            memcpy(d->buf + d->tail, tmp + off, k);
-            d->tail = (d->tail + k) % SOCK_BUF;
-            d->count += k;
+            size_t k = ring_write(&d->ring, tmp + off, chunk - off);
             d->wpos += k;
             off += k;
             waitq_wake_all(&d->rd_waitq);
         }
         spin_unlock(&c->lock);
-        poll_notify();
+        poll_source_notify(&c->poll[0]);
+        poll_source_notify(&c->poll[1]);
         done += chunk;
     }
     return (long)n;
@@ -415,7 +420,7 @@ long socket_recv(struct file *f, char *buf, size_t n, struct file **files, int *
     struct sock_dir *d = &c->dir[1 - s->side];
     char tmp[BOUNCE];
     spin_lock(&c->lock);
-    while (d->count == 0) {
+    while (ring_count(&d->ring) == 0) {
         if (d->writer_closed) {
             spin_unlock(&c->lock);
             return 0;
@@ -444,7 +449,7 @@ long socket_recv(struct file *f, char *buf, size_t n, struct file **files, int *
         d->rec_head = (d->rec_head + 1) % SOCK_MAX_RECS;
         d->nrecs--;
     }
-    size_t limit = d->count;
+    size_t limit = ring_count(&d->ring);
     if (d->nrecs) {
         uint64_t next = d->recs[d->rec_head].pos;
         if (next - d->rpos < limit)
@@ -455,16 +460,8 @@ long socket_recv(struct file *f, char *buf, size_t n, struct file **files, int *
     size_t got = 0;
     while (got < n) {
         size_t chunk = MIN(n - got, sizeof tmp);
-        size_t off = 0;
-        while (off < chunk) {
-            size_t head_run = SOCK_BUF - d->head;
-            size_t k = MIN(chunk - off, head_run);
-            memcpy(tmp + off, d->buf + d->head, k);
-            d->head = (d->head + k) % SOCK_BUF;
-            d->count -= k;
-            d->rpos += k;
-            off += k;
-        }
+        chunk = ring_read(&d->ring, tmp, chunk);
+        d->rpos += chunk;
         waitq_wake_all(&d->wr_waitq);
         spin_unlock(&c->lock);
         memcpy(buf + got, tmp, chunk);
@@ -472,7 +469,8 @@ long socket_recv(struct file *f, char *buf, size_t n, struct file **files, int *
         spin_lock(&c->lock);
     }
     spin_unlock(&c->lock);
-    poll_notify();
+    poll_source_notify(&c->poll[0]);
+    poll_source_notify(&c->poll[1]);
     if (nfiles)
         *nfiles = delivered;
     return (long)got;
@@ -505,14 +503,22 @@ static int sock_poll(struct file *f)
     struct conn *c = s->conn;
     spin_lock(&c->lock);
     struct sock_dir *in = &c->dir[1 - s->side], *out = &c->dir[s->side];
-    if (in->count || in->writer_closed)
+    if (ring_count(&in->ring) || in->writer_closed)
         r |= POLLIN;
-    if (out->count < SOCK_BUF || out->reader_closed)
+    if (ring_space(&out->ring) || out->reader_closed)
         r |= POLLOUT;
     if (in->writer_closed && out->reader_closed)
         r |= POLLHUP;
     spin_unlock(&c->lock);
     return r;
+}
+
+static struct poll_source *sock_poll_source(struct file *f)
+{
+    struct sock *s = f->priv;
+    if (s->state == 2 && s->conn)
+        return &s->conn->poll[s->side];
+    return &s->poll;
 }
 
 static void sock_release(struct file *f)
@@ -544,6 +550,7 @@ static const struct file_ops sock_fops = {
     .read = sock_read,
     .write = sock_write,
     .poll = sock_poll,
+    .poll_source = sock_poll_source,
     .release = sock_release,
     .lseek = sock_lseek,
 };

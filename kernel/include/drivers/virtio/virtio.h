@@ -2,6 +2,7 @@
 #include <kernel.h>
 #include <sync/spinlock.h>
 #include <sched/wait.h>
+#include <ipc/poll.h>
 
 struct pci_dev;
 
@@ -84,6 +85,7 @@ struct virtqueue {
     volatile uint16_t *notify;
     struct spinlock lock;
     struct waitq waitq;             /* waiters for completions */
+    struct poll_source poll;        /* poll waiters for this queue only */
     void (*complete)(struct virtqueue *vq, uint16_t head, uint32_t len);
 };
 

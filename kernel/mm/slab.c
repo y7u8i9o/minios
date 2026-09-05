@@ -8,6 +8,7 @@
 #include <console.h>
 #include <lib/printf.h>
 #include <debug/panic.h>
+#include <arch/cpu.h>
 
 /*
  * Slab layout: a struct slab header at the start of a buddy block of
@@ -81,6 +82,10 @@ static void cache_setup(struct kmem_cache *c, const char *name, size_t size, siz
     spinlock_init(&c->lock, name);
     c->nr_slabs = 0;
     c->nr_objects = 0;
+    for (unsigned i = 0; i < MAX_CPUS; i++) {
+        c->magazines[i].count = 0;
+        spinlock_init(&c->magazines[i].lock, "slab_magazine");
+    }
 }
 
 #if CONFIG_SLABDEBUG
@@ -177,7 +182,6 @@ static void *cache_alloc_locked(struct kmem_cache *c)
         list_del(&s->link);
         list_add(&s->link, &c->full);
     }
-    c->nr_objects++;
     return obj;
 }
 
@@ -185,11 +189,9 @@ static void cache_free_locked(struct kmem_cache *c, struct slab *s, void *obj)
 {
     uint32_t i = obj_slot(s, obj);
     kassert(i < c->objs_per_slab && slot_obj(s, i) == obj);
-    debug_check_free(s, obj);
     *(uint32_t *)obj = s->free_head;
     s->free_head = i;
     s->free_count++;
-    c->nr_objects--;
     if (s->free_count == 1) {
         list_del(&s->link);
         list_add(&s->link, &c->partial);
@@ -200,11 +202,28 @@ static void cache_free_locked(struct kmem_cache *c, struct slab *s, void *obj)
     }
 }
 
+static struct slab *slab_of(const void *obj);
+
 void *kmem_cache_alloc(struct kmem_cache *c)
 {
-    spin_lock(&c->lock);
-    void *obj = cache_alloc_locked(c);
-    spin_unlock(&c->lock);
+    struct kmem_magazine *m = &c->magazines[cpu_current()->id];
+    spin_lock(&m->lock);
+    if (m->count == 0) {
+        spin_lock(&c->lock);
+        while (m->count < KMEM_MAG_SIZE) {
+            void *p = cache_alloc_locked(c);
+            if (!p)
+                break;
+            m->objects[m->count++] = p;
+        }
+        spin_unlock(&c->lock);
+    }
+    void *obj = m->count ? m->objects[--m->count] : NULL;
+    if (obj) {
+        debug_check_alloc(slab_of(obj), obj);
+        __atomic_fetch_add(&c->nr_objects, 1, __ATOMIC_RELAXED);
+    }
+    spin_unlock(&m->lock);
     return obj;
 }
 
@@ -222,9 +241,36 @@ void kmem_cache_free(struct kmem_cache *c, void *obj)
     struct slab *s = slab_of(obj);
     if (!s || s->cache != c)
         panic("kmem_cache_free: %p does not belong to cache %s", obj, c->name);
-    spin_lock(&c->lock);
-    cache_free_locked(c, s, obj);
-    spin_unlock(&c->lock);
+    debug_check_free(s, obj);
+    struct kmem_magazine *m = &c->magazines[cpu_current()->id];
+    spin_lock(&m->lock);
+    if (m->count == KMEM_MAG_SIZE) {
+        spin_lock(&c->lock);
+        for (unsigned i = 0; i < KMEM_MAG_SIZE / 2; i++) {
+            void *p = m->objects[--m->count];
+            cache_free_locked(c, slab_of(p), p);
+        }
+        spin_unlock(&c->lock);
+    }
+    m->objects[m->count++] = obj;
+    uint64_t old = __atomic_fetch_sub(&c->nr_objects, 1, __ATOMIC_RELAXED);
+    kassert(old > 0);
+    spin_unlock(&m->lock);
+}
+
+static void cache_drain_magazines(struct kmem_cache *c)
+{
+    for (unsigned cpu = 0; cpu < MAX_CPUS; cpu++) {
+        struct kmem_magazine *m = &c->magazines[cpu];
+        spin_lock(&m->lock);
+        spin_lock(&c->lock);
+        while (m->count) {
+            void *obj = m->objects[--m->count];
+            cache_free_locked(c, slab_of(obj), obj);
+        }
+        spin_unlock(&c->lock);
+        spin_unlock(&m->lock);
+    }
 }
 
 struct kmem_cache *kmem_cache_create(const char *name, size_t size, size_t align)
@@ -241,8 +287,9 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size, size_t align
 
 void kmem_cache_destroy(struct kmem_cache *c)
 {
+    cache_drain_magazines(c);
     spin_lock(&c->lock);
-    if (c->nr_objects != 0)
+    if (__atomic_load_n(&c->nr_objects, __ATOMIC_RELAXED) != 0)
         panic("kmem_cache_destroy: cache %s still has %lu objects", c->name, c->nr_objects);
     spin_unlock(&c->lock);
     spin_lock(&kmem_caches_lock);
@@ -313,9 +360,7 @@ void kfree(void *ptr)
     if (pg->flags & PG_SLAB) {
         struct slab *s = slab_of(ptr);
         struct kmem_cache *c = s->cache;
-        spin_lock(&c->lock);
-        cache_free_locked(c, s, ptr);
-        spin_unlock(&c->lock);
+        kmem_cache_free(c, ptr);
     } else if (pg->flags & PG_LARGE) {
         kfree_large(ptr, pg);
     } else {
@@ -347,8 +392,19 @@ void slab_dump_stats(void)
         spin_lock(&c->lock);
         kprintf("  %-14s obj %5zu stride %5zu order %u per slab %3u slabs %4lu objects %lu\n",
                 c->name, c->obj_size, c->stride, c->slab_order, c->objs_per_slab,
-                c->nr_slabs, c->nr_objects);
+                c->nr_slabs, __atomic_load_n(&c->nr_objects, __ATOMIC_RELAXED));
         spin_unlock(&c->lock);
+    }
+    spin_unlock(&kmem_caches_lock);
+}
+
+void slab_reclaim(void)
+{
+    spin_lock(&kmem_caches_lock);
+    struct list_head *pos;
+    list_for_each(pos, &kmem_caches) {
+        struct kmem_cache *c = list_entry(pos, struct kmem_cache, link);
+        cache_drain_magazines(c);
     }
     spin_unlock(&kmem_caches_lock);
 }

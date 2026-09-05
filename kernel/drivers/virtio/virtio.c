@@ -7,7 +7,6 @@
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
 #include <mm/slab.h>
-#include <ipc/mqueue.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
@@ -133,21 +132,17 @@ void virtq_poll_locked(struct virtqueue *vq)
 static void virtio_irq(struct trapframe *tf, void *arg)
 {
     struct virtio_dev *dev = arg;
-    bool completed = false;
     for (unsigned i = 0; i < dev->nqueues && i < ARRAY_SIZE(dev->queues); i++) {
         struct virtqueue *vq = dev->queues[i];
         if (!vq)
             continue;
         spin_lock(&vq->lock);
-        if (virtq_drain_locked(vq))
-            completed = true;
+        bool completed = virtq_drain_locked(vq);
         waitq_wake_all(&vq->waitq);
         spin_unlock(&vq->lock);
+        if (completed)
+            poll_source_notify(&vq->poll);
     }
-    /* Poll readiness callbacks commonly depend on device completions.  Wake
-     * the global poll wait queue only after every virtqueue lock is gone. */
-    if (completed)
-        poll_notify();
 }
 
 struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
@@ -186,6 +181,7 @@ struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
     vq->complete = complete;
     spinlock_init(&vq->lock, "virtqueue");
     waitq_init(&vq->waitq, "virtqueue");
+    poll_source_init(&vq->poll, "virtqueue_poll");
     for (uint16_t i = 0; i < size; i++)
         vq->desc[i].next = (uint16_t)(i + 1);
     vq->free_head = 0;

@@ -29,6 +29,7 @@ struct spinlock {
 
 void spinlock_init(struct spinlock *lk, const char *name);
 void spin_lock(struct spinlock *lk);
+bool spin_try_lock(struct spinlock *lk);
 void spin_unlock(struct spinlock *lk);
 /* True if the current CPU holds the lock. Always true when locked without CONFIG_LOCKDEBUG. */
 bool spin_holding(struct spinlock *lk);

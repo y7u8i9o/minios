@@ -4,6 +4,7 @@
 #include <mm/vma.h>
 #include <mm/pmm.h>
 #include <mm/slab.h>
+#include <mm/slab.h>
 #include <mm/filemap.h>
 #include <mm/huge.h>
 #include <mm/memlayout.h>
@@ -159,6 +160,7 @@ static uint64_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *v
                     pt[i] = e & ~PTE_LAZYFREE;
                 } else {
                     pt[i] = 0;
+                    percpu_counter_dec(&vm->resident);
                     tlb_flush_range(vm, va, PAGE_SIZE);
                     page_put(pg);
                     spin_lock(&swap_lock);
@@ -227,6 +229,7 @@ static unsigned evict_batch_locked(void)
             while (nframes < want && (entry = find_victim(vm, &hand_va, &va)) != NULL) {
                 frames[nframes] = phys_to_page(*entry & PTE_ADDR_MASK);
                 *entry = ((first + nframes) << 12) | PTE_SWAPPED;
+                percpu_counter_dec(&vm->resident);
                 tlb_flush_range(vm, va, PAGE_SIZE);
                 nframes++;
             }
@@ -286,6 +289,7 @@ void swap_drain(void)
 {
     while (evicting)
         sleep_ms(1);
+    slab_reclaim();
 }
 
 static void kswapd(void *arg)
@@ -391,6 +395,7 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
         if (w == 1 && (*entry & PTE_SWAPPED) && (*entry >> 12) == slot + i && v) {
             page_get(pages[i]);
             *entry = page_to_phys(pages[i]) | vma_pte_flags(v->flags);
+            percpu_counter_inc(&vm->resident);
             tlb_flush_range(vm, a, PAGE_SIZE);
             swap_free_slot(slot + i);
             spin_lock(&swap_lock);

@@ -14,6 +14,11 @@ bookkeeping of `brk` stays valid. Only `MAP_ANONYMOUS | MAP_PRIVATE` is
 supported: file mappings return `ENODEV`, `MAP_FIXED` returns `EINVAL`.
 `brk` and `sbrk` are unchanged.
 
+Since M46, a multi-page unmap clears the complete range while holding the
+space lock and then issues one range TLB shootdown. Resident accounting is
+updated through the address space's per-CPU counter as present entries are
+removed.
+
 ## Swap device and slots
 
 `mm/swap.c` uses the second virtio-blk device, `vdb`, as swap space

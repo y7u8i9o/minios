@@ -83,6 +83,7 @@ int huge_fault_locked(struct vmspace *vm, struct vma *v, uintptr_t va)
     }
     page_get(pg);
     *pde = page_to_phys(pg) | vma_pte_flags(flags) | PTE_PS;
+    percpu_counter_add(&vm->resident, PT_ENTRIES);
     tlb_flush_range(vm, block, PAGE_2M);    /* a freed empty table may be cached by the page walker */
     __atomic_fetch_add(&stats.mapped, 1, __ATOMIC_RELAXED);
     return 1;

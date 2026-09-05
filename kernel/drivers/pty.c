@@ -4,7 +4,8 @@
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <ipc/signal.h>
-#include <ipc/mqueue.h>
+#include <ipc/poll.h>
+#include <sync/ring.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <mm/vma.h>
@@ -23,8 +24,9 @@ struct pty {
     int index;
     struct spinlock lock;
     struct waitq out_waitq;
+    struct poll_source poll;
     char out[PTY_OUT_MAX];
-    size_t head, tail, count;
+    struct spsc_ring out_ring;
     bool master_open;
     int slave_open;                 /* number of open slave files */
     struct tty tty;
@@ -38,14 +40,10 @@ static void pty_output(struct tty *t, const char *s, size_t n)
 {
     struct pty *p = container_of(t, struct pty, tty);
     spin_lock(&p->lock);
-    for (size_t i = 0; i < n && p->count < PTY_OUT_MAX; i++) {
-        p->out[p->tail] = s[i];
-        p->tail = (p->tail + 1) % PTY_OUT_MAX;
-        p->count++;
-    }
+    ring_write(&p->out_ring, s, n);
     waitq_wake_all(&p->out_waitq);
     spin_unlock(&p->lock);
-    poll_notify();
+    poll_source_notify(&p->poll);
 }
 
 /* ---- master ---- */
@@ -59,7 +57,7 @@ static int ptmx_open(struct inode *ino, struct file *f)
             p->master_open = true;
             spin_unlock(&pty_table_lock);
             tty_init(&p->tty, p->name, pty_output, false);
-            p->head = p->tail = p->count = 0;
+            ring_init(&p->out_ring, p->out, sizeof p->out);
             f->priv = p;
             klog_info("pts%d opened", i);
             return 0;
@@ -74,19 +72,17 @@ static long ptmx_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     struct pty *p = f->priv;
     char tmp[256];
     spin_lock(&p->lock);
-    while (p->count == 0) {
+    while (ring_count(&p->out_ring) == 0) {
         if (signal_should_interrupt()) {
             spin_unlock(&p->lock);
             return -EINTR;
         }
         waitq_wait(&p->out_waitq, &p->lock);
     }
-    size_t got = 0;
-    while (got < n && got < sizeof tmp && p->count) {
-        tmp[got++] = p->out[p->head];
-        p->head = (p->head + 1) % PTY_OUT_MAX;
-        p->count--;
-    }
+    spin_unlock(&p->lock);
+    size_t got = ring_read(&p->out_ring, tmp, MIN(n, sizeof tmp));
+    spin_lock(&p->lock);
+    waitq_wake_all(&p->out_waitq);
     spin_unlock(&p->lock);
     memcpy(buf, tmp, got);
     return (long)got;
@@ -111,9 +107,14 @@ static int ptmx_poll(struct file *f)
 {
     struct pty *p = f->priv;
     spin_lock(&p->lock);
-    int r = p->count ? POLLIN : 0;
+    int r = ring_count(&p->out_ring) ? POLLIN : 0;
     spin_unlock(&p->lock);
     return r | POLLOUT;
+}
+
+static struct poll_source *ptmx_poll_source(struct file *f)
+{
+    return &((struct pty *)f->priv)->poll;
 }
 
 static long ptmx_ioctl(struct file *f, unsigned long req, uintptr_t arg)
@@ -150,6 +151,7 @@ static const struct file_ops ptmx_fops = {
     .read = ptmx_read,
     .write = ptmx_write,
     .poll = ptmx_poll,
+    .poll_source = ptmx_poll_source,
     .ioctl = ptmx_ioctl,
     .release = ptmx_release,
 };
@@ -188,7 +190,7 @@ static long pts_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
         spin_lock(&p->lock);
         size_t off = 0;
         while (off < chunk) {
-            if (p->count == PTY_OUT_MAX) {
+            if (ring_space(&p->out_ring) == 0) {
                 if (!p->master_open) {
                     spin_unlock(&p->lock);
                     return done ? (long)done : -EIO;
@@ -200,13 +202,13 @@ static long pts_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
                 waitq_wait(&p->out_waitq, &p->lock);
                 continue;
             }
-            p->out[p->tail] = tmp[off++];
-            p->tail = (p->tail + 1) % PTY_OUT_MAX;
-            p->count++;
+            spin_unlock(&p->lock);
+            off += ring_write(&p->out_ring, tmp + off, chunk - off);
+            spin_lock(&p->lock);
         }
         waitq_wake_all(&p->out_waitq);
         spin_unlock(&p->lock);
-        poll_notify();
+        poll_source_notify(&p->poll);
         done += chunk;
     }
     return (long)n;
@@ -216,6 +218,11 @@ static int pts_poll(struct file *f)
 {
     struct pty *p = f->priv;
     return tty_poll(&p->tty);
+}
+
+static struct poll_source *pts_poll_source(struct file *f)
+{
+    return tty_poll_source(&((struct pty *)f->priv)->tty);
 }
 
 static long pts_ioctl(struct file *f, unsigned long req, uintptr_t arg)
@@ -239,6 +246,7 @@ static const struct file_ops pts_fops = {
     .read = pts_read,
     .write = pts_write,
     .poll = pts_poll,
+    .poll_source = pts_poll_source,
     .ioctl = pts_ioctl,
     .release = pts_release,
 };
@@ -250,7 +258,9 @@ void pty_init(void)
         struct pty *p = &ptys[i];
         p->index = i;
         spinlock_init(&p->lock, "pty");
+        ring_init(&p->out_ring, p->out, sizeof p->out);
         waitq_init(&p->out_waitq, "pty_out");
+        poll_source_init(&p->poll, "pty_poll");
         ksnprintf(p->name, sizeof p->name, "pts%d", i);
         tty_init(&p->tty, p->name, pty_output, false);
         devfs_register(p->name, S_IFCHR | 0666, &pts_fops, p, 0);

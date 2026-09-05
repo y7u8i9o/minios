@@ -3,6 +3,8 @@
 #include <lib/list.h>
 #include <sync/spinlock.h>
 #include <sync/mutex.h>
+#include <sync/atomic.h>
+#include <sync/rcu.h>
 #include <minios/abi.h>
 
 struct inode;
@@ -11,6 +13,7 @@ struct superblock;
 struct blockdev;
 struct vmspace;
 struct mapping;
+struct poll_source;
 
 #define VFS_PATH_MAX 256
 
@@ -50,6 +53,7 @@ struct file_ops {
                  uint64_t off);
     /* Readiness bits (POLLIN, POLLOUT). NULL means always ready. */
     int (*poll)(struct file *f);
+    struct poll_source *(*poll_source)(struct file *f);
     int (*truncate)(struct file *f, uint64_t size);   /* M23: memfd */
 };
 
@@ -122,16 +126,18 @@ struct mount {
     struct list_head link;
 };
 
-/* An open file description. refcount is protected by files_lock. pos is
- * protected by lock. */
+/* An open file description. refcount is atomic.  The storage remains alive
+ * for an RCU grace period after the final reference; pos is protected by
+ * lock. */
 struct file {
     struct inode *inode;
     const struct file_ops *ops;
     uint64_t pos;
     int flags;                      /* O_* */
-    int refcount;
+    refcount_t refcount;
     struct mutex lock;
     void *priv;
+    struct rcu_head rcu;
 };
 
 void vfs_init(void);

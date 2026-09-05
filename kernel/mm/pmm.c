@@ -2,6 +2,8 @@
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
 #include <arch/boot.h>
+#include <arch/cpu.h>
+#include <arch/smp.h>
 #include <sync/spinlock.h>
 #include <lib/string.h>
 #include <kassert.h>
@@ -243,7 +245,35 @@ void pmm_free(struct page *page, unsigned order)
 
 struct page *pmm_alloc_page(void)
 {
-    return pmm_alloc(0);
+    struct cpu *c = cpu_current();
+    spin_lock(&c->pmm_cache_lock);
+    if (c->pmm_cache_count) {
+        struct page *page = c->pmm_cache[--c->pmm_cache_count];
+        page->flags &= (uint16_t)~PG_CPUCACHE;
+        spin_unlock(&c->pmm_cache_lock);
+        return page;
+    }
+    spin_unlock(&c->pmm_cache_lock);
+
+    struct page *batch[8];
+    unsigned n = 0;
+    while (n < ARRAY_SIZE(batch) && (batch[n] = pmm_alloc(0)) != NULL)
+        n++;
+    if (n == 0)
+        return NULL;
+    spin_lock(&c->pmm_cache_lock);
+    for (unsigned i = 1; i < n; i++) {
+        if (c->pmm_cache_count < ARRAY_SIZE(c->pmm_cache)) {
+            batch[i]->flags |= PG_CPUCACHE;
+            c->pmm_cache[c->pmm_cache_count++] = batch[i];
+        } else {
+            spin_unlock(&c->pmm_cache_lock);
+            pmm_free(batch[i], 0);
+            spin_lock(&c->pmm_cache_lock);
+        }
+    }
+    spin_unlock(&c->pmm_cache_lock);
+    return batch[0];
 }
 
 void pmm_split_block(struct page *head, unsigned order)
@@ -266,7 +296,7 @@ bool page_put(struct page *page)
     uint32_t old = __atomic_fetch_sub(&page->refcount, 1, __ATOMIC_SEQ_CST);
     kassert(old > 0);
     if (old == 1) {
-        pmm_free(page, 0);
+        pmm_free_page(page);
         return true;
     }
     return false;
@@ -274,7 +304,42 @@ bool page_put(struct page *page)
 
 void pmm_free_page(struct page *page)
 {
-    pmm_free(page, 0);
+    struct cpu *c = cpu_current();
+    struct page *drain[16];
+    unsigned n = 0;
+    spin_lock(&c->pmm_cache_lock);
+    if (page->flags & PG_CPUCACHE)
+        panic("pmm_free_page: double free of pfn %lx", page_to_pfn(page));
+    if (c->pmm_cache_count == ARRAY_SIZE(c->pmm_cache)) {
+        while (n < ARRAY_SIZE(drain)) {
+            drain[n] = c->pmm_cache[--c->pmm_cache_count];
+            drain[n]->flags &= (uint16_t)~PG_CPUCACHE;
+            n++;
+        }
+    }
+    page->flags |= PG_CPUCACHE;
+    c->pmm_cache[c->pmm_cache_count++] = page;
+    spin_unlock(&c->pmm_cache_lock);
+    for (unsigned i = 0; i < n; i++)
+        pmm_free(drain[i], 0);
+}
+
+void pmm_reclaim_cpu_caches(void)
+{
+    for (unsigned cpu = 0; cpu < smp_cpu_count(); cpu++) {
+        struct cpu *c = cpu_by_id(cpu);
+        struct page *drain[ARRAY_SIZE(c->pmm_cache)];
+        unsigned n = 0;
+        spin_lock(&c->pmm_cache_lock);
+        while (c->pmm_cache_count) {
+            struct page *page = c->pmm_cache[--c->pmm_cache_count];
+            page->flags &= (uint16_t)~PG_CPUCACHE;
+            drain[n++] = page;
+        }
+        spin_unlock(&c->pmm_cache_lock);
+        for (unsigned i = 0; i < n; i++)
+            pmm_free(drain[i], 0);
+    }
 }
 
 void pmm_get_stats(struct pmm_stats *out)
@@ -282,6 +347,12 @@ void pmm_get_stats(struct pmm_stats *out)
     spin_lock(&pmm_lock);
     *out = pmm_stats;
     spin_unlock(&pmm_lock);
+    for (unsigned i = 0; i < smp_cpu_count(); i++) {
+        struct cpu *c = cpu_by_id(i);
+        spin_lock(&c->pmm_cache_lock);
+        out->free_pages += c->pmm_cache_count;
+        spin_unlock(&c->pmm_cache_lock);
+    }
 }
 
 void pmm_get_free_counts(uint64_t *out)
@@ -290,6 +361,12 @@ void pmm_get_free_counts(uint64_t *out)
     for (unsigned o = 0; o <= PMM_MAX_ORDER; o++)
         out[o] = pmm_free_count[o];
     spin_unlock(&pmm_lock);
+    for (unsigned i = 0; i < smp_cpu_count(); i++) {
+        struct cpu *c = cpu_by_id(i);
+        spin_lock(&c->pmm_cache_lock);
+        out[0] += c->pmm_cache_count;
+        spin_unlock(&c->pmm_cache_lock);
+    }
 }
 
 void pmm_dump_stats(void)

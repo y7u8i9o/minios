@@ -1,166 +1,158 @@
-# Lock-free data structures: design and plan
+# Lock-free and per-CPU paths (M43-M46)
 
-This document is the plan for milestones M43 to M46 and will be updated
-as each is implemented. The measurements it rests on are in
-`lockstat.md`.
+M43-M46 replace the global locks on the common system-call, scheduling,
+byte-stream and allocation paths.  The kernel remains non-preemptible:
+interrupts can interrupt kernel code, but another thread does not run on the
+same CPU until the current thread blocks, yields or returns through a
+preemption point.  This property is part of the proofs below.
 
-## Rules
+## Ordering rules and primitives
 
-- Spinlocks stay where a critical section changes several words at once
-  and is short: run queue manipulation, list surgery, table growth. The
-  goal is to take no spinlock on the paths every system call runs and to
-  make the locks that remain per CPU or per object.
-- Atomics use the `__atomic` builtins with explicit ordering: `RELAXED`
-  for counters nobody reads for control decisions, `ACQUIRE`/`RELEASE`
-  pairs for publishing a structure and consuming it, `SEQ_CST` only where
-  a proof needs it. Every lock-free structure documents its ordering in a
-  comment.
-- No ABA is possible where only one side can pop: the MPSC stack below
-  has many pushers and one popper, so a CAS on the head from the popper
-  cannot see a recycled node. Structures with several poppers are not
-  used.
-- Freed memory that lock-free readers may still be looking at is
-  released through `rcu_free` (below), never through `kfree` directly.
-- Every structure comes with a self test under `tests/cases/` that runs
-  producers and consumers on all four CPUs and checks counts, and the
-  `lockstat` rows named in each milestone must reach the stated counts
-  in `prof_gui`.
+All atomic operations name their ordering in `kernel/sync/atomic.h`.
+Statistics use relaxed operations.  A pointer or index that makes initialized
+memory visible is stored with release ordering and loaded with acquire
+ordering.  A reference count reaching zero is terminal:
+`refcount_inc_not_zero` is the only operation allowed after a lock-free
+lookup, and destruction uses a release decrement followed by an acquire
+fence.
 
-## Primitives (`kernel/sync/`)
+`percpu.h` stores one counter in each cache line.  The owner CPU updates its
+slot and readers sum the slots.  `vmspace.resident` uses this form, so process
+accounting no longer walks page tables.
 
-`atomic.h`: `atomic_inc`, `atomic_dec_and_test`, `atomic_cmpxchg`
-wrappers naming the ordering, and `refcount_t` with `refcount_inc_not_zero`
-for the "reference an object I found through a lock-free lookup" case.
+`mpsc.h` is an intrusive multi-producer/single-consumer stack.  Producers
+publish a node with a release CAS.  The consumer acquires the complete list
+with one exchange and reverses it to recover FIFO order.  Only the consumer
+removes nodes, so the head operation has no ABA case.  Scheduler wake inboxes
+and RCU callback queues use this primitive.
 
-`percpu.h`: per CPU counters (`struct percpu_counter`, one cache line per
-CPU indexed by `cpu_current()->id`, summed when read). Used for the
-allocator statistics, the fault and switch counters and the resident
-page count of an address space.
+`ring.h` is a power-of-two SPSC byte ring.  The producer owns `head`, writes
+the bytes, then publishes `head` with release ordering.  The consumer owns
+`tail`, reads bytes after acquiring `head`, then releases the new `tail`.
+Blocking and readiness notification remain outside the ring.
 
-`ring.h`: single producer, single consumer byte ring. The producer owns
-`head`, the consumer owns `tail`; each publishes its index with a
-`RELEASE` store after writing or reading data and reads the other's with
-an `ACQUIRE` load. Capacity is a power of two. Blocking stays outside the
-ring: a wait queue per side, woken after the index store.
+`rcu.h` implements epoch RCU for the non-preemptible kernel.  Read sections
+may not sleep; `waitq_wait` detects this invariant.  Context switches and the
+idle loop publish quiescent epochs.  `rcu_call` attaches the next epoch to an
+intrusive callback and puts it on the calling CPU's MPSC queue. A dedicated
+`rcu` kernel thread is the sole consumer of all CPU queues and reclaims a
+callback after every started CPU has published that epoch. It sleeps one
+millisecond between scans and holds no RCU lock across a callback.
+Callbacks may sleep: releasing a VMA's last file reference can enter an MFS
+journal transaction. Running that path from the timer interrupt could block
+an interrupted idle thread and corrupt its wait-queue membership.
 
-`mpsc.h`: intrusive multi producer, single consumer stack. Producers push
-with a CAS loop on `head`; the consumer takes the whole list with one
-`xchg` of `head` to NULL and processes it in reverse. This is the
-wakeup path between CPUs and the deferred free list of RCU.
+## File descriptors, signals and VM regions
 
-`rcu.h`: read-copy-update for a kernel that is not preemptible. A read
-side critical section is any kernel code that does not block, so
-`rcu_read_lock` is a compiler barrier and a debug counter. A writer
-publishes a new version with a `RELEASE` store of a pointer and calls
-`rcu_free(old)`, which pushes the old memory onto a per CPU MPSC list
-with the current grace period number. Every CPU increments its own
-counter in `sched_switch_locked` and in the idle loop; a grace period
-ends when every started CPU has passed such a point since the item was
-queued, checked by the CPU that runs `rcu_reclaim` from its tick. Sleeping
-inside a read side section is a bug that the debug counter catches in
-`waitq_wait`.
+`proc.exiting` and `proc.sig_pending` are published atomically.  The common
+signal and exit checks perform acquire loads and avoid `proc.lock` when no
+work is pending.
 
-`seqlock.h`: a sequence counter for small structures that are read often
-and written rarely (the time offset of `clock_settime`, compositor
-settings if they move into the kernel). Readers retry while the sequence
-is odd or changed.
+`struct file.refcount` is a `refcount_t`; the former global `files_lock` no
+longer exists.  A descriptor slot is installed with a release store.
+`fdtable_get` enters an RCU read section, acquires the slot, and calls
+`refcount_inc_not_zero`.  Close publishes NULL before dropping the table's
+reference.  The file's release operation and inode reference are discharged
+at the last reference; the file allocation itself remains available until an
+RCU callback, covering a reader that loaded the old slot immediately before
+close.
 
-## Hot paths and their replacements
+The VMA list has an RCU-published forward link.  Writers still hold
+`vmspace.lock` for list surgery and page-table changes.  Removal updates the
+predecessor with a release store and leaves the removed node's old forward
+link intact until its callback.  `vma_range_ok` therefore walks the list
+without `vmspace.lock`; an old reader either follows the old valid chain or
+observes the new one.  File and mapping references attached to a removed VMA
+are also released from the callback.
 
-### System call entry and exit (M43)
+## Object-local poll
 
-`proc.exiting` and `proc.sig_pending` become atomic words.
-`proc_exit_check`, `signal_should_interrupt` and `signal_deliver` read
-them with `ACQUIRE` loads and take `proc.lock` only when a bit is set,
-which is the rare case. The six `proc.lock` acquisitions per system call
-become zero on the common path.
+Every pollable object exposes a `poll_source`.  `poll_files` registers one
+stack entry with each distinct source before its first readiness check.  A
+producer walks only that source's waiter list, sets the waiter's notification
+word and wakes its private wait queue.  Clearing the word, checking readiness
+and registering for sleep are ordered by the waiter lock, so a transition in
+the check-to-sleep window is retained.  Entries are removed before the
+function returns.
 
-`user_range_ok` stops walking the region list under `vmspace.lock`. The
-region list becomes RCU protected: `vma_split_locked`, `vma_munmap` and
-friends still take the lock to change it, but freed regions go through
-`rcu_free` and the lookup for a user pointer check runs without the lock.
-The later step, planned in the same milestone if time allows, is
-`copy_from_user`/`copy_to_user` with fault fixup: the kernel touches the
-user address directly, the page fault handler recognizes a fault inside
-an accessor and returns `-EFAULT` through a fixup table, and the region
-walk disappears from the system call path entirely.
+Pipes, ttys, ptys, sockets, message queues, eventfd, timerfd, mouse, klog,
+profiler, PCM and virtqueue-backed devices notify their own sources.  The
+former global poll lock, generation and wake queue have been removed; a write
+to one object cannot cause a polling herd on unrelated descriptors.
 
-`struct file.refcount` becomes a `refcount_t` and `files_lock` is
-removed. `fdtable_get` reads `fds[fd]` with an `ACQUIRE` load and takes a
-reference with `refcount_inc_not_zero`; `fdtable_close` publishes NULL,
-drops the table's reference and frees the file through `rcu_free` when
-the count reaches zero, so a reader that loaded the pointer just before
-the close either gets a reference or sees the count at zero and retries
-as "no such descriptor". `fdtable.lock` stays for install and close.
+## Per-CPU scheduler
 
-`poll` loses the global wait queue. Every pollable object gets a
-`struct waitq` of its own (sockets already have per direction queues,
-pipes, ttys, timers and the input rings gain one), and `poll_files`
-registers a waiter entry on the queue of every descriptor before it
-checks readiness, then sleeps; a producer wakes only the queues of its
-own object. `poll_notify`, `poll_lock` and `poll_generation` are removed.
-Readiness checks (`sock_poll`, `tty_poll`, ...) read their counts with
-atomic loads instead of taking the object lock.
+Each CPU owns one MLFQ, one sorted sleeper list and one MPSC runnable inbox.
+The run-queue lock protects only that CPU's lists.  Remote wakeup atomically
+claims the thread's intrusive wake node, publishes it to the home CPU and
+sends `IRQ_RESCHED`.  The target drains the inbox under its own lock.  A
+thread cannot be inserted twice because only the producer that changes
+`wake_queued` from false to true may publish the node.
 
-Target for `prof_gui`: the `proc`, `files_lock` and `poll_lock` rows are
-gone or below one thousand acquisitions, `vmspace` drops to page faults
-and mmap calls only, and a `poll` on one socket takes at most the
-socket's lock.
+The timer decrements the locally running thread's slice without a lock.  It
+takes the local queue lock only to drain wakeups, expire local sleepers and
+perform the local one-second boost.  An empty CPU tries victim locks while
+holding its own lock; a failed try is skipped, so two stealing CPUs never
+wait on each other.  The old global `sched_lock` has been removed.  Full
+context-switch and wait-queue details are in `sched.md`.
 
-### Scheduler (M44)
+## Byte streams, input, logging and profiling
 
-`sched_lock` splits into one `struct run_queue.lock` per CPU. A CPU takes
-only its own lock to pick the next thread and to enqueue a thread that
-became ready on itself. Waking a thread that belongs to another CPU
-pushes it onto that CPU's `mpsc` wakeup list without taking any lock and
-sends a reschedule IPI when the target is idle; the target drains the
-list under its own lock at its next scheduling point. Work stealing takes
-the victim's lock only, never two locks at once, in CPU id order for the
-two moments it needs both (moving a thread between queues at boost time).
-The tick decrements `slice_left` of the running thread without a lock,
-since only the running CPU touches it. Sleepers move to a per CPU sorted
-list under the run queue lock; the boost walks each CPU's queues under
-that CPU's lock.
+The byte storage of pipes, tty ready input, pty output and each socket
+direction uses `spsc_ring`.  Socket descriptor-passing records and endpoint
+state remain under the connection lock because they update several fields as
+one transaction.  Mouse events are fixed-size records in a byte ring.  The
+keyboard feeds the console tty ring.
 
-Target: the `sched_lock` row disappears, the `run_queue` rows sum to the
-old acquisition count with contention under one percent, and the timer
-tick takes no lock on an idle CPU.
+Console and klog producers have one SPSC staging ring per CPU.  Interrupts
+are disabled only around the owner CPU's enqueue, which serializes thread and
+interrupt producers on that CPU without a cross-CPU lock.  `consoleout`
+merges the rings and is the sole ordinary UART writer.  Its drain mutex keeps
+an explicit flush ordered with the daemon, while the slow polled UART runs
+without `console_lock`; that spinlock now covers only framebuffer state and
+the short framebuffer write.  The panic path bypasses the queue and writes
+directly.  `/dev/klog` retains a bounded chronological history; its global
+history lock is taken by the single drain side, not by logging CPUs.
 
-### Byte streams and the console (M45)
+The profiler has one fixed-record SPSC ring per CPU.  A local timer interrupt
+is its sole producer, and `/dev/profile` is the consumer that merges the
+rings.  A short per-CPU active count lets close stop sampling, wait for
+in-flight interrupts and safely release the ring pages.
 
-The data path of pipes, pseudo terminals, the console tty, sockets (one
-`ring` per direction, the descriptor passing records keep the lock) and
-the kernel log becomes `ring`. The input rings filled from the mouse and
-keyboard interrupts become `ring` as well, so the interrupt handler never
-takes a lock that a reader may hold.
+## Allocators and address spaces
 
-`console_write` appends to the klog ring lock-free and wakes a console
-thread that drives the UART and the framebuffer console; the lock hold
-of a write falls from hundreds of microseconds to the copy of the line.
-Panic output keeps the direct path.
+Each slab cache has a small magazine per CPU.  Normal allocation and free
+touch the local magazine lock only; the cache lock is needed for a batch
+refill or drain.  `slab_reclaim` drains all magazines for memory-pressure and
+exact-accounting paths, allowing completely free slabs to return to the buddy
+allocator.  Each CPU also caches order-zero physical pages behind a local
+cache lock, refilling and draining in batches.  The local lock is released
+before the buddy lock is taken.  The exported free-page count includes these
+lists, and `pmm_reclaim_cpu_caches` drains them for high-order pressure and
+exact coalescing checks.
 
-The profiler ring becomes one `ring` of samples per CPU so the timer
-interrupt of one CPU never contends with another; the reader merges.
+`vma_populate` allocates and zeroes both the user frame and enough possible
+page-table frames before taking `vmspace.lock`; the locked walk consumes only
+the table frames it needs and the caller returns unused frames after unlocking.
+Anonymous fault-in likewise zeroes its user frame before reacquiring the
+space lock, then revalidates the VMA and page-table slot before publication.
+Every present user mapping path increments `vmspace.resident`, and
+unmap, swap-out and lazy-free paths decrement it. `munmap` clears all entries
+under the space lock, detaches empty leaf page tables, and issues one range
+TLB shootdown before returning those table frames to the buddy allocator.
+Keeping empty tables allocated can fragment otherwise free 2 MiB blocks
+after a large small-page workload. Swap and `PROT_NONE` entries keep their
+tables alive, and absent upper levels are skipped for sparse ranges.
+Whole-space teardown omits that redundant range round because the immediately
+following `vmspace_destroy` drops the address space from every CPU before it
+frees the page tables.
 
-### Allocators and address spaces (M46)
+## Validation
 
-`kmem_cache` gets a per CPU magazine (a small array of free objects owned
-by one CPU) in front of the slab lists, so `kmalloc` and `kfree` of small
-objects take no lock; the slab lock is taken to refill or drain a
-magazine. `pmm_alloc_page` and `pmm_free_page` get a per CPU list of
-single pages in front of the buddy lists. `pmm_stats` and the swap,
-filemap and huge page counters become per CPU counters.
-
-`vma_populate` allocates and zeroes pages before taking `vmspace.lock`
-and maps them under it. `struct vmspace` gets a `resident` per CPU
-counter maintained where entries are installed and cleared, so
-`/dev/proc` and `getrusage` stop walking page tables. TLB shootdowns for
-`munmap` of many pages are batched into one round per call.
-
-## Order of work
-
-M43 first: it removes the per system call locks that every process pays
-for and the poll herd that wakes every client on every event. M44 next,
-because the scheduler lock is the most contended one after the poll lock.
-M45 and M46 follow; the console change in M45 is small and may be done
-first within the milestone since it has the largest single hold time.
+`lockfree` exercises atomic counters, reference counts, per-CPU counters,
+MPSC publication and a sleeping RCU callback across four CPUs. The callback
+asserts that interrupts are enabled before sleeping. `poll_wake` measures
+an object-local pipe transition.  `ring` verifies full/empty and wraparound
+transitions with producer and consumer scheduled independently.  The existing
+`sched`, `smp`, `pipes`, `pty`, `sockets`, `profile`, `slab`, `pmm`, `vmm`,
+`swap` and `hugepages` cases cover the migrated subsystems.

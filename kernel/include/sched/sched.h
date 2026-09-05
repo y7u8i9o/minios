@@ -4,10 +4,6 @@
 
 struct thread;
 
-/* Protects the run queues, the sleep list and every thread's scheduling
- * fields. Taken from the timer interrupt. */
-extern struct spinlock sched_lock;
-
 /* Turn the boot context into the idle thread and start the kinit thread. */
 void sched_init(void);
 /* Turn the calling application processor's startup context into its idle
@@ -17,8 +13,11 @@ __noreturn void sched_idle_loop(void);
 
 /* Give up the CPU, staying runnable. */
 void sched_yield(void);
-/* Switch away with sched_lock held and the current thread's state already
- * set to something other than RUNNING. Returns with sched_lock held. */
+/* Lock the calling CPU's run queue around a state change and switch. */
+void sched_lock_current(void);
+void sched_unlock_current(void);
+/* Switch away with the local run-queue lock held and current state already
+ * changed from RUNNING. Returns with the same local lock held. */
 void sched_switch_locked(void);
 /* Make a blocked or sleeping thread runnable. */
 void sched_wake(struct thread *t);
@@ -35,7 +34,6 @@ bool sched_need_resched(void);
 /* Preemption point used before returning to user mode and by the idle loop. */
 void sched_preempt(void);
 bool sched_started(void);
-/* Post switch bookkeeping, run on the resumed thread's stack with
- * sched_lock held. Also called by thread_start for brand new threads. */
+/* Post switch bookkeeping, run with the local run-queue lock held. */
 void sched_finish_switch(void);
 void sched_dump(void);

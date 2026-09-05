@@ -1,5 +1,7 @@
 #pragma once
 #include <kernel.h>
+#include <sync/mpsc.h>
+#include <sync/spinlock.h>
 
 #define MSR_EFER            0xc0000080
 #define MSR_STAR            0xc0000081
@@ -17,6 +19,7 @@ typedef uint64_t cpu_mask_t;
 
 struct thread;
 struct vmspace;
+struct page;
 
 /* Per CPU state. Reached exclusively through cpu_current(), which reads the
  * self pointer at GS base offset 0, or through smp_cpu(id) for another
@@ -26,19 +29,25 @@ struct cpu {
     struct cpu *self;           /* must stay at offset 0 */
     uint32_t id;
     uint32_t lapic_id;
-    struct thread *current;     /* running thread, sched_lock */
+    struct thread *current;     /* running thread, local run-queue lock */
     void *kstack_top;           /* top of the running thread's kernel stack */
     int cli_depth;              /* push_cli nesting depth */
     int int_enabled;            /* IF before the outermost push_cli */
     struct vmspace *vm;         /* address space loaded in CR3 */
     uint64_t user_rsp;          /* scratch for the syscall entry */
-    struct thread *idle;        /* this CPU's idle thread, sched_lock */
-    struct thread *zombie_pending; /* switched away from, joiners not yet woken, sched_lock */
-    bool need_resched;          /* set by the local timer tick, sched_lock */
+    struct thread *idle;        /* this CPU's idle thread, local run-queue lock */
+    struct thread *zombie_pending; /* switched-away zombie, local run-queue lock */
+    bool need_resched;          /* local tick or reschedule IPI */
     volatile bool online;       /* runs kernel code on its own stack, set once */
     volatile bool started;      /* finished per CPU initialization, set once */
     void *ap_stack_top;         /* stack used from startup on, becomes the idle stack */
     uint64_t ticks;             /* local timer interrupts, written by this CPU only */
+    uint64_t rcu_epoch;         /* last RCU quiescent epoch, release published */
+    unsigned rcu_read_depth;    /* owning CPU only; read sections may not sleep */
+    struct mpsc_head rcu_callbacks; /* producers local, reclaimed by this CPU */
+    struct spinlock pmm_cache_lock; /* this CPU's single-page cache */
+    struct page *pmm_cache[32];
+    unsigned pmm_cache_count;
 };
 
 /* Offsets used by syscall.S. */

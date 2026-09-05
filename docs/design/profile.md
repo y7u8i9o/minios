@@ -13,22 +13,26 @@ pointers (both the kernel and user programs are built with
 `-fno-omit-frame-pointer`). In user mode every load of the walk goes
 through `vmm_translate`, so a corrupt frame pointer ends the chain instead
 of faulting in the interrupt handler; in kernel mode the chain must stay
-inside the current kernel stack. The sample goes into a ring of 8192
-entries under `prof_lock`; a full ring counts a drop instead of
-overwriting, so the oldest samples survive. `poll_notify` wakes readers
-when the ring goes from empty to non empty.
+inside the current kernel stack. Each CPU publishes into its own 8192-entry
+SPSC ring, so the timer path takes no global profiler lock. A full local ring
+counts a drop instead of overwriting, so its oldest samples survive. The
+profile device's object-local poll source wakes readers when a ring changes
+from empty to nonempty.
 
 ## /dev/profile and /dev/ksyms
 
 `/dev/profile` controls the session: `PROF_START` (argument: pid, 0 for
-all) allocates the ring on first use, clears the counters and enables
-sampling; `PROF_STOP` disables it; `PROF_SET_DIVIDER` sets the ticks
+all) allocates one ring for every started CPU on first use, clears the
+counters and enables sampling; `PROF_STOP` disables it;
+`PROF_SET_DIVIDER` sets the ticks
 between samples on each CPU (1 to 1000, so 1 kHz down to 1 Hz per CPU);
 `PROF_GET_STATS` fills `struct prof_stats` with the sample and drop counts,
 the pending count, the state and the ring capacity. `read` returns whole
 samples from the ring, `poll` reports `POLLIN` while samples are pending,
-and closing the device ends the session and frees the ring, so a program
-that exits leaves nothing behind. One session exists at a time.
+and closing the device ends the session. Close first disables sampling,
+waits for every per-CPU active counter to reach zero, then frees the rings,
+so an in-flight timer interrupt cannot publish into released memory and a
+program that exits leaves nothing behind. One session exists at a time.
 
 `/dev/ksyms` prints the kernel symbol table as `addr size name` lines,
 regenerated from the `.ksyms` blob at each read, so user space can name

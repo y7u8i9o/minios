@@ -3,6 +3,7 @@
 #include <sched/proc.h>
 #include <drivers/ps2kbd.h>
 #include <mm/pmm.h>
+#include <mm/swap.h>
 #include <console.h>
 #include <fs/vfs.h>
 #include <lib/string.h>
@@ -77,6 +78,7 @@ static void test_shell(void)
     type_line("exit 3\n");
 
     struct pmm_stats before, after;
+    swap_drain();
     pmm_get_stats(&before);
     char *const argv[] = { "sh", NULL };
     char *const envp[] = { "PATH=/bin", NULL };
@@ -85,6 +87,7 @@ static void test_shell(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(3), "sh status 0x%x", status);
+    swap_drain();
     pmm_get_stats(&after);
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);
@@ -103,6 +106,7 @@ static void test_pipes(void)
     type_line("exit 5\n");
 
     struct pmm_stats before, after;
+    swap_drain();
     pmm_get_stats(&before);
     char *const argv[] = { "sh", NULL };
     char *const envp[] = { "PATH=/bin", NULL };
@@ -111,6 +115,7 @@ static void test_pipes(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(5), "sh status 0x%x", status);
+    swap_drain();
     pmm_get_stats(&after);
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);

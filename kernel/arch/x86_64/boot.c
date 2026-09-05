@@ -45,6 +45,7 @@
 #include <mm/swap.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
+#include <sync/rcu.h>
 #include <sched/proc.h>
 #include <sched/user.h>
 #include <arch/syscall.h>
@@ -189,6 +190,7 @@ static void mount_root(void)
 
 static void kinit(void *arg)
 {
+    rcu_start_worker();
     mount_root();
     /* virtio-snd discovery sends synchronous control messages and therefore
      * requires interrupt delivery and a schedulable current thread. */
@@ -270,6 +272,8 @@ __noreturn void kmain(void)
     sched_init();
     sti();
     smp_start_aps();
+
+    console_start_daemon();
 
     if (!thread_create("kinit", kinit, NULL, 0))
         panic("cannot create kinit thread");

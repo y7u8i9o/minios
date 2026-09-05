@@ -238,6 +238,11 @@ static int klogdev_poll(struct file *f)
     return (klog_ring_head() > f->pos ? POLLIN : 0);
 }
 
+static struct poll_source *klogdev_source(struct file *f)
+{
+    return klog_poll_source();
+}
+
 static long klogdev_lseek(struct file *f, long off, int whence)
 {
     if (whence == SEEK_END) {
@@ -251,14 +256,23 @@ static long klogdev_lseek(struct file *f, long off, int whence)
     return -EINVAL;
 }
 
-static const struct file_ops klogdev_fops = { .read = klogdev_read, .poll = klogdev_poll, .lseek = klogdev_lseek };
+static const struct file_ops klogdev_fops = {
+    .read = klogdev_read, .poll = klogdev_poll, .poll_source = klogdev_source,
+    .lseek = klogdev_lseek
+};
 static int condev_poll(struct file *f)
 {
     return ps2kbd_poll();
 }
 
+static struct poll_source *condev_source(struct file *f)
+{
+    return tty_poll_source(&console_tty);
+}
+
 static const struct file_ops condev_fops = { .read = condev_read, .write = condev_write,
-                                             .ioctl = condev_ioctl, .poll = condev_poll };
+                                             .ioctl = condev_ioctl, .poll = condev_poll,
+                                             .poll_source = condev_source };
 
 /* Closing /dev/kbd leaves raw scancode mode, so a display server that
  * dies does not leave the console keyboard unusable. */
@@ -268,7 +282,8 @@ static void kbddev_release(struct file *f)
 }
 
 static const struct file_ops kbddev_fops = { .read = condev_read, .write = condev_write, .ioctl = condev_ioctl,
-                                             .poll = condev_poll, .release = kbddev_release };
+                                             .poll = condev_poll, .poll_source = condev_source,
+                                             .release = kbddev_release };
 static const struct file_ops null_fops = { .read = null_read, .write = null_write };
 static const struct file_ops zero_fops = { .read = zero_read, .write = null_write };
 

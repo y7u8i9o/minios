@@ -39,9 +39,10 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
   every mapping adds its own, so unmapping stays uniform and kswapd never
   evicts a frame mapped twice. `fork` shares `VM_SHARED` regions without
   copy on write. Objects live until unlinked and closed by everyone.
-  `poll` checks readiness through `file_ops.poll` and sleeps on one wait
-  queue that every producer (queues, mouse, terminals, pseudo terminals)
-  wakes through `poll_notify`.
+  `poll` checks readiness through `file_ops.poll`, registers with each
+  descriptor's object-local `poll_source` and sleeps on a private wait queue.
+  A producer wakes only pollers registered on the object whose readiness it
+  changed.
 - Terminals (`drivers/tty.c`, `drivers/pty.c`): the line discipline
   moved out of the keyboard driver into `struct tty`: canonical editing,
   echo, control C to the foreground group (deferred to `ttyd` for the

@@ -211,7 +211,7 @@ long sys_thread_join(struct trapframe *tf)
             if (list_entry(pos, struct thread, proc_link)->tid == tid)
                 alive = true;
         }
-        if (!alive || p->exiting) {
+        if (!alive || __atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE)) {
             spin_unlock(&p->lock);
             return alive ? -EINTR : -ESRCH;
         }

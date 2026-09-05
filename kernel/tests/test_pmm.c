@@ -12,6 +12,7 @@ static struct page *pages[NPAGES];
 
 static void snapshot(uint64_t *counts, struct pmm_stats *st)
 {
+    pmm_reclaim_cpu_caches();
     pmm_get_free_counts(counts);
     pmm_get_stats(st);
 }

@@ -117,6 +117,7 @@ void smp_park_aps(void)
         c->id = id;
         c->lapic_id = info->lapic_id;
         c->vm = &kernel_vmspace;
+        spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
         c->kstack_top = kstack_alloc();
         if (!c->kstack_top)
             panic("smp: no stack for cpu %u", id);

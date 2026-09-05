@@ -2,6 +2,7 @@
 #include <kernel.h>
 #include <lib/list.h>
 #include <mm/vmm.h>
+#include <sync/rcu.h>
 
 struct file;
 struct mapping;
@@ -19,6 +20,8 @@ struct vma {
     struct mapping *mapping;/* VM_FILE: the file's page cache */
     uint64_t offset;        /* VM_FILE: file offset of start, page aligned */
     struct list_head link;  /* vmspace->vmas, sorted by start */
+    struct list_head reclaim_link; /* temporary dead list; never used by RCU readers */
+    struct rcu_head rcu;
 };
 
 /* Page table bits for a region's protection: present, user, writable and
@@ -67,6 +70,8 @@ int vma_msync(struct vmspace *vm, uintptr_t addr, size_t len);
 void vma_queue_sync(struct list_head *jobs, struct vma *v, uintptr_t start, uintptr_t end);
 int vma_run_sync_jobs(struct list_head *jobs);
 /* Remove every region, unmapping and releasing their frames. */
+/* Remove every region before an immediate vmspace_destroy. The destroy-side
+ * TLB drop replaces a redundant full-range shootdown here. */
 void vma_remove_all(struct vmspace *vm);
 /* Grow or shrink the heap region. Returns the old break or -errno. */
 long vma_brk(struct vmspace *vm, intptr_t increment);

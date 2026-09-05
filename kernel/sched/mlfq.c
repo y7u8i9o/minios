@@ -7,6 +7,8 @@
 #include <arch/smp.h>
 #include <arch/gdt.h>
 #include <arch/trap.h>
+#include <arch/apic.h>
+#include <arch/irq.h>
 #include <mm/vmm.h>
 #include <drivers/timer.h>
 #include <lib/string.h>
@@ -14,34 +16,24 @@
 #include <klog.h>
 #include <console.h>
 #include <debug/panic.h>
+#include <sync/rcu.h>
 
-/*
- * Multilevel feedback queue. Level 0 has the highest priority and a 10 ms
- * slice; each lower level doubles the slice. A thread that exhausts its
- * slice is demoted, a thread that blocks before that is promoted, and
- * every second all ready threads return to level 0.
- *
- * Every CPU has its own set of run queues. A woken thread goes to an idle
- * CPU when there is one, otherwise back to the CPU that last ran it. A CPU
- * whose queues are empty steals the best ready thread from another CPU.
- * One lock, sched_lock, covers every queue: switches are short and the
- * lock is already held across them, so per queue locks would add ordering
- * rules without removing contention that matters on a few CPUs.
- */
 #define BASE_SLICE_MS   10
 #define BOOST_INTERVAL  1000
 
-struct spinlock sched_lock = SPINLOCK_INIT("sched_lock");
-
-/* Everything below is protected by sched_lock. */
+/* The owner CPU consumes inbound and owns levels/sleepers under lock.
+ * Remote producers publish only through the MPSC inbox. */
 struct run_queues {
+    struct spinlock lock;
     struct list_head levels[MLFQ_LEVELS];
+    struct list_head sleepers;
+    struct mpsc_head inbound;
     unsigned nr_ready;
-};
+    uint64_t last_boost;
+} __aligned(64);
+
 static struct run_queues rq[MAX_CPUS];
-static struct list_head sleepers;          /* sorted by wake_at */
 static bool started;
-static uint64_t last_boost;
 
 void context_switch(uint64_t **old_sp, uint64_t *new_sp);
 extern char boot_stack_top[];
@@ -51,108 +43,165 @@ static inline int slice_for(int level)
     return BASE_SLICE_MS << level;
 }
 
-static inline bool cpu_is_idle(struct cpu *c)
+static inline struct run_queues *local_rq(void)
 {
-    return c->started && c->current == c->idle && rq[c->id].nr_ready == 0;
+    return &rq[cpu_current()->id];
 }
 
-/* Choose the CPU whose queue receives a thread that became ready. */
-static unsigned pick_cpu(struct thread *t)
+void sched_lock_current(void)
 {
-    unsigned n = smp_cpu_count();
-    if (n == 1)
-        return 0;
-    unsigned home = t->cpu < n ? t->cpu : 0;
-    if (cpu_is_idle(cpu_by_id(home)))
-        return home;
-    for (unsigned i = 0; i < n; i++) {
-        if (cpu_is_idle(cpu_by_id(i)))
-            return i;
-    }
-    return home;
+    spin_lock(&local_rq()->lock);
 }
 
-static void enqueue(struct thread *t)
+void sched_unlock_current(void)
 {
-    kassert(spin_holding(&sched_lock));
-    unsigned cpu = pick_cpu(t);
-    t->state = THREAD_READY;
-    t->cpu = cpu;
-    list_add_tail(&t->run_link, &rq[cpu].levels[t->level]);
-    rq[cpu].nr_ready++;
+    spin_unlock(&local_rq()->lock);
 }
 
-static struct thread *dequeue_best(unsigned cpu)
+static void enqueue_locked(struct run_queues *r, struct thread *t)
+{
+    kassert(spin_holding(&r->lock));
+    if (t->waiting_on)
+        panic("enqueue waiter %s tid %d state %d wq %p", t->name, t->tid, t->state, t->waiting_on);
+    __atomic_store_n(&t->state, THREAD_READY, __ATOMIC_RELEASE);
+    list_add_tail(&t->run_link, &r->levels[t->level]);
+    r->nr_ready++;
+}
+
+static struct thread *dequeue_best_locked(struct run_queues *r)
 {
     for (int l = 0; l < MLFQ_LEVELS; l++) {
-        if (!list_empty(&rq[cpu].levels[l])) {
-            struct thread *t = list_first_entry(&rq[cpu].levels[l], struct thread, run_link);
+        if (!list_empty(&r->levels[l])) {
+            struct thread *t = list_first_entry(&r->levels[l], struct thread, run_link);
             list_del(&t->run_link);
-            rq[cpu].nr_ready--;
+            r->nr_ready--;
             return t;
         }
     }
     return NULL;
 }
 
-/* Take the best thread from the own queues, else steal the best thread of
- * any other CPU, else idle. */
-static struct thread *sched_pick_next(struct cpu *c)
+static void kick_cpu(unsigned id)
 {
-    struct thread *t = dequeue_best(c->id);
-    if (t)
-        return t;
+    struct cpu *c = cpu_by_id(id);
+    __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
+    if (id != cpu_current()->id && c->started)
+        lapic_send_ipi(c->lapic_id, IRQ_RESCHED);
+}
+
+static bool queue_inbound(struct thread *t, unsigned target)
+{
+    bool expected = false;
+    if (!__atomic_compare_exchange_n(&t->wake_queued, &expected, true, false,
+                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return false;
+    __atomic_store_n(&t->cpu, target, __ATOMIC_RELEASE);
+    mpsc_push(&rq[target].inbound, &t->wake_node);
+    kick_cpu(target);
+    return true;
+}
+
+static unsigned pick_cpu(void)
+{
     unsigned n = smp_cpu_count();
-    int best_level = MLFQ_LEVELS;
-    unsigned best_cpu = 0;
+    unsigned best = cpu_current()->id;
+    unsigned best_load = ~0u;
     for (unsigned i = 0; i < n; i++) {
-        if (i == c->id || rq[i].nr_ready == 0)
+        struct cpu *c = cpu_by_id(i);
+        if (!c->started && i != cpu_current()->id)
             continue;
-        for (int l = 0; l < best_level; l++) {
-            if (!list_empty(&rq[i].levels[l])) {
-                best_level = l;
-                best_cpu = i;
-                break;
-            }
+        unsigned load = __atomic_load_n(&rq[i].nr_ready, __ATOMIC_RELAXED);
+        struct thread *cur = __atomic_load_n(&c->current, __ATOMIC_ACQUIRE);
+        if (cur && cur != c->idle)
+            load++;
+        if (load < best_load) {
+            best = i;
+            best_load = load;
         }
     }
-    if (best_level < MLFQ_LEVELS)
-        return dequeue_best(best_cpu);
-    return c->idle;
+    return best;
+}
+
+static void drain_inbound_locked(struct run_queues *r)
+{
+    struct mpsc_node *node = mpsc_reverse(mpsc_take_all(&r->inbound));
+    while (node) {
+        struct mpsc_node *next = node->next;
+        struct thread *t = container_of(node, struct thread, wake_node);
+        enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
+        if (state == THREAD_NEW || state == THREAD_BLOCKED ||
+            state == THREAD_SLEEPING || state == THREAD_STOPPED) {
+            if (state == THREAD_SLEEPING)
+                list_del(&t->run_link);
+            if (state != THREAD_NEW && t->level > 0)
+                t->level--;
+            t->slice_left = slice_for(t->level);
+            enqueue_locked(r, t);
+        }
+        /* next was captured first, so the producer may now reuse wake_node. */
+        __atomic_store_n(&t->wake_queued, false, __ATOMIC_RELEASE);
+        node = next;
+    }
+}
+
+/* Victim locks are tried while the local lock is held, never waited for. */
+static struct thread *steal_best_locked(void)
+{
+    unsigned me = cpu_current()->id;
+    unsigned n = smp_cpu_count();
+    for (int level = 0; level < MLFQ_LEVELS; level++) {
+        for (unsigned i = 0; i < n; i++) {
+            if (i == me || __atomic_load_n(&rq[i].nr_ready, __ATOMIC_RELAXED) == 0)
+                continue;
+            struct run_queues *victim = &rq[i];
+            if (!spin_try_lock(&victim->lock))
+                continue;
+            struct thread *t = NULL;
+            if (!list_empty(&victim->levels[level])) {
+                t = list_first_entry(&victim->levels[level], struct thread, run_link);
+                list_del(&t->run_link);
+                victim->nr_ready--;
+                __atomic_store_n(&t->cpu, me, __ATOMIC_RELEASE);
+            }
+            spin_unlock(&victim->lock);
+            if (t)
+                return t;
+        }
+    }
+    return NULL;
+}
+
+static struct thread *sched_pick_next_locked(struct run_queues *r)
+{
+    drain_inbound_locked(r);
+    struct thread *t = dequeue_best_locked(r);
+    if (!t)
+        t = steal_best_locked();
+    return t ? t : cpu_current()->idle;
 }
 
 bool sched_started(void)
 {
-    return started;
+    return __atomic_load_n(&started, __ATOMIC_ACQUIRE);
 }
 
 void sched_add(struct thread *t)
 {
-    spin_lock(&sched_lock);
-    enqueue(t);
-    spin_unlock(&sched_lock);
+    kassert(__atomic_load_n(&t->state, __ATOMIC_ACQUIRE) == THREAD_NEW);
+    queue_inbound(t, pick_cpu());
 }
 
 void sched_wake(struct thread *t)
 {
-    spin_lock(&sched_lock);
-    if (t->state == THREAD_BLOCKED || t->state == THREAD_SLEEPING ||
-        t->state == THREAD_STOPPED) {
-        if (t->state == THREAD_SLEEPING)
-            list_del(&t->run_link);
-        /* Blocking before the slice ran out earns a promotion. */
-        if (t->level > 0)
-            t->level--;
-        t->slice_left = slice_for(t->level);
-        enqueue(t);
-    }
-    spin_unlock(&sched_lock);
+    enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
+    if (state != THREAD_BLOCKED && state != THREAD_SLEEPING && state != THREAD_STOPPED)
+        return;
+    unsigned target = __atomic_load_n(&t->cpu, __ATOMIC_ACQUIRE);
+    if (target >= smp_cpu_count())
+        target = 0;
+    queue_inbound(t, target);
 }
 
-/* Runs on the new thread's stack right after every switch. The zombie's
- * stack is no longer in use, so its joiners may free it. sched_lock is
- * dropped around the wakeup to respect the exit_lock -> waitq.lock ->
- * sched_lock ordering. */
 void sched_finish_switch(void)
 {
     struct cpu *c = cpu_current();
@@ -160,28 +209,32 @@ void sched_finish_switch(void)
     if (!z)
         return;
     c->zombie_pending = NULL;
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
     spin_lock(&z->exit_lock);
     z->finished = true;
-    spin_unlock(&z->exit_lock);
     waitq_wake_all(&z->exit_waitq);
-    spin_lock(&sched_lock);
+    /* A joiner may free z as soon as it observes finished. Keep the
+     * condition lock until our last access to the embedded wait queue. */
+    spin_unlock(&z->exit_lock);
+    sched_lock_current();
 }
 
 void sched_switch_locked(void)
 {
-    kassert(spin_holding(&sched_lock));
+    struct run_queues *r = local_rq();
+    kassert(spin_holding(&r->lock));
     struct cpu *c = cpu_current();
     struct thread *prev = c->current;
-    kassert(prev->state != THREAD_RUNNING);
+    kassert(__atomic_load_n(&prev->state, __ATOMIC_ACQUIRE) != THREAD_RUNNING);
     kassert(c->cli_depth == 1);
+    rcu_quiescent();
 
-    struct thread *next = sched_pick_next(c);
+    struct thread *next = sched_pick_next_locked(r);
     if (prev->state == THREAD_ZOMBIE)
         c->zombie_pending = prev;
-    c->need_resched = false;
+    __atomic_store_n(&c->need_resched, false, __ATOMIC_RELEASE);
     if (next == prev) {
-        prev->state = THREAD_RUNNING;
+        __atomic_store_n(&prev->state, THREAD_RUNNING, __ATOMIC_RELEASE);
         return;
     }
     if (prev->state == THREAD_READY) {
@@ -191,8 +244,8 @@ void sched_switch_locked(void)
         prev->nvcsw++;
         __atomic_fetch_add(&prev->proc->nvcsw, 1, __ATOMIC_RELAXED);
     }
-    next->state = THREAD_RUNNING;
-    next->cpu = c->id;
+    __atomic_store_n(&next->state, THREAD_RUNNING, __ATOMIC_RELEASE);
+    __atomic_store_n(&next->cpu, c->id, __ATOMIC_RELEASE);
     c->current = next;
     tss_set_rsp0((uintptr_t)next->kstack_top);
     c->kstack_top = next->kstack_top;
@@ -214,7 +267,8 @@ void sched_switch_locked(void)
 void sched_yield(void)
 {
     struct thread *t = thread_current();
-    spin_lock(&sched_lock);
+    sched_lock_current();
+    struct run_queues *r = local_rq();
     struct cpu *c = cpu_current();
     if (t->slice_left <= 0) {
         if (t->level < MLFQ_LEVELS - 1)
@@ -222,117 +276,116 @@ void sched_yield(void)
         t->slice_left = slice_for(t->level);
     }
     if (t != c->idle)
-        enqueue(t);
+        enqueue_locked(r, t);
     else
-        t->state = THREAD_READY;
+        __atomic_store_n(&t->state, THREAD_READY, __ATOMIC_RELEASE);
     sched_switch_locked();
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
 }
 
 bool sched_need_resched(void)
 {
-    return cpu_current()->need_resched;
+    return __atomic_load_n(&cpu_current()->need_resched, __ATOMIC_ACQUIRE);
 }
 
 void sched_preempt(void)
 {
-    if (cpu_current()->need_resched)
+    if (sched_need_resched())
         sched_yield();
 }
 
 void sched_sleep_until(uint64_t tick)
 {
     struct thread *t = thread_current();
-    spin_lock(&sched_lock);
+    sched_lock_current();
+    struct run_queues *r = local_rq();
     t->wake_at = tick;
-    t->state = THREAD_SLEEPING;
+    __atomic_store_n(&t->state, THREAD_SLEEPING, __ATOMIC_RELEASE);
     struct list_head *pos;
-    list_for_each(pos, &sleepers) {
+    list_for_each(pos, &r->sleepers) {
         if (list_entry(pos, struct thread, run_link)->wake_at > tick)
             break;
     }
     list_add_tail(&t->run_link, pos);
     sched_switch_locked();
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
 }
 
-static void wake_sleepers_locked(uint64_t now)
+static void wake_sleepers_locked(struct run_queues *r, uint64_t now)
 {
-    while (!list_empty(&sleepers)) {
-        struct thread *t = list_first_entry(&sleepers, struct thread, run_link);
+    while (!list_empty(&r->sleepers)) {
+        struct thread *t = list_first_entry(&r->sleepers, struct thread, run_link);
         if (t->wake_at > now)
+            break;
+        bool expected = false;
+        if (!__atomic_compare_exchange_n(&t->wake_queued, &expected, true, false,
+                                          __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
             break;
         list_del(&t->run_link);
         if (t->level > 0)
             t->level--;
         t->slice_left = slice_for(t->level);
-        enqueue(t);
+        enqueue_locked(r, t);
+        __atomic_store_n(&t->wake_queued, false, __ATOMIC_RELEASE);
     }
 }
 
-static void boost_locked(void)
+static void boost_locked(struct run_queues *r)
 {
-    unsigned n = smp_cpu_count();
-    for (unsigned i = 0; i < n; i++) {
-        for (int l = 1; l < MLFQ_LEVELS; l++) {
-            while (!list_empty(&rq[i].levels[l])) {
-                struct thread *t = list_first_entry(&rq[i].levels[l], struct thread, run_link);
-                list_del(&t->run_link);
-                t->level = 0;
-                t->slice_left = slice_for(0);
-                list_add_tail(&t->run_link, &rq[i].levels[0]);
-            }
-        }
-        struct cpu *c = cpu_by_id(i);
-        struct thread *cur = c->current;
-        if (c->started && cur && cur != c->idle) {
-            cur->level = 0;
-            cur->slice_left = slice_for(0);
+    for (int l = 1; l < MLFQ_LEVELS; l++) {
+        while (!list_empty(&r->levels[l])) {
+            struct thread *t = list_first_entry(&r->levels[l], struct thread, run_link);
+            list_del(&t->run_link);
+            t->level = 0;
+            t->slice_left = slice_for(0);
+            list_add_tail(&t->run_link, &r->levels[0]);
         }
     }
-}
-
-static bool any_ready_locked(void)
-{
-    unsigned n = smp_cpu_count();
-    for (unsigned i = 0; i < n; i++) {
-        if (rq[i].nr_ready)
-            return true;
+    struct cpu *c = cpu_current();
+    struct thread *cur = c->current;
+    if (cur && cur != c->idle) {
+        cur->level = 0;
+        cur->slice_left = slice_for(0);
     }
-    return false;
 }
 
-/* Slice accounting for the calling CPU's running thread. */
-static void tick_cpu_locked(struct cpu *c)
+static void tick_local(void)
 {
+    struct cpu *c = cpu_current();
+    struct run_queues *r = local_rq();
+    /* Only this CPU runs and accounts current, so the common tick path
+     * changes its slice without touching the run-queue lock. */
     struct thread *cur = c->current;
     if (cur != c->idle && --cur->slice_left <= 0)
-        c->need_resched = true;
-    if (cur == c->idle && !c->need_resched && any_ready_locked())
-        c->need_resched = true;
+        __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
+    spin_lock(&r->lock);
+    drain_inbound_locked(r);
+    uint64_t now = timer_ticks();
+    wake_sleepers_locked(r, now);
+    if (cur == c->idle && r->nr_ready)
+        __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
+    if (now - r->last_boost >= BOOST_INTERVAL) {
+        r->last_boost = now;
+        boost_locked(r);
+    }
+    spin_unlock(&r->lock);
 }
 
 void sched_tick(void)
 {
-    spin_lock(&sched_lock);
-    uint64_t now = timer_ticks();
-    wake_sleepers_locked(now);
-    tick_cpu_locked(cpu_current());
-    if (now - last_boost >= BOOST_INTERVAL) {
-        last_boost = now;
-        boost_locked();
-    }
-    spin_unlock(&sched_lock);
+    tick_local();
 }
 
 void sched_tick_cpu(void)
 {
-    spin_lock(&sched_lock);
-    tick_cpu_locked(cpu_current());
-    spin_unlock(&sched_lock);
+    tick_local();
 }
 
-/* Turn the calling CPU's current context into its idle thread. */
+static void resched_irq(struct trapframe *tf, void *arg)
+{
+    __atomic_store_n(&cpu_current()->need_resched, true, __ATOMIC_RELEASE);
+}
+
 static void make_idle(struct cpu *c, void *stack_top)
 {
     struct thread *t = thread_alloc(&kernel_proc, "idle", NULL, NULL, MLFQ_LEVELS - 1);
@@ -343,29 +396,31 @@ static void make_idle(struct cpu *c, void *stack_top)
     t->on_boot_stack = true;
     t->state = THREAD_RUNNING;
     t->cpu = c->id;
-    spin_lock(&sched_lock);
+    spin_lock(&rq[c->id].lock);
     c->idle = t;
     c->current = t;
     c->kstack_top = stack_top;
-    spin_unlock(&sched_lock);
+    spin_unlock(&rq[c->id].lock);
     tss_set_rsp0((uintptr_t)stack_top);
 }
 
 void sched_init(void)
 {
+    uint64_t now = timer_ticks();
     for (unsigned i = 0; i < MAX_CPUS; i++) {
+        spinlock_init(&rq[i].lock, "run_queue");
         for (int l = 0; l < MLFQ_LEVELS; l++)
             list_init(&rq[i].levels[l]);
+        list_init(&rq[i].sleepers);
+        mpsc_init(&rq[i].inbound);
         rq[i].nr_ready = 0;
+        rq[i].last_boost = now;
     }
-    list_init(&sleepers);
-
-    /* The boot context becomes the idle thread of the boot CPU. */
+    irq_register(IRQ_RESCHED, resched_irq, NULL);
     make_idle(cpu_current(), boot_stack_top);
-    last_boost = timer_ticks();
     timer_set_tick_handler(sched_tick);
-    started = true;
-    klog_info("mlfq scheduler with %d levels, base slice %d ms, %u cpus",
+    __atomic_store_n(&started, true, __ATOMIC_RELEASE);
+    klog_info("per-cpu mlfq with %d levels, base slice %d ms, %u cpus",
               MLFQ_LEVELS, BASE_SLICE_MS, smp_cpu_count());
 }
 
@@ -378,6 +433,7 @@ void sched_init_cpu(void)
 __noreturn void sched_idle_loop(void)
 {
     for (;;) {
+        rcu_quiescent();
         sti();
         hlt();
         sched_preempt();
@@ -386,24 +442,25 @@ __noreturn void sched_idle_loop(void)
 
 void sched_dump(void)
 {
-    spin_lock(&sched_lock);
     unsigned n = smp_cpu_count();
     for (unsigned i = 0; i < n; i++) {
+        struct run_queues *r = &rq[i];
+        spin_lock(&r->lock);
         struct cpu *c = cpu_by_id(i);
         kprintf("cpu %u: running %s(%d), %u ready\n", i,
                 c->current ? c->current->name : "-", c->current ? c->current->tid : 0,
-                rq[i].nr_ready);
+                r->nr_ready);
         for (int l = 0; l < MLFQ_LEVELS; l++) {
-            if (list_empty(&rq[i].levels[l]))
+            if (list_empty(&r->levels[l]))
                 continue;
             struct list_head *pos;
             kprintf("  level %d:", l);
-            list_for_each(pos, &rq[i].levels[l]) {
+            list_for_each(pos, &r->levels[l]) {
                 struct thread *t = list_entry(pos, struct thread, run_link);
                 kprintf(" %s(%d)", t->name, t->tid);
             }
             kprintf("\n");
         }
+        spin_unlock(&r->lock);
     }
-    spin_unlock(&sched_lock);
 }

@@ -1,6 +1,5 @@
 #define KLOG_SUBSYS "signal"
 #include <ipc/signal.h>
-#include <ipc/mqueue.h>
 #include <arch/fpu.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
@@ -59,7 +58,7 @@ static void stop_current(struct proc *p, int sig)
     bool changed = false;
     spin_lock(&proc_tree_lock);
     if (!p->stopped && p->state != PROC_ZOMBIE) {
-        p->stopped = true;
+        __atomic_store_n(&p->stopped, true, __ATOMIC_RELEASE);
         p->stop_reported = false;
         p->continued = false;
         if (sig)
@@ -82,12 +81,13 @@ static void stop_current(struct proc *p, int sig)
         notify_parent(p);
     }
 
-    spin_lock(&sched_lock);
-    if (__atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE) && !p->exiting) {
+    sched_lock_current();
+    if (__atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE) &&
+        !__atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE)) {
         thread_current()->state = THREAD_STOPPED;
         sched_switch_locked();
     }
-    spin_unlock(&sched_lock);
+    sched_unlock_current();
 }
 
 /* SIGCONT always resumes a stopped process, even when ignored or blocked. */
@@ -96,7 +96,7 @@ static void continue_process(struct proc *p)
     bool changed = false;
     spin_lock(&proc_tree_lock);
     if (p->stopped && p->state != PROC_ZOMBIE) {
-        p->stopped = false;
+        __atomic_store_n(&p->stopped, false, __ATOMIC_RELEASE);
         p->stop_reported = false;
         p->continued = true;
         changed = true;
@@ -106,7 +106,7 @@ static void continue_process(struct proc *p)
         return;
 
     spin_lock(&p->lock);
-    p->sig_pending &= ~DEFAULT_STOP;
+    __atomic_fetch_and(&p->sig_pending, ~DEFAULT_STOP, __ATOMIC_RELEASE);
     struct list_head *pos;
     list_for_each(pos, &p->threads) {
         struct thread *t = list_entry(pos, struct thread, proc_link);
@@ -150,18 +150,11 @@ int signal_send(struct proc *p, int sig)
     void (*h)(int) = p->sig_actions[sig].handler;
     bool ignored = h == SIG_IGN || (h == SIG_DFL &&
         ((DEFAULT_IGNORE & SIGBIT(sig)) || sig == SIGCONT || is_init));
-    bool queued = false;
-    if (!ignored && !p->exiting) {
-        p->sig_pending |= SIGBIT(sig);
+    if (!ignored && !__atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
+        __atomic_fetch_or(&p->sig_pending, SIGBIT(sig), __ATOMIC_RELEASE);
         interrupt_threads(p, sig);
-        queued = true;
     }
     spin_unlock(&p->lock);
-    /* A signal can arrive after poll checks signal_should_interrupt but
-     * before it registers on poll_waitq.  Advancing poll's generation
-     * after posting the signal closes that check-to-sleep race. */
-    if (queued)
-        poll_notify();
     klog_debug("signal %d to pid %d%s", sig, p->pid, ignored ? " (ignored)" : "");
     return 0;
 }
@@ -185,11 +178,9 @@ bool signal_should_interrupt(void)
     struct proc *p = t->proc;
     if (p == &kernel_proc)
         return false;
-    spin_lock(&p->lock);
-    bool r = p->exiting || __atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE) ||
-             (p->sig_pending & ~t->sig_mask) != 0;
-    spin_unlock(&p->lock);
-    return r;
+    return __atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE) ||
+           __atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE) ||
+           (__atomic_load_n(&p->sig_pending, __ATOMIC_ACQUIRE) & ~t->sig_mask) != 0;
 }
 
 bool signal_fault(struct proc *p, int sig)
@@ -198,7 +189,7 @@ bool signal_fault(struct proc *p, int sig)
     void (*h)(int) = p->sig_actions[sig].handler;
     bool handled = h != SIG_DFL && h != SIG_IGN;
     if (handled)
-        p->sig_pending |= SIGBIT(sig);
+        __atomic_fetch_or(&p->sig_pending, SIGBIT(sig), __ATOMIC_RELEASE);
     spin_unlock(&p->lock);
     return handled;
 }
@@ -217,7 +208,7 @@ void signal_copy(struct proc *dst, const struct proc *src)
 {
     spin_lock(&dst->lock);
     memcpy(dst->sig_actions, src->sig_actions, sizeof dst->sig_actions);
-    dst->sig_pending = 0;
+    __atomic_store_n(&dst->sig_pending, 0, __ATOMIC_RELEASE);
     spin_unlock(&dst->lock);
 }
 
@@ -237,14 +228,17 @@ void signal_deliver(struct trapframe *tf)
         return;
     if (__atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE))
         stop_current(p, 0);
+    uint64_t pending = __atomic_load_n(&p->sig_pending, __ATOMIC_ACQUIRE);
+    if (!(pending & ~t->sig_mask) || __atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE))
+        return;
     spin_lock(&p->lock);
-    uint64_t ready = p->sig_pending & ~t->sig_mask;
-    if (!ready || p->exiting) {
+    uint64_t ready = __atomic_load_n(&p->sig_pending, __ATOMIC_RELAXED) & ~t->sig_mask;
+    if (!ready || __atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
         spin_unlock(&p->lock);
         return;
     }
     int sig = __builtin_ctzl(ready);
-    p->sig_pending &= ~SIGBIT(sig);
+    __atomic_fetch_and(&p->sig_pending, ~SIGBIT(sig), __ATOMIC_RELAXED);
     struct ksigaction act = p->sig_actions[sig];
     spin_unlock(&p->lock);
     klog_debug("deliver %d to pid %d handler %p", sig, p->pid, act.handler);

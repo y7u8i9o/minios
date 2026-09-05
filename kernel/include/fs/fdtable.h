@@ -6,7 +6,8 @@
 struct file;
 struct proc;
 
-/* Per process descriptor table. Protected by lock. */
+/* Install, close, flags and limit are protected by lock.  Descriptor slots
+ * are published with release stores and looked up under RCU without lock. */
 struct fdtable {
     struct file *fds[OPEN_MAX];
     uint64_t cloexec;               /* bit per descriptor, lock */

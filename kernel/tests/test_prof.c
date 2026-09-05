@@ -27,6 +27,7 @@ static void run_and_reap(const char *path, char *const argv[])
 
 static void test_prof_gui(void)
 {
+    uint64_t started = timer_ms();
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     struct proc *mon = start("/bin/sysmon", "sysmon");
@@ -42,14 +43,18 @@ static void test_prof_gui(void)
     struct proc *prof = proc_create_user("/bin/prof", (char *const[]){ "prof", "-k", "-c", "-n", "60", "-d", "10", "-a", NULL },
                                          (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(prof != NULL, "cannot start prof");
+    kprintf("prof_gui: input start at %lu ms\n", timer_ms() - started);
     int cx = logical_w() / 2, cy = logical_h() / 2;
     for (int i = 0; i < 420; i++) {
         mouse_move_to(&cx, &cy, 100 + (i % 10) * 40, 100 + (i % 7) * 30, 0);
         sleep_ms(20);
     }
+    kprintf("prof_gui: input done at %lu ms\n", timer_ms() - started);
     int status = proc_reap(prof);
+    kprintf("prof_gui: profiler reaped at %lu ms\n", timer_ms() - started);
     ktest_assert(status == 0, "prof status 0x%x", status);
     run_and_reap("/bin/cat", (char *const[]){ "cat", "/dev/lockstat", NULL });
+    kprintf("prof_gui: lockstat done at %lu ms\n", timer_ms() - started);
     signal_send(mandel, SIGTERM);
     proc_reap(mandel);
     signal_send(term, SIGKILL);
@@ -59,6 +64,6 @@ static void test_prof_gui(void)
     signal_send(mon, SIGTERM);
     proc_reap(mon);
     stop_server(srv);
-    kprintf("prof_gui: done\n");
+    kprintf("prof_gui: done in %lu ms\n", timer_ms() - started);
 }
 KTEST_DEFINE("prof_gui", test_prof_gui);

@@ -11,9 +11,6 @@
 #include <klog.h>
 #include <errno.h>
 
-/* Reference counts of every open file description. */
-static DEFINE_SPINLOCK(files_lock);
-
 struct file *file_alloc(struct inode *ino, const struct file_ops *ops, int flags)
 {
     struct file *f = kzalloc(sizeof *f);
@@ -22,31 +19,33 @@ struct file *file_alloc(struct inode *ino, const struct file_ops *ops, int flags
     f->inode = ino;
     f->ops = ops;
     f->flags = flags;
-    f->refcount = 1;
+    refcount_set(&f->refcount, 1);
     mutex_init(&f->lock, "file");
     return f;
 }
 
 void file_ref(struct file *f)
 {
-    spin_lock(&files_lock);
-    f->refcount++;
-    spin_unlock(&files_lock);
+    kassert(refcount_read(&f->refcount) != 0);
+    refcount_inc(&f->refcount);
+}
+
+static void file_free_rcu(struct rcu_head *head)
+{
+    struct file *f = container_of(head, struct file, rcu);
+    kfree(f);
 }
 
 void file_put(struct file *f)
 {
-    spin_lock(&files_lock);
-    kassert(f->refcount > 0);
-    int left = --f->refcount;
-    spin_unlock(&files_lock);
-    if (left)
+    kassert(refcount_read(&f->refcount) != 0);
+    if (!refcount_dec_and_test(&f->refcount))
         return;
     if (f->ops && f->ops->release)
         f->ops->release(f);
     if (f->inode)
         inode_put(f->inode);
-    kfree(f);
+    rcu_call(&f->rcu, file_free_rcu);
 }
 
 long file_read(struct file *f, char *buf, size_t n)
@@ -154,7 +153,7 @@ int fdtable_install(struct fdtable *t, struct file *f, int min)
     spin_lock(&t->lock);
     for (int i = min; i < t->limit; i++) {
         if (!t->fds[i]) {
-            t->fds[i] = f;
+            __atomic_store_n(&t->fds[i], f, __ATOMIC_RELEASE);
             t->cloexec &= ~(1ULL << i);
             spin_unlock(&t->lock);
             return i;
@@ -173,8 +172,8 @@ int fdtable_install_at(struct fdtable *t, struct file *f, int fd)
         spin_unlock(&t->lock);
         return -EBADF;
     }
-    struct file *old = t->fds[fd];
-    t->fds[fd] = f;
+    struct file *old = __atomic_load_n(&t->fds[fd], __ATOMIC_RELAXED);
+    __atomic_store_n(&t->fds[fd], f, __ATOMIC_RELEASE);
     t->cloexec &= ~(1ULL << fd);
     spin_unlock(&t->lock);
     if (old)
@@ -186,11 +185,14 @@ struct file *fdtable_get(struct fdtable *t, int fd)
 {
     if (fd < 0 || fd >= OPEN_MAX)
         return NULL;
-    spin_lock(&t->lock);
-    struct file *f = t->fds[fd];
-    if (f)
-        file_ref(f);
-    spin_unlock(&t->lock);
+    struct file *f;
+    rcu_read_lock();
+    for (;;) {
+        f = __atomic_load_n(&t->fds[fd], __ATOMIC_ACQUIRE);
+        if (!f || refcount_inc_not_zero(&f->refcount))
+            break;
+    }
+    rcu_read_unlock();
     return f;
 }
 
@@ -199,8 +201,8 @@ int fdtable_close(struct fdtable *t, int fd)
     if (fd < 0 || fd >= OPEN_MAX)
         return -EBADF;
     spin_lock(&t->lock);
-    struct file *f = t->fds[fd];
-    t->fds[fd] = NULL;
+    struct file *f = __atomic_load_n(&t->fds[fd], __ATOMIC_RELAXED);
+    __atomic_store_n(&t->fds[fd], NULL, __ATOMIC_RELEASE);
     t->cloexec &= ~(1ULL << fd);
     spin_unlock(&t->lock);
     if (!f)
