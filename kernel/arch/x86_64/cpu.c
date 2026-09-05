@@ -36,41 +36,77 @@ void cpu_init_boot(void)
     wrmsr(MSR_KERNEL_GS_BASE, (uint64_t)c);
 }
 
+struct cpu_features cpu_features;
+
 static void cpuid(uint32_t leaf, uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d)
 {
     __asm__ volatile("cpuid" : "=a"(*a), "=b"(*b), "=c"(*c), "=d"(*d) : "a"(leaf), "c"(0));
 }
 
-/* Log the processor the kernel runs on: vendor, family and model, and
- * whether a hypervisor announces itself, so that behaviour that differs
- * between emulation and hardware virtualization can be told apart. */
-void cpu_log_identity(void)
+void cpu_identify(void)
 {
+    struct cpu_features *f = &cpu_features;
     uint32_t a, b, c, d;
-    char vendor[13];
     cpuid(0, &a, &b, &c, &d);
-    memcpy(vendor, &b, 4);
-    memcpy(vendor + 4, &d, 4);
-    memcpy(vendor + 8, &c, 4);
-    vendor[12] = 0;
-    uint32_t max_leaf = a;
+    memcpy(f->vendor, &b, 4);
+    memcpy(f->vendor + 4, &d, 4);
+    memcpy(f->vendor + 8, &c, 4);
+    f->vendor[12] = 0;
+    f->intel = strcmp(f->vendor, "GenuineIntel") == 0;
+    f->amd = strcmp(f->vendor, "AuthenticAMD") == 0;
+
     cpuid(1, &a, &b, &c, &d);
-    unsigned family = (a >> 8) & 0xf, model = (a >> 4) & 0xf, stepping = a & 0xf;
-    if (family == 0xf)
-        family += (a >> 20) & 0xff;
-    if (family == 6 || family >= 0xf)
-        model |= ((a >> 16) & 0xf) << 4;
+    f->family = (a >> 8) & 0xf;
+    f->model = (a >> 4) & 0xf;
+    f->stepping = a & 0xf;
+    if (f->family == 0xf)
+        f->family += (a >> 20) & 0xff;
+    if (f->family == 6 || f->family >= 0xf)
+        f->model |= ((a >> 16) & 0xf) << 4;
+    f->pge = (d >> 13) & 1;
+    f->pat = (d >> 16) & 1;
+    f->fxsr = (d >> 24) & 1;
+    f->sse2 = (d >> 26) & 1;
+    f->pcid = (c >> 17) & 1;
+    f->x2apic = (c >> 21) & 1;
+    f->tsc_deadline = (c >> 24) & 1;
+    /* The hypervisor leaf is separate from the basic range; its eax is
+     * the maximum hypervisor leaf, which is at least 0x40000000. */
     bool hypervisor = (c >> 31) & 1;
-    char hv[13] = "";
-    if (hypervisor && max_leaf >= 0x40000000) {
+    if (hypervisor) {
         cpuid(0x40000000, &a, &b, &c, &d);
-        memcpy(hv, &b, 4);
-        memcpy(hv + 4, &c, 4);
-        memcpy(hv + 8, &d, 4);
-        hv[12] = 0;
+        if (a < 0x40000000)
+            b = c = d = 0;
+        memcpy(f->hypervisor, &b, 4);
+        memcpy(f->hypervisor + 4, &c, 4);
+        memcpy(f->hypervisor + 8, &d, 4);
+        f->hypervisor[12] = 0;
     }
-    klog_info("%s family %u model %u stepping %u, %s%s", vendor, family, model, stepping,
-              hypervisor ? "hypervisor " : "no hypervisor", hv);
+
+    cpuid(0x80000000, &a, &b, &c, &d);
+    uint32_t max_ext = a;
+    f->phys_bits = 36;
+    if (max_ext >= 0x80000001) {
+        cpuid(0x80000001, &a, &b, &c, &d);
+        f->nx = (d >> 20) & 1;
+        f->pdpe1gb = (d >> 26) & 1;
+    }
+    if (max_ext >= 0x80000007) {
+        cpuid(0x80000007, &a, &b, &c, &d);
+        f->invariant_tsc = (d >> 8) & 1;
+    }
+    if (max_ext >= 0x80000008) {
+        cpuid(0x80000008, &a, &b, &c, &d);
+        f->phys_bits = a & 0xff;
+    }
+    klog_info("%s family %u model %u stepping %u, %s%s", f->vendor, f->family, f->model,
+              f->stepping, hypervisor ? "hypervisor " : "no hypervisor", f->hypervisor);
+    klog_info("features:%s%s%s%s%s%s%s%s%s%s, %u physical address bits",
+              f->nx ? " nx" : "", f->pge ? " pge" : "", f->pat ? " pat" : "",
+              f->fxsr ? " fxsr" : "", f->sse2 ? " sse2" : "", f->x2apic ? " x2apic" : "",
+              f->pcid ? " pcid" : "", f->pdpe1gb ? " pdpe1gb" : "",
+              f->invariant_tsc ? " invariant_tsc" : "", f->tsc_deadline ? " tsc_deadline" : "",
+              f->phys_bits);
 }
 
 void push_cli(void)

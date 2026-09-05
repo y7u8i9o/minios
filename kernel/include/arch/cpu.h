@@ -148,8 +148,32 @@ static inline void cpu_relax(void)
 
 /* Set up the boot CPU structure and load its GS base. */
 void cpu_init_boot(void);
-/* Log vendor, family, model and hypervisor identification. */
-void cpu_log_identity(void);
+/* Processor identification and the features the kernel depends on, read
+ * from CPUID once by the boot CPU (cpu_identify) and constant afterwards.
+ * Every vendor or hypervisor dependent decision reads this structure;
+ * no other file executes cpuid. See docs/design/platform.md. */
+struct cpu_features {
+    char vendor[13];            /* "GenuineIntel", "AuthenticAMD", ... */
+    char hypervisor[13];        /* "KVMKVMKVM\0\0\0", "TCGTCGTCGTCG", ..., "" on bare hardware */
+    unsigned family, model, stepping;
+    bool intel, amd;
+    bool nx;                    /* execute disable, EFER.NXE */
+    bool pge;                   /* global pages, CR4.PGE */
+    bool pat;                   /* page attribute table MSR */
+    bool fxsr;                  /* fxsave/fxrstor, CR4.OSFXSR */
+    bool sse2;
+    bool x2apic;
+    bool pcid;
+    bool pdpe1gb;               /* 1 GiB pages */
+    bool invariant_tsc;
+    bool tsc_deadline;
+    unsigned phys_bits;         /* physical address width */
+};
+extern struct cpu_features cpu_features;
+
+/* Fill cpu_features from CPUID and log the processor. Boot CPU only,
+ * before any feature is enabled. */
+void cpu_identify(void);
 /* Return the structure of CPU id (0 is the boot CPU). Valid ids are below
  * smp_cpu_count(). */
 struct cpu *cpu_by_id(unsigned id);

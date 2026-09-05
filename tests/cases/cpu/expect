@@ -1,0 +1,4 @@
+\[I cpu\] [A-Za-z]+ family [0-9]+ model [0-9]+
+\[I cpu\] features: nx pge pat fxsr sse2
+cpu: vendor "[A-Za-z]+"
+TEST PASS

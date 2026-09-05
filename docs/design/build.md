@@ -132,6 +132,19 @@ default is 2560x1600. The `video=` mode is baked into the ISO, so
 `--video` only takes effect when the image is built (`make run`, or
 `tools/run.sh --build`). `--full-screen` is the alternative that scales
 the plain mode to the screen with interpolation.
+
+On Linux the gtk and sdl windows also show one guest pixel per screen
+pixel, and a 2560x1440 laptop screen at 190 dpi shows the 1024x768 mode
+as a small window. `tools/run.sh` therefore reads the primary screen from
+`xrandr --current` and uses its pixel size as the mode, `@2` when the
+screen has 150 dpi or more or `GDK_SCALE` is 2, and `@1` otherwise; a
+2560x1440 laptop gets `2560x1440@2`, a 2560x1440 27 inch monitor
+`2560x1440@1`. Because a window of the screen's size does not fit next to
+panels, the default display becomes `gtk,zoom-to-fit=on`, which scales the
+guest to the window it gets. Modes whose frame exceeds the 16 MiB
+virtio-gpu buffer, `QEMU_DISPLAY` values other than gtk and sdl, and
+systems without `xrandr` keep the image default. `QEMU_VIDEO` in
+`qemu.conf` or `--video` overrides the choice.
 `tests/cases/comp_scale` boots `video=2560x1600@2` and checks that the
 compositor's surface appears at doubled coordinates as uniform 2x2 blocks.
 
@@ -147,5 +160,8 @@ containing `TEST FAIL` fails the case. `tests/run_all.sh` runs every case and
 prints a summary. Test images and logs are written to `build/tests/<case>/`.
 
 Tests use HVF on macOS when the installed QEMU offers it and TCG elsewhere.
-Set `ACCEL` to override that choice. `make run` follows the same default and
+Set `ACCEL` to override that choice. `make test-kvm` runs the cases listed
+in `KVM_CASES` with `ACCEL=kvm`; run it on the Linux machine after every
+change to the kernel, because TCG follows Intel semantics and hides
+processor and hypervisor differences (`platform.md`). `make run` follows the same default and
 uses `QEMU_ACCEL` for an override (see Running above).

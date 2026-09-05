@@ -17,7 +17,7 @@ MKFAT    := $(BUILD)/host/mkfat
 
 export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT SWAP
 
-.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test check clean tools $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean tools $(DISK)
 
 all: kernel libc user
 
@@ -112,6 +112,12 @@ gdb:
 # long to run for every change.
 test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+
+# The cases whose behaviour depends on the processor or the hypervisor,
+# run with hardware virtualization. Linux only; needs /dev/kvm.
+KVM_CASES := boot cpu exception fork signals smp smp_user vmm sched
+test-kvm:
+	ACCEL=kvm $(MAKE) test CASES="$(KVM_CASES)"
 
 # Host unit tests of the GUI framework.
 check:

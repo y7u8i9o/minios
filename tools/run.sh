@@ -39,9 +39,13 @@
 #                                            --build). @2 doubles every pixel
 #                                            for high density displays. Default
 #                                            on macOS with a Retina display and
-#                                            the cocoa window: 2560x1600@2;
-#                                            elsewhere the image default,
-#                                            1024x768. With --vga std only the
+#                                            the cocoa window: 2560x1600@2; on
+#                                            Linux with an X display: the
+#                                            primary screen's size, @2 when it
+#                                            is 150 dpi or more or GDK_SCALE is
+#                                            2, in a gtk window with
+#                                            zoom-to-fit; elsewhere the image
+#                                            default, 1024x768. With --vga std only the
 #                                            VGA BIOS modes work (1600x1200,
 #                                            1920x1080, 1920x1200, 2560x1440,
 #                                            2560x1600, ...).
@@ -220,8 +224,51 @@ hidpi_display() {
     esac
     system_profiler SPDisplaysDataType 2>/dev/null | grep -q -i 'retina\|UI Looks like'
 }
-if [ -z "${QEMU_VIDEO+set}" ] && hidpi_display; then
-    QEMU_VIDEO=2560x1600@2
+# Linux: the gtk and sdl windows show one guest pixel per screen pixel as
+# well, so the mode follows the primary screen: its pixel size, doubled
+# (@2) when the screen is high density (150 dpi or more, or GDK_SCALE=2).
+# Prints "WIDTH HEIGHT DPI" from xrandr; fails without an X display.
+linux_screen() {
+    [ "$(uname -s)" = Linux ] || return 1
+    case "${QEMU_DISPLAY:-gtk}" in
+        gtk*|sdl*) ;;
+        *) return 1 ;;
+    esac
+    command -v xrandr >/dev/null 2>&1 || return 1
+    out="$(xrandr --current 2>/dev/null)" || return 1
+    line="$(echo "$out" | grep ' connected primary')"
+    [ -n "$line" ] || line="$(echo "$out" | grep ' connected' | head -1)"
+    [ -n "$line" ] || return 1
+    echo "$line" | awk '{
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) geom = $i
+            if ($i ~ /^[0-9]+mm$/ && mm == "") mm = $i
+        }
+        if (geom == "") exit 1
+        split(geom, a, /[x+]/)
+        sub(/mm/, "", mm)
+        dpi = (mm + 0 > 0) ? int(a[1] * 25.4 / mm) : 96
+        print a[1], a[2], dpi
+    }'
+}
+if [ -z "${QEMU_VIDEO+set}" ]; then
+    if hidpi_display; then
+        QEMU_VIDEO=2560x1600@2
+    elif screen="$(linux_screen)"; then
+        set -- $screen "$@"
+        w=$1; h=$2; dpi=$3; shift 3
+        scale=1
+        if [ "${GDK_SCALE:-1}" -ge 2 ] || [ "$dpi" -ge 150 ]; then
+            scale=2
+        fi
+        # The frame must fit the 16 MiB virtio-gpu buffer.
+        if [ $((w * h * 4)) -le $((16 * 1024 * 1024)) ]; then
+            QEMU_VIDEO="${w}x${h}@${scale}"
+            # A window of the screen's size does not fit next to panels;
+            # let gtk scale it to the space it gets.
+            [ -z "$QEMU_DISPLAY" ] && QEMU_DISPLAY=gtk,zoom-to-fit=on
+        fi
+    fi
 fi
 
 if [ "$DO_BUILD" = 1 ]; then

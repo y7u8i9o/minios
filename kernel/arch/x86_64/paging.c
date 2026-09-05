@@ -6,6 +6,7 @@
 #include <mm/vmm.h>
 #include <lib/string.h>
 #include <errno.h>
+#include <debug/panic.h>
 
 #define CR0_WP   (1UL << 16)
 #define CR4_PGE  (1UL << 7)
@@ -188,6 +189,14 @@ void paging_free_user_tables(uintptr_t pml4_phys)
 
 void paging_enable_features(void)
 {
+    /* The bits below fault with #GP on a processor that lacks them; a
+     * message names the missing feature instead. */
+    if (!cpu_features.nx)
+        panic("cpu: execute disable (NX) is required");
+    if (!cpu_features.pge)
+        panic("cpu: global pages (PGE) are required");
+    if (!cpu_features.pat)
+        panic("cpu: the page attribute table (PAT) is required");
     fpu_init_cpu();
     /* NX for non executable mappings. */
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NXE);

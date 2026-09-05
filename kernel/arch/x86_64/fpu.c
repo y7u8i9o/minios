@@ -1,5 +1,7 @@
 #include <arch/fpu.h>
 #include <lib/string.h>
+#include <arch/cpu.h>
+#include <debug/panic.h>
 
 #define CR0_MP (1UL << 1)
 #define CR0_EM (1UL << 2)
@@ -12,6 +14,8 @@ static bool template_ready;
 
 void fpu_init_cpu(void)
 {
+    if (!cpu_features.fxsr || !cpu_features.sse2)
+        panic("cpu: fxsave and SSE2 are required");
     uint64_t cr0, cr4;
     __asm__ volatile("movq %%cr0, %0" : "=r"(cr0));
     __asm__ volatile("movq %%cr4, %0" : "=r"(cr4));
