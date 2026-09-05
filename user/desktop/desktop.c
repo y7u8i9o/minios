@@ -372,7 +372,7 @@ static void desk_paint(struct widget *w, struct painter *p)
         if (i == selected)
             painter_rounded(p, x + 2, y + 2, CELL_W - 4, CELL_H - 4, 0x00405870, 0x00c0d0e0);
         if (entries[i].icon)
-            painter_image(p, x + (CELL_W - entries[i].icon->w) / 2, y + 8, entries[i].icon);
+            painter_image(p, x + (CELL_W - image_lw(entries[i].icon)) / 2, y + 8, entries[i].icon);
         const char *label = entries[i].label;
         int tw = painter_text_width(p, label, -1);
         if (tw > CELL_W - 6) tw = CELL_W - 6;
