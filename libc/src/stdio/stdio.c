@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <stdint.h>
 #include "../thread/tcb.h"
 
@@ -18,6 +19,8 @@ struct FILE {
     size_t size;
     size_t wpos;            /* bytes pending in buf for writing */
     size_t rpos, rlen;      /* read buffer window */
+    char *tmppath;          /* tmpfile: removed when the stream closes */
+    pid_t pid;              /* popen: the child that pclose waits for */
     struct __libc_lock lock; /* one operation at a time per stream (M35) */
     char inbuf[BUFSIZ];
 };
@@ -364,8 +367,13 @@ FILE *fopen(const char *path, const char *mode)
 int fclose(FILE *f)
 {
     int r = fflush(f);
-    if (close(f->fd) < 0)
+    if (f->fd >= 0 && close(f->fd) < 0)
         r = EOF;
+    if (f->tmppath) {
+        unlink(f->tmppath);
+        free(f->tmppath);
+        f->tmppath = NULL;
+    }
     for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++)
         if (open_streams[i] == f)
             open_streams[i] = NULL;
@@ -397,4 +405,167 @@ void rewind(FILE *f)
 {
     fseek(f, 0, SEEK_SET);
     clearerr(f);
+}
+
+/* Pushes c back into the read buffer. After a read rpos is at least one,
+ * so the byte fits in place; a push back onto an empty buffer shifts the
+ * window instead. The pushed byte counts against the SEEK_CUR offset
+ * like any unread byte. */
+int ungetc(int c, FILE *f)
+{
+    if (c == EOF)
+        return EOF;
+    LOCK(f);
+    if (f->rpos > 0) {
+        f->inbuf[--f->rpos] = (char)c;
+    } else if (f->rlen < sizeof f->inbuf) {
+        memmove(f->inbuf + 1, f->inbuf, f->rlen);
+        f->inbuf[0] = (char)c;
+        f->rlen++;
+    } else {
+        UNLOCK(f);
+        return EOF;
+    }
+    f->eof = 0;
+    UNLOCK(f);
+    return (unsigned char)c;
+}
+
+/* Replaces the file behind an existing stream; the standard streams
+ * keep their identity so that stdin can be turned into a file. On
+ * failure the stream is closed, as the standard requires. */
+FILE *freopen(const char *path, const char *mode, FILE *f)
+{
+    int flags;
+    if (parse_mode(mode, &flags) < 0) {
+        fclose(f);
+        return NULL;
+    }
+    fflush(f);
+    close(f->fd);
+    f->fd = -1;
+    f->rpos = f->rlen = f->wpos = 0;
+    f->error = f->eof = 0;
+    int fd = open(path, flags, 0644);
+    if (fd < 0) {
+        fclose(f);
+        return NULL;
+    }
+    f->fd = fd;
+    return f;
+}
+
+/* Names live under P_tmpdir and carry the pid, so concurrent processes
+ * never collide; the counter separates calls within one process. */
+char *tmpnam(char *buf)
+{
+    static char names[L_tmpnam];
+    static unsigned counter;
+    char *out = buf ? buf : names;
+    snprintf(out, L_tmpnam, P_tmpdir "/t%d.%u", (int)getpid(),
+             __atomic_fetch_add(&counter, 1, __ATOMIC_RELAXED));
+    return out;
+}
+
+/* A read/write stream on a fresh file that fclose removes. */
+FILE *tmpfile(void)
+{
+    char name[L_tmpnam];
+    int fd = -1;
+    for (int attempt = 0; attempt < 16 && fd < 0; attempt++) {
+        tmpnam(name);
+        fd = open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+        if (fd < 0 && errno != EEXIST)
+            return NULL;
+    }
+    if (fd < 0)
+        return NULL;
+    FILE *f = fdopen(fd, "w+");
+    if (!f) {
+        close(fd);
+        unlink(name);
+        return NULL;
+    }
+    f->tmppath = strdup(name);
+    return f;
+}
+
+/* The lock is not recursive, so a caller holding it through flockfile
+ * must read with getc_unlocked. */
+void flockfile(FILE *f) { LOCK(f); }
+void funlockfile(FILE *f) { UNLOCK(f); }
+
+int getc_unlocked(FILE *f)
+{
+    if (f->rpos < f->rlen || fill(f) != EOF)
+        return (unsigned char)f->inbuf[f->rpos++];
+    return EOF;
+}
+
+/* Offsets fit in long on x86-64, so the off_t forms share one path. */
+int fseeko(FILE *f, off_t off, int whence)
+{
+    return fseek(f, (long)off, whence);
+}
+
+off_t ftello(FILE *f)
+{
+    return (off_t)ftell(f);
+}
+
+/* Runs command through /bin/sh -c with one end of a pipe as its stdin
+ * ("w") or stdout ("r"); the other end becomes the stream. pclose
+ * closes the stream and returns the child's wait status. */
+FILE *popen(const char *command, const char *mode)
+{
+    int reading = mode[0] == 'r';
+    if (mode[0] != 'r' && mode[0] != 'w') {
+        errno = EINVAL;
+        return NULL;
+    }
+    int fds[2];
+    if (pipe(fds) < 0)
+        return NULL;
+    int parent_end = reading ? fds[0] : fds[1];
+    int child_end = reading ? fds[1] : fds[0];
+    FILE *f = fdopen(parent_end, mode);
+    if (!f) {
+        close(fds[0]);
+        close(fds[1]);
+        return NULL;
+    }
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid < 0) {
+        fclose(f);
+        close(child_end);
+        return NULL;
+    }
+    if (pid == 0) {
+        dup2(child_end, reading ? 1 : 0);
+        close(child_end);
+        close(parent_end);
+        char *const argv[] = { "sh", "-c", (char *)command, NULL };
+        execv("/bin/sh", argv);
+        _exit(127);
+    }
+    close(child_end);
+    f->pid = pid;
+    return f;
+}
+
+int pclose(FILE *f)
+{
+    pid_t pid = f->pid;
+    if (pid <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    fclose(f);
+    int status;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR)
+            return -1;
+    }
+    return status;
 }

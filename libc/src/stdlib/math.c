@@ -573,7 +573,13 @@ double pow(double x, double y)
         errno = EDOM;
         return NAN;
     }
-    double result = exp(y * log(magnitude));
+    /* The x87 kernels carry 64 significand bits, so the double result is
+     * correctly rounded except in rare double rounding cases. The double
+     * kernels lost up to one unit through exp(y * log(x)): 2 ** 0.5 came
+     * out one unit below sqrt(2). */
+    double result = (double)exp2l((long double)y * log2l((long double)magnitude));
+    if (isinf(result) || result == 0.0)
+        errno = ERANGE;
     return x < 0.0 && odd ? -result : result;
 }
 

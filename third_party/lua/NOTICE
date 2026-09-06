@@ -1,0 +1,15 @@
+Lua 5.5.1, released on 24 Jul 2026.
+Source: https://www.lua.org/ftp/lua-5.5.1.tar.gz
+SHA-256 of the archive:
+1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce
+
+Copied from the archive without modification:
+  src/   every .c and .h file (the upstream src/Makefile is not used;
+         user/Makefile compiles the sources into build/user/lua/)
+  doc/   lua.1, luac.1, manual.html, readme.html
+  README
+
+Platform configuration is passed on the compiler command line by
+user/Makefile instead of editing luaconf.h, so that a later release can
+be dropped in unchanged. The vendored files are exempt from the minios
+line count and naming conventions. See docs/design/lua.md.

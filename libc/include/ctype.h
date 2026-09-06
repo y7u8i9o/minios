@@ -11,3 +11,5 @@ static inline int iscntrl(int c) { return (c >= 0 && c < 0x20) || c == 0x7f; }
 static inline int ispunct(int c) { return isprint(c) && !isalnum(c) && c != ' '; }
 static inline int toupper(int c) { return islower(c) ? c - 0x20 : c; }
 static inline int tolower(int c) { return isupper(c) ? c + 0x20 : c; }
+static inline int isgraph(int c) { return c > 0x20 && c < 0x7f; }
+static inline int isblank(int c) { return c == ' ' || c == '\t'; }

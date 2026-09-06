@@ -1,0 +1,13 @@
+Integer and bitwise: PASS
+Float and math library: PASS
+String library: PASS
+Pattern matching: PASS
+Tables and sorting: PASS
+Functions, closures, and varargs: PASS
+Metatables and metamethods: PASS
+Coroutines: PASS
+Error handling: PASS
+Garbage collection: PASS
+File I/O: PASS
+os library and time: PASS
+/bin/lua exited with status 0x0

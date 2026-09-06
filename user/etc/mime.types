@@ -2,6 +2,7 @@
 text/plain txt md conf log
 text/x-csrc c h
 text/x-shellscript sh
+text/x-lua lua
 image/png png
 audio/x-wav wav
 application/x-launcher app

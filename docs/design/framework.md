@@ -38,7 +38,9 @@ over the fake client in `tests/fake_client.c` with the builtin font.
   it to the ancestors, translating coordinates on the way.
 - Signals: `widget_connect(w, "clicked", fn, arg)` appends a handler;
   `widget_emit` runs the handlers of that name in order until one
-  returns non zero. Each signal name has a fixed argument structure
+  returns non zero. `widget_destroy` emits "destroy" (no arguments) after
+  the children are gone and before the class destructor, so an owner of
+  a reference (the Lua binding) can drop it. Each signal name has a fixed argument structure
   (`sig_click`, `sig_change`, `sig_key`, `sig_select`, `sig_resize`,
   `sig_scroll`, `sig_paint`).
 - Windows translate server messages: mouse messages go to the widget

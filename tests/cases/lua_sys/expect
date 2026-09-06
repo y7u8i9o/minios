@@ -1,0 +1,11 @@
+ok mkdir
+ok list sorted
+ok dir iterator
+ok chdir round trip
+ok run exit status
+ok spawn skipped without init
+ok uptime and sleep
+ok uname
+ok mime handler exact
+modules: done
+/bin/lua exited with status 0x0

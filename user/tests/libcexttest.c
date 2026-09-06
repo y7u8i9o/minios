@@ -12,8 +12,11 @@
 #include <fnmatch.h>
 #include <glob.h>
 #include <unistd.h>
+#include <ctype.h>
+#include <sys/wait.h>
 
 static void test_terminal_libc(void);
+static void test_stdio_additions(void);
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("libcexttest: FAIL " __VA_ARGS__); printf("\n"); } } while (0)
@@ -164,6 +167,7 @@ int main(void)
     test_regex();
     test_time_additions();
     test_terminal_libc();
+    test_stdio_additions();
     printf("libcexttest: %d failures\n", failures);
     return failures ? 1 : 0;
 }
@@ -201,4 +205,81 @@ static void test_terminal_libc(void)
     CHECK(getline(&line, &capacity, f) == 4 && !strcmp(line, "last"), "getline final line");
     CHECK(getline(&line, &capacity, f) == -1 && feof(f), "getline EOF");
     free(line); fclose(f); unlink("/getline-test");
+}
+
+/* The functions added for the Lua port: push back, stream reopening,
+ * temporary files, the shell, collation and the POSIX names. */
+static void test_stdio_additions(void)
+{
+    CHECK(isgraph('a') && !isgraph(' ') && isblank('\t'), "isgraph and isblank");
+    CHECK(strcoll("abc", "abd") < 0 && strcoll("b", "a") > 0, "strcoll order");
+
+    FILE *f = tmpfile();
+    CHECK(f != NULL, "tmpfile");
+    if (!f) return;
+    fputs("12 rest\n", f);
+    rewind(f);
+    int c = fgetc(f);
+    CHECK(c == '1' && ungetc('9', f) == '9' && fgetc(f) == '9' && fgetc(f) == '2',
+          "ungetc replaces the byte read");
+    CHECK(fgetc(f) == ' ' && ftell(f) == 3, "position after push back");
+    while (fgetc(f) != EOF) ;
+    CHECK(feof(f) && ungetc('x', f) == 'x' && !feof(f) && fgetc(f) == 'x' &&
+          fgetc(f) == EOF, "ungetc at end of file");
+    fclose(f);
+
+    char name[L_tmpnam], other[L_tmpnam];
+    CHECK(tmpnam(name) == name && tmpnam(other) == other && strcmp(name, other) != 0 &&
+          !strncmp(name, "/tmp/", 5), "tmpnam distinct names");
+    f = fopen(name, "w");
+    CHECK(f != NULL, "tmpnam is creatable");
+    if (!f) return;
+    fputs("first\n", f);
+    f = freopen(other, "w+", f);
+    CHECK(f != NULL, "freopen");
+    if (!f) return;
+    fputs("second\n", f);
+    rewind(f);
+    char line[32];
+    CHECK(fgets(line, sizeof line, f) && !strcmp(line, "second\n"), "freopen writes the new file");
+    fclose(f);
+    f = fopen(name, "r");
+    CHECK(f && fgets(line, sizeof line, f) && !strcmp(line, "first\n"), "freopen flushed the old file");
+    if (f) fclose(f);
+    unlink(name);
+    unlink(other);
+
+    char template[] = "/tmp/ext_XXXXXX";
+    int fd = mkstemp(template);
+    CHECK(fd >= 0 && strncmp(template, "/tmp/ext_", 9) == 0 && strchr(template, 'X') == NULL,
+          "mkstemp");
+    if (fd >= 0) { close(fd); unlink(template); }
+
+    CHECK(system(NULL) == 1, "system reports a shell");
+    int status = system("exit 3");
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 3, "system exit status %d", status);
+
+    f = popen("echo piped; exit 5", "r");
+    CHECK(f != NULL, "popen read");
+    if (f) {
+        CHECK(fgets(line, sizeof line, f) && !strcmp(line, "piped\n"), "popen output");
+        status = pclose(f);
+        CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 5, "pclose status %d", status);
+    }
+    f = popen("cat > /tmp/popen-test", "w");
+    CHECK(f != NULL, "popen write");
+    if (f) {
+        fputs("written\n", f);
+        CHECK(pclose(f) == 0, "pclose write status");
+        f = fopen("/tmp/popen-test", "r");
+        CHECK(f && fgets(line, sizeof line, f) && !strcmp(line, "written\n"), "popen wrote");
+        if (f) fclose(f);
+        unlink("/tmp/popen-test");
+    }
+
+    jmp_buf env;
+    int value = _setjmp(env);
+    if (value == 0)
+        _longjmp(env, 4);
+    CHECK(value == 4, "_setjmp and _longjmp");
 }

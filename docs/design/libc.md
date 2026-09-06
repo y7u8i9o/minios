@@ -32,8 +32,8 @@ result into `-1` with `errno` set. Numbers come from
   `puts`, `fputs`, `putchar`, `fwrite`, `getchar`, `fgetc`, `fgets`,
   `fread`, `fflush`, `setvbuf`, `perror`. `fopen`, `fdopen` and `fclose`
   fail with `ENOSYS` until the VFS (M11).
-- `stdlib.h`: `malloc`, `calloc`, `realloc`, `free` (first fit list over
-  `sbrk` with coalescing), `atoi`, `atol`, `strtol`, `strtoul`, `abs`,
+- `stdlib.h`: `malloc`, `calloc`, `realloc`, `free` (segregated free
+  lists with boundary tags over `sbrk`, see below), `atoi`, `atol`, `strtol`, `strtoul`, `abs`,
   `labs`, `exit`, `_Exit`, `abort`, `atexit`, `getenv`, `setenv`, `rand`,
   `srand`, `qsort`.
 - `unistd.h`: `write`, `read`, `fork`, `execve`, `execv`, `execvp` (PATH
@@ -65,6 +65,13 @@ result into `-1` with `errno` set. Numbers come from
 - `time.h` additionally exposes the C `TIME_UTC`, `timespec_get` and
   `timespec_getres` interfaces and the POSIX UTC timezone state
   (`tzname`, `timezone`, `daylight`, `tzset`).
+- Added for the Lua port (see `lua.md`): `ungetc`, `freopen`, `tmpfile`,
+  `tmpnam`, `popen`, `pclose`, `getc_unlocked`, `flockfile`,
+  `funlockfile`, `fseeko`, `ftello` in `stdio.h`; `system` and `mkstemp`
+  in `stdlib.h`; `strcoll` in `string.h`; `isgraph` and `isblank` in
+  `ctype.h`; `sig_atomic_t` in `signal.h`; `_setjmp` and `_longjmp` in
+  `setjmp.h`. `tmpfile` and `tmpnam` use `/tmp`, an empty directory in
+  the root image.
 
 ## Terminal userland helpers
 
@@ -104,8 +111,9 @@ allocator, `qsort`, the environment, the streams and `atexit`.
 `tests/cases/libc_ext` runs `/bin/libcexttest`, covering non-local jumps,
 the C locale, UTF-8 split-sequence conversion and rejection, wide
 strings and numbers, BRE/ERE matching and captures, leftmost-longest
-alternation, back references, newline anchors, bounded execution and the
-new `time.h` interfaces.
+alternation, back references, newline anchors, bounded execution, the
+new `time.h` interfaces and the stream, process and temporary file
+functions added for Lua.
 `tests/cases/shell` (`test=shell`) types a session into the keyboard line
 buffer through `ps2kbd_feed_scancode` and then starts `/bin/sh`, checking
 the builtin output, PATH lookup with arguments, the error messages and the
@@ -115,7 +123,26 @@ by booting the default image and typing through QEMU's monitor.
 ## Large allocations (M33)
 
 `malloc` serves requests of 256 KiB or more with a private anonymous
-`mmap` of their own and `free` unmaps them, while smaller blocks stay on
-the first fit list over `sbrk`. Window surfaces and buffer pools are
+`mmap` of their own and `free` unmaps them, while smaller blocks stay in
+the heap over `sbrk`. Window surfaces and buffer pools are
 re-created at every mode change; on the list they fragmented the heap
 and each new size cost another 30 MiB that never came back.
+
+## Heap allocator
+
+The first fit list was replaced on 2026-09-06 after the Lua garbage
+collection test showed allocation and freeing times growing with the
+square of the number of live objects: every `malloc` walked the list
+from its head and every `free` walked it to coalesce. `malloc.c` now
+keeps free blocks in bins by size, one bin per 16 bytes up to 512 bytes
+and one per power of two above, with the bin links in the payload of
+the free block. Every block has a 16 byte header with the payload size
+and two flags; a free block also writes its size in its last 8 bytes,
+and the header of the following block records that its predecessor is
+free, so `free` coalesces with both neighbours in constant time. Each
+`sbrk` region ends with a used sentinel header of size zero, so the
+forward neighbour is always a valid header; a region that continues
+the previous one at the break turns the old sentinel into the header of
+the new block. The smallest payload is 32 bytes. `realloc` grows into a
+free successor in place before it copies. Requests of 256 KiB or more
+are mapped separately as before.

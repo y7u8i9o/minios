@@ -45,6 +45,21 @@ void perror(const char *s);
 FILE *fopen(const char *path, const char *mode);
 FILE *fdopen(int fd, const char *mode);
 int fclose(FILE *f);
+FILE *freopen(const char *path, const char *mode, FILE *f);
+int ungetc(int c, FILE *f);
+#define L_tmpnam 32
+#define TMP_MAX 10000
+#define P_tmpdir "/tmp"
+#define FILENAME_MAX 256
+FILE *tmpfile(void);
+char *tmpnam(char *buf);
+FILE *popen(const char *command, const char *mode);
+int pclose(FILE *f);
+int getc_unlocked(FILE *f);
+void flockfile(FILE *f);
+void funlockfile(FILE *f);
+int fseeko(FILE *f, off_t off, int whence);
+off_t ftello(FILE *f);
 int rename(const char *oldpath, const char *newpath);
 int remove(const char *path);
 #define SEEK_SET 0

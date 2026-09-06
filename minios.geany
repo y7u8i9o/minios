@@ -19,7 +19,7 @@ indent_mode=2
 
 [project]
 name=minios
-base_path=/home/ryanm/minios
+base_path=/Users/flifex/Sources/minios
 description=
 
 [long line marker]
@@ -27,16 +27,7 @@ long_line_behaviour=1
 long_line_column=72
 
 [files]
-current_page=8
-FILE_NAME_0=0;None;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2Fminios.geany;0;4
-FILE_NAME_1=0;None;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2Fqemu.conf.example;0;4
-FILE_NAME_2=0;Make;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2FMakefile;0;4
-FILE_NAME_3=0;Make;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2Ftoolchain.mk;0;4
-FILE_NAME_4=0;Markdown;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2FPLAN.md;0;4
-FILE_NAME_5=0;Markdown;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2FCLAUDE.md;0;4
-FILE_NAME_6=0;Conf;1;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2Flimine.conf;0;4
-FILE_NAME_7=0;C++;0;EUTF-8;1;1;0;%2Fhome%2Fryanm%2FSources%2FNdless%2Fndless-sdk%2Fsamples%2Fhelloworld-cpp%2Fhello.cpp;0;4
-FILE_NAME_8=1466;C++;0;EUTF-8;1;1;0;%2Fhome%2Fryanm%2Fminios%2Fuser%2Fsh%2Fsh.h;0;4
+current_page=0
 
 [VTE]
-last_dir=/home/ryanm
+last_dir=/Users/flifex

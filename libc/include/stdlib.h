@@ -31,6 +31,8 @@ int atexit(void (*fn)(void));
 char *getenv(const char *name);
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
+int system(const char *command);
+int mkstemp(char *template);
 int rand(void);
 void srand(unsigned seed);
 void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const void *));

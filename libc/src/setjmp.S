@@ -39,3 +39,9 @@ longjmp:
     .size longjmp, .-longjmp
 
     .section .note.GNU-stack,"",@progbits
+
+/* POSIX names: minios has no signal mask to save, so both pairs agree. */
+    .globl _setjmp
+    .set _setjmp, setjmp
+    .globl _longjmp
+    .set _longjmp, longjmp

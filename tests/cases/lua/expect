@@ -1,0 +1,24 @@
+fib	610
+float 3.142 inf 0x1p\+0
+math	2	1	4.0	3	1024.0
+int	9223372036854775807	3	1099511627776
+str	HELLO	6	a;b;c	2
+cmp	true	true	42
+utf8	5	中文
+table	1 4 9 16 25 36 49 64 81 100	10
+sorted	100	1
+args	1	first
+pcall	false	boom
+coroutine	1	2	3
+read numbers	12	3.5	16
+read rest	true	second line	nil
+seek	3.5
+lines	2
+removed	true
+bytecode	from bytecode
+clock	number	true	1970
+execute	true
+execute status	nil	exit	3
+getenv	/bin
+done
+/bin/lua exited with status 0x0

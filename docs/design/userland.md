@@ -143,10 +143,11 @@ restored at exit through `atexit`.
 
 ## Interpreter
 
-The scripting language is a custom one, `mint` (`user/mint/mint.c`),
-because a Lua port needs floating point and `setjmp`, neither of which
-user programs have yet (SSE is disabled until the FPU state is saved on
-context switches). mint has 64 bit integers and strings, arithmetic and
+The first scripting language was a custom one, `mint` (`user/mint/mint.c`),
+written when user programs had neither floating point nor `setjmp`. Both
+exist now and Lua 5.5 is built from `third_party/lua/` as `/bin/lua`;
+see [Lua](lua.md). mint stays for its test and as a small example of an
+interpreter. mint has 64 bit integers and strings, arithmetic and
 comparison operators, `&&`, `||`, `!`, string concatenation with `+`,
 `if`/`elif`/`else`, `while`, `for x in range(a, b)`, `break`,
 `continue`, functions with `fn name(params) { .. }` and `return`, and

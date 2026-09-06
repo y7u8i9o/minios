@@ -77,6 +77,7 @@ void widget_destroy(struct widget *w)
         widget_destroy(w->first);
     if (w->parent)
         widget_remove(w);
+    widget_emit(w, "destroy", NULL);    /* owners drop their references */
     if (w->cls->destroy)
         w->cls->destroy(w);
     for (struct handler *h = w->handlers; h;) {

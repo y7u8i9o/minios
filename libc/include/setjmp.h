@@ -7,3 +7,7 @@ typedef unsigned long jmp_buf[8];
 
 int setjmp(jmp_buf env) __attribute__((returns_twice));
 void longjmp(jmp_buf env, int value) __attribute__((noreturn));
+
+/* The POSIX pair; identical here because no signal mask is saved. */
+int _setjmp(jmp_buf env) __attribute__((returns_twice));
+void _longjmp(jmp_buf env, int value) __attribute__((noreturn));

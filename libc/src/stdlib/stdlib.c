@@ -4,6 +4,9 @@
 #include <errno.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 #define LONG_MAX_PLUS_ONE (1UL << 63)
 
@@ -439,4 +442,65 @@ int unsetenv(const char *name)
     if (environ)
         environ[k] = NULL;
     return 0;
+}
+
+/* Runs command through /bin/sh -c and returns its wait status. With a
+ * null command reports that a shell is available. Interrupt and quit
+ * are ignored in the parent while the child runs, as POSIX requires,
+ * so that control C reaches only the command. */
+int system(const char *command)
+{
+    if (!command)
+        return 1;
+    sighandler_t old_int = signal(SIGINT, SIG_IGN);
+    sighandler_t old_quit = signal(SIGQUIT, SIG_IGN);
+    int status = -1;
+    pid_t pid = fork();
+    if (pid == 0) {
+        signal(SIGINT, old_int);
+        signal(SIGQUIT, old_quit);
+        char *const argv[] = { "sh", "-c", (char *)command, NULL };
+        execv("/bin/sh", argv);
+        _exit(127);
+    }
+    if (pid > 0) {
+        while (waitpid(pid, &status, 0) < 0) {
+            if (errno != EINTR) {
+                status = -1;
+                break;
+            }
+        }
+    }
+    signal(SIGINT, old_int);
+    signal(SIGQUIT, old_quit);
+    return status;
+}
+
+/* Replaces the trailing XXXXXX of template with letters and creates the
+ * file exclusively, retrying on a collision. Returns the descriptor or
+ * -1 with errno set. */
+int mkstemp(char *template)
+{
+    size_t len = strlen(template);
+    if (len < 6 || strcmp(template + len - 6, "XXXXXX") != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    static const char letters[] =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    unsigned seed = (unsigned)getpid() * 2654435761u ^ (unsigned)rand();
+    for (int attempt = 0; attempt < 100; attempt++) {
+        unsigned v = seed + (unsigned)attempt * 7919u;
+        for (int i = 0; i < 6; i++) {
+            template[len - 6 + i] = letters[v % (sizeof letters - 1)];
+            v /= (sizeof letters - 1);
+        }
+        int fd = open(template, O_RDWR | O_CREAT | O_EXCL, 0600);
+        if (fd >= 0)
+            return fd;
+        if (errno != EEXIST)
+            return -1;
+    }
+    errno = EEXIST;
+    return -1;
 }

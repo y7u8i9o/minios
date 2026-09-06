@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <minios/abi.h>
 
+typedef int sig_atomic_t;
 typedef void (*sighandler_t)(int);
 
 int kill(pid_t pid, int sig);

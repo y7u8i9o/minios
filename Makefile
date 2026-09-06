@@ -127,6 +127,26 @@ check:
 	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
+	$(MAKE) check-lua
+
+.PHONY: check-lua
+# Host unit test of the Lua modules: the interpreter, user/lua and the
+# MIME code compiled with the system compiler, running the same script
+# as the lua_sys boot test on a scratch directory.
+LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
+                $(wildcard user/lua/*.c) user/lua/tests/host_main.c \
+                $(filter-out libgui/src/client.c,$(wildcard libgui/src/*.c libgui/src/widgets/*.c)) \
+                libgui/tests/fake_client.c libgui/tests/host_compat.c $(wildcard libfont/src/*.c)
+check-lua:
+	@mkdir -p $(BUILD)/lua/host
+	$(MAKE) -C libgui $(BUILD)/libgui/font.c
+	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -DMINIOS_HOST -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
+	    -include libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilibgui/include -Ilibfont/include \
+	    -Ilibgui/tests -idirafter kernel/include \
+	    -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm
+	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp
+	$(BUILD)/lua/host/test_modules user/etc/tests/modules.lua $(BUILD)/lua/host/tmp user/etc/mime.types user/etc/mime.apps
+	$(BUILD)/lua/host/test_modules user/lua/tests/gui.lua
 
 .PHONY: check-sh libedit
 check-sh:

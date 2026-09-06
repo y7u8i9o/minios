@@ -314,3 +314,9 @@ size_t strlcat(char *dst, const char *src, size_t size)
         return size + strlen(src);
     return dl + strlcpy(dst + dl, src, size - dl);
 }
+
+/* The sole locale is C, whose collation order is the byte order. */
+int strcoll(const char *a, const char *b)
+{
+    return strcmp(a, b);
+}
