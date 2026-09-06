@@ -28,8 +28,8 @@ objects 870 KiB; `echo` is 3 KiB, the file manager 39 KiB, the shell 76 KiB.
 
 ## Build
 
-`toolchain.mk` compiles all user code with `-fPIC`, so the same objects go
-into the archives and the shared objects. Each library Makefile links
+`toolchain.mk` compiles all user code with `-fPIC`. The archives and the
+shared objects are built from the same objects. Each library Makefile links
 `$(BUILD)/lib/<name>.so` with `ld -shared -z now --hash-style=sysv
 -soname <name>.so` and names the libraries it depends on, so that the
 loader finds them through `DT_NEEDED`; the compiler driver of the bare
@@ -71,90 +71,74 @@ handoff described below.
 independent object linked with `-Bsymbolic`, hidden visibility, `-fno-plt`
 and its own entry `_dl_start`; it uses no libc and makes its system calls
 through an inline `syscall`. `_dl_main` receives the initial stack pointer
-and returns the program's entry point, which `start.S` enters with the
-stack pointer the kernel provided.
+and returns the program's entry point; `start.S` enters it with the stack
+pointer the kernel provided, the finalizer `_dl_finalize` in `rdx` (the
+x86-64 ELF convention) and the initializer `_dl_initialize` in `rcx`.
 
-The loader first applies its own relocations, which are all
-`R_X86_64_RELATIVE`; the address of its dynamic section is taken through
-a hidden symbol, so that no global offset table entry is read before it
-is relocated. It then reads the program's `PT_DYNAMIC` from the headers
-named by `AT_PHDR`, and loads the libraries named by `DT_NEEDED` breadth
-first: the program's own libraries in order, then theirs. A library is
-opened as `/lib/<soname>`; its `PT_LOAD` segments are mapped with
-`mmap(MAP_PRIVATE | MAP_FIXED)` from the file, the tail of the last file
-page is zeroed when memory extends beyond the file, and pages beyond the
-file are mapped anonymously. A BSS-only segment includes its first page
-even when its virtual address is not page aligned. A read-only segment
-needing tail clearing is made writable only for that operation.
-Libraries are placed from `0x7e0010000000` below `0x7e8000000000`, on at
-least 1 MiB boundaries (larger `p_align` requirements are honored). Each
-image reserves its holes with `PROT_NONE` and leaves a guard page after it.
-Program headers are read separately, so they need not fit in the first
-file page. Object records use a process-lifetime mmap arena and a linked
-list; there is no fixed sixteen-object limit.
+Startup has three phases. The loader first applies its own relocations,
+which are all `R_X86_64_RELATIVE`; the address of its dynamic section is
+taken through a hidden symbol, so that no global offset table entry is
+read before it is relocated. It then builds the dependency graph: the
+program's `PT_DYNAMIC` is found through the headers named by `AT_PHDR`,
+and the libraries named by `DT_NEEDED` are loaded breadth first, the
+program's own libraries in order, then theirs, which gives the symbol
+search order. Object records live in a small mmap arena and form a list
+without a fixed cap. The third phase, initialization, runs later from the
+C library (below).
 
-Symbols are looked up through SysV or GNU hash tables, in the order
-program, libraries. GNU-only and dual-hash objects are supported. The
-relocation types applied are `RELATIVE`,
-`GLOB_DAT`, `JUMP_SLOT`, `64` and `COPY`; a `COPY` relocation copies the
-library's data object into the program's own copy, which the lookup order
-then makes the definition every object uses. All ordinary relocations
-finish before any `COPY` relocation, so copied objects can contain
-relocated pointers. `NONE` is a no-op. Local and non-default-visibility
-definitions bind within their object; hidden and internal symbols do not
-participate in external lookup. Absolute symbols are not rebased, and a
-defined symbol at address zero is distinct from an unresolved symbol.
-An undefined symbol that is
-not weak stops the program with `ld.so: undefined symbol: name` and exit
-status 127. Every relocation is applied before the program starts, since
-the libraries are linked with `-z now`; there is no lazy binding and no
-`dlopen`.
+Every table an object names is checked before use. A range must lie
+inside one `PT_LOAD` segment with the needed permission, not merely inside
+the image; strings must be terminated inside `DT_STRTAB`; the SysV hash
+table's indices and the GNU hash table's buckets and chains are validated
+while the symbol count is derived from them; and the entry sizes of the
+symbol and relocation tables must be the ELF64 ones. The loader refuses,
+with a diagnostic, objects with a TLS segment, `REL` or `RELR`
+relocations, symbol versioning, text relocations, IFUNC symbols, a
+preinit array in a library, a library name with a slash, overlapping or
+misaligned load segments, and initializers outside executable segments.
+An error prints `ld.so: what: name` to standard error and exits with
+status 127.
 
-## Initialization and termination
+A library is `/lib/<soname>`. Its span is reserved with `PROT_NONE` at the
+next address of an arena that starts at `0x7e0010000000` and ends at
+`0x7e8000000000`, each library on a 1 MiB boundary or the alignment its
+segments ask for, followed by an unmapped page; the mmap area below
+`USER_MMAP_TOP` stays as it was. Each `PT_LOAD` segment is mapped
+privately from the file, the tail of the last file page is zeroed, and
+pages beyond the file are mapped anonymously, including the first page of
+a segment without file bytes.
 
-The loader completes mapping and relocation before entering the program.
-It passes `_dl_finalize` in `%rdx` and the MiniOS initialization callback
-`_dl_initialize` in `%rcx`. `crt0.S` preserves those as arguments five and
-four of `__libc_start`, respectively. Libc checks `AT_BASE` before using
-them: a static program entered through `exec` has its entry address in
-`%rcx`, because the kernel returns through `sysret`.
+Symbols are looked up through the GNU hash table when an object has one
+and through the SysV table otherwise, honouring hidden and internal
+visibility, in the order program then libraries; a local or protected
+definition binds inside its own object. The relocation types applied are
+`RELATIVE`, `GLOB_DAT`, `JUMP_SLOT`, `64` and `COPY`. Relocations run in
+two passes, the ordinary ones of every object and then the `COPY`
+relocations of the program, because a copied data object may itself hold
+relocated pointers; a `COPY` relocation is refused when its source is
+smaller than its destination or its owner is not the program. Every
+relocation is applied before the program starts, since the objects are
+linked with `-z now`. The loader implements neither lazy binding nor
+`dlopen`. After
+relocation the `PT_GNU_RELRO` range of every object is made read-only up
+to its last page boundary.
 
-Libc initializes the main thread's control block, environment, program
-name and standard streams, then registers the finalizer with `atexit`
-before invoking constructors. This permits constructors to allocate,
-access errno, use stdio, and register their own exit handlers.
+## Initialization and finalization
 
-The executable's `DT_PREINIT_ARRAY` runs first. An iterative depth-first
-walk then runs dependencies before their dependents, marking visits to
-avoid repeated initialization and to terminate dependency cycles. Each
-object runs `DT_INIT` followed by its `DT_INIT_ARRAY` in array order.
-Finalization records the actual initialization order and reverses it:
-each object runs its `DT_FINI_ARRAY` backwards, then `DT_FINI`. Ordinary
-atexit handlers run before the loader finalizer; stream flushing follows
-finalization. `_exit` and `_Exit` bypass all handlers. Static executables
-use the linker's preinit/init/fini array boundaries directly in libc.
-
-## Validation and memory protection
-
-The loader checks ELF class, byte order, machine, version, header sizes,
-file bounds, segment sizes and alignment, overlapping load pages and
-address arithmetic. Dynamic tables must terminate within their segment.
-String, symbol, hash and relocation tables must fit in readable load
-segments; symbol names must terminate within `DT_STRSZ`. Hash lookups
-have bounded traversal, including cycle detection for SysV chains.
-
-Relocation writes must fit in writable load segments. COPY sources must
-be readable and at least as large as their destinations. Initializer and
-finalizer targets must lie in executable segments. After relocation,
-complete pages covered by `PT_GNU_RELRO` become read-only; a final partial
-page remains writable because ordinary data can share it. Linkers must
-emit a RELRO segment for this protection to apply.
-
-Invalid objects produce an `ld.so:` diagnostic and exit status 127.
-Unsupported TLS segments, text relocations, REL/RELR relocation tables,
-symbol-version requirements and IFUNC symbols are rejected. This remains
-a MiniOS startup loader, without lazy binding, dlopen, ELF TLS, symbol
-versioning, IFUNC resolution, or alternate library search paths.
+`crt0.S` passes the two callbacks from the loader to `__libc_start`, which
+trusts them only when the auxiliary vector carries a non-zero `AT_BASE`,
+since `sysret` leaves the entry address in `rcx` for a static program.
+After the thread control block, `environ` and the standard streams are
+set up, libc registers the finalizer with `atexit` and calls the
+initializer. `_dl_initialize` runs the program's preinit array, then the
+`DT_INIT` function and the `DT_INIT_ARRAY` entries of every object in
+dependency order, a depth first walk over `DT_NEEDED` that visits each
+object once; the order in which objects finished initializing is recorded
+and `_dl_finalize` runs the `DT_FINI_ARRAY` entries and `DT_FINI` in
+reverse, removing each record before calling into it, so that a recursive
+`exit` cannot finalize an object twice. `_exit` bypasses finalizers. A
+static program runs its own arrays from the linker's start and end
+symbols.
 
 ## Thread local storage
 
@@ -182,26 +166,35 @@ loading a program's table.
 
 ## Tests
 
-`tests/cases/dynlink` runs `/bin/dyntest`: the C library is mapped above
-4 GiB and the program below 16 MiB, `environ`, `optind`, `errno` and the
-standard streams are shared with the library, `qsort` calls back into the
-program, and `exec` of another dynamically linked program succeeds.
-`user/ld/tests/fixtures.mk` also builds:
-
-- A chain of twenty DSOs using GNU-only and dual hash tables. Its event
-  sequence checks preinit, dependency order, legacy init/fini hooks, array
-  priorities, reverse finalization, and `_exit` bypass. Constructors use
-  malloc, errno and stdio. An undefined weak symbol and an absolute symbol
-  with value zero exercise lookup corner cases.
-- A static version checking libc's array handling and the `AT_BASE` guard.
-- Twenty-nine ELF fixtures generated from a linked DSO and executable by
-  `fixtures.py`. Working cases cover SysV-only and GNU-only hashes, COPY
-  of relocated pointers, unaligned BSS-only segments and program headers
-  after the first file page. Rejection cases require normal exit 127 and
-  a diagnostic; a crash cannot satisfy them. A separate child attempts a
-  RELRO write and must terminate with SIGSEGV.
+`tests/cases/dynlink` runs `/bin/dyntest`. The program checks that the C
+library is mapped above 4 GiB and the program below 16 MiB, that
+`environ`, `optind`, `errno` and the standard streams are shared with the
+library, that `qsort` calls back into the program, and that `exec` of
+another dynamically linked program succeeds. It then runs the fixtures
+that `user/ld/tests/fixtures.mk` builds: `ldlifecycle`, linked against a
+chain of twenty libraries that alternate between GNU only and dual hash
+tables, whose constructors and destructors write one character each, so
+that the captured output proves the dependency order of initialization
+and the reverse order of finalization, `DT_INIT` and `DT_FINI` beside the
+arrays, the preinit array running before the libraries, an absolute
+symbol with value zero, a weak undefined symbol, and `_exit` skipping the
+destructors; `ldstatic`, the same program linked statically; and the
+rejection fixtures. `user/ld/tests/fixtures.py` takes one linked library
+and one executable and produces, by changing headers and dynamic tables
+of the copies, a set of cases with a manifest under
+`/usr/share/ldtests/cases` naming the expected exit status and
+diagnostic: a relocation into code, a wrong relocation entry size, an
+unsupported relocation type, GNU only and SysV only hash tables, a zero
+filled segment starting inside a page, program headers after the first
+page, an initializer outside code, a symbol name outside the string
+table, a misaligned load segment, a missing library, and a write into a
+RELRO page, which must end in `SIGSEGV`. A loader crash on a rejection
+case is a test failure, since the expected status is 127 and a signal is
+reported separately.
 
 `tests/cases/profile` looks up `qsort` inside the shared C library through
 `/dev/maps`. The shell kernel tests poll the free page count after the
 shell exits, since the release of the file mappings of a program needs
-more than one grace period.
+more than one grace period. The cases of every program, the shell, the
+filesystems, the graphical session and the audio stack were run after
+the change.
