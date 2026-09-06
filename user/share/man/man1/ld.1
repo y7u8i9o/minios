@@ -1,0 +1,32 @@
+LD(1)                       User Commands                    LD(1)
+
+NAME
+    ld - link objects with the linker of tcc
+
+SYNOPSIS
+    ld [-o file] [-L dir] [-l name] [-shared] [-static] [-r]
+       [-soname name] [-rpath dir] [-Map file] file...
+
+DESCRIPTION
+    ld links the named objects, archives and libraries by running
+    /bin/tcc -nostdlib. Nothing is added to what is named: a program
+    needs /lib/crt1.o, /lib/crti.o and /lib/crtn.o, its libraries and
+    /usr/lib/tcc/libtcc1.a on the command line.
+
+OPTIONS
+    -o file        write the output to file
+    -L dir         add a library directory
+    -l name        link libname.so or libname.a
+    -shared        produce a shared object
+    -static        link statically
+    -r             produce a relocatable object
+    -soname name   set the soname of a shared object
+    -rpath dir     record a run path
+    -Map file      write a link map
+    -Bsymbolic     bind references inside a shared object to itself
+    -e _start, -dynamic-linker /lib/ld.so, -Ttext-segment=0x400000,
+    -z ..., --hash-style=..., --as-needed, --start-group, --end-group
+                   accepted; they name what tcc does in any case
+
+SEE ALSO
+    tcc(1), as(1), ar(1)

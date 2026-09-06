@@ -73,6 +73,20 @@ of `make check`, compiles every installed header on its own with the
 cross compiler in C17; the tcc test does the same with tcc on minios,
 except for `minios/simd.h`, whose vector types are a gcc extension.
 
+## ld and as
+
+`ld` (`user/coreutils/ld.c`) and `as` (`user/coreutils/as.c`) run
+`/bin/tcc` under the conventional names, for makefiles and scripts that
+call them. `ld` passes `-nostdlib`; nothing is linked beyond what is
+named. It translates the options tcc implements: `-o`, `-L`, `-l`,
+`-shared`, `-static`, `-r`, `-rdynamic`, `-soname`, `-Bsymbolic`,
+`-rpath` and `-Map`. Options that name what tcc does in any case,
+`-e _start`, `-dynamic-linker /lib/ld.so`, `-Ttext-segment=0x400000`,
+`-z`, `--hash-style`, `--as-needed` and the group markers, are accepted
+and dropped; another entry point, interpreter or text address, and any
+other option, is an error. `as` assembles one file with `tcc -c` and
+writes `a.out` without `-o`.
+
 ## Linking
 
 tcc links against `/lib/libc.so` and the other shared objects by reading
@@ -102,7 +116,9 @@ result and run through the loader, the libc headers with `malloc`,
 `sqrt`, `INT_MAX` and `INT64_MAX`, and the rejection of an undefined
 function and of a syntax error. It also links a program against the toolkit, the protocol library, the
 audio client and the Lua core, dynamically and statically, compiles
-every installed header alone, and runs a statically linked program. It
+every installed header alone, runs a statically linked program, links a
+program and a shared object with `ld`, and assembles a function with
+`as` and calls it from C. It
 then compiles and runs 54 programs of
 the upstream test suite from `/usr/share/tcc/tests2` and compares the
 diagnostics and the output with the expected text, with trailing white

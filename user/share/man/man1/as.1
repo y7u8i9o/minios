@@ -1,0 +1,19 @@
+AS(1)                       User Commands                    AS(1)
+
+NAME
+    as - assemble with the assembler of tcc
+
+SYNOPSIS
+    as [-o file] [-I dir] file
+
+DESCRIPTION
+    as assembles one file in the GNU syntax for x86_64 by running
+    /bin/tcc -c. Without -o the output is a.out.
+
+OPTIONS
+    -o file   write the object to file
+    -I dir    add a directory for .include
+    -g, --64  accepted without effect
+
+SEE ALSO
+    tcc(1), ld(1)

@@ -26,9 +26,30 @@ C
 tcc -c a.c -o a.o; check tcc-object "$?" "0"
 tcc -c b.c -o b.o && tcc -o ab a.o b.o; check tcc-link-objects "$?" "0"
 check tcc-two-objects "$(./ab)" "42"
+ld -o abl -dynamic-linker /lib/ld.so -Ttext-segment=0x400000 -z now --hash-style=both --as-needed /lib/crt1.o /lib/crti.o a.o b.o /lib/crtn.o -L/lib -lc /usr/lib/tcc/libtcc1.a; check ld-link "$?" "0"
+check ld-run "$(./abl)" "42"
+ld -o abx -e main a.o 2> /dev/null; test $? != 0 || echo "FAIL ld-entry-not-rejected"
+ld --nosuchoption a.o 2> /dev/null; test $? != 0 || echo "FAIL ld-unknown-option-not-rejected"
+cat > three.s <<'S'
+    .text
+    .globl three
+three:
+    movl $3, %eax
+    ret
+S
+as -o three.o three.s; check as-assemble "$?" "0"
+cat > c.c <<'C'
+#include <stdio.h>
+int three(void);
+int main(void) { printf("%d\n", three()); return 0; }
+C
+tcc -o c c.c three.o; check as-link "$?" "0"
+check as-run "$(./c)" "3"
+check as-default-output "$(as three.s && ls a.out)" "a.out"
 tcc -shared -o libtwice.so a.c; check tcc-shared "$?" "0"
 cp libtwice.so /lib/libtwice.so
 tcc -o abso b.c -L/lib -ltwice; check tcc-link-shared "$?" "0"
+ld -shared -soname libtwice2.so -o libtwice2.so a.o -L/lib -lc; check ld-shared "$?" "0"
 check tcc-run-shared "$(./abso)" "42"
 rm /lib/libtwice.so
 cat > m.c <<'C'

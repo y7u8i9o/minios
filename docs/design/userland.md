@@ -145,7 +145,8 @@ modification time of existing files since the same change.
 ## tcc
 
 `/bin/tcc` is the Tiny C Compiler, compiled unmodified from the
-submodule `third_party/tinycc`; see [tcc](tcc.md).
+submodule `third_party/tinycc`; `ld` and `as` run it under the
+conventional names. See [tcc](tcc.md).
 
 ## fsinit and mount
 

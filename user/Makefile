@@ -313,6 +313,13 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@for t in $(TCC_TEST_NAMES); do cp -p $(TCC_TESTS)/$$t.c $(TCC_TESTS)/$$t.expect $(ROOT)/usr/share/tcc/tests2/; done
 	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/
 
+# bin/ld is named explicitly: the pattern rule for program directories
+# would match the loader's directory ld/ for that name.
+$(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/ld.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/ld.elf $@
+
 -include $(TCC_GEN)/tcc.d
 
 # The loader is a freestanding position independent object with its own
