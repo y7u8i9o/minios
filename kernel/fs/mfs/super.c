@@ -129,11 +129,17 @@ static void mfs_put_inode(struct inode *ino)
     if (ino->nlink == 0) {
         /* The last reference to an unlinked inode may go away outside any
          * operation (the close of an unlinked file); release its storage
-         * in a transaction of its own then. */
-        mfs_journal_begin(m);
-        mfs_free_all_blocks(ino);
-        mfs_free_inode(m, (uint32_t)ino->ino);
-        mfs_journal_end(m);
+         * in a transaction of its own then. An inode that the bitmap does
+         * not mark allocated was reached through a stale directory entry:
+         * its blocks may belong to other files now, so nothing is freed. */
+        if (!mfs_inode_allocated(m, (uint32_t)ino->ino)) {
+            klog_error("%s: inode %lu with no links is not allocated (run fsck)", m->dev->name, ino->ino);
+        } else {
+            mfs_journal_begin(m);
+            mfs_free_all_blocks(ino);
+            mfs_free_inode(m, (uint32_t)ino->ino);
+            mfs_journal_end(m);
+        }
     }
     kfree(ino->priv);
 }

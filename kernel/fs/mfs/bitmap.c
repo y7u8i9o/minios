@@ -36,17 +36,45 @@ static uint64_t bitmap_alloc(struct mfs_sb *m, uint32_t start, uint32_t nblocks,
     return 0;
 }
 
-static void bitmap_clear(struct mfs_sb *m, uint32_t start, uint64_t bit)
+/* Clear a bit. A bit that is clear already is an inconsistency of the
+ * filesystem, not of the kernel: it is reported and left alone, and the
+ * caller keeps its counters. Returns 0, or -1 for a clear bit. */
+static int bitmap_clear(struct mfs_sb *m, uint32_t start, uint64_t bit)
 {
     kassert(mutex_held(&m->lock));
     struct buf *buf = bread(m->dev, start + (uint32_t)(bit / BITS_PER_BLOCK));
     if (!buf)
-        return;
+        return -1;
     uint64_t i = bit % BITS_PER_BLOCK;
-    kassert(buf->data[i / 8] & (1 << (i % 8)));
+    if (!(buf->data[i / 8] & (1 << (i % 8)))) {
+        brelse(buf);
+        return -1;
+    }
     buf->data[i / 8] &= (uint8_t)~(1 << (i % 8));
     mfs_journal_write(m, buf);
     brelse(buf);
+    return 0;
+}
+
+static int bitmap_test(struct mfs_sb *m, uint32_t start, uint64_t bit)
+{
+    struct buf *buf = bread(m->dev, start + (uint32_t)(bit / BITS_PER_BLOCK));
+    if (!buf)
+        return 0;
+    uint64_t i = bit % BITS_PER_BLOCK;
+    int set = (buf->data[i / 8] >> (i % 8)) & 1;
+    brelse(buf);
+    return set;
+}
+
+int mfs_inode_allocated(struct mfs_sb *m, uint32_t ino)
+{
+    if (ino == 0 || ino >= m->sb.ninodes)
+        return 0;
+    mutex_lock(&m->lock);
+    int set = bitmap_test(m, m->sb.inode_bitmap_start, ino);
+    mutex_unlock(&m->lock);
+    return set;
 }
 
 uint32_t mfs_alloc_block(struct mfs_sb *m)
@@ -78,9 +106,12 @@ void mfs_free_block(struct mfs_sb *m, uint32_t block)
 {
     kassert(block >= m->sb.data_start && block < m->sb.nblocks);
     mutex_lock(&m->lock);
-    bitmap_clear(m, m->sb.block_bitmap_start, block);
-    m->sb.free_blocks++;
-    mfs_super_journal(m);
+    if (bitmap_clear(m, m->sb.block_bitmap_start, block) < 0) {
+        klog_error("%s: block %u freed while not allocated (run fsck)", m->dev->name, block);
+    } else {
+        m->sb.free_blocks++;
+        mfs_super_journal(m);
+    }
     mutex_unlock(&m->lock);
 }
 
@@ -101,8 +132,11 @@ void mfs_free_inode(struct mfs_sb *m, uint32_t ino)
 {
     kassert(ino > 0 && ino < m->sb.ninodes);
     mutex_lock(&m->lock);
-    bitmap_clear(m, m->sb.inode_bitmap_start, ino);
-    m->sb.free_inodes++;
-    mfs_super_journal(m);
+    if (bitmap_clear(m, m->sb.inode_bitmap_start, ino) < 0) {
+        klog_error("%s: inode %u freed while not allocated (run fsck)", m->dev->name, ino);
+    } else {
+        m->sb.free_inodes++;
+        mfs_super_journal(m);
+    }
     mutex_unlock(&m->lock);
 }

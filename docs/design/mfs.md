@@ -200,3 +200,19 @@ persistent filesystem that is still busy is reported and left unclean.
 Booting still uses the Limine ISO; the disk image is the primary root
 filesystem, not the boot medium. Installing Limine on the disk image is a
 possible later change.
+
+## Inconsistencies found at run time
+
+Freeing a block or an inode whose bitmap bit is clear was a kernel
+assertion until 2026-09-06, when `ls /bin` panicked in `bitmap_clear`
+from `mfs_put_inode`: a directory entry named an inode with no links and
+no allocation. The kernel now treats that as an inconsistency of the
+filesystem: `bitmap_clear` reports it, the counters stay unchanged, an
+inode with no links that the bitmap does not mark allocated releases
+nothing (its blocks may belong to other files by then), and `getdents`
+reports such an entry with `DT_UNKNOWN` and a log line naming the
+directory, the entry and the inode. Every message ends with `run fsck`,
+which detects and repairs the entry on the host. The cause of the entry
+is not established: a fresh image passes `fsck`, and the operations the
+data volume of that session shows (`tcc`, listings, renames, archive
+updates in one directory under concurrent listings) do not reproduce it.

@@ -70,6 +70,8 @@ uint32_t mfs_alloc_block(struct mfs_sb *m);
 void mfs_free_block(struct mfs_sb *m, uint32_t block);
 uint32_t mfs_alloc_inode(struct mfs_sb *m);
 void mfs_free_inode(struct mfs_sb *m, uint32_t ino);
+/* True when the inode bitmap marks ino allocated. */
+int mfs_inode_allocated(struct mfs_sb *m, uint32_t ino);
 
 /* inode.c: all take ino->lock held by the caller. */
 long mfs_read_locked(struct inode *ino, char *buf, size_t n, uint64_t off);

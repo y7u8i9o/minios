@@ -319,7 +319,10 @@ static long mfs_getdents(struct file *f, struct dirent *buf, size_t count)
             continue;
         struct inode *child = inode_get(dir->sb, e.ino);
         buf[filled].d_ino = e.ino;
-        buf[filled].d_type = child ? vfs_mode_to_dtype(child->mode) : DT_UNKNOWN;
+        buf[filled].d_type = child && child->nlink ? vfs_mode_to_dtype(child->mode) : DT_UNKNOWN;
+        if (child && !child->nlink)
+            klog_error("%s: entry '%s' of directory %lu names inode %u, which has no links (run fsck)",
+                       ((struct mfs_sb *)dir->sb->priv)->dev->name, e.name, dir->ino, e.ino);
         if (child)
             inode_put(child);
         strlcpy(buf[filled].d_name, e.name, sizeof buf[filled].d_name);
