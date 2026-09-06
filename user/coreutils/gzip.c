@@ -578,8 +578,9 @@ int main(int argc, char **argv)
             else if (*p == 'd') decompress = 1;
             else if (*p == 'k') keep = 1;
             else if (*p == 't') { test = 1; decompress = 1; }
+            else if (*p == 'f') ;   /* force: output files are always replaced */
             else {
-                fprintf(stderr, "usage: gzip [-cdkt] [file...]\n");
+                fprintf(stderr, "usage: gzip [-cdfkt] [file...]\n");
                 return 2;
             }
         }

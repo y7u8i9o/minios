@@ -602,3 +602,75 @@ int fstatat(int dirfd, const char *path, struct stat *st, int flags)
 {
     return (int)syscall4(SYS_fstatat, dirfd, path, st, flags);
 }
+
+int lchown(const char *path, uid_t owner, gid_t group)
+{
+    return 0;
+}
+
+uid_t getuid(void) { return 0; }
+uid_t geteuid(void) { return 0; }
+gid_t getgid(void) { return 0; }
+gid_t getegid(void) { return 0; }
+
+int symlink(const char *target, const char *path)
+{
+    errno = EPERM;
+    return -1;
+}
+
+ssize_t readlink(const char *path, char *buf, size_t size)
+{
+    errno = EINVAL;
+    return -1;
+}
+
+int mknod(const char *path, mode_t mode, dev_t dev)
+{
+    errno = EPERM;
+    return -1;
+}
+
+int mkfifo(const char *path, mode_t mode)
+{
+    errno = EPERM;
+    return -1;
+}
+
+/* Collect the variadic arguments of execl and execlp into a vector. */
+static int exec_list(const char *file, const char *arg, va_list ap, int search)
+{
+    va_list count;
+    va_copy(count, ap);
+    int n = 1;
+    while (va_arg(count, const char *) != NULL)
+        n++;
+    va_end(count);
+    char **argv = malloc((size_t)(n + 1) * sizeof *argv);
+    if (argv == NULL)
+        return -1;
+    argv[0] = (char *)arg;
+    for (int i = 1; i <= n; i++)
+        argv[i] = va_arg(ap, char *);
+    int r = search ? execvp(file, argv) : execv(file, argv);
+    free(argv);
+    return r;
+}
+
+int execl(const char *path, const char *arg, ...)
+{
+    va_list ap;
+    va_start(ap, arg);
+    int r = exec_list(path, arg, ap, 0);
+    va_end(ap);
+    return r;
+}
+
+int execlp(const char *file, const char *arg, ...)
+{
+    va_list ap;
+    va_start(ap, arg);
+    int r = exec_list(file, arg, ap, 1);
+    va_end(ap);
+    return r;
+}

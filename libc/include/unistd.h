@@ -56,6 +56,21 @@ int getopt(int argc, char *const argv[], const char *optstring);
  * without effect. */
 int fchown(int fd, uid_t owner, gid_t group);
 int chown(const char *path, uid_t owner, gid_t group);
+int lchown(const char *path, uid_t owner, gid_t group);
+
+/* The single user has uid 0 and gid 0. */
+uid_t getuid(void);
+uid_t geteuid(void);
+gid_t getgid(void);
+gid_t getegid(void);
+
+/* There are no symbolic links: symlink fails with EPERM and readlink with
+ * EINVAL. */
+int symlink(const char *target, const char *path);
+ssize_t readlink(const char *path, char *buf, size_t size);
+
+int execl(const char *path, const char *arg, ...);
+int execlp(const char *file, const char *arg, ...);
 
 /* Scatter and gather I/O, performed as a sequence of read and write calls. */
 struct iovec;

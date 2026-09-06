@@ -142,6 +142,12 @@ tests.
 from `third_party/make`; see [make](make.md). `touch` sets the
 modification time of existing files since the same change.
 
+## ar and tar
+
+`ar` (`user/coreutils/ar.c`) maintains System V archives and `/bin/tar`
+is the tar of sbase, compiled unmodified from `third_party/sbase`; see
+[ar and tar](artar.md). `gzip` accepts `-f` since the same change.
+
 ## Editor
 
 `edit file` (`user/edit/edit.c`) is a nano style editor. It loads the

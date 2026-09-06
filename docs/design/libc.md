@@ -181,3 +181,11 @@ with its four mode bits, `confstr` for `_CS_PATH` and the header `ar.h`.
 `struct stat` gained `st_mtim`, filled with nanoseconds on mfs and with
 two second resolution on FAT; `st_mtime` is now a macro for
 `st_mtim.tv_sec`, so programs that use the old name compile unchanged.
+
+## Additions for ar and tar
+
+The ar utility and the sbase tar (`artar.md`) added `openat` and
+`fstatat`, `pwd.h` and `grp.h` describing the single user, the uid and
+gid functions, `lchown`, `symlink` and `readlink` (both refused: there
+are no symbolic links), `mknod` and `mkfifo` (refused), `execl`,
+`execlp` and `sys/sysmacros.h`.

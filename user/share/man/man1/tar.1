@@ -1,0 +1,30 @@
+TAR(1)                        User Commands
+
+NAME
+    tar - create, list and extract ustar archives
+
+SYNOPSIS
+    tar [-C dir] [-z] -c [-v] [-f file] path...
+    tar [-C dir] [-z] -t [-v] [-f file]
+    tar [-C dir] [-z] -x [-m] [-p] [-v] [-f file] [member...]
+
+DESCRIPTION
+    Writes the named files and directories, recursively, into an archive
+    in the POSIX ustar format (-c), lists the members of an archive (-t)
+    or extracts them (-x), all of them or the named ones. This is the tar
+    of sbase, the suckless base utilities. Without -f the archive is
+    standard output or standard input, so tar -c path | tar -t works.
+    -C changes to dir before reading or writing files. -z compresses and
+    decompresses through gzip in a child that tar does not wait for, so
+    an archive written with -z may still be in progress when tar exits; -j, -J and -Z name bzip2, xz and compress,
+    which minios does not have. -v prints each member name. -m sets the
+    time of extracted files to the current time instead of the recorded
+    one; -p keeps the recorded permissions (they are stored but not
+    enforced). -h follows symbolic links when archiving; there are none.
+
+    Names longer than 100 characters use the ustar prefix field, up to 255
+    characters. Archives written by the GNU and BSD tar programs in the
+    ustar format are read; their extension headers are not.
+
+SEE ALSO
+    ar(1), gzip(1), index(7)

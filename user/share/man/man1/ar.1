@@ -1,0 +1,28 @@
+AR(1)                         User Commands
+
+NAME
+    ar - maintain archives of files
+
+SYNOPSIS
+    ar [-]{dpqrtx}[cousv] archive [member...]
+
+DESCRIPTION
+    Creates and modifies archives in the System V format that the GNU
+    binutils write, so archives made on the host and on minios are
+    interchangeable and make(1) can date lib.a(member.o) prerequisites.
+    One operation letter is required: d deletes the named members, p
+    prints them to standard output, q appends the files without checking
+    for duplicates, r adds the files and replaces members of the same
+    name in place, t lists the members, x extracts them into the current
+    directory. Without member names t, p and x act on every member.
+
+    The modifiers are c (do not report the creation of a new archive), o
+    (extraction keeps the recorded modification time), u (r replaces a
+    member only with a newer file), s (accepted; no symbol table is
+    written) and v (verbose: a - added, r - replaced, d - deleted, x -
+    extracted, and the mode, owner, size, date and name for t). A
+    symbol table found in an archive is dropped when the archive is
+    rewritten.
+
+SEE ALSO
+    make(1), tar(1), index(7)

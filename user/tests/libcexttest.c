@@ -20,6 +20,11 @@
 #include <libgen.h>
 #include <err.h>
 #include <limits.h>
+#include <pwd.h>
+#include <grp.h>
+#include <sys/sysmacros.h>
+#include <dirent.h>
+#include <fcntl.h>
 
 static void test_terminal_libc(void);
 static void test_stdio_additions(void);
@@ -388,5 +393,44 @@ static void test_port_additions(void)
           && st.st_mtime > 1600000000, "utimensat with UTIME_NOW");
     CHECK(utimensat(AT_FDCWD, "/tmp/nosuchfile", NULL, 0) < 0 && errno == ENOENT, "utimensat of a missing file");
     unlink("/tmp/utime-test");
+
+    int dir = open("/bin", O_RDONLY | O_DIRECTORY);
+    CHECK(dir >= 0, "open /bin as a directory");
+    int fd = openat(dir, "sh", O_RDONLY);
+    CHECK(fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode), "openat relative to a directory");
+    if (fd >= 0) close(fd);
+    CHECK(fstatat(dir, "sh", &st, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(st.st_mode), "fstatat relative");
+    CHECK(fstatat(dir, "/bin/sh", &st, 0) == 0, "fstatat with an absolute path");
+    CHECK(fstatat(AT_FDCWD, "/bin/sh", &st, 0) == 0, "fstatat from the working directory");
+    CHECK(openat(dir, "nosuchfile", O_RDONLY) < 0 && errno == ENOENT, "openat of a missing name");
+    fd = open("/bin/sh", O_RDONLY);
+    CHECK(fd >= 0 && openat(fd, "x", O_RDONLY) < 0 && errno == ENOTDIR, "openat with a file descriptor");
+    if (fd >= 0) close(fd);
+    DIR *dp = fdopendir(dir);
+    int saw_sh = 0;
+    struct dirent *de;
+    while (dp && (de = readdir(dp)) != NULL)
+        if (!strcmp(de->d_name, "sh")) saw_sh = 1;
+    CHECK(saw_sh, "fdopendir over an openat directory");
+    if (dp) closedir(dp);
+
+    struct passwd *pw = getpwuid(0);
+    struct group *gr = getgrgid(0);
+    CHECK(pw && !strcmp(pw->pw_name, "user") && !strcmp(pw->pw_dir, "/home") && getpwuid(7) == NULL, "getpwuid");
+    CHECK(gr && !strcmp(gr->gr_name, "user") && getgrnam("nobody") == NULL, "getgrgid and getgrnam");
+    CHECK(getuid() == 0 && geteuid() == 0 && getgid() == 0, "single user ids");
+    CHECK(major(makedev(5, 9)) == 5 && minor(makedev(5, 9)) == 9, "device numbers");
+    CHECK(symlink("/bin/sh", "/tmp/link") < 0 && errno == EPERM, "symlink is refused");
+    char lbuf[16];
+    CHECK(readlink("/bin/sh", lbuf, sizeof lbuf) < 0 && errno == EINVAL, "readlink is refused");
+    CHECK(mkfifo("/tmp/fifo", 0644) < 0 && errno == EPERM, "mkfifo is refused");
+
+    pid_t child = fork();
+    if (child == 0) {
+        execlp("echo", "echo", "-n", "", NULL);
+        _exit(127);
+    }
+    int wstatus = -1;
+    CHECK(child > 0 && waitpid(child, &wstatus, 0) == child && WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 0, "execlp");
     CHECK(strcasecmp(getprogname(), "LIBCEXTTEST") == 0, "program name compares");
 }

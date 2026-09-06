@@ -1,0 +1,19 @@
+tar from sbase, the suckless base utilities (MIT licence), taken from
+https://git.suckless.org/sbase at commit
+c546c3a5724c81cee9a11d816a38ccdf17472129
+on 2026-09-06 with tools/fetch_tar.sh.
+
+Copied without modification:
+  src/          tar.c, tar.1 and the headers arg.h, fs.h, util.h, text.h,
+                utf.h, queue.h
+  src/libutil/  the whole utility library; user/Makefile compiles only
+                eprintf.c, ealloc.c, reallocarray.c, mkdirp.c, recurse.c
+                and strlcpy.c, the files tar.c needs
+  LICENSE, README, Makefile  the upstream licence, readme and build file
+                (the build file is not used)
+
+sbase's Makefile generates a compat.h that util.h includes; user/Makefile
+writes an empty one into build/user/tar/. strlcpy.c is compiled with
+-Dstrlcpy=sbase_strlcpy so that its definition does not collide with the
+libc one. The vendored files are exempt from the minios line count and
+naming conventions. See docs/design/artar.md.

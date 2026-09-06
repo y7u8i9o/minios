@@ -1532,3 +1532,15 @@ and `ar.h`; `touch` sets modification times. Documented in
 Modification times are nanoseconds throughout the kernel and in the mfs
 disk inode (format version 4), because pdpmake treats equal times as out
 of date.
+
+## ar and tar (completed 2026-09-06)
+
+`ar` is written for minios (`user/coreutils/ar.c`) in the System V
+format of the GNU binutils, and the tar of sbase is compiled unmodified
+from `third_party/sbase` (downloaded by `tools/fetch_tar.sh`) into
+`/bin/tar`. The kernel gained `openat` and `fstatat` (a directory opened
+by name keeps its path in `file.path`) and `proc_reap_children` for the
+run test; the libc gained `pwd.h`, `grp.h`, `sys/sysmacros.h`, `execlp`
+and the refused `symlink`, `readlink`, `mknod` and `mkfifo`; `gzip`
+accepts `-f`. Documented in `docs/design/artar.md`, tested by
+`tests/cases/ar`, `tests/cases/tar` and new checks in `libc_ext`.

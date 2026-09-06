@@ -38,6 +38,9 @@ int fstat(int fd, struct stat *st);
 /* There are no symbolic links, so lstat is stat. */
 int lstat(const char *path, struct stat *st);
 int fstatat(int dirfd, const char *path, struct stat *st, int flags);
+/* Device and FIFO nodes cannot be created: EPERM. */
+int mknod(const char *path, mode_t mode, dev_t dev);
+int mkfifo(const char *path, mode_t mode);
 int mkdir(const char *path, mode_t mode);
 
 /* Permission bits are stored but not enforced and cannot be changed: both
