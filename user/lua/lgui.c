@@ -14,6 +14,7 @@
 #include <minios/abi.h>          /* POLLIN, POLLOUT */
 #endif
 #include <gui/app.h>
+#include <gui/model.h>
 #include "lauxlib.h"
 #include "minios.h"
 #include "lgui.h"
@@ -146,11 +147,20 @@ static int push_signal_args(lua_State *L, struct widget *w, const char *name, vo
     } else if (strcmp(name, "scrolled") == 0) {
         lua_createtable(L, 0, 1);
         lua_pushinteger(L, ((struct sig_scroll *)args)->value); lua_setfield(L, -2, "value");
+    } else if ((strcmp(name, "selected") == 0 || strcmp(name, "activate") == 0) &&
+               (strcmp(cls, "treeview") == 0 || strcmp(cls, "table") == 0)) {
+        /* Rows of the data views are the ids the model chose. */
+        lua_createtable(L, 0, 1);
+        lua_pushinteger(L, ((struct sig_select *)args)->index); lua_setfield(L, -2, "row");
+    } else if (strcmp(name, "context") == 0) {
+        struct sig_click *c = args;
+        lua_createtable(L, 0, 2);
+        lua_pushinteger(L, c->x); lua_setfield(L, -2, "x");
+        lua_pushinteger(L, c->y); lua_setfield(L, -2, "y");
     } else if (strcmp(name, "selected") == 0 ||
                ((strcmp(name, "changed") == 0 || strcmp(name, "activate") == 0) &&
                 (strcmp(cls, "combobox") == 0 || strcmp(cls, "tabs") == 0 ||
-                 strcmp(cls, "listview") == 0 || strcmp(cls, "treeview") == 0 ||
-                 strcmp(cls, "table") == 0))) {
+                 strcmp(cls, "listview") == 0))) {
         lua_createtable(L, 0, 1);
         lua_pushinteger(L, ((struct sig_select *)args)->index + 1); lua_setfield(L, -2, "index");
     } else if (strcmp(name, "changed") == 0 || strcmp(name, "toggled") == 0 ||
@@ -223,6 +233,17 @@ static int w_on(lua_State *L)
 static int w_text(lua_State *L)
 {
     struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "editor") == 0) {
+        if (lua_isnoneornil(L, 2)) {
+            char *t = editor_text(w);
+            lua_pushstring(L, t);
+            free(t);
+            return 1;
+        }
+        editor_set_text(w, luaL_checkstring(L, 2));
+        lua_settop(L, 1);
+        return 1;
+    }
     if (lua_isnoneornil(L, 2)) {
         const char *t = widget_text(w);
         if (t)
@@ -563,6 +584,450 @@ static int w_set(lua_State *L)
     return 1;
 }
 
+/* ---- menus, tool bars, status bars, icons ---- */
+
+static int w_item(lua_State *L);
+
+static int w_menuitem(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "menu") != 0)
+        return luaL_error(L, "item: not a menu");
+    gui_push_widget(L, menu_add(w, luaL_checkstring(L, 2), luaL_optstring(L, 3, NULL)));
+    return 1;
+}
+
+static int w_separator(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "menu") != 0)
+        return luaL_error(L, "separator: not a menu");
+    gui_push_widget(L, menu_add_separator(w));
+    return 1;
+}
+
+static int w_popup(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "menu") != 0)
+        return luaL_error(L, "popup: not a menu");
+    menu_popup(w, (int)luaL_checkinteger(L, 2), (int)luaL_checkinteger(L, 3));
+    return 0;
+}
+
+static int w_tool(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "toolbar") != 0)
+        return luaL_error(L, "tool: not a tool bar");
+    gui_push_widget(L, toolbar_add(w, luaL_checkstring(L, 2), luaL_optstring(L, 3, "")));
+    return 1;
+}
+
+static int w_field(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "statusbar") != 0)
+        return luaL_error(L, "field: not a status bar");
+    gui_push_widget(L, statusbar_add(w, (int)luaL_optinteger(L, 2, 0)));
+    return 1;
+}
+
+static int w_icon(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    widget_set_icon(w, lua_isnoneornil(L, 2) ? NULL : icon_get(luaL_checkstring(L, 2)));
+    lua_settop(L, 1);
+    return 1;
+}
+
+/* ---- the editor ---- */
+
+static struct widget *check_editor(lua_State *L, const char *what)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "editor") != 0)
+        luaL_error(L, "%s: not an editor", what);
+    return w;
+}
+
+static int w_lines(lua_State *L)
+{
+    lua_pushinteger(L, editor_line_count(check_editor(L, "lines")));
+    return 1;
+}
+
+static int w_line(lua_State *L)
+{
+    struct widget *w = check_editor(L, "line");
+    int i = (int)luaL_checkinteger(L, 2) - 1;
+    if (i < 0 || i >= editor_line_count(w))
+        lua_pushnil(L);
+    else
+        lua_pushstring(L, editor_line(w, i));
+    return 1;
+}
+
+static int w_wrap(lua_State *L)
+{
+    editor_set_wrap(check_editor(L, "wrap"), lua_toboolean(L, 2));
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_numbers(lua_State *L)
+{
+    editor_set_line_numbers(check_editor(L, "numbers"), lua_toboolean(L, 2));
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_readonly(lua_State *L)
+{
+    editor_set_readonly(check_editor(L, "readonly"), lua_toboolean(L, 2));
+    lua_settop(L, 1);
+    return 1;
+}
+
+/* A language table is kept in the widget's handler table under
+ * "language", with its C description and the keyword strings it owns. */
+struct language_box {
+    struct highlight_language lang;
+    char **keywords;
+    char *line_comment, *block_start, *block_end, *quotes;
+};
+
+static int language_gc(lua_State *L)
+{
+    struct language_box *b = lua_touserdata(L, 1);
+    if (b->keywords) {
+        for (int i = 0; b->keywords[i]; i++)
+            free(b->keywords[i]);
+        free(b->keywords);
+    }
+    free(b->line_comment);
+    free(b->block_start);
+    free(b->block_end);
+    free(b->quotes);
+    return 0;
+}
+
+static char *field_string(lua_State *L, int index, const char *name)
+{
+    lua_getfield(L, index, name);
+    char *s = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
+    lua_pop(L, 1);
+    return s;
+}
+
+/* editor:highlight(nil | "c" | "lua" | "sh" | { keywords = {...},
+ * line_comment = "--", block_comment = { "--[[", "]]" }, quotes = "\"'",
+ * preproc = "#" }) */
+static int w_highlight(lua_State *L)
+{
+    struct widget *w = check_editor(L, "highlight");
+    if (lua_isnoneornil(L, 2)) {
+        editor_set_highlighter(w, NULL, NULL);
+    } else if (lua_isstring(L, 2)) {
+        const char *name = lua_tostring(L, 2);
+        const struct highlight_language *lang =
+            strcmp(name, "c") == 0 ? &highlight_language_c :
+            strcmp(name, "lua") == 0 ? &highlight_language_lua :
+            strcmp(name, "sh") == 0 ? &highlight_language_sh : NULL;
+        if (!lang)
+            return luaL_error(L, "highlight: unknown language %s", name);
+        editor_set_highlighter(w, highlight_lang, (void *)lang);
+    } else {
+        luaL_checktype(L, 2, LUA_TTABLE);
+        struct language_box *b = lua_newuserdatauv(L, sizeof *b, 0);
+        memset(b, 0, sizeof *b);
+        if (luaL_newmetatable(L, "gui.language")) {
+            lua_pushcfunction(L, language_gc);
+            lua_setfield(L, -2, "__gc");
+        }
+        lua_setmetatable(L, -2);
+        lua_getfield(L, 2, "keywords");
+        if (lua_istable(L, -1)) {
+            lua_Integer n = luaL_len(L, -1);
+            b->keywords = calloc((size_t)n + 1, sizeof *b->keywords);
+            for (lua_Integer i = 1; i <= n; i++) {
+                lua_rawgeti(L, -1, i);
+                b->keywords[i - 1] = strdup(luaL_checkstring(L, -1));
+                lua_pop(L, 1);
+            }
+        }
+        lua_pop(L, 1);
+        b->line_comment = field_string(L, 2, "line_comment");
+        b->quotes = field_string(L, 2, "quotes");
+        lua_getfield(L, 2, "block_comment");
+        if (lua_istable(L, -1)) {
+            lua_rawgeti(L, -1, 1);
+            b->block_start = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
+            lua_pop(L, 1);
+            lua_rawgeti(L, -1, 2);
+            b->block_end = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
+        lua_getfield(L, 2, "preproc");
+        b->lang.preproc = lua_isstring(L, -1) ? lua_tostring(L, -1)[0] : 0;
+        lua_pop(L, 1);
+        b->lang.keywords = (const char *const *)b->keywords;
+        b->lang.line_comment = b->line_comment;
+        b->lang.block_start = b->block_start && b->block_end ? b->block_start : NULL;
+        b->lang.block_end = b->lang.block_start ? b->block_end : NULL;
+        b->lang.quotes = b->quotes;
+        push_handler_table(L, 1);
+        lua_pushvalue(L, -2);
+        lua_setfield(L, -2, "language");
+        lua_pop(L, 2);
+        editor_set_highlighter(w, highlight_lang, &b->lang);
+    }
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_go(lua_State *L)
+{
+    editor_goto(check_editor(L, "go"), (int)luaL_checkinteger(L, 2) - 1, (int)luaL_optinteger(L, 3, 1) - 1);
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_cursor(lua_State *L)
+{
+    int line, col;
+    editor_cursor(check_editor(L, "cursor"), &line, &col);
+    lua_pushinteger(L, line + 1);
+    lua_pushinteger(L, col + 1);
+    return 2;
+}
+
+static int w_undo(lua_State *L)
+{
+    lua_pushboolean(L, editor_undo(check_editor(L, "undo")));
+    return 1;
+}
+
+static int w_redo(lua_State *L)
+{
+    lua_pushboolean(L, editor_redo(check_editor(L, "redo")));
+    return 1;
+}
+
+static int w_editor_find(lua_State *L)
+{
+    struct widget *w = check_editor(L, "search");
+    lua_pushboolean(L, editor_find(w, luaL_checkstring(L, 2), lua_isnoneornil(L, 3) ? 1 : lua_toboolean(L, 3)));
+    return 1;
+}
+
+static int w_modified(lua_State *L)
+{
+    struct widget *w = check_editor(L, "modified");
+    if (lua_isnone(L, 2)) {
+        lua_pushboolean(L, editor_modified(w));
+        return 1;
+    }
+    editor_set_modified(w, lua_toboolean(L, 2));
+    lua_settop(L, 1);
+    return 1;
+}
+
+/* ---- data views with a Lua model ---- */
+
+/* The C model of a view calls the functions of the Lua table kept in the
+ * widget's handler table under "model". */
+struct lua_model {
+    struct model m;
+    struct widget *w;
+    char cell[256];
+};
+
+static int model_call(lua_State *L, struct lua_model *lm, const char *fn, int nargs, int nresults)
+{
+    int base = lua_gettop(L) - nargs;
+    gui_push_widget(L, lm->w);
+    push_handler_table(L, -1);
+    lua_getfield(L, -1, "model");
+    lua_getfield(L, -1, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_settop(L, base);
+        return 0;
+    }
+    lua_insert(L, base + 1);            /* fn, args..., widget, handlers, model */
+    lua_settop(L, base + 1 + nargs);
+    return gui_call(L, nargs, nresults);
+}
+
+static int lm_rows(struct model *m, int parent)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    lua_pushinteger(L, parent);
+    int n = model_call(L, lm, "rows", 1, 1) ? (int)lua_tointeger(L, -1) : 0;
+    lua_settop(L, top);
+    return n;
+}
+
+static int lm_child(struct model *m, int parent, int index)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    lua_pushinteger(L, parent);
+    lua_pushinteger(L, index + 1);
+    /* Without a child function the rows of the root are numbered from 0. */
+    int row = model_call(L, lm, "child", 2, 1) ? (int)lua_tointeger(L, -1) : index;
+    lua_settop(L, top);
+    return row;
+}
+
+static int lm_columns(struct model *m)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    gui_push_widget(L, lm->w);
+    push_handler_table(L, -1);
+    lua_getfield(L, -1, "model");
+    lua_getfield(L, -1, "columns");
+    int n = lua_isnumber(L, -1) ? (int)lua_tointeger(L, -1) : 1;
+    lua_settop(L, top);
+    return n;
+}
+
+static const char *lm_cell(struct model *m, int row, int col, char *buf, size_t size)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    lua_pushinteger(L, row);
+    lua_pushinteger(L, col + 1);
+    const char *text = "";
+    if (model_call(L, lm, "cell", 2, 1) && lua_isstring(L, -1)) {
+        strlcpy(buf, lua_tostring(L, -1), size);
+        text = buf;
+    }
+    lua_settop(L, top);
+    return text;
+}
+
+static const char *lm_header(struct model *m, int col)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    lua_pushinteger(L, col + 1);
+    const char *text = NULL;
+    if (model_call(L, lm, "header", 1, 1) && lua_isstring(L, -1)) {
+        strlcpy(lm->cell, lua_tostring(L, -1), sizeof lm->cell);
+        text = lm->cell;
+    }
+    lua_settop(L, top);
+    return text;
+}
+
+static void lm_sort(struct model *m, int col, int descending)
+{
+    struct lua_model *lm = (struct lua_model *)m;
+    lua_State *L = gui_L;
+    int top = lua_gettop(L);
+    lua_pushinteger(L, col + 1);
+    lua_pushboolean(L, descending);
+    model_call(L, lm, "sort", 2, 0);
+    lua_settop(L, top);
+}
+
+static struct widget *check_view(lua_State *L, const char *what)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    if (strcmp(w->cls->name, "treeview") != 0 && strcmp(w->cls->name, "table") != 0)
+        luaL_error(L, "%s: not a tree view or table", what);
+    return w;
+}
+
+/* view:model{ rows = fn(parent), child = fn(parent, index), columns = n,
+ * cell = fn(row, col), header = fn(col), sort = fn(col, descending) } */
+static int w_model(lua_State *L)
+{
+    struct widget *w = check_view(L, "model");
+    luaL_checktype(L, 2, LUA_TTABLE);
+    struct lua_model *lm = lua_newuserdatauv(L, sizeof *lm, 0);
+    memset(lm, 0, sizeof *lm);
+    lm->w = w;
+    lm->m.rows = lm_rows;
+    lm->m.child = lm_child;
+    lm->m.columns = lm_columns;
+    lm->m.cell = lm_cell;
+    lm->m.header = lm_header;
+    lua_getfield(L, 2, "sort");
+    if (lua_isfunction(L, -1))
+        lm->m.sort = lm_sort;
+    lua_pop(L, 1);
+    push_handler_table(L, 1);
+    lua_pushvalue(L, 2);
+    lua_setfield(L, -2, "model");
+    lua_pushvalue(L, -2);
+    lua_setfield(L, -2, "model_c");
+    lua_pop(L, 2);
+    view_set_model(w, &lm->m);
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_refresh(lua_State *L)
+{
+    view_refresh(check_view(L, "refresh"));
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_rows(lua_State *L)
+{
+    struct widget *w = check_view(L, "rows");
+    if (lua_isnoneornil(L, 2)) {
+        lua_pushinteger(L, view_visible_rows(w));
+        return 1;
+    }
+    lua_pushinteger(L, view_row_at(w, (int)luaL_checkinteger(L, 2) - 1));
+    return 1;
+}
+
+static int w_selectrow(lua_State *L)
+{
+    view_select(check_view(L, "selectrow"), (int)luaL_checkinteger(L, 2));
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_expand(lua_State *L)
+{
+    struct widget *w = check_view(L, "expand");
+    int row = (int)luaL_checkinteger(L, 2);
+    if (lua_isnone(L, 3)) {
+        lua_pushboolean(L, treeview_is_expanded(w, row));
+        return 1;
+    }
+    treeview_expand(w, row, lua_toboolean(L, 3));
+    lua_settop(L, 1);
+    return 1;
+}
+
+static int w_column(lua_State *L)
+{
+    struct widget *w = check_view(L, "column");
+    int col = (int)luaL_checkinteger(L, 2) - 1;
+    if (lua_isnone(L, 3)) {
+        lua_pushinteger(L, table_column_width(w, col));
+        return 1;
+    }
+    table_set_column_width(w, col, (int)luaL_checkinteger(L, 3));
+    lua_settop(L, 1);
+    return 1;
+}
+
 static int w_tostring(lua_State *L)
 {
     struct wref *r = luaL_checkudata(L, 1, GUI_WIDGET_META);
@@ -585,6 +1050,14 @@ static const luaL_Reg widget_methods[] = {
     { "close", w_close }, { "title", w_title }, { "add", w_add }, { "clear", w_clear },
     { "count", w_count }, { "item", w_item }, { "select", w_select }, { "page", w_page },
     { "position", w_position }, { "set", w_set },
+    { "menuitem", w_menuitem }, { "separator", w_separator }, { "popup", w_popup },
+    { "tool", w_tool }, { "field", w_field }, { "icon", w_icon },
+    { "lines", w_lines }, { "line", w_line }, { "wrap", w_wrap }, { "numbers", w_numbers },
+    { "readonly", w_readonly }, { "highlight", w_highlight }, { "go", w_go },
+    { "cursor", w_cursor }, { "undo", w_undo }, { "redo", w_redo }, { "search", w_editor_find },
+    { "modified", w_modified },
+    { "model", w_model }, { "refresh", w_refresh }, { "rows", w_rows }, { "selectrow", w_selectrow },
+    { "expand", w_expand }, { "column", w_column },
     { "__tostring", w_tostring },
     { NULL, NULL }
 };
@@ -619,6 +1092,14 @@ CONSTRUCTOR(slider, slider_new(parent, (int)luaL_checkinteger(L, 2), (int)luaL_c
 CONSTRUCTOR(progress, progress_new(parent))
 CONSTRUCTOR(tabs, tabs_new(parent))
 CONSTRUCTOR(splitpane, splitpane_new(parent, lua_toboolean(L, 2)))
+CONSTRUCTOR(editor, editor_new(parent))
+CONSTRUCTOR(menubar, menubar_new(parent))
+CONSTRUCTOR(menu, menu_new(parent, luaL_checkstring(L, 2)))
+CONSTRUCTOR(popupmenu, popupmenu_new(parent))
+CONSTRUCTOR(toolbar, toolbar_new(parent))
+CONSTRUCTOR(statusbar, statusbar_new(parent))
+CONSTRUCTOR(treeview, treeview_new(parent))
+CONSTRUCTOR(table, table_new(parent))
 
 /* ---- application ---- */
 
@@ -933,6 +1414,8 @@ static const luaL_Reg gui_funcs[] = {
     { "listview", g_listview }, { "scrollbar", g_scrollbar }, { "scrollarea", g_scrollarea },
     { "combobox", g_combobox }, { "spinner", g_spinner }, { "slider", g_slider },
     { "progress", g_progress }, { "tabs", g_tabs }, { "splitpane", g_splitpane },
+    { "editor", g_editor }, { "menubar", g_menubar }, { "menu", g_menu }, { "popupmenu", g_popupmenu },
+    { "toolbar", g_toolbar }, { "statusbar", g_statusbar }, { "treeview", g_treeview }, { "table", g_table },
     { NULL, NULL }
 };
 

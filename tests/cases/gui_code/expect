@@ -1,0 +1,6 @@
+code: opened /etc/tests/sample.lua \(Lua\)
+code: run: lua /etc/tests/sample.lua
+code: output: hello from sample
+code: run exit 0
+gui_code: ok
+TEST PASS

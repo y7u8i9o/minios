@@ -284,6 +284,19 @@ enum hl_class { HL_NORMAL, HL_KEYWORD, HL_STRING, HL_COMMENT, HL_NUMBER, HL_PREP
 /* Fill classes[0..len) for one line; state carries across lines (block
  * comments) and starts at 0 for the first line. */
 typedef void (*highlight_fn)(const char *line, int len, unsigned char *classes, int *state, void *arg);
+/* A language for highlight_lang: keywords (NULL terminated), the prefix of
+ * a line comment, the delimiters of a block comment, the quote characters
+ * of strings, and the character that starts a preprocessor line; each may
+ * be NULL or 0. highlight_lang receives a pointer to it as arg. */
+struct highlight_language {
+    const char *const *keywords;
+    const char *line_comment;
+    const char *block_start, *block_end;
+    const char *quotes;
+    int preproc;
+};
+void highlight_lang(const char *line, int len, unsigned char *classes, int *state, void *arg);
+extern const struct highlight_language highlight_language_c, highlight_language_lua, highlight_language_sh;
 struct widget *editor_new(struct widget *parent);
 void editor_set_text(struct widget *w, const char *text);
 char *editor_text(struct widget *w);                 /* malloc'ed, joined with newlines */

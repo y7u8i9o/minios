@@ -122,5 +122,69 @@ cb:visible(false)
 check(not cb:visible(), "hidden")
 win:close()
 app:step(0)
+
+-- the editor
+win = app:window(400, 300, "editor")
+local ed = gui.editor(win)
+ed:text("local x = 1\n-- comment\nprint(x)")
+check(ed:lines() == 3 and ed:line(2) == "-- comment" and ed:line(4) == nil, "editor lines")
+ed:highlight("lua"):highlight("c"):highlight("sh"):highlight(nil)
+ed:highlight { keywords = { "print" }, line_comment = "--", block_comment = { "--[[", "]]" }, quotes = "\"'" }
+gui.test.paint(win)
+check(ed:search("print", true) and select(1, ed:cursor()) == 3, "editor search moves the cursor")
+ed:go(1, 7)
+local l, c = ed:cursor()
+check(l == 1 and c == 7, "editor go")
+check(not ed:modified(), "editor unmodified after set")
+ed:modified(true)
+check(ed:modified(), "editor modified flag")
+check(ed:text() == "local x = 1\n-- comment\nprint(x)", "editor text round trip")
+ed:wrap(true):numbers(true):readonly(true):readonly(false)
+local ok = pcall(function() return gui.label(win, "x"):lines() end)
+check(not ok, "lines on a label is an error")
+win:close()
+app:step(0)
+
+-- menus, tool bar, status bar and a table with a model
+win = app:window(400, 300, "views")
+local mbar = gui.menubar(win)
+local m = gui.menu(mbar, "File")
+local hits = 0
+m:menuitem("Open", "open"):on("clicked", function() hits = hits + 1; return true end)
+m:separator()
+m:menuitem("Quit"):accel(gui.key.q, gui.mod.ctrl):on("clicked", function() hits = hits + 10; return true end)
+local tb = gui.toolbar(win)
+local tool = tb:tool("save", "Save"):on("clicked", function() hits = hits + 100; return true end)
+tool:icon("open"):icon(nil)
+local sbar = gui.statusbar(win)
+local field = sbar:field(1):text("ready")
+check(field:text() == "ready" and tool:class() == "button", "status field and tool")
+local rows = { { "b", 2 }, { "a", 1 }, { "c", 3 } }
+local tbl = gui.table(win)
+tbl:model {
+  columns = 2,
+  rows = function(parent) return parent == -1 and #rows or 0 end,
+  cell = function(row, col) return tostring(rows[row + 1][col]) end,
+  header = function(col) return col == 1 and "Name" or "Number" end,
+  sort = function(col, descending)
+    table.sort(rows, function(x, y) if descending then return x[col] > y[col] else return x[col] < y[col] end end)
+  end,
+}
+gui.test.paint(win)
+check(tbl:rows() == 3 and tbl:rows(1) == 0, "table rows from the model")
+rows[#rows + 1] = { "d", 4 }
+tbl:refresh()
+check(tbl:rows() == 4, "table refreshed")
+local selected
+tbl:on("selected", function(w, e) selected = e.row; return true end)
+tbl:selectrow(2)
+tbl:column(1, 120)
+check(tbl:column(1) == 120, "table column width")
+gui.test.paint(win)
+local pm = gui.popupmenu(win)
+pm:menuitem("Here")
+check(pm:class() == "menu" and m:class() == "menu" and mbar:class() == "menubar", "menu classes")
+win:close()
+app:step(0)
 app:destroy()
 print("gui: done")

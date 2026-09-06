@@ -6,6 +6,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -100,6 +101,103 @@ static int sys_run(lua_State *L)
     lua_pushstring(L, what);
     lua_pushinteger(L, code);
     return 3;
+}
+
+/* sys.spawn_pipe(program, args...): starts the program with its standard
+ * output and error joined into a pipe and its input from /dev/null.
+ * Returns the pid and the read end of the pipe, to be watched with
+ * app:watch and read with sys.read. */
+static int sys_spawn_pipe(lua_State *L)
+{
+    const char *prog = luaL_checkstring(L, 1);
+    char **argv = argv_from(L, 1);
+    int fds[2];
+    if (pipe(fds) < 0) {
+        free(argv);
+        return minios_errresult(L);
+    }
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        int null = open("/dev/null", O_RDONLY);
+        if (null >= 0) {
+            dup2(null, 0);
+            close(null);
+        }
+        dup2(fds[1], 1);
+        dup2(fds[1], 2);
+        close(fds[0]);
+        close(fds[1]);
+        execvp(prog, argv);
+        _exit(127);
+    }
+    free(argv);
+    close(fds[1]);
+    if (pid < 0) {
+        close(fds[0]);
+        return minios_errresult(L);
+    }
+    lua_pushinteger(L, pid);
+    lua_pushinteger(L, fds[0]);
+    return 2;
+}
+
+/* sys.read(fd [, max]): the bytes available, "" when nothing is there
+ * yet, nil at the end of the stream. */
+static int sys_read(lua_State *L)
+{
+    int fd = (int)luaL_checkinteger(L, 1);
+    size_t max = (size_t)luaL_optinteger(L, 2, 4096);
+    luaL_Buffer b;
+    char *p = luaL_buffinitsize(L, &b, max);
+    ssize_t n = read(fd, p, max);
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EINTR) {
+            luaL_pushresultsize(&b, 0);
+            return 1;
+        }
+        return minios_errresult(L);
+    }
+    if (n == 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    luaL_pushresultsize(&b, (size_t)n);
+    return 1;
+}
+
+static int sys_close(lua_State *L)
+{
+    if (close((int)luaL_checkinteger(L, 1)) < 0)
+        return minios_errresult(L);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+/* sys.wait(pid [, nohang]): "exit" or "signal" and the number once the
+ * process ended; nil while it runs when nohang is true. */
+static int sys_wait(lua_State *L)
+{
+    pid_t pid = (pid_t)luaL_checkinteger(L, 1);
+    int flags = lua_toboolean(L, 2) ? WNOHANG : 0;
+    int status;
+    pid_t r;
+    while ((r = waitpid(pid, &status, flags)) < 0 && errno == EINTR)
+        ;
+    if (r < 0)
+        return minios_errresult(L);
+    if (r == 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    if (WIFEXITED(status)) {
+        lua_pushstring(L, "exit");
+        lua_pushinteger(L, WEXITSTATUS(status));
+    } else {
+        lua_pushstring(L, "signal");
+        lua_pushinteger(L, WTERMSIG(status));
+    }
+    return 2;
 }
 
 /* sys.open(path): starts the program registered for the file's type,
@@ -238,6 +336,10 @@ static int sys_yield(lua_State *L)
 static const luaL_Reg sys_funcs[] = {
     { "spawn", sys_spawn },
     { "run", sys_run },
+    { "spawn_pipe", sys_spawn_pipe },
+    { "read", sys_read },
+    { "close", sys_close },
+    { "wait", sys_wait },
     { "open", sys_open },
     { "type", sys_type },
     { "handler", sys_handler },

@@ -1,5 +1,6 @@
-/* Highlighters for the editor: C and shell. state carries block
- * comment status between lines. */
+/* Highlighters for the editor: C and shell, and a generic one driven by a
+ * language description, with C, Lua and shell as the languages given.
+ * state carries block comment status between lines. */
 #include <gui/widget.h>
 #include <string.h>
 #include <ctype.h>
@@ -149,6 +150,114 @@ void highlight_sh(const char *line, int len, unsigned char *classes, int *state,
             while (j < len && word_char((unsigned char)line[j]))
                 j++;
             if (is_keyword(line + i, j - i, sh_keywords))
+                memset(classes + i, HL_KEYWORD, (size_t)(j - i));
+            i = j;
+            continue;
+        }
+        i++;
+    }
+}
+
+/* A highlighter driven by a language description. The state carries a
+ * block comment across lines. */
+static const char *const lua_keywords[] = {
+    "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+    "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while", NULL,
+};
+
+const struct highlight_language highlight_language_c = { c_keywords, "//", "/*", "*/", "\"'", '#' };
+const struct highlight_language highlight_language_lua = { lua_keywords, "--", "--[[", "]]", "\"'", 0 };
+const struct highlight_language highlight_language_sh = { sh_keywords, "#", NULL, NULL, "\"'", '$' };
+
+static int starts_with(const char *line, int len, int i, const char *s)
+{
+    int n = (int)strlen(s);
+    return i + n <= len && memcmp(line + i, s, (size_t)n) == 0;
+}
+
+void highlight_lang(const char *line, int len, unsigned char *classes, int *state, void *arg)
+{
+    const struct highlight_language *lang = arg;
+    int i = 0;
+    memset(classes, HL_NORMAL, (size_t)len);
+    if (lang->preproc == '#') {
+        while (i < len && (line[i] == ' ' || line[i] == '\t'))
+            i++;
+        if (!*state && i < len && line[i] == '#') {
+            memset(classes, HL_PREPROC, (size_t)len);
+            return;
+        }
+        i = 0;
+    }
+    while (i < len) {
+        if (*state) {
+            int end = -1;
+            for (int j = i; j < len; j++)
+                if (starts_with(line, len, j, lang->block_end)) {
+                    end = j + (int)strlen(lang->block_end);
+                    break;
+                }
+            int stop = end < 0 ? len : end;
+            memset(classes + i, HL_COMMENT, (size_t)(stop - i));
+            if (end < 0)
+                return;
+            *state = 0;
+            i = end;
+            continue;
+        }
+        char c = line[i];
+        if (lang->block_start && starts_with(line, len, i, lang->block_start)) {
+            *state = 1;
+            int n = (int)strlen(lang->block_start);
+            memset(classes + i, HL_COMMENT, (size_t)n);
+            i += n;
+            continue;
+        }
+        if (lang->line_comment && starts_with(line, len, i, lang->line_comment)) {
+            memset(classes + i, HL_COMMENT, (size_t)(len - i));
+            return;
+        }
+        if (lang->quotes && strchr(lang->quotes, c)) {
+            int j = i + 1;
+            while (j < len && line[j] != c) {
+                if (line[j] == '\\')
+                    j++;
+                j++;
+            }
+            if (j < len)
+                j++;
+            memset(classes + i, HL_STRING, (size_t)(j - i));
+            i = j;
+            continue;
+        }
+        if (lang->preproc == '$' && c == '$') {
+            int j = i + 1;
+            if (j < len && line[j] == '{') {
+                while (j < len && line[j] != '}')
+                    j++;
+                if (j < len)
+                    j++;
+            } else {
+                while (j < len && word_char((unsigned char)line[j]))
+                    j++;
+            }
+            memset(classes + i, HL_PREPROC, (size_t)(j - i));
+            i = j;
+            continue;
+        }
+        if (isdigit((unsigned char)c) && (i == 0 || !word_char((unsigned char)line[i - 1]))) {
+            int j = i;
+            while (j < len && (isalnum((unsigned char)line[j]) || line[j] == '.'))
+                j++;
+            memset(classes + i, HL_NUMBER, (size_t)(j - i));
+            i = j;
+            continue;
+        }
+        if (word_char((unsigned char)c)) {
+            int j = i;
+            while (j < len && word_char((unsigned char)line[j]))
+                j++;
+            if (lang->keywords && is_keyword(line + i, j - i, lang->keywords))
                 memset(classes + i, HL_KEYWORD, (size_t)(j - i));
             i = j;
             continue;

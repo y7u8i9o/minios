@@ -1603,3 +1603,15 @@ C runtime objects under `/lib` and the loader as the ELF interpreter, so
 that programs compile, link and run on minios; `-run` works through the
 new `dlfcn.h` of libc. Documented in `docs/design/tcc.md`, tested by
 `tests/cases/tcc` with 54 programs of the upstream suite.
+
+## Code editor (completed 2026-09-06)
+
+A source editor for C, Lua and shell scripts written in Lua
+(`user/share/apps/code.lua`, started by `/bin/code`), with a run panel
+over `sys.spawn_pipe`, an outline table and languages as table entries
+that `$HOME/.config/code.lua` may extend. The `gui` module gained the
+editor, menu, tool bar, status bar, icon and data view bindings with Lua
+models; the toolkit gained `highlight_lang`, a highlighter driven by a
+language description, with Lua as a third language. Documented in
+`docs/design/code.md`, tested by `make check-lua` and
+`tests/cases/gui_code`.

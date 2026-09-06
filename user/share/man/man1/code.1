@@ -1,0 +1,25 @@
+CODE(1)                     User Commands                    CODE(1)
+
+NAME
+    code - source editor for C, Lua and shell scripts
+
+SYNOPSIS
+    code [file]
+
+DESCRIPTION
+    code opens the file in an editor window with syntax highlighting, an
+    output pane and an outline of the definitions. Run saves the file and
+    runs it: Lua files with lua, C files with tcc -run, shell scripts with
+    sh; the output appears in the pane below the text. Languages are
+    entries of a table in /usr/share/apps/code.lua; $HOME/.config/code.lua
+    may add entries.
+
+KEYS
+    Ctrl+N  new file            Ctrl+Z  undo
+    Ctrl+O  open                Ctrl+Y  redo
+    Ctrl+S  save                Ctrl+F  find
+    Ctrl+Q  quit                Ctrl+G  find next
+    F5      run                 F6      stop
+
+SEE ALSO
+    tcc(1), sh(1)

@@ -3,6 +3,7 @@ Terminal=/bin/term
 Files=/bin/files
 Viewer=/bin/view
 Editor=/bin/gedit
+Code=/bin/code
 Calculator=/bin/calc
 Synthesizer=/bin/synth
 Sequencer=/bin/sequencer

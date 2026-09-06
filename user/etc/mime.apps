@@ -1,4 +1,7 @@
 # type program
+text/x-lua /bin/code
+text/x-csrc /bin/code
+text/x-shellscript /bin/code
 text/* /bin/gedit
 image/* /bin/view
 audio/* /bin/player

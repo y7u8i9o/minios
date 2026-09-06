@@ -13,3 +13,20 @@ size_t gui_host_strlcpy(char *dst, const char *src, size_t size)
     }
     return len;
 }
+
+/* The configuration file of the desktop session; the host tests read
+ * nothing from it. */
+#include <string.h>
+#include "minios/conf.h"
+
+const char *conf_read_path(char *buf, size_t size)
+{
+    strncpy(buf, "/nonexistent/desktop.conf", size - 1);
+    buf[size - 1] = '\0';
+    return buf;
+}
+
+const char *conf_write_path(char *buf, size_t size)
+{
+    return conf_read_path(buf, size);
+}

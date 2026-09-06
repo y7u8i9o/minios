@@ -149,6 +149,14 @@ in Lua; `Pong.app` on the desktop starts the latter.
 A launcher file starts a script with `exec=/bin/lua /usr/share/apps/name.lua`;
 `mime_open` passes one argument after the program.
 
+## Additions for the Code editor
+
+The editor (`code.md`) added the constructors `editor`, `menubar`, `menu`,
+`popupmenu`, `toolbar`, `statusbar`, `treeview` and `table`, the editor,
+menu, tool bar, status bar, icon and data view methods, models written in
+Lua, the `context` signal, and `sys.spawn_pipe`, `sys.read`, `sys.close`
+and `sys.wait`. `code.md` lists them.
+
 ## Tests
 
 `user/etc/tests/modules.lua` checks every function of `fs` and `sys`.
@@ -196,8 +204,8 @@ status, and `os.getenv`. The expected output pins every printed line.
   have to be written in that format.
 - Module directory. `/usr/share/lua/5.5/` does not exist yet; it is
   created with the first Lua module.
-- Bindings not yet in `gui`: menus, tool bars, status bars, tree views
-  and tables with models, the editor widget, images and icons, the
+- Bindings not yet in `gui`: images beyond the named icons, and the
+  clipboard.
   clipboard, layer windows. The `audio` module.
 - `os.setlocale` accepts only `C`, `POSIX` and the empty string, and
   `os.date` reports UTC because `localtime` is `gmtime`.
