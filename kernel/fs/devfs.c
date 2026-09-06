@@ -247,6 +247,30 @@ static long condev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
     return tty_ioctl(&console_tty, req, arg);
 }
 
+/* /dev/maps: the file backed regions of every process, for the profiler
+ * to resolve addresses inside shared libraries. */
+static long mapsdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    enum { MAPS_SIZE = 32768 };
+    char *text = kmalloc(MAPS_SIZE);
+    if (!text)
+        return -ENOMEM;
+    size_t len = proc_format_maps(text, MAPS_SIZE);
+    long r = 0;
+    if (*pos < len) {
+        size_t avail = len - *pos;
+        if (n > avail)
+            n = avail;
+        memcpy(buf, text + *pos, n);
+        *pos += n;
+        r = (long)n;
+    }
+    kfree(text);
+    return r;
+}
+
+static const struct file_ops mapsdev_fops = { .read = mapsdev_read };
+
 static const struct file_ops procdev_fops = { .read = procdev_read };
 
 struct mount_snapshot {
@@ -367,5 +391,6 @@ void devfs_init(void)
     devfs_register("null", S_IFCHR | 0666, &null_fops, NULL, 0);
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);
     devfs_register("proc", S_IFCHR | 0444, &procdev_fops, NULL, 0);
+    devfs_register("maps", S_IFCHR | 0444, &mapsdev_fops, NULL, 0);
     devfs_register("mounts", S_IFCHR | 0444, &mounts_fops, NULL, 0);
 }

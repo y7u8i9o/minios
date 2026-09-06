@@ -2,12 +2,13 @@ include ../toolchain.mk
 
 OUT   := $(BUILD)/libwire
 LIB   := $(OUT)/libwire.a
+SO    := $(BUILD)/lib/libwire.so
 SRCS  := $(wildcard src/*.c) $(wildcard generated/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS))
 UCPP  := -Iinclude -Igenerated -I../libc/include -I../kernel/include
 
 .PHONY: all clean check generate
-all: $(LIB)
+all: $(LIB) $(SO)
 
 # Regenerate the marshalling code from the protocol files.
 generate:
@@ -16,6 +17,10 @@ generate:
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
+
+$(SO): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(LD) $(USOFLAGS) -soname libwire.so -o $@ $(OBJS) -L$(BUILD)/lib -lc $(LIBGCC)
 
 $(LIB): $(OBJS)
 	rm -f $@

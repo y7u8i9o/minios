@@ -14,7 +14,8 @@ The release is `0.1.0`, recorded in `VERSION` under semantic versioning. `tools/
 | Kernel | Monolithic. The scheduler runs on return to user mode. Kernel code runs until it returns, blocks or yields. |
 | Per CPU state | One `struct cpu` per processor, reached through the GS base. The current thread is a field of that structure. |
 | Locking | Every shared structure names the lock that protects it. `docs/design/locking.md` records the lock order. |
-| Scope | One user. Permission bits are stored and ignored. The system has no network stack. Executables are static ELF64. |
+| Scope | One user. Permission bits are stored and ignored. The system has no network stack. |
+| Linking | Programs are ELF64 executables linked against shared libraries in `/lib`, loaded by `/lib/ld.so`. `init` and the loader are static. |
 
 ## Memory management
 
@@ -171,7 +172,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 124 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 125 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
 
 ## Code size
 
@@ -179,13 +180,13 @@ The counts are code lines reported by cloc 2.10, without blank and comment lines
 
 | Component | C | Headers | Other | Total |
 |---|---|---|---|---|
-| kernel | 23,940 | 3,393 | 307 assembly and make | 27,640 |
-| libc | 8,459 | 1,445 | 93 assembly and make | 9,997 |
+| kernel | 24,083 | 3,412 | 307 assembly and make | 27,802 |
+| libc | 8,572 | 1,455 | 100 assembly and make | 10,127 |
 | libgui, libfont, libwire, libaudio, libedit | 13,227 | 1,027 | 107 make | 14,362 |
-| user programs and tests | 30,731 | 1,296 | 483 Lua, 564 shell, 158 make | 33,234 |
+| user programs, the loader and tests | 31,787 | 1,297 | 483 Lua, 564 shell, 207 make, 14 assembly | 34,551 |
 | tools | 1,677 | | 502 Python, 500 shell | 2,679 |
 | protocol | | | 437 XML | 437 |
-| total | 78,034 | 7,161 | 3,154 | 88,349 |
+| total | 79,346 | 7,194 | 3,437 | 89,977 |
 
 The Lua sources in `third_party/lua/src/` add 21,410 code lines, the sed and awk sources in `third_party/sed/src/` and `third_party/awk/src/` 9,045, the make sources in `third_party/make/src/` 3,393 and the compiled part of the sbase tar 1,524, all unchanged from their origin. The boot test scripts under `tests/` add 226 lines.
 

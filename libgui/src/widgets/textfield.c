@@ -159,10 +159,10 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     switch (e->code) {
-    case 0xcb: f->cursor = gui_utf8_prev_boundary(widget_text(&f->w), f->cursor); break;
-    case 0xcd: f->cursor = gui_utf8_next_boundary(widget_text(&f->w), len, f->cursor); break;
-    case 0xc7: f->cursor = 0; break;
-    case 0xcf: f->cursor = len; break;
+    case KEY_LEFT: f->cursor = gui_utf8_prev_boundary(widget_text(&f->w), f->cursor); break;
+    case KEY_RIGHT: f->cursor = gui_utf8_next_boundary(widget_text(&f->w), len, f->cursor); break;
+    case KEY_HOME: f->cursor = 0; break;
+    case KEY_END: f->cursor = len; break;
     default: moved = 0;
     }
     if (moved) {
@@ -176,7 +176,7 @@ static int key(struct textfield *f, struct event *e)
         widget_invalidate(&f->w);
         return 1;
     }
-    if (e->code == 0xd3) {                       /* Delete */
+    if (e->code == KEY_DELETE) {
         if (!delete_selection(f) && f->cursor < len) {
             int next = gui_utf8_next_boundary(f->w.text, len, f->cursor);
             memmove(f->w.text + f->cursor, f->w.text + next, (size_t)(len - next + 1));

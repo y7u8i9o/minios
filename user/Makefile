@@ -3,12 +3,17 @@ include ../toolchain.mk
 OUT    := $(BUILD)/user
 ROOT   := $(BUILD)/initrd_root
 LIBC   := $(BUILD)/libc/libc.a
-LIBGUI := $(BUILD)/libgui/libgui.a
-LIBFONT := $(BUILD)/libfont/libfont.a
-LIBWIRE := $(BUILD)/libwire/libwire.a
-LIBAUDIO := $(BUILD)/libaudio/libaudio.a
 LIBEDIT := $(BUILD)/libedit/libedit.a
 CRT0   := $(BUILD)/libc/crt0.o
+# The shared libraries (docs/design/dynlink.md). Programs name them with
+# -l and --as-needed keeps only the ones a program references; libedit is
+# static, since a single program uses it.
+SHARED := libc libfont libwire libaudio libgui liblua
+SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
+DYNLIBS := -lgui -laudio -lwire -lfont $(LIBEDIT) -lc
+# Every program is installed without its debugging sections; the symbol
+# table stays for the profiler.
+INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
@@ -17,6 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar)
+LIBS   := $(addprefix $(ROOT)/lib/,ld.so $(addsuffix .so,$(SHARED)))
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
 # are made here instead of in luaconf.h (see docs/design/lua.md).
@@ -27,9 +33,8 @@ BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac s
 # modules (fs, sys), compiled with the interpreter headers.
 LUA_SRC  := ../third_party/lua/src
 LUA_CORE := $(filter-out $(LUA_SRC)/lua.c $(LUA_SRC)/luac.c $(LUA_SRC)/linit.c,$(wildcard $(LUA_SRC)/*.c))
-LUA_OBJS := $(patsubst $(LUA_SRC)/%.c,$(OUT)/lua/%.o,$(LUA_CORE)) \
-            $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(wildcard lua/*.c))
-LUA_LIBS := $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT)
+LUA_CORE_OBJS := $(patsubst $(LUA_SRC)/%.c,$(OUT)/lua/%.o,$(LUA_CORE))
+LUA_OBJS := $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(wildcard lua/*.c))
 LUA_CPP  := -DLUA_USE_POSIX -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua"' \
             -DLUA_CPATH_DEFAULT='""'
 
@@ -41,7 +46,7 @@ HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/hom
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(BINS) $(ETC) share-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp
+all: $(LIBS) $(BINS) $(ETC) share-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -89,17 +94,24 @@ $(OUT)/lua/minios_%.o: lua/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) $(LUA_CPP) -I$(LUA_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(LUA_LIBS) $(LIBC) $(CRT0)
+# The Lua core is one shared object used by lua and luac.
+$(BUILD)/lib/liblua.so: $(LUA_CORE_OBJS) $(BUILD)/lib/libc.so
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/lua.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(OUT)/lua/lua.o $(LUA_LIBS) $(LIBC) -lgcc
-	cp $(OUT)/lua.elf $@
+	$(LD) $(USOFLAGS) -soname liblua.so -o $@ $(LUA_CORE_OBJS) -L$(BUILD)/lib -lc $(LIBGCC)
 
-$(ROOT)/bin/luac: $(LUA_OBJS) $(OUT)/lua/luac.o $(LUA_LIBS) $(LIBC) $(CRT0)
+$(ROOT)/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(OUT)/lua/luac.o $(LUA_LIBS) $(LIBC) -lgcc
-	cp $(OUT)/luac.elf $@
+	$(CC) $(UCFLAGS) -o $(OUT)/lua.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(OUT)/lua/lua.o -llua $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/lua.elf $@
 
--include $(LUA_OBJS:.o=.d) $(OUT)/lua/lua.d $(OUT)/lua/luac.d
+# luac uses internal functions of the core, which the shared object hides
+# (LUAI_FUNC in luaconf.h), so it links the core objects directly.
+$(ROOT)/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LIBEDIT) $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/luac.elf $@
+
+-include $(LUA_CORE_OBJS:.o=.d) $(LUA_OBJS:.o=.d) $(OUT)/lua/lua.d $(OUT)/lua/luac.d
 
 # sed and awk are compiled unmodified from third_party/ (see
 # docs/design/sedawk.md). The awk grammar is generated with yacc and the
@@ -116,10 +128,10 @@ $(OUT)/sed/%.o: $(SED_SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SED_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/sed: $(SED_OBJS) $(LIBC) $(CRT0)
+$(ROOT)/bin/sed: $(SED_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/sed.elf $(ULDFLAGS) $(CRT0) $(SED_OBJS) $(LIBC) -lgcc
-	cp $(OUT)/sed.elf $@
+	$(CC) $(UCFLAGS) -o $(OUT)/sed.elf $(ULDFLAGS) $(CRT0) $(SED_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/sed.elf $@
 
 $(AWK_GEN)/awkgram.tab.c $(AWK_GEN)/awkgram.tab.h: $(AWK_SRC)/awkgram.y
 	@mkdir -p $(AWK_GEN)
@@ -139,10 +151,10 @@ $(OUT)/awk/%.o: $(AWK_GEN)/%.c $(AWK_GEN)/awkgram.tab.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) -Wno-unused-variable -Wno-unused-function -Wno-unused-label $(UCPP) -I$(AWK_SRC) -I$(AWK_GEN) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/awk: $(AWK_OBJS) $(LIBC) $(CRT0)
+$(ROOT)/bin/awk: $(AWK_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/awk.elf $(ULDFLAGS) $(CRT0) $(AWK_OBJS) $(LIBC) -lgcc
-	cp $(OUT)/awk.elf $@
+	$(CC) $(UCFLAGS) -o $(OUT)/awk.elf $(ULDFLAGS) $(CRT0) $(AWK_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/awk.elf $@
 
 -include $(SED_OBJS:.o=.d) $(AWK_OBJS:.o=.d)
 
@@ -155,10 +167,10 @@ $(OUT)/make/%.o: $(MAKE_SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(MAKE_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/make: $(MAKE_OBJS) $(LIBC) $(CRT0)
+$(ROOT)/bin/make: $(MAKE_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/make.elf $(ULDFLAGS) $(CRT0) $(MAKE_OBJS) $(LIBC) -lgcc
-	cp $(OUT)/make.elf $@
+	$(CC) $(UCFLAGS) -o $(OUT)/make.elf $(ULDFLAGS) $(CRT0) $(MAKE_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/make.elf $@
 
 -include $(MAKE_OBJS:.o=.d)
 
@@ -181,51 +193,75 @@ $(OUT)/tar/util_%.o: $(TAR_SRC)/libutil/%.c $(OUT)/tar/compat.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(TAR_SRC) -I$(OUT)/tar -Dstrlcpy=sbase_strlcpy -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/tar: $(TAR_OBJS) $(LIBC) $(CRT0)
+$(ROOT)/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -o $(OUT)/tar.elf $(ULDFLAGS) $(CRT0) $(TAR_OBJS) $(LIBC) -lgcc
-	cp $(OUT)/tar.elf $@
+	$(CC) $(UCFLAGS) -o $(OUT)/tar.elf $(ULDFLAGS) $(CRT0) $(TAR_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/tar.elf $@
 
 -include $(TAR_OBJS:.o=.d)
 
-$(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(CRT0)
+# The loader is a freestanding position independent object with its own
+# entry; init is linked statically, so that the system starts even when
+# /lib is damaged.
+$(ROOT)/lib/ld.so: ld/ld.c ld/start.S
+	@mkdir -p $(dir $@) $(OUT)/ld
+	$(CC) -std=c17 -ffreestanding -fno-stack-protector -fPIC -fvisibility=hidden -fno-plt -O2 -g \
+	    -fno-builtin -Wall -Wextra -I../kernel/include -c -o $(OUT)/ld/ld.o ld/ld.c
+	$(CC) $(UASFLAGS) -c -o $(OUT)/ld/start.o ld/start.S
+	$(LD) $(USOFLAGS) -Bsymbolic -e _dl_start -o $(OUT)/ld.so.elf $(OUT)/ld/start.o $(OUT)/ld/ld.o $(LIBGCC)
+	$(OBJCOPY) --strip-debug $(OUT)/ld.so.elf $@
+
+$(ROOT)/lib/%.so: $(BUILD)/lib/%.so
+	@mkdir -p $(dir $@)
+	$(OBJCOPY) --strip-debug $< $@
+
+$(ROOT)/bin/init: init/*.c $(LIBC) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(LIBC) -lgcc
-	cp $(OUT)/$*.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/init.elf $(ULDFLAGS_STATIC) $(CRT0) $(filter %.c,$^) $(LIBC) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/init.elf $@
+
+$(ROOT)/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(INSTALL)
 
 # X12 keeps its implementation in compositor/ for source-history
 # continuity; the installed server and user-facing name are X12.
-$(ROOT)/bin/x12: compositor/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/x12: compositor/*.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/x12.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/x12.elf $@
 
-$(ROOT)/bin/x12settings: apps/compsettings.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/x12settings.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/x12settings.elf $@
 
 # Named explicitly so that the generated block table is a prerequisite;
 # the generic apps rule below tracks only the .c file.
-$(ROOT)/bin/unicode: apps/unicode.c apps/unicode_blocks.h $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/unicode.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/unicode.elf $@
 
-$(ROOT)/bin/%: coreutils/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: coreutils/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/$*.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(INSTALL)
 
-$(ROOT)/bin/%: apps/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: apps/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/$*.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(INSTALL)
 
-$(ROOT)/bin/%: tests/%.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(CRT0)
+$(ROOT)/bin/%: tests/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBC) -lgcc
-	cp $(OUT)/$*.elf $@
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
+	$(INSTALL)
 
 clean:
 	rm -rf $(OUT) $(ROOT)
+
+# Executable loader fixtures are kept together with their source and the
+# ELF mutation generator; they run only in the targeted dynlink test.
+include ld/tests/fixtures.mk

@@ -1,3 +1,4 @@
+#include "../thread/tcb.h"
 #include <term.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,7 @@ int term_columns(int fd)
 
 const char *term_sgr(int color)
 {
-    static _Thread_local char sequence[16];
-    snprintf(sequence, sizeof sequence, "\033[%dm", color >= 0 && color <= 107 ? color : 0);
+    char *sequence = __pthread_current()->sgr_sequence;
+    snprintf(sequence, 16, "\033[%dm", color >= 0 && color <= 107 ? color : 0);
     return sequence;
 }

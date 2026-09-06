@@ -22,13 +22,27 @@ struct prof_sym {
     uint64_t size;
     const char *name;
 };
+/* A shared library mapped into the process the table describes: the
+ * addresses [start, end) hold the file from offset on, and the library's
+ * own table gives the symbols by link address. */
+struct prof_module {
+    uint64_t start, end, offset;
+    struct prof_symtab *syms;
+    char *path;
+    int owner;                  /* this entry frees syms and path */
+};
 struct prof_symtab {
     struct prof_sym *syms;      /* sorted by address */
     size_t count;
     char *strings;
+    struct prof_module *modules;
+    size_t nmodules;
 };
-/* The function symbols of a static ELF file, or NULL. */
+/* The function symbols of an ELF file, or NULL. */
 struct prof_symtab *prof_symtab_load_elf(const char *path);
+/* Attach the shared libraries of process pid, read from /dev/maps, to t so
+ * that lookups resolve addresses inside them. Returns the number added. */
+int prof_symtab_add_maps(struct prof_symtab *t, pid_t pid);
 /* The kernel's symbols from /dev/ksyms, or NULL. */
 struct prof_symtab *prof_symtab_load_kernel(void);
 void prof_symtab_free(struct prof_symtab *t);

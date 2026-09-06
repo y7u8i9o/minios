@@ -2,11 +2,13 @@
 
 ## Build
 
-`libc/Makefile` produces `build/libc/libc.a` and `build/libc/crt0.o`.
-User programs are compiled with `UCFLAGS` from `toolchain.mk` (static, no
-PIC, SSE2 enabled with saved FPU state, AVX disabled) and
-linked with `-nostdlib -static -Ttext-segment=0x400000`, `crt0.o`,
-`libc.a` and `libgcc`. `user/Makefile` builds one binary per directory
+`libc/Makefile` produces `build/libc/libc.a`, `build/lib/libc.so` and
+`build/libc/crt0.o`. User code is compiled with `UCFLAGS` from
+`toolchain.mk` (PIC, SSE2 enabled with saved FPU state, AVX disabled).
+Programs normally link against shared libraries at `0x400000` with
+`/lib/ld.so` as their interpreter; init remains static. See `dynlink.md`
+for the linker options and the static startup path.
+`user/Makefile` builds one binary per directory
 listed in `PROGS`, one per file under `coreutils/` and one per file under
 `tests/`, all copied into `build/initrd_root/bin`, which `make initrd`
 packs into `build/initrd.tar`.
@@ -14,9 +16,13 @@ packs into `build/initrd.tar`.
 ## Runtime
 
 `crt0.S` reads `argc`, `argv` and `envp` from the stack laid out by the
-kernel, aligns the stack and calls `__libc_start`, which sets `environ`,
-initializes stdio, runs `main` and passes its result to `exit`. `exit` runs
-`atexit` handlers in reverse order, flushes the streams and calls `_exit`.
+kernel, aligns the stack and calls `__libc_start`, which initializes the
+main thread, sets `environ`, initializes stdio, invokes ELF constructors,
+runs `main` and passes its result to `exit`. The loader supplies callbacks
+for dynamic initialization and finalization; `AT_BASE` distinguishes those
+from static startup, which uses the linker's array boundaries. `exit`
+runs `atexit` handlers and ELF destructors, flushes the streams and calls
+`_exit`. See `dynlink.md` for dependency and callback ordering.
 `syscall.S` provides `__syscall6`; the wrappers turn a negative errno
 result into `-1` with `errno` set. Numbers come from
 `kernel/include/syscall_nums.h`.
@@ -86,7 +92,9 @@ result into `-1` with `errno` set. Numbers come from
   the delimiter and return the byte count or -1 at EOF/error.
 - `term.h`: `term_use_color(fd)` requires a tty, nonempty nondumb TERM,
   and an unset NO_COLOR; `term_columns(fd)` uses the window size, then
-  COLUMNS, then 80. `term_sgr` returns a small thread-local SGR string.
+  COLUMNS, then 80. `term_sgr` returns a small SGR string kept in the
+  thread control block (a thread local variable would give the shared
+  library a TLS segment, `dynlink.md`).
 
 `libc_ext` additionally checks these helpers, including glob fixtures,
 quoting flags, combining/wide characters and dynamically grown lines.

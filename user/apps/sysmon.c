@@ -93,7 +93,7 @@ static const char *name_of_pid(int pid)
     return NULL;
 }
 
-static struct prof_symtab *symtab_for(const char *name)
+static struct prof_symtab *symtab_for(const char *name, int pid)
 {
     if (!name)
         return NULL;
@@ -106,6 +106,7 @@ static struct prof_symtab *symtab_for(const char *name)
     snprintf(path, sizeof path, "/bin/%s", name);
     strncpy(symtabs[nsymtabs].name, name, sizeof symtabs[nsymtabs].name - 1);
     symtabs[nsymtabs].syms = prof_symtab_load_elf(path);
+    prof_symtab_add_maps(symtabs[nsymtabs].syms, pid);
     return symtabs[nsymtabs++].syms;
 }
 
@@ -126,7 +127,7 @@ static void prof_consume(int fd, int revents, void *arg)
                 continue;
             char name[96];
             int locked;
-            prof_attribute(kernel ? NULL : symtab_for(name_of_pid((int)s->pid)), ksyms, s, &locked, name, sizeof name);
+            prof_attribute(kernel ? NULL : symtab_for(name_of_pid((int)s->pid), (int)s->pid), ksyms, s, &locked, name, sizeof name);
             if (locked)
                 strncat(name, " (locked)", sizeof name - strlen(name) - 1);
             prof_hist_add(&hist, name, kernel);

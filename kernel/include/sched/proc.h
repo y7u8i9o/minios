@@ -94,6 +94,10 @@ int proc_count_others(void);
 int proc_collect_pgrp(int pgid, int *pids, int max);
 /* Format "PID PPID PGID STATE NAME" lines into buf. Returns the length. */
 size_t proc_format_table(char *buf, size_t size);
+/* Format the file backed regions of every process for /dev/maps: one line
+ * per region with the pid, the start and end addresses, the file offset of
+ * the start and the file's path. */
+size_t proc_format_maps(char *buf, size_t size);
 /* Number of live user processes (everything but the kernel process). */
 int proc_count_users(void);
 /* Charge the running thread and its process with one timer tick, user or

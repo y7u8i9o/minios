@@ -86,7 +86,10 @@ static void tally_samples(int fd, pid_t pid, struct tally *t)
 static void test_symbols(void)
 {
     self_syms = prof_symtab_load_elf("/bin/proftest");
-    CHECK(self_syms && self_syms->count > 20, "own symbol table: %zu symbols", self_syms ? self_syms->count : 0);
+    CHECK(self_syms && self_syms->count > 3, "own symbol table: %zu symbols", self_syms ? self_syms->count : 0);
+    CHECK(prof_symtab_add_maps(self_syms, getpid()) > 0, "libraries of this process from /dev/maps");
+    const struct prof_sym *lib = prof_symtab_lookup(self_syms, (uint64_t)(uintptr_t)qsort + 2, NULL);
+    CHECK(lib && strcmp(lib->name, "qsort") == 0, "lookup inside the shared C library: %s", lib ? lib->name : "?");
     uint64_t off = 0;
     const struct prof_sym *s = prof_symtab_lookup(self_syms, (uint64_t)(uintptr_t)hot_loop + 5, &off);
     CHECK(s && strcmp(s->name, "hot_loop") == 0 && off == 5, "lookup inside hot_loop: %s+%lu", s ? s->name : "?", (unsigned long)off);

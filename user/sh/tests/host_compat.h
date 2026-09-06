@@ -2,6 +2,9 @@
 #include <string.h>
 #include <stdio.h>
 extern char **environ;
+/* Darwin's string.h may supply a fortified macro. Keep the shell helper
+ * private and avoid redefining that macro or a native libc function. */
+#undef strlcpy
 #define strlcpy sh_host_strlcpy
 static inline size_t sh_host_strlcpy(char *dst, const char *src, size_t size)
 {

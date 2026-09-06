@@ -12,8 +12,10 @@
 #define ELFCLASS64  2
 #define ELFDATA2LSB 1
 #define ET_EXEC     2
+#define ET_DYN      3
 #define EM_X86_64   62
 #define PT_LOAD     1
+#define PT_INTERP   3
 #define PF_X        1
 #define PF_W        2
 #define PF_R        4
@@ -63,25 +65,34 @@ static int write_user(struct vmspace *vm, uintptr_t va, const void *src, size_t 
     return 0;
 }
 
-int elf_load(struct vmspace *vm, const void *image, size_t size, uintptr_t *entry)
+/* Check the header of an ELF64 image of the given type. */
+static const struct elf64_ehdr *elf_check(const void *image, size_t size, uint16_t type)
 {
     const struct elf64_ehdr *eh = image;
     if (size < sizeof *eh || memcmp(eh->e_ident, ELFMAG, 4) != 0 ||
         eh->e_ident[4] != ELFCLASS64 || eh->e_ident[5] != ELFDATA2LSB ||
-        eh->e_type != ET_EXEC || eh->e_machine != EM_X86_64)
-        return -ENOEXEC;
+        eh->e_type != type || eh->e_machine != EM_X86_64)
+        return NULL;
     if (eh->e_phentsize != sizeof(struct elf64_phdr) ||
         eh->e_phoff + (uint64_t)eh->e_phnum * sizeof(struct elf64_phdr) > size)
-        return -ENOEXEC;
+        return NULL;
+    return eh;
+}
 
-    uintptr_t highest = 0;
+/* Map the PT_LOAD segments of an image, each shifted by base, and return
+ * the end of the highest one through *highest. */
+static int load_segments(struct vmspace *vm, const void *image, size_t size,
+                         const struct elf64_ehdr *eh, uintptr_t base, uintptr_t *highest)
+{
+    *highest = 0;
     for (int i = 0; i < eh->e_phnum; i++) {
         const struct elf64_phdr *ph = (const struct elf64_phdr *)((const uint8_t *)image + eh->e_phoff) + i;
         if (ph->p_type != PT_LOAD || ph->p_memsz == 0)
             continue;
         if (ph->p_offset + ph->p_filesz > size || ph->p_filesz > ph->p_memsz)
             return -ENOEXEC;
-        if (ph->p_vaddr < USER_BASE || ph->p_vaddr + ph->p_memsz - 1 > USER_TOP)
+        uintptr_t vaddr = base + ph->p_vaddr;
+        if (vaddr < USER_BASE || vaddr + ph->p_memsz - 1 > USER_TOP || vaddr + ph->p_memsz < vaddr)
             return -ENOEXEC;
         unsigned flags = 0;
         if (ph->p_flags & PF_R)
@@ -90,15 +101,15 @@ int elf_load(struct vmspace *vm, const void *image, size_t size, uintptr_t *entr
             flags |= VM_WRITE;
         if (ph->p_flags & PF_X)
             flags |= VM_EXEC;
-        uintptr_t start = ALIGN_DOWN(ph->p_vaddr, PAGE_SIZE);
-        uintptr_t end = ALIGN_UP(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
+        uintptr_t start = ALIGN_DOWN(vaddr, PAGE_SIZE);
+        uintptr_t end = ALIGN_UP(vaddr + ph->p_memsz, PAGE_SIZE);
         int r = vma_add(vm, start, end, flags | VM_WRITE);   /* writable while loading */
         if (r < 0)
             return r;
         r = vma_populate(vm, start, end);
         if (r < 0)
             return r;
-        r = write_user(vm, ph->p_vaddr, (const uint8_t *)image + ph->p_offset, ph->p_filesz);
+        r = write_user(vm, vaddr, (const uint8_t *)image + ph->p_offset, ph->p_filesz);
         if (r < 0)
             return r;
         if (!(flags & VM_WRITE)) {
@@ -108,22 +119,66 @@ int elf_load(struct vmspace *vm, const void *image, size_t size, uintptr_t *entr
             spin_unlock(&vm->lock);
             vmm_protect(vm, start, end - start, flags | VM_USER);
         }
-        if (end > highest)
-            highest = end;
+        if (end > *highest)
+            *highest = end;
     }
-    if (!highest)
+    return *highest ? 0 : -ENOEXEC;
+}
+
+int elf_load(struct vmspace *vm, const void *image, size_t size, struct elf_info *info)
+{
+    const struct elf64_ehdr *eh = elf_check(image, size, ET_EXEC);
+    if (!eh)
         return -ENOEXEC;
+    memset(info, 0, sizeof *info);
+    uintptr_t highest;
+    int r = load_segments(vm, image, size, eh, 0, &highest);
+    if (r < 0)
+        return r;
+
+    /* The program headers are visible to the loader when a PT_LOAD segment
+     * covers them; PT_INTERP names the loader of a dynamically linked
+     * program. */
+    for (int i = 0; i < eh->e_phnum; i++) {
+        const struct elf64_phdr *ph = (const struct elf64_phdr *)((const uint8_t *)image + eh->e_phoff) + i;
+        if (ph->p_type == PT_LOAD && eh->e_phoff >= ph->p_offset &&
+            eh->e_phoff + (uint64_t)eh->e_phnum * sizeof *ph <= ph->p_offset + ph->p_filesz)
+            info->phdr = ph->p_vaddr + (eh->e_phoff - ph->p_offset);
+        if (ph->p_type == PT_INTERP) {
+            if (ph->p_filesz == 0 || ph->p_filesz > sizeof info->interp ||
+                ph->p_offset + ph->p_filesz > size)
+                return -ENOEXEC;
+            memcpy(info->interp, (const uint8_t *)image + ph->p_offset, ph->p_filesz);
+            info->interp[ph->p_filesz - 1] = '\0';
+        }
+    }
+    info->phnum = eh->e_phnum;
 
     /* Heap: one page to start, grown by brk. */
     uintptr_t heap = highest + PAGE_SIZE;
-    int r = vma_add(vm, heap, heap + PAGE_SIZE, VM_READ | VM_WRITE);
+    r = vma_add(vm, heap, heap + PAGE_SIZE, VM_READ | VM_WRITE);
     if (r < 0)
         return r;
     spin_lock(&vm->lock);
     vm->brk_start = heap;
     vm->brk = heap + PAGE_SIZE;
     spin_unlock(&vm->lock);
-    *entry = eh->e_entry;
+    info->entry = eh->e_entry;
+    return 0;
+}
+
+int elf_load_interp(struct vmspace *vm, const void *image, size_t size, uintptr_t base,
+                    struct elf_info *info)
+{
+    const struct elf64_ehdr *eh = elf_check(image, size, ET_DYN);
+    if (!eh)
+        return -ENOEXEC;
+    uintptr_t highest;
+    int r = load_segments(vm, image, size, eh, base, &highest);
+    if (r < 0)
+        return r;
+    info->interp_base = base;
+    info->interp_entry = base + eh->e_entry;
     return 0;
 }
 
@@ -137,7 +192,7 @@ static size_t count_strings(char *const list[])
 }
 
 int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[], uintptr_t *rsp,
-                     size_t stack_size)
+                     size_t stack_size, const struct elf_info *info)
 {
     uintptr_t bottom = USER_STACK_TOP - stack_size;
     int r = vma_add(vm, bottom, USER_STACK_TOP, VM_READ | VM_WRITE);
@@ -151,7 +206,13 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
         bytes += strlen(argv[i]) + 1;
     for (size_t i = 0; i < envc; i++)
         bytes += strlen(envp[i]) + 1;
-    size_t vectors = (1 + argc + 1 + envc + 1) * sizeof(uint64_t);
+    /* argc, argv, NULL, envp, NULL, then the auxiliary vector of type and
+     * value pairs ending with AT_NULL. */
+    const uint64_t aux[] = {
+        AT_PHDR, info->phdr, AT_PHENT, sizeof(struct elf64_phdr), AT_PHNUM, info->phnum,
+        AT_PAGESZ, PAGE_SIZE, AT_BASE, info->interp_base, AT_ENTRY, info->entry, AT_NULL, 0,
+    };
+    size_t vectors = (1 + argc + 1 + envc + 1 + sizeof aux / sizeof aux[0]) * sizeof(uint64_t);
     if (bytes + vectors + 64 > stack_size / 2)
         return -E2BIG;
 
@@ -186,6 +247,8 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
         p += n;
     }
     vec[idx++] = 0;
+    for (size_t i = 0; i < sizeof aux / sizeof aux[0]; i++)
+        vec[idx++] = aux[i];
     write_user(vm, sp, vec, vectors);
     kfree(vec);
     *rsp = sp;

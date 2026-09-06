@@ -2,12 +2,13 @@ include ../toolchain.mk
 
 OUT   := $(BUILD)/libgui
 LIB   := $(OUT)/libgui.a
+SO    := $(BUILD)/lib/libgui.so
 SRCS  := $(wildcard src/*.c src/widgets/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(OUT)/font.o
 UCPP  := -Iinclude -I../libfont/include -I../libwire/include -I../libwire/generated -I../libc/include -I../kernel/include
 
 .PHONY: all clean check
-all: $(LIB)
+all: $(LIB) $(SO)
 
 # Host unit tests: the library and libfont compiled with the system
 # compiler against a fake client (tests/fake_client.c).
@@ -30,6 +31,10 @@ $(OUT)/font.o: $(OUT)/font.c
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
+
+$(SO): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(LD) $(USOFLAGS) -soname libgui.so -o $@ $(OBJS) -L$(BUILD)/lib -lfont -lwire -lc $(LIBGCC)
 
 $(LIB): $(OBJS)
 	rm -f $@

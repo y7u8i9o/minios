@@ -79,3 +79,11 @@ spinning parent excluded, kernel samples of a child making system calls
 resolving through `/dev/ksyms`, the divider, the absence of samples after
 stop, ring overflow accounting when four spinning processes are sampled
 without reading, and `poll`.
+
+## Shared libraries
+
+Since dynamic linking (`dynlink.md`) the symbol table of `/bin/<name>`
+covers the program only. `/dev/maps` lists the file backed regions of
+every process, and `prof_symtab_add_maps` attaches the libraries of a
+process to its table, so that `prof` and `sysmon` name functions of the
+shared libraries as well.

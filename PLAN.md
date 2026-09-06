@@ -19,7 +19,7 @@
 | Filesystem | Custom inode based filesystem (`mfs`) behind a VFS with mount points and devfs |
 | Storage | virtio-blk (PCI, modern virtio interface) |
 | System calls | POSIX subset, entered through `syscall` / `sysretq` |
-| Executables | Static ELF64 |
+| Executables | ELF64, dynamically linked against the shared libraries in `/lib` since 2026-09-06 (`docs/design/dynlink.md`); `init` and the loader are static |
 | libc | Own minimal libc (`libc/`) |
 | User space | Shell, coreutils, text editor, scripting interpreter |
 | Console | Framebuffer text console with bitmap font, serial (COM1) mirror |
@@ -1544,3 +1544,40 @@ run test; the libc gained `pwd.h`, `grp.h`, `sys/sysmacros.h`, `execlp`
 and the refused `symlink`, `readlink`, `mknod` and `mkfifo`; `gzip`
 accepts `-f`. Documented in `docs/design/artar.md`, tested by
 `tests/cases/ar`, `tests/cases/tar` and new checks in `libc_ext`.
+
+## Dynamic linking (completed 2026-09-06)
+
+Programs are linked against shared objects in `/lib`: libc, libgui,
+libfont, libwire, libaudio and the Lua core; `init` and the loader are
+static. The kernel loads the loader named by `PT_INTERP` at
+`USER_INTERP_BASE` and passes an auxiliary vector; `/lib/ld.so`
+(`user/ld/`) maps the libraries, resolves the symbols and applies the
+relocations before the program starts. Installed programs and libraries
+are stripped of debugging information. `/dev/maps` lets the profiler
+resolve addresses inside libraries. The root image of programs went from
+62.6 MiB to 2.2 MiB plus 870 KiB of libraries. Documented in
+`docs/design/dynlink.md`, tested by `tests/cases/dynlink` and the
+regression of the existing cases.
+
+## Host test portability and loader initialization (completed 2026-09-06)
+
+Host checks use Darwin feature visibility and private strlcpy helpers.
+The GUI fixtures and the text-field navigation handler use the input
+core's KEY_* codes. `make check` and `make check-sh` pass on macOS.
+
+The dynamic loader now supports GNU and SysV hashes, dependency-ordered
+constructors and reverse-order destructors, absolute zero-valued symbols,
+and a dynamically allocated object list. It validates ELF headers,
+segments, dynamic tables, symbol indices and relocation destinations,
+handles unaligned BSS-only segments and program headers beyond the first
+page, defers COPY until other relocations finish, and protects GNU RELRO
+pages. Libc initializes its runtime before calling constructors and uses
+AT_BASE to distinguish loader callbacks from static exec startup.
+
+The dynlink case includes a twenty-DSO chain, static startup, a RELRO
+write check and 29 generated ELF fixtures. The targeted serial QEMU run
+passed dynlink, libc, libc_ext, fork, pthreads, profile, shell2,
+gui_widgets, gui_controls, gui_editor, gui_unicode, gui_lua and audio_server
+(13/13). ELF TLS, dlopen, IFUNC, symbol versioning and lazy binding remain
+unsupported. The implementation and startup ABI are in
+`docs/design/dynlink.md`.

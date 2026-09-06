@@ -2,7 +2,8 @@
 
 #include <string.h>
 
-size_t strlcpy(char *dst, const char *src, size_t size)
+/* Match MiniOS strlcpy even on hosts which do not provide the function. */
+size_t gui_host_strlcpy(char *dst, const char *src, size_t size)
 {
     size_t len = strlen(src);
     if (size) {

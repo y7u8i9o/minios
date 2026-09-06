@@ -47,14 +47,16 @@ must be complete before that call.
 
 ## ELF loading and the initial stack
 
-`sched/elf.c` accepts static `ET_EXEC` x86_64 files. Each `PT_LOAD`
+`sched/elf.c` accepts `ET_EXEC` x86_64 files. Each `PT_LOAD`
 segment becomes a region rounded to pages, populated and filled from the
 file, then protected to the segment's permissions. A one page heap region
 follows the highest segment; `sbrk` grows it with `vma_brk`. The stack
 region is 1 MiB below `USER_STACK_TOP`, demand paged; `user_stack_setup`
-copies the strings, builds `argc`, `argv`, `NULL`, `envp`, `NULL` and
-leaves `rsp` 16 byte aligned as the SysV ABI requires. `crt0.S` reads that
-layout.
+copies the strings, builds `argc`, `argv`, `NULL`, `envp`, `NULL`, the
+auxiliary vector, and leaves `rsp` 16 byte aligned as the SysV ABI
+requires. `crt0.S` reads that layout. A program with a `PT_INTERP` header
+is dynamically linked: the loader it names is mapped at
+`USER_INTERP_BASE` and entered first (`dynlink.md`).
 
 ## Processes
 

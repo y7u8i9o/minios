@@ -2,16 +2,21 @@ include ../toolchain.mk
 
 OUT   := $(BUILD)/libfont
 LIB   := $(OUT)/libfont.a
+SO    := $(BUILD)/lib/libfont.so
 SRCS  := $(wildcard src/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS))
 UCPP  := -Iinclude -I../libc/include -I../kernel/include
 
 .PHONY: all clean check
-all: $(LIB)
+all: $(LIB) $(SO)
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
+
+$(SO): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(LD) $(USOFLAGS) -soname libfont.so -o $@ $(OBJS) -L$(BUILD)/lib -lc $(LIBGCC)
 
 $(LIB): $(OBJS)
 	rm -f $@

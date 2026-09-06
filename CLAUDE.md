@@ -9,7 +9,7 @@ A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. T
 - Processes own address spaces, threads are the scheduling unit. MLFQ scheduler, kernel is not preemptible, rescheduling happens on return to user mode.
 - Buddy physical allocator, slab kernel heap, copy on write fork, swap to a virtio-blk swap device.
 - VFS with mount points and devfs. Custom inode filesystem `mfs`. virtio-blk storage.
-- POSIX subset syscalls, static ELF64 user programs, own libc in `libc/`.
+- POSIX subset syscalls, ELF64 user programs dynamically linked against the shared libraries in `/lib` (`init` and `/lib/ld.so` are static), own libc in `libc/`.
 - Single user, no permission enforcement. No networking.
 - SMP since milestone M18 (application processors started through the Limine MP protocol). All per CPU state lives in `struct cpu` accessed through the GS base.
 
@@ -39,4 +39,4 @@ A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. T
 
 - Complete one milestone at a time in PLAN.md order. Do not start a later milestone before the boot test of the current one passes.
 - Never run the full test suite. Before considering a change finished, run only the cases of the modules the change touches (`make test CASES="..."`, for example the `gui_*` and `comp_*` cases for a compositor change); pick them from the files changed, not by guessing.
-- Keep files under roughly 800 lines. Split by subsystem, not by arbitrary size.
+- Do not impose a source-file line limit. Organize code around coherent responsibilities; preserve explanatory comments and avoid arbitrary splitting or tangled control flow.

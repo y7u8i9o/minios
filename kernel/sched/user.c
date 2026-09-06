@@ -51,8 +51,8 @@ static size_t stack_size_for(struct proc *p)
     return ALIGN_UP(lim, PAGE_SIZE);
 }
 
-static int load_image(const char *path, char *const argv[], char *const envp[],
-                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size)
+/* Read a whole regular file into kernel memory. */
+static int read_file_image(const char *path, void **image_out, size_t *size_out)
 {
     struct file *f;
     int r = vfs_open(path, O_RDONLY, 0, &f);
@@ -82,20 +82,47 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
         kfree(image);
         return r;
     }
+    *image_out = image;
+    *size_out = size;
+    return 0;
+}
+
+/* Build the address space of a program: its segments, the loader named by
+ * PT_INTERP at USER_INTERP_BASE when the program is dynamically linked, and
+ * the initial stack. The thread starts in the loader in that case. */
+static int load_image(const char *path, char *const argv[], char *const envp[],
+                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size)
+{
+    void *image;
+    size_t size;
+    int r = read_file_image(path, &image, &size);
+    if (r < 0)
+        return r;
     struct vmspace *vm = vmspace_create();
     if (!vm) {
         kfree(image);
         return -ENOMEM;
     }
-    r = elf_load(vm, image, size, entry);
+    struct elf_info info;
+    r = elf_load(vm, image, size, &info);
     kfree(image);
+    if (r == 0 && info.interp[0]) {
+        r = read_file_image(info.interp, &image, &size);
+        if (r == 0) {
+            r = elf_load_interp(vm, image, size, USER_INTERP_BASE, &info);
+            kfree(image);
+        }
+        if (r < 0)
+            klog_error("%s: loader %s: error %d", path, info.interp, r);
+    }
     if (r == 0)
-        r = user_stack_setup(vm, argv, envp, rsp, stack_size);
+        r = user_stack_setup(vm, argv, envp, rsp, stack_size, &info);
     if (r < 0) {
         vma_remove_all(vm);
         vmspace_destroy(vm);
         return r;
     }
+    *entry = info.interp[0] ? info.interp_entry : info.entry;
     *vm_out = vm;
     return 0;
 }

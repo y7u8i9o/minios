@@ -203,12 +203,84 @@ void prof_symtab_free(struct prof_symtab *t)
 {
     if (!t)
         return;
+    for (size_t i = 0; i < t->nmodules; i++) {
+        if (t->modules[i].owner) {
+            prof_symtab_free(t->modules[i].syms);
+            free(t->modules[i].path);
+        }
+    }
+    free(t->modules);
     free(t->syms);
     free(t->strings);
     free(t);
 }
 
+int prof_symtab_add_maps(struct prof_symtab *t, pid_t pid)
+{
+    if (!t)
+        return 0;
+    FILE *f = fopen("/dev/maps", "r");
+    if (!f)
+        return 0;
+    int added = 0;
+    char line[512];
+    while (fgets(line, sizeof line, f)) {
+        int lpid;
+        unsigned long start, end, offset;
+        char path[256];
+        if (sscanf(line, "%d %lx %lx %lx %255s", &lpid, &start, &end, &offset, path) != 5 || lpid != pid)
+            continue;
+        if (strncmp(path, "/lib/", 5) != 0)
+            continue;
+        struct prof_module *m = realloc(t->modules, (t->nmodules + 1) * sizeof *m);
+        if (!m)
+            break;
+        t->modules = m;
+        m = &t->modules[t->nmodules];
+        memset(m, 0, sizeof *m);
+        m->start = start;
+        m->end = end;
+        m->offset = offset;
+        /* Every region of one file shares the file's table. */
+        for (size_t i = 0; i < t->nmodules; i++) {
+            if (t->modules[i].path && strcmp(t->modules[i].path, path) == 0) {
+                m->syms = t->modules[i].syms;
+                m->path = t->modules[i].path;
+                break;
+            }
+        }
+        if (!m->path) {
+            m->path = strdup(path);
+            m->syms = prof_symtab_load_elf(path);
+            m->owner = 1;
+        }
+        t->nmodules++;
+        added++;
+    }
+    fclose(f);
+    return added;
+}
+
+static const struct prof_sym *lookup_own(const struct prof_symtab *t, uint64_t addr, uint64_t *off);
+
 const struct prof_sym *prof_symtab_lookup(const struct prof_symtab *t, uint64_t addr, uint64_t *off)
+{
+    if (!t)
+        return NULL;
+    const struct prof_sym *s = lookup_own(t, addr, off);
+    if (s)
+        return s;
+    /* Inside a library the link address is the file offset of the address,
+     * since the text segment of a shared object starts at offset 0. */
+    for (size_t i = 0; i < t->nmodules; i++) {
+        const struct prof_module *m = &t->modules[i];
+        if (addr >= m->start && addr < m->end && m->syms)
+            return lookup_own(m->syms, addr - m->start + m->offset, off);
+    }
+    return NULL;
+}
+
+static const struct prof_sym *lookup_own(const struct prof_symtab *t, uint64_t addr, uint64_t *off)
 {
     if (!t || !t->count)
         return NULL;

@@ -37,6 +37,7 @@
 #define KSTACK_SLOT     (KSTACK_SIZE + PAGE_SIZE)
 #define KSTACK_SLOTS    4096
 #define USER_MMAP_TOP   0x00007f0000000000UL   /* mmap regions grow down from here */
+#define USER_INTERP_BASE 0x00007e0000000000UL  /* the dynamic loader of a program (dynlink.md) */
 #define KHEAP_BASE      0xffffffd000000000UL   /* reserved for vmalloc style use */
 
 /* An address space. lock protects the page tables reachable from pml4_phys,

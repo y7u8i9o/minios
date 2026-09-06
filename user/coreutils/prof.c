@@ -39,6 +39,7 @@ static struct prof_symtab *syms_for_pid(int pid)
     snprintf(path, sizeof path, "/bin/%s", name ? name : "?");
     pid_syms[npid_syms].pid = pid;
     pid_syms[npid_syms].syms = name ? prof_symtab_load_elf(path) : NULL;
+    prof_symtab_add_maps(pid_syms[npid_syms].syms, pid);
     return pid_syms[npid_syms++].syms;
 }
 static int want_kernel, want_chains;
@@ -197,6 +198,7 @@ int main(int argc, char **argv)
         usyms = prof_symtab_load_elf(path);
         if (!usyms)
             fprintf(stderr, "prof: no symbols in %s, user addresses stay numeric\n", path);
+        prof_symtab_add_maps(usyms, pid);
     }
     if (want_kernel)
         ksyms = prof_symtab_load_kernel();

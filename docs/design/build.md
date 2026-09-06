@@ -197,6 +197,17 @@ change to the kernel, because TCG follows Intel semantics and hides
 processor and hypervisor differences (`platform.md`). `make run` follows the same default and
 uses `QEMU_ACCEL` for an override (see Running above).
 
+## Host checks
+
+`make check` runs the font, protocol, GUI, and Lua checks on the host;
+`make check-sh` checks the shell parser, expansion and execution. On
+Darwin, `toolchain.mk` adds `_DARWIN_C_SOURCE` to `HOSTCPPFLAGS` alongside
+the POSIX feature level. This exposes native socket ancillary-data
+macros, `RLIMIT_NPROC`, and `mkdtemp` without changing guest compiler flags.
+The GUI and shell use private names for their host `strlcpy` helpers,
+after including the system header and undefining any fortified macro.
+GUI key fixtures use the input interface's `KEY_*` constants.
+
 ## Branches and the daily fold into develop
 
 The repository has three long lived branches: `bleeding-edge` for new work,

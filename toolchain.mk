@@ -16,10 +16,18 @@ CC      := $(CROSS)gcc
 LD      := $(CROSS)ld
 NM      := $(CROSS)nm
 OBJCOPY := $(CROSS)objcopy
+READELF := $(CROSS)readelf
+LIBGCC  := $(shell $(CROSS)gcc -print-libgcc-file-name)
 GDB     := $(CROSS)gdb
 HOSTCC  ?= cc
 YACC    ?= yacc
 HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
+# Darwin hides socket ancillary-data macros and resource-limit extensions
+# under strict POSIX visibility. Host tests use those native interfaces;
+# this flag never reaches the freestanding MiniOS build.
+ifeq ($(HOST_OS),Darwin)
+HOSTCPPFLAGS += -D_DARWIN_C_SOURCE
+endif
 QEMU    ?= qemu-system-x86_64
 XORRISO ?= xorriso
 
@@ -50,15 +58,25 @@ KLDFLAGS := -nostdlib -static -z max-page-size=0x1000 --no-dynamic-linker
 
 AR      := $(CROSS)ar
 
-# User space flags: static, no PIC, red zone allowed. M23 saves x87 and all
-# 128-bit XMM registers. Keep AVX disabled until the kernel migrates from
-# FXSAVE to XSAVE/XRSTOR and enables the matching XCR0 state components.
-UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
+# User space flags: position independent code, so that the same objects go
+# into the shared libraries and the programs; red zone allowed. M23 saves
+# x87 and all 128-bit XMM registers. Keep AVX disabled until the kernel
+# migrates from FXSAVE to XSAVE/XRSTOR and enables the matching XCR0 state
+# components.
+UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC \
             -msse2 -mfpmath=sse -mno-avx -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
 UASFLAGS := -g
-ULDFLAGS := -nostdlib -static -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000
+# Programs are linked at 0x400000 against the shared libraries in
+# build/lib, with every relocation applied at load (docs/design/dynlink.md);
+# ULDFLAGS_STATIC links a program on its own, for init and the loader.
+ULDFLAGS := -nostdlib -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 \
+            -Wl,--hash-style=sysv -Wl,-z,now -Wl,--as-needed -Wl,-dynamic-linker,/lib/ld.so -L$(BUILD)/lib
+ULDFLAGS_STATIC := -nostdlib -static -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000
+# Shared libraries are linked with ld directly: the compiler driver of the
+# bare metal target does not pass -shared on.
+USOFLAGS := -shared -z now --hash-style=sysv -z max-page-size=0x1000
 
 # Machine size and accelerator for `make run` live in tools/run.sh
 # (QEMU_MEM, QEMU_SMP, QEMU_ACCEL, QEMU_AUDIO, see qemu.conf.example).

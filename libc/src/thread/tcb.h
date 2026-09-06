@@ -17,6 +17,7 @@ struct pthread {
     int detached;                   /* protected by __threads_lock */
     int exited;                     /* protected by __threads_lock */
     const void *keys[PTHREAD_KEYS_MAX];
+    char sgr_sequence[16];          /* the buffer term_sgr returns */
     struct pthread *next;           /* __threads list, protected by __threads_lock */
 };
 

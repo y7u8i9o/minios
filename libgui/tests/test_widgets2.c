@@ -7,6 +7,7 @@
 
 struct app *app_create_detached(void);
 
+/* WM_KEY carries input-core KEY_* values, not PS/2 scancodes. */
 static struct wmsg key_msg(struct widget *win, int code, int ch, int mods)
 {
     struct wmsg m = { .type = WM_KEY, .window = window_state_of(win)->win->id, .a = code, .b = 1, .c = mods, .d = ch };
@@ -29,7 +30,7 @@ static void click(struct widget *win, int x, int y)
 static void type_text(struct widget *win, const char *s)
 {
     for (; *s; s++) {
-        struct wmsg m = key_msg(win, *s == '\n' ? 0x1c : 0, *s, 0);
+        struct wmsg m = key_msg(win, *s == '\n' ? KEY_ENTER : 0, *s, 0);
         window_message(win, &m);
     }
 }
@@ -71,7 +72,7 @@ static void test_controls(struct app *a)
     }
     /* Escape closes a popup, an outside click too. */
     click(win, ax + 5, ay + 5);
-    struct wmsg esc = key_msg(win, 0x01, 27, 0);
+    struct wmsg esc = key_msg(win, KEY_ESC, 27, 0);
     window_message(win, &esc);
     CHECK(ws->popup == NULL, "Escape closes the popup");
     click(win, ax + 5, ay + 5);
@@ -79,7 +80,7 @@ static void test_controls(struct app *a)
     CHECK(ws->popup == NULL, "outside click closes the popup");
     /* Spinner keys and arrows. */
     widget_focus(spin);
-    struct wmsg up = key_msg(win, 0xc8, 0, 0);
+    struct wmsg up = key_msg(win, KEY_UP, 0, 0);
     window_message(win, &up);
     CHECK(spin->value == 6 && last_value == 6, "spinner up: %d", spin->value);
     widget_abs(spin, &ax, &ay);
@@ -189,12 +190,12 @@ static void test_models(struct app *a)
     treeview_expand(tree, 2, 1);
     CHECK(view_visible_rows(tree) == 10 && view_row_at(tree, 3) == 3, "nested expansion");
     widget_focus(tree);
-    struct wmsg end = key_msg(win, 0xcf, 0, 0);
+    struct wmsg end = key_msg(win, KEY_END, 0, 0);
     window_message(win, &end);
     CHECK(tree->value == 9 && last_value == 9, "End selects the last row id: %d", tree->value);
-    struct wmsg home = key_msg(win, 0xc7, 0, 0);
+    struct wmsg home = key_msg(win, KEY_HOME, 0, 0);
     window_message(win, &home);
-    struct wmsg left = key_msg(win, 0xcb, 0, 0);
+    struct wmsg left = key_msg(win, KEY_LEFT, 0, 0);
     window_message(win, &left);
     CHECK(!treeview_is_expanded(tree, 0) && view_visible_rows(tree) == 7, "Left collapses");
     window_close(win);
@@ -235,7 +236,7 @@ static void test_editor(struct app *a)
     int l, c;
     editor_cursor(ed, &l, &c);
     CHECK(l == 1 && c == 5, "cursor at the end: %d,%d", l, c);
-    struct wmsg bs = key_msg(win, 0x0e, '\b', 0);
+    struct wmsg bs = key_msg(win, KEY_BACKSPACE, '\b', 0);
     window_message(win, &bs);
     window_message(win, &bs);
     t = editor_text(ed);
@@ -255,16 +256,16 @@ static void test_editor(struct app *a)
     free(t);
     /* Selection across lines, cut, paste. */
     editor_goto(ed, 0, 3);
-    struct wmsg right = key_msg(win, 0xcd, 0, WMOD_SHIFT);
+    struct wmsg right = key_msg(win, KEY_RIGHT, 0, WMOD_SHIFT);
     for (int i = 0; i < 5; i++)
         window_message(win, &right);
-    struct wmsg cut = key_msg(win, 0x2d, 24, WMOD_CTRL);
+    struct wmsg cut = key_msg(win, KEY_X, 24, WMOD_CTRL);
     window_message(win, &cut);
     t = editor_text(ed);
     CHECK(strcmp(t, "helrld") == 0, "cut across lines: '%s'", t);
     free(t);
     editor_goto(ed, 0, 0);
-    struct wmsg paste = key_msg(win, 0x2f, 22, WMOD_CTRL);
+    struct wmsg paste = key_msg(win, KEY_V, 22, WMOD_CTRL);
     window_message(win, &paste);
     t = editor_text(ed);
     CHECK(strcmp(t, "lo\nwohelrld") == 0, "pasted at the start: '%s'", t);
@@ -281,7 +282,7 @@ static void test_editor(struct app *a)
     editor_set_wrap(ed, 1);
     window_paint(win);
     editor_goto(ed, 0, 0);
-    struct wmsg down = key_msg(win, 0xd0, 0, 0);
+    struct wmsg down = key_msg(win, KEY_DOWN, 0, 0);
     window_message(win, &down);
     editor_cursor(ed, &l, &c);
     CHECK(l == 0 && c > 0, "Down moves along the wrapped line: %d,%d", l, c);
@@ -362,7 +363,7 @@ void run_gedit_tree_test(void)
     CHECK(strcmp(t, "int x;") == 0, "gedit tree typed: '%s'", t);
     free(t);
     CHECK(strcmp(widget_text(g_pos), "line 1, column 7") == 0, "status shows the cursor: '%s'", widget_text(g_pos));
-    struct wmsg s = key_msg(win, 0x1f, 19, WMOD_CTRL);
+    struct wmsg s = key_msg(win, KEY_S, 19, WMOD_CTRL);
     window_message(win, &s);
     window_close(win);
     app_step(a, 0);

@@ -1,6 +1,11 @@
 #pragma once
 
 #include <stddef.h>
+#include <string.h>
 
-/* Available in MiniOS and macOS libc, but not in glibc. */
-size_t strlcpy(char *dst, const char *src, size_t size);
+/* Use one implementation on every host. Include the native declaration
+ * first, then replace its name: Darwin may define strlcpy as a fortified
+ * macro, and defining a function with that macro active breaks compilation. */
+#undef strlcpy
+#define strlcpy gui_host_strlcpy
+size_t gui_host_strlcpy(char *dst, const char *src, size_t size);

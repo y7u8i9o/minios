@@ -5,6 +5,7 @@
 #include <mm/slab.h>
 #include <mm/vmm.h>
 #include <mm/vma.h>
+#include <fs/vfs.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
@@ -327,6 +328,46 @@ struct proc_row {
     struct vmspace *vm;
     char name[PROC_NAME_LEN];
 };
+
+size_t proc_format_maps(char *buf, size_t size)
+{
+    size_t off = 0;
+    off += (size_t)ksnprintf(buf + off, size - off, "%5s %16s %16s %10s %s\n", "PID", "START", "END", "OFFSET", "PATH");
+    enum { MAX_ROWS = 64 };
+    static int pids[MAX_ROWS];      /* the device read is serialized by the file lock */
+    int n = 0;
+    spin_lock(&proc_list_lock);
+    struct list_head *pos;
+    list_for_each(pos, &proc_list) {
+        struct proc *p = list_entry(pos, struct proc, link);
+        if (n == MAX_ROWS)
+            break;
+        pids[n++] = p->pid;
+    }
+    spin_unlock(&proc_list_lock);
+    for (int i = 0; i < n && off < size - 1; i++) {
+        /* proc_tree_lock keeps the process from being reaped and sits above
+         * vmspace.lock in the lock order. */
+        spin_lock(&proc_tree_lock);
+        struct proc *p = proc_find(pids[i]);
+        if (p && p->state != PROC_ZOMBIE && p->vm) {
+            struct vmspace *vm = p->vm;
+            spin_lock(&vm->lock);
+            struct list_head *vpos;
+            list_for_each(vpos, &vm->vmas) {
+                struct vma *v = list_entry(vpos, struct vma, link);
+                if (!(v->flags & VM_FILE) || !v->file || !v->file->path || off >= size - 1)
+                    continue;
+                off += (size_t)ksnprintf(buf + off, size - off, "%5d %16lx %16lx %10lx %s\n", p->pid,
+                                         (unsigned long)v->start, (unsigned long)v->end,
+                                         (unsigned long)v->offset, v->file->path);
+            }
+            spin_unlock(&vm->lock);
+        }
+        spin_unlock(&proc_tree_lock);
+    }
+    return off < size ? off : size - 1;
+}
 
 size_t proc_format_table(char *buf, size_t size)
 {

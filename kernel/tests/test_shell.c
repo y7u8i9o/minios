@@ -113,8 +113,15 @@ static void test_shell(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(3), "sh status 0x%x", status);
-    shell_memory_drain();
-    pmm_get_stats(&after);
+    /* The release of the file mappings of a program takes more than one
+     * grace period: poll until the count settles. */
+    for (int i = 0; i < 100; i++) {
+        shell_memory_drain();
+        pmm_get_stats(&after);
+        if (after.free_pages == before.free_pages)
+            break;
+        sleep_ms(2);
+    }
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);
 }
@@ -224,8 +231,15 @@ static void test_pipes(void)
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);
     ktest_assert(status == PROC_STATUS_EXITED(5), "sh status 0x%x", status);
-    shell_memory_drain();
-    pmm_get_stats(&after);
+    /* The release of the file mappings of a program takes more than one
+     * grace period: poll until the count settles. */
+    for (int i = 0; i < 100; i++) {
+        shell_memory_drain();
+        pmm_get_stats(&after);
+        if (after.free_pages == before.free_pages)
+            break;
+        sleep_ms(2);
+    }
     ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);
 }
