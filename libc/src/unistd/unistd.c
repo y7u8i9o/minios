@@ -463,6 +463,7 @@ int chmod(const char *path, mode_t mode)
 }
 
 #include <sys/uio.h>
+#include <limits.h>
 
 ssize_t readv(int fd, const struct iovec *iov, int count)
 {
@@ -499,4 +500,88 @@ ssize_t writev(int fd, const struct iovec *iov, int count)
 int lstat(const char *path, struct stat *st)
 {
     return stat(path, st);
+}
+
+int access(const char *path, int mode)
+{
+    struct stat st;
+    return stat(path, &st);
+}
+
+size_t confstr(int name, char *buf, size_t len)
+{
+    if (name != _CS_PATH) {
+        errno = EINVAL;
+        return 0;
+    }
+    const char *value = "/bin";
+    if (buf != NULL && len > 0) {
+        strncpy(buf, value, len - 1);
+        buf[len - 1] = '\0';
+    }
+    return strlen(value) + 1;
+}
+
+int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
+{
+    return (int)syscall4(SYS_utimensat, dirfd, path, times, flags);
+}
+
+/* Build the absolute form of path, removing . and .. components and
+ * repeated slashes, and check that the result exists. */
+char *realpath(const char *path, char *resolved)
+{
+    char buf[PATH_MAX];
+    size_t n = 0;
+    if (path == NULL || *path == '\0') {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (path[0] != '/') {
+        if (getcwd(buf, sizeof buf) == NULL)
+            return NULL;
+        n = strlen(buf);
+        if (n == 1 && buf[0] == '/')
+            n = 0;
+    }
+    const char *p = path;
+    while (*p != '\0') {
+        while (*p == '/')
+            p++;
+        if (*p == '\0')
+            break;
+        const char *start = p;
+        while (*p != '\0' && *p != '/')
+            p++;
+        size_t len = (size_t)(p - start);
+        if (len == 1 && start[0] == '.')
+            continue;
+        if (len == 2 && start[0] == '.' && start[1] == '.') {
+            while (n > 0 && buf[n - 1] != '/')
+                n--;
+            if (n > 0)
+                n--;
+            continue;
+        }
+        if (n + 1 + len >= sizeof buf) {
+            errno = ENAMETOOLONG;
+            return NULL;
+        }
+        buf[n++] = '/';
+        memcpy(buf + n, start, len);
+        n += len;
+    }
+    if (n == 0)
+        buf[n++] = '/';
+    buf[n] = '\0';
+    struct stat st;
+    if (stat(buf, &st) < 0)
+        return NULL;
+    if (resolved == NULL) {
+        resolved = malloc(n + 1);
+        if (resolved == NULL)
+            return NULL;
+    }
+    memcpy(resolved, buf, n + 1);
+    return resolved;
 }

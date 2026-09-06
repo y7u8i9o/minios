@@ -643,6 +643,25 @@ int vfs_mkdir(const char *path)
     return dir_op(path, DIR_OP_MKDIR);
 }
 
+int vfs_utimens(const char *path, int64_t mtime)
+{
+    struct inode *ino;
+    int r = vfs_lookup(path, &ino);
+    if (r < 0)
+        return r;
+    if (!ino->ops || !ino->ops->setmtime) {
+        inode_put(ino);
+        return -EROFS;
+    }
+    vfs_op_begin(ino->sb);
+    mutex_lock(&ino->lock);
+    r = ino->ops->setmtime(ino, mtime);
+    mutex_unlock(&ino->lock);
+    vfs_op_end(ino->sb);
+    inode_put(ino);
+    return r;
+}
+
 int vfs_unlink(const char *path)
 {
     return dir_op(path, DIR_OP_UNLINK);
@@ -751,7 +770,7 @@ uint8_t vfs_mode_to_dtype(uint32_t mode)
 
 int64_t vfs_now(void)
 {
-    return (int64_t)((rtc_epoch_offset_ns() + timer_ns()) / 1000000000ull);
+    return (int64_t)(rtc_epoch_offset_ns() + timer_ns());
 }
 
 void inode_stat(struct inode *ino, struct stat *st)
@@ -763,7 +782,8 @@ void inode_stat(struct inode *ino, struct stat *st)
     st->st_nlink = ino->nlink;
     st->st_rdev = ino->rdev;
     st->st_size = (int64_t)ino->size;
-    st->st_mtime = ino->mtime;
+    st->st_mtim.tv_sec = ino->mtime / 1000000000;
+    st->st_mtim.tv_nsec = ino->mtime % 1000000000;
     st->st_blksize = 4096;
     st->st_blocks = (int64_t)((ino->size + 511) / 512);
 }

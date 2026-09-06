@@ -31,6 +31,10 @@ struct inode_ops {
     int (*rename)(struct inode *olddir, const char *oldname, size_t oldlen,
                   struct inode *newdir, const char *newname, size_t newlen);
     int (*truncate)(struct inode *ino, uint64_t size);
+    /* Set the modification time and write the inode back. ino->lock is held
+     * and the call is bracketed by op_begin and op_end. Optional: a
+     * filesystem without it refuses utimensat with EROFS. */
+    int (*setmtime)(struct inode *ino, int64_t mtime);
 };
 
 /* Operations on open files. read and write receive the position to use and
@@ -68,7 +72,7 @@ struct inode {
     uint32_t nlink;
     uint64_t size;
     uint64_t rdev;
-    int64_t mtime;                  /* seconds since the epoch; lock */
+    int64_t mtime;                  /* nanoseconds since the epoch; lock */
     const struct inode_ops *ops;
     const struct file_ops *fops;
     void *priv;                     /* filesystem private */
@@ -189,11 +193,14 @@ long file_write(struct file *f, const char *buf, size_t n);
 long file_lseek(struct file *f, long off, int whence);
 long file_getdents(struct file *f, struct dirent *buf, size_t count);
 /* Seconds since the Unix epoch from the real time clock, for time stamps. */
+/* The current time in nanoseconds since the epoch, the unit of inode mtime. */
 int64_t vfs_now(void);
 void inode_stat(struct inode *ino, struct stat *st);
 
 int vfs_mkdir(const char *path);
 int vfs_unlink(const char *path);
+/* Set the modification time of the file at path to mtime (nanoseconds). */
+int vfs_utimens(const char *path, int64_t mtime);
 int vfs_rmdir(const char *path);
 int vfs_rename(const char *oldpath, const char *newpath);
 int vfs_link(const char *oldpath, const char *newpath);

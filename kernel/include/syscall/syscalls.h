@@ -112,3 +112,4 @@ long sys_timerfd_settime(struct trapframe *tf);
 long sys_timerfd_gettime(struct trapframe *tf);
 long sys_fcntl(struct trapframe *tf);
 long sys_pipe2(struct trapframe *tf);
+long sys_utimensat(struct trapframe *tf);

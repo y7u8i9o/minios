@@ -349,3 +349,23 @@ int ffs(int value)
 {
     return value == 0 ? 0 : __builtin_ctz((unsigned)value) + 1;
 }
+
+char *strndup(const char *s, size_t n)
+{
+    size_t len = strnlen(s, n);
+    char *copy = malloc(len + 1);
+    if (copy == NULL)
+        return NULL;
+    memcpy(copy, s, len);
+    copy[len] = '\0';
+    return copy;
+}
+
+char *stpcpy(char *dst, const char *src)
+{
+    while ((*dst = *src) != '\0') {
+        dst++;
+        src++;
+    }
+    return dst;
+}

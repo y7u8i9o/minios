@@ -1518,3 +1518,17 @@ FreeBSD sed and the One True AWK are compiled unmodified from
 accepts `REG_STARTEND` with `nmatch` 0. Documented in
 `docs/design/sedawk.md`, tested by `tests/cases/sed`, `tests/cases/awk`
 and the new checks in `tests/cases/libc_ext`.
+
+## make (completed 2026-09-06)
+
+pdpmake, the public domain POSIX make, is compiled unmodified from
+`third_party/make` (downloaded by `tools/fetch_make.sh`) into
+`/bin/make`. The kernel gained `utimensat` with the `setmtime` inode
+operation in mfs and FAT, and `struct stat` carries `st_mtim`; the libc
+gained `utimensat`, `strndup`, `stpcpy`, `realpath`, `access`, `confstr`
+and `ar.h`; `touch` sets modification times. Documented in
+`docs/design/make.md`, tested by `tests/cases/make` and new checks in
+`tests/cases/libc_ext`.
+Modification times are nanoseconds throughout the kernel and in the mfs
+disk inode (format version 4), because pdpmake treats equal times as out
+of date.

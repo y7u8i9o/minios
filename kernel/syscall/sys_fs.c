@@ -239,6 +239,40 @@ long sys_rename(struct trapframe *tf)
     return path2_op(tf, vfs_rename);
 }
 
+/* utimensat(dirfd, path, times, flags): sets the modification time of the
+ * file at path. dirfd must be AT_FDCWD (paths are resolved from the working
+ * directory); times is NULL for the current time or two timespecs of which
+ * the second is the modification time, with UTIME_NOW and UTIME_OMIT in
+ * tv_nsec. The access time is not stored and is ignored. Inode times are
+ * nanoseconds, so the given time is kept exactly by mfs. */
+long sys_utimensat(struct trapframe *tf)
+{
+    if ((int)SYSARG0(tf) != AT_FDCWD)
+        return -EINVAL;
+    if (SYSARG3(tf) != 0)
+        return -EINVAL;
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG1(tf), sizeof path);
+    if (r < 0)
+        return r;
+    int64_t mtime = vfs_now();
+    uintptr_t times = SYSARG2(tf);
+    if (times) {
+        struct timespec ts[2];
+        if (!user_range_ok(times, sizeof ts, false))
+            return -EFAULT;
+        memcpy(ts, (const void *)times, sizeof ts);
+        if (ts[1].tv_nsec == UTIME_OMIT)
+            return 0;
+        if (ts[1].tv_nsec != UTIME_NOW) {
+            if (ts[1].tv_nsec < 0 || ts[1].tv_nsec >= 1000000000)
+                return -EINVAL;
+            mtime = ts[1].tv_sec * 1000000000 + ts[1].tv_nsec;
+        }
+    }
+    return vfs_utimens(path, mtime);
+}
+
 long sys_link(struct trapframe *tf)
 {
     return path2_op(tf, vfs_link);

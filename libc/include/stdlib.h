@@ -52,3 +52,8 @@ void setprogname(const char *name);
 int mblen(const char *s, size_t n);
 int mbtowc(wchar_t *out, const char *s, size_t n);
 int wctomb(char *s, wchar_t wc);
+
+/* Absolute path without . and .. components; there are no symbolic links.
+ * The result is written to resolved (PATH_MAX bytes) or allocated when
+ * resolved is NULL. */
+char *realpath(const char *path, char *resolved);

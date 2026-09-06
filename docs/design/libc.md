@@ -172,3 +172,12 @@ character before anything was assigned returns `EOF`.
 Greek and Cyrillic; every other code point above U+009F is printable and
 neither alphabetic nor a digit. `towupper` and `towlower` map the same
 blocks.
+
+## Additions for make
+
+The port of pdpmake (`make.md`) added `utimensat` with `AT_FDCWD`,
+`UTIME_NOW` and `UTIME_OMIT`, `strndup`, `stpcpy`, `realpath`, `access`
+with its four mode bits, `confstr` for `_CS_PATH` and the header `ar.h`.
+`struct stat` gained `st_mtim`, filled with nanoseconds on mfs and with
+two second resolution on FAT; `st_mtime` is now a macro for
+`st_mtim.tv_sec`, so programs that use the old name compile unchanged.

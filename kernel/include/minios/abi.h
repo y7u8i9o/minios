@@ -16,6 +16,11 @@
 #define S_ISBLK(m) (((m) & S_IFMT) == S_IFBLK)
 #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
 
+struct timespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+};
+
 struct stat {
     uint64_t st_dev;
     uint64_t st_ino;
@@ -27,8 +32,15 @@ struct stat {
     int64_t  st_size;
     int64_t  st_blksize;
     int64_t  st_blocks;
-    int64_t  st_mtime;
+    struct timespec st_mtim;        /* modification time; the filesystems keep seconds */
 };
+#define st_mtime st_mtim.tv_sec
+
+/* utimensat: the directory descriptor meaning the working directory, and
+ * the two special tv_nsec values of a timespec argument. */
+#define AT_FDCWD   (-100)
+#define UTIME_NOW  ((1l << 30) - 1l)
+#define UTIME_OMIT ((1l << 30) - 2l)
 
 /* Directory entry types. */
 #define DT_UNKNOWN 0
@@ -374,11 +386,6 @@ struct cmsghdr {
 
 #define CLOCK_REALTIME  0
 #define CLOCK_MONOTONIC 1
-
-struct timespec {
-    int64_t tv_sec;
-    int64_t tv_nsec;
-};
 
 /* Timer descriptors count in milliseconds. */
 struct timerfd_spec {

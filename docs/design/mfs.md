@@ -72,7 +72,8 @@ changes, which discards files written during earlier runs.
   returning. `read_inode` and `mfs_inode_flush` copy between
   `struct inode` plus `struct mfs_inode_info` (the block pointers) and the
   inode table through the block cache; the `mtime` field of the disk
-  inode holds the modification time in seconds since the epoch, set by
+  inode holds the modification time in nanoseconds since the epoch
+  (format version 4; versions 2 and 3 stored seconds), set by
   `mkfs` from the host file, by `mfs_inode_new`, and by every write and
   truncation (a write that does not grow the file flushes the inode once
   at its end). `put_inode` runs when the last

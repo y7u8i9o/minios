@@ -661,6 +661,11 @@ static int fat_truncate(struct inode *ino, uint64_t size)
     return fat_truncate_locked(ino, size);
 }
 
+static int fat_setmtime(struct inode *ino, int64_t mtime)
+{
+    return fat_inode_flush_time(ino, mtime);
+}
+
 const struct inode_ops fat_dir_ops = {
     .lookup = fat_lookup,
     .create = fat_create,
@@ -669,6 +674,7 @@ const struct inode_ops fat_dir_ops = {
     .rmdir = fat_rmdir,
     .rename = fat_rename,
     .truncate = fat_truncate,
+    .setmtime = fat_setmtime,
 };
 
 /* getdents: positions 0 and 1 are "." and ".." for every directory (the

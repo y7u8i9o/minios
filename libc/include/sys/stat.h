@@ -43,3 +43,8 @@ int mkdir(const char *path, mode_t mode);
  * return 0 without effect. */
 int fchmod(int fd, mode_t mode);
 int chmod(const char *path, mode_t mode);
+
+/* Set the modification time of path: times NULL for now, otherwise the
+ * second timespec, with UTIME_NOW or UTIME_OMIT in tv_nsec. dirfd must be
+ * AT_FDCWD and flags 0. */
+int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags);

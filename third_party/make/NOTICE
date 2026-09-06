@@ -1,0 +1,15 @@
+pdpmake, the public domain POSIX make of Ron Yorston, taken from
+https://github.com/rmyorston/pdpmake at commit
+02f03e299ac141817675e2b0d876741ceef136a4
+on 2026-09-06 with tools/fetch_make.sh.
+
+Copied without modification:
+  src/      check.c, input.c, macro.c, main.c, make.c, make.h, modtime.c,
+            rules.c, target.c, utils.c and the manual page pdpmake.1
+  LICENSE   the public domain dedication
+  README.md, Makefile  the upstream readme and build file (not used)
+
+user/Makefile compiles src/ into build/user/make/ and links /bin/make with
+the default configuration of make.h: the non-POSIX extensions and the
+POSIX 2024 features are enabled. The vendored files are exempt from the
+minios line count and naming conventions. See docs/design/make.md.

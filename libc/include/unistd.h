@@ -61,3 +61,14 @@ int chown(const char *path, uid_t owner, gid_t group);
 struct iovec;
 ssize_t readv(int fd, const struct iovec *iov, int count);
 ssize_t writev(int fd, const struct iovec *iov, int count);
+
+/* access checks that the file exists; permission bits are not enforced. */
+#define F_OK 0
+#define X_OK 1
+#define W_OK 2
+#define R_OK 4
+int access(const char *path, int mode);
+
+/* confstr knows _CS_PATH, the default command search path "/bin". */
+#define _CS_PATH 0
+size_t confstr(int name, char *buf, size_t len);

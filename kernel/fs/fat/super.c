@@ -69,9 +69,11 @@ static void civil_from_days(int64_t z, int *y, int *mo, int *d)
     *y = (int)(yy + (*mo <= 2));
 }
 
-void fat_now(uint16_t *date, uint16_t *time)
+/* Directory entry date and time from nanoseconds since the epoch, clamped
+ * to the years FAT can store. */
+void fat_time_of(int64_t ns, uint16_t *date, uint16_t *time)
 {
-    uint64_t secs = (rtc_epoch_offset_ns() + timer_ns()) / 1000000000ull;
+    uint64_t secs = ns < 0 ? 0 : (uint64_t)ns / 1000000000;
     int y, mo, d;
     civil_from_days((int64_t)(secs / 86400), &y, &mo, &d);
     uint64_t sod = secs % 86400;
@@ -81,6 +83,11 @@ void fat_now(uint16_t *date, uint16_t *time)
         y = 2107;
     *date = (uint16_t)((y - 1980) << 9 | mo << 5 | d);
     *time = (uint16_t)((sod / 3600) << 11 | ((sod / 60) % 60) << 5 | (sod % 60) / 2);
+}
+
+void fat_now(uint16_t *date, uint16_t *time)
+{
+    fat_time_of(vfs_now(), date, time);
 }
 
 /* ---- inodes ---- */
@@ -141,7 +148,7 @@ static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     info->cdate = e.cdate;
     info->ctime_tenths = e.ctime_tenths;
     info->adate = e.adate;
-    i->mtime = fat_epoch(e.mdate, e.mtime);
+    i->mtime = fat_epoch(e.mdate, e.mtime) * 1000000000;
     if (e.attr & FAT_ATTR_DIRECTORY) {
         i->mode = S_IFDIR | 0755;
         i->nlink = 2;
@@ -155,7 +162,8 @@ static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     return 0;
 }
 
-int fat_inode_flush(struct inode *ino)
+/* Write the inode back with mtime as its modification time. */
+int fat_inode_flush_time(struct inode *ino, int64_t mtime)
 {
     struct fat_sb *m = fat_of(ino);
     struct fat_inode_info *info = ino->priv;
@@ -169,11 +177,16 @@ int fat_inode_flush(struct inode *ino)
     e.cluster_hi = m->type == 32 ? (uint16_t)(info->first_cluster >> 16) : 0;
     e.size = S_ISDIR(ino->mode) ? 0 : (uint32_t)ino->size;
     uint16_t date, time;
-    fat_now(&date, &time);
+    fat_time_of(mtime, &date, &time);
     e.mdate = e.adate = date;
     e.mtime = time;
-    ino->mtime = vfs_now();
+    ino->mtime = mtime;
     return fat_write(m, info->entry_off, &e, sizeof e);
+}
+
+int fat_inode_flush(struct inode *ino)
+{
+    return fat_inode_flush_time(ino, vfs_now());
 }
 
 static void fat_put_inode(struct inode *ino)

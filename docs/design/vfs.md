@@ -128,8 +128,8 @@ processes of a pipeline exit together.
 
 `open`, `close`, `read`, `write`, `lseek`, `dup`, `dup2`, `stat`,
 `fstat`, `getdents`, `mkdir`, `unlink`, `rmdir`, `rename`, `link`,
-`pipe`, `mount`, `umount`, `sync`, `chdir` and `getcwd` are implemented
-in `syscall/sys_fs.c`. User buffers are checked with `user_range_ok` and
+`pipe`, `mount`, `umount`, `sync`, `chdir`, `getcwd` and, since the make
+port (`make.md`), `utimensat` are implemented in `syscall/sys_fs.c`. User buffers are checked with `user_range_ok` and
 then accessed directly. `read` and `write` on descriptors 0 to 2 go
 through the console device like any other file.
 

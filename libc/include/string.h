@@ -27,3 +27,6 @@ char *strtok_r(char *s, const char *delim, const char **save);
 char *strdup(const char *s);
 size_t strlcat(char *dst, const char *src, size_t size);
 char *strerror(int errnum);
+
+char *strndup(const char *s, size_t n);
+char *stpcpy(char *dst, const char *src);

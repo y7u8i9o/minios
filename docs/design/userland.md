@@ -136,6 +136,12 @@ unmodified from `third_party/`; see [sed and awk](sedawk.md) for the
 build, the libc additions, the differences from the GNU programs and the
 tests.
 
+## make
+
+`/bin/make` is pdpmake, the public domain POSIX make, compiled unmodified
+from `third_party/make`; see [make](make.md). `touch` sets the
+modification time of existing files since the same change.
+
 ## Editor
 
 `edit file` (`user/edit/edit.c`) is a nano style editor. It loads the

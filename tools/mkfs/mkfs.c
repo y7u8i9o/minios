@@ -5,8 +5,9 @@
  *   mkfs --cat <image> <path>         print the contents of a file
  *
  * Exits non zero on any error. --dump reports "clean" or "unclean" and
- * the state of the journal. Images are written in format version 3, which
- * places a journal between the inode table and the data blocks.
+ * the state of the journal. Images are written in format version 4, which
+ * places a journal between the inode table and the data blocks and stores
+ * modification times in nanoseconds.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,18 @@
 #define S_IFMT_  0170000
 #define S_IFDIR_ 0040000
 #define S_IFREG_ 0100000
+
+/* Modification time of a host file in nanoseconds since the epoch. */
+static uint64_t host_mtime_ns(const struct stat *st)
+{
+#if defined(__APPLE__) && defined(_POSIX_C_SOURCE) && !defined(_DARWIN_C_SOURCE)
+    return (uint64_t)st->st_mtime * 1000000000ull + (uint64_t)st->st_mtimensec;
+#elif defined(__APPLE__)
+    return (uint64_t)st->st_mtimespec.tv_sec * 1000000000ull + (uint64_t)st->st_mtimespec.tv_nsec;
+#else
+    return (uint64_t)st->st_mtim.tv_sec * 1000000000ull + (uint64_t)st->st_mtim.tv_nsec;
+#endif
+}
 
 static uint8_t *img;
 static uint64_t img_blocks;
@@ -177,7 +190,7 @@ static void add_tree(uint32_t dir, const char *path)
             die(full);
         if (S_ISDIR(st.st_mode)) {
             uint32_t sub = make_dir(dir);
-            dinode(sub)->mtime = (uint64_t)st.st_mtime;
+            dinode(sub)->mtime = host_mtime_ns(&st);
             add_dirent(dir, e->d_name, sub);
             add_tree(sub, full);
         } else if (S_ISREG(st.st_mode)) {
@@ -192,7 +205,7 @@ static void add_tree(uint32_t dir, const char *path)
             struct mfs_dinode *di = dinode(ino);
             di->mode = S_IFREG_ | 0755;
             di->nlink = 1;
-            di->mtime = (uint64_t)st.st_mtime;
+            di->mtime = host_mtime_ns(&st);
             write_data(ino, data, (uint64_t)st.st_size);
             free(data);
             add_dirent(dir, e->d_name, ino);
@@ -239,7 +252,7 @@ static void format(uint64_t nblocks)
     bitmap_set(sb->inode_bitmap_start, 0);
     sb->free_inodes = ninodes - 1;
     uint32_t root = make_dir(0);
-    dinode(root)->mtime = (uint64_t)time(NULL);
+    dinode(root)->mtime = (uint64_t)time(NULL) * 1000000000ull;
     if (root != MFS_ROOT_INO)
         die("root inode is not 1");
 }

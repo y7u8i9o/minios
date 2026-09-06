@@ -19,6 +19,7 @@
 #include <strings.h>
 #include <libgen.h>
 #include <err.h>
+#include <limits.h>
 
 static void test_terminal_libc(void);
 static void test_stdio_additions(void);
@@ -360,5 +361,32 @@ static void test_port_additions(void)
     struct stat st;
     CHECK(lstat("/bin/sh", &st) == 0 && S_ISREG(st.st_mode) && fchmod(0, 0644) == 0, "lstat and fchmod");
     CHECK(!strcmp(getprogname(), "libcexttest"), "getprogname is %s", getprogname());
+
+    char *dup = strndup("abcdef", 3);
+    CHECK(dup && !strcmp(dup, "abc"), "strndup");
+    free(dup);
+    char joined[16];
+    char *end = stpcpy(stpcpy(joined, "ab"), "cd");
+    CHECK(!strcmp(joined, "abcd") && end == joined + 4, "stpcpy");
+    char pathbuf[PATH_MAX];
+    CHECK(realpath("/bin/../bin/./sh", pathbuf) == pathbuf && !strcmp(pathbuf, "/bin/sh"), "realpath normalizes");
+    char *alloc = realpath("/bin//sh", NULL);
+    CHECK(alloc && !strcmp(alloc, "/bin/sh"), "realpath allocates");
+    free(alloc);
+    CHECK(realpath("/bin/nosuchfile", pathbuf) == NULL && errno == ENOENT, "realpath of a missing file");
+    CHECK(access("/bin/sh", X_OK) == 0 && access("/bin/nosuchfile", F_OK) < 0, "access");
+    char cs[16];
+    CHECK(confstr(_CS_PATH, cs, sizeof cs) == 5 && !strcmp(cs, "/bin"), "confstr");
+
+    FILE *tf = fopen("/tmp/utime-test", "w");
+    if (tf) fclose(tf);
+    struct timespec times[2] = { { 0, UTIME_OMIT }, { 86400 * 365, 0 } };
+    CHECK(utimensat(AT_FDCWD, "/tmp/utime-test", times, 0) == 0 && stat("/tmp/utime-test", &st) == 0
+          && st.st_mtim.tv_sec == 86400 * 365 && st.st_mtim.tv_nsec == 0, "utimensat sets a time");
+    times[1].tv_nsec = UTIME_NOW;
+    CHECK(utimensat(AT_FDCWD, "/tmp/utime-test", times, 0) == 0 && stat("/tmp/utime-test", &st) == 0
+          && st.st_mtime > 1600000000, "utimensat with UTIME_NOW");
+    CHECK(utimensat(AT_FDCWD, "/tmp/nosuchfile", NULL, 0) < 0 && errno == ENOENT, "utimensat of a missing file");
+    unlink("/tmp/utime-test");
     CHECK(strcasecmp(getprogname(), "LIBCEXTTEST") == 0, "program name compares");
 }

@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #define MFS_MAGIC          0x3153464du   /* "MFS1" */
-#define MFS_VERSION        3             /* 2: journal region (M36), 3: 256 byte directory entries */
+#define MFS_VERSION        4             /* 2: journal region (M36), 3: 256 byte directory entries, 4: mtime in nanoseconds */
 #define MFS_BLOCK_SIZE     4096
 #define MFS_NDIRECT        12
 #define MFS_INODE_SIZE     128
@@ -44,7 +44,7 @@ struct mfs_dinode {
     uint32_t mode;                  /* S_IF* and permission bits */
     uint32_t nlink;
     uint64_t size;
-    uint64_t mtime;
+    uint64_t mtime;                 /* nanoseconds since the epoch (version 4) */
     uint32_t direct[MFS_NDIRECT];
     uint32_t indirect;
     uint32_t dindirect;

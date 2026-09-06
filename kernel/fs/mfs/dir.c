@@ -286,6 +286,12 @@ static int mfs_truncate(struct inode *ino, uint64_t size)
     return mfs_truncate_locked(ino, size);
 }
 
+static int mfs_setmtime(struct inode *ino, int64_t mtime)
+{
+    ino->mtime = mtime;
+    return mfs_inode_flush(ino);
+}
+
 const struct inode_ops mfs_dir_ops = {
     .lookup = mfs_lookup,
     .create = mfs_create,
@@ -295,6 +301,7 @@ const struct inode_ops mfs_dir_ops = {
     .link = mfs_link,
     .rename = mfs_rename,
     .truncate = mfs_truncate,
+    .setmtime = mfs_setmtime,
 };
 
 static long mfs_getdents(struct file *f, struct dirent *buf, size_t count)

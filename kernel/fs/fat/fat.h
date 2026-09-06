@@ -72,8 +72,10 @@ static inline int fat_write(struct fat_sb *m, uint64_t off, const void *buf, siz
 /* Write size, first cluster and modification time to the entry. Caller
  * holds ino->lock. */
 int fat_inode_flush(struct inode *ino);
+int fat_inode_flush_time(struct inode *ino, int64_t mtime);
 /* Current time in FAT form. */
 void fat_now(uint16_t *date, uint16_t *time);
+void fat_time_of(int64_t ns, uint16_t *date, uint16_t *time);
 static inline struct fat_sb *fat_of(struct inode *ino)
 {
     return ino->sb->priv;

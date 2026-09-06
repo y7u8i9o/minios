@@ -16,7 +16,7 @@ PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings fi
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk)
+BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make)
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
 # are made here instead of in luaconf.h (see docs/design/lua.md).
@@ -145,6 +145,22 @@ $(ROOT)/bin/awk: $(AWK_OBJS) $(LIBC) $(CRT0)
 	cp $(OUT)/awk.elf $@
 
 -include $(SED_OBJS:.o=.d) $(AWK_OBJS:.o=.d)
+
+# make is pdpmake, compiled unmodified from third_party/make (see
+# docs/design/make.md).
+MAKE_SRC  := ../third_party/make/src
+MAKE_OBJS := $(patsubst $(MAKE_SRC)/%.c,$(OUT)/make/%.o,$(wildcard $(MAKE_SRC)/*.c))
+
+$(OUT)/make/%.o: $(MAKE_SRC)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(MAKE_SRC) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/make: $(MAKE_OBJS) $(LIBC) $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/make.elf $(ULDFLAGS) $(CRT0) $(MAKE_OBJS) $(LIBC) -lgcc
+	cp $(OUT)/make.elf $@
+
+-include $(MAKE_OBJS:.o=.d)
 
 $(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
