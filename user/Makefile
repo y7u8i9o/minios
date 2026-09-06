@@ -21,7 +21,7 @@ PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings fi
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar)
+BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc)
 LIBS   := $(addprefix $(ROOT)/lib/,ld.so $(addsuffix .so,$(SHARED)))
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
@@ -46,7 +46,7 @@ HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/hom
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp
+all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -207,6 +207,96 @@ $(ROOT)/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/tar.elf $@
 
 -include $(TAR_OBJS:.o=.d)
+
+# tcc is the Tiny C Compiler, compiled unmodified from the submodule
+# third_party/tinycc as one source with the configuration on the command
+# line (docs/design/tcc.md). The runtime library libtcc1.a is built from
+# lib/ with the cross compiler. tcc-support installs the system headers,
+# the C runtime objects and the compiler's own headers that tcc needs to
+# compile programs on minios.
+TCC_SRC  := ../third_party/tinycc
+TCC_GEN  := $(OUT)/tcc
+TCC_VERSION := $(shell cat $(TCC_SRC)/VERSION)
+TCC_DEFS := -DONE_SOURCE=1 -DTCC_TARGET_X86_64 -DCONFIG_TCC_SEMLOCK=0 -DCONFIG_TCC_BCHECK=0 \
+            -DCONFIG_TCC_BACKTRACE=0 -DTCC_VERSION='"$(TCC_VERSION)"' -DCONFIG_TCCDIR='"/usr/lib/tcc"' \
+            -DCONFIG_TCC_ELFINTERP='"/lib/ld.so"' -DCONFIG_TCC_SYSINCLUDEPATHS='"{B}/include:/usr/include"' \
+            -DCONFIG_TCC_LIBPATHS='"{B}:/lib"' -DCONFIG_TCC_CRTPREFIX='"/lib"'
+TCC_LIB1 := libtcc1.c va_list.c builtin.c stdatomic.c dsohandle.c alloca.S alloca-bt.S atomic.S
+TCC_LIB1_OBJS := $(addprefix $(TCC_GEN)/lib/,$(addsuffix .o,$(basename $(TCC_LIB1))))
+TCC_TESTS := $(TCC_SRC)/tests/tests2
+
+$(TCC_GEN)/config.h:
+	@mkdir -p $(dir $@)
+	printf '/* The configuration of tcc is given on the compiler command line. */\n' > $@
+
+$(TCC_GEN)/tcc.o: $(TCC_SRC)/tcc.c $(TCC_GEN)/config.h Makefile
+	@mkdir -p $(dir $@)
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -msse2 -mfpmath=sse -O2 -g -fno-builtin -w \
+	    $(TCC_DEFS) -I../libc/include -I../kernel/include -I$(TCC_GEN) -I$(TCC_SRC) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/tcc.elf $(ULDFLAGS) $(CRT0) $< -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/tcc.elf $@
+
+$(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -fno-omit-frame-pointer -msse2 -mfpmath=sse -O2 -w \
+	    -DTCC_TARGET_X86_64 -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
+
+$(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.S
+	@mkdir -p $(dir $@)
+	$(CC) -DTCC_TARGET_X86_64 -I$(TCC_SRC) -c -o $@ $<
+
+$(ROOT)/usr/lib/tcc/libtcc1.a: $(TCC_LIB1_OBJS)
+	@mkdir -p $(dir $@)
+	rm -f $@
+	$(AR) rcs $@ $(TCC_LIB1_OBJS)
+
+$(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_X86_64 -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
+
+# crt1.o is the C runtime start; crti.o and crtn.o are the empty objects
+# tcc links around every program; libm.a is empty because the math
+# functions are in libc.so.
+$(ROOT)/lib/crt1.o: $(CRT0)
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+$(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o:
+	@mkdir -p $(dir $@)
+	$(CC) -c -x assembler /dev/null -o $@
+
+$(ROOT)/lib/libm.a:
+	@mkdir -p $(dir $@)
+	rm -f $@
+	$(AR) rcs $@
+
+# A selection of the tcc test suite runs on minios (tests/cases/tcc): the
+# programs that need neither arguments, input files, bound checking,
+# threads, thread local storage nor a specific assembler.
+TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 06_case 07_function \
+    08_while 09_do_while 10_pointer 11_precedence 12_hashdefine 13_integer_literals 14_if 15_recursion \
+    16_nesting 17_enum 18_include 19_pointer_arithmetic 20_pointer_comparison 21_char_array \
+    22_floating_point 23_type_coercion 24_math_library 25_quicksort 26_character_constants 27_sizeof \
+    28_strings 29_array_address 30_hanoi 33_ternary_op 35_sizeof \
+    36_array_initialisers 37_sprintf 38_multiple_array_index 39_typedef 41_hashif 42_function_pointer \
+    43_void_param 44_scoped_declarations 45_empty_for 47_switch_return 48_nested_break \
+    49_bracket_evaluation 50_logical_second_arg 51_static 52_unnamed_enum 54_goto 55_lshift_type \
+    61_integers 64_macro_nesting 67_macro_concat 70_floating_point_literals
+
+.PHONY: tcc-support
+tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/lib/crt1.o $(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o $(ROOT)/lib/libm.a
+	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/lib/tcc/include $(ROOT)/usr/share/tcc/tests2
+	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
+	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
+	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
+	@cp -p $(TCC_SRC)/include/*.h $(ROOT)/usr/lib/tcc/include/
+	@for t in $(TCC_TEST_NAMES); do cp -p $(TCC_TESTS)/$$t.c $(TCC_TESTS)/$$t.expect $(ROOT)/usr/share/tcc/tests2/; done
+	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/
+
+-include $(TCC_GEN)/tcc.d
 
 # The loader is a freestanding position independent object with its own
 # entry; init is linked statically, so that the system starts even when

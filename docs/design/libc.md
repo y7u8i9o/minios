@@ -197,3 +197,12 @@ The ar utility and the sbase tar (`artar.md`) added `openat` and
 gid functions, `lchown`, `symlink` and `readlink` (both refused: there
 are no symbolic links), `mknod` and `mkfifo` (refused), `execl`,
 `execlp` and `sys/sysmacros.h`.
+
+## Additions for tcc
+
+The port of the Tiny C Compiler (`tcc.md`) added `dlfcn.h` over the
+libraries the loader mapped (`dlopen`, `dlsym`, `dlclose`, `dlerror`),
+`strtoll`, `strtoull`, `strtold`, `inttypes.h` with `strtoimax`,
+`strtoumax` and `imaxabs`, a `stdint.h` of the C library, and a
+`limits.h` that gives the integer limits itself when the compiler is not
+gcc.

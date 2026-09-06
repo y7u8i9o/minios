@@ -17,8 +17,12 @@ long atol(const char *s);
 double atof(const char *s);
 long strtol(const char *s, char **end, int base);
 unsigned long strtoul(const char *s, char **end, int base);
+long long strtoll(const char *s, char **end, int base);
+unsigned long long strtoull(const char *s, char **end, int base);
 double strtod(const char *s, char **end);
 float strtof(const char *s, char **end);
+/* strtold parses with the precision of double. */
+long double strtold(const char *s, char **end);
 size_t mbstowcs(wchar_t *dst, const char *src, size_t len);
 size_t wcstombs(char *dst, const wchar_t *src, size_t len);
 int abs(int v);

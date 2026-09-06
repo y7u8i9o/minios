@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -552,4 +553,36 @@ void setprogname(const char *name)
 {
     const char *slash = strrchr(name, '/');
     progname = slash != NULL ? slash + 1 : name;
+}
+
+/* long is 64 bits on x86_64, so the long long conversions are the long
+ * ones. */
+long long strtoll(const char *s, char **end, int base)
+{
+    return strtol(s, end, base);
+}
+
+unsigned long long strtoull(const char *s, char **end, int base)
+{
+    return strtoul(s, end, base);
+}
+
+long double strtold(const char *s, char **end)
+{
+    return strtod(s, end);
+}
+
+intmax_t strtoimax(const char *s, char **end, int base)
+{
+    return strtol(s, end, base);
+}
+
+uintmax_t strtoumax(const char *s, char **end, int base)
+{
+    return strtoul(s, end, base);
+}
+
+intmax_t imaxabs(intmax_t v)
+{
+    return v < 0 ? -v : v;
 }

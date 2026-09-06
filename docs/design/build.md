@@ -234,3 +234,9 @@ gui/$(id -u)/com.minios.fold-develop` shows its state;
 missing and never rebuilds. `DATA` names another file, `DATA_MB` its size
 (256), and `make clean-data` removes it. `tools/run.sh` attaches it as the
 third virtio-blk device; `--data FILE` and `--no-data` override that.
+
+## Submodules
+
+`third_party/tinycc` is a git submodule; run `git submodule update --init`
+after cloning. The other third party sources are copies fetched by the
+scripts in `tools/`.

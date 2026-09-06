@@ -1593,3 +1593,13 @@ once and never rebuilds, attached as `vdc` and mounted at boot by
 filesystems, and `mkfs` includes dot files. Documented in
 `docs/design/storage.md`, tested by `tests/cases/persist` with a post
 script that reads the volume on the host.
+
+## tcc (completed 2026-09-06)
+
+The Tiny C Compiler is compiled unmodified from the submodule
+`third_party/tinycc` into `/bin/tcc`, with its runtime library built by
+the cross compiler, the libc headers installed under `/usr/include`, the
+C runtime objects under `/lib` and the loader as the ELF interpreter, so
+that programs compile, link and run on minios; `-run` works through the
+new `dlfcn.h` of libc. Documented in `docs/design/tcc.md`, tested by
+`tests/cases/tcc` with 54 programs of the upstream suite.

@@ -142,6 +142,11 @@ tests.
 from `third_party/make`; see [make](make.md). `touch` sets the
 modification time of existing files since the same change.
 
+## tcc
+
+`/bin/tcc` is the Tiny C Compiler, compiled unmodified from the
+submodule `third_party/tinycc`; see [tcc](tcc.md).
+
 ## fsinit and mount
 
 `fsinit` mounts the entries of `/etc/fstab` at boot and seeds a fresh

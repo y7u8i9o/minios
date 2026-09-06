@@ -94,7 +94,7 @@ The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `mat
 
 `/bin/sh` parses complete command trees (`if`, `for`, `while`, `until`, `case`, functions, subshells, brace groups), expands parameters, command substitutions, arithmetic and pathnames, applies redirections and here documents, and controls jobs. Interactive input is read by `libedit`, which implements line editing, history and completion.
 
-The 75 programs in `user/coreutils/` are the file, text, process and system utilities (`ls`, `grep`, `find`, `xargs`, `sort`, `diff`, `gzip`, `less`, `man`, `ps`, `prof`, `prlimit`, `mount`, `sync`, `shutdown`) and the terminal games (`2048`, `snake`, `life`, `maze`, `matrix`, `sl`). `/bin/sed` is the sed of FreeBSD, `/bin/awk` the One True AWK of Brian Kernighan, `/bin/make` the public domain POSIX make pdpmake and `/bin/tar` the tar of sbase, all four compiled unmodified from `third_party/`. `ar` is written for minios and produces the archive format of the GNU binutils. Manual pages are installed under `/usr/share/man`.
+The 75 programs in `user/coreutils/` are the file, text, process and system utilities (`ls`, `grep`, `find`, `xargs`, `sort`, `diff`, `gzip`, `less`, `man`, `ps`, `prof`, `prlimit`, `mount`, `sync`, `shutdown`) and the terminal games (`2048`, `snake`, `life`, `maze`, `matrix`, `sl`). `/bin/sed` is the sed of FreeBSD, `/bin/awk` the One True AWK of Brian Kernighan, `/bin/make` the public domain POSIX make pdpmake, `/bin/tar` the tar of sbase and `/bin/tcc` the Tiny C Compiler, all five compiled unmodified from `third_party/`. tcc compiles and links programs on minios against the shared libraries. `ar` is written for minios and produces the archive format of the GNU binutils. Manual pages are installed under `/usr/share/man`.
 
 Lua 5.5.1 is compiled unmodified from `third_party/lua/src/` into `/bin/lua` and `/bin/luac`. `user/lua/` adds the modules `fs` (directory listing, file status, whole file reads and writes), `sys` (process start, MIME handlers, signals, system information) and `gui`, which binds the `libgui` framework. `user/share/apps/clock.lua` and `pong.lua` are the clock and pong applications written in Lua. Launcher files on the desktop start them.
 
@@ -137,7 +137,7 @@ minios/
   user/
     init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  desktop/
     settings/  files/  calc/  audiod/  apps/  lua/  tests/  etc/  share/  home/
-  third_party/          Limine, Lua 5.5.1, FreeBSD sed, the One True AWK, pdpmake, the sbase tar, DejaVu, Noto Sans, Latin Modern, Unifont, Font Awesome
+  third_party/          Limine, Lua 5.5.1, FreeBSD sed, the One True AWK, pdpmake, the sbase tar, tinycc (a submodule), DejaVu, Noto Sans, Latin Modern, Unifont, Font Awesome
   tools/
     mkfs/  fsck/        mfs image tools
     mkfat/              FAT image tool
@@ -174,7 +174,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 126 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 127 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
 
 ## Code size
 

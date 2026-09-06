@@ -1,0 +1,40 @@
+TCC(1)                      User Commands                    TCC(1)
+
+NAME
+    tcc - Tiny C Compiler
+
+SYNOPSIS
+    tcc [options] [-o outfile] [-c] file...
+    tcc [options] -run file [arguments...]
+
+DESCRIPTION
+    tcc compiles, assembles and links C programs. Without -c or -shared it
+    produces an executable linked against the shared libraries in /lib.
+    With -run it compiles the file into memory and runs it with the
+    remaining arguments.
+
+OPTIONS
+    -c            compile to an object file
+    -o file       write the output to file
+    -shared       produce a shared object
+    -run          compile and run
+    -E            preprocess only
+    -Dname[=v]    define a macro
+    -Uname        undefine a macro
+    -Idir         add an include directory
+    -Ldir         add a library directory
+    -lname        link with libname.so or libname.a
+    -g            add debugging information
+    -w            suppress warnings
+    -Wall         enable warnings
+    -v            print the version, twice for the search paths
+    -static       link statically (libc.a is not installed)
+
+FILES
+    /usr/include            system headers
+    /usr/lib/tcc/include    the compiler's own headers
+    /usr/lib/tcc/libtcc1.a  runtime library
+    /lib/crt1.o             C runtime start
+
+SEE ALSO
+    make(1), ar(1), tcc-doc in the tinycc sources

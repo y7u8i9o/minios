@@ -1,0 +1,12 @@
+tinycc, the Tiny C Compiler, is a git submodule at third_party/tinycc from
+https://github.com/TinyCC/tinycc.git (the mirror of the repository of
+Fabrice Bellard and the tinycc developers), at the commit recorded in
+this repository's index, release 0.9.28rc. The compiler is under the GNU
+Lesser General Public License, version 2.1 (COPYING in the submodule).
+
+Nothing in the submodule is modified. user/Makefile compiles tcc.c as one
+source with the configuration on the command line (config.h is empty),
+builds the runtime library libtcc1.a from lib/ with the cross compiler,
+and installs the compiler's own headers from include/. The files are
+exempt from the minios line count and naming conventions. See
+docs/design/tcc.md.
