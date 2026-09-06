@@ -195,3 +195,22 @@ in `KVM_CASES` with `ACCEL=kvm`; run it on the Linux machine after every
 change to the kernel, because TCG follows Intel semantics and hides
 processor and hypervisor differences (`platform.md`). `make run` follows the same default and
 uses `QEMU_ACCEL` for an override (see Running above).
+
+## Branches and the daily fold into develop
+
+The repository has three long lived branches: `bleeding-edge` for new work,
+`develop` for stabilised work and `main` for releases. Feature branches are
+named `bleeding-edge-<feature>` or `develop-<feature>`.
+
+`tools/fold-develop.sh` merges every `bleeding-edge` and `bleeding-edge-*`
+branch into `develop` when at least one of them received a commit in the
+last 24 hours. The merge runs in a temporary worktree, so the checkout in
+use is untouched. A conflict aborts that merge, leaves `develop` unchanged
+and exits with status 1. `--force` merges without a recent commit; `--push`
+(or `PUSH=1`) pushes `develop` to `origin` after a change. The script
+appends one line per action to `~/Library/Logs/minios-fold-develop.log`.
+
+The launchd agent `~/Library/LaunchAgents/com.minios.fold-develop.plist`
+runs the script every day at 03:00 on this machine. `launchctl print
+gui/$(id -u)/com.minios.fold-develop` shows its state;
+`launchctl kickstart gui/$(id -u)/com.minios.fold-develop` runs it at once.

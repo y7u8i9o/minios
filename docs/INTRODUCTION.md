@@ -1,155 +1,194 @@
 # MiniOS
 
-MiniOS is a monolithic x86_64 kernel written in C, booted by the Limine bootloader and running under QEMU. The project implements a complete operating system from first principles, including memory management, process scheduling, a custom filesystem, device drivers, a windowing system and a suite of user space applications.
+MiniOS is a monolithic x86_64 kernel written in C with a custom user space. It boots through the Limine bootloader and runs under QEMU. The kernel implements physical and virtual memory management, processes and threads on several processors, a virtual filesystem with two disk filesystems, device drivers, and a POSIX subset of system calls. User space consists of a C library, a display server with a client toolkit, an audio server, a shell, command line utilities, graphical applications, and the Lua 5.5 interpreter.
 
-## Architecture
+The release is `0.1.0`, recorded in `VERSION` under semantic versioning. `tools/version.sh` numbers every kernel link and records the commit hash and date. `uname`, the boot log and the System page of Settings print the release, the build number and the commit.
 
-- **Target**: x86_64 only, QEMU with the Q35 machine model
-- **Boot**: Limine boot protocol, higher half kernel mapped at `0xffffffff80000000`
-- **Language**: C17 freestanding with GNU as assembly (`.S` files)
-- **Kernel type**: Monolithic, non preemptible (rescheduling occurs on return to user mode)
+## Design decisions
 
-## Subsystems
+| Area | Decision |
+|---|---|
+| Processor | x86_64, under QEMU with the Q35 machine. TCG, KVM and HVF are supported. |
+| Boot | Limine boot protocol. The kernel is linked at `0xffffffff80000000`. The image boots under BIOS and UEFI. |
+| Language | C17 freestanding, compiled with `x86_64-elf-gcc`. Assembly uses GNU as syntax. The kernel is compiled without floating point instructions. |
+| Kernel | Monolithic. The scheduler runs on return to user mode. Kernel code runs until it returns, blocks or yields. |
+| Per CPU state | One `struct cpu` per processor, reached through the GS base. The current thread is a field of that structure. |
+| Locking | Every shared structure names the lock that protects it. `docs/design/locking.md` records the lock order. |
+| Scope | One user. Permission bits are stored and ignored. The system has no network stack. Executables are static ELF64. |
 
-### Memory Management
+## Memory management
 
-- **Physical memory**: Buddy allocator (orders 0 to 10, 4 KiB to 4 MiB pages)
-- **Kernel heap**: Slab allocator with size class caches (16 B to 8 KiB)
-- **Virtual memory**: Per process page tables, copy on write fork, swap to a virtio-blk device
-- **Page replacement**: Clock algorithm for anonymous pages
+The buddy allocator in `kernel/mm/pmm.c` allocates physical frames in orders 0 to 12 (4 KiB to 16 MiB). Each CPU has a cache of 32 order zero frames that is used before the free lists. The slab allocator in `kernel/mm/slab.c` allocates kernel heap objects in size classes from 16 bytes to 8 KiB, a magazine per CPU and cache, and optional red zones and poisoning.
 
-### Process and Thread Model
+Every process has an address space of regions. Pages are allocated on first access. `fork` shares pages copy on write. `mmap` creates anonymous and file backed regions, private or shared. `mprotect` changes their protection. `madvise` changes their flags, and `madvise(MADV_FREE)` marks pages that the swap daemon may discard without writing them. Anonymous private regions may be backed by 2 MiB pages, on request through `MAP_HUGETLB` or after `madvise(MADV_HUGEPAGE)`. The swap daemon writes anonymous pages to a virtio-blk swap device when the free frame count falls below a watermark, selecting pages with a clock algorithm. Resident page counts are kept in per CPU counters and reported through `/dev/meminfo`.
 
-- Processes own address spaces, file tables and thread lists
-- Threads are the scheduling unit
-- MLFQ scheduler with 8 priority queues, time slice doubling per level, periodic priority boost
-- User threads through a `clone` style `thread_create` syscall
+## Processes, threads and scheduling
 
-### Filesystem
+A process consists of an address space, a file descriptor table, signal state, resource limits and a list of threads. Threads are scheduled by a multilevel feedback queue with eight levels. Each CPU has a run queue with a lock of that CPU and an inbox for wakeups sent by other CPUs. The scheduler locks are these per CPU run queue locks.
 
-- VFS layer with mount points, path resolution and a file descriptor table per process
-- **mfs**: A custom inode based filesystem with 12 direct, one indirect and one double indirect block pointers
-- **devfs**: Device nodes including `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/kbd`, `/dev/mouse`, `/dev/fb0`, `/dev/vda`, `/dev/pcm0`
-- **initrdfs**: Read only initrd for early boot
+User threads have thread local storage through the FS base and block on futexes. The C library implements the pthread interface on these primitives and is safe to call from several threads.
 
-### Interprocess Communication
+Signals are implemented as in POSIX, with process groups, a controlling terminal and job control. `init` shuts the system down in order when it receives the shutdown signal. Each process has resource limits (`RLIMIT_AS`, `RLIMIT_DATA`, `RLIMIT_STACK`, `RLIMIT_NOFILE`, `RLIMIT_NPROC`, `RLIMIT_FSIZE`, `RLIMIT_CPU`) and user and system time accounting.
 
-- Pipes with shell redirection support
-- POSIX style signals, including stop/continue job-control signals
-- Shared memory objects
-- Message queues
+The kernel reads the CMOS clock at boot. `clock_gettime` returns `CLOCK_MONOTONIC` from the TSC based timer and `CLOCK_REALTIME` from that plus the boot offset.
 
-### Device Drivers
+## Symmetric multiprocessing
 
-- Serial (COM1) for console mirroring and debug output
-- Framebuffer console with an 8x16 bitmap font
-- PS/2 keyboard and mouse
-- Local APIC timer (calibrated against the PIT)
-- I/O APIC for interrupt routing
-- PCI enumeration
-- virtio-blk (modern PCI interface) with a write back block cache
-- virtio-snd playback with an interrupt-driven, pollable PCM period queue
+Application processors are started through the Limine multiprocessor protocol. Each processor calibrates its local APIC timer. Every unmap calls `tlb_flush_range`, which sends the shootdown interprocessor interrupts.
 
-### Symmetric Multiprocessing
+The common system call, byte stream and allocation paths use per CPU state and atomic operations in place of global locks. Lookups of file descriptors, signal state and regions are done under RCU and then increment a reference count. Statistics use per CPU counters. Wakeups and RCU callbacks are queued in multi-producer single-consumer queues. Byte streams use single-producer single-consumer rings. `docs/design/lockfree.md` states the ordering rules and the correctness argument for each path.
 
-- Application processors started through the Limine MP protocol
-- Per CPU `struct cpu` accessed through the GS base
-- Per CPU run queues with work stealing
-- TLB shootdown IPIs
+`/dev/lockstat` reports acquisition counts, contention and hold times per lock. `/dev/profile` samples the instruction pointer and the call chain of a process or of every process on a timer. A sample taken inside a spinlock section is attributed to the code that acquired the lock.
 
-### Windowing System
+## Filesystems and storage
 
-- The X12 display server (`user/compositor`, installed as `/bin/x12`) owns the framebuffer, mouse and keyboard and is reached over a Unix domain socket with descriptor passing; it uses a Wayland-inspired protocol of our own (`protocol/*.xml`, `libwire`, code generated by `tools/wscan`)
-- Surfaces with shared memory buffer pools, damage, a 60 Hz frame clock with frame callbacks, occlusion culling, alpha blending
-- Roles: toplevels with server side decorations (title bar, close, maximize and minimize boxes, resize grip), popups with positioners, layer surfaces; a seat with keymaps; a data device for the clipboard and drag and drop
-- A panel client with a launcher menu, a task list and a clock
-- Client library (`libgui`) with a retained widget tree, signals, themes, partial redraws and a text editor widget
-- Outline font rendering (`libfont`) for TrueType and CFF OpenType fonts with kerning
+The VFS in `kernel/fs/vfs.c` resolves paths across mount points. Each process has a file descriptor table with `O_CLOEXEC` and `O_NONBLOCK` flags. `poll` accepts every descriptor type.
 
-### Audio
+mfs is the native filesystem. It uses 4 KiB blocks. An inode has twelve direct pointers, one indirect pointer and one double indirect pointer. A zero pointer reads as a block of zeros. A write ahead journal is replayed at mount. The host tools `mkfs` and `fsck` build and check images. The FAT driver mounts FAT12, FAT16 and FAT32 volumes with long file names for reading and writing. The host tool `mkfat` builds images. initrdfs is a read only archive that is mounted before the root filesystem is mounted.
 
-- Exclusive raw PCM playback through `/dev/pcm0`, backed by virtio-snd
-- User-space `audiod` server with a device-clocked multi-stream mixer,
-  per-stream volume and underrun reporting
-- Shared memfd buffer pools and an `audio.xml` control protocol generated by
-  `wscan`; `libaudio` provides the application-facing blocking and event-loop API
+devfs contains the device nodes: `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/fb0`, `/dev/vda`, `/dev/pcm0`, `/dev/input/eventN`, `/dev/klog`, `/dev/proc`, `/dev/meminfo`, `/dev/ksyms`, `/dev/profile` and `/dev/lockstat`.
 
-### User Space
+The block layer has a write back cache of 256 buffers of 4 KiB. The virtio-blk driver uses the modern PCI interface.
 
-- Own minimal libc (`libc/`) with stdio, stdlib, string, math, unistd, fcntl, dirent, sys/wait, sys/stat, errno, assert, ctype, termios, signal and mman headers
-- Desktop-session audio server, a minimal `playtone` client and an interactive
-  subtractive synthesizer
-- User-space scalar libm for float, double and x87 long double, hexadecimal and decimal conversion, floating-environment control, printf floating formatting, and an SSE2 `f32x4`/`f64x2` vector API with vectorized array operations
-- Shell with quoting, environment variables, pipelines, redirection, and
-  foreground/background job control (`jobs`, `fg`, `bg`, control Z)
-- Userland tools include `find`, `xargs`, `pager`, `gzip`, `man`, and the
-  conventional file, text, process, and system utilities
-- Modal text editor (`edit`)
-- Scripting interpreter (`mint`)
-- GUI applications: terminal emulator, file browser, text viewer, RPN/algebraic
-  scientific calculator, clock, paint, pong
+## Interprocess communication
 
-## Repository Layout
+The kernel implements pipes, Unix domain stream sockets with `socketpair` and descriptor passing through `SCM_RIGHTS`, anonymous shared memory through `memfd_create`, named shared memory through `shm_open`, message queues through `mq_open`, `eventfd`, `timerfd`, futexes and pseudo terminals.
+
+## Device drivers
+
+| Driver | Function |
+|---|---|
+| `serial.c` | COM1. The console output is copied to it, and the boot tests read their results from it. |
+| `fbcon.c`, `font.c` | Framebuffer console with an 8x16 bitmap font and SGR attributes. |
+| `kernel/input/` | Input core. Events in the Linux format are written to `/dev/input/eventN` and to the console terminal. |
+| `ps2kbd.c`, `ps2mouse.c` | PS/2 keyboard and mouse, reporting through the input core. |
+| `virtio/virtio_input.c` | virtio-input keyboard and tablet. |
+| `timer.c`, `apic.c`, `pit.c` | Local APIC timer calibrated against the PIT, I/O APIC routing. |
+| `pci.c`, `virtio/virtio.c` | PCI enumeration and the virtio transport. |
+| `virtio/virtio_blk.c` | Block storage. |
+| `virtio/virtio_gpu.c`, `fbdev.c` | Display through `virtio-vga` with mode setting at run time. |
+| `virtio/virtio_snd.c`, `audio/pcm.c` | Playback and capture through `/dev/pcm0`. |
+| `pty.c`, `tty.c` | Pseudo terminals and the line discipline. |
+| `rtc.c` | CMOS real time clock. |
+| `debugexit.c` | Exit from QEMU with a status code for the boot tests. |
+
+## Display server and toolkit
+
+The display server X12 (`user/compositor/`, installed as `/bin/x12`) opens the framebuffer and the input devices. Clients connect over a Unix domain socket. The protocol is defined in `protocol/*.xml`. `tools/wscan` generates the marshalling code. `libwire` implements the client and the server connection. The protocol is modelled on Wayland: surfaces with shared memory buffer pools, damage, a frame clock with frame callbacks, and roles for toplevels, popups with positioners and layer surfaces. The seat object transmits the keymap and the repeat settings. A data device implements the clipboard and drag and drop. The server composites with occlusion culling and alpha blending and logs to `/var/log/x12.log`.
+
+The toolkit draws the window decorations: a header bar with the title and the close, maximize and minimize buttons, resize zones around the frame, and a shadow. When the server requests server side decorations, the toolkit draws the window contents without a frame.
+
+`libgui` is the application framework. It has a retained widget tree with signals, box and grid layout, a theme read from `/etc/desktop.conf`, partial redraws, PNG and SVG images, and integer scaling for high density outputs. The widgets are label, button, check box, radio button, separator, canvas, text field, list view, scroll bar, scroll area, combo box, spinner, slider, progress bar, tabs, split pane, tool bar, status bar, menu bar, tree view, table with a model, and a text editor with undo, word wrap and syntax highlighting. `libfont` parses TrueType and CFF OpenType fonts and rasterizes antialiased glyphs with kerning.
+
+The session consists of the panel (launcher menu, task list, volume mixer, clock), the desktop client (wallpaper, launcher files, context menus) and the Settings application (Appearance, Display, Keyboard, Sound, Date and time, File types, Launcher, System). `startgui` starts the session from the console shell.
+
+## Audio
+
+`/dev/pcm0` is the raw PCM device of the virtio-snd driver. Its period queue is interrupt driven and pollable. `audiod` opens the device, mixes the playback streams of its clients with a volume per stream, and makes the mix and the capture input available to capture streams. Samples are exchanged in shared memory pools. Control messages use the `audio.xml` protocol generated by `wscan`. `libaudio` implements the client side with a blocking interface and an event loop interface.
+
+## User space
+
+The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `math.h`, `time.h`, `pthread.h`, `signal.h`, `termios.h`, `dirent.h`, `fnmatch.h`, `glob.h`, `regex.h`, `wchar.h`, `locale.h`, `setjmp.h`, `fenv.h` and the `sys/` headers for sockets, memory mapping, waiting, file status, resource limits, event descriptors and audio. The math library has functions for `float`, `double` and x87 `long double`, the floating environment, hexadecimal and decimal conversion, `printf` floating formatting, and an SSE2 vector interface. The kernel saves the FXSAVE area of every thread.
+
+`/bin/sh` parses complete command trees (`if`, `for`, `while`, `until`, `case`, functions, subshells, brace groups), expands parameters, command substitutions, arithmetic and pathnames, applies redirections and here documents, and controls jobs. Interactive input is read by `libedit`, which implements line editing, history and completion.
+
+The 75 programs in `user/coreutils/` are the file, text, process and system utilities (`ls`, `grep`, `find`, `xargs`, `sort`, `diff`, `gzip`, `less`, `man`, `ps`, `prof`, `prlimit`, `mount`, `sync`, `shutdown`) and the terminal games (`2048`, `snake`, `life`, `maze`, `matrix`, `sl`). Manual pages are installed under `/usr/share/man`.
+
+Lua 5.5.1 is compiled unmodified from `third_party/lua/src/` into `/bin/lua` and `/bin/luac`. `user/lua/` adds the modules `fs` (directory listing, file status, whole file reads and writes), `sys` (process start, MIME handlers, signals, system information) and `gui`, which binds the `libgui` framework. `user/share/apps/clock.lua` and `pong.lua` are the clock and pong applications written in Lua. Launcher files on the desktop start them.
+
+`edit` is a console text editor, `gedit` a graphical one. `mint` is a small scripting language written before user space had floating point and `setjmp`. It is retained as an example interpreter.
+
+The graphical applications are the terminal emulator (scrollback, alternate screen, selection), the file manager, the image viewer, the calculator with RPN and algebraic modes, paint, pong, a Mandelbrot renderer, a Unicode viewer, a clock, an audio player, a subtractive synthesizer, a sequencer, and the debugging tools `sysmon` (process table and profiler), `logview`, `hexview`, `evtest` and `x12settings`.
+
+## Repository layout
 
 ```
 minios/
-  Makefile              build all, image, run, test, gdb, clean
+  Makefile              all, image, run, gdb, test, test-kvm, check, check-sh, clean
   toolchain.mk          compiler flags and paths
+  VERSION               release under semantic versioning
   limine.conf           bootloader configuration
+  PLAN.md               design summary and milestone record
   kernel/
-    arch/x86_64/        boot, GDT, IDT, paging, APIC, syscall, context switch, SMP
-    mm/                 pmm, vmm, slab, mmap, vma, swap, tlb
-    sched/              thread, proc, mlfq, wait, elf loader
-    sync/               spinlock, mutex, semaphore, condvar
-    ipc/                pipe, signal, shm, mqueue
-    fs/                 vfs, devfs, initrdfs, mfs
+    arch/x86_64/        boot, GDT, IDT, paging, APIC, PIT, FPU, syscall entry, context switch, SMP, power
+    mm/                 pmm, vmm, slab, mmap, vma, filemap, madvise, huge, swap, tlb
+    sched/              thread, proc, mlfq, wait, elf, user
+    sync/               spinlock, mutex, semaphore, condvar, rcu, lockstat
+    ipc/                pipe, signal, shm, mqueue, socket, poll, eventfd, timerfd, futex
+    fs/                 vfs, file, devfs, initrdfs, mfs/, fat/
     block/              blockdev, bcache
-    audio/              raw PCM device layer
-    drivers/            serial, fbcon, ps2kbd, ps2mouse, pci, virtio_blk, timer, fbdev, pty
-    syscall/            table, sys_proc, sys_fs, sys_mm, sys_signal, sys_misc, sys_ipc
-    debug/              panic, backtrace, symbols
+    input/              core, keyboard
+    audio/              pcm
+    drivers/            serial, console, fbcon, fbdev, font, ps2kbd, ps2mouse, pci, pty, tty, rtc, timer, virtio/
+    syscall/            table, sys_proc, sys_fs, sys_mm, sys_signal, sys_misc, sys_ipc, sys_rlimit
+    debug/              panic, backtrace, symbols, profile
     lib/                printf, string, klog, kassert, crc32, cmdline
-    tests/              kernel self tests
-  libc/                 C library for user programs
-  libfont/              outline font parser and rasterizer
-  libwire/              display protocol library (client and server)
+    tests/              kernel self tests, selected with test= on the command line
+  libc/                 C library
+  libfont/              font parser and rasterizer
+  libwire/              protocol library, client and server side
   libaudio/             audiod client library
-  libgui/               GUI toolkit and widget framework
+  libgui/               application framework and widgets
+  libedit/              line editor
   protocol/             protocol definitions in XML
   user/
-    init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  calc/  apps/  tests/
+    init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  desktop/
+    settings/  files/  calc/  audiod/  apps/  lua/  tests/  etc/  share/  home/
+  third_party/          Limine, Lua 5.5.1, DejaVu, Noto Sans, Latin Modern, Unifont, Font Awesome
   tools/
-    mkfs/               builds an mfs disk image from a directory tree
-    fsck/               replays the mfs journal, checks and repairs an image
-    mkfat/              builds FAT12/16/32 images from a directory tree
+    mkfs/  fsck/        mfs image tools
+    mkfat/              FAT image tool
     gensyms/            kernel symbol table generator
-    genfont/            bitmap font generator
+    genfont/  genicons/  genkeymap/  wscan/
+    run.sh              QEMU command line for make run and make gdb
+    version.sh          build number and version stamp
   tests/
-    run_qemu_test.sh    headless boot test runner
+    run_qemu_test.sh    boots one case headless and checks the serial output
+    run_all.sh          runs the selected cases
     cases/              one directory per boot test
-  docs/design/          one document per subsystem
+  docs/
+    design/             one document per subsystem
+    postmortems/        analyses of defects
 ```
 
-## Building and Running
+## Building and running
 
 ```sh
-make            # build kernel, libc and user programs
-make image      # create build/disk.img
-make run        # boot QEMU; macOS uses Core Audio for guest playback
-make QEMU_AUDIO=none run       # boot with guest audio discarded
-make RUNFLAGS="--audio wav" run  # record guest audio to build/audio.wav
-make VIDEO=2560x1600@2 run       # doubled pixels for a Retina display (the
-                                 # default on a Mac with such a display);
-                                 # Settings > Display changes the mode later
-tools/run.sh --help            # every QEMU option; qemu.conf holds local defaults
-make gdb        # boot QEMU halted with gdbstub on port 1234
-make test CASES="gui gui_wm"   # run the named boot tests (never the whole suite)
+make                             # kernel, libraries and user programs
+make image                       # ISO, root image and swap image in build/
+make run                         # boot QEMU with serial on stdio
+make gdb                         # boot QEMU halted with the gdbstub on port 1234
+make test CASES="gui gui_wm"     # run the named boot tests
+make test-kvm                    # run the processor dependent cases under KVM (Linux)
+make check                       # host unit tests of libfont, libwire, libgui and the Lua modules
+make check-sh                    # host unit test of the shell parser
+tools/run.sh --help              # QEMU options. qemu.conf holds local defaults
 ```
 
-## Code Size
+`make run` reads `QEMU_*` variables and `RUNFLAGS`, for example `make QEMU_AUDIO=none run` or `make RUNFLAGS="--audio wav --smp 2" run`. `make image VIDEO=2560x1600@2` selects a framebuffer mode with doubled pixels for a high density display. The Display page of Settings changes the mode at run time.
 
-The project totals 37,000 lines of C source code, header, and assembly.
+A change is checked with the cases of the modules it modifies. Running all cases takes too long for that.
 
-## Current State
+## Tests
 
-The system boots to a shell on the framebuffer console, runs user programs from the mfs filesystem on a virtio-blk device, and provides a windowing system with resizable overlapping windows, a terminal emulator, graphical applications and antialiased font rendering. SMP is enabled with TLB shootdowns and per CPU scheduling.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 119 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
+
+## Code size
+
+The counts are code lines reported by cloc 2.10, without blank and comment lines. The `generated/` directory of libwire is excluded.
+
+| Component | C | Headers | Other | Total |
+|---|---|---|---|---|
+| kernel | 23,791 | 3,375 | 250 assembly and make | 27,473 |
+| libc | 7,327 | 1,225 | 93 assembly and make | 8,645 |
+| libgui, libfont, libwire, libaudio, libedit | 13,227 | 1,027 | 107 make | 14,362 |
+| user programs and tests | 30,116 | 1,295 | 483 Lua, 205 shell, 99 make | 32,200 |
+| tools | 1,667 | | 502 Python, 365 shell | 2,534 |
+| protocol | | | 437 XML | 437 |
+| total | 76,128 | 6,922 | 2,601 | 85,651 |
+
+The Lua sources in `third_party/lua/src/` add 21,410 code lines, unchanged from the release archive. The boot test scripts under `tests/` add 226 lines.
+
+## State
+
+The system boots on four processors to a shell on the framebuffer console, mounts the mfs root filesystem from a virtio-blk device, and starts the graphical session with `startgui`. Development continues by feature on branches from `bleeding-edge`, merged through `develop` to `main`.
