@@ -6,6 +6,7 @@
 #include <fs/fdtable.h>
 #include <ipc/pipe.h>
 #include <lib/string.h>
+#include <lib/printf.h>
 #include <errno.h>
 
 static struct fdtable *cur_fds(void)
@@ -239,20 +240,86 @@ long sys_rename(struct trapframe *tf)
     return path2_op(tf, vfs_rename);
 }
 
+/* Copy the user path of an *at system call into buf, prefixed with the path
+ * of the directory dirfd when the path is relative and dirfd is not
+ * AT_FDCWD. The directory must have been opened by name (file.path). */
+static long copy_path_at(int dirfd, uintptr_t upath, char *buf, size_t size)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, upath, sizeof path);
+    if (r < 0)
+        return r;
+    if (dirfd == AT_FDCWD || path[0] == '/') {
+        strlcpy(buf, path, size);
+        return 0;
+    }
+    struct file *f = fdtable_get(cur_fds(), dirfd);
+    if (!f)
+        return -EBADF;
+    if (!f->inode || !S_ISDIR(f->inode->mode) || !f->path) {
+        file_put(f);
+        return -ENOTDIR;
+    }
+    int n = ksnprintf(buf, size, "%s/%s", f->path, path);
+    file_put(f);
+    return n < 0 || (size_t)n >= size ? -ENAMETOOLONG : 0;
+}
+
+/* openat(dirfd, path, flags, mode): open relative to a directory descriptor. */
+long sys_openat(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    int flags = (int)SYSARG2(tf);
+    uint32_t mode = (uint32_t)SYSARG3(tf);
+    struct file *f;
+    r = vfs_open(path, flags, mode, &f);
+    if (r < 0)
+        return r;
+    r = fdtable_install(cur_fds(), f, 0);
+    if (r < 0)
+        file_put(f);
+    else if (flags & O_CLOEXEC)
+        fdtable_set_cloexec(cur_fds(), (int)r, true);
+    return r;
+}
+
+/* fstatat(dirfd, path, st, flags): stat relative to a directory descriptor.
+ * AT_SYMLINK_NOFOLLOW is accepted and has no effect. */
+long sys_fstatat(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    uintptr_t st = SYSARG2(tf);
+    if (!user_range_ok(st, sizeof(struct stat), true))
+        return -EFAULT;
+    if (SYSARG3(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
+        return -EINVAL;
+    struct inode *ino;
+    r = vfs_lookup(path, &ino);
+    if (r < 0)
+        return r;
+    inode_stat(ino, (struct stat *)st);
+    inode_put(ino);
+    return 0;
+}
+
 /* utimensat(dirfd, path, times, flags): sets the modification time of the
- * file at path. dirfd must be AT_FDCWD (paths are resolved from the working
- * directory); times is NULL for the current time or two timespecs of which
+ * file at path, resolved relative to dirfd as in openat; times is NULL for
+ * the current time or two timespecs of which
  * the second is the modification time, with UTIME_NOW and UTIME_OMIT in
  * tv_nsec. The access time is not stored and is ignored. Inode times are
  * nanoseconds, so the given time is kept exactly by mfs. */
 long sys_utimensat(struct trapframe *tf)
 {
-    if ((int)SYSARG0(tf) != AT_FDCWD)
-        return -EINVAL;
-    if (SYSARG3(tf) != 0)
+    if (SYSARG3(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
         return -EINVAL;
     char path[USER_PATH_MAX];
-    long r = copy_string_from_user(path, SYSARG1(tf), sizeof path);
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
     if (r < 0)
         return r;
     int64_t mtime = vfs_now();

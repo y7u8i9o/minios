@@ -108,6 +108,8 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_prlimit]       = sys_prlimit,
     [SYS_getrusage]     = sys_getrusage,
     [SYS_utimensat]     = sys_utimensat,
+    [SYS_openat]        = sys_openat,
+    [SYS_fstatat]       = sys_fstatat,
 };
 
 void syscall_init_cpu(void)

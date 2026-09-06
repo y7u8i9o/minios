@@ -168,6 +168,19 @@ void proc_exit_notify(struct proc *p)
     }
 }
 
+void proc_reap_children(struct proc *parent)
+{
+    for (;;) {
+        spin_lock(&proc_tree_lock);
+        struct proc *child = list_empty(&parent->children) ? NULL
+            : list_first_entry(&parent->children, struct proc, sibling);
+        spin_unlock(&proc_tree_lock);
+        if (!child)
+            return;
+        proc_reap(child);
+    }
+}
+
 int proc_reap(struct proc *p)
 {
     spin_lock(&proc_tree_lock);

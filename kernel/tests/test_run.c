@@ -53,6 +53,9 @@ static void test_run(void)
     if (cmdline_lookup("status", want, sizeof want) && want[0])
         expected = (int)strtol_simple(want);
     ktest_assert(status == PROC_STATUS_EXITED(expected), "%s failed with status 0x%x", path, status);
+    /* Children the program did not wait for were adopted by the kernel
+     * process; their memory must be returned before it is counted. */
+    proc_reap_children(&kernel_proc);
 
     swap_drain();
     /* Another CPU may still be finishing the last switch away from an

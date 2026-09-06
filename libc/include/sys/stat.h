@@ -37,6 +37,7 @@ int stat(const char *path, struct stat *st);
 int fstat(int fd, struct stat *st);
 /* There are no symbolic links, so lstat is stat. */
 int lstat(const char *path, struct stat *st);
+int fstatat(int dirfd, const char *path, struct stat *st, int flags);
 int mkdir(const char *path, mode_t mode);
 
 /* Permission bits are stored but not enforced and cannot be changed: both
@@ -45,6 +46,6 @@ int fchmod(int fd, mode_t mode);
 int chmod(const char *path, mode_t mode);
 
 /* Set the modification time of path: times NULL for now, otherwise the
- * second timespec, with UTIME_NOW or UTIME_OMIT in tv_nsec. dirfd must be
- * AT_FDCWD and flags 0. */
+ * second timespec, with UTIME_NOW or UTIME_OMIT in tv_nsec. The path is
+ * resolved as in openat. */
 int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags);

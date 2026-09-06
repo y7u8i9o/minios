@@ -585,3 +585,20 @@ char *realpath(const char *path, char *resolved)
     memcpy(resolved, buf, n + 1);
     return resolved;
 }
+
+int openat(int dirfd, const char *path, int flags, ...)
+{
+    unsigned mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, unsigned);
+        va_end(ap);
+    }
+    return (int)syscall4(SYS_openat, dirfd, path, flags, mode);
+}
+
+int fstatat(int dirfd, const char *path, struct stat *st, int flags)
+{
+    return (int)syscall4(SYS_fstatat, dirfd, path, st, flags);
+}

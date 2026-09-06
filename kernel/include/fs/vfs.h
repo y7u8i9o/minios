@@ -149,6 +149,9 @@ struct file {
     refcount_t refcount;
     struct mutex lock;
     void *priv;
+    char *path;                     /* canonical path of an opened directory, for
+                                       the *at system calls; NULL otherwise. Set at
+                                       open, freed with the file. */
     struct rcu_head rcu;
 };
 

@@ -33,6 +33,7 @@ void file_ref(struct file *f)
 static void file_free_rcu(struct rcu_head *head)
 {
     struct file *f = container_of(head, struct file, rcu);
+    kfree(f->path);
     kfree(f);
 }
 

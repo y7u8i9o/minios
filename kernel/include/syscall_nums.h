@@ -86,4 +86,6 @@
 #define SYS_prlimit       82
 #define SYS_getrusage     83
 #define SYS_utimensat     84
-#define SYS_MAX           85
+#define SYS_openat        85
+#define SYS_fstatat       86
+#define SYS_MAX           87

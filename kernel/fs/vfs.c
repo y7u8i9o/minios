@@ -593,6 +593,15 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
         r = -ENOMEM;
         goto fail;
     }
+    if (S_ISDIR(ino->mode)) {
+        char canon[VFS_PATH_MAX];
+        if (canonicalize_cwd(path, canon, sizeof canon) == 0) {
+            size_t len = strlen(canon) + 1;
+            f->path = kmalloc(len);
+            if (f->path)
+                memcpy(f->path, canon, len);
+        }
+    }
     if (f->ops && f->ops->open) {
         r = f->ops->open(ino, f);
         if (r < 0) {
