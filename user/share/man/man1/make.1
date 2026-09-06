@@ -1,33 +1,47 @@
-MAKE(1)                       User Commands
+MAKE(1)                     User Commands                    MAKE(1)
 
 NAME
     make - maintain program dependencies
 
 SYNOPSIS
-    make [--posix] [-C path] [-f makefile] [-j num] [-x pragma]
-         [-ehiknpqrsSt] [macro[:[:[:]]]=value ...] [target ...]
+    make [--posix] [-C path] [-f makefile] [-j num] [-ehiknpqrsSt]
+         [macro=value...] [target...]
 
 DESCRIPTION
-    Reads the rules in makefile (Makefile or makefile by default, - for
-    standard input) and rebuilds every named target whose prerequisites are
-    newer than it, running the commands of the rule with /bin/sh. This is
-    pdpmake, the public domain make of Ron Yorston, which implements the
-    make of POSIX 2024 with these extensions: double colon rules, ifdef,
-    ifndef, ifeq, ifneq, else and endif, archive members lib.a(member.o),
-    := assignments, chained inference rules, wildcards in target rules,
-    a backslash escaping #,     $< and $* in target rules, -C directory,
-    and macros and targets mixed on the command line. .POSIX as the first
-    target, the --posix option or the environment variable
-    PDPMAKE_POSIXLY_CORRECT disable the extensions.
+    make reads the rules in Makefile or makefile, or in the files named with
+    -f, and rebuilds each named target whose prerequisites are newer than
+    it by running the commands of its rule with /bin/sh. Without a target
+    the first target of the first file is built.
 
-    -e lets the environment override makefile macros, -f names the
-    makefile (repeatable), -i ignores command errors, -k continues with
-    other targets after an error, -n prints commands without running them,
-    -p prints the macros and rules, -q reports with the exit status whether
-    the targets are current, -r drops the built-in rules, -s runs silently,
-    -S stops at the first error (the default), -t touches the targets
-    instead of building them, -C changes to the directory first, -j is
-    accepted and ignored, -h prints the usage.
+OPTIONS
+    --posix      disable the extensions; must be the first option
+    -C path      change to path before reading the makefile
+    -e           let environment variables override makefile macros
+    -f makefile  read makefile instead of Makefile; - is standard input
+    -h           print the usage
+    -i           ignore errors from commands
+    -j num       accepted; commands run one at a time
+    -k           continue with other targets after an error
+    -n           print commands without running them
+    -p           print the macros and rules
+    -q           exit 0 when the targets are up to date, 1 otherwise
+    -r           do not use the built-in rules
+    -s           do not print commands
+    -S           stop at the first error (default)
+    -t           touch the targets instead of building them
+
+EXTENSIONS
+    Double colon rules; ifdef, ifndef, ifeq, ifneq, else, endif; archive
+    members lib.a(member.o); := assignments; chained inference rules;
+    wildcards in target rules; $< and $* in target rules; a backslash
+    escaping #; macros and targets mixed on the command line. The .POSIX
+    target, the --posix option and the environment variable
+    PDPMAKE_POSIXLY_CORRECT disable them.
+
+EXAMPLES
+    make
+    make -n clean
+    make -f build.mk CC=cc all
 
 SEE ALSO
-    sh(1), touch(1), index(7)
+    sh(1), touch(1), ar(1)

@@ -1,4 +1,4 @@
-TAR(1)                        User Commands
+TAR(1)                      User Commands                    TAR(1)
 
 NAME
     tar - create, list and extract ustar archives
@@ -9,22 +9,27 @@ SYNOPSIS
     tar [-C dir] [-z] -x [-m] [-p] [-v] [-f file] [member...]
 
 DESCRIPTION
-    Writes the named files and directories, recursively, into an archive
-    in the POSIX ustar format (-c), lists the members of an archive (-t)
-    or extracts them (-x), all of them or the named ones. This is the tar
-    of sbase, the suckless base utilities. Without -f the archive is
-    standard output or standard input, so tar -c path | tar -t works.
-    -C changes to dir before reading or writing files. -z compresses and
-    decompresses through gzip in a child that tar does not wait for, so
-    an archive written with -z may still be in progress when tar exits; -j, -J and -Z name bzip2, xz and compress,
-    which minios does not have. -v prints each member name. -m sets the
-    time of extracted files to the current time instead of the recorded
-    one; -p keeps the recorded permissions (they are stored but not
-    enforced). -h follows symbolic links when archiving; there are none.
+    tar writes the named files and directories, recursively, into an
+    archive in the ustar format, lists the members of an archive, or
+    extracts all or the named members. Without -f the archive is standard
+    output for -c and standard input for -t and -x.
 
-    Names longer than 100 characters use the ustar prefix field, up to 255
-    characters. Archives written by the GNU and BSD tar programs in the
-    ustar format are read; their extension headers are not.
+OPTIONS
+    -c        create an archive from the named paths
+    -t        list the members
+    -x        extract members
+    -f file   use file as the archive
+    -C dir    change to dir before reading or writing files
+    -z        compress with gzip when creating, decompress when reading;
+              gzip runs as a child that tar does not wait for
+    -m        give extracted files the current time
+    -p        keep the recorded permissions
+    -v        print each member name
+
+EXAMPLES
+    tar -cf src.tar src
+    tar -tzf src.tgz
+    tar -C /tmp -xf src.tar src/main.c
 
 SEE ALSO
-    ar(1), gzip(1), index(7)
+    ar(1), gzip(1)

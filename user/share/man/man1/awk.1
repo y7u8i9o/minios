@@ -1,30 +1,41 @@
-AWK(1)                        User Commands
+AWK(1)                      User Commands                    AWK(1)
 
 NAME
-    awk - pattern-directed scanning and processing language
+    awk - pattern scanning and processing language
 
 SYNOPSIS
-    awk [-F fs] [-v var=value] [-safe] [--version] program [file...]
+    awk [-F fs] [-v var=value] [-safe] program [file...]
     awk [-F fs] [-v var=value] [-safe] -f program_file [file...]
 
 DESCRIPTION
-    Reads the files (or standard input) as records, splits every record
-    into fields and runs the program's pattern-action pairs on it. This is
-    the One True AWK of Brian Kernighan (the second edition), and
-    implements the language of the POSIX standard and of the book The AWK
-    Programming Language: BEGIN and END blocks, regular expression and
-    relational patterns, ranges, the built-in variables NR NF FS OFS RS ORS
-    FILENAME FNR SUBSEP RSTART RLENGTH ENVIRON ARGC ARGV, associative
-    arrays with for (k in a), delete and in, user functions, printf,
-    getline in its forms, output to files and pipes, close, fflush and
-    system, the string functions length substr index split sub gsub match
-    sprintf tolower toupper, the arithmetic functions int sqrt exp log sin
-    cos atan2 rand srand, and the time functions systime strftime mktime.
-    Strings are UTF-8; length and substr count characters.
+    awk reads each input record, splits it into fields and runs the actions
+    of the program whose patterns match it. Without files it reads standard
+    input. The language is the one of POSIX and of the book The AWK
+    Programming Language.
 
-    -F fs sets the field separator, -v assigns a variable before BEGIN,
-    -f reads the program from a file (repeatable), -safe disables file
-    output, pipes and system, and --version prints the release.
+OPTIONS
+    -F fs          set the field separator
+    -v var=value   assign a variable before BEGIN runs
+    -f file        read the program from file; may be repeated
+    -safe          disable file output, pipes and system
+    --version      print the release
+
+LANGUAGE
+    BEGIN, END, /regex/, relational and range patterns; if, while, do, for,
+    for (key in array), break, continue, next, exit, return; user defined
+    functions; associative arrays with delete and in; printf; getline in
+    its forms; output to files and pipes with close and fflush; system.
+
+    Built-in variables: NR NF FS OFS RS ORS FILENAME FNR SUBSEP RSTART
+    RLENGTH ENVIRON ARGC ARGV.
+    String functions: length substr index split sub gsub match sprintf
+    tolower toupper. Strings are UTF-8; length and substr count characters.
+    Arithmetic functions: int sqrt exp log sin cos atan2 rand srand.
+    Time functions: systime strftime mktime.
+
+EXAMPLES
+    awk '{ print $1 }' file
+    awk -F: '$3 > 100 { n++ } END { print n }' /etc/passwd
 
 SEE ALSO
-    sed(1), grep(1), sh(1), index(7)
+    sed(1), grep(1), sh(1)

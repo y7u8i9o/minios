@@ -1,4 +1,4 @@
-SED(1)                        User Commands
+SED(1)                      User Commands                    SED(1)
 
 NAME
     sed - stream editor
@@ -8,21 +8,43 @@ SYNOPSIS
     sed [-Ealnru] [-e command] [-f command_file] [-i extension] [file...]
 
 DESCRIPTION
-    Reads the files (or standard input) line by line, applies the editing
-    commands to every line and writes the result to standard output. This
-    is the sed of FreeBSD. -n prints only lines selected with p; -E uses
-    extended regular expressions; -i extension edits the files in place and
-    keeps a copy under the old name plus the extension (-i '' keeps none);
-    -a delays opening w files; -l makes output line buffered; -r is -E;
-    -u is unbuffered. Several -e and -f options are concatenated.
+    sed reads each input line, applies the editing commands and writes the
+    result to standard output. Without files it reads standard input.
 
-    A command has an optional address (a line number, $, /regex/, or two of
-    them separated by a comma) followed by a function letter: s/re/rep/flags
-    (flags g, p, N, I, w file), y/from/to/, p, d, D, n, N, g, G, h, H, x, q,
-    =, l, a, i, c (text on the following line after a backslash), r file,
-    w file, b label, t label, T label, :label, ! (negation) and { } groups.
-    A label extends to the end of the line, so branch commands are given
-    with separate -e options or on their own lines.
+OPTIONS
+    -E            use extended regular expressions
+    -a            open w files when first written to
+    -e command    add command to the script; may be repeated
+    -f file       add the commands in file to the script; may be repeated
+    -i extension  edit files in place; a copy is kept with the extension
+                  appended, or none when the extension is empty
+    -l            line buffer the output
+    -n            print only lines selected with p
+    -r            same as -E
+    -u            unbuffer the output
+
+COMMANDS
+    An address is a line number, $, or /regex/; two addresses separated by
+    a comma select a range. ! after the address negates it.
+
+    s/re/rep/flags  substitute; flags g, p, N (the Nth match), I, w file
+    y/from/to/      transliterate
+    p  P            print the pattern space; print its first line
+    d  D            delete the pattern space; delete its first line
+    n  N            next line; append the next line
+    g  G  h  H  x   copy or append between the pattern and hold spaces
+    a\ i\ c\        append, insert or change text; the text follows on the
+                    next line
+    r file  w file  read a file after the line; write the line to a file
+    b  t  T label   branch; branch if a substitution was made; if none was
+    :label          define a label; it extends to the end of the line
+    =  l  q         print the line number; print unambiguously; quit
+    { commands }    group commands
+
+EXAMPLES
+    sed -n '2,4p' file
+    sed -e 's/x/y/' -e 't done' -e 's/$/!/' -e ':done' file
+    sed -i '' 's/old/new/g' file
 
 SEE ALSO
-    awk(1), grep(1), index(7)
+    awk(1), grep(1)
