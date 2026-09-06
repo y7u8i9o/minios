@@ -1,0 +1,21 @@
+FSINIT(1)                   User Commands                    FSINIT(1)
+
+NAME
+    fsinit - mount the filesystems of the boot table
+
+SYNOPSIS
+    fsinit [-f fstab] [-v]
+
+DESCRIPTION
+    fsinit reads /etc/fstab and mounts each entry whose mount point is not
+    mounted yet. init runs it before the first shell. An entry with the
+    seed option is filled from a directory tree when the mounted
+    filesystem is empty. The exit status is 1 when a required mount or the
+    table itself failed.
+
+OPTIONS
+    -f fstab   read fstab instead of /etc/fstab
+    -v         report every entry: mounted, skipped, or mounted already
+
+SEE ALSO
+    fstab(5), mount(1)

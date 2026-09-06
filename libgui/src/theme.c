@@ -1,4 +1,5 @@
 /* Theme defaults, scaling and the interface font. */
+#include <minios/conf.h>
 #include <gui/theme.h>
 #include <string.h>
 #include <stdlib.h>
@@ -37,7 +38,8 @@ void theme_init_default(struct theme *t)
     theme_read_conf(t);
 }
 
-/* The interface font, its size and the scale come from /etc/desktop.conf
+/* The interface font, its size and the scale come from the configuration
+ * file (conf_read_path)
  * (ui_font, ui_font_px, ui_scale), written by the settings program. A
  * missing file keeps the defaults. */
 static const struct { const char *name; const char *path; } ui_fonts[] = {
@@ -49,7 +51,8 @@ static const struct { const char *name; const char *path; } ui_fonts[] = {
 
 void theme_read_conf(struct theme *t)
 {
-    FILE *f = fopen("/etc/desktop.conf", "r");
+    char path[256];
+    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
     if (!f)
         return;
     char line[256];

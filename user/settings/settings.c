@@ -1,9 +1,10 @@
 /* settings: the user's settings in one window with a category list. Every
- * change is written to /etc/desktop.conf immediately; the desktop client
+ * change is written to the user's configuration file immediately; the desktop client
  * notices the file within a second and applies it, pushing the values
  * X12 owns (colour, key repeat, display mode, frame interval, decorations,
  * keymap, pointer speed and acceleration) through the settings protocol. "settings set KEY VALUE" changes
  * one entry and exits; "settings PAGE" opens on that page. */
+#include <minios/conf.h>
 #include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +33,8 @@ static int key_index(const char *key)
 
 static void conf_read(void)
 {
-    FILE *f = fopen(CONF_PATH, "r");
+    char path[256];
+    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
     if (!f)
         return;
     char line[256];
@@ -52,7 +54,8 @@ static void conf_read(void)
 
 static int conf_write(void)
 {
-    FILE *f = fopen(CONF_PATH, "w");
+    char path[256];
+    FILE *f = fopen(conf_write_path(path, sizeof path), "w");
     if (!f)
         return -1;
     fprintf(f, "# desktop settings, edited by /bin/settings\n");

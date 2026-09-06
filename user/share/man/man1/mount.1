@@ -1,0 +1,21 @@
+MOUNT(1)                    User Commands                    MOUNT(1)
+
+NAME
+    mount - mount and unmount filesystems
+
+SYNOPSIS
+    mount
+    mount type source target
+    mount -u target
+
+DESCRIPTION
+    Without arguments mount lists the mounted filesystems from /dev/mounts.
+    With a type, a source device under /dev and a target directory it
+    mounts the filesystem; -u unmounts the filesystem at target.
+
+EXAMPLES
+    mount mfs vdb /mnt
+    mount -u /mnt
+
+SEE ALSO
+    fstab(5), fsinit(1), df(1)

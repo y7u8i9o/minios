@@ -1,6 +1,7 @@
-/* init: process 1. Starts the shell and restarts it when it exits, reaps
- * orphaned processes, and performs the orderly shutdown when asked with
- * SIGUSR1 (power off), SIGUSR2 (reboot) or SIGHUP (halt). */
+/* init: process 1. Mounts the filesystems of /etc/fstab through fsinit,
+ * starts the shell and restarts it when it exits, reaps orphaned processes,
+ * and performs the orderly shutdown when asked with SIGUSR1 (power off),
+ * SIGUSR2 (reboot) or SIGHUP (halt). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,18 @@ int main(int argc, char **argv)
     signal(SIGUSR1, on_signal);
     signal(SIGUSR2, on_signal);
     signal(SIGHUP, on_signal);
+    /* The persistent volumes are mounted before the shell starts; a
+     * failure is reported and the system continues from the root image. */
+    pid_t fs = fork();
+    if (fs == 0) {
+        char *const args[] = { "fsinit", NULL };
+        execv("/bin/fsinit", args);
+        perror("init: exec fsinit");
+        _exit(127);
+    }
+    int fs_status = 0;
+    if (fs > 0 && waitpid(fs, &fs_status, 0) == fs && (!WIFEXITED(fs_status) || WEXITSTATUS(fs_status) != 0))
+        printf("init: fsinit failed with status %d\n", WIFEXITED(fs_status) ? WEXITSTATUS(fs_status) : -1);
     pid_t shell = -1;
     for (;;) {
         if (shutdown_request) {

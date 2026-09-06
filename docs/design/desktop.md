@@ -31,8 +31,10 @@ click opens a context menu (`popupmenu_new` and `menu_popup` in
 - On the desktop: New folder, New text file, Refresh, Change wallpaper
   (starts `settings appearance`), Settings.
 
-Every second the desktop re-reads `/home/desktop` and compares
-`/etc/desktop.conf` with the last contents. A changed file is applied:
+Every second the desktop re-reads `/home/desktop` and compares the
+configuration file (`$HOME/.config/desktop.conf` when it exists, the
+shipped `/etc/desktop.conf` otherwise; `storage.md`) with the last
+contents. A changed file is applied:
 the wallpaper is reloaded and rescaled, and `desktop_color`,
 `repeat_rate` and `repeat_delay` are sent to the compositor through
 the `settings` protocol interface. Log lines: `desktop: started with N

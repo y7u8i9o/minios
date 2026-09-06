@@ -46,7 +46,7 @@ HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/hom
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(LIBS) $(BINS) $(ETC) share-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp
+all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -59,6 +59,14 @@ share-tree:
 	@mkdir -p $(ROOT)/usr/share
 	@cp -Rp share/. $(ROOT)/usr/share/
 	@if [ -d ../third_party/fontawesome/svgs ]; then cp ../third_party/fontawesome/svgs/*.svg $(ROOT)/usr/share/icons/; fi
+
+# The home directory is installed twice: on the root image, for a boot
+# without a data volume, and as the skeleton that fsinit copies onto a
+# fresh data volume (etc/fstab).
+.PHONY: skel-tree
+skel-tree:
+	@mkdir -p $(ROOT)/usr/share/skel/home
+	@cp -Rp home/. $(ROOT)/usr/share/skel/home/
 
 $(ROOT)/home/%: home/%
 	@mkdir -p $(dir $@)

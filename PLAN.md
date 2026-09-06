@@ -1581,3 +1581,15 @@ gui_widgets, gui_controls, gui_editor, gui_unicode, gui_lua and audio_server
 (13/13). ELF TLS, dlopen, IFUNC, symbol versioning and lazy binding remain
 unsupported. The implementation and startup ABI are in
 `docs/design/dynlink.md`.
+
+## Persistent storage (completed 2026-09-06)
+
+The home directory lives on `data.img`, a data volume the build creates
+once and never rebuilds, attached as `vdc` and mounted at boot by
+`fsinit` from `/etc/fstab`, which seeds a fresh volume from
+`/usr/share/skel/home`. The user's configuration moved to
+`$HOME/.config/desktop.conf` over the shipped `/etc/desktop.conf`
+(`conf_read_path`, `conf_write_path`). `mount` lists the mounted
+filesystems, and `mkfs` includes dot files. Documented in
+`docs/design/storage.md`, tested by `tests/cases/persist` with a post
+script that reads the volume on the host.

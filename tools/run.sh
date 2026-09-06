@@ -59,6 +59,8 @@
 #       --iso FILE         ISO               boot image (default build/minios.iso)
 #       --disk FILE        DISK              root image (default build/disk.img)
 #       --swap FILE        SWAP              swap image (default build/swap.img)
+#       --data FILE        DATA              data volume (default data.img in the repository)
+#       --no-data          DATA=             boot without the data volume
 #       --qemu BINARY      QEMU              qemu-system-x86_64 to run
 #       --extra ARGS       QEMU_EXTRA        arguments appended to the command
 #   -g, --gdb                                start halted with the gdbstub
@@ -90,7 +92,7 @@ die() {
 # file, then put them back.
 VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
       QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_VIDEO \
-      QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP"
+      QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP DATA"
 
 CONF="${QEMU_CONF:-$TOP/qemu.conf}"
 # --config must be found before the file is read; other options are parsed
@@ -128,6 +130,7 @@ QEMU="${QEMU:-qemu-system-x86_64}"
 ISO="${ISO:-$BUILD/minios.iso}"
 DISK="${DISK:-$BUILD/disk.img}"
 SWAP="${SWAP:-$BUILD/swap.img}"
+DATA="${DATA-$TOP/data.img}"
 QEMU_MEM="${QEMU_MEM:-512M}"
 QEMU_SMP="${QEMU_SMP:-4}"
 QEMU_SERIAL="${QEMU_SERIAL:-stdio}"
@@ -189,6 +192,9 @@ while [ $# -gt 0 ]; do
         --disk=*)         DISK="${1#*=}" ;;
         --swap)           SWAP="$2"; shift ;;
         --swap=*)         SWAP="${1#*=}" ;;
+        --data)           DATA="$2"; shift ;;
+        --data=*)         DATA="${1#*=}" ;;
+        --no-data)        DATA="" ;;
         --qemu)           QEMU="$2"; shift ;;
         --qemu=*)         QEMU="${1#*=}" ;;
         --extra)          QEMU_EXTRA="$QEMU_EXTRA $2"; shift ;;
@@ -347,6 +353,7 @@ if [ "$DRY_RUN" = 0 ]; then
     [ -f "$ISO" ]  || die "$ISO not found, run 'make image' or pass --build"
     [ -f "$DISK" ] || die "$DISK not found, run 'make image' or pass --build"
     [ -f "$SWAP" ] || die "$SWAP not found, run 'make image' or pass --build"
+    [ -z "$DATA" ] || [ -f "$DATA" ] || die "$DATA not found, run 'make image' or pass --build"
 fi
 
 # --- command ------------------------------------------------------------
@@ -356,6 +363,7 @@ set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
        -drive "file=$DISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0 \
        -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1 \
        "$@"
+[ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
 if [ "$QEMU_SOUND" != 0 ]; then

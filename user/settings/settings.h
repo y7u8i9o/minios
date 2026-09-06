@@ -1,5 +1,7 @@
 #pragma once
-/* The settings program: /etc/desktop.conf holds the user's choices, the
+/* The settings program: the user's configuration file (conf_write_path,
+ * $HOME/.config/desktop.conf over the shipped /etc/desktop.conf) holds the
+ * user's choices, the
  * desktop client applies them and pushes the ones X12 owns through the
  * settings protocol; other pages act on their subsystem directly. */
 #include <gui/app.h>
@@ -7,7 +9,6 @@
 #include <gui/model.h>
 #include <stddef.h>
 
-#define CONF_PATH "/etc/desktop.conf"
 #define WALLPAPER_DIR "/usr/share/wallpapers"
 #define KEYMAP_DIR "/usr/share/keymaps"
 #define LAUNCHER_PATH "/etc/launcher"

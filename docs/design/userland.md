@@ -142,6 +142,12 @@ tests.
 from `third_party/make`; see [make](make.md). `touch` sets the
 modification time of existing files since the same change.
 
+## fsinit and mount
+
+`fsinit` mounts the entries of `/etc/fstab` at boot and seeds a fresh
+volume; `init` runs it before the shell. `mount` without arguments lists
+the mounted filesystems. See [persistent storage](storage.md).
+
 ## ar and tar
 
 `ar` (`user/coreutils/ar.c`) maintains System V archives and `/bin/tar`

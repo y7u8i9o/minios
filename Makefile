@@ -9,15 +9,17 @@ DISK     := $(BUILD)/disk.img
 DISK_MB  ?= 512
 SWAP     := $(BUILD)/swap.img
 SWAP_MB  ?= 64
+DATA     ?= $(TOP)/data.img
+DATA_MB  ?= 256
 LIMINE   := $(BUILD)/host/limine
 GENSYMS  := $(BUILD)/host/gensyms
 MKFS     := $(BUILD)/host/mkfs
 FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
 
-export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT SWAP
+export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT SWAP DATA
 
-.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean tools $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools $(DISK)
 
 all: kernel libc user
 
@@ -84,7 +86,17 @@ $(SWAP):
 	@mkdir -p $(dir $@)
 	dd if=/dev/zero of=$@ bs=1048576 count=$(SWAP_MB) status=none
 
-disk: $(DISK) $(SWAP)
+# The data volume keeps the home directory across boots and across rebuilds
+# of the root image. It is created once, empty, outside build/, and is
+# never rebuilt; `make clean-data` removes it.
+$(DATA): | $(MKFS)
+	@mkdir -p $(BUILD)/empty
+	$(MKFS) $@ $(DATA_MB) $(BUILD)/empty
+
+clean-data:
+	rm -f $(DATA)
+
+disk: $(DISK) $(SWAP) $(DATA)
 
 # QEMU is started by tools/run.sh, which reads qemu.conf, QEMU_* variables
 # and RUNFLAGS. Variables given on the make command line are exported so
@@ -102,14 +114,14 @@ endif
 
 # VIDEO=WxH[xBPP][@SCALE] selects the framebuffer mode (video= on the
 # kernel command line); @2 doubles every pixel for high density displays.
-image: kernel initrd $(LIMINE) $(DISK) $(SWAP)
+image: kernel initrd $(LIMINE) $(DISK) $(SWAP) $(DATA)
 	LIMINE=$(LIMINE) INITRD=$(INITRD) tools/mkiso.sh $(KERNEL) $(ISO) "$(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"
 
 run:
-	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) $(RUN) --build $(RUNFLAGS)
+	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build $(RUNFLAGS)
 
 gdb:
-	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) $(RUN) --build --gdb $(RUNFLAGS)
+	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build --gdb $(RUNFLAGS)
 
 # CASES="gui gui_wm" runs only those cases; the whole suite takes too
 # long to run for every change.

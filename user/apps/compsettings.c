@@ -287,7 +287,7 @@ int main(int argc, char **argv)
     widget_set_grid(decor_combo, r++, 1, 1, 1);
     widget_connect(decor_combo, "changed", on_decor, NULL);
     widget_set_grid(label_new(grid, "Keyboard layout"), r, 0, 1, 1);
-    struct widget *reload = button_new(grid, "Reload from /etc/desktop.conf");
+    struct widget *reload = button_new(grid, "Reload keymap");
     widget_set_grid(reload, r++, 1, 1, 1);
     widget_connect(reload, "clicked", on_keymap, NULL);
     verbose_box = checkbox_new(grid, "Log every frame and event on the console");

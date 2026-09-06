@@ -28,7 +28,7 @@ struct theme {
 /* The compiled in defaults: DejaVu Sans at 14 pixels when the file
  * exists, the builtin 8x16 font otherwise. */
 void theme_init_default(struct theme *t);
-/* Apply ui_font, ui_font_px and ui_scale from /etc/desktop.conf, if present. */
+/* Apply ui_font, ui_font_px and ui_scale from the configuration file, if present. */
 void theme_read_conf(struct theme *t);
 /* Load the font for the theme's scale; frees a previously loaded one. */
 void theme_apply(struct theme *t);

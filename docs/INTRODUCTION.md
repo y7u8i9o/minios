@@ -16,6 +16,7 @@ The release is `0.1.0`, recorded in `VERSION` under semantic versioning. `tools/
 | Locking | Every shared structure names the lock that protects it. `docs/design/locking.md` records the lock order. |
 | Scope | One user. Permission bits are stored and ignored. The system has no network stack. |
 | Linking | Programs are ELF64 executables linked against shared libraries in `/lib`, loaded by `/lib/ld.so`. `init` and the loader are static. |
+| Storage | The root image is rebuilt by the build. The home directory and the user's configuration are on a data volume, `data.img`, that the build creates once and mounts at boot through `/etc/fstab`. |
 
 ## Memory management
 
@@ -108,6 +109,7 @@ minios/
   Makefile              all, image, run, gdb, test, test-kvm, check, check-sh, clean
   toolchain.mk          compiler flags and paths
   VERSION               release under semantic versioning
+  data.img              persistent data volume, created by the build, ignored by git
   limine.conf           bootloader configuration
   PLAN.md               design summary and milestone record
   kernel/
@@ -172,7 +174,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 125 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 126 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
 
 ## Code size
 

@@ -1,6 +1,7 @@
 /* Debugging and settings globals: statistics, the surface list, a
  * pixel probe, and tunable settings (frame interval, desktop colour,
  * key repeat, decoration default, logging). */
+#include <minios/conf.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -80,11 +81,12 @@ static int *slot(const char *key)
     return NULL;
 }
 
-/* The keymap name lives in /etc/desktop.conf; the settings client asks
- * for a reload with keymap_reload after changing it. */
+/* The keymap name lives in the configuration file; the settings client
+ * asks for a reload with keymap_reload after changing it. */
 static void reload_keymap(void)
 {
-    FILE *f = fopen("/etc/desktop.conf", "r");
+    char path[256];
+    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
     if (!f)
         return;
     char line[256];

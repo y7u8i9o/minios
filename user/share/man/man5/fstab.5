@@ -1,0 +1,26 @@
+FSTAB(5)                    File Formats                     FSTAB(5)
+
+NAME
+    fstab - filesystems mounted at boot
+
+SYNOPSIS
+    /etc/fstab
+
+DESCRIPTION
+    Each line names a device, a mount point, a filesystem type and an
+    optional comma separated list of options; # starts a comment. The
+    device is a name under /dev, with or without the /dev/ prefix. The
+    types are mfs and fat.
+
+OPTIONS
+    defaults   no option
+    nofail     a device that cannot be mounted is skipped without error
+    noauto     the entry is not mounted by fsinit
+    seed=DIR   copy the tree below DIR into the mount point when the
+               mounted filesystem is empty
+
+EXAMPLE
+    vdc /home mfs nofail,seed=/usr/share/skel/home
+
+SEE ALSO
+    fsinit(1), mount(1)

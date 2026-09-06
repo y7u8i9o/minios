@@ -1,8 +1,9 @@
 /* desktop: the background layer surface. It draws the wallpaper, shows
  * the entries of /home/desktop as icons, opens them by their MIME type
  * on a double click, offers context menus, and applies
- * /etc/desktop.conf (wallpaper and compositor settings), re-reading the
+ * the configuration file (wallpaper and compositor settings), re-reading the
  * file when its contents change. */
+#include <minios/conf.h>
 #include <gui/app.h>
 #include <gui/mime.h>
 #include <debug-client.h>
@@ -18,7 +19,6 @@
 #include <unistd.h>
 
 #define DESKTOP_DIR "/home/desktop"
-#define CONF_PATH "/etc/desktop.conf"
 #define CELL_W 90
 #define CELL_H 84
 #define ICON_SIZE 32
@@ -267,7 +267,8 @@ static int mode_of(const char *s)
 
 static int read_conf(char *buf, size_t size)
 {
-    int fd = open(CONF_PATH, O_RDONLY);
+    char path[256];
+    int fd = open(conf_read_path(path, sizeof path), O_RDONLY);
     if (fd < 0)
         return -errno;
     long n = read(fd, buf, size - 1);
@@ -562,7 +563,7 @@ int main(int argc, char **argv)
     build_menus();
     mkdir(DESKTOP_DIR, 0755);
     if (read_conf(conf_text, sizeof conf_text) < 0)
-        logline("no " CONF_PATH ", using defaults");
+        logline("no configuration file, using defaults");
     apply_conf(1);
     refresh();
     logline("started with %d entries", nentries);

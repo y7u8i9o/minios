@@ -9,6 +9,7 @@
  * paste (also Shift+Insert and the middle button), Ctrl+Shift+T/W open
  * and close a tab, Ctrl+PageUp/PageDown switch tabs, Ctrl+plus/minus/0
  * change the font size. */
+#include <minios/conf.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -639,10 +640,11 @@ static int on_close(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-/* term_font_px from /etc/desktop.conf, written by the settings program. */
+/* term_font_px from the configuration file, written by the settings program. */
 static int conf_font_px(void)
 {
-    FILE *f = fopen("/etc/desktop.conf", "r");
+    char path[256];
+    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
     int px = DEFAULT_PX;
     if (!f)
         return px;

@@ -226,3 +226,11 @@ The launchd agent `~/Library/LaunchAgents/com.minios.fold-develop.plist`
 runs the script every day at 03:00 on this machine. `launchctl print
 gui/$(id -u)/com.minios.fold-develop` shows its state;
 `launchctl kickstart gui/$(id -u)/com.minios.fold-develop` runs it at once.
+
+## The data volume
+
+`data.img` in the repository root is the persistent data volume
+(`storage.md`): an empty mfs image that `make image` creates when it is
+missing and never rebuilds. `DATA` names another file, `DATA_MB` its size
+(256), and `make clean-data` removes it. `tools/run.sh` attaches it as the
+third virtio-blk device; `--data FILE` and `--no-data` override that.

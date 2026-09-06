@@ -181,7 +181,9 @@ static void add_tree(uint32_t dir, const char *path)
         die(path);
     struct dirent *e;
     while ((e = readdir(d))) {
-        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0 || e->d_name[0] == '.')
+        /* Dot files are part of the image (.shrc, .config); only the
+         * directory entries and the macOS Finder file are skipped. */
+        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0 || strcmp(e->d_name, ".DS_Store") == 0)
             continue;
         char full[1024];
         snprintf(full, sizeof full, "%s/%s", path, e->d_name);

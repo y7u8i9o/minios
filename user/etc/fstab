@@ -1,0 +1,5 @@
+# Filesystems mounted by fsinit at boot: device, mount point, type, options.
+# The data volume (data.img in the repository, attached as the third
+# virtio-blk device) keeps the home directory across boots and rebuilds of
+# the root image; a fresh volume is seeded with the skeleton.
+vdc /home mfs nofail,seed=/usr/share/skel/home
