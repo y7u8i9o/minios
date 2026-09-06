@@ -69,5 +69,16 @@ test "${MISSING:-fallback}" = fallback || echo 'FAIL parameter-default'
 test "${WORDS% two}" = one || echo 'FAIL parameter-trim'
 rm /sh-errors /sh-glob/a.txt /sh-glob/b.txt
 rmdir /sh-glob
+(set -e; false; echo 'FAIL errexit-continued')
+(set -e; false || true; if false; then :; fi; while false; do :; done; ! false; true && false || true; echo errexit-suspended) > /sh-errexit
+test "$(cat /sh-errexit)" = errexit-suspended || echo 'FAIL errexit-suspended'
+rm /sh-errexit
+(set -e; set +e; false; echo errexit-off) > /sh-errexit
+test "$(cat /sh-errexit)" = errexit-off || echo 'FAIL errexit-off'
+rm /sh-errexit
+set -e -- p q
+test "$1$2" = pq || echo 'FAIL set-options-then-parameters'
+set +e
+set -z 2> /dev/null && echo 'FAIL set-unknown-option'
 echo 'script2: done'
 exit 11

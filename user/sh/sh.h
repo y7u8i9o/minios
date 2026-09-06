@@ -88,6 +88,9 @@ struct reader {
 };
 enum exec_flow { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_EXIT };
 extern int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
+/* set -e: a failing command outside a condition exits the shell. errexit_off
+ * counts the enclosing contexts in which POSIX suspends the option. */
+extern int opt_errexit, errexit_off;
 extern char **script_argv;
 extern pid_t last_background;
 extern enum exec_flow flow;

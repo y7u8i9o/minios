@@ -240,15 +240,38 @@ int builtin(int argc, char **argv)
         return 0;
     }
     if (!strcmp(name, "set")) {
-        if (argc > 1 && !strcmp(argv[1], "--")) {
+        /* Options first: -e and +e; any other letter is refused. Then -- or
+         * the first non option word starts the new positional parameters. */
+        int i = 1;
+        int replace = 0;
+        for (; i < argc; i++) {
+            if (!strcmp(argv[i], "--")) {
+                i++;
+                replace = 1;
+                break;
+            }
+            if ((argv[i][0] != '-' && argv[i][0] != '+') || !argv[i][1]) {
+                replace = 1;
+                break;
+            }
+            for (const char *p = argv[i] + 1; *p; p++) {
+                if (*p == 'e') {
+                    opt_errexit = argv[i][0] == '-';
+                } else {
+                    fprintf(stderr, "set: unsupported option %c%c\n", argv[i][0], *p);
+                    return 2;
+                }
+            }
+        }
+        if (replace) {
             /* Positional parameters outlive the expanded command arguments. */
-            char **args = sh_alloc((size_t)argc * sizeof *args);
+            char **args = sh_alloc((size_t)(argc - i + 1) * sizeof *args);
             args[0] = script_argc ? script_argv[0] : "sh";
-            for (int i = 2; i < argc; i++)
-                args[i - 1] = argv[i];
-            parameters_replace(argc - 1, args);
+            for (int k = i; k < argc; k++)
+                args[k - i + 1] = argv[k];
+            parameters_replace(argc - i + 1, args);
             free(args);
-        } else {
+        } else if (argc == 1) {
             vars_print();
         }
         return 0;

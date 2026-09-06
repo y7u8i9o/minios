@@ -263,15 +263,23 @@ static int compound(struct node *n)
     case N_SIMPLE:
         return simple(n);
     case N_PIPELINE:
+        if (n->op)
+            errexit_off++;
         result = pipeline(n->a, n->bg, 0);
+        if (n->op)
+            errexit_off--;
         return n->op ? !result : result;
     case N_LIST:
+        errexit_off++;
         result = exec_node(n->a);
+        errexit_off--;
         if (flow == FLOW_NORMAL && ((n->op == T_AND && !result) || (n->op == T_OR && result)))
             result = exec_node(n->b);
         return result;
     case N_IF:
+        errexit_off++;
         result = exec_node(n->a);
+        errexit_off--;
         if (flow != FLOW_NORMAL)
             return result;
         return exec_node(result == 0 ? n->b : n->c);
@@ -298,7 +306,9 @@ static int compound(struct node *n)
     case N_UNTIL:
         loop_depth++;
         for (;;) {
+            errexit_off++;
             int condition = exec_node(n->a);
+            errexit_off--;
             if (flow != FLOW_NORMAL || ((condition == 0) != (n->kind == N_WHILE)))
                 break;
             result = exec_node(n->b);
@@ -357,12 +367,18 @@ static int execute_one(struct node *n)
     return result;
 }
 
+int opt_errexit, errexit_off;
+
 int exec_node(struct node *n)
 {
     int result = 0;
     for (; n && flow == FLOW_NORMAL; n = n->next) {
         result = execute_one(n);
         last_status = result;
+        if (opt_errexit && result != 0 && errexit_off == 0 && !n->bg) {
+            fflush(NULL);
+            exit(result);
+        }
     }
     return result;
 }

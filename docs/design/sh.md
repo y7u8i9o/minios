@@ -56,6 +56,13 @@ shell; subshells and pipeline stages fork. Builtins and functions can
 therefore change the current shell when not placed in a pipeline.
 `builtins.c`, `builtin_test.c` and `ulimit.c` provide the command table,
 tests and resource limits. `help` preserves its historical prefix.
+`set -e` and `set +e` switch the errexit option: a command that fails
+outside a condition of `if`, `while` or `until`, outside the left side
+of `&&` and `||`, and not negated with `!`, exits the shell with its
+status (`errexit_off` in `exec.c` counts those contexts). Any other
+option letter is refused with status 2. `set` alone prints the
+variables; `set --` or a first non option word replaces the positional
+parameters. pdpmake in POSIX mode prefixes every command with `set -e;`.
 
 `redirect.c` handles `<`, `>`, `>>`, descriptor-qualified forms, `<&`,
 `>&`, descriptor closure and `<<`/`<<-`. Saved descriptors are
