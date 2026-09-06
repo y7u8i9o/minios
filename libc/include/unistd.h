@@ -47,3 +47,17 @@ long uptime_ms(void);
 /* Number of processors and the processor currently running the caller. */
 int nproc(void);
 int getcpu(void);
+
+extern char *optarg;
+extern int optind, opterr, optopt, optreset;
+int getopt(int argc, char *const argv[], const char *optstring);
+
+/* Ownership is stored but not enforced and cannot be changed: both return 0
+ * without effect. */
+int fchown(int fd, uid_t owner, gid_t group);
+int chown(const char *path, uid_t owner, gid_t group);
+
+/* Scatter and gather I/O, performed as a sequence of read and write calls. */
+struct iovec;
+ssize_t readv(int fd, const struct iovec *iov, int count);
+ssize_t writev(int fd, const struct iovec *iov, int count);

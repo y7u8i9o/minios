@@ -504,3 +504,52 @@ int mkstemp(char *template)
     errno = EEXIST;
     return -1;
 }
+
+void *bsearch(const void *key, const void *base, size_t n, size_t size,
+              int (*cmp)(const void *, const void *))
+{
+    const char *b = base;
+    while (n > 0) {
+        size_t mid = n / 2;
+        const char *p = b + mid * size;
+        int r = cmp(key, p);
+        if (r == 0)
+            return (void *)p;
+        if (r > 0) {
+            b = p + size;
+            n -= mid + 1;
+        } else {
+            n = mid;
+        }
+    }
+    return NULL;
+}
+
+/* Park-Miller minimal standard generator, state in [1, 2^31 - 2]. */
+static unsigned long random_state = 1;
+
+long random(void)
+{
+    random_state = (random_state * 48271UL) % 2147483647UL;
+    return (long)random_state - 1;
+}
+
+void srandom(unsigned seed)
+{
+    random_state = seed % 2147483647UL;
+    if (random_state == 0)
+        random_state = 1;
+}
+
+static const char *progname = "";
+
+const char *getprogname(void)
+{
+    return progname;
+}
+
+void setprogname(const char *name)
+{
+    const char *slash = strrchr(name, '/');
+    progname = slash != NULL ? slash + 1 : name;
+}

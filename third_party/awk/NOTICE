@@ -1,0 +1,19 @@
+The One True AWK (the awk of Brian Kernighan, second edition), taken
+from contrib/one-true-awk of the FreeBSD source tree on the GitHub
+mirror https://github.com/freebsd/freebsd-src at commit
+2e33355ee2bfa0b6d7b61aeca66d9b2b2b7b9e56
+on 2026-09-06 with tools/fetch_sedawk.sh. The upstream repository is
+https://github.com/onetrue-awk/awk; main.c reports the release date as
+its version.
+
+Copied without modification:
+  src/   awk.h, awkgram.y, b.c, lex.c, lib.c, main.c, maketab.c, parse.c,
+         proto.h, run.c, tran.c, awk.1
+  LICENSE, README.md, FIXES
+
+awkgram.y is turned into awkgram.tab.c and awkgram.tab.h by yacc at
+build time, and maketab.c, compiled with the host compiler, produces
+proctab.c from the grammar's token numbers; the generated files live in
+build/user/awk/gen/. user/Makefile links /bin/awk. The vendored files
+are exempt from the minios line count and naming conventions. See
+docs/design/sedawk.md.

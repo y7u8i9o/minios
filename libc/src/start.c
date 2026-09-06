@@ -68,6 +68,8 @@ __attribute__((noreturn)) void __libc_start(int argc, char **argv, char **envp)
 {
     __pthread_init_main();
     environ = envp;
+    if (argc > 0 && argv[0] != NULL)
+        setprogname(argv[0]);
     __stdio_init();
     exit(main(argc, argv, envp));
 }

@@ -18,6 +18,7 @@ NM      := $(CROSS)nm
 OBJCOPY := $(CROSS)objcopy
 GDB     := $(CROSS)gdb
 HOSTCC  ?= cc
+YACC    ?= yacc
 HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 QEMU    ?= qemu-system-x86_64
 XORRISO ?= xorriso

@@ -36,3 +36,19 @@ int mkstemp(char *template);
 int rand(void);
 void srand(unsigned seed);
 void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const void *));
+
+void *bsearch(const void *key, const void *base, size_t n, size_t size,
+              int (*cmp)(const void *, const void *));
+
+/* random has a period of 2^31 - 2 and returns values in [0, 2^31 - 2]. */
+long random(void);
+void srandom(unsigned seed);
+
+/* The program name is the last component of argv[0]. */
+const char *getprogname(void);
+void setprogname(const char *name);
+
+/* Stateful multibyte conversion over the UTF-8 encoding. */
+int mblen(const char *s, size_t n);
+int mbtowc(wchar_t *out, const char *s, size_t n);
+int wctomb(char *s, wchar_t wc);

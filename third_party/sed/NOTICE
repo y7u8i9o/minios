@@ -1,0 +1,12 @@
+sed from the FreeBSD source tree, usr.bin/sed, taken from the GitHub
+mirror https://github.com/freebsd/freebsd-src at commit
+2e33355ee2bfa0b6d7b61aeca66d9b2b2b7b9e56
+on 2026-09-06 with tools/fetch_sedawk.sh.
+
+Copied without modification:
+  src/   compile.c, defs.h, extern.h, main.c, misc.c, process.c, sed.1, POSIX
+  LICENSE  the COPYRIGHT file of the FreeBSD source tree (BSD 2-clause)
+
+user/Makefile compiles src/ into build/user/sed/ and links /bin/sed. The
+vendored files are exempt from the minios line count and naming
+conventions. See docs/design/sedawk.md.

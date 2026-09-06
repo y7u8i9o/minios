@@ -14,9 +14,15 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <wctype.h>
+#include <strings.h>
+#include <libgen.h>
+#include <err.h>
 
 static void test_terminal_libc(void);
 static void test_stdio_additions(void);
+static void test_port_additions(void);
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("libcexttest: FAIL " __VA_ARGS__); printf("\n"); } } while (0)
@@ -168,6 +174,7 @@ int main(void)
     test_time_additions();
     test_terminal_libc();
     test_stdio_additions();
+    test_port_additions();
     printf("libcexttest: %d failures\n", failures);
     return failures ? 1 : 0;
 }
@@ -282,4 +289,76 @@ static void test_stdio_additions(void)
     if (value == 0)
         _longjmp(env, 4);
     CHECK(value == 4, "_setjmp and _longjmp");
+}
+
+static int compare_ints(const void *a, const void *b)
+{
+    return *(const int *)a - *(const int *)b;
+}
+
+/* The functions added for the sed and awk ports. */
+static void test_port_additions(void)
+{
+    int a = 0, b = 0, c = 0;
+    char word[16];
+    float x = 0;
+    CHECK(sscanf("12 -7 0x1f", "%d %d %i", &a, &b, &c) == 3 && a == 12 && b == -7 && c == 31,
+          "sscanf integers %d %d %d", a, b, c);
+    CHECK(sscanf("pi=3.5 rest", "pi=%f %5s", &x, word) == 2 && x == 3.5f && !strcmp(word, "rest"),
+          "sscanf float and string");
+    CHECK(sscanf("1970 01 02", "%d %d %d %d", &a, &b, &c, &a) == 3, "sscanf stops at the end");
+    CHECK(sscanf("", "%d", &a) == EOF, "sscanf on empty input");
+    CHECK(sscanf("abc:def", "%[a-c]:%s", word, word + 8) == 2 && !strcmp(word, "abc") && !strcmp(word + 8, "def"),
+          "sscanf scanset");
+    int n = 0;
+    CHECK(sscanf("xy", "xy%n", &n) == 0 && n == 2, "sscanf %%n");
+
+    char *args[] = { "prog", "-ab", "-c", "value", "file", NULL };
+    optind = 1;
+    optreset = 1;
+    int opt, seen_a = 0, seen_b = 0;
+    const char *carg = NULL;
+    while ((opt = getopt(5, args, "abc:")) != -1) {
+        if (opt == 'a') seen_a = 1;
+        if (opt == 'b') seen_b = 1;
+        if (opt == 'c') carg = optarg;
+    }
+    CHECK(seen_a && seen_b && carg && !strcmp(carg, "value") && optind == 4, "getopt parsed options");
+
+    char *text = NULL;
+    CHECK(asprintf(&text, "%s-%d", "id", 42) == 5 && text && !strcmp(text, "id-42"), "asprintf");
+    free(text);
+
+    char path1[] = "/usr/share/man/", path2[] = "plain", path3[] = "/";
+    CHECK(!strcmp(basename(path1), "man"), "basename strips slashes");
+    CHECK(!strcmp(dirname(path1), "/usr/share"), "dirname");
+    CHECK(!strcmp(dirname(path2), ".") && !strcmp(basename(path3), "/"), "dirname and basename edge cases");
+
+    CHECK(strcasecmp("Hello", "hELLO") == 0 && strncasecmp("abcX", "ABCy", 3) == 0 && strcasecmp("a", "b") < 0,
+          "strcasecmp");
+
+    int sorted[] = { 1, 3, 5, 7, 9 };
+    int key = 7;
+    int *found = bsearch(&key, sorted, 5, sizeof sorted[0], compare_ints);
+    key = 4;
+    CHECK(found == &sorted[3] && bsearch(&key, sorted, 5, sizeof sorted[0], compare_ints) == NULL, "bsearch");
+
+    srandom(11);
+    long r1 = random();
+    srandom(11);
+    CHECK(r1 == random() && r1 >= 0, "random repeats for a seed");
+
+    CHECK(iswalpha(L'a') && iswalpha(0xe9) && !iswalpha(L'1') && iswdigit(L'7') && iswspace(0xa0),
+          "wide character classes");
+    CHECK(towupper(L'a') == L'A' && towupper(0xe9) == 0xc9 && towlower(0x410) == 0x430 && towupper(L'1') == L'1',
+          "towupper and towlower");
+    wchar_t wc = 0;
+    char mb[8];
+    CHECK(mbtowc(&wc, "\xc3\xa9x", 3) == 2 && wc == 0xe9 && wctomb(mb, 0x20ac) == 3 && mb[0] == '\xe2',
+          "mbtowc and wctomb");
+
+    struct stat st;
+    CHECK(lstat("/bin/sh", &st) == 0 && S_ISREG(st.st_mode) && fchmod(0, 0644) == 0, "lstat and fchmod");
+    CHECK(!strcmp(getprogname(), "libcexttest"), "getprogname is %s", getprogname());
+    CHECK(strcasecmp(getprogname(), "LIBCEXTTEST") == 0, "program name compares");
 }

@@ -569,3 +569,28 @@ int pclose(FILE *f)
     }
     return status;
 }
+
+int vasprintf(char **out, const char *fmt, va_list ap)
+{
+    va_list copy;
+    va_copy(copy, ap);
+    int n = vsnprintf(NULL, 0, fmt, copy);
+    va_end(copy);
+    if (n < 0)
+        return -1;
+    char *buf = malloc((size_t)n + 1);
+    if (buf == NULL)
+        return -1;
+    vsnprintf(buf, (size_t)n + 1, fmt, ap);
+    *out = buf;
+    return n;
+}
+
+int asprintf(char **out, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vasprintf(out, fmt, ap);
+    va_end(ap);
+    return n;
+}

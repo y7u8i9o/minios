@@ -1426,7 +1426,7 @@ the desktop).
 
 ## 6. Tooling Requirements
 
-Already installed: `x86_64-elf-gcc`, `nasm`, `qemu-system-x86_64`.
+Already installed: `x86_64-elf-gcc`, `nasm`, `qemu-system-x86_64`, `yacc` (for the awk grammar).
 To install: `brew install x86_64-elf-gdb xorriso` (xorriso for ISO creation, needed only until M13 makes the disk image primary).
 
 ## Debugging tools (completed 2026-08-30)
@@ -1506,3 +1506,15 @@ that carry their device scale; `icon_get` prefers `<name>.svg` in
 Awesome Free (solid), downloaded by `tools/fetch_icons.sh` into
 `third_party/fontawesome/`. Documented in `docs/design/icons.md`,
 tested by `libgui/tests/test_svg.c`.
+
+## sed and awk (completed 2026-09-06)
+
+FreeBSD sed and the One True AWK are compiled unmodified from
+`third_party/sed` and `third_party/awk` (downloaded by
+`tools/fetch_sedawk.sh`) into `/bin/sed` and `/bin/awk`. The libc gained
+`err.h`, `getopt`, the `scanf` family, `asprintf`, `wctype.h`,
+`strings.h`, `libgen.h`, `limits.h`, `sys/uio.h`, `bsearch`, `random`,
+`mbtowc`, `getprogname` and the permission bit macros, and `regexec`
+accepts `REG_STARTEND` with `nmatch` 0. Documented in
+`docs/design/sedawk.md`, tested by `tests/cases/sed`, `tests/cases/awk`
+and the new checks in `tests/cases/libc_ext`.

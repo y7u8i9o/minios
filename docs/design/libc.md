@@ -146,3 +146,29 @@ the previous one at the break turns the old sentinel into the header of
 the new block. The smallest payload is 32 bytes. `realloc` grows into a
 free successor in place before it copies. Requests of 256 KiB or more
 are mapped separately as before.
+
+## Additions for sed and awk
+
+The ports of FreeBSD sed and the One True AWK (`sedawk.md`) added
+`err.h`, `getopt`, `readv` and `writev`, the permission bit macros and
+`lstat`, `fchmod`, `chmod`, `fchown` and `chown` (which return 0 without
+effect, since the kernel ignores permission bits), the `scanf` family in
+`src/stdio/scan.c`, `asprintf`, `bsearch`, `random`, `mbtowc`, `wctomb`,
+`mblen`, `getprogname` (set from `argv[0]` by `__libc_start`),
+`wctype.h`, `strings.h`, `libgen.h`, `limits.h` with the POSIX limits,
+`sys/cdefs.h`, `sys/param.h`, `sys/uio.h` and the BSD type names in
+`sys/types.h`.
+
+`scan.c` reads through a source with one character of push back, which
+is what the grammar needs: `%d %i %u %o %x %X %p` collect the longest
+valid prefix and convert it with `strtol` or `strtoul`, the floating
+conversions collect a decimal or hexadecimal literal or `inf`/`nan` and
+call `strtod`, `%s`, `%c` and `%[` copy characters, `%n` stores the
+count consumed, `*` suppresses assignment, and `hh h l ll j z t L` set
+the width of the target. A directive that fails on the first input
+character before anything was assigned returns `EOF`.
+
+`wctype.h` classifies the Latin-1 supplement, Latin Extended-A and B,
+Greek and Cyrillic; every other code point above U+009F is printable and
+neither alphabetic nor a digit. `towupper` and `towlower` map the same
+blocks.

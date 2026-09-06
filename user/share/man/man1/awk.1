@@ -1,0 +1,30 @@
+AWK(1)                        User Commands
+
+NAME
+    awk - pattern-directed scanning and processing language
+
+SYNOPSIS
+    awk [-F fs] [-v var=value] [-safe] [--version] program [file...]
+    awk [-F fs] [-v var=value] [-safe] -f program_file [file...]
+
+DESCRIPTION
+    Reads the files (or standard input) as records, splits every record
+    into fields and runs the program's pattern-action pairs on it. This is
+    the One True AWK of Brian Kernighan (the second edition), and
+    implements the language of the POSIX standard and of the book The AWK
+    Programming Language: BEGIN and END blocks, regular expression and
+    relational patterns, ranges, the built-in variables NR NF FS OFS RS ORS
+    FILENAME FNR SUBSEP RSTART RLENGTH ENVIRON ARGC ARGV, associative
+    arrays with for (k in a), delete and in, user functions, printf,
+    getline in its forms, output to files and pipes, close, fflush and
+    system, the string functions length substr index split sub gsub match
+    sprintf tolower toupper, the arithmetic functions int sqrt exp log sin
+    cos atan2 rand srand, and the time functions systime strftime mktime.
+    Strings are UTF-8; length and substr count characters.
+
+    -F fs sets the field separator, -v assigns a variable before BEGIN,
+    -f reads the program from a file (repeatable), -safe disables file
+    output, pipes and system, and --version prints the release.
+
+SEE ALSO
+    sed(1), grep(1), sh(1), index(7)

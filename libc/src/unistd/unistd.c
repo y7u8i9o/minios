@@ -441,3 +441,62 @@ int uname(struct utsname *buf)
 {
     return (int)syscall1(SYS_uname, buf);
 }
+
+int fchown(int fd, uid_t owner, gid_t group)
+{
+    return 0;
+}
+
+int chown(const char *path, uid_t owner, gid_t group)
+{
+    return 0;
+}
+
+int fchmod(int fd, mode_t mode)
+{
+    return 0;
+}
+
+int chmod(const char *path, mode_t mode)
+{
+    return 0;
+}
+
+#include <sys/uio.h>
+
+ssize_t readv(int fd, const struct iovec *iov, int count)
+{
+    ssize_t total = 0;
+    for (int i = 0; i < count; i++) {
+        if (iov[i].iov_len == 0)
+            continue;
+        ssize_t n = read(fd, iov[i].iov_base, iov[i].iov_len);
+        if (n < 0)
+            return total > 0 ? total : n;
+        total += n;
+        if ((size_t)n < iov[i].iov_len)
+            break;
+    }
+    return total;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int count)
+{
+    ssize_t total = 0;
+    for (int i = 0; i < count; i++) {
+        size_t done = 0;
+        while (done < iov[i].iov_len) {
+            ssize_t n = write(fd, (const char *)iov[i].iov_base + done, iov[i].iov_len - done);
+            if (n < 0)
+                return total > 0 ? total : n;
+            done += (size_t)n;
+            total += n;
+        }
+    }
+    return total;
+}
+
+int lstat(const char *path, struct stat *st)
+{
+    return stat(path, st);
+}

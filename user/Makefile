@@ -16,7 +16,7 @@ PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings fi
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac)
+BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk)
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
 # are made here instead of in luaconf.h (see docs/design/lua.md).
@@ -100,6 +100,51 @@ $(ROOT)/bin/luac: $(LUA_OBJS) $(OUT)/lua/luac.o $(LUA_LIBS) $(LIBC) $(CRT0)
 	cp $(OUT)/luac.elf $@
 
 -include $(LUA_OBJS:.o=.d) $(OUT)/lua/lua.d $(OUT)/lua/luac.d
+
+# sed and awk are compiled unmodified from third_party/ (see
+# docs/design/sedawk.md). The awk grammar is generated with yacc and the
+# procedure table with maketab, a host program of the awk sources.
+SED_SRC  := ../third_party/sed/src
+SED_OBJS := $(patsubst $(SED_SRC)/%.c,$(OUT)/sed/%.o,$(wildcard $(SED_SRC)/*.c))
+AWK_SRC  := ../third_party/awk/src
+AWK_GEN  := $(OUT)/awk/gen
+AWK_CORE := b.c lex.c lib.c main.c parse.c run.c tran.c
+AWK_OBJS := $(patsubst %.c,$(OUT)/awk/%.o,$(AWK_CORE)) $(OUT)/awk/awkgram.tab.o $(OUT)/awk/proctab.o
+PORT_CFLAGS := -Wno-unused-but-set-variable -Wno-sign-compare -Wno-implicit-fallthrough -Wno-missing-field-initializers
+
+$(OUT)/sed/%.o: $(SED_SRC)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SED_SRC) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/sed: $(SED_OBJS) $(LIBC) $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/sed.elf $(ULDFLAGS) $(CRT0) $(SED_OBJS) $(LIBC) -lgcc
+	cp $(OUT)/sed.elf $@
+
+$(AWK_GEN)/awkgram.tab.c $(AWK_GEN)/awkgram.tab.h: $(AWK_SRC)/awkgram.y
+	@mkdir -p $(AWK_GEN)
+	cd $(AWK_GEN) && $(YACC) -d -b awkgram $(CURDIR)/$(AWK_SRC)/awkgram.y
+
+$(AWK_GEN)/maketab: $(AWK_SRC)/maketab.c $(AWK_GEN)/awkgram.tab.h
+	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -I$(AWK_SRC) -I$(AWK_GEN) -o $@ $<
+
+$(AWK_GEN)/proctab.c: $(AWK_GEN)/maketab
+	$(AWK_GEN)/maketab $(AWK_GEN)/awkgram.tab.h > $@
+
+$(OUT)/awk/%.o: $(AWK_SRC)/%.c $(AWK_GEN)/awkgram.tab.h
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(AWK_SRC) -I$(AWK_GEN) -MMD -MP -c -o $@ $<
+
+$(OUT)/awk/%.o: $(AWK_GEN)/%.c $(AWK_GEN)/awkgram.tab.h
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) -Wno-unused-variable -Wno-unused-function -Wno-unused-label $(UCPP) -I$(AWK_SRC) -I$(AWK_GEN) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/awk: $(AWK_OBJS) $(LIBC) $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/awk.elf $(ULDFLAGS) $(CRT0) $(AWK_OBJS) $(LIBC) -lgcc
+	cp $(OUT)/awk.elf $@
+
+-include $(SED_OBJS:.o=.d) $(AWK_OBJS:.o=.d)
 
 $(ROOT)/bin/%: %/*.c $(LIBC) $(LIBGUI) $(LIBAUDIO) $(LIBWIRE) $(LIBFONT) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)

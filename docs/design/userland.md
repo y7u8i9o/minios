@@ -129,6 +129,13 @@ switched the console to raw mode, feeds arrow keys and `q` through the
 keyboard driver, and checks the final output and that canonical mode is
 restored; it also runs `sl` and `life` to completion.
 
+## sed and awk
+
+`/bin/sed` (FreeBSD sed) and `/bin/awk` (the One True AWK) are compiled
+unmodified from `third_party/`; see [sed and awk](sedawk.md) for the
+build, the libc additions, the differences from the GNU programs and the
+tests.
+
 ## Editor
 
 `edit file` (`user/edit/edit.c`) is a nano style editor. It loads the

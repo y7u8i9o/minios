@@ -320,3 +320,32 @@ int strcoll(const char *a, const char *b)
 {
     return strcmp(a, b);
 }
+
+static int lower(int c)
+{
+    return (c >= 'A' && c <= 'Z') ? c + 0x20 : c;
+}
+
+int strcasecmp(const char *a, const char *b)
+{
+    while (*a != '\0' && lower((unsigned char)*a) == lower((unsigned char)*b)) {
+        a++;
+        b++;
+    }
+    return lower((unsigned char)*a) - lower((unsigned char)*b);
+}
+
+int strncasecmp(const char *a, const char *b, size_t n)
+{
+    for (; n > 0; n--, a++, b++) {
+        int d = lower((unsigned char)*a) - lower((unsigned char)*b);
+        if (d != 0 || *a == '\0')
+            return d;
+    }
+    return 0;
+}
+
+int ffs(int value)
+{
+    return value == 0 ? 0 : __builtin_ctz((unsigned)value) + 1;
+}

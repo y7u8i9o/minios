@@ -51,6 +51,7 @@ int ungetc(int c, FILE *f);
 #define TMP_MAX 10000
 #define P_tmpdir "/tmp"
 #define FILENAME_MAX 256
+#define FOPEN_MAX 64
 FILE *tmpfile(void);
 char *tmpnam(char *buf);
 FILE *popen(const char *command, const char *mode);
@@ -68,3 +69,14 @@ int remove(const char *path);
 int fseek(FILE *f, long off, int whence);
 long ftell(FILE *f);
 void rewind(FILE *f);
+
+/* Both allocate the result with malloc; -1 with *out unchanged on failure. */
+int asprintf(char **out, const char *fmt, ...);
+int vasprintf(char **out, const char *fmt, va_list ap);
+
+int scanf(const char *fmt, ...);
+int fscanf(FILE *f, const char *fmt, ...);
+int sscanf(const char *s, const char *fmt, ...);
+int vscanf(const char *fmt, va_list ap);
+int vfscanf(FILE *f, const char *fmt, va_list ap);
+int vsscanf(const char *s, const char *fmt, va_list ap);

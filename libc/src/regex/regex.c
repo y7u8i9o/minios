@@ -890,7 +890,9 @@ int regexec(const regex_t *regex, const char *string, size_t nmatch,
     size_t begin = 0;
     size_t end;
     if (flags & REG_STARTEND) {
-        if (!matches || !nmatch || matches[0].rm_so < 0 ||
+        /* matches[0] is an input even when nmatch is 0, as in the BSD
+         * definition of the flag. */
+        if (!matches || matches[0].rm_so < 0 ||
             matches[0].rm_eo < matches[0].rm_so)
             return REG_BADPAT;
         begin = (size_t)matches[0].rm_so;

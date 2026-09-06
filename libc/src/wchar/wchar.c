@@ -603,3 +603,37 @@ wchar_t *fgetws(wchar_t *s, int n, FILE *stream)
     s[i] = 0;
     return s;
 }
+
+/* mbtowc, wctomb and mblen keep no state between calls because UTF-8 is
+ * stateless; a null s resets nothing and reports that. */
+int mbtowc(wchar_t *out, const char *s, size_t n)
+{
+    if (s == NULL)
+        return 0;
+    if (n == 0)
+        return -1;
+    if (*s == '\0') {
+        if (out != NULL)
+            *out = 0;
+        return 0;
+    }
+    mbstate_t state = { 0 };
+    size_t r = mbrtowc(out, s, n, &state);
+    if (r == (size_t)-1 || r == (size_t)-2)
+        return -1;
+    return (int)r;
+}
+
+int wctomb(char *s, wchar_t wc)
+{
+    if (s == NULL)
+        return 0;
+    mbstate_t state = { 0 };
+    size_t r = wcrtomb(s, wc, &state);
+    return r == (size_t)-1 ? -1 : (int)r;
+}
+
+int mblen(const char *s, size_t n)
+{
+    return mbtowc(NULL, s, n);
+}

@@ -92,7 +92,7 @@ The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `mat
 
 `/bin/sh` parses complete command trees (`if`, `for`, `while`, `until`, `case`, functions, subshells, brace groups), expands parameters, command substitutions, arithmetic and pathnames, applies redirections and here documents, and controls jobs. Interactive input is read by `libedit`, which implements line editing, history and completion.
 
-The 75 programs in `user/coreutils/` are the file, text, process and system utilities (`ls`, `grep`, `find`, `xargs`, `sort`, `diff`, `gzip`, `less`, `man`, `ps`, `prof`, `prlimit`, `mount`, `sync`, `shutdown`) and the terminal games (`2048`, `snake`, `life`, `maze`, `matrix`, `sl`). Manual pages are installed under `/usr/share/man`.
+The 75 programs in `user/coreutils/` are the file, text, process and system utilities (`ls`, `grep`, `find`, `xargs`, `sort`, `diff`, `gzip`, `less`, `man`, `ps`, `prof`, `prlimit`, `mount`, `sync`, `shutdown`) and the terminal games (`2048`, `snake`, `life`, `maze`, `matrix`, `sl`). `/bin/sed` is the sed of FreeBSD and `/bin/awk` the One True AWK of Brian Kernighan, both compiled unmodified from `third_party/`. Manual pages are installed under `/usr/share/man`.
 
 Lua 5.5.1 is compiled unmodified from `third_party/lua/src/` into `/bin/lua` and `/bin/luac`. `user/lua/` adds the modules `fs` (directory listing, file status, whole file reads and writes), `sys` (process start, MIME handlers, signals, system information) and `gui`, which binds the `libgui` framework. `user/share/apps/clock.lua` and `pong.lua` are the clock and pong applications written in Lua. Launcher files on the desktop start them.
 
@@ -134,7 +134,7 @@ minios/
   user/
     init/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  desktop/
     settings/  files/  calc/  audiod/  apps/  lua/  tests/  etc/  share/  home/
-  third_party/          Limine, Lua 5.5.1, DejaVu, Noto Sans, Latin Modern, Unifont, Font Awesome
+  third_party/          Limine, Lua 5.5.1, FreeBSD sed, the One True AWK, DejaVu, Noto Sans, Latin Modern, Unifont, Font Awesome
   tools/
     mkfs/  fsck/        mfs image tools
     mkfat/              FAT image tool
@@ -171,7 +171,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 119 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 121 cases. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser.
 
 ## Code size
 
@@ -180,14 +180,14 @@ The counts are code lines reported by cloc 2.10, without blank and comment lines
 | Component | C | Headers | Other | Total |
 |---|---|---|---|---|
 | kernel | 23,791 | 3,375 | 250 assembly and make | 27,473 |
-| libc | 7,327 | 1,225 | 93 assembly and make | 8,645 |
+| libc | 8,242 | 1,381 | 93 assembly and make | 9,716 |
 | libgui, libfont, libwire, libaudio, libedit | 13,227 | 1,027 | 107 make | 14,362 |
-| user programs and tests | 30,116 | 1,295 | 483 Lua, 205 shell, 99 make | 32,200 |
-| tools | 1,667 | | 502 Python, 365 shell | 2,534 |
+| user programs and tests | 30,184 | 1,295 | 483 Lua, 332 shell, 99 make | 32,393 |
+| tools | 1,667 | | 502 Python, 449 shell | 2,618 |
 | protocol | | | 437 XML | 437 |
-| total | 76,128 | 6,922 | 2,601 | 85,651 |
+| total | 77,111 | 7,078 | 2,810 | 86,999 |
 
-The Lua sources in `third_party/lua/src/` add 21,410 code lines, unchanged from the release archive. The boot test scripts under `tests/` add 226 lines.
+The Lua sources in `third_party/lua/src/` add 21,410 code lines and the sed and awk sources in `third_party/sed/src/` and `third_party/awk/src/` 9,045, all unchanged from their origin. The boot test scripts under `tests/` add 226 lines.
 
 ## State
 

@@ -4,7 +4,8 @@
 
 `toolchain.mk` is included by every Makefile. On x86_64 Linux it uses the
 native GCC and GNU binutils, which can emit the freestanding x86_64 ELF files
-directly. Other hosts default to the `x86_64-elf-` cross tools. Set `CROSS`
+directly. Other hosts default to the `x86_64-elf-` cross tools. `YACC` (default
+`yacc`) generates the awk parser; Berkeley yacc and bison both work. Set `CROSS`
 explicitly to override either choice (for example, `CROSS=x86_64-elf-`). It
 also selects the host compiler for the helper programs under `tools/`, and
 QEMU. Host utilities request POSIX.1-2008 declarations so they compile under
