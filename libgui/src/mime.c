@@ -7,9 +7,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <minios/local.h>
 
-struct ext_entry { char type[48]; char ext[16]; };
-struct app_entry { char type[48]; char program[64]; };
+/* local: from the tables of installed packages under the package prefix,
+ * which mime_save leaves out. */
+struct ext_entry { char type[48]; char ext[16]; int local; };
+struct app_entry { char type[48]; char program[64]; int local; };
 
 static struct ext_entry exts[128];
 static int nexts;
@@ -36,29 +39,42 @@ static char *trim(char *s)
     return s;
 }
 
-int mime_load(const char *types_path, const char *apps_path)
+static void load_types(const char *path, int local)
 {
-    loaded = 1;
-    nexts = napps = 0;
     char line[256];
-    FILE *f = fopen(types_path ? types_path : "/etc/mime.types", "r");
-    if (f) {
-        while (fgets(line, sizeof line, f)) {
-            char *p = trim(line);
-            if (!*p || *p == '#') continue;
-            char *type = strtok(p, " \t");
-            char *ext;
-            while (type && (ext = strtok(NULL, " \t")) != NULL && nexts < 128) {
-                strlcpy(exts[nexts].type, type, sizeof exts[0].type);
-                strlcpy(exts[nexts].ext, ext, sizeof exts[0].ext);
-                nexts++;
-            }
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return;
+    while (fgets(line, sizeof line, f)) {
+        char *p = trim(line);
+        if (!*p || *p == '#') continue;
+        char *type = strtok(p, " \t");
+        char *ext;
+        while (type && (ext = strtok(NULL, " \t")) != NULL && nexts < 128) {
+            strlcpy(exts[nexts].type, type, sizeof exts[0].type);
+            strlcpy(exts[nexts].ext, ext, sizeof exts[0].ext);
+            exts[nexts].local = local;
+            nexts++;
         }
-        fclose(f);
     }
-    if (apps_path)
-        strlcpy(apps_file, apps_path, sizeof apps_file);
-    f = fopen(apps_file, "r");
+    fclose(f);
+}
+
+static int find_app(const char *type)
+{
+    for (int i = 0; i < napps; i++)
+        if (strcmp(apps[i].type, type) == 0)
+            return i;
+    return -1;
+}
+
+/* Package entries are added after the system table and only for types
+ * the table does not name, so the user's handler table takes precedence
+ * on the same type. */
+static int load_apps(const char *path, int local)
+{
+    char line[256];
+    FILE *f = fopen(path, "r");
     if (!f)
         return -errno;
     while (fgets(line, sizeof line, f)) {
@@ -66,13 +82,29 @@ int mime_load(const char *types_path, const char *apps_path)
         if (!*p || *p == '#') continue;
         char *type = strtok(p, " \t");
         char *prog = strtok(NULL, " \t");
-        if (type && prog && napps < MIME_MAX) {
+        if (type && prog && napps < MIME_MAX && !(local && find_app(type) >= 0)) {
             strlcpy(apps[napps].type, type, sizeof apps[0].type);
             strlcpy(apps[napps].program, prog, sizeof apps[0].program);
+            apps[napps].local = local;
             napps++;
         }
     }
     fclose(f);
+    return 0;
+}
+
+int mime_load(const char *types_path, const char *apps_path)
+{
+    loaded = 1;
+    nexts = napps = 0;
+    load_types(types_path ? types_path : "/etc/mime.types", 0);
+    if (apps_path)
+        strlcpy(apps_file, apps_path, sizeof apps_file);
+    int r = load_apps(apps_file, 0);
+    if (r < 0)
+        return r;
+    load_types(LOCAL_MIME_TYPES, 1);
+    load_apps(LOCAL_MIME_APPS, 1);
     return 0;
 }
 
@@ -96,14 +128,6 @@ const char *mime_type(const char *path, int is_dir)
                 return exts[i].type;
     }
     return "application/octet-stream";
-}
-
-static int find_app(const char *type)
-{
-    for (int i = 0; i < napps; i++)
-        if (strcmp(apps[i].type, type) == 0)
-            return i;
-    return -1;
 }
 
 const char *mime_handler(const char *type)
@@ -134,6 +158,7 @@ void mime_set_handler(const char *type, const char *program)
         strlcpy(apps[i].type, type, sizeof apps[0].type);
     }
     strlcpy(apps[i].program, program, sizeof apps[0].program);
+    apps[i].local = 0;
 }
 
 int mime_save(const char *apps_path)
@@ -144,7 +169,8 @@ int mime_save(const char *apps_path)
         return -errno;
     fprintf(f, "# type program\n");
     for (int i = 0; i < napps; i++)
-        fprintf(f, "%s %s\n", apps[i].type, apps[i].program);
+        if (!apps[i].local)
+            fprintf(f, "%s %s\n", apps[i].type, apps[i].program);
     fclose(f);
     return 0;
 }

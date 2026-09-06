@@ -6,4 +6,5 @@ text/x-lua lua
 image/png png
 audio/x-wav wav
 application/x-launcher app
+application/x-minios-package mpk
 application/octet-stream bin img

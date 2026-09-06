@@ -15,6 +15,7 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include "panel.h"
+#include <minios/local.h>
 
 #define MAX_ENTRIES 32
 #define MAX_TASKS 16
@@ -164,9 +165,9 @@ static void draw_menu(void)
 
 /* ---- launcher ---- */
 
-static void load_entries(void)
+static void load_entry_file(const char *path)
 {
-    FILE *f = fopen("/etc/launcher", "r");
+    FILE *f = fopen(path, "r");
     if (!f)
         return;
     char line[128];
@@ -181,6 +182,14 @@ static void load_entries(void)
         nentries++;
     }
     fclose(f);
+}
+
+/* The system table, then the entries of installed packages, which the
+ * package installer writes (docs/design/packages.md). */
+static void load_entries(void)
+{
+    load_entry_file("/etc/launcher");
+    load_entry_file(LOCAL_LAUNCHER);
 }
 
 static void launch(const struct entry *e)

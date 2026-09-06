@@ -3,12 +3,17 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libgui
 LIB   := $(OUT)/libgui.a
 SO    := $(BUILD)/lib/libgui.so
+# The ABI number of the shared object (docs/design/packages.md): raised
+# whenever a structure, constant, signature or documented behaviour that
+# programs depend on changes incompatibly; additions leave it alone.
+ABI   := 1
+ABIFILE := $(BUILD)/lib/libgui.abi
 SRCS  := $(wildcard src/*.c src/widgets/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(OUT)/font.o
 UCPP  := -Iinclude -I../libfont/include -I../libwire/include -I../libwire/generated -I../libc/include -I../kernel/include
 
 .PHONY: all clean check
-all: $(LIB) $(SO)
+all: $(LIB) $(SO) $(ABIFILE)
 
 # Host unit tests: the library and libfont compiled with the system
 # compiler against a fake client (tests/fake_client.c).
@@ -44,3 +49,7 @@ clean:
 	rm -rf $(OUT)
 
 -include $(OBJS:.o=.d)
+
+$(ABIFILE): Makefile
+	@mkdir -p $(dir $@)
+	@echo $(ABI) > $@

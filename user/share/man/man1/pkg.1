@@ -1,0 +1,58 @@
+PKG(1)                      User Commands                    PKG(1)
+
+NAME
+    pkg - install, remove, list and build packages
+
+SYNOPSIS
+    pkg [--prefix dir] [--root dir] install file...
+    pkg [--prefix dir] [--root dir] check file...
+    pkg [--prefix dir] remove [--force] name...
+    pkg [--prefix dir] list
+    pkg [--prefix dir] info name|file
+    pkg [--prefix dir] verify [name...]
+    pkg [--root dir] build dir [file]
+
+DESCRIPTION
+    pkg installs applications from package files into /home/.local and
+    keeps a record of every installed file. A package is a gzip
+    compressed ustar archive named name-version.mpk whose first member
+    is the manifest and whose files lie under files/, relative to the
+    prefix. Every check of an installation runs before anything is
+    written: the dependencies, the conflicts, the shared libraries with
+    their ABI numbers and symbols, and the ownership of every path.
+
+COMMANDS
+    install   install or upgrade the packages in the named files
+    check     run the checks of install without writing anything
+    remove    remove installed packages; --force removes a package that
+              other packages depend on
+    list      print the installed packages, one name, version and
+              summary per line
+    info      print the manifest and the files of an installed package
+              or of a package file
+    verify    compare the recorded size and checksum of every installed
+              file with the file on disk
+    build     write a package from a directory holding manifest and
+              files/; the needs lines are derived from the ELF files
+
+OPTIONS
+    --prefix dir   install under dir instead of /home/.local
+    --root dir     read lib/abi and the system libraries below dir
+
+FILES
+    /home/.local/lib/pkg/name/manifest   the manifest as installed
+    /home/.local/lib/pkg/name/files      path, size and CRC-32 of each file
+    /home/.local/lib/pkg/name/dirs       the directories the package created
+    /home/.local/share/launcher          launcher entries of the packages
+    /home/.local/share/mime.types        MIME types of the packages
+    /home/.local/share/mime.apps         MIME handlers of the packages
+    /lib/abi                             ABI numbers of the system libraries
+
+EXAMPLES
+    pkg build pong
+    pkg install pong-1.2.0.mpk
+    pkg list
+    pkg remove pong
+
+SEE ALSO
+    tar(1), gzip(1), ld(1)

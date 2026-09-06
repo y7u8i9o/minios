@@ -19,7 +19,8 @@
 #define PAGE 4096UL
 #define ALIGN_DOWN(x, a) ((x) & ~((a) - 1))
 #define ALIGN_UP(x, a) (((x) + (a) - 1) & ~((a) - 1))
-#define LIB_DIR "/lib/"
+/* The system libraries, then the package prefix (minios/local.h). */
+static const char *const lib_dirs[] = { "/lib/", "/home/.local/lib/" };
 /* Keep DSOs above the interpreter and below the ordinary mmap area. Every
  * image reserves its holes too, so later mappings cannot occupy them. */
 #define LIB_ARENA 0x7e0010000000UL
@@ -645,13 +646,18 @@ static struct object *load_library(const char *name)
         die("empty library name", NULL);
     for (size_t i = 0; i < n; i++)
         if (name[i] == '/')
-            die("library names must be basenames in /lib", name);
-    char *path = dl_alloc(sizeof LIB_DIR + n);
-    dl_memcpy(path, LIB_DIR, sizeof LIB_DIR - 1);
-    dl_memcpy(path + sizeof LIB_DIR - 1, name, n + 1);
-    long fd = sys(SYS_open, (long)path, O_RDONLY, 0, 0, 0, 0);
+            die("library names must be basenames", name);
+    char *path = NULL;
+    long fd = -1;
+    for (size_t d = 0; d < sizeof lib_dirs / sizeof lib_dirs[0] && fd < 0; d++) {
+        size_t dn = dl_strlen(lib_dirs[d]);
+        path = dl_alloc(dn + n + 1);
+        dl_memcpy(path, lib_dirs[d], dn);
+        dl_memcpy(path + dn, name, n + 1);
+        fd = sys(SYS_open, (long)path, O_RDONLY, 0, 0, 0, 0);
+    }
     if (fd < 0)
-        die("cannot open library", path);
+        die("cannot open library", name);
     struct stat st;
     if (sys(SYS_fstat, fd, (long)&st, 0, 0, 0, 0) < 0 || st.st_size < (long)sizeof(struct ehdr))
         die("invalid library file size", path);

@@ -158,7 +158,10 @@ the mounted filesystems. See [persistent storage](storage.md).
 
 `ar` (`user/coreutils/ar.c`) maintains System V archives and `/bin/tar`
 is the tar of sbase, compiled unmodified from `third_party/sbase`; see
-[ar and tar](artar.md). `gzip` accepts `-f` since the same change.
+[ar and tar](artar.md). `gzip` accepts `-f` since the same change. The
+gzip codec lives in libc (`minios/gzip.h`: `gzip_compress`,
+`gzip_decompress`, `gzip_crc32`) since the package installer
+([packages.md](packages.md)) uses it; `mkdir` accepts `-p`.
 
 ## Editor
 

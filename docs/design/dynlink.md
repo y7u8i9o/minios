@@ -99,7 +99,9 @@ misaligned load segments, and initializers outside executable segments.
 An error prints `ld.so: what: name` to standard error and exits with
 status 127.
 
-A library is `/lib/<soname>`. Its span is reserved with `PROT_NONE` at the
+A library is `/lib/<soname>`, or `/home/.local/lib/<soname>` when `/lib`
+does not hold it, the directory of installed packages (`packages.md`).
+Its span is reserved with `PROT_NONE` at the
 next address of an arena that starts at `0x7e0010000000` and ends at
 `0x7e8000000000`, each library on a 1 MiB boundary or the alignment its
 segments ask for, followed by an unmapped page; the mmap area below

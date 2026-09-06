@@ -3,6 +3,11 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libc
 LIB   := $(OUT)/libc.a
 SO    := $(BUILD)/lib/libc.so
+# The ABI number of the shared object (docs/design/packages.md): raised
+# whenever a structure, constant, signature or documented behaviour that
+# programs depend on changes incompatibly; additions leave it alone.
+ABI   := 1
+ABIFILE := $(BUILD)/lib/libc.abi
 CRT0  := $(OUT)/crt0.o
 CRTI  := $(OUT)/crti.o $(OUT)/crtn.o
 
@@ -11,7 +16,7 @@ ASRCS := src/syscall.S src/setjmp.S
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(patsubst %.S,$(OUT)/%.o,$(ASRCS))
 
 .PHONY: all clean
-all: $(LIB) $(SO) $(CRT0) $(CRTI)
+all: $(LIB) $(SO) $(CRT0) $(CRTI) $(ABIFILE)
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -46,3 +51,7 @@ clean:
 	rm -rf $(OUT)
 
 -include $(OBJS:.o=.d)
+
+$(ABIFILE): Makefile
+	@mkdir -p $(dir $@)
+	@echo $(ABI) > $@

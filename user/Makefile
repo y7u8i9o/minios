@@ -17,12 +17,12 @@ INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings files
+PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings files pkg
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
 APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc)
-LIBS   := $(addprefix $(ROOT)/lib/,ld.so $(addsuffix .so,$(SHARED)))
+LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
 # are made here instead of in luaconf.h (see docs/design/lua.md).
@@ -103,6 +103,19 @@ $(OUT)/lua/minios_%.o: lua/%.c
 	$(CC) $(UCFLAGS) $(UCPP) $(LUA_CPP) -I$(LUA_SRC) -MMD -MP -c -o $@ $<
 
 # The Lua core is one shared object used by lua and luac.
+# The ABI number of the Lua core (docs/design/packages.md).
+LUA_ABI := 1
+$(BUILD)/lib/liblua.abi: Makefile
+	@mkdir -p $(dir $@)
+	@echo $(LUA_ABI) > $@
+
+# The ABI table the package installer reads: one "soname number" line per
+# shared library, from the ABI variables of the library Makefiles.
+$(ROOT)/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
+	@mkdir -p $(dir $@)
+	@rm -f $@
+	@for l in $(SHARED); do echo "$$l.so $$(cat $(BUILD)/lib/$$l.abi)" >> $@; done
+
 $(BUILD)/lib/liblua.so: $(LUA_CORE_OBJS) $(BUILD)/lib/libc.so
 	@mkdir -p $(dir $@)
 	$(LD) $(USOFLAGS) -soname liblua.so -o $@ $(LUA_CORE_OBJS) -L$(BUILD)/lib -lc $(LIBGCC)
@@ -387,3 +400,4 @@ clean:
 # Executable loader fixtures are kept together with their source and the
 # ELF mutation generator; they run only in the targeted dynlink test.
 include ld/tests/fixtures.mk
+include pkg/tests/fixtures.mk
