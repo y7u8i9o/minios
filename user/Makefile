@@ -401,3 +401,21 @@ clean:
 # ELF mutation generator; they run only in the targeted dynlink test.
 include ld/tests/fixtures.mk
 include pkg/tests/fixtures.mk
+
+# Packages of the desktop applications (docs/design/packages.md): each
+# application is built into a package on the root image under
+# /usr/share/packages, from its program and its launcher entry, with
+# tools/mkpkg.sh. PKG_APPS lists "program:Title".
+PKG_APPS := calc:Calculator synth:Synthesizer sequencer:Sequencer player:Player view:Viewer unicode:Unicode
+PKG_VERSION := $(shell cat ../VERSION)
+PKG_FILES := $(foreach a,$(PKG_APPS),$(ROOT)/usr/share/packages/$(word 1,$(subst :, ,$(a)))-$(PKG_VERSION).mpk)
+all: $(PKG_FILES)
+define PKG_APP
+$(ROOT)/usr/share/packages/$(1)-$(PKG_VERSION).mpk: $(ROOT)/bin/$(1) $(ROOT)/lib/abi ../tools/mkpkg.sh ../VERSION
+	@rm -rf $(OUT)/packages/$(1)
+	@mkdir -p $(OUT)/packages/$(1)/files/bin $(ROOT)/usr/share/packages
+	@printf 'name $(1)\nversion $(PKG_VERSION)\nsummary $(2)\nlauncher $(2) bin/$(1)\n' > $(OUT)/packages/$(1)/manifest
+	@cp $(ROOT)/bin/$(1) $(OUT)/packages/$(1)/files/bin/$(1)
+	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(ROOT)
+endef
+$(foreach a,$(PKG_APPS),$(eval $(call PKG_APP,$(word 1,$(subst :, ,$(a))),$(word 2,$(subst :, ,$(a))))))
