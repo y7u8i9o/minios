@@ -3,13 +3,20 @@
 -- file extensions, the highlighter (a name or a table for
 -- editor:highlight), the command that runs a file, and a pattern that
 -- finds the definitions listed in the outline. $HOME/.config/code.lua
--- may add or change entries: it is loaded with the table as `languages`.
+-- may add or change entries and settings: it is loaded with the tables
+-- as `languages` and `settings`.
 --
 --     lua /usr/share/apps/code.lua [file]
 
 local gui = require "gui"
 local sys = require "sys"
 local fs = require "fs"
+
+-- Settings that $HOME/.config/code.lua may change as well.
+local settings = {
+  font = "/etc/fonts/DejaVuSansMono.ttf",
+  font_px = 13,
+}
 
 local languages = {
   lua = {
@@ -37,7 +44,7 @@ do
   local f = io.open(home .. "/.config/code.lua", "r")
   if f then
     f:close()
-    local chunk, err = loadfile(home .. "/.config/code.lua", "t", setmetatable({ languages = languages }, { __index = _G }))
+    local chunk, err = loadfile(home .. "/.config/code.lua", "t", setmetatable({ languages = languages, settings = settings }, { __index = _G }))
     if chunk then chunk() else io.stderr:write("code: " .. err .. "\n") end
   end
 end
@@ -80,6 +87,10 @@ local split = gui.splitpane(win, false)
 local left = gui.splitpane(split, true)
 local editor = gui.editor(left)
 local output = gui.editor(left):readonly(true)
+for _, pane in ipairs({ editor, output }) do
+  local ok, err = pane:font(settings.font, settings.font_px)
+  if not ok then io.stderr:write("code: font " .. settings.font .. ": " .. tostring(err) .. "\n") end
+end
 local outline = gui.table(split)
 split:position(540)
 left:position(330)

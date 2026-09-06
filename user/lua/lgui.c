@@ -787,6 +787,19 @@ static int w_highlight(lua_State *L)
     return 1;
 }
 
+static int w_font(lua_State *L)
+{
+    struct widget *w = check_editor(L, "font");
+    const char *path = lua_isnoneornil(L, 2) ? NULL : luaL_checkstring(L, 2);
+    int r = editor_set_font(w, path, (int)luaL_optinteger(L, 3, 13));
+    if (r < 0) {
+        errno = -r;
+        return minios_errresult(L);
+    }
+    lua_settop(L, 1);
+    return 1;
+}
+
 static int w_go(lua_State *L)
 {
     editor_goto(check_editor(L, "go"), (int)luaL_checkinteger(L, 2) - 1, (int)luaL_optinteger(L, 3, 1) - 1);
@@ -1053,7 +1066,7 @@ static const luaL_Reg widget_methods[] = {
     { "menuitem", w_menuitem }, { "separator", w_separator }, { "popup", w_popup },
     { "tool", w_tool }, { "field", w_field }, { "icon", w_icon },
     { "lines", w_lines }, { "line", w_line }, { "wrap", w_wrap }, { "numbers", w_numbers },
-    { "readonly", w_readonly }, { "highlight", w_highlight }, { "go", w_go },
+    { "readonly", w_readonly }, { "highlight", w_highlight }, { "font", w_font }, { "go", w_go },
     { "cursor", w_cursor }, { "undo", w_undo }, { "redo", w_redo }, { "search", w_editor_find },
     { "modified", w_modified },
     { "model", w_model }, { "refresh", w_refresh }, { "rows", w_rows }, { "selectrow", w_selectrow },

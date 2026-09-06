@@ -262,7 +262,7 @@ static int gutter_w(struct editor *ed)
     int digits = 1;
     for (int n = ed->nlines; n >= 10; n /= 10)
         digits++;
-    return digits * widget_theme(&ed->w)->font->advance['0'] + 10;
+    return digits * ed_font(ed)->advance['0'] + 10;
 }
 
 static int text_w(struct editor *ed)
@@ -273,7 +273,7 @@ static int text_w(struct editor *ed)
 
 static void build_rows(struct editor *ed)
 {
-    const struct font *f = widget_theme(&ed->w)->font;
+    const struct font *f = ed_font(ed);
     int avail = text_w(ed);
     ed->nrows = 0;
     for (int l = 0; l < ed->nlines; l++) {
@@ -340,7 +340,7 @@ static void scroll_to_cursor(struct editor *ed)
     if (r >= ed->scroll + vis)
         ed->scroll = r - vis + 1;
     if (!ed->wrap) {
-        const struct font *f = widget_theme(&ed->w)->font;
+        const struct font *f = ed_font(ed);
         int cx = gfx_text_width_font(f, ed->lines[ed->cl], ed->cc);
         int avail = text_w(ed);
         if (cx < ed->scroll_x) ed->scroll_x = cx;
@@ -415,10 +415,10 @@ static void editor_paint(struct widget *w, struct painter *p)
         if ((l > l0 || (l == l0 && start + len >= c0)) && (l < l1 || (l == l1 && start <= c1)) && !(l0 == l1 && c0 == c1)) {
             int sa = l == l0 && c0 > start ? c0 : start;
             int sb2 = l == l1 && c1 < start + len ? c1 : start + len;
-            int x0 = x + gfx_text_width_font(t->font, s + start, sa - start);
-            int x1 = x + gfx_text_width_font(t->font, s + start, sb2 - start);
+            int x0 = x + gfx_text_width_font(ed_font(ed), s + start, sa - start);
+            int x1 = x + gfx_text_width_font(ed_font(ed), s + start, sb2 - start);
             if (l < l1 && sb2 == start + len)
-                x1 += t->font->advance[' '];
+                x1 += ed_font(ed)->advance[' '];
             painter_fill(p, x0, y, x1 - x0, lh, t->color[TC_HIGHLIGHT]);
         }
         /* Text in runs of one class. */
@@ -431,15 +431,15 @@ static void editor_paint(struct widget *w, struct painter *p)
                 k++;
             memcpy(buf, s + j, (size_t)(k - j));
             buf[k - j] = '\0';
-            painter_text(p, x, ty, buf, class_color(t, cls));
-            x += gfx_text_width_font(t->font, buf, -1);
+            painter_text_font(p, ed_font(ed), x, ty, buf, class_color(t, cls), 0xffffffffu);
+            x += gfx_text_width_font(ed_font(ed), buf, -1);
             j = k;
         }
         if (w->focused && !ed->readonly && l == ed->cl && ed->cc >= start && (ed->cc < start + len || (ed->cc == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
-            int cx = PAD - ed->scroll_x + gfx_text_width_font(t->font, s + start, ed->cc - start);
+            int cx = PAD - ed->scroll_x + gfx_text_width_font(ed_font(ed), s + start, ed->cc - start);
             if (ed->preedit[0]) {
-                painter_text(p, cx, ty, ed->preedit, t->color[TC_TEXT]);
-                int pw = painter_text_width(p, ed->preedit, -1);
+                painter_text_font(p, ed_font(ed), cx, ty, ed->preedit, t->color[TC_TEXT], 0xffffffffu);
+                int pw = gfx_text_width_font(ed_font(ed), ed->preedit, -1);
                 painter_line(p, cx, y + lh - 1, cx + pw, y + lh - 1, t->color[TC_ACCENT]);
                 cx += pw;
             }
@@ -456,8 +456,8 @@ static void editor_paint(struct widget *w, struct painter *p)
                 continue;
             char num[16];
             snprintf(num, sizeof num, "%d", ed->row_line[r] + 1);
-            int tw = gfx_text_width_font(t->font, num, -1);
-            painter_text(p, gw - 6 - tw, i * lh + 1, num, t->color[TC_TEXT_DISABLED]);
+            int tw = gfx_text_width_font(ed_font(ed), num, -1);
+            painter_text_font(p, ed_font(ed), gw - 6 - tw, i * lh + 1, num, t->color[TC_TEXT_DISABLED], 0xffffffffu);
         }
         painter_pop(p);
     }
@@ -469,7 +469,7 @@ static void editor_paint(struct widget *w, struct painter *p)
 static void move_vertical(struct editor *ed, int rows)
 {
     ensure_rows(ed);
-    const struct font *f = widget_theme(&ed->w)->font;
+    const struct font *f = ed_font(ed);
     int r = row_of(ed, ed->cl, ed->cc);
     if (ed->wanted_x < 0)
         ed->wanted_x = gfx_text_width_font(f, ed->lines[ed->cl] + ed->row_start[r], ed->cc - ed->row_start[r]);
@@ -489,7 +489,7 @@ static void move_vertical(struct editor *ed, int rows)
 static void set_pos_from_point(struct editor *ed, int px, int py)
 {
     ensure_rows(ed);
-    const struct font *f = widget_theme(&ed->w)->font;
+    const struct font *f = ed_font(ed);
     int r = ed->scroll + (py - 1) / LH(ed);
     if (r < 0) r = 0;
     if (r >= ed->nrows) r = ed->nrows - 1;
@@ -694,6 +694,8 @@ static void editor_destroy(struct widget *w)
     free(ed->row_line);
     free(ed->row_start);
     free(ed->row_len);
+    if (ed->font)
+        gfx_font_free(ed->font);
 }
 
 const struct widget_class editor_class = { "editor", sizeof(struct editor), editor_measure, NULL, editor_paint, editor_event, editor_destroy };

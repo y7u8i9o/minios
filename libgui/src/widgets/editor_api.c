@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "editor_internal.h"
 
 struct widget *editor_new(struct widget *parent)
@@ -157,3 +158,28 @@ int editor_find(struct widget *w, const char *needle, int forward)
 
 int editor_modified(const struct widget *w) { return ((const struct editor *)w)->modified; }
 void editor_set_modified(struct widget *w, int m) { ((struct editor *)w)->modified = !!m; }
+
+/* Give the editor a font of its own, loaded from an outline font file at
+ * px logical pixels (scaled with the theme), with the theme's fallback
+ * font for the characters it lacks; NULL returns to the theme's font.
+ * Returns 0 or -errno. */
+int editor_set_font(struct widget *w, const char *path, int px)
+{
+    struct editor *ed = (struct editor *)w;
+    struct font *f = NULL;
+    if (path) {
+        const struct theme *t = widget_theme(w);
+        f = gfx_font_open_ttf(path, (px * t->scale + 50) / 100);
+        if (!f)
+            return -errno;
+        if (t->owned_fallback)
+            gfx_font_set_fallback(f, t->owned_fallback);
+    }
+    if (ed->font)
+        gfx_font_free(ed->font);
+    ed->font = f;
+    ed->rows_dirty = 1;
+    widget_invalidate(w);
+    widget_relayout(w);
+    return 0;
+}

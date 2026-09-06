@@ -306,6 +306,9 @@ void editor_set_wrap(struct widget *w, int on);
 void editor_set_line_numbers(struct widget *w, int on);
 void editor_set_readonly(struct widget *w, int on);
 void editor_set_highlighter(struct widget *w, highlight_fn fn, void *arg);
+/* An outline font of the editor's own at px logical pixels, NULL for the
+ * theme's font. Returns 0 or -errno. */
+int editor_set_font(struct widget *w, const char *path, int px);
 void editor_goto(struct widget *w, int line, int col);
 void editor_cursor(const struct widget *w, int *line, int *col);
 int editor_undo(struct widget *w);

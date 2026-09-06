@@ -12,7 +12,9 @@ The window has a menu bar (File, Edit, Run, View), a tool bar (New, Open,
 Save, Find, Run, Stop), a split pane with the editor above the output
 pane on the left and the outline table on the right, and a status bar
 with the file and its language, the cursor position and the state of a
-run. The editor is the toolkit's editor widget with line numbers;
+run. The editor and the output pane use DejaVu Sans Mono at 13 pixels;
+`settings.font` and `settings.font_px` in `$HOME/.config/code.lua`
+select another font file or size. The editor has line numbers;
 Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Q, Ctrl+Z, Ctrl+Y, Ctrl+F and Ctrl+G are
 the accelerators of the menu items, F5 runs and F6 stops. The output pane
 is a read-only editor. The outline lists the definitions the language
@@ -63,7 +65,7 @@ The `gui` module gained the constructors `editor`, `menubar`, `menu`,
 methods: on menus `menuitem(text [, icon])`, `separator()` and
 `popup(x, y)`; on tool bars `tool(icon, tip)`; on status bars
 `field(stretch)`; on every widget `icon(name)`; on editors `text`,
-`lines`, `line(i)`, `wrap`, `numbers`, `readonly`, `highlight`, `go(line [, col])`,
+`lines`, `line(i)`, `wrap`, `numbers`, `readonly`, `highlight`, `font(path [, px])`, `go(line [, col])`,
 `cursor`, `undo`, `redo`, `search(needle [, forward])` and `modified`;
 on tree views and tables `model(t)`, `refresh`, `rows([index])`,
 `selectrow(row)`, `expand(row [, on])` and `column(col [, width])`. A

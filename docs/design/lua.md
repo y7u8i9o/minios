@@ -155,7 +155,9 @@ The editor (`code.md`) added the constructors `editor`, `menubar`, `menu`,
 `popupmenu`, `toolbar`, `statusbar`, `treeview` and `table`, the editor,
 menu, tool bar, status bar, icon and data view methods, models written in
 Lua, the `context` signal, and `sys.spawn_pipe`, `sys.read`, `sys.close`
-and `sys.wait`. `code.md` lists them.
+and `sys.wait`. `code.md` lists them. `editor:font(path [, px])` loads an
+outline font for one editor (`editor_set_font` in libgui); `px` defaults
+to 13 logical pixels and `nil` returns to the theme's font.
 
 ## Tests
 

@@ -27,12 +27,16 @@ struct editor {
     int nrows, rows_dirty, rows_width;
     int wanted_x;               /* column pixel to keep on vertical moves */
     char preedit[WSRV_TITLE_MAX];
+    struct font *font;          /* own font (editor_set_font), NULL for the theme's */
 };
 
-#define LH(ed) (widget_theme(&(ed)->w)->font->height + 2)
-#define PAD 4
+static inline const struct font *ed_font(const struct editor *ed)
+{
+    return ed->font ? ed->font : widget_theme(&ed->w)->font;
+}
 
-#define LH(ed) (widget_theme(&(ed)->w)->font->height + 2)
+#define LH(ed) (ed_font(ed)->height + 2)
+#define PAD 4
 
 void lines_insert(struct editor *ed, int at, char *line);
 int llen(const struct editor *ed, int l);
