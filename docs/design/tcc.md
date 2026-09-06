@@ -39,15 +39,39 @@ that a change of these flags rebuilds it.
   `float.h`, `stdatomic.h`, `stdalign.h`, `stdnoreturn.h`, `tgmath.h`,
   `varargs.h` and `tccdefs.h`.
 - `/usr/include/`: the libc headers, `minios/*.h` and `syscall_nums.h`
-  from the kernel. `stdint.h` and `limits.h` were written for both
-  compilers, since tcc ships neither and the libc `limits.h` used to
-  reach the compiler's copy with `#include_next`.
-- `/lib/crt1.o` (a copy of `crt0.o`), `/lib/crti.o` and `/lib/crtn.o`
-  (empty objects), the runtime objects tcc links around every program;
-  `/lib/libm.a`, an empty archive for `-lm`, since the math functions are
-  in `libc.so`.
+  from the kernel, and the headers of the libraries: `gui/`, `font/`,
+  `wire/`, `audio/`, `edit.h` and `lua/`. `stdint.h` and `limits.h` were
+  written for both compilers, since tcc ships neither and the libc
+  `limits.h` used to reach the compiler's copy with `#include_next`.
+  `minios/abi.h` includes `stddef.h` itself now; every header compiles
+  alone.
+- `/lib/crt1.o`, a copy of `crt0.o`; `/lib/crti.o`, which defines empty
+  `_init` and `_fini` functions; `/lib/crtn.o`, empty. tcc links them
+  around every program. `__libc_start` of a static program tests the
+  weak `_init` and `_fini` through the global offset table, and tcc
+  leaves the table slot of an undefined weak function pointing at a
+  stub; without the definitions a static program crashed at exit.
+- `/lib/libm.a`, an empty archive for `-lm`, since the math functions
+  are in `libc.so`; `/lib/libc.a`, `libgui.a`, `libfont.a`, `libwire.a`,
+  `libaudio.a` and `libedit.a`, the static archives of the cross build,
+  for `tcc -static`.
 - `/usr/share/tcc/tests2/`: the selected programs of the tcc test suite
   with their expected outputs.
+
+## Build settings
+
+A program compiled on minios and a program of the cross build meet the
+same interface. Both see the same headers, since `/usr/include` is a copy
+of the headers the cross build uses; both link the same objects, since
+the archives and shared objects in `/lib` are the ones the cross build
+produces, compiled with `-fPIC`, `-msse2 -mfpmath=sse` and
+`-fno-builtin`; and both use the SysV calling convention, the same
+structure layouts and the same 80 bit `long double`. tcc predefines
+`__linux__` and `__unix__` for its ELF targets, and `__GNUC__` with a
+version, which the minios headers do not test. `make check-headers`, part
+of `make check`, compiles every installed header on its own with the
+cross compiler in C17; the tcc test does the same with tcc on minios,
+except for `minios/simd.h`, whose vector types are a gcc extension.
 
 ## Linking
 
@@ -76,7 +100,10 @@ with its exit status and output, `-run`, `-v`, `-E`, compilation to
 objects and linking them, `tcc -shared` with a program linked against the
 result and run through the loader, the libc headers with `malloc`,
 `sqrt`, `INT_MAX` and `INT64_MAX`, and the rejection of an undefined
-function and of a syntax error. It then compiles and runs 54 programs of
+function and of a syntax error. It also links a program against the toolkit, the protocol library, the
+audio client and the Lua core, dynamically and statically, compiles
+every installed header alone, and runs a statically linked program. It
+then compiles and runs 54 programs of
 the upstream test suite from `/usr/share/tcc/tests2` and compares the
 diagnostics and the output with the expected text, with trailing white
 space ignored as the upstream `diff -b` does. The selection leaves out

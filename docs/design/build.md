@@ -235,6 +235,12 @@ missing and never rebuilds. `DATA` names another file, `DATA_MB` its size
 (256), and `make clean-data` removes it. `tools/run.sh` attaches it as the
 third virtio-blk device; `--data FILE` and `--no-data` override that.
 
+## Header check
+
+`make check-headers`, run by `make check`, compiles every header of
+libc and of the libraries on its own with the cross compiler, as a
+program compiled with tcc on minios sees them.
+
 ## Submodules
 
 `third_party/tinycc` is a git submodule; run `git submodule update --init`

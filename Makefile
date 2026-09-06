@@ -135,13 +135,23 @@ test-kvm:
 	ACCEL=kvm $(MAKE) test CASES="$(KVM_CASES)"
 
 # Host unit tests of the GUI framework.
-check:
+check: check-headers
 	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
 	$(MAKE) check-lua
 
-.PHONY: check-lua
+.PHONY: check-lua check-headers
+# Every installed header must compile on its own with the cross compiler,
+# in C17, as tcc will see it on minios (docs/design/tcc.md).
+check-headers:
+	@mkdir -p $(BUILD)/headers
+	@status=0; for h in $$(cd libc/include && find . -name '*.h' | sed 's|^\./||') \
+	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h; do \
+	    printf '#include <%s>\nint check_header_%s;\n' "$$h" "$$(echo $$h | tr -c 'A-Za-z0-9_\n' '_')" > $(BUILD)/headers/t.c; \
+	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -fsyntax-only $(BUILD)/headers/t.c \
+	        || { echo "header $$h does not compile alone"; status=1; }; \
+	done; exit $$status
 # Host unit test of the Lua modules: the interpreter, user/lua and the
 # MIME code compiled with the system compiler, running the same script
 # as the lua_sys boot test on a scratch directory.

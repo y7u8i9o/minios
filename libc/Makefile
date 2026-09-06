@@ -4,13 +4,14 @@ OUT   := $(BUILD)/libc
 LIB   := $(OUT)/libc.a
 SO    := $(BUILD)/lib/libc.so
 CRT0  := $(OUT)/crt0.o
+CRTI  := $(OUT)/crti.o $(OUT)/crtn.o
 
 SRCS  := $(wildcard src/*/*.c) $(wildcard src/*.c)
 ASRCS := src/syscall.S src/setjmp.S
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(patsubst %.S,$(OUT)/%.o,$(ASRCS))
 
 .PHONY: all clean
-all: $(LIB) $(SO) $(CRT0)
+all: $(LIB) $(SO) $(CRT0) $(CRTI)
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -23,6 +24,12 @@ $(OUT)/%.o: %.S
 $(CRT0): src/crt0.S
 	@mkdir -p $(dir $@)
 	$(CC) $(UASFLAGS) -Iinclude -c -o $@ $<
+
+$(OUT)/crti.o: src/crti.S
+	$(CC) $(UASFLAGS) -c -o $@ $<
+
+$(OUT)/crtn.o: src/crtn.S
+	$(CC) $(UASFLAGS) -c -o $@ $<
 
 # A thread local variable would give the library a TLS segment, which the
 # loader does not support; the link fails when one appears.

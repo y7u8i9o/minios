@@ -203,6 +203,6 @@ are no symbolic links), `mknod` and `mkfifo` (refused), `execl`,
 The port of the Tiny C Compiler (`tcc.md`) added `dlfcn.h` over the
 libraries the loader mapped (`dlopen`, `dlsym`, `dlclose`, `dlerror`),
 `strtoll`, `strtoull`, `strtold`, `inttypes.h` with `strtoimax`,
-`strtoumax` and `imaxabs`, a `stdint.h` of the C library, and a
+`strtoumax` and `imaxabs`, a `stdint.h` of the C library, a
 `limits.h` that gives the integer limits itself when the compiler is not
-gcc.
+gcc, and `crti.o` and `crtn.o` with empty `_init` and `_fini`.

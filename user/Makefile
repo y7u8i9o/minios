@@ -257,16 +257,20 @@ $(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_X86_64 -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
 
-# crt1.o is the C runtime start; crti.o and crtn.o are the empty objects
-# tcc links around every program; libm.a is empty because the math
-# functions are in libc.so.
+# crt1.o is the C runtime start; crti.o defines the empty _init and _fini
+# and crtn.o is empty, the objects tcc links around every program; libm.a
+# is empty because the math functions are in libc.so.
 $(ROOT)/lib/crt1.o: $(CRT0)
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o:
+$(ROOT)/lib/crti.o: $(BUILD)/libc/crti.o
 	@mkdir -p $(dir $@)
-	$(CC) -c -x assembler /dev/null -o $@
+	cp $< $@
+
+$(ROOT)/lib/crtn.o: $(BUILD)/libc/crtn.o
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 $(ROOT)/lib/libm.a:
 	@mkdir -p $(dir $@)
@@ -287,11 +291,24 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
     61_integers 64_macro_nesting 67_macro_concat 70_floating_point_literals
 
 .PHONY: tcc-support
+# The headers and the static archives of every library go beside the C
+# library, so that a program compiled on minios can use the toolkit, the
+# protocol library, the audio client, the line editor and the Lua core
+# with the same headers and the same objects as the cross build.
+STATIC_LIBS := libc libgui libfont libwire libaudio libedit
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/lib/crt1.o $(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o $(ROOT)/lib/libm.a
-	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/lib/tcc/include $(ROOT)/usr/share/tcc/tests2
+	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
+	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include $(ROOT)/usr/share/tcc/tests2
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
 	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
+	@cp -p ../libgui/include/gui/*.h $(ROOT)/usr/include/gui/
+	@cp -p ../libfont/include/font/*.h $(ROOT)/usr/include/font/
+	@cp -p ../libwire/include/wire/*.h $(ROOT)/usr/include/wire/
+	@cp -p ../libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
+	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/
+	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/
+	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/lib/$$l.a; done
 	@cp -p $(TCC_SRC)/include/*.h $(ROOT)/usr/lib/tcc/include/
 	@for t in $(TCC_TEST_NAMES); do cp -p $(TCC_TESTS)/$$t.c $(TCC_TESTS)/$$t.expect $(ROOT)/usr/share/tcc/tests2/; done
 	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/

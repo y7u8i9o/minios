@@ -41,6 +41,29 @@ cat > m.c <<'C'
 int main(void) { char *p = malloc(8); strcpy(p, "ok"); printf("%s %.1f %d %ld\n", p, sqrt(16.0), INT_MAX, (long)INT64_MAX); return 0; }
 C
 check tcc-libc-headers "$(tcc -run m.c)" "ok 4.0 2147483647 9223372036854775807"
+tcc -static -o hs hello.c; check tcc-static-link "$?" "0"
+check tcc-static-run "$(./hs)" "hello from tcc"
+cat > g.c <<'C'
+#include <gui/app.h>
+#include <gui/widget.h>
+#include <font/font.h>
+#include <wire/client.h>
+#include <audio/audio.h>
+#include <edit.h>
+#include <lua/lua.h>
+#include <lua/lauxlib.h>
+int main(void) { struct app *a = app_create(); return a == NULL; }
+C
+tcc -o g g.c -lgui -lwire -lfont -laudio -llua; check tcc-link-libraries "$?" "0"
+tcc -static -o gs g.c -lgui -lwire -lfont -laudio -ledit -lc; check tcc-static-link-libraries "$?" "0"
+# Every installed header compiles on its own with tcc.
+bad=""
+for h in $(cd /usr/include && find . -name '*.h' | sed 's|^\./||' | sort); do
+    case $h in minios/simd.h) continue ;; esac   # gcc vector extensions
+    printf '#include <%s>\nint v;\n' "$h" > h.c
+    tcc -c -o h.o h.c > h.err 2>&1 || bad="$bad $h"
+done
+check tcc-headers-compile "$bad" ""
 printf 'int main(void) { return undefined_function(); }\n' > u.c
 tcc -o u u.c 2> /dev/null; test $? != 0 || echo "FAIL tcc-undefined-not-rejected"
 printf 'int main(void) { return 1 +; }\n' > s.c

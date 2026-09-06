@@ -1,6 +1,7 @@
 #pragma once
 /* Binary interface shared between the kernel and libc: structures crossing
  * the system call boundary. Only fixed width types are used here. */
+#include <stddef.h>
 #include <stdint.h>
 
 /* File type bits in st_mode. */
