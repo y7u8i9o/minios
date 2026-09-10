@@ -64,6 +64,9 @@ before the code that uses them.
 | `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is held | M37 |
 | `socket.lock` | spinlock | the pending asynchronous error of one socket | N01 |
 | `families_lock`, `inet_protocols_lock` | spinlock | the socket family table and the Internet protocol table | N01 |
+| `net_worker.lock` | spinlock | the worker's packet and request queues, timer list, kick flag and counters; condition lock of its sleep and of request completion | N02 |
+| `pbuf_pool.lock` | spinlock | the packet buffer free list and counters | N02 |
+| `netif_lock` | spinlock | the interface list and the flags of every interface | N02 |
 
 ## Ordering
 
@@ -78,7 +81,7 @@ acquire locks that appear later in this list.
 5. `swap_io_lock` (mutex)
 6. `condvar.lock`
 7. `proc_tree_lock`
-8. `mutex.lock`, `semaphore.lock`, `proc.lock`, `thread.exit_lock`, `kbd_lock`, `pipe.lock`, `virtqueue.lock`, `swap_lock`, `mouse_lock`, `mqueue.lock`, `poll_source.lock`, `tty.lock`, `pty.lock` (condition and notification locks above private wait queues)
+8. `mutex.lock`, `semaphore.lock`, `proc.lock`, `thread.exit_lock`, `kbd_lock`, `pipe.lock`, `virtqueue.lock`, `swap_lock`, `mouse_lock`, `mqueue.lock`, `poll_source.lock`, `tty.lock`, `pty.lock`, `net_worker.lock` (condition and notification locks above private wait queues)
 9. `waitq.lock`
 10. the calling CPU's `run_queue.lock`
 11. `vmspaces_lock`, then `vmspace.lock` (user spaces)
@@ -87,7 +90,7 @@ acquire locks that appear later in this list.
 13. `kmem_caches_lock`
 14. `slab_magazine.lock`, then `kmem_cache.lock` on refill, drain or reclaim
 15. `pmm_lock`
-16. `pmm_cpu_cache`, `proc_list_lock`, `tid_lock`, `fdtable.lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `pcm_device.owner_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`, `socket.lock`, `families_lock`, `inet_protocols_lock`
+16. `pmm_cpu_cache`, `proc_list_lock`, `tid_lock`, `fdtable.lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `pcm_device.owner_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`, `socket.lock`, `families_lock`, `inet_protocols_lock`, `pbuf_pool.lock`, `netif_lock`
 17. `console_lock`
 
 `proc_tree_lock` sits above `proc.lock` because `wait4` reads the exiting
@@ -331,3 +334,18 @@ the framebuffer state and framebuffer write.
   `FOPS_STREAM` (sockets): they have no position, and a reader blocked in
   the backend must not exclude a writer on the same open file
   description. Regular files keep the mutex.
+
+## N02 additions
+
+- `net_worker.lock` is the condition lock of the worker's sleep and of
+  request completion: `net_worker.lock -> waitq.lock ->` the calling
+  CPU's `run_queue.lock`, and `net_worker.lock -> timed_lock` through
+  `waitq_wait_timeout`. It is never held while a packet, a request or a
+  timer function runs, and never taken from an interrupt: device
+  completion callbacks (N03) record and wake through their own queue
+  lock, and the worker takes `net_worker.lock` afterwards on its own.
+- `pbuf_pool.lock` and `netif_lock` are leaves in level 16. The pool
+  lock is taken by `pbuf_alloc` and `pbuf_free` from thread context;
+  `net_worker_queue_packet` takes `net_worker.lock` after the ownership
+  hand-over, which uses an atomic word and no lock. The interface flag is
+  read with an acquire load on the data paths without `netif_lock`.

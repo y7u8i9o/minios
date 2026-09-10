@@ -16,7 +16,7 @@ are recorded here as their milestones land:
 
 | Area | Specification | Supported subset |
 |---|---|---|
-| Packet checksums | RFC 1071 | one's complement sum over 16 bit words, odd trailing byte padded with zero |
+| Packet checksums | RFC 1071 | one's complement sum over 16 bit words, odd trailing byte padded with zero, accumulated over even pieces (N02) |
 
 ## Contracts
 
@@ -271,6 +271,134 @@ and checks that the free page count returns to its settled baseline.
 `sockets`, `evfd`, `fdflags`, `pthreads`, `poll_wake`, `pipes` and the
 compositor cases `comp_core`, `comp_data`, `comp_seat`, `comp_panel` and
 `gui_app` are the regressions.
+
+## The packet core (N02)
+
+`kernel/net/` holds `pbuf.c` (the pool), `checksum.c`, `netif.c` (the
+interface table and the two data paths), `loopback.c`, `worker.c` (the
+worker, its requests and its timers), `net.c` (initialization and the IP
+entry point) and `clock.c` (N00). `net_init` runs from `kinit` after the
+daemons it resembles: the pool, the interface table and the worker come
+up first, then the loopback interface is registered and marked up, so no
+interface exists before the worker that serves it.
+
+### Packet buffers
+
+The pool is 256 buffers of 2048 bytes carved from one buddy block at
+initialization (512 KiB), never grown. A buffer starts with 64 bytes of
+headroom for the headers lower layers push in front of a payload and
+leaves 1984 bytes of capacity, enough for an Ethernet frame with the
+virtio header. `pbuf_push`, `pbuf_pull`, `pbuf_put` and `pbuf_trim` move
+the data window and fail instead of leaving the buffer; wire headers are
+read through the unaligned accessors of `net/byteorder.h`.
+
+Each buffer records its owner: the pool, the stack (protocol code or a
+system call), a queue (the worker's input queue) or a device (a virtqueue
+descriptor, from N03). `pbuf_alloc` and `pbuf_free` move buffers between
+the pool and the stack; `pbuf_transfer(p, from, to)` moves between the
+other owners and fails with `EINVAL`, counted in `bad_transfer`, when the
+buffer is not owned by `from`. A device hand-over therefore cannot be
+undone twice, a queued buffer cannot be queued again, and a buffer a
+device still owns cannot be freed. `pbuf_free` of a buffer the stack does
+not own is a kernel assertion.
+
+Thirty two buffers are a reserve: `pbuf_alloc(PBUF_DATA)` fails once
+only the reserve is left, `pbuf_alloc(PBUF_CONTROL)` may take it. Data
+traffic under pressure therefore leaves room for ACKs, teardown and
+neighbour replies. Failures and the low water mark are counted
+(`pbuf_get_stats`). Allocation failure on an output path frees nothing
+and returns `ENOBUFS` to the caller; on an input path the driver leaves
+the frame in its ring.
+
+### Checksums
+
+`net_checksum_partial`, `net_checksum_finish` and `net_checksum` compute
+the RFC 1071 sum over unaligned bytes, fold the carries at every piece so
+a run of pieces cannot overflow, and pad an odd trailing byte with zero.
+Every piece but the last must have an even length. The tests use the RFC
+example, an odd length datagram that verifies to zero, the all ones
+carry case and the empty input.
+
+### Interfaces
+
+`struct netif` has a name, an index, flags (`NETIF_UP`, `NETIF_LOOPBACK`,
+`NETIF_ETHERNET`), an MTU, a hardware address, an operation table with
+`output` and an optional link layer `input`, and relaxed atomic counters
+(packets, bytes, drops and errors per direction). At most four interfaces
+register; a duplicate name is `EEXIST`. `netif_output` refuses a down
+interface with `ENETDOWN`, frees the buffer and counts the drop, and
+otherwise hands the buffer to the driver, which consumes it either way.
+`netif_input` marks the buffer with its interface, counts it and queues
+it for the worker; a full queue is `ENOBUFS`, the buffer is freed and the
+drop is counted on the interface and the worker. The worker delivers a
+dequeued buffer to the interface's `input`, or without one to
+`net_ip_input`, which runs the handler installed by `net_set_ip_input`
+(IPv4 from N04, a test handler until then) and otherwise counts and frees.
+
+`netif_set_up(n, false)` clears the flag and drains the worker, so on
+return no packet of the interface is being processed; packets still
+queued for it are dropped when the worker reaches them and counted as
+`packets_dropped_down` and on the interface. `netif_unregister` takes the
+interface down first. `lo` is the loopback interface: its output queues
+the buffer as its own input, so a packet to the host takes the path a
+received frame takes; its MTU is the buffer capacity, 1984 bytes.
+`netif_format_table` prints one line per interface with the counters, the
+basis of the later configuration utility.
+
+### The worker
+
+`netd` is a kernel thread at the highest scheduler level. Under
+`net_worker.lock` it keeps the input queue (at most 128 buffers), the
+request queue (at most 64) and the armed timers sorted by deadline. Its
+loop takes the lock, checks whether a packet, a request or a due timer
+exists or a kick arrived, and otherwise sleeps on its wait queue with the
+lock as condition lock, using `waitq_wait_timeout` until the earliest
+deadline when the clock is real and an unlimited wait when a test
+controls the clock (a controlled deadline is reached only when the test
+moves time and calls `net_worker_kick`). Producers enqueue and wake under
+the same lock, so work arriving between the check and the sleep is seen.
+Every pass then fires the due timers, processes at most 32 packets, then
+at most 32 requests, and checks the timers again, so a flood of input
+cannot postpone a due timer past one batch; the test measures the
+distance in packets and requires at most two batches.
+
+A request (`struct net_request`) carries a function the worker runs with
+no lock held; the caller either waits (`net_request_wait`, which returns
+the function's result) or sets `done`, which the worker calls last and
+which may free the request. `net_request_submit` fails with `ENOBUFS` on
+a full queue and counts the rejection. A queued request can be withdrawn
+(`net_request_cancel`, once); a waiter whose process is exiting or has a
+pending signal withdraws its queued request and returns `EINTR`, while a
+request the worker has taken is always waited for, which is bounded
+because the worker does not block. `net_worker_drain` runs an empty
+request and is the synchronization point interface changes use.
+
+A timer (`struct net_timer`) is a one shot deadline on the network clock
+whose function runs on the worker and may re-arm it. `net_timer_arm`
+inserts in deadline order and wakes the worker when the new timer is the
+earliest, so a deadline already reached fires at the next pass;
+`net_timer_cancel` returns whether the timer was armed, which is false
+for one whose function is running or has run, and a caller that must know
+the function is over synchronizes with a request.
+
+### Tests
+
+`net_core` covers: the pool emptied through the reserve with counted
+failures and refilled; the ownership transitions including the refused
+ones; the data window operations at their limits; the checksum vectors;
+loopback delivery to the default and to a test entry point with an MTU
+sized packet; the input queue filled to its limit with the worker held
+(refused buffers freed and counted), the request queue filled with
+rejections counted, cancellation of a queued and of a finished request,
+completion of everything queued once the worker is released; an
+interface taken down with packets queued (dropped and counted, output
+refused with `ENETDOWN`, output again after up); timers that stay quiet,
+fire when due without a kick, fire in deadline order after the controlled
+clock moved, move when re-armed, re-arm themselves, fire within two
+batches under a flood, and fire on the real clock without a kick; four
+threads running 1200 requests with the worker sleeping without a timeout,
+which would hang on a lost wakeup; and fifty cycles of packets, requests
+and timers after which the pool is full and the queues are empty.
 
 ## Limits
 

@@ -32,6 +32,7 @@
 #include <drivers/rtc.h>
 #include <ipc/futex.h>
 #include <ipc/socket.h>
+#include <net/net.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/pci.h>
 #include <drivers/ps2mouse.h>
@@ -202,6 +203,9 @@ static void kinit(void *arg)
     swap_start_daemon();
     tty_start_daemon();
     input_start_daemon();
+    /* The network core needs the worker thread before any interface is
+     * published; devices register with it in later milestones. */
+    net_init();
 #if CONFIG_TESTS
     ktest_run_selected();
 #endif

@@ -555,3 +555,20 @@ on sockets (`FOPS_STREAM`). Tests: `sockets_api` (user), `net_socket`
 `pthreads`, `poll_wake`, `pipes`, `pipe_close`, `comp_core`, `comp_data`,
 `comp_seat`, `comp_panel`, `gui_app`, `make check-headers`. Limitation:
 `AF_INET` sockets validate and report `EPROTONOSUPPORT` until N05 and N06.
+
+### N02 (complete 2026-09-10)
+
+The packet pool with ownership checks and a control reserve
+(`kernel/net/pbuf.c`), the RFC 1071 checksum and byte order primitives,
+the interface table with counters and the loopback interface
+(`netif.c`, `loopback.c`), the common IP entry point with a replaceable
+handler (`net.c`), and the worker with bounded packet and request queues,
+cancellation and deadline timers on the network clock (`worker.c`),
+started from `kinit` before any interface exists. Limits: 256 buffers of
+2048 bytes with 32 reserved, an input queue of 128, a request queue of 64,
+batches of 32. Tests: `net_core` (every exit criterion of the milestone,
+listed in `docs/design/network.md`), regressions `boot`, `net_clock`,
+`net_socket`, `net_harness`, `sockets`, `sockets_api`, `smp`, `pipes`,
+`sched`. Limitation: a request interrupted while queued is tested through
+cancellation; the signal path uses the same code but no kernel test can
+raise a signal against a kernel thread.
