@@ -110,6 +110,10 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_utimensat]     = sys_utimensat,
     [SYS_openat]        = sys_openat,
     [SYS_fstatat]       = sys_fstatat,
+    [SYS_getsockname]   = sys_getsockname,
+    [SYS_getpeername]   = sys_getpeername,
+    [SYS_setsockopt]    = sys_setsockopt,
+    [SYS_getsockopt]    = sys_getsockopt,
 };
 
 void syscall_init_cpu(void)

@@ -1,544 +1,425 @@
-/* Unix domain stream sockets: abstract names, a listen backlog, two 64
- * KiB rings per connection, descriptor passing with SCM_RIGHTS records
- * attached to byte positions of the stream, poll and non blocking
- * modes. Locks: sock_table_lock (listener names) -> sock->lock
- * (backlog) and, separately, conn->lock (rings and records); neither
- * is held across a user copy, data moves through a bounce buffer as in
- * pipe.c. */
+/* The common socket layer: family dispatch, files, addresses, flags and
+ * options shared by every backend (N01). Locks: socket.lock (the error
+ * word) is a leaf; families_lock (the family table) is a leaf. Neither
+ * is held across a backend call. */
 #define KLOG_SUBSYS "socket"
 #include <ipc/socket.h>
-#include <ipc/poll.h>
-#include <ipc/signal.h>
-#include <sync/ring.h>
-#include <sched/wait.h>
-#include <sched/thread.h>
-#include <sched/proc.h>
-#include <mm/pmm.h>
-#include <mm/memlayout.h>
+#include <net/inet.h>
+#include <syscall/syscalls.h>
 #include <mm/slab.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
 #include <errno.h>
 
-#define SOCK_BUF_ORDER 4                    /* 16 pages, 64 KiB per direction */
-#define SOCK_BUF ((size_t)PAGE_SIZE << SOCK_BUF_ORDER)
-#define SOCK_MAX_RECS 32
-#define SOCK_MAX_LISTENERS 16
-#define BOUNCE 256
+#define SOCKET_MAX_FAMILIES 4
 
-struct fdrec {
-    uint64_t pos;                           /* stream position of the message's first byte */
-    struct file *files[SCM_MAX_FD];
-    int n;
-};
-
-/* One direction of a connection: bytes written by one end and read by
- * the other, with the descriptor records in stream order. */
-struct sock_dir {
-    struct page *pages;
-    uint8_t *buf;
-    struct spsc_ring ring;
-    uint64_t wpos, rpos;
-    struct fdrec recs[SOCK_MAX_RECS];
-    int rec_head, nrecs;
-    bool writer_closed, reader_closed;
-    struct waitq rd_waitq, wr_waitq;
-};
-
-struct conn {
-    struct spinlock lock;
-    struct sock_dir dir[2];                 /* dir[i] is written by side i */
-    int refs;
-    struct poll_source poll[2];
-};
-
-struct sock {
-    struct spinlock lock;
-    int state;                              /* 0 unbound, 1 listening, 2 connected */
-    char name[SOCK_NAME_MAX];
-    struct conn *conn;
-    int side;
-    struct conn *backlog[SOMAXCONN];
-    int nbacklog;
-    struct waitq accept_waitq;
-    struct poll_source poll;
-};
-
-static struct sock *listeners[SOCK_MAX_LISTENERS];
-static DEFINE_SPINLOCK(sock_table_lock);
+static const struct socket_family *families[SOCKET_MAX_FAMILIES];
+static DEFINE_SPINLOCK(families_lock);
 
 static const struct file_ops sock_fops;
+
+int socket_register_family(const struct socket_family *fam)
+{
+    spin_lock(&families_lock);
+    for (int i = 0; i < SOCKET_MAX_FAMILIES; i++) {
+        if (families[i] && families[i]->family == fam->family) {
+            spin_unlock(&families_lock);
+            return -EEXIST;
+        }
+    }
+    for (int i = 0; i < SOCKET_MAX_FAMILIES; i++) {
+        if (!families[i]) {
+            families[i] = fam;
+            spin_unlock(&families_lock);
+            return 0;
+        }
+    }
+    spin_unlock(&families_lock);
+    return -ENOSPC;
+}
+
+static const struct socket_family *family_find(int family)
+{
+    const struct socket_family *fam = NULL;
+    spin_lock(&families_lock);
+    for (int i = 0; i < SOCKET_MAX_FAMILIES; i++)
+        if (families[i] && families[i]->family == family)
+            fam = families[i];
+    spin_unlock(&families_lock);
+    return fam;
+}
+
+static const struct socket_family unix_family = {
+    .family = AF_UNIX,
+    .create = unix_socket_create,
+};
+
+void socket_init(void)
+{
+    socket_register_family(&unix_family);
+    inet_socket_init();
+}
+
+/* ---- objects and files ---- */
+
+struct socket *socket_alloc(int family, int type, int protocol, const struct socket_ops *ops)
+{
+    struct socket *s = kzalloc(sizeof *s);
+    if (!s)
+        return NULL;
+    s->family = family;
+    s->type = type;
+    s->protocol = protocol;
+    s->ops = ops;
+    spinlock_init(&s->lock, "socket");
+    poll_source_init(&s->poll, "socket_poll");
+    return s;
+}
+
+void socket_free(struct socket *s)
+{
+    kfree(s);
+}
 
 bool file_is_socket(const struct file *f)
 {
     return f->ops == &sock_fops;
 }
 
-/* ---- connections ---- */
-
-static void dir_free(struct sock_dir *d)
+struct socket *socket_from_file(struct file *f)
 {
-    for (int i = 0; i < d->nrecs; i++) {
-        struct fdrec *r = &d->recs[(d->rec_head + i) % SOCK_MAX_RECS];
-        for (int j = 0; j < r->n; j++)
-            file_put(r->files[j]);
-    }
-    if (d->pages)
-        pmm_free(d->pages, SOCK_BUF_ORDER);
+    return file_is_socket(f) ? f->priv : NULL;
 }
 
-static struct conn *conn_create(void)
+int socket_file(struct socket *s, int fflags, struct file **out)
 {
-    struct conn *c = kzalloc(sizeof *c);
-    if (!c)
-        return NULL;
-    spinlock_init(&c->lock, "sockconn");
-    for (int i = 0; i < 2; i++) {
-        struct sock_dir *d = &c->dir[i];
-        d->pages = pmm_alloc(SOCK_BUF_ORDER);
-        if (!d->pages) {
-            dir_free(&c->dir[0]);
-            kfree(c);
-            return NULL;
-        }
-        d->buf = P2V(page_to_phys(d->pages));
-        ring_init(&d->ring, d->buf, SOCK_BUF);
-        waitq_init(&d->rd_waitq, "sock_rd");
-        waitq_init(&d->wr_waitq, "sock_wr");
-        poll_source_init(&c->poll[i], "sock_poll");
-    }
-    c->refs = 2;
-    return c;
-}
-
-static void conn_put(struct conn *c)
-{
-    spin_lock(&c->lock);
-    bool last = --c->refs == 0;
-    spin_unlock(&c->lock);
-    if (last) {
-        dir_free(&c->dir[0]);
-        dir_free(&c->dir[1]);
-        kfree(c);
-    }
-}
-
-/* One end goes away: its writes end, its reads end. */
-static void conn_close_side(struct conn *c, int side)
-{
-    spin_lock(&c->lock);
-    c->dir[side].writer_closed = true;
-    c->dir[1 - side].reader_closed = true;
-    waitq_wake_all(&c->dir[side].rd_waitq);
-    waitq_wake_all(&c->dir[1 - side].wr_waitq);
-    spin_unlock(&c->lock);
-    poll_source_notify(&c->poll[0]);
-    poll_source_notify(&c->poll[1]);
-}
-
-/* ---- sockets ---- */
-
-static struct sock *sock_alloc(void)
-{
-    struct sock *s = kzalloc(sizeof *s);
-    if (!s)
-        return NULL;
-    spinlock_init(&s->lock, "sock");
-    waitq_init(&s->accept_waitq, "sock_accept");
-    poll_source_init(&s->poll, "sock_listen_poll");
-    return s;
-}
-
-static int sock_file(struct sock *s, int flags, struct file **out)
-{
-    struct file *f = file_alloc(NULL, &sock_fops, O_RDWR | (flags & O_NONBLOCK));
-    if (!f)
+    struct file *f = file_alloc(NULL, &sock_fops, O_RDWR | (fflags & O_NONBLOCK));
+    if (!f) {
+        if (s->ops && s->ops->release)
+            s->ops->release(s);
+        socket_free(s);
         return -ENOMEM;
+    }
     f->priv = s;
+    s->file = f;
     *out = f;
     return 0;
 }
 
-int socket_create(int flags, struct file **out)
+int socket_create(int family, int type, int protocol, int fflags, struct file **out)
 {
-    struct sock *s = sock_alloc();
+    const struct socket_family *fam = family_find(family);
+    if (!fam)
+        return -EAFNOSUPPORT;
+    struct socket *s = socket_alloc(family, type, protocol, NULL);
     if (!s)
         return -ENOMEM;
-    int r = sock_file(s, flags, out);
-    if (r < 0)
-        kfree(s);
-    return r;
-}
-
-int socket_pair(int flags, struct file **a, struct file **b)
-{
-    struct conn *c = conn_create();
-    struct sock *sa = sock_alloc(), *sb = sock_alloc();
-    if (!c || !sa || !sb) {
-        if (c) { c->refs = 1; conn_put(c); }
-        kfree(sa);
-        kfree(sb);
-        return -ENOMEM;
-    }
-    sa->state = sb->state = 2;
-    sa->conn = sb->conn = c;
-    sa->side = 0;
-    sb->side = 1;
-    int r = sock_file(sa, flags, a);
+    int r = fam->create(s);
     if (r < 0) {
-        c->refs = 1;
-        conn_put(c);
-        kfree(sa);
-        kfree(sb);
+        socket_free(s);
         return r;
     }
-    r = sock_file(sb, flags, b);
+    kassert(s->ops != NULL);
+    return socket_file(s, fflags, out);
+}
+
+int socket_pair(int family, int type, int protocol, int fflags, struct file **a, struct file **b)
+{
+    if (family != AF_UNIX)
+        return -EOPNOTSUPP;
+    const struct socket_family *fam = family_find(family);
+    if (!fam)
+        return -EAFNOSUPPORT;
+    struct socket *sa = socket_alloc(family, type, protocol, NULL);
+    struct socket *sb = socket_alloc(family, type, protocol, NULL);
+    if (!sa || !sb) {
+        socket_free(sa);
+        socket_free(sb);
+        return -ENOMEM;
+    }
+    int r = fam->create(sa);
+    if (r < 0) {
+        socket_free(sa);
+        socket_free(sb);
+        return r;
+    }
+    r = fam->create(sb);
+    if (r < 0) {
+        sa->ops->release(sa);
+        socket_free(sa);
+        socket_free(sb);
+        return r;
+    }
+    r = unix_socket_pair(sa, sb);
+    if (r < 0) {
+        sa->ops->release(sa);
+        sb->ops->release(sb);
+        socket_free(sa);
+        socket_free(sb);
+        return r;
+    }
+    r = socket_file(sa, fflags, a);
+    if (r < 0) {
+        sb->ops->release(sb);
+        socket_free(sb);
+        return r;
+    }
+    r = socket_file(sb, fflags, b);
     if (r < 0) {
         file_put(*a);
-        kfree(sb);
         return r;
     }
     return 0;
 }
 
-int socket_bind(struct file *f, const char *name)
+bool socket_nonblocking(const struct socket *s)
 {
-    struct sock *s = f->priv;
-    if (!name[0] || strlen(name) >= SOCK_NAME_MAX)
-        return -EINVAL;
-    spin_lock(&sock_table_lock);
-    if (s->state != 0 || s->name[0]) {
-        spin_unlock(&sock_table_lock);
-        return -EINVAL;
-    }
-    for (int i = 0; i < SOCK_MAX_LISTENERS; i++)
-        if (listeners[i] && strcmp(listeners[i]->name, name) == 0) {
-            spin_unlock(&sock_table_lock);
-            return -EADDRINUSE;
+    return s->file && (s->file->flags & O_NONBLOCK);
+}
+
+void socket_set_error(struct socket *s, int err)
+{
+    spin_lock(&s->lock);
+    s->error = err;
+    spin_unlock(&s->lock);
+}
+
+int socket_take_error(struct socket *s)
+{
+    spin_lock(&s->lock);
+    int err = s->error;
+    s->error = 0;
+    spin_unlock(&s->lock);
+    return err;
+}
+
+/* ---- operations ---- */
+
+int socket_bind(struct socket *s, const struct sockaddr_storage *addr, socklen_t len)
+{
+    if (addr->ss_family != s->family)
+        return -EAFNOSUPPORT;
+    if (!s->ops->bind)
+        return -EOPNOTSUPP;
+    return s->ops->bind(s, addr, len);
+}
+
+int socket_listen(struct socket *s, int backlog)
+{
+    if (!s->ops->listen)
+        return -EOPNOTSUPP;
+    return s->ops->listen(s, backlog);
+}
+
+int socket_accept(struct socket *s, int fflags, struct file **out,
+                  struct sockaddr_storage *peer, socklen_t *peerlen)
+{
+    if (!s->ops->accept)
+        return -EOPNOTSUPP;
+    struct socket *ns;
+    int r = s->ops->accept(s, &ns);
+    if (r < 0)
+        return r;
+    if (peer) {
+        memset(peer, 0, sizeof *peer);
+        r = ns->ops->getname ? ns->ops->getname(ns, peer, peerlen, true) : -EOPNOTSUPP;
+        if (r < 0) {
+            ns->ops->release(ns);
+            socket_free(ns);
+            return r;
         }
-    strlcpy(s->name, name, sizeof s->name);
-    spin_unlock(&sock_table_lock);
+    }
+    return socket_file(ns, fflags, out);
+}
+
+int socket_connect(struct socket *s, const struct sockaddr_storage *addr, socklen_t len)
+{
+    if (addr->ss_family != s->family)
+        return -EAFNOSUPPORT;
+    if (!s->ops->connect)
+        return -EOPNOTSUPP;
+    return s->ops->connect(s, addr, len);
+}
+
+int socket_shutdown(struct socket *s, int how)
+{
+    if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR)
+        return -EINVAL;
+    if (!s->ops->shutdown)
+        return -EOPNOTSUPP;
+    return s->ops->shutdown(s, how);
+}
+
+long socket_sendmsg(struct socket *s, struct socket_msg *m)
+{
+    if (m->flags & ~SOCKET_MSG_FLAGS)
+        return -EINVAL;
+    if (m->flags & (MSG_PEEK | MSG_TRUNC | MSG_WAITALL))
+        return -EINVAL;
+    if (!s->ops->sendmsg)
+        return -EOPNOTSUPP;
+    if (socket_nonblocking(s))
+        m->flags |= MSG_DONTWAIT;
+    m->rflags = 0;
+    return s->ops->sendmsg(s, m);
+}
+
+long socket_recvmsg(struct socket *s, struct socket_msg *m)
+{
+    if (m->flags & ~SOCKET_MSG_FLAGS)
+        return -EINVAL;
+    if (m->flags & (MSG_EOR | MSG_NOSIGNAL))
+        return -EINVAL;
+    if (!s->ops->recvmsg)
+        return -EOPNOTSUPP;
+    if (socket_nonblocking(s))
+        m->flags |= MSG_DONTWAIT;
+    m->rflags = 0;
+    if (m->nfiles < 0)
+        m->nfiles = 0;
+    return s->ops->recvmsg(s, m);
+}
+
+int socket_getname(struct socket *s, struct sockaddr_storage *addr, socklen_t *len, bool peer)
+{
+    if (!s->ops->getname)
+        return -EOPNOTSUPP;
+    memset(addr, 0, sizeof *addr);
+    return s->ops->getname(s, addr, len, peer);
+}
+
+/* SOL_SOCKET options every family answers alike are handled here; the
+ * rest, and every other level, go to the backend. */
+int socket_setsockopt(struct socket *s, int level, int name, const void *val, socklen_t len)
+{
+    if (level == SOL_SOCKET) {
+        switch (name) {
+        case SO_TYPE:
+        case SO_ERROR:
+        case SO_DOMAIN:
+        case SO_PROTOCOL:
+            return -ENOPROTOOPT;
+        default:
+            break;
+        }
+    }
+    if (!s->ops->setsockopt)
+        return -ENOPROTOOPT;
+    return s->ops->setsockopt(s, level, name, val, len);
+}
+
+static int put_int_option(void *val, socklen_t *len, int v)
+{
+    if (*len < sizeof(int))
+        return -EINVAL;
+    memcpy(val, &v, sizeof v);
+    *len = sizeof v;
     return 0;
 }
 
-int socket_listen(struct file *f, int backlog)
+int socket_getsockopt(struct socket *s, int level, int name, void *val, socklen_t *len)
 {
-    struct sock *s = f->priv;
-    spin_lock(&sock_table_lock);
-    if (s->state != 0 || !s->name[0]) {
-        spin_unlock(&sock_table_lock);
+    if (level == SOL_SOCKET) {
+        switch (name) {
+        case SO_TYPE:
+            return put_int_option(val, len, s->type);
+        case SO_ERROR:
+            return put_int_option(val, len, -socket_take_error(s));
+        case SO_DOMAIN:
+            return put_int_option(val, len, s->family);
+        case SO_PROTOCOL:
+            return put_int_option(val, len, s->protocol);
+        default:
+            break;
+        }
+    }
+    if (!s->ops->getsockopt)
+        return -ENOPROTOOPT;
+    return s->ops->getsockopt(s, level, name, val, len);
+}
+
+/* ---- addresses ---- */
+
+socklen_t socket_addr_min_len(int family)
+{
+    switch (family) {
+    case AF_UNIX:
+        return sizeof(uint16_t);
+    case AF_INET:
+        return sizeof(struct sockaddr_in);
+    default:
+        return 0;
+    }
+}
+
+int socket_addr_from_user(uintptr_t uaddr, size_t ulen, struct sockaddr_storage *out, socklen_t *outlen)
+{
+    if (ulen < sizeof(uint16_t) || ulen > sizeof *out)
         return -EINVAL;
-    }
-    int slot = -1;
-    for (int i = 0; i < SOCK_MAX_LISTENERS; i++)
-        if (!listeners[i] && slot < 0)
-            slot = i;
-    if (slot < 0) {
-        spin_unlock(&sock_table_lock);
-        return -ENOSPC;
-    }
-    listeners[slot] = s;
-    s->state = 1;
-    spin_unlock(&sock_table_lock);
-    (void)backlog;
+    if (!user_range_ok(uaddr, ulen, false))
+        return -EFAULT;
+    memset(out, 0, sizeof *out);
+    memcpy(out, (const void *)uaddr, ulen);
+    socklen_t min = socket_addr_min_len(out->ss_family);
+    if (min == 0)
+        return -EAFNOSUPPORT;
+    if (ulen < min)
+        return -EINVAL;
+    *outlen = (socklen_t)ulen;
     return 0;
 }
 
-int socket_connect(struct file *f, const char *name)
+int socket_addr_to_user(uintptr_t uaddr, uintptr_t ulenp, const struct sockaddr_storage *addr, socklen_t len)
 {
-    struct sock *s = f->priv;
-    if (s->state != 0)
-        return -EISCONN;
-    struct conn *c = conn_create();
-    if (!c)
-        return -ENOMEM;
-    spin_lock(&sock_table_lock);
-    struct sock *l = NULL;
-    for (int i = 0; i < SOCK_MAX_LISTENERS; i++)
-        if (listeners[i] && strcmp(listeners[i]->name, name) == 0)
-            l = listeners[i];
-    if (!l) {
-        spin_unlock(&sock_table_lock);
-        c->refs = 1;
-        conn_put(c);
-        return -ECONNREFUSED;
-    }
-    spin_lock(&l->lock);
-    if (l->nbacklog == SOMAXCONN) {
-        spin_unlock(&l->lock);
-        spin_unlock(&sock_table_lock);
-        c->refs = 1;
-        conn_put(c);
-        return -ECONNREFUSED;
-    }
-    l->backlog[l->nbacklog++] = c;          /* the listener's reference */
-    waitq_wake_all(&l->accept_waitq);
-    spin_unlock(&l->lock);
-    spin_unlock(&sock_table_lock);
-    s->conn = c;
-    s->side = 0;
-    s->state = 2;
-    poll_source_notify(&l->poll);
+    if (!uaddr || !ulenp)
+        return 0;
+    if (!user_range_ok(ulenp, sizeof(socklen_t), true))
+        return -EFAULT;
+    socklen_t room;
+    memcpy(&room, (const void *)ulenp, sizeof room);
+    socklen_t n = MIN(room, len);
+    if (n > sizeof *addr)
+        n = sizeof *addr;
+    if (n && !user_range_ok(uaddr, n, true))
+        return -EFAULT;
+    if (n)
+        memcpy((void *)uaddr, addr, n);
+    memcpy((void *)ulenp, &len, sizeof len);
     return 0;
-}
-
-int socket_accept(struct file *f, int flags, struct file **out)
-{
-    struct sock *l = f->priv;
-    if (l->state != 1)
-        return -EINVAL;
-    spin_lock(&l->lock);
-    while (l->nbacklog == 0) {
-        if (f->flags & O_NONBLOCK) {
-            spin_unlock(&l->lock);
-            return -EAGAIN;
-        }
-        if (signal_should_interrupt()) {
-            spin_unlock(&l->lock);
-            return -EINTR;
-        }
-        waitq_wait(&l->accept_waitq, &l->lock);
-    }
-    struct conn *c = l->backlog[0];
-    memmove(l->backlog, l->backlog + 1, (size_t)(l->nbacklog - 1) * sizeof l->backlog[0]);
-    l->nbacklog--;
-    spin_unlock(&l->lock);
-    struct sock *s = sock_alloc();
-    if (!s) {
-        conn_close_side(c, 1);
-        conn_put(c);
-        return -ENOMEM;
-    }
-    s->state = 2;
-    s->conn = c;
-    s->side = 1;
-    int r = sock_file(s, flags, out);
-    if (r < 0) {
-        kfree(s);
-        conn_close_side(c, 1);
-        conn_put(c);
-    }
-    return r;
-}
-
-int socket_shutdown(struct file *f, int how)
-{
-    struct sock *s = f->priv;
-    if (s->state != 2)
-        return -ENOTCONN;
-    struct conn *c = s->conn;
-    spin_lock(&c->lock);
-    if (how == SHUT_WR || how == SHUT_RDWR) {
-        c->dir[s->side].writer_closed = true;
-        waitq_wake_all(&c->dir[s->side].rd_waitq);
-    }
-    if (how == SHUT_RD || how == SHUT_RDWR) {
-        c->dir[1 - s->side].reader_closed = true;
-        waitq_wake_all(&c->dir[1 - s->side].wr_waitq);
-    }
-    spin_unlock(&c->lock);
-    poll_source_notify(&c->poll[0]);
-    poll_source_notify(&c->poll[1]);
-    return 0;
-}
-
-/* ---- data ---- */
-
-long socket_send(struct file *f, const char *buf, size_t n, struct file **files, int nfiles)
-{
-    struct sock *s = f->priv;
-    if (s->state != 2)
-        return -ENOTCONN;
-    if (nfiles > SCM_MAX_FD || (nfiles > 0 && n == 0))
-        return -EINVAL;
-    struct conn *c = s->conn;
-    struct sock_dir *d = &c->dir[s->side];
-    char tmp[BOUNCE];
-    size_t done = 0;
-    bool first = true;
-    while (done < n || first) {
-        size_t chunk = MIN(n - done, sizeof tmp);
-        memcpy(tmp, buf + done, chunk);
-        spin_lock(&c->lock);
-        if (first && nfiles > 0) {
-            if (d->nrecs == SOCK_MAX_RECS) {
-                spin_unlock(&c->lock);
-                return -EAGAIN;
-            }
-            struct fdrec *r = &d->recs[(d->rec_head + d->nrecs) % SOCK_MAX_RECS];
-            r->pos = d->wpos;
-            r->n = nfiles;
-            for (int i = 0; i < nfiles; i++)
-                r->files[i] = files[i];
-            d->nrecs++;
-        }
-        first = false;
-        size_t off = 0;
-        while (off < chunk) {
-            if (d->reader_closed || d->writer_closed) {
-                spin_unlock(&c->lock);
-                if (done + off)
-                    return (long)(done + off);
-                signal_send(thread_current()->proc, SIGPIPE);
-                return -EPIPE;
-            }
-            if (ring_space(&d->ring) == 0) {
-                if (f->flags & O_NONBLOCK) {
-                    spin_unlock(&c->lock);
-                    return done + off ? (long)(done + off) : -EAGAIN;
-                }
-                if (signal_should_interrupt()) {
-                    spin_unlock(&c->lock);
-                    return done + off ? (long)(done + off) : -EINTR;
-                }
-                waitq_wait(&d->wr_waitq, &c->lock);
-                continue;
-            }
-            size_t k = ring_write(&d->ring, tmp + off, chunk - off);
-            d->wpos += k;
-            off += k;
-            waitq_wake_all(&d->rd_waitq);
-        }
-        spin_unlock(&c->lock);
-        poll_source_notify(&c->poll[0]);
-        poll_source_notify(&c->poll[1]);
-        done += chunk;
-    }
-    return (long)n;
-}
-
-long socket_recv(struct file *f, char *buf, size_t n, struct file **files, int *nfiles)
-{
-    struct sock *s = f->priv;
-    int room = nfiles ? *nfiles : 0;
-    if (nfiles)
-        *nfiles = 0;
-    if (s->state != 2)
-        return -ENOTCONN;
-    struct conn *c = s->conn;
-    struct sock_dir *d = &c->dir[1 - s->side];
-    char tmp[BOUNCE];
-    spin_lock(&c->lock);
-    while (ring_count(&d->ring) == 0) {
-        if (d->writer_closed) {
-            spin_unlock(&c->lock);
-            return 0;
-        }
-        if (f->flags & O_NONBLOCK) {
-            spin_unlock(&c->lock);
-            return -EAGAIN;
-        }
-        if (signal_should_interrupt()) {
-            spin_unlock(&c->lock);
-            return -EINTR;
-        }
-        waitq_wait(&d->rd_waitq, &c->lock);
-    }
-    /* Descriptors of the message starting here, then a limit so the
-     * read does not run into the next message carrying descriptors. */
-    int delivered = 0;
-    if (d->nrecs && d->recs[d->rec_head].pos == d->rpos) {
-        struct fdrec *r = &d->recs[d->rec_head];
-        for (int i = 0; i < r->n; i++) {
-            if (files && delivered < room)
-                files[delivered++] = r->files[i];
-            else
-                file_put(r->files[i]);
-        }
-        d->rec_head = (d->rec_head + 1) % SOCK_MAX_RECS;
-        d->nrecs--;
-    }
-    size_t limit = ring_count(&d->ring);
-    if (d->nrecs) {
-        uint64_t next = d->recs[d->rec_head].pos;
-        if (next - d->rpos < limit)
-            limit = (size_t)(next - d->rpos);
-    }
-    if (n > limit)
-        n = limit;
-    size_t got = 0;
-    while (got < n) {
-        size_t chunk = MIN(n - got, sizeof tmp);
-        chunk = ring_read(&d->ring, tmp, chunk);
-        d->rpos += chunk;
-        waitq_wake_all(&d->wr_waitq);
-        spin_unlock(&c->lock);
-        memcpy(buf + got, tmp, chunk);
-        got += chunk;
-        spin_lock(&c->lock);
-    }
-    spin_unlock(&c->lock);
-    poll_source_notify(&c->poll[0]);
-    poll_source_notify(&c->poll[1]);
-    if (nfiles)
-        *nfiles = delivered;
-    return (long)got;
 }
 
 /* ---- file operations ---- */
 
 static long sock_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
-    return socket_recv(f, buf, n, NULL, NULL);
+    struct socket_msg m = { .data = buf, .len = n };
+    return socket_recvmsg(f->priv, &m);
 }
 
 static long sock_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
 {
-    return socket_send(f, buf, n, NULL, 0);
+    struct socket_msg m = { .data = (char *)buf, .len = n };
+    return socket_sendmsg(f->priv, &m);
 }
 
 static int sock_poll(struct file *f)
 {
-    struct sock *s = f->priv;
-    int r = 0;
-    if (s->state == 1) {
-        spin_lock(&s->lock);
-        r = s->nbacklog ? POLLIN : 0;
-        spin_unlock(&s->lock);
-        return r;
-    }
-    if (s->state != 2)
-        return POLLHUP;
-    struct conn *c = s->conn;
-    spin_lock(&c->lock);
-    struct sock_dir *in = &c->dir[1 - s->side], *out = &c->dir[s->side];
-    if (ring_count(&in->ring) || in->writer_closed)
-        r |= POLLIN;
-    if (ring_space(&out->ring) || out->reader_closed)
-        r |= POLLOUT;
-    if (in->writer_closed && out->reader_closed)
-        r |= POLLHUP;
-    spin_unlock(&c->lock);
-    return r;
+    struct socket *s = f->priv;
+    return s->ops->poll ? s->ops->poll(s) : POLLIN | POLLOUT;
 }
 
 static struct poll_source *sock_poll_source(struct file *f)
 {
-    struct sock *s = f->priv;
-    if (s->state == 2 && s->conn)
-        return &s->conn->poll[s->side];
-    return &s->poll;
+    return &((struct socket *)f->priv)->poll;
 }
 
 static void sock_release(struct file *f)
 {
-    struct sock *s = f->priv;
-    if (s->state == 1) {
-        spin_lock(&sock_table_lock);
-        for (int i = 0; i < SOCK_MAX_LISTENERS; i++)
-            if (listeners[i] == s)
-                listeners[i] = NULL;
-        spin_unlock(&sock_table_lock);
-        for (int i = 0; i < s->nbacklog; i++) {
-            conn_close_side(s->backlog[i], 1);
-            conn_put(s->backlog[i]);
-        }
-    } else if (s->state == 2) {
-        conn_close_side(s->conn, s->side);
-        conn_put(s->conn);
-    }
-    kfree(s);
+    struct socket *s = f->priv;
+    if (s->ops->release)
+        s->ops->release(s);
+    socket_free(s);
 }
 
 static long sock_lseek(struct file *f, long off, int whence)
@@ -553,4 +434,5 @@ static const struct file_ops sock_fops = {
     .poll_source = sock_poll_source,
     .release = sock_release,
     .lseek = sock_lseek,
+    .flags = FOPS_STREAM,
 };

@@ -59,7 +59,13 @@ struct file_ops {
     int (*poll)(struct file *f);
     struct poll_source *(*poll_source)(struct file *f);
     int (*truncate)(struct file *f, uint64_t size);   /* M23: memfd */
+    /* FOPS_STREAM: the object has no position, so file_read and
+     * file_write call read and write without file.lock and a reader
+     * blocked in read does not exclude a writer on the same open file
+     * description (N01, sockets). pos is a scratch word for such calls. */
+    unsigned flags;
 };
+#define FOPS_STREAM 1
 
 /* An in memory inode. refcount and link are protected by sb->lock. size,
  * nlink and the contents are protected by lock, a mutex because filesystem

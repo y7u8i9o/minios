@@ -147,6 +147,131 @@ the no-NIC reference.
 `tools/run.sh` accepts `--nic BACKEND` (`QEMU_NIC` in `qemu.conf`): `none`
 by default, `user`, or a complete `-netdev` argument without the id.
 
+## The socket layer (N01)
+
+`kernel/ipc/socket.c` holds the common layer, `kernel/ipc/unix_socket.c`
+the Unix backend of M23 moved behind it, and `kernel/net/inet_socket.c`
+the Internet family.
+
+### Objects
+
+`struct socket` carries the family, type and protocol, the backend
+operation table (`struct socket_ops`), `error`, `poll` and `file`.
+`socket_create` looks the family up in a small registration table
+(`socket_register_family`), lets the family validate the type and protocol
+and install the backend, and wraps the object in a file with the common
+`sock_fops`. Backends allocate accepted sockets with `socket_alloc` and the
+common layer wraps them. The file's release calls the backend's release
+and frees the object; the poll source lives in the object, so a poller
+registered on it before a connection was made or after it was closed
+keeps receiving notifications until the descriptor is closed.
+
+The Unix backend clears its pointer to the socket's poll source under the
+connection lock when a side releases, and announces readiness under that
+lock, which is why `conn.lock` sits above `poll_source.lock`
+(`docs/design/locking.md`). The listener's source is notified by
+`connect` while the listener is still in the name table, which its release
+leaves first.
+
+### ABI
+
+`socket(AF_UNIX, SOCK_STREAM, flags)` keeps the M23 convention of flags
+in the protocol argument; any other value there is `EPROTONOSUPPORT`.
+`SOCK_NONBLOCK` and `SOCK_CLOEXEC` in the type are accepted for every
+family. `socket(AF_INET, type, protocol)` validates the pair: a type other
+than `SOCK_STREAM` or `SOCK_DGRAM` is `ESOCKTNOSUPPORT`, a protocol that
+does not match the type is `EPROTONOSUPPORT`, and protocol 0 selects TCP
+or UDP. Until N05 and N06 register their backends with
+`inet_register_protocol`, valid pairs fail with `EPROTONOSUPPORT` as
+well. `socketpair` is `AF_UNIX` only (`EOPNOTSUPP` elsewhere). Existing
+numbers are unchanged; `getsockname` (87), `getpeername` (88),
+`setsockopt` (89) and `getsockopt` (90) are appended.
+
+`struct sockaddr_in`, `struct in_addr`, `struct sockaddr_storage`, the
+`INADDR_*` and `IPPROTO_*` constants, the `MSG_*` flags and the `SO_*`
+options are defined once in `minios/abi.h` and exposed by
+`sys/socket.h`, `netinet/in.h` and `arpa/inet.h`. The byte order helpers
+are inline in `netinet/in.h`.
+
+### Addresses
+
+`socket_addr_from_user` copies at most `sizeof(struct sockaddr_storage)`
+bytes, requires at least the family word, looks the family's minimum up
+(`socket_addr_min_len`) and rejects a length below it with `EINVAL` and an
+unknown family with `EAFNOSUPPORT`; `bind` and `connect` then reject a
+family other than the socket's. `socket_addr_to_user` reads the room the
+caller offered, writes `min(room, length)` bytes and stores the full
+length, so a caller can detect truncation. `accept`, `getsockname`,
+`getpeername` and `recvmsg` with `msg_name` use it. An unnamed Unix
+socket reports the family word alone (length 2), a named one the whole
+`sockaddr_un`; the accepted socket carries the listener's name, and a
+client's peer name is the listener's.
+
+### Messages and flags
+
+`sendmsg` and `recvmsg` pass their flags to the backend in a
+`struct socket_msg` after the common layer masked them: a bit outside
+`SOCKET_MSG_FLAGS`, or a receive-only flag on send and the reverse, is
+`EINVAL`; a flag the backend does not implement is `EOPNOTSUPP`. Nothing
+is ignored. `MSG_DONTWAIT` is added when the file is non blocking. The
+Unix stream backend implements `MSG_DONTWAIT`, `MSG_NOSIGNAL`, `MSG_PEEK`
+(a copy that consumes nothing and ignores descriptor records) and
+`MSG_WAITALL` (the read continues until the request is full, the peer
+closes, a signal arrives after some data, or a message carrying
+descriptors begins); `MSG_OOB`, `MSG_EOR` and `MSG_TRUNC` are rejected.
+libc's `send`, `recv`, `sendto` and `recvfrom` are the message calls with
+one buffer, so flags reach the kernel; `read` and `write` on a socket are
+the message calls with no flags.
+
+The message header path checks every iovec element against a 1 GiB
+limit and the running sum against the same limit before any range is
+looked at, so the total cannot overflow; at most 32 elements are accepted.
+A stream call moves at most 64 KiB and reports the partial count; a
+datagram above it will be `EMSGSIZE`. A control message must be one
+complete `SCM_RIGHTS` record with a whole number of descriptors on an
+`AF_UNIX` socket; anything else is `EINVAL` (`EOPNOTSUPP` on other
+families) and no descriptor is looked up. Descriptors already referenced
+are released on every later failure.
+
+### Position independent I/O
+
+`struct file_ops.flags` carries `FOPS_STREAM`; `file_read` and
+`file_write` call such an object without taking `file.lock`, which
+regular files keep for their position. A thread blocked in `read` on a
+socket therefore no longer excludes a `write` on the same open file
+description, which `sockets_api` demonstrates with a reader thread and a
+writer on one descriptor of a pair.
+
+### Options and errors
+
+The common layer answers `SO_TYPE`, `SO_DOMAIN`, `SO_PROTOCOL` and
+`SO_ERROR` (which consumes the pending error recorded by
+`socket_set_error`) and refuses to set them; other options go to the
+backend, which for Unix sockets is `ENOPROTOOPT`. Option values are at
+most 64 bytes.
+
+### Readiness
+
+Poll reports, per state: an unbound or unconnected stream `POLLHUP`; a
+listener `POLLIN` with a pending connection; a connecting endpoint (from
+N06) nothing until the handshake ends, then `POLLOUT` or
+`POLLERR | POLLHUP` with the error in `SO_ERROR`; an established endpoint
+`POLLIN` with queued data or a closed peer and `POLLOUT` with room or a
+closed peer; both directions ended `POLLHUP` as well.
+
+### Tests
+
+`sockets_api` (`/bin/sockapi`) covers the blocked reader with an
+independent writer, every flag above, address lengths, truncation,
+unnamed and named peers, family and type errors, iovec overflow and range
+errors, malformed control records without a leaked descriptor, and the
+options. `net_socket` runs two hundred listen, connect, accept, send,
+receive and release cycles through the kernel API, with the error paths,
+and checks that the free page count returns to its settled baseline.
+`sockets`, `evfd`, `fdflags`, `pthreads`, `poll_wake`, `pipes` and the
+compositor cases `comp_core`, `comp_data`, `comp_seat`, `comp_panel` and
+`gui_app` are the regressions.
+
 ## Limits
 
 Public Internet services are never test dependencies. The dgram backend on

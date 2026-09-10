@@ -95,14 +95,51 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
     return syscall3(SYS_recvmsg, fd, msg, flags);
 }
 
+ssize_t sendto(int fd, const void *buf, size_t n, int flags, const struct sockaddr *addr, socklen_t len)
+{
+    struct iovec iov = { (void *)buf, n };
+    struct msghdr m = { (void *)addr, addr ? len : 0, &iov, 1, NULL, 0, 0 };
+    return sendmsg(fd, &m, flags);
+}
+
+ssize_t recvfrom(int fd, void *buf, size_t n, int flags, struct sockaddr *addr, socklen_t *len)
+{
+    struct iovec iov = { buf, n };
+    struct msghdr m = { addr, addr && len ? *len : 0, &iov, 1, NULL, 0, 0 };
+    ssize_t r = recvmsg(fd, &m, flags);
+    if (r >= 0 && addr && len)
+        *len = m.msg_namelen;
+    return r;
+}
+
 ssize_t send(int fd, const void *buf, size_t n, int flags)
 {
-    return write(fd, buf, n);
+    return sendto(fd, buf, n, flags, NULL, 0);
 }
 
 ssize_t recv(int fd, void *buf, size_t n, int flags)
 {
-    return read(fd, buf, n);
+    return recvfrom(fd, buf, n, flags, NULL, NULL);
+}
+
+int getsockname(int fd, struct sockaddr *addr, socklen_t *len)
+{
+    return (int)syscall3(SYS_getsockname, fd, addr, len);
+}
+
+int getpeername(int fd, struct sockaddr *addr, socklen_t *len)
+{
+    return (int)syscall3(SYS_getpeername, fd, addr, len);
+}
+
+int setsockopt(int fd, int level, int name, const void *val, socklen_t len)
+{
+    return (int)syscall5(SYS_setsockopt, fd, level, name, val, len);
+}
+
+int getsockopt(int fd, int level, int name, void *val, socklen_t *len)
+{
+    return (int)syscall5(SYS_getsockopt, fd, level, name, val, len);
 }
 
 int memfd_create(const char *name, unsigned flags)

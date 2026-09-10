@@ -541,3 +541,17 @@ kernel with a virtio-net device and no driver), `boot` (no NIC, unchanged),
 and `make check-net` (host self test of the harness with a fake QEMU: success,
 timeout and bad backend paths, no leftover process or port). Limitation: the
 dgram backend has been verified on this host only.
+
+### N01 (complete 2026-09-10)
+
+The common socket layer (`kernel/ipc/socket.c`), the Unix backend behind
+it (`kernel/ipc/unix_socket.c`), the Internet family with its protocol
+registry (`kernel/net/inet_socket.c`), the Internet address types, message
+flags, socket options and errors in the ABI and libc, the appended
+`getsockname`, `getpeername`, `setsockopt` and `getsockopt` calls, flag
+carrying `send`, `recv`, `sendto` and `recvfrom`, and lock-free stream I/O
+on sockets (`FOPS_STREAM`). Tests: `sockets_api` (user), `net_socket`
+(kernel, allocation baseline), regressions `sockets`, `evfd`, `fdflags`,
+`pthreads`, `poll_wake`, `pipes`, `pipe_close`, `comp_core`, `comp_data`,
+`comp_seat`, `comp_panel`, `gui_app`, `make check-headers`. Limitation:
+`AF_INET` sockets validate and report `EPROTONOSUPPORT` until N05 and N06.

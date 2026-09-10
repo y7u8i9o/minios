@@ -31,6 +31,7 @@
 #include <drivers/timer.h>
 #include <drivers/rtc.h>
 #include <ipc/futex.h>
+#include <ipc/socket.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/pci.h>
 #include <drivers/ps2mouse.h>
@@ -274,6 +275,7 @@ __noreturn void kmain(void)
     syscall_init();
     proc_init();
     futex_init();
+    socket_init();
     sched_init();
     sti();
     smp_start_aps();

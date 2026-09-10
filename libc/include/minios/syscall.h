@@ -10,3 +10,4 @@ long __syscall_ret(long r);
 #define syscall2(n, a, b)          __syscall_ret(__syscall6((n), (long)(a), (long)(b), 0, 0, 0, 0))
 #define syscall3(n, a, b, c)       __syscall_ret(__syscall6((n), (long)(a), (long)(b), (long)(c), 0, 0, 0))
 #define syscall4(n, a, b, c, d)    __syscall_ret(__syscall6((n), (long)(a), (long)(b), (long)(c), (long)(d), 0, 0))
+#define syscall5(n, a, b, c, d, e) __syscall_ret(__syscall6((n), (long)(a), (long)(b), (long)(c), (long)(d), (long)(e), 0))

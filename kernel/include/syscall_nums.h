@@ -88,4 +88,8 @@
 #define SYS_utimensat     84
 #define SYS_openat        85
 #define SYS_fstatat       86
-#define SYS_MAX           87
+#define SYS_getsockname   87
+#define SYS_getpeername   88
+#define SYS_setsockopt    89
+#define SYS_getsockopt    90
+#define SYS_MAX           91

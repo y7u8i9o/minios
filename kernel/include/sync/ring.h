@@ -45,6 +45,23 @@ static inline size_t ring_write(struct spsc_ring *r, const void *src, size_t n)
     return n;
 }
 
+/* Copy up to n bytes starting off bytes past the consumer's tail without
+ * consuming them (MSG_PEEK). The consumer's own call, so tail is stable. */
+static inline size_t ring_peek(const struct spsc_ring *r, size_t off, void *dst, size_t n)
+{
+    size_t tail = __atomic_load_n(&r->tail, __ATOMIC_RELAXED);
+    size_t head = __atomic_load_n(&r->head, __ATOMIC_ACQUIRE);
+    size_t avail = head - tail;
+    if (off >= avail)
+        return 0;
+    n = MIN(n, avail - off);
+    size_t start = (tail + off) & (r->capacity - 1);
+    size_t first = MIN(n, r->capacity - start);
+    memcpy(dst, r->data + start, first);
+    memcpy((uint8_t *)dst + first, r->data, n - first);
+    return n;
+}
+
 static inline size_t ring_read(struct spsc_ring *r, void *dst, size_t n)
 {
     size_t tail = __atomic_load_n(&r->tail, __ATOMIC_RELAXED);

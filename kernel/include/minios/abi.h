@@ -314,8 +314,12 @@ struct pollfd {
 
 /* ---- M23: sockets, descriptor passing, memfd, eventfd, timerfd, fcntl ---- */
 
+#define AF_UNSPEC 0
 #define AF_UNIX 1
+#define AF_INET 2
 #define SOCK_STREAM 1
+#define SOCK_DGRAM 2
+#define SOCK_RAW 3
 #define SOCK_NONBLOCK O_NONBLOCK
 #define SOCK_CLOEXEC O_CLOEXEC
 #define SOCK_NAME_MAX 32
@@ -327,10 +331,66 @@ struct pollfd {
 #define SCM_RIGHTS 1
 #define SCM_MAX_FD 16
 
+typedef uint32_t socklen_t;
+
 struct sockaddr_un {
     uint16_t sun_family;
     char sun_path[SOCK_NAME_MAX];   /* abstract name, NUL terminated */
 };
+
+/* ---- N01: Internet addresses, message flags and socket options ---- */
+
+#define IPPROTO_IP   0
+#define IPPROTO_ICMP 1
+#define IPPROTO_TCP  6
+#define IPPROTO_UDP  17
+
+/* Both fields are in network byte order. */
+struct in_addr {
+    uint32_t s_addr;
+};
+
+struct sockaddr_in {
+    uint16_t sin_family;
+    uint16_t sin_port;
+    struct in_addr sin_addr;
+    uint8_t sin_zero[8];
+};
+
+#define INADDR_ANY       0x00000000u
+#define INADDR_LOOPBACK  0x7f000001u
+#define INADDR_BROADCAST 0xffffffffu
+#define INADDR_NONE      0xffffffffu
+
+/* Large enough for every address family, aligned for any of them. */
+struct sockaddr_storage {
+    uint16_t ss_family;
+    uint8_t ss_pad1[6];
+    uint64_t ss_align;
+    uint8_t ss_pad2[112];
+};
+
+/* Message flags of sendmsg and recvmsg. A flag a backend does not
+ * implement is rejected with EOPNOTSUPP, an unknown one with EINVAL. */
+#define MSG_OOB      0x1
+#define MSG_PEEK     0x2
+#define MSG_TRUNC    0x20
+#define MSG_DONTWAIT 0x40
+#define MSG_EOR      0x80
+#define MSG_WAITALL  0x100
+#define MSG_NOSIGNAL 0x4000
+
+/* Options at SOL_SOCKET level; the values are int unless noted. */
+#define SO_DEBUG     1
+#define SO_REUSEADDR 2
+#define SO_TYPE      3
+#define SO_ERROR     4
+#define SO_BROADCAST 6
+#define SO_SNDBUF    7
+#define SO_RCVBUF    8
+#define SO_KEEPALIVE 9
+#define SO_PROTOCOL  38
+#define SO_DOMAIN    39
 
 struct iovec {
     void *iov_base;
@@ -338,8 +398,8 @@ struct iovec {
 };
 
 struct msghdr {
-    void *msg_name;                 /* unused */
-    uint32_t msg_namelen;
+    void *msg_name;                 /* address: sent to, or received from (N01) */
+    socklen_t msg_namelen;
     struct iovec *msg_iov;
     size_t msg_iovlen;
     void *msg_control;              /* cmsghdr records */

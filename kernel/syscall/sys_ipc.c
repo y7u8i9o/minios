@@ -96,30 +96,43 @@ static long install_flags(struct file *f, int flags)
     return fd;
 }
 
-/* socket(domain, type, flags) */
+/* socket(domain, type, protocol). The type carries SOCK_NONBLOCK and
+ * SOCK_CLOEXEC. AF_UNIX callers of M23 pass those flags in the protocol
+ * argument instead, which stays accepted for that family alone. */
 long sys_socket(struct trapframe *tf)
 {
-    if (SYSARG0(tf) != AF_UNIX)
-        return -EAFNOSUPPORT;
-    if ((SYSARG1(tf) & 0xff) != SOCK_STREAM)
+    int family = (int)SYSARG0(tf);
+    long type = (long)SYSARG1(tf);
+    long protocol = (long)SYSARG2(tf);
+    int flags = socket_flags(type);
+    type &= ~(long)(SOCK_NONBLOCK | SOCK_CLOEXEC);
+    if (type < 0 || type > 0xff)
+        return -EINVAL;
+    if (family == AF_UNIX) {
+        if (protocol & ~(long)(SOCK_NONBLOCK | SOCK_CLOEXEC))
+            return -EPROTONOSUPPORT;
+        flags |= socket_flags(protocol);
+        protocol = 0;
+    }
+    if (protocol < 0 || protocol > 0xff)
         return -EPROTONOSUPPORT;
-    int flags = socket_flags((long)SYSARG1(tf) | (long)SYSARG2(tf));
     struct file *f;
-    int r = socket_create(flags, &f);
+    int r = socket_create(family, (int)type, (int)protocol, flags, &f);
     return r < 0 ? r : install_flags(f, flags);
 }
 
 /* socketpair(domain, type, fds[2]) */
 long sys_socketpair(struct trapframe *tf)
 {
-    if (SYSARG0(tf) != AF_UNIX)
-        return -EAFNOSUPPORT;
+    int family = (int)SYSARG0(tf);
+    long type = (long)SYSARG1(tf);
     uintptr_t ufds = SYSARG2(tf);
     if (!user_range_ok(ufds, 2 * sizeof(int), true))
         return -EFAULT;
-    int flags = socket_flags((long)SYSARG1(tf));
+    int flags = socket_flags(type);
+    type &= ~(long)(SOCK_NONBLOCK | SOCK_CLOEXEC);
     struct file *a, *b;
-    int r = socket_pair(flags, &a, &b);
+    int r = socket_pair(family, (int)type, 0, flags, &a, &b);
     if (r < 0)
         return r;
     long fa = install_flags(a, flags);
@@ -135,20 +148,7 @@ long sys_socketpair(struct trapframe *tf)
     return 0;
 }
 
-static long sock_name_from_user(uintptr_t addr, size_t len, char *name)
-{
-    if (len < sizeof(struct sockaddr_un) || !user_range_ok(addr, sizeof(struct sockaddr_un), false))
-        return -EINVAL;
-    struct sockaddr_un sa;
-    memcpy(&sa, (void *)addr, sizeof sa);
-    if (sa.sun_family != AF_UNIX)
-        return -EAFNOSUPPORT;
-    sa.sun_path[SOCK_NAME_MAX - 1] = '\0';
-    strlcpy(name, sa.sun_path, SOCK_NAME_MAX);
-    return 0;
-}
-
-static struct file *socket_file(int fd, long *err)
+static struct file *socket_file_get(int fd, long *err)
 {
     struct file *f = fdtable_get(&thread_current()->proc->fds, fd);
     if (!f) {
@@ -165,14 +165,15 @@ static struct file *socket_file(int fd, long *err)
 
 long sys_bind(struct trapframe *tf)
 {
-    char name[SOCK_NAME_MAX];
-    long r = sock_name_from_user(SYSARG1(tf), SYSARG2(tf), name);
+    struct sockaddr_storage addr;
+    socklen_t len;
+    long r = socket_addr_from_user(SYSARG1(tf), SYSARG2(tf), &addr, &len);
     if (r < 0)
         return r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
-    r = socket_bind(f, name);
+    r = socket_bind(f->priv, &addr, len);
     file_put(f);
     return r;
 }
@@ -180,38 +181,54 @@ long sys_bind(struct trapframe *tf)
 long sys_listen(struct trapframe *tf)
 {
     long r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
-    r = socket_listen(f, (int)SYSARG1(tf));
+    r = socket_listen(f->priv, (int)SYSARG1(tf));
     file_put(f);
     return r;
 }
 
-/* accept(fd, addr, addrlen, flags) */
+/* accept(fd, addr, addrlen, flags): addr, when given, receives the peer
+ * address truncated to *addrlen, and *addrlen its full length. */
 long sys_accept(struct trapframe *tf)
 {
     long r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    uintptr_t uaddr = SYSARG1(tf), ulenp = SYSARG2(tf);
+    if (uaddr && !ulenp)
+        return -EFAULT;
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
     int flags = socket_flags((long)SYSARG3(tf));
     struct file *nf;
-    r = socket_accept(f, flags, &nf);
+    struct sockaddr_storage peer;
+    socklen_t peerlen = sizeof peer;
+    r = socket_accept(f->priv, flags, &nf, uaddr ? &peer : NULL, &peerlen);
     file_put(f);
-    return r < 0 ? r : install_flags(nf, flags);
+    if (r < 0)
+        return r;
+    if (uaddr) {
+        r = socket_addr_to_user(uaddr, ulenp, &peer, peerlen);
+        if (r < 0) {
+            file_put(nf);
+            return r;
+        }
+    }
+    return install_flags(nf, flags);
 }
 
 long sys_connect(struct trapframe *tf)
 {
-    char name[SOCK_NAME_MAX];
-    long r = sock_name_from_user(SYSARG1(tf), SYSARG2(tf), name);
+    struct sockaddr_storage addr;
+    socklen_t len;
+    long r = socket_addr_from_user(SYSARG1(tf), SYSARG2(tf), &addr, &len);
     if (r < 0)
         return r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
-    r = socket_connect(f, name);
+    r = socket_connect(f->priv, &addr, len);
     file_put(f);
     return r;
 }
@@ -219,48 +236,153 @@ long sys_connect(struct trapframe *tf)
 long sys_shutdown(struct trapframe *tf)
 {
     long r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
-    r = socket_shutdown(f, (int)SYSARG1(tf));
+    r = socket_shutdown(f->priv, (int)SYSARG1(tf));
     file_put(f);
     return r;
 }
 
-/* Gather the iovec of a user msghdr into one kernel buffer (at most 64
- * KiB per call) and collect the SCM_RIGHTS descriptors. */
-#define MSG_MAX 65536
-
-static long msghdr_from_user(uintptr_t addr, struct msghdr *m, struct iovec *iov, int max_iov)
+/* getsockname(fd, addr, addrlen) and getpeername */
+static long getname(struct trapframe *tf, bool peer)
 {
-    if (!user_range_ok(addr, sizeof *m, false))
+    long r;
+    uintptr_t uaddr = SYSARG1(tf), ulenp = SYSARG2(tf);
+    if (!uaddr || !ulenp)
+        return -EFAULT;
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
+    if (!f)
+        return r;
+    struct sockaddr_storage addr;
+    socklen_t len = sizeof addr;
+    r = socket_getname(f->priv, &addr, &len, peer);
+    file_put(f);
+    if (r < 0)
+        return r;
+    return socket_addr_to_user(uaddr, ulenp, &addr, len);
+}
+
+long sys_getsockname(struct trapframe *tf)
+{
+    return getname(tf, false);
+}
+
+long sys_getpeername(struct trapframe *tf)
+{
+    return getname(tf, true);
+}
+
+/* setsockopt(fd, level, name, val, len) */
+long sys_setsockopt(struct trapframe *tf)
+{
+    uintptr_t uval = SYSARG3(tf);
+    size_t len = SYSARG4(tf);
+    if (len > SOCKET_OPT_MAX)
+        return -EINVAL;
+    if (len && !user_range_ok(uval, len, false))
+        return -EFAULT;
+    uint8_t val[SOCKET_OPT_MAX];
+    if (len)
+        memcpy(val, (const void *)uval, len);
+    long r;
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
+    if (!f)
+        return r;
+    r = socket_setsockopt(f->priv, (int)SYSARG1(tf), (int)SYSARG2(tf), val, (socklen_t)len);
+    file_put(f);
+    return r;
+}
+
+/* getsockopt(fd, level, name, val, lenp) */
+long sys_getsockopt(struct trapframe *tf)
+{
+    uintptr_t uval = SYSARG3(tf), ulenp = SYSARG4(tf);
+    if (!user_range_ok(ulenp, sizeof(socklen_t), true))
+        return -EFAULT;
+    socklen_t len;
+    memcpy(&len, (const void *)ulenp, sizeof len);
+    if (len > SOCKET_OPT_MAX)
+        len = SOCKET_OPT_MAX;
+    if (len && !user_range_ok(uval, len, true))
+        return -EFAULT;
+    uint8_t val[SOCKET_OPT_MAX];
+    long r;
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
+    if (!f)
+        return r;
+    r = socket_getsockopt(f->priv, (int)SYSARG1(tf), (int)SYSARG2(tf), val, &len);
+    file_put(f);
+    if (r < 0)
+        return r;
+    if (len)
+        memcpy((void *)uval, val, len);
+    memcpy((void *)ulenp, &len, sizeof len);
+    return 0;
+}
+
+/* Gather the iovec of a user msghdr into one kernel buffer (at most 64
+ * KiB per call: a stream moves the rest in later calls, a datagram must
+ * fit) and collect the SCM_RIGHTS descriptors. Every range is checked
+ * before anything is copied; a single element above 1 GiB or a sum that
+ * would exceed it is rejected before the ranges are looked at, so the
+ * total cannot overflow. */
+#define MSG_MAX 65536
+#define MSG_MAX_IOV 32
+#define MSG_IOV_LIMIT ((size_t)1 << 30)
+
+static long msghdr_from_user(uintptr_t addr, struct msghdr *m, struct iovec *iov, bool write,
+                             size_t *total)
+{
+    if (!user_range_ok(addr, sizeof *m, true))
         return -EFAULT;
     memcpy(m, (void *)addr, sizeof *m);
-    if (m->msg_iovlen > (size_t)max_iov)
+    if (m->msg_iovlen > MSG_MAX_IOV)
         return -EINVAL;
     if (m->msg_iovlen && !user_range_ok((uintptr_t)m->msg_iov, m->msg_iovlen * sizeof *iov, false))
         return -EFAULT;
     memcpy(iov, m->msg_iov, m->msg_iovlen * sizeof *iov);
+    size_t sum = 0;
+    for (size_t i = 0; i < m->msg_iovlen; i++) {
+        if (iov[i].iov_len > MSG_IOV_LIMIT || sum + iov[i].iov_len > MSG_IOV_LIMIT)
+            return -EINVAL;
+        sum += iov[i].iov_len;
+    }
+    for (size_t i = 0; i < m->msg_iovlen; i++)
+        if (iov[i].iov_len && !user_range_ok((uintptr_t)iov[i].iov_base, iov[i].iov_len, write))
+            return -EFAULT;
+    *total = sum;
     return 0;
 }
 
+/* sendmsg(fd, msg, flags) */
 long sys_sendmsg(struct trapframe *tf)
 {
     long r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
+    struct socket *s = f->priv;
     struct msghdr m;
-    struct iovec iov[16];
-    r = msghdr_from_user(SYSARG1(tf), &m, iov, 16);
+    struct iovec iov[MSG_MAX_IOV];
+    size_t total;
+    r = msghdr_from_user(SYSARG1(tf), &m, iov, false, &total);
     if (r < 0)
         goto out;
-    size_t total = 0;
-    for (size_t i = 0; i < m.msg_iovlen; i++)
-        total += iov[i].iov_len;
     if (total > MSG_MAX) {
-        r = -EMSGSIZE;
-        goto out;
+        if (s->type != SOCK_STREAM) {
+            r = -EMSGSIZE;
+            goto out;
+        }
+        total = MSG_MAX;
+    }
+    struct socket_msg sm = { .flags = (int)SYSARG2(tf) };
+    struct sockaddr_storage addr;
+    if (m.msg_name && m.msg_namelen) {
+        r = socket_addr_from_user((uintptr_t)m.msg_name, m.msg_namelen, &addr, &sm.addrlen);
+        if (r < 0)
+            goto out;
+        sm.addr = &addr;
     }
     char *buf = kmalloc(total ? total : 1);
     if (!buf) {
@@ -268,93 +390,99 @@ long sys_sendmsg(struct trapframe *tf)
         goto out;
     }
     size_t off = 0;
-    for (size_t i = 0; i < m.msg_iovlen; i++) {
-        if (!user_range_ok((uintptr_t)iov[i].iov_base, iov[i].iov_len, false)) {
-            kfree(buf);
-            r = -EFAULT;
-            goto out;
-        }
-        memcpy(buf + off, iov[i].iov_base, iov[i].iov_len);
-        off += iov[i].iov_len;
+    for (size_t i = 0; i < m.msg_iovlen && off < total; i++) {
+        size_t k = MIN(iov[i].iov_len, total - off);
+        memcpy(buf + off, iov[i].iov_base, k);
+        off += k;
     }
     struct file *files[SCM_MAX_FD];
     int nfiles = 0;
     if (m.msg_controllen) {
-        if (!user_range_ok((uintptr_t)m.msg_control, m.msg_controllen, false)) {
-            kfree(buf);
-            r = -EFAULT;
-            goto out;
+        if (s->family != AF_UNIX) {
+            r = -EOPNOTSUPP;
+            goto free;
         }
         uint8_t ctl[CMSG_SPACE(sizeof(int) * SCM_MAX_FD)];
-        if (m.msg_controllen > sizeof ctl) {
-            kfree(buf);
+        if (m.msg_controllen > sizeof ctl || m.msg_controllen < sizeof(struct cmsghdr)) {
             r = -EINVAL;
-            goto out;
+            goto free;
+        }
+        if (!user_range_ok((uintptr_t)m.msg_control, m.msg_controllen, false)) {
+            r = -EFAULT;
+            goto free;
         }
         memcpy(ctl, m.msg_control, m.msg_controllen);
         struct cmsghdr *c = (struct cmsghdr *)ctl;
-        if (m.msg_controllen >= sizeof *c && c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS &&
-            c->cmsg_len >= CMSG_LEN(0) && c->cmsg_len <= m.msg_controllen) {
-            int n = (int)((c->cmsg_len - CMSG_LEN(0)) / sizeof(int));
-            if (n > SCM_MAX_FD) {
-                kfree(buf);
-                r = -EINVAL;
-                goto out;
+        if (c->cmsg_level != SOL_SOCKET || c->cmsg_type != SCM_RIGHTS ||
+            c->cmsg_len < CMSG_LEN(0) || c->cmsg_len > m.msg_controllen ||
+            (c->cmsg_len - CMSG_LEN(0)) % sizeof(int) != 0) {
+            r = -EINVAL;
+            goto free;
+        }
+        int n = (int)((c->cmsg_len - CMSG_LEN(0)) / sizeof(int));
+        if (n > SCM_MAX_FD) {
+            r = -EINVAL;
+            goto free;
+        }
+        int *fds = (int *)CMSG_DATA(c);
+        for (int i = 0; i < n; i++) {
+            files[i] = fdtable_get(&thread_current()->proc->fds, fds[i]);
+            if (!files[i]) {
+                r = -EBADF;
+                goto release;
             }
-            int *fds = (int *)CMSG_DATA(c);
-            for (int i = 0; i < n; i++) {
-                files[i] = fdtable_get(&thread_current()->proc->fds, fds[i]);
-                if (!files[i]) {
-                    for (int j = 0; j < i; j++)
-                        file_put(files[j]);
-                    kfree(buf);
-                    r = -EBADF;
-                    goto out;
-                }
-                nfiles++;
-            }
+            nfiles++;
         }
     }
-    r = socket_send(f, buf, total, files, nfiles);
-    if (r < 0)
-        for (int i = 0; i < nfiles; i++)
-            file_put(files[i]);
+    sm.data = buf;
+    sm.len = total;
+    sm.files = files;
+    sm.nfiles = nfiles;
+    r = socket_sendmsg(s, &sm);
+    if (r >= 0)
+        nfiles = 0;                 /* references consumed by the backend */
+release:
+    for (int i = 0; i < nfiles; i++)
+        file_put(files[i]);
+free:
     kfree(buf);
 out:
     file_put(f);
     return r;
 }
 
+/* recvmsg(fd, msg, flags) */
 long sys_recvmsg(struct trapframe *tf)
 {
     long r;
-    struct file *f = socket_file((int)SYSARG0(tf), &r);
+    struct file *f = socket_file_get((int)SYSARG0(tf), &r);
     if (!f)
         return r;
     uintptr_t uaddr = SYSARG1(tf);
     struct msghdr m;
-    struct iovec iov[16];
-    r = msghdr_from_user(uaddr, &m, iov, 16);
+    struct iovec iov[MSG_MAX_IOV];
+    size_t total;
+    r = msghdr_from_user(uaddr, &m, iov, true, &total);
     if (r < 0)
         goto out;
-    size_t total = 0;
-    for (size_t i = 0; i < m.msg_iovlen; i++) {
-        if (!user_range_ok((uintptr_t)iov[i].iov_base, iov[i].iov_len, true)) {
-            r = -EFAULT;
-            goto out;
-        }
-        total += iov[i].iov_len;
-    }
     if (total > MSG_MAX)
         total = MSG_MAX;
+    if (m.msg_name && (!user_range_ok((uintptr_t)m.msg_name, m.msg_namelen, true))) {
+        r = -EFAULT;
+        goto out;
+    }
     char *buf = kmalloc(total ? total : 1);
     if (!buf) {
         r = -ENOMEM;
         goto out;
     }
     struct file *files[SCM_MAX_FD];
-    int nfiles = SCM_MAX_FD;
-    r = socket_recv(f, buf, total, files, &nfiles);
+    struct sockaddr_storage addr;
+    struct socket_msg sm = {
+        .data = buf, .len = total, .addr = &addr, .files = files, .nfiles = SCM_MAX_FD,
+        .flags = (int)SYSARG2(tf),
+    };
+    r = socket_recvmsg(f->priv, &sm);
     if (r < 0) {
         kfree(buf);
         goto out;
@@ -367,8 +495,18 @@ long sys_recvmsg(struct trapframe *tf)
         left -= k;
     }
     kfree(buf);
+    int flags = sm.rflags;
+    /* The source address, truncated to the room offered. */
+    if (m.msg_name) {
+        socklen_t n = MIN(m.msg_namelen, sm.addrlen);
+        if (n)
+            memcpy(m.msg_name, &addr, n);
+        m.msg_namelen = sm.addrlen;
+    } else {
+        m.msg_namelen = 0;
+    }
     /* Deliver descriptors into the control buffer, or drop them. */
-    int flags = 0;
+    int nfiles = sm.nfiles;
     size_t need = CMSG_SPACE(sizeof(int) * (size_t)nfiles);
     if (nfiles && m.msg_control && m.msg_controllen >= need && user_range_ok((uintptr_t)m.msg_control, need, true)) {
         uint8_t ctl[CMSG_SPACE(sizeof(int) * SCM_MAX_FD)];
@@ -376,17 +514,18 @@ long sys_recvmsg(struct trapframe *tf)
         struct cmsghdr *c = (struct cmsghdr *)ctl;
         c->cmsg_level = SOL_SOCKET;
         c->cmsg_type = SCM_RIGHTS;
-        c->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)nfiles);
         int *fds = (int *)CMSG_DATA(c);
         int installed = 0;
         for (int i = 0; i < nfiles; i++) {
-            long fd = install(files[i]);
-            if (fd < 0)
+            long fd = install(files[i]);       /* releases the file on failure */
+            if (fd < 0) {
+                for (int j = i + 1; j < nfiles; j++)
+                    file_put(files[j]);
+                flags |= MSG_CTRUNC;
                 break;
+            }
             fds[installed++] = (int)fd;
         }
-        for (int i = installed; i < nfiles && installed < nfiles; i++)
-            ;   /* files that could not be installed were released by install */
         c->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)installed);
         memcpy(m.msg_control, ctl, need);
         m.msg_controllen = need;

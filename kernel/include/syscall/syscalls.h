@@ -115,3 +115,8 @@ long sys_pipe2(struct trapframe *tf);
 long sys_utimensat(struct trapframe *tf);
 long sys_openat(struct trapframe *tf);
 long sys_fstatat(struct trapframe *tf);
+/* N01 */
+long sys_getsockname(struct trapframe *tf);
+long sys_getpeername(struct trapframe *tf);
+long sys_setsockopt(struct trapframe *tf);
+long sys_getsockopt(struct trapframe *tf);

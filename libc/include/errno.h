@@ -53,3 +53,19 @@ int *__errno_location(void);
 #define ETIMEDOUT   110
 #define ECONNREFUSED 111
 #define EWOULDBLOCK EAGAIN
+/* N01: the remaining socket errors of a POSIX stack. */
+#define EDESTADDRREQ 89
+#define EPROTOTYPE   91
+#define ENOPROTOOPT  92
+#define ESOCKTNOSUPPORT 94
+#define EADDRNOTAVAIL 99
+#define ENETDOWN     100
+#define ENETUNREACH  101
+#define ENETRESET    102
+#define ECONNABORTED 103
+#define ENOBUFS      105
+#define ESHUTDOWN    108
+#define EHOSTDOWN    112
+#define EHOSTUNREACH 113
+#define EALREADY     114
+#define EINPROGRESS  115

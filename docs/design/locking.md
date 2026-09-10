@@ -62,6 +62,8 @@ before the code that uses them.
 | `filemap_lock` | spinlock | `inode->mapping` pointers and the reference counts of mappings | M37 |
 | `mapping.lock` | mutex | the page array of one file mapping, held while a page is read from the file or written back | M37 |
 | `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is held | M37 |
+| `socket.lock` | spinlock | the pending asynchronous error of one socket | N01 |
+| `families_lock`, `inet_protocols_lock` | spinlock | the socket family table and the Internet protocol table | N01 |
 
 ## Ordering
 
@@ -85,7 +87,7 @@ acquire locks that appear later in this list.
 13. `kmem_caches_lock`
 14. `slab_magazine.lock`, then `kmem_cache.lock` on refill, drain or reclaim
 15. `pmm_lock`
-16. `pmm_cpu_cache`, `proc_list_lock`, `tid_lock`, `fdtable.lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `pcm_device.owner_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`
+16. `pmm_cpu_cache`, `proc_list_lock`, `tid_lock`, `fdtable.lock`, `superblock.lock`, `mount_lock`, `fs_types_lock`, `devfs_lock`, `bcache_lock`, `blockdev_lock`, `fbdev_lock`, `pcm_device.owner_lock`, `shm_lock`, `mq_table_lock`, `pty_table_lock`, `socket.lock`, `families_lock`, `inet_protocols_lock`
 17. `console_lock`
 
 `proc_tree_lock` sits above `proc.lock` because `wait4` reads the exiting
@@ -311,3 +313,21 @@ the framebuffer state and framebuffer write.
   reclaim release it before taking `pmm_lock`, so the two allocator locks do
   not nest. Statistics briefly take each CPU-cache lock after releasing
   `pmm_lock`.
+
+## N01 additions
+
+- `socket.lock` is a leaf protecting the error word of a socket; it is
+  never held across a backend call. `families_lock` and
+  `inet_protocols_lock` are leaves over registration tables.
+- The Unix backend's `conn.lock` is now taken before `poll_source.lock`:
+  readiness changes are announced while it is held, and a side that
+  releases clears its pointer to the socket's poll source under it, so
+  the source of a freed socket is never notified. The order below it is
+  `conn.lock -> poll_source.lock -> poll_waiter.lock -> waitq.lock`,
+  the one `input_dev.lock` already uses. `sock_table_lock ->
+  unix_sock.lock` (the listener's backlog) is unchanged and never nests
+  with `conn.lock`.
+- `file.lock` is not taken for objects whose operations carry
+  `FOPS_STREAM` (sockets): they have no position, and a reader blocked in
+  the backend must not exclude a writer on the same open file
+  description. Regular files keep the mutex.

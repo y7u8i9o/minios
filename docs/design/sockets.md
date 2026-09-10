@@ -32,6 +32,11 @@ M23 adds the kernel primitives the display server rework relies on.
 - Locks: `sock_table_lock` (listener names) is taken before
   `sock->lock` (backlog); `conn->lock` (rings and records) is never
   nested with them.
+- Since N01 (`docs/design/network.md`) the Unix code is the backend of a
+  common socket layer (`kernel/ipc/socket.c`): the file, the poll source,
+  address copies, flag validation and the `SOL_SOCKET` options live
+  there, `send` and `recv` carry flags, and `getsockname`,
+  `getpeername`, `setsockopt` and `getsockopt` exist.
 
 ## Anonymous shared memory (`memfd_create`, `ftruncate`)
 

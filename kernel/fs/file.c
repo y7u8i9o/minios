@@ -59,6 +59,10 @@ long file_read(struct file *f, char *buf, size_t n)
         return -EINVAL;
     if (n == 0)
         return 0;
+    if (f->ops->flags & FOPS_STREAM) {
+        uint64_t scratch = 0;
+        return f->ops->read(f, buf, n, &scratch);
+    }
     mutex_lock(&f->lock);
     uint64_t pos = f->pos;
     uint64_t start = pos;
@@ -80,6 +84,10 @@ long file_write(struct file *f, const char *buf, size_t n)
         return -EINVAL;
     if (n == 0)
         return 0;
+    if (f->ops->flags & FOPS_STREAM) {
+        uint64_t scratch = 0;
+        return f->ops->write(f, buf, n, &scratch);
+    }
     struct superblock *sb = f->inode ? f->inode->sb : NULL;
     vfs_op_begin(sb);
     mutex_lock(&f->lock);
