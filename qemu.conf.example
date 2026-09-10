@@ -44,6 +44,12 @@
 # PS/2 keyboard.
 #QEMU_KEYBOARD=1
 
+# Network backend of a virtio-net device: none (the default), user (QEMU's
+# user mode stack, which needs no host configuration) or a complete -netdev
+# argument without the id, for example a dgram backend exchanging frames
+# with a host peer (docs/design/network.md).
+#QEMU_NIC=user
+
 # Framebuffer mode, WxH[xBPP][@SCALE], put on the kernel command line when
 # the image is built by `make run` or `tools/run.sh --build`. @2 draws every
 # pixel twice for high density displays: the desktop keeps its size and is

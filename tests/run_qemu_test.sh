@@ -20,6 +20,17 @@
 #   tablet    present: attach a virtio-tablet-pci device
 #   keyboard  present: attach a virtio-keyboard-pci device
 #   disk.img  a private root image instead of the shared one (optional)
+#   nic       network backend of a virtio-net-pci device (optional): dgram
+#             exchanges raw Ethernet frames with the case's peer program
+#             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
+#             none attaches nothing. Frames are captured to <out>/capture.pcap
+#             (docs/design/network.md)
+#   peer      executable started before QEMU for nic dgram, with NETPEER
+#             (the host tool tools/netpeer), PEER_READY, PEER_LOG, PEER_PID,
+#             OUTDIR, TOP and BUILD in the environment. It writes
+#             "<peer port> <guest port>" to PEER_READY once it listens and
+#             is terminated when QEMU has exited; the post script sees
+#             PEER_LOG and PEER_READY
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
 KERNEL="$1"
@@ -40,9 +51,32 @@ CPUS="${CPUS:-4}"
 [ -f "$CASE/cpus" ] && CPUS="$(cat "$CASE/cpus")"
 SERIAL="$OUTDIR/serial.txt"
 ISO="$OUTDIR/test.iso"
+PEERPID=""
+PEER_READY="$OUTDIR/peer.ready"
+PEER_LOG="$OUTDIR/peer.log"
+PEER_PID="$OUTDIR/peer.pid"
 
-"$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || { echo "FAIL $NAME (image build)"; exit 1; }
-rm -f "$SERIAL"
+# The peer of a network case is stopped whenever this script ends: after
+# QEMU exited, after the timeout killed it, and on every early failure.
+# A peer that ignores SIGTERM for five seconds is killed.
+stop_peer() {
+    [ -n "$PEERPID" ] || return 0
+    if kill -0 "$PEERPID" 2>/dev/null; then
+        kill "$PEERPID" 2>/dev/null
+        i=0
+        while kill -0 "$PEERPID" 2>/dev/null && [ "$i" -lt 50 ]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+        kill -0 "$PEERPID" 2>/dev/null && kill -9 "$PEERPID" 2>/dev/null
+    fi
+    wait "$PEERPID" 2>/dev/null
+    PEERPID=""
+}
+fail() {
+    echo "FAIL $NAME ($1)"
+    exit 1
+}
 # Every case gets a private copy of the disk image so writes do not leak
 # between cases. A case may provide its own image as <case>/disk.img.
 # The copy is a copy-on-write clone where the file system supports it
@@ -51,10 +85,52 @@ rm -f "$SERIAL"
 clone() {
     cp -c "$1" "$2" 2>/dev/null || cp "$1" "$2"
 }
-cleanup_images() {
+cleanup() {
+    stop_peer
     rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso"
 }
-trap cleanup_images EXIT
+trap cleanup EXIT
+
+# The network device and its peer are prepared before the image so that
+# a peer that fails to start costs nothing else. The backend named in
+# the nic file must be one this QEMU offers.
+NETFLAGS=""
+if [ -f "$CASE/nic" ]; then
+    NIC="$(cat "$CASE/nic")"
+    case "$NIC" in
+        none) ;;
+        dgram|user)
+            "$QEMU" -netdev help 2>/dev/null | grep -qx "$NIC" || fail "nic backend $NIC not offered by $QEMU"
+            ;;
+        *) fail "unknown nic backend $NIC" ;;
+    esac
+    if [ "$NIC" = dgram ]; then
+        [ -x "$CASE/peer" ] || fail "nic dgram needs an executable peer"
+        rm -f "$PEER_READY" "$PEER_LOG" "$PEER_PID"
+        NETPEER="${NETPEER:-$(dirname "$BUILD")/host/netpeer}" PEER_READY="$PEER_READY" PEER_LOG="$PEER_LOG" \
+            PEER_PID="$PEER_PID" OUTDIR="$OUTDIR" TOP="$TOP" BUILD="$(dirname "$BUILD")" \
+            "$CASE/peer" > "$OUTDIR/peer.out" 2>&1 &
+        PEERPID=$!
+        i=0
+        while [ ! -s "$PEER_READY" ]; do
+            kill -0 "$PEERPID" 2>/dev/null || fail "peer exited before it was ready: $(cat "$OUTDIR/peer.out")"
+            [ "$i" -ge 100 ] && fail "peer not ready after 10 s"
+            sleep 0.1
+            i=$((i + 1))
+        done
+        read -r PEERPORT GUESTPORT < "$PEER_READY"
+        NETFLAGS="-netdev dgram,id=net0,local.type=inet,local.host=127.0.0.1,local.port=$GUESTPORT,remote.type=inet,remote.host=127.0.0.1,remote.port=$PEERPORT"
+    elif [ "$NIC" = user ]; then
+        NETFLAGS="-netdev user,id=net0"
+    fi
+    if [ -n "$NETFLAGS" ]; then
+        rm -f "$OUTDIR/capture.pcap"
+        NETFLAGS="$NETFLAGS -device virtio-net-pci,netdev=net0,mac=52:54:00:4d:49:4f -object filter-dump,id=dump0,netdev=net0,file=$OUTDIR/capture.pcap"
+    fi
+fi
+
+"$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || fail "image build"
+rm -f "$SERIAL"
 DISKFLAGS=""
 if [ -f "$CASE/disk.img" ]; then
     clone "$CASE/disk.img" "$OUTDIR/disk.img"
@@ -126,7 +202,7 @@ fi
 "$QEMU" -M q35 -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
     -serial "file:$SERIAL" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x4 \
-    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS \
+    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS \
     -cdrom "$ISO" >"$OUTDIR/qemu.log" 2>&1 &
 QPID=$!
 ELAPSED=0
@@ -134,6 +210,7 @@ while kill -0 $QPID 2>/dev/null; do
     if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
         kill $QPID 2>/dev/null
         wait $QPID 2>/dev/null
+        stop_peer
         echo "FAIL $NAME (timeout after ${TIMEOUT}s, log: $SERIAL)"
         exit 1
     fi
@@ -142,6 +219,9 @@ while kill -0 $QPID 2>/dev/null; do
 done
 wait $QPID
 echo "$?" > "$OUTDIR/exitcode"
+# The peer's log is complete once it has been stopped, so the checks
+# below and the post script can read it.
+stop_peer
 
 STATUS=0
 touch "$SERIAL"
@@ -169,6 +249,7 @@ if [ -f "$CASE/reject" ]; then
 fi
 if [ -x "$CASE/post" ]; then
     if ! DISK="$OUTDIR/disk.img" DISK2="$DISK2" FATIMG="$FATIMG" FATIMGS="$FATIMGS" SERIAL="$SERIAL" \
+         PEER_LOG="$PEER_LOG" PEER_READY="$PEER_READY" CAPTURE="$OUTDIR/capture.pcap" \
          EXITCODE="$(cat "$OUTDIR/exitcode")" TOP="$TOP" BUILD="$(dirname "$BUILD")" "$CASE/post"; then
         echo "FAIL $NAME: post check failed"
         STATUS=1

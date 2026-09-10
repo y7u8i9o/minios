@@ -35,6 +35,12 @@
 #                                            mode up to 2560x1600 at run time),
 #                                            std (VGA BIOS modes only) or none
 #       --no-keyboard      QEMU_KEYBOARD=0   no virtio keyboard; keys go to the PS/2 port
+#       --nic BACKEND      QEMU_NIC          network backend of a virtio-net
+#                                            device: none (default), user
+#                                            (QEMU's user mode stack) or a
+#                                            complete -netdev argument such as
+#                                            "dgram,local.type=inet,..." (the
+#                                            id net0 is added)
 #       --no-tablet        QEMU_TABLET=0     no virtio tablet; the window grabs
 #                                            the mouse and moves it relatively
 #       --video MODE       QEMU_VIDEO        framebuffer mode WxH[xBPP][@SCALE]
@@ -91,7 +97,7 @@ die() {
 # Environment variables must beat the file, so remember them, source the
 # file, then put them back.
 VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
-      QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_VIDEO \
+      QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_NIC QEMU_VIDEO \
       QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP DATA"
 
 CONF="${QEMU_CONF:-$TOP/qemu.conf}"
@@ -138,6 +144,7 @@ QEMU_SOUND="${QEMU_SOUND:-1}"
 QEMU_VGA="${QEMU_VGA:-virtio}"
 QEMU_TABLET="${QEMU_TABLET:-1}"
 QEMU_KEYBOARD="${QEMU_KEYBOARD:-1}"
+QEMU_NIC="${QEMU_NIC:-none}"
 QEMU_WAV="${QEMU_WAV:-$BUILD/audio.wav}"
 if [ -z "$QEMU_AUDIO" ]; then
     case "$(uname -s)" in
@@ -182,6 +189,8 @@ while [ $# -gt 0 ]; do
         --vga=*)          QEMU_VGA="${1#*=}" ;;
         --no-tablet)      QEMU_TABLET=0 ;;
         --no-keyboard)    QEMU_KEYBOARD=0 ;;
+        --nic)            QEMU_NIC="$2"; shift ;;
+        --nic=*)          QEMU_NIC="${1#*=}" ;;
         --video)          QEMU_VIDEO="$2"; shift ;;
         --video=*)        QEMU_VIDEO="${1#*=}" ;;
         --serial)         QEMU_SERIAL="$2"; shift ;;
@@ -366,6 +375,11 @@ set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
 [ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
+case "$QEMU_NIC" in
+    none|"") ;;
+    user)    set -- "$@" -netdev user,id=net0 -device virtio-net-pci,netdev=net0 ;;
+    *)       set -- "$@" -netdev "$QEMU_NIC,id=net0" -device virtio-net-pci,netdev=net0 ;;
+esac
 if [ "$QEMU_SOUND" != 0 ]; then
     audiodev="$QEMU_AUDIO,id=minios_audio"
     [ "$QEMU_AUDIO" = wav ] && audiodev="$audiodev,path=$QEMU_WAV"

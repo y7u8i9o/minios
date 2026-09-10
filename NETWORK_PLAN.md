@@ -1,6 +1,6 @@
 # MiniOS TCP/IP implementation plan
 
-Status: proposed; no networking implementation has been started by this plan.
+Status: in progress on the branch `bleeding-edge-net`; see section 7.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
 `bleeding-edge-pkg`, whose HEAD was `1a95395`. The working tree contained
@@ -527,3 +527,17 @@ implementation commits; tests and configurations; results; remaining
 limitations; and any change to downstream dependencies. Preserve this plan's
 distinction between restricted development milestones and the final supported
 feature set.
+
+### N00 (complete 2026-09-10)
+
+Contracts and the feature matrix are in `docs/design/network.md`. The
+controlled clock (`kernel/net/clock.c`) is the kernel seam; packet injection
+arrives with the loopback interface in N02. The boot harness gained the
+`nic` and `peer` case files, frame capture, peer readiness synchronization
+and peer cleanup on every exit path; `tools/netpeer` is the host peer;
+`tools/run.sh --nic` configures the interactive launcher. Tests: `net_clock`
+(kernel, the clock), `net_harness` (QEMU 11.0 on macOS, dgram backend, real
+kernel with a virtio-net device and no driver), `boot` (no NIC, unchanged),
+and `make check-net` (host self test of the harness with a fake QEMU: success,
+timeout and bad backend paths, no leftover process or port). Limitation: the
+dgram backend has been verified on this host only.

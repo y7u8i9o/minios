@@ -16,14 +16,15 @@ GENSYMS  := $(BUILD)/host/gensyms
 MKFS     := $(BUILD)/host/mkfs
 FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
+NETPEER  := $(BUILD)/host/netpeer
 
-export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT SWAP DATA
+export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA
 
 .PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER)
 
 $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
@@ -36,6 +37,11 @@ $(FSCK): tools/fsck/fsck.c kernel/include/fs/mfs_format.h
 $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+
+# The controlled peer of the network boot tests (docs/design/network.md).
+$(NETPEER): tools/netpeer/netpeer.c
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
 
 $(LIMINE): third_party/limine/limine.c
 	@mkdir -p $(dir $@)
@@ -125,8 +131,14 @@ gdb:
 
 # CASES="gui gui_wm" runs only those cases; the whole suite takes too
 # long to run for every change.
-test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT)
-	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER)
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+
+# Host self test of the network peer lifecycle of the boot harness: a
+# fake QEMU, the real peer tool, no guest (docs/design/network.md).
+.PHONY: check-net
+check-net: kernel initrd $(LIMINE) $(NETPEER)
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) NETPEER=$(NETPEER) tests/net/selftest.sh $(BUILD)
 
 # The cases whose behaviour depends on the processor or the hypervisor,
 # run with hardware virtualization. Linux only; needs /dev/kvm.
