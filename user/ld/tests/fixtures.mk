@@ -3,7 +3,29 @@
 LDTEST := $(OUT)/ldtests
 LDTEST_LEVELS := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
 LDTEST_CHAIN := $(addprefix $(ROOT)/lib/libldchain,$(addsuffix .so,$(LDTEST_LEVELS)))
-all: $(LDTEST_CHAIN) $(ROOT)/bin/ldlifecycle $(ROOT)/bin/ldstatic $(LDTEST)/fixtures.stamp
+all: $(LDTEST_CHAIN) $(ROOT)/bin/ldlifecycle $(ROOT)/bin/ldstatic $(LDTEST)/fixtures.stamp \
+     $(ROOT)/lib/libldtls.so $(ROOT)/lib/libldplugdep.so $(ROOT)/lib/libldplugin.so $(ROOT)/bin/ldlazy $(ROOT)/bin/dltest
+
+# Thread local storage, dlopen and lazy binding (dltest). The plugin and
+# its dependency are not linked into any program; dlopen loads them.
+$(LDTEST)/%.o: ld/tests/%.c
+	@mkdir -p $(LDTEST)
+	$(CC) $(UCFLAGS) $(UCPP) -c -o $@ $<
+
+$(ROOT)/lib/libldtls.so: $(LDTEST)/tls.o $(BUILD)/lib/libc.so
+	$(LD) $(USOFLAGS) -soname libldtls.so -o $@ $< -L$(BUILD)/lib -lc
+
+$(ROOT)/lib/libldplugdep.so: $(LDTEST)/plugdep.o $(BUILD)/lib/libc.so
+	$(LD) $(USOFLAGS) -soname libldplugdep.so -o $@ $< -L$(BUILD)/lib -lc
+
+$(ROOT)/lib/libldplugin.so: $(LDTEST)/plugin.o $(ROOT)/lib/libldplugdep.so $(ROOT)/lib/libldtls.so
+	$(LD) $(USOFLAGS) -z lazy -soname libldplugin.so -o $@ $< -L$(ROOT)/lib -lldplugdep -lldtls -L$(BUILD)/lib -lc
+
+$(ROOT)/bin/ldlazy: ld/tests/lazy.c $(ROOT)/lib/libldtls.so $(CRT0)
+	$(CC) $(UCFLAGS) $(UCPP) -o $@ $(ULDFLAGS) -Wl,-z,lazy $(CRT0) $< -L$(ROOT)/lib -lldtls -lc -lgcc
+
+$(ROOT)/bin/dltest: tests/dltest.c $(ROOT)/lib/libldtls.so $(CRT0)
+	$(CC) $(UCFLAGS) $(UCPP) -o $@ $(ULDFLAGS) -Wl,--export-dynamic $(CRT0) $< -L$(ROOT)/lib -lldtls -lc -lgcc
 
 $(LDTEST)/chain0.o: ld/tests/chain.c
 	@mkdir -p $(LDTEST)

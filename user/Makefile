@@ -342,7 +342,7 @@ $(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 $(ROOT)/lib/ld.so: ld/ld.c ld/start.S
 	@mkdir -p $(dir $@) $(OUT)/ld
 	$(CC) -std=c17 -ffreestanding -fno-stack-protector -fPIC -fvisibility=hidden -fno-plt -O2 -g \
-	    -fno-builtin -Wall -Wextra -I../kernel/include -c -o $(OUT)/ld/ld.o ld/ld.c
+	    -fno-builtin -Wall -Wextra -I../kernel/include -I../libc/include -c -o $(OUT)/ld/ld.o ld/ld.c
 	$(CC) $(UASFLAGS) -c -o $(OUT)/ld/start.o ld/start.S
 	$(LD) $(USOFLAGS) -Bsymbolic -e _dl_start -o $(OUT)/ld.so.elf $(OUT)/ld/start.o $(OUT)/ld/ld.o $(LIBGCC)
 	$(OBJCOPY) --strip-debug $(OUT)/ld.so.elf $@

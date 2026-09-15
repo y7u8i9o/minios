@@ -135,10 +135,20 @@ def overlap(e):
     e.set_ph(e.loads[1], "vaddr", e.ph(e.loads[1], "offset") % 4096)
 
 
-@case("unsupported_tls", diagnostic="ELF TLS is not supported")
-def tls(e):
+@case("tls_image_larger_than_block", diagnostic="invalid TLS segment")
+def tls_sizes(e):
     index = next(i for i in range(e.phnum) if e.ph(i, "type") == 0x6474e551)
     e.set_ph(index, "type", 7)
+    e.set_ph(index, "filesz", 8)
+
+
+@case("tls_image_outside_segments", diagnostic="ELF range outside load segments")
+def tls_image(e):
+    index = next(i for i in range(e.phnum) if e.ph(i, "type") == 0x6474e551)
+    e.set_ph(index, "type", 7)
+    e.set_ph(index, "vaddr", 0xfffff000)
+    e.set_ph(index, "filesz", 16)
+    e.set_ph(index, "memsz", 16)
 
 
 @case("unterminated_dynamic", diagnostic="unterminated dynamic segment")

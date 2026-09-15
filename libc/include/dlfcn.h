@@ -1,17 +1,23 @@
 #pragma once
+#include <minios/dl.h>
 
-/* Dynamic loading over the libraries that the loader mapped at start.
- * dlopen returns a handle for a library that is mapped in the process
- * (by its soname or its /lib path) and fails for any other; there is no
- * loading at run time. dlsym searches the dynamic symbol table of one
- * library, or of every mapped library for RTLD_DEFAULT. */
-#define RTLD_LAZY 1
-#define RTLD_NOW 2
-#define RTLD_GLOBAL 0x100
-#define RTLD_LOCAL 0
+/* Dynamic loading through /lib/ld.so (docs/design/dynlink.md). dlopen
+ * maps a shared object by its soname from /lib and the package prefix,
+ * or by path when the name holds a slash, together with the libraries
+ * it needs, and returns a handle; a name that is loaded already returns
+ * its object. dlopen(NULL) is the program, whose handle searches every
+ * object in the global scope, as RTLD_DEFAULT does. dlsym searches the
+ * handle's object and the objects it was loaded with. dlclose drops a
+ * reference and unloads what nothing refers to any more. dlerror gives
+ * the text of the last failure once. A static program has no loader,
+ * so dlopen fails there. */
+#define RTLD_LAZY DL_LAZY
+#define RTLD_NOW DL_NOW
+#define RTLD_GLOBAL DL_GLOBAL
+#define RTLD_LOCAL DL_LOCAL
 #define RTLD_DEFAULT ((void *)0)
 
-void *dlopen(const char *file, int flags);
+void *dlopen(const char *file, int mode);
 void *dlsym(void *handle, const char *name);
 int dlclose(void *handle);
 char *dlerror(void);

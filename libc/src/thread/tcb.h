@@ -1,13 +1,19 @@
 #pragma once
 /* libc thread internals (M35). Every thread has a control block whose
  * address is its FS base: the self pointer sits at %fs:0, so
- * pthread_self and errno are one load away. */
+ * pthread_self and errno are one load away. The first two words are the
+ * struct dl_tcb the loader knows (minios/dl.h); the thread local storage
+ * of the loaded objects lies below the block. */
 #include <pthread.h>
 #include <stdint.h>
 
+struct dl_dtv;
+
 struct pthread {
     struct pthread *self;           /* %fs:0 */
+    struct dl_dtv *dtv;             /* %fs:8, the blocks of objects loaded by dlopen */
     int tid;                        /* kernel thread id */
+    int main;                       /* the initial thread */
     int errno_value;
     void *(*start)(void *);
     void *arg;
@@ -44,5 +50,11 @@ void __libc_lock_unlock(struct __libc_lock *l);
 long __futex_wait(int *addr, int value, unsigned long timeout_ms);
 long __futex_wake(int *addr, int count);
 /* Install the control block of the main thread; run before anything
- * touches errno. */
+ * touches errno, after __tls_init. */
 void __pthread_init_main(void);
+/* Thread local storage (tls.c): the space below a control block, its
+ * initialization for a new thread and its release. */
+void __tls_init(const uintptr_t *aux);
+size_t __tls_reserve(size_t *align);
+void __tls_setup(struct pthread *t);
+void __tls_free(struct pthread *t);

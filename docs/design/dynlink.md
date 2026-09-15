@@ -34,8 +34,7 @@ shared objects are built from the same objects. Each library Makefile links
 -soname <name>.so` and names the libraries it depends on, so that the
 loader finds them through `DT_NEEDED`; the compiler driver of the bare
 metal target does not pass `-shared` on, hence the direct use of `ld`.
-`libgcc.a` is linked into every shared object. The libc rule fails when
-the object carries a TLS segment.
+`libgcc.a` is linked into every shared object.
 
 Programs link with `ULDFLAGS`: `-Ttext-segment=0x400000`,
 `-dynamic-linker /lib/ld.so`, `-z now`, `--hash-style=sysv` and
@@ -83,8 +82,8 @@ program's `PT_DYNAMIC` is found through the headers named by `AT_PHDR`,
 and the libraries named by `DT_NEEDED` are loaded breadth first, the
 program's own libraries in order, then theirs, which gives the symbol
 search order. Object records live in a small mmap arena and form a list
-without a fixed cap. The third phase, initialization, runs later from the
-C library (below).
+without a fixed cap; the program record is first. The third phase,
+initialization, runs later from the C library (below).
 
 Every table an object names is checked before use. A range must lie
 inside one `PT_LOAD` segment with the needed permission, not merely inside
@@ -92,9 +91,10 @@ the image; strings must be terminated inside `DT_STRTAB`; the SysV hash
 table's indices and the GNU hash table's buckets and chains are validated
 while the symbol count is derived from them; and the entry sizes of the
 symbol and relocation tables must be the ELF64 ones. The loader refuses,
-with a diagnostic, objects with a TLS segment, `REL` or `RELR`
-relocations, symbol versioning, text relocations, IFUNC symbols, a
-preinit array in a library, a library name with a slash, overlapping or
+with a diagnostic, objects with `REL` or `RELR` relocations, symbol
+versioning, text relocations, IFUNC symbols, a TLS segment whose image
+is larger than its block or lies outside the load segments, a preinit
+array in a library, a needed library name with a slash, overlapping or
 misaligned load segments, and initializers outside executable segments.
 An error prints `ld.so: what: name` to standard error and exits with
 status 127.
@@ -114,16 +114,97 @@ Symbols are looked up through the GNU hash table when an object has one
 and through the SysV table otherwise, honouring hidden and internal
 visibility, in the order program then libraries; a local or protected
 definition binds inside its own object. The relocation types applied are
-`RELATIVE`, `GLOB_DAT`, `JUMP_SLOT`, `64` and `COPY`. Relocations run in
-two passes, the ordinary ones of every object and then the `COPY`
+`RELATIVE`, `GLOB_DAT`, `JUMP_SLOT`, `64` and `COPY`. The TLS relocation types
+`DTPMOD64`, `DTPOFF64` and `TPOFF64` are described below. Relocations
+run in two passes, the ordinary ones of every object and then the `COPY`
 relocations of the program, because a copied data object may itself hold
 relocated pointers; a `COPY` relocation is refused when its source is
 smaller than its destination or its owner is not the program. Every
-relocation is applied before the program starts, since the objects are
-linked with `-z now`. The loader implements neither lazy binding nor
-`dlopen`. After
+relocation of an object linked with `-z now` (`DT_FLAGS` with
+`DF_BIND_NOW`, or `DT_BIND_NOW`), which is how the build links every
+program and library, is applied before the program starts. After
 relocation the `PT_GNU_RELRO` range of every object is made read-only up
 to its last page boundary.
+
+Symbol lookup walks scopes. The global scope holds the program and the
+libraries loaded at start in breadth first order, then any object opened
+with `RTLD_GLOBAL`; every `dlopen` gives the object it loads and the
+libraries loaded with it a local scope, searched after the global one
+when those objects are relocated. Each object records its local scope;
+the initial objects share the global scope as theirs.
+
+## Lazy binding
+
+An object without `DF_BIND_NOW` keeps its `JUMP_SLOT` entries pointing
+into its own procedure linkage table, rebased for a shared object, and
+the loader stores the object record in the second word of the table
+named by `DT_PLTGOT` and `_dl_runtime_resolve` in the third. The first
+call through an entry pushes the relocation index and the record and
+reaches the trampoline in `start.S`, which preserves every register an
+argument may travel in, including the eight vector registers of
+floating point arguments, and calls `_dl_fixup`. That resolves the one
+relocation under the loader lock, exactly as the eager pass would, and
+stores the address in the slot, so the next call goes straight through;
+the trampoline drops the two pushed words and continues to the target.
+An undefined symbol met this way ends the process with the same
+diagnostic as at startup. The `-z lazy` fixture below exercises the
+path; the system itself is linked eagerly.
+
+## The runtime interface
+
+After relocating the initial objects the loader looks up the variable
+`__dl_interface` of the C library and stores in it the address of its
+interface record, `struct dl_interface` in `minios/dl.h`: the static TLS
+size and alignment, and the functions behind `__tls_get_addr`, thread
+creation and exit, `dlopen`, `dlsym`, `dlclose` and `dlerror`. The C
+library fills in `malloc` and `free` once its heap works; the loader
+uses them for the vectors and blocks of dynamic TLS, and its own mmap
+arena for everything else. A static program has no loader and leaves the
+pointer NULL; libc then handles the program's own TLS segment and fails
+`dlopen` with a message.
+
+The loader's runtime entries take one recursive futex lock, `dl_lock`,
+since a constructor run by `dlopen` may itself call `dlopen` or reach a
+lazily bound entry; the lock is taken before libc's `malloc` lock and
+never the other way around, because nothing in `malloc` uses thread
+local storage. A failure inside `dlopen` or `dlsym` does not exit: the
+entries set a recovery point (`_dl_setjmp` in `start.S`) and `die`
+returns to it with the diagnostic stored as the `dlerror` text, after
+which whatever the failed call mapped is unmapped.
+
+## dlopen
+
+`dlopen(name, mode)` under the lock: `NULL` returns the program, whose
+handle searches the global scope (`RTLD_DEFAULT`). A name whose
+basename matches a loaded object returns that object with one more
+reference, promoted to the global scope when `RTLD_GLOBAL` is given.
+Otherwise the object is mapped, from the library directories by soname
+or from the path when the name holds a slash, and the libraries it needs
+that are not loaded yet follow breadth first; the new objects and the
+loaded ones they depend on form the group's local scope. The new
+objects are relocated against the global scope and that local scope,
+lazily unless `RTLD_NOW` or their own `DF_BIND_NOW` says otherwise, get
+their RELRO protection, and only then join the list of loaded objects,
+so that a lookup from another thread never sees a half built record.
+Every member of the group gains a reference, `RTLD_GLOBAL` adds the
+members to the global scope, and the initializers of the new objects
+run in dependency order through the same depth first walk as at start,
+skipping objects initialized earlier. A failure anywhere releases the
+mappings of the new objects and returns `NULL`.
+
+`dlsym(handle, name)` searches the handle's object and then its local
+scope, or the global scope for `RTLD_DEFAULT`; a TLS symbol yields the
+calling thread's copy. `dlclose(handle)` drops one reference from every
+member of the handle's scope; the members left without references, and
+never an initial object, run their finalizers in the reverse of their
+initialization order (they are removed from the finalization chain that
+`exit` walks), leave the global scope and the object list, are unmapped
+and, when they had TLS, give up their vector slot. A thread that used
+the storage of an unloaded object keeps that block until its exit or
+until the slot is reused, when the generation stored with the block no
+longer matches the module's and the block is replaced. Object records
+return to a free list. Package libraries in `/home/.local/lib` are found
+by soname like the system ones.
 
 ## Initialization and finalization
 
@@ -144,11 +225,44 @@ symbols.
 
 ## Thread local storage
 
-The loader does not implement TLS: no loaded object may carry a `PT_TLS`
-segment. The one thread local variable of the C library, the buffer
-`term_sgr` returned, became a field of the thread control block
-(`sgr_sequence` in `struct pthread`), and the libc link rule checks the
-shared object for a TLS segment.
+The layout is the x86-64 variant II. The thread pointer, the FS base,
+addresses the thread control block (`struct pthread` in libc), whose
+first word is its own address and whose second word is the dynamic
+thread vector, the two words `struct dl_tcb` names. The blocks of the
+objects loaded at start lie below the control block at fixed offsets:
+the program's block ends at the thread pointer, its offset being its
+size rounded up to its alignment, which is what the linker assumed when
+it resolved the program's own local-exec accesses, and each further
+initial object's block follows below it. The loader computes this
+static layout once the initial objects are loaded and publishes its size
+and alignment; libc reserves the space below every control block, of
+the main thread (whose block moves from static storage to a mapping when
+the process has TLS) and of every thread `pthread_create` starts, and
+asks the loader's `tls_setup` to copy the images and clear the rest
+before the thread runs.
+
+The loader writes the address of the object's `struct dl_tls_module`
+record, rather than a small integer, as the module id of a `DTPMOD64`
+relocation, so `__tls_get_addr` in libc, which the general dynamic model
+calls with a module id and an offset, reaches the record directly: for
+a static module it returns thread pointer minus the module's offset plus
+the variable's offset without entering the loader, for a dynamic one it
+calls the loader's slow path. `DTPOFF64` stores the variable's offset in
+its block and `TPOFF64`, the initial-exec model, the offset from the
+thread pointer, which exists only for a static module; a relocation of
+that kind against an object loaded by `dlopen` is refused. A relocation
+with symbol index zero refers to the object's own module with the addend
+as the offset, as the linker emits for local variables.
+
+An object loaded by `dlopen` gets a slot in the dynamic thread vector
+and a generation number. The slow path grows the calling thread's
+vector to cover the slot, allocates and initializes a block on the first
+access, or again when the slot's generation changed because a later
+object reuses it after the earlier one was closed, and returns the
+address. `pthread_exit` frees the blocks and the vector through the
+loader's `tls_free`. A static program keeps one module, its own `PT_TLS`
+segment read from `AT_PHDR`, handled by libc's `tls.c` without the
+loader.
 
 ## Profiler
 
@@ -167,6 +281,31 @@ segment of a shared object. `prof` and `sysmon` attach the modules after
 loading a program's table.
 
 ## Tests
+
+`tests/cases/dlopen` runs `/bin/dltest`, linked with `--export-dynamic`
+against `libldtls.so`, a library with thread local variables in every
+model (general dynamic, initial-exec and local dynamic) and a variadic
+function taking doubles. The program checks its own local-exec
+variables and the library's from the main thread and from a worker
+thread created before anything else, that the two threads have separate
+blocks initialized from the images, that `dlopen` of a missing library
+and of an executable fail with their diagnostics and leave the process
+running, that a library loaded at start is found and its symbols
+resolve to the loaded copies, and then loads `libldplugin.so`, which no
+program links against, needs `libldplugdep.so`, calls back into the
+program through the exported `dltest_events` and into `libldtls.so`, and
+has TLS of its own: the dependency initializes before the plugin,
+`dlsym` finds the plugin's functions, its dependency's symbols and the
+calling thread's copy of a TLS variable, `RTLD_LOCAL` keeps it out of the
+global scope until a second `dlopen` with `RTLD_GLOBAL` promotes it, the
+worker thread created before the load gets its own block, the first
+`dlclose` drops a reference and the second unloads with the finalizers
+in reverse order, and a third `dlopen` gets a fresh copy whose static
+data and TLS start over, in the worker too, and whose lazily bound
+calls work. `/bin/ldlazy`, linked with `-z lazy`, proves through
+`DT_PLTGOT` that its jump slots point into its own table before the
+first call and into the libraries after, and that a variadic call with
+doubles survives the resolver.
 
 `tests/cases/dynlink` runs `/bin/dyntest`. The program checks that the C
 library is mapped above 4 GiB and the program below 16 MiB, that
@@ -189,8 +328,11 @@ diagnostic: a relocation into code, a wrong relocation entry size, an
 unsupported relocation type, GNU only and SysV only hash tables, a zero
 filled segment starting inside a page, program headers after the first
 page, an initializer outside code, a symbol name outside the string
-table, a misaligned load segment, a missing library, and a write into a
-RELRO page, which must end in `SIGSEGV`. A loader crash on a rejection
+table, a misaligned load segment, a missing library, a TLS segment with
+an image larger than its block, a TLS image outside the load segments,
+and a write into a RELRO page, which must end in `SIGSEGV`. The
+lifecycle programs, dynamic and static, also check a thread local
+variable of the program itself. A loader crash on a rejection
 case is a test failure, since the expected status is 127 and a signal is
 reported separately.
 

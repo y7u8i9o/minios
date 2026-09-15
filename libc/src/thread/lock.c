@@ -4,6 +4,7 @@
 #include <minios/syscall.h>
 #include <sys/audio.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <errno.h>
 
 static struct pthread main_thread;
@@ -18,11 +19,30 @@ long __futex_wake(int *addr, int count)
     return __syscall6(SYS_futex, (long)addr, FUTEX_WAKE, count, 0, 0, 0);
 }
 
+/* The main thread's block is static unless the process has thread local
+ * storage, in which case the block and the storage below it come from
+ * one mapping so that the layout matches every other thread's. Raw
+ * system calls: errno has no home yet. */
 void __pthread_init_main(void)
 {
-    main_thread.self = &main_thread;
-    main_thread.tid = (int)__syscall6(SYS_gettid, 0, 0, 0, 0, 0, 0);
-    __syscall6(SYS_set_tls, (long)&main_thread, 0, 0, 0, 0, 0);
+    size_t align;
+    size_t tls = __tls_reserve(&align);
+    struct pthread *t = &main_thread;
+    if (tls) {
+        size_t size = (tls + sizeof *t + align + 4095) & ~(size_t)4095;
+        long r = __syscall6(SYS_mmap, 0, (long)size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (r < 0) {
+            static const char msg[] = "libc: cannot allocate thread local storage\n";
+            __syscall6(SYS_write, 2, (long)msg, sizeof msg - 1, 0, 0, 0);
+            __syscall6(SYS_exit, 127, 0, 0, 0, 0, 0);
+        }
+        t = (struct pthread *)(((uintptr_t)r + tls + align - 1) & ~(uintptr_t)(align - 1));
+    }
+    t->self = t;
+    t->main = 1;
+    t->tid = (int)__syscall6(SYS_gettid, 0, 0, 0, 0, 0, 0);
+    __tls_setup(t);
+    __syscall6(SYS_set_tls, (long)t, 0, 0, 0, 0, 0);
 }
 
 /* Acquire: uncontended is one atomic exchange; a contended thread marks

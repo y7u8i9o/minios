@@ -111,7 +111,7 @@ static void test_elf_fixtures(void)
         count++;
     }
     fclose(manifest);
-    CHECK(count >= 29, "fixture manifest was complete (%u cases)", count);
+    CHECK(count >= 30, "fixture manifest was complete (%u cases)", count);
     printf("dyntest: %u ELF fixtures checked\n", count);
 }
 

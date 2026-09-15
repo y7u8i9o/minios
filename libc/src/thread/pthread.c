@@ -1,7 +1,8 @@
 /* POSIX threads (M35): creation, joining, detaching, keys and once. A
- * thread's stack and control block are one anonymous mapping; the block
- * sits at its top and becomes the thread's FS base before any user code
- * runs. Detached threads that have exited are reclaimed by the next
+ * thread's stack, thread local storage and control block are one
+ * anonymous mapping; the block sits at its top, the storage of the
+ * loaded objects directly below it, and the block becomes the thread's
+ * FS base before any user code runs. Detached threads that have exited are reclaimed by the next
  * pthread_create or pthread_join, since a thread cannot unmap the stack
  * it is running on. */
 #include "tcb.h"
@@ -122,15 +123,19 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)
     reap_detached();
     __libc_lock_unlock(&threads_lock);
 
-    /* The control block at the top of the mapping, the stack below it. */
+    /* The control block at the top of the mapping, aligned as the
+     * thread local storage below it requires, the stack below that. */
+    size_t align;
+    size_t tls = __tls_reserve(&align);
     size_t block = (sizeof(struct pthread) + 63) & ~(size_t)63;
-    size_t size = (attr->stack_size + block + 4095) & ~(size_t)4095;
+    size_t size = (attr->stack_size + tls + block + align + 4095) & ~(size_t)4095;
     void *mapping = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mapping == MAP_FAILED)
         return EAGAIN;
-    struct pthread *t = (struct pthread *)((char *)mapping + size - block);
+    struct pthread *t = (struct pthread *)(((uintptr_t)mapping + size - block) & ~(uintptr_t)(align - 1));
     memset(t, 0, sizeof *t);
     t->self = t;
+    __tls_setup(t);
     t->start = start;
     t->arg = arg;
     t->mapping = mapping;
@@ -141,7 +146,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)
     t->next = threads;
     threads = t;
     thread_t tid;
-    int r = thread_create(&tid, thread_entry, t, mapping, size - block);
+    int r = thread_create(&tid, thread_entry, t, mapping, (size_t)((char *)t - tls - (char *)mapping));
     if (r < 0) {
         int error = errno;
         unlink_thread(t);
@@ -160,7 +165,8 @@ void pthread_exit(void *result)
     struct pthread *self = __pthread_current();
     self->result = result;
     run_key_destructors(self);
-    if (self->mapping == NULL) {
+    __tls_free(self);
+    if (self->main) {
         /* The main thread: the process lives on while other threads run
          * and ends with the last one. */
         for (;;)

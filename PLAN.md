@@ -1604,6 +1604,30 @@ that programs compile, link and run on minios; `-run` works through the
 new `dlfcn.h` of libc. Documented in `docs/design/tcc.md`, tested by
 `tests/cases/tcc` with 54 programs of the upstream suite.
 
+## TCP/IP (completed 2026-09-12)
+
+The network stack of `NETWORK_PLAN.md`, milestones N00 to N12: packet
+buffers, the worker, virtio-net, Ethernet, ARP, IPv4 with fragments and
+path MTU, ICMP, UDP, TCP with congestion control, DHCP, DNS, the socket
+ABI and the tools `net`, `dhcpc`, `ping`, `nc`, `http` and `xfer`.
+Documented in `docs/design/network.md` and the validation records
+beside it, tested by the `net_*` cases.
+
+## Thread local storage, dlopen and lazy binding (completed 2026-09-15)
+
+The loader lays out the TLS blocks of the initial objects below every
+thread control block (variant II), applies the `DTPMOD64`, `DTPOFF64`
+and `TPOFF64` relocations, and serves `__tls_get_addr` for objects
+loaded later through a dynamic thread vector per thread. `dlopen`,
+`dlsym`, `dlclose` and `dlerror` load, search and unload shared objects
+at run time with reference counts, local and global scopes and
+finalizers in reverse order; objects linked without `-z now` bind their
+procedure linkage table entries on first call through
+`_dl_runtime_resolve`. The C library and the loader share the record in
+`minios/dl.h`; a static program handles its own TLS segment. Documented
+in `docs/design/dynlink.md`, tested by `tests/cases/dlopen` and the
+extended `dynlink` fixtures.
+
 ## Code editor (completed 2026-09-06)
 
 A source editor for C, Lua and shell scripts written in Lua

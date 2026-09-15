@@ -36,12 +36,9 @@ $(OUT)/crti.o: src/crti.S
 $(OUT)/crtn.o: src/crtn.S
 	$(CC) $(UASFLAGS) -c -o $@ $<
 
-# A thread local variable would give the library a TLS segment, which the
-# loader does not support; the link fails when one appears.
 $(SO): $(OBJS)
 	@mkdir -p $(dir $@)
 	$(LD) $(USOFLAGS) -soname libc.so -o $@ $(OBJS) $(LIBGCC)
-	@if $(READELF) -l $@ | grep -q ' TLS '; then echo "libc.so has a TLS segment"; rm -f $@; exit 1; fi
 
 $(LIB): $(OBJS)
 	rm -f $@

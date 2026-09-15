@@ -32,8 +32,15 @@ __attribute__((destructor(200))) static void program_fini_early(void) { dyn_reco
 __attribute__((destructor(300))) static void program_fini_late(void) { dyn_record('V'); }
 static void on_exit(void) { dyn_record('x'); }
 
+/* Thread local storage of the program itself, in both builds. */
+static __thread int tls_probe = 11;
+static __thread char tls_zero[24];
+
 int main(int argc, char **argv)
 {
+    if (tls_probe != 11 || tls_zero[0] != 0)
+        return 96;
+    tls_probe++;
 #ifndef STATIC_PROBE
     const void *volatile absolute_zero = dyn_absolute_zero;
     if (dyn_value19() != 20 || absolute_zero != NULL || dyn_absent_weak != NULL)

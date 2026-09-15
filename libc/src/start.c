@@ -4,6 +4,7 @@
 #include <minios/syscall.h>
 #include <errno.h>
 #include "thread/tcb.h"
+#include <minios/dl.h>
 
 char **environ;
 void __pthread_init_main(void);
@@ -97,16 +98,24 @@ __attribute__((noreturn)) void __libc_start(int argc, char **argv, char **envp,
     const uintptr_t *aux = (const uintptr_t *)envp;
     while (*aux)
         aux++;
+    aux++;
     int has_loader = 0;
-    for (aux++; aux[0] != 0; aux += 2) {
-        if (aux[0] == 7)             /* AT_BASE */
-            has_loader = aux[1] != 0;
+    for (const uintptr_t *a = aux; a[0] != 0; a += 2) {
+        if (a[0] == 7)             /* AT_BASE */
+            has_loader = a[1] != 0;
     }
     if (!has_loader) {
         initialize = NULL;
         finalize = NULL;
     }
+    /* Thread local storage comes before the control block that anchors
+     * it; the loader's allocator entries wait for a usable heap. */
+    __tls_init(aux);
     __pthread_init_main();
+    if (__dl_interface) {
+        __dl_interface->alloc = malloc;
+        __dl_interface->free = free;
+    }
     environ = envp;
     if (argc > 0 && argv[0] != NULL)
         setprogname(argv[0]);

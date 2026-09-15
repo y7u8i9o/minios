@@ -97,12 +97,10 @@ and a GNU hash table and the relocation types the minios loader applies.
 
 ## libc additions
 
-- `dlfcn.h`: `dlopen`, `dlsym`, `dlclose` and `dlerror` over the
-  libraries the loader mapped at start, found through `/dev/maps`.
-  `dlopen` returns a handle for a library that is mapped in the process
-  and fails for any other; `dlsym` reads the dynamic symbol table of the
-  library file once and adds the base address. `tcc -run` resolves the
-  references of the compiled program through them.
+- `dlfcn.h`: `dlopen`, `dlsym`, `dlclose` and `dlerror`, since
+  2026-09-15 forwarded to the loader (`dynlink.md`), which loads
+  libraries at run time; `tcc -run` resolves the references of the
+  compiled program through `dlsym` on the program's handle.
 - `strtoll`, `strtoull`, `strtold` (with the precision of `double`),
   `strtoimax`, `strtoumax`, `imaxabs` and `inttypes.h`.
 - `stdint.h` and the self contained `limits.h`.
