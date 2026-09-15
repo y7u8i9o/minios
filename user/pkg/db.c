@@ -59,7 +59,12 @@ int read_file(const char *path, uint8_t **data, size_t *len)
 
 int write_file(const char *path, const uint8_t *data, size_t len)
 {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    return write_file_mode(path, data, len, 0644);
+}
+
+int write_file_mode(const char *path, const uint8_t *data, size_t len, uint32_t mode)
+{
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
     if (fd < 0)
         return -1;
     size_t done = 0;

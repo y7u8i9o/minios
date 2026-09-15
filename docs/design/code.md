@@ -1,7 +1,7 @@
 # Code, the source editor
 
-`/usr/share/apps/code.lua` is a source editor for C, Lua and shell
-scripts, written in Lua on the `gui`, `sys` and `fs` modules. `/bin/code`
+`/home/.local/share/apps/code.lua` is a source editor for C, Lua and shell
+scripts, written in Lua on the `gui`, `sys` and `fs` modules. `/home/.local/bin/code`
 starts it with the arguments; `Code.app` on the desktop, the launcher
 menu and the file types `text/x-lua`, `text/x-csrc` and
 `text/x-shellscript` point at it.

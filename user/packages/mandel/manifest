@@ -1,0 +1,3 @@
+name mandel
+summary Mandelbrot set explorer
+launcher Mandelbrot bin/mandel

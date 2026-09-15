@@ -555,12 +555,18 @@ static int extract(struct pending *p)
             break;
         }
         path_join(full, sizeof full, prefix, rel);
-        if (write_file(full, m.data, m.size) < 0) {
+        /* MiniOS chmod is currently a stub. Recreate payload files so the
+         * archive's mode is applied by open, including during upgrades. */
+        if (unlink(full) < 0 && errno != ENOENT) {
             error(p->m.name, "%s: %s", rel, strerror(errno));
             failed = 1;
             break;
         }
-        chmod(full, m.mode & 0777);
+        if (write_file_mode(full, m.data, m.size, m.mode & 0777) < 0) {
+            error(p->m.name, "%s: %s", rel, strerror(errno));
+            failed = 1;
+            break;
+        }
         struct timespec ts[2] = { { m.mtime, 0 }, { m.mtime, 0 } };
         utimensat(AT_FDCWD, full, ts, 0);
         record_add_file(&rec, rel, m.size, gzip_crc32(m.data, m.size));

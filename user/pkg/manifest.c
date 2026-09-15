@@ -180,7 +180,8 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
             (*count)++;
         } else if (strcmp(key, "launcher") == 0) {
             if (m->nlaunchers >= PKG_MAX_LAUNCHERS) return fail(err, errlen, line, "too many launcher lines", NULL);
-            char *sp = strchr(value, ' ');
+            /* The final field is the command; the title may contain spaces. */
+            char *sp = strrchr(value, ' ');
             if (!sp) return fail(err, errlen, line, "launcher needs a title and a command", value);
             *sp++ = '\0';
             while (*sp == ' ') sp++;

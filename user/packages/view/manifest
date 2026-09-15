@@ -1,0 +1,4 @@
+name view
+summary Image viewer
+launcher Viewer bin/view
+mime-handler image/* bin/view

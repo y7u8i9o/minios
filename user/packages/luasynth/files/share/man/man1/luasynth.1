@@ -1,0 +1,62 @@
+LUASYNTH(1)                 User Commands                 LUASYNTH(1)
+
+NAME
+    luasynth - polyphonic Lua synthesizer
+
+SYNOPSIS
+    luasynth [patch.lsynth]
+
+DESCRIPTION
+    Lua Synthesizer is a separate instrument from the C synth program.
+    It plays up to eight voices with velocity, sustain, two oscillators
+    per voice, ADSR envelopes, a shared resonant stereo low-pass filter,
+    vibrato, stereo spread, and a ping-pong delay. Output is stereo S16
+    PCM at 48000 Hz through audiod. Excess notes steal a quiet released
+    voice first, then a quiet held voice (oldest when equally loud).
+
+    Oscillators offer sine, saw, pulse and triangle. Saw and pulse use
+    polynomial edge correction to reduce aliasing. Oscillator B has
+    separate detune and octave controls. Blend and pulse width change
+    the timbre. The amplitude envelope can also open the shared filter.
+    Vibrato depth is in cents and its rate is shown in Hz. Delay time,
+    wet mix and feedback are independent. Saturation bounds the output.
+
+    Choose Warm pad, Bright keys, Deep bass, Glass, Pulse lead or Pure
+    sine from Preset. Demo cycles through chords to audition a sound.
+    Save patch and Load patch preserve all sound controls in a plain
+    key=value .lsynth file. Loading a patch does not execute Lua code.
+    Invalid files leave the current patch unchanged.
+
+KEYBOARD
+    Click the on-screen keyboard to give it keyboard focus.
+    Z S X D C V G B H N J M     lower chromatic octave
+    Q 2 W 3 E R 5 T 6 Y 7 U I   upper octave and the next C
+    Space                       sustain while held
+    [ and ]                     shift the keyboard octave
+    Esc                         panic: stop voices, demo and delay
+    Ctrl+Q or window Close      close the application
+
+    Several keys can be held at once. Click and drag on the on-screen
+    keyboard to play a glissando. Keyboard and mouse holds on the same
+    note are tracked independently. Losing window focus releases held
+    notes. Moving focus to other controls releases keyboard notes.
+
+AUDIO
+    Desktop sessions start audiod. A console can start it with audiod &
+    before starting a desktop application. The status line reports active
+    voices, the output peak and audio underruns. A dedicated native thread
+    owns synthesis and audio playback, while the main thread handles the
+    window and controls. Display updates do not block audio generation.
+    Synthesis is interpreted Lua, so many voices and a slow virtual CPU
+    can still cause underruns. Closing the window stops and joins the
+    audio worker before releasing the application.
+
+FILES
+    /home/.local/share/apps/luasynth/engine.lua    synthesis and patch format
+    /home/.local/share/apps/luasynth/ui.lua        window and controls
+    /home/.local/share/apps/luasynth/worker.lua    dedicated audio loop
+    /home/.local/share/apps/luasynth/controller.lua command and meter exchange
+    /home/luasynth.lsynth                         default patch save location
+
+SEE ALSO
+    pkg(1)

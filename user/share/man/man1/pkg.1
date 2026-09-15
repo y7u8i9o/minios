@@ -39,6 +39,12 @@ OPTIONS
     --prefix dir   install under dir instead of /home/.local
     --root dir     read lib/abi and the system libraries below dir
 
+BUNDLED APPLICATIONS
+    Optional applications are available as archives in /usr/share/packages.
+    Install selected archives, or all of them, with the examples below.
+    They are not installed automatically. The package prefix persists on
+    the data volume across root image rebuilds.
+
 FILES
     /home/.local/lib/pkg/name/manifest   the manifest as installed
     /home/.local/lib/pkg/name/files      path, size and CRC-32 of each file
@@ -49,6 +55,8 @@ FILES
     /lib/abi                             ABI numbers of the system libraries
 
 EXAMPLES
+    pkg install /usr/share/packages/calc-*.mpk
+    pkg install /usr/share/packages/*.mpk
     pkg build pong
     pkg install pong-1.2.0.mpk
     pkg list

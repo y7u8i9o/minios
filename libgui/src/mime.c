@@ -210,7 +210,8 @@ static int launcher_command(const char *path, char *buf, size_t size)
 
 pid_t mime_open(const char *path)
 {
-    ensure();
+    /* Packages may have been installed or removed since this window opened. */
+    mime_load(NULL, NULL);
     const char *type = mime_type(path, 0);
     char cmd[160];
     char *argv[4];

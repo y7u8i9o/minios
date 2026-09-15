@@ -1,0 +1,5 @@
+name luasynth
+summary Polyphonic Lua synthesizer with modulation, delay and presets
+launcher Lua Synthesizer bin/luasynth
+mime-type application/x-luasynth-patch lsynth
+mime-handler application/x-luasynth-patch bin/luasynth

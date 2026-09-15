@@ -90,4 +90,5 @@ void record_free(struct record *r);
 int system_abi(const char *soname);
 int read_file(const char *path, uint8_t **data, size_t *len);
 int write_file(const char *path, const uint8_t *data, size_t len);
+int write_file_mode(const char *path, const uint8_t *data, size_t len, uint32_t mode);
 void path_join(char *buf, size_t n, const char *dir, const char *rel);

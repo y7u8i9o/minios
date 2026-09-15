@@ -1,0 +1,4 @@
+calc: self-test 0 failures
+pkg-apps: done
+/bin/sh exited with status 0x0
+TEST PASS

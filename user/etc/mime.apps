@@ -1,9 +1,2 @@
-# type program
-text/x-lua /bin/code
-text/x-csrc /bin/code
-text/x-shellscript /bin/code
-text/* /bin/gedit
-image/* /bin/view
-audio/* /bin/player
+# Base handlers; application handlers are registered by their packages.
 inode/directory /bin/files
-* /bin/hexview

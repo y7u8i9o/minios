@@ -1,0 +1,3 @@
+name calc
+summary Calculator
+launcher Calculator bin/calc

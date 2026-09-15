@@ -1,0 +1,3 @@
+name synth
+summary Musical synthesizer
+launcher Synthesizer bin/synth

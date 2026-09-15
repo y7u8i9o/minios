@@ -1,0 +1,4 @@
+name hexview
+summary Hexadecimal file viewer
+launcher Hex viewer bin/hexview
+mime-handler * bin/hexview

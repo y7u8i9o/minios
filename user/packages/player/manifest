@@ -1,0 +1,4 @@
+name player
+summary WAV audio player
+launcher Player bin/player
+mime-handler audio/* bin/player

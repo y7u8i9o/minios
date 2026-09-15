@@ -234,6 +234,63 @@ cross build can be copied onto the data volume for installation.
 below another tree, which lets a host build of the installer check
 packages against a build tree.
 
+## Bundled application packages
+
+`make user` (also `make packages`) builds fourteen optional applications as
+packages: `calc`, `code`, `gedit`, `hexview`, `luasynth`, `mandel`, `paint`, `player`,
+`playtone`, `pong`, `sequencer`, `synth`, `unicode` and `view`. The archives
+are in `build/packages/` on the host and `/usr/share/packages/` in the
+image. They are an offline archive shelf, not installed applications.
+For example, on minios:
+
+    pkg install /usr/share/packages/calc-*.mpk
+    calc
+    pkg install /usr/share/packages/*.mpk
+    pkg verify
+    pkg remove calc
+
+Installation is explicit. An application removed by the user is not
+reinstalled on boot. Installed programs and their records survive root
+image rebuilds on the data volume. Rebuilding with a newer `VERSION`
+creates archives that can be installed as upgrades. Development changes
+within the same version require removal and reinstallation, because
+`pkg install` skips an already installed version.
+
+The base image keeps init, the shell and console editor, command-line
+utilities and language/development tools, shared libraries and fonts,
+X12, the panel, desktop, Terminal, Files, settings, the clock, and the
+system diagnostics (`sysmon`, `logview`, `evtest`, `x12settings`). These
+remain usable before installing any application.
+
+`user/packages/packages.mk` builds application binaries under
+`build/user/app-bin/`, independently of the base image's `bin/`. Each
+`user/packages/NAME/manifest` declares its summary, launcher and MIME
+handlers; the build adds the version from `VERSION` and derives library
+requirements. Optional `files/` trees supply data and manuals. Code owns
+its Lua source and `code(1)` manual, and Pong also owns its Lua example.
+The base Lua interpreter supports both. `man` searches the base manual
+tree and `/home/.local/share/man`, including keyword searches.
+
+Application entries are absent from the base launcher and MIME handler
+table. Installing packages registers these entries; removing packages
+unregisters them. The panel reloads the launcher when opening its menu,
+and file opening refreshes the MIME tables. Files remains the base
+handler for directories. New home skeletons omit the former Code and
+Pong desktop shortcuts; application launchers now come from packages.
+Existing home directories are not modified, so users with old shortcuts
+can update their `exec=` paths to the installed locations or remove them.
+
+Incremental builds remove former application binaries, data, manual
+pages and skeleton shortcuts from the generated root tree and replace
+its archive shelf with the current release. This cleanup never edits
+`data.img` or an installed package database.
+
+`tests/cases/pkg_apps` checks the real archive collection: absence of
+built-in copies, installation, all file records, launcher and MIME
+registration, manual lookup and search, calculator execution, removal,
+reinstallation, and fallback handlers. Application GUI tests install
+the relevant archive before opening its program from `/home/.local/bin`.
+
 ## Program structure
 
 `user/pkg/` is one program, `/bin/pkg`, linked against libc only:
@@ -273,8 +330,6 @@ host build of the installer.
 
 - A window for the installer, opened by Files for `.mpk` files, showing
   the manifest and the checks before installation.
-- Packages of the programs now built into the root image, so that the
-  image shrinks to the base system and the installer manages the rest.
 - Signatures, once a key can reach the system by a trusted path.
 - The profiler reads the symbol tables of `/lib` only; a library
   installed under the prefix appears in a profile without symbols.

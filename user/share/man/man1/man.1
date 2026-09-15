@@ -9,8 +9,10 @@ SYNOPSIS
     man -f name
 
 DESCRIPTION
-    man searches /usr/share/man by section and displays a page through pager
-    when output is a terminal. MANPAGER, then PAGER, selects another pager.
+    man searches /usr/share/man and /home/.local/share/man by section,
+    including manuals installed by packages. It displays a page through
+    pager when output is a terminal. MANPAGER, then PAGER, selects another
+    pager. Keyword and description searches include both trees.
 
 OPTIONS
     -w   print the selected manual page path

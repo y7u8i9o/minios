@@ -1,4 +1,4 @@
-/* man: find and display plain-text manual pages from /usr/share/man. */
+/* man: find and display plain-text manual pages from the base system and installed packages. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +6,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <minios/local.h>
+
+static const char *roots[] = { "/usr/share/man", LOCAL_SHARE "/man", NULL };
 
 static const char *sections[] = { "1", "2", "3", "4", "5", "7", "8", NULL };
 
@@ -30,12 +33,15 @@ static int contains_case(const char *s, const char *needle)
 
 static int page_path(char *path, size_t size, const char *section, const char *name)
 {
-    snprintf(path, size, "/usr/share/man/man%s/%s.%s", section, name, section);
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return 0;
-    fclose(f);
-    return 1;
+    for (int ri = 0; roots[ri]; ri++) {
+        snprintf(path, size, "%s/man%s/%s.%s", roots[ri], section, name, section);
+        FILE *f = fopen(path, "r");
+        if (f) {
+            fclose(f);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int find_page(char *path, size_t size, const char *section, const char *name)
@@ -107,36 +113,38 @@ static void description(FILE *f, char *out, size_t size)
 static int apropos(const char *word, int exact)
 {
     int found = 0;
-    for (int si = 0; sections[si]; si++) {
-        char dirpath[64];
-        snprintf(dirpath, sizeof dirpath, "/usr/share/man/man%s", sections[si]);
-        DIR *d = opendir(dirpath);
-        if (!d)
-            continue;
-        struct dirent *e;
-        while ((e = readdir(d))) {
-            size_t n = strlen(e->d_name), sn = strlen(sections[si]);
-            if (n <= sn + 1 || e->d_name[n - sn - 1] != '.' ||
-                strcmp(e->d_name + n - sn, sections[si]) != 0)
+    for (int ri = 0; roots[ri]; ri++) {
+        for (int si = 0; sections[si]; si++) {
+            char dirpath[64];
+            snprintf(dirpath, sizeof dirpath, "%s/man%s", roots[ri], sections[si]);
+            DIR *d = opendir(dirpath);
+            if (!d)
                 continue;
-            char name[256], path[512], desc[512];
-            snprintf(name, sizeof name, "%.*s", (int)(n - sn - 1), e->d_name);
-            if (exact && strcmp(name, word) != 0)
-                continue;
-            snprintf(path, sizeof path, "%s/%s", dirpath, e->d_name);
-            FILE *f = fopen(path, "r");
-            if (!f)
-                continue;
-            description(f, desc, sizeof desc);
-            fclose(f);
-            if (!exact && !contains_case(name, word) && !contains_case(desc, word))
-                continue;
-            const char *summary = strstr(desc, " - ");
-            summary = summary ? summary + 3 : (desc[0] ? desc : "manual page");
-            printf("%s (%s) - %s\n", name, sections[si], summary);
-            found = 1;
+            struct dirent *e;
+            while ((e = readdir(d))) {
+                size_t n = strlen(e->d_name), sn = strlen(sections[si]);
+                if (n <= sn + 1 || e->d_name[n - sn - 1] != '.' ||
+                    strcmp(e->d_name + n - sn, sections[si]) != 0)
+                    continue;
+                char name[256], path[512], desc[512];
+                snprintf(name, sizeof name, "%.*s", (int)(n - sn - 1), e->d_name);
+                if (exact && strcmp(name, word) != 0)
+                    continue;
+                snprintf(path, sizeof path, "%s/%s", dirpath, e->d_name);
+                FILE *f = fopen(path, "r");
+                if (!f)
+                    continue;
+                description(f, desc, sizeof desc);
+                fclose(f);
+                if (!exact && !contains_case(name, word) && !contains_case(desc, word))
+                    continue;
+                const char *summary = strstr(desc, " - ");
+                summary = summary ? summary + 3 : (desc[0] ? desc : "manual page");
+                printf("%s (%s) - %s\n", name, sections[si], summary);
+                found = 1;
+            }
+            closedir(d);
         }
-        closedir(d);
     }
     return found ? 0 : 1;
 }
