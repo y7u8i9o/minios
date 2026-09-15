@@ -30,6 +30,13 @@ call. A pthread's block sits at the top of the thread's own anonymous
 mapping, above its stack, and the thread entry installs it with `set_tls`
 before calling the start routine.
 
+The raw `thread_create` wrapper reserves a synthetic return-address slot
+below the aligned stack top. The kernel jumps to the C entry function
+without a call instruction, so this establishes the x86-64 ABI requirement
+that RSP is 8 modulo 16 on entry. Without it, aligned SIMD spills inside
+Lua can fault. Invalid, overflowing or insufficient stack ranges are rejected
+before writing the slot. Raw entries must finish with `thread_exit`.
+
 ## Futexes
 
 `futex(addr, op, value, timeout_ms)` in `kernel/ipc/futex.c` is the
@@ -79,7 +86,13 @@ conditions with writer preference; spin locks are a single exchanged word.
 
 `malloc`, `free` and `realloc` run under one lock, every `FILE` has its own
 recursive lock (so `vfprintf` may call `fputc` on the stream it holds), and
-`atexit` is locked. The lock, `struct __libc_lock`, is a recursive futex
+`atexit` is locked. The open-stream registry has a separate `streams_lock`.
+`fdopen` publishes under that lock, `fflush(NULL)` holds it while walking
+entries, and `fclose` unpublishes before flushing and freeing the object.
+The registry lock nests outside each FILE lock, preventing a global flush
+from retaining a stream that another thread frees. Callers still own the
+responsibility for coordinating direct uses of the same FILE with fclose.
+The lock, `struct __libc_lock`, is a recursive futex
 mutex keyed by `tid`. Everything else in libc is reentrant or documented as
 not thread safe in POSIX (`gmtime`, `asctime`, `strtok`).
 
@@ -96,4 +109,9 @@ two condition variables, recursive and error checking mutexes, a timed
 wait that expires, `errno` kept per thread across a blocking exchange with
 another thread, keys with destructors, `pthread_once` from four threads,
 detached threads with small stacks that are reclaimed, `malloc` and `printf`
-from several threads, and spin and read-write locks.
+from several threads, spin and read-write locks, aligned SIMD stack access,
+invalid raw-stack rejection, and concurrent private-stream open/flush/close.
+
+The [Lua thread binding](lua-threads.md) uses this pthread implementation.
+Its `lua_threads` and `luasynth_worker` cases verify the language binding
+and independent audio progress inside MiniOS.

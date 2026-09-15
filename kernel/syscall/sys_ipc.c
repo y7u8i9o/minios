@@ -81,6 +81,7 @@ long sys_poll(struct trapframe *tf)
 /* ---- M23: sockets, descriptor passing, memfd, eventfd, timerfd ---- */
 
 #include <ipc/socket.h>
+#include <ipc/socket_validate.h>
 #include <ipc/eventfd.h>
 
 static int socket_flags(long flags)
@@ -342,12 +343,13 @@ static long msghdr_from_user(uintptr_t addr, struct msghdr *m, struct iovec *iov
     if (m->msg_iovlen && !user_range_ok((uintptr_t)m->msg_iov, m->msg_iovlen * sizeof *iov, false))
         return -EFAULT;
     memcpy(iov, m->msg_iov, m->msg_iovlen * sizeof *iov);
-    size_t sum = 0;
-    for (size_t i = 0; i < m->msg_iovlen; i++) {
-        if (iov[i].iov_len > MSG_IOV_LIMIT || sum + iov[i].iov_len > MSG_IOV_LIMIT)
-            return -EINVAL;
-        sum += iov[i].iov_len;
-    }
+    size_t lengths[MSG_MAX_IOV];
+    for (size_t i = 0; i < m->msg_iovlen; i++)
+        lengths[i] = iov[i].iov_len;
+    size_t sum;
+    int result = socket_iovec_size(lengths, m->msg_iovlen, &sum);
+    if (result < 0)
+        return result;
     for (size_t i = 0; i < m->msg_iovlen; i++)
         if (iov[i].iov_len && !user_range_ok((uintptr_t)iov[i].iov_base, iov[i].iov_len, write))
             return -EFAULT;
@@ -487,7 +489,7 @@ long sys_recvmsg(struct trapframe *tf)
         kfree(buf);
         goto out;
     }
-    size_t left = (size_t)r, off = 0;
+    size_t left = MIN((size_t)r, total), off = 0;
     for (size_t i = 0; i < m.msg_iovlen && left; i++) {
         size_t k = MIN(left, iov[i].iov_len);
         memcpy(iov[i].iov_base, buf + off, k);

@@ -8,6 +8,7 @@
 #include <net/worker.h>
 #include <net/netif.h>
 #include <net/net.h>
+#include <drivers/virtio/virtio_net.h>
 #include <net/clock.h>
 #include <sched/wait.h>
 #include <sched/thread.h>
@@ -76,11 +77,11 @@ int net_request_submit(struct net_request *r)
     return 0;
 }
 
-int net_request_wait(struct net_request *r)
+static int request_wait(struct net_request *r, bool interruptible)
 {
     spin_lock(&w.lock);
     while (r->state != NET_REQ_DONE) {
-        if (r->state == NET_REQ_QUEUED && signal_should_interrupt()) {
+        if (interruptible && r->state == NET_REQ_QUEUED && signal_should_interrupt()) {
             list_del(&r->link);
             w.nrequests--;
             r->state = NET_REQ_CANCELLED;
@@ -96,6 +97,16 @@ int net_request_wait(struct net_request *r)
     }
     spin_unlock(&w.lock);
     return r->result;
+}
+
+int net_request_wait(struct net_request *r)
+{
+    return request_wait(r, true);
+}
+
+int net_request_finish(struct net_request *r)
+{
+    return request_wait(r, false);
 }
 
 bool net_request_cancel(struct net_request *r)
@@ -125,13 +136,15 @@ static int drain_fn(struct net_request *r)
 
 void net_worker_drain(void)
 {
+    if (net_worker_is_current())
+        return;
     struct net_request r;
     net_request_init(&r, drain_fn);
     /* A full queue is waited out: the drain is a synchronization point,
      * not a hint. */
     while (net_request_submit(&r) == -ENOBUFS)
         sched_yield();
-    net_request_wait(&r);
+    net_request_finish(&r);
 }
 
 /* ---- timers ---- */
@@ -332,6 +345,7 @@ static void netd(void *arg)
         w.stats.batches++;
         spin_unlock(&w.lock);
         run_timers();
+        virtio_net_service();
         run_packets();
         run_requests();
     }

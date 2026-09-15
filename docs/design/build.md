@@ -200,7 +200,10 @@ uses `QEMU_ACCEL` for an override (see Running above).
 ## Host checks
 
 `make check` runs the font, protocol, GUI, and Lua checks on the host;
-`make check-sh` checks the shell parser, expansion and execution. On
+`make check-sh` checks the shell parser, expansion and execution. `make
+check-net` self-tests the network peer harness with a fake QEMU, and `make
+check-net-fuzz` fuzzes the network parsers under the sanitizers for three
+seeds of `FUZZ_SECONDS` (30) each (`network.md`). On
 Darwin, `toolchain.mk` adds `_DARWIN_C_SOURCE` to `HOSTCPPFLAGS` alongside
 the POSIX feature level. This exposes native socket ancillary-data
 macros, `RLIMIT_NPROC`, and `mkdtemp` without changing guest compiler flags.

@@ -1,0 +1,35 @@
+NET(1)                       User Commands
+
+NAME
+    net - show and configure network interfaces
+
+SYNOPSIS
+    net
+    net config IF ADDRESS NETMASK [GATEWAY]
+    net down IF
+    net apply
+
+DESCRIPTION
+    Without arguments prints the text snapshot of /dev/net: one line per
+    interface with its counters, "link" lines with the MAC addresses,
+    the "inet" line with the configured address, netmask and gateway,
+    "arp" lines with the neighbour cache, and the IP, ARP, ICMP, UDP, TCP
+    and packet pool counters.
+
+    config assigns an address to an Ethernet interface; the gateway must
+    lie inside the subnet. down removes the address, netmask and gateway
+    while the interface stays attached, so DHCP can start again. apply
+    reads /etc/network, which init runs at boot in the background:
+
+        iface eth0 dhcp                   start dhcpc(1)
+        iface eth0 static ADDR MASK [GW]  configure once
+        nameserver ADDR                   written to /etc/resolv.conf
+
+    A missing file or a missing interface means no network; the shell is
+    never delayed. MiniOS is single user: every process may reconfigure.
+
+FILES
+    /dev/net, /etc/network, /etc/resolv.conf
+
+SEE ALSO
+    dhcpc(1), ping(1), nc(1), http(1), index(7)

@@ -38,6 +38,14 @@ int main(int argc, char **argv)
     int fs_status = 0;
     if (fs > 0 && waitpid(fs, &fs_status, 0) == fs && (!WIFEXITED(fs_status) || WEXITSTATUS(fs_status) != 0))
         printf("init: fsinit failed with status %d\n", WIFEXITED(fs_status) ? WEXITSTATUS(fs_status) : -1);
+    /* Network configuration runs in the background and never delays the
+     * shell: without an interface or a DHCP server it simply keeps retrying. */
+    pid_t net = fork();
+    if (net == 0) {
+        char *const args[] = { "net", "apply", NULL };
+        execv("/bin/net", args);
+        _exit(127);
+    }
     pid_t shell = -1;
     for (;;) {
         if (shutdown_request) {

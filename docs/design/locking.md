@@ -341,11 +341,98 @@ the framebuffer state and framebuffer write.
   request completion: `net_worker.lock -> waitq.lock ->` the calling
   CPU's `run_queue.lock`, and `net_worker.lock -> timed_lock` through
   `waitq_wait_timeout`. It is never held while a packet, a request or a
-  timer function runs, and never taken from an interrupt: device
-  completion callbacks (N03) record and wake through their own queue
-  lock, and the worker takes `net_worker.lock` afterwards on its own.
+  timer function runs, and not held across device processing. N03 extends its producer
+  use to an IRQ-side kick/wakeup after recording queue completions, as
+  described below.
 - `pbuf_pool.lock` and `netif_lock` are leaves in level 16. The pool
   lock is taken by `pbuf_alloc` and `pbuf_free` from thread context;
   `net_worker_queue_packet` takes `net_worker.lock` after the ownership
   hand-over, which uses an atomic word and no lock. The interface flag is
   read with an acquire load on the data paths without `netif_lock`.
+
+## Lua workers and libc stream registration
+
+These locks are in user space and do not add a kernel lock-order level.
+
+- `streams_lock` in `libc/src/stdio/stdio.c` protects the open-stream registry
+  and the lifetime of entries visited by `fflush(NULL)`. Ordering is
+  `streams_lock -> FILE.lock`. `fclose` removes the entry before acquiring
+  its FILE lock for the final flush. Registration allocates before locking.
+- `job.lock` in `user/lua/lthread.c` protects a worker's message queues, their
+  notification pipes, cancellation and completion state. Message allocations,
+  Lua operations and callbacks occur outside this mutex. Pipe operations
+  under it are nonblocking. No job lock nests inside another job lock.
+  Reference counts and the process-wide active worker count use atomics.
+  Worker errors become visible through completion and pthread join.
+
+## N03–N05 additions
+
+- The VirtIO device `irq_lock` serializes interrupt traversal with queue
+  detachment after reset: `irq_lock -> virtqueue.lock -> net_worker.lock
+  -> waitq.lock`. Completion callbacks only record tokens and kick netd;
+  they never allocate, free packets, refill descriptors or parse frames.
+  This extends N02: the worker condition lock may be taken in an interrupt
+  solely to record a kick and wake its waiter. Netd holds none of its locks
+  while servicing the NIC. The NIC's DMA buffers and completion slots are
+  protected by the corresponding queue lock.
+- IPv4 configuration, routes, ARP entries and deadlines belong exclusively
+  to netd. Configuration and socket sends use bounded synchronous requests
+  holding kernel copies; file references keep socket objects alive until
+  completion. Close uses an uninterruptible request to remove its endpoint.
+- `udp_lock` protects the bounded endpoint table, bindings, peer selection
+  and receive rings. Its order is `udp_lock -> socket.lock` and
+  `udp_lock -> poll_source.lock -> poll_waiter.lock -> waitq.lock`.
+  A receiver sleeps with udp_lock as condition lock. All copies under it
+  are bounded copies between kernel buffers. Packet freeing and output
+  happen after unlocking. Netd never waits for a reader or a descriptor.
+
+## N06 TCP ownership
+
+- Netd exclusively owns TCP connection state, sequence numbers, listener
+  membership and deadlines. A connection control block may outlive its socket
+  through FIN processing and TIME_WAIT. The fixed connection table is distinct
+  from the application endpoint table.
+- `tcp_lock` protects endpoint publication, application-visible readiness,
+  address snapshots, receive rings and wait conditions. The order is
+  `tcp_lock -> socket.lock` and `tcp_lock -> poll_source.lock ->
+  poll_waiter.lock -> waitq.lock`. No packet output, allocation, user copy or
+  worker request submission occurs while tcp_lock is held.
+- Socket operations submit copied, bounded requests while their file reference
+  keeps the endpoint alive. Close removes the endpoint with an uninterruptible
+  worker barrier; remaining protocol state then contains no socket pointer.
+  A blocked connect interrupted by a signal leaves the connection in progress;
+  a later poll/SO_ERROR or close observes/terminates it. Accept waiters register
+  under the same condition lock used when publishing accepted connections.
+
+## N07–N09 additions
+
+- `tcp_lock` additionally protects the out-of-order presence bitmap,
+  `out_of_order` and the pending FIN of a connection's receive store, since
+  `tcp_receive_segment` on netd and `tcp_receive` on a reader share the ring.
+  The send buffer, congestion state, round-trip estimator and every deadline
+  belong to netd alone and are never read under `tcp_lock`; readiness is
+  published as before through `tcp_publish`.
+- Reassembly contexts, the path MTU cache and the recent-transmission table
+  (`fragment.c`, `path.c`) belong to netd. `netif_set_up(false)` from another
+  thread drains the worker and then runs a request that fails the interface's
+  connections, flushes its reassembly contexts, the path tables and its ARP
+  entries; called on netd it runs the same function directly. No lock is held
+  across that request.
+- `random_lock` is a leaf in level 16 protecting the generator state of
+  `kernel/lib/random.c`. It is taken from thread context by `random_u32`,
+  including on netd under no other lock, never from an interrupt. Readiness
+  is an acquire/release flag set once by `random_init`.
+- The entropy device's `virtqueue.lock` is used only during `random_init`,
+  before netd services any interface; its completion callback records the
+  length and never allocates. The device is reset before its buffer is freed.
+
+## N10–N11 additions
+
+- `icmp_lock` is a leaf in level 16 protecting the four echo request slots
+  of `icmp.c`. The caller of `icmp_echo` sleeps on the slot's wait queue
+  with `icmp_lock` as condition lock and a deadline; netd completes a slot
+  from echo-reply or ICMP-error input under the same lock and never sleeps.
+  The request that emits the echo runs on netd without the lock.
+- `/dev/net` reads take a snapshot through a worker request; the counters
+  are netd-owned and the text is assembled on netd. The UDP `broadcast`
+  flag is protected by `udp_lock` like the other endpoint fields.

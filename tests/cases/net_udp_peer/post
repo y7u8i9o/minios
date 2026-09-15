@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+grep -q "summary frames 300 .* echoed 300 " "$PEER_LOG"
+python3 "$TOP/tests/net/check_capture.py" "$CAPTURE"

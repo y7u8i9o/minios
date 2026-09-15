@@ -218,6 +218,8 @@ void syscall_dispatch(struct trapframe *tf)
     c->last_user_ss = tf->ss;
     c->last_user_cr3 = read_cr3();
     c->last_user_frame = (void *)tf;
+    if (c->current)
+        c->current->kentry_frame = tf;
     /* The entry masked IF. The kernel runs with interrupts enabled. */
     sti();
     uint64_t nr = tf->rax;

@@ -25,9 +25,9 @@ struct pbuf_pool {
     unsigned order;
 };
 
-static struct pbuf_pool pool = { .lock = SPINLOCK_INIT("pbuf_pool") };
+static struct pbuf_pool pool = {.lock = SPINLOCK_INIT("pbuf_pool")};
 
-_Static_assert(PAGE_SIZE % PBUF_SIZE == 0, "buffers tile pages");
+_Static_assert(PBUF_SIZE % PAGE_SIZE == 0 || PAGE_SIZE % PBUF_SIZE == 0, "buffers tile pages");
 
 int pbuf_pool_init(void)
 {
@@ -57,7 +57,9 @@ int pbuf_pool_init(void)
     }
     pool.nfree = pool.total = pool.low_water = NET_PBUF_COUNT;
     spin_unlock(&pool.lock);
-    klog_info("%u packet buffers of %u bytes, %u reserved for control", NET_PBUF_COUNT, PBUF_SIZE,
+    klog_info("%u packet buffers of %u bytes, %u reserved for control",
+              NET_PBUF_COUNT,
+              PBUF_SIZE,
               NET_PBUF_RESERVE);
     return 0;
 }
@@ -98,7 +100,7 @@ void pbuf_free(struct pbuf *p)
 int pbuf_transfer(struct pbuf *p, enum pbuf_owner from, enum pbuf_owner to)
 {
     if (from == PBUF_OWNER_POOL || to == PBUF_OWNER_POOL)
-        return -EINVAL;             /* the pool's side is pbuf_alloc and pbuf_free */
+        return -EINVAL; /* the pool's side is pbuf_alloc and pbuf_free */
     if (__atomic_load_n(&p->owner, __ATOMIC_ACQUIRE) != from) {
         spin_lock(&pool.lock);
         pool.bad_transfer++;

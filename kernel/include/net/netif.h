@@ -64,3 +64,5 @@ int netif_output(struct netif *n, struct pbuf *p);
 int netif_input(struct netif *n, struct pbuf *p);
 /* Format one line per interface into buf. */
 size_t netif_format_table(char *buf, size_t size);
+/* One "link NAME MAC" line per Ethernet interface, for /dev/net. */
+size_t netif_format_links(char *buf, size_t size);

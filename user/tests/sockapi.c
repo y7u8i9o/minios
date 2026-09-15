@@ -204,9 +204,15 @@ static void test_families(void)
     errno = 0;
     CHECK(socket(77, SOCK_STREAM, 0) == -1 && errno == EAFNOSUPPORT, "unknown family");
     errno = 0;
-    CHECK(socket(AF_INET, SOCK_STREAM, 0) == -1 && errno == EPROTONOSUPPORT, "AF_INET stream is not supported yet");
+    int tcp = socket(AF_INET, SOCK_STREAM, 0);
+    CHECK(tcp >= 0, "AF_INET stream supported");
+    if (tcp >= 0)
+        close(tcp);
     errno = 0;
-    CHECK(socket(AF_INET, SOCK_DGRAM, 0) == -1 && errno == EPROTONOSUPPORT, "AF_INET datagram is not supported yet");
+    int udp = socket(AF_INET, SOCK_DGRAM, 0);
+    CHECK(udp >= 0, "AF_INET datagram supported");
+    if (udp >= 0)
+        close(udp);
     errno = 0;
     CHECK(socket(AF_INET, SOCK_STREAM, IPPROTO_UDP) == -1 && errno == EPROTONOSUPPORT, "stream over UDP");
     errno = 0;

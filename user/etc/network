@@ -1,0 +1,5 @@
+# Network configuration applied by "net apply" at boot (docs/design/network.md).
+# iface NAME dhcp
+# iface NAME static ADDRESS NETMASK [GATEWAY]
+# nameserver ADDRESS         (static configurations)
+iface eth0 dhcp

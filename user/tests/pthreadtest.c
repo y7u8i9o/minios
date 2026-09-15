@@ -1,6 +1,7 @@
 /* M35 test: pthreads, futex based synchronization, thread local errno
  * and keys, the thread safety of malloc and stdio. Exits 0 on success. */
 #include <pthread.h>
+#include <sys/thread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,33 @@ static int failures;
 
 static pthread_mutex_t counter_lock = PTHREAD_MUTEX_INITIALIZER;
 static long counter;
+
+static void raw_entry(void *arg) { thread_exit(0); }
+
+/* A C thread entry must preserve the ABI alignment used by SIMD spills. */
+static void *aligned_stack_worker(void *arg)
+{
+    float values[4] __attribute__((aligned(16)));
+    __asm__ volatile("xorps %%xmm0, %%xmm0\n\tmovaps %%xmm0, %0"
+                     : "=m"(values) : : "xmm0");
+    return (void *)(long)(values[0] == 0 && values[3] == 0);
+}
+
+/* Opening/closing private streams must coexist with flushing the registry. */
+static void *file_worker(void *arg)
+{
+    char path[80];
+    snprintf(path, sizeof path, "/tmp/pthread-file-%d", gettid());
+    for (int i = 0; i < 100; i++) {
+        FILE *f = fopen(path, "w");
+        if (!f) return NULL;
+        fputs("thread data\n", f);
+        fflush(NULL);
+        if (fclose(f) != 0) return NULL;
+    }
+    unlink(path);
+    return (void *)1;
+}
 
 static void *count_worker(void *arg)
 {
@@ -177,6 +205,12 @@ int main(void)
 {
     pthread_t t[WORKERS];
     CHECK(pthread_self() != NULL && pthread_equal(pthread_self(), pthread_self()), "pthread_self");
+    unsigned char tiny[32] __attribute__((aligned(16)));
+    memset(tiny, 0x5a, sizeof tiny);
+    thread_t raw;
+    CHECK(thread_create(&raw, raw_entry, NULL, tiny + 15, 16) == -1 && errno == EINVAL,
+          "reject stack without aligned entry slot");
+    CHECK(tiny[8] == 0x5a && tiny[14] == 0x5a, "rejected stack leaves surrounding bytes intact");
 
     /* Mutex contention. */
     for (int i = 0; i < WORKERS; i++)
@@ -289,6 +323,17 @@ int main(void)
     CHECK(detached_done == 4, "detached threads ran: %d", detached_done);
 
     /* malloc and stdio from several threads. */
+    pthread_t aligned;
+    void *aligned_result = NULL;
+    CHECK(pthread_create(&aligned, NULL, aligned_stack_worker, NULL) == 0, "create aligned worker");
+    CHECK(pthread_join(aligned, &aligned_result) == 0 && aligned_result == (void *)1, "SIMD stack alignment");
+    pthread_t fw[4];
+    for (int i = 0; i < 4; i++)
+        CHECK(pthread_create(&fw[i], NULL, file_worker, NULL) == 0, "create file worker");
+    for (int i = 0; i < 4; i++) {
+        void *result = NULL;
+        CHECK(pthread_join(fw[i], &result) == 0 && result == (void *)1, "concurrent stream registry");
+    }
     pthread_t mw[4];
     for (int i = 0; i < 4; i++)
         pthread_create(&mw[i], NULL, malloc_worker, (void *)(long)(i + 1));

@@ -188,6 +188,7 @@ static void load_entry_file(const char *path)
  * package installer writes (docs/design/packages.md). */
 static void load_entries(void)
 {
+    nentries = 0;
     load_entry_file("/etc/launcher");
     load_entry_file(LOCAL_LAUNCHER);
 }
@@ -236,6 +237,7 @@ static const struct popup_listener popup_events = { on_popup_configure, on_popup
 
 static void menu_show(void)
 {
+    load_entries();
     int h = nentries * MENU_ITEM_H + 2 * MENU_PAD;
     if (!menu.surface && canvas_create(&menu, MENU_W, h) < 0)
         return;

@@ -3,11 +3,11 @@ desktop: wallpaper none mode 0
 settings: set wallpaper /usr/share/wallpapers/default.png
 desktop: wallpaper /usr/share/wallpapers/default.png mode 0
 desktop: config applied
-desktop: started with 6 entries
+desktop: started with 4 entries
 desktop: open /home/desktop/Clock.app
 x12: toplevel 1 'clock' mapped
 desktop: menu desktop
-desktop: menu Pong.app
+desktop: menu readme.txt
 settings: set wallpaper_mode tile
 desktop: wallpaper /usr/share/wallpapers/default.png mode 2
 x12: toplevel 2 'Settings' mapped

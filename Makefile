@@ -72,6 +72,10 @@ libgui: libc libfont libwire
 libedit: libc
 	$(MAKE) -C libedit
 
+packages: user
+
+.PHONY: packages
+
 user: libc libfont libwire libaudio libgui libedit
 	$(MAKE) -C user
 
@@ -140,6 +144,13 @@ test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER)
 check-net: kernel initrd $(LIMINE) $(NETPEER)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) NETPEER=$(NETPEER) tests/net/selftest.sh $(BUILD)
 
+# Host fuzzing of the wire parsers and socket validators linked into the
+# kernel, under the sanitizers (docs/design/network.md, N09). FUZZ_SECONDS
+# bounds each of the three seeds (default 30).
+.PHONY: check-net-fuzz
+check-net-fuzz:
+	@tests/net/fuzz/run.sh $(BUILD)/network-fuzz
+
 # The cases whose behaviour depends on the processor or the hypervisor,
 # run with hardware virtualization. Linux only; needs /dev/kvm.
 KVM_CASES := boot cpu exception fork signals smp smp_user vmm sched
@@ -168,19 +179,24 @@ check-headers:
 # MIME code compiled with the system compiler, running the same script
 # as the lua_sys boot test on a scratch directory.
 LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
-                $(wildcard user/lua/*.c) user/lua/tests/host_main.c \
+                $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
                 $(filter-out libgui/src/client.c,$(wildcard libgui/src/*.c libgui/src/widgets/*.c)) \
                 libgui/tests/fake_client.c libgui/tests/host_compat.c $(wildcard libfont/src/*.c)
 check-lua:
 	@mkdir -p $(BUILD)/lua/host
 	$(MAKE) -C libgui $(BUILD)/libgui/font.c
-	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -DMINIOS_HOST -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
+	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
 	    -include libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilibgui/include -Ilibfont/include \
-	    -Ilibgui/tests -idirafter kernel/include \
-	    -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm
+	    -Ilibgui/tests -Ilibaudio/include -idirafter kernel/include \
+    -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
 	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp
 	$(BUILD)/lua/host/test_modules user/etc/tests/modules.lua $(BUILD)/lua/host/tmp user/etc/mime.types user/etc/mime.apps
 	$(BUILD)/lua/host/test_modules user/lua/tests/gui.lua
+	$(BUILD)/lua/host/test_modules user/lua/tests/audio.lua
+	$(BUILD)/lua/host/test_modules user/etc/tests/threads.lua
+	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/engine.lua
+	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/ui.lua
+	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/worker.lua
 
 .PHONY: check-sh libedit
 check-sh:

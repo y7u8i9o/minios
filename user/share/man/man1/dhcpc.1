@@ -1,0 +1,31 @@
+DHCPC(1)                     User Commands
+
+NAME
+    dhcpc - DHCP client
+
+SYNOPSIS
+    dhcpc [-i IF] [-1] [-f] [-t SECONDS] [-s SERVER] [-p PORT]
+
+DESCRIPTION
+    Obtains an IPv4 address, netmask, gateway and name servers for IF
+    (default eth0) with DHCP, configures the interface through /dev/net
+    and writes /etc/resolv.conf. The lease is renewed at T1 by unicast to
+    the server, rebound at T2 by broadcast, and removed at expiry, after
+    which discovery starts again. Without a server the client retries
+    with backoff from 4 to 64 seconds and leaves the interface without an
+    address. A NAK removes the address at once.
+
+    Without -1 or -f the client detaches and keeps running. -1 exits with
+    status 0 after the first lease or 1 after SECONDS (default 60) without
+    one. -f stays in the foreground. -s and -p send to a unicast test
+    server instead of broadcasting to port 67.
+
+    Replies are accepted only for the client's transaction and MAC
+    address, and only when they carry a subnet mask, server identifier
+    and lease time of at least 10 seconds; anything else is ignored.
+
+FILES
+    /dev/net, /etc/resolv.conf
+
+SEE ALSO
+    net(1), index(7)

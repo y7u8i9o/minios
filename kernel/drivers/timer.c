@@ -32,6 +32,7 @@ static void timer_irq(struct trapframe *tf, void *arg)
     if (sched_started()) {
         proc_account_tick(tf);
         profile_sample(tf);
+        profile_tick();
     }
     if (c->id != 0) {
         sched_tick_cpu();

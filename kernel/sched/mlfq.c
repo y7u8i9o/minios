@@ -1,4 +1,5 @@
 #define KLOG_SUBSYS "sched"
+#include <debug/profile.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
 #include <arch/fpu.h>
@@ -196,6 +197,7 @@ void sched_wake(struct thread *t)
     enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
     if (state != THREAD_BLOCKED && state != THREAD_SLEEPING && state != THREAD_STOPPED)
         return;
+    profile_ready(t);
     unsigned target = __atomic_load_n(&t->cpu, __ATOMIC_ACQUIRE);
     if (target >= smp_cpu_count())
         target = 0;
@@ -255,8 +257,10 @@ void sched_switch_locked(void)
     int intena = c->int_enabled;
     if (prev->fpu)
         fpu_save(prev->fpu);
+    profile_leave_cpu(prev, prev->state == THREAD_READY);
     context_switch(&prev->ctx, next->ctx);
     c = cpu_current();
+    profile_enter_cpu(c->current);
     if (c->current->fpu)
         fpu_restore(c->current->fpu);
     wrmsr(MSR_FS_BASE, c->current->fs_base);

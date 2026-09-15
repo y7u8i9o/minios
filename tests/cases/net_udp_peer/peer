@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$TOP/tests/net/peer-count.sh" udp

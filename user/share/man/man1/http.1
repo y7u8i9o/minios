@@ -1,0 +1,19 @@
+HTTP(1)                      User Commands
+
+NAME
+    http - fetch a URL with HTTP/1.0
+
+SYNOPSIS
+    http [-v] [-o FILE] http://HOST[:PORT]/PATH
+
+DESCRIPTION
+    Sends one GET request and writes the response body to standard output
+    or FILE. -v prints the status line and headers to standard error. The
+    exit status is 0 for a 2xx response, 1 for any other status or a
+    connection failure, 2 for a bad URL. Only plain http:// is supported:
+    there is no TLS, no certificate validation, no https://, no redirect
+    following and no chunked decoding beyond what an HTTP/1.0 server
+    sends with Connection: close.
+
+SEE ALSO
+    nc(1), index(7)

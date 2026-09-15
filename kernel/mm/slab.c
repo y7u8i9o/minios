@@ -1,4 +1,5 @@
 #define KLOG_SUBSYS "slab"
+#include <debug/profile.h>
 #include <mm/slab.h>
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
@@ -337,11 +338,18 @@ void *kmalloc(size_t size)
 {
     if (size == 0)
         size = 1;
+    void *p = NULL;
     for (size_t i = 0; i < ARRAY_SIZE(kmalloc_sizes); i++) {
-        if (size <= kmalloc_sizes[i])
-            return kmem_cache_alloc(kmalloc_caches[i]);
+        if (size <= kmalloc_sizes[i]) {
+            p = kmem_cache_alloc(kmalloc_caches[i]);
+            goto done;
+        }
     }
-    return kmalloc_large(size);
+    p = kmalloc_large(size);
+done:
+    if (p && profile_wants(PROF_EV_ALLOC))
+        profile_heap(false, p, size);
+    return p;
 }
 
 void *kzalloc(size_t size)
@@ -360,8 +368,12 @@ void kfree(void *ptr)
     if (pg->flags & PG_SLAB) {
         struct slab *s = slab_of(ptr);
         struct kmem_cache *c = s->cache;
+        if (profile_wants(PROF_EV_FREE))
+            profile_heap(true, ptr, c->obj_size);
         kmem_cache_free(c, ptr);
     } else if (pg->flags & PG_LARGE) {
+        if (profile_wants(PROF_EV_FREE))
+            profile_heap(true, ptr, 0);
         kfree_large(ptr, pg);
     } else {
         panic("kfree: %p was not allocated by kmalloc", ptr);

@@ -84,5 +84,45 @@ echo nosuchbackend > "$OUT/cases/badnic/nic"
 "$DIR/../run_qemu_test.sh" "$KERNEL" "$OUT/run" "$OUT/cases/badnic" > "$OUT/badnic.out" 2>&1
 grep -q 'FAIL badnic (unknown nic backend' "$OUT/badnic.out" || fail "unknown backend not rejected: $(cat "$OUT/badnic.out")"
 
+# 4. A user-backend peer uses the same lifecycle, including timeout cleanup.
+for behavior in pass hang; do
+    name="user-$behavior"
+    make_case "$name" 2
+    echo user > "$OUT/cases/$name/nic"
+    FAKE_QEMU_BEHAVIOUR="$behavior" FAKE_QEMU_ARGS="$OUT/$name-args.txt" \
+        "$DIR/../run_qemu_test.sh" "$KERNEL" "$OUT/run" "$OUT/cases/$name" \
+        > "$OUT/$name.out" 2>&1
+    if [ "$behavior" = pass ]; then
+        grep -q "^PASS $name$" "$OUT/$name.out" || fail "user backend success path"
+    else
+        grep -q "FAIL $name (timeout" "$OUT/$name.out" || fail "user backend timeout path"
+    fi
+    grep -q 'user,id=net0' "$OUT/$name-args.txt" || fail "user backend not passed to QEMU"
+    read -r PEERPORT GUESTPORT < "$OUT/run/$name/peer.ready"
+    "$NETPEER" --probe "$PEERPORT" || fail "user peer port remains bound"
+    [ -f "$OUT/run/$name/peer.pid" ] && fail "user peer pid remains after $behavior"
+    grep -q '^summary frames' "$OUT/run/$name/peer.log" || fail "user peer summary missing"
+done
+
+# 5. Native TCP peers must also release a blocking accept on termination.
+for behavior in pass hang; do
+    name="tcp-$behavior"
+    make_case "$name" 2
+    echo user > "$OUT/cases/$name/nic"
+    cp "$TOP/tests/cases/net_tcp_peer/peer" "$OUT/cases/$name/peer"
+    FAKE_QEMU_BEHAVIOUR="$behavior" \
+        "$DIR/../run_qemu_test.sh" "$KERNEL" "$OUT/run" "$OUT/cases/$name" \
+        > "$OUT/$name.out" 2>&1
+    if [ "$behavior" = pass ]; then
+        grep -q "^PASS $name$" "$OUT/$name.out" || fail "TCP peer success path"
+    else
+        grep -q "FAIL $name (timeout" "$OUT/$name.out" || fail "TCP peer timeout path"
+    fi
+    read -r PEERPORT GUESTPORT < "$OUT/run/$name/peer.ready"
+    "$NETPEER" --probe-tcp "$PEERPORT" || fail "TCP peer port remains bound"
+    [ -f "$OUT/run/$name/peer.pid" ] && fail "TCP peer pid remains after $behavior"
+    grep -q '^tcp summary connections' "$OUT/run/$name/peer.log" || fail "TCP summary missing"
+done
+
 [ "$status" -eq 0 ] && echo "PASS net-selftest"
 exit $status

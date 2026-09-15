@@ -25,7 +25,9 @@
 #             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
 #             none attaches nothing. Frames are captured to <out>/capture.pcap
 #             (docs/design/network.md)
-#   peer      executable started before QEMU for nic dgram, with NETPEER
+#   peer      executable started before QEMU (required for dgram, optional
+#             for user; for user a nonzero guest port in PEER_READY is
+#             forwarded to guest port 9100), with NETPEER
 #             (the host tool tools/netpeer), PEER_READY, PEER_LOG, PEER_PID,
 #             OUTDIR, TOP and BUILD in the environment. It writes
 #             "<peer port> <guest port>" to PEER_READY once it listens and
@@ -104,7 +106,7 @@ if [ -f "$CASE/nic" ]; then
             ;;
         *) fail "unknown nic backend $NIC" ;;
     esac
-    if [ "$NIC" = dgram ]; then
+    if [ "$NIC" = dgram ] || { [ "$NIC" = user ] && [ -x "$CASE/peer" ]; }; then
         [ -x "$CASE/peer" ] || fail "nic dgram needs an executable peer"
         rm -f "$PEER_READY" "$PEER_LOG" "$PEER_PID"
         NETPEER="${NETPEER:-$(dirname "$BUILD")/host/netpeer}" PEER_READY="$PEER_READY" PEER_LOG="$PEER_LOG" \
@@ -119,7 +121,15 @@ if [ -f "$CASE/nic" ]; then
             i=$((i + 1))
         done
         read -r PEERPORT GUESTPORT < "$PEER_READY"
-        NETFLAGS="-netdev dgram,id=net0,local.type=inet,local.host=127.0.0.1,local.port=$GUESTPORT,remote.type=inet,remote.host=127.0.0.1,remote.port=$PEERPORT"
+        if [ "$NIC" = dgram ]; then
+            NETFLAGS="-netdev dgram,id=net0,local.type=inet,local.host=127.0.0.1,local.port=$GUESTPORT,remote.type=inet,remote.host=127.0.0.1,remote.port=$PEERPORT"
+        else
+            NETFLAGS="-netdev user,id=net0"
+            # A nonzero guest port forwards that host port to guest port
+            # 9100, the xfer(1) server, so the peer can reach into the guest.
+            [ "$GUESTPORT" != 0 ] && NETFLAGS="$NETFLAGS,hostfwd=tcp:127.0.0.1:$GUESTPORT-:9100"
+            CMDLINE="$CMDLINE netpeer_port=$PEERPORT"
+        fi
     elif [ "$NIC" = user ]; then
         NETFLAGS="-netdev user,id=net0"
     fi
@@ -199,10 +209,13 @@ if [ -z "$ACCEL" ]; then
         ACCEL=tcg
     fi
 fi
+RNGFLAGS="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0,disable-legacy=on"
+[ -f "$CASE/rng-zero" ] && RNGFLAGS="-object rng-random,id=rng0,filename=/dev/zero -device virtio-rng-pci,rng=rng0,disable-legacy=on"
+[ -f "$CASE/no-rng" ] && RNGFLAGS=""
 "$QEMU" -M q35 -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
     -serial "file:$SERIAL" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x4 \
-    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS \
+    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
     -cdrom "$ISO" >"$OUTDIR/qemu.log" 2>&1 &
 QPID=$!
 ELAPSED=0

@@ -11,6 +11,7 @@
 #include <kassert.h>
 #include <klog.h>
 #include <errno.h>
+#include <drivers/timer.h>
 
 #define VIRTIO_PCI_CAP_COMMON 1
 #define VIRTIO_PCI_CAP_NOTIFY 2
@@ -44,6 +45,7 @@ int virtio_pci_setup(struct pci_dev *pci, struct virtio_dev *dev)
 {
     memset(dev, 0, sizeof *dev);
     dev->pci = pci;
+    spinlock_init(&dev->irq_lock, "virtio_irq");
     uint8_t off = pci_read8(pci, 0x34) & 0xfc;
     for (int guard = 0; off && guard < 48; guard++) {
         if (pci_read8(pci, off) == PCI_CAP_VENDOR) {
@@ -61,6 +63,7 @@ int virtio_pci_setup(struct pci_dev *pci, struct virtio_dev *dev)
                 break;
             case VIRTIO_PCI_CAP_DEVICE:
                 dev->device_cfg = map_cap(pci, off);
+                dev->device_cfg_len = pci_read32(pci, (uint8_t)(off + 12));
                 break;
             }
         }
@@ -113,10 +116,23 @@ static bool virtq_drain_locked(struct virtqueue *vq)
 {
     bool completed = false;
     mb();
+    if (vq->broken)
+        return false;
+    if ((uint16_t)(vq->used->idx - vq->last_used) > vq->size) {
+        vq->broken = true;
+        vq->bad_used++;
+        return false;
+    }
     while (vq->last_used != vq->used->idx) {
         completed = true;
         struct virtq_used_elem e = vq->used->ring[vq->last_used % vq->size];
         vq->last_used++;
+        if (e.id >= vq->size || !vq->active[e.id]) {
+            vq->broken = true;
+            vq->bad_used++;
+            break;
+        }
+        vq->active[e.id] = false;
         if (vq->complete)
             vq->complete(vq, (uint16_t)e.id, e.len);
         virtq_free_chain(vq, (uint16_t)e.id);
@@ -132,6 +148,7 @@ void virtq_poll_locked(struct virtqueue *vq)
 static void virtio_irq(struct trapframe *tf, void *arg)
 {
     struct virtio_dev *dev = arg;
+    spin_lock(&dev->irq_lock);
     for (unsigned i = 0; i < dev->nqueues && i < ARRAY_SIZE(dev->queues); i++) {
         struct virtqueue *vq = dev->queues[i];
         if (!vq)
@@ -143,6 +160,9 @@ static void virtio_irq(struct trapframe *tf, void *arg)
         if (completed)
             poll_source_notify(&vq->poll);
     }
+    if (dev->work_notify)
+        dev->work_notify();
+    spin_unlock(&dev->irq_lock);
 }
 
 struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
@@ -229,7 +249,7 @@ int virtio_start(struct virtio_dev *dev)
 int virtq_alloc_chain(struct virtqueue *vq, unsigned n, uint16_t *ids)
 {
     kassert(spin_holding(&vq->lock));
-    if (vq->num_free < n)
+    if (vq->broken || !n || n > vq->num_free)
         return -ENOSPC;
     for (unsigned i = 0; i < n; i++) {
         ids[i] = vq->free_head;
@@ -258,15 +278,48 @@ void virtq_free_chain(struct virtqueue *vq, uint16_t head)
         i = next;
     }
     vq->cookie[head] = NULL;
+    vq->active[head] = false;
 }
 
 void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie)
 {
     kassert(spin_holding(&vq->lock));
+    kassert(head < vq->size && !vq->active[head] && !vq->broken);
+    vq->active[head] = true;
     vq->cookie[head] = cookie;
     vq->avail->ring[vq->avail->idx % vq->size] = head;
     mb();
     vq->avail->idx++;
     mb();
     *vq->notify = vq->index;
+}
+
+int virtio_reset(struct virtio_dev *dev)
+{
+    if (!dev->common)
+        return 0;
+    dev->common->device_status = 0;
+    uint64_t deadline = timer_ms() + 100;
+    while (dev->common->device_status != 0) {
+        if (timer_ms() >= deadline)
+            return -ETIMEDOUT;
+        __asm__ volatile("pause");
+    }
+    /* Device reset ends DMA. Serialize with any ISR already traversing
+     * the rings before detaching them. The static device remains valid. */
+    struct virtqueue *old[4];
+    spin_lock(&dev->irq_lock);
+    dev->work_notify = NULL;
+    for (unsigned i = 0; i < ARRAY_SIZE(old); i++) {
+        old[i] = dev->queues[i];
+        dev->queues[i] = NULL;
+    }
+    spin_unlock(&dev->irq_lock);
+    for (unsigned i = 0; i < ARRAY_SIZE(old); i++) {
+        if (!old[i])
+            continue;
+        pmm_free(phys_to_page(old[i]->phys), old[i]->order);
+        kfree(old[i]);
+    }
+    return 0;
 }

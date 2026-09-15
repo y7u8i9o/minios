@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+grep -q '^host: pushed fromhost.txt$' "$PEER_LOG"
+grep -q 'stored up.bin, 300000 bytes' "$PEER_LOG"
+grep -q 'sent big name with spaces.wav, 3000000 bytes' "$PEER_LOG"

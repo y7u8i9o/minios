@@ -1,0 +1,19 @@
+PING(1)                      User Commands
+
+NAME
+    ping - send ICMP echo requests
+
+SYNOPSIS
+    ping [-c COUNT] [-s SIZE] [-W MILLISECONDS] HOST
+
+DESCRIPTION
+    Sends COUNT (default 4) echo requests of SIZE (default 56) payload
+    bytes one second apart and prints each reply with its TTL and round
+    trip time in milliseconds, then a summary. -W bounds the wait for each
+    reply (default 2000 ms). HOST is resolved with the resolver of
+    getaddrinfo in netdb.h. Requests go through the echo interface of /dev/net,
+    which matches replies to the kernel's own requests; there are no raw
+    sockets. Exits 0 when at least one reply arrived.
+
+SEE ALSO
+    net(1), nc(1), index(7)

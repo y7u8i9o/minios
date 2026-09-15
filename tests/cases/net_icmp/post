@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+grep -q "icmp guest reply" "$PEER_LOG"
+grep -q "icmp peer reply" "$PEER_LOG"
+python3 "$TOP/tests/net/check_capture.py" "$CAPTURE"

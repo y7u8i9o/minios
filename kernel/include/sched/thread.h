@@ -54,6 +54,17 @@ struct thread {
     uint64_t fs_base;               /* user FS base (thread local storage), loaded at every switch (M35) */
     uint64_t utime, stime;          /* timer ticks charged to this thread, written by its CPU's tick (M40) */
     uint64_t nvcsw, nivcsw;         /* voluntary and involuntary switches away */
+    /* Profiler timestamps in nanoseconds (M48). on_cpu_ns and off_cpu_ns
+     * are written by the CPU running the switch, under its run queue lock;
+     * ready_ns by whichever CPU makes the thread runnable. They feed
+     * scheduler statistics only, so a race skews one number and nothing
+     * else. All three are zero while the profiler is stopped. */
+    uint64_t on_cpu_ns, off_cpu_ns, ready_ns;
+    /* The trapframe of this thread's innermost entry from user mode,
+     * written by the thread itself at that entry and read by the
+     * profiler's unwinder, which validates it against the kernel stack
+     * before following it. */
+    struct trapframe *kentry_frame;
     void *fs_txn;                   /* filesystem transaction the thread is inside, if any (M36) */
     int fs_txn_depth;               /* nesting of op_begin calls for fs_txn */
     char name[THREAD_NAME_LEN];

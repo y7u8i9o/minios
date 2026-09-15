@@ -42,7 +42,12 @@ static void test_run(void)
         }
         argv[n] = NULL;
     }
-    char *const envp[] = { "PATH=/bin", "TEST=1", NULL };
+    /* netpeer_port=N (set by the boot harness for a native host peer) is
+     * passed to the program as NETPEER_PORT. */
+    static char peer[64] = "NETPEER_PORT=";
+    char *const envp[] = { "PATH=/bin", "TEST=1",
+                           cmdline_lookup("netpeer_port", peer + 13, sizeof peer - 13) ? peer : NULL,
+                           NULL };
     struct proc *p = proc_create_user(path, argv, envp, &kernel_proc);
     ktest_assert(p != NULL, "cannot start %s", path);
     int status = proc_reap(p);

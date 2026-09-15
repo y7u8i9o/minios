@@ -99,6 +99,8 @@ static void trap_record_user_entry(const struct trapframe *tf)
     c->last_user_ss = tf->ss;
     c->last_user_cr3 = read_cr3();
     c->last_user_frame = (void *)tf;
+    if (c->current)
+        c->current->kentry_frame = (struct trapframe *)tf;
 }
 
 void trap_dump_extra(const struct trapframe *tf)

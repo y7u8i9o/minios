@@ -3,8 +3,11 @@
  * worker; the default drop counter is a relaxed atomic. */
 #define KLOG_SUBSYS "net"
 #include <net/net.h>
+#include <lib/random.h>
 #include <net/worker.h>
 #include <net/loopback.h>
+#include <net/ipv4.h>
+#include <drivers/virtio/virtio_net.h>
 #include <debug/panic.h>
 #include <klog.h>
 
@@ -18,6 +21,11 @@ void net_ip_input(struct netif *n, struct pbuf *p)
         fn(n, p);
         return;
     }
+    ipv4_input(n, p);
+}
+
+void net_ip_discard(struct pbuf *p)
+{
     __atomic_fetch_add(&ip_dropped, 1, __ATOMIC_RELAXED);
     pbuf_free(p);
 }
@@ -36,8 +44,12 @@ void net_init(void)
 {
     if (pbuf_pool_init() < 0)
         panic("net: cannot allocate the packet pool");
+    random_init();
     netif_init();
     net_worker_start();
     loopback_init();
+    ipv4_init();
+    virtio_net_init();
+    netdev_init();
     klog_info("core ready");
 }

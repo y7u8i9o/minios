@@ -125,7 +125,8 @@ static void socket_cycle(int round)
     /* Families and types that are not there. */
     struct file *f;
     ktest_assert(socket_create(77, SOCK_STREAM, 0, 0, &f) == -EAFNOSUPPORT, "unknown family");
-    ktest_assert(socket_create(AF_INET, SOCK_STREAM, 0, 0, &f) == -EPROTONOSUPPORT, "AF_INET stream pending");
+    ktest_assert(socket_create(AF_INET, SOCK_STREAM, 0, 0, &f) == 0, "AF_INET stream supported");
+    file_put(f);
     ktest_assert(socket_create(AF_INET, SOCK_DGRAM, IPPROTO_TCP, 0, &f) == -EPROTONOSUPPORT, "datagram over TCP");
     ktest_assert(socket_create(AF_INET, SOCK_RAW, 0, 0, &f) == -ESOCKTNOSUPPORT, "raw");
     ktest_assert(socket_create(AF_UNIX, SOCK_DGRAM, 0, 0, &f) == -ESOCKTNOSUPPORT, "Unix datagram");

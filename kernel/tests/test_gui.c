@@ -235,8 +235,8 @@ KTEST_DEFINE("gui_term", test_gui_term);
 /* Geometry of the launcher popup, which the panel builds from
  * user/etc/launcher: one 24 px row per entry inside 6 px of padding,
  * opened above the 28 px panel.  Keep these in step with that file. */
-#define LAUNCHER_ENTRIES 19
-#define LAUNCHER_CLOCK   11     /* index of Clock=/bin/clock */
+#define LAUNCHER_ENTRIES 9
+#define LAUNCHER_CLOCK   2     /* index of Clock=/bin/clock */
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 24 + 12))
 #define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + (i) * 24 + 12)
 
@@ -467,10 +467,11 @@ KTEST_DEFINE("gui_controls", test_gui_controls);
 /* M22: gedit types C source, highlights the keyword, saves with Ctrl+S. */
 static void test_gui_editor(void)
 {
+    install_app("gedit");
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     vfs_unlink("/gedit.c");
-    struct proc *cl = proc_create_user("/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);
@@ -581,10 +582,11 @@ KTEST_DEFINE("gui_app", test_gui_app);
  * changes to algebraic input through its mode selector. */
 static void test_gui_calc(void)
 {
+    install_app("calc");
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/calc", (char *const[]){ "calc", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/calc", (char *const[]){ "calc", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start calc");
     sleep_ms(1200);
@@ -632,10 +634,11 @@ KTEST_DEFINE("gui_calc", test_gui_calc);
  * ends the program. */
 static void test_gui_mandel(void)
 {
+    install_app("mandel");
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/mandel", (char *const[]){ "mandel", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/mandel", (char *const[]){ "mandel", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start mandel");
     int mid_x = 40 + 320, mid_y = 60 + 300, edge_x = 40 + 8;
@@ -1053,6 +1056,7 @@ KTEST_DEFINE("gui_kbd_restore", test_gui_kbd_restore);
  * click; sysmon, logview and hexview open and close. */
 static void test_gui_tools(void)
 {
+    install_app("hexview");
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
@@ -1064,7 +1068,7 @@ static void test_gui_tools(void)
     const char *tools[] = { "evtest", "sysmon", "logview", "hexview" };
     int cx = sw / 2, cy = sh / 2;
     for (int i = 0; i < 4; i++) {
-        cl = proc_create_user(i == 3 ? "/bin/hexview" : tools[i][0] == 'e' ? "/bin/evtest" : tools[i][0] == 's' ? "/bin/sysmon" : "/bin/logview",
+        cl = proc_create_user(i == 3 ? "/home/.local/bin/hexview" : tools[i][0] == 'e' ? "/bin/evtest" : tools[i][0] == 's' ? "/bin/sysmon" : "/bin/logview",
                               (char *const[]){ (char *)tools[i], NULL }, (char *const[]){ NULL }, &kernel_proc);
         ktest_assert(cl != NULL, "cannot start %s", tools[i]);
         int wx = 40 + i * 30, wy = 60 + i * 30;   /* cascade by creation number */
@@ -1099,10 +1103,11 @@ KTEST_DEFINE("gui_tools", test_gui_tools);
  * window still appears promptly. */
 static void test_gui_unicode(void)
 {
+    install_app("unicode");
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/unicode", (char *const[]){ "unicode", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/unicode", (char *const[]){ "unicode", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start unicode");
     int active = 0;

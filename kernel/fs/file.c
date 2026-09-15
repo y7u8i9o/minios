@@ -1,4 +1,6 @@
 #define KLOG_SUBSYS "file"
+#include <debug/profile.h>
+#include <drivers/timer.h>
 #include <fs/vfs.h>
 #include <mm/filemap.h>
 #include <sched/thread.h>
@@ -63,6 +65,11 @@ long file_read(struct file *f, char *buf, size_t n)
         uint64_t scratch = 0;
         return f->ops->read(f, buf, n, &scratch);
     }
+    /* Regular file transfers are timed for the profiler. Devices are left
+     * out: their latency belongs to the driver, and reading the profiler's
+     * own device would feed the stream it produces. */
+    bool timed = f->inode && S_ISREG(f->inode->mode) && profile_wants(PROF_EV_IO);
+    uint64_t began = timed ? timer_ns() : 0;
     mutex_lock(&f->lock);
     uint64_t pos = f->pos;
     uint64_t start = pos;
@@ -71,6 +78,8 @@ long file_read(struct file *f, char *buf, size_t n)
         filemap_read_overlay(f->inode, buf, start, (size_t)r);
     f->pos = pos;
     mutex_unlock(&f->lock);
+    if (timed)
+        profile_io(false, false, r > 0 ? (uint64_t)r : 0, began);
     return r;
 }
 
@@ -89,6 +98,8 @@ long file_write(struct file *f, const char *buf, size_t n)
         return f->ops->write(f, buf, n, &scratch);
     }
     struct superblock *sb = f->inode ? f->inode->sb : NULL;
+    bool timed = f->inode && S_ISREG(f->inode->mode) && profile_wants(PROF_EV_IO);
+    uint64_t began = timed ? timer_ns() : 0;
     vfs_op_begin(sb);
     mutex_lock(&f->lock);
     uint64_t pos = f->pos;
@@ -114,6 +125,8 @@ long file_write(struct file *f, const char *buf, size_t n)
     f->pos = pos;
     mutex_unlock(&f->lock);
     vfs_op_end(sb);
+    if (timed)
+        profile_io(true, false, r > 0 ? (uint64_t)r : 0, began);
     return r;
 }
 

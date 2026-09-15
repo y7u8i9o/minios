@@ -4,6 +4,7 @@
 #include <net/netif.h>
 #include <net/worker.h>
 #include <net/net.h>
+#include <net/ipv4.h>
 #include <sync/spinlock.h>
 #include <lib/string.h>
 #include <lib/printf.h>
@@ -28,7 +29,8 @@ int netif_register(struct netif *n)
         return -EINVAL;
     spin_lock(&netif_lock);
     struct list_head *pos;
-    list_for_each(pos, &netifs) {
+    list_for_each(pos, &netifs)
+    {
         struct netif *o = list_entry(pos, struct netif, link);
         if (strcmp(o->name, n->name) == 0) {
             spin_unlock(&netif_lock);
@@ -62,7 +64,8 @@ struct netif *netif_find(const char *name)
     struct netif *found = NULL;
     spin_lock(&netif_lock);
     struct list_head *pos;
-    list_for_each(pos, &netifs) {
+    list_for_each(pos, &netifs)
+    {
         struct netif *o = list_entry(pos, struct netif, link);
         if (strcmp(o->name, name) == 0)
             found = o;
@@ -74,6 +77,20 @@ struct netif *netif_find(const char *name)
 bool netif_is_up(const struct netif *n)
 {
     return __atomic_load_n(&n->flags, __ATOMIC_ACQUIRE) & NETIF_UP;
+}
+
+struct down_request {
+    struct net_request request;
+    struct netif *interface;
+};
+static int interface_down(struct net_request *request)
+{
+    struct netif *interface = ((struct down_request *)request)->interface;
+    tcp_interface_changed(interface, ENETDOWN);
+    ipv4_reassembly_flush(interface);
+    ipv4_path_flush();
+    arp_flush(interface);
+    return 0;
 }
 
 /* Taking an interface down changes the flag and then waits for the
@@ -88,8 +105,18 @@ int netif_set_up(struct netif *n, bool up)
     flags = up ? flags | NETIF_UP : flags & ~NETIF_UP;
     __atomic_store_n(&n->flags, flags, __ATOMIC_RELEASE);
     spin_unlock(&netif_lock);
-    if (was_up && !up)
-        net_worker_drain();
+    if (was_up && !up) {
+        struct down_request request = {.interface = n};
+        net_request_init(&request.request, interface_down);
+        if (net_worker_is_current())
+            interface_down(&request.request);
+        else {
+            net_worker_drain();
+            int result = net_request_run(&request.request);
+            if (result < 0)
+                return result;
+        }
+    }
     return 0;
 }
 
@@ -125,16 +152,40 @@ int netif_input(struct netif *n, struct pbuf *p)
     return r;
 }
 
+size_t netif_format_links(char *buf, size_t size)
+{
+    size_t n = 0;
+    spin_lock(&netif_lock);
+    struct list_head *pos;
+    list_for_each(pos, &netifs)
+    {
+        struct netif *o = list_entry(pos, struct netif, link);
+        if (!(o->flags & NETIF_ETHERNET))
+            continue;
+        const uint8_t *m = o->hwaddr;
+        n += (size_t)ksnprintf(buf + n, n < size ? size - n : 0,
+                               "link %s %02x:%02x:%02x:%02x:%02x:%02x\n", o->name, m[0], m[1],
+                               m[2], m[3], m[4], m[5]);
+    }
+    spin_unlock(&netif_lock);
+    return n;
+}
+
 size_t netif_format_table(char *buf, size_t size)
 {
     size_t n = 0;
     spin_lock(&netif_lock);
     struct list_head *pos;
-    list_for_each(pos, &netifs) {
+    list_for_each(pos, &netifs)
+    {
         struct netif *o = list_entry(pos, struct netif, link);
-        n += (size_t)ksnprintf(buf + n, n < size ? size - n : 0,
+        n += (size_t)ksnprintf(buf + n,
+                               n < size ? size - n : 0,
                                "%d %s %s mtu %u rx %lu/%lu drop %lu tx %lu/%lu drop %lu err %lu\n",
-                               o->index, o->name, netif_is_up(o) ? "up" : "down", o->mtu,
+                               o->index,
+                               o->name,
+                               netif_is_up(o) ? "up" : "down",
+                               o->mtu,
                                atomic_u64_load_relaxed(&o->stats.rx_packets),
                                atomic_u64_load_relaxed(&o->stats.rx_bytes),
                                atomic_u64_load_relaxed(&o->stats.rx_dropped),

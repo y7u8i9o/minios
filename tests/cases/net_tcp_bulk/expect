@@ -1,0 +1,2 @@
+net_tcp_bulk: 262144 bytes each direction, ok
+TEST PASS

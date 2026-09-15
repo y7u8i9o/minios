@@ -36,6 +36,8 @@
 #                                            std (VGA BIOS modes only) or none
 #       --no-keyboard      QEMU_KEYBOARD=0   no virtio keyboard; keys go to the PS/2 port
 #       --nic BACKEND      QEMU_NIC          network backend of a virtio-net
+#                                            (user forwards host port 9100 to
+#                                            the guest for xfer(1))
 #                                            device: none (default), user
 #                                            (QEMU's user mode stack) or a
 #                                            complete -netdev argument such as
@@ -368,6 +370,8 @@ fi
 # --- command ------------------------------------------------------------
 set -- "$@"     # the arguments after `--`
 set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
+       -object rng-random,id=rng0,filename=/dev/urandom \
+       -device virtio-rng-pci,rng=rng0,disable-legacy=on \
        -serial "$QEMU_SERIAL" -no-reboot -vga "$QEMU_VGA" \
        -drive "file=$DISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0 \
        -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1 \
@@ -377,7 +381,7 @@ set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
 case "$QEMU_NIC" in
     none|"") ;;
-    user)    set -- "$@" -netdev user,id=net0 -device virtio-net-pci,netdev=net0 ;;
+    user)    set -- "$@" -netdev user,id=net0,hostfwd=tcp:127.0.0.1:9100-:9100 -device virtio-net-pci,netdev=net0 ;;
     *)       set -- "$@" -netdev "$QEMU_NIC,id=net0" -device virtio-net-pci,netdev=net0 ;;
 esac
 if [ "$QEMU_SOUND" != 0 ]; then

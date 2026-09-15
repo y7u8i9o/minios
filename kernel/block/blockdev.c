@@ -1,4 +1,6 @@
 #define KLOG_SUBSYS "block"
+#include <debug/profile.h>
+#include <drivers/timer.h>
 #include <block/blockdev.h>
 #include <block/bcache.h>
 #include <fs/vfs.h>
@@ -97,14 +99,26 @@ struct blockdev *blockdev_find(const char *name)
     return found;
 }
 
+/* Both transfer entry points time themselves for the profiler, which
+ * charges the latency and the bytes to the stack that asked for them. */
 int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf)
 {
-    return dev->rw(dev, sector, count, buf, false);
+    bool timed = profile_wants(PROF_EV_IO);
+    uint64_t start = timed ? timer_ns() : 0;
+    int r = dev->rw(dev, sector, count, buf, false);
+    if (timed)
+        profile_io(false, true, (uint64_t)count * dev->sector_size, start);
+    return r;
 }
 
 int blockdev_write(struct blockdev *dev, uint64_t sector, uint32_t count, const void *buf)
 {
-    return dev->rw(dev, sector, count, (void *)buf, true);
+    bool timed = profile_wants(PROF_EV_IO);
+    uint64_t start = timed ? timer_ns() : 0;
+    int r = dev->rw(dev, sector, count, (void *)buf, true);
+    if (timed)
+        profile_io(true, true, (uint64_t)count * dev->sector_size, start);
+    return r;
 }
 
 uint64_t blockdev_size(struct blockdev *dev)

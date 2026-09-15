@@ -45,6 +45,8 @@ int net_request_submit(struct net_request *r);
  * request is always waited for, which is bounded because the worker
  * does not block. */
 int net_request_wait(struct net_request *r);
+/* Uninterruptible completion for teardown and lifetime barriers. */
+int net_request_finish(struct net_request *r);
 /* Withdraw a queued request; false once the worker has taken it. */
 bool net_request_cancel(struct net_request *r);
 /* submit followed by wait. */

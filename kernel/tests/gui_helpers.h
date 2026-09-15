@@ -14,6 +14,17 @@
 
 static struct proc *panel_proc;
 
+/* GUI tests install the same archive a user installs on the base image. */
+static inline void install_app(const char *name)
+{
+    struct proc *p = proc_create_user("/bin/sh",
+        (char *const[]){ "sh", "/etc/tests/install-app.sh", (char *)name, NULL },
+        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start pkg for %s", name);
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "install %s status 0x%x", name, status);
+}
+
 /* PS/2 mouse packets: buttons and the wheel (the drivers report them
  * to the input core, the compositor reads /dev/input). */
 static inline void feed_packet_wheel(uint8_t flags, int dx, int dy, int dz)

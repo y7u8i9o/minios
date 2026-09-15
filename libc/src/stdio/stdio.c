@@ -31,8 +31,10 @@ struct FILE {
 static struct FILE files[3];
 FILE *stdin = &files[0], *stdout = &files[1], *stderr = &files[2];
 
-/* Streams opened with fopen, flushed together by fflush(NULL) and exit. */
+/* streams_lock protects registration and keeps entries alive while
+ * fflush(NULL) walks them. It nests outside each FILE's recursive lock. */
 static struct FILE *open_streams[32];
+static struct __libc_lock streams_lock = __LIBC_LOCK_INIT;
 
 void __stdio_init(void)
 {
@@ -51,9 +53,11 @@ int fflush(FILE *f)
     if (!f) {
         fflush(stdout);
         fflush(stderr);
+        __libc_lock_lock(&streams_lock);
         for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++)
             if (open_streams[i])
                 fflush(open_streams[i]);
+        __libc_lock_unlock(&streams_lock);
         return 0;
     }
     LOCK(f);
@@ -341,12 +345,14 @@ FILE *fdopen(int fd, const char *mode)
     f->mode = _IOFBF;
     f->buf = f->inbuf;
     f->size = BUFSIZ;
+    __libc_lock_lock(&streams_lock);
     for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++) {
         if (!open_streams[i]) {
             open_streams[i] = f;
             break;
         }
     }
+    __libc_lock_unlock(&streams_lock);
     return f;
 }
 
@@ -366,6 +372,13 @@ FILE *fopen(const char *path, const char *mode)
 
 int fclose(FILE *f)
 {
+    /* Unpublish before flushing/freeing. fflush(NULL) holds the registry
+     * lock while accessing entries, so it cannot retain a freed FILE. */
+    __libc_lock_lock(&streams_lock);
+    for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++)
+        if (open_streams[i] == f)
+            open_streams[i] = NULL;
+    __libc_lock_unlock(&streams_lock);
     int r = fflush(f);
     if (f->fd >= 0 && close(f->fd) < 0)
         r = EOF;
@@ -374,9 +387,6 @@ int fclose(FILE *f)
         free(f->tmppath);
         f->tmppath = NULL;
     }
-    for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++)
-        if (open_streams[i] == f)
-            open_streams[i] = NULL;
     if (f != stdin && f != stdout && f != stderr)
         free(f);
     return r;

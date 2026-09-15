@@ -81,6 +81,9 @@ struct virtqueue {
     uint16_t free_head;
     uint16_t num_free;
     uint16_t last_used;
+    bool active[VIRTQ_MAX_SIZE]; /* published heads, validated before callback */
+    bool broken;
+    uint64_t bad_used;
     void *cookie[VIRTQ_MAX_SIZE];   /* per head descriptor completion token */
     volatile uint16_t *notify;
     struct spinlock lock;
@@ -96,6 +99,9 @@ struct virtio_dev {
     uint32_t notify_multiplier;
     volatile uint8_t *isr;
     volatile uint8_t *device_cfg;
+    uint32_t device_cfg_len;
+    struct spinlock irq_lock; /* IRQ traversal versus reset/detach */
+    void (*work_notify)(void);
     uint8_t vector;
     uint64_t features;
     struct virtqueue *queues[4];
@@ -112,6 +118,9 @@ struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
                                      void (*complete)(struct virtqueue *, uint16_t, uint32_t));
 /* Set DRIVER_OK and route the queue interrupts to the device vector. */
 int virtio_start(struct virtio_dev *dev);
+/* Stop DMA, then detach/free rings. Driver reclaims its cookies afterwards.
+ * On timeout buffers MUST remain pinned; dev must outlive its IRQ handler. */
+int virtio_reset(struct virtio_dev *dev);
 
 /* Descriptor chains: allocate n descriptors under vq->lock, returns the
  * head or -ENOSPC. Chains are freed on completion. */

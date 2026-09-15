@@ -1,0 +1,20 @@
+NC(1)                        User Commands
+
+NAME
+    nc - TCP and UDP client and server
+
+SYNOPSIS
+    nc [-u] HOST PORT
+    nc [-u] -l PORT
+
+DESCRIPTION
+    Connects to HOST:PORT (or with -l accepts one connection on PORT) and
+    relays standard input to the peer and the peer's data to standard
+    output. End of input half-closes the TCP connection; the command ends
+    when the peer closes. With -u datagrams are exchanged instead; a
+    listening UDP server answers the first peer it hears from, and the
+    command runs until interrupted. Ports are numeric. Connection and
+    resolver failures are reported with their reason.
+
+SEE ALSO
+    http(1), ping(1), index(7)

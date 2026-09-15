@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+grep -q 'summary frames 640 .* echoed 640 ' "$PEER_LOG"
+[ -s "$CAPTURE" ]

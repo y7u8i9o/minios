@@ -130,7 +130,21 @@ int gettid(void)
 
 int thread_create(thread_t *out, void (*fn)(void *), void *arg, void *stack, size_t stack_size)
 {
+    if (!out || !fn || !stack || stack_size < 16 ||
+        (unsigned long)stack + stack_size < (unsigned long)stack) {
+        errno = EINVAL;
+        return -1;
+    }
     unsigned long top = ((unsigned long)stack + stack_size) & ~15UL;
+    if (top - (unsigned long)stack < sizeof(unsigned long)) {
+        errno = EINVAL;
+        return -1;
+    }
+    /* The kernel enters the C function directly, without a call instruction.
+     * Supply its return-address slot so RSP is 8 modulo 16 at function entry,
+     * as required by the x86-64 ABI (including aligned SIMD stack accesses). */
+    top -= sizeof(unsigned long);
+    *(unsigned long *)top = 0;
     long r = syscall3(SYS_thread_create, fn, arg, top);
     if (r < 0)
         return -1;

@@ -1,8 +1,8 @@
 #pragma once
 /* The Internet socket family (N01): validates the type and protocol of
  * AF_INET sockets and dispatches to the protocol backend registered for
- * them. UDP (N05) and TCP (N06) register here; until then every valid
- * combination reports EPROTONOSUPPORT. */
+ * them. UDP (N05) registers here; TCP combinations remain
+ * EPROTONOSUPPORT until N06 registers the stream backend. */
 #include <kernel.h>
 #include <ipc/socket.h>
 

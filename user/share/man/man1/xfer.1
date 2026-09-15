@@ -1,0 +1,40 @@
+XFER(1)                      User Commands
+
+NAME
+    xfer - transfer files between the guest and the host
+
+SYNOPSIS
+    xfer put [-h HOST] [-p PORT] PATH...
+    xfer get [-h HOST] [-p PORT] [-o DIR] NAME...
+    xfer ls [-h HOST] [-p PORT] [DIR]
+    xfer serve [-p PORT] [DIR]
+
+DESCRIPTION
+    Copies files and directories over TCP. HOST defaults to 10.0.2.2,
+    the host machine as seen from QEMU user networking, and PORT to 9100,
+    so "xfer put notes.txt" in the guest sends a file to a host running
+    "tools/xfer.py serve", "xfer get build.tar" fetches one, and "xfer ls"
+    lists the served directory. A directory is transferred file by file
+    under its name. Every transfer carries a CRC32 checked by both ends.
+
+    serve makes DIR (default the current directory) available; the host
+    reaches it through the port forward that "make run --nic user" sets
+    up on port 9100, with "tools/xfer.py put FILE". Paths in requests are
+    relative and may not contain "..". A connection without progress for
+    30 seconds is dropped. While a transfer runs, every side whose standard
+    error is a terminal (the client, the server's child and tools/xfer.py)
+    prints the bytes done and the throughput once per second; a summary
+    line follows when the transfer completes.
+
+OPTIONS
+    -h HOST    server address
+    -p PORT    server port
+    -o DIR     directory that get writes into (default .)
+
+EXAMPLES
+    xfer put /home/report.txt
+    xfer get -o /tmp photos
+    xfer serve /home
+
+SEE ALSO
+    nc(1), http(1), net(1), index(7)

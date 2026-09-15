@@ -52,10 +52,11 @@ static int count_color(int x0, int y0, int w, int h, uint32_t color)
  * space restarts it. */
 static void test_audio_player(void)
 {
+    install_app("player");
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/player",
+    struct proc *cl = proc_create_user("/home/.local/bin/player",
                                        (char *const[]){ "player", "/usr/share/sounds/chime.wav", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start player");
@@ -76,7 +77,7 @@ static void test_audio_player(void)
     struct inode *ino;
     if (vfs_lookup(track, &ino) == 0) {
         inode_put(ino);
-        cl = proc_create_user("/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
+        cl = proc_create_user("/home/.local/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
                               &kernel_proc);
         ktest_assert(cl != NULL, "cannot start player");
         uint64_t t0 = timer_ms();
@@ -106,10 +107,11 @@ KTEST_DEFINE("audio_player", test_audio_player);
  * the grid and runs the transport. */
 static void test_audio_sequencer(void)
 {
+    install_app("sequencer");
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/sequencer", (char *const[]){ "sequencer", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/sequencer", (char *const[]){ "sequencer", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start sequencer");
     sleep_ms(1500);
@@ -136,11 +138,12 @@ KTEST_DEFINE("audio_sequencer", test_audio_sequencer);
  * master volume by a click on its bar. */
 static void test_gui_mixer(void)
 {
+    install_app("synth");
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/synth", (char *const[]){ "synth", NULL },
+    struct proc *cl = proc_create_user("/home/.local/bin/synth", (char *const[]){ "synth", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start synth");
     sleep_ms(1500);

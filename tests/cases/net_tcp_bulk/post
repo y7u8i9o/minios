@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+grep -q '^tcp stream 1 bytes 262144$' "$PEER_LOG"
+python3 "$TOP/tests/net/check_capture.py" "$CAPTURE"

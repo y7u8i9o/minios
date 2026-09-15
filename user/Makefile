@@ -17,10 +17,11 @@ INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term x12 panel desktop calc audiod settings files pkg
+PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
-UTILS  := $(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c))
-APPS   := $(filter-out compsettings,$(patsubst apps/%.c,%,$(wildcard apps/*.c))) x12settings
+UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
+APPS   := clock evtest logview profiler sysmon x12settings
+APPBIN := $(OUT)/app-bin
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc)
 LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 
@@ -374,7 +375,7 @@ $(ROOT)/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
 
 # Named explicitly so that the generated block table is a prerequisite;
 # the generic apps rule below tracks only the .c file.
-$(ROOT)/bin/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
+$(APPBIN)/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/unicode.elf $@
@@ -402,20 +403,4 @@ clean:
 include ld/tests/fixtures.mk
 include pkg/tests/fixtures.mk
 
-# Packages of the desktop applications (docs/design/packages.md): each
-# application is built into a package on the root image under
-# /usr/share/packages, from its program and its launcher entry, with
-# tools/mkpkg.sh. PKG_APPS lists "program:Title".
-PKG_APPS := calc:Calculator synth:Synthesizer sequencer:Sequencer player:Player view:Viewer unicode:Unicode
-PKG_VERSION := $(shell cat ../VERSION)
-PKG_FILES := $(foreach a,$(PKG_APPS),$(ROOT)/usr/share/packages/$(word 1,$(subst :, ,$(a)))-$(PKG_VERSION).mpk)
-all: $(PKG_FILES)
-define PKG_APP
-$(ROOT)/usr/share/packages/$(1)-$(PKG_VERSION).mpk: $(ROOT)/bin/$(1) $(ROOT)/lib/abi ../tools/mkpkg.sh ../VERSION
-	@rm -rf $(OUT)/packages/$(1)
-	@mkdir -p $(OUT)/packages/$(1)/files/bin $(ROOT)/usr/share/packages
-	@printf 'name $(1)\nversion $(PKG_VERSION)\nsummary $(2)\nlauncher $(2) bin/$(1)\n' > $(OUT)/packages/$(1)/manifest
-	@cp $(ROOT)/bin/$(1) $(OUT)/packages/$(1)/files/bin/$(1)
-	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(ROOT)
-endef
-$(foreach a,$(PKG_APPS),$(eval $(call PKG_APP,$(word 1,$(subst :, ,$(a))),$(word 2,$(subst :, ,$(a))))))
+include packages/packages.mk

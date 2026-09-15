@@ -1,0 +1,31 @@
+#!/bin/sh
+# The host side: tools/xfer.py serves a scratch directory on a free port
+# for the guest, and once the guest serves on its forwarded port 9100 the
+# host pulls the guest's file back and stores one there.
+set -eu
+DIR="$OUTDIR/xfer-host"
+rm -rf "$DIR"; mkdir -p "$DIR/pulled"
+printf 'hello from the host\n' > "$DIR/greeting.txt"
+printf 'stored by the host\n' > "$DIR/fromhost.txt"
+head -c 3000000 /dev/urandom > "$DIR/big name with spaces.wav"
+PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+FWD=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+python3 "$TOP/tools/xfer.py" serve -p "$PORT" "$DIR" > "$PEER_LOG" 2>&1 &
+SERVER=$!
+echo $! > "$PEER_PID"
+sleep 0.5
+echo "$PORT $FWD" > "$PEER_READY"
+# The guest serves after it has exchanged files with us; retry until it
+# answers, then pull its file and push ours.
+i=0
+while [ $i -lt 120 ]; do
+    if python3 "$TOP/tools/xfer.py" ls -p "$FWD" >> "$PEER_LOG" 2>&1; then
+        python3 "$TOP/tools/xfer.py" get -p "$FWD" -o "$DIR/pulled" up.bin >> "$PEER_LOG" 2>&1 || true
+        python3 "$TOP/tools/xfer.py" put -p "$FWD" "$DIR/big name with spaces.wav" "$DIR/fromhost.txt" >> "$PEER_LOG" 2>&1
+        echo "host: pushed fromhost.txt" >> "$PEER_LOG"
+        break
+    fi
+    sleep 1
+    i=$((i + 1))
+done
+wait $SERVER

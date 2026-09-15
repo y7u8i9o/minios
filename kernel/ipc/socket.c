@@ -4,6 +4,9 @@
  * is held across a backend call. */
 #define KLOG_SUBSYS "socket"
 #include <ipc/socket.h>
+#include <ipc/socket_validate.h>
+_Static_assert(AF_UNIX == 1 && AF_INET == 2 && sizeof(struct sockaddr_in) == 16 &&
+               sizeof(struct sockaddr_storage) == 128, "socket validator ABI");
 #include <net/inet.h>
 #include <syscall/syscalls.h>
 #include <mm/slab.h>
@@ -361,11 +364,9 @@ int socket_addr_from_user(uintptr_t uaddr, size_t ulen, struct sockaddr_storage 
         return -EFAULT;
     memset(out, 0, sizeof *out);
     memcpy(out, (const void *)uaddr, ulen);
-    socklen_t min = socket_addr_min_len(out->ss_family);
-    if (min == 0)
-        return -EAFNOSUPPORT;
-    if (ulen < min)
-        return -EINVAL;
+    int result = socket_parse_address((const uint8_t *)out, ulen);
+    if (result < 0)
+        return result;
     *outlen = (socklen_t)ulen;
     return 0;
 }
@@ -391,16 +392,49 @@ int socket_addr_to_user(uintptr_t uaddr, uintptr_t ulenp, const struct sockaddr_
 
 /* ---- file operations ---- */
 
+/* read/write reach file operations with a caller buffer, unlike sendmsg/
+ * recvmsg whose syscall layer already copies the message. Internet backends
+ * run on netd or copy under endpoint locks, so they must see kernel storage.
+ * The file reference keeps the socket alive through the worker request. */
 static long sock_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
-    struct socket_msg m = { .data = buf, .len = n };
-    return socket_recvmsg(f->priv, &m);
+    struct socket *s = f->priv;
+    if (s->family != AF_INET) {
+        struct socket_msg m = { .data = buf, .len = n };
+        return socket_recvmsg(s, &m);
+    }
+
+    size_t capacity = MIN(n, 65536);
+    char *copy = kmalloc(capacity ? capacity : 1);
+    if (!copy)
+        return -ENOMEM;
+    struct socket_msg m = { .data = copy, .len = capacity };
+    long result = socket_recvmsg(s, &m);
+    if (result > 0)
+        memcpy(buf, copy, (size_t)result);
+    kfree(copy);
+    return result;
 }
 
 static long sock_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
 {
-    struct socket_msg m = { .data = (char *)buf, .len = n };
-    return socket_sendmsg(f->priv, &m);
+    struct socket *s = f->priv;
+    if (s->family != AF_INET) {
+        struct socket_msg m = { .data = (char *)buf, .len = n };
+        return socket_sendmsg(s, &m);
+    }
+
+    if (n > 65536)
+        return -EMSGSIZE;
+    char *copy = kmalloc(n ? n : 1);
+    if (!copy)
+        return -ENOMEM;
+    if (n)
+        memcpy(copy, buf, n);
+    struct socket_msg m = { .data = copy, .len = n };
+    long result = socket_sendmsg(s, &m);
+    kfree(copy);
+    return result;
 }
 
 static int sock_poll(struct file *f)

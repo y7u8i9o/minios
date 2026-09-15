@@ -310,7 +310,24 @@ struct pollfd {
 #define TIOCSWINSZ 0x5414
 #define TIOCGPGRP  0x540f
 #define TIOCSPGRP  0x5410
-#define TIOCGPTN   0x5430   /* pseudo terminal master: index of the slave */
+#define TIOCGPTN   0x5430
+/* /dev/net (N10): interface configuration and the ICMP echo interface.
+ * Addresses are host order. address 0 detaches the address, the mask and
+ * the gateway of the interface but keeps it as the broadcast interface. */
+#define NETIOC_CONFIGURE 0x4e01  /* struct net_config * */
+#define NETIOC_PING      0x4e02  /* struct net_ping *, returns 0 or -errno */
+struct net_config {
+    char name[16];
+    uint32_t address, mask, gateway;
+};
+struct net_ping {
+    uint32_t address;
+    uint32_t timeout_ms;   /* at most 60000 */
+    uint16_t sequence;
+    uint16_t size;         /* payload bytes, at most 1400 */
+    uint32_t rtt_ms;       /* out */
+    uint8_t ttl;           /* out */
+};   /* pseudo terminal master: index of the slave */
 
 /* ---- M23: sockets, descriptor passing, memfd, eventfd, timerfd, fcntl ---- */
 
@@ -504,34 +521,94 @@ struct rusage {
     int64_t ru_nivcsw;              /* involuntary context switches */
 };
 
-/* ---- M41: sampling profiler, /dev/profile ---- */
+/* ---- M48: full system profiler, /dev/profile ---- */
 
-#define PROF_MAX_FRAMES 8
-#define PROF_FLAG_USER  1       /* the sample interrupted user mode */
+/* The device delivers a stream of variable length events, one record per
+ * observation, ordered by time across the per CPU rings that produce them.
+ * Every record starts with the same header, so a reader that does not know
+ * a type can still skip it with size. */
 
-/* One sample: the interrupted instruction pointer in chain[0] followed by
- * depth - 1 return addresses walked through frame pointers. */
-struct prof_sample {
-    uint32_t pid;
-    uint32_t tid;
-    uint32_t cpu;
-    uint32_t flags;
-    uint32_t depth;
-    uint32_t pad;
-    uint64_t chain[PROF_MAX_FRAMES];
+#define PROF_MAX_FRAMES 32      /* frames one chain can hold */
+
+/* Event types. A type is also a bit position in the class mask. */
+#define PROF_EV_SAMPLE 0        /* timer sample of the running thread */
+#define PROF_EV_BLOCK  1        /* thread left a CPU; chain is where it stopped */
+#define PROF_EV_RUN    2        /* thread returned to a CPU */
+#define PROF_EV_ALLOC  3        /* kernel heap allocation */
+#define PROF_EV_FREE   4        /* kernel heap release */
+#define PROF_EV_IO     5        /* completed block or file transfer */
+#define PROF_EV_TYPES  6
+#define PROF_EV_PAD    255      /* fills a ring to its wrap point, never delivered */
+
+#define PROF_MASK(type) (1u << (type))
+#define PROF_MASK_CPU   PROF_MASK(PROF_EV_SAMPLE)
+#define PROF_MASK_SCHED (PROF_MASK(PROF_EV_BLOCK) | PROF_MASK(PROF_EV_RUN))
+#define PROF_MASK_HEAP  (PROF_MASK(PROF_EV_ALLOC) | PROF_MASK(PROF_EV_FREE))
+#define PROF_MASK_IO    PROF_MASK(PROF_EV_IO)
+#define PROF_MASK_ALL   (PROF_MASK_CPU | PROF_MASK_SCHED | PROF_MASK_HEAP | PROF_MASK_IO)
+
+#define PROF_FLAG_USER     0x01 /* the event was raised in user mode */
+#define PROF_FLAG_KUSER    0x02 /* the chain crosses into user frames */
+#define PROF_FLAG_WRITE    0x04 /* IO: a write */
+#define PROF_FLAG_BLOCKDEV 0x08 /* IO: a block device, otherwise a file */
+#define PROF_FLAG_PREEMPT  0x10 /* BLOCK: preempted while runnable */
+#define PROF_FLAG_EXIT     0x20 /* BLOCK: the thread will not run again */
+#define PROF_FLAG_TRUNC    0x40 /* the chain reached PROF_MAX_FRAMES */
+
+/* Separates the kernel frames of a chain from the user frames of the entry
+ * that led into the kernel. It is never a valid address. */
+#define PROF_FRAME_BOUNDARY 0xffffffffffffffffULL
+
+/* One observation. chain holds depth addresses, innermost first.
+ * a and b depend on the type:
+ *   SAMPLE  a: 0                     b: 0
+ *   BLOCK   a: nanoseconds on CPU    b: thread state left behind
+ *   RUN     a: nanoseconds off CPU   b: nanoseconds runnable before running
+ *   ALLOC   a: address               b: bytes requested
+ *   FREE    a: address               b: bytes, 0 when the size is unknown
+ *   IO      a: bytes transferred     b: nanoseconds of latency */
+struct prof_event {
+    uint16_t size;              /* bytes of this record, a multiple of 8 */
+    uint8_t type;
+    uint8_t flags;
+    uint16_t depth;
+    uint16_t cpu;
+    uint64_t time_ns;           /* monotonic, the same clock on every CPU */
+    uint32_t pid, tid;
+    uint64_t a, b;
+    uint64_t chain[];
+};
+
+#define PROF_EVENT_HEADER ((unsigned)sizeof(struct prof_event))
+#define PROF_EVENT_MAX (PROF_EVENT_HEADER + PROF_MAX_FRAMES * 8u)
+
+/* What the engine records. A zero field keeps the current setting. */
+struct prof_config {
+    uint32_t pid;               /* 0: every process */
+    uint32_t divider;           /* timer ticks between samples, 1..1000 */
+    uint32_t events;            /* PROF_MASK_* */
+    uint32_t max_depth;         /* frames per chain, 1..PROF_MAX_FRAMES */
+    uint32_t alloc_min;         /* smallest recorded allocation in bytes */
+    uint32_t io_min_ns;         /* shortest recorded transfer */
 };
 
 struct prof_stats {
-    uint64_t samples;           /* recorded since PROF_START */
-    uint64_t dropped;           /* lost because the ring was full */
-    uint64_t pending;           /* waiting to be read */
+    uint64_t events;            /* recorded since PROF_START */
+    uint64_t dropped;           /* lost because a ring was full */
+    uint64_t pending;           /* bytes waiting to be read */
+    uint64_t counts[PROF_EV_TYPES];
     uint32_t enabled;
-    uint32_t pid;               /* filter, 0 for every process */
-    uint32_t divider;           /* ticks between samples on each CPU */
-    uint32_t ring;              /* capacity in samples */
+    uint32_t pid;
+    uint32_t divider;
+    uint32_t event_mask;
+    uint32_t max_depth;
+    uint32_t ring;              /* bytes in one CPU ring */
+    uint32_t cpus;
+    uint32_t period_ns;         /* CPU time one sample stands for */
 };
 
 #define PROF_START       0x5000     /* arg: pid to profile, 0 for all */
 #define PROF_STOP        0x5001
 #define PROF_SET_DIVIDER 0x5002     /* arg: 1..1000 ticks */
 #define PROF_GET_STATS   0x5003     /* arg: struct prof_stats * */
+#define PROF_CONFIGURE   0x5004     /* arg: struct prof_config * */

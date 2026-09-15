@@ -1,1 +1,1 @@
-test=run prog=/bin/calc args=--self-test
+test=run prog=/bin/sh args=/etc/tests/install-app.sh,calc,--self-test
