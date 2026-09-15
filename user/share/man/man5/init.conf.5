@@ -1,0 +1,52 @@
+INIT.CONF(5)                File Formats                  INIT.CONF(5)
+
+NAME
+    init.conf - programs started and supervised by init
+
+SYNOPSIS
+    /etc/init.conf
+
+DESCRIPTION
+    init reads the file at boot and processes the entries in order. A
+    line holds words separated by blanks; # starts a comment. The first
+    word is the keyword, the second the entry name, then options of the
+    form key=value, then the command and its arguments. Commands are
+    looked up in PATH.
+
+    env NAME=VALUE...
+        set variables in the environment of every program started
+        afterwards.
+
+    task NAME [options] COMMAND...
+        run the command and wait for it before the next entry.
+
+    service NAME [options] COMMAND...
+        run the command in the background. When it exits it is started
+        again, after a second if it ran less than five seconds; after
+        five such quick exits in a row init gives up and leaves the
+        entry failed until initctl starts it.
+
+    console NAME [options] COMMAND...
+        the session on the console: the command gets its own process
+        group and the terminal, and is always restarted when it ends.
+        sh gives a shell, startgui a graphical session.
+
+OPTIONS
+    if=PATH          start only when PATH exists (skipped otherwise)
+    log=FILE         append standard output and error to FILE
+    restart=always   restart a service whenever it exits (default)
+    restart=never    a service that exits stays stopped
+    restart=failure  restart only after a non zero status or a signal
+
+    Without a readable file init uses a built-in table equivalent to
+    the example below, so the system still boots to a shell.
+
+EXAMPLE
+    env PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios
+    task fsinit fsinit
+    task network net apply
+    service audio if=/dev/pcm0 audiod
+    console sh sh
+
+SEE ALSO
+    initctl(1), fsinit(1), fstab(5)

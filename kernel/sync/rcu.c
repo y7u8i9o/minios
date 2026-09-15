@@ -80,6 +80,25 @@ static void rcu_worker(void *arg)
     }
 }
 
+struct sync_head {
+    struct rcu_head head;
+    volatile bool done;
+};
+
+static void sync_done(struct rcu_head *head)
+{
+    struct sync_head *sh = container_of(head, struct sync_head, head);
+    __atomic_store_n(&sh->done, true, __ATOMIC_RELEASE);
+}
+
+void rcu_synchronize(void)
+{
+    struct sync_head sh = { .done = false };
+    rcu_call(&sh.head, sync_done);
+    while (!__atomic_load_n(&sh.done, __ATOMIC_ACQUIRE))
+        sleep_ms(1);
+}
+
 void rcu_start_worker(void)
 {
     if (!thread_create("rcu", rcu_worker, NULL, 0))

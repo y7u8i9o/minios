@@ -8,6 +8,8 @@
 #include <ipc/signal.h>
 #include <fs/vfs.h>
 #include <fs/fdtable.h>
+#include <mm/vma.h>
+#include <sync/rcu.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/timer.h>
 #include <lib/string.h>
@@ -184,19 +186,30 @@ long sys_reboot(struct trapframe *tf)
         for (int i = 0; i < 20 && proc_count_others() > 0; i++)
             sleep_ms(50);
     }
+    /* Init never returns to user mode from here, so its own file mappings
+     * (the shared libraries of a dynamic init) can go; the regions of the
+     * processes just reaped release their files through RCU callbacks,
+     * which must have run before the filesystems are judged busy. */
+    vma_remove_all(self->vm);
+    rcu_synchronize();
     int busy = vfs_umount_all();
     if (busy)
         klog_warn("%d filesystems were busy", busy);
+    /* Console output is queued per CPU and drained by a thread that never
+     * runs again once the machine stops: write the final lines out here. */
     switch (cmd) {
     case RB_AUTOBOOT:
         kprintf("system rebooting\n");
+        console_flush();
         power_reboot();
     case RB_HALT:
         kprintf("system halted\n");
+        console_flush();
         cli();
         cpu_halt_forever();
     default:
         kprintf("system powering off\n");
+        console_flush();
         power_off();
     }
 }

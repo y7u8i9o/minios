@@ -1628,6 +1628,18 @@ procedure linkage table entries on first call through
 in `docs/design/dynlink.md`, tested by `tests/cases/dlopen` and the
 extended `dynlink` fixtures.
 
+## Init (completed 2026-09-15)
+
+Process 1 reads `/etc/init.conf`: `env` lines, `task` entries run in
+order, `service` entries supervised with restart limits, and the
+`console` session, with `if=`, `log=` and `restart=` options and a
+built-in fallback table. `initctl` lists, starts, stops, restarts and
+reloads entries and requests the shutdown over an abstract Unix socket.
+`sys_reboot` flushes the console and releases init's mappings after an
+RCU grace period so the root filesystem unmounts cleanly. Documented in
+`docs/design/init.md`, tested by `tests/cases/initctl`, `shutdown_cmd`
+and `shutdown`.
+
 ## Code editor (completed 2026-09-06)
 
 A source editor for C, Lua and shell scripts written in Lua

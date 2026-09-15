@@ -284,6 +284,39 @@ static void test_shutdown_cmd(void)
 }
 KTEST_DEFINE("shutdown_cmd", test_shutdown_cmd);
 
+/* Init supervises the entries of its configuration and answers initctl:
+ * a service added by a reload is stopped, started and restarted, a
+ * command that keeps failing is given up after five quick exits, a
+ * removed entry disappears, and the power off request goes through the
+ * same orderly shutdown as the signal. */
+static void test_initctl(void)
+{
+    type_line("cp /etc/init.conf /tmp/init.conf\n");
+    type_line("echo 'service spin sleep 1000' >> /tmp/init.conf\n");
+    type_line("initctl reload /tmp/init.conf\n");
+    type_line("initctl status spin\n");
+    type_line("initctl stop spin\n");
+    type_line("initctl status spin\n");
+    type_line("initctl start spin\n");
+    type_line("cp /etc/init.conf /tmp/init2.conf\n");
+    type_line("echo 'service spin test 1 = 2' >> /tmp/init2.conf\n");
+    type_line("initctl reload /tmp/init2.conf\n");
+    type_line("initctl restart spin\n");
+    type_line("sleep 6\n");
+    type_line("initctl list\n");
+    type_line("initctl reload /etc/init.conf\n");
+    type_line("initctl status spin\n");
+    type_line("initctl nosuch\n");
+    type_line("initctl poweroff\n");
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    int status = proc_reap(p);
+    ktest_fail("init exited with status 0x%x", status);
+}
+KTEST_DEFINE("initctl", test_initctl);
+
 /* M16: quoting, variables, lists and background jobs typed into an
  * interactive shell. */
 static void test_shell2(void)

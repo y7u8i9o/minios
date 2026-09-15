@@ -148,10 +148,16 @@ modification time of existing files since the same change.
 submodule `third_party/tinycc`; `ld` and `as` run it under the
 conventional names. See [tcc](tcc.md).
 
+## init
+
+Process 1 reads `/etc/init.conf`, runs the boot tasks, supervises the
+services and the console session and answers `initctl`; see
+[init](init.md).
+
 ## fsinit and mount
 
 `fsinit` mounts the entries of `/etc/fstab` at boot and seeds a fresh
-volume; `init` runs it before the shell. `mount` without arguments lists
+volume; `init` runs it as the first task. `mount` without arguments lists
 the mounted filesystems. See [persistent storage](storage.md).
 
 ## ar and tar

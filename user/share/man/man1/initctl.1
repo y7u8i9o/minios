@@ -1,0 +1,46 @@
+INITCTL(1)                  User Commands                   INITCTL(1)
+
+NAME
+    initctl - list and control the programs started by init
+
+SYNOPSIS
+    initctl [list]
+    initctl status|start|stop|restart NAME
+    initctl reload [FILE]
+    initctl poweroff|reboot|halt
+
+DESCRIPTION
+    initctl sends one request to init over the abstract socket "init"
+    and prints the reply. Without arguments, or with list, it prints
+    one row per entry of init.conf(5): name, kind, state, pid, the
+    number of starts, and a detail (the running time, the exit status
+    of a failed entry, or the absent path of a skipped one).
+
+    The states are waiting (not started yet, or due for a restart),
+    running, stopping, stopped (by request, not restarted), done (a
+    task that exited with status 0), failed (a task that failed, or a
+    service given up on after five quick exits in a row) and skipped
+    (the if= path does not exist).
+
+COMMANDS
+    status NAME   print the row of one entry
+    start NAME    start a stopped, failed or skipped entry; a task is
+                  run again and waited for
+    stop NAME     send SIGTERM, then SIGKILL after three seconds, and
+                  wait; the entry is not restarted. The console entry
+                  cannot be stopped, only restarted
+    restart NAME  stop, then start
+    reload [FILE] read the configuration again (FILE instead of the
+                  file read last): removed entries are stopped, new
+                  ones started, changed commands apply at the next
+                  start
+    poweroff, reboot, halt
+                  stop every entry in reverse order and shut the
+                  system down, as shutdown(1), reboot(1) and halt(1)
+
+EXIT STATUS
+    0 when init answered ok, 1 with the diagnostic on standard error
+    otherwise.
+
+SEE ALSO
+    init.conf(5), shutdown(1), ps(1)

@@ -17,5 +17,8 @@ void rcu_read_unlock(void);
 bool rcu_read_held(void);
 void rcu_quiescent(void);
 void rcu_call(struct rcu_head *head, void (*func)(struct rcu_head *head));
+/* Block until every callback queued before the call has run. Sleeps, so
+ * only from a thread that may block. */
+void rcu_synchronize(void);
 /* Start the sole callback consumer after the scheduler is running. */
 void rcu_start_worker(void);
