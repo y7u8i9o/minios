@@ -121,7 +121,8 @@ static void push_handler_table(lua_State *L, int index)
 static int push_signal_args(lua_State *L, struct widget *w, const char *name, void *args)
 {
     const char *cls = w->cls->name;
-    if (strcmp(name, "clicked") == 0) {
+    if (strcmp(name, "clicked") == 0 || strcmp(name, "press") == 0 ||
+        strcmp(name, "release") == 0 || strcmp(name, "motion") == 0 || strcmp(name, "wheel") == 0) {
         struct sig_click *c = args;
         lua_createtable(L, 0, 3);
         lua_pushinteger(L, c->button); lua_setfield(L, -2, "button");
@@ -1446,6 +1447,8 @@ static const luaL_Reg watch_methods[] = { { "remove", h_remove }, { NULL, NULL }
 
 int luaopen_gui(lua_State *L)
 {
+    if (minios_lua_worker(L))
+        return luaL_error(L, "GUI is owned by the main thread");
     lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
     gui_L = lua_tothread(L, -1);
     lua_pop(L, 1);

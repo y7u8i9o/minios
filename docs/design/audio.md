@@ -187,9 +187,9 @@ what has already arrived on the socket without waiting.
 
 ## Applications
 
-`/bin/playtone` is a minimal client that emits a one-second triangle wave.
+`/home/.local/bin/playtone` is a minimal client that emits a one-second triangle wave.
 
-`/bin/synth` is a small monophonic subtractive synthesizer: a saw, square or
+`/home/.local/bin/synth` is a small monophonic subtractive synthesizer: a saw, square or
 triangle oscillator with a five octave range feeds an ADSR amplitude
 envelope and a resonant state-variable low-pass filter whose cutoff is swept
 by the envelope; a cubic soft clipper follows.  The filter runs twice per
@@ -204,7 +204,7 @@ Audio runs from the application event loop through `fill_ready_buffers()`,
 which refills every returned buffer, and the phase continues across
 retriggers so note changes do not click.
 
-`/bin/sequencer` is a step sequencer on the same voice: sixteen steps by
+`/home/.local/bin/sequencer` is a step sequencer on the same voice: sixteen steps by
 eight notes of a major scale, one voice per row so that chords play
 polyphonically.  The transport runs on the audio clock (the render loop
 counts frames per step), with tempo, octave, waveform, cutoff, resonance,
@@ -212,7 +212,7 @@ decay and volume controls; the gate of a step closes halfway through it so
 that repeated notes are heard separately.  Space plays and stops, D loads
 the demo pattern, C clears the grid, and a click toggles a cell.
 
-`/bin/player` plays WAV files (PCM, 8 or 16 bit, mono or stereo, any rate;
+`/home/.local/bin/player` plays WAV files (PCM, 8 or 16 bit, mono or stereo, any rate;
 other rates are converted by linear interpolation when the file is opened)
 and shows the whole file as a waveform of per-column minima and maxima with
 a play head; a click seeks, space plays and pauses, and a loop check box
@@ -261,3 +261,24 @@ applications against the server: the player draws the chime's waveform and
 reports the end of the file, the sequencer loads and plays the demo
 pattern from the keyboard, and the panel applet lists the synthesizer's
 stream and sets the master volume by a click on its bar.
+
+
+## Lua binding
+
+Lua programs load `require "audio"` to access libaudio connections,
+playback, input and monitor capture, and mixer controls. The binding uses
+binary stereo S16_LE PCM strings and integrates with GUI descriptor
+watches. Objects support explicit close, garbage collection and Lua's
+`<close>` scopes; a closed connection invalidates its child handles.
+`lua.md` documents every method, error result and lifetime rule. The
+example `/usr/share/lua/examples/tone.lua` generates and drains a tone.
+
+The `lua_audio` boot test verifies the generated PCM through the real
+server's monitor, partial input reads, mixer updates and stream cleanup.
+`make check-lua` also runs deterministic binding tests with a host-only
+backend, including errors and partial I/O that are difficult to provoke
+reliably through a live device.
+
+The independent `luasynth` package implements an eight-voice instrument
+entirely in Lua, with two oscillators per voice, modulation, stereo delay
+and saved patches (`luasynth.md`). It coexists with the C `synth` package.

@@ -31,6 +31,8 @@ static const luaL_Reg minios_libs[] = {
     { "fs", luaopen_fs },
     { "sys", luaopen_sys },
     { "gui", luaopen_gui },
+    { "audio", luaopen_audio },
+    { "thread", luaopen_thread },
     { NULL, NULL }
 };
 

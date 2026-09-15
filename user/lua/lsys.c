@@ -286,7 +286,9 @@ static int sys_kill(lua_State *L)
 
 static int sys_sleep(lua_State *L)
 {
-    sleep_ms((unsigned long)luaL_checkinteger(L, 1));
+    lua_Integer ms = luaL_checkinteger(L, 1);
+    luaL_argcheck(L, ms >= 0 && ms <= 2147483647, 1, "invalid sleep duration");
+    if (sleep_ms((unsigned long)ms) < 0) return minios_errresult(L);
     return 0;
 }
 
@@ -359,5 +361,6 @@ static const luaL_Reg sys_funcs[] = {
 int luaopen_sys(lua_State *L)
 {
     luaL_newlib(L, sys_funcs);
+    minios_sys_extra(L);
     return 1;
 }

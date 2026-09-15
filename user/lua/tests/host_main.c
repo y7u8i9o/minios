@@ -5,6 +5,8 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
+void audio_test_register(lua_State *L);
+
 int main(int argc, char **argv)
 {
     if (argc < 2) {
@@ -13,6 +15,7 @@ int main(int argc, char **argv)
     }
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
+    audio_test_register(L);
     lua_createtable(L, argc - 2, 1);
     for (int i = 1; i < argc; i++) {
         lua_pushstring(L, argv[i]);

@@ -1,0 +1,10 @@
+installed synth
+installed luasynth
+luasynth: ready, 8 voices
+luasynth: note 60 on, voices 1
+luasynth: note 64 on, voices 2
+luasynth: note 67 on, voices 3
+luasynth: note 72 on, voices 8
+luasynth: closed, underruns [0-9]+
+gui_luasynth: polyphonic instrument ok
+TEST PASS

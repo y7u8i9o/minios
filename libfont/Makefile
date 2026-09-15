@@ -3,12 +3,17 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libfont
 LIB   := $(OUT)/libfont.a
 SO    := $(BUILD)/lib/libfont.so
+# The ABI number of the shared object (docs/design/packages.md): raised
+# whenever a structure, constant, signature or documented behaviour that
+# programs depend on changes incompatibly; additions leave it alone.
+ABI   := 1
+ABIFILE := $(BUILD)/lib/libfont.abi
 SRCS  := $(wildcard src/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS))
 UCPP  := -Iinclude -I../libc/include -I../kernel/include
 
 .PHONY: all clean check
-all: $(LIB) $(SO)
+all: $(LIB) $(SO) $(ABIFILE)
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -32,3 +37,7 @@ clean:
 	rm -rf $(OUT)
 
 -include $(OBJS:.o=.d)
+
+$(ABIFILE): Makefile
+	@mkdir -p $(dir $@)
+	@echo $(ABI) > $@

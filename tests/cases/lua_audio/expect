@@ -1,0 +1,7 @@
+lua_audio: unavailable server reported
+lua_audio: monitor verified [0-9]+ stereo periods
+lua_audio: mixer verified
+lua_audio: lifetime verified
+lua_audio: done
+luaaudiotest: 0 failures
+TEST PASS

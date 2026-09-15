@@ -90,6 +90,12 @@ registered for the file type or the exec line of a launcher;
 `sleep(ms)`, `uptime()` in milliseconds, `yield`; `uname()` as a table,
 `nproc` and `cpu`.
 
+Native workers are available through `require "thread"`. The `sys` module
+also supplies raw descriptor I/O, polling, monotonic nanosecond clocks,
+thread IDs and per-thread CPU accounting. See [Lua native threads and system
+primitives](lua-threads.md) for API contracts, examples and ownership rules.
+The GUI remains on the main thread, while workers own separate Lua states.
+
 ## The gui module
 
 `gui` (`user/lua/lgui.c`, `user/lua/lpaint.c`) binds the application
@@ -121,8 +127,8 @@ split panes `position`; scroll bars `set(value, max, page)`. Setters
 return the widget, so calls chain.
 
 A handler is `fn(widget, args)`; a true result consumes the signal. The
-argument tables follow the libgui structures: `clicked` has `button`,
-`x`, `y`; `key` and `keyup` have `code`, `ch`, `mods` and `char`;
+argument tables follow the libgui structures: `clicked`, `press`, `motion`, `release` and `wheel` have
+`button`, `x`, `y`; `key` and `keyup` have `code`, `ch`, `mods` and `char`;
 `changed`, `toggled`, `activate` and `focus` have `value` and `text`,
 except on combo boxes, tabs and list views where they have `index`;
 `selected` has `index`; `scrolled` has `value`; `resize` has `w` and
@@ -142,11 +148,12 @@ with a traceback to stderr and the program continues. `gui.test` holds
 `key`, `mouse`, `close`, `paint` and `pixel`, which inject messages into
 a window and read its surface for tests.
 
-`user/share/apps/clock.lua` and `pong.lua` are the C `clock` and `pong`
-in Lua; `Pong.app` on the desktop starts the latter.
+The Pong package includes its Lua version at
+`/home/.local/share/apps/pong.lua`.
 
-`.lua` has the MIME type `text/x-lua`, so Files opens scripts in gedit.
-A launcher file starts a script with `exec=/bin/lua /usr/share/apps/name.lua`;
+`.lua` has the MIME type `text/x-lua`; installing the Code package
+registers its editor as the handler.
+A launcher file starts a script with `exec=/bin/lua /home/.local/share/apps/name.lua`;
 `mime_open` passes one argument after the program.
 
 ## Additions for the Code editor
@@ -159,6 +166,91 @@ and `sys.wait`. `code.md` lists them. `editor:font(path [, px])` loads an
 outline font for one editor (`editor_set_font` in libgui); `px` defaults
 to 13 logical pixels and `nil` returns to the theme's font.
 
+## Audio
+
+`require "audio"` loads the binding in `user/lua/laudio.c`. It uses
+`libaudio` and the same `audiod` server as native applications. The
+module can be loaded without an audio device or server; `audio.connect()`
+returns an error when the server is unavailable. A desktop session starts
+`audiod` automatically. A console session can start it with `audiod &`.
+
+The module constants describe the fixed stream format: `audio.rate` is
+48000, `audio.channels` is 2, `audio.frame_bytes` is 4, and `audio.format`
+is `"s16le"`. PCM data is a binary Lua string of interleaved signed
+16-bit little-endian left/right samples. For example,
+`string.pack("<i2i2", left, right)` produces one frame. The binding does
+not decode WAV files, resample, or normalize floating-point samples.
+
+| Object | Methods |
+|---|---|
+| `audio` | `connect()` returns a connection |
+| connection | `playback([name])`, `capture([name [, source]])`, `mixer()`, `fd()`, `dispatch([timeout_ms])`, `sync()`, `close()` |
+| playback | `write(pcm)`, `start()`, `pause()`, `drain()`, `volume(percent)`, `ready()`, `info()`, `close()` |
+| capture | `read([frames])`, `start()`, `stop()`, `volume(percent)`, `available()`, `info()`, `close()` |
+| mixer | `streams()`, `master([percent])`, `volume(id, percent)`, `generation()`, `sync()`, `close()` |
+
+Stream names default to `"Lua playback"` and `"Lua capture"`; an explicit
+name has at most 47 bytes and no embedded NUL. Capture source is `"input"`
+(the default) or `"monitor"` (the output mix). All volume percentages
+range from 0 to 200, with 100 meaning unity gain. Stream creation leaves
+playback and capture paused. `drain()` starts playback if necessary and
+waits for the queued samples to finish.
+
+`write` returns the number of **frames** accepted, not the number of
+bytes. Its string must contain complete four-byte frames. `read`
+returns a PCM string and its frame count; it defaults to one quantum.
+Both calls can block and can return a partial transfer. A caller must
+handle the returned count; after writing `n` frames, the unwritten part
+of the string begins at `n * audio.frame_bytes + 1`. A zero-size transfer
+returns zero frames (and an empty string for capture).
+
+`playback:ready()` reports frames that can be submitted without waiting,
+while `capture:available()` reports frames already captured. These are
+cached counts updated by dispatch. Each playback buffer holds one
+quantum; even a short write consumes a buffer. Start playback before a
+write larger than the ready capacity, otherwise a paused stream cannot
+release buffers. For GUI work, use `app:watch(connection:fd(), "r", fn)`
+to call `connection:dispatch(0)` and transfer only ready/available frames.
+Prime the playback buffers before waiting for an event. Remove the watch
+before closing its connection; the descriptor belongs to the connection
+and must not be closed separately with `sys.close`.
+
+`dispatch` returns the number of events dispatched, or zero after its
+timeout; the default timeout is zero, and -1 waits indefinitely. `sync`
+waits until the server has processed preceding requests. Use a round trip
+before examining the result of an asynchronous state or volume change.
+`info()` returns a table with `rate`, `channels`, `quantum` (frames),
+`xruns`, `error` (an errno number, zero on success), and `state` (`"paused"`,
+`"running"`, or `"error"`).
+
+`mixer:streams()` returns a new array of snapshots, each holding `id`,
+`name`, `direction` (`"playback"` or `"capture"`), `volume`, `state` and
+`peak` (0 to 32767). Later events do not mutate a returned table. The
+mixer sees streams from every client. `master()` reads its cached master
+volume; `master(percent)` changes it, and `volume(id, percent)` changes
+one stream. Call `mixer:sync()` to refresh the view after changes;
+`generation()` is its change counter.
+
+Operations that return no data return `true` on success. Audio failures
+return `nil, message, errno`, like `io.open`. Invalid arguments and use of
+closed objects raise Lua errors. `close()` is the exception: it returns
+no values and is idempotent. All four object types support `__gc` and
+Lua's `<close>` variables. A stream or mixer keeps its connection alive;
+closing a connection destroys its native children and makes subsequent
+operations on their Lua objects fail safely. Explicitly close or scope
+objects when timely release matters.
+
+A tone example is installed as `/usr/share/lua/examples/tone.lua`:
+
+    lua /usr/share/lua/examples/tone.lua 440 0.5
+
+It synthesizes PCM in quantum-sized blocks, handles partial writes, and
+drains before its scoped playback and connection objects close.
+
+The separate `luasynth` package uses this binding for an eight-voice
+synthesizer with two oscillators, modulation, delay and saved presets.
+`luasynth.md` describes it; the C synthesizer remains available as `synth`.
+
 ## Tests
 
 `user/etc/tests/modules.lua` checks every function of `fs` and `sys`.
@@ -168,6 +260,16 @@ script on a scratch directory with the MIME tables from `user/etc/`.
 `user/lua/tests/gui.lua` runs on the host only, over the fake client
 of libgui: layout, signals, painting and pixels, the painter lifetime,
 close handling, destroyed widgets, timers and the constructors.
+`user/lua/tests/audio.lua` checks PCM conversion, partial transfers,
+argument bounds, injected audio errors, snapshots, garbage collection,
+connection retention and explicit/scoped close against
+`user/lua/tests/fake_audio.c`. This backend is linked only into the host
+test program, never the MiniOS interpreter.
+`tests/cases/lua_audio` starts a real `audiod` on QEMU's silent capture
+backend: it verifies Lua-generated stereo PCM sample by sample through
+the monitor, reads input in partial buffers, changes mixer controls, and
+checks native stream removal and closing a connection before its children.
+The test driver reaps both Lua and audiod even when an assertion fails.
 `tests/cases/gui_lua` starts `/etc/tests/luagui.lua` on the compositor,
 finds the colour of its canvas on the screen and closes it with Escape.
 `tests/cases/lua_sys` runs the same script on minios; it passes
@@ -207,8 +309,7 @@ status, and `os.getenv`. The expected output pins every printed line.
 - Module directory. `/usr/share/lua/5.5/` does not exist yet; it is
   created with the first Lua module.
 - Bindings not yet in `gui`: images beyond the named icons, and the
-  clipboard.
-  clipboard, layer windows. The `audio` module.
+  clipboard, and layer windows.
 - `os.setlocale` accepts only `C`, `POSIX` and the empty string, and
   `os.date` reports UTC because `localtime` is `gmtime`.
 - `LUA_INIT` and the `-E`/`-W` options work as upstream; nothing sets

@@ -71,6 +71,6 @@ check(type(u.sysname) == "string" and #u.sysname > 0 and type(u.machine) == "str
 check(sys.nproc() >= 1 and sys.cpu() >= 0, "processors")
 check(sys.type("script.lua") == "text/x-lua", "mime type")
 check(sys.type(scratch) == "inode/directory", "mime directory")
-check(sys.handler("text/x-lua") == "/bin/code", "mime handler")
+check(sys.handler("text/x-lua") == nil, "mime handler")
 check(sys.handler("inode/directory") == "/bin/files", "mime handler exact")
 print("modules: done")
