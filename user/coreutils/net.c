@@ -2,7 +2,7 @@
  *   net                     show interfaces, addresses, neighbours, counters
  *   net config IF ADDR MASK [GATEWAY]
  *   net down IF             remove the address, mask and gateway
- *   net apply               apply /etc/network (static, or start dhcpc)
+ *   net apply               apply the static entries of /etc/network
  * MiniOS is single user; every process may configure the network. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,9 +78,10 @@ static int has_interface(const char *name)
     return ok;
 }
 
-/* /etc/network: "iface NAME dhcp" or "iface NAME static ADDR MASK [GW]",
- * plus "nameserver ADDR" lines written to /etc/resolv.conf for static
- * configurations. Missing file or interface means no network. */
+/* /etc/network: "iface NAME dhcp" (handled by dhcpc -a, init's dhcp
+ * service) or "iface NAME static ADDR MASK [GW]", plus "nameserver ADDR"
+ * lines written to /etc/resolv.conf for static configurations. Missing
+ * file or interface means no network. */
 static int apply(void)
 {
     FILE *f = fopen("/etc/network", "r");
@@ -108,13 +109,9 @@ static int apply(void)
         if (n < 3 || strcmp(words[0], "iface") != 0 || !has_interface(words[1]))
             continue;
         if (strcmp(words[2], "dhcp") == 0) {
-            pid_t pid = fork();
-            if (pid == 0) {
-                execl("/bin/dhcpc", "dhcpc", "-i", words[1], (char *)NULL);
-                _exit(127);
-            }
-            if (pid < 0)
-                status = 1;
+            /* Leases are the business of init's dhcp service (dhcpc -a),
+             * which reads the same file and is supervised there. */
+            continue;
         } else if (strcmp(words[2], "static") == 0 && n >= 5) {
             uint32_t a, m, g = 0;
             if (parse(words[3], &a) && parse(words[4], &m) && (n < 6 || parse(words[5], &g)))

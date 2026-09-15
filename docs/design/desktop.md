@@ -141,9 +141,10 @@ The panel also carries the audio applet described in `docs/design/audio.md`:
 a speaker button left of the clock opens a popup with the master volume and
 the streams of the audio server.
 
-`startgui` starts `audiod` when a PCM device is present, then X12, the panel,
-the desktop and the requested program. It stops the audio server with the
-desktop session. A desktop or panel that ends abnormally is
+`startgui` starts X12, the panel, the desktop and the requested program,
+and stops them on logout. The audio server is the `audio` service of
+init (`init.md`), started at boot when `/dev/pcm0` exists and living
+across sessions. A desktop or panel that ends abnormally is
 restarted up to three times. The `gui_desktop` boot test covers the
 wallpaper, opening a launcher by double click, both context menus, a
 configuration change through `settings set` and the settings window.

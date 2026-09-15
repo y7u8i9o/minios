@@ -1635,6 +1635,8 @@ order, `service` entries supervised with restart limits, and the
 `console` session, with `if=`, `log=` and `restart=` options and a
 built-in fallback table. `initctl` lists, starts, stops, restarts and
 reloads entries and requests the shutdown over an abstract Unix socket.
+The audio server and the DHCP client (`dhcpc -a`) became services of
+the shipped configuration.
 `sys_reboot` flushes the console and releases init's mappings after an
 RCU grace period so the root filesystem unmounts cleanly. Documented in
 `docs/design/init.md`, tested by `tests/cases/initctl`, `shutdown_cmd`

@@ -263,7 +263,9 @@ static void builtin_config(void)
     static const char *const lines[] = {
         "env PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios",
         "task fsinit fsinit",
+        "service audio if=/dev/pcm0 audiod",
         "task network net apply",
+        "service dhcp restart=failure dhcpc -a",
         "console sh sh",
     };
     for (size_t i = 0; i < sizeof lines / sizeof lines[0]; i++) {

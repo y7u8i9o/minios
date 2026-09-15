@@ -4,9 +4,14 @@
  * at expiry before discovering again. Retries back off from 4 to 64 s and
  * never block anything else: without a server the client keeps trying in
  * the background and the interface stays unconfigured.
- *   dhcpc [-i IF] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]
+ *   dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]
  * -1 exits after the first lease (or failure after SECONDS), -f stays in
- * the foreground, -s/-p unicast to a test server instead of broadcasting. */
+ * the foreground, -s/-p unicast to a test server instead of broadcasting.
+ * -a, used by init's dhcp service, takes the interface from the first
+ * "iface NAME dhcp" line of /etc/network, stays in the foreground, and
+ * exits with status 0 when there is nothing to do (no such line, or no
+ * such interface), so the service simply stops on a machine without a
+ * network. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +46,27 @@ static uint64_t now_ms(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* The interface of the first "iface NAME dhcp" line of /etc/network, or
+ * NULL. The name is static storage. */
+static const char *network_dhcp_interface(void)
+{
+    static char name[64];
+    FILE *f = fopen("/etc/network", "r");
+    if (!f)
+        return NULL;
+    char line[256], kind[16];
+    const char *found = NULL;
+    while (!found && fgets(line, sizeof line, f)) {
+        char *hash = strchr(line, '#');
+        if (hash)
+            *hash = 0;
+        if (sscanf(line, "iface %63s %15s", name, kind) == 2 && strcmp(kind, "dhcp") == 0)
+            found = name;
+    }
+    fclose(f);
+    return found;
 }
 
 static int read_mac(void)
@@ -331,9 +357,12 @@ static int refresh(int fd, unsigned timeout_ms, int broadcast)
 
 int main(int argc, char **argv)
 {
+    int automatic = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-i") == 0 && i + 1 < argc)
             interface = argv[++i];
+        else if (strcmp(argv[i], "-a") == 0)
+            automatic = foreground = 1;
         else if (strcmp(argv[i], "-1") == 0)
             one_shot = 1;
         else if (strcmp(argv[i], "-f") == 0)
@@ -350,13 +379,20 @@ int main(int argc, char **argv)
             }
             server_override = ntohl(in.s_addr);
         } else {
-            fprintf(stderr, "usage: dhcpc [-i IF] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]\n");
+            fprintf(stderr, "usage: dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]\n");
             return 2;
+        }
+    }
+    if (automatic) {
+        interface = network_dhcp_interface();
+        if (!interface) {
+            printf("dhcpc: no dhcp interface in /etc/network\n");
+            return 0;
         }
     }
     if (read_mac() < 0) {
         fprintf(stderr, "dhcpc: no interface %s\n", interface);
-        return 1;
+        return automatic ? 0 : 1;
     }
     if (!one_shot && !foreground) {
         pid_t pid = fork();

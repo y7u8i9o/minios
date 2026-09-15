@@ -16,9 +16,16 @@ the console, started in its own process group with the terminal
 (`setpgid`, `tcsetpgrp`). Options between the name and the command are
 `if=PATH` (start only when the path exists), `log=FILE` (standard
 output and error appended to the file) and `restart=always|never|failure`.
-The shipped file runs `fsinit`, then `net apply`, then the shell. When
-the file cannot be read init parses a built-in table with the same
-entries, so a damaged root image still boots to a shell.
+The shipped file runs `fsinit`, starts `audiod` as the `audio` service
+when `/dev/pcm0` exists, runs `net apply` for the static network entries,
+starts `dhcpc -a` as the `dhcp` service with `restart=failure` (the client
+reads the dhcp entry of `/etc/network` itself and exits with status 0
+when there is nothing to do, so the service stops on a machine without
+a network), and then the shell. Before this, `startgui` started the
+audio server per session and `net apply` forked the DHCP client as an
+unsupervised orphan. When the file cannot be read init parses a
+built-in table with the same entries, so a damaged root image still
+boots to a shell.
 
 Entries are records in a fixed array (`struct entry`, at most 32). The
 command words are kept NUL separated in the record and the argument
@@ -68,7 +75,9 @@ reverse configuration order, init waits up to three seconds for them,
 prints the final line and calls `reboot(2)`, which terminates whatever
 is left, unmounts and stops the machine.
 
-Two kernel changes came with the new init. The console output of the
+Three kernel changes came with the new init. A scheduler race between the
+child exit wake and the `SIGCHLD` delivery made a stale wake enqueue a
+thread that was already blocking again (`sched.md`, remote wakeup). The console output of the
 kernel is queued per CPU and drained by a thread; the old init reached
 `reboot(2)` only after the kernel had waited for the shell, which gave
 the drain thread time, while the new one has already stopped everything

@@ -25,8 +25,23 @@ wakes an idle `hlt` and requests a scheduling point on return to user mode.
 The target exchanges and reverses the inbound list under its local queue
 lock.  It removes a scheduler sleeper from the local sleep list if necessary,
 promotes a thread that blocked before exhausting its slice, and inserts the
-thread once.  The consumer captures `node->next` before clearing
-`wake_queued`, so a subsequent wake may safely reuse the intrusive node.
+thread once.  The consumer captures `node->next` and clears `wake_queued`
+before it reads the thread's state, so a subsequent wake may safely reuse
+the intrusive node and, more importantly, no wake is lost: the clear and
+the compare-exchange of `sched_wake` are sequentially consistent, so a wake
+that found the claim taken (and pushed nothing) is observed by the state
+read that follows the clear.
+
+A queued wake can be stale.  Signal delivery calls `waitq_interrupt` and
+then `sched_wake` without holding the wait queue lock across both; when
+the thread was woken by somebody else in between, ran, and blocked on a
+wait queue again, the second call queues a thread that is legitimately
+waiting.  The drain recognizes this as `THREAD_BLOCKED` with `waiting_on`
+set and discards the entry; the eventual `waitq_wake_*` or interrupt
+clears `waiting_on` under the queue lock before it queues the thread
+again.  The case was found with the new init (2026-09-15), the first
+process to sleep in `wait4` with a `SIGCHLD` handler installed: every
+child exit wakes the parent's `child_waitq` and then sends the signal.
 
 An empty CPU attempts to steal the highest-priority ready thread.  It holds
 its local lock and uses `spin_try_lock` on each victim; it never waits for a

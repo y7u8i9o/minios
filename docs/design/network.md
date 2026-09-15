@@ -1082,13 +1082,15 @@ interface. `NETIOC_PING` is described under N11. MiniOS enforces no
 permissions, so every process may reconfigure the network; the plan's
 authority bound is the single-user model itself, not privilege separation.
 
-`net(1)` wraps the device. `net apply`, started by init in the background
-after the filesystems are mounted, reads `/etc/network`: `iface NAME dhcp`
-starts `dhcpc`, `iface NAME static ADDRESS NETMASK [GATEWAY]` configures
-once, and `nameserver ADDRESS` lines are written to `/etc/resolv.conf`.
-The default file asks for DHCP on `eth0`. A missing file, a missing
-interface or an absent server never delays the shell or the desktop: the
-program exits, or the client keeps retrying in the background with an
+`net(1)` wraps the device. `net apply`, a boot task of init after the
+filesystems are mounted, reads `/etc/network`: `iface NAME static ADDRESS
+NETMASK [GATEWAY]` configures once and `nameserver ADDRESS` lines are
+written to `/etc/resolv.conf`; an `iface NAME dhcp` line is left to the
+`dhcp` service of `/etc/init.conf`, `dhcpc -a`, which reads the same file
+and is supervised by init (`init.md`). The default file asks for DHCP on
+`eth0`. A missing file, a missing interface or an absent server never
+delays the shell or the desktop: the task exits, the client exits with
+status 0 when there is nothing to do, or keeps retrying with an
 unconfigured interface. Booting without a NIC is unchanged.
 
 ### Broadcast before an address
@@ -1116,7 +1118,8 @@ through `/dev/net`, writes `/etc/resolv.conf` from option 6, renews at T1 by
 unicast, rebinds at T2 by broadcast, and at expiry or on NAK removes the
 address, empties the resolver configuration and starts discovery again.
 Retries back off from 4 to 64 seconds. `-1` acquires once for scripts and
-tests, `-f` stays in the foreground, `-s`/`-p` address a unicast test server.
+tests, `-f` stays in the foreground, `-s`/`-p` address a unicast test server,
+and `-a` takes the interface from `/etc/network` for the init service.
 Address-conflict detection (gratuitous ARP) is not implemented; the kernel's
 configuration validation rejects addresses outside the unicast host range.
 

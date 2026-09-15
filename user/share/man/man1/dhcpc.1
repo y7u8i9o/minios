@@ -4,7 +4,7 @@ NAME
     dhcpc - DHCP client
 
 SYNOPSIS
-    dhcpc [-i IF] [-1] [-f] [-t SECONDS] [-s SERVER] [-p PORT]
+    dhcpc [-i IF | -a] [-1] [-f] [-t SECONDS] [-s SERVER] [-p PORT]
 
 DESCRIPTION
     Obtains an IPv4 address, netmask, gateway and name servers for IF
@@ -20,6 +20,13 @@ DESCRIPTION
     one. -f stays in the foreground. -s and -p send to a unicast test
     server instead of broadcasting to port 67.
 
+    -a is the form init runs as the dhcp service: the interface comes
+    from the first "iface NAME dhcp" line of /etc/network, the client
+    stays in the foreground, and it exits with status 0 when the file
+    has no such line or the interface is absent, so the service stops
+    quietly on a machine without a network. initctl restart dhcp starts
+    it again after /etc/network changed.
+
     Replies are accepted only for the client's transaction and MAC
     address, and only when they carry a subnet mask, server identifier
     and lease time of at least 10 seconds; anything else is ignored.
@@ -28,4 +35,4 @@ FILES
     /dev/net, /etc/resolv.conf
 
 SEE ALSO
-    net(1), index(7)
+    net(1), init.conf(5), initctl(1), index(7)

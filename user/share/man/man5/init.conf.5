@@ -44,8 +44,9 @@ OPTIONS
 EXAMPLE
     env PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios
     task fsinit fsinit
-    task network net apply
     service audio if=/dev/pcm0 audiod
+    task network net apply
+    service dhcp restart=failure dhcpc -a
     console sh sh
 
 SEE ALSO

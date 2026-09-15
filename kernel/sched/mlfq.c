@@ -93,8 +93,10 @@ static void kick_cpu(unsigned id)
 static bool queue_inbound(struct thread *t, unsigned target)
 {
     bool expected = false;
+    /* Sequentially consistent against the release of the claim in
+     * drain_inbound_locked, see there. */
     if (!__atomic_compare_exchange_n(&t->wake_queued, &expected, true, false,
-                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                                      __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
         return false;
     __atomic_store_n(&t->cpu, target, __ATOMIC_RELEASE);
     mpsc_push(&rq[target].inbound, &t->wake_node);
@@ -129,7 +131,23 @@ static void drain_inbound_locked(struct run_queues *r)
     while (node) {
         struct mpsc_node *next = node->next;
         struct thread *t = container_of(node, struct thread, wake_node);
-        enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
+        /* next was captured first, so the producer may reuse wake_node from
+         * here on. Releasing the claim before reading the thread's state
+         * matters: a wake that finds the claim taken pushes nothing, so
+         * the state read below must observe every wake that observed the
+         * claim. Both sides are sequentially consistent for that. */
+        __atomic_store_n(&t->wake_queued, false, __ATOMIC_SEQ_CST);
+        enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_SEQ_CST);
+        struct waitq *wq = __atomic_load_n(&t->waiting_on, __ATOMIC_SEQ_CST);
+        /* A blocked thread still on a wait queue is not runnable: this wake
+         * is stale, queued between an earlier wake and the thread blocking
+         * again (signal delivery interrupts a wait and then wakes without
+         * holding the queue lock). The wake that removes it from the queue
+         * queues it again. */
+        if (state == THREAD_BLOCKED && wq) {
+            node = next;
+            continue;
+        }
         if (state == THREAD_NEW || state == THREAD_BLOCKED ||
             state == THREAD_SLEEPING || state == THREAD_STOPPED) {
             if (state == THREAD_SLEEPING)
@@ -139,8 +157,6 @@ static void drain_inbound_locked(struct run_queues *r)
             t->slice_left = slice_for(t->level);
             enqueue_locked(r, t);
         }
-        /* next was captured first, so the producer may now reuse wake_node. */
-        __atomic_store_n(&t->wake_queued, false, __ATOMIC_RELEASE);
         node = next;
     }
 }
