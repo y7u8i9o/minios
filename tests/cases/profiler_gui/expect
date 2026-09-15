@@ -1,0 +1,6 @@
+profiler: recording every process
+profiler: [0-9]* events, [0-9]* samples, [0-9]* nodes in the CPU tree
+profiler_gui: done
+TEST PASS
+profiler: automatic export saved
+profiler: UI checks passed

@@ -27,6 +27,7 @@ static void run_and_reap(const char *path, char *const argv[])
 
 static void test_prof_gui(void)
 {
+    install_app("mandel");
     uint64_t started = timer_ms();
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
@@ -35,12 +36,14 @@ static void test_prof_gui(void)
     struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", "yes", NULL }, (char *const[]){ NULL },
                                          &kernel_proc);
     ktest_assert(term != NULL, "cannot start the terminal");
-    struct proc *mandel = start("/bin/mandel", "mandel");
+    struct proc *mandel = start("/home/.local/bin/mandel", "mandel");
     sleep_ms(2000);
     /* Reset the lock counters after startup so they describe the steady
      * state, then generate pointer motion while sampling. */
     run_and_reap("/bin/sh", (char *const[]){ "sh", "-c", "echo reset > /dev/lockstat", NULL });
-    struct proc *prof = proc_create_user("/bin/prof", (char *const[]){ "prof", "-k", "-c", "-n", "60", "-d", "10", "-a", NULL },
+    struct proc *prof = proc_create_user("/bin/prof",
+                                         (char *const[]){ "prof", "-e", "all", "-A", "512", "-c", "-g", "-t", "-m", "-i",
+                                                          "-n", "40", "-d", "10", "-a", NULL },
                                          (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(prof != NULL, "cannot start prof");
     kprintf("prof_gui: input start at %lu ms\n", timer_ms() - started);
@@ -67,3 +70,31 @@ static void test_prof_gui(void)
     kprintf("prof_gui: done in %lu ms\n", timer_ms() - started);
 }
 KTEST_DEFINE("prof_gui", test_prof_gui);
+
+/* The graphical profiler over a busy desktop: it records every class for
+ * six seconds on its own and prints what it collected. */
+static void test_profiler_gui(void)
+{
+    install_app("mandel");
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = start_server();
+    struct proc *mandel = start("/home/.local/bin/mandel", "mandel");
+    sleep_ms(1500);
+    struct proc *gui = proc_create_user("/bin/profiler",
+                                        (char *const[]){ "profiler", "-r", "6", "-o", "/tmp/profiler-gui.json", "--test-ui", NULL },
+                                        (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(gui != NULL, "cannot start the profiler");
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    for (int i = 0; i < 200; i++) {
+        mouse_move_to(&cx, &cy, 120 + (i % 12) * 30, 120 + (i % 9) * 25, 0);
+        sleep_ms(20);
+    }
+    sleep_ms(4000);
+    signal_send(gui, SIGTERM);
+    proc_reap(gui);
+    signal_send(mandel, SIGTERM);
+    proc_reap(mandel);
+    stop_server(srv);
+    kprintf("profiler_gui: done\n");
+}
+KTEST_DEFINE("profiler_gui", test_profiler_gui);

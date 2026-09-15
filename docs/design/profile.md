@@ -1,89 +1,149 @@
-# Sampling profiler (M41)
+# System profiler
 
-## Sampling
+## Capture and attribution
 
-`kernel/debug/profile.c` hooks the timer interrupt of every CPU
-(`profile_sample`, called after the CPU time accounting). While a session
-is enabled, and the interrupted thread is not the idle thread and belongs
-to the profiled process (or any process when the filter is 0), and the
-CPU's tick count is a multiple of the divider, the handler builds a
-`struct prof_sample`: pid, tid, CPU, a user/kernel flag, the interrupted
-instruction pointer and up to seven return addresses walked through frame
-pointers (both the kernel and user programs are built with
-`-fno-omit-frame-pointer`). In user mode every load of the walk goes
-through `vmm_translate`, so a corrupt frame pointer ends the chain instead
-of faulting in the interrupt handler; in kernel mode the chain must stay
-inside the current kernel stack. Each CPU publishes into its own 8192-entry
-SPSC ring, so the timer path takes no global profiler lock. A full local ring
-counts a drop instead of overwriting, so its oldest samples survive. The
-profile device's object-local poll source wakes readers when a ring changes
-from empty to nonempty.
+`kernel/debug/profile.c` collects CPU samples, scheduler transitions,
+kernel heap allocations and frees, and completed transfers. Each CPU owns
+a 128 KiB byte ring containing variable-length records. Producers publish
+whole records without taking the reader's lock. Ring overflow is reported
+through `prof_stats.dropped`. Timer readiness notifications wake the reader.
 
-## /dev/profile and /dev/ksyms
+`/dev/profile` controls the global recording session. `PROF_CONFIGURE`
+selects event classes, stack depth (up to 32 frames), a CPU sampling divider
+(1–1000 timer ticks), minimum allocation size and minimum transfer duration.
+`PROF_START` resets the capture and selects a PID, or every process when
+PID is zero. System-wide recording excludes the recording process.
+`PROF_STOP` quiesces producers, after which the remaining records can be
+read. Closing the device stops capture and frees ring storage.
+`PROF_GET_STATS` reports configuration, recorded events, lost events and
+pending bytes. Readers receive whole events merged by timestamp.
 
-`/dev/profile` controls the session: `PROF_START` (argument: pid, 0 for
-all) allocates one ring for every started CPU on first use, clears the
-counters and enables sampling; `PROF_STOP` disables it;
-`PROF_SET_DIVIDER` sets the ticks
-between samples on each CPU (1 to 1000, so 1 kHz down to 1 Hz per CPU);
-`PROF_GET_STATS` fills `struct prof_stats` with the sample and drop counts,
-the pending count, the state and the ring capacity. `read` returns whole
-samples from the ring, `poll` reports `POLLIN` while samples are pending,
-and closing the device ends the session. Close first disables sampling,
-waits for every per-CPU active counter to reach zero, then frees the rings,
-so an in-flight timer interrupt cannot publish into released memory and a
-program that exits leaves nothing behind. One session exists at a time.
+`kernel/debug/unwind.c` walks frame pointers and stitches kernel stacks
+onto the user frames that caused them when available. The client resolver
+loads kernel symbols from `/dev/ksyms`, process executables from their ELF
+symbol tables, and shared-library mappings from `/dev/maps`. Unresolved
+addresses remain numeric. Lock-release samples are attributed past the
+lock primitives to the code that held the lock.
 
-`/dev/ksyms` prints the kernel symbol table as `addr size name` lines,
-regenerated from the `.ksyms` blob at each read, so user space can name
-kernel addresses.
+`libc/src/profanalyze.c` maintains four call trees, flat histograms, thread
+statistics, outstanding allocation addresses and pending scheduler stacks.
+Each tree node stores inclusive weight, exclusive self weight, an inclusive
+secondary magnitude, and the number of events ending at that node. The
+weights are CPU nanoseconds estimated from samples, off-CPU nanoseconds,
+allocated kernel heap bytes, and I/O latency nanoseconds. Heap secondary
+weights are bytes still held. I/O secondary weights are transferred bytes.
+Thread scheduling measurements are separate from sampled CPU estimates.
 
-## Client library
+## Graphical analysis
 
-`minios/profile.h` in libc wraps the device (`prof_open`, `prof_start`,
-`prof_stop`, `prof_set_divider`, `prof_get_stats`, `prof_read`), loads
-symbol tables (`prof_symtab_load_elf` reads the `.symtab` function symbols
-of a static ELF such as `/bin/<name>`, `prof_symtab_load_kernel` parses
-`/dev/ksyms`), looks addresses up (`prof_symtab_lookup` attributes an
-address to the preceding symbol up to the start of the next one, so return
-addresses after `noreturn` calls resolve) and keeps a histogram of string
-keys (`prof_hist_add`, `prof_hist_sort`).
+Launch `/bin/profiler`, or use `profiler -p PID` to preselect a target.
+Select the event classes, stack depth and CPU sample interval, then press
+Start. These settings apply to the next capture. A larger sample interval
+reduces CPU sampling overhead. Stop retains the capture for inspection.
+Reset stops capture, drains it and clears the analysis before refreshing
+the process selector. It does not restart recording.
 
-## Lock attribution (M42)
+The Flame graph tab supports:
 
-A kernel sample whose innermost frames are the lock primitives
-(`pop_cli`, `push_cli`, `spin_lock`, `spin_unlock` and the `irqsave`
-variants) is attributed by `prof_attribute` to the first frame outside
-them and marked `(locked)`: the timer interrupt was pending while
-interrupts were disabled and fired on the `sti` of the release. `prof -a`
-samples every process, prints a table of samples per process and
-symbolizes each sample with the binary of its own process. See
-`lockstat.md`.
+- Clicking a frame to select its call site and zoom into its subtree.
+  Right-clicking, clicking the bottom frame, or pressing Up selects its
+  caller. All frames restores the complete tree.
+- A resizable breakdown pane showing the selected function, caller,
+  inclusive and self costs, and percentage of the entire capture. The
+  table contains self work and direct callees sorted by inclusive cost.
+  Its percentages use the selected frame as the denominator. These rows
+  are disjoint and sum to that frame's inclusive cost, even for recursion.
+  Double-click a callee to inspect its breakdown.
+- A case-sensitive function substring search. Matching frames are purple.
+  The matched amount is the weight of stacks containing a match within
+  the current subtree. Nested and recursive matches count only once.
+- Hover details with inclusive cost, self cost, self event count, mode,
+  and held or transferred bytes where applicable. Warm colors identify
+  user code and cool colors identify kernel code.
 
-## Tools
+The Frames tab lists exclusive hotspots for the selected view. Threads
+shows CPU, off-CPU and ready time together with scheduling counts. Heap
+lists allocation call sites still holding memory. Transfers lists latency
+and bytes by leaf function. The status bar reports capture duration and
+dropped events. Updates stop when recording stops, preserving hover and
+search context. Reads are bounded per UI callback during capture so a
+continuous stream cannot prevent input and repaint processing.
 
-`prof command args...` starts the command behind a pipe so sampling is on
-before it runs, filters on its pid, drains the ring while waiting for it
-and prints the flat profile (percent, samples, symbol, `[kernel]` marker);
-`-k` includes kernel samples, `-c` also aggregates whole call chains,
-`-n` limits the rows, `-p pid -d seconds` samples a running process.
-`sysmon`'s Profile tab does the same for the selected process (or all)
-with a live table (`tools.md`).
+Breakdown is specific to the selected call path. A function appearing
+under different callers has a separate breakdown in each location. Event
+counts are observations, not function invocation counts. CPU widths are
+sample-based estimates. Outstanding kernel allocations are not proof of
+leaks: they can be legitimate live objects. Missing events and truncated
+stacks limit attribution, particularly allocation/free pairing and blocked
+threads that have not resumed when the capture ends.
 
-## Test
+## Export formats
 
-`tests/cases/profile` runs `/bin/proftest`: symbol table loading and
-lookups (own binary and kernel), a hot function taking most of the user
-samples of the process with chains reaching `main`, the pid filter with a
-spinning parent excluded, kernel samples of a child making system calls
-resolving through `/dev/ksyms`, the divider, the absence of samples after
-stop, ring overflow accounting when four spinning processes are sampled
-without reading, and `poll`.
+Export JSON saves all four call trees, thread statistics, event counts,
+recording timestamps, sample period and heap totals. Export folded saves
+the entire currently selected view, independent of zoom and search. The
+GUI prompts for a guest filesystem path and confirms replacement of an
+existing file. Export stops and drains capture before serialization.
+Successful export paths and errors remain visible below the tabs.
 
-## Shared libraries
+The shared `prof_session_export` API writes a sibling temporary file with
+exclusive creation, checks write and close errors, and renames it over the
+destination only after completion. Failures leave an existing destination
+untouched and remove temporary files created by the export. A temporary
+name collision reports an error without removing the conflicting file.
+This provides atomic replacement, not a guarantee of persistence through
+power failure. Paths refer to the guest filesystem, not the host.
 
-Since dynamic linking (`dynlink.md`) the symbol table of `/bin/<name>`
-covers the program only. `/dev/maps` lists the file backed regions of
-every process, and `prof_symtab_add_maps` attaches the libraries of a
-process to its table, so that `prof` and `sysmon` name functions of the
-shared libraries as well.
+JSON uses `format: "minios-profile"` and `version: 1`. `views` contains
+`cpu`, `offcpu`, `heap`, and `io`. Each includes explicit units and nodes
+identified by `id` and `parent` (`-1` for root). Node fields are `name`,
+`kernel`, `total`, `self`, `extra`, and `self_events`. Integer weights
+preserve nanosecond and byte precision. Use an integer-preserving parser
+for values above JavaScript's exact integer range. `dropped` is null when
+device statistics are unavailable. Symbol bytes outside printable ASCII
+are escaped as JSON Unicode escapes. This is an aggregate report, not a
+raw event timeline or a format the GUI can reopen.
+
+Folded stacks contain one `outer;inner;leaf weight` record per exclusive
+cost. Summing their weights reproduces the root total. CPU, off-CPU and I/O
+weights are nanoseconds. Heap weights are allocated bytes, including bytes
+later freed. Kernel frames carry `_[k]`. Semicolons, whitespace and control
+bytes inside names become underscores because this format has no standard
+escaping convention. Unattributed root weight is emitted as
+`[unattributed]`. Use JSON when exact symbol spelling matters.
+
+## Command-line workflow
+
+`prof command args...` starts a command after sampling has been enabled.
+`prof -p PID -d SECONDS` attaches to a process. `prof -a -d SECONDS` records
+every process. `-e cpu,sched,heap,io` selects event classes, `-D` sets the
+CPU sampling divider and `-s` sets maximum stack depth. `-c` reports call
+chains, `-g` draws an ASCII flame graph, `-t` adds thread statistics, `-m`
+adds kernel heap analysis and `-i` adds transfer analysis.
+
+Examples:
+
+```sh
+prof -e all -o /home/capture.json -p 42 -d 10
+prof -F -o /home/cpu.folded -a -d 5
+profiler -r 10 -o /home/capture.json
+```
+
+`prof -o` exports full JSON while retaining the usual terminal report.
+`-F -o` exports folded CPU stacks to a file. Without `-o`, `-F` writes
+folded stacks to standard output. An export failure returns a nonzero
+status. `profiler -r` starts all event classes immediately and stops after
+the requested number of seconds. Its optional `-o` saves JSON at that point.
+
+## Validation
+
+`tests/cases/profile` runs the device, resolver, scheduler, allocation,
+transfer, call-tree and flame-layout tests in `/bin/proftest`.
+`tests/cases/profreport` runs deterministic analysis and export checks in
+`/bin/profreporttest`: recursive search accounting, subtree boundaries,
+breakdown conservation, sorting, JSON escaping, folded conservation,
+selected-view weights, empty captures, file replacement, failure cleanup,
+and a real command-line export. `profiler_gui` exercises the graphical
+profiler during a workload. `prof_gui` checks system-wide command-line
+profiling during GUI activity. Run affected QEMU cases serially with
+`JOBS=1 CPUS=4`.

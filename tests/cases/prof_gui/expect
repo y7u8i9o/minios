@@ -1,4 +1,7 @@
 Flat profile
+Flame graph
+Threads, on CPU time
+Kernel heap:
 NAME +ACQUIRES
 prof_gui: done
 TEST PASS
