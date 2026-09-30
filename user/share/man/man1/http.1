@@ -4,16 +4,20 @@ NAME
     http - fetch a URL with HTTP/1.0
 
 SYNOPSIS
-    http [-v] [-o FILE] http://HOST[:PORT]/PATH
+    http [-v] [-t SECONDS] [-o FILE] http://HOST[:PORT]/PATH
 
 DESCRIPTION
     Sends one GET request and writes the response body to standard output
-    or FILE. -v prints the status line and headers to standard error. The
+    or FILE. -v prints the status line and headers to standard error. -t
+    bounds the connection and every wait for data to SECONDS, 30 by
+    default; 0 waits without a bound. When the server sends
+    Content-Length, a body that ends early or runs longer is an error,
+    and a failed transfer removes FILE instead of leaving part of it. The
     exit status is 0 for a 2xx response, 1 for any other status or a
-    connection failure, 2 for a bad URL. Only plain http:// is supported:
-    there is no TLS, no certificate validation, no https://, no redirect
-    following and no chunked decoding beyond what an HTTP/1.0 server
-    sends with Connection: close.
+    failed connection or transfer, 2 for a bad URL. Only plain http:// is
+    supported: there is no TLS, no certificate validation, no https://,
+    no redirect following and no chunked decoding beyond what an HTTP/1.0
+    server sends with Connection: close. pkg(1) uses the same client.
 
 SEE ALSO
-    nc(1), index(7)
+    nc(1), pkg(1), index(7)

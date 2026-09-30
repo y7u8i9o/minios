@@ -1,105 +1,61 @@
-/* http: a minimal HTTP/1.0 GET client (N11). Plain http:// only: there is
- * no TLS, no certificate validation and no https://. Redirects are not
- * followed; the status line and headers go to stderr with -v.
- *   http [-v] [-o FILE] http://HOST[:PORT]/PATH */
+/* http is a minimal HTTP/1.0 GET client (N11). It speaks plain http://
+ * only, without TLS, certificate validation or https://. Redirects are
+ * not followed, and -v prints the status line and headers to stderr. The
+ * protocol code is the libc client of minios/http.h, which pkg(1) shares.
+ *   http [-v] [-t SECONDS] [-o FILE] http://HOST[:PORT]/PATH */
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#include <minios/http.h>
+
+static int usage(void)
+{
+    fprintf(stderr, "usage: http [-v] [-t SECONDS] [-o FILE] http://HOST[:PORT]/PATH\n");
+    return 2;
+}
 
 int main(int argc, char **argv)
 {
-    int verbose = 0, opt;
+    int verbose = 0, timeout = 30, opt;
     const char *output = NULL;
-    while ((opt = getopt(argc, argv, "vo:")) != -1) {
+    while ((opt = getopt(argc, argv, "vt:o:")) != -1) {
         if (opt == 'v')
             verbose = 1;
+        else if (opt == 't')
+            timeout = atoi(optarg);
         else if (opt == 'o')
             output = optarg;
         else
-            return fprintf(stderr, "usage: http [-v] [-o FILE] http://HOST[:PORT]/PATH\n"), 2;
+            return usage();
     }
-    if (optind != argc - 1)
-        return fprintf(stderr, "usage: http [-v] [-o FILE] http://HOST[:PORT]/PATH\n"), 2;
+    if (optind != argc - 1 || timeout < 0)
+        return usage();
     const char *url = argv[optind];
-    if (strncmp(url, "http://", 7) != 0)
+    struct http_url parsed;
+    int r = http_parse_url(url, &parsed);
+    if (r == -EPROTONOSUPPORT)
         return fprintf(stderr, "http: only http:// URLs are supported (no TLS)\n"), 2;
-    char host[256], port[8] = "80";
-    const char *p = url + 7;
-    size_t n = strcspn(p, "/:");
-    if (!n || n >= sizeof host)
-        return fprintf(stderr, "http: bad host in %s\n", url), 2;
-    memcpy(host, p, n);
-    host[n] = 0;
-    p += n;
-    if (*p == ':') {
-        size_t m = strcspn(++p, "/");
-        if (!m || m >= sizeof port)
-            return fprintf(stderr, "http: bad port in %s\n", url), 2;
-        memcpy(port, p, m);
-        port[m] = 0;
-        p += m;
-    }
-    const char *path = *p ? p : "/";
-    struct addrinfo hints = {.ai_family = AF_INET, .ai_socktype = SOCK_STREAM}, *ai;
-    int error = getaddrinfo(host, port, &hints, &ai);
-    if (error)
-        return fprintf(stderr, "http: %s: %s\n", host, gai_strerror(error)), 1;
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0 || connect(fd, ai->ai_addr, ai->ai_addrlen) < 0)
-        return fprintf(stderr, "http: connect %s:%s: %s\n", host, port, strerror(errno)), 1;
-    freeaddrinfo(ai);
-    char request[1024];
-    int len = snprintf(request, sizeof request,
-                       "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: minios-http\r\nConnection: close\r\n\r\n",
-                       path, host);
-    if (len < 0 || len >= (int)sizeof request || write(fd, request, (size_t)len) != len)
-        return fprintf(stderr, "http: request failed: %s\n", strerror(errno)), 1;
-    shutdown(fd, SHUT_WR);
-    FILE *out = output ? fopen(output, "w") : stdout;
-    if (!out)
+    if (r < 0)
+        return fprintf(stderr, "http: malformed URL %s\n", url), 2;
+    int fd = 1;
+    if (output && (fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         return fprintf(stderr, "http: %s: %s\n", output, strerror(errno)), 1;
-    char buf[8192];
-    size_t have = 0;
-    int in_headers = 1, status = 0;
-    for (;;) {
-        ssize_t r = read(fd, buf + have, sizeof buf - have);
-        if (r < 0)
-            return fprintf(stderr, "http: read: %s\n", strerror(errno)), 1;
-        if (r == 0)
-            break;
-        have += (size_t)r;
-        if (in_headers) {
-            buf[have < sizeof buf ? have : sizeof buf - 1] = 0;
-            char *end = strstr(buf, "\r\n\r\n");
-            if (!end) {
-                if (have == sizeof buf)
-                    return fprintf(stderr, "http: headers too long\n"), 1;
-                continue;
-            }
-            *end = 0;
-            if (sscanf(buf, "HTTP/%*d.%*d %d", &status) != 1)
-                return fprintf(stderr, "http: malformed status line\n"), 1;
-            if (verbose)
-                fprintf(stderr, "%s\n", buf);
-            size_t body = (size_t)(end + 4 - buf);
-            memmove(buf, buf + body, have - body);
-            have -= body;
-            in_headers = 0;
-        }
-        if (have && fwrite(buf, 1, have, out) != have)
-            return fprintf(stderr, "http: write: %s\n", strerror(errno)), 1;
-        have = 0;
+    struct http_response res;
+    r = http_get(url, fd, timeout, 0, &res);
+    if (verbose && res.status)
+        fprintf(stderr, "%s\n", res.head);
+    if (output)
+        close(fd);
+    if (r < 0) {
+        /* A partial body is not left behind as if it were the file. */
+        if (output)
+            unlink(output);
+        return fprintf(stderr, "http: %s\n", res.error), 1;
     }
-    if (in_headers)
-        return fprintf(stderr, "http: connection closed before the response\n"), 1;
-    if (out != stdout)
-        fclose(out);
-    close(fd);
-    if (status < 200 || status >= 300)
-        return fprintf(stderr, "http: server returned status %d\n", status), 1;
+    if (res.status < 200 || res.status >= 300)
+        return fprintf(stderr, "http: server returned status %d\n", res.status), 1;
     return 0;
 }
