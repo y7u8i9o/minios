@@ -71,12 +71,19 @@ UASFLAGS := -g
 # Programs are linked at 0x400000 against the shared libraries in
 # build/lib, with every relocation applied at load (docs/design/dynlink.md);
 # ULDFLAGS_STATIC links a program on its own, for init and the loader.
-ULDFLAGS := -nostdlib -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 \
+# The layout options are stated rather than left to the linker's defaults,
+# which differ: the ld of a Linux distribution enables RELRO and separate
+# code segments and its gcc links position independent executables, while
+# the x86_64-elf tools do none of this. Both toolchains therefore produce
+# the same layout, and the boot tests exercise the one a Linux host builds.
+ULAYOUT  := -z relro -z separate-code
+ULAYOUT_WL := -Wl,-z,relro -Wl,-z,separate-code
+ULDFLAGS := -nostdlib -no-pie -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 $(ULAYOUT_WL) \
             -Wl,--hash-style=sysv -Wl,-z,now -Wl,--as-needed -Wl,-dynamic-linker,/lib/ld.so -L$(BUILD)/lib
-ULDFLAGS_STATIC := -nostdlib -static -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000
+ULDFLAGS_STATIC := -nostdlib -static -no-pie -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 $(ULAYOUT_WL)
 # Shared libraries are linked with ld directly: the compiler driver of the
 # bare metal target does not pass -shared on.
-USOFLAGS := -shared -z now --hash-style=sysv -z max-page-size=0x1000
+USOFLAGS := -shared -z now --hash-style=sysv -z max-page-size=0x1000 $(ULAYOUT)
 
 # Machine size and accelerator for `make run` live in tools/run.sh
 # (QEMU_MEM, QEMU_SMP, QEMU_ACCEL, QEMU_AUDIO, see qemu.conf.example).

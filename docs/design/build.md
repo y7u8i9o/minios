@@ -21,6 +21,17 @@ with:
 frame pointer chain intact for the backtrace code. `-mno-red-zone` is required
 because interrupt handlers run on the interrupted stack.
 
+User programs and shared libraries state their layout options instead of
+relying on the linker's defaults, because the two toolchains differ: a
+Linux distribution's ld enables RELRO and separate code segments and its
+gcc links position independent executables, while the `x86_64-elf-` tools
+do none of this. `ULAYOUT` passes `-z relro -z separate-code` to every
+shared object and the loader, and programs also get `-no-pie`, so both
+hosts produce the same layout and the boot tests on macOS exercise the one
+a Linux host builds. Before this was stated, a Linux build produced
+libraries whose RELRO range ended in the padding of their last page, which
+`/lib/ld.so` refused (`dynlink.md`).
+
 Build time options are make variables with defaults in `toolchain.mk` and are
 passed to the compiler as `CONFIG_*` macros:
 

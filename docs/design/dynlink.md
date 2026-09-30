@@ -31,14 +31,14 @@ objects 870 KiB; `echo` is 3 KiB, the file manager 39 KiB, the shell 76 KiB.
 `toolchain.mk` compiles all user code with `-fPIC`. The archives and the
 shared objects are built from the same objects. Each library Makefile links
 `$(BUILD)/lib/<name>.so` with `ld -shared -z now --hash-style=sysv
--soname <name>.so` and names the libraries it depends on, so that the
+-z relro -z separate-code -soname <name>.so` and names the libraries it depends on, so that the
 loader finds them through `DT_NEEDED`; the compiler driver of the bare
 metal target does not pass `-shared` on, hence the direct use of `ld`.
 `libgcc.a` is linked into every shared object.
 
-Programs link with `ULDFLAGS`: `-Ttext-segment=0x400000`,
-`-dynamic-linker /lib/ld.so`, `-z now`, `--hash-style=sysv` and
-`--as-needed`, against `-lgui -laudio -lwire -lfont libedit.a -lc`.
+Programs link with `ULDFLAGS`: `-no-pie`, `-Ttext-segment=0x400000`,
+`-dynamic-linker /lib/ld.so`, `-z now`, `-z relro`, `-z separate-code`,
+`--hash-style=sysv` and `--as-needed`, against `-lgui -laudio -lwire -lfont libedit.a -lc`.
 `--as-needed` records only the libraries a program references. Programs
 stay `ET_EXEC` at `0x400000`; the linker resolves their references to the
 libraries with `R_X86_64_JUMP_SLOT` (functions), `R_X86_64_GLOB_DAT`
@@ -124,7 +124,12 @@ relocation of an object linked with `-z now` (`DT_FLAGS` with
 `DF_BIND_NOW`, or `DT_BIND_NOW`), which is how the build links every
 program and library, is applied before the program starts. After
 relocation the `PT_GNU_RELRO` range of every object is made read-only up
-to its last page boundary.
+to its last page boundary. The range must start in a readable load
+segment and may end in the padding of that segment's last page, because
+GNU ld rounds its end up to a page boundary: a library without ordinary
+writable data after its RELRO sections, such as `libwire.so`, has a RELRO
+range longer than its writable segment. Every other table and relocation
+target must lie within the memory size of one load segment.
 
 Symbol lookup walks scopes. The global scope holds the program and the
 libraries loaded at start in breadth first order, then any object opened

@@ -1041,6 +1041,24 @@ static struct object *load_library(const char *name, int allow_path)
     return o;
 }
 
+/* The RELRO range must start in a readable load segment. GNU ld rounds
+ * its end up to a page boundary, so when no ordinary writable data
+ * follows it, the range ends in the padding of the segment's last page,
+ * which is mapped with the segment. */
+static void require_relro(const struct object *o, uintptr_t addr, size_t bytes)
+{
+    uint64_t offset = addr - o->base;
+    for (size_t i = 0; i < o->phnum; i++) {
+        const struct phdr *p = &o->phdr[i];
+        if (p->p_type != PT_LOAD || !(p->p_flags & PF_R) || offset < p->p_vaddr || offset - p->p_vaddr >= p->p_memsz)
+            continue;
+        uint64_t mapped = ALIGN_UP(p->p_vaddr + p->p_memsz, PAGE) - p->p_vaddr;
+        if (within(offset - p->p_vaddr, bytes, mapped))
+            return;
+    }
+    die("ELF range outside load segments", o->name);
+}
+
 static void protect_relro(struct object *o)
 {
     for (size_t i = 0; i < o->phnum; i++) {
@@ -1048,7 +1066,7 @@ static void protect_relro(struct object *o)
         if (p->p_type != PT_GNU_RELRO || !p->p_memsz)
             continue;
         uintptr_t addr = address(o, p->p_vaddr);
-        require_range(o, addr, p->p_memsz, PF_R);
+        require_relro(o, addr, p->p_memsz);
         uintptr_t start = ALIGN_DOWN(addr, PAGE), end = ALIGN_DOWN(addr + p->p_memsz, PAGE);
         /* Do not protect the last partial page: ordinary writable data may
          * share it. GNU linkers end RELRO on a page boundary when possible. */
