@@ -7,3 +7,5 @@ user/share/sounds/*
 /*.wav
 BUILDNUM
 /data.img
+# editor project files
+*.geany
