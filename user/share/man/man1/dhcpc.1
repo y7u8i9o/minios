@@ -7,9 +7,10 @@ SYNOPSIS
     dhcpc [-i IF | -a] [-1] [-f] [-t SECONDS] [-s SERVER] [-p PORT]
 
 DESCRIPTION
-    Obtains an IPv4 address, netmask, gateway and name servers for IF
-    (default eth0) with DHCP, configures the interface through /dev/net
-    and writes /etc/resolv.conf. The lease is renewed at T1 by unicast to
+    Obtains an IPv4 address, netmask, gateway, name servers and domain
+    name for IF (default eth0) with DHCP, configures the interface
+    through /dev/net and writes /etc/resolv.conf, with the domain name
+    as its search list. The lease is renewed at T1 by unicast to
     the server, rebound at T2 by broadcast, and removed at expiry, after
     which discovery starts again. Without a server the client retries
     with backoff from 4 to 64 seconds and leaves the interface without an
@@ -35,4 +36,4 @@ FILES
     /dev/net, /etc/resolv.conf
 
 SEE ALSO
-    net(1), init.conf(5), initctl(1), index(7)
+    net(1), init.conf(5), initctl(1), resolv.conf(5), index(7)

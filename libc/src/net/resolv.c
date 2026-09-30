@@ -1,15 +1,22 @@
 /* IPv4 resolver (N11): numeric text, /etc/hosts, then DNS over UDP with a
  * TCP retry for truncated answers. Every answer is matched on transaction
  * id, server address and question; names are parsed with bounds and a
- * jump limit so compression loops and out-of-range pointers are rejected. */
+ * jump limit so compression loops and out-of-range pointers are rejected.
+ *
+ * N15 adds a cache of DNS answers in each process, positive entries for
+ * the smallest TTL of the records used and negative entries for the TTL
+ * that RFC 2308 derives from the SOA record of a negative answer, both
+ * capped at CACHE_TTL_MAX, and the search list of /etc/resolv.conf. */
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/ipc.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <strings.h>
 
@@ -18,6 +25,15 @@
 #define TIMEOUT_MS 3000
 #define MAX_CNAME 8
 #define MAX_ANSWERS 8
+/* resolv.conf(5): at most six search domains of at most 256 bytes in all,
+ * and an ndots option of at most 15. */
+#define MAX_SEARCH 6
+#define SEARCH_BYTES 256
+#define MAX_NDOTS 15
+/* The cache holds CACHE_ENTRIES names and replaces the least recently used
+ * one when full. Every entry lives at most CACHE_TTL_MAX seconds. */
+#define CACHE_ENTRIES 32
+#define CACHE_TTL_MAX 3600
 
 const char *gai_strerror(int error)
 {
@@ -102,23 +118,175 @@ static int lookup_hosts(const char *name, uint32_t *address)
     return found;
 }
 
-static unsigned read_servers(uint32_t *servers)
+/* The parts of /etc/resolv.conf the resolver uses. As in resolv.conf(5),
+ * the last "search" or "domain" line gives the search list (a "domain"
+ * line is a list of one), and "options ndots:N" sets how many dots make a
+ * name be tried as given before the search list (default 1). */
+struct resolv_config {
+    uint32_t servers[MAX_SERVERS];
+    unsigned nservers;
+    char search[MAX_SEARCH][SEARCH_BYTES];
+    unsigned nsearch;
+    unsigned ndots;
+};
+
+static void read_config(struct resolv_config *config)
 {
+    memset(config, 0, sizeof *config);
+    config->ndots = 1;
     FILE *f = fopen(path_of("RESOLV_CONF", "/etc/resolv.conf"), "r");
-    unsigned n = 0;
     if (!f)
-        return 0;
-    char line[256];
-    while (n < MAX_SERVERS && fgets(line, sizeof line, f)) {
+        return;
+    char line[512];
+    while (fgets(line, sizeof line, f)) {
         const char *save;
         char *key = strtok_r(line, " \t\r\n", &save);
-        char *value = key ? strtok_r(NULL, " \t\r\n", &save) : NULL;
+        if (!key)
+            continue;
+        char *value = strtok_r(NULL, " \t\r\n", &save);
         struct in_addr in;
-        if (key && value && strcmp(key, "nameserver") == 0 && inet_aton(value, &in))
-            servers[n++] = ntohl(in.s_addr);
+        if (strcmp(key, "nameserver") == 0 && value && config->nservers < MAX_SERVERS &&
+            inet_aton(value, &in)) {
+            config->servers[config->nservers++] = ntohl(in.s_addr);
+        } else if (strcmp(key, "search") == 0 || strcmp(key, "domain") == 0) {
+            config->nsearch = 0;
+            size_t total = 0;
+            for (; value && config->nsearch < MAX_SEARCH; value = strtok_r(NULL, " \t\r\n", &save)) {
+                size_t length = strlen(value);
+                while (length && value[length - 1] == '.')
+                    value[--length] = 0;
+                if (!length || total + length + 1 > SEARCH_BYTES)
+                    break;
+                memcpy(config->search[config->nsearch++], value, length + 1);
+                total += length + 1;
+                if (strcmp(key, "domain") == 0)
+                    break;
+            }
+        } else if (strcmp(key, "options") == 0) {
+            for (; value; value = strtok_r(NULL, " \t\r\n", &save))
+                if (strncmp(value, "ndots:", 6) == 0) {
+                    long n = strtol(value + 6, NULL, 10);
+                    config->ndots = n < 0 ? 0 : n > MAX_NDOTS ? MAX_NDOTS : (unsigned)n;
+                }
+        }
     }
     fclose(f);
-    return n;
+}
+
+/* The cache of this process. cache_lock protects every entry and
+ * cache_clock, so threads of one process may resolve concurrently. Keys
+ * are lower-case names without a trailing dot. A negative entry stores
+ * EAI_NONAME and no address. A child created by fork starts with a copy. */
+struct cache_entry {
+    char name[256];
+    int error;
+    unsigned count;
+    uint32_t addresses[MAX_ANSWERS];
+    uint64_t expires_ms, used;
+};
+static struct cache_entry cache[CACHE_ENTRIES];
+static uint64_t cache_clock;
+static pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static uint64_t monotonic_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+static void cache_key(const char *name, char *key)
+{
+    size_t n = 0;
+    for (; name[n] && n < 255; n++)
+        key[n] = name[n] >= 'A' && name[n] <= 'Z' ? (char)(name[n] - 'A' + 'a') : name[n];
+    while (n && key[n - 1] == '.')
+        n--;
+    key[n] = 0;
+}
+
+/* Caller holds cache_lock. Expired entries are dropped when found. */
+static struct cache_entry *cache_find(const char *key, uint64_t now)
+{
+    for (unsigned i = 0; i < CACHE_ENTRIES; i++) {
+        struct cache_entry *e = &cache[i];
+        if (!e->name[0] || strcmp(e->name, key))
+            continue;
+        if (now >= e->expires_ms) {
+            e->name[0] = 0;
+            return NULL;
+        }
+        return e;
+    }
+    return NULL;
+}
+
+/* Returns 1 with the cached result of name, or 0 when it is not cached. */
+static int cache_lookup(const char *name, int *error, uint32_t *addresses, unsigned *count)
+{
+    char key[256];
+    cache_key(name, key);
+    pthread_mutex_lock(&cache_lock);
+    struct cache_entry *e = cache_find(key, monotonic_ms());
+    if (e) {
+        e->used = ++cache_clock;
+        *error = e->error;
+        *count = e->count;
+        memcpy(addresses, e->addresses, e->count * sizeof *addresses);
+    }
+    pthread_mutex_unlock(&cache_lock);
+    return e != NULL;
+}
+
+/* A TTL of 0 means the answer may be used for this lookup only (RFC 1035
+ * section 3.2.1), so nothing is stored. */
+static void cache_store(const char *name, int error, const uint32_t *addresses, unsigned count,
+                        uint32_t ttl)
+{
+    if (!ttl)
+        return;
+    if (ttl > CACHE_TTL_MAX)
+        ttl = CACHE_TTL_MAX;
+    char key[256];
+    cache_key(name, key);
+    pthread_mutex_lock(&cache_lock);
+    uint64_t now = monotonic_ms();
+    struct cache_entry *e = cache_find(key, now);
+    for (unsigned i = 0; !e && i < CACHE_ENTRIES; i++)
+        if (!cache[i].name[0] || now >= cache[i].expires_ms)
+            e = &cache[i];
+    if (!e) {
+        e = &cache[0];
+        for (unsigned i = 1; i < CACHE_ENTRIES; i++)
+            if (cache[i].used < e->used)
+                e = &cache[i];
+    }
+    strcpy(e->name, key);
+    e->error = error;
+    e->count = count;
+    memcpy(e->addresses, addresses, count * sizeof *addresses);
+    e->expires_ms = now + (uint64_t)ttl * 1000;
+    e->used = ++cache_clock;
+    pthread_mutex_unlock(&cache_lock);
+}
+
+int res_cache_remaining(const char *name)
+{
+    char key[256];
+    cache_key(name, key);
+    pthread_mutex_lock(&cache_lock);
+    uint64_t now = monotonic_ms();
+    struct cache_entry *e = cache_find(key, now);
+    int seconds = e ? (int)((e->expires_ms - now + 999) / 1000) : -1;
+    pthread_mutex_unlock(&cache_lock);
+    return seconds;
+}
+
+void res_cache_flush(void)
+{
+    pthread_mutex_lock(&cache_lock);
+    memset(cache, 0, sizeof cache);
+    pthread_mutex_unlock(&cache_lock);
 }
 
 /* Wire helpers. A name is at most 255 bytes of labels; parsing follows at
@@ -256,13 +424,57 @@ out:
     return result;
 }
 
-/* Returns 0 with addresses filled, or an EAI code. */
-static int query_dns(const char *name, uint32_t *addresses, unsigned *count)
+static uint32_t get32(const unsigned char *p)
 {
-    uint32_t servers[MAX_SERVERS];
-    unsigned nservers = read_servers(servers);
-    if (!nservers)
+    return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
+}
+
+/* RFC 2308 section 5: a negative answer may be cached for the smaller of
+ * the TTL of the SOA record in its authority section and the SOA MINIMUM
+ * field. Returns that TTL, or 0 when the answer carries no usable SOA
+ * record, since negative answers without one must not be cached. offset is
+ * the start of the authority section. */
+static uint32_t negative_ttl(const unsigned char *answer, size_t alen, size_t offset)
+{
+    unsigned authorities = answer[8] << 8 | answer[9];
+    for (unsigned i = 0; i < authorities; i++) {
+        char owner[256];
+        size_t next;
+        if (decode_name(answer, alen, offset, owner, &next) < 0 || next + 10 > alen)
+            return 0;
+        unsigned type = answer[next] << 8 | answer[next + 1];
+        unsigned class = answer[next + 2] << 8 | answer[next + 3];
+        uint32_t ttl = get32(answer + next + 4);
+        unsigned rdlen = answer[next + 8] << 8 | answer[next + 9];
+        size_t rdata = next + 10;
+        if (rdata + rdlen > alen)
+            return 0;
+        if (type == 6 && class == 1) {
+            char skip[256];
+            size_t o;
+            if (decode_name(answer, rdata + rdlen, rdata, skip, &o) < 0 ||
+                decode_name(answer, rdata + rdlen, o, skip, &o) < 0 || o + 20 != rdata + rdlen)
+                return 0;
+            uint32_t minimum = get32(answer + o + 16);
+            if (ttl & 0x80000000u)
+                ttl = 0; /* RFC 2181 section 8: a TTL above 2^31 - 1 counts as 0 */
+            return ttl < minimum ? ttl : minimum;
+        }
+        offset = rdata + rdlen;
+    }
+    return 0;
+}
+
+/* Returns 0 with addresses filled, or an EAI code. ttl receives the time
+ * the result may be cached: the smallest TTL of the records used on
+ * success, the RFC 2308 TTL for EAI_NONAME, 0 otherwise. */
+static int query_dns(const struct resolv_config *config, const char *name, uint32_t *addresses,
+                     unsigned *count, uint32_t *ttl)
+{
+    *ttl = 0;
+    if (!config->nservers)
         return EAI_AGAIN;
+    uint32_t lifetime = UINT32_MAX;
     char current[256];
     strncpy(current, name, sizeof current - 1);
     current[sizeof current - 1] = 0;
@@ -287,10 +499,10 @@ static int query_dns(const char *name, uint32_t *addresses, unsigned *count)
         ssize_t alen = -1;
         int last = EAI_AGAIN;
         for (unsigned attempt = 0; attempt < ATTEMPTS && alen < 0; attempt++) {
-            for (unsigned s = 0; s < nservers && alen < 0; s++) {
-                alen = exchange(servers[s], query, qlen, answer, sizeof answer, 0);
+            for (unsigned s = 0; s < config->nservers && alen < 0; s++) {
+                alen = exchange(config->servers[s], query, qlen, answer, sizeof answer, 0);
                 if (alen >= 12 && (answer[2] & 0x02)) {
-                    alen = exchange(servers[s], query, qlen, answer, sizeof answer, 1);
+                    alen = exchange(config->servers[s], query, qlen, answer, sizeof answer, 1);
                     if (alen < 0)
                         last = EAI_FAIL;
                 }
@@ -302,16 +514,16 @@ static int query_dns(const char *name, uint32_t *addresses, unsigned *count)
         if (memcmp(answer + 12, query + 12, qlen - 12) != 0 || (answer[4] << 8 | answer[5]) != 1)
             return EAI_FAIL;
         unsigned rcode = answer[3] & 15;
-        if (rcode == 3)
-            return EAI_NONAME;
-        if (rcode)
+        if (rcode && rcode != 3)
             return EAI_FAIL;
         unsigned answers = answer[6] << 8 | answer[7];
         char cname[256] = "";
         *count = 0;
+        size_t authority = qlen;
         /* Two passes: the first learns a CNAME for the queried name, the
          * second collects addresses for the name or its target, so a
-         * response carrying both is resolved in one round trip. */
+         * response carrying both is resolved in one round trip. The TTL of
+         * every record used bounds the lifetime of the result. */
         for (int pass = 0; pass < 2; pass++) {
             size_t o = qlen;
             for (unsigned i = 0; i < answers; i++) {
@@ -322,31 +534,100 @@ static int query_dns(const char *name, uint32_t *addresses, unsigned *count)
                     return EAI_FAIL;
                 unsigned type = answer[next] << 8 | answer[next + 1];
                 unsigned class = answer[next + 2] << 8 | answer[next + 3];
+                uint32_t record_ttl = get32(answer + next + 4);
                 unsigned rdlen = answer[next + 8] << 8 | answer[next + 9];
                 size_t rdata = next + 10;
                 if (rdata + rdlen > (size_t)alen)
                     return EAI_FAIL;
+                if (record_ttl & 0x80000000u)
+                    record_ttl = 0;
                 if (class == 1 && pass == 0 && type == 5 && !cname[0] &&
                     strcasecmp(owner, current) == 0) {
                     size_t unused;
                     if (decode_name(answer, (size_t)alen, rdata, cname, &unused) < 0)
                         return EAI_FAIL;
+                    if (record_ttl < lifetime)
+                        lifetime = record_ttl;
                 }
                 if (class == 1 && pass == 1 && type == 1 && rdlen == 4 && *count < MAX_ANSWERS &&
-                    (strcasecmp(owner, current) == 0 || (cname[0] && strcasecmp(owner, cname) == 0)))
-                    addresses[(*count)++] = (uint32_t)answer[rdata] << 24 |
-                                            answer[rdata + 1] << 16 | answer[rdata + 2] << 8 |
-                                            answer[rdata + 3];
+                    (strcasecmp(owner, current) == 0 || (cname[0] && strcasecmp(owner, cname) == 0))) {
+                    addresses[(*count)++] = get32(answer + rdata);
+                    if (record_ttl < lifetime)
+                        lifetime = record_ttl;
+                }
                 o = rdata + rdlen;
             }
+            authority = o;
         }
-        if (*count)
-            return 0;
-        if (!cname[0])
+        if (rcode == 3 || (!*count && !cname[0])) {
+            /* NXDOMAIN, or NODATA: no address and no alias for the name. */
+            uint32_t negative = negative_ttl(answer, (size_t)alen, authority);
+            *ttl = negative < lifetime ? negative : lifetime;
             return EAI_NONAME;
+        }
+        if (*count) {
+            *ttl = lifetime;
+            return 0;
+        }
         strcpy(current, cname);
     }
     return EAI_FAIL;
+}
+
+/* One name as a DNS query, through the cache. */
+static int lookup_dns(const struct resolv_config *config, const char *name, uint32_t *addresses,
+                      unsigned *count)
+{
+    int error;
+    if (cache_lookup(name, &error, addresses, count))
+        return error;
+    uint32_t ttl;
+    error = query_dns(config, name, addresses, count, &ttl);
+    if (!error || error == EAI_NONAME)
+        cache_store(name, error, addresses, error ? 0 : *count, ttl);
+    return error;
+}
+
+/* The names tried for node, in order (resolv.conf(5)): a name with a
+ * trailing dot is absolute and tried alone; a name with at least ndots
+ * dots is tried as given and then with each search domain; a name with
+ * fewer dots is tried with each search domain first and as given last.
+ * Only "no such name" moves on to the next candidate; any other failure
+ * ends the lookup. */
+static int resolve_dns(const char *node, uint32_t *addresses, unsigned *count)
+{
+    struct resolv_config config;
+    read_config(&config);
+    size_t length = strlen(node);
+    if (!length || length > 253 + (node[length - 1] == '.'))
+        return EAI_NONAME;
+    if (node[length - 1] == '.') {
+        char absolute[256];
+        memcpy(absolute, node, length - 1);
+        absolute[length - 1] = 0;
+        return lookup_dns(&config, absolute, addresses, count);
+    }
+    unsigned dots = 0;
+    for (const char *p = node; *p; p++)
+        dots += *p == '.';
+    int error = EAI_NONAME;
+    int first = dots >= config.ndots;
+    if (first) {
+        error = lookup_dns(&config, node, addresses, count);
+        if (error != EAI_NONAME)
+            return error;
+    }
+    for (unsigned i = 0; i < config.nsearch; i++) {
+        char candidate[512];
+        if ((size_t)snprintf(candidate, sizeof candidate, "%s.%s", node, config.search[i]) > 253)
+            continue;
+        error = lookup_dns(&config, candidate, addresses, count);
+        if (error != EAI_NONAME)
+            return error;
+    }
+    if (!first)
+        error = lookup_dns(&config, node, addresses, count);
+    return error;
 }
 
 int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints,
@@ -387,7 +668,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
         } else if (lookup_hosts(node, &addresses[0])) {
             count = 1;
         } else {
-            int error = query_dns(node, addresses, &count);
+            int error = resolve_dns(node, addresses, &count);
             if (error)
                 return error;
         }

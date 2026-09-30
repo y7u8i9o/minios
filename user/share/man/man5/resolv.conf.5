@@ -1,0 +1,38 @@
+RESOLV.CONF(5)              File Formats              RESOLV.CONF(5)
+
+NAME
+    resolv.conf - configuration of the name resolver
+
+SYNOPSIS
+    /etc/resolv.conf
+
+DESCRIPTION
+    getaddrinfo(3) reads this file for every name that is neither
+    numeric, localhost nor listed in /etc/hosts. dhcpc(1) writes it from
+    a lease and net(1) apply writes it from /etc/network. Each line holds
+    a keyword and its values:
+
+        nameserver ADDR       a DNS server; at most three are used
+        search DOMAIN...      the search list, at most six domains
+        domain DOMAIN         a search list of one domain
+        options ndots:N       dots that make a name be tried as given
+                              first (default 1, at most 15)
+
+    The last search or domain line wins. A name that ends with a dot is
+    tried alone. A name with at least ndots dots is tried as given and
+    then with each search domain; a name with fewer dots is tried with
+    each search domain first and as given last. Only a negative answer
+    moves on to the next candidate.
+
+    Every process keeps the answers it received for the smallest TTL of
+    the records used, at most one hour, in a cache of 32 names. A
+    negative answer is kept for the TTL of the SOA record that came with
+    it or its MINIMUM field, whichever is smaller (RFC 2308), again at
+    most one hour; a negative answer without an SOA record, a server
+    failure and an answer with TTL 0 are not kept.
+
+ENVIRONMENT
+    RESOLV_CONF names another file, which tests use.
+
+SEE ALSO
+    dhcpc(1), net(1), index(7)

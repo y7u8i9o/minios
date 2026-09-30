@@ -80,8 +80,8 @@ static int has_interface(const char *name)
 
 /* /etc/network: "iface NAME dhcp" (handled by dhcpc -a, init's dhcp
  * service) or "iface NAME static ADDR MASK [GW]", plus "nameserver ADDR"
- * lines written to /etc/resolv.conf for static configurations. Missing
- * file or interface means no network. */
+ * and "search DOMAIN..." lines written to /etc/resolv.conf for static
+ * configurations. Missing file or interface means no network. */
 static int apply(void)
 {
     FILE *f = fopen("/etc/network", "r");
@@ -104,6 +104,13 @@ static int apply(void)
                 resolv = fopen("/etc/resolv.conf", "w");
             if (resolv)
                 fprintf(resolv, "nameserver %s\n", words[1]);
+            continue;
+        }
+        if (n >= 2 && strcmp(words[0], "search") == 0) {
+            if (!resolv)
+                resolv = fopen("/etc/resolv.conf", "w");
+            for (int i = 0; resolv && i < n; i++)
+                fprintf(resolv, "%s%c", words[i], i + 1 < n ? ' ' : '\n');
             continue;
         }
         if (n < 3 || strcmp(words[0], "iface") != 0 || !has_interface(words[1]))

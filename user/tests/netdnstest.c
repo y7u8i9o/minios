@@ -1,5 +1,7 @@
 /* N11: the resolver against a scripted DNS server on loopback. The queried
- * name selects the server's behaviour. No NIC is needed. */
+ * name selects the server's behaviour. No NIC is needed. With the argument
+ * "cache" the program checks the cache, negative caching and the search
+ * list of N15 instead; the server counts the queries for every name. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +15,112 @@
 #include <arpa/inet.h>
 
 static int failures;
+
+/* Queries received per name, written by the server threads. */
+static pthread_mutex_t counts_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct {
+    char name[96];
+    int count;
+} counts[96];
+
+static void count_query(const char *name)
+{
+    pthread_mutex_lock(&counts_lock);
+    unsigned i = 0;
+    while (i < 95 && counts[i].name[0] && strcmp(counts[i].name, name))
+        i++;
+    if (!counts[i].name[0])
+        snprintf(counts[i].name, sizeof counts[i].name, "%s", name);
+    counts[i].count++;
+    pthread_mutex_unlock(&counts_lock);
+}
+
+static int queries(const char *name)
+{
+    pthread_mutex_lock(&counts_lock);
+    int n = 0;
+    for (unsigned i = 0; i < 96 && counts[i].name[0]; i++)
+        if (strcmp(counts[i].name, name) == 0)
+            n = counts[i].count;
+    pthread_mutex_unlock(&counts_lock);
+    return n;
+}
+
+static int ends_with(const char *name, const char *suffix)
+{
+    size_t n = strlen(name), m = strlen(suffix);
+    return n > m && strcmp(name + n - m, suffix) == 0;
+}
+
+/* An SOA record in the authority section whose TTL and MINIMUM give the
+ * negative caching time of RFC 2308. */
+static size_t add_soa(unsigned char *a, size_t n, uint32_t ttl, uint32_t minimum)
+{
+    unsigned char rr[] = {0xc0, 12, 0, 6, 0, 1, ttl >> 24, ttl >> 16, ttl >> 8, ttl, 0, 30,
+                          2, 'n', 's', 0, 4, 'h', 'o', 's', 't', 0,
+                          0, 0, 0, 1, 0, 0, 0, 60, 0, 0, 0, 60, 0, 0, 0, 60,
+                          minimum >> 24, minimum >> 16, minimum >> 8, minimum};
+    memcpy(a + n, rr, sizeof rr);
+    a[8] = 0;
+    a[9] = 1;
+    return n + sizeof rr;
+}
+
+/* One A record for the question name with the given TTL and address. */
+static size_t add_address(unsigned char *a, size_t n, uint32_t ttl, uint32_t address)
+{
+    unsigned char rr[] = {0xc0, 12, 0, 1, 0, 1, ttl >> 24, ttl >> 16, ttl >> 8, ttl, 0, 4,
+                          address >> 24, address >> 16, address >> 8, address};
+    memcpy(a + n, rr, sizeof rr);
+    return n + sizeof rr;
+}
+
+/* The N15 names: TTLs, negative answers with and without SOA, and the
+ * domains of the search list. Returns 0 for a name that is not one. */
+static size_t cache_answer(unsigned char *a, size_t n, const char *name, unsigned *answers)
+{
+    if (strcmp(name, "ttl2.test") == 0)
+        return *answers = 1, add_address(a, n, 2, 0x0a000102);
+    if (strcmp(name, "ttl0.test") == 0)
+        return *answers = 1, add_address(a, n, 0, 0x0a000100);
+    if (strcmp(name, "long.test") == 0)
+        return *answers = 1, add_address(a, n, 86400, 0x0a000103);
+    if (strncmp(name, "fill", 4) == 0)
+        return *answers = 1, add_address(a, n, 60, 0x0a000200 + (uint32_t)atoi(name + 4));
+    if (strcmp(name, "cname2.test") == 0) {
+        /* A CNAME with TTL 1 to host.test, whose address has TTL 60. */
+        a[n++] = 0xc0; a[n++] = 12;
+        memcpy(a + n, "\0\5\0\1\0\0\0\1\0\x0b\4host\4test\0", 21); n += 21;
+        size_t target = n - 11;
+        unsigned char rr[] = {0xc0, (unsigned char)target, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 10, 0, 0, 5};
+        memcpy(a + n, rr, sizeof rr);
+        *answers = 2;
+        return n + sizeof rr;
+    }
+    if (strcmp(name, "nxsoa.test") == 0) {
+        a[3] = 0x83;
+        return add_soa(a, n, 5, 2);
+    }
+    if (strcmp(name, "nxlong.test") == 0) {
+        a[3] = 0x83;
+        return add_soa(a, n, 86400, 86400);
+    }
+    if (strcmp(name, "nodata.test") == 0)
+        return add_soa(a, n, 2, 30);
+    if (strcmp(name, "www.example.test") == 0)
+        return *answers = 1, add_address(a, n, 60, 0x0a00000b);
+    if (strcmp(name, "only.other.test") == 0)
+        return *answers = 1, add_address(a, n, 60, 0x0a00000c);
+    if (strcmp(name, "absolute.test") == 0)
+        return *answers = 1, add_address(a, n, 60, 0x0a00000d);
+    if (strcmp(name, "dotted.name") == 0)
+        return *answers = 1, add_address(a, n, 60, 0x0a00000e);
+    if (ends_with(name, ".example.test") || ends_with(name, ".other.test")) {
+        a[3] = 0x83;
+        return add_soa(a, n, 60, 60);
+    }
+    return 0;
+}
 #define CHECK(c, text) do { if (!(c)) { printf("netdnstest: FAIL %s (errno %d)\n", text, errno); failures++; } } while (0)
 
 static size_t build_answer(const unsigned char *q, size_t qlen, unsigned char *a, const char *name,
@@ -25,6 +133,12 @@ static size_t build_answer(const unsigned char *q, size_t qlen, unsigned char *a
     a[6] = a[7] = 0;
     size_t n = qlen;
     unsigned answers = 0;
+    size_t cached = cache_answer(a, n, name, &answers);
+    if (cached) {
+        a[6] = answers >> 8;
+        a[7] = answers & 255;
+        return cached;
+    }
     if (strcmp(name, "nx.test") == 0) {
         a[3] = 0x83; /* NXDOMAIN */
     } else if (strcmp(name, "fail.test") == 0) {
@@ -89,6 +203,7 @@ static void *udp_server(void *arg)
             continue;
         char qname[256];
         question_name(q, (size_t)n, qname);
+        count_query(qname);
         if (strcmp(qname, "silent.test") == 0)
             continue;
         if (strcmp(qname, "unrelated.test") == 0) {
@@ -149,7 +264,83 @@ static int resolve(const char *name, uint32_t *address)
     return error;
 }
 
-int main(void)
+static void write_resolv(const char *extra)
+{
+    FILE *f = fopen("/tmp/resolv.test", "w");
+    fprintf(f, "nameserver 127.0.0.1\n%s", extra);
+    fclose(f);
+    res_cache_flush();
+}
+
+/* N15: the cache honours TTLs with an upper bound, caches negative answers
+ * only with an SOA record and for the RFC 2308 time, evicts the least
+ * recently used name, and the search list is applied by the ndots rule. */
+static int cache_tests(void)
+{
+    uint32_t a;
+    CHECK(resolve("ttl2.test", &a) == 0 && a == 0x0a000102 && queries("ttl2.test") == 1,
+          "first lookup queries the server");
+    CHECK(resolve("TTL2.test", &a) == 0 && a == 0x0a000102 && queries("ttl2.test") == 1,
+          "second lookup, in other case, is answered from the cache");
+    int left = res_cache_remaining("ttl2.test");
+    CHECK(left >= 1 && left <= 2, "cached for the record's TTL of 2 s");
+    usleep(2200000);
+    CHECK(resolve("ttl2.test", &a) == 0 && queries("ttl2.test") == 2, "expired entry queried again");
+
+    CHECK(resolve("ttl0.test", &a) == 0 && resolve("ttl0.test", &a) == 0 &&
+          queries("ttl0.test") == 2 && res_cache_remaining("ttl0.test") == -1,
+          "TTL 0 is not cached");
+    CHECK(resolve("long.test", &a) == 0 && res_cache_remaining("long.test") > 3590 &&
+          res_cache_remaining("long.test") <= 3600, "a TTL of one day is capped at one hour");
+    CHECK(resolve("cname2.test", &a) == 0 && a == 0x0a000005 &&
+          res_cache_remaining("cname2.test") == 1, "a chain lives as long as its shortest record");
+
+    CHECK(resolve("nxsoa.test", &a) == EAI_NONAME && resolve("nxsoa.test", &a) == EAI_NONAME &&
+          queries("nxsoa.test") == 1, "NXDOMAIN with SOA is cached");
+    left = res_cache_remaining("nxsoa.test");
+    CHECK(left >= 1 && left <= 2, "negative entry lives min(SOA TTL, MINIMUM) = 2 s");
+    usleep(2200000);
+    CHECK(resolve("nxsoa.test", &a) == EAI_NONAME && queries("nxsoa.test") == 2,
+          "expired negative entry queried again");
+    CHECK(resolve("nx.test", &a) == EAI_NONAME && resolve("nx.test", &a) == EAI_NONAME &&
+          queries("nx.test") == 2, "NXDOMAIN without SOA is not cached");
+    CHECK(resolve("nxlong.test", &a) == EAI_NONAME && res_cache_remaining("nxlong.test") <= 3600 &&
+          res_cache_remaining("nxlong.test") > 3590, "negative lifetime capped at one hour");
+    CHECK(resolve("nodata.test", &a) == EAI_NONAME && resolve("nodata.test", &a) == EAI_NONAME &&
+          queries("nodata.test") == 1, "NODATA with SOA is cached");
+    CHECK(resolve("fail.test", &a) == EAI_FAIL && resolve("fail.test", &a) == EAI_FAIL &&
+          queries("fail.test") == 2, "server failure is not cached");
+
+    res_cache_flush();
+    char name[32];
+    for (int i = 0; i < 40; i++) {
+        snprintf(name, sizeof name, "fill%d.test", i);
+        CHECK(resolve(name, &a) == 0 && a == 0x0a000200u + (uint32_t)i, "fill the cache");
+    }
+    CHECK(res_cache_remaining("fill0.test") == -1 && res_cache_remaining("fill7.test") == -1 &&
+          res_cache_remaining("fill8.test") > 0 && res_cache_remaining("fill39.test") > 0,
+          "32 entries kept, the least recently used replaced");
+
+    write_resolv("search example.test other.test\n");
+    CHECK(resolve("www", &a) == 0 && a == 0x0a00000b && queries("www.example.test") == 1 &&
+          !queries("www"), "a short name is tried with the first search domain");
+    CHECK(resolve("only", &a) == 0 && a == 0x0a00000c && queries("only.example.test") == 1 &&
+          queries("only.other.test") == 1, "the next domain follows a negative answer");
+    CHECK(resolve("absolute.test.", &a) == 0 && a == 0x0a00000d && queries("absolute.test") == 1 &&
+          !queries("absolute.test.example.test"), "a trailing dot disables the search list");
+    CHECK(resolve("dotted.name", &a) == 0 && a == 0x0a00000e && queries("dotted.name") == 1 &&
+          !queries("dotted.name.example.test"), "a name with ndots dots is tried as given first");
+    write_resolv("search example.test other.test\noptions ndots:3\n");
+    CHECK(resolve("dotted.name", &a) == 0 && a == 0x0a00000e &&
+          queries("dotted.name.example.test") == 1 && queries("dotted.name.other.test") == 1 &&
+          queries("dotted.name") == 2, "with ndots:3 the search list comes first");
+    write_resolv("domain example.test\n");
+    CHECK(resolve("www", &a) == 0 && a == 0x0a00000b, "a domain line is a search list of one");
+    printf("netdnstest: %d failures\n", failures);
+    return failures ? 1 : 0;
+}
+
+int main(int argc, char **argv)
 {
     FILE *f = fopen("/tmp/resolv.test", "w");
     if (!f) { mkdir("/tmp", 0755); f = fopen("/tmp/resolv.test", "w"); }
@@ -185,6 +376,8 @@ int main(void)
     pthread_create(&udp, NULL, udp_server, NULL);
     pthread_create(&tcp, NULL, tcp_server, NULL);
     usleep(100000);
+    if (argc > 1 && strcmp(argv[1], "cache") == 0)
+        return cache_tests();
     CHECK(resolve("host.test", &a) == 0 && a == 0x0a000005, "positive answer");
     CHECK(resolve("nx.test", &a) == EAI_NONAME, "negative answer");
     CHECK(resolve("fail.test", &a) == EAI_FAIL, "server failure");

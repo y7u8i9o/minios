@@ -1,7 +1,7 @@
 # MiniOS TCP/IP implementation plan
 
 Status: N00–N12 complete on the branch `bleeding-edge-net` (2026-09-12); N13
-and N14 complete on `bleeding-edge-net-options` (2026-09-30). Section 7
+to N15 complete on `bleeding-edge-net-options` (2026-09-30). Section 7
 holds the evidence and the remaining limitations of each milestone.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
@@ -133,6 +133,7 @@ data-buffer pressure so ACKs and teardown do not depend on unbounded allocation.
 | N12 | Interoperability, regressions, documentation and release evidence | N00–N11 |
 | N13 | TCP window scaling and timestamps | N07, N09, N12 |
 | N14 | TCP selective acknowledgements and delayed ACKs | N13 |
+| N15 | Resolver cache, negative caching and search domains | N11 |
 
 N01 and N02 are architecturally independent after their shared contracts are
 settled. The table does not authorize parallel implementation or agent work.
@@ -515,6 +516,18 @@ cover block generation, the scoreboard bound, recovery entry, the pipe and
 the choice of what to send, the timeout path and the delayed-ACK timer, and
 when a scripted peer shows a lost segment repaired from SACK information
 without a timeout, correct guest blocks and the delayed ACK on the wire.
+
+### N15. Resolver cache, negative caching and search domains
+
+The resolver keeps DNS answers for the TTL of their records with an upper
+bound, keeps negative answers for the time RFC 2308 derives from the SOA
+record of the answer, and applies the search list and the ndots option of
+`/etc/resolv.conf`. The cache is bounded in entries and lifetime, and the
+DHCP client and `net apply` provide the search list.
+
+The milestone is complete when a scripted server that counts queries shows
+cached, expired, uncached and capped answers, positive and negative, and
+the order in which search candidates are tried.
 
 ## 5. Verification and implementation discipline
 
@@ -899,3 +912,25 @@ SACK blocks in both directions. The existing `net_tcp_options` case now expects 
 of an in-order segment. The optional rescue retransmission and D-SACK are
 not implemented, and loss with a native host stack is still not scripted,
 because QEMU's user-mode stack neither drops on request nor offers SACK.
+
+### N15 (complete 2026-09-30)
+
+The libc resolver caches DNS answers per process in 32 entries with
+least-recently-used replacement, for the smallest TTL of the records used
+and at most one hour; TTL 0 is not stored. Negative answers are cached for
+the smaller of the SOA TTL and the SOA MINIMUM, at most one hour, and only
+when the answer carries an SOA record; server failures and timeouts are
+never cached. `search`, `domain` and `options ndots:N` in
+`/etc/resolv.conf` select the candidate names in the order of
+resolv.conf(5). `dhcpc` writes the domain name of option 15 as the search
+list and `net apply` copies `search` lines from `/etc/network`.
+`res_cache_remaining` and `res_cache_flush` are MiniOS extensions of
+`netdb.h`.
+
+`net_dns_cache` covers the cache, the negative cache and the search list
+against the scripted server, which now counts queries; `net_dns`,
+`net_dhcp` and `net_tools` pass with their new checks for the search list.
+The `net_tools` case now also runs `net apply` and restores the files it
+changed. The cache is not shared between processes, so a short-lived tool
+queries the server every time; a shared cache would need a service of its
+own.

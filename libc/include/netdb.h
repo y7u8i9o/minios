@@ -1,6 +1,8 @@
 #pragma once
 /* Name resolution (N11): an IPv4 subset of getaddrinfo. Names come from
- * numeric text, /etc/hosts and the DNS servers of /etc/resolv.conf.
+ * numeric text, /etc/hosts and the DNS servers of /etc/resolv.conf, with
+ * its search list (N15). DNS answers are cached in the process for their
+ * TTL, at most one hour; negative answers are cached as RFC 2308 allows.
  * Unsupported: AF_INET6, AI_CANONNAME, service names (numeric ports only),
  * getnameinfo and reverse lookups. See docs/design/network.md. */
 #include <sys/socket.h>
@@ -39,3 +41,9 @@ const char *gai_strerror(int error);
 
 /* The resolver reads RESOLV_CONF and HOSTS_FILE from the environment when
  * set; tests use them to point at scratch files. */
+
+/* MiniOS extensions for the resolver cache of this process: the seconds
+ * that the cached answer for name has left, or -1 when there is none, and
+ * the removal of every cached answer. */
+int res_cache_remaining(const char *name);
+void res_cache_flush(void);

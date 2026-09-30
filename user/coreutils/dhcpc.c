@@ -37,6 +37,7 @@ struct lease {
     uint32_t address, mask, gateway, server, dns[2];
     uint32_t seconds, t1, t2;
     time_t acquired;
+    char domain[256]; /* option 15, the search domain; empty when absent */
 };
 static struct lease lease;
 static enum { INIT, BOUND, RENEWING, REBINDING } state = INIT;
@@ -113,6 +114,8 @@ static void write_resolv(const struct lease *l)
             fprintf(f, "nameserver %s\n", inet_ntoa(in));
         }
     }
+    if (l && l->domain[0])
+        fprintf(f, "search %s\n", l->domain);
     fclose(f);
 }
 
@@ -166,13 +169,34 @@ static size_t build(unsigned char *m, int type, uint32_t ciaddr, uint32_t reques
         o += 4;
     }
     *o++ = 55; /* parameter request list */
-    *o++ = 4;
+    *o++ = 5;
     *o++ = 1;
     *o++ = 3;
     *o++ = 6;
+    *o++ = 15;
     *o++ = 51;
     *o++ = 255;
     return (size_t)(o - m) < 300 ? 300 : (size_t)(o - m);
+}
+
+/* Option 15 names the domain of the client (RFC 2132 section 3.17). It is
+ * kept only when it is a plausible domain name: letters, digits, hyphens
+ * and dots, trailing dots and NUL padding removed. */
+static void domain_option(const unsigned char *v, unsigned length, char *domain)
+{
+    while (length && (v[length - 1] == 0 || v[length - 1] == '.'))
+        length--;
+    domain[0] = 0;
+    if (!length || length > 253)
+        return;
+    for (unsigned i = 0; i < length; i++) {
+        unsigned char c = v[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+              c == '-' || c == '.'))
+            return;
+    }
+    memcpy(domain, v, length);
+    domain[length] = 0;
 }
 
 /* Validate a reply for our transaction and MAC. Returns the message type
@@ -206,6 +230,7 @@ static int parse(const unsigned char *m, size_t len, struct lease *l)
             if (olen >= 4) l->dns[0] = get32(v);
             if (olen >= 8) l->dns[1] = get32(v + 4);
             break;
+        case 15: domain_option(v, olen, l->domain); break;
         case 51: if (olen == 4) l->seconds = get32(v); break;
         case 54: if (olen == 4) l->server = get32(v); break;
         case 58: if (olen == 4) l->t1 = get32(v); break;
@@ -342,7 +367,7 @@ static int refresh(int fd, unsigned timeout_ms, int broadcast)
     if (type != 5)
         return -1;
     if (ack.address != lease.address || ack.mask != lease.mask || ack.gateway != lease.gateway ||
-        memcmp(ack.dns, lease.dns, sizeof ack.dns))
+        memcmp(ack.dns, lease.dns, sizeof ack.dns) || strcmp(ack.domain, lease.domain))
         bind_lease(&ack);
     else {
         lease.seconds = ack.seconds;

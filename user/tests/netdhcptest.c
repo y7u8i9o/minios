@@ -73,6 +73,7 @@ static void reply(const unsigned char *request, size_t len, const struct sockadd
     if (with_mask) { *o++ = 1; *o++ = 4; put32(o, 0xffffff00); o += 4; }
     *o++ = 3; *o++ = 4; put32(o, 0x0a000202); o += 4;
     *o++ = 6; *o++ = 4; put32(o, 0x0a000203); o += 4;
+    *o++ = 15; *o++ = 12; memcpy(o, "example.test", 12); o += 12;
     *o++ = 51; *o++ = 4; put32(o, lease); o += 4;
     if (t1) { *o++ = 58; *o++ = 4; put32(o, t1); o += 4; }
     if (t2) { *o++ = 59; *o++ = 4; put32(o, t2); o += 4; }
@@ -172,6 +173,7 @@ int main(void)
     CHECK(inet_line(line, sizeof line) && strstr(line, "10.0.2.15/255.255.255.0 gw 10.0.2.2"),
           "lease applied through /dev/net");
     CHECK(resolv_has("nameserver 10.0.2.3"), "resolver configuration written");
+    CHECK(resolv_has("search example.test"), "domain option written as the search list");
 
     /* 3. Renewal at T1, NAK on the next renewal removes the address. */
     const char *const daemon[] = {"/bin/dhcpc", "-f", "-s", "127.0.0.1", "-p", "6767", NULL};

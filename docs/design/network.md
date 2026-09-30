@@ -1153,8 +1153,9 @@ backwards, so loops and forward references fail with `EAI_FAIL`. A truncated
 UDP answer is retried over TCP. CNAMEs are followed for at most eight
 steps, with the target's address taken from the same response when present.
 `RESOLV_CONF` and `HOSTS_FILE` in the environment redirect the files for
-tests. Unsupported: AF_INET6, service names, `AI_CANONNAME` output,
-`getnameinfo`, reverse lookups, search domains and caching.
+tests. N11 supported neither AF_INET6, service names, `AI_CANONNAME` output,
+`getnameinfo` and reverse lookups, nor search domains and caching; N15 added
+the last two and is described below.
 
 `net_dns` runs `netdnstest`, a scripted server on loopback whose queried
 name selects the behaviour: positive, NXDOMAIN, SERVFAIL, a compression
@@ -1436,3 +1437,75 @@ blocks correct, sends 100 bytes alone and receives the delayed ACK after
 ACK covering both. `check_capture.py` now also requires that SACK blocks
 appear only on connections that negotiated SACK and never beyond the data
 the other side has sent, and the case requires blocks in both directions.
+
+## Resolver cache and search domains (N15)
+
+N15 adds a cache of DNS answers, negative caching and the search list to
+the resolver in `libc/src/net/resolv.c`. The cache lives in each process:
+libc is linked into every program and has no daemon to share answers with,
+so a long-running program such as a browser or a server gains from it and
+a short tool such as `ping` does not. A shared cache would need a service
+and a protocol of its own and was not built.
+
+### Cache
+
+The cache holds 32 names (`CACHE_ENTRIES`). A key is the queried name in
+lower case without a trailing dot, so `Host.Test` and `host.test.` share
+an entry. When the cache is full, the entry used least recently is
+replaced; expired entries are removed when they are found. A mutex
+protects the table, so threads of one process may resolve at the same
+time. Only DNS answers are cached; numeric names, `localhost` and
+`/etc/hosts` never reach the cache.
+
+A positive entry lives for the smallest TTL of the records the answer used:
+the A records and every CNAME followed, in one response or across the
+queries of a chain. A TTL of 0 means that the answer may serve this lookup
+only (RFC 1035 section 3.2.1) and nothing is stored, and a TTL with the
+high bit set counts as 0 (RFC 2181 section 8). Every entry lives at most
+one hour (`CACHE_TTL_MAX`), so a changed record is seen within an hour
+whatever TTL a server announces.
+
+A negative answer, NXDOMAIN or NODATA (no address and no alias for the
+name), is cached as RFC 2308 section 5 describes: for the smaller of the
+TTL of the SOA record in the authority section and the SOA MINIMUM field,
+at most the same hour, which lies within the one to three hours that the
+RFC calls a sensible maximum. A negative answer without an SOA record is
+not cached, as the RFC requires, and a server failure, a timeout or a
+malformed answer is never cached. `res_cache_remaining` and
+`res_cache_flush`, declared in `netdb.h` as MiniOS extensions, report the
+remaining lifetime of a name and empty the cache; the tests use them.
+
+### Search list
+
+`/etc/resolv.conf` may hold a `search` line with up to six domains of at
+most 256 bytes together, or a `domain` line with one; the last such line
+wins, as in resolv.conf(5). `options ndots:N` (default 1, at most 15) sets
+how many dots a name needs to be tried as given before the search list. A
+name with a trailing dot is absolute and tried alone; a name with at least
+`ndots` dots is tried as given and then with each domain; a name with fewer
+dots is tried with each domain and then as given. Only a negative answer
+moves on to the next candidate, and every candidate is looked up through
+the cache, so a negative answer for one candidate is remembered as well.
+`dhcpc` writes the domain name of option 15 as a `search` line after
+checking that it holds only letters, digits, hyphens and dots, and
+`net apply` copies `search` lines from `/etc/network`. The manual page
+resolv.conf(5) documents the file.
+
+### N15 validation
+
+`net_dns_cache` runs `netdnstest cache` against the scripted loopback
+server of N11, which now counts the queries it receives for every name. It
+checks that a second lookup, in other case, costs no query; that an entry
+with a TTL of 2 seconds expires and is queried again; that TTL 0 is not
+cached; that a TTL of one day and a negative TTL of one day are capped at
+one hour; that a CNAME with TTL 1 limits its chain to one second; that
+NXDOMAIN with an SOA record of TTL 5 and MINIMUM 2 is cached for 2 seconds
+and then queried again; that NXDOMAIN without SOA and SERVFAIL are not
+cached; that NODATA with SOA is cached; and that 40 names leave the 32
+most recently used in the cache. With `search example.test other.test` it
+checks that a short name is tried with the first domain, that a negative
+answer moves on to the second, that a trailing dot and a name with enough
+dots are tried as given first, that `options ndots:3` puts the search list
+first, and that a `domain` line acts as a list of one. `net_dns` still
+passes unchanged, `net_dhcp` checks the `search` line written from option
+15, and `net_tools` checks that `net apply` writes it from `/etc/network`.
