@@ -31,6 +31,8 @@ static bool wait_for(const char *path, bool present)
 static void test_gui_files(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
+    /* The text editor that opens the file ships as a package. */
+    install_app("gedit");
     struct proc *srv = start_server();
     struct proc *files = proc_create_user("/bin/files", (char *const[]){ "files", "/home/desktop", NULL },
                                           (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
