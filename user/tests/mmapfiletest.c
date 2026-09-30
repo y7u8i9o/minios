@@ -260,8 +260,12 @@ static void test_fork_private(void)
 
 static void test_mprotect(void)
 {
-    unsigned char *p = mmap(NULL, 4 * PG, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    /* Five pages are mapped and the fifth is released, so that the page
+     * after the four page region is certainly unmapped for the error check
+     * below; a later mapping could otherwise be placed right behind it. */
+    unsigned char *p = mmap(NULL, 5 * PG, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     CHECK(p != MAP_FAILED, "anonymous mapping for mprotect");
+    CHECK(munmap(p + 4 * PG, PG) == 0, "release the page after the region");
     memset(p, 0x31, 4 * PG);
     CHECK(mprotect(p + PG, PG, PROT_READ) == 0, "mprotect middle page read only: %s", strerror(errno));
     CHECK(p[PG] == 0x31 && p[2 * PG] == 0x31, "data kept across mprotect");
@@ -293,6 +297,7 @@ static void test_mprotect(void)
     CHECK(p[3 * PG] == 0x31, "child's copy on write did not reach the parent: %02x", p[3 * PG]);
     /* Errors. */
     CHECK(mprotect(p + 1, PG, PROT_READ) < 0 && errno == EINVAL, "unaligned mprotect");
+    errno = 0;
     CHECK(mprotect(p, 4 * PG + PG, PROT_READ) < 0 && errno == ENOMEM, "mprotect past the mapping: %s", strerror(errno));
     CHECK(mprotect(p, PG, 0x100) < 0 && errno == EINVAL, "bad protection bits");
     /* The split regions can be unmapped piecewise. */
