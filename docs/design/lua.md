@@ -12,7 +12,10 @@ manual and the manual pages from `doc/`, the upstream `README`, the MIT
 license in `LICENSE` and the release, download address and SHA-256 in
 `NOTICE`. Nothing in `src/` is edited: a later release is dropped in
 by replacing the directory. The vendored files are exempt from the minios
-line count and naming conventions.
+line count and naming conventions. The upstream manual pages are troff,
+which the minios `man` does not read, so `user/share/man/man1/lua.1` and
+`luac.1` restate them as plain text, together with the line editing
+keys, the module directory and the history file of minios.
 
 ## Configuration
 
@@ -25,10 +28,14 @@ on the compiler command line:
   `gmtime_r`/`localtime_r`, `isatty` for the prompt decision, `sigaction`
   for the interrupt handler, and the `sys/wait.h` macros that turn the
   status of `os.execute` and `io.close` into `exit`/`signal` and a code.
-  `LUA_USE_DLOPEN` and `LUA_USE_READLINE` stay off.
+  `LUA_USE_DLOPEN` and `LUA_USE_READLINE` stay off. The line editing of
+  the prompt comes from `user/lua/lreadline.h` instead (see "The
+  interactive prompt" below).
 - `LUA_PATH_DEFAULT` is `/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua`
   and `LUA_CPATH_DEFAULT` is empty: `require` finds Lua modules in the
   share tree and the current directory and there is no dynamic loading.
+  The share tree rule of `user/Makefile` creates `/usr/share/lua/5.5/`,
+  which stays empty until a module is installed there.
 - Numbers are the defaults, 64-bit integers and `double`. User programs
   compile with SSE2 and the kernel saves the FXSAVE area per thread, so
   floating point needs no further support (see `floating.md`).
@@ -98,8 +105,8 @@ The GUI remains on the main thread, while workers own separate Lua states.
 
 ## The gui module
 
-`gui` (`user/lua/lgui.c`, `user/lua/lpaint.c`) binds the application
-framework of libgui (`framework.md`).
+`gui` (`user/lua/lgui.c`, `user/lua/lpaint.c`, `user/lua/limage.c`)
+binds the application framework of libgui (`framework.md`).
 
 `gui.app()` connects to the display server and returns the application;
 it fails with `nil` and a message without a server. The application has
@@ -108,13 +115,16 @@ it fails with `nil` and a message without a server. The application has
 `watch(fd, "r"|"w"|"rw", fn)` (the watch has `remove()`; `fn(fd, ready)`),
 `theme()` (tables `color` and `metric` by name, `scale`), `dialog(title,
 text, {buttons})` returning the index of the button, `prompt(title,
-label, default)` returning the text or `nil`, and `destroy()`.
+label, default)` returning the text or `nil`, `layer(w, h, options)`,
+`screen()`, `clipboard([text])` (the three are described below) and
+`destroy()`.
 
 Constructors take the parent first: `box(parent, vertical)`, `vbox`,
 `hbox`, `grid`, `label(parent, text)`, `button`, `checkbox`, `radio`,
 `textfield`, `canvas`, `separator`, `listview`, `scrollbar(parent,
 vertical)`, `scrollarea`, `combobox`, `spinner(parent, min, max,
-value)`, `slider`, `progress`, `tabs` and `splitpane(parent, vertical)`.
+value)`, `slider`, `progress`, `tabs`, `splitpane(parent, vertical)` and
+`imageview(parent, img)`.
 Every widget is a userdata with the methods `on(signal, fn)`, `text`,
 `value`, `range`, `visible`, `enabled`, `hint`, `min`, `max`, `stretch`,
 `align` (`fill`, `start`, `center`, `end`), `grid(row, col, rowspan,
@@ -123,8 +133,9 @@ colspan)`, `gridstretch`, `accel`, `padding`, `tip`, `id`, `find`,
 `pos`, `parent`, `window`, `destroy`; windows have `close` and `title`;
 list views and combo boxes have `add`, `clear`, `count`, `item` and
 `select` (indexes start at 1); tabs have `page(title)` and `select`;
-split panes `position`; scroll bars `set(value, max, page)`. Setters
-return the widget, so calls chain.
+split panes `position`; scroll bars `set(value, max, page)`; image
+views, labels and buttons `image(img)`. Setters return the widget, so
+calls chain.
 
 A handler is `fn(widget, args)`; a true result consumes the signal. The
 argument tables follow the libgui structures: `clicked`, `press`, `motion`, `release` and `wheel` have
@@ -134,8 +145,8 @@ except on combo boxes, tabs and list views where they have `index`;
 `selected` has `index`; `scrolled` has `value`; `resize` has `w` and
 `h`; `close` has none. `paint` receives a painter with `fill`, `frame`,
 `line`, `rounded`, `text`, `text_width`, `text_height`, `push`, `pop`,
-`focus_ring` and `clip`; the painter is valid during the handler only
-and raises an error afterwards. Colours are integers `0xRRGGBB`;
+`focus_ring`, `clip` and `image`; the painter is valid during the
+handler only and raises an error afterwards. Colours are integers `0xRRGGBB`;
 `gui.rgb(r, g, b)` builds one. `gui.key` names the key codes (`esc`,
 `enter`, the arrows, `f1` to `f12`, letters and digits) and `gui.mod`
 the modifiers.
@@ -155,6 +166,111 @@ The Pong package includes its Lua version at
 registers its editor as the handler.
 A launcher file starts a script with `exec=/bin/lua /home/.local/share/apps/name.lua`;
 `mime_open` passes one argument after the program.
+
+## Images, the clipboard and layer windows
+
+`user/lua/limage.c` binds the images of libgui (`gui/image.h`).
+`gui.image(path [, size [, color]])` loads a PNG file at its own size,
+or an SVG file, recognised by the `.svg` suffix, rendered `size` by
+`size` logical pixels (16 by default, at most 1024 device pixels). An
+SVG image is rendered at the scale of the first output, the way the
+icon cache renders icons, so it stays sharp on a high density display;
+`color` fills the paths that name no fill and defaults to black. A
+missing file returns `nil`, `"path: No such file or directory"` and
+`ENOENT`; a file that does not decode returns `nil`, `"path: not a
+valid PNG file"` (or SVG) and `EINVAL`. `gui.from_pixels(w, h [,
+data])` builds an image from a string of `w * h` pixels of four bytes,
+each `0xAARRGGBB` in little endian order (`string.pack("<I4", argb)`),
+row by row; without `data` the image is transparent. Sides are limited
+to 16384 pixels, and a string of the wrong length is an argument error.
+
+An image has `size()`, its width and height in logical pixels (the size
+the painter draws), `scale()`, the device pixels per logical pixel (1
+for PNG files and pixel strings), `pixel(x, y [, argb])`, which reads a
+device pixel as `0xAARRGGBB` or stores one and returns the image, and
+`pixels()`, every device pixel in the format of `from_pixels`. Pixel
+values carry the alpha in the top byte, so opaque red is `0xffff0000`;
+coordinates outside the image raise an error. The pixels belong to the
+userdata and only the garbage collector frees them. A widget that shows
+an image keeps its userdata in the widget's handler table, so the
+pixels outlive every widget that points at them.
+
+The painter gained `image(img, x, y [, w, h])`. Without a size the image
+is drawn at its logical size, and libgui's `painter_image` resamples by
+nearest pixel when the image's scale differs from the window's. With a
+size the binding resamples the image to `w * scale` by `h * scale`
+device pixels with a box filter over premultiplied samples (each target
+pixel averages the source pixels its area covers, which is the nearest
+pixel when enlarging) and keeps that rendition in the image until a
+different size, scale or a `pixel` store replaces it. A size of zero
+draws nothing, and a side beyond 16384 device pixels raises an error.
+
+libgui has no image widget, so the binding defines the class
+`imageview`. `gui.imageview(parent [, img])` shows the image centred,
+reduced to fit its area with the proportions kept and never enlarged,
+on the window colour, and then emits `paint`, so a handler can draw
+over it. Its preferred size is the image's logical size.
+`widget:image(img | nil)` replaces the image of an image view, or sets
+the icon of a label or button, which draw it beside their caption; any
+other widget raises an error. `widget:icon(name)` releases an image set
+this way.
+
+`app:clipboard()` returns the text of the clipboard and
+`app:clipboard(text)` makes `text` the selection and returns the
+application; the text holds any bytes up to 65536. Both go through
+`gui_clipboard_get` and `gui_clipboard_set` of libgui, which complete
+the transfer through the data device before they return. The read
+passes a pipe to the offer and waits until the owner (or the
+compositor's stored copy) has written it, at most about two seconds.
+The binding is therefore synchronous and needs no callback. The
+compositor accepts a selection only with the serial of an input event
+the client received, so a program sets the clipboard from an input
+handler or after its window gained the keyboard focus (the window's
+`focus` signal with `value` 1); a selection set earlier is silently
+ignored by X12. A read without any selection returns `nil`, `"the
+clipboard holds no text"` and `ENOENT`. libgui exposes neither a
+primary selection nor drag and drop, so the module has neither.
+
+`app:layer(w, h [, options])` creates a window on a layer surface
+(`app_layer_window`), without decorations, for panels, docks and
+overlays. The options table holds `layer` (`"background"`, `"bottom"`,
+`"top"`, the default, or `"overlay"`), `anchor` (edge names separated
+by spaces or commas from `top`, `bottom`, `left` and `right`; none by
+default), `exclusive` (the exclusive zone in logical pixels, 0 by
+default), `keyboard` (true asks for key events) and `namespace` (a name
+for the compositor's log, `"lua"` by default). A size of 0 takes the
+free desktop area in that dimension; the compositor's configure sets
+the final size before `layer` returns, so `size()` reports it. The
+window has the methods of any window and `close` destroys the surface.
+The layer protocol has no margins, so neither the module nor libgui
+offers them. `app:screen()` returns the desktop's width and height in
+logical pixels, which a panel uses to lay out its contents. These lines
+put a short bar along the top edge.
+
+    local bar = assert(app:layer(0, 28, { anchor = "top left right", exclusive = 28 }))
+    gui.label(bar, "status")
+
+## The interactive prompt
+
+`lua.c` calls `lua_initreadline`, `lua_readline`, `lua_saveline` and
+`lua_freeline`, and defines its own versions only when `lua_readline`
+is not defined. `user/Makefile` compiles `lua.c` with `-include
+lua/lreadline.h`, whose macros map the four hooks to
+`user/lua/lreadline.c`, so the vendored file stays unmodified. The glue
+opens a libedit editor on the terminal at the first prompt and gives the
+prompt the editing keys of the shell, which move the cursor, recall the
+history with the arrows and Ctrl+R, and complete with Tab global names
+and table fields after a dotted chain (`string.fo` offers
+`string.format`). The
+completion reads tables with raw access, so no metamethod runs while a
+line is edited. Ctrl+C discards the line being edited, and Ctrl+D on an
+empty line ends the session as the end of input does. lua.c saves whole
+statements; the glue adds each of their lines to the history on its
+own, so that recalling a line edits one line. The history holds 500
+lines, is read from `$HOME/.lua_history` at the first prompt and is
+written back at exit. When the editor cannot be opened, the prompt
+falls back to `fgets`. The host test program replaces `lua.c` and
+compiles none of this.
 
 ## Additions for the Code editor
 
@@ -259,7 +375,15 @@ synthesizer with two oscillators, modulation, delay and saved presets.
 script on a scratch directory with the MIME tables from `user/etc/`.
 `user/lua/tests/gui.lua` runs on the host only, over the fake client
 of libgui: layout, signals, painting and pixels, the painter lifetime,
-close handling, destroyed widgets, timers and the constructors.
+close handling, destroyed widgets, timers and the constructors. It also
+loads `libgui/tests/data/rgba.png` and `shape.svg` and compares their
+sizes and pixels with the formulas of `genicons.py`, checks the missing
+and malformed file results, `from_pixels` and pixel stores, reads back
+images drawn on a canvas at their size, enlarged and reduced, checks
+the image view's placement and fitting and that a label keeps its image
+through a garbage collection, round trips the fake clipboard, and
+creates, sizes and closes layer windows, with the errors of bad layer
+names, anchors and sizes.
 `user/lua/tests/audio.lua` checks PCM conversion, partial transfers,
 argument bounds, injected audio errors, snapshots, garbage collection,
 connection retention and explicit/scoped close against
@@ -272,6 +396,25 @@ checks native stream removal and closing a connection before its children.
 The test driver reaps both Lua and audiod even when an assertion fails.
 `tests/cases/gui_lua` starts `/etc/tests/luagui.lua` on the compositor,
 finds the colour of its canvas on the screen and closes it with Escape.
+`tests/cases/gui_lua_bindings` starts `/etc/tests/luabind.lua`, which
+loads a PNG and an SVG icon, checks the missing and malformed file
+results, reads back an image enlarged over its canvas and an icon drawn
+at twice its size, sets the clipboard once its window has the focus and
+starts `/etc/tests/luaclip.lua` as a second client, which reads that
+text and sets its own; the first client reads it back after the second
+closed its window and exited. It then opens a layer window along the
+top edge and checks that it spans the screen. The kernel test finds the
+enlarged image and the layer's colour on the screen and presses Escape,
+which closes the layer window and ends the program. Its first run found
+a use after free in X12: an offer made to the client that received the
+focus when the owner's window closed still pointed at the owner's
+source after the owner disconnected. `source_gone` in
+`user/compositor/data.c` now moves such offers to the stored copy.
+`tests/cases/lua_prompt` types into the interactive prompt on the
+console: an expression, a Tab completion of `string.up`, a history
+recall with Up, a line discarded with Ctrl+C and Ctrl+D; then
+`/etc/tests/luaprompt.lua` checks `$HOME/.lua_history` and the module
+directory.
 `tests/cases/lua_sys` runs the same script on minios; it passes
 `--no-init`, which skips the `spawn` check because the kernel run test
 starts the program without init and a child of init would stay a
@@ -298,18 +441,13 @@ status, and `os.getenv`. The expected output pins every printed line.
 
 ## Remaining work
 
-- Interactive use. `lua` without arguments reads lines with `fgets` in
-  canonical mode, so the prompt works but has no history or editing.
-  `lua.c` provides the `lua_readline`, `lua_saveline` and `lua_initreadline`
-  hooks for a replacement; wiring them to `libedit` needs a small file
-  outside `third_party/` that the Makefile compiles into the interpreter.
-- Manual pages. `third_party/lua/doc/lua.1` and `luac.1` are troff; the
-  minios `man` shows plain text, so pages in `user/share/man/man1/`
-  have to be written in that format.
-- Module directory. `/usr/share/lua/5.5/` does not exist yet; it is
-  created with the first Lua module.
-- Bindings not yet in `gui`: images beyond the named icons, and the
-  clipboard, and layer windows.
+- The clipboard binding is synchronous, because libgui completes each
+  transfer inside `gui_clipboard_get`. An asynchronous read with a
+  callback in the event loop needs a libgui call that hands out the
+  pipe of the current offer, which the binding would then watch with
+  `app_watch_fd`.
+- libgui exposes no primary selection and no drag and drop, and the
+  layer protocol has no margins, so the module offers none of them.
 - `os.setlocale` accepts only `C`, `POSIX` and the empty string, and
   `os.date` reports UTC because `localtime` is `gmtime`.
 - `LUA_INIT` and the `-E`/`-W` options work as upstream; nothing sets

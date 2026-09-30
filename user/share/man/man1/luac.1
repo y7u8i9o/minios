@@ -1,0 +1,30 @@
+LUAC(1)                     User Commands                    LUAC(1)
+
+NAME
+    luac - Lua 5.5 compiler
+
+SYNOPSIS
+    luac [options] [file...]
+
+DESCRIPTION
+    luac translates Lua source files into one file of precompiled chunks,
+    which lua(1) loads faster than source. Running the output is the same
+    as running the given files in order. Source and precompiled files may
+    be mixed. The output is not portable to other architectures or Lua
+    releases, so the sources must be kept.
+
+OPTIONS
+    -l            list the bytecode; -l -l lists it in full. Without
+                  files luac lists luac.out
+    -o file       write the output to file instead of luac.out; - is the
+                  standard output
+    -p            only load the files, for syntax checks; nothing is
+                  written
+    -s            strip debugging information (line numbers and local
+                  names) from the output
+    -v            print the version
+    --            stop handling options
+    -             stop handling options and read the standard input
+
+SEE ALSO
+    lua(1)

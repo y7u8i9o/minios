@@ -210,6 +210,51 @@ static void test_lineedit_screen(void)
 }
 KTEST_DEFINE("lineedit_screen", test_lineedit_screen);
 
+/* The interactive prompt of /bin/lua edits lines with libedit through
+ * the readline hooks of lua.c (user/lua/lreadline.c). Each result is
+ * printed in a form the echoed input does not contain: Tab completes
+ * string.up to string.upper, Up recalls the counter line, Ctrl+C
+ * discards a line, and Ctrl+D on an empty line ends the interpreter.
+ * /etc/tests/luaprompt.lua then checks the history file. */
+static void test_lua_prompt(void)
+{
+    struct proc *p = proc_create_user("/bin/lua", (char *const[]){ "lua", NULL },
+                                      (char *const[]){ "PATH=/bin", "HOME=/tmp", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "lua did not start");
+    lineedit_wait();
+    type_line("print(\"answer \" .. 6 * 7)\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_line("print(\"up \" .. string.up\t(\"ok\"))\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_line("n = (n or 0) + 1; print(\"run \" .. n)\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_key(0x48); /* Up recalls the counter line. */
+    type_line("\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_line("error(\"discarded\"");
+    type_ctrl('c');
+    sleep_ms(300);
+    lineedit_wait();
+    type_line("print(\"after \" .. n)\n");
+    sleep_ms(300);
+    lineedit_wait();
+    type_ctrl('d');
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "lua exited with status 0x%x", status);
+    ktest_assert(tty_get_lflag(&console_tty) & ICANON, "the line editor left the terminal in raw mode");
+    p = proc_create_user("/bin/lua", (char *const[]){ "lua", "/etc/tests/luaprompt.lua", NULL },
+                         (char *const[]){ "PATH=/bin", "HOME=/tmp", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "lua did not start for the history check");
+    status = proc_reap(p);
+    ktest_assert(status == 0, "the history check exited with status 0x%x", status);
+    kprintf("lua_prompt: completion, history and Ctrl+C passed\n");
+}
+KTEST_DEFINE("lua_prompt", test_lua_prompt);
+
 /* M11: pipelines, redirections and directory listing through the shell. */
 static void test_pipes(void)
 {

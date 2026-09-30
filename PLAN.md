@@ -1670,6 +1670,24 @@ configuration reads, starts, exits, restarts and the startup summary.
 Documented in `docs/design/console.md` and `docs/design/init.md`, tested
 by `boot`, `timer` and the init cases.
 
+### Lua images, clipboard, layer windows and prompt (completed 2026-09-30)
+
+The `gui` module gained images (`user/lua/limage.c`): `gui.image` loads
+PNG files and SVG files rendered at the output's scale, `gui.from_pixels`
+builds one from a string, images have `size`, `scale`, `pixel` and
+`pixels`, the painter draws them at any size through a cached box
+filtered rendition, `gui.imageview` shows one fitted to its area and
+`widget:image` gives labels and buttons one. The application gained
+`clipboard([text])` over the libgui data device calls, `layer(w, h,
+options)` for layer surface windows and `screen()`. The interactive
+prompt edits lines with libedit through the readline hooks of `lua.c`
+(`user/lua/lreadline.c`), with Tab completion of Lua names and a history
+file; `lua.1` and `luac.1` are plain text manual pages, and the image
+has the module directory `/usr/share/lua/5.5`. X12 detaches the offers
+of a destroyed source, which fixed a use after free found by the new
+test. Documented in `docs/design/lua.md` and `docs/design/shell.md`,
+tested by `make check-lua`, `gui_lua_bindings` and `lua_prompt`.
+
 ## 5. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.
