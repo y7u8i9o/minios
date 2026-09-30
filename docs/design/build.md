@@ -104,16 +104,20 @@ twice:
 ## Version and build number
 
 `VERSION` at the top of the tree holds the release under semantic
-versioning (`MAJOR.MINOR.PATCH`, `0.1.0` at the change from milestone
-numbers on 2026-09-05); it is changed by hand when a release is cut.
-`tools/version.sh` runs before every pass 1 link: it increments
-`BUILDNUM` (a counter local to the working tree, ignored by git),
-reads the short commit hash and marks it `-dirty` when tracked files
-differ from HEAD, and writes `build/kernel/version.c` with
-`kernel_release`, `kernel_version` (`#build commit date`) and
-`kernel_build_number`. `uname` reports the release and version, the
-boot log prints `minios 0.1.0 build N (#N commit date)`, and the
-System page of Settings shows the same line.
+versioning (`MAJOR.MINOR.PATCH`); it is changed by hand when a release
+is cut, on `develop` before the merge into `main`. `0.1.0` marked the
+change from milestone numbers on 2026-09-05, `0.2.0` on 2026-09-30 the
+dynamic loader, tcc, networking, packages, `dlopen` and init's service
+supervision. Application packages take their version from `VERSION`
+unless `packages.mk` sets one. `tools/version.sh` runs before every
+pass 1 link: it increments `BUILDNUM` (a counter local to the working
+tree, ignored by git), reads the short commit hash and marks it
+`-dirty` when tracked files differ from HEAD, and writes
+`build/kernel/version.c` with `kernel_release`, `kernel_version`
+(`#build commit date`) and `kernel_build_number`. `uname` reports the
+release and version, the boot log prints `minios 0.2.0 build N (#N
+commit date) booting, gcc V`, and the System page of Settings shows
+the same line.
 
 ## Limine
 
