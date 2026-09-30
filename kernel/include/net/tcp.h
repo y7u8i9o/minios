@@ -16,6 +16,14 @@ struct tcp_stats {
     uint64_t timeouts;
     uint64_t backlog_drops;
     uint64_t suppressed;
+    /* RFC 7323 (N13): connections that negotiated window scaling and
+     * timestamps, segments dropped by PAWS or for a missing timestamp, and
+     * round-trip samples taken from echoed timestamps. */
+    uint64_t window_scaling;
+    uint64_t timestamps;
+    uint64_t paws_rejected;
+    uint64_t timestamp_missing;
+    uint64_t timestamp_samples;
     unsigned connections;
     unsigned half_open;
     unsigned accepted;

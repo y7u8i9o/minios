@@ -4,6 +4,7 @@
 #include <net/inet.h>
 #include <lib/string.h>
 #include <lib/random.h>
+#include <mm/slab.h>
 #include <errno.h>
 #include <kassert.h>
 
@@ -87,6 +88,9 @@ int tcp_bind_port(struct tcp_endpoint *endpoint, uint32_t address, uint16_t port
     return 0;
 }
 
+/* The stores are allocated on netd with no lock held. A connection whose
+ * stores cannot be allocated is not created, which callers report as they
+ * report a full table. */
 struct tcp_connection *tcp_connection_alloc(void)
 {
     for (unsigned i = 0; i < TCP_CONNECTIONS; i++) {
@@ -94,6 +98,13 @@ struct tcp_connection *tcp_connection_alloc(void)
         if (c->used)
             continue;
         memset(c, 0, sizeof *c);
+        c->transmit = kmalloc(TCP_SEND_CAPACITY);
+        c->receive = kmalloc(TCP_RECEIVE_CAPACITY);
+        c->receive_present = kzalloc(TCP_RECEIVE_CAPACITY / 8);
+        if (!c->transmit || !c->receive || !c->receive_present) {
+            tcp_release_storage(c);
+            return NULL;
+        }
         c->used = true;
         c->peer_mss = TCP_DEFAULT_MSS;
         c->local_mss = TCP_LOCAL_MSS;
@@ -101,6 +112,77 @@ struct tcp_connection *tcp_connection_alloc(void)
         return c;
     }
     return NULL;
+}
+
+/* The stores are released as soon as nothing can use them, so a closing
+ * connection that outlives its socket holds no more memory than its
+ * protocol state needs. Only netd calls these. The receive store serves
+ * readers alone: once the endpoint is gone, data arriving resets the
+ * connection instead of being stored, and a FIN needs no store. The
+ * transmit store is needed until its last byte is acknowledged. */
+void tcp_release_receive(struct tcp_connection *c)
+{
+    spin_lock(&tcp_lock);
+    c->receive_count = 0;
+    c->out_of_order = 0;
+    c->pending_fin = false;
+    spin_unlock(&tcp_lock);
+    kfree(c->receive);
+    kfree(c->receive_present);
+    c->receive = NULL;
+    c->receive_present = NULL;
+}
+
+void tcp_release_transmit(struct tcp_connection *c)
+{
+    kfree(c->transmit);
+    c->transmit = NULL;
+}
+
+void tcp_release_storage(struct tcp_connection *c)
+{
+    tcp_release_receive(c);
+    tcp_release_transmit(c);
+}
+
+/* A connection without an endpoint or a listener is an orphan: no reader
+ * and no writer can reach it again. */
+void tcp_release_unused(struct tcp_connection *c)
+{
+    if (c->endpoint || c->listener)
+        return;
+    if (c->receive)
+        tcp_release_receive(c);
+    if (c->transmit && !c->transmit_length)
+        tcp_release_transmit(c);
+}
+
+uint32_t tcp_timestamp_now(const struct tcp_connection *c)
+{
+    return (uint32_t)net_clock_ms() + c->ts_offset;
+}
+
+/* The payload of a full segment: the peer's MSS excludes TCP options
+ * (RFC 6691), so the timestamp option carried by every segment of a
+ * connection that negotiated it is taken from the payload. */
+unsigned tcp_send_mss(const struct tcp_connection *c)
+{
+    return c->peer_mss - (c->timestamps ? TCP_TIMESTAMP_SPACE : 0);
+}
+
+/* Applies the options of the peer's SYN (passive or simultaneous open) or
+ * SYN ACK (active open). Our SYN always offers window scaling and
+ * timestamps, so each is in use exactly when the peer's SYN carried it. */
+void tcp_negotiate(struct tcp_connection *c, const struct tcp_segment *syn)
+{
+    c->window_scaling = syn->has_window_scale;
+    c->rcv_scale = c->window_scaling ? TCP_WINDOW_SHIFT : 0;
+    c->snd_scale = c->window_scaling ? MIN(syn->window_scale, TCP_MAX_WINDOW_SHIFT) : 0;
+    c->timestamps = syn->has_timestamp;
+    if (c->timestamps) {
+        c->ts_recent = syn->timestamp_value;
+        c->ts_recent_age = net_clock_ms();
+    }
 }
 
 void tcp_listener_counts(struct tcp_endpoint *listener, unsigned *incomplete, unsigned *ready)
@@ -134,18 +216,32 @@ void tcp_connection_free(struct tcp_connection *c)
     kassert(!c->endpoint);
     struct tcp_endpoint *listener = c->listener;
     net_timer_cancel(&c->timer);
+    tcp_release_storage(c);
     c->listener = NULL;
     c->used = false;
     if (listener)
         tcp_publish_listener(listener);
 }
 
+/* The window offered to the peer, which is also the range input accepts.
+ * Out-of-order bytes are stored inside it and do not shrink it, so the
+ * right edge never moves left through reordering. Without window scaling
+ * the 16-bit field caps it at 65535 bytes of the larger store; with it the
+ * window is rounded down to the scale unit, so what is advertised is
+ * exactly what is accepted. Caller holds tcp_lock. */
+unsigned tcp_receive_window_locked(struct tcp_connection *c)
+{
+    unsigned available =
+        c->read_shutdown ? TCP_RECEIVE_CAPACITY : TCP_RECEIVE_CAPACITY - c->receive_count;
+    unsigned shift = c->window_scaling ? c->rcv_scale : 0;
+    available = MIN(available, 65535u << shift);
+    return available & ~((1u << shift) - 1);
+}
+
 unsigned tcp_receive_window(struct tcp_connection *c)
 {
     spin_lock(&tcp_lock);
-    unsigned available = c->read_shutdown
-                             ? TCP_RECEIVE_CAPACITY
-                             : TCP_RECEIVE_CAPACITY - c->receive_count - c->out_of_order;
+    unsigned available = tcp_receive_window_locked(c);
     spin_unlock(&tcp_lock);
     return available;
 }
@@ -193,6 +289,8 @@ void tcp_established(struct tcp_connection *c)
     c->snd_una = c->snd_nxt;
     tcp_transfer_init(c);
     tcp_counters.established++;
+    tcp_counters.window_scaling += c->window_scaling;
+    tcp_counters.timestamps += c->timestamps;
     if (c->listener) {
         unsigned incomplete, ready;
         tcp_listener_counts(c->listener, &incomplete, &ready);
@@ -214,6 +312,7 @@ void tcp_established(struct tcp_connection *c)
 void tcp_enter_time_wait(struct tcp_connection *c)
 {
     c->state = TCP_TIME_WAIT;
+    tcp_release_unused(c);
     c->control_deadline = 0;
     c->data_deadline = 0;
     c->lifetime_deadline = net_clock_ms() + TCP_TIME_WAIT_MS;

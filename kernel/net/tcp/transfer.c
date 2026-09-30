@@ -1,5 +1,6 @@
-/* Bounded send storage, ACK accounting, RTT estimation and conservative
- * Tahoe congestion control. Every entry point runs on netd. */
+/* Bounded send storage, ACK accounting, RTT estimation from a timed
+ * segment or from echoed timestamps, and conservative Tahoe congestion
+ * control. Every entry point runs on netd. */
 #include "internal.h"
 #include <lib/string.h>
 #include <errno.h>
@@ -9,15 +10,15 @@ void tcp_transfer_init(struct tcp_connection *c)
     struct net_route route;
     if (net_route_lookup(c->peer_address, &route) == 0)
         c->peer_mss = MIN(c->peer_mss, ipv4_path_mtu(c->peer_address, route.netif->mtu) - 40);
-    c->congestion_window = c->peer_mss;
-    c->slow_start_threshold = 65535;
+    c->congestion_window = tcp_send_mss(c);
+    c->slow_start_threshold = TCP_SEND_CAPACITY;
     c->rto_ms = 1000;
 }
 
 static void loss_window(struct tcp_connection *c)
 {
-    c->slow_start_threshold = MAX(c->transmit_sent / 2, 2u * c->peer_mss);
-    c->congestion_window = c->peer_mss;
+    c->slow_start_threshold = MAX(c->transmit_sent / 2, 2u * tcp_send_mss(c));
+    c->congestion_window = tcp_send_mss(c);
     c->congestion_credit = 0;
     c->sampling = false; /* Karn: ACKs after retransmission are ambiguous. */
     c->recovering = true;
@@ -26,7 +27,7 @@ static void loss_window(struct tcp_connection *c)
 
 static void retransmit(struct tcp_connection *c)
 {
-    size_t length = MIN(c->transmit_sent, c->peer_mss);
+    size_t length = MIN(c->transmit_sent, tcp_send_mss(c));
     if (length) {
         tcp_emit(c, TCP_ACK, c->snd_una, c->transmit, length);
         tcp_counters.retransmits++;
@@ -42,12 +43,12 @@ void tcp_flush(struct tcp_connection *c)
         return;
     uint64_t now = net_clock_ms();
     if (!c->transmit_sent && c->last_transmit && now - c->last_transmit >= c->rto_ms)
-        c->congestion_window = MIN(c->congestion_window, c->peer_mss);
+        c->congestion_window = MIN(c->congestion_window, tcp_send_mss(c));
     unsigned limit = MIN(c->congestion_window, c->peer_window);
     for (unsigned batch = 0;
          batch < 8 && c->transmit_sent < c->transmit_length && c->transmit_sent < limit;
          batch++) {
-        size_t length = MIN(c->peer_mss, c->transmit_length - c->transmit_sent);
+        size_t length = MIN(tcp_send_mss(c), c->transmit_length - c->transmit_sent);
         length = MIN(length, limit - c->transmit_sent);
         int result =
             tcp_emit(c, TCP_ACK | TCP_PSH, c->snd_nxt, c->transmit + c->transmit_sent, length);
@@ -66,11 +67,11 @@ void tcp_flush(struct tcp_connection *c)
         c->data_deadline = now + c->rto_ms;
 }
 
-static void sample_rtt(struct tcp_connection *c, uint32_t acknowledgement)
+/* RFC 6298: one measurement in milliseconds, clamped to 1-60000 ms, updates
+ * the smoothed estimate and the retransmission timeout. */
+static void rtt_update(struct tcp_connection *c, uint32_t sample)
 {
-    if (!c->sampling || tcp_before(acknowledgement, c->sample_end))
-        return;
-    uint32_t sample = MAX(1u, MIN(net_clock_ms() - c->sample_time, 60000u));
+    sample = MAX(1u, MIN(sample, 60000u));
     if (!c->srtt_ms) {
         c->srtt_ms = sample;
         c->rtt_variance_ms = MAX(sample / 2, 1u);
@@ -80,7 +81,38 @@ static void sample_rtt(struct tcp_connection *c, uint32_t acknowledgement)
         c->srtt_ms = (7 * c->srtt_ms + sample) / 8;
     }
     c->rto_ms = MIN(60000u, MAX(1000u, c->srtt_ms + MAX(1u, 4 * c->rtt_variance_ms)));
+}
+
+/* Without timestamps one segment per flight is timed and Karn's rule
+ * cancels the sample on any retransmission. */
+static void sample_rtt(struct tcp_connection *c, uint32_t acknowledgement)
+{
+    if (!c->sampling || tcp_before(acknowledgement, c->sample_end))
+        return;
+    rtt_update(c, (uint32_t)(net_clock_ms() - c->sample_time));
     c->sampling = false;
+}
+
+/* With timestamps the echoed value identifies the transmission that the
+ * peer acknowledged, retransmissions included, so Karn's rule is not
+ * needed (RFC 7323 section 4). One sample is taken per flight, which keeps
+ * the RFC 6298 gains meaningful: the first ACK that covers the data sent
+ * when the previous sample was taken provides the next one. An echo of 0
+ * or one that lies in the future is ignored. */
+static void sample_timestamp(struct tcp_connection *c,
+                             const struct tcp_segment *segment,
+                             uint32_t acknowledgement)
+{
+    if (!segment->has_timestamp || !segment->timestamp_echo ||
+        (c->ts_sample_valid && tcp_before(acknowledgement, c->ts_sample_end)))
+        return;
+    uint32_t elapsed = tcp_timestamp_now(c) - segment->timestamp_echo;
+    if (elapsed > 60000)
+        return;
+    rtt_update(c, elapsed);
+    tcp_counters.timestamp_samples++;
+    c->ts_sample_valid = true;
+    c->ts_sample_end = c->snd_nxt;
 }
 
 void tcp_data_ack(struct tcp_connection *c, const struct tcp_segment *segment)
@@ -90,25 +122,29 @@ void tcp_data_ack(struct tcp_connection *c, const struct tcp_segment *segment)
         return;
     if (ack == c->snd_una) {
         if (c->transmit_sent && !segment->length && !(segment->flags & (TCP_SYN | TCP_FIN)) &&
-            segment->window == c->peer_window && ++c->duplicate_acks == 3 && !c->recovering) {
+            tcp_segment_window(c, segment) == c->peer_window && ++c->duplicate_acks == 3 &&
+            !c->recovering) {
             loss_window(c);
             retransmit(c);
         }
         return;
     }
     size_t consumed = MIN((uint32_t)(ack - c->snd_una), c->transmit_sent);
-    sample_rtt(c, ack);
+    if (c->timestamps)
+        sample_timestamp(c, segment, ack);
+    else
+        sample_rtt(c, ack);
     if (consumed) {
         memmove(c->transmit, c->transmit + consumed, c->transmit_length - consumed);
         c->transmit_length -= consumed;
         c->transmit_sent -= consumed;
         if (c->congestion_window < c->slow_start_threshold) {
-            c->congestion_window += MIN(consumed, c->peer_mss);
+            c->congestion_window += MIN(consumed, tcp_send_mss(c));
         } else {
             c->congestion_credit += consumed;
             if (c->congestion_credit >= c->congestion_window) {
                 c->congestion_credit -= c->congestion_window;
-                c->congestion_window += c->peer_mss;
+                c->congestion_window += tcp_send_mss(c);
             }
         }
         c->congestion_window = MIN(c->congestion_window, TCP_SEND_CAPACITY);
@@ -121,6 +157,7 @@ void tcp_data_ack(struct tcp_connection *c, const struct tcp_segment *segment)
     uint64_t now = net_clock_ms();
     c->data_deadline = c->transmit_length ? now + c->rto_ms : 0;
     c->progress_deadline = c->transmit_length ? now + TCP_PROGRESS_MS : 0;
+    tcp_release_unused(c);
 }
 
 void tcp_data_timeout(struct tcp_connection *c)
@@ -162,7 +199,7 @@ void tcp_path_changed(uint32_t destination, unsigned mtu)
         if (!c->used || c->peer_address != destination || c->peer_mss <= mtu - 40)
             continue;
         c->peer_mss = mtu - 40;
-        c->congestion_window = MIN(c->congestion_window, c->peer_mss);
+        c->congestion_window = MIN(c->congestion_window, tcp_send_mss(c));
         c->sampling = false;
         if (c->transmit_length) {
             c->data_deadline = net_clock_ms();

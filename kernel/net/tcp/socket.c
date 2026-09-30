@@ -86,6 +86,7 @@ static int start_connect(struct tcp_request *request)
     c->local_port = e->local_port;
     c->peer_port = request->port;
     c->iss = tcp_initial_sequence();
+    c->ts_offset = tcp_initial_sequence();
     c->snd_una = c->iss;
     c->snd_nxt = c->iss + 1;
     c->local_mss = MIN(TCP_LOCAL_MSS, route.netif->mtu - 40);
@@ -224,6 +225,7 @@ static void close_endpoint(struct tcp_endpoint *endpoint)
             tcp_maybe_fin(c);
             if (c->state != TCP_TIME_WAIT)
                 c->lifetime_deadline = net_clock_ms() + TCP_ORPHAN_MS;
+            tcp_release_unused(c);
             tcp_schedule(c);
         }
     }

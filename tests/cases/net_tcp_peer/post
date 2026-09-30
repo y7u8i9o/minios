@@ -2,4 +2,4 @@
 set -eu
 grep -q '^tcp summary connections 20$' "$PEER_LOG"
 [ "$(grep -c '^tcp connection .* eof 1 sent ' "$PEER_LOG")" -eq 20 ]
-python3 "$TOP/tests/net/check_capture.py" "$CAPTURE"
+python3 "$TOP/tests/net/check_capture.py" --require fallback "$CAPTURE"

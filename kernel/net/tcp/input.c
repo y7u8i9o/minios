@@ -68,6 +68,9 @@ static void passive_open(struct tcp_endpoint *listener, const struct tcp_segment
     c->snd_wl2 = 0;
     c->local_mss = MIN(TCP_LOCAL_MSS, route.netif->mtu - 40);
     c->peer_mss = MIN(segment->mss, c->local_mss);
+    /* The timestamp clock offset is drawn like an initial sequence. */
+    c->ts_offset = tcp_initial_sequence();
+    tcp_negotiate(c, segment);
     tcp_counters.passive_opens++;
     tcp_emit(c, TCP_SYN | TCP_ACK, c->iss, NULL, 0);
     tcp_start_control_timer(c);
@@ -94,6 +97,7 @@ static void active_reply(struct tcp_connection *c, const struct tcp_segment *seg
     c->peer_mss = MIN(segment->mss, c->local_mss);
     c->snd_wl1 = segment->sequence;
     c->snd_wl2 = segment->acknowledgement;
+    tcp_negotiate(c, segment);
     if (valid_ack) {
         tcp_established(c);
         tcp_emit(c, TCP_ACK, c->snd_nxt, NULL, 0);
@@ -133,7 +137,7 @@ static bool acknowledge(struct tcp_connection *c, const struct tcp_segment *segm
     if (!tcp_before(ack, c->snd_una)) {
         if (tcp_after(segment->sequence, c->snd_wl1) ||
             (segment->sequence == c->snd_wl1 && !tcp_before(ack, c->snd_wl2))) {
-            c->peer_window = segment->window;
+            c->peer_window = tcp_segment_window(c, segment);
             c->snd_wl1 = segment->sequence;
             c->snd_wl2 = ack;
         }
@@ -159,8 +163,49 @@ static bool acknowledge(struct tcp_connection *c, const struct tcp_segment *segm
     return true;
 }
 
+/* RFC 7323 section 5.3, step R1, before the sequence check. With
+ * timestamps negotiated, a segment without one is dropped silently and a
+ * segment whose timestamp is older than TS.Recent is a duplicate from an
+ * earlier incarnation of the sequence space: it is dropped and answered
+ * with a rate-limited ACK. A reset is exempt from both checks. After 24
+ * idle days TS.Recent is no longer trusted and the segment is accepted. */
+static bool timestamp_acceptable(struct tcp_connection *c, const struct tcp_segment *segment)
+{
+    if (!c->timestamps || (segment->flags & TCP_RST))
+        return true;
+    if (!segment->has_timestamp) {
+        tcp_counters.timestamp_missing++;
+        return false;
+    }
+    if (tcp_before(segment->timestamp_value, c->ts_recent) &&
+        net_clock_ms() - c->ts_recent_age <= TCP_PAWS_IDLE_MS) {
+        tcp_counters.paws_rejected++;
+        tcp_challenge_ack(c);
+        return false;
+    }
+    return true;
+}
+
+/* RFC 7323 section 4.3: TS.Recent follows the newest timestamp of a
+ * segment that begins at or before the last acknowledgement sent, which
+ * keeps the timestamp of the earliest unacknowledged segment when ACKs are
+ * delayed or segments arrive out of order. */
+static void timestamp_update(struct tcp_connection *c, const struct tcp_segment *segment)
+{
+    if (!c->timestamps || !segment->has_timestamp ||
+        tcp_after(segment->sequence, c->last_ack_sent))
+        return;
+    if (!tcp_before(segment->timestamp_value, c->ts_recent) ||
+        net_clock_ms() - c->ts_recent_age > TCP_PAWS_IDLE_MS) {
+        c->ts_recent = segment->timestamp_value;
+        c->ts_recent_age = net_clock_ms();
+    }
+}
+
 static void synchronized_input(struct tcp_connection *c, const struct tcp_segment *segment)
 {
+    if (!timestamp_acceptable(c, segment))
+        return;
     /* Duplicate handshake replies recover a lost final ACK. Duplicate FIN
      * restarts TIME_WAIT; RST cannot assassinate that retained reservation. */
     if (c->state == TCP_TIME_WAIT) {
@@ -190,6 +235,7 @@ static void synchronized_input(struct tcp_connection *c, const struct tcp_segmen
             tcp_challenge_ack(c);
         return;
     }
+    timestamp_update(c, segment);
     if (segment->flags & TCP_RST) {
         if (segment->sequence == c->rcv_nxt) {
             tcp_counters.resets++;

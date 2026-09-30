@@ -436,3 +436,14 @@ These locks are in user space and do not add a kernel lock-order level.
 - `/dev/net` reads take a snapshot through a worker request; the counters
   are netd-owned and the text is assembled on netd. The UDP `broadcast`
   flag is protected by `udp_lock` like the other endpoint fields.
+
+## N13–N16 additions
+
+- The send store, receive store and presence bitmap of a TCP connection
+  are allocated by netd with no lock held when the connection is created
+  and freed by netd. The receive pointers are set before any endpoint can
+  reach the connection and are cleared only when no endpoint exists, so a
+  reader that finds the connection under `tcp_lock` always finds its
+  store. `tcp_release_receive` clears the counts under `tcp_lock` and frees
+  the memory after releasing it; no allocation or free happens under
+  `tcp_lock`.

@@ -11,12 +11,25 @@
 #define TCP_CONNECTIONS 64
 #define TCP_SYN_BACKLOG 8
 #define TCP_ACCEPT_BACKLOG 16
-#define TCP_RECEIVE_CAPACITY 4096
+/* Receive and send storage is allocated per connection (N13). The window
+ * shift is the smallest one that expresses the whole receive store in the
+ * 16-bit window field. */
+#define TCP_RECEIVE_CAPACITY 131072
+#define TCP_WINDOW_SHIFT 2
 #define TCP_LOCAL_MSS 1460
 #define TCP_DEFAULT_MSS 536
 #define TCP_RETRY_MS 1000
 #define TCP_MAX_RETRIES 3
-#define TCP_SEND_CAPACITY 8192
+#define TCP_SEND_CAPACITY 65536
+/* RFC 7323: the largest shift a peer may use, the length of the timestamp
+ * option with its two padding bytes, and the idle time after which PAWS
+ * no longer trusts TS.Recent (24 days). */
+#define TCP_MAX_WINDOW_SHIFT 14
+#define TCP_TIMESTAMP_SPACE 12
+#define TCP_PAWS_IDLE_MS (24ull * 24 * 60 * 60 * 1000)
+_Static_assert((TCP_RECEIVE_CAPACITY >> TCP_WINDOW_SHIFT) <= 65535 &&
+                   (TCP_RECEIVE_CAPACITY >> (TCP_WINDOW_SHIFT - 1)) > 65535,
+               "TCP_WINDOW_SHIFT must be the smallest shift for the receive store");
 #define TCP_DATA_RETRIES 8
 #define TCP_PROGRESS_MS 120000
 #define TCP_ORPHAN_MS 30000
@@ -80,15 +93,33 @@ struct tcp_connection {
     uint32_t iss, irs;
     uint32_t snd_una, snd_nxt, rcv_nxt;
     uint32_t snd_wl1, snd_wl2;
-    uint16_t peer_window, peer_mss, local_mss;
+    /* peer_window is in bytes, already shifted by snd_scale. */
+    uint32_t peer_window;
+    uint16_t peer_mss, local_mss;
+
+    /* RFC 7323. rcv_scale is the shift offered in our SYN and applies to
+     * the windows we advertise once window_scaling is negotiated; snd_scale
+     * is the peer's shift, applied to every window it sends outside SYN.
+     * ts_recent is the peer timestamp echoed in our segments, ts_recent_age
+     * the network clock when it was last updated, last_ack_sent the
+     * acknowledgement of our latest segment, ts_offset the random offset of
+     * our timestamp clock and ts_sample_end the sequence an ACK must cover
+     * before the next timestamp RTT sample (one sample per flight). */
+    bool window_scaling, timestamps, ts_sample_valid;
+    uint8_t snd_scale, rcv_scale;
+    uint32_t ts_recent, ts_offset, last_ack_sent, ts_sample_end;
+    uint64_t ts_recent_age;
     bool peer_fin, read_shutdown;
     bool fin_requested, fin_sent;
     uint32_t fin_sequence;
     int error;
 
     /* The prefix transmit_sent is on the wire. All transmit_length bytes
-     * remain owned here until cumulative acknowledgement or terminal error. */
-    uint8_t transmit[TCP_SEND_CAPACITY];
+     * remain owned here until cumulative acknowledgement or terminal error.
+     * transmit, receive and receive_present are allocated with the
+     * connection and released with it, or earlier by tcp_release_unused
+     * once no endpoint can use them (the pointers are then NULL). */
+    uint8_t *transmit;
     size_t transmit_length;
     size_t transmit_sent;
     uint32_t congestion_window, slow_start_threshold, congestion_credit;
@@ -102,8 +133,8 @@ struct tcp_connection {
 
     /* Present bits describe out-of-order bytes in the same circular storage
      * as readable data. Only contiguous bytes contribute to receive_count. */
-    uint8_t receive[TCP_RECEIVE_CAPACITY];
-    uint8_t receive_present[TCP_RECEIVE_CAPACITY / 8];
+    uint8_t *receive;
+    uint8_t *receive_present;
     unsigned receive_head, receive_count, out_of_order;
     bool pending_fin;
     uint32_t pending_fin_sequence;
@@ -130,6 +161,12 @@ static inline bool tcp_after(uint32_t a, uint32_t b)
 {
     return tcp_before(b, a);
 }
+/* The peer's window of a segment other than a SYN, in bytes. */
+static inline uint32_t tcp_segment_window(const struct tcp_connection *c,
+                                          const struct tcp_segment *segment)
+{
+    return (uint32_t)segment->window << c->snd_scale;
+}
 
 int tcp_endpoint_create(struct socket *socket);
 int tcp_bind_port(struct tcp_endpoint *endpoint, uint32_t address, uint16_t port);
@@ -144,6 +181,14 @@ void tcp_established(struct tcp_connection *connection);
 void tcp_enter_time_wait(struct tcp_connection *connection);
 void tcp_maybe_fin(struct tcp_connection *connection);
 unsigned tcp_receive_window(struct tcp_connection *connection);
+unsigned tcp_receive_window_locked(struct tcp_connection *connection);
+void tcp_release_storage(struct tcp_connection *connection);
+void tcp_release_receive(struct tcp_connection *connection);
+void tcp_release_transmit(struct tcp_connection *connection);
+void tcp_release_unused(struct tcp_connection *connection);
+uint32_t tcp_timestamp_now(const struct tcp_connection *connection);
+unsigned tcp_send_mss(const struct tcp_connection *connection);
+void tcp_negotiate(struct tcp_connection *connection, const struct tcp_segment *syn);
 int tcp_emit(struct tcp_connection *connection,
              uint8_t flags,
              uint32_t sequence,

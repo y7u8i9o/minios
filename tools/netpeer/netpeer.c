@@ -16,9 +16,10 @@
  * is free and 1 when it is still bound, which the harness self test uses
  * to verify that a terminated peer released its port.
  *
- * Mode ip answers ARP and ICMP on an isolated Ethernet link. Modes udp and tcp
- * are native host echo sockets for the QEMU user backend. Both use
- * the same readiness and cleanup lifecycle as count and raw echo. */
+ * Mode ip answers ARP and ICMP on an isolated Ethernet link. Mode scripted
+ * runs the scripted TCP peer of scripted.c on the same kind of link. Modes
+ * udp and tcp are native host echo sockets for the QEMU user backend. All
+ * use the same readiness and cleanup lifecycle as count and raw echo. */
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -30,6 +31,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include "scripted.h"
 
 static volatile sig_atomic_t stopping;
 
@@ -258,7 +260,7 @@ int main(int argc, char **argv)
         } else {
             fprintf(stderr,
                     "usage: netpeer --ready FILE --log FILE [--pid FILE] [--mode "
-                    "count|echo|ip|udp|tcp|tcp-stream]\n"
+                    "count|echo|ip|scripted|udp|tcp|tcp-stream]\n"
                     "       netpeer --probe PORT | --probe-tcp PORT\n");
             return 2;
         }
@@ -276,7 +278,8 @@ int main(int argc, char **argv)
         return 2;
     }
     if (strcmp(mode, "count") != 0 && strcmp(mode, "echo") != 0 && strcmp(mode, "ip") != 0 &&
-        strcmp(mode, "udp") != 0 && strcmp(mode, "tcp") != 0 && strcmp(mode, "tcp-stream") != 0) {
+        strcmp(mode, "scripted") != 0 && strcmp(mode, "udp") != 0 && strcmp(mode, "tcp") != 0 &&
+        strcmp(mode, "tcp-stream") != 0) {
         fprintf(stderr, "netpeer: unknown mode %s\n", mode);
         return 2;
     }
@@ -341,6 +344,16 @@ int main(int argc, char **argv)
     guest.sin_family = AF_INET;
     guest.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     guest.sin_port = htons(guest_port);
+
+    if (strcmp(mode, "scripted") == 0) {
+        scripted_peer(fd, &guest, lf, &stopping);
+        fprintf(lf, "summary scripted seconds %.3f\n", now_s() - start);
+        fclose(lf);
+        close(fd);
+        if (pidfile)
+            unlink(pidfile);
+        return 0;
+    }
 
     unsigned long frames = 0, bytes = 0, echoed = 0;
     int sent_echo_request = 0;

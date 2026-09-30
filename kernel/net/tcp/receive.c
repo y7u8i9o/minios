@@ -15,7 +15,8 @@ void tcp_receive_discard(struct tcp_connection *c)
     c->receive_count = 0;
     c->out_of_order = 0;
     c->pending_fin = false;
-    memset(c->receive_present, 0, sizeof c->receive_present);
+    if (c->receive_present)
+        memset(c->receive_present, 0, TCP_RECEIVE_CAPACITY / 8);
 }
 
 void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *segment)
@@ -24,9 +25,10 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
         return;
     bool received_fin = false;
     spin_lock(&tcp_lock);
-    unsigned window = TCP_RECEIVE_CAPACITY - c->receive_count - c->out_of_order;
-    uint32_t right = c->rcv_nxt + window;
-    for (size_t i = 0; i < segment->length; i++) {
+    uint32_t right = c->rcv_nxt + tcp_receive_window_locked(c);
+    /* Without a receive store (an orphan) only a FIN is processed. */
+    size_t length = c->receive ? segment->length : 0;
+    for (size_t i = 0; i < length; i++) {
         uint32_t sequence = segment->sequence + i;
         if (tcp_before(sequence, c->rcv_nxt) || !tcp_before(sequence, right))
             continue;
@@ -49,8 +51,9 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
             c->rcv_nxt++;
             c->peer_fin = true;
             c->pending_fin = false;
+            if (c->out_of_order)
+                memset(c->receive_present, 0, TCP_RECEIVE_CAPACITY / 8);
             c->out_of_order = 0;
-            memset(c->receive_present, 0, sizeof c->receive_present);
             received_fin = true;
             break;
         }

@@ -34,13 +34,21 @@ bool tcp_parse_segment(const uint8_t *ip, size_t packet_length, struct tcp_segme
     segment->flags = header[13];
     segment->window = net_get_be16(header + 14);
     segment->mss = 536;
+    segment->has_window_scale = false;
+    segment->has_timestamp = false;
+    segment->window_scale = 0;
+    segment->timestamp_value = 0;
+    segment->timestamp_echo = 0;
     segment->data = header + header_length;
     segment->length = length - header_length;
     if (!segment->source_port || !segment->destination_port || (segment->flags & 0x20) ||
         ((segment->flags & 0x02) && (segment->flags & 0x01)))
         return false;
 
+    /* A malformed or repeated option of a kind the stack interprets makes
+     * the whole segment invalid; well-framed unknown options are skipped. */
     bool saw_mss = false;
+    bool syn = segment->flags & 0x02;
     for (size_t offset = 20; offset < header_length;) {
         uint8_t kind = header[offset];
         if (kind == 0)
@@ -54,16 +62,26 @@ bool tcp_parse_segment(const uint8_t *ip, size_t packet_length, struct tcp_segme
         size_t option_length = header[offset + 1];
         if (option_length < 2 || option_length > header_length - offset)
             return false;
-        if (kind == 2 && (segment->flags & 0x02)) {
+        const uint8_t *value = header + offset + 2;
+        if (kind == 2 && syn) {
             if (option_length != 4 || saw_mss)
                 return false;
-            segment->mss = net_get_be16(header + offset + 2);
+            segment->mss = net_get_be16(value);
             if (!segment->mss)
                 return false;
             saw_mss = true;
+        } else if (kind == 3 && syn) {
+            if (option_length != 3 || segment->has_window_scale)
+                return false;
+            segment->window_scale = value[0];
+            segment->has_window_scale = true;
+        } else if (kind == 8) {
+            if (option_length != 10 || segment->has_timestamp)
+                return false;
+            segment->timestamp_value = net_get_be32(value);
+            segment->timestamp_echo = net_get_be32(value + 4);
+            segment->has_timestamp = true;
         }
-        /* Unknown, well-framed options are ignored. No window scaling,
-         * timestamps, SACK or ECN capability is advertised. */
         offset += option_length;
     }
     return true;

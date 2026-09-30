@@ -1,7 +1,8 @@
 # MiniOS TCP/IP implementation plan
 
-Status: N00–N12 complete on the branch `bleeding-edge-net` (2026-09-12); see
-section 7 for the evidence and the remaining limitations of each milestone.
+Status: N00–N12 complete on the branch `bleeding-edge-net` (2026-09-12); N13
+complete on `bleeding-edge-net-options` (2026-09-30). Section 7 holds the
+evidence and the remaining limitations of each milestone.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
 `bleeding-edge-pkg`, whose HEAD was `1a95395`. The working tree contained
@@ -130,6 +131,7 @@ data-buffer pressure so ACKs and teardown do not depend on unbounded allocation.
 | N10 | Persistent configuration and DHCP client | N05, N09 |
 | N11 | DNS resolver and user-facing networking tools | N07, N08, N09, N10 |
 | N12 | Interoperability, regressions, documentation and release evidence | N00–N11 |
+| N13 | TCP window scaling and timestamps | N07, N09, N12 |
 
 N01 and N02 are architecturally independent after their shared contracts are
 settled. The table does not authorize parallel implementation or agent work.
@@ -478,6 +480,23 @@ and known limitations. Every milestone's exit criterion has evidence or an
 explicit unresolved entry; unresolved requirements prevent marking the overall
 plan complete.
 
+### N13. TCP window scaling and timestamps
+
+N13 closes the first TCP limitation that the N12 record carried into the
+supported feature set. The window scale and timestamp options of RFC 7323
+are offered in every SYN and used only when the other SYN of the handshake
+carried them too. The receive store grows beyond 65535 bytes so that
+scaling has an effect, and the stores stay bounded and are released when
+no endpoint can use them. PAWS runs before the sequence check, TS.Recent
+follows RFC 7323 section 4.3, and round-trip samples taken from echoed
+timestamps feed the existing RFC 6298 estimator. Negotiations, PAWS drops
+and samples are counted in the TCP statistics.
+
+The milestone is complete when injected segments with the controlled clock
+cover negotiation, fallback, scaled windows in both directions, PAWS,
+TS.Recent and timestamp samples, and when a peer that does not share the
+guest's parsers observes both options on the wire.
+
 ## 5. Verification and implementation discipline
 
 - Keep host protocol tests, simulated-device tests and live QEMU/peer tests
@@ -806,3 +825,30 @@ QEMU version, commands and artifacts are in
 and remain documented limitations rather than open exit criteria: scripted
 loss with a native peer, fragmented traffic with a native peer, address
 conflict detection, and formatting verification without a repository style.
+
+### N13 (complete 2026-09-30)
+
+RFC 7323 window scaling and timestamps are implemented in `wire.c` and
+`kernel/net/tcp/`. Every SYN offers both options, and a connection uses an
+option only when the other SYN carried it. The peer's shift is clamped to
+14 and the local shift is 2 over a 131072-byte receive store; the send
+store holds 65536 bytes. The stores are allocated per connection and
+released as soon as no endpoint can use them, and out-of-order bytes stay
+inside the window instead of shrinking it. PAWS applies the 24-day rule,
+TS.Recent follows section 4.3, one timestamp sample per flight feeds the
+RFC 6298 estimator without Karn's restriction, and segments carry the
+peer's MSS minus the 12-byte option. The `tcpopt` line of `/dev/net` shows
+five new counters.
+
+`net_tcp_options` covers the option rules with injected segments and the
+controlled clock. `net_tcp_options_peer` runs the VirtIO NIC against the
+new scripted mode of `netpeer`, which offers both options and reports what
+it observed, and its capture is checked against the option rules that
+`check_capture.py` now applies to every TCP capture. `net_tcp_bulk` and
+`net_tcp_peer` require the fallback that QEMU's user-mode stack causes.
+Two existing tests changed because the window grew: `net_tcp` moves its
+out-of-window reset beyond 65535 bytes, and `net_pressure` fills the larger
+store in several segments. The parser changes were fuzzed with structured
+options. QEMU's user-mode stack never offers the options, so a native host
+stack exercises only the fallback; the scripted peer provides the
+negotiated case on the wire.

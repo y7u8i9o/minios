@@ -675,7 +675,8 @@ Input verifies the TCP pseudo-header checksum, minimum header, data offset,
 reserved header bits and option bounds. MSS is accepted only as one valid,
 nonzero, four-byte SYN option. Malformed TLVs are discarded. Well-formed unknown
 options are skipped. SYN plus FIN and urgent data are unsupported and dropped.
-No window scaling, timestamps, SACK, ECN or TCP Fast Open are advertised.
+N06 advertised no option but MSS; window scaling and timestamps arrived in
+N13 and SACK in N14, while ECN and TCP Fast Open remain absent.
 SYN payload is not acknowledged or delivered during this stage.
 
 Outgoing SYNs advertise the smaller of 1460 and route MTU minus 40. Peer MSS
@@ -761,13 +762,14 @@ completion never acknowledges TCP sequence space. The behaviour follows
 [RFC 6298](https://www.rfc-editor.org/rfc/rfc6298.html) for the
 retransmission timer and the Tahoe subset of
 [RFC 5681](https://www.rfc-editor.org/rfc/rfc5681.html) for congestion
-control. Window scaling, SACK, timestamps and ECN are still not advertised,
-so the receive window is limited to the 4096-byte ring and the peer's window
-is taken at face value.
+control. N07 advertised no window scaling, SACK, timestamps or ECN, so its
+receive window was limited to a 4096-byte ring and the peer's window was
+taken at face value; N13 and N14 changed that and are described below.
 
 ### Send buffering and acknowledgement
 
-Each connection holds an 8192-byte send buffer (`TCP_SEND_CAPACITY`). A send
+Each connection holds a send buffer of `TCP_SEND_CAPACITY` bytes (8192 in
+N07, 65536 since N13). A send
 copies as many bytes as fit and returns that partial count; a full buffer
 returns `EAGAIN` to nonblocking callers and blocks the others until an
 acknowledgement frees space. The prefix `transmit_sent` is on the wire and the
@@ -788,11 +790,11 @@ unchanged.
 
 ### Ordered receive and the out-of-order store
 
-One 4096-byte circular store holds both readable bytes and bytes that arrived
-ahead of a hole. A presence bitmap marks the out-of-order positions; only the
-contiguous prefix counts toward `receive_count`, and the out-of-order bytes
-are subtracted from the advertised window so a burst of reordered segments
-cannot promise capacity the ring does not have. Bytes are accepted only inside
+One circular store (4096 bytes in N07, 131072 since N13) holds both readable
+bytes and bytes that arrived ahead of a hole. A presence bitmap marks the out-of-order positions; only the
+contiguous prefix counts toward `receive_count`. N07 subtracted the
+out-of-order bytes from the advertised window; since N13 they are stored
+inside the window without shrinking it (see N13). Bytes are accepted only inside
 `[rcv_nxt, rcv_nxt + window)`; the first arrival of a byte wins, so an
 overlapping retransmission with different content cannot change a byte
 already accepted, and no byte is delivered twice. When a hole is filled the
@@ -1180,3 +1182,124 @@ The complete affected set, the throughput baseline and the recorded
 configuration are in `docs/design/network-n10-n12-validation.md`. The
 network plan is marked complete there only for the milestones whose exit
 criteria have evidence; the remaining limitations are listed per milestone.
+
+## TCP window scaling and timestamps (N13)
+
+N13 implements the two options of
+[RFC 7323](https://www.rfc-editor.org/rfc/rfc7323.html). Every SYN the stack
+sends offers both, and a connection uses an option only when the other SYN
+of the handshake carried it too; a SYN ACK repeats only the options the
+peer's SYN offered. `wire.c` reads the window scale option from SYN segments
+only, since the RFC requires it to be ignored elsewhere, and the timestamp
+option from every segment. A window scale or timestamp option with the
+wrong length, or a second one in the same header, makes the segment
+invalid, which is the policy N06 applied to a malformed MSS option.
+
+### Stores and window scaling
+
+The stores of a connection grew and moved out of the connection table.
+When a connection is created, netd allocates a 65536-byte send store, a
+131072-byte receive store and its 16384-byte presence bitmap from the
+kernel heap with no lock held. A connection that cannot allocate them is
+not created: passive open counts a backlog drop and connect returns
+`ENOBUFS`. The stores are released as soon as nothing can use them. The
+receive store goes when the endpoint closes, because data that arrives
+after the final close resets the connection instead of being stored, and
+the send store goes when its last byte has been acknowledged after the
+close. A connection that is finishing its FIN exchange or waits in
+TIME_WAIT therefore holds its table entry and nothing more. With all 64
+connections open the stores take 13 MiB.
+
+The receive window is the free space of the receive store. Out-of-order
+bytes lie inside that window and no longer shrink it, so reordering cannot
+move the right edge to the left. The local shift is 2, the smallest that
+expresses the whole store in the 16-bit field (`TCP_WINDOW_SHIFT`, checked
+by a static assertion). With scaling in use the advertised window is
+rounded down to a multiple of four bytes and input accepts exactly that
+range; without scaling the window is capped at 65535 bytes of the larger
+store. The peer's shift is clamped to 14, the limit of RFC 7323 section
+2.3. The window of a SYN or SYN ACK is never scaled in either direction;
+every later window of the peer is shifted by the peer's shift before it
+limits transmission or takes part in the duplicate-ACK test.
+
+### Timestamps
+
+The timestamp clock is the network clock in milliseconds plus an offset
+per connection that is drawn like an initial sequence number, so the values
+do not reveal the uptime and the controlled clock drives them in tests.
+Every segment of a connection that negotiated timestamps carries one and
+echoes TS.Recent; a reset carries one as well, which RFC 7323 section 3.2
+recommends. TS.Recent follows section 4.3: it takes the value of an
+acceptable segment whose timestamp is not older than TS.Recent and whose
+sequence starts at or before the last acknowledgement sent, which keeps the
+timestamp of the earliest unacknowledged segment when segments arrive out
+of order.
+
+PAWS (section 5) runs before the sequence check. A segment without a
+timestamp is dropped silently and counted in `timestamp_missing`. A segment
+whose timestamp is older than TS.Recent is dropped, counted in
+`paws_rejected` and answered with an ACK under the shared limit of 20
+replies per second. A reset is exempt from both checks. After 24 days
+without an update TS.Recent is no longer trusted, and the next segment
+replaces it.
+
+### Round-trip measurement
+
+With timestamps, a round-trip sample is the timestamp clock minus the
+echoed value of an ACK that acknowledges new data. One sample is taken per
+flight: after a sample, the next one comes from the first ACK that covers
+everything sent at the time of the previous one, which keeps the RFC 6298
+gains of N07 meaningful. The echo identifies the transmission that the peer
+acknowledged, so sampling continues after a retransmission; Karn's rule
+applies only to connections without timestamps, which keep the timed
+segment of N07. An echo of 0 and an echo more than 60 seconds old are
+ignored.
+
+The timestamp option takes 12 bytes of every segment. The MSS a peer
+announces excludes options (RFC 6691), so a full segment of a connection
+with timestamps carries the peer's MSS minus 12 bytes, and the congestion
+window counts in that unit.
+
+### Counters
+
+`struct tcp_stats` and the `tcpopt` line of `/dev/net` report
+`window_scaling` and `timestamps` (connections established with each
+option), `paws_rejected`, `timestamp_missing` and `timestamp_samples`.
+
+### N13 validation
+
+`net_tcp_options` (kernel, controlled clock, fake capture interface) decodes
+every captured segment with an option decoder of its own. It checks the
+offer in a SYN (MSS 1460, shift 2, a timestamp with a zero echo, a 40-byte
+header, window 65535) and the fallback when the SYN ACK carries MSS alone
+(20-byte headers, full-MSS segments, window capped at 65535). On a
+negotiated connection it checks that the ACK echoes the peer's timestamp and
+advertises 32768 units, that one unit of the peer's shift 7 limits the
+flight to 128 bytes, that full segments carry 1188 bytes for a peer MSS of
+1200, and that the timestamp sample equals the 40 ms by which the controlled
+clock moved. PAWS rejects an older timestamp with an ACK, a segment without
+a timestamp is dropped silently, and a newer one is accepted and echoed.
+TS.Recent stays unchanged for a segment beyond the last ACK and advances
+when the hole is filled, a retransmission's echo yields a sample, and a
+reset without a timestamp is accepted. A passive open repeats both options
+and scales the window of the final ACK, a SYN without options is answered
+with MSS alone, a shift of 15 is clamped to 14, malformed option lengths are
+rejected and the 24-day rule restores acceptance. Every connection,
+endpoint and packet buffer returns to the baseline.
+
+`net_tcp_options_peer` runs the guest over the VirtIO NIC against the
+scripted mode of `netpeer` (`tools/netpeer/scripted.c`) on the dgram link.
+The peer builds and checks its headers without the guest's code. It answers
+the SYN with MSS 1400, shift 5 and timestamps, receives 100000 bytes while
+advertising 1024 units and acknowledging after four segments or 20 ms of
+silence, sends one segment with an old timestamp, and then sends 3000 bytes
+and a FIN with fresh ones. Its log records the guest's offer, the exact
+stream, segments that end beyond the edge an unscaled window would give,
+the guest's advertised window of 131072 bytes, a PAWS drop answered by an
+ACK that does not cover the old segment, the acknowledged FIN, and neither
+a missing timestamp nor a foreign echo. `check_capture.py` applies its own
+rules to every capture: a connection whose SYNs both carried timestamps
+has one on every later segment and each echo repeats a value the other
+side sent, a connection without them has none, and no data segment ends
+beyond the scaled right edge. `net_tcp_bulk` and `net_tcp_peer` require the
+fallback case, because QEMU's user-mode stack answers with MSS alone.

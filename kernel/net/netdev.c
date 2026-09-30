@@ -45,13 +45,18 @@ static int snapshot(struct net_request *request)
            i->icmp_echo_reply, i->icmp_errors, i->icmp_suppressed);
     APPEND("udp invalid %lu no_port %lu full %lu\n", i->udp_invalid, i->udp_no_port, i->udp_full);
     struct tcp_stats t;
-    if (tcp_get_stats(&t) == 0)
+    if (tcp_get_stats(&t) == 0) {
         APPEND("tcp active %lu passive %lu established %lu invalid %lu resets %lu "
                "retransmits %lu timeouts %lu backlog_drops %lu suppressed %lu connections %u "
                "half_open %u time_wait %u endpoints %u\n",
                t.active_opens, t.passive_opens, t.established, t.invalid, t.resets, t.retransmits,
                t.timeouts, t.backlog_drops, t.suppressed, t.connections, t.half_open, t.time_wait,
                t.endpoints);
+        APPEND("tcpopt window_scaling %lu timestamps %lu paws_rejected %lu timestamp_missing %lu "
+               "timestamp_samples %lu\n",
+               t.window_scaling, t.timestamps, t.paws_rejected, t.timestamp_missing,
+               t.timestamp_samples);
+    }
     struct pbuf_stats p;
     pbuf_get_stats(&p);
     APPEND("pbuf free %u low_water %u failed %lu\n", p.free, p.low_water, p.alloc_fail);

@@ -155,3 +155,79 @@ static void test_tcp_bulk(void)
             (unsigned long)stats.retransmits);
 }
 KTEST_DEFINE("net_tcp_bulk", test_tcp_bulk);
+
+/* The scripted peer of netpeer on the raw dgram link (tools/netpeer/
+ * scripted.c). It offers window scaling and timestamps, so this guest
+ * connection uses both; the peer reports what it saw on the wire. */
+static unsigned char script_guest_byte(unsigned long i)
+{
+    return (unsigned char)(i * 31 + (i >> 9));
+}
+static unsigned char script_peer_byte(unsigned long i)
+{
+    return (unsigned char)(i * 17 + 3);
+}
+static void test_tcp_options_peer(void)
+{
+    struct netif *interface = netif_find("eth0");
+    ktest_assert(interface && net_configure(interface, 0x0a000002, 0xffffff00u, 0x0a000001) == 0,
+                 "configure the scripted link");
+    struct file *file;
+    ktest_assert(socket_create(AF_INET, SOCK_STREAM, 0, O_NONBLOCK, &file) == 0, "script socket");
+    struct socket *socket = socket_from_file(file);
+    struct sockaddr_storage name;
+    address(&name, 0x0a000001, 7000);
+    ktest_assert(socket_connect(socket, &name, 16) == -EINPROGRESS, "script connect");
+    ktest_assert(wait_readiness(socket, POLLOUT), "script connected");
+    enum { GUEST_BYTES = 100000, PEER_BYTES = 3000 };
+    static char outgoing[8192], incoming[4096];
+    size_t sent = 0, received = 0;
+    bool closed = false, eof = false;
+    uint64_t deadline = timer_ms() + 30000;
+    while (!eof && timer_ms() < deadline) {
+        if (sent < GUEST_BYTES) {
+            size_t length = MIN(sizeof outgoing, GUEST_BYTES - sent);
+            for (size_t i = 0; i < length; i++)
+                outgoing[i] = (char)script_guest_byte(sent + i);
+            struct socket_msg message = {.data = outgoing, .len = length, .flags = MSG_NOSIGNAL};
+            long result = socket_sendmsg(socket, &message);
+            ktest_assert(result > 0 || result == -EAGAIN, "script send %ld", result);
+            if (result > 0)
+                sent += (size_t)result;
+        } else if (!closed) {
+            ktest_assert(socket_shutdown(socket, SHUT_WR) == 0, "script half-close");
+            closed = true;
+        }
+        struct socket_msg message = {.data = incoming, .len = sizeof incoming};
+        long result = socket_recvmsg(socket, &message);
+        ktest_assert(result >= 0 || result == -EAGAIN, "script receive %ld", result);
+        if (result > 0) {
+            for (long i = 0; i < result; i++)
+                ktest_assert((unsigned char)incoming[i] == script_peer_byte(received + i),
+                             "script stream mismatch at %lu",
+                             received + i);
+            received += (size_t)result;
+        } else if (!result) {
+            eof = true;
+        } else {
+            sleep_ms(1);
+        }
+    }
+    ktest_assert(sent == GUEST_BYTES && received == PEER_BYTES && eof,
+                 "script totals %lu/%lu EOF %d",
+                 sent,
+                 received,
+                 eof);
+    struct tcp_stats stats;
+    ktest_assert(tcp_get_stats(&stats) == 0, "script statistics");
+    file_put(file);
+    ktest_assert(stats.window_scaling == 1 && stats.timestamps == 1 && stats.paws_rejected >= 1 &&
+                     stats.timestamp_samples >= 1,
+                 "script negotiated scaling %lu timestamps %lu, PAWS %lu, samples %lu",
+                 (unsigned long)stats.window_scaling,
+                 (unsigned long)stats.timestamps,
+                 (unsigned long)stats.paws_rejected,
+                 (unsigned long)stats.timestamp_samples);
+    kprintf("net_tcp_options_peer: scaling, timestamps and PAWS with the scripted peer, ok\n");
+}
+KTEST_DEFINE("net_tcp_options_peer", test_tcp_options_peer);

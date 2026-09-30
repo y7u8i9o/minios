@@ -216,8 +216,9 @@ static void active_checks(void)
     ktest_assert(connection->snd_una == 17 && !connection->transmit_length,
                  "wrapped ACK advances send state");
 
+    /* The unscaled window is 65535 bytes since N13; this RST lies beyond it. */
     unsigned before = frame_count;
-    inject(connection, 9000, 17, TCP_RST, NULL, 0);
+    inject(connection, 101 + 70000, 17, TCP_RST, NULL, 0);
     ktest_assert(connection->state == TCP_ESTABLISHED && frame_count == before,
                  "out-of-window RST ignored");
     inject(connection, 102, 17, TCP_RST, NULL, 0);
@@ -709,8 +710,11 @@ static int pressure_cycle(struct net_request *request)
     struct file *file = active_open();
     struct tcp_connection *c = connection_of(file);
     establish(c);
-    static char data[TCP_RECEIVE_CAPACITY];
-    inject(c, c->rcv_nxt, c->snd_nxt, TCP_ACK, data, sizeof data);
+    /* The store is larger than one packet since N13, so the peer fills the
+     * offered window in 8000-byte segments until it is closed. */
+    static char data[8000];
+    for (unsigned window; (window = tcp_receive_window(c));)
+        inject(c, c->rcv_nxt, c->snd_nxt, TCP_ACK, data, MIN(window, sizeof data));
     ktest_assert(c->receive_count == TCP_RECEIVE_CAPACITY && !tcp_receive_window(c),
                  "slow reader fills only its bounded storage");
     struct file *other = active_open();

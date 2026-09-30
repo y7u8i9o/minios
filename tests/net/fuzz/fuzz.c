@@ -18,6 +18,24 @@ static uint32_t next(void)
     state ^= state << 17;
     return state;
 }
+/* Fills the option area of a TCP header with plausible TLVs: kinds the
+ * stack interprets with correct and incorrect lengths, NOP, end of list
+ * and unknown kinds, so the option parser sees more than random bytes. */
+static void fill_options(uint8_t *options, size_t space)
+{
+    static const uint8_t kinds[] = {0, 1, 2, 3, 4, 5, 8, 30};
+    static const uint8_t lengths[] = {2, 3, 4, 10, 18, 26, 34};
+    size_t offset = 0;
+    while (offset < space) {
+        uint8_t kind = kinds[next() % sizeof kinds];
+        options[offset++] = kind;
+        if (kind <= 1 || offset == space)
+            continue;
+        uint8_t length = next() % 4 ? lengths[next() % sizeof lengths] : (uint8_t)next();
+        options[offset++] = length;
+        offset += MIN((size_t)(length >= 2 ? length - 2 : 0), space - offset);
+    }
+}
 static void known_answer(void)
 {
     uint32_t input[16] = {
@@ -66,7 +84,7 @@ int main(int argc, char **argv)
     unsigned seconds = argc > 2 ? strtoul(argv[2], NULL, 0) : 30;
     state = seed ? seed : 1;
     known_answer();
-    unsigned long iterations = 0, accepted_tcp = 0, accepted_ip = 0;
+    unsigned long iterations = 0, accepted_tcp = 0, accepted_ip = 0, with_options = 0;
     time_t start = time(NULL);
     do {
         size_t length = next() % 512;
@@ -81,7 +99,10 @@ int main(int argc, char **argv)
             net_put_be16(bytes + 2, length);
             net_put_be16(bytes + 6, 0x4000);
             bytes[32] = (5 + next() % 11) << 4;
-            bytes[33] = 2;
+            bytes[33] = next() % 2 ? 2 : 0x10;
+            size_t header = (size_t)(bytes[32] >> 4) * 4;
+            if (next() % 2 && 20 + header <= length)
+                fill_options(bytes + 40, header - 20);
             net_put_be16(bytes + 36, 0);
             net_put_be16(
                 bytes + 36,
@@ -93,6 +114,9 @@ int main(int argc, char **argv)
         struct tcp_segment segment;
         if (tcp_parse_segment(bytes, length, &segment)) {
             assert(segment.data >= bytes + 40 && segment.data + segment.length == bytes + length);
+            assert(!segment.has_window_scale || (segment.flags & 2));
+            assert(segment.mss && (segment.flags & 2 || segment.mss == 536));
+            with_options += segment.has_window_scale || segment.has_timestamp;
             accepted_tcp++;
         }
         unsigned total = 0, offset = 0;
@@ -118,11 +142,13 @@ int main(int argc, char **argv)
         free(bytes);
         iterations++;
     } while (time(NULL) - start < seconds);
-    printf("seed=0x%llx seconds=%ld iterations=%lu tcp_valid=%lu ip_valid=%lu KAT=pass\n",
+    printf("seed=0x%llx seconds=%ld iterations=%lu tcp_valid=%lu tcp_options=%lu ip_valid=%lu "
+           "KAT=pass\n",
            (unsigned long long)seed,
            (long)(time(NULL) - start),
            iterations,
            accepted_tcp,
+           with_options,
            accepted_ip);
     return 0;
 }
