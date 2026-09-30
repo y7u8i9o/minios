@@ -62,6 +62,16 @@ links: $(ETC)
 	@ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar
 	@ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd
 
+# pkg-key installs the public half of the key that signs the package
+# repository index (docs/design/packages.md), which the top level Makefile
+# derives. The copy compares contents, since a change of PKG_KEY can leave
+# timestamps equal to the second.
+.PHONY: pkg-key
+all: pkg-key
+pkg-key:
+	@mkdir -p $(ROOT)/etc/pkg/keys
+	@cmp -s $(PKG_PUB) $(ROOT)/etc/pkg/keys/build.pub || cp $(PKG_PUB) $(ROOT)/etc/pkg/keys/build.pub
+
 # The share tree is copied whole: make cannot name files with spaces, and
 # media files may carry them.
 .PHONY: share-tree

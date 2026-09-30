@@ -79,7 +79,7 @@ int write_file_mode(const char *path, const uint8_t *data, size_t len, uint32_t 
     return close(fd);
 }
 
-static int mkdir_all(const char *path)
+int mkdir_all(const char *path)
 {
     char buf[PKG_PATH_MAX];
     strlcpy(buf, path, sizeof buf);

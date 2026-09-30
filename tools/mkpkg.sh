@@ -5,7 +5,9 @@
 # ROOT is the root tree of the build (build/initrd_root); its lib/abi gives
 # the ABI numbers of the system libraries. The needs lines of the manifest
 # are derived from the DT_NEEDED entries of every ELF file with readelf
-# ($READELF, default x86_64-elf-readelf).
+# ($READELF, default x86_64-elf-readelf). As with pkg build, a needs line
+# of the source manifest supplies the number of a library that neither the
+# package nor lib/abi provides.
 set -e
 DIR="$1"; OUT="$2"; ROOT="$3"
 READELF="${READELF:-x86_64-elf-readelf}"
@@ -25,6 +27,7 @@ while read -r so; do
     [ -n "$so" ] || continue
     abi="$(sed -n "s/^provides $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
     [ -n "$abi" ] || abi="$(sed -n "s/^$so \([0-9]*\)$/\1/p" "$ROOT/lib/abi" | head -1)"
+    [ -n "$abi" ] || abi="$(sed -n "s/^needs $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
     [ -n "$abi" ] || { echo "mkpkg.sh: the ABI number of $so is unknown" >&2; exit 1; }
     echo "needs $so $abi" >> "$TMP/manifest"
 done < "$TMP/needed"

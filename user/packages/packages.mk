@@ -53,6 +53,12 @@ packages:
 	@mkdir -p $(ROOT)/usr/share/packages
 	@cp $(PKG_FILES) $(ROOT)/usr/share/packages/
 
+# make repo writes the signed repository of the same archives anew each
+# time, so that it lists the current archives only.
+.PHONY: repo
+repo: $(PKG_FILES)
+	../tools/mkrepo.sh $(PKGSIGN) $(PKG_KEY_FILE) $(REPO) $(PKG_FILES)
+
 # Remove the old built-in copies on incremental builds, including their
 # default desktop shortcuts. Never touch the persistent data volume.
 prune-packaged: share-tree skel-tree

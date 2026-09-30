@@ -1174,6 +1174,20 @@ configuration, the `/dev/net` snapshot, echo to the gateway and to an
 unreachable host, HTTP against a loopback server (200, 404 and the
 `https://` refusal), TCP and UDP relays and a refused connection.
 
+The HTTP client of `http(1)` is `libc/src/net/http.c` behind
+`minios/http.h`, which `pkg(1)` shares for signed repositories
+(`packages.md`). It connects with a non blocking socket and waits in
+`poll`, so a timeout bounds the connection and every wait for data;
+`http -t SECONDS` sets it, and the default is 30 seconds. The body is
+checked against `Content-Length` when the server sends one. A connection
+closed before the announced length and bytes beyond it are errors that
+name the server and the counts, and `http -o FILE` removes the file of a
+failed transfer instead of leaving a truncated one. A caller may bound
+the body, which `pkg` sets to the size its index gives. Redirects are
+still not followed and a chunked body is not decoded. `pkg_repo`
+exercises these paths against a host server that stops early and one
+that stops answering.
+
 ## Release evidence (N12)
 
 The complete affected set, the throughput baseline and the recorded

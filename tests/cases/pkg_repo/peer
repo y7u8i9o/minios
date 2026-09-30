@@ -1,0 +1,49 @@
+#!/bin/sh
+# This script is the host side of the pkg_repo case. It assembles
+# repositories from the test archives the build writes to
+# build/user/pkgrepo, with the build's signing key, and serves them over
+# HTTP with server.py on a free port, which the guest reaches as 10.0.2.2
+# through QEMU user networking. The repository v1 holds repohello 1.0,
+# repolib 1.0 and repoprog 1.0, and v2 adds repohello 1.1. badarchive is
+# v2 with one byte of repohello-1.1.mpk changed after signing, and badsize
+# is v2 with repohello-1.1.mpk longer than the index says. badindex is v1
+# with a summary in the index changed after signing, and otherkey is v1
+# signed by a key the image does not trust.
+set -eu
+CASE="$(cd "$(dirname "$0")" && pwd)"
+FIX="$BUILD/user/pkgrepo"
+SIGN="$BUILD/host/pkgsign"
+KEY="${PKG_KEY_FILE:-$BUILD/pkg/signing.key}"
+MKREPO="$TOP/tools/mkrepo.sh"
+WWW="$OUTDIR/www"
+rm -rf "$WWW" "$OUTDIR/other.key"
+mkdir -p "$WWW"
+V1="$FIX/repohello-1.0.mpk $FIX/repolib-1.0.mpk $FIX/repoprog-1.0.mpk"
+"$MKREPO" "$SIGN" "$KEY" "$WWW/v1" $V1
+"$MKREPO" "$SIGN" "$KEY" "$WWW/v2" $V1 "$FIX/repohello-1.1.mpk"
+cp -R "$WWW/v2" "$WWW/badarchive"
+python3 -c 'import sys; p = sys.argv[1]; d = bytearray(open(p, "rb").read()); d[200] ^= 0xff; open(p, "wb").write(d)' \
+    "$WWW/badarchive/repohello-1.1.mpk"
+cp -R "$WWW/v2" "$WWW/badsize"
+printf 'trailing bytes' >> "$WWW/badsize/repohello-1.1.mpk"
+cp -R "$WWW/v1" "$WWW/badindex"
+sed 's/^summary Hello from a repository$/summary Hello from somebody else/' "$WWW/v1/index" > "$WWW/badindex/index"
+cmp -s "$WWW/v1/index" "$WWW/badindex/index" && { echo "peer: the index was not changed" >&2; exit 1; }
+"$SIGN" keygen "$OUTDIR/other.key"
+"$MKREPO" "$SIGN" "$OUTDIR/other.key" "$WWW/otherkey" $V1
+PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+python3 "$CASE/server.py" "$PORT" "$WWW" > "$PEER_LOG" 2>&1 &
+SERVER=$!
+echo $SERVER > "$PEER_PID"
+# The harness stops this script; the server goes with it.
+trap 'kill $SERVER 2>/dev/null; exit 0' TERM INT
+# The peer is ready once the server accepts connections. A guest port of
+# 0 asks the harness for no forward into the guest.
+i=0
+until python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 1)' "$PORT" 2>/dev/null; do
+    i=$((i + 1))
+    [ $i -lt 50 ] || { echo "peer: the server did not start" >&2; exit 1; }
+    sleep 0.1
+done
+echo "$PORT 0" > "$PEER_READY"
+wait $SERVER
