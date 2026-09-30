@@ -114,6 +114,11 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_getpeername]   = sys_getpeername,
     [SYS_setsockopt]    = sys_setsockopt,
     [SYS_getsockopt]    = sys_getsockopt,
+    [SYS_symlink]       = sys_symlink,
+    [SYS_symlinkat]     = sys_symlinkat,
+    [SYS_readlink]      = sys_readlink,
+    [SYS_readlinkat]    = sys_readlinkat,
+    [SYS_lstat]         = sys_lstat,
 };
 
 void syscall_init_cpu(void)

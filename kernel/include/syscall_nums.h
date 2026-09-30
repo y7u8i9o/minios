@@ -92,4 +92,9 @@
 #define SYS_getpeername   88
 #define SYS_setsockopt    89
 #define SYS_getsockopt    90
-#define SYS_MAX           91
+#define SYS_symlink       91
+#define SYS_symlinkat     92
+#define SYS_readlink      93
+#define SYS_readlinkat    94
+#define SYS_lstat         95
+#define SYS_MAX           96

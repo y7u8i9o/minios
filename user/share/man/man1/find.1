@@ -8,11 +8,14 @@ SYNOPSIS
 
 DESCRIPTION
     find visits each starting path and its descendants. With no path it starts
-    at the current directory. All supplied tests must match.
+    at the current directory. All supplied tests must match. Symbolic
+    links are reported as links and never followed, so a link to a
+    directory is not entered and matches -type l, not -type d.
 
 EXPRESSIONS
     -name pattern       match the final path component using *, ?, and []
-    -type f | -type d   select regular files or directories
+    -type f | d | l     select regular files, directories or symbolic
+                        links
     -mindepth number    suppress entries above the given depth
     -maxdepth number    do not descend below the given depth
     -print              print each matching path followed by a newline
@@ -22,6 +25,7 @@ EXPRESSIONS
 
 EXAMPLES
     find /etc -type f -name '*.conf'
+    find /home -type l
     find . -print0 | xargs -0 wc -l
 
 SEE ALSO

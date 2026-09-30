@@ -64,10 +64,14 @@ uid_t geteuid(void);
 gid_t getgid(void);
 gid_t getegid(void);
 
-/* There are no symbolic links: symlink fails with EPERM and readlink with
- * EINVAL. */
+/* symlink creates path as a symbolic link holding target, which is not
+ * checked and may name nothing. readlink copies at most size bytes of a
+ * link's target into buf without a terminating NUL and returns the count.
+ * The *at forms resolve a relative path from the directory dirfd. */
 int symlink(const char *target, const char *path);
+int symlinkat(const char *target, int dirfd, const char *path);
 ssize_t readlink(const char *path, char *buf, size_t size);
+ssize_t readlinkat(int dirfd, const char *path, char *buf, size_t size);
 
 int execl(const char *path, const char *arg, ...);
 int execlp(const char *file, const char *arg, ...);

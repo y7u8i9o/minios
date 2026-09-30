@@ -281,6 +281,36 @@ static int mfs_rename(struct inode *olddir, const char *oldname, size_t oldlen,
     return r;
 }
 
+/* A symbolic link keeps its target in its first data block, written
+ * through the journal like directory contents, so the link and its target
+ * are committed in one transaction. */
+static int mfs_symlink(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen)
+{
+    if (entry_find(dir, name, len, NULL))
+        return -EEXIST;
+    if (tlen == 0 || tlen > MFS_SYMLINK_MAX)
+        return -ENAMETOOLONG;
+    struct inode *ino = mfs_inode_new(dir->sb, S_IFLNK | 0777, 1);
+    if (!ino)
+        return -ENOSPC;
+    mutex_lock(&ino->lock);
+    long w = mfs_write_locked(ino, target, tlen, 0);
+    mutex_unlock(&ino->lock);
+    int r = w == (long)tlen ? 0 : w < 0 ? (int)w : -ENOSPC;
+    if (r == 0)
+        r = entry_add(dir, name, len, (uint32_t)ino->ino);
+    if (r < 0)
+        ino->nlink = 0;             /* the release frees the inode and its block */
+    inode_put(ino);
+    return r;
+}
+
+static int mfs_readlink(struct inode *ino, char *buf, size_t size)
+{
+    long r = mfs_read_locked(ino, buf, MIN(size, (size_t)ino->size), 0);
+    return (int)r;
+}
+
 static int mfs_truncate(struct inode *ino, uint64_t size)
 {
     return mfs_truncate_locked(ino, size);
@@ -299,8 +329,16 @@ const struct inode_ops mfs_dir_ops = {
     .unlink = mfs_unlink,
     .rmdir = mfs_rmdir,
     .link = mfs_link,
+    .symlink = mfs_symlink,
     .rename = mfs_rename,
     .truncate = mfs_truncate,
+    .setmtime = mfs_setmtime,
+};
+
+/* A symbolic link has no directory or file operations; utimensat with
+ * AT_SYMLINK_NOFOLLOW sets its time. */
+const struct inode_ops mfs_link_ops = {
+    .readlink = mfs_readlink,
     .setmtime = mfs_setmtime,
 };
 

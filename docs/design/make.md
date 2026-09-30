@@ -71,8 +71,8 @@ creating the missing ones, and `touch -c` does not create files.
   `UTIME_OMIT`.
 - `strndup` and `stpcpy` (`string.h`).
 - `realpath` (`stdlib.h`): the absolute path with `.`, `..` and
-  repeated slashes removed, checked with `stat`. There are no symbolic
-  links, so nothing else is resolved.
+  repeated slashes removed, checked with `stat`. Since symbolic links
+  were added (2026-09-30, `vfs.md`) it also resolves every link.
 - `access` with `F_OK`, `R_OK`, `W_OK` and `X_OK` (`unistd.h`): the
   file must exist; permission bits are not enforced.
 - `confstr(_CS_PATH)` (`unistd.h`) returns `/bin`, where make looks for

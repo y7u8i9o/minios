@@ -121,12 +121,13 @@ long mfs_read_locked(struct inode *ino, char *buf, size_t n, uint64_t off)
     return (long)done;
 }
 
-/* Directory contents are metadata and go through the journal; file data
- * is written back by the cache (before the transaction commits). */
+/* Directory contents and symbolic link targets are metadata and go through
+ * the journal; file data is written back by the cache (before the
+ * transaction commits). */
 long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off)
 {
     struct mfs_sb *m = mfs_of(ino);
-    bool metadata = S_ISDIR(ino->mode);
+    bool metadata = S_ISDIR(ino->mode) || S_ISLNK(ino->mode);
     if ((off + n) / MFS_BLOCK_SIZE >= MFS_MAX_FILE_BLOCKS)
         return -EFBIG;
     size_t done = 0;

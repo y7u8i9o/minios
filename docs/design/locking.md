@@ -350,6 +350,19 @@ the framebuffer state and framebuffer write.
   hand-over, which uses an atomic word and no lock. The interface flag is
   read with an acquire load on the data paths without `netif_lock`.
 
+## Symbolic links (2026-09-30)
+
+- No lock is added. A path walk reads the target of a link with the
+  `readlink` operation under that link's `inode.lock` alone, after the
+  directory mutex of the lookup that found it has been released, so no
+  two inode mutexes are held. `open` with `O_CREAT` releases the
+  directory mutex and ends the operation (`op_end`) before it reads a
+  link it found in place of the file. `mfs_symlink` runs under the
+  directory mutex and takes the new inode's mutex to write the target,
+  the parent before the child as `unlink` and `link` already do, then
+  `mfs_sb.lock` and the buffer mutexes through the journal as any
+  write.
+
 ## Lua workers and libc stream registration
 
 These locks are in user space and do not add a kernel lock-order level.

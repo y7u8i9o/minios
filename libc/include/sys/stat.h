@@ -21,10 +21,6 @@
 #define ACCESSPERMS (S_IRWXU | S_IRWXG | S_IRWXO)
 #define ALLPERMS (S_ISUID | S_ISGID | S_ISVTX | ACCESSPERMS)
 #define DEFFILEMODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
-#ifndef S_IFLNK
-#define S_IFLNK 0120000
-#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
-#endif
 #ifndef S_IFSOCK
 #define S_IFSOCK 0140000
 #define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
@@ -35,7 +31,8 @@
 
 int stat(const char *path, struct stat *st);
 int fstat(int fd, struct stat *st);
-/* There are no symbolic links, so lstat is stat. */
+/* lstat reports on a symbolic link itself, as fstatat does with
+ * AT_SYMLINK_NOFOLLOW; st_size is the length of the link's target. */
 int lstat(const char *path, struct stat *st);
 int fstatat(int dirfd, const char *path, struct stat *st, int flags);
 /* Device and FIFO nodes cannot be created: EPERM. */
@@ -50,5 +47,6 @@ int chmod(const char *path, mode_t mode);
 
 /* Set the modification time of path: times NULL for now, otherwise the
  * second timespec, with UTIME_NOW or UTIME_OMIT in tv_nsec. The path is
- * resolved as in openat. */
+ * resolved as in openat; with AT_SYMLINK_NOFOLLOW a symbolic link named
+ * by path gets the time itself. */
 int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags);

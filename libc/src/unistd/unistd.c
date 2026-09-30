@@ -228,7 +228,7 @@ int rename(const char *oldpath, const char *newpath)
 int remove(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) < 0)
+    if (lstat(path, &st) < 0)
         return -1;
     return S_ISDIR(st.st_mode) ? rmdir(path) : unlink(path);
 }
@@ -513,7 +513,7 @@ ssize_t writev(int fd, const struct iovec *iov, int count)
 
 int lstat(const char *path, struct stat *st)
 {
-    return stat(path, st);
+    return (int)syscall2(SYS_lstat, path, st);
 }
 
 int access(const char *path, int mode)
@@ -541,62 +541,108 @@ int utimensat(int dirfd, const char *path, const struct timespec times[2], int f
     return (int)syscall4(SYS_utimensat, dirfd, path, times, flags);
 }
 
-/* Build the absolute form of path, removing . and .. components and
- * repeated slashes, and check that the result exists. */
+/* Build the absolute form of path without ".", ".." and symbolic links.
+ * The components are resolved one at a time: a symbolic link is replaced
+ * by its target, which restarts from the root when it is absolute and
+ * otherwise continues in the directory holding the link, and ".." removes
+ * the last component of the result so far, which never names a link.
+ * Every component but the last must be a directory, and the last must
+ * exist. At most SYMLOOP_MAX links are followed (ELOOP). */
 char *realpath(const char *path, char *resolved)
 {
-    char buf[PATH_MAX];
+    char out[PATH_MAX], rest[2 * PATH_MAX], target[PATH_MAX];
     size_t n = 0;
-    if (path == NULL || *path == '\0') {
+    int links = 0;
+    if (path == NULL) {
         errno = EINVAL;
         return NULL;
     }
+    if (*path == '\0') {
+        errno = ENOENT;
+        return NULL;
+    }
+    if (strlen(path) >= sizeof rest) {
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
+    strcpy(rest, path);
     if (path[0] != '/') {
-        if (getcwd(buf, sizeof buf) == NULL)
+        if (getcwd(out, sizeof out) == NULL)
             return NULL;
-        n = strlen(buf);
-        if (n == 1 && buf[0] == '/')
+        n = strlen(out);
+        if (n == 1)
             n = 0;
     }
-    const char *p = path;
-    while (*p != '\0') {
-        while (*p == '/')
-            p++;
-        if (*p == '\0')
+    size_t i = 0;
+    while (rest[i] != '\0') {
+        while (rest[i] == '/')
+            i++;
+        if (rest[i] == '\0')
             break;
-        const char *start = p;
-        while (*p != '\0' && *p != '/')
-            p++;
-        size_t len = (size_t)(p - start);
-        if (len == 1 && start[0] == '.')
+        size_t start = i;
+        while (rest[i] != '\0' && rest[i] != '/')
+            i++;
+        size_t len = i - start;
+        if (len == 1 && rest[start] == '.')
             continue;
-        if (len == 2 && start[0] == '.' && start[1] == '.') {
-            while (n > 0 && buf[n - 1] != '/')
+        if (len == 2 && rest[start] == '.' && rest[start + 1] == '.') {
+            while (n > 0 && out[n - 1] != '/')
                 n--;
             if (n > 0)
                 n--;
             continue;
         }
-        if (n + 1 + len >= sizeof buf) {
+        if (n + 1 + len >= sizeof out) {
             errno = ENAMETOOLONG;
             return NULL;
         }
-        buf[n++] = '/';
-        memcpy(buf + n, start, len);
+        size_t prev = n;
+        out[n++] = '/';
+        memcpy(out + n, rest + start, len);
         n += len;
+        out[n] = '\0';
+        struct stat st;
+        if (lstat(out, &st) < 0)
+            return NULL;
+        if (S_ISLNK(st.st_mode)) {
+            if (++links > SYMLOOP_MAX) {
+                errno = ELOOP;
+                return NULL;
+            }
+            ssize_t t = readlink(out, target, sizeof target - 1);
+            if (t < 0)
+                return NULL;
+            target[t] = '\0';
+            size_t tail = strlen(rest + i);
+            if ((size_t)t + tail >= sizeof rest) {
+                errno = ENAMETOOLONG;
+                return NULL;
+            }
+            memmove(rest + t, rest + i, tail + 1);
+            memcpy(rest, target, (size_t)t);
+            i = 0;
+            n = target[0] == '/' ? 0 : prev;
+            continue;
+        }
+        if (!S_ISDIR(st.st_mode)) {
+            size_t j = i;
+            while (rest[j] == '/')
+                j++;
+            if (rest[j] != '\0') {
+                errno = ENOTDIR;
+                return NULL;
+            }
+        }
     }
     if (n == 0)
-        buf[n++] = '/';
-    buf[n] = '\0';
-    struct stat st;
-    if (stat(buf, &st) < 0)
-        return NULL;
+        out[n++] = '/';
+    out[n] = '\0';
     if (resolved == NULL) {
         resolved = malloc(n + 1);
         if (resolved == NULL)
             return NULL;
     }
-    memcpy(resolved, buf, n + 1);
+    memcpy(resolved, out, n + 1);
     return resolved;
 }
 
@@ -629,14 +675,22 @@ gid_t getegid(void) { return 0; }
 
 int symlink(const char *target, const char *path)
 {
-    errno = EPERM;
-    return -1;
+    return (int)syscall2(SYS_symlink, target, path);
+}
+
+int symlinkat(const char *target, int dirfd, const char *path)
+{
+    return (int)syscall3(SYS_symlinkat, target, dirfd, path);
 }
 
 ssize_t readlink(const char *path, char *buf, size_t size)
 {
-    errno = EINVAL;
-    return -1;
+    return (ssize_t)syscall3(SYS_readlink, path, buf, size);
+}
+
+ssize_t readlinkat(int dirfd, const char *path, char *buf, size_t size)
+{
+    return (ssize_t)syscall4(SYS_readlinkat, dirfd, path, buf, size);
 }
 
 int mknod(const char *path, mode_t mode, dev_t dev)

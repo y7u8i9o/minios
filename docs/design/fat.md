@@ -37,7 +37,10 @@ Directories present `.` and `..` from the getdents position, not from
 the on disk entries (the root has none). Timestamps written to entries
 come from the real time clock of M35. Files are limited to 4 GiB; there
 are no holes, so a write beyond the end allocates the clusters in
-between; there are no hard links (`link` returns `EROFS`).
+between; there are no hard links (`link` returns `EROFS`) and no symbolic
+links: FAT has no entry type for one, so `symlink` returns `EPERM`. A
+link on another filesystem may lead into a FAT volume, and lookups below
+it work as for any path.
 
 ## Names
 

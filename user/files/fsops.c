@@ -91,11 +91,21 @@ static int copy_file(const char *src, const char *dst)
     return err;
 }
 
+/* A symbolic link is copied as a link with the same target, so a link to
+ * a directory is not entered and a link to a parent cannot recurse. */
 int fs_copy(const char *src, const char *dst)
 {
     struct stat st;
-    if (stat(src, &st) < 0)
+    if (lstat(src, &st) < 0)
         return -errno;
+    if (S_ISLNK(st.st_mode)) {
+        char target[512];
+        ssize_t n = readlink(src, target, sizeof target - 1);
+        if (n < 0)
+            return -errno;
+        target[n] = '\0';
+        return symlink(target, dst) < 0 ? -errno : 0;
+    }
     if (!S_ISDIR(st.st_mode))
         return copy_file(src, dst);
     if (mkdir(dst, 0755) < 0 && errno != EEXIST)
@@ -117,10 +127,11 @@ int fs_copy(const char *src, const char *dst)
     return err;
 }
 
+/* A symbolic link is removed itself; the tree it leads to is kept. */
 int fs_remove(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) < 0)
+    if (lstat(path, &st) < 0)
         return -errno;
     if (!S_ISDIR(st.st_mode))
         return unlink(path) < 0 ? -errno : 0;
@@ -157,7 +168,7 @@ int fs_move(const char *src, const char *dst)
 long fs_tree_size(const char *path, int *files, int *dirs)
 {
     struct stat st;
-    if (stat(path, &st) < 0)
+    if (lstat(path, &st) < 0)
         return 0;
     if (!S_ISDIR(st.st_mode)) {
         (*files)++;

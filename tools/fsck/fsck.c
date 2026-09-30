@@ -5,7 +5,10 @@
  * The journal is replayed first (a committed transaction whose checksum
  * matches is copied to the home blocks, anything else is discarded), then
  * five passes check the inodes, the directory tree, connectivity, the
- * bitmaps and the superblock counters. Without -y problems are reported
+ * bitmaps and the superblock counters. A symbolic link must keep its
+ * target, 1 to MFS_SYMLINK_MAX bytes without a NUL, in its first direct
+ * block and use no other block; a link that does not is released and its
+ * directory entries are removed. Without -y problems are reported
  * only; -y repairs them; -n never writes the image, so the replay happens
  * in memory only. Exit status: 0 no problems, 1 problems repaired, 4
  * problems left, 8 usage or I/O error.
@@ -20,6 +23,7 @@
 #define S_IFMT_  0170000
 #define S_IFDIR_ 0040000
 #define S_IFREG_ 0100000
+#define S_IFLNK_ 0120000
 
 static uint8_t *img;
 static uint64_t img_blocks;
@@ -118,6 +122,11 @@ static int inode_allocated(uint32_t ino)
 static int is_dir(const struct mfs_dinode *d)
 {
     return (d->mode & S_IFMT_) == S_IFDIR_;
+}
+
+static int is_link(const struct mfs_dinode *d)
+{
+    return (d->mode & S_IFMT_) == S_IFLNK_;
 }
 
 /* ---- loading and the superblock ---- */
@@ -274,6 +283,20 @@ static uint64_t count_blocks(uint32_t ino, struct mfs_dinode *d)
     return n;
 }
 
+/* A link's target fills the first data block up to the size and holds no
+ * NUL; the link has no other block. */
+static int link_valid(uint32_t ino, const struct mfs_dinode *d)
+{
+    if (d->size == 0 || d->size > MFS_SYMLINK_MAX || !d->direct[0] || d->indirect || d->dindirect)
+        return 0;
+    for (int i = 1; i < MFS_NDIRECT; i++)
+        if (d->direct[i])
+            return 0;
+    if (block_owner[d->direct[0]] != ino)
+        return 0;                   /* out of range or shared, reported above */
+    return memchr(block(d->direct[0]), '\0', d->size) == NULL;
+}
+
 static void pass1_inodes(void)
 {
     for (uint32_t ino = 1; ino < sb->ninodes; ino++) {
@@ -281,7 +304,7 @@ static void pass1_inodes(void)
             continue;
         struct mfs_dinode *d = dinode(ino);
         uint32_t type = d->mode & S_IFMT_;
-        if (type != S_IFDIR_ && type != S_IFREG_) {
+        if (type != S_IFDIR_ && type != S_IFREG_ && type != S_IFLNK_) {
             if (problem("inode %u: invalid mode 0%o", ino, d->mode)) {
                 memset(d, 0, sizeof *d);
                 bit_write(sb->inode_bitmap_start, ino, 0);
@@ -304,6 +327,16 @@ static void pass1_inodes(void)
             problem("inode %u: directory size %llu is not a multiple of %d", ino,
                     (unsigned long long)d->size, MFS_DIRENT_SIZE))
             d->size -= d->size % MFS_DIRENT_SIZE;
+        if (is_link(d) && !link_valid(ino, d)) {
+            /* Release it: pass 2 drops the entries naming an unchecked
+             * inode and pass 3 frees the blocks it claimed. */
+            if (problem("inode %u: symbolic link of %llu bytes has no valid target", ino,
+                        (unsigned long long)d->size)) {
+                memset(d, 0, sizeof *d);
+                bit_write(sb->inode_bitmap_start, ino, 0);
+            }
+            continue;
+        }
         checked[ino] = 1;
     }
 }
@@ -484,7 +517,8 @@ static void pass3_links(void)
             continue;
         struct mfs_dinode *d = dinode(ino);
         if (!problem("inode %u (%s, %llu bytes) is not referenced by any directory", ino,
-                     is_dir(d) ? "directory" : "file", (unsigned long long)d->size))
+                     is_dir(d) ? "directory" : is_link(d) ? "symbolic link" : "file",
+                     (unsigned long long)d->size))
             continue;
         if (!lost_found)
             lost_found = find_lost_found();
@@ -617,12 +651,14 @@ int main(int argc, char **argv)
     pass4_bitmaps();
     pass5_counters();
 
-    uint32_t files = 0, dirs = 0;
+    uint32_t files = 0, dirs = 0, links = 0;
     for (uint32_t i = 1; i < sb->ninodes; i++) {
         if (!inode_allocated(i) || !checked[i])
             continue;
         if (is_dir(dinode(i)))
             dirs++;
+        else if (is_link(dinode(i)))
+            links++;
         else
             files++;
     }
@@ -635,8 +671,8 @@ int main(int argc, char **argv)
         printf("filesystem was not unmounted cleanly%s\n",
                unrepaired == 0 && !readonly ? ", marked clean" : "");
     }
-    printf("%s: %u files, %u directories, %llu of %llu data blocks used, %d problem%s%s\n", path,
-           files, dirs, (unsigned long long)(sb->nblocks - sb->data_start - sb->free_blocks),
+    printf("%s: %u files, %u directories, %u symbolic links, %llu of %llu data blocks used, %d problem%s%s\n",
+           path, files, dirs, links, (unsigned long long)(sb->nblocks - sb->data_start - sb->free_blocks),
            (unsigned long long)(sb->nblocks - sb->data_start), problems, problems == 1 ? "" : "s",
            problems ? (fix ? " repaired" : " found") : "");
     if (dirty && !readonly)

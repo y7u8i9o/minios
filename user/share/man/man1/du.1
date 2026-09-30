@@ -1,0 +1,18 @@
+DU(1)                       User Commands
+
+NAME
+    du - estimate disk usage
+
+SYNOPSIS
+    du [-s] [file...]
+
+DESCRIPTION
+    du prints the size in KiB of each directory below the named files,
+    and of each file named directly, rounding every file up to whole KiB.
+    -s prints only the total of each operand. Without operands du starts
+    at the current directory. A symbolic link counts with the length of
+    its target and is never followed, so a link to a directory is not
+    entered.
+
+SEE ALSO
+    df(1), find(1)

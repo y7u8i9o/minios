@@ -420,9 +420,12 @@ static void test_port_additions(void)
     CHECK(gr && !strcmp(gr->gr_name, "user") && getgrnam("nobody") == NULL, "getgrgid and getgrnam");
     CHECK(getuid() == 0 && geteuid() == 0 && getgid() == 0, "single user ids");
     CHECK(major(makedev(5, 9)) == 5 && minor(makedev(5, 9)) == 9, "device numbers");
-    CHECK(symlink("/bin/sh", "/tmp/link") < 0 && errno == EPERM, "symlink is refused");
+    CHECK(symlink("/bin/sh", "/tmp/link") == 0, "symlink");
     char lbuf[16];
-    CHECK(readlink("/bin/sh", lbuf, sizeof lbuf) < 0 && errno == EINVAL, "readlink is refused");
+    CHECK(readlink("/tmp/link", lbuf, sizeof lbuf) == 7 && !memcmp(lbuf, "/bin/sh", 7), "readlink of a link");
+    CHECK(readlink("/bin/sh", lbuf, sizeof lbuf) < 0 && errno == EINVAL, "readlink of a file");
+    CHECK(lstat("/tmp/link", &st) == 0 && S_ISLNK(st.st_mode) && remove("/tmp/link") == 0 &&
+          stat("/bin/sh", &st) == 0, "remove deletes the link, not the target");
     CHECK(mkfifo("/tmp/fifo", 0644) < 0 && errno == EPERM, "mkfifo is refused");
 
     pid_t child = fork();

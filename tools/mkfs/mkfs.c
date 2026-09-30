@@ -5,7 +5,9 @@
  *   mkfs --cat <image> <path>         print the contents of a file
  *
  * Exits non zero on any error. --dump reports "clean" or "unclean" and
- * the state of the journal. Images are written in format version 4, which
+ * the state of the journal. Symbolic links of the host tree are stored as
+ * links (their target in one data block); a target longer than 255 bytes,
+ * which the kernel would not resolve, is an error. Images are written in format version 4, which
  * places a journal between the inode table and the data blocks and stores
  * modification times in nanoseconds.
  */
@@ -16,12 +18,16 @@
 #include <stdint.h>
 #include <errno.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <fs/mfs_format.h>
 
 #define S_IFMT_  0170000
 #define S_IFDIR_ 0040000
 #define S_IFREG_ 0100000
+#define S_IFLNK_ 0120000
+/* The longest target the kernel follows (VFS_SYMLINK_MAX). */
+#define LINK_TARGET_MAX 255
 
 /* Modification time of a host file in nanoseconds since the epoch. */
 static uint64_t host_mtime_ns(const struct stat *st)
@@ -188,9 +194,25 @@ static void add_tree(uint32_t dir, const char *path)
         char full[1024];
         snprintf(full, sizeof full, "%s/%s", path, e->d_name);
         struct stat st;
-        if (stat(full, &st) < 0)
+        if (lstat(full, &st) < 0)
             die(full);
-        if (S_ISDIR(st.st_mode)) {
+        if (S_ISLNK(st.st_mode)) {
+            char target[LINK_TARGET_MAX + 2];
+            ssize_t n = readlink(full, target, sizeof target);
+            if (n < 0)
+                die(full);
+            if (n == 0 || n > LINK_TARGET_MAX) {
+                fprintf(stderr, "mkfs: %s: symbolic link target empty or longer than %d bytes\n", full, LINK_TARGET_MAX);
+                exit(1);
+            }
+            uint32_t ino = alloc_inode();
+            struct mfs_dinode *di = dinode(ino);
+            di->mode = S_IFLNK_ | 0777;
+            di->nlink = 1;
+            di->mtime = host_mtime_ns(&st);
+            write_data(ino, target, (uint64_t)n);
+            add_dirent(dir, e->d_name, ino);
+        } else if (S_ISDIR(st.st_mode)) {
             uint32_t sub = make_dir(dir);
             dinode(sub)->mtime = host_mtime_ns(&st);
             add_dirent(dir, e->d_name, sub);
@@ -291,8 +313,11 @@ static void dump_tree(uint32_t ino, const char *prefix, int depth)
             continue;
         struct mfs_dinode *c = dinode(e->ino);
         int isdir = (c->mode & S_IFMT_) == S_IFDIR_;
-        printf("%s/%s%s ino %u size %llu nlink %u\n", prefix, e->name, isdir ? "/" : "",
+        printf("%s/%s%s ino %u size %llu nlink %u", prefix, e->name, isdir ? "/" : "",
                e->ino, (unsigned long long)c->size, c->nlink);
+        if ((c->mode & S_IFMT_) == S_IFLNK_ && c->direct[0] && c->size < MFS_BLOCK_SIZE)
+            printf(" -> %.*s", (int)c->size, (const char *)block(c->direct[0]));
+        printf("\n");
         if (isdir && depth < 16) {
             char sub[1024];
             snprintf(sub, sizeof sub, "%s/%s", prefix, e->name);

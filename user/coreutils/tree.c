@@ -1,6 +1,9 @@
+/* tree: print a directory tree. A symbolic link is printed as
+ * "name -> target" and not entered. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -57,20 +60,25 @@ static void walk(const char *path, const char *prefix, int depth)
         }
         snprintf(full, size, "%s/%s", path, names[i]);
         struct stat st;
-        if (stat(full, &st) < 0) {
+        if (lstat(full, &st) < 0) {
             errors = 1;
             free(full);
             free(names[i]);
             continue;
         }
         int isdir = S_ISDIR(st.st_mode);
-        int sgr = isdir ? 34 : (st.st_mode & 0111) ? 32 : 0;
+        int islink = S_ISLNK(st.st_mode);
+        int sgr = isdir ? 34 : islink ? 36 : (st.st_mode & 0111) ? 32 : 0;
         printf("%s%s", prefix, i + 1 == count ? "`-- " : "|-- ");
         if (color && sgr)
             fputs(term_sgr(sgr), stdout);
         fputs(names[i], stdout);
         if (color && sgr)
             fputs(term_sgr(0), stdout);
+        char target[1024];
+        ssize_t n = islink ? readlink(full, target, sizeof target - 1) : -1;
+        if (n >= 0)
+            printf(" -> %.*s", (int)n, target);
         putchar('\n');
         if (isdir) {
             dir_count++;

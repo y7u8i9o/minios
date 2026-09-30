@@ -146,7 +146,20 @@ long sys_dup2(struct trapframe *tf)
     return r;
 }
 
-long sys_stat(struct trapframe *tf)
+/* Fill the checked user struct stat at st for path; flags is 0 or
+ * VFS_NOFOLLOW. */
+static long stat_path(const char *path, unsigned flags, uintptr_t st)
+{
+    struct inode *ino;
+    int r = vfs_lookup_path(path, flags, &ino, NULL, 0);
+    if (r < 0)
+        return r;
+    inode_stat(ino, (struct stat *)st);
+    inode_put(ino);
+    return 0;
+}
+
+static long stat_common(struct trapframe *tf, unsigned flags)
 {
     char path[USER_PATH_MAX];
     long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
@@ -155,13 +168,18 @@ long sys_stat(struct trapframe *tf)
     uintptr_t st = SYSARG1(tf);
     if (!user_range_ok(st, sizeof(struct stat), true))
         return -EFAULT;
-    struct inode *ino;
-    r = vfs_lookup(path, &ino);
-    if (r < 0)
-        return r;
-    inode_stat(ino, (struct stat *)st);
-    inode_put(ino);
-    return 0;
+    return stat_path(path, flags, st);
+}
+
+long sys_stat(struct trapframe *tf)
+{
+    return stat_common(tf, 0);
+}
+
+/* lstat(path, st): stat that reports a symbolic link itself. */
+long sys_lstat(struct trapframe *tf)
+{
+    return stat_common(tf, VFS_NOFOLLOW);
 }
 
 long sys_fstat(struct trapframe *tf)
@@ -287,7 +305,8 @@ long sys_openat(struct trapframe *tf)
 }
 
 /* fstatat(dirfd, path, st, flags): stat relative to a directory descriptor.
- * AT_SYMLINK_NOFOLLOW is accepted and has no effect. */
+ * With AT_SYMLINK_NOFOLLOW a symbolic link in the last component is
+ * reported itself. */
 long sys_fstatat(struct trapframe *tf)
 {
     char path[USER_PATH_MAX];
@@ -299,17 +318,68 @@ long sys_fstatat(struct trapframe *tf)
         return -EFAULT;
     if (SYSARG3(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
         return -EINVAL;
-    struct inode *ino;
-    r = vfs_lookup(path, &ino);
+    return stat_path(path, SYSARG3(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0, st);
+}
+
+/* symlinkat(target, dirfd, path): create path, resolved as in openat, as a
+ * symbolic link holding target. */
+long sys_symlinkat(struct trapframe *tf)
+{
+    char target[USER_PATH_MAX], path[USER_PATH_MAX];
+    long r = copy_string_from_user(target, SYSARG0(tf), sizeof target);
     if (r < 0)
         return r;
-    inode_stat(ino, (struct stat *)st);
-    inode_put(ino);
-    return 0;
+    r = copy_path_at((int)SYSARG1(tf), SYSARG2(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    return vfs_symlink(target, path);
+}
+
+long sys_symlink(struct trapframe *tf)
+{
+    return path2_op(tf, vfs_symlink);
+}
+
+/* Copy the target of the link at path to the user buffer buf of size
+ * bytes, without a NUL, and return the number of bytes copied. */
+static long readlink_common(const char *path, uintptr_t buf, size_t size)
+{
+    if ((long)size <= 0)
+        return -EINVAL;
+    if (!user_range_ok(buf, size, true))
+        return -EFAULT;
+    char target[VFS_SYMLINK_MAX + 1];
+    int r = vfs_readlink(path, target, sizeof target);
+    if (r < 0)
+        return r;
+    size_t n = MIN((size_t)r, size);
+    /* User memory is written with no lock held: the copy may fault. */
+    memcpy((char *)buf, target, n);
+    return (long)n;
+}
+
+long sys_readlink(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    return readlink_common(path, SYSARG1(tf), SYSARG2(tf));
+}
+
+/* readlinkat(dirfd, path, buf, size): readlink resolved as in openat. */
+long sys_readlinkat(struct trapframe *tf)
+{
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    return readlink_common(path, SYSARG2(tf), SYSARG3(tf));
 }
 
 /* utimensat(dirfd, path, times, flags): sets the modification time of the
- * file at path, resolved relative to dirfd as in openat; times is NULL for
+ * file at path, resolved relative to dirfd as in openat, or of a symbolic
+ * link itself with AT_SYMLINK_NOFOLLOW; times is NULL for
  * the current time or two timespecs of which
  * the second is the modification time, with UTIME_NOW and UTIME_OMIT in
  * tv_nsec. The access time is not stored and is ignored. Inode times are
@@ -337,7 +407,7 @@ long sys_utimensat(struct trapframe *tf)
             mtime = ts[1].tv_sec * 1000000000 + ts[1].tv_nsec;
         }
     }
-    return vfs_utimens(path, mtime);
+    return vfs_utimens(path, mtime, SYSARG3(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0);
 }
 
 long sys_link(struct trapframe *tf)
@@ -420,15 +490,12 @@ long sys_chdir(struct trapframe *tf)
     long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
     if (r < 0)
         return r;
+    /* The working directory is kept as the path of the directory without
+     * symbolic links, which getcwd returns. */
     struct proc *p = thread_current()->proc;
     char resolved[PROC_CWD_LEN];
-    spin_lock(&p->lock);
-    r = vfs_canonicalize(p->cwd, path, resolved, sizeof resolved);
-    spin_unlock(&p->lock);
-    if (r < 0)
-        return r;
     struct inode *ino;
-    r = vfs_lookup(resolved, &ino);
+    r = vfs_lookup_path(path, 0, &ino, resolved, sizeof resolved);
     if (r < 0)
         return r;
     bool is_dir = S_ISDIR(ino->mode);

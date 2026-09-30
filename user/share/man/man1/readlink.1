@@ -1,0 +1,25 @@
+READLINK(1)                 User Commands
+
+NAME
+    readlink - print the target of a symbolic link
+
+SYNOPSIS
+    readlink [-fn] file...
+
+DESCRIPTION
+    readlink prints the target stored in each symbolic link, one per
+    line, exactly as ln -s stored it. With -f it prints instead the
+    absolute path of each file with every symbolic link and every . and
+    .. resolved, and a file that is not a link is accepted. -n omits the
+    newline after each name.
+
+    The exit status is 1 when a file is not a symbolic link, does not
+    exist, or cannot be resolved because it passes through more than 40
+    links.
+
+EXAMPLES
+    readlink /etc/tests/link-motd
+    readlink -f ../lib
+
+SEE ALSO
+    ln(1), ls(1), stat(1)

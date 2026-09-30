@@ -16,6 +16,9 @@ struct mapping;
 struct poll_source;
 
 #define VFS_PATH_MAX 256
+/* The longest symbolic link target: like every path the kernel accepts, a
+ * target holds at most VFS_PATH_MAX - 1 bytes. */
+#define VFS_SYMLINK_MAX (VFS_PATH_MAX - 1)
 
 /* Operations on directory and file inodes. name is not NUL terminated,
  * len is its length. The caller holds dir->lock for directory operations.
@@ -27,6 +30,13 @@ struct inode_ops {
     int (*unlink)(struct inode *dir, const char *name, size_t len);
     int (*rmdir)(struct inode *dir, const char *name, size_t len);
     int (*link)(struct inode *dir, const char *name, size_t len, struct inode *target);
+    /* Create name as a symbolic link holding target (tlen bytes, 1 to
+     * VFS_SYMLINK_MAX, not NUL terminated). A filesystem that cannot store
+     * links returns -EPERM; without the operation the VFS reports EROFS. */
+    int (*symlink)(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen);
+    /* Copy the target of the symbolic link ino into buf, at most size
+     * bytes and without a NUL; returns the length. ino->lock is held. */
+    int (*readlink)(struct inode *ino, char *buf, size_t size);
     /* Both directory locks are held, olddir first when they differ. */
     int (*rename)(struct inode *olddir, const char *oldname, size_t oldlen,
                   struct inode *newdir, const char *newname, size_t newlen);
@@ -187,10 +197,19 @@ int vfs_umount_all(void);
  * "." and ".." are folded, duplicate slashes removed, no trailing slash. */
 int vfs_canonicalize(const char *cwd, const char *path, char *out, size_t size);
 /* Resolve a path (relative paths use the current process cwd) to a
- * referenced inode. Mount points are crossed downwards. */
+ * referenced inode. Mount points are crossed downwards, symbolic links are
+ * followed in every component (SYMLOOP_MAX in total) and ".." leaves the
+ * directory that was actually reached, not the name that led there. */
 int vfs_lookup(const char *path, struct inode **out);
-/* Resolve everything but the last component, which is copied to name.
- * Fails with -EINVAL for "/" and for "." or ".." as last component. */
+/* vfs_lookup with flags: VFS_NOFOLLOW returns a symbolic link in the last
+ * component itself. phys, when not NULL, receives the canonical path of
+ * the result without symbolic links (physsize bytes, VFS_PATH_MAX is
+ * enough). */
+#define VFS_NOFOLLOW 1
+int vfs_lookup_path(const char *path, unsigned flags, struct inode **out, char *phys, size_t physsize);
+/* Resolve everything but the last component, which is copied to name and
+ * is never followed. Fails with -EINVAL for "/" and for "." or ".." as
+ * last component. */
 int vfs_lookup_parent(const char *path, struct inode **dir, char *name, size_t namesize);
 
 /* File level API used by the system calls. */
@@ -209,11 +228,18 @@ void inode_stat(struct inode *ino, struct stat *st);
 
 int vfs_mkdir(const char *path);
 int vfs_unlink(const char *path);
-/* Set the modification time of the file at path to mtime (nanoseconds). */
-int vfs_utimens(const char *path, int64_t mtime);
+/* Set the modification time of the file at path to mtime (nanoseconds).
+ * flags is 0 or VFS_NOFOLLOW. */
+int vfs_utimens(const char *path, int64_t mtime, unsigned flags);
 int vfs_rmdir(const char *path);
 int vfs_rename(const char *oldpath, const char *newpath);
 int vfs_link(const char *oldpath, const char *newpath);
+/* Create path as a symbolic link holding target. */
+int vfs_symlink(const char *target, const char *path);
+/* Copy the target of the symbolic link at path into the kernel buffer buf
+ * (size bytes, no NUL added); returns the length, -EINVAL when path is
+ * not a link. */
+int vfs_readlink(const char *path, char *buf, size_t size);
 
 /* Generic helpers for filesystems. */
 long vfs_generic_lseek(struct file *f, long off, int whence);

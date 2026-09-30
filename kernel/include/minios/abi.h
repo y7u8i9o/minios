@@ -11,11 +11,13 @@
 #define S_IFCHR  0020000
 #define S_IFBLK  0060000
 #define S_IFIFO  0010000
+#define S_IFLNK  0120000
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
 #define S_ISCHR(m) (((m) & S_IFMT) == S_IFCHR)
 #define S_ISBLK(m) (((m) & S_IFMT) == S_IFBLK)
 #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
+#define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
 
 struct timespec {
     int64_t tv_sec;
@@ -37,10 +39,12 @@ struct stat {
 };
 #define st_mtime st_mtim.tv_sec
 
-/* utimensat: the directory descriptor meaning the working directory, and
- * the two special tv_nsec values of a timespec argument. */
+/* The *at system calls: the directory descriptor meaning the working
+ * directory, the flag that makes fstatat and utimensat act on a symbolic
+ * link itself, and the two special tv_nsec values of a utimensat
+ * timespec. */
 #define AT_FDCWD   (-100)
-#define AT_SYMLINK_NOFOLLOW 0x100   /* accepted and ignored: there are no symbolic links */
+#define AT_SYMLINK_NOFOLLOW 0x100
 #define AT_REMOVEDIR        0x200
 #define UTIME_NOW  ((1l << 30) - 1l)
 #define UTIME_OMIT ((1l << 30) - 2l)
@@ -52,8 +56,12 @@ struct stat {
 #define DT_DIR     4
 #define DT_BLK     6
 #define DT_REG     8
+#define DT_LNK     10
 
 #define NAME_MAX 255
+/* A lookup follows at most this many symbolic links before it fails with
+ * ELOOP. */
+#define SYMLOOP_MAX 40
 
 /* getdents fills an array of these fixed size records. */
 struct dirent {
@@ -72,6 +80,7 @@ struct dirent {
 #define O_TRUNC     0x200
 #define O_APPEND    0x400
 #define O_DIRECTORY 0x10000
+#define O_NOFOLLOW  0x20000         /* fail with ELOOP when the last component is a symbolic link */
 #define O_NONBLOCK  0x800
 #define O_CLOEXEC   0x80000
 

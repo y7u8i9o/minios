@@ -1,4 +1,7 @@
-/* ls: sorted, width-aware directory listings. */
+/* ls: sorted, width-aware directory listings. Entries of a directory are
+ * reported with lstat, so a symbolic link is listed as a link (l in the
+ * long format, followed by "-> target"; @ with -F). An operand that is a
+ * link is followed unless -l, -d or -F is given, as POSIX specifies. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +15,7 @@
 
 struct entry {
     char *name;
+    char *target;                   /* the target of a symbolic link in the long format, or NULL */
     struct stat st;
 };
 static int longfmt, all, human, columns, reverse, by_time, by_size, directory, classify, color;
@@ -31,6 +35,8 @@ static int compare(const void *a, const void *b)
 
 static char suffix(unsigned mode)
 {
+    if (S_ISLNK(mode))
+        return '@';
     if (S_ISDIR(mode))
         return '/';
     if (S_ISFIFO(mode))
@@ -63,7 +69,9 @@ static void print_name(const struct entry *e)
 {
     unsigned mode = e->st.st_mode;
     int sgr = 0;
-    if (S_ISDIR(mode))
+    if (S_ISLNK(mode))
+        sgr = 36;
+    else if (S_ISDIR(mode))
         sgr = 34;
     else if (S_ISCHR(mode) || S_ISBLK(mode))
         sgr = 33;
@@ -74,7 +82,7 @@ static void print_name(const struct entry *e)
     if (color && sgr)
         fputs(term_sgr(sgr), stdout);
     fputs(e->name, stdout);
-    if (classify && suffix(mode))
+    if (classify && suffix(mode) && !(longfmt && e->target))
         putchar(suffix(mode));
     if (color && sgr)
         fputs(term_sgr(0), stdout);
@@ -85,6 +93,7 @@ static void print_long(const struct entry *e)
     unsigned mode = e->st.st_mode;
     char permissions[11] = "----------";
     permissions[0] = S_ISDIR(mode)    ? 'd'
+                     : S_ISLNK(mode)  ? 'l'
                      : S_ISCHR(mode)  ? 'c'
                      : S_ISBLK(mode)  ? 'b'
                      : S_ISFIFO(mode) ? 'p'
@@ -111,20 +120,37 @@ static void print_long(const struct entry *e)
         strftime(date, sizeof date, "%b %d %H:%M", &tm);
     printf("%s %3lu %8s %s ", permissions, (unsigned long)e->st.st_nlink, size, date);
     print_name(e);
+    if (e->target)
+        printf(" -> %s", e->target);
     putchar('\n');
+}
+
+/* The target of the symbolic link at path, allocated, or NULL. */
+static char *link_target(const char *path)
+{
+    char buf[1024];
+    ssize_t n = readlink(path, buf, sizeof buf - 1);
+    if (n < 0)
+        return NULL;
+    buf[n] = '\0';
+    return strdup(buf);
 }
 
 static int list(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) < 0) {
+    int r = longfmt || directory || classify ? lstat(path, &st) : stat(path, &st);
+    if (r < 0) {
         fprintf(stderr, "ls: %s: %s\n", path, strerror(errno));
         return 1;
     }
     if (!S_ISDIR(st.st_mode) || directory) {
         struct entry e = {.name = (char *)path, .st = st};
         if (longfmt) {
+            if (S_ISLNK(st.st_mode))
+                e.target = link_target(path);
             print_long(&e);
+            free(e.target);
         } else {
             print_name(&e);
             putchar('\n');
@@ -150,7 +176,8 @@ static int list(const char *path)
             break;
         }
         snprintf(full, length, "%s/%s", path, entry->d_name);
-        int found = stat(full, &st) == 0;
+        int found = lstat(full, &st) == 0;
+        char *target = found && longfmt && S_ISLNK(st.st_mode) ? link_target(full) : NULL;
         free(full);
         if (!found) {
             status = 1;
@@ -158,11 +185,13 @@ static int list(const char *path)
         }
         struct entry *next = realloc(entries, (count + 1) * sizeof *next);
         if (!next) {
+            free(target);
             status = 1;
             break;
         }
         entries = next;
         entries[count].name = strdup(entry->d_name);
+        entries[count].target = target;
         entries[count].st = st;
         if (!entries[count].name) {
             status = 1;
@@ -199,8 +228,10 @@ static int list(const char *path)
         if (!longfmt)
             putchar('\n');
     }
-    for (size_t i = 0; i < count; i++)
+    for (size_t i = 0; i < count; i++) {
         free(entries[i].name);
+        free(entries[i].target);
+    }
     free(entries);
     return status;
 }
