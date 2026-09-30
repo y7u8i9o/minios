@@ -17,14 +17,23 @@ MKFS     := $(BUILD)/host/mkfs
 FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
 NETPEER  := $(BUILD)/host/netpeer
+PKGSIGN  := $(BUILD)/host/pkgsign
+# PKG_KEY names the key that signs the package repository index
+# (docs/design/packages.md). The build generates one under build/ unless
+# PKG_KEY names another file, and its public half is installed as
+# /etc/pkg/keys/build.pub.
+PKG_KEY  ?= $(BUILD)/pkg/signing.key
+PKG_KEY_FILE := $(abspath $(PKG_KEY))
+PKG_PUB  := $(BUILD)/pkg/signing.pub
+REPO     := $(BUILD)/repo
 
-export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA
+export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKG_KEY_FILE PKG_PUB REPO
 
-.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo check-pkg $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN)
 
 $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
@@ -42,6 +51,27 @@ $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 $(NETPEER): tools/netpeer/netpeer.c
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
+
+# pkgsign generates keys and signs the index of a package repository. It
+# compiles the SHA-2 and Ed25519 code of libc, with which pkg verifies on
+# minios.
+CRYPTO_SRCS := libc/src/crypto/sha2.c libc/src/crypto/ed25519.c
+CRYPTO_HDRS := libc/include/minios/sha2.h libc/include/minios/ed25519.h
+$(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
+
+$(PKG_KEY_FILE): | $(PKGSIGN)
+	@mkdir -p $(dir $@)
+	$(PKGSIGN) keygen $@
+
+# The public key is derived from the key on every run and replaced only
+# when it changes, so that naming another PKG_KEY installs its public half.
+.PHONY: FORCE
+$(PKG_PUB): $(PKG_KEY_FILE) $(PKGSIGN) FORCE
+	@mkdir -p $(dir $@)
+	@$(PKGSIGN) public $(PKG_KEY_FILE) > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
 
 $(LIMINE): third_party/limine/limine.c
 	@mkdir -p $(dir $@)
@@ -76,8 +106,15 @@ packages: user
 
 .PHONY: packages
 
-user: libc libfont libwire libaudio libgui libedit
+user: libc libfont libwire libaudio libgui libedit $(PKG_PUB)
 	$(MAKE) -C user
+
+# make repo writes the package repository of the bundled applications to
+# build/repo, with the archives, the index and its signature. `python3 -m
+# http.server -d build/repo 8000` serves it to a guest as
+# http://10.0.2.2:8000.
+repo: user $(PKGSIGN) $(PKG_KEY_FILE)
+	$(MAKE) -C user repo
 
 # The initrd is a ustar archive of build/initrd_root, populated by user/.
 initrd: user
@@ -135,7 +172,7 @@ gdb:
 
 # CASES="gui gui_wm" runs only those cases; the whole suite takes too
 # long to run for every change.
-test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER)
+test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 
 # Host self test of the network peer lifecycle of the boot harness: a
@@ -157,8 +194,9 @@ KVM_CASES := boot cpu exception fork signals smp smp_user vmm sched
 test-kvm:
 	ACCEL=kvm $(MAKE) test CASES="$(KVM_CASES)"
 
-# Host unit tests of the GUI framework.
-check: check-headers
+# check runs the host unit tests of the GUI framework, the Lua modules and
+# the package signature code.
+check: check-headers check-pkg
 	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
@@ -197,6 +235,15 @@ check-lua:
 	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/engine.lua
 	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/ui.lua
 	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/worker.lua
+
+# check-pkg tests the SHA-256, SHA-512 and Ed25519 code on the host with
+# the vectors of RFC 6234 and RFC 8032, and the pkg_repo case runs the same
+# test on minios.
+check-pkg:
+	@mkdir -p $(BUILD)/host
+	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter libc/include \
+	    -o $(BUILD)/host/cryptotest user/tests/cryptotest.c $(CRYPTO_SRCS)
+	$(BUILD)/host/cryptotest
 
 .PHONY: check-sh libedit
 check-sh:

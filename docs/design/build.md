@@ -40,6 +40,7 @@ passed to the compiler as `CONFIG_*` macros:
 | `make run` | builds the image and boots it through `tools/run.sh` (see below) |
 | `make gdb` | boots with `-s -S` and prints the GDB command line |
 | `make test CASES="case ..."` | runs the named cases under `tests/cases/` (without `CASES` every case, which is too slow to use) |
+| `make repo` | `build/repo/`, the signed package repository of the bundled applications (`packages.md`) |
 | `make clean` | removes `build/` |
 
 `make image` accepts `CMDLINE="..."` to set the kernel command line and
@@ -203,8 +204,11 @@ uses `QEMU_ACCEL` for an override (see Running above).
 
 ## Host checks
 
-`make check` runs the font, protocol, GUI, and Lua checks on the host;
-`make check-sh` checks the shell parser, expansion and execution. `make
+`make check` runs the font, protocol, GUI, Lua and signature checks on
+the host; `make check-pkg` alone runs the SHA-256, SHA-512 and Ed25519
+vectors of RFC 6234 and RFC 8032 against `libc/src/crypto/`
+(`packages.md`). `make check-sh` checks the shell parser, expansion and
+execution. `make
 check-net` self-tests the network peer harness with a fake QEMU, and `make
 check-net-fuzz` fuzzes the network parsers under the sanitizers for three
 seeds of `FUZZ_SECONDS` (30) each (`network.md`). On

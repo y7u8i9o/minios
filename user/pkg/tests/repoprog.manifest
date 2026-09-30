@@ -1,0 +1,4 @@
+name repoprog
+summary A program that needs repolib and repohello
+depends repohello >= 1.0
+needs libpkgfix.so 1

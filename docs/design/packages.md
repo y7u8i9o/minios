@@ -1,17 +1,20 @@
 # Package installer
 
-`pkg` (`user/pkg/`, `pkg(1)`) installs applications from local archives,
-lists, verifies and removes them, and builds the archives. This document
-describes the package format, the manifest, the installation prefix, the
-records the installer keeps, the dependency and library rules, and the
-changes made elsewhere in the system.
+`pkg` (`user/pkg/`, `pkg(1)`) installs applications from local archives
+and from signed repositories over HTTP, lists, verifies and removes them,
+and builds the archives. This document describes the package format, the
+manifest, the installation prefix, the records the installer keeps, the
+dependency and library rules, the repository format with its trust
+model, and the changes made elsewhere in the system.
 
 ## Scope
 
-The installer works on files of a local filesystem. There is no
-repository, no download and no signature. The network stack can fetch
-files over plain HTTP, but `pkg` does not use it, and without TLS a
-download could not be trusted without a digest from another source.
+The installer works on archive files of a local filesystem and on
+repositories served over plain HTTP. The network stack has no TLS, so
+the transport is not trusted. A repository's index carries the size and
+SHA-256 digest of every archive and is signed with Ed25519, and `pkg`
+uses nothing from a repository that the signature and the digests do
+not cover (see Repositories below).
 A package may contain programs, shared libraries, scripts, data files,
 manual pages, launcher entries and MIME registrations. It may not contain
 scripts that run at installation: every effect of an installation is
@@ -135,13 +138,20 @@ reports the files that changed or disappeared.
 
 ## Operations
 
-    pkg install FILE...   install or upgrade packages from archive files
-    pkg check FILE...     the checks of install without writing anything
-    pkg remove NAME...    remove installed packages (--force: with dependents)
-    pkg list              installed packages, one `name version summary` line each
-    pkg info NAME|FILE    the manifest and the files
-    pkg verify [NAME...]  check the recorded files
-    pkg build DIR [OUT]   make an archive from a directory holding manifest and files/
+    pkg install FILE|NAME[-VERSION]...  install or upgrade packages
+    pkg check FILE|NAME[-VERSION]...    the checks of install without writing anything
+    pkg update                          fetch and verify the repository indexes
+    pkg search [PATTERN]                list the entries of the indexes
+    pkg upgrade [NAME...]               install newer versions from the repositories
+    pkg remove NAME...                  remove installed packages (--force: with dependents)
+    pkg list                            installed packages, one `name version summary` line each
+    pkg info NAME|FILE                  the manifest and the files
+    pkg verify [NAME...]                check the recorded files
+    pkg build DIR [OUT]                 make an archive from a directory holding manifest and files/
+
+This section describes the operations on archive files; the commands
+that use repositories are described under Repositories, and they hand
+the archives they fetched to the same installation path.
 
 `install` decompresses each archive into memory (`gzip_decompress` in
 libc, `minios/gzip.h`) and reads the manifest and every member header
@@ -293,6 +303,214 @@ registration, manual lookup and search, calculator execution, removal,
 reinstallation, and fallback handlers. Application GUI tests install
 the relevant archive before opening its program from `/home/.local/bin`.
 
+## Repositories
+
+A repository is a directory served over HTTP. It holds the archives, a
+file `index` that lists them, and `index.sig`, the Ed25519 signature of
+the index. `make repo` writes the repository of the bundled applications
+to `build/repo/`. On the host, `python3 -m http.server -d build/repo
+8000` serves it to a guest under QEMU user networking as
+`http://10.0.2.2:8000`, the URL that the shipped `/etc/pkg.conf` names.
+
+### Index format
+
+The index is a text file whose first line, `minios-pkg-index 1`, names
+the format and its version. Each entry that follows begins with a `name`
+line and describes one archive:
+
+    minios-pkg-index 1
+
+    name repoprog
+    summary A program that needs repolib and repohello
+    depends repohello >= 1.0
+    version 1.0
+    needs libc.so 1
+    needs libpkgfix.so 1
+    path repoprog-1.0.mpk
+    size 2097
+    sha256 dcf4d48dd1e2157ead0d7d5970d4080835c985e3213940296749b37323a0c66f
+
+The keys `name`, `version`, `summary`, `depends`, `conflicts`,
+`provides` and `needs` are copied from the manifest of the archive and
+parsed by the manifest parser, so they follow the rules of the manifest.
+`path` locates the archive relative to the repository URL and consists
+of letters, digits and the characters `._+-/`, without empty, dot or
+dot-dot components. `size` is the length of the archive in bytes and
+`sha256` the SHA-256 digest of the whole compressed file in lowercase
+hexadecimal. Any other key refuses the index. A repository may list
+several versions of a package, each name and version once. The parser
+accepts an index of at most 4 MiB and at most 512 entries over all
+configured repositories.
+
+`index.sig` holds one line, `ed25519 KEYID SIGNATURE`. KEYID is the
+first eight bytes of the SHA-256 of the signing public key, and
+SIGNATURE is the 64 byte Ed25519 signature (RFC 8032) of the exact
+bytes of `index`, both in hexadecimal.
+
+### Trust model
+
+The server, the network and everything between them are untrusted. The
+trust anchor is the set of public keys under `/etc/pkg/keys/` on the
+image. A key file there is named `*.pub` and holds one line,
+`ed25519 HEX`, with the 32 byte public key. The build installs the
+public half of its signing key as `/etc/pkg/keys/build.pub`, and further
+files add keys.
+
+`pkg` accepts an index only when the key its signature names is one of
+those files and the signature verifies against that key. It accepts an
+archive from a repository only when its size and SHA-256 digest equal
+those of its entry in a verified index and its manifest names the same
+package and version as the entry. What the installer does with the
+archive afterwards is the local installation with all its checks. The
+digest binds each archive to the signed index, so a party that can
+change the index or the archives in transit cannot make `pkg` install
+anything that the holder of the key did not list. The size in the index
+also bounds the download, so a server cannot fill the disk with an
+oversized archive. An index is limited to 4 MiB and a signature file to
+1 KiB.
+
+The model does not cover freshness. The index carries no date or
+sequence number, so a server can keep offering an older index that was
+validly signed, and `pkg update` accepts it. The archives it lists are
+older, but each of them was signed. Every key in `/etc/pkg/keys/` is
+trusted for every repository, and whoever holds a private key can sign
+any index.
+
+### Keys and signing
+
+`tools/pkgsign/pkgsign.c` is the host tool, built to
+`build/host/pkgsign` from the `libc/src/crypto/` sources that `pkg`
+links. `pkgsign keygen FILE` writes a new secret key with mode 0600, the
+32 byte seed of RFC 8032 as `ed25519-secret HEX`, and refuses to
+overwrite a file. `pkgsign public FILE` prints the public key file of a
+secret key, `pkgsign sign KEY FILE` writes `FILE.sig` and checks the new
+signature, `pkgsign verify PUB FILE` checks `FILE.sig` against a public
+key file, and `pkgsign digest FILE` prints the size and SHA-256 of a
+file. `tools/mkrepo.sh PKGSIGN KEY OUTDIR ARCHIVE...` empties OUTDIR,
+copies the archives into it, writes the index from the manifest of each
+archive with the name line first, and signs it.
+
+The private key stays out of git. The build uses
+`build/pkg/signing.key`, which `pkgsign keygen` creates when it does not
+exist, or the file that the make variable `PKG_KEY` names. Every build
+derives the public half into `build/pkg/signing.pub` and copies it to
+`/etc/pkg/keys/build.pub` in the root tree when its content changed.
+`make repo` signs `build/repo/` with the same key.
+
+To rotate the key, replace `build/pkg/signing.key`, or the file that
+`PKG_KEY` names, with a new key from `build/host/pkgsign keygen FILE`.
+`make repo` then signs the index with the new key and the next `make`
+installs its public half as `/etc/pkg/keys/build.pub`, and an image
+built before the rotation refuses the new index until that file is
+replaced on it as well.
+
+### Configuration
+
+`/etc/pkg.conf` names the repositories with one `repo NAME URL` line
+each, in the order in which they are searched. NAME follows the rules
+of a package name, and URL has the form `http://HOST[:PORT]/PATH`.
+`timeout SECONDS` bounds the connection and every wait for data, 30
+seconds by default. `--config FILE` reads another file, and `--root DIR`
+makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/` as it reads
+`DIR/lib/abi`.
+
+### Commands
+
+`update` fetches `URL/index` and `URL/index.sig` of every repository
+into `<prefix>/lib/pkg/_repos/NAME/` as `index.new` and
+`index.sig.new`, verifies the signature, parses the index, and only then
+renames both into place and records the URL in `url`. A refused index
+is deleted and the last verified one stays in place. The underscore
+keeps the directory apart from the package records, since a package
+name cannot contain one. The repositories are updated one after another
+and independently of each other, and the exit status is 1 when any of
+them failed.
+
+Every command that reads the indexes verifies the cached copies again.
+It uses a repository only when the recorded URL is the configured one,
+and for any other it reports that `pkg update` must run.
+
+`search` prints one line per entry with the name, the version, the
+repository and the summary, sorted by name and version. A pattern
+selects the entries whose name or summary contains it.
+
+`install` takes archive files and package names on one command line.
+An argument that names an existing file, contains a slash or ends in
+`.mpk` is an archive file, as before. Any other argument is looked up as
+a package name in the indexes and, when no entry has that name, as
+NAME-VERSION split at the last dash. A name alone selects the highest
+version, and between equal versions the repository listed first wins. A
+selected version that is installed already is reported and not fetched.
+
+The dependencies are resolved through the indexes as far as the
+dependency and library rules allow. For every `depends` line that
+neither an installed package nor an archive of the command line
+satisfies, the highest version in the indexes that satisfies it is
+added. For every `needs` soname that neither `/lib`, an installed
+package, an archive of the command line nor another selected package
+provides, a package whose `provides` line names the soname with the same
+ABI number is added. The resolution continues with what it added. A
+dependency that the indexes cannot supply is left to the checks of
+install, which report it. The selected archives are downloaded into
+`/tmp/pkg-PID/`, checked against the index and handed, together with
+the archive files of the command line, to the installation path of the
+previous sections. The directory is removed afterwards whether the
+installation succeeded or not.
+
+`upgrade` selects, for every installed package or for the named ones,
+the highest version in the indexes when it is higher than the installed
+version, and installs the selection as `install` does. It prints `the
+installed packages are up to date` when nothing is newer.
+
+`check FILE` runs the checks of install as before. When `/etc/pkg.conf`
+exists, it then looks the name and version of the archive up in the
+verified indexes and compares size and digest. A match prints `NAME
+VERSION matches the index of REPO`, a difference is an error, and an
+archive that no index lists is reported without an error. This is how
+an archive installed from a local file is checked against a signed
+index.
+
+### Failure handling
+
+Transfers use the HTTP client of `minios/http.h` in libc, which
+`http(1)` shares (`network.md`). A failure names the repository or the
+package and ends the command with status 1, and nothing is installed
+after a failed transfer or check. The messages are the following.
+
+| Failure | Message |
+|---|---|
+| connection refused | `pkg: down: connect to 10.0.2.2:1: Connection refused` |
+| host name not resolved | `pkg: main: HOST: ` and the resolver's reason |
+| no connection within the timeout | `pkg: main: connect to HOST:PORT: no answer in 30 seconds` |
+| no data within the timeout | `pkg: main: HOST:PORT sent nothing for 30 seconds` |
+| HTTP status other than 200 | `pkg: main: URL/index: the server returned status 404` |
+| connection closed early | `pkg: main: HOST:PORT closed the connection after N of M bytes` |
+| body longer than `Content-Length` | `pkg: main: HOST:PORT sent more than its Content-Length of N bytes` |
+| archive longer than its entry | `pkg: NAME: HOST:PORT announces N bytes, more than the M expected` |
+| archive digest differs | `pkg: NAME: the SHA-256 digest of PATH differs from the index of REPO` |
+| signature by an unknown key | `pkg: REPO: the index is signed by key KEYID, which is not in /etc/pkg/keys` |
+| signature does not verify | `pkg: REPO: the index signature does not verify with /etc/pkg/keys/build.pub` |
+| malformed index | `pkg: REPO: entry N: ` and what is wrong |
+| no verified index | `pkg: REPO: no index; run pkg update` |
+
+### Cryptography
+
+`libc/src/crypto/sha2.c` implements SHA-256 and SHA-512 from FIPS 180-4
+and RFC 6234, and `libc/src/crypto/ed25519.c` implements Ed25519 from
+RFC 8032, with the headers `minios/sha2.h` and `minios/ed25519.h`. Field
+elements modulo 2^255 - 19 are five limbs of 51 bits with 128 bit
+products. Points use the extended coordinates and the formulas of
+section 5.1.4, and scalars modulo the group order are reduced bit by
+bit. The constants d and sqrt(-1) and the base point are computed from
+their definitions rather than written out. Verification refuses a
+signature whose S is not below the group order and a public key that
+does not decode, and it compares the encoding of [S]B - [k]A with R.
+The scalar multiplication runs the same operations for every scalar, so
+signing on the host does not branch on the secret key. Both files
+depend on `string.h` alone. The host tools compile them with
+`-idirafter libc/include`, which finds the `minios/` headers after the
+system headers.
+
 ## Program structure
 
 `user/pkg/` is one program, `/bin/pkg`, linked against libc only:
@@ -304,8 +522,15 @@ the relevant archive before opening its program from `/home/.local/bin`.
 - `elf.c`: `DT_NEEDED` and the dynamic symbol table of a file in memory.
 - `pkg.c`: the commands, the check order and the messages.
 
+`repo.c` reads the configuration, verifies and parses the indexes,
+fetches and checks the archives, and implements `update` and `search`.
+The resolution of names and dependencies and `upgrade` are in `pkg.c`,
+beside the installation path they feed.
+
 The gzip codec moved from `user/coreutils/gzip.c` to `libc/src/gzip.c`
-so that the installer and the gzip program share it.
+so that the installer and the gzip program share it. For the same
+reason the HTTP client of `http(1)` moved to `libc/src/net/http.c`, and
+the SHA-2 and Ed25519 code is in `libc/src/crypto/`.
 
 ## Tests
 
@@ -328,10 +553,46 @@ from the hello program, so the archives of the host tools are covered as
 well. The variables at the top of the script let the same script drive a
 host build of the installer.
 
+`tests/cases/pkg_repo` runs `/etc/tests/pkg-repo.sh` against the HTTP
+server of its host peer, `tests/cases/pkg_repo/server.py`, reached as
+10.0.2.2 through QEMU user networking. The peer assembles repositories
+with `tools/mkrepo.sh` and the build's key from test archives that
+`user/pkg/tests/fixtures.mk` writes to `build/user/pkgrepo/`. They are
+repohello in versions 1.0 and 1.1, repolib, which provides
+`libpkgfix.so`, and repoprog, which needs that library and depends on
+repohello. It also
+builds four damaged copies, one with an archive changed after signing,
+one with an archive longer than its entry, one with the index changed
+after signing and one signed by a key the image does not trust. The
+script first runs `/bin/cryptotest`, the RFC vectors. It then checks
+`update` and the cached files, `search` with and without a pattern, the
+installation of repoprog by name with repohello and repolib resolved
+through the index and installed in dependency order, the program
+running, a repeated installation, an unknown name and an unknown
+version, the refusal of an index fetched from another URL, `upgrade` to
+repohello 1.1 and its new file, `pkg check` of a local archive that
+matches the index and of one that does not, and the removal. The damaged
+repositories must be refused by digest, by size, by signature and by key,
+with nothing installed and the previous verified index left in place.
+Last come a refused connection beside a working second repository, a
+missing index, a response shorter than its `Content-Length` for `pkg`
+and for `http`, and a server that sends nothing within a two second
+timeout.
+
+`make check-pkg` compiles `user/tests/cryptotest.c` with the host
+compiler and runs the same vectors on the host: SHA-256 and SHA-512 of
+RFC 6234 TEST1 to TEST4, each fed at once and in pieces, and Ed25519 of
+RFC 8032 TEST 1, 2, 3 and SHA(abc). For each Ed25519 vector the test
+derives the public key, signs, verifies, and refuses a changed message,
+a longer message, a changed R, a changed S, S plus the group order and
+another key. `make check` includes it.
+
 ## Later
 
 - A window for the installer, opened by Files for `.mpk` files, showing
   the manifest and the checks before installation.
-- Signatures, once a key can reach the system by a trusted path.
+- The index should carry a sequence number, so that `pkg update` refuses
+  an index older than the one it holds, and a key should be bound to the
+  repositories it signs for.
 - The profiler reads the symbol tables of `/lib` only; a library
   installed under the prefix appears in a profile without symbols.

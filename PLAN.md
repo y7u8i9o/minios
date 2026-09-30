@@ -1670,6 +1670,25 @@ configuration reads, starts, exits, restarts and the startup summary.
 Documented in `docs/design/console.md` and `docs/design/init.md`, tested
 by `boot`, `timer` and the init cases.
 
+### Signed package repositories (completed 2026-09-30)
+
+`pkg` installs from repositories served over plain HTTP. A repository's
+index lists every archive with its name, version, dependencies, size and
+SHA-256 digest and is signed with Ed25519. `pkg update`, `search`,
+`install NAME[-VERSION]` and `upgrade` accept an index only when its
+signature verifies against a key in `/etc/pkg/keys/` and an archive only
+when it matches its entry, resolve `depends` and `needs` through the
+index, and `pkg check` compares a local archive with the index.
+SHA-256, SHA-512 and Ed25519 are written in `libc/src/crypto/` from RFC
+6234 and RFC 8032, the client of `http` moved to `libc/src/net/http.c`
+with timeouts and `Content-Length` checks, and the host tool
+`tools/pkgsign` with `tools/mkrepo.sh` generates the build's key under
+`build/pkg/` and signs the repository that `make repo` writes to
+`build/repo/`. Documented in `docs/design/packages.md`,
+`docs/design/network.md` and `docs/design/build.md`, tested by
+`pkg_repo` and `make check-pkg`, with `pkg`, `pkg_apps` and `net_tools`
+as regressions.
+
 ## 5. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

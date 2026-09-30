@@ -4,8 +4,11 @@ NAME
     pkg - install, remove, list and build packages
 
 SYNOPSIS
-    pkg [--prefix dir] [--root dir] install file...
-    pkg [--prefix dir] [--root dir] check file...
+    pkg [--prefix dir] [--root dir] [--config file] install file|name[-version]...
+    pkg [--prefix dir] [--root dir] [--config file] check file|name[-version]...
+    pkg [--prefix dir] [--root dir] [--config file] update
+    pkg [--prefix dir] [--root dir] [--config file] search [pattern]
+    pkg [--prefix dir] [--root dir] [--config file] upgrade [name...]
     pkg [--prefix dir] remove [--force] name...
     pkg [--prefix dir] list
     pkg [--prefix dir] info name|file
@@ -13,17 +16,39 @@ SYNOPSIS
     pkg [--root dir] build dir [file]
 
 DESCRIPTION
-    pkg installs applications from package files into /home/.local and
-    keeps a record of every installed file. A package is a gzip
-    compressed ustar archive named name-version.mpk whose first member
-    is the manifest and whose files lie under files/, relative to the
-    prefix. Every check of an installation runs before anything is
-    written: the dependencies, the conflicts, the shared libraries with
-    their ABI numbers and symbols, and the ownership of every path.
+    pkg installs applications from package files and from signed
+    repositories into /home/.local and keeps a record of every installed
+    file. A package is a gzip compressed ustar archive named
+    name-version.mpk whose first member is the manifest and whose files
+    lie under files/, relative to the prefix. Every check of an
+    installation runs before anything is written: the dependencies, the
+    conflicts, the shared libraries with their ABI numbers and symbols,
+    and the ownership of every path.
+
+    A repository is a directory served over plain HTTP that holds the
+    archives, an index and the Ed25519 signature of the index. The index
+    lists every archive with its name, version, dependencies, size and
+    SHA-256 digest. Since HTTP offers no protection, pkg uses an index
+    only when its signature verifies against a key in /etc/pkg/keys, and
+    an archive only when its size and digest equal those in the index.
 
 COMMANDS
-    install   install or upgrade the packages in the named files
-    check     run the checks of install without writing anything
+    install   install or upgrade packages; an argument that is an
+              existing file, contains a slash or ends in .mpk is a
+              package file, any other names a package in the
+              repositories, as name or name-version, and its
+              dependencies are resolved through the indexes
+    check     run the checks of install without writing anything; a
+              package file is also compared with the entry of the same
+              name and version in the indexes
+    update    fetch the index of every repository, verify its signature
+              and keep it under /home/.local/lib/pkg/_repos; a refused
+              index leaves the previous one in place
+    search    print the entries of the indexes whose name or summary
+              contains pattern, one name, version, repository and
+              summary per line
+    upgrade   install the higher versions that the indexes offer for
+              the installed packages, or for the named ones
     remove    remove installed packages; --force removes a package that
               other packages depend on
     list      print the installed packages, one name, version and
@@ -37,18 +62,45 @@ COMMANDS
 
 OPTIONS
     --prefix dir   install under dir instead of /home/.local
-    --root dir     read lib/abi and the system libraries below dir
+    --root dir     read lib/abi, the system libraries, etc/pkg.conf and
+                   etc/pkg/keys below dir
+    --config file  read the repositories from file instead of
+                   /etc/pkg.conf
+
+CONFIGURATION
+    /etc/pkg.conf names the repositories, one per line, in the order in
+    which they are searched, and may set the timeout in seconds for the
+    connection and for every wait for data (30 by default):
+
+        repo build http://10.0.2.2:8000
+        timeout 30
+
+    A key file in /etc/pkg/keys has the suffix .pub and holds one line,
+    ed25519 followed by the public key in hexadecimal. The image carries
+    the key of the build as /etc/pkg/keys/build.pub.
+
+EXIT STATUS
+    pkg exits with 0 on success and 1 when an operation failed. A
+    refused signature, an archive that differs from the index, a
+    connection that fails or times out, an HTTP status other than 200
+    and a response shorter or longer than its Content-Length are
+    failures, and each prints a message naming the repository or the
+    package. An unknown command or missing arguments exit with 2.
 
 BUNDLED APPLICATIONS
     Optional applications are available as archives in /usr/share/packages.
     Install selected archives, or all of them, with the examples below.
     They are not installed automatically. The package prefix persists on
-    the data volume across root image rebuilds.
+    the data volume across root image rebuilds. make repo writes the same
+    archives as a signed repository to build/repo on the host.
 
 FILES
+    /etc/pkg.conf                        the repositories
+    /etc/pkg/keys/*.pub                  the trusted public keys
     /home/.local/lib/pkg/name/manifest   the manifest as installed
     /home/.local/lib/pkg/name/files      path, size and CRC-32 of each file
     /home/.local/lib/pkg/name/dirs       the directories the package created
+    /home/.local/lib/pkg/_repos/repo/    the verified index of a repository
     /home/.local/share/launcher          launcher entries of the packages
     /home/.local/share/mime.types        MIME types of the packages
     /home/.local/share/mime.apps         MIME handlers of the packages
@@ -59,8 +111,14 @@ EXAMPLES
     pkg install /usr/share/packages/*.mpk
     pkg build pong
     pkg install pong-1.2.0.mpk
+    pkg update
+    pkg search calc
+    pkg install calc
+    pkg install calc-0.2.0
+    pkg upgrade
+    pkg check calc-0.2.0.mpk
     pkg list
     pkg remove pong
 
 SEE ALSO
-    tar(1), gzip(1), ld(1)
+    http(1), tar(1), gzip(1), ld(1)

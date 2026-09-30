@@ -58,7 +58,7 @@ The kernel implements pipes, Unix domain stream sockets with `socketpair` and de
 
 ## Networking
 
-`kernel/net/` implements IPv4 for one virtio-net interface and the loopback interface. Packets are handled by a worker thread and live in packet buffers that have exactly one owner at a time. The stack has Ethernet, ARP, IPv4 with fragment reassembly and path MTU discovery, ICMP, UDP and TCP with congestion control and retransmission timers. Sockets use the Internet ABI of POSIX (`AF_INET`, `SOCK_STREAM`, `SOCK_DGRAM`) behind the same socket layer as Unix domain sockets. `/dev/urandom` is seeded from virtio-rng when present. `dhcpc` configures the interface and the resolver, and the tools `net`, `ping`, `nc`, `http` and `xfer` use the stack. TCP has no window scaling, selective acknowledgements or timestamps, and the resolver has no cache. `docs/design/network.md` describes the stack and the validation records beside it list the evidence per milestone.
+`kernel/net/` implements IPv4 for one virtio-net interface and the loopback interface. Packets are handled by a worker thread and live in packet buffers that have exactly one owner at a time. The stack has Ethernet, ARP, IPv4 with fragment reassembly and path MTU discovery, ICMP, UDP and TCP with congestion control and retransmission timers. Sockets use the Internet ABI of POSIX (`AF_INET`, `SOCK_STREAM`, `SOCK_DGRAM`) behind the same socket layer as Unix domain sockets. `/dev/urandom` is seeded from virtio-rng when present. `dhcpc` configures the interface and the resolver, and the tools `net`, `ping`, `nc`, `http` and `xfer` use the stack, as does `pkg` for its repositories. TCP has no window scaling, selective acknowledgements or timestamps, and the resolver has no cache. `docs/design/network.md` describes the stack and the validation records beside it list the evidence per milestone.
 
 ## Device drivers
 
@@ -96,7 +96,7 @@ The session consists of the panel (launcher menu, task list, volume mixer, clock
 
 ## User space
 
-The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `math.h`, `time.h`, `pthread.h`, `signal.h`, `termios.h`, `dirent.h`, `fnmatch.h`, `glob.h`, `regex.h`, `wchar.h`, `locale.h`, `setjmp.h`, `fenv.h` and the `sys/` headers for sockets, memory mapping, waiting, file status, resource limits, event descriptors and audio. The math library has functions for `float`, `double` and x87 `long double`, the floating environment, hexadecimal and decimal conversion, `printf` floating formatting, and an SSE2 vector interface. The kernel saves the FXSAVE area of every thread.
+The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `math.h`, `time.h`, `pthread.h`, `signal.h`, `termios.h`, `dirent.h`, `fnmatch.h`, `glob.h`, `regex.h`, `wchar.h`, `locale.h`, `setjmp.h`, `fenv.h` and the `sys/` headers for sockets, memory mapping, waiting, file status, resource limits, event descriptors and audio. `minios/sha2.h`, `minios/ed25519.h` and `minios/http.h` provide SHA-256, SHA-512, Ed25519 and the HTTP client that `http` and `pkg` share. The math library has functions for `float`, `double` and x87 `long double`, the floating environment, hexadecimal and decimal conversion, `printf` floating formatting, and an SSE2 vector interface. The kernel saves the FXSAVE area of every thread.
 
 `init` reads `/etc/init.conf`, runs its tasks in order and supervises its services with restart limits; the audio server and the DHCP client are services of the shipped configuration. `initctl` lists, starts, stops, restarts and reloads entries and requests the shutdown.
 
@@ -106,7 +106,7 @@ The 86 programs in `user/coreutils/` are the file, text, process and system util
 
 Lua 5.5.1 is compiled unmodified from `third_party/lua/src/` into `/bin/lua` and `/bin/luac`. `user/lua/` adds the modules `fs` (directory listing, file status, whole file reads and writes), `sys` (process start, MIME handlers, signals, system information) and `gui`, which binds the `libgui` framework. `user/share/apps/clock.lua` and `pong.lua` are the clock and pong applications written in Lua, and `code.lua` is a source editor for C, Lua and shell scripts with a run panel. Launcher files on the desktop start them. `require "thread"` starts native worker threads with their own Lua states, and `require "audio"` binds `libaudio`; the Lua Synthesizer is an eight voice instrument written in Lua on these two modules.
 
-`pkg` installs, verifies and removes `.mpk` packages under `/home/.local`, on the data volume, and builds them. The desktop applications of `user/packages/` are built as packages into `/usr/share/packages`, and the loader searches `/home/.local/lib` after `/lib`.
+`pkg` installs, verifies and removes `.mpk` packages under `/home/.local`, on the data volume, and builds them. It installs from local archives and from repositories over plain HTTP. A repository's index lists the size and SHA-256 digest of every archive and is signed with Ed25519, and `pkg` accepts an index only when its signature verifies against a key in `/etc/pkg/keys/` and an archive only when it matches the index. `pkg update`, `search`, `install NAME` and `upgrade` work on the verified indexes and resolve dependencies through them. The desktop applications of `user/packages/` are built as packages into `/usr/share/packages`, and `make repo` signs them as a repository in `build/repo/` with a key that the build generates under `build/pkg/` and whose public half it installs in the image. The loader searches `/home/.local/lib` after `/lib`.
 
 `edit` is a console text editor, `gedit` a graphical one. `mint` is a small scripting language written before user space had floating point and `setjmp`. It is retained as an example interpreter.
 
@@ -116,7 +116,7 @@ The graphical applications are the terminal emulator (scrollback, alternate scre
 
 ```
 minios/
-  Makefile              all, image, run, gdb, test, test-kvm, check, check-sh, clean
+  Makefile              all, image, run, gdb, test, test-kvm, check, check-sh, check-pkg, repo, clean
   toolchain.mk          compiler flags and paths
   VERSION               release under semantic versioning
   data.img              persistent data volume, created by the build, ignored by git
@@ -157,7 +157,9 @@ minios/
     gensyms/            kernel symbol table generator
     genfont/  genicons/  genkeymap/  wscan/
     netpeer/            host peer of the network tests
+    pkgsign/            key generation and index signing of package repositories
     mkpkg.sh            package builder used by make packages
+    mkrepo.sh           signed repository writer used by make repo
     fold-develop.sh     daily merge of the bleeding-edge branches into develop
     run.sh              QEMU command line for make run and make gdb
     version.sh          build number and version stamp
@@ -182,10 +184,12 @@ make test CASES="gui gui_wm"     # run the named boot tests
 make test-kvm                    # run the processor dependent cases under KVM (Linux)
 make check                       # host unit tests of libfont, libwire, libgui and the Lua modules
 make check-sh                    # host unit test of the shell parser
+make check-pkg                   # host test of SHA-256, SHA-512 and Ed25519 with the RFC vectors
 make check-lua                   # host tests of the Lua modules
 make check-net                   # self test of the network peer harness
 make check-net-fuzz              # host fuzzing of the wire parsers and socket validators
 make packages                    # build the application packages
+make repo                        # sign them as a repository in build/repo
 tools/run.sh --help              # QEMU options. qemu.conf holds local defaults
 ```
 
@@ -195,7 +199,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 174 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser, and host fuzzers cover the network wire parsers.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 175 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules, the shell parser and the signature code of the package installer, and host fuzzers cover the network wire parsers.
 
 ## Code size
 

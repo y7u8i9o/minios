@@ -91,4 +91,40 @@ int system_abi(const char *soname);
 int read_file(const char *path, uint8_t **data, size_t *len);
 int write_file(const char *path, const uint8_t *data, size_t len);
 int write_file_mode(const char *path, const uint8_t *data, size_t len, uint32_t mode);
+int mkdir_all(const char *path);
 void path_join(char *buf, size_t n, const char *dir, const char *rel);
+
+/* repo.c verifies repository indexes and fetches archives over HTTP. The
+ * timeout of a configuration bounds, in seconds, the connection and each
+ * wait for data. An index entry holds the manifest keys of the archive in
+ * m, its path relative to the repository URL, its size and digest, and
+ * the position of its repository in repo_config.repos. */
+#define PKG_MAX_REPOS 8
+#define PKG_URL_MAX 512
+struct repo { char name[PKG_NAME_MAX]; char url[PKG_URL_MAX]; };
+struct repo_config {
+    struct repo repos[PKG_MAX_REPOS];
+    int nrepos;
+    int timeout;
+};
+struct index_entry {
+    struct manifest m;
+    char path[PKG_PATH_MAX];
+    long long size;
+    uint8_t sha256[32];
+    int repo;
+};
+struct index { struct index_entry *entries; int n, cap; };
+extern const char *config_path;
+int config_read(struct repo_config *c);
+int index_load(const struct repo_config *c, struct index *ix, int quiet);
+void index_free(struct index *ix);
+const struct index_entry *index_best(const struct index *ix, const char *name, const struct pkg_dep *want);
+const struct index_entry *index_find(const struct index *ix, const char *name, const char *version);
+const struct index_entry *index_provider(const struct index *ix, const struct pkg_lib *lib);
+int repo_fetch(const struct repo_config *c, const struct index_entry *e, const char *dest);
+int file_matches(const struct index_entry *e, const char *file, const char *label, const char *repo,
+                 char *err, size_t errlen);
+int config_present(void);
+int cmd_update(void);
+int cmd_search(int argc, char **argv);

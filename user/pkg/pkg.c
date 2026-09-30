@@ -23,6 +23,7 @@ struct pending {
     int upgrade;                /* another version is installed */
     int skip;                   /* the same version is installed */
     int done;                   /* ordering */
+    int fetched;                /* The archive came from a repository. */
 };
 
 static struct pending pend[MAX_PENDING];
@@ -34,13 +35,16 @@ static int force;
 
 static void usage(void)
 {
-    fputs("usage: pkg [--prefix DIR] [--root DIR] command...\n"
-          "       pkg install FILE...\n"
+    fputs("usage: pkg [--prefix DIR] [--root DIR] [--config FILE] command...\n"
+          "       pkg install FILE|NAME[-VERSION]...\n"
+          "       pkg check FILE|NAME[-VERSION]...\n"
+          "       pkg update\n"
+          "       pkg search [PATTERN]\n"
+          "       pkg upgrade [NAME...]\n"
           "       pkg remove [--force] NAME...\n"
           "       pkg list\n"
           "       pkg info NAME|FILE\n"
           "       pkg verify [NAME...]\n"
-          "       pkg check FILE...\n"
           "       pkg build DIR [FILE]\n", stderr);
     exit(2);
 }
@@ -622,10 +626,229 @@ static int order(struct pending **out)
     return n;
 }
 
-static int cmd_install(int argc, char **argv, int check_only)
+/* The functions below install packages from repositories. */
+
+static const struct index_entry *wanted[MAX_PENDING];
+static int nwanted;
+static char fetched_files[MAX_PENDING][PKG_PATH_MAX];
+static char fetch_dir[PKG_PATH_MAX];
+
+static const struct index_entry *wanted_named(const char *name)
 {
-    if (argc < 1)
-        usage();
+    for (int i = 0; i < nwanted; i++)
+        if (strcmp(wanted[i]->m.name, name) == 0)
+            return wanted[i];
+    return NULL;
+}
+
+static int add_wanted(const struct index_entry *e)
+{
+    const struct index_entry *w = wanted_named(e->m.name);
+    if (w && w != e)
+        return error(e->m.name, "wanted both as %s and as %s", w->m.version, e->m.version);
+    if (w)
+        return 0;
+    if (nwanted == MAX_PENDING)
+        return error(NULL, "at most %d packages per command", MAX_PENDING);
+    wanted[nwanted++] = e;
+    return 0;
+}
+
+/* An argument names a local archive when it is an existing file, has a
+ * slash or ends in .mpk; anything else is a package name. */
+static int is_file_argument(const char *arg)
+{
+    struct stat st;
+    size_t n = strlen(arg);
+    return stat(arg, &st) == 0 || strchr(arg, '/') || (n > 4 && strcmp(arg + n - 4, ".mpk") == 0);
+}
+
+/* resolve_name looks NAME or NAME-VERSION up in the index. It tries the
+ * name as a whole first, since names may contain dashes, and then splits
+ * it at the last dash. */
+static const struct index_entry *resolve_name(const struct index *ix, const char *arg)
+{
+    const struct index_entry *e = index_best(ix, arg, NULL);
+    if (e)
+        return e;
+    const char *dash = strrchr(arg, '-');
+    if (dash && dash > arg && version_valid(dash + 1)) {
+        char name[PKG_NAME_MAX];
+        size_t n = (size_t)(dash - arg);
+        if (n < sizeof name) {
+            memcpy(name, arg, n);
+            name[n] = '\0';
+            if ((e = index_find(ix, name, dash + 1)) != NULL)
+                return e;
+            if (index_best(ix, name, NULL)) {
+                error(name, "no repository offers version %s", dash + 1);
+                return NULL;
+            }
+        }
+    }
+    error(arg, "no repository offers this package");
+    return NULL;
+}
+
+static int system_library(const char *soname)
+{
+    char path[PKG_PATH_MAX];
+    struct stat st;
+    snprintf(path, sizeof path, "%s/lib/%s", sysroot, soname);
+    return stat(path, &st) == 0;
+}
+
+/* resolve_dependencies adds what the wanted packages need and nothing
+ * else provides. A
+ * `depends` line that neither an installed package nor an archive on the
+ * command line satisfies takes the highest version the index offers that
+ * satisfies it. A `needs` soname that neither /lib, an installed package,
+ * an archive on the command line nor another wanted package provides
+ * takes a package the index lists as providing it with the same ABI
+ * number. What the index cannot supply is left for the checks of install
+ * to report. The list grows while it is walked. */
+static int resolve_dependencies(const struct index *ix)
+{
+    for (int i = 0; i < nwanted; i++) {
+        const struct manifest *m = &wanted[i]->m;
+        for (int j = 0; j < m->ndeps; j++) {
+            const struct pkg_dep *d = &m->deps[j];
+            const struct manifest *im = installed_manifest(d->name);
+            if (wanted_named(d->name) || pending_named(d->name) || (im && dep_satisfied(d, im->version)))
+                continue;
+            const struct index_entry *e = index_best(ix, d->name, d);
+            if (e && add_wanted(e) < 0)
+                return -1;
+        }
+        for (int j = 0; j < m->nneeds; j++) {
+            const struct pkg_lib *n = &m->needs[j];
+            int provided = system_library(n->soname);
+            for (int k = 0; k < nwanted && !provided; k++)
+                if (manifest_provides(&wanted[k]->m, n->soname))
+                    provided = 1;
+            for (int k = 0; k < npend && !provided; k++)
+                if (manifest_provides(&pend[k].m, n->soname))
+                    provided = 1;
+            for (int k = 0; k < ninstalled && !provided; k++)
+                if (manifest_provides(&installed_m[k], n->soname))
+                    provided = 1;
+            if (provided)
+                continue;
+            const struct index_entry *e = index_provider(ix, n);
+            if (e && add_wanted(e) < 0)
+                return -1;
+        }
+    }
+    return 0;
+}
+
+/* fetch_wanted downloads every wanted package into a private directory
+ * under /tmp and adds the verified archives to the pending list. */
+static int fetch_wanted(const struct repo_config *c)
+{
+    snprintf(fetch_dir, sizeof fetch_dir, "/tmp/pkg-%d", (int)getpid());
+    if (mkdir(fetch_dir, 0700) < 0 && errno != EEXIST)
+        return error(NULL, "%s: %s", fetch_dir, strerror(errno));
+    for (int i = 0; i < nwanted; i++) {
+        const struct index_entry *e = wanted[i];
+        if (npend == MAX_PENDING)
+            return error(NULL, "at most %d packages per command", MAX_PENDING);
+        char *file = fetched_files[npend];
+        snprintf(file, PKG_PATH_MAX, "%s/%s-%s.mpk", fetch_dir, e->m.name, e->m.version);
+        if (repo_fetch(c, e, file) < 0)
+            return -1;
+        printf("fetched %s %s from %s\n", e->m.name, e->m.version, c->repos[e->repo].name);
+        struct pending *p = &pend[npend++];
+        p->file = file;
+        p->fetched = 1;
+        if (open_package(p) < 0)
+            return -1;
+        if (strcmp(p->m.name, e->m.name) != 0 || strcmp(p->m.version, e->m.version) != 0)
+            return error(e->m.name, "the archive holds %s %s, the index lists %s %s", p->m.name,
+                         p->m.version, e->m.name, e->m.version);
+    }
+    return 0;
+}
+
+static void remove_fetched(void)
+{
+    for (int i = 0; i < npend; i++)
+        if (pend[i].fetched)
+            unlink(pend[i].file);
+    if (fetch_dir[0])
+        rmdir(fetch_dir);
+}
+
+/* install_from_repositories resolves the package names of an install,
+ * check or upgrade command through the verified indexes, completes them
+ * with their dependencies and fetches them. A wanted version that is
+ * installed already is reported and not fetched. */
+static int install_from_repositories(char **names, int nnames, const struct index_entry **upgrades, int nupgrades)
+{
+    static struct repo_config c;
+    static struct index ix;
+    if (config_read(&c) < 0)
+        return -1;
+    if (index_load(&c, &ix, 0) == 0)
+        return error(NULL, "no repository index is available; run pkg update");
+    for (int i = 0; i < nnames; i++) {
+        const struct index_entry *e = resolve_name(&ix, names[i]);
+        if (!e)
+            return -1;
+        const struct manifest *im = installed_manifest(e->m.name);
+        if (im && strcmp(im->version, e->m.version) == 0) {
+            printf("%s %s is installed already\n", e->m.name, e->m.version);
+            continue;
+        }
+        if (add_wanted(e) < 0)
+            return -1;
+    }
+    for (int i = 0; i < nupgrades; i++) {
+        /* The upgrades were chosen from another load of the index. */
+        const struct index_entry *e = index_find(&ix, upgrades[i]->m.name, upgrades[i]->m.version);
+        if (e && add_wanted(e) < 0)
+            return -1;
+    }
+    if (resolve_dependencies(&ix) < 0)
+        return -1;
+    return fetch_wanted(&c);
+}
+
+/* check_local_against_index compares every local archive with the
+ * indexes. Its size and digest must be the ones the index gives for its
+ * name and version. */
+static int check_local_against_index(void)
+{
+    struct repo_config c;
+    struct index ix;
+    if (!config_present() || config_read(&c) < 0)
+        return 0;
+    index_load(&c, &ix, 1);
+    int status = 0;
+    for (int i = 0; i < npend; i++) {
+        struct pending *p = &pend[i];
+        if (p->fetched)
+            continue;
+        const struct index_entry *e = index_find(&ix, p->m.name, p->m.version);
+        if (!e) {
+            printf("%s %s is in no repository index\n", p->m.name, p->m.version);
+            continue;
+        }
+        char err[400];
+        int m = file_matches(e, p->file, p->file, c.repos[e->repo].name, err, sizeof err);
+        if (m == 1)
+            printf("%s %s matches the index of %s\n", p->m.name, p->m.version, c.repos[e->repo].name);
+        else
+            status = error(p->m.name, "%s", err);
+    }
+    index_free(&ix);
+    return status;
+}
+
+static int install(int argc, char **argv, const struct index_entry **upgrades, int nupgrades, int check_only)
+{
+    char *names[MAX_PENDING];
+    int nnames = 0;
     if (argc > MAX_PENDING)
         return error(NULL, "at most %d packages per command", MAX_PENDING);
     int r = db_lock();
@@ -634,10 +857,21 @@ static int cmd_install(int argc, char **argv, int check_only)
     load_installed();
     int status = 0;
     for (int i = 0; i < argc && status == 0; i++) {
+        if (!is_file_argument(argv[i])) {
+            names[nnames++] = argv[i];
+            continue;
+        }
         pend[npend].file = argv[i];
         if (open_package(&pend[npend]) < 0)
             status = -1;
         npend++;
+    }
+    if (status == 0 && (nnames || nupgrades))
+        status = install_from_repositories(names, nnames, upgrades, nupgrades);
+    if (status == 0 && npend == 0) {
+        db_unlock();
+        remove_fetched();
+        return 0;
     }
     if (status == 0)
         status = check_all();
@@ -648,6 +882,7 @@ static int cmd_install(int argc, char **argv, int check_only)
         for (int i = 0; i < npend; i++)
             if (!pend[i].skip)
                 printf("%s %s can be installed\n", pend[i].m.name, pend[i].m.version);
+        status = check_local_against_index();
     } else if (status == 0) {
         for (int i = 0; i < npend && status == 0; i++) {
             struct pending *p = sorted[i];
@@ -665,7 +900,55 @@ static int cmd_install(int argc, char **argv, int check_only)
     }
     for (int i = 0; i < npend; i++)
         archive_free(&pend[i].ar);
+    remove_fetched();
     db_unlock();
+    return status;
+}
+
+static int cmd_install(int argc, char **argv, int check_only)
+{
+    if (argc < 1)
+        usage();
+    return install(argc, argv, NULL, 0, check_only);
+}
+
+/* cmd_upgrade installs the higher versions that the indexes offer for the
+ * installed packages, all of them or the named ones. */
+static int cmd_upgrade(int argc, char **argv)
+{
+    struct repo_config c;
+    struct index ix;
+    const struct index_entry *newer[MAX_PENDING];
+    int n = 0, status = 0;
+    if (config_read(&c) < 0)
+        return -1;
+    if (index_load(&c, &ix, 0) == 0)
+        return error(NULL, "no repository index is available; run pkg update");
+    load_installed();
+    for (int i = 0; i < argc; i++)
+        if (!installed_manifest(argv[i]))
+            status = error(argv[i], "not installed");
+    for (int i = 0; i < ninstalled && status == 0; i++) {
+        const struct manifest *im = &installed_m[i];
+        int named = argc == 0;
+        for (int j = 0; j < argc; j++)
+            if (strcmp(argv[j], installed[i]) == 0)
+                named = 1;
+        if (!im->name[0] || !named)
+            continue;
+        const struct index_entry *e = index_best(&ix, im->name, NULL);
+        if (!e || version_cmp(e->m.version, im->version) <= 0)
+            continue;
+        if (n == MAX_PENDING)
+            status = error(NULL, "at most %d packages per command", MAX_PENDING);
+        else
+            newer[n++] = e;
+    }
+    if (status == 0 && n == 0)
+        printf("the installed packages are up to date\n");
+    else if (status == 0)
+        status = install(0, NULL, newer, n, 0);
+    index_free(&ix);
     return status;
 }
 
@@ -988,11 +1271,14 @@ static int cmd_build(int argc, char **argv)
 int main(int argc, char **argv)
 {
     int i = 1;
-    while (argc > i + 1 && (strcmp(argv[i], "--prefix") == 0 || strcmp(argv[i], "--root") == 0)) {
+    while (argc > i + 1 && (strcmp(argv[i], "--prefix") == 0 || strcmp(argv[i], "--root") == 0 ||
+                            strcmp(argv[i], "--config") == 0)) {
         if (argv[i][2] == 'p')
             prefix = argv[i + 1];
-        else
+        else if (argv[i][2] == 'r')
             sysroot = argv[i + 1];
+        else
+            config_path = argv[i + 1];
         i += 2;
     }
     if (i >= argc)
@@ -1003,6 +1289,12 @@ int main(int argc, char **argv)
         r = cmd_install(argc - i, argv + i, 0);
     else if (strcmp(cmd, "check") == 0)
         r = cmd_install(argc - i, argv + i, 1);
+    else if (strcmp(cmd, "update") == 0 && argc == i)
+        r = cmd_update();
+    else if (strcmp(cmd, "search") == 0)
+        r = cmd_search(argc - i, argv + i);
+    else if (strcmp(cmd, "upgrade") == 0)
+        r = cmd_upgrade(argc - i, argv + i);
     else if (strcmp(cmd, "remove") == 0)
         r = cmd_remove(argc - i, argv + i);
     else if (strcmp(cmd, "list") == 0)
