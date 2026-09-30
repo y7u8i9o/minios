@@ -9,7 +9,9 @@ changes made elsewhere in the system.
 ## Scope
 
 The installer works on files of a local filesystem. There is no
-repository, no download and no signature, since there is no networking.
+repository, no download and no signature. The network stack can fetch
+files over plain HTTP, but `pkg` does not use it, and without TLS a
+download could not be trusted without a digest from another source.
 A package may contain programs, shared libraries, scripts, data files,
 manual pages, launcher entries and MIME registrations. It may not contain
 scripts that run at installation: every effect of an installation is

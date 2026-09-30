@@ -5,10 +5,10 @@
 | Area | Decision |
 |---|---|
 | Architecture | x86_64, QEMU only (`qemu-system-x86_64`, `-M q35`, `-accel hvf` where available) |
-| Language | C (C17, freestanding), NASM or GNU as for assembly stubs |
+| Language | C (C17, freestanding), GNU as (`.S` files) for assembly |
 | Boot | Limine bootloader, Limine boot protocol, higher half kernel at `0xffffffff80000000` |
 | Kernel type | Monolithic |
-| CPUs | Boot CPU only at first. All per CPU state kept in a `struct cpu` reached via `GS` base so SMP can be added later without restructuring |
+| CPUs | SMP since M18, application processors started through the Limine MP protocol. All per CPU state kept in a `struct cpu` reached via the `GS` base |
 | Preemption | Timer interrupts trigger rescheduling only on return to user mode. Kernel code is not preempted |
 | Execution model | Processes with multiple threads. Threads are the scheduling unit, processes own the address space, file table and thread list |
 | Scheduler | Multilevel feedback queue (MLFQ) |
@@ -17,16 +17,17 @@
 | Kernel heap | Slab allocator on top of the buddy allocator |
 | Virtual memory | Copy on write, swapping of anonymous pages to a swap partition |
 | Filesystem | Custom inode based filesystem (`mfs`) behind a VFS with mount points and devfs |
-| Storage | virtio-blk (PCI, modern virtio interface) |
+| Storage | virtio-blk (PCI, modern virtio interface): the root image rebuilt by the build, a data volume mounted at `/home`, a swap device, FAT volumes |
 | System calls | POSIX subset, entered through `syscall` / `sysretq` |
 | Executables | ELF64, dynamically linked against the shared libraries in `/lib` since 2026-09-06 (`docs/design/dynlink.md`); `init` and the loader are static |
 | libc | Own minimal libc (`libc/`) |
-| User space | Shell, coreutils, text editor, scripting interpreter |
-| Console | Framebuffer text console with bitmap font, serial (COM1) mirror |
+| User space | Shell with a line editor, coreutils, sed, awk, make, ar, tar, tcc, Lua 5.5, the package installer `pkg`, init with service supervision, desktop applications |
+| Console | Framebuffer text console with bitmap font and 16 colour SGR, serial (COM1) mirror, timestamped kernel log |
 | Input | Input core (`/dev/input/eventN`), PS/2 keyboard and mouse, virtio-input |
-| Timer | Local APIC timer calibrated against the PIT |
-| Networking | None |
-| Graphics | Text only initially. Windowing system as a late milestone |
+| Timer | TSC calibrated against the PIT for time, local APIC timer for the periodic tick |
+| Networking | IPv4 over virtio-net and loopback: ARP, ICMP, UDP, TCP, DHCP, DNS (`NETWORK_PLAN.md`). No IPv6, forwarding or TLS |
+| Graphics | The X12 display server with a Wayland-like protocol (`protocol/`), the `libgui` toolkit, virtio-gpu mode setting with the std VGA framebuffer as fallback |
+| Audio | virtio-snd through `/dev/pcm0`, the `audiod` mixing server, `libaudio` |
 | Privilege | Ring 3 from the first user process |
 | Permissions | Single user, permission bits stored but not enforced |
 | Testing | Automated QEMU boot tests checked via serial output, exit via `isa-debug-exit` |
@@ -37,44 +38,10 @@
 
 ## 2. Repository Layout
 
-```
-minios/
-  Makefile                 top level: build all, image, run, test, gdb, clean
-  toolchain.mk             compiler, flags, paths
-  limine.conf              Limine configuration
-  kernel/
-    Makefile
-    linker.ld              higher half layout, symbol table section
-    arch/x86_64/           boot.c, gdt.c, idt.c, isr.S, paging.c, apic.c, pit.c, syscall.S, context.S, cpu.c
-    include/               public kernel headers
-    lib/                   string.c, printf.c, list.h, bitmap.c, kassert.c
-    mm/                    pmm_buddy.c, vmm.c, slab.c, kmalloc.c, cow.c, swap.c, mmap.c
-    sched/                 thread.c, proc.c, mlfq.c, wait.c
-    sync/                  spinlock.c, mutex.c, semaphore.c, condvar.c
-    ipc/                   pipe.c, signal.c
-    fs/                    vfs.c, mount.c, file.c, devfs.c, mfs/ (superblock.c, inode.c, dir.c, bitmap.c, journal.c), fat/ (super.c, table.c, dir.c, file.c), initrd.c
-    input/                 core.c (devices, key state, repeat, /dev/input), keyboard.c (console keyboard)
-    drivers/               serial.c, fbcon.c, font.c, ps2kbd.c, ps2mouse.c, pci.c, virtio/ (virtio.c, virtio_blk.c, virtio_input.c), debugexit.c
-    syscall/               table.c, sys_proc.c, sys_fs.c, sys_mm.c, sys_misc.c
-    debug/                 panic.c, backtrace.c, symbols.c
-  libc/
-    Makefile
-    include/               stdio.h, stdlib.h, string.h, unistd.h, fcntl.h, sys/*.h, errno.h
-    src/                   crt0.S, syscall.S, stdio/, stdlib/, string/, unistd/
-  user/
-    Makefile
-    init/  sh/  coreutils/ (ls, cat, echo, mkdir, rm, cp, mv, ps, kill, mount, ...)  edit/  interp/  tests/
-  tools/
-    mkfs/                  host tool: builds an mfs disk image from a directory tree
-    fsck/                  host tool: replays the mfs journal and checks or repairs an image
-    mkfat/                 host tool: builds FAT12/16/32 images from a directory tree
-    gensyms/               host tool: converts nm output into the kernel symbol table blob
-  tests/
-    run_qemu_test.sh       boots an image headless, captures serial, asserts on markers
-    cases/                 one directory per boot test
-  docs/
-    design/                one document per subsystem, written when the subsystem is implemented
-```
+The layout planned here at M0 has grown past recognition; the current tree
+is described under "Repository layout" in `docs/INTRODUCTION.md`, which is
+kept with the code. The networking and terminal userland work were planned
+in `NETWORK_PLAN.md` and `TERMINAL_PLAN.md`.
 
 ## 3. Milestones
 
@@ -314,7 +281,7 @@ Tests:
 - Application processor startup through the Limine MP protocol (the bootloader performs INIT and SIPI and parks the APs in long mode; the kernel moves them onto its own stacks and page tables before reclaiming bootloader memory), one `struct cpu` per processor, per CPU idle thread, per CPU GDT, TSS and APIC timer.
 - Per CPU run queues behind the existing `sched_pick_next`; balancing by placing woken threads on idle CPUs and by stealing from other CPUs' queues (done).
 - `tlb_flush_range` extended to send shootdown IPIs to CPUs that have the address space active, plus a drop request before an address space is freed (done, `mm/tlb.c`).
-- Per CPU page caches in the buddy allocator and per CPU magazines in the slab allocator, both optional (not done).
+- Per CPU page caches in the buddy allocator and per CPU magazines in the slab allocator, both optional (deferred, done in M46).
 - Lock debugging run with `CONFIG_LOCKDEBUG=1` (the default) across the whole suite with four CPUs (done).
 - Files touched: `arch/x86_64/{smp,cpu,gdt,idt,apic,boot}.c`, `sched/mlfq.c`, `mm/{tlb,vmm}.c`, `sync/spinlock.c`, `drivers/timer.c`, `lib/klog.c`, `debug/panic.c`, plus the `nproc` and `getcpu` syscalls.
 - Result: `nproc` reports the configured CPU count, `smptest` runs its children on every CPU with parallel speedup; all 35 cases pass with `-smp 4`.
@@ -1392,52 +1359,19 @@ Tests: `input`, `mouse`, `mouse_wheel`, `kbd`, `input_tablet`,
 cases, which place the cursor through the virtual tablet.
 `docs/design/input.md`.
 
-## Settings rework (completed 2026-09-04)
+## 4. Work after the milestones
 
-`/bin/settings` moved to `user/settings/` and became a category window
-(Appearance, Display, Keyboard, Sound, Date and time, File types,
-Launcher, System) that writes `/etc/desktop.conf` on every change; new
-keys `frame_ms`, `decorations`, `keymap`, `ui_font`, `ui_font_px` and
-`ui_scale` are applied by the desktop client, X12 (`keymap_reload`) and
-libgui (`theme_read_conf`). `x12settings` shows the server's status,
-surfaces, live settings and a pixel inspector. Documented in
-`docs/design/desktop.md` and `docs/design/tools.md`, tested by
-`tests/cases/gui_settings` (every page and the X12 tool open and close on
-the desktop).
+After M47 the work was organised by feature on `bleeding-edge-*` branches instead of numbered milestones. Each entry is recorded here when its boot tests pass.
 
-## 4. Testing Strategy
-
-- `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.
-- Kernel self tests are compiled in when `CONFIG_TESTS=1` and selected by a Limine command line argument such as `test=pmm`.
-- User space tests in `user/tests/` run under a `runtests` program once M10 is reached and report the same markers.
-- `make test CASES="case ..."` runs the named cases and prints a summary. Only the cases of the modules a change touches are run; the full suite has grown too large to run for every change and is never run as a whole.
-- The shutdown path is itself tested: a case boots to user space, runs `shutdown`, and asserts that the block cache was flushed (the mfs clean flag is set on the resulting image) and that QEMU exited through the ACPI power off rather than the timeout.
-
-## 5. Conventions
-
-- Kernel code is C17, freestanding, no dynamic allocation before M5, no floating point.
-- Headers in `kernel/include/` use the `#pragma once` guard. Every subsystem has one header named after its directory.
-- Naming: `subsystem_verb_object`, for example `pmm_alloc_page`, `vfs_open`, `sched_yield`. Types are `struct name`, no typedef for structs. Fixed width integers from `<stdint.h>`.
-- Errors are negative `errno` values returned as `int` or `long`. Pointers returning errors use `ERR_PTR` and `IS_ERR` helpers.
-- Locks: every shared structure documents which lock protects it in a comment above the struct definition, and takes that lock from the first commit in which it exists. Disabling interrupts is never treated as sufficient mutual exclusion on its own.
-- Per CPU state is only accessed through `cpu_current()`. No global variables hold per CPU data.
-- Lock ordering is recorded in `docs/design/locking.md` before a new lock is introduced.
-- Every milestone adds a boot test and a short document in `docs/design/`.
-
-## 6. Tooling Requirements
-
-Already installed: `x86_64-elf-gcc`, `nasm`, `qemu-system-x86_64`, `yacc` (for the awk grammar).
-To install: `brew install x86_64-elf-gdb xorriso` (xorriso for ISO creation, needed only until M13 makes the disk image primary).
-
-## Debugging tools (completed 2026-08-30)
+### Debugging tools (completed 2026-08-30)
 
 Graphical tools `sysmon`, `logview` (over `/dev/klog`), `hexview`, `evtest` and `compsettings` (over the `debug` and `settings` protocol interfaces). Documented in `docs/design/tools.md`, tested by `tests/cases/gui_tools`.
 
-## Desktop and settings (completed 2026-08-30)
+### Desktop and settings (completed 2026-08-30)
 
 Desktop layer client with wallpaper, icons of `/home/desktop`, context menus, MIME tables (`gui/mime.h`), the user settings application `settings` and layer surface windows in libgui. Documented in `docs/design/desktop.md`, tested by `tests/cases/gui_desktop` and the libgui host test.
 
-## Desktop look refresh (completed 2026-09-03)
+### Desktop look refresh (completed 2026-09-03)
 
 Decorations moved to the GTK 4 model: libgui toplevels draw a light
 header bar, outline, rounded corners and shadow in their own ARGB
@@ -1455,7 +1389,20 @@ Documented in
 `docs/design/protocol.md`; the decoration expectations of the `gui_*`
 and `comp_*` cases were updated.
 
-## Terminal and Files rework (completed 2026-09-05)
+### Settings rework (completed 2026-09-04)
+
+`/bin/settings` moved to `user/settings/` and became a category window
+(Appearance, Display, Keyboard, Sound, Date and time, File types,
+Launcher, System) that writes `/etc/desktop.conf` on every change; new
+keys `frame_ms`, `decorations`, `keymap`, `ui_font`, `ui_font_px` and
+`ui_scale` are applied by the desktop client, X12 (`keymap_reload`) and
+libgui (`theme_read_conf`). `x12settings` shows the server's status,
+surfaces, live settings and a pixel inspector. Documented in
+`docs/design/desktop.md` and `docs/design/tools.md`, tested by
+`tests/cases/gui_settings` (every page and the X12 tool open and close on
+the desktop).
+
+### Terminal and Files rework (completed 2026-09-05)
 
 The terminal window was rebuilt on a separate emulator (`user/term/vt.c`):
 UTF-8, 16, 256 and 24 bit colours with bold, faint, underline, reverse
@@ -1474,7 +1421,7 @@ in `docs/design/terminal.md` and `docs/design/files.md`; tested by
 `gui_term`, `gui_term_scale2` (updated to the 8x17 cells) and the new
 `gui_files` case.
 
-## Modification times (completed 2026-09-05)
+### Modification times (completed 2026-09-05)
 
 `struct inode` carries `mtime`, reported by `stat` as `st_mtime`. mfs
 reads and writes the field its disk inode already reserved, updated on
@@ -1483,21 +1430,21 @@ FAT decodes the entry's date and time; the initrd parses the tar
 header; devfs dates its nodes from the boot. Tested by additions to
 `mfs`, `fat` and `mfs_user`.
 
-## Versioning (completed 2026-09-05)
+### Versioning (completed 2026-09-05)
 
 Releases follow semantic versioning in `VERSION` (0.1.0) instead of the
 milestone numbers; `tools/version.sh` numbers every kernel link in
 `BUILDNUM` and records the commit and date, reported by `uname`, the
 boot log and the System page. Documented in `docs/design/build.md`.
 
-## X12 log file (completed 2026-09-05)
+### X12 log file (completed 2026-09-05)
 
 The display server logs to `/var/log/x12.log` instead of the serial
 line; `-s` mirrors the log to standard output for the boot tests, and
 the per frame, per key and per commit lines need the verbose setting
 (`-v`). Documented in `docs/design/compositor.md`.
 
-## SVG icons (completed 2026-09-05)
+### SVG icons (completed 2026-09-05)
 
 libgui renders a subset of SVG (`libgui/src/svg.c`: view box, paths
 with fills, both fill rules, curves and arcs, antialiased) into images
@@ -1507,7 +1454,7 @@ Awesome Free (solid), downloaded by `tools/fetch_icons.sh` into
 `third_party/fontawesome/`. Documented in `docs/design/icons.md`,
 tested by `libgui/tests/test_svg.c`.
 
-## sed and awk (completed 2026-09-06)
+### sed and awk (completed 2026-09-06)
 
 FreeBSD sed and the One True AWK are compiled unmodified from
 `third_party/sed` and `third_party/awk` (downloaded by
@@ -1519,7 +1466,7 @@ accepts `REG_STARTEND` with `nmatch` 0. Documented in
 `docs/design/sedawk.md`, tested by `tests/cases/sed`, `tests/cases/awk`
 and the new checks in `tests/cases/libc_ext`.
 
-## make (completed 2026-09-06)
+### make (completed 2026-09-06)
 
 pdpmake, the public domain POSIX make, is compiled unmodified from
 `third_party/make` (downloaded by `tools/fetch_make.sh`) into
@@ -1533,7 +1480,7 @@ Modification times are nanoseconds throughout the kernel and in the mfs
 disk inode (format version 4), because pdpmake treats equal times as out
 of date.
 
-## ar and tar (completed 2026-09-06)
+### ar and tar (completed 2026-09-06)
 
 `ar` is written for minios (`user/coreutils/ar.c`) in the System V
 format of the GNU binutils, and the tar of sbase is compiled unmodified
@@ -1545,7 +1492,7 @@ and the refused `symlink`, `readlink`, `mknod` and `mkfifo`; `gzip`
 accepts `-f`. Documented in `docs/design/artar.md`, tested by
 `tests/cases/ar`, `tests/cases/tar` and new checks in `libc_ext`.
 
-## Dynamic linking (completed 2026-09-06)
+### Dynamic linking (completed 2026-09-06)
 
 Programs are linked against shared objects in `/lib`: libc, libgui,
 libfont, libwire, libaudio and the Lua core; `init` and the loader are
@@ -1559,7 +1506,7 @@ resolve addresses inside libraries. The root image of programs went from
 `docs/design/dynlink.md`, tested by `tests/cases/dynlink` and the
 regression of the existing cases.
 
-## Host test portability and loader initialization (completed 2026-09-06)
+### Host test portability and loader initialization (completed 2026-09-06)
 
 Host checks use Darwin feature visibility and private strlcpy helpers.
 The GUI fixtures and the text-field navigation handler use the input
@@ -1582,7 +1529,7 @@ gui_widgets, gui_controls, gui_editor, gui_unicode, gui_lua and audio_server
 unsupported. The implementation and startup ABI are in
 `docs/design/dynlink.md`.
 
-## Persistent storage (completed 2026-09-06)
+### Persistent storage (completed 2026-09-06)
 
 The home directory lives on `data.img`, a data volume the build creates
 once and never rebuilds, attached as `vdc` and mounted at boot by
@@ -1594,7 +1541,7 @@ filesystems, and `mkfs` includes dot files. Documented in
 `docs/design/storage.md`, tested by `tests/cases/persist` with a post
 script that reads the volume on the host.
 
-## tcc (completed 2026-09-06)
+### tcc (completed 2026-09-06)
 
 The Tiny C Compiler is compiled unmodified from the submodule
 `third_party/tinycc` into `/bin/tcc`, with its runtime library built by
@@ -1604,7 +1551,53 @@ that programs compile, link and run on minios; `-run` works through the
 new `dlfcn.h` of libc. Documented in `docs/design/tcc.md`, tested by
 `tests/cases/tcc` with 54 programs of the upstream suite.
 
-## TCP/IP (completed 2026-09-12)
+### Code editor (completed 2026-09-06)
+
+A source editor for C, Lua and shell scripts written in Lua
+(`user/share/apps/code.lua`, started by `/bin/code`), with a run panel
+over `sys.spawn_pipe`, an outline table and languages as table entries
+that `$HOME/.config/code.lua` may extend. The `gui` module gained the
+editor, menu, tool bar, status bar, icon and data view bindings with Lua
+models; the toolkit gained `highlight_lang`, a highlighter driven by a
+language description, with Lua as a third language. Documented in
+`docs/design/code.md`, tested by `make check-lua` and
+`tests/cases/gui_code`.
+
+### Terminal userland (completed 2026-09-06)
+
+The work of `TERMINAL_PLAN.md`. `libedit/` is a line editor with
+history, completion, reverse search and bracketed paste. `/bin/sh` was
+rewritten as a parser of complete command trees (`if`, `for`, `while`,
+`until`, `case`, functions, subshells, brace groups) with POSIX expansion
+order, here documents, `local`, `alias`, `source` and startup files
+(`/etc/profile`, `$HOME/.shrc`). The framebuffer console keeps 16 colour
+SGR attributes per cell and preserves the order of user output across
+CPUs. libc gained `glob`, `fnmatch`, `wcwidth`, `getline` and the `term.h`
+helpers; `ls`, `grep`, `less`, `tree` and `df` use colour and the terminal
+width. Documented in `docs/design/libedit.md` and `docs/design/sh.md`,
+tested by `lineedit`, `lineedit_screen`, `script2`, `console_sgr` and
+`libc_ext`.
+
+### Lua (completed 2026-09-06)
+
+Lua 5.5.1 built unmodified from `third_party/lua` into `/bin/lua` and
+`/bin/luac`, with the modules `fs`, `sys` and `gui` in `user/lua/` and the
+clock and pong programs in Lua. libc gained the stdio, process and
+`setjmp` functions the interpreter needs and a binned heap allocator.
+Documented in `docs/design/lua.md`, tested by `lua`, `lua_conf`,
+`lua_gc`, `lua_sys`, `gui_lua` and `make check-lua`.
+
+### Packages (completed 2026-09-06)
+
+`pkg` (`user/pkg/`) installs, lists, verifies, removes and builds
+`.mpk` archives under the prefix `/home/.local`, which lies on the data
+volume; the loader searches `/home/.local/lib` after `/lib`. The desktop
+applications of `user/packages/` are built into `/usr/share/packages`;
+Code and Pong ship as packages since 2026-09-15 and `man` reads the
+pages of installed packages. Documented in `docs/design/packages.md`,
+tested by `pkg` and `pkg_apps`.
+
+### TCP/IP (completed 2026-09-12)
 
 The network stack of `NETWORK_PLAN.md`, milestones N00 to N12: packet
 buffers, the worker, virtio-net, Ethernet, ARP, IPv4 with fragments and
@@ -1613,7 +1606,7 @@ ABI and the tools `net`, `dhcpc`, `ping`, `nc`, `http` and `xfer`.
 Documented in `docs/design/network.md` and the validation records
 beside it, tested by the `net_*` cases.
 
-## Thread local storage, dlopen and lazy binding (completed 2026-09-15)
+### Thread local storage, dlopen and lazy binding (completed 2026-09-15)
 
 The loader lays out the TLS blocks of the initial objects below every
 thread control block (variant II), applies the `DTPMOD64`, `DTPOFF64`
@@ -1628,7 +1621,7 @@ procedure linkage table entries on first call through
 in `docs/design/dynlink.md`, tested by `tests/cases/dlopen` and the
 extended `dynlink` fixtures.
 
-## Init (completed 2026-09-15)
+### Init (completed 2026-09-15)
 
 Process 1 reads `/etc/init.conf`: `env` lines, `task` entries run in
 order, `service` entries supervised with restart limits, and the
@@ -1642,14 +1635,62 @@ RCU grace period so the root filesystem unmounts cleanly. Documented in
 `docs/design/init.md`, tested by `tests/cases/initctl`, `shutdown_cmd`
 and `shutdown`.
 
-## Code editor (completed 2026-09-06)
+### Lua threads and the Lua synthesizer (completed 2026-09-15)
 
-A source editor for C, Lua and shell scripts written in Lua
-(`user/share/apps/code.lua`, started by `/bin/code`), with a run panel
-over `sys.spawn_pipe`, an outline table and languages as table entries
-that `$HOME/.config/code.lua` may extend. The `gui` module gained the
-editor, menu, tool bar, status bar, icon and data view bindings with Lua
-models; the toolkit gained `highlight_lang`, a highlighter driven by a
-language description, with Lua as a third language. Documented in
-`docs/design/code.md`, tested by `make check-lua` and
-`tests/cases/gui_code`.
+`require "thread"` starts native worker threads, each with its own Lua
+state, that exchange byte strings with the parent; `sys` gained
+descriptor and timing functions and `require "audio"` binds `libaudio`.
+The Lua Synthesizer (`luasynth`) is an eight voice instrument written in
+Lua and shipped as a package, with its synthesis on a worker thread.
+Documented in `docs/design/lua-threads.md`, `docs/design/luasynth.md`
+and `docs/design/luasynth-performance.md`, tested by `lua_threads`,
+`lua_audio`, `luasynth`, `luasynth_worker`, `luasynth_profile` and
+`gui_luasynth`.
+
+### Profiler application (completed 2026-09-15)
+
+`/dev/profile` records CPU samples, scheduler transitions, heap
+allocations and transfers in per CPU rings; `kernel/debug/unwind.c`
+stitches kernel stacks onto the user frames that caused them. The
+analysis library in libc (`profanalyze.c`, `profreport.c`) builds call
+trees and reports, `prof` prints them, and `/bin/profiler` shows a flame
+graph with breakdown, search and capture controls. Documented in
+`docs/design/profile.md`, tested by `profile`, `profreport`, `prof_gui`
+and `profiler_gui`.
+
+### Boot log (completed 2026-09-30)
+
+`timer_early_init` calibrates the TSC first thing in `kmain`, and every
+kernel log line carries the time since the kernel entry. The boot log
+states the bootloader, the image and initrd placement, the CPU, the
+memory map and allocator counts, the interrupt controllers, the timer
+rates, each PCI function by name, the loader of each process, `/dev` in
+one line and the boot time. Init logs in the same format and reports
+configuration reads, starts, exits, restarts and the startup summary.
+Documented in `docs/design/console.md` and `docs/design/init.md`, tested
+by `boot`, `timer` and the init cases.
+
+## 5. Testing Strategy
+
+- `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.
+- Kernel self tests are compiled in when `CONFIG_TESTS=1` and selected by a Limine command line argument such as `test=pmm`.
+- User space test programs in `user/tests/` are started by the `test=run prog=/bin/<name>` command line of a case and report the same markers.
+- The network cases run against a peer on the host (`tools/netpeer`, `tests/net/`); `make check-net` checks the harness itself and `make check-net-fuzz` fuzzes the wire parsers on the host.
+- `make check`, `make check-lua` and `make check-sh` run the host unit tests of the libraries, the Lua modules and the shell parser.
+- `make test CASES="case ..."` runs the named cases and prints a summary. Only the cases of the modules a change touches are run; the full suite has grown too large to run for every change and is never run as a whole.
+- The shutdown path is itself tested: a case boots to user space, runs `shutdown`, and asserts that the block cache was flushed (the mfs clean flag is set on the resulting image) and that QEMU exited through the ACPI power off rather than the timeout.
+
+## 6. Conventions
+
+- Kernel code is C17, freestanding, no dynamic allocation before M5, no floating point.
+- Headers in `kernel/include/` use the `#pragma once` guard. Every subsystem has one header named after its directory.
+- Naming: `subsystem_verb_object`, for example `pmm_alloc_page`, `vfs_open`, `sched_yield`. Types are `struct name`, no typedef for structs. Fixed width integers from `<stdint.h>`.
+- Errors are negative `errno` values returned as `int` or `long`. Pointers returning errors use `ERR_PTR` and `IS_ERR` helpers.
+- Locks: every shared structure documents which lock protects it in a comment above the struct definition, and takes that lock from the first commit in which it exists. Disabling interrupts is never treated as sufficient mutual exclusion on its own.
+- Per CPU state is only accessed through `cpu_current()`. No global variables hold per CPU data.
+- Lock ordering is recorded in `docs/design/locking.md` before a new lock is introduced.
+- Every milestone adds a boot test and a short document in `docs/design/`.
+
+## 7. Tooling Requirements
+
+Required: `x86_64-elf-gcc`, `qemu-system-x86_64`, `xorriso` (`make image` builds the boot ISO), `yacc` (the awk grammar) and `python3` (`tools/xfer.py` and the network test scripts). `x86_64-elf-gdb` is needed for `make gdb`.
