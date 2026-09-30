@@ -1670,6 +1670,24 @@ configuration reads, starts, exits, restarts and the startup summary.
 Documented in `docs/design/console.md` and `docs/design/init.md`, tested
 by `boot`, `timer` and the init cases.
 
+### TCP options, resolver cache and DHCP robustness (completed 2026-09-30)
+
+Milestones N13 to N16 of `NETWORK_PLAN.md` closed the limitations that
+the network release carried. They added TCP window scaling, timestamps with
+PAWS and round-trip samples, selective acknowledgements with a bounded
+scoreboard and RFC 6675 recovery, and delayed ACKs; per-connection stores of 64 KiB
+for sending and 128 KiB for receiving, released as soon as no endpoint
+needs them; a resolver cache per process with TTLs bounded to one hour,
+negative caching after RFC 2308 and the search list of
+`/etc/resolv.conf`; and RFC 5227 conflict detection in `dhcpc` through a
+new `/dev/net` probe operation, with DHCPDECLINE, announcements and a
+lease kept on the home volume for INIT-REBOOT. `netpeer` gained a scripted
+TCP peer and `check_capture.py` checks option use on the wire. Documented
+in `docs/design/network.md` and `docs/design/network-n13-n16-validation.md`,
+tested by `net_tcp_options`, `net_tcp_options_peer`, `net_tcp_sack`,
+`net_dns_cache`, `net_arp_probe` and the extended `net_dhcp`, `net_dns` and
+`net_tools` cases.
+
 ## 5. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

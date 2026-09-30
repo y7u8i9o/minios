@@ -1,5 +1,10 @@
 /* N10: DHCP client against a scripted server on loopback, then a live lease
- * from QEMU's user-mode DHCP server. Runs with nic user. */
+ * from QEMU's user-mode DHCP server. Runs with nic user. N16 adds address
+ * conflict detection, whose probes go out on the NIC even when the scripted
+ * server answers on loopback (QEMU answers ARP for 10.0.2.2, so offering
+ * that address produces a conflict), and INIT-REBOOT from a saved lease.
+ * The scripted runs use -A, which shortens the RFC 5227 intervals, and
+ * their own lease files; the live runs use the default timing and file. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +22,44 @@ static int failures;
 
 static uint32_t get32(const unsigned char *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static void put32(unsigned char *p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
+
+/* option32 returns a four-byte option of a request, or 0 when it is
+ * absent. */
+static uint32_t option32(const unsigned char *m, size_t len, int code)
+{
+    size_t o = 240;
+    while (o + 2 <= len && m[o] != 255) {
+        if (m[o] == 0) { o++; continue; }
+        if (m[o] == code && m[o + 1] == 4 && o + 6 <= len)
+            return get32(m + o + 2);
+        o += 2 + m[o + 1];
+    }
+    return 0;
+}
+
+static int has_option(const unsigned char *m, size_t len, int code)
+{
+    size_t o = 240;
+    while (o + 2 <= len && m[o] != 255) {
+        if (m[o] == 0) { o++; continue; }
+        if (m[o] == code)
+            return 1;
+        o += 2 + m[o + 1];
+    }
+    return 0;
+}
+
+static int file_has(const char *path, const char *text)
+{
+    FILE *f = fopen(path, "r");
+    char line[128];
+    int found = 0;
+    while (f && fgets(line, sizeof line, f))
+        found |= strstr(line, text) != NULL;
+    if (f)
+        fclose(f);
+    return found;
+}
 
 /* Find option code in a request. */
 static int option(const unsigned char *m, size_t len, int code)
@@ -40,7 +83,17 @@ static int server(void)
     return bind(server_fd, (struct sockaddr *)&name, sizeof name);
 }
 
-/* Wait for one request of the given type; returns its length or 0. */
+/* drain discards requests still queued from an earlier client. */
+static void drain(void)
+{
+    unsigned char m[1500];
+    struct pollfd pfd = {.fd = server_fd, .events = POLLIN};
+    while (poll(&pfd, 1, 0) == 1 && recv(server_fd, m, sizeof m, 0) >= 0)
+        ;
+}
+
+/* await waits for one request of the given type, or of any type when type
+ * is negative, and returns its length or 0. */
 static size_t await(unsigned char *m, int type, int timeout_ms, struct sockaddr_in *from)
 {
     for (;;) {
@@ -49,7 +102,7 @@ static size_t await(unsigned char *m, int type, int timeout_ms, struct sockaddr_
             return 0;
         socklen_t len = sizeof *from;
         ssize_t n = recvfrom(server_fd, m, 1500, 0, (struct sockaddr *)from, &len);
-        if (n >= 240 && option(m, (size_t)n, 53) == type)
+        if (n >= 240 && (type < 0 || option(m, (size_t)n, 53) == type))
             return (size_t)n;
     }
 }
@@ -142,7 +195,8 @@ int main(void)
     char line[512];
 
     /* 1. Server absent: bounded failure, nothing configured. */
-    const char *const absent[] = {"/bin/dhcpc", "-1", "-t", "3", "-s", "127.0.0.1", "-p", "6768", NULL};
+    const char *const absent[] = {"/bin/dhcpc", "-1", "-t", "3", "-A", "-l", "/tmp/dhcp-1.lease",
+                                  "-s", "127.0.0.1", "-p", "6768", NULL};
     int out;
     pid_t pid = spawn(absent, &out);
     CHECK(wait_status(pid) == 1, "no server gives up after -t seconds");
@@ -150,7 +204,8 @@ int main(void)
     CHECK(!inet_line(line, sizeof line) || strstr(line, "0.0.0.0/"), "absent server leaves no address");
 
     /* 2. Malformed and unrelated replies are ignored, then a valid lease. */
-    const char *const once[] = {"/bin/dhcpc", "-1", "-t", "20", "-s", "127.0.0.1", "-p", "6767", NULL};
+    const char *const once[] = {"/bin/dhcpc", "-1", "-t", "20", "-A", "-l", "/tmp/dhcp-2.lease",
+                                "-s", "127.0.0.1", "-p", "6767", NULL};
     pid = spawn(once, &out);
     size_t n = await(m, 1, 5000, &from);
     CHECK(n, "discover received");
@@ -176,7 +231,8 @@ int main(void)
     CHECK(resolv_has("search example.test"), "domain option written as the search list");
 
     /* 3. Renewal at T1, NAK on the next renewal removes the address. */
-    const char *const daemon[] = {"/bin/dhcpc", "-f", "-s", "127.0.0.1", "-p", "6767", NULL};
+    const char *const daemon[] = {"/bin/dhcpc", "-f", "-A", "-l", "/tmp/dhcp-3.lease",
+                                  "-s", "127.0.0.1", "-p", "6767", NULL};
     pid = spawn(daemon, &out);
     n = await(m, 1, 5000, &from);
     if (n)
@@ -204,10 +260,90 @@ int main(void)
     n = await(m, 3, 5000, &from);
     if (n)
         reply(m, n, &from, 5, 0x0a00020f, 0, 1, 10, 3, 5);
-    sleep(1);
+    sleep(2); /* conflict detection runs before the address is applied */
     CHECK(inet_line(line, sizeof line) && strstr(line, "10.0.2.15/"), "second lease applied");
     sleep(12); /* server silent: renew, rebind, expiry */
     CHECK(inet_line(line, sizeof line) && strstr(line, " 0.0.0.0/"), "expiry removes the address");
+    kill(pid, SIGTERM);
+    wait_status(pid);
+    close(out);
+
+    /* 6. The offered 10.0.2.2 answers ARP, so the client sends DHCPDECLINE
+     * and discovers again after the shortened wait. */
+    char output[1024];
+    const char *const acd[] = {"/bin/dhcpc", "-1", "-t", "30", "-A", "-l", "/tmp/dhcp-acd.lease",
+                               "-s", "127.0.0.1", "-p", "6767", NULL};
+    drain();
+    pid = spawn(acd, &out);
+    n = await(m, 1, 5000, &from);
+    if (n)
+        reply(m, n, &from, 2, 0x0a000202, 0, 1, 600, 0, 0);
+    n = await(m, 3, 5000, &from);
+    if (n)
+        reply(m, n, &from, 5, 0x0a000202, 0, 1, 600, 0, 0);
+    n = await(m, 4, 5000, &from);
+    CHECK(n && option32(m, n, 50) == 0x0a000202 && option32(m, n, 54) == 0x0a000202 &&
+          !get32(m + 12) && !has_option(m, n, 55), "DHCPDECLINE names the address and the server");
+    n = await(m, 1, 5000, &from);
+    CHECK(n && !option32(m, n, 50), "discovery again after the decline");
+    if (n)
+        reply(m, n, &from, 2, 0x0a00020f, 0, 1, 600, 0, 0);
+    n = await(m, 3, 5000, &from);
+    if (n)
+        reply(m, n, &from, 5, 0x0a00020f, 0, 1, 600, 0, 0);
+    CHECK(wait_status(pid) == 0, "lease after the conflict");
+    memset(output, 0, sizeof output);
+    read(out, output, sizeof output - 1);
+    close(out);
+    CHECK(strstr(output, "address 10.0.2.2 in use by 52:55:0a:00:02:02, declined") != NULL,
+          "conflict reported with the other host's address");
+    CHECK(strstr(output, "bound 10.0.2.15") != NULL && file_has("/tmp/dhcp-acd.lease", "address 10.0.2.15"),
+          "second address bound and saved");
+
+    /* 7. In INIT-REBOOT the saved lease is requested again without a server
+     * identifier, and the server acknowledges it. */
+    drain();
+    pid = spawn(acd, &out);
+    n = await(m, 3, 5000, &from);
+    CHECK(n && option32(m, n, 50) == 0x0a00020f && !option32(m, n, 54) && !get32(m + 12),
+          "INIT-REBOOT request carries the saved address only");
+    if (n)
+        reply(m, n, &from, 5, 0x0a00020f, 0, 1, 600, 0, 0);
+    CHECK(wait_status(pid) == 0, "rebooted lease");
+    memset(output, 0, sizeof output);
+    read(out, output, sizeof output - 1);
+    close(out);
+    CHECK(strstr(output, "rebooting with 10.0.2.15") && strstr(output, "bound 10.0.2.15"),
+          "INIT-REBOOT reported");
+
+    /* 8. After a NAK for the saved address the file is removed, and
+     * discovery starts without asking for that address. */
+    drain();
+    pid = spawn(acd, &out);
+    n = await(m, 3, 5000, &from);
+    if (n)
+        reply(m, n, &from, 6, 0, 0, 1, 0, 0, 0);
+    n = await(m, 1, 5000, &from);
+    CHECK(n && !option32(m, n, 50) && !file_has("/tmp/dhcp-acd.lease", "address"),
+          "NAK forgets the saved lease");
+    if (n)
+        reply(m, n, &from, 2, 0x0a00020f, 0, 1, 600, 0, 0);
+    n = await(m, 3, 5000, &from);
+    if (n)
+        reply(m, n, &from, 5, 0x0a00020f, 0, 1, 600, 0, 0);
+    CHECK(wait_status(pid) == 0, "lease after the NAK");
+    close(out);
+
+    /* 9. An expired saved lease is not requested again. */
+    FILE *old = fopen("/tmp/dhcp-old.lease", "w");
+    fprintf(old, "address 10.0.2.15\nserver 10.0.2.2\nexpires 1\n");
+    fclose(old);
+    const char *const expired[] = {"/bin/dhcpc", "-1", "-t", "30", "-A", "-l", "/tmp/dhcp-old.lease",
+                                   "-s", "127.0.0.1", "-p", "6767", NULL};
+    drain();
+    pid = spawn(expired, &out);
+    n = await(m, -1, 5000, &from);
+    CHECK(n && option(m, n, 53) == 1, "an expired lease starts with discovery");
     kill(pid, SIGTERM);
     wait_status(pid);
     close(out);
@@ -223,6 +359,18 @@ int main(void)
     CHECK(strstr(text, "bound 10.0.2.15 from 10.0.2.2") != NULL, "live lease reported");
     CHECK(inet_line(line, sizeof line) && strstr(line, "10.0.2.15/255.255.255.0 gw 10.0.2.2"),
           "live lease applied");
+    const char *const saved = "/home/.local/state/dhcpc/eth0.lease";
+    CHECK(file_has(saved, "address 10.0.2.15") && file_has(saved, "server 10.0.2.2"),
+          "live lease saved on the home volume");
+
+    /* 10. The next start requests the saved address from QEMU's server. */
+    pid = spawn(live, &out);
+    CHECK(wait_status(pid) == 0, "live INIT-REBOOT");
+    memset(output, 0, sizeof output);
+    read(out, output, sizeof output - 1);
+    close(out);
+    CHECK(strstr(output, "rebooting with 10.0.2.15") && strstr(output, "bound 10.0.2.15 from 10.0.2.2"),
+          "QEMU acknowledges the saved address");
     printf("netdhcptest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

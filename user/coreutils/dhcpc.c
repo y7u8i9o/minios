@@ -5,13 +5,22 @@
  * never block anything else: without a server the client keeps trying in
  * the background and the interface stays unconfigured.
  *   dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]
+ *         [-l FILE] [-A]
  * -1 exits after the first lease (or failure after SECONDS), -f stays in
  * the foreground, -s/-p unicast to a test server instead of broadcasting.
  * -a, used by init's dhcp service, takes the interface from the first
  * "iface NAME dhcp" line of /etc/network, stays in the foreground, and
  * exits with status 0 when there is nothing to do (no such line, or no
  * such interface), so the service simply stops on a machine without a
- * network. */
+ * network.
+ *
+ * Since N16, RFC 5227 probes check that no other host holds an address
+ * from an ACK before it is used, and a conflict is answered with
+ * DHCPDECLINE. After configuration two announcements follow. The lease is
+ * kept in a file on the persistent home volume (-l names another file),
+ * and a client that starts with an unexpired lease asks for the same
+ * address in the INIT-REBOOT state of RFC 2131 section 3.2. -A divides
+ * every interval of conflict detection by ten for tests. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +29,7 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/ipc.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -32,12 +42,33 @@ static int one_shot, foreground;
 static unsigned give_up = 60;
 static unsigned char mac[6];
 static uint32_t xid;
+/* lease_path is the file named by -l, or DEFAULT_LEASE_DIR/IF.lease, and
+ * accelerated is set by -A. */
+static const char *lease_path;
+static int accelerated;
+
+/* The root image is rebuilt by every build; only the home volume persists
+ * (docs/design/storage.md), so the lease is state below it. */
+#define DEFAULT_LEASE_DIR "/home/.local/state/dhcpc"
+
+/* These are the constants of RFC 5227 section 1.1 in milliseconds and the
+ * ten seconds that RFC 2131 section 3.1 asks a client to wait after
+ * DHCPDECLINE. */
+#define PROBE_WAIT 1000
+#define PROBE_NUM 3
+#define PROBE_MIN 1000
+#define PROBE_MAX 2000
+#define ANNOUNCE_WAIT 2000
+#define ANNOUNCE_NUM 2
+#define ANNOUNCE_INTERVAL 2000
+#define DECLINE_WAIT 10000
 
 struct lease {
     uint32_t address, mask, gateway, server, dns[2];
     uint32_t seconds, t1, t2;
     time_t acquired;
-    char domain[256]; /* option 15, the search domain; empty when absent */
+    /* domain holds option 15, the search domain, and is empty when absent. */
+    char domain[256];
 };
 static struct lease lease;
 static enum { INIT, BOUND, RENEWING, REBINDING } state = INIT;
@@ -131,8 +162,8 @@ static uint32_t get32(const unsigned char *p)
     return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
 }
 
-/* Build a message: type 1 DISCOVER or 3 REQUEST. ciaddr/unicast are used
- * while renewing. Returns the length. */
+/* build writes a message of type 1 DISCOVER, 3 REQUEST or 4 DECLINE and
+ * returns its length. ciaddr is used while renewing. */
 static size_t build(unsigned char *m, int type, uint32_t ciaddr, uint32_t requested,
                     uint32_t server)
 {
@@ -168,20 +199,23 @@ static size_t build(unsigned char *m, int type, uint32_t ciaddr, uint32_t reques
         put32(o, server);
         o += 4;
     }
-    *o++ = 55; /* parameter request list */
-    *o++ = 5;
-    *o++ = 1;
-    *o++ = 3;
-    *o++ = 6;
-    *o++ = 15;
-    *o++ = 51;
+    /* RFC 2131 table 5 forbids a parameter request list in DHCPDECLINE. */
+    if (type != 4) {
+        *o++ = 55;
+        *o++ = 5;
+        *o++ = 1;
+        *o++ = 3;
+        *o++ = 6;
+        *o++ = 15;
+        *o++ = 51;
+    }
     *o++ = 255;
     return (size_t)(o - m) < 300 ? 300 : (size_t)(o - m);
 }
 
 /* Option 15 names the domain of the client (RFC 2132 section 3.17). It is
- * kept only when it is a plausible domain name: letters, digits, hyphens
- * and dots, trailing dots and NUL padding removed. */
+ * kept only when it is a plausible domain name of letters, digits, hyphens
+ * and dots after trailing dots and NUL padding are removed. */
 static void domain_option(const unsigned char *v, unsigned length, char *domain)
 {
     while (length && (v[length - 1] == 0 || v[length - 1] == '.'))
@@ -296,6 +330,126 @@ static int await(int fd, unsigned timeout_ms, int want_a, int want_b, struct lea
     }
 }
 
+static unsigned interval(unsigned low, unsigned high)
+{
+    unsigned ms = low + (unsigned)rand() % (high - low + 1);
+    return accelerated ? ms / 10 : ms;
+}
+
+/* arp_probe sends one ARP probe or announcement through /dev/net and waits
+ * wait_ms for another host claiming the address. It returns 1 on a conflict
+ * with that host's hardware address in other, and 0 otherwise. A kernel or interface
+ * without the probe interface is reported once and treated as no
+ * conflict, so detection never prevents configuration. */
+static int arp_probe(uint32_t address, int announce, unsigned wait_ms, unsigned char *other)
+{
+    static int warned;
+    struct net_arp_probe probe = {.address = address, .wait_ms = wait_ms, .announce = announce};
+    strncpy(probe.name, interface, sizeof probe.name - 1);
+    int fd = open("/dev/net", O_RDONLY);
+    int result = fd < 0 ? -1 : ioctl(fd, NETIOC_ARP_PROBE, &probe);
+    int saved = errno;
+    if (fd >= 0)
+        close(fd);
+    if (result == 0)
+        return 0;
+    if (saved == EADDRINUSE) {
+        memcpy(other, probe.mac, 6);
+        return 1;
+    }
+    if (!warned++)
+        fprintf(stderr, "dhcpc: conflict detection unavailable: %s\n", strerror(saved));
+    sleep_ms(wait_ms);
+    return 0;
+}
+
+/* address_in_use follows RFC 5227 section 2.1.1. After a random delay of
+ * up to PROBE_WAIT it sends three probes PROBE_MIN to PROBE_MAX apart and
+ * waits ANNOUNCE_WAIT after the last. It returns 1 when another host holds
+ * or claims the address. */
+static int address_in_use(uint32_t address)
+{
+    unsigned char other[6];
+    sleep_ms(interval(0, PROBE_WAIT));
+    for (int i = 0; i < PROBE_NUM; i++) {
+        unsigned wait = i + 1 < PROBE_NUM ? interval(PROBE_MIN, PROBE_MAX)
+                                          : interval(ANNOUNCE_WAIT, ANNOUNCE_WAIT);
+        if (arp_probe(address, 0, wait, other)) {
+            struct in_addr a = {.s_addr = htonl(address)};
+            printf("dhcpc: address %s in use by %02x:%02x:%02x:%02x:%02x:%02x, declined\n",
+                   inet_ntoa(a), other[0], other[1], other[2], other[3], other[4], other[5]);
+            fflush(stdout);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* announce sends ANNOUNCE_NUM announcements ANNOUNCE_INTERVAL apart once
+ * the address is configured (RFC 5227 section 2.3). Defending the address against a
+ * later conflict (section 2.4) is not implemented; a conflict seen here is
+ * reported. */
+static void announce(uint32_t address)
+{
+    unsigned char other[6];
+    for (int i = 0; i < ANNOUNCE_NUM; i++) {
+        unsigned wait = i + 1 < ANNOUNCE_NUM ? interval(ANNOUNCE_INTERVAL, ANNOUNCE_INTERVAL) : 0;
+        if (arp_probe(address, 1, wait, other)) {
+            fprintf(stderr, "dhcpc: conflict reported after announcing the address\n");
+            return;
+        }
+    }
+}
+
+/* The lease file holds "address A", "server S" and "expires T" lines, T in
+ * seconds of the real-time clock. lease_save writes it under a temporary
+ * name and renames it, so that a crash leaves either the old or the new
+ * file. */
+static void lease_save(const struct lease *l)
+{
+    if (!strncmp(lease_path, DEFAULT_LEASE_DIR "/", sizeof DEFAULT_LEASE_DIR)) {
+        mkdir("/home/.local", 0755);
+        mkdir("/home/.local/state", 0755);
+        mkdir(DEFAULT_LEASE_DIR, 0755);
+    }
+    char temporary[160];
+    snprintf(temporary, sizeof temporary, "%s.new", lease_path);
+    FILE *f = fopen(temporary, "w");
+    if (!f)
+        return;
+    struct in_addr a = {.s_addr = htonl(l->address)}, s = {.s_addr = htonl(l->server)};
+    fprintf(f, "address %s\n", inet_ntoa(a));
+    fprintf(f, "server %s\n", inet_ntoa(s));
+    fprintf(f, "expires %lld\n", (long long)(l->acquired + (time_t)l->seconds));
+    if (fclose(f) != 0 || rename(temporary, lease_path) != 0)
+        unlink(temporary);
+}
+
+/* lease_load returns 1 with the address of an unexpired saved lease. */
+static int lease_load(uint32_t *address)
+{
+    FILE *f = fopen(lease_path, "r");
+    if (!f)
+        return 0;
+    char line[128], value[64];
+    long long expires = 0;
+    *address = 0;
+    while (fgets(line, sizeof line, f)) {
+        struct in_addr in;
+        if (sscanf(line, "address %63s", value) == 1 && inet_aton(value, &in))
+            *address = ntohl(in.s_addr);
+        else
+            sscanf(line, "expires %lld", &expires);
+    }
+    fclose(f);
+    return *address && expires > (long long)time(NULL);
+}
+
+static void lease_forget(void)
+{
+    unlink(lease_path);
+}
+
 static void report(const char *what, const struct lease *l)
 {
     struct in_addr a = {.s_addr = htonl(l->address)}, s = {.s_addr = htonl(l->server)};
@@ -315,6 +469,7 @@ static void bind_lease(const struct lease *l)
         return;
     }
     write_resolv(l);
+    lease_save(&lease);
     state = BOUND;
 }
 
@@ -326,17 +481,40 @@ static void drop_lease(void)
         configure(0, 0, 0);
         write_resolv(NULL);
     }
+    lease_forget();
     state = INIT;
     memset(&lease, 0, sizeof lease);
 }
 
-/* Discover and request: returns 0 when bound. */
-static int acquire(int fd, unsigned timeout_ms)
+/* accept_ack checks the address of an ACK and binds it or declines it. A
+ * DHCPDECLINE names the address and the server, the saved lease is
+ * forgotten and the client waits DECLINE_WAIT before it starts again. It
+ * returns 0 when bound and 1 when declined. */
+static int accept_ack(int fd, const struct lease *ack)
+{
+    if (address_in_use(ack->address)) {
+        unsigned char m[576];
+        transmit(fd, m, build(m, 4, 0, ack->address, ack->server), INADDR_BROADCAST);
+        lease_forget();
+        sleep_ms(accelerated ? DECLINE_WAIT / 10 : DECLINE_WAIT);
+        return 1;
+    }
+    bind_lease(ack);
+    report("bound", ack);
+    if (state == BOUND)
+        announce(ack->address);
+    return 0;
+}
+
+/* acquire discovers and requests an address, asking for hint when it is
+ * not 0. It returns 0 when bound, 1 when the address was declined and -1
+ * without a lease. */
+static int acquire(int fd, unsigned timeout_ms, uint32_t hint)
 {
     unsigned char m[576];
     struct lease offer, ack;
     xid = (uint32_t)rand() ^ (uint32_t)now_ms();
-    if (transmit(fd, m, build(m, 1, 0, 0, 0), INADDR_BROADCAST) < 0)
+    if (transmit(fd, m, build(m, 1, 0, hint, 0), INADDR_BROADCAST) < 0)
         return -1;
     if (await(fd, timeout_ms, 2, 2, &offer) != 2)
         return -1;
@@ -345,9 +523,35 @@ static int acquire(int fd, unsigned timeout_ms)
     int type = await(fd, timeout_ms, 5, 6, &ack);
     if (type != 5 || ack.address != offer.address)
         return -1;
-    bind_lease(&ack);
-    report("bound", &ack);
-    return 0;
+    return accept_ack(fd, &ack);
+}
+
+/* reboot implements INIT-REBOOT (RFC 2131 sections 3.2 and 4.3.2) with a
+ * broadcast REQUEST for the saved address, no server identifier and ciaddr
+ * 0. It returns 0 when bound, 1 after a NAK or a declined address, when the
+ * saved lease is forgotten, and -1 without an answer. */
+static int reboot(int fd, unsigned timeout_ms, uint32_t address)
+{
+    unsigned char m[576];
+    struct lease ack;
+    struct in_addr a = {.s_addr = htonl(address)};
+    printf("dhcpc: rebooting with %s\n", inet_ntoa(a));
+    fflush(stdout);
+    xid = (uint32_t)rand() ^ (uint32_t)now_ms();
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (transmit(fd, m, build(m, 3, 0, address, 0), INADDR_BROADCAST) < 0)
+            return -1;
+        int type = await(fd, timeout_ms, 5, 6, &ack);
+        if (type == 6 || (type == 5 && ack.address != address)) {
+            printf("dhcpc: saved address refused, discovering\n");
+            fflush(stdout);
+            lease_forget();
+            return 1;
+        }
+        if (type == 5)
+            return accept_ack(fd, &ack);
+    }
+    return -1;
 }
 
 /* Renew (unicast to the server) or rebind (broadcast). */
@@ -374,6 +578,7 @@ static int refresh(int fd, unsigned timeout_ms, int broadcast)
         lease.t1 = ack.t1;
         lease.t2 = ack.t2;
         lease.acquired = time(NULL);
+        lease_save(&lease);
         state = BOUND;
     }
     report("renewed", &ack);
@@ -394,6 +599,10 @@ int main(int argc, char **argv)
             foreground = 1;
         else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc)
             give_up = (unsigned)atoi(argv[++i]);
+        else if (strcmp(argv[i], "-l") == 0 && i + 1 < argc)
+            lease_path = argv[++i];
+        else if (strcmp(argv[i], "-A") == 0)
+            accelerated = 1;
         else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc)
             server_port = (unsigned short)atoi(argv[++i]);
         else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
@@ -404,7 +613,8 @@ int main(int argc, char **argv)
             }
             server_override = ntohl(in.s_addr);
         } else {
-            fprintf(stderr, "usage: dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]\n");
+            fprintf(stderr, "usage: dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS] "
+                            "[-l FILE] [-A]\n");
             return 2;
         }
     }
@@ -418,6 +628,11 @@ int main(int argc, char **argv)
     if (read_mac() < 0) {
         fprintf(stderr, "dhcpc: no interface %s\n", interface);
         return automatic ? 0 : 1;
+    }
+    static char default_path[96];
+    if (!lease_path) {
+        snprintf(default_path, sizeof default_path, DEFAULT_LEASE_DIR "/%s.lease", interface);
+        lease_path = default_path;
     }
     if (!one_shot && !foreground) {
         pid_t pid = fork();
@@ -437,14 +652,29 @@ int main(int argc, char **argv)
     srand((unsigned)now_ms() ^ mac[5]);
     uint64_t start = now_ms();
     unsigned backoff = 4;
+    /* A saved, unexpired lease is asked for again first; without an
+     * answer its address stays the hint of the discovery that follows. */
+    uint32_t hint = 0;
+    if (lease_load(&hint)) {
+        int result = reboot(fd, 2000, hint);
+        if (result == 0 && one_shot)
+            return 0;
+        if (result >= 0)
+            hint = 0;
+    }
     for (;;) {
         if (state == INIT) {
-            if (acquire(fd, 2000) == 0) {
+            int result = acquire(fd, 2000, hint);
+            if (result == 0) {
                 backoff = 4;
                 if (one_shot)
                     return 0;
                 continue;
             }
+            hint = 0;
+            /* A declined address has waited DECLINE_WAIT already. */
+            if (result > 0)
+                continue;
             if (one_shot && now_ms() - start >= (uint64_t)give_up * 1000) {
                 fprintf(stderr, "dhcpc: no lease within %u s\n", give_up);
                 return 1;

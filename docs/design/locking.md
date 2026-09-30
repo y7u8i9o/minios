@@ -67,6 +67,7 @@ before the code that uses them.
 | `net_worker.lock` | spinlock | the worker's packet and request queues, timer list, kick flag and counters; condition lock of its sleep and of request completion | N02 |
 | `pbuf_pool.lock` | spinlock | the packet buffer free list and counters | N02 |
 | `netif_lock` | spinlock | the interface list and the flags of every interface | N02 |
+| `arp_probe_lock` | spinlock | the two address conflict probe slots of `arp.c`; condition lock of a waiting prober | N16 |
 
 ## Ordering
 
@@ -81,7 +82,7 @@ acquire locks that appear later in this list.
 5. `swap_io_lock` (mutex)
 6. `condvar.lock`
 7. `proc_tree_lock`
-8. `mutex.lock`, `semaphore.lock`, `proc.lock`, `thread.exit_lock`, `kbd_lock`, `pipe.lock`, `virtqueue.lock`, `swap_lock`, `mouse_lock`, `mqueue.lock`, `poll_source.lock`, `tty.lock`, `pty.lock`, `net_worker.lock` (condition and notification locks above private wait queues)
+8. `mutex.lock`, `semaphore.lock`, `proc.lock`, `thread.exit_lock`, `kbd_lock`, `pipe.lock`, `virtqueue.lock`, `swap_lock`, `mouse_lock`, `mqueue.lock`, `poll_source.lock`, `tty.lock`, `pty.lock`, `net_worker.lock`, `arp_probe_lock` (condition and notification locks above private wait queues)
 9. `waitq.lock`
 10. the calling CPU's `run_queue.lock`
 11. `vmspaces_lock`, then `vmspace.lock` (user spaces)
@@ -453,3 +454,11 @@ These locks are in user space and do not add a kernel lock-order level.
   stored bytes for a SACK block reads the presence bitmap, so it runs under
   `tcp_lock` inside `tcp_receive_segment`; the report list is updated after
   the lock is released.
+- `arp_probe_lock` (N16) protects the address conflict probe slots of
+  `arp.c`. A caller of `NETIOC_ARP_PROBE` reserves a slot under it, has
+  netd send the probe through a worker request with the lock released, and
+  sleeps on the slot's wait queue with the lock as condition lock and a
+  deadline, which gives the order `arp_probe_lock -> waitq.lock ->
+  run_queue.lock`. netd marks a
+  conflict from `arp_input` under the same lock and wakes the waiter; it
+  holds no other lock then and never sleeps on a slot.

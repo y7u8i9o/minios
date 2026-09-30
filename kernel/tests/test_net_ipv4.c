@@ -274,3 +274,103 @@ static void test_arp_failure(void)
     kprintf("net_arp: timeout and link-down errors, ok\n");
 }
 KTEST_DEFINE("net_arp", test_arp_failure);
+
+/* The N16 checks drive RFC 5227 probes and announcements with injected ARP
+ * packets. The interface has no address, as during DHCP, and conflict
+ * detection must work regardless. */
+static void arp_packet(uint16_t op, const uint8_t *mac, uint32_t sender, uint32_t target)
+{
+    struct pbuf *p = pbuf_alloc(PBUF_CONTROL);
+    uint8_t *h = pbuf_put(p, 28);
+    memset(h, 0, 28);
+    net_put_be16(h, 1);
+    net_put_be16(h + 2, 0x0800);
+    h[4] = 6;
+    h[5] = 4;
+    net_put_be16(h + 6, op);
+    memcpy(h + 8, mac, 6);
+    net_put_be32(h + 14, sender);
+    if (op == 2)
+        memcpy(h + 18, fake.hwaddr, 6);
+    net_put_be32(h + 24, target);
+    arp_input(&fake, p);
+}
+static void expect_probe(unsigned index, uint32_t sender, uint32_t target)
+{
+    const uint8_t *f = frames[index];
+    static const uint8_t zero[6], all[6] = {255, 255, 255, 255, 255, 255};
+    ktest_assert(lengths[index] >= 42 && !memcmp(f, all, 6) && net_get_be16(f + 12) == 0x0806 &&
+                     net_get_be16(f + 20) == 1 && !memcmp(f + 22, fake.hwaddr, 6) &&
+                     net_get_be32(f + 28) == sender && !memcmp(f + 32, zero, 6) &&
+                     net_get_be32(f + 38) == target,
+                 "ARP frame %u: broadcast request from %x for %x",
+                 index,
+                 sender,
+                 target);
+}
+static int probe_checks(struct net_request *request)
+{
+    ktest_assert(netif_register(&fake) == 0, "register probe interface");
+    netif_set_up(&fake, true);
+    captured = 0;
+    const uint32_t wanted = 0x0a000063;
+    const uint8_t other[6] = {2, 0, 0, 0, 0, 9};
+    uint8_t mac[6];
+    uint64_t probes = net_ip_stats.arp_probes, conflicts = net_ip_stats.arp_conflicts;
+
+    int slot = arp_probe_start(&fake, wanted, false);
+    ktest_assert(slot >= 0 && captured == 1, "probe sent");
+    expect_probe(0, 0, wanted);
+    arp_packet(2, other, 0x0a000064, 0);
+    arp_packet(1, fake.hwaddr, 0, wanted);
+    ktest_assert(arp_probe_finish(slot, 0, mac) == 0,
+                 "unrelated ARP and our own probe are no conflict");
+
+    slot = arp_probe_start(&fake, wanted, false);
+    arp_packet(2, other, wanted, 0);
+    ktest_assert(arp_probe_finish(slot, 0, mac) == -EADDRINUSE && !memcmp(mac, other, 6),
+                 "a reply from the address is a conflict");
+    slot = arp_probe_start(&fake, wanted, false);
+    arp_packet(1, other, 0, wanted);
+    ktest_assert(arp_probe_finish(slot, 0, mac) == -EADDRINUSE,
+                 "another host probing for the address is a conflict");
+    slot = arp_probe_start(&fake, wanted, false);
+    arp_packet(1, other, wanted, 0x0a000001);
+    ktest_assert(arp_probe_finish(slot, 0, mac) == -EADDRINUSE,
+                 "a request sent from the address is a conflict");
+
+    int first = arp_probe_start(&fake, wanted, false);
+    int second = arp_probe_start(&fake, wanted + 1, false);
+    ktest_assert(first >= 0 && second >= 0 && arp_probe_start(&fake, wanted + 2, false) == -EBUSY,
+                 "two probe slots");
+    arp_packet(2, other, wanted + 1, 0);
+    ktest_assert(arp_probe_finish(first, 0, mac) == 0 &&
+                     arp_probe_finish(second, 0, mac) == -EADDRINUSE,
+                 "a conflict marks only the slot of its address");
+
+    unsigned before = captured;
+    slot = arp_probe_start(&fake, wanted, true);
+    expect_probe(before, wanted, wanted);
+    ktest_assert(arp_probe_finish(slot, 0, mac) == 0 && net_ip_stats.arp_announcements >= 1,
+                 "announcement sent with the address as sender and target");
+    ktest_assert(net_ip_stats.arp_probes == probes + 6 &&
+                     net_ip_stats.arp_conflicts == conflicts + 4,
+                 "probe and conflict counters");
+    ktest_assert(arp_probe_start(netif_loopback(), wanted, false) == -EOPNOTSUPP &&
+                     arp_probe_start(&fake, 0, false) == -EINVAL,
+                 "probes need an Ethernet interface and a unicast address");
+    return cleanup_fake(request);
+}
+static void test_arp_probe(void)
+{
+    struct pbuf_stats before, after;
+    pbuf_get_stats(&before);
+    struct net_request request;
+    net_request_init(&request, probe_checks);
+    ktest_assert(net_request_run(&request) == 0, "probe checks");
+    net_worker_drain();
+    pbuf_get_stats(&after);
+    ktest_assert(after.free == before.free, "probe packets released");
+    kprintf("net_arp_probe: probes, announcements and conflicts, ok\n");
+}
+KTEST_DEFINE("net_arp_probe", test_arp_probe);

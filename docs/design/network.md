@@ -486,8 +486,9 @@ ARP checks Ethernet/IPv4 types, hardware/protocol lengths, opcode, sender MAC,
 source subnet and target address. Ethernet dispatch checks the ARP sender MAC
 against the enclosing frame. Only existing neighbors are learned/refreshed;
 requests for the local address still receive a reply without allocating a
-cache entry. Unsolicited responses cannot fill the table. Address-conflict
-detection, proxy ARP and ARP probes with source address zero are not supported.
+cache entry. Unsolicited responses cannot fill the table. Proxy ARP is not
+supported. N04 had no address-conflict detection and did not send ARP
+probes with source address zero; N16 added both for the DHCP client.
 
 ### IPv4 and ICMP subset
 
@@ -807,9 +808,9 @@ ring origin, which keeps the sequence-to-slot mapping intact.
 In N07 every segment that carried data or a FIN was acknowledged at once.
 N14 replaced that with delayed ACKs within the rules of RFC 1122 (see N14);
 duplicates, out-of-order segments and FINs are still acknowledged at once.
-There is no Nagle algorithm: a small write is sent as soon as the windows
-allow, so a sender never waits for the receiver's delayed-ACK timer before
-sending.
+There is no Nagle algorithm, so a small write is sent as soon as the
+windows allow and a sender never waits for the receiver's delayed-ACK timer
+before sending.
 
 ### Retransmission, round-trip time and congestion control
 
@@ -1123,8 +1124,8 @@ address, empties the resolver configuration and starts discovery again.
 Retries back off from 4 to 64 seconds. `-1` acquires once for scripts and
 tests, `-f` stays in the foreground, `-s`/`-p` address a unicast test server,
 and `-a` takes the interface from `/etc/network` for the init service.
-Address-conflict detection (gratuitous ARP) is not implemented; the kernel's
-configuration validation rejects addresses outside the unicast host range.
+N10 had no address-conflict detection and kept no lease across a restart;
+N16 added both and is described below.
 
 `net_dhcp` runs `netdhcptest`, which drives the real client against a
 scripted server on loopback: absence with bounded give-up, malformed and
@@ -1203,7 +1204,7 @@ The stores of a connection grew and moved out of the connection table.
 When a connection is created, netd allocates a 65536-byte send store, a
 131072-byte receive store and its 16384-byte presence bitmap from the
 kernel heap with no lock held. A connection that cannot allocate them is
-not created: passive open counts a backlog drop and connect returns
+not created; passive open then counts a backlog drop and connect returns
 `ENOBUFS`. The stores are released as soon as nothing can use them. The
 receive store goes when the endpoint closes, because data that arrives
 after the final close resets the connection instead of being stored, and
@@ -1249,7 +1250,7 @@ replaces it.
 
 With timestamps, a round-trip sample is the timestamp clock minus the
 echoed value of an ACK that acknowledges new data. One sample is taken per
-flight: after a sample, the next one comes from the first ACK that covers
+flight; after a sample, the next one comes from the first ACK that covers
 everything sent at the time of the previous one, which keeps the RFC 6298
 gains of N07 meaningful. The echo identifies the transmission that the peer
 acknowledged, so sampling continues after a retransmission; Karn's rule
@@ -1300,7 +1301,7 @@ stream, segments that end beyond the edge an unscaled window would give,
 the guest's advertised window of 131072 bytes, a PAWS drop answered by an
 ACK that does not cover the old segment, the acknowledged FIN, and neither
 a missing timestamp nor a foreign echo. `check_capture.py` applies its own
-rules to every capture: a connection whose SYNs both carried timestamps
+rules to every capture. A connection whose SYNs both carried timestamps
 has one on every later segment and each echo repeats a value the other
 side sent, a connection without them has none, and no data segment ends
 beyond the scaled right edge. `net_tcp_bulk` and `net_tcp_peer` require the
@@ -1329,9 +1330,9 @@ block; the blocks reported before follow in the order they were reported,
 and a block the new run overlaps or touches is absorbed into it. Blocks at
 or below `rcv_nxt` are dropped as the stream advances, and the list is
 emptied when no hole remains. Every ACK of a SACK connection carries as
-many blocks as fit: four without timestamps, three beside the timestamp,
-and for a data segment only as many as fit within the peer's MSS together
-with the data. A duplicate report (D-SACK) is not sent.
+many blocks as fit, which is four without timestamps and three beside the
+timestamp, and a data segment carries only as many as fit within the
+peer's MSS together with the data. A duplicate report (D-SACK) is not sent.
 
 ### The scoreboard and loss recovery
 
@@ -1347,8 +1348,8 @@ retransmitted next. A cumulative ACK trims the ranges it covers.
 With SACK negotiated, an ACK that does not move `snd_una` counts as a
 duplicate when it SACKs bytes not SACKed before (RFC 6675 section 2).
 IsLost is decided per hole of the scoreboard, since every byte of one hole
-has the same ranges above it: the hole is lost when three ranges, or more
-than two segments of SACKed bytes, lie above it. Recovery starts at the
+has the same ranges above it, and the hole is lost when three ranges, or
+more than two segments of SACKed bytes, lie above it. Recovery starts at the
 third duplicate or when the first unacknowledged byte is already lost. It
 records `snd_nxt` as the recovery point, sets the congestion window and the
 threshold to half the flight (at least two segments) and retransmits the
@@ -1363,7 +1364,7 @@ congestion window does not grow during this recovery, which ends when
 rule 4 is not implemented.
 
 A retransmission timeout on a SACK connection keeps the scoreboard, as
-section 5.1 permits, and starts a timeout recovery: the window returns to
+section 5.1 permits, and starts a timeout recovery. The window returns to
 one segment with slow start, and every unSACKed byte below the recovery
 point counts as lost, so the ACK-clocked loop retransmits the holes in
 order and skips the SACKed ranges. A second consecutive timeout without
@@ -1408,12 +1409,12 @@ showed this as a stall of 1.1 seconds. `net_tcp_sack` checks the case.
 ### N14 validation
 
 `net_tcp_sack` (kernel, controlled clock, fake capture interface) checks
-the receiver with and without timestamps: an out-of-order segment is
+the receiver with and without timestamps. An out-of-order segment is
 acknowledged at once with its block, the most recent block comes first,
 four blocks fit without timestamps and three beside them, filling a gap
 reports the merged run, filling the first hole keeps the remaining blocks
-in report order, and a contiguous stream carries no block. It checks the
-delayed ACK: a 100-byte segment is not acknowledged until the timer fires
+in report order, and a contiguous stream carries no block. For the
+delayed ACK, a 100-byte segment is not acknowledged until the timer fires
 exactly 100 ms later, the second of two full segments is acknowledged at
 once by one ACK for both, a reply carries the pending ACK, a 100-byte read
 announces no window and a larger read does. On a flight of eight 1000-byte
@@ -1448,11 +1449,11 @@ the other side has sent, and the case requires blocks in both directions.
 ## Resolver cache and search domains (N15)
 
 N15 adds a cache of DNS answers, negative caching and the search list to
-the resolver in `libc/src/net/resolv.c`. The cache lives in each process:
-libc is linked into every program and has no daemon to share answers with,
-so a long-running program such as a browser or a server gains from it and
-a short tool such as `ping` does not. A shared cache would need a service
-and a protocol of its own and was not built.
+the resolver in `libc/src/net/resolv.c`. The cache lives in each process,
+because libc is linked into every program and has no daemon to share
+answers with. A long-running program that resolves names repeatedly gains
+from it, while a short tool like `ping` exits before it could. A shared
+cache would need a service and a protocol of its own and was not built.
 
 ### Cache
 
@@ -1473,9 +1474,9 @@ one hour (`CACHE_TTL_MAX`), so a changed record is seen within an hour
 whatever TTL a server announces.
 
 A negative answer, NXDOMAIN or NODATA (no address and no alias for the
-name), is cached as RFC 2308 section 5 describes: for the smaller of the
-TTL of the SOA record in the authority section and the SOA MINIMUM field,
-at most the same hour, which lies within the one to three hours that the
+name), is cached as RFC 2308 section 5 describes, for the smaller of the
+TTL of the SOA record in the authority section and the SOA MINIMUM field
+and at most the same hour, which lies within the one to three hours that the
 RFC calls a sensible maximum. A negative answer without an SOA record is
 not cached, as the RFC requires, and a server failure, a timeout or a
 malformed answer is never cached. `res_cache_remaining` and
@@ -1516,3 +1517,99 @@ dots are tried as given first, that `options ndots:3` puts the search list
 first, and that a `domain` line acts as a list of one. `net_dns` still
 passes unchanged, `net_dhcp` checks the `search` line written from option
 15, and `net_tools` checks that `net apply` writes it from `/etc/network`.
+
+## Address conflict detection and lease persistence (N16)
+
+### ARP probes in the kernel
+
+The DHCP client cannot send ARP itself, since there are no raw sockets, so
+the kernel offers one narrow operation on `/dev/net`. `NETIOC_ARP_PROBE`
+with a `struct net_arp_probe` (`minios/abi.h`) sends one ARP probe or one
+announcement for an address on an Ethernet interface and then waits up to
+the given time, at most ten seconds, for another host to claim the
+address. A probe is a broadcast request with sender address 0 and a zero
+target hardware address; an announcement carries the address as sender
+and target (RFC 5227 sections 2.1.1 and 2.3). `arp.c` keeps two probe
+slots under `arp_probe_lock` (`docs/design/locking.md`); a caller that
+finds both in use gets `EBUSY`, an interface other than Ethernet
+`EOPNOTSUPP` and an address that is not unicast `EINVAL`.
+
+`arp_input` checks the slots before the checks that need a configured
+address, because probing happens before configuration. While a slot is in
+use, any ARP request or reply whose sender is the probed address, and any
+probe for it, marks a conflict and wakes the caller, which gets
+`EADDRINUSE` and the other host's hardware address. Packets from the
+interface's own hardware address are ignored. The operation neither
+changes the neighbour cache nor defends a configured address later
+(RFC 5227 section 2.4). The `arp` line of `/dev/net` counts probes,
+announcements and conflicts.
+
+### Conflict detection in the client
+
+After an ACK, and before it configures anything, `dhcpc` runs the probe
+sequence of RFC 5227 section 2.1.1 with the constants of its section 1.1:
+a random delay of up to one second, three probes one to two seconds apart
+and a final wait of two seconds. A conflict is reported with the other
+host's hardware address and answered with DHCPDECLINE, which names the
+address (option 50) and the server (option 54), has ciaddr 0 and, as RFC
+2131 table 5 requires, no parameter request list. The client then forgets
+any saved lease, waits the ten seconds RFC 2131 section 3.1 asks for and
+discovers again without backoff. Without a conflict the address is
+configured and announced twice, two seconds apart. A kernel or interface
+without the probe operation is reported once and treated as free, so
+conflict detection never prevents configuration. `-A` divides every one of
+these intervals by ten; the scripted tests use it.
+
+### Lease persistence
+
+The root image is rebuilt by every build and only the data volume mounted
+at `/home` survives (`docs/design/storage.md`), and `fsinit` mounts it
+before init starts the `dhcp` service. The lease therefore lives in
+`/home/.local/state/dhcpc/IF.lease`. The lease is state rather than
+configuration, so it lies where the XDG convention puts state, and the
+client creates the file with its directories on the first lease. `-l FILE` selects another file. The file holds the
+address, the server and the expiry in seconds of the real-time clock,
+which the RTC sets at boot, so an expiry survives a reboot. It is written
+under a temporary name and renamed at every bind and renewal, and removed
+on a NAK, at expiry, and when an address is declined. Without a data
+volume the file lands on the root image's `/home` and lasts until the next
+build.
+
+A client that starts with an unexpired saved lease enters INIT-REBOOT
+(RFC 2131 sections 3.2 and 4.3.2) and broadcasts a REQUEST for the saved
+address with ciaddr 0 and no server identifier, twice at most. An ACK for
+that address goes through conflict detection like any other; a NAK or an
+ACK for another address forgets the file and discovery starts; without an
+answer, discovery starts with the saved address as the requested address
+of the DISCOVER, which RFC 2131 permits. An expired file is ignored.
+
+### N16 validation
+
+`net_arp_probe` (kernel, injected ARP on a fake Ethernet interface without
+an address) checks the probe and announcement frames field by field, that
+an unrelated reply and the interface's own probe are no conflict, that a
+reply from the address, a request from it and another host's probe for it
+are conflicts reported with that host's hardware address, that a conflict
+marks only the slot of its address, that a third slot is refused with
+`EBUSY`, and the counters and argument errors. `net_arp` passes unchanged.
+
+`net_dhcp` extends `netdhcptest`. The probes go out on the VirtIO NIC while
+the scripted server answers on loopback, and QEMU's user-mode network
+answers ARP for its gateway 10.0.2.2, so offering that address produces a
+real conflict. The client reports it with QEMU's hardware address
+52:55:0a:00:02:02, the server receives a DHCPDECLINE with the address, the
+server identifier and no request list, and the next discovery binds
+10.0.2.15 and saves it. The next run requests 10.0.2.15 in INIT-REBOOT
+without a server identifier and is acknowledged; the run after that
+receives a NAK, removes the file and discovers without asking for the old
+address; an expired file leads straight to discovery. The live part now
+also checks the saved file on `/home` and a second start that QEMU's server
+acknowledges in INIT-REBOOT. The case's post script requires ARP probes
+and announcements in the capture, which `check_capture.py` recognises by
+their sender and target addresses.
+
+## Release evidence (N13–N16)
+
+The runs on one and four vCPUs, the fuzzing results, the measurements and
+the limitations that remain are recorded in
+`docs/design/network-n13-n16-validation.md`.

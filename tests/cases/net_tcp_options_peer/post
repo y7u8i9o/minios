@@ -6,8 +6,8 @@ grep -q '^script paws old segment answered without acceptance$' "$PEER_LOG"
 grep -q '^script sent 5996 bytes and FIN acknowledged$' "$PEER_LOG"
 grep -q '^script timestamps missing 0 echo errors 0$' "$PEER_LOG"
 grep -q '^script complete$' "$PEER_LOG"
-# The guest trusted the scaled window: segments ended beyond the edge an
-# unscaled reading of the same field would give.
+# The guest trusted the scaled window, since segments ended beyond the
+# edge that an unscaled reading of the same field would give.
 awk '/^script max flight/ { exit !($NF > 0) }' "$PEER_LOG"
 # The guest advertised more than an unscaled window can express.
 awk '/^script guest window/ { exit !($NF > 65535) }' "$PEER_LOG"

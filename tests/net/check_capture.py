@@ -14,9 +14,11 @@ SACK-permitted and each block lies inside the sequence space the other
 side has sent. --require names a feature the capture must show:
 window-scale (a negotiated connection sent data beyond the edge that an
 unscaled reading of the window would give), timestamps (a connection
-negotiated them), sack (both sides of a connection sent SACK blocks) and
+negotiated them), sack (both sides of a connection sent SACK blocks),
 fallback (a SYN offered options that the other SYN did not, and neither
-side used them afterwards).
+side used them afterwards), arp-probe (an ARP request with sender address
+0, RFC 5227) and arp-announce (an ARP request whose sender and target
+addresses are equal and nonzero).
 """
 import struct
 import sys
@@ -32,13 +34,14 @@ def checksum(data):
 
 counts = {'arp': 0, 'icmp': 0, 'udp': 0, 'tcp': 0, 'fragments': 0,
           'tcp_window_scale': 0, 'tcp_timestamps': 0, 'tcp_fallback': 0,
-          'scaled_window_use': 0, 'tcp_sack': 0, 'sack_blocks': 0}
+          'scaled_window_use': 0, 'tcp_sack': 0, 'sack_blocks': 0,
+          'arp_probe': 0, 'arp_announce': 0}
 fragments = {}
 connections = {}
 
 
 def tcp_options(header):
-    """Returns the options of one TCP header as a dictionary."""
+    """This function returns the options of one TCP header as a dictionary."""
     found = {}
     offset = 20
     end = (header[12] >> 4) * 4
@@ -69,7 +72,7 @@ def tcp_options(header):
 
 
 def tcp_connection(ip, payload):
-    """Applies the option consistency rules to one TCP segment."""
+    """This function applies the option consistency rules to one TCP segment."""
     source = (ip[12:16], payload[0:2])
     destination = (ip[16:20], payload[2:4])
     key = tuple(sorted((source, destination)))
@@ -176,6 +179,13 @@ with open(arguments[0], 'rb') as file:
         ethertype = data[12:14]
         if ethertype == b'\x08\x06':
             counts['arp'] += 1
+            arp = data[14:42]
+            assert len(arp) == 28, 'ARP length'
+            if arp[6:8] == b'\x00\x01' and arp[14:18] == b'\0\0\0\0':
+                assert arp[24:28] != b'\0\0\0\0' and arp[18:24] == b'\0' * 6, 'ARP probe fields'
+                counts['arp_probe'] += 1
+            elif arp[6:8] == b'\x00\x01' and arp[14:18] == arp[24:28]:
+                counts['arp_announce'] += 1
         if ethertype != b'\x08\x00':
             continue
         ip = data[14:]
@@ -222,6 +232,8 @@ with open(arguments[0], 'rb') as file:
             assert counts['tcp_timestamps'], counts
         elif feature == 'sack':
             assert counts.get('sack_both_directions'), counts
+        elif feature in ('arp-probe', 'arp-announce'):
+            assert counts[feature.replace('-', '_')], counts
         elif feature == 'fallback':
             assert counts['tcp_fallback'], counts
         else:

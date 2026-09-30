@@ -6,9 +6,12 @@
 #include <net/byteorder.h>
 #include <net/worker.h>
 #include <net/clock.h>
+#include <sched/wait.h>
+#include <drivers/timer.h>
 #include <lib/string.h>
 #include <lib/printf.h>
 #include <errno.h>
+#include <kassert.h>
 
 #define ARP_ENTRIES 16
 #define ARP_PENDING 4
@@ -23,6 +26,21 @@ struct neighbor {
     struct pbuf *pending[ARP_PENDING];
 };
 static struct neighbor neighbors[ARP_ENTRIES];
+
+/* Address conflict probes (RFC 5227, N16), protected by arp_probe_lock. A
+ * slot is reserved by a caller of arp_probe_start and released by
+ * arp_probe_finish; netd marks it when another host claims the address. */
+#define ARP_PROBE_SLOTS 2
+struct arp_probe {
+    bool used, conflict;
+    struct netif *n;
+    uint32_t address;
+    bool announce;
+    uint8_t mac[6];
+    struct waitq wait;
+};
+static struct arp_probe probes[ARP_PROBE_SLOTS];
+static DEFINE_SPINLOCK(arp_probe_lock);
 static unsigned pending_count;
 static struct net_timer timer;
 static bool initialized;
@@ -59,6 +77,120 @@ static void emit(struct netif *n, uint16_t op, uint32_t target, const uint8_t *m
     ethernet_output(n, p, mac ? mac : broadcast, 0x0806);
     if (op == 1)
         net_ip_stats.arp_requests++;
+}
+
+/* A probe carries sender address 0, so no host updates its cache from
+ * it; an announcement carries the address as sender and target (RFC 5227
+ * sections 2.1.1 and 2.3). Both are broadcast requests with a zero target
+ * hardware address. */
+static void emit_probe(struct netif *n, uint32_t address, bool announce)
+{
+    struct pbuf *p = pbuf_alloc(PBUF_CONTROL);
+    if (!p)
+        return;
+    uint8_t *h = pbuf_put(p, 28);
+    memset(h, 0, 28);
+    net_put_be16(h, 1);
+    net_put_be16(h + 2, 0x0800);
+    h[4] = 6;
+    h[5] = 4;
+    net_put_be16(h + 6, 1);
+    memcpy(h + 8, n->hwaddr, 6);
+    net_put_be32(h + 14, announce ? address : 0);
+    net_put_be32(h + 24, address);
+    ethernet_output(n, p, broadcast, 0x0806);
+    if (announce)
+        net_ip_stats.arp_announcements++;
+    else
+        net_ip_stats.arp_probes++;
+}
+
+struct probe_request {
+    struct net_request request;
+    unsigned slot;
+};
+static int probe_send(struct net_request *request)
+{
+    struct arp_probe *probe = &probes[((struct probe_request *)request)->slot];
+    if (!netif_is_up(probe->n))
+        return -ENETDOWN;
+    emit_probe(probe->n, probe->address, probe->announce);
+    return 0;
+}
+
+int arp_probe_start(struct netif *n, uint32_t address, bool announce)
+{
+    if (!(n->flags & NETIF_ETHERNET))
+        return -EOPNOTSUPP;
+    if (!ipv4_unicast(address))
+        return -EINVAL;
+    unsigned slot;
+    spin_lock(&arp_probe_lock);
+    for (slot = 0; slot < ARP_PROBE_SLOTS && probes[slot].used; slot++)
+        ;
+    if (slot == ARP_PROBE_SLOTS) {
+        spin_unlock(&arp_probe_lock);
+        return -EBUSY;
+    }
+    struct arp_probe *probe = &probes[slot];
+    memset(probe, 0, sizeof *probe);
+    waitq_init(&probe->wait, "arp_probe");
+    probe->used = true;
+    probe->n = n;
+    probe->address = address;
+    probe->announce = announce;
+    spin_unlock(&arp_probe_lock);
+    struct probe_request r = {.slot = slot};
+    net_request_init(&r.request, probe_send);
+    int result = net_worker_is_current() ? probe_send(&r.request) : net_request_run(&r.request);
+    if (result < 0) {
+        uint8_t unused[6];
+        arp_probe_finish((int)slot, 0, unused);
+        return result;
+    }
+    return (int)slot;
+}
+
+int arp_probe_finish(int slot, unsigned wait_ms, uint8_t mac[6])
+{
+    kassert(slot >= 0 && slot < ARP_PROBE_SLOTS);
+    kassert(!wait_ms || !net_worker_is_current());
+    struct arp_probe *probe = &probes[slot];
+    uint64_t deadline = timer_ms() + wait_ms;
+    spin_lock(&arp_probe_lock);
+    while (!probe->conflict && timer_ms() < deadline)
+        waitq_wait_timeout(&probe->wait, &arp_probe_lock, deadline);
+    int result = probe->conflict ? -EADDRINUSE : 0;
+    memcpy(mac, probe->mac, 6);
+    probe->used = false;
+    spin_unlock(&arp_probe_lock);
+    return result;
+}
+
+/* While an address is probed, RFC 5227 section 2.1.1 takes any ARP packet
+ * whose sender is that address, and any probe for it from another hardware
+ * address, as a sign that another host uses or wants the address. Packets
+ * from our own hardware address are ignored. This check runs before the
+ * checks that need a configured address, since probing happens before
+ * configuration. */
+static void probe_check(struct netif *n, const uint8_t *h, unsigned op)
+{
+    uint32_t sender = net_get_be32(h + 14), target = net_get_be32(h + 24);
+    if ((op != 1 && op != 2) || !memcmp(h + 8, n->hwaddr, 6))
+        return;
+    spin_lock(&arp_probe_lock);
+    for (unsigned i = 0; i < ARP_PROBE_SLOTS; i++) {
+        struct arp_probe *probe = &probes[i];
+        if (!probe->used || probe->n != n || probe->conflict)
+            continue;
+        if (sender == probe->address || (op == 1 && !sender && target == probe->address)) {
+            probe->conflict = true;
+            memcpy(probe->mac, h + 8, 6);
+            net_ip_stats.arp_conflicts++;
+            waitq_wake_all(&probe->wait);
+        }
+    }
+    spin_unlock(&arp_probe_lock);
 }
 
 static void schedule(void);
@@ -173,9 +305,12 @@ void arp_input(struct netif *n, struct pbuf *p)
 {
     uint8_t *h = p->data;
     if (p->len < 28 || net_get_be16(h) != 1 || net_get_be16(h + 2) != 0x0800 || h[4] != 6 ||
-        h[5] != 4 || !ipv4_address(n))
+        h[5] != 4)
         goto out;
     unsigned op = net_get_be16(h + 6);
+    probe_check(n, h, op);
+    if (!ipv4_address(n))
+        goto out;
     uint32_t sender = net_get_be32(h + 14), target = net_get_be32(h + 24);
     uint32_t mask = ipv4_netmask(n), host = sender & ~mask;
     static const uint8_t zero[6];

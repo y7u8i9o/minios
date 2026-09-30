@@ -5,6 +5,7 @@ NAME
 
 SYNOPSIS
     dhcpc [-i IF | -a] [-1] [-f] [-t SECONDS] [-s SERVER] [-p PORT]
+          [-l FILE] [-A]
 
 DESCRIPTION
     Obtains an IPv4 address, netmask, gateway, name servers and domain
@@ -15,6 +16,21 @@ DESCRIPTION
     which discovery starts again. Without a server the client retries
     with backoff from 4 to 64 seconds and leaves the interface without an
     address. A NAK removes the address at once.
+
+    Before an address is used, the client checks that no other host
+    holds it (RFC 5227). After a random delay of up to one second it
+    sends three ARP probes one to two seconds apart and waits two more
+    seconds. If another host answers for the address or probes for it,
+    the client sends DHCPDECLINE, waits ten seconds and starts again.
+    Otherwise it configures the address and announces it twice, two
+    seconds apart. -A divides these intervals by ten for tests.
+
+    The lease is saved in FILE, by default
+    /home/.local/state/dhcpc/IF.lease on the persistent home volume. A
+    client that starts with an unexpired saved lease first asks for the
+    same address (INIT-REBOOT); a NAK removes the file and discovery
+    starts, and without an answer the address is asked for again during
+    discovery.
 
     Without -1 or -f the client detaches and keeps running. -1 exits with
     status 0 after the first lease or 1 after SECONDS (default 60) without
@@ -33,7 +49,7 @@ DESCRIPTION
     and lease time of at least 10 seconds; anything else is ignored.
 
 FILES
-    /dev/net, /etc/resolv.conf
+    /dev/net, /etc/resolv.conf, /home/.local/state/dhcpc/IF.lease
 
 SEE ALSO
     net(1), init.conf(5), initctl(1), resolv.conf(5), index(7)

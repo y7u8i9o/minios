@@ -1,8 +1,10 @@
 # MiniOS TCP/IP implementation plan
 
-Status: N00–N12 complete on the branch `bleeding-edge-net` (2026-09-12); N13
-to N15 complete on `bleeding-edge-net-options` (2026-09-30). Section 7
-holds the evidence and the remaining limitations of each milestone.
+N00–N12 are complete on the branch `bleeding-edge-net` (2026-09-12), and
+N13 to N16 are complete on `bleeding-edge-net-options` (2026-09-30).
+Section 7 holds the evidence and the remaining limitations of each
+milestone, and `docs/design/network-n13-n16-validation.md` holds the
+release evidence of N13 to N16.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
 `bleeding-edge-pkg`, whose HEAD was `1a95395`. The working tree contained
@@ -134,6 +136,7 @@ data-buffer pressure so ACKs and teardown do not depend on unbounded allocation.
 | N13 | TCP window scaling and timestamps | N07, N09, N12 |
 | N14 | TCP selective acknowledgements and delayed ACKs | N13 |
 | N15 | Resolver cache, negative caching and search domains | N11 |
+| N16 | DHCP address conflict detection and lease persistence | N10 |
 
 N01 and N02 are architecturally independent after their shared contracts are
 settled. The table does not authorize parallel implementation or agent work.
@@ -529,6 +532,21 @@ The milestone is complete when a scripted server that counts queries shows
 cached, expired, uncached and capped answers, positive and negative, and
 the order in which search candidates are tried.
 
+### N16. DHCP address conflict detection and lease persistence
+
+The DHCP client probes an offered address with ARP as RFC 5227 describes
+before it uses it, declines it with DHCPDECLINE on a conflict and
+announces it after configuration. The kernel provides the probe through a
+narrow `/dev/net` operation, since there are no raw sockets. The lease is
+kept on the persistent home volume, and a client that restarts with an
+unexpired lease asks for its address again in INIT-REBOOT.
+
+The milestone is complete when injected ARP packets cover the conflict
+rules of the kernel, a real conflict on the NIC leads to DHCPDECLINE and a
+new address, INIT-REBOOT is acknowledged and refused by the scripted
+server and acknowledged by QEMU's server, and probes and announcements
+appear in the capture.
+
 ## 5. Verification and implementation discipline
 
 - Keep host protocol tests, simulated-device tests and live QEMU/peer tests
@@ -878,7 +896,7 @@ new scripted mode of `netpeer`, which offers both options and reports what
 it observed, and its capture is checked against the option rules that
 `check_capture.py` now applies to every TCP capture. `net_tcp_bulk` and
 `net_tcp_peer` require the fallback that QEMU's user-mode stack causes.
-Two existing tests changed because the window grew: `net_tcp` moves its
+Two existing tests changed because the window grew. `net_tcp` moves its
 out-of-window reset beyond 65535 bytes, and `net_pressure` fills the larger
 store in several segments. The parser changes were fuzzed with structured
 options. QEMU's user-mode stack never offers the options, so a native host
@@ -938,3 +956,27 @@ The `net_tools` case now also runs `net apply` and restores the files it
 changed. The cache is not shared between processes, so a short-lived tool
 queries the server every time; a shared cache would need a service of its
 own.
+
+### N16 (complete 2026-09-30)
+
+`NETIOC_ARP_PROBE` on `/dev/net` sends one RFC 5227 probe or announcement
+and waits up to ten seconds for a conflict, which `arp_input` detects
+from the sender or the probed target of any ARP packet before it looks at
+the interface's address. The new `arp_probe_lock` protects two probe
+slots and was recorded in `docs/design/locking.md` first. `dhcpc` probes
+an acknowledged address with the RFC 5227 timing, declines it on a
+conflict, waits ten seconds and discovers again, and announces a
+configured address twice. It saves the lease in
+`/home/.local/state/dhcpc/IF.lease`, the only persistent location, and
+starts in INIT-REBOOT when the saved lease has not expired. `-l` selects
+the file and `-A` shortens the intervals for tests.
+
+`net_arp_probe` covers the kernel rules with injected ARP packets.
+`net_dhcp` now produces a real conflict through QEMU's ARP answer for its
+gateway, checks the DHCPDECLINE, INIT-REBOOT with an ACK and with a NAK,
+an expired file, the saved live lease and a live INIT-REBOOT, and its new
+post script requires probes and announcements in the capture. Its existing
+steps use their own lease files and `-A`, and one wait grew from one to
+two seconds because conflict detection now precedes configuration.
+Defence of a configured address (RFC 5227 section 2.4) and conflict
+detection for static configuration are not implemented.
