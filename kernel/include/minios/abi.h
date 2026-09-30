@@ -325,9 +325,25 @@ struct pollfd {
  * the gateway of the interface but keeps it as the broadcast interface. */
 #define NETIOC_CONFIGURE 0x4e01  /* struct net_config * */
 #define NETIOC_PING      0x4e02  /* struct net_ping *, returns 0 or -errno */
+/* NETIOC_ARP_PROBE takes a struct net_arp_probe and implements RFC 5227
+ * address conflict detection (N16). It sends one ARP probe with sender
+ * address 0, or with announce set one announcement whose sender and target
+ * addresses are equal, for address on the named Ethernet interface, and
+ * then waits up to wait_ms (at most 10000) for another host to claim the
+ * address. It returns 0, or -EADDRINUSE with that host's hardware address
+ * in mac. */
+#define NETIOC_ARP_PROBE 0x4e03
 struct net_config {
     char name[16];
     uint32_t address, mask, gateway;
+};
+/* The address is in host order, and the kernel writes mac. */
+struct net_arp_probe {
+    char name[16];
+    uint32_t address;
+    uint32_t wait_ms;
+    uint32_t announce;
+    uint8_t mac[6];
 };
 struct net_ping {
     uint32_t address;

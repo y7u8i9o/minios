@@ -48,9 +48,9 @@ $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
 # The controlled peer of the network boot tests (docs/design/network.md).
-$(NETPEER): tools/netpeer/netpeer.c
+$(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scripted.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ tools/netpeer/netpeer.c tools/netpeer/scripted.c
 
 # pkgsign generates keys and signs the index of a package repository. It
 # compiles the SHA-2 and Ed25519 code of libc, with which pkg verifies on

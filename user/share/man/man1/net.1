@@ -24,6 +24,7 @@ DESCRIPTION
         iface eth0 dhcp                   left to the dhcp service
         iface eth0 static ADDR MASK [GW]  configure once
         nameserver ADDR                   written to /etc/resolv.conf
+        search DOMAIN...                  written to /etc/resolv.conf
 
     The dhcp entry is served by dhcpc(1) -a, the dhcp service of
     init.conf(5), started right after apply. A missing file or a missing
@@ -34,4 +35,5 @@ FILES
     /dev/net, /etc/network, /etc/resolv.conf
 
 SEE ALSO
-    dhcpc(1), init.conf(5), ping(1), nc(1), http(1), index(7)
+    dhcpc(1), init.conf(5), resolv.conf(5), ping(1), nc(1), http(1),
+    index(7)

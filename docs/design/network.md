@@ -486,8 +486,9 @@ ARP checks Ethernet/IPv4 types, hardware/protocol lengths, opcode, sender MAC,
 source subnet and target address. Ethernet dispatch checks the ARP sender MAC
 against the enclosing frame. Only existing neighbors are learned/refreshed;
 requests for the local address still receive a reply without allocating a
-cache entry. Unsolicited responses cannot fill the table. Address-conflict
-detection, proxy ARP and ARP probes with source address zero are not supported.
+cache entry. Unsolicited responses cannot fill the table. Proxy ARP is not
+supported. N04 had no address-conflict detection and did not send ARP
+probes with source address zero; N16 added both for the DHCP client.
 
 ### IPv4 and ICMP subset
 
@@ -675,7 +676,8 @@ Input verifies the TCP pseudo-header checksum, minimum header, data offset,
 reserved header bits and option bounds. MSS is accepted only as one valid,
 nonzero, four-byte SYN option. Malformed TLVs are discarded. Well-formed unknown
 options are skipped. SYN plus FIN and urgent data are unsupported and dropped.
-No window scaling, timestamps, SACK, ECN or TCP Fast Open are advertised.
+N06 advertised no option but MSS; window scaling and timestamps arrived in
+N13 and SACK in N14, while ECN and TCP Fast Open remain absent.
 SYN payload is not acknowledged or delivered during this stage.
 
 Outgoing SYNs advertise the smaller of 1460 and route MTU minus 40. Peer MSS
@@ -761,13 +763,14 @@ completion never acknowledges TCP sequence space. The behaviour follows
 [RFC 6298](https://www.rfc-editor.org/rfc/rfc6298.html) for the
 retransmission timer and the Tahoe subset of
 [RFC 5681](https://www.rfc-editor.org/rfc/rfc5681.html) for congestion
-control. Window scaling, SACK, timestamps and ECN are still not advertised,
-so the receive window is limited to the 4096-byte ring and the peer's window
-is taken at face value.
+control. N07 advertised no window scaling, SACK, timestamps or ECN, so its
+receive window was limited to a 4096-byte ring and the peer's window was
+taken at face value; N13 and N14 changed that and are described below.
 
 ### Send buffering and acknowledgement
 
-Each connection holds an 8192-byte send buffer (`TCP_SEND_CAPACITY`). A send
+Each connection holds a send buffer of `TCP_SEND_CAPACITY` bytes (8192 in
+N07, 65536 since N13). A send
 copies as many bytes as fit and returns that partial count; a full buffer
 returns `EAGAIN` to nonblocking callers and blocks the others until an
 acknowledgement frees space. The prefix `transmit_sent` is on the wire and the
@@ -788,11 +791,11 @@ unchanged.
 
 ### Ordered receive and the out-of-order store
 
-One 4096-byte circular store holds both readable bytes and bytes that arrived
-ahead of a hole. A presence bitmap marks the out-of-order positions; only the
-contiguous prefix counts toward `receive_count`, and the out-of-order bytes
-are subtracted from the advertised window so a burst of reordered segments
-cannot promise capacity the ring does not have. Bytes are accepted only inside
+One circular store (4096 bytes in N07, 131072 since N13) holds both readable
+bytes and bytes that arrived ahead of a hole. A presence bitmap marks the out-of-order positions; only the
+contiguous prefix counts toward `receive_count`. N07 subtracted the
+out-of-order bytes from the advertised window; since N13 they are stored
+inside the window without shrinking it (see N13). Bytes are accepted only inside
 `[rcv_nxt, rcv_nxt + window)`; the first arrival of a byte wins, so an
 overlapping retransmission with different content cannot change a byte
 already accepted, and no byte is delivered twice. When a hole is filled the
@@ -802,11 +805,12 @@ before it have arrived, so EOF still follows all data. Read shutdown keeps
 the out-of-order positions but discards the contiguous bytes by moving the
 ring origin, which keeps the sequence-to-slot mapping intact.
 
-Every segment that carries data or a FIN, including duplicates and
-out-of-order segments, is acknowledged immediately. There is no delayed ACK
-and no Nagle algorithm: a small write is sent as soon as the windows allow,
-so two MiniOS endpoints cannot wait for each other's timer, and the immediate
-ACK of a duplicate lets a peer's fast retransmit work.
+In N07 every segment that carried data or a FIN was acknowledged at once.
+N14 replaced that with delayed ACKs within the rules of RFC 1122 (see N14);
+duplicates, out-of-order segments and FINs are still acknowledged at once.
+There is no Nagle algorithm, so a small write is sent as soon as the
+windows allow and a sender never waits for the receiver's delayed-ACK timer
+before sending.
 
 ### Retransmission, round-trip time and congestion control
 
@@ -1120,8 +1124,8 @@ address, empties the resolver configuration and starts discovery again.
 Retries back off from 4 to 64 seconds. `-1` acquires once for scripts and
 tests, `-f` stays in the foreground, `-s`/`-p` address a unicast test server,
 and `-a` takes the interface from `/etc/network` for the init service.
-Address-conflict detection (gratuitous ARP) is not implemented; the kernel's
-configuration validation rejects addresses outside the unicast host range.
+N10 had no address-conflict detection and kept no lease across a restart;
+N16 added both and is described below.
 
 `net_dhcp` runs `netdhcptest`, which drives the real client against a
 scripted server on loopback: absence with bounded give-up, malformed and
@@ -1150,8 +1154,9 @@ backwards, so loops and forward references fail with `EAI_FAIL`. A truncated
 UDP answer is retried over TCP. CNAMEs are followed for at most eight
 steps, with the target's address taken from the same response when present.
 `RESOLV_CONF` and `HOSTS_FILE` in the environment redirect the files for
-tests. Unsupported: AF_INET6, service names, `AI_CANONNAME` output,
-`getnameinfo`, reverse lookups, search domains and caching.
+tests. N11 supported neither AF_INET6, service names, `AI_CANONNAME` output,
+`getnameinfo` and reverse lookups, nor search domains and caching; N15 added
+the last two and is described below.
 
 `net_dns` runs `netdnstest`, a scripted server on loopback whose queried
 name selects the behaviour: positive, NXDOMAIN, SERVFAIL, a compression
@@ -1194,3 +1199,431 @@ The complete affected set, the throughput baseline and the recorded
 configuration are in `docs/design/network-n10-n12-validation.md`. The
 network plan is marked complete there only for the milestones whose exit
 criteria have evidence; the remaining limitations are listed per milestone.
+
+## TCP window scaling and timestamps (N13)
+
+N13 implements the two options of
+[RFC 7323](https://www.rfc-editor.org/rfc/rfc7323.html). Every SYN the stack
+sends offers both, and a connection uses an option only when the other SYN
+of the handshake carried it too; a SYN ACK repeats only the options the
+peer's SYN offered. `wire.c` reads the window scale option from SYN segments
+only, since the RFC requires it to be ignored elsewhere, and the timestamp
+option from every segment. A window scale or timestamp option with the
+wrong length, or a second one in the same header, makes the segment
+invalid, which is the policy N06 applied to a malformed MSS option.
+
+### Stores and window scaling
+
+The stores of a connection grew and moved out of the connection table.
+When a connection is created, netd allocates a 65536-byte send store, a
+131072-byte receive store and its 16384-byte presence bitmap from the
+kernel heap with no lock held. A connection that cannot allocate them is
+not created; passive open then counts a backlog drop and connect returns
+`ENOBUFS`. The stores are released as soon as nothing can use them. The
+receive store goes when the endpoint closes, because data that arrives
+after the final close resets the connection instead of being stored, and
+the send store goes when its last byte has been acknowledged after the
+close. A connection that is finishing its FIN exchange or waits in
+TIME_WAIT therefore holds its table entry and nothing more. With all 64
+connections open the stores take 13 MiB.
+
+The receive window is the free space of the receive store. Out-of-order
+bytes lie inside that window and no longer shrink it, so reordering cannot
+move the right edge to the left. The local shift is 2, the smallest that
+expresses the whole store in the 16-bit field (`TCP_WINDOW_SHIFT`, checked
+by a static assertion). With scaling in use the advertised window is
+rounded down to a multiple of four bytes and input accepts exactly that
+range; without scaling the window is capped at 65535 bytes of the larger
+store. The peer's shift is clamped to 14, the limit of RFC 7323 section
+2.3. The window of a SYN or SYN ACK is never scaled in either direction;
+every later window of the peer is shifted by the peer's shift before it
+limits transmission or takes part in the duplicate-ACK test.
+
+### Timestamps
+
+The timestamp clock is the network clock in milliseconds plus an offset
+per connection that is drawn like an initial sequence number, so the values
+do not reveal the uptime and the controlled clock drives them in tests.
+Every segment of a connection that negotiated timestamps carries one and
+echoes TS.Recent; a reset carries one as well, which RFC 7323 section 3.2
+recommends. TS.Recent follows section 4.3: it takes the value of an
+acceptable segment whose timestamp is not older than TS.Recent and whose
+sequence starts at or before the last acknowledgement sent, which keeps the
+timestamp of the earliest unacknowledged segment when segments arrive out
+of order.
+
+PAWS (section 5) runs before the sequence check. A segment without a
+timestamp is dropped silently and counted in `timestamp_missing`. A segment
+whose timestamp is older than TS.Recent is dropped, counted in
+`paws_rejected` and answered with an ACK under the shared limit of 20
+replies per second. A reset is exempt from both checks. After 24 days
+without an update TS.Recent is no longer trusted, and the next segment
+replaces it.
+
+### Round-trip measurement
+
+With timestamps, a round-trip sample is the timestamp clock minus the
+echoed value of an ACK that acknowledges new data. One sample is taken per
+flight; after a sample, the next one comes from the first ACK that covers
+everything sent at the time of the previous one, which keeps the RFC 6298
+gains of N07 meaningful. The echo identifies the transmission that the peer
+acknowledged, so sampling continues after a retransmission; Karn's rule
+applies only to connections without timestamps, which keep the timed
+segment of N07. An echo of 0 and an echo more than 60 seconds old are
+ignored.
+
+The timestamp option takes 12 bytes of every segment. The MSS a peer
+announces excludes options (RFC 6691), so a full segment of a connection
+with timestamps carries the peer's MSS minus 12 bytes, and the congestion
+window counts in that unit.
+
+### Counters
+
+`struct tcp_stats` and the `tcpopt` line of `/dev/net` report
+`window_scaling` and `timestamps` (connections established with each
+option), `paws_rejected`, `timestamp_missing` and `timestamp_samples`.
+
+### N13 validation
+
+`net_tcp_options` (kernel, controlled clock, fake capture interface) decodes
+every captured segment with an option decoder of its own. It checks the
+offer in a SYN (MSS 1460, shift 2, a timestamp with a zero echo, a 40-byte
+header, window 65535) and the fallback when the SYN ACK carries MSS alone
+(20-byte headers, full-MSS segments, window capped at 65535). On a
+negotiated connection it checks that the ACK echoes the peer's timestamp and
+advertises 32768 units, that one unit of the peer's shift 7 limits the
+flight to 128 bytes, that full segments carry 1188 bytes for a peer MSS of
+1200, and that the timestamp sample equals the 40 ms by which the controlled
+clock moved. PAWS rejects an older timestamp with an ACK, a segment without
+a timestamp is dropped silently, and a newer one is accepted and echoed.
+TS.Recent stays unchanged for a segment beyond the last ACK and advances
+when the hole is filled, a retransmission's echo yields a sample, and a
+reset without a timestamp is accepted. A passive open repeats both options
+and scales the window of the final ACK, a SYN without options is answered
+with MSS alone, a shift of 15 is clamped to 14, malformed option lengths are
+rejected and the 24-day rule restores acceptance. Every connection,
+endpoint and packet buffer returns to the baseline.
+
+`net_tcp_options_peer` runs the guest over the VirtIO NIC against the
+scripted mode of `netpeer` (`tools/netpeer/scripted.c`) on the dgram link.
+The peer builds and checks its headers without the guest's code. It answers
+the SYN with MSS 1400, shift 5 and timestamps, receives 100000 bytes while
+advertising 1024 units and acknowledging after four segments or 20 ms of
+silence, sends one segment with an old timestamp, and then sends 3000 bytes
+and a FIN with fresh ones. Its log records the guest's offer, the exact
+stream, segments that end beyond the edge an unscaled window would give,
+the guest's advertised window of 131072 bytes, a PAWS drop answered by an
+ACK that does not cover the old segment, the acknowledged FIN, and neither
+a missing timestamp nor a foreign echo. `check_capture.py` applies its own
+rules to every capture. A connection whose SYNs both carried timestamps
+has one on every later segment and each echo repeats a value the other
+side sent, a connection without them has none, and no data segment ends
+beyond the scaled right edge. `net_tcp_bulk` and `net_tcp_peer` require the
+fallback case, because QEMU's user-mode stack answers with MSS alone.
+
+## Selective acknowledgements and delayed ACKs (N14)
+
+N14 adds the SACK option of [RFC 2018](https://www.rfc-editor.org/rfc/rfc2018.html),
+the loss recovery of [RFC 6675](https://www.rfc-editor.org/rfc/rfc6675.html)
+and delayed acknowledgements. Every SYN offers SACK-permitted next to the
+options of N13, and a connection uses SACK only when the other SYN carried
+it too. When both SACK-permitted and a timestamp are present, SACK-permitted
+takes the place of the two padding bytes before the timestamp, as in the
+layout of RFC 7323 appendix A. `wire.c` reads SACK-permitted from SYN
+segments only and SACK blocks from every other segment; a block list whose
+length is not 2 plus a multiple of 8, that holds no block or more than
+four, or that repeats the option makes the segment invalid.
+
+### Reporting received data
+
+The receiver keeps up to four blocks to report (`TCP_SACK_REPORT`). When an
+out-of-order segment is stored, the run of stored bytes that contains it is
+found in the presence bitmap of the receive store, since RFC 2018 section 4
+requires the first block to be that whole run, and it becomes the first
+block; the blocks reported before follow in the order they were reported,
+and a block the new run overlaps or touches is absorbed into it. Blocks at
+or below `rcv_nxt` are dropped as the stream advances, and the list is
+emptied when no hole remains. Every ACK of a SACK connection carries as
+many blocks as fit, which is four without timestamps and three beside the
+timestamp, and a data segment carries only as many as fit within the
+peer's MSS together with the data. A duplicate report (D-SACK) is not sent.
+
+### The scoreboard and loss recovery
+
+The sender keeps a scoreboard of at most eight SACKed ranges
+(`TCP_SCOREBOARD`), sorted and disjoint, within `[snd_una, snd_nxt]`. A
+block that is empty, starts below `snd_una` or ends beyond `snd_nxt` is
+ignored. A new block absorbs every range it overlaps or touches; when it
+would need a ninth range the highest range is dropped and counted in
+`scoreboard_drops`. Forgetting that the peer holds data is safe, because the
+data is at worst sent again, and the ranges nearest `snd_una` decide what is
+retransmitted next. A cumulative ACK trims the ranges it covers.
+
+With SACK negotiated, an ACK that does not move `snd_una` counts as a
+duplicate when it SACKs bytes not SACKed before (RFC 6675 section 2).
+IsLost is decided per hole of the scoreboard, since every byte of one hole
+has the same ranges above it, and the hole is lost when three ranges, or
+more than two segments of SACKed bytes, lie above it. Recovery starts at the
+third duplicate or when the first unacknowledged byte is already lost. It
+records `snd_nxt` as the recovery point, sets the congestion window and the
+threshold to half the flight (at least two segments) and retransmits the
+first lost segment at once. From then on every ACK updates the scoreboard
+and runs the transmission loop of section 5: while the window exceeds the
+pipe (unSACKed bytes not lost plus retransmitted bytes, SetPipe of section
+4) by a full segment, it sends the first lost byte above the highest
+retransmission, then new data within the peer's window, then the first
+unSACKed byte below SACKed data. At most 16 segments leave per ACK. The
+congestion window does not grow during this recovery, which ends when
+`snd_una` reaches the recovery point. The optional rescue retransmission of
+rule 4 is not implemented.
+
+A retransmission timeout on a SACK connection keeps the scoreboard, as
+section 5.1 permits, and starts a timeout recovery. The window returns to
+one segment with slow start, and every unSACKed byte below the recovery
+point counts as lost, so the ACK-clocked loop retransmits the holes in
+order and skips the SACKed ranges. A second consecutive timeout without
+progress clears the scoreboard, because the peer may have discarded data it
+had SACKed (RFC 2018 section 8). Connections without SACK keep the Tahoe
+recovery of N07 unchanged.
+
+### Delayed acknowledgements
+
+A FIN, a segment that arrives out of order or repeats received data, and a
+segment that fills part of a hole are acknowledged at once, as RFC 5681
+section 4.2 asks. In-order data is acknowledged at once when the bytes
+received since the last ACK reach two full segments (the receive MSS, less
+12 bytes with timestamps); otherwise the ACK waits for `TCP_DELAYED_ACK_MS`,
+100 ms, which is within the 500 ms limit of RFC 1122 section 4.2.3.2 and
+RFC 9293 section 3.8.6.3. Any segment the connection sends acknowledges
+everything received and cancels the pending delayed ACK, so a reply to a
+request carries the ACK. The deadline is one more field that `tcp_schedule`
+considers for the connection's timer.
+
+A read that frees receive space announces the window on its own only when
+the right edge moves by at least the smaller of half the store and one full
+segment (receiver silly window avoidance, RFC 1122 section 4.2.3.3). Every
+other segment carries the current window as before, and a peer's zero
+window probe is a duplicate and is answered at once.
+
+A FIN without data that arrives at `rcv_nxt` is accepted even when the
+receive window is closed. RFC 9293 accepts no segment with length in a
+closed window, but a FIN occupies no receive space, and dropping it made a
+peer whose FIN met a full store wait for its own retransmission timeout
+after the reader had emptied the store; the one-vCPU run of `net_tcp_bulk`
+showed this as a stall of 1.1 seconds. `net_tcp_sack` checks the case.
+
+### Counters
+
+`struct tcp_stats` and the `tcpopt` line of `/dev/net` add `sack`
+(connections that negotiated it), `sack_blocks_sent`,
+`sack_blocks_received`, `scoreboard_drops`, `sack_recoveries`,
+`sack_retransmits`, `delayed_acks` (ACKs that waited) and
+`delayed_ack_timeouts` (ACKs sent by the timer).
+
+### N14 validation
+
+`net_tcp_sack` (kernel, controlled clock, fake capture interface) checks
+the receiver with and without timestamps. An out-of-order segment is
+acknowledged at once with its block, the most recent block comes first,
+four blocks fit without timestamps and three beside them, filling a gap
+reports the merged run, filling the first hole keeps the remaining blocks
+in report order, and a contiguous stream carries no block. For the
+delayed ACK, a 100-byte segment is not acknowledged until the timer fires
+exactly 100 ms later, the second of two full segments is acknowledged at
+once by one ACK for both, a reply carries the pending ACK, a 100-byte read
+announces no window and a larger read does. On a flight of eight 1000-byte
+segments whose first is lost, two duplicates do not start recovery, the
+third retransmits exactly the lost segment and halves the window and
+threshold to 4000, the pipe then holds further sending until more data is
+SACKed, the next transmission is new data rather than SACKed data, only one
+retransmission happens, and a cumulative ACK at the recovery point ends
+recovery. After a timeout the ACK-clocked loop retransmits the hole below
+the SACKed range and then the hole above it, and a second consecutive
+timeout clears the scoreboard. Blocks below `snd_una`, beyond `snd_nxt` or
+empty are ignored, nine separate blocks leave eight ranges with the highest
+dropped, a covering block merges them, and a connection whose peer did not
+permit SACK sends plain duplicate ACKs.
+
+`net_tcp_options_peer` extends the scripted peer run of N13. The peer also
+offers SACK-permitted, drops the first transmission of the guest segment
+that reaches byte 50000 and answers every later segment with SACK blocks.
+Its log shows how long after the original the guest retransmitted the
+dropped segment, measured with the guest's own timestamps; the case
+requires less than one second, the minimum retransmission timeout, and the
+recorded run took 1 ms. The log also shows that no SACKed segment was sent
+again, and the guest
+reports one retransmission, made by SACK recovery, and no timeout. The peer
+then sends three segments in the order 3, 1, 2 and finds the guest's
+blocks correct, sends 100 bytes alone and receives the delayed ACK after
+100 ms, and sends two full segments back to back and receives exactly one
+ACK covering both. `check_capture.py` now also requires that SACK blocks
+appear only on connections that negotiated SACK and never beyond the data
+the other side has sent, and the case requires blocks in both directions.
+
+## Resolver cache and search domains (N15)
+
+N15 adds a cache of DNS answers, negative caching and the search list to
+the resolver in `libc/src/net/resolv.c`. The cache lives in each process,
+because libc is linked into every program and has no daemon to share
+answers with. A long-running program that resolves names repeatedly gains
+from it, while a short tool like `ping` exits before it could. A shared
+cache would need a service and a protocol of its own and was not built.
+
+### Cache
+
+The cache holds 32 names (`CACHE_ENTRIES`). A key is the queried name in
+lower case without a trailing dot, so `Host.Test` and `host.test.` share
+an entry. When the cache is full, the entry used least recently is
+replaced; expired entries are removed when they are found. A mutex
+protects the table, so threads of one process may resolve at the same
+time. Only DNS answers are cached; numeric names, `localhost` and
+`/etc/hosts` never reach the cache.
+
+A positive entry lives for the smallest TTL of the records the answer used:
+the A records and every CNAME followed, in one response or across the
+queries of a chain. A TTL of 0 means that the answer may serve this lookup
+only (RFC 1035 section 3.2.1) and nothing is stored, and a TTL with the
+high bit set counts as 0 (RFC 2181 section 8). Every entry lives at most
+one hour (`CACHE_TTL_MAX`), so a changed record is seen within an hour
+whatever TTL a server announces.
+
+A negative answer, NXDOMAIN or NODATA (no address and no alias for the
+name), is cached as RFC 2308 section 5 describes, for the smaller of the
+TTL of the SOA record in the authority section and the SOA MINIMUM field
+and at most the same hour, which lies within the one to three hours that the
+RFC calls a sensible maximum. A negative answer without an SOA record is
+not cached, as the RFC requires, and a server failure, a timeout or a
+malformed answer is never cached. `res_cache_remaining` and
+`res_cache_flush`, declared in `netdb.h` as MiniOS extensions, report the
+remaining lifetime of a name and empty the cache; the tests use them.
+
+### Search list
+
+`/etc/resolv.conf` may hold a `search` line with up to six domains of at
+most 256 bytes together, or a `domain` line with one; the last such line
+wins, as in resolv.conf(5). `options ndots:N` (default 1, at most 15) sets
+how many dots a name needs to be tried as given before the search list. A
+name with a trailing dot is absolute and tried alone; a name with at least
+`ndots` dots is tried as given and then with each domain; a name with fewer
+dots is tried with each domain and then as given. Only a negative answer
+moves on to the next candidate, and every candidate is looked up through
+the cache, so a negative answer for one candidate is remembered as well.
+`dhcpc` writes the domain name of option 15 as a `search` line after
+checking that it holds only letters, digits, hyphens and dots, and
+`net apply` copies `search` lines from `/etc/network`. The manual page
+resolv.conf(5) documents the file.
+
+### N15 validation
+
+`net_dns_cache` runs `netdnstest cache` against the scripted loopback
+server of N11, which now counts the queries it receives for every name. It
+checks that a second lookup, in other case, costs no query; that an entry
+with a TTL of 2 seconds expires and is queried again; that TTL 0 is not
+cached; that a TTL of one day and a negative TTL of one day are capped at
+one hour; that a CNAME with TTL 1 limits its chain to one second; that
+NXDOMAIN with an SOA record of TTL 5 and MINIMUM 2 is cached for 2 seconds
+and then queried again; that NXDOMAIN without SOA and SERVFAIL are not
+cached; that NODATA with SOA is cached; and that 40 names leave the 32
+most recently used in the cache. With `search example.test other.test` it
+checks that a short name is tried with the first domain, that a negative
+answer moves on to the second, that a trailing dot and a name with enough
+dots are tried as given first, that `options ndots:3` puts the search list
+first, and that a `domain` line acts as a list of one. `net_dns` still
+passes unchanged, `net_dhcp` checks the `search` line written from option
+15, and `net_tools` checks that `net apply` writes it from `/etc/network`.
+
+## Address conflict detection and lease persistence (N16)
+
+### ARP probes in the kernel
+
+The DHCP client cannot send ARP itself, since there are no raw sockets, so
+the kernel offers one narrow operation on `/dev/net`. `NETIOC_ARP_PROBE`
+with a `struct net_arp_probe` (`minios/abi.h`) sends one ARP probe or one
+announcement for an address on an Ethernet interface and then waits up to
+the given time, at most ten seconds, for another host to claim the
+address. A probe is a broadcast request with sender address 0 and a zero
+target hardware address; an announcement carries the address as sender
+and target (RFC 5227 sections 2.1.1 and 2.3). `arp.c` keeps two probe
+slots under `arp_probe_lock` (`docs/design/locking.md`); a caller that
+finds both in use gets `EBUSY`, an interface other than Ethernet
+`EOPNOTSUPP` and an address that is not unicast `EINVAL`.
+
+`arp_input` checks the slots before the checks that need a configured
+address, because probing happens before configuration. While a slot is in
+use, any ARP request or reply whose sender is the probed address, and any
+probe for it, marks a conflict and wakes the caller, which gets
+`EADDRINUSE` and the other host's hardware address. Packets from the
+interface's own hardware address are ignored. The operation neither
+changes the neighbour cache nor defends a configured address later
+(RFC 5227 section 2.4). The `arp` line of `/dev/net` counts probes,
+announcements and conflicts.
+
+### Conflict detection in the client
+
+After an ACK, and before it configures anything, `dhcpc` runs the probe
+sequence of RFC 5227 section 2.1.1 with the constants of its section 1.1:
+a random delay of up to one second, three probes one to two seconds apart
+and a final wait of two seconds. A conflict is reported with the other
+host's hardware address and answered with DHCPDECLINE, which names the
+address (option 50) and the server (option 54), has ciaddr 0 and, as RFC
+2131 table 5 requires, no parameter request list. The client then forgets
+any saved lease, waits the ten seconds RFC 2131 section 3.1 asks for and
+discovers again without backoff. Without a conflict the address is
+configured and announced twice, two seconds apart. A kernel or interface
+without the probe operation is reported once and treated as free, so
+conflict detection never prevents configuration. `-A` divides every one of
+these intervals by ten; the scripted tests use it.
+
+### Lease persistence
+
+The root image is rebuilt by every build and only the data volume mounted
+at `/home` survives (`docs/design/storage.md`), and `fsinit` mounts it
+before init starts the `dhcp` service. The lease therefore lives in
+`/home/.local/state/dhcpc/IF.lease`. The lease is state rather than
+configuration, so it lies where the XDG convention puts state, and the
+client creates the file with its directories on the first lease. `-l FILE` selects another file. The file holds the
+address, the server and the expiry in seconds of the real-time clock,
+which the RTC sets at boot, so an expiry survives a reboot. It is written
+under a temporary name and renamed at every bind and renewal, and removed
+on a NAK, at expiry, and when an address is declined. Without a data
+volume the file lands on the root image's `/home` and lasts until the next
+build.
+
+A client that starts with an unexpired saved lease enters INIT-REBOOT
+(RFC 2131 sections 3.2 and 4.3.2) and broadcasts a REQUEST for the saved
+address with ciaddr 0 and no server identifier, twice at most. An ACK for
+that address goes through conflict detection like any other; a NAK or an
+ACK for another address forgets the file and discovery starts; without an
+answer, discovery starts with the saved address as the requested address
+of the DISCOVER, which RFC 2131 permits. An expired file is ignored.
+
+### N16 validation
+
+`net_arp_probe` (kernel, injected ARP on a fake Ethernet interface without
+an address) checks the probe and announcement frames field by field, that
+an unrelated reply and the interface's own probe are no conflict, that a
+reply from the address, a request from it and another host's probe for it
+are conflicts reported with that host's hardware address, that a conflict
+marks only the slot of its address, that a third slot is refused with
+`EBUSY`, and the counters and argument errors. `net_arp` passes unchanged.
+
+`net_dhcp` extends `netdhcptest`. The probes go out on the VirtIO NIC while
+the scripted server answers on loopback, and QEMU's user-mode network
+answers ARP for its gateway 10.0.2.2, so offering that address produces a
+real conflict. The client reports it with QEMU's hardware address
+52:55:0a:00:02:02, the server receives a DHCPDECLINE with the address, the
+server identifier and no request list, and the next discovery binds
+10.0.2.15 and saves it. The next run requests 10.0.2.15 in INIT-REBOOT
+without a server identifier and is acknowledged; the run after that
+receives a NAK, removes the file and discovers without asking for the old
+address; an expired file leads straight to discovery. The live part now
+also checks the saved file on `/home` and a second start that QEMU's server
+acknowledges in INIT-REBOOT. The case's post script requires ARP probes
+and announcements in the capture, which `check_capture.py` recognises by
+their sender and target addresses.
+
+## Release evidence (N13–N16)
+
+The runs on one and four vCPUs, the fuzzing results, the measurements and
+the limitations that remain are recorded in
+`docs/design/network-n13-n16-validation.md`.

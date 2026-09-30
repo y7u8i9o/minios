@@ -29,6 +29,7 @@ struct ipv4_stats {
     uint64_t arp_requests;
     uint64_t arp_timeouts;
     uint64_t arp_full;
+    uint64_t arp_probes, arp_announcements, arp_conflicts;
 
     uint64_t icmp_echo;
     uint64_t icmp_echo_reply;
@@ -53,6 +54,14 @@ int ethernet_output(struct netif *n, struct pbuf *p, const uint8_t *mac, uint16_
 int arp_output(struct netif *n, struct pbuf *p, uint32_t next_hop);
 void arp_input(struct netif *n, struct pbuf *p);
 void arp_flush(struct netif *n);
+/* These functions implement RFC 5227 address conflict detection (N16).
+ * arp_probe_start reserves a slot and has netd send one probe, or one
+ * announcement; it returns the slot or a negative errno. arp_probe_finish
+ * waits up to wait_ms for a conflict, releases the slot and returns 0 or
+ * -EADDRINUSE with the claiming host's address in mac. A wait of 0 does not
+ * wait, and netd itself must use it. */
+int arp_probe_start(struct netif *n, uint32_t address, bool announce);
+int arp_probe_finish(int slot, unsigned wait_ms, uint8_t mac[6]);
 void icmp_input(struct netif *n, struct pbuf *p);
 void icmp_error(struct pbuf *original, uint8_t code);
 uint32_t ipv4_address(struct netif *n);

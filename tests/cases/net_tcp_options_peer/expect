@@ -1,0 +1,2 @@
+net_tcp_options_peer: scaling, timestamps, PAWS, SACK and delayed ACKs with the scripted peer, ok
+TEST PASS

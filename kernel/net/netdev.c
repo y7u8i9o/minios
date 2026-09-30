@@ -39,19 +39,29 @@ static int snapshot(struct net_request *request)
            i->invalid, i->options, i->no_route, i->too_big, i->wrong_destination, i->fragments,
            i->reassembled, i->fragment_invalid, i->fragment_full, i->fragment_expired,
            i->pmtu_updates, i->pmtu_rejected);
-    APPEND("arp requests %lu timeouts %lu full %lu\n", i->arp_requests, i->arp_timeouts,
-           i->arp_full);
+    APPEND("arp requests %lu timeouts %lu full %lu probes %lu announcements %lu conflicts %lu\n",
+           i->arp_requests, i->arp_timeouts, i->arp_full, i->arp_probes, i->arp_announcements,
+           i->arp_conflicts);
     APPEND("icmp echo %lu reply %lu errors %lu suppressed %lu\n", i->icmp_echo,
            i->icmp_echo_reply, i->icmp_errors, i->icmp_suppressed);
     APPEND("udp invalid %lu no_port %lu full %lu\n", i->udp_invalid, i->udp_no_port, i->udp_full);
     struct tcp_stats t;
-    if (tcp_get_stats(&t) == 0)
+    if (tcp_get_stats(&t) == 0) {
         APPEND("tcp active %lu passive %lu established %lu invalid %lu resets %lu "
                "retransmits %lu timeouts %lu backlog_drops %lu suppressed %lu connections %u "
                "half_open %u time_wait %u endpoints %u\n",
                t.active_opens, t.passive_opens, t.established, t.invalid, t.resets, t.retransmits,
                t.timeouts, t.backlog_drops, t.suppressed, t.connections, t.half_open, t.time_wait,
                t.endpoints);
+        APPEND("tcpopt window_scaling %lu timestamps %lu paws_rejected %lu timestamp_missing %lu "
+               "timestamp_samples %lu sack %lu sack_blocks_sent %lu sack_blocks_received %lu "
+               "scoreboard_drops %lu sack_recoveries %lu sack_retransmits %lu delayed_acks %lu "
+               "delayed_ack_timeouts %lu\n",
+               t.window_scaling, t.timestamps, t.paws_rejected, t.timestamp_missing,
+               t.timestamp_samples, t.sack, t.sack_blocks_sent, t.sack_blocks_received,
+               t.scoreboard_drops, t.sack_recoveries, t.sack_retransmits, t.delayed_acks,
+               t.delayed_ack_timeouts);
+    }
     struct pbuf_stats p;
     pbuf_get_stats(&p);
     APPEND("pbuf free %u low_water %u failed %lu\n", p.free, p.low_water, p.alloc_fail);
@@ -96,6 +106,24 @@ static long netdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
         if (!n)
             return -ENODEV;
         return net_configure(n, c.address, c.mask, c.gateway);
+    }
+    case NETIOC_ARP_PROBE: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct net_arp_probe), true))
+            return -EFAULT;
+        struct net_arp_probe probe;
+        memcpy(&probe, (void *)arg, sizeof probe);
+        probe.name[sizeof probe.name - 1] = 0;
+        if (probe.wait_ms > 10000)
+            return -EINVAL;
+        struct netif *n = netif_find(probe.name);
+        if (!n)
+            return -ENODEV;
+        int slot = arp_probe_start(n, probe.address, probe.announce != 0);
+        if (slot < 0)
+            return slot;
+        int result = arp_probe_finish(slot, probe.wait_ms, probe.mac);
+        memcpy((void *)arg, &probe, sizeof probe);
+        return result;
     }
     case NETIOC_PING: {
         if (!vma_range_ok(p->vm, arg, sizeof(struct net_ping), true))

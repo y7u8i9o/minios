@@ -82,14 +82,20 @@ captures of the last run are under `build/tests/<case>/`.
 
 ## Limitations carried into the supported feature set
 
-- TCP: no window scaling, SACK, timestamps or delayed ACKs; scripted loss
-  with a native peer is not in the suite (recovery is verified with injected
-  segments and the controlled clock).
+N13 to N16 (2026-09-30) closed several items of this list, as each item
+now states; `network-n13-n16-validation.md` holds the list that remains.
+
+- Window scaling and timestamps arrived in N13, SACK and delayed ACKs in
+  N14. Scripted loss with a native peer is still not in the suite; recovery
+  is verified with injected segments, the controlled clock and, since N14,
+  a scripted peer on the raw link.
 - IPv4: no fragmented exchange with a native peer, DF never set on UDP, no
   IP options, no forwarding, no multicast or directed broadcast.
-- DHCP: no address-conflict detection, one interface, no persistent lease.
-- Resolver: IPv4 only, numeric services, no search domains, caching or
-  reverse lookups. `http` is HTTP/1.0 over plain `http://` with no TLS.
+- Address-conflict detection and a persistent lease arrived in N16; the
+  DHCP client still serves one interface.
+- Search domains and caching arrived in N15; the resolver is still IPv4
+  only, with numeric services and no reverse lookups. `http` is HTTP/1.0
+  over plain `http://` with no TLS.
 - Randomness: one boot seed, no reseeding, global rate limits.
 - Formatting: no clang-format configuration exists in the repository, so no
   formatting claim is made; whitespace is checked with `git diff --check`.

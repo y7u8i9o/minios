@@ -4,12 +4,25 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+/* The window is the raw header field; the receiver applies the scale
+ * negotiated for the connection. Option fields are valid only when their
+ * presence flag is set. The window scale and SACK-permitted options are
+ * parsed on SYN segments only, since RFC 7323 and RFC 2018 require them
+ * to be ignored elsewhere; the timestamp option is parsed on every segment
+ * and SACK blocks on every segment but a SYN. */
+#define TCP_SACK_OPTION_BLOCKS 4
 struct tcp_segment {
     uint32_t source, destination;
     uint16_t source_port, destination_port;
     uint32_t sequence, acknowledgement;
     uint16_t window, mss;
     uint8_t flags;
+    bool has_window_scale, has_timestamp, sack_permitted;
+    uint8_t window_scale;
+    uint32_t timestamp_value, timestamp_echo;
+    /* sack holds sack_count blocks as [start, end) sequence pairs. */
+    unsigned sack_count;
+    uint32_t sack[TCP_SACK_OPTION_BLOCKS][2];
     const uint8_t *data;
     size_t length;
 };

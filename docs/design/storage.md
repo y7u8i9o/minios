@@ -54,6 +54,13 @@ otherwise, and the file to write, creating `$HOME/.config`. The settings
 program, the desktop client, the terminal, X12's keymap reload and the
 toolkit theme use them.
 
+## System state
+
+The DHCP client keeps its lease in `/home/.local/state/dhcpc/IF.lease`
+(N16, `docs/design/network.md`), since the home volume is the only
+storage that survives a build, and `fsinit` mounts it before init starts
+the `dhcp` service.
+
 ## mount
 
 `mount` without arguments prints the mounted filesystems from

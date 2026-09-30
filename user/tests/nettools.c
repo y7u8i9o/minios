@@ -90,6 +90,31 @@ int main(void)
     CHECK(run(bad, NULL, out, sizeof out) == 1, "gateway outside the subnet rejected");
     const char *const config[] = {"/bin/net", "config", "eth0", "10.0.2.15", "255.255.255.0", "10.0.2.2", NULL};
     CHECK(run(config, NULL, out, sizeof out) == 0, "static configuration");
+    /* net apply writes the name servers and the search list (N15). The
+     * files are restored afterwards, because the later checks expect no
+     * resolver and no check may reach a public name server. */
+    char saved[512];
+    FILE *network = fopen("/etc/network", "r");
+    size_t saved_length = network ? fread(saved, 1, sizeof saved, network) : 0;
+    if (network)
+        fclose(network);
+    network = fopen("/etc/network", "w");
+    fprintf(network, "iface eth0 static 10.0.2.15 255.255.255.0 10.0.2.2\n"
+                     "nameserver 127.0.0.1\nsearch example.test other.test\n");
+    fclose(network);
+    const char *const apply[] = {"/bin/net", "apply", NULL};
+    CHECK(run(apply, NULL, out, sizeof out) == 0, "net apply");
+    FILE *resolv = fopen("/etc/resolv.conf", "r");
+    size_t length = resolv ? fread(out, 1, sizeof out - 1, resolv) : 0;
+    out[length] = 0;
+    if (resolv)
+        fclose(resolv);
+    CHECK(strstr(out, "nameserver 127.0.0.1\n") && strstr(out, "search example.test other.test\n"),
+          "net apply writes the search list");
+    unlink("/etc/resolv.conf");
+    network = fopen("/etc/network", "w");
+    fwrite(saved, 1, saved_length, network);
+    fclose(network);
     const char *const show[] = {"/bin/net", NULL};
     CHECK(run(show, NULL, out, sizeof out) == 0 && strstr(out, "inet eth0 10.0.2.15/255.255.255.0 gw 10.0.2.2") &&
           strstr(out, "link eth0 ") && strstr(out, "tcp active"), "net shows the configuration and counters");

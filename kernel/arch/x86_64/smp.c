@@ -102,7 +102,9 @@ void smp_park_aps(void)
 {
     struct limine_mp_response *mp = mp_request.response;
     if (!mp || mp->cpu_count <= 1) {
-        klog_info("1 processor, lapic id %u, no application processors", lapic_id());
+        /* The local APIC is not mapped before lapic_init, so its id cannot
+         * be read here; lapic_init logs it. */
+        klog_info("1 processor, no application processors");
         return;
     }
     struct cpu *bsp = cpu_by_id(0);
