@@ -22,12 +22,17 @@ struct source {
 
 struct offer {
     struct wire_resource *res;
-    struct source *source;
+    struct source *source;      /* NULL once the source is gone and nothing replaced it */
     int is_drag;
     uint32_t enter_serial;
     char accepted[48];
     int dropped;
+    struct offer *next;         /* in the list of live offers */
 };
+
+/* Every offer not yet destroyed, so that a source that goes away can
+ * detach the offers made for it. */
+static struct offer *offers;
 
 static struct source *selection;
 static struct source *drag_source;
@@ -114,10 +119,17 @@ static void use_store(void)
 static void source_gone(struct wire_resource *r)
 {
     struct source *s = r->data;
-    if (selection == s) {
+    int was_selection = selection == s;
+    if (was_selection) {
         selection = NULL;
         use_store();
     }
+    /* Another client may hold an offer of this source, because the focus
+     * moves to it when the owner's window closes, before the owner
+     * disconnects. Such an offer now reads the stored copy, or nothing. */
+    for (struct offer *o = offers; o; o = o->next)
+        if (o->source == s)
+            o->source = was_selection && selection == &stored_source ? &stored_source : NULL;
     if (drag_source == s)
         drag_source = NULL;
     free(s);
@@ -191,6 +203,11 @@ static void offer_gone(struct wire_resource *r)
     struct offer *o = r->data;
     if (drag_offer == o)
         drag_offer = NULL;
+    for (struct offer **p = &offers; *p; p = &(*p)->next)
+        if (*p == o) {
+            *p = o->next;
+            break;
+        }
     free(o);
 }
 
@@ -208,6 +225,8 @@ static struct offer *offer_create(struct client *cl, struct source *src, int is_
     o->res = r;
     o->source = src;
     o->is_drag = is_drag;
+    o->next = offers;
+    offers = o;
     wire_resource_set_listener(r, &offer_handlers, o, offer_gone);
     data_device_send_data_offer(cl->data_device, r);
     for (int i = 0; i < src->nmimes; i++)
