@@ -77,6 +77,19 @@ libwire generate` regenerates them.
   immediately. Requests on unknown objects, unknown opcodes, malformed
   bodies or objects of the wrong interface post `display.error` and
   disconnect the client.
+- Tracing: `wire_server_set_trace` installs a hook that the server calls
+  for every request after it is decoded and before its handler runs,
+  and for every event as it is queued, with the client, the object, the
+  opcode, the decoded arguments (object and new id arguments as ids)
+  and the encoded size. The hook is one pointer test when none is
+  installed. `wire_format_args` in `wire/common.h` writes the arguments
+  of a message as text: integers, fixed point numbers with two
+  decimals, quoted strings with escapes cut after 60 bytes, `nil`,
+  `interface@id` for objects when a resolver names them, `new
+  interface@id` for new ids, `array[size]` and `fd N`. An untyped new
+  id takes its interface from the last string argument before it,
+  which makes `registry.bind` read `new seat@5`. X12 uses both for the
+  `tracer` interface (`compositor.md`, `tools.md`).
 
 ## Tests
 
@@ -85,7 +98,11 @@ socketpair with both sides in one process: registry and bind, every
 argument type including a null object and an array, descriptor
 passing with `create_pool` (a temporary file read on the server side),
 events with arguments, destructor requests and id reuse after
-`delete_id`, `sync`, and a protocol error. `comp_core` covers the same
+`delete_id`, `sync`, and a protocol error. It also installs a trace
+hook and checks the traced lines of requests and events, their sizes,
+that removing the hook stops the trace, and the formatter's fixed
+point numbers, escaped and cut strings, descriptors and untyped new
+ids. `comp_core` covers the same
 protocol in the target against the compositor.
 
 Messages carry at most 16 arguments (`WIRE_MAX_ARGS`). The listener and handler trampolines in `libwire/src/client.c` and `server.c` cover 0 to 12 arguments, so a message with more arguments must be split.

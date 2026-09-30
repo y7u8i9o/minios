@@ -178,6 +178,10 @@ struct comp_settings {
 #define DISPLAY_MODE_S(m) (((m) >> 28) & 7)
 extern struct comp_settings settings;
 void debug_init(struct wire_server *srv);
+/* trace.c: the tracer global, and the client events of a running trace
+ * (connected 1 when a client appears or reports its pid, 0 when it goes). */
+void trace_init(struct wire_server *srv);
+void trace_client(const struct client *c, int connected);
 void frame_clock_set(int ms);                   /* main.c */
 void seat_repeat_changed(void);                 /* seat.c */
 void scene_stat_values(long *count, long *ms, long *max);   /* scene.c */

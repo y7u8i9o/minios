@@ -110,7 +110,7 @@ Lua 5.5.1 is compiled unmodified from `third_party/lua/src/` into `/bin/lua` and
 
 `edit` is a console text editor, `gedit` a graphical one. `mint` is a small scripting language written before user space had floating point and `setjmp`. It is retained as an example interpreter.
 
-The graphical applications are the terminal emulator (scrollback, alternate screen, selection), the file manager, the image viewer, the calculator with RPN and algebraic modes, paint, pong, a Mandelbrot renderer, a Unicode viewer, a clock, an audio player, a subtractive synthesizer, a sequencer, the profiler with a flame graph over `/dev/profile`, and the debugging tools `sysmon` (process table), `logview`, `hexview`, `evtest` and `x12settings`.
+The graphical applications are the terminal emulator (scrollback, alternate screen, selection), the file manager, the image viewer, the calculator with RPN and algebraic modes, paint, pong, a Mandelbrot renderer, a Unicode viewer, a clock, an audio player, a subtractive synthesizer, a sequencer, the profiler with a flame graph over `/dev/profile`, and the debugging tools `sysmon` (process table), `logview`, `hexview`, `evtest`, `x12settings` and `wireview`, which shows the protocol traffic of every client.
 
 ## Repository layout
 
@@ -199,7 +199,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 183 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules, the shell parser and the signature code of the package installer, and host fuzzers cover the network wire parsers.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 184 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules, the shell parser and the signature code of the package installer, and host fuzzers cover the network wire parsers.
 
 ## Code size
 

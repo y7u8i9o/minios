@@ -45,6 +45,20 @@ serial line to the kernel and the programs.
   occlusion culling of surfaces below opaque (`XRGB8888`) surfaces,
   per rectangle composition (desktop fill, surfaces bottom up with
   alpha blending for `ARGB8888`, the cursor), and frame statistics.
+- `trace.c`: the `tracer` global of `protocol/debug.xml`. `start`
+  installs libwire's trace hook while at least one tracer runs, sends a
+  `client` event for every other connected client, and turns every
+  request and event of the other clients into a `message` event with a
+  sequence number, the uptime, the client number, the direction, the
+  object and the arguments formatted by `wire_format_args`. `client`
+  events follow when a client connects, reports its pid through the
+  shell or disconnects. The traffic of a client that traces is never
+  traced, so two tracers cannot feed each other, and a flag keeps the
+  hook from tracing the events it queues itself. When more than 48 KiB
+  are queued to a tracer, its messages are counted instead of queued
+  and reported by one `dropped` event once it reads again, so a slow
+  tracer never makes libwire drop a message of its own. Up to eight
+  tracers may be bound.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back

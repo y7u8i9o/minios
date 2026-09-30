@@ -46,6 +46,37 @@ void debug_send_pixel(struct wire_resource *debug, int32_t x, int32_t y, uint32_
     wire_resource_post(debug, 3, args);
 }
 
+void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected)
+{
+    union wire_arg args[3] = { { 0 } };
+    args[0].u = number;
+    args[1].u = pid;
+    args[2].u = connected;
+    wire_resource_post(tracer, 0, args);
+}
+
+void tracer_send_message(struct wire_resource *tracer, uint32_t seq, uint32_t time_ms, uint32_t client, uint32_t direction, uint32_t object, const char * interface, const char * name, const char * arguments, uint32_t size)
+{
+    union wire_arg args[9] = { { 0 } };
+    args[0].u = seq;
+    args[1].u = time_ms;
+    args[2].u = client;
+    args[3].u = direction;
+    args[4].u = object;
+    args[5].s = interface;
+    args[6].s = name;
+    args[7].s = arguments;
+    args[8].u = size;
+    wire_resource_post(tracer, 1, args);
+}
+
+void tracer_send_dropped(struct wire_resource *tracer, uint32_t count)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = count;
+    wire_resource_post(tracer, 2, args);
+}
+
 void settings_send_value(struct wire_resource *settings, const char * key, int32_t value)
 {
     union wire_arg args[2] = { { 0 } };

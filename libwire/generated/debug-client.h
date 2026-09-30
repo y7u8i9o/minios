@@ -4,6 +4,7 @@
 #include "core-client.h"
 
 extern const struct wire_interface debug_interface;
+extern const struct wire_interface tracer_interface;
 extern const struct wire_interface settings_interface;
 
 struct debug_listener {
@@ -17,6 +18,17 @@ static inline int debug_add_listener(struct wire_proxy *p, const struct debug_li
 void debug_get_stats(struct wire_proxy *debug);
 void debug_get_surfaces(struct wire_proxy *debug);
 void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y);
+
+struct tracer_listener {
+    void (*client)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t connected);
+    void (*message)(void *user, struct wire_proxy *self, uint32_t seq, uint32_t time_ms, uint32_t client, uint32_t direction, uint32_t object, const char * interface, const char * name, const char * arguments, uint32_t size);
+    void (*dropped)(void *user, struct wire_proxy *self, uint32_t count);
+};
+static inline int tracer_add_listener(struct wire_proxy *p, const struct tracer_listener *l, void *user)
+{ return wire_proxy_add_listener(p, (const void *)l, user); }
+void tracer_start(struct wire_proxy *tracer);
+void tracer_stop(struct wire_proxy *tracer);
+void tracer_destroy(struct wire_proxy *tracer);
 
 struct settings_listener {
     void (*value)(void *user, struct wire_proxy *self, const char * key, int32_t value);

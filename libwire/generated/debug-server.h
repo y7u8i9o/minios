@@ -4,6 +4,7 @@
 #include "core-server.h"
 
 extern const struct wire_interface debug_interface;
+extern const struct wire_interface tracer_interface;
 extern const struct wire_interface settings_interface;
 
 struct debug_impl {
@@ -15,6 +16,15 @@ void debug_send_stats(struct wire_resource *debug, uint32_t uptime_ms, uint32_t 
 void debug_send_surface(struct wire_resource *debug, uint32_t id, uint32_t client, const char * role, const char * title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped, uint32_t format);
 void debug_send_surfaces_done(struct wire_resource *debug);
 void debug_send_pixel(struct wire_resource *debug, int32_t x, int32_t y, uint32_t value);
+
+struct tracer_impl {
+    void (*start)(struct wire_client *client, struct wire_resource *self);
+    void (*stop)(struct wire_client *client, struct wire_resource *self);
+    void (*destroy)(struct wire_client *client, struct wire_resource *self);
+};
+void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected);
+void tracer_send_message(struct wire_resource *tracer, uint32_t seq, uint32_t time_ms, uint32_t client, uint32_t direction, uint32_t object, const char * interface, const char * name, const char * arguments, uint32_t size);
+void tracer_send_dropped(struct wire_resource *tracer, uint32_t count);
 
 struct settings_impl {
     void (*set)(struct wire_client *client, struct wire_resource *self, const char * key, int32_t value);

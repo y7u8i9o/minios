@@ -97,6 +97,38 @@ static const struct callback_listener callback_impl = { c_done };
 static void c_release(void *data, struct wire_proxy *b) { releases++; }
 static const struct buffer_listener buffer_impl = { c_release };
 
+/* Trace hook: each message becomes one line "> surface@3.attach(nil, -3, 7)"
+ * for a request or "< callback@6.done(42)" for an event. */
+static char trace_lines[64][160];
+static int ntrace;
+static size_t trace_bytes;
+
+static const char *trace_object_name(void *data, uint32_t id)
+{
+    struct wire_resource *r = wire_client_find(data, id);
+    return r ? r->obj.interface->name : NULL;
+}
+
+static void trace_hook(void *data, struct wire_client *c, int event, const struct wire_object *obj, uint32_t opcode,
+                       const union wire_arg *args, size_t size)
+{
+    const struct wire_message *m = event ? &obj->interface->events[opcode] : &obj->interface->requests[opcode];
+    char text[128];
+    wire_format_args(text, sizeof text, m, args, trace_object_name, c);
+    if (ntrace < 64)
+        snprintf(trace_lines[ntrace++], sizeof trace_lines[0], "%c %s@%u.%s(%s)", event ? '<' : '>', obj->interface->name,
+                 (unsigned)obj->id, m->name, text);
+    trace_bytes += size;
+}
+
+static int traced(const char *line)
+{
+    for (int i = 0; i < ntrace; i++)
+        if (strcmp(trace_lines[i], line) == 0)
+            return 1;
+    return 0;
+}
+
 /* Pump both sides until the client saw the given number of messages. */
 static void pump(struct wire_display *d)
 {
@@ -132,7 +164,8 @@ int main(void)
     shm_add_listener(shm_proxy, &shm_c_impl, NULL);
     pump(d);
     CHECK(formats_seen == 1, "format event after bind: %d", formats_seen);
-    /* A surface with every argument type. */
+    /* A surface with every argument type, traced. */
+    wire_server_set_trace(srv, trace_hook, NULL);
     struct wire_proxy *surface = compositor_create_surface(compositor_proxy);
     surface_attach(surface, NULL, -3, 7);
     surface_damage(surface, 1, 2, 300, 200);
@@ -147,12 +180,43 @@ int main(void)
     CHECK(damages == 1 && last_w == 300 && last_h == 200, "damage ints");
     CHECK(region_rects == 2, "array argument: %d rects", region_rects);
     CHECK(frames == 1 && commits == 1 && frame_cb, "frame and commit requests");
+    CHECK(traced("> compositor@4.create_surface(new surface@5)"), "traced create_surface: %s", ntrace ? trace_lines[0] : "");
+    CHECK(traced("> surface@5.attach(nil, -3, 7)"), "traced attach with a null object");
+    CHECK(traced("> surface@5.set_opaque_region(array[32])"), "traced array argument");
+    CHECK(traced("> surface@5.frame(new callback@6)"), "traced new id argument");
+    CHECK(trace_bytes == 8 + 4 + 8 + 12 + 8 + 16 + 8 + 4 + 32 + 8 + 4 + 8, "traced sizes: %zu", trace_bytes);
     /* Server events: callback done, buffer release. */
     callback_send_done(frame_cb, 42);
     wire_resource_destroy(frame_cb);
     wire_client_flush(cl);
     wire_display_dispatch(d);
     CHECK(frame_done == 1 && frame_serial == 42, "done event with its argument");
+    CHECK(traced("< callback@6.done(42)"), "traced event");
+    CHECK(traced("< display@1.delete_id(6)"), "traced delete_id");
+    wire_server_set_trace(srv, NULL, NULL);
+    int before = ntrace;
+    surface_commit(surface);
+    pump(d);
+    CHECK(ntrace == before, "no trace after the hook is removed");
+    /* The formatter on its own: fixed point, escaped and cut strings,
+     * descriptors, unknown objects. */
+    static const char *const sample_types[6] = { NULL };
+    const struct wire_message sample = { "sample", "f?sshou", 6, sample_types, 0 };
+    char longer[100];
+    memset(longer, 'x', sizeof longer - 1);
+    longer[sizeof longer - 1] = '\0';
+    union wire_arg sargs[6] = { { .i = -384 }, { .s = NULL }, { .s = "a\"b\n" }, { .h = 9 }, { .o = 77 }, { .u = 5 } };
+    char text[200];
+    wire_format_args(text, sizeof text, &sample, sargs, NULL, NULL);
+    CHECK(strcmp(text, "-1.50, nil, \"a\\\"b\\x0a\", fd 9, @77, 5") == 0, "formatted arguments: %s", text);
+    sargs[2].s = longer;
+    size_t n = wire_format_args(text, 24, &sample, sargs, NULL, NULL);
+    CHECK(n == 23 && strlen(text) == 23, "truncated text: %zu '%s'", n, text);
+    /* An untyped new id is named by the string before it, as in registry.bind. */
+    const struct wire_message bind = { "bind", "usun", 4, sample_types, 0 };
+    union wire_arg bargs[4] = { { .u = 6 }, { .s = "seat" }, { .u = 1 }, { .n = 5 } };
+    wire_format_args(text, sizeof text, &bind, bargs, NULL, NULL);
+    CHECK(strcmp(text, "6, \"seat\", 1, new seat@5") == 0, "untyped new id: %s", text);
     /* Descriptor passing through create_pool. */
     char path[] = "/tmp/wiretestXXXXXX";
     int fd = mkstemp(path);

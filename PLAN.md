@@ -1745,6 +1745,21 @@ tested by `net_tcp_options`, `net_tcp_options_peer`, `net_tcp_sack`,
 `net_dns_cache`, `net_arp_probe` and the extended `net_dhcp`, `net_dns` and
 `net_tools` cases.
 
+### Protocol viewer (completed 2026-09-30)
+
+libwire's server calls an optional trace hook for every request it
+decodes and every event it queues, and `wire_format_args` writes the
+arguments of a message as text. X12 offers the `tracer` interface of
+`protocol/debug.xml`, which streams the traffic of every other client
+as `message` events and reports clients, their pids and the messages
+it had to drop for a slow tracer. `wireview` lists the traffic with
+filters by client, text and frame traffic, shows the history of the
+selected object and the message rate of every client over the last 30
+seconds, and prints the trace in text mode with `-t`. Documented in
+`docs/design/protocol.md`, `docs/design/compositor.md` and
+`docs/design/tools.md`, tested by `make check` for libwire and the boot
+test `gui_wireview`.
+
 ## 5. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

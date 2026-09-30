@@ -75,6 +75,41 @@ Settings keys: `frame_ms` (4 to 200), `desktop_color` (0xRRGGBB),
 `repeat_rate` (1 to 100), `repeat_delay` (50 to 2000), `decorations`
 (0 client, 1 server) and `verbose` (0 or 1).
 
+## wireview
+
+`wireview` (the Protocol viewer in the launcher) shows the protocol
+traffic between X12 and its clients through the `tracer` interface of
+`protocol/debug.xml` (`compositor.md`). Its own traffic is never
+traced. The table lists every request and event with the time since
+the first message, the client with the name of its process from
+`/dev/proc` once the client has reported its pid, the kind, the object
+as `interface@id`, the message, the arguments and the size in bytes.
+The client list, the filter field (a substring of
+`interface@id.message(arguments)`) and Hide frame traffic narrow the
+table; the last removes `callback` messages, `surface.frame`, `attach`,
+`damage` and `commit`, `buffer.release` and `display.delete_id`, which
+every redrawing client sends each frame. Record starts and stops the
+trace, Clear empties it, and Follow keeps the newest message selected.
+The detail pane shows the selected message and up to 40 earlier
+messages on the same object of the same client, which is the history
+of that object. The activity pane draws one strip per client with a
+bar per quarter second over the last 30 seconds, requests in the
+accent colour stacked on events. The last 20000 messages are kept, and
+the view is refreshed at most ten times a second. The status bar counts
+messages, shown rows, dropped messages and clients.
+
+`wireview -t` prints the trace on standard output instead, one line per
+message such as `[    0.017] 3 -> registry@2.bind(6, "seat", 1, new
+seat@5)`, with `->` for a request and `<-` for an event. `-n COUNT`
+exits after COUNT messages and `-c CLIENT` keeps only one client. The
+window prints a summary line when it closes.
+
+`tests/cases/gui_wireview` runs `wireview -t -n 40` while the clock
+connects and checks the decoded registry requests and events, then
+opens the window while a second clock runs, closes it, and checks the
+summary for received messages, no drops and no protocol error. The
+reject list ensures that no traced line belongs to the tracer itself.
+
 ## Boot test
 
 `tests/cases/gui_tools` starts X12 and the panel, applies a setting

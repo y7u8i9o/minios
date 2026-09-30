@@ -465,6 +465,7 @@ static void client_gone(struct wire_client *wc, void *data)
     data_client_gone(c);
     text_client_gone(c);
     comp_log("client %d disconnected", c->number);
+    trace_client(c, 0);
     free(c);
 }
 
@@ -487,6 +488,7 @@ void client_attach(struct wire_client *wc)
     wire_client_set_user_data(wc, c, client_gone);
     hang_client_attached(c);
     comp_log("client %d connected", c->number);
+    trace_client(c, 1);
 }
 
 /* Frame callbacks of committed surfaces, sent after a composition. */

@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 extern const struct wire_interface debug_interface;
+extern const struct wire_interface tracer_interface;
 extern const struct wire_interface settings_interface;
 
 static const struct wire_message debug_requests[] = {
@@ -16,6 +17,16 @@ static const struct wire_message debug_events[] = {
     { "surfaces_done", "", 0, (const char *const[]){ NULL }, 0 },
     { "pixel", "iiu", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
 };
+static const struct wire_message tracer_requests[] = {
+    { "start", "", 0, (const char *const[]){ NULL }, 0 },
+    { "stop", "", 0, (const char *const[]){ NULL }, 0 },
+    { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+};
+static const struct wire_message tracer_events[] = {
+    { "client", "uuu", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
+    { "message", "uuuuusssu", 9, (const char *const[]){ NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }, 0 },
+    { "dropped", "u", 1, (const char *const[]){ NULL }, 0 },
+};
 static const struct wire_message settings_requests[] = {
     { "set", "si", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "get_all", "", 0, (const char *const[]){ NULL }, 0 },
@@ -25,4 +36,5 @@ static const struct wire_message settings_events[] = {
     { "done", "", 0, (const char *const[]){ NULL }, 0 },
 };
 const struct wire_interface debug_interface = { "debug", 1, 3, debug_requests, 4, debug_events };
+const struct wire_interface tracer_interface = { "tracer", 1, 3, tracer_requests, 3, tracer_events };
 const struct wire_interface settings_interface = { "settings", 1, 2, settings_requests, 2, settings_events };

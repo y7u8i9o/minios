@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <fcntl.h>
+#include <stdarg.h>
 
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24); }
@@ -32,7 +33,7 @@ void wire_conn_close(struct wire_conn *c)
     c->fd = -1;
 }
 
-static size_t message_size(const struct wire_message *m, const union wire_arg *args)
+size_t wire_message_size(const struct wire_message *m, const union wire_arg *args)
 {
     size_t n = 8;
     const char *sig = m->signature;
@@ -52,7 +53,7 @@ static size_t message_size(const struct wire_message *m, const union wire_arg *a
 int wire_conn_marshal(struct wire_conn *c, uint32_t id, uint32_t opcode, const struct wire_message *m,
                       const union wire_arg *args)
 {
-    size_t size = message_size(m, args);
+    size_t size = wire_message_size(m, args);
     int nfds = 0;
     for (const char *s = m->signature; *s; s++)
         nfds += *s == 'h';
@@ -273,4 +274,101 @@ int wire_unmarshal(struct wire_conn *c, const struct wire_message *m, const uint
         }
     }
     return off == len ? 0 : -1;
+}
+
+/* ---- trace formatting ---- */
+
+struct text {
+    char *buf;
+    size_t size, len;
+};
+
+static void text_add(struct text *t, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void text_add(struct text *t, const char *fmt, ...)
+{
+    if (t->len + 1 >= t->size)
+        return;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(t->buf + t->len, t->size - t->len, fmt, ap);
+    va_end(ap);
+    if (n < 0)
+        return;
+    t->len += (size_t)n < t->size - t->len ? (size_t)n : t->size - t->len - 1;
+}
+
+/* A string argument is quoted, with control characters and quotes
+ * escaped, and cut after 60 bytes. */
+static void text_add_string(struct text *t, const char *s)
+{
+    text_add(t, "\"");
+    size_t i = 0;
+    for (; s[i] && i < 60; i++) {
+        unsigned char ch = (unsigned char)s[i];
+        if (ch == '"' || ch == '\\')
+            text_add(t, "\\%c", ch);
+        else if (ch < 0x20 || ch == 0x7f)
+            text_add(t, "\\x%02x", ch);
+        else
+            text_add(t, "%c", ch);
+    }
+    text_add(t, s[i] ? "\"..." : "\"");
+}
+
+size_t wire_format_args(char *buf, size_t size, const struct wire_message *m, const union wire_arg *args,
+                        wire_object_name_fn object_name, void *data)
+{
+    struct text t = { buf, size, 0 };
+    if (size)
+        buf[0] = '\0';
+    const char *sig = m->signature;
+    int last_string = -1;
+    for (int i = 0; i < m->nargs; i++) {
+        if (*sig == '?')
+            sig++;
+        if (i)
+            text_add(&t, ", ");
+        if (*sig == 's')
+            last_string = i;
+        switch (*sig++) {
+        case 'i': text_add(&t, "%d", (int)args[i].i); break;
+        case 'u': text_add(&t, "%u", (unsigned)args[i].u); break;
+        case 'f': {
+            /* 24.8 fixed point, printed with two decimals without floating point. */
+            int32_t v = args[i].i;
+            uint32_t mag = v < 0 ? (uint32_t)-(int64_t)v : (uint32_t)v;
+            text_add(&t, "%s%u.%02u", v < 0 ? "-" : "", mag >> 8, (mag & 0xff) * 100 / 256);
+            break;
+        }
+        case 's':
+            if (args[i].s)
+                text_add_string(&t, args[i].s);
+            else
+                text_add(&t, "nil");
+            break;
+        case 'o': {
+            if (!args[i].o) {
+                text_add(&t, "nil");
+                break;
+            }
+            const char *name = object_name ? object_name(data, args[i].o) : NULL;
+            if (!name)
+                name = m->types[i];
+            text_add(&t, "%s@%u", name ? name : "", (unsigned)args[i].o);
+            break;
+        }
+        case 'n': {
+            /* An untyped new id, as in registry.bind, takes its interface
+             * from the last string argument before it. */
+            const char *name = m->types[i];
+            if (!name && last_string >= 0)
+                name = args[last_string].s;
+            text_add(&t, "new %s@%u", name ? name : "", (unsigned)args[i].n);
+            break;
+        }
+        case 'a': text_add(&t, "array[%zu]", args[i].a ? args[i].a->size : (size_t)0); break;
+        case 'h': text_add(&t, "fd %d", args[i].h); break;
+        }
+    }
+    return t.len;
 }

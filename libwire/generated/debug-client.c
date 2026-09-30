@@ -22,6 +22,25 @@ void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y)
     wire_proxy_marshal(debug, 2, args, NULL);
 }
 
+void tracer_start(struct wire_proxy *tracer)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(tracer, 0, args, NULL);
+}
+
+void tracer_stop(struct wire_proxy *tracer)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(tracer, 1, args, NULL);
+}
+
+void tracer_destroy(struct wire_proxy *tracer)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(tracer, 2, args, NULL);
+    wire_proxy_destroy(tracer);
+}
+
 void settings_set(struct wire_proxy *settings, const char * key, int32_t value)
 {
     union wire_arg args[2] = { { 0 } };

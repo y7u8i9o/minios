@@ -1,0 +1,9 @@
+wireview: tracing
+x12: client [0-9]+ started a protocol trace
+\] [0-9]+ -> display@1\.get_registry\(new registry@2\)
+\] [0-9]+ <- registry@2\.global\([0-9]+, "compositor", 1\)
+\] [0-9]+ -> registry@2\.bind\([0-9]+, "compositor", 1, new compositor@[0-9]+\)
+wireview: client [0-9]+ connected
+wireview: [1-9][0-9]* messages from [1-9][0-9]* clients, 0 dropped
+gui_wireview: protocol viewer ok
+TEST PASS

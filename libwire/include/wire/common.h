@@ -79,6 +79,18 @@ void wire_conn_consume(struct wire_conn *c, size_t len);
 /* Decode a message body; strings and arrays point into body. */
 int wire_unmarshal(struct wire_conn *c, const struct wire_message *m, const uint8_t *body, size_t len,
                    union wire_arg *args, struct wire_array *arrays);
+/* The encoded size of a message in bytes, its header included. */
+size_t wire_message_size(const struct wire_message *m, const union wire_arg *args);
+/* Write the arguments of a message into buf as text for a trace, for
+ * example `buffer@15, 0, 0` or `"title", new callback@7`. Object and new
+ * id arguments are ids. An untyped new id takes its interface from the
+ * last string argument before it, as in registry.bind. object_name,
+ * when not NULL, names the interface of an object id or returns NULL
+ * for an unknown one. The text is truncated to size and always
+ * terminated. Returns its length. */
+typedef const char *(*wire_object_name_fn)(void *data, uint32_t id);
+size_t wire_format_args(char *buf, size_t size, const struct wire_message *m, const union wire_arg *args,
+                        wire_object_name_fn object_name, void *data);
 /* 24.8 fixed point helpers. */
 static inline int32_t wire_fixed_from_int(int v) { return v * 256; }
 static inline int wire_fixed_to_int(int32_t f) { return f / 256; }

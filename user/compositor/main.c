@@ -188,6 +188,7 @@ int main(int argc, char **argv)
     data_init(srv);
     text_init(srv);
     debug_init(srv);
+    trace_init(srv);
     if (verbose)
         settings.verbose = 1;
     scene_init();

@@ -19,6 +19,25 @@
     <event name="pixel"><arg name="x" type="int"/><arg name="y" type="int"/><arg name="value" type="uint"/></event>
   </interface>
 
+  <!-- The protocol traffic of every other client (wireview). start sends
+       a client event for each connected client, then one message event
+       per request the server decodes and per event it queues, until stop.
+       direction is 0 for a request and 1 for an event. The traffic of
+       clients that trace is never traced. When the tracer's socket backs
+       up, messages are counted instead of sent and reported by dropped. -->
+  <interface name="tracer" version="1">
+    <request name="start"/>
+    <request name="stop"/>
+    <request name="destroy" type="destructor"/>
+    <event name="client"><arg name="number" type="uint"/><arg name="pid" type="uint"/><arg name="connected" type="uint"/></event>
+    <event name="message">
+      <arg name="seq" type="uint"/><arg name="time_ms" type="uint"/><arg name="client" type="uint"/>
+      <arg name="direction" type="uint"/><arg name="object" type="uint"/><arg name="interface" type="string"/>
+      <arg name="name" type="string"/><arg name="arguments" type="string"/><arg name="size" type="uint"/>
+    </event>
+    <event name="dropped"><arg name="count" type="uint"/></event>
+  </interface>
+
   <interface name="settings" version="1">
     <request name="set"><arg name="key" type="string"/><arg name="value" type="int"/></request>
     <request name="get_all"/>

@@ -795,8 +795,10 @@ static void h_pong(struct wire_client *c, struct wire_resource *self, uint32_t s
 static void h_set_pid(struct wire_client *c, struct wire_resource *self, uint32_t pid)
 {
     struct client *cl = wire_client_get_user_data(c);
-    if (cl)
+    if (cl) {
         cl->pid = (int)pid;
+        trace_client(cl, 1);
+    }
 }
 
 static const struct shell_impl shell_handlers = { h_get_toplevel, h_get_popup, h_create_positioner, h_get_layer_surface,

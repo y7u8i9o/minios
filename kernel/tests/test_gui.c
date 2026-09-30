@@ -235,7 +235,7 @@ KTEST_DEFINE("gui_term", test_gui_term);
 /* Geometry of the launcher popup, which the panel builds from
  * user/etc/launcher: one 24 px row per entry inside 6 px of padding,
  * opened above the 28 px panel.  Keep these in step with that file. */
-#define LAUNCHER_ENTRIES 9
+#define LAUNCHER_ENTRIES 10
 #define LAUNCHER_CLOCK   2     /* index of Clock=/bin/clock */
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 24 + 12))
 #define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + (i) * 24 + 12)
@@ -1097,6 +1097,60 @@ static void test_gui_tools(void)
     kprintf("gui_tools: debugging tools ok\n");
 }
 KTEST_DEFINE("gui_tools", test_gui_tools);
+
+/* The protocol viewer: the text mode prints the requests and events of
+ * the clock while it connects, then the window records a second clock
+ * and reports what it received when it is closed. Windows cascade by
+ * creation number, so the first clock is at (40,60), the viewer at
+ * (70,90) and the second clock at (100,120). */
+static void test_gui_wireview(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_server();
+    struct proc *trace = proc_create_user("/bin/wireview", (char *const[]){ "wireview", "-t", "-n", "40", NULL },
+                                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(trace != NULL, "cannot start wireview -t");
+    sleep_ms(500);
+    struct proc *clock = proc_create_user("/bin/clock", (char *const[]){ "clock", NULL }, (char *const[]){ NULL },
+                                          &kernel_proc);
+    ktest_assert(clock != NULL, "cannot start clock");
+    int status = proc_reap(trace);
+    ktest_assert(status == 0, "wireview -t status 0x%x", status);
+    sleep_ms(500);
+    alt_key(0x3e);
+    status = proc_reap(clock);
+    ktest_assert(status == 0, "clock status 0x%x", status);
+
+    struct proc *view = proc_create_user("/bin/wireview", (char *const[]){ "wireview", NULL }, (char *const[]){ NULL },
+                                         &kernel_proc);
+    ktest_assert(view != NULL, "cannot start wireview");
+    int wx = 70, wy = 90;
+    uint64_t t0 = timer_ms();
+    while (pixel(wx + 2, wy - 10) != 0x00ebebeb && timer_ms() - t0 < 4000)
+        sleep_ms(50);
+    ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "wireview window has an active title bar: %08x",
+                 pixel(wx + 2, wy - 10));
+    clock = proc_create_user("/bin/clock", (char *const[]){ "clock", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(clock != NULL, "cannot start the second clock");
+    sleep_ms(1500);
+    kprintf("gui_wireview: viewer recording\n");
+    sleep_ms(1500);
+    alt_key(0x3e);
+    status = proc_reap(clock);
+    ktest_assert(status == 0, "second clock status 0x%x", status);
+    /* Focus the viewer by its title bar, then close it. */
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, wx + 200, wy - 10, 0);
+    mouse_click(1);
+    sleep_ms(300);
+    alt_key(0x3e);
+    status = proc_reap(view);
+    ktest_assert(status == 0, "wireview status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_wireview: protocol viewer ok\n");
+}
+KTEST_DEFINE("gui_wireview", test_gui_wireview);
 
 /* The Unicode viewer walks the whole code space once at startup to record
  * which code points its font covers, so this test also measures that the

@@ -17,6 +17,8 @@ struct wire_server {
     struct wire_client *clients;
     struct wire_global *globals;
     uint32_t next_global, next_serial;
+    wire_trace_fn trace;        /* NULL when no one traces */
+    void *trace_data;
 };
 
 struct wire_client {
@@ -77,6 +79,12 @@ int wire_server_fd(struct wire_server *s) { return s->listen_fd; }
 struct wire_client *wire_server_first_client(struct wire_server *s) { return s->clients; }
 struct wire_client *wire_client_next(struct wire_client *c) { return c->next; }
 uint32_t wire_server_next_serial(struct wire_server *s) { return s->next_serial++; }
+
+void wire_server_set_trace(struct wire_server *s, wire_trace_fn fn, void *data)
+{
+    s->trace = fn;
+    s->trace_data = data;
+}
 
 /* ---- display and registry resources ---- */
 
@@ -274,6 +282,10 @@ void wire_resource_post(struct wire_resource *r, uint32_t opcode, const union wi
 {
     if ((int)opcode >= r->obj.interface->nevents)
         return;
+    struct wire_server *s = r->client->srv;
+    if (s->trace)
+        s->trace(s->trace_data, r->client, 1, &r->obj, opcode, args,
+                 wire_message_size(&r->obj.interface->events[opcode], args));
     wire_conn_marshal(&r->client->conn, r->obj.id, opcode, &r->obj.interface->events[opcode], args);
 }
 
@@ -357,6 +369,8 @@ static int dispatch_one(struct wire_client *c)
         wire_client_post_error(c, res, 5, "malformed request");
         return -1;
     }
+    if (c->srv->trace)
+        c->srv->trace(c->srv->trace_data, c, 0, &res->obj, opcode, args, len + 8);
     uintptr_t v[WIRE_MAX_ARGS];
     const char *sig = m->signature;
     for (int i = 0; i < m->nargs; i++) {

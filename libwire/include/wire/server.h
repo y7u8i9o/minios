@@ -28,7 +28,16 @@ struct wire_global {
     struct wire_global *next;
 };
 
+/* A trace hook sees every request after it is decoded and before its
+ * handler runs (event 0), and every event as it is queued (event 1).
+ * Object and new id arguments are ids. size is the encoded size. The
+ * hook may post events; those reach the hook again. */
+typedef void (*wire_trace_fn)(void *data, struct wire_client *c, int event, const struct wire_object *obj,
+                              uint32_t opcode, const union wire_arg *args, size_t size);
+
 struct wire_server *wire_server_create(const char *name);   /* NULL name: "display" */
+/* Install a trace hook, or remove it with NULL. */
+void wire_server_set_trace(struct wire_server *s, wire_trace_fn fn, void *data);
 void wire_server_destroy(struct wire_server *s);
 int wire_server_fd(struct wire_server *s);
 /* Accept a pending connection; returns the new client. */
