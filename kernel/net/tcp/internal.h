@@ -27,6 +27,16 @@
 #define TCP_MAX_WINDOW_SHIFT 14
 #define TCP_TIMESTAMP_SPACE 12
 #define TCP_PAWS_IDLE_MS (24ull * 24 * 60 * 60 * 1000)
+/* RFC 2018 and RFC 6675 (N14): at most four blocks are reported to the
+ * peer, the scoreboard keeps at most eight disjoint SACKed ranges, and
+ * three duplicate ACKs or SACKed segments declare a loss. */
+#define TCP_SACK_REPORT 4
+#define TCP_SCOREBOARD 8
+#define TCP_DUP_THRESHOLD 3
+/* RFC 1122 section 4.2.3.2 and RFC 9293 section 3.8.6.3: an ACK may be
+ * delayed at most 500 ms; this stack delays it 100 ms, and acknowledges at
+ * once when two full segments of data are unacknowledged. */
+#define TCP_DELAYED_ACK_MS 100
 _Static_assert((TCP_RECEIVE_CAPACITY >> TCP_WINDOW_SHIFT) <= 65535 &&
                    (TCP_RECEIVE_CAPACITY >> (TCP_WINDOW_SHIFT - 1)) > 65535,
                "TCP_WINDOW_SHIFT must be the smallest shift for the receive store");
@@ -109,6 +119,25 @@ struct tcp_connection {
     uint8_t snd_scale, rcv_scale;
     uint32_t ts_recent, ts_offset, last_ack_sent, ts_sample_end;
     uint64_t ts_recent_age;
+
+    /* RFC 2018 and RFC 6675 (N14). sack_report lists the out-of-order
+     * ranges we report, most recent first. The scoreboard lists the ranges
+     * the peer reported, sorted, disjoint and within [snd_una, snd_nxt].
+     * high_rxt is the end of the highest retransmission in the current
+     * recovery; rto_recovery marks a recovery started by a timeout, in which
+     * every unSACKed byte below recovery_end counts as lost. */
+    bool sack, rto_recovery;
+    struct tcp_range {
+        uint32_t start, end;
+    } sack_report[TCP_SACK_REPORT], scoreboard[TCP_SCOREBOARD];
+    unsigned sack_report_count, scoreboard_count;
+    uint32_t high_rxt;
+
+    /* Delayed acknowledgement: ack_deadline is armed when an ACK is owed,
+     * ack_owed counts the bytes received since the last ACK we sent, and
+     * rcv_adv is the right edge of the window that ACK advertised. */
+    uint64_t ack_deadline;
+    uint32_t ack_owed, rcv_adv;
     bool peer_fin, read_shutdown;
     bool fin_requested, fin_sent;
     uint32_t fin_sequence;
@@ -189,6 +218,9 @@ void tcp_release_unused(struct tcp_connection *connection);
 uint32_t tcp_timestamp_now(const struct tcp_connection *connection);
 unsigned tcp_send_mss(const struct tcp_connection *connection);
 void tcp_negotiate(struct tcp_connection *connection, const struct tcp_segment *syn);
+unsigned tcp_receive_mss(const struct tcp_connection *connection);
+void tcp_acknowledge(struct tcp_connection *connection, bool immediate);
+void tcp_window_update(struct tcp_connection *connection);
 int tcp_emit(struct tcp_connection *connection,
              uint8_t flags,
              uint32_t sequence,

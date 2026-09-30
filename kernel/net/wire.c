@@ -39,6 +39,8 @@ bool tcp_parse_segment(const uint8_t *ip, size_t packet_length, struct tcp_segme
     segment->window_scale = 0;
     segment->timestamp_value = 0;
     segment->timestamp_echo = 0;
+    segment->sack_permitted = false;
+    segment->sack_count = 0;
     segment->data = header + header_length;
     segment->length = length - header_length;
     if (!segment->source_port || !segment->destination_port || (segment->flags & 0x20) ||
@@ -75,6 +77,20 @@ bool tcp_parse_segment(const uint8_t *ip, size_t packet_length, struct tcp_segme
                 return false;
             segment->window_scale = value[0];
             segment->has_window_scale = true;
+        } else if (kind == 4 && syn) {
+            if (option_length != 2 || segment->sack_permitted)
+                return false;
+            segment->sack_permitted = true;
+        } else if (kind == 5 && !syn) {
+            size_t blocks = (option_length - 2) / 8;
+            if ((option_length - 2) % 8 || !blocks || blocks > TCP_SACK_OPTION_BLOCKS ||
+                segment->sack_count)
+                return false;
+            for (size_t b = 0; b < blocks; b++) {
+                segment->sack[b][0] = net_get_be32(value + 8 * b);
+                segment->sack[b][1] = net_get_be32(value + 8 * b + 4);
+            }
+            segment->sack_count = (unsigned)blocks;
         } else if (kind == 8) {
             if (option_length != 10 || segment->has_timestamp)
                 return false;

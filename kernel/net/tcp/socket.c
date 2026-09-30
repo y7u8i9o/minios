@@ -268,8 +268,8 @@ static int perform_request(struct net_request *request)
     case REQUEST_SHUTDOWN:
         return shutdown_connection(e, r->argument);
     case REQUEST_WINDOW:
-        if (e->connection && e->connection->state != TCP_CLOSED)
-            tcp_emit(e->connection, TCP_ACK, e->connection->snd_nxt, NULL, 0);
+        if (e->connection)
+            tcp_window_update(e->connection);
         return 0;
     case REQUEST_CLOSE:
         close_endpoint(e);

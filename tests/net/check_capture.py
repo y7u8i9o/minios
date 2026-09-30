@@ -9,11 +9,14 @@ two SYN segments carried (RFC 7323): timestamps appear on every later
 segment exactly when both SYNs carried them and each echo repeats a value
 the other side sent; when both SYNs carried window scaling, no data
 segment ends beyond the right edge the receiver last advertised with its
-scale applied. --require names a feature the capture must show:
+scale applied; SACK blocks appear only when both SYNs carried
+SACK-permitted and each block lies inside the sequence space the other
+side has sent. --require names a feature the capture must show:
 window-scale (a negotiated connection sent data beyond the edge that an
 unscaled reading of the window would give), timestamps (a connection
-negotiated them) and fallback (a SYN offered options that the other SYN
-did not, and neither side used them afterwards).
+negotiated them), sack (both sides of a connection sent SACK blocks) and
+fallback (a SYN offered options that the other SYN did not, and neither
+side used them afterwards).
 """
 import struct
 import sys
@@ -29,7 +32,7 @@ def checksum(data):
 
 counts = {'arp': 0, 'icmp': 0, 'udp': 0, 'tcp': 0, 'fragments': 0,
           'tcp_window_scale': 0, 'tcp_timestamps': 0, 'tcp_fallback': 0,
-          'scaled_window_use': 0}
+          'scaled_window_use': 0, 'tcp_sack': 0, 'sack_blocks': 0}
 fragments = {}
 connections = {}
 
@@ -58,6 +61,9 @@ def tcp_options(header):
         elif kind == 4:
             assert length == 2, 'SACK-permitted length'
             found['sackok'] = True
+        elif kind == 5:
+            assert length >= 10 and (length - 2) % 8 == 0 and length <= 34, 'SACK length'
+            found['sack'] = [struct.unpack('!II', value[i:i + 8]) for i in range(0, length - 2, 8)]
         offset += length
     return found
 
@@ -69,7 +75,14 @@ def tcp_connection(ip, payload):
     key = tuple(sorted((source, destination)))
     flags = payload[13]
     options = tcp_options(payload)
-    state = connections.setdefault(key, {'syn': {}, 'tsvals': {}, 'edge': {}, 'counted': False})
+    state = connections.setdefault(key, {'syn': {}, 'tsvals': {}, 'edge': {}, 'counted': False,
+                                         'high': {}, 'sackers': set()})
+    sequence = struct.unpack('!I', payload[4:8])[0]
+    length = len(payload) - (payload[12] >> 4) * 4
+    end = (sequence + length + ((flags & 0x03) != 0)) & 0xffffffff
+    high = state['high'].get(source)
+    if high is None or 0 < ((end - high) & 0xffffffff) < 0x80000000:
+        state['high'][source] = end
     if flags & 0x02:
         state['syn'][source] = options
         if 'ts' in options:
@@ -81,13 +94,25 @@ def tcp_connection(ip, payload):
     mine, theirs = syns[source], syns[destination]
     timestamps = 'ts' in mine and 'ts' in theirs
     scaling = 'wscale' in mine and 'wscale' in theirs
+    sack = 'sackok' in mine and 'sackok' in theirs
     if not state['counted']:
         state['counted'] = True
         counts['tcp_timestamps'] += timestamps
         counts['tcp_window_scale'] += scaling
-        offered = set(k for k in ('ts', 'wscale') if k in mine or k in theirs)
-        if offered and not timestamps and not scaling:
+        counts['tcp_sack'] += sack
+        offered = set(k for k in ('ts', 'wscale', 'sackok') if k in mine or k in theirs)
+        if offered and not timestamps and not scaling and not sack:
             counts['tcp_fallback'] += 1
+    if 'sack' in options:
+        assert sack, 'SACK blocks on a connection that did not negotiate SACK'
+        peer_high = state['high'].get(destination)
+        for left, right in options['sack']:
+            assert 0 < ((right - left) & 0xffffffff) < 0x80000000, 'empty or reversed SACK block'
+            assert ((peer_high - right) & 0xffffffff) < 0x80000000, 'SACK block beyond sent data'
+        counts['sack_blocks'] += len(options['sack'])
+        state['sackers'].add(source)
+        if len(state['sackers']) == 2:
+            counts['sack_both_directions'] = 1
     if timestamps and not flags & 0x04:
         assert 'ts' in options, 'timestamp missing on a connection that negotiated it'
     if not timestamps:
@@ -97,9 +122,8 @@ def tcp_connection(ip, payload):
         state['tsvals'].setdefault(source, set()).add(value)
         if flags & 0x10:
             assert echo in state['tsvals'].get(destination, set()), 'timestamp echo never sent'
-    sequence, acknowledgement = struct.unpack('!II', payload[4:12])
+    acknowledgement = struct.unpack('!I', payload[8:12])[0]
     window = int.from_bytes(payload[14:16], 'big')
-    length = len(payload) - (payload[12] >> 4) * 4
     if scaling:
         shift = min(mine['wscale'], 14)
         if flags & 0x10:
@@ -196,6 +220,8 @@ with open(arguments[0], 'rb') as file:
             assert counts['tcp_window_scale'] and counts['scaled_window_use'], counts
         elif feature == 'timestamps':
             assert counts['tcp_timestamps'], counts
+        elif feature == 'sack':
+            assert counts.get('sack_both_directions'), counts
         elif feature == 'fallback':
             assert counts['tcp_fallback'], counts
         else:

@@ -804,11 +804,12 @@ before it have arrived, so EOF still follows all data. Read shutdown keeps
 the out-of-order positions but discards the contiguous bytes by moving the
 ring origin, which keeps the sequence-to-slot mapping intact.
 
-Every segment that carries data or a FIN, including duplicates and
-out-of-order segments, is acknowledged immediately. There is no delayed ACK
-and no Nagle algorithm: a small write is sent as soon as the windows allow,
-so two MiniOS endpoints cannot wait for each other's timer, and the immediate
-ACK of a duplicate lets a peer's fast retransmit work.
+In N07 every segment that carried data or a FIN was acknowledged at once.
+N14 replaced that with delayed ACKs within the rules of RFC 1122 (see N14);
+duplicates, out-of-order segments and FINs are still acknowledged at once.
+There is no Nagle algorithm: a small write is sent as soon as the windows
+allow, so a sender never waits for the receiver's delayed-ACK timer before
+sending.
 
 ### Retransmission, round-trip time and congestion control
 
@@ -1303,3 +1304,135 @@ has one on every later segment and each echo repeats a value the other
 side sent, a connection without them has none, and no data segment ends
 beyond the scaled right edge. `net_tcp_bulk` and `net_tcp_peer` require the
 fallback case, because QEMU's user-mode stack answers with MSS alone.
+
+## Selective acknowledgements and delayed ACKs (N14)
+
+N14 adds the SACK option of [RFC 2018](https://www.rfc-editor.org/rfc/rfc2018.html),
+the loss recovery of [RFC 6675](https://www.rfc-editor.org/rfc/rfc6675.html)
+and delayed acknowledgements. Every SYN offers SACK-permitted next to the
+options of N13, and a connection uses SACK only when the other SYN carried
+it too. When both SACK-permitted and a timestamp are present, SACK-permitted
+takes the place of the two padding bytes before the timestamp, as in the
+layout of RFC 7323 appendix A. `wire.c` reads SACK-permitted from SYN
+segments only and SACK blocks from every other segment; a block list whose
+length is not 2 plus a multiple of 8, that holds no block or more than
+four, or that repeats the option makes the segment invalid.
+
+### Reporting received data
+
+The receiver keeps up to four blocks to report (`TCP_SACK_REPORT`). When an
+out-of-order segment is stored, the run of stored bytes that contains it is
+found in the presence bitmap of the receive store, since RFC 2018 section 4
+requires the first block to be that whole run, and it becomes the first
+block; the blocks reported before follow in the order they were reported,
+and a block the new run overlaps or touches is absorbed into it. Blocks at
+or below `rcv_nxt` are dropped as the stream advances, and the list is
+emptied when no hole remains. Every ACK of a SACK connection carries as
+many blocks as fit: four without timestamps, three beside the timestamp,
+and for a data segment only as many as fit within the peer's MSS together
+with the data. A duplicate report (D-SACK) is not sent.
+
+### The scoreboard and loss recovery
+
+The sender keeps a scoreboard of at most eight SACKed ranges
+(`TCP_SCOREBOARD`), sorted and disjoint, within `[snd_una, snd_nxt]`. A
+block that is empty, starts below `snd_una` or ends beyond `snd_nxt` is
+ignored. A new block absorbs every range it overlaps or touches; when it
+would need a ninth range the highest range is dropped and counted in
+`scoreboard_drops`. Forgetting that the peer holds data is safe, because the
+data is at worst sent again, and the ranges nearest `snd_una` decide what is
+retransmitted next. A cumulative ACK trims the ranges it covers.
+
+With SACK negotiated, an ACK that does not move `snd_una` counts as a
+duplicate when it SACKs bytes not SACKed before (RFC 6675 section 2).
+IsLost is decided per hole of the scoreboard, since every byte of one hole
+has the same ranges above it: the hole is lost when three ranges, or more
+than two segments of SACKed bytes, lie above it. Recovery starts at the
+third duplicate or when the first unacknowledged byte is already lost. It
+records `snd_nxt` as the recovery point, sets the congestion window and the
+threshold to half the flight (at least two segments) and retransmits the
+first lost segment at once. From then on every ACK updates the scoreboard
+and runs the transmission loop of section 5: while the window exceeds the
+pipe (unSACKed bytes not lost plus retransmitted bytes, SetPipe of section
+4) by a full segment, it sends the first lost byte above the highest
+retransmission, then new data within the peer's window, then the first
+unSACKed byte below SACKed data. At most 16 segments leave per ACK. The
+congestion window does not grow during this recovery, which ends when
+`snd_una` reaches the recovery point. The optional rescue retransmission of
+rule 4 is not implemented.
+
+A retransmission timeout on a SACK connection keeps the scoreboard, as
+section 5.1 permits, and starts a timeout recovery: the window returns to
+one segment with slow start, and every unSACKed byte below the recovery
+point counts as lost, so the ACK-clocked loop retransmits the holes in
+order and skips the SACKed ranges. A second consecutive timeout without
+progress clears the scoreboard, because the peer may have discarded data it
+had SACKed (RFC 2018 section 8). Connections without SACK keep the Tahoe
+recovery of N07 unchanged.
+
+### Delayed acknowledgements
+
+A FIN, a segment that arrives out of order or repeats received data, and a
+segment that fills part of a hole are acknowledged at once, as RFC 5681
+section 4.2 asks. In-order data is acknowledged at once when the bytes
+received since the last ACK reach two full segments (the receive MSS, less
+12 bytes with timestamps); otherwise the ACK waits for `TCP_DELAYED_ACK_MS`,
+100 ms, which is within the 500 ms limit of RFC 1122 section 4.2.3.2 and
+RFC 9293 section 3.8.6.3. Any segment the connection sends acknowledges
+everything received and cancels the pending delayed ACK, so a reply to a
+request carries the ACK. The deadline is one more field that `tcp_schedule`
+considers for the connection's timer.
+
+A read that frees receive space announces the window on its own only when
+the right edge moves by at least the smaller of half the store and one full
+segment (receiver silly window avoidance, RFC 1122 section 4.2.3.3). Every
+other segment carries the current window as before, and a peer's zero
+window probe is a duplicate and is answered at once.
+
+### Counters
+
+`struct tcp_stats` and the `tcpopt` line of `/dev/net` add `sack`
+(connections that negotiated it), `sack_blocks_sent`,
+`sack_blocks_received`, `scoreboard_drops`, `sack_recoveries`,
+`sack_retransmits`, `delayed_acks` (ACKs that waited) and
+`delayed_ack_timeouts` (ACKs sent by the timer).
+
+### N14 validation
+
+`net_tcp_sack` (kernel, controlled clock, fake capture interface) checks
+the receiver with and without timestamps: an out-of-order segment is
+acknowledged at once with its block, the most recent block comes first,
+four blocks fit without timestamps and three beside them, filling a gap
+reports the merged run, filling the first hole keeps the remaining blocks
+in report order, and a contiguous stream carries no block. It checks the
+delayed ACK: a 100-byte segment is not acknowledged until the timer fires
+exactly 100 ms later, the second of two full segments is acknowledged at
+once by one ACK for both, a reply carries the pending ACK, a 100-byte read
+announces no window and a larger read does. On a flight of eight 1000-byte
+segments whose first is lost, two duplicates do not start recovery, the
+third retransmits exactly the lost segment and halves the window and
+threshold to 4000, the pipe then holds further sending until more data is
+SACKed, the next transmission is new data rather than SACKed data, only one
+retransmission happens, and a cumulative ACK at the recovery point ends
+recovery. After a timeout the ACK-clocked loop retransmits the hole below
+the SACKed range and then the hole above it, and a second consecutive
+timeout clears the scoreboard. Blocks below `snd_una`, beyond `snd_nxt` or
+empty are ignored, nine separate blocks leave eight ranges with the highest
+dropped, a covering block merges them, and a connection whose peer did not
+permit SACK sends plain duplicate ACKs.
+
+`net_tcp_options_peer` extends the scripted peer run of N13. The peer also
+offers SACK-permitted, drops the first transmission of the guest segment
+that reaches byte 50000 and answers every later segment with SACK blocks.
+Its log shows how long after the original the guest retransmitted the
+dropped segment, measured with the guest's own timestamps; the case
+requires less than one second, the minimum retransmission timeout, and the
+recorded run took 1 ms. The log also shows that no SACKed segment was sent
+again, and the guest
+reports one retransmission, made by SACK recovery, and no timeout. The peer
+then sends three segments in the order 3, 1, 2 and finds the guest's
+blocks correct, sends 100 bytes alone and receives the delayed ACK after
+100 ms, and sends two full segments back to back and receives exactly one
+ACK covering both. `check_capture.py` now also requires that SACK blocks
+appear only on connections that negotiated SACK and never beyond the data
+the other side has sent, and the case requires blocks in both directions.

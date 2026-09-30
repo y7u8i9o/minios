@@ -170,11 +170,18 @@ unsigned tcp_send_mss(const struct tcp_connection *c)
     return c->peer_mss - (c->timestamps ? TCP_TIMESTAMP_SPACE : 0);
 }
 
+/* The payload of a full segment the peer sends us, by the same rule. */
+unsigned tcp_receive_mss(const struct tcp_connection *c)
+{
+    return c->local_mss - (c->timestamps ? TCP_TIMESTAMP_SPACE : 0);
+}
+
 /* Applies the options of the peer's SYN (passive or simultaneous open) or
- * SYN ACK (active open). Our SYN always offers window scaling and
- * timestamps, so each is in use exactly when the peer's SYN carried it. */
+ * SYN ACK (active open). Our SYN always offers window scaling, timestamps
+ * and SACK, so each is in use exactly when the peer's SYN carried it. */
 void tcp_negotiate(struct tcp_connection *c, const struct tcp_segment *syn)
 {
+    c->sack = syn->sack_permitted;
     c->window_scaling = syn->has_window_scale;
     c->rcv_scale = c->window_scaling ? TCP_WINDOW_SHIFT : 0;
     c->snd_scale = c->window_scaling ? MIN(syn->window_scale, TCP_MAX_WINDOW_SHIFT) : 0;
@@ -273,6 +280,7 @@ void tcp_fail(struct tcp_connection *c, int error)
     c->control_deadline = 0;
     c->data_deadline = 0;
     c->lifetime_deadline = 0;
+    c->ack_deadline = 0;
     c->transmit_length = 0;
     c->transmit_sent = 0;
     c->progress_deadline = 0;
@@ -291,6 +299,7 @@ void tcp_established(struct tcp_connection *c)
     tcp_counters.established++;
     tcp_counters.window_scaling += c->window_scaling;
     tcp_counters.timestamps += c->timestamps;
+    tcp_counters.sack += c->sack;
     if (c->listener) {
         unsigned incomplete, ready;
         tcp_listener_counts(c->listener, &incomplete, &ready);

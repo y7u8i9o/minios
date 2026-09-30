@@ -24,6 +24,18 @@ struct tcp_stats {
     uint64_t paws_rejected;
     uint64_t timestamp_missing;
     uint64_t timestamp_samples;
+    /* RFC 2018, RFC 6675 and delayed ACKs (N14): connections that
+     * negotiated SACK, blocks sent and accepted, ranges dropped from a full
+     * scoreboard, SACK-based recoveries and their retransmissions, ACKs
+     * that were delayed and ACKs sent by the delayed-ACK timer. */
+    uint64_t sack;
+    uint64_t sack_blocks_sent;
+    uint64_t sack_blocks_received;
+    uint64_t scoreboard_drops;
+    uint64_t sack_recoveries;
+    uint64_t sack_retransmits;
+    uint64_t delayed_acks;
+    uint64_t delayed_ack_timeouts;
     unsigned connections;
     unsigned half_open;
     unsigned accepted;

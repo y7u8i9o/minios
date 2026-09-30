@@ -11,6 +11,8 @@ void tcp_schedule(struct tcp_connection *c)
         next = c->data_deadline;
     if (c->lifetime_deadline && c->lifetime_deadline < next)
         next = c->lifetime_deadline;
+    if (c->ack_deadline && c->ack_deadline < next)
+        next = c->ack_deadline;
     if (next == UINT64_MAX)
         net_timer_cancel(&c->timer);
     else
@@ -35,6 +37,10 @@ void tcp_timer_expire(struct net_timer *timer)
         }
         tcp_fail(c, c->state == TCP_TIME_WAIT ? 0 : -ETIMEDOUT);
         return;
+    }
+    if (c->ack_deadline && now >= c->ack_deadline) {
+        tcp_counters.delayed_ack_timeouts++;
+        tcp_emit(c, TCP_ACK, c->snd_nxt, NULL, 0);
     }
     if (c->data_deadline && now >= c->data_deadline) {
         tcp_data_timeout(c);

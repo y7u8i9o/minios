@@ -53,9 +53,13 @@ static int snapshot(struct net_request *request)
                t.timeouts, t.backlog_drops, t.suppressed, t.connections, t.half_open, t.time_wait,
                t.endpoints);
         APPEND("tcpopt window_scaling %lu timestamps %lu paws_rejected %lu timestamp_missing %lu "
-               "timestamp_samples %lu\n",
+               "timestamp_samples %lu sack %lu sack_blocks_sent %lu sack_blocks_received %lu "
+               "scoreboard_drops %lu sack_recoveries %lu sack_retransmits %lu delayed_acks %lu "
+               "delayed_ack_timeouts %lu\n",
                t.window_scaling, t.timestamps, t.paws_rejected, t.timestamp_missing,
-               t.timestamp_samples);
+               t.timestamp_samples, t.sack, t.sack_blocks_sent, t.sack_blocks_received,
+               t.scoreboard_drops, t.sack_recoveries, t.sack_retransmits, t.delayed_acks,
+               t.delayed_ack_timeouts);
     }
     struct pbuf_stats p;
     pbuf_get_stats(&p);

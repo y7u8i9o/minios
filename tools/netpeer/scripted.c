@@ -9,13 +9,18 @@
  * per step, in its log. The post script of the case reads those lines and
  * the capture checker validates every frame again.
  *
- * The script: offer MSS 1400, window scale 5 and timestamps in the SYN
- * ACK; receive SCRIPT_GUEST_BYTES from the guest while advertising a
- * scaled window, acknowledging after four segments or 20 ms of silence;
- * acknowledge the guest's FIN; send one segment with a timestamp older
- * than the last one, which PAWS must reject; then send SCRIPT_PEER_BYTES
- * with fresh timestamps and a FIN, and wait until the guest has
- * acknowledged everything. */
+ * The script: offer MSS 1400, window scale 5, SACK and timestamps in the
+ * SYN ACK. Receive SCRIPT_GUEST_BYTES from the guest while advertising a
+ * scaled window and acknowledging in-order data after four segments or
+ * 20 ms of silence. The first transmission of the segment that reaches
+ * byte LOSS_OFFSET is dropped; every later segment is stored out of order
+ * and answered at once with SACK blocks, so the guest has to repair the
+ * hole from its scoreboard. After the guest's FIN, send one segment with
+ * a timestamp older than any before, which PAWS must reject; send three
+ * 1000-byte segments in the order 3, 1, 2 and check the guest's SACK
+ * blocks; send 100 bytes alone and time the delayed ACK; send two full
+ * segments back to back and count the ACKs; then send a FIN and wait
+ * until the guest has acknowledged everything. */
 #include "scripted.h"
 #include <errno.h>
 #include <poll.h>
@@ -33,7 +38,10 @@
 #define PEER_SHIFT 5
 #define PEER_WINDOW 1024 /* field value: 32768 bytes after the shift */
 #define SCRIPT_GUEST_BYTES 100000
-#define SCRIPT_PEER_BYTES 3000
+#define LOSS_OFFSET 50000
+#define GUEST_FULL 1448 /* the guest's MSS 1460 minus the timestamp option */
+#define SCRIPT_PEER_BYTES (3000 + 100 + 2 * GUEST_FULL)
+#define MAX_RANGES 32
 
 static const unsigned char peer_mac[6] = {2, 0, 0, 0, 0, 1};
 
@@ -44,8 +52,13 @@ struct segment {
     const unsigned char *data;
     size_t length;
     int has_mss, has_scale, has_timestamp, sack_permitted;
-    unsigned mss, shift;
+    unsigned mss, shift, sack_count;
     uint32_t ts_value, ts_echo;
+    uint32_t sack[4][2];
+};
+
+struct range {
+    uint32_t start, end;
 };
 
 struct script {
@@ -55,15 +68,23 @@ struct script {
     double start;
     unsigned char guest_mac[6];
     uint16_t guest_port;
-    uint32_t iss, snd_una, snd_nxt; /* our sequence space */
-    uint32_t rcv_nxt;               /* next guest byte */
-    int guest_shift;                /* -1: the guest did not offer scaling */
-    int timestamps;
-    uint32_t ts_recent;             /* newest in-order guest timestamp */
-    uint32_t ts_first, ts_last;     /* the range of timestamps we sent */
+    uint32_t iss, snd_nxt;      /* our sequence space */
+    uint32_t guest_iss, rcv_nxt; /* the guest's */
+    int guest_shift;            /* -1: the guest did not offer scaling */
+    int timestamps, sack;
+    uint32_t ts_recent;         /* newest in-order guest timestamp */
+    uint32_t ts_first, ts_last; /* the range of timestamps we sent */
+    uint32_t last_ack_sent;
     unsigned long received, pattern_errors, missing_ts, echo_errors;
     unsigned long beyond_unscaled, max_flight, guest_window;
-    uint32_t last_ack_sent;
+    /* Out-of-order guest data we hold, and the range to report first. */
+    struct range held[MAX_RANGES];
+    unsigned held_count;
+    struct range recent;
+    /* The deliberate loss. */
+    int dropped, repaired;
+    uint32_t drop_sequence, drop_ts;
+    unsigned long sacked_resent, repair_ms;
 };
 
 static uint16_t get16(const unsigned char *p)
@@ -129,7 +150,8 @@ static unsigned char peer_byte(unsigned long i)
     return (unsigned char)(i * 17 + 3);
 }
 
-/* Sends one segment. ts_value 0 selects a fresh timestamp. */
+/* Sends one segment. ts_value 0 selects a fresh timestamp. An ACK reports
+ * the held ranges as SACK blocks, the most recent one first. */
 static void send_segment(struct script *s, uint8_t flags, uint32_t sequence,
                          const unsigned char *data, size_t length, uint32_t ts_value)
 {
@@ -142,21 +164,37 @@ static void send_segment(struct script *s, uint8_t flags, uint32_t sequence,
         put16(o + 2, PEER_MSS);
         options = 4;
         if (s->guest_shift >= 0) {
-            o[4] = 1;
-            o[5] = 3;
-            o[6] = 3;
-            o[7] = PEER_SHIFT;
-            options = 8;
+            memcpy(o + options, "\x01\x03\x03", 3);
+            o[options + 3] = PEER_SHIFT;
+            options += 4;
+        }
+        if (s->sack) {
+            memcpy(o + options, "\x01\x01\x04\x02", 4);
+            options += 4;
         }
     }
     if (s->timestamps) {
-        o[options] = 1;
-        o[options + 1] = 1;
-        o[options + 2] = 8;
-        o[options + 3] = 10;
+        memcpy(o + options, "\x01\x01\x08\x0a", 4);
         put32(o + options + 4, ts_value ? ts_value : timestamp(s));
         put32(o + options + 8, s->ts_recent);
         options += 12;
+    }
+    if (s->sack && s->held_count && (flags & 0x12) == 0x10) {
+        unsigned blocks = 0;
+        unsigned char *b = o + options + 4;
+        put32(b, s->recent.start);
+        put32(b + 4, s->recent.end);
+        blocks = 1;
+        for (unsigned i = 0; i < s->held_count && blocks < 3; i++) {
+            if (s->held[i].start == s->recent.start)
+                continue;
+            put32(b + 8 * blocks, s->held[i].start);
+            put32(b + 8 * blocks + 4, s->held[i].end);
+            blocks++;
+        }
+        memcpy(o + options, "\x01\x01\x05", 3);
+        o[options + 3] = (unsigned char)(2 + 8 * blocks);
+        options += 4 + 8 * blocks;
     }
     size_t tcp_length = 20 + options + length;
     memcpy(frame, s->guest_mac, 6);
@@ -254,20 +292,27 @@ static int parse(struct script *s, const unsigned char *b, size_t n, struct segm
         }
         if (o + 2 > header || tcp[o + 1] < 2 || o + tcp[o + 1] > header)
             return 0;
-        if (tcp[o] == 2 && tcp[o + 1] == 4) {
+        unsigned length = tcp[o + 1];
+        if (tcp[o] == 2 && length == 4) {
             out->has_mss = 1;
             out->mss = get16(tcp + o + 2);
-        } else if (tcp[o] == 3 && tcp[o + 1] == 3) {
+        } else if (tcp[o] == 3 && length == 3) {
             out->has_scale = 1;
             out->shift = tcp[o + 2];
-        } else if (tcp[o] == 4 && tcp[o + 1] == 2) {
+        } else if (tcp[o] == 4 && length == 2) {
             out->sack_permitted = 1;
-        } else if (tcp[o] == 8 && tcp[o + 1] == 10) {
+        } else if (tcp[o] == 5 && length >= 10 && (length - 2) % 8 == 0 && length <= 34) {
+            out->sack_count = (length - 2) / 8;
+            for (unsigned i = 0; i < out->sack_count; i++) {
+                out->sack[i][0] = get32(tcp + o + 2 + 8 * i);
+                out->sack[i][1] = get32(tcp + o + 6 + 8 * i);
+            }
+        } else if (tcp[o] == 8 && length == 10) {
             out->has_timestamp = 1;
             out->ts_value = get32(tcp + o + 2);
             out->ts_echo = get32(tcp + o + 6);
         }
-        o += tcp[o + 1];
+        o += length;
     }
     return 1;
 }
@@ -314,7 +359,159 @@ static void check_timestamp(struct script *s, const struct segment *g)
         s->ts_recent = g->ts_value;
 }
 
-void scripted_peer(int fd, const struct sockaddr_in *guest, FILE *log, volatile sig_atomic_t *stopping)
+/* Records [start, end) as held out of order, merging touching ranges, and
+ * makes the merged range the one reported first. */
+static void hold(struct script *s, uint32_t start, uint32_t end)
+{
+    struct range merged = {start, end};
+    unsigned kept = 0;
+    for (unsigned i = 0; i < s->held_count; i++) {
+        struct range r = s->held[i];
+        if (before(r.end, merged.start) || before(merged.end, r.start)) {
+            s->held[kept++] = r;
+            continue;
+        }
+        if (before(r.start, merged.start))
+            merged.start = r.start;
+        if (before(merged.end, r.end))
+            merged.end = r.end;
+    }
+    if (kept < MAX_RANGES)
+        s->held[kept++] = merged;
+    s->held_count = kept;
+    s->recent = merged;
+}
+
+/* Moves rcv_nxt across held ranges that now continue the stream. */
+static void absorb(struct script *s)
+{
+    for (int moved = 1; moved;) {
+        moved = 0;
+        for (unsigned i = 0; i < s->held_count; i++) {
+            if (before(s->rcv_nxt, s->held[i].start))
+                continue;
+            if (before(s->rcv_nxt, s->held[i].end))
+                s->rcv_nxt = s->held[i].end;
+            s->held[i] = s->held[--s->held_count];
+            moved = 1;
+            break;
+        }
+    }
+}
+
+static int is_held(const struct script *s, uint32_t start, uint32_t end)
+{
+    for (unsigned i = 0; i < s->held_count; i++)
+        if (!before(start, s->held[i].start) && !before(s->held[i].end, end))
+            return 1;
+    return 0;
+}
+
+/* The guest's stream: the byte at offset i is guest_byte(i). */
+static void check_pattern(struct script *s, const struct segment *g)
+{
+    for (size_t i = 0; i < g->length; i++)
+        if (g->data[i] != guest_byte((uint32_t)(g->sequence - s->guest_iss - 1) + i))
+            s->pattern_errors++;
+}
+
+/* Receives the guest's stream up to its FIN. Returns 0 when stopping. */
+static int receive_stream(struct script *s, volatile sig_atomic_t *stopping,
+                          unsigned char *buffer, size_t size)
+{
+    struct segment g;
+    unsigned shift = s->guest_shift >= 0 ? (unsigned)s->guest_shift : 0;
+    unsigned pending = 0;
+    for (;;) {
+        int r = next_segment(s, 20, stopping, buffer, size, &g);
+        if (r < 0)
+            return 0;
+        if (r == 0) {
+            if (pending)
+                send_ack(s);
+            pending = 0;
+            continue;
+        }
+        check_timestamp(s, &g);
+        if ((unsigned long)g.window << shift > s->guest_window)
+            s->guest_window = (unsigned long)g.window << shift;
+        uint32_t end = g.sequence + (uint32_t)g.length;
+        uint32_t offset = g.sequence - s->guest_iss - 1;
+        if (g.length && before(s->last_ack_sent + PEER_WINDOW, end))
+            s->beyond_unscaled++;
+        if (g.length && (unsigned long)(end - s->last_ack_sent) > s->max_flight)
+            s->max_flight = end - s->last_ack_sent;
+        if (g.length && !s->dropped && offset + g.length > LOSS_OFFSET) {
+            s->dropped = 1;
+            s->drop_sequence = g.sequence;
+            s->drop_ts = g.ts_value;
+            fprintf(s->log, "script dropped guest segment at offset %u length %zu\n",
+                    (unsigned)offset, g.length);
+            continue;
+        }
+        if (g.length && s->dropped && !s->repaired && g.sequence == s->drop_sequence) {
+            s->repaired = 1;
+            s->repair_ms = g.ts_value - s->drop_ts;
+        }
+        if (g.length && is_held(s, g.sequence, end))
+            s->sacked_resent++;
+        int in_order = g.length && g.sequence == s->rcv_nxt;
+        if (g.length && before(s->rcv_nxt, g.sequence)) {
+            /* Out of order: hold it and send a duplicate ACK with blocks. */
+            check_pattern(s, &g);
+            hold(s, g.sequence, end);
+            send_ack(s);
+            pending = 0;
+        } else if (in_order) {
+            check_pattern(s, &g);
+            s->rcv_nxt = end;
+            int had_hole = s->held_count > 0;
+            absorb(s);
+            if (had_hole) {
+                send_ack(s);
+                pending = 0;
+            } else {
+                pending++;
+            }
+        } else if (g.length) {
+            pending = 4; /* a duplicate: acknowledge at once */
+        }
+        if ((g.flags & 0x01) && end == s->rcv_nxt) {
+            s->rcv_nxt++;
+            send_ack(s);
+            return 1;
+        }
+        if (pending >= 4) {
+            send_ack(s);
+            pending = 0;
+        }
+    }
+}
+
+/* Waits for the next guest ACK without data; returns it, or 0 after
+ * timeout_ms. elapsed receives the wait in milliseconds. */
+static int await_ack(struct script *s, int timeout_ms, volatile sig_atomic_t *stopping,
+                     unsigned char *buffer, size_t size, struct segment *g, double *elapsed)
+{
+    double started = now_ms(s);
+    for (;;) {
+        int left = timeout_ms - (int)(now_ms(s) - started);
+        if (left <= 0)
+            return 0;
+        int r = next_segment(s, left, stopping, buffer, size, g);
+        if (r <= 0)
+            return 0;
+        check_timestamp(s, g);
+        if ((g->flags & 0x10) && !g->length) {
+            if (elapsed)
+                *elapsed = now_ms(s) - started;
+            return 1;
+        }
+    }
+}
+
+void scripted_peer(int fd, const struct sockaddr_in *guest, FILE *log,
+                   volatile sig_atomic_t *stopping)
 {
     struct script s;
     memset(&s, 0, sizeof s);
@@ -342,9 +539,10 @@ void scripted_peer(int fd, const struct sockaddr_in *guest, FILE *log, volatile 
     s.guest_port = g.source_port;
     s.guest_shift = g.has_scale ? (int)g.shift : -1;
     s.timestamps = g.has_timestamp;
+    s.sack = g.sack_permitted;
     s.ts_recent = g.ts_value;
+    s.guest_iss = g.sequence;
     s.rcv_nxt = g.sequence + 1;
-    s.snd_una = s.iss;
     s.snd_nxt = s.iss + 1;
     send_segment(&s, 0x12, s.iss, NULL, 0, 0);
     for (;;) {
@@ -358,88 +556,76 @@ void scripted_peer(int fd, const struct sockaddr_in *guest, FILE *log, volatile 
         if (g.flags & 0x02)
             send_segment(&s, 0x12, s.iss, NULL, 0, 0);
     }
-    s.snd_una = s.snd_nxt;
-    unsigned shift = s.guest_shift >= 0 ? (unsigned)s.guest_shift : 0;
     check_timestamp(&s, &g);
-    s.guest_window = (unsigned long)g.window << shift;
+    s.guest_window = (unsigned long)g.window << (s.guest_shift >= 0 ? s.guest_shift : 0);
 
-    /* Receive the guest's stream. In-order bytes are checked against the
-     * pattern; the ACK is held back until four segments or 20 ms of
-     * silence, so the guest's flight shows how far it trusts our window. */
-    unsigned pending = 0;
-    int fin = 0;
-    while (!fin) {
-        int r = next_segment(&s, 20, stopping, buffer, sizeof buffer, &g);
-        if (r < 0)
-            return;
-        if (r == 0) {
-            if (pending)
-                send_ack(&s);
-            pending = 0;
-            continue;
-        }
-        check_timestamp(&s, &g);
-        if ((unsigned long)g.window << shift > s.guest_window)
-            s.guest_window = (unsigned long)g.window << shift;
-        uint32_t end = g.sequence + (uint32_t)g.length;
-        uint32_t unscaled_edge = s.last_ack_sent + PEER_WINDOW;
-        if (g.length && before(unscaled_edge, end))
-            s.beyond_unscaled++;
-        if (g.length && (unsigned long)(end - s.last_ack_sent) > s.max_flight)
-            s.max_flight = end - s.last_ack_sent;
-        if (g.sequence == s.rcv_nxt && g.length) {
-            for (size_t i = 0; i < g.length; i++)
-                if (g.data[i] != guest_byte(s.received + i))
-                    s.pattern_errors++;
-            s.received += g.length;
-            s.rcv_nxt += (uint32_t)g.length;
-            pending++;
-        } else if (g.length) {
-            pending = 4; /* duplicate or out of order: acknowledge at once */
-        }
-        if ((g.flags & 0x01) && g.sequence + g.length == s.rcv_nxt) {
-            s.rcv_nxt++;
-            fin = 1;
-            pending = 4;
-        }
-        if (pending >= 4) {
-            send_ack(&s);
-            pending = 0;
-        }
-    }
+    if (!receive_stream(&s, stopping, buffer, sizeof buffer))
+        return;
+    s.received = s.rcv_nxt - s.guest_iss - 2;
     fprintf(log, "script received %lu bytes pattern errors %lu\n", s.received, s.pattern_errors);
     fprintf(log, "script max flight %lu beyond unscaled window %lu\n", s.max_flight,
             s.beyond_unscaled);
     fprintf(log, "script guest window %lu\n", s.guest_window);
+    fprintf(log, "script sack repair %s after %lu ms of guest time, sacked data resent %lu\n",
+            s.repaired ? "retransmitted" : "missing", s.repair_ms, s.sacked_resent);
 
-    /* PAWS: the first data segment goes out with a timestamp older than
-     * any the guest has seen from us. It must not be acknowledged. */
     unsigned char data[SCRIPT_PEER_BYTES];
     for (unsigned i = 0; i < sizeof data; i++)
         data[i] = peer_byte(i);
+    uint32_t base = s.snd_nxt;
+    double elapsed = 0;
+
+    /* PAWS: the first data segment goes out with a timestamp older than
+     * any the guest has seen from us. It must not be acknowledged. */
     if (s.timestamps) {
-        send_segment(&s, 0x18, s.snd_nxt, data, 1000, s.ts_first - 50000);
-        int answered = 0;
-        for (;;) {
-            int r = next_segment(&s, 500, stopping, buffer, sizeof buffer, &g);
-            if (r <= 0)
-                break;
-            check_timestamp(&s, &g);
-            if ((g.flags & 0x10) && !g.length) {
-                answered = g.acknowledgement == s.snd_nxt ? 1 : -1;
-                break;
-            }
-        }
-        fprintf(log, "script paws %s\n", answered > 0   ? "old segment answered without acceptance"
-                                         : answered < 0 ? "old segment accepted"
-                                                        : "no answer");
+        send_segment(&s, 0x18, base, data, 1000, s.ts_first - 50000);
+        int answered = await_ack(&s, 500, stopping, buffer, sizeof buffer, &g, NULL);
+        fprintf(log, "script paws %s\n",
+                !answered                     ? "no answer"
+                : g.acknowledgement == base ? "old segment answered without acceptance"
+                                              : "old segment accepted");
     }
 
-    /* The stream with fresh timestamps, then FIN. */
-    for (size_t offset = 0; offset < sizeof data; offset += 1000)
-        send_segment(&s, 0x18 | (offset + 1000 == sizeof data ? 0x01 : 0), s.snd_nxt + offset,
-                     data + offset, 1000, 0);
-    uint32_t goal = s.snd_nxt + sizeof data + 1;
+    /* Out of order: the third segment first, then the first, then the
+     * second. The guest must report the held segment as a SACK block. */
+    int sack_ok = 1;
+    send_segment(&s, 0x18, base + 2000, data + 2000, 1000, 0);
+    if (!await_ack(&s, 500, stopping, buffer, sizeof buffer, &g, NULL) ||
+        g.acknowledgement != base || !g.sack_count || g.sack[0][0] != base + 2000 ||
+        g.sack[0][1] != base + 3000)
+        sack_ok = 0;
+    send_segment(&s, 0x18, base, data, 1000, 0);
+    if (!await_ack(&s, 500, stopping, buffer, sizeof buffer, &g, NULL) ||
+        g.acknowledgement != base + 1000 || !g.sack_count || g.sack[0][0] != base + 2000)
+        sack_ok = 0;
+    send_segment(&s, 0x18, base + 1000, data + 1000, 1000, 0);
+    if (!await_ack(&s, 500, stopping, buffer, sizeof buffer, &g, NULL) ||
+        g.acknowledgement != base + 3000 || g.sack_count)
+        sack_ok = 0;
+    fprintf(log, "script guest sack blocks %s\n", sack_ok ? "correct" : "wrong");
+
+    /* A lone small segment: its ACK is delayed. */
+    send_segment(&s, 0x18, base + 3000, data + 3000, 100, 0);
+    int delayed = await_ack(&s, 1000, stopping, buffer, sizeof buffer, &g, &elapsed);
+    fprintf(log, "script delayed ack %s after %.0f ms\n",
+            delayed && g.acknowledgement == base + 3100 ? "received" : "missing", elapsed);
+
+    /* Two full segments back to back: one ACK covers both. */
+    uint32_t full = base + 3100;
+    send_segment(&s, 0x18, full, data + 3100, GUEST_FULL, 0);
+    send_segment(&s, 0x18, full + GUEST_FULL, data + 3100 + GUEST_FULL, GUEST_FULL, 0);
+    unsigned acks = 0;
+    int covered = 0;
+    while (await_ack(&s, 60, stopping, buffer, sizeof buffer, &g, NULL)) {
+        acks++;
+        covered |= g.acknowledgement == full + 2 * GUEST_FULL;
+    }
+    fprintf(log, "script two full segments acknowledged by %u ack%s%s\n", acks,
+            acks == 1 ? "" : "s", covered ? " covering both" : "");
+
+    /* FIN, then wait for its acknowledgement. */
+    uint32_t goal = base + sizeof data + 1;
+    send_segment(&s, 0x11, base + sizeof data, NULL, 0, 0);
     int acknowledged = 0;
     for (int round = 0; round < 50 && !acknowledged; round++) {
         int r = next_segment(&s, 100, stopping, buffer, sizeof buffer, &g);

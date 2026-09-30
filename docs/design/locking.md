@@ -447,3 +447,9 @@ These locks are in user space and do not add a kernel lock-order level.
   store. `tcp_release_receive` clears the counts under `tcp_lock` and frees
   the memory after releasing it; no allocation or free happens under
   `tcp_lock`.
+- The SACK report list, the scoreboard, the recovery state and the
+  delayed-ACK deadline of a connection belong to netd, like the rest of its
+  sending state, and are never read under `tcp_lock`. Finding the run of
+  stored bytes for a SACK block reads the presence bitmap, so it runs under
+  `tcp_lock` inside `tcp_receive_segment`; the report list is updated after
+  the lock is released.

@@ -116,7 +116,11 @@ int main(int argc, char **argv)
             assert(segment.data >= bytes + 40 && segment.data + segment.length == bytes + length);
             assert(!segment.has_window_scale || (segment.flags & 2));
             assert(segment.mss && (segment.flags & 2 || segment.mss == 536));
-            with_options += segment.has_window_scale || segment.has_timestamp;
+            assert(segment.sack_count <= TCP_SACK_OPTION_BLOCKS);
+            assert(!segment.sack_permitted || (segment.flags & 2));
+            assert(!segment.sack_count || !(segment.flags & 2));
+            with_options += segment.has_window_scale || segment.has_timestamp ||
+                            segment.sack_permitted || segment.sack_count;
             accepted_tcp++;
         }
         unsigned total = 0, offset = 0;

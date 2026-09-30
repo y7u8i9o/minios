@@ -1,8 +1,8 @@
 # MiniOS TCP/IP implementation plan
 
 Status: N00–N12 complete on the branch `bleeding-edge-net` (2026-09-12); N13
-complete on `bleeding-edge-net-options` (2026-09-30). Section 7 holds the
-evidence and the remaining limitations of each milestone.
+and N14 complete on `bleeding-edge-net-options` (2026-09-30). Section 7
+holds the evidence and the remaining limitations of each milestone.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
 `bleeding-edge-pkg`, whose HEAD was `1a95395`. The working tree contained
@@ -132,6 +132,7 @@ data-buffer pressure so ACKs and teardown do not depend on unbounded allocation.
 | N11 | DNS resolver and user-facing networking tools | N07, N08, N09, N10 |
 | N12 | Interoperability, regressions, documentation and release evidence | N00–N11 |
 | N13 | TCP window scaling and timestamps | N07, N09, N12 |
+| N14 | TCP selective acknowledgements and delayed ACKs | N13 |
 
 N01 and N02 are architecturally independent after their shared contracts are
 settled. The table does not authorize parallel implementation or agent work.
@@ -497,6 +498,24 @@ cover negotiation, fallback, scaled windows in both directions, PAWS,
 TS.Recent and timestamp samples, and when a peer that does not share the
 guest's parsers observes both options on the wire.
 
+### N14. TCP selective acknowledgements and delayed ACKs
+
+SACK-permitted is negotiated in SYN and SYN ACK like the options of N13.
+The receiver reports out-of-order data as SACK blocks by the rules of RFC
+2018. The sender keeps a bounded scoreboard of SACKed ranges and recovers
+from loss with the pipe and NextSeg rules of RFC 6675, retransmitting only
+what the scoreboard shows missing. In-order data is acknowledged after at
+most 500 ms and at once for every second full segment, as RFC 1122 and RFC
+9293 require, while out-of-order data, duplicates, hole fills and FINs are
+acknowledged at once. The scoreboard bound, the reporting limit and the
+delay are fixed constants with documented behaviour at their limits.
+
+The milestone is complete when injected segments with the controlled clock
+cover block generation, the scoreboard bound, recovery entry, the pipe and
+the choice of what to send, the timeout path and the delayed-ACK timer, and
+when a scripted peer shows a lost segment repaired from SACK information
+without a timeout, correct guest blocks and the delayed ACK on the wire.
+
 ## 5. Verification and implementation discipline
 
 - Keep host protocol tests, simulated-device tests and live QEMU/peer tests
@@ -852,3 +871,31 @@ store in several segments. The parser changes were fuzzed with structured
 options. QEMU's user-mode stack never offers the options, so a native host
 stack exercises only the fallback; the scripted peer provides the
 negotiated case on the wire.
+
+### N14 (complete 2026-09-30)
+
+RFC 2018 SACK, RFC 6675 loss recovery and delayed ACKs are implemented in
+`wire.c` and `kernel/net/tcp/`. SACK-permitted is offered in every SYN and
+used only when both SYNs carried it. The receiver reports up to four blocks
+with the run containing the newest out-of-order segment first, found in the
+presence bitmap. The sender keeps a scoreboard of eight ranges and drops the
+highest when a ninth is needed, counts duplicates as ACKs that SACK new
+data, decides IsLost per hole, enters recovery at the third duplicate or an
+earlier loss, halves the window, and runs the SetPipe and NextSeg loop with
+rules 1 to 3 and at most 16 segments per ACK. A timeout keeps the
+scoreboard for an ACK-clocked recovery of the holes, and a second
+consecutive timeout clears it. ACKs of in-order data wait 100 ms unless two
+full segments are owed; FINs, duplicates, out-of-order data and hole fills
+are acknowledged at once, and window updates after reads follow receiver
+silly window avoidance. Eight counters are added to the `tcpopt` line.
+
+`net_tcp_sack` covers these rules with injected segments and the controlled
+clock. In `net_tcp_options_peer` the scripted peer now also drops one guest
+segment and reports its repair from SACK information in less than one
+second of guest time, without a resend of SACKed data or a timeout. It also
+reports correct guest blocks for reordered data, a delayed ACK after 100 ms
+and a single ACK for two full segments, and the capture checker verifies
+SACK blocks in both directions. The existing `net_tcp_options` case now expects the delayed ACK
+of an in-order segment. The optional rescue retransmission and D-SACK are
+not implemented, and loss with a native host stack is still not scripted,
+because QEMU's user-mode stack neither drops on request nor offers SACK.

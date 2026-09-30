@@ -5,6 +5,7 @@
 #include <net/tcp.h>
 #include <lib/cmdline.h>
 #include "net_helpers.h"
+#include "../net/tcp/internal.h"
 
 static bool wait_readiness(struct socket *socket, int events)
 {
@@ -157,8 +158,18 @@ static void test_tcp_bulk(void)
 KTEST_DEFINE("net_tcp_bulk", test_tcp_bulk);
 
 /* The scripted peer of netpeer on the raw dgram link (tools/netpeer/
- * scripted.c). It offers window scaling and timestamps, so this guest
- * connection uses both; the peer reports what it saw on the wire. */
+ * scripted.c). It offers window scaling, timestamps and SACK, so this guest
+ * connection uses all three; the peer reports what it saw on the wire. The
+ * guest reads the peer's data only after its FIN has arrived, so no window
+ * update of the reader disturbs the ACKs the peer counts and times. */
+static bool peer_finished(struct socket *socket)
+{
+    struct tcp_endpoint *endpoint = socket->priv;
+    spin_lock(&tcp_lock);
+    bool eof = endpoint->eof;
+    spin_unlock(&tcp_lock);
+    return eof;
+}
 static unsigned char script_guest_byte(unsigned long i)
 {
     return (unsigned char)(i * 31 + (i >> 9));
@@ -179,7 +190,7 @@ static void test_tcp_options_peer(void)
     address(&name, 0x0a000001, 7000);
     ktest_assert(socket_connect(socket, &name, 16) == -EINPROGRESS, "script connect");
     ktest_assert(wait_readiness(socket, POLLOUT), "script connected");
-    enum { GUEST_BYTES = 100000, PEER_BYTES = 3000 };
+    enum { GUEST_BYTES = 100000, PEER_BYTES = 3000 + 100 + 2 * 1448 };
     static char outgoing[8192], incoming[4096];
     size_t sent = 0, received = 0;
     bool closed = false, eof = false;
@@ -197,6 +208,10 @@ static void test_tcp_options_peer(void)
         } else if (!closed) {
             ktest_assert(socket_shutdown(socket, SHUT_WR) == 0, "script half-close");
             closed = true;
+        }
+        if (!peer_finished(socket)) {
+            sleep_ms(1);
+            continue;
         }
         struct socket_msg message = {.data = incoming, .len = sizeof incoming};
         long result = socket_recvmsg(socket, &message);
@@ -228,6 +243,22 @@ static void test_tcp_options_peer(void)
                  (unsigned long)stats.timestamps,
                  (unsigned long)stats.paws_rejected,
                  (unsigned long)stats.timestamp_samples);
-    kprintf("net_tcp_options_peer: scaling, timestamps and PAWS with the scripted peer, ok\n");
+    /* The loss was repaired from the scoreboard, never by a timeout. */
+    ktest_assert(stats.sack == 1 && stats.sack_recoveries >= 1 && stats.sack_retransmits >= 1 &&
+                     !stats.timeouts && stats.sack_blocks_sent >= 2 &&
+                     stats.delayed_ack_timeouts >= 1,
+                 "script SACK %lu recoveries %lu retransmits %lu timeouts %lu blocks %lu "
+                 "delayed %lu",
+                 (unsigned long)stats.sack,
+                 (unsigned long)stats.sack_recoveries,
+                 (unsigned long)stats.sack_retransmits,
+                 (unsigned long)stats.timeouts,
+                 (unsigned long)stats.sack_blocks_sent,
+                 (unsigned long)stats.delayed_ack_timeouts);
+    kprintf("net_tcp_options_peer: %lu retransmits, %lu by SACK, no timeout\n",
+            (unsigned long)stats.retransmits,
+            (unsigned long)stats.sack_retransmits);
+    kprintf("net_tcp_options_peer: scaling, timestamps, PAWS, SACK and delayed ACKs with the "
+            "scripted peer, ok\n");
 }
 KTEST_DEFINE("net_tcp_options_peer", test_tcp_options_peer);

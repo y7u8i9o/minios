@@ -72,6 +72,9 @@ struct peer_options {
     bool timestamp;
     uint32_t ts_value, ts_echo;
     int bad_length; /* nonzero: that length for the first option emitted */
+    bool sack_permitted;
+    unsigned sack_count;
+    uint32_t sack[4][2];
 };
 
 static size_t build_options(uint8_t *o, const struct peer_options *p)
@@ -93,6 +96,22 @@ static size_t build_options(uint8_t *o, const struct peer_options *p)
         uint8_t scale[4] = {1, 3, 3, (uint8_t)p->window_scale};
         memcpy(o + n, scale, 4);
         n += 4;
+    }
+    if (p->sack_permitted) {
+        uint8_t permitted[4] = {1, 1, 4, 2};
+        memcpy(o + n, permitted, 4);
+        n += 4;
+    }
+    if (p->sack_count) {
+        o[n] = 1;
+        o[n + 1] = 1;
+        o[n + 2] = 5;
+        o[n + 3] = (uint8_t)(2 + 8 * p->sack_count);
+        for (unsigned i = 0; i < p->sack_count; i++) {
+            net_put_be32(o + n + 4 + 8 * i, p->sack[i][0]);
+            net_put_be32(o + n + 8 + 8 * i, p->sack[i][1]);
+        }
+        n += 4 + 8 * p->sack_count;
     }
     if (p->timestamp && p->bad_length && p->window_scale < 0) {
         uint8_t bad[12] = {8, 8, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1};
@@ -160,10 +179,12 @@ struct decoded {
     uint32_t sequence, acknowledgement;
     uint16_t window;
     size_t header_length, payload;
-    bool mss, window_scale, timestamp;
+    bool mss, window_scale, timestamp, sack_permitted;
     uint16_t mss_value;
     uint8_t shift;
     uint32_t ts_value, ts_echo;
+    unsigned sack_count;
+    uint32_t sack[4][2];
 };
 
 static struct decoded decode_frame(unsigned index)
@@ -200,6 +221,14 @@ static struct decoded decode_frame(unsigned index)
         } else if (h[o] == 3 && h[o + 1] == 3) {
             d.window_scale = true;
             d.shift = h[o + 2];
+        } else if (h[o] == 4 && h[o + 1] == 2) {
+            d.sack_permitted = true;
+        } else if (h[o] == 5 && h[o + 1] >= 10 && (h[o + 1] - 2) % 8 == 0 && h[o + 1] <= 34) {
+            d.sack_count = (h[o + 1] - 2u) / 8;
+            for (unsigned b = 0; b < d.sack_count; b++) {
+                d.sack[b][0] = net_get_be32(h + o + 2 + 8 * b);
+                d.sack[b][1] = net_get_be32(h + o + 6 + 8 * b);
+            }
         } else if (h[o] == 8 && h[o + 1] == 10) {
             d.timestamp = true;
             d.ts_value = net_get_be32(h + o + 2);
@@ -271,8 +300,8 @@ static void fallback_checks(void)
     struct decoded syn = last();
     ktest_assert(syn.flags == TCP_SYN && syn.header_length == 40 && syn.mss &&
                      syn.mss_value == 1460 && syn.window_scale && syn.shift == TCP_WINDOW_SHIFT &&
-                     syn.timestamp && !syn.ts_echo && syn.window == 65535,
-                 "SYN offers MSS, window scale %u and a timestamp",
+                     syn.timestamp && !syn.ts_echo && syn.window == 65535 && syn.sack_permitted,
+                 "SYN offers MSS, window scale %u, SACK and a timestamp",
                  syn.shift);
     struct peer_options plain = {.mss = 1200, .window_scale = -1};
     inject(c, 100, TCP_SYN | TCP_ACK, 4096, &plain, NULL, 0);
@@ -358,8 +387,11 @@ static void negotiated_checks(void)
                  "segment without a timestamp dropped silently");
     options.ts_value = 5003;
     inject(c, expected, TCP_ACK, 100, &options, "new", 3);
-    ktest_assert(c->rcv_nxt == expected + 3 && c->ts_recent == 5003 && last().ts_echo == 5003,
-                 "newer timestamp accepted and echoed");
+    ktest_assert(c->rcv_nxt == expected + 3 && c->ts_recent == 5003 && c->ack_deadline,
+                 "newer timestamp accepted, its ACK delayed");
+    expire_next(c);
+    ktest_assert(last().ts_echo == 5003 && last().acknowledgement == expected + 3,
+                 "delayed ACK echoes the newer timestamp");
 
     /* Out-of-order data beyond the last ACK does not move TS.Recent. */
     options.ts_value = 6000;
@@ -427,8 +459,8 @@ static void passive_checks(void)
     send_segment(9301, 8100, 1, 0, TCP_SYN, 65535, &plain, NULL, 0);
     synack = last();
     ktest_assert(child(9301) && !child(9301)->window_scaling && !child(9301)->timestamps &&
-                     synack.header_length == 24 && synack.mss && !synack.window_scale &&
-                     !synack.timestamp,
+                     !child(9301)->sack && synack.header_length == 24 && synack.mss &&
+                     !synack.window_scale && !synack.timestamp && !synack.sack_permitted,
                  "SYN without options is answered with MSS alone");
 
     struct peer_options large = {.mss = 1400, .window_scale = 15};
@@ -501,3 +533,325 @@ static void test_tcp_options(void)
     kprintf("net_tcp_options: window scaling, timestamps, PAWS and RTT, ok\n");
 }
 KTEST_DEFINE("net_tcp_options", test_tcp_options);
+
+/* N14: SACK (RFC 2018, RFC 6675) and delayed ACKs. */
+
+/* An established connection that negotiated SACK, with the peer's MSS
+ * 1000 and a scaled peer window of 128000 bytes. Timestamps are optional
+ * so that both option budgets are exercised. */
+static struct file *sack_open(bool timestamps)
+{
+    struct file *file = active_open();
+    struct tcp_connection *c = connection_of(file);
+    struct peer_options options = {
+        .mss = 1000,
+        .window_scale = 7,
+        .sack_permitted = true,
+        .timestamp = timestamps,
+        .ts_value = 1,
+        .ts_echo = last().ts_value,
+    };
+    inject(c, 100, TCP_SYN | TCP_ACK, 1000, &options, NULL, 0);
+    ktest_assert(c->state == TCP_ESTABLISHED && c->sack && c->timestamps == timestamps,
+                 "SACK negotiated");
+    return file;
+}
+static struct peer_options ack_options(struct tcp_connection *c)
+{
+    struct peer_options o = {.window_scale = -1, .timestamp = c->timestamps};
+    if (c->timestamps) {
+        o.ts_value = c->ts_recent + 1;
+        o.ts_echo = c->ts_recent ? tcp_timestamp_now(c) : 0;
+    }
+    return o;
+}
+/* A pure ACK from the peer with the given cumulative ACK and SACK blocks. */
+static void peer_ack(struct tcp_connection *c, uint32_t ack, unsigned blocks, const uint32_t (*sack)[2])
+{
+    struct peer_options o = ack_options(c);
+    o.sack_count = blocks;
+    for (unsigned i = 0; i < blocks; i++) {
+        o.sack[i][0] = sack[i][0];
+        o.sack[i][1] = sack[i][1];
+    }
+    send_segment(c->peer_port, c->local_port, c->rcv_nxt, ack, TCP_ACK, 1000, &o, NULL, 0);
+}
+static void peer_data(struct tcp_connection *c, uint32_t sequence, size_t length)
+{
+    struct peer_options o = ack_options(c);
+    inject(c, sequence, TCP_ACK, 1000, &o, pattern, length);
+}
+
+static void receiver_checks(bool timestamps)
+{
+    struct file *file = sack_open(timestamps);
+    struct tcp_connection *c = connection_of(file);
+    uint32_t r = c->rcv_nxt;
+    unsigned before = frame_count;
+    peer_data(c, r + 100, 100);
+    struct decoded d = last();
+    ktest_assert(frame_count == before + 1 && d.acknowledgement == r && d.sack_count == 1 &&
+                     d.sack[0][0] == r + 100 && d.sack[0][1] == r + 200,
+                 "out-of-order data acknowledged at once with its SACK block");
+    peer_data(c, r + 300, 100);
+    d = last();
+    ktest_assert(d.sack_count == 2 && d.sack[0][0] == r + 300 && d.sack[1][0] == r + 100,
+                 "most recent block first (RFC 2018)");
+    peer_data(c, r + 500, 100);
+    peer_data(c, r + 700, 100);
+    peer_data(c, r + 900, 100);
+    d = last();
+    unsigned fit = timestamps ? 3 : 4;
+    ktest_assert(d.sack_count == fit && d.sack[0][0] == r + 900 && d.sack[1][0] == r + 700 &&
+                     d.header_length <= 60,
+                 "%u blocks fit beside %s",
+                 fit,
+                 timestamps ? "the timestamp" : "no timestamp");
+    peer_data(c, r + 200, 100);
+    d = last();
+    ktest_assert(d.sack[0][0] == r + 100 && d.sack[0][1] == r + 400,
+                 "filled gap merges reported blocks");
+    before = frame_count;
+    peer_data(c, r, 100);
+    d = last();
+    ktest_assert(frame_count == before + 1 && d.acknowledgement == r + 400 &&
+                     d.sack_count == 3 && d.sack[0][0] == r + 900 && d.sack[2][0] == r + 500,
+                 "hole filled: immediate ACK keeps the remaining blocks in report order");
+    peer_data(c, r + 400, 100);
+    peer_data(c, r + 600, 100);
+    peer_data(c, r + 800, 100);
+    d = last();
+    ktest_assert(d.acknowledgement == r + 1000 && !d.sack_count,
+                 "no block once the stream is contiguous");
+    reset(c);
+    file_put(file);
+}
+
+static void delayed_ack_checks(void)
+{
+    struct file *file = sack_open(false);
+    struct tcp_connection *c = connection_of(file);
+    uint64_t delayed = tcp_counters.delayed_acks, timeouts = tcp_counters.delayed_ack_timeouts;
+    unsigned before = frame_count;
+    uint64_t start = net_clock_ms();
+    peer_data(c, c->rcv_nxt, 100);
+    ktest_assert(frame_count == before && c->ack_deadline == start + TCP_DELAYED_ACK_MS &&
+                     tcp_counters.delayed_acks == delayed + 1,
+                 "small in-order segment: ACK delayed %u ms",
+                 TCP_DELAYED_ACK_MS);
+    expire_next(c);
+    ktest_assert(frame_count == before + 1 && net_clock_ms() == start + TCP_DELAYED_ACK_MS &&
+                     last().acknowledgement == c->rcv_nxt &&
+                     tcp_counters.delayed_ack_timeouts == timeouts + 1,
+                 "delayed ACK sent by its timer after 100 ms");
+
+    before = frame_count;
+    peer_data(c, c->rcv_nxt, 1460);
+    ktest_assert(frame_count == before, "first full segment waits");
+    peer_data(c, c->rcv_nxt, 1460);
+    ktest_assert(frame_count == before + 1 && last().acknowledgement == c->rcv_nxt &&
+                     !c->ack_deadline,
+                 "second full segment acknowledged at once, one ACK for both");
+
+    before = frame_count;
+    peer_data(c, c->rcv_nxt, 50);
+    ktest_assert(c->ack_deadline && send_bytes(file, "reply", 5) == 5 &&
+                     frame_count == before + 1 && last().payload == 5 &&
+                     last().acknowledgement == c->rcv_nxt && !c->ack_deadline,
+                 "outgoing data carries the delayed ACK");
+
+    /* Receiver silly window avoidance: a small read sends no update, a
+     * read of a full segment does. */
+    struct socket_msg message = {.data = pattern, .len = 100};
+    before = frame_count;
+    ktest_assert(socket_recvmsg(socket_from_file(file), &message) == 100 && frame_count == before,
+                 "100-byte read sends no window update");
+    message.len = 3000;
+    ktest_assert(socket_recvmsg(socket_from_file(file), &message) > 0 &&
+                     frame_count == before + 1 && last().flags == TCP_ACK,
+                 "read of more than a segment announces the window");
+    reset(c);
+    file_put(file);
+}
+
+/* Grows the congestion window with full ACKs until it holds at least
+ * `segments` segments of 1000 bytes, then leaves a full flight
+ * outstanding. */
+static uint32_t fill_flight(struct file *file, struct tcp_connection *c, unsigned segments)
+{
+    static char data[TCP_SEND_CAPACITY];
+    for (;;) {
+        size_t room = TCP_SEND_CAPACITY - c->transmit_length;
+        ktest_assert(!room || send_bytes(file, data, room) == (long)room, "refill send store");
+        if (c->congestion_window >= segments * 1000u)
+            break;
+        peer_ack(c, c->snd_nxt, 0, NULL);
+    }
+    /* One flush sends at most eight segments. */
+    while (c->transmit_sent < c->congestion_window)
+        tcp_flush(c);
+    ktest_assert(c->transmit_sent >= segments * 1000u, "flight of %u bytes", (unsigned)c->transmit_sent);
+    return c->snd_una;
+}
+
+static void recovery_checks(void)
+{
+    struct file *file = sack_open(false);
+    struct tcp_connection *c = connection_of(file);
+    uint32_t u = fill_flight(file, c, 8);
+    ktest_assert(c->transmit_sent == 8000, "flight of exactly eight segments");
+    uint64_t retransmits = tcp_counters.retransmits, sack_rtx = tcp_counters.sack_retransmits;
+    uint64_t recoveries = tcp_counters.sack_recoveries;
+
+    /* Segment 0 is lost; the peer SACKs segments 1, 2 and 3. */
+    uint32_t sack[4][2] = {{u + 1000, u + 2000}};
+    peer_ack(c, u, 1, sack);
+    sack[0][1] = u + 3000;
+    peer_ack(c, u, 1, sack);
+    ktest_assert(!c->recovering && c->duplicate_acks == 2 && c->scoreboard_count == 1,
+                 "two duplicates do not start recovery");
+    unsigned before = frame_count;
+    sack[0][1] = u + 4000;
+    peer_ack(c, u, 1, sack);
+    struct decoded d = last();
+    ktest_assert(c->recovering && tcp_counters.sack_recoveries == recoveries + 1 &&
+                     frame_count == before + 1 && d.sequence == u && d.payload == 1000,
+                 "third duplicate retransmits the first lost segment");
+    ktest_assert(c->congestion_window == 4000 && c->slow_start_threshold == 4000 &&
+                     c->recovery_end == u + 8000 && c->high_rxt == u + 1000,
+                 "window and threshold halved, recovery point set");
+
+    /* The pipe (1000 retransmitted + 4000 above the SACKed range) exceeds
+     * the window; one more SACKed segment leaves it at the window. */
+    before = frame_count;
+    sack[0][1] = u + 5000;
+    peer_ack(c, u, 1, sack);
+    ktest_assert(frame_count == before, "pipe at the window: nothing sent");
+    sack[0][1] = u + 6000;
+    peer_ack(c, u, 1, sack);
+    d = last();
+    ktest_assert(frame_count == before + 1 && d.sequence == u + 8000,
+                 "room in the pipe sends new data, not SACKed data");
+    ktest_assert(tcp_counters.retransmits == retransmits + 1 &&
+                     tcp_counters.sack_retransmits == sack_rtx + 1,
+                 "exactly one retransmission during SACK recovery");
+
+    /* A cumulative ACK beyond the recovery point ends recovery. */
+    peer_ack(c, u + 8000, 0, NULL);
+    ktest_assert(!c->recovering && c->congestion_window == 4000 && !c->scoreboard_count,
+                 "recovery ends at the recovery point");
+    reset(c);
+    file_put(file);
+}
+
+static void timeout_checks(void)
+{
+    struct file *file = sack_open(false);
+    struct tcp_connection *c = connection_of(file);
+    uint32_t u = fill_flight(file, c, 8);
+    ktest_assert(c->transmit_sent == 8000, "flight of exactly eight segments");
+    uint32_t sack[1][2] = {{u + 2000, u + 4000}};
+    peer_ack(c, u, 1, sack);
+    ktest_assert(!c->recovering && c->scoreboard_count == 1, "one duplicate with a SACK block");
+    expire_next(c);
+    ktest_assert(c->rto_recovery && last().sequence == u && c->congestion_window == 1000,
+                 "timeout retransmits the first segment and keeps the scoreboard");
+    unsigned before = frame_count;
+    peer_ack(c, u + 1000, 1, sack);
+    ktest_assert(frame_count == before + 2 && decode_frame(before).sequence == u + 1000 &&
+                     decode_frame(before + 1).sequence == u + 4000,
+                 "after the timeout the SACKed range is skipped");
+    expire_next(c);
+    ktest_assert(c->scoreboard_count == 1, "one timeout after progress keeps the scoreboard");
+    expire_next(c);
+    ktest_assert(!c->scoreboard_count, "second consecutive timeout clears the scoreboard");
+    reset(c);
+    file_put(file);
+}
+
+static void scoreboard_checks(void)
+{
+    struct file *file = sack_open(false);
+    struct tcp_connection *c = connection_of(file);
+    uint32_t u = fill_flight(file, c, 20);
+    uint64_t drops = tcp_counters.scoreboard_drops, received = tcp_counters.sack_blocks_received;
+    uint32_t sack[3][2] = {
+        {u - 500, u},                /* below snd_una: a duplicate report */
+        {u + 30000, u + 31000},      /* beyond snd_nxt */
+        {u + 1000, u + 1000},        /* empty */
+    };
+    peer_ack(c, u, 3, sack);
+    ktest_assert(!c->scoreboard_count && tcp_counters.sack_blocks_received == received,
+                 "invalid blocks ignored");
+    for (unsigned i = 0; i < 9; i++) {
+        uint32_t block[1][2] = {{u + 2000 * i + 1000, u + 2000 * i + 1500}};
+        peer_ack(c, u, 1, block);
+    }
+    ktest_assert(c->scoreboard_count == TCP_SCOREBOARD &&
+                     tcp_counters.scoreboard_drops == drops + 1 &&
+                     c->scoreboard[0].start == u + 1000 &&
+                     c->scoreboard[TCP_SCOREBOARD - 1].start == u + 2000 * 7 + 1000,
+                 "scoreboard bounded to %u ranges, the highest dropped",
+                 TCP_SCOREBOARD);
+    uint32_t cover[1][2] = {{u + 1000, u + 16000}};
+    peer_ack(c, u, 1, cover);
+    ktest_assert(c->scoreboard_count == 1 && c->scoreboard[0].end == u + 16000,
+                 "a covering block merges every range");
+    reset(c);
+    file_put(file);
+}
+
+static void unsacked_checks(void)
+{
+    /* The peer does not permit SACK: no block is ever sent. */
+    struct file *file = active_open();
+    struct tcp_connection *c = connection_of(file);
+    struct peer_options options = {.mss = 1000, .window_scale = -1};
+    inject(c, 100, TCP_SYN | TCP_ACK, 4096, &options, NULL, 0);
+    ktest_assert(!c->sack, "SACK not negotiated");
+    struct peer_options none = {.window_scale = -1};
+    inject(c, c->rcv_nxt + 100, TCP_ACK, 4096, &none, "gap", 3);
+    ktest_assert(!last().sack_count && last().acknowledgement == c->rcv_nxt,
+                 "out-of-order data without SACK: plain duplicate ACK");
+    reset(c);
+    file_put(file);
+}
+
+static int controlled_sack(struct net_request *request)
+{
+    ktest_assert(netif_register(&fake) == 0, "register SACK capture interface");
+    netif_set_up(&fake, true);
+    ktest_assert(net_configure(&fake, LOCAL, 0xffffff00u, 0) == 0, "SACK test address");
+    for (unsigned i = 0; i < sizeof pattern; i++)
+        pattern[i] = (char)(i * 13);
+    net_clock_control(true);
+    tcp_set_generators(initial_sequence, next_port);
+    receiver_checks(false);
+    receiver_checks(true);
+    delayed_ack_checks();
+    recovery_checks();
+    timeout_checks();
+    scoreboard_checks();
+    unsacked_checks();
+    tcp_set_generators(NULL, NULL);
+    struct tcp_stats stats;
+    ktest_assert(tcp_get_stats(&stats) == 0 && !stats.connections && !stats.endpoints,
+                 "all SACK test connections released");
+    net_clock_control(false);
+    netif_set_up(&fake, false);
+    return 0;
+}
+
+static void test_tcp_sack(void)
+{
+    struct pbuf_stats before, after;
+    pbuf_get_stats(&before);
+    struct net_request request;
+    net_request_init(&request, controlled_sack);
+    ktest_assert(net_request_run(&request) == 0, "controlled SACK checks");
+    net_worker_drain();
+    pbuf_get_stats(&after);
+    ktest_assert(before.free == after.free, "packet pool restored %u/%u", before.free, after.free);
+    kprintf("net_tcp_sack: SACK blocks, scoreboard, RFC 6675 recovery and delayed ACKs, ok\n");
+}
+KTEST_DEFINE("net_tcp_sack", test_tcp_sack);

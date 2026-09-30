@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
-grep -q '^script syn mss 1460 wscale 2 sackok [01] ts 1$' "$PEER_LOG"
+grep -q '^script syn mss 1460 wscale 2 sackok 1 ts 1$' "$PEER_LOG"
 grep -q '^script received 100000 bytes pattern errors 0$' "$PEER_LOG"
 grep -q '^script paws old segment answered without acceptance$' "$PEER_LOG"
-grep -q '^script sent 3000 bytes and FIN acknowledged$' "$PEER_LOG"
+grep -q '^script sent 5996 bytes and FIN acknowledged$' "$PEER_LOG"
 grep -q '^script timestamps missing 0 echo errors 0$' "$PEER_LOG"
 grep -q '^script complete$' "$PEER_LOG"
 # The guest trusted the scaled window: segments ended beyond the edge an
@@ -11,4 +11,14 @@ grep -q '^script complete$' "$PEER_LOG"
 awk '/^script max flight/ { exit !($NF > 0) }' "$PEER_LOG"
 # The guest advertised more than an unscaled window can express.
 awk '/^script guest window/ { exit !($NF > 65535) }' "$PEER_LOG"
-python3 "$TOP/tests/net/check_capture.py" --require window-scale --require timestamps "$CAPTURE"
+# The dropped segment came back within one second of guest time, below the
+# minimum retransmission timeout, and no SACKed segment was sent again.
+grep -q '^script dropped guest segment at offset' "$PEER_LOG"
+awk '/^script sack repair/ { exit !($4 == "retransmitted" && $6 < 1000 && $NF == 0) }' "$PEER_LOG"
+grep -q '^script guest sack blocks correct$' "$PEER_LOG"
+# A lone small segment waited for the delayed-ACK timer; two full segments
+# were acknowledged by one ACK.
+awk '/^script delayed ack/ { exit !($4 == "received" && $6 >= 50) }' "$PEER_LOG"
+grep -q '^script two full segments acknowledged by 1 ack covering both$' "$PEER_LOG"
+python3 "$TOP/tests/net/check_capture.py" --require window-scale --require timestamps \
+    --require sack "$CAPTURE"
