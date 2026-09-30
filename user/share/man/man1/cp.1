@@ -1,0 +1,32 @@
+CP(1)                       User Commands
+
+NAME
+    cp - copy files and directory trees
+
+SYNOPSIS
+    cp [-R] [-H | -L | -P] source target
+    cp [-R] [-H | -L | -P] source... directory
+
+DESCRIPTION
+    cp copies the contents of source to target, which is created or
+    truncated and receives the permission bits of the source. When the
+    last operand is a directory each source is copied into it under its
+    last component. -R copies directories with everything below them;
+    without it a directory operand is reported and skipped.
+
+    cp treats symbolic links among the sources as POSIX specifies. With -P a
+    link is copied as a new link holding the same target. With -L a link
+    is followed and the file it leads to is copied. -H follows the links
+    named as operands and copies the links found below them as links.
+    Without any of the three, cp follows links, and cp -R copies them as
+    links. A file copied onto an existing symbolic link is written to the
+    file the link leads to, while a copied link replaces an existing link
+    or file of the same name.
+
+EXAMPLES
+    cp notes.txt /home
+    cp -R src backup
+    cp -P current.conf saved.conf
+
+SEE ALSO
+    ln(1), rm(1), tar(1)

@@ -118,8 +118,12 @@ static void search(FILE *file, const char *name, int show_name)
 static void search_path(const char *path, unsigned depth)
 {
     struct stat st;
-    if (stat(path, &st) < 0)
+    /* Operands are followed; a symbolic link met while descending is
+     * skipped, so that a link to an ancestor cannot recurse. */
+    if ((depth ? lstat(path, &st) : stat(path, &st)) < 0)
         goto error;
+    if (S_ISLNK(st.st_mode))
+        return;
     if (S_ISDIR(st.st_mode) && recursive) {
         if (depth >= 128) {
             errno = ENAMETOOLONG;

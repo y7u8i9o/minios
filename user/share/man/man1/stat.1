@@ -1,0 +1,17 @@
+STAT(1)                     User Commands
+
+NAME
+    stat - print file attributes
+
+SYNOPSIS
+    stat [-L] file...
+
+DESCRIPTION
+    stat prints the size, the block count and block size, the type, the
+    device and inode numbers, the link count and the permission bits of
+    each file. A symbolic link is reported itself, with the type symbolic
+    link, the length of its target as the size and "-> target" after the
+    name. -L reports the file the link leads to instead.
+
+SEE ALSO
+    ls(1), readlink(1)

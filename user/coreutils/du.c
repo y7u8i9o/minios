@@ -1,4 +1,6 @@
-/* du: disk usage of files and directories in kB. -s prints only totals. */
+/* du: disk usage of files and directories in kB. -s prints only totals.
+ * Symbolic links are counted themselves and never followed, so a link to
+ * a directory is not entered. */
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
@@ -10,7 +12,7 @@ static int summary;
 static long usage(const char *path, int top)
 {
     struct stat st;
-    if (stat(path, &st) < 0) {
+    if (lstat(path, &st) < 0) {
         fprintf(stderr, "du: %s: %s\n", path, strerror(errno));
         return 0;
     }

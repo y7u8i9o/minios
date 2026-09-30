@@ -23,8 +23,9 @@ undoes it exactly.
 The root filesystem is rebuilt from `build/initrd_root` whenever a program
 changes (`storage.md`), so an installation into `/bin` or `/lib` would not
 survive the next build. The only persistent volume is the data volume,
-mounted at `/home`, and the system has neither symbolic links nor bind
-mounts with which another directory could be placed on it. Packages are
+mounted at `/home`. Symbolic links exist since 2026-09-30 (`vfs.md`),
+but a link placed in `/bin` or `/lib` of the root image would disappear
+with the next rebuild as well, and there are no bind mounts. Packages are
 therefore installed under `/home/.local` (`LOCAL_PREFIX` in
 `minios/local.h`), with the layout of a per-user prefix: `bin/`, `lib/`,
 `share/`, and `lib/pkg/` for the installer's records. Without a data

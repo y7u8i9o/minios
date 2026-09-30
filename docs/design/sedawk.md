@@ -41,7 +41,8 @@ available to every program and documented in `libc.md`.
   `optreset`; `readv` and `writev` (`sys/uio.h`), performed as loops of
   `read` and `write`; `fchown` and `chown`.
 - `sys/stat.h`: the permission bit macros, `DEFFILEMODE`, `lstat` (the
-  same as `stat`, there are no symbolic links), `fchmod` and `chmod`.
+  same as `stat` until symbolic links were added on 2026-09-30, a system
+  call since then), `fchmod` and `chmod`.
   Permission bits are stored and ignored by the kernel and cannot be
   changed, so the four change functions return 0 without effect.
 - `stdio.h`: `scanf`, `fscanf`, `sscanf` and their `v` forms

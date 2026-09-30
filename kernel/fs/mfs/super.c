@@ -72,6 +72,9 @@ static int mfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     if (S_ISDIR(i->mode)) {
         i->ops = &mfs_dir_ops;
         i->fops = &mfs_dir_fops;
+    } else if (S_ISLNK(i->mode)) {
+        i->ops = &mfs_link_ops;     /* never opened: lookups follow or refuse it */
+        i->fops = NULL;
     } else {
         i->ops = &mfs_dir_ops;      /* only truncate applies to files */
         i->fops = &mfs_file_fops;

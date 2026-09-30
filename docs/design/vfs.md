@@ -35,10 +35,11 @@ system call boundary (`struct stat`, `struct dirent`, open flags) live in
   release unlinked storage. No inodes are cached beyond their references,
   so a completed test leaves no allocations behind.
 - `struct inode_ops` covers directory operations: `lookup`, `create`,
-  `mkdir`, `unlink`, `rmdir`, `link`, `rename` and `truncate`. Names are
-  passed as pointer and length. The caller holds the directory inode mutex.
-  A filesystem without a given operation leaves the pointer NULL and the
-  VFS reports `EROFS`.
+  `mkdir`, `unlink`, `rmdir`, `link`, `symlink`, `rename` and `truncate`,
+  and `readlink` on a symbolic link. Names are passed as pointer and
+  length. The caller holds the directory inode mutex, or the link's own
+  mutex for `readlink`. A filesystem without a given operation leaves the
+  pointer NULL and the VFS reports `EROFS`.
 - `struct file_ops` covers open files: `open`, `release`, `read`, `write`,
   `getdents` and `lseek`. `read` and `write` receive the position by
   pointer and advance it. `getdents` fills whole `struct dirent` records
@@ -57,27 +58,79 @@ system call boundary (`struct stat`, `struct dirent`, open flags) live in
 
 ## Path resolution
 
-`vfs_canonicalize` folds a path against the process working directory
-into an absolute path without `.`, `..`, duplicate or trailing slashes.
-The working directory is kept as a canonical string in `proc->cwd`, so
-`..` is resolved lexically. Without symbolic links this matches the
-directory structure.
+Every lookup walks from the root mount. A relative path is first joined
+to the working directory, which `proc->cwd` holds as the canonical path
+of the directory without symbolic links (the string `getcwd` returns).
+The walk (`walk` in `vfs.c`) keeps the remaining components in a buffer
+and the canonical path of the directory reached so far beside it, and
+takes one component at a time, calling `lookup` under the directory
+mutex and dropping the reference to the previous directory. After each
+step the result is checked against the mount table and replaced by the
+root of a mount that covers it.
 
-`vfs_lookup` walks the canonical path from the root mount one component
-at a time, calling `lookup` under the directory mutex and dropping the
-reference to the previous directory. After each step the result is checked
-against the mount table and replaced by the root of a mount that covers
-it. `vfs_lookup_parent` stops before the last component and returns its
-name, which the create, unlink, mkdir, rmdir, link and rename paths use.
-`rename` locks two directories in inode number order so concurrent renames
-between the same pair cannot deadlock.
+A component that names a symbolic link (mode `S_IFLNK`) is replaced in
+the buffer by the link's target, read with the `readlink` operation
+under the link's mutex alone. A relative target continues from the
+directory that holds the link, an absolute one from the root. Links are
+followed in every intermediate component and in the last one, unless
+the caller passes `VFS_NOFOLLOW` and the last component has no trailing
+slash. A lookup follows at most `SYMLOOP_MAX` (40) links in total and
+fails with `ELOOP` beyond that, which also ends every loop. A target
+holds 1 to `VFS_SYMLINK_MAX` (255) bytes: an empty target resolves to
+`ENOENT`, and the remainder buffer of four paths bounds the growth by
+nested targets (`ENAMETOOLONG`).
+
+Since the canonical path of the current directory contains no link,
+`..` removes its last component and the walk finds that directory again
+from the root. `..` after a link therefore leaves the directory the link
+led to, not the one holding the link, and `..` at the root of a mounted
+filesystem reaches the parent of the directory it covers. A component
+after a regular file fails with `ENOTDIR`, also for `.` and `..`, and
+an empty path with `ENOENT`.
+
+`vfs_lookup` follows every link; `vfs_lookup_path` takes the flags and
+also returns the canonical path of the result, which `chdir` stores,
+`open` keeps in `file.path` for the `*at` system calls and `mount`
+records in the mount table (so `/dev/mounts` and `umount` name mounts by
+that path, and `umount` accepts a path through links).
+`vfs_lookup_parent` stops before the last component and returns its
+name, never following it, which the create, unlink, mkdir, rmdir, link,
+symlink and rename paths use; `.` and `..` are refused there with
+`EINVAL`. Unlink, rename and rmdir therefore act on a link itself: rmdir
+of a link to a directory fails with `ENOTDIR`, rename moves the link,
+and `link` makes a hard link to a link rather than to its target (POSIX
+leaves this choice to the implementation). `rename` locks two
+directories in inode number order so concurrent renames between the same
+pair cannot deadlock.
+
+`open` resolves the last component like any lookup; `O_NOFOLLOW` makes a
+link there fail with `ELOOP`. With `O_CREAT` the parent is resolved and
+the name looked up under the directory mutex: a missing name is created,
+and a link is followed by releasing the directory and repeating the
+parent lookup for its target, with the same count of followed links, so
+a dangling link creates the file it names, as POSIX specifies. `O_EXCL`
+fails with `EEXIST` on a link whether it dangles or not, and `O_NOFOLLOW`
+with `ELOOP`.
+
+`lstat`, `fstatat` with `AT_SYMLINK_NOFOLLOW`, `readlink` and `utimensat`
+with `AT_SYMLINK_NOFOLLOW` look the last component up with
+`VFS_NOFOLLOW`. `inode_stat` reports a link with its own inode, mode
+`S_IFLNK | 0777` and the target's length as `st_size`; `getdents` gives
+it `DT_LNK`.
+
+`vfs_symlink` checks the target length and calls the directory's
+`symlink` operation. mfs stores links (`mfs.md`), the initrd reads them
+from the archive, FAT and devfs return `EPERM`, and a filesystem without
+the operation reports `EROFS`.
 
 ## Filesystems in M11
 
 - `initrd` (`fs/initrdfs.c`) exposes the ustar archive parsed by
   `fs/initrd.c` read only. Inode 1 is the root, entry i is inode i + 2. A
   directory lists entries whose name has the directory as prefix and no
-  further slash.
+  further slash. A member of typeflag `2` is a symbolic link whose target
+  is the header's link name field (at most 100 bytes). The table holds
+  1024 members, and the boot log reports members beyond that.
 - `devfs` (`fs/devfs.c`) is a flat in memory directory of nodes registered
   by drivers with `devfs_register(name, mode, fops, priv)`. It provides
   `/dev/console` (keyboard line discipline for reading, console for
@@ -129,9 +182,13 @@ processes of a pipeline exit together.
 `open`, `close`, `read`, `write`, `lseek`, `dup`, `dup2`, `stat`,
 `fstat`, `getdents`, `mkdir`, `unlink`, `rmdir`, `rename`, `link`,
 `pipe`, `mount`, `umount`, `sync`, `chdir`, `getcwd`, `utimensat` (since
-the make port, `make.md`) and `openat` and `fstatat` (since the tar port,
+the make port, `make.md`), `openat` and `fstatat` (since the tar port,
 `artar.md`; a directory opened by name keeps its canonical path in
-`file.path` for them) are implemented in `syscall/sys_fs.c`. User buffers are checked with `user_range_ok` and
+`file.path` for them), and `symlink`, `symlinkat`, `readlink`,
+`readlinkat` and `lstat` (numbers 91 to 95, 2026-09-30) are implemented
+in `syscall/sys_fs.c`. `readlink` copies at most the given size of the
+target without a NUL and returns the byte count; a size of zero is
+`EINVAL`. User buffers are checked with `user_range_ok` and
 then accessed directly. `read` and `write` on descriptors 0 to 2 go
 through the console device like any other file.
 
@@ -140,13 +197,28 @@ through the console device like any other file.
 libc implements the calls above plus `opendir`, `readdir`, `closedir`
 over `getdents`, `isatty` over `fstat`, and `fopen`, `fdopen`, `fclose`,
 `fseek`, `ftell` and `rewind` over descriptors. Streams opened with
-`fopen` are flushed by `exit`.
+`fopen` are flushed by `exit`. `realpath` resolves one component at a
+time with `lstat` and `readlink`, with the same rules and limit as the
+kernel, and `remove` uses `lstat`, so it removes a link and not the
+directory it may lead to.
 
 The shell parses pipelines with `|` and the redirections `<`, `>` and
 `>>`. Each stage is a forked child with its ends wired through `dup2`.
 Coreutils added: `cat`, `ls` (`-l`), `wc` (`-l`, `-w`, `-c`), `mkdir`,
 `rm` (`-d`), `mv` and `cp`. The modifying utilities return `EROFS` on the
 initrd until the disk filesystem of M13 is mounted.
+
+With symbolic links `ln -s` creates links and `readlink` prints them.
+`ls` lists the entries of a directory with `lstat` (`l` and
+`name -> target` in the long format, `@` with `-F`) and follows a link
+named as an operand unless `-l`, `-d` or `-F` is given. `stat` reports a
+link itself unless `-L` is given, `find` does not follow links and
+selects them with `-type l`, `du` and `tree` do not enter them, `rm`
+removes the link, and `cp` copies a link as a link with `-P` and by
+default with `-R`, and follows it otherwise. The Files program copies
+links as links and deletes the link, not the tree behind it. The sbase
+`tar` archives links with typeflag `2` and extracts them with `symlink`
+and `utimensat(AT_SYMLINK_NOFOLLOW)`.
 
 ## Tests
 
@@ -159,6 +231,21 @@ initrd until the disk filesystem of M13 is mounted.
 - `pipes` types `ls /dev`, `cat < /etc/motd`, `cat /etc/motd | wc`, output
   redirection and a four stage pipeline into the keyboard buffer and runs
   the shell on it, checking the output and that no physical page leaks.
+- `symlink` runs `/etc/tests/symlink.sh`, which starts `/bin/symlinktest`
+  for the system calls: readlink without a NUL and truncated, relative
+  and absolute targets, the `*at` forms, a 255 byte target and the
+  refusal of a 256 byte one, chains, 40 links resolving and 41 failing
+  with `ELOOP`, loops, `O_NOFOLLOW`, `lstat` against `stat`,
+  `utimensat` on a link, dangling links with `O_CREAT` and `O_EXCL`,
+  unlink and rename of links, a hard link to a link, `..` after a link,
+  `getcwd`, `realpath`, links into, out of and onto a mounted mfs volume
+  (`vdb`), `umount` through a link, links that survive the unmount, the
+  links of the initrd and of the root image, and `EPERM` on devfs and on
+  a FAT volume (`vdc`) whose files remain reachable through a link. The
+  script then checks `ln`, `readlink`, `ls`, `stat`, `find`, `tree`,
+  `cp`, `du` and `rm` and a `tar` round trip, unmounts the volume and
+  syncs. The `post` script runs `fsck` on both images and finds the
+  links in `mkfs --dump`.
 - `pipe_close` (`kernel/tests/test_pipe.c`) has two kernel threads release
   the read ends and the write ends of 256 pipes in step, forty rounds, so
   both ends of a pipe are closed at the same moment on different CPUs; it

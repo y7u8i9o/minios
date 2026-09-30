@@ -1,4 +1,7 @@
-/* find: recursive file search with the common name/type/depth actions. */
+/* find: recursive file search with the common name/type/depth actions.
+ * Symbolic links are reported as links and not followed, as with the
+ * POSIX default -P, so a link to a directory is neither entered nor
+ * matched by -type d; -type l selects links. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -134,13 +137,15 @@ static int matches(const char *path, const struct stat *st, int depth)
         return 0;
     if (wanted_type == 'f' && !S_ISREG(st->st_mode))
         return 0;
+    if (wanted_type == 'l' && !S_ISLNK(st->st_mode))
+        return 0;
     return 1;
 }
 
 static void visit(const char *path, int depth)
 {
     struct stat st;
-    if (stat(path, &st) < 0) {
+    if (lstat(path, &st) < 0) {
         fprintf(stderr, "find: %s: %s\n", path, strerror(errno));
         had_error = 1;
         return;
@@ -200,7 +205,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "-name") == 0 && i + 1 < argc)
             name_pattern = argv[++i];
         else if (strcmp(argv[i], "-type") == 0 && i + 1 < argc &&
-                 (argv[i + 1][0] == 'f' || argv[i + 1][0] == 'd') && !argv[i + 1][1])
+                 strchr("fdl", argv[i + 1][0]) && argv[i + 1][0] && !argv[i + 1][1])
             wanted_type = argv[++i][0];
         else if (strcmp(argv[i], "-mindepth") == 0 && i + 1 < argc)
             min_depth = number("-mindepth", argv[++i]);
@@ -222,7 +227,7 @@ int main(int argc, char **argv)
             exec_count = i - start;
         } else {
             fprintf(stderr, "find: unsupported expression: %s\n", argv[i]);
-            fprintf(stderr, "usage: find [path...] [-name pattern] [-type f|d] "
+            fprintf(stderr, "usage: find [path...] [-name pattern] [-type f|d|l] "
                             "[-mindepth n] [-maxdepth n] [-print0] [-exec command {} ;]\n");
             return 2;
         }

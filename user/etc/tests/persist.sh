@@ -12,7 +12,7 @@ printf 'vdb /mnt/data mfs seed=/usr/share/skel/home\n# a comment\nvdz /mnt/none 
 fsinit -f /tmp/fstab -v > /tmp/out.txt; check fsinit-status "$?" "0"
 grep 'seeded /mnt/data from /usr/share/skel/home' /tmp/out.txt > /dev/null || echo "FAIL fsinit-seed-message"
 grep '/mnt/none: .*skipped' /tmp/out.txt > /dev/null || echo "FAIL fsinit-nofail-message"
-check seeded-files "$(ls /mnt/data/desktop | sort | tr "\n" " ")" "Clock.app Code.app Files.app Pong.app Terminal.app readme.txt "
+check seeded-files "$(ls /mnt/data/desktop | sort | tr "\n" " ")" "Clock.app Files.app Terminal.app readme.txt "
 check seeded-dotfile "$(head -n 1 /mnt/data/.shrc | cut -c1-10)" "# Personal"
 check mounted "$(mount | grep -c '^/mnt/data type mfs')" "1"
 echo persisted > /mnt/data/persisted.txt

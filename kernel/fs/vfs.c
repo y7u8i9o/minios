@@ -231,68 +231,270 @@ static int lookup_child(struct inode *dir, const char *name, size_t len, struct 
     return *out ? 0 : -ENOMEM;
 }
 
-/* Walk canonical path; if stop_at_last, stop before the last component and
- * copy it to name. */
-static int walk(const char *canon, bool stop_at_last, struct inode **out,
-                char *name, size_t namesize)
+/* Read the target of the symbolic link link into buf, which holds
+ * VFS_SYMLINK_MAX + 1 bytes, and terminate it. An empty target names
+ * nothing. No other inode lock may be held. */
+static int link_target(struct inode *link, char *buf)
 {
-    struct inode *cur = root_inode();
-    if (!cur)
+    if (!link->ops || !link->ops->readlink)
+        return -EINVAL;
+    if (link->size > VFS_SYMLINK_MAX)
+        return -ENAMETOOLONG;
+    mutex_lock(&link->lock);
+    int r = link->ops->readlink(link, buf, VFS_SYMLINK_MAX);
+    mutex_unlock(&link->lock);
+    if (r < 0)
+        return r;
+    if (r == 0)
+        return -ENOENT;
+    buf[r] = '\0';
+    return r;
+}
+
+/* The state of one path walk, kmalloc'd because it is too large for the
+ * kernel stack of a deep call chain. rest holds the components still to
+ * be resolved: a symbolic link replaces its own component by its target,
+ * so the remainder may grow beyond one path. path is the canonical name of
+ * cur without symbolic links: a component is appended only when the walk
+ * enters it, and it enters a link only as the last component of a lookup
+ * with VFS_NOFOLLOW. */
+#define WALK_REST_MAX (4 * VFS_PATH_MAX)
+#define WALK_PARENT   2             /* stop before the last component; next to VFS_NOFOLLOW */
+
+struct walk {
+    struct inode *cur;              /* referenced */
+    size_t plen;
+    char path[VFS_PATH_MAX];
+    char rest[WALK_REST_MAX];
+    char target[VFS_SYMLINK_MAX + 1];
+};
+
+static int walk_to_root(struct walk *w)
+{
+    if (w->cur)
+        inode_put(w->cur);
+    w->cur = root_inode();
+    w->path[0] = '/';
+    w->path[1] = '\0';
+    w->plen = 1;
+    return w->cur ? 0 : -ENOMEM;
+}
+
+/* Move to the parent of w->cur. The parent is found again from the root
+ * along w->path, which names directories only, so ".." after a symbolic
+ * link leaves the directory the link led to, and ".." at the root of a
+ * mounted filesystem reaches the parent of the directory it covers. */
+static int walk_up(struct walk *w)
+{
+    if (w->plen == 1)
+        return 0;
+    while (w->plen > 1 && w->path[w->plen - 1] != '/')
+        w->plen--;
+    if (w->plen > 1)
+        w->plen--;
+    w->path[w->plen] = '\0';
+    struct inode *dir = root_inode();
+    if (!dir)
         return -ENOMEM;
-    const char *p = canon + 1;
+    const char *p = w->path + 1;
     while (*p) {
         const char *start = p;
         while (*p && *p != '/')
             p++;
-        size_t n = (size_t)(p - start);
-        while (*p == '/')
-            p++;
-        if (stop_at_last && !*p) {
-            if (n >= namesize) {
-                inode_put(cur);
-                return -ENAMETOOLONG;
-            }
-            memcpy(name, start, n);
-            name[n] = '\0';
-            break;
-        }
         struct inode *next;
-        int r = lookup_child(cur, start, n, &next);
-        inode_put(cur);
+        int r = lookup_child(dir, start, (size_t)(p - start), &next);
+        inode_put(dir);
         if (r < 0)
             return r;
-        cur = next;
+        dir = next;
+        if (*p)
+            p++;
     }
-    *out = cur;
+    inode_put(w->cur);
+    w->cur = dir;
     return 0;
+}
+
+/* Resolve path from the root, or from the working directory when it is
+ * relative, into w->cur and w->path. Symbolic links are followed in every
+ * component, and in the last one unless flags has VFS_NOFOLLOW and the
+ * component has no trailing slash; *links counts the links followed and
+ * may not exceed SYMLOOP_MAX. With WALK_PARENT the walk stops at the
+ * directory holding the last component and copies the component to name;
+ * "." and ".." are refused there. On failure w->cur is NULL. */
+static int walk(struct walk *w, const char *path, unsigned flags, int *links, char *name, size_t namesize)
+{
+    w->cur = NULL;
+    size_t n = strlen(path);
+    if (n == 0)
+        return -ENOENT;
+    if (path[0] == '/') {
+        if (n >= sizeof w->rest)
+            return -ENAMETOOLONG;
+        memcpy(w->rest, path, n + 1);
+    } else {
+        struct proc *p = thread_current()->proc;
+        spin_lock(&p->lock);
+        strlcpy(w->path, p->cwd, sizeof w->path);
+        spin_unlock(&p->lock);
+        int m = ksnprintf(w->rest, sizeof w->rest, "%s/%s", w->path, path);
+        if (m < 0 || (size_t)m >= sizeof w->rest)
+            return -ENAMETOOLONG;
+    }
+    int r = walk_to_root(w);
+    if (r < 0)
+        return r;
+    size_t i = 0;
+    for (;;) {
+        while (w->rest[i] == '/')
+            i++;
+        if (!w->rest[i])
+            break;
+        size_t start = i;
+        while (w->rest[i] && w->rest[i] != '/')
+            i++;
+        size_t len = i - start, end = i, j = i;
+        while (w->rest[j] == '/')
+            j++;
+        bool last = w->rest[j] == '\0';
+        bool trailing = last && j > end;
+        const char *c = w->rest + start;
+        bool dot = len == 1 && c[0] == '.';
+        bool dotdot = len == 2 && c[0] == '.' && c[1] == '.';
+        if (len > NAME_MAX) {
+            r = -ENAMETOOLONG;
+            goto fail;
+        }
+        if (!S_ISDIR(w->cur->mode)) {
+            r = -ENOTDIR;
+            goto fail;
+        }
+        if ((flags & WALK_PARENT) && last) {
+            if (dot || dotdot) {
+                r = -EINVAL;
+                goto fail;
+            }
+            if (len >= namesize) {
+                r = -ENAMETOOLONG;
+                goto fail;
+            }
+            memcpy(name, c, len);
+            name[len] = '\0';
+            return 0;
+        }
+        if (dot)
+            continue;
+        if (dotdot) {
+            r = walk_up(w);
+            if (r < 0)
+                goto fail;
+            continue;
+        }
+        struct inode *next;
+        r = lookup_child(w->cur, c, len, &next);
+        if (r < 0)
+            goto fail;
+        if (S_ISLNK(next->mode) && (!last || trailing || !(flags & VFS_NOFOLLOW))) {
+            /* Replace the component by the target and continue from the
+             * directory holding the link, or from the root. */
+            int tlen = ++*links > SYMLOOP_MAX ? -ELOOP : link_target(next, w->target);
+            inode_put(next);
+            if (tlen < 0) {
+                r = tlen;
+                goto fail;
+            }
+            size_t tail = strlen(w->rest + end);
+            if ((size_t)tlen + tail >= sizeof w->rest) {
+                r = -ENAMETOOLONG;
+                goto fail;
+            }
+            memmove(w->rest + tlen, w->rest + end, tail + 1);
+            memcpy(w->rest, w->target, (size_t)tlen);
+            i = 0;
+            if (w->target[0] == '/') {
+                r = walk_to_root(w);
+                if (r < 0)
+                    goto fail;
+            }
+            continue;
+        }
+        if (w->plen + 1 + len >= VFS_PATH_MAX) {
+            inode_put(next);
+            r = -ENAMETOOLONG;
+            goto fail;
+        }
+        if (w->plen > 1)
+            w->path[w->plen++] = '/';
+        memcpy(w->path + w->plen, c, len);
+        w->plen += len;
+        w->path[w->plen] = '\0';
+        inode_put(w->cur);
+        w->cur = next;
+    }
+    if (!(flags & WALK_PARENT))
+        return 0;
+    r = -EINVAL;                    /* "/" has no parent and no name */
+fail:
+    if (w->cur)
+        inode_put(w->cur);
+    w->cur = NULL;
+    return r;
+}
+
+int vfs_lookup_path(const char *path, unsigned flags, struct inode **out, char *phys, size_t physsize)
+{
+    struct walk *w = kmalloc(sizeof *w);
+    if (!w)
+        return -ENOMEM;
+    int links = 0;
+    int r = walk(w, path, flags & VFS_NOFOLLOW, &links, NULL, 0);
+    if (r == 0 && phys) {
+        if (w->plen >= physsize) {
+            inode_put(w->cur);
+            r = -ENAMETOOLONG;
+        } else {
+            memcpy(phys, w->path, w->plen + 1);
+        }
+    }
+    if (r == 0)
+        *out = w->cur;
+    kfree(w);
+    return r;
 }
 
 int vfs_lookup(const char *path, struct inode **out)
 {
-    char canon[VFS_PATH_MAX];
-    int r = canonicalize_cwd(path, canon, sizeof canon);
-    if (r < 0)
-        return r;
-    return walk(canon, false, out, NULL, 0);
+    return vfs_lookup_path(path, 0, out, NULL, 0);
+}
+
+/* vfs_lookup_parent with the link count of an outer lookup and, when phys
+ * is not NULL, the canonical path of the directory in phys (VFS_PATH_MAX
+ * bytes). */
+static int lookup_parent(const char *path, int *links, struct inode **dir, char *name, size_t namesize,
+                         char *phys)
+{
+    struct walk *w = kmalloc(sizeof *w);
+    if (!w)
+        return -ENOMEM;
+    int r = walk(w, path, WALK_PARENT, links, name, namesize);
+    if (r == 0 && !S_ISDIR(w->cur->mode)) {
+        inode_put(w->cur);
+        r = -ENOTDIR;
+    }
+    if (r == 0) {
+        *dir = w->cur;
+        if (phys)
+            memcpy(phys, w->path, w->plen + 1);
+    }
+    kfree(w);
+    return r;
 }
 
 int vfs_lookup_parent(const char *path, struct inode **dir, char *name, size_t namesize)
 {
-    char canon[VFS_PATH_MAX];
-    int r = canonicalize_cwd(path, canon, sizeof canon);
-    if (r < 0)
-        return r;
-    if (canon[1] == '\0')
-        return -EINVAL;
+    int links = 0;
     name[0] = '\0';
-    r = walk(canon, true, dir, name, namesize);
-    if (r < 0)
-        return r;
-    if (!S_ISDIR((*dir)->mode)) {
-        inode_put(*dir);
-        return -ENOTDIR;
-    }
-    return 0;
+    return lookup_parent(path, &links, dir, name, namesize, NULL);
 }
 
 /* ---- mounts ---- */
@@ -356,7 +558,9 @@ int vfs_mount(const char *fstype, const char *source, const char *target)
     bool is_root = canon[1] == '\0';
     struct inode *point = NULL;
     if (!is_root) {
-        r = vfs_lookup(canon, &point);
+        /* The mount records the path without symbolic links, the name
+         * that /dev/mounts shows and umount compares. */
+        r = vfs_lookup_path(target, 0, &point, canon, sizeof canon);
         if (r < 0)
             return r;
         if (!S_ISDIR(point->mode)) {
@@ -408,8 +612,16 @@ out:
 
 int vfs_umount(const char *target)
 {
+    /* A target reached through symbolic links is compared by the path of
+     * the directory it resolves to; a target that no longer resolves is
+     * compared as written. */
     char canon[VFS_PATH_MAX];
-    int r = canonicalize_cwd(target, canon, sizeof canon);
+    struct inode *ino;
+    int r = vfs_lookup_path(target, 0, &ino, canon, sizeof canon);
+    if (r == 0)
+        inode_put(ino);
+    else
+        r = canonicalize_cwd(target, canon, sizeof canon);
     if (r < 0)
         return r;
     spin_lock(&mount_lock);
@@ -526,20 +738,31 @@ int vfs_sync(void)
 
 /* ---- namespace operations ---- */
 
-int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
+/* Open with O_CREAT: find or create the last component of path. A
+ * symbolic link in the last component is followed like any other (O_EXCL
+ * and O_NOFOLLOW refuse it), and a link whose target does not exist
+ * creates the target, as POSIX specifies for open. phys (VFS_PATH_MAX
+ * bytes) receives the canonical path of the result. */
+static int open_create(const char *path, int flags, uint32_t mode, struct inode **out, char *phys)
 {
-    struct inode *ino = NULL;
-    int r;
-    if (flags & O_CREAT) {
-        struct inode *dir;
+    struct open_create_bufs {
         char name[NAME_MAX + 1];
-        r = vfs_lookup_parent(path, &dir, name, sizeof name);
+        char target[VFS_SYMLINK_MAX + 1];
+        char next[2 * VFS_PATH_MAX];
+    } *b = kmalloc(sizeof *b);
+    if (!b)
+        return -ENOMEM;
+    int links = 0, r;
+    struct inode *ino = NULL;
+    for (;;) {
+        struct inode *dir;
+        r = lookup_parent(path, &links, &dir, b->name, sizeof b->name, phys);
         if (r < 0)
-            return r;
-        size_t len = strlen(name);
+            break;
+        size_t len = strlen(b->name);
         vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
-        r = dir->ops && dir->ops->lookup ? dir->ops->lookup(dir, name, len, &ino) : -ENOENT;
+        r = dir->ops && dir->ops->lookup ? dir->ops->lookup(dir, b->name, len, &ino) : -ENOENT;
         if (r == 0 && (flags & O_EXCL)) {
             inode_put(ino);
             r = -EEXIST;
@@ -547,20 +770,60 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
             if (!dir->ops || !dir->ops->create)
                 r = -EROFS;
             else
-                r = dir->ops->create(dir, name, len, S_IFREG | (mode & 0777), &ino);
+                r = dir->ops->create(dir, b->name, len, S_IFREG | (mode & 0777), &ino);
         }
         mutex_unlock(&dir->lock);
         vfs_op_end(dir->sb);
         inode_put(dir);
         if (r < 0)
-            return r;
-        ino = cross_mount(ino);
-        if (!ino)
-            return -ENOMEM;
-    } else {
-        r = vfs_lookup(path, &ino);
+            break;
+        if (!S_ISLNK(ino->mode)) {
+            size_t plen = strlen(phys);
+            if (plen + 1 + len >= VFS_PATH_MAX) {
+                inode_put(ino);
+                r = -ENAMETOOLONG;
+                break;
+            }
+            ksnprintf(phys + plen, VFS_PATH_MAX - plen, "%s%s", plen > 1 ? "/" : "", b->name);
+            ino = cross_mount(ino);
+            r = ino ? 0 : -ENOMEM;
+            break;
+        }
+        /* Continue with the target, relative to the link's directory. */
+        r = flags & O_NOFOLLOW ? -ELOOP : ++links > SYMLOOP_MAX ? -ELOOP : link_target(ino, b->target);
+        inode_put(ino);
+        ino = NULL;
+        if (r < 0)
+            break;
+        if (b->target[0] == '/')
+            strlcpy(b->next, b->target, sizeof b->next);
+        else
+            ksnprintf(b->next, sizeof b->next, "%s/%s", phys, b->target);
+        path = b->next;
+    }
+    kfree(b);
+    if (r == 0)
+        *out = ino;
+    return r;
+}
+
+int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
+{
+    struct inode *ino = NULL;
+    char phys[VFS_PATH_MAX];
+    int r;
+    if (flags & O_CREAT) {
+        r = open_create(path, flags, mode, &ino, phys);
         if (r < 0)
             return r;
+    } else {
+        r = vfs_lookup_path(path, flags & O_NOFOLLOW ? VFS_NOFOLLOW : 0, &ino, phys, sizeof phys);
+        if (r < 0)
+            return r;
+        if (S_ISLNK(ino->mode)) {
+            inode_put(ino);
+            return -ELOOP;
+        }
     }
 
     int acc = flags & O_ACCMODE;
@@ -593,13 +856,10 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
         goto fail;
     }
     if (S_ISDIR(ino->mode) || S_ISREG(ino->mode)) {
-        char canon[VFS_PATH_MAX];
-        if (canonicalize_cwd(path, canon, sizeof canon) == 0) {
-            size_t len = strlen(canon) + 1;
-            f->path = kmalloc(len);
-            if (f->path)
-                memcpy(f->path, canon, len);
-        }
+        size_t len = strlen(phys) + 1;
+        f->path = kmalloc(len);
+        if (f->path)
+            memcpy(f->path, phys, len);
     }
     if (f->ops && f->ops->open) {
         r = f->ops->open(ino, f);
@@ -651,10 +911,10 @@ int vfs_mkdir(const char *path)
     return dir_op(path, DIR_OP_MKDIR);
 }
 
-int vfs_utimens(const char *path, int64_t mtime)
+int vfs_utimens(const char *path, int64_t mtime, unsigned flags)
 {
     struct inode *ino;
-    int r = vfs_lookup(path, &ino);
+    int r = vfs_lookup_path(path, flags & VFS_NOFOLLOW, &ino, NULL, 0);
     if (r < 0)
         return r;
     if (!ino->ops || !ino->ops->setmtime) {
@@ -680,10 +940,12 @@ int vfs_rmdir(const char *path)
     return dir_op(path, DIR_OP_RMDIR);
 }
 
+/* A symbolic link named by oldpath is linked itself, not its target
+ * (POSIX leaves the choice to the implementation). */
 int vfs_link(const char *oldpath, const char *newpath)
 {
     struct inode *target;
-    int r = vfs_lookup(oldpath, &target);
+    int r = vfs_lookup_path(oldpath, VFS_NOFOLLOW, &target, NULL, 0);
     if (r < 0)
         return r;
     struct inode *dir;
@@ -708,6 +970,48 @@ int vfs_link(const char *oldpath, const char *newpath)
     }
     inode_put(dir);
     inode_put(target);
+    return r;
+}
+
+int vfs_symlink(const char *target, const char *path)
+{
+    size_t tlen = strlen(target);
+    if (tlen == 0)
+        return -ENOENT;
+    if (tlen > VFS_SYMLINK_MAX)
+        return -ENAMETOOLONG;
+    struct inode *dir;
+    char name[NAME_MAX + 1];
+    int r = vfs_lookup_parent(path, &dir, name, sizeof name);
+    if (r < 0)
+        return r;
+    if (!dir->ops || !dir->ops->symlink) {
+        r = -EROFS;
+    } else {
+        vfs_op_begin(dir->sb);
+        mutex_lock(&dir->lock);
+        r = dir->ops->symlink(dir, name, strlen(name), target, tlen);
+        mutex_unlock(&dir->lock);
+        vfs_op_end(dir->sb);
+    }
+    inode_put(dir);
+    return r;
+}
+
+int vfs_readlink(const char *path, char *buf, size_t size)
+{
+    struct inode *ino;
+    int r = vfs_lookup_path(path, VFS_NOFOLLOW, &ino, NULL, 0);
+    if (r < 0)
+        return r;
+    if (!S_ISLNK(ino->mode) || !ino->ops || !ino->ops->readlink) {
+        r = -EINVAL;
+    } else {
+        mutex_lock(&ino->lock);
+        r = ino->ops->readlink(ino, buf, size);
+        mutex_unlock(&ino->lock);
+    }
+    inode_put(ino);
     return r;
 }
 
@@ -772,6 +1076,7 @@ uint8_t vfs_mode_to_dtype(uint32_t mode)
     case S_IFCHR: return DT_CHR;
     case S_IFBLK: return DT_BLK;
     case S_IFIFO: return DT_FIFO;
+    case S_IFLNK: return DT_LNK;
     default: return DT_UNKNOWN;
     }
 }

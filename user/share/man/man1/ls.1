@@ -11,10 +11,18 @@ DESCRIPTION
     one name per line; -C forces columns. -l shows permissions, link count,
     size and modification date; -h uses KiB-based units. -a includes hidden
     names. -t sorts by modification time, -S by size, -r reverses order.
-    -d lists directories themselves, -F adds / for directories, * for
-    executables and | for pipes. Names are sorted alphabetically otherwise.
-    Colours distinguish directories, executable files and devices when
-    stdout is a terminal, TERM is set and NO_COLOR is absent.
+    -d lists directories themselves, -F adds / for directories, @ for
+    symbolic links, * for executables and | for pipes. Names are sorted
+    alphabetically otherwise. Colours distinguish directories, symbolic
+    links, executable files and devices when stdout is a terminal, TERM
+    is set and NO_COLOR is absent.
+
+    The entries of a directory are shown as they are, so a symbolic link
+    appears as a link: -l marks it with l and prints "name -> target",
+    with the length of the target as its size. A link named as an
+    operand is followed, and a link to a directory lists that directory,
+    unless -l, -d or -F is given, in which case the link itself is
+    shown.
 
 SEE ALSO
     sh(1), man(1), index(7)

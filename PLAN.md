@@ -1688,6 +1688,26 @@ of a destroyed source, which fixed a use after free found by the new
 test. Documented in `docs/design/lua.md` and `docs/design/shell.md`,
 tested by `make check-lua`, `gui_lua_bindings` and `lua_prompt`.
 
+### Symbolic links (completed 2026-09-30)
+
+The VFS resolves symbolic links in every component of a path, and in the
+last one unless the caller asks for the link itself, with relative
+targets taken from the directory holding the link, at most 40 links per
+lookup and `..` resolved against the directory a link led to; the working
+directory and the paths of open directories are kept without links.
+`open` refuses a link with `O_NOFOLLOW` and creates the target of a
+dangling link with `O_CREAT`. The system calls `symlink`, `symlinkat`,
+`readlink`, `readlinkat` and `lstat` were added and `fstatat` and
+`utimensat` honour `AT_SYMLINK_NOFOLLOW`. mfs stores the target in a
+journaled data block without a format change, `mkfs` copies host links
+and `fsck` checks them, the initrd reader accepts typeflag `2`, and FAT
+and devfs refuse links with `EPERM`. libc gained the calls and a link
+aware `realpath`; `ln -s`, the new `readlink`, `ls`, `stat`, `find`,
+`cp`, `rm`, `du`, `tree`, the Files program and the sbase `tar` handle
+links. The design is described in `docs/design/vfs.md`,
+`docs/design/mfs.md`, `docs/design/fat.md` and `docs/design/syscall.md`,
+and the boot test `symlink` checks it.
+
 ## 5. Testing Strategy
 
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.

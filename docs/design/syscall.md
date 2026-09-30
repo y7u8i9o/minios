@@ -51,7 +51,11 @@ panicking. Faulting kernel code still panics.
 ## System calls
 
 Numbers live in `kernel/include/syscall_nums.h`, shared with libc:
-`write` (1), `exit` (2), `getpid` (3), `yield` (4). Arguments arrive in
+`write` (1), `exit` (2), `getpid` (3), `yield` (4). Later milestones
+append to the table; symbolic links added `symlink` (91), `symlinkat`
+(92), `readlink` (93), `readlinkat` (94) and `lstat` (95) on 2026-09-30,
+and `fstatat` and `utimensat` honour `AT_SYMLINK_NOFOLLOW` since then
+(`vfs.md`). Arguments arrive in
 rdi, rsi, rdx, r10, r8, r9. `write` accepts descriptors 1 and 2 only until
 the VFS exists and checks that the buffer lies in user space with
 `user_range_ok`. An address that is in range but unmapped still faults in

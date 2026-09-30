@@ -27,6 +27,17 @@ one indirect pointer (1024 blocks) and one double indirect pointer
 (1024 x 1024 blocks). Unused pointers are zero; reading such a block yields
 zeros, which gives sparse files. Inode 1 is the root directory.
 
+A symbolic link (mode `S_IFLNK | 0777`) keeps its target in its first
+direct block, without a NUL, and its size is the target's length; it has
+no other block. This is a slow link: the target does not live in the
+inode, whose 48 spare bytes would hold short targets only and would give
+the block pointers two meanings for `free_from`, `bmap` and `fsck`. The
+kernel accepts targets of 1 to 255 bytes (`VFS_SYMLINK_MAX`), the format
+up to `MFS_SYMLINK_MAX` (4095). The on disk layout is unchanged, so the
+format version stays 4: a link is an inode of a new type in the existing
+fields. A kernel or `fsck` built before links reads such an inode as a
+file or reports its mode as invalid.
+
 Directories are arrays of 256 byte entries (format version 3; version 2
 used 64 byte entries and 59 character names): a 32 bit inode number
 followed by a NUL terminated name of up to 251 characters, any bytes but
@@ -40,10 +51,13 @@ free and is reused by the next create. Every directory starts with `.` and
 
 - `mkfs <image> <size_mb> <dir>` writes a fresh image whose root holds the
   tree under `dir`. Hidden files are skipped. The inode count is one per
-  four blocks with a minimum of 64.
-- `mkfs --dump <image>` prints the superblock summary, including `clean`
-  or `unclean`, the journal state (sequence number and pending blocks),
-  and the tree with inode numbers, sizes and link counts.
+  four blocks with a minimum of 64. The tree is read with `lstat`, so a
+  symbolic link of the host becomes a link with the target that
+  `readlink` returns; a target longer than 255 bytes is an error.
+- `mkfs --dump <image>` prints the superblock summary with `clean` or
+  `unclean`, the journal state (sequence number and pending blocks), and
+  the tree with inode numbers, sizes and link counts; a symbolic link is
+  followed by `-> target`.
 - `mkfs --cat <image> <path>` writes a file's contents to standard output.
 
 `build/host/fsck`, built from `tools/fsck/fsck.c` (M36), checks and
@@ -56,7 +70,12 @@ directory linked once), connectivity (unreferenced inodes are moved to
 recomputed), the bitmaps against the blocks in use, and the free counts.
 Without `-y` problems are only reported; `-n` never writes the image, so
 the replay happens in memory. An image with no problems left is marked
-clean. The exit status is 0 (no problems), 1 (repaired), 4 (problems
+clean. Pass 1 accepts directories, regular files and symbolic links; a
+link must have a size of 1 to 4095, its target in a first direct block
+it owns alone, no NUL in the target and no other block. A link that
+fails the check is released with `-y`, and pass 2 then removes the
+entries that name it. The summary counts files, directories and
+symbolic links. The exit status is 0 (no problems), 1 (repaired), 4 (problems
 left) or 8 (usage or I/O error).
 
 `make disk` (a dependency of `make image` and `make test`) builds
@@ -90,8 +109,13 @@ changes, which discards files written during earlier runs.
   the tail of the last block and releases indirect tables that became
   empty. The file operations take the inode mutex around these helpers.
 - `dir.c`: directory operations run with the directory mutex held by the
-  VFS. `lookup`, `create`, `mkdir`, `unlink`, `rmdir`, `link` and
-  `rename` scan and rewrite entries through the data helpers. `rename`
+  VFS. `lookup`, `create`, `mkdir`, `unlink`, `rmdir`, `link`, `symlink`
+  and `rename` scan and rewrite entries through the data helpers.
+  `symlink` allocates the inode, writes the target with
+  `mfs_write_locked` and adds the entry; `readlink` reads the target back
+  and `setmtime` sets the link's own time (`mfs_link_ops`, the operations
+  of a link inode, which has no file operations). Unlink, rename and the
+  release of an unlinked inode treat a link as a file. `rename`
   replaces an existing target of the same kind (a directory only when
   empty), and moving a directory between parents rewrites its `..` entry
   and adjusts both parents' link counts. `getdents` walks the entry slots
@@ -100,8 +124,12 @@ changes, which discards files written during earlier runs.
 ## Journal
 
 Since M36 metadata changes are journaled (`journal.c`): the inode table,
-both bitmaps, the superblock counters, indirect blocks and directory
-contents. File data is not journaled.
+both bitmaps, the superblock counters, indirect blocks, directory
+contents and, since 2026-09-30, the target block of a symbolic link
+(`mfs_write_locked` journals the data of directories and links). File
+data is not journaled. A link is created in one operation that commits
+its inode, its target and its directory entry together, so after a crash
+it exists with its target or not at all.
 
 Every modifying VFS operation runs between the superblock hooks
 `op_begin` and `op_end` (see `vfs.md`); `mfs_journal_begin` waits while a
@@ -196,6 +224,11 @@ persistent filesystem that is still busy is reported and left unclean.
   and the persisted contents in the resulting image.
 - `blk` boots with `root=initrd` so its raw sector writes do not touch a
   mounted filesystem.
+- `symlink` (`vfs.md`) creates links on the root image and on a second
+  mfs image, unmounts and mounts that image again, and its `post` script
+  checks both images with `fsck` and finds the targets with
+  `mkfs --dump`. The root image carries the two links of
+  `/etc/tests` that `mkfs` copied from `build/initrd_root`.
 
 Booting still uses the Limine ISO; the disk image is the primary root
 filesystem, not the boot medium. Installing Limine on the disk image is a

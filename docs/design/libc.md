@@ -85,7 +85,8 @@ result into `-1` with `errno` set. Numbers come from
   classes; pathname, leading-period, no-escape and case-fold flags.
 - `glob.h`: directory walking and sorted path matches, with append,
   offset, mark, no-check and no-sort modes. `globfree` owns the result
-  cleanup. The VFS has no symbolic links.
+  cleanup. Matching follows symbolic links to directories, since the
+  walk opens every directory by name.
 - `wchar.h`: `wcwidth`/`wcswidth` report zero-width combining and
   double-width ranges for cursor and column arithmetic.
 - `stdio.h`: `getline`/`getdelim` grow a caller-owned allocation, retain
@@ -194,8 +195,9 @@ two second resolution on FAT; `st_mtime` is now a macro for
 
 The ar utility and the sbase tar (`artar.md`) added `openat` and
 `fstatat`, `pwd.h` and `grp.h` describing the single user, the uid and
-gid functions, `lchown`, `symlink` and `readlink` (both refused: there
-are no symbolic links), `mknod` and `mkfifo` (refused), `execl`,
+gid functions, `lchown`, `symlink` and `readlink` (refused until the
+symbolic links of 2026-09-30, system calls since then, with `symlinkat`,
+`readlinkat` and `lstat`), `mknod` and `mkfifo` (refused), `execl`,
 `execlp` and `sys/sysmacros.h`.
 
 ## Additions for tcc

@@ -49,6 +49,7 @@ struct mfs_inode_info {
 };
 
 extern const struct inode_ops mfs_dir_ops;
+extern const struct inode_ops mfs_link_ops;
 extern const struct file_ops mfs_dir_fops;
 extern const struct file_ops mfs_file_fops;
 

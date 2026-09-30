@@ -298,6 +298,7 @@ static const char *const errors[] = {
     [ENAMETOOLONG] = "File name too long",
     [ENOSYS] = "Function not implemented",
     [ENOTEMPTY] = "Directory not empty",
+    [ELOOP] = "Too many levels of symbolic links",
     [EOVERFLOW] = "Value too large for defined data type",
     [EILSEQ] = "Invalid or incomplete multibyte or wide character",
     [ENOTSOCK] = "Socket operation on non-socket",

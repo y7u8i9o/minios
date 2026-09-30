@@ -15,6 +15,9 @@
 #define MFS_NAME_MAX       251
 #define MFS_DIRENT_SIZE    256
 #define MFS_ROOT_INO       1
+/* A symbolic link (mode S_IFLNK) keeps its target, without a NUL, in the
+ * first data block; its size is the target's length. */
+#define MFS_SYMLINK_MAX    (MFS_BLOCK_SIZE - 1)
 
 /* flags */
 #define MFS_FLAG_CLEAN     1u   /* set by unmount, cleared by mount */

@@ -170,8 +170,16 @@ static long devfs_getdents(struct file *f, struct dirent *buf, size_t count)
     return (long)(filled * sizeof(struct dirent));
 }
 
+/* Device nodes are registered by drivers; a symbolic link cannot be
+ * created among them. */
+static int devfs_symlink(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen)
+{
+    return -EPERM;
+}
+
 static const struct inode_ops devfs_dir_ops = {
     .lookup = devfs_lookup,
+    .symlink = devfs_symlink,
 };
 static const struct file_ops devfs_dir_fops = {
     .getdents = devfs_getdents,

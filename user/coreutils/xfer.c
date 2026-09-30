@@ -264,12 +264,18 @@ static int put_file(const char *path, const char *rel)
     return status;
 }
 
-static int put_tree(const char *path, const char *rel)
+static int put_tree(const char *path, const char *rel, int operand)
 {
     struct stat st;
-    if (stat(path, &st) < 0) {
+    /* An operand is followed; a symbolic link inside the tree is not
+     * transferred, so that a link to an ancestor cannot recurse. */
+    if ((operand ? stat(path, &st) : lstat(path, &st)) < 0) {
         fprintf(stderr, "xfer: %s: %s\n", path, strerror(errno));
         return 1;
+    }
+    if (S_ISLNK(st.st_mode)) {
+        fprintf(stderr, "xfer: %s: symbolic link skipped\n", path);
+        return 0;
     }
     if (!S_ISDIR(st.st_mode))
         return put_file(path, rel);
@@ -284,7 +290,7 @@ static int put_tree(const char *path, const char *rel)
         char sub[1024], subrel[1024];
         snprintf(sub, sizeof sub, "%s/%s", path, e->d_name);
         snprintf(subrel, sizeof subrel, "%s/%s", rel, e->d_name);
-        status |= put_tree(sub, subrel);
+        status |= put_tree(sub, subrel, 0);
     }
     closedir(d);
     return status;
@@ -512,7 +518,9 @@ static void serve_one(int c, const char *dir)
             char sub[2200];
             struct stat st;
             snprintf(sub, sizeof sub, "%s/%s", path, e->d_name);
-            if (stat(sub, &st) < 0)
+            /* Symbolic links are not listed, so that a client that
+             * descends into every directory cannot loop. */
+            if (lstat(sub, &st) < 0 || S_ISLNK(st.st_mode))
                 continue;
             if (S_ISDIR(st.st_mode)) {
                 snprintf(line, sizeof line, "D %s\n", e->d_name);
@@ -598,7 +606,7 @@ int main(int argc, char **argv)
         if (i >= argc)
             return usage();
         for (; i < argc; i++)
-            status |= put_tree(argv[i], base(argv[i]));
+            status |= put_tree(argv[i], base(argv[i]), 1);
     } else if (strcmp(cmd, "get") == 0) {
         if (i >= argc)
             return usage();

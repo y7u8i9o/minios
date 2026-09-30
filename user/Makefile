@@ -47,11 +47,20 @@ HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/hom
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support
+all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
 	@if [ -f $< ]; then cp $< $@; else mkdir -p $@; fi
+
+# Two symbolic links that the symlink test resolves on the root image and
+# under /initrd, which mkfs and the initrd reader store as links: a
+# relative one to the tar fixture beside it and an absolute one to
+# /etc/motd. They are recreated on every build.
+.PHONY: links
+links: $(ETC)
+	@ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar
+	@ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd
 
 # The share tree is copied whole: make cannot name files with spaces, and
 # media files may carry them.

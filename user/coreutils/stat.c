@@ -1,6 +1,8 @@
-/* stat: print the attributes of files. */
+/* stat: print the attributes of files. A symbolic link is reported
+ * itself, with its target; -L reports the file it leads to. */
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
 
@@ -8,27 +10,42 @@ static const char *kind(unsigned mode)
 {
     if (S_ISDIR(mode)) return "directory";
     if (S_ISREG(mode)) return "regular file";
+    if (S_ISLNK(mode)) return "symbolic link";
     if (S_ISCHR(mode)) return "character device";
     return "other";
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
-        fprintf(stderr, "usage: stat file...\n");
+    int follow = 0, first = 1;
+    if (first < argc && strcmp(argv[first], "-L") == 0) {
+        follow = 1;
+        first++;
+    }
+    if (first >= argc) {
+        fprintf(stderr, "usage: stat [-L] file...\n");
         return 2;
     }
     int status = 0;
-    for (int i = 1; i < argc; i++) {
+    for (int i = first; i < argc; i++) {
         struct stat st;
-        if (stat(argv[i], &st) < 0) {
+        if ((follow ? stat(argv[i], &st) : lstat(argv[i], &st)) < 0) {
             fprintf(stderr, "stat: %s: %s\n", argv[i], strerror(errno));
             status = 1;
             continue;
         }
-        printf("  File: %s\n  Size: %ld\tBlocks: %ld\tIO Block: %ld\t%s\n"
+        printf("  File: %s", argv[i]);
+        if (S_ISLNK(st.st_mode)) {
+            char target[1024];
+            ssize_t n = readlink(argv[i], target, sizeof target - 1);
+            if (n >= 0) {
+                target[n] = '\0';
+                printf(" -> %s", target);
+            }
+        }
+        printf("\n  Size: %ld\tBlocks: %ld\tIO Block: %ld\t%s\n"
                "Device: %lu\tInode: %lu\tLinks: %u\n  Mode: %04o\n",
-               argv[i], (long)st.st_size, (long)st.st_blocks, (long)st.st_blksize, kind(st.st_mode),
+               (long)st.st_size, (long)st.st_blocks, (long)st.st_blksize, kind(st.st_mode),
                (unsigned long)st.st_dev, (unsigned long)st.st_ino, st.st_nlink, st.st_mode & 07777);
     }
     return status;

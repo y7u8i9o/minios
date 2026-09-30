@@ -73,7 +73,8 @@ static long initrd_getdents(struct file *f, struct dirent *buf, size_t count)
         if (index++ < f->pos)
             continue;
         buf[filled].d_ino = i + 2;
-        buf[filled].d_type = initrd_entry(i)->type == INITRD_DIR ? DT_DIR : DT_REG;
+        enum initrd_type type = initrd_entry(i)->type;
+        buf[filled].d_type = type == INITRD_DIR ? DT_DIR : type == INITRD_LINK ? DT_LNK : DT_REG;
         strlcpy(buf[filled].d_name, c, sizeof buf[filled].d_name);
         filled++;
         f->pos++;
@@ -81,8 +82,19 @@ static long initrd_getdents(struct file *f, struct dirent *buf, size_t count)
     return (long)(filled * sizeof(struct dirent));
 }
 
+static int initrd_readlink(struct inode *ino, char *buf, size_t size)
+{
+    const struct initrd_entry *e = ino->priv;
+    size_t n = MIN(size, e->size);
+    memcpy(buf, e->data, n);
+    return (int)n;
+}
+
 static const struct inode_ops initrd_dir_ops = {
     .lookup = initrd_lookup_op,
+};
+static const struct inode_ops initrd_link_ops = {
+    .readlink = initrd_readlink,
 };
 static const struct file_ops initrd_file_fops = {
     .read = initrd_read,
@@ -112,6 +124,10 @@ static int initrd_read_inode(struct superblock *sb, uint64_t ino, struct inode *
         i->mode = S_IFDIR | 0755;
         i->ops = &initrd_dir_ops;
         i->fops = &initrd_dir_fops;
+    } else if (e->type == INITRD_LINK) {
+        i->mode = S_IFLNK | 0777;
+        i->size = e->size;
+        i->ops = &initrd_link_ops;
     } else {
         i->mode = S_IFREG | 0755;
         i->size = e->size;

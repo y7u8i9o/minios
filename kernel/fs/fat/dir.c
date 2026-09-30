@@ -666,12 +666,19 @@ static int fat_setmtime(struct inode *ino, int64_t mtime)
     return fat_inode_flush_time(ino, mtime);
 }
 
+/* FAT has no entry type for a symbolic link. */
+static int fat_symlink(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen)
+{
+    return -EPERM;
+}
+
 const struct inode_ops fat_dir_ops = {
     .lookup = fat_lookup,
     .create = fat_create,
     .mkdir = fat_mkdir,
     .unlink = fat_unlink,
     .rmdir = fat_rmdir,
+    .symlink = fat_symlink,
     .rename = fat_rename,
     .truncate = fat_truncate,
     .setmtime = fat_setmtime,

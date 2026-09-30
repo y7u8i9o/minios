@@ -34,6 +34,7 @@
 #define ERANGE      34
 #define ENOSYS      38
 #define ENOTEMPTY   39
+#define ELOOP       40
 #define ENAMETOOLONG 36
 #define EOVERFLOW   75
 #define EMSGSIZE    90

@@ -60,8 +60,9 @@ prefixes it with `file.path` when the path is relative and the
 descriptor is not `AT_FDCWD`; a descriptor without a path yields
 `ENOTDIR`. `sys_openat` and `sys_fstatat` are `open` and `stat` over
 that helper, and `sys_utimensat` now accepts a directory descriptor as
-well. `AT_SYMLINK_NOFOLLOW` is accepted and ignored, since there are no
-symbolic links.
+well. `AT_SYMLINK_NOFOLLOW` was accepted and ignored until symbolic
+links were added on 2026-09-30 (`vfs.md`); since then it selects the link
+itself, and tar archives and extracts links with typeflag `2`.
 
 A program under a boot test that leaves children behind, as tar does
 with its gzip child, left zombies adopted by the kernel process, which
@@ -78,8 +79,9 @@ after the program exits.
   shell `/bin/sh`; other ids and names fail with `ENOENT`.
 - `getuid`, `geteuid`, `getgid`, `getegid` return 0; `lchown` returns 0
   without effect like `chown`.
-- `symlink` fails with `EPERM` and `readlink` with `EINVAL`; `mknod`
-  and `mkfifo` fail with `EPERM`.
+- `symlink` failed with `EPERM` and `readlink` with `EINVAL` until
+  2026-09-30, when both became system calls; `mknod` and `mkfifo`
+  fail with `EPERM`.
 - `sys/sysmacros.h`: `major`, `minor` and `makedev` over the 32 bit
   halves of `st_rdev`.
 - `execl` and `execlp`.

@@ -61,6 +61,7 @@ void initrd_init(void)
     }
     const uint8_t *p = bootinfo.initrd;
     const uint8_t *end = p + bootinfo.initrd_size;
+    size_t dropped = 0;
     while (p + sizeof(struct tar_header) <= end) {
         const struct tar_header *h = (const struct tar_header *)p;
         if (h->name[0] == '\0')
@@ -82,22 +83,34 @@ void initrd_init(void)
                 full[nl] = '\0';
             }
             normalize(e->name, full, INITRD_NAME_MAX);
-            e->type = h->typeflag == '5' ? INITRD_DIR : INITRD_FILE;
+            e->type = h->typeflag == '5' ? INITRD_DIR : h->typeflag == '2' ? INITRD_LINK : INITRD_FILE;
             e->data = p + 512;
             e->size = e->type == INITRD_DIR ? 0 : size;
+            if (e->type == INITRD_LINK) {
+                /* The target is the header's link name field, NUL
+                 * terminated only when shorter than the field. */
+                e->data = (const uint8_t *)h->linkname;
+                e->size = strnlen(h->linkname, sizeof h->linkname);
+            }
             e->mtime = parse_octal(h->mtime, sizeof h->mtime);
             if (e->mtime > newest_mtime)
                 newest_mtime = e->mtime;
             if (e->name[0] != '\0')
                 nentries++;
+        } else {
+            dropped++;
         }
         p += 512 + ALIGN_UP(size, 512);
     }
-    size_t files = 0;
-    for (size_t i = 0; i < nentries; i++)
+    if (dropped)
+        klog_warn("%zu members beyond the first %d are not available", dropped, INITRD_MAX_ENTRIES);
+    size_t files = 0, links = 0;
+    for (size_t i = 0; i < nentries; i++) {
         files += entries[i].type == INITRD_FILE;
-    klog_info("tar of %lu KiB, %zu files and %zu directories", bootinfo.initrd_size >> 10,
-              files, nentries - files);
+        links += entries[i].type == INITRD_LINK;
+    }
+    klog_info("tar of %lu KiB, %zu files, %zu directories and %zu symbolic links",
+              bootinfo.initrd_size >> 10, files, nentries - files - links, links);
 }
 
 const struct initrd_entry *initrd_lookup(const char *path)

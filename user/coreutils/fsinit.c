@@ -114,8 +114,19 @@ static int copy_tree(const char *from, const char *to)
         snprintf(src, sizeof src, "%s/%s", from, e->d_name);
         snprintf(dst, sizeof dst, "%s/%s", to, e->d_name);
         struct stat st;
-        if (stat(src, &st) < 0) {
+        if (lstat(src, &st) < 0) {
             r = -1;
+        } else if (S_ISLNK(st.st_mode)) {
+            /* A link is copied as a link, never through its target. */
+            char target[256];
+            ssize_t n = readlink(src, target, sizeof target - 1);
+            if (n < 0) {
+                r = -1;
+            } else {
+                target[n] = '\0';
+                if (symlink(target, dst) < 0 && errno != EEXIST)
+                    r = -1;
+            }
         } else if (S_ISDIR(st.st_mode)) {
             if (mkdir(dst, st.st_mode & 07777) < 0 && errno != EEXIST)
                 r = -1;
