@@ -130,6 +130,14 @@ path may use the still-current pointer-enter serial while no button is
 held. The target must accept the offered MIME type for a drop; `finish`
 ends the drag with `dnd_finished` at the source.
 
+X12 keeps a list of the live offers. When a source is destroyed, the
+offers made for it read the compositor's stored copy if the source was
+the selection and a copy exists, and nothing otherwise. This matters
+when the owner's window closes before its client disconnects. The
+client that receives the focus gets an offer of the owner's source,
+and without the list that offer would point at freed memory once the
+owner is gone.
+
 ## Panel (`user/panel/`)
 
 A layer surface anchored to the bottom (28 pixels, exclusive zone)

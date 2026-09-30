@@ -57,7 +57,7 @@ $(ROOT)/etc/%: etc/%
 # media files may carry them.
 .PHONY: share-tree
 share-tree:
-	@mkdir -p $(ROOT)/usr/share
+	@mkdir -p $(ROOT)/usr/share/lua/5.5
 	@cp -Rp share/. $(ROOT)/usr/share/
 	@if [ -d ../third_party/fontawesome/svgs ]; then cp ../third_party/fontawesome/svgs/*.svg $(ROOT)/usr/share/icons/; fi
 
@@ -97,7 +97,12 @@ $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp:
 
 $(OUT)/lua/%.o: $(LUA_SRC)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) $(UCPP) $(LUA_CPP) -MMD -MP -c -o $@ $<
+	$(CC) $(UCFLAGS) $(UCPP) $(LUA_CPP) $(LUA_RL) -MMD -MP -c -o $@ $<
+
+# The interactive prompt edits lines with libedit. The header defines the
+# readline hooks of lua.c, and lua/lreadline.c implements them.
+$(OUT)/lua/lua.o: LUA_RL := -include lua/lreadline.h
+$(OUT)/lua/lua.o: lua/lreadline.h
 
 $(OUT)/lua/minios_%.o: lua/%.c
 	@mkdir -p $(dir $@)

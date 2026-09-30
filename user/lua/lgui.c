@@ -1,5 +1,6 @@
-/* The gui module: the libgui application object, windows, widgets,
- * signals, timers and descriptor watches. A widget is a full userdata
+/* The gui module binds the libgui application object, windows and
+ * layer windows, widgets, signals, timers, descriptor watches and the
+ * clipboard; limage.c binds the images. A widget is a full userdata
  * holding the C pointer; the registry table WIDGETS maps the pointer to
  * that userdata, so the same object is returned every time and the
  * "destroy" signal of libgui clears the pointer when the C widget dies.
@@ -638,6 +639,11 @@ static int w_icon(lua_State *L)
 {
     struct widget *w = gui_check_widget(L, 1);
     widget_set_icon(w, lua_isnoneornil(L, 2) ? NULL : icon_get(luaL_checkstring(L, 2)));
+    /* A named icon replaces an image set with widget:image, which the
+     * widget no longer needs to keep. */
+    push_handler_table(L, 1);
+    lua_pushnil(L);
+    lua_setfield(L, -2, "image");
     lua_settop(L, 1);
     return 1;
 }
@@ -1065,7 +1071,7 @@ static const luaL_Reg widget_methods[] = {
     { "count", w_count }, { "item", w_item }, { "select", w_select }, { "page", w_page },
     { "position", w_position }, { "set", w_set },
     { "menuitem", w_menuitem }, { "separator", w_separator }, { "popup", w_popup },
-    { "tool", w_tool }, { "field", w_field }, { "icon", w_icon },
+    { "tool", w_tool }, { "field", w_field }, { "icon", w_icon }, { "image", gui_widget_image },
     { "lines", w_lines }, { "line", w_line }, { "wrap", w_wrap }, { "numbers", w_numbers },
     { "readonly", w_readonly }, { "highlight", w_highlight }, { "font", w_font }, { "go", w_go },
     { "cursor", w_cursor }, { "undo", w_undo }, { "redo", w_redo }, { "search", w_editor_find },
@@ -1345,6 +1351,135 @@ static int a_prompt(lua_State *L)
     return 1;
 }
 
+static const char *const layer_names[] = { "background", "bottom", "top", "overlay", NULL };
+
+/* Returns the anchor mask of a string of edge names separated by spaces
+ * or commas, so that "top left right" anchors a bar to the top edge. */
+static int anchor_mask(lua_State *L, const char *s)
+{
+    static const struct { const char *name; int bit; } edges[] = {
+        { "top", GUI_ANCHOR_TOP }, { "bottom", GUI_ANCHOR_BOTTOM },
+        { "left", GUI_ANCHOR_LEFT }, { "right", GUI_ANCHOR_RIGHT },
+    };
+    int mask = 0;
+    while (*s) {
+        size_t n = strcspn(s, " ,");
+        if (n) {
+            int bit = 0;
+            for (size_t i = 0; i < sizeof edges / sizeof edges[0]; i++)
+                if (strlen(edges[i].name) == n && strncmp(edges[i].name, s, n) == 0)
+                    bit = edges[i].bit;
+            if (!bit)
+                return luaL_error(L, "layer: unknown anchor edge '%s'", lua_pushlstring(L, s, n));
+            mask |= bit;
+        }
+        s += n;
+        s += strspn(s, " ,");
+    }
+    return mask;
+}
+
+/* app:layer(w, h [, { layer = "top", anchor = "top left right",
+ * exclusive = 0, keyboard = false, namespace = "lua" }]) creates a
+ * window on a layer surface, without decorations. A size of 0 takes the
+ * free desktop area in that dimension; the compositor's configure sets
+ * the final size. It returns nil and a message when the surface cannot
+ * be created. */
+static int a_layer(lua_State *L)
+{
+    struct app *a = check_app(L, 1);
+    int w = (int)luaL_checkinteger(L, 2), h = (int)luaL_checkinteger(L, 3);
+    luaL_argcheck(L, w >= 0 && h >= 0, 2, "negative size");
+    int layer = 2, anchor = 0, exclusive = 0, keyboard = 0;
+    const char *ns = "lua";
+    if (!lua_isnoneornil(L, 4)) {
+        luaL_checktype(L, 4, LUA_TTABLE);
+        if (lua_getfield(L, 4, "layer") != LUA_TNIL) {
+            const char *name = lua_tostring(L, -1);
+            for (layer = 0; layer_names[layer] && (!name || strcmp(layer_names[layer], name) != 0); layer++)
+                ;
+            if (!layer_names[layer])
+                return luaL_error(L, "layer: unknown layer '%s'", name ? name : luaL_typename(L, -1));
+        }
+        if (lua_getfield(L, 4, "anchor") != LUA_TNIL) {
+            if (!lua_isstring(L, -1))
+                return luaL_error(L, "layer: anchor is not a string");
+            anchor = anchor_mask(L, lua_tostring(L, -1));
+        }
+        if (lua_getfield(L, 4, "exclusive") != LUA_TNIL) {
+            if (!lua_isinteger(L, -1))
+                return luaL_error(L, "layer: exclusive is not an integer");
+            exclusive = (int)lua_tointeger(L, -1);
+        }
+        lua_getfield(L, 4, "keyboard");
+        keyboard = lua_toboolean(L, -1);
+        if (lua_getfield(L, 4, "namespace") != LUA_TNIL) {
+            if (!lua_isstring(L, -1))
+                return luaL_error(L, "layer: namespace is not a string");
+            ns = lua_tostring(L, -1);
+        }
+    }
+    struct widget *win = app_layer_window(a, w, h, layer, anchor, exclusive, keyboard, ns);
+    if (!win) {
+        lua_pushnil(L);
+        lua_pushstring(L, "cannot create the layer surface");
+        return 2;
+    }
+    gui_push_widget(L, win);
+    return 1;
+}
+
+/* app:screen() returns the width and height of the desktop in logical
+ * pixels. */
+static int a_screen(lua_State *L)
+{
+    check_app(L, 1);
+    lua_pushinteger(L, gui_screen_width());
+    lua_pushinteger(L, gui_screen_height());
+    return 2;
+}
+
+/* app:clipboard() returns the text of the clipboard; app:clipboard(text)
+ * makes text the selection and returns the application. libgui
+ * completes the transfer through the data device before it returns, so
+ * a read waits until the owner has answered (at most about two
+ * seconds). Failures return nil, the message and the errno. */
+static int a_clipboard(lua_State *L)
+{
+    check_app(L, 1);
+    if (!lua_isnoneornil(L, 2)) {
+        size_t len;
+        const char *text = luaL_checklstring(L, 2, &len);
+        luaL_argcheck(L, len <= GUI_CLIP_MAX, 2, "text longer than the clipboard");
+        errno = 0;
+        if (gui_clipboard_set(text, (int)len) < 0) {
+            int e = errno ? errno : ENOTCONN;
+            lua_pushnil(L);
+            lua_pushstring(L, e == ENOTCONN ? "the display has no clipboard" : strerror(e));
+            lua_pushinteger(L, e);
+            return 3;
+        }
+        lua_settop(L, 1);
+        return 1;
+    }
+    char *buf = malloc(GUI_CLIP_MAX + 1);
+    if (!buf)
+        return luaL_error(L, "not enough memory");
+    errno = 0;
+    int n = gui_clipboard_get(buf, GUI_CLIP_MAX + 1);
+    if (n < 0) {
+        int e = errno ? errno : ENOENT;
+        free(buf);
+        lua_pushnil(L);
+        lua_pushstring(L, e == ENOENT ? "the clipboard holds no text" : strerror(e));
+        lua_pushinteger(L, e);
+        return 3;
+    }
+    lua_pushlstring(L, buf, (size_t)n);
+    free(buf);
+    return 1;
+}
+
 static int a_destroy(lua_State *L)
 {
     struct aref *r = luaL_checkudata(L, 1, GUI_APP_META);
@@ -1358,6 +1493,7 @@ static const luaL_Reg app_methods[] = {
     { "window", a_window }, { "modal", a_modal }, { "run", a_run }, { "quit", a_quit },
     { "step", a_step }, { "timer", a_timer }, { "watch", a_watch }, { "theme", a_theme },
     { "dialog", a_dialog }, { "prompt", a_prompt }, { "destroy", a_destroy },
+    { "layer", a_layer }, { "screen", a_screen }, { "clipboard", a_clipboard },
     { NULL, NULL }
 };
 
@@ -1460,6 +1596,7 @@ int luaopen_gui(lua_State *L)
     new_meta(L, GUI_WATCH_META, watch_methods);
     gui_open_painter(L);
     luaL_newlib(L, gui_funcs);
+    gui_open_image(L);
     luaL_newlib(L, test_funcs);
     lua_setfield(L, -2, "test");
     gui_push_constants(L);

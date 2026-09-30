@@ -114,10 +114,32 @@ static int p_clip(lua_State *L)
     return 4;
 }
 
+/* p:image(img, x, y [, w, h]) draws the image at its own size, or
+ * resampled to w by h logical pixels. */
+static int p_image(lua_State *L)
+{
+    struct painter *p = check_painter(L, 1);
+    const struct image *img = gui_check_image(L, 2);
+    int x = (int)luaL_checkinteger(L, 3), y = (int)luaL_checkinteger(L, 4);
+    if (lua_isnoneornil(L, 5)) {
+        painter_image(p, x, y, img);
+        return 0;
+    }
+    int w = (int)luaL_checkinteger(L, 5), h = (int)luaL_checkinteger(L, 6);
+    if (w <= 0 || h <= 0)
+        return 0;
+    const struct image *sized = gui_image_sized(L, 2, w, h, p->scale);
+    if (!sized)
+        return luaL_error(L, "not enough memory");
+    painter_image(p, x, y, sized);
+    return 0;
+}
+
 static const luaL_Reg painter_methods[] = {
     { "fill", p_fill }, { "frame", p_frame }, { "line", p_line }, { "rounded", p_rounded },
     { "text", p_text }, { "text_width", p_text_width }, { "text_height", p_text_height },
     { "push", p_push }, { "pop", p_pop }, { "focus_ring", p_focus_ring }, { "clip", p_clip },
+    { "image", p_image },
     { NULL, NULL }
 };
 

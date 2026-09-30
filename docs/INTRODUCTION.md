@@ -195,7 +195,7 @@ A change is checked with the cases of the modules it modifies. Running all cases
 
 ## Tests
 
-A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 174 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser, and host fuzzers cover the network wire parsers.
+A boot test is a directory under `tests/cases/` with the kernel command line, the regular expressions that the serial output must and must not match, and optional resources: a swap image, further disks, FAT images, an audio backend, a display or input device, and a script that runs after QEMU exits. The kernel prints `TEST PASS` or `TEST FAIL <reason>` on the serial line and exits through `isa-debug-exit`. There are 176 cases. The network cases run against a peer on the host. Host unit tests cover the font engine, the protocol library, the toolkit, the Lua modules and the shell parser, and host fuzzers cover the network wire parsers.
 
 ## Code size
 

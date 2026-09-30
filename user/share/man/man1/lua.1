@@ -1,0 +1,61 @@
+LUA(1)                      User Commands                     LUA(1)
+
+NAME
+    lua - Lua 5.5 interpreter
+
+SYNOPSIS
+    lua [options] [script [arguments...]]
+
+DESCRIPTION
+    lua loads and runs Lua programs in source form or as chunks precompiled
+    by luac. The arguments are strings in the global table arg, and they
+    are passed to the script's main chunk. Without arguments lua behaves as
+    lua -v -i when the standard input is a terminal and as lua - otherwise.
+
+    The interactive prompt evaluates each line. An expression prints its
+    values, and an incomplete statement continues on the secondary prompt
+    until it is complete or a syntax error is found.
+
+OPTIONS
+    -e stat       run the statement stat
+    -i            enter interactive mode after the script
+    -l mod        require mod into the global mod
+    -l g=mod      require mod into the global g
+    -v            print the version
+    -E            ignore the environment variables below
+    -W            turn warnings on
+    --            stop handling options
+    -             stop handling options and run the standard input
+
+INTERACTIVE EDITING
+    Lines are edited with the keys of sh(1). The arrows move and recall
+    history, Home/End and Ctrl-A/E move to the line ends, Ctrl-K, Ctrl-U
+    and Ctrl-W erase, and Ctrl-R searches the history. Tab completes a
+    global name, or a field after a dotted chain of names, so string.fo
+    completes to string.format. Ctrl-C discards the line being edited, and
+    Ctrl-D on an empty line ends the session. Each line of a statement
+    enters the history on its own.
+
+MODULES
+    require finds Lua modules in /usr/share/lua/5.5 and in the current
+    directory; there is no loading of C modules. The interpreter provides
+    fs, sys, gui, audio and thread without a search.
+
+ENVIRONMENT
+    LUA_INIT, LUA_INIT_5_5  code run before the options and the script,
+                            or @file to run a file
+    LUA_PATH, LUA_PATH_5_5  the initial package.path
+    HOME                    the directory of the history file
+
+FILES
+    $HOME/.lua_history      history of the interactive prompt, read at
+                            the first prompt and written at exit
+    /usr/share/lua/5.5      the module directory
+
+EXIT STATUS
+    lua exits with the status given to os.exit, else with 0 when no error
+    occurred and 1 after an error. Errors at the interactive prompt do not
+    end the session.
+
+SEE ALSO
+    luac(1), sh(1), the reference manual at lua.org

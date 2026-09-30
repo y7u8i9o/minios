@@ -1,0 +1,18 @@
+luabind: the PNG icon loaded
+luabind: the PNG icon is 16x16
+luabind: the SVG icon is 24x24
+luabind: a missing image is reported
+luabind: a malformed image is reported
+luabind: the image is enlarged on the canvas
+luabind: the icon is drawn at twice its size
+luabind: the clipboard is set
+luabind: the clipboard child started
+luaclip: the clipboard held 'from parent'
+luaclip: the child set the clipboard
+luabind: the clipboard child exited
+luabind: the clipboard came back from the child
+luabind: the layer window spans the screen width
+luabind: the layer window is shown
+luabind: the layer window closed
+gui_lua_bindings: images, the clipboard and layer windows work
+TEST PASS

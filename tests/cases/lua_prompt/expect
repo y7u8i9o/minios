@@ -1,0 +1,8 @@
+answer 42
+up OK
+run 2
+after 2
+luaprompt: the history was saved
+luaprompt: the module directory exists
+lua_prompt: completion, history and Ctrl\+C passed
+TEST PASS
