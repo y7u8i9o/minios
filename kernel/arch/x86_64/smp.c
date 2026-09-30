@@ -102,7 +102,7 @@ void smp_park_aps(void)
 {
     struct limine_mp_response *mp = mp_request.response;
     if (!mp || mp->cpu_count <= 1) {
-        klog_info("single processor");
+        klog_info("1 processor, lapic id %u, no application processors", lapic_id());
         return;
     }
     struct cpu *bsp = cpu_by_id(0);
@@ -131,7 +131,8 @@ void smp_park_aps(void)
     if (mp->cpu_count > MAX_CPUS)
         klog_warn("only %u of %lu processors are used", MAX_CPUS, mp->cpu_count);
     cpu_count = id;
-    klog_info("%u processors parked", cpu_count);
+    klog_info("%u processors parked on kernel stacks, bsp lapic id %u, x2apic %s", cpu_count,
+              bsp->lapic_id, cpu_features.x2apic ? "available" : "absent");
 }
 
 static void halt_irq(struct trapframe *tf, void *arg)

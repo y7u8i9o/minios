@@ -10,6 +10,7 @@
 #include <mm/slab.h>
 #include <lib/string.h>
 #include <klog.h>
+#include <lib/printf.h>
 #include <errno.h>
 
 /* Device nodes. The list is protected by devfs_lock. Nodes are never
@@ -97,10 +98,42 @@ int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops,
     list_add_tail(&n->link, &devnodes);
     spin_unlock(&devfs_lock);
     if (S_ISDIR(mode))
-        klog_info("/dev/%s/ registered", name);
+        klog_debug("/dev/%s/ registered", name);
     else if (parent == ROOT_INO)
-        klog_info("/dev/%s registered", name);
+        klog_debug("/dev/%s registered", name);
     return 0;
+}
+
+/* One line naming every node in the root of /dev; subdirectories show
+ * their entry count. Called once the boot time drivers have registered. */
+void devfs_log_nodes(void)
+{
+    char line[320];
+    size_t n = 0, count = 0;
+    struct list_head *pos;
+    spin_lock(&devfs_lock);
+    list_for_each(pos, &devnodes) {
+        struct devnode *d = list_entry(pos, struct devnode, link);
+        count++;
+        if (d->parent != ROOT_INO)
+            continue;
+        size_t children = 0;
+        if (S_ISDIR(d->mode)) {
+            struct list_head *q;
+            list_for_each(q, &devnodes)
+                children += list_entry(q, struct devnode, link)->parent == d->ino;
+        }
+        int m;
+        if (S_ISDIR(d->mode))
+            m = ksnprintf(line + n, sizeof line - n, "%s%s/(%zu)", n ? " " : "", d->name, children);
+        else
+            m = ksnprintf(line + n, sizeof line - n, "%s%s", n ? " " : "", d->name);
+        if (m < 0 || n + (size_t)m >= sizeof line)
+            break;
+        n += (size_t)m;
+    }
+    spin_unlock(&devfs_lock);
+    klog_info("%zu nodes: %s", count, line);
 }
 
 static int devfs_lookup(struct inode *dir, const char *name, size_t len, struct inode **out)

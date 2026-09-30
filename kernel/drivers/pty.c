@@ -265,5 +265,6 @@ void pty_init(void)
         tty_init(&p->tty, p->name, pty_output, false);
         devfs_register(p->name, S_IFCHR | 0666, &pts_fops, p, 0);
     }
-    klog_info("%d pseudo terminals", PTY_MAX);
+    klog_info("/dev/ptmx with %d slaves /dev/pts0../dev/pts%d, %zu byte output ring each",
+              PTY_MAX, PTY_MAX - 1, sizeof ptys[0].out);
 }

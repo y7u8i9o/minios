@@ -93,7 +93,11 @@ void initrd_init(void)
         }
         p += 512 + ALIGN_UP(size, 512);
     }
-    klog_info("%zu entries in %lu bytes", nentries, bootinfo.initrd_size);
+    size_t files = 0;
+    for (size_t i = 0; i < nentries; i++)
+        files += entries[i].type == INITRD_FILE;
+    klog_info("tar of %lu KiB, %zu files and %zu directories", bootinfo.initrd_size >> 10,
+              files, nentries - files);
 }
 
 const struct initrd_entry *initrd_lookup(const char *path)

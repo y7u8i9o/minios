@@ -99,8 +99,18 @@ void cpu_identify(void)
         cpuid(0x80000008, &a, &b, &c, &d);
         f->phys_bits = a & 0xff;
     }
-    klog_info("%s family %u model %u stepping %u, %s%s", f->vendor, f->family, f->model,
-              f->stepping, hypervisor ? "hypervisor " : "no hypervisor", f->hypervisor);
+    char brand[49] = "";
+    if (max_ext >= 0x80000004) {
+        uint32_t *w = (uint32_t *)brand;
+        for (uint32_t leaf = 0; leaf < 3; leaf++)
+            cpuid(0x80000002 + leaf, &w[leaf * 4], &w[leaf * 4 + 1], &w[leaf * 4 + 2], &w[leaf * 4 + 3]);
+        brand[48] = '\0';
+    }
+    const char *name = brand;
+    while (*name == ' ')
+        name++;
+    klog_info("%s family %u model %u stepping %u \"%s\", %s%s", f->vendor, f->family, f->model,
+              f->stepping, name, hypervisor ? "hypervisor " : "no hypervisor", f->hypervisor);
     klog_info("features:%s%s%s%s%s%s%s%s%s%s, %u physical address bits",
               f->nx ? " nx" : "", f->pge ? " pge" : "", f->pat ? " pat" : "",
               f->fxsr ? " fxsr" : "", f->sse2 ? " sse2" : "", f->x2apic ? " x2apic" : "",

@@ -1,4 +1,4 @@
 local apic at fee00000
-timer: [0-9]+ ticks/s
+lapic timer [0-9]+ Hz at divider 16
 ps/2 keyboard on irq 33
 TEST PASS

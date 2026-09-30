@@ -24,7 +24,6 @@ static struct mount *root_mount;
 
 void vfs_init(void)
 {
-    klog_info("vfs ready");
 }
 
 int vfs_register_fs(struct fs_type *type)

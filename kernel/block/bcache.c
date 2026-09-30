@@ -21,7 +21,8 @@ void bcache_init(void)
         mutex_init(&bufs[i].lock, "buf");
         list_add_tail(&bufs[i].lru, &lru);
     }
-    klog_info("%u buffers of %u bytes", BCACHE_NBUF, BCACHE_BLOCK_SIZE);
+    klog_info("%u buffers of %u bytes, %u KiB cache", BCACHE_NBUF, BCACHE_BLOCK_SIZE,
+              BCACHE_NBUF * BCACHE_BLOCK_SIZE / 1024);
 }
 
 static int write_back(struct buf *b)

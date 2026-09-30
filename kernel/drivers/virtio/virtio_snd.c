@@ -332,5 +332,5 @@ void virtio_snd_init(void)
             probe(p);
     }
     if (!ndevices)
-        klog_warn("no playback device");
+        klog_info("no device, audio unavailable");
 }

@@ -41,6 +41,33 @@ This lossless ordered path prevents process migration between CPUs from
 reordering terminal cursor sequences and leaving duplicated command text.
 Once `panic_in_progress` is set, panic printing bypasses the normal lock.
 
+## Boot log
+
+`klog_print` formats each line completely before writing it, so lines from
+different CPUs never interleave. The prefix is the time since the kernel
+entry in seconds with six decimals, then the level letter and the
+subsystem set by `KLOG_SUBSYS` in the source file:
+
+```
+[    0.041166] [I pmm] 489 MiB usable in 4 regions below 1ff3f000, 4220 KiB reclaimable after boot
+```
+
+The banner printed by `kprintf` before any subsystem runs carries no
+prefix. Every line states facts a reader may need to check the machine
+against the kernel's view of it: the bootloader and its version, the
+kernel image and initrd placement, the CPU brand string and feature bits,
+the memory map summary and the buddy allocator's page counts, the mapped
+direct map and image segment sizes, the interrupt controller registers
+and vector ranges, the TSC and local APIC timer rates, each PCI function
+with its decoded name, BAR count and interrupt routing, and the loader
+used by each user process. Device node registration is logged at debug
+level; `devfs_log_nodes` prints the whole of `/dev` in one line once the
+boot time drivers have registered. The last line, printed once init runs,
+gives the boot time in milliseconds and the free memory. Absent optional
+devices (sound, GPU, swap) are reported at info level because their
+absence is a configuration, not a fault. `loglevel=N` on the command line
+lowers the threshold to 0 for debug output.
+
 `kprintf` and `kvprintf` are built on `lib/printf.c`, a callback based
 formatter supporting `%d %i %u %x %X %p %s %c %%`, the `l`, `ll` and `z`
 length modifiers, the `-` and `0` flags and a field width. `ksnprintf` uses

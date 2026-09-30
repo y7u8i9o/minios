@@ -54,6 +54,26 @@ to three seconds and then send `SIGKILL`; the request is answered when
 the process has been reaped, so `initctl status` right after a stop
 shows the final state.
 
+## Log
+
+Init writes its log to the console in the kernel's format, `[ seconds.micro]
+init: ...`, from `CLOCK_MONOTONIC`, which is the kernel's boot clock, so
+the lines continue the kernel log without a break. Every configuration
+read is summarized (source, environment variables, tasks, services and
+console entries), every start names the kind, the entry, the pid, the
+process group for the console, the log file when one is set and the
+command; a restart names the start count instead. A task reports the time
+it took, a service or console exit reports the status, how long it ran
+and whether and when it restarts. After the first pass through the
+configuration a summary gives the elapsed time and the number of running,
+skipped and failed services, and the shutdown line counts what is still
+running and states the grace period.
+
+A child that exits between `reap` and `poll` used to cost a full poll
+timeout, because its `SIGCHLD` had already been delivered; the main loop
+now polls with a zero timeout when the handler's flag is set, so a quick
+exit is handled at once.
+
 ## Control socket
 
 Init listens on the abstract Unix socket `init` (`sockets.md`). A

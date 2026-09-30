@@ -51,5 +51,4 @@ void net_init(void)
     ipv4_init();
     virtio_net_init();
     netdev_init();
-    klog_info("core ready");
 }

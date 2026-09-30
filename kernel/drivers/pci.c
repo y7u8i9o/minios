@@ -4,6 +4,7 @@
 #include <arch/apic.h>
 #include <mm/vmm.h>
 #include <klog.h>
+#include <lib/printf.h>
 #include <errno.h>
 
 #define PCI_CONFIG_ADDR 0xcf8
@@ -85,6 +86,76 @@ static void read_bars(struct pci_dev *d)
     }
 }
 
+/* Names for the boot log only; drivers match on the numeric ids. A
+ * function is described by its device name when known, else by its class. */
+static const char *class_name(uint8_t class, uint8_t subclass)
+{
+    switch ((unsigned)class << 8 | subclass) {
+    case 0x0100: return "scsi controller";
+    case 0x0101: return "ide controller";
+    case 0x0106: return "sata controller";
+    case 0x0180: return "storage controller";
+    case 0x0200: return "ethernet controller";
+    case 0x0300: return "vga display";
+    case 0x0380: return "display controller";
+    case 0x0400: return "video device";
+    case 0x0401: return "audio device";
+    case 0x0403: return "hd audio";
+    case 0x0500: return "memory controller";
+    case 0x0600: return "host bridge";
+    case 0x0601: return "isa bridge";
+    case 0x0604: return "pci bridge";
+    case 0x0680: return "bridge";
+    case 0x0700: return "serial controller";
+    case 0x0780: return "communication device";
+    case 0x0880: return "system peripheral";
+    case 0x0900: return "keyboard controller";
+    case 0x0902: return "mouse controller";
+    case 0x0c03: return "usb controller";
+    case 0x0c05: return "smbus controller";
+    case 0x00ff: return "unclassified device";
+    default:     return NULL;
+    }
+}
+
+static const char *device_name(uint16_t vendor, uint16_t device)
+{
+    if (vendor == 0x1af4) {
+        switch (device) {
+        case 0x1000: return "virtio-net (legacy)";
+        case 0x1001: return "virtio-blk (legacy)";
+        case 0x1003: return "virtio-console (legacy)";
+        case 0x1005: return "virtio-rng (legacy)";
+        case 0x1041: return "virtio-net";
+        case 0x1042: return "virtio-blk";
+        case 0x1043: return "virtio-console";
+        case 0x1044: return "virtio-rng";
+        case 0x1050: return "virtio-gpu";
+        case 0x1052: return "virtio-input";
+        case 0x1059: return "virtio-snd";
+        default:     return NULL;
+        }
+    }
+    if (vendor == 0x8086) {
+        switch (device) {
+        case 0x100e: return "82540EM e1000";
+        case 0x10d3: return "82574L e1000e";
+        case 0x1237: return "440FX host bridge";
+        case 0x29c0: return "82G33 host bridge";
+        case 0x2918: return "ICH9 lpc";
+        case 0x2922: return "ICH9 ahci";
+        case 0x2930: return "ICH9 smbus";
+        case 0x7000: return "PIIX3 isa";
+        case 0x7010: return "PIIX3 ide";
+        case 0x7113: return "PIIX4 acpi";
+        default:     return NULL;
+        }
+    }
+    if (vendor == 0x1234 && device == 0x1111)
+        return "qemu vga";
+    return NULL;
+}
+
 static void probe(uint8_t bus, uint8_t slot, uint8_t func)
 {
     uint32_t id = raw_read32(bus, slot, func, 0);
@@ -106,24 +177,45 @@ static void probe(uint8_t bus, uint8_t slot, uint8_t func)
     d->irq_pin = (uint8_t)(irq >> 8);
     if (d->header_type == 0)
         read_bars(d);
-    klog_info("%02x:%02x.%u %04x:%04x class %02x%02x", bus, slot, func,
-              d->vendor, d->device, d->class, d->subclass);
+    unsigned nbars = 0;
+    for (int i = 0; i < 6; i++)
+        nbars += d->bar[i] != 0;
+    const char *what = device_name(d->vendor, d->device);
+    char clsbuf[16];
+    if (!what)
+        what = class_name(d->class, d->subclass);
+    if (!what) {
+        ksnprintf(clsbuf, sizeof clsbuf, "class %02x%02x", d->class, d->subclass);
+        what = clsbuf;
+    }
+    if (d->irq_pin)
+        klog_info("%02x:%02x.%u %04x:%04x %s, %u bar%s, int%c line %u", bus, slot, func,
+                  d->vendor, d->device, what, nbars, nbars == 1 ? "" : "s",
+                  'A' + d->irq_pin - 1, d->irq_line);
+    else
+        klog_info("%02x:%02x.%u %04x:%04x %s, %u bar%s, no interrupt pin", bus, slot, func,
+                  d->vendor, d->device, what, nbars, nbars == 1 ? "" : "s");
 }
 
 void pci_init(void)
 {
+    unsigned nbuses = 0;
     for (unsigned bus = 0; bus < 256; bus++) {
+        bool populated = false;
         for (uint8_t slot = 0; slot < 32; slot++) {
             uint32_t id = raw_read32((uint8_t)bus, slot, 0, 0);
             if ((id & 0xffff) == 0xffff)
                 continue;
+            populated = true;
             uint8_t ht = (uint8_t)(raw_read32((uint8_t)bus, slot, 0, 0x0c) >> 16);
             uint8_t nfunc = (ht & 0x80) ? 8 : 1;
             for (uint8_t f = 0; f < nfunc; f++)
                 probe((uint8_t)bus, slot, f);
         }
+        nbuses += populated;
     }
-    klog_info("%zu functions", ndevices);
+    klog_info("%zu functions on %u bus%s, config space through ports cf8/cfc", ndevices, nbuses,
+              nbuses == 1 ? "" : "es");
 }
 
 size_t pci_count(void)

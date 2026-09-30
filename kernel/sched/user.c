@@ -91,7 +91,8 @@ static int read_file_image(const char *path, void **image_out, size_t *size_out)
  * PT_INTERP at USER_INTERP_BASE when the program is dynamically linked, and
  * the initial stack. The thread starts in the loader in that case. */
 static int load_image(const char *path, char *const argv[], char *const envp[],
-                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size)
+                      struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
+                      char *interp, size_t interp_len)
 {
     void *image;
     size_t size;
@@ -123,6 +124,8 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
         return r;
     }
     *entry = info.interp[0] ? info.interp_entry : info.entry;
+    if (interp)
+        strlcpy(interp, info.interp, interp_len);
     *vm_out = vm;
     return 0;
 }
@@ -173,7 +176,8 @@ struct proc *proc_create_user(const char *path, char *const argv[], char *const 
 {
     struct vmspace *vm;
     uintptr_t entry, rsp;
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(parent));
+    char interp[64];
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(parent), interp, sizeof interp);
     if (r < 0) {
         klog_error("cannot load %s: %d", path, r);
         return NULL;
@@ -194,7 +198,11 @@ struct proc *proc_create_user(const char *path, char *const argv[], char *const 
         kfree(tf);
         goto fail_proc;
     }
-    klog_info("process %s (pid %d) from %s, entry %lx", p->name, p->pid, path, entry);
+    if (interp[0])
+        klog_info("process %s (pid %d) from %s, dynamic, %s entry %lx", p->name, p->pid, path,
+                  interp, entry);
+    else
+        klog_info("process %s (pid %d) from %s, static, entry %lx", p->name, p->pid, path, entry);
     return p;
 
 fail_proc:
@@ -256,7 +264,7 @@ int proc_exec(struct trapframe *tf, const char *path, char *const argv[], char *
 
     struct vmspace *vm;
     uintptr_t entry, rsp;
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(p));
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(p), NULL, 0);
     if (r < 0)
         return r;
 

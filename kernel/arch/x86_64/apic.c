@@ -11,6 +11,7 @@
 #define APIC_BASE_ENABLE    (1UL << 11)
 
 #define LAPIC_ID            0x020
+#define LAPIC_VERSION       0x030
 #define LAPIC_TPR           0x080
 #define LAPIC_EOI           0x0b0
 #define LAPIC_SVR           0x0f0
@@ -79,8 +80,11 @@ void lapic_init(void)
     lapic_write(LAPIC_ESR, 0);
     lapic_write(LAPIC_SVR, SVR_ENABLE | IRQ_SPURIOUS);
     lapic_write(LAPIC_EOI, 0);
-    if (cpu_current()->id == 0)
-        klog_info("local apic at %lx, id %u", pa, lapic_id());
+    if (cpu_current()->id == 0) {
+        uint32_t ver = lapic_read(LAPIC_VERSION);
+        klog_info("local apic at %lx, id %u, version %02x, %u lvt entries, spurious vector %u",
+                  pa, lapic_id(), ver & 0xff, ((ver >> 16) & 0xff) + 1, IRQ_SPURIOUS);
+    }
 }
 
 uint32_t lapic_id(void)
@@ -103,7 +107,6 @@ uint64_t lapic_timer_calibrate(void)
     uint32_t elapsed = 0xffffffffu - lapic_read(LAPIC_TIMER_CUR);
     lapic_write(LAPIC_TIMER_INIT, 0);
     timer_ticks_per_second = (uint64_t)elapsed * 100;
-    klog_info("timer: %lu ticks/s at divider 16", timer_ticks_per_second);
     return timer_ticks_per_second;
 }
 
@@ -150,7 +153,9 @@ void ioapic_init(void)
         ioapic_write(IOAPIC_REG_REDIR(i), IOAPIC_MASKED | (IRQ_VECTOR_BASE + i));
         ioapic_write(IOAPIC_REG_REDIR(i) + 1, 0);
     }
-    klog_info("i/o apic at %x, %u redirection entries", IOAPIC_DEFAULT_BASE, ioapic_entries);
+    klog_info("i/o apic at %x, id %u, version %02x, %u redirection entries masked at vectors %u..%u",
+              IOAPIC_DEFAULT_BASE, (ioapic_read(0) >> 24) & 0xf, ioapic_read(IOAPIC_REG_VER) & 0xff,
+              ioapic_entries, IRQ_VECTOR_BASE, IRQ_VECTOR_BASE + ioapic_entries - 1);
 }
 
 void ioapic_route(unsigned gsi, uint8_t vector, bool masked)

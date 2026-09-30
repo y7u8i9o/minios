@@ -5,6 +5,7 @@
 /* devfs is an in memory directory of device nodes registered by drivers.
  * It is mounted on /dev. */
 void devfs_init(void);
+void devfs_log_nodes(void);      /* log the registered nodes once at boot */
 /* Register a device node. mode carries S_IFCHR or S_IFBLK. priv is stored
  * in the inode for the driver. */
 int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops, void *priv,

@@ -78,6 +78,7 @@ struct entry {
 
 static struct entry entries[MAX_ENTRIES];
 static int entry_count;
+static int env_count;           /* env variables set by the last configuration read */
 static char config_path[128] = CONFIG_PATH;
 static volatile int shutdown_request;   /* the signal received, 0 if none */
 static volatile int child_exited;
@@ -104,16 +105,45 @@ static uint64_t now_ms(void)
     return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
 }
 
+/* Init's log goes to the console in the kernel's format: the time since
+ * boot with six decimals, then "init:". The clock is the kernel's, so the
+ * lines read as a continuation of the kernel log. */
 static void report(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void report(const char *fmt, ...)
 {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     va_list ap;
     va_start(ap, fmt);
-    fputs("init: ", stdout);
+    printf("[%5lu.%06lu] init: ", (unsigned long)ts.tv_sec, (unsigned long)ts.tv_nsec / 1000);
     vprintf(fmt, ap);
     putchar('\n');
     fflush(stdout);
     va_end(ap);
+}
+
+/* The command words of an entry joined by spaces, for the log. */
+static const char *command_text(const struct entry *e, char *buf, size_t size)
+{
+    const char *p = e->words;
+    size_t n = 0;
+    for (int i = 0; i < e->argc && n < size; i++) {
+        n += (size_t)snprintf(buf + n, size - n, "%s%s", i ? " " : "", p);
+        p += strlen(p) + 1;
+    }
+    return buf;
+}
+
+/* One line describing what a configuration read produced. */
+static void report_config(const char *source, int env_count)
+{
+    int counts[3] = { 0, 0, 0 };
+    for (int i = 0; i < entry_count; i++)
+        if (entries[i].present)
+            counts[entries[i].kind]++;
+    report("%s: %d environment variables, %d tasks, %d services, %d console entr%s", source,
+           env_count, counts[KIND_TASK], counts[KIND_SERVICE], counts[KIND_CONSOLE],
+           counts[KIND_CONSOLE] == 1 ? "y" : "ies");
 }
 
 /* ---- configuration ---- */
@@ -211,6 +241,7 @@ static void parse_line(char *line, int lineno)
             }
             *eq = 0;
             setenv(words[i], eq + 1, 1);
+            env_count++;
         }
         return;
     }
@@ -268,11 +299,13 @@ static void builtin_config(void)
         "service dhcp restart=failure dhcpc -a",
         "console sh sh",
     };
+    env_count = 0;
     for (size_t i = 0; i < sizeof lines / sizeof lines[0]; i++) {
         char copy[128];
         strlcpy(copy, lines[i], sizeof copy);
         parse_line(copy, (int)i + 1);
     }
+    report_config("built-in configuration", env_count);
 }
 
 /* Read the configuration. Entries that disappeared are marked absent
@@ -287,6 +320,7 @@ static int read_config(const char *path)
     for (int i = 0; i < entry_count; i++)
         entries[i].present = 0;
     strlcpy(config_path, path, sizeof config_path);
+    env_count = 0;
     char line[512];
     int lineno = 0;
     while (fgets(line, sizeof line, f)) {
@@ -294,6 +328,7 @@ static int read_config(const char *path)
         parse_line(line, lineno);
     }
     fclose(f);
+    report_config(path, env_count);
     return 0;
 }
 
@@ -349,6 +384,17 @@ static void start_entry(struct entry *e)
     e->state = STATE_RUNNING;
     e->starts++;
     e->started_ms = now_ms();
+    char cmd[300];
+    command_text(e, cmd, sizeof cmd);
+    if (e->kind == KIND_CONSOLE)
+        report("console %s started as pid %d in process group %d: %s", e->name, (int)pid, (int)pid, cmd);
+    else if (e->starts > 1)
+        report("%s %s restarted as pid %d, start %d", kind_names[e->kind], e->name, (int)pid, e->starts);
+    else if (e->log[0])
+        report("%s %s started as pid %d, output to %s: %s", kind_names[e->kind], e->name, (int)pid,
+               e->log, cmd);
+    else
+        report("%s %s started as pid %d: %s", kind_names[e->kind], e->name, (int)pid, cmd);
 }
 
 static struct entry *entry_by_pid(pid_t pid)
@@ -383,8 +429,11 @@ static void entry_exited(struct entry *e, int status)
     }
     if (e->kind == KIND_TASK) {
         e->state = failed ? STATE_FAILED : STATE_DONE;
+        uint64_t took = now_ms() - e->started_ms;
         if (failed)
-            report("%s failed with %s", e->name, how);
+            report("task %s failed with %s after %lu ms", e->name, how, (unsigned long)took);
+        else
+            report("task %s done in %lu ms", e->name, (unsigned long)took);
         return;
     }
     uint64_t ran = now_ms() - e->started_ms;
@@ -394,7 +443,8 @@ static void entry_exited(struct entry *e, int status)
         restart = 1;            /* the system is unusable without a session */
     if (!restart) {
         e->state = failed ? STATE_FAILED : STATE_STOPPED;
-        report("%s exited with %s", e->name, how);
+        report("%s %s exited with %s after %lu ms, not restarted", kind_names[e->kind], e->name, how,
+               (unsigned long)ran);
         return;
     }
     if (e->kind != KIND_CONSOLE && e->quick >= QUICK_LIMIT) {
@@ -402,7 +452,8 @@ static void entry_exited(struct entry *e, int status)
         report("%s exited with %s %d times within %d s, giving up", e->name, how, e->quick, QUICK_MS / 1000);
         return;
     }
-    report("%s exited with %s, restarting", e->name, how);
+    report("%s %s exited with %s after %lu ms, restarting%s", kind_names[e->kind], e->name, how,
+           (unsigned long)ran, e->quick ? " in 1 s" : "");
     e->state = STATE_WAITING;
     e->restart_ms = now_ms() + (e->quick ? RESTART_MS : 0);
 }
@@ -513,7 +564,10 @@ static void reload(const char *path, char *reply, size_t size)
 
 static void shutdown_system(int cmd)
 {
-    report("stopping services");
+    int running = 0;
+    for (int i = 0; i < entry_count; i++)
+        running += entries[i].pid > 0;
+    report("stopping services, %d running, %d s grace before SIGKILL", running, STOP_MS / 1000);
     for (int i = entry_count - 1; i >= 0; i--) {
         struct entry *e = &entries[i];
         if (e->pid > 0) {
@@ -687,14 +741,21 @@ int main(int argc, char **argv)
     signal(SIGUSR2, on_signal);
     signal(SIGHUP, on_signal);
     signal(SIGCHLD, on_signal);
+    report("pid %d, control socket \"%s\"", (int)getpid(), CONTROL_NAME);
     listener = open_control();
     if (listener < 0)
         report("control socket: %s", strerror(errno));
-    if (read_config(argc > 1 ? argv[1] : CONFIG_PATH) < 0) {
-        report("using the built-in configuration");
+    if (read_config(argc > 1 ? argv[1] : CONFIG_PATH) < 0)
         builtin_config();
-    }
     start_due();
+    int running = 0, skipped = 0, failed = 0;
+    for (int i = 0; i < entry_count; i++) {
+        running += entries[i].state == STATE_RUNNING && entries[i].kind != KIND_CONSOLE;
+        skipped += entries[i].state == STATE_SKIPPED;
+        failed += entries[i].state == STATE_FAILED;
+    }
+    report("startup complete at %lu ms, %d services running, %d skipped, %d failed",
+           (unsigned long)now_ms(), running, skipped, failed);
     for (;;) {
         if (shutdown_request) {
             int sig = shutdown_request;
@@ -713,6 +774,11 @@ int main(int argc, char **argv)
             if (e->state == STATE_WAITING && e->present && e->restart_ms > now && e->restart_ms - now < (uint64_t)timeout)
                 timeout = (int)(e->restart_ms - now);
         }
+        /* A child that exited since reap() ran has set the flag; poll
+         * would otherwise sleep the whole timeout for a signal that was
+         * already delivered. */
+        if (child_exited)
+            timeout = 0;
         if (listener < 0) {
             sleep_ms((unsigned long)timeout);
             continue;

@@ -91,11 +91,17 @@ static volatile struct limine_module_request module_request = {
     .id = LIMINE_MODULE_REQUEST_ID, .revision = 0, .response = NULL,
 };
 
+__used __section(".limine_requests")
+static volatile struct limine_bootloader_info_request bootloader_request = {
+    .id = LIMINE_BOOTLOADER_INFO_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
 __used __section(".limine_requests_end")
 static volatile uint64_t limine_requests_end[] = LIMINE_REQUESTS_END_MARKER;
 
 struct bootinfo bootinfo;
 uintptr_t hhdm_offset;
+extern char __kernel_start[], __kernel_end[];
 
 static void boot_parse_video(void);
 
@@ -206,6 +212,7 @@ static void kinit(void *arg)
     /* The network core needs the worker thread before any interface is
      * published; devices register with it in later milestones. */
     net_init();
+    devfs_log_nodes();
 #if CONFIG_TESTS
     ktest_run_selected();
 #endif
@@ -219,20 +226,44 @@ static void kinit(void *arg)
     if (!p)
         panic("cannot start %s", init_path);
     proc_set_init(p);
-    klog_info("boot complete");
+    struct pmm_stats mem;
+    pmm_get_stats(&mem);
+    klog_info("boot complete in %lu ms, init is %s (pid %d), %lu of %lu MiB free",
+              timer_ms(), init_path, p->pid, mem.free_pages >> (20 - PAGE_SHIFT),
+              mem.total_pages >> (20 - PAGE_SHIFT));
     int status = proc_reap(p);
     panic("init exited with status 0x%x", status);
 }
 
+/* The bootloader, the kernel image and everything Limine handed over. */
+static void boot_log_environment(void)
+{
+    const struct limine_bootloader_info_response *bl = bootloader_request.response;
+    klog_info("booted by %s %s, %zu memory map entries", bl ? bl->name : "unknown bootloader",
+              bl ? bl->version : "", bootinfo.memmap_count);
+    klog_info("kernel image %lu KiB at phys %lx virt %lx, hhdm at %lx",
+              (unsigned long)(__kernel_end - __kernel_start) >> 10, bootinfo.kernel_phys_base,
+              bootinfo.kernel_virt_base, bootinfo.hhdm_offset);
+    if (bootinfo.initrd)
+        klog_info("initrd %lu KiB at phys %lx", bootinfo.initrd_size >> 10,
+                  (uintptr_t)bootinfo.initrd - bootinfo.hhdm_offset);
+    else
+        klog_warn("no initrd module");
+    if (!bootinfo.have_framebuffer)
+        klog_warn("no framebuffer, serial console only");
+    klog_info("cmdline \"%s\", log level %d", bootinfo.cmdline, klog_runtime_level);
+}
+
 __noreturn void kmain(void)
 {
+    timer_early_init();
     serial_init();
     console_init();
     boot_init();
     fb_screen_init();
     fbcon_init();
-    kprintf("minios booting\n");
-    kprintf("minios %s build %u (%s)\n", kernel_release, kernel_build_number, kernel_version);
+    kprintf("minios %s build %u (%s) booting, gcc %s\n", kernel_release, kernel_build_number,
+            kernel_version, __VERSION__);
 
     boot_apply_cmdline();
     gdt_init();
@@ -241,10 +272,7 @@ __noreturn void kmain(void)
     idt_init();
     ksyms_init();
     cpu_identify();
-
-    klog_info("kernel at phys %lx virt %lx, hhdm offset %lx",
-              bootinfo.kernel_phys_base, bootinfo.kernel_virt_base, bootinfo.hhdm_offset);
-    klog_info("cmdline: \"%s\"", bootinfo.cmdline);
+    boot_log_environment();
 
     pmm_init();
     vmm_init();

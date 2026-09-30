@@ -30,10 +30,12 @@ second.
 `drivers/timer.c` registers the vector 32 handler, counts the interrupts
 of the boot CPU and calls the scheduler hook installed with
 `timer_set_tick_handler`. Time itself does not come from that count:
-`timer_ms` and `timer_ticks` read the TSC, which `timer_init` calibrates
-against the PIT over 20 ms. Under TCG the emulator delivers fewer than
-1000 timer interrupts per second, and a clock built on the interrupt count
-ran about 25 percent slow, while the TSC follows host time. `sleep_ms`
+`timer_ms` and `timer_ticks` read the TSC, which `timer_early_init`
+calibrates against the PIT over 20 ms as the first statement of `kmain`,
+so that the log can stamp every line with the time since the kernel
+entry. Under TCG the emulator delivers fewer than 1000 timer interrupts
+per second, and a clock built on the interrupt count ran about 25
+percent slow, while the TSC follows host time. `sleep_ms`
 blocks until the TSC based time reaches the deadline, and the timer
 interrupt only provides the moments at which sleepers are examined.
 

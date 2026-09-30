@@ -8,6 +8,7 @@
 #include <sync/ring.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
+#include <drivers/timer.h>
 
 int klog_runtime_level = CONFIG_LOG_LEVEL;
 
@@ -23,13 +24,17 @@ void klog_set_level(int level)
 }
 
 /* A line is formatted completely before it is written, so lines logged
- * by different CPUs never interleave. */
+ * by different CPUs never interleave. The prefix is the time since the
+ * kernel entry in seconds with microseconds, then the level and the
+ * subsystem: "[    0.123456] [I pmm] ...". */
 void klog_print(int level, const char *subsys, const char *fmt, ...)
 {
     if (level < LOG_DEBUG || level > LOG_ERROR)
         level = LOG_ERROR;
-    char line[256];
-    int n = ksnprintf(line, sizeof line, "[%c %s] ", level_chars[level], subsys);
+    char line[384];
+    uint64_t us = timer_ns() / 1000;
+    int n = ksnprintf(line, sizeof line, "[%5lu.%06lu] [%c %s] ", us / 1000000, us % 1000000,
+                      level_chars[level], subsys);
     if (n < 0)
         n = 0;
     if ((size_t)n < sizeof line) {

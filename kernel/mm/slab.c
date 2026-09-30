@@ -390,8 +390,9 @@ void slab_init(void)
         if (!kmalloc_caches[i])
             panic("slab: cannot create %s", kmalloc_names[i]);
     }
-    klog_info("slab allocator ready, %zu kmalloc size classes, debug %d",
-              ARRAY_SIZE(kmalloc_sizes), CONFIG_SLABDEBUG);
+    klog_info("%zu kmalloc size classes from %zu to %zu bytes, larger requests take whole pages, debug %s",
+              ARRAY_SIZE(kmalloc_sizes), kmalloc_sizes[0], kmalloc_sizes[ARRAY_SIZE(kmalloc_sizes) - 1],
+              CONFIG_SLABDEBUG ? "on" : "off");
 }
 
 void slab_dump_stats(void)

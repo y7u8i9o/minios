@@ -45,25 +45,27 @@ static void timer_irq(struct trapframe *tf, void *arg)
     waitq_timeouts_tick();
 }
 
-/* Measure the TSC against the PIT over 20 ms. */
-static void tsc_calibrate(void)
+/* Measure the TSC against the PIT over 20 ms. Runs first thing in kmain
+ * so that timer_ns counts from the kernel entry and the log can stamp
+ * every line, including those of the early console and memory setup. */
+void timer_early_init(void)
 {
-    uint64_t t0 = rdtsc();
+    tsc_base = rdtsc();
     pit_wait_us(20000);
-    uint64_t t1 = rdtsc();
-    tsc_per_ms = (t1 - t0) / 20;
+    tsc_per_ms = (rdtsc() - tsc_base) / 20;
     if (tsc_per_ms == 0)
         tsc_per_ms = 1;
-    tsc_base = rdtsc();
-    klog_info("tsc: %lu kHz", tsc_per_ms);
 }
 
 void timer_init(void)
 {
     irq_register(IRQ_TIMER, timer_irq, NULL);
-    tsc_calibrate();
-    lapic_timer_calibrate();
+    klog_info("tsc %lu.%03lu MHz, measured against the pit over 20 ms, invariant %s",
+              tsc_per_ms / 1000, tsc_per_ms % 1000, cpu_features.invariant_tsc ? "yes" : "no");
+    uint64_t lapic_hz = lapic_timer_calibrate();
     lapic_timer_start(TIMER_HZ);
+    klog_info("lapic timer %lu Hz at divider 16, periodic tick %u Hz (%lu counts) on every cpu",
+              lapic_hz, TIMER_HZ, lapic_hz / TIMER_HZ);
 }
 
 void timer_init_cpu(void)

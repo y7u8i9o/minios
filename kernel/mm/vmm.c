@@ -354,6 +354,8 @@ static void map_kernel_image(uintptr_t pml4)
     }
 }
 
+static uint64_t hhdm_mapped_bytes;   /* written once by map_hhdm */
+
 static void map_hhdm(uintptr_t pml4)
 {
     for (size_t i = 0; i < bootinfo.memmap_count; i++) {
@@ -377,6 +379,7 @@ static void map_hhdm(uintptr_t pml4)
         uintptr_t end = ALIGN_UP(e->base + e->length, PAGE_SIZE);
         if (paging_map_large(pml4, s + hhdm_offset, s, end - s, flags_to_pte(flags)) < 0)
             panic("vmm: cannot map hhdm");
+        hhdm_mapped_bytes += end - s;
     }
 }
 
@@ -408,5 +411,10 @@ void vmm_init(void)
     kassert(IS_ALIGNED(guard, PAGE_SIZE));
     vmm_unmap(&kernel_vmspace, guard, PAGE_SIZE);
 
-    klog_info("kernel page tables active, pml4 at %lx", pml4);
+    klog_info("kernel page tables active, pml4 at %lx, %lu MiB of physical memory in the hhdm%s",
+              pml4, hhdm_mapped_bytes >> 20, cpu_features.pdpe1gb ? " with 1 GiB pages" : "");
+    klog_info("image text %lu KiB, rodata %lu KiB, data and bss %lu KiB, boot stack guard at %lx",
+              (unsigned long)(__rodata_start - __text_start) >> 10,
+              (unsigned long)(__data_start - __rodata_start) >> 10,
+              (unsigned long)(__kernel_end - __data_start) >> 10, guard);
 }

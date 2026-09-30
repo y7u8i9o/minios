@@ -1,3 +1,3 @@
-minios booting
-minios [0-9]+\.[0-9]+\.[0-9]+ build [0-9]+ \(#[0-9]+ [0-9a-f]+(-dirty)? [0-9-]+\)
+minios [0-9]+\.[0-9]+\.[0-9]+ build [0-9]+ \(#[0-9]+ [0-9a-f]+(-dirty)? [0-9-]+\) booting, gcc [0-9.]+
+\[ *[0-9]+\.[0-9]{6}\] \[I boot\] booted by
 TEST PASS

@@ -108,6 +108,8 @@ void pmm_init(void)
 {
     uint64_t max_addr = 0;
     uint64_t usable_bytes = 0;
+    uint64_t reclaimable_bytes = 0;
+    size_t usable_regions = 0;
 
     for (size_t i = 0; i < bootinfo.memmap_count; i++) {
         const struct limine_memmap_entry *e = &bootinfo.memmap[i];
@@ -115,8 +117,11 @@ void pmm_init(void)
                    memmap_type_name(e->type));
         if (e->type == LIMINE_MEMMAP_USABLE) {
             usable_bytes += e->length;
+            usable_regions++;
             if (e->base + e->length > max_addr)
                 max_addr = e->base + e->length;
+        } else if (e->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
+            reclaimable_bytes += e->length;
         }
     }
     if (!max_addr)
@@ -163,8 +168,10 @@ void pmm_init(void)
     }
     spin_unlock(&pmm_lock);
 
-    klog_info("%lu MiB usable, %lu pages managed, page array %lu KiB at %lx",
-              usable_bytes >> 20, pmm_stats.total_pages, array_bytes >> 10, array_phys);
+    klog_info("%lu MiB usable in %zu regions below %lx, %lu KiB reclaimable after boot",
+              usable_bytes >> 20, usable_regions, max_addr, reclaimable_bytes >> 10);
+    klog_info("%lu pages managed by a buddy allocator with %u orders, page array %lu KiB at %lx",
+              pmm_stats.total_pages, PMM_MAX_ORDER + 1, array_bytes >> 10, array_phys);
 }
 
 void pmm_reclaim_bootloader(void)
@@ -182,8 +189,9 @@ void pmm_reclaim_bootloader(void)
             reclaimed += end - start;
         }
     }
+    uint64_t free = pmm_stats.free_pages, total = pmm_stats.total_pages;
     spin_unlock(&pmm_lock);
-    klog_info("reclaimed %lu bootloader pages", reclaimed);
+    klog_info("reclaimed %lu bootloader pages, %lu of %lu pages free", reclaimed, free, total);
 }
 
 struct page *pmm_alloc(unsigned order)
