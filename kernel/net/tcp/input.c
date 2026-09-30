@@ -115,8 +115,13 @@ static bool acceptable_sequence(struct tcp_connection *c, const struct tcp_segme
     unsigned window = tcp_receive_window(c);
     uint32_t sequence = segment->sequence;
     size_t length = segment->length + !!(segment->flags & TCP_SYN) + !!(segment->flags & TCP_FIN);
+    /* RFC 9293 accepts nothing with length in a closed window. A FIN
+     * without data at RCV.NXT needs no receive space, so it is accepted;
+     * otherwise a peer whose FIN meets a full window waits for its own
+     * retransmission timeout after the reader has emptied the store. */
+    bool bare_fin = !segment->length && (segment->flags & (TCP_SYN | TCP_FIN)) == TCP_FIN;
     if (!window)
-        return !length && sequence == c->rcv_nxt;
+        return (!length || bare_fin) && sequence == c->rcv_nxt;
     if (!length)
         return !tcp_before(sequence, c->rcv_nxt) && tcp_before(sequence, c->rcv_nxt + window);
     uint32_t last = sequence + (uint32_t)length - 1;

@@ -908,10 +908,14 @@ segment and reports its repair from SACK information in less than one
 second of guest time, without a resend of SACKed data or a timeout. It also
 reports correct guest blocks for reordered data, a delayed ACK after 100 ms
 and a single ACK for two full segments, and the capture checker verifies
-SACK blocks in both directions. The existing `net_tcp_options` case now expects the delayed ACK
-of an in-order segment. The optional rescue retransmission and D-SACK are
-not implemented, and loss with a native host stack is still not scripted,
-because QEMU's user-mode stack neither drops on request nor offers SACK.
+SACK blocks in both directions. The existing `net_tcp_options` case now
+expects the delayed ACK of an in-order segment. The optional rescue
+retransmission and D-SACK are not implemented, and loss with a native host
+stack is still not scripted, because QEMU's user-mode stack neither drops
+on request nor offers SACK. A FIN without data at `rcv_nxt` is now
+accepted in a closed window, which removed a stall of one retransmission
+timeout that the one-vCPU run of `net_tcp_bulk` showed when QEMU's FIN met
+a full receive store.
 
 ### N15 (complete 2026-09-30)
 

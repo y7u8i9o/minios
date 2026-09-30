@@ -801,6 +801,27 @@ static void scoreboard_checks(void)
     file_put(file);
 }
 
+/* A FIN at RCV.NXT is accepted when the store is full and the window
+ * closed, since it needs no space. */
+static void closed_window_checks(void)
+{
+    struct file *file = active_open();
+    struct tcp_connection *c = connection_of(file);
+    struct peer_options options = {.mss = 1000, .window_scale = -1};
+    inject(c, 100, TCP_SYN | TCP_ACK, 4096, &options, NULL, 0);
+    struct peer_options none = {.window_scale = -1};
+    static char data[8000];
+    for (unsigned window; (window = tcp_receive_window(c));)
+        inject(c, c->rcv_nxt, TCP_ACK, 4096, &none, data, MIN(window, sizeof data));
+    uint32_t end = c->rcv_nxt;
+    inject(c, end, TCP_ACK | TCP_FIN, 4096, &none, NULL, 0);
+    ktest_assert(c->state == TCP_CLOSE_WAIT && c->rcv_nxt == end + 1 &&
+                     last().acknowledgement == end + 1,
+                 "FIN accepted in a closed window");
+    reset(c);
+    file_put(file);
+}
+
 static void unsacked_checks(void)
 {
     /* The peer does not permit SACK: no block is ever sent. */
@@ -833,6 +854,7 @@ static int controlled_sack(struct net_request *request)
     timeout_checks();
     scoreboard_checks();
     unsacked_checks();
+    closed_window_checks();
     tcp_set_generators(NULL, NULL);
     struct tcp_stats stats;
     ktest_assert(tcp_get_stats(&stats) == 0 && !stats.connections && !stats.endpoints,

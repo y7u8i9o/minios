@@ -1390,6 +1390,13 @@ segment (receiver silly window avoidance, RFC 1122 section 4.2.3.3). Every
 other segment carries the current window as before, and a peer's zero
 window probe is a duplicate and is answered at once.
 
+A FIN without data that arrives at `rcv_nxt` is accepted even when the
+receive window is closed. RFC 9293 accepts no segment with length in a
+closed window, but a FIN occupies no receive space, and dropping it made a
+peer whose FIN met a full store wait for its own retransmission timeout
+after the reader had emptied the store; the one-vCPU run of `net_tcp_bulk`
+showed this as a stall of 1.1 seconds. `net_tcp_sack` checks the case.
+
 ### Counters
 
 `struct tcp_stats` and the `tcpopt` line of `/dev/net` add `sack`

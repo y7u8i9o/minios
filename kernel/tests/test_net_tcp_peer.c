@@ -151,9 +151,11 @@ static void test_tcp_bulk(void)
     struct tcp_stats stats;
     tcp_get_stats(&stats);
     kprintf("net_tcp_bulk: 262144 bytes each direction, ok\n");
-    kprintf("net_tcp_bulk: %lu ms, %lu KiB/s per direction, %lu retransmits\n",
+    kprintf("net_tcp_bulk: %lu ms, %lu KiB/s per direction, %lu retransmits, "
+            "%lu delayed ACKs, %lu sent by the timer\n",
             (unsigned long)elapsed, (unsigned long)(TOTAL / elapsed * 1000 / 1024),
-            (unsigned long)stats.retransmits);
+            (unsigned long)stats.retransmits, (unsigned long)stats.delayed_acks,
+            (unsigned long)stats.delayed_ack_timeouts);
 }
 KTEST_DEFINE("net_tcp_bulk", test_tcp_bulk);
 

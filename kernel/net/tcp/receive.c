@@ -145,8 +145,9 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
         c->out_of_order++;
     }
     uint32_t fin_sequence = segment->sequence + segment->length;
+    /* A FIN may lie at the right edge: it occupies no receive space. */
     if ((segment->flags & TCP_FIN) && !tcp_before(fin_sequence, c->rcv_nxt) &&
-        tcp_before(fin_sequence, right) && !c->pending_fin) {
+        !tcp_after(fin_sequence, right) && !c->pending_fin) {
         c->pending_fin = true;
         c->pending_fin_sequence = fin_sequence;
     }
