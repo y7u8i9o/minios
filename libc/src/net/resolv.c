@@ -25,8 +25,8 @@
 #define TIMEOUT_MS 3000
 #define MAX_CNAME 8
 #define MAX_ANSWERS 8
-/* resolv.conf(5): at most six search domains of at most 256 bytes in all,
- * and an ndots option of at most 15. */
+/* resolv.conf(5) allows at most six search domains of at most 256 bytes
+ * in all and an ndots option of at most 15. */
 #define MAX_SEARCH 6
 #define SEARCH_BYTES 256
 #define MAX_NDOTS 15
@@ -118,10 +118,11 @@ static int lookup_hosts(const char *name, uint32_t *address)
     return found;
 }
 
-/* The parts of /etc/resolv.conf the resolver uses. As in resolv.conf(5),
- * the last "search" or "domain" line gives the search list (a "domain"
- * line is a list of one), and "options ndots:N" sets how many dots make a
- * name be tried as given before the search list (default 1). */
+/* struct resolv_config holds the parts of /etc/resolv.conf that the
+ * resolver uses. As in resolv.conf(5), the last "search" or "domain" line
+ * gives the search list (a "domain" line is a list of one), and "options
+ * ndots:N" sets how many dots make a name be tried as given before the
+ * search list (default 1). */
 struct resolv_config {
     uint32_t servers[MAX_SERVERS];
     unsigned nservers;
@@ -151,7 +152,8 @@ static void read_config(struct resolv_config *config)
         } else if (strcmp(key, "search") == 0 || strcmp(key, "domain") == 0) {
             config->nsearch = 0;
             size_t total = 0;
-            for (; value && config->nsearch < MAX_SEARCH; value = strtok_r(NULL, " \t\r\n", &save)) {
+            for (; value && config->nsearch < MAX_SEARCH;
+                 value = strtok_r(NULL, " \t\r\n", &save)) {
                 size_t length = strlen(value);
                 while (length && value[length - 1] == '.')
                     value[--length] = 0;
@@ -205,7 +207,7 @@ static void cache_key(const char *name, char *key)
     key[n] = 0;
 }
 
-/* Caller holds cache_lock. Expired entries are dropped when found. */
+/* The caller holds cache_lock. Expired entries are dropped when found. */
 static struct cache_entry *cache_find(const char *key, uint64_t now)
 {
     for (unsigned i = 0; i < CACHE_ENTRIES; i++) {
@@ -221,7 +223,8 @@ static struct cache_entry *cache_find(const char *key, uint64_t now)
     return NULL;
 }
 
-/* Returns 1 with the cached result of name, or 0 when it is not cached. */
+/* cache_lookup returns 1 with the cached result of name, or 0 when it is
+ * not cached. */
 static int cache_lookup(const char *name, int *error, uint32_t *addresses, unsigned *count)
 {
     char key[256];
@@ -429,11 +432,11 @@ static uint32_t get32(const unsigned char *p)
     return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
 }
 
-/* RFC 2308 section 5: a negative answer may be cached for the smaller of
- * the TTL of the SOA record in its authority section and the SOA MINIMUM
- * field. Returns that TTL, or 0 when the answer carries no usable SOA
- * record, since negative answers without one must not be cached. offset is
- * the start of the authority section. */
+/* By RFC 2308 section 5, a negative answer may be cached for the smaller
+ * of the TTL of the SOA record in its authority section and the SOA
+ * MINIMUM field. negative_ttl returns that TTL, or 0 when the answer
+ * carries no usable SOA record, since negative answers without one must not
+ * be cached. offset is the start of the authority section. */
 static uint32_t negative_ttl(const unsigned char *answer, size_t alen, size_t offset)
 {
     unsigned authorities = answer[8] << 8 | answer[9];
@@ -456,8 +459,9 @@ static uint32_t negative_ttl(const unsigned char *answer, size_t alen, size_t of
                 decode_name(answer, rdata + rdlen, o, skip, &o) < 0 || o + 20 != rdata + rdlen)
                 return 0;
             uint32_t minimum = get32(answer + o + 16);
+            /* RFC 2181 section 8 counts a TTL above 2^31 - 1 as 0. */
             if (ttl & 0x80000000u)
-                ttl = 0; /* RFC 2181 section 8: a TTL above 2^31 - 1 counts as 0 */
+                ttl = 0;
             return ttl < minimum ? ttl : minimum;
         }
         offset = rdata + rdlen;
@@ -465,9 +469,10 @@ static uint32_t negative_ttl(const unsigned char *answer, size_t alen, size_t of
     return 0;
 }
 
-/* Returns 0 with addresses filled, or an EAI code. ttl receives the time
- * the result may be cached: the smallest TTL of the records used on
- * success, the RFC 2308 TTL for EAI_NONAME, 0 otherwise. */
+/* query_dns returns 0 with addresses filled, or an EAI code. ttl receives
+ * the time the result may be cached, which is the smallest TTL of the
+ * records used on success, the RFC 2308 TTL for EAI_NONAME and 0
+ * otherwise. */
 static int query_dns(const struct resolv_config *config, const char *name, uint32_t *addresses,
                      unsigned *count, uint32_t *ttl)
 {
@@ -560,7 +565,8 @@ static int query_dns(const struct resolv_config *config, const char *name, uint3
             authority = o;
         }
         if (rcode == 3 || (!*count && !cname[0])) {
-            /* NXDOMAIN, or NODATA: no address and no alias for the name. */
+            /* The answer is NXDOMAIN, or NODATA with no address and no alias
+             * for the name. */
             uint32_t negative = negative_ttl(answer, (size_t)alen, authority);
             *ttl = negative < lifetime ? negative : lifetime;
             return EAI_NONAME;
@@ -574,7 +580,7 @@ static int query_dns(const struct resolv_config *config, const char *name, uint3
     return EAI_FAIL;
 }
 
-/* One name as a DNS query, through the cache. */
+/* lookup_dns resolves one name as a DNS query through the cache. */
 static int lookup_dns(const struct resolv_config *config, const char *name, uint32_t *addresses,
                       unsigned *count)
 {
@@ -588,10 +594,11 @@ static int lookup_dns(const struct resolv_config *config, const char *name, uint
     return error;
 }
 
-/* The names tried for node, in order (resolv.conf(5)): a name with a
- * trailing dot is absolute and tried alone; a name with at least ndots
- * dots is tried as given and then with each search domain; a name with
- * fewer dots is tried with each search domain first and as given last.
+/* resolve_dns tries the candidate names of resolv.conf(5) in order. A name
+ * with a trailing dot is absolute and tried alone; a name with at least
+ * ndots dots is tried as given and then with each search domain; a name
+ * with fewer dots is tried with each search domain first and as given
+ * last.
  * Only "no such name" moves on to the next candidate; any other failure
  * ends the lookup. */
 static int resolve_dns(const char *node, uint32_t *addresses, unsigned *count)

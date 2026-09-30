@@ -1,5 +1,6 @@
 #pragma once
-/* The scripted TCP peer of netpeer (mode scripted, see scripted.c). */
+/* This header declares the scripted TCP peer of netpeer (mode scripted,
+ * see scripted.c). */
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdio.h>

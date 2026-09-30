@@ -58,7 +58,8 @@ static void scoreboard_trim(struct tcp_connection *c)
     c->scoreboard_count = kept;
 }
 
-/* Merges [start, end) into the scoreboard; returns the bytes it adds. */
+/* scoreboard_insert merges [start, end) into the scoreboard and returns the
+ * bytes it adds. */
 static uint32_t scoreboard_insert(struct tcp_connection *c, uint32_t start, uint32_t end)
 {
     uint32_t added = end - start;
@@ -76,7 +77,8 @@ static uint32_t scoreboard_insert(struct tcp_connection *c, uint32_t start, uint
             kept[count++] = r;
             continue;
         }
-        /* Overlapping or adjacent: count the overlap once and absorb it. */
+        /* An overlapping or adjacent range is absorbed, and its overlap is
+         * counted once. */
         uint32_t low = tcp_after(r.start, start) ? r.start : start;
         uint32_t high = tcp_before(r.end, end) ? r.end : end;
         if (tcp_before(low, high))
@@ -98,9 +100,9 @@ static uint32_t scoreboard_insert(struct tcp_connection *c, uint32_t start, uint
     return added;
 }
 
-/* Accepts the SACK blocks of an ACK that lie within [snd_una, snd_nxt]; a
- * block below snd_una reports a duplicate and is ignored. Returns the
- * number of bytes SACKed for the first time. */
+/* scoreboard_update accepts the SACK blocks of an ACK that lie within
+ * [snd_una, snd_nxt]; a block below snd_una reports a duplicate and is
+ * ignored. It returns the number of bytes SACKed for the first time. */
 static uint32_t scoreboard_update(struct tcp_connection *c, const struct tcp_segment *segment)
 {
     uint32_t added = 0;
@@ -117,14 +119,16 @@ static uint32_t scoreboard_update(struct tcp_connection *c, const struct tcp_seg
 
 /* The unSACKed holes of [snd_una, snd_nxt) are the gaps before each range
  * and after the last one. Every byte of one gap has the same ranges above
- * it, so IsLost (RFC 6675 section 4) is decided per gap: a byte is lost
+ * it, so IsLost (RFC 6675 section 4) is decided per gap; a byte is lost
  * when TCP_DUP_THRESHOLD ranges, or more than TCP_DUP_THRESHOLD - 1
  * segments of SACKed bytes, lie above it. In a recovery started by a
  * timeout, every unSACKed byte below recovery_end counts as lost. */
+/* A gap spans the hole [start, end), its bytes in [start, lost_end) are
+ * lost, and below_sacked tells whether a SACKed range lies above it. */
 struct sack_gap {
-    uint32_t start, end; /* the hole */
-    uint32_t lost_end;   /* [start, lost_end) is lost */
-    bool below_sacked;   /* a SACKed range lies above the hole */
+    uint32_t start, end;
+    uint32_t lost_end;
+    bool below_sacked;
 };
 
 static unsigned sack_gaps(struct tcp_connection *c, struct sack_gap *gaps)
@@ -145,7 +149,10 @@ static unsigned sack_gaps(struct tcp_connection *c, struct sack_gap *gaps)
             g->below_sacked = ranges_above > 0;
             if (c->rto_recovery) {
                 uint32_t limit = c->recovery_end;
-                g->lost_end = !tcp_before(limit, end) ? end : tcp_after(limit, cursor) ? limit : cursor;
+                if (!tcp_before(limit, end))
+                    g->lost_end = end;
+                else
+                    g->lost_end = tcp_after(limit, cursor) ? limit : cursor;
             } else if (ranges_above >= TCP_DUP_THRESHOLD ||
                        above > (TCP_DUP_THRESHOLD - 1) * mss) {
                 g->lost_end = end;
@@ -161,8 +168,9 @@ static unsigned sack_gaps(struct tcp_connection *c, struct sack_gap *gaps)
     return count;
 }
 
-/* SetPipe (RFC 6675 section 4): the bytes in flight are the unSACKed
- * bytes not considered lost plus the retransmitted ones below high_rxt. */
+/* sack_pipe is SetPipe of RFC 6675 section 4. The bytes in flight are the
+ * unSACKed bytes not considered lost plus the retransmitted ones below
+ * high_rxt. */
 static uint32_t sack_pipe(struct tcp_connection *c, const struct sack_gap *gaps, unsigned count)
 {
     uint32_t pipe = 0;
@@ -199,13 +207,14 @@ static bool send_new_segment(struct tcp_connection *c)
     return true;
 }
 
-/* The transmission loop of RFC 6675 section 5, step (C): while the
- * congestion window exceeds the pipe by a full segment, send what NextSeg
- * selects. Rule (1) is the first lost byte above high_rxt, rule (2) new
- * data within the peer's window, and rule (3), during fast recovery only,
- * the first unSACKed byte above high_rxt that lies below SACKed data. The
- * optional rescue retransmission of rule (4) is not implemented. At most
- * 16 segments leave per call, which bounds the work of one ACK on netd. */
+/* sack_transmit is the transmission loop of RFC 6675 section 5, step (C).
+ * While the congestion window exceeds the pipe by a full segment, it sends
+ * what NextSeg selects. Rule (1) selects the first lost byte above
+ * high_rxt, rule (2) new data within the peer's window, and rule (3),
+ * during fast recovery only, the first unSACKed byte above high_rxt that
+ * lies below SACKed data. The optional rescue retransmission of rule (4)
+ * is not implemented. At most 16 segments leave per call, which bounds the
+ * work of one ACK on netd. */
 static void sack_transmit(struct tcp_connection *c)
 {
     uint32_t mss = tcp_send_mss(c);
@@ -238,10 +247,10 @@ static void sack_transmit(struct tcp_connection *c)
         c->data_deadline = net_clock_ms() + c->rto_ms;
 }
 
-/* RFC 6675 section 5, step (4): the recovery point is the highest sequence
- * sent, the congestion window and the threshold become half the flight
- * (at least two segments), and the first segment presumed lost is sent at
- * once; the transmission loop then runs from tcp_flush. */
+/* In step (4) of RFC 6675 section 5, the recovery point becomes the highest
+ * sequence sent, the congestion window and the threshold become half the
+ * flight (at least two segments), and the first segment presumed lost is
+ * sent at once; the transmission loop then runs from tcp_flush. */
 static void sack_enter_recovery(struct tcp_connection *c)
 {
     uint32_t mss = tcp_send_mss(c);
@@ -258,8 +267,8 @@ static void sack_enter_recovery(struct tcp_connection *c)
     sack_retransmit(c, c->snd_una, MIN(mss, end - c->snd_una));
 }
 
-/* RFC 6675 section 2: with SACK, an ACK that does not move snd_una counts
- * as a duplicate when it SACKs bytes not SACKed before. Recovery starts at
+/* By RFC 6675 section 2, an ACK of a SACK connection that does not move
+ * snd_una counts as a duplicate when it SACKs bytes not SACKed before. Recovery starts at
  * TCP_DUP_THRESHOLD duplicates, or earlier when the SACK rule already
  * declares the first unacknowledged byte lost. */
 static void sack_duplicate(struct tcp_connection *c, const struct tcp_segment *segment)
@@ -312,8 +321,8 @@ void tcp_flush(struct tcp_connection *c)
         c->data_deadline = now + c->rto_ms;
 }
 
-/* RFC 6298: one measurement in milliseconds, clamped to 1-60000 ms, updates
- * the smoothed estimate and the retransmission timeout. */
+/* rtt_update feeds one measurement in milliseconds, clamped to 1-60000 ms,
+ * to the RFC 6298 estimator and the retransmission timeout. */
 static void rtt_update(struct tcp_connection *c, uint32_t sample)
 {
     sample = MAX(1u, MIN(sample, 60000u));
@@ -341,7 +350,7 @@ static void sample_rtt(struct tcp_connection *c, uint32_t acknowledgement)
 /* With timestamps the echoed value identifies the transmission that the
  * peer acknowledged, retransmissions included, so Karn's rule is not
  * needed (RFC 7323 section 4). One sample is taken per flight, which keeps
- * the RFC 6298 gains meaningful: the first ACK that covers the data sent
+ * the RFC 6298 gains meaningful; the first ACK that covers the data sent
  * when the previous sample was taken provides the next one. An echo of 0
  * or one that lies in the future is ignored. */
 static void sample_timestamp(struct tcp_connection *c,

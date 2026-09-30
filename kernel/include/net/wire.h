@@ -20,7 +20,8 @@ struct tcp_segment {
     bool has_window_scale, has_timestamp, sack_permitted;
     uint8_t window_scale;
     uint32_t timestamp_value, timestamp_echo;
-    unsigned sack_count; /* SACK blocks: [start, end) sequence pairs */
+    /* sack holds sack_count blocks as [start, end) sequence pairs. */
+    unsigned sack_count;
     uint32_t sack[TCP_SACK_OPTION_BLOCKS][2];
     const uint8_t *data;
     size_t length;

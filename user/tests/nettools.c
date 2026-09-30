@@ -91,8 +91,8 @@ int main(void)
     const char *const config[] = {"/bin/net", "config", "eth0", "10.0.2.15", "255.255.255.0", "10.0.2.2", NULL};
     CHECK(run(config, NULL, out, sizeof out) == 0, "static configuration");
     /* net apply writes the name servers and the search list (N15). The
-     * files are restored afterwards: the later checks expect no resolver,
-     * and no check may reach a public name server. */
+     * files are restored afterwards, because the later checks expect no
+     * resolver and no check may reach a public name server. */
     char saved[512];
     FILE *network = fopen("/etc/network", "r");
     size_t saved_length = network ? fread(saved, 1, sizeof saved, network) : 0;

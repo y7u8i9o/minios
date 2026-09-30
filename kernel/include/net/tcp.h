@@ -16,18 +16,19 @@ struct tcp_stats {
     uint64_t timeouts;
     uint64_t backlog_drops;
     uint64_t suppressed;
-    /* RFC 7323 (N13): connections that negotiated window scaling and
-     * timestamps, segments dropped by PAWS or for a missing timestamp, and
-     * round-trip samples taken from echoed timestamps. */
+    /* The RFC 7323 counters of N13 count connections that negotiated
+     * window scaling and timestamps, segments dropped by PAWS or for a
+     * missing timestamp, and round-trip samples taken from echoed
+     * timestamps. */
     uint64_t window_scaling;
     uint64_t timestamps;
     uint64_t paws_rejected;
     uint64_t timestamp_missing;
     uint64_t timestamp_samples;
-    /* RFC 2018, RFC 6675 and delayed ACKs (N14): connections that
-     * negotiated SACK, blocks sent and accepted, ranges dropped from a full
-     * scoreboard, SACK-based recoveries and their retransmissions, ACKs
-     * that were delayed and ACKs sent by the delayed-ACK timer. */
+    /* The counters of N14 count connections that negotiated SACK, blocks
+     * sent and accepted, ranges dropped from a full scoreboard, SACK-based
+     * recoveries and their retransmissions, ACKs that were delayed and ACKs
+     * sent by the delayed-ACK timer. */
     uint64_t sack;
     uint64_t sack_blocks_sent;
     uint64_t sack_blocks_received;

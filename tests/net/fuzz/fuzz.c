@@ -18,9 +18,10 @@ static uint32_t next(void)
     state ^= state << 17;
     return state;
 }
-/* Fills the option area of a TCP header with plausible TLVs: kinds the
- * stack interprets with correct and incorrect lengths, NOP, end of list
- * and unknown kinds, so the option parser sees more than random bytes. */
+/* fill_options fills the option area of a TCP header with plausible TLVs,
+ * which are the kinds the stack interprets with correct and incorrect
+ * lengths, NOP, end of list and unknown kinds, so the option parser sees
+ * more than random bytes. */
 static void fill_options(uint8_t *options, size_t space)
 {
     static const uint8_t kinds[] = {0, 1, 2, 3, 4, 5, 8, 30};

@@ -21,20 +21,20 @@
 #define TCP_RETRY_MS 1000
 #define TCP_MAX_RETRIES 3
 #define TCP_SEND_CAPACITY 65536
-/* RFC 7323: the largest shift a peer may use, the length of the timestamp
- * option with its two padding bytes, and the idle time after which PAWS
- * no longer trusts TS.Recent (24 days). */
+/* RFC 7323 sets the largest shift a peer may use, the timestamp option
+ * takes 12 bytes with its two padding bytes, and PAWS no longer trusts
+ * TS.Recent after 24 idle days. */
 #define TCP_MAX_WINDOW_SHIFT 14
 #define TCP_TIMESTAMP_SPACE 12
 #define TCP_PAWS_IDLE_MS (24ull * 24 * 60 * 60 * 1000)
-/* RFC 2018 and RFC 6675 (N14): at most four blocks are reported to the
- * peer, the scoreboard keeps at most eight disjoint SACKed ranges, and
- * three duplicate ACKs or SACKed segments declare a loss. */
+/* Following RFC 2018 and RFC 6675 (N14), at most four blocks are reported
+ * to the peer, the scoreboard keeps at most eight disjoint SACKed ranges,
+ * and three duplicate ACKs or SACKed segments declare a loss. */
 #define TCP_SACK_REPORT 4
 #define TCP_SCOREBOARD 8
 #define TCP_DUP_THRESHOLD 3
-/* RFC 1122 section 4.2.3.2 and RFC 9293 section 3.8.6.3: an ACK may be
- * delayed at most 500 ms; this stack delays it 100 ms, and acknowledges at
+/* RFC 1122 section 4.2.3.2 and RFC 9293 section 3.8.6.3 allow an ACK to be
+ * delayed at most 500 ms. This stack delays it 100 ms and acknowledges at
  * once when two full segments of data are unacknowledged. */
 #define TCP_DELAYED_ACK_MS 100
 _Static_assert((TCP_RECEIVE_CAPACITY >> TCP_WINDOW_SHIFT) <= 65535 &&
@@ -107,25 +107,27 @@ struct tcp_connection {
     uint32_t peer_window;
     uint16_t peer_mss, local_mss;
 
-    /* RFC 7323. rcv_scale is the shift offered in our SYN and applies to
-     * the windows we advertise once window_scaling is negotiated; snd_scale
-     * is the peer's shift, applied to every window it sends outside SYN.
-     * ts_recent is the peer timestamp echoed in our segments, ts_recent_age
-     * the network clock when it was last updated, last_ack_sent the
-     * acknowledgement of our latest segment, ts_offset the random offset of
-     * our timestamp clock and ts_sample_end the sequence an ACK must cover
-     * before the next timestamp RTT sample (one sample per flight). */
+    /* These fields implement RFC 7323. rcv_scale is the shift offered in
+     * our SYN and applies to the windows we advertise once window_scaling
+     * is negotiated; snd_scale is the peer's shift, applied to every window
+     * it sends outside SYN. ts_recent is the peer timestamp echoed in our
+     * segments, ts_recent_age the network clock when it was last updated,
+     * last_ack_sent the acknowledgement of our latest segment, ts_offset
+     * the random offset of our timestamp clock and ts_sample_end the
+     * sequence an ACK must cover before the next timestamp RTT sample (one
+     * sample per flight). */
     bool window_scaling, timestamps, ts_sample_valid;
     uint8_t snd_scale, rcv_scale;
     uint32_t ts_recent, ts_offset, last_ack_sent, ts_sample_end;
     uint64_t ts_recent_age;
 
-    /* RFC 2018 and RFC 6675 (N14). sack_report lists the out-of-order
-     * ranges we report, most recent first. The scoreboard lists the ranges
-     * the peer reported, sorted, disjoint and within [snd_una, snd_nxt].
-     * high_rxt is the end of the highest retransmission in the current
-     * recovery; rto_recovery marks a recovery started by a timeout, in which
-     * every unSACKed byte below recovery_end counts as lost. */
+    /* These fields implement RFC 2018 and RFC 6675 (N14). sack_report
+     * lists the out-of-order ranges we report, most recent first. The
+     * scoreboard lists the ranges the peer reported, sorted, disjoint and
+     * within [snd_una, snd_nxt]. high_rxt is the end of the highest
+     * retransmission in the current recovery; rto_recovery marks a recovery
+     * started by a timeout, in which every unSACKed byte below recovery_end
+     * counts as lost. */
     bool sack, rto_recovery;
     struct tcp_range {
         uint32_t start, end;
@@ -133,9 +135,9 @@ struct tcp_connection {
     unsigned sack_report_count, scoreboard_count;
     uint32_t high_rxt;
 
-    /* Delayed acknowledgement: ack_deadline is armed when an ACK is owed,
-     * ack_owed counts the bytes received since the last ACK we sent, and
-     * rcv_adv is the right edge of the window that ACK advertised. */
+    /* For delayed acknowledgements, ack_deadline is armed when an ACK is
+     * owed, ack_owed counts the bytes received since the last ACK we sent,
+     * and rcv_adv is the right edge of the window that ACK advertised. */
     uint64_t ack_deadline;
     uint32_t ack_owed, rcv_adv;
     bool peer_fin, read_shutdown;
@@ -190,7 +192,8 @@ static inline bool tcp_after(uint32_t a, uint32_t b)
 {
     return tcp_before(b, a);
 }
-/* The peer's window of a segment other than a SYN, in bytes. */
+/* tcp_segment_window returns the peer's window of a segment other than a
+ * SYN in bytes. */
 static inline uint32_t tcp_segment_window(const struct tcp_connection *c,
                                           const struct tcp_segment *segment)
 {

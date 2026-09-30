@@ -168,11 +168,11 @@ static bool acknowledge(struct tcp_connection *c, const struct tcp_segment *segm
     return true;
 }
 
-/* RFC 7323 section 5.3, step R1, before the sequence check. With
- * timestamps negotiated, a segment without one is dropped silently and a
- * segment whose timestamp is older than TS.Recent is a duplicate from an
- * earlier incarnation of the sequence space: it is dropped and answered
- * with a rate-limited ACK. A reset is exempt from both checks. After 24
+/* This is step R1 of RFC 7323 section 5.3, which runs before the sequence
+ * check. With timestamps negotiated, a segment without one is dropped
+ * silently, and a segment whose timestamp is older than TS.Recent is a
+ * duplicate from an earlier incarnation of the sequence space, so it is
+ * dropped and answered with a rate-limited ACK. A reset is exempt from both checks. After 24
  * idle days TS.Recent is no longer trusted and the segment is accepted. */
 static bool timestamp_acceptable(struct tcp_connection *c, const struct tcp_segment *segment)
 {
@@ -191,7 +191,7 @@ static bool timestamp_acceptable(struct tcp_connection *c, const struct tcp_segm
     return true;
 }
 
-/* RFC 7323 section 4.3: TS.Recent follows the newest timestamp of a
+/* By RFC 7323 section 4.3, TS.Recent follows the newest timestamp of a
  * segment that begins at or before the last acknowledgement sent, which
  * keeps the timestamp of the earliest unacknowledged segment when ACKs are
  * delayed or segments arrive out of order. */

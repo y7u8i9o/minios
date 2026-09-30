@@ -16,7 +16,8 @@
 
 static int failures;
 
-/* Queries received per name, written by the server threads. */
+/* counts holds the queries received per name; the server threads write it
+ * under counts_lock. */
 static pthread_mutex_t counts_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct {
     char name[96];
@@ -52,8 +53,8 @@ static int ends_with(const char *name, const char *suffix)
     return n > m && strcmp(name + n - m, suffix) == 0;
 }
 
-/* An SOA record in the authority section whose TTL and MINIMUM give the
- * negative caching time of RFC 2308. */
+/* add_soa appends an SOA record to the authority section, whose TTL and
+ * MINIMUM give the negative caching time of RFC 2308. */
 static size_t add_soa(unsigned char *a, size_t n, uint32_t ttl, uint32_t minimum)
 {
     unsigned char rr[] = {0xc0, 12, 0, 6, 0, 1, ttl >> 24, ttl >> 16, ttl >> 8, ttl, 0, 30,
@@ -66,7 +67,8 @@ static size_t add_soa(unsigned char *a, size_t n, uint32_t ttl, uint32_t minimum
     return n + sizeof rr;
 }
 
-/* One A record for the question name with the given TTL and address. */
+/* add_address appends one A record for the question name with the given
+ * TTL and address. */
 static size_t add_address(unsigned char *a, size_t n, uint32_t ttl, uint32_t address)
 {
     unsigned char rr[] = {0xc0, 12, 0, 1, 0, 1, ttl >> 24, ttl >> 16, ttl >> 8, ttl, 0, 4,
@@ -75,8 +77,9 @@ static size_t add_address(unsigned char *a, size_t n, uint32_t ttl, uint32_t add
     return n + sizeof rr;
 }
 
-/* The N15 names: TTLs, negative answers with and without SOA, and the
- * domains of the search list. Returns 0 for a name that is not one. */
+/* cache_answer builds the answers of the N15 names, which cover TTLs,
+ * negative answers with and without SOA and the domains of the search
+ * list, and returns 0 for any other name. */
 static size_t cache_answer(unsigned char *a, size_t n, const char *name, unsigned *answers)
 {
     if (strcmp(name, "ttl2.test") == 0)
@@ -88,7 +91,8 @@ static size_t cache_answer(unsigned char *a, size_t n, const char *name, unsigne
     if (strncmp(name, "fill", 4) == 0)
         return *answers = 1, add_address(a, n, 60, 0x0a000200 + (uint32_t)atoi(name + 4));
     if (strcmp(name, "cname2.test") == 0) {
-        /* A CNAME with TTL 1 to host.test, whose address has TTL 60. */
+        /* The answer is a CNAME with TTL 1 to host.test, whose address has
+         * TTL 60. */
         a[n++] = 0xc0; a[n++] = 12;
         memcpy(a + n, "\0\5\0\1\0\0\0\1\0\x0b\4host\4test\0", 21); n += 21;
         size_t target = n - 11;
@@ -272,9 +276,10 @@ static void write_resolv(const char *extra)
     res_cache_flush();
 }
 
-/* N15: the cache honours TTLs with an upper bound, caches negative answers
- * only with an SOA record and for the RFC 2308 time, evicts the least
- * recently used name, and the search list is applied by the ndots rule. */
+/* The N15 checks show that the cache honours TTLs with an upper bound,
+ * caches negative answers only with an SOA record and for the RFC 2308
+ * time and evicts the least recently used name, and that the search list
+ * is applied by the ndots rule. */
 static int cache_tests(void)
 {
     uint32_t a;

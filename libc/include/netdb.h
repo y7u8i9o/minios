@@ -42,8 +42,9 @@ const char *gai_strerror(int error);
 /* The resolver reads RESOLV_CONF and HOSTS_FILE from the environment when
  * set; tests use them to point at scratch files. */
 
-/* MiniOS extensions for the resolver cache of this process: the seconds
- * that the cached answer for name has left, or -1 when there is none, and
- * the removal of every cached answer. */
+/* These MiniOS extensions serve the resolver cache of this process.
+ * res_cache_remaining returns the seconds that the cached answer for name
+ * has left, or -1 when there is none, and res_cache_flush removes every
+ * cached answer. */
 int res_cache_remaining(const char *name);
 void res_cache_flush(void);

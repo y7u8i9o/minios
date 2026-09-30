@@ -1,8 +1,8 @@
-/* TCP options with injected segments and the controlled clock. A fake
- * Ethernet device records production output, injected segments carry
- * options built here, and the captured options are decoded by this file
- * rather than by the production parser, so the two cannot agree by
- * sharing a mistake. */
+/* These tests check TCP options with injected segments and the controlled
+ * clock. A fake Ethernet device records production output, injected
+ * segments carry options built here, and the captured options are decoded
+ * by this file rather than by the production parser, so the two cannot
+ * agree by sharing a mistake. */
 #include <console.h>
 #include <errno.h>
 #include "net_helpers.h"
@@ -65,13 +65,15 @@ static void resolve_peer(void)
     arp_input(&fake, packet);
 }
 
-/* Options of an injected segment. */
+/* struct peer_options describes the options of an injected segment. A
+ * negative window_scale leaves the option out, and a nonzero bad_length
+ * replaces the length of the window scale or timestamp option. */
 struct peer_options {
     uint16_t mss;
-    int window_scale; /* negative: absent */
+    int window_scale;
     bool timestamp;
     uint32_t ts_value, ts_echo;
-    int bad_length; /* nonzero: that length for the first option emitted */
+    int bad_length;
     bool sack_permitted;
     unsigned sack_count;
     uint32_t sack[4][2];
@@ -173,7 +175,8 @@ static void inject(struct tcp_connection *c,
                  data, length);
 }
 
-/* One captured TCP segment decoded independently of wire.c. */
+/* struct decoded holds one captured TCP segment, decoded independently of
+ * wire.c. */
 struct decoded {
     uint8_t flags;
     uint32_t sequence, acknowledgement;
@@ -370,8 +373,8 @@ static void negotiated_checks(void)
                  "a full segment leaves room for the timestamp option (payload %u)",
                  (unsigned)full.payload);
 
-    /* PAWS: an older timestamp is dropped and answered; a segment without
-     * one is dropped silently; a newer one is accepted. */
+    /* PAWS drops an older timestamp and answers it, drops a segment without
+     * one silently and accepts a newer one. */
     uint32_t expected = c->rcv_nxt;
     uint64_t paws = tcp_counters.paws_rejected, missing = tcp_counters.timestamp_missing;
     options.ts_value = 4000;
@@ -440,7 +443,8 @@ static void passive_checks(void)
     ktest_assert(socket_bind(socket_from_file(listener), &name, 16) == 0 &&
                      socket_listen(socket_from_file(listener), 4) == 0,
                  "options listener");
-    struct peer_options options = {.mss = 1400, .window_scale = 3, .timestamp = true, .ts_value = 700};
+    struct peer_options options = {
+        .mss = 1400, .window_scale = 3, .timestamp = true, .ts_value = 700};
     send_segment(9300, 8100, 1, 0, TCP_SYN, 65535, &options, NULL, 0);
     struct tcp_connection *c = child(9300);
     struct decoded synack = last();
@@ -534,11 +538,11 @@ static void test_tcp_options(void)
 }
 KTEST_DEFINE("net_tcp_options", test_tcp_options);
 
-/* N14: SACK (RFC 2018, RFC 6675) and delayed ACKs. */
+/* The N14 tests check SACK (RFC 2018, RFC 6675) and delayed ACKs. */
 
-/* An established connection that negotiated SACK, with the peer's MSS
- * 1000 and a scaled peer window of 128000 bytes. Timestamps are optional
- * so that both option budgets are exercised. */
+/* sack_open returns an established connection that negotiated SACK, with
+ * the peer's MSS 1000 and a scaled peer window of 128000 bytes. Timestamps
+ * are optional so that both option budgets are exercised. */
 static struct file *sack_open(bool timestamps)
 {
     struct file *file = active_open();
@@ -565,8 +569,12 @@ static struct peer_options ack_options(struct tcp_connection *c)
     }
     return o;
 }
-/* A pure ACK from the peer with the given cumulative ACK and SACK blocks. */
-static void peer_ack(struct tcp_connection *c, uint32_t ack, unsigned blocks, const uint32_t (*sack)[2])
+/* peer_ack injects a pure ACK from the peer with the given cumulative ACK
+ * and SACK blocks. */
+static void peer_ack(struct tcp_connection *c,
+                     uint32_t ack,
+                     unsigned blocks,
+                     const uint32_t (*sack)[2])
 {
     struct peer_options o = ack_options(c);
     o.sack_count = blocks;
@@ -660,8 +668,8 @@ static void delayed_ack_checks(void)
                      last().acknowledgement == c->rcv_nxt && !c->ack_deadline,
                  "outgoing data carries the delayed ACK");
 
-    /* Receiver silly window avoidance: a small read sends no update, a
-     * read of a full segment does. */
+    /* Under receiver silly window avoidance a small read sends no update,
+     * and a read of a full segment does. */
     struct socket_msg message = {.data = pattern, .len = 100};
     before = frame_count;
     ktest_assert(socket_recvmsg(socket_from_file(file), &message) == 100 && frame_count == before,
@@ -690,7 +698,9 @@ static uint32_t fill_flight(struct file *file, struct tcp_connection *c, unsigne
     /* One flush sends at most eight segments. */
     while (c->transmit_sent < c->congestion_window)
         tcp_flush(c);
-    ktest_assert(c->transmit_sent >= segments * 1000u, "flight of %u bytes", (unsigned)c->transmit_sent);
+    ktest_assert(c->transmit_sent >= segments * 1000u,
+                 "flight of %u bytes",
+                 (unsigned)c->transmit_sent);
     return c->snd_una;
 }
 
@@ -775,10 +785,12 @@ static void scoreboard_checks(void)
     struct tcp_connection *c = connection_of(file);
     uint32_t u = fill_flight(file, c, 20);
     uint64_t drops = tcp_counters.scoreboard_drops, received = tcp_counters.sack_blocks_received;
+    /* The blocks lie below snd_una, lie beyond snd_nxt and are empty, in
+     * this order. */
     uint32_t sack[3][2] = {
-        {u - 500, u},                /* below snd_una: a duplicate report */
-        {u + 30000, u + 31000},      /* beyond snd_nxt */
-        {u + 1000, u + 1000},        /* empty */
+        {u - 500, u},
+        {u + 30000, u + 31000},
+        {u + 1000, u + 1000},
     };
     peer_ack(c, u, 3, sack);
     ktest_assert(!c->scoreboard_count && tcp_counters.sack_blocks_received == received,
@@ -801,7 +813,7 @@ static void scoreboard_checks(void)
     file_put(file);
 }
 
-/* A FIN at RCV.NXT is accepted when the store is full and the window
+/* A FIN at RCV.NXT is accepted when the store is full and the window is
  * closed, since it needs no space. */
 static void closed_window_checks(void)
 {
@@ -824,7 +836,7 @@ static void closed_window_checks(void)
 
 static void unsacked_checks(void)
 {
-    /* The peer does not permit SACK: no block is ever sent. */
+    /* When the peer does not permit SACK, no block is ever sent. */
     struct file *file = active_open();
     struct tcp_connection *c = connection_of(file);
     struct peer_options options = {.mss = 1000, .window_scale = -1};

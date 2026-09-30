@@ -145,8 +145,8 @@ void tcp_release_storage(struct tcp_connection *c)
     tcp_release_transmit(c);
 }
 
-/* A connection without an endpoint or a listener is an orphan: no reader
- * and no writer can reach it again. */
+/* A connection without an endpoint or a listener is an orphan, which no
+ * reader and no writer can reach again. */
 void tcp_release_unused(struct tcp_connection *c)
 {
     if (c->endpoint || c->listener)
@@ -162,22 +162,24 @@ uint32_t tcp_timestamp_now(const struct tcp_connection *c)
     return (uint32_t)net_clock_ms() + c->ts_offset;
 }
 
-/* The payload of a full segment: the peer's MSS excludes TCP options
- * (RFC 6691), so the timestamp option carried by every segment of a
- * connection that negotiated it is taken from the payload. */
+/* tcp_send_mss returns the payload of a full segment. The peer's MSS
+ * excludes TCP options (RFC 6691), so the timestamp option that every
+ * segment of a connection with timestamps carries is taken from the
+ * payload. */
 unsigned tcp_send_mss(const struct tcp_connection *c)
 {
     return c->peer_mss - (c->timestamps ? TCP_TIMESTAMP_SPACE : 0);
 }
 
-/* The payload of a full segment the peer sends us, by the same rule. */
+/* tcp_receive_mss returns the payload of a full segment that the peer
+ * sends, by the same rule. */
 unsigned tcp_receive_mss(const struct tcp_connection *c)
 {
     return c->local_mss - (c->timestamps ? TCP_TIMESTAMP_SPACE : 0);
 }
 
-/* Applies the options of the peer's SYN (passive or simultaneous open) or
- * SYN ACK (active open). Our SYN always offers window scaling, timestamps
+/* tcp_negotiate applies the options of the peer's SYN (passive or
+ * simultaneous open) or SYN ACK (active open). Our SYN always offers window scaling, timestamps
  * and SACK, so each is in use exactly when the peer's SYN carried it. */
 void tcp_negotiate(struct tcp_connection *c, const struct tcp_segment *syn)
 {
@@ -230,12 +232,12 @@ void tcp_connection_free(struct tcp_connection *c)
         tcp_publish_listener(listener);
 }
 
-/* The window offered to the peer, which is also the range input accepts.
+/* The window offered to the peer is also the range that input accepts.
  * Out-of-order bytes are stored inside it and do not shrink it, so the
  * right edge never moves left through reordering. Without window scaling
  * the 16-bit field caps it at 65535 bytes of the larger store; with it the
  * window is rounded down to the scale unit, so what is advertised is
- * exactly what is accepted. Caller holds tcp_lock. */
+ * exactly what is accepted. The caller holds tcp_lock. */
 unsigned tcp_receive_window_locked(struct tcp_connection *c)
 {
     unsigned available =

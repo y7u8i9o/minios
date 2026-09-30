@@ -6,12 +6,14 @@
 #include <lib/string.h>
 #include <errno.h>
 
-/* Options of one outgoing segment. The layouts follow the examples of
- * RFC 7323 appendix A and RFC 2018: four-byte aligned, padded with NOP. */
+/* struct tcp_out_options describes the options of one outgoing segment.
+ * The layouts follow the examples of RFC 7323 appendix A and RFC 2018,
+ * aligned to four bytes and padded with NOP. A nonzero mss, a nonnegative
+ * window_scale and sack_permitted belong to a SYN only. */
 struct tcp_out_options {
-    uint16_t mss;         /* nonzero: MSS, SYN only */
-    int window_scale;     /* nonnegative: window scale shift, SYN only */
-    bool sack_permitted;  /* SYN only */
+    uint16_t mss;
+    int window_scale;
+    bool sack_permitted;
     bool timestamp;
     uint32_t ts_value, ts_echo;
     unsigned sack_count;

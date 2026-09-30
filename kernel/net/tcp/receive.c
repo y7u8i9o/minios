@@ -22,12 +22,12 @@ void tcp_receive_discard(struct tcp_connection *c)
         memset(c->receive_present, 0, TCP_RECEIVE_CAPACITY / 8);
 }
 
-/* The contiguous run of stored out-of-order bytes that contains [start,
- * end), found in the presence bitmap. RFC 2018 section 4 requires the first
- * reported block to be exactly this run. The scan never passes rcv_nxt
- * (that byte is missing, or rcv_nxt would have advanced) or the right
- * edge, and it skips whole bitmap bytes where it can. Caller holds
- * tcp_lock. */
+/* stored_run finds, in the presence bitmap, the contiguous run of stored
+ * out-of-order bytes that contains [start, end). RFC 2018 section 4
+ * requires the first reported block to be exactly this run. The scan never
+ * passes rcv_nxt (that byte is missing, or rcv_nxt would have advanced) or
+ * the right edge, and it skips whole bitmap bytes where it can. The caller
+ * holds tcp_lock. */
 static struct tcp_range stored_run(struct tcp_connection *c, uint32_t start, uint32_t end,
                                    uint32_t right)
 {
@@ -49,7 +49,7 @@ static struct tcp_range stored_run(struct tcp_connection *c, uint32_t start, uin
     return (struct tcp_range){start, end};
 }
 
-/* RFC 2018 section 4: the first block reported is the run containing the
+/* By RFC 2018 section 4, the first block reported is the run containing the
  * most recently received out-of-order segment, followed by the blocks
  * reported most recently. The new run absorbs every reported block it
  * overlaps or touches; blocks at or below rcv_nxt are dropped. At most
@@ -94,7 +94,7 @@ static void sack_report_prune(struct tcp_connection *c)
     c->sack_report_count = count;
 }
 
-/* Sends the ACK now, or arms the delayed-ACK deadline once. */
+/* tcp_acknowledge sends the ACK now or arms the delayed-ACK deadline once. */
 void tcp_acknowledge(struct tcp_connection *c, bool immediate)
 {
     if (immediate) {
@@ -107,9 +107,9 @@ void tcp_acknowledge(struct tcp_connection *c, bool immediate)
     }
 }
 
-/* Receiver silly window avoidance (RFC 1122 section 4.2.3.3): after a read
- * the window is announced on its own only when the right edge moves by at
- * least the smaller of half the store and one full segment. Every other
+/* Receiver silly window avoidance (RFC 1122 section 4.2.3.3) applies after
+ * a read. The window is announced on its own only when the right edge moves
+ * by at least the smaller of half the store and one full segment. Every other
  * segment carries the current window anyway. */
 void tcp_window_update(struct tcp_connection *c)
 {
@@ -145,7 +145,7 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
         c->out_of_order++;
     }
     uint32_t fin_sequence = segment->sequence + segment->length;
-    /* A FIN may lie at the right edge: it occupies no receive space. */
+    /* A FIN may lie at the right edge, because it occupies no receive space. */
     if ((segment->flags & TCP_FIN) && !tcp_before(fin_sequence, c->rcv_nxt) &&
         !tcp_after(fin_sequence, right) && !c->pending_fin) {
         c->pending_fin = true;
@@ -214,10 +214,10 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
             break;
         }
     }
-    /* RFC 5681 section 4.2 and RFC 1122 section 4.2.3.2: a FIN, a segment
-     * that arrives out of order or repeats data, and a segment that fills
-     * part of a hole are acknowledged at once, as is in-order data once two
-     * full segments are unacknowledged. Other in-order data waits at most
+    /* As RFC 5681 section 4.2 and RFC 1122 section 4.2.3.2 ask, a FIN, a
+     * segment that arrives out of order or repeats data, and a segment that
+     * fills part of a hole are acknowledged at once, as is in-order data
+     * once two full segments are unacknowledged. Other in-order data waits at most
      * TCP_DELAYED_ACK_MS, and any segment we send settles the ACK earlier.
      * There is no Nagle algorithm, so a sender never waits for this ACK
      * before sending a small write. */
