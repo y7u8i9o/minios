@@ -895,8 +895,11 @@ static int build_dir(struct build *b, const char *rel)
         path_join(full, sizeof full, b->root, sub);
         snprintf(member, sizeof member, "files/%s", sub);
         struct stat st;
-        if (stat(full, &st) < 0) {
+        if (lstat(full, &st) < 0) {
             r = error(b->m->name, "%s: %s", full, strerror(errno));
+        } else if (S_ISLNK(st.st_mode)) {
+            /* The package format has no link member. */
+            r = error(b->m->name, "%s: symbolic links cannot be packaged", full);
         } else if (S_ISDIR(st.st_mode)) {
             if (tarw_add(&b->w, member, 1, 0755, st.st_mtime, NULL, 0) < 0)
                 r = error(b->m->name, "%s: cannot add", member);

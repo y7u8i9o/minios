@@ -38,6 +38,7 @@ static const char *type_name(unsigned mode)
     case S_IFCHR: return "char";
     case S_IFBLK: return "block";
     case S_IFIFO: return "fifo";
+    case S_IFLNK: return "link";
     }
     return "unknown";
 }
@@ -50,6 +51,7 @@ static const char *dirent_type_name(unsigned type)
     case DT_CHR: return "char";
     case DT_BLK: return "block";
     case DT_FIFO: return "fifo";
+    case DT_LNK: return "link";
     }
     return "unknown";
 }
@@ -189,6 +191,17 @@ static int fs_stat(lua_State *L)
     return 1;
 }
 
+/* The status of a symbolic link itself rather than of its target. */
+static int fs_lstat(lua_State *L)
+{
+    const char *path = luaL_checkstring(L, 1);
+    struct stat st;
+    if (lstat(path, &st) < 0)
+        return minios_errresult(L);
+    push_stat(L, &st);
+    return 1;
+}
+
 static int fs_exists(lua_State *L)
 {
     struct stat st;
@@ -282,6 +295,7 @@ static const luaL_Reg fs_funcs[] = {
     { "dir", fs_dir },
     { "list", fs_list },
     { "stat", fs_stat },
+    { "lstat", fs_lstat },
     { "exists", fs_exists },
     { "mkdir", fs_mkdir },
     { "rmdir", fs_rmdir },

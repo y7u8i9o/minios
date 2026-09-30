@@ -73,6 +73,11 @@ check tar-abs-content "$(cat out/t/abs)" "hi"
 check tar-file "$(cat out/t/file)" "data"
 check tar-type "$(find out -type l | sort | tr '\n' ' ')" "out/t/abs out/t/rel "
 
+# A link back to an ancestor must not make grep -r recurse.
+ln -s .. t/up
+check grep-r-loop "$(grep -r data t | tr '\n' ' ')" "t/file:data "
+rm t/up
+
 rm lf; check rm-link "$(find /su/lf /su/d/f 2> /dev/null | tr '\n' ' ')" "/su/d/f "
 rm ld; check rm-dir-link "$(ls /su/d)" "f"
 rm loopa loopb lx; check rm-loops "$?" "0"

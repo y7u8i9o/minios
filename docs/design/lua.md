@@ -73,10 +73,11 @@ rule for the upstream sources does not produce them. Failures in the
 modules return `nil`, the message and the errno, as `io.open` does.
 
 `fs` (`user/lua/lfs.c`) provides `dir(path)`, an iterator over name and
-type (`file`, `directory`, `char`, `block`, `fifo`, `unknown`) that
-skips `.` and `..`; `list(path)`, a sorted array of names; `stat(path)`
-with `type`, `size`, `mtime`, `mode`, `inode`, `device`, `links`,
-`blocks`, `blocksize`; `exists`; `mkdir(path [, mode])`, `rmdir`,
+type (`file`, `directory`, `link`, `char`, `block`, `fifo`, `unknown`)
+that skips `.` and `..`; `list(path)`, a sorted array of names;
+`stat(path)` with `type`, `size`, `mtime`, `mode`, `inode`, `device`,
+`links`, `blocks`, `blocksize`; `lstat(path)`, the same for a symbolic
+link itself; `exists`; `mkdir(path [, mode])`, `rmdir`,
 `chdir`, `getcwd`, `sync`; `read(path)` for a whole file and
 `write(path, data [, append])`.
 
