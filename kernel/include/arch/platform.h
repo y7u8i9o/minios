@@ -16,7 +16,7 @@ __noreturn void platform_power_off(void);
 __noreturn void platform_reboot(void);
 /* End a QEMU test run with an exit status. On the PC the isa-debug-exit
  * device on port 0xf4 makes QEMU exit with (code << 1) | 1 and the call
- * returns if the device is not present; on virt QEMU powers off, without
+ * returns if the device is not present. On virt QEMU powers off, without
  * the status. */
 void platform_test_exit(int code);
 

@@ -62,8 +62,12 @@ int huge_fault_locked(struct vmspace *vm, struct vma *v, uintptr_t va)
         for (int i = 0; i < PT_ENTRIES; i++)
             if (table[i])
                 return 0;
-        paging_free_table(pte_addr(*pde));
+        /* The walkers of every CPU may cache the table entry: drop it
+         * before the table is freed. */
+        uintptr_t pt = pte_addr(*pde);
         *pde = 0;
+        tlb_flush_range(vm, block, PAGE_2M);
+        paging_free_table(pt);
     }
     unsigned flags = v->flags;
     spin_unlock(&vm->lock);
@@ -84,14 +88,13 @@ int huge_fault_locked(struct vmspace *vm, struct vma *v, uintptr_t va)
     page_get(pg);
     *pde = pte_mkblock(vma_make_pte(page_to_phys(pg), flags));
     percpu_counter_add(&vm->resident, PT_ENTRIES);
-    tlb_flush_range(vm, block, PAGE_2M);    /* a freed empty table may be cached by the page walker */
     __atomic_fetch_add(&stats.mapped, 1, __ATOMIC_RELAXED);
     return 1;
 }
 
 /* Replace the huge entry pde covering block by a page table. With an
- * exclusively owned block the small entries point into it; a shared block
- * is copied into small frames first. Caller holds vm->lock. */
+ * exclusively owned block the small entries point into it. A shared block
+ * is copied into small frames first. The caller has acquired vm->lock. */
 static int split_locked(struct vmspace *vm, uintptr_t block, pte_t *pde)
 {
     pte_t e = *pde;
@@ -107,7 +110,7 @@ static int split_locked(struct vmspace *vm, uintptr_t block, pte_t *pde)
         for (int i = 0; i < PT_ENTRIES; i++) {
             struct page *pg = head + i;
             if (i)
-                page_get(pg);   /* the head already carries its mapping reference */
+                page_get(pg);   /* the reference of the mapping is already counted on the head */
             table[i] = pte_set_addr(small, page_to_phys(pg));
         }
     } else {
@@ -131,8 +134,7 @@ static int split_locked(struct vmspace *vm, uintptr_t block, pte_t *pde)
         }
         huge_put(head);
     }
-    *pde = pte_make_table(pt, true);
-    tlb_flush_range(vm, block, PAGE_2M);
+    tlb_replace_entry(vm, pde, pte_make_table(pt, true), block, PAGE_2M);
     __atomic_fetch_sub(&stats.mapped, 1, __ATOMIC_RELAXED);
     __atomic_fetch_add(&stats.splits, 1, __ATOMIC_RELAXED);
     return 0;
@@ -177,6 +179,7 @@ int huge_cow_locked(struct vmspace *vm, uintptr_t va, pte_t *pde)
     pte_t writable = pte_mkwrite(pte_clear_cow(*pde));
     if (__atomic_load_n(&old->refcount, __ATOMIC_SEQ_CST) == 1) {
         *pde = writable;
+        tlb_flush_range(vm, block, PAGE_2M);
     } else {
         struct page *pg = pmm_alloc(HUGE_ORDER);
         if (!pg) {
@@ -186,9 +189,8 @@ int huge_cow_locked(struct vmspace *vm, uintptr_t va, pte_t *pde)
         }
         memcpy(P2V(page_to_phys(pg)), P2V(page_to_phys(old)), PAGE_2M);
         page_get(pg);
-        *pde = pte_set_addr(writable, page_to_phys(pg));
+        tlb_replace_entry(vm, pde, pte_set_addr(writable, page_to_phys(pg)), block, PAGE_2M);
         huge_put(old);
     }
-    tlb_flush_range(vm, block, PAGE_2M);
     return 0;
 }

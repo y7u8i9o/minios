@@ -51,7 +51,7 @@ pte_t vma_make_pte(uintptr_t pa, unsigned flags)
 {
     if (!(flags & VM_READ))
         return pte_make_protnone(pa);
-    /* The frame may hold code the kernel just wrote (a file page, a page
+    /* The frame may contain code the kernel just wrote (a file page, a page
      * swapped in, a region made executable). */
     if (flags & VM_EXEC)
         paging_sync_icache(pa);
@@ -71,7 +71,7 @@ struct vma *vma_find_locked(struct vmspace *vm, uintptr_t addr)
     return NULL;
 }
 
-/* Insert n into the sorted list. Caller holds vm->lock and has checked
+/* Insert n into the sorted list. The caller has acquired vm->lock and checked
  * that the range is free. */
 static void vma_insert_locked(struct vmspace *vm, struct vma *n)
 {
@@ -131,8 +131,11 @@ struct vma *vma_split_locked(struct vmspace *vm, struct vma *v, uintptr_t addr)
         filemap_ref(tail->mapping);
         tail->offset = v->offset + (addr - v->start);
     }
-    __atomic_store_n(&v->end, addr, __ATOMIC_RELEASE);
+    /* The tail is linked before v shrinks: a lockless reader
+     * (vma_range_ok) meanwhile finds v or the tail covering [addr, end),
+     * never a gap. */
     vma_link_after_rcu(&tail->link, &v->link);
+    __atomic_store_n(&v->end, addr, __ATOMIC_RELEASE);
     return tail;
 }
 
@@ -349,16 +352,16 @@ static int do_cow_locked(struct vmspace *vm, uintptr_t va, pte_t *entry)
     pte_t writable = pte_mkwrite(pte_clear_cow(*entry));
     if (__atomic_load_n(&old->refcount, __ATOMIC_SEQ_CST) == 1) {
         *entry = writable;
+        tlb_flush_range(vm, va, PAGE_SIZE);
     } else {
         struct page *pg = pmm_alloc_page();
         if (!pg)
             return -ENOMEM;
         memcpy(P2V(page_to_phys(pg)), P2V(page_to_phys(old)), PAGE_SIZE);
         page_get(pg);
-        *entry = pte_set_addr(writable, page_to_phys(pg));
+        tlb_replace_entry(vm, entry, pte_set_addr(writable, page_to_phys(pg)), va, PAGE_SIZE);
         page_put(old);
     }
-    tlb_flush_range(vm, va, PAGE_SIZE);
     return 0;
 }
 
@@ -413,7 +416,7 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
         else if (w == 1 && pte_present(*entry) && write && pte_cow(*entry))
             ok = do_cow_locked(vm, va, entry) == 0;
         else if (w >= 1 && pte_present(*entry) && write && pte_write(*entry))
-            ok = true;  /* another thread resolved it first; the stale TLB entry refaulted */
+            ok = true;  /* another thread resolved it first, and the stale TLB entry faulted again */
     } else if (w == 1 && pte_swapped(*entry)) {
         spin_unlock(&vm->lock);
         ok = swap_in_page(vm, va) == 0;
@@ -436,8 +439,8 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
                 ok = h > 0;
                 goto out;
             }
-            /* The lock was dropped meanwhile; fall back to a small page
-             * if the region is still there. */
+            /* The lock was dropped meanwhile. Map a small page instead if
+             * the region still exists. */
             v = vma_find_locked(vm, va);
             if (!v || !(v->flags & VM_READ))
                 goto out;
@@ -460,7 +463,7 @@ size_t vma_count_resident(struct vmspace *vm)
 /* A fault on an entry that permits the access: the processor needs the
  * access flag set, or for a write the dirty state, which the hardware of
  * aarch64 may leave to software (docs/design/arch.md). Sets them and
- * returns true; on x86_64 such a fault comes only from a stale TLB entry
+ * returns true. On x86_64 such a fault comes only from a stale TLB entry
  * after another CPU changed the entry. */
 static bool update_access(struct vmspace *vm, uintptr_t va, bool write)
 {
@@ -549,7 +552,7 @@ static int share_level(struct vmspace *vm, struct vmspace *child, pte_t *src,
     return 0;
 }
 
-/* Copy the region list. Caller holds vm->lock. */
+/* Copy the region list. The caller has acquired vm->lock. */
 static int copy_vmas_locked(struct vmspace *vm, struct vmspace *child)
 {
     struct list_head *pos;

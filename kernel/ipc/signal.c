@@ -57,7 +57,7 @@ static void stop_current(struct proc *p, int sig)
         list_for_each(pos, &p->threads) {
             struct thread *t = list_entry(pos, struct thread, proc_link);
             if (t != thread_current()) {
-                waitq_interrupt(t);
+                waitq_signal(t);
                 sched_wake(t);
             }
         }
@@ -66,10 +66,22 @@ static void stop_current(struct proc *p, int sig)
     }
 
     sched_lock_current();
+    struct thread *t = thread_current();
     if (__atomic_load_n(&p->stopped, __ATOMIC_ACQUIRE) &&
         !__atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE)) {
-        thread_current()->state = THREAD_STOPPED;
-        sched_switch_locked();
+        /* continue_process stores stopped and then reads the state in
+         * sched_wake. The state is stored first here and stopped is read
+         * again, both sequentially consistent, so either the continuer
+         * finds THREAD_STOPPED and queues a wake, or this thread finds
+         * stopped cleared and does not stop. A wake queued meanwhile is
+         * drained under the run queue lock acquired above and finds the
+         * thread running. */
+        __atomic_store_n(&t->state, THREAD_STOPPED, __ATOMIC_SEQ_CST);
+        if (__atomic_load_n(&p->stopped, __ATOMIC_SEQ_CST) &&
+            !__atomic_load_n(&p->exiting, __ATOMIC_ACQUIRE))
+            sched_switch_locked();
+        else
+            __atomic_store_n(&t->state, THREAD_RUNNING, __ATOMIC_RELAXED);
     }
     sched_unlock_current();
 }
@@ -80,7 +92,7 @@ static void continue_process(struct proc *p)
     bool changed = false;
     spin_lock(&proc_tree_lock);
     if (p->stopped && p->state != PROC_ZOMBIE) {
-        __atomic_store_n(&p->stopped, false, __ATOMIC_RELEASE);
+        __atomic_store_n(&p->stopped, false, __ATOMIC_SEQ_CST);    /* see stop_current */
         p->stop_reported = false;
         p->continued = true;
         changed = true;
@@ -107,7 +119,7 @@ static void interrupt_threads(struct proc *p, int sig)
     list_for_each(pos, &p->threads) {
         struct thread *t = list_entry(pos, struct thread, proc_link);
         if (t != thread_current() && !(t->sig_mask & SIGBIT(sig))) {
-            waitq_interrupt(t);
+            waitq_signal(t);
             sched_wake(t);          /* also interrupt a timed scheduler sleep */
         }
     }

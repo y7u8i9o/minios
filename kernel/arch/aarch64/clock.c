@@ -1,7 +1,6 @@
 #define KLOG_SUBSYS "timer"
 #include <arch/timer.h>
 #include <klog.h>
-#include "todo.h"
 #include "timer_internal.h"
 
 /* The clock is the virtual counter of the generic timer, which runs at
@@ -26,7 +25,7 @@ void timer_rearm(void)
     __asm__ volatile("mrs %0, cntv_cval_el0" : "=r"(cval));
     cval += period;
     /* After a delay longer than a period the next tick is one period from
-     * now; ticks that were missed are not delivered. */
+     * now. Ticks that were missed are not delivered. */
     uint64_t now = arch_clock_read();
     if (cval <= now)
         cval = now + period;
@@ -48,7 +47,10 @@ void arch_timer_init(unsigned hz, uint64_t clock_per_ms)
     klog_info("generic timer %lu Hz, periodic tick %u Hz (%lu counts) on every cpu", freq, hz, period);
 }
 
+/* The tick of an application processor. gic_init_cpu has enabled PPI 27
+ * in its redistributor. */
 void arch_timer_init_cpu(unsigned hz)
 {
-    ARCH_TODO("A8");
+    (void)hz;
+    start_tick();
 }

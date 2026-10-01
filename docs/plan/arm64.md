@@ -116,7 +116,7 @@ unchanged to `include/boot.h` and the Limine requests to
 - The boot test is `pagetable`.
 
 `<arch/paging.h>` defines `pte_t`, the table geometry and the entry
-functions; the x86 bits are used only in `kernel/arch/x86_64/`.
+functions. The x86 bits are used only in `kernel/arch/x86_64/`.
 `pt_next_leaf_table` (`mm/ptwalk.c`) replaces the open-coded walks of the
 swap daemon and of `munmap`, and the recursive walks of `fork` and of the
 teardown use the geometry. `struct vmspace` has `pt_root` in place of
@@ -139,9 +139,9 @@ teardown use the geometry. `struct vmspace` has `pt_root` in place of
 - The boot test is `abi`.
 
 libc takes `syscall.S`, the start files, `setjmp.S`, `fenv.c`,
-`math_x87.c`, `math_long.c` and `libc_arch.h` from `libc/arch/x86_64/`; the
+`math_x87.c`, `math_long.c` and `libc_arch.h` from `libc/arch/x86_64/`. The
 public headers take their architecture part from `include/bits/<arch>/`.
-`minios/simd.h` has an SSE2 and a NEON implementation; the NEON one was
+`minios/simd.h` has an SSE2 and a NEON implementation. The NEON one was
 compiled with `aarch64-elf-gcc` but cannot run before A6. The loader takes
 `start.S` and `ld_arch.h` from `user/ld/arch/x86_64/`. `toolchain.mk`
 stops the build for an `ARCH` without flags. The cases `abi`, `libc`,
@@ -166,7 +166,7 @@ were split into the generic scancode and packet decoders in `drivers/` and
 the 8042 code in `arch/x86_64/i8042.c`, because the self-tests feed input
 through the decoders. The interface headers with identical prototypes moved
 to `kernel/include/arch/`. `boot` and `exception` run as early self-tests
-(`KTEST_DEFINE_STAGE` with `KTEST_EARLY`) after the boot environment is logged; on aarch64 they
+(`KTEST_DEFINE_STAGE` with `KTEST_EARLY`) after the boot environment is logged. On aarch64 they
 pass under HVF on the Apple host, and `exception` shows the register dump,
 the system registers and the backtrace (`tests/cases/exception/
 expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
@@ -187,13 +187,13 @@ expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
 
 QEMU 11 offers GICv3 with an ITS under HVF, so the port uses GICv3. The
 table walks moved from `arch/x86_64/paging.c` to the generic
-`mm/pgtable.c`; the architecture keeps the entry format, the roots and the
-TLB. The aarch64 processor of the Apple host manages neither the access
+`mm/pgtable.c`. The architecture implements the entry format, the roots and
+the TLB. The aarch64 processor of the Apple host manages neither the access
 flag nor the dirty state, so a fault on an entry that permits the access
 sets them (`update_access` in `mm/vma.c`). Self-tests run at stages of the
-start-up sequence; `pmm`, `vmm`, `munmap_tables`, `slab`, `slab_redzone`
-and `pagetable` run after the slab allocator and `timer` after the timer,
-on both architectures, and `vmm` measures its second round, because the
+start-up sequence. On both architectures `pmm`, `vmm`, `munmap_tables`,
+`slab`, `slab_redzone` and `pagetable` run after the slab allocator, and
+`timer` runs after the timer. `vmm` measures its second round, because the
 first creates the kernel tables and slabs it uses. Under HVF the GIC of
 Hypervisor.framework does not complete a write of `GICR_IGROUPR0`, so the
 driver writes the redistributor registers only when their value differs.
@@ -208,30 +208,30 @@ TCG. On x86_64 these cases and `kbd`, `fork`, `swap`, `madvise`,
 
 - The architecture implements the context switch, EL0 entry, `svc` system
   calls and signal frames.
-- FP and SIMD state is enabled through CPACR_EL1, and the TLS base is kept
+- FP and SIMD state is enabled through CPACR_EL1, and the TLS base is stored
   in TPIDR_EL0.
 - libc and the dynamic loader implement AArch64 relocations and TLS variant I.
 - The boot tests `fork`, `libc`, `signals`, `pthreads` and `dynlink` pass on aarch64.
 
 The whole user space builds for aarch64, including tcc, Lua and the
-utilities; the kernel boots to the first thread and runs the programs of
-the initrd, which is the root until the disk arrives with PCI in A7.
+utilities. The kernel boots to the first thread and runs the programs of
+the initrd, which is the root until the disk is supported with PCI in A7.
 `fork`, `libc`, `signals`, `dynlink` and `abi` pass on aarch64 under HVF and
 TCG, together with the kernel cases `boot`, `exception`, `pmm`, `vmm`,
 `slab`, `timer` and `sched`. `pthreads` passes every check except the
 concurrent stream test, which writes to `/tmp` and needs the writable root
-of A7; A7 adds `pthreads` to its cases.
+of A7. A7 adds `pthreads` to its cases.
 
-The port found three faults in shared code: `user_stack_setup` left the
+The port found three faults in shared code. `user_stack_setup` left the
 initial stack pointer 8 bytes off 16 byte alignment, which the x86 start
-code had hidden; static programs of the bare-metal aarch64 linker have
+code had hidden. Static programs of the bare-metal aarch64 linker have
 their program headers outside every load segment, so the kernel now
-copies them to the stack for `AT_PHDR`; and `ld/tests/fixtures.py` wrote
-x86 machine and relocation numbers. TLS follows variant I on aarch64
+copies them to the stack for `AT_PHDR`. `ld/tests/fixtures.py` wrote x86
+machine and relocation numbers. TLS follows variant I on aarch64
 (`minios/dl.h`), user code uses `-mtls-dialect=trad`, and the loader
 supports the AArch64 relocations and PLT. The aarch64 `long double`
 (binary128) functions compute their exponentials, logarithms and inverse
-tangents in double precision (`libc/arch/aarch64/math_long.c`); whether the
+tangents in double precision (`libc/arch/aarch64/math_long.c`). Whether the
 libm accuracy cases `mathvec` and `libmfull` need adjustment on aarch64 is
 checked with the rest of the user programs in A7. The return path masks
 exceptions before it writes `ELR_EL1`, because a thread enters EL0 with
@@ -267,7 +267,7 @@ self-tests inject keys and pointer motion, as input devices when no
 
 The port found two faults in shared code. `pmm_is_ram` was true for
 reserved frames below the highest RAM address, so the unmap of a mapped
-framebuffer in reserved RAM (ramfb) freed a reserved frame; it is now
+framebuffer in reserved RAM (ramfb) freed a reserved frame. It is now
 true only for frames of the allocator. The `utils` case required the
 machine name `x86_64`. The binary128 exponential, logarithm and inverse
 tangent functions now evaluate in binary128 instead of double precision,
@@ -275,7 +275,7 @@ which the `libmfull` checks require.
 
 On aarch64 the cases `platform`, `blk`, `time`, `gpu_mode`,
 `input_keyboard`, `gui`, `pthreads` and `comp_panel` pass under HVF and
-under TCG; under HVF `shell`, `script`, `initctl`, `audio_pcm`,
+under TCG. Under HVF `shell`, `script`, `initctl`, `audio_pcm`,
 `net_icmp`, `net_dhcp`, `libmfull`, `mathvec`, `float`, `fpu`, `lua`,
 `utils`, `awk`, `sed`, `mmap_file`, `swap`, `fb0`, `input_tablet`, `mouse`,
 `abi` and `libc` pass as well. The `kbd` case tests the 8042 controller
@@ -284,13 +284,51 @@ and remains x86 specific. On x86_64 `boot`, `platform`, `pmm`, `vmm`,
 `mmap_file`, `net_icmp`, `audio_pcm`, `shell`, `initctl` and `utils`
 pass.
 
-### A8. aarch64 SMP
+### A8. aarch64 SMP (completed 2026-10-02)
 
 - The application processors are started through the Limine MP protocol.
 - IPIs are sent as SGIs, and `tlb_flush_range` uses broadcast TLBI.
 - The memory ordering of the lock-free paths of M43 to M46 and of the
   spinlock is audited.
 - The boot tests `smp`, `smp_user`, `lockfree` and `sched` pass on aarch64.
+
+`smp_park_aps` releases each processor into `ap_entry`, which installs the
+translation state of the kernel before it uses a kernel stack.
+`gic_init_cpu` sets up the redistributor and the CPU interface of each
+processor, and `arch_send_ipi` writes SGIs through `ICC_SGI1R_EL1`.
+`paging_flush_range` replaces the two local flush functions. On aarch64 it
+invalidates by ASID on every CPU, also for a space that is not loaded, so
+`tlb_flush_range` sends no interrupts for a range there. Before A8 the
+flush of a space that was not loaded was skipped on aarch64, which left
+stale entries of its ASID in the TLB. `paging_publish_entries` orders new
+tables and new kernel entries before the walks of other CPUs, and
+`tlb_replace_entry` performs the break before make that ARMv8 requires
+when an entry changes its frame or its size. The huge page fault now
+flushes the range before it frees an empty page table. The harness runs
+aarch64 cases with four CPUs.
+
+The `smp` test checks the flush across CPUs with a reader thread that
+caches a kernel translation, a remap of the page and a read of the new
+frame. Under HVF one run in five left a CPU without work, because an idle
+CPU rescheduled on its tick only when its own run queue had ready threads.
+The tick now also reschedules an idle CPU when another run queue has
+ready threads (`sched.md`). With four CPUs on aarch64 the `signals` test
+sent SIGTERM before the child had set the signal to be ignored. The child
+now reports through a pipe when it has set the signal.
+
+The audit corrected five orderings and five races in shared code, listed
+in `lockfree.md`.
+
+On aarch64 under HVF the cases `smp`, `smp_user`, `lockfree`, `sched`,
+`boot`, `exception`, `timer`, `platform`, `vmm`, `pagetable`,
+`munmap_tables`, `fork`, `hugepages`, `madvise`, `swap`, `mmap_file`,
+`signals`, `ctrlc`, `jobcontrol`, `pty`, `lineedit`, `profile`,
+`dynlink`, `pthreads`, `libc`, `blk`, `net_icmp`, `time`, `gpu_mode`,
+`gui`, `shell`, `initctl`, `shutdown`, `comp_panel`, `input_keyboard` and
+`rlimit` pass with four CPUs. Under TCG `smp`, `smp_user`, `lockfree`,
+`sched`, `fork`, `hugepages`, `swap`, `pthreads`, `signals`, `pty`, `blk`
+and `jobcontrol` pass. On x86_64 the same cases of the changed modules
+pass.
 
 ### A9. aarch64 user tools
 

@@ -56,7 +56,7 @@ layout belongs to the architecture. Generic code uses these accessors:
 `include/syscall/syscalls.h` includes `<arch/frame.h>`, so every system call
 handler reaches its arguments through `SYSARGn`. Because the number and the
 result share `rax` on x86_64, `frame_syscall_nr` returns the result once a
-system call has completed; generic code reads the number before the call.
+system call has completed. Generic code reads the number before the call.
 
 ## 3. System call entry (`<arch/syscall.h>`)
 
@@ -98,7 +98,7 @@ operations are:
 | `arch_switch_to(prev, next)` | save `prev`'s FPU state and switch kernel stacks (`sched_switch_locked`) |
 | `arch_thread_resume(t)` | load `t`'s FPU state and TLS base after every switch and in `thread_start` |
 | `arch_set_kernel_stack(top)` | the stack used on entries from user mode (the TSS `rsp0`) |
-| `arch_get_tls(t)`, `arch_set_tls(t, base)` | the TLS base; setting it for the calling thread also loads the register (`set_tls`, `fork`, `execve`, thread creation) |
+| `arch_get_tls(t)`, `arch_set_tls(t, base)` | the TLS base. Setting it for the calling thread also loads the register (`set_tls`, `fork`, `execve`, thread creation) |
 | `arch_fpu_capture(t)` | store the calling CPU's FPU registers in `t`'s area (the child of `fork`) |
 | `arch_fpu_reset(t)` | reset and load the initial FPU state of the calling thread (`execve`) |
 
@@ -107,7 +107,7 @@ operations are:
 `arch_irq_enable`, `arch_irq_disable`, `arch_irqs_enabled`, and the pair
 `arch_irq_save` and `arch_irq_restore` control the local interrupt state.
 `arch_idle` enables interrupts and waits for the next one without losing a
-wakeup in between (`sti; hlt`). `push_cli` and `pop_cli` (`include/cpu.h`,
+wakeup in between (`sti` followed by `hlt`). `push_cli` and `pop_cli` (`include/cpu.h`,
 `sched/cpu.c`) are the nesting interface used by spinlocks, implemented with
 `arch_irq_save` and `arch_irq_flags_enabled`. The user space profiler
 recognises lock primitives by these symbol names (`lockstat.md`), so the
@@ -135,20 +135,23 @@ architecture part `struct arch_cpu` as `c->arch`. On x86_64 that part
 contains the scratch slot of the `syscall` entry, the local APIC id and the
 diagnostics of the last entry from user mode. The fields up to `arch` have
 fixed offsets because `syscall.S` reads `kstack_top` at offset 24 and
-`arch.user_rsp` at offset 48; static assertions in `<arch/cpu.h>` check
+`arch.user_rsp` at offset 48. Static assertions in `<arch/cpu.h>` check
 both. The array of structures and `cpu_by_id` are in `sched/cpu.c`.
 `cpu_current` is defined by the architecture (`%gs:0` on x86_64).
 
 ## 8. Interrupt numbers and IPIs (`<arch/irq.h>`)
 
 An interrupt number is the value that `irq_register` takes and that a
-handler is registered for; on x86_64 it is the IDT vector. Generic code
+handler is registered for. On x86_64 it is the IDT vector. Generic code
 uses the named numbers `IRQ_TIMER`, `IRQ_RESCHED` and `IRQ_TLB_SHOOTDOWN`,
 and allocates numbers for message signalled device interrupts with
 `irq_alloc`, which virtio uses for MSI-X (vectors from 40 upward on x86_64,
 LPIs from 8192 upward on aarch64).
-`arch_send_ipi(cpu, irq)` sends an interrupt to a CPU by its kernel id; the
-x86_64 implementation looks up the local APIC id in `c->arch`. The fixed
+`arch_send_ipi(cpu, irq)` sends an interrupt to a CPU by its kernel id. The
+x86_64 implementation looks up the local APIC id in `c->arch`, the aarch64
+implementation writes the SGI to the MPIDR affinity of the CPU through
+`ICC_SGI1R_EL1` after a `dsb ish`, so that the receiver observes the stores
+made before the interrupt. The fixed
 vectors of the PC devices and the APIC functions are in `<arch/apic.h>`,
 which only architecture code includes.
 
@@ -172,14 +175,14 @@ variant of `sleep_ms`.
 | `platform_test_exit(code)` | the exit of a boot test (`ktest.c`) and of a panic with `CONFIG_PANIC_EXIT` | isa-debug-exit on port `0xf4` |
 | `platform_rtc_read` | `rtc_init` reads the date once (`time.md`) | CMOS clock (`cmos.c`) |
 | `platform_pci_read32`, `platform_pci_write32` | configuration space accesses of `drivers/pci.c` | configuration mechanism 1, ports `0xcf8` and `0xcfc` (`pci_config.c`) |
-| `platform_msi_compose(dev, irq, ...)` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data; `dev` is unused |
+| `platform_msi_compose(dev, irq, ...)` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data, `dev` unused |
 | `platform_devices_init` | devices that exist only on this platform | PS/2 keyboard and mouse |
 
 The console UART implements `<drivers/serial.h>` (`arch/x86_64/serial.c`,
 COM1). The PS/2 scancode and packet decoders are generic
 (`drivers/ps2kbd.c`, `ps2mouse.c`) and the 8042 controller is PC code
 (`arch/x86_64/i8042.c`). The kernel self-tests feed scancodes and packets
-through the decoders; on a platform without an 8042, `ktest_run_selected`
+through the decoders. On a platform without an 8042, `ktest_run_selected`
 registers the decoders as input devices before the selected test runs.
 
 ## 11. Start-up sequence (`<arch/init.h>`, `include/boot.h`)
@@ -228,8 +231,24 @@ The table operations that only walk and allocate tables are generic
 and `paging_free_user_tables`. The architecture implements the roots and
 the TLB: `paging_init_kernel_root`, `paging_init_user_root` (x86_64 copies
 the kernel half of the root into every user root, aarch64 assigns an
-ASID), `paging_release_user_root`, `paging_load`, `paging_flush_page`,
-`paging_flush_user` and `paging_enable_features`.
+ASID), `paging_release_user_root`, `paging_load`, `paging_flush_range` and
+`paging_enable_features`. `paging_flush_range(root, kernel, active, va,
+size)` drops the translations of a range of one space. On x86_64 it
+flushes the calling CPU only, and only if the space is loaded there,
+because without PCIDs an unloaded space has no translations in the TLB. On
+aarch64 it flushes every CPU by ASID, also for a space that is not loaded,
+because the TLB contains translations of every ASID. Before A8 the flush of
+an unloaded space was skipped, which left stale entries of its ASID.
+`PAGING_TLB_BROADCAST` tells `mm/tlb.c` whether that flush already reaches
+the other CPUs. `paging_publish_entries` makes the entries written so far
+visible to the page table walkers of every CPU. It is empty on x86_64 and
+executes `dsb ishst` and `isb` on aarch64, where a walk is not ordered by
+acquire and release. The generic code calls it before it links a new table
+and after it makes kernel entries valid (`vmm_map`, `paging_map_large`). A
+user entry missed by a walk causes a second fault, and the fault handler
+finds the entry present. An entry that changes its frame or its size is
+written by `tlb_replace_entry`, which performs break before make
+(`smp.md`).
 
 A fault on an entry that permits the access sets the access flag, and for
 a write the dirty state, before the region is consulted (`update_access` in
@@ -286,7 +305,7 @@ and `RELOC_TLS_TPREL`, and defines `ld_arch_syscall`,
 
 `toolchain.mk` selects by `ARCH` the kernel flags `KARCHFLAGS`, the user
 flags `UARCHFLAGS`, the tcc backend `TCC_TARGET` and the QEMU binary
-`qemu-system-$(ARCH)`; `tests/run_qemu_test.sh` takes the QEMU binary from
+`qemu-system-$(ARCH)`. `tests/run_qemu_test.sh` takes the QEMU binary from
 `ARCH` too. An `ARCH` without these definitions stops the build.
 
 ## 15. Tests
@@ -295,27 +314,27 @@ The kernel self-test `arch` (`kernel/tests/test_arch.c`, case
 `tests/cases/arch`) checks the A0 interface:
 - the frame accessors on a frame built by `arch_frame_init_user`, the
   agreement between `frame_set_arg0` and `SYSARG0`, and the decoding of two
-  page fault error codes;
+  page fault error codes.
 - the nesting of `push_cli` and `pop_cli` and of `arch_irq_save` and
-  `arch_irq_restore`;
-- that `arch_set_tls` loads the register for the calling thread;
+  `arch_irq_restore`.
+- that `arch_set_tls` loads the register for the calling thread.
 - that the `e_machine` field of `/bin/init` equals `ARCH_ELF_MACHINE`.
 
 The kernel self-test `platform` (`kernel/tests/test_platform.c`, case
 `tests/cases/platform`) checks the A1 interface:
-- that `cpu_current` and `cpu_by_id` agree on every CPU;
-- that the clock advances and a 20 ms sleep measures at least 20 ms;
-- that `irq_alloc` returns two different numbers with an MSI address;
-- that `platform_rtc_read` returns a plausible date;
+- that `cpu_current` and `cpu_by_id` agree on every CPU.
+- that the clock advances and a 20 ms sleep measures at least 20 ms.
+- that `irq_alloc` returns two different numbers with an MSI address.
+- that `platform_rtc_read` returns a plausible date.
 - that the configuration space of the host bridge at 00:00.0 is readable.
 
 The kernel self-test `pagetable` (`kernel/tests/test_pagetable.c`, case
 `tests/cases/pagetable`) checks the A2 interface:
 - that `pte_vm_flags` returns the flags given to `pte_make`, for user,
-  kernel text, write combining and uncached entries;
-- copy on write, accessed, dirty and lazy free changes and their reversal;
+  kernel text, write combining and uncached entries.
+- copy on write, accessed, dirty and lazy free changes and their reversal.
 - the `PROT_NONE`, swap, block and table entries and `vma_make_pte` for an
-  unreadable region;
+  unreadable region.
 - that `pt_next_leaf_table` returns exactly the three level 1 tables of
   pages placed under different level 4, level 3 and level 2 entries.
 
@@ -335,120 +354,144 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. The aarch64 implementation (A4 to A7)
+## 16. The aarch64 implementation (A4 to A8)
 
 The whole generic kernel, with its self-tests except `test_cpu.c`
 (`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
 kernel flags are `-march=armv8-a -mgeneral-regs-only -mno-outline-atomics
 -mcmodel=small`. The functions of later milestones stop the kernel with
 `ARCH_TODO` (`arch/aarch64/todo.h`), which names the function and the
-milestone. Implemented are:
-- the entry (`start.S`), which selects `SP_EL1` because Limine may enter
-  with `SPSel` clear, and the boot stack with its guard page;
-- the exception vectors (`vectors.S`), which save a `struct trapframe` and
-  call `trap_dispatch`, and the register and system register dumps of
-  `trap.c`;
-- the boot CPU (`cpu.c`): `struct cpu` through `TPIDR_EL1`, `VBAR_EL1`, and
-  the identification from `MIDR_EL1` and the ID registers;
-- the console on the PL011 of `virt` (`serial.c`), mapped on first use by
-  `early_map_device` (`early_mmio.c`), which adds device entries to the
-  tables Limine installed in `TTBR1_EL1` and takes its tables from a static
-  pool; the first load of the kernel root enters these mappings into it
-  (`early_mmio_install`);
-- power off, reboot and the test exit through PSCI (`platform.c`);
-- the page tables (`paging.c`, A5): the entry format of the ARMv8
-  descriptors, `MAIR_EL1` with write-back, Device-nGnRE and non-cacheable
-  attributes, the kernel root in `TTBR1_EL1`, the user roots in `TTBR0_EL1`
-  with 8 bit ASIDs (`asid_lock`, `locking.md`), an empty table in
-  `TTBR0_EL1` while the kernel space is active, and the hardware access
-  flag and dirty state where `ID_AA64MMFR1_EL1` reports them;
-- the GICv3 (`gic.c`, A5): the distributor, the redistributor of the boot
-  CPU and the CPU interface through the ICC system registers, with every
-  interrupt in group 1. Under HVF the GIC of Hypervisor.framework does not
-  complete a write of `GICR_IGROUPR0`, so the redistributor registers are
-  written only when their value differs;
-- the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` and the tick from the
-  virtual timer, PPI 27, programmed one period ahead through
-  `CNTV_CVAL_EL0` (`clock.c`, A5);
-- threads, user mode and signals (A6): the context switch of `context.S`
-  (x19 to x30 and sp), the FP and SIMD state of `fpu.S` (q0 to q31, FPSR,
-  FPCR, enabled through `CPACR_EL1.FPEN`), the TLS base in `TPIDR_EL0`,
-  `user_enter`, which moves the frame to the top of the kernel stack so that
-  `SP_EL1` is the stack top while the thread runs at EL0, system calls by
-  `svc` with the number in x8, and the signal frame of `signal.c`, entered
-  with the restorer in x30. The return path masks exceptions before it
-  writes `ELR_EL1` and `SPSR_EL1`, and loads `SP_EL0` for every return to
-  EL0t;
-- the PL031 real time clock (`platform.c`, A6);
-- the device tree (A7). Limine passes the flattened tree that edk2
-  installs when the machine has no ACPI tables (`acpi=off`). The generic
-  reader `kernel/lib/fdt.c` finds nodes by compatible string and decodes
-  `reg` with the cell counts of the parent. `devtree_init`
-  (`arch/aarch64/devtree.c`), called from `arch_init_cpu_features` before
-  `pmm_reclaim_bootloader` frees the tree, records the addresses of the
-  distributor, the redistributors, the ITS, the PL031 and the ECAM window
-  with its bus range and `msi-map`; without a tree the addresses of `virt`
-  apply and there is no PCI;
-- PCIe configuration through ECAM (`platform.c`, A7): 1 MiB per bus,
-  mapped at the first access of the bus under `ecam_lock`
-  (`locking.md`), reads outside the bus range return all ones;
-- MSI through the GICv3 ITS (`its.c`, A7). The redistributor of the boot
-  CPU gets an LPI configuration table for 14 interrupt ID bits and a
-  pending table. The ITS gets a command queue of one page, an indirect
-  device table where the ITS supports one (otherwise a flat table for 16
-  buses) and a collection table; collection 0 targets the boot CPU.
-  `irq_alloc` hands out LPIs from 8192. `platform_msi_compose` translates
-  the requester ID of the function through `msi-map` to a device ID, maps
-  the device with an interrupt translation table of 32 events on first use
-  (`MAPD`), maps the next event to the LPI (`MAPTI`, `INV`, `SYNC`) and
-  returns the address of `GITS_TRANSLATER` with the event ID as data. The
-  command queue and the tables are protected by `its_lock`; the data cache
-  lines of every table entry the CPU writes are cleaned to the point of
-  coherency, for an implementation that does not snoop them;
-- `paging_sync_icache`, which cleans the data cache and invalidates the
-  instruction caches for a frame the kernel wrote before it is mapped
-  executable (the ELF loader, `vma_make_pte`); x86_64 needs nothing;
-- one processor for `<arch/smp.h>` until A8.
+milestone.
+
+The entry code (`start.S`) selects `SP_EL1`, because Limine may enter with
+`SPSel` clear, and sets up the boot stack with its guard page. The
+exception vectors (`vectors.S`) save a `struct trapframe` and call
+`trap_dispatch`. `trap.c` prints the register and system register dumps.
+The boot CPU code (`cpu.c`) stores the address of `struct cpu` in
+`TPIDR_EL1`, loads `VBAR_EL1` and identifies the processor from `MIDR_EL1`
+and the ID registers.
+
+The console uses the PL011 of `virt` (`serial.c`). `early_map_device`
+(`early_mmio.c`) maps it on first use. The function adds device entries to
+the tables that Limine installed in `TTBR1_EL1` and allocates its tables
+from a static pool. The first load of the kernel root copies these
+mappings into the kernel root (`early_mmio_install`). Power off, reboot and
+the test exit call PSCI (`platform.c`).
+
+The page tables (`paging.c`, A5) use the entry format of the ARMv8
+descriptors and set `MAIR_EL1` with write-back, Device-nGnRE and
+non-cacheable attributes. The kernel root is in `TTBR1_EL1` and the user
+roots are in `TTBR0_EL1` with 8 bit ASIDs (`asid_lock`, `locking.md`).
+While the kernel space is active, `TTBR0_EL1` points to an empty table. The
+kernel enables the hardware access flag and dirty state where
+`ID_AA64MMFR1_EL1` reports them.
+
+The GICv3 code (`gic.c`, A5) programs the distributor, the redistributors
+and the CPU interface through the ICC system registers, with every
+interrupt in group 1. Under HVF the GIC of Hypervisor.framework does not
+complete a write of `GICR_IGROUPR0`, so the redistributor registers are
+written only when their value differs. The clock reads `CNTVCT_EL0` and
+`CNTFRQ_EL0`, and the tick is the virtual timer, PPI 27, programmed one
+period ahead through `CNTV_CVAL_EL0` (`clock.c`, A5).
+
+Threads, user mode and signals were added in A6. The context switch of
+`context.S` saves x19 to x30 and sp. `fpu.S` saves q0 to q31, FPSR and
+FPCR, and `CPACR_EL1.FPEN` enables the FP and SIMD instructions. The TLS
+base is in `TPIDR_EL0`. `user_enter` moves the frame to the top of the
+kernel stack, so that `SP_EL1` is the stack top while the thread runs at
+EL0. System calls use `svc` with the number in x8. The signal frame of
+`signal.c` is entered with the restorer in x30. The return path masks
+exceptions before it writes `ELR_EL1` and `SPSR_EL1`, and it loads `SP_EL0`
+for every return to EL0t. The PL031 real time clock is read in
+`platform.c` (A6). `paging_sync_icache` cleans the data cache and
+invalidates the instruction caches for a frame that the kernel wrote,
+before the frame is mapped executable (the ELF loader, `vma_make_pte`). On
+x86_64 the function is empty.
+
+Limine passes the flattened device tree that edk2 installs when the
+machine has no ACPI tables (`acpi=off`, A7). The generic reader
+`kernel/lib/fdt.c` finds nodes by compatible string and decodes `reg` with
+the cell counts of the parent. `devtree_init` (`arch/aarch64/devtree.c`) is
+called from `arch_init_cpu_features`, before `pmm_reclaim_bootloader`
+frees the tree. It records the addresses of the distributor, the
+redistributors, the ITS, the PL031 and the ECAM window with its bus range
+and `msi-map`. Without a tree the addresses of `virt` apply and the kernel
+finds no PCI devices.
+
+The PCIe configuration space is accessed through ECAM (`platform.c`, A7).
+Each bus has a window of 1 MiB, which is mapped at the first access of the
+bus under `ecam_lock` (`locking.md`). A read outside the bus range returns
+all ones.
+
+MSI interrupts are translated by the GICv3 ITS (`its.c`, A7). The
+redistributor of the boot CPU has an LPI configuration table for 14
+interrupt ID bits and a pending table. The ITS has a command queue of one
+page, an indirect device table where the ITS supports one (otherwise a
+flat table for 16 buses) and a collection table. Collection 0 targets the
+boot CPU. `irq_alloc` allocates LPIs from 8192. `platform_msi_compose`
+translates the requester ID of the function through `msi-map` to a device
+ID. On first use it maps the device with an interrupt translation table of
+32 events (`MAPD`). It then maps the next event to the LPI (`MAPTI`, `INV`,
+`SYNC`) and returns the address of `GITS_TRANSLATER` with the event ID as
+data. `its_lock` protects the command queue and the tables. After the CPU
+writes a table entry, the code cleans its data cache lines to the point of
+coherency, for an implementation that does not snoop them.
+
+The application processors are started through the Limine MP protocol
+(`smp.c`, A8). Limine starts each processor and lets it wait on its own
+stack and tables. `smp_park_aps` releases one processor at a time into
+`ap_entry` (`start.S`). Before it uses a kernel stack, `ap_entry` installs
+`MAIR_EL1`, `TCR_EL1` and the kernel values of `TTBR1_EL1` and `TTBR0_EL1`
+from `ap_boot` (`paging_cpu_state`). It then selects `SP_EL1` and calls
+`ap_main`. A `dmb ish` at the entry orders the reads of `ap_boot` after the
+read of `goto_address`. `ap_main` sets `TPIDR_EL1`, `VBAR_EL1` and
+`CPACR_EL1` and waits for `smp_start_aps`. Then `gic_init_cpu` wakes the
+redistributor of the CPU and enables the SGIs and PPIs that have a
+handler. Every SGI and PPI handler is registered before the processors
+start. The generic timer then starts the tick of the CPU. The IPIs are
+SGIs 1 to 3, and the TLB is flushed by broadcast TLBI, as section 12
+describes. Shared peripheral interrupts and LPIs are routed to the boot
+CPU.
 
 Self-tests run at stages of the start-up sequence (`enum ktest_stage`,
-`KTEST_DEFINE_STAGE`): `KTEST_EARLY` after the boot environment is logged
-(`boot`, `exception`), `KTEST_MEMORY` after the slab allocator (`pmm`,
-`vmm`, `munmap_tables`, `slab`, `slab_redzone`, `pagetable`), `KTEST_TIMER`
-after the timer, with interrupts enabled for the test (`timer`), and
-`KTEST_KINIT` in the first thread for every other test. A test runs at the
-earliest stage at which what it uses is initialized. On aarch64 the kernel
-reached the timer stage before A6, whose threads the scheduler needs;
-since A6 it boots to the first thread and runs user programs, and since
-A7 its root is the mfs on the virtio disk.
+`KTEST_DEFINE_STAGE`). `KTEST_EARLY` tests run after the boot environment
+is logged (`boot`, `exception`). `KTEST_MEMORY` tests run after the slab
+allocator is initialized (`pmm`, `vmm`, `munmap_tables`, `slab`,
+`slab_redzone`, `pagetable`). `KTEST_TIMER` tests run after the timer, with
+interrupts enabled for the test (`timer`). Every other test runs at
+`KTEST_KINIT` in the first thread. A test runs at the earliest stage at
+which the subsystems it uses are initialized. Before A6 the aarch64 kernel
+reached only the timer stage, because the scheduler needs threads. Since
+A6 it boots to the first thread and runs user programs. Since A7 its root
+is the mfs on the virtio disk.
 
 `make ARCH=aarch64 test CASES="..."` boots QEMU `virt` with the edk2
-firmware that QEMU installs, on HVF where available (`-cpu host`, otherwise
-TCG with `-cpu max`), without ACPI so that edk2 installs the device tree.
-The image is the ISO of `tools/mkiso.sh`, whose UEFI El Torito image
-contains Limine's `BOOTAA64.EFI`, attached as a SCSI CD. The machine has no
-VGA: `ramfb` gives the boot framebuffer that std VGA gives on the PC, and a
-case with `vga` set to `virtio` also gets `virtio-gpu-pci`, because edk2
-offers no framebuffer on it. A case without a `nic` file gets `-nic none`,
-since `virt` otherwise adds a virtio-net device. The ramfb framebuffer is
-in RAM that the memory map reserves; `pmm_is_ram` is false for reserved
-frames, so a mapping of it takes no page references, as for a framebuffer
-in a PCI BAR.
-Without user programs (`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is
-an empty archive and no disk is attached. The machine has one CPU until
-the application processors are parked by the kernel (A8), because
-`pmm_reclaim_bootloader` frees the memory in which Limine parks them; it
-uses GICv3 (`gic-version=3`). A case may have an
-`expect.$(ARCH)` file that replaces `expect` where the output names
-architecture state, as `tests/cases/exception` and `tests/cases/timer` do.
+firmware that QEMU installs. It uses HVF where available (`-cpu host`),
+otherwise TCG with `-cpu max`, and disables ACPI so that edk2 installs the
+device tree. The image is the ISO of `tools/mkiso.sh`, whose UEFI El Torito
+image contains Limine's `BOOTAA64.EFI`. It is attached as a SCSI CD. The
+machine has no VGA. `ramfb` gives the boot framebuffer that std VGA gives
+on the PC. A case with `vga` set to `virtio` also gets `virtio-gpu-pci`,
+because edk2 sets up no framebuffer on that device. A case without a `nic`
+file gets `-nic none`, because `virt` otherwise adds a virtio-net device.
+The ramfb framebuffer is in RAM that the memory map reserves. `pmm_is_ram`
+is false for reserved frames, so a mapping of the framebuffer takes no
+page references, as for a framebuffer in a PCI BAR. Without user programs
+(`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is an empty archive and
+no disk is attached. The machine uses GICv3 (`gic-version=3`) and, since
+A8, the number of CPUs of the case, four by default, as on x86_64. A case
+may have an `expect.$(ARCH)` file that replaces `expect` where the output
+names architecture state, as `tests/cases/exception` and
+`tests/cases/timer` do.
 
 ## 17. Dependencies that remain
 
 The x86_64 build needs nothing outside its architecture directories. The
 designs that A6 found encoded for x86_64 are now stated for both
 architectures: the thread local storage layout (`minios/dl.h`), the signal
-frame contract between `arch_signal_setup_frame` and the libc restorer (a
+frame interface between `arch_signal_setup_frame` and the libc restorer (a
 return address on the stack on x86_64, x30 on aarch64), and the
 `long double` format (`libc/src/ldouble.h`). The aarch64 port still lacks
-the application processors (A8) and the tcc backend and package
-repositories (A9). The kernel self-test `cpu` of x86 features and the
-`kbd` case of the 8042 controller remain x86 specific.
+the tcc backend and package repositories (A9). The kernel self-test `cpu`
+of x86 features and the `kbd` case of the 8042 controller remain x86
+specific.

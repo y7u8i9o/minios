@@ -46,7 +46,12 @@ child exit wakes the parent's `child_waitq` and then sends the signal.
 An empty CPU attempts to steal the highest-priority ready thread.  It holds
 its local lock and uses `spin_try_lock` on each victim; it never waits for a
 second queue lock.  This avoids a lock-order cycle between simultaneous
-stealers.
+stealers.  The tick of an idle CPU requests a scheduling point when its own
+queue or the queue of any other CPU has a ready thread (`others_have_ready`,
+counts read without locks), so an idle CPU that missed the placement of new
+threads steals one within a tick.  Before A8 only its own queue counted, and
+under HVF a virtual CPU that the host descheduled while eight threads were
+placed stayed idle for the rest of the `smp` case.
 
 ## Context switch
 

@@ -7,7 +7,7 @@
 
 /* The table operations of <arch/paging.h> that only walk and allocate
  * tables (A5). They use the geometry and the entry functions of the
- * architecture, so x86_64 and aarch64 share them; the entry format, the
+ * architecture, so x86_64 and aarch64 share them. The entry format, the
  * roots and the TLB are architecture code. */
 
 uintptr_t paging_alloc_table(void)
@@ -36,6 +36,7 @@ static pte_t *next_level(pte_t *entry, bool create, bool user)
     uintptr_t pa = paging_alloc_table();
     if (!pa)
         return NULL;
+    paging_publish_entries();           /* the cleared table before the link */
     *entry = pte_make_table(pa, user);
     return P2V(pa);
 }
@@ -49,6 +50,7 @@ static pte_t *next_level_preallocated(pte_t *entry, bool user, const uintptr_t *
     if (*used >= table_count)
         return NULL;
     uintptr_t pa = tables[(*used)++];
+    paging_publish_entries();
     *entry = pte_make_table(pa, user);
     return P2V(pa);
 }
@@ -129,6 +131,7 @@ int paging_map_large(uintptr_t root, uintptr_t va, uintptr_t pa, size_t size, un
         va += PAGE_SIZE;
         pa += PAGE_SIZE;
     }
+    paging_publish_entries();
     return 0;
 }
 

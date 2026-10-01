@@ -11,7 +11,7 @@
 
 /* The aarch64 part of the page tables (A5): the entry format, the two
  * roots and the TLB. The kernel root is loaded in TTBR1_EL1 once, by the
- * first activation of the kernel space; a user root is loaded in
+ * first activation of the kernel space. A user root is loaded in
  * TTBR0_EL1 with the ASID of its space. While the kernel space is active,
  * TTBR0_EL1 points to an empty table, so user addresses fault. The table
  * walks are generic (mm/pgtable.c). */
@@ -132,8 +132,8 @@ static unsigned asid_of(uintptr_t root)
 void paging_release_user_root(uintptr_t root)
 {
     unsigned asid = asid_of(root);
-    /* No CPU uses the space any more (vmspace_destroy); drop what the TLBs
-     * of every CPU hold for its ASID before it is reused. */
+    /* No CPU uses the space any more (vmspace_destroy). Drop the entries
+     * of its ASID from the TLBs of every CPU before the ASID is reused. */
     __asm__ volatile("dsb ishst; tlbi aside1is, %0; dsb ish; isb"
                      : : "r"((uint64_t)asid << 48) : "memory");
     if (!asid)
@@ -164,20 +164,34 @@ void paging_load(uintptr_t root)
         __asm__ volatile("tlbi aside1, xzr; dsb nsh; isb" : : : "memory");
 }
 
-/* Drop the translation of one page in every ASID on the calling CPU. */
-void paging_flush_page(uintptr_t va)
+void paging_flush_range(uintptr_t root, bool kernel, bool active, uintptr_t va, size_t size)
 {
-    __asm__ volatile("dsb ishst; tlbi vaae1, %0; dsb nsh; isb"
-                     : : "r"((va >> PAGE_SHIFT) & ((1UL << 44) - 1)) : "memory");
-}
-
-/* Drop the user translations of the active ASID on the calling CPU. */
-void paging_flush_user(void)
-{
-    uint64_t ttbr0;
-    __asm__ volatile("mrs %0, ttbr0_el1" : "=r"(ttbr0));
-    __asm__ volatile("dsb ishst; tlbi aside1, %0; dsb nsh; isb"
-                     : : "r"(ttbr0 & ~((1UL << 48) - 1)) : "memory");
+    (void)active;
+    /* The table updates are visible to the walkers of every CPU before
+     * the invalidation (dsb ishst), and the invalidation is complete on
+     * every CPU before the caller continues (dsb ish). */
+    __asm__ volatile("dsb ishst" : : : "memory");
+    if (kernel) {
+        if (size > 64 * PAGE_SIZE) {
+            __asm__ volatile("tlbi vmalle1is" : : : "memory");
+        } else {
+            for (size_t off = 0; off < size; off += PAGE_SIZE)
+                __asm__ volatile("tlbi vaae1is, %0"
+                                 : : "r"(((va + off) >> PAGE_SHIFT) & ((1UL << 44) - 1)) : "memory");
+        }
+    } else {
+        /* A root without an ASID runs with ASID 0 (asid_of). */
+        uint64_t asid = (uint64_t)asid_of(root) << 48;
+        if (size > 64 * PAGE_SIZE) {
+            __asm__ volatile("tlbi aside1is, %0" : : "r"(asid) : "memory");
+        } else {
+            for (size_t off = 0; off < size; off += PAGE_SIZE)
+                __asm__ volatile("tlbi vae1is, %0"
+                                 : : "r"(asid | (((va + off) >> PAGE_SHIFT) & ((1UL << 44) - 1)))
+                                 : "memory");
+        }
+    }
+    __asm__ volatile("dsb ish; isb" : : : "memory");
 }
 
 void paging_sync_icache(uintptr_t pa)
@@ -196,6 +210,10 @@ void paging_sync_icache(uintptr_t pa)
     __asm__ volatile("dsb ish; isb" : : : "memory");
 }
 
+/* TCR_EL1 of the boot CPU after paging_enable_features, for the
+ * application processors. Written once before they start. */
+static uint64_t kernel_tcr;
+
 void paging_enable_features(void)
 {
     uint64_t mmfr1, tcr;
@@ -204,14 +222,24 @@ void paging_enable_features(void)
     unsigned hafdbs = mmfr1 & 0xf;
     hw_access_flag = hafdbs >= 1;
     hw_dirty = hafdbs >= 2;
-    /* 8 bit ASIDs (TCR.AS clear) are enough for ASID_COUNT; the hardware
-     * access flag and dirty state where the processor has them. */
+    /* 8 bit ASIDs (TCR.AS clear) are enough for ASID_COUNT. The hardware
+     * access flag and dirty state are enabled where the processor
+     * implements them. */
     tcr &= ~TCR_AS;
     if (hw_access_flag)
         tcr |= TCR_HA;
     if (hw_dirty)
         tcr |= TCR_HD;
     __asm__ volatile("msr mair_el1, %0; msr tcr_el1, %1; isb" : : "r"(MAIR_VALUE), "r"(tcr) : "memory");
+    kernel_tcr = tcr;
+}
+
+void paging_cpu_state(uint64_t *mair, uint64_t *tcr, uint64_t *ttbr1, uint64_t *ttbr0)
+{
+    *mair = MAIR_VALUE;
+    *tcr = kernel_tcr;
+    *ttbr1 = kernel_root;
+    *ttbr0 = image_phys(empty_root);
 }
 
 const char *paging_describe(void)

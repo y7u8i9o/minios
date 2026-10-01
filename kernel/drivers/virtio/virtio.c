@@ -101,34 +101,42 @@ int virtio_negotiate(struct virtio_dev *dev, uint64_t wanted)
     return 0;
 }
 
-/* Drain the used ring. Caller holds vq->lock. Returns true if any
+/* Drain the used ring. The caller has acquired vq->lock. Returns true if any
  * chain completed. */
 static bool virtq_drain_locked(struct virtqueue *vq)
 {
     bool completed = false;
     mb();
-    if (vq->broken)
-        return false;
-    if ((uint16_t)(vq->used->idx - vq->last_used) > vq->size) {
-        vq->broken = true;
-        vq->bad_used++;
-        return false;
-    }
-    while (vq->last_used != vq->used->idx) {
-        completed = true;
-        struct virtq_used_elem e = vq->used->ring[vq->last_used % vq->size];
-        vq->last_used++;
-        if (e.id >= vq->size || !vq->active[e.id]) {
+    for (;;) {
+        if (vq->broken)
+            return completed;
+        /* The device writes the entries before the index. The entries up
+         * to the index are read after it (rmb): otherwise a weakly
+         * ordered CPU may read an entry of the previous lap (A8). */
+        uint16_t idx = vq->used->idx;
+        rmb();
+        if (idx == vq->last_used)
+            return completed;
+        if ((uint16_t)(idx - vq->last_used) > vq->size) {
             vq->broken = true;
             vq->bad_used++;
-            break;
+            return completed;
         }
-        vq->active[e.id] = false;
-        if (vq->complete)
-            vq->complete(vq, (uint16_t)e.id, e.len);
-        virtq_free_chain(vq, (uint16_t)e.id);
+        while (vq->last_used != idx) {
+            completed = true;
+            struct virtq_used_elem e = vq->used->ring[vq->last_used % vq->size];
+            vq->last_used++;
+            if (e.id >= vq->size || !vq->active[e.id]) {
+                vq->broken = true;
+                vq->bad_used++;
+                break;
+            }
+            vq->active[e.id] = false;
+            if (vq->complete)
+                vq->complete(vq, (uint16_t)e.id, e.len);
+            virtq_free_chain(vq, (uint16_t)e.id);
+        }
     }
-    return completed;
 }
 
 void virtq_poll_locked(struct virtqueue *vq)
@@ -173,7 +181,7 @@ struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
     if (!vq)
         return NULL;
     /* Descriptors and avail ring in the first page, used ring in the
-     * second: two pages hold a queue of up to 128 entries. */
+     * second. Two pages contain a queue of up to 128 entries. */
     vq->order = 1;
     struct page *pg = pmm_alloc(vq->order);
     if (!pg) {

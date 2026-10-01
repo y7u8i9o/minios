@@ -38,7 +38,7 @@ void pmm_free(struct page *page, unsigned order);
 struct page *pmm_alloc_page(void);
 void pmm_free_page(struct page *page);
 /* Return every per-CPU order-zero cache to the buddy allocator. The caller
- * must not hold an allocator lock. */
+ * must not have acquired an allocator lock. */
 void pmm_reclaim_cpu_caches(void);
 /* Turn an allocated block of 2^order pages into 2^order independent single
  * page allocations, each freeable with pmm_free_page or page_put (M39). */
@@ -50,7 +50,7 @@ uint64_t page_to_pfn(const struct page *page);
 struct page *pfn_to_page(uint64_t pfn);
 
 /* Reference counting for frames shared between address spaces (COW). A
- * freshly allocated frame has refcount 0; the first mapping sets it to 1. */
+ * freshly allocated frame has refcount 0. The first mapping sets it to 1. */
 static inline void page_get(struct page *page)
 {
     __atomic_add_fetch(&page->refcount, 1, __ATOMIC_SEQ_CST);

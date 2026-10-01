@@ -4,12 +4,12 @@
 
 /* Page tables (docs/design/arch.md, A2). Generic code walks the tables
  * through the geometry below and reads and builds entries only through
- * the pte_* functions; the bit layout is private to the architecture.
+ * the pte_* functions. The bit layout is private to the architecture.
  *
  * The tables have PT_LEVELS levels of PT_ENTRIES entries. Level 1 entries
  * map 4 KiB pages, a level 2 entry is a table pointer or a 2 MiB block,
- * and levels 3 and up hold table pointers only. An entry that is not
- * present may still carry a frame (PROT_NONE) or a swap slot; the
+ * and levels 3 and up contain table pointers only. An entry that is not
+ * present may still contain a frame (PROT_NONE) or a swap slot. The
  * software bits that mark these states are part of the entry format. */
 
 typedef uint64_t pte_t;
@@ -19,7 +19,7 @@ typedef uint64_t pte_t;
 #define PT_SHIFT(level)      (PAGE_SHIFT + 9 * ((level) - 1))
 #define PT_LEVEL_SIZE(level) (1UL << PT_SHIFT(level))
 #define PT_INDEX(va, level)  (((uintptr_t)(va) >> PT_SHIFT(level)) & (PT_ENTRIES - 1))
-/* Root entries that map user space; the rest of the root maps the kernel
+/* Root entries that map user space. The rest of the root maps the kernel
  * and is shared by every address space (paging_init_user_root). */
 #define PT_ROOT_USER_ENTRIES (PT_ENTRIES / 2)
 
@@ -36,7 +36,7 @@ typedef uint64_t pte_t;
 #define PTE_PS      (1UL << 7)
 #define PTE_G       (1UL << 8)
 #define PTE_COW     (1UL << 9)    /* software: copy on write, see mm/vma.c */
-#define PTE_SWAPPED (1UL << 10)   /* software: not present, bits 12+ hold the swap slot, see mm/swap.c */
+#define PTE_SWAPPED (1UL << 10)   /* software: not present, bits 12+ contain the swap slot, see mm/swap.c */
 #define PTE_LAZYFREE (1UL << 52)  /* software: MADV_FREE, kswapd may discard the frame while the dirty bit stays clear (M38) */
 #define PTE_PROTNONE (1UL << 53)  /* software: not present, a frame is attached but the region is PROT_NONE (M37) */
 #define PTE_NX      (1UL << 63)
@@ -101,10 +101,10 @@ unsigned pte_vm_flags(pte_t e);
 /* ---- building entries ---- */
 
 /* A present 4 KiB page entry for pa with the VM_* flags (VM_WRITE,
- * VM_EXEC, VM_USER, VM_NOCACHE, VM_WC, VM_GLOBAL; readable always). */
+ * VM_EXEC, VM_USER, VM_NOCACHE, VM_WC, VM_GLOBAL), always readable. */
 pte_t pte_make(uintptr_t pa, unsigned vm_flags);
 
-/* A user entry that keeps the frame pa for a PROT_NONE region. */
+/* A user entry that contains the frame pa for a PROT_NONE region. */
 static inline pte_t pte_make_protnone(uintptr_t pa)
 {
     return pa | PTE_U | PTE_PROTNONE;
@@ -192,19 +192,36 @@ static inline void paging_load(uintptr_t root)
     __asm__ volatile("movq %0, %%cr3" : : "r"(root) : "memory");
 }
 
-/* Drop the translation of one page on the calling CPU. */
-static inline void paging_flush_page(uintptr_t va)
+/* Make the entries written so far visible to the page table walkers of
+ * every CPU. The x86 walkers snoop the stores in program order. */
+static inline void paging_publish_entries(void)
 {
-    __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+    __asm__ volatile("" : : : "memory");
 }
 
-/* Drop every user translation on the calling CPU. Reloading CR3 keeps the
- * global kernel mappings. */
-static inline void paging_flush_user(void)
+/* TLB invalidation reaches only the calling CPU. mm/tlb.c sends the other
+ * CPUs a shootdown interrupt. */
+#define PAGING_TLB_BROADCAST 0
+
+/* Drop the translations of [va, va + size) in the space whose root is
+ * root (a kernel range when kernel is set) on the calling CPU. Without
+ * PCIDs a space that is not loaded (active false) has no translations in
+ * the TLB. A user range of more than 64 pages reloads CR3, which does not
+ * flush the global kernel mappings. */
+static inline void paging_flush_range(uintptr_t root, bool kernel, bool active,
+                                      uintptr_t va, size_t size)
 {
-    uintptr_t root;
-    __asm__ volatile("movq %%cr3, %0" : "=r"(root));
-    __asm__ volatile("movq %0, %%cr3" : : "r"(root) : "memory");
+    (void)root;
+    if (!active)
+        return;
+    if (kernel || size <= 64 * PAGE_SIZE) {
+        for (size_t off = 0; off < size; off += PAGE_SIZE)
+            __asm__ volatile("invlpg (%0)" : : "r"(va + off) : "memory");
+        return;
+    }
+    uintptr_t cr3;
+    __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("movq %0, %%cr3" : : "r"(cr3) : "memory");
 }
 
 /* Make the instruction fetches of every CPU see the data written to the

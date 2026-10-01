@@ -3,7 +3,7 @@
 #include <arch/irq.h>
 
 /* LPIs and the GICv3 Interrupt Translation Service (A7). An MSI write to
- * GITS_TRANSLATER carries an event ID; the ITS translates the pair of the
+ * GITS_TRANSLATER contains an event ID. The ITS translates the pair of the
  * writer's device ID and the event ID into an LPI for a collection, which
  * names the redistributor that receives it. */
 

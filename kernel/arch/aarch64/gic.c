@@ -6,16 +6,17 @@
 #include <mm/vmm.h>
 #include <klog.h>
 #include <debug/panic.h>
-#include "todo.h"
+#include "gic.h"
 #include "timer_internal.h"
 #include "devtree.h"
 #include "its.h"
 
 /* The GICv3 (A5): the distributor and the redistributors, 128 KiB per
  * CPU, at the addresses of the device tree (A7). The CPU interface is
- * reached through the ICC system registers. Every interrupt is in group 1
- * and is routed to the boot CPU. LPIs, the interrupts of MSI, are in
- * its.c. */
+ * reached through the ICC system registers. Every interrupt is in group 1.
+ * Shared peripheral interrupts are routed to the CPU that registers them,
+ * the boot CPU. SGIs are the IPIs (A8). LPIs, the interrupts of MSI, are
+ * in its.c. */
 
 #define GICR_STRIDE     0x20000UL
 
@@ -43,7 +44,8 @@
 #define MAX_IRQS        1020
 
 static volatile uint8_t *gicd;
-static volatile uint8_t *gicr;          /* the redistributor of the boot CPU */
+static volatile uint8_t *gicr_base;     /* every redistributor, mapped once */
+static unsigned gicr_count;
 static unsigned nlines;
 
 /* Handler table. Written only during initialization, before the interrupt
@@ -76,12 +78,8 @@ static volatile uint8_t *find_redistributor(uintptr_t *phys)
     uint64_t mpidr;
     __asm__ volatile("mrs %0, mpidr_el1" : "=r"(mpidr));
     uint32_t aff = (uint32_t)((mpidr & 0xffffff) | ((mpidr >> 8) & 0xff000000));
-    unsigned count = (unsigned)(devtree.gicr_size / GICR_STRIDE);
-    volatile uint8_t *base = vmm_map_mmio(devtree.gicr, count * GICR_STRIDE, VM_KERNEL_RW | VM_NOCACHE);
-    if (!base)
-        panic("gic: cannot map the redistributors");
-    for (unsigned i = 0; i < count; i++) {
-        volatile uint8_t *r = base + i * GICR_STRIDE;
+    for (unsigned i = 0; i < gicr_count; i++) {
+        volatile uint8_t *r = gicr_base + i * GICR_STRIDE;
         uint64_t typer = *(volatile uint64_t *)(r + GICR_TYPER);
         if ((uint32_t)(typer >> 32) == aff) {
             *phys = devtree.gicr + i * GICR_STRIDE;
@@ -93,25 +91,14 @@ static volatile uint8_t *find_redistributor(uintptr_t *phys)
     panic("gic: no redistributor for mpidr %lx", mpidr);
 }
 
-void arch_init_interrupts(void)
+/* Wake the redistributor of the calling CPU, put its SGIs and PPIs in
+ * group 1 at the default priority, enable those that have a handler, and
+ * enable the CPU interface. */
+static uintptr_t init_cpu_interface(struct cpu *c)
 {
-    gicd = vmm_map_mmio(devtree.gicd, 0x10000, VM_KERNEL_RW | VM_NOCACHE);
-    if (!gicd)
-        panic("gic: cannot map the distributor");
-    nlines = ((rd32(gicd, GICD_TYPER) & 0x1f) + 1) * 32;
-    if (nlines > MAX_IRQS)
-        nlines = MAX_IRQS;
-    wr32(gicd, GICD_CTLR, 0);
-    dist_wait();
-    for (unsigned i = 32; i < nlines; i += 32)
-        wr32(gicd, GICD_IGROUPR + i / 8, 0xffffffff);
-    for (unsigned i = 32; i < nlines; i += 4)
-        wr32(gicd, GICD_IPRIORITYR + i, 0x01010101u * DEFAULT_PRIORITY);
-    wr32(gicd, GICD_CTLR, CTLR_ARE | CTLR_GRP1 | CTLR_GRP0);
-    dist_wait();
-
-    uintptr_t gicr_phys;
-    gicr = find_redistributor(&gicr_phys);
+    uintptr_t phys;
+    volatile uint8_t *gicr = find_redistributor(&phys);
+    c->arch.gicr = gicr;
     wr32(gicr, GICR_WAKER, rd32(gicr, GICR_WAKER) & ~WAKER_SLEEP);
     while (rd32(gicr, GICR_WAKER) & WAKER_ASLEEP)
         cpu_relax();
@@ -124,6 +111,12 @@ void arch_init_interrupts(void)
         if (rd32(gicr, GICR_IPRIORITYR + i) != 0x01010101u * DEFAULT_PRIORITY)
             wr32(gicr, GICR_IPRIORITYR + i, 0x01010101u * DEFAULT_PRIORITY);
     }
+    uint32_t enabled = 0;
+    for (unsigned irq = 0; irq < 32; irq++)
+        if (handlers[irq].fn)
+            enabled |= 1u << irq;
+    if (enabled)
+        wr32(gicr, GICR_ISENABLER0, enabled);
 
     /* The CPU interface: system register access, every priority, group 1. */
     uint64_t sre;
@@ -131,9 +124,40 @@ void arch_init_interrupts(void)
     __asm__ volatile("msr icc_sre_el1, %0; isb" : : "r"(sre | 1) : "memory");
     __asm__ volatile("msr icc_pmr_el1, %0; msr icc_bpr1_el1, xzr; msr icc_igrpen1_el1, %1; isb"
                      : : "r"(0xffUL), "r"(1UL) : "memory");
+    return phys;
+}
+
+void arch_init_interrupts(void)
+{
+    gicd = vmm_map_mmio(devtree.gicd, 0x10000, VM_KERNEL_RW | VM_NOCACHE);
+    if (!gicd)
+        panic("gic: cannot map the distributor");
+    gicr_count = (unsigned)(devtree.gicr_size / GICR_STRIDE);
+    gicr_base = vmm_map_mmio(devtree.gicr, gicr_count * GICR_STRIDE, VM_KERNEL_RW | VM_NOCACHE);
+    if (!gicr_base)
+        panic("gic: cannot map the redistributors");
+    nlines = ((rd32(gicd, GICD_TYPER) & 0x1f) + 1) * 32;
+    if (nlines > MAX_IRQS)
+        nlines = MAX_IRQS;
+    wr32(gicd, GICD_CTLR, 0);
+    dist_wait();
+    for (unsigned i = 32; i < nlines; i += 32)
+        wr32(gicd, GICD_IGROUPR + i / 8, 0xffffffff);
+    for (unsigned i = 32; i < nlines; i += 4)
+        wr32(gicd, GICD_IPRIORITYR + i, 0x01010101u * DEFAULT_PRIORITY);
+    wr32(gicd, GICD_CTLR, CTLR_ARE | CTLR_GRP1 | CTLR_GRP0);
+    dist_wait();
+
+    struct cpu *c = cpu_current();
+    uintptr_t gicr_phys = init_cpu_interface(c);
     klog_info("gicv3: distributor at %lx with %u interrupt lines, redistributor at %lx",
               devtree.gicd, nlines, gicr_phys);
-    its_init(gicr, gicr_phys);
+    its_init(c->arch.gicr, gicr_phys);
+}
+
+void gic_init_cpu(void)
+{
+    init_cpu_interface(cpu_current());
 }
 
 void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
@@ -148,7 +172,10 @@ void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
     handlers[irq].arg = arg;
     __asm__ volatile("dsb ish" : : : "memory");
     if (irq < 32) {
-        wr32(gicr, GICR_ISENABLER0, 1u << irq);
+        /* An SGI or PPI is enabled in the redistributor of the calling
+         * CPU. gic_init_cpu enables it on the application processors,
+         * which start after every SGI and PPI is registered. */
+        wr32(cpu_current()->arch.gicr, GICR_ISENABLER0, 1u << irq);
     } else {
         uint64_t mpidr;
         __asm__ volatile("mrs %0, mpidr_el1" : "=r"(mpidr));
@@ -181,7 +208,16 @@ int irq_alloc(void)
     return its_alloc();
 }
 
+/* An SGI to one CPU through ICC_SGI1R_EL1: the affinity levels 3 to 1
+ * of its MPIDR and a bit for affinity level 0 in the target list, whose
+ * range selector RS covers 16 values of affinity 0. */
 void arch_send_ipi(unsigned cpu, unsigned irq)
 {
-    ARCH_TODO("A8");
+    uint64_t mpidr = cpu_by_id(cpu)->arch.mpidr;
+    uint64_t aff0 = mpidr & 0xff;
+    uint64_t v = ((mpidr >> 32) & 0xff) << 48 | ((mpidr >> 16) & 0xff) << 32 |
+                 (uint64_t)(irq & 0xf) << 24 | ((mpidr >> 8) & 0xff) << 16 |
+                 (aff0 >> 4) << 44 | 1UL << (aff0 & 0xf);
+    /* The stores the receiver reads are visible before the interrupt. */
+    __asm__ volatile("dsb ish; msr icc_sgi1r_el1, %0; isb" : : "r"(v) : "memory");
 }

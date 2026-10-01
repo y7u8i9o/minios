@@ -43,7 +43,7 @@ address. Every queue keeps a completion cookie per head descriptor.
 
 Interrupts arrive through MSI-X. Each device gets one interrupt number
 from `irq_alloc` (a vector from 40 upwards on x86_64, an LPI from 8192 on
-aarch64), registered with `irq_register`; the configuration and every queue
+aarch64), registered with `irq_register`. The configuration and every queue
 use table entry 0. The handler walks the used ring of every queue under
 `virtqueue.lock`, calls the driver completion callback for each finished
 chain, frees the chain and wakes the queue wait queue.

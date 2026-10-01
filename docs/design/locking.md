@@ -491,7 +491,7 @@ These locks are in user space and do not add a kernel lock-order level.
 
 - `ecam_lock` (spinlock, `arch/aarch64/platform.c`) protects the table of
   mapped ECAM buses. A configuration space access takes it to find or map
-  its bus; `vmm_map_mmio` takes `kernel_vmspace.lock` inside it, which
+  its bus. `vmm_map_mmio` takes `kernel_vmspace.lock` inside it, which
   gives the order `ecam_lock -> kernel_vmspace.lock`. It exists only on
   aarch64.
 - `its_lock` (spinlock, `arch/aarch64/its.c`) protects the ITS command

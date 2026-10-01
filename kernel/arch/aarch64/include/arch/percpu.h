@@ -5,6 +5,7 @@
  * c->arch. Private to the owning CPU. */
 struct arch_cpu {
     uint64_t mpidr;             /* MPIDR_EL1 affinity of the processor */
+    volatile uint8_t *gicr;     /* its GICv3 redistributor (gic.c) */
     /* Last exception taken from EL0 on this CPU, for the panic dump
      * (diagnostics only). */
     uint64_t last_user_esr;

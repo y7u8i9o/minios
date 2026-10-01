@@ -161,9 +161,9 @@ operation table (`struct socket_ops`), `error`, `poll` and `file`.
 and install the backend, and wraps the object in a file with the common
 `sock_fops`. Backends allocate accepted sockets with `socket_alloc` and the
 common layer wraps them. The file's release calls the backend's release
-and frees the object; the poll source is part of the object, so a poller
+and frees the object. The poll source is part of the object, so a poller
 registered on it before a connection was made or after it was closed
-keeps receiving notifications until the descriptor is closed.
+receives notifications until the descriptor is closed.
 
 The Unix backend clears its pointer to the socket's poll source under the
 connection lock when a side releases, and announces readiness under that

@@ -19,7 +19,8 @@
 #define BASE_SLICE_MS   10
 #define BOOST_INTERVAL  1000
 
-/* The owner CPU consumes inbound and owns levels/sleepers under lock.
+/* Only the CPU of the run queue consumes inbound, and it changes levels
+ * and sleepers under lock.
  * Remote producers publish only through the MPSC inbox. */
 struct run_queues {
     struct spinlock lock;
@@ -135,10 +136,10 @@ static void drain_inbound_locked(struct run_queues *r)
         __atomic_store_n(&t->wake_queued, false, __ATOMIC_SEQ_CST);
         enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_SEQ_CST);
         struct waitq *wq = __atomic_load_n(&t->waiting_on, __ATOMIC_SEQ_CST);
-        /* A blocked thread still on a wait queue is not runnable: this wake
+        /* A blocked thread still on a wait queue is not runnable. This wake
          * is stale, queued between an earlier wake and the thread blocking
          * again (signal delivery interrupts a wait and then wakes without
-         * holding the queue lock). The wake that removes it from the queue
+         * the queue lock acquired). The wake that removes it from the queue
          * queues it again. */
         if (state == THREAD_BLOCKED && wq) {
             node = next;
@@ -206,7 +207,8 @@ void sched_add(struct thread *t)
 
 void sched_wake(struct thread *t)
 {
-    enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
+    /* Sequentially consistent against stop_current (ipc/signal.c). */
+    enum thread_state state = __atomic_load_n(&t->state, __ATOMIC_SEQ_CST);
     if (state != THREAD_BLOCKED && state != THREAD_SLEEPING && state != THREAD_STOPPED)
         return;
     profile_ready(t);
@@ -361,6 +363,18 @@ static void boost_locked(struct run_queues *r)
     }
 }
 
+/* True if another CPU's run queue has a thread waiting, which an idle CPU
+ * can steal. The counts are read without the locks. A stale count causes
+ * one extra rescheduling of the idle thread or delays a steal by a tick. */
+static bool others_have_ready(unsigned me)
+{
+    unsigned n = smp_cpu_count();
+    for (unsigned i = 0; i < n; i++)
+        if (i != me && __atomic_load_n(&rq[i].nr_ready, __ATOMIC_RELAXED))
+            return true;
+    return false;
+}
+
 static void tick_local(void)
 {
     struct cpu *c = cpu_current();
@@ -374,7 +388,7 @@ static void tick_local(void)
     drain_inbound_locked(r);
     uint64_t now = timer_ticks();
     wake_sleepers_locked(r, now);
-    if (cur == c->idle && r->nr_ready)
+    if (cur == c->idle && (r->nr_ready || others_have_ready(c->id)))
         __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
     if (now - r->last_boost >= BOOST_INTERVAL) {
         r->last_boost = now;

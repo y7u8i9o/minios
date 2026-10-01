@@ -4,7 +4,7 @@
 
 /* Page tables of aarch64 with 4 KiB granules and 48 bit addresses
  * (docs/design/arch.md, A2). The geometry and the functions are those of
- * the x86_64 header; the descriptor format follows the ARMv8 VMSA.
+ * the x86_64 header. The descriptor format is that of the ARMv8 VMSA.
  *
  * Write permission and the dirty state use the scheme of the hardware
  * dirty bit management (FEAT_HAFDBS): PTE_WRITE (the DBM bit) marks an
@@ -30,7 +30,7 @@ typedef uint64_t pte_t;
 
 /* Descriptor bits, private to the architecture. */
 #define PTE_VALID       (1UL << 0)
-#define PTE_TYPE_PAGE   (1UL << 1)      /* level 3 page or level 0-2 table; clear for a block */
+#define PTE_TYPE_PAGE   (1UL << 1)      /* level 3 page or level 0-2 table, clear for a block */
 #define PTE_ATTR(i)     ((uint64_t)(i) << 2)    /* MAIR_EL1 index */
 #define PTE_ATTR_MASK   PTE_ATTR(7)
 #define PTE_USER        (1UL << 6)      /* AP[1]: accessible from EL0 */
@@ -190,9 +190,33 @@ void paging_release_user_root(uintptr_t root);
 
 /* Load root as the user translation (TTBR0_EL1) of the calling CPU. */
 void paging_load(uintptr_t root);
-void paging_flush_page(uintptr_t va);
-void paging_flush_user(void);
+
+/* Make the entries written so far visible to the page table walkers of
+ * every CPU (A8). A walk is not ordered by the acquire and release of
+ * normal accesses: without the barrier another CPU, or this one, may
+ * still walk the old entry after it observed a later store. Called after
+ * a table is cleared and before it is linked, and after kernel entries
+ * become valid. A user entry missed by a walk causes a second fault, and
+ * the fault handler finds the entry present. */
+static inline void paging_publish_entries(void)
+{
+    __asm__ volatile("dsb ishst; isb" : : : "memory");
+}
+
+/* TLB invalidation by the inner shareable TLBI instructions reaches every
+ * CPU, so mm/tlb.c sends no shootdown interrupts for a range (A8). */
+#define PAGING_TLB_BROADCAST 1
+
+/* Drop the translations of [va, va + size) in the space whose root is
+ * root (a kernel range, in every ASID, when kernel is set) on every CPU.
+ * The space need not be loaded (active is unused): the TLBs keep the
+ * translations of every ASID. */
+void paging_flush_range(uintptr_t root, bool kernel, bool active, uintptr_t va, size_t size);
 void paging_enable_features(void);
+/* The translation state that an application processor installs before it
+ * runs on kernel stacks (A8): MAIR_EL1, TCR_EL1 and the TTBR1_EL1 and
+ * TTBR0_EL1 values of the kernel space. */
+void paging_cpu_state(uint64_t *mair, uint64_t *tcr, uint64_t *ttbr1, uint64_t *ttbr0);
 /* Make the instruction fetches of every CPU see the data written to the
  * frame at pa: clean the data cache to the point of unification and
  * invalidate the instruction caches, unless CTR_EL0 reports them

@@ -18,8 +18,8 @@
 #define PTY_OUT_MAX 4096
 
 /* One pair. lock protects the output ring (slave writes, master reads),
- * the open flags and is the condition lock of out_waitq. The slave side
- * discipline lives in tty. */
+ * the open flags and is the condition lock of out_waitq. The line
+ * discipline of the slave side is in tty. */
 struct pty {
     int index;
     struct spinlock lock;
@@ -202,9 +202,9 @@ static long pts_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
                 waitq_wait(&p->out_waitq, &p->lock);
                 continue;
             }
-            spin_unlock(&p->lock);
+            /* Under p->lock: the echo of pty_output writes the same ring,
+             * and the ring has one producer at a time. */
             off += ring_write(&p->out_ring, tmp + off, chunk - off);
-            spin_lock(&p->lock);
         }
         waitq_wake_all(&p->out_waitq);
         spin_unlock(&p->lock);

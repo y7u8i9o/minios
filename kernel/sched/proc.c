@@ -136,7 +136,7 @@ void proc_begin_exit(struct proc *p, int status)
     list_for_each(pos, &p->threads) {
         struct thread *t = list_entry(pos, struct thread, proc_link);
         if (t != thread_current()) {
-            waitq_interrupt(t);
+            waitq_signal(t);
             sched_wake(t);          /* SIGKILL must also release stopped threads */
         }
     }

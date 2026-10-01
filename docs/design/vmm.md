@@ -52,7 +52,7 @@ A user space rejects kernel addresses with `-EINVAL`.
 `tlb_flush_range(vm, va, size)` is called with `vm->lock` held by every
 unmap and protect. It uses `invlpg` for kernel addresses (global pages
 survive CR3 reloads) and for short user ranges, and a CR3 reload for long
-user ranges. Since M18 the function lives in `mm/tlb.c` and sends shootdown IPIs to the other CPUs that hold the space (see `smp.md`).
+user ranges. Since M18 the function is in `mm/tlb.c`. `smp.md` describes how the flush reaches the other CPUs whose TLBs may contain the translations, by shootdown IPIs on x86_64 and by broadcast invalidation on aarch64 (A8).
 
 M46 moves user-frame and populate-time page-table allocation and zeroing
 outside `vmspace.lock`. The locked phase revalidates the VMA, consumes any

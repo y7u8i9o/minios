@@ -31,12 +31,12 @@ starts the APs in two stages:
   `sched_idle_loop`. The boot CPU waits for every AP before continuing to
   `kinit`.
 
-CPU ids are dense, 0 is the boot CPU. `MAX_CPUS` is 16. `struct cpu` keeps
-`kstack_top` at offset 24 and `user_rsp` at offset 48 for `syscall.S`.
+CPU ids are dense, 0 is the boot CPU. `MAX_CPUS` is 16. `kstack_top` is at
+offset 24 of `struct cpu` and `user_rsp` at offset 48, for `syscall.S`.
 
 Loading a segment register clears the GS base MSR, so the base is written
 again after the GDT switch. The GDT, TSS and double fault stack of each
-CPU live in `struct cpu_tables` in `gdt.c`, indexed by CPU id.
+CPU are in `struct cpu_tables` in `gdt.c`, indexed by CPU id.
 `tss_set_rsp0` writes the TSS of the calling CPU.
 
 ## Timers
@@ -81,8 +81,11 @@ timer tick.
 
 `mm/tlb.c` implements `tlb_flush_range` and `tlb_drop_vmspace`. Every
 unmap and protection change still calls `tlb_flush_range` with the space
-lock held. The local TLB is flushed directly. If other CPUs may hold the
-translations, they receive `IRQ_TLB_SHOOTDOWN`:
+lock held. The local TLB is flushed directly through `paging_flush_range`.
+On aarch64 that flush uses the inner shareable TLBI instructions, which
+reach every CPU (`PAGING_TLB_BROADCAST`), and no interrupt is sent for a
+range (A8). On x86_64, if the TLBs of other CPUs may contain the
+translations, those CPUs receive `IRQ_TLB_SHOOTDOWN`:
 
 - kernel ranges go to every online CPU;
 - user ranges go to the CPUs in `vmspace.cpu_mask`, which
@@ -100,8 +103,15 @@ deadlocking against a CPU that spins on that lock with interrupts
 disabled. The sender is never one of its own targets. Kernel threads keep
 the previous user space loaded, so `vmspace_destroy` sends a
 `TLB_DROP_VMSPACE` request that makes every CPU still holding the space
-switch to the kernel space before the tables are freed. `tlb_get_stats`
+switch to the kernel space before the tables are freed. aarch64 sends it
+as well, because a loaded root may be walked speculatively. `tlb_get_stats`
 reports rounds, IPIs and acknowledgements.
+
+`tlb_replace_entry` replaces a present entry with one that maps another
+frame or has another size. It clears the entry, flushes the range on
+every CPU and only then writes the new entry. ARMv8 requires this break
+before make. The copy on write of a small or huge page and the split of a
+huge page into a page table use it on both architectures.
 
 ## Panic and halt
 
@@ -154,8 +164,10 @@ and stop. `klog` formats each line into a buffer and writes it with one
 
 - `smp` (kernel): checks the CPU count against `cpus=` on the command
   line, runs eight kernel threads for 300 ms, requires that every CPU ran a
-  worker and that several workers ran at the same moment, then frees a
-  kernel stack and requires that the unmap sent a shootdown round which
+  worker and that several workers ran at the same moment. A reader thread
+  on another CPU then caches the translation of a kernel page, the test
+  remaps the page to another frame, and the reader must read the new
+  frame. On x86_64 the remap must also have sent a shootdown round that
   reached every other CPU and was acknowledged by all of them.
 - `smp_user`: `smptest` forks twice as many children as CPUs, each
   spinning 400 ms while sampling `getcpu`; the children must cover at

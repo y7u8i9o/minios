@@ -29,6 +29,10 @@ int waitq_wake_all(struct waitq *wq);
  * condition and the process exit flag. */
 struct thread;
 void waitq_interrupt(struct thread *t);
+/* waitq_interrupt for a signal or an exit sent to t. If t is about to call
+ * waitq_wait and is not registered yet, its next waitq_wait returns at
+ * once, so the caller checks for signals again. */
+void waitq_signal(struct thread *t);
 /* Like waitq_wait, but the wait ends at deadline_ms (timer_ms clock)
  * as if woken; callers re-check their condition and the time. */
 void waitq_wait_timeout(struct waitq *wq, struct spinlock *held, uint64_t deadline_ms);

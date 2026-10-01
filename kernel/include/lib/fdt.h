@@ -1,9 +1,9 @@
 #pragma once
 #include <kernel.h>
 
-/* A reader of flattened device trees (A7): the blob Limine passes on
- * aarch64. Only reading is supported; the blob stays where the bootloader
- * left it until its memory is reclaimed. */
+/* A reader of flattened device trees (A7), for the blob that Limine passes
+ * on aarch64. The reader does not modify the blob. The blob is in the
+ * memory where the bootloader placed it, until that memory is reclaimed. */
 
 /* A node found in the tree: its offset in the structure block and the
  * #address-cells and #size-cells that apply to its reg property (those of

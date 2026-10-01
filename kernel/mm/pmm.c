@@ -294,7 +294,7 @@ void pmm_split_block(struct page *head, unsigned order)
         page_array[pfn + i].order = 0;
         page_array[pfn + i].flags &= (uint16_t)~PG_FREE;
         if (i)
-            page_array[pfn + i].refcount = 0;   /* the head keeps the block's count */
+            page_array[pfn + i].refcount = 0;   /* the count of the block is on the head */
     }
     spin_unlock(&pmm_lock);
 }

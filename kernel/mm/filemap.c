@@ -77,12 +77,19 @@ void filemap_ref(struct mapping *m)
 
 void filemap_put(struct mapping *m)
 {
-    if (__atomic_sub_fetch(&m->refs, 1, __ATOMIC_SEQ_CST) != 0)
-        return;
-    /* Nobody references the mapping; detach it unless a lookup revived it
-     * meanwhile (a lookup takes filemap_lock and increments refs). */
+    /* A reference that is not the last one is dropped without the lock. */
+    int refs = __atomic_load_n(&m->refs, __ATOMIC_RELAXED);
+    while (refs > 1) {
+        if (__atomic_compare_exchange_n(&m->refs, &refs, refs - 1, false,
+                                        __ATOMIC_SEQ_CST, __ATOMIC_RELAXED))
+            return;
+    }
+    /* The count reaches zero only under filemap_lock, which a lookup
+     * acquires to take a reference. After the decrement to zero no lookup
+     * finds the mapping, because it is detached before the lock is
+     * released. */
     spin_lock(&filemap_lock);
-    if (__atomic_load_n(&m->refs, __ATOMIC_SEQ_CST) != 0) {
+    if (__atomic_sub_fetch(&m->refs, 1, __ATOMIC_SEQ_CST) != 0) {
         spin_unlock(&filemap_lock);
         return;
     }

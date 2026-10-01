@@ -40,6 +40,7 @@ static int map_locked(struct vmspace *vm, uintptr_t va, uintptr_t pa, size_t siz
             return -EEXIST;
         *entry = pte_make(pa + off, flags);
     }
+    paging_publish_entries();
     return 0;
 }
 
@@ -204,8 +205,8 @@ void vmspace_activate(struct vmspace *vm)
     if (old == vm)
         return;
     /* The mask of the new space is set before the root changes and the old one
-     * is cleared afterwards, so a shootdown never misses a CPU that holds
-     * translations of either space. */
+     * is cleared afterwards, so a shootdown never misses a CPU whose TLB
+     * may contain translations of either space. */
     __atomic_fetch_or(&vm->cpu_mask, bit, __ATOMIC_SEQ_CST);
     c->vm = vm;
     paging_load(vm->pt_root);

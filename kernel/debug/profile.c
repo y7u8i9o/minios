@@ -19,22 +19,22 @@
 
 /* The collection engine.
  *
- * Every CPU owns one byte ring. Its producers are that CPU's timer
- * interrupt and the hooks running on it, which is a single producer once
- * interrupts are disabled, with one exception: an interrupt can arrive
+ * Every CPU has one byte ring. Its producers are the timer interrupt of
+ * that CPU and the hooks running on it, which is a single producer once
+ * interrupts are disabled, with one exception. An interrupt can arrive
  * while a hook is writing. A per ring busy flag turns that nesting into a
  * dropped event instead of a corrupt one, and is also what teardown waits
  * for before the storage is released.
  *
- * Records are a multiple of eight bytes and never wrap: the tail of a ring
+ * Records are a multiple of eight bytes and never wrap. The tail of a ring
  * is filled with a padding record when the next event does not fit before
  * the wrap point, so a reader can always read a header contiguously.
  * head and tail are monotonic byte counters masked into the buffer, so the
  * difference is the fill level without an empty-or-full ambiguity.
  *
- * Recorders never take a lock and never wake a poller: they run under the
- * run queue lock and inside interrupts. Readiness is published by
- * profile_tick from the timer interrupt, which holds nothing.
+ * Recorders never take a lock and never wake a poller, because they run
+ * under the run queue lock and inside interrupts. profile_tick publishes
+ * readiness from the timer interrupt, without any lock acquired.
  */
 
 #define PROF_RING_BYTES 131072u
@@ -69,8 +69,8 @@ static struct prof_config config = {
     .io_min_ns = 0,
 };
 uint32_t prof_event_mask;
-/* Counters shared by every CPU's recorder, so they are only ever touched
- * with atomic operations; no lock guards them. */
+/* Counters shared by the recorders of every CPU. They are accessed only
+ * with atomic operations and are not protected by a lock. */
 static uint64_t counts[PROF_EV_TYPES];
 static uint64_t total_events;
 
@@ -78,7 +78,9 @@ static uint64_t total_events;
 
 static bool ring_enter(struct prof_ring *r)
 {
-    return r->data && __atomic_exchange_n(&r->busy, 1, __ATOMIC_ACQ_REL) == 0;
+    /* Sequentially consistent against quiesce: either the producer sees
+     * enabled cleared or quiesce sees busy set (A8). */
+    return r->data && __atomic_exchange_n(&r->busy, 1, __ATOMIC_SEQ_CST) == 0;
 }
 
 static void ring_leave(struct prof_ring *r)
@@ -87,7 +89,7 @@ static void ring_leave(struct prof_ring *r)
 }
 
 /* Append one complete record, or report that it did not fit. The caller
- * holds the ring. */
+ * has entered the ring (ring_enter). */
 static bool ring_write(struct prof_ring *r, const struct prof_event *e)
 {
     uint32_t size = e->size;
@@ -114,9 +116,9 @@ static bool ring_write(struct prof_ring *r, const struct prof_event *e)
 
 /* ---- recording ---- */
 
-/* Build one event and store it in the ring of the running CPU. t owns the
- * event; when stack is true the chain is unwound from tf, or from rbp when
- * there is no trapframe. */
+/* Build one event and store it in the ring of the running CPU. The event
+ * is attributed to t. When stack is true the chain is unwound from tf, or
+ * from rbp when there is no trapframe. */
 static void record(unsigned type, uint8_t flags, uint64_t a, uint64_t b,
                    const struct trapframe *tf, uintptr_t rbp, struct thread *t, bool stack)
 {
@@ -129,7 +131,7 @@ static void record(unsigned type, uint8_t flags, uint64_t a, uint64_t b,
     struct prof_ring *r = &cpu_rings[c->id];
     if (!ring_enter(r))
         goto out;                       /* nested inside another recorder */
-    if (!__atomic_load_n(&enabled, __ATOMIC_ACQUIRE))
+    if (!__atomic_load_n(&enabled, __ATOMIC_SEQ_CST))
         goto leave;
     uint32_t pid = config.pid;
     uint32_t self = t && t->proc ? (uint32_t)t->proc->pid : 0;
@@ -244,7 +246,8 @@ void profile_heap(bool releasing, const void *addr, size_t size)
     if (size && size < config.alloc_min)
         return;
     struct cpu *c = cpu_current();
-    /* A free needs no chain: the allocation it retires carries one. */
+    /* A free needs no chain, because the event of the allocation that it
+     * frees contains one. */
     record(type, 0, (uint64_t)(uintptr_t)addr, size, NULL,
            (uintptr_t)__builtin_frame_address(0), c->current, !releasing);
 }
@@ -264,7 +267,7 @@ void profile_io(bool write, bool block_device, uint64_t bytes, uint64_t start_ns
 /* ---- the device ---- */
 
 /* The oldest record of a ring, with padding skipped, or NULL when empty.
- * The reader holds prof_lock. */
+ * The reader has acquired prof_lock. */
 static const struct prof_event *ring_peek(struct prof_ring *r)
 {
     if (!r->data)
@@ -330,9 +333,9 @@ static void quiesce(void)
 {
     unsigned cpus = smp_cpu_count();
     __atomic_store_n(&prof_event_mask, 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&enabled, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&enabled, false, __ATOMIC_SEQ_CST);
     for (unsigned i = 0; i < cpus; i++)
-        while (__atomic_load_n(&cpu_rings[i].busy, __ATOMIC_ACQUIRE) != 0)
+        while (__atomic_load_n(&cpu_rings[i].busy, __ATOMIC_SEQ_CST) != 0)
             cpu_relax();
 }
 

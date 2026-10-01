@@ -74,7 +74,7 @@ static void read_bars(struct pci_dev *d)
     }
 }
 
-/* Names for the boot log only; drivers match on the numeric ids. A
+/* Names for the boot log only. Drivers match on the numeric ids. A
  * function is described by its device name when known, else by its class. */
 static const char *class_name(uint8_t class, uint8_t subclass)
 {

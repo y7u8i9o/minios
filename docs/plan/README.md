@@ -20,7 +20,7 @@ its boot tests pass.
 | `network.md` | The TCP/IP plan, milestones N00 to N16 | completed 2026-09-30 |
 | `network-progress.md` | Progress record and validation evidence of N00 to N16 | completed 2026-09-30 |
 | `terminal.md` | The terminal userland plan | completed 2026-09-06 |
-| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A7 completed 2026-10-01, A8 next |
+| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A7 completed 2026-10-01, A8 completed 2026-10-02, A9 next |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.
@@ -44,7 +44,7 @@ milestone is not started before the boot tests of the current one pass.
 | Filesystem | Custom inode based filesystem (`mfs`) behind a VFS with mount points and devfs |
 | Storage | virtio-blk (PCI, modern virtio interface): the root image rebuilt by the build, a data volume mounted at `/home`, a swap device, FAT volumes |
 | System calls | POSIX subset, entered through `syscall` / `sysretq` |
-| Executables | ELF64, dynamically linked against the shared libraries in `/lib` since 2026-09-06 (`docs/design/dynlink.md`); `init` and the loader are static |
+| Executables | ELF64, dynamically linked against the shared libraries in `/lib` since 2026-09-06 (`docs/design/dynlink.md`), with `init` and the loader static |
 | libc | Own minimal libc (`libc/`) |
 | User space | Shell with a line editor, coreutils, sed, awk, make, ar, tar, tcc, Lua 5.5, the package installer `pkg`, init with service supervision, desktop applications |
 | Console | Framebuffer text console with bitmap font and 16 colour SGR, serial (COM1) mirror, timestamped kernel log |
@@ -72,9 +72,9 @@ with the code.
 - `tests/run_qemu_test.sh <case>` boots the image with `-display none -serial file:<out> -device isa-debug-exit,iobase=0xf4,iosize=0x4` and a timeout. The kernel writes `TEST PASS` or `TEST FAIL <reason>` to serial and exits through port `0xf4`.
 - Kernel self tests are compiled in when `CONFIG_TESTS=1` and selected by a Limine command line argument such as `test=pmm`.
 - User space test programs in `user/tests/` are started by the `test=run prog=/bin/<name>` command line of a case and report the same markers.
-- The network cases run against a peer on the host (`tools/netpeer`, `tests/net/`); `make check-net` checks the harness itself and `make check-net-fuzz` fuzzes the wire parsers on the host.
+- The network cases run against a peer on the host (`tools/netpeer`, `tests/net/`). `make check-net` checks the harness itself and `make check-net-fuzz` fuzzes the wire parsers on the host.
 - `make check`, `make check-lua` and `make check-sh` run the host unit tests of the libraries, the Lua modules and the shell parser.
-- `make test CASES="case ..."` runs the named cases and prints a summary. Only the cases of the modules a change touches are run; the full suite has grown too large to run for every change and is never run as a whole.
+- `make test CASES="case ..."` runs the named cases and prints a summary. Only the cases of the modules a change touches are run, because the full suite takes too long for every change.
 - The shutdown path is itself tested: a case boots to user space, runs `shutdown`, and asserts that the block cache was flushed (the mfs clean flag is set on the resulting image) and that QEMU exited through the ACPI power off rather than the timeout.
 
 ## 4. Conventions
@@ -84,7 +84,7 @@ with the code.
 - Naming: `subsystem_verb_object`, for example `pmm_alloc_page`, `vfs_open`, `sched_yield`. Types are `struct name`, no typedef for structs. Fixed width integers from `<stdint.h>`.
 - Errors are negative `errno` values returned as `int` or `long`. Pointers returning errors use `ERR_PTR` and `IS_ERR` helpers.
 - Locks: every shared structure documents which lock protects it in a comment above the struct definition, and takes that lock from the first commit in which it exists. Disabling interrupts is never treated as sufficient mutual exclusion on its own.
-- Per CPU state is only accessed through `cpu_current()`. No global variables hold per CPU data.
+- Per CPU state is only accessed through `cpu_current()`. No global variable contains per CPU data.
 - Lock ordering is recorded in `docs/design/locking.md` before a new lock is introduced.
 - Every milestone adds a boot test and a short document in `docs/design/`.
 

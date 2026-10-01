@@ -26,9 +26,23 @@ void waitq_wait(struct waitq *wq, struct spinlock *held)
      * lock, so a wakeup between release and switch cannot be lost. */
     spin_lock(&wq->lock);
     list_add_tail(&t->run_link, &wq->waiters);
-    t->waiting_on = wq;
+    __atomic_store_n(&t->waiting_on, wq, __ATOMIC_SEQ_CST);
+    /* A signal sent after the caller checked for signals and before
+     * waiting_on was stored found no queue to interrupt. waitq_signal
+     * stores sig_wake before it reads waiting_on, and both sides are
+     * sequentially consistent, so either the sender finds the queue or
+     * this exchange finds the flag. The wait then ends at once, and a
+     * caller that does not check signals waits again with the flag clear. */
+    if (__atomic_exchange_n(&t->sig_wake, false, __ATOMIC_SEQ_CST)) {
+        list_del(&t->run_link);
+        __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);
+        spin_unlock(&wq->lock);
+        return;
+    }
     sched_lock_current();
-    t->state = THREAD_BLOCKED;
+    /* Release: a drain that reads BLOCKED also reads waiting_on (mlfq.c,
+     * drain_inbound_locked). */
+    __atomic_store_n(&t->state, THREAD_BLOCKED, __ATOMIC_RELEASE);
     spin_unlock(&wq->lock);
     if (held)
         spin_unlock(held);
@@ -48,7 +62,10 @@ static int wake(struct waitq *wq, bool all)
             panic("bad waiter wq %p next %p prev %p thread %p tid %d state %d waiting %p", wq,
                   wq->waiters.next, wq->waiters.prev, t, t->tid, t->state, t->waiting_on);
         list_del(&t->run_link);
-        t->waiting_on = NULL;
+        /* Sequentially consistent, before the claim of queue_inbound: a
+         * drain that finds the claim released must not read the old
+         * waiting_on and discard this wake as stale (A8). */
+        __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);
         sched_wake(t);
         n++;
         if (!all)
@@ -76,15 +93,21 @@ void waitq_interrupt(struct thread *t)
     spin_lock(&wq->lock);
     if (t->waiting_on == wq) {
         list_del(&t->run_link);
-        t->waiting_on = NULL;
+        __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);  /* see wake */
         sched_wake(t);
     }
     spin_unlock(&wq->lock);
 }
 
+void waitq_signal(struct thread *t)
+{
+    __atomic_store_n(&t->sig_wake, true, __ATOMIC_SEQ_CST);
+    waitq_interrupt(t);
+}
+
 /* ---- timed waits (M23) ---- */
 
-/* Waiters with a deadline; timed_lock protects the list and is taken
+/* Waiters with a deadline. timed_lock protects the list and is taken
  * from the timer interrupt. Order: the caller's condition lock ->
  * timed_lock, and timed_lock -> wq->lock inside waitq_interrupt. */
 struct timed_waiter {

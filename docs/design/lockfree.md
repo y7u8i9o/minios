@@ -147,6 +147,55 @@ Whole-space teardown omits that redundant range round because the immediately
 following `vmspace_destroy` drops the address space from every CPU before it
 frees the page tables.
 
+## Ordering audit for aarch64 (A8)
+
+The aarch64 port runs these paths on a weakly ordered processor, where an
+acquire load does not order an earlier plain store and a control
+dependency does not order a later load. An audit of the spinlock and of
+every path above found five orderings that x86 permitted and the C11
+model does not. A8 corrected them.
+
+- The wakers of a wait queue cleared `waiting_on` with a plain store
+  before the claim exchange of `queue_inbound`. A drain could then read
+  the old queue and discard the wake as stale, and the thread never ran
+  again. `wake` and `waitq_interrupt` now store `NULL` sequentially
+  consistent, and `waitq_wait` stores `waiting_on` and the blocked state
+  as atomics.
+- A shootdown target read the request before the bit of `pending` that
+  publishes it. `tlb_shootdown_poll` now loads `pending` with acquire.
+- `virtq_drain_locked` read a used ring entry before the used index. It
+  now reads the index, executes `rmb` and then reads the entries up to it.
+- The profiler's `quiesce` and `ring_enter` formed a store and load pair
+  on two variables with release and acquire only. Both sides are now
+  sequentially consistent.
+- `tlb_flush_range` read `cpu_mask` after it cleared the entries, against
+  the `fetch_or` and the table walk of `vmspace_activate`. A sequentially
+  consistent fence now separates the stores of the entries from the load
+  of the mask.
+
+The spinlock is correct with the exchange and the release store that it
+uses. The audit also found five races that occur under any memory order,
+and A8 corrected them.
+
+- `pts_write` wrote the pty output ring without `p->lock`, while the echo
+  of `pty_output` wrote the same ring under the lock. The write is now
+  under the lock.
+- `vma_split_locked` shrank the region before it linked the tail, so a
+  lockless `vma_range_ok` could find a gap. The tail is now linked first.
+- A signal sent after a caller checked for signals and before
+  `waitq_wait` registered the thread found no queue to interrupt.
+  `waitq_signal` sets the one-shot flag `sig_wake` before it interrupts
+  the wait, and `waitq_wait` exchanges the flag after it registers the
+  thread and returns at once if the flag was set.
+- `stop_current` read `stopped` and then stored the stopped state, so a
+  `SIGCONT` between the two left the thread stopped. The thread now
+  stores the state and reads `stopped` again, both sequentially
+  consistent, against the store of `continue_process` and the state load
+  of `sched_wake`.
+- `filemap_put` reached zero without `filemap_lock`, so a lookup could
+  revive the mapping and both callers freed it. The last reference is now
+  dropped under the lock.
+
 ## Validation
 
 `lockfree` exercises atomic counters, reference counts, per-CPU counters,

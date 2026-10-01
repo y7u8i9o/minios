@@ -16,7 +16,7 @@
 #             built by mkfat from the directory under the case (optional);
 #             the post script sees the first as FATIMG, all as FATIMGS
 #   audio     QEMU audio backend for a virtio-sound device: none or wav
-#   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver);
+#   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver),
 #             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
 #   tablet    present: attach a virtio-tablet-pci device
 #   keyboard  present: attach a virtio-keyboard-pci device
@@ -215,9 +215,9 @@ RNGFLAGS="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pc
 [ -f "$CASE/no-rng" ] && RNGFLAGS=""
 # The machine of the architecture. x86_64 is the q35 PC with the
 # isa-debug-exit device for the exit status. aarch64 is virt with the edk2
-# UEFI firmware that QEMU installs (EDK2_AARCH64 overrides its path); the
+# UEFI firmware that QEMU installs (EDK2_AARCH64 overrides its path). The
 # image is a CD on a SCSI controller, and the guest ends a test with a PSCI
-# power off, which carries no exit status.
+# power off, which reports no exit status.
 case "${ARCH:-x86_64}" in
     x86_64)
         MACHINE="-M q35 -device isa-debug-exit,iobase=0xf4,iosize=0x4"
@@ -229,17 +229,13 @@ case "${ARCH:-x86_64}" in
         CPU=max
         [ "$ACCEL" = hvf ] && CPU=host
         MACHINE="-M virt,gic-version=3,acpi=off -cpu $CPU -bios $EDK2_AARCH64"
-        # Until A8 the kernel leaves the application processors parked in
-        # Limine's memory, which it reclaims, so the machine has one CPU.
-        CPUS=1
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
-        # virt has no VGA: ramfb gives the boot framebuffer that std VGA
-        # gives on the PC. virtio-vga is a boot framebuffer and a virtio
-        # GPU; edk2 offers no framebuffer on virtio-gpu-pci, so ramfb is
-        # added to it.
-        # virt also adds a virtio-net device unless told otherwise; a case
-        # without a nic file gets none, like the PC, whose e1000 has no
-        # driver.
+        # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
+        # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2
+        # sets up no framebuffer on virtio-gpu-pci, so ramfb is added to it.
+        # virt adds a virtio-net device unless -nic none is given. A case
+        # without a nic file gets no network device, like the PC, whose
+        # e1000 has no driver.
         [ -f "$CASE/nic" ] || NETFLAGS="-nic none"
         VGAFLAGS="-device ramfb"
         [ -f "$CASE/vga" ] && [ "$(cat "$CASE/vga")" = virtio ] && VGAFLAGS="$VGAFLAGS -device virtio-gpu-pci"

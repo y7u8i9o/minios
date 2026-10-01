@@ -104,7 +104,7 @@ void boot_init(void)
 }
 
 /* video=WxH[xBPP][@SCALE]: the mode itself is applied by Limine (the image
- * builder copies it into limine.conf); the @SCALE suffix asks for an
+ * builder copies it into limine.conf). The @SCALE suffix asks for an
  * integer UI scale on high density displays, used by the framebuffer
  * console and reported through /dev/fb0 to the window server. */
 static void boot_parse_video(void)
@@ -116,7 +116,8 @@ static void boot_parse_video(void)
     const char *at = strchr(val, '@');
     if (at && at[1] >= '1' && at[1] <= '4' && at[2] == '\0')
         bootinfo.fb_scale = (uint32_t)(at[1] - '0');
-    /* WxH[xBPP]: Limine may not offer the mode; the GPU driver can. */
+    /* WxH[xBPP]: Limine may not support the mode, but the GPU driver can
+     * set it. */
     uint32_t w = 0, h = 0;
     const char *p = val;
     while (*p >= '0' && *p <= '9')

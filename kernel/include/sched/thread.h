@@ -39,7 +39,8 @@ struct thread {
     struct list_head run_link;      /* run queue, sleep list or wait queue */
     struct mpsc_node wake_node;     /* remote runnable notification */
     bool wake_queued;               /* atomically claims wake_node */
-    struct waitq *waiting_on;       /* wait queue holding run_link, wq->lock */
+    struct waitq *waiting_on;       /* wait queue that contains run_link, wq->lock */
+    bool sig_wake;                  /* a signal or exit was sent, atomic, see waitq_signal */
     struct list_head proc_link;     /* proc->threads, proc->lock */
     thread_fn entry;
     void *arg;

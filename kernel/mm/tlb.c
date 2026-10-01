@@ -28,19 +28,13 @@ static struct {
 static volatile cpu_mask_t pending;
 static struct tlb_stats stats;   /* requests and ipis under tlb_lock, acks atomic */
 
-/* Flush the local TLB for a range of vm. */
+/* Flush the local TLB for a range of vm, and on an architecture with
+ * broadcast invalidation (PAGING_TLB_BROADCAST) the TLBs of every CPU. */
 static void flush_local(struct vmspace *vm, uintptr_t va, size_t size)
 {
-    struct cpu *c = cpu_current();
-    bool active = vm == &kernel_vmspace || va > USER_TOP || c->vm == vm;
-    if (!active)
-        return;
-    if (va > USER_TOP || size <= 64 * PAGE_SIZE) {
-        for (size_t off = 0; off < size; off += PAGE_SIZE)
-            paging_flush_page(va + off);
-    } else {
-        paging_flush_user();
-    }
+    bool kernel = vm == &kernel_vmspace || va > USER_TOP;
+    bool active = kernel || cpu_current()->vm == vm;
+    paging_flush_range(vm->pt_root, kernel, active, va, size);
 }
 
 static void service(void)
@@ -57,7 +51,8 @@ void tlb_shootdown_poll(void)
     if (!smp_active())
         return;
     cpu_mask_t bit = 1UL << cpu_current()->id;
-    if (!(pending & bit))
+    /* Acquire: the request written before pending is read after it. */
+    if (!(__atomic_load_n(&pending, __ATOMIC_ACQUIRE) & bit))
         return;
     service();
     __atomic_fetch_add(&stats.acks, 1, __ATOMIC_RELAXED);
@@ -69,10 +64,10 @@ static void shootdown_irq(struct trapframe *tf, void *arg)
     tlb_shootdown_poll();
 }
 
-/* Run one round against targets. The sender's interrupts are disabled by
- * its locks and it is never a target itself, so it simply waits; any
- * target that spins on a lock this CPU holds services the request from
- * its spin loop, the others take the interrupt. */
+/* Run one round against targets. The interrupts of the sender are disabled
+ * by its locks, and the sender is never one of its own targets, so it
+ * waits. A target that spins on a lock that this CPU has acquired services
+ * the request from its spin loop. The other targets take the interrupt. */
 static void send_round(enum tlb_kind kind, struct vmspace *vm, uintptr_t va, size_t size,
                        cpu_mask_t targets)
 {
@@ -106,12 +101,25 @@ void tlb_flush_range(struct vmspace *vm, uintptr_t va, size_t size)
 {
     kassert(spin_holding(&vm->lock));
     flush_local(vm, va, size);
-    if (!smp_active())
+    if (!smp_active() || PAGING_TLB_BROADCAST)
         return;
     bool kernel_range = vm == &kernel_vmspace || va > USER_TOP;
+    /* The cleared entries before the read of cpu_mask, against the
+     * fetch_or and the table walk of vmspace_activate: otherwise a CPU
+     * that activates the space meanwhile may walk the old entry and be
+     * missing from the mask (A8). */
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
     cpu_mask_t targets = targets_for(vm, kernel_range);
     if (targets)
         send_round(TLB_FLUSH_RANGE, vm, va, size, targets);
+}
+
+void tlb_replace_entry(struct vmspace *vm, pte_t *entry, pte_t value, uintptr_t va, size_t size)
+{
+    *entry = 0;
+    tlb_flush_range(vm, va, size);
+    *entry = value;
+    paging_publish_entries();
 }
 
 void tlb_drop_vmspace(struct vmspace *vm)

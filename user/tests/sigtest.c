@@ -59,15 +59,24 @@ int main(void)
     int status = child_status(pid);
     CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM, "TERM default status 0x%x", status);
 
-    /* Ignoring SIGTERM keeps the child alive; SIGKILL cannot be ignored. */
+    /* A child that ignores SIGTERM survives it. SIGKILL cannot be ignored.
+     * The child reports through a pipe that it has set the dispositions,
+     * because with several CPUs the parent may otherwise send SIGTERM
+     * before the child calls signal. */
+    int ready[2];
+    CHECK(pipe(ready) == 0, "pipe");
     pid = fork();
     if (pid == 0) {
         signal(SIGTERM, SIG_IGN);
         signal(SIGKILL, SIG_IGN);
+        write(ready[1], "r", 1);
         for (;;)
             sched_yield();
     }
-    sched_yield();
+    char byte;
+    CHECK(read(ready[0], &byte, 1) == 1, "child ready");
+    close(ready[0]);
+    close(ready[1]);
     kill(pid, SIGTERM);
     for (int i = 0; i < 20; i++)
         sched_yield();

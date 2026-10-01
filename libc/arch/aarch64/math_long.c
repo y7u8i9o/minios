@@ -1,14 +1,14 @@
 /* The long double functions of aarch64 and the primitives that math.c
  * and math_extra.c take from the architecture (stdlib/math_arch.h).
  *
- * long double is IEEE binary128 on aarch64; libgcc implements its
+ * long double is IEEE binary128 on aarch64. libgcc implements its
  * arithmetic in software. The exact functions (truncl, frexpl, ldexpl,
  * fmodl, remainderl) work on the binary128 representation. The
  * exponential, logarithmic and inverse tangent functions evaluate their
  * series in binary128 after an argument reduction, to within a few units
- * of the last place of binary128; the double functions that math.c and
- * math_extra.c build on them (pow, atan, the hyperbolic functions) round
- * from that result. */
+ * of the last place of binary128. The double functions that math.c and
+ * math_extra.c implement with them (pow, atan, the hyperbolic functions)
+ * round that result. */
 #include <math.h>
 #include <float.h>
 #include <errno.h>
@@ -154,7 +154,7 @@ float sqrtf(float x)
 }
 
 /* The remainder of |x| / |y| by exact subtractions of y scaled to the
- * exponent of the rest; *odd receives the parity of the quotient. Every
+ * exponent of the rest. *odd receives the parity of the quotient. Every
  * subtraction is exact (Sterbenz), so the result is exact. */
 #define PARTIAL_REMAINDER(type, frexp_fn, ldexp_fn)                       \
     {                                                                     \
@@ -513,7 +513,7 @@ long double log1pl(long double x)
         /* log1p(x) = 2 atanh(s), s = x / (2 + x), |s| <= 1/3. */
         return 2.0L * odd_series(x / (2.0L + x), 37, 0);
     }
-    /* u = 1 + x rounded; (x - (u - 1)) / u corrects for the rounding. */
+    /* u is 1 + x rounded, and (x - (u - 1)) / u corrects the rounding. */
     long double u = 1.0L + x;
     return logl(u) + (x - (u - 1.0L)) / u;
 }
