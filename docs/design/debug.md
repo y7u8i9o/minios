@@ -21,6 +21,15 @@ stops at a zero return address, which `_start` guarantees by clearing `rbp`.
 the faulting function first. Sibling call optimization is disabled kernel wide
 so that every active function has a frame.
 
+`/dev/threads` lists every thread with its process, state, CPU, the wait
+queue it blocks on (the name of the queue's lock) and its user program
+counter at the entry into the kernel. For a thread that is switched out it
+adds the kernel frames from the frame that `context_switch` saved
+(`arch_thread_switch_frame`, `unwind_kernel`), with symbols. The frames are
+read without stopping the thread, so a thread that starts to run meanwhile
+can show stale frames. `cat /dev/threads` from a shell, or from a
+background job while a program is blocked, shows where each thread waits.
+
 ## Logging
 
 `klog(level, fmt, ...)` prints `[<L> <subsys>] message`. The subsystem prefix

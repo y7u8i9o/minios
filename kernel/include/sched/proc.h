@@ -94,6 +94,9 @@ int proc_count_others(void);
 int proc_collect_pgrp(int pgid, int *pids, int max);
 /* Format "PID PPID PGID STATE NAME" lines into buf. Returns the length. */
 size_t proc_format_table(char *buf, size_t size);
+/* Every thread of every process with its state, the wait queue it blocks
+ * on and the kernel frames where it was switched out (/dev/threads). */
+size_t proc_format_threads(char *buf, size_t size);
 /* Format the file backed regions of every process for /dev/maps: one line
  * per region with the pid, the start and end addresses, the file offset of
  * the start and the file's path. */

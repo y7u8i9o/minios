@@ -127,6 +127,29 @@ int main(void)
     CHECK(read(s, two, 2) == 2 && two[0] == 'a' && two[1] == 'b', "raw bytes '%s'", two);
     close(s);
 
+    /* A reader blocked on the slave does not block a writer on the same
+     * open file description. A shell that waits for input and its
+     * background job share standard input and output, and before the
+     * terminals were marked FOPS_STREAM the job blocked in write until the
+     * next key press. */
+    int s3 = open(slave, O_RDWR);
+    CHECK(s3 >= 0, "slave for the shared description");
+    pid_t rp = fork();
+    if (rp == 0) {
+        setpgid(0, 0);
+        tcsetpgrp(s3, getpgrp());
+        char c[8];
+        _exit(read(s3, c, sizeof c) > 0 ? 0 : 4);
+    }
+    sleep_ms(200);
+    CHECK(write(s3, "beside\n", 7) == 7, "write beside a blocked reader");
+    CHECK(expect(master, "beside", buf, sizeof buf), "output beside a blocked reader: '%s'", buf);
+    write(master, "q\n", 2);
+    status = -1;
+    waitpid(rp, &status, 0);
+    CHECK(status == 0, "blocked reader woken (status 0x%x)", status);
+    close(s3);
+
     /* A window size change on the master sends SIGWINCH to the slave's
      * foreground process group. */
     pid_t wp = fork();

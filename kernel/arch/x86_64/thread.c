@@ -74,3 +74,11 @@ void arch_fpu_reset(struct thread *t)
     fpu_init_state(t->arch.fpu);
     fpu_restore(t->arch.fpu);
 }
+
+/* context_switch pushed rbp, rbx, r12 to r15 below the return address:
+ * ctx[5] is the saved rbp and ctx[6] the return address. */
+void arch_thread_switch_frame(const struct thread *t, uintptr_t *pc, uintptr_t *fp)
+{
+    *fp = t->ctx[5];
+    *pc = t->ctx[6];
+}

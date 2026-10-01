@@ -332,9 +332,13 @@ the framebuffer state and framebuffer write.
   unix_sock.lock` (the listener's backlog) is unchanged and never nests
   with `conn.lock`.
 - `file.lock` is not taken for objects whose operations carry
-  `FOPS_STREAM` (sockets): they have no position, and a reader blocked in
-  the backend must not exclude a writer on the same open file
-  description. Regular files keep the mutex.
+  `FOPS_STREAM` (sockets, and since 2026-10-02 the pty master, the pty
+  slaves and `/dev/console`): they have no position, and a reader blocked
+  in the backend must not exclude a writer on the same open file
+  description. Regular files keep the mutex. Before the terminals carried
+  the flag, a shell waiting at its prompt held the mutex of its terminal
+  in `read`, and a background job that wrote to the same description
+  blocked until the next key press.
 
 ## N02 additions
 

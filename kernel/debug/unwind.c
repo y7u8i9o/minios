@@ -15,6 +15,7 @@
  * came from ring three, so a stale pointer is ignored rather than trusted.
  */
 #include <debug/profile.h>
+#include <debug/backtrace.h>
 #include <arch/frame.h>
 #include <arch/cpu.h>
 #include <mm/vmm.h>
@@ -88,6 +89,11 @@ static unsigned walk_kernel(uintptr_t rip, uintptr_t rbp, const struct thread *t
     return depth;
 }
 
+unsigned unwind_kernel(const struct thread *t, uintptr_t pc, uintptr_t fp, uint64_t *chain, unsigned max)
+{
+    return walk_kernel(pc, fp, t, chain, max);
+}
+
 /* The innermost user entry frame of t, or NULL. */
 static const struct trapframe *entry_frame(const struct thread *t)
 {
@@ -133,4 +139,14 @@ unsigned prof_unwind(const struct trapframe *tf, uintptr_t rbp, struct thread *t
     if (depth == max)
         *flags |= PROF_FLAG_TRUNC;
     return depth;
+}
+
+bool unwind_user_entry(const struct thread *t, uintptr_t *pc, uintptr_t *fp)
+{
+    const struct trapframe *tf = entry_frame(t);
+    if (!tf)
+        return false;
+    *pc = frame_pc(tf);
+    *fp = frame_fp(tf);
+    return true;
 }

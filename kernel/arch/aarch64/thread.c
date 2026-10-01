@@ -74,3 +74,10 @@ void arch_fpu_reset(struct thread *t)
     memset(t->arch.fpu, 0, FPU_AREA_SIZE);
     fpu_restore(t->arch.fpu);
 }
+
+/* context_switch stored x29 and x30 at offset 80 of its frame. */
+void arch_thread_switch_frame(const struct thread *t, uintptr_t *pc, uintptr_t *fp)
+{
+    *fp = t->ctx[10];
+    *pc = t->ctx[11];
+}

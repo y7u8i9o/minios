@@ -16,6 +16,9 @@
 #include <arch/frame.h>
 #include <arch/cpu.h>
 #include <drivers/timer.h>
+#include <debug/backtrace.h>
+#include <debug/symbols.h>
+#include <arch/thread.h>
 
 /* All processes and the pid counter. Protected by proc_list_lock. */
 static LIST_HEAD(proc_list);
@@ -415,6 +418,78 @@ size_t proc_format_table(char *buf, size_t size)
         off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", r->pid, r->ppid, r->pgid,
                                  r->zombie ? "zombie" : r->stopped ? "stopped" : "running",
                                  r->ticks, rss, r->name);
+    }
+    return off < size ? off : size - 1;
+}
+
+static const char *const thread_state_names[] = {
+    [THREAD_NEW] = "new", [THREAD_READY] = "ready", [THREAD_RUNNING] = "running",
+    [THREAD_BLOCKED] = "blocked", [THREAD_SLEEPING] = "sleeping", [THREAD_STOPPED] = "stopped",
+    [THREAD_ZOMBIE] = "zombie",
+};
+
+/* One line per thread and one line per kernel frame of a thread that is
+ * switched out. The frames are read from the stack of a thread that may
+ * start to run meanwhile, so a report can show stale frames. The kernel
+ * process is listed as well. proc_list_lock is a leaf below proc.lock, so
+ * the pids are copied first and each process is looked up again under
+ * proc_tree_lock, which keeps it from being reaped while its lock is
+ * acquired. */
+size_t proc_format_threads(char *buf, size_t size)
+{
+    enum { MAX_PIDS = 64, MAX_FRAMES = 16 };
+    static int pids[MAX_PIDS];          /* threadsdev_read is serialized by the file lock */
+    int n = 0;
+    spin_lock(&proc_list_lock);
+    struct list_head *pos;
+    list_for_each(pos, &proc_list) {
+        if (n == MAX_PIDS)
+            break;
+        pids[n++] = list_entry(pos, struct proc, link)->pid;
+    }
+    spin_unlock(&proc_list_lock);
+    size_t off = 0;
+    struct thread *self = thread_current();
+    for (int i = 0; i < n && off < size - 1; i++) {
+        spin_lock(&proc_tree_lock);
+        struct proc *p = pids[i] ? proc_find(pids[i]) : &kernel_proc;
+        if (!p) {
+            spin_unlock(&proc_tree_lock);
+            continue;
+        }
+        spin_lock(&p->lock);
+        list_for_each(pos, &p->threads) {
+            if (off >= size - 1)
+                break;
+            struct thread *t = list_entry(pos, struct thread, proc_link);
+            enum thread_state st = __atomic_load_n(&t->state, __ATOMIC_ACQUIRE);
+            struct waitq *wq = __atomic_load_n(&t->waiting_on, __ATOMIC_ACQUIRE);
+            uintptr_t upc = 0, ufp = 0;
+            bool user = unwind_user_entry(t, &upc, &ufp);
+            off += (size_t)ksnprintf(buf + off, size - off, "%d %d %s %s cpu %u wq %s",
+                                     p->pid, t->tid, p->name,
+                                     st <= THREAD_ZOMBIE ? thread_state_names[st] : "?", t->cpu,
+                                     wq ? wq->lock.name : "-");
+            if (user)
+                off += (size_t)ksnprintf(buf + off, size - off, " user pc %lx fp %lx", upc, ufp);
+            off += (size_t)ksnprintf(buf + off, size - off, "\n");
+            if (t == self || st == THREAD_RUNNING || st == THREAD_NEW || !t->ctx)
+                continue;
+            uintptr_t pc, fp;
+            arch_thread_switch_frame(t, &pc, &fp);
+            uint64_t chain[MAX_FRAMES];
+            unsigned depth = unwind_kernel(t, pc, fp, chain, MAX_FRAMES);
+            for (unsigned k = 0; k < depth && off < size - 1; k++) {
+                uintptr_t at;
+                const char *sym = ksyms_lookup(chain[k], &at, NULL);
+                if (sym)
+                    off += (size_t)ksnprintf(buf + off, size - off, "    %s+0x%lx\n", sym, at);
+                else
+                    off += (size_t)ksnprintf(buf + off, size - off, "    %lx\n", chain[k]);
+            }
+        }
+        spin_unlock(&p->lock);
+        spin_unlock(&proc_tree_lock);
     }
     return off < size ? off : size - 1;
 }

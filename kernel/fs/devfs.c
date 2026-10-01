@@ -314,6 +314,30 @@ static const struct file_ops mapsdev_fops = { .read = mapsdev_read };
 
 static const struct file_ops procdev_fops = { .read = procdev_read };
 
+/* /dev/threads: every thread with its state, wait queue and kernel frames,
+ * for finding where a program is blocked. */
+static long threadsdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    enum { THREADS_SIZE = 65536 };
+    char *text = kmalloc(THREADS_SIZE);
+    if (!text)
+        return -ENOMEM;
+    size_t len = proc_format_threads(text, THREADS_SIZE);
+    long r = 0;
+    if (*pos < len) {
+        size_t avail = len - *pos;
+        if (n > avail)
+            n = avail;
+        memcpy(buf, text + *pos, n);
+        *pos += n;
+        r = (long)n;
+    }
+    kfree(text);
+    return r;
+}
+
+static const struct file_ops threadsdev_fops = { .read = threadsdev_read };
+
 struct mount_snapshot {
     char *text;
     size_t length;
@@ -417,9 +441,10 @@ static struct poll_source *condev_source(struct file *f)
     return tty_poll_source(&console_tty);
 }
 
+/* The console has no file position (FOPS_STREAM, see pts_fops). */
 static const struct file_ops condev_fops = { .read = condev_read, .write = condev_write,
                                              .ioctl = condev_ioctl, .poll = condev_poll,
-                                             .poll_source = condev_source };
+                                             .poll_source = condev_source, .flags = FOPS_STREAM };
 
 static const struct file_ops null_fops = { .read = null_read, .write = null_write };
 static const struct file_ops zero_fops = { .read = zero_read, .write = null_write };
@@ -432,6 +457,7 @@ void devfs_init(void)
     devfs_register("null", S_IFCHR | 0666, &null_fops, NULL, 0);
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);
     devfs_register("proc", S_IFCHR | 0444, &procdev_fops, NULL, 0);
+    devfs_register("threads", S_IFCHR | 0444, &threadsdev_fops, NULL, 0);
     devfs_register("maps", S_IFCHR | 0444, &mapsdev_fops, NULL, 0);
     devfs_register("mounts", S_IFCHR | 0444, &mounts_fops, NULL, 0);
 }

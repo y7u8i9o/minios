@@ -16,6 +16,9 @@ struct arch_thread {
 /* The operations are those of the x86_64 header; see docs/design/arch.md. */
 int arch_thread_init(struct thread *t, void (*start)(void));
 void arch_thread_free(struct thread *t);
+/* The return address and frame pointer that context_switch saved for a
+ * thread that is switched out, for /dev/threads. */
+void arch_thread_switch_frame(const struct thread *t, uintptr_t *pc, uintptr_t *fp);
 void arch_switch_to(struct thread *prev, struct thread *next);
 void arch_thread_resume(struct thread *t);
 void arch_set_kernel_stack(uintptr_t top);

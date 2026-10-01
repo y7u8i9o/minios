@@ -146,7 +146,11 @@ static void ptmx_release(struct file *f)
     klog_info("pts%d master closed", p->index);
 }
 
+/* The terminals have no file position. FOPS_STREAM lets a writer proceed
+ * while a reader of the same open file description waits for input, as a
+ * shell at its prompt does while its background job prints. */
 static const struct file_ops ptmx_fops = {
+    .flags = FOPS_STREAM,
     .open = ptmx_open,
     .read = ptmx_read,
     .write = ptmx_write,
@@ -242,6 +246,7 @@ static void pts_release(struct file *f)
 }
 
 static const struct file_ops pts_fops = {
+    .flags = FOPS_STREAM,
     .open = pts_open,
     .read = pts_read,
     .write = pts_write,

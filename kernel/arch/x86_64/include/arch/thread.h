@@ -19,6 +19,9 @@ struct arch_thread {
 int arch_thread_init(struct thread *t, void (*start)(void));
 /* Release what arch_thread_init allocated. */
 void arch_thread_free(struct thread *t);
+/* The return address and frame pointer that context_switch saved for a
+ * thread that is switched out, for /dev/threads. */
+void arch_thread_switch_frame(const struct thread *t, uintptr_t *pc, uintptr_t *fp);
 
 /* Save prev's user register state and switch to next's kernel stack.
  * Returns when prev is switched back to. */
