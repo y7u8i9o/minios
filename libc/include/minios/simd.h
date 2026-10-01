@@ -2,17 +2,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if !defined(__SSE2__)
-#error "MiniOS SIMD requires the x86_64 SSE2 baseline"
-#endif
-
-/* Native 128-bit vector types. They may be kept in XMM registers across a
- * scheduling point because the kernel saves the complete FXSAVE area. */
-typedef float simd_f32x4 __attribute__((vector_size(16)));
-typedef double simd_f64x2 __attribute__((vector_size(16)));
-typedef int32_t simd_i32x4 __attribute__((vector_size(16)));
-typedef uint32_t simd_u32x4 __attribute__((vector_size(16)));
-typedef uint64_t simd_u64x2 __attribute__((vector_size(16)));
+/* The vector types are in bits/simd_types.h. The square root, minimum and
+ * maximum of a vector are defined by the architecture
+ * (bits/<arch>/simd.h). */
+#include <bits/simd_types.h>
 
 static inline simd_f32x4 simd_set_f32x4(float x0, float x1, float x2, float x3)
 {
@@ -83,46 +76,13 @@ static inline simd_f64x2 simd_abs_f64x2(simd_f64x2 value)
     return bits.floating;
 }
 
-static inline simd_f32x4 simd_sqrt_f32x4(simd_f32x4 value)
-{
-    simd_f32x4 result;
-    __asm__("sqrtps %1, %0" : "=x"(result) : "x"(value));
-    return result;
-}
-
-static inline simd_f64x2 simd_sqrt_f64x2(simd_f64x2 value)
-{
-    simd_f64x2 result;
-    __asm__("sqrtpd %1, %0" : "=x"(result) : "x"(value));
-    return result;
-}
-
-/* minps/maxps and minpd/maxpd return their second operand for unordered or
- * equal lanes. This is the native SSE behavior, not the scalar fmin/fmax NaN
- * and signed-zero policy. */
-static inline simd_f32x4 simd_min_f32x4(simd_f32x4 a, simd_f32x4 b)
-{
-    __asm__("minps %1, %0" : "+x"(a) : "x"(b));
-    return a;
-}
-
-static inline simd_f32x4 simd_max_f32x4(simd_f32x4 a, simd_f32x4 b)
-{
-    __asm__("maxps %1, %0" : "+x"(a) : "x"(b));
-    return a;
-}
-
-static inline simd_f64x2 simd_min_f64x2(simd_f64x2 a, simd_f64x2 b)
-{
-    __asm__("minpd %1, %0" : "+x"(a) : "x"(b));
-    return a;
-}
-
-static inline simd_f64x2 simd_max_f64x2(simd_f64x2 a, simd_f64x2 b)
-{
-    __asm__("maxpd %1, %0" : "+x"(a) : "x"(b));
-    return a;
-}
+#if defined(__x86_64__)
+#include <bits/x86_64/simd.h>
+#elif defined(__aarch64__)
+#include <bits/aarch64/simd.h>
+#else
+#error "minios/simd.h: unsupported architecture"
+#endif
 
 static inline simd_f32x4 simd_clamp_f32x4(simd_f32x4 value,
                                            simd_f32x4 lower, simd_f32x4 upper)

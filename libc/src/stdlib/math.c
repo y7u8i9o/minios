@@ -1,6 +1,7 @@
 #include <math.h>
 #include <errno.h>
 #include <stdint.h>
+#include "math_arch.h"
 
 union double_bits { double value; uint64_t bits; };
 union float_bits { float value; uint32_t bits; };
@@ -90,28 +91,6 @@ float copysignf(float x, float y)
     union float_bits ux = { x }, uy = { y };
     ux.bits = (ux.bits & ~(1U << 31)) | (uy.bits & (1U << 31));
     return ux.value;
-}
-
-double sqrt(double x)
-{
-    if (x < 0.0) {
-        errno = EDOM;
-        return NAN;
-    }
-    double result;
-    __asm__ volatile("sqrtsd %1, %0" : "=x"(result) : "x"(x));
-    return result;
-}
-
-float sqrtf(float x)
-{
-    if (x < 0.0f) {
-        errno = EDOM;
-        return NAN;
-    }
-    float result;
-    __asm__ volatile("sqrtss %1, %0" : "=x"(result) : "x"(x));
-    return result;
 }
 
 double trunc(double x)
@@ -324,41 +303,6 @@ float modff(float x, float *integer)
     return x - *integer;
 }
 
-static double x87_partial_remainder(double x, double y, int nearest)
-{
-    double result;
-    unsigned short status;
-    if (nearest) {
-        __asm__ volatile(
-            "fldl %[divisor]\n\t"
-            "fldl %[value]\n\t"
-            "1: fprem1\n\t"
-            "fnstsw %%ax\n\t"
-            "testw $0x400, %%ax\n\t"
-            "jnz 1b\n\t"
-            "fstpl %[result]\n\t"
-            "fstp %%st(0)"
-            : [result] "=m" (result), "=&a" (status)
-            : [value] "m" (x), [divisor] "m" (y)
-            : "cc", "st", "st(1)");
-    } else {
-        __asm__ volatile(
-            "fldl %[divisor]\n\t"
-            "fldl %[value]\n\t"
-            "1: fprem\n\t"
-            "fnstsw %%ax\n\t"
-            "testw $0x400, %%ax\n\t"
-            "jnz 1b\n\t"
-            "fstpl %[result]\n\t"
-            "fstp %%st(0)"
-            : [result] "=m" (result), "=&a" (status)
-            : [value] "m" (x), [divisor] "m" (y)
-            : "cc", "st", "st(1)");
-    }
-    (void)status;
-    return result;
-}
-
 double fmod(double x, double y)
 {
     if (isnan(x)) return x;
@@ -369,7 +313,7 @@ double fmod(double x, double y)
     }
     if (isinf(y) || x == 0.0)
         return x;
-    return x87_partial_remainder(x, y, 0);
+    return __math_partial_remainder(x, y, 0);
 }
 
 float fmodf(float x, float y)
@@ -387,7 +331,7 @@ double remainder(double x, double y)
     }
     if (isinf(y) || x == 0.0)
         return x;
-    return x87_partial_remainder(x, y, 1);
+    return __math_partial_remainder(x, y, 1);
 }
 
 float remainderf(float x, float y)

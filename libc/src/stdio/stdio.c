@@ -512,7 +512,7 @@ int getc_unlocked(FILE *f)
     return EOF;
 }
 
-/* Offsets fit in long on x86-64, so the off_t forms share one path. */
+/* Offsets fit in long (LP64), so the off_t forms share one path. */
 int fseeko(FILE *f, off_t off, int whence)
 {
     return fseek(f, (long)off, whence);

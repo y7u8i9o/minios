@@ -8,18 +8,19 @@ compiles `arch/$(ARCH)` and adds `arch/$(ARCH)/include` to the include path,
 so generic code includes `<arch/...>` without naming the architecture. The
 linker script is `arch/$(ARCH)/linker.ld`.
 
-Milestones A0 to A2 of the aarch64 port (`docs/plan/arm64.md`) introduced
+Milestones A0 to A3 of the aarch64 port (`docs/plan/arm64.md`) introduced
 the interface described here. A0 covers the CPU and execution state: saved
 registers, system call entry, signal frames, thread state, interrupt state,
 barriers and page fault decoding. A1 covers the platform: the per CPU
 structure, interrupt numbers and IPIs, the clock and the tick, the devices
 of the PC and the start-up sequence. A2 covers the page tables and the
-address layout. Generic code uses these operations and does not name an
+address layout. A3 covers the user ABI: libc, the dynamic loader and the
+compiler flags. Generic code uses these operations and does not name an
 x86 register, instruction, MSR, I/O port, APIC function or page table bit.
 A second architecture implements the same headers with the same names.
 
-Milestone A3 extends the interface to the user ABI. Section 15 lists the
-dependencies that remain until then.
+Section 16 lists the dependencies that remain for the aarch64
+implementation.
 
 ## 1. Machine identification (`<arch/machine.h>`)
 
@@ -234,7 +235,42 @@ The architecture defines the addresses of the regions: `HIGHER_HALF_BASE`,
 `KHEAP_BASE`. `mm/memlayout.h` and `mm/vmm.h` include it and define the
 generic sizes (`USER_STACK_SIZE`, `KSTACK_SIZE`, `KSTACK_SLOTS`).
 
-## 14. Tests
+## 14. User ABI (`libc/arch/`, `user/ld/arch/`, `toolchain.mk`)
+
+libc compiles the files of `libc/arch/$(ARCH)/` with the generic sources
+and finds the internal header `libc_arch.h` through `-Iarch/$(ARCH)`:
+
+| File | Content on x86_64 |
+|---|---|
+| `syscall.S` | `__syscall6` and the `sigreturn` trampoline |
+| `crt0.S`, `crti.S`, `crtn.S` | the program entry and the static init sections |
+| `setjmp.S` | `setjmp`, `longjmp`, `_setjmp`, `_longjmp` |
+| `fenv.c` | the floating point environment over x87 and MXCSR |
+| `math_x87.c` | `sqrt`, `sqrtf`, `__math_partial_remainder` (behind `fmod` and `remainder`), `atanl`, `atan2l` |
+| `math_long.c` | the x87 long double functions |
+| `libc_arch.h` | `__arch_thread_pointer`, `__arch_spin_hint`, `__arch_thread_stack_top` |
+
+The public headers `setjmp.h` and `fenv.h` include
+`bits/<arch>/setjmp.h` and `bits/<arch>/fenv.h`, selected by the compiler's
+architecture macro. `minios/simd.h` includes the vector types of
+`bits/simd_types.h` and the square root, minimum and maximum of
+`bits/x86_64/simd.h` (SSE2) or `bits/aarch64/simd.h` (NEON). The NEON
+minimum and maximum select lanes so that they return the same lanes as the
+SSE instructions (`floating.md`).
+
+The dynamic loader takes `start.S` and `ld_arch.h` from
+`user/ld/arch/$(ARCH)/`. `ld_arch.h` maps the relocation types to the
+generic names `RELOC_NONE`, `RELOC_ABS64`, `RELOC_COPY`, `RELOC_GLOB_DAT`,
+`RELOC_JUMP_SLOT`, `RELOC_RELATIVE`, `RELOC_TLS_DTPMOD`, `RELOC_TLS_DTPREL`
+and `RELOC_TLS_TPREL`, and defines `ld_arch_syscall`,
+`ld_arch_thread_pointer` and `ld_arch_tls_tprel`.
+
+`toolchain.mk` selects by `ARCH` the kernel flags `KARCHFLAGS`, the user
+flags `UARCHFLAGS`, the tcc backend `TCC_TARGET` and the QEMU binary
+`qemu-system-$(ARCH)`; `tests/run_qemu_test.sh` takes the QEMU binary from
+`ARCH` too. An `ARCH` without these definitions stops the build.
+
+## 15. Tests
 
 The kernel self-test `arch` (`kernel/tests/test_arch.c`, case
 `tests/cases/arch`) checks the A0 interface:
@@ -264,17 +300,32 @@ The kernel self-test `pagetable` (`kernel/tests/test_pagetable.c`, case
 - that `pt_next_leaf_table` returns exactly the three level 1 tables of
   pages placed under different level 4, level 3 and level 2 entries.
 
+The user test `abitest` (`user/tests/abitest.c`, case `tests/cases/abi`)
+checks the A3 interface: `setjmp` and `longjmp` across nested frames, the
+directed rounding modes and the division by zero flag of `fenv.h`, the
+lanes of the SIMD minimum and maximum with NaN and signed zeros, the array
+square root tail, and the 16 byte stack alignment and the TLS
+initialization of a new thread.
+
 The behaviour of the moved code is covered by the existing cases of the
 subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `dynlink`, `smp`, `smp_user`, `lockfree`, `sched`, `exception`,
 `backtrace`, `profile`, `vmm`, `swap`, `shutdown`, `blk`, `timer`, `time`,
 `kbd`, `mouse`, `input`, `input_keyboard`, `input_tablet`, `gpu_mode`,
 `audio_pcm`, `net_nic`, `net_virtqueue`, `munmap_tables`, `madvise`,
-`hugepages`, `mmap_file`, `rlimit` and `fb0`.
+`hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
+`libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 15. Dependencies that remain
+## 16. Dependencies that remain
 
-A3 moves the libc and loader assembly, the relocation types,
-`minios/simd.h` and the user compiler flags. The kernel self-tests of x86
-features, `cpu` and `exception`, and the self-tests that feed PS/2
-scancodes remain x86 specific.
+The x86_64 build no longer needs anything outside its architecture
+directories. The aarch64 implementation (A4 to A9) has to supply every
+header and file listed above. Some x86_64 properties are encoded in shared
+designs that A6 changes for aarch64: the thread local storage layout
+(variant II, the control block above the TLS blocks, used by
+`libc/src/thread/tls.c` and by `ld.c`), the signal frame contract between
+`arch_signal_setup_frame` and the libc restorer (a return address on the
+stack), and the x87 long double format that `math_extra.c` uses through
+`atanl` and `atan2l`. The kernel self-tests of x86 features, `cpu` and
+`exception`, and the self-tests that feed PS/2 scancodes remain x86
+specific.

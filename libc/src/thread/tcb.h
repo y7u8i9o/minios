@@ -6,6 +6,7 @@
  * of the loaded objects lies below the block. */
 #include <pthread.h>
 #include <stdint.h>
+#include <libc_arch.h>
 
 struct dl_dtv;
 
@@ -39,9 +40,7 @@ struct __libc_lock {
 
 static inline struct pthread *__pthread_current(void)
 {
-    struct pthread *self;
-    __asm__ volatile("movq %%fs:0, %0" : "=r"(self));
-    return self;
+    return __arch_thread_pointer();
 }
 
 void __libc_lock_lock(struct __libc_lock *l);

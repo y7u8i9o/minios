@@ -248,7 +248,7 @@ int pthread_spin_lock(pthread_spinlock_t *l)
 {
     while (__atomic_exchange_n(&l->locked, 1, __ATOMIC_ACQUIRE)) {
         while (__atomic_load_n(&l->locked, __ATOMIC_RELAXED))
-            __asm__ volatile("pause");
+            __arch_spin_hint();
     }
     return 0;
 }

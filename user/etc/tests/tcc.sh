@@ -80,7 +80,7 @@ tcc -static -o gs g.c -lgui -lwire -lfont -laudio -ledit -lc; check tcc-static-l
 # Every installed header compiles on its own with tcc.
 bad=""
 for h in $(cd /usr/include && find . -name '*.h' | sed 's|^\./||' | sort); do
-    case $h in minios/simd.h) continue ;; esac   # gcc vector extensions
+    case $h in minios/simd.h|bits/simd_types.h|bits/*/simd.h) continue ;; esac   # gcc vector extensions
     printf '#include <%s>\nint v;\n' "$h" > h.c
     tcc -c -o h.o h.c > h.err 2>&1 || bad="$bad $h"
 done

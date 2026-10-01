@@ -34,7 +34,7 @@ HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 ifeq ($(HOST_OS),Darwin)
 HOSTCPPFLAGS += -D_DARWIN_C_SOURCE
 endif
-QEMU    ?= qemu-system-x86_64
+QEMU    ?= qemu-system-$(ARCH)
 XORRISO ?= xorriso
 
 # Build time configuration. Override on the make command line, for example
@@ -53,8 +53,23 @@ CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
                -DCONFIG_SLABDEBUG=$(strip $(CONFIG_SLABDEBUG)) \
                -DCONFIG_LOG_LEVEL=$(strip $(CONFIG_LOG_LEVEL))
 
+# The architecture flags of the kernel and of user programs.
+# Kernel: no red zone, the kernel code model for the higher half, and no
+# SIMD or floating point registers (the kernel never saves them for
+# itself). User: M23 saves x87 and all 128-bit XMM registers. Keep AVX
+# disabled until the kernel migrates from FXSAVE to XSAVE/XRSTOR and enables
+# the matching XCR0 state components. TCC_TARGET selects the backend of the
+# bundled tcc.
+ifeq ($(ARCH),x86_64)
+KARCHFLAGS := -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387
+UARCHFLAGS := -msse2 -mfpmath=sse -mno-avx
+TCC_TARGET := X86_64
+else
+$(error ARCH=$(ARCH) is not supported; see docs/plan/arm64.md)
+endif
+
 KCFLAGS := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
-           -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387 \
+           $(KARCHFLAGS) \
            -O2 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-asynchronous-unwind-tables \
            -fno-strict-aliasing -fno-builtin \
            -Wall -Wextra -Werror -Wno-unused-parameter -Wmissing-prototypes \
@@ -65,12 +80,9 @@ KLDFLAGS := -nostdlib -static -z max-page-size=0x1000 --no-dynamic-linker
 AR      := $(CROSS)ar
 
 # User space flags: position independent code, so that the same objects go
-# into the shared libraries and the programs; red zone allowed. M23 saves
-# x87 and all 128-bit XMM registers. Keep AVX disabled until the kernel
-# migrates from FXSAVE to XSAVE/XRSTOR and enables the matching XCR0 state
-# components.
+# into the shared libraries and the programs; red zone allowed.
 UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC \
-            -msse2 -mfpmath=sse -mno-avx -ftree-vectorize -fvect-cost-model=dynamic \
+            $(UARCHFLAGS) -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
 UASFLAGS := -g

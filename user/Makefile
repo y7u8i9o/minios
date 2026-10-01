@@ -255,7 +255,7 @@ $(ROOT)/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 TCC_SRC  := ../third_party/tinycc
 TCC_GEN  := $(OUT)/tcc
 TCC_VERSION := $(shell cat $(TCC_SRC)/VERSION)
-TCC_DEFS := -DONE_SOURCE=1 -DTCC_TARGET_X86_64 -DCONFIG_TCC_SEMLOCK=0 -DCONFIG_TCC_BCHECK=0 \
+TCC_DEFS := -DONE_SOURCE=1 -DTCC_TARGET_$(TCC_TARGET) -DCONFIG_TCC_SEMLOCK=0 -DCONFIG_TCC_BCHECK=0 \
             -DCONFIG_TCC_BACKTRACE=0 -DTCC_VERSION='"$(TCC_VERSION)"' -DCONFIG_TCCDIR='"/usr/lib/tcc"' \
             -DCONFIG_TCC_ELFINTERP='"/lib/ld.so"' -DCONFIG_TCC_SYSINCLUDEPATHS='"{B}/include:/usr/include"' \
             -DCONFIG_TCC_LIBPATHS='"{B}:/lib"' -DCONFIG_TCC_CRTPREFIX='"/lib"'
@@ -269,7 +269,7 @@ $(TCC_GEN)/config.h:
 
 $(TCC_GEN)/tcc.o: $(TCC_SRC)/tcc.c $(TCC_GEN)/config.h Makefile
 	@mkdir -p $(dir $@)
-	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -msse2 -mfpmath=sse -O2 -g -fno-builtin -w \
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC $(UARCHFLAGS) -O2 -g -fno-builtin -w \
 	    $(TCC_DEFS) -I../libc/include -I../kernel/include -I$(TCC_GEN) -I$(TCC_SRC) -MMD -MP -c -o $@ $<
 
 $(ROOT)/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
@@ -279,12 +279,12 @@ $(ROOT)/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
 
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -fno-omit-frame-pointer -msse2 -mfpmath=sse -O2 -w \
-	    -DTCC_TARGET_X86_64 -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -fno-omit-frame-pointer $(UARCHFLAGS) -O2 -w \
+	    -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
 
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.S
 	@mkdir -p $(dir $@)
-	$(CC) -DTCC_TARGET_X86_64 -I$(TCC_SRC) -c -o $@ $<
+	$(CC) -DTCC_TARGET_$(TCC_TARGET) -I$(TCC_SRC) -c -o $@ $<
 
 $(ROOT)/usr/lib/tcc/libtcc1.a: $(TCC_LIB1_OBJS)
 	@mkdir -p $(dir $@)
@@ -293,7 +293,7 @@ $(ROOT)/usr/lib/tcc/libtcc1.a: $(TCC_LIB1_OBJS)
 
 $(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
 	@mkdir -p $(dir $@)
-	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_X86_64 -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
 
 # crt1.o is the C runtime start; crti.o defines the empty _init and _fini
 # and crtn.o is empty, the objects tcc links around every program; libm.a
@@ -363,11 +363,11 @@ $(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 # The loader is a freestanding position independent object with its own
 # entry; init is linked statically, so that the system starts even when
 # /lib is damaged.
-$(ROOT)/lib/ld.so: ld/ld.c ld/start.S
+$(ROOT)/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
 	@mkdir -p $(dir $@) $(OUT)/ld
 	$(CC) -std=c17 -ffreestanding -fno-stack-protector -fPIC -fvisibility=hidden -fno-plt -O2 -g \
-	    -fno-builtin -Wall -Wextra -I../kernel/include -I../libc/include -c -o $(OUT)/ld/ld.o ld/ld.c
-	$(CC) $(UASFLAGS) -c -o $(OUT)/ld/start.o ld/start.S
+	    -fno-builtin -Wall -Wextra -I../kernel/include -I../libc/include -Ild/arch/$(ARCH) -c -o $(OUT)/ld/ld.o ld/ld.c
+	$(CC) $(UASFLAGS) -c -o $(OUT)/ld/start.o ld/arch/$(ARCH)/start.S
 	$(LD) $(USOFLAGS) -Bsymbolic -e _dl_start -o $(OUT)/ld.so.elf $(OUT)/ld/start.o $(OUT)/ld/ld.o $(LIBGCC)
 	$(OBJCOPY) --strip-debug $(OUT)/ld.so.elf $@
 

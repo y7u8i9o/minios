@@ -8,7 +8,7 @@
  * the allocator entries before it creates a second thread or calls
  * dlopen.
  *
- * Thread local storage follows the x86-64 variant II layout: the thread
+ * Thread local storage on x86_64 follows the variant II layout: the thread
  * pointer (the FS base) addresses the thread control block, whose first
  * word is the block's own address and whose second word is the dynamic
  * thread vector; the TLS blocks of the objects loaded at start lie below

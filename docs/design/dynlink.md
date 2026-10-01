@@ -66,10 +66,13 @@ handoff described below.
 
 ## The loader
 
-`user/ld/ld.c` and `start.S` build `/lib/ld.so`, a freestanding position
-independent object linked with `-Bsymbolic`, hidden visibility, `-fno-plt`
-and its own entry `_dl_start`; it uses no libc and makes its system calls
-through an inline `syscall`. `_dl_main` receives the initial stack pointer
+`user/ld/ld.c` and `user/ld/arch/x86_64/start.S` build `/lib/ld.so`, a
+freestanding position independent object linked with `-Bsymbolic`, hidden
+visibility, `-fno-plt` and its own entry `_dl_start`; it uses no libc and
+makes its system calls through an inline `syscall`. The relocation types,
+the system call stub, the thread pointer and the initial-exec TLS offset
+are in `user/ld/arch/x86_64/ld_arch.h`; `ld.c` names the relocation types
+generically (`RELOC_RELATIVE`, `RELOC_JUMP_SLOT` and so on). `_dl_main` receives the initial stack pointer
 and returns the program's entry point; `start.S` enters it with the stack
 pointer the kernel provided, the finalizer `_dl_finalize` in `rdx` (the
 x86-64 ELF convention) and the initializer `_dl_initialize` in `rcx`.

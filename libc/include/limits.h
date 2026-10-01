@@ -1,5 +1,5 @@
 #pragma once
-/* The integer limits of x86_64 and the POSIX limits of minios. gcc has
+/* The integer limits of the LP64 targets of minios and its POSIX limits. gcc has
  * its own limits.h with the integer part; tcc has none, so the values are
  * given here for it. */
 #if defined(__GNUC__) && !defined(__TINYC__)

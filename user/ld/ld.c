@@ -24,6 +24,7 @@
 #include <syscall_nums.h>
 #include <minios/abi.h>
 #include <minios/dl.h>
+#include <ld_arch.h>
 
 #define PAGE 4096UL
 #define ALIGN_DOWN(x, a) ((x) & ~((a) - 1))
@@ -107,15 +108,6 @@ struct rela { uint64_t r_offset, r_info; int64_t r_addend; };
 #define STV_PROTECTED 3
 #define SHN_UNDEF 0
 #define SHN_ABS 0xfff1
-#define R_X86_64_NONE 0
-#define R_X86_64_64 1
-#define R_X86_64_COPY 5
-#define R_X86_64_GLOB_DAT 6
-#define R_X86_64_JUMP_SLOT 7
-#define R_X86_64_RELATIVE 8
-#define R_X86_64_DTPMOD64 16
-#define R_X86_64_DTPOFF64 17
-#define R_X86_64_TPOFF64 18
 #define AT_NULL 0
 #define AT_PHDR 3
 #define AT_PHENT 4
@@ -199,13 +191,7 @@ void _dl_runtime_resolve(void);
 
 static long sys(long nr, long a, long b, long c, long d, long e, long f)
 {
-    register long r10 __asm__("r10") = d;
-    register long r8 __asm__("r8") = e;
-    register long r9 __asm__("r9") = f;
-    long ret;
-    __asm__ volatile("syscall" : "=a"(ret) : "a"(nr), "D"(a), "S"(b), "d"(c), "r"(r10), "r"(r8), "r"(r9)
-                     : "rcx", "r11", "memory");
-    return ret;
+    return ld_arch_syscall(nr, a, b, c, d, e, f);
 }
 
 static size_t dl_strlen(const char *s)
@@ -321,9 +307,7 @@ static void dl_unlock(void)
 
 static struct dl_tcb *current_tcb(void)
 {
-    struct dl_tcb *tcb;
-    __asm__ volatile("movq %%fs:0, %0" : "=r"(tcb));
-    return tcb;
+    return ld_arch_thread_pointer();
 }
 
 /* Subtraction-based checks avoid accepting wrapped ELF offsets. */
@@ -766,14 +750,14 @@ static int resolve(const struct object *o, const struct rela *r, uint32_t type, 
     def->object = o;
     def->symbol = s;
     unsigned visibility = s->st_other & 3;
-    if (type != R_X86_64_COPY && s->st_shndx != SHN_UNDEF && ((s->st_info >> 4) == 0 || visibility != 0))
+    if (type != RELOC_COPY && s->st_shndx != SHN_UNDEF && ((s->st_info >> 4) == 0 || visibility != 0))
         return 1;
-    if (index == 0 && (type == R_X86_64_DTPMOD64 || type == R_X86_64_DTPOFF64 || type == R_X86_64_TPOFF64))
+    if (index == 0 && (type == RELOC_TLS_DTPMOD || type == RELOC_TLS_DTPREL || type == RELOC_TLS_TPREL))
         return 1;                   /* a local TLS symbol: the object itself, the addend as the offset */
     const char *name = string_at(o, s->st_name);
-    if (lookup(name, type == R_X86_64_COPY ? objects : NULL, o->local, def))
+    if (lookup(name, type == RELOC_COPY ? objects : NULL, o->local, def))
         return 1;
-    if ((s->st_info >> 4) != STB_WEAK || type == R_X86_64_COPY)
+    if ((s->st_info >> 4) != STB_WEAK || type == RELOC_COPY)
         die("undefined symbol", name);
     return 0;
 }
@@ -794,43 +778,43 @@ static void apply(struct object *o, const struct rela *table, size_t bytes, int 
     for (size_t i = 0; i < bytes / sizeof *table; i++) {
         const struct rela *r = &table[i];
         uint32_t type = (uint32_t)r->r_info;
-        if (type == R_X86_64_NONE || (type == R_X86_64_COPY) != copies)
+        if (type == RELOC_NONE || (type == RELOC_COPY) != copies)
             continue;
         uintptr_t where = address(o, r->r_offset);
-        if (type == R_X86_64_RELATIVE) {
+        if (type == RELOC_RELATIVE) {
             require_range(o, where, sizeof(uint64_t), PF_W);
             *(uint64_t *)where = o->base + (uint64_t)r->r_addend;
             continue;
         }
-        if (type == R_X86_64_JUMP_SLOT && o->lazy && table == o->jmprel) {
+        if (type == RELOC_JUMP_SLOT && o->lazy && table == o->jmprel) {
             require_range(o, where, sizeof(uint64_t), PF_W);
             *(uint64_t *)where += o->base;
             continue;
         }
-        if (type == R_X86_64_DTPMOD64 || type == R_X86_64_DTPOFF64 || type == R_X86_64_TPOFF64) {
+        if (type == RELOC_TLS_DTPMOD || type == RELOC_TLS_DTPREL || type == RELOC_TLS_TPREL) {
             struct definition def;
             int found = resolve(o, r, type, &def);
             require_range(o, where, sizeof(uint64_t), PF_W);
             uint64_t value = 0;
-            if (found && type == R_X86_64_DTPMOD64) {
+            if (found && type == RELOC_TLS_DTPMOD) {
                 value = (uint64_t)(uintptr_t)require_tls(def.object);
-            } else if (found && type == R_X86_64_DTPOFF64) {
+            } else if (found && type == RELOC_TLS_DTPREL) {
                 value = def.symbol->st_value + (uint64_t)r->r_addend;
             } else if (found) {
                 const struct dl_tls_module *m = require_tls(def.object);
                 if (!m->offset)
                     die("initial-exec TLS reference to an object loaded by dlopen", def.object->name);
-                value = def.symbol->st_value + (uint64_t)r->r_addend - m->offset;
+                value = ld_arch_tls_tprel(def.symbol->st_value + (uint64_t)r->r_addend, m->offset);
             }
             *(uint64_t *)where = value;
             continue;
         }
-        if (type != R_X86_64_64 && type != R_X86_64_COPY &&
-            type != R_X86_64_GLOB_DAT && type != R_X86_64_JUMP_SLOT)
+        if (type != RELOC_ABS64 && type != RELOC_COPY &&
+            type != RELOC_GLOB_DAT && type != RELOC_JUMP_SLOT)
             die("unsupported relocation type", o->name);
         struct definition def;
         uintptr_t value = resolve(o, r, type, &def) ? symbol_address(&def) : 0;
-        if (type == R_X86_64_COPY) {
+        if (type == RELOC_COPY) {
             const struct sym *s = &o->symtab[(uint32_t)(r->r_info >> 32)];
             if (o != objects || def.symbol->st_size < s->st_size)
                 die("invalid copy relocation size or owner", string_at(o, s->st_name));
@@ -839,7 +823,7 @@ static void apply(struct object *o, const struct rela *table, size_t bytes, int 
             dl_memcpy((void *)where, (const void *)value, s->st_size);
         } else {
             require_range(o, where, sizeof(uint64_t), PF_W);
-            *(uint64_t *)where = value + (type == R_X86_64_64 ? (uint64_t)r->r_addend : 0);
+            *(uint64_t *)where = value + (type == RELOC_ABS64 ? (uint64_t)r->r_addend : 0);
         }
     }
     if (o->lazy && table == o->jmprel && bytes) {
@@ -857,10 +841,10 @@ uintptr_t _dl_fixup(struct object *o, size_t index)
     if (index >= o->pltrelsz / sizeof(struct rela))
         die("invalid lazy relocation index", o->name);
     const struct rela *r = &o->jmprel[index];
-    if ((uint32_t)r->r_info != R_X86_64_JUMP_SLOT)
+    if ((uint32_t)r->r_info != RELOC_JUMP_SLOT)
         die("lazy relocation is not a jump slot", o->name);
     struct definition def;
-    uintptr_t value = resolve(o, r, R_X86_64_JUMP_SLOT, &def) ? symbol_address(&def) : 0;
+    uintptr_t value = resolve(o, r, RELOC_JUMP_SLOT, &def) ? symbol_address(&def) : 0;
     uintptr_t where = address(o, r->r_offset);
     require_range(o, where, sizeof(uint64_t), PF_W);
     *(uint64_t *)where = value;
@@ -1531,9 +1515,9 @@ static void relocate_self(uintptr_t base)
         if (d->d_tag == DT_RELASZ) bytes = d->d_val;
     }
     for (size_t i = 0; i < bytes / sizeof *rel; i++) {
-        if ((uint32_t)rel[i].r_info == R_X86_64_NONE)
+        if ((uint32_t)rel[i].r_info == RELOC_NONE)
             continue;
-        if ((uint32_t)rel[i].r_info != R_X86_64_RELATIVE)
+        if ((uint32_t)rel[i].r_info != RELOC_RELATIVE)
             die("unsupported loader self relocation", NULL);
         *(uintptr_t *)(base + rel[i].r_offset) = base + (uint64_t)rel[i].r_addend;
     }

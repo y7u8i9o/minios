@@ -18,28 +18,6 @@ static float narrow_float(long double value)
     return narrowed;
 }
 
-long double atanl(long double x)
-{
-    if (isnan(x))
-        return x;
-    long double result;
-    __asm__ volatile("fldt %1; fld1; fpatan; fstpt %0"
-                     : "=m" (result) : "m" (x) : "st", "st(1)");
-    return result;
-}
-
-long double atan2l(long double y, long double x)
-{
-    if (isnan(x))
-        return x;
-    if (isnan(y))
-        return y;
-    long double result;
-    __asm__ volatile("fldt %1; fldt %2; fpatan; fstpt %0"
-                     : "=m" (result) : "m" (y), "m" (x) : "st", "st(1)");
-    return result;
-}
-
 long double asinl(long double x)
 {
     if (isnan(x))

@@ -1,7 +1,8 @@
 #pragma once
 /* C floating point classification and the MiniOS scalar libm interface. The
- * implementation targets the SSE2 baseline of x86_64 and keeps exceptions
- * masked under the default MXCSR installed by the kernel. */
+ * implementation keeps floating point exceptions masked under the default
+ * environment installed by the kernel; on x86_64 it targets the SSE2
+ * baseline and the default MXCSR. */
 
 #define FP_NAN       0
 #define FP_INFINITE  1

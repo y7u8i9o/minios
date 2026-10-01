@@ -69,9 +69,7 @@ void simd_sqrt_f32(float *restrict destination, const float *restrict source,
     for (; i + 4 <= count; i += 4)
         simd_store_f32x4(destination + i, simd_sqrt_f32x4(simd_load_f32x4(source + i)));
     for (; i < count; i++) {
-        float result;
-        __asm__("sqrtss %1, %0" : "=x"(result) : "x"(source[i]));
-        destination[i] = result;
+        destination[i] = simd_sqrt_f32x1(source[i]);
     }
 }
 
@@ -82,9 +80,7 @@ void simd_sqrt_f64(double *restrict destination, const double *restrict source,
     for (; i + 2 <= count; i += 2)
         simd_store_f64x2(destination + i, simd_sqrt_f64x2(simd_load_f64x2(source + i)));
     for (; i < count; i++) {
-        double result;
-        __asm__("sqrtsd %1, %0" : "=x"(result) : "x"(source[i]));
-        destination[i] = result;
+        destination[i] = simd_sqrt_f64x1(source[i]);
     }
 }
 

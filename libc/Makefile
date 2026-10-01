@@ -10,9 +10,14 @@ ABI   := 1
 ABIFILE := $(BUILD)/lib/libc.abi
 CRT0  := $(OUT)/crt0.o
 CRTI  := $(OUT)/crti.o $(OUT)/crtn.o
+# The code of the target architecture: the system call stub, the start
+# files, setjmp, the floating point environment and the math primitives
+# (docs/design/libc.md).
+ARCHDIR := arch/$(ARCH)
 
-SRCS  := $(wildcard src/*/*.c) $(wildcard src/*.c)
-ASRCS := src/syscall.S src/setjmp.S
+SRCS  := $(wildcard src/*/*.c) $(wildcard src/*.c) $(wildcard $(ARCHDIR)/*.c)
+ASRCS := $(ARCHDIR)/syscall.S $(ARCHDIR)/setjmp.S
+LIBC_CPPFLAGS := -Iinclude -I$(ARCHDIR) -Isrc -I../kernel/include
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(patsubst %.S,$(OUT)/%.o,$(ASRCS))
 
 .PHONY: all clean
@@ -20,20 +25,20 @@ all: $(LIB) $(SO) $(CRT0) $(CRTI) $(ABIFILE)
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(UCFLAGS) -Iinclude -I../kernel/include -MMD -MP -c -o $@ $<
+	$(CC) $(UCFLAGS) $(LIBC_CPPFLAGS) -MMD -MP -c -o $@ $<
 
 $(OUT)/%.o: %.S
 	@mkdir -p $(dir $@)
-	$(CC) $(UASFLAGS) -Iinclude -I../kernel/include -c -o $@ $<
+	$(CC) $(UASFLAGS) $(LIBC_CPPFLAGS) -c -o $@ $<
 
-$(CRT0): src/crt0.S
+$(CRT0): $(ARCHDIR)/crt0.S
 	@mkdir -p $(dir $@)
 	$(CC) $(UASFLAGS) -Iinclude -c -o $@ $<
 
-$(OUT)/crti.o: src/crti.S
+$(OUT)/crti.o: $(ARCHDIR)/crti.S
 	$(CC) $(UASFLAGS) -c -o $@ $<
 
-$(OUT)/crtn.o: src/crtn.S
+$(OUT)/crtn.o: $(ARCHDIR)/crtn.S
 	$(CC) $(UASFLAGS) -c -o $@ $<
 
 $(SO): $(OBJS)

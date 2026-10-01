@@ -127,7 +127,7 @@ teardown use the geometry. `struct vmspace` has `pt_root` in place of
 `boot`, `shutdown`, `profile`, `fb0`, `fb_format`, `gpu_mode`, `mq`,
 `pipes`, `mfs_user`, `fat_user`, `arch` and `platform` pass.
 
-### A3. User ABI boundary
+### A3. User ABI boundary (completed 2026-10-01)
 
 - The architecture code of libc moves to `libc/arch/x86_64/`: the system
   call stub, crt0, crti, setjmp, fenv, the x87 and SSE math assembly, the
@@ -136,6 +136,19 @@ teardown use the geometry. `struct vmspace` has `pt_root` in place of
   architecture directory.
 - `minios/simd.h` selects SSE2 or NEON per architecture.
 - `ARCH` selects `UCFLAGS` and `QEMU`.
+- The boot test is `abi`.
+
+libc takes `syscall.S`, the start files, `setjmp.S`, `fenv.c`,
+`math_x87.c`, `math_long.c` and `libc_arch.h` from `libc/arch/x86_64/`; the
+public headers take their architecture part from `include/bits/<arch>/`.
+`minios/simd.h` has an SSE2 and a NEON implementation; the NEON one was
+compiled with `aarch64-elf-gcc` but cannot run before A6. The loader takes
+`start.S` and `ld_arch.h` from `user/ld/arch/x86_64/`. `toolchain.mk`
+stops the build for an `ARCH` without flags. The cases `abi`, `libc`,
+`libc_ext`, `float`, `fpu`, `mathvec`, `libmfull`, `pthreads`, `dynlink`,
+`dlopen`, `signals`, `fork`, `tcc`, `lua`, `shell`, `utils`,
+`shutdown_cmd`, `gui`, `gui_mandel`, `luasynth`, `pkg`, `boot`, `arch`,
+`platform` and `pagetable` pass, as does `make check`.
 
 ### A4. aarch64 toolchain and boot to serial
 

@@ -1,5 +1,5 @@
 #pragma once
-/* Exact width integer types for x86_64 (LP64). This header is written for
+/* Exact width integer types for the LP64 targets of minios. This header is written for
  * every compiler that compiles minios programs, since tcc ships no
  * stdint.h of its own. */
 typedef signed char int8_t;

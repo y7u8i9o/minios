@@ -555,8 +555,8 @@ void setprogname(const char *name)
     progname = slash != NULL ? slash + 1 : name;
 }
 
-/* long is 64 bits on x86_64, so the long long conversions are the long
- * ones. */
+/* long is 64 bits on every minios target (LP64), so the long long
+ * conversions are the long ones. */
 long long strtoll(const char *s, char **end, int base)
 {
     return strtol(s, end, base);

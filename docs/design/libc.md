@@ -4,7 +4,15 @@
 
 `libc/Makefile` produces `build/libc/libc.a`, `build/lib/libc.so` and
 `build/libc/crt0.o`. User code is compiled with `UCFLAGS` from
-`toolchain.mk` (PIC, SSE2 enabled with saved FPU state, AVX disabled).
+`toolchain.mk` (PIC, and on x86_64 SSE2 enabled with saved FPU state and
+AVX disabled, `UARCHFLAGS`). The code of the target architecture is in
+`libc/arch/$(ARCH)/`: on x86_64 `syscall.S`, `crt0.S`, `crti.S`, `crtn.S`,
+`setjmp.S`, `fenv.c`, `math_long.c` (the x87 long double functions),
+`math_x87.c` (the SSE2 square roots, the x87 partial remainder and arc
+tangent) and the internal header `libc_arch.h` (the thread pointer, the
+spin wait hint and the stack of a new thread). The public headers
+`setjmp.h`, `fenv.h` and `minios/simd.h` take their architecture part from
+`include/bits/<arch>/`.
 Programs normally link against shared libraries at `0x400000` with
 `/lib/ld.so` as their interpreter; init remains static. See `dynlink.md`
 for the linker options and the static startup path.
@@ -23,7 +31,7 @@ for dynamic initialization and finalization; `AT_BASE` distinguishes those
 from static startup, which uses the linker's array boundaries. `exit`
 runs `atexit` handlers and ELF destructors, flushes the streams and calls
 `_exit`. See `dynlink.md` for dependency and callback ordering.
-`syscall.S` provides `__syscall6`; the wrappers turn a negative errno
+`arch/x86_64/syscall.S` defines `__syscall6`; the wrappers turn a negative errno
 result into `-1` with `errno` set. Numbers come from
 `kernel/include/syscall_nums.h`.
 

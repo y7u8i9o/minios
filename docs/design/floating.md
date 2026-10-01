@@ -127,7 +127,9 @@ group additions differently from a scalar left-to-right loop and can therefore
 differ by normal floating point rounding error. Native SSE minimum and maximum
 return the second operand for equal or unordered lanes; their NaN and
 signed-zero behavior intentionally follows the instruction rather than scalar
-`fmin` and `fmax`.
+`fmin` and `fmax`. The SSE2 operations are in `bits/x86_64/simd.h`; the NEON
+operations in `bits/aarch64/simd.h` select lanes with a comparison mask so
+that minimum and maximum return the same lanes as on x86_64.
 
 ## Verification
 
