@@ -50,7 +50,7 @@ panicking. Faulting kernel code still panics.
 
 ## System calls
 
-Numbers live in `kernel/include/syscall_nums.h`, shared with libc:
+Numbers are defined in `kernel/include/syscall_nums.h`, shared with libc:
 `write` (1), `exit` (2), `getpid` (3), `yield` (4). Later milestones
 append to the table; symbolic links added `symlink` (91), `symlinkat`
 (92), `readlink` (93), `readlinkat` (94) and `lstat` (95) on 2026-09-30,

@@ -194,7 +194,7 @@ triangle oscillator with a five octave range feeds an ADSR amplitude
 envelope and a resonant state-variable low-pass filter whose cutoff is swept
 by the envelope; a cubic soft clipper follows.  The filter runs twice per
 sample so that it stays stable up to the highest cutoff the sweep reaches.
-The voice lives in `user/apps/synthvoice.h` (`struct synth_voice`,
+The voice is defined in `user/apps/synthvoice.h` (`struct synth_voice`,
 `synth_voice_on`, `synth_voice_off`, `synth_voice_sample` with coefficients
 derived from `struct synth_params`) so that other programs can play it.
 The window exposes oscillator, octave, cutoff, resonance, envelope amount,

@@ -4,7 +4,7 @@ The root filesystem is an mfs image that the build regenerates from
 `build/initrd_root` whenever a program changes, so files written during a
 session were lost at the next build. Since 2026-09-06 the home directory
 lives on a data volume that the build creates once and never rebuilds,
-and the user's configuration lives in that home directory.
+and the user's configuration is stored in that home directory.
 
 ## The data volume
 

@@ -161,7 +161,7 @@ operation table (`struct socket_ops`), `error`, `poll` and `file`.
 and install the backend, and wraps the object in a file with the common
 `sock_fops`. Backends allocate accepted sockets with `socket_alloc` and the
 common layer wraps them. The file's release calls the backend's release
-and frees the object; the poll source lives in the object, so a poller
+and frees the object; the poll source is part of the object, so a poller
 registered on it before a connection was made or after it was closed
 keeps receiving notifications until the descriptor is closed.
 
@@ -587,7 +587,7 @@ Wire layouts and the supported subset were checked against
 The omitted features and the QEMU header exception above are deliberate
 restrictions, not claims of complete compliance with those specifications.
 
-The deterministic device tests live in `test_net_device.c`, IPv4/ARP/ICMP
+The deterministic device tests are in `test_net_device.c`, IPv4/ARP/ICMP
 tests in `test_net_ipv4.c`, and UDP tests in `test_net_udp.c`. Shared builders
 in `net_helpers.h` prepare input; validation and delivery use production code.
 `netudpapi.c` tests the application ABI and concurrent operations. The peer
@@ -1463,7 +1463,7 @@ the other side has sent, and the case requires blocks in both directions.
 ## Resolver cache and search domains (N15)
 
 N15 adds a cache of DNS answers, negative caching and the search list to
-the resolver in `libc/src/net/resolv.c`. The cache lives in each process,
+the resolver in `libc/src/net/resolv.c`. Each process has its own cache,
 because libc is linked into every program and has no daemon to share
 answers with. A long-running program that resolves names repeatedly gains
 from it, while a short tool like `ping` exits before it could. A shared
@@ -1578,7 +1578,7 @@ these intervals by ten; the scripted tests use it.
 
 The root image is rebuilt by every build and only the data volume mounted
 at `/home` survives (`docs/design/storage.md`), and `fsinit` mounts it
-before init starts the `dhcp` service. The lease therefore lives in
+before init starts the `dhcp` service. The lease is therefore stored in
 `/home/.local/state/dhcpc/IF.lease`. The lease is state rather than
 configuration, so it lies where the XDG convention puts state, and the
 client creates the file with its directories on the first lease. `-l FILE` selects another file. The file holds the

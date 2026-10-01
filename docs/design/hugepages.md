@@ -38,7 +38,7 @@ With these rules the walkers only ever meet whole huge pages:
 `reprotect_range_locked` rewrites its bits, `share_level` in fork marks
 it copy on write and shares it (`huge_share_locked`), kswapd's scans skip
 `PTE_PS` entries, and `vmm_translate` already understood level 2 entries.
-`PROT_NONE` and `MADV_FREE` need small entries (the software bits live in
+`PROT_NONE` and `MADV_FREE` need small entries (the software bits are in
 not present entries and kswapd reclaims small pages), so `mprotect` to
 `PROT_NONE` and `MADV_FREE` split every huge page in their range first.
 

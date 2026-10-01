@@ -89,7 +89,7 @@ read before it is relocated. It then builds the dependency graph: the
 program's `PT_DYNAMIC` is found through the headers named by `AT_PHDR`,
 and the libraries named by `DT_NEEDED` are loaded breadth first, the
 program's own libraries in order, then theirs, which gives the symbol
-search order. Object records live in a small mmap arena and form a list
+search order. Object records are allocated from a small mmap arena and form a list
 without a fixed cap; the program record is first. The third phase,
 initialization, runs later from the C library (below).
 

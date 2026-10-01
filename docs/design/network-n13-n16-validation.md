@@ -147,7 +147,7 @@ This list replaces the one of the N10–N12 record.
   defended against a later conflict (RFC 5227 section 2.4), and a static
   configuration is not probed.
 - The resolver is IPv4 only, with numeric services and no reverse lookups,
-  and its cache lives in each process and is not shared. `http` is
+  and each process has its own cache, which is not shared. `http` is
   HTTP/1.0 over plain `http://` with no TLS.
 - The random provider has one boot seed and no reseeding, and the rate
   limits are global.

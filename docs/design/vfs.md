@@ -4,7 +4,7 @@ The VFS (`kernel/fs/vfs.c`, `kernel/fs/file.c`) gives every filesystem
 and device the same interface: paths resolve to inodes, inodes are opened
 into files, and files are reached through per process descriptors. The
 interface header is `kernel/include/fs/vfs.h`. Structures crossing the
-system call boundary (`struct stat`, `struct dirent`, open flags) live in
+system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
 `kernel/include/minios/abi.h`, which libc includes directly.
 
 ## Objects

@@ -29,7 +29,7 @@ zeros, which gives sparse files. Inode 1 is the root directory.
 
 A symbolic link (mode `S_IFLNK | 0777`) keeps its target in its first
 direct block, without a NUL, and its size is the target's length; it has
-no other block. This is a slow link: the target does not live in the
+no other block. This is a slow link: the target is not stored in the
 inode, whose 48 spare bytes would hold short targets only and would give
 the block pointers two meanings for `free_from`, `bmap` and `fsck`. The
 kernel accepts targets of 1 to 255 bytes (`VFS_SYMLINK_MAX`), the format

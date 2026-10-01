@@ -136,7 +136,7 @@ the same line.
 
 ## Limine
 
-Limine binaries live in `third_party/limine/` (release v10.8.5, binary branch)
+Limine binaries are in `third_party/limine/` (release v10.8.5, binary branch)
 together with the protocol header `limine.h` from the `limine-protocol`
 repository. The kernel requests base revision 3. `tools/mkiso.sh` builds the
 ISO: it copies the kernel to `/boot/kernel.elf`, writes `limine.conf` with the

@@ -56,7 +56,7 @@ output, so the tool also serves as a protocol check for the seat.
 
 `x12settings` binds X12's `settings` and `debug` globals
 (`protocol/debug.xml`) and changes the running server; the persistent
-values live in the Settings program. The Status tab shows the uptime,
+values are set in the Settings program. The Status tab shows the uptime,
 the composition count, the total and average composition time, the
 longest composition, the clients, the surfaces, the frame interval and
 the display mode, refreshed every second through `debug.get_stats`. The

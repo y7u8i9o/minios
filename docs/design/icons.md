@@ -1,6 +1,6 @@
 # Icons
 
-Icons live in `/usr/share/icons` under the names the programs use
+Icons are installed in `/usr/share/icons` under the names the programs use
 (`new`, `open`, `save`, `cut`, `copy`, `paste`, `quit`, `folder`,
 `file`, `terminal`, `clock`, `paint`, `pong`, `search`, `up`, `edit`,
 `back`, `forward`, `home`, `refresh`). Since 2026-09-05 each name may

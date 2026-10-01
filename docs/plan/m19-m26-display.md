@@ -97,7 +97,7 @@ Tests:
 
 ## M20. Font rendering (completed 2026-08-30)
 
-Decisions (2026-08-30): outline font rendering lives in its own library
+Decisions (2026-08-30): outline font rendering is in its own library
 `libfont/` (`libfont.a`), independent from the window server and the
 toolkit; libgui consumes it through the existing `struct font` so every
 widget and application can switch to an outline font without changes.
