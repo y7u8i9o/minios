@@ -121,9 +121,7 @@ minios/
   VERSION               release under semantic versioning
   data.img              persistent data volume, created by the build, ignored by git
   limine.conf           bootloader configuration
-  PLAN.md               design summary and milestone record
-  NETWORK_PLAN.md       plan and progress record of the network stack
-  TERMINAL_PLAN.md      plan of the terminal userland
+  docs/plan/            design summary, milestone record and feature plans (network, terminal, arm64)
   kernel/
     arch/x86_64/        boot, GDT, IDT, paging, APIC, PIT, FPU, syscall entry, context switch, SMP, power
     mm/                 pmm, vmm, slab, mmap, vma, filemap, madvise, huge, swap, tlb

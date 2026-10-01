@@ -3,7 +3,7 @@
 The networking implementation was developed in the `bleeding-edge-net`
 working tree based on `87a10c3`. It is not committed by this task. Unrelated
 changes already present in the working tree remain separate. This record
-covers the restricted N03–N05 feature set in `NETWORK_PLAN.md`; it does not
+covers the restricted N03–N05 feature set in `docs/plan/network.md`; it does not
 claim completion of TCP, fragmentation, DHCP, DNS or N09 hardening.
 
 ## Environment and execution

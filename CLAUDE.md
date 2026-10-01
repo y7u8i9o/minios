@@ -1,6 +1,6 @@
 # minios
 
-A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. The full design and milestone list is in PLAN.md. Read PLAN.md before starting any milestone and mark completed milestones there.
+A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. The design summary and the milestone record are in `docs/plan/` (index in `docs/plan/README.md`). Read the plan that contains a milestone before starting it and mark the milestone completed in that file.
 
 ## Design decisions (fixed)
 
@@ -37,6 +37,6 @@ A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. T
 
 ## Working style
 
-- Complete one milestone at a time in PLAN.md order. Do not start a later milestone before the boot test of the current one passes.
+- Complete one milestone at a time in the order of its plan in `docs/plan/`. Do not start a later milestone before the boot test of the current one passes.
 - Never run the full test suite. Before considering a change finished, run only the cases of the modules the change touches (`make test CASES="..."`, for example the `gui_*` and `comp_*` cases for a compositor change); pick them from the files changed, not by guessing.
 - Do not impose a source-file line limit. Organize code around coherent responsibilities; preserve explanatory comments and avoid arbitrary splitting or tangled control flow.

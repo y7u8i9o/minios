@@ -4,7 +4,7 @@
 
 The shell reads lines with `fgets` in canonical mode (`user/sh/sh.c:857`): no cursor movement, history or completion, and the kernel keyboard driver drops arrow keys in canonical mode (`kernel/input/keyboard.c:113-118`). The shell language has no globbing, tilde, control flow, functions, aliases, `2>` or startup files, and the prompt is the hardcoded `cwd $ ` (`sh.c:853`). No utility uses colour or the terminal width, `ls` has only `-l -a`, `grep` matches fixed strings, and six manual pages exist. The framebuffer console drops SGR sequences (`kernel/drivers/fbcon.c` handles only `H f J K A B C D`), while the Terminal window (`user/term/vt.c`) supports 16, 256 and 24 bit colours. Nothing sets `HOME`; `TERM` is set only by the Terminal window.
 
-The user chose: console colour (16 colours), the whole shell language in one branch, the core utilities with colour and manual pages. PLAN.md is not touched; the design goes to `docs/design/`. Branch: `bleeding-edge-terminal` from `bleeding-edge`.
+The user chose: console colour (16 colours), the whole shell language in one branch, the core utilities with colour and manual pages. The development plan (`README.md`) is not touched; the design goes to `docs/design/`. Branch: `bleeding-edge-terminal` from `bleeding-edge`.
 
 ## Architecture
 

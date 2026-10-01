@@ -1,4 +1,4 @@
-/* Network stack self tests (NETWORK_PLAN.md): the controlled clock (N00),
+/* Network stack self tests (docs/plan/network.md): the controlled clock (N00),
  * the socket layer (N01) and the packet core with its worker (N02). They
  * run on the loopback interface and the kernel API alone; no device and
  * no user program is involved. */

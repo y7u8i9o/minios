@@ -1,6 +1,6 @@
 # Networking
 
-The TCP/IP stack is built in the `N` milestones of `NETWORK_PLAN.md`. This
+The TCP/IP stack is built in the `N` milestones of `docs/plan/network.md`. This
 document describes the N00 contracts, common socket layer (N01), worker and
 packet core (N02), VirtIO Ethernet (N03), IPv4/ARP/ICMP (N04), UDP (N05),
 and TCP connection lifecycle (N06). Later milestones extend it.
