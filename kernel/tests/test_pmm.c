@@ -117,4 +117,4 @@ static void test_pmm(void)
 
     pmm_dump_stats();
 }
-KTEST_DEFINE("pmm", test_pmm);
+KTEST_DEFINE_STAGE("pmm", test_pmm, KTEST_MEMORY);

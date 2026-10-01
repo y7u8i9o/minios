@@ -3,6 +3,7 @@
 #include <arch/frame.h>
 #include <arch/irq.h>
 #include <console.h>
+#include <mm/vmm.h>
 #include <debug/panic.h>
 
 static const char *exception_name(uint64_t esr)
@@ -27,6 +28,10 @@ void trap_dispatch(struct trapframe *tf)
         irq_dispatch(tf);
         return;
     }
+    unsigned ec = ESR_EC(tf->esr);
+    bool abort = ec == EC_DABT_LOWER || ec == EC_DABT_CUR || ec == EC_IABT_LOWER || ec == EC_IABT_CUR;
+    if (kind == TRAP_SYNC && abort && vmm_handle_fault(tf, tf->far))
+        return;
     if (tf->kind & TRAP_LOWER)
         panic_trap(tf, "exception from EL0 before user mode exists (A6): %s, esr %lx",
                    exception_name(tf->esr), tf->esr);

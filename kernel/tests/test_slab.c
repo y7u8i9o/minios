@@ -107,7 +107,7 @@ static void test_slab(void)
     kfree(NULL);
     expect_free(baseline, "after kzalloc");
 }
-KTEST_DEFINE("slab", test_slab);
+KTEST_DEFINE_STAGE("slab", test_slab, KTEST_MEMORY);
 
 /* Overrunning an object must be caught by the redzone on free. */
 static void test_slab_redzone(void)
@@ -118,4 +118,4 @@ static void test_slab_redzone(void)
     kfree(p);
     ktest_fail("redzone violation not detected");
 }
-KTEST_DEFINE("slab_redzone", test_slab_redzone);
+KTEST_DEFINE_STAGE("slab_redzone", test_slab_redzone, KTEST_MEMORY);

@@ -5,15 +5,20 @@
 #include <arch/cpu.h>
 #include <console.h>
 
-/* M6: the APIC timer ticks at 1000 Hz and sleep_ms waits accordingly. */
+/* M6: the timer ticks at 1000 Hz and sleep_ms waits accordingly. Runs
+ * right after timer_init, with interrupts enabled. */
 static void test_timer(void)
 {
     ktest_assert(arch_irqs_enabled(), "interrupts are disabled");
+    uint64_t i0 = timer_interrupts();
     uint64_t t0 = timer_ticks();
     sleep_ms(50);
     uint64_t t1 = timer_ticks();
     ktest_assert(t1 - t0 >= 50, "sleep_ms(50) returned after %lu ticks", t1 - t0);
     ktest_assert(t1 - t0 < 500, "sleep_ms(50) took %lu ticks", t1 - t0);
+    /* The tick interrupt arrived during the sleep. */
+    ktest_assert(timer_interrupts() - i0 >= 10, "%lu timer interrupts in 50 ms",
+                 timer_interrupts() - i0);
 
     /* Ten short sleeps, counting elapsed ticks. */
     uint64_t start = timer_ticks();
@@ -23,7 +28,7 @@ static void test_timer(void)
     ktest_assert(elapsed >= 100 && elapsed < 1000, "10 x sleep_ms(10) took %lu ticks", elapsed);
     kprintf("timer: %lu ticks for 10 x 10 ms, uptime %lu ms\n", elapsed, timer_ms());
 }
-KTEST_DEFINE("timer", test_timer);
+KTEST_DEFINE_STAGE("timer", test_timer, KTEST_TIMER);
 
 /* M6: scancode translation, modifiers and the line discipline, through
  * the input core and its console keyboard handler. */

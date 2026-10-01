@@ -184,6 +184,9 @@ int paging_map_large(uintptr_t root, uintptr_t va, uintptr_t pa, size_t size, un
 uintptr_t paging_init_kernel_root(void);
 void paging_init_user_root(uintptr_t root, uintptr_t kernel_root);
 void paging_free_user_tables(uintptr_t root);
+/* Architecture part of paging_free_user_tables (mm/pgtable.c), called
+ * before the tables are freed: on aarch64 the release of the ASID. */
+void paging_release_user_root(uintptr_t root);
 
 /* Load root as the user translation (TTBR0_EL1) of the calling CPU. */
 void paging_load(uintptr_t root);

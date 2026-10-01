@@ -475,3 +475,14 @@ These locks are in user space and do not add a kernel lock-order level.
   run_queue.lock`. netd marks a
   conflict from `arp_input` under the same lock and wakes the waiter; it
   holds no other lock then and never sleeps on a slot.
+
+## A5 additions
+
+- `asid_lock` (spinlock, `arch/aarch64/paging.c`) protects the table that
+  assigns an ASID to each user root. It is a leaf: `paging_init_user_root`
+  takes it from `vmspace_create` without other locks,
+  `paging_release_user_root` from `vmspace_destroy`, and `paging_load`
+  under the `run_queue.lock` of the switching CPU or under no lock. It
+  exists only on aarch64.
+- The access flag and dirty state update of a fault (`update_access` in
+  `mm/vma.c`) takes `vmspace.lock` alone, like `vma_resolve_fault`.

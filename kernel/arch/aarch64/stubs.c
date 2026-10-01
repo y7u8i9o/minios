@@ -1,7 +1,6 @@
 /* Interface functions whose aarch64 implementation belongs to later
- * milestones of docs/plan/arm64.md: the interrupt controller and the timer
- * tick (A5), threads, user mode, system calls and signals (A6), and the
- * application processors (A8). */
+ * milestones of docs/plan/arm64.md: threads, user mode, system calls and
+ * signals (A6), and the application processors (A8). */
 #include <arch/init.h>
 #include <arch/irq.h>
 #include <arch/smp.h>
@@ -11,11 +10,6 @@
 #include <arch/trap.h>
 #include "todo.h"
 
-void arch_init_interrupts(void) { ARCH_TODO("A5"); }
-void irq_register(unsigned irq, irq_handler_fn fn, void *arg) { ARCH_TODO("A5"); }
-void irq_dispatch(struct trapframe *tf) { ARCH_TODO("A5"); }
-int irq_alloc(void) { ARCH_TODO("A7"); }
-void arch_send_ipi(unsigned cpu, unsigned irq) { ARCH_TODO("A8"); }
 
 int arch_thread_init(struct thread *t, void (*start)(void)) { ARCH_TODO("A6"); }
 void arch_thread_free(struct thread *t) { ARCH_TODO("A6"); }

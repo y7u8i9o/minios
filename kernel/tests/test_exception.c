@@ -15,4 +15,4 @@ static void test_exception(void)
 #endif
     ktest_fail("execution continued past the undefined instruction");
 }
-KTEST_DEFINE_EARLY("exception", test_exception);
+KTEST_DEFINE_STAGE("exception", test_exception, KTEST_EARLY);

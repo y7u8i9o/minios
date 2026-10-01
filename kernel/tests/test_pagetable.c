@@ -83,4 +83,4 @@ static void test_pagetable(void)
     check_walker();
     kprintf("pagetable: %d levels of %d entries, entries and walk checked\n", PT_LEVELS, PT_ENTRIES);
 }
-KTEST_DEFINE("pagetable", test_pagetable);
+KTEST_DEFINE_STAGE("pagetable", test_pagetable, KTEST_MEMORY);

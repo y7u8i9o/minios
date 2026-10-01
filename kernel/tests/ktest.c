@@ -9,14 +9,20 @@
 
 extern const struct ktest __ktests_start[], __ktests_end[];
 
-void ktest_run_early(void)
+void ktest_run_stage(enum ktest_stage stage)
 {
+    static const char *const names[] = {
+        [KTEST_KINIT] = "", [KTEST_EARLY] = "early ", [KTEST_MEMORY] = "memory stage ",
+        [KTEST_TIMER] = "timer stage ",
+    };
     char name[64];
     if (!cmdline_lookup("test", name, sizeof name))
         return;
     for (const struct ktest *t = __ktests_start; t < __ktests_end; t++) {
-        if (t->early && strcmp(t->name, name) == 0) {
-            klog_info("running early test %s", name);
+        if (t->stage == stage && strcmp(t->name, name) == 0) {
+            klog_info("running %stest %s", names[stage], name);
+            if (stage == KTEST_TIMER)
+                arch_irq_enable();
             t->fn();
             ktest_pass();
         }
@@ -30,7 +36,7 @@ void ktest_run_selected(void)
         return;
 
     for (const struct ktest *t = __ktests_start; t < __ktests_end; t++) {
-        if (strcmp(t->name, name) == 0) {
+        if (t->stage == KTEST_KINIT && strcmp(t->name, name) == 0) {
             klog_info("running test %s", name);
             t->fn();
             ktest_pass();

@@ -1,9 +1,20 @@
+#define KLOG_SUBSYS "paging"
 #include <arch/paging.h>
+#include <arch/cpu.h>
 #include <mm/vmm.h>
-#include "todo.h"
+#include <boot.h>
+#include <sync/spinlock.h>
+#include <lib/string.h>
+#include <klog.h>
+#include <debug/panic.h>
+#include "early_mmio.h"
 
-/* Entry construction for the VM_* flags. The table operations follow with
- * the MMU code of A5. */
+/* The aarch64 part of the page tables (A5): the entry format, the two
+ * roots and the TLB. The kernel root is loaded in TTBR1_EL1 once, by the
+ * first activation of the kernel space; a user root is loaded in
+ * TTBR0_EL1 with the ASID of its space. While the kernel space is active,
+ * TTBR0_EL1 points to an empty table, so user addresses fault. The table
+ * walks are generic (mm/pgtable.c). */
 
 pte_t pte_make(uintptr_t pa, unsigned flags)
 {
@@ -57,22 +68,141 @@ unsigned pte_vm_flags(pte_t e)
     return flags;
 }
 
-uintptr_t paging_alloc_table(void) { ARCH_TODO("A5"); }
-void paging_free_table(uintptr_t pa) { ARCH_TODO("A5"); }
-int paging_walk(uintptr_t root, uintptr_t va, bool create, pte_t **entry) { ARCH_TODO("A5"); }
-int paging_walk_preallocated(uintptr_t root, uintptr_t va, const uintptr_t *tables, unsigned table_count,
-                             unsigned *used, pte_t **entry) { ARCH_TODO("A5"); }
-int paging_pde(uintptr_t root, uintptr_t va, bool create, pte_t **entry) { ARCH_TODO("A5"); }
-int paging_map_large(uintptr_t root, uintptr_t va, uintptr_t pa, size_t size, unsigned vm_flags) { ARCH_TODO("A5"); }
-uintptr_t paging_init_kernel_root(void) { ARCH_TODO("A5"); }
-void paging_init_user_root(uintptr_t root, uintptr_t kernel_root) { ARCH_TODO("A5"); }
-void paging_free_user_tables(uintptr_t root) { ARCH_TODO("A5"); }
-void paging_load(uintptr_t root) { ARCH_TODO("A5"); }
-void paging_flush_page(uintptr_t va) { ARCH_TODO("A5"); }
-void paging_flush_user(void) { ARCH_TODO("A5"); }
-void paging_enable_features(void) { ARCH_TODO("A5"); }
+/* MAIR_EL1 attributes of the indices in <arch/paging.h>: write-back
+ * normal memory, Device-nGnRE, normal non-cacheable. Index 0 equals the
+ * attribute Limine maps memory with, so the change is compatible with the
+ * tables in use until the kernel root is loaded. */
+#define MAIR_VALUE ((0xffUL << (8 * MAIR_IDX_NORMAL)) | (0x04UL << (8 * MAIR_IDX_DEVICE)) | \
+                    (0x44UL << (8 * MAIR_IDX_NC)))
+
+#define TCR_AS  (1UL << 36)     /* 16 bit ASIDs */
+#define TCR_HA  (1UL << 39)     /* hardware access flag */
+#define TCR_HD  (1UL << 40)     /* hardware dirty state */
+
+/* The table TTBR0_EL1 points to while no user space is active. */
+static pte_t empty_root[PT_ENTRIES] __aligned(PAGE_SIZE);
+static uintptr_t kernel_root;
+static bool hw_access_flag, hw_dirty;
+
+/* ASIDs of the user roots. ASID 0 belongs to the empty root. A root
+ * without an ASID (all in use) runs with ASID 0 and its translations are
+ * dropped whenever it is loaded. Protected by asid_lock. */
+#define ASID_COUNT 256
+static DEFINE_SPINLOCK(asid_lock);
+static uintptr_t asid_roots[ASID_COUNT];
+
+static uintptr_t image_phys(const void *p)
+{
+    return (uintptr_t)p - bootinfo.kernel_virt_base + bootinfo.kernel_phys_base;
+}
+
+uintptr_t paging_init_kernel_root(void)
+{
+    kernel_root = paging_alloc_table();
+    return kernel_root;
+}
+
+void paging_init_user_root(uintptr_t root, uintptr_t kroot)
+{
+    (void)kroot;
+    spin_lock(&asid_lock);
+    for (unsigned i = 1; i < ASID_COUNT; i++) {
+        if (!asid_roots[i]) {
+            asid_roots[i] = root;
+            break;
+        }
+    }
+    spin_unlock(&asid_lock);
+}
+
+static unsigned asid_of(uintptr_t root)
+{
+    unsigned asid = 0;
+    spin_lock(&asid_lock);
+    for (unsigned i = 1; i < ASID_COUNT; i++) {
+        if (asid_roots[i] == root) {
+            asid = i;
+            break;
+        }
+    }
+    spin_unlock(&asid_lock);
+    return asid;
+}
+
+void paging_release_user_root(uintptr_t root)
+{
+    unsigned asid = asid_of(root);
+    /* No CPU uses the space any more (vmspace_destroy); drop what the TLBs
+     * of every CPU hold for its ASID before it is reused. */
+    __asm__ volatile("dsb ishst; tlbi aside1is, %0; dsb ish; isb"
+                     : : "r"((uint64_t)asid << 48) : "memory");
+    if (!asid)
+        return;
+    spin_lock(&asid_lock);
+    asid_roots[asid] = 0;
+    spin_unlock(&asid_lock);
+}
+
+void paging_load(uintptr_t root)
+{
+    if (root == kernel_root) {
+        uint64_t ttbr1;
+        __asm__ volatile("mrs %0, ttbr1_el1" : "=r"(ttbr1));
+        if ((ttbr1 & PTE_ADDR_MASK) != root) {
+            /* The first activation: the kernel root replaces Limine's
+             * tables. The early device mappings move along. */
+            early_mmio_install(root);
+            __asm__ volatile("dsb ishst; msr ttbr1_el1, %0; isb; tlbi vmalle1; dsb nsh; isb"
+                             : : "r"(root) : "memory");
+        }
+        __asm__ volatile("msr ttbr0_el1, %0; isb" : : "r"(image_phys(empty_root)) : "memory");
+        return;
+    }
+    uint64_t asid = asid_of(root);
+    __asm__ volatile("msr ttbr0_el1, %0; isb" : : "r"(root | (asid << 48)) : "memory");
+    if (!asid)
+        __asm__ volatile("tlbi aside1, xzr; dsb nsh; isb" : : : "memory");
+}
+
+/* Drop the translation of one page in every ASID on the calling CPU. */
+void paging_flush_page(uintptr_t va)
+{
+    __asm__ volatile("dsb ishst; tlbi vaae1, %0; dsb nsh; isb"
+                     : : "r"((va >> PAGE_SHIFT) & ((1UL << 44) - 1)) : "memory");
+}
+
+/* Drop the user translations of the active ASID on the calling CPU. */
+void paging_flush_user(void)
+{
+    uint64_t ttbr0;
+    __asm__ volatile("mrs %0, ttbr0_el1" : "=r"(ttbr0));
+    __asm__ volatile("dsb ishst; tlbi aside1, %0; dsb nsh; isb"
+                     : : "r"(ttbr0 & ~((1UL << 48) - 1)) : "memory");
+}
+
+void paging_enable_features(void)
+{
+    uint64_t mmfr1, tcr;
+    __asm__ volatile("mrs %0, id_aa64mmfr1_el1" : "=r"(mmfr1));
+    __asm__ volatile("mrs %0, tcr_el1" : "=r"(tcr));
+    unsigned hafdbs = mmfr1 & 0xf;
+    hw_access_flag = hafdbs >= 1;
+    hw_dirty = hafdbs >= 2;
+    /* 8 bit ASIDs (TCR.AS clear) are enough for ASID_COUNT; the hardware
+     * access flag and dirty state where the processor has them. */
+    tcr &= ~TCR_AS;
+    if (hw_access_flag)
+        tcr |= TCR_HA;
+    if (hw_dirty)
+        tcr |= TCR_HD;
+    __asm__ volatile("msr mair_el1, %0; msr tcr_el1, %1; isb" : : "r"(MAIR_VALUE), "r"(tcr) : "memory");
+}
 
 const char *paging_describe(void)
 {
-    return "";
+    if (hw_dirty)
+        return ", hardware access flag and dirty state";
+    if (hw_access_flag)
+        return ", hardware access flag";
+    return ", software access flag and dirty state";
 }

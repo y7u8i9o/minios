@@ -166,7 +166,7 @@ were split into the generic scancode and packet decoders in `drivers/` and
 the 8042 code in `arch/x86_64/i8042.c`, because the self-tests feed input
 through the decoders. The interface headers with identical prototypes moved
 to `kernel/include/arch/`. `boot` and `exception` run as early self-tests
-(`KTEST_DEFINE_EARLY`) after the boot environment is logged; on aarch64 they
+(`KTEST_DEFINE_STAGE` with `KTEST_EARLY`) after the boot environment is logged; on aarch64 they
 pass under HVF on the Apple host, and `exception` shows the register dump,
 the system registers and the backtrace (`tests/cases/exception/
 expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
@@ -175,7 +175,7 @@ expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
 `timer`, `arch`, `platform`, `pagetable`, `abi`, `fork`, `signals`, `libc`,
 `smp` and `lockfree` pass, as does `make check`.
 
-### A5. aarch64 memory, interrupts and time
+### A5. aarch64 memory, interrupts and time (completed 2026-10-01)
 
 - The MMU is enabled with ASIDs, and the physical and slab allocators run
   on it.
@@ -184,6 +184,25 @@ expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
   milestone.
 - The kernel uses the generic timer as the clocksource and for the tick.
 - The boot tests `pmm`, `vmm`, `slab`, `timer` and `exception` pass on aarch64.
+
+QEMU 11 offers GICv3 with an ITS under HVF, so the port uses GICv3. The
+table walks moved from `arch/x86_64/paging.c` to the generic
+`mm/pgtable.c`; the architecture keeps the entry format, the roots and the
+TLB. The aarch64 processor of the Apple host manages neither the access
+flag nor the dirty state, so a fault on an entry that permits the access
+sets them (`update_access` in `mm/vma.c`). Self-tests run at stages of the
+start-up sequence; `pmm`, `vmm`, `munmap_tables`, `slab`, `slab_redzone`
+and `pagetable` run after the slab allocator and `timer` after the timer,
+on both architectures, and `vmm` measures its second round, because the
+first creates the kernel tables and slabs it uses. Under HVF the GIC of
+Hypervisor.framework does not complete a write of `GICR_IGROUPR0`, so the
+driver writes the redistributor registers only when their value differs.
+The cases `boot`, `exception`, `pmm`, `vmm`, `munmap_tables`, `slab`,
+`slab_redzone`, `pagetable` and `timer` pass on aarch64 under HVF and under
+TCG. On x86_64 these cases and `kbd`, `fork`, `swap`, `madvise`,
+`hugepages`, `mmap_file`, `rlimit`, `signals`, `libc`, `pthreads`,
+`dynlink`, `smp`, `smp_user`, `lockfree`, `sched`, `shutdown`, `arch`,
+`platform`, `abi`, `profile`, `gpu_mode` and `blk` pass.
 
 ### A6. aarch64 threads and user mode
 

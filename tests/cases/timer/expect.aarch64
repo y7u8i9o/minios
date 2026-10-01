@@ -1,0 +1,3 @@
+gicv3: distributor at 8000000 with [0-9]+ interrupt lines
+generic timer [0-9]+ Hz, periodic tick 1000 Hz
+TEST PASS

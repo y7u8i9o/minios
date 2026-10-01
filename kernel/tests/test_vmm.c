@@ -11,10 +11,9 @@
 
 /* M4: mappings in the kernel space and in a fresh user space behave, and
  * nothing leaks from page table allocation. */
-static void test_vmm(void)
+static void vmm_round(void)
 {
-    struct pmm_stats before, after;
-    pmm_get_stats(&before);
+    volatile int stack_probe = 0;
 
     /* Kernel space: map a frame at a fresh virtual address. */
     struct page *pg = pmm_alloc_page();
@@ -46,9 +45,9 @@ static void test_vmm(void)
     /* HHDM and kernel image translations. */
     ktest_assert(vmm_translate(&kernel_vmspace, (uintptr_t)through_hhdm, &tpa, NULL) && tpa == pa,
                  "hhdm translation wrong");
-    ktest_assert(vmm_translate(&kernel_vmspace, (uintptr_t)test_vmm, NULL, &tflags) &&
+    ktest_assert(vmm_translate(&kernel_vmspace, (uintptr_t)vmm_round, NULL, &tflags) &&
                  (tflags & VM_EXEC) && !(tflags & VM_WRITE), "text mapping flags %x", tflags);
-    ktest_assert(vmm_translate(&kernel_vmspace, (uintptr_t)&before, NULL, &tflags) &&
+    ktest_assert(vmm_translate(&kernel_vmspace, (uintptr_t)&stack_probe, NULL, &tflags) &&
                  !(tflags & VM_EXEC) && (tflags & VM_WRITE), "stack mapping flags %x", tflags);
 
     /* Boot stack guard page is unmapped. */
@@ -94,14 +93,24 @@ static void test_vmm(void)
     ktest_assert(*mmio == 77, "mmio read wrong");
 
     pmm_free_page(pg);
+}
+
+static void test_vmm(void)
+{
+    /* The first round creates the kernel page tables of the heap, stack and
+     * MMIO regions, which are never freed, and the first slabs of the
+     * caches it uses. The test runs before most of the kernel has used
+     * them (KTEST_MEMORY), so only the second round is measured. */
+    vmm_round();
+    struct pmm_stats before, after;
+    pmm_get_stats(&before);
+    vmm_round();
     pmm_get_stats(&after);
-    /* Kernel page tables are never freed: the heap, stack and MMIO regions
-     * each keep one PD and one PT, so six pages may stay allocated. */
-    ktest_assert(after.free_pages + 6 >= before.free_pages, "leaked %lu pages",
+    ktest_assert(after.free_pages >= before.free_pages, "leaked %lu pages",
                  before.free_pages - after.free_pages);
     kprintf("vmm: %lu pages before, %lu after\n", before.free_pages, after.free_pages);
 }
-KTEST_DEFINE("vmm", test_vmm);
+KTEST_DEFINE_STAGE("vmm", test_vmm, KTEST_MEMORY);
 
 static void test_munmap_tables(void)
 {
@@ -136,4 +145,4 @@ static void test_munmap_tables(void)
     vmspace_destroy(vm);
     kprintf("munmap_tables: protected entries retained, empty tables reclaimed, sparse ranges checked\n");
 }
-KTEST_DEFINE("munmap_tables", test_munmap_tables);
+KTEST_DEFINE_STAGE("munmap_tables", test_munmap_tables, KTEST_MEMORY);

@@ -227,7 +227,10 @@ case "${ARCH:-x86_64}" in
         [ -f "$EDK2_AARCH64" ] || fail "no edk2 firmware at $EDK2_AARCH64"
         CPU=max
         [ "$ACCEL" = hvf ] && CPU=host
-        MACHINE="-M virt -cpu $CPU -bios $EDK2_AARCH64"
+        MACHINE="-M virt,gic-version=3 -cpu $CPU -bios $EDK2_AARCH64"
+        # Until A8 the kernel leaves the application processors parked in
+        # Limine's memory, which it reclaims, so the machine has one CPU.
+        CPUS=1
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
         VGAFLAGS=""
         ;;

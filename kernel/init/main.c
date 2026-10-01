@@ -141,7 +141,7 @@ __noreturn void kmain(void)
     arch_init_cpu_features();
     boot_log_environment();
 #if CONFIG_TESTS
-    ktest_run_early();
+    ktest_run_stage(KTEST_EARLY);
 #endif
 
     pmm_init();
@@ -151,6 +151,9 @@ __noreturn void kmain(void)
     smp_park_aps();
     pmm_reclaim_bootloader();
     slab_init();
+#if CONFIG_TESTS
+    ktest_run_stage(KTEST_MEMORY);
+#endif
     initrd_init();
     vfs_init();
     initrdfs_init();
@@ -160,6 +163,9 @@ __noreturn void kmain(void)
     arch_init_interrupts();
     tlb_init();
     timer_init();
+#if CONFIG_TESTS
+    ktest_run_stage(KTEST_TIMER);
+#endif
     rtc_init();
     console_tty_init();
     input_init();

@@ -13,21 +13,6 @@
 #define EFER_NXE (1UL << 11)
 #define MSR_PAT  0x277
 
-uintptr_t paging_alloc_table(void)
-{
-    struct page *pg = pmm_alloc_page();
-    if (!pg)
-        return 0;
-    uintptr_t pa = page_to_phys(pg);
-    memset(P2V(pa), 0, PAGE_SIZE);
-    return pa;
-}
-
-void paging_free_table(uintptr_t pa)
-{
-    pmm_free_page(phys_to_page(pa));
-}
-
 pte_t pte_make(uintptr_t pa, unsigned flags)
 {
     pte_t pte = pa | PTE_P;
@@ -64,147 +49,6 @@ unsigned pte_vm_flags(pte_t pte)
     return flags;
 }
 
-/* Descend one level, creating the next table if asked. */
-static pte_t *next_level(pte_t *entry, bool create, bool user)
-{
-    if (*entry & PTE_P) {
-        if (*entry & PTE_PS)
-            return NULL;
-        return pte_table(*entry);
-    }
-    if (!create)
-        return NULL;
-    uintptr_t pa = paging_alloc_table();
-    if (!pa)
-        return NULL;
-    *entry = pte_make_table(pa, user);
-    return P2V(pa);
-}
-
-int paging_walk(uintptr_t root, uintptr_t va, bool create, pte_t **entry)
-{
-    bool user = va <= USER_TOP;
-    pte_t *pml4 = P2V(root);
-    pte_t *pdpt, *pd, *pt;
-
-    pdpt = next_level(&pml4[PT_INDEX(va, 4)], create, user);
-    if (!pdpt)
-        return create ? -ENOMEM : 0;
-    pd = next_level(&pdpt[PT_INDEX(va, 3)], create, user);
-    if (!pd)
-        return create ? -ENOMEM : 0;
-    pte_t *pde = &pd[PT_INDEX(va, 2)];
-    if ((*pde & PTE_P) && (*pde & PTE_PS)) {
-        *entry = pde;
-        return 2;
-    }
-    pt = next_level(pde, create, user);
-    if (!pt)
-        return create ? -ENOMEM : 0;
-    *entry = &pt[PT_INDEX(va, 1)];
-    return 1;
-}
-
-static pte_t *next_level_preallocated(pte_t *entry, bool user,
-                                      const uintptr_t *tables,
-                                      unsigned table_count, unsigned *used)
-{
-    if (*entry & PTE_P) {
-        if (*entry & PTE_PS)
-            return NULL;
-        return pte_table(*entry);
-    }
-    if (*used >= table_count)
-        return NULL;
-    uintptr_t pa = tables[(*used)++];
-    *entry = pte_make_table(pa, user);
-    return P2V(pa);
-}
-
-int paging_walk_preallocated(uintptr_t root, uintptr_t va,
-                             const uintptr_t *tables, unsigned table_count,
-                             unsigned *used, pte_t **entry)
-{
-    bool user = va <= USER_TOP;
-    pte_t *pml4 = P2V(root);
-    *used = 0;
-    pte_t *pdpt = next_level_preallocated(&pml4[PT_INDEX(va, 4)], user,
-                                             tables, table_count, used);
-    if (!pdpt)
-        return -ENOMEM;
-    pte_t *pd = next_level_preallocated(&pdpt[PT_INDEX(va, 3)], user,
-                                           tables, table_count, used);
-    if (!pd)
-        return -ENOMEM;
-    pte_t *pde = &pd[PT_INDEX(va, 2)];
-    if ((*pde & PTE_P) && (*pde & PTE_PS)) {
-        *entry = pde;
-        return 2;
-    }
-    pte_t *pt = next_level_preallocated(pde, user, tables,
-                                           table_count, used);
-    if (!pt)
-        return -ENOMEM;
-    *entry = &pt[PT_INDEX(va, 1)];
-    return 1;
-}
-
-int paging_pde(uintptr_t root, uintptr_t va, bool create, pte_t **entry)
-{
-    bool user = va <= USER_TOP;
-    pte_t *pml4 = P2V(root);
-    pte_t *pdpt = next_level(&pml4[PT_INDEX(va, 4)], create, user);
-    if (!pdpt)
-        return create ? -ENOMEM : 0;
-    pte_t *pd = next_level(&pdpt[PT_INDEX(va, 3)], create, user);
-    if (!pd)
-        return create ? -ENOMEM : 0;
-    *entry = &pd[PT_INDEX(va, 2)];
-    return 1;
-}
-
-int paging_map_large(uintptr_t root, uintptr_t va, uintptr_t pa, size_t size, unsigned vm_flags)
-{
-    pte_t flags = pte_make(0, vm_flags);
-    uintptr_t end = va + size;
-    while (va < end) {
-        pte_t *entry;
-        bool big = IS_ALIGNED(va, PAGE_2M) && IS_ALIGNED(pa, PAGE_2M) && end - va >= PAGE_2M;
-        if (big) {
-            pte_t *pml4 = P2V(root);
-            pte_t *pdpt = next_level(&pml4[PT_INDEX(va, 4)], true, false);
-            if (!pdpt)
-                return -ENOMEM;
-            pte_t *pd = next_level(&pdpt[PT_INDEX(va, 3)], true, false);
-            if (!pd)
-                return -ENOMEM;
-            pd[PT_INDEX(va, 2)] = pa | flags | PTE_PS;
-            va += PAGE_2M;
-            pa += PAGE_2M;
-            continue;
-        }
-        int r = paging_walk(root, va, true, &entry);
-        if (r < 0)
-            return r;
-        *entry = pa | flags;
-        va += PAGE_SIZE;
-        pa += PAGE_SIZE;
-    }
-    return 0;
-}
-
-static void free_level(pte_t *table, int level)
-{
-    for (int i = 0; i < PT_ENTRIES; i++) {
-        pte_t e = table[i];
-        if (!pte_is_table(e))
-            continue;
-        if (level > 1)
-            free_level(pte_table(e), level - 1);
-        paging_free_table(pte_addr(e));
-    }
-}
-
 uintptr_t paging_init_kernel_root(void)
 {
     uintptr_t root = paging_alloc_table();
@@ -233,18 +77,9 @@ void paging_init_user_root(uintptr_t root, uintptr_t kernel_root)
            (PT_ENTRIES - PT_ROOT_USER_ENTRIES) * sizeof(pte_t));
 }
 
-void paging_free_user_tables(uintptr_t root)
+void paging_release_user_root(uintptr_t root)
 {
-    pte_t *pml4 = P2V(root);
-    for (int i = 0; i < PT_ROOT_USER_ENTRIES; i++) {
-        pte_t e = pml4[i];
-        if (!(e & PTE_P))
-            continue;
-        free_level(pte_table(e), 3);
-        paging_free_table(pte_addr(e));
-        pml4[i] = 0;
-    }
-    paging_free_table(root);
+    (void)root;
 }
 
 const char *paging_describe(void)

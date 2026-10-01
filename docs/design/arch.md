@@ -219,12 +219,21 @@ through the direct map, `pte_swap_slot` the slot of a swapped entry and
 `pte_block_to_page`. `vma_make_pte(pa, flags)` (`mm/vma.c`) gives the
 entry of a user region: present, or `PROT_NONE` without `VM_READ`.
 
-The architecture implements the table operations: `paging_walk`,
-`paging_walk_preallocated`, `paging_pde`, `paging_map_large`,
-`paging_alloc_table`, `paging_free_table`, `paging_free_user_tables`,
-`paging_init_kernel_root`, `paging_init_user_root` (x86_64 copies the
-kernel half of the root into every user root), `paging_load`,
-`paging_flush_page`, `paging_flush_user` and `paging_enable_features`.
+The table operations that only walk and allocate tables are generic
+(`mm/pgtable.c`, A5): `paging_walk`, `paging_walk_preallocated`,
+`paging_pde`, `paging_map_large`, `paging_alloc_table`, `paging_free_table`
+and `paging_free_user_tables`. The architecture implements the roots and
+the TLB: `paging_init_kernel_root`, `paging_init_user_root` (x86_64 copies
+the kernel half of the root into every user root, aarch64 assigns an
+ASID), `paging_release_user_root`, `paging_load`, `paging_flush_page`,
+`paging_flush_user` and `paging_enable_features`.
+
+A fault on an entry that permits the access sets the access flag, and for
+a write the dirty state, before the region is consulted (`update_access` in
+`mm/vma.c`). aarch64 needs this where the processor does not manage these
+bits in hardware (FEAT_HAFDBS): a writable entry stays read only until its
+first write, and an entry made old by the swap daemon faults on its next
+access. On x86_64 the path is taken only after a stale TLB entry.
 The x86_64 bit layout, including the software bits, is described in
 `vmm.md`, `filemap.md`, `madvise.md` and `swap.md`.
 
@@ -323,7 +332,7 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. The aarch64 implementation (A4)
+## 16. The aarch64 implementation (A4, A5)
 
 The whole generic kernel, with its self-tests except `test_cpu.c`
 (`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
@@ -341,27 +350,46 @@ milestone. Implemented are:
 - the console on the PL011 of `virt` (`serial.c`), mapped on first use by
   `early_map_device` (`early_mmio.c`), which adds device entries to the
   tables Limine installed in `TTBR1_EL1` and takes its tables from a static
-  pool, until `vmm_init` runs (A5);
+  pool; the first load of the kernel root enters these mappings into it
+  (`early_mmio_install`);
 - power off, reboot and the test exit through PSCI (`platform.c`);
-- the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` (`clock.c`);
-- the entry functions of `<arch/paging.h>` (`paging.c`), whose table
-  operations follow in A5;
+- the page tables (`paging.c`, A5): the entry format of the ARMv8
+  descriptors, `MAIR_EL1` with write-back, Device-nGnRE and non-cacheable
+  attributes, the kernel root in `TTBR1_EL1`, the user roots in `TTBR0_EL1`
+  with 8 bit ASIDs (`asid_lock`, `locking.md`), an empty table in
+  `TTBR0_EL1` while the kernel space is active, and the hardware access
+  flag and dirty state where `ID_AA64MMFR1_EL1` reports them;
+- the GICv3 of `virt` (`gic.c`, A5): the distributor, the redistributor of
+  the boot CPU and the CPU interface through the ICC system registers, with
+  every interrupt in group 1. The addresses are those of `virt` until the
+  device tree is read (A7). Under HVF the GIC of Hypervisor.framework does
+  not complete a write of `GICR_IGROUPR0`, so the redistributor registers
+  are written only when their value differs;
+- the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` and the tick from the
+  virtual timer, PPI 27, programmed one period ahead through
+  `CNTV_CVAL_EL0` (`clock.c`, A5);
 - one processor for `<arch/smp.h>` until A8.
 
-`kmain` calls `ktest_run_early` after the boot environment is logged. A test
-defined with `KTEST_DEFINE_EARLY` needs only the console, the log and the
-command line, so it runs there on every architecture: `boot` and
-`exception`. On aarch64 the kernel reaches no further than that point
-before A5.
+Self-tests run at stages of the start-up sequence (`enum ktest_stage`,
+`KTEST_DEFINE_STAGE`): `KTEST_EARLY` after the boot environment is logged
+(`boot`, `exception`), `KTEST_MEMORY` after the slab allocator (`pmm`,
+`vmm`, `munmap_tables`, `slab`, `slab_redzone`, `pagetable`), `KTEST_TIMER`
+after the timer, with interrupts enabled for the test (`timer`), and
+`KTEST_KINIT` in the first thread for every other test. A test runs at the
+earliest stage at which what it uses is initialized. On aarch64 the kernel
+reaches the timer stage before A6, whose threads the scheduler needs.
 
 `make ARCH=aarch64 test CASES="..."` boots QEMU `virt` with the edk2
 firmware that QEMU installs, on HVF where available (`-cpu host`, otherwise
 TCG with `-cpu max`). The image is the ISO of `tools/mkiso.sh`, whose UEFI
 El Torito image contains Limine's `BOOTAA64.EFI`, attached as a SCSI CD.
 Without user programs (`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is
-an empty archive and no disk is attached. A case may have an
+an empty archive and no disk is attached. The machine has one CPU until
+the application processors are parked by the kernel (A8), because
+`pmm_reclaim_bootloader` frees the memory in which Limine parks them; it
+uses GICv3 (`gic-version=3`). A case may have an
 `expect.$(ARCH)` file that replaces `expect` where the output names
-architecture state, as `tests/cases/exception` does.
+architecture state, as `tests/cases/exception` and `tests/cases/timer` do.
 
 ## 17. Dependencies that remain
 

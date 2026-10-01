@@ -453,6 +453,31 @@ size_t vma_count_resident(struct vmspace *vm)
     return n > 0 ? (size_t)n : 0;
 }
 
+/* A fault on an entry that permits the access: the processor needs the
+ * access flag set, or for a write the dirty state, which the hardware of
+ * aarch64 may leave to software (docs/design/arch.md). Sets them and
+ * returns true; on x86_64 such a fault comes only from a stale TLB entry
+ * after another CPU changed the entry. */
+static bool update_access(struct vmspace *vm, uintptr_t va, bool write)
+{
+    bool fixed = false;
+    spin_lock(&vm->lock);
+    pte_t *entry;
+    int w = paging_walk(vm->pt_root, va, false, &entry);
+    if (w >= 1 && pte_present(*entry) && (!write || pte_write(*entry))) {
+        pte_t n = pte_mkyoung(*entry);
+        if (write)
+            n = pte_mkdirty(n);
+        if (n != *entry) {
+            *entry = n;
+            tlb_flush_range(vm, ALIGN_DOWN(va, w == 2 ? PAGE_2M : PAGE_SIZE), w == 2 ? PAGE_2M : PAGE_SIZE);
+        }
+        fixed = true;
+    }
+    spin_unlock(&vm->lock);
+    return fixed;
+}
+
 bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
 {
     struct vmspace *vm = cpu_current()->vm;
@@ -460,7 +485,10 @@ bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
         return false;
     struct fault_info fi;
     arch_fault_decode(tf, &fi);
-    return vma_resolve_fault(vm, ALIGN_DOWN(addr, PAGE_SIZE), fi.write, fi.present);
+    uintptr_t va = ALIGN_DOWN(addr, PAGE_SIZE);
+    if (fi.present && update_access(vm, va, fi.write))
+        return true;
+    return vma_resolve_fault(vm, va, fi.write, fi.present);
 }
 
 /* Share every page of the parent with the child. Frames of private

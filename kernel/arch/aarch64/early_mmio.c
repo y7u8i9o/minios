@@ -2,6 +2,7 @@
 #include <arch/paging.h>
 #include <boot.h>
 #include <debug/panic.h>
+#include <mm/vmm.h>
 
 /* Device mappings before the kernel has its own page tables (A4). Limine
  * maps the kernel and the direct map, but no device registers, so this code
@@ -14,6 +15,15 @@
 static pte_t pool[POOL_TABLES][PT_ENTRIES] __aligned(PAGE_SIZE);
 static unsigned pool_used;
 static uintptr_t next_va = KMMIO_BASE + (63UL << 30);   /* the last GiB of KMMIO */
+
+/* The mappings made, for early_mmio_install. Written before the scheduler
+ * and the other CPUs run, read once by the boot CPU. */
+#define MAX_EARLY 8
+static struct {
+    uintptr_t va, pa;
+    size_t size;
+} early[MAX_EARLY];
+static unsigned nearly;
 
 static uintptr_t image_phys(const void *p)
 {
@@ -40,8 +50,14 @@ void *early_map_device(uintptr_t pa, size_t size)
         return NULL;
     uintptr_t off = pa & (PAGE_SIZE - 1);
     size = ALIGN_UP(size + off, PAGE_SIZE);
+    if (nearly == MAX_EARLY)
+        panic("early_mmio: more than %d mappings", MAX_EARLY);
     uintptr_t base = next_va;
     next_va += size;
+    early[nearly].va = base;
+    early[nearly].pa = pa - off;
+    early[nearly].size = size;
+    nearly++;
     uint64_t ttbr1;
     __asm__ volatile("mrs %0, ttbr1_el1" : "=r"(ttbr1));
     unsigned attr = device_attr_index();
@@ -64,4 +80,16 @@ void *early_map_device(uintptr_t pa, size_t size)
     }
     __asm__ volatile("dsb ishst; isb" : : : "memory");
     return (void *)(base + off);
+}
+
+void early_mmio_install(uintptr_t root)
+{
+    for (unsigned i = 0; i < nearly; i++) {
+        for (size_t done = 0; done < early[i].size; done += PAGE_SIZE) {
+            pte_t *e;
+            if (paging_walk(root, early[i].va + done, true, &e) != 1)
+                panic("early_mmio: no table for %lx in the kernel root", early[i].va + done);
+            *e = pte_make(early[i].pa + done, VM_KERNEL_RW | VM_NOCACHE | VM_GLOBAL);
+        }
+    }
 }

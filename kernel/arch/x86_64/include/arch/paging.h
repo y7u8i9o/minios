@@ -182,6 +182,9 @@ void paging_init_user_root(uintptr_t root, uintptr_t kernel_root);
 /* Free every table page reachable from the user half of root, then the
  * root itself. Mapped frames are not freed. */
 void paging_free_user_tables(uintptr_t root);
+/* Architecture part of paging_free_user_tables (mm/pgtable.c), called
+ * before the tables are freed: on aarch64 the release of the ASID. */
+void paging_release_user_root(uintptr_t root);
 
 /* Load root as the translation of the calling CPU. */
 static inline void paging_load(uintptr_t root)

@@ -3,27 +3,34 @@
 
 /* Kernel self tests, compiled in with CONFIG_TESTS=1 and selected by the
  * `test=<name>` command line argument. A test that returns passes. */
+/* The point of the start-up sequence (init/main.c) at which a test runs:
+ * the earliest one at which what the test uses is initialized. A test
+ * that runs before the scheduler also runs on an architecture whose port
+ * has not reached the rest of the sequence (docs/plan/arm64.md). */
+enum ktest_stage {
+    KTEST_KINIT,                /* in the first thread, after the root is mounted */
+    KTEST_EARLY,                /* after the boot environment is logged: console, log, command line */
+    KTEST_MEMORY,               /* after the slab allocator: physical, virtual and heap memory */
+    KTEST_TIMER,                /* after the timer, with interrupts enabled for the test */
+};
+
 struct ktest {
     const char *name;
     void (*fn)(void);
-    bool early;                 /* runs before memory management, see ktest_run_early */
+    enum ktest_stage stage;
 };
 
 /* The entries form an array between __ktests_start and __ktests_end. An
  * explicit alignment keeps the compiler from padding the 24 byte entries
  * to a larger alignment, which would leave gaps in that array. */
-#define KTEST_DEFINE(testname, func) \
-    static const struct ktest __ktest_##func __used __section(".ktests") __aligned(8) = { testname, func, false }
-/* A test that needs only the console, the log and the command line. It
- * runs right after the boot environment is logged, before memory
- * management, so it also runs on an architecture whose port has not
- * reached the rest of the start-up sequence (docs/plan/arm64.md). */
-#define KTEST_DEFINE_EARLY(testname, func) \
-    static const struct ktest __ktest_##func __used __section(".ktests") __aligned(8) = { testname, func, true }
+#define KTEST_DEFINE_STAGE(testname, func, when) \
+    static const struct ktest __ktest_##func __used __section(".ktests") __aligned(8) = { testname, func, when }
+#define KTEST_DEFINE(testname, func) KTEST_DEFINE_STAGE(testname, func, KTEST_KINIT)
 
-/* Run the test selected on the command line if it is an early test.
- * Returns if none is selected or the selected test is not early. */
-void ktest_run_early(void);
+/* Run the test selected on the command line if it belongs to stage.
+ * Returns if none is selected or the selected test belongs to another
+ * stage; a test that runs ends the boot. */
+void ktest_run_stage(enum ktest_stage stage);
 /* Run the test selected on the command line, if any. Returns if none. */
 void ktest_run_selected(void);
 __noreturn void ktest_pass(void);
