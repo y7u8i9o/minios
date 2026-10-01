@@ -259,7 +259,13 @@ TCC_DEFS := -DONE_SOURCE=1 -DTCC_TARGET_$(TCC_TARGET) -DCONFIG_TCC_SEMLOCK=0 -DC
             -DCONFIG_TCC_BACKTRACE=0 -DTCC_VERSION='"$(TCC_VERSION)"' -DCONFIG_TCCDIR='"/usr/lib/tcc"' \
             -DCONFIG_TCC_ELFINTERP='"/lib/ld.so"' -DCONFIG_TCC_SYSINCLUDEPATHS='"{B}/include:/usr/include"' \
             -DCONFIG_TCC_LIBPATHS='"{B}:/lib"' -DCONFIG_TCC_CRTPREFIX='"/lib"'
-TCC_LIB1 := libtcc1.c va_list.c builtin.c stdatomic.c dsohandle.c alloca.S alloca-bt.S atomic.S
+TCC_LIB1 := builtin.c stdatomic.c dsohandle.c alloca.S alloca-bt.S atomic.S
+ifeq ($(TCC_TARGET),ARM64)
+# The binary128 long double arithmetic and __clear_cache for tcc -run.
+TCC_LIB1 += lib-arm64.c armflush.c
+else
+TCC_LIB1 += libtcc1.c va_list.c
+endif
 TCC_LIB1_OBJS := $(addprefix $(TCC_GEN)/lib/,$(addsuffix .o,$(basename $(TCC_LIB1))))
 TCC_TESTS := $(TCC_SRC)/tests/tests2
 
@@ -277,10 +283,14 @@ $(ROOT)/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
 	$(CC) $(UCFLAGS) -o $(OUT)/tcc.elf $(ULDFLAGS) $(CRT0) $< -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/tcc.elf $@
 
+# armflush.c calls the tcc builtin for the cache maintenance. The GCC
+# builtin expands to the libgcc routine for aarch64.
+$(TCC_GEN)/lib/armflush.o: TCC_LIB1_CFLAGS := -D__arm64_clear_cache=__builtin___clear_cache
+
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -fno-omit-frame-pointer $(UARCHFLAGS) -O2 -w \
-	    -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
+	    $(TCC_LIB1_CFLAGS) -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
 
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.S
 	@mkdir -p $(dir $@)

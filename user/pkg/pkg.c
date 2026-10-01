@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <minios/gzip.h>
 
 #define MAX_PENDING 32
@@ -239,8 +240,20 @@ static int collect_symbol(const char *name, void *arg)
 /* The loader's view of one ELF file of package name: every library in the
  * transitive DT_NEEDED closure must exist and, together, define every
  * symbol the file leaves undefined. */
+const char *system_arch(void)
+{
+    static struct utsname u;
+    if (!u.machine[0] && uname(&u) < 0)
+        strlcpy(u.machine, "unknown", sizeof u.machine);
+    return u.machine;
+}
+
 static int check_elf(const char *name, const char *rel, const uint8_t *data, size_t len)
 {
+    /* A program or library for another machine cannot be loaded. */
+    const char *arch = elf_arch(data, len);
+    if (strcmp(arch, system_arch()) != 0)
+        return error(name, "%s is built for %s, and the system is %s", rel, arch, system_arch());
     char (*needed)[PKG_NAME_MAX] = calloc(MAX_LIBS, PKG_NAME_MAX);
     struct symbols syms = { calloc(MAX_SYMBOLS, PKG_NAME_MAX), 0 };
     int nneeded = elf_needed(data, len, needed, MAX_LIBS), r = 0;
@@ -345,6 +358,9 @@ static int check_all(void)
     /* Names, versions and what is installed already. */
     for (int i = 0; i < npend; i++) {
         struct pending *p = &pend[i];
+        if (p->m.arch[0] && strcmp(p->m.arch, system_arch()) != 0)
+            return error(p->m.name, "the package is built for %s, and the system is %s",
+                         p->m.arch, system_arch());
         for (int j = 0; j < i; j++)
             if (strcmp(pend[j].m.name, p->m.name) == 0)
                 return error(p->m.name, "named twice on the command line");
@@ -1143,6 +1159,20 @@ static int add_needed(struct build *b, const uint8_t *data, size_t len, const ch
     return 0;
 }
 
+/* The arch line of the manifest is the machine of the ELF files, which
+ * must all be built for the same machine. */
+static int note_arch(struct build *b, const uint8_t *data, size_t len, const char *rel)
+{
+    const char *arch = elf_arch(data, len);
+    if (!b->m->arch[0]) {
+        strlcpy(b->m->arch, arch, sizeof b->m->arch);
+        return 0;
+    }
+    if (strcmp(b->m->arch, arch) != 0)
+        return error(b->m->name, "%s is built for %s, and the package for %s", rel, arch, b->m->arch);
+    return 0;
+}
+
 static int build_dir(struct build *b, const char *rel)
 {
     char path[PKG_PATH_MAX];
@@ -1195,6 +1225,8 @@ static int build_dir(struct build *b, const char *rel)
                 r = error(b->m->name, "%s: %s", full, strerror(errno));
             } else {
                 if (elf_is(data, len))
+                    r = note_arch(b, data, len, sub);
+                if (r == 0 && elf_is(data, len))
                     r = add_needed(b, data, len, sub);
                 if (r == 0 && tarw_add(&b->w, member, 0, st.st_mode & 0777, st.st_mtime, data, len) < 0)
                     r = error(b->m->name, "%s: cannot add", member);

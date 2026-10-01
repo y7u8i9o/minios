@@ -97,6 +97,7 @@ repeat where the value is a list.
 | `name` | package name | required, once |
 | `version` | version | required, once |
 | `summary` | one line of text | required, once |
+| `arch` | `x86_64` or `aarch64` | the machine of the ELF files, once, absent in a package without ELF files |
 | `depends` | `name` or `name OP version`, OP one of `>=`, `=`, `<` | a package that must be installed first |
 | `conflicts` | `name` | a package that may not be installed at the same time |
 | `provides` | `soname abi` | a shared library in `lib/` of the package and its ABI number |
@@ -105,6 +106,12 @@ repeat where the value is a list.
 | `mime-type` | `type extensions...` | a line for the MIME type table |
 | `mime-handler` | `type command` | a line for the handler table; the command is relative to the prefix |
 | `icon` | path relative to the prefix | the icon of the launcher entries |
+
+`pkg build` writes the `arch` line from the machine of the ELF files in the
+package and refuses a package whose ELF files are built for two machines
+(A9). The installer refuses a package whose `arch` differs from the
+machine of the running system, as `uname -m` prints it, and an ELF file
+built for another machine, also in a package without an `arch` line.
 
 `pkg build` derives the `needs` lines from the `DT_NEEDED` entries of every
 ELF file in the package. The ABI number of a soname comes from the
@@ -308,10 +315,15 @@ the relevant archive before opening its program from `/home/.local/bin`.
 
 A repository is a directory served over HTTP. It holds the archives, a
 file `index` that lists them, and `index.sig`, the Ed25519 signature of
-the index. `make repo` writes the repository of the bundled applications
-to `build/repo/`. On the host, `python3 -m http.server -d build/repo
-8000` serves it to a guest under QEMU user networking as
-`http://10.0.2.2:8000`, the URL that the shipped `/etc/pkg.conf` names.
+the index. Each architecture has its own repository (A9). `make repo`
+writes the repository of the bundled applications to `build/repo/x86_64/`
+and `make ARCH=aarch64 repo` to `build/repo/aarch64/`. On the host,
+`python3 -m http.server -d build/repo 8000` serves both to a guest under
+QEMU user networking. The shipped `/etc/pkg.conf` names
+`http://10.0.2.2:8000/$arch`, and `pkg` replaces `$arch` in a repository
+URL with the machine name of the system. An index entry whose `arch`
+differs from that machine is skipped, so `search`, `install` and
+`upgrade` see only the packages that run on the system.
 
 ### Index format
 
@@ -331,7 +343,7 @@ line and describes one archive:
     size 2097
     sha256 dcf4d48dd1e2157ead0d7d5970d4080835c985e3213940296749b37323a0c66f
 
-The keys `name`, `version`, `summary`, `depends`, `conflicts`,
+The keys `name`, `version`, `summary`, `arch`, `depends`, `conflicts`,
 `provides` and `needs` are copied from the manifest of the archive and
 parsed by the manifest parser, so they follow the rules of the manifest.
 `path` locates the archive relative to the repository URL and consists
@@ -396,7 +408,9 @@ The private key stays out of git. The build uses
 exist, or the file that the make variable `PKG_KEY` names. Every build
 derives the public half into `build/pkg/signing.pub` and copies it to
 `/etc/pkg/keys/build.pub` in the root tree when its content changed.
-`make repo` signs `build/repo/` with the same key.
+`make repo` signs `build/repo/x86_64/` with the same key. The aarch64
+build uses `build/aarch64/pkg/signing.key` in the same way and signs
+`build/repo/aarch64/`.
 
 To rotate the key, replace `build/pkg/signing.key`, or the file that
 `PKG_KEY` names, with a new key from `build/host/pkgsign keygen FILE`.

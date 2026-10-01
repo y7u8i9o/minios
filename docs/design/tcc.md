@@ -17,7 +17,9 @@ files are exempt from the minios line count and naming conventions.
 
 ## Configuration
 
-The compiler is built for the x86_64 target only. The bound checker, the
+The compiler is built for the target of the system, `TCC_TARGET_X86_64` on
+x86_64 and `TCC_TARGET_ARM64` on aarch64 (`TCC_TARGET` in `toolchain.mk`,
+A9). The bound checker, the
 backtrace support and the semaphore lock are disabled. `CONFIG_TCC_STATIC`
 is not set: tcc resolves the symbols of a program run with `-run`
 through `dlfcn.h`. The paths are
@@ -27,12 +29,21 @@ headers), `CONFIG_TCC_SYSINCLUDEPATHS {B}/include:/usr/include`,
 `CONFIG_TCC_ELFINTERP /lib/ld.so`. The object depends on the Makefile, so
 that a change of these flags rebuilds it.
 
+On aarch64 a program that writes code must clean the data cache and
+invalidate the instruction cache before it runs that code. `tcc -run` calls
+`__clear_cache` from libgcc for this, which runs the cache maintenance
+instructions and reads `CTR_EL0` at EL0. The kernel enables both on every
+CPU (`SCTLR_EL1.UCI` and `UCT`, `cpu_init_el0_access`).
+
 ## Installed files
 
 - `/usr/lib/tcc/libtcc1.a`: the runtime library, built from `lib/` with
-  the cross compiler: `libtcc1.c` (integer and floating conversions),
-  `va_list.c`, `builtin.c`, `stdatomic.c`, `atomic.S`, `dsohandle.c`,
-  `alloca.S` and `alloca-bt.S`. `tcov.c` is left out, because the
+  the cross compiler: `builtin.c`, `stdatomic.c`, `atomic.S`,
+  `dsohandle.c`, `alloca.S` and `alloca-bt.S`, on x86_64 with
+  `libtcc1.c` (integer and floating conversions) and `va_list.c`, and on
+  aarch64 with `lib-arm64.c` (the binary128 `long double` arithmetic) and
+  `armflush.c` (`__clear_cache`). `armflush.c` is compiled with
+  `__arm64_clear_cache` defined as the GCC builtin `__builtin___clear_cache`. `tcov.c` is left out, because the
   coverage support needs the file locks of `fcntl`, and the kernel
   implements none. `runmain.o` is installed beside the library.
 - `/usr/lib/tcc/include/`: tcc's own `stdarg.h`, `stddef.h`, `stdbool.h`,

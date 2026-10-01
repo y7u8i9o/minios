@@ -36,6 +36,13 @@ check search "$(pkg search | cut -d' ' -f1-3 | tr '\n' ' ')" "repohello 1.0 main
 check search-pattern "$(pkg search Hello)" "repohello 1.0 main Hello from a repository"
 check search-summary "$(pkg search library | cut -d' ' -f1)" "repolib"
 check search-none "$(pkg search nothing)" ""
+
+# An index entry for another machine is not listed.
+conf $URL/otherarch
+check otherarch-update "$(pkg update 2>&1)" "main: 2 packages from $URL/otherarch"
+check otherarch-search "$(pkg search | cut -d' ' -f1 | tr '\n' ' ')" "repolib repoprog "
+conf $URL/v1
+pkg update > /dev/null
 check list-empty "$(pkg list)" ""
 
 # repoprog is installed by name. It depends on repohello and needs

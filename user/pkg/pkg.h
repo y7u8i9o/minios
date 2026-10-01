@@ -21,6 +21,7 @@ struct pkg_handler { char type[48]; char command[128]; };
 
 struct manifest {
     char name[PKG_NAME_MAX], version[PKG_VERSION_MAX], summary[160];
+    char arch[16];              /* machine of the ELF files, empty when there are none */
     struct pkg_dep deps[PKG_MAX_DEPS]; int ndeps;
     char conflicts[PKG_MAX_DEPS][PKG_NAME_MAX]; int nconflicts;
     struct pkg_lib provides[PKG_MAX_LIBS]; int nprovides;
@@ -30,6 +31,9 @@ struct manifest {
     struct pkg_handler handlers[PKG_MAX_MIME]; int nhandlers;
     char icon[128];
 };
+
+/* The machine name of the running system, as uname -m prints it (pkg.c). */
+const char *system_arch(void);
 
 /* manifest.c. Errors are described in err. */
 int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, size_t errlen);
@@ -65,6 +69,9 @@ int elf_is(const uint8_t *data, size_t len);
 int elf_needed(const uint8_t *data, size_t len, char (*names)[PKG_NAME_MAX], int max);
 int elf_undefined(const uint8_t *data, size_t len, elf_symbol_fn fn, void *arg);
 int elf_defines(const uint8_t *data, size_t len, const char *name);
+/* The machine name of an ELF file in the form of uname -m: x86_64,
+ * aarch64, or unknown. */
+const char *elf_arch(const uint8_t *data, size_t len);
 
 /* db.c: the records under <prefix>/lib/pkg and the tables the desktop reads. */
 struct owned { char path[PKG_PATH_MAX]; size_t size; uint32_t crc; };

@@ -105,6 +105,33 @@ static void config_file(char *path, size_t n)
         snprintf(path, n, "%s/etc/pkg.conf", sysroot);
 }
 
+/* Replace every $arch in a repository URL with the machine name of the
+ * system, so that one configuration names the repository of each
+ * architecture. A URL that would become too long is left unchanged. */
+static void expand_arch(char *url, size_t size)
+{
+    static const char token[] = "$arch";
+    char out[PKG_URL_MAX];
+    size_t o = 0;
+    const char *arch = system_arch();
+    for (const char *p = url; *p; ) {
+        if (strncmp(p, token, sizeof token - 1) == 0) {
+            size_t n = strlen(arch);
+            if (o + n >= sizeof out)
+                return;
+            memcpy(out + o, arch, n);
+            o += n;
+            p += sizeof token - 1;
+        } else {
+            if (o + 1 >= sizeof out)
+                return;
+            out[o++] = *p++;
+        }
+    }
+    out[o] = '\0';
+    strlcpy(url, out, size);
+}
+
 int config_present(void)
 {
     char path[PKG_PATH_MAX];
@@ -135,6 +162,7 @@ int config_read(struct repo_config *c)
         int fields = sscanf(line, "%15s %511s %511s %1s", key, a, b, extra);
         if (strcmp(key, "repo") == 0 && fields == 3) {
             struct http_url u;
+            expand_arch(b, sizeof b);
             size_t ul = strlen(b);
             while (ul > 7 && b[ul - 1] == '/')
                 b[--ul] = '\0';
@@ -264,7 +292,7 @@ static int archive_path_valid(const char *p)
  * own. */
 static int entry_parse(struct index_entry *e, char *text, char *err, size_t errlen)
 {
-    static const char *const manifest_keys[] = { "name", "version", "summary", "depends", "conflicts", "provides", "needs" };
+    static const char *const manifest_keys[] = { "name", "version", "summary", "arch", "depends", "conflicts", "provides", "needs" };
     char *manifest = malloc(strlen(text) + 1), *line;
     size_t mlen = 0;
     int have_size = 0, have_sha = 0, r = 0;
@@ -379,6 +407,13 @@ static int index_parse(struct index *ix, int repo, char *text, char *err, size_t
             return -1;
         }
         e->repo = repo;
+        /* An entry for another machine is skipped, so search, install and
+         * upgrade find only the packages that can run here. */
+        if (e->m.arch[0] && strcmp(e->m.arch, system_arch()) != 0) {
+            *end = saved;
+            text = end;
+            continue;
+        }
         for (int i = 0; i < ix->n; i++)
             if (ix->entries[i].repo == repo && strcmp(ix->entries[i].m.name, e->m.name) == 0 &&
                 strcmp(ix->entries[i].m.version, e->m.version) == 0) {

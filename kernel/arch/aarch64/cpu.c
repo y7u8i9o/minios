@@ -8,6 +8,22 @@
 extern char boot_stack_top[];
 extern char exception_vectors[];
 
+/* Settings of the calling CPU that every CPU needs: FP and SIMD
+ * instructions at EL0 and EL1 (CPACR_EL1.FPEN), because user programs use
+ * them and the kernel saves their registers, and the cache maintenance
+ * instructions and CTR_EL0 at EL0 (SCTLR_EL1.UCI and UCT), because a
+ * program that writes code, such as tcc -run, cleans the data cache and
+ * invalidates the instruction cache itself (A9). */
+void cpu_init_el0_access(void)
+{
+    uint64_t cpacr, sctlr;
+    __asm__ volatile("mrs %0, cpacr_el1" : "=r"(cpacr));
+    __asm__ volatile("msr cpacr_el1, %0; isb" : : "r"(cpacr | (3UL << 20)) : "memory");
+    __asm__ volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+    sctlr |= (1UL << 26) | (1UL << 15);
+    __asm__ volatile("msr sctlr_el1, %0; isb" : : "r"(sctlr) : "memory");
+}
+
 void cpu_init_boot(void)
 {
     struct cpu *c = cpu_by_id(0);
@@ -21,11 +37,7 @@ void cpu_init_boot(void)
     c->online = true;
     c->started = true;
     __asm__ volatile("mrs %0, mpidr_el1" : "=r"(c->arch.mpidr));
-    /* FP and SIMD instructions at EL0 and EL1 (CPACR_EL1.FPEN): user
-     * programs use them, and the kernel saves their registers. */
-    uint64_t cpacr;
-    __asm__ volatile("mrs %0, cpacr_el1" : "=r"(cpacr));
-    __asm__ volatile("msr cpacr_el1, %0; isb" : : "r"(cpacr | (3UL << 20)) : "memory");
+    cpu_init_el0_access();
     spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
     __asm__ volatile("msr tpidr_el1, %0" : : "r"(c) : "memory");
 }

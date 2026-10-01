@@ -57,8 +57,9 @@ COMMANDS
               or of a package file
     verify    compare the recorded size and checksum of every installed
               file with the file on disk
-    build     write a package from a directory holding manifest and
-              files/; the needs lines are derived from the ELF files
+    build     write a package from a directory with manifest and
+              files/, with the arch and needs lines derived from the
+              ELF files
 
 OPTIONS
     --prefix dir   install under dir instead of /home/.local
@@ -72,12 +73,15 @@ CONFIGURATION
     which they are searched, and may set the timeout in seconds for the
     connection and for every wait for data (30 by default):
 
-        repo build http://10.0.2.2:8000
+        repo build http://10.0.2.2:8000/$arch
         timeout 30
 
-    A key file in /etc/pkg/keys has the suffix .pub and holds one line,
-    ed25519 followed by the public key in hexadecimal. The image carries
-    the key of the build as /etc/pkg/keys/build.pub.
+    $arch in a URL is replaced with the machine name of the system.
+    Index entries for another machine are not listed.
+
+    A key file in /etc/pkg/keys has the suffix .pub and contains one
+    line, ed25519 followed by the public key in hexadecimal. The image
+    contains the key of the build as /etc/pkg/keys/build.pub.
 
 EXIT STATUS
     pkg exits with 0 on success and 1 when an operation failed. A
@@ -92,7 +96,7 @@ BUNDLED APPLICATIONS
     Install selected archives, or all of them, with the examples below.
     They are not installed automatically. The package prefix persists on
     the data volume across root image rebuilds. make repo writes the same
-    archives as a signed repository to build/repo on the host.
+    archives as a signed repository to build/repo/ARCH on the host.
 
 FILES
     /etc/pkg.conf                        the repositories

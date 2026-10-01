@@ -1,6 +1,6 @@
 # minios
 
-A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU, with an aarch64 port in progress (`docs/plan/arm64.md`). The design summary and the milestone record are in `docs/plan/` (index in `docs/plan/README.md`). Read the plan that contains a milestone before starting it and mark the milestone completed in that file.
+A monolithic x86_64 and aarch64 kernel written in C, booted by Limine, running under QEMU. The aarch64 port is described in `docs/plan/arm64.md`. The design summary and the milestone record are in `docs/plan/` (index in `docs/plan/README.md`). Read the plan that contains a milestone before starting it and mark the milestone completed in that file.
 
 ## Design decisions (fixed)
 

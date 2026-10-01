@@ -90,3 +90,5 @@ static inline uint64_t arch_cycles(void)
 
 /* Set up the boot CPU structure and point TPIDR_EL1 at it. */
 void cpu_init_boot(void);
+/* FP and SIMD access and EL0 cache maintenance on the calling CPU. */
+void cpu_init_el0_access(void);

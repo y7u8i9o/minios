@@ -354,7 +354,7 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. The aarch64 implementation (A4 to A8)
+## 16. The aarch64 implementation (A4 to A9)
 
 The whole generic kernel, with its self-tests except `test_cpu.c`
 (`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
@@ -453,6 +453,11 @@ SGIs 1 to 3, and the TLB is flushed by broadcast TLBI, as section 12
 describes. Shared peripheral interrupts and LPIs are routed to the boot
 CPU.
 
+`cpu_init_el0_access` enables the FP and SIMD instructions
+(`CPACR_EL1.FPEN`) and, since A9, the cache maintenance instructions and
+`CTR_EL0` at EL0 (`SCTLR_EL1.UCI` and `UCT`) on every CPU. A program that
+writes code, such as `tcc -run`, cleans and invalidates the caches itself.
+
 Self-tests run at stages of the start-up sequence (`enum ktest_stage`,
 `KTEST_DEFINE_STAGE`). `KTEST_EARLY` tests run after the boot environment
 is logged (`boot`, `exception`). `KTEST_MEMORY` tests run after the slab
@@ -491,7 +496,8 @@ designs that A6 found encoded for x86_64 are now stated for both
 architectures: the thread local storage layout (`minios/dl.h`), the signal
 frame interface between `arch_signal_setup_frame` and the libc restorer (a
 return address on the stack on x86_64, x30 on aarch64), and the
-`long double` format (`libc/src/ldouble.h`). The aarch64 port still lacks
-the tcc backend and package repositories (A9). The kernel self-test `cpu`
-of x86 features and the `kbd` case of the 8042 controller remain x86
+`long double` format (`libc/src/ldouble.h`). Since A9 tcc compiles for
+the arm64 target with its own runtime library, and each architecture has
+its own package repository (`tcc.md`, `packages.md`). The kernel self-test
+`cpu` of x86 features and the `kbd` case of the 8042 controller are x86
 specific.

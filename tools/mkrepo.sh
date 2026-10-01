@@ -4,7 +4,7 @@
 # PKGSIGN is the host tool tools/pkgsign, KEY a secret key file it wrote.
 # OUTDIR is emptied and receives the archives, the index listing each of
 # them with the manifest keys pkg resolves by (name, version, summary,
-# depends, conflicts, provides, needs) and its path, size and SHA-256
+# arch, depends, conflicts, provides, needs) and its path, size and SHA-256
 # digest, and index.sig, the Ed25519 signature of the index.
 set -e
 PKGSIGN="$1"; KEY="$2"; OUT="$3"
@@ -30,7 +30,7 @@ for archive in "$@"; do
         # An entry begins with its name line.
         echo
         grep -E '^name[[:space:]]' "$TMP/manifest"
-        grep -E '^(version|summary|depends|conflicts|provides|needs)[[:space:]]' "$TMP/manifest"
+        grep -E '^(version|summary|arch|depends|conflicts|provides|needs)[[:space:]]' "$TMP/manifest"
         echo "path $base"
         echo "size $size"
         echo "sha256 $sha"

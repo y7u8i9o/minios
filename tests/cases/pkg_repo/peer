@@ -8,7 +8,8 @@
 # v2 with one byte of repohello-1.1.mpk changed after signing, and badsize
 # is v2 with repohello-1.1.mpk longer than the index says. badindex is v1
 # with a summary in the index changed after signing, and otherkey is v1
-# signed by a key the image does not trust.
+# signed by a key the image does not trust. otherarch is v1 with the arch
+# line of repohello changed to the other machine and signed again.
 set -eu
 CASE="$(cd "$(dirname "$0")" && pwd)"
 FIX="$BUILD/user/pkgrepo"
@@ -31,6 +32,14 @@ sed 's/^summary Hello from a repository$/summary Hello from somebody else/' "$WW
 cmp -s "$WWW/v1/index" "$WWW/badindex/index" && { echo "peer: the index was not changed" >&2; exit 1; }
 "$SIGN" keygen "$OUTDIR/other.key"
 "$MKREPO" "$SIGN" "$OUTDIR/other.key" "$WWW/otherkey" $V1
+OTHER=aarch64
+[ "${ARCH:-x86_64}" = aarch64 ] && OTHER=x86_64
+cp -R "$WWW/v1" "$WWW/otherarch"
+awk -v other="$OTHER" '$1 == "name" { name = $2 } $1 == "arch" && name == "repohello" { $0 = "arch " other } { print }' \
+    "$WWW/v1/index" > "$WWW/otherarch/index"
+grep -q "^arch $OTHER\$" "$WWW/otherarch/index" || { echo "peer: the arch line was not changed" >&2; exit 1; }
+rm -f "$WWW/otherarch/index.sig"
+"$SIGN" sign "$KEY" "$WWW/otherarch/index" > /dev/null
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 python3 "$CASE/server.py" "$PORT" "$WWW" > "$PEER_LOG" 2>&1 &
 SERVER=$!

@@ -106,6 +106,18 @@ static int parse_lib(struct pkg_lib *l, char *value)
     return 0;
 }
 
+/* A machine name: lowercase letters, digits and underscores. */
+static int arch_valid(const char *value)
+{
+    size_t n = strlen(value);
+    if (n == 0 || n >= 16)
+        return 0;
+    for (size_t i = 0; i < n; i++)
+        if (!((value[i] >= 'a' && value[i] <= 'z') || (value[i] >= '0' && value[i] <= '9') || value[i] == '_'))
+            return 0;
+    return 1;
+}
+
 int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, size_t errlen)
 {
     memset(m, 0, sizeof *m);
@@ -147,6 +159,10 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
             if (m->summary[0]) return fail(err, errlen, line, "summary given twice", NULL);
             if (strlen(value) >= sizeof m->summary) return fail(err, errlen, line, "summary too long", NULL);
             strlcpy(m->summary, value, sizeof m->summary);
+        } else if (strcmp(key, "arch") == 0) {
+            if (m->arch[0]) return fail(err, errlen, line, "arch given twice", NULL);
+            if (!arch_valid(value)) return fail(err, errlen, line, "invalid arch", value);
+            strlcpy(m->arch, value, sizeof m->arch);
         } else if (strcmp(key, "depends") == 0) {
             if (m->ndeps >= PKG_MAX_DEPS) return fail(err, errlen, line, "too many depends lines", NULL);
             struct pkg_dep *d = &m->deps[m->ndeps];
@@ -240,6 +256,8 @@ int manifest_read(struct manifest *m, const char *path, char *err, size_t errlen
 void manifest_write(FILE *f, const struct manifest *m)
 {
     fprintf(f, "name %s\nversion %s\nsummary %s\n", m->name, m->version, m->summary);
+    if (m->arch[0])
+        fprintf(f, "arch %s\n", m->arch);
     for (int i = 0; i < m->ndeps; i++) {
         if (m->deps[i].op[0])
             fprintf(f, "depends %s %s %s\n", m->deps[i].name, m->deps[i].op, m->deps[i].version);

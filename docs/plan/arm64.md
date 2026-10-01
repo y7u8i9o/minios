@@ -330,8 +330,31 @@ On aarch64 under HVF the cases `smp`, `smp_user`, `lockfree`, `sched`,
 and `jobcontrol` pass. On x86_64 the same cases of the changed modules
 pass.
 
-### A9. aarch64 user tools
+### A9. aarch64 user tools (completed 2026-10-02)
 
 - tcc is built with its arm64 backend, and the `as` and `ld` wrappers and
   their manual pages are updated.
-- Package repositories are kept per architecture.
+- Each architecture has its own package repository.
+
+tcc has been built with its arm64 backend since A6. A9 builds its runtime
+library from the arm64 sources of tinycc, `lib-arm64.c` for the binary128
+`long double` arithmetic and `armflush.c` for `__clear_cache`, in place of
+the x86 sources. `tcc -run` failed with SIGSEGV, because libgcc's
+`__clear_cache` runs the cache maintenance instructions at EL0, which the
+kernel did not enable. `cpu_init_el0_access` now sets `SCTLR_EL1.UCI` and
+`UCT` on every CPU. The `tcc` test assembles an aarch64 source on aarch64,
+and `as(1)` names both architectures. `ld` and `ld(1)` apply to both
+architectures unchanged.
+
+A package now records the machine of its ELF files in the manifest key
+`arch`, which `pkg build` and `tools/mkpkg.sh` derive from the ELF files.
+The installer refuses a package or an ELF file for another machine, and
+the index of a repository contains the `arch` line, so `pkg` skips the
+entries for another machine. `make repo` writes `build/repo/$(ARCH)`, and
+the shipped `/etc/pkg.conf` names `http://10.0.2.2:8000/$arch`, which
+`pkg` expands to the machine name of the system. The `pkg` test checks
+the refusal of a package for the other machine, and the `pkg_repo` test
+checks that an index entry for the other machine is not listed.
+
+The cases `tcc`, `pkg`, `pkg_repo` and `pkg_apps` pass on aarch64 under
+HVF and on x86_64.

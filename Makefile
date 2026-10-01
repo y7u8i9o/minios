@@ -31,7 +31,9 @@ PKGSIGN  := $(BUILD)/host/pkgsign
 PKG_KEY  ?= $(BUILD)/pkg/signing.key
 PKG_KEY_FILE := $(abspath $(PKG_KEY))
 PKG_PUB  := $(BUILD)/pkg/signing.pub
-REPO     := $(BUILD)/repo
+# The repository of each architecture is a directory of build/repo, so
+# that one HTTP server serves both (docs/design/packages.md).
+REPO     := $(TOP)/build/repo/$(ARCH)
 
 export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKG_KEY_FILE PKG_PUB REPO
 
@@ -116,9 +118,9 @@ user: libc libfont libwire libaudio libgui libedit $(PKG_PUB)
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to
-# build/repo, with the archives, the index and its signature. `python3 -m
-# http.server -d build/repo 8000` serves it to a guest as
-# http://10.0.2.2:8000.
+# build/repo/$(ARCH), with the archives, the index and its signature.
+# `python3 -m http.server -d build/repo 8000` serves it to a guest as
+# http://10.0.2.2:8000/$(ARCH), the URL of the shipped /etc/pkg.conf.
 repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 	$(MAKE) -C user repo
 

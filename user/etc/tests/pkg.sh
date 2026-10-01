@@ -24,6 +24,16 @@ cp $FIX/libpkgfix.so lib/files/lib/libpkgfix.so
 check build-lib "$($PKG build lib)" "pkgfix-1.0.mpk"
 check info-needs "$($PKG info pkgfix-1.0.mpk | grep needs)" "needs libc.so 1"
 check info-file "$($PKG info pkgfix-1.0.mpk | grep '^file' | cut -d' ' -f2)" "lib/libpkgfix.so"
+check info-arch "$($PKG info pkgfix-1.0.mpk | grep '^arch')" "arch $(uname -m)"
+
+# A package for the other machine is refused.
+OTHER=aarch64
+test "$(uname -m)" = aarch64 && OTHER=x86_64
+mkdir -p other/files/share
+printf 'data\n' > other/files/share/data
+printf 'name pkgother\nversion 1.0\nsummary Another machine\narch %s\n' $OTHER > other/manifest
+check build-other "$($PKG build other)" "pkgother-1.0.mpk"
+check arch-refused "$($PKG install pkgother-1.0.mpk 2>&1)" "pkg: pkgother: the package is built for $OTHER, and the system is $(uname -m)"
 
 mkdir -p prog/files/bin prog/files/share/pkgprog
 printf 'name pkgprog\nversion 1.0\nsummary A program\ndepends pkgfix >= 1.0\nneeds libpkgfix.so 1\nlauncher Prog bin/pkgprog\nmime-type text/x-pkgfix pkf\nmime-handler text/x-pkgfix bin/pkgprog\n' > prog/manifest

@@ -39,6 +39,20 @@ int elf_is(const uint8_t *data, size_t len)
     return len >= sizeof(struct ehdr) && memcmp(data, "\x7f" "ELF", 4) == 0 && data[4] == 2 && data[5] == 1;
 }
 
+#define EM_X86_64 62
+#define EM_AARCH64 183
+
+const char *elf_arch(const uint8_t *data, size_t len)
+{
+    if (!elf_is(data, len))
+        return "unknown";
+    switch (((const struct ehdr *)data)->e_machine) {
+    case EM_X86_64:  return "x86_64";
+    case EM_AARCH64: return "aarch64";
+    default:         return "unknown";
+    }
+}
+
 static const struct shdr *sections(const uint8_t *data, size_t len, int *count)
 {
     if (!elf_is(data, len))

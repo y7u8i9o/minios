@@ -30,6 +30,15 @@ ld -o abl -dynamic-linker /lib/ld.so -Ttext-segment=0x400000 -z now --hash-style
 check ld-run "$(./abl)" "42"
 ld -o abx -e main a.o 2> /dev/null; test $? != 0 || echo "FAIL ld-entry-not-rejected"
 ld --nosuchoption a.o 2> /dev/null; test $? != 0 || echo "FAIL ld-unknown-option-not-rejected"
+if test "$(uname -m)" = "aarch64"; then
+cat > three.s <<'S'
+    .text
+    .globl three
+three:
+    mov w0, #3
+    ret
+S
+else
 cat > three.s <<'S'
     .text
     .globl three
@@ -37,6 +46,7 @@ three:
     movl $3, %eax
     ret
 S
+fi
 as -o three.o three.s; check as-assemble "$?" "0"
 cat > c.c <<'C'
 #include <stdio.h>

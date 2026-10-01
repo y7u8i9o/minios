@@ -65,9 +65,7 @@ __noreturn void ap_main(struct cpu *c)
 {
     __asm__ volatile("msr tpidr_el1, %0" : : "r"(c) : "memory");
     arch_init_traps();
-    uint64_t cpacr;
-    __asm__ volatile("mrs %0, cpacr_el1" : "=r"(cpacr));
-    __asm__ volatile("msr cpacr_el1, %0; isb" : : "r"(cpacr | (3UL << 20)) : "memory");
+    cpu_init_el0_access();
     __atomic_store_n(&c->online, true, __ATOMIC_RELEASE);
     while (!__atomic_load_n(&aps_released, __ATOMIC_ACQUIRE))
         cpu_relax();
