@@ -24,7 +24,7 @@ VIDEO="${VIDEO%@*}"
 true
 cp "$LIMINE_DIR/limine-bios.sys" "$LIMINE_DIR/limine-bios-cd.bin" \
    "$LIMINE_DIR/limine-uefi-cd.bin" "$ROOT/boot/limine/"
-cp "$LIMINE_DIR/BOOTX64.EFI" "$ROOT/EFI/BOOT/"
+cp "$LIMINE_DIR/BOOTX64.EFI" "$LIMINE_DIR/BOOTAA64.EFI" "$ROOT/EFI/BOOT/"
 
 xorriso -as mkisofs -quiet -R -r -J \
     -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table \

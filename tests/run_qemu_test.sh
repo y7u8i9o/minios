@@ -212,11 +212,31 @@ fi
 RNGFLAGS="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0,disable-legacy=on"
 [ -f "$CASE/rng-zero" ] && RNGFLAGS="-object rng-random,id=rng0,filename=/dev/zero -device virtio-rng-pci,rng=rng0,disable-legacy=on"
 [ -f "$CASE/no-rng" ] && RNGFLAGS=""
-"$QEMU" -M q35 -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
+# The machine of the architecture. x86_64 is the q35 PC with the
+# isa-debug-exit device for the exit status. aarch64 is virt with the edk2
+# UEFI firmware that QEMU installs (EDK2_AARCH64 overrides its path); the
+# image is a CD on a SCSI controller, and the guest ends a test with a PSCI
+# power off, which carries no exit status.
+case "${ARCH:-x86_64}" in
+    x86_64)
+        MACHINE="-M q35 -device isa-debug-exit,iobase=0xf4,iosize=0x4"
+        BOOTFLAGS="-cdrom $ISO"
+        ;;
+    aarch64)
+        EDK2_AARCH64="${EDK2_AARCH64:-$(dirname "$(command -v "$QEMU")")/../share/qemu/edk2-aarch64-code.fd}"
+        [ -f "$EDK2_AARCH64" ] || fail "no edk2 firmware at $EDK2_AARCH64"
+        CPU=max
+        [ "$ACCEL" = hvf ] && CPU=host
+        MACHINE="-M virt -cpu $CPU -bios $EDK2_AARCH64"
+        BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
+        VGAFLAGS=""
+        ;;
+    *) fail "unknown ARCH ${ARCH}" ;;
+esac
+"$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
     -serial "file:$SERIAL" \
-    -device isa-debug-exit,iobase=0xf4,iosize=0x4 \
     $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
-    -cdrom "$ISO" >"$OUTDIR/qemu.log" 2>&1 &
+    $BOOTFLAGS >"$OUTDIR/qemu.log" 2>&1 &
 QPID=$!
 ELAPSED=0
 while kill -0 $QPID 2>/dev/null; do
@@ -242,14 +262,17 @@ if grep -q "TEST FAIL" "$SERIAL"; then
     echo "FAIL $NAME: $(grep -m1 'TEST FAIL' "$SERIAL")"
     STATUS=1
 fi
-if [ -f "$CASE/expect" ]; then
+# expect.$ARCH replaces expect where the output names architecture state.
+EXPECT="$CASE/expect"
+[ -f "$CASE/expect.${ARCH:-x86_64}" ] && EXPECT="$CASE/expect.${ARCH:-x86_64}"
+if [ -f "$EXPECT" ]; then
     while IFS= read -r pat; do
         [ -z "$pat" ] && continue
         if ! grep -E -q -- "$pat" "$SERIAL"; then
             echo "FAIL $NAME: missing /$pat/"
             STATUS=1
         fi
-    done < "$CASE/expect"
+    done < "$EXPECT"
 fi
 if [ -f "$CASE/reject" ]; then
     while IFS= read -r pat; do

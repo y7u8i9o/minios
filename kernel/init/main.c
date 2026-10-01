@@ -140,6 +140,9 @@ __noreturn void kmain(void)
     ksyms_init();
     arch_init_cpu_features();
     boot_log_environment();
+#if CONFIG_TESTS
+    ktest_run_early();
+#endif
 
     pmm_init();
     vmm_init();

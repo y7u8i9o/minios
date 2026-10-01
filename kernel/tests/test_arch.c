@@ -33,21 +33,33 @@ static void check_frame(void)
     ktest_assert(frame_pc(&tf) == 0x402000 && frame_sp(&tf) == 0x7fffffffd000, "pc or sp not stored");
     ktest_assert(SYSARG0(&tf) == 17, "arg0 is not the first system call argument");
     ktest_assert((long)frame_retval(&tf) == -EINTR, "return value %ld", (long)frame_retval(&tf));
+#if defined(__x86_64__)
     /* On x86_64 the number and the result share rax: a system call that
      * is restarted must find its number replaced by the result. */
     ktest_assert(frame_syscall_nr(&tf) == frame_retval(&tf), "number and result registers differ");
+#endif
 
     struct trapframe kf;
     memset(&kf, 0, sizeof kf);
     ktest_assert(!frame_from_user(&kf), "zeroed frame marked as user mode");
 
+    /* A write from user mode to a present page, and an instruction fetch
+     * from an unmapped kernel page. */
     struct fault_info fi;
-    kf.error = 0x7;                     /* present, write, user */
+#if defined(__x86_64__)
+    kf.error = 0x7;                     /* #PF error code: present, write, user */
+#elif defined(__aarch64__)
+    kf.esr = (0x24UL << 26) | (1UL << 6) | 0x0f;   /* data abort from EL0, WnR, permission fault */
+#endif
     arch_fault_decode(&kf, &fi);
-    ktest_assert(fi.present && fi.write && fi.user && !fi.exec, "fault 0x7 decoded wrongly");
-    kf.error = 0x10;                    /* instruction fetch from an unmapped kernel page */
+    ktest_assert(fi.present && fi.write && fi.user && !fi.exec, "user write fault decoded wrongly");
+#if defined(__x86_64__)
+    kf.error = 0x10;                    /* instruction fetch */
+#elif defined(__aarch64__)
+    kf.esr = (0x21UL << 26) | 0x07;     /* instruction abort at EL1, translation fault */
+#endif
     arch_fault_decode(&kf, &fi);
-    ktest_assert(!fi.present && !fi.write && !fi.user && fi.exec, "fault 0x10 decoded wrongly");
+    ktest_assert(!fi.present && !fi.write && !fi.user && fi.exec, "kernel fetch fault decoded wrongly");
 }
 
 static void check_irq_state(void)
@@ -80,7 +92,13 @@ static void check_tls(void)
     uint64_t saved = arch_get_tls(t);
     arch_set_tls(t, 0x12345000);
     ktest_assert(arch_get_tls(t) == 0x12345000, "TLS base not stored");
-    ktest_assert(rdmsr(MSR_FS_BASE) == 0x12345000, "TLS base not loaded for the calling thread");
+#if defined(__x86_64__)
+    uint64_t loaded = rdmsr(MSR_FS_BASE);
+#elif defined(__aarch64__)
+    uint64_t loaded;
+    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(loaded));
+#endif
+    ktest_assert(loaded == 0x12345000, "TLS base not loaded for the calling thread");
     arch_set_tls(t, saved);
 }
 

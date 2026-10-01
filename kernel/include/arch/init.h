@@ -4,8 +4,8 @@
  * kmain calls them. The entry code (start.S) calls kmain on the boot stack
  * with interrupts disabled. */
 
-/* Load the descriptor tables of the boot CPU and its struct cpu, so that
- * cpu_current() works. Runs before the kernel log ring is allocated. */
+/* Set up the boot CPU: its descriptor tables where the architecture has
+ * them, and its struct cpu, so that cpu_current() works. Runs before the kernel log ring is allocated. */
 void arch_init_cpu_boot(void);
 /* Install the exception and interrupt entry points. */
 void arch_init_traps(void);

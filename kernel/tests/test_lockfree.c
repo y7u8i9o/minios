@@ -39,7 +39,7 @@ static void lf_worker(void *arg)
 static bool rcu_called;
 static void test_rcu_callback(struct rcu_head *head)
 {
-    ktest_assert(read_rflags() & RFLAGS_IF, "RCU callback ran with interrupts disabled");
+    ktest_assert(arch_irqs_enabled(), "RCU callback ran with interrupts disabled");
     /* VMA reclamation may close the last file reference and sleep in a
      * filesystem transaction. Exercise that callback contract directly. */
     sleep_ms(2);

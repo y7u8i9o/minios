@@ -42,4 +42,4 @@ static void test_boot(void)
     ktest_assert(!cmdline_lookup("tes", val, sizeof val), "prefix matched as key");
     kprintf("kprintf works: %s %d %x\n", "ok", 1, 0xbeef);
 }
-KTEST_DEFINE("boot", test_boot);
+KTEST_DEFINE_EARLY("boot", test_boot);

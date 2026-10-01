@@ -1,0 +1,35 @@
+#pragma once
+#include <kernel.h>
+
+/* Platform services that generic code calls (docs/design/arch.md),
+ * implemented by the architecture for its QEMU machine: the q35 PC on
+ * x86_64, virt on aarch64. The console UART implements
+ * <drivers/serial.h>. */
+
+struct rtc_date;
+
+/* Unconditional power off (the q35 ACPI PM1a control port, PSCI
+ * SYSTEM_OFF on virt), halting if that fails. */
+__noreturn void platform_power_off(void);
+/* Reboot (the 8042 reset line, PSCI SYSTEM_RESET on virt). */
+__noreturn void platform_reboot(void);
+/* End a QEMU test run with an exit status. On the PC the isa-debug-exit
+ * device on port 0xf4 makes QEMU exit with (code << 1) | 1 and the call
+ * returns if the device is not present; on virt QEMU powers off, without
+ * the status. */
+void platform_test_exit(int code);
+
+/* Read the battery backed clock as a UTC calendar date. */
+void platform_rtc_read(struct rtc_date *d);
+
+/* 32 bit read and write of the PCI configuration space of one function.
+ * off is a multiple of 4. */
+uint32_t platform_pci_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off);
+void platform_pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off, uint32_t v);
+/* The MSI address and data that deliver interrupt number irq to the
+ * calling CPU. */
+void platform_msi_compose(unsigned irq, uint64_t *addr, uint32_t *data);
+
+/* Register the devices that only this platform has (the PS/2 keyboard and
+ * mouse on the PC). Called after the input core is initialized. */
+void platform_devices_init(void);

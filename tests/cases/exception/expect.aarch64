@@ -1,0 +1,4 @@
+undefined instruction, esr=02000000
+PC=ffffffff8[0-9a-f]{7} SP=[0-9a-f]{16}
+X29=[0-9a-f]{16}
+kernel panic: unhandled exception: undefined instruction

@@ -60,10 +60,22 @@ CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
 # disabled until the kernel migrates from FXSAVE to XSAVE/XRSTOR and enables
 # the matching XCR0 state components. TCC_TARGET selects the backend of the
 # bundled tcc.
+# ARCH_USERLAND is "no" while an architecture runs the kernel only: the
+# build and the boot tests then use an empty initrd and no root disk.
 ifeq ($(ARCH),x86_64)
 KARCHFLAGS := -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387
 UARCHFLAGS := -msse2 -mfpmath=sse -mno-avx
 TCC_TARGET := X86_64
+ARCH_USERLAND := yes
+else ifeq ($(ARCH),aarch64)
+# The kernel uses general purpose registers only and inline LL/SC or LSE
+# atomics instead of the libgcc helpers, which select an implementation at
+# run time through the auxiliary vector. The small code model reaches the
+# whole image with PC relative addressing from its higher half address.
+KARCHFLAGS := -march=armv8-a -mgeneral-regs-only -mno-outline-atomics -mcmodel=small
+UARCHFLAGS := -march=armv8-a
+TCC_TARGET := ARM64
+ARCH_USERLAND := no
 else
 $(error ARCH=$(ARCH) is not supported; see docs/plan/arm64.md)
 endif

@@ -8,7 +8,7 @@
 /* M6: the APIC timer ticks at 1000 Hz and sleep_ms waits accordingly. */
 static void test_timer(void)
 {
-    ktest_assert(read_rflags() & RFLAGS_IF, "interrupts are disabled");
+    ktest_assert(arch_irqs_enabled(), "interrupts are disabled");
     uint64_t t0 = timer_ticks();
     sleep_ms(50);
     uint64_t t1 = timer_ticks();

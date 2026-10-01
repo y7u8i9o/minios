@@ -1,7 +1,13 @@
 include toolchain.mk
 
 TOP      := $(CURDIR)
+# The x86_64 build is in build/; another architecture builds into
+# build/$(ARCH)/, so that both can exist side by side.
+ifeq ($(ARCH),x86_64)
 BUILD    := $(TOP)/build
+else
+BUILD    := $(TOP)/build/$(ARCH)
+endif
 KERNEL   := $(BUILD)/kernel.elf
 ISO      := $(BUILD)/minios.iso
 INITRD   := $(BUILD)/initrd.tar
@@ -27,7 +33,7 @@ PKG_KEY_FILE := $(abspath $(PKG_KEY))
 PKG_PUB  := $(BUILD)/pkg/signing.pub
 REPO     := $(BUILD)/repo
 
-export TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKG_KEY_FILE PKG_PUB REPO
+export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKG_KEY_FILE PKG_PUB REPO
 
 .PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo check-pkg $(DISK)
 
@@ -172,8 +178,16 @@ gdb:
 
 # CASES="gui gui_wm" runs only those cases; the whole suite takes too
 # long to run for every change.
+ifeq ($(ARCH_USERLAND),yes)
 test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+else
+# An architecture without user programs boots the kernel with an empty
+# initrd and no disk; only kernel self-tests can run.
+test: kernel $(LIMINE) $(MKFAT)
+	@mkdir -p $(BUILD)/empty && tar --format ustar -cf $(INITRD) -C $(BUILD)/empty .
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK= MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+endif
 
 # Host self test of the network peer lifecycle of the boot harness: a
 # fake QEMU, the real peer tool, no guest (docs/design/network.md).

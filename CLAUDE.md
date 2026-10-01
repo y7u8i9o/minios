@@ -1,17 +1,17 @@
 # minios
 
-A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU. The design summary and the milestone record are in `docs/plan/` (index in `docs/plan/README.md`). Read the plan that contains a milestone before starting it and mark the milestone completed in that file.
+A monolithic x86_64 kernel written in C, booted by Limine, running under QEMU, with an aarch64 port in progress (`docs/plan/arm64.md`). The design summary and the milestone record are in `docs/plan/` (index in `docs/plan/README.md`). Read the plan that contains a milestone before starting it and mark the milestone completed in that file.
 
 ## Design decisions (fixed)
 
-- x86_64 only, QEMU only, Limine boot protocol, higher half kernel at 0xffffffff80000000.
-- C17 freestanding, compiled with x86_64-elf-gcc. Assembly in GNU as syntax (`.S` files).
+- x86_64, and aarch64 from milestone A4 of `docs/plan/arm64.md` on (`make ARCH=aarch64`). QEMU only, Limine boot protocol, higher half kernel at 0xffffffff80000000. Generic code reaches the architecture only through the interface of `docs/design/arch.md`.
+- C17 freestanding, compiled with x86_64-elf-gcc or aarch64-elf-gcc. Assembly in GNU as syntax (`.S` files).
 - Processes own address spaces, threads are the scheduling unit. MLFQ scheduler, kernel is not preemptible, rescheduling happens on return to user mode.
 - Buddy physical allocator, slab kernel heap, copy on write fork, swap to a virtio-blk swap device.
 - VFS with mount points and devfs. Custom inode filesystem `mfs`. virtio-blk storage.
 - POSIX subset syscalls, ELF64 user programs dynamically linked against the shared libraries in `/lib` (`init` and `/lib/ld.so` are static), own libc in `libc/`.
 - Single user, no permission enforcement. IPv4 networking over virtio-net (`docs/design/network.md`), no IPv6, forwarding or TLS.
-- SMP since milestone M18 (application processors started through the Limine MP protocol). All per CPU state lives in `struct cpu` accessed through the GS base.
+- SMP since milestone M18 (application processors started through the Limine MP protocol). All per CPU state is in `struct cpu`, reached through `cpu_current()` (the GS base on x86_64, `TPIDR_EL1` on aarch64).
 
 ## Build and run
 

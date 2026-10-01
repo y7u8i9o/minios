@@ -9,6 +9,20 @@
 
 extern const struct ktest __ktests_start[], __ktests_end[];
 
+void ktest_run_early(void)
+{
+    char name[64];
+    if (!cmdline_lookup("test", name, sizeof name))
+        return;
+    for (const struct ktest *t = __ktests_start; t < __ktests_end; t++) {
+        if (t->early && strcmp(t->name, name) == 0) {
+            klog_info("running early test %s", name);
+            t->fn();
+            ktest_pass();
+        }
+    }
+}
+
 void ktest_run_selected(void)
 {
     char name[64];

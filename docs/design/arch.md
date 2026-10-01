@@ -1,15 +1,22 @@
 # Architecture interface
 
 The kernel is divided into generic code and architecture code. The
-architecture code of x86_64 is in `kernel/arch/x86_64/`, and its headers
-are in `kernel/arch/x86_64/include/arch/`. The build selects the directory
-with the `ARCH` variable of `toolchain.mk` (default `x86_64`): `kernel/Makefile`
-compiles `arch/$(ARCH)` and adds `arch/$(ARCH)/include` to the include path,
-so generic code includes `<arch/...>` without naming the architecture. The
-linker script is `arch/$(ARCH)/linker.ld`.
+architecture code of x86_64 is in `kernel/arch/x86_64/` and that of aarch64
+in `kernel/arch/aarch64/`. The build selects the directory with the `ARCH`
+variable of `toolchain.mk` (default `x86_64`): `kernel/Makefile` compiles
+`arch/$(ARCH)` and adds `arch/$(ARCH)/include` to the include path after
+`include`, so generic code includes `<arch/...>` without naming the
+architecture. The linker script is `arch/$(ARCH)/linker.ld`.
+
+The interface headers whose content is the same on every architecture,
+prototypes only, are in `kernel/include/arch/`: `syscall.h`, `signal.h`,
+`init.h`, `smp.h` and `platform.h`. Every other `<arch/...>` header is in
+`kernel/arch/$(ARCH)/include/arch/`, and each architecture has one with the
+same name. A header name exists in only one of the two directories.
 
 Milestones A0 to A3 of the aarch64 port (`docs/plan/arm64.md`) introduced
-the interface described here. A0 covers the CPU and execution state: saved
+the interface described here, and A4 added the aarch64 implementation
+described in section 16. A0 covers the CPU and execution state: saved
 registers, system call entry, signal frames, thread state, interrupt state,
 barriers and page fault decoding. A1 covers the platform: the per CPU
 structure, interrupt numbers and IPIs, the clock and the tick, the devices
@@ -19,7 +26,7 @@ compiler flags. Generic code uses these operations and does not name an
 x86 register, instruction, MSR, I/O port, APIC function or page table bit.
 A second architecture implements the same headers with the same names.
 
-Section 16 lists the dependencies that remain for the aarch64
+Section 17 lists the dependencies that remain for the aarch64
 implementation.
 
 ## 1. Machine identification (`<arch/machine.h>`)
@@ -316,7 +323,47 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. Dependencies that remain
+## 16. The aarch64 implementation (A4)
+
+The whole generic kernel, with its self-tests except `test_cpu.c`
+(`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
+kernel flags are `-march=armv8-a -mgeneral-regs-only -mno-outline-atomics
+-mcmodel=small`. The functions of later milestones stop the kernel with
+`ARCH_TODO` (`arch/aarch64/todo.h`), which names the function and the
+milestone. Implemented are:
+- the entry (`start.S`), which selects `SP_EL1` because Limine may enter
+  with `SPSel` clear, and the boot stack with its guard page;
+- the exception vectors (`vectors.S`), which save a `struct trapframe` and
+  call `trap_dispatch`, and the register and system register dumps of
+  `trap.c`;
+- the boot CPU (`cpu.c`): `struct cpu` through `TPIDR_EL1`, `VBAR_EL1`, and
+  the identification from `MIDR_EL1` and the ID registers;
+- the console on the PL011 of `virt` (`serial.c`), mapped on first use by
+  `early_map_device` (`early_mmio.c`), which adds device entries to the
+  tables Limine installed in `TTBR1_EL1` and takes its tables from a static
+  pool, until `vmm_init` runs (A5);
+- power off, reboot and the test exit through PSCI (`platform.c`);
+- the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` (`clock.c`);
+- the entry functions of `<arch/paging.h>` (`paging.c`), whose table
+  operations follow in A5;
+- one processor for `<arch/smp.h>` until A8.
+
+`kmain` calls `ktest_run_early` after the boot environment is logged. A test
+defined with `KTEST_DEFINE_EARLY` needs only the console, the log and the
+command line, so it runs there on every architecture: `boot` and
+`exception`. On aarch64 the kernel reaches no further than that point
+before A5.
+
+`make ARCH=aarch64 test CASES="..."` boots QEMU `virt` with the edk2
+firmware that QEMU installs, on HVF where available (`-cpu host`, otherwise
+TCG with `-cpu max`). The image is the ISO of `tools/mkiso.sh`, whose UEFI
+El Torito image contains Limine's `BOOTAA64.EFI`, attached as a SCSI CD.
+Without user programs (`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is
+an empty archive and no disk is attached. A case may have an
+`expect.$(ARCH)` file that replaces `expect` where the output names
+architecture state, as `tests/cases/exception` does.
+
+## 17. Dependencies that remain
 
 The x86_64 build no longer needs anything outside its architecture
 directories. The aarch64 implementation (A4 to A9) has to supply every

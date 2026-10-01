@@ -3,12 +3,17 @@
 
 struct trapframe;
 
-/* Program STAR, LSTAR and SFMASK and enable syscall/sysret. */
+/* System call entry (docs/design/arch.md). Shared by every architecture;
+ * the functions other than syscall_dispatch are implemented by the
+ * architecture.
+ *
+ * Enable the system call instruction (on x86_64 the STAR, LSTAR and SFMASK
+ * MSRs). */
 void syscall_init(void);
-/* The MSR part alone, run on every CPU. */
+/* The per CPU part of syscall_init, run on every CPU. */
 void syscall_init_cpu(void);
-/* Generic dispatch (syscall/table.c), called from syscall.S with the
- * saved user state. */
+/* Generic dispatch (syscall/table.c), called from the entry code of the
+ * architecture with the saved user state. */
 void syscall_dispatch(struct trapframe *tf);
 /* Record the entry for diagnostics. Called first by syscall_dispatch with
  * interrupts still disabled. */

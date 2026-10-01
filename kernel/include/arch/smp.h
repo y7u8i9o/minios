@@ -1,14 +1,16 @@
 #pragma once
 #include <kernel.h>
-#include <arch/cpu.h>
+#include <cpu.h>
 
-/* Symmetric multiprocessing. Application processors are enumerated and
- * started through the Limine MP protocol: the bootloader parks every AP in
- * long mode on its own page tables and jumps to the kernel entry when the
- * kernel writes goto_address. */
+/* Symmetric multiprocessing (docs/design/arch.md), implemented by the
+ * architecture. Application processors are enumerated and started through
+ * the Limine MP protocol: the bootloader parks every AP on its own page
+ * tables and jumps to the kernel entry when the kernel writes
+ * goto_address. */
 
 /* Take every AP off the bootloader's memory: load the kernel page tables,
- * a kernel stack, GDT and IDT, then spin until smp_start_aps. Must run
+ * a kernel stack and the descriptor or vector tables, then spin until
+ * smp_start_aps. Must run
  * before bootloader reclaimable memory is freed. */
 void smp_park_aps(void);
 /* Release the parked APs into their per CPU initialization and idle loops.

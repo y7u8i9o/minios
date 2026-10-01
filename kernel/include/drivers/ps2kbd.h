@@ -7,7 +7,11 @@ struct input_dev;
 #define PS2KBD_REPEAT_DELAY_MS  500
 #define PS2KBD_REPEAT_PERIOD_MS 33
 
+/* Probe the controller port and register the keyboard (platform code,
+ * arch/x86_64/i8042.c). */
 void ps2kbd_init(void);
+/* Register the input device of the keyboard; called by ps2kbd_init. */
+void ps2kbd_register(void);
 /* Translate one scancode (set 1) and report the key to the input core.
  * Called by the interrupt handler and by tests. */
 void ps2kbd_feed_scancode(uint8_t code);

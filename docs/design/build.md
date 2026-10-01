@@ -2,9 +2,12 @@
 
 ## Toolchain
 
-`toolchain.mk` is included by every Makefile. On x86_64 Linux it uses the
-native GCC and GNU binutils, which can emit the freestanding x86_64 ELF files
-directly. Other hosts default to the `x86_64-elf-` cross tools. `YACC` (default
+`toolchain.mk` is included by every Makefile. `ARCH` selects the target
+(`x86_64` by default, `aarch64` for the port of `docs/plan/arm64.md`); an
+architecture other than x86_64 builds into `build/$(ARCH)/`. On a Linux host
+of the target architecture it uses the native GCC and GNU binutils, which
+can emit the freestanding ELF files directly. Other hosts default to the
+`$(ARCH)-elf-` cross tools. `YACC` (default
 `yacc`) generates the awk parser; Berkeley yacc and bison both work. Set `CROSS`
 explicitly to override either choice (for example, `CROSS=x86_64-elf-`). It
 also selects the host compiler for the helper programs under `tools/`, and

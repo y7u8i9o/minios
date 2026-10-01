@@ -150,7 +150,7 @@ stops the build for an `ARCH` without flags. The cases `abi`, `libc`,
 `shutdown_cmd`, `gui`, `gui_mandel`, `luasynth`, `pkg`, `boot`, `arch`,
 `platform` and `pagetable` pass, as does `make check`.
 
-### A4. aarch64 toolchain and boot to serial
+### A4. aarch64 toolchain and boot to serial (completed 2026-10-01)
 
 - The build uses `aarch64-elf-gcc` with `-mgeneral-regs-only` for the
   kernel, the Limine aarch64 image and edk2 firmware.
@@ -159,6 +159,21 @@ stops the build for an `ARCH` without flags. The cases `abi`, `libc`,
 - The test harness selects the machine by `ARCH` and exits through PSCI
   `SYSTEM_OFF` or semihosting.
 - The boot test `boot` passes on aarch64.
+
+The whole generic kernel compiles and links for aarch64, with stubs that
+name the milestone of every function not yet implemented. The PS/2 drivers
+were split into the generic scancode and packet decoders in `drivers/` and
+the 8042 code in `arch/x86_64/i8042.c`, because the self-tests feed input
+through the decoders. The interface headers with identical prototypes moved
+to `kernel/include/arch/`. `boot` and `exception` run as early self-tests
+(`KTEST_DEFINE_EARLY`) after the boot environment is logged; on aarch64 they
+pass under HVF on the Apple host, and `exception` shows the register dump,
+the system registers and the backtrace (`tests/cases/exception/
+expect.aarch64`). On x86_64 the cases `boot`, `exception`, `backtrace`,
+`kbd`, `mouse`, `mouse_wheel`, `input`, `input_keyboard`, `input_tablet`,
+`gui`, `gui_pointer`, `comp_seat`, `shutdown`, `shutdown_cmd`, `time`,
+`timer`, `arch`, `platform`, `pagetable`, `abi`, `fork`, `signals`, `libc`,
+`smp` and `lockfree` pass, as does `make check`.
 
 ### A5. aarch64 memory, interrupts and time
 

@@ -20,7 +20,7 @@ its boot tests pass.
 | `network.md` | The TCP/IP plan, milestones N00 to N16 | completed 2026-09-30 |
 | `network-progress.md` | Progress record and validation evidence of N00 to N16 | completed 2026-09-30 |
 | `terminal.md` | The terminal userland plan | completed 2026-09-06 |
-| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A3 completed 2026-10-01 |
+| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A4 completed 2026-10-01, A5 next |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.
@@ -29,7 +29,7 @@ milestone is not started before the boot tests of the current one pass.
 
 | Area | Decision |
 |---|---|
-| Architecture | x86_64, QEMU only (`qemu-system-x86_64`, `-M q35`, `-accel hvf` where available). An aarch64 port is planned in `arm64.md` |
+| Architecture | x86_64, QEMU only (`qemu-system-x86_64`, `-M q35`, `-accel hvf` where available). The aarch64 port (`arm64.md`) boots to serial on QEMU `virt` |
 | Language | C (C17, freestanding), GNU as (`.S` files) for assembly |
 | Boot | Limine bootloader, Limine boot protocol, higher half kernel at `0xffffffff80000000` |
 | Kernel type | Monolithic |

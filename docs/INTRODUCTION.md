@@ -123,7 +123,10 @@ minios/
   limine.conf           bootloader configuration
   docs/plan/            design summary, milestone record and feature plans (network, terminal, arm64)
   kernel/
-    arch/x86_64/        boot, GDT, IDT, paging, APIC, PIT, FPU, syscall entry, context switch, SMP, power
+    arch/x86_64/        GDT, IDT, paging, APIC, PIT, FPU, syscall entry, context switch, SMP, the PC devices
+    arch/aarch64/       entry, exception vectors, PL011, PSCI (the port, docs/plan/arm64.md)
+    include/arch/       the architecture interface shared by both (docs/design/arch.md)
+    init/               the start-up sequence and the Limine boot information
     mm/                 pmm, vmm, slab, mmap, vma, filemap, madvise, huge, swap, tlb
     sched/              thread, proc, mlfq, wait, elf, user
     sync/               spinlock, mutex, semaphore, condvar, rcu, lockstat

@@ -9,7 +9,12 @@ ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif
 
+# Self-tests of x86 processor features, built only for x86_64.
+TESTS_X86_ONLY := tests/test_cpu.c
 CSRC     := $(foreach d,$(SUBDIRS),$(wildcard $(d)/*.c))
+ifneq ($(ARCH),x86_64)
+CSRC     := $(filter-out $(TESTS_X86_ONLY),$(CSRC))
+endif
 SSRC     := $(foreach d,$(SUBDIRS),$(wildcard $(d)/*.S))
 OBJS     := $(patsubst %.c,$(OUT)/%.o,$(CSRC)) $(patsubst %.S,$(OUT)/%.o,$(SSRC))
 DEPS     := $(OBJS:.o=.d)

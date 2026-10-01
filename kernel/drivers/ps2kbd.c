@@ -1,18 +1,13 @@
-/* The PS/2 keyboard on the first 8042 port: scancode set 1 bytes are
- * translated to key codes and reported to the input core, which keeps
- * the key state, repeats held keys and feeds the console terminal. */
+/* The PS/2 keyboard: scancode set 1 bytes are translated to key codes and
+ * reported to the input core, which keeps the key state, repeats held keys
+ * and feeds the console terminal. The 8042 controller that delivers the
+ * bytes is platform code (arch/x86_64/i8042.c). */
 #define KLOG_SUBSYS "ps2kbd"
 #include <drivers/ps2kbd.h>
 #include <drivers/ps2mouse.h>
 #include <input/input.h>
-#include <arch/apic.h>
-#include <arch/irq.h>
-#include <arch/io.h>
 #include <sync/spinlock.h>
 #include <klog.h>
-
-#define PS2_DATA    0x60
-#define PS2_STATUS  0x64
 
 #define SC_EXTENDED  0xe0
 #define SC_PAUSE     0xe1
@@ -85,24 +80,12 @@ void ps2kbd_feed_scancode(uint8_t code)
     input_sync(&ps2kbd_dev);
 }
 
-static void kbd_irq(struct trapframe *tf, void *arg)
-{
-    while (inb(PS2_STATUS) & 0x01) {
-        uint8_t st = inb(PS2_STATUS);
-        uint8_t b = inb(PS2_DATA);
-        if (st & 0x20)
-            ps2mouse_feed_byte(b);
-        else
-            ps2kbd_feed_scancode(b);
-    }
-}
-
 struct input_dev *ps2kbd_device(void)
 {
     return &ps2kbd_dev;
 }
 
-void ps2kbd_init(void)
+void ps2kbd_register(void)
 {
     input_dev_init(&ps2kbd_dev, "AT Translated Set 2 keyboard", BUS_I8042);
     for (unsigned code = KEY_ESC; code <= KEY_F12; code++)
@@ -112,10 +95,4 @@ void ps2kbd_init(void)
             input_set_key_cap(&ps2kbd_dev, extended_keys[i]);
     input_set_repeat(&ps2kbd_dev, PS2KBD_REPEAT_DELAY_MS, PS2KBD_REPEAT_PERIOD_MS);
     input_register_device(&ps2kbd_dev);
-    /* Drain anything pending, then unmask the line. */
-    while (inb(PS2_STATUS) & 0x01)
-        (void)inb(PS2_DATA);
-    irq_register(IRQ_KEYBOARD, kbd_irq, NULL);
-    ioapic_route(GSI_KEYBOARD, IRQ_KEYBOARD, false);
-    klog_info("ps/2 keyboard on irq %u", IRQ_KEYBOARD);
 }
