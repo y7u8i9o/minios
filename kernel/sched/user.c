@@ -1,13 +1,13 @@
 #define KLOG_SUBSYS "user"
 #include <sched/user.h>
-#include <arch/fpu.h>
+#include <arch/thread.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
 #include <sched/sched.h>
 #include <sched/elf.h>
 #include <fs/vfs.h>
 #include <fs/fdtable.h>
-#include <arch/gdt.h>
+#include <arch/frame.h>
 #include <arch/syscall.h>
 #include <arch/cpu.h>
 #include <mm/vmm.h>
@@ -26,16 +26,6 @@ static void user_thread_entry(void *arg)
     kfree(arg);
     thread_current()->user_frame = NULL;
     user_enter(&frame);
-}
-
-static void frame_init(struct trapframe *tf, uintptr_t rip, uintptr_t rsp)
-{
-    memset(tf, 0, sizeof *tf);
-    tf->rip = rip;
-    tf->cs = GDT_USER_CODE | 3;
-    tf->rflags = RFLAGS_IF | 0x2;
-    tf->rsp = rsp;
-    tf->ss = GDT_USER_DATA | 3;
 }
 
 /* Build a new address space from an ELF on the initrd. */
@@ -158,7 +148,7 @@ static struct thread *prepare_thread(struct proc *p, const char *name, struct tr
     t->user_frame = tf;
     if (thread_current()->proc != &kernel_proc) {
         t->sig_mask = thread_current()->sig_mask;
-        t->fs_base = thread_current()->fs_base;
+        arch_set_tls(t, arch_get_tls(thread_current()));
     }
     return t;
 }
@@ -193,7 +183,7 @@ struct proc *proc_create_user(const char *path, char *const argv[], char *const 
     struct trapframe *tf = kmalloc(sizeof *tf);
     if (!tf)
         goto fail_proc;
-    frame_init(tf, entry, rsp);
+    arch_frame_init_user(tf, entry, rsp);
     if (!start_thread(p, base, tf)) {
         kfree(tf);
         goto fail_proc;
@@ -235,7 +225,7 @@ struct proc *proc_fork(struct trapframe *tf)
     if (!ctf)
         goto fail;
     *ctf = *tf;
-    ctf->rax = 0;
+    frame_set_retval(ctf, 0);
     struct thread *t = prepare_thread(child, cur->name, ctf);
     if (!t) {
         kfree(ctf);
@@ -243,8 +233,8 @@ struct proc *proc_fork(struct trapframe *tf)
     }
     /* The child starts with the parent's registers. Its FPU image must be
      * complete before it can run, so it is queued only afterwards. */
-    fpu_save(t->fpu);
-    t->fs_base = cur->fs_base;
+    arch_fpu_capture(t);
+    arch_set_tls(t, arch_get_tls(cur));
     sched_add(t);
     return child;
 fail:
@@ -279,11 +269,9 @@ int proc_exec(struct trapframe *tf, const char *path, char *const argv[], char *
     strlcpy(cur->name, base, sizeof cur->name);
     signal_reset_for_exec(p);
     fdtable_close_exec(&p->fds);
-    fpu_init_state(cur->fpu);
-    fpu_restore(cur->fpu);
-    cur->fs_base = 0;                   /* the new image sets up its own thread local storage */
-    wrmsr(MSR_FS_BASE, 0);
-    frame_init(tf, entry, rsp);
+    arch_fpu_reset(cur);
+    arch_set_tls(cur, 0);               /* the new image sets up its own thread local storage */
+    arch_frame_init_user(tf, entry, rsp);
     return 0;
 }
 
@@ -293,8 +281,8 @@ int user_thread_create(uintptr_t entry, uintptr_t arg, uintptr_t stack)
     struct trapframe *tf = kmalloc(sizeof *tf);
     if (!tf)
         return -ENOMEM;
-    frame_init(tf, entry, stack);
-    tf->rdi = arg;
+    arch_frame_init_user(tf, entry, stack);
+    frame_set_arg0(tf, arg);
     struct thread *t = start_thread(cur->proc, cur->name, tf);
     if (!t) {
         kfree(tf);

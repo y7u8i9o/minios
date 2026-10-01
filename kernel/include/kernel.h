@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <arch/machine.h>
 
 #define __packed        __attribute__((packed))
 #define __aligned(x)    __attribute__((aligned(x)))
@@ -39,10 +40,10 @@
  * number come from build/kernel/version.c, written by tools/version.sh
  * at every kernel link. */
 #define KERNEL_SYSNAME  "minios"
-#define KERNEL_MACHINE  "x86_64"
+#define KERNEL_MACHINE  ARCH_MACHINE_NAME
 extern const char kernel_release[];
 extern const char kernel_version[];
 extern const unsigned kernel_build_number;
 
-/* Kernel entry, defined in arch/x86_64/boot.c. */
+/* Kernel entry, defined by the architecture (arch/x86_64/boot.c). */
 __noreturn void kmain(void);

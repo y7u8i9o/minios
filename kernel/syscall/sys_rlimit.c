@@ -1,7 +1,6 @@
 /* Resource limits and usage (M40): getrlimit, setrlimit, prlimit, getrusage. */
 #include <syscall/syscalls.h>
 #include <syscall/rlimit.h>
-#include <arch/trap.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <mm/vma.h>

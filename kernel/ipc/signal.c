@@ -1,13 +1,12 @@
 #define KLOG_SUBSYS "signal"
 #include <ipc/signal.h>
-#include <arch/fpu.h>
+#include <arch/signal.h>
+#include <arch/frame.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
 #include <sched/sched.h>
 #include <sched/user.h>
 #include <sched/wait.h>
-#include <arch/trap.h>
-#include <arch/gdt.h>
 #include <mm/vma.h>
 #include <lib/string.h>
 #include <kassert.h>
@@ -19,21 +18,6 @@
 #define DEFAULT_IGNORE (SIGBIT(SIGCHLD) | SIGBIT(SIGWINCH))
 #define DEFAULT_STOP (SIGBIT(SIGSTOP) | SIGBIT(SIGTSTP) | \
                       SIGBIT(SIGTTIN) | SIGBIT(SIGTTOU))
-/* User controllable RFLAGS bits restored by sigreturn. */
-#define RFLAGS_USER_MASK 0xcd5UL
-#define RFLAGS_IF_BIT   (1UL << 9)
-
-/* Frame pushed on the user stack for a handler. The return address slot
- * makes the handler's ret land in the libc restorer, which issues
- * sigreturn with rsp pointing at tf. */
-struct sigframe {
-    uint64_t restorer;
-    struct trapframe tf;
-    uint64_t saved_mask;
-    uint64_t signo;
-    uint8_t fpu[FPU_AREA_SIZE];     /* the interrupted FPU and SSE state (M23) */
-};
-
 static bool valid_sig(int sig)
 {
     return sig >= 1 && sig < NSIG;
@@ -257,53 +241,27 @@ void signal_deliver(struct trapframe *tf)
         default_terminate(p, sig);
     }
 
-    /* Build the frame below the red zone, 16 byte aligned so the handler
-     * sees rsp + 8 aligned as after a call. */
-    uintptr_t sp = tf->rsp - 128 - sizeof(struct sigframe);
-    sp = ALIGN_DOWN(sp, 16) - 8;
-    if (!vma_range_ok(p->vm, sp, sizeof(struct sigframe), true)) {
+    if (arch_signal_setup_frame(tf, t, sig, (uintptr_t)act.handler,
+                                (uintptr_t)act.restorer, t->sig_mask) < 0) {
         klog_error("process %s (pid %d): no room for a signal frame", p->name, p->pid);
         default_terminate(p, SIGSEGV);
     }
-    struct sigframe frame;
-    frame.restorer = (uint64_t)act.restorer;
-    frame.tf = *tf;
-    frame.saved_mask = t->sig_mask;
-    frame.signo = (uint64_t)sig;
-    fpu_save(t->fpu);
-    memcpy(frame.fpu, t->fpu, FPU_AREA_SIZE);
-    memcpy((void *)sp, &frame, sizeof frame);
 
     t->sig_mask |= act.mask;
     if (!(act.flags & SA_NODEFER))
         t->sig_mask |= SIGBIT(sig);
     t->sig_mask &= ~(SIGBIT(SIGKILL) | SIGBIT(SIGSTOP));
-    tf->rip = (uint64_t)act.handler;
-    tf->rdi = (uint64_t)sig;
-    tf->rsp = sp;
-    tf->rax = 0;
 }
 
 long signal_return(struct trapframe *tf)
 {
     struct thread *t = thread_current();
     struct proc *p = t->proc;
-    /* The restorer runs after the handler's ret popped the return slot,
-     * so rsp points at the saved trap frame. */
-    uintptr_t base = tf->rsp - offsetof(struct sigframe, tf);
-    if (!vma_range_ok(p->vm, base, sizeof(struct sigframe), false)) {
+    uint64_t saved_mask;
+    if (arch_signal_restore_frame(tf, t, &saved_mask) < 0) {
         klog_error("process %s (pid %d): bad sigreturn frame", p->name, p->pid);
         default_terminate(p, SIGSEGV);
     }
-    struct sigframe frame;
-    memcpy(&frame, (void *)base, sizeof frame);
-    uint64_t rflags = (frame.tf.rflags & RFLAGS_USER_MASK) | RFLAGS_IF_BIT | 0x2;
-    *tf = frame.tf;
-    tf->cs = GDT_USER_CODE | 3;
-    tf->ss = GDT_USER_DATA | 3;
-    tf->rflags = rflags;
-    t->sig_mask = frame.saved_mask & ~(SIGBIT(SIGKILL) | SIGBIT(SIGSTOP));
-    memcpy(t->fpu, frame.fpu, FPU_AREA_SIZE);
-    fpu_restore(t->fpu);
-    return (long)tf->rax;
+    t->sig_mask = saved_mask & ~(SIGBIT(SIGKILL) | SIGBIT(SIGSTOP));
+    return (long)frame_retval(tf);
 }

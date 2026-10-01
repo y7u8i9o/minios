@@ -131,9 +131,9 @@ user mode on that CPU (`cpu.last_user_*`, recorded by `trap_dispatch` and
 the hypervisor signature (`cpu_log_identity`), so output from emulation
 and from hardware virtualization can be told apart.
 
-`arch/x86_64/power.c`: `power_off` writes `0x2000` to port `0x604` (the q35
+`arch/x86_64/power.c`: `platform_power_off` writes `0x2000` to port `0x604` (the q35
 ACPI PM1a control register), falls back to isa-debug-exit and finally halts.
-`power_reboot` pulses the 8042 reset line and falls back to a triple fault
+`platform_reboot` pulses the 8042 reset line and falls back to a triple fault
 through an empty IDT. Both are unconditional. The orderly shutdown sequence
 arrives in M15.
 

@@ -7,13 +7,13 @@
 #include <mm/slab.h>
 #include <klog.h>
 #include <errno.h>
+#include <arch/machine.h>
 
 #define ELFMAG      "\x7f""ELF"
 #define ELFCLASS64  2
 #define ELFDATA2LSB 1
 #define ET_EXEC     2
 #define ET_DYN      3
-#define EM_X86_64   62
 #define PT_LOAD     1
 #define PT_INTERP   3
 #define PF_X        1
@@ -71,7 +71,7 @@ static const struct elf64_ehdr *elf_check(const void *image, size_t size, uint16
     const struct elf64_ehdr *eh = image;
     if (size < sizeof *eh || memcmp(eh->e_ident, ELFMAG, 4) != 0 ||
         eh->e_ident[4] != ELFCLASS64 || eh->e_ident[5] != ELFDATA2LSB ||
-        eh->e_type != type || eh->e_machine != EM_X86_64)
+        eh->e_type != type || eh->e_machine != ARCH_ELF_MACHINE)
         return NULL;
     if (eh->e_phentsize != sizeof(struct elf64_phdr) ||
         eh->e_phoff + (uint64_t)eh->e_phnum * sizeof(struct elf64_phdr) > size)

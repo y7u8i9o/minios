@@ -15,7 +15,7 @@
  * came from ring three, so a stale pointer is ignored rather than trusted.
  */
 #include <debug/profile.h>
-#include <arch/trap.h>
+#include <arch/frame.h>
 #include <arch/cpu.h>
 #include <arch/paging.h>
 #include <mm/vmm.h>
@@ -97,7 +97,7 @@ static const struct trapframe *entry_frame(const struct thread *t)
     if (!tf || !kernel_bounds(t, &bottom, &top))
         return NULL;
     uintptr_t at = (uintptr_t)tf;
-    if (at < bottom || at + sizeof *tf > top || (tf->cs & 3) != 3)
+    if (at < bottom || at + sizeof *tf > top || !frame_from_user(tf))
         return NULL;
     return tf;
 }
@@ -108,14 +108,14 @@ unsigned prof_unwind(const struct trapframe *tf, uintptr_t rbp, struct thread *t
     struct vmspace *vm = t && t->proc ? t->proc->vm : NULL;
     if (max > PROF_MAX_FRAMES)
         max = PROF_MAX_FRAMES;
-    if (tf && (tf->cs & 3) == 3) {
+    if (tf && frame_from_user(tf)) {
         *flags |= PROF_FLAG_USER;
-        unsigned depth = walk_user(vm, tf->rip, tf->rbp, chain, max);
+        unsigned depth = walk_user(vm, frame_pc(tf), frame_fp(tf), chain, max);
         if (depth == max)
             *flags |= PROF_FLAG_TRUNC;
         return depth;
     }
-    unsigned depth = walk_kernel(tf ? tf->rip : 0, tf ? tf->rbp : rbp, t, chain, max);
+    unsigned depth = walk_kernel(tf ? frame_pc(tf) : 0, tf ? frame_fp(tf) : rbp, t, chain, max);
     if (depth == max) {
         *flags |= PROF_FLAG_TRUNC;
         return depth;
@@ -125,7 +125,7 @@ unsigned prof_unwind(const struct trapframe *tf, uintptr_t rbp, struct thread *t
     const struct trapframe *entry = t ? entry_frame(t) : NULL;
     if (!entry || depth + 2 > max)
         return depth;
-    unsigned user = walk_user(vm, entry->rip, entry->rbp, chain + depth + 1, max - depth - 1);
+    unsigned user = walk_user(vm, frame_pc(entry), frame_fp(entry), chain + depth + 1, max - depth - 1);
     if (!user)
         return depth;
     chain[depth] = PROF_FRAME_BOUNDARY;

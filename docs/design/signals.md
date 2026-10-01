@@ -38,14 +38,16 @@ with status `PROC_STATUS_SIGNALED(sig)`, which `wait4` reports. `SIGSTOP`,
 caught, ignored, or blocked. `wait4` reports these transitions with
 `WUNTRACED` and `WCONTINUED` without reaping the process.
 
-For a handler the kernel pushes a `struct sigframe` on the user stack,
+For a handler the kernel pushes a `struct sigframe` on the user stack
+(`arch_signal_setup_frame` in `arch/x86_64/signal.c`),
 below the 128 byte red zone and 16 byte aligned as after a call: the
 restorer address in the return slot, the complete trap frame, the saved
 blocked mask and the signal number. The trap frame is rewritten to enter
 the handler with the signal number in `rdi`. The handler's mask and the
 signal itself (unless `SA_NODEFER`) are added to the thread mask while it
 runs. The handler's `ret` lands in libc's `__sigreturn_trampoline`, which
-issues `sigreturn`. `signal_return` copies the saved frame back, forcing
+issues `sigreturn`. `signal_return` copies the saved frame back
+(`arch_signal_restore_frame`), forcing
 the user code and stack selectors and sanitizing `RFLAGS`, and restores
 the mask, so the interrupted code resumes exactly where it was, including
 the `EINTR` result of an interrupted system call.
@@ -99,7 +101,7 @@ and waits again, flushes and unmounts every filesystem that is not busy
 keyboard controller or halts with interrupts disabled. Programs never
 call it directly: `shutdown` sends `SIGUSR1` to init and `shutdown -r`
 or `reboot` sends `SIGUSR2`; init's handler records the request and the
-main loop, woken from `wait` by `EINTR`, calls `reboot`. `power_off`
+main loop, woken from `wait` by `EINTR`, calls `reboot`. `platform_power_off`
 waits after the ACPI write so the ACPI exit is not overtaken by the
 `isa-debug-exit` fallback.
 

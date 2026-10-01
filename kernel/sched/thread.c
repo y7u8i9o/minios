@@ -1,6 +1,6 @@
 #define KLOG_SUBSYS "thread"
 #include <sched/thread.h>
-#include <arch/fpu.h>
+#include <arch/thread.h>
 #include <sched/proc.h>
 #include <sched/sched.h>
 #include <mm/slab.h>
@@ -25,13 +25,13 @@ static int tid_alloc(void)
     return tid;
 }
 
-/* First code run by a new thread, entered through context_switch's ret.
- * The local run-queue lock is held across the switch and released here. */
+/* First code run by a new thread, entered through its first switch
+ * (arch_thread_init). The local run-queue lock is held across the switch
+ * and released here. */
 void thread_start(void)
 {
-    fpu_restore(thread_current()->fpu);
     struct thread *t = thread_current();
-    wrmsr(MSR_FS_BASE, t->fs_base);
+    arch_thread_resume(t);
     sched_finish_switch();
     sched_unlock_current();
     t->entry(t->arg);
@@ -48,14 +48,11 @@ struct thread *thread_alloc(struct proc *proc, const char *name, thread_fn fn, v
         kfree(t);
         return NULL;
     }
-    t->fpu_raw = kmalloc(FPU_AREA_SIZE + 16);
-    if (!t->fpu_raw) {
+    if (arch_thread_init(t, thread_start) < 0) {
         kstack_free(t->kstack_top);
         kfree(t);
         return NULL;
     }
-    t->fpu = (void *)ALIGN_UP((uintptr_t)t->fpu_raw, 16);
-    fpu_init_state(t->fpu);
     t->proc = proc;
     t->tid = tid_alloc();
     t->state = THREAD_NEW;
@@ -68,16 +65,6 @@ struct thread *thread_alloc(struct proc *proc, const char *name, thread_fn fn, v
     spinlock_init(&t->exit_lock, "thread_exit");
     waitq_init(&t->exit_waitq, "thread_exit");
     strlcpy(t->name, name, sizeof t->name);
-
-    /* Initial frame: six callee saved registers then the return address
-     * into thread_start, laid out as context_switch expects. The address
-     * sits at top - 16 so the stack is 16 byte aligned plus 8 on entry. */
-    uint64_t *sp = (uint64_t *)t->kstack_top;
-    *--sp = 0;                          /* padding */
-    *--sp = (uint64_t)thread_start;     /* return address */
-    for (int i = 0; i < 6; i++)
-        *--sp = 0;                      /* rbp, rbx, r12-r15 */
-    t->ctx = sp;
 
     spin_lock(&proc->lock);
     list_add_tail(&t->proc_link, &proc->threads);
@@ -137,7 +124,7 @@ void thread_free(struct thread *t)
     kassert(t->state == THREAD_ZOMBIE);
     if (!t->on_boot_stack)
         kstack_free(t->kstack_top);
-    kfree(t->fpu_raw);
+    arch_thread_free(t);
     kfree(t);
 }
 

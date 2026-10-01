@@ -1,5 +1,4 @@
 #include <syscall/syscalls.h>
-#include <arch/trap.h>
 #include <arch/cpu.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -178,8 +177,7 @@ long sys_set_tls(struct trapframe *tf)
     if (base && !user_range_ok(base, 8, false))
         return -EFAULT;
     struct thread *t = thread_current();
-    t->fs_base = base;
-    wrmsr(MSR_FS_BASE, base);
+    arch_set_tls(t, base);
     return 0;
 }
 

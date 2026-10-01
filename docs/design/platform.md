@@ -7,6 +7,8 @@ behaviour of every instruction, so a kernel that only ever ran under TCG
 has never been tested against AMD semantics or against a processor with
 caches that TCG does not model. This document lists every place where
 the kernel depends on such behaviour and the rule for adding another.
+The boundary between generic and architecture code, which the aarch64 port
+builds on, is described in `arch.md`.
 
 ## Rules
 

@@ -3,6 +3,7 @@
 #include <drivers/pci.h>
 #include <arch/irq.h>
 #include <arch/apic.h>
+#include <arch/barrier.h>
 #include <mm/vmm.h>
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
@@ -22,11 +23,6 @@
  * initialization only. */
 #define VIRTIO_VECTOR_BASE 40
 static uint8_t next_vector = VIRTIO_VECTOR_BASE;
-
-static inline void mb(void)
-{
-    __asm__ volatile("mfence" ::: "memory");
-}
 
 static volatile void *map_cap(struct pci_dev *pci, uint8_t cap)
 {
@@ -303,7 +299,7 @@ int virtio_reset(struct virtio_dev *dev)
     while (dev->common->device_status != 0) {
         if (timer_ms() >= deadline)
             return -ETIMEDOUT;
-        __asm__ volatile("pause");
+        cpu_relax();
     }
     /* Device reset ends DMA. Serialize with any ISR already traversing
      * the rings before detaching them. The static device remains valid. */

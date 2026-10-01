@@ -3,6 +3,7 @@
 #include <lib/list.h>
 #include <sched/wait.h>
 #include <sync/mpsc.h>
+#include <arch/thread.h>
 
 #define THREAD_NAME_LEN 32
 #define MLFQ_LEVELS 8
@@ -49,9 +50,7 @@ struct thread {
     struct trapframe *user_frame;   /* entry frame for user threads (M8) */
     bool on_boot_stack;             /* stack not owned by kstack_alloc */
     uint64_t sig_mask;              /* blocked signals, used by the thread itself */
-    void *fpu;                      /* fxsave area, 16 byte aligned inside fpu_raw (M23) */
-    void *fpu_raw;
-    uint64_t fs_base;               /* user FS base (thread local storage), loaded at every switch (M35) */
+    struct arch_thread arch;        /* FPU state and TLS base (M23, M35, A0) */
     uint64_t utime, stime;          /* timer ticks charged to this thread, written by its CPU's tick (M40) */
     uint64_t nvcsw, nivcsw;         /* voluntary and involuntary switches away */
     /* Profiler timestamps in nanoseconds (M48). on_cpu_ns and off_cpu_ns

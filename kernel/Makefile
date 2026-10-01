@@ -4,7 +4,7 @@ OUT      := $(BUILD)/kernel
 KERNEL   ?= $(BUILD)/kernel.elf
 GENSYMS  ?= $(BUILD)/host/gensyms
 
-SUBDIRS  := arch/x86_64 lib mm sync sched syscall fs fs/mfs fs/fat ipc net net/tcp block audio input drivers drivers/virtio debug
+SUBDIRS  := arch/$(ARCH) lib mm sync sched syscall fs fs/mfs fs/fat ipc net net/tcp block audio input drivers drivers/virtio debug
 ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif
@@ -14,7 +14,8 @@ SSRC     := $(foreach d,$(SUBDIRS),$(wildcard $(d)/*.S))
 OBJS     := $(patsubst %.c,$(OUT)/%.o,$(CSRC)) $(patsubst %.S,$(OUT)/%.o,$(SSRC))
 DEPS     := $(OBJS:.o=.d)
 
-CPPFLAGS := -Iinclude -I../third_party/limine
+CPPFLAGS := -Iinclude -Iarch/$(ARCH)/include -I../third_party/limine
+LDSCRIPT := arch/$(ARCH)/linker.ld
 
 .PHONY: all clean
 all: $(KERNEL)
@@ -39,10 +40,10 @@ $(OUT)/ksyms_empty.o: $(OUT)/ksyms_empty.bin
 
 # The identification (VERSION, the build number, the commit) is generated
 # before pass 1 so that both passes link the same objects.
-$(OUT)/kernel_pass1.elf: linker.ld $(OBJS) $(OUT)/ksyms_empty.o ../tools/version.sh ../VERSION
+$(OUT)/kernel_pass1.elf: $(LDSCRIPT) $(OBJS) $(OUT)/ksyms_empty.o ../tools/version.sh ../VERSION
 	../tools/version.sh .. $(OUT)/version.c
 	$(CC) $(KCFLAGS) $(CPPFLAGS) -c -o $(OUT)/version.o $(OUT)/version.c
-	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms_empty.o
+	$(LD) $(KLDFLAGS) -T $(LDSCRIPT) -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms_empty.o
 
 # Pass 2: extract symbols and relink with the populated .ksyms section.
 # .ksyms is the last section in the image, so no other address changes.
@@ -53,8 +54,8 @@ $(OUT)/ksyms.o: $(OUT)/ksyms.bin
 	printf '.section .ksyms,"a"\n.incbin "%s"\n' $< > $(OUT)/ksyms.S
 	$(CC) $(KASFLAGS) -c -o $@ $(OUT)/ksyms.S
 
-$(KERNEL): linker.ld $(OBJS) $(OUT)/ksyms.o
-	$(LD) $(KLDFLAGS) -T linker.ld -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms.o
+$(KERNEL): $(LDSCRIPT) $(OBJS) $(OUT)/ksyms.o
+	$(LD) $(KLDFLAGS) -T $(LDSCRIPT) -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms.o
 
 clean:
 	rm -rf $(OUT) $(KERNEL)

@@ -5,6 +5,7 @@
 #include <drivers/pci.h>
 #include <arch/boot.h>
 #include <drivers/timer.h>
+#include <arch/barrier.h>
 #include <console.h>
 #include <mm/memlayout.h>
 #include <mm/pmm.h>
@@ -176,7 +177,7 @@ static int ctrl_xfer(struct virtio_gpu *g, const void *request, size_t request_l
     if (poll) {
         for (unsigned i = 0; i < 20000000 && !x->done; i++) {
             virtq_poll_locked(vq);
-            __asm__ volatile("pause");
+            cpu_relax();
         }
     } else {
         while (!x->done)

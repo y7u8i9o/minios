@@ -1,17 +1,10 @@
 #pragma once
 #include <kernel.h>
 
-struct trapframe;
+/* The argument accessors SYSARG0 to SYSARG5 for handlers. */
+#include <arch/frame.h>
 
 typedef long (*syscall_fn)(struct trapframe *tf);
-
-/* Argument accessors for handlers. */
-#define SYSARG0(tf) ((tf)->rdi)
-#define SYSARG1(tf) ((tf)->rsi)
-#define SYSARG2(tf) ((tf)->rdx)
-#define SYSARG3(tf) ((tf)->r10)
-#define SYSARG4(tf) ((tf)->r8)
-#define SYSARG5(tf) ((tf)->r9)
 
 #define USER_PATH_MAX  256
 #define USER_ARG_MAX   64

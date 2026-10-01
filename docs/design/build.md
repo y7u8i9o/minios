@@ -101,7 +101,7 @@ The script rejects an audio backend that the QEMU binary does not list in
 
 ## Kernel link
 
-`kernel/linker.ld` places the kernel at `0xffffffff80000000` with four
+`kernel/arch/x86_64/linker.ld` places the kernel at `0xffffffff80000000` with four
 `PT_LOAD` segments: `.text` (RX), `.rodata` with `.limine_requests` (R),
 `.data` with `.bss` (RW) and `.ksyms` (R). All sections are 4 KiB aligned.
 `.ksyms` is last so that the second link pass, which fills it with the symbol

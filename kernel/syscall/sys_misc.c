@@ -1,10 +1,8 @@
 #include <syscall/syscalls.h>
-#include <arch/trap.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <mm/vma.h>
 #include <fs/vfs.h>
-#include <arch/power.h>
 #include <klog.h>
 #include <console.h>
 #include <errno.h>

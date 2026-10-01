@@ -1,5 +1,4 @@
 #include <syscall/syscalls.h>
-#include <arch/trap.h>
 #include <arch/power.h>
 #include <arch/cpu.h>
 #include <sched/thread.h>
@@ -201,15 +200,15 @@ long sys_reboot(struct trapframe *tf)
     case RB_AUTOBOOT:
         kprintf("system rebooting\n");
         console_flush();
-        power_reboot();
+        platform_reboot();
     case RB_HALT:
         kprintf("system halted\n");
         console_flush();
-        cli();
+        arch_irq_disable();
         cpu_halt_forever();
     default:
         kprintf("system powering off\n");
         console_flush();
-        power_off();
+        platform_power_off();
     }
 }

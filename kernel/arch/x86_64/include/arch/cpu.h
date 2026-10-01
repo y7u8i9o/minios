@@ -2,6 +2,7 @@
 #include <kernel.h>
 #include <sync/mpsc.h>
 #include <sync/spinlock.h>
+#include <arch/barrier.h>
 
 #define MSR_EFER            0xc0000080
 #define MSR_STAR            0xc0000081
@@ -100,9 +101,48 @@ static inline void sti(void)
     __asm__ volatile("sti" : : : "memory");
 }
 
+/* Interrupt state for generic code. Interrupt disabling is never mutual
+ * exclusion on its own (docs/design/locking.md). arch_irq_save disables
+ * interrupts and returns the previous state for arch_irq_restore. */
+static inline void arch_irq_enable(void)
+{
+    sti();
+}
+
+static inline void arch_irq_disable(void)
+{
+    cli();
+}
+
+static inline bool arch_irqs_enabled(void)
+{
+    return (read_rflags() & RFLAGS_IF) != 0;
+}
+
+static inline unsigned long arch_irq_save(void)
+{
+    unsigned long flags = read_rflags();
+    cli();
+    return flags;
+}
+
+static inline void arch_irq_restore(unsigned long flags)
+{
+    if (flags & RFLAGS_IF)
+        sti();
+}
+
 static inline void hlt(void)
 {
     __asm__ volatile("hlt");
+}
+
+/* Enable interrupts and wait for the next one (the idle loop). sti takes
+ * effect after the following instruction, so no interrupt is taken between
+ * the two and a wakeup cannot be lost before hlt. */
+static inline void arch_idle(void)
+{
+    __asm__ volatile("sti; hlt" : : : "memory");
 }
 
 static inline __noreturn void cpu_halt_forever(void)
@@ -141,9 +181,11 @@ static inline uint64_t rdtsc(void)
     return ((uint64_t)hi << 32) | lo;
 }
 
-static inline void cpu_relax(void)
+/* Free running cycle counter for lock statistics and the profiler; the
+ * unit is not calibrated. */
+static inline uint64_t arch_cycles(void)
 {
-    __asm__ volatile("pause");
+    return rdtsc();
 }
 
 /* Set up the boot CPU structure and load its GS base. */

@@ -2,8 +2,7 @@
 #include <debug/backtrace.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
-#include <arch/trap.h>
-#include <arch/power.h>
+#include <arch/frame.h>
 #include <console.h>
 #include <drivers/fbdev.h>
 #include <drivers/debugexit.h>
@@ -29,7 +28,7 @@ static __noreturn void panic_finish(void)
 
 static void panic_begin(const char *fmt, va_list ap)
 {
-    cli();
+    arch_irq_disable();
     if (panic_in_progress) {
         /* A CPU that faults while the first report is being written (the
          * halt IPI cannot stop a CPU already inside a fault) parks itself,
@@ -78,6 +77,6 @@ __noreturn void panic_trap(struct trapframe *tf, const char *fmt, ...)
     trap_dump_frame(tf);
     trap_dump_extra(tf);
     kprintf("backtrace from trap frame:\n");
-    backtrace_print_from(tf->rip, tf->rbp);
+    backtrace_print_from(frame_pc(tf), frame_fp(tf));
     panic_finish();
 }

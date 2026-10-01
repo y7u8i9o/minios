@@ -18,17 +18,18 @@ void spinlock_init(struct spinlock *lk, const char *name)
 #endif
 }
 
+/* Both operations are sequentially consistent, which on x86 compiles to
+ * the xchg the lock always used, so acquiring and releasing a lock remain
+ * full barriers. Whether weaker acquire and release orderings suffice is
+ * part of the memory ordering audit of the aarch64 port (A8). */
 static inline bool try_acquire(struct spinlock *lk)
 {
-    uint32_t old = 1;
-    __asm__ volatile("xchgl %0, %1" : "+r"(old), "+m"(lk->locked) : : "memory");
-    return old == 0;
+    return __atomic_exchange_n(&lk->locked, 1, __ATOMIC_SEQ_CST) == 0;
 }
 
 static inline void release(struct spinlock *lk)
 {
-    uint32_t zero = 0;
-    __asm__ volatile("xchgl %0, %1" : "+r"(zero), "+m"(lk->locked) : : "memory");
+    __atomic_store_n(&lk->locked, 0, __ATOMIC_SEQ_CST);
 }
 
 #if CONFIG_LOCKDEBUG
@@ -80,10 +81,8 @@ static struct lockstat *stat_for(const char *name)
     for (unsigned i = 0; i < n; i++)
         if (lockstat_table[i].name == name || strcmp(lockstat_table[i].name, name) == 0)
             return &lockstat_table[i];
-    uint32_t one = 1;
-    do {
-        __asm__ volatile("xchgl %0, %1" : "+r"(one), "+m"(table_lock) : : "memory");
-    } while (one);
+    while (__atomic_exchange_n(&table_lock, 1, __ATOMIC_SEQ_CST))
+        ;
     struct lockstat *st = NULL;
     for (unsigned i = 0; i < lockstat_count; i++)
         if (strcmp(lockstat_table[i].name, name) == 0)
@@ -93,14 +92,13 @@ static struct lockstat *stat_for(const char *name)
         st->name = name;
         __atomic_store_n(&lockstat_count, lockstat_count + 1, __ATOMIC_RELEASE);
     }
-    uint32_t zero = 0;
-    __asm__ volatile("xchgl %0, %1" : "+r"(zero), "+m"(table_lock) : : "memory");
+    __atomic_store_n(&table_lock, 0, __ATOMIC_SEQ_CST);
     return st;
 }
 
 static inline void stat_acquired(struct spinlock *lk, bool contended, uint64_t spin_start)
 {
-    uint64_t now = rdtsc();
+    uint64_t now = arch_cycles();
     if (!lk->stat)
         lk->stat = stat_for(lk->name);
     struct lockstat *st = lk->stat;
@@ -119,7 +117,7 @@ static inline void stat_released(struct spinlock *lk, void *caller)
     struct lockstat *st = lk->stat;
     if (!st)
         return;
-    uint64_t held = rdtsc() - lk->acquired_tsc;
+    uint64_t held = arch_cycles() - lk->acquired_tsc;
     st->hold_cycles += held;
     if (held > st->max_hold) {
         st->max_hold = held;
@@ -154,7 +152,7 @@ void spin_lock(struct spinlock *lk)
     if (!try_acquire(lk)) {
         contended = true;
 #if CONFIG_LOCKSTAT
-        start = rdtsc();
+        start = arch_cycles();
 #endif
         do {
             cpu_relax();
@@ -202,8 +200,7 @@ bool spin_holding(struct spinlock *lk)
 
 void spin_lock_irqsave(struct spinlock *lk, unsigned long *flags)
 {
-    *flags = read_rflags();
-    cli();
+    *flags = arch_irq_save();
     /* Owner tracking needs struct cpu, which the irqsave variant may
      * legitimately be used before (early console output). */
     bool contended = false;
@@ -211,7 +208,7 @@ void spin_lock_irqsave(struct spinlock *lk, unsigned long *flags)
     if (!try_acquire(lk)) {
         contended = true;
 #if CONFIG_LOCKSTAT
-        start = rdtsc();
+        start = arch_cycles();
 #endif
         do {
             cpu_relax();
@@ -225,6 +222,5 @@ void spin_unlock_irqrestore(struct spinlock *lk, unsigned long flags)
 {
     stat_released(lk, NULL);
     release(lk);
-    if (flags & RFLAGS_IF)
-        sti();
+    arch_irq_restore(flags);
 }

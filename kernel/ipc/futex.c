@@ -10,7 +10,6 @@
 #include <sched/proc.h>
 #include <sched/wait.h>
 #include <syscall/syscalls.h>
-#include <arch/trap.h>
 #include <drivers/timer.h>
 #include <lib/list.h>
 #include <errno.h>

@@ -15,10 +15,11 @@ table are one load away. `errno` is a macro over `__errno_location()`,
 which returns the `errno_value` field of the current block; there is no
 global `errno` any more.
 
-The kernel keeps the base in `thread.fs_base`. `set_tls(base)` stores it and
-loads `MSR_FS_BASE`; every context switch (`sched_switch_locked`) and every
-first run of a thread (`thread_start`) load the MSR from the field of the
-thread being resumed, so the value is per thread on every CPU. `fork` copies
+The kernel stores the base in `thread.arch.tls_base`. `set_tls(base)` stores
+it and loads `MSR_FS_BASE` through `arch_set_tls`; every context switch
+(`sched_switch_locked`) and every first run of a thread (`thread_start`)
+load the MSR from the field of the thread being resumed
+(`arch_thread_resume`), so the value is per thread on every CPU. `fork` copies
 the parent's base to the child's thread, `exec` clears it (the new image
 installs its own), and a raw `thread_create` inherits the creator's base so
 that a thread created outside the pthread layer still finds a valid block

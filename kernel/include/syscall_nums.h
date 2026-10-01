@@ -1,7 +1,10 @@
 #pragma once
-/* System call numbers, shared with libc. Arguments follow the SysV order:
- * rdi, rsi, rdx, r10, r8, r9. The number goes in rax, the result comes
- * back in rax as a negative errno on failure. */
+/* System call numbers, shared with libc and included by its assembly
+ * stubs, so this file contains only #define lines. The result is a negative
+ * errno on failure. The register convention belongs to the architecture
+ * (<arch/frame.h> in the kernel, the libc system call stub): on x86_64 the
+ * number goes in rax, the arguments in rdi, rsi, rdx, r10, r8, r9, and the
+ * result comes back in rax. */
 #define SYS_write          1
 #define SYS_exit           2
 #define SYS_getpid         3

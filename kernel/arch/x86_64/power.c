@@ -6,7 +6,7 @@
 #define QEMU_Q35_PM1A_CNT   0x604
 #define ACPI_SLP_TYP_S5     0x2000
 
-__noreturn void power_off(void)
+__noreturn void platform_power_off(void)
 {
     cli();
     outw(QEMU_Q35_PM1A_CNT, ACPI_SLP_TYP_S5);
@@ -20,7 +20,7 @@ __noreturn void power_off(void)
     cpu_halt_forever();
 }
 
-__noreturn void power_reboot(void)
+__noreturn void platform_reboot(void)
 {
     cli();
     /* Wait for the 8042 input buffer to drain, then pulse the reset line. */

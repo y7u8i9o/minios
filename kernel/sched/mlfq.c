@@ -2,11 +2,10 @@
 #include <debug/profile.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
-#include <arch/fpu.h>
+#include <arch/thread.h>
 #include <sched/proc.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
-#include <arch/gdt.h>
 #include <arch/trap.h>
 #include <arch/apic.h>
 #include <arch/irq.h>
@@ -36,7 +35,6 @@ struct run_queues {
 static struct run_queues rq[MAX_CPUS];
 static bool started;
 
-void context_switch(uint64_t **old_sp, uint64_t *new_sp);
 extern char boot_stack_top[];
 
 static inline int slice_for(int level)
@@ -265,21 +263,17 @@ void sched_switch_locked(void)
     __atomic_store_n(&next->state, THREAD_RUNNING, __ATOMIC_RELEASE);
     __atomic_store_n(&next->cpu, c->id, __ATOMIC_RELEASE);
     c->current = next;
-    tss_set_rsp0((uintptr_t)next->kstack_top);
+    arch_set_kernel_stack((uintptr_t)next->kstack_top);
     c->kstack_top = next->kstack_top;
     if (next->proc->vm && next->proc->vm != c->vm)
         vmspace_activate(next->proc->vm);
 
     int intena = c->int_enabled;
-    if (prev->fpu)
-        fpu_save(prev->fpu);
     profile_leave_cpu(prev, prev->state == THREAD_READY);
-    context_switch(&prev->ctx, next->ctx);
+    arch_switch_to(prev, next);
     c = cpu_current();
     profile_enter_cpu(c->current);
-    if (c->current->fpu)
-        fpu_restore(c->current->fpu);
-    wrmsr(MSR_FS_BASE, c->current->fs_base);
+    arch_thread_resume(c->current);
     c->int_enabled = intena;
     sched_finish_switch();
 }
@@ -421,7 +415,7 @@ static void make_idle(struct cpu *c, void *stack_top)
     c->current = t;
     c->kstack_top = stack_top;
     spin_unlock(&rq[c->id].lock);
-    tss_set_rsp0((uintptr_t)stack_top);
+    arch_set_kernel_stack((uintptr_t)stack_top);
 }
 
 void sched_init(void)
@@ -454,8 +448,7 @@ __noreturn void sched_idle_loop(void)
 {
     for (;;) {
         rcu_quiescent();
-        sti();
-        hlt();
+        arch_idle();
         sched_preempt();
     }
 }

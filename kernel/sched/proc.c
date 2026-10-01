@@ -13,7 +13,7 @@
 #include <debug/panic.h>
 #include <lib/printf.h>
 #include <ipc/signal.h>
-#include <arch/trap.h>
+#include <arch/frame.h>
 #include <arch/cpu.h>
 #include <drivers/timer.h>
 
@@ -250,7 +250,7 @@ void proc_account_tick(const struct trapframe *tf)
     if (!t || t == c->idle)
         return;
     struct proc *p = t->proc;
-    bool user = (tf->cs & 3) == 3;
+    bool user = frame_from_user(tf);
     if (user) {
         t->utime++;
         __atomic_fetch_add(&p->utime, 1, __ATOMIC_RELAXED);

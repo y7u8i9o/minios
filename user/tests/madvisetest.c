@@ -71,8 +71,13 @@ static void touch_read(void *p) { volatile unsigned char *c = p; (void)*c; }
 static void test_basic(void)
 {
     size_t len = 16 * PG;
-    unsigned char *a = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    /* Mappings are placed top down, directly below the lowest existing
+     * one, so the page after a fresh region usually belongs to the loader
+     * or a shared library. One more page is mapped and unmapped again, so
+     * that the page after the region is known to be unmapped. */
+    unsigned char *a = mmap(NULL, len + PG, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     CHECK(a != MAP_FAILED, "mmap");
+    CHECK(munmap(a + len, PG) == 0, "munmap of the page after the region");
     fill(a, len, 5);
     CHECK(madvise(a, len, MADV_NORMAL) == 0, "MADV_NORMAL: %s", strerror(errno));
     CHECK(madvise(a, len, MADV_RANDOM) == 0, "MADV_RANDOM");
@@ -81,6 +86,7 @@ static void test_basic(void)
     CHECK(madvise(a, 0, MADV_NORMAL) == 0, "zero length");
     CHECK(madvise(a + 1, PG, MADV_NORMAL) < 0 && errno == EINVAL, "unaligned address");
     CHECK(madvise(a, len, 99) < 0 && errno == EINVAL, "unknown advice");
+    errno = 0;
     CHECK(madvise(a, len + PG, MADV_NORMAL) < 0 && errno == ENOMEM, "range past the mapping: %s", strerror(errno));
     CHECK(madvise((void *)0x100000000000UL, PG, MADV_NORMAL) < 0 && errno == ENOMEM, "unmapped range");
     int ok = 1;

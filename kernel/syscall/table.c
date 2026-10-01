@@ -3,8 +3,7 @@
 #include <syscall_nums.h>
 #include <arch/syscall.h>
 #include <arch/cpu.h>
-#include <arch/gdt.h>
-#include <arch/trap.h>
+#include <arch/frame.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -15,13 +14,6 @@
 #include <lib/string.h>
 #include <klog.h>
 #include <errno.h>
-
-#define EFER_SCE 1UL
-#define RFLAGS_TF (1UL << 8)
-#define RFLAGS_DF (1UL << 10)
-#define RFLAGS_AC (1UL << 18)
-
-void syscall_entry(void);
 
 static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_write]         = sys_write,
@@ -121,26 +113,6 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_lstat]         = sys_lstat,
 };
 
-void syscall_init_cpu(void)
-{
-    /* STAR: syscall loads CS=0x08, SS=0x10. sysret loads CS from
-     * STAR[63:48]+16 and SS from STAR[63:48]+8. Intel processors OR 3
-     * into both selectors, AMD processors do not, so the base carries
-     * RPL 3 itself: 0x13 gives CS=0x23 and SS=0x1b on both. With 0x10 an
-     * AMD processor ran user code with SS=0x18, and the next iretq back
-     * to user mode faulted with #GP(0x18). */
-    wrmsr(MSR_STAR, ((uint64_t)(GDT_KERNEL_DATA | 3) << 48) | ((uint64_t)GDT_KERNEL_CODE << 32));
-    wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
-    wrmsr(MSR_SFMASK, RFLAGS_IF | RFLAGS_TF | RFLAGS_DF | RFLAGS_AC);
-    wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_SCE);
-}
-
-void syscall_init(void)
-{
-    syscall_init_cpu();
-    klog_info("syscall entry at %p, %d calls", syscall_entry, SYS_MAX - 1);
-}
-
 bool user_range_ok(uintptr_t addr, size_t len, bool write)
 {
     struct proc *p = thread_current()->proc;
@@ -214,34 +186,23 @@ void free_user_vector(char **vec)
 
 void syscall_dispatch(struct trapframe *tf)
 {
+    arch_syscall_enter(tf);
     struct cpu *c = cpu_current();
-    c->last_user_vector = tf->vector;
-    c->last_user_error = 0;
-    c->last_user_rip = tf->rip;
-    c->last_user_cs = tf->cs;
-    c->last_user_rsp = tf->rsp;
-    c->last_user_ss = tf->ss;
-    c->last_user_cr3 = read_cr3();
-    c->last_user_frame = (void *)tf;
     if (c->current)
         c->current->kentry_frame = tf;
-    /* The entry masked IF. The kernel runs with interrupts enabled. */
-    sti();
-    uint64_t nr = tf->rax;
+    /* The entry masked interrupts. The kernel runs with them enabled. */
+    arch_irq_enable();
+    uint64_t nr = frame_syscall_nr(tf);
     long ret;
     if (nr < SYS_MAX && syscall_table[nr])
         ret = syscall_table[nr](tf);
     else
         ret = -ENOSYS;
-    tf->rax = (uint64_t)ret;
+    frame_set_retval(tf, (uint64_t)ret);
     proc_exit_check();
     signal_deliver(tf);
-    cli();
+    arch_irq_disable();
     sched_preempt();
-    /* sysret takes RIP from RCX and RFLAGS from R11, so it cannot restore
-     * those two registers. A frame rewritten by sigreturn belongs to code
-     * that may have been interrupted anywhere, so it is entered through
-     * the iretq path, which restores every register. */
     if (nr == SYS_sigreturn)
-        user_enter(tf);
+        arch_syscall_return_full(tf);
 }

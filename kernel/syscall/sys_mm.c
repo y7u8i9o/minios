@@ -1,5 +1,4 @@
 #include <syscall/syscalls.h>
-#include <arch/trap.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <mm/vma.h>

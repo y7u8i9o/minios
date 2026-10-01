@@ -1,15 +1,21 @@
 # Toolchain and global build settings shared by every Makefile.
 
-# A native x86_64 Linux GCC/binutils toolchain produces the same freestanding
-# ELF binaries as the prefixed cross toolchain.  macOS still needs cross tools
-# because its native compiler and linker target Mach-O.
+# ARCH selects the target architecture. The kernel builds arch/$(ARCH) and
+# takes its architecture headers from arch/$(ARCH)/include
+# (docs/design/arch.md). x86_64 is the only implemented architecture; the
+# aarch64 port is planned in docs/plan/arm64.md.
+ARCH ?= x86_64
+
+# A native Linux GCC/binutils toolchain for ARCH produces the same
+# freestanding ELF binaries as the prefixed cross toolchain.  macOS still
+# needs cross tools because its native compiler and linker target Mach-O.
 HOST_OS   := $(shell uname -s)
 HOST_ARCH := $(shell uname -m)
 ifeq ($(origin CROSS),undefined)
-  ifeq ($(HOST_OS)-$(HOST_ARCH),Linux-x86_64)
+  ifeq ($(HOST_OS)-$(HOST_ARCH),Linux-$(ARCH))
     CROSS :=
   else
-    CROSS := x86_64-elf-
+    CROSS := $(ARCH)-elf-
   endif
 endif
 CC      := $(CROSS)gcc

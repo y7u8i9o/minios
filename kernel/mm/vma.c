@@ -8,7 +8,7 @@
 #include <mm/memlayout.h>
 #include <arch/paging.h>
 #include <arch/cpu.h>
-#include <arch/trap.h>
+#include <arch/frame.h>
 #include <fs/vfs.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -464,7 +464,9 @@ bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
     struct vmspace *vm = cpu_current()->vm;
     if (!vm || vm == &kernel_vmspace || addr > USER_TOP)
         return false;
-    return vma_resolve_fault(vm, ALIGN_DOWN(addr, PAGE_SIZE), tf->error & 2, tf->error & 1);
+    struct fault_info fi;
+    arch_fault_decode(tf, &fi);
+    return vma_resolve_fault(vm, ALIGN_DOWN(addr, PAGE_SIZE), fi.write, fi.present);
 }
 
 /* Share every page of the parent with the child. Frames of private
