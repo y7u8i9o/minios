@@ -1,4 +1,5 @@
 #define KLOG_SUBSYS "boot"
+#include <debug/hung.h>
 #include <kernel.h>
 #include <boot.h>
 #include <arch/init.h>
@@ -94,6 +95,7 @@ static void kinit(void *arg)
     virtio_gpu_init();
     virtio_input_init();
     swap_start_daemon();
+    hung_start_daemon();
     tty_start_daemon();
     input_start_daemon();
     /* The network core needs the worker thread before any interface is

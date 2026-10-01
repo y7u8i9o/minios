@@ -1,0 +1,7 @@
+hung: pid 0 tid [0-9]+ \(kernel\) in a bounded wait for [0-9]+ s
+kernel hung_waiter blocked cpu [0-9]+ wq hung_test_mutex bounded wait [0-9]+ ms
+mutex_lock
+hung_task: waiter released
+hung: threads \(Alt\+SysRq\)
+hung_task: ok
+TEST PASS

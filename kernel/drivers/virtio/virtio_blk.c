@@ -68,7 +68,7 @@ static int blk_do_request(struct virtio_blk *d, uint32_t type, uint64_t sector,
 
     spin_lock(&vq->lock);
     while (virtq_alloc_chain(vq, n, ids) < 0)
-        waitq_wait(&vq->waitq, &vq->lock);
+        waitq_wait_bounded(&vq->waitq, &vq->lock);
     vq->desc[ids[0]].addr = virt_to_phys(&req->hdr);
     vq->desc[ids[0]].len = sizeof req->hdr;
     unsigned last = 1;
@@ -84,7 +84,7 @@ static int blk_do_request(struct virtio_blk *d, uint32_t type, uint64_t sector,
     vq->desc[ids[last]].flags |= VIRTQ_DESC_F_WRITE;
     virtq_submit(vq, ids[0], req);
     while (!req->done)
-        waitq_wait(&vq->waitq, &vq->lock);
+        waitq_wait_bounded(&vq->waitq, &vq->lock);
     spin_unlock(&vq->lock);
 
     int r = req->status == VIRTIO_BLK_S_OK ? 0 : -EIO;

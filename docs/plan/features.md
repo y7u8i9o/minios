@@ -398,3 +398,16 @@ seconds, and prints the trace in text mode with `-t`. Documented in
 `docs/design/protocol.md`, `docs/design/compositor.md` and
 `docs/design/tools.md`, tested by `make check` for libwire and the boot
 test `gui_wireview`.
+
+## Hung task detector (completed 2026-10-02)
+
+- `/dev/threads` lists every thread with its state, wait queue and kernel
+  frames.
+- A kernel thread reports waits for a sleeping lock or a block request
+  that last longer than a limit, with the thread table.
+- Alt+SysRq prints the thread table on the console.
+- The boot test is `hung_task`.
+
+`/dev/threads` located the terminal fault of 2026-10-02 (`locking.md`),
+which the profiler could not show, because it records a stack only when a
+block ends. `docs/design/debug.md` describes the detector.

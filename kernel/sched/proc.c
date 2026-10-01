@@ -435,19 +435,47 @@ static const char *const thread_state_names[] = {
  * the pids are copied first and each process is looked up again under
  * proc_tree_lock, which keeps it from being reaped while its lock is
  * acquired. */
-size_t proc_format_threads(char *buf, size_t size)
+/* The pids of the processes, copied under proc_list_lock, which is a leaf
+ * below proc.lock. */
+static int snapshot_pids(int *pids, int max)
 {
-    enum { MAX_PIDS = 64, MAX_FRAMES = 16 };
-    static int pids[MAX_PIDS];          /* threadsdev_read is serialized by the file lock */
     int n = 0;
     spin_lock(&proc_list_lock);
     struct list_head *pos;
     list_for_each(pos, &proc_list) {
-        if (n == MAX_PIDS)
+        if (n == max)
             break;
         pids[n++] = list_entry(pos, struct proc, link)->pid;
     }
     spin_unlock(&proc_list_lock);
+    return n;
+}
+
+void proc_for_each_thread(void (*fn)(struct proc *p, struct thread *t, void *arg), void *arg)
+{
+    enum { MAX_PIDS = 64 };
+    int pids[MAX_PIDS];
+    int n = snapshot_pids(pids, MAX_PIDS);
+    for (int i = 0; i < n; i++) {
+        spin_lock(&proc_tree_lock);
+        struct proc *p = pids[i] ? proc_find(pids[i]) : &kernel_proc;
+        if (p) {
+            spin_lock(&p->lock);
+            struct list_head *pos;
+            list_for_each(pos, &p->threads)
+                fn(p, list_entry(pos, struct thread, proc_link), arg);
+            spin_unlock(&p->lock);
+        }
+        spin_unlock(&proc_tree_lock);
+    }
+}
+
+size_t proc_format_threads(char *buf, size_t size)
+{
+    enum { MAX_PIDS = 64, MAX_FRAMES = 16 };
+    int pids[MAX_PIDS];
+    int n = snapshot_pids(pids, MAX_PIDS);
+    struct list_head *pos;
     size_t off = 0;
     struct thread *self = thread_current();
     for (int i = 0; i < n && off < size - 1; i++) {
@@ -466,12 +494,15 @@ size_t proc_format_threads(char *buf, size_t size)
             struct waitq *wq = __atomic_load_n(&t->waiting_on, __ATOMIC_ACQUIRE);
             uintptr_t upc = 0, ufp = 0;
             bool user = unwind_user_entry(t, &upc, &ufp);
-            off += (size_t)ksnprintf(buf + off, size - off, "%d %d %s %s cpu %u wq %s",
-                                     p->pid, t->tid, p->name,
+            off += (size_t)ksnprintf(buf + off, size - off, "%d %d %s %s %s cpu %u wq %s",
+                                     p->pid, t->tid, p->name, t->name,
                                      st <= THREAD_ZOMBIE ? thread_state_names[st] : "?", t->cpu,
                                      wq ? wq->lock.name : "-");
             if (user)
                 off += (size_t)ksnprintf(buf + off, size - off, " user pc %lx fp %lx", upc, ufp);
+            uint64_t since = __atomic_load_n(&t->bounded_since, __ATOMIC_RELAXED);
+            if (since)
+                off += (size_t)ksnprintf(buf + off, size - off, " bounded wait %lu ms", timer_ms() + 1 - since);
             off += (size_t)ksnprintf(buf + off, size - off, "\n");
             if (t == self || st == THREAD_RUNNING || st == THREAD_NEW || !t->ctx)
                 continue;

@@ -27,6 +27,10 @@ int waitq_wake_all(struct waitq *wq);
 /* Remove t from whatever queue it blocks on and make it runnable. The
  * woken waitq_wait returns as if woken normally; callers re-check their
  * condition and the process exit flag. */
+/* waitq_wait for a wait that ends soon in a working system: a sleeping
+ * lock or the completion of a block request. The hung task detector
+ * (debug/hung.c) reports a thread that waits here longer than its limit. */
+void waitq_wait_bounded(struct waitq *wq, struct spinlock *held);
 struct thread;
 void waitq_interrupt(struct thread *t);
 /* waitq_interrupt for a signal or an exit sent to t. If t is about to call

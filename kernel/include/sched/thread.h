@@ -41,6 +41,8 @@ struct thread {
     bool wake_queued;               /* atomically claims wake_node */
     struct waitq *waiting_on;       /* wait queue that contains run_link, wq->lock */
     bool sig_wake;                  /* a signal or exit was sent, atomic, see waitq_signal */
+    uint64_t bounded_since;         /* timer_ms + 1 when a bounded wait began, 0 otherwise, atomic */
+    uint64_t hung_reported;         /* bounded_since of the last reported wait, written by hungd */
     struct list_head proc_link;     /* proc->threads, proc->lock */
     thread_fn entry;
     void *arg;

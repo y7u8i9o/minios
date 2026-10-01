@@ -18,7 +18,7 @@ void mutex_lock(struct mutex *m)
     if (m->locked && m->owner == self)
         panic("mutex %s: recursive lock by %s", m->lock.name, self->name);
     while (m->locked)
-        waitq_wait(&m->wq, &m->lock);
+        waitq_wait_bounded(&m->wq, &m->lock);
     m->locked = true;
     m->owner = self;
     spin_unlock(&m->lock);

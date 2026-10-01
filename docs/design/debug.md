@@ -29,6 +29,24 @@ adds the kernel frames from the frame that `context_switch` saved
 read without stopping the thread, so a thread that starts to run meanwhile
 can show stale frames. `cat /dev/threads` from a shell, or from a
 background job while a program is blocked, shows where each thread waits.
+A thread in a bounded wait also shows how long the wait has lasted.
+
+The hung task detector (`debug/hung.c`) reports waits that end soon in a
+working system. `mutex_lock`, the request waits of virtio-blk and the
+journal waits of mfs call `waitq_wait_bounded`, which records the start of
+the wait in `thread.bounded_since`. Waits for input, for a child or in
+`poll` use `waitq_wait` and are never reported. The kernel thread `hungd`
+checks every thread once a second. For each bounded wait longer than the
+limit it prints `hung: pid P tid T (name) in a bounded wait for N s` once,
+followed by the table of `/dev/threads`, so the report also shows the
+thread that holds the lock or the device that does not answer. The limit
+is 30 seconds, and `hung_task=SECONDS` on the kernel command line changes
+it, 0 disables the reports. Alt+SysRq prints the same table on the console
+within a second. The input core detects the combination before it
+delivers the key, so it also works while X12 has grabbed the keyboard.
+The case `hung_task` holds a mutex for four seconds with `hung_task=2`,
+checks the report and the frames down to `mutex_lock`, and feeds
+Alt+SysRq through the PS/2 decoder.
 
 ## Logging
 

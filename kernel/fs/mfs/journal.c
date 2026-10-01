@@ -153,7 +153,7 @@ void mfs_journal_begin(struct mfs_sb *m)
     spin_lock(&j->lock);
     while (j->committing || j->flush_waiters ||
            j->reserved + MFS_JOURNAL_RESERVE > MFS_JOURNAL_SLOTS)
-        waitq_wait(&j->wq, &j->lock);
+        waitq_wait_bounded(&j->wq, &j->lock);
     j->outstanding++;
     j->reserved += MFS_JOURNAL_RESERVE;
     spin_unlock(&j->lock);
@@ -265,7 +265,7 @@ int mfs_journal_flush(struct mfs_sb *m)
     spin_lock(&j->lock);
     j->flush_waiters++;
     while (j->outstanding || j->committing)
-        waitq_wait(&j->wq, &j->lock);
+        waitq_wait_bounded(&j->wq, &j->lock);
     j->committing = true;
     spin_unlock(&j->lock);
     int r = commit(m);

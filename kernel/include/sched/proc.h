@@ -97,6 +97,10 @@ size_t proc_format_table(char *buf, size_t size);
 /* Every thread of every process with its state, the wait queue it blocks
  * on and the kernel frames where it was switched out (/dev/threads). */
 size_t proc_format_threads(char *buf, size_t size);
+/* Call fn for every thread of every process, under proc_tree_lock and the
+ * process's lock, so fn must not sleep or take those locks. */
+struct thread;
+void proc_for_each_thread(void (*fn)(struct proc *p, struct thread *t, void *arg), void *arg);
 /* Format the file backed regions of every process for /dev/maps: one line
  * per region with the pid, the start and end addresses, the file offset of
  * the start and the file's path. */

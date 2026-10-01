@@ -99,6 +99,14 @@ void waitq_interrupt(struct thread *t)
     spin_unlock(&wq->lock);
 }
 
+void waitq_wait_bounded(struct waitq *wq, struct spinlock *held)
+{
+    struct thread *t = thread_current();
+    __atomic_store_n(&t->bounded_since, timer_ms() + 1, __ATOMIC_RELAXED);
+    waitq_wait(wq, held);
+    __atomic_store_n(&t->bounded_since, 0, __ATOMIC_RELAXED);
+}
+
 void waitq_signal(struct thread *t)
 {
     __atomic_store_n(&t->sig_wake, true, __ATOMIC_SEQ_CST);

@@ -1,4 +1,5 @@
 #define KLOG_SUBSYS "input"
+#include <debug/hung.h>
 #include <input/input.h>
 #include <drivers/timer.h>
 #include <fs/vfs.h>
@@ -112,7 +113,7 @@ static void deliver(struct input_dev *dev, const struct input_event *e)
 void input_event(struct input_dev *dev, uint16_t type, uint16_t code, int32_t value)
 {
     struct input_event e = { .time_us = timer_ns() / 1000, .type = type, .code = code, .value = value };
-    bool pass = false, to_console = false;
+    bool pass = false, to_console = false, sysrq = false;
     spin_lock(&dev->lock);
     switch (type) {
     case EV_KEY:
@@ -135,6 +136,10 @@ void input_event(struct input_dev *dev, uint16_t type, uint16_t code, int32_t va
             }
         }
         to_console = pass && !dev->grab;
+        /* Alt+SysRq prints the thread table, also while a client has
+         * grabbed the device (debug/hung.c). */
+        sysrq = pass && code == KEY_SYSRQ && value == 1 &&
+                (bit_test(dev->key, KEY_LEFTALT) || bit_test(dev->key, KEY_RIGHTALT));
         break;
     case EV_REL:
         pass = code <= REL_MAX && (dev->relbit & (1u << code)) && value != 0;
@@ -155,6 +160,8 @@ void input_event(struct input_dev *dev, uint16_t type, uint16_t code, int32_t va
         deliver(dev, &e);
     }
     spin_unlock(&dev->lock);
+    if (sysrq)
+        hung_request_dump();
     if (to_console)
         input_console_key(code, value);
 }
