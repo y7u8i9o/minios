@@ -18,7 +18,10 @@ and MSI-X setup: `pci_msix_enable` sets the enable bit of the MSI-X
 capability and `pci_msix_set_vector` maps the table BAR and writes into
 one table entry the address and data of `platform_msi_compose`: the local
 APIC address and the vector on the PC, the ITS doorbell and an event ID on
-aarch64.
+aarch64. The target CPU of each vector is chosen in turn among the CPUs
+that have started (`pick_msi_cpu`), so the devices that kinit sets up
+interrupt different CPUs. Devices set up during boot, before the
+application processors start, interrupt the boot CPU.
 
 QEMU q35 shows seven functions: host bridge, VGA, e1000, the virtio-blk
 function, the ISA bridge, AHCI and SMBus. They are logged at boot.

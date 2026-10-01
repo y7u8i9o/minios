@@ -183,13 +183,15 @@ int paging_pde(uintptr_t root, uintptr_t va, bool create, pte_t **entry);
 int paging_map_large(uintptr_t root, uintptr_t va, uintptr_t pa, size_t size, unsigned vm_flags);
 uintptr_t paging_init_kernel_root(void);
 void paging_init_user_root(uintptr_t root, uintptr_t kernel_root);
-void paging_free_user_tables(uintptr_t root);
+struct vmspace;
+void paging_free_user_tables(struct vmspace *vm);
 /* Architecture part of paging_free_user_tables (mm/pgtable.c), called
  * before the tables are freed: on aarch64 the release of the ASID. */
-void paging_release_user_root(uintptr_t root);
+void paging_release_user_root(struct vmspace *vm);
 
-/* Load root as the user translation (TTBR0_EL1) of the calling CPU. */
-void paging_load(uintptr_t root);
+/* Load the translation of vm on the calling CPU: the kernel space loads the
+ * empty table into TTBR0_EL1, a user space its root with its ASID. */
+void paging_load(struct vmspace *vm);
 
 /* Make the entries written so far visible to the page table walkers of
  * every CPU (A8). A walk is not ordered by the acquire and release of
@@ -207,12 +209,14 @@ static inline void paging_publish_entries(void)
  * CPU, so mm/tlb.c sends no shootdown interrupts for a range (A8). */
 #define PAGING_TLB_BROADCAST 1
 
-/* Drop the translations of [va, va + size) in the space whose root is
- * root (a kernel range, in every ASID, when kernel is set) on every CPU.
- * The space need not be loaded (active is unused): the TLBs keep the
- * translations of every ASID. */
-void paging_flush_range(uintptr_t root, bool kernel, bool active, uintptr_t va, size_t size);
+/* Drop the translations of [va, va + size) in vm (a kernel range, in every
+ * ASID, when kernel is set) on every CPU. The space need not be loaded
+ * (active is unused), because the TLBs contain translations of every
+ * ASID. */
+void paging_flush_range(struct vmspace *vm, bool kernel, bool active, uintptr_t va, size_t size);
 void paging_enable_features(void);
+/* The number of ASID generations that ran out (tests). */
+uint64_t paging_asid_rollovers(void);
 /* The translation state that an application processor installs before it
  * runs on kernel stacks (A8): MAIR_EL1, TCR_EL1 and the TTBR1_EL1 and
  * TTBR0_EL1 values of the kernel space. */

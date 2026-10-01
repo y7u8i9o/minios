@@ -14,9 +14,12 @@
  * gicr_phys) and the ITS, if the device tree lists one. Called by
  * arch_init_interrupts on the boot CPU. */
 void its_init(volatile uint8_t *gicr, uintptr_t gicr_phys);
+/* The LPI tables and the ITS collection of an application processor
+ * (A8): an MSI composed on a CPU is delivered to that CPU. */
+void its_init_cpu(volatile uint8_t *gicr, uintptr_t gicr_phys);
 int its_alloc(void);
 void its_register(unsigned lpi, irq_handler_fn fn, void *arg);
 void its_dispatch(struct trapframe *tf, unsigned lpi);
-/* Map event irq - LPI_BASE of devid to the LPI irq and return the MSI
- * address and data that raise it. */
-void its_msi_compose(uint32_t devid, unsigned irq, uint64_t *addr, uint32_t *data);
+/* Map the next event of devid to the LPI irq in the collection of cpu and
+ * return the MSI address and data that raise it. */
+void its_msi_compose(uint32_t devid, unsigned irq, unsigned cpu, uint64_t *addr, uint32_t *data);

@@ -34,7 +34,7 @@ static void flush_local(struct vmspace *vm, uintptr_t va, size_t size)
 {
     bool kernel = vm == &kernel_vmspace || va > USER_TOP;
     bool active = kernel || cpu_current()->vm == vm;
-    paging_flush_range(vm->pt_root, kernel, active, va, size);
+    paging_flush_range(vm, kernel, active, va, size);
 }
 
 static void service(void)

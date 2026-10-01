@@ -147,9 +147,10 @@ static void free_level(pte_t *table, int level)
     }
 }
 
-void paging_free_user_tables(uintptr_t root)
+void paging_free_user_tables(struct vmspace *vm)
 {
-    paging_release_user_root(root);
+    uintptr_t root = vm->pt_root;
+    paging_release_user_root(vm);
     pte_t *top = P2V(root);
     for (int i = 0; i < PT_ROOT_USER_ENTRIES; i++) {
         pte_t e = top[i];

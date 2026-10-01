@@ -358,3 +358,30 @@ checks that an index entry for the other machine is not listed.
 
 The cases `tcc`, `pkg`, `pkg_repo` and `pkg_apps` pass on aarch64 under
 HVF and on x86_64.
+
+### Interrupt distribution and ASID generations (completed 2026-10-02)
+
+- MSI-X vectors are distributed over the CPUs that have started.
+- Every CPU has LPI tables and an ITS collection.
+- ASIDs are 16 bits wide where available and use generations.
+- The boot test is `asid`.
+
+`pci_msix_set_vector` chooses the target CPU in turn among the CPUs that
+have started, and `platform_msi_compose` takes it, on both architectures.
+Before, an MSI was delivered to the composing CPU on x86_64 and to the
+boot CPU on aarch64. Every aarch64 redistributor has a pending table and
+an ITS collection. The root functions of `<arch/paging.h>` take the
+`struct vmspace`, whose `tlb_tag` contains the ASID and its generation, so
+the linear search of a table of 256 roots is gone. The first version of
+the rollover wrote a log line under `asid_lock`, which deadlocked against
+the lock order of the run queues (`locking.md`). The `smp` case on aarch64
+also checks that a device interrupt reaches an application processor.
+
+On aarch64 under HVF the cases `asid`, `smp`, `platform`, `blk`, `gui`,
+`gpu_mode`, `input_keyboard`, `net_icmp`, `audio_pcm`, `fork`, `swap`,
+`hugepages`, `madvise`, `munmap_tables`, `signals`, `pthreads`,
+`smp_user`, `dynlink`, `libc`, `vmm` and `pagetable` pass, and `asid`,
+`smp`, `smp_user` and `fork` pass under TCG. On x86_64 `asid`, `smp`,
+`platform`, `blk`, `gui`, `gpu_mode`, `net_icmp`, `audio_pcm`,
+`input_keyboard`, `fork`, `swap`, `hugepages`, `madvise`, `munmap_tables`
+and `hung_task` pass.

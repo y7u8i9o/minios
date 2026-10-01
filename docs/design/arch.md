@@ -175,7 +175,7 @@ variant of `sleep_ms`.
 | `platform_test_exit(code)` | the exit of a boot test (`ktest.c`) and of a panic with `CONFIG_PANIC_EXIT` | isa-debug-exit on port `0xf4` |
 | `platform_rtc_read` | `rtc_init` reads the date once (`time.md`) | CMOS clock (`cmos.c`) |
 | `platform_pci_read32`, `platform_pci_write32` | configuration space accesses of `drivers/pci.c` | configuration mechanism 1, ports `0xcf8` and `0xcfc` (`pci_config.c`) |
-| `platform_msi_compose(dev, irq, ...)` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data, `dev` unused |
+| `platform_msi_compose(dev, irq, cpu, ...)` | the MSI-X table entries of `pci_msix_set_vector`, for the target CPU that `pick_msi_cpu` chose | local APIC address `0xfee00000` with the APIC id of `cpu`, vector as data, `dev` unused |
 | `platform_devices_init` | devices that exist only on this platform | PS/2 keyboard and mouse |
 
 The console UART implements `<drivers/serial.h>` (`arch/x86_64/serial.c`,
@@ -230,9 +230,11 @@ The table operations that only walk and allocate tables are generic
 `paging_pde`, `paging_map_large`, `paging_alloc_table`, `paging_free_table`
 and `paging_free_user_tables`. The architecture implements the roots and
 the TLB: `paging_init_kernel_root`, `paging_init_user_root` (x86_64 copies
-the kernel half of the root into every user root, aarch64 assigns an
-ASID), `paging_release_user_root`, `paging_load`, `paging_flush_range` and
-`paging_enable_features`. `paging_flush_range(root, kernel, active, va,
+the kernel half of the root into every user root), `paging_release_user_root`,
+`paging_load`, `paging_flush_range` and `paging_enable_features`. The
+functions that load, flush and release a space take the `struct vmspace`,
+whose field `tlb_tag` the architecture uses for its TLB tag, the ASID and
+its generation on aarch64. `paging_flush_range(vm, kernel, active, va,
 size)` drops the translations of a range of one space. On x86_64 it
 flushes the calling CPU only, and only if the space is loaded there,
 because without PCIDs an unloaded space has no translations in the TLB. On
@@ -381,7 +383,22 @@ the test exit call PSCI (`platform.c`).
 The page tables (`paging.c`, A5) use the entry format of the ARMv8
 descriptors and set `MAIR_EL1` with write-back, Device-nGnRE and
 non-cacheable attributes. The kernel root is in `TTBR1_EL1` and the user
-roots are in `TTBR0_EL1` with 8 bit ASIDs (`asid_lock`, `locking.md`).
+roots are in `TTBR0_EL1` with ASIDs (`asid_lock`, `locking.md`). The ASIDs
+are 16 bits wide where `ID_AA64MMFR0_EL1.ASIDBits` reports it, 8 bits
+otherwise, and `asid_bits=N` on the command line uses fewer bits. A space
+receives its ASID at its first load in a generation and stores it with the
+generation in `vmspace.tlb_tag`, so loads and flushes need no lookup. When
+a generation has no free ASID left, it advances. The bitmap is cleared
+except for the ASIDs that the CPUs are running, which stay reserved for
+their spaces, and one `tlbi vmalle1is` drops the entries of the old
+generation. A space that no CPU runs receives a new ASID at its next
+load. A CPU that runs the same space across two rollovers keeps its
+reservation, which follows the tag of the space. ASID 0 belongs to the
+empty root of the kernel space. Before 2026-10-02 a table of 256 roots was
+searched at every load and flush, and spaces beyond 255 shared ASID 0 with
+a TLB flush at every load. The `asid` case loads 24 spaces with
+`asid_bits=3` on four CPUs, which causes several hundred rollovers, and
+checks every read and the flush of replaced frames.
 While the kernel space is active, `TTBR0_EL1` points to an empty table. The
 kernel enables the hardware access flag and dirty state where
 `ID_AA64MMFR1_EL1` reports them.
@@ -424,16 +441,19 @@ bus under `ecam_lock` (`locking.md`). A read outside the bus range returns
 all ones.
 
 MSI interrupts are translated by the GICv3 ITS (`its.c`, A7). The
-redistributor of the boot CPU has an LPI configuration table for 14
-interrupt ID bits and a pending table. The ITS has a command queue of one
+redistributors share one LPI configuration table for 14 interrupt ID bits,
+and each has a pending table of its own. The ITS has a command queue of one
 page, an indirect device table where the ITS supports one (otherwise a
-flat table for 16 buses) and a collection table. Collection 0 targets the
-boot CPU. `irq_alloc` allocates LPIs from 8192. `platform_msi_compose`
+flat table for 16 buses) and a collection table. Every CPU has a
+collection numbered by its id, which `its_init` maps for the boot CPU and
+`its_init_cpu` for each application processor (since 2026-10-02, before
+that every LPI was delivered to the boot CPU). `irq_alloc` allocates LPIs from 8192. `platform_msi_compose`
 translates the requester ID of the function through `msi-map` to a device
 ID. On first use it maps the device with an interrupt translation table of
 32 events (`MAPD`). It then maps the next event to the LPI (`MAPTI`, `INV`,
-`SYNC`) and returns the address of `GITS_TRANSLATER` with the event ID as
-data. `its_lock` protects the command queue and the tables. After the CPU
+`SYNC`) in the collection of the target CPU, and returns the address of
+`GITS_TRANSLATER` with the event ID as data. A log line names the target
+CPU of each LPI. `its_lock` protects the command queue and the tables. After the CPU
 writes a table entry, the code cleans its data cache lines to the point of
 coherency, for an implementation that does not snoop them.
 
@@ -450,8 +470,8 @@ redistributor of the CPU and enables the SGIs and PPIs that have a
 handler. Every SGI and PPI handler is registered before the processors
 start. The generic timer then starts the tick of the CPU. The IPIs are
 SGIs 1 to 3, and the TLB is flushed by broadcast TLBI, as section 12
-describes. Shared peripheral interrupts and LPIs are routed to the boot
-CPU.
+describes. Shared peripheral interrupts are routed to the boot CPU, and
+LPIs to the CPU that `pci_msix_set_vector` chose.
 
 `cpu_init_el0_access` enables the FP and SIMD instructions
 (`CPACR_EL1.FPEN`) and, since A9, the cache maintenance instructions and

@@ -179,18 +179,16 @@ uintptr_t paging_init_kernel_root(void);
  * of the kernel root is copied into it. */
 void paging_init_user_root(uintptr_t root, uintptr_t kernel_root);
 
-/* Free every table page reachable from the user half of root, then the
- * root itself. Mapped frames are not freed. */
-void paging_free_user_tables(uintptr_t root);
+/* Free every table page reachable from the user half of the root of vm,
+ * then the root itself. Mapped frames are not freed. */
+struct vmspace;
+void paging_free_user_tables(struct vmspace *vm);
 /* Architecture part of paging_free_user_tables (mm/pgtable.c), called
- * before the tables are freed: on aarch64 the release of the ASID. */
-void paging_release_user_root(uintptr_t root);
+ * before the tables are freed: on aarch64 the invalidation of the ASID. */
+void paging_release_user_root(struct vmspace *vm);
 
-/* Load root as the translation of the calling CPU. */
-static inline void paging_load(uintptr_t root)
-{
-    __asm__ volatile("movq %0, %%cr3" : : "r"(root) : "memory");
-}
+/* Load the root of vm as the translation of the calling CPU. */
+void paging_load(struct vmspace *vm);
 
 /* Make the entries written so far visible to the page table walkers of
  * every CPU. The x86 walkers snoop the stores in program order. */
@@ -203,32 +201,25 @@ static inline void paging_publish_entries(void)
  * CPUs a shootdown interrupt. */
 #define PAGING_TLB_BROADCAST 0
 
-/* Drop the translations of [va, va + size) in the space whose root is
- * root (a kernel range when kernel is set) on the calling CPU. Without
- * PCIDs a space that is not loaded (active false) has no translations in
- * the TLB. A user range of more than 64 pages reloads CR3, which does not
- * flush the global kernel mappings. */
-static inline void paging_flush_range(uintptr_t root, bool kernel, bool active,
-                                      uintptr_t va, size_t size)
-{
-    (void)root;
-    if (!active)
-        return;
-    if (kernel || size <= 64 * PAGE_SIZE) {
-        for (size_t off = 0; off < size; off += PAGE_SIZE)
-            __asm__ volatile("invlpg (%0)" : : "r"(va + off) : "memory");
-        return;
-    }
-    uintptr_t cr3;
-    __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
-    __asm__ volatile("movq %0, %%cr3" : : "r"(cr3) : "memory");
-}
+/* Drop the translations of [va, va + size) in vm (a kernel range when
+ * kernel is set) on the calling CPU. Without PCIDs a space that is not
+ * loaded (active false) has no translations in the TLB. A user range of
+ * more than 64 pages reloads CR3, which does not flush the global kernel
+ * mappings. */
+void paging_flush_range(struct vmspace *vm, bool kernel, bool active, uintptr_t va, size_t size);
 
 /* Make the instruction fetches of every CPU see the data written to the
  * frame at pa. The x86 caches are coherent: nothing to do. */
 static inline void paging_sync_icache(uintptr_t pa)
 {
     (void)pa;
+}
+
+/* The number of ASID generations that ran out (tests). x86_64 uses no
+ * PCIDs, so it has none. */
+static inline uint64_t paging_asid_rollovers(void)
+{
+    return 0;
 }
 
 /* Enable the MMU features the kernel depends on (NX, global pages, write

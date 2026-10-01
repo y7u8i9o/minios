@@ -108,10 +108,11 @@ void platform_pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off, 
 
 /* MSI through the ITS (its.c): the device ID is the requester ID
  * translated by the msi-map of the device tree. */
-void platform_msi_compose(const struct pci_dev *dev, unsigned irq, uint64_t *addr, uint32_t *data)
+void platform_msi_compose(const struct pci_dev *dev, unsigned irq, unsigned cpu,
+                          uint64_t *addr, uint32_t *data)
 {
     uint32_t rid = (uint32_t)dev->bus << 8 | (uint32_t)dev->slot << 3 | dev->func;
-    its_msi_compose(rid - devtree.msi_rid_base + devtree.msi_base, irq, addr, data);
+    its_msi_compose(rid - devtree.msi_rid_base + devtree.msi_base, irq, cpu, addr, data);
 }
 
 /* The virt machine has no devices outside PCI and the device tree. */

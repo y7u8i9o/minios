@@ -1,0 +1,3 @@
+4 processors running
+lpi [0-9]+: device [0-9a-f]+ event [0-9]+ on cpu [1-9]
+TEST PASS

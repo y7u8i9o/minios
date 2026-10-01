@@ -1,0 +1,5 @@
+vmm\] .*, 3 bit ASIDs
+asid: first frames, [0-9]+ reads, 0 wrong values
+asid: replaced frames, [0-9]+ reads, 0 wrong values
+asid: 24 spaces on cpus [0-9a-f]+, [1-9][0-9]* rollovers
+TEST PASS

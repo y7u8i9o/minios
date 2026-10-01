@@ -78,7 +78,8 @@ static uintptr_t its_phys;
 static uint64_t *cmdq;
 static uintptr_t cmdq_phys;
 static unsigned cmdq_write;
-static uint64_t rdbase;                 /* target of the collection, as MAPC encodes it */
+static bool its_pta;                    /* GITS_TYPER.PTA: collections name redistributor addresses */
+static uintptr_t prop_phys;             /* the configuration table, shared by every redistributor */
 static unsigned itt_entry_size;
 static uint64_t *device_l1;             /* level 1 device table, or the flat table */
 static bool device_indirect;
@@ -88,9 +89,10 @@ static struct its_device {
     unsigned next_event;
 } devices[MAX_DEVICES];
 static unsigned ndevices;
-/* Device ID and event of each LPI mapped through the ITS. */
+/* Device ID, event and target CPU of each LPI mapped through the ITS. */
 static struct {
     uint32_t devid, event;
+    unsigned cpu;
     bool mapped;
 } lpi_map[LPI_MAX];
 
@@ -155,8 +157,9 @@ static void its_command(uint64_t d0, uint64_t d1, uint64_t d2)
     wr64(its, GITS_CWRITER, cmdq_write);
 }
 
-/* Wait until the ITS has executed every queued command. */
-static void its_wait(void)
+/* Wait until the ITS has executed every queued command, synchronizing
+ * with the redistributor that rdbase names. */
+static void its_wait(uint64_t rdbase)
 {
     kassert(spin_holding(&its_lock));
     its_command(CMD_SYNC, 0, rdbase);
@@ -249,26 +252,52 @@ static struct its_device *device_get(uint32_t devid)
 
 /* ---- the redistributor ---- */
 
+/* The LPI tables of one redistributor: the configuration table, one byte
+ * per LPI from 8192, which every redistributor shares and the boot CPU
+ * allocates, and a pending table of its own. */
 static void setup_lpis(volatile uint8_t *gicr, uintptr_t gicr_phys)
 {
     if (!(rd64(gicr, GICR_TYPER) & GICR_TYPER_PLPIS))
         panic("gic: the redistributor at %lx has no LPIs", gicr_phys);
     if (rd32(gicr, GICR_CTLR) & GICR_CTLR_LPIS)
         panic("gic: LPIs were enabled before the kernel");
-    /* Configuration: one byte per LPI from 8192, disabled. */
-    uintptr_t prop_phys, pend_phys;
-    size_t prop_size = (1UL << LPI_ID_BITS) - LPI_BASE;
-    prop_table = alloc_zeroed(1, &prop_phys);
-    kassert(prop_size <= 2 * PAGE_SIZE);
-    memset(prop_table, LPI_PRIORITY | LPI_PROP_RES1, prop_size);
-    clean_range(prop_table, prop_size);
+    if (!prop_table) {
+        size_t prop_size = (1UL << LPI_ID_BITS) - LPI_BASE;
+        prop_table = alloc_zeroed(1, &prop_phys);
+        kassert(prop_size <= 2 * PAGE_SIZE);
+        memset(prop_table, LPI_PRIORITY | LPI_PROP_RES1, prop_size);
+        clean_range(prop_table, prop_size);
+    }
     /* Pending bits for every interrupt ID, 64 KiB aligned. */
+    uintptr_t pend_phys;
     alloc_zeroed(4, &pend_phys);
     wr64(gicr, GICR_PROPBASER, prop_phys | REG_ATTR_WB_INNER | (LPI_ID_BITS - 1));
     wr64(gicr, GICR_PENDBASER, pend_phys | REG_ATTR_WB_INNER | (1UL << 62));
     __asm__ volatile("dsb sy" : : : "memory");
     wr32(gicr, GICR_CTLR, rd32(gicr, GICR_CTLR) | GICR_CTLR_LPIS);
     __asm__ volatile("dsb sy; isb" : : : "memory");
+}
+
+/* Map the collection of the calling CPU, numbered by its id, to its
+ * redistributor. The ITS names the redistributor by its physical address
+ * (PTA) or by its processor number. */
+static void map_collection(volatile uint8_t *gicr, uintptr_t gicr_phys)
+{
+    struct cpu *c = cpu_current();
+    c->arch.its_rdbase = its_pta ? gicr_phys : ((rd64(gicr, GICR_TYPER) >> 8) & 0xffff) << 16;
+    spin_lock(&its_lock);
+    its_command(CMD_MAPC, 0, BASER_VALID | c->arch.its_rdbase | c->id);
+    its_command(CMD_INVALL, 0, c->id);
+    its_wait(c->arch.its_rdbase);
+    spin_unlock(&its_lock);
+}
+
+void its_init_cpu(volatile uint8_t *gicr, uintptr_t gicr_phys)
+{
+    if (!its)
+        return;
+    setup_lpis(gicr, gicr_phys);
+    map_collection(gicr, gicr_phys);
 }
 
 void its_init(volatile uint8_t *gicr, uintptr_t gicr_phys)
@@ -290,10 +319,7 @@ void its_init(volatile uint8_t *gicr, uintptr_t gicr_phys)
     uint64_t typer = rd64(its, GITS_TYPER);
     itt_entry_size = (unsigned)((typer >> 4) & 0xf) + 1;
     device_bits = (unsigned)((typer >> 13) & 0x1f) + 1;
-    if (typer & GITS_TYPER_PTA)
-        rdbase = gicr_phys;             /* the physical address, bits 51:16 */
-    else
-        rdbase = ((rd64(gicr, GICR_TYPER) >> 8) & 0xffff) << 16;   /* processor number */
+    its_pta = (typer & GITS_TYPER_PTA) != 0;
 
     cmdq = alloc_zeroed(0, &cmdq_phys);
     wr64(its, GITS_CBASER, BASER_VALID | ATTR_WB_INNER | cmdq_phys | (CMDQ_SIZE / PAGE_SIZE - 1));
@@ -304,12 +330,7 @@ void its_init(volatile uint8_t *gicr, uintptr_t gicr_phys)
         panic("its: no device table");
     wr32(its, GITS_CTLR, GITS_CTLR_ENABLED);
 
-    /* Collection 0 targets the boot CPU. */
-    spin_lock(&its_lock);
-    its_command(CMD_MAPC, 0, BASER_VALID | rdbase | 0);
-    its_command(CMD_INVALL, 0, 0);
-    its_wait();
-    spin_unlock(&its_lock);
+    map_collection(gicr, gicr_phys);
     klog_info("its at %lx, %u bit device ids in a%s table, lpis %u to %u", its_phys,
               device_bits, device_indirect ? "n indirect" : " flat", LPI_BASE,
               LPI_BASE + LPI_MAX - 1);
@@ -337,7 +358,7 @@ void its_register(unsigned lpi, irq_handler_fn fn, void *arg)
     spin_lock(&its_lock);
     if (lpi_map[n].mapped) {
         its_command(CMD_INV | (uint64_t)lpi_map[n].devid << 32, lpi_map[n].event, 0);
-        its_wait();
+        its_wait(cpu_by_id(lpi_map[n].cpu)->arch.its_rdbase);
     }
     spin_unlock(&its_lock);
 }
@@ -351,7 +372,7 @@ void its_dispatch(struct trapframe *tf, unsigned lpi)
         klog_warn("unhandled lpi %u", lpi);
 }
 
-void its_msi_compose(uint32_t devid, unsigned irq, uint64_t *addr, uint32_t *data)
+void its_msi_compose(uint32_t devid, unsigned irq, unsigned cpu, uint64_t *addr, uint32_t *data)
 {
     unsigned n = irq - LPI_BASE;
     if (irq < LPI_BASE || n >= LPI_MAX || !its)
@@ -361,12 +382,16 @@ void its_msi_compose(uint32_t devid, unsigned irq, uint64_t *addr, uint32_t *dat
         struct its_device *d = device_get(devid);
         if (!d || d->next_event >= (1u << EVENT_BITS))
             panic("its: no event for device %x", devid);
+        /* The event is delivered to cpu through its collection. */
+        struct cpu *c = cpu_by_id(cpu);
         lpi_map[n].devid = devid;
         lpi_map[n].event = d->next_event++;
+        lpi_map[n].cpu = c->id;
         lpi_map[n].mapped = true;
-        its_command(CMD_MAPTI | (uint64_t)devid << 32, lpi_map[n].event | (uint64_t)irq << 32, 0);
+        its_command(CMD_MAPTI | (uint64_t)devid << 32, lpi_map[n].event | (uint64_t)irq << 32, c->id);
         its_command(CMD_INV | (uint64_t)devid << 32, lpi_map[n].event, 0);
-        its_wait();
+        its_wait(c->arch.its_rdbase);
+        klog_info("lpi %u: device %x event %u on cpu %u", irq, devid, lpi_map[n].event, c->id);
     }
     *addr = its_phys + GITS_TRANSLATER;
     *data = lpi_map[n].event;

@@ -482,12 +482,14 @@ These locks are in user space and do not add a kernel lock-order level.
 
 ## A5 additions
 
-- `asid_lock` (spinlock, `arch/aarch64/paging.c`) protects the table that
-  assigns an ASID to each user root. It is a leaf: `paging_init_user_root`
-  takes it from `vmspace_create` without other locks,
-  `paging_release_user_root` from `vmspace_destroy`, and `paging_load`
-  under the `run_queue.lock` of the switching CPU or under no lock. It
-  exists only on aarch64.
+- `asid_lock` (spinlock, `arch/aarch64/paging.c`) protects the ASID
+  generation, the bitmap of assigned ASIDs, `vmspace.tlb_tag` and the ASID
+  fields of `struct arch_cpu` (since 2026-10-02, the generation scheme of
+  `arch.md`). It is a leaf. `paging_load` takes it under the
+  `run_queue.lock` of the switching CPU or under no lock, so nothing under
+  it may log or wake a thread: logging can take a `waitq.lock`, which comes
+  before `run_queue.lock`. A log line of the first rollover code deadlocked
+  the `asid` case for that reason. It exists only on aarch64.
 - The access flag and dirty state update of a fault (`update_access` in
   `mm/vma.c`) takes `vmspace.lock` alone, like `vma_resolve_fault`.
 

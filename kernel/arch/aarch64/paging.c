@@ -1,10 +1,13 @@
 #define KLOG_SUBSYS "paging"
 #include <arch/paging.h>
 #include <arch/cpu.h>
+#include <arch/smp.h>
 #include <mm/vmm.h>
 #include <boot.h>
 #include <sync/spinlock.h>
 #include <lib/string.h>
+#include <lib/cmdline.h>
+#include <lib/printf.h>
 #include <klog.h>
 #include <debug/panic.h>
 #include "early_mmio.h"
@@ -84,12 +87,109 @@ static pte_t empty_root[PT_ENTRIES] __aligned(PAGE_SIZE);
 static uintptr_t kernel_root;
 static bool hw_access_flag, hw_dirty;
 
-/* ASIDs of the user roots. ASID 0 belongs to the empty root. A root
- * without an ASID (all in use) runs with ASID 0 and its translations are
- * dropped whenever it is loaded. Protected by asid_lock. */
-#define ASID_COUNT 256
+/* ASIDs (A8). The tag of a space, vmspace.tlb_tag, is its ASID in the low
+ * asid_bits bits and the generation in which the ASID was assigned above
+ * them. ASIDs are assigned at the first load of a space in a generation
+ * and are not released when a space is destroyed. When the generation has
+ * no free ASID left, it advances: the bitmap is cleared except for the
+ * ASIDs that the CPUs are running, and one broadcast invalidation drops
+ * every TLB entry of the old generation. A space keeps its ASID across
+ * the change when a CPU is running it, and otherwise receives a new one
+ * at its next load. ASID 0 is the empty root of the kernel space.
+ * asid_lock protects asid_generation, asid_map, asid_next, the tags and
+ * the ASID fields of struct arch_cpu. */
+#define ASID_BITS_MAX 16
 static DEFINE_SPINLOCK(asid_lock);
-static uintptr_t asid_roots[ASID_COUNT];
+static unsigned asid_bits = 8;          /* 16 where ID_AA64MMFR0_EL1 reports it, set at boot */
+static uint64_t asid_generation;
+static uint64_t asid_map[(1UL << ASID_BITS_MAX) / 64];
+static uint64_t asid_next = 1;
+static uint64_t asid_rollovers;
+
+static uint64_t asid_mask(void)
+{
+    return (1UL << asid_bits) - 1;
+}
+
+static bool asid_used(uint64_t asid)
+{
+    return asid_map[asid / 64] & (1UL << (asid % 64));
+}
+
+static void asid_set(uint64_t asid)
+{
+    asid_map[asid / 64] |= 1UL << (asid % 64);
+}
+
+uint64_t paging_asid_rollovers(void)
+{
+    return __atomic_load_n(&asid_rollovers, __ATOMIC_RELAXED);
+}
+
+/* A new generation. The ASIDs that the CPUs run stay reserved, with the
+ * tag of their space, so that the spaces keep them. A CPU that has not
+ * switched since an earlier rollover keeps its reserved tag, which
+ * asid_assign updated when its space was assigned again. */
+static void asid_rollover(void)
+{
+    /* No log line here: paging_load runs under the run queue lock, and
+     * logging can take a wait queue lock, which comes first in the lock
+     * order. */
+    asid_generation++;
+    __atomic_store_n(&asid_rollovers, asid_rollovers + 1, __ATOMIC_RELAXED);
+    memset(asid_map, 0, sizeof asid_map);
+    asid_set(0);
+    for (unsigned i = 0; i < smp_cpu_count(); i++) {
+        struct cpu *c = cpu_by_id(i);
+        if (c->arch.asid_active) {
+            c->arch.asid_reserved = c->arch.asid_active;
+            c->arch.asid_active = 0;
+        }
+        asid_set(c->arch.asid_reserved & asid_mask());
+    }
+    asid_next = 1;
+    __asm__ volatile("dsb ishst; tlbi vmalle1is; dsb ish; isb" : : : "memory");
+}
+
+/* The tag of vm in the current generation. Called under asid_lock. */
+static uint64_t asid_assign(struct vmspace *vm)
+{
+    uint64_t tag = vm->tlb_tag;
+    uint64_t current = asid_generation << asid_bits;
+    if (tag && (tag & ~asid_mask()) == current)
+        return tag;
+    uint64_t old = tag & asid_mask();
+    if (tag) {
+        /* A space that a CPU ran across the last rollover keeps its ASID,
+         * and the reservation follows the new tag. */
+        bool reserved = false;
+        for (unsigned i = 0; i < smp_cpu_count(); i++) {
+            struct cpu *c = cpu_by_id(i);
+            if (c->arch.asid_reserved == tag) {
+                c->arch.asid_reserved = current | old;
+                reserved = true;
+            }
+        }
+        if (reserved)
+            return vm->tlb_tag = current | old;
+        /* An ASID that nobody took in this generation is reused. */
+        if (old && !asid_used(old)) {
+            asid_set(old);
+            return vm->tlb_tag = current | old;
+        }
+    }
+    uint64_t count = 1UL << asid_bits;
+    for (uint64_t n = 0; n < count; n++) {
+        uint64_t a = (asid_next + n) % count;
+        if (a && !asid_used(a)) {
+            asid_set(a);
+            asid_next = a + 1;
+            return vm->tlb_tag = current | a;
+        }
+    }
+    asid_rollover();
+    return asid_assign(vm);
+}
 
 static uintptr_t image_phys(const void *p)
 {
@@ -104,67 +204,50 @@ uintptr_t paging_init_kernel_root(void)
 
 void paging_init_user_root(uintptr_t root, uintptr_t kroot)
 {
+    (void)root;
     (void)kroot;
-    spin_lock(&asid_lock);
-    for (unsigned i = 1; i < ASID_COUNT; i++) {
-        if (!asid_roots[i]) {
-            asid_roots[i] = root;
-            break;
-        }
-    }
-    spin_unlock(&asid_lock);
 }
 
-static unsigned asid_of(uintptr_t root)
+void paging_release_user_root(struct vmspace *vm)
 {
-    unsigned asid = 0;
-    spin_lock(&asid_lock);
-    for (unsigned i = 1; i < ASID_COUNT; i++) {
-        if (asid_roots[i] == root) {
-            asid = i;
-            break;
-        }
-    }
-    spin_unlock(&asid_lock);
-    return asid;
+    /* No CPU uses the space any more (vmspace_destroy). Its ASID stays
+     * assigned until the next rollover, so its TLB entries are dropped
+     * now, before its tables are freed. */
+    uint64_t asid = vm->tlb_tag & asid_mask();
+    if (asid)
+        __asm__ volatile("dsb ishst; tlbi aside1is, %0; dsb ish; isb"
+                         : : "r"(asid << 48) : "memory");
 }
 
-void paging_release_user_root(uintptr_t root)
+void paging_load(struct vmspace *vm)
 {
-    unsigned asid = asid_of(root);
-    /* No CPU uses the space any more (vmspace_destroy). Drop the entries
-     * of its ASID from the TLBs of every CPU before the ASID is reused. */
-    __asm__ volatile("dsb ishst; tlbi aside1is, %0; dsb ish; isb"
-                     : : "r"((uint64_t)asid << 48) : "memory");
-    if (!asid)
-        return;
-    spin_lock(&asid_lock);
-    asid_roots[asid] = 0;
-    spin_unlock(&asid_lock);
-}
-
-void paging_load(uintptr_t root)
-{
-    if (root == kernel_root) {
+    if (vm == &kernel_vmspace) {
         uint64_t ttbr1;
         __asm__ volatile("mrs %0, ttbr1_el1" : "=r"(ttbr1));
-        if ((ttbr1 & PTE_ADDR_MASK) != root) {
+        if ((ttbr1 & PTE_ADDR_MASK) != kernel_root) {
             /* The first activation: the kernel root replaces Limine's
              * tables. The early device mappings move along. */
-            early_mmio_install(root);
+            early_mmio_install(kernel_root);
             __asm__ volatile("dsb ishst; msr ttbr1_el1, %0; isb; tlbi vmalle1; dsb nsh; isb"
-                             : : "r"(root) : "memory");
+                             : : "r"(kernel_root) : "memory");
         }
         __asm__ volatile("msr ttbr0_el1, %0; isb" : : "r"(image_phys(empty_root)) : "memory");
+        spin_lock(&asid_lock);
+        cpu_current()->arch.asid_active = 0;
+        cpu_current()->arch.asid_reserved = 0;
+        spin_unlock(&asid_lock);
         return;
     }
-    uint64_t asid = asid_of(root);
-    __asm__ volatile("msr ttbr0_el1, %0; isb" : : "r"(root | (asid << 48)) : "memory");
-    if (!asid)
-        __asm__ volatile("tlbi aside1, xzr; dsb nsh; isb" : : : "memory");
+    spin_lock(&asid_lock);
+    uint64_t tag = asid_assign(vm);
+    cpu_current()->arch.asid_active = tag;
+    cpu_current()->arch.asid_reserved = 0;
+    __asm__ volatile("msr ttbr0_el1, %0; isb"
+                     : : "r"(vm->pt_root | ((tag & asid_mask()) << 48)) : "memory");
+    spin_unlock(&asid_lock);
 }
 
-void paging_flush_range(uintptr_t root, bool kernel, bool active, uintptr_t va, size_t size)
+void paging_flush_range(struct vmspace *vm, bool kernel, bool active, uintptr_t va, size_t size)
 {
     (void)active;
     /* The table updates are visible to the walkers of every CPU before
@@ -180,8 +263,11 @@ void paging_flush_range(uintptr_t root, bool kernel, bool active, uintptr_t va, 
                                  : : "r"(((va + off) >> PAGE_SHIFT) & ((1UL << 44) - 1)) : "memory");
         }
     } else {
-        /* A root without an ASID runs with ASID 0 (asid_of). */
-        uint64_t asid = (uint64_t)asid_of(root) << 48;
+        /* A tag of an older generation names an ASID whose entries the
+         * rollover dropped, or that the CPUs still run (reserved); in
+         * both cases invalidating that ASID is correct, at worst for
+         * another space as well. */
+        uint64_t asid = (__atomic_load_n(&vm->tlb_tag, __ATOMIC_RELAXED) & asid_mask()) << 48;
         if (size > 64 * PAGE_SIZE) {
             __asm__ volatile("tlbi aside1is, %0" : : "r"(asid) : "memory");
         } else {
@@ -222,10 +308,28 @@ void paging_enable_features(void)
     unsigned hafdbs = mmfr1 & 0xf;
     hw_access_flag = hafdbs >= 1;
     hw_dirty = hafdbs >= 2;
-    /* 8 bit ASIDs (TCR.AS clear) are enough for ASID_COUNT. The hardware
-     * access flag and dirty state are enabled where the processor
-     * implements them. */
+    /* 16 bit ASIDs where ID_AA64MMFR0_EL1.ASIDBits reports them, 8 bits
+     * otherwise. The hardware access flag and dirty state are enabled
+     * where the processor implements them. */
+    uint64_t mmfr0;
+    __asm__ volatile("mrs %0, id_aa64mmfr0_el1" : "=r"(mmfr0));
     tcr &= ~TCR_AS;
+    if (((mmfr0 >> 4) & 0xf) == 2) {
+        tcr |= TCR_AS;
+        asid_bits = 16;
+    }
+    /* asid_bits=N on the command line uses fewer bits, so that a test can
+     * cause rollovers with a few spaces. */
+    char val[8];
+    if (cmdline_lookup("asid_bits", val, sizeof val) && val[0] >= '1' && val[0] <= '9') {
+        unsigned bits = (unsigned)(val[0] - '0');
+        if (val[1] >= '0' && val[1] <= '9')
+            bits = bits * 10 + (unsigned)(val[1] - '0');
+        if (bits >= 2 && bits < asid_bits)
+            asid_bits = bits;
+    }
+    asid_generation = 1;
+    asid_set(0);
     if (hw_access_flag)
         tcr |= TCR_HA;
     if (hw_dirty)
@@ -244,9 +348,9 @@ void paging_cpu_state(uint64_t *mair, uint64_t *tcr, uint64_t *ttbr1, uint64_t *
 
 const char *paging_describe(void)
 {
-    if (hw_dirty)
-        return ", hardware access flag and dirty state";
-    if (hw_access_flag)
-        return ", hardware access flag";
-    return ", software access flag and dirty state";
+    static char text[96];
+    ksnprintf(text, sizeof text, ", %u bit ASIDs, %s", asid_bits,
+              hw_dirty ? "hardware access flag and dirty state" :
+              hw_access_flag ? "hardware access flag" : "software access flag and dirty state");
+    return text;
 }

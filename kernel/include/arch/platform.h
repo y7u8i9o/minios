@@ -28,9 +28,11 @@ void platform_rtc_read(struct rtc_date *d);
 uint32_t platform_pci_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off);
 void platform_pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off, uint32_t v);
 /* The MSI address and data with which dev delivers interrupt number irq
- * to the calling CPU. On aarch64 this also maps the message in the ITS,
- * which identifies the sender by its requester ID. */
-void platform_msi_compose(const struct pci_dev *dev, unsigned irq, uint64_t *addr, uint32_t *data);
+ * to the CPU with the kernel id cpu, which has started. On aarch64 this
+ * also maps the message in the ITS, which identifies the sender by its
+ * requester ID. */
+void platform_msi_compose(const struct pci_dev *dev, unsigned irq, unsigned cpu,
+                          uint64_t *addr, uint32_t *data);
 
 /* Register the devices that only this platform has (the PS/2 keyboard and
  * mouse on the PC). Called after the input core is initialized. */

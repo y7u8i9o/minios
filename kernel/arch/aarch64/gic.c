@@ -157,7 +157,9 @@ void arch_init_interrupts(void)
 
 void gic_init_cpu(void)
 {
-    init_cpu_interface(cpu_current());
+    struct cpu *c = cpu_current();
+    uintptr_t gicr_phys = init_cpu_interface(c);
+    its_init_cpu(c->arch.gicr, gicr_phys);
 }
 
 void irq_register(unsigned irq, irq_handler_fn fn, void *arg)

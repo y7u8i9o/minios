@@ -193,7 +193,7 @@ void vmspace_destroy(struct vmspace *vm)
         vmspace_activate(&kernel_vmspace);
     tlb_drop_vmspace(vm);
     kassert(vm->cpu_mask == 0);
-    paging_free_user_tables(vm->pt_root);
+    paging_free_user_tables(vm);
     kfree(vm);
 }
 
@@ -209,7 +209,7 @@ void vmspace_activate(struct vmspace *vm)
      * may contain translations of either space. */
     __atomic_fetch_or(&vm->cpu_mask, bit, __ATOMIC_SEQ_CST);
     c->vm = vm;
-    paging_load(vm->pt_root);
+    paging_load(vm);
     if (old)
         __atomic_fetch_and(&old->cpu_mask, ~bit, __ATOMIC_SEQ_CST);
 }

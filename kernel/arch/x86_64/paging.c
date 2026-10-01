@@ -77,9 +77,29 @@ void paging_init_user_root(uintptr_t root, uintptr_t kernel_root)
            (PT_ENTRIES - PT_ROOT_USER_ENTRIES) * sizeof(pte_t));
 }
 
-void paging_release_user_root(uintptr_t root)
+void paging_release_user_root(struct vmspace *vm)
 {
-    (void)root;
+    (void)vm;
+}
+
+void paging_load(struct vmspace *vm)
+{
+    __asm__ volatile("movq %0, %%cr3" : : "r"(vm->pt_root) : "memory");
+}
+
+void paging_flush_range(struct vmspace *vm, bool kernel, bool active, uintptr_t va, size_t size)
+{
+    (void)vm;
+    if (!active)
+        return;
+    if (kernel || size <= 64 * PAGE_SIZE) {
+        for (size_t off = 0; off < size; off += PAGE_SIZE)
+            __asm__ volatile("invlpg (%0)" : : "r"(va + off) : "memory");
+        return;
+    }
+    uintptr_t cr3;
+    __asm__ volatile("movq %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("movq %0, %%cr3" : : "r"(cr3) : "memory");
 }
 
 const char *paging_describe(void)

@@ -37,7 +37,7 @@ static void test_platform(void)
     ktest_assert(pci_count() > 0, "no PCI functions");
     uint64_t addr;
     uint32_t data;
-    platform_msi_compose(pci_device(0), (unsigned)a, &addr, &data);
+    platform_msi_compose(pci_device(0), (unsigned)a, cpu_current()->id, &addr, &data);
     ktest_assert(addr != 0, "MSI address 0 for irq %d", a);
 
     /* The clock device reads a plausible date. */

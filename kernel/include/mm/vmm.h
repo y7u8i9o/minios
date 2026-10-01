@@ -46,6 +46,7 @@ struct vmspace {
     struct list_head link;      /* vmspaces, protected by vmspaces_lock */
     cpu_mask_t cpu_mask;        /* CPUs with this space in CR3, atomic updates in vmspace_activate */
     struct percpu_counter resident; /* resident user pages, lock-free sum */
+    uint64_t tlb_tag;           /* architecture TLB tag: ASID and generation on aarch64, asid_lock */
 };
 
 extern struct vmspace kernel_vmspace;

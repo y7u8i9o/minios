@@ -1,6 +1,8 @@
 #define KLOG_SUBSYS "pci"
 #include <drivers/pci.h>
 #include <arch/platform.h>
+#include <arch/smp.h>
+#include <arch/cpu.h>
 #include <mm/vmm.h>
 #include <klog.h>
 #include <lib/printf.h>
@@ -260,6 +262,23 @@ void pci_enable_bus_master(const struct pci_dev *d)
     pci_write16(d, 0x04, cmd);
 }
 
+/* The CPU that receives the next MSI-X vector: the CPUs that have started,
+ * in turn, so that the interrupts of the devices are spread over them.
+ * Devices set up during boot, before the application processors start,
+ * use the boot CPU. */
+static unsigned next_msi_cpu;           /* advanced atomically */
+
+static unsigned pick_msi_cpu(void)
+{
+    unsigned n = smp_cpu_count();
+    for (unsigned i = 0; i < n; i++) {
+        unsigned c = __atomic_fetch_add(&next_msi_cpu, 1, __ATOMIC_RELAXED) % n;
+        if (__atomic_load_n(&cpu_by_id(c)->started, __ATOMIC_ACQUIRE))
+            return c;
+    }
+    return cpu_current()->id;
+}
+
 /* MSI-X table, mapped on first use. */
 static volatile uint32_t *msix_table(const struct pci_dev *d, uint8_t cap, unsigned *nentries)
 {
@@ -300,7 +319,7 @@ int pci_msix_set_vector(const struct pci_dev *d, unsigned index, unsigned vector
         return -EINVAL;
     uint64_t addr;
     uint32_t data;
-    platform_msi_compose(d, vector, &addr, &data);
+    platform_msi_compose(d, vector, pick_msi_cpu(), &addr, &data);
     volatile uint32_t *e = tbl + index * 4;
     e[0] = (uint32_t)addr;
     e[1] = (uint32_t)(addr >> 32);

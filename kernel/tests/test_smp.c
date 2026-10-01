@@ -124,7 +124,6 @@ static void test_smp(void)
     while (!__atomic_load_n(&reader_ready, __ATOMIC_ACQUIRE))
         sched_preempt();
     tlb_get_stats(&before);
-    page_get(phys_to_page(old_pa));         /* keep the stack frame for the restore */
     ktest_assert(vmm_unmap(&kernel_vmspace, remap_va, PAGE_SIZE) == 0, "unmap");
     ktest_assert(vmm_map(&kernel_vmspace, remap_va, page_to_phys(fresh), PAGE_SIZE,
                          VM_KERNEL_RW | VM_GLOBAL) == 0, "map");
@@ -140,7 +139,10 @@ static void test_smp(void)
                      after.ipis - before.ipis);
         ktest_assert(after.acks == after.ipis, "%lu ipis but %lu acks", after.ipis, after.acks);
     }
+    /* vmm_unmap leaves the frames to the caller: the fresh one is freed
+     * here, and the stack frame returns to the stack. */
     ktest_assert(vmm_unmap(&kernel_vmspace, remap_va, PAGE_SIZE) == 0, "unmap the fresh frame");
+    pmm_free_page(fresh);
     ktest_assert(vmm_map(&kernel_vmspace, remap_va, old_pa, PAGE_SIZE, VM_KERNEL_RW | VM_GLOBAL) == 0,
                  "restore the stack frame");
     kstack_free(stack);
