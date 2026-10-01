@@ -518,6 +518,8 @@ frame interface between `arch_signal_setup_frame` and the libc restorer (a
 return address on the stack on x86_64, x30 on aarch64), and the
 `long double` format (`libc/src/ldouble.h`). Since A9 tcc compiles for
 the arm64 target with its own runtime library, and each architecture has
-its own package repository (`tcc.md`, `packages.md`). The kernel self-test
-`cpu` of x86 features and the `kbd` case of the 8042 controller are x86
-specific.
+its own package repository (`tcc.md`, `packages.md`). Three cases are x86
+specific and name x86_64 in their `arches` file: `cpu` (x86 processor
+features), `kbd` (the 8042 controller) and `fb_format` (the 24 bpp modes
+of the PC's VGA, which the ramfb of edk2 does not offer). The harness
+reports them as skipped on aarch64.

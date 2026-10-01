@@ -192,7 +192,14 @@ void vmspace_destroy(struct vmspace *vm)
     if (cpu_current()->vm == vm)
         vmspace_activate(&kernel_vmspace);
     tlb_drop_vmspace(vm);
-    kassert(vm->cpu_mask == 0);
+    /* A CPU that switches away from vm sets its new space in cpu.vm before
+     * paging_load and clears its bit here after it. When it services the
+     * drop request in that window, from the spin loop of a lock that
+     * paging_load acquires (asid_lock on aarch64), it acknowledges without
+     * switching, and its bit is cleared a moment later. The tables are
+     * freed only after every bit is clear. */
+    while (__atomic_load_n(&vm->cpu_mask, __ATOMIC_ACQUIRE))
+        cpu_relax();
     paging_free_user_tables(vm);
     kfree(vm);
 }

@@ -4,6 +4,9 @@
 #
 # A case directory contains:
 #   cmdline   kernel command line (optional, typically test=<name>)
+#   arches    the architectures the case runs on, one per line (optional,
+#             default all). On another architecture the case is reported
+#             as SKIP and the script exits with status 2.
 #   expect    one extended regex per line, every line must match the serial log
 #   reject    one extended regex per line, no line may match (optional)
 #   timeout   seconds to wait before declaring failure (optional, default 30)
@@ -43,6 +46,10 @@ NAME="$(basename "$CASE")"
 TOP="$(cd "$(dirname "$0")/.." && pwd)"
 QEMU="${QEMU:-qemu-system-${ARCH:-x86_64}}"
 OUTDIR="$BUILD/$NAME"
+if [ -f "$CASE/arches" ] && ! grep -qx "${ARCH:-x86_64}" "$CASE/arches"; then
+    echo "SKIP $NAME (runs on $(tr '\n' ' ' < "$CASE/arches" | sed 's/ *$//') only)"
+    exit 2
+fi
 mkdir -p "$OUTDIR"
 CMDLINE=""
 [ -f "$CASE/cmdline" ] && CMDLINE="$(cat "$CASE/cmdline")"

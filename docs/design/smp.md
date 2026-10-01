@@ -104,7 +104,13 @@ disabled. The sender is never one of its own targets. Kernel threads keep
 the previous user space loaded, so `vmspace_destroy` sends a
 `TLB_DROP_VMSPACE` request that makes every CPU still holding the space
 switch to the kernel space before the tables are freed. aarch64 sends it
-as well, because a loaded root may be walked speculatively. `tlb_get_stats`
+as well, because a loaded root may be walked speculatively. A CPU that is
+switching away from the space when the request arrives acknowledges it
+without switching and clears its bit in the mask after `paging_load`, so
+`vmspace_destroy` waits until the mask is empty before it frees the
+tables. It asserted an empty mask before 2026-10-02, which the
+`lua_prompt` case on aarch64 contradicted, because `paging_load` there
+spins on `asid_lock` and services shootdowns while it spins. `tlb_get_stats`
 reports rounds, IPIs and acknowledgements.
 
 `tlb_replace_entry` replaces a present entry with one that maps another

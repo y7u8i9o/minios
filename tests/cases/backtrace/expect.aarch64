@@ -1,0 +1,9 @@
+unhandled exception: data abort
+data abort, esr=[0-9a-f]+ far=fffffffe00000000
+test_bt_c\+0x
+test_bt_b\+0x
+test_bt_a\+0x
+test_backtrace\+0x
+ktest_run_selected\+0x
+kinit\+0x
+thread_start\+0x

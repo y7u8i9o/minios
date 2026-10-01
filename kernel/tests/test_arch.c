@@ -29,9 +29,11 @@ static void check_frame(void)
     frame_set_pc(&tf, 0x402000);
     frame_set_sp(&tf, 0x7fffffffd000);
     frame_set_arg0(&tf, 17);
-    frame_set_retval(&tf, (uint64_t)-EINTR);
     ktest_assert(frame_pc(&tf) == 0x402000 && frame_sp(&tf) == 0x7fffffffd000, "pc or sp not stored");
+    /* The argument is checked before the return value is set, because on
+     * aarch64 x0 contains both. */
     ktest_assert(SYSARG0(&tf) == 17, "arg0 is not the first system call argument");
+    frame_set_retval(&tf, (uint64_t)-EINTR);
     ktest_assert((long)frame_retval(&tf) == -EINTR, "return value %ld", (long)frame_retval(&tf));
 #if defined(__x86_64__)
     /* On x86_64 the number and the result share rax: a system call that
@@ -39,9 +41,14 @@ static void check_frame(void)
     ktest_assert(frame_syscall_nr(&tf) == frame_retval(&tf), "number and result registers differ");
 #endif
 
+    /* A kernel frame. On x86_64 a zeroed frame has CS 0, a kernel
+     * selector. On aarch64 SPSR.M 0 is EL0t, so the frame names EL1h. */
     struct trapframe kf;
     memset(&kf, 0, sizeof kf);
-    ktest_assert(!frame_from_user(&kf), "zeroed frame marked as user mode");
+#if defined(__aarch64__)
+    kf.pstate = 0x5;
+#endif
+    ktest_assert(!frame_from_user(&kf), "kernel frame marked as user mode");
 
     /* A write from user mode to a present page, and an instruction fetch
      * from an unmapped kernel page. */

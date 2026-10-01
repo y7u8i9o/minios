@@ -385,3 +385,27 @@ On aarch64 under HVF the cases `asid`, `smp`, `platform`, `blk`, `gui`,
 `platform`, `blk`, `gui`, `gpu_mode`, `net_icmp`, `audio_pcm`,
 `input_keyboard`, `fork`, `swap`, `hugepages`, `madvise`, `munmap_tables`
 and `hung_task` pass.
+
+### Complete aarch64 test pass (completed 2026-10-02)
+
+- Every boot test runs on aarch64.
+- A case lists the architectures it runs on in an optional `arches` file.
+
+The 114 cases that had not run on aarch64 ran in groups by module, and
+the faults they found are corrected:
+
+- `vmspace_destroy` asserted that no CPU had the space loaded after the
+  drop round. A CPU switching away from it acknowledged the round while
+  it spun on `asid_lock` in `paging_load` and cleared its bit only
+  afterwards. It now waits for the mask (`smp.md`).
+- The `arch` test set the return value before it checked the first
+  argument, which share x0 on aarch64, and took a zeroed frame as a
+  kernel frame, which on aarch64 is an EL0t frame.
+- `backtrace` and `arch` received aarch64 expectations, and `net_nic`
+  counts only its own frames, because edk2 sends IPv6 neighbor
+  solicitations from the network card before the kernel starts.
+- `net_harness` expected an older form of the boot line, also on x86_64.
+
+`cpu`, `kbd` and `fb_format` name x86_64 in their `arches` file and are
+reported as skipped on aarch64. Every other case passes on aarch64 under
+HVF.
