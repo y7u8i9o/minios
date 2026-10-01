@@ -351,6 +351,33 @@ static int check_installed_elves(const char *name)
     return r;
 }
 
+/* True if the installed package name is built for another machine: its
+ * manifest names another arch, or, for a record written before the arch
+ * key existed, one of its ELF files is for another machine. A data volume
+ * moved from x86_64 to aarch64 contains such packages. */
+static int installed_foreign(const char *name, const struct manifest *im)
+{
+    if (im->arch[0])
+        return strcmp(im->arch, system_arch()) != 0;
+    struct record rec;
+    if (db_read_record(name, &rec) < 0)
+        return 0;
+    int foreign = 0;
+    for (int i = 0; i < rec.nfiles && !foreign; i++) {
+        char path[PKG_PATH_MAX];
+        uint8_t *data;
+        size_t len;
+        path_join(path, sizeof path, prefix, rec.files[i].path);
+        if (read_file(path, &data, &len) < 0)
+            continue;
+        if (elf_is(data, len) && strcmp(elf_arch(data, len), system_arch()) != 0)
+            foreign = 1;
+        free(data);
+    }
+    record_free(&rec);
+    return foreign;
+}
+
 /* ---- the checks of install ---- */
 
 static int check_all(void)
@@ -366,7 +393,7 @@ static int check_all(void)
                 return error(p->m.name, "named twice on the command line");
         const struct manifest *im = installed_manifest(p->m.name);
         if (im) {
-            if (strcmp(im->version, p->m.version) == 0) {
+            if (strcmp(im->version, p->m.version) == 0 && !installed_foreign(p->m.name, im)) {
                 printf("%s %s is installed already\n", p->m.name, p->m.version);
                 p->skip = 1;
             } else {
@@ -812,7 +839,7 @@ static int install_from_repositories(char **names, int nnames, const struct inde
         if (!e)
             return -1;
         const struct manifest *im = installed_manifest(e->m.name);
-        if (im && strcmp(im->version, e->m.version) == 0) {
+        if (im && strcmp(im->version, e->m.version) == 0 && !installed_foreign(e->m.name, im)) {
             printf("%s %s is installed already\n", e->m.name, e->m.version);
             continue;
         }

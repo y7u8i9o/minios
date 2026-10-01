@@ -8,5 +8,6 @@ user/share/sounds/*
 BUILDNUM
 /data.img
 /data-*.img
+/data-*.img.bak
 # editor project files
 *.geany

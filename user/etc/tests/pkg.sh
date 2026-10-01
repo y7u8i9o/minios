@@ -57,6 +57,13 @@ check apps-table "$(grep -v '^#' $P/share/mime.apps)" "text/x-pkgfix $P/bin/pkgp
 check record "$(cut -d' ' -f1 $P/lib/pkg/pkgprog/files | tr '\n' ' ')" "bin/pkgprog share/pkgprog/readme "
 check dirs "$(cat $P/lib/pkg/pkgprog/dirs | tr '\n' ' ')" "bin share share/pkgprog "
 check again "$($PKG install pkgfix-1.0.mpk)" "pkgfix 1.0 is installed already"
+# The same version replaces an installed package for the other machine, as
+# on a data volume moved from x86_64 to aarch64.
+sed "s/^arch .*/arch $OTHER/" $P/lib/pkg/pkgfix/manifest > manifest.other
+cp manifest.other $P/lib/pkg/pkgfix/manifest
+check foreign-replaced "$($PKG install pkgfix-1.0.mpk)" "upgraded pkgfix 1.0"
+check foreign-arch "$(grep '^arch' $P/lib/pkg/pkgfix/manifest)" "arch $(uname -m)"
+check foreign-runs "$($P/bin/pkgprog)" "pkgfix 42"
 check verify-ok "$($PKG verify; echo $?)" "0"
 
 # A conflict.
