@@ -94,7 +94,7 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
         kfree(image);
         return -ENOMEM;
     }
-    struct elf_info info;
+    struct elf_info info = { 0 };
     r = elf_load(vm, image, size, &info);
     kfree(image);
     if (r == 0 && info.interp[0]) {
@@ -108,6 +108,7 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
     }
     if (r == 0)
         r = user_stack_setup(vm, argv, envp, rsp, stack_size, &info);
+    kfree(info.phdr_copy);
     if (r < 0) {
         vma_remove_all(vm);
         vmspace_destroy(vm);

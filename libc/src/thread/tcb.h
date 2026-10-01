@@ -40,7 +40,8 @@ struct __libc_lock {
 
 static inline struct pthread *__pthread_current(void)
 {
-    return __arch_thread_pointer();
+    /* The first word of the control block at the thread pointer. */
+    return *(struct pthread **)__arch_thread_pointer();
 }
 
 void __libc_lock_lock(struct __libc_lock *l);
@@ -54,6 +55,12 @@ void __pthread_init_main(void);
 /* Thread local storage (tls.c): the space below a control block, its
  * initialization for a new thread and its release. */
 void __tls_init(const uintptr_t *aux);
-size_t __tls_reserve(size_t *align);
+/* The bytes and the alignment of the area that holds a thread's struct
+ * pthread and its static TLS blocks, and the struct pthread inside such an
+ * area at an aligned address. */
+size_t __tls_area_size(size_t *align);
+struct pthread *__tls_area_place(void *area);
+/* The thread pointer value of thread t, its control block (minios/dl.h). */
+void *__tls_thread_pointer(struct pthread *t);
 void __tls_setup(struct pthread *t);
 void __tls_free(struct pthread *t);

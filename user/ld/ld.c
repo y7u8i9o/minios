@@ -184,7 +184,7 @@ static struct dl_interface interface;
  * returns to the entry through the jump buffer while recovering is set. */
 static char error_text[256];
 static int error_set, recovering;
-static uintptr_t recover[8];
+static uintptr_t recover[LD_ARCH_JMPBUF_WORDS];
 int _dl_setjmp(uintptr_t *buffer) __attribute__((returns_twice));
 void _dl_longjmp(uintptr_t *buffer, int value) __attribute__((noreturn));
 void _dl_runtime_resolve(void);
@@ -804,7 +804,7 @@ static void apply(struct object *o, const struct rela *table, size_t bytes, int 
                 const struct dl_tls_module *m = require_tls(def.object);
                 if (!m->offset)
                     die("initial-exec TLS reference to an object loaded by dlopen", def.object->name);
-                value = ld_arch_tls_tprel(def.symbol->st_value + (uint64_t)r->r_addend, m->offset);
+                value = dl_tls_tprel(def.symbol->st_value + (uint64_t)r->r_addend, m->offset);
             }
             *(uint64_t *)where = value;
             continue;
@@ -950,7 +950,7 @@ static struct object *load_library(const char *name, int allow_path)
     read_at(fd, 0, &eh, sizeof eh, path);
     if (eh.e_ident[0] != 0x7f || eh.e_ident[1] != 'E' || eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F' ||
         eh.e_ident[4] != 2 || eh.e_ident[5] != 1 || eh.e_ident[6] != 1 ||
-        eh.e_type != ET_DYN || eh.e_machine != 62 || eh.e_version != 1 || eh.e_ehsize != sizeof eh ||
+        eh.e_type != ET_DYN || eh.e_machine != LD_ARCH_ELF_MACHINE || eh.e_version != 1 || eh.e_ehsize != sizeof eh ||
         eh.e_phentsize != sizeof(struct phdr) || !eh.e_phnum ||
         !within(eh.e_phoff, (size_t)eh.e_phnum * sizeof(struct phdr), st.st_size))
         die("invalid ELF64 shared object", path);
@@ -1158,20 +1158,19 @@ void _dl_finalize(void)
 
 /* ---- thread local storage ---- */
 
-/* The static layout: the program's block ends at the thread pointer, as
- * the linker assumed for its local-exec accesses, and each further
- * initial object's block follows below it. */
+/* The static layout (dl_tls_place): the program's block is placed first,
+ * where the linker assumed it for its local-exec accesses, and each further
+ * initial object's block follows. */
 static void layout_static_tls(void)
 {
-    size_t total = 0, align = 16;
+    size_t total = DL_TLS_TCB_SIZE, align = 16;
     for (struct object *o = objects; o; o = o->next) {
         struct dl_tls_module *m = o->tls;
         if (!m)
             continue;
         if (m->align > align)
             align = m->align;
-        total = ALIGN_UP(total + m->memsz, m->align);
-        m->offset = total;
+        m->offset = dl_tls_place(&total, m->memsz, m->align);
     }
     interface.static_tls_size = total;
     interface.static_tls_align = align;
@@ -1184,7 +1183,7 @@ static void tls_setup(void *tcb)
         const struct dl_tls_module *m = o->tls;
         if (!m || !m->offset)
             continue;
-        unsigned char *block = (unsigned char *)tcb - m->offset;
+        unsigned char *block = dl_tls_block(tcb, m->offset);
         dl_memcpy(block, (const void *)m->image, m->filesz);
         dl_memset(block + m->filesz, 0, m->memsz - m->filesz);
     }
@@ -1220,7 +1219,7 @@ static void *tls_get_addr(struct dl_tls_module *m, size_t offset)
 {
     struct dl_tcb *tcb = current_tcb();
     if (m->offset)
-        return (unsigned char *)tcb - m->offset + offset;
+        return dl_tls_block(tcb, m->offset) + offset;
     dl_lock();
     struct dl_dtv *dtv = tcb->dtv;
     if (!dtv || dtv->count <= m->index) {

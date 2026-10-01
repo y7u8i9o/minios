@@ -1,6 +1,7 @@
 #include <math.h>
 #include <errno.h>
 #include <stdint.h>
+#include "../ldouble.h"
 
 #define TWO_OVER_PI_BITS 16512
 #define TWO_OVER_PI_LIMBS (TWO_OVER_PI_BITS / 64)
@@ -53,14 +54,6 @@ static const char two_over_pi_hex[] =
     "dc51a463dd27dde16919949a9529a828ce68b4ed09209f44ca984e638270237c7e32b90f8ef5a7e7561408f1212a9db5"
     "4d7e6f5119a5abf9b5d6df8261dd960236169f3ac4a1a2836ded727a8d39a9b8825c326b5b2746ed34007700d255f4fc";
 
-union trig_long_bits {
-    long double value;
-    struct {
-        uint64_t significand;
-        uint16_t sign_exponent;
-        uint16_t padding[3];
-    } parts;
-};
 
 static unsigned hex_value(char c)
 {
@@ -102,11 +95,12 @@ static int lower_product_nonzero(const uint64_t product[PRODUCT_LIMBS], int limi
  * is required by the trigonometric reconstruction. */
 static long double reduce_pio2(long double x, int *quadrant)
 {
-    union trig_long_bits bits = { x };
-    int negative = bits.parts.sign_exponent >> 15;
-    bits.parts.sign_exponent &= 0x7fffU;
-    int exponent = (int)bits.parts.sign_exponent - 16383;
-    uint64_t significand = bits.parts.significand;
+    /* The arguments come from double values, so the leading 64
+     * significand bits are the whole significand on both formats. */
+    struct ld_parts bits = ld_split(x);
+    int negative = (int)bits.negative;
+    int exponent = (int)bits.raw_exponent - 16383;
+    uint64_t significand = bits.significand;
 
     uint64_t product[PRODUCT_LIMBS];
     __uint128_t carry = 0;

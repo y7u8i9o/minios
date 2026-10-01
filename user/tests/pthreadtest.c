@@ -25,8 +25,15 @@ static void raw_entry(void *arg) { thread_exit(0); }
 static void *aligned_stack_worker(void *arg)
 {
     float values[4] __attribute__((aligned(16)));
+#if defined(__x86_64__)
+    /* movaps faults on a misaligned address. */
     __asm__ volatile("xorps %%xmm0, %%xmm0\n\tmovaps %%xmm0, %0"
                      : "=m"(values) : : "xmm0");
+#elif defined(__aarch64__)
+    /* An sp that is not 16 byte aligned faults at any sp based access. */
+    __asm__ volatile("movi v0.4s, #0\n\tstr q0, %0"
+                     : "=m"(values) : : "v0");
+#endif
     return (void *)(long)(values[0] == 0 && values[3] == 0);
 }
 

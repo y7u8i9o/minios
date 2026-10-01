@@ -207,6 +207,13 @@ static inline void paging_flush_user(void)
     __asm__ volatile("movq %0, %%cr3" : : "r"(root) : "memory");
 }
 
+/* Make the instruction fetches of every CPU see the data written to the
+ * frame at pa. The x86 caches are coherent: nothing to do. */
+static inline void paging_sync_icache(uintptr_t pa)
+{
+    (void)pa;
+}
+
 /* Enable the MMU features the kernel depends on (NX, global pages, write
  * combining) on the calling CPU. */
 void paging_enable_features(void);

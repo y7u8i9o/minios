@@ -202,7 +202,7 @@ void pci_init(void)
         }
         nbuses += populated;
     }
-    klog_info("%zu functions on %u bus%s, config space through ports cf8/cfc", ndevices, nbuses,
+    klog_info("%zu functions on %u bus%s", ndevices, nbuses,
               nbuses == 1 ? "" : "es");
 }
 

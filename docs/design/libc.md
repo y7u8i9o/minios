@@ -12,7 +12,14 @@ AVX disabled, `UARCHFLAGS`). The code of the target architecture is in
 tangent) and the internal header `libc_arch.h` (the thread pointer, the
 spin wait hint and the stack of a new thread). The public headers
 `setjmp.h`, `fenv.h` and `minios/simd.h` take their architecture part from
-`include/bits/<arch>/`.
+`include/bits/<arch>/`. On aarch64 `libc/arch/aarch64/` contains the
+same assembly, an `fenv.c` over FPCR and FPSR, and `math_long.c`: the
+binary128 `long double` functions with exact `truncl`, `frexpl`,
+`ldexpl`, `fmodl` and `remainderl`, and exponential, logarithmic and
+inverse tangent kernels that compute in double precision. `src/ldouble.h`
+takes a `long double` apart for both formats (the classification, the
+trigonometric argument reduction, `%La`, which prints the leading 64
+significand bits).
 Programs normally link against shared libraries at `0x400000` with
 `/lib/ld.so` as their interpreter; init remains static. See `dynlink.md`
 for the linker options and the static startup path.

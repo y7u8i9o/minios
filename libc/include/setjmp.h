@@ -3,6 +3,8 @@
 /* jmp_buf is defined by the architecture (bits/<arch>/setjmp.h). */
 #if defined(__x86_64__)
 #include <bits/x86_64/setjmp.h>
+#elif defined(__aarch64__)
+#include <bits/aarch64/setjmp.h>
 #else
 #error "setjmp.h: unsupported architecture"
 #endif

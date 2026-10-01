@@ -180,6 +180,22 @@ void paging_flush_user(void)
                      : : "r"(ttbr0 & ~((1UL << 48) - 1)) : "memory");
 }
 
+void paging_sync_icache(uintptr_t pa)
+{
+    uint64_t ctr;
+    __asm__ volatile("mrs %0, ctr_el0" : "=r"(ctr));
+    if (!(ctr & (1UL << 28))) {                 /* IDC: data cleaning not required */
+        uintptr_t line = 4UL << ((ctr >> 16) & 0xf);   /* DminLine */
+        uintptr_t va = (uintptr_t)P2V(pa & ~(PAGE_SIZE - 1));
+        for (uintptr_t p = va; p < va + PAGE_SIZE; p += line)
+            __asm__ volatile("dc cvau, %0" : : "r"(p) : "memory");
+    }
+    __asm__ volatile("dsb ish" : : : "memory");
+    if (!(ctr & (1UL << 29)))                   /* DIC: invalidation not required */
+        __asm__ volatile("ic ialluis" : : : "memory");
+    __asm__ volatile("dsb ish; isb" : : : "memory");
+}
+
 void paging_enable_features(void)
 {
     uint64_t mmfr1, tcr;

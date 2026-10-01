@@ -53,8 +53,12 @@ file, then protected to the segment's permissions. A one page heap region
 follows the highest segment; `sbrk` grows it with `vma_brk`. The stack
 region is 1 MiB below `USER_STACK_TOP`, demand paged; `user_stack_setup`
 copies the strings, builds `argc`, `argv`, `NULL`, `envp`, `NULL`, the
-auxiliary vector, and leaves `rsp` 16 byte aligned as the SysV ABI
-requires. `crt0.S` reads that layout. A program with a `PT_INTERP` header
+auxiliary vector, and leaves the stack pointer 16 byte aligned, as the
+x86-64 and AArch64 ABIs require (before A6 an adjustment left it 8 bytes
+off, which only the realignment in the x86 start code hid). When no
+`PT_LOAD` segment covers the program headers, which the bare-metal aarch64
+linker script does for a static program, the headers are copied to the top
+of the stack and `AT_PHDR` points to the copy. `crt0.S` reads that layout. A program with a `PT_INTERP` header
 is dynamically linked: the loader it names is mapped at
 `USER_INTERP_BASE` and entered first (`dynlink.md`).
 

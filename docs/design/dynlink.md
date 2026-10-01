@@ -66,13 +66,18 @@ handoff described below.
 
 ## The loader
 
-`user/ld/ld.c` and `user/ld/arch/x86_64/start.S` build `/lib/ld.so`, a
+`user/ld/ld.c` and `user/ld/arch/$(ARCH)/start.S` build `/lib/ld.so`, a
 freestanding position independent object linked with `-Bsymbolic`, hidden
 visibility, `-fno-plt` and its own entry `_dl_start`; it uses no libc and
-makes its system calls through an inline `syscall`. The relocation types,
-the system call stub, the thread pointer and the initial-exec TLS offset
-are in `user/ld/arch/x86_64/ld_arch.h`; `ld.c` names the relocation types
-generically (`RELOC_RELATIVE`, `RELOC_JUMP_SLOT` and so on). `_dl_main` receives the initial stack pointer
+makes its system calls through an inline `syscall` or `svc`. The machine
+number, the relocation types, the system call stub, the thread pointer and
+the size of the recovery buffer are in `user/ld/arch/$(ARCH)/ld_arch.h`;
+`ld.c` names the relocation types generically (`RELOC_RELATIVE`,
+`RELOC_JUMP_SLOT` and so on). On aarch64 the program is entered with the
+finalizer in `x0` and the initializer in `x1`; the lazy binding trampoline
+takes the GOT slot that the AArch64 PLT pushed and preserves `x0` to `x8`
+and `q0` to `q7`; user code is compiled with `-mtls-dialect=trad`, so the
+loader needs no TLS descriptors. `_dl_main` receives the initial stack pointer
 and returns the program's entry point; `start.S` enters it with the stack
 pointer the kernel provided, the finalizer `_dl_finalize` in `rdx` (the
 x86-64 ELF convention) and the initializer `_dl_initialize` in `rcx`.
@@ -233,15 +238,20 @@ symbols.
 
 ## Thread local storage
 
-The layout is the x86-64 variant II. The thread pointer, the FS base,
-addresses the thread control block (`struct pthread` in libc), whose
-first word is its own address and whose second word is the dynamic
-thread vector, the two words `struct dl_tcb` names. The blocks of the
-objects loaded at start lie below the control block at fixed offsets:
-the program's block ends at the thread pointer, its offset being its
-size rounded up to its alignment, which is what the linker assumed when
-it resolved the program's own local-exec accesses, and each further
-initial object's block follows below it. The loader computes this
+The thread pointer addresses the thread control block, the two words
+`struct dl_tcb` names: a pointer to the thread's `struct pthread` and the
+dynamic thread vector. `minios/dl.h` states the two layouts with
+`dl_tls_block`, `dl_tls_place` and `dl_tls_tprel`. On x86_64 (variant II,
+the FS base) the control block is the `struct pthread` itself, and the
+blocks of the objects loaded at start lie below it at fixed offsets: the
+program's block ends at the thread pointer, its offset being its size
+rounded up to its alignment, and each further initial object's block
+follows below it. On aarch64 (variant I, `TPIDR_EL0`) the control block is
+16 bytes after the `struct pthread`, and the blocks lie above it: the
+program's block starts at the first offset after the 16 bytes that its
+alignment allows, and each further block follows. In both layouts the
+program's offset is what the linker assumed when it resolved the program's
+own local-exec accesses. The loader computes this
 static layout once the initial objects are loaded and publishes its size
 and alignment; libc reserves the space below every control block, of
 the main thread (whose block moves from static storage to a mapping when
@@ -253,8 +263,8 @@ The loader writes the address of the object's `struct dl_tls_module`
 record, rather than a small integer, as the module id of a `DTPMOD64`
 relocation, so `__tls_get_addr` in libc, which the general dynamic model
 calls with a module id and an offset, reaches the record directly: for
-a static module it returns thread pointer minus the module's offset plus
-the variable's offset without entering the loader, for a dynamic one it
+a static module it returns the module's block (`dl_tls_block`) plus the
+variable's offset without entering the loader, for a dynamic one it
 calls the loader's slow path. `DTPOFF64` stores the variable's offset in
 its block and `TPOFF64`, the initial-exec model, the offset from the
 thread pointer, which exists only for a static module; a relocation of

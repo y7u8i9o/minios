@@ -8,6 +8,7 @@
 #include <klog.h>
 #include <errno.h>
 #include <arch/machine.h>
+#include <arch/paging.h>
 
 #define ELFMAG      "\x7f""ELF"
 #define ELFCLASS64  2
@@ -112,6 +113,14 @@ static int load_segments(struct vmspace *vm, const void *image, size_t size,
         r = write_user(vm, vaddr, (const uint8_t *)image + ph->p_offset, ph->p_filesz);
         if (r < 0)
             return r;
+        if (flags & VM_EXEC) {
+            /* The code was written through the data cache. */
+            for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
+                uintptr_t pa;
+                if (vmm_translate(vm, va, &pa, NULL))
+                    paging_sync_icache(pa);
+            }
+        }
         if (!(flags & VM_WRITE)) {
             spin_lock(&vm->lock);
             struct vma *v = vma_find_locked(vm, start);
@@ -153,6 +162,17 @@ int elf_load(struct vmspace *vm, const void *image, size_t size, struct elf_info
         }
     }
     info->phnum = eh->e_phnum;
+    /* A static program's linker may leave the headers out of every PT_LOAD
+     * (the bare-metal aarch64 script does); user_stack_setup then copies
+     * them to the stack so that AT_PHDR still finds them, as libc needs for
+     * the thread local storage segment. */
+    if (!info->phdr) {
+        size_t bytes = (size_t)eh->e_phnum * sizeof(struct elf64_phdr);
+        info->phdr_copy = kmalloc(bytes);
+        if (!info->phdr_copy)
+            return -ENOMEM;
+        memcpy(info->phdr_copy, (const uint8_t *)image + eh->e_phoff, bytes);
+    }
 
     /* Heap: one page to start, grown by brk. */
     uintptr_t heap = highest + PAGE_SIZE;
@@ -201,15 +221,21 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
 
     size_t argc = count_strings(argv);
     size_t envc = count_strings(envp);
-    size_t bytes = 0;
+    size_t phdr_bytes = info->phdr_copy ? info->phnum * sizeof(struct elf64_phdr) : 0;
+    size_t bytes = phdr_bytes;
     for (size_t i = 0; i < argc; i++)
         bytes += strlen(argv[i]) + 1;
     for (size_t i = 0; i < envc; i++)
         bytes += strlen(envp[i]) + 1;
     /* argc, argv, NULL, envp, NULL, then the auxiliary vector of type and
      * value pairs ending with AT_NULL. */
+    /* Copied headers lie at the top of the stack, aligned, above the
+     * strings. */
+    uintptr_t phdr = info->phdr;
+    if (phdr_bytes)
+        phdr = USER_STACK_TOP - ALIGN_UP(phdr_bytes, 16);
     const uint64_t aux[] = {
-        AT_PHDR, info->phdr, AT_PHENT, sizeof(struct elf64_phdr), AT_PHNUM, info->phnum,
+        AT_PHDR, phdr, AT_PHENT, sizeof(struct elf64_phdr), AT_PHNUM, info->phnum,
         AT_PAGESZ, PAGE_SIZE, AT_BASE, info->interp_base, AT_ENTRY, info->entry, AT_NULL, 0,
     };
     size_t vectors = (1 + argc + 1 + envc + 1 + sizeof aux / sizeof aux[0]) * sizeof(uint64_t);
@@ -217,12 +243,12 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
         return -E2BIG;
 
     /* Strings at the top, then the pointer vectors below, 16 byte aligned
-     * so that rsp % 16 == 0 at the entry point with argc on top. */
-    uintptr_t sp = USER_STACK_TOP - bytes;
+     * so that the stack pointer is 16 byte aligned at the entry point with
+     * argc on top, as both the x86-64 and the AArch64 ABI require (AArch64
+     * faults on any access through a misaligned sp). */
+    uintptr_t sp = (phdr_bytes ? phdr : USER_STACK_TOP) - (bytes - phdr_bytes);
     uintptr_t strings = sp;
     sp = ALIGN_DOWN(sp - vectors, 16);
-    if (((sp + vectors) & 15) == 8)
-        sp -= 8;
     r = vma_populate(vm, sp, USER_STACK_TOP);
     if (r < 0)
         return r;
@@ -251,6 +277,8 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
         vec[idx++] = aux[i];
     write_user(vm, sp, vec, vectors);
     kfree(vec);
+    if (phdr_bytes)
+        write_user(vm, phdr, info->phdr_copy, phdr_bytes);
     *rsp = sp;
     return 0;
 }

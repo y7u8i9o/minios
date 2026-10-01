@@ -81,13 +81,21 @@ trap_entry_common:
     mov x29, sp
     bl trap_dispatch
     add sp, sp, #16
-    /* Restore the state the handler may have changed and return. */
+    /* Restore the state the handler may have changed and return. sp is
+     * the frame; trap_return enters here with a frame of its own. */
+trap_restore:
+    /* ELR_EL1 and SPSR_EL1 hold the return state from here to eret; an
+     * exception taken in between would replace them. user_enter reaches
+     * this point with interrupts enabled. */
+    msr daifset, #0xf
     ldr x0, [sp, #F_PC]
     msr elr_el1, x0
     ldr x0, [sp, #F_PSTATE]
     msr spsr_el1, x0
-    ldr x0, [sp, #F_KIND]
-    tbz x0, #2, 1f
+    /* A return to EL0t (SPSR.M = 0) loads the user stack pointer, also
+     * for a frame that execve or user_enter built. */
+    tst x0, #0xf
+    b.ne 1f
     ldr x0, [sp, #F_SP]
     msr sp_el0, x0
 1:  ldp x2, x3, [sp, #16]
@@ -108,3 +116,12 @@ trap_entry_common:
     ldp x0, x1, [sp, #0]
     add sp, sp, #FRAME_SIZE
     eret
+
+/* void trap_return(struct trapframe *tf): return to the state of a frame,
+ * which becomes the stack (user_enter). */
+    .global trap_return
+    .type trap_return, %function
+trap_return:
+    mov sp, x0
+    b trap_restore
+    .size trap_return, . - trap_return

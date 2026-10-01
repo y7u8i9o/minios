@@ -99,9 +99,16 @@ def wrong_endian(e):
     e.data[5] = 2
 
 
+# The machine numbers of the two architectures, and the GLOB_DAT
+# relocation type of each, which makes the loader look up the symbol.
+EM_X86_64, EM_AARCH64 = 62, 183
+GLOB_DAT = {EM_X86_64: 6, EM_AARCH64: 1025}
+
+
 @case("wrong_machine")
 def wrong_machine(e):
-    e.put(18, "H", 183)
+    machine = e.get(18, "H")
+    e.put(18, "H", EM_AARCH64 if machine == EM_X86_64 else EM_X86_64)
 
 
 @case("wrong_phentsize")
@@ -186,7 +193,7 @@ def gnu_bloom(e):
 @case("bad_relocation_symbol", diagnostic="relocation symbol index outside table")
 def relocation_symbol(e):
     off = e.table(7)
-    e.put(off + 8, "Q", (0xffffffff << 32) | 6)
+    e.put(off + 8, "Q", (0xffffffff << 32) | GLOB_DAT[e.get(18, "H")])
 
 
 @case("relocation_into_code", diagnostic="ELF range outside load segments")

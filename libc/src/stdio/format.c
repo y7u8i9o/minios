@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <fenv.h>
+#include "../ldouble.h"
 
 /* Formatter shared by the printf family. Supports integer, string and
  * floating conversions, the flags - 0 + space #, width and precision. */
@@ -265,28 +266,28 @@ static void hex_rep_double(double value, struct hex_rep *hex)
 
 static void hex_rep_long(long double value, struct hex_rep *hex)
 {
-    union {
-        long double value;
-        struct {
-            uint64_t significand;
-            uint16_t sign_exponent;
-            uint16_t padding[3];
-        } parts;
-    } u = { value };
-    unsigned raw = u.parts.sign_exponent & 0x7fffU;
-    hex->negative = u.parts.sign_exponent >> 15;
-    hex->zero = raw == 0 && u.parts.significand == 0;
+    /* On aarch64 (binary128) the significand bits below the leading 64
+     * are not printed. */
+    struct ld_parts p = ld_split(value);
+    unsigned raw = p.raw_exponent;
+    hex->negative = (int)p.negative;
+    hex->zero = raw == 0 && p.significand == 0 && p.lower == 0;
     hex->special = raw == 0x7fffU ?
-        (u.parts.significand == 0x8000000000000000ULL ? 1 : 2) : 0;
+        (p.significand == 0x8000000000000000ULL && !p.lower ? 1 : 2) : 0;
     hex->exact_digits = 16;
     if (hex->zero || hex->special) {
         hex->significand = 0;
         hex->exponent = 0;
         return;
     }
-    hex->significand = u.parts.significand;
+    hex->significand = p.significand;
     if (raw == 0) {
         hex->exponent = -16382;
+        if (!hex->significand) {
+            /* A binary128 subnormal with only lower bits set. */
+            hex->significand = p.lower << 15;
+            hex->exponent -= 49;
+        }
         while ((hex->significand & (1ULL << 63)) == 0) {
             hex->significand <<= 1;
             hex->exponent--;

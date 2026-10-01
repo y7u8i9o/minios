@@ -20,6 +20,11 @@ void cpu_init_boot(void)
     c->online = true;
     c->started = true;
     __asm__ volatile("mrs %0, mpidr_el1" : "=r"(c->arch.mpidr));
+    /* FP and SIMD instructions at EL0 and EL1 (CPACR_EL1.FPEN): user
+     * programs use them, and the kernel saves their registers. */
+    uint64_t cpacr;
+    __asm__ volatile("mrs %0, cpacr_el1" : "=r"(cpacr));
+    __asm__ volatile("msr cpacr_el1, %0; isb" : : "r"(cpacr | (3UL << 20)) : "memory");
     spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
     __asm__ volatile("msr tpidr_el1, %0" : : "r"(c) : "memory");
 }

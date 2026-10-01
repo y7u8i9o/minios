@@ -65,6 +65,7 @@ CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
 ifeq ($(ARCH),x86_64)
 KARCHFLAGS := -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387
 UARCHFLAGS := -msse2 -mfpmath=sse -mno-avx
+LDSO_ARCHFLAGS :=
 TCC_TARGET := X86_64
 ARCH_USERLAND := yes
 else ifeq ($(ARCH),aarch64)
@@ -73,9 +74,13 @@ else ifeq ($(ARCH),aarch64)
 # run time through the auxiliary vector. The small code model reaches the
 # whole image with PC relative addressing from its higher half address.
 KARCHFLAGS := -march=armv8-a -mgeneral-regs-only -mno-outline-atomics -mcmodel=small
-UARCHFLAGS := -march=armv8-a
+# User code reaches dynamic TLS through __tls_get_addr; the loader
+# implements no TLS descriptors. The loader itself uses no FP registers,
+# so its recovery buffer (_dl_setjmp) holds only general registers.
+UARCHFLAGS := -march=armv8-a -mno-outline-atomics -mtls-dialect=trad
+LDSO_ARCHFLAGS := -mgeneral-regs-only
 TCC_TARGET := ARM64
-ARCH_USERLAND := no
+ARCH_USERLAND := yes
 else
 $(error ARCH=$(ARCH) is not supported; see docs/plan/arm64.md)
 endif

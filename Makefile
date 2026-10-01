@@ -185,7 +185,7 @@ else
 # An architecture without user programs boots the kernel with an empty
 # initrd and no disk; only kernel self-tests can run.
 test: kernel $(LIMINE) $(MKFAT)
-	@mkdir -p $(BUILD)/empty && tar --format ustar -cf $(INITRD) -C $(BUILD)/empty .
+	@mkdir -p $(BUILD)/empty/dev $(BUILD)/empty/tmp && tar --format ustar -cf $(INITRD) -C $(BUILD)/empty .
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK= MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 endif
 

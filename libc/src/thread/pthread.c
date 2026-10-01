@@ -66,7 +66,7 @@ static void run_key_destructors(struct pthread *self)
 static void thread_entry(void *arg)
 {
     struct pthread *self = arg;
-    __syscall6(SYS_set_tls, (long)self, 0, 0, 0, 0, 0);
+    __syscall6(SYS_set_tls, (long)__tls_thread_pointer(self), 0, 0, 0, 0, 0);
     self->tid = (int)__syscall6(SYS_gettid, 0, 0, 0, 0, 0, 0);
     pthread_exit(self->start(self->arg));
 }
@@ -123,16 +123,17 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)
     reap_detached();
     __libc_lock_unlock(&threads_lock);
 
-    /* The control block at the top of the mapping, aligned as the
-     * thread local storage below it requires, the stack below that. */
+    /* The area with the control block and the thread local storage at the
+     * top of the mapping, aligned as the storage requires, the stack below
+     * it. */
     size_t align;
-    size_t tls = __tls_reserve(&align);
-    size_t block = (sizeof(struct pthread) + 63) & ~(size_t)63;
-    size_t size = (attr->stack_size + tls + block + align + 4095) & ~(size_t)4095;
+    size_t area_size = __tls_area_size(&align);
+    size_t size = (attr->stack_size + area_size + align + 4095) & ~(size_t)4095;
     void *mapping = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mapping == MAP_FAILED)
         return EAGAIN;
-    struct pthread *t = (struct pthread *)(((uintptr_t)mapping + size - block) & ~(uintptr_t)(align - 1));
+    unsigned char *area = (unsigned char *)(((uintptr_t)mapping + size - area_size) & ~(uintptr_t)(align - 1));
+    struct pthread *t = __tls_area_place(area);
     memset(t, 0, sizeof *t);
     t->self = t;
     __tls_setup(t);
@@ -146,7 +147,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)
     t->next = threads;
     threads = t;
     thread_t tid;
-    int r = thread_create(&tid, thread_entry, t, mapping, (size_t)((char *)t - tls - (char *)mapping));
+    int r = thread_create(&tid, thread_entry, t, mapping, (size_t)(area - (unsigned char *)mapping));
     if (r < 0) {
         int error = errno;
         unlink_thread(t);

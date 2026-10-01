@@ -8,12 +8,16 @@
  * the allocator entries before it creates a second thread or calls
  * dlopen.
  *
- * Thread local storage on x86_64 follows the variant II layout: the thread
- * pointer (the FS base) addresses the thread control block, whose first
- * word is the block's own address and whose second word is the dynamic
- * thread vector; the TLS blocks of the objects loaded at start lie below
- * the control block at fixed offsets, and the blocks of objects loaded
- * with dlopen are allocated on first use through the vector. */
+ * The thread pointer addresses a thread control block (struct dl_tcb)
+ * whose first word points to the thread's struct pthread and whose second
+ * word is the dynamic thread vector. The TLS blocks of the objects loaded
+ * at start lie at fixed offsets from the thread pointer, and the blocks of
+ * objects loaded with dlopen are allocated on first use through the
+ * vector. On x86_64 (TLS variant II, the FS base) the control block is the
+ * struct pthread itself and the blocks lie below it; on aarch64 (variant
+ * I, TPIDR_EL0) the control block is 16 bytes after the struct pthread and
+ * the blocks lie above it. dl_tls_block and dl_tls_place below state both
+ * layouts. */
 #include <stddef.h>
 #include <stdint.h>
 
@@ -41,9 +45,54 @@ struct dl_tls_index {
 
 /* The first two words of a thread control block. */
 struct dl_tcb {
-    void *self;
+    void *self;                 /* the struct pthread of the thread */
     struct dl_dtv *dtv;
 };
+
+#if defined(__aarch64__)
+#define DL_TLS_ABOVE_TP 1       /* variant I */
+#define DL_TLS_TCB_SIZE 16      /* the control block, before the first block */
+#else
+#define DL_TLS_ABOVE_TP 0       /* variant II */
+#define DL_TLS_TCB_SIZE 0
+#endif
+
+/* The start of the static block at offset from the thread pointer tp. */
+static inline unsigned char *dl_tls_block(void *tp, size_t offset)
+{
+#if DL_TLS_ABOVE_TP
+    return (unsigned char *)tp + offset;
+#else
+    return (unsigned char *)tp - offset;
+#endif
+}
+
+/* The offset from the thread pointer to a symbol at symbol_offset in the
+ * static block at offset: the value of an initial-exec relocation. */
+static inline uint64_t dl_tls_tprel(uint64_t symbol_offset, size_t offset)
+{
+#if DL_TLS_ABOVE_TP
+    return symbol_offset + offset;
+#else
+    return symbol_offset - offset;
+#endif
+}
+
+/* Add a block of memsz bytes aligned to align to the static area, whose
+ * size so far is *total (DL_TLS_TCB_SIZE when empty); returns the block's
+ * offset. The program's block is placed first, at the offset the linker
+ * assumed for its local-exec accesses. */
+static inline size_t dl_tls_place(size_t *total, size_t memsz, size_t align)
+{
+#if DL_TLS_ABOVE_TP
+    size_t offset = (*total + align - 1) & ~(align - 1);
+    *total = offset + memsz;
+    return offset;
+#else
+    *total = (*total + memsz + align - 1) & ~(align - 1);
+    return *total;
+#endif
+}
 
 struct dl_dtv_entry {
     void *block;                /* aligned start of the module's block */
@@ -64,10 +113,13 @@ struct dl_dtv {
 
 struct dl_interface {
     unsigned version;
-    /* Bytes of static TLS below a thread control block and the alignment
-     * the block needs; the C library reserves that space for each thread. */
+    /* Bytes of the static TLS area beside a thread control block (below it
+     * in variant II, above it including the control block in variant I) and
+     * the alignment the thread pointer needs; the C library reserves that
+     * space for each thread. */
     size_t static_tls_size, static_tls_align;
-    /* Copy the static TLS images below a control block and clear its vector. */
+    /* Copy the static TLS images beside the control block at the thread
+     * pointer tcb and clear its vector. */
     void (*tls_setup)(void *tcb);
     /* The address of offset inside the calling thread's block of a module. */
     void *(*tls_get_addr)(struct dl_tls_module *module, size_t offset);

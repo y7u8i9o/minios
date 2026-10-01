@@ -6,6 +6,8 @@
  * architecture (bits/<arch>/fenv.h). */
 #if defined(__x86_64__)
 #include <bits/x86_64/fenv.h>
+#elif defined(__aarch64__)
+#include <bits/aarch64/fenv.h>
 #else
 #error "fenv.h: unsupported architecture"
 #endif

@@ -204,7 +204,7 @@ TCG. On x86_64 these cases and `kbd`, `fork`, `swap`, `madvise`,
 `dynlink`, `smp`, `smp_user`, `lockfree`, `sched`, `shutdown`, `arch`,
 `platform`, `abi`, `profile`, `gpu_mode` and `blk` pass.
 
-### A6. aarch64 threads and user mode
+### A6. aarch64 threads and user mode (completed 2026-10-01)
 
 - The architecture implements the context switch, EL0 entry, `svc` system
   calls and signal frames.
@@ -213,12 +213,38 @@ TCG. On x86_64 these cases and `kbd`, `fork`, `swap`, `madvise`,
 - libc and the dynamic loader implement AArch64 relocations and TLS variant I.
 - The boot tests `fork`, `libc`, `signals`, `pthreads` and `dynlink` pass on aarch64.
 
+The whole user space builds for aarch64, including tcc, Lua and the
+utilities; the kernel boots to the first thread and runs the programs of
+the initrd, which is the root until the disk arrives with PCI in A7.
+`fork`, `libc`, `signals`, `dynlink` and `abi` pass on aarch64 under HVF and
+TCG, together with the kernel cases `boot`, `exception`, `pmm`, `vmm`,
+`slab`, `timer` and `sched`. `pthreads` passes every check except the
+concurrent stream test, which writes to `/tmp` and needs the writable root
+of A7; A7 adds `pthreads` to its cases.
+
+The port found three faults in shared code: `user_stack_setup` left the
+initial stack pointer 8 bytes off 16 byte alignment, which the x86 start
+code had hidden; static programs of the bare-metal aarch64 linker have
+their program headers outside every load segment, so the kernel now
+copies them to the stack for `AT_PHDR`; and `ld/tests/fixtures.py` wrote
+x86 machine and relocation numbers. TLS follows variant I on aarch64
+(`minios/dl.h`), user code uses `-mtls-dialect=trad`, and the loader
+supports the AArch64 relocations and PLT. The aarch64 `long double`
+(binary128) functions compute their exponentials, logarithms and inverse
+tangents in double precision (`libc/arch/aarch64/math_long.c`); whether the
+libm accuracy cases `mathvec` and `libmfull` need adjustment on aarch64 is
+checked with the rest of the user programs in A7. The return path masks
+exceptions before it writes `ELR_EL1`, because a thread enters EL0 with
+interrupts enabled, and the kernel synchronizes the instruction cache for
+code it writes (`paging_sync_icache`).
+
 ### A7. aarch64 devices
 
 - The kernel parses the device tree, enumerates PCIe through ECAM, and
   drives virtio blk, net, input, gpu and snd and the PL031 RTC.
 - The system boots to the shell and to the desktop.
-- The boot tests `blk`, `time`, `gpu_mode`, `input_keyboard` and `gui` pass on aarch64.
+- The boot tests `blk`, `time`, `gpu_mode`, `input_keyboard`, `gui` and
+  `pthreads` pass on aarch64.
 
 ### A8. aarch64 SMP
 

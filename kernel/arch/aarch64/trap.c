@@ -2,8 +2,15 @@
 #include <arch/trap.h>
 #include <arch/frame.h>
 #include <arch/irq.h>
+#include <arch/syscall.h>
 #include <console.h>
 #include <mm/vmm.h>
+#include <sched/thread.h>
+#include <sched/proc.h>
+#include <sched/sched.h>
+#include <sched/user.h>
+#include <ipc/signal.h>
+#include <klog.h>
 #include <debug/panic.h>
 
 static const char *exception_name(uint64_t esr)
@@ -21,20 +28,72 @@ static const char *exception_name(uint64_t esr)
     }
 }
 
+/* Record an entry from EL0 for the panic dump and the profiler. */
+static void record_user_entry(struct trapframe *tf)
+{
+    struct cpu *c = cpu_current();
+    c->arch.last_user_esr = tf->esr;
+    c->arch.last_user_pc = tf->pc;
+    c->arch.last_user_sp = tf->sp;
+    if (c->current)
+        c->current->kentry_frame = tf;
+}
+
+/* Returning to user mode is the only preemption point for user threads. */
+static void return_to_user(struct trapframe *tf)
+{
+    proc_exit_check();
+    signal_deliver(tf);
+    arch_irq_disable();
+    sched_preempt();
+}
+
+/* An exception from EL0 that the kernel does not resolve: SIGSEGV, as on
+ * x86_64, or the end of the process. */
+static void user_exception(struct trapframe *tf)
+{
+    struct thread *t = thread_current();
+    if (signal_fault(t->proc, SIGSEGV)) {
+        return_to_user(tf);
+        return;
+    }
+    klog_error("process %s (pid %d) killed by %s at pc %lx, esr %lx far %lx",
+               t->proc->name, t->proc->pid, exception_name(tf->esr), tf->pc, tf->esr, tf->far);
+    trap_dump_frame(tf);
+    user_fault_exit(PROC_STATUS_SIGNALED(SIGSEGV));
+}
+
 void trap_dispatch(struct trapframe *tf)
 {
     unsigned kind = tf->kind & 3;
+    bool user = tf->kind & TRAP_LOWER;
+    if (user)
+        record_user_entry(tf);
     if (kind == TRAP_IRQ) {
         irq_dispatch(tf);
+        if (user)
+            return_to_user(tf);
         return;
     }
     unsigned ec = ESR_EC(tf->esr);
-    bool abort = ec == EC_DABT_LOWER || ec == EC_DABT_CUR || ec == EC_IABT_LOWER || ec == EC_IABT_CUR;
-    if (kind == TRAP_SYNC && abort && vmm_handle_fault(tf, tf->far))
+    if (user && kind == TRAP_SYNC && ec == EC_SVC64) {
+        syscall_dispatch(tf);
         return;
-    if (tf->kind & TRAP_LOWER)
-        panic_trap(tf, "exception from EL0 before user mode exists (A6): %s, esr %lx",
-                   exception_name(tf->esr), tf->esr);
+    }
+    bool abort = ec == EC_DABT_LOWER || ec == EC_DABT_CUR || ec == EC_IABT_LOWER || ec == EC_IABT_CUR;
+    if (kind == TRAP_SYNC && abort) {
+        /* Interrupts stay masked, as after the interrupt gate of a page
+         * fault on x86_64. */
+        if (vmm_handle_fault(tf, tf->far)) {
+            if (user)
+                return_to_user(tf);
+            return;
+        }
+    }
+    if (user) {
+        user_exception(tf);
+        return;
+    }
     if (kind == TRAP_SYNC)
         panic_trap(tf, "unhandled exception: %s (class %02lx, esr %lx)",
                    exception_name(tf->esr), ESR_EC(tf->esr), tf->esr);

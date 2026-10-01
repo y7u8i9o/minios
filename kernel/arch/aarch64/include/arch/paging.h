@@ -193,4 +193,9 @@ void paging_load(uintptr_t root);
 void paging_flush_page(uintptr_t va);
 void paging_flush_user(void);
 void paging_enable_features(void);
+/* Make the instruction fetches of every CPU see the data written to the
+ * frame at pa: clean the data cache to the point of unification and
+ * invalidate the instruction caches, unless CTR_EL0 reports them
+ * coherent. Called before a frame the kernel wrote is mapped executable. */
+void paging_sync_icache(uintptr_t pa);
 const char *paging_describe(void);

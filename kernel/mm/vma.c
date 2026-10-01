@@ -51,6 +51,10 @@ pte_t vma_make_pte(uintptr_t pa, unsigned flags)
 {
     if (!(flags & VM_READ))
         return pte_make_protnone(pa);
+    /* The frame may hold code the kernel just wrote (a file page, a page
+     * swapped in, a region made executable). */
+    if (flags & VM_EXEC)
+        paging_sync_icache(pa);
     return pte_make(pa, (flags & (VM_WRITE | VM_EXEC)) | VM_USER);
 }
 

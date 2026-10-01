@@ -10,6 +10,7 @@ struct elf_info {
     uintptr_t entry;            /* entry point of the program */
     uintptr_t phdr;             /* address of the program headers in memory, 0 if unmapped */
     unsigned phnum;
+    void *phdr_copy;            /* kmalloc'd copy of unmapped headers for the stack, else NULL */
     char interp[64];            /* PT_INTERP path, empty for a static program */
     uintptr_t interp_base;
     uintptr_t interp_entry;

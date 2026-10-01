@@ -332,7 +332,7 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. The aarch64 implementation (A4, A5)
+## 16. The aarch64 implementation (A4 to A6)
 
 The whole generic kernel, with its self-tests except `test_cpu.c`
 (`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
@@ -368,6 +368,20 @@ milestone. Implemented are:
 - the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` and the tick from the
   virtual timer, PPI 27, programmed one period ahead through
   `CNTV_CVAL_EL0` (`clock.c`, A5);
+- threads, user mode and signals (A6): the context switch of `context.S`
+  (x19 to x30 and sp), the FP and SIMD state of `fpu.S` (q0 to q31, FPSR,
+  FPCR, enabled through `CPACR_EL1.FPEN`), the TLS base in `TPIDR_EL0`,
+  `user_enter`, which moves the frame to the top of the kernel stack so that
+  `SP_EL1` is the stack top while the thread runs at EL0, system calls by
+  `svc` with the number in x8, and the signal frame of `signal.c`, entered
+  with the restorer in x30. The return path masks exceptions before it
+  writes `ELR_EL1` and `SPSR_EL1`, and loads `SP_EL0` for every return to
+  EL0t;
+- the PL031 real time clock of `virt` (`platform.c`, A6), and an empty PCI
+  bus until ECAM arrives with the device tree (A7);
+- `paging_sync_icache`, which cleans the data cache and invalidates the
+  instruction caches for a frame the kernel wrote before it is mapped
+  executable (the ELF loader, `vma_make_pte`); x86_64 needs nothing;
 - one processor for `<arch/smp.h>` until A8.
 
 Self-tests run at stages of the start-up sequence (`enum ktest_stage`,
@@ -377,7 +391,9 @@ Self-tests run at stages of the start-up sequence (`enum ktest_stage`,
 after the timer, with interrupts enabled for the test (`timer`), and
 `KTEST_KINIT` in the first thread for every other test. A test runs at the
 earliest stage at which what it uses is initialized. On aarch64 the kernel
-reaches the timer stage before A6, whose threads the scheduler needs.
+reached the timer stage before A6, whose threads the scheduler needs;
+since A6 it boots to the first thread and runs user programs from the
+initrd, which is the root until the disk arrives with PCI (A7).
 
 `make ARCH=aarch64 test CASES="..."` boots QEMU `virt` with the edk2
 firmware that QEMU installs, on HVF where available (`-cpu host`, otherwise
@@ -393,14 +409,13 @@ architecture state, as `tests/cases/exception` and `tests/cases/timer` do.
 
 ## 17. Dependencies that remain
 
-The x86_64 build no longer needs anything outside its architecture
-directories. The aarch64 implementation (A4 to A9) has to supply every
-header and file listed above. Some x86_64 properties are encoded in shared
-designs that A6 changes for aarch64: the thread local storage layout
-(variant II, the control block above the TLS blocks, used by
-`libc/src/thread/tls.c` and by `ld.c`), the signal frame contract between
-`arch_signal_setup_frame` and the libc restorer (a return address on the
-stack), and the x87 long double format that `math_extra.c` uses through
-`atanl` and `atan2l`. The kernel self-tests of x86 features, `cpu` and
-`exception`, and the self-tests that feed PS/2 scancodes remain x86
-specific.
+The x86_64 build needs nothing outside its architecture directories. The
+designs that A6 found encoded for x86_64 are now stated for both
+architectures: the thread local storage layout (`minios/dl.h`), the signal
+frame contract between `arch_signal_setup_frame` and the libc restorer (a
+return address on the stack on x86_64, x30 on aarch64), and the
+`long double` format (`libc/src/ldouble.h`). The aarch64 port still lacks
+the device tree, PCI and the virtio devices (A7), the application
+processors (A8) and the tcc backend and package repositories (A9). The
+kernel self-test `cpu` of x86 features and the self-tests that feed PS/2
+scancodes remain x86 specific.

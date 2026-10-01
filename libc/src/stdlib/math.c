@@ -2,17 +2,10 @@
 #include <errno.h>
 #include <stdint.h>
 #include "math_arch.h"
+#include "../ldouble.h"
 
 union double_bits { double value; uint64_t bits; };
 union float_bits { float value; uint32_t bits; };
-union long_double_bits {
-    long double value;
-    struct {
-        uint64_t significand;
-        uint16_t sign_exponent;
-        uint16_t padding[3];
-    } parts;
-};
 
 int __math_fpclassify(double x)
 {
@@ -38,12 +31,11 @@ int __math_fpclassifyf(float x)
 
 int __math_fpclassifyl(long double x)
 {
-    union long_double_bits u = { x };
-    uint16_t exp = u.parts.sign_exponent & 0x7fff;
-    if (exp == 0x7fff)
-        return u.parts.significand == 0x8000000000000000ULL ? FP_INFINITE : FP_NAN;
-    if (!exp)
-        return u.parts.significand ? FP_SUBNORMAL : FP_ZERO;
+    struct ld_parts p = ld_split(x);
+    if (p.raw_exponent == 0x7fff)
+        return p.significand == 0x8000000000000000ULL && !p.lower ? FP_INFINITE : FP_NAN;
+    if (!p.raw_exponent)
+        return p.significand || p.lower ? FP_SUBNORMAL : FP_ZERO;
     return FP_NORMAL;
 }
 
@@ -61,8 +53,7 @@ int __math_signbitf(float x)
 
 int __math_signbitl(long double x)
 {
-    union long_double_bits u = { x };
-    return u.parts.sign_exponent >> 15;
+    return (int)ld_split(x).negative;
 }
 
 double fabs(double x)
@@ -517,10 +508,11 @@ double pow(double x, double y)
         errno = EDOM;
         return NAN;
     }
-    /* The x87 kernels carry 64 significand bits, so the double result is
-     * correctly rounded except in rare double rounding cases. The double
-     * kernels lost up to one unit through exp(y * log(x)): 2 ** 0.5 came
-     * out one unit below sqrt(2). */
+    /* On x86_64 the x87 kernels carry 64 significand bits, so the double
+     * result is correctly rounded except in rare double rounding cases.
+     * The double kernels lost up to one unit through exp(y * log(x)):
+     * 2 ** 0.5 came out one unit below sqrt(2). The aarch64 long double
+     * kernels compute in double precision (arch/aarch64/math_long.c). */
     double result = (double)exp2l((long double)y * log2l((long double)magnitude));
     if (isinf(result) || result == 0.0)
         errno = ERANGE;
