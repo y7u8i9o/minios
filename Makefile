@@ -15,7 +15,13 @@ DISK     := $(BUILD)/disk.img
 DISK_MB  ?= 512
 SWAP     := $(BUILD)/swap.img
 SWAP_MB  ?= 64
+# The data volume contains /home with the installed packages, which are
+# built for one machine, so each architecture has its own volume.
+ifeq ($(ARCH),x86_64)
 DATA     ?= $(TOP)/data.img
+else
+DATA     ?= $(TOP)/data-$(ARCH).img
+endif
 DATA_MB  ?= 256
 LIMINE   := $(BUILD)/host/limine
 GENSYMS  := $(BUILD)/host/gensyms

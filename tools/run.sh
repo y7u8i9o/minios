@@ -9,6 +9,9 @@
 # from QEMU_* environment variables and from the command line. Every
 # option has an environment variable of the same meaning:
 #
+# ARCH (x86_64 or aarch64, as make passes it) selects the machine and the
+# QEMU binary qemu-system-$ARCH.
+#
 #   -a, --audio BACKEND    QEMU_AUDIO        audio backend for virtio-snd
 #                                            (coreaudio, none, wav, pa, alsa,
 #                                            pipewire, sdl, dbus, ...);
@@ -84,7 +87,14 @@
 set -e
 
 TOP="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD="$TOP/build"
+# ARCH selects the machine: the q35 PC for x86_64, virt for aarch64. make
+# passes ARCH and BUILD.
+ARCH="${ARCH:-x86_64}"
+if [ "$ARCH" = x86_64 ]; then
+    BUILD="${BUILD:-$TOP/build}"
+else
+    BUILD="${BUILD:-$TOP/build/$ARCH}"
+fi
 
 usage() {
     sed -n '2,/^set -e/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -134,7 +144,7 @@ elif [ -n "$QEMU_CONF" ] || [ "$CONF" != "$TOP/qemu.conf" ]; then
 fi
 
 # --- defaults -----------------------------------------------------------
-QEMU="${QEMU:-qemu-system-x86_64}"
+QEMU="${QEMU:-qemu-system-$ARCH}"
 ISO="${ISO:-$BUILD/minios.iso}"
 DISK="${DISK:-$BUILD/disk.img}"
 SWAP="${SWAP:-$BUILD/swap.img}"
@@ -369,13 +379,39 @@ fi
 
 # --- command ------------------------------------------------------------
 set -- "$@"     # the arguments after `--`
-set -- -M q35 -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
+# The machine. virt has no VGA and no PS/2 devices. The edk2 firmware that
+# QEMU installs boots the CD, and without ACPI it installs the device tree
+# that the kernel reads. virtio-gpu-pci is the first display, so that the
+# window shows it. edk2 sets up no framebuffer on it, so ramfb is the boot
+# framebuffer. virt adds a virtio-net device unless -nic none is given.
+case "$ARCH" in
+    x86_64)
+        set -- -M q35 -vga "$QEMU_VGA" "$@"
+        BOOT="-cdrom"
+        ;;
+    aarch64)
+        EDK2="${EDK2_AARCH64:-$(dirname "$(command -v "$QEMU")")/../share/qemu/edk2-aarch64-code.fd}"
+        [ "$DRY_RUN" = 1 ] || [ -f "$EDK2" ] || die "no edk2 firmware at $EDK2, set EDK2_AARCH64"
+        cpu=max
+        [ "$QEMU_ACCEL" = hvf ] || [ "$QEMU_ACCEL" = kvm ] && cpu=host
+        case "$QEMU_VGA" in
+            virtio) gpu="-device virtio-gpu-pci -device ramfb" ;;
+            none)   gpu="" ;;
+            *)      gpu="-device ramfb" ;;
+        esac
+        # shellcheck disable=SC2086
+        set -- -M virt,gic-version=3,acpi=off -cpu "$cpu" -bios "$EDK2" $gpu "$@"
+        [ "$QEMU_NIC" = none ] || [ -z "$QEMU_NIC" ] && set -- "$@" -nic none
+        BOOT="aarch64"
+        ;;
+    *) die "unknown ARCH $ARCH" ;;
+esac
+set -- "$@" -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
        -object rng-random,id=rng0,filename=/dev/urandom \
        -device virtio-rng-pci,rng=rng0,disable-legacy=on \
-       -serial "$QEMU_SERIAL" -no-reboot -vga "$QEMU_VGA" \
+       -serial "$QEMU_SERIAL" -no-reboot \
        -drive "file=$DISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0 \
-       -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1 \
-       "$@"
+       -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1
 [ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
@@ -401,7 +437,12 @@ if [ "$QEMU_FULLSCREEN" = 1 ]; then
 fi
 [ -n "$QEMU_DISPLAY" ] && set -- "$@" -display "$QEMU_DISPLAY"
 [ "$GDB" = 1 ] && set -- "$@" -s -S
-set -- "$@" -cdrom "$ISO"
+if [ "$BOOT" = -cdrom ]; then
+    set -- "$@" -cdrom "$ISO"
+else
+    set -- "$@" -drive "file=$ISO,if=none,id=cd0,media=cdrom,readonly=on" \
+        -device virtio-scsi-pci -device scsi-cd,drive=cd0
+fi
 # QEMU_EXTRA is a string and is deliberately word split.
 # shellcheck disable=SC2086
 set -- "$@" $QEMU_EXTRA

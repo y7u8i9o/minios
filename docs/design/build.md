@@ -65,9 +65,14 @@ to draw every pixel twice, see "High density displays" below.
 ## Running
 
 `tools/run.sh` builds the QEMU command line for `make run` and `make gdb`:
-`-M q35`, the accelerator, memory, CPU count, `-serial stdio`, the root and
-swap virtio-blk devices, a virtio-snd device with an audio backend and the
-ISO. Settings come from four layers, each overriding the previous one:
+the machine, the accelerator, memory, CPU count, `-serial stdio`, the root
+and swap virtio-blk devices, a virtio-snd device with an audio backend and
+the ISO. The machine follows `ARCH`. For x86_64 it is `-M q35` with
+`-vga virtio`. For aarch64 (`make ARCH=aarch64 run`) it is `-M virt` with
+GICv3 and without ACPI, `-cpu host` under HVF, the edk2 firmware that QEMU
+installs (`EDK2_AARCH64` names another file), virtio-gpu-pci as the
+display with ramfb as the boot framebuffer, the ISO as a SCSI CD and
+`-nic none` unless `--nic` names a network. Settings come from four layers, each overriding the previous one:
 
 1. built-in defaults: 512M, 4 CPUs, HVF on macOS and KVM on Linux when the
    QEMU binary offers them and `/dev/kvm` is writable, TCG otherwise, the
@@ -256,7 +261,9 @@ gui/$(id -u)/com.minios.fold-develop` shows its state;
 
 `data.img` in the repository root is the persistent data volume
 (`storage.md`): an empty mfs image that `make image` creates when it is
-missing and never rebuilds. `DATA` names another file, `DATA_MB` its size
+missing and never rebuilds. The aarch64 build uses `data-aarch64.img`,
+because the volume contains the installed packages, which are built for
+one machine. `DATA` names another file, `DATA_MB` its size
 (256), and `make clean-data` removes it. `tools/run.sh` attaches it as the
 third virtio-blk device; `--data FILE` and `--no-data` override that.
 
