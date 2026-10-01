@@ -8,15 +8,15 @@
 #include <debug/panic.h>
 #include "todo.h"
 #include "timer_internal.h"
+#include "devtree.h"
+#include "its.h"
 
-/* The GICv3 of the QEMU virt machine (A5): the distributor at 0x08000000
- * and the redistributors from 0x080a0000, 128 KiB per CPU. The CPU
- * interface is reached through the ICC system registers. Every interrupt
- * is in group 1 and is routed to the boot CPU. The addresses are those of
- * virt; A7 reads them from the device tree. */
+/* The GICv3 (A5): the distributor and the redistributors, 128 KiB per
+ * CPU, at the addresses of the device tree (A7). The CPU interface is
+ * reached through the ICC system registers. Every interrupt is in group 1
+ * and is routed to the boot CPU. LPIs, the interrupts of MSI, are in
+ * its.c. */
 
-#define GICD_PHYS       0x08000000UL
-#define GICR_PHYS       0x080a0000UL
 #define GICR_STRIDE     0x20000UL
 
 #define GICD_CTLR       0x0000
@@ -69,20 +69,24 @@ static void dist_wait(void)
         cpu_relax();
 }
 
-/* The redistributor whose affinity matches the calling CPU. */
-static volatile uint8_t *find_redistributor(void)
+/* The redistributor whose affinity matches the calling CPU, and its
+ * physical address. */
+static volatile uint8_t *find_redistributor(uintptr_t *phys)
 {
     uint64_t mpidr;
     __asm__ volatile("mrs %0, mpidr_el1" : "=r"(mpidr));
     uint32_t aff = (uint32_t)((mpidr & 0xffffff) | ((mpidr >> 8) & 0xff000000));
-    volatile uint8_t *base = vmm_map_mmio(GICR_PHYS, 8 * GICR_STRIDE, VM_KERNEL_RW | VM_NOCACHE);
+    unsigned count = (unsigned)(devtree.gicr_size / GICR_STRIDE);
+    volatile uint8_t *base = vmm_map_mmio(devtree.gicr, count * GICR_STRIDE, VM_KERNEL_RW | VM_NOCACHE);
     if (!base)
         panic("gic: cannot map the redistributors");
-    for (unsigned i = 0; i < 8; i++) {
+    for (unsigned i = 0; i < count; i++) {
         volatile uint8_t *r = base + i * GICR_STRIDE;
         uint64_t typer = *(volatile uint64_t *)(r + GICR_TYPER);
-        if ((uint32_t)(typer >> 32) == aff)
+        if ((uint32_t)(typer >> 32) == aff) {
+            *phys = devtree.gicr + i * GICR_STRIDE;
             return r;
+        }
         if (typer & (1u << 4))          /* Last */
             break;
     }
@@ -91,7 +95,7 @@ static volatile uint8_t *find_redistributor(void)
 
 void arch_init_interrupts(void)
 {
-    gicd = vmm_map_mmio(GICD_PHYS, 0x10000, VM_KERNEL_RW | VM_NOCACHE);
+    gicd = vmm_map_mmio(devtree.gicd, 0x10000, VM_KERNEL_RW | VM_NOCACHE);
     if (!gicd)
         panic("gic: cannot map the distributor");
     nlines = ((rd32(gicd, GICD_TYPER) & 0x1f) + 1) * 32;
@@ -106,7 +110,8 @@ void arch_init_interrupts(void)
     wr32(gicd, GICD_CTLR, CTLR_ARE | CTLR_GRP1 | CTLR_GRP0);
     dist_wait();
 
-    gicr = find_redistributor();
+    uintptr_t gicr_phys;
+    gicr = find_redistributor(&gicr_phys);
     wr32(gicr, GICR_WAKER, rd32(gicr, GICR_WAKER) & ~WAKER_SLEEP);
     while (rd32(gicr, GICR_WAKER) & WAKER_ASLEEP)
         cpu_relax();
@@ -127,11 +132,16 @@ void arch_init_interrupts(void)
     __asm__ volatile("msr icc_pmr_el1, %0; msr icc_bpr1_el1, xzr; msr icc_igrpen1_el1, %1; isb"
                      : : "r"(0xffUL), "r"(1UL) : "memory");
     klog_info("gicv3: distributor at %lx with %u interrupt lines, redistributor at %lx",
-              GICD_PHYS, nlines, GICR_PHYS);
+              devtree.gicd, nlines, gicr_phys);
+    its_init(gicr, gicr_phys);
 }
 
 void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
 {
+    if (irq >= LPI_BASE) {
+        its_register(irq, fn, arg);
+        return;
+    }
     if (irq >= nlines)
         panic("irq_register: interrupt %u beyond the %u lines of the gic", irq, nlines);
     handlers[irq].fn = fn;
@@ -156,16 +166,19 @@ void irq_dispatch(struct trapframe *tf)
         return;                         /* spurious: no end of interrupt */
     if (irq == IRQ_TIMER)
         timer_rearm();
-    if (irq < MAX_IRQS && handlers[irq].fn)
+    if (irq >= LPI_BASE)
+        its_dispatch(tf, irq);
+    else if (irq < MAX_IRQS && handlers[irq].fn)
         handlers[irq].fn(tf, handlers[irq].arg);
     else
         klog_warn("unhandled interrupt %u", irq);
     __asm__ volatile("msr icc_eoir1_el1, %0; isb" : : "r"(iar) : "memory");
 }
 
+/* Interrupt numbers for MSI are LPIs. */
 int irq_alloc(void)
 {
-    ARCH_TODO("A7");
+    return its_alloc();
 }
 
 void arch_send_ipi(unsigned cpu, unsigned irq)

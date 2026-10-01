@@ -4,11 +4,11 @@
  * long double is IEEE binary128 on aarch64; libgcc implements its
  * arithmetic in software. The exact functions (truncl, frexpl, ldexpl,
  * fmodl, remainderl) work on the binary128 representation. The
- * exponential, logarithmic and inverse tangent functions compute in
- * double precision with the kernels below, so their long double results
- * carry double precision only, and the double functions that math.c
- * builds on them (exp, log, pow, atan) can be one unit off where the x87
- * kernels of x86_64 round correctly. */
+ * exponential, logarithmic and inverse tangent functions evaluate their
+ * series in binary128 after an argument reduction, to within a few units
+ * of the last place of binary128; the double functions that math.c and
+ * math_extra.c build on them (pow, atan, the hyperbolic functions) round
+ * from that result. */
 #include <math.h>
 #include <float.h>
 #include <errno.h>
@@ -23,112 +23,110 @@ union quad_bits {
 #define QUAD_SIGN (1ULL << 63)
 #define QUAD_EXP(hi) ((unsigned)((hi) >> 48) & 0x7fffU)
 
-/* ---- double kernels ---- */
+/* ---- binary128 kernels ---- */
 
-static const double LN2_HI = 6.93147180369123816490e-01;   /* 0x3fe62e42fee00000 */
-static const double LN2_LO = 1.90821492927058770002e-10;
-static const double LOG2E = 1.44269504088896338700e+00;
-static const double PI = 3.14159265358979311600e+00;
-static const double PI_2 = 1.57079632679489655800e+00;
-static const double PI_6 = 5.23598775598298815659e-01;
-static const double SQRT3 = 1.73205080756887719318e+00;
-static const double TAN_PI_12 = 2.67949192431122696e-01;
+/* ln 2 split so that n * LN2_HI is exact for the exponents of binary128:
+ * LN2_HI has 93 significant bits. */
+static const long double LN2_HI = 0x162e42fefa39ef35793c7673p-93L;
+static const long double LN2_LO = 1.9470450923807499515879595733332738027853e-31L;
+static const long double SQRT3 = 1.7320508075688772935274463415058723669428e+0L;
+static const long double PI_2 = 1.5707963267948966192313216916397514420986e+0L;
+static const long double PI_6 = 5.2359877559829887307710723054658381403286e-1L;
+static const long double TAN_PI_12 = 2.6794919243112270647255365849412763305719e-1L;
 
-/* e**t for |t| <= 0.35: the Taylor series to degree 14. */
-static double exp_series(double t)
+/* 1/k! for k = 0 to 30. */
+static const long double INV_FACTORIAL[] = {
+    1.0000000000000000000000000000000000000000e+0L, 1.0000000000000000000000000000000000000000e+0L,
+    5.0000000000000000000000000000000000000000e-1L, 1.6666666666666666666666666666666666666667e-1L,
+    4.1666666666666666666666666666666666666667e-2L, 8.3333333333333333333333333333333333333333e-3L,
+    1.3888888888888888888888888888888888888889e-3L, 1.9841269841269841269841269841269841269841e-4L,
+    2.4801587301587301587301587301587301587302e-5L, 2.7557319223985890652557319223985890652557e-6L,
+    2.7557319223985890652557319223985890652557e-7L, 2.5052108385441718775052108385441718775052e-8L,
+    2.0876756987868098979210090321201432312543e-9L, 1.6059043836821614599392377170154947932726e-10L,
+    1.1470745597729724713851697978682105666233e-11L, 7.6471637318198164759011319857880704441551e-13L,
+    4.7794773323873852974382074911175440275969e-14L, 2.8114572543455207631989455830103200162335e-15L,
+    1.5619206968586226462216364350057333423519e-16L, 8.2206352466243297169559812368722807492207e-18L,
+    4.1103176233121648584779906184361403746104e-19L, 1.9572941063391261230847574373505430355287e-20L,
+    8.8967913924505732867488974425024683433125e-22L, 3.8681701706306840377169119315228123231793e-23L,
+    1.6117375710961183490487133048011718013247e-24L, 6.4469502843844733961948532192046872052989e-26L,
+    2.4795962632247974600749435458479566174227e-27L, 9.1836898637955461484257168364739133978617e-29L,
+    3.2798892370698379101520417273121119278077e-30L, 1.1309962886447716931558764576938316992441e-31L,
+    3.7699876288159056438529215256461056641468e-33L,
+};
+
+/* 1/(2k + 1) for k = 0 to 36. */
+static const long double INV_ODD[] = {
+    1.0000000000000000000000000000000000000000e+0L, 3.3333333333333333333333333333333333333333e-1L,
+    2.0000000000000000000000000000000000000000e-1L, 1.4285714285714285714285714285714285714286e-1L,
+    1.1111111111111111111111111111111111111111e-1L, 9.0909090909090909090909090909090909090909e-2L,
+    7.6923076923076923076923076923076923076923e-2L, 6.6666666666666666666666666666666666666667e-2L,
+    5.8823529411764705882352941176470588235294e-2L, 5.2631578947368421052631578947368421052632e-2L,
+    4.7619047619047619047619047619047619047619e-2L, 4.3478260869565217391304347826086956521739e-2L,
+    4.0000000000000000000000000000000000000000e-2L, 3.7037037037037037037037037037037037037037e-2L,
+    3.4482758620689655172413793103448275862069e-2L, 3.2258064516129032258064516129032258064516e-2L,
+    3.0303030303030303030303030303030303030303e-2L, 2.8571428571428571428571428571428571428571e-2L,
+    2.7027027027027027027027027027027027027027e-2L, 2.5641025641025641025641025641025641025641e-2L,
+    2.4390243902439024390243902439024390243902e-2L, 2.3255813953488372093023255813953488372093e-2L,
+    2.2222222222222222222222222222222222222222e-2L, 2.1276595744680851063829787234042553191489e-2L,
+    2.0408163265306122448979591836734693877551e-2L, 1.9607843137254901960784313725490196078431e-2L,
+    1.8867924528301886792452830188679245283019e-2L, 1.8181818181818181818181818181818181818182e-2L,
+    1.7543859649122807017543859649122807017544e-2L, 1.6949152542372881355932203389830508474576e-2L,
+    1.6393442622950819672131147540983606557377e-2L, 1.5873015873015873015873015873015873015873e-2L,
+    1.5384615384615384615384615384615384615385e-2L, 1.4925373134328358208955223880597014925373e-2L,
+    1.4492753623188405797101449275362318840580e-2L, 1.4084507042253521126760563380281690140845e-2L,
+    1.3698630136986301369863013698630136986301e-2L,
+};
+
+/* e**t - 1 for |t| <= ln 2 by the Taylor series. The remainder after the
+ * last term is below 2**-113 of the result: |t|**30 / 31! < 1e-34 |t|. */
+static long double expm1_series(long double t)
 {
-    double p = 1.0 / 87178291200.0;                 /* 1/14! */
-    static const double inverse_factorial[] = {
-        1.0 / 6227020800.0, 1.0 / 479001600.0, 1.0 / 39916800.0, 1.0 / 3628800.0,
-        1.0 / 362880.0, 1.0 / 40320.0, 1.0 / 5040.0, 1.0 / 720.0, 1.0 / 120.0,
-        1.0 / 24.0, 1.0 / 6.0, 0.5, 1.0, 1.0,
-    };
-    for (unsigned i = 0; i < sizeof inverse_factorial / sizeof inverse_factorial[0]; i++)
-        p = p * t + inverse_factorial[i];
-    return p;
+    int n = sizeof INV_FACTORIAL / sizeof INV_FACTORIAL[0] - 1;
+    long double p = INV_FACTORIAL[n];
+    for (int k = n - 1; k >= 1; k--)
+        p = p * t + INV_FACTORIAL[k];
+    return p * t;
 }
 
-/* 2**x for finite x within the double range. */
-static double exp2_kernel(double x)
+/* sum (-1)**k t**(2k+1) / (2k+1) when alternate, else sum t**(2k+1) /
+ * (2k+1), to n terms: atan(t) and atanh(t). */
+static long double odd_series(long double t, int n, int alternate)
 {
-    double n = floor(x + 0.5);
-    double f = x - n;                               /* exact, |f| <= 0.5 */
-    double t = f * LN2_HI + f * LN2_LO;
-    return ldexp(exp_series(t), (int)n);
+    long double t2 = t * t;
+    long double p = INV_ODD[n - 1];
+    for (int k = n - 2; k >= 0; k--)
+        p = alternate ? INV_ODD[k] - t2 * p : INV_ODD[k] + t2 * p;
+    return p * t;
 }
 
-/* log2 of m in [0.5, 1), returned as the natural logarithm of m scaled to
- * [sqrt(1/2), sqrt(2)) and the exponent adjustment. */
-static double log_mantissa(double m, int *adjust)
-{
-    *adjust = 0;
-    if (m < 0.70710678118654752440) {
-        m *= 2.0;
-        *adjust = -1;
-    }
-    /* ln(m) = 2 atanh(s), s = (m - 1) / (m + 1), |s| <= 0.172. */
-    double s = (m - 1.0) / (m + 1.0);
-    double s2 = s * s;
-    double p = 2.0 / 25.0;
-    for (int k = 23; k >= 1; k -= 2)
-        p = p * s2 + 2.0 / k;
-    return s * p;
-}
-
-/* log2 of a positive finite double. */
-static double log2_kernel(double x)
+/* The natural logarithm of a positive finite x as e * ln 2 + ln m with
+ * m in [sqrt(1/2), sqrt(2)): ln m = 2 atanh(s), s = (m - 1) / (m + 1),
+ * |s| <= 0.172, for which 24 terms reach binary128 precision. */
+static long double log_positive(long double x, int *exponent, long double *mantissa_log)
 {
     int e;
-    double m = frexp(x, &e);
-    int adjust;
-    double ln = log_mantissa(m, &adjust);
-    return (double)(e + adjust) + ln * LOG2E;
+    long double m = frexpl(x, &e);
+    if (m < 0.70710678118654752440084436210484903928L) {
+        m *= 2.0L;
+        e--;
+    }
+    long double s = (m - 1.0L) / (m + 1.0L);
+    *exponent = e;
+    *mantissa_log = 2.0L * odd_series(s, 24, 0);
+    return e * LN2_HI + (e * LN2_LO + *mantissa_log);
 }
 
-/* atan(t) for 0 <= t <= 1. */
-static double atan_unit(double t)
+/* atan(t) for 0 <= t <= 1: above tan(pi/12) the identity
+ * atan(t) = pi/6 + atan((t sqrt(3) - 1) / (sqrt(3) + t)) brings the
+ * argument within tan(pi/12), for which 30 terms are enough. */
+static long double atan_unit(long double t)
 {
-    double base = 0.0;
+    long double base = 0.0L;
     if (t > TAN_PI_12) {
-        t = (t * SQRT3 - 1.0) / (SQRT3 + t);
+        t = (t * SQRT3 - 1.0L) / (SQRT3 + t);
         base = PI_6;
     }
-    double t2 = t * t;
-    double p = 1.0 / 41.0;
-    for (int k = 39; k >= 1; k -= 2)
-        p = -p * t2 + 1.0 / k;
-    return base + t * p;
-}
-
-static double atan_kernel(double x)
-{
-    double a = fabs(x);
-    double r = a > 1.0 ? PI_2 - atan_unit(1.0 / a) : atan_unit(a);
-    return x < 0.0 ? -r : r;
-}
-
-static double atan2_kernel(double y, double x)
-{
-    if (isnan(x) || isnan(y))
-        return x + y;
-    if (y == 0.0) {
-        if (signbit(x))
-            return signbit(y) ? -PI : PI;
-        return y;
-    }
-    if (x == 0.0)
-        return y > 0.0 ? PI_2 : -PI_2;
-    if (isinf(x)) {
-        if (isinf(y))
-            return x > 0.0 ? copysign(PI_2 / 2.0, y) : copysign(3.0 * PI_2 / 2.0, y);
-        return x > 0.0 ? copysign(0.0, y) : copysign(PI, y);
-    }
-    if (isinf(y))
-        return copysign(PI_2, y);
-    double r = atan_kernel(fabs(y / x));
-    if (x < 0.0)
-        r = PI - r;
-    return y < 0.0 ? -r : r;
+    return base + odd_series(t, 30, 1);
 }
 
 /* ---- primitives of stdlib/math_arch.h ---- */
@@ -194,7 +192,9 @@ long double atanl(long double x)
 {
     if (isnan(x))
         return x;
-    return atan_kernel((double)x);
+    long double a = fabsl(x);
+    long double r = a > 1.0L ? PI_2 - atan_unit(1.0L / a) : atan_unit(a);
+    return x < 0.0L ? -r : r;
 }
 
 long double atan2l(long double y, long double x)
@@ -203,7 +203,24 @@ long double atan2l(long double y, long double x)
         return x;
     if (isnan(y))
         return y;
-    return atan2_kernel((double)y, (double)x);
+    if (y == 0.0L) {
+        if (signbit(x))
+            return signbit(y) ? -M_PIL : M_PIL;
+        return y;
+    }
+    if (x == 0.0L)
+        return y > 0.0L ? PI_2 : -PI_2;
+    if (isinf(x)) {
+        if (isinf(y))
+            return x > 0.0L ? copysignl(M_PI_4L, y) : copysignl(3.0L * M_PI_4L, y);
+        return x > 0.0L ? copysignl(0.0L, y) : copysignl(M_PIL, y);
+    }
+    if (isinf(y))
+        return copysignl(PI_2, y);
+    long double r = atanl(fabsl(y / x));
+    if (x < 0.0L)
+        r = M_PIL - r;
+    return y < 0.0L ? -r : r;
 }
 
 /* ---- binary128 representation ---- */
@@ -396,7 +413,7 @@ long double remainderl(long double x, long double y)
     return partial_remainder_long(x, y, 1);
 }
 
-/* ---- exponentials and logarithms in double precision ---- */
+/* ---- exponentials and logarithms ---- */
 
 long double exp2l(long double x)
 {
@@ -412,42 +429,40 @@ long double exp2l(long double x)
         errno = ERANGE;
         return 0.0L;
     }
-    long double integral = floorl(x);
-    return ldexpl(exp2_kernel((double)(x - integral)), (int)integral);
+    long double n = floorl(x + 0.5L);
+    long double f = x - n;                          /* exact, |f| <= 0.5 */
+    return ldexpl(1.0L + expm1_series(f * M_LN2L), (int)n);
 }
 
 long double expl(long double x)
 {
-    return exp2l(x * M_LOG2EL);
+    if (isnan(x) || x == INFINITY)
+        return x;
+    if (x == -INFINITY)
+        return 0.0L;
+    if (x > 11356.6L) {
+        errno = ERANGE;
+        return HUGE_VALL;
+    }
+    if (x < -11433.5L) {
+        errno = ERANGE;
+        return 0.0L;
+    }
+    /* x = n ln 2 + r with |r| <= ln 2 / 2, n ln 2 subtracted in two parts. */
+    long double n = floorl(x * M_LOG2EL + 0.5L);
+    long double r = (x - n * LN2_HI) - n * LN2_LO;
+    return ldexpl(1.0L + expm1_series(r), (int)n);
 }
 
 long double expm1l(long double x)
 {
     if (x == 0.0L || isnan(x))
         return x;
-    if (fabsl(x) <= M_LN2L) {
-        /* The series without the leading 1, to degree 20. */
-        double t = (double)x;
-        double p = 1.0 / 2432902008176640000.0;       /* 1/20! */
-        double factorial = 2432902008176640000.0;
-        for (int k = 19; k >= 1; k--) {
-            factorial /= k + 1;
-            p = p * t + 1.0 / factorial;
-        }
-        return t * p;
-    }
+    if (fabsl(x) <= M_LN2L)
+        return expm1_series(x);
+    if (x < -80.0L)
+        return -1.0L;                               /* e**x below 2**-115 */
     return expl(x) - 1.0L;
-}
-
-/* log2 of a positive finite long double: the exponent from frexpl, the
- * mantissa through the double kernel. */
-static long double log2_positive(long double x)
-{
-    int e;
-    long double m = frexpl(x, &e);
-    int adjust;
-    double ln = log_mantissa((double)m, &adjust);
-    return (long double)(e + adjust) + (long double)ln * M_LOG2EL;
 }
 
 long double logl(long double x)
@@ -462,7 +477,9 @@ long double logl(long double x)
         errno = EDOM;
         return NAN;
     }
-    return log2_positive(x) * M_LN2L;
+    int e;
+    long double ln_m;
+    return log_positive(x, &e, &ln_m);
 }
 
 long double log2l(long double x)
@@ -470,17 +487,14 @@ long double log2l(long double x)
     if (x <= 0.0L || !isfinite(x))
         return logl(x) * M_LOG2EL;
     int e;
-    long double m = frexpl(x, &e);
-    if (m == 0.5L)
-        return (long double)(e - 1);                /* exact for powers of two */
-    return (long double)log2_kernel((double)m) + (long double)e;
+    long double ln_m;
+    log_positive(x, &e, &ln_m);
+    return (long double)e + ln_m * M_LOG2EL;        /* exact for powers of two */
 }
 
 long double log10l(long double x)
 {
-    if (x <= 0.0L || !isfinite(x))
-        return logl(x) * M_LOG10EL;
-    return log2_positive(x) * (M_LN2L * M_LOG10EL);
+    return logl(x) * M_LOG10EL;
 }
 
 long double log1pl(long double x)
@@ -497,14 +511,11 @@ long double log1pl(long double x)
     }
     if (fabsl(x) <= 0.5L) {
         /* log1p(x) = 2 atanh(s), s = x / (2 + x), |s| <= 1/3. */
-        double s = (double)(x / (2.0L + x));
-        double s2 = s * s;
-        double p = 2.0 / 61.0;
-        for (int k = 59; k >= 1; k -= 2)
-            p = p * s2 + 2.0 / k;
-        return s * p;
+        return 2.0L * odd_series(x / (2.0L + x), 37, 0);
     }
-    return logl(1.0L + x);
+    /* u = 1 + x rounded; (x - (u - 1)) / u corrects for the rounding. */
+    long double u = 1.0L + x;
+    return logl(u) + (x - (u - 1.0L)) / u;
 }
 
 static int integral_is_odd(long double value)

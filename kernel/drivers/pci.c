@@ -185,10 +185,18 @@ static void probe(uint8_t bus, uint8_t slot, uint8_t func)
                   d->vendor, d->device, what, nbars, nbars == 1 ? "" : "s");
 }
 
+/* Scan bus 0 and every bus that a bridge found earlier names as its
+ * secondary bus, in bus order. The firmware numbers the buses below a
+ * bridge after the bridge's own, so one pass in order reaches them all
+ * without reading the configuration space of absent buses, which on ECAM
+ * platforms would have to be mapped. */
 void pci_init(void)
 {
+    uint64_t reachable[4] = { 1 };
     unsigned nbuses = 0;
     for (unsigned bus = 0; bus < 256; bus++) {
+        if (!(reachable[bus / 64] & (1UL << (bus % 64))))
+            continue;
         bool populated = false;
         for (uint8_t slot = 0; slot < 32; slot++) {
             uint32_t id = raw_read32((uint8_t)bus, slot, 0, 0);
@@ -197,8 +205,16 @@ void pci_init(void)
             populated = true;
             uint8_t ht = (uint8_t)(raw_read32((uint8_t)bus, slot, 0, 0x0c) >> 16);
             uint8_t nfunc = (ht & 0x80) ? 8 : 1;
-            for (uint8_t f = 0; f < nfunc; f++)
+            for (uint8_t f = 0; f < nfunc; f++) {
                 probe((uint8_t)bus, slot, f);
+                uint32_t hdr = raw_read32((uint8_t)bus, slot, f, 0x0c);
+                if (((hdr >> 16) & 0x7f) != 1 || raw_read32((uint8_t)bus, slot, f, 0) == 0xffffffff)
+                    continue;
+                /* A PCI to PCI bridge: the secondary bus is byte 0x19. */
+                unsigned secondary = (raw_read32((uint8_t)bus, slot, f, 0x18) >> 8) & 0xff;
+                if (secondary > bus)
+                    reachable[secondary / 64] |= 1UL << (secondary % 64);
+            }
         }
         nbuses += populated;
     }
@@ -284,7 +300,7 @@ int pci_msix_set_vector(const struct pci_dev *d, unsigned index, unsigned vector
         return -EINVAL;
     uint64_t addr;
     uint32_t data;
-    platform_msi_compose(vector, &addr, &data);
+    platform_msi_compose(d, vector, &addr, &data);
     volatile uint32_t *e = tbl + index * 4;
     e[0] = (uint32_t)addr;
     e[1] = (uint32_t)(addr >> 32);

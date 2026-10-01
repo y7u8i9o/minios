@@ -486,3 +486,17 @@ These locks are in user space and do not add a kernel lock-order level.
   exists only on aarch64.
 - The access flag and dirty state update of a fault (`update_access` in
   `mm/vma.c`) takes `vmspace.lock` alone, like `vma_resolve_fault`.
+
+## A7 additions
+
+- `ecam_lock` (spinlock, `arch/aarch64/platform.c`) protects the table of
+  mapped ECAM buses. A configuration space access takes it to find or map
+  its bus; `vmm_map_mmio` takes `kernel_vmspace.lock` inside it, which
+  gives the order `ecam_lock -> kernel_vmspace.lock`. It exists only on
+  aarch64.
+- `its_lock` (spinlock, `arch/aarch64/its.c`) protects the ITS command
+  queue, the device table with its level 2 pages, the mapped devices and
+  the event of each LPI. `its_msi_compose` and `its_register` take it
+  without other locks and allocate table pages from the buddy allocator
+  under it, which gives the order `its_lock -> pmm_lock` (and the per CPU
+  page cache lock). It exists only on aarch64.

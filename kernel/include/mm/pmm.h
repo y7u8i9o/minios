@@ -60,7 +60,8 @@ static inline void page_get(struct page *page)
 bool page_put(struct page *page);
 
 void pmm_get_stats(struct pmm_stats *out);
-/* True if pa lies inside memory described by struct page. */
+/* True if pa is a frame of the allocator, with a reference count: inside
+ * the memory described by struct page and not reserved. */
 bool pmm_is_ram(uintptr_t pa);
 /* Copy the per order free block counts into out[PMM_MAX_ORDER + 1]. */
 void pmm_get_free_counts(uint64_t *out);

@@ -2,16 +2,23 @@
 
 ## PCI
 
-`drivers/pci.c` enumerates every bus, slot and function through the
-configuration space ports `0xcf8` and `0xcfc`. Each function found is
+`drivers/pci.c` enumerates the slots and functions of bus 0 and of every
+bus that a PCI to PCI bridge found earlier names as its secondary bus. The
+firmware numbers the buses below a bridge after the bridge's own, so one
+pass in bus order reaches every function without reading absent buses.
+Configuration space accesses go through `platform_pci_read32` and
+`platform_pci_write32`: the ports `0xcf8` and `0xcfc` on the PC, the ECAM
+window of the device tree on aarch64 (`arch.md`). Each function found is
 recorded in a static table of `struct pci_dev` with vendor, device, class
 codes, interrupt line and pin and the decoded base address registers
 (64 bit memory BARs consume two slots). The table is filled once at boot
 and read without a lock afterwards. Helpers provide configuration space
 accesses of 8, 16 and 32 bits, capability list walks, bus master enabling
 and MSI-X setup: `pci_msix_enable` sets the enable bit of the MSI-X
-capability and `pci_msix_set_vector` maps the table BAR and writes the
-local APIC address and the vector into one table entry.
+capability and `pci_msix_set_vector` maps the table BAR and writes into
+one table entry the address and data of `platform_msi_compose`: the local
+APIC address and the vector on the PC, the ITS doorbell and an event ID on
+aarch64.
 
 QEMU q35 shows seven functions: host bridge, VGA, e1000, the virtio-blk
 function, the ISA bridge, AHCI and SMBus. They are logged at boot.
@@ -34,8 +41,9 @@ descriptors, `virtq_submit` publishes the head in the available ring
 with a memory fence and writes the queue index to the notification
 address. Every queue keeps a completion cookie per head descriptor.
 
-Interrupts arrive through MSI-X. Each device gets one vector from 40
-upwards, registered with `irq_register`; the configuration and every queue
+Interrupts arrive through MSI-X. Each device gets one interrupt number
+from `irq_alloc` (a vector from 40 upwards on x86_64, an LPI from 8192 on
+aarch64), registered with `irq_register`; the configuration and every queue
 use table entry 0. The handler walks the used ring of every queue under
 `virtqueue.lock`, calls the driver completion callback for each finished
 chain, frees the chain and wakes the queue wait queue.

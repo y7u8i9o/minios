@@ -48,6 +48,11 @@ static volatile struct limine_module_request module_request = {
 };
 
 __used __section(".limine_requests")
+static volatile struct limine_dtb_request dtb_request = {
+    .id = LIMINE_DTB_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
+__used __section(".limine_requests")
 static volatile struct limine_bootloader_info_request bootloader_request = {
     .id = LIMINE_BOOTLOADER_INFO_REQUEST_ID, .revision = 0, .response = NULL,
 };
@@ -89,6 +94,10 @@ void boot_init(void)
         bootinfo.initrd = f->address;
         bootinfo.initrd_size = f->size;
     }
+    /* The device tree (aarch64), in bootloader reclaimable memory: it is
+     * read before pmm_reclaim_bootloader (arch_init_cpu_features). */
+    if (dtb_request.response && dtb_request.response->dtb_ptr)
+        bootinfo.dtb = dtb_request.response->dtb_ptr;
     hhdm_offset = bootinfo.hhdm_offset;
     cmdline_init(bootinfo.cmdline);
     boot_parse_video();

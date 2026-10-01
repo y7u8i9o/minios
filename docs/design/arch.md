@@ -145,7 +145,8 @@ An interrupt number is the value that `irq_register` takes and that a
 handler is registered for; on x86_64 it is the IDT vector. Generic code
 uses the named numbers `IRQ_TIMER`, `IRQ_RESCHED` and `IRQ_TLB_SHOOTDOWN`,
 and allocates numbers for message signalled device interrupts with
-`irq_alloc`, which virtio uses for MSI-X (vectors from 40 upward on x86_64).
+`irq_alloc`, which virtio uses for MSI-X (vectors from 40 upward on x86_64,
+LPIs from 8192 upward on aarch64).
 `arch_send_ipi(cpu, irq)` sends an interrupt to a CPU by its kernel id; the
 x86_64 implementation looks up the local APIC id in `c->arch`. The fixed
 vectors of the PC devices and the APIC functions are in `<arch/apic.h>`,
@@ -171,13 +172,15 @@ variant of `sleep_ms`.
 | `platform_test_exit(code)` | the exit of a boot test (`ktest.c`) and of a panic with `CONFIG_PANIC_EXIT` | isa-debug-exit on port `0xf4` |
 | `platform_rtc_read` | `rtc_init` reads the date once (`time.md`) | CMOS clock (`cmos.c`) |
 | `platform_pci_read32`, `platform_pci_write32` | configuration space accesses of `drivers/pci.c` | configuration mechanism 1, ports `0xcf8` and `0xcfc` (`pci_config.c`) |
-| `platform_msi_compose` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data |
+| `platform_msi_compose(dev, irq, ...)` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data; `dev` is unused |
 | `platform_devices_init` | devices that exist only on this platform | PS/2 keyboard and mouse |
 
 The console UART implements `<drivers/serial.h>` (`arch/x86_64/serial.c`,
-COM1). The headers of the PS/2 drivers (`arch/x86_64/ps2kbd.c`, `ps2mouse.c`)
-are in `include/drivers/` because the kernel self-tests feed scancodes
-through them.
+COM1). The PS/2 scancode and packet decoders are generic
+(`drivers/ps2kbd.c`, `ps2mouse.c`) and the 8042 controller is PC code
+(`arch/x86_64/i8042.c`). The kernel self-tests feed scancodes and packets
+through the decoders; on a platform without an 8042, `ktest_run_selected`
+registers the decoders as input devices before the selected test runs.
 
 ## 11. Start-up sequence (`<arch/init.h>`, `include/boot.h`)
 
@@ -332,7 +335,7 @@ subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `hugepages`, `mmap_file`, `rlimit`, `fb0`, `float`, `fpu`, `mathvec`,
 `libmfull`, `dlopen`, `tcc`, `lua` and `luasynth`.
 
-## 16. The aarch64 implementation (A4 to A6)
+## 16. The aarch64 implementation (A4 to A7)
 
 The whole generic kernel, with its self-tests except `test_cpu.c`
 (`TESTS_X86_ONLY` in `kernel/Makefile`), compiles and links for aarch64. The
@@ -359,12 +362,11 @@ milestone. Implemented are:
   with 8 bit ASIDs (`asid_lock`, `locking.md`), an empty table in
   `TTBR0_EL1` while the kernel space is active, and the hardware access
   flag and dirty state where `ID_AA64MMFR1_EL1` reports them;
-- the GICv3 of `virt` (`gic.c`, A5): the distributor, the redistributor of
-  the boot CPU and the CPU interface through the ICC system registers, with
-  every interrupt in group 1. The addresses are those of `virt` until the
-  device tree is read (A7). Under HVF the GIC of Hypervisor.framework does
-  not complete a write of `GICR_IGROUPR0`, so the redistributor registers
-  are written only when their value differs;
+- the GICv3 (`gic.c`, A5): the distributor, the redistributor of the boot
+  CPU and the CPU interface through the ICC system registers, with every
+  interrupt in group 1. Under HVF the GIC of Hypervisor.framework does not
+  complete a write of `GICR_IGROUPR0`, so the redistributor registers are
+  written only when their value differs;
 - the clock from `CNTVCT_EL0` and `CNTFRQ_EL0` and the tick from the
   virtual timer, PPI 27, programmed one period ahead through
   `CNTV_CVAL_EL0` (`clock.c`, A5);
@@ -377,8 +379,32 @@ milestone. Implemented are:
   with the restorer in x30. The return path masks exceptions before it
   writes `ELR_EL1` and `SPSR_EL1`, and loads `SP_EL0` for every return to
   EL0t;
-- the PL031 real time clock of `virt` (`platform.c`, A6), and an empty PCI
-  bus until ECAM arrives with the device tree (A7);
+- the PL031 real time clock (`platform.c`, A6);
+- the device tree (A7). Limine passes the flattened tree that edk2
+  installs when the machine has no ACPI tables (`acpi=off`). The generic
+  reader `kernel/lib/fdt.c` finds nodes by compatible string and decodes
+  `reg` with the cell counts of the parent. `devtree_init`
+  (`arch/aarch64/devtree.c`), called from `arch_init_cpu_features` before
+  `pmm_reclaim_bootloader` frees the tree, records the addresses of the
+  distributor, the redistributors, the ITS, the PL031 and the ECAM window
+  with its bus range and `msi-map`; without a tree the addresses of `virt`
+  apply and there is no PCI;
+- PCIe configuration through ECAM (`platform.c`, A7): 1 MiB per bus,
+  mapped at the first access of the bus under `ecam_lock`
+  (`locking.md`), reads outside the bus range return all ones;
+- MSI through the GICv3 ITS (`its.c`, A7). The redistributor of the boot
+  CPU gets an LPI configuration table for 14 interrupt ID bits and a
+  pending table. The ITS gets a command queue of one page, an indirect
+  device table where the ITS supports one (otherwise a flat table for 16
+  buses) and a collection table; collection 0 targets the boot CPU.
+  `irq_alloc` hands out LPIs from 8192. `platform_msi_compose` translates
+  the requester ID of the function through `msi-map` to a device ID, maps
+  the device with an interrupt translation table of 32 events on first use
+  (`MAPD`), maps the next event to the LPI (`MAPTI`, `INV`, `SYNC`) and
+  returns the address of `GITS_TRANSLATER` with the event ID as data. The
+  command queue and the tables are protected by `its_lock`; the data cache
+  lines of every table entry the CPU writes are cleaned to the point of
+  coherency, for an implementation that does not snoop them;
 - `paging_sync_icache`, which cleans the data cache and invalidates the
   instruction caches for a frame the kernel wrote before it is mapped
   executable (the ELF loader, `vma_make_pte`); x86_64 needs nothing;
@@ -392,13 +418,21 @@ after the timer, with interrupts enabled for the test (`timer`), and
 `KTEST_KINIT` in the first thread for every other test. A test runs at the
 earliest stage at which what it uses is initialized. On aarch64 the kernel
 reached the timer stage before A6, whose threads the scheduler needs;
-since A6 it boots to the first thread and runs user programs from the
-initrd, which is the root until the disk arrives with PCI (A7).
+since A6 it boots to the first thread and runs user programs, and since
+A7 its root is the mfs on the virtio disk.
 
 `make ARCH=aarch64 test CASES="..."` boots QEMU `virt` with the edk2
 firmware that QEMU installs, on HVF where available (`-cpu host`, otherwise
-TCG with `-cpu max`). The image is the ISO of `tools/mkiso.sh`, whose UEFI
-El Torito image contains Limine's `BOOTAA64.EFI`, attached as a SCSI CD.
+TCG with `-cpu max`), without ACPI so that edk2 installs the device tree.
+The image is the ISO of `tools/mkiso.sh`, whose UEFI El Torito image
+contains Limine's `BOOTAA64.EFI`, attached as a SCSI CD. The machine has no
+VGA: `ramfb` gives the boot framebuffer that std VGA gives on the PC, and a
+case with `vga` set to `virtio` also gets `virtio-gpu-pci`, because edk2
+offers no framebuffer on it. A case without a `nic` file gets `-nic none`,
+since `virt` otherwise adds a virtio-net device. The ramfb framebuffer is
+in RAM that the memory map reserves; `pmm_is_ram` is false for reserved
+frames, so a mapping of it takes no page references, as for a framebuffer
+in a PCI BAR.
 Without user programs (`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is
 an empty archive and no disk is attached. The machine has one CPU until
 the application processors are parked by the kernel (A8), because
@@ -415,7 +449,6 @@ architectures: the thread local storage layout (`minios/dl.h`), the signal
 frame contract between `arch_signal_setup_frame` and the libc restorer (a
 return address on the stack on x86_64, x30 on aarch64), and the
 `long double` format (`libc/src/ldouble.h`). The aarch64 port still lacks
-the device tree, PCI and the virtio devices (A7), the application
-processors (A8) and the tcc backend and package repositories (A9). The
-kernel self-test `cpu` of x86 features and the self-tests that feed PS/2
-scancodes remain x86 specific.
+the application processors (A8) and the tcc backend and package
+repositories (A9). The kernel self-test `cpu` of x86 features and the
+`kbd` case of the 8042 controller remain x86 specific.

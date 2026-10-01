@@ -16,7 +16,10 @@ spin wait hint and the stack of a new thread). The public headers
 same assembly, an `fenv.c` over FPCR and FPSR, and `math_long.c`: the
 binary128 `long double` functions with exact `truncl`, `frexpl`,
 `ldexpl`, `fmodl` and `remainderl`, and exponential, logarithmic and
-inverse tangent kernels that compute in double precision. `src/ldouble.h`
+inverse tangent functions that reduce their argument and evaluate a
+Taylor or arctangent series in binary128 arithmetic (A7), so that they
+reach binary128 precision within a few units of the last place; libgcc
+performs that arithmetic in software. `src/ldouble.h`
 takes a `long double` apart for both formats (the classification, the
 trigonometric argument reduction, `%La`, which prints the leading 64
 significand bits).

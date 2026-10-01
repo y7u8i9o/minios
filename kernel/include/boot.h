@@ -22,6 +22,7 @@ struct bootinfo {
     uint32_t fb_scale;              /* integer UI scale from video=WxH@N, 1 by default */
     uint32_t fb_req_width, fb_req_height;   /* the video= size, 0 when absent; a GPU driver applies it */
     const uint8_t *initrd;          /* module contents in the direct map */
+    const void *dtb;                /* the device tree, NULL without one; valid until pmm_reclaim_bootloader */
     uint64_t initrd_size;
     size_t memmap_count;
     struct limine_memmap_entry memmap[BOOT_MAX_MEMMAP];

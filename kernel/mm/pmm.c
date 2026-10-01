@@ -391,5 +391,10 @@ void pmm_dump_stats(void)
 
 bool pmm_is_ram(uintptr_t pa)
 {
-    return (pa >> PAGE_SHIFT) < pmm_max_pfn;
+    /* A reserved frame (firmware memory, a framebuffer in RAM such as the
+     * ramfb of virt) has no reference count and is treated as device
+     * memory. PG_RESERVED changes only before the first user mapping
+     * (pmm_reclaim_bootloader), so it is read without pmm_lock. */
+    uint64_t pfn = pa >> PAGE_SHIFT;
+    return pfn < pmm_max_pfn && !(page_array[pfn].flags & PG_RESERVED);
 }

@@ -16,7 +16,8 @@
 #             built by mkfat from the directory under the case (optional);
 #             the post script sees the first as FATIMG, all as FATIMGS
 #   audio     QEMU audio backend for a virtio-sound device: none or wav
-#   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver)
+#   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver);
+#             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
 #   tablet    present: attach a virtio-tablet-pci device
 #   keyboard  present: attach a virtio-keyboard-pci device
 #   disk.img  a private root image instead of the shared one (optional)
@@ -102,7 +103,7 @@ if [ -f "$CASE/nic" ]; then
     case "$NIC" in
         none) ;;
         dgram|user)
-            "$QEMU" -netdev help 2>/dev/null | grep -qx "$NIC" || fail "nic backend $NIC not offered by $QEMU"
+            "$QEMU" -M none -netdev help 2>/dev/null | grep -qx "$NIC" || fail "nic backend $NIC not offered by $QEMU"
             ;;
         *) fail "unknown nic backend $NIC" ;;
     esac
@@ -227,12 +228,23 @@ case "${ARCH:-x86_64}" in
         [ -f "$EDK2_AARCH64" ] || fail "no edk2 firmware at $EDK2_AARCH64"
         CPU=max
         [ "$ACCEL" = hvf ] && CPU=host
-        MACHINE="-M virt,gic-version=3 -cpu $CPU -bios $EDK2_AARCH64"
+        MACHINE="-M virt,gic-version=3,acpi=off -cpu $CPU -bios $EDK2_AARCH64"
         # Until A8 the kernel leaves the application processors parked in
         # Limine's memory, which it reclaims, so the machine has one CPU.
         CPUS=1
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
-        VGAFLAGS=""
+        # virt has no VGA: ramfb gives the boot framebuffer that std VGA
+        # gives on the PC. virtio-vga is a boot framebuffer and a virtio
+        # GPU; edk2 offers no framebuffer on virtio-gpu-pci, so ramfb is
+        # added to it.
+        # virt also adds a virtio-net device unless told otherwise; a case
+        # without a nic file gets none, like the PC, whose e1000 has no
+        # driver.
+        [ -f "$CASE/nic" ] || NETFLAGS="-nic none"
+        VGAFLAGS="-device ramfb"
+        [ -f "$CASE/vga" ] && [ "$(cat "$CASE/vga")" = virtio ] && VGAFLAGS="$VGAFLAGS -device virtio-gpu-pci"
+        [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
+        [ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
         ;;
     *) fail "unknown ARCH ${ARCH}" ;;
 esac

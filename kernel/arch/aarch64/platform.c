@@ -2,7 +2,10 @@
 #include <arch/cpu.h>
 #include <drivers/rtc.h>
 #include <mm/vmm.h>
-#include "todo.h"
+#include <drivers/pci.h>
+#include <sync/spinlock.h>
+#include "devtree.h"
+#include "its.h"
 
 /* PSCI calls through hvc, the conduit QEMU uses for virt without EL2 or
  * EL3 firmware. */
@@ -33,9 +36,8 @@ void platform_test_exit(int code)
     psci_call(PSCI_SYSTEM_OFF);
 }
 
-/* The PL031 real time clock of virt at 0x09010000: its data register
- * counts seconds since the Unix epoch. */
-#define PL031_PHYS 0x09010000UL
+/* The PL031 real time clock (0x09010000 on virt): its data register counts
+ * seconds since the Unix epoch. */
 #define RTCDR      0x00
 
 /* The UTC calendar date of a day number counted from 1970-01-01. */
@@ -54,7 +56,7 @@ static void civil_from_days(int64_t z, struct rtc_date *d)
 
 void platform_rtc_read(struct rtc_date *d)
 {
-    volatile uint32_t *rtc = vmm_map_mmio(PL031_PHYS, 0x1000, VM_KERNEL_RW | VM_NOCACHE);
+    volatile uint32_t *rtc = vmm_map_mmio(devtree.rtc, 0x1000, VM_KERNEL_RW | VM_NOCACHE);
     if (!rtc) {
         *d = (struct rtc_date){ .year = 2000, .month = 1, .day = 1 };
         return;
@@ -67,20 +69,49 @@ void platform_rtc_read(struct rtc_date *d)
     d->second = (int)(rest % 60);
 }
 
-/* PCI arrives with the device tree and ECAM (A7). Until then every
- * configuration read finds no function, so the bus is empty. */
+/* PCIe configuration through the ECAM window of the device tree: 4 KiB per
+ * function, 1 MiB per bus, counted from the first bus of the window. A
+ * bus is mapped at its first access. Reads outside the window find no
+ * function. */
+static DEFINE_SPINLOCK(ecam_lock);      /* protects ecam_bus */
+static volatile uint8_t *ecam_bus[256];
+
+static volatile uint32_t *ecam_config(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
+{
+    if (!devtree.ecam || bus < devtree.bus_start || bus > devtree.bus_end)
+        return NULL;
+    spin_lock(&ecam_lock);
+    volatile uint8_t *base = ecam_bus[bus];
+    if (!base) {
+        uintptr_t pa = devtree.ecam + ((uintptr_t)(bus - devtree.bus_start) << 20);
+        base = vmm_map_mmio(pa, 1UL << 20, VM_KERNEL_RW | VM_NOCACHE);
+        ecam_bus[bus] = base;
+    }
+    spin_unlock(&ecam_lock);
+    if (!base)
+        return NULL;
+    return (volatile uint32_t *)(base + ((uintptr_t)slot << 15) + ((uintptr_t)func << 12) + (off & 0xfc));
+}
+
 uint32_t platform_pci_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
 {
-    return 0xffffffff;
+    volatile uint32_t *reg = ecam_config(bus, slot, func, off);
+    return reg ? *reg : 0xffffffff;
 }
 
 void platform_pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off, uint32_t v)
 {
+    volatile uint32_t *reg = ecam_config(bus, slot, func, off);
+    if (reg)
+        *reg = v;
 }
 
-void platform_msi_compose(unsigned irq, uint64_t *addr, uint32_t *data)
+/* MSI through the ITS (its.c): the device ID is the requester ID
+ * translated by the msi-map of the device tree. */
+void platform_msi_compose(const struct pci_dev *dev, unsigned irq, uint64_t *addr, uint32_t *data)
 {
-    ARCH_TODO("A7");
+    uint32_t rid = (uint32_t)dev->bus << 8 | (uint32_t)dev->slot << 3 | dev->func;
+    its_msi_compose(rid - devtree.msi_rid_base + devtree.msi_base, irq, addr, data);
 }
 
 /* The virt machine has no devices outside PCI and the device tree. */

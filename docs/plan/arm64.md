@@ -238,13 +238,51 @@ exceptions before it writes `ELR_EL1`, because a thread enters EL0 with
 interrupts enabled, and the kernel synchronizes the instruction cache for
 code it writes (`paging_sync_icache`).
 
-### A7. aarch64 devices
+### A7. aarch64 devices (completed 2026-10-01)
 
 - The kernel parses the device tree, enumerates PCIe through ECAM, and
   drives virtio blk, net, input, gpu and snd and the PL031 RTC.
 - The system boots to the shell and to the desktop.
 - The boot tests `blk`, `time`, `gpu_mode`, `input_keyboard`, `gui` and
   `pthreads` pass on aarch64.
+
+Limine passes the device tree that edk2 installs when `virt` runs without
+ACPI (`acpi=off`). The generic reader `kernel/lib/fdt.c` and
+`arch/aarch64/devtree.c` record the GIC, ITS, PL031 and ECAM addresses
+before the bootloader memory is reclaimed. Configuration space accesses go
+through ECAM, one bus mapping at a time, and MSI-X interrupts arrive as
+LPIs through the GICv3 ITS (`arch/aarch64/its.c`).
+`platform_msi_compose` now takes the PCI function, whose requester ID the
+ITS needs as device ID. `pci_init` scans bus 0 and the secondary buses of
+the bridges it finds instead of all 256 buses, so that ECAM maps only
+buses that exist.
+
+The test harness gives `virt` a `ramfb` boot framebuffer in place of std
+VGA, adds `virtio-gpu-pci` for the cases that use virtio-vga on the PC,
+attaches the tablet and keyboard devices as on the PC, and passes
+`-nic none` to a case without a network device. Because `virt` has no
+8042, `ktest_run_selected` registers the PS/2 decoders, through which the
+self-tests inject keys and pointer motion, as input devices when no
+8042 registered them.
+
+The port found two faults in shared code. `pmm_is_ram` was true for
+reserved frames below the highest RAM address, so the unmap of a mapped
+framebuffer in reserved RAM (ramfb) freed a reserved frame; it is now
+true only for frames of the allocator. The `utils` case required the
+machine name `x86_64`. The binary128 exponential, logarithm and inverse
+tangent functions now evaluate in binary128 instead of double precision,
+which the `libmfull` checks require.
+
+On aarch64 the cases `platform`, `blk`, `time`, `gpu_mode`,
+`input_keyboard`, `gui`, `pthreads` and `comp_panel` pass under HVF and
+under TCG; under HVF `shell`, `script`, `initctl`, `audio_pcm`,
+`net_icmp`, `net_dhcp`, `libmfull`, `mathvec`, `float`, `fpu`, `lua`,
+`utils`, `awk`, `sed`, `mmap_file`, `swap`, `fb0`, `input_tablet`, `mouse`,
+`abi` and `libc` pass as well. The `kbd` case tests the 8042 controller
+and remains x86 specific. On x86_64 `boot`, `platform`, `pmm`, `vmm`,
+`blk`, `gpu_mode`, `gui`, `input_keyboard`, `comp_panel`, `fork`,
+`mmap_file`, `net_icmp`, `audio_pcm`, `shell`, `initctl` and `utils`
+pass.
 
 ### A8. aarch64 SMP
 

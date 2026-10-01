@@ -5,6 +5,7 @@
 #include <arch/timer.h>
 #include <arch/platform.h>
 #include <arch/smp.h>
+#include <drivers/pci.h>
 #include <drivers/rtc.h>
 #include <drivers/timer.h>
 #include <console.h>
@@ -29,12 +30,14 @@ static void test_platform(void)
     ktest_assert(c1 > c0, "clock did not advance");
     ktest_assert(n1 - n0 >= 20000000 && n1 - n0 < 2000000000, "20 ms sleep measured as %lu ns", n1 - n0);
 
-    /* Two allocated interrupt numbers differ and both deliver through MSI. */
+    /* Two allocated interrupt numbers differ and both deliver through MSI,
+     * here composed for the host bridge. */
     int a = irq_alloc(), b = irq_alloc();
     ktest_assert(a >= 0 && b >= 0 && a != b, "irq_alloc returned %d and %d", a, b);
+    ktest_assert(pci_count() > 0, "no PCI functions");
     uint64_t addr;
     uint32_t data;
-    platform_msi_compose((unsigned)a, &addr, &data);
+    platform_msi_compose(pci_device(0), (unsigned)a, &addr, &data);
     ktest_assert(addr != 0, "MSI address 0 for irq %d", a);
 
     /* The clock device reads a plausible date. */

@@ -3,6 +3,7 @@
 #include <arch/init.h>
 #include <arch/trap.h>
 #include <klog.h>
+#include "devtree.h"
 
 extern char boot_stack_top[];
 extern char exception_vectors[];
@@ -57,4 +58,7 @@ void arch_init_cpu_features(void)
     klog_info("features:%s%s%s%s",
               hafdbs >= 1 ? " access_flag" : "", hafdbs >= 2 ? " dirty_state" : "",
               ((pfr0 >> 16) & 0xf) != 0xf ? " fp" : "", ((pfr0 >> 20) & 0xf) != 0xf ? " asimd" : "");
+    /* The platform description, read here because the tree is in
+     * bootloader memory that pmm_reclaim_bootloader frees. */
+    devtree_init();
 }

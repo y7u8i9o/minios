@@ -45,7 +45,7 @@ test "$(du -s /u.txt | cut -f1)" = "1" || echo "FAIL du"
 test "$(uptime | cut -d' ' -f1)" = "up" || echo "FAIL uptime"
 test "$(free | grep -c Mem)" = "1" || echo "FAIL free"
 test "$(uname)" = "minios" || echo "FAIL uname"
-test "$(uname -m)" = "x86_64" || echo "FAIL uname-m"
+case "$(uname -m)" in x86_64|aarch64) ;; *) echo "FAIL uname-m" ;; esac
 test "$(uname -a)" = "$(uname -s) $(uname -n) $(uname -r) $(uname -v) $(uname -m)" || echo "FAIL uname-a"
 test -f /u.txt || echo "FAIL test-f"
 test -d /bin || echo "FAIL test-d"

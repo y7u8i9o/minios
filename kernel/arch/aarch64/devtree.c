@@ -1,0 +1,79 @@
+#define KLOG_SUBSYS "dt"
+#include "devtree.h"
+#include <boot.h>
+#include <lib/fdt.h>
+#include <klog.h>
+
+/* The addresses of QEMU virt (hw/arm/virt.c), used without a tree. */
+struct devtree devtree = {
+    .gicd = 0x08000000,
+    .gicr = 0x080a0000,
+    .gicr_size = 0xf60000,
+    .its = 0,
+    .ecam = 0,
+    .rtc = 0x09010000,
+    .msi_length = 0x10000,
+};
+
+/* Entry index of the reg property of the first node compatible with
+ * compat. */
+static bool find_reg(const void *blob, const char *compat, int index, uint64_t *addr, uint64_t *size)
+{
+    struct fdt_node node = { .offset = -1 };
+    return fdt_find_compatible(blob, compat, &node) && fdt_reg(blob, &node, index, addr, size);
+}
+
+static void read_pcie(const void *blob)
+{
+    struct fdt_node node = { .offset = -1 };
+    uint64_t addr, size;
+    if (!fdt_find_compatible(blob, "pci-host-ecam-generic", &node) ||
+        !fdt_reg(blob, &node, 0, &addr, &size))
+        return;
+    devtree.ecam = addr;
+    devtree.ecam_size = size;
+    devtree.bus_start = 0;
+    devtree.bus_end = (unsigned)(size >> 20) - 1;
+    int len;
+    const void *v = fdt_prop(blob, &node, "bus-range", &len);
+    if (v && len == 8) {
+        devtree.bus_start = fdt_cell(v, 0);
+        devtree.bus_end = fdt_cell(v, 1);
+    }
+    if (devtree.bus_end > 255)
+        devtree.bus_end = 255;
+    /* The first msi-map entry: rid-base, the controller, msi-base, length. */
+    v = fdt_prop(blob, &node, "msi-map", &len);
+    if (v && len >= 16) {
+        devtree.msi_rid_base = fdt_cell(v, 0);
+        devtree.msi_base = fdt_cell(v, 2);
+        devtree.msi_length = fdt_cell(v, 3);
+    }
+}
+
+void devtree_init(void)
+{
+    const void *blob = bootinfo.dtb;
+    if (!blob || !fdt_valid(blob)) {
+        klog_warn("no device tree, assuming the devices of QEMU virt without PCI");
+        return;
+    }
+    uint64_t addr, size;
+    if (find_reg(blob, "arm,gic-v3", 0, &addr, &size))
+        devtree.gicd = addr;
+    if (find_reg(blob, "arm,gic-v3", 1, &addr, &size)) {
+        devtree.gicr = addr;
+        devtree.gicr_size = size;
+    }
+    if (find_reg(blob, "arm,gic-v3-its", 0, &addr, &size))
+        devtree.its = addr;
+    if (find_reg(blob, "arm,pl031", 0, &addr, &size))
+        devtree.rtc = addr;
+    read_pcie(blob);
+    klog_info("gicv3 at %lx and %lx, its %s%lx, rtc at %lx", devtree.gicd, devtree.gicr,
+              devtree.its ? "at " : "", devtree.its, devtree.rtc);
+    if (devtree.ecam)
+        klog_info("pcie ecam at %lx for buses %u to %u, msi requester ids %x to %x as device ids from %x",
+                  devtree.ecam, devtree.bus_start, devtree.bus_end, devtree.msi_rid_base,
+                  devtree.msi_rid_base + devtree.msi_length - 1, devtree.msi_base);
+}

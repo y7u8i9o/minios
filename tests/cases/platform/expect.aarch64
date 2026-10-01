@@ -1,0 +1,4 @@
+pcie ecam at [0-9a-f]+ for buses 0 to 255
+its at [0-9a-f]+, [0-9]+ bit device ids
+platform: [0-9]+ cpus, irqs 8[0-9]+ and 8[0-9]+, MSI [0-9a-f]+/[0-9a-f]+, host bridge 1b36:0008
+TEST PASS

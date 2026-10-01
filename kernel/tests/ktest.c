@@ -6,6 +6,9 @@
 #include <klog.h>
 #include <arch/cpu.h>
 #include <arch/platform.h>
+#include <drivers/ps2kbd.h>
+#include <drivers/ps2mouse.h>
+#include <input/input.h>
 
 extern const struct ktest __ktests_start[], __ktests_end[];
 
@@ -29,11 +32,24 @@ void ktest_run_stage(enum ktest_stage stage)
     }
 }
 
+/* The boot tests inject keys and pointer motion through the PS/2
+ * decoders, which the PC registers for its 8042 controller. A platform
+ * without one (virt on aarch64) gets the decoders as input devices for the
+ * test run, with the wheel that QEMU's PS/2 mouse reports. */
+static void attach_test_input(void)
+{
+    if (!input_device_by_name("AT Translated Set 2 keyboard"))
+        ps2kbd_register();
+    if (!input_device_by_name("ImPS/2 Generic Wheel Mouse") && !input_device_by_name("PS/2 Generic Mouse"))
+        ps2mouse_register(4, true);
+}
+
 void ktest_run_selected(void)
 {
     char name[64];
     if (!cmdline_lookup("test", name, sizeof name))
         return;
+    attach_test_input();
 
     for (const struct ktest *t = __ktests_start; t < __ktests_end; t++) {
         if (t->stage == KTEST_KINIT && strcmp(t->name, name) == 0) {
