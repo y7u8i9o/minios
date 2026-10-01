@@ -2,8 +2,10 @@
 #include <arch/irq.h>
 #include <arch/apic.h>
 #include <arch/trap.h>
+#include <arch/cpu.h>
 #include <klog.h>
 #include <debug/panic.h>
+#include <errno.h>
 
 /* Handler table. Written only during initialization, before the vector is
  * unmasked, so the interrupt path reads it without a lock. */
@@ -12,10 +14,13 @@ static struct {
     void *arg;
 } handlers[256];
 
-void irq_register(uint8_t vector, irq_handler_fn fn, void *arg)
+/* Next vector for irq_alloc, advanced atomically. */
+static unsigned next_dynamic = IRQ_DYNAMIC_BASE;
+
+void irq_register(unsigned vector, irq_handler_fn fn, void *arg)
 {
-    if (vector < IRQ_VECTOR_BASE)
-        panic("irq_register: vector %u is an exception", vector);
+    if (vector < IRQ_VECTOR_BASE || vector > 0xff)
+        panic("irq_register: vector %u is not an interrupt vector", vector);
     handlers[vector].fn = fn;
     handlers[vector].arg = arg;
 }
@@ -30,4 +35,17 @@ void irq_dispatch(struct trapframe *tf)
     else
         klog_warn("unhandled interrupt vector %u", vec);
     lapic_eoi();
+}
+
+int irq_alloc(void)
+{
+    unsigned v = __atomic_fetch_add(&next_dynamic, 1, __ATOMIC_RELAXED);
+    if (v >= IRQ_TLB_SHOOTDOWN)
+        return -ENOSPC;
+    return (int)v;
+}
+
+void arch_send_ipi(unsigned cpu, unsigned irq)
+{
+    lapic_send_ipi(cpu_by_id(cpu)->arch.lapic_id, (uint8_t)irq);
 }

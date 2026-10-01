@@ -5,11 +5,12 @@
 
 typedef void (*timer_tick_fn)(void);
 
-void timer_early_init(void);    /* first thing in kmain: TSC calibration */
+void timer_early_init(void);    /* first thing in kmain: clock calibration */
 void timer_init(void);
 /* Start the local timer of an application processor. */
 void timer_init_cpu(void);
-/* Monotonic milliseconds since timer_init, read from the TSC. */
+/* Monotonic milliseconds since timer_early_init, read from the clock of the
+ * architecture. */
 uint64_t timer_ms(void);
 /* The same time in nanoseconds. */
 uint64_t timer_ns(void);

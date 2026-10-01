@@ -5,7 +5,10 @@
 #define BOOT_MAX_MEMMAP 128
 #define BOOT_MAX_CMDLINE 256
 
-/* Information gathered from the Limine responses at entry. Everything is
+/* The Limine boot protocol is used on every architecture, so this
+ * structure and its Limine types are generic (init/bootinfo.c).
+ *
+ * Information gathered from the Limine responses at entry. Everything is
  * copied out of bootloader reclaimable memory so that memory can be freed
  * once the kernel runs on its own page tables. Written once by boot_init
  * before any other subsystem runs, read only afterwards. */
@@ -27,3 +30,5 @@ struct bootinfo {
 extern struct bootinfo bootinfo;
 
 void boot_init(void);
+/* Log the bootloader, the kernel image and what Limine handed over. */
+void boot_log_environment(void);

@@ -2,7 +2,7 @@
 
 ## Serial
 
-`drivers/serial.c` drives COM1 at 115200 8N1 with polled output. Line feeds
+`arch/x86_64/serial.c` drives COM1 at 115200 8N1 with polled output. Line feeds
 are expanded to carriage return plus line feed on the wire.
 
 ## Framebuffer console

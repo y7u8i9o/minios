@@ -30,8 +30,10 @@ second.
 `drivers/timer.c` registers the vector 32 handler, counts the interrupts
 of the boot CPU and calls the scheduler hook installed with
 `timer_set_tick_handler`. Time itself does not come from that count:
-`timer_ms` and `timer_ticks` read the TSC, which `timer_early_init`
-calibrates against the PIT over 20 ms as the first statement of `kmain`,
+`timer_ms` and `timer_ticks` read the TSC (`arch_clock_read`), which
+`timer_early_init` calibrates against the PIT over 20 ms
+(`arch_clock_calibrate` in `arch/x86_64/clock.c`) as the first statement
+of `kmain`,
 so that the log can stamp every line with the time since the kernel
 entry. Under TCG the emulator delivers fewer than 1000 timer interrupts
 per second, and a clock built on the interrupt count ran about 25
@@ -49,7 +51,7 @@ needs no lock.
 
 ## PS/2 keyboard
 
-`drivers/ps2kbd.c` reads scancode set 1 from port `0x60`. Since M47 it
+`arch/x86_64/ps2kbd.c` reads scancode set 1 from port `0x60`. Since M47 it
 reports key codes to the input core (`input.md`), which owns the state
 described below (this section is the M6 design). Shift, control,
 alt and caps lock are tracked, `0xe0` prefixed keys are ignored for now.

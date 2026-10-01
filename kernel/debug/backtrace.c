@@ -30,7 +30,7 @@ static void backtrace_walk(uintptr_t rbp, int depth)
 
 void backtrace_print(void)
 {
-    backtrace_walk(read_rbp(), 0);
+    backtrace_walk((uintptr_t)__builtin_frame_address(0), 0);
 }
 
 void backtrace_print_from(uintptr_t rip, uintptr_t rbp)

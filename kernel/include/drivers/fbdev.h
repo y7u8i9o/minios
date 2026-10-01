@@ -1,6 +1,6 @@
 #pragma once
 #include <kernel.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <minios/abi.h>
 
 /* The active display. fb_screen starts as the Limine framebuffer (fb_screen_init)

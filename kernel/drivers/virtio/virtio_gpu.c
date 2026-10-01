@@ -3,7 +3,7 @@
 #include <drivers/virtio/virtio.h>
 #include <drivers/fbdev.h>
 #include <drivers/pci.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <drivers/timer.h>
 #include <arch/barrier.h>
 #include <console.h>

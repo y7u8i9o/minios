@@ -2,7 +2,6 @@
 #include <drivers/virtio/virtio.h>
 #include <drivers/pci.h>
 #include <arch/irq.h>
-#include <arch/apic.h>
 #include <arch/barrier.h>
 #include <mm/vmm.h>
 #include <mm/pmm.h>
@@ -19,10 +18,6 @@
 #define VIRTIO_PCI_CAP_ISR    3
 #define VIRTIO_PCI_CAP_DEVICE 4
 
-/* Vectors handed to virtio devices, one per device. Assigned during
- * initialization only. */
-#define VIRTIO_VECTOR_BASE 40
-static uint8_t next_vector = VIRTIO_VECTOR_BASE;
 
 static volatile void *map_cap(struct pci_dev *pci, uint8_t cap)
 {
@@ -217,9 +212,10 @@ struct virtqueue *virtio_queue_setup(struct virtio_dev *dev, uint16_t index,
 int virtio_start(struct virtio_dev *dev)
 {
     volatile struct virtio_pci_common_cfg *c = dev->common;
-    if (next_vector >= IRQ_SPURIOUS)
-        return -ENOSPC;
-    dev->vector = next_vector++;
+    int irq = irq_alloc();
+    if (irq < 0)
+        return irq;
+    dev->vector = (unsigned)irq;
     irq_register(dev->vector, virtio_irq, dev);
     int r = pci_msix_enable(dev->pci);
     if (r < 0)

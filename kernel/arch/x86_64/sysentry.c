@@ -40,14 +40,14 @@ void syscall_init(void)
 void arch_syscall_enter(struct trapframe *tf)
 {
     struct cpu *c = cpu_current();
-    c->last_user_vector = tf->vector;
-    c->last_user_error = 0;
-    c->last_user_rip = tf->rip;
-    c->last_user_cs = tf->cs;
-    c->last_user_rsp = tf->rsp;
-    c->last_user_ss = tf->ss;
-    c->last_user_cr3 = read_cr3();
-    c->last_user_frame = (void *)tf;
+    c->arch.last_user_vector = tf->vector;
+    c->arch.last_user_error = 0;
+    c->arch.last_user_rip = tf->rip;
+    c->arch.last_user_cs = tf->cs;
+    c->arch.last_user_rsp = tf->rsp;
+    c->arch.last_user_ss = tf->ss;
+    c->arch.last_user_cr3 = read_cr3();
+    c->arch.last_user_frame = (void *)tf;
 }
 
 void arch_syscall_return_full(struct trapframe *tf)

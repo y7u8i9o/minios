@@ -1,0 +1,2 @@
+platform: [0-9]+ cpus, irqs [0-9]+ and [0-9]+, MSI fee[0-9a-f]+/[0-9a-f]+, host bridge 8086:29c0
+TEST PASS

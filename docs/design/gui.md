@@ -8,7 +8,7 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
 
 ## Kernel
 
-- Mouse (`drivers/ps2mouse.c`): the auxiliary 8042 port is enabled and
+- Mouse (`arch/x86_64/ps2mouse.c`): the auxiliary 8042 port is enabled and
   the device set to streaming mode. Both keyboard and mouse bytes arrive
   through port 0x60; bit 5 of the status register tells them apart, and
   both interrupt handlers drain the port accordingly. Since M47 packets

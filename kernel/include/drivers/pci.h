@@ -34,7 +34,7 @@ void pci_enable_bus_master(const struct pci_dev *dev);
 
 /* MSI-X: enable the table and point entry index at vector on this CPU. */
 int pci_msix_enable(const struct pci_dev *dev);
-int pci_msix_set_vector(const struct pci_dev *dev, unsigned index, uint8_t vector);
+int pci_msix_set_vector(const struct pci_dev *dev, unsigned index, unsigned vector);
 
 #define PCI_CAP_MSIX   0x11
 #define PCI_CAP_VENDOR 0x09

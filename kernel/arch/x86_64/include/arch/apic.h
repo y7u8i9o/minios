@@ -1,17 +1,14 @@
 #pragma once
 #include <kernel.h>
+#include <arch/irq.h>
 
-/* Interrupt vectors used by the kernel. */
-#define IRQ_VECTOR_BASE   32
-#define IRQ_TIMER         32
+/* Fixed vectors of the PC devices. The generic vectors are in
+ * <arch/irq.h>. */
 #define IRQ_KEYBOARD      33
 #define IRQ_PIT           34
 #define IRQ_MOUSE         35
-/* Inter processor interrupts. */
-#define IRQ_TLB_SHOOTDOWN 0xf0
-#define IRQ_HALT          0xf1
-#define IRQ_RESCHED       0xf2
-#define IRQ_SPURIOUS      0xff
+/* First vector handed out by irq_alloc for MSI-X devices. */
+#define IRQ_DYNAMIC_BASE  40
 
 /* Legacy IRQ lines as they appear on the I/O APIC (ISA identity mapping,
  * except IRQ 0 which the PIT drives through GSI 2 on q35). */

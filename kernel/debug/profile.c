@@ -1,7 +1,6 @@
 #define KLOG_SUBSYS "profile"
 #include <debug/profile.h>
 #include <debug/symbols.h>
-#include <arch/trap.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
 #include <mm/slab.h>

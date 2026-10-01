@@ -1,28 +1,17 @@
 #define KLOG_SUBSYS "pci"
 #include <drivers/pci.h>
-#include <arch/io.h>
-#include <arch/apic.h>
+#include <arch/platform.h>
 #include <mm/vmm.h>
 #include <klog.h>
 #include <lib/printf.h>
 #include <errno.h>
 
-#define PCI_CONFIG_ADDR 0xcf8
-#define PCI_CONFIG_DATA 0xcfc
-
 static struct pci_dev devices[PCI_MAX_DEVICES];
 static size_t ndevices;
 
-static uint32_t cfg_addr(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
-{
-    return 0x80000000u | ((uint32_t)bus << 16) | ((uint32_t)slot << 11) |
-           ((uint32_t)func << 8) | (off & 0xfc);
-}
-
 static uint32_t raw_read32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off)
 {
-    outl(PCI_CONFIG_ADDR, cfg_addr(bus, slot, func, off));
-    return inl(PCI_CONFIG_DATA);
+    return platform_pci_read32(bus, slot, func, off);
 }
 
 uint32_t pci_read32(const struct pci_dev *d, uint8_t off)
@@ -42,8 +31,7 @@ uint8_t pci_read8(const struct pci_dev *d, uint8_t off)
 
 void pci_write32(const struct pci_dev *d, uint8_t off, uint32_t v)
 {
-    outl(PCI_CONFIG_ADDR, cfg_addr(d->bus, d->slot, d->func, off));
-    outl(PCI_CONFIG_DATA, v);
+    platform_pci_write32(d->bus, d->slot, d->func, off, v);
 }
 
 void pci_write16(const struct pci_dev *d, uint8_t off, uint16_t v)
@@ -283,7 +271,7 @@ int pci_msix_enable(const struct pci_dev *d)
     return 0;
 }
 
-int pci_msix_set_vector(const struct pci_dev *d, unsigned index, uint8_t vector)
+int pci_msix_set_vector(const struct pci_dev *d, unsigned index, unsigned vector)
 {
     uint8_t cap = pci_find_capability(d, PCI_CAP_MSIX);
     if (!cap)
@@ -294,10 +282,13 @@ int pci_msix_set_vector(const struct pci_dev *d, unsigned index, uint8_t vector)
         return -ENOMEM;
     if (index >= n)
         return -EINVAL;
+    uint64_t addr;
+    uint32_t data;
+    platform_msi_compose(vector, &addr, &data);
     volatile uint32_t *e = tbl + index * 4;
-    e[0] = 0xfee00000u | (lapic_id() << 12);
-    e[1] = 0;
-    e[2] = vector;
+    e[0] = (uint32_t)addr;
+    e[1] = (uint32_t)(addr >> 32);
+    e[2] = data;
     e[3] = 0;               /* unmask */
     return 0;
 }

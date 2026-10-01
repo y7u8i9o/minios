@@ -28,12 +28,12 @@ which creates `/dev/input/eventN` in order of registration. It reports
 events with `input_report_key`, `input_report_rel`, `input_report_abs`
 and `input_sync`, from interrupt handlers or virtqueue completions.
 
-- `drivers/ps2kbd.c` translates scancode set 1 to key codes: the
+- `arch/x86_64/ps2kbd.c` translates scancode set 1 to key codes: the
   unprefixed codes are their own key code, a table maps the `0xe0`
   prefixed ones, `0xe1 0x1d 0x45` is Pause and the fake shifts around
   the navigation keys are dropped. The device is "AT Translated Set 2
   keyboard", event0, with software repeat.
-- `drivers/ps2mouse.c` assembles three or four byte packets (the
+- `arch/x86_64/ps2mouse.c` assembles three or four byte packets (the
   IntelliMouse sequence enables the wheel) and reports `REL_X`, `REL_Y`
   (positive downwards), `REL_WHEEL` (positive away from the user) and
   the three buttons. Overflow packets are dropped.

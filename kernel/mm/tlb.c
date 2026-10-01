@@ -4,7 +4,6 @@
 #include <arch/paging.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
-#include <arch/apic.h>
 #include <arch/irq.h>
 #include <sync/spinlock.h>
 #include <kassert.h>
@@ -86,7 +85,7 @@ static void send_round(enum tlb_kind kind, struct vmspace *vm, uintptr_t va, siz
     __atomic_store_n(&pending, targets, __ATOMIC_SEQ_CST);
     for (unsigned i = 0; i < smp_cpu_count(); i++) {
         if (targets & (1UL << i)) {
-            lapic_send_ipi(cpu_by_id(i)->lapic_id, IRQ_TLB_SHOOTDOWN);
+            arch_send_ipi(i, IRQ_TLB_SHOOTDOWN);
             stats.ipis++;
         }
     }

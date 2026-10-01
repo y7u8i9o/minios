@@ -8,18 +8,17 @@ compiles `arch/$(ARCH)` and adds `arch/$(ARCH)/include` to the include path,
 so generic code includes `<arch/...>` without naming the architecture. The
 linker script is `arch/$(ARCH)/linker.ld`.
 
-Milestone A0 of the aarch64 port (`docs/plan/arm64.md`) introduced the
-interface described here for the CPU and execution state: saved registers,
-system call entry, signal frames, thread state, interrupt state, barriers,
-power control and page fault decoding. Generic code uses these operations
-and does not name an x86 register, instruction or MSR for them. A second
-architecture implements the same headers with the same names.
+Milestones A0 and A1 of the aarch64 port (`docs/plan/arm64.md`) introduced
+the interface described here. A0 covers the CPU and execution state: saved
+registers, system call entry, signal frames, thread state, interrupt state,
+barriers and page fault decoding. A1 covers the platform: the per CPU
+structure, interrupt numbers and IPIs, the clock and the tick, the devices
+of the PC and the start-up sequence. Generic code uses these operations and
+does not name an x86 register, instruction, MSR, I/O port or APIC function.
+A second architecture implements the same headers with the same names.
 
-Milestones A1 to A3 extend the interface to the platform devices, the MMU
-and the user ABI. Until then generic code still uses `struct cpu`,
-`cpu_current`, the LAPIC and IOAPIC calls, the PS/2, CMOS, serial, PCI and
-timer drivers, the page table entry bits of `<arch/paging.h>` and the Limine
-boot information directly. Section 9 lists what remains.
+Milestones A2 and A3 extend the interface to the MMU and the user ABI.
+Section 13 lists the dependencies that remain until then.
 
 ## 1. Machine identification (`<arch/machine.h>`)
 
@@ -99,10 +98,11 @@ operations are:
 `arch_irq_enable`, `arch_irq_disable`, `arch_irqs_enabled`, and the pair
 `arch_irq_save` and `arch_irq_restore` control the local interrupt state.
 `arch_idle` enables interrupts and waits for the next one without losing a
-wakeup in between (`sti; hlt`). `push_cli` and `pop_cli` are not renamed
-and remain the nesting interface used by spinlocks. The user space profiler
-recognises lock primitives by these symbol names (`lockstat.md`), so they
-are not renamed even though "cli" is an x86 term. Interrupt disabling is
+wakeup in between (`sti; hlt`). `push_cli` and `pop_cli` (`include/cpu.h`,
+`sched/cpu.c`) are the nesting interface used by spinlocks, implemented with
+`arch_irq_save` and `arch_irq_flags_enabled`. The user space profiler
+recognises lock primitives by these symbol names (`lockstat.md`), so the
+names contain the x86 term "cli" on every architecture. Interrupt disabling is
 never mutual exclusion on its own (`locking.md`).
 
 `mb`, `rmb` and `wmb` order normal memory against device accesses, as in
@@ -117,16 +117,76 @@ ordering suffice is part of the memory ordering audit of A8.
 `arch_cycles` is the uncalibrated cycle counter of the lock statistics
 (`rdtsc`).
 
-## 7. Power control (`<arch/power.h>`)
+## 7. Per CPU state (`include/cpu.h`, `<arch/percpu.h>`)
 
-`platform_power_off` and `platform_reboot` are called by the `reboot` system
-call after the orderly shutdown sequence (`signals.md`). The x86_64
-implementations are described in `console.md`.
+`struct cpu` is generic. It contains the CPU id, the current and idle
+threads, the kernel stack top, the interrupt nesting state, the loaded
+address space, the scheduler, RCU and page cache fields, and the
+architecture part `struct arch_cpu` as `c->arch`. On x86_64 that part
+contains the scratch slot of the `syscall` entry, the local APIC id and the
+diagnostics of the last entry from user mode. The fields up to `arch` have
+fixed offsets because `syscall.S` reads `kstack_top` at offset 24 and
+`arch.user_rsp` at offset 48; static assertions in `<arch/cpu.h>` check
+both. The array of structures and `cpu_by_id` are in `sched/cpu.c`.
+`cpu_current` is defined by the architecture (`%gs:0` on x86_64).
 
-## 8. Test
+## 8. Interrupt numbers and IPIs (`<arch/irq.h>`)
+
+An interrupt number is the value that `irq_register` takes and that a
+handler is registered for; on x86_64 it is the IDT vector. Generic code
+uses the named numbers `IRQ_TIMER`, `IRQ_RESCHED` and `IRQ_TLB_SHOOTDOWN`,
+and allocates numbers for message signalled device interrupts with
+`irq_alloc`, which virtio uses for MSI-X (vectors from 40 upward on x86_64).
+`arch_send_ipi(cpu, irq)` sends an interrupt to a CPU by its kernel id; the
+x86_64 implementation looks up the local APIC id in `c->arch`. The fixed
+vectors of the PC devices and the APIC functions are in `<arch/apic.h>`,
+which only architecture code includes.
+
+## 9. Clock and tick (`<arch/timer.h>`)
+
+`arch_clock_read` returns a free running counter and
+`arch_clock_calibrate` returns its counts per millisecond. `drivers/timer.c`
+converts the counter to milliseconds and nanoseconds since the kernel
+entry. `arch_timer_init(hz, per_ms)` logs the clock and starts the periodic
+tick of the boot CPU on `IRQ_TIMER`, and `arch_timer_init_cpu(hz)` starts
+the tick of an application processor. On x86_64 the counter is the TSC,
+calibrated against the PIT over 20 ms, and the tick is the local APIC timer
+(`arch/x86_64/clock.c`). `arch_wait_for_interrupt` waits in the early boot
+variant of `sleep_ms`.
+
+## 10. Platform services (`<arch/platform.h>`)
+
+| Function | Use | PC implementation |
+|---|---|---|
+| `platform_power_off`, `platform_reboot` | the `reboot` system call after the orderly shutdown (`signals.md`) | ACPI PM1a, 8042 reset (`console.md`) |
+| `platform_test_exit(code)` | the exit of a boot test (`ktest.c`) and of a panic with `CONFIG_PANIC_EXIT` | isa-debug-exit on port `0xf4` |
+| `platform_rtc_read` | `rtc_init` reads the date once (`time.md`) | CMOS clock (`cmos.c`) |
+| `platform_pci_read32`, `platform_pci_write32` | configuration space accesses of `drivers/pci.c` | configuration mechanism 1, ports `0xcf8` and `0xcfc` (`pci_config.c`) |
+| `platform_msi_compose` | the MSI-X table entries of `pci_msix_set_vector` | local APIC address `0xfee00000` with the APIC id, vector as data |
+| `platform_devices_init` | devices that exist only on this platform | PS/2 keyboard and mouse |
+
+The console UART implements `<drivers/serial.h>` (`arch/x86_64/serial.c`,
+COM1). The headers of the PS/2 drivers (`arch/x86_64/ps2kbd.c`, `ps2mouse.c`)
+are in `include/drivers/` because the kernel self-tests feed scancodes
+through them.
+
+## 11. Start-up sequence (`<arch/init.h>`, `include/boot.h`)
+
+The entry code of the architecture (`start.S`) calls the generic `kmain`
+(`init/main.c`) on the boot stack. `kmain` calls the architecture at four
+steps: `arch_init_cpu_boot` (descriptor tables and the boot CPU's
+`struct cpu`), `arch_init_traps` (exception entry points),
+`arch_init_cpu_features` (processor identification) and
+`arch_init_interrupts` (interrupt controllers). It also calls
+`smp_park_aps` and `smp_start_aps` (`<arch/smp.h>`) and
+`platform_devices_init`. Every architecture boots through the Limine boot
+protocol, so `struct bootinfo` and the Limine requests in
+`init/bootinfo.c` are generic.
+
+## 12. Tests
 
 The kernel self-test `arch` (`kernel/tests/test_arch.c`, case
-`tests/cases/arch`) checks the behaviour that generic callers rely on:
+`tests/cases/arch`) checks the A0 interface:
 - the frame accessors on a frame built by `arch_frame_init_user`, the
   agreement between `frame_set_arg0` and `SYSARG0`, and the decoding of two
   page fault error codes;
@@ -135,24 +195,26 @@ The kernel self-test `arch` (`kernel/tests/test_arch.c`, case
 - that `arch_set_tls` loads the register for the calling thread;
 - that the `e_machine` field of `/bin/init` equals `ARCH_ELF_MACHINE`.
 
+The kernel self-test `platform` (`kernel/tests/test_platform.c`, case
+`tests/cases/platform`) checks the A1 interface:
+- that `cpu_current` and `cpu_by_id` agree on every CPU;
+- that the clock advances and a 20 ms sleep measures at least 20 ms;
+- that `irq_alloc` returns two different numbers with an MSI address;
+- that `platform_rtc_read` returns a plausible date;
+- that the configuration space of the host bridge at 00:00.0 is readable.
+
 The behaviour of the moved code is covered by the existing cases of the
 subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `dynlink`, `smp`, `smp_user`, `lockfree`, `sched`, `exception`,
-`backtrace`, `profile`, `vmm`, `swap`, `shutdown` and `blk`.
+`backtrace`, `profile`, `vmm`, `swap`, `shutdown`, `blk`, `timer`, `time`,
+`kbd`, `mouse`, `input`, `input_keyboard`, `input_tablet`, `gpu_mode`,
+`audio_pcm`, `net_nic` and `net_virtqueue`.
 
-## 9. Dependencies that remain
-
-A1 moves the per CPU state (`struct cpu`, `cpu_current`, `cpu_by_id`), the
-interrupt vectors and `irq_register` with x86 vector numbers,
-`lapic_send_ipi` and the MSI composition in `drivers/pci.c` behind
-interfaces. It also moves the serial port, debug exit, CMOS RTC, PS/2 and
-PCI configuration port drivers, the TSC clocksource and the LAPIC tick
-(including the `read_rflags` and `hlt` wait in `drivers/timer.c`), and the
-Limine structures in `bootinfo` that the physical allocator, the
-framebuffer and the initrd use.
+## 13. Dependencies that remain
 
 A2 moves the x86 page table entry bits, the open-coded four level walks in
-`mm/` and the address layout in `memlayout.h` and `vmm.h`. A3 moves the
-libc and loader assembly, the relocation types, `minios/simd.h` and the user
-compiler flags. The kernel self-tests of x86 features, `cpu` and
-`exception`, remain x86 specific.
+`mm/`, the `CR3` reload in `mm/tlb.c` and the address layout in
+`memlayout.h` and `vmm.h`. A3 moves the libc and loader assembly, the
+relocation types, `minios/simd.h` and the user compiler flags. The kernel
+self-tests of x86 features, `cpu` and `exception`, and the self-tests that
+feed PS/2 scancodes remain x86 specific.

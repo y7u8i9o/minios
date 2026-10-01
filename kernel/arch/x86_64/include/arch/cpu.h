@@ -1,7 +1,6 @@
 #pragma once
 #include <kernel.h>
-#include <sync/mpsc.h>
-#include <sync/spinlock.h>
+#include <cpu.h>
 #include <arch/barrier.h>
 
 #define MSR_EFER            0xc0000080
@@ -14,56 +13,9 @@
 
 #define RFLAGS_IF           (1UL << 9)
 
-/* Upper bound on processors. cpu_mask values are one bit per CPU id. */
-#define MAX_CPUS 16
-typedef uint64_t cpu_mask_t;
-
-struct thread;
-struct vmspace;
-struct page;
-
-/* Per CPU state. Reached exclusively through cpu_current(), which reads the
- * self pointer at GS base offset 0, or through smp_cpu(id) for another
- * processor. Fields are private to the owning CPU except where a comment
- * says otherwise. The first fields keep fixed offsets for syscall.S. */
-struct cpu {
-    struct cpu *self;           /* must stay at offset 0 */
-    uint32_t id;
-    uint32_t lapic_id;
-    struct thread *current;     /* running thread, local run-queue lock */
-    void *kstack_top;           /* top of the running thread's kernel stack */
-    int cli_depth;              /* push_cli nesting depth */
-    int int_enabled;            /* IF before the outermost push_cli */
-    struct vmspace *vm;         /* address space loaded in CR3 */
-    uint64_t user_rsp;          /* scratch for the syscall entry */
-    struct thread *idle;        /* this CPU's idle thread, local run-queue lock */
-    struct thread *zombie_pending; /* switched-away zombie, local run-queue lock */
-    bool need_resched;          /* local tick or reschedule IPI */
-    volatile bool online;       /* runs kernel code on its own stack, set once */
-    volatile bool started;      /* finished per CPU initialization, set once */
-    void *ap_stack_top;         /* stack used from startup on, becomes the idle stack */
-    uint64_t ticks;             /* local timer interrupts, written by this CPU only */
-    uint64_t rcu_epoch;         /* last RCU quiescent epoch, release published */
-    unsigned rcu_read_depth;    /* owning CPU only; read sections may not sleep */
-    struct mpsc_head rcu_callbacks; /* producers local, reclaimed by this CPU */
-    struct spinlock pmm_cache_lock; /* this CPU's single-page cache */
-    struct page *pmm_cache[32];
-    unsigned pmm_cache_count;
-    /* Last trap or interrupt taken from user mode on this CPU, as the CPU
-     * pushed it, kept for the panic dump (diagnostics only). */
-    uint64_t last_user_vector;
-    uint64_t last_user_error;
-    uint64_t last_user_rip;
-    uint64_t last_user_cs;
-    uint64_t last_user_rsp;
-    uint64_t last_user_ss;
-    uint64_t last_user_cr3;
-    void *last_user_frame;
-};
-
 /* Offsets used by syscall.S. */
 _Static_assert(offsetof(struct cpu, kstack_top) == 24, "cpu.kstack_top offset");
-_Static_assert(offsetof(struct cpu, user_rsp) == 48, "cpu.user_rsp offset");
+_Static_assert(offsetof(struct cpu, arch.user_rsp) == 48, "cpu.arch.user_rsp offset");
 
 static inline struct cpu *cpu_current(void)
 {
@@ -119,6 +71,12 @@ static inline bool arch_irqs_enabled(void)
     return (read_rflags() & RFLAGS_IF) != 0;
 }
 
+/* True if the state saved by arch_irq_save had interrupts enabled. */
+static inline bool arch_irq_flags_enabled(unsigned long flags)
+{
+    return (flags & RFLAGS_IF) != 0;
+}
+
 static inline unsigned long arch_irq_save(void)
 {
     unsigned long flags = read_rflags();
@@ -135,6 +93,12 @@ static inline void arch_irq_restore(unsigned long flags)
 static inline void hlt(void)
 {
     __asm__ volatile("hlt");
+}
+
+/* Wait for the next interrupt with the current interrupt state. */
+static inline void arch_wait_for_interrupt(void)
+{
+    hlt();
 }
 
 /* Enable interrupts and wait for the next one (the idle loop). sti takes
@@ -216,11 +180,3 @@ extern struct cpu_features cpu_features;
 /* Fill cpu_features from CPUID and log the processor. Boot CPU only,
  * before any feature is enabled. */
 void cpu_identify(void);
-/* Return the structure of CPU id (0 is the boot CPU). Valid ids are below
- * smp_cpu_count(). */
-struct cpu *cpu_by_id(unsigned id);
-
-/* Interrupt disable nesting. push_cli disables interrupts and records the
- * previous state on first entry, pop_cli restores it when the depth hits 0. */
-void push_cli(void);
-void pop_cli(void);

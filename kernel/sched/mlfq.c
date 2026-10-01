@@ -6,8 +6,6 @@
 #include <sched/proc.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
-#include <arch/trap.h>
-#include <arch/apic.h>
 #include <arch/irq.h>
 #include <mm/vmm.h>
 #include <drivers/timer.h>
@@ -85,7 +83,7 @@ static void kick_cpu(unsigned id)
     struct cpu *c = cpu_by_id(id);
     __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
     if (id != cpu_current()->id && c->started)
-        lapic_send_ipi(c->lapic_id, IRQ_RESCHED);
+        arch_send_ipi(id, IRQ_RESCHED);
 }
 
 static bool queue_inbound(struct thread *t, unsigned target)

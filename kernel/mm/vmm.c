@@ -6,7 +6,7 @@
 #include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <arch/cpu.h>
 #include <arch/trap.h>
 #include <lib/string.h>

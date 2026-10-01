@@ -5,7 +5,7 @@
 #include <console.h>
 #include <klog.h>
 #include <arch/cpu.h>
-#include <drivers/debugexit.h>
+#include <arch/platform.h>
 
 extern const struct ktest __ktests_start[], __ktests_end[];
 
@@ -29,7 +29,7 @@ __noreturn void ktest_pass(void)
 {
     kprintf("TEST PASS\n");
     console_flush();
-    debugexit_exit(0);
+    platform_test_exit(0);
     cpu_halt_forever();
 }
 
@@ -42,6 +42,6 @@ __noreturn void ktest_fail(const char *fmt, ...)
     va_end(ap);
     kprintf("\n");
     console_flush();
-    debugexit_exit(1);
+    platform_test_exit(1);
     cpu_halt_forever();
 }

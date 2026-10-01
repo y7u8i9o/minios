@@ -8,7 +8,7 @@
 #include <drivers/fbdev.h>
 #include <sched/user.h>
 #include <sched/proc.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <fs/vfs.h>
 #include <lib/string.h>
 #include <lib/cmdline.h>

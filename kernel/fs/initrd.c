@@ -1,6 +1,6 @@
 #define KLOG_SUBSYS "initrd"
 #include <fs/initrd.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <lib/string.h>
 #include <klog.h>
 

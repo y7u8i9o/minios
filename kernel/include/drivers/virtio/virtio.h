@@ -102,7 +102,7 @@ struct virtio_dev {
     uint32_t device_cfg_len;
     struct spinlock irq_lock; /* IRQ traversal versus reset/detach */
     void (*work_notify)(void);
-    uint8_t vector;
+    unsigned vector;                /* interrupt number from irq_alloc */
     uint64_t features;
     struct virtqueue *queues[4];
     uint16_t nqueues;

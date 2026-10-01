@@ -6,15 +6,17 @@ POSIX clocks and the `time.h` family in libc.
 
 ## The real time clock
 
-`kernel/drivers/rtc.c` reads the CMOS clock once at boot, right after
-`timer_init`: it waits for the update flag to clear, reads the registers
-twice until they agree, converts BCD and 12 hour values as the status
-register says, and turns the calendar date into seconds since the Unix
-epoch (QEMU keeps the CMOS clock in UTC). The difference between that
-instant and the timer's own count becomes the epoch offset; the clock is
-never read again, so the slow CMOS port access cannot disturb a running
-system. The boot log records the date (`rtc: 2026-09-03 15:16:57 UTC`), and
-an implausible clock (before 2000) falls back to 2000-01-01 with a warning.
+`kernel/drivers/rtc.c` reads the clock once at boot, right after
+`timer_init`, through `platform_rtc_read`. On the PC that function
+(`kernel/arch/x86_64/cmos.c`) waits for the update flag of the CMOS clock
+to clear, reads the registers twice until they agree, and converts BCD and
+12 hour values as the status register says. `rtc_init` turns the calendar
+date into seconds since the Unix epoch (QEMU sets the CMOS clock to UTC).
+The difference between that instant and the timer's own count becomes the
+epoch offset. Because `rtc_init` reads the clock only once, the slow CMOS
+port access does not delay a running system. The boot log records the date
+(`rtc: 2026-09-03 15:16:57 UTC`), and an implausible clock (before 2000)
+falls back to 2000-01-01 with a warning.
 
 ## Clocks
 

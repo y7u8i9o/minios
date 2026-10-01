@@ -1,7 +1,7 @@
 #define KLOG_SUBSYS "pmm"
 #include <mm/pmm.h>
 #include <mm/memlayout.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <arch/cpu.h>
 #include <arch/smp.h>
 #include <sync/spinlock.h>

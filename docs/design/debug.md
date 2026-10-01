@@ -34,9 +34,10 @@ comes from `KLOG_SUBSYS`, which a file defines before its includes (default
 
 ## Per CPU state
 
-`struct cpu` (`arch/cpu.h`) holds the CPU id, local APIC id, current thread,
-kernel stack top and the interrupt disable nesting state. The boot CPU's
-instance is static in `arch/x86_64/cpu.c`. `cpu_init_boot` stores its address
+`struct cpu` (`include/cpu.h`) contains the CPU id, the current thread, the
+kernel stack top, the interrupt disable nesting state and the x86_64 part
+`struct arch_cpu` with the local APIC id. The instances are in the static
+array of `sched/cpu.c`. `cpu_init_boot` stores its address
 in `IA32_GS_BASE` and `IA32_KERNEL_GS_BASE`, and `cpu_current()` reads the
 self pointer at `%gs:0`. No global variable refers to the current thread.
 

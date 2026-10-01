@@ -66,7 +66,7 @@ static __noreturn void ap_main(struct cpu *c)
     timer_init_cpu();
     sched_init_cpu();
     __atomic_store_n(&c->started, true, __ATOMIC_SEQ_CST);
-    klog_info("cpu %u online, lapic id %u", c->id, c->lapic_id);
+    klog_info("cpu %u online, lapic id %u", c->id, c->arch.lapic_id);
     sti();
     sched_idle_loop();
 }
@@ -108,7 +108,7 @@ void smp_park_aps(void)
         return;
     }
     struct cpu *bsp = cpu_by_id(0);
-    bsp->lapic_id = mp->bsp_lapic_id;
+    bsp->arch.lapic_id = mp->bsp_lapic_id;
     unsigned id = 1;
     for (uint64_t i = 0; i < mp->cpu_count && id < MAX_CPUS; i++) {
         struct limine_mp_info *info = mp->cpus[i];
@@ -117,7 +117,7 @@ void smp_park_aps(void)
         struct cpu *c = cpu_by_id(id);
         c->self = c;
         c->id = id;
-        c->lapic_id = info->lapic_id;
+        c->arch.lapic_id = info->lapic_id;
         c->vm = &kernel_vmspace;
         spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
         c->kstack_top = kstack_alloc();
@@ -134,7 +134,7 @@ void smp_park_aps(void)
         klog_warn("only %u of %lu processors are used", MAX_CPUS, mp->cpu_count);
     cpu_count = id;
     klog_info("%u processors parked on kernel stacks, bsp lapic id %u, x2apic %s", cpu_count,
-              bsp->lapic_id, cpu_features.x2apic ? "available" : "absent");
+              bsp->arch.lapic_id, cpu_features.x2apic ? "available" : "absent");
 }
 
 static void halt_irq(struct trapframe *tf, void *arg)
@@ -164,6 +164,6 @@ void smp_halt_others(void)
     for (unsigned i = 0; i < cpu_count; i++) {
         struct cpu *c = cpu_by_id(i);
         if (c != self && c->online)
-            lapic_send_ipi(c->lapic_id, IRQ_HALT);
+            lapic_send_ipi(c->arch.lapic_id, IRQ_HALT);
     }
 }

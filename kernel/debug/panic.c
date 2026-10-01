@@ -5,7 +5,7 @@
 #include <arch/frame.h>
 #include <console.h>
 #include <drivers/fbdev.h>
-#include <drivers/debugexit.h>
+#include <arch/platform.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -20,7 +20,7 @@ static __noreturn void panic_finish(void)
     fb_panic_flush();
 #if CONFIG_PANIC_EXIT
     kprintf("panic: exiting through isa-debug-exit\n");
-    debugexit_exit(PANIC_EXIT_CODE);
+    platform_test_exit(PANIC_EXIT_CODE);
 #endif
     kprintf("panic: system halted\n");
     cpu_halt_forever();

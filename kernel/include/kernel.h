@@ -45,5 +45,6 @@ extern const char kernel_release[];
 extern const char kernel_version[];
 extern const unsigned kernel_build_number;
 
-/* Kernel entry, defined by the architecture (arch/x86_64/boot.c). */
+/* The start-up sequence (init/main.c), called by the entry code of the
+ * architecture. */
 __noreturn void kmain(void);

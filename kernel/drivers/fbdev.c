@@ -1,7 +1,7 @@
 #define KLOG_SUBSYS "fbdev"
 #include <drivers/fbdev.h>
 #include <console.h>
-#include <arch/boot.h>
+#include <boot.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <mm/vma.h>

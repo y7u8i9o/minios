@@ -91,14 +91,14 @@ void idt_init(void)
 static void trap_record_user_entry(const struct trapframe *tf)
 {
     struct cpu *c = cpu_current();
-    c->last_user_vector = tf->vector;
-    c->last_user_error = tf->error;
-    c->last_user_rip = tf->rip;
-    c->last_user_cs = tf->cs;
-    c->last_user_rsp = tf->rsp;
-    c->last_user_ss = tf->ss;
-    c->last_user_cr3 = read_cr3();
-    c->last_user_frame = (void *)tf;
+    c->arch.last_user_vector = tf->vector;
+    c->arch.last_user_error = tf->error;
+    c->arch.last_user_rip = tf->rip;
+    c->arch.last_user_cs = tf->cs;
+    c->arch.last_user_rsp = tf->rsp;
+    c->arch.last_user_ss = tf->ss;
+    c->arch.last_user_cr3 = read_cr3();
+    c->arch.last_user_frame = (void *)tf;
     if (c->current)
         c->current->kentry_frame = (struct trapframe *)tf;
 }
@@ -140,8 +140,8 @@ void trap_dump_extra(const struct trapframe *tf)
     kprintf("cpu %u self=%p kstack_top=%p tss.rsp0=%016lx current=%p vm=%p\n",
             c->id, c->self, c->kstack_top, tss_get_rsp0(), c->current, c->vm);
     kprintf("last user entry: vector=%lu error=%lx rip=%016lx cs=%04lx rsp=%016lx ss=%04lx cr3=%lx frame=%p\n",
-            c->last_user_vector, c->last_user_error, c->last_user_rip, c->last_user_cs,
-            c->last_user_rsp, c->last_user_ss, c->last_user_cr3, c->last_user_frame);
+            c->arch.last_user_vector, c->arch.last_user_error, c->arch.last_user_rip, c->arch.last_user_cs,
+            c->arch.last_user_rsp, c->arch.last_user_ss, c->arch.last_user_cr3, c->arch.last_user_frame);
 }
 
 void trap_dump_frame(const struct trapframe *tf)

@@ -6,7 +6,7 @@ they need (raw keyboard mode, console cursor control, a sleep call).
 
 ## Kernel support
 
-- Terminal modes. The console line discipline in `drivers/ps2kbd.c` has
+- Terminal modes. The console line discipline in `arch/x86_64/ps2kbd.c` has
   the flags `ICANON`, `ECHO` and `ISIG` (`minios/abi.h`), read and set
   through `ioctl` on `/dev/console` with `TCGETS` and `TCSETS`;
   `TIOCGWINSZ` reports the text size. Without `ICANON` every byte is

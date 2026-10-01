@@ -1,5 +1,5 @@
 #include <syscall/syscalls.h>
-#include <arch/power.h>
+#include <arch/platform.h>
 #include <arch/cpu.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
@@ -9,7 +9,6 @@
 #include <fs/fdtable.h>
 #include <mm/vma.h>
 #include <sync/rcu.h>
-#include <drivers/ps2kbd.h>
 #include <drivers/timer.h>
 #include <lib/string.h>
 #include <console.h>

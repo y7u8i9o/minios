@@ -1,7 +1,6 @@
-#include <arch/power.h>
+#include <arch/platform.h>
 #include <arch/io.h>
 #include <arch/cpu.h>
-#include <drivers/debugexit.h>
 
 #define QEMU_Q35_PM1A_CNT   0x604
 #define ACPI_SLP_TYP_S5     0x2000
@@ -16,7 +15,7 @@ __noreturn void platform_power_off(void)
     for (volatile long i = 0; i < 200000000L; i++)
         cpu_relax();
     /* Not on a q35 with ACPI, or the write was ignored: try the test device. */
-    debugexit_exit(0);
+    platform_test_exit(0);
     cpu_halt_forever();
 }
 

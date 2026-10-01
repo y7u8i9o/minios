@@ -77,7 +77,7 @@ expected. The test now unmaps a guard page after the region.
 `make test-kvm` (`docs/design/platform.md` rule 5) has not been run, because
 it requires the Linux machine.
 
-### A1. Platform boundary
+### A1. Platform boundary (completed 2026-10-01)
 
 - The serial, debug-exit, CMOS RTC, PS/2 and PCI configuration drivers move
   into `kernel/arch/x86_64/` behind `platform_*` interfaces.
@@ -89,6 +89,21 @@ it requires the Linux machine.
   arch_cpu`.
 - The Limine boot information (memory map, framebuffer, initrd) is exposed
   through a generic structure.
+- The boot test is `platform`.
+
+The serial, debug exit, RTC, PS/2 and PCI configuration code is in
+`kernel/arch/x86_64/` behind `<arch/platform.h>`. `irq_alloc` and
+`arch_send_ipi` are in `<arch/irq.h>`, the clock and the tick in
+`<arch/timer.h>`, `struct cpu` in `include/cpu.h` with `struct arch_cpu`,
+and the start-up sequence in `init/main.c` with the hooks of
+`<arch/init.h>`. The boot information needed no new structure: Limine is
+the boot protocol of every architecture, so `struct bootinfo` moved
+unchanged to `include/boot.h` and the Limine requests to
+`init/bootinfo.c`. The cases `platform`, `arch`, `boot`, `cpu`,
+`exception`, `backtrace`, `timer`, `time`, `kbd`, `mouse`, `mouse_wheel`,
+`input`, `input_keyboard`, `input_tablet`, `blk`, `gpu_mode`, `audio_pcm`,
+`net_virtqueue`, `net_nic`, `smp`, `smp_user`, `sched`, `lockfree`, `fork`,
+`signals`, `libc`, `shutdown`, `shutdown_cmd`, `swap` and `profile` pass.
 
 ### A2. MMU boundary
 
