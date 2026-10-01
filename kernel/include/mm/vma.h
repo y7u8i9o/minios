@@ -1,5 +1,6 @@
 #pragma once
 #include <kernel.h>
+#include <arch/paging.h>
 #include <lib/list.h>
 #include <mm/vmm.h>
 #include <sync/rcu.h>
@@ -24,10 +25,10 @@ struct vma {
     struct rcu_head rcu;
 };
 
-/* Page table bits for a region's protection: present, user, writable and
- * executable as the flags say, or PTE_PROTNONE without PTE_P for a region
- * without VM_READ. */
-uint64_t vma_pte_flags(unsigned flags);
+/* The entry that maps the frame pa in a region with the VM_* flags: a
+ * present user entry, or a PROT_NONE entry that keeps the frame when the
+ * region is not readable. */
+pte_t vma_make_pte(uintptr_t pa, unsigned flags);
 
 /* Add [start, end) to vm. Fails with -EEXIST on overlap. */
 int vma_add(struct vmspace *vm, uintptr_t start, uintptr_t end, unsigned flags);

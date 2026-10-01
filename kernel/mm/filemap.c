@@ -261,9 +261,9 @@ bool filemap_fault(struct vmspace *vm, uintptr_t va, bool write)
     struct page *pg = mapping_get_page(m, file, pgoff);
     if (!pg)
         goto out;
-    uint64_t pte;
+    pte_t pte;
     if (flags & VM_SHARED) {
-        pte = page_to_phys(pg) | vma_pte_flags(flags);
+        pte = vma_make_pte(page_to_phys(pg), flags);
     } else if (write) {
         /* A private write: the region gets its own copy of the page. */
         struct page *copy = swap_alloc_user_frame();
@@ -275,21 +275,21 @@ bool filemap_fault(struct vmspace *vm, uintptr_t va, bool write)
         page_put(pg);
         page_get(copy);
         pg = copy;
-        pte = page_to_phys(pg) | vma_pte_flags(flags);
+        pte = vma_make_pte(page_to_phys(pg), flags);
     } else {
         /* A private read maps the cached frame read only; the copy on write
          * bit makes a later write copy it. */
-        pte = page_to_phys(pg) | ((vma_pte_flags(flags) & ~PTE_W) | PTE_COW);
+        pte = pte_mkcow(pte_wrprotect(vma_make_pte(page_to_phys(pg), flags)));
     }
 
     spin_lock(&vm->lock);
     struct vma *cur = vma_find_locked(vm, va);
-    uint64_t *entry;
-    int w = paging_walk(vm->pml4_phys, va, true, &entry);
+    pte_t *entry;
+    int w = paging_walk(vm->pt_root, va, true, &entry);
     if (cur != v || !(cur->flags & VM_FILE) || w != 1) {
         page_put(pg);
         ok = cur != NULL && w == 1;
-    } else if (*entry & (PTE_P | PTE_SWAPPED | PTE_PROTNONE)) {
+    } else if (pte_mapped(*entry) || pte_swapped(*entry)) {
         page_put(pg);           /* another thread mapped it meanwhile */
         ok = true;
     } else {

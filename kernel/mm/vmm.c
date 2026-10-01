@@ -8,7 +8,6 @@
 #include <arch/paging.h>
 #include <boot.h>
 #include <arch/cpu.h>
-#include <arch/trap.h>
 #include <lib/string.h>
 #include <kassert.h>
 #include <klog.h>
@@ -17,7 +16,7 @@
 
 /* The kernel address space. Its lock, kvm_lock, serializes every change to
  * the shared upper half page tables. */
-struct vmspace kernel_vmspace = { .pml4_phys = 0, .lock = SPINLOCK_INIT("kvm_lock") };
+struct vmspace kernel_vmspace = { .pt_root = 0, .lock = SPINLOCK_INIT("kvm_lock") };
 LIST_HEAD(vmspaces);
 DEFINE_SPINLOCK(vmspaces_lock);
 
@@ -28,55 +27,18 @@ extern char boot_stack[];
 static uint64_t kstack_bitmap[KSTACK_SLOTS / 64];
 static uintptr_t kmmio_next = KMMIO_BASE;
 
-static uint64_t flags_to_pte(unsigned flags)
-{
-    uint64_t pte = PTE_P;
-    if (flags & VM_WRITE)
-        pte |= PTE_W;
-    if (flags & VM_USER)
-        pte |= PTE_U;
-    if (!(flags & VM_EXEC))
-        pte |= PTE_NX;
-    if (flags & VM_NOCACHE)
-        pte |= PTE_PCD | PTE_PWT;
-    else if (flags & VM_WC)
-        pte |= PTE_PWT;
-    if (flags & VM_GLOBAL)
-        pte |= PTE_G;
-    return pte;
-}
-
-static unsigned pte_to_flags(uint64_t pte)
-{
-    unsigned flags = VM_READ;
-    if (pte & PTE_W)
-        flags |= VM_WRITE;
-    if (pte & PTE_U)
-        flags |= VM_USER;
-    if (!(pte & PTE_NX))
-        flags |= VM_EXEC;
-    if ((pte & (PTE_PCD | PTE_PWT)) == (PTE_PCD | PTE_PWT))
-        flags |= VM_NOCACHE;
-    else if (pte & PTE_PWT)
-        flags |= VM_WC;
-    if (pte & PTE_G)
-        flags |= VM_GLOBAL;
-    return flags;
-}
-
 static int map_locked(struct vmspace *vm, uintptr_t va, uintptr_t pa, size_t size, unsigned flags)
 {
-    uint64_t pte_flags = flags_to_pte(flags);
     for (size_t off = 0; off < size; off += PAGE_SIZE) {
-        uint64_t *entry;
-        int r = paging_walk(vm->pml4_phys, va + off, true, &entry);
+        pte_t *entry;
+        int r = paging_walk(vm->pt_root, va + off, true, &entry);
         if (r < 0)
             return r;
         if (r != 1)
             return -EEXIST;
-        if (*entry & PTE_P)
+        if (pte_present(*entry))
             return -EEXIST;
-        *entry = (pa + off) | pte_flags;
+        *entry = pte_make(pa + off, flags);
     }
     return 0;
 }
@@ -103,10 +65,10 @@ int vmm_unmap(struct vmspace *vm, uintptr_t va, size_t size)
         return -EINVAL;
     spin_lock(&vm->lock);
     for (size_t off = 0; off < size; off += PAGE_SIZE) {
-        uint64_t *entry;
-        int r = paging_walk(vm->pml4_phys, va + off, false, &entry);
+        pte_t *entry;
+        int r = paging_walk(vm->pt_root, va + off, false, &entry);
         if (r == 1) {
-            if (vm != &kernel_vmspace && (*entry & PTE_P) && pmm_is_ram(*entry & PTE_ADDR_MASK))
+            if (vm != &kernel_vmspace && pte_present(*entry) && pmm_is_ram(pte_addr(*entry)))
                 percpu_counter_dec(&vm->resident);
             *entry = 0;
         }
@@ -122,16 +84,15 @@ int vmm_protect(struct vmspace *vm, uintptr_t va, size_t size, unsigned flags)
 {
     if (!IS_ALIGNED(va, PAGE_SIZE) || !IS_ALIGNED(size, PAGE_SIZE))
         return -EINVAL;
-    uint64_t pte_flags = flags_to_pte(flags);
     spin_lock(&vm->lock);
     for (size_t off = 0; off < size; off += PAGE_SIZE) {
-        uint64_t *entry;
-        int r = paging_walk(vm->pml4_phys, va + off, false, &entry);
-        if (r != 1 || !(*entry & PTE_P)) {
+        pte_t *entry;
+        int r = paging_walk(vm->pt_root, va + off, false, &entry);
+        if (r != 1 || !pte_present(*entry)) {
             spin_unlock(&vm->lock);
             return -ENOENT;
         }
-        *entry = (*entry & PTE_ADDR_MASK) | pte_flags;
+        *entry = pte_make(pte_addr(*entry), flags);
     }
     tlb_flush_range(vm, va, size);
     spin_unlock(&vm->lock);
@@ -140,16 +101,16 @@ int vmm_protect(struct vmspace *vm, uintptr_t va, size_t size, unsigned flags)
 
 bool vmm_translate(struct vmspace *vm, uintptr_t va, uintptr_t *pa, unsigned *flags)
 {
-    uint64_t *entry;
+    pte_t *entry;
     spin_lock(&vm->lock);
-    int r = paging_walk(vm->pml4_phys, va, false, &entry);
-    bool ok = r > 0 && (*entry & PTE_P);
+    int r = paging_walk(vm->pt_root, va, false, &entry);
+    bool ok = r > 0 && pte_present(*entry);
     if (ok) {
         uintptr_t mask = r == 2 ? PAGE_2M - 1 : PAGE_SIZE - 1;
         if (pa)
-            *pa = (*entry & PTE_ADDR_MASK & ~mask) | (va & mask);
+            *pa = (pte_addr(*entry) & ~mask) | (va & mask);
         if (flags)
-            *flags = pte_to_flags(*entry);
+            *flags = pte_vm_flags(*entry);
     }
     spin_unlock(&vm->lock);
     return ok;
@@ -163,47 +124,43 @@ struct vmspace *vmspace_create(void)
     spinlock_init(&vm->lock, "vmspace");
     list_init(&vm->vmas);
     percpu_counter_init(&vm->resident, 0);
-    vm->pml4_phys = paging_alloc_table();
-    if (!vm->pml4_phys) {
+    vm->pt_root = paging_alloc_table();
+    if (!vm->pt_root) {
         kfree(vm);
         return NULL;
     }
-    /* Share the kernel half. Every upper PML4 entry was populated at
-     * vmm_init, so later kernel mappings never need to touch user spaces. */
-    uint64_t *src = P2V(kernel_vmspace.pml4_phys);
-    uint64_t *dst = P2V(vm->pml4_phys);
-    memcpy(&dst[PT_ENTRIES / 2], &src[PT_ENTRIES / 2], PAGE_SIZE / 2);
+    paging_init_user_root(vm->pt_root, kernel_vmspace.pt_root);
     spin_lock(&vmspaces_lock);
     list_add_tail(&vm->link, &vmspaces);
     spin_unlock(&vmspaces_lock);
     return vm;
 }
 
-static void free_user_level(uint64_t *table, int level)
+static void free_user_level(pte_t *table, int level)
 {
     for (int i = 0; i < PT_ENTRIES; i++) {
-        uint64_t e = table[i];
-        if (level == 1 && (e & PTE_SWAPPED)) {
-            swap_free_slot(e >> 12);
+        pte_t e = table[i];
+        if (level == 1 && pte_swapped(e)) {
+            swap_free_slot(pte_swap_slot(e));
             table[i] = 0;
             continue;
         }
-        if (level == 1 && (e & PTE_PROTNONE)) {
-            if (pmm_is_ram(e & PTE_ADDR_MASK))
-                page_put(phys_to_page(e & PTE_ADDR_MASK));
+        if (level == 1 && pte_protnone(e)) {
+            if (pmm_is_ram(pte_addr(e)))
+                page_put(phys_to_page(pte_addr(e)));
             table[i] = 0;
             continue;
         }
-        if (!(e & PTE_P))
+        if (!pte_present(e))
             continue;
         if (level == 1) {
-            if (pmm_is_ram(e & PTE_ADDR_MASK))
-                page_put(phys_to_page(e & PTE_ADDR_MASK));
+            if (pmm_is_ram(pte_addr(e)))
+                page_put(phys_to_page(pte_addr(e)));
             table[i] = 0;
-        } else if (level == 2 && (e & PTE_PS)) {
+        } else if (level == 2 && pte_is_block(e)) {
             huge_unmap_locked(&table[i]);
-        } else if (!(e & PTE_PS)) {
-            free_user_level(P2V(e & PTE_ADDR_MASK), level - 1);
+        } else if (pte_is_table(e)) {
+            free_user_level(pte_table(e), level - 1);
         }
     }
 }
@@ -212,10 +169,10 @@ void vmspace_free_user_pages(struct vmspace *vm)
 {
     kassert(vm != &kernel_vmspace);
     spin_lock(&vm->lock);
-    uint64_t *pml4 = P2V(vm->pml4_phys);
-    for (int i = 0; i < PT_ENTRIES / 2; i++) {
-        if (pml4[i] & PTE_P)
-            free_user_level(P2V(pml4[i] & PTE_ADDR_MASK), 3);
+    pte_t *root = P2V(vm->pt_root);
+    for (int i = 0; i < PT_ROOT_USER_ENTRIES; i++) {
+        if (pte_is_table(root[i]))
+            free_user_level(pte_table(root[i]), PT_LEVELS - 1);
     }
     tlb_flush_range(vm, 0, USER_TOP + 1);
     percpu_counter_init(&vm->resident, 0);
@@ -235,7 +192,7 @@ void vmspace_destroy(struct vmspace *vm)
         vmspace_activate(&kernel_vmspace);
     tlb_drop_vmspace(vm);
     kassert(vm->cpu_mask == 0);
-    paging_free_user_tables(vm->pml4_phys);
+    paging_free_user_tables(vm->pt_root);
     kfree(vm);
 }
 
@@ -246,12 +203,12 @@ void vmspace_activate(struct vmspace *vm)
     struct vmspace *old = c->vm;
     if (old == vm)
         return;
-    /* The mask of the new space is set before CR3 changes and the old one
+    /* The mask of the new space is set before the root changes and the old one
      * is cleared afterwards, so a shootdown never misses a CPU that holds
      * translations of either space. */
     __atomic_fetch_or(&vm->cpu_mask, bit, __ATOMIC_SEQ_CST);
     c->vm = vm;
-    paging_load(vm->pml4_phys);
+    paging_load(vm->pt_root);
     if (old)
         __atomic_fetch_and(&old->cpu_mask, ~bit, __ATOMIC_SEQ_CST);
 }
@@ -321,9 +278,9 @@ void kstack_free(void *top)
     uintptr_t base = KSTACK_BASE + (uintptr_t)slot * KSTACK_SLOT + PAGE_SIZE;
     spin_lock(&kernel_vmspace.lock);
     for (uintptr_t va = base; va < base + KSTACK_SIZE; va += PAGE_SIZE) {
-        uint64_t *entry;
-        if (paging_walk(kernel_vmspace.pml4_phys, va, false, &entry) == 1 && (*entry & PTE_P)) {
-            pmm_free_page(phys_to_page(*entry & PTE_ADDR_MASK));
+        pte_t *entry;
+        if (paging_walk(kernel_vmspace.pt_root, va, false, &entry) == 1 && pte_present(*entry)) {
+            pmm_free_page(phys_to_page(pte_addr(*entry)));
             *entry = 0;
         }
     }
@@ -332,7 +289,7 @@ void kstack_free(void *top)
     spin_unlock(&kernel_vmspace.lock);
 }
 
-static void map_kernel_image(uintptr_t pml4)
+static void map_kernel_image(uintptr_t root)
 {
     uintptr_t phys = bootinfo.kernel_phys_base;
     uintptr_t virt = bootinfo.kernel_virt_base;
@@ -349,14 +306,14 @@ static void map_kernel_image(uintptr_t pml4)
         uintptr_t e = ALIGN_UP((uintptr_t)segs[i].end, PAGE_SIZE);
         if (e <= s)
             continue;
-        if (paging_map_large(pml4, s, s - virt + phys, e - s, flags_to_pte(segs[i].flags)) < 0)
+        if (paging_map_large(root, s, s - virt + phys, e - s, segs[i].flags) < 0)
             panic("vmm: cannot map kernel image");
     }
 }
 
 static uint64_t hhdm_mapped_bytes;   /* written once by map_hhdm */
 
-static void map_hhdm(uintptr_t pml4)
+static void map_hhdm(uintptr_t root)
 {
     for (size_t i = 0; i < bootinfo.memmap_count; i++) {
         const struct limine_memmap_entry *e = &bootinfo.memmap[i];
@@ -377,7 +334,7 @@ static void map_hhdm(uintptr_t pml4)
         }
         uintptr_t s = ALIGN_DOWN(e->base, PAGE_SIZE);
         uintptr_t end = ALIGN_UP(e->base + e->length, PAGE_SIZE);
-        if (paging_map_large(pml4, s + hhdm_offset, s, end - s, flags_to_pte(flags)) < 0)
+        if (paging_map_large(root, s + hhdm_offset, s, end - s, flags) < 0)
             panic("vmm: cannot map hhdm");
         hhdm_mapped_bytes += end - s;
     }
@@ -385,24 +342,14 @@ static void map_hhdm(uintptr_t pml4)
 
 void vmm_init(void)
 {
-    uintptr_t pml4 = paging_alloc_table();
-    if (!pml4)
-        panic("vmm: no memory for PML4");
+    uintptr_t root = paging_init_kernel_root();
+    if (!root)
+        panic("vmm: no memory for the kernel page tables");
 
-    /* Populate every upper half PML4 entry now so user spaces can copy
-     * them once and stay in sync with all later kernel mappings. */
-    uint64_t *table = P2V(pml4);
-    for (int i = PT_ENTRIES / 2; i < PT_ENTRIES; i++) {
-        uintptr_t pdpt = paging_alloc_table();
-        if (!pdpt)
-            panic("vmm: no memory for kernel PDPTs");
-        table[i] = pdpt | PTE_P | PTE_W;
-    }
+    map_hhdm(root);
+    map_kernel_image(root);
 
-    map_hhdm(pml4);
-    map_kernel_image(pml4);
-
-    kernel_vmspace.pml4_phys = pml4;
+    kernel_vmspace.pt_root = root;
     paging_enable_features();
     vmspace_activate(&kernel_vmspace);
 
@@ -411,8 +358,8 @@ void vmm_init(void)
     kassert(IS_ALIGNED(guard, PAGE_SIZE));
     vmm_unmap(&kernel_vmspace, guard, PAGE_SIZE);
 
-    klog_info("kernel page tables active, pml4 at %lx, %lu MiB of physical memory in the hhdm%s",
-              pml4, hhdm_mapped_bytes >> 20, cpu_features.pdpe1gb ? " with 1 GiB pages" : "");
+    klog_info("kernel page tables active, root table at %lx, %lu MiB of physical memory in the hhdm%s",
+              root, hhdm_mapped_bytes >> 20, paging_describe());
     klog_info("image text %lu KiB, rodata %lu KiB, data and bss %lu KiB, boot stack guard at %lx",
               (unsigned long)(__rodata_start - __text_start) >> 10,
               (unsigned long)(__data_start - __rodata_start) >> 10,

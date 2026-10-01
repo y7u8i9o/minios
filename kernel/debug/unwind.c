@@ -17,7 +17,6 @@
 #include <debug/profile.h>
 #include <arch/frame.h>
 #include <arch/cpu.h>
-#include <arch/paging.h>
 #include <mm/vmm.h>
 #include <mm/memlayout.h>
 #include <sched/thread.h>

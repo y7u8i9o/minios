@@ -20,7 +20,7 @@ its boot tests pass.
 | `network.md` | The TCP/IP plan, milestones N00 to N16 | completed 2026-09-30 |
 | `network-progress.md` | Progress record and validation evidence of N00 to N16 | completed 2026-09-30 |
 | `terminal.md` | The terminal userland plan | completed 2026-09-06 |
-| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 and A1 completed 2026-10-01 |
+| `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A2 completed 2026-10-01 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.

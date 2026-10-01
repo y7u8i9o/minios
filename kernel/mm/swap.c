@@ -9,6 +9,7 @@
 #include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
+#include <mm/ptwalk.h>
 #include <block/blockdev.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
@@ -126,38 +127,23 @@ static uintptr_t hand_va;
  * frame is not shared and whose accessed bit is clear. Accessed bits seen
  * on the way are cleared. Returns the entry or NULL, leaving *cursor at
  * the next address to examine. Caller holds vm->lock. */
-static uint64_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *victim_va)
+static pte_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *victim_va)
 {
     unsigned budget = SCAN_BUDGET;
-    uint64_t *pml4 = P2V(vm->pml4_phys);
     uintptr_t va = *cursor;
-    while (va <= USER_TOP && budget) {
-        uint64_t e4 = pml4[PML4_INDEX(va)];
-        if (!(e4 & PTE_P)) {
-            va = ALIGN_DOWN(va, 1UL << 39) + (1UL << 39);
-            continue;
-        }
-        uint64_t e3 = ((uint64_t *)P2V(e4 & PTE_ADDR_MASK))[PDPT_INDEX(va)];
-        if (!(e3 & PTE_P)) {
-            va = ALIGN_DOWN(va, 1UL << 30) + (1UL << 30);
-            continue;
-        }
-        uint64_t e2 = ((uint64_t *)P2V(e3 & PTE_ADDR_MASK))[PD_INDEX(va)];
-        if (!(e2 & PTE_P) || (e2 & PTE_PS)) {
-            va = ALIGN_DOWN(va, 1UL << 21) + (1UL << 21);   /* empty or a huge page */
-            continue;
-        }
-        uint64_t *pt = P2V(e2 & PTE_ADDR_MASK);
-        for (unsigned i = PT_INDEX(va); i < PT_ENTRIES && budget; i++, va += PAGE_SIZE, budget--) {
-            uint64_t e = pt[i];
-            if (!(e & PTE_P) || !(e & PTE_U) || !pmm_is_ram(e & PTE_ADDR_MASK))
+    pte_t *pt;
+    /* Absent tables and huge pages are skipped by the walk. */
+    while (budget && (pt = pt_next_leaf_table(vm->pt_root, &va, USER_TOP + 1, NULL)) != NULL) {
+        for (unsigned i = PT_INDEX(va, 1); i < PT_ENTRIES && budget; i++, va += PAGE_SIZE, budget--) {
+            pte_t e = pt[i];
+            if (!pte_present(e) || !pte_user(e) || !pmm_is_ram(pte_addr(e)))
                 continue;
-            struct page *pg = phys_to_page(e & PTE_ADDR_MASK);
-            if (e & PTE_LAZYFREE) {
+            struct page *pg = phys_to_page(pte_addr(e));
+            if (pte_lazyfree(e)) {
                 /* MADV_FREE: a page written since keeps its data, a clean
                  * one is discarded instead of swapped. */
-                if (e & PTE_D) {
-                    pt[i] = e & ~PTE_LAZYFREE;
+                if (pte_dirty(e)) {
+                    pt[i] = pte_clear_lazyfree(e);
                 } else {
                     pt[i] = 0;
                     percpu_counter_dec(&vm->resident);
@@ -171,8 +157,8 @@ static uint64_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *v
             }
             if (__atomic_load_n(&pg->refcount, __ATOMIC_SEQ_CST) != 1)
                 continue;
-            if (e & PTE_A) {
-                pt[i] = e & ~PTE_A;
+            if (pte_young(e)) {
+                pt[i] = pte_mkold(e);
                 tlb_flush_range(vm, va, PAGE_SIZE);
                 continue;
             }
@@ -225,10 +211,10 @@ static unsigned evict_batch_locked(void)
         spin_lock(&vm->lock);
         if (!vm->pinned) {
             uintptr_t va;
-            uint64_t *entry;
+            pte_t *entry;
             while (nframes < want && (entry = find_victim(vm, &hand_va, &va)) != NULL) {
-                frames[nframes] = phys_to_page(*entry & PTE_ADDR_MASK);
-                *entry = ((first + nframes) << 12) | PTE_SWAPPED;
+                frames[nframes] = phys_to_page(pte_addr(*entry));
+                *entry = pte_make_swap(first + nframes);
                 percpu_counter_dec(&vm->resident);
                 tlb_flush_range(vm, va, PAGE_SIZE);
                 nframes++;
@@ -338,20 +324,20 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
 {
     va = ALIGN_DOWN(va, PAGE_SIZE);
     spin_lock(&vm->lock);
-    uint64_t *entry;
-    int w = paging_walk(vm->pml4_phys, va, false, &entry);
-    if (w != 1 || !(*entry & PTE_SWAPPED)) {
+    pte_t *entry;
+    int w = paging_walk(vm->pt_root, va, false, &entry);
+    if (w != 1 || !pte_swapped(*entry)) {
         spin_unlock(&vm->lock);
         return 0;   /* already resident */
     }
-    uint64_t slot = *entry >> 12;
+    uint64_t slot = pte_swap_slot(*entry);
     /* Cluster: following pages whose slots follow this one were evicted
      * together and are likely to be used together. */
     unsigned n = 1;
     while (n < SWAPIN_CLUSTER && va + n * PAGE_SIZE <= USER_TOP) {
-        uint64_t *e;
-        if (paging_walk(vm->pml4_phys, va + n * PAGE_SIZE, false, &e) != 1 ||
-            !(*e & PTE_SWAPPED) || (*e >> 12) != slot + n)
+        pte_t *e;
+        if (paging_walk(vm->pt_root, va + n * PAGE_SIZE, false, &e) != 1 ||
+            !pte_swapped(*e) || pte_swap_slot(*e) != slot + n)
             break;
         n++;
     }
@@ -391,10 +377,10 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
     for (unsigned i = 0; i < got; i++) {
         uintptr_t a = va + i * PAGE_SIZE;
         struct vma *v = i < n ? vma_find_locked(vm, a) : NULL;
-        w = i < n ? paging_walk(vm->pml4_phys, a, false, &entry) : 0;
-        if (w == 1 && (*entry & PTE_SWAPPED) && (*entry >> 12) == slot + i && v) {
+        w = i < n ? paging_walk(vm->pt_root, a, false, &entry) : 0;
+        if (w == 1 && pte_swapped(*entry) && pte_swap_slot(*entry) == slot + i && v) {
             page_get(pages[i]);
-            *entry = page_to_phys(pages[i]) | vma_pte_flags(v->flags);
+            *entry = vma_make_pte(page_to_phys(pages[i]), v->flags);
             percpu_counter_inc(&vm->resident);
             tlb_flush_range(vm, a, PAGE_SIZE);
             swap_free_slot(slot + i);
@@ -413,18 +399,11 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
 /* First swapped entry at or after *va, or false. Caller holds vm->lock. */
 static bool find_swapped(struct vmspace *vm, uintptr_t *va)
 {
-    uint64_t *pml4 = P2V(vm->pml4_phys);
     uintptr_t a = *va;
-    while (a <= USER_TOP) {
-        uint64_t e4 = pml4[PML4_INDEX(a)];
-        if (!(e4 & PTE_P)) { a = ALIGN_DOWN(a, 1UL << 39) + (1UL << 39); continue; }
-        uint64_t e3 = ((uint64_t *)P2V(e4 & PTE_ADDR_MASK))[PDPT_INDEX(a)];
-        if (!(e3 & PTE_P)) { a = ALIGN_DOWN(a, 1UL << 30) + (1UL << 30); continue; }
-        uint64_t e2 = ((uint64_t *)P2V(e3 & PTE_ADDR_MASK))[PD_INDEX(a)];
-        if (!(e2 & PTE_P) || (e2 & PTE_PS)) { a = ALIGN_DOWN(a, 1UL << 21) + (1UL << 21); continue; }
-        uint64_t *pt = P2V(e2 & PTE_ADDR_MASK);
-        for (unsigned i = PT_INDEX(a); i < PT_ENTRIES; i++, a += PAGE_SIZE) {
-            if (pt[i] & PTE_SWAPPED) {
+    pte_t *pt;
+    while ((pt = pt_next_leaf_table(vm->pt_root, &a, USER_TOP + 1, NULL)) != NULL) {
+        for (unsigned i = PT_INDEX(a, 1); i < PT_ENTRIES; i++, a += PAGE_SIZE) {
+            if (pte_swapped(pt[i])) {
                 *va = a;
                 return true;
             }

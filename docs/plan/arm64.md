@@ -105,7 +105,7 @@ unchanged to `include/boot.h` and the Limine requests to
 `net_virtqueue`, `net_nic`, `smp`, `smp_user`, `sched`, `lockfree`, `fork`,
 `signals`, `libc`, `shutdown`, `shutdown_cmd`, `swap` and `profile` pass.
 
-### A2. MMU boundary
+### A2. MMU boundary (completed 2026-10-01)
 
 - A portable page table entry interface (present, accessed, dirty, swap entry
   encoding) and a range walker replace the open-coded four level walks.
@@ -113,6 +113,19 @@ unchanged to `include/boot.h` and the Limine requests to
   `vmm.c` use only that interface.
 - `memlayout.h` and the user and kernel address constants move into the
   architecture.
+- The boot test is `pagetable`.
+
+`<arch/paging.h>` defines `pte_t`, the table geometry and the entry
+functions; the x86 bits are used only in `kernel/arch/x86_64/`.
+`pt_next_leaf_table` (`mm/ptwalk.c`) replaces the open-coded walks of the
+swap daemon and of `munmap`, and the recursive walks of `fork` and of the
+teardown use the geometry. `struct vmspace` has `pt_root` in place of
+`pml4_phys`. The region addresses are in `<arch/memlayout.h>`. The cases
+`pagetable`, `vmm`, `munmap_tables`, `fork`, `swap`, `madvise`,
+`hugepages`, `mmap_file`, `rlimit`, `signals`, `libc`, `libc_ext`,
+`pthreads`, `dynlink`, `dlopen`, `smp`, `smp_user`, `sched`, `lockfree`,
+`boot`, `shutdown`, `profile`, `fb0`, `fb_format`, `gpu_mode`, `mq`,
+`pipes`, `mfs_user`, `fat_user`, `arch` and `platform` pass.
 
 ### A3. User ABI boundary
 

@@ -86,14 +86,14 @@ static int lazyfree_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
     if (r < 0)
         return r;
     for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
-        uint64_t *entry;
-        if (paging_walk(vm->pml4_phys, va, false, &entry) != 1)
+        pte_t *entry;
+        if (paging_walk(vm->pt_root, va, false, &entry) != 1)
             continue;
-        uint64_t e = *entry;
-        if (e & PTE_P) {
-            *entry = (e & ~PTE_D) | PTE_LAZYFREE;
-        } else if (e & PTE_SWAPPED) {
-            swap_free_slot(e >> 12);
+        pte_t e = *entry;
+        if (pte_present(e)) {
+            *entry = pte_mklazyfree(pte_mkclean(e));
+        } else if (pte_swapped(e)) {
+            swap_free_slot(pte_swap_slot(e));
             *entry = 0;
         }
     }
@@ -113,9 +113,9 @@ static int willneed(struct vmspace *vm, uintptr_t addr, uintptr_t end)
                 return -ENOMEM;
             continue;
         }
-        uint64_t *entry;
-        int w = paging_walk(vm->pml4_phys, va, false, &entry);
-        bool mapped = w == 1 && (*entry & (PTE_P | PTE_PROTNONE));
+        pte_t *entry;
+        int w = paging_walk(vm->pt_root, va, false, &entry);
+        bool mapped = w == 1 && pte_mapped(*entry);
         spin_unlock(&vm->lock);
         if (mapped || w == 2)
             continue;

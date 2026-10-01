@@ -77,7 +77,7 @@ static __noreturn void ap_main(struct cpu *c)
 static __noreturn void ap_entry(struct limine_mp_info *info)
 {
     struct cpu *c = (struct cpu *)info->extra_argument;
-    paging_load(kernel_vmspace.pml4_phys);
+    paging_load(kernel_vmspace.pt_root);
     wrmsr(MSR_GS_BASE, (uint64_t)c);
     wrmsr(MSR_KERNEL_GS_BASE, (uint64_t)c);
     c->vm = &kernel_vmspace;

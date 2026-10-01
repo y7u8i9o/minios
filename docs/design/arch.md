@@ -8,17 +8,18 @@ compiles `arch/$(ARCH)` and adds `arch/$(ARCH)/include` to the include path,
 so generic code includes `<arch/...>` without naming the architecture. The
 linker script is `arch/$(ARCH)/linker.ld`.
 
-Milestones A0 and A1 of the aarch64 port (`docs/plan/arm64.md`) introduced
+Milestones A0 to A2 of the aarch64 port (`docs/plan/arm64.md`) introduced
 the interface described here. A0 covers the CPU and execution state: saved
 registers, system call entry, signal frames, thread state, interrupt state,
 barriers and page fault decoding. A1 covers the platform: the per CPU
 structure, interrupt numbers and IPIs, the clock and the tick, the devices
-of the PC and the start-up sequence. Generic code uses these operations and
-does not name an x86 register, instruction, MSR, I/O port or APIC function.
+of the PC and the start-up sequence. A2 covers the page tables and the
+address layout. Generic code uses these operations and does not name an
+x86 register, instruction, MSR, I/O port, APIC function or page table bit.
 A second architecture implements the same headers with the same names.
 
-Milestones A2 and A3 extend the interface to the MMU and the user ABI.
-Section 13 lists the dependencies that remain until then.
+Milestone A3 extends the interface to the user ABI. Section 15 lists the
+dependencies that remain until then.
 
 ## 1. Machine identification (`<arch/machine.h>`)
 
@@ -183,7 +184,57 @@ steps: `arch_init_cpu_boot` (descriptor tables and the boot CPU's
 protocol, so `struct bootinfo` and the Limine requests in
 `init/bootinfo.c` are generic.
 
-## 12. Tests
+## 12. Page tables (`<arch/paging.h>`)
+
+An entry is a `pte_t`. Generic code walks the tables through the geometry
+`PT_LEVELS`, `PT_ENTRIES`, `PT_SHIFT(level)`, `PT_LEVEL_SIZE(level)` and
+`PT_INDEX(va, level)`, where level 1 maps 4 KiB pages and a level 2 entry
+is a table pointer or a 2 MiB block (`PAGE_2M`). The first
+`PT_ROOT_USER_ENTRIES` entries of a root table map user space. The entry
+format is private to the architecture. Generic code reads entries with
+these functions:
+
+| Function | True for |
+|---|---|
+| `pte_present` | an entry the hardware translates through |
+| `pte_mapped` | an entry with a frame: present, or kept for a `PROT_NONE` region |
+| `pte_is_table`, `pte_is_block` | a table pointer, a 2 MiB block (level 2) |
+| `pte_write`, `pte_user`, `pte_young`, `pte_dirty` | the hardware permission and status bits |
+| `pte_cow`, `pte_lazyfree`, `pte_protnone`, `pte_swapped` | the software states of `vma.c`, `madvise.c`, `filemap.md` and `swap.c` |
+
+`pte_addr` returns the physical address, `pte_table` the next table
+through the direct map, `pte_swap_slot` the slot of a swapped entry and
+`pte_vm_flags` the `VM_*` flags of a present entry. Entries are built with
+`pte_make(pa, vm_flags)`, `pte_make_protnone`, `pte_make_swap`,
+`pte_make_table` and `pte_set_addr`, and changed with the `pte_mk*` and
+`pte_clear_*` functions, `pte_wrprotect`, `pte_mkblock` and
+`pte_block_to_page`. `vma_make_pte(pa, flags)` (`mm/vma.c`) gives the
+entry of a user region: present, or `PROT_NONE` without `VM_READ`.
+
+The architecture implements the table operations: `paging_walk`,
+`paging_walk_preallocated`, `paging_pde`, `paging_map_large`,
+`paging_alloc_table`, `paging_free_table`, `paging_free_user_tables`,
+`paging_init_kernel_root`, `paging_init_user_root` (x86_64 copies the
+kernel half of the root into every user root), `paging_load`,
+`paging_flush_page`, `paging_flush_user` and `paging_enable_features`.
+The x86_64 bit layout, including the software bits, is described in
+`vmm.md`, `filemap.md`, `madvise.md` and `swap.md`.
+
+`pt_next_leaf_table` (`mm/ptwalk.c`) returns the next level 1 table of a
+range and skips absent upper tables and 2 MiB blocks. The swap daemon
+(`find_victim`, `find_swapped`) and `munmap` (`detach_empty_pts`) use it.
+The recursive walks of `fork` (`share_level`) and of the teardown of a
+space (`free_user_level`) use the geometry and the entry functions.
+
+## 13. Address layout (`<arch/memlayout.h>`)
+
+The architecture defines the addresses of the regions: `HIGHER_HALF_BASE`,
+`KERNEL_VBASE`, `USER_BASE`, `USER_TOP`, `USER_STACK_TOP`, `USER_MMAP_TOP`,
+`USER_INTERP_BASE`, `KMMIO_BASE` and `KMMIO_SIZE`, `KSTACK_BASE` and
+`KHEAP_BASE`. `mm/memlayout.h` and `mm/vmm.h` include it and define the
+generic sizes (`USER_STACK_SIZE`, `KSTACK_SIZE`, `KSTACK_SLOTS`).
+
+## 14. Tests
 
 The kernel self-test `arch` (`kernel/tests/test_arch.c`, case
 `tests/cases/arch`) checks the A0 interface:
@@ -203,18 +254,27 @@ The kernel self-test `platform` (`kernel/tests/test_platform.c`, case
 - that `platform_rtc_read` returns a plausible date;
 - that the configuration space of the host bridge at 00:00.0 is readable.
 
+The kernel self-test `pagetable` (`kernel/tests/test_pagetable.c`, case
+`tests/cases/pagetable`) checks the A2 interface:
+- that `pte_vm_flags` returns the flags given to `pte_make`, for user,
+  kernel text, write combining and uncached entries;
+- copy on write, accessed, dirty and lazy free changes and their reversal;
+- the `PROT_NONE`, swap, block and table entries and `vma_make_pte` for an
+  unreadable region;
+- that `pt_next_leaf_table` returns exactly the three level 1 tables of
+  pages placed under different level 4, level 3 and level 2 entries.
+
 The behaviour of the moved code is covered by the existing cases of the
 subsystems that use it: `fork`, `libc`, `signals`, `fpu`, `pthreads`,
 `dynlink`, `smp`, `smp_user`, `lockfree`, `sched`, `exception`,
 `backtrace`, `profile`, `vmm`, `swap`, `shutdown`, `blk`, `timer`, `time`,
 `kbd`, `mouse`, `input`, `input_keyboard`, `input_tablet`, `gpu_mode`,
-`audio_pcm`, `net_nic` and `net_virtqueue`.
+`audio_pcm`, `net_nic`, `net_virtqueue`, `munmap_tables`, `madvise`,
+`hugepages`, `mmap_file`, `rlimit` and `fb0`.
 
-## 13. Dependencies that remain
+## 15. Dependencies that remain
 
-A2 moves the x86 page table entry bits, the open-coded four level walks in
-`mm/`, the `CR3` reload in `mm/tlb.c` and the address layout in
-`memlayout.h` and `vmm.h`. A3 moves the libc and loader assembly, the
-relocation types, `minios/simd.h` and the user compiler flags. The kernel
-self-tests of x86 features, `cpu` and `exception`, and the self-tests that
-feed PS/2 scancodes remain x86 specific.
+A3 moves the libc and loader assembly, the relocation types,
+`minios/simd.h` and the user compiler flags. The kernel self-tests of x86
+features, `cpu` and `exception`, and the self-tests that feed PS/2
+scancodes remain x86 specific.

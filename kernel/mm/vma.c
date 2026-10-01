@@ -47,17 +47,11 @@ static void vma_unlink_rcu(struct list_head *n)
     __atomic_store_n(&prev->next, next, __ATOMIC_RELEASE);
 }
 
-uint64_t vma_pte_flags(unsigned flags)
+pte_t vma_make_pte(uintptr_t pa, unsigned flags)
 {
-    uint64_t pte = PTE_U;
     if (!(flags & VM_READ))
-        return pte | PTE_PROTNONE;
-    pte |= PTE_P;
-    if (flags & VM_WRITE)
-        pte |= PTE_W;
-    if (!(flags & VM_EXEC))
-        pte |= PTE_NX;
-    return pte;
+        return pte_make_protnone(pa);
+    return pte_make(pa, (flags & (VM_WRITE | VM_EXEC)) | VM_USER);
 }
 
 struct vma *vma_find_locked(struct vmspace *vm, uintptr_t addr)
@@ -181,14 +175,14 @@ int vma_populate(struct vmspace *vm, uintptr_t start, uintptr_t end)
         if (!v || (v->flags & VM_FILE)) {
             r = -EFAULT;
         } else {
-            uint64_t *entry;
-            int w = paging_walk_preallocated(vm->pml4_phys, va, tables,
+            pte_t *entry;
+            int w = paging_walk_preallocated(vm->pt_root, va, tables,
                                              table_count, &tables_used, &entry);
             if (w < 0)
                 r = w;
-            else if (w == 1 && !(*entry & (PTE_P | PTE_PROTNONE | PTE_SWAPPED))) {
+            else if (w == 1 && !pte_mapped(*entry) && !pte_swapped(*entry)) {
                 page_get(pg);
-                *entry = page_to_phys(pg) | vma_pte_flags(v->flags);
+                *entry = vma_make_pte(page_to_phys(pg), v->flags);
                 percpu_counter_inc(&vm->resident);
                 pg = NULL;
             }
@@ -206,8 +200,8 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
 {
     bool track_dirty = v && (v->flags & VM_FILE) && (v->flags & VM_SHARED);
     for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
-        uint64_t *entry;
-        int w = paging_walk(vm->pml4_phys, va, false, &entry);
+        pte_t *entry;
+        int w = paging_walk(vm->pt_root, va, false, &entry);
         if (w == 2) {
             /* Whole huge pages only: the callers split at the boundaries. */
             kassert(IS_ALIGNED(va, PAGE_2M) && end - va >= PAGE_2M);
@@ -218,17 +212,17 @@ void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, 
         }
         if (w != 1)
             continue;
-        uint64_t e = *entry;
-        if (e & (PTE_P | PTE_PROTNONE)) {
-            if (pmm_is_ram(e & PTE_ADDR_MASK)) {
-                if (track_dirty && (e & PTE_D))
+        pte_t e = *entry;
+        if (pte_mapped(e)) {
+            if (pmm_is_ram(pte_addr(e))) {
+                if (track_dirty && pte_dirty(e))
                     filemap_mark_dirty(v->mapping, (v->offset >> PAGE_SHIFT) + ((va - v->start) >> PAGE_SHIFT));
-                page_put(phys_to_page(e & PTE_ADDR_MASK));
+                page_put(phys_to_page(pte_addr(e)));
                 percpu_counter_dec(&vm->resident);
             }
             *entry = 0;
-        } else if (e & PTE_SWAPPED) {
-            swap_free_slot(e >> 12);
+        } else if (pte_swapped(e)) {
+            swap_free_slot(pte_swap_slot(e));
             *entry = 0;
         }
     }
@@ -345,19 +339,19 @@ size_t vma_total_size(struct vmspace *vm)
 }
 
 /* Copy on write: give the faulting address its own writable frame. */
-static int do_cow_locked(struct vmspace *vm, uintptr_t va, uint64_t *entry)
+static int do_cow_locked(struct vmspace *vm, uintptr_t va, pte_t *entry)
 {
-    struct page *old = phys_to_page(*entry & PTE_ADDR_MASK);
-    uint64_t flags = (*entry & PTE_FLAGS_MASK & ~PTE_COW) | PTE_W;
+    struct page *old = phys_to_page(pte_addr(*entry));
+    pte_t writable = pte_mkwrite(pte_clear_cow(*entry));
     if (__atomic_load_n(&old->refcount, __ATOMIC_SEQ_CST) == 1) {
-        *entry = (*entry & PTE_ADDR_MASK) | flags;
+        *entry = writable;
     } else {
         struct page *pg = pmm_alloc_page();
         if (!pg)
             return -ENOMEM;
         memcpy(P2V(page_to_phys(pg)), P2V(page_to_phys(old)), PAGE_SIZE);
         page_get(pg);
-        *entry = page_to_phys(pg) | flags;
+        *entry = pte_set_addr(writable, page_to_phys(pg));
         page_put(old);
     }
     tlb_flush_range(vm, va, PAGE_SIZE);
@@ -377,14 +371,14 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
     if (!pg)
         return false;
     struct vma *v = vma_find_locked(vm, va);
-    uint64_t *entry;
-    int w = paging_walk(vm->pml4_phys, va, true, &entry);
-    if (!v || w != 1 || (*entry & (PTE_P | PTE_SWAPPED | PTE_PROTNONE))) {
+    pte_t *entry;
+    int w = paging_walk(vm->pt_root, va, true, &entry);
+    if (!v || w != 1 || pte_mapped(*entry) || pte_swapped(*entry)) {
         pmm_free_page(pg);
         return v != NULL && w == 1;
     }
     page_get(pg);
-    *entry = page_to_phys(pg) | vma_pte_flags(v->flags);
+    *entry = vma_make_pte(page_to_phys(pg), v->flags);
     percpu_counter_inc(&vm->resident);
     return true;
 }
@@ -407,22 +401,22 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
         goto out;
     if (write && !(v->flags & VM_WRITE))
         goto out;
-    uint64_t *entry;
-    int w = paging_walk(vm->pml4_phys, va, false, &entry);
+    pte_t *entry;
+    int w = paging_walk(vm->pt_root, va, false, &entry);
     if (present) {
-        if (w == 2 && write && (*entry & PTE_COW))
+        if (w == 2 && write && pte_cow(*entry))
             ok = huge_cow_locked(vm, va, entry) == 0;
-        else if (w == 1 && (*entry & PTE_P) && write && (*entry & PTE_COW))
+        else if (w == 1 && pte_present(*entry) && write && pte_cow(*entry))
             ok = do_cow_locked(vm, va, entry) == 0;
-        else if (w >= 1 && (*entry & PTE_P) && write && (*entry & PTE_W))
+        else if (w >= 1 && pte_present(*entry) && write && pte_write(*entry))
             ok = true;  /* another thread resolved it first; the stale TLB entry refaulted */
-    } else if (w == 1 && (*entry & PTE_SWAPPED)) {
+    } else if (w == 1 && pte_swapped(*entry)) {
         spin_unlock(&vm->lock);
         ok = swap_in_page(vm, va) == 0;
         if (ok)
             count_fault(true);
         return ok;
-    } else if (w == 1 && (*entry & PTE_PROTNONE)) {
+    } else if (w == 1 && pte_protnone(*entry)) {
         /* Cannot happen: mprotect makes the entries of a readable region
          * present again. */
         goto out;
@@ -473,16 +467,16 @@ bool vmm_handle_fault(struct trapframe *tf, uintptr_t addr)
  * regions become read only and tagged COW in both spaces, whether or not
  * they were writable, so a later mprotect never grants write access to a
  * shared frame. */
-static int share_level(struct vmspace *vm, struct vmspace *child, uint64_t *src,
-                       uint64_t *dst, int level, uintptr_t base)
+static int share_level(struct vmspace *vm, struct vmspace *child, pte_t *src,
+                       pte_t *dst, int level, uintptr_t base)
 {
     for (int i = 0; i < PT_ENTRIES; i++) {
-        uint64_t e = src[i];
-        uintptr_t va = base + ((uintptr_t)i << (12 + 9 * (level - 1)));
+        pte_t e = src[i];
+        uintptr_t va = base + ((uintptr_t)i << PT_SHIFT(level));
         if (level == 1) {
-            if (!(e & (PTE_P | PTE_PROTNONE)))
+            if (!pte_mapped(e))
                 continue;
-            if (!pmm_is_ram(e & PTE_ADDR_MASK)) {
+            if (!pmm_is_ram(pte_addr(e))) {
                 dst[i] = e;     /* device memory: shared, not counted */
                 continue;
             }
@@ -491,19 +485,19 @@ static int share_level(struct vmspace *vm, struct vmspace *child, uint64_t *src,
                 continue;   /* the child has no region here */
             if (v->flags & VM_SHARED) {
                 dst[i] = e;     /* shared object: both map the same frame */
-                page_get(phys_to_page(e & PTE_ADDR_MASK));
+                page_get(phys_to_page(pte_addr(e)));
                 percpu_counter_inc(&child->resident);
                 continue;
             }
-            e = (e & ~PTE_W) | PTE_COW;
+            e = pte_mkcow(pte_wrprotect(e));
             src[i] = e;
             dst[i] = e;
-            page_get(phys_to_page(e & PTE_ADDR_MASK));
+            page_get(phys_to_page(pte_addr(e)));
             percpu_counter_inc(&child->resident);
         } else {
-            if (!(e & PTE_P))
+            if (!pte_present(e))
                 continue;
-            if (level == 2 && (e & PTE_PS)) {
+            if (level == 2 && pte_is_block(e)) {
                 struct vma *v = vma_find_locked(vm, va);
                 if (v && !(v->flags & VM_DONTFORK))
                     huge_share_locked(&src[i], &dst[i]);
@@ -514,8 +508,8 @@ static int share_level(struct vmspace *vm, struct vmspace *child, uint64_t *src,
             uintptr_t table = paging_alloc_table();
             if (!table)
                 return -ENOMEM;
-            dst[i] = table | (e & PTE_FLAGS_MASK);
-            int r = share_level(vm, child, P2V(e & PTE_ADDR_MASK), P2V(table), level - 1, va);
+            dst[i] = pte_set_addr(e, table);
+            int r = share_level(vm, child, pte_table(e), P2V(table), level - 1, va);
             if (r < 0)
                 return r;
         }
@@ -572,19 +566,19 @@ struct vmspace *vmspace_fork(struct vmspace *vm)
     spin_lock(&vm->lock);
     int r = copy_vmas_locked(vm, child);
     if (r == 0) {
-        uint64_t *src = P2V(vm->pml4_phys);
-        uint64_t *dst = P2V(child->pml4_phys);
-        for (int i = 0; i < PT_ENTRIES / 2 && r == 0; i++) {
-            if (!(src[i] & PTE_P))
+        pte_t *src = P2V(vm->pt_root);
+        pte_t *dst = P2V(child->pt_root);
+        for (int i = 0; i < PT_ROOT_USER_ENTRIES && r == 0; i++) {
+            if (!pte_present(src[i]))
                 continue;
             uintptr_t table = paging_alloc_table();
             if (!table) {
                 r = -ENOMEM;
                 break;
             }
-            dst[i] = table | (src[i] & PTE_FLAGS_MASK);
-            r = share_level(vm, child, P2V(src[i] & PTE_ADDR_MASK), P2V(table), 3,
-                            (uintptr_t)i << 39);
+            dst[i] = pte_set_addr(src[i], table);
+            r = share_level(vm, child, pte_table(src[i]), P2V(table), PT_LEVELS - 1,
+                            (uintptr_t)i << PT_SHIFT(PT_LEVELS));
         }
         child->brk_start = vm->brk_start;
         child->brk = vm->brk;

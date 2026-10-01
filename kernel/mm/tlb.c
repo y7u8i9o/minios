@@ -37,9 +37,9 @@ static void flush_local(struct vmspace *vm, uintptr_t va, size_t size)
         return;
     if (va > USER_TOP || size <= 64 * PAGE_SIZE) {
         for (size_t off = 0; off < size; off += PAGE_SIZE)
-            paging_invlpg(va + off);
+            paging_flush_page(va + off);
     } else {
-        paging_load(read_cr3());
+        paging_flush_user();
     }
 }
 

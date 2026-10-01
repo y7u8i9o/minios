@@ -88,8 +88,9 @@ whether or not it was writable.
 attached to a not present entry tagged with the software bit `PTE_PROTNONE`
 (bit 53). The fault handler refuses access to regions without `VM_READ`,
 `vma_range_ok` refuses them for kernel accesses, unmapping and fork treat
-them like present entries and `vma_pte_flags` produces the form for any
-region protection, so swap in and populate install the right kind of entry.
+them like present entries (`pte_mapped`) and `vma_make_pte` produces the
+form for any region protection, so swap in and populate install the right
+kind of entry.
 A later `mprotect` makes the entries present again.
 
 ## Test

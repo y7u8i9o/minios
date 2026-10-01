@@ -4,6 +4,7 @@
 #include <sync/percpu.h>
 #include <lib/list.h>
 #include <arch/cpu.h>
+#include <arch/memlayout.h>
 
 /* Mapping flags. */
 #define VM_READ     (1u << 0)
@@ -24,27 +25,19 @@
 #define VM_PROT_MASK (VM_READ | VM_WRITE | VM_EXEC)
 #define VM_KERNEL_RW (VM_READ | VM_WRITE | VM_GLOBAL)
 
-/* Virtual layout. Lower half belongs to user space. */
-#define USER_BASE       0x0000000000001000UL
-#define USER_TOP        0x00007fffffffffffUL
-#define USER_STACK_TOP  0x00007ffffffff000UL
+/* Virtual layout. The addresses of the regions are defined by the
+ * architecture (<arch/memlayout.h>); the sizes below are generic. */
 #define USER_STACK_SIZE (1UL << 20)     /* legacy default, exec sizes the stack by RLIMIT_STACK (M40) */
 #define USER_STACK_MIN  (64UL << 10)
-#define KMMIO_BASE      0xffffffa000000000UL   /* device mappings, 64 GiB */
-#define KMMIO_SIZE      (64UL << 30)
-#define KSTACK_BASE     0xffffffc000000000UL   /* kernel stacks with guards */
 #define KSTACK_SIZE     (16UL << 10)
 #define KSTACK_SLOT     (KSTACK_SIZE + PAGE_SIZE)
 #define KSTACK_SLOTS    4096
-#define USER_MMAP_TOP   0x00007f0000000000UL   /* mmap regions grow down from here */
-#define USER_INTERP_BASE 0x00007e0000000000UL  /* the dynamic loader of a program (dynlink.md) */
-#define KHEAP_BASE      0xffffffd000000000UL   /* reserved for vmalloc style use */
 
-/* An address space. lock protects the page tables reachable from pml4_phys,
+/* An address space. lock protects the page tables reachable from pt_root,
  * the region list and the heap break. The kernel's instance is
  * kernel_vmspace and its lock is kvm_lock. */
 struct vmspace {
-    uintptr_t pml4_phys;
+    uintptr_t pt_root;          /* physical address of the root page table */
     struct spinlock lock;
     struct list_head vmas;      /* struct vma, sorted by start */
     uintptr_t brk_start;        /* heap region start, 0 if none */

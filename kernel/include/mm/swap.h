@@ -6,8 +6,8 @@ struct page;
 
 /* Swap: anonymous user pages are written to slots of a swap block device
  * (vdb) when free memory runs low. A page table entry of a swapped page
- * is not present, carries PTE_SWAPPED and holds the slot number in the
- * address bits. See docs/design/swap.md. */
+ * is not present and records the slot number (pte_make_swap,
+ * pte_swap_slot in <arch/paging.h>). See docs/design/swap.md. */
 
 /* Attach the swap device if present. Called once block devices exist. */
 void swap_init(void);

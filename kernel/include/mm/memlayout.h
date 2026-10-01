@@ -1,8 +1,7 @@
 #pragma once
 #include <kernel.h>
-
-#define HIGHER_HALF_BASE 0xffff800000000000UL
-#define KERNEL_VBASE 0xffffffff80000000UL
+/* HIGHER_HALF_BASE, KERNEL_VBASE and the user and kernel regions. */
+#include <arch/memlayout.h>
 
 /* Higher half direct map offset, set from the Limine HHDM response. */
 extern uintptr_t hhdm_offset;

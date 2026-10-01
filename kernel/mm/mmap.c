@@ -6,6 +6,7 @@
 #include <mm/huge.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
+#include <mm/ptwalk.h>
 #include <fs/vfs.h>
 #include <kassert.h>
 #include <klog.h>
@@ -160,35 +161,19 @@ int vma_run_sync_jobs(struct list_head *jobs)
 static void detach_empty_pts(struct vmspace *vm, uintptr_t start, uintptr_t end,
                              struct list_head *tables)
 {
-    uint64_t *pml4 = P2V(vm->pml4_phys);
-    for (uintptr_t va = ALIGN_DOWN(start, PAGE_2M); va < end;) {
-        uint64_t e = pml4[PML4_INDEX(va)];
-        if (!(e & PTE_P)) {
-            va = ALIGN_DOWN(va, 1UL << 39) + (1UL << 39);
-            continue;
+    uintptr_t va = ALIGN_DOWN(start, PAGE_2M);
+    pte_t *pde, *pt;
+    while ((pt = pt_next_leaf_table(vm->pt_root, &va, end, &pde)) != NULL) {
+        int i = 0;
+        while (i < PT_ENTRIES && pt[i] == 0)
+            i++;
+        /* Non-present swap and PROT_NONE entries still own resources. */
+        if (i == PT_ENTRIES) {
+            struct page *pg = phys_to_page(pte_addr(*pde));
+            *pde = 0;
+            list_add_tail(&pg->lru, tables);
         }
-        uint64_t *pdpt = P2V(e & PTE_ADDR_MASK);
-        e = pdpt[PDPT_INDEX(va)];
-        if (!(e & PTE_P) || (e & PTE_PS)) {
-            va = ALIGN_DOWN(va, 1UL << 30) + (1UL << 30);
-            continue;
-        }
-        uint64_t *pd = P2V(e & PTE_ADDR_MASK);
-        uint64_t *pde = &pd[PD_INDEX(va)];
-        e = *pde;
-        if ((e & (PTE_P | PTE_PS)) == PTE_P) {
-            uint64_t *pt = P2V(e & PTE_ADDR_MASK);
-            int i = 0;
-            while (i < PT_ENTRIES && pt[i] == 0)
-                i++;
-            /* Non-present swap and PROT_NONE entries still own resources. */
-            if (i == PT_ENTRIES) {
-                *pde = 0;
-                struct page *pg = phys_to_page(e & PTE_ADDR_MASK);
-                list_add_tail(&pg->lru, tables);
-            }
-        }
-        va += PAGE_2M;
+        va = ALIGN_DOWN(va, PAGE_2M) + PAGE_2M;
     }
 }
 
@@ -271,36 +256,45 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
 static void reprotect_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, uintptr_t end,
                                    unsigned flags)
 {
-    uint64_t want = vma_pte_flags(flags);
     bool track_dirty = (v->flags & (VM_FILE | VM_SHARED)) == (VM_FILE | VM_SHARED);
     for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
-        uint64_t *entry;
-        int w = paging_walk(vm->pml4_phys, va, false, &entry);
+        pte_t *entry;
+        int w = paging_walk(vm->pt_root, va, false, &entry);
         if (w == 2) {
             /* A whole huge page (the caller split the boundaries and
-             * PROT_NONE ranges): rewrite the directory entry. */
-            uint64_t e = *entry;
-            uint64_t bits = want | PTE_PS;
-            if (e & PTE_COW)
-                bits &= ~PTE_W;
-            *entry = (e & (PTE_ADDR_MASK | PTE_COW | PTE_A | PTE_D)) | bits;
+             * PROT_NONE ranges): rewrite the block entry. */
+            pte_t e = *entry;
+            pte_t n = pte_mkblock(vma_make_pte(pte_addr(e), flags));
+            if (pte_cow(e))
+                n = pte_mkcow(pte_wrprotect(n));
+            if (pte_young(e))
+                n = pte_mkyoung(n);
+            if (pte_dirty(e))
+                n = pte_mkdirty(n);
+            *entry = n;
             va += PAGE_2M - PAGE_SIZE;
             continue;
         }
         if (w != 1)
             continue;
-        uint64_t e = *entry;
-        if (!(e & (PTE_P | PTE_PROTNONE)))
+        pte_t e = *entry;
+        if (!pte_mapped(e))
             continue;
-        if (track_dirty && (e & PTE_D))
+        if (track_dirty && pte_dirty(e))
             filemap_mark_dirty(v->mapping, (v->offset >> PAGE_SHIFT) + ((va - v->start) >> PAGE_SHIFT));
-        uint64_t keep = e & (PTE_ADDR_MASK | PTE_COW | PTE_A | PTE_LAZYFREE);
-        uint64_t bits = want;
-        if (e & PTE_COW)
-            bits &= ~PTE_W;
-        if (!(e & PTE_COW) && (e & PTE_D) && (bits & PTE_P))
-            bits |= PTE_D;
-        *entry = keep | bits;
+        /* The frame, the copy on write state, the accessed bit and the
+         * MADV_FREE mark carry over; the dirty bit too unless the frame is
+         * shared copy on write. */
+        pte_t n = vma_make_pte(pte_addr(e), flags);
+        if (pte_cow(e))
+            n = pte_mkcow(pte_wrprotect(n));
+        if (pte_young(e))
+            n = pte_mkyoung(n);
+        if (pte_lazyfree(e))
+            n = pte_mklazyfree(n);
+        if (!pte_cow(e) && pte_dirty(e) && pte_present(n))
+            n = pte_mkdirty(n);
+        *entry = n;
     }
     tlb_flush_range(vm, start, end - start);
 }
@@ -391,12 +385,12 @@ int vma_msync(struct vmspace *vm, uintptr_t addr, size_t len)
             /* Gather the hardware dirty bits and clear them so the next
              * write dirties the page again. */
             for (uintptr_t p = s; p < e; p += PAGE_SIZE) {
-                uint64_t *entry;
-                if (paging_walk(vm->pml4_phys, p, false, &entry) != 1)
+                pte_t *entry;
+                if (paging_walk(vm->pt_root, p, false, &entry) != 1)
                     continue;
-                if ((*entry & (PTE_P | PTE_D)) == (PTE_P | PTE_D)) {
+                if (pte_present(*entry) && pte_dirty(*entry)) {
                     filemap_mark_dirty(v->mapping, (v->offset >> PAGE_SHIFT) + ((p - v->start) >> PAGE_SHIFT));
-                    *entry &= ~PTE_D;
+                    *entry = pte_mkclean(*entry);
                 }
             }
             tlb_flush_range(vm, s, e - s);
