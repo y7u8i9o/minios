@@ -43,7 +43,9 @@ Each `struct codec` describes one format:
 
 - `name` and `description`, for lookups and listings;
 - `kind`, `CODEC_IMAGE` or `CODEC_AUDIO`;
-- `caps`, `CODEC_DECODE` and `CODEC_ENCODE`;
+- `caps`, `CODEC_DECODE` and `CODEC_ENCODE`, and `CODEC_SCALABLE` for a
+  vector format that renders at the size of the request, like
+  `GDK_PIXBUF_FORMAT_SCALABLE`;
 - `mime_types` and `extensions`, lists separated by spaces;
 - `probe`, which scores the first bytes of some data (at most
   `CODEC_PROBE_LEN`, 512) from 0 to 100, as a gdk-pixbuf loader does
@@ -119,7 +121,7 @@ The modules of C1:
 | Module | Codec | Capabilities | Probe |
 |---|---|---|---|
 | `png.so` | `png`, `image/png`, `.png` | decode, encode | the eight byte signature, 100 |
-| `svg.so` | `svg`, `image/svg+xml`, `.svg` | decode | `<svg` after an optional byte order mark, XML declaration, comments and white space, 90 |
+| `svg.so` | `svg`, `image/svg+xml`, `.svg` | decode, scalable | `<svg` after an optional byte order mark, XML declaration, comments and white space, 90 |
 
 The PNG decoder and encoder are described in `images.md`, the SVG
 renderer in `icons.md`. The SVG codec renders a square of the request's
@@ -163,6 +165,68 @@ them in chunks of 4096 frames into 16 bit samples, the upper half of each
 value, before its resampling; it no longer contains a WAV reader. Its
 package records `libcodec.so` among its needs, from its `DT_NEEDED`
 entries.
+
+## A new format: BMP
+
+Once the viewer and paint stopped naming formats (below), `bmp.so` was
+added without a change to any program: the viewer, paint, the desktop
+wallpaper and the `codecs` command read BMP files from the moment the
+module is in `/lib/codecs`.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `bmp.so` | `bmp`, `image/bmp image/x-bmp`, `.bmp .dib` | decode, encode | `BM` and a known header size, 90 |
+
+The decoder reads the file header and a `BITMAPINFOHEADER` (40 bytes)
+or its V2, V3, V4 and V5 extensions (52, 56, 108 and 124 bytes), with 24
+bit pixels, or 32 bit pixels either in `BI_RGB`, whose fourth byte is
+unused, so the image is opaque, or in `BI_BITFIELDS`. The masks of
+`BI_BITFIELDS` are read from the header from V2 on and after a 40 byte
+header otherwise, the alpha mask only when the header or the pixel offset
+leaves room for it; each mask must be contiguous and at most eight bits
+wide, and its channel is scaled to eight bits. A negative height means
+rows from the top. Rows are padded to four bytes. Sizes are limited to
+16384 pixels a side, and the pixel data must lie within the file.
+
+The encoder writes a `BITMAPV4HEADER` with 32 bit `BI_BITFIELDS` pixels,
+the masks of `0xAARRGGBB` and the sRGB colour space, bottom up, so that
+alpha survives the file and a picture encoded and decoded again is
+unchanged.
+
+## Programs
+
+`view` lists the files of a directory whose extension a codec decodes
+(`codec_for_path` with `CODEC_DECODE`) and decodes each by content with
+a request of 1024 by 1024 pixels, which only vector formats use; the Set
+as wallpaper entry is enabled for the formats without `CODEC_SCALABLE`.
+paint opens every decodable format and saves in the format of the
+extension of the file name, or PNG when no codec encodes that extension.
+The desktop loads its wallpaper with `image_load`, so a BMP file is a
+wallpaper as well. `/etc/mime.types` lists `image/bmp` with `.bmp` and
+`.dib`, `image/svg+xml` with `.svg`, and `.wave` beside `.wav`, so Files
+opens these files with the viewer and the player.
+
+## The codecs command
+
+`/bin/codecs` (`user/coreutils/codecs.c`, `codecs(1)`) shows the
+registry in the manner of `gst-inspect` and converts files in the manner
+of `ffmpeg`:
+
+- `codecs` prints one line per codec with its capabilities (`D`, `E`,
+  `S`), name, kind, module file and description, a line with its MIME
+  types and extensions, and the totals, for example
+  `DE- bmp   image  bmp.so   Windows bitmap`;
+- `codecs info FILE...` names the codec `codec_identify` picks and
+  decodes the file: an image's size, alpha and scalability, or an audio
+  stream's rate, channels, sample size, frames and duration;
+- `codecs convert [-f NAME] [-b BITS] [-s SIZE] IN OUT` decodes `IN`
+  and encodes it with the codec `NAME`, or the encoder of `OUT`'s
+  extension of the same kind; `-b` sets the sample size of audio and
+  `-s` the size at which a vector image renders. It prints
+  `IN (codec) -> OUT (codec)`.
+
+The exit status is 0, 1 for a file that cannot be read, identified,
+decoded, encoded or written, and 2 for wrong usage.
 
 ## Files and errors
 
@@ -213,3 +277,15 @@ chunks, a cut in the middle of a sample, a 12 bit request, the
 extensible format with PCM and with float, image data, and a file saved
 by extension and opened again. `make check` covers the same codecs built
 in, and `audio_player` the player.
+
+The boot test `codec_tool` runs `/etc/tests/codecs.sh`: the listing of
+the four modules with their capabilities; an icon converted from PNG to
+BMP and back, with the two BMP files equal byte for byte; `info` of both,
+of a BMP file named `.png`, which content identifies, and of a generated
+SVG file; conversion with `-f` and an SVG rendered with `-s`; the chime
+identified, converted to 24 bit and back to 16, equal to a direct
+conversion; and the errors for unknown data, an extension without an
+encoder, formats of different kinds, wrong usage and a missing file.
+`gui_images` converts the saved drawing to BMP with `codecs` and shows
+the BMP file in the viewer, and its post script decodes the BMP file
+with its own reader and compares pixels with the PNG file.

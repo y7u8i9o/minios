@@ -1,5 +1,7 @@
-/* paint: a bitmap editor for PNG files with a brush, an eraser, lines,
- * rectangles, ellipses, flood fill, a palette, undo and redo.
+/* paint: a bitmap editor with a brush, an eraser, lines, rectangles,
+ * ellipses, flood fill, a palette, undo and redo. It opens every image
+ * format a codec module decodes and saves in the format of the file's
+ * extension, PNG when no codec encodes it (docs/design/codecs.md).
  *
  *   paint [FILE]
  *
@@ -12,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <codec/codec.h>
 #include <gui/app.h>
 #include <minios/input.h>
 
@@ -409,7 +412,9 @@ static int save_to(const char *name)
     }
     for (size_t i = 0, n = (size_t)img.width * img.height; i < n; i++)
         out.pixels[i] = img.pixels[i] | 0xff000000u;
-    int err = image_save_png(&out, name);
+    /* The format of the extension, PNG for a name without a known one. */
+    struct codec_picture pic = { out.w, out.h, out.pixels };
+    int err = codec_image_save(&pic, name, codec_for_path(CODEC_IMAGE, name, CODEC_ENCODE) ? NULL : "png");
     free(out.pixels);
     if (err < 0) {
         error_dialog("%s cannot be saved: %s", name, -err);
@@ -455,7 +460,8 @@ static int confirm_discard(void)
     return choice == 1;
 }
 
-/* A PNG file, composed over white because the drawing has no alpha. */
+/* An image file in any format a codec decodes, composed over white
+ * because the drawing has no alpha. */
 static int load(const char *name)
 {
     struct image *im = image_load(name);

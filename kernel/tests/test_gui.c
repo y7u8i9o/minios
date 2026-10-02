@@ -1376,9 +1376,19 @@ static void test_gui_images(void)
     read_head("/drawing.png", head, sizeof head);
     ktest_assert(memcmp(head, sig, 8) == 0, "/drawing.png is not a PNG file");
 
-    /* The saved drawing in the viewer: the stroke shows as black pixels
-     * in the canvas, below the tool bar and above the status bar. */
-    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/drawing.png", NULL },
+    /* The codecs command converts the drawing to BMP through the codec
+     * modules, and the viewer shows the BMP file: the stroke shows as
+     * black pixels in the canvas, below the tool bar and above the status
+     * bar. */
+    vfs_unlink("/drawing.bmp");
+    cl = proc_create_user("/bin/codecs", (char *const[]){ "codecs", "convert", "/drawing.png", "/drawing.bmp", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start codecs");
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "codecs convert status 0x%x", status);
+    read_head("/drawing.bmp", head, 2);
+    ktest_assert(head[0] == 'B' && head[1] == 'M', "/drawing.bmp is not a BMP file");
+    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/drawing.bmp", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start the second view");
     wait_active(100, 120, "second view");

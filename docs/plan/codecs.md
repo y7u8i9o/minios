@@ -95,7 +95,7 @@ The scope is images and audio. Compression (gzip) stays in libc.
   sample size through the encoder, decodes them back sample for sample,
   and checks truncated and foreign data. `audio_player` must still pass.
 
-### C3: a new format without program changes, the codecs tool
+### C3: a new format without program changes, the codecs tool (completed 2026-10-03)
 
 - The module `bmp.so` decodes BMP files with 24 and 32 bit pixels,
   bottom up and top down, and encodes 32 bit BMP files with alpha.
@@ -107,5 +107,10 @@ The scope is images and audio. Compression (gzip) stays in libc.
   converts between formats of one kind (`codecs convert IN OUT`), in the
   manner of `gst-inspect` and `ffmpeg`.
 - Boot test `codec_tool`: `codecs` lists the four modules, converts a PNG
-  file to BMP and back with identical pixels, identifies a WAV file, and
-  the viewer shows a BMP file.
+  file to BMP and back with identical pixels, and identifies a WAV file;
+  `gui_images` converts its drawing to BMP and shows it in the viewer.
+- Codecs gained `CODEC_SCALABLE` for vector formats, which the viewer
+  uses for its wallpaper entry.
+- Found on the way: the shell ran a line ending in a backslash and
+  newline without the next line; the lexer now reports such input as
+  incomplete.

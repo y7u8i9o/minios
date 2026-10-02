@@ -1,0 +1,46 @@
+CODECS(1)                   User Commands                  CODECS(1)
+
+NAME
+    codecs - list, identify and convert image and audio formats
+
+SYNOPSIS
+    codecs
+    codecs info file...
+    codecs convert [-f name] [-b bits] [-s size] in out
+
+DESCRIPTION
+    The formats of minios are modules in /lib/codecs, which the codec
+    library loads at run time; every program that opens images or
+    audio reads the formats of all modules. The environment variable
+    CODEC_PATH names another module directory.
+
+    Without arguments codecs lists every codec with its capabilities
+    (D decodes, E encodes, S renders at any size), its kind, its
+    module, its description, its MIME types and its extensions.
+
+    info names the format of each file, found by its content and then
+    by its extension, and describes it: the size of an image and
+    whether it has alpha, or the rate, channels, sample size, frames
+    and duration of audio.
+
+    convert decodes in and encodes it in the format of the extension of
+    out, or with the codec name. Both formats must be of one kind.
+
+OPTIONS
+    -f name      encode with this codec, whatever the extension
+    -b bits      sample size of the converted audio (the source's)
+    -s size      size in pixels at which a vector image is rendered
+
+EXIT STATUS
+    0 on success, 1 when a file cannot be read, identified, decoded,
+    encoded or written, and 2 for wrong usage.
+
+EXAMPLES
+    codecs
+    codecs info /usr/share/sounds/chime.wav
+    codecs convert shot.png shot.bmp
+    codecs convert -s 64 /usr/share/icons/app-default.svg icon.png
+    codecs convert -b 24 chime.wav chime24.wav
+
+SEE ALSO
+    screenshot(1)

@@ -25,7 +25,9 @@ static void test_registry(void)
 {
     const struct codec *png = codec_find("png"), *svg = codec_find("SVG");
     CHECK(png && png->kind == CODEC_IMAGE && png->caps == (CODEC_DECODE | CODEC_ENCODE), "png codec");
-    CHECK(svg && svg->kind == CODEC_IMAGE && svg->caps == CODEC_DECODE, "svg codec, found without regard to case");
+    CHECK(svg && svg->kind == CODEC_IMAGE && svg->caps == (CODEC_DECODE | CODEC_SCALABLE),
+          "svg codec, found without regard to case");
+    CHECK(png && !(png->caps & CODEC_SCALABLE), "png is not scalable");
     CHECK(codec_find("nothing") == NULL, "unknown name");
     CHECK(codec_for_mime(CODEC_IMAGE, "image/svg+xml", CODEC_DECODE) == svg, "svg by MIME type");
     CHECK(codec_for_mime(CODEC_AUDIO, "image/png", 0) == NULL, "kind filters MIME lookups");

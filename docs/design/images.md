@@ -172,12 +172,14 @@ Screenshot entry that starts `screenshot -i`.
 
 ## Image viewer
 
-`view` (`user/apps/view.c`, package `view`) shows PNG and SVG files. The
-`view` package registers it for `image/*`, so Files and the desktop open
-PNG files with it. A file argument opens the file and lists the other
-image files of its directory, sorted by name. A directory argument opens
-its first image. SVG files are rendered at 1024 by 1024 pixels by the
-SVG renderer of the icons.
+`view` (`user/apps/view.c`, package `view`) shows every image format a
+codec module decodes (`codecs.md`): PNG, BMP and SVG files. The `view`
+package registers it for `image/*`, so Files and the desktop open image
+files with it. A file argument opens the file and lists the other files
+of its directory whose extension a codec decodes, sorted by name. A
+directory argument opens its first image. Each file is decoded by the
+codec its content names; vector formats are rendered at 1024 by 1024
+pixels, SVG by the renderer of the icons.
 
 The zoom is a number of device pixels per 1000 image pixels. Zoom 0 fits
 the image into the window and never enlarges it. The zoom steps are 5 %
@@ -193,7 +195,8 @@ directory.
 
 File, Set as wallpaper runs `settings set wallpaper PATH`, which writes
 the configuration file that the desktop client reads. It is enabled for
-PNG files only, because the desktop decodes PNG wallpapers only.
+raster formats, the codecs without `CODEC_SCALABLE`, since the desktop
+decodes its wallpaper with `image_load` at the file's own size.
 
 ## Paint
 
@@ -206,9 +209,11 @@ and the release makes that copy the undo step. Undo and redo store whole
 copies of the drawing, at most eight in each direction. The palette row
 below the drawing shows the current colour and sixteen colours.
 
-New asks for a size up to 4096x4096. Open composes a PNG file over white,
-because the drawing has no alpha channel. Save writes opaque RGB with
-`image_save_png`. The window title shows the file name and an asterisk
+New asks for a size up to 4096x4096. Open composes an image of any
+decodable format over white, because the drawing has no alpha channel.
+Save writes the opaque drawing in the format of the file name's
+extension through `codec_image_save`, and as PNG when no codec encodes
+that extension. The window title shows the file name and an asterisk
 while the drawing has unsaved changes. Closing the window, Quit, New and
 Open ask whether to save such changes.
 

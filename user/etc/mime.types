@@ -4,7 +4,9 @@ text/x-csrc c h
 text/x-shellscript sh
 text/x-lua lua
 image/png png
-audio/x-wav wav
+image/bmp bmp dib
+image/svg+xml svg
+audio/x-wav wav wave
 application/x-launcher app
 application/x-minios-package mpk
 application/octet-stream bin img

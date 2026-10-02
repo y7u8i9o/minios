@@ -23,6 +23,9 @@ enum codec_kind { CODEC_IMAGE = 1, CODEC_AUDIO = 2 };
 
 #define CODEC_DECODE 1
 #define CODEC_ENCODE 2
+/* A vector format that renders at the size of the request, like
+ * GDK_PIXBUF_FORMAT_SCALABLE. */
+#define CODEC_SCALABLE 4
 
 struct codec_picture {
     int w, h;
@@ -52,7 +55,7 @@ struct codec {
     const char *name;               /* "png" */
     const char *description;        /* "Portable Network Graphics" */
     enum codec_kind kind;
-    int caps;                       /* CODEC_DECODE, CODEC_ENCODE */
+    int caps;                       /* CODEC_DECODE, CODEC_ENCODE, CODEC_SCALABLE */
     const char *mime_types;         /* separated by spaces */
     const char *extensions;         /* lower case, separated by spaces */
     int (*probe)(const uint8_t *data, size_t len);

@@ -13,8 +13,9 @@ DIR="$(dirname "$DISK")"
 "$MKFS" --cat "$DISK" /shot.png > "$DIR/shot.png" || { echo "  /shot.png missing"; exit 1; }
 "$MKFS" --cat "$DISK" /drawing.png > "$DIR/drawing.png" || { echo "  /drawing.png missing"; exit 1; }
 "$MKFS" --cat "$DISK" /win.png > "$DIR/win.png" || { echo "  /win.png missing"; exit 1; }
+"$MKFS" --cat "$DISK" /drawing.bmp > "$DIR/drawing.bmp" || { echo "  /drawing.bmp missing"; exit 1; }
 SIZE="$(sed -n 's/.*gui_images: screen \([0-9]*x[0-9]*\).*/\1/p' "$SERIAL" | head -1)"
-exec python3 - "$DIR/shot.png" "$DIR/drawing.png" "$SIZE" "$DIR/win.png" <<'PY'
+exec python3 - "$DIR/shot.png" "$DIR/drawing.png" "$SIZE" "$DIR/win.png" "$DIR/drawing.bmp" <<'PY'
 import struct, sys, zlib
 
 def decode(path):
@@ -80,6 +81,19 @@ for x, y, colour in ((60, 50, (0, 0, 0)), (150, 50, (0, 0, 0)), (240, 50, (0, 0,
                      (150, 100, (255, 255, 255)), (10, 10, (255, 255, 255)), (639, 479, (255, 255, 255))):
     if px(drawing, x, y) != colour:
         sys.exit("  drawing pixel (%d,%d) is %s" % (x, y, px(drawing, x, y)))
+# The BMP copy of the drawing: a V4 header, 32 bit BI_BITFIELDS pixels
+# bottom up, with the same pixels as the PNG file.
+bmp = open(sys.argv[5], "rb").read()
+off, hsize = struct.unpack("<I", bmp[10:14])[0], struct.unpack("<I", bmp[14:18])[0]
+bw, bh, planes, bpp, comp = struct.unpack("<iiHHI", bmp[18:34])
+if bmp[:2] != b"BM" or hsize != 108 or (bw, bh, bpp, comp) != (640, 480, 32, 3):
+    sys.exit("  drawing.bmp header: %d %dx%d %d bit compression %d" % (hsize, bw, bh, bpp, comp))
+def bmp_px(x, y):
+    b, g, r, a = bmp[off + ((bh - 1 - y) * bw + x) * 4:off + ((bh - 1 - y) * bw + x) * 4 + 4]
+    return (r, g, b)
+for x, y in ((60, 50), (150, 50), (240, 50), (150, 100), (10, 10), (639, 479)):
+    if bmp_px(x, y) != px(drawing, x, y):
+        sys.exit("  drawing.bmp pixel (%d,%d) is %s, the PNG %s" % (x, y, bmp_px(x, y), px(drawing, x, y)))
 print("  screenshot %dx%d, desktop colour in %d of %d samples; window %dx%d with a transparent corner; "
-      "drawing 640x480 with the stroke" % (shot[0], shot[1], desk, total, win[0], win[1]))
+      "drawing 640x480 with the stroke, also as BMP" % (shot[0], shot[1], desk, total, win[0], win[1]))
 PY

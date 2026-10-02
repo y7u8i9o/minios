@@ -1,6 +1,8 @@
-/* view: an image viewer for PNG and SVG files. The window shows one image
- * scaled to fit or at a chosen zoom, steps through the other images of
- * its directory, and sets a PNG file as the desktop wallpaper.
+/* view: an image viewer for every format a codec module decodes
+ * (docs/design/codecs.md), such as PNG, BMP and SVG files. The window
+ * shows one image scaled to fit or at a chosen zoom, steps through the
+ * other images of its directory, and sets a raster image as the desktop
+ * wallpaper.
  *
  *   view [FILE | DIRECTORY]
  *
@@ -17,12 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <codec/codec.h>
 #include <gui/app.h>
 #include <gui/mime.h>
 #include <minios/input.h>
 
 #define MAX_FILES 512
-#define SVG_PX 1024             /* size at which SVG files are rendered */
+#define SVG_PX 1024             /* size at which vector formats are rendered */
 
 static struct app *app;
 static struct widget *win, *canvas, *st_name, *st_size, *st_zoom, *st_index, *wallpaper_item;
@@ -33,7 +36,7 @@ static int nfiles, current = -1;
 
 static struct image *img;       /* the decoded file */
 static struct image *reduced;   /* img resampled for a zoom below 100 % */
-static int is_png;
+static int scalable;            /* img came from a vector format */
 static int opaque;              /* every pixel of img has full alpha */
 /* Zoom in device pixels per 1000 image pixels; 0 fits the image into
  * the window without enlarging it. */
@@ -147,10 +150,38 @@ static void zoom_step(int direction)
     set_zoom(levels[i]);
 }
 
+/* A name the viewer lists: one whose extension a codec decodes. */
 static int has_image_extension(const char *name)
 {
-    const char *dot = strrchr(name, '.');
-    return dot && (strcasecmp(dot, ".png") == 0 || strcasecmp(dot, ".svg") == 0);
+    return codec_for_path(CODEC_IMAGE, name, CODEC_DECODE) != NULL;
+}
+
+/* The file decoded by the codec its content names, else its extension;
+ * vector formats render at SVG_PX. Sets scalable. NULL with errno. */
+static struct image *load_image(const char *path)
+{
+    uint8_t *data;
+    size_t len;
+    int err = codec_read_file(path, &data, &len);
+    if (err < 0) {
+        errno = -err;
+        return NULL;
+    }
+    const struct codec *c = codec_identify(CODEC_IMAGE, data, len, path, CODEC_DECODE);
+    struct codec_image_request req = { SVG_PX, SVG_PX, 0 };
+    struct codec_picture pic;
+    err = codec_image_decode(c, data, len, path, &req, &pic);
+    free(data);
+    struct image *im = err < 0 ? NULL : malloc(sizeof *im);
+    if (!im) {
+        if (err == 0)
+            codec_picture_free(&pic);
+        errno = err < 0 ? -err : ENOMEM;
+        return NULL;
+    }
+    *im = (struct image){ pic.w, pic.h, pic.pixels, 1 };
+    scalable = (c->caps & CODEC_SCALABLE) != 0;
+    return im;
 }
 
 static int compare_names(const void *a, const void *b)
@@ -199,9 +230,8 @@ static void show(int index)
         return;
     }
     file_path(index, path, sizeof path);
-    const char *dot = strrchr(path, '.');
-    is_png = !(dot && strcasecmp(dot, ".svg") == 0);
-    img = is_png ? image_load(path) : image_load_svg(path, SVG_PX, 0);
+    errno = 0;
+    img = load_image(path);
     opaque = 1;
     for (size_t i = 0, n = img ? (size_t)img->w * img->h : 0; i < n && opaque; i++)
         opaque = (img->pixels[i] >> 24) == 0xff;
@@ -211,7 +241,7 @@ static void show(int index)
         snprintf(title, sizeof title, "%s: %s", files[index], strerror(errno ? errno : EINVAL));
         widget_set_text(st_name, title);
     }
-    widget_set_enabled(wallpaper_item, img && is_png);
+    widget_set_enabled(wallpaper_item, img && !scalable);
     gui_set_title(window_state_of(win)->win, files[index]);
     changed();
 }
@@ -392,7 +422,7 @@ static int on_open(struct widget *w, void *args, void *arg)
 
 static int on_wallpaper(struct widget *w, void *args, void *arg)
 {
-    if (current < 0 || !img || !is_png)
+    if (current < 0 || !img || scalable)
         return 1;
     char path[PATH_MAX];
     file_path(current, path, sizeof path);
