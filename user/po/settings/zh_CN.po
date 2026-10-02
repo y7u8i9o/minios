@@ -154,91 +154,123 @@ msgstr "平稳"
 msgid "Adaptive"
 msgstr "自适应"
 
-#: user/settings/region.c:138
+#: user/settings/region.c:151
 msgid "Example: %s, %s"
 msgstr "示例：%s，%s"
 
-#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
 msgid "OK"
 msgstr "确定"
 
-#: user/settings/region.c:175 user/settings/settings.c:129
+#: user/settings/region.c:188 user/settings/settings.c:130
 msgid "Region and language"
 msgstr "区域和语言"
 
-#: user/settings/region.c:175
+#: user/settings/region.c:188
 msgid "The time zone cannot be set."
 msgstr "无法设置时区。"
 
-#: user/settings/region.c:199
+#: user/settings/region.c:285
+msgid "Input methods"
+msgstr "输入法"
+
+#: user/settings/region.c:292 user/settings/system.c:407
+msgid "Move up"
+msgstr "上移"
+
+#: user/settings/region.c:299
+msgid "A Shift tap toggles the input method"
+msgstr "单按 Shift 键开关输入法"
+
+#: user/settings/region.c:303
+msgid "Ctrl+Space toggles the input method"
+msgstr "Ctrl+空格键开关输入法"
+
+#: user/settings/region.c:307
+msgid "Candidates per page"
+msgstr "每页候选词数"
+
+#: user/settings/region.c:311
+msgid "Candidate layout"
+msgstr "候选词排列"
+
+#: user/settings/region.c:313
+msgid "Horizontal"
+msgstr "横排"
+
+#: user/settings/region.c:314
+msgid "Vertical"
+msgstr "竖排"
+
+#: user/settings/region.c:337
 msgid "Language"
 msgstr "语言"
 
-#: user/settings/region.c:210
+#: user/settings/region.c:348
 msgid "Formats"
 msgstr "格式"
 
-#: user/settings/region.c:212
+#: user/settings/region.c:350
 msgid "Same as the language"
 msgstr "与语言相同"
 
-#: user/settings/region.c:220
+#: user/settings/region.c:358
 msgid "Time zone"
 msgstr "时区"
 
-#: user/settings/region.c:228
+#: user/settings/region.c:366
 msgid "Keyboard layout"
 msgstr "键盘布局"
 
-#: user/settings/region.c:233
-msgid "A new language applies to the programs started afterwards."
-msgstr "新的语言将应用于之后启动的程序。"
+#: user/settings/region.c:37
+msgid "Chinese (Pinyin)"
+msgstr "中文（拼音）"
 
-#: user/settings/region.c:234
-msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
-msgstr "单按 Shift 键开关输入法，Ctrl+Shift 切换到下一个输入法。"
+#: user/settings/region.c:38
+msgid "Japanese"
+msgstr "日语"
 
-#: user/settings/settings.c:126
+#: user/settings/settings.c:127
 msgid "Appearance"
 msgstr "外观"
 
-#: user/settings/settings.c:127
+#: user/settings/settings.c:128
 msgid "Display"
 msgstr "显示"
 
-#: user/settings/settings.c:128
+#: user/settings/settings.c:129
 msgid "Keyboard"
 msgstr "键盘"
 
-#: user/settings/settings.c:130
+#: user/settings/settings.c:131
 msgid "Mouse"
 msgstr "鼠标"
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:132
 msgid "Sound"
 msgstr "声音"
 
-#: user/settings/settings.c:132 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:179
 msgid "Date and time"
 msgstr "日期和时间"
 
-#: user/settings/settings.c:133
+#: user/settings/settings.c:134
 msgid "File types"
 msgstr "文件类型"
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:135
 msgid "Launcher"
 msgstr "启动器"
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:136
 msgid "System"
 msgstr "系统"
 
-#: user/settings/settings.c:93 user/settings/settings.c:169
+#: user/settings/settings.c:94 user/settings/settings.c:170
 msgid "Settings"
 msgstr "设置"
 
-#: user/settings/settings.c:93
+#: user/settings/settings.c:94
 msgid "The settings file cannot be written."
 msgstr "无法写入设置文件。"
 
@@ -353,10 +385,6 @@ msgstr "新建"
 #: user/settings/system.c:406
 msgid "Remove"
 msgstr "移除"
-
-#: user/settings/system.c:407
-msgid "Move up"
-msgstr "上移"
 
 #: user/settings/system.c:408
 msgid "Move down"

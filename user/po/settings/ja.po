@@ -154,91 +154,123 @@ msgstr "一定"
 msgid "Adaptive"
 msgstr "適応"
 
-#: user/settings/region.c:138
+#: user/settings/region.c:151
 msgid "Example: %s, %s"
 msgstr "例: %s、%s"
 
-#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
 msgid "OK"
 msgstr "OK"
 
-#: user/settings/region.c:175 user/settings/settings.c:129
+#: user/settings/region.c:188 user/settings/settings.c:130
 msgid "Region and language"
 msgstr "地域と言語"
 
-#: user/settings/region.c:175
+#: user/settings/region.c:188
 msgid "The time zone cannot be set."
 msgstr "タイムゾーンを設定できません。"
 
-#: user/settings/region.c:199
+#: user/settings/region.c:285
+msgid "Input methods"
+msgstr "入力方式"
+
+#: user/settings/region.c:292 user/settings/system.c:407
+msgid "Move up"
+msgstr "上へ"
+
+#: user/settings/region.c:299
+msgid "A Shift tap toggles the input method"
+msgstr "Shift キーを単独で押すと入力方式をオン・オフ"
+
+#: user/settings/region.c:303
+msgid "Ctrl+Space toggles the input method"
+msgstr "Ctrl+Space で入力方式をオン・オフ"
+
+#: user/settings/region.c:307
+msgid "Candidates per page"
+msgstr "1 ページの候補数"
+
+#: user/settings/region.c:311
+msgid "Candidate layout"
+msgstr "候補の並び"
+
+#: user/settings/region.c:313
+msgid "Horizontal"
+msgstr "横"
+
+#: user/settings/region.c:314
+msgid "Vertical"
+msgstr "縦"
+
+#: user/settings/region.c:337
 msgid "Language"
 msgstr "言語"
 
-#: user/settings/region.c:210
+#: user/settings/region.c:348
 msgid "Formats"
 msgstr "形式"
 
-#: user/settings/region.c:212
+#: user/settings/region.c:350
 msgid "Same as the language"
 msgstr "言語と同じ"
 
-#: user/settings/region.c:220
+#: user/settings/region.c:358
 msgid "Time zone"
 msgstr "タイムゾーン"
 
-#: user/settings/region.c:228
+#: user/settings/region.c:366
 msgid "Keyboard layout"
 msgstr "キーボード配列"
 
-#: user/settings/region.c:233
-msgid "A new language applies to the programs started afterwards."
-msgstr "新しい言語はこの後に起動するプログラムに適用されます。"
+#: user/settings/region.c:37
+msgid "Chinese (Pinyin)"
+msgstr "中国語（ピンイン）"
 
-#: user/settings/region.c:234
-msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
-msgstr "Shift キーを単独で押すと入力方式をオン・オフし、Ctrl+Shift で次の入力方式に切り替えます。"
+#: user/settings/region.c:38
+msgid "Japanese"
+msgstr "日本語"
 
-#: user/settings/settings.c:126
+#: user/settings/settings.c:127
 msgid "Appearance"
 msgstr "外観"
 
-#: user/settings/settings.c:127
+#: user/settings/settings.c:128
 msgid "Display"
 msgstr "ディスプレイ"
 
-#: user/settings/settings.c:128
+#: user/settings/settings.c:129
 msgid "Keyboard"
 msgstr "キーボード"
 
-#: user/settings/settings.c:130
+#: user/settings/settings.c:131
 msgid "Mouse"
 msgstr "マウス"
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:132
 msgid "Sound"
 msgstr "サウンド"
 
-#: user/settings/settings.c:132 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:179
 msgid "Date and time"
 msgstr "日付と時刻"
 
-#: user/settings/settings.c:133
+#: user/settings/settings.c:134
 msgid "File types"
 msgstr "ファイルの種類"
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:135
 msgid "Launcher"
 msgstr "ランチャー"
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:136
 msgid "System"
 msgstr "システム"
 
-#: user/settings/settings.c:93 user/settings/settings.c:169
+#: user/settings/settings.c:94 user/settings/settings.c:170
 msgid "Settings"
 msgstr "設定"
 
-#: user/settings/settings.c:93
+#: user/settings/settings.c:94
 msgid "The settings file cannot be written."
 msgstr "設定ファイルを書き込めません。"
 
@@ -353,10 +385,6 @@ msgstr "新規"
 #: user/settings/system.c:406
 msgid "Remove"
 msgstr "削除"
-
-#: user/settings/system.c:407
-msgid "Move up"
-msgstr "上へ"
 
 #: user/settings/system.c:408
 msgid "Move down"

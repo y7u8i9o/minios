@@ -179,7 +179,16 @@ static int on_paint(struct widget *w, void *args, void *arg)
             c += run - 1;
         }
     }
-    if (t->view == 0 && v->cursor_visible) {
+    if (t->view == 0 && v->cursor_visible && focused)
+        widget_text_cursor(w, PAD_X + v->cx * cell_w, PAD_Y + v->cy * cell_h, 1, cell_h);
+    if (t->view == 0 && t->preedit[0]) {
+        /* The composition covers the cells from the cursor, underlined. */
+        int x = PAD_X + v->cx * cell_w, y = PAD_Y + v->cy * cell_h;
+        int pw = gfx_text_width_font(text_font(), t->preedit, -1);
+        painter_fill(p, x, y, pw, cell_h, DEFAULT_BG);
+        painter_text_font(p, text_font(), x, y, t->preedit, DEFAULT_FG, 0xffffffffu);
+        painter_fill(p, x, y + cell_h - 1, pw, 1, DEFAULT_FG);
+    } else if (t->view == 0 && v->cursor_visible) {
         int x = PAD_X + v->cx * cell_w, y = PAD_Y + v->cy * cell_h;
         const struct vcell *cc = v->cells + v->cy * v->cols + v->cx;
         if (focused && blink_on) {
@@ -342,6 +351,8 @@ static void on_poll(void *arg)
 }
 
 static int on_key(struct widget *w, void *args, void *arg);
+static int on_text(struct widget *w, void *args, void *arg);
+static int on_preedit(struct widget *w, void *args, void *arg);
 static int on_press(struct widget *w, void *args, void *arg);
 static int on_motion(struct widget *w, void *args, void *arg);
 static int on_release(struct widget *w, void *args, void *arg);
@@ -371,7 +382,12 @@ static struct tab *open_tab(char *const argv[], const char *dir)
     t->canvas = canvas_new(t->page);
     widget_set_stretch(t->canvas, 1, 1);
     widget_connect(t->canvas, "paint", on_paint, t);
+    /* Text input: the compositor or the input method commits the text
+     * of the printable keys, which goes to the pty. */
+    t->canvas->accepts_text = 1;
     widget_connect(t->canvas, "key", on_key, t);
+    widget_connect(t->canvas, "text", on_text, t);
+    widget_connect(t->canvas, "preedit", on_preedit, t);
     widget_connect(t->canvas, "press", on_press, t);
     widget_connect(t->canvas, "motion", on_motion, t);
     widget_connect(t->canvas, "release", on_release, t);
@@ -534,6 +550,26 @@ static int on_key(struct widget *w, void *args, void *arg)
             n += gui_utf8_encode((uint32_t)ch, s + n);
         write_all(t->master, s, (size_t)n);
     }
+    return 1;
+}
+
+static int on_text(struct widget *w, void *args, void *arg)
+{
+    struct tab *t = arg;
+    const char *text = ((struct sig_text *)args)->text;
+    t->preedit[0] = '\0';
+    blink_on = 1;
+    set_view(t, 0);
+    write_all(t->master, text, strlen(text));
+    widget_invalidate(w);
+    return 1;
+}
+
+static int on_preedit(struct widget *w, void *args, void *arg)
+{
+    struct tab *t = arg;
+    strlcpy(t->preedit, ((struct sig_text *)args)->text, sizeof t->preedit);
+    widget_invalidate(w);
     return 1;
 }
 

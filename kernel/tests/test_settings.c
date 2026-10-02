@@ -15,11 +15,11 @@
 static const char *const pages[] = { "appearance", "display", "keyboard", "mouse", "sound", "time", "filetypes", "launcher",
                                      "system", "region" };
 
-static int windows;             /* toplevels created so far: the server cascades by 30 px each */
+static int windows;             /* toplevels created so far: the server cascades by 30 px each, 8 places */
 
 static void open_and_close(const char *path, const char *arg0, const char *arg1, int hold_ms)
 {
-    int wx = 40 + windows * 30, wy = 60 + windows * 30;
+    int wx = 40 + windows % 8 * 30, wy = 60 + windows % 8 * 30;
     windows++;
     struct proc *cl = proc_create_user(path, (char *const[]){ (char *)arg0, (char *)arg1, NULL }, (char *const[]){ NULL },
                                        &kernel_proc);

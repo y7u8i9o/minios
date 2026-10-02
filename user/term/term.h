@@ -34,6 +34,7 @@ struct tab {
     long click_ms;
     int clicks;
     char title[64];
+    char preedit[256];          /* the composition of an input method at the cursor */
 };
 
 

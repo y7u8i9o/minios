@@ -6,15 +6,27 @@ msgstr ""
 "Language: ja\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: user/panel/launcher.c:197
+#: user/panel/imemenu.c:40
+msgid "Keyboard layout"
+msgstr "キーボード配列"
+
+#: user/panel/imemenu.c:42
+msgid "Chinese (Pinyin)"
+msgstr "中国語（ピンイン）"
+
+#: user/panel/imemenu.c:44
+msgid "Japanese"
+msgstr "日本語"
+
+#: user/panel/launcher.c:213
 msgid "Applications"
 msgstr "アプリケーション"
 
-#: user/panel/launcher.c:200
+#: user/panel/launcher.c:216
 msgid "System"
 msgstr "システム"
 
-#: user/panel/launcher.c:233
+#: user/panel/launcher.c:249
 msgid "Search"
 msgstr "検索"
 
@@ -47,6 +59,6 @@ msgid "%d more"
 msgid_plural "%d more"
 msgstr[0] "ほか %d 件"
 
-#: user/panel/panel.c:126
+#: user/panel/panel.c:130
 msgid "Menu"
 msgstr "メニュー"

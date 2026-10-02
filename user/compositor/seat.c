@@ -494,7 +494,8 @@ void seat_key(uint32_t key, int pressed)
                                  !mod_logo && !mod_altgr && !npressed;
             } else if (!pressed && mod == &mod_shift && shift_tap) {
                 shift_tap = 0;
-                im_toggle_in_order();
+                if (settings.ime_shift_toggle)
+                    im_toggle_in_order();
             } else if (!pressed && (mod == &mod_shift || mod == &mod_ctrl) && ctrl_shift_tap) {
                 ctrl_shift_tap = 0;
                 im_select_in_order(-1);
@@ -542,8 +543,8 @@ void seat_key(uint32_t key, int pressed)
             popup_dismiss_all();
             return;
         }
-        int used = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_CTRL)) && !(modifiers & KEYMAP_MOD_ALT) &&
-                   key == KEY_SPACE;
+        int used = settings.ime_ctrl_space && (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_CTRL)) &&
+                   !(modifiers & KEYMAP_MOD_ALT) && key == KEY_SPACE;
         if (used)
             im_toggle_in_order();
         else

@@ -42,6 +42,7 @@ enum align { ALIGN_FILL = 0, ALIGN_START, ALIGN_CENTER, ALIGN_END };
 struct sig_click { int button, x, y; };
 struct sig_change { int value; const char *text; };
 struct sig_key { int code, ch, mods; };
+struct sig_text { const char *text; };    /* "text" and "preedit" of a canvas with accepts_text */
 struct sig_select { int index; };
 struct sig_resize { int w, h; };
 struct sig_scroll { int value; };

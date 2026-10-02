@@ -2,7 +2,7 @@
  * Ctrl+Shift tap selects the pinyin engine, another one the Japanese
  * engine, a Shift tap the layout and the Japanese engine again, Ctrl+Space
  * the layout, Zenkaku/Hankaku the Japanese engine, the Eisu key (LANG2)
- * the layout, and a click on the panel label the pinyin engine. */
+ * the layout, and the menu of the panel label the pinyin engine. */
 #include <tests/ktest.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/fbdev.h>
@@ -121,10 +121,14 @@ static void test_ime(void)
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "gedit status 0x%x", status);
-    /* A click on the label of the panel selects the next method: after the
-     * layout the pinyin engine. */
-    int cx = logical_w() / 2, cy = logical_h() / 2;
-    mouse_move_to(&cx, &cy, logical_w() - CLOCK_W - MIXER_W - 4 - 4 - INPUT_W / 2, logical_h() - 14, 0);
+    /* The menu of the panel label: layout, pinyin, japanese.  The second row
+     * selects the pinyin engine. */
+    int cx = logical_w() / 2, cy = logical_h() / 2, right = logical_w() - CLOCK_W - MIXER_W - 4 - 4;
+    mouse_move_to(&cx, &cy, right - INPUT_W / 2, logical_h() - 14, 0);
+    mouse_click(1);
+    sleep_ms(800);
+    int top = logical_h() - 28 + 4 - (2 * 6 + 3 * 28);
+    mouse_move_to(&cx, &cy, right - 110, top + 6 + 28 + 14, 0);
     mouse_click(1);
     sleep_ms(500);
     signal_send(panel, SIGTERM);

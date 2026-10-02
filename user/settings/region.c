@@ -1,5 +1,7 @@
 /* The Region and language page (L7, docs/design/desktop.md): the language
- * and the formats of the session, the time zone and the keyboard layout.
+ * and the formats of the session, the time zone, the keyboard layout, and
+ * the input methods (I5, docs/design/ime.md): the engines of imed and
+ * their order, the switch keys and the candidate window.
  * The language and the formats are written to the configuration file as
  * lang and formats, which startgui and /etc/profile export as LANG and the
  * format categories.  They apply to the programs started afterwards.  The
@@ -9,6 +11,7 @@
 #include <dirent.h>
 #include <locale.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -27,6 +30,16 @@ static char zones[MAX_ZONES][48];
 static int nzones;
 static int building;
 static struct widget *lang_combo, *formats_combo, *zone_combo, *sample;
+
+/* The engines of imed that the page knows, in the order of ime_engines,
+ * the disabled ones last. */
+static const struct { const char *name, *title; } engines[] = {
+    { "pinyin", N_("Chinese (Pinyin)") },
+    { "japanese", N_("Japanese") },
+};
+#define NENGINES ((int)(sizeof engines / sizeof engines[0]))
+static int order[NENGINES], enabled[NENGINES];
+static struct widget *engine_check[NENGINES];
 
 /* locale_title reads the language and territory names of a locale file,
  * "Français (France)" for fr_FR. */
@@ -181,6 +194,131 @@ static int on_zone(struct widget *w, void *args, void *arg)
     return 1;
 }
 
+static void read_engines(void)
+{
+    char list[128];
+    strlcpy(list, conf_get("ime_engines"), sizeof list);
+    int n = 0;
+    for (char *name = strtok(list, ", "); name; name = strtok(NULL, ", "))
+        for (int i = 0; i < NENGINES; i++)
+            if (strcmp(engines[i].name, name) == 0 && !enabled[i]) {
+                enabled[i] = 1;
+                order[n++] = i;
+            }
+    for (int i = 0; i < NENGINES; i++)
+        if (!enabled[i])
+            order[n++] = i;
+}
+
+static void write_engines(void)
+{
+    char list[128] = "";
+    for (int k = 0; k < NENGINES; k++)
+        if (enabled[order[k]]) {
+            if (list[0])
+                strlcat(list, ",", sizeof list);
+            strlcat(list, engines[order[k]].name, sizeof list);
+        }
+    conf_set("ime_engines", list);
+}
+
+static void show_engines(void)
+{
+    building = 1;
+    for (int k = 0; k < NENGINES; k++) {
+        widget_set_text(engine_check[k], _(engines[order[k]].title));
+        engine_check[k]->value = enabled[order[k]];
+        widget_invalidate(engine_check[k]);
+    }
+    building = 0;
+}
+
+static int on_engine(struct widget *w, void *args, void *arg)
+{
+    if (building)
+        return 1;
+    int k = (int)(intptr_t)arg;
+    enabled[order[k]] = w->value != 0;
+    write_engines();
+    return 1;
+}
+
+/* Move up exchanges an engine with the one before it. */
+static int on_engine_up(struct widget *w, void *args, void *arg)
+{
+    int k = (int)(intptr_t)arg;
+    if (k <= 0)
+        return 1;
+    int t = order[k - 1];
+    order[k - 1] = order[k];
+    order[k] = t;
+    show_engines();
+    write_engines();
+    return 1;
+}
+
+static int on_switch_key(struct widget *w, void *args, void *arg)
+{
+    if (!building)
+        conf_set(arg, w->value ? "1" : "0");
+    return 1;
+}
+
+static int on_page_size(struct widget *w, void *args, void *arg)
+{
+    if (!building)
+        conf_set_int("ime_page_size", w->value);
+    return 1;
+}
+
+static int on_orientation(struct widget *w, void *args, void *arg)
+{
+    if (!building && w->value >= 0)
+        conf_set("ime_orientation", w->value == 1 ? "vertical" : "horizontal");
+    return 1;
+}
+
+/* build_input_methods adds the input method section to the grid. */
+static int build_input_methods(struct widget *grid, int r)
+{
+    read_engines();
+    struct widget *heading = label_new(grid, _("Input methods"));
+    widget_set_grid(heading, r++, 0, 1, 2);
+    for (int k = 0; k < NENGINES; k++) {
+        engine_check[k] = checkbox_new(grid, "");
+        widget_set_grid(engine_check[k], r, 0, 1, 1);
+        widget_connect(engine_check[k], "toggled", on_engine, (void *)(intptr_t)k);
+        if (k > 0) {
+            struct widget *up = button_new(grid, _("Move up"));
+            widget_set_grid(up, r, 1, 1, 1);
+            widget_set_align(up, ALIGN_START, ALIGN_CENTER);
+            widget_connect(up, "clicked", on_engine_up, (void *)(intptr_t)k);
+        }
+        r++;
+    }
+    struct widget *shift = checkbox_new(grid, _("A Shift tap toggles the input method"));
+    shift->value = conf_int("ime_shift_toggle", 1) != 0;
+    widget_connect(shift, "toggled", on_switch_key, "ime_shift_toggle");
+    widget_set_grid(shift, r++, 0, 1, 2);
+    struct widget *ctrl = checkbox_new(grid, _("Ctrl+Space toggles the input method"));
+    ctrl->value = conf_int("ime_ctrl_space", 1) != 0;
+    widget_connect(ctrl, "toggled", on_switch_key, "ime_ctrl_space");
+    widget_set_grid(ctrl, r++, 0, 1, 2);
+    row_label(grid, r, _("Candidates per page"));
+    struct widget *size = spinner_new(grid, 2, 9, conf_int("ime_page_size", 5));
+    widget_connect(size, "changed", on_page_size, NULL);
+    widget_set_grid(size, r++, 1, 1, 1);
+    row_label(grid, r, _("Candidate layout"));
+    struct widget *layout = combobox_new(grid);
+    combobox_add(layout, _("Horizontal"));
+    combobox_add(layout, _("Vertical"));
+    combobox_select(layout, strcmp(conf_get("ime_orientation"), "vertical") == 0 ? 1 : 0);
+    widget_connect(layout, "changed", on_orientation, NULL);
+    widget_set_grid(layout, r++, 1, 1, 1);
+    show_engines();
+    return r;
+}
+
 static void sample_tick(void *arg)
 {
     show_sample();
@@ -227,11 +365,10 @@ void build_region(struct widget *page)
 
     row_label(grid, r, _("Keyboard layout"));
     widget_set_grid(layout_combo_new(grid), r++, 1, 1, 1);
-
-    sample = label_new(page, "");
-    widget_set_hint(sample, 0, 28);
-    label_new(page, _("A new language applies to the programs started afterwards."));
-    label_new(page, _("A Shift tap toggles the input method, and Ctrl+Shift selects the next one."));
+    sample = label_new(grid, "");
+    widget_set_grid(sample, r++, 0, 1, 2);
+    r = build_input_methods(grid, r);
+    (void)r;
     show_sample();
     app_timer_add(app, 1000, 1, sample_tick, NULL);
     building = 0;

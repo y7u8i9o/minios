@@ -154,91 +154,123 @@ msgstr "Plana"
 msgid "Adaptive"
 msgstr "Adaptativa"
 
-#: user/settings/region.c:138
+#: user/settings/region.c:151
 msgid "Example: %s, %s"
 msgstr "Ejemplo: %s, %s"
 
-#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
 msgid "OK"
 msgstr "Aceptar"
 
-#: user/settings/region.c:175 user/settings/settings.c:129
+#: user/settings/region.c:188 user/settings/settings.c:130
 msgid "Region and language"
 msgstr "Región e idioma"
 
-#: user/settings/region.c:175
+#: user/settings/region.c:188
 msgid "The time zone cannot be set."
 msgstr "No se puede establecer la zona horaria."
 
-#: user/settings/region.c:199
+#: user/settings/region.c:285
+msgid "Input methods"
+msgstr "Métodos de entrada"
+
+#: user/settings/region.c:292 user/settings/system.c:407
+msgid "Move up"
+msgstr "Subir"
+
+#: user/settings/region.c:299
+msgid "A Shift tap toggles the input method"
+msgstr "Una pulsación de Mayús activa o desactiva el método de entrada"
+
+#: user/settings/region.c:303
+msgid "Ctrl+Space toggles the input method"
+msgstr "Ctrl+Espacio activa o desactiva el método de entrada"
+
+#: user/settings/region.c:307
+msgid "Candidates per page"
+msgstr "Candidatos por página"
+
+#: user/settings/region.c:311
+msgid "Candidate layout"
+msgstr "Disposición de los candidatos"
+
+#: user/settings/region.c:313
+msgid "Horizontal"
+msgstr "Horizontal"
+
+#: user/settings/region.c:314
+msgid "Vertical"
+msgstr "Vertical"
+
+#: user/settings/region.c:337
 msgid "Language"
 msgstr "Idioma"
 
-#: user/settings/region.c:210
+#: user/settings/region.c:348
 msgid "Formats"
 msgstr "Formatos"
 
-#: user/settings/region.c:212
+#: user/settings/region.c:350
 msgid "Same as the language"
 msgstr "Igual que el idioma"
 
-#: user/settings/region.c:220
+#: user/settings/region.c:358
 msgid "Time zone"
 msgstr "Zona horaria"
 
-#: user/settings/region.c:228
+#: user/settings/region.c:366
 msgid "Keyboard layout"
 msgstr "Distribución del teclado"
 
-#: user/settings/region.c:233
-msgid "A new language applies to the programs started afterwards."
-msgstr "Un idioma nuevo se aplica a los programas que se inicien después."
+#: user/settings/region.c:37
+msgid "Chinese (Pinyin)"
+msgstr "Chino (pinyin)"
 
-#: user/settings/region.c:234
-msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
-msgstr "Una pulsación de Mayús activa o desactiva el método de entrada, y Ctrl+Mayús elige el siguiente."
+#: user/settings/region.c:38
+msgid "Japanese"
+msgstr "Japonés"
 
-#: user/settings/settings.c:126
+#: user/settings/settings.c:127
 msgid "Appearance"
 msgstr "Apariencia"
 
-#: user/settings/settings.c:127
+#: user/settings/settings.c:128
 msgid "Display"
 msgstr "Pantalla"
 
-#: user/settings/settings.c:128
+#: user/settings/settings.c:129
 msgid "Keyboard"
 msgstr "Teclado"
 
-#: user/settings/settings.c:130
+#: user/settings/settings.c:131
 msgid "Mouse"
 msgstr "Ratón"
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:132
 msgid "Sound"
 msgstr "Sonido"
 
-#: user/settings/settings.c:132 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:179
 msgid "Date and time"
 msgstr "Fecha y hora"
 
-#: user/settings/settings.c:133
+#: user/settings/settings.c:134
 msgid "File types"
 msgstr "Tipos de archivo"
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:135
 msgid "Launcher"
 msgstr "Lanzador"
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:136
 msgid "System"
 msgstr "Sistema"
 
-#: user/settings/settings.c:93 user/settings/settings.c:169
+#: user/settings/settings.c:94 user/settings/settings.c:170
 msgid "Settings"
 msgstr "Configuración"
 
-#: user/settings/settings.c:93
+#: user/settings/settings.c:94
 msgid "The settings file cannot be written."
 msgstr "No se puede escribir el archivo de configuración."
 
@@ -353,10 +385,6 @@ msgstr "Nueva"
 #: user/settings/system.c:406
 msgid "Remove"
 msgstr "Quitar"
-
-#: user/settings/system.c:407
-msgid "Move up"
-msgstr "Subir"
 
 #: user/settings/system.c:408
 msgid "Move down"

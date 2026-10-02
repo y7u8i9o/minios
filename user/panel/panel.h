@@ -92,6 +92,13 @@ void mixer_toggle(void);
 int mixer_owns(const struct wire_proxy *surface);
 void mixer_pointer_motion(int x, int y);
 void mixer_pointer_button(uint32_t button, uint32_t state, int x, int y);
+/* The input method menu (imemenu.c): the label of the layout or input
+ * method left of the mixer button and a popup that selects one. */
+int imemenu_x(void);
+void imemenu_bind(struct wire_proxy *manager);
+void imemenu_toggle(void);
+int imemenu_owns(const struct wire_proxy *surface);
+void imemenu_pointer_button(uint32_t button, uint32_t state, int x, int y);
 /* The audio connection to poll while the popup is open, or -1. */
 int mixer_fd(void);
 void mixer_dispatch(int revents);

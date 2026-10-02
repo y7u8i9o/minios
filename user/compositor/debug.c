@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include "comp.h"
 
-struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE };
+struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -108,7 +108,8 @@ void debug_screen_changed(void)
 /* ---- settings ---- */
 
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
-                                    "display_mode", "pointer_speed", "pointer_accel" };
+                                    "display_mode", "pointer_speed", "pointer_accel", "ime_shift_toggle",
+                                    "ime_ctrl_space" };
 
 static int *slot(const char *key)
 {
@@ -121,6 +122,8 @@ static int *slot(const char *key)
     if (strcmp(key, "display_mode") == 0) return &settings.display_mode;
     if (strcmp(key, "pointer_speed") == 0) return &settings.pointer_speed;
     if (strcmp(key, "pointer_accel") == 0) return &settings.pointer_accel;
+    if (strcmp(key, "ime_shift_toggle") == 0) return &settings.ime_shift_toggle;
+    if (strcmp(key, "ime_ctrl_space") == 0) return &settings.ime_ctrl_space;
     return NULL;
 }
 

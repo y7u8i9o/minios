@@ -154,91 +154,123 @@ msgstr "Постоянное"
 msgid "Adaptive"
 msgstr "Адаптивное"
 
-#: user/settings/region.c:138
+#: user/settings/region.c:151
 msgid "Example: %s, %s"
 msgstr "Пример: %s, %s"
 
-#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
 msgid "OK"
 msgstr "ОК"
 
-#: user/settings/region.c:175 user/settings/settings.c:129
+#: user/settings/region.c:188 user/settings/settings.c:130
 msgid "Region and language"
 msgstr "Регион и язык"
 
-#: user/settings/region.c:175
+#: user/settings/region.c:188
 msgid "The time zone cannot be set."
 msgstr "Не удаётся установить часовой пояс."
 
-#: user/settings/region.c:199
+#: user/settings/region.c:285
+msgid "Input methods"
+msgstr "Методы ввода"
+
+#: user/settings/region.c:292 user/settings/system.c:407
+msgid "Move up"
+msgstr "Вверх"
+
+#: user/settings/region.c:299
+msgid "A Shift tap toggles the input method"
+msgstr "Нажатие Shift включает и выключает метод ввода"
+
+#: user/settings/region.c:303
+msgid "Ctrl+Space toggles the input method"
+msgstr "Ctrl+Пробел включает и выключает метод ввода"
+
+#: user/settings/region.c:307
+msgid "Candidates per page"
+msgstr "Кандидатов на странице"
+
+#: user/settings/region.c:311
+msgid "Candidate layout"
+msgstr "Расположение кандидатов"
+
+#: user/settings/region.c:313
+msgid "Horizontal"
+msgstr "Горизонтальное"
+
+#: user/settings/region.c:314
+msgid "Vertical"
+msgstr "Вертикальное"
+
+#: user/settings/region.c:337
 msgid "Language"
 msgstr "Язык"
 
-#: user/settings/region.c:210
+#: user/settings/region.c:348
 msgid "Formats"
 msgstr "Форматы"
 
-#: user/settings/region.c:212
+#: user/settings/region.c:350
 msgid "Same as the language"
 msgstr "Как у языка"
 
-#: user/settings/region.c:220
+#: user/settings/region.c:358
 msgid "Time zone"
 msgstr "Часовой пояс"
 
-#: user/settings/region.c:228
+#: user/settings/region.c:366
 msgid "Keyboard layout"
 msgstr "Раскладка клавиатуры"
 
-#: user/settings/region.c:233
-msgid "A new language applies to the programs started afterwards."
-msgstr "Новый язык применяется к программам, запущенным после изменения."
+#: user/settings/region.c:37
+msgid "Chinese (Pinyin)"
+msgstr "Китайский (пиньинь)"
 
-#: user/settings/region.c:234
-msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
-msgstr "Нажатие Shift включает и выключает метод ввода, а Ctrl+Shift выбирает следующий."
+#: user/settings/region.c:38
+msgid "Japanese"
+msgstr "Японский"
 
-#: user/settings/settings.c:126
+#: user/settings/settings.c:127
 msgid "Appearance"
 msgstr "Внешний вид"
 
-#: user/settings/settings.c:127
+#: user/settings/settings.c:128
 msgid "Display"
 msgstr "Экран"
 
-#: user/settings/settings.c:128
+#: user/settings/settings.c:129
 msgid "Keyboard"
 msgstr "Клавиатура"
 
-#: user/settings/settings.c:130
+#: user/settings/settings.c:131
 msgid "Mouse"
 msgstr "Мышь"
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:132
 msgid "Sound"
 msgstr "Звук"
 
-#: user/settings/settings.c:132 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:179
 msgid "Date and time"
 msgstr "Дата и время"
 
-#: user/settings/settings.c:133
+#: user/settings/settings.c:134
 msgid "File types"
 msgstr "Типы файлов"
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:135
 msgid "Launcher"
 msgstr "Меню запуска"
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:136
 msgid "System"
 msgstr "Система"
 
-#: user/settings/settings.c:93 user/settings/settings.c:169
+#: user/settings/settings.c:94 user/settings/settings.c:170
 msgid "Settings"
 msgstr "Параметры"
 
-#: user/settings/settings.c:93
+#: user/settings/settings.c:94
 msgid "The settings file cannot be written."
 msgstr "Не удаётся записать файл параметров."
 
@@ -353,10 +385,6 @@ msgstr "Создать"
 #: user/settings/system.c:406
 msgid "Remove"
 msgstr "Удалить"
-
-#: user/settings/system.c:407
-msgid "Move up"
-msgstr "Вверх"
 
 #: user/settings/system.c:408
 msgid "Move down"

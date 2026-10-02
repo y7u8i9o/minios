@@ -6,15 +6,27 @@ msgstr ""
 "Language: ru\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: user/panel/launcher.c:197
+#: user/panel/imemenu.c:40
+msgid "Keyboard layout"
+msgstr "Раскладка клавиатуры"
+
+#: user/panel/imemenu.c:42
+msgid "Chinese (Pinyin)"
+msgstr "Китайский (пиньинь)"
+
+#: user/panel/imemenu.c:44
+msgid "Japanese"
+msgstr "Японский"
+
+#: user/panel/launcher.c:213
 msgid "Applications"
 msgstr "Приложения"
 
-#: user/panel/launcher.c:200
+#: user/panel/launcher.c:216
 msgid "System"
 msgstr "Система"
 
-#: user/panel/launcher.c:233
+#: user/panel/launcher.c:249
 msgid "Search"
 msgstr "Поиск"
 
@@ -49,6 +61,6 @@ msgstr[0] "ещё %d"
 msgstr[1] "ещё %d"
 msgstr[2] "ещё %d"
 
-#: user/panel/panel.c:126
+#: user/panel/panel.c:130
 msgid "Menu"
 msgstr "Меню"

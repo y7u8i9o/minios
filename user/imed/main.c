@@ -308,14 +308,32 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
 static void on_global_remove(void *user, struct wire_proxy *registry, uint32_t name) {}
 static const struct registry_listener registry_events = { on_global, on_global_remove };
 
+/* announce_engines sends the engines that ime_engines of the desktop
+ * configuration names, in its order (all engines without the key).  The
+ * test engine always comes first. */
+static char announced[256];
+
 static void announce_engines(void)
 {
+    const char *want = imed_config("ime_engines");
     char list[1024] = "", line[160];
-    for (int i = 0; i < nengines; i++) {
-        snprintf(line, sizeof line, "%s\t%s\t%s\n", engines[i]->name, engines[i]->label, engines[i]->title);
-        strlcat(list, line, sizeof list);
-    }
+    for (int i = 0; i < nengines; i++)
+        if (engines[i] == &test_engine) {
+            snprintf(line, sizeof line, "%s\t%s\t%s\n", engines[i]->name, engines[i]->label, engines[i]->title);
+            strlcat(list, line, sizeof list);
+        }
+    if (!want[0])
+        want = "pinyin,japanese";
+    char copy[256];
+    strlcpy(copy, want, sizeof copy);
+    for (char *name = strtok(copy, ", "); name; name = strtok(NULL, ", "))
+        for (int i = 0; i < nengines; i++)
+            if (strcmp(engines[i]->name, name) == 0 && engines[i] != &test_engine) {
+                snprintf(line, sizeof line, "%s\t%s\t%s\n", engines[i]->name, engines[i]->label, engines[i]->title);
+                strlcat(list, line, sizeof list);
+            }
     input_method_set_engines(im, list);
+    strlcpy(announced, imed_config("ime_engines"), sizeof announced);
 }
 
 int main(int argc, char **argv)
@@ -356,8 +374,11 @@ int main(int argc, char **argv)
     for (;;) {
         wire_display_flush(display);
         struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
-        if (poll(&pf, 1, -1) < 0)
+        if (poll(&pf, 1, 1000) < 0)
             continue;
+        /* Settings may enable, disable or reorder the engines. */
+        if (strcmp(imed_config("ime_engines"), announced) != 0)
+            announce_engines();
         if (pf.revents & (POLLIN | POLLHUP))
             if (wire_display_dispatch(display) < 0)
                 break;

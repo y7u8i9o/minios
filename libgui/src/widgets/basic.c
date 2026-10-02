@@ -309,6 +309,10 @@ static int canvas_event(struct widget *w, struct event *e)
         struct sig_key k = { e->code, e->ch, e->mods };
         return widget_emit(w, e->type == EV_KEY_DOWN ? "key" : "keyup", &k);
     }
+    case EV_TEXT: case EV_PREEDIT: {
+        struct sig_text t = { e->text ? e->text : "" };
+        return widget_emit(w, e->type == EV_TEXT ? "text" : "preedit", &t);
+    }
     default:
         return 0;
     }

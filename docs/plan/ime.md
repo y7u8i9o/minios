@@ -123,8 +123,14 @@ behind the keys typed before them. The cases `ime_japanese`, `ime`,
 `ime_pinyin`, `ime_protocol`, `ime_candidates`, `comp_seat`, `gui_editor`
 and `keymap` pass, and `make check` passes.
 
-### I5. Settings, panel menu and terminal
+### I5. Settings, panel menu and terminal (completed 2026-10-03)
 
 - An input method section on the Region and language page, a menu on the
   panel indicator, and text input in the terminal.
 - The boot test is `gui_ime_settings`.
+
+The menu replaces the cycling click of I0. The canvas of libgui gained the
+signals `text` and `preedit` for the terminal. The cases
+`gui_ime_settings`, `ime`, `ime_pinyin`, `ime_japanese`, `gui_term`,
+`gui_term_scale2`, `lineedit`, `lineedit_screen`, `gui_region`,
+`gui_settings`, `comp_panel` and `gui_desktop` pass.

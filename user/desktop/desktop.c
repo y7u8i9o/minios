@@ -46,6 +46,7 @@ struct conf {
     char keymap[32];
     int pointer_speed;              /* -100..100 */
     int pointer_accel;              /* 0 flat, 1 adaptive, -1 when the file has none */
+    int ime_shift_toggle, ime_ctrl_space;   /* the switch keys of the input methods, 1 by default */
 };
 
 static struct app *app;
@@ -54,7 +55,7 @@ static struct wire_proxy *settings;
 static struct entry entries[MAX_ENTRIES];
 static int nentries, selected = -1;
 static struct conf conf = { .mode = MODE_FILL, .color = 0x00306080, .repeat_rate = 30, .repeat_delay = 500,
-                            .pointer_accel = -1 };  /* solid colour by default */
+                            .pointer_accel = -1, .ime_shift_toggle = 1, .ime_ctrl_space = 1 };  /* solid colour by default */
 static char conf_text[1024];
 static struct image *wallpaper;
 static struct surface bg;       /* wallpaper scaled to the window */
@@ -318,6 +319,8 @@ static void apply_conf(int first)
         else if (strcmp(line, "keymap") == 0) strlcpy(c.keymap, v, sizeof c.keymap);
         else if (strcmp(line, "pointer_speed") == 0) c.pointer_speed = atoi(v);
         else if (strcmp(line, "pointer_accel") == 0) c.pointer_accel = strcmp(v, "flat") == 0 ? 0 : 1;
+        else if (strcmp(line, "ime_shift_toggle") == 0) c.ime_shift_toggle = atoi(v) != 0;
+        else if (strcmp(line, "ime_ctrl_space") == 0) c.ime_ctrl_space = atoi(v) != 0;
     }
     int wall_changed = first || strcmp(c.wallpaper, conf.wallpaper) != 0 || c.mode != conf.mode || c.color != conf.color;
     if (settings && (first || c.color != conf.color))
@@ -338,6 +341,10 @@ static void apply_conf(int first)
         settings_set(settings, "pointer_speed", c.pointer_speed);
     if (settings && c.pointer_accel >= 0 && (first || c.pointer_accel != conf.pointer_accel))
         settings_set(settings, "pointer_accel", c.pointer_accel);
+    if (settings && (first || c.ime_shift_toggle != conf.ime_shift_toggle))
+        settings_set(settings, "ime_shift_toggle", c.ime_shift_toggle);
+    if (settings && (first || c.ime_ctrl_space != conf.ime_ctrl_space))
+        settings_set(settings, "ime_ctrl_space", c.ime_ctrl_space);
     conf = c;
     if (wall_changed)
         load_wallpaper();

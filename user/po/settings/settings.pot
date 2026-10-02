@@ -151,91 +151,123 @@ msgstr ""
 msgid "Adaptive"
 msgstr ""
 
-#: user/settings/region.c:138
+#: user/settings/region.c:151
 msgid "Example: %s, %s"
 msgstr ""
 
-#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
 msgid "OK"
 msgstr ""
 
-#: user/settings/region.c:175 user/settings/settings.c:129
+#: user/settings/region.c:188 user/settings/settings.c:130
 msgid "Region and language"
 msgstr ""
 
-#: user/settings/region.c:175
+#: user/settings/region.c:188
 msgid "The time zone cannot be set."
 msgstr ""
 
-#: user/settings/region.c:199
+#: user/settings/region.c:285
+msgid "Input methods"
+msgstr ""
+
+#: user/settings/region.c:292 user/settings/system.c:407
+msgid "Move up"
+msgstr ""
+
+#: user/settings/region.c:299
+msgid "A Shift tap toggles the input method"
+msgstr ""
+
+#: user/settings/region.c:303
+msgid "Ctrl+Space toggles the input method"
+msgstr ""
+
+#: user/settings/region.c:307
+msgid "Candidates per page"
+msgstr ""
+
+#: user/settings/region.c:311
+msgid "Candidate layout"
+msgstr ""
+
+#: user/settings/region.c:313
+msgid "Horizontal"
+msgstr ""
+
+#: user/settings/region.c:314
+msgid "Vertical"
+msgstr ""
+
+#: user/settings/region.c:337
 msgid "Language"
 msgstr ""
 
-#: user/settings/region.c:210
+#: user/settings/region.c:348
 msgid "Formats"
 msgstr ""
 
-#: user/settings/region.c:212
+#: user/settings/region.c:350
 msgid "Same as the language"
 msgstr ""
 
-#: user/settings/region.c:220
+#: user/settings/region.c:358
 msgid "Time zone"
 msgstr ""
 
-#: user/settings/region.c:228
+#: user/settings/region.c:366
 msgid "Keyboard layout"
 msgstr ""
 
-#: user/settings/region.c:233
-msgid "A new language applies to the programs started afterwards."
+#: user/settings/region.c:37
+msgid "Chinese (Pinyin)"
 msgstr ""
 
-#: user/settings/region.c:234
-msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
-msgstr ""
-
-#: user/settings/settings.c:126
-msgid "Appearance"
+#: user/settings/region.c:38
+msgid "Japanese"
 msgstr ""
 
 #: user/settings/settings.c:127
-msgid "Display"
+msgid "Appearance"
 msgstr ""
 
 #: user/settings/settings.c:128
+msgid "Display"
+msgstr ""
+
+#: user/settings/settings.c:129
 msgid "Keyboard"
 msgstr ""
 
-#: user/settings/settings.c:130
+#: user/settings/settings.c:131
 msgid "Mouse"
 msgstr ""
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:132
 msgid "Sound"
 msgstr ""
 
-#: user/settings/settings.c:132 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:179
 msgid "Date and time"
 msgstr ""
 
-#: user/settings/settings.c:133
+#: user/settings/settings.c:134
 msgid "File types"
 msgstr ""
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:135
 msgid "Launcher"
 msgstr ""
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:136
 msgid "System"
 msgstr ""
 
-#: user/settings/settings.c:93 user/settings/settings.c:169
+#: user/settings/settings.c:94 user/settings/settings.c:170
 msgid "Settings"
 msgstr ""
 
-#: user/settings/settings.c:93
+#: user/settings/settings.c:94
 msgid "The settings file cannot be written."
 msgstr ""
 
@@ -349,10 +381,6 @@ msgstr ""
 
 #: user/settings/system.c:406
 msgid "Remove"
-msgstr ""
-
-#: user/settings/system.c:407
-msgid "Move up"
 msgstr ""
 
 #: user/settings/system.c:408

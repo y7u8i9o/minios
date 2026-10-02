@@ -1,0 +1,11 @@
+settings: set ime_page_size 3
+panel: input method menu opened, 3 methods
+panel: input method pinyin selected
+x12: input method 拼
+settings: set ime_engines japanese
+x12: ime: 1 engines
+panel: input method menu opened, 2 methods
+panel: input method japanese selected
+x12: input method あ
+gui_ime_settings: ok
+TEST PASS

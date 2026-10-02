@@ -8,7 +8,8 @@ the dictionary of Mozc, and the compositor X12 relays between the text
 input contexts and the daemon. `startgui` starts the daemon. The panel
 shows the current method next to the mixer button. Without the daemon the
 compositor composes only with its Ctrl+Shift+U entry and the dead keys of
-the layout.
+the layout. The Region and language page of Settings chooses the engines
+and the switch keys, and the terminal composes as the text widgets do.
 
 ## Methods
 
@@ -34,13 +35,16 @@ Ctrl+Space switches the input source of macOS before QEMU sees them.
 | Zenkaku/Hankaku | toggles between the layout and the Japanese engine |
 | Katakana/Hiragana, Henkan, Kana (LANG1) | select the Japanese engine, and then go to it |
 | Eisu (LANG2) | selects the layout |
-| a click on the panel label | selects the next method |
+| the menu of the panel label | selects a method |
 
 A tap is a press and a release without another key between them. Shift
 with a letter therefore types a capital, and Ctrl+Shift+U still starts the
 Unicode entry. A change of method commits the composition as it is shown.
-`seat.c` detects the taps. The panel sends the settings key
-`input_method` with the value -1, and `im_select` selects the next method.
+`seat.c` detects the taps. The settings `ime_shift_toggle` and
+`ime_ctrl_space` of `desktop.conf` (1 by default) turn the Shift tap and
+Ctrl+Space with Super+Space on and off: the desktop sends them to the
+compositor as settings of the same names. The settings key `input_method`
+of the compositor selects a method by number, or the next one with -1.
 The Kana and Eisu keys of Mac keyboards arrive as KEY_HANGEUL (122) and
 KEY_HANJA (123) from the virtio keyboard, and as the scancodes 0xf2 and
 0xf1, a press without a release, from a PS/2 keyboard.
@@ -283,6 +287,46 @@ and the text field of libgui report the start of the preedit through
 rectangle the candidate window appears near the top left corner of the
 surface.
 
+## Panel menu
+
+A click on the label of the panel (`user/panel/imemenu.c`) opens a popup
+above it with one row per method: its label and its title, the keyboard
+layout first, and a highlight on the current one. The panel binds the
+`input_method_manager` global and gets an `ime_control`, whose `engines`
+and `current` events give the rows. A click on a row sends `select` with
+its name, and the compositor selects it as a switch key does. The titles of
+the known methods are translated in the `panel` domain.
+
+## Settings
+
+The Region and language page of Settings (`user/settings/region.c`) has
+an Input methods section:
+
+| Control | Configuration key |
+|---|---|
+| a checkbox per engine, with Move up | `ime_engines`: the enabled engines in order, `pinyin,japanese` by default |
+| A Shift tap toggles the input method | `ime_shift_toggle` |
+| Ctrl+Space toggles the input method | `ime_ctrl_space` |
+| Candidates per page (2 to 9) | `ime_page_size` |
+| Candidate layout | `ime_orientation`: `horizontal` or `vertical` |
+
+The daemon reads `desktop.conf` again when it changes. It announces the
+engines of `ime_engines` in their order within a second, and a disabled
+engine leaves the switch keys and the panel menu. The page size and the
+orientation apply at the next key.
+
+## Terminal
+
+The canvas widget of libgui emits the signals `text` and `preedit` when it
+accepts text, and the terminal (`user/term/term.c`) sets `accepts_text` on
+its canvas. The text of the printable keys then arrives as committed text,
+from the dead keys of the compositor or from an engine, and the terminal
+writes it to the pty. Keys with Ctrl or Alt, the cursor keys and the
+function keys stay key events, which the terminal turns into bytes as
+before. The preedit covers the cells from the cursor, underlined, and the
+terminal reports the cursor cell as the caret, where the candidate window
+appears.
+
 ## Label
 
 The seat of version 2 has the event `input_method` with a short label: the
@@ -299,10 +343,10 @@ comes from sentences. The Japanese engine has no bigram costs between
 words and no prediction. かんじへんかん therefore becomes 感じ変換, where
 Mozc gives 漢字変換. The pinyin engine has no fuzzy syllables (zh for z, ing for in)
 and neither engine has a caret inside the input. The compositor repeats no
-key for the
-daemon, so a held Backspace deletes one letter of the input. The engines
-compose only in clients with text input enabled. The terminal receives key
-events and is not covered.
+key for the daemon: a Backspace that stays down deletes one letter of the
+input.
+The engines compose only in clients with text input enabled: the text
+widgets of libgui and the terminal.
 
 ## Test
 
@@ -312,8 +356,8 @@ selects the pinyin engine for `nihao`, another one the Japanese engine for
 for `yama`, Ctrl+Space the layout for `b`, Zenkaku/Hankaku the Japanese
 engine for `hashi` with Enter, and the Eisu key the layout for `c`. gedit
 must save 你好日本語a山bはしc, which also shows that no Space or Enter
-reached gedit as a key. A click on the panel label must then select the
-pinyin engine, and the compositor log must report the labels.
+reached gedit as a key. The second row of the panel menu must then select
+the pinyin engine, and the compositor log must report the labels.
 
 `ime_protocol` starts the compositor, `imed -t` and gedit, and selects the
 test engine with a Ctrl+Shift tap. It composes `abc` and chooses ABC with
@@ -354,3 +398,12 @@ with Escape. gedit must save 日本語私は学生です今日はい移転機で
 and the user history must contain 漢字 for かんじ. The host test
 `user/imed/tests/test_japanese.c` (part of `make check-imed`) checks the
 conversion of words and sentences, the learning and the forms.
+
+`gui_ime_settings` starts the compositor and the panel, `imed` and the
+terminal, and sets `ime_page_size` to 3 with `settings set`. In the
+terminal the layout types `echo `, the panel menu selects the pinyin
+engine, which composes 你好, ignores the digit 4 for `shi`, because the
+page has 3 candidates, and chooses 是 with Space. A Shift tap selects the
+layout for ` >/imeterm` and Enter. The file must contain 你好是. `settings
+set ime_engines japanese` must leave the daemon with one engine, and the
+panel menu must offer two methods and select the Japanese engine.

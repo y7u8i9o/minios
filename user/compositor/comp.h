@@ -175,6 +175,8 @@ struct comp_settings {
     int display_mode;               /* DISPLAY_MODE_PACK of the current mode */
     int pointer_speed;              /* -100..100, 0 is unscaled */
     int pointer_accel;              /* POINTER_ACCEL_* */
+    int ime_shift_toggle;           /* a Shift tap toggles the input method */
+    int ime_ctrl_space;             /* Ctrl+Space and Super+Space toggle it */
 };
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1

@@ -159,8 +159,9 @@ needed. The Time zone list shows the zones of
 symbolic link to the selected zone file. libc reads the zone again when the
 link changes (`time.md`), and the panel clock follows at once. The page
 also shows the keyboard layout, in a combo box that the Keyboard page
-shares, and a line with the current time and a number in the selected
-formats.
+shares, a line with the current time and a number in the selected formats,
+and the input method section that `ime.md` describes (`ime_engines`,
+`ime_shift_toggle`, `ime_ctrl_space`, `ime_page_size`, `ime_orientation`).
 
 `x12settings` changes the running server (see `tools.md`).
 
