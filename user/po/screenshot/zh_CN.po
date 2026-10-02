@@ -1,0 +1,20 @@
+# Simplified Chinese messages of the screenshot domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/screenshot.c:400
+msgid "Selection"
+msgstr "选区"
+
+#: user/apps/screenshot.c:400
+msgid "Screen"
+msgstr "屏幕"
+
+#: user/apps/screenshot.c:400
+msgid "Window"
+msgstr "窗口"
+

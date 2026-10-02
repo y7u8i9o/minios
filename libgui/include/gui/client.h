@@ -72,13 +72,18 @@ void gui_text_input_set(struct gui_window *window, int enabled);
 void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int width, int height);
 /* A layer surface (no decorations): layer 0 background, 1 bottom, 2 top,
  * 3 overlay; anchor is a mask of GUI_ANCHOR_* edges; a dimension of 0
- * takes the free desktop area; keyboard 1 asks for key events. */
+ * takes the free desktop area; keyboard 1 asks for key events. The
+ * surface maps with the first commit after the caller has drawn
+ * (gui_flush or gui_next_event). */
 #define GUI_ANCHOR_TOP 1
 #define GUI_ANCHOR_BOTTOM 2
 #define GUI_ANCHOR_LEFT 4
 #define GUI_ANCHOR_RIGHT 8
 struct gui_window *gui_create_layer_window(int width, int height, int layer, int anchor, int exclusive,
                                            int keyboard, const char *ns);
+/* Margins of a layer window from the anchored edges of the desktop area
+ * (the screen without the panel); they apply from the next commit. */
+void gui_layer_set_margin(struct gui_window *w, int top, int right, int bottom, int left);
 void gui_destroy_window(struct gui_window *w);
 /* Mark a rectangle (logical pixels) changed; it is committed with the next frame. */
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);

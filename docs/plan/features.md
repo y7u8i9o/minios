@@ -486,3 +486,19 @@ palettes, zooms to a magnification of 2^44 and into dragged rectangles,
 shows Julia sets, saves PNG files and has menus, a tool bar and a status
 bar. Documented in `docs/design/userland.md`, tested by the boot test
 `gui_mandel`.
+
+## Screenshot interface (completed 2026-10-03)
+
+Print Screen opens a capture interface in the manner of GNOME over the
+frozen screen: the Selection, Screen and Window modes, a selection that
+is drawn, moved and resized with handles, a pointer toggle, the capture
+button and Close. Shift+Print Screen saves the screen at once, and
+Super+Shift+3, 4 and 5 save the screen, select an area and open the
+interface as on macOS. After a capture from the keys a thumbnail stays
+in the bottom right corner for five seconds and opens the file when
+clicked. Window images are drawn by X12 alone with their shadow on a
+transparent background. `screencopy` gained captures without the pointer,
+the window list and window captures; layer surfaces gained margins, and
+keyboard interactive overlay layers take the focus when they map. The
+launcher accepts arguments in its entries. Documented in
+`docs/design/images.md`, tested by the boot test `gui_images`.

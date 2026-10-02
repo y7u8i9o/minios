@@ -96,6 +96,13 @@
     <request name="set_keyboard_interactivity"><arg name="mode" type="uint"/></request>
     <request name="ack_configure"><arg name="serial" type="uint"/></request>
     <request name="destroy" type="destructor"/>
+    <!-- Distances from the anchored edges of the desktop area (the
+         screen minus exclusive zones), so that a layer with margins stays
+         clear of the panel. Without margins an anchored edge touches the
+         screen edge. -->
+    <request name="set_margin">
+      <arg name="top" type="int"/><arg name="right" type="int"/><arg name="bottom" type="int"/><arg name="left" type="int"/>
+    </request>
     <event name="configure"><arg name="serial" type="uint"/><arg name="width" type="int"/><arg name="height" type="int"/></event>
     <event name="closed"/>
   </interface>

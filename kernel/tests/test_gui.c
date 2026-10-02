@@ -1221,11 +1221,55 @@ static void test_gui_images(void)
     ktest_assert(w == fb_screen.width && h == fb_screen.height, "screenshot %ux%u", (unsigned)w, (unsigned)h);
     ktest_assert(head[24] == 8 && head[25] == 2, "screenshot depth %u colour type %u", head[24], head[25]);
 
-    /* Print Screen starts the same program, which names the file. */
+    /* Print Screen opens the capture interface over the frozen screen:
+     * the desktop at half brightness outside the selection in the middle,
+     * full brightness inside it. Enter saves the selection under a name
+     * the program chooses, and its thumbnail appears in the bottom right
+     * corner of the desktop area, 16 pixels from the edges, with a light
+     * grey frame. */
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0x37);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xb7);
+    uint64_t t0 = timer_ms();
+    while (pixel(5, sh / 2) != 0x00183040 && timer_ms() - t0 < 5000)
+        sleep_ms(50);
+    ktest_assert(pixel(5, sh / 2) == 0x00183040, "dimmed outside the selection: %08x", pixel(5, sh / 2));
+    ktest_assert(pixel(sw / 2, sh / 2) == 0x00306080, "bright inside the selection: %08x", pixel(sw / 2, sh / 2));
+    kprintf("gui_images: capture interface shown\n");
+    char hold[8];
+    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+        sleep_ms(8000);                 /* screenshots of the interface */
+    press_key(0x1c);
+    int thumb_y = sh - 28 - 16 - 71;
+    t0 = timer_ms();
+    while (pixel(sw - 17, thumb_y) != 0x00c0c0c0 && timer_ms() - t0 < 5000)
+        sleep_ms(50);
+    ktest_assert(pixel(sw - 17, thumb_y) == 0x00c0c0c0, "thumbnail frame: %08x", pixel(sw - 17, thumb_y));
+    ktest_assert(pixel(5, sh / 2) == 0x00306080, "interface closed: %08x", pixel(5, sh / 2));
+    kprintf("gui_images: thumbnail shown\n");
+
+    /* Super+Shift+4 selects an area: the drag from (100,100) to (300,250)
+     * saves it when the button goes up. */
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0x5b);
+    ps2kbd_feed_scancode(0x2a);
+    press_key(0x05);
+    ps2kbd_feed_scancode(0xaa);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xdb);
+    t0 = timer_ms();
+    while (pixel(5, sh / 2) != 0x00183040 && timer_ms() - t0 < 5000)
+        sleep_ms(50);
+    ktest_assert(pixel(5, sh / 2) == 0x00183040, "area selection dims the screen: %08x", pixel(5, sh / 2));
+    mouse_move_to(&cx, &cy, 100, 100, 0);
+    feed_packet(1, 0, 0);
+    sleep_ms(100);
+    mouse_move_to(&cx, &cy, 200, 180, 1);
+    mouse_move_to(&cx, &cy, 300, 250, 1);
+    sleep_ms(200);
+    ktest_assert(pixel(200, 180) == 0x00306080, "the dragged area is bright: %08x", pixel(200, 180));
+    feed_packet(0, 0, 0);
     sleep_ms(2500);
 
     /* The viewer fits the screenshot into its window: the desktop colour
@@ -1253,6 +1297,42 @@ static void test_gui_images(void)
     ps2kbd_feed_scancode(0xcd);
     sleep_ms(400);
     ktest_assert(count_pixels(40, 60, 640, 480, 0x00306080, 0x00ffffff) > 20000, "viewer after the zoom keys");
+    /* Window mode of the capture interface: W keeps the active window
+     * bright and dims the rest, Enter saves it. */
+    uint32_t inside = pixel(340, 260);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0x37);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xb7);
+    t0 = timer_ms();
+    while (pixel(5, sh / 2) != 0x00183040 && timer_ms() - t0 < 5000)
+        sleep_ms(50);
+    press_key(0x11);
+    sleep_ms(500);
+    ktest_assert(pixel(5, sh / 2) == 0x00183040, "dimmed beside the window: %08x", pixel(5, sh / 2));
+    ktest_assert(pixel(340, 260) == inside, "window bright in window mode: %08x, not %08x", pixel(340, 260), inside);
+    kprintf("gui_images: window mode shown\n");
+    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+        sleep_ms(8000);
+    press_key(0x1c);
+    sleep_ms(2500);
+
+    /* The active window alone, with its shadow on a transparent
+     * background. */
+    vfs_unlink("/win.png");
+    struct proc *shot = proc_create_user("/bin/screenshot", (char *const[]){ "screenshot", "-w", "/win.png", NULL },
+                                         (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(shot != NULL, "cannot start screenshot -w");
+    status = proc_reap(shot);
+    ktest_assert(status == 0, "screenshot -w status 0x%x", status);
+    read_head("/win.png", head, sizeof head);
+    w = (uint32_t)head[16] << 24 | (uint32_t)head[17] << 16 | (uint32_t)head[18] << 8 | head[19];
+    h = (uint32_t)head[20] << 24 | (uint32_t)head[21] << 16 | (uint32_t)head[22] << 8 | head[23];
+    uint32_t sc = fb_screen_scale ? fb_screen_scale : 1;
+    kprintf("gui_images: window %ux%u\n", (unsigned)w, (unsigned)h);
+    ktest_assert(w >= 640 * sc && h >= 480 * sc && w < 760 * sc && h < 600 * sc, "window image %ux%u", (unsigned)w,
+                 (unsigned)h);
+    ktest_assert(head[25] == 6, "window image colour type %u", head[25]);
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "view status 0x%x", status);

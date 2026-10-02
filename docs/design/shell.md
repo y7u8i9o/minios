@@ -31,7 +31,9 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
 - `shell.get_layer_surface(surface, layer, namespace)`: anchored to
   screen edges with `set_anchor`, a size, an exclusive zone that
   shrinks the desktop area for toplevels, and keyboard interactivity;
-  `configure(serial, w, h)` follows `set_size`.
+  `configure(serial, w, h)` follows `set_size`. `set_margin(top, right,
+  bottom, left)` measures the anchored edges from the desktop area
+  instead of the screen (`compositor.md`).
 - `shell.get_decoration(toplevel)` with `set_mode` (1 server, 2
   client): the compositor draws title bars, boxes and the resize grip
   only in server mode.
@@ -153,7 +155,9 @@ the configure's serial.
 
 The launcher menu (`launcher.c`) reads `/etc/launcher` and the table of
 installed packages, `/home/.local/share/launcher`, each time it opens.
-Both files contain `title=program` lines. The entries of packages are
+Both files contain `title=program` lines, where the program may be
+followed by arguments separated by spaces (`Screenshot=/bin/screenshot
+-i`). The entries of packages are
 listed under the heading Applications in the order of their titles. The
 entries of `/etc/launcher` are listed under the heading System in the
 order of the file. The entry with the program `@logout` is drawn in the

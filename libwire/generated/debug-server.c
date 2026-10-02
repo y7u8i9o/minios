@@ -98,6 +98,37 @@ void screencopy_send_failed(struct wire_resource *screencopy)
     wire_resource_post(screencopy, 2, args);
 }
 
+void screencopy_send_pointer(struct wire_resource *screencopy, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].i = x;
+    args[1].i = y;
+    args[2].i = width;
+    args[3].i = height;
+    wire_resource_post(screencopy, 3, args);
+}
+
+void screencopy_send_window(struct wire_resource *screencopy, uint32_t window, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t activated, const char * title, int32_t image_width, int32_t image_height)
+{
+    union wire_arg args[9] = { { 0 } };
+    args[0].u = window;
+    args[1].i = x;
+    args[2].i = y;
+    args[3].i = width;
+    args[4].i = height;
+    args[5].u = activated;
+    args[6].s = title;
+    args[7].i = image_width;
+    args[8].i = image_height;
+    wire_resource_post(screencopy, 4, args);
+}
+
+void screencopy_send_windows_done(struct wire_resource *screencopy)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(screencopy, 5, args);
+}
+
 void settings_send_value(struct wire_resource *settings, const char * key, int32_t value)
 {
     union wire_arg args[2] = { { 0 } };

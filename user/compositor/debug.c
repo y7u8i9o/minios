@@ -66,19 +66,17 @@ static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint
 
 /* The back buffer contains the last composed frame in device pixels;
  * it is copied with opaque alpha, so that ARGB buffers read as opaque. */
-static void h_capture(struct wire_client *c, struct wire_resource *self, struct wire_resource *buffer)
+static void h_capture(struct wire_client *c, struct wire_resource *self, struct wire_resource *buffer, uint32_t pointer)
 {
     struct buffer *b = buffer->data;
     if (!b || b->width != back.width || b->height != back.height) {
         screencopy_send_failed(self);
         return;
     }
-    uint8_t *base = b->pool->map + b->offset;
-    for (int y = 0; y < back.height; y++) {
-        const uint32_t *from = back.pixels + (size_t)y * back.stride;
-        uint32_t *to = (uint32_t *)(base + (size_t)y * b->stride);
-        for (int x = 0; x < back.width; x++)
-            to[x] = from[x] | 0xff000000u;
+    scene_copy_screen(b->pool->map + b->offset, b->stride, pointer != 0);
+    if (pointer) {
+        struct rect r = scene_pointer_rect();
+        screencopy_send_pointer(self, r.x, r.y, r.w, r.h);
     }
     struct client *cl = wire_client_get_user_data(c);
     comp_log("screen captured for client %d", cl ? cl->number : 0);
@@ -86,7 +84,45 @@ static void h_capture(struct wire_client *c, struct wire_resource *self, struct 
 }
 
 static void h_screencopy_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
-static const struct screencopy_impl screencopy_handlers = { h_capture, h_screencopy_destroy };
+
+/* The mapped toplevels from the top of the stack down. */
+static void h_get_windows(struct wire_client *c, struct wire_resource *self)
+{
+    struct csurface *order[256];
+    int n = scene_order(order, 256);
+    for (int i = n - 1; i >= 0; i--) {
+        struct csurface *s = order[i];
+        if (s->role != ROLE_TOPLEVEL || !s->toplevel)
+            continue;
+        struct rect f = toplevel_frame(s->toplevel), e = scene_window_extent(s->toplevel);
+        screencopy_send_window(self, (uint32_t)s->toplevel->number, f.x, f.y, f.w, f.h,
+                               (uint32_t)s->toplevel->activated, s->toplevel->title, e.w * screen_scale,
+                               e.h * screen_scale);
+    }
+    screencopy_send_windows_done(self);
+}
+
+static void h_capture_window(struct wire_client *c, struct wire_resource *self, struct wire_resource *buffer,
+                             uint32_t window)
+{
+    struct toplevel *t = NULL;
+    for (struct csurface *s = surface_first(); s && !t; s = s->next)
+        if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->number == (int)window && s->mapped &&
+            s->current.buffer && !s->toplevel->minimized)
+            t = s->toplevel;
+    struct buffer *b = buffer->data;
+    struct rect f = t ? scene_window_extent(t) : (struct rect){ 0, 0, 0, 0 };
+    if (!t || !b || b->width != f.w * screen_scale || b->height != f.h * screen_scale ||
+        scene_render_window(t, b->pool->map + b->offset, b->stride) < 0) {
+        screencopy_send_failed(self);
+        return;
+    }
+    comp_log("window %d captured", t->number);
+    screencopy_send_done(self);
+}
+
+static const struct screencopy_impl screencopy_handlers = { h_capture, h_screencopy_destroy, h_get_windows,
+                                                            h_capture_window };
 
 static void bind_screencopy(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {

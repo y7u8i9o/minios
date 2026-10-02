@@ -41,10 +41,11 @@ void tracer_destroy(struct wire_proxy *tracer)
     wire_proxy_destroy(tracer);
 }
 
-void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer)
+void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer, uint32_t pointer)
 {
-    union wire_arg args[1] = { { 0 } };
+    union wire_arg args[2] = { { 0 } };
     args[0].o = buffer ? buffer->obj.id : 0;
+    args[1].u = pointer;
     wire_proxy_marshal(screencopy, 0, args, NULL);
 }
 
@@ -53,6 +54,20 @@ void screencopy_destroy(struct wire_proxy *screencopy)
     union wire_arg args[1] = { { 0 } };
     wire_proxy_marshal(screencopy, 1, args, NULL);
     wire_proxy_destroy(screencopy);
+}
+
+void screencopy_get_windows(struct wire_proxy *screencopy)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(screencopy, 2, args, NULL);
+}
+
+void screencopy_capture_window(struct wire_proxy *screencopy, struct wire_proxy * buffer, uint32_t window)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].o = buffer ? buffer->obj.id : 0;
+    args[1].u = window;
+    wire_proxy_marshal(screencopy, 3, args, NULL);
 }
 
 void settings_set(struct wire_proxy *settings, const char * key, int32_t value)

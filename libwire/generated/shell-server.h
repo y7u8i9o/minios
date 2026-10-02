@@ -67,6 +67,7 @@ struct layer_surface_impl {
     void (*set_keyboard_interactivity)(struct wire_client *client, struct wire_resource *self, uint32_t mode);
     void (*ack_configure)(struct wire_client *client, struct wire_resource *self, uint32_t serial);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_margin)(struct wire_client *client, struct wire_resource *self, int32_t top, int32_t right, int32_t bottom, int32_t left);
 };
 void layer_surface_send_configure(struct wire_resource *layer_surface, uint32_t serial, int32_t width, int32_t height);
 void layer_surface_send_closed(struct wire_resource *layer_surface);

@@ -1,0 +1,17 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/apps/screenshot.c:400
+msgid "Selection"
+msgstr ""
+
+#: user/apps/screenshot.c:400
+msgid "Screen"
+msgstr ""
+
+#: user/apps/screenshot.c:400
+msgid "Window"
+msgstr ""
+

@@ -26,6 +26,7 @@
 #define SHADOW_DY 3             /* the shadow is shifted down by this much */
 #define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
+#define LAYER_OVERLAY 3          /* above the panel; a keyboard interactive one takes the focus when mapped */
 enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
 enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
@@ -107,6 +108,8 @@ struct layer {
     struct csurface *s;
     struct wire_resource *res;
     int anchor, exclusive, w, h, interactive;
+    int margin[4];                          /* top, right, bottom, left; see layer_place */
+    int has_margin;
     uint32_t layer;
     uint32_t serial;
     uint32_t acked_serial;
@@ -233,6 +236,15 @@ void scene_cursor_changed(void);
 void scene_stats(void);
 struct csurface *scene_surface_at(int x, int y);           /* content hit, topmost */
 int scene_order(struct csurface **out, int max);           /* bottom to top */
+/* Screen capture: the pointer's rectangle in device pixels (empty when
+ * hidden), the last frame with or without the pointer into a buffer of
+ * the back buffer's size, the extent of a toplevel with its shadow in
+ * logical pixels, and the toplevel alone into an ARGB buffer of its
+ * extent in device pixels (0 or -ENOMEM). stride is in bytes. */
+struct rect scene_pointer_rect(void);
+void scene_copy_screen(uint8_t *to, int stride, int pointer);
+struct rect scene_window_extent(const struct toplevel *t);
+int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
 /* backend_fb.c */
 extern struct surface back;
 int backend_init(void);

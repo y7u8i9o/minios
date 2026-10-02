@@ -1,0 +1,20 @@
+# French messages of the screenshot domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/apps/screenshot.c:400
+msgid "Selection"
+msgstr "Sélection"
+
+#: user/apps/screenshot.c:400
+msgid "Screen"
+msgstr "Écran"
+
+#: user/apps/screenshot.c:400
+msgid "Window"
+msgstr "Fenêtre"
+

@@ -531,12 +531,34 @@ void seat_key(uint32_t key, int pressed)
                 toplevel_close(t);
             return;
         }
-        /* Print Screen saves a screenshot. Alt+SysRq prints the thread
-         * table of the kernel and is passed to the client unchanged. */
-        if (key == KEY_SYSRQ && !(modifiers & KEYMAP_MOD_ALT)) {
-            char *const argv[] = { "/bin/screenshot", NULL };
-            int err = mime_spawn(argv);
-            comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
+        /* The screenshot keys (images.md): Print Screen opens the capture
+         * interface and Shift+Print Screen saves the screen at once, as in
+         * GNOME; Super+Shift+3, 4 and 5 save the screen, select an area
+         * and open the interface, as on macOS. While the interface has the
+         * keyboard, Print Screen is its own capture key. Alt+SysRq prints
+         * the thread table of the kernel and is passed to the client
+         * unchanged. */
+        const char *shot = NULL;
+        int logo_shift = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT | KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) ==
+                         (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT);
+        if (key == KEY_SYSRQ && !(modifiers & KEYMAP_MOD_ALT))
+            shot = modifiers & KEYMAP_MOD_SHIFT ? "-t" : "-i";
+        else if (logo_shift && key == KEY_3)
+            shot = "-t";
+        else if (logo_shift && key == KEY_4)
+            shot = "-a";
+        else if (logo_shift && key == KEY_5)
+            shot = "-i";
+        int overlay = keyboard_focus && keyboard_focus->role == ROLE_LAYER &&
+                      keyboard_focus->layer->layer == LAYER_OVERLAY;
+        if (shot && !(overlay && key == KEY_SYSRQ)) {
+            if (!overlay) {
+                char *const argv[] = { "/bin/screenshot", (char *)shot, NULL };
+                int err = mime_spawn(argv);
+                comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
+            }
+            if (nused < 16)
+                used_keys[nused++] = key;
             return;
         }
         if (key == KEY_ESC && popup_grab_surface()) {

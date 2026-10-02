@@ -35,11 +35,16 @@ struct screencopy_listener {
     void (*size)(void *user, struct wire_proxy *self, int32_t width, int32_t height, int32_t scale);
     void (*done)(void *user, struct wire_proxy *self);
     void (*failed)(void *user, struct wire_proxy *self);
+    void (*pointer)(void *user, struct wire_proxy *self, int32_t x, int32_t y, int32_t width, int32_t height);
+    void (*window)(void *user, struct wire_proxy *self, uint32_t window, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t activated, const char * title, int32_t image_width, int32_t image_height);
+    void (*windows_done)(void *user, struct wire_proxy *self);
 };
 static inline int screencopy_add_listener(struct wire_proxy *p, const struct screencopy_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
-void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer);
+void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer, uint32_t pointer);
 void screencopy_destroy(struct wire_proxy *screencopy);
+void screencopy_get_windows(struct wire_proxy *screencopy);
+void screencopy_capture_window(struct wire_proxy *screencopy, struct wire_proxy * buffer, uint32_t window);
 
 struct settings_listener {
     void (*value)(void *user, struct wire_proxy *self, const char * key, int32_t value);

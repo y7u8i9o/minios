@@ -1,4 +1,4 @@
-# Launcher menu of the window server: title=program
+# Launcher menu of the window server: title=program [arguments]
 Terminal=/bin/term
 Files=/bin/files
 Clock=/bin/clock
@@ -6,7 +6,7 @@ System monitor=/bin/sysmon
 Kernel log=/bin/logview
 Profiler=/bin/profiler
 Event viewer=/bin/evtest
-Screenshot=/bin/screenshot
+Screenshot=/bin/screenshot -i
 Settings=/bin/settings
 X12 settings=/bin/x12settings
 Protocol viewer=/bin/wireview

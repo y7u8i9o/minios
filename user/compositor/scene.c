@@ -4,6 +4,7 @@
  * the back buffer holds screen_scale device pixels per logical pixel:
  * buffers with the output's scale are copied 1:1, others are resampled. */
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@
 static struct rect damage[MAX_DAMAGE * 2];
 static int ndamage;
 static int shown_x, shown_y;            /* where the cursor was drawn */
+static int cursor_suppressed;           /* compose without the cursor (screen copies) */
 /* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
  * keeps 60 percent of the background's brightness. */
 #define CURSOR_W 12
@@ -139,11 +141,15 @@ static int visible(const struct csurface *s)
 }
 
 /* Sort key: background layers, toplevels by stack, top layers, popups
- * above everything, then drag icons. */
+ * above everything, overlay layers (the screenshot interface) above the
+ * popups of the panel, then the input method candidates and drag icons. */
 static long sort_key(const struct csurface *s)
 {
     switch (s->role) {
-    case ROLE_LAYER: return s->layer->layer >= 2 ? 3000000L + s->id : s->id;
+    case ROLE_LAYER:
+        if (s->layer->layer == LAYER_OVERLAY)
+            return 3800000L + s->id;
+        return s->layer->layer >= 2 ? 3000000L + s->id : s->id;
     case ROLE_TOPLEVEL: return 1000000L + s->stack;
     case ROLE_POPUP:
         return s->popup && s->popup->parent && s->popup->parent->role == ROLE_LAYER &&
@@ -289,7 +295,7 @@ static void draw_surface(struct csurface *s, struct rect clip)
 static void draw_cursor(struct rect clip)
 {
     struct csurface *cursor = seat_cursor_surface();
-    if (seat_cursor_hidden())
+    if (seat_cursor_hidden() || cursor_suppressed)
         return;
     if (cursor && cursor->mapped && cursor->current.buffer) {
         draw_surface(cursor, clip);
@@ -329,7 +335,7 @@ static void draw_cursor(struct rect clip)
         }
 }
 
-static void compose_rect(struct rect r, struct csurface **order, int n)
+static void compose_rect(struct rect r, struct csurface **order, int n, int flush)
 {
     struct rect pieces[MAX_PIECES];
     int np = 1;
@@ -398,7 +404,8 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
         }
     }
     draw_cursor(r);
-    backend_flush(r);
+    if (flush)
+        backend_flush(r);
 }
 
 void scene_compose(void)
@@ -409,7 +416,7 @@ void scene_compose(void)
     struct csurface *order[256];
     int n = scene_order(order, 256);
     for (int d = 0; d < ndamage; d++)
-        compose_rect(damage[d], order, n);
+        compose_rect(damage[d], order, n, 1);
     ndamage = 0;
     long dt = uptime_ms() - t0;
     stat_count++;
@@ -430,4 +437,108 @@ void scene_stat_values(long *count, long *ms, long *max)
 void scene_stats(void)
 {
     comp_log("frame stats: %ld compositions, %ld ms total, %ld ms max", stat_count, stat_ms, stat_max);
+}
+
+/* ---- screen capture ---- */
+
+struct rect scene_pointer_rect(void)
+{
+    struct rect r = cursor_rect();
+    if (rect_empty(r))
+        return r;
+    return rect_intersect(dev(r), (struct rect){ 0, 0, back.width, back.height });
+}
+
+/* The back buffer holds the last composed frame. Without the pointer the
+ * rectangle under it is composed again with the cursor suppressed, copied,
+ * and composed once more with the cursor; nothing is flushed in between,
+ * so the screen never shows the frame without the pointer. */
+void scene_copy_screen(uint8_t *to, int stride, int pointer)
+{
+    struct rect under = pointer ? (struct rect){ 0, 0, 0, 0 } : cursor_rect();
+    struct csurface *order[256];
+    int n = 0;
+    if (!rect_empty(under)) {
+        n = scene_order(order, 256);
+        cursor_suppressed = 1;
+        compose_rect(under, order, n, 0);
+        cursor_suppressed = 0;
+    }
+    for (int y = 0; y < back.height; y++) {
+        const uint32_t *from = back.pixels + (size_t)y * back.stride;
+        uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
+        for (int x = 0; x < back.width; x++)
+            row[x] = from[x] | 0xff000000u;
+    }
+    if (!rect_empty(under))
+        compose_rect(under, order, n, 0);
+}
+
+struct rect scene_window_extent(const struct toplevel *t)
+{
+    return extent(t->s);
+}
+
+/* The toplevel is drawn alone with its extent at the origin of a scratch
+ * target, twice: over black into the client buffer and over white into a
+ * copy. A pixel that came out the same over both is opaque; the
+ * difference is the part of the background that shows through, which
+ * gives the alpha of the shadow, the rounded corners and translucent
+ * client pixels, and the colour is the black pass divided by that alpha.
+ * The surface is moved to the origin for the drawing and put back at
+ * once. */
+int scene_render_window(struct toplevel *t, uint8_t *to, int stride)
+{
+    struct csurface *s = t->s;
+    struct rect f = extent(s);
+    int S = screen_scale, W = f.w * S, H = f.h * S;
+    uint32_t *white = malloc((size_t)W * H * 4);
+    if (!white)
+        return -ENOMEM;
+    struct surface saved = back;
+    int sx = s->x, sy = s->y;
+    s->x -= f.x;
+    s->y -= f.y;
+    struct rect clip = { 0, 0, f.w, f.h };
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass)
+            back = (struct surface){ white, W, H, W };
+        else
+            back = (struct surface){ (uint32_t *)to, W, H, stride / 4 };
+        gfx_fill_rect(&back, 0, 0, W, H, pass ? 0x00ffffff : 0);
+        if (decor_has(s)) {
+            decor_draw_shadow(s, clip);
+            decor_draw(s, clip);
+        }
+        draw_surface(s, clip);
+    }
+    back = saved;
+    s->x = sx;
+    s->y = sy;
+    for (int y = 0; y < H; y++) {
+        uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
+        const uint32_t *over_white = white + (size_t)y * W;
+        for (int x = 0; x < W; x++) {
+            uint32_t b = row[x], w = over_white[x];
+            int show = 0;
+            for (int sh = 0; sh < 24; sh += 8) {
+                int d = (int)(w >> sh & 0xff) - (int)(b >> sh & 0xff);
+                if (d > show)
+                    show = d;
+            }
+            uint32_t a = 255u - (uint32_t)show;
+            if (!a) {
+                row[x] = 0;
+                continue;
+            }
+            uint32_t c = a << 24;
+            for (int sh = 0; sh < 24; sh += 8) {
+                uint32_t v = (b >> sh & 0xff) * 255u / a;
+                c |= (v > 255 ? 255 : v) << sh;
+            }
+            row[x] = c;
+        }
+    }
+    free(white);
+    return 0;
 }

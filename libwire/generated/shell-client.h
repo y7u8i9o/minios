@@ -81,6 +81,7 @@ void layer_surface_set_size(struct wire_proxy *layer_surface, int32_t width, int
 void layer_surface_set_keyboard_interactivity(struct wire_proxy *layer_surface, uint32_t mode);
 void layer_surface_ack_configure(struct wire_proxy *layer_surface, uint32_t serial);
 void layer_surface_destroy(struct wire_proxy *layer_surface);
+void layer_surface_set_margin(struct wire_proxy *layer_surface, int32_t top, int32_t right, int32_t bottom, int32_t left);
 
 struct decoration_listener {
     void (*mode)(void *user, struct wire_proxy *self, uint32_t mode);

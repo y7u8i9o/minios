@@ -5,8 +5,10 @@
  * listed under the heading Applications in the order of their titles,
  * the entries of /etc/launcher under the heading System in the order of
  * the file.  The entry with the program @logout is drawn at the bottom
- * below a line.  Each entry has the icon /usr/share/icons/app-NAME.svg,
- * where NAME is the file name of its program, or app-default.svg.
+ * below a line.  The program of an entry may be followed by arguments
+ * separated by spaces.  Each entry has the icon
+ * /usr/share/icons/app-NAME.svg, where NAME is the file name of its
+ * program, or app-default.svg.
  *
  * The first row of the menu is a search field.  Typed characters filter
  * the entries by title without regard to case, Backspace removes the
@@ -88,9 +90,11 @@ static const struct image *icon_load(const char *name)
 
 static const struct image *entry_icon(const char *path)
 {
-    char name[40];
-    const char *base = strrchr(path, '/');
-    base = base ? base + 1 : path;
+    char program[96], name[40];
+    strlcpy(program, path, sizeof program);
+    program[strcspn(program, " ")] = '\0';
+    const char *base = strrchr(program, '/');
+    base = base ? base + 1 : program;
     if (base[0] == '@')
         base++;
     snprintf(name, sizeof name, "app-%s", base);
@@ -291,8 +295,15 @@ static void launch(const struct entry *e)
     log_line("launch %s", e->path);
     pid_t pid = fork();
     if (pid == 0) {
-        char *const args[] = { (char *)e->path, NULL };
-        execvp(e->path, args);
+        char line[sizeof e->path], *args[8];
+        const char *save;
+        int n = 0;
+        strlcpy(line, e->path, sizeof line);
+        for (char *w = strtok_r(line, " ", &save); w && n < 7; w = strtok_r(NULL, " ", &save))
+            args[n++] = w;
+        args[n] = NULL;
+        if (n)
+            execvp(args[0], args);
         _exit(127);
     }
 }

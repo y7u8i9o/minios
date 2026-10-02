@@ -40,15 +40,38 @@
 
   <!-- Screen capture (screenshot). Binding sends size with the screen in
        device pixels and the scale, again after a mode change. capture
-       copies the last composed frame, the pointer included, into a shared
-       memory buffer of that size and sends done, or failed when the
-       buffer has another size. -->
+       copies the last composed frame into a shared memory buffer of that
+       size and sends done, or failed when the buffer has another size.
+       With pointer 0 the frame is copied without the pointer; with 1 it
+       contains the pointer, and pointer reports its rectangle in device
+       pixels before done (an empty one when the pointer is hidden).
+       get_windows sends one window event per mapped toplevel, the top of
+       the stack first, with its visible frame in logical pixels and the
+       size of its image in device pixels, then windows_done.
+       capture_window draws the toplevel with that number alone, with its
+       shadow, into an ARGB buffer of the image size, and sends done, or
+       failed for an unknown window or a buffer of another size. -->
   <interface name="screencopy" version="1">
-    <request name="capture"><arg name="buffer" type="object" interface="buffer"/></request>
+    <request name="capture">
+      <arg name="buffer" type="object" interface="buffer"/><arg name="pointer" type="uint"/>
+    </request>
     <request name="destroy" type="destructor"/>
+    <request name="get_windows"/>
+    <request name="capture_window">
+      <arg name="buffer" type="object" interface="buffer"/><arg name="window" type="uint"/>
+    </request>
     <event name="size"><arg name="width" type="int"/><arg name="height" type="int"/><arg name="scale" type="int"/></event>
     <event name="done"/>
     <event name="failed"/>
+    <event name="pointer">
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </event>
+    <event name="window">
+      <arg name="window" type="uint"/><arg name="x" type="int"/><arg name="y" type="int"/>
+      <arg name="width" type="int"/><arg name="height" type="int"/><arg name="activated" type="uint"/>
+      <arg name="title" type="string"/><arg name="image_width" type="int"/><arg name="image_height" type="int"/>
+    </event>
+    <event name="windows_done"/>
   </interface>
 
   <interface name="settings" version="1">

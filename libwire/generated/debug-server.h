@@ -28,12 +28,17 @@ void tracer_send_message(struct wire_resource *tracer, uint32_t seq, uint32_t ti
 void tracer_send_dropped(struct wire_resource *tracer, uint32_t count);
 
 struct screencopy_impl {
-    void (*capture)(struct wire_client *client, struct wire_resource *self, struct wire_resource * buffer);
+    void (*capture)(struct wire_client *client, struct wire_resource *self, struct wire_resource * buffer, uint32_t pointer);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*get_windows)(struct wire_client *client, struct wire_resource *self);
+    void (*capture_window)(struct wire_client *client, struct wire_resource *self, struct wire_resource * buffer, uint32_t window);
 };
 void screencopy_send_size(struct wire_resource *screencopy, int32_t width, int32_t height, int32_t scale);
 void screencopy_send_done(struct wire_resource *screencopy);
 void screencopy_send_failed(struct wire_resource *screencopy);
+void screencopy_send_pointer(struct wire_resource *screencopy, int32_t x, int32_t y, int32_t width, int32_t height);
+void screencopy_send_window(struct wire_resource *screencopy, uint32_t window, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t activated, const char * title, int32_t image_width, int32_t image_height);
+void screencopy_send_windows_done(struct wire_resource *screencopy);
 
 struct settings_impl {
     void (*set)(struct wire_client *client, struct wire_resource *self, const char * key, int32_t value);

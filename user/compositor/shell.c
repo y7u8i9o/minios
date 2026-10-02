@@ -762,19 +762,54 @@ static void h_layer_ack(struct wire_client *c, struct wire_resource *self, uint3
     l->nsent -= i + 1;
 }
 static void h_layer_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
+static void h_layer_set_margin(struct wire_client *c, struct wire_resource *self, int32_t top, int32_t right,
+                               int32_t bottom, int32_t left)
+{
+    struct layer *l = self->data;
+    l->margin[0] = top;
+    l->margin[1] = right;
+    l->margin[2] = bottom;
+    l->margin[3] = left;
+    l->has_margin = 1;
+}
 static const struct layer_surface_impl layer_handlers = {
     h_layer_set_anchor, h_layer_set_zone, h_layer_set_size, h_layer_set_kbd, h_layer_ack, h_layer_destroy,
+    h_layer_set_margin,
 };
+
+/* The position of a layer surface from its anchor. An edge anchored on
+ * one side touches the screen edge; anchored on both sides the surface
+ * starts at the desktop area. With margins every anchored edge keeps its
+ * margin from the desktop area instead. */
+static void layer_place(struct csurface *s)
+{
+    struct layer *l = s->layer;
+    struct rect d = shell_desktop();
+    int lr = l->anchor & (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT);
+    int tb = l->anchor & (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM);
+    if (l->has_margin) {
+        s->x = lr == LAYER_ANCHOR_RIGHT ? d.x + d.w - s->width - l->margin[1] : lr ? d.x + l->margin[3] : 0;
+        s->y = tb == LAYER_ANCHOR_BOTTOM ? d.y + d.h - s->height - l->margin[2] : tb ? d.y + l->margin[0] : 0;
+        return;
+    }
+    s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x : 0;
+    s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y : 0;
+}
 
 static void layer_gone(struct wire_resource *r)
 {
     struct layer *l = r->data;
     if (l->s->mapped)
         scene_damage(surface_rect(l->s));
+    int focused = seat_keyboard_focus() == l->s;
     l->s->role = ROLE_NONE;
     l->s->layer = NULL;
     l->s->mapped = 0;
     seat_surface_gone(l->s);
+    /* An overlay that held the keyboard returns it to the active window. */
+    struct toplevel *t = toplevel_focused();
+    if (focused && t && t->s)
+        seat_set_keyboard_focus(t->s);
     free(l);
 }
 
@@ -961,13 +996,11 @@ void shell_surface_committed(struct csurface *s, int first_map)
     }
     case ROLE_LAYER: {
         struct layer *l = s->layer;
-        struct rect d = shell_desktop();
-        int lr = l->anchor & (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT);
-        int tb = l->anchor & (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM);
-        s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x : 0;
-        s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y : 0;
+        layer_place(s);
         if (first_map) {
             comp_log("layer surface %d mapped at %d,%d %dx%d", s->id, s->x, s->y, s->width, s->height);
+            if (l->layer == LAYER_OVERLAY && l->interactive)
+                seat_set_keyboard_focus(s);
             if (l->exclusive > 0) {
                 scene_damage_all();
                 /* Layers sized to the free area get the new area. */
@@ -991,11 +1024,9 @@ void shell_output_changed(void)
     for (struct csurface *s = surface_first(); s; s = s->next) {
         if (s->role == ROLE_LAYER && s->layer) {
             struct layer *l = s->layer;
-            struct rect d = shell_desktop();
             int lr = l->anchor & (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT);
             int tb = l->anchor & (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM);
-            s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x : 0;
-            s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y : 0;
+            layer_place(s);
             if (l->w <= 0 || l->h <= 0 || lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ||
                 tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM))
                 layer_configure(l);

@@ -1023,8 +1023,17 @@ struct gui_window *gui_create_layer_window(int width, int height, int layer, int
     roundtrip();
     if (w->width == 0)
         surface_resize(w, width > 0 ? width : screen_w, height > 0 ? height : screen_h);
-    gui_flush();
+    /* Nothing is committed yet: the surface maps with the caller's first
+     * drawing, not with the grey fill of the new buffer, which would
+     * flash over the whole screen for a full screen overlay. */
     return w;
+}
+
+void gui_layer_set_margin(struct gui_window *w, int top, int right, int bottom, int left)
+{
+    struct win *wi = w ? w->priv : NULL;
+    if (wi && wi->layer)
+        layer_surface_set_margin(wi->layer, top, right, bottom, left);
 }
 
 struct gui_window *gui_create_window(int width, int height, const char *title)

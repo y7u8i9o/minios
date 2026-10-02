@@ -306,6 +306,16 @@ void layer_surface_destroy(struct wire_proxy *layer_surface)
     wire_proxy_destroy(layer_surface);
 }
 
+void layer_surface_set_margin(struct wire_proxy *layer_surface, int32_t top, int32_t right, int32_t bottom, int32_t left)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].i = top;
+    args[1].i = right;
+    args[2].i = bottom;
+    args[3].i = left;
+    wire_proxy_marshal(layer_surface, 6, args, NULL);
+}
+
 void decoration_set_mode(struct wire_proxy *decoration, uint32_t mode)
 {
     union wire_arg args[1] = { { 0 } };

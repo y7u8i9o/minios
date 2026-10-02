@@ -1,8 +1,9 @@
 #!/bin/sh
-# Decode the screenshot and the saved drawing on the host: the screenshot
-# has the screen size printed by the test and shows the desktop colour,
-# and the drawing is 640x480 white with the black stroke from (50,50) to
-# (250,50).
+# Decode the screenshot, the window capture and the saved drawing on the
+# host: the screenshot has the screen size printed by the test and shows
+# the desktop colour, the window is opaque in the middle and transparent
+# in its rounded top left corner, and the drawing is 640x480 white with
+# the black stroke from (50,50) to (250,50).
 FSCK="$BUILD/host/fsck"
 MKFS="$BUILD/host/mkfs"
 "$FSCK" -y "$DISK" > "$DISK.fsck" 2>&1
@@ -11,8 +12,9 @@ RC=$?
 DIR="$(dirname "$DISK")"
 "$MKFS" --cat "$DISK" /shot.png > "$DIR/shot.png" || { echo "  /shot.png missing"; exit 1; }
 "$MKFS" --cat "$DISK" /drawing.png > "$DIR/drawing.png" || { echo "  /drawing.png missing"; exit 1; }
+"$MKFS" --cat "$DISK" /win.png > "$DIR/win.png" || { echo "  /win.png missing"; exit 1; }
 SIZE="$(sed -n 's/.*gui_images: screen \([0-9]*x[0-9]*\).*/\1/p' "$SERIAL" | head -1)"
-exec python3 - "$DIR/shot.png" "$DIR/drawing.png" "$SIZE" <<'PY'
+exec python3 - "$DIR/shot.png" "$DIR/drawing.png" "$SIZE" "$DIR/win.png" <<'PY'
 import struct, sys, zlib
 
 def decode(path):
@@ -65,6 +67,12 @@ desk = sum(1 for y in range(0, shot[1], 4) for x in range(0, shot[0], 4) if px(s
 total = (shot[0] // 4) * (shot[1] // 4)
 if desk < total // 2:
     sys.exit("  screenshot shows the desktop colour in %d of %d samples" % (desk, total))
+win = decode(sys.argv[4])
+if win[2] != 4:
+    sys.exit("  the window image has no alpha")
+alpha = lambda img, x, y: img[3][y][x * 4 + 3]
+if alpha(win, 0, 0) != 0 or alpha(win, win[0] // 2, win[1] // 2) != 255:
+    sys.exit("  window alpha: corner %d, middle %d" % (alpha(win, 0, 0), alpha(win, win[0] // 2, win[1] // 2)))
 drawing = decode(sys.argv[2])
 if drawing[:2] != (640, 480):
     sys.exit("  drawing is %dx%d" % drawing[:2])
@@ -72,5 +80,6 @@ for x, y, colour in ((60, 50, (0, 0, 0)), (150, 50, (0, 0, 0)), (240, 50, (0, 0,
                      (150, 100, (255, 255, 255)), (10, 10, (255, 255, 255)), (639, 479, (255, 255, 255))):
     if px(drawing, x, y) != colour:
         sys.exit("  drawing pixel (%d,%d) is %s" % (x, y, px(drawing, x, y)))
-print("  screenshot %dx%d, desktop colour in %d of %d samples; drawing 640x480 with the stroke" % (shot[0], shot[1], desk, total))
+print("  screenshot %dx%d, desktop colour in %d of %d samples; window %dx%d with a transparent corner; "
+      "drawing 640x480 with the stroke" % (shot[0], shot[1], desk, total, win[0], win[1]))
 PY

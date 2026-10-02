@@ -61,8 +61,12 @@ serial line to the kernel and the programs.
   tracers may be bound.
 - `debug.c`: the `debug`, `settings` and `screencopy` globals of
   `protocol/debug.xml`. `screencopy.capture` copies the back buffer into a
-  client buffer of the screen size (`images.md`). `seat.c` starts
-  `/bin/screenshot` when Print Screen is pressed without Alt.
+  client buffer of the screen size, with or without the pointer,
+  `get_windows` lists the toplevels and `capture_window` draws one of
+  them alone with its shadow (`scene_copy_screen`,
+  `scene_render_window`, `images.md`). `seat.c` starts `/bin/screenshot`
+  on Print Screen, Shift+Print Screen and Super+Shift+3, 4 and 5, and
+  passes Print Screen to an overlay layer surface that has the keyboard.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
@@ -85,6 +89,17 @@ the desktop does when the panel maps and reconfigures it during its first
 configure, and may then commit a buffer of that older size. The newer
 configure stays pending until the client acknowledges it. libwire's server logs every protocol error it posts and every
 failed send on stderr.
+
+Layer surfaces on the overlay layer (3) are stacked above the top
+layers and the popups of the panel, below the input method candidates
+and drag icons. One with keyboard interactivity takes the keyboard focus
+when it maps, and when it goes the focus returns to the activated
+toplevel; the screenshot interface relies on both. `set_margin` places a
+layer surface relative to the desktop area: each anchored edge keeps its
+margin from the edge of the area left by exclusive zones, so a surface
+anchored to the bottom stays above the panel. A layer surface without
+margins is placed as before, against the screen edge for one anchored
+side and at the desktop area for two.
 
 ## Frame clock and callbacks
 

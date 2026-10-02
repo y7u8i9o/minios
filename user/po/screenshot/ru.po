@@ -1,0 +1,20 @@
+# Russian messages of the screenshot domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/screenshot.c:400
+msgid "Selection"
+msgstr "Область"
+
+#: user/apps/screenshot.c:400
+msgid "Screen"
+msgstr "Экран"
+
+#: user/apps/screenshot.c:400
+msgid "Window"
+msgstr "Окно"
+

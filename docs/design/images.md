@@ -2,7 +2,8 @@
 
 This document describes the image functions of libgui, the screen
 capture interface of X12, and the three programs built on them:
-`screenshot`, the image viewer `view` and the bitmap editor `paint`.
+`screenshot` with its capture interface, the image viewer `view` and the
+bitmap editor `paint`.
 
 ## PNG decoding
 
@@ -47,23 +48,123 @@ visible area and not on the size of the image.
 The `screencopy` global of `protocol/debug.xml` copies the screen into a
 shared memory buffer of the client. Binding it sends `size` with the
 screen in device pixels and the output scale, and X12 sends `size` again
-after a mode change (`debug_screen_changed`). `capture(buffer)` copies the
-back buffer, which contains the last composed frame and the pointer, into
-the buffer with opaque alpha and answers `done`, or `failed` when the
-buffer has another size. The copy is made while the request is decoded,
-so X12 never refers to a buffer after the request.
+after a mode change (`debug_screen_changed`). `capture(buffer, pointer)`
+copies the back buffer, which contains the last composed frame, into the
+buffer with opaque alpha and answers `done`, or `failed` when the buffer
+has another size. With `pointer` 1 the copy contains the pointer, and the
+`pointer` event reports its rectangle in device pixels before `done`
+(empty while the pointer is hidden). With 0 `scene_copy_screen` composes
+the rectangle under the pointer again with the cursor suppressed, copies
+the back buffer, and composes the rectangle once more with the cursor.
+Neither composition is flushed, so the screen never shows the frame
+without the pointer. Every copy is made while the request is decoded, so
+X12 never refers to a buffer after the request.
 
-`/bin/screenshot` (`user/apps/screenshot.c`) connects through libgui,
-binds `shm` and `screencopy`, creates a buffer of the reported size,
-requests the copy and saves the buffer with `image_save_png`. Without a
-file argument it writes `$HOME/Pictures/screenshot-YYYY-MM-DD-HHMMSS.png`
-and creates the directory. It prints the path on standard output. The
-time is the local time.
+`get_windows` sends a `window` event for every mapped toplevel that is
+not minimized, from the top of the stack down, with its number, its
+visible frame in logical pixels, whether it is activated, its title, and
+the size of its image in device pixels, followed by `windows_done`. The
+image covers the extent of the window: the frame and the shadow drawn by
+X12, or the whole surface of a window with client side decorations,
+whose shadow is part of the surface. `capture_window(buffer, number)`
+draws that window alone into an ARGB buffer of the image size
+(`scene_render_window`). The back buffer is pointed at a scratch target
+and the surface is moved so that its extent starts at the origin; the
+shadow, the decorations and the surface are drawn once over black into
+the client buffer and once over white into a copy, and the surface is
+moved back. A pixel that came out the same over both backgrounds is
+opaque. Otherwise the largest difference of a channel is the part of the
+background that shows through, so the alpha is 255 minus that
+difference and the colour is the pixel over black divided by the alpha.
+The image therefore has the soft shadow and the rounded corners on a
+transparent background, and parts of other windows that cover the window
+on the screen do not appear in it. Popups of the window are not drawn.
 
-The launcher menu has a Screenshot entry, and X12 starts
-`/bin/screenshot` through `mime_spawn` when Print Screen (`KEY_SYSRQ`) is
-pressed without Alt. Alt+SysRq is the thread table of
-the kernel (`debug.md`) and is passed to the focused client unchanged.
+## The screenshot program
+
+`/bin/screenshot` (`user/apps/screenshot.c`) connects through libgui
+and binds `shm` and `screencopy`. Its modes follow `gnome-screenshot`:
+
+    screenshot [-i | -a | -w] [-p] [-t] [-d SECONDS] [FILE]
+
+Without a mode it copies the screen into a buffer of the reported size,
+with the pointer when `-p` is given, and saves it. `-w` saves the
+activated window, or the top window when none is activated, through
+`capture_window`. `-i` opens the capture interface and `-a` the area
+selection described below. `-d` waits before the copy. `-t` shows the
+thumbnail after the file is written; `-i` and `-a` show it always. The
+image is saved with `image_save_png`; a window image has an alpha
+channel, so its file is RGBA. Without a file argument the program writes
+`$HOME/Pictures/screenshot-YYYY-MM-DD-HHMMSS.png` in local time and
+creates the directory. It prints the path on standard output, and a
+cancelled capture prints nothing and exits with status 1. Messages on
+standard output and standard error stay in English; the labels of the
+toolbar are translated in the `screenshot` domain.
+
+## The capture interface
+
+The interface of `-i` follows the screenshot interface of GNOME. The
+program first freezes the screen: it captures it once with the pointer
+and keeps the pixels of the reported pointer rectangle, captures it again
+without the pointer into the same buffer, and asks for the window list.
+It then maps a layer surface of the screen size on the overlay layer
+with keyboard interactivity, which X12 places above the panel and its
+popups and gives the keyboard focus when it maps. The surface shows the
+frozen screen at half brightness and the part that will be saved at full
+brightness, so live changes of the screen behind it do not show.
+
+The toolbar is centred 24 pixels above the bottom edge and is drawn in
+the colours of the theme. It has the Selection, Screen and Window mode
+buttons with an icon over the label, the capture button (an accent ring
+around an accent disc), the pointer toggle and Close. In Selection mode
+the selection starts as the middle half of the screen and is drawn with a
+white outline, round handles at its corners and the middles of its
+edges, and a label with its size in device pixels below it. Dragging
+outside the selection draws a new one once the pointer has moved four
+pixels, so that a click keeps the old selection; dragging inside moves
+it within the screen, and dragging a handle or an edge moves the edges it
+grabs. Screen mode shows the whole screen bright. Window mode shows the
+activated window bright with an accent frame and outlines the window
+under the pointer in white; a click chooses a window. The keys are those
+of GNOME: S, C and W select the modes, P toggles the pointer, Enter, Space
+and Print Screen capture, and Escape cancels.
+
+When the capture is chosen the program destroys the surface, waits for a
+round trip so that the screen is back before the file is encoded, and
+cuts the selection or the screen out of the frozen copy. With the
+pointer toggle on, the kept pointer pixels are copied over the part of
+the cut that they cover. A window is captured again through
+`capture_window` after a fresh window list, because the window may have
+changed its size while the interface was shown, so the pointer is never
+part of a window image.
+
+`-a` is the area selection of macOS: the same surface without the
+toolbar, the handles and an initial selection. A drag draws the
+selection, and releasing the button saves it. Space switches between the
+area and the window under the pointer, which a click saves; Escape
+cancels.
+
+## Thumbnail and keys
+
+After a capture with `-t`, `-i` or `-a` the program shows the saved image
+as on macOS: a layer surface on the overlay layer without keyboard
+interactivity, anchored to the bottom right corner with margins of 16
+pixels (`gui_layer_set_margin`), so that it stays above the panel. It
+holds the image scaled into at most 220 by 140 pixels inside a one
+pixel light grey frame. A click opens the file with `mime_open`, which
+starts the image viewer, and the thumbnail goes after five seconds,
+counted again whenever the pointer moves over it.
+
+X12 starts the program through `mime_spawn` on the keys of both systems.
+Print Screen (`KEY_SYSRQ`) starts `screenshot -i` and Shift+Print Screen
+`screenshot -t`, as in GNOME. Super+Shift+3, Super+Shift+4 and
+Super+Shift+5 start `screenshot -t`, `screenshot -a` and `screenshot -i`,
+as on macOS. The keys are kept from the focused client, and their
+releases as well. While an overlay layer surface has the keyboard focus,
+Print Screen is passed to it as its capture key and the other keys start
+nothing. Alt+SysRq is the thread table of the kernel (`debug.md`) and is
+passed to the focused client unchanged. The launcher menu has a
+Screenshot entry that starts `screenshot -i`.
 
 ## Image viewer
 
@@ -118,12 +219,22 @@ same pixels, checks that a uniform 1024x768 image compresses below 40000
 bytes, and checks `image_scale` and `painter_image_scaled`.
 
 The boot test `gui_images` runs `screenshot /shot.png` and checks the
-PNG header against the framebuffer size, presses Print Screen, opens the
-screenshot in the viewer and counts the desktop colour and the
-background in the window, and presses the zoom and navigation keys. In
-paint it draws a stroke, undoes and redoes it, saves `/drawing.png` with
-Ctrl+S, and opens the saved file in the viewer to count the black pixels
-of the stroke. The post script runs `fsck -y` on the disk image, extracts
-both files with `mkfs --cat`, decodes them with an independent decoder in
-Python, and checks the screenshot size, its desktop colour and the
-pixels of the drawing.
+PNG header against the framebuffer size. It presses Print Screen and
+checks that the desktop is dimmed beside the selection and bright inside
+it, presses Enter, and finds the frame of the thumbnail 16 pixels from
+the right edge and the panel. It presses Super+Shift+4, drags an area
+and checks that the area is bright before the button goes up. It opens
+the screenshot in the viewer, counts the desktop colour and the
+background in the window, and presses the zoom and navigation keys. With
+the viewer open it presses Print Screen and W and checks that the window
+stays bright while the desktop beside it is dimmed, presses Enter, and
+runs `screenshot -w /win.png`, whose header must be RGBA and the size of
+the window with its shadow. In paint it draws a stroke, undoes and redoes
+it, saves `/drawing.png` with Ctrl+S, and opens the saved file in the
+viewer to count the black pixels of the stroke. The post script runs
+`fsck -y` on the disk image, extracts the files with `mkfs --cat`,
+decodes them with an independent decoder in Python, and checks the
+screenshot size and its desktop colour, the transparent corner and the
+opaque middle of the window image, and the pixels of the drawing. Started
+with `hold=1` on the kernel command line, the test waits eight seconds
+in the capture interface and in its window mode for screen dumps.
