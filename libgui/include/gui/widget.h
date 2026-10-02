@@ -315,6 +315,21 @@ void editor_goto(struct widget *w, int line, int col);
 void editor_cursor(const struct widget *w, int *line, int *col);
 int editor_undo(struct widget *w);
 int editor_redo(struct widget *w);
+int editor_can_undo(const struct widget *w);
+int editor_can_redo(const struct widget *w);
+/* The selection and the clipboard.  editor_selection returns the selected
+ * text as a malloc'ed string or NULL.  A right click opens a context menu
+ * with the same commands. */
+int editor_has_selection(const struct widget *w);
+char *editor_selection(struct widget *w);
+void editor_cut(struct widget *w);
+void editor_copy(struct widget *w);
+void editor_paste(struct widget *w);
+void editor_delete_selection(struct widget *w);
+void editor_select_all(struct widget *w);
+/* Replace every occurrence of needle, which may not contain a newline, as
+ * one undo step.  Returns the number of replacements. */
+int editor_replace_all(struct widget *w, const char *needle, const char *replacement);
 int editor_find(struct widget *w, const char *needle, int forward);   /* 1 when found and selected */
 int editor_modified(const struct widget *w);
 void editor_set_modified(struct widget *w, int modified);
@@ -327,3 +342,6 @@ void highlight_sh(const char *line, int len, unsigned char *classes, int *state,
 const struct image *icon_get(const char *name);
 /* The SVG icon rendered px logical pixels high; NULL without an SVG. */
 const struct image *icon_get_size(const char *name, int px);
+/* A copy of an icon with reduced opacity for disabled buttons and menu
+ * items, cached per icon. */
+const struct image *icon_dimmed(const struct image *img);

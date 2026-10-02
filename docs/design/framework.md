@@ -232,3 +232,62 @@ painter` carries the scale, so widget code keeps drawing in logical
 pixels while text is rasterized at `px * scale` and lines are `scale`
 pixels thick; see `display.md`. Only code that writes into
 `gui_window.surf` directly sees device pixels.
+
+## Editing commands and context menus
+
+The editor widget has the functions `editor_has_selection`,
+`editor_selection`, `editor_cut`, `editor_copy`, `editor_paste`,
+`editor_delete_selection`, `editor_select_all`, `editor_can_undo`,
+`editor_can_redo` and `editor_replace_all`. Ctrl+C, Ctrl+X, Ctrl+V and
+Ctrl+A call the same functions. The clipboard is the selection of the
+X12 data device (`gui_clipboard_set`, `gui_clipboard_get` in
+`src/client.c`). Both the editor and the text field already used it
+before this change.
+
+An operation records an undo group number in `struct op`. Operations
+with the same nonzero number are undone and redone together. A paste
+that replaces a selection, a newline with indentation, the indentation
+of several lines and `editor_replace_all` are each one undo step.
+
+Ctrl+Left and Ctrl+Right move the cursor by words, and Ctrl+Backspace
+and Ctrl+Delete delete to the start or the end of a word. A word consists
+of letters, digits, underscores and bytes of multibyte characters. Home
+moves to the first character of the line that is not a space or a tab,
+and a second Home moves to column 0. Enter starts the new line with the
+spaces and tabs that start the current line before the cursor. Tab with
+a selection over several lines inserts four spaces at the start of each
+line, and Shift+Tab removes up to four leading spaces from the selected
+lines or from the line of the cursor. A second click within 400 ms at the
+same place selects the word, and a third click selects the line. The
+line of the cursor has a faint background while the editor has the
+focus and no selection.
+
+A right click on an editor or a text field opens a context menu
+(`src/widgets/editmenu.c`). The menu of the editor contains Undo, Redo,
+Cut, Copy, Paste, Delete and Select all, and the menu of a text field
+contains the same items without Undo and Redo. A click outside the
+selection first moves the cursor to the click. A click inside the
+selection does not change the selection. Items that do not apply are disabled. The menu is an
+invisible child of the widget and is destroyed with it. The handler
+argument of an item is its action, and the menu stores the callback of
+the widget in `user`.
+
+A drop down menu draws the accelerator of an item, such as Ctrl+S, at
+its right edge. Disabled buttons and menu items draw their icon with 40
+percent of its opacity (`icon_dimmed`).
+
+gedit has File and Edit menus with accelerators. The Edit menu contains
+Undo, Redo, Cut, Copy, Paste, Delete, Select all, Find, Find next (F3),
+Replace (Ctrl+H, replaces every occurrence) and Go to line (Ctrl+L). The
+tool bar contains New, Open, Save, Undo, Redo, Cut, Copy, Paste and
+Find, followed by the Wrap and Line numbers check boxes. The commands
+that do not apply are disabled. The status bar shows a message, the
+language, the cursor position and the number of lines. Lua files are
+highlighted with `highlight_language_lua`. New, Open, Quit and closing
+the window ask whether unsaved changes are saved.
+
+`make check` tests word movement, word deletion, indentation, Home, Tab
+and Shift+Tab with their undo steps, `editor_replace_all`, the clipboard
+functions, the double click and Cut in the context menu. The boot test
+`gui_editor` selects the typed text with Ctrl+A, copies it with the
+context menu and pastes it on a second line.

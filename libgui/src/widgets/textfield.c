@@ -3,6 +3,7 @@
 #include <gui/utf8.h>
 #include <stdlib.h>
 #include <string.h>
+#include "editmenu.h"
 
 #define PAD 4
 
@@ -11,6 +12,7 @@ struct textfield {
     int cursor, sel;            /* sel: anchor, -1 none */
     int scroll_x;
     char preedit[WSRV_TITLE_MAX];
+    struct widget *context_menu;
 };
 
 static void changed(struct textfield *f)
@@ -204,11 +206,73 @@ static int key(struct textfield *f, struct event *e)
     return 1;
 }
 
+static void context_action(struct widget *w, enum edit_action a)
+{
+    struct textfield *f = (struct textfield *)w;
+    int a0, b0;
+    clamp(f);
+    switch (a) {
+    case EDIT_CUT:
+    case EDIT_COPY:
+        if (f->sel >= 0 && f->sel != f->cursor) {
+            sel_range(f, &a0, &b0);
+            gui_clipboard_set(widget_text(w) + a0, b0 - a0);
+            if (a == EDIT_CUT && delete_selection(f))
+                changed(f);
+        }
+        break;
+    case EDIT_PASTE: {
+        struct event e = { .type = EV_KEY_DOWN, .code = KEY_V, .ch = 22, .mods = WMOD_CTRL };
+        key(f, &e);
+        break;
+    }
+    case EDIT_DELETE:
+        if (delete_selection(f))
+            changed(f);
+        break;
+    case EDIT_SELECT_ALL:
+        f->sel = 0;
+        f->cursor = len_of(f);
+        break;
+    default:
+        break;
+    }
+    widget_focus(w);
+    widget_invalidate(w);
+}
+
+static void context_menu(struct textfield *f, int x)
+{
+    int p = pos_at(f, x), a, b;
+    int sel = f->sel >= 0 && f->sel != f->cursor;
+    if (sel) {
+        sel_range(f, &a, &b);
+        sel = p >= a && p <= b;
+    }
+    if (!sel) {
+        f->cursor = p;
+        f->sel = -1;
+    }
+    widget_focus(&f->w);
+    widget_invalidate(&f->w);
+    unsigned enabled = EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_SELECT_ALL);
+    if (sel)
+        enabled |= EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY) | EDIT_BIT(EDIT_DELETE);
+    unsigned shown = EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY) | EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_DELETE) |
+                     EDIT_BIT(EDIT_SELECT_ALL);
+    edit_menu_popup(&f->w, &f->context_menu, x, f->w.h / 2, shown, enabled, context_action);
+}
+
 static int textfield_event(struct widget *w, struct event *e)
 {
     struct textfield *f = (struct textfield *)w;
     switch (e->type) {
     case EV_MOUSE_DOWN:
+        if (e->button & 2) {
+            clamp(f);
+            context_menu(f, e->x);
+            return 1;
+        }
         if (!(e->button & 1))
             return 0;
         f->cursor = pos_at(f, e->x);

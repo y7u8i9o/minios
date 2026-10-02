@@ -309,6 +309,115 @@ static void test_editor(struct app *a)
     src = "echo $HOME # hi";
     highlight_sh(src, (int)strlen(src), cls, &state, NULL);
     CHECK(cls[0] == HL_KEYWORD && cls[5] == HL_PREPROC && cls[11] == HL_COMMENT, "shell classes %d %d %d", cls[0], cls[5], cls[11]);
+
+    /* Words: Ctrl+Right and Ctrl+Left move by words, Ctrl+Backspace
+     * deletes the word before the cursor. */
+    editor_set_wrap(ed, 0);
+    editor_set_text(ed, "alpha beta_2 (gamma)");
+    window_paint(win);
+    editor_goto(ed, 0, 0);
+    struct wmsg cright = key_msg(win, KEY_RIGHT, 0, WMOD_CTRL), cleft = key_msg(win, KEY_LEFT, 0, WMOD_CTRL);
+    window_message(win, &cright);
+    editor_cursor(ed, &l, &c);
+    CHECK(c == 6, "Ctrl+Right to the next word: %d", c);
+    window_message(win, &cright);
+    editor_cursor(ed, &l, &c);
+    CHECK(c == 13, "Ctrl+Right over beta_2: %d", c);
+    window_message(win, &cleft);
+    editor_cursor(ed, &l, &c);
+    CHECK(c == 6, "Ctrl+Left to the start of beta_2: %d", c);
+    editor_goto(ed, 0, 12);
+    struct wmsg cbs = key_msg(win, KEY_BACKSPACE, '\b', WMOD_CTRL);
+    window_message(win, &cbs);
+    t = editor_text(ed);
+    CHECK(strcmp(t, "alpha  (gamma)") == 0, "Ctrl+Backspace deletes a word: '%s'", t);
+    free(t);
+
+    /* Enter repeats the indentation of the line, Home moves to the first
+     * character that is not a space. */
+    editor_set_text(ed, "    if (x)");
+    editor_goto(ed, 0, 10);
+    type_text(win, "\ny;");
+    t = editor_text(ed);
+    CHECK(strcmp(t, "    if (x)\n    y;") == 0, "automatic indentation: '%s'", t);
+    free(t);
+    struct wmsg home = key_msg(win, KEY_HOME, 0, 0);
+    window_message(win, &home);
+    editor_cursor(ed, &l, &c);
+    CHECK(l == 1 && c == 4, "Home to the indentation: %d,%d", l, c);
+    window_message(win, &home);
+    editor_cursor(ed, &l, &c);
+    CHECK(c == 0, "second Home to column 0: %d", c);
+    CHECK(editor_undo(ed), "undo of the typing");
+    CHECK(editor_undo(ed), "undo of the indented newline");
+    t = editor_text(ed);
+    CHECK(strcmp(t, "    if (x)") == 0, "the indented newline is one undo step: '%s'", t);
+    free(t);
+
+    /* Tab and Shift+Tab indent and unindent the selected lines as one
+     * undo step. */
+    editor_set_text(ed, "a\nb\nc");
+    editor_select_all(ed);
+    struct wmsg tab = key_msg(win, KEY_TAB, '\t', 0), stab = key_msg(win, KEY_TAB, '\t', WMOD_SHIFT);
+    window_message(win, &tab);
+    t = editor_text(ed);
+    CHECK(strcmp(t, "    a\n    b\n    c") == 0, "Tab indents the selection: '%s'", t);
+    free(t);
+    CHECK(editor_has_selection(ed), "the lines stay selected");
+    window_message(win, &stab);
+    t = editor_text(ed);
+    CHECK(strcmp(t, "a\nb\nc") == 0, "Shift+Tab unindents: '%s'", t);
+    free(t);
+    CHECK(editor_undo(ed), "undo of the unindent");
+    t = editor_text(ed);
+    CHECK(strcmp(t, "    a\n    b\n    c") == 0, "the unindent is one undo step: '%s'", t);
+    free(t);
+
+    /* Replace all is one undo step. */
+    editor_set_text(ed, "cat dog cat\ncat");
+    CHECK(editor_replace_all(ed, "cat", "bird") == 3, "three replacements");
+    t = editor_text(ed);
+    CHECK(strcmp(t, "bird dog bird\nbird") == 0, "replaced: '%s'", t);
+    free(t);
+    CHECK(editor_undo(ed) && !editor_can_undo(ed), "one undo step");
+    t = editor_text(ed);
+    CHECK(strcmp(t, "cat dog cat\ncat") == 0, "replacement undone: '%s'", t);
+    free(t);
+
+    /* The selection, the clipboard and the context menu. */
+    editor_set_text(ed, "one two");
+    window_paint(win);
+    editor_select_all(ed);
+    char *sel = editor_selection(ed);
+    CHECK(sel && strcmp(sel, "one two") == 0, "selection text '%s'", sel ? sel : "(null)");
+    free(sel);
+    editor_copy(ed);
+    editor_goto(ed, 0, 7);
+    editor_paste(ed);
+    t = editor_text(ed);
+    CHECK(strcmp(t, "one twoone two") == 0, "pasted copy: '%s'", t);
+    free(t);
+    /* A double click selects a word; a right click inside it opens the
+     * context menu, and Cut is its fourth item after a separator. */
+    int ex, ey;
+    widget_abs(ed, &ex, &ey);
+    int px = ex + 6, py = ey + 6;
+    click(win, px, py);
+    click(win, px, py);
+    sel = editor_selection(ed);
+    CHECK(sel && strcmp(sel, "one") == 0, "double click selects a word: '%s'", sel ? sel : "(null)");
+    free(sel);
+    struct wmsg rd = mouse_msg(win, WMOUSE_DOWN, px, py, 2), ru = mouse_msg(win, WMOUSE_UP, px, py, 0);
+    window_message(win, &rd);
+    window_message(win, &ru);
+    CHECK(window_state_of(win)->popup != NULL, "right click opens the context menu");
+    struct wmsg mdown = key_msg(win, KEY_DOWN, 0, 0), enter = key_msg(win, KEY_ENTER, '\n', 0);
+    for (int i = 0; i < 4; i++)
+        window_message(win, &mdown);
+    window_message(win, &enter);
+    t = editor_text(ed);
+    CHECK(strcmp(t, " twoone two") == 0, "Cut from the context menu: '%s'", t);
+    free(t);
     window_close(win);
 }
 

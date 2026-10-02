@@ -63,3 +63,31 @@ static const struct image *lookup(const char *name, int px, int png_fallback)
 const struct image *icon_get(const char *name) { return lookup(name, ICON_PX, 1); }
 
 const struct image *icon_get_size(const char *name, int px) { return lookup(name, px, 0); }
+
+/* Dimmed copies of icons for disabled buttons and menu items, created
+ * once per icon.  The copy has 40 percent of the alpha of the icon. */
+static struct { const struct image *src; struct image *dim; } dimmed[ICON_MAX];
+static int ndimmed;
+
+const struct image *icon_dimmed(const struct image *img)
+{
+    if (!img)
+        return NULL;
+    for (int i = 0; i < ndimmed; i++)
+        if (dimmed[i].src == img)
+            return dimmed[i].dim ? dimmed[i].dim : img;
+    if (ndimmed == ICON_MAX)
+        return img;
+    struct image *dim = image_create(img->w, img->h);
+    if (dim) {
+        dim->scale = img->scale;
+        for (int k = 0; k < img->w * img->h; k++) {
+            uint32_t v = img->pixels[k];
+            dim->pixels[k] = ((v >> 24) * 2 / 5) << 24 | (v & 0x00ffffffu);
+        }
+    }
+    dimmed[ndimmed].src = img;
+    dimmed[ndimmed].dim = dim;
+    ndimmed++;
+    return dim ? dim : img;
+}

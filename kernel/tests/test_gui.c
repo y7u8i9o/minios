@@ -470,7 +470,9 @@ static void test_gui_controls(void)
 }
 KTEST_DEFINE("gui_controls", test_gui_controls);
 
-/* M22: gedit types C source, highlights the keyword, saves with Ctrl+S. */
+/* M22: gedit types C source, highlights the keyword, saves with Ctrl+S.
+ * Ctrl+A then selects the text, Copy in the context menu of the editor
+ * copies it, and Ctrl+V pastes it on a second line. */
 static void test_gui_editor(void)
 {
     install_app("gedit");
@@ -501,6 +503,35 @@ static void test_gui_editor(void)
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
     ktest_assert(strcmp(buf, "int x;") == 0, "saved text '%s'", buf);
+    ctrl_key(0x1e);                     /* Ctrl+A */
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    mouse_move_to(&cx, &cy, 40 + 30, 60 + 92, 0);
+    mouse_click(2);
+    sleep_ms(400);
+    /* The menu lists Undo, Redo, a separator, Cut and Copy. */
+    for (int i = 0; i < 5; i++) {
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0x50);
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0xd0);
+        sleep_ms(50);
+    }
+    type_line("\n");
+    sleep_ms(300);
+    ps2kbd_feed_scancode(0xe0);         /* End */
+    ps2kbd_feed_scancode(0x4f);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xcf);
+    type_line("\n");
+    ctrl_key(0x2f);                     /* Ctrl+V */
+    sleep_ms(300);
+    ctrl_key(0x1f);                     /* Ctrl+S */
+    sleep_ms(400);
+    ktest_assert(vfs_open("/gedit.c", O_RDONLY, 0, &f) == 0, "open /gedit.c again");
+    n = file_read(f, buf, sizeof buf - 1);
+    file_put(f);
+    buf[n > 0 ? n : 0] = '\0';
+    ktest_assert(strcmp(buf, "int x;\nint x;") == 0, "text after copy and paste '%s'", buf);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "gedit status 0x%x", status);

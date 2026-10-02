@@ -7,6 +7,7 @@ struct op {
     int l, c;
     char *text;
     int len;
+    int group;                  /* Operations with the same nonzero group are undone together. */
 };
 
 struct editor {
@@ -28,6 +29,10 @@ struct editor {
     int wanted_x;               /* column pixel to keep on vertical moves */
     char preedit[WSRV_TITLE_MAX];
     struct font *font;          /* own font (editor_set_font), NULL for the theme's */
+    int group, next_group;      /* group is the undo group of new operations, or 0. */
+    long last_click_ms;         /* The time, position and count of the last left click. */
+    int click_x, click_y, clicks;
+    struct widget *context_menu;
 };
 
 static inline const struct font *ed_font(const struct editor *ed)

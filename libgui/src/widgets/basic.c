@@ -106,7 +106,7 @@ static void button_paint(struct widget *w, struct painter *p)
     int iw = w->icon ? image_lw(w->icon) + (buf[0] ? 4 : 0) : 0;
     int x = (w->w - tw - iw) / 2;
     if (w->icon) {
-        painter_image(p, x, (w->h - image_lh(w->icon)) / 2, w->icon);
+        painter_image(p, x, (w->h - image_lh(w->icon)) / 2, w->enabled ? w->icon : icon_dimmed(w->icon));
         x += iw;
     }
     if (buf[0])

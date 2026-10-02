@@ -7,6 +7,8 @@
 #include <string.h>
 #include <gui/utf8.h>
 #include "editor_internal.h"
+#include "editmenu.h"
+long uptime_ms(void);
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 /* ---- lines ---- */
@@ -70,8 +72,8 @@ static void raw_insert(struct editor *ed, int l, int c, const char *text, int n,
     (void)len;
 }
 
-/* Raw delete of the range; returns the removed text. */
-static char *raw_delete(struct editor *ed, int l0, int c0, int l1, int c1)
+/* copy_range returns the text of the range as a malloc'ed string. */
+static char *copy_range(struct editor *ed, int l0, int c0, int l1, int c1)
 {
     size_t cap = 64, n = 0;
     char *out = malloc(cap);
@@ -88,6 +90,13 @@ static char *raw_delete(struct editor *ed, int l0, int c0, int l1, int c1)
             out[n++] = '\n';
     }
     out[n] = '\0';
+    return out;
+}
+
+/* raw_delete removes the range and returns the removed text. */
+static char *raw_delete(struct editor *ed, int l0, int c0, int l1, int c1)
+{
+    char *out = copy_range(ed, l0, c0, l1, c1);
     char *tail = strdup(ed->lines[l1] + c1);
     ed->lines[l0][c0] = '\0';
     ed->lines[l0] = realloc(ed->lines[l0], (size_t)c0 + strlen(tail) + 1);
@@ -119,7 +128,7 @@ static void insert_text(struct editor *ed, const char *text, int n, int mergeabl
 {
     int el, ec;
     raw_insert(ed, ed->cl, ed->cc, text, n, &el, &ec);
-    if (mergeable && ed->merge && ed->nundo) {
+    if (mergeable && ed->merge && ed->nundo && !ed->group) {
         struct op *last = &ed->undo[ed->nundo - 1];
         if (last->kind == 0) {
             /* End position of the last insert must equal the cursor. */
@@ -139,7 +148,7 @@ static void insert_text(struct editor *ed, const char *text, int n, int mergeabl
             }
         }
     }
-    struct op op = { 0, ed->cl, ed->cc, malloc((size_t)n + 1), n };
+    struct op op = { 0, ed->cl, ed->cc, malloc((size_t)n + 1), n, ed->group };
     memcpy(op.text, text, (size_t)n);
     op.text[n] = '\0';
     push(&ed->undo, &ed->nundo, op);
@@ -159,7 +168,7 @@ static void delete_range(struct editor *ed, int l0, int c0, int l1, int c1)
     if (l0 == l1 && c0 == c1)
         return;
     char *text = raw_delete(ed, l0, c0, l1, c1);
-    struct op op = { 1, l0, c0, text, (int)strlen(text) };
+    struct op op = { 1, l0, c0, text, (int)strlen(text), ed->group };
     push(&ed->undo, &ed->nundo, op);
     clear_ops(&ed->redo, &ed->nredo);
     ed->merge = 0;
@@ -176,14 +185,14 @@ static void apply(struct editor *ed, struct op *op, struct op **to, int *nto)
         for (int i = 0; i < op->len; i++)
             if (op->text[i] == '\n') { l++; c = 0; } else c++;
         free(raw_delete(ed, op->l, op->c, l, c));
-        struct op inv = { 1, op->l, op->c, op->text, op->len };
+        struct op inv = { 1, op->l, op->c, op->text, op->len, op->group };
         push(to, nto, inv);
         ed->cl = op->l;
         ed->cc = op->c;
     } else {
         int el, ec;
         raw_insert(ed, op->l, op->c, op->text, op->len, &el, &ec);
-        struct op inv = { 0, op->l, op->c, op->text, op->len };
+        struct op inv = { 0, op->l, op->c, op->text, op->len, op->group };
         push(to, nto, inv);
         ed->cl = el;
         ed->cc = ec;
@@ -193,24 +202,47 @@ static void apply(struct editor *ed, struct op *op, struct op **to, int *nto)
     editor_changed(ed);
 }
 
+/* replay moves the operation on top of one stack to the other, together
+ * with the operations below it that belong to the same group. */
+static int replay(struct editor *ed, struct op **from, int *nfrom, struct op **to, int *nto)
+{
+    if (!*nfrom)
+        return 0;
+    int group;
+    do {
+        struct op op = (*from)[--*nfrom];
+        group = op.group;
+        apply(ed, &op, to, nto);
+    } while (group && *nfrom && (*from)[*nfrom - 1].group == group);
+    return 1;
+}
+
 int editor_undo(struct widget *w)
 {
     struct editor *ed = (struct editor *)w;
-    if (!ed->nundo)
-        return 0;
-    struct op op = ed->undo[--ed->nundo];
-    apply(ed, &op, &ed->redo, &ed->nredo);
-    return 1;
+    return replay(ed, &ed->undo, &ed->nundo, &ed->redo, &ed->nredo);
 }
 
 int editor_redo(struct widget *w)
 {
     struct editor *ed = (struct editor *)w;
-    if (!ed->nredo)
-        return 0;
-    struct op op = ed->redo[--ed->nredo];
-    apply(ed, &op, &ed->undo, &ed->nundo);
-    return 1;
+    return replay(ed, &ed->redo, &ed->nredo, &ed->undo, &ed->nundo);
+}
+
+int editor_can_undo(const struct widget *w) { return ((const struct editor *)w)->nundo > 0; }
+int editor_can_redo(const struct widget *w) { return ((const struct editor *)w)->nredo > 0; }
+
+/* group_begin starts an undo group for an operation that consists of
+ * several inserts and deletes, and group_end closes it. */
+static void group_begin(struct editor *ed)
+{
+    ed->group = ++ed->next_group;
+    ed->merge = 0;
+}
+
+static void group_end(struct editor *ed)
+{
+    ed->group = 0;
 }
 
 /* ---- selection ---- */
@@ -238,6 +270,196 @@ static int delete_selection(struct editor *ed)
         return 0;
     delete_range(ed, l0, c0, l1, c1);
     return 1;
+}
+
+int editor_has_selection(const struct widget *w)
+{
+    const struct editor *ed = (const struct editor *)w;
+    return ed->has_sel && (ed->al != ed->cl || ed->ac != ed->cc);
+}
+
+char *editor_selection(struct widget *w)
+{
+    struct editor *ed = (struct editor *)w;
+    if (!editor_has_selection(w))
+        return NULL;
+    int l0, c0, l1, c1;
+    sel_range(ed, &l0, &c0, &l1, &c1);
+    return copy_range(ed, l0, c0, l1, c1);
+}
+
+void editor_copy(struct widget *w)
+{
+    char *text = editor_selection(w);
+    if (text) {
+        gui_clipboard_set(text, (int)strlen(text));
+        free(text);
+    }
+}
+
+void editor_cut(struct widget *w)
+{
+    struct editor *ed = (struct editor *)w;
+    if (ed->readonly || !editor_has_selection(w))
+        return;
+    editor_copy(w);
+    delete_selection(ed);
+    cursor_moved(ed);
+}
+
+void editor_paste(struct widget *w)
+{
+    struct editor *ed = (struct editor *)w;
+    if (ed->readonly)
+        return;
+    char *tmp = malloc(WSRV_CLIP_MAX);
+    int n = tmp ? gui_clipboard_get(tmp, WSRV_CLIP_MAX) : -1;
+    if (n > 0) {
+        group_begin(ed);
+        delete_selection(ed);
+        insert_text(ed, tmp, n, 0);
+        group_end(ed);
+        cursor_moved(ed);
+    }
+    free(tmp);
+}
+
+void editor_delete_selection(struct widget *w)
+{
+    struct editor *ed = (struct editor *)w;
+    if (!ed->readonly && delete_selection(ed))
+        cursor_moved(ed);
+}
+
+void editor_select_all(struct widget *w)
+{
+    struct editor *ed = (struct editor *)w;
+    ed->al = 0;
+    ed->ac = 0;
+    ed->has_sel = 1;
+    ed->cl = ed->nlines - 1;
+    ed->cc = llen(ed, ed->cl);
+    cursor_moved(ed);
+}
+
+int editor_replace_all(struct widget *w, const char *needle, const char *replacement)
+{
+    struct editor *ed = (struct editor *)w;
+    int n = (int)strlen(needle), rn = (int)strlen(replacement), count = 0;
+    if (ed->readonly || n == 0 || strchr(needle, '\n'))
+        return 0;
+    group_begin(ed);
+    for (int l = 0; l < ed->nlines; l++) {
+        int c = 0;
+        char *hit;
+        while ((hit = strstr(ed->lines[l] + c, needle)) != NULL) {
+            int at = (int)(hit - ed->lines[l]);
+            delete_range(ed, l, at, l, at + n);
+            ed->cl = l;
+            ed->cc = at;
+            if (rn)
+                insert_text(ed, replacement, rn, 0);
+            c = at + rn;
+            count++;
+        }
+    }
+    group_end(ed);
+    if (count)
+        cursor_moved(ed);
+    return count;
+}
+
+/* ---- words ---- */
+
+static int is_word(char ch)
+{
+    unsigned char u = (unsigned char)ch;
+    return u >= 0x80 || u == '_' || (u >= '0' && u <= '9') || ((u | 0x20) >= 'a' && (u | 0x20) <= 'z');
+}
+
+/* word_left and word_right return the column of the start of the word
+ * before the cursor and of the end of the word after it on line l. */
+static int word_left(struct editor *ed, int l, int c)
+{
+    const char *s = ed->lines[l];
+    while (c > 0 && s[c - 1] == ' ')
+        c--;
+    if (c > 0 && !is_word(s[c - 1]))
+        return gui_utf8_prev_boundary(s, c);
+    while (c > 0 && is_word(s[c - 1]))
+        c--;
+    return c;
+}
+
+static int word_right(struct editor *ed, int l, int c)
+{
+    const char *s = ed->lines[l];
+    int len = llen(ed, l);
+    if (c < len && !is_word(s[c]) && s[c] != ' ')
+        return gui_utf8_next_boundary(s, len, c);
+    while (c < len && is_word(s[c]))
+        c++;
+    while (c < len && s[c] == ' ')
+        c++;
+    return c;
+}
+
+/* select_word selects the word at the cursor, and select_line selects the
+ * line of the cursor including its newline. */
+static void select_word(struct editor *ed)
+{
+    const char *s = ed->lines[ed->cl];
+    int len = llen(ed, ed->cl), a = ed->cc, b = ed->cc;
+    while (a > 0 && is_word(s[a - 1]))
+        a--;
+    while (b < len && is_word(s[b]))
+        b++;
+    if (a == b && b < len)
+        b = gui_utf8_next_boundary(s, len, b);
+    ed->al = ed->cl;
+    ed->ac = a;
+    ed->cc = b;
+    ed->has_sel = 1;
+}
+
+static void select_line(struct editor *ed)
+{
+    ed->al = ed->cl;
+    ed->ac = 0;
+    ed->has_sel = 1;
+    if (ed->cl + 1 < ed->nlines) {
+        ed->cl++;
+        ed->cc = 0;
+    } else {
+        ed->cc = llen(ed, ed->cl);
+    }
+}
+
+/* indent_lines inserts four spaces at the start of the lines l0 to l1, or
+ * removes up to four leading spaces from them when out is set.  The lines
+ * stay selected. */
+static void indent_lines(struct editor *ed, int l0, int l1, int out)
+{
+    group_begin(ed);
+    for (int l = l0; l <= l1; l++) {
+        if (out) {
+            int k = 0;
+            while (k < 4 && ed->lines[l][k] == ' ')
+                k++;
+            if (k)
+                delete_range(ed, l, 0, l, k);
+        } else if (ed->lines[l][0]) {
+            ed->cl = l;
+            ed->cc = 0;
+            insert_text(ed, "    ", 4, 0);
+        }
+    }
+    group_end(ed);
+    ed->al = l0;
+    ed->ac = 0;
+    ed->cl = l1;
+    ed->cc = llen(ed, l1);
+    ed->has_sel = 1;
 }
 
 /* ---- visual rows ---- */
@@ -372,6 +594,14 @@ static uint32_t class_color(const struct theme *t, int cls)
     }
 }
 
+static uint32_t current_line_color(const struct theme *t)
+{
+    uint32_t a = t->color[TC_HIGHLIGHT], b = t->color[TC_FIELD], out = 0;
+    for (int shift = 0; shift < 24; shift += 8)
+        out |= ((((a >> shift) & 255) * 3 + ((b >> shift) & 255) * 7) / 10) << shift;
+    return out;
+}
+
 static void editor_paint(struct widget *w, struct painter *p)
 {
     struct editor *ed = (struct editor *)w;
@@ -411,6 +641,10 @@ static void editor_paint(struct widget *w, struct painter *p)
             ed->hl(s, ll, classes, &state, ed->hl_arg);
             last_hl_line = l;
         }
+        /* The row of the cursor has a faint background while the editor
+         * has the focus and no selection. */
+        if (w->focused && l == ed->cl && !editor_has_selection(w))
+            painter_fill(p, -PAD, y, w->w, lh, current_line_color(t));
         /* Selection background on this row. */
         if ((l > l0 || (l == l0 && start + len >= c0)) && (l < l1 || (l == l1 && start <= c1)) && !(l0 == l1 && c0 == c1)) {
             int sa = l == l0 && c0 > start ? c0 : start;
@@ -508,46 +742,33 @@ static int editor_key(struct editor *ed, struct event *e)
     int bl = ed->cl, bc = ed->cc;
     if (ctrl) {
         switch (e->ch) {
-        case 1: ed->al = 0; ed->ac = 0; ed->has_sel = 1; ed->cl = ed->nlines - 1; ed->cc = llen(ed, ed->cl); cursor_moved(ed); return 1;
-        case 3: case 24: {
-            int l0, c0, l1, c1;
-            sel_range(ed, &l0, &c0, &l1, &c1);
-            if (l0 != l1 || c0 != c1) {
-                char *text = raw_delete(ed, l0, c0, l1, c1);
-                int el, ec;
-                raw_insert(ed, l0, c0, text, (int)strlen(text), &el, &ec);
-                gui_clipboard_set(text, (int)strlen(text));
-                free(text);
-                if (e->ch == 24 && !ed->readonly)
-                    delete_selection(ed);
-            }
-            return 1;
-        }
-        case 22: {
-            if (ed->readonly)
-                return 1;
-            char *tmp = malloc(WSRV_CLIP_MAX);
-            int n = tmp ? gui_clipboard_get(tmp, WSRV_CLIP_MAX) : -1;
-            if (n > 0) {
-                delete_selection(ed);
-                insert_text(ed, tmp, n, 0);
-                cursor_moved(ed);
-            }
-            free(tmp);
-            return 1;
-        }
+        case 1: editor_select_all(&ed->w); return 1;
+        case 3: editor_copy(&ed->w); return 1;
+        case 24: editor_cut(&ed->w); return 1;
+        case 22: editor_paste(&ed->w); return 1;
         case 26: if (!ed->readonly && editor_undo(&ed->w)) cursor_moved(ed); return 1;
         case 25: if (!ed->readonly && editor_redo(&ed->w)) cursor_moved(ed); return 1;
         }
     }
-    switch (e->code) {
+    if (ctrl && e->code == KEY_LEFT && ed->cc > 0)
+        ed->cc = word_left(ed, ed->cl, ed->cc);
+    else if (ctrl && e->code == KEY_RIGHT && ed->cc < llen(ed, ed->cl))
+        ed->cc = word_right(ed, ed->cl, ed->cc);
+    else if (e->code == KEY_HOME && !ctrl) {
+        /* Home moves to the first character that is not a space, or to
+         * column 0 when the cursor is already there. */
+        int k = 0;
+        while (ed->lines[ed->cl][k] == ' ' || ed->lines[ed->cl][k] == '\t')
+            k++;
+        ed->cc = ed->cc == k ? 0 : k;
+    } else switch (e->code) {
     case KEY_LEFT: if (ed->cc > 0) ed->cc = gui_utf8_prev_boundary(ed->lines[ed->cl], ed->cc); else if (ed->cl > 0) { ed->cl--; ed->cc = llen(ed, ed->cl); } break;
     case KEY_RIGHT: if (ed->cc < llen(ed, ed->cl)) ed->cc = gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc); else if (ed->cl + 1 < ed->nlines) { ed->cl++; ed->cc = 0; } break;
     case KEY_UP: move_vertical(ed, -1); break;
     case KEY_DOWN: move_vertical(ed, 1); break;
     case KEY_PAGEUP: move_vertical(ed, -vis); break;
     case KEY_PAGEDOWN: move_vertical(ed, vis); break;
-    case KEY_HOME: if (ctrl) { ed->cl = 0; } ed->cc = 0; break;
+    case KEY_HOME: ed->cl = 0; ed->cc = 0; break;
     case KEY_END: if (ctrl) ed->cl = ed->nlines - 1; ed->cc = llen(ed, ed->cl); break;
     default: moved = 0;
     }
@@ -566,7 +787,17 @@ static int editor_key(struct editor *ed, struct event *e)
     ed->wanted_x = -1;
     if (ed->readonly)
         return 0;
-    if (e->code == KEY_DELETE) {
+    if (ctrl && (e->code == KEY_BACKSPACE || e->code == KEY_DELETE) && !editor_has_selection(&ed->w)) {
+        /* Ctrl+Backspace and Ctrl+Delete delete to the start of the word
+         * before the cursor or to the end of the word after it. */
+        if (e->code == KEY_BACKSPACE) {
+            if (ed->cc > 0) delete_range(ed, ed->cl, word_left(ed, ed->cl, ed->cc), ed->cl, ed->cc);
+            else if (ed->cl > 0) delete_range(ed, ed->cl - 1, llen(ed, ed->cl - 1), ed->cl, 0);
+        } else {
+            if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, word_right(ed, ed->cl, ed->cc));
+            else if (ed->cl + 1 < ed->nlines) delete_range(ed, ed->cl, ed->cc, ed->cl + 1, 0);
+        }
+    } else if (e->code == KEY_DELETE) {
         if (!delete_selection(ed)) {
             if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, gui_utf8_next_boundary(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc));
             else if (ed->cl + 1 < ed->nlines) delete_range(ed, ed->cl, ed->cc, ed->cl + 1, 0);
@@ -577,11 +808,30 @@ static int editor_key(struct editor *ed, struct event *e)
             else if (ed->cl > 0) delete_range(ed, ed->cl - 1, llen(ed, ed->cl - 1), ed->cl, 0);
         }
     } else if (e->ch == '\n') {
+        /* The new line starts with the spaces and tabs that start the
+         * current line before the cursor. */
+        char indent[65] = "\n";
+        int k = 0;
+        while (k < 63 && k < ed->cc && (ed->lines[ed->cl][k] == ' ' || ed->lines[ed->cl][k] == '\t')) {
+            indent[k + 1] = ed->lines[ed->cl][k];
+            k++;
+        }
+        indent[k + 1] = '\0';
+        group_begin(ed);
         delete_selection(ed);
-        insert_text(ed, "\n", 1, 0);
-    } else if (e->ch == '\t') {
-        delete_selection(ed);
-        insert_text(ed, "    ", 4, 0);
+        insert_text(ed, indent, k + 1, 0);
+        group_end(ed);
+    } else if (e->ch == '\t' || e->code == KEY_TAB) {
+        int l0, c0, l1, c1;
+        sel_range(ed, &l0, &c0, &l1, &c1);
+        if (l1 > l0 && c1 == 0)
+            l1--;
+        if (shift || (editor_has_selection(&ed->w) && l1 > l0)) {
+            indent_lines(ed, l0, l1, shift);
+        } else {
+            delete_selection(ed);
+            insert_text(ed, "    ", 4, 0);
+        }
     } else if (e->ch >= 32 && !ctrl) {
         char c[4];
         int n = gui_utf8_encode((uint32_t)e->ch, c);
@@ -594,11 +844,68 @@ static int editor_key(struct editor *ed, struct event *e)
     return 1;
 }
 
+static void context_action(struct widget *w, enum edit_action a)
+{
+    struct editor *ed = (struct editor *)w;
+    switch (a) {
+    case EDIT_UNDO: if (!ed->readonly) editor_undo(w); break;
+    case EDIT_REDO: if (!ed->readonly) editor_redo(w); break;
+    case EDIT_CUT: editor_cut(w); break;
+    case EDIT_COPY: editor_copy(w); break;
+    case EDIT_PASTE: editor_paste(w); break;
+    case EDIT_DELETE: editor_delete_selection(w); break;
+    case EDIT_SELECT_ALL: editor_select_all(w); break;
+    default: break;
+    }
+    cursor_moved(ed);
+    widget_focus(w);
+}
+
+/* inside_selection returns 1 when (l, c) is inside the selection. */
+static int inside_selection(struct editor *ed, int l, int c)
+{
+    if (!editor_has_selection(&ed->w))
+        return 0;
+    int l0, c0, l1, c1;
+    sel_range(ed, &l0, &c0, &l1, &c1);
+    return (l > l0 || (l == l0 && c >= c0)) && (l < l1 || (l == l1 && c <= c1));
+}
+
+/* context_menu opens the context menu at (x, y).  A click outside the
+ * selection first moves the cursor to the click. */
+static void context_menu(struct editor *ed, int x, int y)
+{
+    int bl = ed->cl, bc = ed->cc;
+    set_pos_from_point(ed, x, y);
+    int l = ed->cl, c = ed->cc;
+    ed->cl = bl;
+    ed->cc = bc;
+    if (!inside_selection(ed, l, c)) {
+        ed->cl = l;
+        ed->cc = c;
+        ed->has_sel = 0;
+    }
+    widget_focus(&ed->w);
+    cursor_moved(ed);
+    int sel = editor_has_selection(&ed->w), rw = !ed->readonly;
+    unsigned enabled = EDIT_BIT(EDIT_SELECT_ALL);
+    if (rw && ed->nundo) enabled |= EDIT_BIT(EDIT_UNDO);
+    if (rw && ed->nredo) enabled |= EDIT_BIT(EDIT_REDO);
+    if (sel) enabled |= EDIT_BIT(EDIT_COPY);
+    if (sel && rw) enabled |= EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_DELETE);
+    if (rw) enabled |= EDIT_BIT(EDIT_PASTE);
+    edit_menu_popup(&ed->w, &ed->context_menu, x, y, ~0u, enabled, context_action);
+}
+
 static int editor_event(struct widget *w, struct event *e)
 {
     struct editor *ed = (struct editor *)w;
     switch (e->type) {
     case EV_MOUSE_DOWN: {
+        if (e->button & 2) {
+            context_menu(ed, e->x, e->y);
+            return 1;
+        }
         if (!(e->button & 1))
             return 0;
         int sb = theme_px(widget_theme(w), TM_SCROLLBAR);
@@ -613,11 +920,26 @@ static int editor_event(struct widget *w, struct event *e)
             widget_invalidate(w);
             return 1;
         }
+        /* A second and a third click within 400 ms at the same place
+         * select the word and the line. */
+        long now = uptime_ms();
+        if (now - ed->last_click_ms < 400 && abs(e->x - ed->click_x) < 4 && abs(e->y - ed->click_y) < 4)
+            ed->clicks = ed->clicks % 3 + 1;
+        else
+            ed->clicks = 1;
+        ed->last_click_ms = now;
+        ed->click_x = e->x;
+        ed->click_y = e->y;
         set_pos_from_point(ed, e->x, e->y);
         ed->has_sel = 0;
         ed->wanted_x = -1;
         ed->merge = 0;
-        widget_capture(w);
+        if (ed->clicks == 2)
+            select_word(ed);
+        else if (ed->clicks == 3)
+            select_line(ed);
+        else
+            widget_capture(w);
         cursor_moved(ed);
         return 1;
     }

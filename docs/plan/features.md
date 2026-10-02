@@ -465,3 +465,15 @@ a separate Log out row, and two columns when one column does not fit on
 the screen. The launcher code moved from `user/panel/panel.c` into
 `user/panel/launcher.c`. Documented in `docs/design/shell.md`, tested by
 the boot tests `comp_panel` and `gui_wm`.
+
+## Editor update (completed 2026-10-02)
+
+The editor widget has word movement and deletion, automatic indentation,
+indentation of selected lines, word and line selection by double and
+triple click, undo groups, `editor_replace_all` and public clipboard
+functions. Editors and text fields have a context menu with the editing
+commands. Menus show accelerators, and disabled icons are dimmed. gedit
+has a full Edit menu, Replace, Go to line, Lua highlighting and a status
+bar with the language and the line count. Documented in
+`docs/design/framework.md`, tested by `make check` for libgui and the
+boot test `gui_editor`.

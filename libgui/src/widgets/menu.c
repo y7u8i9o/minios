@@ -1,5 +1,6 @@
 /* Menu bar with drop down menus shown as window popups. */
 #include <gui/app.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -7,6 +8,25 @@
 #define ITEM_H_EXTRA 8
 
 /* ---- items and menus ---- */
+
+/* accel_label writes the name of the accelerator of an item, such as
+ * "Ctrl+S", into buf, or an empty string when the item has none. */
+static void accel_label(const struct widget *w, char *buf, size_t size)
+{
+    static const char row1[] = "qwertyuiop", row2[] = "asdfghjkl", row3[] = "zxcvbnm", digits[] = "1234567890";
+    int k = w->accel_key;
+    char key[8] = "";
+    buf[0] = '\0';
+    if (k >= KEY_Q && k < KEY_Q + 10) snprintf(key, sizeof key, "%c", row1[k - KEY_Q] - 32);
+    else if (k >= KEY_A && k < KEY_A + 9) snprintf(key, sizeof key, "%c", row2[k - KEY_A] - 32);
+    else if (k >= KEY_Z && k < KEY_Z + 7) snprintf(key, sizeof key, "%c", row3[k - KEY_Z] - 32);
+    else if (k >= KEY_1 && k <= KEY_0) snprintf(key, sizeof key, "%c", digits[k - KEY_1]);
+    else if (k >= KEY_F1 && k <= KEY_F10) snprintf(key, sizeof key, "F%d", k - KEY_F1 + 1);
+    else if (k == KEY_DELETE) snprintf(key, sizeof key, "Del");
+    else return;
+    snprintf(buf, size, "%s%s%s%s", w->accel_mods & WMOD_CTRL ? "Ctrl+" : "", w->accel_mods & WMOD_ALT ? "Alt+" : "",
+             w->accel_mods & WMOD_SHIFT ? "Shift+" : "", key);
+}
 
 static void item_measure(struct widget *w, struct size_hint *h)
 {
@@ -16,7 +36,11 @@ static void item_measure(struct widget *w, struct size_hint *h)
         h->pref_w = 20;
         return;
     }
+    char accel[24];
+    accel_label(w, accel, sizeof accel);
     h->pref_w = gfx_text_width_font(t->font, widget_text(w), -1) + 2 * MENU_PAD + 24;
+    if (accel[0])
+        h->pref_w += gfx_text_width_font(t->font, accel, -1) + 24;
     h->pref_h = h->min_h = t->font->height + ITEM_H_EXTRA;
 }
 
@@ -63,10 +87,15 @@ static void dropdown_paint(struct widget *w, struct painter *p)
                 painter_fill(p, 1, y, w->w - 2, ih, t->color[TC_HIGHLIGHT]);
             int x = MENU_PAD;
             if (it->icon) {
-                painter_image(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon);
+                painter_image(p, 4, y + (ih - image_lh(it->icon)) / 2, it->enabled ? it->icon : icon_dimmed(it->icon));
                 x = 24;
             }
             painter_text(p, x, y + ITEM_H_EXTRA / 2, widget_text(it), t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+            char accel[24];
+            accel_label(it, accel, sizeof accel);
+            if (accel[0])
+                painter_text(p, w->w - MENU_PAD - painter_text_width(p, accel, -1), y + ITEM_H_EXTRA / 2, accel,
+                             t->color[TC_TEXT_DISABLED]);
         }
         y += ih;
     }
