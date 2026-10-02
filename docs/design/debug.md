@@ -31,6 +31,15 @@ can show stale frames. `cat /dev/threads` from a shell, or from a
 background job while a program is blocked, shows where each thread waits.
 A thread in a bounded wait also shows how long the wait has lasted.
 
+`/dev/cpustat` lists one line `CPU USER SYSTEM IDLE` per processor with
+its timer ticks since the scheduler started. `proc_account_tick` adds
+each tick of a CPU to exactly one of the three counters in `struct cpu`.
+A tick in the idle thread is idle time, and a tick of another thread is
+user or system time by the mode of the interrupted frame. The CPU writes
+its own counters with relaxed atomic stores, and the reader of the file
+uses relaxed atomic loads. The counters therefore need no lock. sysmon computes
+the CPU graphs from this file.
+
 The hung task detector (`debug/hung.c`) reports waits that end soon in a
 working system. `mutex_lock`, the request waits of virtio-blk and the
 journal waits of mfs call `waitq_wait_bounded`, which records the start of

@@ -97,6 +97,9 @@ size_t proc_format_table(char *buf, size_t size);
 /* Every thread of every process with its state, the wait queue it blocks
  * on and the kernel frames where it was switched out (/dev/threads). */
 size_t proc_format_threads(char *buf, size_t size);
+/* Format one "CPU USER SYSTEM IDLE" line of tick counts per CPU into buf
+ * (/dev/cpustat). Returns the length. */
+size_t proc_format_cpustat(char *buf, size_t size);
 /* Call fn for every thread of every process, under proc_tree_lock and the
  * process's lock, so fn must not sleep or take those locks. */
 struct thread;

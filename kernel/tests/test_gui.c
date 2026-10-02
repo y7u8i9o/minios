@@ -17,6 +17,8 @@
 #include <klog.h>
 #include <errno.h>
 #include <drivers/timer.h>
+#include <arch/smp.h>
+#include <cpu.h>
 #include "gui_helpers.h"
 
 
@@ -1351,6 +1353,104 @@ static void test_gui_logview(void)
     kprintf("gui_logview: log viewer ok\n");
 }
 KTEST_DEFINE("gui_logview", test_gui_logview);
+
+/* The system monitor: /dev/cpustat counts the ticks of every CPU, the
+ * process filter and Ctrl+K kill a sleeping process, and the Resources tab
+ * draws its graphs. */
+static void cpustat_sum(uint64_t *busy, uint64_t *idle, unsigned *cpus)
+{
+    static char text[1024];
+    proc_format_cpustat(text, sizeof text);
+    ktest_assert(text_contains(text, "CPU USER SYSTEM IDLE\n"), "cpustat header: %s", text);
+    *busy = *idle = 0;
+    *cpus = 0;
+    for (char *p = strchr(text, '\n') + 1; *p; (*cpus)++) {
+        uint64_t v[4];
+        for (int k = 0; k < 4; k++) {
+            v[k] = 0;
+            while (*p >= '0' && *p <= '9')
+                v[k] = v[k] * 10 + (uint64_t)(*p++ - '0');
+            if (*p == ' ')
+                p++;
+        }
+        ktest_assert(*p == '\n', "cpustat line format: %s", text);
+        p++;
+        *busy += v[1] + v[2];
+        *idle += v[3];
+    }
+}
+
+static uint64_t cpu_ticks_sum(void)
+{
+    uint64_t sum = 0;
+    for (unsigned id = 0; id < smp_cpu_count(); id++)
+        sum += __atomic_load_n(&cpu_by_id(id)->ticks, __ATOMIC_RELAXED);
+    return sum;
+}
+
+static void test_gui_sysmon(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    uint64_t busy0, idle0, busy1, idle1;
+    unsigned cpus;
+    uint64_t ticks0 = cpu_ticks_sum();
+    cpustat_sum(&busy0, &idle0, &cpus);
+    ktest_assert(cpus == smp_cpu_count(), "cpustat lists %u of %u cpus", cpus, smp_cpu_count());
+    sleep_ms(500);
+    cpustat_sum(&busy1, &idle1, &cpus);
+    uint64_t ticks = cpu_ticks_sum() - ticks0;
+    uint64_t counted = busy1 - busy0 + idle1 - idle0;
+    kprintf("gui_sysmon: %u cpus, %lu of %lu ticks counted, %lu idle\n", cpus, counted, ticks, idle1 - idle0);
+    /* Every timer interrupt after the scheduler start increments exactly
+     * one of the three counters of its CPU.  The two samples are not
+     * atomic, and a few ticks may differ between them. */
+    ktest_assert(counted + 4 * cpus >= ticks && counted <= ticks + 4 * cpus, "cpustat counted %lu of %lu ticks",
+                 counted, ticks);
+    ktest_assert(idle1 > idle0, "no idle ticks");
+
+    struct proc *srv = start_server();
+    struct proc *victim = proc_create_user("/bin/sleep", (char *const[]){ "sleep", "100", NULL },
+                                           (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(victim != NULL, "cannot start sleep");
+    struct proc *cl = proc_create_user("/bin/sysmon", (char *const[]){ "sysmon", NULL }, (char *const[]){ NULL },
+                                       &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start sysmon");
+    wait_active(40, 60, "sysmon");
+    sleep_ms(500);
+    /* Shift+Tab moves the focus from the process table to the filter. */
+    ps2kbd_feed_scancode(0x2a);
+    press_key(0x0f);
+    ps2kbd_feed_scancode(0xaa);
+    sleep_ms(200);
+    type_line("sleep");
+    sleep_ms(300);
+    press_key(0x0f);                    /* Tab returns to the table. */
+    sleep_ms(200);
+    ps2kbd_feed_scancode(0xe0);         /* Home selects the only row. */
+    ps2kbd_feed_scancode(0x47);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xc7);
+    sleep_ms(300);
+    ctrl_key(0x25);                     /* Ctrl+K */
+    int status = proc_reap(victim);
+    kprintf("gui_sysmon: sleep status 0x%x\n", status);
+    ktest_assert(status != 0, "sleep exited normally");
+
+    ctrl_key(0x03);                     /* Ctrl+2 shows the Resources tab. */
+    sleep_ms(2500);
+    int accent = 0;
+    for (int y = 60; y < 60 + 540; y++)
+        for (int x = 40; x < 40 + 760; x++)
+            accent += pixel(x, y) == 0x003c78c8;
+    kprintf("gui_sysmon: %d accent pixels in the graphs\n", accent);
+    ktest_assert(accent > 300, "graphs drawn: %d accent pixels", accent);
+    alt_key(0x3e);
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "sysmon status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_sysmon: system monitor ok\n");
+}
+KTEST_DEFINE("gui_sysmon", test_gui_sysmon);
 
 /* The protocol viewer: the text mode prints the requests and events of
  * the clock while it connects, then the window records a second clock

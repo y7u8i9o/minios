@@ -46,6 +46,9 @@ ellipse:circle
 fill:fill-drip
 eraser:eraser
 wallpaper:desktop
+stop:circle-stop
+kill:ban
+profile:chart-line
 "
 
 fetch() {

@@ -6,21 +6,49 @@ a terminal as well. Each tool is built into `/bin`.
 
 ## sysmon
 
-`sysmon` shows the process table. It reads `/dev/proc` once per second,
-parses the `PID PPID PGID STATE TIME RSS NAME` rows without `sscanf` (the
-libc has none), and lists them in a table with the CPU share of each
-process (the growth of its `TIME` ticks over the refresh interval) and
-its resident size. The label below the table shows the memory summary
-from `/dev/meminfo`. The Terminate and Kill buttons send `SIGTERM` or
-`SIGKILL` to the selected process. Since M41 a second tab holds the
-sampling profiler: Start samples the selected process (or every process
-without a selection) through `/dev/profile`, the table lists the hottest
-symbols with their share, refreshed every second, the checkbox includes
-or excludes kernel samples, and Stop freezes the result. User addresses
-are symbolized with the `.symtab` of `/bin/<name>` of the sampled process,
-kernel addresses with `/dev/ksyms` (see `profile.md`). Kernel samples
-taken inside a spinlock section are attributed to the lock holder and
-marked `(locked)` since M42.
+`sysmon` shows the processes and the resource usage of the system in a
+window titled System monitor with two tabs. It reads its sources once per
+second. Ctrl+1 and Ctrl+2 select the tabs.
+
+The Processes tab lists the rows of `/dev/proc` in a table with the
+columns Name, PID, Parent, State, CPU, CPU time and Memory. The CPU share
+of a process is the growth of its `TIME` ticks over the refresh interval,
+in percent of one processor. Memory is the resident size from the `RSS`
+column. A click on a column header sorts the table by that column, and
+a second click reverses the order. The text field of the toolbar shows
+only the processes whose name contains its text. The row id of a process
+in the table model is its pid. The selection therefore stays on the same
+process when the order of the rows changes. The table below lists the threads of
+the selected process from `/dev/threads` with their thread id, name,
+state, last CPU, the wait queue they block on and the duration of a
+bounded wait. sysmon reads `/dev/threads` only while a process is
+selected and the Processes tab is shown, because the kernel unwinds the
+stack of every thread for each read.
+
+The toolbar buttons, the Process menu and the context menu of the table
+send `SIGTERM` (End process, Ctrl+E) or `SIGKILL` (Kill process, Ctrl+K)
+to the selected process and start `profiler -p PID` (Profile). The
+profiler is started through an intermediate child that exits at once and
+is reaped by sysmon, and the profiler process is then a child of init.
+
+The Resources tab draws the last 60 samples of three quantities on a
+canvas. The CPU section contains one graph per processor, at most four in
+a row, from the user, system and idle ticks of `/dev/cpustat`. The busy
+share of a CPU is the growth of its user and system ticks divided by the
+growth of all three counters. The heading shows the share of all CPUs
+together. The memory graph fills the used memory, `MemTotal` minus
+`MemFree` of `/dev/meminfo`, and draws the used swap as a line when a
+swap device exists. The legend also shows the size of the file cache
+(`FileMapped`, in pages of 4 KiB). The network graph fills the receive
+rate and draws the transmit rate of all interfaces of `/dev/net` except
+`lo`. Its scale is the largest rate of the history, rounded up to 1, 2 or
+5 times a power of ten and at least 1 KiB/s. The status bar shows the
+number of processes, the CPU share, the memory usage and the uptime.
+
+The boot test `gui_sysmon` compares the counters of `/dev/cpustat` with
+the timer interrupts of every CPU, filters the process table for a
+`sleep` process, kills it with Ctrl+K and checks that the Resources tab
+draws its graphs.
 
 ## logview
 

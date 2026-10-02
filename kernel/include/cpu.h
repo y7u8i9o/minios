@@ -32,6 +32,13 @@ struct cpu {
     volatile bool started;      /* finished per CPU initialization, set once */
     void *ap_stack_top;         /* stack used from startup on, becomes the idle stack */
     uint64_t ticks;             /* local timer interrupts, written by this CPU only */
+    /* The three counters below split the ticks since the scheduler started
+     * into time in user mode, time in the kernel outside the idle thread
+     * and time in the idle thread. This CPU writes them with relaxed atomic
+     * stores, and /dev/cpustat reads them with relaxed atomic loads. */
+    uint64_t user_ticks;
+    uint64_t system_ticks;
+    uint64_t idle_ticks;
     uint64_t rcu_epoch;         /* last RCU quiescent epoch, release published */
     unsigned rcu_read_depth;    /* owning CPU only; read sections may not sleep */
     struct mpsc_head rcu_callbacks; /* producers local, reclaimed by this CPU */

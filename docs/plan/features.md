@@ -446,3 +446,13 @@ selected line in full, and copies and saves lines. `/dev/klog` accepts
 libgui has `view_scroll_to` and `view_scroll_position`. Documented in
 `docs/design/tools.md`, tested by the boot test
 `gui_logview` and the libgui host test.
+
+## System monitor update (completed 2026-10-02)
+
+`sysmon` has a Processes tab with a sortable process table, a name filter,
+a table of the threads of the selected process and a context menu, and a
+Resources tab with graphs of the usage of each CPU, of memory and swap and
+of the network rates over 60 seconds. The kernel counts the user, system
+and idle ticks of every CPU and lists them in `/dev/cpustat`. Documented
+in `docs/design/tools.md` and `docs/design/debug.md`, tested by the boot
+test `gui_sysmon`.

@@ -19,6 +19,7 @@
 #include <debug/backtrace.h>
 #include <debug/symbols.h>
 #include <arch/thread.h>
+#include <arch/smp.h>
 
 /* All processes and the pid counter. Protected by proc_list_lock. */
 static LIST_HEAD(proc_list);
@@ -250,16 +251,20 @@ void proc_account_tick(const struct trapframe *tf)
 {
     struct cpu *c = cpu_current();
     struct thread *t = c->current;
-    if (!t || t == c->idle)
+    if (!t || t == c->idle) {
+        __atomic_store_n(&c->idle_ticks, c->idle_ticks + 1, __ATOMIC_RELAXED);
         return;
+    }
     struct proc *p = t->proc;
     bool user = frame_from_user(tf);
     if (user) {
         t->utime++;
         __atomic_fetch_add(&p->utime, 1, __ATOMIC_RELAXED);
+        __atomic_store_n(&c->user_ticks, c->user_ticks + 1, __ATOMIC_RELAXED);
     } else {
         t->stime++;
         __atomic_fetch_add(&p->stime, 1, __ATOMIC_RELAXED);
+        __atomic_store_n(&c->system_ticks, c->system_ticks + 1, __ATOMIC_RELAXED);
     }
     if (p == &kernel_proc)
         return;
@@ -468,6 +473,19 @@ void proc_for_each_thread(void (*fn)(struct proc *p, struct thread *t, void *arg
         }
         spin_unlock(&proc_tree_lock);
     }
+}
+
+size_t proc_format_cpustat(char *buf, size_t size)
+{
+    size_t off = (size_t)ksnprintf(buf, size, "CPU USER SYSTEM IDLE\n");
+    for (unsigned id = 0; id < smp_cpu_count() && off < size - 1; id++) {
+        struct cpu *c = cpu_by_id(id);
+        off += (size_t)ksnprintf(buf + off, size - off, "%u %lu %lu %lu\n", id,
+                                 __atomic_load_n(&c->user_ticks, __ATOMIC_RELAXED),
+                                 __atomic_load_n(&c->system_ticks, __ATOMIC_RELAXED),
+                                 __atomic_load_n(&c->idle_ticks, __ATOMIC_RELAXED));
+    }
+    return off < size ? off : size - 1;
 }
 
 size_t proc_format_threads(char *buf, size_t size)

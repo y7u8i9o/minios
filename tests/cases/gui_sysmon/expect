@@ -1,0 +1,4 @@
+sysmon: [0-9]+ cpus, [0-9]+ processes
+sysmon: signal 9 to pid [0-9]+
+gui_sysmon: system monitor ok
+TEST PASS

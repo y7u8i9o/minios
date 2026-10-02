@@ -4,6 +4,7 @@
 #include <drivers/tty.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
+#include <cpu.h>
 #include <mm/vma.h>
 #include <drivers/fbcon.h>
 #include <console.h>
@@ -338,6 +339,23 @@ static long threadsdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 
 static const struct file_ops threadsdev_fops = { .read = threadsdev_read };
 
+/* /dev/cpustat: the user, system and idle ticks of every CPU, for the CPU
+ * graphs of sysmon. */
+static long cpustatdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    char text[64 + MAX_CPUS * 64];
+    size_t len = proc_format_cpustat(text, sizeof text);
+    if (*pos >= len)
+        return 0;
+    if (n > len - *pos)
+        n = len - *pos;
+    memcpy(buf, text + *pos, n);
+    *pos += n;
+    return (long)n;
+}
+
+static const struct file_ops cpustatdev_fops = { .read = cpustatdev_read };
+
 struct mount_snapshot {
     char *text;
     size_t length;
@@ -465,6 +483,7 @@ void devfs_init(void)
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);
     devfs_register("proc", S_IFCHR | 0444, &procdev_fops, NULL, 0);
     devfs_register("threads", S_IFCHR | 0444, &threadsdev_fops, NULL, 0);
+    devfs_register("cpustat", S_IFCHR | 0444, &cpustatdev_fops, NULL, 0);
     devfs_register("maps", S_IFCHR | 0444, &mapsdev_fops, NULL, 0);
     devfs_register("mounts", S_IFCHR | 0444, &mounts_fops, NULL, 0);
 }
