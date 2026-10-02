@@ -3,38 +3,10 @@
  * session on logout. The audio server is a service of init and lives
  * across sessions. */
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <minios/conf.h>
-
-/* export_locale sets LANG from the lang setting of the desktop
- * configuration, and LC_NUMERIC, LC_TIME and LC_MONETARY from its formats
- * setting, for every program of the session (docs/design/desktop.md). */
-static void export_locale(void)
-{
-    char path[256], line[256], lang[64] = "", formats[64] = "";
-    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
-    if (!f)
-        return;
-    while (fgets(line, sizeof line, f)) {
-        line[strcspn(line, "\n")] = '\0';
-        if (strncmp(line, "lang=", 5) == 0)
-            strlcpy(lang, line + 5, sizeof lang);
-        else if (strncmp(line, "formats=", 8) == 0)
-            strlcpy(formats, line + 8, sizeof formats);
-    }
-    fclose(f);
-    if (lang[0])
-        setenv("LANG", lang, 1);
-    if (formats[0]) {
-        setenv("LC_NUMERIC", formats, 1);
-        setenv("LC_TIME", formats, 1);
-        setenv("LC_MONETARY", formats, 1);
-    }
-}
 
 static pid_t spawn(const char *path)
 {
@@ -50,7 +22,7 @@ static pid_t spawn(const char *path)
 
 int main(int argc, char **argv)
 {
-    export_locale();
+    conf_export_locale();
     pid_t server = spawn("x12");
     sleep_ms(400);
     pid_t panel = spawn("panel");

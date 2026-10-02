@@ -206,6 +206,10 @@ version 2. The cases `ime`, `comp_seat`, `comp_core`, `comp_panel`,
   page.
 
 The page also shows the current time and a number in the selected
-formats. `settings` writes `term_font_px` again, which the configuration
+formats. After the milestone, a language change applies to the running
+panel and desktop and to the programs they start, without a new session.
+The SVG reader of libgui reads numbers in the C locale, which brings back
+the launcher icons in French, Spanish and Russian, and layer surfaces
+accept the acknowledgement of an older configure. `settings` writes `term_font_px` again, which the configuration
 table had lost. The cases `gui_region`, `gui_settings`, `gui_locale`,
 `timezone`, `lineedit` and `gui_term` pass.

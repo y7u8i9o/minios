@@ -19,6 +19,7 @@
 #include <gui/i18n.h>
 #include "panel.h"
 #include <minios/local.h>
+#include <minios/conf.h>
 
 #define MAX_TASKS 16
 
@@ -392,6 +393,12 @@ int main(void)
         if (pf[1].revents & POLLIN) {
             uint64_t n;
             read(tfd, &n, 8);
+            /* A language chosen in Settings applies to the panel and to
+             * the programs that it starts from now on. */
+            if (conf_export_locale()) {
+                setlocale(LC_ALL, "");
+                log_line("language %s", getenv("LANG"));
+            }
             draw_panel();
         }
         if (pf[0].revents & (POLLIN | POLLHUP))

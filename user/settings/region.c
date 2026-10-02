@@ -21,6 +21,7 @@
 #define MAX_ZONES 96
 
 static char locales[MAX_LOCALES][32];
+static char titles[MAX_LOCALES][128];   /* "Français (France)" for each locale */
 static int nlocales;
 static char zones[MAX_ZONES][48];
 static int nzones;
@@ -67,6 +68,8 @@ static void read_locales(void)
     if (d)
         closedir(d);
     qsort(locales, (size_t)nlocales, sizeof locales[0], by_name);
+    for (int i = 0; i < nlocales; i++)
+        locale_title(locales[i], titles[i], sizeof titles[i]);
 }
 
 /* The zones of zones.tab, in its order: the first field of each line. */
@@ -192,14 +195,11 @@ void build_region(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
-    char title[128];
 
     row_label(grid, r, _("Language"));
     lang_combo = combobox_new(grid);
-    for (int i = 0; i < nlocales; i++) {
-        locale_title(locales[i], title, sizeof title);
-        combobox_add(lang_combo, title);
-    }
+    for (int i = 0; i < nlocales; i++)
+        combobox_add(lang_combo, titles[i]);
     int lang = locale_index(conf_get("lang"));
     if (lang < 0)
         lang = locale_index("en_US");
@@ -210,10 +210,8 @@ void build_region(struct widget *page)
     row_label(grid, r, _("Formats"));
     formats_combo = combobox_new(grid);
     combobox_add(formats_combo, _("Same as the language"));
-    for (int i = 0; i < nlocales; i++) {
-        locale_title(locales[i], title, sizeof title);
-        combobox_add(formats_combo, title);
-    }
+    for (int i = 0; i < nlocales; i++)
+        combobox_add(formats_combo, titles[i]);
     int formats = conf_get("formats")[0] ? locale_index(conf_get("formats")) : -1;
     combobox_select(formats_combo, formats + 1);
     widget_connect(formats_combo, "changed", on_formats, NULL);

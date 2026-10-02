@@ -30,3 +30,8 @@ const char *conf_write_path(char *buf, size_t size)
 {
     return conf_read_path(buf, size);
 }
+
+int conf_export_locale(void)
+{
+    return 0;
+}

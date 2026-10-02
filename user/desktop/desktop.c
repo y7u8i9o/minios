@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -344,6 +345,8 @@ static void apply_conf(int first)
     logline("config applied");
 }
 
+static void build_menus(void);
+
 static void poll_conf(void *arg)
 {
     char text[sizeof conf_text];
@@ -352,6 +355,15 @@ static void poll_conf(void *arg)
     if (strcmp(text, conf_text) != 0) {
         strlcpy(conf_text, text, sizeof conf_text);
         apply_conf(0);
+        /* A new language applies to the menus and to the programs that
+         * the desktop starts. */
+        if (conf_export_locale()) {
+            setlocale(LC_ALL, "");
+            widget_destroy(item_menu);
+            widget_destroy(desk_menu);
+            build_menus();
+            logline("language %s", getenv("LANG"));
+        }
     }
     /* Also pick up files added by other programs. */
     refresh();

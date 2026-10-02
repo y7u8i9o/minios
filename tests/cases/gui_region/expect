@@ -2,6 +2,9 @@ settings: set lang fr_FR.UTF-8
 settings: time zone Asia/Tokyo
 lang=fr_FR.UTF-8
 zone=JST
+profile LANG=fr_FR.UTF-8
+panel: language fr_FR.UTF-8
+desktop: language fr_FR.UTF-8
 x12: toplevel [0-9]+ 'Moniteur système' mapped
 gui_region: ok
 TEST PASS

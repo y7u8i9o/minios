@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <math.h>
 #include <errno.h>
+#ifndef MINIOS_HOST
+#include <locale.h>
+#include <pthread.h>
+#endif
 
 #define SUBROWS 4
 
@@ -175,13 +179,36 @@ static void skip_sep(const char **p)
         (*p)++;
 }
 
+#ifndef MINIOS_HOST
+static locale_t c_locale;               /* written once under c_locale_once */
+static pthread_once_t c_locale_once = PTHREAD_ONCE_INIT;
+
+static void c_locale_init(void)
+{
+    c_locale = newlocale(LC_ALL_MASK, "C", (locale_t)0);
+}
+#endif
+
+/* strtof_c reads a number with the full stop as the decimal separator,
+ * which SVG requires, also in a program whose locale has a decimal comma
+ * (app_create selects the locale of the environment). */
+static float strtof_c(const char *s, char **end)
+{
+#ifndef MINIOS_HOST
+    pthread_once(&c_locale_once, c_locale_init);
+    if (c_locale)
+        return (float)strtod_l(s, end, c_locale);
+#endif
+    return strtof(s, end);
+}
+
 static int number(const char **p, float *out)
 {
     skip_sep(p);
     const char *s = *p;
     char *end;
     /* strtof accepts "1.5.5" as 1.5 then ".5", which is the SVG rule. */
-    float v = strtof(s, &end);
+    float v = strtof_c(s, &end);
     if (end == s)
         return 0;
     *p = end;
@@ -485,8 +512,8 @@ struct image *image_render_svg(const char *text, size_t len, int px, uint32_t co
                     vw = 0;
             }
             if (vw <= 0 || vh <= 0) {
-                if (attribute(p, end, "width", val, sizeof val)) vw = strtof(val, NULL);
-                if (attribute(p, end, "height", val, sizeof val)) vh = strtof(val, NULL);
+                if (attribute(p, end, "width", val, sizeof val)) vw = strtof_c(val, NULL);
+                if (attribute(p, end, "height", val, sizeof val)) vh = strtof_c(val, NULL);
                 vx = vy = 0;
             }
             if (vw > 0 && vh > 0) {
@@ -504,9 +531,9 @@ struct image *image_render_svg(const char *text, size_t len, int px, uint32_t co
                     visible = parse_color(val, color, &fill);
                 unsigned opacity = 255;
                 if (attribute(p, end, "opacity", val, sizeof val))
-                    opacity = (unsigned)(strtof(val, NULL) * 255.0f + 0.5f);
+                    opacity = (unsigned)(strtof_c(val, NULL) * 255.0f + 0.5f);
                 if (attribute(p, end, "fill-opacity", val, sizeof val))
-                    opacity = opacity * (unsigned)(strtof(val, NULL) * 255.0f + 0.5f) / 255;
+                    opacity = opacity * (unsigned)(strtof_c(val, NULL) * 255.0f + 0.5f) / 255;
                 int evenodd = attribute(p, end, "fill-rule", val, sizeof val) && strcmp(val, "evenodd") == 0;
                 if (visible && opacity) {
                     struct path path = { { NULL, 0, 0 }, &cv, 0, 0, 0, 0, 0, 0, 0 };

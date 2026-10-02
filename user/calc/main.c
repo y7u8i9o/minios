@@ -1,6 +1,7 @@
 /* Native GUI front end for the RPN and algebraic calculator. */
 #include "calc.h"
 #include <ctype.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,6 +172,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "calc: cannot connect to X12\n");
         return 1;
     }
+    /* The keys and the expressions use the full stop as the decimal
+     * separator, which strtod and the results follow only in the C
+     * numeric locale. */
+    setlocale(LC_NUMERIC, "C");
     struct widget *window = app_window(application, 520, 500, "calculator");
     if (!window)
         return 1;

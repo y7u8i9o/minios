@@ -69,7 +69,9 @@ it, `stretch` scales both dimensions independently.
 
 The keys `lang` and `formats` name locales such as `fr_FR.UTF-8`
 (`locale.md`). `startgui` exports `lang` as `LANG` and `formats` as
-`LC_NUMERIC`, `LC_TIME` and `LC_MONETARY` before it starts the session.
+`LC_NUMERIC`, `LC_TIME` and `LC_MONETARY` before it starts the session,
+through `conf_export_locale`. Without `formats` the three variables are
+removed and the categories follow `LANG`.
 `/etc/profile` exports them in the same way for the shells of the console
 and of the terminal. An empty value exports nothing, and programs then use
 the C locale. `term_font_px` is the font size of the terminal.
@@ -144,8 +146,15 @@ The Region and language page (`region.c`, L7 of `docs/plan/locale.md`)
 lists the locales of `/usr/share/i18n/locales` by the language and
 territory names of their files, for example Français (France). The
 Language list writes `lang`, and the Formats list writes `formats`, whose
-first entry, Same as the language, writes an empty value. Both apply to
-programs started afterwards. The Time zone list shows the zones of
+first entry, Same as the language, writes an empty value. The panel reads
+the file every second and the desktop when it changes. Both then call
+`conf_export_locale` of libc, which sets the variables of the setting in
+their environment, and `setlocale`. The panel draws its labels and the
+next launcher menu in the new language, and the desktop builds its context
+menus again. Programs started from the panel or the desktop, and every
+program that `mime_spawn` starts, inherit the new variables. A program
+that was already running stays in its language, and a new session is not
+needed. The Time zone list shows the zones of
 `/usr/share/zoneinfo/zones.tab` and replaces `/etc/localtime` with a
 symbolic link to the selected zone file. libc reads the zone again when the
 link changes (`time.md`), and the panel clock follows at once. The page
@@ -171,6 +180,9 @@ wallpaper, opening a launcher by double click, both context menus, a
 configuration change through `settings set` and the settings window. The
 `gui_region` boot test selects French and Asia/Tokyo on the Region and
 language page with the keyboard, then checks `lang` in the configuration
-file, the zone abbreviation that `date` prints and the French title of
-sysmon started through `/etc/profile`.
+file, the zone abbreviation that `date` prints and the `LANG` that
+`/etc/profile` exports. The running panel and desktop must report the new
+language. The launcher must draw its icons, and sysmon started from it
+must show its French title. The desktop must survive its context menu
+built again.
 The host test `libgui/tests/test_mime.c` covers the tables.

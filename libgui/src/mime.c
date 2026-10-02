@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <minios/local.h>
+#include <minios/conf.h>
 
 /* local: from the tables of installed packages under the package prefix,
  * which mime_save leaves out. */
@@ -243,6 +244,8 @@ int mime_spawn(char *const argv[])
     if (pid == 0) {
         pid_t grandchild = fork();
         if (grandchild == 0) {
+            /* The program follows the language of the desktop settings. */
+            conf_export_locale();
             execvp(argv[0], argv);
             _exit(127);
         }
