@@ -235,13 +235,16 @@ KTEST_DEFINE("gui_term", test_gui_term);
 
 /* ---- M19 stage 2 ---- */
 
-/* Geometry of the launcher popup, which the panel builds from
- * user/etc/launcher: one 24 px row per entry inside 6 px of padding,
- * opened above the 28 px panel.  Keep these in step with that file. */
-#define LAUNCHER_ENTRIES 11
-#define LAUNCHER_CLOCK   2     /* index of Clock=/bin/clock */
-#define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 24 + 12))
-#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + (i) * 24 + 12)
+/* Geometry of the launcher popup (user/panel/launcher.c) without
+ * installed packages.  The menu has 6 px of padding, a 34 px search row, a
+ * 22 px System heading, one 24 px row per entry of user/etc/launcher
+ * except Log out, a 9 px rule and the Log out row.  It opens above the
+ * 28 px panel.  These values must change with that file. */
+#define LAUNCHER_SYSTEM  11
+#define LAUNCHER_CLOCK   2     /* Clock=/bin/clock is the third System entry. */
+#define LAUNCHER_H       (6 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 9 + 24 + 6)
+#define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - LAUNCHER_H)
+#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + 34 + 22 + (i) * 24 + 12)
 
 
 
@@ -1000,10 +1003,11 @@ static void test_comp_panel(void)
     mouse_click(1);
     sleep_ms(400);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00dcdcdc, "window restored: %08x", pixel(140, 135));
-    /* Launcher menu: open, dismiss it with a click on the desktop (the
-     * compositor sends popup.done), then open it again and pick Clock.
-     * The reopening once asked for a popup role on a surface that still
-     * had one, a protocol error that disconnected the panel. */
+    /* The launcher menu is opened and dismissed with a click on the
+     * desktop, which makes the compositor send popup.done.  It is opened
+     * again, and the search for "clo" and Enter start the clock.  The
+     * reopening once asked for a popup role on a surface that still had
+     * one, a protocol error that disconnected the panel. */
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(400);
@@ -1014,8 +1018,7 @@ static void test_comp_panel(void)
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
     sleep_ms(400);
-    mouse_move_to(&cx, &cy, 40, LAUNCHER_ROW(sh, LAUNCHER_CLOCK), 0);
-    mouse_click(1);
+    type_line("clo\n");
     sleep_ms(1200);
     alt_key(0x3e);                      /* closes the clock, which is on top */
     sleep_ms(300);

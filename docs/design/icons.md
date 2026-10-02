@@ -5,7 +5,9 @@ Icons are installed in `/usr/share/icons` under the names the programs use
 `file`, `terminal`, `clock`, `paint`, `pong`, `search`, `up`, `edit`,
 `back`, `forward`, `home`, `refresh`, `zoom-in`, `zoom-out`, `fit`,
 `undo`, `redo`, `line`, `rectangle`, `ellipse`, `fill`, `eraser`,
-`wallpaper`, `stop`, `kill`, `profile`). Since 2026-09-05 each name may
+`wallpaper`, `stop`, `kill`, `profile`). The launcher menu of the panel
+uses the icons `app-NAME`, where NAME is the file name of the program of
+an entry, and `app-default` for programs without an icon. Since 2026-09-05 each name may
 exist as an SVG file, which is preferred, and as a PNG file, which is
 the fallback; both paths stay in the library.
 

@@ -49,6 +49,32 @@ wallpaper:desktop
 stop:circle-stop
 kill:ban
 profile:chart-line
+app-default:window-maximize
+app-term:terminal
+app-files:folder
+app-clock:clock
+app-sysmon:gauge-high
+app-logview:file-lines
+app-profiler:chart-line
+app-evtest:computer-mouse
+app-screenshot:camera
+app-settings:gear
+app-x12settings:sliders
+app-wireview:network-wired
+app-logout:right-from-bracket
+app-gedit:pen-to-square
+app-hexview:hashtag
+app-player:music
+app-calc:calculator
+app-synth:wave-square
+app-code:code
+app-paint:paintbrush
+app-luasynth:keyboard
+app-mandel:hurricane
+app-pong:table-tennis-paddle-ball
+app-sequencer:table-cells
+app-view:image
+app-unicode:font
 "
 
 fetch() {

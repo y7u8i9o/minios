@@ -1,5 +1,5 @@
-/* panel: a layer surface at the bottom of the screen with a launcher
- * menu (a popup), one button per toplevel from the toplevel manager,
+/* panel: a layer surface at the bottom of the screen with the launcher
+ * menu of launcher.c, one button per toplevel from the toplevel manager,
  * and a clock. Built directly on libwire and the libgui painter; the
  * buffers are rendered at the output's scale. */
 #include <stdio.h>
@@ -17,24 +17,18 @@
 #include "panel.h"
 #include <minios/local.h>
 
-#define MAX_ENTRIES 32
 #define MAX_TASKS 16
 
-struct entry { char title[24]; char path[64]; };
 struct task { struct wire_proxy *handle; char title[48]; int active, minimized; };
 
 struct wire_display *display;
 struct wire_proxy *compositor, *shm, *shell, *seat;
 static struct wire_proxy *pointer, *manager;
 struct canvas panel;
-static struct canvas menu;
-static struct wire_proxy *layer, *popup;
-static struct entry entries[MAX_ENTRIES];
-static int nentries;
+static struct wire_proxy *layer;
 static struct task tasks[MAX_TASKS];
 static int ntasks;
 int screen_w = 1024, screen_h = 768;
-static int menu_open, hover_item = -1;
 static int px, py;                       /* pointer in the panel */
 static struct wire_proxy *pointer_surface;
 uint32_t press_serial;
@@ -126,7 +120,7 @@ void draw_panel(void)
     int w = panel.lw, h = panel.lh;
     painter_fill(&p, 0, 0, w, h, PANEL_BG);
     painter_fill(&p, 0, 0, w, 1, PANEL_LINE);
-    painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, menu_open ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
+    painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, launcher_is_open() ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
     panel_label(&p, 4, 4, MENU_BTN_W, h - 8, "Menu", PANEL_TEXT, 1);
     int limit = (w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
@@ -145,139 +139,6 @@ void draw_panel(void)
     panel_label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
     mixer_draw_button(&p);
     canvas_commit(&panel);
-}
-
-static void draw_menu(void)
-{
-    struct painter p;
-    canvas_painter(&p, &menu);
-    int w = menu.lw, h = menu.lh;
-    painter_fill(&p, 0, 0, w, h, MENU_BG);
-    painter_frame(&p, 0, 0, w, h, MENU_BORDER);
-    for (int i = 0; i < nentries; i++) {
-        int y = MENU_PAD + i * MENU_ITEM_H;
-        if (i == hover_item)
-            painter_rounded(&p, 4, y, w - 8, MENU_ITEM_H, MENU_HOVER, 0xffffffffu);
-        panel_label(&p, 8, y, w - 16, MENU_ITEM_H, entries[i].title, MENU_TEXT, 0);
-    }
-    canvas_commit(&menu);
-}
-
-/* ---- launcher ---- */
-
-static void load_entry_file(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return;
-    char line[128];
-    while (nentries < MAX_ENTRIES && fgets(line, sizeof line, f)) {
-        char *eq = strchr(line, '='), *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
-        if (!eq || line[0] == '#')
-            continue;
-        *eq = '\0';
-        strlcpy(entries[nentries].title, line, sizeof entries[0].title);
-        strlcpy(entries[nentries].path, eq + 1, sizeof entries[0].path);
-        nentries++;
-    }
-    fclose(f);
-}
-
-/* The system table, then the entries of installed packages, which the
- * package installer writes (docs/design/packages.md). */
-static void load_entries(void)
-{
-    nentries = 0;
-    load_entry_file("/etc/launcher");
-    load_entry_file(LOCAL_LAUNCHER);
-}
-
-static void launch(const struct entry *e)
-{
-    if (strcmp(e->path, "@logout") == 0) {
-        log_line("logout");
-        exit(0);                        /* startgui ends the session when the panel exits */
-    }
-    log_line("launch %s", e->path);
-    pid_t pid = fork();
-    if (pid == 0) {
-        char *const args[] = { (char *)e->path, NULL };
-        execvp(e->path, args);
-        _exit(127);
-    }
-}
-
-/* ---- popup events ---- */
-
-static void on_popup_configure(void *user, struct wire_proxy *p, uint32_t serial, int32_t x, int32_t y, int32_t w, int32_t h)
-{
-    if (p != popup)
-        return;
-    popup_ack_configure(p, serial);
-    popup_grab(popup, seat, press_serial);
-    menu_open = 1;
-    draw_menu();
-    log_line("menu opened");
-    draw_panel();
-}
-static void menu_teardown(void);
-static void on_popup_done(void *user, struct wire_proxy *p)
-{
-    /* The compositor dismissed the menu: release the popup and its
-     * surface, or the next menu_show would ask for a role on a surface
-     * that still has one, which is a protocol error. */
-    menu_open = 0;
-    hover_item = -1;
-    menu_teardown();
-    log_line("menu closed");
-    draw_panel();
-}
-static const struct popup_listener popup_events = { on_popup_configure, on_popup_done };
-
-static void menu_show(void)
-{
-    load_entries();
-    int h = nentries * MENU_ITEM_H + 2 * MENU_PAD;
-    if (!menu.surface && canvas_create(&menu, MENU_W, h) < 0)
-        return;
-    struct wire_proxy *pos = shell_create_positioner(shell);
-    positioner_set_size(pos, MENU_W, h);
-    positioner_set_anchor_rect(pos, 4, 4, MENU_BTN_W, 1);
-    positioner_set_anchor(pos, 5);             /* top left of the button */
-    positioner_set_gravity(pos, 7);            /* extends up and to the right */
-    popup = shell_get_popup(shell, menu.surface, panel.surface, pos);
-    popup_add_listener(popup, &popup_events, NULL);
-    positioner_destroy(pos);
-    menu_open = 1;                    /* opening; configure finishes it */
-    wire_display_flush(display);
-    draw_panel();
-}
-
-static void menu_hide(void)
-{
-    if (!menu_open)
-        return;
-    menu_open = 0;
-    hover_item = -1;
-    menu_teardown();
-    draw_panel();
-}
-
-static void menu_teardown(void)
-{
-    if (!menu.surface)
-        return;
-    if (popup) {
-        popup_destroy(popup);
-        popup = NULL;
-    }
-    surface_attach(menu.surface, NULL, 0, 0);
-    surface_commit(menu.surface);
-    surface_destroy(menu.surface);
-    canvas_release_buffer(&menu);
-    memset(&menu, 0, sizeof menu);
-    draw_panel();
 }
 
 /* ---- pointer ---- */
@@ -301,14 +162,8 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
         mixer_pointer_motion(px, py);
         return;
     }
-    if (menu_open && pointer_surface == menu.surface) {
-        int item = py < MENU_PAD ? -1 : (py - MENU_PAD) / MENU_ITEM_H;
-        if (item >= nentries) item = -1;
-        if (item != hover_item) {
-            hover_item = item;
-            draw_menu();
-        }
-    }
+    if (launcher_is_surface(pointer_surface))
+        launcher_pointer_motion(px, py);
 }
 static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
@@ -318,22 +173,16 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
         mixer_pointer_button(button, state, px, py);
         return;
     }
-    if (button != 1 || state != 1)
-        return;
-    if (pointer_surface == menu.surface) {
-        int item = py < MENU_PAD ? -1 : (py - MENU_PAD) / MENU_ITEM_H;
-        menu_hide();
-        if (item >= 0 && item < nentries)
-            launch(&entries[item]);
+    if (launcher_is_surface(pointer_surface)) {
+        launcher_pointer_button(button, state, px, py);
         return;
     }
+    if (button != 1 || state != 1)
+        return;
     if (pointer_surface != panel.surface)
         return;
     if (px >= 4 && px < 4 + MENU_BTN_W) {
-        if (menu_open)
-            menu_hide();
-        else
-            menu_show();
+        launcher_toggle();
         return;
     }
     if (px >= mixer_button_x() && px < mixer_button_x() + MIXER_BTN_W) {
@@ -488,7 +337,7 @@ int main(void)
     pointer = seat_get_pointer(seat);
     pointer_add_listener(pointer, &pointer_events, NULL);
     toplevel_manager_add_listener(manager, &manager_events, NULL);
-    load_entries();
+    launcher_init();
     theme_init_default(&ui);
     ui.metric[TM_FONT_PX] = 13;
     ui.metric[TM_RADIUS] = 5;

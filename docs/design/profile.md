@@ -36,7 +36,9 @@ Thread scheduling measurements are separate from sampled CPU estimates.
 
 ## Graphical analysis
 
-Launch `/bin/profiler`, or use `profiler -p PID` to preselect a target.
+The launcher entry Profiler starts `/bin/profiler`. `profiler -p PID`
+preselects a target, and the Profile command of sysmon starts it with the
+selected process.
 Select the event classes, stack depth and CPU sample interval, then press
 Start. These settings apply to the next capture. A larger sample interval
 reduces CPU sampling overhead. Stop retains the capture for inspection.

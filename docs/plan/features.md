@@ -456,3 +456,12 @@ of the network rates over 60 seconds. The kernel counts the user, system
 and idle ticks of every CPU and lists them in `/dev/cpustat`. Documented
 in `docs/design/tools.md` and `docs/design/debug.md`, tested by the boot
 test `gui_sysmon`.
+
+## Launcher update (completed 2026-10-02)
+
+The launcher menu of the panel has a search field with keyboard
+selection, the headings Applications and System, an icon for every entry,
+a separate Log out row, and two columns when one column does not fit on
+the screen. The launcher code moved from `user/panel/panel.c` into
+`user/panel/launcher.c`. Documented in `docs/design/shell.md`, tested by
+the boot tests `comp_panel` and `gui_wm`.

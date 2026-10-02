@@ -4,7 +4,8 @@ M25 gives surfaces roles and delivers input and data transfers; X12 keeps
 the protocol interface names stable for clients.
 Protocol definitions: `protocol/shell.xml`, `seat.xml`, `data.xml`;
 compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
-`data.c`; the panel: `user/panel/panel.c`.
+`data.c`. The panel consists of `user/panel/panel.c`, `launcher.c` and
+`mixer.c`.
 
 ## Roles (`shell.c`)
 
@@ -149,8 +150,31 @@ Text uses the interface font at 13 px. The buffers are allocated at the
 output's scale with `set_buffer_scale`; a layer configure with a new
 width (mode change) or a new output scale reallocates them, and the
 panel never commits from an output event, since that would race with
-the configure's serial. The menu has 24 pixel rows inside 6 pixels of
-padding. It launches programs from `/etc/launcher` and reaps them.
+the configure's serial.
+
+The launcher menu (`launcher.c`) reads `/etc/launcher` and the table of
+installed packages, `/home/.local/share/launcher`, each time it opens.
+Both files contain `title=program` lines. The entries of packages are
+listed under the heading Applications in the order of their titles. The
+entries of `/etc/launcher` are listed under the heading System in the
+order of the file. The entry with the program `@logout` is drawn in the
+last row below a rule. Each entry has a 16 pixel icon
+`/usr/share/icons/app-NAME.svg`, where NAME is the file name of the
+program, or `app-default.svg` when that file does not exist. The panel
+renders the icons at the output scale and caches them by name.
+
+The first row of the menu is a search field. The popup grab gives the
+menu the keyboard focus, and the panel binds a keyboard for it. Printable
+characters extend the search text, and Backspace removes the last
+character. The menu then lists only the entries whose title contains the
+text, without regard to case, and selects the first of them. Up and Down
+move the selection, and Enter starts the selected entry. The compositor
+closes the menu on Escape. The menu has 6 pixels of padding, a 34 pixel
+search row, 22 pixel headings and 24 pixel entry rows in 200 pixel wide
+columns. Its size is computed for all entries when it opens, and the
+search does not change it. When one column is taller than the screen
+above the panel, Applications and System are placed in two columns. The
+panel starts programs with `fork` and `execvp` and reaps them.
 
 ## Tests
 
@@ -160,4 +184,5 @@ restore through the boxes, a title bar move, Alt+F4), `comp_seat`
 translation of plain, shifted and extended keys, modifier events),
 `comp_data` (a drag from one client to another with the payload read
 through the passed pipe, and the selection), `comp_panel` (task
-button minimize and restore, the launcher popup starting `clock`).
+button minimize and restore, the launcher popup starting `clock` through
+the search field). `gui_wm` starts `clock` with a click on its row.

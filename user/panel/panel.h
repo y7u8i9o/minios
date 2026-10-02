@@ -17,7 +17,11 @@
 #define MIXER_BTN_W 30
 #define MENU_ITEM_H 24
 #define MENU_PAD 6
-#define MENU_W 184
+#define LAUNCHER_COLUMN_W 200
+#define LAUNCHER_SEARCH_H 34
+#define LAUNCHER_HEADING_H 22
+#define LAUNCHER_RULE_H 9
+#define LAUNCHER_ICON 16
 
 /* Colours: a dark neutral bar, pill shaped buttons, a light menu. */
 #define PANEL_BG        0x0023272c
@@ -33,6 +37,8 @@
 #define MENU_HOVER      0x00dce8fa
 #define MENU_TEXT       0x00202428
 #define MENU_TEXT_DIM   0x00858b93
+#define MENU_FIELD      0x00ffffff
+#define MENU_ICON       0x00454b53
 #define METER_BG        0x00e3e6ea
 #define METER_FG        0x0047b26b
 
@@ -65,6 +71,16 @@ void canvas_painter(struct painter *p, struct canvas *c);
 void panel_label(struct painter *p, int x, int y, int w, int h, const char *text, uint32_t color, int centre);
 void log_line(const char *fmt, ...);
 void draw_panel(void);
+
+/* The launcher menu (launcher.c): a popup above the Menu button with a
+ * search field and the entries of /etc/launcher and of the installed
+ * packages. */
+void launcher_init(void);
+int launcher_is_open(void);
+void launcher_toggle(void);
+int launcher_is_surface(const struct wire_proxy *surface);
+void launcher_pointer_motion(int x, int y);
+void launcher_pointer_button(uint32_t button, uint32_t state, int x, int y);
 
 /* The audio applet: a button left of the clock and a popup with the
  * master volume and one row per stream of the audio server. */

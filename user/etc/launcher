@@ -4,6 +4,7 @@ Files=/bin/files
 Clock=/bin/clock
 System monitor=/bin/sysmon
 Kernel log=/bin/logview
+Profiler=/bin/profiler
 Event viewer=/bin/evtest
 Screenshot=/bin/screenshot
 Settings=/bin/settings

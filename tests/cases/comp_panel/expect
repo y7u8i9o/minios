@@ -9,6 +9,7 @@ x12: popup 3 shown at
 x12: popup 3 dismissed
 panel: menu closed
 x12: popup 4 shown at
+panel: menu search 'clo'
 panel: launch /bin/clock
 comp_panel: panel ok
 TEST PASS
