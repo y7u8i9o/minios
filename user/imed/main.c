@@ -130,9 +130,24 @@ const char *imed_config(const char *key)
 
 /* ---- the input method ---- */
 
+/* apply_config takes the page size and the orientation of the candidate
+ * window from the desktop configuration. */
+static void apply_config(void)
+{
+    int ps = atoi(imed_config("ime_page_size"));
+    imed_table.page_size = ps >= 2 && ps <= 9 ? ps : 5;
+    imed_table.vertical = strcmp(imed_config("ime_orientation"), "vertical") == 0;
+}
+
+int imed_page_first(void)
+{
+    return imed_table.cursor / imed_table.page_size * imed_table.page_size;
+}
+
 static void on_activate(void *user, struct wire_proxy *p)
 {
     active = 1;
+    apply_config();
     table_dirty = 1;
 }
 
@@ -177,6 +192,7 @@ static void on_key(void *user, struct wire_proxy *p, uint32_t serial, uint32_t t
         return;
     }
     int handled = 0;
+    apply_config();
     if (current && state) {
         int mods = (int)depressed | (int)(locked & KEYMAP_MOD_CAPS);
         int ch = keymap ? keymap_translate_group(keymap, key, mods, (int)group) : 0;

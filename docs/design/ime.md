@@ -114,6 +114,26 @@ that the field gives. Traditional characters, which have a
 The compositor reads a table when its engine is first selected. It builds
 an array of the readings and finds a reading by binary search.
 
+## Candidate window
+
+The candidate window of `imed` (`user/imed/window.c`) shows the lookup
+table of the engine as IBus does: the candidates with a label and an
+optional comment, the cursor on one of them, a page size, a horizontal or
+a vertical layout and an auxiliary line above the candidates, where the
+pinyin engine shows the segmented syllables. The window shows the page
+that contains the cursor and labels its candidates 1 to the page size.
+With more than one page, the arrows ‹ and › at the end turn the pages.
+The cursor candidate has the selection colour of the theme. The window is
+drawn with the libgui painter in a 16 pixel font, with the CJK fallback
+font, at the scale of the output, and the daemon hides it by attaching no
+buffer when the table is empty.
+
+The configuration keys `ime_page_size` (2 to 9, 5 by default) and
+`ime_orientation` (`horizontal` or `vertical`) of `desktop.conf` apply at
+the next key. The digits choose on the current page (`imed_page_first`). A
+click on a candidate passes it to `candidate_clicked` of the engine, a
+click on an arrow and the wheel turn the pages.
+
 ## Built-in engines
 
 `user/compositor/ime.c` contains both engines. The engines do not use the
@@ -210,3 +230,10 @@ with a Shift tap, which commits hi, and types `x`. gedit must save
 `ABCdeFg`, a new line and `hix`. The log must show the bound input method,
 the candidate surface and its place, the timeout and the end of the input
 method.
+
+`ime_candidates` writes `ime_page_size=2`, starts `imed -t` and gedit and
+composes `abc`. It finds the selected candidate by its colour below the
+caret and clicks the candidate to its right, which commits abc. It
+composes `de`, turns to the second page with the wheel and chooses De with
+Space. With `ime_orientation=vertical` it composes `fg` and clicks the
+candidate below the selected one. gedit must save abcDefg.

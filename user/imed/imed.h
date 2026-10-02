@@ -43,6 +43,7 @@ void imed_preedit(const char *text, int cursor);     /* cursor in bytes, -1 for 
 void imed_table_changed(void);                      /* shows, hides or redraws the window */
 void imed_set_label(const char *label);             /* the label of the current engine */
 const char *imed_config(const char *key);           /* a value of desktop.conf, or "" */
+int imed_page_first(void);                          /* the first candidate of the page of the cursor */
 
 /* The connection, for window.c. */
 struct wire_proxy;

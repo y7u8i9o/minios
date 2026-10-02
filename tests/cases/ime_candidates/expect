@@ -1,0 +1,5 @@
+x12: input method T
+ime_candidates: horizontal page at [0-9]+,[0-9]+
+ime_candidates: vertical page at [0-9]+,[0-9]+
+ime_candidates: text ok
+TEST PASS

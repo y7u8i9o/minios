@@ -76,11 +76,15 @@ and the switch keys stay in the compositor, as GNOME Shell does with IBus.
 The cases `ime_protocol`, `ime`, `comp_seat`, `comp_core`, `comp_shell`,
 `gui_editor` and `keymap` pass.
 
-### I2. Candidate window
+### I2. Candidate window (completed 2026-10-03)
 
 - A lookup table as in IBus: page size, cursor, labels, horizontal or
   vertical layout, an auxiliary line, page arrows, mouse selection.
 - The boot test is `ime_candidates`.
+
+The page size and the orientation come from `ime_page_size` and
+`ime_orientation` of `desktop.conf`, which I5 adds to Settings. The cases
+`ime_candidates`, `ime_protocol` and `ime` pass.
 
 ### I3. Pinyin engine
 

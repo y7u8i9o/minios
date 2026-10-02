@@ -1,8 +1,9 @@
 /* The test engine of imed (imed -t), for the boot tests of the protocol and
  * the candidate window.  Letters collect in the preedit.  The candidates
  * are the letters in capitals, in small letters and with a capital first.
- * Space chooses the candidate under the cursor, 1 to 3 choose by number,
- * Enter commits the letters, Escape drops them.  F12 replies after 300 ms,
+ * Space chooses the candidate under the cursor, 1 to 9 choose by number on
+ * the page, Enter commits the letters, Escape drops them, and the wheel
+ * and the arrows of the window turn the pages.  F12 replies after 300 ms,
  * after the timeout of the compositor. */
 #include <ctype.h>
 #include <string.h>
@@ -19,7 +20,6 @@ static void show(void)
     struct imed_table *t = &imed_table;
     t->n = 0;
     t->cursor = 0;
-    t->page_size = 5;
     t->aux[0] = '\0';
     if (letters[0]) {
         size_t n = strlen(letters);
@@ -67,8 +67,8 @@ static int test_key(uint32_t key, int ch, int mods)
         return 0;
     if (key == KEY_SPACE)
         choose(imed_table.cursor);
-    else if (ch >= '1' && ch <= '3')
-        choose(ch - '1');
+    else if (ch >= '1' && ch <= '9')
+        choose(imed_page_first() + ch - '1');
     else if (key == KEY_ENTER) {
         imed_commit(letters);
         letters[0] = '\0';
