@@ -477,3 +477,12 @@ has a full Edit menu, Replace, Go to line, Lua highlighting and a status
 bar with the language and the line count. Documented in
 `docs/design/framework.md`, tested by `make check` for libgui and the
 boot test `gui_editor`.
+
+## Mandelbrot update (completed 2026-10-02)
+
+`mandel` computes in double precision with one worker thread per CPU on
+tiles of 64 pixels, colours with smooth iteration counts in four
+palettes, zooms to a magnification of 2^44 and into dragged rectangles,
+shows Julia sets, saves PNG files and has menus, a tool bar and a status
+bar. Documented in `docs/design/userland.md`, tested by the boot test
+`gui_mandel`.

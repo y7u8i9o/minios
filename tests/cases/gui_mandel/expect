@@ -1,6 +1,9 @@
+mandel: [0-9]+ worker threads
 mandel: rendering [0-9]+x[0-9]+ at zoom level 0
 mandel: render complete in [0-9]+ ms
 mandel: rendering [0-9]+x[0-9]+ at zoom level 1
+mandel: rendering [0-9]+x[0-9]+ at zoom level [2-9]
+mandel: Julia set
+mandel: saved /home/mandel.png
 mandel: exit 0
 gui_mandel: progressive plotter ok
-TEST PASS

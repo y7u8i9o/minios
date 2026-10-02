@@ -664,11 +664,12 @@ static void test_gui_calc(void)
 }
 KTEST_DEFINE("gui_calc", test_gui_calc);
 
-/* The progressive Mandelbrot plotter: a 640x480 window at (40,60) whose
- * canvas lies below the tool bar. The centre of the home view (-0.6) is
- * inside the set and painted black; the left edge (-2.2) is outside and
- * coloured. A wheel step zooms in and starts a second render; Escape
- * ends the program. */
+/* The Mandelbrot plotter: a 640x480 window at (40,60) whose canvas lies
+ * below the menu bar and the tool bar.  The point at the window centre is
+ * inside the set and painted black, and the left edge (about -2.2) is
+ * outside and coloured.  A wheel step zooms in, a drag with the right
+ * button zooms into a rectangle, j shows the Julia set of the centre,
+ * Ctrl+S saves the image as a PNG file and Escape ends the program. */
 static void test_gui_mandel(void)
 {
     install_app("mandel");
@@ -693,6 +694,27 @@ static void test_gui_mandel(void)
     mouse_move_to(&cx, &cy, mid_x, mid_y, 0);
     feed_packet_wheel(0x00, 0, 0, -1);      /* wheel up: zoom in */
     sleep_ms(1500);
+    mouse_move_to(&cx, &cy, mid_x - 80, mid_y - 60, 0);
+    feed_packet(2, 0, 0);
+    sleep_ms(50);
+    mouse_move_to(&cx, &cy, mid_x + 80, mid_y + 60, 1);
+    feed_packet(0, 0, 0);
+    sleep_ms(1500);
+    press_key(0x24);                        /* j */
+    sleep_ms(1500);
+    vfs_unlink("/home/mandel.png");
+    ctrl_key(0x1f);                         /* Ctrl+S */
+    sleep_ms(800);
+    type_line("\n");
+    sleep_ms(800);
+    struct file *f;
+    ktest_assert(vfs_open("/home/mandel.png", O_RDONLY, 0, &f) == 0, "open /home/mandel.png");
+    char sig[8] = { 0 };
+    file_read(f, sig, sizeof sig);
+    file_put(f);
+    ktest_assert((uint8_t)sig[0] == 0x89 && sig[1] == 'P' && sig[2] == 'N' && sig[3] == 'G', "PNG signature %02x %02x",
+                 (uint8_t)sig[0], (uint8_t)sig[1]);
+    vfs_unlink("/home/mandel.png");
     press_key(0x01);                        /* escape */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "mandel status 0x%x", status);

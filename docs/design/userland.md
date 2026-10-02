@@ -102,24 +102,52 @@ shows the code point at 64 pixels, its block name from the table
 generated in `user/apps/unicode_blocks.h`, its UTF-8 bytes and its glyph
 id in the selected font.
 
-`mandel` renders progressively. The complex plane is held in 64 bit
-fixed point with 26 fraction bits, the view is a centre and a scale in
-units per pixel, and the scale halves per zoom level (levels -4 to 16,
-the iteration limit grows by 24 per level from 64). The renderer keeps
-one iteration count per pixel (-1 while unknown) next to the colour
-image and runs passes with sample spacing 32, 16, 8, 4, 2 and 1. The
-first pass samples the grid and fills 32 pixel blocks. Each later pass
-refines every block of the previous pass: it samples the midpoints of
-the four edges, and when all eight boundary samples agree the block is
-marked solid (every pixel takes that count, so no later pass samples
-inside it), otherwise the centre is sampled and the block is split by
-the next pass. Samples are stored on the pixel grid, so points shared
-by neighbouring blocks are computed once. Work is driven by a repeating
-application timer in slices of 30 ms followed by one invalidation of the
-canvas, so input is handled between slices. Panning shifts the existing
-image and rerenders, dragging shows the shifted image until the button
-is released. Serial lines `mandel: rendering WxH at zoom level N` and
-`mandel: render complete in T ms` mark each render.
+`mandel` shows the Mandelbrot set and its Julia sets in double precision
+arithmetic. The view consists of a centre and a scale in units per pixel.
+The magnification ranges from 1/16 to 2^44 of the home view, which spans
+3.2 units over 640 pixels. The automatic iteration limit is 160 plus 64
+for each doubling of the magnification, and the Iterations list of the
+tool bar selects a fixed limit of 256, 1024 or 4096 instead. Points in
+the main cardioid and in the period 2 bulb are recognised without
+iteration. An escaping point has the smooth iteration count
+n + 1 - log2(log |z|) with the escape radius 256, and the colour is
+interpolated between two entries of one of four palettes of 256 colours
+(Classic, Fire, Ocean, Grey). The points of the set are black.
+
+The program starts one worker thread per CPU, at most eight. The image is
+divided into tiles of 64 pixels, and the workers take the tiles in the
+order of their distance from the centre of the canvas. A worker renders
+its tile in passes with the block sizes 16, 8, 4, 2 and 1. The first pass
+samples the grid and fills 16 pixel blocks. Each later pass refines every
+block of the previous pass: it samples the midpoints of the edges, and
+when all eight boundary samples are inside the set, it marks the block as
+inside without sampling its interior. Otherwise it samples the centre,
+and the next pass splits the block. A worker samples only pixels of its
+own tile, and the tiles share no data. The workers write each pixel of
+the colour image with one relaxed atomic store, and the main thread
+draws the image every 40 ms while a render runs. A mutex protects the
+render job, the next tile, the number of finished tiles and the number
+of active workers. A change of the view sets a cancel flag, waits until
+no worker is active and starts a new job. A change of the palette after a
+finished render recolours the image from the stored smooth counts
+without a new render.
+
+A left click or wheel up zooms in by a factor of 2 at the pointer, and
+wheel down or a right click zooms out. A left drag pans: the image is
+drawn shifted while the button is pressed, and on release the known part of
+the image is moved and the rest is rendered. A right drag draws a
+rectangle and zooms into it. The arrow keys pan by a quarter of the
+canvas, + and - zoom around the centre, r resets the view and j or the
+View menu switch between the Mandelbrot set and the Julia set of the
+current centre, with the Mandelbrot view restored on return. Save image
+(Ctrl+S) writes the canvas as a PNG file with `image_save_png`. The
+status bar shows the centre or the Julia constant, the point under the
+pointer, the magnification, the iteration limit and the progress or the
+duration of the last render. Serial lines `mandel: N worker threads`,
+`mandel: rendering WxH at zoom level N` and
+`mandel: render complete in T ms` mark the start and each render. The
+boot test `gui_mandel` checks the colours of the home view, zooms with
+the wheel and with a rectangle, shows a Julia set and saves a PNG file.
 
 `/etc/tests/utils.sh` exercises the utilities; the `utils` case runs it
 and rejects any line starting with `FAIL`. The `games` case

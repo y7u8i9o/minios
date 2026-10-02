@@ -1,256 +1,415 @@
-/* mandel: the Mandelbrot set in a window. The picture is rendered
- * progressively in passes of shrinking block size, each pass reusing the
- * samples of the previous one, and blocks whose whole boundary shares one
- * iteration count are filled without sampling their interior. Work runs
- * in short slices from a timer so the window stays responsive.
+/* mandel: the Mandelbrot set and its Julia sets in a window.
  *
- * Left click or wheel up zooms in at the pointer, right click or wheel
- * down zooms out, dragging pans, arrows pan, + and - zoom around the
- * centre, r resets the view, Escape or q quits. Without a window server
- * (or with `mandel columns rows`) the set is printed as text.
+ * The picture is divided into tiles of TILE pixels, which worker threads
+ * take in the order of their distance from the centre of the window.  A
+ * tile is rendered progressively in passes of shrinking block size, each
+ * pass reusing the samples of the previous one.  A block whose boundary
+ * samples are all inside the set is filled without sampling its interior.
+ * The main thread draws the image every REDRAW_MS while a render runs.
  *
- * Arithmetic is 64 bit fixed point with 26 fraction bits: no floating
- * point is available in user space. */
+ * The arithmetic is double precision.  Escaping points are coloured with
+ * a smooth iteration count, mu = n + 1 - log2(log |z|), interpolated in
+ * one of four palettes.  The magnification ranges from 1/16 to 2^44.
+ *
+ * A left click or wheel up zooms in at the pointer, wheel down zooms out,
+ * a left drag pans, a right drag zooms into the rectangle and a right
+ * click zooms out.  The arrow keys pan, + and - zoom around the centre,
+ * r resets the view, j switches between the Mandelbrot set and the Julia
+ * set of the centre, and Escape or q quits.  Without a window server, or
+ * with `mandel columns rows`, the set is printed as text. */
+#include <math.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <gui/app.h>
+#include <gui/image.h>
 
-#define FRAC 26
-#define ONE (1LL << FRAC)
-#define FIRST_BLOCK 32
-#define SLICE_MS 30
-#define ZOOM_MIN (-4)
-#define ZOOM_MAX 16
+#define TILE 64
+#define FIRST_BLOCK 16
+#define REDRAW_MS 40
+#define MAX_WORKERS 8
+#define LEVEL_MIN (-4)
+#define LEVEL_MAX 44
+#define BAILOUT 65536.0                 /* The square of the escape radius 256. */
 
-typedef int64_t fix;
+/* The parameters of one render, copied by each worker when it takes a
+ * tile. */
+struct view {
+    double cr, ci, scale;               /* The centre and the units per pixel. */
+    int julia;
+    double jr, ji;                      /* The constant of the Julia set. */
+    int maxiter, width, height;
+    int palette;
+};
 
 static struct app *app;
-static struct widget *canvas, *status;
-static struct timer *work_timer;
+static struct widget *win, *canvas, *st_centre, *st_pointer, *st_zoom, *st_state;
+static struct widget *palette_box, *iter_box, *mandel_item, *julia_item;
+static struct timer *redraw_timer;
 
-/* The view: complex coordinate of the canvas centre and units per pixel. */
-static fix view_cr, view_ci, view_scale, home_scale;
-static int zoom_level, maxiter;
+/* The view of the window, changed by the main thread only. */
+static struct view view;
+static double home_scale;
+static struct view saved_mandel;        /* The Mandelbrot view while a Julia set is shown. */
+static int iter_choice;                 /* 0 selects the iteration count automatically. */
+static int palette_index;              /* The palette of the next render and of recolour. */
 
-/* The image: iteration counts per pixel (-1 while unknown) and colours. */
+/* The image.  iters is -1 for a pixel that is not computed yet, smooth is
+ * the smooth iteration count of a computed pixel.  Each tile is written
+ * by one worker only.  The main thread reads pixels while workers write
+ * them, and the workers store each pixel with one relaxed atomic store. */
 static int width, height;
 static int32_t *iters;
+static float *smooth;
 static struct surface img;
-static uint32_t palette[256];
+static uint32_t palettes[4][256];
 
-/* Progress of the current render: the sample spacing of the running
- * pass (0 when idle) and the next block row of that pass. */
-static int pass, pass_y;
-static long render_start;
+/* The render state.  lock protects job, running, active, next_tile,
+ * ntiles and tiles_done.  cancel is read by the workers without the lock
+ * with relaxed atomic loads. */
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t wake = PTHREAD_COND_INITIALIZER, idle = PTHREAD_COND_INITIALIZER;
+static struct view job;
+static int running, active, next_tile, ntiles, tiles_done;
+static int cancel;
+static int *tile_order;
+static int nworkers;
+static long render_start, render_ms = -1;
 
-/* Dragging state: the image is drawn shifted while the button is held. */
-static int dragging, drag_moved, drag_x, drag_y, drag_ox, drag_oy;
+/* Dragging state: a left drag shifts the drawn image, a right drag draws
+ * the zoom rectangle. */
+static int dragging, drag_button, drag_moved, drag_x, drag_y, drag_ox, drag_oy;
 
-static fix from_tenths(long t)
+static int level_of(const struct view *v)
 {
-    return (fix)t * ONE / 10;
+    return (int)floor(log2(home_scale / v->scale) + 0.5);
 }
 
-static int iterate(fix cr, fix ci, int limit)
+/* iterate returns the smooth iteration count of the orbit of z0 under
+ * z = z^2 + c, or limit when the orbit stays bounded for limit steps. */
+static double iterate(double zr, double zi, double cr, double ci, int limit, int julia)
 {
-    fix zr = 0, zi = 0;
+    if (!julia) {
+        /* The main cardioid and the period 2 bulb are inside the set. */
+        double xq = cr - 0.25, q = xq * xq + ci * ci;
+        if (q * (q + xq) <= 0.25 * ci * ci || (cr + 1) * (cr + 1) + ci * ci <= 0.0625)
+            return limit;
+    }
     for (int i = 0; i < limit; i++) {
-        fix zr2 = (zr * zr) >> FRAC, zi2 = (zi * zi) >> FRAC;
-        if (zr2 + zi2 > 4 * ONE)
-            return i;
-        zi = ((zr * zi) >> (FRAC - 1)) + ci;
+        double zr2 = zr * zr, zi2 = zi * zi;
+        if (zr2 + zi2 > BAILOUT)
+            return i + 1 - log2(0.5 * log(zr2 + zi2));
+        zi = 2 * zr * zi + ci;
         zr = zr2 - zi2 + cr;
     }
     return limit;
 }
 
-/* ---- text mode ---- */
+/* The functions below print the set as text. */
 
 static int text_mode(int cols, int rows)
 {
     const char *shades = " .:-=+*#%@";
     int limit = 40;
-    fix rmin = from_tenths(-22), rmax = from_tenths(10);
-    fix imin = from_tenths(-12), imax = from_tenths(12);
     if (cols < 2 || rows < 2)
         return 1;
     for (int y = 0; y < rows; y++) {
-        fix ci = imin + (imax - imin) * y / (rows - 1);
+        double ci = -1.2 + 2.4 * y / (rows - 1);
         for (int x = 0; x < cols; x++) {
-            fix cr = rmin + (rmax - rmin) * x / (cols - 1);
-            int i = iterate(cr, ci, limit);
-            putchar(i == limit ? '@' : shades[i * 9 / limit]);
+            double cr = -2.2 + 3.2 * x / (cols - 1);
+            double mu = iterate(0, 0, cr, ci, limit, 0);
+            putchar(mu >= limit ? '@' : shades[(int)mu * 9 / limit]);
         }
         putchar('\n');
     }
     return 0;
 }
 
-/* ---- colours ---- */
+/* The functions below compute the colours. */
 
-static void palette_init(void)
+static void palette_from_keys(uint32_t *out, const uint8_t (*key)[3], int nkeys)
 {
-    /* A cycle through five key colours, interpolated linearly. */
-    static const uint8_t key[6][3] = {
-        { 0, 7, 100 }, { 32, 107, 203 }, { 237, 255, 255 },
-        { 255, 170, 0 }, { 0, 2, 0 }, { 0, 7, 100 },
-    };
     for (int i = 0; i < 256; i++) {
-        int seg = i * 5 / 256, t = i * 5 % 256;
+        int seg = i * (nkeys - 1) / 256, t = i * (nkeys - 1) % 256;
         int c[3];
         for (int k = 0; k < 3; k++)
             c[k] = key[seg][k] + (key[seg + 1][k] - key[seg][k]) * t / 256;
-        palette[i] = gfx_rgb(c[0], c[1], c[2]);
+        out[i] = gfx_rgb(c[0], c[1], c[2]);
     }
 }
 
-static uint32_t colour(int it)
+static void palettes_init(void)
 {
-    return it >= maxiter ? 0x00000000 : palette[(it * 6) & 255];
+    static const uint8_t classic[6][3] = {
+        { 0, 7, 100 }, { 32, 107, 203 }, { 237, 255, 255 }, { 255, 170, 0 }, { 0, 2, 0 }, { 0, 7, 100 },
+    };
+    static const uint8_t fire[5][3] = {
+        { 20, 0, 0 }, { 180, 30, 0 }, { 255, 200, 40 }, { 255, 255, 220 }, { 20, 0, 0 },
+    };
+    static const uint8_t ocean[5][3] = {
+        { 0, 20, 40 }, { 0, 110, 140 }, { 120, 220, 210 }, { 240, 250, 255 }, { 0, 20, 40 },
+    };
+    static const uint8_t grey[3][3] = { { 16, 16, 16 }, { 240, 240, 240 }, { 16, 16, 16 } };
+    palette_from_keys(palettes[0], classic, 6);
+    palette_from_keys(palettes[1], fire, 5);
+    palette_from_keys(palettes[2], ocean, 5);
+    palette_from_keys(palettes[3], grey, 3);
 }
 
-/* ---- the progressive renderer ---- */
-
-static void fill_block(int x, int y, int size, uint32_t c)
+static uint32_t mix(uint32_t a, uint32_t b, int t)
 {
-    int x1 = x + size < width ? x + size : width;
-    int y1 = y + size < height ? y + size : height;
+    uint32_t r = (((a >> 16) & 255) * (uint32_t)(256 - t) + ((b >> 16) & 255) * (uint32_t)t) >> 8;
+    uint32_t g = (((a >> 8) & 255) * (uint32_t)(256 - t) + ((b >> 8) & 255) * (uint32_t)t) >> 8;
+    uint32_t bl = ((a & 255) * (uint32_t)(256 - t) + (b & 255) * (uint32_t)t) >> 8;
+    return r << 16 | g << 8 | bl;
+}
+
+/* colour maps a smooth iteration count to a colour.  The palette repeats
+ * every 256 / 6 iterations, and the points of the set are black. */
+static uint32_t colour(double mu, int maxiter, const uint32_t *pal)
+{
+    if (mu >= maxiter)
+        return 0;
+    double f = mu * 6;
+    if (f < 0)
+        f = 0;
+    long i = (long)f;
+    int t = (int)((f - (double)i) * 256);
+    return mix(pal[i & 255], pal[(i + 1) & 255], t);
+}
+
+/* The functions below render one tile.  They run in the worker threads. */
+
+struct tile {
+    int x0, y0, x1, y1;
+    int block;                          /* The block size of the running pass. */
+    const struct view *v;
+    const uint32_t *pal;
+};
+
+static void put_pixel(int x, int y, uint32_t c)
+{
+    __atomic_store_n(&img.pixels[y * width + x], c, __ATOMIC_RELAXED);
+}
+
+static void fill_block(struct tile *t, int x, int y, int size, uint32_t c)
+{
+    int x1 = x + size < t->x1 ? x + size : t->x1;
+    int y1 = y + size < t->y1 ? y + size : t->y1;
     for (int j = y; j < y1; j++)
         for (int i = x; i < x1; i++)
-            img.pixels[j * width + i] = c;
+            put_pixel(i, j, c);
 }
 
-/* The iteration count at a pixel, computed on first use. A newly
- * computed sample colours the block of the current pass below and to
+/* sample returns the iteration count at a pixel and computes it on first
+ * use.  A new sample colours the block of the current pass below and to
  * the right of it. */
-static int sample(int x, int y)
+static int sample(struct tile *t, int x, int y)
 {
     int32_t *p = &iters[y * width + x];
     if (*p < 0) {
-        fix cr = view_cr + (fix)(x - width / 2) * view_scale;
-        fix ci = view_ci + (fix)(y - height / 2) * view_scale;
-        *p = iterate(cr, ci, maxiter);
-        fill_block(x, y, pass, colour(*p));
+        const struct view *v = t->v;
+        double pr = v->cr + (x - v->width / 2) * v->scale;
+        double pi = v->ci + (y - v->height / 2) * v->scale;
+        double mu = v->julia ? iterate(pr, pi, v->jr, v->ji, v->maxiter, 1) : iterate(0, 0, pr, pi, v->maxiter, 0);
+        *p = mu >= v->maxiter ? v->maxiter : (int)mu;
+        smooth[y * width + x] = (float)mu;
+        fill_block(t, x, y, t->block, colour(mu, v->maxiter, t->pal));
     }
     return *p;
 }
 
-/* Mark a whole block as known: every pixel takes the boundary value, so
- * later passes find nothing left to sample inside it. */
-static void solid_block(int x, int y, int size, int it)
+/* solid_block marks a block as inside the set. */
+static void solid_block(struct tile *t, int x, int y, int size)
 {
-    int x1 = x + size < width ? x + size : width;
-    int y1 = y + size < height ? y + size : height;
+    int x1 = x + size < t->x1 ? x + size : t->x1;
+    int y1 = y + size < t->y1 ? y + size : t->y1;
     for (int j = y; j < y1; j++)
-        for (int i = x; i < x1; i++)
-            iters[j * width + i] = it;
-    fill_block(x, y, size, colour(it));
+        for (int i = x; i < x1; i++) {
+            iters[j * width + i] = t->v->maxiter;
+            smooth[j * width + i] = (float)t->v->maxiter;
+            put_pixel(i, j, 0);
+        }
 }
 
-/* Refine one block of the previous pass: sample the midpoints of its
- * edges, and either fill it when all eight boundary samples agree or
- * sample its centre so the next pass can split it further. */
-static void refine_block(int x, int y)
+/* refine_block refines one block of the previous pass.  It samples the
+ * midpoints of the edges and fills the block when all eight boundary
+ * samples are inside the set.  Otherwise it samples the centre, and the
+ * next pass splits the block further.  Samples outside the tile are not
+ * taken, because another worker computes them. */
+static void refine_block(struct tile *t, int x, int y)
 {
-    int s = pass, b = 2 * pass;
-    int has_r = x + s < width, has_d = y + s < height;
+    int s = t->block, b = 2 * s, maxiter = t->v->maxiter;
+    int has_r = x + s < t->x1, has_d = y + s < t->y1;
     if (has_r && has_d && iters[(y + s) * width + x + s] >= 0)
-        return;                             /* already solid */
-    int it = sample(x, y);
-    int inside = x + b < width && y + b < height;
-    int same = inside;
+        return;                         /* The block is already solid. */
+    int inside = x + b < t->x1 && y + b < t->y1;
+    int same = inside && sample(t, x, y) == maxiter;
     if (has_r)
-        same &= sample(x + s, y) == it;
+        same &= sample(t, x + s, y) == maxiter;
     if (has_d)
-        same &= sample(x, y + s) == it;
-    if (x + b < width) {
-        same &= sample(x + b, y) == it;
+        same &= sample(t, x, y + s) == maxiter;
+    if (x + b < t->x1) {
+        same &= sample(t, x + b, y) == maxiter;
         if (has_d)
-            same &= sample(x + b, y + s) == it;
+            same &= sample(t, x + b, y + s) == maxiter;
     }
-    if (y + b < height) {
-        same &= sample(x, y + b) == it;
+    if (y + b < t->y1) {
+        same &= sample(t, x, y + b) == maxiter;
         if (has_r)
-            same &= sample(x + s, y + b) == it;
+            same &= sample(t, x + s, y + b) == maxiter;
     }
     if (inside)
-        same &= sample(x + b, y + b) == it;
+        same &= sample(t, x + b, y + b) == maxiter;
     if (same)
-        solid_block(x, y, b, it);
+        solid_block(t, x, y, b);
     else if (has_r && has_d)
-        sample(x + s, y + s);
+        sample(t, x + s, y + s);
 }
 
-/* One block row of the current pass. Returns 0 when the render is done. */
-static int render_row(void)
+static int cancelled(void)
 {
-    if (pass == 0)
-        return 0;
-    if (pass == FIRST_BLOCK) {
-        for (int x = 0; x < width; x += pass)
-            sample(x, pass_y);
-        pass_y += pass;
-    } else {
-        for (int x = 0; x < width; x += 2 * pass)
-            refine_block(x, pass_y);
-        pass_y += 2 * pass;
-    }
-    if (pass_y >= height) {
-        pass /= 2;
-        pass_y = 0;
-    }
-    return pass != 0;
+    return __atomic_load_n(&cancel, __ATOMIC_RELAXED);
 }
 
-static void status_update(void)
+static void render_tile(int index, const struct view *v)
 {
-    char buf[128];
-    long re = (long)(view_cr * 10000 / ONE), im = (long)(view_ci * 10000 / ONE);
-    long zoom = zoom_level >= 0 ? 1L << zoom_level : 0;
-    if (zoom)
-        snprintf(buf, sizeof buf, "centre %ld.%04ld %c%ld.%04ldi  zoom %ldx  %d iterations  %s",
-                 re / 10000, labs(re % 10000), im < 0 ? '-' : '+', labs(im) / 10000, labs(im) % 10000,
-                 zoom, maxiter, pass ? "rendering" : "done");
-    else
-        snprintf(buf, sizeof buf, "centre %ld.%04ld %c%ld.%04ldi  zoom 1/%ldx  %d iterations  %s",
-                 re / 10000, labs(re % 10000), im < 0 ? '-' : '+', labs(im) / 10000, labs(im) % 10000,
-                 1L << -zoom_level, maxiter, pass ? "rendering" : "done");
-    widget_set_text(status, buf);
+    int cols = (v->width + TILE - 1) / TILE;
+    struct tile t = { (index % cols) * TILE, (index / cols) * TILE, 0, 0, FIRST_BLOCK, v, palettes[v->palette] };
+    t.x1 = t.x0 + TILE < v->width ? t.x0 + TILE : v->width;
+    t.y1 = t.y0 + TILE < v->height ? t.y0 + TILE : v->height;
+    for (int y = t.y0; y < t.y1 && !cancelled(); y += FIRST_BLOCK)
+        for (int x = t.x0; x < t.x1; x += FIRST_BLOCK)
+            sample(&t, x, y);
+    for (t.block = FIRST_BLOCK / 2; t.block >= 1; t.block /= 2)
+        for (int y = t.y0; y < t.y1; y += 2 * t.block) {
+            if (cancelled())
+                return;
+            for (int x = t.x0; x < t.x1; x += 2 * t.block)
+                refine_block(&t, x, y);
+        }
 }
 
-static void work(void *arg)
+static void *worker(void *arg)
 {
-    long deadline = uptime_ms() + SLICE_MS;
-    int more = 1;
-    while (more && uptime_ms() < deadline)
-        more = render_row();
-    widget_invalidate(canvas);
-    if (!more) {
-        app_timer_remove(app, work_timer);
-        work_timer = NULL;
-        printf("mandel: render complete in %ld ms\n", uptime_ms() - render_start);
-        fflush(stdout);
-        status_update();
+    for (;;) {
+        pthread_mutex_lock(&lock);
+        while (!running || next_tile >= ntiles)
+            pthread_cond_wait(&wake, &lock);
+        int index = tile_order[next_tile++];
+        struct view v = job;
+        active++;
+        pthread_mutex_unlock(&lock);
+        render_tile(index, &v);
+        pthread_mutex_lock(&lock);
+        active--;
+        if (!cancelled())
+            tiles_done++;
+        if (active == 0)
+            pthread_cond_signal(&idle);
+        pthread_mutex_unlock(&lock);
     }
+    return NULL;
 }
+
+/* The functions below control the render from the main thread. */
+
+/* render_stop cancels the running render and waits until no worker
+ * writes into the image. */
+static void render_stop(void)
+{
+    pthread_mutex_lock(&lock);
+    __atomic_store_n(&cancel, 1, __ATOMIC_RELAXED);
+    running = 0;
+    while (active > 0)
+        pthread_cond_wait(&idle, &lock);
+    __atomic_store_n(&cancel, 0, __ATOMIC_RELAXED);
+    pthread_mutex_unlock(&lock);
+}
+
+static int auto_iterations(const struct view *v)
+{
+    int level = level_of(v);
+    return 160 + 64 * (level > 0 ? level : 0);
+}
+
+static int tile_distance(int index, int cols)
+{
+    int dx = (index % cols) * TILE + TILE / 2 - width / 2, dy = (index / cols) * TILE + TILE / 2 - height / 2;
+    return dx * dx + dy * dy;
+}
+
+static int cols_for_sort;
+static int compare_tiles(const void *a, const void *b)
+{
+    return tile_distance(*(const int *)a, cols_for_sort) - tile_distance(*(const int *)b, cols_for_sort);
+}
+
+static void status_update(void);
+static void redraw(void *arg);
 
 static void render_start_view(void)
 {
     if (!iters)
         return;
+    render_stop();
     for (int i = 0; i < width * height; i++)
         iters[i] = -1;
-    maxiter = 64 + 24 * (zoom_level > 0 ? zoom_level : 0);
-    pass = FIRST_BLOCK;
-    pass_y = 0;
+    static const int fixed[] = { 0, 256, 1024, 4096 };
+    view.maxiter = iter_choice ? fixed[iter_choice] : auto_iterations(&view);
+    view.width = width;
+    view.height = height;
+    view.palette = palette_index;
+    int cols = (width + TILE - 1) / TILE, rows = (height + TILE - 1) / TILE;
+    pthread_mutex_lock(&lock);
+    job = view;
+    ntiles = cols * rows;
+    free(tile_order);
+    tile_order = malloc(sizeof *tile_order * (size_t)ntiles);
+    for (int i = 0; i < ntiles; i++)
+        tile_order[i] = i;
+    cols_for_sort = cols;
+    qsort(tile_order, (size_t)ntiles, sizeof *tile_order, compare_tiles);
+    next_tile = tiles_done = 0;
+    running = 1;
+    pthread_cond_broadcast(&wake);
+    pthread_mutex_unlock(&lock);
     render_start = uptime_ms();
-    printf("mandel: rendering %dx%d at zoom level %d\n", width, height, zoom_level);
+    render_ms = -1;
+    printf("mandel: rendering %dx%d at zoom level %d\n", width, height, level_of(&view));
     fflush(stdout);
-    if (!work_timer)
-        work_timer = app_timer_add(app, 1, 1, work, NULL);
+    if (!redraw_timer)
+        redraw_timer = app_timer_add(app, REDRAW_MS, 1, redraw, NULL);
+    status_update();
+}
+
+/* recolour paints a finished image again with the current palette. */
+static void recolour(void)
+{
+    const uint32_t *pal = palettes[palette_index];
+    for (int i = 0; i < width * height; i++)
+        img.pixels[i] = colour(smooth[i], view.maxiter, pal);
+    widget_invalidate(canvas);
+}
+
+static void redraw(void *arg)
+{
+    pthread_mutex_lock(&lock);
+    int done = running && tiles_done == ntiles && active == 0;
+    if (done)
+        running = 0;
+    pthread_mutex_unlock(&lock);
+    widget_invalidate(canvas);
+    if (done) {
+        app_timer_remove(app, redraw_timer);
+        redraw_timer = NULL;
+        render_ms = uptime_ms() - render_start;
+        printf("mandel: render complete in %ld ms\n", render_ms);
+        fflush(stdout);
+    }
     status_update();
 }
 
@@ -258,14 +417,19 @@ static int resize_image(int w, int h)
 {
     if (w == width && h == height)
         return 0;
+    render_stop();
     free(iters);
+    free(smooth);
     free(img.pixels);
     iters = malloc(sizeof *iters * (size_t)w * h);
+    smooth = malloc(sizeof *smooth * (size_t)w * h);
     img.pixels = malloc(sizeof *img.pixels * (size_t)w * h);
-    if (!iters || !img.pixels) {
+    if (!iters || !smooth || !img.pixels) {
         free(iters);
+        free(smooth);
         free(img.pixels);
         iters = NULL;
+        smooth = NULL;
         img.pixels = NULL;
         width = height = 0;
         return -1;
@@ -276,57 +440,65 @@ static int resize_image(int w, int h)
     return 1;
 }
 
-/* ---- view changes ---- */
+/* The functions below change the view. */
 
 static void view_reset(void)
 {
-    view_cr = from_tenths(-6);
-    view_ci = 0;
-    zoom_level = 0;
-    view_scale = home_scale;
+    view.cr = view.julia ? 0 : -0.6;
+    view.ci = 0;
+    view.scale = home_scale;
 }
 
-static void scale_for_level(void)
+static void set_scale(double scale)
 {
-    view_scale = zoom_level >= 0 ? home_scale >> zoom_level : home_scale << -zoom_level;
+    double lo = home_scale / ldexp(1.0, LEVEL_MAX), hi = home_scale * ldexp(1.0, -LEVEL_MIN);
+    view.scale = scale < lo ? lo : scale > hi ? hi : scale;
 }
 
-/* Zoom by one level keeping the complex number under pixel (x, y) fixed. */
-static void zoom_at(int x, int y, int dir)
+/* zoom_at divides the scale by factor and leaves the point under pixel
+ * (x, y) in place. */
+static void zoom_at(int x, int y, double factor)
 {
-    int level = zoom_level + dir;
-    if (level < ZOOM_MIN || level > ZOOM_MAX)
-        return;
-    fix cr = view_cr + (fix)(x - width / 2) * view_scale;
-    fix ci = view_ci + (fix)(y - height / 2) * view_scale;
-    zoom_level = level;
-    scale_for_level();
-    view_cr = cr - (fix)(x - width / 2) * view_scale;
-    view_ci = ci - (fix)(y - height / 2) * view_scale;
+    double pr = view.cr + (x - width / 2) * view.scale, pi = view.ci + (y - height / 2) * view.scale;
+    set_scale(view.scale / factor);
+    view.cr = pr - (x - width / 2) * view.scale;
+    view.ci = pi - (y - height / 2) * view.scale;
     render_start_view();
 }
 
-/* Move the view by a pixel offset; the old picture is shifted so the
- * known part stays in place while the rest is rendered. */
+/* zoom_rect shows the rectangle between two pixels in the whole canvas. */
+static void zoom_rect(int x0, int y0, int x1, int y1)
+{
+    int rw = abs(x1 - x0), rh = abs(y1 - y0);
+    if (rw < 4 || rh < 4)
+        return;
+    double mr = view.cr + ((x0 + x1) / 2.0 - width / 2) * view.scale;
+    double mi = view.ci + ((y0 + y1) / 2.0 - height / 2) * view.scale;
+    double fx = (double)rw / width, fy = (double)rh / height;
+    set_scale(view.scale * (fx > fy ? fx : fy));
+    view.cr = mr;
+    view.ci = mi;
+    render_start_view();
+}
+
+/* pan moves the view by a pixel offset.  The old picture is shifted so
+ * that the known part stays in place while the rest is rendered. */
 static void pan(int dx, int dy)
 {
-    view_cr += (fix)dx * view_scale;
-    view_ci += (fix)dy * view_scale;
+    render_stop();
+    view.cr += dx * view.scale;
+    view.ci += dy * view.scale;
     if (iters) {
         for (int j = 0; j < height; j++) {
             int sj = dy >= 0 ? j : height - 1 - j;
             int from = sj + dy;
             uint32_t *row = img.pixels + (size_t)sj * width;
-            if (from < 0 || from >= height) {
+            int n = width - abs(dx);
+            if (from < 0 || from >= height || n <= 0) {
                 memset(row, 0, sizeof *row * (size_t)width);
                 continue;
             }
             const uint32_t *src = img.pixels + (size_t)from * width;
-            int n = width - abs(dx);
-            if (n <= 0) {
-                memset(row, 0, sizeof *row * (size_t)width);
-                continue;
-            }
             memmove(row + (dx < 0 ? -dx : 0), src + (dx > 0 ? dx : 0), sizeof *row * (size_t)n);
             if (dx > 0)
                 memset(row + n, 0, sizeof *row * (size_t)dx);
@@ -337,7 +509,76 @@ static void pan(int dx, int dy)
     render_start_view();
 }
 
-/* ---- signal handlers ---- */
+static void set_julia(int on)
+{
+    if (on == view.julia)
+        return;
+    if (on) {
+        saved_mandel = view;
+        view.jr = view.cr;
+        view.ji = view.ci;
+        view.julia = 1;
+        view_reset();
+    } else {
+        view = saved_mandel;
+        view.julia = 0;
+    }
+    widget_set_enabled(mandel_item, view.julia);
+    widget_set_enabled(julia_item, !view.julia);
+    printf("mandel: %s\n", view.julia ? "Julia set" : "Mandelbrot set");
+    fflush(stdout);
+    render_start_view();
+}
+
+/* The functions below format the status bar. */
+
+static int coordinate_digits(void)
+{
+    int d = 3 + (int)ceil(log10(home_scale / view.scale + 1));
+    return d > 16 ? 16 : d;
+}
+
+static void format_complex(char *buf, size_t size, double re, double im)
+{
+    int d = coordinate_digits();
+    snprintf(buf, size, "%.*f %c %.*fi", d, re, im < 0 ? '-' : '+', d, fabs(im));
+}
+
+static void status_update(void)
+{
+    char buf[128], c[96];
+    format_complex(c, sizeof c, view.cr, view.ci);
+    if (view.julia) {
+        char jc[96];
+        format_complex(jc, sizeof jc, view.jr, view.ji);
+        snprintf(buf, sizeof buf, "Julia %s", jc);
+    } else {
+        snprintf(buf, sizeof buf, "Centre %s", c);
+    }
+    widget_set_text(st_centre, buf);
+    double mag = home_scale / view.scale;
+    if (mag >= 1e6)
+        snprintf(buf, sizeof buf, "Zoom %.2e", mag);
+    else if (mag >= 1)
+        snprintf(buf, sizeof buf, "Zoom %.0fx", mag);
+    else
+        snprintf(buf, sizeof buf, "Zoom 1/%.0fx", 1 / mag);
+    widget_set_text(st_zoom, buf);
+    pthread_mutex_lock(&lock);
+    int done = tiles_done, total = ntiles, run = running;
+    pthread_mutex_unlock(&lock);
+    if (run)
+        snprintf(buf, sizeof buf, "%d iterations, %d%%", view.maxiter, total ? done * 100 / total : 0);
+    else if (render_ms >= 1000)
+        snprintf(buf, sizeof buf, "%d iterations, %ld.%01ld s", view.maxiter, render_ms / 1000, render_ms % 1000 / 100);
+    else if (render_ms >= 0)
+        snprintf(buf, sizeof buf, "%d iterations, %ld ms", view.maxiter, render_ms);
+    else
+        snprintf(buf, sizeof buf, "%d iterations", view.maxiter);
+    widget_set_text(st_state, buf);
+}
+
+/* The functions below process input events. */
 
 static int on_paint(struct widget *w, void *args, void *arg)
 {
@@ -349,9 +590,16 @@ static int on_paint(struct widget *w, void *args, void *arg)
     }
     if (r > 0)
         render_start_view();
-    if (drag_ox || drag_oy)
+    int ox = dragging && drag_button == 1 ? drag_ox : 0, oy = dragging && drag_button == 1 ? drag_oy : 0;
+    if (ox || oy)
         painter_fill(p, 0, 0, w->w, w->h, 0x00000000);
-    painter_blit(p, drag_ox, drag_oy, &img);
+    painter_blit(p, ox, oy, &img);
+    if (dragging && drag_button == 2 && drag_moved) {
+        int x0 = drag_x < drag_x + drag_ox ? drag_x : drag_x + drag_ox;
+        int y0 = drag_y < drag_y + drag_oy ? drag_y : drag_y + drag_oy;
+        painter_frame(p, x0, y0, abs(drag_ox), abs(drag_oy), 0x00ffffff);
+        painter_frame(p, x0 - 1, y0 - 1, abs(drag_ox) + 2, abs(drag_oy) + 2, 0x00000000);
+    }
     return 1;
 }
 
@@ -359,13 +607,13 @@ static int on_press(struct widget *w, void *args, void *arg)
 {
     struct sig_click *c = args;
     widget_focus(w);
-    if (c->button & 1) {
+    if (c->button & 3) {
         dragging = 1;
+        drag_button = c->button & 1 ? 1 : 2;
         drag_moved = 0;
         drag_x = c->x;
         drag_y = c->y;
-    } else if (c->button & 2) {
-        zoom_at(c->x, c->y, -1);
+        drag_ox = drag_oy = 0;
     }
     return 1;
 }
@@ -373,6 +621,10 @@ static int on_press(struct widget *w, void *args, void *arg)
 static int on_motion(struct widget *w, void *args, void *arg)
 {
     struct sig_click *c = args;
+    char pos[96], text[112];
+    format_complex(pos, sizeof pos, view.cr + (c->x - width / 2) * view.scale, view.ci + (c->y - height / 2) * view.scale);
+    snprintf(text, sizeof text, "Pointer %s", pos);
+    widget_set_text(st_pointer, text);
     if (!dragging)
         return 0;
     drag_ox = c->x - drag_x;
@@ -391,10 +643,10 @@ static int on_release(struct widget *w, void *args, void *arg)
     dragging = 0;
     int ox = drag_ox, oy = drag_oy;
     drag_ox = drag_oy = 0;
-    if (drag_moved)
-        pan(-ox, -oy);
+    if (drag_button == 1)
+        drag_moved ? pan(-ox, -oy) : zoom_at(c->x, c->y, 2);
     else
-        zoom_at(c->x, c->y, 1);
+        drag_moved ? zoom_rect(drag_x, drag_y, drag_x + ox, drag_y + oy) : zoom_at(c->x, c->y, 0.5);
     widget_invalidate(w);
     return 1;
 }
@@ -402,7 +654,7 @@ static int on_release(struct widget *w, void *args, void *arg)
 static int on_wheel(struct widget *w, void *args, void *arg)
 {
     struct sig_click *c = args;
-    zoom_at(c->x, c->y, c->button < 0 ? 1 : -1);
+    zoom_at(c->x, c->y, c->button < 0 ? 2 : 0.5);
     return 1;
 }
 
@@ -410,16 +662,19 @@ static int on_key(struct widget *w, void *args, void *arg)
 {
     struct sig_key *k = args;
     switch (k->code) {
-    case 0x01: app_quit(app, 0); return 1;              /* escape */
-    case 0x48: pan(0, -height / 4); return 1;           /* up */
-    case 0x50: pan(0, height / 4); return 1;            /* down */
-    case 0x4b: pan(-width / 4, 0); return 1;            /* left */
-    case 0x4d: pan(width / 4, 0); return 1;             /* right */
+    case KEY_ESC: app_quit(app, 0); return 1;
+    case KEY_UP: pan(0, -height / 4); return 1;
+    case KEY_DOWN: pan(0, height / 4); return 1;
+    case KEY_LEFT: pan(-width / 4, 0); return 1;
+    case KEY_RIGHT: pan(width / 4, 0); return 1;
     }
+    if (k->mods & (WMOD_CTRL | WMOD_ALT))
+        return 0;
     switch (k->ch) {
     case 'q': app_quit(app, 0); return 1;
-    case '+': case '=': zoom_at(width / 2, height / 2, 1); return 1;
-    case '-': zoom_at(width / 2, height / 2, -1); return 1;
+    case '+': case '=': zoom_at(width / 2, height / 2, 2); return 1;
+    case '-': zoom_at(width / 2, height / 2, 0.5); return 1;
+    case 'j': set_julia(!view.julia); return 1;
     case 'r':
         view_reset();
         render_start_view();
@@ -428,22 +683,72 @@ static int on_key(struct widget *w, void *args, void *arg)
     return 0;
 }
 
-static int on_zoom_in(struct widget *w, void *args, void *arg)
-{
-    zoom_at(width / 2, height / 2, 1);
-    return 1;
-}
-
-static int on_zoom_out(struct widget *w, void *args, void *arg)
-{
-    zoom_at(width / 2, height / 2, -1);
-    return 1;
-}
+static int on_zoom_in(struct widget *w, void *args, void *arg) { zoom_at(width / 2, height / 2, 2); return 1; }
+static int on_zoom_out(struct widget *w, void *args, void *arg) { zoom_at(width / 2, height / 2, 0.5); return 1; }
+static int on_mandel(struct widget *w, void *args, void *arg) { set_julia(0); return 1; }
+static int on_julia(struct widget *w, void *args, void *arg) { set_julia(1); return 1; }
 
 static int on_reset(struct widget *w, void *args, void *arg)
 {
     view_reset();
     render_start_view();
+    return 1;
+}
+
+static int on_palette(struct widget *w, void *args, void *arg)
+{
+    palette_index = w->value;
+    pthread_mutex_lock(&lock);
+    int run = running;
+    pthread_mutex_unlock(&lock);
+    if (run)
+        render_start_view();
+    else
+        recolour();
+    widget_focus(canvas);
+    return 1;
+}
+
+static int on_iterations(struct widget *w, void *args, void *arg)
+{
+    iter_choice = w->value;
+    render_start_view();
+    widget_focus(canvas);
+    return 1;
+}
+
+static int on_save(struct widget *w, void *args, void *arg)
+{
+    static char name[256] = "/home/mandel.png";
+    static const char *const buttons[] = { "Close" };
+    if (!app_prompt(app, "Save image", "File:", name, sizeof name))
+        return 1;
+    render_stop();
+    struct image *out = image_create(width, height);
+    int ok = out != NULL;
+    if (out) {
+        for (int i = 0; i < width * height; i++)
+            out->pixels[i] = 0xff000000u | img.pixels[i];
+        ok = image_save_png(out, name) == 0;
+        image_free(out);
+    }
+    if (!ok)
+        app_dialog(app, "Error", "The image cannot be written.", buttons, 1);
+    else {
+        printf("mandel: saved %s\n", name);
+        fflush(stdout);
+    }
+    pthread_mutex_lock(&lock);
+    int unfinished = tiles_done < ntiles;
+    pthread_mutex_unlock(&lock);
+    if (unfinished)
+        render_start_view();
+    return 1;
+}
+
+static int on_quit(struct widget *w, void *args, void *arg)
+{
+    app_quit(app, 0);
     return 1;
 }
 
@@ -461,35 +766,97 @@ int main(int argc, char **argv)
         }
         return text_mode(cols, rows);
     }
-    palette_init();
+    palettes_init();
     /* The home view spans 3.2 units of the real axis over 640 pixels. */
-    home_scale = from_tenths(32) / 640;
+    home_scale = 3.2 / 640;
     view_reset();
+    nworkers = nproc();
+    if (nworkers < 1)
+        nworkers = 1;
+    if (nworkers > MAX_WORKERS)
+        nworkers = MAX_WORKERS;
+    for (int i = 0; i < nworkers; i++) {
+        pthread_t t;
+        if (pthread_create(&t, NULL, worker, NULL) != 0) {
+            nworkers = i;
+            break;
+        }
+    }
+    if (nworkers == 0) {
+        fprintf(stderr, "mandel: cannot create a worker thread\n");
+        return 1;
+    }
+    printf("mandel: %d worker threads\n", nworkers);
+    fflush(stdout);
 
-    struct widget *win = app_window(app, 640, 480, "mandel");
+    win = app_window(app, 640, 480, "Mandelbrot");
     if (!win)
         return 1;
-    struct widget *bar = box_new(win, 0);
-    widget_set_stretch(bar, 1, 0);
-    struct widget *b = button_new(bar, "Zoom &in");
-    widget_connect(b, "clicked", on_zoom_in, NULL);
-    b = button_new(bar, "Zoom &out");
-    widget_connect(b, "clicked", on_zoom_out, NULL);
-    b = button_new(bar, "&Reset");
-    widget_connect(b, "clicked", on_reset, NULL);
-    status = label_new(bar, "");
-    widget_set_stretch(status, 1, 0);
+    struct widget *bar = menubar_new(win);
+    struct widget *file = menu_new(bar, "File");
+    struct widget *m = menu_add(file, "Save image...", "save");
+    widget_connect(m, "clicked", on_save, NULL);
+    widget_set_accel(m, KEY_S, WMOD_CTRL);
+    menu_add_separator(file);
+    m = menu_add(file, "Quit", "quit");
+    widget_connect(m, "clicked", on_quit, NULL);
+    widget_set_accel(m, KEY_Q, WMOD_CTRL);
+    struct widget *viewm = menu_new(bar, "View");
+    widget_connect(menu_add(viewm, "Zoom in", "zoom-in"), "clicked", on_zoom_in, NULL);
+    widget_connect(menu_add(viewm, "Zoom out", "zoom-out"), "clicked", on_zoom_out, NULL);
+    widget_connect(menu_add(viewm, "Reset view", "fit"), "clicked", on_reset, NULL);
+    menu_add_separator(viewm);
+    mandel_item = menu_add(viewm, "Mandelbrot set", NULL);
+    widget_connect(mandel_item, "clicked", on_mandel, NULL);
+    widget_set_enabled(mandel_item, 0);
+    julia_item = menu_add(viewm, "Julia set of the centre", NULL);
+    widget_connect(julia_item, "clicked", on_julia, NULL);
+
+    struct widget *tools = toolbar_new(win);
+    widget_connect(toolbar_add(tools, "zoom-in", "Zoom in"), "clicked", on_zoom_in, NULL);
+    widget_connect(toolbar_add(tools, "zoom-out", "Zoom out"), "clicked", on_zoom_out, NULL);
+    widget_connect(toolbar_add(tools, "fit", "Reset view"), "clicked", on_reset, NULL);
+    widget_connect(toolbar_add(tools, "save", "Save image"), "clicked", on_save, NULL);
+    separator_new(tools);
+    label_new(tools, "Colours");
+    palette_box = combobox_new(tools);
+    combobox_add(palette_box, "Classic");
+    combobox_add(palette_box, "Fire");
+    combobox_add(palette_box, "Ocean");
+    combobox_add(palette_box, "Grey");
+    combobox_select(palette_box, 0);
+    widget_connect(palette_box, "changed", on_palette, NULL);
+    label_new(tools, "Iterations");
+    iter_box = combobox_new(tools);
+    combobox_add(iter_box, "Automatic");
+    combobox_add(iter_box, "256");
+    combobox_add(iter_box, "1024");
+    combobox_add(iter_box, "4096");
+    combobox_select(iter_box, 0);
+    widget_connect(iter_box, "changed", on_iterations, NULL);
+
     canvas = canvas_new(win);
+    widget_set_stretch(canvas, 1, 1);
     widget_connect(canvas, "paint", on_paint, NULL);
     widget_connect(canvas, "press", on_press, NULL);
     widget_connect(canvas, "motion", on_motion, NULL);
     widget_connect(canvas, "release", on_release, NULL);
     widget_connect(canvas, "wheel", on_wheel, NULL);
     widget_connect(canvas, "key", on_key, NULL);
+
+    struct widget *sb = statusbar_new(win);
+    st_centre = statusbar_add(sb, 1);
+    st_pointer = statusbar_add(sb, 0);
+    widget_set_min(st_pointer, 160, 0);
+    st_zoom = statusbar_add(sb, 0);
+    widget_set_min(st_zoom, 70, 0);
+    st_state = statusbar_add(sb, 0);
+    widget_set_min(st_state, 150, 0);
     widget_focus(canvas);
     status_update();
 
     int code = app_run(app);
+    render_stop();
     app_destroy(app);
     printf("mandel: exit %d\n", code);
     return code;
