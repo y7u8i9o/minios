@@ -44,6 +44,8 @@ static void send_preedit(struct text_context *t)
     text_input_send_done(t->res, t->serial);
 }
 
+static void update_anchor(struct text_context *t);
+
 static struct text_context *context_of(struct client *cl)
 {
     return cl && cl->text_input ? cl->text_input->data : NULL;
@@ -64,8 +66,12 @@ static void leave(struct text_context *t)
     if (t && t->entered) {
         end_preedit(t);
         drop_ime(t);
+        /* A preedit of the input method daemon ends with the focus. */
+        text_input_send_preedit_string(t->res, "", 0, 0);
+        text_input_send_done(t->res, t->serial);
         text_input_send_leave(t->res, t->active->res);
         t->entered = 0;
+        im_update();
     }
 }
 
@@ -74,6 +80,8 @@ static void enter(struct text_context *t)
     if (t && t->active && seat_keyboard_focus() == t->active && !t->entered) {
         text_input_send_enter(t->res, t->active->res);
         t->entered = 1;
+        update_anchor(t);
+        im_update();
     }
 }
 
@@ -141,10 +149,13 @@ static void update_anchor(struct text_context *t)
     struct csurface *s = t->active;
     if (!s)
         return;
-    if (t->has_rect)
+    if (t->has_rect) {
         ime_set_anchor(s->x + t->rect[0], s->y + t->rect[1], t->rect[3]);
-    else
+        im_cursor_changed(s->x + t->rect[0], s->y + t->rect[1], t->rect[2], t->rect[3]);
+    } else {
         ime_set_anchor(s->x + 8, s->y + 8, 16);
+        im_cursor_changed(s->x + 8, s->y + 8, 1, 16);
+    }
 }
 
 static void h_commit(struct wire_client *c, struct wire_resource *self, uint32_t serial)
@@ -164,7 +175,10 @@ static void h_commit(struct wire_client *c, struct wire_resource *self, uint32_t
         t->pending_action = -1;
         enter(t);
     }
+    if (t->entered)
+        update_anchor(t);
     text_input_send_done(self, serial);
+    im_context_changed();
 }
 
 static void h_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
@@ -373,6 +387,35 @@ int text_key(uint32_t key, int pressed, int mods)
     return 0;
 }
 
+int text_focused_state(const char **text, uint32_t *cursor, uint32_t *anchor, uint32_t *hints, uint32_t *purpose)
+{
+    struct csurface *focus = seat_keyboard_focus();
+    struct text_context *t = focus ? context_of(focus->client) : NULL;
+    if (!t || !t->entered || t->active != focus)
+        return 0;
+    if (text) *text = t->surrounding;
+    if (cursor) *cursor = t->cursor;
+    if (anchor) *anchor = t->anchor;
+    if (hints) *hints = t->hints;
+    if (purpose) *purpose = t->purpose;
+    return 1;
+}
+
+void text_im_apply(const char *commit, const char *preedit, int begin, int end, uint32_t before, uint32_t after)
+{
+    struct csurface *focus = seat_keyboard_focus();
+    struct text_context *t = focus ? context_of(focus->client) : NULL;
+    if (!t || !t->entered || t->active != focus)
+        return;
+    if (before || after)
+        text_input_send_delete_surrounding_text(t->res, before, after);
+    if (commit && commit[0])
+        text_input_send_commit_string(t->res, commit);
+    if (preedit)
+        text_input_send_preedit_string(t->res, preedit, begin, end);
+    text_input_send_done(t->res, t->serial);
+}
+
 void text_surface_gone(struct csurface *s)
 {
     struct text_context *t = context_of(s ? s->client : NULL);
@@ -381,6 +424,7 @@ void text_surface_gone(struct csurface *s)
     if (t->active == s) {
         t->active = NULL;
         t->entered = 0;
+        im_update();
     }
     if (t->pending == s)
         t->pending = NULL;

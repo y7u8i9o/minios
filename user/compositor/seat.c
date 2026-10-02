@@ -43,7 +43,6 @@ static int nused;
  * is a press and a release of Shift without another key between them, a
  * Ctrl+Shift tap a press of both and a release without another key. */
 static int shift_tap, ctrl_shift_tap;
-static int last_engine = IME_CHINESE;   /* the engine that a toggle selects */
 
 uint32_t seat_last_serial(void) { return last_serial; }
 int seat_modifiers(void) { return modifiers; }
@@ -208,19 +207,10 @@ static void h_get_keyboard(struct wire_client *c, struct wire_resource *self, ui
 }
 static const struct seat_impl seat_handlers = { h_get_pointer, h_get_keyboard };
 
-/* The label of the input method for the panel: the hiragana a or the
- * pinyin pin for an engine, else the layout name in capitals.  The first
- * group of a layout with two groups and the us layout are EN. */
-static void input_label(char *out, size_t size)
+/* seat_layout_label writes the name of the layout in capitals.  The us
+ * layout and the first group of a layout with two groups are EN. */
+void seat_layout_label(char *out, size_t size)
 {
-    if (ime_mode() == IME_JAPANESE) {
-        strlcpy(out, "あ", size);
-        return;
-    }
-    if (ime_mode() == IME_CHINESE) {
-        strlcpy(out, "拼", size);
-        return;
-    }
     int en = strcmp(keymap_name, "us") == 0 || (server_keymap && server_keymap->groups == 2 && group == 0);
     strlcpy(out, en ? "en" : keymap_name, size);
     for (char *p = out; *p; p++)
@@ -231,12 +221,14 @@ static void input_label(char *out, size_t size)
 static void send_input_label(struct client *cl)
 {
     char label[16];
-    input_label(label, sizeof label);
+    im_label(label, sizeof label);
     if (cl->seat_res && cl->seat_res->obj.version >= 2)
         seat_send_input_method(cl->seat_res, label);
 }
 
-static void broadcast_input_label(void)
+/* seat_input_label_changed sends the label of the input method to the
+ * panel and every other seat of version 2. */
+void seat_input_label_changed(void)
 {
     if (!server_of_seat)
         return;
@@ -247,30 +239,10 @@ static void broadcast_input_label(void)
     }
 }
 
-/* seat_select_input_method selects the layout (IME_OFF) or an engine, or
- * the next one in the order layout, Japanese, Chinese for -1.  A
- * composition in progress is committed as it is shown. */
-void seat_select_input_method(int mode)
+int seat_keymap_fd(uint32_t *size)
 {
-    if (mode < 0)
-        mode = (ime_mode() + 1) % 3;
-    if (mode > IME_CHINESE || mode == ime_mode())
-        return;
-    text_ime_end(1);
-    ime_set_mode(mode);
-    if (mode != IME_OFF)
-        last_engine = mode;
-    char label[16];
-    input_label(label, sizeof label);
-    comp_log("input method %s", label);
-    broadcast_input_label();
-}
-
-/* A Shift tap, Ctrl+Space and Super+Space toggle between the layout and the
- * last engine. */
-static void toggle_input_method(void)
-{
-    seat_select_input_method(ime_mode() == IME_OFF ? last_engine : IME_OFF);
+    *size = keymap_size;
+    return keymap_fd;
 }
 
 static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint32_t id)
@@ -344,7 +316,7 @@ int seat_load_keymap(const char *name)
                 send_modifiers(cl, last_serial);
             }
         }
-    broadcast_input_label();
+    im_keymap_changed(keymap_fd, keymap_size);
     return 0;
 }
 
@@ -522,10 +494,10 @@ void seat_key(uint32_t key, int pressed)
                                  !mod_logo && !mod_altgr && !npressed;
             } else if (!pressed && mod == &mod_shift && shift_tap) {
                 shift_tap = 0;
-                toggle_input_method();
+                im_toggle();
             } else if (!pressed && (mod == &mod_shift || mod == &mod_ctrl) && ctrl_shift_tap) {
                 ctrl_shift_tap = 0;
-                seat_select_input_method(-1);
+                im_select(-1);
             }
             /* Alt+Shift switches the group of a layout with two groups when
              * the second of the two keys goes down. */
@@ -533,7 +505,7 @@ void seat_key(uint32_t key, int pressed)
             if (pressed && other && !*mod && server_keymap && server_keymap->groups == 2 &&
                 server_keymap->switch_mode == 1) {
                 group = !group;
-                broadcast_input_label();
+                seat_input_label_changed();
             }
             *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
         } else if (pressed) {
@@ -545,6 +517,7 @@ void seat_key(uint32_t key, int pressed)
                     (mod_altgr ? KEYMAP_MOD_ALTGR : 0);
         if (keyboard_focus && keyboard_focus->client->keyboard)
             send_modifiers(keyboard_focus->client, serial_for(keyboard_focus->client));
+        im_modifiers(modifiers, caps_locked ? KEYMAP_MOD_CAPS : 0, group);
         return;
     }
     if (pressed)
@@ -571,11 +544,32 @@ void seat_key(uint32_t key, int pressed)
         }
         int used = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_CTRL)) && !(modifiers & KEYMAP_MOD_ALT) &&
                    key == KEY_SPACE;
-        if (used)
-            toggle_input_method();
-        else if (keyboard_focus && keyboard_focus->client->keyboard)
-            used = text_key(key, 1, modifiers);
         if (used) {
+            im_toggle();
+            if (nused < 16)
+                used_keys[nused++] = key;
+            return;
+        }
+    } else {
+        for (int i = 0; i < nused; i++)
+            if (used_keys[i] == key) {
+                used_keys[i] = used_keys[--nused];
+                return;
+            }
+    }
+    /* The input method daemon sees the key first and may keep it. */
+    if (keyboard_focus && keyboard_focus->client->keyboard && im_filter_key(key, pressed, modifiers))
+        return;
+    seat_deliver_key(key, pressed, modifiers);
+}
+
+/* seat_deliver_key gives a key to the focused client: to the built-in
+ * composition of text.c, then as a key event.  mods are the modifiers
+ * when the key was typed. */
+void seat_deliver_key(uint32_t key, int pressed, int mods)
+{
+    if (pressed) {
+        if (keyboard_focus && keyboard_focus->client->keyboard && text_key(key, 1, mods)) {
             if (nused < 16)
                 used_keys[nused++] = key;
             return;

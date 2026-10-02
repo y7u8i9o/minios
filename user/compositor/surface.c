@@ -161,6 +161,7 @@ static void surface_resource_destroy(struct wire_resource *r)
     seat_surface_gone(s);
     data_surface_gone(s);
     shell_surface_gone(s);
+    im_surface_gone(s);
     if (s->toplevel)
         s->toplevel->s = NULL;
     comp_log("surface %d destroyed", s->id);

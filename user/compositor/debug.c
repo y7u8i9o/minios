@@ -153,7 +153,7 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     }
     /* The panel indicator selects the next input method with -1. */
     if (strcmp(key, "input_method") == 0) {
-        seat_select_input_method(value);
+        im_select(value);
         return;
     }
     int *p = slot(key);

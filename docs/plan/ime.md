@@ -59,7 +59,7 @@ through the new settings key `input_method`. The cases `ime`, `comp_seat`,
 `comp_panel`, `keymap`, `gui_editor`, `gui_region` and `gui_settings`
 pass.
 
-### I1. Protocol and the daemon
+### I1. Protocol and the daemon (completed 2026-10-03)
 
 - `protocol/ime.xml` with `input_method_manager`, `input_method`,
   `candidate_surface` and `ime_control`. The compositor sends the keys of
@@ -68,6 +68,13 @@ pass.
 - `imed` with an engine interface and the switch keys of I0, started by
   `startgui`.
 - The boot test is `ime_protocol`, with a test input method.
+
+The test input method is the test engine of `imed -t` instead of a
+separate program. The compositor sends the keys of an active context only,
+and the switch keys stay in the compositor, as GNOME Shell does with IBus.
+`startgui` starts `imed` from I3 on, when the daemon has its first engine.
+The cases `ime_protocol`, `ime`, `comp_seat`, `comp_core`, `comp_shell`,
+`gui_editor` and `keymap` pass.
 
 ### I2. Candidate window
 

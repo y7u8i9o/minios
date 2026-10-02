@@ -17,7 +17,7 @@ INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
 # Every directory holding a main program: one binary per directory named
 # after it, plus tests/*.c which each become one binary.
-PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg
+PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg imed
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings

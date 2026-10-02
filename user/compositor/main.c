@@ -107,6 +107,7 @@ static void flush_clients(void)
         }
     }
     hang_tick(now);
+    im_tick(now);
 }
 
 static void frame(void)
@@ -188,6 +189,7 @@ int main(int argc, char **argv)
     seat_init(srv);
     data_init(srv);
     text_init(srv);
+    im_init(srv);
     debug_init(srv);
     trace_init(srv);
     if (verbose)

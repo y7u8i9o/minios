@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Input methods (I1, docs/design/ime.md, docs/plan/ime.md).  The input
+     method daemon imed binds the input method of the seat, receives the
+     keys of the active text input context and replies whether it used
+     each one, as the ProcessKeyEvent call of IBus does.  It composes into
+     the context and shows its candidates on a surface that the compositor
+     places below the caret.  The panel and the settings watch and select
+     the engines through ime_control. -->
+<protocol name="ime">
+  <interface name="input_method_manager" version="1">
+    <!-- One client at a time holds the input method of the seat.  A
+         second request is a protocol error. -->
+    <request name="get_input_method">
+      <arg name="id" type="new_id" interface="input_method"/>
+      <arg name="seat" type="object" interface="seat"/>
+    </request>
+    <request name="get_control">
+      <arg name="id" type="new_id" interface="ime_control"/>
+    </request>
+  </interface>
+
+  <interface name="input_method" version="1">
+    <!-- The reply to a key event with a serial other than 0: handled 1
+         means that the engine used the key and the client does not
+         receive it.  Without a reply in 150 ms the key goes to the
+         client. -->
+    <request name="key_handled">
+      <arg name="serial" type="uint"/><arg name="handled" type="uint"/>
+    </request>
+    <!-- The text changes below apply together at the next commit. -->
+    <request name="commit_string"><arg name="text" type="string"/></request>
+    <request name="preedit_string">
+      <arg name="text" type="string"/><arg name="cursor_begin" type="int"/><arg name="cursor_end" type="int"/>
+    </request>
+    <request name="delete_surrounding_text">
+      <arg name="before" type="uint"/><arg name="after" type="uint"/>
+    </request>
+    <request name="commit"><arg name="serial" type="uint"/></request>
+    <!-- The engines: one line "name TAB label TAB title" each.  The
+         compositor offers them after the keyboard layout. -->
+    <request name="set_engines"><arg name="list" type="string"/></request>
+    <!-- The label of the engine for the panel, which may change with the
+         state of the engine. -->
+    <request name="set_status">
+      <arg name="engine" type="string"/><arg name="label" type="string"/>
+    </request>
+    <request name="get_candidate_surface">
+      <arg name="id" type="new_id" interface="candidate_surface"/>
+      <arg name="surface" type="object" interface="surface"/>
+    </request>
+    <request name="destroy" type="destructor"/>
+
+    <!-- An engine of the daemon is selected and a text input context has
+         the keyboard focus, or no longer. -->
+    <event name="activate"/>
+    <event name="deactivate"/>
+    <event name="surrounding_text">
+      <arg name="text" type="string"/><arg name="cursor" type="uint"/><arg name="anchor" type="uint"/>
+    </event>
+    <event name="content_type"><arg name="hints" type="uint"/><arg name="purpose" type="uint"/></event>
+    <!-- The caret of the active context in screen coordinates. -->
+    <event name="cursor_rectangle">
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </event>
+    <event name="keymap"><arg name="format" type="uint"/><arg name="fd" type="fd"/><arg name="size" type="uint"/></event>
+    <event name="modifiers">
+      <arg name="depressed" type="uint"/><arg name="locked" type="uint"/><arg name="group" type="uint"/>
+    </event>
+    <!-- A key of the active context.  Serial 0 asks for no reply: a key
+         with Ctrl, Alt or Super, which the client receives at once. -->
+    <event name="key">
+      <arg name="serial" type="uint"/><arg name="time" type="uint"/><arg name="key" type="uint"/><arg name="state" type="uint"/>
+    </event>
+    <!-- The engine that the switch keys, the panel or the settings chose. -->
+    <event name="select_engine"><arg name="name" type="string"/></event>
+    <event name="done"><arg name="serial" type="uint"/></event>
+  </interface>
+
+  <!-- The surface of the candidate window.  The compositor places it below
+       the caret of the active context, or above the caret at the bottom of
+       the screen, above every other surface.  It never has the keyboard
+       focus.  It is shown while the input method is active. -->
+  <interface name="candidate_surface" version="1">
+    <request name="destroy" type="destructor"/>
+    <event name="placed"><arg name="x" type="int"/><arg name="y" type="int"/></event>
+  </interface>
+
+  <interface name="ime_control" version="1">
+    <!-- An engine name of the engines event, or "layout". -->
+    <request name="select"><arg name="name" type="string"/></request>
+    <request name="destroy" type="destructor"/>
+    <!-- The methods in order: "layout TAB label TAB title" first, then the
+         engines of the daemon. -->
+    <event name="engines"><arg name="list" type="string"/></event>
+    <event name="current"><arg name="name" type="string"/><arg name="label" type="string"/></event>
+  </interface>
+</protocol>

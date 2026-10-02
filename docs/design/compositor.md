@@ -112,7 +112,8 @@ flip/slide/resize placement and popup grabs; output scale/transform/done
 events and client output tracking; UTF-8 editing and outline-font cmap,
 fallback and combining-mark support; the text-input protocol with a
 built-in Ctrl+Shift+U Unicode preedit; and server-side shadows. The input
-methods for Japanese and Chinese (`ime.c`) are described in `ime.md`.
+methods for Japanese and Chinese (`ime.c`) and the relay to the input
+method daemon (`inputmethod.c`) are described in `ime.md`.
 
 ## Tests
 

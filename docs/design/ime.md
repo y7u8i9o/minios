@@ -1,10 +1,22 @@
 # Input methods
 
-The compositor X12 has two input methods, one for Japanese and one for
-Simplified Chinese. They compose text for the clients that use the text
-input protocol, which are the text widgets of libgui. The panel shows the
-current choice next to the mixer button. `docs/plan/ime.md` replaces these
-engines with an input method daemon.
+Input methods compose text for the clients that use the text input
+protocol, which are the text widgets of libgui. The compositor X12 has two
+built-in engines from L6, one for Japanese and one for Simplified Chinese,
+and relays to the input method daemon `imed`, which `docs/plan/ime.md`
+introduces after the model of IBus. The panel shows the current method
+next to the mixer button.
+
+## Methods
+
+`user/compositor/inputmethod.c` keeps the list of methods that the switch
+keys select. The keyboard layout is the first method. The engines of the
+daemon follow in the order of its `set_engines` request, then the built-in
+engines `l6-japanese` and `l6-chinese`. The first toggle selects the first
+engine whose name contains `pinyin` or `chinese`. `im_select` selects a
+method, `im_toggle` toggles between the layout and the last engine, and the
+settings key `input_method` of the panel and the `ime_control` interface
+select a method as well.
 
 ## Switch keys
 
@@ -22,8 +34,60 @@ A tap is a press and a release without another key between them. Shift
 with a letter therefore types a capital, and Ctrl+Shift+U still starts the
 Unicode entry. A change of method commits the composition as it is shown.
 `seat.c` detects the taps. The panel sends the settings key
-`input_method` with the value -1, and `seat_select_input_method` selects
-the next method.
+`input_method` with the value -1, and `im_select` selects the next method.
+
+## Input method daemon
+
+`protocol/ime.xml` connects the compositor and `imed` (`user/imed/`). The
+roles follow IBus. The text input context of each client is the input
+context, the compositor relays as the bus of ibus-daemon does, and the
+daemon contains the engines and draws the candidate window.
+
+| Interface | Use |
+|---|---|
+| `input_method_manager` | the global: `get_input_method` for one client at a time, `get_control` for any client |
+| `input_method` | keys and context state to the daemon, text changes and the engine list to the compositor |
+| `candidate_surface` | the role of the surface of the candidate window |
+| `ime_control` | the methods and the current one, and `select`, for the panel and the settings |
+
+The daemon is active while one of its engines is selected and a text input
+context has the keyboard focus. It then receives `activate`, the
+surrounding text, the content type and the caret in screen coordinates,
+and `deactivate` when the focus or the method changes. Every key of the
+active context goes to the daemon as `key` with a serial. The compositor
+holds the key in a queue of 32 entries until `key_handled` arrives. A used
+key and its release do not reach the client. A passed key goes the usual
+way through the dead keys of `text.c` to the client, with the modifiers of
+the moment it was typed. A key without a reply in 150 ms passes, and the
+compositor logs a timeout. The keys typed after a waiting key wait behind
+it, so the order stays. A key with Ctrl, Alt or Super goes to the client at
+once and to the daemon with serial 0, and the daemon commits its
+composition. The daemon sends the changes of a key before the reply, so the
+compositor applies the text before it passes the key.
+
+`commit_string`, `preedit_string` and `delete_surrounding_text` apply
+together at `commit`. They reach the focused context while the daemon is
+active, and also after a change of method as long as the same surface has
+the focus. A Shift tap therefore commits the composition of the engine
+when it selects the layout: the compositor sends `select_engine` with the
+new method first, and the daemon commits as the engine shows it. When the
+focus moves, the daemon drops its composition, and the compositor removes
+the preedit from the context that loses the focus.
+
+The candidate surface has the role `ROLE_IME_POPUP`. The compositor places
+it 2 pixels below the caret, or above the caret when the screen ends below,
+inside the screen, and above every other surface. It is shown only while
+the daemon is active and never takes the keyboard focus. The pointer
+reaches it, so the daemon can take clicks on candidates.
+
+`imed` uses raw libwire like the panel. Each engine is a `struct
+imed_engine` with `select`, `key`, `flush`, `reset` and
+`candidate_clicked`. An engine changes the composition through
+`imed_commit`, `imed_preedit` and the lookup table `imed_table`, and the
+daemon sends the changes after each event. `imed -t` adds the test engine
+of the boot tests: letters compose, the candidates are the letters in
+capitals, in small letters and with a capital first, and F12 replies after
+300 ms.
 
 ## Candidate tables
 
@@ -50,7 +114,7 @@ that the field gives. Traditional characters, which have a
 The compositor reads a table when its engine is first selected. It builds
 an array of the readings and finds a reading by binary search.
 
-## Engines
+## Built-in engines
 
 `user/compositor/ime.c` contains both engines. The engines do not use the
 protocol. `ime_key` receives the key code, the character of the layout and
@@ -136,3 +200,13 @@ for `b`, and Ctrl+Space the Chinese engine for `ni`. gedit must save
 山水二かなカナ中国你好a好b你, which also shows that no Space, Enter or digit
 reached gedit as a key. A click on the panel label must then select the
 layout, and the compositor log must report the labels あ, 拼 and EN.
+
+`ime_protocol` starts the compositor, `imed -t` and gedit, and selects the
+test engine with a Ctrl+Shift tap. It composes `abc` and chooses ABC with
+Space, `de` with the digit 2, `Fg` with Right twice and Space, sends Enter,
+which the engine does not use and gedit receives as a new line, and F12,
+which times out and reaches gedit. It composes `hi` and selects the layout
+with a Shift tap, which commits hi, and types `x`. gedit must save
+`ABCdeFg`, a new line and `hix`. The log must show the bound input method,
+the candidate surface and its place, the timeout and the end of the input
+method.

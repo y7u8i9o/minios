@@ -10,6 +10,7 @@
 #include "data-server.h"
 #include "text-server.h"
 #include "debug-server.h"
+#include "ime-server.h"
 
 #define FORMAT_XRGB8888 1
 #define FORMAT_ARGB8888 2
@@ -25,7 +26,7 @@
 #define SHADOW_DY 3             /* the shadow is shifted down by this much */
 #define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
-enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON };
+enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
 enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
 enum { ANCHOR_NONE, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_LEFT, ANCHOR_RIGHT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_LEFT,
@@ -304,7 +305,28 @@ int seat_translate(uint32_t key, int mods);
 /* The keymap of the seat, for the compositions of dead keys. */
 struct keymap;
 const struct keymap *seat_keymap(void);
-void seat_select_input_method(int mode);   /* IME_OFF, an engine, or -1 for the next */
+void seat_layout_label(char *out, size_t size);
+void seat_input_label_changed(void);
+int seat_keymap_fd(uint32_t *size);
+void seat_deliver_key(uint32_t key, int pressed, int mods);
+
+/* inputmethod.c: the methods of the seat and the relay to the input method
+ * daemon (docs/design/ime.md). */
+void im_init(struct wire_server *srv);
+void im_label(char *out, size_t size);
+void im_select(int index);                 /* a method, or -1 for the next */
+void im_toggle(void);
+void im_update(void);
+void im_context_changed(void);
+int im_filter_key(uint32_t key, int pressed, int mods);
+void im_tick(long now);
+void im_modifiers(int depressed, int locked, int group);
+void im_keymap_changed(int fd, uint32_t size);
+void im_cursor_changed(int x, int y, int width, int height);
+int im_candidates_visible(void);
+void im_place_candidates(void);
+void im_candidates_committed(struct csurface *s, int first_map);
+void im_surface_gone(struct csurface *s);
 /* text.c */
 /* ime.c: the input methods (docs/design/ime.md).  ime_key returns 1 when
  * the engine used the key.  The result has the text to commit and the new
@@ -329,6 +351,11 @@ void text_init(struct wire_server *srv);
 void text_focus_changed(struct csurface *old, struct csurface *now);
 int text_key(uint32_t key, int pressed, int mods);   /* 1: a composition used the key */
 void text_ime_end(int commit);   /* ends a composition, committing it or not */
+/* The state of the text input context that has the keyboard focus: 0
+ * without one.  Each pointer may be NULL. */
+int text_focused_state(const char **text, uint32_t *cursor, uint32_t *anchor, uint32_t *hints, uint32_t *purpose);
+/* The changes of the input method daemon for the focused context. */
+void text_im_apply(const char *commit, const char *preedit, int begin, int end, uint32_t before, uint32_t after);
 void text_surface_gone(struct csurface *s);
 void text_client_gone(struct client *c);
 /* data.c */

@@ -978,6 +978,9 @@ void shell_surface_committed(struct csurface *s, int first_map)
         }
         break;
     }
+    case ROLE_IME_POPUP:
+        im_candidates_committed(s, first_map);
+        break;
     default:
         break;
     }

@@ -133,6 +133,8 @@ static int visible(const struct csurface *s)
         return 0;
     if (s->role == ROLE_CURSOR)
         return 0;
+    if (s->role == ROLE_IME_POPUP && !im_candidates_visible())
+        return 0;
     return 1;
 }
 
@@ -146,6 +148,7 @@ static long sort_key(const struct csurface *s)
     case ROLE_POPUP:
         return s->popup && s->popup->parent && s->popup->parent->role == ROLE_LAYER &&
                s->popup->parent->layer->layer >= 2 ? 3500000L + s->id : 2000000L + s->id;
+    case ROLE_IME_POPUP: return 4000000L + s->id;
     case ROLE_DND_ICON: return 5000000L + s->id;
     default: return 2000000L + s->id;
     }
