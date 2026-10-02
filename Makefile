@@ -30,6 +30,7 @@ FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
 NETPEER  := $(BUILD)/host/netpeer
 PKGSIGN  := $(BUILD)/host/pkgsign
+MSGFMT   := $(BUILD)/host/msgfmt
 # PKG_KEY names the key that signs the package repository index
 # (docs/design/packages.md). The build generates one under build/ unless
 # PKG_KEY names another file, and its public half is installed as
@@ -41,13 +42,18 @@ PKG_PUB  := $(BUILD)/pkg/signing.pub
 # that one HTTP server serves both (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
 
-export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKG_KEY_FILE PKG_PUB REPO
+export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN MSGFMT PKG_KEY_FILE PKG_PUB REPO
 
 .PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo check-pkg $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN) $(MSGFMT)
+
+# msgfmt compiles the message catalogues of user/po (docs/design/gettext.md).
+$(MSGFMT): tools/msgfmt/msgfmt.c
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
 
 $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
@@ -120,7 +126,7 @@ packages: user
 
 .PHONY: packages
 
-user: libc libfont libwire libaudio libgui libedit $(PKG_PUB)
+user: libc libfont libwire libaudio libgui libedit $(PKG_PUB) $(MSGFMT)
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to

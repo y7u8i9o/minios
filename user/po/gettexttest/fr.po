@@ -1,0 +1,33 @@
+# French catalogue of the gettexttest domain, used by the boot test gettext.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Save as..."
+msgstr "Enregistrer sous..."
+
+msgid "%d file"
+msgid_plural "%d files"
+msgstr[0] "%d fichier"
+msgstr[1] "%d fichiers"
+
+msgctxt "menu"
+msgid "File"
+msgstr "Fichier"
+
+#, fuzzy
+msgid "Quit"
+msgstr "Quitter"
+
+msgid "Untranslated"
+msgstr ""
+
+msgid "Multi"
+"line"
+msgstr "Plusieurs\n"
+"lignes"

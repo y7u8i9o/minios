@@ -47,7 +47,7 @@ HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/hom
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
 
 .PHONY: all clean
-all: $(LIBS) $(BINS) $(ETC) share-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
+all: $(LIBS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -74,6 +74,17 @@ pkg-key:
 
 # The share tree is copied whole: make cannot name files with spaces, and
 # media files may carry them.
+# Every po/DOMAIN/LL.po becomes /usr/share/locale/LL/LC_MESSAGES/DOMAIN.mo
+# (docs/design/gettext.md).
+.PHONY: locale-tree
+locale-tree:
+	@for po in po/*/*.po; do \
+	    [ -f "$$po" ] || continue; \
+	    domain=$$(basename $$(dirname $$po)); lang=$$(basename $$po .po); \
+	    mkdir -p $(ROOT)/usr/share/locale/$$lang/LC_MESSAGES; \
+	    $(MSGFMT) -o $(ROOT)/usr/share/locale/$$lang/LC_MESSAGES/$$domain.mo $$po || exit 1; \
+	done
+
 .PHONY: share-tree
 share-tree:
 	@mkdir -p $(ROOT)/usr/share/lua/5.5

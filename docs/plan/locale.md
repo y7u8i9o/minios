@@ -107,7 +107,7 @@ because rules such as `M10.5.0/3` contain slashes. The cases `timezone`,
 `time`, `libc_ext`, `locale`, `lua`, `comp_panel`, `gui_images` and
 `gui_settings` pass.
 
-### L3. Message catalogues
+### L3. Message catalogues (completed 2026-10-02)
 
 - `<libintl.h>` with `gettext`, `dgettext`, `dcgettext`, `ngettext`,
   `dngettext`, `textdomain` and `bindtextdomain`. The reader maps the `.mo`
@@ -117,6 +117,11 @@ because rules such as `M10.5.0/3` contain slashes. The cases `timezone`,
 - `tools/msgfmt.py` and `tools/xgettext.py`.
 - The boot test is `gettext`, and the design document is
   `docs/design/gettext.md`.
+
+`msgfmt` became a host program in C (`tools/msgfmt/msgfmt.c`), because the
+build runs no Python. The build compiles every `user/po/DOMAIN/LL.po`.
+`tools/xgettext.py` remains a Python program for maintainers. The cases
+`gettext` and `locale` pass.
 
 ### L4. Fonts and translated desktop
 

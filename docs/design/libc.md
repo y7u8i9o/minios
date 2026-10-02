@@ -79,8 +79,9 @@ result into `-1` with `errno` set. Numbers come from
   `docs/design/time.md`.
 - `setjmp.h`: x86-64 System V `setjmp` and `longjmp`, including the rule
   that a zero value passed to `longjmp` is observed as one. `locale.h`
-  supplies named locales, locale objects and `localeconv`, and
-  `langinfo.h` supplies `nl_langinfo` (`locale.md`). `wchar.h` supplies wide strings and memory operations,
+  supplies named locales, locale objects and `localeconv`,
+  `langinfo.h` supplies `nl_langinfo` (`locale.md`), and `libintl.h`
+  supplies message catalogues (`gettext.md`). `wchar.h` supplies wide strings and memory operations,
   restartable strict UTF-8 conversion, wide numeric conversion and
   wide-character stream input/output. `regex.h` supplies compiled POSIX
   basic and extended byte regular expressions, captures, BRE back
