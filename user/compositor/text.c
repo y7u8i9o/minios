@@ -18,6 +18,7 @@ struct text_context {
     uint32_t cursor, anchor;
     int composing, nhex;
     char hex[7];
+    int dead;                           /* the dead key that waits for its base, or 0 */
 };
 
 static void end_preedit(struct text_context *t)
@@ -185,6 +186,24 @@ static void commit_codepoint(struct text_context *t, uint32_t cp)
     text_input_send_done(t->res, t->serial);
 }
 
+/* show_dead shows the accent of a waiting dead key as the preedit, and
+ * clear_dead removes it. */
+static void show_dead(struct text_context *t)
+{
+    char out[5] = "";
+    int spacing = keymap_compose(seat_keymap(), t->dead, ' ');
+    int n = spacing ? gui_utf8_encode((uint32_t)spacing, out) : 0;
+    out[n] = '\0';
+    text_input_send_preedit_string(t->res, out, n, n);
+    text_input_send_done(t->res, t->serial);
+}
+
+static void clear_dead(struct text_context *t)
+{
+    t->dead = 0;
+    text_input_send_preedit_string(t->res, "", 0, 0);
+}
+
 void text_key(uint32_t key, int pressed, int mods)
 {
     struct csurface *focus = seat_keyboard_focus();
@@ -232,8 +251,40 @@ void text_key(uint32_t key, int pressed, int mods)
     if (mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT))
         return;
     int ch = seat_translate(key, mods);
-    if (ch >= 32 && !keysym_is_symbol(ch))
+    /* A dead key waits for the next character.  The two compose one
+     * character, or the accent and the character are committed when the
+     * layout has no composition for them.  A second dead key commits the
+     * accent of the first, and Escape or Backspace drops it. */
+    if (keysym_is_dead(ch)) {
+        if (t->dead) {
+            int spacing = keymap_compose(seat_keymap(), t->dead, ' ');
+            clear_dead(t);
+            if (spacing)
+                commit_codepoint(t, (uint32_t)spacing);
+        }
+        t->dead = ch;
+        show_dead(t);
+        return;
+    }
+    if (t->dead && (key == KEY_ESC || key == KEY_BACKSPACE)) {
+        clear_dead(t);
+        text_input_send_done(t->res, t->serial);
+        return;
+    }
+    if (ch >= 32 && !keysym_is_symbol(ch)) {
+        if (t->dead) {
+            int composed = keymap_compose(seat_keymap(), t->dead, ch);
+            int spacing = keymap_compose(seat_keymap(), t->dead, ' ');
+            clear_dead(t);
+            if (composed) {
+                commit_codepoint(t, (uint32_t)composed);
+                return;
+            }
+            if (spacing)
+                commit_codepoint(t, (uint32_t)spacing);
+        }
         commit_codepoint(t, (uint32_t)ch);
+    }
 }
 
 void text_surface_gone(struct csurface *s)

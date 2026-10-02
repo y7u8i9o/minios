@@ -1,0 +1,23 @@
+LOADKEYS(1)                 User Commands                LOADKEYS(1)
+
+NAME
+    loadkeys - set the keyboard layout of the console
+
+SYNOPSIS
+    loadkeys name
+    loadkeys -c
+
+DESCRIPTION
+    loadkeys sets the layout of the console keyboard from the file
+    /usr/share/keymaps/name.mkm. The layouts are us, fr, es, ru and jp.
+    The graphical session takes its layout from the keymap setting.
+
+OPTIONS
+    -c   use the keymap setting of the desktop configuration
+
+EXAMPLES
+    loadkeys fr
+    loadkeys -c
+
+SEE ALSO
+    init.conf(5), index(7)

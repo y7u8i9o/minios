@@ -248,10 +248,33 @@ static bool fbcon_escape(char c)
     return true;
 }
 
+/* The UTF-8 decoder of the console output: the code point being decoded
+ * and the number of continuation bytes still expected.  Protected by the
+ * caller's console_lock, as the rest of fb. */
+static uint32_t utf8_cp;
+static int utf8_need;
+
 static void fbcon_put_raw(char c)
 {
     if (fbcon_escape(c))
         return;
+    /* Output is UTF-8.  The font has glyphs for the code points below 256,
+     * and other characters are drawn as a question mark. */
+    unsigned char u = (unsigned char)c;
+    if (utf8_need && (u & 0xc0) == 0x80) {
+        utf8_cp = utf8_cp << 6 | (u & 0x3f);
+        if (--utf8_need)
+            return;
+        c = utf8_cp < 256 ? (char)utf8_cp : '?';
+    } else if (u >= 0xc0 && u < 0xf8) {
+        utf8_need = u >= 0xf0 ? 3 : u >= 0xe0 ? 2 : 1;
+        utf8_cp = u & (0x3f >> utf8_need);
+        return;
+    } else {
+        utf8_need = 0;
+        if (u >= 0x80)
+            c = '?';
+    }
     switch (c) {
     case '\n':
         fb.cx = 0;

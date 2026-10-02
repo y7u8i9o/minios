@@ -1,0 +1,31 @@
+# French (AZERTY), as the fr layout of X11 (docs/design/keymaps.md).
+name "Français (AZERTY)"
+include us
+key grave ² none
+key 1 & 1
+key 2 é 2 dead_tilde
+key 3 \" 3 #
+key 4 ' 4 {
+key 5 ( 5 [
+key 6 - 6 |
+key 7 è 7 dead_grave
+key 8 _ 8 \
+key 9 ç 9 ^
+key 0 à 0 @
+key minus ) ° ]
+key equal = + }
+key q a A
+key w z Z
+key e e E €
+key leftbrace dead_circumflex dead_diaeresis
+key rightbrace $ £ ¤
+key a q Q
+key semicolon m M
+key apostrophe ù %
+key backslash * µ
+key 102nd < >
+key z w W
+key m , ?
+key comma ; .
+key dot : /
+key slash ! §

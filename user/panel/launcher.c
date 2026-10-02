@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <gui/utf8.h>
+#include <wctype.h>
 #include <unistd.h>
 #include <gui/i18n.h>
 #include <gui/image.h>
@@ -56,6 +58,7 @@ static struct canvas menu;
 static struct wire_proxy *popup, *keyboard, *keyboard_surface;
 static struct keymap *keymap;
 static int modifiers;
+static int group;                   /* the keymap group that the compositor reports */
 static int open_state;
 
 static struct { char name[40]; int scale; struct image *img; } icons[MAX_ICONS];
@@ -135,13 +138,26 @@ static void load_entries(void)
     load_file("/etc/launcher", SEC_SYSTEM);
 }
 
+/* lower decodes UTF-8 text into lower case code points and returns their
+ * number. */
+static int lower(const char *s, wchar_t *out, int max)
+{
+    int n = 0, len = (int)strlen(s);
+    for (int at = 0; at < len && n < max;)
+        out[n++] = (wchar_t)towlower((wint_t)gui_utf8_decode(s, len, &at));
+    return n;
+}
+
+/* matches compares the title and the query without regard to case, also
+ * for Cyrillic and Greek letters. */
 static int matches(const struct entry *e)
 {
     if (!query[0])
         return 1;
-    size_t n = strlen(query);
-    for (const char *s = e->title; *s; s++)
-        if (strncasecmp(s, query, n) == 0)
+    wchar_t title[96], q[32];
+    int nt = lower(e->title, title, 96), nq = lower(query, q, 32);
+    for (int i = 0; i + nq <= nt; i++)
+        if (memcmp(title + i, q, (size_t)nq * sizeof *q) == 0)
             return 1;
     return 0;
 }
@@ -451,22 +467,29 @@ static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t t
     if (key == KEY_BACKSPACE) {
         if (n == 0)
             return;
+        /* Backspace removes the last character with all its bytes. */
+        while (n > 0 && ((unsigned char)query[n - 1] & 0xc0) == 0x80)
+            n--;
         query[n - 1] = '\0';
     } else {
-        int ch = keymap ? keymap_translate(keymap, key, modifiers) : 0;
-        if (ch < 32 || ch > 126 || (modifiers & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) || n + 1 >= sizeof query)
+        int ch = keymap ? keymap_translate_group(keymap, key, modifiers, group) : 0;
+        char utf8[5];
+        int len = ch >= 32 && !keysym_is_symbol(ch) ? gui_utf8_encode((uint32_t)ch, utf8) : 0;
+        if (!len || (modifiers & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) || n + (size_t)len >= sizeof query)
             return;
-        query[n] = (char)ch;
-        query[n + 1] = '\0';
+        memcpy(query + n, utf8, (size_t)len);
+        query[n + (size_t)len] = '\0';
     }
     layout_rows();
     log_line("menu search '%s'", query);
     draw();
 }
 
-static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t group)
+static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock,
+                         uint32_t grp)
 {
-    modifiers = (int)dep;
+    modifiers = (int)dep | (int)(lock & KEYMAP_MOD_CAPS);
+    group = (int)grp;
 }
 
 static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t delay) {}

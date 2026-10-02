@@ -106,13 +106,12 @@ popups); `enter`, `leave`, `motion`, `button`, `axis` and `frame`
 carry surface coordinates in 24.8 fixed point and serials. A press on
 a toplevel activates it and sets the keyboard focus; the pressed
 surface keeps the pointer until release. The keyboard sends the keymap
-as a memfd (`/usr/share/keymaps/us.mkm` copied at start), `repeat_info
-(30, 500)`, `enter` with the pressed keys, `key` with the raw code
-(0x80 added for the 0xe0 prefix) and `modifiers` (Shift 1, Ctrl 2,
-Alt 4). Compositor shortcuts: Alt+Tab cycles toplevels, Alt+F4 sends
-`close`, Escape dismisses a grabbed popup. Keymaps
-(`tools/genkeymap/genkeymap.py`) hold four levels per key code;
-`libgui/include/gui/keymap.h` loads them and translates codes. X12
+as a memfd, `repeat_info (30, 500)`, `enter` with the pressed keys, `key`
+with the raw code (0x80 added for the 0xe0 prefix) and `modifiers` (Shift
+1, Ctrl 2, Alt 4, AltGr 16, with Caps Lock and the group in the locked and
+group arguments). Compositor shortcuts: Alt+Tab cycles toplevels, Alt+F4
+sends `close`, Escape dismisses a grabbed popup. `keymaps.md` describes the
+layouts and their translation. X12
 records a short per-client serial history so selection ownership can be
 checked without accepting another client's serial.
 

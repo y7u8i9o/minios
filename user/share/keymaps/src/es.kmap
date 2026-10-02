@@ -1,0 +1,26 @@
+# Spanish (Spain), as the es layout of X11 (docs/design/keymaps.md).
+name "Español"
+include us
+key grave º ª \
+key 1 1 ! |
+key 2 2 \" @
+key 3 3 · #
+key 4 4 $ ~
+key 5 5 % €
+key 6 6 & ¬
+key 7 7 /
+key 8 8 (
+key 9 9 )
+key 0 0 =
+key minus ' ?
+key equal ¡ ¿
+key e e E €
+key leftbrace dead_grave dead_circumflex [
+key rightbrace + * ]
+key semicolon ñ Ñ
+key apostrophe dead_acute dead_diaeresis {
+key backslash ç Ç }
+key 102nd < >
+key comma , ;
+key dot . :
+key slash - _

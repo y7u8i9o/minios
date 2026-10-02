@@ -1,0 +1,47 @@
+# Russian (ЙЦУКЕН) with English (US) as the first group. Alt+Shift
+# switches between the groups (docs/design/keymaps.md).
+name "Русский"
+include us
+switch alt_shift
+group 2
+key grave ё Ё
+key 2 2 \"
+key 3 3 №
+key 4 4 ;
+key 6 6 :
+key 7 7 ?
+key q й Й
+key w ц Ц
+key e у У
+key r к К
+key t е Е
+key y н Н
+key u г Г
+key i ш Ш
+key o щ Щ
+key p з З
+key leftbrace х Х
+key rightbrace ъ Ъ
+key a ф Ф
+key s ы Ы
+key d в В
+key f а А
+key g п П
+key h р Р
+key j о О
+key k л Л
+key l д Д
+key semicolon ж Ж
+key apostrophe э Э
+key backslash \ /
+key 102nd \ /
+key z я Я
+key x ч Ч
+key c с С
+key v м М
+key b и И
+key n т Т
+key m ь Ь
+key comma б Б
+key dot ю Ю
+key slash . ,

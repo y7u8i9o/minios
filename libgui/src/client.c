@@ -106,6 +106,8 @@ static struct wmsg queue[QUEUE_MAX];
 static int qhead, qtail;
 static struct keymap *keymap;
 static int modifiers;
+static int group;                   /* the keymap group that the compositor reports */
+static int pending_dead;            /* a dead key of a window without text input, or 0 */
 static uint32_t last_serial;
 static struct gui_window *pointer_win, *keyboard_win;
 /* Key repeat from the seat's repeat_info: the held key and the time of
@@ -410,14 +412,29 @@ static void on_kbd_leave(void *user, struct wire_proxy *k, uint32_t serial, stru
     if (keyboard_win == w)
         keyboard_win = NULL;
 }
+/* push_key translates a key with the group and the locked Caps Lock that
+ * the compositor reports.  In a window without text input a dead key waits
+ * for the next character and composes with it.  With text input the
+ * compositor composes, and the characters of key events are dropped.
+ * Widgets receive the modifiers Shift, Ctrl, Alt and Logo only. */
 static void push_key(uint32_t key, int down)
 {
-    int ch = keymap_translate(keymap, key, modifiers);
+    int ch = keymap_translate_group(keymap, key, modifiers, group);
+    if (down && !text_active && keysym_is_dead(ch)) {
+        pending_dead = ch;
+        ch = 0;
+    } else if (down && pending_dead && ch >= 32 && !keysym_is_symbol(ch) && !(modifiers & (WMOD_CTRL | WMOD_ALT))) {
+        int composed = keymap_compose(keymap, pending_dead, ch);
+        if (composed)
+            ch = composed;
+        pending_dead = 0;
+    }
     if (keysym_is_symbol(ch))
         ch = 0;
     if (text_active && ch >= 32 && !(modifiers & (WMOD_CTRL | WMOD_ALT)))
         ch = 0;
-    struct wmsg m = { WM_KEY, 0, keyboard_win->id, (int32_t)key, down, modifiers, ch, "" };
+    int mods = modifiers & (WMOD_SHIFT | WMOD_CTRL | WMOD_ALT | WMOD_LOGO);
+    struct wmsg m = { WM_KEY, 0, keyboard_win->id, (int32_t)key, down, mods, ch, "" };
     push(&m);
 }
 
@@ -446,8 +463,12 @@ static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t t
         return;
     push_key(key, state ? 1 : 0);
 }
-static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t group)
-{ modifiers = (int)dep; }
+static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock,
+                         uint32_t grp)
+{
+    modifiers = (int)dep | (int)(lock & KEYMAP_MOD_CAPS);
+    group = (int)grp;
+}
 
 int gui_modifiers(void)
 {

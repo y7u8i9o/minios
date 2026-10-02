@@ -114,9 +114,14 @@ struct input_event {
 #define KEY_KP3        81
 #define KEY_KP0        82
 #define KEY_KPDOT      83
+#define KEY_ZENKAKUHANKAKU 85
 #define KEY_102ND      86
 #define KEY_F11        87
 #define KEY_F12        88
+#define KEY_RO         89
+#define KEY_HENKAN     92
+#define KEY_KATAKANAHIRAGANA 93
+#define KEY_MUHENKAN   94
 #define KEY_KPENTER    96
 #define KEY_RIGHTCTRL  97
 #define KEY_KPSLASH    98
@@ -138,6 +143,7 @@ struct input_event {
 #define KEY_POWER      116
 #define KEY_KPEQUAL    117
 #define KEY_PAUSE      119
+#define KEY_YEN        124
 #define KEY_LEFTMETA   125
 #define KEY_RIGHTMETA  126
 #define KEY_COMPOSE    127

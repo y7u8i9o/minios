@@ -5,6 +5,8 @@
 #include <sched/proc.h>
 #include <sched/thread.h>
 #include <cpu.h>
+#include <input/input.h>
+#include <minios/kbdmap.h>
 #include <mm/vma.h>
 #include <drivers/fbcon.h>
 #include <console.h>
@@ -286,6 +288,19 @@ static long procdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 
 static long condev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 {
+    if (req == KBD_SET_KEYMAP) {
+        /* loadkeys sets the layout of the console keyboard (L5). */
+        struct proc *p = thread_current()->proc;
+        if (!vma_range_ok(p->vm, arg, sizeof(struct kbd_keymap), false))
+            return -EFAULT;
+        struct kbd_keymap *map = kmalloc(sizeof *map);
+        if (!map)
+            return -ENOMEM;
+        memcpy(map, (const void *)arg, sizeof *map);
+        long r = input_console_set_keymap(map);
+        kfree(map);
+        return r;
+    }
     return tty_ioctl(&console_tty, req, arg);
 }
 

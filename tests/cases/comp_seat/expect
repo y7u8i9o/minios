@@ -1,4 +1,4 @@
-comptest: keymap loaded, 2056 bytes
+comptest: keymap loaded, 2064 bytes
 comptest: repeat 30/500
 comptest: pointer motion 50,40
 x12: pointer enter surface 1

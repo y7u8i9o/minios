@@ -150,7 +150,7 @@ of `gui_files` in three. That fix is a separate commit. The cases
 `prof_gui`, `gui_widgets` and `gui_controls` pass, and `make check` for
 libgui passes.
 
-### L5. Keyboard layouts
+### L5. Keyboard layouts (completed 2026-10-03)
 
 - A text source format `user/share/keymaps/src/<name>.kmap`, compiled by
   `tools/genkeymap` into the format MKM2 with the levels plain, Shift, AltGr
@@ -164,6 +164,13 @@ libgui passes.
   `keymap` setting at boot.
 - The boot test is `keymap`, and the design document is
   `docs/design/keymaps.md`.
+
+The layouts are compiled by `tools/genkeymap/genkeymap.py` and checked in.
+The compositor sends a reloaded keymap to every bound keyboard, and the
+launcher search accepts characters outside ASCII. The cases `keymap`,
+`comp_seat`, `gui_editor`, `kbd`, `input_keyboard`, `console_sgr`,
+`comp_panel`, `gui_settings`, `gui_term`, `lineedit`, `lineedit_screen`
+and `gui_files` pass.
 
 ### L6. Input methods for Chinese and Japanese
 

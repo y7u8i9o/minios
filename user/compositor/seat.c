@@ -17,6 +17,11 @@ int decor_hit(const struct csurface *s, int x, int y);
 static struct csurface *pointer_focus, *keyboard_focus, *press_focus, *cursor_surface;
 static int buttons, modifiers;
 static uint8_t mod_shift, mod_ctrl, mod_alt, mod_logo;   /* bit 0 left key, bit 1 right key */
+/* The right Alt key is AltGr when the layout uses AltGr.  Caps Lock and
+ * the group are locked states, sent in the locked and group arguments of
+ * the modifiers event (docs/design/keymaps.md). */
+static uint8_t mod_altgr;
+static int caps_locked, group;
 static uint32_t last_serial;
 static uint32_t cursor_serial, grab_serial;
 static struct client *cursor_client, *grab_client;
@@ -34,7 +39,17 @@ int seat_modifiers(void) { return modifiers; }
 struct csurface *seat_keyboard_focus(void) { return keyboard_focus; }
 struct csurface *seat_cursor_surface(void) { return cursor_surface; }
 int seat_cursor_hidden(void) { return cursor_is_hidden; }
-int seat_translate(uint32_t key, int mods) { return keymap_translate(server_keymap, key, mods); }
+int seat_translate(uint32_t key, int mods)
+{
+    return keymap_translate_group(server_keymap, key, mods | (caps_locked ? KEYMAP_MOD_CAPS : 0), group);
+}
+const struct keymap *seat_keymap(void) { return server_keymap; }
+
+static void send_modifiers(struct client *cl, uint32_t serial_value)
+{
+    keyboard_send_modifiers(cl->keyboard, serial_value, (uint32_t)modifiers, caps_locked ? KEYMAP_MOD_CAPS : 0, 0,
+                            (uint32_t)group);
+}
 
 static uint32_t serial(void)
 {
@@ -147,7 +162,7 @@ static void send_keyboard_enter(struct client *cl, struct csurface *s)
 {
     struct wire_array keys = { pressed_keys, sizeof(uint32_t) * (size_t)npressed };
     keyboard_send_enter(cl->keyboard, serial_for(cl), s->res, &keys);
-    keyboard_send_modifiers(cl->keyboard, last_serial, (uint32_t)modifiers, 0, 0, 0);
+    send_modifiers(cl, last_serial);
 }
 
 static void h_get_pointer(struct wire_client *c, struct wire_resource *self, uint32_t id)
@@ -195,7 +210,8 @@ static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint3
     seat_send_name(r, "seat0");
 }
 
-/* The keymap file is copied into a memfd, which clients map. */
+/* The keymap file is copied into a memfd of its size, which clients map.
+ * A new keymap starts in the first group. */
 int seat_load_keymap(const char *name)
 {
     char path[128];
@@ -208,26 +224,29 @@ int seat_load_keymap(const char *name)
         keymap_free(k);
         return -1;
     }
-    char buf[4096];
+    static char buf[65536];
     ssize_t n = read(fd, buf, sizeof buf);
     close(fd);
     if (n <= 0) {
         keymap_free(k);
         return -1;
     }
+    size_t len = ((size_t)n + 4095) & ~(size_t)4095;
     int mfd = memfd_create("keymap", MFD_CLOEXEC);
-    if (mfd < 0 || ftruncate(mfd, 4096) < 0) {
+    if (mfd < 0 || ftruncate(mfd, (long)len) < 0) {
+        if (mfd >= 0)
+            close(mfd);
         keymap_free(k);
         return -1;
     }
-    void *map = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mfd, 0);
+    void *map = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, mfd, 0);
     if (map == MAP_FAILED) {
         close(mfd);
         keymap_free(k);
         return -1;
     }
     memcpy(map, buf, (size_t)n);
-    munmap(map, 4096);
+    munmap(map, len);
     if (server_keymap)
         keymap_free(server_keymap);
     if (keymap_fd >= 0)
@@ -235,7 +254,17 @@ int seat_load_keymap(const char *name)
     server_keymap = k;
     keymap_fd = mfd;
     keymap_size = (uint32_t)n;
+    group = 0;
     comp_log("keymap %s", name);
+    /* Clients that bound the keyboard earlier receive the new keymap. */
+    if (server_of_seat)
+        for (struct wire_client *c = wire_server_first_client(server_of_seat); c; c = wire_client_next(c)) {
+            struct client *cl = wire_client_get_user_data(c);
+            if (cl && cl->keyboard) {
+                keyboard_send_keymap(cl->keyboard, 1, keymap_fd, keymap_size);
+                send_modifiers(cl, last_serial);
+            }
+        }
     return 0;
 }
 
@@ -394,7 +423,7 @@ static uint8_t *modifier_of(uint32_t key, int *side)
     case KEY_LEFTCTRL:   *side = 0; return &mod_ctrl;
     case KEY_RIGHTCTRL:  *side = 1; return &mod_ctrl;
     case KEY_LEFTALT:    *side = 0; return &mod_alt;
-    case KEY_RIGHTALT:   *side = 1; return &mod_alt;
+    case KEY_RIGHTALT:   *side = 1; return server_keymap && server_keymap->uses_altgr ? &mod_altgr : &mod_alt;
     case KEY_LEFTMETA:   *side = 0; return &mod_logo;
     case KEY_RIGHTMETA:  *side = 1; return &mod_logo;
     }
@@ -405,12 +434,23 @@ void seat_key(uint32_t key, int pressed)
 {
     int side;
     uint8_t *mod = modifier_of(key, &side);
-    if (mod) {
-        *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
+    if (mod || key == KEY_CAPSLOCK) {
+        if (mod) {
+            /* Alt+Shift switches the group of a layout with two groups when
+             * the second of the two keys goes down. */
+            int other = mod == &mod_shift ? mod_alt != 0 : mod == &mod_alt ? mod_shift != 0 : 0;
+            if (pressed && other && !*mod && server_keymap && server_keymap->groups == 2 &&
+                server_keymap->switch_mode == 1)
+                group = !group;
+            *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
+        } else if (pressed) {
+            caps_locked = !caps_locked;
+        }
         modifiers = (mod_shift ? KEYMAP_MOD_SHIFT : 0) | (mod_ctrl ? KEYMAP_MOD_CTRL : 0) |
-                    (mod_alt ? KEYMAP_MOD_ALT : 0) | (mod_logo ? KEYMAP_MOD_LOGO : 0);
+                    (mod_alt ? KEYMAP_MOD_ALT : 0) | (mod_logo ? KEYMAP_MOD_LOGO : 0) |
+                    (mod_altgr ? KEYMAP_MOD_ALTGR : 0);
         if (keyboard_focus && keyboard_focus->client->keyboard)
-            keyboard_send_modifiers(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), (uint32_t)modifiers, 0, 0, 0);
+            send_modifiers(keyboard_focus->client, serial_for(keyboard_focus->client));
         return;
     }
     if (pressed) {

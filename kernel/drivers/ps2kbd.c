@@ -34,6 +34,20 @@ static struct {
     int pause;                  /* bytes of an 0xe1 sequence still expected */
 } kbd;
 
+/* Key codes of the unprefixed scancodes above KEY_F12, the keys of the
+ * Japanese keyboard. */
+static uint16_t jis_key(uint8_t code)
+{
+    switch (code) {
+    case 0x70: return KEY_KATAKANAHIRAGANA;
+    case 0x73: return KEY_RO;
+    case 0x79: return KEY_HENKAN;
+    case 0x7b: return KEY_MUHENKAN;
+    case 0x7d: return KEY_YEN;
+    }
+    return 0;
+}
+
 void ps2kbd_feed_scancode(uint8_t code)
 {
     spin_lock(&kbd_lock);
@@ -72,7 +86,7 @@ void ps2kbd_feed_scancode(uint8_t code)
          * navigation keys and Print Screen. */
         key = extended_keys[code];
     } else {
-        key = code <= KEY_F12 ? code : 0;
+        key = code <= KEY_F12 ? code : jis_key((uint8_t)code);
     }
     if (!key)
         return;
@@ -90,6 +104,9 @@ void ps2kbd_register(void)
     input_dev_init(&ps2kbd_dev, "AT Translated Set 2 keyboard", BUS_I8042);
     for (unsigned code = KEY_ESC; code <= KEY_F12; code++)
         input_set_key_cap(&ps2kbd_dev, code);
+    static const uint8_t jis[] = { 0x70, 0x73, 0x79, 0x7b, 0x7d };
+    for (unsigned i = 0; i < ARRAY_SIZE(jis); i++)
+        input_set_key_cap(&ps2kbd_dev, jis_key(jis[i]));
     for (unsigned i = 0; i < ARRAY_SIZE(extended_keys); i++)
         if (extended_keys[i])
             input_set_key_cap(&ps2kbd_dev, extended_keys[i]);

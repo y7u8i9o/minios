@@ -1,0 +1,8 @@
+loadkeys: fr
+loadkeys: es
+loadkeys: ru
+loadkeys: jp
+x12: keymap fr
+x12: keymap ru
+keymap: layouts ok
+TEST PASS

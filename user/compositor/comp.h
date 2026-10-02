@@ -295,6 +295,9 @@ int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t 
 struct csurface *seat_cursor_surface(void);
 int seat_cursor_hidden(void);
 int seat_translate(uint32_t key, int mods);
+/* The keymap of the seat, for the compositions of dead keys. */
+struct keymap;
+const struct keymap *seat_keymap(void);
 /* text.c */
 void text_init(struct wire_server *srv);
 void text_focus_changed(struct csurface *old, struct csurface *now);

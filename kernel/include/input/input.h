@@ -107,3 +107,7 @@ void input_start_daemon(void);
 /* input/keyboard.c: keys of ungrabbed keyboards, translated for the
  * console terminal. value is 1 press, 0 release, 2 repeat. */
 void input_console_key(uint16_t code, int value);
+/* Replace the layout of the console keyboard (KBD_SET_KEYMAP).  Returns 0
+ * or -EINVAL for a malformed keymap. */
+struct kbd_keymap;
+int input_console_set_keymap(const struct kbd_keymap *map);
