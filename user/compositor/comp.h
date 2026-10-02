@@ -110,6 +110,12 @@ struct layer {
     uint32_t serial;
     uint32_t acked_serial;
     int pending_w, pending_h;
+    /* The configures sent and not yet acknowledged, oldest first.  A
+     * client may acknowledge an older one that it received before a newer
+     * one, and may then commit a buffer of its size. */
+    struct { uint32_t serial; int w, h; } sent[4];
+    int nsent;
+    int acked_w, acked_h;
 };
 
 struct csurface {

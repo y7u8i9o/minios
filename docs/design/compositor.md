@@ -79,7 +79,11 @@ serial line to the kernel and the programs.
 A buffer committed while a configure is unacknowledged is accepted when
 it has the surface's current geometry (a frame sent before the configure
 arrived, see `display.md`); a buffer of another size is a protocol
-error. libwire's server logs every protocol error it posts and every
+error. A layer surface records the last four configures it was sent. Its
+client may acknowledge an older one that arrived before a newer one, as
+the desktop does when the panel maps and reconfigures it during its first
+configure, and may then commit a buffer of that older size. The newer
+configure stays pending until the client acknowledges it. libwire's server logs every protocol error it posts and every
 failed send on stderr.
 
 ## Frame clock and callbacks

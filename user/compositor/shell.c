@@ -728,6 +728,14 @@ static void layer_configure(struct layer *l)
     l->serial = comp_serial();
     l->pending_w = w;
     l->pending_h = h;
+    if (l->nsent == 4) {
+        memmove(l->sent, l->sent + 1, 3 * sizeof l->sent[0]);
+        l->nsent = 3;
+    }
+    l->sent[l->nsent].serial = l->serial;
+    l->sent[l->nsent].w = w;
+    l->sent[l->nsent].h = h;
+    l->nsent++;
     layer_surface_send_configure(l->res, l->serial, w, h);
 }
 
@@ -739,11 +747,19 @@ static void h_layer_set_kbd(struct wire_client *c, struct wire_resource *self, u
 static void h_layer_ack(struct wire_client *c, struct wire_resource *self, uint32_t serial)
 {
     struct layer *l = self->data;
-    if (!l->serial || serial != l->serial) {
+    int i = 0;
+    while (i < l->nsent && l->sent[i].serial != serial)
+        i++;
+    if (!l->serial || i == l->nsent) {
         wire_client_post_error(c, self, 21, "invalid layer configure serial");
         return;
     }
     l->acked_serial = serial;
+    l->acked_w = l->sent[i].w;
+    l->acked_h = l->sent[i].h;
+    /* The acknowledged configure supersedes the older ones. */
+    memmove(l->sent, l->sent + i + 1, (size_t)(l->nsent - i - 1) * sizeof l->sent[0]);
+    l->nsent -= i + 1;
 }
 static void h_layer_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
 static const struct layer_surface_impl layer_handlers = {
@@ -869,6 +885,10 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         int bw, bh;
         logical_buffer_size(s, b, &bw, &bh);
         if (s->mapped && bw == s->width && bh == s->height)
+            return 1;
+        /* A layer whose client acknowledged an older configure commits a
+         * buffer of that configure.  The newer one stays pending. */
+        if (s->role == ROLE_LAYER && acked && bw == s->layer->acked_w && bh == s->layer->acked_h)
             return 1;
         wire_client_post_error(c, s->res, 23, "buffer committed before configure acknowledgement");
         return 0;
