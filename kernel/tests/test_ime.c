@@ -1,9 +1,8 @@
-/* L6 and I0: the built-in Japanese input method and the switch keys.  A
- * Ctrl+Shift tap selects the Japanese engine, a Shift tap the layout and
- * the engine again, and Ctrl+Space the layout.  Keys typed into gedit
- * compose kanji from romaji through the candidates of the compositor, and
- * the keys that a composition uses do not reach gedit.  A click on the
- * panel label selects the next method. */
+/* I0 and I4: the switch keys of the input methods, with imed.  A
+ * Ctrl+Shift tap selects the pinyin engine, another one the Japanese
+ * engine, a Shift tap the layout and the Japanese engine again, Ctrl+Space
+ * the layout, Zenkaku/Hankaku the Japanese engine, the Eisu key (LANG2)
+ * the layout, and a click on the panel label the pinyin engine. */
 #include <tests/ktest.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/fbdev.h>
@@ -62,21 +61,12 @@ static void ctrl_space(void)
 }
 
 #define SPACE 0x39
+#define ZENKAKU 0x55             /* the scancode of Zenkaku/Hankaku, key 85 */
 /* The panel geometry of user/panel/panel.h. */
 #define CLOCK_W 80
 #define MIXER_W 30
 #define INPUT_W 30
 #define ENTER 0x1c
-#define F7    0x41
-#define KEY2  0x03
-
-static void run(const char *path, char *const argv[])
-{
-    struct proc *p = proc_create_user(path, argv, (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start %s", path);
-    int status = proc_reap(p);
-    ktest_assert(status == 0, "%s status 0x%x", path, status);
-}
 
 static void test_ime(void)
 {
@@ -84,43 +74,40 @@ static void test_ime(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     vfs_unlink("/ime.txt");
     struct proc *srv = start_server();
-    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL },
-                                          &kernel_proc);
+    char *const env[] = { "PATH=/bin", "HOME=/home", NULL };
+    struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", NULL }, env, &kernel_proc);
+    ktest_assert(imed != NULL, "cannot start imed");
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, env, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(800);
     struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/ime.txt", NULL },
-                                       (char *const[]){ NULL }, &kernel_proc);
+                                       env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);
 
+    ctrl_shift_tap();               /* pinyin */
+    type("nihao");
+    tap(SPACE);                     /* 你好 */
     ctrl_shift_tap();               /* Japanese */
-    type("yama");
-    tap(SPACE);                     /* 山 is the first candidate of やま */
-    tap(ENTER);
-    type("kawa");
+    type("nihongo");
     tap(SPACE);
-    tap(SPACE);                     /* the second candidate of かわ: 水 */
-    tap(ENTER);
-    type("ni");
-    tap(SPACE);
-    tap(KEY2);                      /* the second candidate of に: 二 */
-    type("kana");
-    tap(ENTER);                     /* the kana as they are */
-    type("kana");
-    tap(F7);
-    tap(ENTER);                     /* in katakana */
-    sleep_ms(300);
-
+    tap(ENTER);                     /* 日本語 */
     shift_tap();                    /* the layout */
     type("a");
     shift_tap();                    /* the Japanese engine again */
     type("yama");
     tap(SPACE);
-    tap(ENTER);
+    tap(ENTER);                     /* 山 */
     ctrl_space();                   /* the layout */
     type("b");
+    tap(ZENKAKU);                   /* the Japanese engine */
+    type("hashi");
+    tap(ENTER);                     /* はし as kana */
+    ps2kbd_feed_scancode(0xf1);     /* Eisu: the layout */
+    sleep_ms(200);
+    type("c");
     sleep_ms(300);
-    ctrl_key(0x1f);                 /* Ctrl+S */
+    ctrl_key(0x1f);
     sleep_ms(500);
 
     struct file *f;
@@ -130,20 +117,25 @@ static void test_ime(void)
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
     kprintf("ime: gedit wrote %s\n", buf);
-    ktest_assert(strcmp(buf, "山水二かなカナa山b") == 0, "gedit text '%s'", buf);
+    ktest_assert(strcmp(buf, "你好日本語a山bはしc") == 0, "gedit text '%s'", buf);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "gedit status 0x%x", status);
     /* A click on the label of the panel selects the next method: after the
-     * layout the Japanese engine. */
+     * layout the pinyin engine. */
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, logical_w() - CLOCK_W - MIXER_W - 4 - 4 - INPUT_W / 2, logical_h() - 14, 0);
     mouse_click(1);
     sleep_ms(500);
     signal_send(panel, SIGTERM);
     proc_reap(panel);
+    signal_send(imed, SIGTERM);
+    proc_reap(imed);
     stop_server(srv);
-    run("/bin/sh", (char *const[]){ "sh", "-c", "rm -f /ime.txt", NULL });
+    struct proc *rm = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", "rm -rf /ime.txt /home/.config/imed", NULL },
+                                       env, &kernel_proc);
+    if (rm)
+        proc_reap(rm);
     kprintf("ime: text ok\n");
 }
 KTEST_DEFINE("ime", test_ime);

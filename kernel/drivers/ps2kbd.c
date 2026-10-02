@@ -77,6 +77,16 @@ void ps2kbd_feed_scancode(uint8_t code)
     bool ext = kbd.extended;
     kbd.extended = false;
     spin_unlock(&kbd_lock);
+    /* LANG1 and LANG2 send 0xf2 and 0xf1 when pressed and nothing when
+     * released. */
+    if (!ext && (code == 0xf1 || code == 0xf2)) {
+        uint16_t lang = code == 0xf2 ? KEY_HANGEUL : KEY_HANJA;
+        input_report_key(&ps2kbd_dev, lang, 1);
+        input_sync(&ps2kbd_dev);
+        input_report_key(&ps2kbd_dev, lang, 0);
+        input_sync(&ps2kbd_dev);
+        return;
+    }
 
     bool release = code & 0x80;
     code &= 0x7f;
@@ -107,6 +117,8 @@ void ps2kbd_register(void)
     static const uint8_t jis[] = { 0x70, 0x73, 0x79, 0x7b, 0x7d };
     for (unsigned i = 0; i < ARRAY_SIZE(jis); i++)
         input_set_key_cap(&ps2kbd_dev, jis_key(jis[i]));
+    input_set_key_cap(&ps2kbd_dev, KEY_HANGEUL);
+    input_set_key_cap(&ps2kbd_dev, KEY_HANJA);
     for (unsigned i = 0; i < ARRAY_SIZE(extended_keys); i++)
         if (extended_keys[i])
             input_set_key_cap(&ps2kbd_dev, extended_keys[i]);

@@ -5,7 +5,7 @@
  * so the compositor applies them before it gives a passed key to the
  * client.
  *
- *   imed        the pinyin engine
+ *   imed        the pinyin and the Japanese engine
  *   imed -t     the test engine of the boot tests first, then the others */
 #include <sys/ipc.h>
 #include <stdio.h>
@@ -84,7 +84,7 @@ static void flush(void)
 {
     send_changes();
     if (table_dirty) {
-        window_update(active && imed_table.n > 0);
+        window_update(active && (imed_table.n > 0 || imed_table.aux[0]));
         table_dirty = 0;
     }
 }
@@ -324,6 +324,7 @@ int main(int argc, char **argv)
     if (test)
         engines[nengines++] = &test_engine;
     engines[nengines++] = &pinyin_engine;
+    engines[nengines++] = &japanese_engine;
     display = wire_display_connect(NULL);
     if (!display) {
         fprintf(stderr, "imed: no X12 server\n");
@@ -341,11 +342,14 @@ int main(int argc, char **argv)
     input_method_add_listener(im, &im_events, NULL);
     pointer = seat_get_pointer(seat);
     pointer_add_listener(pointer, &pointer_events, NULL);
+    /* The engines are announced first, so the switch keys find them while
+     * the dictionaries and the CJK font load. */
+    announce_engines();
+    wire_display_flush(display);
     for (int i = 0; i < nengines; i++)
         if (engines[i]->init)
             engines[i]->init();
     window_init();
-    announce_engines();
     wire_display_flush(display);
     printf("imed: started with %d engines\n", nengines);
     fflush(stdout);

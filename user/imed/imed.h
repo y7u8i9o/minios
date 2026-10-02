@@ -61,4 +61,4 @@ void window_scroll(int pages);
 void window_set_scale(int scale);
 
 /* The engines. */
-extern const struct imed_engine test_engine, pinyin_engine;
+extern const struct imed_engine test_engine, pinyin_engine, japanese_engine;

@@ -316,6 +316,9 @@ void im_init(struct wire_server *srv);
 void im_label(char *out, size_t size);
 void im_select(int index);                 /* a method, or -1 for the next */
 void im_toggle(void);
+void im_select_in_order(int index);         /* after the keys that wait for the daemon */
+void im_toggle_in_order(void);
+int im_japanese_key(uint32_t key);
 void im_update(void);
 void im_context_changed(void);
 int im_filter_key(uint32_t key, int pressed, int mods);
@@ -328,29 +331,10 @@ void im_place_candidates(void);
 void im_candidates_committed(struct csurface *s, int first_map);
 void im_surface_gone(struct csurface *s);
 /* text.c */
-/* ime.c: the input methods (docs/design/ime.md).  ime_key returns 1 when
- * the engine used the key.  The result has the text to commit and the new
- * preedit. */
-enum { IME_OFF, IME_JAPANESE };
-struct ime_result {
-    char commit[256];
-    char preedit[256];
-    int preedit_changed;
-};
-int ime_mode(void);
-void ime_set_mode(int mode);
-int ime_composing(void);
-int ime_key(uint32_t key, int ch, int mods, struct ime_result *r);
-void ime_reset(void);
-void ime_finish(struct ime_result *r);   /* the composition to commit as it is shown */
-void ime_set_anchor(int x, int y, int h);
-void ime_draw(struct rect clip);
-void ime_describe(char *out, size_t size);
 
 void text_init(struct wire_server *srv);
 void text_focus_changed(struct csurface *old, struct csurface *now);
 int text_key(uint32_t key, int pressed, int mods);   /* 1: a composition used the key */
-void text_ime_end(int commit);   /* ends a composition, committing it or not */
 /* The state of the text input context that has the keyboard focus: 0
  * without one.  Each pointer may be NULL. */
 int text_focused_state(const char **text, uint32_t *cursor, uint32_t *anchor, uint32_t *hints, uint32_t *purpose);

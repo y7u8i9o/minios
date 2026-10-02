@@ -239,6 +239,9 @@ check-imed:
 	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -o $(BUILD)/host/test_pinyin user/imed/pycore.c \
 	    user/imed/tests/test_pinyin.c -lm
 	$(BUILD)/host/test_pinyin user/share/ime/pinyin.dict
+	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -o $(BUILD)/host/test_japanese user/imed/jpcore.c \
+	    user/imed/tests/test_japanese.c
+	$(BUILD)/host/test_japanese user/share/ime/japanese.dict
 
 # Every installed header must compile on its own with the cross compiler,
 # in C17, as tcc will see it on minios (docs/design/tcc.md).

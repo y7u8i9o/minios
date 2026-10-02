@@ -104,13 +104,24 @@ keeps one-letter syllables out of sentences. `startgui` starts `imed`. The
 cases `ime_pinyin`, `ime`, `ime_protocol`, `ime_candidates`, `comp_seat`
 and `gui_editor` pass, and `make check` passes.
 
-### I4. Japanese engine
+### I4. Japanese engine (completed 2026-10-03)
 
 - Romaji to kana, conversion of a reading into segments by the costs of the
   Mozc dictionary, segment movement and resizing, candidates of a segment,
   F6 to F10, the Japanese keys of JIS keyboards and the Kana and Eisu keys
   of Mac keyboards, and a user history.
 - Host unit tests, and the boot test `ime_japanese`.
+
+The part of speech ids become 1427 classes instead of about 60: fewer
+classes merged the hiragana forms that Mozc suppresses through their own
+ids, and the conjugation types that decide between た and だ. The matrix
+is stored in one byte per pair, and the dictionary has 9.3 MB. The L6
+Japanese engine, `kana.tab` and `tools/fetch_unihan.sh` are removed here.
+The dictionaries are mapped, the daemon announces its engines before it
+loads them, and the switch keys wait in the key queue of the compositor
+behind the keys typed before them. The cases `ime_japanese`, `ime`,
+`ime_pinyin`, `ime_protocol`, `ime_candidates`, `comp_seat`, `gui_editor`
+and `keymap` pass, and `make check` passes.
 
 ### I5. Settings, panel menu and terminal
 

@@ -143,6 +143,8 @@ struct input_event {
 #define KEY_POWER      116
 #define KEY_KPEQUAL    117
 #define KEY_PAUSE      119
+#define KEY_HANGEUL    122         /* LANG1: Hangul, the Kana key of Mac keyboards */
+#define KEY_HANJA      123         /* LANG2: Hanja, the Eisu key of Mac keyboards */
 #define KEY_YEN        124
 #define KEY_LEFTMETA   125
 #define KEY_RIGHTMETA  126

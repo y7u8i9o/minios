@@ -494,10 +494,10 @@ void seat_key(uint32_t key, int pressed)
                                  !mod_logo && !mod_altgr && !npressed;
             } else if (!pressed && mod == &mod_shift && shift_tap) {
                 shift_tap = 0;
-                im_toggle();
+                im_toggle_in_order();
             } else if (!pressed && (mod == &mod_shift || mod == &mod_ctrl) && ctrl_shift_tap) {
                 ctrl_shift_tap = 0;
-                im_select(-1);
+                im_select_in_order(-1);
             }
             /* Alt+Shift switches the group of a layout with two groups when
              * the second of the two keys goes down. */
@@ -544,8 +544,11 @@ void seat_key(uint32_t key, int pressed)
         }
         int used = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_CTRL)) && !(modifiers & KEYMAP_MOD_ALT) &&
                    key == KEY_SPACE;
+        if (used)
+            im_toggle_in_order();
+        else
+            used = im_japanese_key(key);
         if (used) {
-            im_toggle();
             if (nused < 16)
                 used_keys[nused++] = key;
             return;

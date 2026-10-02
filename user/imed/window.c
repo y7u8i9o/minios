@@ -138,7 +138,7 @@ static void layout(struct painter *p, int *w, int *h)
             x += iw + GAP;
         }
     }
-    if (!imed_table.vertical) {
+    if (!imed_table.vertical && count > 0) {
         if (x - GAP - PAD > width)
             width = x - GAP - PAD;
         y += row;

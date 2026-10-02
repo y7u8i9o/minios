@@ -1,8 +1,9 @@
 /* Text input and X12's small built-in Unicode composer. Physical keys
  * remain on the keyboard interface; committed text and preedit state use
  * this protocol so clients do not have to infer text from scancodes.
- * The input methods of ime.c compose through the same contexts, and a key
- * that a composition uses does not reach the client as a key event. */
+ * The input method daemon composes through the same contexts
+ * (inputmethod.c), and a key that a composition uses does not reach the
+ * client as a key event. */
 #include <stdlib.h>
 #include <string.h>
 #include <gui/keymap.h>
@@ -51,21 +52,10 @@ static struct text_context *context_of(struct client *cl)
     return cl && cl->text_input ? cl->text_input->data : NULL;
 }
 
-/* drop_ime cancels the composition of an input method in the context. */
-static void drop_ime(struct text_context *t)
-{
-    if (!ime_composing())
-        return;
-    ime_reset();
-    text_input_send_preedit_string(t->res, "", 0, 0);
-    text_input_send_done(t->res, t->serial);
-}
-
 static void leave(struct text_context *t)
 {
     if (t && t->entered) {
         end_preedit(t);
-        drop_ime(t);
         /* A preedit of the input method daemon ends with the focus. */
         text_input_send_preedit_string(t->res, "", 0, 0);
         text_input_send_done(t->res, t->serial);
@@ -142,20 +132,17 @@ static void h_cursor_rectangle(struct wire_client *c, struct wire_resource *self
     t->has_pending_rect = 1;
 }
 
-/* update_anchor tells the input methods where the caret of the active
- * surface is on the screen. */
+/* update_anchor tells the input method daemon where the caret of the
+ * active surface is on the screen. */
 static void update_anchor(struct text_context *t)
 {
     struct csurface *s = t->active;
     if (!s)
         return;
-    if (t->has_rect) {
-        ime_set_anchor(s->x + t->rect[0], s->y + t->rect[1], t->rect[3]);
+    if (t->has_rect)
         im_cursor_changed(s->x + t->rect[0], s->y + t->rect[1], t->rect[2], t->rect[3]);
-    } else {
-        ime_set_anchor(s->x + 8, s->y + 8, 16);
+    else
         im_cursor_changed(s->x + 8, s->y + 8, 1, 16);
-    }
 }
 
 static void h_commit(struct wire_client *c, struct wire_resource *self, uint32_t serial)
@@ -264,33 +251,6 @@ static void clear_dead(struct text_context *t)
     text_input_send_preedit_string(t->res, "", 0, 0);
 }
 
-/* apply_ime sends what an input method composed. */
-static void apply_ime(struct text_context *t, const struct ime_result *r)
-{
-    if (r->commit[0])
-        text_input_send_commit_string(t->res, r->commit);
-    if (r->preedit_changed) {
-        int n = (int)strlen(r->preedit);
-        text_input_send_preedit_string(t->res, r->preedit, n, n);
-    }
-    if (r->commit[0] || r->preedit_changed)
-        text_input_send_done(t->res, t->serial);
-}
-
-void text_ime_end(int commit)
-{
-    struct csurface *focus = seat_keyboard_focus();
-    struct text_context *t = focus ? context_of(focus->client) : NULL;
-    if (t && t->entered && commit) {
-        struct ime_result r;
-        ime_finish(&r);
-        apply_ime(t, &r);
-    } else if (t && t->entered) {
-        drop_ime(t);
-    }
-    ime_reset();
-}
-
 int text_key(uint32_t key, int pressed, int mods)
 {
     struct csurface *focus = seat_keyboard_focus();
@@ -334,18 +294,6 @@ int text_key(uint32_t key, int pressed, int mods)
             send_preedit(t);
         }
         return 1;
-    }
-    if (ime_mode() != IME_OFF) {
-        struct ime_result r;
-        update_anchor(t);
-        int used = ime_key(key, seat_translate(key, mods), mods, &r);
-        apply_ime(t, &r);
-        if (used) {
-            char shown[160];
-            ime_describe(shown, sizeof shown);
-            comp_debug("ime: preedit '%s' candidates %s", r.preedit, shown);
-            return 1;
-        }
     }
     if (mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT))
         return 0;

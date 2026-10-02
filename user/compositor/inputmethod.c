@@ -3,12 +3,13 @@
  * input contexts and the input method daemon imed.
  *
  * Method 0 is the keyboard layout.  The engines of the daemon follow in
- * the order of its set_engines request, then the built-in Japanese engine
- * of ime.c (L6), which the daemon replaces in I4.  While an engine of the daemon is
+ * the order of its set_engines request.  While an engine of the daemon is
  * selected and a text input context has the keyboard focus, the daemon is
  * active: it receives every key of the context and replies whether it
- * used it.  The keys wait in a queue for the reply, at most 150 ms each,
- * and the queue keeps their order with the keys typed after them.
+ * used it.  The keys wait in a queue for the reply, at most 150 ms each.
+ * The queue keeps the order of the keys and of the switch keys: a switch
+ * waits for the keys typed before it, and the keys typed after a waiting
+ * switch wait for it and go where it sends them.
  *
  * The state below belongs to the single thread of the compositor. */
 #include <stdio.h>
@@ -25,14 +26,19 @@
 
 struct method {
     char name[32], label[16], title[64];
-    int builtin;                /* IME_JAPANESE of ime.c, 0 for the layout or the daemon */
 };
 
+enum { Q_KEY, Q_SELECT, Q_TOGGLE, Q_JAPANESE };
+
+/* An entry of the queue: a key, sent to the daemon or not yet, or a
+ * switch of the method. */
 struct pending_key {
+    int kind;
     uint32_t serial, key;
     int pressed, mods;
     long time;
-    int decided, handled;
+    int sent, decided, handled;
+    int index;                  /* the method of Q_SELECT */
 };
 
 static struct method methods[MAX_METHODS];
@@ -49,6 +55,7 @@ static struct pending_key queue[MAX_QUEUE];
 static int nqueue;
 static uint32_t handled_keys[16];                 /* presses that the daemon used: their release is dropped */
 static int nhandled;
+static int flushing;
 /* The text changes of the daemon that its next commit applies. */
 static char pending_commit[1024], pending_preedit[512];
 static int pending_preedit_set, pending_begin, pending_end;
@@ -58,9 +65,13 @@ static struct csurface *composed;                 /* the focused surface when th
 static struct wire_resource *candidates_res;
 static int cursor_rect[4] = { 0, 0, 0, 16 };
 
+static int japanese_switch(uint32_t key);
+static int push(struct pending_key k);
+static void flush_queue(void);
+
 /* ---- the methods ---- */
 
-static void add_method(const char *name, const char *label, const char *title, int builtin)
+static void add_method(const char *name, const char *label, const char *title)
 {
     if (nmethods == MAX_METHODS)
         return;
@@ -68,7 +79,6 @@ static void add_method(const char *name, const char *label, const char *title, i
     strlcpy(m->name, name, sizeof m->name);
     strlcpy(m->label, label, sizeof m->label);
     strlcpy(m->title, title, sizeof m->title);
-    m->builtin = builtin;
 }
 
 /* rebuild_methods makes the list again after the daemon came, went or
@@ -81,10 +91,9 @@ static void rebuild_methods(void)
         strlcpy(last, methods[last_engine].name, sizeof last);
     }
     nmethods = 0;
-    add_method("layout", "", "Keyboard layout", 0);
+    add_method("layout", "", "Keyboard layout");
     for (int i = 0; i < ndaemon; i++)
-        add_method(daemon_engines[i][0], daemon_engines[i][1], daemon_engines[i][2], 0);
-    add_method("l6-japanese", "あ", "Japanese (characters)", IME_JAPANESE);
+        add_method(daemon_engines[i][0], daemon_engines[i][1], daemon_engines[i][2]);
     current = 0;
     last_engine = -1;
     for (int i = 0; i < nmethods; i++) {
@@ -147,8 +156,6 @@ static void engines_changed(void)
 
 /* ---- activation ---- */
 
-static void flush_queue(void);
-
 static void send_context_state(void)
 {
     const char *text;
@@ -170,7 +177,7 @@ static void candidates_damage(void)
  * method, of the keyboard focus or of a text input context. */
 void im_update(void)
 {
-    int want = im && current > 0 && !methods[current].builtin && text_focused_state(NULL, NULL, NULL, NULL, NULL);
+    int want = im && current > 0 && text_focused_state(NULL, NULL, NULL, NULL, NULL);
     if (want == active)
         return;
     active = want;
@@ -180,8 +187,10 @@ void im_update(void)
         input_method_send_activate(im);
         send_context_state();
     } else {
+        /* The keys that wait for a reply pass to the client. */
         for (int i = 0; i < nqueue; i++)
-            queue[i].decided = 1;
+            if (queue[i].kind == Q_KEY && queue[i].sent)
+                queue[i].decided = 1;
         flush_queue();
         nhandled = 0;
         if (im)
@@ -192,10 +201,8 @@ void im_update(void)
     comp_debug("ime: %s", active ? "active" : "inactive");
 }
 
-/* im_select selects method index, or the next one for -1.  A composition
- * of a built-in engine is committed as it is shown.  The daemon commits
- * its own composition when another engine is selected or when it is
- * deactivated. */
+/* im_select selects method index, or the next one for -1.  The daemon
+ * commits its composition when another method is selected. */
 void im_select(int index)
 {
     if (!nmethods)
@@ -204,19 +211,15 @@ void im_select(int index)
         index = (current + 1) % nmethods;
     if (index >= nmethods || index == current)
         return;
-    if (methods[current].builtin)
-        text_ime_end(1);
-    /* An engine of the daemon commits its composition when another
-     * method is selected. */
-    if (im && current > 0 && !methods[current].builtin && (index == 0 || methods[index].builtin))
+    /* The layout tells the daemon to commit its composition. */
+    if (im && current > 0 && index == 0)
         input_method_send_select_engine(im, methods[index].name);
     current = index;
     if (current > 0) {
         last_engine = current;
         engine_chosen = 1;
     }
-    ime_set_mode(methods[current].builtin);
-    if (im && current > 0 && !methods[current].builtin)
+    if (im && current > 0)
         input_method_send_select_engine(im, methods[current].name);
     im_update();
     char label[16];
@@ -232,6 +235,51 @@ void im_toggle(void)
     if (!nmethods)
         rebuild_methods();
     im_select(current == 0 ? last_engine : 0);
+}
+
+/* japanese_switch: Zenkaku/Hankaku toggles the Japanese engine,
+ * Katakana/Hiragana, Henkan and the Kana key (LANG1) select it and then go
+ * to it, and the Eisu key (LANG2) selects the layout.  It returns 1 when
+ * the key selected a method. */
+static int japanese_switch(uint32_t key)
+{
+    int jp = -1;
+    for (int i = 1; i < nmethods; i++)
+        if (strcmp(methods[i].name, "japanese") == 0)
+            jp = i;
+    if (jp < 0)
+        return 0;
+    switch (key) {
+    case KEY_ZENKAKUHANKAKU:
+        im_select(current == jp ? 0 : jp);
+        return 1;
+    case KEY_KATAKANAHIRAGANA:
+    case KEY_HENKAN:
+    case KEY_HANGEUL:
+        if (current == jp)
+            return 0;
+        im_select(jp);
+        return 1;
+    case KEY_HANJA:
+        if (current == 0)
+            return 0;
+        im_select(0);
+        return 1;
+    }
+    return 0;
+}
+
+/* im_japanese_key decides at once, or behind the waiting keys: then the
+ * key counts as used, and its turn shows whether it switches or goes to
+ * the engine. */
+int im_japanese_key(uint32_t key)
+{
+    if (key != KEY_ZENKAKUHANKAKU && key != KEY_KATAKANAHIRAGANA && key != KEY_HENKAN && key != KEY_HANGEUL &&
+        key != KEY_HANJA)
+        return 0;
+    if (nqueue)
+        return push((struct pending_key){ .kind = Q_JAPANESE, .key = key, .pressed = 1, .decided = 1 });
+    return japanese_switch(key);
 }
 
 static void select_by_name(const char *name)
@@ -255,13 +303,51 @@ static int take_handled(uint32_t key)
     return 0;
 }
 
-/* flush_queue delivers or drops the decided keys at the head. */
+static uint32_t next_serial(void)
+{
+    if (!++key_serial)
+        key_serial = 1;
+    return key_serial;
+}
+
+/* flush_queue works through the head of the queue: it delivers or drops
+ * the decided keys, carries out the switches, and sends a key that waited
+ * behind a switch to the daemon when the daemon is now active.  It stops
+ * at a key that waits for its reply. */
 static void flush_queue(void)
 {
-    while (nqueue && queue[0].decided) {
-        struct pending_key k = queue[0];
+    if (flushing)
+        return;
+    flushing = 1;
+    while (nqueue) {
+        struct pending_key *h = &queue[0];
+        if (h->kind == Q_KEY && !h->sent && !h->decided) {
+            if (active && h->pressed && !(h->mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT | KEYMAP_MOD_LOGO))) {
+                h->sent = 1;
+                h->serial = next_serial();
+                h->time = uptime_ms();
+                input_method_send_key(im, h->serial, (uint32_t)h->time, h->key, 1);
+                break;
+            }
+            if (active && h->pressed)
+                input_method_send_key(im, 0, (uint32_t)uptime_ms(), h->key, 1);
+            h->decided = 1;
+        }
+        if (h->kind == Q_KEY && !h->decided)
+            break;
+        if (h->kind == Q_JAPANESE && !japanese_switch(h->key)) {
+            *h = (struct pending_key){ .kind = Q_KEY, .key = h->key, .pressed = 1, .mods = seat_modifiers() };
+            continue;
+        }
+        struct pending_key k = *h;
         memmove(queue, queue + 1, (size_t)(--nqueue) * sizeof queue[0]);
-        if (k.pressed && k.handled) {
+        if (k.kind == Q_JAPANESE) {
+            continue;
+        } else if (k.kind == Q_SELECT) {
+            im_select(k.index);
+        } else if (k.kind == Q_TOGGLE) {
+            im_toggle();
+        } else if (k.pressed && k.handled) {
             if (nhandled < 16)
                 handled_keys[nhandled++] = k.key;
         } else if (!k.pressed && take_handled(k.key)) {
@@ -270,6 +356,30 @@ static void flush_queue(void)
             seat_deliver_key(k.key, k.pressed, k.mods);
         }
     }
+    flushing = 0;
+}
+
+/* push adds an entry at the end of the queue; 0 when it is full. */
+static int push(struct pending_key k)
+{
+    if (nqueue == MAX_QUEUE)
+        return 0;
+    queue[nqueue++] = k;
+    return 1;
+}
+
+/* im_select_in_order and im_toggle_in_order switch the method after the
+ * keys that wait in the queue. */
+void im_select_in_order(int index)
+{
+    if (!nqueue || !push((struct pending_key){ .kind = Q_SELECT, .index = index, .decided = 1 }))
+        im_select(index);
+}
+
+void im_toggle_in_order(void)
+{
+    if (!nqueue || !push((struct pending_key){ .kind = Q_TOGGLE, .decided = 1 }))
+        im_toggle();
 }
 
 /* im_filter_key returns 1 when the key waits for the daemon or was used
@@ -278,34 +388,30 @@ int im_filter_key(uint32_t key, int pressed, int mods)
 {
     if (!pressed && !nqueue && take_handled(key))
         return 1;
-    if (!active)
-        return 0;
     long now = uptime_ms();
-    if (!pressed) {
-        if (!nqueue)
-            return 0;
-        if (nqueue == MAX_QUEUE)
-            return 0;
-        queue[nqueue++] = (struct pending_key){ 0, key, 0, mods, now, 1, 0 };
-        return 1;
-    }
+    /* Behind a waiting entry every key waits, unsent, to keep the order. */
+    if (nqueue)
+        return push((struct pending_key){ .kind = Q_KEY, .key = key, .pressed = pressed, .mods = mods,
+                                          .time = now, .decided = !pressed });
+    if (!active || !pressed)
+        return 0;
     /* A shortcut goes to the client at once.  The daemon learns of it and
      * commits its composition. */
-    if ((mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT | KEYMAP_MOD_LOGO)) && !nqueue) {
+    if (mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT | KEYMAP_MOD_LOGO)) {
         input_method_send_key(im, 0, (uint32_t)now, key, 1);
         return 0;
     }
-    if (nqueue == MAX_QUEUE)
-        return 0;
-    uint32_t serial = ++key_serial ? key_serial : ++key_serial;
-    queue[nqueue++] = (struct pending_key){ serial, key, 1, mods, now, 0, 0 };
+    uint32_t serial = next_serial();
+    push((struct pending_key){ .kind = Q_KEY, .serial = serial, .key = key, .pressed = 1, .mods = mods,
+                               .time = now, .sent = 1 });
     input_method_send_key(im, serial, (uint32_t)now, key, 1);
     return 1;
 }
 
 void im_tick(long now)
 {
-    if (nqueue && !queue[0].decided && now - queue[0].time > KEY_TIMEOUT_MS) {
+    if (nqueue && queue[0].kind == Q_KEY && queue[0].sent && !queue[0].decided &&
+        now - queue[0].time > KEY_TIMEOUT_MS) {
         comp_log("ime: key 0x%02x timed out", queue[0].key);
         queue[0].decided = 1;
         flush_queue();
@@ -427,7 +533,7 @@ static void candidates_gone(struct wire_resource *r)
 static void h_key_handled(struct wire_client *c, struct wire_resource *self, uint32_t serial, uint32_t handled)
 {
     for (int i = 0; i < nqueue; i++)
-        if (queue[i].serial == serial && !queue[i].decided) {
+        if (queue[i].kind == Q_KEY && queue[i].sent && queue[i].serial == serial && !queue[i].decided) {
             queue[i].decided = 1;
             queue[i].handled = handled != 0;
             break;
@@ -534,15 +640,15 @@ static void im_gone(struct wire_resource *r)
 {
     if (im != r)
         return;
-    for (int i = 0; i < nqueue; i++)
-        queue[i].decided = 1;
-    flush_queue();
-    nhandled = 0;
     im = NULL;
     active = 0;
+    for (int i = 0; i < nqueue; i++)
+        if (queue[i].kind == Q_KEY && queue[i].sent)
+            queue[i].decided = 1;
+    flush_queue();
+    nhandled = 0;
     ndaemon = 0;
     rebuild_methods();
-    ime_set_mode(methods[current].builtin);
     comp_log("ime: input method gone");
     engines_changed();
 }

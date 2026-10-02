@@ -11,7 +11,5 @@ BUILDNUM
 /data-*.img.bak
 # editor project files
 *.geany
-# the Unihan database, downloaded by tools/fetch_unihan.sh
-/third_party/unihan/
 # the dictionaries of imed, downloaded by tools/fetch_imedata.sh
 /third_party/imedata/

@@ -17,10 +17,14 @@
  *
  * The state below belongs to the single thread of imed. */
 #include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include "pycore.h"
 
 #define MAX_SEDGES 16
@@ -53,7 +57,7 @@ struct user_word {
     int nids, count;
 };
 
-static unsigned char *data;
+static const unsigned char *data;
 static uint32_t nsyl, nentries;
 static const char (*syl)[8];
 static const unsigned char *entries;
@@ -98,39 +102,38 @@ static int entry_len(uint32_t e)
 static uint32_t entry_weight(uint32_t e) { return u32(entries + (size_t)e * 16 + 8); }
 static const char *entry_word(uint32_t e) { return pool + u32(entries + (size_t)e * 16 + 12); }
 
+/* The dictionary is mapped, so its pages are read when they are used. */
 int py_load(const char *path)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f)
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
         return -errno;
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    data = size > 28 ? malloc((size_t)size) : NULL;
-    if (!data || fread(data, 1, (size_t)size, f) != (size_t)size || memcmp(data, "MPY1", 4) != 0) {
-        fclose(f);
-        free(data);
+    struct stat st;
+    long size = fstat(fd, &st) == 0 ? (long)st.st_size : 0;
+    void *map = size > 32 ? mmap(NULL, (size_t)size, PROT_READ, MAP_PRIVATE, fd, 0) : MAP_FAILED;
+    close(fd);
+    if (map == MAP_FAILED)
+        return -EINVAL;
+    data = map;
+    if (memcmp(data, "MPY1", 4) != 0) {
+        munmap(map, (size_t)size);
         data = NULL;
         return -EINVAL;
     }
-    fclose(f);
     nsyl = u32(data + 4);
     nentries = u32(data + 8);
     uint32_t syl_off = u32(data + 12), entry_off = u32(data + 16), pool_off = u32(data + 20);
     pool_size = u32(data + 24);
     if ((size_t)pool_off + pool_size > (size_t)size || (size_t)entry_off + (size_t)nentries * 16 > (size_t)size ||
         (size_t)syl_off + (size_t)nsyl * 8 > (size_t)size || nsyl > 0xfff0) {
-        free(data);
+        munmap((void *)data, (size_t)size);
         data = NULL;
         return -EINVAL;
     }
     syl = (const char (*)[8])(data + syl_off);
     entries = data + entry_off;
     pool = (const char *)data + pool_off;
-    double total = 0;
-    for (uint32_t e = 0; e < nentries; e++)
-        total += 1.0 + entry_weight(e);
-    log_total = log(total);
+    log_total = log((double)u32(data + 28));
     return 0;
 }
 

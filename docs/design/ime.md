@@ -1,19 +1,22 @@
 # Input methods
 
 Input methods compose text for the clients that use the text input
-protocol, which are the text widgets of libgui. The compositor X12 has two
-built-in engines from L6, one for Japanese and one for Simplified Chinese,
-and relays to the input method daemon `imed`, which `docs/plan/ime.md`
-introduces after the model of IBus. The panel shows the current method
-next to the mixer button.
+protocol, which are the text widgets of libgui. The input method daemon
+`imed` follows the model of IBus (`docs/plan/ime.md`): it contains a pinyin
+engine with the Rime dictionary rime-pinyin-simp and a Japanese engine with
+the dictionary of Mozc, and the compositor X12 relays between the text
+input contexts and the daemon. `startgui` starts the daemon. The panel
+shows the current method next to the mixer button. Without the daemon the
+compositor composes only with its Ctrl+Shift+U entry and the dead keys of
+the layout.
 
 ## Methods
 
 `user/compositor/inputmethod.c` keeps the list of methods that the switch
 keys select. The keyboard layout is the first method. The engines of the
-daemon follow in the order of its `set_engines` request, then the built-in
-engines `l6-japanese` and `l6-chinese`. The first toggle selects the first
-engine whose name contains `pinyin` or `chinese`. `im_select` selects a
+daemon follow in the order of its `set_engines` request: `pinyin`, then
+`japanese`. Until the user selects an engine, the first toggle selects the
+first engine whose name contains `pinyin` or `chinese`. `im_select` selects a
 method, `im_toggle` toggles between the layout and the last engine, and the
 settings key `input_method` of the panel and the `ime_control` interface
 select a method as well.
@@ -25,9 +28,12 @@ Ctrl+Space switches the input source of macOS before QEMU sees them.
 
 | Keys | Effect |
 |---|---|
-| a Shift tap | toggles between the layout and the last engine (the Chinese engine at first) |
-| a Ctrl+Shift tap | selects the next method in the order layout, Japanese, Chinese |
+| a Shift tap | toggles between the layout and the last engine (the pinyin engine at first) |
+| a Ctrl+Shift tap | selects the next method in the order layout, pinyin, Japanese |
 | Ctrl+Space, Super+Space | toggle as a Shift tap does, where the host passes them |
+| Zenkaku/Hankaku | toggles between the layout and the Japanese engine |
+| Katakana/Hiragana, Henkan, Kana (LANG1) | select the Japanese engine, and then go to it |
+| Eisu (LANG2) | selects the layout |
 | a click on the panel label | selects the next method |
 
 A tap is a press and a release without another key between them. Shift
@@ -35,6 +41,9 @@ with a letter therefore types a capital, and Ctrl+Shift+U still starts the
 Unicode entry. A change of method commits the composition as it is shown.
 `seat.c` detects the taps. The panel sends the settings key
 `input_method` with the value -1, and `im_select` selects the next method.
+The Kana and Eisu keys of Mac keyboards arrive as KEY_HANGEUL (122) and
+KEY_HANJA (123) from the virtio keyboard, and as the scancodes 0xf2 and
+0xf1, a press without a release, from a PS/2 keyboard.
 
 ## Input method daemon
 
@@ -60,10 +69,13 @@ key and its release do not reach the client. A passed key goes the usual
 way through the dead keys of `text.c` to the client, with the modifiers of
 the moment it was typed. A key without a reply in 150 ms passes, and the
 compositor logs a timeout. The keys typed after a waiting key wait behind
-it, so the order stays. A key with Ctrl, Alt or Super goes to the client at
-once and to the daemon with serial 0, and the daemon commits its
-composition. The daemon sends the changes of a key before the reply, so the
-compositor applies the text before it passes the key.
+it, unsent, and the order stays. The switch keys and the Japanese keys wait
+in the same queue: a switch typed after letters takes effect after the
+daemon has answered for the letters, and the keys typed after a waiting
+switch go where the switch sends them. A key with Ctrl, Alt or Super goes
+to the client at once and to the daemon with serial 0, and the daemon
+commits its composition. The daemon sends the changes of a key before the reply, and
+the compositor therefore applies the text before it passes the key.
 
 `commit_string`, `preedit_string` and `delete_surrounding_text` apply
 together at `commit`. They reach the focused context while the daemon is
@@ -81,8 +93,12 @@ the daemon is active and never takes the keyboard focus. The pointer
 reaches it, so the daemon can take clicks on candidates.
 
 `imed` uses raw libwire like the panel. Each engine is a `struct
-imed_engine` with `select`, `key`, `flush`, `reset` and
-`candidate_clicked`. An engine changes the composition through
+imed_engine` with `init`, `select`, `key`, `flush`, `reset` and
+`candidate_clicked`. The daemon announces its engines first and then calls
+`init`, which maps the dictionaries, and loads the CJK font. The switch
+keys therefore find the engines while the daemon starts. It replies to a key before it
+draws the candidate window and logs a key that took the engine more than
+100 ms. An engine changes the composition through
 `imed_commit`, `imed_preedit` and the lookup table `imed_table`, and the
 daemon sends the changes after each event. `imed -t` adds the test engine
 of the boot tests: letters compose, the candidates are the letters in
@@ -91,37 +107,48 @@ capitals, in small letters and with a capital first, and F12 replies after
 
 ## Dictionaries
 
-`tools/fetch_imedata.sh` downloads the dictionaries of the engines of
-`imed` at pinned commits into `third_party/imedata`, and
-`tools/fetch_unihan.sh` downloads the Unihan database of Unicode 16.0 into
-`third_party/unihan`. Neither directory is in the repository.
-`tools/genime.py` reads both and writes the files of `user/share/ime`,
-which are checked in and installed as `/usr/share/ime`.
+`tools/fetch_imedata.sh` downloads the dictionaries of the engines at
+pinned commits into `third_party/imedata`, which is not in the repository.
+`tools/genime.py` writes the files of `user/share/ime` from them, which are
+checked in and installed as `/usr/share/ime`. The daemon maps both
+dictionaries with `mmap`, and a page is read when a lookup first touches
+it.
 
 `pinyin.dict` comes from `pinyin_simp.dict.yaml` of rime-pinyin-simp
 (Apache-2.0, its license is installed beside it as
 `pinyin_simp.LICENSE`): 415 syllables and 65125 entries of one to four
 syllables with weights, 17000 characters and 48000 words of simplified
 Chinese, ü written as v. The file is little endian. A header with the
-magic `MPY1` gives the number of syllables and entries and the offsets of
-the syllable table, the entry table and the pool. The syllables are in
+magic `MPY1` gives the number of syllables and entries, the offsets of the
+syllable table, the entry table and the pool, and the sum of the weights. The syllables are in
 alphabetical order, 8 bytes each. An entry has 16 bytes: four syllable
 numbers (0xffff after the last), the weight and the offset of the word in
 the pool of zero-terminated UTF-8 words. The entries are sorted by their
 syllable numbers. Because the syllables are sorted, the syllables that
 begin with some letters have consecutive numbers, so an incomplete
-syllable or an initial stands for a range of numbers. `imed` reads the
-file when it starts.
+syllable or an initial stands for a range of numbers.
 
-`kana.tab`, for the built-in Japanese engine, has one line per reading: the
-reading in hiragana, a tab and its kanji, sorted by reading. It has 4891
-readings from the field `kJapanese` of Unihan, with the katakana readings
-converted to hiragana. The Jōyō kanji (`kJoyoKanji`) come first. Within
-each group a kanji that names the reading earlier in its list of readings
-comes first, then a kanji with fewer readings, then the lower code point.
-The order gives 山 for やま, 川 for かわ and 人 for ひと as the first
-candidate. The compositor reads the table when the engine is first
-selected and finds a reading by binary search.
+`japanese.dict` comes from `dictionary_oss` of Mozc (the IPAdic license,
+public domain and BSD 3-clause, whose README is installed beside it as
+`mozc.README.txt`): 225811 entries of 138863 readings, 9.3 MB. The 2672
+part of speech ids of Mozc become 1427 classes. A verb or an adjective
+without a word of its own is grouped by its group, conjugation type and
+conjugation form, and every other id stays a class: particles, auxiliary
+verbs, nouns, and verbs with a word such as いる or 来る. The conjugation
+type decides between た and だ after a verb, and the ids of single words
+separate forms such as the hiragana わたし, which Mozc gives cost 0 and
+suppresses through the connection costs of its id. The connection cost
+between two classes is the mean of the costs between their ids, stored in
+steps of 60 as one byte. The dictionary has the entries with a cost below
+6000 and every particle and auxiliary verb. A header with the magic `MJP1` gives
+the numbers of classes, readings and entries, the class of the start and
+end of a sentence and of common nouns, and the offsets of the class flags,
+the matrix, the readings, the entries and the pool. A class flag marks a
+particle or auxiliary verb, a suffix or dependent word, or a prefix. The
+readings are sorted by bytes, 8 bytes each: the offset of the reading and
+the number of its first entry. An entry has 10 bytes: the offset of the
+surface (or a mark for the reading itself or the reading in katakana), the
+left and right classes and the cost.
 
 ## Candidate window
 
@@ -202,86 +229,91 @@ replies to a key before it draws the candidate window, so the first keys
 do not wait for the font. It logs a key that took the engine more than
 100 ms.
 
-## Built-in engines
+## Japanese engine
 
-`user/compositor/ime.c` contains the Japanese engine of L6, until the
-Japanese engine of `imed` replaces it in I4. The Chinese engine of L6 is
-replaced by the pinyin engine. The engine does not use the protocol. `ime_key` receives the key code, the character of the layout and
-the modifiers, and returns whether the engine used the key. Its result has
-the text to commit and the new preedit, which `text.c` sends to the focused
-text input context. A key that an engine used does not reach the client as
-a key event, and neither does its release. The Ctrl+Shift+U composer and a
-dead key cancelled with Escape or Backspace also consume their keys.
+The Japanese engine of `imed` (`user/imed/japanese.c` with the core
+`jpcore.c` and `romaji.c`) follows the keys of Mozc and MS-IME. Its label
+is あ.
 
-The Japanese engine converts romaji to hiragana while the letters are
-typed. A sequence that begins a longer sequence waits, a doubled consonant
-gives a small っ, and an n before a consonant gives ん. The punctuation keys
-`-`, `,`, `.`, `[` and `]` give ー, 、, 。, 「 and 」.
+Romaji become hiragana while the letters are typed. A sequence that begins
+a longer sequence waits, a doubled consonant gives a small っ, an n before a
+consonant gives ん, and `-`, `,`, `.`, `[`, `]` give ー, 、, 。, 「, 」.
 
-| Key | Without candidates | With candidates |
+The core makes a node of every part of the reading that is a reading of
+the dictionary or of the user history, with the cost of its word, and a
+node of every character alone with a cost of 15000. A path therefore
+always exists. A Viterbi search finds the path with the lowest sum of word costs
+and connection costs between neighbouring classes, from the start of the
+sentence to its end. The path falls into segments: a word that is not a
+particle, an auxiliary verb, a suffix or a dependent word starts a segment,
+unless a prefix comes before it. わたしはがくせいです becomes 私は｜学生です
+and かのじょはとしょかんでほんをよんだ becomes 彼女は｜図書館で｜本を｜読んだ.
+When a segment is resized, its part of the reading is converted alone and
+the rest again. The candidates of a segment are the lowest cost path of its
+reading, the words of its whole reading (chosen ones first), the other
+words of its first word followed by the rest, then hiragana and katakana.
+
+| Key | Composing | Converting |
 |---|---|---|
-| Space | the candidates of the longest reading at the start of the text | the next candidate (Shift+Space the previous one) |
-| arrows | no effect | the next or the previous candidate |
-| 1 to 9 | a digit in the text | the candidate with that number on the page |
-| Enter | commits the text | commits the selected candidate |
-| Backspace | deletes the last romaji letter or kana | closes the candidates |
-| Escape | cancels the text | closes the candidates |
-| F7 | switches the text between hiragana and katakana | no effect |
+| letters | compose | commit, then compose |
+| Space, Henkan | convert | the next candidate, and the second Space opens the candidates |
+| Up, Down | | the previous or the next candidate |
+| 1 to 9 | | choose on the page and go to the next segment |
+| Left, Right | | the previous or the next segment |
+| Shift+Left, Shift+Right | | shorten or lengthen the current segment |
+| Enter | commit the kana | commit the segments |
+| Escape | drop | back to the kana |
+| Backspace | delete the last letter or kana | back to the kana |
+| F6 to F10 | hiragana, katakana, half-width katakana, full-width letters, letters as typed | F6 to F8 for the current segment |
+| Muhenkan | toggle katakana | |
 
-The candidates are the kanji of the reading, then the reading in hiragana
-and in katakana. Without a matching reading the candidates are the whole
-text in hiragana and in katakana. A chosen candidate replaces its reading,
-and the rest of the text stays in the preedit for the next conversion. A
-letter typed while the candidates are shown commits the selected one first.
+The auxiliary line of the candidate window shows the segments with the
+current one in brackets, 【今日は】いい天気ですね. A segment whose candidate
+was changed is learned in `$HOME/.config/imed/japanese.user`: one line
+`reading TAB surface TAB left class TAB right class TAB count` per choice.
+A learned surface becomes a node of cost 2500 less 300 for each choice, up
+to 8. After 漢字 was chosen for かんじ, かんじ converts to 漢字.
 
-While Ctrl, Alt or Super is down, the engine commits its text as it is
-shown and passes the key to the client.
-
-## Candidate box
-
-The box shows the page of nine candidates that contains the selected one,
-each with its number, and the page number when there is more than one
-page. It is drawn with the theme of the decorations after all surfaces in
-`scene.c`. It appears below the caret, or above the caret when there is no
-room below, and moves with the caret. Every change of the candidates or of
-the caret damages the old and the new box.
+## Caret
 
 The caret comes from the request `set_cursor_rectangle` of `text_input`
 version 2, in surface coordinates, applied at the next commit. The editor
 and the text field of libgui report the start of the preedit through
 `widget_text_cursor`, and libgui sends only a changed rectangle. Without a
-rectangle the box appears near the top left corner of the surface.
+rectangle the candidate window appears near the top left corner of the
+surface.
 
 ## Label
 
 The seat of version 2 has the event `input_method` with a short label: the
-label of the engine (あ for the built-in Japanese engine, 拼 for the pinyin
-engine), and otherwise the layout name in capitals. The `us` layout and the first group of a layout
-with two groups are EN. The compositor sends the label after the bind,
+label of the engine (拼 for the pinyin engine, あ for the Japanese engine),
+and otherwise the layout name in capitals. The `us` layout and the first
+group of a layout with two groups are EN. The compositor sends the label after the bind,
 after a change of method, after Alt+Shift changes the group and after a
 keymap reload. The panel binds the seat with a listener and draws the label.
 
 ## Limits
 
-The built-in Japanese engine converts one character at a time. The pinyin
-dictionary has words of at most four syllables, and longer text comes from
-sentences. The pinyin engine has no fuzzy syllables (zh for z, ing for in)
-and no caret inside the input. The compositor repeats no key for the
+The pinyin dictionary has words of at most four syllables, and longer text
+comes from sentences. The Japanese engine has no bigram costs between
+words and no prediction. かんじへんかん therefore becomes 感じ変換, where
+Mozc gives 漢字変換. The pinyin engine has no fuzzy syllables (zh for z, ing for in)
+and neither engine has a caret inside the input. The compositor repeats no
+key for the
 daemon, so a held Backspace deletes one letter of the input. The engines
 compose only in clients with text input enabled. The terminal receives key
 events and is not covered.
 
 ## Test
 
-`ime` starts the panel and gedit and selects the built-in Japanese engine
-with a Ctrl+Shift tap. It types `yama` and chooses 山 with Space and Enter,
-chooses 水 for `kawa` with a second Space, chooses 二 for `ni` with the
-digit 2, and commits `kana` once as hiragana and once in katakana after
-F7. A Shift tap selects the layout for `a`, another one the engine for
-`yama`, and Ctrl+Space the layout for `b`. gedit must save 山水二かなカナa山b,
-which also shows that no Space, Enter or digit reached gedit as a key. A
-click on the panel label must then select the engine, and the compositor
-log must report the labels あ and EN.
+`ime` starts the compositor, `imed`, the panel and gedit. A Ctrl+Shift tap
+selects the pinyin engine for `nihao`, another one the Japanese engine for
+`nihongo`, a Shift tap the layout for `a`, another one the Japanese engine
+for `yama`, Ctrl+Space the layout for `b`, Zenkaku/Hankaku the Japanese
+engine for `hashi` with Enter, and the Eisu key the layout for `c`. gedit
+must save 你好日本語a山bはしc, which also shows that no Space or Enter
+reached gedit as a key. A click on the panel label must then select the
+pinyin engine, and the compositor log must report the labels.
 
 `ime_protocol` starts the compositor, `imed -t` and gedit, and selects the
 test engine with a Ctrl+Shift tap. It composes `abc` and chooses ABC with
@@ -311,3 +343,14 @@ candidate 式, `shi` again, which offers 式 first, `hello` with Enter, and
 must contain the line of 式. The host test `user/imed/tests/test_pinyin.c`
 (`make check-imed`, part of `make check`) checks the candidates of words,
 a sentence, an abbreviation and syllable divisions, and the learning.
+
+`ime_japanese` starts the compositor, `imed` and gedit and selects the
+Japanese engine with two Ctrl+Shift taps. It converts `nihongo`,
+`watashihagakuseidesu` and `kyouhaiitenkidesune`, lengthens the first
+segment of the last with Shift+Right, chooses the fourth candidate of
+`kanji` with a second Space and 4, converts `kanji` again, which gives the
+learned 漢字, commits `katakana` after F7, and returns `yama` to the kana
+with Escape. gedit must save 日本語私は学生です今日はい移転機ですね漢字漢字カタカナやま,
+and the user history must contain 漢字 for かんじ. The host test
+`user/imed/tests/test_japanese.c` (part of `make check-imed`) checks the
+conversion of words and sentences, the learning and the forms.
