@@ -23,7 +23,7 @@ its boot tests pass.
 | `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A7 completed 2026-10-01, A8 and A9 completed 2026-10-02 |
 | `locale.md` | Locales, time zones, message catalogues, keyboard layouts and input methods, milestones L0 to L7 | completed 2026-10-03 |
 | `ime.md` | Input method daemon after IBus, pinyin and Japanese engines, milestones I0 to I5 | completed 2026-10-03 |
-| `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C3 | completed 2026-10-03 |
+| `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C5 | C1 to C3 completed 2026-10-03 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.

@@ -1,9 +1,10 @@
-/* The codec library and its modules in /lib/codecs (docs/design/codecs.md).
- * "codectest image" checks the registry, probing and lookups, image round
- * trips through the modules and through libgui, errors, and CODEC_PATH;
- * "codectest audio" checks the audio streams and the WAV module. Other
- * arguments run both. "codectest count" prints the number of codecs, for
- * the child started with another CODEC_PATH. */
+/* Tests of the codec library and its modules in /lib/codecs
+ * (docs/design/codecs.md). "codectest image" checks the registry, probing
+ * and lookups, image round trips through the modules and through libgui,
+ * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
+ * and the WAV module. Any other argument runs both. "codectest count"
+ * prints the number of codecs and is used by the child process that runs
+ * with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
 #include <errno.h>

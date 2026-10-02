@@ -489,16 +489,17 @@ bar. Documented in `docs/design/userland.md`, tested by the boot test
 
 ## Screenshot interface (completed 2026-10-03)
 
-Print Screen opens a capture interface in the manner of GNOME over the
-frozen screen: the Selection, Screen and Window modes, a selection that
-is drawn, moved and resized with handles, a pointer toggle, the capture
-button and Close. Shift+Print Screen saves the screen at once, and
-Super+Shift+3, 4 and 5 save the screen, select an area and open the
-interface as on macOS. After a capture from the keys a thumbnail stays
-in the bottom right corner for five seconds and opens the file when
-clicked. Window images are drawn by X12 alone with their shadow on a
-transparent background. `screencopy` gained captures without the pointer,
-the window list and window captures; layer surfaces gained margins, and
-keyboard interactive overlay layers take the focus when they map. The
-launcher accepts arguments in its entries. Documented in
+Print Screen opens a capture interface modelled on GNOME's over the
+frozen screen. It offers the Selection, Screen and Window modes, a
+selection that the user can draw, move and resize with handles, a
+pointer toggle, the capture button and Close. Shift+Print Screen saves
+the screen at once, and Super+Shift+3, 4 and 5 save the screen, select an
+area and open the interface, as on macOS. After a capture started from
+the keys, a thumbnail is shown in the bottom right corner for five
+seconds, and a click on it opens the file. X12 draws a window image from
+the window alone, with its shadow, on a transparent background.
+`screencopy` gained captures without the pointer, the window list and
+window captures. Layer surfaces gained margins, and X12 gives the
+keyboard focus to a keyboard interactive overlay layer when it is
+mapped. Launcher entries can include arguments. Documented in
 `docs/design/images.md`, tested by the boot test `gui_images`.

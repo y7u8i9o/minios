@@ -156,8 +156,9 @@ static int has_image_extension(const char *name)
     return codec_for_path(CODEC_IMAGE, name, CODEC_DECODE) != NULL;
 }
 
-/* The file decoded by the codec its content names, else its extension;
- * vector formats render at SVG_PX. Sets scalable. NULL with errno. */
+/* Decode a file with the codec selected by its content, or by its
+ * extension when no probe matches. Vector formats render at SVG_PX. The
+ * function sets scalable, and on failure it returns NULL and sets errno. */
 static struct image *load_image(const char *path)
 {
     uint8_t *data;

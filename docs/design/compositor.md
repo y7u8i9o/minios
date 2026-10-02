@@ -66,7 +66,8 @@ serial line to the kernel and the programs.
   them alone with its shadow (`scene_copy_screen`,
   `scene_render_window`, `images.md`). `seat.c` starts `/bin/screenshot`
   on Print Screen, Shift+Print Screen and Super+Shift+3, 4 and 5, and
-  passes Print Screen to an overlay layer surface that has the keyboard.
+  passes Print Screen to an overlay layer surface that has the keyboard
+  focus.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
@@ -92,14 +93,17 @@ failed send on stderr.
 
 Layer surfaces on the overlay layer (3) are stacked above the top
 layers and the popups of the panel, below the input method candidates
-and drag icons. One with keyboard interactivity takes the keyboard focus
-when it maps, and when it goes the focus returns to the activated
-toplevel; the screenshot interface relies on both. `set_margin` places a
-layer surface relative to the desktop area: each anchored edge keeps its
-margin from the edge of the area left by exclusive zones, so a surface
-anchored to the bottom stays above the panel. A layer surface without
-margins is placed as before, against the screen edge for one anchored
-side and at the desktop area for two.
+and drag icons. When an overlay layer surface with keyboard
+interactivity is mapped, X12 gives it the keyboard focus, and when the
+surface is destroyed, X12 gives the focus back to the active toplevel.
+The screenshot interface depends on both rules. `set_margin` positions a
+layer surface relative to the desktop area, which is the screen minus
+the exclusive zones. X12 places each anchored edge at the given margin
+from the corresponding edge of that area. A surface anchored to the
+bottom is therefore placed above the panel. A layer surface without
+margins is positioned as before, against the screen edge when it is
+anchored on one side and at the desktop area when it is anchored on two
+opposite sides.
 
 ## Frame clock and callbacks
 

@@ -19,10 +19,10 @@ words only in command positions. `parser.c` follows this precedence:
 Lists accept newlines, semicolons and background `&`; and/or lists use
 `&&` and `||`. A parse result distinguishes a complete tree, incomplete
 input and a syntax error. Incomplete input requests another line using
-`PS2`; an unclosed quote or substitution, an open compound command, and a
-line that ends in a backslash outside single quotes are incomplete, so a
-command continued with backslash and newline runs once with the words of
-both lines. Here-document bodies are collected after the command's newline,
+`PS2`. An unclosed quote or substitution, an open compound command, and a
+line that ends in a backslash outside single quotes are incomplete
+input. A command continued with a backslash and a newline therefore runs
+once, with the words of both lines. Here-document bodies are collected after the command's newline,
 in redirection order, before the tree is executed.
 
 `sh.h` defines `struct node`, words and redirections. Nodes own their

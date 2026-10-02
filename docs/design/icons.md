@@ -13,10 +13,10 @@ the fallback; both paths stay in the library.
 
 ## SVG icons (the `svg` codec)
 
-The renderer is the module `svg.so` of libcodec
-(`libcodec/modules/svg/svg.c`, `codecs.md`); libgui's
-`image_render_svg(text, len, px, color)` asks it for a px by px image. It
-renders the subset of SVG that
+The renderer is the libcodec module `svg.so`
+(`libcodec/modules/svg/svg.c`, `codecs.md`). The libgui function
+`image_render_svg(text, len, px, color)` calls its decode function with a
+request of px by px pixels. The renderer supports the subset of SVG that
 icon files use: the `viewBox` (or `width` and `height`) of the `<svg>`
 element, and every `<path>` with its `d` data, `fill` (`#rgb`,
 `#rrggbb`, `none`, `black`, `white`; other values take `color`),

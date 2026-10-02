@@ -1,6 +1,6 @@
 # The codecs command (docs/design/codecs.md), run as: sh /etc/tests/codecs.sh.
-# Every failing check prints a line starting with FAIL and the value
-# received; the last line reports the end.
+# Every failing check prints a line that starts with FAIL and shows the
+# value received. The last line reports the end of the script.
 check() {
     test "$2" = "$3" || echo "FAIL $1: [$2]"
 }

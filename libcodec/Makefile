@@ -3,10 +3,10 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libcodec
 LIB   := $(OUT)/libcodec.a
 SO    := $(BUILD)/lib/libcodec.so
-# The ABI number of the shared object (docs/design/packages.md): raised
-# whenever a structure, constant, signature or documented behaviour that
-# programs depend on changes incompatibly; additions leave it alone. The
-# interface of the modules has its own number, CODEC_MODULE_ABI.
+# The ABI number of the shared object (docs/design/packages.md). It is
+# raised whenever a structure, constant, signature or documented behaviour
+# that programs depend on changes incompatibly. Additions do not change
+# it. The interface of the modules has its own number, CODEC_MODULE_ABI.
 ABI   := 1
 ABIFILE := $(BUILD)/lib/libcodec.abi
 SRCS  := $(wildcard src/*.c)
@@ -42,8 +42,9 @@ $(LIB): $(OBJS)
 	rm -f $@
 	$(AR) rcs $@ $(OBJS)
 
-# The objects of module $(1); a function, because a % written in the
-# rule below would be replaced by the stem before the second expansion.
+# The objects of module $(1). This is a function because make would
+# replace a % written in the rule below by the stem before the second
+# expansion.
 module_objs = $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/$(1)/*.c))
 .SECONDEXPANSION:
 $(BUILD)/lib/codecs/%.so: $$(call module_objs,$$*) $(SO)

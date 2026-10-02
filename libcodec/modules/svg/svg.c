@@ -1,8 +1,8 @@
 /* svg.so: a subset of SVG for icons. The viewBox of the <svg> element
  * and its <path> elements (d, fill, fill-rule, fill-opacity, opacity) are
- * rendered into an RGBA image of px by px pixels with antialiasing, px
- * being the width of the request, else its height, else 256; paths
- * without a fill take the colour of the request.
+ * rendered with antialiasing into an RGBA image of px by px pixels. px
+ * is the width of the request, or its height when the width is 0, or 256
+ * when both are 0. Paths without a fill use the colour of the request.
  * Path data supports M L H V C S Q T A Z and their relative forms;
  * curves are flattened, edges are scan converted with four sub rows per
  * pixel and exact horizontal coverage (the method of libfont's

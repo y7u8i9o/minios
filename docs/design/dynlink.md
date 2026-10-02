@@ -192,9 +192,10 @@ handle searches the global scope (`RTLD_DEFAULT`). A name whose
 basename matches a loaded object returns that object with one more
 reference, promoted to the global scope when `RTLD_GLOBAL` is given.
 Otherwise the object is mapped, from the library directories by soname
-or from the path when the name holds a slash, and keeps a copy of the
-name, since a caller may reuse its buffer for the next `dlopen` (the
-names of `DT_NEEDED` entries stay in the string tables of their objects), and the libraries it needs
+or from the path when the name holds a slash. The loader stores a copy
+of the name, because the caller may reuse its buffer for the next
+`dlopen` (the names of `DT_NEEDED` entries remain in the string tables of
+their objects). The libraries it needs
 that are not loaded yet follow breadth first; the new objects and the
 loaded ones they depend on form the group's local scope. The new
 objects are relocated against the global scope and that local scope,

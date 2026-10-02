@@ -3,21 +3,23 @@
  *
  *   screenshot [-i | -a | -w] [-p] [-t] [-d SECONDS] [FILE]
  *
- * Without a mode the whole screen is saved at once. -i opens the capture
- * interface of GNOME: the frozen screen dimmed, a selection that can be
- * drawn, moved and resized, and a toolbar with the Selection, Screen and
- * Window modes, the pointer toggle, the capture button and Close. -a is
- * the area selection of macOS: dragging an area and releasing the button
- * saves it, Space switches to the window under the pointer. -w saves the
- * active window. -p includes the pointer, -t shows a thumbnail of the
- * result in the corner of the screen for five seconds, which opens the
- * file when clicked; -i and -a show it always.
+ * Without a mode the whole screen is saved at once. -i opens a capture
+ * interface modelled on GNOME's. It shows the frozen screen dimmed, a
+ * selection that the user can draw, move and resize, and a toolbar with
+ * the Selection, Screen and Window modes, the pointer toggle, the capture
+ * button and Close. -a selects an area as macOS does: the user drags an
+ * area, and releasing the button saves it. Space switches to the window
+ * under the pointer. -w saves the active window. -p includes the
+ * pointer. -t shows a thumbnail of the result in the corner of the screen
+ * for five seconds, and a click on the thumbnail opens the file. -i and
+ * -a always show the thumbnail.
  *
  * Without FILE the image is written to $HOME/Pictures/screenshot-DATE-
  * TIME.png, and the directory is created when it does not exist. The
- * image has the device resolution of the screen; a window is drawn alone
- * with its shadow on a transparent background. The path of the file is printed on
- * standard output; a cancelled capture prints nothing and exits with 1.
+ * image has the device resolution of the screen. A window is drawn alone,
+ * with its shadow, on a transparent background. The program prints the
+ * path of the file on standard output. A cancelled capture prints nothing
+ * and exits with status 1.
  * The display server starts this program on the screenshot keys
  * (docs/design/images.md). */
 #include <gui/client.h>
@@ -114,7 +116,7 @@ static void buffer_destroy_all(struct shot_buffer *b)
     close(b->fd);
 }
 
-/* Wait for done or failed of the last request; 0 when done. */
+/* Wait for done or failed after the last request. Returns 0 after done. */
 static int wait_copy(void)
 {
     while (!done && !failed && wire_display_error(display) == 0)
@@ -232,7 +234,7 @@ struct ui {
     int quick;                      /* -a: no toolbar, the release captures */
     enum mode mode;
     int x0, y0, x1, y1;             /* the selection, edges in any order */
-    int drag, edges, ax, ay;        /* drag state; the press point, or the grip inside the selection */
+    int drag, edges, ax, ay;        /* drag state, and the press point or the grip inside the selection */
     int started;                    /* a new selection replaces the old one once the pointer moved */
     int px, py;                     /* the pointer */
     int pointer;                    /* save the pointer */
@@ -575,7 +577,8 @@ static void press(struct ui *u, int x, int y)
     struct rect s = selection(u);
     int e = edges_at(u, x, y);
     if (e) {
-        /* The grabbed edges follow the pointer; the others stay. */
+        /* The edges under the press follow the pointer, and the others
+         * remain in place. */
         u->x0 = s.x;
         u->y0 = s.y;
         u->x1 = s.x + s.w;

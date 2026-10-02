@@ -1,22 +1,24 @@
 #pragma once
-/* Formats and codecs (docs/design/codecs.md): a registry of the codecs
- * that the modules in /lib/codecs provide, in the manner of the
- * gdk-pixbuf loaders and the GStreamer plugins. A program asks for an
- * image or an audio stream and the registry picks the codec by the
- * content of the data, then by the extension of the file name.
+/* Formats and codecs (docs/design/codecs.md). The library keeps a
+ * registry of the codecs that the modules in /lib/codecs provide, in the
+ * manner of the gdk-pixbuf loaders and the GStreamer plugins. A program
+ * passes a file or the bytes of one, and the registry selects the codec
+ * by the content of the data first and by the extension of the file name
+ * second.
  *
- * Images are w by h pixels of 0xAARRGGBB with straight alpha, allocated
- * with malloc. Audio is interleaved signed 32 bit samples, full scale at
- * 2^31, whatever the sample size of the file. Functions that can fail
- * return a negative errno value; lookups return NULL. */
+ * An image is w by h pixels of 0xAARRGGBB with straight alpha in memory
+ * allocated with malloc. Audio is interleaved signed 32 bit samples with
+ * full scale at 2^31, whatever the sample size of the file. Functions
+ * that can fail return a negative errno value, and lookup functions
+ * return NULL when nothing matches. */
 #include <stddef.h>
 #include <stdint.h>
 
-/* The interface between the library and its modules. A module built for
- * another number is not loaded. */
+/* The version of the interface between the library and its modules. The
+ * registry does not load a module built for a different version. */
 #define CODEC_MODULE_ABI 1
-/* The directory of the modules; the environment variable CODEC_PATH
- * names another one. */
+/* The directory of the modules. The environment variable CODEC_PATH
+ * overrides it. */
 #define CODEC_DIR "/lib/codecs"
 
 enum codec_kind { CODEC_IMAGE = 1, CODEC_AUDIO = 2 };
@@ -32,10 +34,10 @@ struct codec_picture {
     uint32_t *pixels;
 };
 
-/* What the caller would like from a decoder: vector formats render at
- * width by height pixels (0: their own size) and fill shapes without a
- * colour of their own with color (0x00rrggbb); raster formats ignore
- * both. */
+/* Parameters for a decoder. A vector format renders at width by height
+ * pixels (0 selects the size stored in the file) and fills shapes that
+ * have no colour of their own with color (0x00rrggbb). Raster formats
+ * ignore these parameters. */
 struct codec_image_request {
     int width, height;
     uint32_t color;
@@ -47,9 +49,10 @@ struct codec_audio_format {
     int rate, channels, bits;
 };
 
-/* One codec. probe scores the first bytes of some data from 0 (not this
- * format) to 100 (certainly this format); it sees at most CODEC_PROBE_LEN
- * bytes. The functions of a capability the codec lacks are NULL. */
+/* One codec. probe rates the first bytes of some data from 0 (not this
+ * format) to 100 (certainly this format) and receives at most
+ * CODEC_PROBE_LEN bytes. The function pointers for a capability that the
+ * codec lacks are NULL. */
 #define CODEC_PROBE_LEN 512
 struct codec {
     const char *name;               /* "png" */
@@ -59,15 +62,16 @@ struct codec {
     const char *mime_types;         /* separated by spaces */
     const char *extensions;         /* lower case, separated by spaces */
     int (*probe)(const uint8_t *data, size_t len);
-    /* Images: decode fills *out; encode stores a malloc'ed file in *data
-     * and returns its length. */
+    /* Images. decode fills *out. encode stores the encoded file in memory
+     * allocated with malloc at *data and returns its length. */
     int (*image_decode)(const uint8_t *data, size_t len, const struct codec_image_request *req,
                         struct codec_picture *out);
     long (*image_encode)(const struct codec_picture *pic, uint8_t **data);
-    /* Audio: open checks the data, fills the format and the number of
-     * frames, and returns a decoder state that read takes up to frames
-     * frames from (0 at the end); the data must stay valid until close.
-     * encode writes frames frames of samples in the format. */
+    /* Audio. open checks the data, fills in the format and the number of
+     * frames, and creates a decoder state. read decodes up to frames
+     * frames from that state and returns 0 at the end of the stream. The
+     * data must remain valid until close. encode writes frames frames of
+     * samples in the given format. */
     int (*audio_open)(const uint8_t *data, size_t len, struct codec_audio_format *fmt, long *frames,
                       void **state);
     long (*audio_read)(void *state, int32_t *samples, long frames);
@@ -84,11 +88,11 @@ struct codec_module {
     const struct codec *codecs;
 };
 
-/* A module defines its table with CODEC_MODULE(name); it is the only
- * symbol a module exports, since modules are compiled with hidden
- * visibility. Compiled into a program with CODEC_BUILTIN (the host
- * tests), each module has its own symbol and the registry lists them
- * instead of loading files. */
+/* A module defines its table with CODEC_MODULE(name). The table is the
+ * only symbol that a module exports, because modules are compiled with
+ * hidden visibility. When the modules are compiled into a program with
+ * CODEC_BUILTIN (the host tests), each module has a symbol of its own
+ * name, and the registry registers them instead of loading files. */
 #ifdef CODEC_BUILTIN
 #define CODEC_MODULE(name) const struct codec_module codec_module_##name
 #else
@@ -103,37 +107,38 @@ int codec_module_count(void);
 const struct codec_module *codec_module_get(int index);
 const char *codec_module_path(int index);       /* the file it was loaded from */
 /* Add a module that is not in the directory, before or after the first
- * lookup. Returns 0, or -EINVAL for a wrong ABI number. */
+ * lookup. Returns 0, or -EINVAL when the ABI number does not match. */
 int codec_register(const struct codec_module *m, const char *path);
 
-/* Lookups. kind 0 matches both kinds; caps is the capabilities the codec
- * must have (0 for any). */
+/* Lookups. A kind of 0 matches both kinds. caps lists the capabilities
+ * that the codec must have, and 0 accepts any codec. */
 const struct codec *codec_find(const char *name);
 const struct codec *codec_for_mime(enum codec_kind kind, const char *mime, int caps);
 const struct codec *codec_for_path(enum codec_kind kind, const char *path, int caps);
 const struct codec *codec_for_data(enum codec_kind kind, const uint8_t *data, size_t len, int caps);
-/* The codec for some data: by content, else by the extension of path
- * (which may be NULL). */
+/* The codec for some data, selected by content and, when no probe
+ * matches, by the extension of path. path may be NULL. */
 const struct codec *codec_identify(enum codec_kind kind, const uint8_t *data, size_t len, const char *path,
                                    int caps);
 
 /* ---- files ---- */
 
-/* Read a whole file into a malloc'ed buffer; write one. */
+/* Read a whole file into memory allocated with malloc, and write a whole
+ * file. */
 int codec_read_file(const char *path, uint8_t **data, size_t *len);
 int codec_write_file(const char *path, const uint8_t *data, size_t len);
 
 /* ---- images ---- */
 
-/* Decode with the codec codec_identify picks (path may be NULL), or with
- * c when it is not NULL. req may be NULL. -ENOTSUP: no codec decodes the
- * data. */
+/* Decode with c, or with the codec that codec_identify selects when c is
+ * NULL. path and req may be NULL. Returns -ENOTSUP when no codec decodes
+ * the data. */
 int codec_image_decode(const struct codec *c, const uint8_t *data, size_t len, const char *path,
                        const struct codec_image_request *req, struct codec_picture *out);
 int codec_image_load(const char *path, const struct codec_image_request *req, struct codec_picture *out);
 long codec_image_encode(const struct codec *c, const struct codec_picture *pic, uint8_t **data);
-/* Save in the format named by name, or by the extension of path when
- * name is NULL. */
+/* Save with the codec called name, or with the codec for the extension
+ * of path when name is NULL. */
 int codec_image_save(const struct codec_picture *pic, const char *path, const char *name);
 void codec_picture_free(struct codec_picture *pic);
 
@@ -144,13 +149,14 @@ struct codec_audio;
  * closed. */
 int codec_audio_open(const struct codec *c, const uint8_t *data, size_t len, const char *path,
                      struct codec_audio **out);
-/* Open a file; the decoder owns the file's contents. */
+/* Open a file. The decoder keeps the file contents in memory and
+ * codec_audio_close frees them. */
 int codec_audio_open_file(const char *path, struct codec_audio **out);
 const struct codec_audio_format *codec_audio_format(const struct codec_audio *a);
 long codec_audio_frames(const struct codec_audio *a);          /* -1 when unknown */
 const struct codec *codec_audio_codec(const struct codec_audio *a);
-/* Up to frames frames into samples (frames * channels values); 0 at the
- * end. */
+/* Decode up to frames frames into samples (frames * channels values).
+ * Returns the number of frames, or 0 at the end of the stream. */
 long codec_audio_read(struct codec_audio *a, int32_t *samples, long frames);
 void codec_audio_close(struct codec_audio *a);
 long codec_audio_encode(const struct codec *c, const struct codec_audio_format *fmt, const int32_t *samples,
@@ -160,5 +166,6 @@ int codec_audio_save(const char *path, const char *name, const struct codec_audi
 
 /* ---- shared helpers of the modules ---- */
 
-/* A zlib stream (RFC 1950) into dst; returns the output length. */
+/* Inflate a zlib stream (RFC 1950) into dst and return the output
+ * length. */
 long codec_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len);

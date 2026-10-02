@@ -45,7 +45,7 @@ int *__errno_location(void);
 #define EMSGSIZE    90
 #define EPROTONOSUPPORT 93
 #define EOPNOTSUPP  95
-#define ENOTSUP     EOPNOTSUPP       /* POSIX; the same value as on Linux */
+#define ENOTSUP     EOPNOTSUPP       /* POSIX, with the same value as on Linux */
 #define EAFNOSUPPORT 97
 #define EADDRINUSE  98
 #define ENOTSOCK    88

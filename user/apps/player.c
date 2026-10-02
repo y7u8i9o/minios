@@ -165,8 +165,8 @@ static int resample_sinc(const int16_t *data, int file_channels, uint32_t rate,
     return 0;
 }
 
-/* read_all decodes the whole stream into 16-bit samples; it returns the
- * number of frames, or -1. */
+/* read_all decodes the whole stream into 16-bit samples and returns the
+ * number of frames, or -1 on failure. */
 static long read_all(struct codec_audio *a, int channels, int16_t **result)
 {
     long cap = codec_audio_frames(a) > 0 ? codec_audio_frames(a) : 65536, n = 0;

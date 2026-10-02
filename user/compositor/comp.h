@@ -26,7 +26,7 @@
 #define SHADOW_DY 3             /* the shadow is shifted down by this much */
 #define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
-#define LAYER_OVERLAY 3          /* above the panel; a keyboard interactive one takes the focus when mapped */
+#define LAYER_OVERLAY 3          /* above the panel, and a keyboard interactive one gets the focus when mapped */
 enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
 enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
@@ -108,7 +108,7 @@ struct layer {
     struct csurface *s;
     struct wire_resource *res;
     int anchor, exclusive, w, h, interactive;
-    int margin[4];                          /* top, right, bottom, left; see layer_place */
+    int margin[4];                          /* top, right, bottom, left (layer_place) */
     int has_margin;
     uint32_t layer;
     uint32_t serial;

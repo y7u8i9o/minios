@@ -531,13 +531,13 @@ void seat_key(uint32_t key, int pressed)
                 toplevel_close(t);
             return;
         }
-        /* The screenshot keys (images.md): Print Screen opens the capture
+        /* The screenshot keys (images.md). Print Screen opens the capture
          * interface and Shift+Print Screen saves the screen at once, as in
-         * GNOME; Super+Shift+3, 4 and 5 save the screen, select an area
-         * and open the interface, as on macOS. While the interface has the
-         * keyboard, Print Screen is its own capture key. Alt+SysRq prints
-         * the thread table of the kernel and is passed to the client
-         * unchanged. */
+         * GNOME. Super+Shift+3, 4 and 5 save the screen, select an area and
+         * open the interface, as on macOS. While the interface has the
+         * keyboard focus, Print Screen is passed to it as its capture key.
+         * Alt+SysRq prints the thread table of the kernel and is passed to
+         * the client unchanged. */
         const char *shot = NULL;
         int logo_shift = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT | KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) ==
                          (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT);

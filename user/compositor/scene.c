@@ -449,10 +449,11 @@ struct rect scene_pointer_rect(void)
     return rect_intersect(dev(r), (struct rect){ 0, 0, back.width, back.height });
 }
 
-/* The back buffer holds the last composed frame. Without the pointer the
- * rectangle under it is composed again with the cursor suppressed, copied,
- * and composed once more with the cursor; nothing is flushed in between,
- * so the screen never shows the frame without the pointer. */
+/* The back buffer holds the last composed frame. For a copy without the
+ * pointer, the rectangle under the pointer is composed again without the
+ * cursor, the buffer is copied, and the rectangle is composed once more
+ * with the cursor. Nothing is flushed in between, and the screen never
+ * shows the frame without the pointer. */
 void scene_copy_screen(uint8_t *to, int stride, int pointer)
 {
     struct rect under = pointer ? (struct rect){ 0, 0, 0, 0 } : cursor_rect();
@@ -479,14 +480,14 @@ struct rect scene_window_extent(const struct toplevel *t)
     return extent(t->s);
 }
 
-/* The toplevel is drawn alone with its extent at the origin of a scratch
+/* The toplevel is drawn alone, with its extent at the origin of a scratch
  * target, twice: over black into the client buffer and over white into a
- * copy. A pixel that came out the same over both is opaque; the
- * difference is the part of the background that shows through, which
- * gives the alpha of the shadow, the rounded corners and translucent
- * client pixels, and the colour is the black pass divided by that alpha.
- * The surface is moved to the origin for the drawing and put back at
- * once. */
+ * copy. A pixel with the same value over both backgrounds is opaque. For
+ * other pixels the difference is the amount of background that shows
+ * through, which gives the alpha of the shadow, the rounded corners and
+ * translucent client pixels. The colour is the result over black divided
+ * by that alpha. The surface is moved to the origin for the drawing and
+ * moved back immediately afterwards. */
 int scene_render_window(struct toplevel *t, uint8_t *to, int stride)
 {
     struct csurface *s = t->s;

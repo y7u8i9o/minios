@@ -1,13 +1,13 @@
-/* The registry of codecs: the modules of CODEC_DIR (or CODEC_PATH) are
- * opened with dlopen on the first lookup, in the order of their file
- * names, and stay loaded. Lookups by name, MIME type, extension and
- * content walk the codecs in that order.
+/* The registry of codecs. The first lookup opens the modules in
+ * CODEC_DIR, or in the directory named by CODEC_PATH, with dlopen in the
+ * order of their file names, and the modules remain loaded. Lookups by
+ * name, MIME type, extension and content walk the codecs in that order.
  *
- * Locking: the tables below are filled once under init_once and read
- * without a lock afterwards. codec_register after the first lookup takes
- * register_lock, which also guards the tables while they grow; a program
- * that registers modules while other threads look codecs up must do so
- * before starting them. */
+ * Locking. The tables below are filled once under init_once and are read
+ * without a lock afterwards. codec_register takes register_lock, which
+ * also protects the tables while they grow. A program that registers
+ * modules must do it before it starts threads that call the lookup
+ * functions. */
 #include <codec/codec.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -54,8 +54,8 @@ static int add_module(const struct codec_module *m, const char *path)
 }
 
 #ifdef CODEC_BUILTIN
-/* The modules compiled into the program, in the order of their names;
- * a new module is added here as well. */
+/* The modules compiled into the program, in the order of their names.
+ * A new module must be added here as well. */
 extern const struct codec_module codec_module_bmp, codec_module_png, codec_module_svg, codec_module_wav;
 
 static void load_all(void)

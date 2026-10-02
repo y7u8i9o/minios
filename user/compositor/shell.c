@@ -777,10 +777,11 @@ static const struct layer_surface_impl layer_handlers = {
     h_layer_set_margin,
 };
 
-/* The position of a layer surface from its anchor. An edge anchored on
- * one side touches the screen edge; anchored on both sides the surface
- * starts at the desktop area. With margins every anchored edge keeps its
- * margin from the desktop area instead. */
+/* Position a layer surface by its anchor. A surface anchored on one side
+ * touches the screen edge, and a surface anchored on two opposite sides
+ * starts at the edge of the desktop area. When margins are set, each
+ * anchored edge is placed at its margin from the edge of the desktop area
+ * instead. */
 static void layer_place(struct csurface *s)
 {
     struct layer *l = s->layer;

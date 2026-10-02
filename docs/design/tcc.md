@@ -63,12 +63,12 @@ CPU (`SCTLR_EL1.UCI` and `UCT`, `cpu_init_el0_access`).
   leaves the table slot of an undefined weak function pointing at a
   stub; without the definitions a static program crashed at exit.
 - `/lib/libm.a`, an empty archive for `-lm`, since the math functions
-  are in `libc.so`; `/lib/libc.a`, `libcodec.a`, `libgui.a`, `libfont.a`,
+  are in `libc.so`. `/lib/libc.a`, `libcodec.a`, `libgui.a`, `libfont.a`,
   `libwire.a`, `libaudio.a` and `libedit.a`, the static archives of the
-  cross build, for `tcc -static`. A static program that uses libgui links
-  `-lcodec` as well; it cannot load the codec modules, since a static
-  program has no loader, so its image functions fail with `ENOTSUP`
-  (`codecs.md`).
+  cross build, for `tcc -static`. A static program that uses libgui must
+  also link `-lcodec`. A static program has no dynamic loader and cannot
+  load the codec modules, and its image functions therefore fail with
+  `ENOTSUP` (`codecs.md`).
 - `/usr/share/tcc/tests2/`: the selected programs of the tcc test suite
   with their expected outputs.
 

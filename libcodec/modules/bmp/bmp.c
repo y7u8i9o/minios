@@ -62,7 +62,7 @@ static int field_init(struct field *f, uint32_t mask)
     return mask || f->bits > 8 ? -1 : 0;    /* holes, or wider than 8 bits */
 }
 
-/* The channel scaled to 8 bits; missing is the value of an absent mask. */
+/* The channel scaled to 8 bits. missing is the value for an absent mask. */
 static uint32_t field_get(const struct field *f, uint32_t v, uint32_t missing)
 {
     if (!f->mask)
