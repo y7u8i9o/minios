@@ -24,24 +24,77 @@ marked `(locked)` since M42.
 
 ## logview
 
-`logview` follows the kernel log. The kernel keeps every `klog_print`
-line in a 64 KiB ring (`kernel/lib/klog.c`) that `/dev/klog` exposes
+`logview` follows the kernel log. The kernel writes every `klog_print`
+line into a 16 KiB ring (`kernel/lib/klog.c`) that `/dev/klog` exposes
 (`kernel/fs/devfs.c`). A read returns the bytes after the file position,
 `poll` reports readable data when the ring head has moved, and `lseek`
-with `SEEK_END` skips to the current head. The ring lock is enabled by
-`klog_ring_init` after the boot CPU exists, because the first log lines
-are printed before any spinlock can be taken. The application watches
-the descriptor with `app_watch_fd`, appends new lines to a read-only
-editor, and offers a filter field, a pause button, and a clear button.
+accepts `SEEK_SET`, `SEEK_END` and `SEEK_CUR`. A read whose position is
+below the oldest byte of the ring starts at the oldest byte, so the
+position advances by more than the read returns. The ring lock is enabled
+by `klog_ring_init` after the boot CPU exists, because the first log lines
+are printed before any spinlock can be taken.
+
+The application watches the descriptor with `app_watch_fd` and parses
+every line of the form `[seconds] [L subsystem] message` into a row of a
+table with the time, the level, the subsystem and the message, and a dot
+in the colour of the level. Lines without that form are rows of level
+Info without a subsystem. At most 10000 rows are stored, and the oldest
+are dropped beyond that. The rows are filtered by the lowest level shown,
+by one subsystem from the list of the subsystems seen so far, and by a
+text that the line contains in any case. The options `-l`, `-s` and `-f`
+set the three filters at the start. A new row that passes the filters is
+appended without filtering the stored rows again. Follow scrolls the
+table to each new row with `view_scroll_to`, which leaves the selection
+unchanged. The pane below the table shows the selected line in full.
+
+Copy (Ctrl+C) puts the selected line on the clipboard. Save (Ctrl+S)
+writes the rows shown to a file, `$HOME/klog.txt` by default, and prints
+the number of lines on standard output. Clear removes the rows read so
+far from the window. The status bar counts the rows shown and stored, the
+warnings and errors, and the bytes that the ring dropped after the start
+before logview read them: logview compares the position before and after
+each read, and skips to the next line after such a drop. Bytes dropped
+before the first read are not counted.
+
+The boot test `gui_logview` writes an info line and a warning, starts
+`logview -l warning -s ktest -f MARKER`, writes an error, saves with
+Ctrl+S, and checks that the file contains the warning and the error and
+not the info line.
 
 ## hexview
 
-`hexview` displays any file or device as a hexadecimal dump, sixteen
-bytes per line with the printable characters at the right. The offset
-field accepts a hexadecimal position, the scrollbar and the keyboard
-move through the file, and Open prompts for another path. The default
-path is `/dev/vda`, so the on-disk `mfs` structures can be inspected
-while the system runs.
+`hexview` (package `hexview`) displays any file or device as a
+hexadecimal dump with sixteen bytes per line, the offset at the left and
+the characters at the right. The number of lines follows the window
+height, and the text is DejaVu Sans Mono at 13 pixels, which View
+changes from 8 to 32 pixels. Each paint reads only the visible lines, so
+devices of any size open at once. The default path is `/dev/vda`, so the
+on-disk `mfs` structures can be inspected while the system runs. The file
+is opened read only.
+
+A cursor selects one byte in the hexadecimal or the character column. Tab
+changes the column, and Shift with a movement key or a drag with the
+left button extends the selection. The inspector at the right shows the
+offset of the cursor, its byte in binary, and the bytes from the cursor
+as signed and unsigned integers of 8, 16, 32 and 64 bits and as 32 and 64
+bit floating point numbers, in little endian order or, with the check
+box, in big endian order. The status bar shows the path, the size, the
+cursor offset and the length of the selection.
+
+Find text (Ctrl+F) and Find bytes (Ctrl+B, pairs of hexadecimal digits
+with or without spaces) search from the byte after the start of the
+selection to the end of the file and then from its start. The file is
+read in chunks of 64 KiB that overlap by the length of the pattern less
+one byte. A match becomes the selection with the cursor on its first
+byte, and F3 finds the next match. Every result is printed on standard
+output for the boot test. The offset field (Ctrl+G) takes a hexadecimal
+offset. Copy (Ctrl+C) puts at most 16 KiB of the selection on the
+clipboard, as hexadecimal digits from the hexadecimal column or as
+characters from the character column, with a dot for each byte that is
+not printable.
+
+The boot test `gui_hexview` writes a file of known bytes, searches for a
+text and for two byte sequences, and checks the reported offsets.
 
 ## evtest
 

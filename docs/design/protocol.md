@@ -37,6 +37,9 @@ also carries the liveness pair `ping` (event) and `pong` (request) and
 `set_pid`, used for the not responding dialog (`compositor.md`). The shell protocol
 adds toplevel parent/modal state and popup configure/acknowledge/grab;
 `protocol/text.xml` carries UTF-8 text-input and preedit events.
+`protocol/debug.xml` contains the `debug`, `tracer`, `settings` and
+`screencopy` interfaces of the debugging tools and of `screenshot`
+(`tools.md`, `images.md`).
 Requests marked `type="destructor"` destroy their object; the server
 removes the resource after the handler ran.
 

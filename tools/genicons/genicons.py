@@ -197,6 +197,57 @@ def write_png(path, w, h, ctype, rows, palette=None, trns=None, level=9):
         f.write(data)
 
 
+ADAM7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
+
+
+def pack_row(samples, depth):
+    """A row of samples (ints below 2**depth) as PNG bytes."""
+    if depth == 8:
+        return bytes(samples)
+    if depth == 16:
+        return b"".join(struct.pack(">H", v) for v in samples)
+    out = bytearray()
+    acc, n = 0, 0
+    for v in samples:
+        acc = acc << depth | v
+        n += depth
+        if n == 8:
+            out.append(acc)
+            acc, n = 0, 0
+    if n:
+        out.append(acc << (8 - n))
+    return bytes(out)
+
+
+def write_png_depth(path, w, h, ctype, depth, pixels, interlace=False, palette=None):
+    """pixels[y][x] is a tuple of samples; rows are filtered in turn
+    with the five filters, separately in each Adam7 pass."""
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ctype]
+    bpp = max(1, channels * depth // 8)
+    passes = ADAM7 if interlace else [(0, 0, 1, 1)]
+    raw = bytearray()
+    n = 0
+    for x0, y0, dx, dy in passes:
+        prev = None
+        for y in range(y0, h, dy):
+            row = pack_row([v for x in range(x0, w, dx) for v in pixels[y][x]], depth)
+            if not row:
+                continue
+            f = n % 5
+            n += 1
+            raw.append(f)
+            raw += filter_row(f, row, prev, bpp)
+            prev = row
+    data = b"\x89PNG\r\n\x1a\n"
+    data += png_chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, depth, ctype, 0, 0, 1 if interlace else 0))
+    if palette is not None:
+        data += png_chunk(b"PLTE", b"".join(bytes(c[:3]) for c in palette))
+    data += png_chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+    data += png_chunk(b"IEND", b"")
+    with open(path, "wb") as f:
+        f.write(data)
+
+
 def gen_icons(out):
     os.makedirs(out, exist_ok=True)
     for name, art in ICONS.items():
@@ -222,6 +273,17 @@ def gen_tests(out):
     write_png(os.path.join(out, "pal.png"), w, h, 3, rows, palette=palette, trns=bytes([0, 255, 128] + [255] * 13))
     # A stored (uncompressed) deflate stream.
     write_png(os.path.join(out, "stored.png"), w, h, 0, [bytes(((x * 5 + y * 3) & 255) for x in range(w)) for y in range(h)], level=0)
+    # Other bit depths and Adam7 interlacing.
+    write_png_depth(os.path.join(out, "grey4.png"), w, h, 0, 4, [[((x + y) % 16,) for x in range(w)] for y in range(h)])
+    write_png_depth(os.path.join(out, "pal2.png"), w, h, 3, 2, [[((x * 3 + y) % 4,) for x in range(w)] for y in range(h)],
+                    palette=[(10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120)])
+    write_png_depth(os.path.join(out, "rgba16.png"), w, h, 6, 16,
+                    [[(x * 1000, y * 2000, (x + y) * 300, 65535 - x * 500) for x in range(w)] for y in range(h)])
+    write_png_depth(os.path.join(out, "adam7.png"), w, h, 6, 8,
+                    [[((x * 7) & 255, (y * 11) & 255, ((x + y) * 3) & 255, (255 - x * 2) & 255) for x in range(w)]
+                     for y in range(h)], interlace=True)
+    write_png_depth(os.path.join(out, "grey1i.png"), w, h, 0, 1, [[((x ^ y) & 1,) for x in range(w)] for y in range(h)],
+                    interlace=True)
 
 
 if __name__ == "__main__":

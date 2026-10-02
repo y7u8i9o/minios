@@ -64,6 +64,13 @@ cp manifest.other $P/lib/pkg/pkgfix/manifest
 check foreign-replaced "$($PKG install pkgfix-1.0.mpk)" "upgraded pkgfix 1.0"
 check foreign-arch "$(grep '^arch' $P/lib/pkg/pkgfix/manifest)" "arch $(uname -m)"
 check foreign-runs "$($P/bin/pkgprog)" "pkgfix 42"
+# A rebuild with other files and the same version replaces the installed
+# package, and an identical archive is skipped again.
+printf 'read me again\n' > prog/files/share/pkgprog/readme
+check build-rebuilt "$($PKG build prog)" "pkgprog-1.0.mpk"
+check rebuilt-replaced "$($PKG install pkgprog-1.0.mpk)" "upgraded pkgprog 1.0"
+check rebuilt-file "$(cat $P/share/pkgprog/readme)" "read me again"
+check rebuilt-again "$($PKG install pkgprog-1.0.mpk)" "pkgprog 1.0 is installed already"
 check verify-ok "$($PKG verify; echo $?)" "0"
 
 # A conflict.

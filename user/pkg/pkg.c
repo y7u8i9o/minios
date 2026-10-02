@@ -378,6 +378,40 @@ static int installed_foreign(const char *name, const struct manifest *im)
     return foreign;
 }
 
+/* True if the files of the archive differ from the record of the
+ * installed package of the same name: a file has another size or CRC, or
+ * one of the two lists names a file that the other does not. A package
+ * rebuilt without a new version is then replaced. */
+static int installed_differs(struct pending *p)
+{
+    struct record rec;
+    if (db_read_record(p->m.name, &rec) < 0)
+        return 1;
+    int differs = 0, nfiles = 0;
+    struct member m;
+    char err[128];
+    archive_rewind(&p->ar);
+    while (!differs && archive_next(&p->ar, &m, err, sizeof err) > 0) {
+        const char *rel;
+        if (member_rel(&m, &rel) < 0 || !rel || m.dir)
+            continue;
+        nfiles++;
+        int found = 0;
+        for (int i = 0; i < rec.nfiles && !found; i++)
+            if (strcmp(rec.files[i].path, rel) == 0) {
+                found = 1;
+                differs = rec.files[i].size != m.size || rec.files[i].crc != gzip_crc32(m.data, m.size);
+            }
+        if (!found)
+            differs = 1;
+    }
+    archive_rewind(&p->ar);
+    if (nfiles != rec.nfiles)
+        differs = 1;
+    record_free(&rec);
+    return differs;
+}
+
 /* ---- the checks of install ---- */
 
 static int check_all(void)
@@ -393,7 +427,8 @@ static int check_all(void)
                 return error(p->m.name, "named twice on the command line");
         const struct manifest *im = installed_manifest(p->m.name);
         if (im) {
-            if (strcmp(im->version, p->m.version) == 0 && !installed_foreign(p->m.name, im)) {
+            if (strcmp(im->version, p->m.version) == 0 && !installed_foreign(p->m.name, im) &&
+                !installed_differs(p)) {
                 printf("%s %s is installed already\n", p->m.name, p->m.version);
                 p->skip = 1;
             } else {

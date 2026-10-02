@@ -41,6 +41,20 @@ void tracer_destroy(struct wire_proxy *tracer)
     wire_proxy_destroy(tracer);
 }
 
+void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].o = buffer ? buffer->obj.id : 0;
+    wire_proxy_marshal(screencopy, 0, args, NULL);
+}
+
+void screencopy_destroy(struct wire_proxy *screencopy)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(screencopy, 1, args, NULL);
+    wire_proxy_destroy(screencopy);
+}
+
 void settings_set(struct wire_proxy *settings, const char * key, int32_t value)
 {
     union wire_arg args[2] = { { 0 } };

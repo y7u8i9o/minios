@@ -220,6 +220,16 @@ static void test_models(struct app *a)
     CHECK(table_column_width(table, 0) == 140, "column resized by dragging: %d", table_column_width(table, 0));
     click(win, ax + 30, ay + 24 + 1 + 3 * (app_theme(a)->font->height + 6) + 5);
     CHECK(table->value == 6, "fourth root row (id 6) selected by click: %d", table->value);
+    /* Scrolling to the last row of a table two rows high leaves the
+     * selection unchanged. */
+    int saved_h = table->h;
+    table->h = 24 + 2 + 2 * (widget_theme(table)->font->height + 6);
+    view_scroll_to(table, view_row_at(table, 6));
+    CHECK(view_scroll_position(table) == 5 && table->value == 6, "scrolled to the last row: first %d, selected %d",
+          view_scroll_position(table), table->value);
+    view_scroll_to(table, view_row_at(table, 0));
+    CHECK(view_scroll_position(table) == 0, "scrolled back to the first row: %d", view_scroll_position(table));
+    table->h = saved_h;
     window_close(win);
 }
 

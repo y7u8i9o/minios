@@ -4,6 +4,7 @@
 
 extern const struct wire_interface debug_interface;
 extern const struct wire_interface tracer_interface;
+extern const struct wire_interface screencopy_interface;
 extern const struct wire_interface settings_interface;
 
 static const struct wire_message debug_requests[] = {
@@ -27,6 +28,15 @@ static const struct wire_message tracer_events[] = {
     { "message", "uuuuusssu", 9, (const char *const[]){ NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }, 0 },
     { "dropped", "u", 1, (const char *const[]){ NULL }, 0 },
 };
+static const struct wire_message screencopy_requests[] = {
+    { "capture", "o", 1, (const char *const[]){ "buffer" }, 0 },
+    { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+};
+static const struct wire_message screencopy_events[] = {
+    { "size", "iii", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
+    { "done", "", 0, (const char *const[]){ NULL }, 0 },
+    { "failed", "", 0, (const char *const[]){ NULL }, 0 },
+};
 static const struct wire_message settings_requests[] = {
     { "set", "si", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "get_all", "", 0, (const char *const[]){ NULL }, 0 },
@@ -37,4 +47,5 @@ static const struct wire_message settings_events[] = {
 };
 const struct wire_interface debug_interface = { "debug", 1, 3, debug_requests, 4, debug_events };
 const struct wire_interface tracer_interface = { "tracer", 1, 3, tracer_requests, 3, tracer_events };
+const struct wire_interface screencopy_interface = { "screencopy", 1, 2, screencopy_requests, 3, screencopy_events };
 const struct wire_interface settings_interface = { "settings", 1, 2, settings_requests, 2, settings_events };

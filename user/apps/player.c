@@ -2,10 +2,9 @@
  *
  * The file (PCM, 8 or 16 bit, mono or stereo, any rate) is decoded to
  * the 48 kHz stereo format of the audio server when it is opened, with
- * linear interpolation for other rates.  The waveform view shows the
- * whole file as one column of minimum and maximum per pixel and a play
- * head; a click seeks.  Audio runs from the application event loop:
- * every buffer the server hands back is refilled at once. */
+ * linear interpolation for other sample rates.  The waveform view shows
+ * the whole file as one column of minimum and maximum per pixel and a play
+ * head. */
 #include <audio/audio.h>
 #include <gui/app.h>
 #include <pthread.h>
@@ -22,7 +21,7 @@ static struct audio_playback *playback;
 static struct watch *audio_watch;
 static struct timer *tick;
 static struct widget *wave, *play_button, *loop_box, *volume, *volume_label, *info, *time_label;
-static int16_t *samples;            /* decoded, interleaved stereo at 48 kHz */
+static int16_t *samples;            /* interleaved stereo sample at 48 kHz */
 static uint32_t frames, position;   /* in frames */
 static int16_t *period;
 static uint32_t quantum;

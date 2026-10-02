@@ -1,0 +1,5 @@
+hexview: NEEDLE found at 0x700
+hexview: de ad be ef found at 0x900
+hexview: de ad be ef found at 0xa00
+gui_hexview: hex viewer ok
+TEST PASS

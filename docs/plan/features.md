@@ -411,3 +411,38 @@ test `gui_wireview`.
 `/dev/threads` located the terminal fault of 2026-10-02 (`locking.md`),
 which the profiler could not show, because it records a stack only when a
 block ends. `docs/design/debug.md` describes the detector.
+
+## Images, screenshots, image viewer and paint (completed 2026-10-02)
+
+- The PNG decoder reads every bit depth and Adam7 interlacing. libgui
+  encodes PNG files (`image_encode_png`, `image_save_png`), resamples
+  images (`image_scale`) and draws them scaled (`painter_image_scaled`).
+- The `screencopy` interface of X12 copies the screen into a client
+  buffer. `/bin/screenshot` saves it as a PNG file, and Print Screen
+  starts it.
+- `view` became an image viewer for PNG and SVG files with zoom, scrolling,
+  navigation through the directory and Set as wallpaper. The text viewer
+  was removed, because gedit opens text files.
+- `paint` saves and opens PNG files and has a brush, an eraser, lines,
+  rectangles, ellipses, flood fill, a palette, undo and redo.
+
+Documented in `docs/design/images.md`, tested by `make check` for libgui
+and the boot test `gui_images`.
+
+## Hex viewer update (completed 2026-10-02)
+
+`hexview` shows as many lines as its window has room for, in DejaVu Sans
+Mono, and has a byte cursor with a selection, a value inspector, search
+for text and for bytes, a go to offset field, copying of the selection,
+menus and a text size setting. Documented in `docs/design/tools.md`,
+tested by the boot test `gui_hexview`.
+
+## Kernel log viewer update (completed 2026-10-02)
+
+`logview` shows the kernel log in a table with time, level, subsystem and
+message, filters by level, subsystem and text, follows new rows, shows the
+selected line in full, and copies and saves lines. `/dev/klog` accepts
+`SEEK_CUR`, which logview uses to count bytes that the ring dropped.
+libgui has `view_scroll_to` and `view_scroll_position`. Documented in
+`docs/design/tools.md`, tested by the boot test
+`gui_logview` and the libgui host test.

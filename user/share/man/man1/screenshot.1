@@ -1,0 +1,25 @@
+SCREENSHOT(1)               User Commands              SCREENSHOT(1)
+
+NAME
+    screenshot - save the screen as a PNG file
+
+SYNOPSIS
+    screenshot [-d seconds] [file]
+
+DESCRIPTION
+    screenshot copies the screen from the display server at the device
+    resolution and writes it to file. Without file, the image is written
+    to $HOME/Pictures/screenshot-DATE-TIME.png. The Print Screen key
+    starts screenshot without arguments.
+
+OPTIONS
+    -d seconds   wait before the copy
+
+    The path of the written file is printed on standard output.
+
+EXAMPLES
+    screenshot
+    screenshot -d 5 /home/desktop.png
+
+SEE ALSO
+    gzip(1)

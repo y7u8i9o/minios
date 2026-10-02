@@ -1,6 +1,6 @@
 /* Debugging and settings globals: statistics, the surface list, a
- * pixel probe, and tunable settings (frame interval, desktop colour,
- * key repeat, decoration default, logging). */
+ * pixel probe, screen capture, and tunable settings (frame interval,
+ * desktop colour, key repeat, decoration default, logging). */
 #include <minios/conf.h>
 #include <stdio.h>
 #include <string.h>
@@ -60,6 +60,49 @@ static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint
     struct wire_resource *r = wire_resource_create(c, &debug_interface, (int)version, id);
     if (r)
         wire_resource_set_listener(r, &debug_handlers, NULL, NULL);
+}
+
+/* ---- screen capture ---- */
+
+/* The back buffer contains the last composed frame in device pixels;
+ * it is copied with opaque alpha, so that ARGB buffers read as opaque. */
+static void h_capture(struct wire_client *c, struct wire_resource *self, struct wire_resource *buffer)
+{
+    struct buffer *b = buffer->data;
+    if (!b || b->width != back.width || b->height != back.height) {
+        screencopy_send_failed(self);
+        return;
+    }
+    uint8_t *base = b->pool->map + b->offset;
+    for (int y = 0; y < back.height; y++) {
+        const uint32_t *from = back.pixels + (size_t)y * back.stride;
+        uint32_t *to = (uint32_t *)(base + (size_t)y * b->stride);
+        for (int x = 0; x < back.width; x++)
+            to[x] = from[x] | 0xff000000u;
+    }
+    struct client *cl = wire_client_get_user_data(c);
+    comp_log("screen captured for client %d", cl ? cl->number : 0);
+    screencopy_send_done(self);
+}
+
+static void h_screencopy_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
+static const struct screencopy_impl screencopy_handlers = { h_capture, h_screencopy_destroy };
+
+static void bind_screencopy(struct wire_client *c, void *data, uint32_t version, uint32_t id)
+{
+    struct wire_resource *r = wire_resource_create(c, &screencopy_interface, (int)version, id);
+    if (!r)
+        return;
+    wire_resource_set_listener(r, &screencopy_handlers, NULL, NULL);
+    screencopy_send_size(r, back.width, back.height, screen_scale);
+}
+
+void debug_screen_changed(void)
+{
+    for (struct wire_client *k = wire_server_first_client(server); k; k = wire_client_next(k))
+        for (struct wire_resource *r = wire_client_first_resource(k); r; r = r->next)
+            if (r->obj.interface == &screencopy_interface)
+                screencopy_send_size(r, back.width, back.height, screen_scale);
 }
 
 /* ---- settings ---- */
@@ -162,4 +205,5 @@ void debug_init(struct wire_server *srv)
     server = srv;
     wire_global_create(srv, &debug_interface, 1, bind_debug, NULL);
     wire_global_create(srv, &settings_interface, 1, bind_settings, NULL);
+    wire_global_create(srv, &screencopy_interface, 1, bind_screencopy, NULL);
 }

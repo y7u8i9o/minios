@@ -35,6 +35,17 @@ back:arrow-left
 forward:arrow-right
 home:house
 refresh:arrows-rotate
+zoom-in:magnifying-glass-plus
+zoom-out:magnifying-glass-minus
+fit:expand
+undo:rotate-left
+redo:rotate-right
+line:slash
+rectangle:square
+ellipse:circle
+fill:fill-drip
+eraser:eraser
+wallpaper:desktop
 "
 
 fetch() {

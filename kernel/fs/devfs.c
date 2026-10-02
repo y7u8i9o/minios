@@ -424,6 +424,13 @@ static long klogdev_lseek(struct file *f, long off, int whence)
         f->pos = (uint64_t)off;
         return (long)f->pos;
     }
+    /* A reader compares the position before and after a read: a read that
+     * starts below the oldest byte of the ring advances the position by
+     * more than it returns. */
+    if (whence == SEEK_CUR) {
+        f->pos += (uint64_t)off;
+        return (long)f->pos;
+    }
     return -EINVAL;
 }
 

@@ -178,6 +178,7 @@ struct comp_settings {
 #define DISPLAY_MODE_S(m) (((m) >> 28) & 7)
 extern struct comp_settings settings;
 void debug_init(struct wire_server *srv);
+void debug_screen_changed(void);              /* sends the new size to screencopy clients */
 /* trace.c: the tracer global, and the client events of a running trace
  * (connected 1 when a client appears or reports its pid, 0 when it goes). */
 void trace_init(struct wire_server *srv);

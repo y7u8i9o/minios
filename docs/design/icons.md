@@ -3,7 +3,9 @@
 Icons are installed in `/usr/share/icons` under the names the programs use
 (`new`, `open`, `save`, `cut`, `copy`, `paste`, `quit`, `folder`,
 `file`, `terminal`, `clock`, `paint`, `pong`, `search`, `up`, `edit`,
-`back`, `forward`, `home`, `refresh`). Since 2026-09-05 each name may
+`back`, `forward`, `home`, `refresh`, `zoom-in`, `zoom-out`, `fit`,
+`undo`, `redo`, `line`, `rectangle`, `ellipse`, `fill`, `eraser`,
+`wallpaper`). Since 2026-09-05 each name may
 exist as an SVG file, which is preferred, and as a PNG file, which is
 the fallback; both paths stay in the library.
 

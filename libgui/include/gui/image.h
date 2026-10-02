@@ -21,5 +21,15 @@ struct image *image_decode(const uint8_t *data, size_t len); /* PNG in memory */
 struct image *image_load_svg(const char *path, int px, uint32_t color);
 struct image *image_render_svg(const char *text, size_t len, int px, uint32_t color);
 void image_free(struct image *img);
+/* A transparent image of w by h pixels (scale 1); NULL with errno. */
+struct image *image_create(int w, int h);
+/* A copy resampled to w by h pixels: area averages for reductions, the
+ * nearest pixel for enlargements. NULL with errno. */
+struct image *image_scale(const struct image *src, int w, int h);
+/* PNG encoding (src/pngenc.c): RGB when every pixel is opaque, else RGBA.
+ * image_encode_png stores a malloc'ed file in *data and returns its
+ * length; both return a negative errno on failure. */
+long image_encode_png(const struct image *img, uint8_t **data);
+int image_save_png(const struct image *img, const char *path);
 /* zlib stream (RFC 1950) to dst; returns the output length or a negative errno. */
 long zlib_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len);

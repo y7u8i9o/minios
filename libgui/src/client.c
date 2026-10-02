@@ -447,6 +447,11 @@ static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t t
 }
 static void on_modifiers(void *user, struct wire_proxy *k, uint32_t serial, uint32_t dep, uint32_t lat, uint32_t lock, uint32_t group)
 { modifiers = (int)dep; }
+
+int gui_modifiers(void)
+{
+    return modifiers;
+}
 static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t delay)
 {
     repeat_rate = rate;

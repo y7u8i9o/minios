@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 #include <gui/keymap.h>
 #include <minios/input.h>
+#include <gui/mime.h>
 #include "comp.h"
 
 int decor_hit(const struct csurface *s, int x, int y);
@@ -418,6 +419,14 @@ void seat_key(uint32_t key, int pressed)
             struct toplevel *t = toplevel_focused();
             if (t)
                 toplevel_close(t);
+            return;
+        }
+        /* Print Screen saves a screenshot. Alt+SysRq prints the thread
+         * table of the kernel and is passed to the client unchanged. */
+        if (key == KEY_SYSRQ && !(modifiers & KEYMAP_MOD_ALT)) {
+            char *const argv[] = { "/bin/screenshot", NULL };
+            int err = mime_spawn(argv);
+            comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
             return;
         }
         if (key == KEY_ESC && popup_grab_surface()) {

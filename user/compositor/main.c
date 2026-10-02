@@ -146,6 +146,7 @@ int comp_set_mode(int width, int height, int scale)
     scene_set_cursor(cursor_x, cursor_y);
     shell_output_changed();
     output_changed();
+    debug_screen_changed();
     scene_damage_all();
     comp_log("mode %dx%d scale %d", screen_w, screen_h, screen_scale);
     return 0;

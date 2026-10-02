@@ -59,6 +59,10 @@ serial line to the kernel and the programs.
   and reported by one `dropped` event once it reads again, so a slow
   tracer never makes libwire drop a message of its own. Up to eight
   tracers may be bound.
+- `debug.c`: the `debug`, `settings` and `screencopy` globals of
+  `protocol/debug.xml`. `screencopy.capture` copies the back buffer into a
+  client buffer of the screen size (`images.md`). `seat.c` starts
+  `/bin/screenshot` when Print Screen is pressed without Alt.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back

@@ -38,6 +38,19 @@
     <event name="dropped"><arg name="count" type="uint"/></event>
   </interface>
 
+  <!-- Screen capture (screenshot). Binding sends size with the screen in
+       device pixels and the scale, again after a mode change. capture
+       copies the last composed frame, the pointer included, into a shared
+       memory buffer of that size and sends done, or failed when the
+       buffer has another size. -->
+  <interface name="screencopy" version="1">
+    <request name="capture"><arg name="buffer" type="object" interface="buffer"/></request>
+    <request name="destroy" type="destructor"/>
+    <event name="size"><arg name="width" type="int"/><arg name="height" type="int"/><arg name="scale" type="int"/></event>
+    <event name="done"/>
+    <event name="failed"/>
+  </interface>
+
   <interface name="settings" version="1">
     <request name="set"><arg name="key" type="string"/><arg name="value" type="int"/></request>
     <request name="get_all"/>

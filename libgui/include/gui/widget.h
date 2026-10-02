@@ -256,6 +256,8 @@ void view_refresh(struct widget *w);                      /* after the model cha
 int view_visible_rows(const struct widget *w);           /* flattened rows */
 int view_row_at(const struct widget *w, int index);      /* row id of a flattened row */
 void view_select(struct widget *w, int row);             /* select and scroll to a row id */
+void view_scroll_to(struct widget *w, int row);          /* scroll to a row id, the selection unchanged */
+int view_scroll_position(const struct widget *w);        /* the first visible flattened row */
 void treeview_expand(struct widget *w, int row, int expanded);
 int treeview_is_expanded(const struct widget *w, int row);
 void table_set_column_width(struct widget *w, int col, int width);

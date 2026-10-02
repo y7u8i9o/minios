@@ -102,6 +102,8 @@ int gui_event_fd(void);
  * held; callers with their own poll loop cap their timeout with it and
  * call gui_next_event(ev, 0) afterwards. */
 int gui_repeat_timeout(void);
+/* The modifier keys that are pressed now (WMOD_*), for mouse events. */
+int gui_modifiers(void);
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
 struct wire_display;

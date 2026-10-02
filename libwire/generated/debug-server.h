@@ -5,6 +5,7 @@
 
 extern const struct wire_interface debug_interface;
 extern const struct wire_interface tracer_interface;
+extern const struct wire_interface screencopy_interface;
 extern const struct wire_interface settings_interface;
 
 struct debug_impl {
@@ -25,6 +26,14 @@ struct tracer_impl {
 void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected);
 void tracer_send_message(struct wire_resource *tracer, uint32_t seq, uint32_t time_ms, uint32_t client, uint32_t direction, uint32_t object, const char * interface, const char * name, const char * arguments, uint32_t size);
 void tracer_send_dropped(struct wire_resource *tracer, uint32_t count);
+
+struct screencopy_impl {
+    void (*capture)(struct wire_client *client, struct wire_resource *self, struct wire_resource * buffer);
+    void (*destroy)(struct wire_client *client, struct wire_resource *self);
+};
+void screencopy_send_size(struct wire_resource *screencopy, int32_t width, int32_t height, int32_t scale);
+void screencopy_send_done(struct wire_resource *screencopy);
+void screencopy_send_failed(struct wire_resource *screencopy);
 
 struct settings_impl {
     void (*set)(struct wire_client *client, struct wire_resource *self, const char * key, int32_t value);

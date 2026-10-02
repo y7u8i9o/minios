@@ -315,3 +315,28 @@ void painter_image(struct painter *p, int x, int y, const struct image *img)
         }
     }
 }
+
+/* Nearest neighbour sampling over the device pixels of the destination
+ * that lie inside the clip, so that the cost follows the visible area
+ * and not the size of the image. */
+void painter_image_scaled(struct painter *p, int x, int y, int w, int h, const struct image *img)
+{
+    int dx, dy, s = p->scale;
+    struct surface v = view(p, &dx, &dy);
+    if (v.width <= 0 || v.height <= 0 || w <= 0 || h <= 0)
+        return;
+    long long X0 = (long long)x * s + dx, Y0 = (long long)y * s + dy, DW = (long long)w * s, DH = (long long)h * s;
+    long long py0 = Y0 > 0 ? Y0 : 0, py1 = Y0 + DH < v.height ? Y0 + DH : v.height;
+    long long px0 = X0 > 0 ? X0 : 0, px1 = X0 + DW < v.width ? X0 + DW : v.width;
+    for (long long py = py0; py < py1; py++) {
+        uint32_t *row = v.pixels + (size_t)py * v.stride;
+        const uint32_t *from = img->pixels + (size_t)((py - Y0) * img->h / DH) * img->w;
+        for (long long px = px0; px < px1; px++) {
+            uint32_t c = from[(px - X0) * img->w / DW];
+            unsigned a = c >> 24;
+            if (!a)
+                continue;
+            row[px] = a == 255 ? (c & 0x00ffffff) : blend(row[px], c, a);
+        }
+    }
+}

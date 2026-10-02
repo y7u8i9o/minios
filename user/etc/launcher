@@ -5,6 +5,7 @@ Clock=/bin/clock
 System monitor=/bin/sysmon
 Kernel log=/bin/logview
 Event viewer=/bin/evtest
+Screenshot=/bin/screenshot
 Settings=/bin/settings
 X12 settings=/bin/x12settings
 Protocol viewer=/bin/wireview

@@ -46,5 +46,7 @@ void painter_blit(struct painter *p, int x, int y, const struct surface *src);
 void painter_mask(struct painter *p, int x, int y, const uint8_t *mask, int w, int h, uint32_t color);
 /* Blend an RGBA image at (x, y). */
 void painter_image(struct painter *p, int x, int y, const struct image *img);
+/* Draw an image scaled to w by h logical pixels at (x, y). */
+void painter_image_scaled(struct painter *p, int x, int y, int w, int h, const struct image *img);
 /* Clip rectangle in local coordinates (for skipping invisible work). */
 struct rect painter_clip_local(const struct painter *p);

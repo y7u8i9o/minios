@@ -167,8 +167,11 @@ before it runs the checks: the manifest syntax, the member paths, the
 dependency rule, the conflict rule, the library rule and the ownership
 rule, for every package on the command line. Only when every package
 passes are the members written, in an order that installs dependencies
-first. A package already installed with the same version is reported and
-skipped; one installed with another version is upgraded, which removes
+first. A package already installed with the same version and the same
+files is reported and skipped. A package installed with the same version
+is replaced when the size or CRC of a file differs from the record or a
+file is added or missing, because a rebuild changes the programs without
+changing the version. One installed with another version is upgraded, which removes
 the old files that the new archive does not contain and keeps the
 directories the old version created. A failure during extraction removes
 what the failing package wrote and leaves the packages installed before
@@ -272,9 +275,9 @@ For example, on minios:
 Installation is explicit. An application removed by the user is not
 reinstalled on boot. Installed programs and their records survive root
 image rebuilds on the data volume. Rebuilding with a newer `VERSION`
-creates archives that can be installed as upgrades. Development changes
-within the same version require removal and reinstallation, because
-`pkg install` skips an already installed version.
+creates archives that can be installed as upgrades. `pkg install` also
+replaces a package whose archive has the installed version but other
+files, so the archives of a rebuild replace the installed programs.
 
 The base image keeps init, the shell and console editor, command-line
 utilities and language/development tools, shared libraries and fonts,

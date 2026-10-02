@@ -403,6 +403,23 @@ void view_select(struct widget *w, int row)
         select_flat(v, idx, "selected");
 }
 
+void view_scroll_to(struct widget *w, int row)
+{
+    struct view *v = (struct view *)w;
+    int idx = flat_index_of(v, row);
+    if (idx < 0)
+        return;
+    int rows = rows_visible(v);
+    if (idx < v->scroll) v->scroll = idx;
+    if (rows > 0 && idx >= v->scroll + rows) v->scroll = idx - rows + 1;
+    widget_invalidate(w);
+}
+
+int view_scroll_position(const struct widget *w)
+{
+    return ((const struct view *)w)->scroll;
+}
+
 void table_set_column_width(struct widget *w, int col, int width)
 {
     struct view *v = (struct view *)w;

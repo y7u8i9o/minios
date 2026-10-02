@@ -77,6 +77,27 @@ void tracer_send_dropped(struct wire_resource *tracer, uint32_t count)
     wire_resource_post(tracer, 2, args);
 }
 
+void screencopy_send_size(struct wire_resource *screencopy, int32_t width, int32_t height, int32_t scale)
+{
+    union wire_arg args[3] = { { 0 } };
+    args[0].i = width;
+    args[1].i = height;
+    args[2].i = scale;
+    wire_resource_post(screencopy, 0, args);
+}
+
+void screencopy_send_done(struct wire_resource *screencopy)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(screencopy, 1, args);
+}
+
+void screencopy_send_failed(struct wire_resource *screencopy)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(screencopy, 2, args);
+}
+
 void settings_send_value(struct wire_resource *settings, const char * key, int32_t value)
 {
     union wire_arg args[2] = { { 0 } };

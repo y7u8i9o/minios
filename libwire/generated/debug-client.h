@@ -5,6 +5,7 @@
 
 extern const struct wire_interface debug_interface;
 extern const struct wire_interface tracer_interface;
+extern const struct wire_interface screencopy_interface;
 extern const struct wire_interface settings_interface;
 
 struct debug_listener {
@@ -29,6 +30,16 @@ static inline int tracer_add_listener(struct wire_proxy *p, const struct tracer_
 void tracer_start(struct wire_proxy *tracer);
 void tracer_stop(struct wire_proxy *tracer);
 void tracer_destroy(struct wire_proxy *tracer);
+
+struct screencopy_listener {
+    void (*size)(void *user, struct wire_proxy *self, int32_t width, int32_t height, int32_t scale);
+    void (*done)(void *user, struct wire_proxy *self);
+    void (*failed)(void *user, struct wire_proxy *self);
+};
+static inline int screencopy_add_listener(struct wire_proxy *p, const struct screencopy_listener *l, void *user)
+{ return wire_proxy_add_listener(p, (const void *)l, user); }
+void screencopy_capture(struct wire_proxy *screencopy, struct wire_proxy * buffer);
+void screencopy_destroy(struct wire_proxy *screencopy);
 
 struct settings_listener {
     void (*value)(void *user, struct wire_proxy *self, const char * key, int32_t value);

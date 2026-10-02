@@ -14,6 +14,7 @@
 #include <lib/cmdline.h>
 #include <lib/crc32.h>
 #include <console.h>
+#include <klog.h>
 #include <errno.h>
 #include <drivers/timer.h>
 #include "gui_helpers.h"
@@ -235,7 +236,7 @@ KTEST_DEFINE("gui_term", test_gui_term);
 /* Geometry of the launcher popup, which the panel builds from
  * user/etc/launcher: one 24 px row per entry inside 6 px of padding,
  * opened above the 28 px panel.  Keep these in step with that file. */
-#define LAUNCHER_ENTRIES 10
+#define LAUNCHER_ENTRIES 11
 #define LAUNCHER_CLOCK   2     /* index of Clock=/bin/clock */
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - (LAUNCHER_ENTRIES * 24 + 12))
 #define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + (i) * 24 + 12)
@@ -1097,6 +1098,259 @@ static void test_gui_tools(void)
     kprintf("gui_tools: debugging tools ok\n");
 }
 KTEST_DEFINE("gui_tools", test_gui_tools);
+
+/* Screenshots, the image viewer and paint. The screenshot program and
+ * the Print Screen key write PNG files of the screen; the viewer shows
+ * one fitted into its window; paint draws a stroke, undoes and redoes
+ * it, and saves; the viewer shows the saved drawing. The post script
+ * decodes /shot.png and /drawing.png on the host. Windows cascade by
+ * creation number: the first viewer at (40,60), paint at (70,90), the
+ * second viewer at (100,120). */
+static int count_pixels(int x0, int y0, int w, int h, uint32_t value, uint32_t mask)
+{
+    int n = 0;
+    for (int y = y0; y < y0 + h; y++)
+        for (int x = x0; x < x0 + w; x++)
+            if ((pixel(x, y) & mask) == (value & mask))
+                n++;
+    return n;
+}
+
+static void wait_active(int wx, int wy, const char *what)
+{
+    uint64_t t0 = timer_ms();
+    while (pixel(wx + 2, wy - 10) != 0x00ebebeb && timer_ms() - t0 < 5000)
+        sleep_ms(50);
+    ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s window has an active title bar: %08x", what,
+                 pixel(wx + 2, wy - 10));
+    sleep_ms(500);
+}
+
+static void read_head(const char *path, uint8_t *buf, size_t n)
+{
+    struct file *f;
+    ktest_assert(vfs_open(path, O_RDONLY, 0, &f) == 0, "open %s", path);
+    long got = file_read(f, (char *)buf, n);
+    file_put(f);
+    ktest_assert(got == (long)n, "%s has %ld bytes", path, got);
+}
+
+static void test_gui_images(void)
+{
+    install_app("view");
+    install_app("paint");
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    ktest_assert(sw >= 800 && sh >= 640, "screen %dx%d too small", sw, sh);
+    kprintf("gui_images: screen %lux%lu\n", (unsigned long)fb_screen.width, (unsigned long)fb_screen.height);
+    struct proc *srv = start_server();
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, sw - 5, sh / 2, 0);
+
+    /* The screenshot program writes the screen at device resolution. */
+    vfs_unlink("/shot.png");
+    struct proc *cl = proc_create_user("/bin/screenshot", (char *const[]){ "screenshot", "/shot.png", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start screenshot");
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "screenshot status 0x%x", status);
+    uint8_t head[26];
+    read_head("/shot.png", head, sizeof head);
+    static const uint8_t sig[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+    ktest_assert(memcmp(head, sig, 8) == 0 && memcmp(head + 12, "IHDR", 4) == 0, "/shot.png is not a PNG file");
+    uint32_t w = (uint32_t)head[16] << 24 | (uint32_t)head[17] << 16 | (uint32_t)head[18] << 8 | head[19];
+    uint32_t h = (uint32_t)head[20] << 24 | (uint32_t)head[21] << 16 | (uint32_t)head[22] << 8 | head[23];
+    ktest_assert(w == fb_screen.width && h == fb_screen.height, "screenshot %ux%u", (unsigned)w, (unsigned)h);
+    ktest_assert(head[24] == 8 && head[25] == 2, "screenshot depth %u colour type %u", head[24], head[25]);
+
+    /* Print Screen starts the same program, which names the file. */
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0x37);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xb7);
+    sleep_ms(2500);
+
+    /* The viewer fits the screenshot into its window: the desktop colour
+     * of the image and the dark bars beside it. */
+    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/shot.png", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start view");
+    wait_active(40, 60, "view");
+    int desk = count_pixels(40, 60, 640, 480, 0x00306080, 0x00ffffff);
+    int bars = count_pixels(40, 60, 640, 480, 0x00303030, 0x00ffffff);
+    kprintf("gui_images: viewer shows %d desktop and %d background pixels\n", desk, bars);
+    ktest_assert(desk > 20000 && bars > 1000, "fitted screenshot: %d desktop, %d background pixels", desk, bars);
+    /* Actual size, zoom in and out, back to the fit, and the next image. */
+    press_key(0x02);
+    sleep_ms(200);
+    press_key(0x0d);
+    sleep_ms(200);
+    press_key(0x0c);
+    sleep_ms(200);
+    press_key(0x0b);
+    sleep_ms(200);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0x4d);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xcd);
+    sleep_ms(400);
+    ktest_assert(count_pixels(40, 60, 640, 480, 0x00306080, 0x00ffffff) > 20000, "viewer after the zoom keys");
+    alt_key(0x3e);
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "view status 0x%x", status);
+
+    /* Paint: find the white drawing inside the window. */
+    vfs_unlink("/drawing.png");
+    cl = proc_create_user("/home/.local/bin/paint", (char *const[]){ "paint", "/drawing.png", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start paint");
+    int wx = 70, wy = 90;
+    wait_active(wx, wy, "paint");
+    int top = -1, left = -1;
+    for (int y = wy; y < wy + 200 && top < 0; y++)
+        if (pixel(wx + 300, y) == 0x00ffffff && pixel(wx + 300, y + 1) == 0x00ffffff && pixel(wx + 300, y + 2) == 0x00ffffff)
+            top = y;
+    ktest_assert(top >= 0, "no drawing in the paint window");
+    for (int x = wx; x < wx + 100 && left < 0; x++)
+        if (pixel(x, top + 20) == 0x00ffffff && pixel(x + 1, top + 20) == 0x00ffffff)
+            left = x;
+    ktest_assert(left >= 0, "no left edge of the drawing");
+    kprintf("gui_images: drawing at %d,%d\n", left - wx, top - wy);
+    mouse_move_to(&cx, &cy, left + 50, top + 50, 0);
+    feed_packet(1, 0, 0);
+    sleep_ms(100);
+    mouse_move_to(&cx, &cy, left + 250, top + 50, 1);
+    sleep_ms(100);
+    feed_packet(0, 0, 0);
+    sleep_ms(400);
+    ktest_assert(pixel(left + 150, top + 50) == 0, "stroke drawn: %08x", pixel(left + 150, top + 50));
+    ctrl_key(0x2c);
+    sleep_ms(300);
+    ktest_assert(pixel(left + 150, top + 50) == 0x00ffffff, "stroke undone: %08x", pixel(left + 150, top + 50));
+    ctrl_key(0x15);
+    sleep_ms(300);
+    ktest_assert(pixel(left + 150, top + 50) == 0, "stroke redone: %08x", pixel(left + 150, top + 50));
+    ctrl_key(0x1f);
+    sleep_ms(1000);
+    alt_key(0x3e);
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "paint status 0x%x", status);
+    read_head("/drawing.png", head, sizeof head);
+    ktest_assert(memcmp(head, sig, 8) == 0, "/drawing.png is not a PNG file");
+
+    /* The saved drawing in the viewer: the stroke shows as black pixels
+     * in the canvas, below the tool bar and above the status bar. */
+    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/drawing.png", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start the second view");
+    wait_active(100, 120, "second view");
+    int dark = count_pixels(110, 120 + 80, 620, 300, 0, 0x00f0f0f0);
+    kprintf("gui_images: saved stroke shows %d dark pixels\n", dark);
+    ktest_assert(dark > 200, "saved stroke in the viewer: %d dark pixels", dark);
+    alt_key(0x3e);
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "second view status 0x%x", status);
+    stop_server(srv);
+    vfs_sync();
+    kprintf("gui_images: images ok\n");
+}
+KTEST_DEFINE("gui_images", test_gui_images);
+
+/* The hex viewer on a file of known bytes: Find text and Find bytes
+ * select the matches, F3 finds the second byte sequence, and the program
+ * reports every match on standard output. */
+static void test_gui_hexview(void)
+{
+    install_app("hexview");
+    ktest_assert(fb_screen_present, "no framebuffer");
+    static char data[4096];
+    for (int i = 0; i < 4096; i++)
+        data[i] = (char)(i * 7);
+    memcpy(data + 0x700, "NEEDLE", 6);
+    memcpy(data + 0x900, "\xde\xad\xbe\xef", 4);
+    memcpy(data + 0xa00, "\xde\xad\xbe\xef", 4);
+    struct file *f;
+    vfs_unlink("/hex.bin");
+    ktest_assert(vfs_open("/hex.bin", O_WRONLY | O_CREAT, 0644, &f) == 0, "create /hex.bin");
+    ktest_assert(file_write(f, data, sizeof data) == (long)sizeof data, "write /hex.bin");
+    file_put(f);
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/home/.local/bin/hexview", (char *const[]){ "hexview", "/hex.bin", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start hexview");
+    wait_active(40, 60, "hexview");
+    ctrl_key(0x21);                     /* Ctrl+F */
+    sleep_ms(600);
+    type_line("NEEDLE\n");
+    sleep_ms(600);
+    ctrl_key(0x30);                     /* Ctrl+B */
+    sleep_ms(600);
+    type_line("de ad be ef\n");
+    sleep_ms(600);
+    press_key(0x3d);                    /* F3 */
+    sleep_ms(600);
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "hexview status 0x%x", status);
+    stop_server(srv);
+    vfs_unlink("/hex.bin");
+    kprintf("gui_hexview: hex viewer ok\n");
+}
+KTEST_DEFINE("gui_hexview", test_gui_hexview);
+
+/* The kernel log viewer with a level, a subsystem and a text filter from
+ * its options: a warning written before it starts and an error written
+ * while it runs are shown, an info line is not, and Save writes the rows
+ * shown. */
+static bool text_contains(const char *hay, const char *needle)
+{
+    size_t n = strlen(needle);
+    for (; *hay; hay++)
+        if (strncmp(hay, needle, n) == 0)
+            return true;
+    return false;
+}
+
+static void test_gui_logview(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    klog_print(LOG_INFO, "ktest", "logview info marker");
+    klog_print(LOG_WARN, "ktest", "logview warning marker");
+    vfs_unlink("/home/klog.txt");
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/logview",
+                                       (char *const[]){ "logview", "-l", "warning", "-s", "ktest", "-f", "MARKER", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start logview");
+    wait_active(40, 60, "logview");
+    klog_print(LOG_ERROR, "ktest", "logview late error marker");
+    sleep_ms(500);
+    ctrl_key(0x1f);                     /* Ctrl+S */
+    sleep_ms(600);
+    type_line("\n");
+    sleep_ms(600);
+    struct file *f;
+    ktest_assert(vfs_open("/home/klog.txt", O_RDONLY, 0, &f) == 0, "open /home/klog.txt");
+    static char buf[2048];
+    long n = file_read(f, buf, sizeof buf - 1);
+    file_put(f);
+    buf[n > 0 ? n : 0] = '\0';
+    kprintf("gui_logview: saved file:\n%s", buf);
+    ktest_assert(text_contains(buf, "] [W ktest] logview warning marker"), "warning row missing");
+    ktest_assert(text_contains(buf, "] [E ktest] logview late error marker"), "late error row missing");
+    ktest_assert(!text_contains(buf, "info marker"), "info row shown");
+    int lines = 0;
+    for (char *p = buf; *p; p++)
+        lines += *p == '\n';
+    ktest_assert(lines == 2, "saved %d lines", lines);
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "logview status 0x%x", status);
+    stop_server(srv);
+    vfs_unlink("/home/klog.txt");
+    kprintf("gui_logview: log viewer ok\n");
+}
+KTEST_DEFINE("gui_logview", test_gui_logview);
 
 /* The protocol viewer: the text mode prints the requests and events of
  * the clock while it connects, then the window records a second clock
