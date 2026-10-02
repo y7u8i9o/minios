@@ -331,7 +331,7 @@ void im_surface_gone(struct csurface *s);
 /* ime.c: the input methods (docs/design/ime.md).  ime_key returns 1 when
  * the engine used the key.  The result has the text to commit and the new
  * preedit. */
-enum { IME_OFF, IME_JAPANESE, IME_CHINESE };
+enum { IME_OFF, IME_JAPANESE };
 struct ime_result {
     char commit[256];
     char preedit[256];

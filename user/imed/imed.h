@@ -12,10 +12,11 @@
 /* An engine.  key receives a press with the character of the layout (0
  * for a key without one) and the modifiers of gui/keymap.h, and returns 1
  * when the engine used the key.  flush commits the composition as it is
- * shown, reset drops it.  Every function may change the composition
+ * shown, reset drops it.  init may be NULL.  Every function may change the composition
  * through the functions below. */
 struct imed_engine {
     const char *name, *label, *title;
+    void (*init)(void);                 /* at the start of the daemon: loads the dictionaries */
     void (*select)(void);
     int (*key)(uint32_t key, int ch, int mods);
     void (*flush)(void);
@@ -60,4 +61,4 @@ void window_scroll(int pages);
 void window_set_scale(int scale);
 
 /* The engines. */
-extern const struct imed_engine test_engine;
+extern const struct imed_engine test_engine, pinyin_engine;

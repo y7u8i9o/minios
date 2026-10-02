@@ -3,8 +3,8 @@
  * input contexts and the input method daemon imed.
  *
  * Method 0 is the keyboard layout.  The engines of the daemon follow in
- * the order of its set_engines request, then the built-in engines of ime.c
- * (L6), which the daemon replaces.  While an engine of the daemon is
+ * the order of its set_engines request, then the built-in Japanese engine
+ * of ime.c (L6), which the daemon replaces in I4.  While an engine of the daemon is
  * selected and a text input context has the keyboard focus, the daemon is
  * active: it receives every key of the context and replies whether it
  * used it.  The keys wait in a queue for the reply, at most 150 ms each,
@@ -25,7 +25,7 @@
 
 struct method {
     char name[32], label[16], title[64];
-    int builtin;                /* IME_JAPANESE or IME_CHINESE of ime.c, 0 for the layout or the daemon */
+    int builtin;                /* IME_JAPANESE of ime.c, 0 for the layout or the daemon */
 };
 
 struct pending_key {
@@ -37,6 +37,7 @@ struct pending_key {
 
 static struct method methods[MAX_METHODS];
 static int nmethods, current, last_engine;
+static int engine_chosen;                         /* the user selected an engine: last_engine stays */
 static char daemon_engines[MAX_METHODS][3][64];   /* name, label and title of each engine of the daemon */
 static int ndaemon;
 static struct wire_resource *im;                  /* the input method of the daemon, or NULL */
@@ -84,13 +85,12 @@ static void rebuild_methods(void)
     for (int i = 0; i < ndaemon; i++)
         add_method(daemon_engines[i][0], daemon_engines[i][1], daemon_engines[i][2], 0);
     add_method("l6-japanese", "あ", "Japanese (characters)", IME_JAPANESE);
-    add_method("l6-chinese", "拼", "Chinese (characters)", IME_CHINESE);
     current = 0;
     last_engine = -1;
     for (int i = 0; i < nmethods; i++) {
         if (strcmp(methods[i].name, was) == 0)
             current = i;
-        if (strcmp(methods[i].name, last) == 0)
+        if (engine_chosen && strcmp(methods[i].name, last) == 0)
             last_engine = i;
     }
     /* The first Chinese engine is the engine of the first toggle. */
@@ -211,8 +211,10 @@ void im_select(int index)
     if (im && current > 0 && !methods[current].builtin && (index == 0 || methods[index].builtin))
         input_method_send_select_engine(im, methods[index].name);
     current = index;
-    if (current > 0)
+    if (current > 0) {
         last_engine = current;
+        engine_chosen = 1;
+    }
     ime_set_mode(methods[current].builtin);
     if (im && current > 0 && !methods[current].builtin)
         input_method_send_select_engine(im, methods[current].name);

@@ -86,7 +86,7 @@ The page size and the orientation come from `ime_page_size` and
 `ime_orientation` of `desktop.conf`, which I5 adds to Settings. The cases
 `ime_candidates`, `ime_protocol` and `ime` pass.
 
-### I3. Pinyin engine
+### I3. Pinyin engine (completed 2026-10-03)
 
 - Segmentation into syllables with ambiguity, incomplete syllables and
   abbreviations by initials. Candidates of a sentence, of words and of
@@ -95,6 +95,14 @@ The page size and the orientation come from `ime_page_size` and
 - The L6 engines, their Unihan tables and `tools/fetch_unihan.sh` are
   removed.
 - Host unit tests, and the boot test `ime_pinyin`.
+
+Only the Chinese engine of L6 and its `pinyin.tab` are removed here. The
+Japanese engine of L6, `kana.tab` and `tools/fetch_unihan.sh` stay until
+I4 replaces them. Scores are logarithms of probabilities, and the sentence
+follows the best division into syllables without abbreviations, which
+keeps one-letter syllables out of sentences. `startgui` starts `imed`. The
+cases `ime_pinyin`, `ime`, `ime_protocol`, `ime_candidates`, `comp_seat`
+and `gui_editor` pass, and `make check` passes.
 
 ### I4. Japanese engine
 

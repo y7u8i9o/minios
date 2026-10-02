@@ -229,8 +229,17 @@ check: check-headers check-pkg
 	$(MAKE) -C libwire check
 	$(MAKE) -C libgui check
 	$(MAKE) check-lua
+	$(MAKE) check-imed
 
-.PHONY: check-lua check-headers
+.PHONY: check-lua check-headers check-imed
+# The engines of the input method daemon on the host, with the
+# dictionaries of user/share/ime (docs/design/ime.md).
+check-imed:
+	@mkdir -p $(BUILD)/host
+	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -o $(BUILD)/host/test_pinyin user/imed/pycore.c \
+	    user/imed/tests/test_pinyin.c -lm
+	$(BUILD)/host/test_pinyin user/share/ime/pinyin.dict
+
 # Every installed header must compile on its own with the cross compiler,
 # in C17, as tcc will see it on minios (docs/design/tcc.md).
 check-headers:

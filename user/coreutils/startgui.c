@@ -1,6 +1,6 @@
-/* startgui [program]: start the desktop session (X12, the panel, the
- * desktop), run the program (the terminal by default) and stop the
- * session on logout. The audio server is a service of init and lives
+/* startgui [program]: start the desktop session (X12, the input method
+ * daemon, the panel, the desktop), run the program (the terminal by
+ * default) and stop the session on logout. The audio server is a service of init and lives
  * across sessions. */
 #include <stdio.h>
 #include <signal.h>
@@ -25,6 +25,7 @@ int main(int argc, char **argv)
     conf_export_locale();
     pid_t server = spawn("x12");
     sleep_ms(400);
+    pid_t ime = spawn("imed");
     pid_t panel = spawn("panel");
     sleep_ms(200);
     pid_t desktop = spawn("desktop");
@@ -45,6 +46,16 @@ int main(int argc, char **argv)
         }
         if (done == server)
             break;
+        if (done == ime) {
+            if (++restarts > 3) {
+                ime = -1;
+                continue;
+            }
+            fprintf(stderr, "startgui: imed ended with status 0x%x, restarting\n", status);
+            sleep_ms(200);
+            ime = spawn("imed");
+            continue;
+        }
         if (done == desktop) {
             if (++restarts > 3)
                 break;
@@ -74,6 +85,10 @@ int main(int argc, char **argv)
     waitpid(panel, NULL, 0);
     kill(desktop, SIGTERM);
     waitpid(desktop, NULL, 0);
+    if (ime > 0) {
+        kill(ime, SIGTERM);
+        waitpid(ime, NULL, 0);
+    }
     kill(server, SIGTERM);
     waitpid(server, NULL, 0);
     return 0;

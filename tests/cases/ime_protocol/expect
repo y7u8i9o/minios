@@ -1,6 +1,6 @@
-imed: started with 1 engines
+imed: started with 2 engines
 x12: ime: input method bound
-x12: ime: 1 engines
+x12: ime: 2 engines
 x12: input method T
 x12: ime: candidate surface [0-9]+ mapped
 x12: ime: candidates at [0-9]+,[0-9]+

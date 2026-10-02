@@ -40,6 +40,12 @@ void window_init(void)
     theme_init_default(&ui);
     ui.metric[TM_FONT_PX] = 16;
     theme_apply(&ui);
+    /* The CJK font loads at its first use, which takes a while: now, not
+     * at the first candidate. */
+    struct surface measure = { .pixels = NULL, .width = 1, .height = 1, .stride = 1 };
+    struct painter p;
+    painter_init_scaled(&p, &measure, &ui, 1);
+    painter_text_width(&p, "中あ", -1);
     surface = compositor_create_surface(compositor);
     role = input_method_get_candidate_surface(im, surface);
     candidate_surface_add_listener(role, &role_events, NULL);

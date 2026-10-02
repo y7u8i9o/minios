@@ -89,30 +89,39 @@ of the boot tests: letters compose, the candidates are the letters in
 capitals, in small letters and with a capital first, and F12 replies after
 300 ms.
 
-## Candidate tables
+## Dictionaries
 
+`tools/fetch_imedata.sh` downloads the dictionaries of the engines of
+`imed` at pinned commits into `third_party/imedata`, and
 `tools/fetch_unihan.sh` downloads the Unihan database of Unicode 16.0 into
-`third_party/unihan`, which is not in the repository. `tools/genime.py`
-reads it and writes two tables into `user/share/ime`, which are checked in
-and installed as `/usr/share/ime`. Each line of a table is a reading, a tab
-and the characters with that reading, without separators. The lines are
-sorted by reading in code point order, which is the byte order of UTF-8.
+`third_party/unihan`. Neither directory is in the repository.
+`tools/genime.py` reads both and writes the files of `user/share/ime`,
+which are checked in and installed as `/usr/share/ime`.
 
-`kana.tab` has 4891 readings in hiragana from the field `kJapanese`. Its
-katakana readings (the on readings) are converted to hiragana. The Jōyō
-kanji (`kJoyoKanji`) come first. Within each group a kanji that names the
-reading earlier in its list of readings comes first, then a kanji with
-fewer readings, then the lower code point. The order gives 山 for やま, 川
-for かわ and 人 for ひと as the first candidate.
+`pinyin.dict` comes from `pinyin_simp.dict.yaml` of rime-pinyin-simp
+(Apache-2.0, its license is installed beside it as
+`pinyin_simp.LICENSE`): 415 syllables and 65125 entries of one to four
+syllables with weights, 17000 characters and 48000 words of simplified
+Chinese, ü written as v. The file is little endian. A header with the
+magic `MPY1` gives the number of syllables and entries and the offsets of
+the syllable table, the entry table and the pool. The syllables are in
+alphabetical order, 8 bytes each. An entry has 16 bytes: four syllable
+numbers (0xffff after the last), the weight and the offset of the word in
+the pool of zero-terminated UTF-8 words. The entries are sorted by their
+syllable numbers. Because the syllables are sorted, the syllables that
+begin with some letters have consecutive numbers, so an incomplete
+syllable or an initial stands for a range of numbers. `imed` reads the
+file when it starts.
 
-`pinyin.tab` has 393 syllables without tone marks, with ü written as v,
-from the field `kHanyuPinlu`. The characters are ordered by the frequency
-that the field gives. Traditional characters, which have a
-`kSimplifiedVariant` other than themselves, are left out. The order gives
-中 for zhong and 国 for guo.
-
-The compositor reads a table when its engine is first selected. It builds
-an array of the readings and finds a reading by binary search.
+`kana.tab`, for the built-in Japanese engine, has one line per reading: the
+reading in hiragana, a tab and its kanji, sorted by reading. It has 4891
+readings from the field `kJapanese` of Unihan, with the katakana readings
+converted to hiragana. The Jōyō kanji (`kJoyoKanji`) come first. Within
+each group a kanji that names the reading earlier in its list of readings
+comes first, then a kanji with fewer readings, then the lower code point.
+The order gives 山 for やま, 川 for かわ and 人 for ひと as the first
+candidate. The compositor reads the table when the engine is first
+selected and finds a reading by binary search.
 
 ## Candidate window
 
@@ -134,10 +143,70 @@ the next key. The digits choose on the current page (`imed_page_first`). A
 click on a candidate passes it to `candidate_clicked` of the engine, a
 click on an arrow and the wheel turn the pages.
 
+## Pinyin engine
+
+The pinyin engine of `imed` (`user/imed/pinyin.c` with the core
+`pycore.c`) follows the keys of Rime. Its label is 拼, and the first
+Shift tap selects it.
+
+The core divides the letters into a lattice of syllable edges. An edge is
+a whole syllable, an incomplete syllable at the end of the letters (zhon),
+or an abbreviation by the initial (z, or zh, ch, sh) where the next letter
+cannot continue a syllable: the z of zg, not the z of zhong. An apostrophe
+ends a syllable. Each edge stands for a range of syllable numbers. A
+search over the paths of edges from each position collects the words of
+the dictionary and of the user dictionary whose syllables fall in the
+ranges, as word edges. The score of a word is the logarithm of its
+probability, its weight divided by the sum of all weights, less 3 for each
+abbreviated and 1 for each incomplete syllable. The division of the
+letters into the fewest and most complete syllables is the auxiliary line
+(`zhong'guo`), where an abbreviation costs 2.5 syllables and a syllable
+without a vowel (n, m, ng), an interjection, costs 3. A Viterbi search over
+the word edges that follow this division, without abbreviations and
+interjections, with 0.5 less per word, gives the sentence.
+
+The candidates are the sentence when it has more than one word, then the
+words at the start, the longer ones first and each length by falling
+score: for `jintiantianqihenhao` the sentence 今天天气很好, then 今天, then
+single characters. Each candidate covers some letters. A candidate that
+covers only the first letters is fixed in the preedit, and the rest of the
+letters gets new candidates: 2 for `woaibeijing` fixes 我爱 and leaves
+`beijing` for 北京.
+
+| Key | Effect |
+|---|---|
+| a to z, apostrophe | add to the input |
+| Space, 1 to 9 | choose the cursor candidate, or the candidate with that number on the page |
+| arrows | move the cursor |
+| `-` `=` `,` `.`, PageUp, PageDown | turn the pages |
+| Enter | commit the fixed words and the letters as they are |
+| Escape | drop the input |
+| Backspace | delete the last letter, or with no letters left undo the last fixed word |
+| other punctuation | commit the input with the first candidate at each step, then the Chinese punctuation |
+
+Without input the punctuation keys give the Chinese punctuation: ，。？！；：
+（）【】《》、 for `, . ? ! ; : ( ) [ ] < > \`, …… for `^`, —— for `_`, ～ for
+`~`, ￥ for `$`, and quotes “ ” and ‘ ’ that alternate. Digits and the other
+keys pass. A Shift tap commits the input as it is and selects the layout.
+
+When the input is used up, the fixed words are committed and learned in
+`$HOME/.config/imed/pinyin.user`: one line `word TAB syllables TAB count`
+per choice, where a later line replaces the count of an earlier one. A
+phrase of several fixed words is learned as a word. A learned word scores
+4 plus twice the logarithm of one plus its count more, and a learned
+phrase that the dictionary lacks scores as a word of weight 1000 plus that.
+After 中国 was chosen once, `zg` offers it first.
+
+The daemon loads the dictionary and the CJK font when it starts, and it
+replies to a key before it draws the candidate window, so the first keys
+do not wait for the font. It logs a key that took the engine more than
+100 ms.
+
 ## Built-in engines
 
-`user/compositor/ime.c` contains both engines. The engines do not use the
-protocol. `ime_key` receives the key code, the character of the layout and
+`user/compositor/ime.c` contains the Japanese engine of L6, until the
+Japanese engine of `imed` replaces it in I4. The Chinese engine of L6 is
+replaced by the pinyin engine. The engine does not use the protocol. `ime_key` receives the key code, the character of the layout and
 the modifiers, and returns whether the engine used the key. Its result has
 the text to commit and the new preedit, which `text.c` sends to the focused
 text input context. A key that an engine used does not reach the client as
@@ -165,15 +234,8 @@ text in hiragana and in katakana. A chosen candidate replaces its reading,
 and the rest of the text stays in the preedit for the next conversion. A
 letter typed while the candidates are shown commits the selected one first.
 
-The Chinese engine collects pinyin letters and shows the candidates of the
-longest syllable at their start after every letter. Space commits the
-selected candidate and 1 to 9 the candidate with that number. The letters
-after the syllable then get their own candidates. Typing `zhongguo` and
-Space twice gives 中国. An apostrophe separates syllables. Enter commits
-the letters, Backspace deletes the last letter and Escape cancels.
-
-While Ctrl, Alt or Super is down, an engine commits its text as it is shown
-and passes the key to the client.
+While Ctrl, Alt or Super is down, the engine commits its text as it is
+shown and passes the key to the client.
 
 ## Candidate box
 
@@ -192,34 +254,34 @@ rectangle the box appears near the top left corner of the surface.
 
 ## Label
 
-The seat of version 2 has the event `input_method` with a short label: あ
-for the Japanese engine, 拼 for the Chinese engine, and otherwise the
-layout name in capitals. The `us` layout and the first group of a layout
+The seat of version 2 has the event `input_method` with a short label: the
+label of the engine (あ for the built-in Japanese engine, 拼 for the pinyin
+engine), and otherwise the layout name in capitals. The `us` layout and the first group of a layout
 with two groups are EN. The compositor sends the label after the bind,
 after a change of method, after Alt+Shift changes the group and after a
 keymap reload. The panel binds the seat with a listener and draws the label.
 
 ## Limits
 
-The engines convert one character at a time. They have no dictionary of
-words, no learning and no conversion of a whole phrase. The Chinese engine
-does not accept abbreviated pinyin such as `zg` for zhongguo. The engines
+The built-in Japanese engine converts one character at a time. The pinyin
+dictionary has words of at most four syllables, and longer text comes from
+sentences. The pinyin engine has no fuzzy syllables (zh for z, ing for in)
+and no caret inside the input. The compositor repeats no key for the
+daemon, so a held Backspace deletes one letter of the input. The engines
 compose only in clients with text input enabled. The terminal receives key
 events and is not covered.
 
 ## Test
 
-`ime` starts the panel and gedit and selects the Japanese engine with a
-Ctrl+Shift tap. It types `yama` and chooses 山 with Space and Enter,
+`ime` starts the panel and gedit and selects the built-in Japanese engine
+with a Ctrl+Shift tap. It types `yama` and chooses 山 with Space and Enter,
 chooses 水 for `kawa` with a second Space, chooses 二 for `ni` with the
 digit 2, and commits `kana` once as hiragana and once in katakana after
-F7. A Ctrl+Shift tap selects the Chinese engine, which composes `zhongguo`
-and `nihao` with Space after each syllable. A Shift tap selects the layout
-for `a`, another one the Chinese engine for `hao`, another one the layout
-for `b`, and Ctrl+Space the Chinese engine for `ni`. gedit must save
-山水二かなカナ中国你好a好b你, which also shows that no Space, Enter or digit
-reached gedit as a key. A click on the panel label must then select the
-layout, and the compositor log must report the labels あ, 拼 and EN.
+F7. A Shift tap selects the layout for `a`, another one the engine for
+`yama`, and Ctrl+Space the layout for `b`. gedit must save 山水二かなカナa山b,
+which also shows that no Space, Enter or digit reached gedit as a key. A
+click on the panel label must then select the engine, and the compositor
+log must report the labels あ and EN.
 
 `ime_protocol` starts the compositor, `imed -t` and gedit, and selects the
 test engine with a Ctrl+Shift tap. It composes `abc` and chooses ABC with
@@ -237,3 +299,15 @@ caret and clicks the candidate to its right, which commits abc. It
 composes `de`, turns to the second page with the wheel and chooses De with
 Space. With `ime_orientation=vertical` it composes `fg` and clicks the
 candidate below the selected one. gedit must save abcDefg.
+
+`ime_pinyin` starts the compositor, `imed` and gedit and selects the
+pinyin engine with a Shift tap. It types `zhongguo` and `nihao` with Space,
+a full-width comma, the sentence `jintiantianqihenhao`, `zg`, which offers
+中国 first after the first choice, `woaibeijing` with 2 for 我爱 and Space
+for 北京, `zhongguox` with Backspace, `shi` with `=` and 1 for the sixth
+candidate 式, `shi` again, which offers 式 first, `hello` with Enter, and
+`shu` followed by a Shift tap. gedit must save
+中国你好，今天天气很好中国我爱北京中国式式helloshux, and the user dictionary
+must contain the line of 式. The host test `user/imed/tests/test_pinyin.c`
+(`make check-imed`, part of `make check`) checks the candidates of words,
+a sentence, an abbreviation and syllable divisions, and the learning.

@@ -1,9 +1,9 @@
-/* L6 and I0: input methods.  A Ctrl+Shift tap selects the Japanese engine,
- * then the Chinese engine, a Shift tap the layout, the Chinese engine again
- * and the layout, and Ctrl+Space the Chinese engine.  Keys typed into gedit
- * compose kanji from romaji and hanzi from pinyin through the candidates
- * of the compositor, and the keys that a composition uses do not reach
- * gedit. */
+/* L6 and I0: the built-in Japanese input method and the switch keys.  A
+ * Ctrl+Shift tap selects the Japanese engine, a Shift tap the layout and
+ * the engine again, and Ctrl+Space the layout.  Keys typed into gedit
+ * compose kanji from romaji through the candidates of the compositor, and
+ * the keys that a composition uses do not reach gedit.  A click on the
+ * panel label selects the next method. */
 #include <tests/ktest.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/fbdev.h>
@@ -111,25 +111,14 @@ static void test_ime(void)
     tap(ENTER);                     /* in katakana */
     sleep_ms(300);
 
-    ctrl_shift_tap();               /* Chinese */
-    type("zhongguo");
-    tap(SPACE);                     /* 中, then the candidates of guo */
-    tap(SPACE);                     /* 国 */
-    type("nihao");
-    tap(SPACE);
-    tap(SPACE);
-    sleep_ms(300);
-
     shift_tap();                    /* the layout */
     type("a");
-    shift_tap();                    /* the Chinese engine again */
-    type("hao");
+    shift_tap();                    /* the Japanese engine again */
+    type("yama");
     tap(SPACE);
-    shift_tap();                    /* the layout */
+    tap(ENTER);
+    ctrl_space();                   /* the layout */
     type("b");
-    ctrl_space();                   /* the Chinese engine */
-    type("ni");
-    tap(SPACE);
     sleep_ms(300);
     ctrl_key(0x1f);                 /* Ctrl+S */
     sleep_ms(500);
@@ -141,12 +130,12 @@ static void test_ime(void)
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
     kprintf("ime: gedit wrote %s\n", buf);
-    ktest_assert(strcmp(buf, "山水二かなカナ中国你好a好b你") == 0, "gedit text '%s'", buf);
+    ktest_assert(strcmp(buf, "山水二かなカナa山b") == 0, "gedit text '%s'", buf);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "gedit status 0x%x", status);
     /* A click on the label of the panel selects the next method: after the
-     * Chinese engine the layout. */
+     * layout the Japanese engine. */
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, logical_w() - CLOCK_W - MIXER_W - 4 - 4 - INPUT_W / 2, logical_h() - 14, 0);
     mouse_click(1);

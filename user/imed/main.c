@@ -5,8 +5,8 @@
  * so the compositor applies them before it gives a passed key to the
  * client.
  *
- *   imed        the engines of the configuration
- *   imed -t     the test engine of the boot tests as well */
+ *   imed        the pinyin engine
+ *   imed -t     the test engine of the boot tests first, then the others */
 #include <sys/ipc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,8 +63,8 @@ void imed_set_label(const char *label)
         input_method_set_status(im, current->name, label);
 }
 
-/* flush sends the changes of the last event together. */
-static void flush(void)
+/* send_changes sends the text changes of the last event together. */
+static void send_changes(void)
 {
     if (im && (pending_commit[0] || preedit_changed)) {
         if (pending_commit[0])
@@ -77,6 +77,12 @@ static void flush(void)
     }
     pending_commit[0] = '\0';
     preedit_changed = 0;
+}
+
+/* flush sends the changes of the last event and updates the window. */
+static void flush(void)
+{
+    send_changes();
     if (table_dirty) {
         window_update(active && imed_table.n > 0);
         table_dirty = 0;
@@ -198,10 +204,17 @@ static void on_key(void *user, struct wire_proxy *p, uint32_t serial, uint32_t t
         int ch = keymap ? keymap_translate_group(keymap, key, mods, (int)group) : 0;
         if (keysym_is_symbol(ch) || keysym_is_dead(ch))
             ch = 0;
+        long t0 = uptime_ms();
         handled = current->key(key, ch, (int)depressed);
+        long dt = uptime_ms() - t0;
+        if (dt > 100)
+            printf("imed: key 0x%02x took %ld ms\n", key, dt);
     }
-    flush();
+    /* The reply goes before the window is drawn, which may take longer. */
+    send_changes();
     input_method_key_handled(im, serial, (uint32_t)handled);
+    wire_display_flush(display);
+    flush();
 }
 
 static void on_select_engine(void *user, struct wire_proxy *p, const char *name)
@@ -310,6 +323,7 @@ int main(int argc, char **argv)
     int test = argc > 1 && strcmp(argv[1], "-t") == 0;
     if (test)
         engines[nengines++] = &test_engine;
+    engines[nengines++] = &pinyin_engine;
     display = wire_display_connect(NULL);
     if (!display) {
         fprintf(stderr, "imed: no X12 server\n");
@@ -327,6 +341,9 @@ int main(int argc, char **argv)
     input_method_add_listener(im, &im_events, NULL);
     pointer = seat_get_pointer(seat);
     pointer_add_listener(pointer, &pointer_events, NULL);
+    for (int i = 0; i < nengines; i++)
+        if (engines[i]->init)
+            engines[i]->init();
     window_init();
     announce_engines();
     wire_display_flush(display);

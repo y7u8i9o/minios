@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
-"""Write the candidate tables of the input methods of the compositor (L6,
-docs/design/ime.md) from the Unihan database in third_party/unihan, which
+"""Write the dictionaries of the input methods (docs/design/ime.md).
+
+user/share/ime/pinyin.dict, for the pinyin engine of imed (I3), comes from
+pinyin_simp.dict.yaml of rime-pinyin-simp in third_party/imedata, which
+tools/fetch_imedata.sh downloads.  It is a little endian binary file:
+
+    "MPY1", then the uint32 values nsyl, nentries, syllable table offset,
+    entry table offset, pool offset and pool size;
+    the syllables in alphabetical order, 8 bytes each, padded with zeros;
+    the entries, 16 bytes each: four uint16 syllable numbers (0xffff after
+    the last), a uint32 weight and the uint32 offset of the word in the
+    pool, sorted by the syllable numbers and then by falling weight;
+    the pool of the words in UTF-8, each ended by a zero byte.
+
+Because the syllables are sorted, the syllables that begin with some
+letters have consecutive numbers, which the engine uses for incomplete
+syllables and abbreviations.
+
+user/share/ime/kana.tab, for the Japanese engine of the compositor (L6),
+comes from the Unihan database in third_party/unihan, which
 tools/fetch_unihan.sh downloads.
 
 user/share/ime/kana.tab lists, for each reading in hiragana, the kanji with
@@ -10,18 +28,16 @@ earlier comes first, then a kanji with fewer readings, then the lower code
 point.  Katakana readings of kJapanese (the on readings) are converted to
 hiragana.
 
-user/share/ime/pinyin.tab lists, for each syllable of pinyin without tone
-marks (ü written as v), the characters of kHanyuPinlu with that reading,
-ordered by the frequency that kHanyuPinlu gives.  Traditional characters,
-which have a kSimplifiedVariant other than themselves, are left out.
-
-Each line is the reading, a tab and the characters without separators."""
+Each line of kana.tab is the reading, a tab and the characters without
+separators."""
 import os
 import re
-import unicodedata
+import shutil
+import struct
 
 TOP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNIHAN = os.path.join(TOP, 'third_party', 'unihan')
+IMEDATA = os.path.join(TOP, 'third_party', 'imedata')
 OUT = os.path.join(TOP, 'user', 'share', 'ime')
 
 
@@ -41,15 +57,54 @@ def to_hiragana(s):
     return ''.join(chr(ord(c) - 0x60) if 0x30a1 <= ord(c) <= 0x30f6 else c for c in s)
 
 
-def toneless(syllable):
-    s = unicodedata.normalize('NFD', syllable)
-    s = s.replace('ü', 'v').replace('Ü', 'v')
-    return ''.join(c for c in s if not unicodedata.combining(c)).lower()
+def write_pinyin():
+    """pinyin.dict from pinyin_simp.dict.yaml."""
+    words = {}
+    started = False
+    with open(os.path.join(IMEDATA, 'pinyin_simp.dict.yaml'), encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('...'):
+                started = True
+                continue
+            if not started or line.startswith('#') or not line.strip():
+                continue
+            fields = line.rstrip('\n').split('\t')
+            if len(fields) < 2:
+                continue
+            syllables = tuple(fields[1].split())
+            weight = int(fields[2]) if len(fields) > 2 and fields[2].strip() else 0
+            if not 1 <= len(syllables) <= 4:
+                continue
+            key = (fields[0], syllables)
+            words[key] = max(words.get(key, 0), weight)
+    names = sorted({s for _, syl in words for s in syl})
+    number = {name: i for i, name in enumerate(names)}
+    entries = sorted(((tuple(number[s] for s in syl), -w, word) for (word, syl), w in words.items()))
+    pool = bytearray()
+    records = bytearray()
+    offsets = {}
+    for ids, negw, word in entries:
+        if word not in offsets:
+            offsets[word] = len(pool)
+            pool += word.encode('utf-8') + b'\0'
+        padded = list(ids) + [0xffff] * (4 - len(ids))
+        records += struct.pack('<4HII', *padded, -negw, offsets[word])
+    syl_table = b''.join(name.encode('ascii').ljust(8, b'\0') for name in names)
+    header = 4 + 6 * 4
+    syl_off = header
+    entry_off = syl_off + len(syl_table)
+    pool_off = entry_off + len(records)
+    data = b'MPY1' + struct.pack('<6I', len(names), len(entries), syl_off, entry_off, pool_off, len(pool))
+    data += syl_table + records + pool
+    with open(os.path.join(OUT, 'pinyin.dict'), 'wb') as f:
+        f.write(data)
+    shutil.copy(os.path.join(IMEDATA, 'pinyin_simp.LICENSE'), os.path.join(OUT, 'pinyin_simp.LICENSE'))
+    print(f'genime: {len(names)} syllables, {len(entries)} entries, {len(data)} bytes in pinyin.dict')
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    readings = fields('Unihan_Readings.txt', {'kJapanese', 'kHanyuPinlu'})
+    readings = fields('Unihan_Readings.txt', {'kJapanese'})
     joyo = set(fields('Unihan_OtherMappings.txt', {'kJoyoKanji'}).get('kJoyoKanji', {}))
 
     kana = {}
@@ -65,22 +120,8 @@ def main():
             chars = sorted(kana[key], key=lambda c: kana[key][c])
             f.write(key + '\t' + ''.join(chr(c) for c in chars) + '\n')
 
-    variants = fields('Unihan_Variants.txt', {'kSimplifiedVariant'}).get('kSimplifiedVariant', {})
-    traditional = {cp for cp, v in variants.items() if any(int(x[2:], 16) != cp for x in v.split())}
-    pinyin = {}
-    for cp, value in readings.get('kHanyuPinlu', {}).items():
-        if cp in traditional:
-            continue
-        for m in re.finditer(r'([^\s(]+)\((\d+)\)', value):
-            pinyin.setdefault(toneless(m.group(1)), {})
-            freq = pinyin[toneless(m.group(1))]
-            freq[cp] = max(freq.get(cp, 0), int(m.group(2)))
-    with open(os.path.join(OUT, 'pinyin.tab'), 'w', encoding='utf-8') as f:
-        f.write('# Hanzi by syllable, written by tools/genime.py from kHanyuPinlu of Unihan 16.0.\n')
-        for key in sorted(pinyin):
-            chars = sorted(pinyin[key], key=lambda c: (-pinyin[key][c], c))
-            f.write(key + '\t' + ''.join(chr(c) for c in chars) + '\n')
-    print(f'genime: {len(kana)} readings in kana.tab, {len(pinyin)} syllables in pinyin.tab')
+    print(f'genime: {len(kana)} readings in kana.tab')
+    write_pinyin()
 
 
 if __name__ == '__main__':

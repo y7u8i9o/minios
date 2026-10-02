@@ -102,5 +102,5 @@ static void test_reset(void)
 }
 
 const struct imed_engine test_engine = {
-    "test", "T", "Test engine", test_select, test_key, test_flush, test_reset, choose,
+    "test", "T", "Test engine", NULL, test_select, test_key, test_flush, test_reset, choose,
 };

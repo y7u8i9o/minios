@@ -1,10 +1,8 @@
-/* Input methods for Japanese and Chinese (L6, docs/design/ime.md).  The
- * Japanese engine converts romaji to hiragana and offers the kanji of the
- * longest reading at the start of the text as candidates.  The Chinese
- * engine collects pinyin letters and offers the hanzi of the longest
- * syllable at their start.  The engines know nothing of the protocol:
- * ime_key returns the text to commit and the new preedit, and text.c sends
- * them.  The candidates are drawn by the compositor over every surface,
+/* The built-in Japanese input method (L6, docs/design/ime.md), until the
+ * Japanese engine of imed replaces it (I4).  It converts romaji to
+ * hiragana and offers the kanji of the longest reading at the start of the
+ * text as candidates.  The engine knows nothing of the protocol: ime_key
+ * returns the text to commit and the new preedit, and text.c sends them.  The candidates are drawn by the compositor over every surface,
  * below the caret that the client reported.
  *
  * The state below belongs to the single thread of the compositor. */
@@ -19,7 +17,7 @@
 #include <minios/input.h>
 #include "comp.h"
 
-#define MAX_TEXT   64           /* bytes of kana or pinyin letters */
+#define MAX_TEXT   64           /* bytes of kana */
 #define MAX_CANDS  96
 #define CAND_BYTES (MAX_TEXT + 8)
 #define PAGE       9
@@ -34,9 +32,9 @@ struct table {
     int tried;
 };
 
-static struct table kana_table, pinyin_table;
-static int mode;                /* IME_OFF, IME_JAPANESE or IME_CHINESE */
-static char text[MAX_TEXT + 1]; /* hiragana, or the pinyin letters */
+static struct table kana_table;
+static int mode;                /* IME_OFF or IME_JAPANESE */
+static char text[MAX_TEXT + 1]; /* hiragana */
 static char roma[8];            /* romaji not yet converted to kana */
 static int katakana;            /* F7 shows the kana as katakana */
 static char cands[MAX_CANDS][CAND_BYTES];
@@ -271,7 +269,7 @@ static void cand_add(const char *s, size_t len)
  * the whole text in both forms when no reading matches. */
 static void cands_lookup(void)
 {
-    struct table *t = mode == IME_JAPANESE ? &kana_table : &pinyin_table;
+    struct table *t = &kana_table;
     ncands = 0;
     sel = 0;
     size_t len = strlen(text);
@@ -328,11 +326,7 @@ static void choose(int i, struct ime_result *r)
 {
     commit_append(r, cands[i]);
     memmove(text, text + cand_cover, strlen(text + cand_cover) + 1);
-    if (mode == IME_CHINESE && text[0] == '\'')
-        memmove(text, text + 1, strlen(text));
     cands_clear();
-    if (mode == IME_CHINESE && text[0])
-        cands_lookup();
 }
 
 /* commit_all commits the composition as it is shown. */
@@ -440,47 +434,6 @@ static int japanese_key(uint32_t key, int ch, int mods, struct ime_result *r)
     return 1;
 }
 
-static int chinese_key(uint32_t key, int ch, int mods, struct ime_result *r)
-{
-    if ((ch >= 'a' && ch <= 'z') || (ch == '\'' && text[0])) {
-        text_append((char[]){ (char)ch, '\0' });
-        cands_lookup();
-        result_preedit(r);
-        return 1;
-    }
-    if (!text[0])
-        return 0;
-    if (key == KEY_SPACE) {
-        if (ncands)
-            choose(sel, r);
-        else
-            commit_all(r);
-    } else if (ch >= '1' && ch <= '9') {
-        int i = sel / PAGE * PAGE + ch - '1';
-        if (i < ncands)
-            choose(i, r);
-    } else if (key == KEY_DOWN || key == KEY_RIGHT) {
-        if (ncands)
-            move_selection(1);
-    } else if (key == KEY_UP || key == KEY_LEFT) {
-        if (ncands)
-            move_selection(-1);
-    } else if (key == KEY_ENTER || key == KEY_KPENTER) {
-        commit_all(r);
-    } else if (key == KEY_BACKSPACE) {
-        delete_last();
-        if (text[0])
-            cands_lookup();
-        else
-            cands_clear();
-    } else if (key == KEY_ESC) {
-        text[0] = '\0';
-        cands_clear();
-    }
-    result_preedit(r);
-    return 1;
-}
-
 int ime_key(uint32_t key, int ch, int mods, struct ime_result *r)
 {
     r->commit[0] = r->preedit[0] = '\0';
@@ -496,7 +449,7 @@ int ime_key(uint32_t key, int ch, int mods, struct ime_result *r)
         }
         return 0;
     }
-    return mode == IME_JAPANESE ? japanese_key(key, ch, mods, r) : chinese_key(key, ch, mods, r);
+    return japanese_key(key, ch, mods, r);
 }
 
 void ime_finish(struct ime_result *r)
@@ -528,8 +481,6 @@ void ime_set_mode(int m)
     mode = m;
     if (mode == IME_JAPANESE)
         table_load(&kana_table, "/usr/share/ime/kana.tab");
-    else if (mode == IME_CHINESE)
-        table_load(&pinyin_table, "/usr/share/ime/pinyin.tab");
 }
 
 /* ---- the candidate box ---- */
