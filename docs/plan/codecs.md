@@ -151,7 +151,7 @@ The scope is images and audio. Compression (gzip) stays in libc.
 - The module `ogg.so` reads Ogg pages, checks their CRC-32, follows the
   logical streams of a file (multiplexed and chained), and assembles
   packets. It selects the codec of each logical stream by its first
-  packet. The Ogg layer is written once and serves Vorbis, FLAC and Opus.
+  packet. The Ogg layer is written once and serves Vorbis and FLAC.
 - The Vorbis decoder implements Vorbis I completely: the identification,
   comment and setup headers, codebooks with both lookup types, floor 0
   and floor 1, residues 0, 1 and 2, mappings with submaps and channel
@@ -224,32 +224,3 @@ The scope is images and audio. Compression (gzip) stays in libc.
 - Added during the work: the probes of Ogg codecs score the first logical
   stream of a file higher than later ones, which makes the first stream
   decide the codec of a multiplexed file.
-
-### C8: Opus decoding
-
-- The Opus decoder implements RFC 6716 with the updates of RFC 8251: the
-  range decoder, the TOC byte and the frame packing modes, SILK (LPC,
-  long-term prediction, stereo prediction, the excitation decoder and the
-  resamplers), CELT (energy envelopes, the pyramid vector quantiser,
-  band folding, anti-collapse, the post-filter and the inverse MDCT),
-  hybrid mode, the redundancy frames for mode transitions, and packet
-  loss concealment. The Ogg mapping of RFC 7845 supplies the header, the
-  pre-skip, the output gain and the channel mapping families 0, 1 and
-  255. Output is at 48 kHz.
-- Fixtures made by ffmpeg with libopus in SILK, CELT and hybrid modes at
-  several bit rates and channel layouts, with libopus' decoding stored as
-  FLAC files for comparison.
-- Boot test `codec_opus`: every fixture decodes to the same length as
-  libopus and within the accuracy that the `opus_compare` tool of the
-  RFC accepts.
-
-### C9: Opus encoding
-
-- The Opus encoder writes CELT frames with energy quantisation, the
-  pyramid vector quantiser and band allocation, SILK frames with LPC and
-  pitch analysis and excitation quantisation, and chooses between the
-  modes by bit rate and signal. It writes Ogg Opus files with the header,
-  the comment header and correct granule positions.
-- Boot test `codec_opus_enc`: encoded files decode in minios and with
-  ffmpeg and libopus on the host at the expected quality for each bit
-  rate.
