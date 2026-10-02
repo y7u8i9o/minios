@@ -176,6 +176,22 @@ static void test_dlopen(void)
     CHECK(worker_value == 30, "the worker's stale block was replaced: %d", worker_value);
     CHECK(compute && compute(1) == 2 + tls_counter, "lazy binding inside a dlopen'd library");
     CHECK(dlclose(plugin) == 0 && strcmp(dltest_events, "dpPD") == 0, "unloaded again: '%s'", dltest_events);
+
+    /* dlopen keeps its own copy of the name: a plugin host that reuses
+     * one buffer for its paths must get the library the buffer names now.
+     * The plugin is opened first, so that the second path names its
+     * dependency, which is loaded already and is found by name. */
+    char name[64];
+    strcpy(name, "/lib/libldplugin.so");
+    plugin = dlopen(name, RTLD_NOW);
+    strcpy(name, "/lib/libldplugdep.so");
+    void *dep = dlopen(name, RTLD_NOW);
+    CHECK(plugin && dep && dep != plugin, "a reused name buffer names the second library");
+    CHECK(dep && dlsym(dep, "plugdep_double") != NULL, "and that handle is the dependency");
+    if (dep)
+        dlclose(dep);
+    if (plugin)
+        dlclose(plugin);
 }
 
 static int run_child(const char *path, char *output, size_t capacity)

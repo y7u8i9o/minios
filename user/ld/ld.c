@@ -954,7 +954,18 @@ static struct object *load_library(const char *name, int allow_path)
         eh.e_phentsize != sizeof(struct phdr) || !eh.e_phnum ||
         !within(eh.e_phoff, (size_t)eh.e_phnum * sizeof(struct phdr), st.st_size))
         die("invalid ELF64 shared object", path);
-    struct object *o = new_object(name);
+    /* An object opened by dlopen keeps a copy of its name, since the
+     * caller may reuse its buffer for the next dlopen and find_loaded
+     * compares the names. The name of a DT_NEEDED entry lives in the
+     * string table of the object that needs it. */
+    const char *kept = name;
+    if (allow_path) {
+        char *copy = is_path ? path : dl_alloc(n + 1);
+        if (!is_path)
+            dl_memcpy(copy, name, n + 1);
+        kept = copy;
+    }
+    struct object *o = new_object(kept);
     loading = o;
     o->phnum = eh.e_phnum;
     struct phdr *ph = dl_alloc(o->phnum * sizeof *ph);
