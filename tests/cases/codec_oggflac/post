@@ -1,0 +1,18 @@
+#!/bin/sh
+# Test the Ogg FLAC files written by minios with the reference flac, whose
+# MD5 test compares the decoded samples with STREAMINFO, and with ffmpeg.
+FSCK="$BUILD/host/fsck"
+MKFS="$BUILD/host/mkfs"
+for tool in flac ffmpeg; do
+    command -v $tool > /dev/null || { echo "  $tool is needed on the host"; exit 1; }
+done
+"$FSCK" -y "$DISK" > "$DISK.fsck" 2>&1
+RC=$?
+[ "$RC" = 0 ] || [ "$RC" = 1 ] || { echo "  fsck -y exit $RC"; cat "$DISK.fsck"; exit 1; }
+DIR="$(dirname "$DISK")"
+for f in oggflac-enc-16-1 oggflac-enc-24-2 oggflac-enc-8-8; do
+    "$MKFS" --cat "$DISK" "/$f.oga" > "$DIR/$f.oga" || { echo "  /$f.oga missing"; exit 1; }
+    flac -t -s "$DIR/$f.oga" 2> "$DIR/$f.err" || { echo "  flac -t $f.oga:"; cat "$DIR/$f.err"; exit 1; }
+    ffmpeg -v error -i "$DIR/$f.oga" -f null - || { echo "  ffmpeg rejects $f.oga"; exit 1; }
+done
+echo "  flac and ffmpeg accept the Ogg FLAC files of minios"

@@ -230,6 +230,11 @@ void codec_ogg_reader_free(struct codec_ogg_reader *r);
  * accepts, for probes. Returns its length, or 0. */
 size_t codec_ogg_first_packet(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len),
                               const uint8_t **packet);
+/* The probe score of an Ogg codec: 100 when the first logical stream of
+ * the file is one that accept accepts, 90 when a later stream of a
+ * multiplexed file is, else 0. The first stream decides the codec of a
+ * multiplexed file. */
+int codec_ogg_probe(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));
 /* The granule position of the last page of every chained stream that
  * accept accepts, summed. Returns -1 when no such page exists. */
 int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));

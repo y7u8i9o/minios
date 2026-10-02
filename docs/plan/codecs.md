@@ -212,14 +212,18 @@ The scope is images and audio. Compression (gzip) stays in libc.
   values up to 8190, because a floor 0 curve cannot follow narrow
   spectral lines without large residues.
 
-### C7: FLAC in Ogg
+### C7: FLAC in Ogg (completed 2026-10-03)
 
 - Decoding and encoding of the Ogg mapping of FLAC: the `\x7fFLAC`
   identification packet with STREAMINFO, the metadata packets, and one
   frame per packet, with granule positions in samples.
-- Boot test `codec_oggflac`: ffmpeg's Ogg FLAC fixtures decode with
+- Boot test `codec_oggflac`: Ogg FLAC fixtures from flac and from ffmpeg,
+  chained streams and the FLAC stream of a multiplexed file decode with
   matching MD5 sums, and files from the encoder decode in minios and with
-  ffmpeg on the host.
+  flac and ffmpeg on the host.
+- Added during the work: the probes of Ogg codecs score the first logical
+  stream of a file higher than later ones, which makes the first stream
+  decide the codec of a multiplexed file.
 
 ### C8: Opus decoding
 

@@ -58,12 +58,26 @@ static void test_imdct(void)
     }
 }
 
-static long decode(const char *path, int32_t **out, struct codec_audio_format *fmt, int *err)
+/* Decode a file, with codec c or the codec found by content when c is
+ * NULL. */
+static long decode_with(const struct codec *c, const char *path, int32_t **out, struct codec_audio_format *fmt,
+                        int *err)
 {
     struct codec_audio *a;
-    *err = codec_audio_open_file(path, &a);
-    if (*err)
+    uint8_t *data = NULL;
+    size_t len;
+    *out = NULL;
+    if (c) {
+        *err = codec_read_file(path, &data, &len);
+        if (!*err)
+            *err = codec_audio_open(c, data, len, path, &a);
+    } else {
+        *err = codec_audio_open_file(path, &a);
+    }
+    if (*err) {
+        free(data);
         return -1;
+    }
     *fmt = *codec_audio_format(a);
     long cap = 1 << 16, n = 0;
     int32_t *buf = malloc(sizeof *buf * cap * fmt->channels);
@@ -80,8 +94,14 @@ static long decode(const char *path, int32_t **out, struct codec_audio_format *f
         n += got;
     }
     codec_audio_close(a);
+    free(data);
     *out = buf;
     return n;
+}
+
+static long decode(const char *path, int32_t **out, struct codec_audio_format *fmt, int *err)
+{
+    return decode_with(NULL, path, out, fmt, err);
 }
 
 static void test_flac(void)
@@ -106,6 +126,21 @@ static void test_flac(void)
     if (d)
         closedir(d);
     CHECK(count >= 16, "%d FLAC fixtures", count);
+    /* FLAC in Ogg: the fixtures, and the FLAC stream of the multiplexed
+     * file, which identification by content selects. */
+    static const char *const ogg[] = { "codec-oggflac-ref.oga", "codec-oggflac-ffmpeg.oga",
+                                       "codec-oggflac-chained.oga", "codec-vorbis-mux.ogg" };
+    static const long lengths[] = { 22050, 9600, 13000, 22050 };
+    for (int i = 0; i < 4; i++) {
+        char path[512];
+        snprintf(path, sizeof path, "%s/%s", fixtures, ogg[i]);
+        int32_t *s;
+        struct codec_audio_format f;
+        int err;
+        long n = decode(path, &s, &f, &err);
+        CHECK(err == 0 && n == lengths[i], "%s: %ld frames, error %d", ogg[i], n, err);
+        free(s);
+    }
 }
 
 static void test_vorbis(void)
@@ -121,7 +156,9 @@ static void test_vorbis(void)
         int32_t *a, *b;
         struct codec_audio_format fa, fb;
         int ea, eb;
-        long na = decode(ogg, &a, &fa, &ea), nb = decode(ref, &b, &fb, &eb);
+        /* The multiplexed file starts with its FLAC stream, and its Vorbis
+         * stream is opened with the Vorbis codec explicitly. */
+        long na = decode_with(codec_find("vorbis"), ogg, &a, &fa, &ea), nb = decode(ref, &b, &fb, &eb);
         long worst = 0;
         double sum = 0;
         for (long k = 0; na == nb && fa.channels == fb.channels && k < na * fa.channels; k++) {
@@ -130,8 +167,9 @@ static void test_vorbis(void)
             sum += (double)diff * diff;
         }
         double rms = na > 0 ? sqrt(sum / ((double)na * fa.channels)) : 99;
-        CHECK(ea == 0 && eb == 0 && na == nb && worst <= 1 && rms < 0.5, "vorbis %s: %ld/%ld frames, error %d, %ld, rms %.3f",
-              names[i], na, nb, ea, worst, rms);
+        CHECK(ea == 0 && eb == 0 && na == nb && fa.channels == fb.channels && worst <= 1 && rms < 0.5,
+              "vorbis %s: %ld/%ld frames, %d/%d channels, error %d, %ld, rms %.3f", names[i], na, nb, fa.channels,
+              fb.channels, ea, worst, rms);
         free(a);
         free(b);
     }

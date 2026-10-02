@@ -502,6 +502,52 @@ libvorbis and ffmpeg decode every file, and libvorbis returns the same
 samples as the decoder of minios to within one step at 16 bits. Floor 0
 decoding in minios is verified through these files.
 
+## FLAC in Ogg
+
+C7 added the codec `oggflac` to `flac.so`.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `flac.so` | `oggflac`, `audio/x-oggflac`, `.oga` | decode, encode | an Ogg stream whose first packet starts with `\x7fFLAC`, version 1, and holds `fLaC`, 100 or 90 |
+
+The Ogg mapping of FLAC 1.0 puts a first packet at the start of a logical
+stream with `\x7f` and `FLAC`, the mapping version 1.0, the number of
+header packets that follow it (0 when unknown), the `fLaC` marker and the
+STREAMINFO block with its header. One metadata block follows in each
+further header packet and one frame in each audio packet. The granule
+position of a page is the number of samples up to the end of the last
+frame completed on it.
+
+`oggflac.c` decodes by reassembly. `oggflac_open` reads the whole file
+through the Ogg reader of libcodec and builds, for every accepted
+logical stream, a native stream of the marker, STREAMINFO marked as the
+last metadata block, and the frames. Header packets are recognised by
+their count or, when the count is 0, by the absence of a frame sync code.
+The native decoder then decodes the streams one after another and checks
+the CRCs and the MD5 sum of each. Chained streams must have the format of
+the first one, and a chained stream of another format ends the file. The
+length is the sum of the totals in STREAMINFO. ffmpeg leaves the total at
+0, and the length then comes from the granule positions. An error of the
+Ogg reader is returned after the frames decoded before it.
+
+The encoder takes the frames of the native encoder through
+`flac_encode_stream`, which returns STREAMINFO, the frame bytes and the
+end offset and sample count of every frame. It writes the first packet
+alone on the first page and, on the second page, a VORBIS_COMMENT block
+with the vendor string, which the mapping requires as the second header
+packet. Each frame then becomes one packet with the sample count up to
+its end as granule position.
+
+The codec claims the extension `.oga`, the Xiph name for Ogg audio other
+than Vorbis, and the MIME type `audio/x-oggflac`. `.ogg` and `audio/ogg`
+stay with Vorbis, the format of most such files. Content identification
+does not depend on these names, because the probes of all Ogg codecs use
+`codec_ogg_probe`. It scores 100 when the first logical stream of the file
+is accepted and 90 when a later stream of a multiplexed file is. The
+first stream therefore decides the codec of a multiplexed file, and a
+program opens another stream by naming its codec, as the Vorbis test does
+for the multiplexed fixture.
+
 ## A new format: BMP
 
 After the viewer and paint stopped naming formats (see below), adding
@@ -639,8 +685,8 @@ generated SVG file. It converts with `-f` and renders an SVG file with
 compares the result with a direct conversion. Finally it checks the
 errors for unknown data, an extension without an encoder, formats of
 different kinds, incorrect usage and a missing file. It also converts the
-chime from WAV to FLAC and back and compares the result with the original
-file.
+chime from WAV to FLAC and to Ogg FLAC and back and compares the results
+with the original file.
 
 With the argument `flac`, used by the boot test `codec_flac`, the
 program decodes sixteen fixtures produced by `tools/gen_codec_fixtures.py`
@@ -680,6 +726,16 @@ an unknown option, of options for a codec without options, and of floor
 minios, and the post script decodes them with libvorbis on the host,
 requires the same samples to within one step, and decodes them with
 ffmpeg as well.
+
+With the argument `oggflac`, used by the boot test `codec_oggflac`, the
+program decodes an Ogg FLAC file from `flac --ogg`, one from the Ogg muxer
+of ffmpeg, two chained streams, and the FLAC stream of the multiplexed
+Vorbis fixture, which identification by content must select. It requires
+the lengths, the formats and the lengths reported at open time. It
+encodes 16 bit mono, 24 bit stereo and 8 bit eight-channel signals,
+requires identical samples after decoding, keeps the files for the post
+script, and checks that a changed byte in a page is reported. The post
+script tests the files with `flac -t` and ffmpeg on the host.
 
 `gui_images` converts the saved drawing to BMP with `codecs` and shows
 the BMP file in the viewer. Its post script decodes the BMP file with its

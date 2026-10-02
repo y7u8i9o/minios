@@ -11,6 +11,9 @@ with `flac -t`, whose MD5 test verifies the file against the samples it
 encodes, and the boot test codec_flac verifies the decoder of minios
 against the same sums.
 
+The Ogg FLAC fixtures come from flac --ogg and from the Ogg muxer of
+ffmpeg, and are checked with `flac -t` as well.
+
 The Vorbis fixtures are encoded by libvorbis through tools/codecref/
 vorbisref.c, and the same program decodes them with libvorbisfile into
 16 bit samples, stored as FLAC files named *.ref.flac. The boot test
@@ -435,11 +438,40 @@ def vorbis_fixtures(tmp):
     return made
 
 
+def oggflac_fixtures(tmp):
+    """FLAC in Ogg from the reference flac and from ffmpeg's Ogg muxer, and
+    two chained streams. The FLAC stream inside codec-vorbis-mux.ogg is
+    a fourth case."""
+    made = []
+
+    def source(name, frames, channels, bits, rate, seed):
+        path = os.path.join(tmp, name + ".wav")
+        write_wav(path, signal(frames, channels, bits, rate, seed), channels, bits, rate)
+        return path
+
+    dst = os.path.join(OUT, "codec-oggflac-ref.oga")
+    run("flac", "-f", "-s", "--ogg", "--serial-number=5001", "-8", "-o", dst, source("of1", 22050, 2, 16, 44100, 41))
+    made.append(dst)
+    dst = os.path.join(OUT, "codec-oggflac-ffmpeg.oga")
+    run("ffmpeg", "-y", "-loglevel", "error", "-i", source("of2", 9600, 2, 24, 48000, 42), "-c:a", "flac",
+        "-sample_fmt", "s32", "-f", "ogg", dst)
+    made.append(dst)
+    a, b = os.path.join(tmp, "ofa.oga"), os.path.join(tmp, "ofb.oga")
+    run("flac", "-f", "-s", "--ogg", "--serial-number=5003", "-5", "-o", a, source("ofa", 8000, 1, 16, 16000, 43))
+    run("flac", "-f", "-s", "--ogg", "--serial-number=5004", "-5", "-o", b, source("ofb", 5000, 1, 16, 16000, 44))
+    dst = os.path.join(OUT, "codec-oggflac-chained.oga")
+    open(dst, "wb").write(open(a, "rb").read() + open(b, "rb").read())
+    made.append(dst)
+    for path in made:
+        run("flac", "-t", "-s", path)
+    return made
+
+
 def main():
     for tool in ("flac", "ffmpeg", "pkg-config"):
         need(tool)
     with tempfile.TemporaryDirectory() as tmp:
-        for path in flac_fixtures(tmp) + vorbis_fixtures(tmp):
+        for path in flac_fixtures(tmp) + vorbis_fixtures(tmp) + oggflac_fixtures(tmp):
             print("%7d %s" % (os.path.getsize(path), os.path.relpath(path, TOP)))
 
 

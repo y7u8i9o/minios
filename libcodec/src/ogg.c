@@ -241,6 +241,14 @@ size_t codec_ogg_first_packet(const uint8_t *data, size_t len, int (*accept)(con
     return 0;
 }
 
+int codec_ogg_probe(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len))
+{
+    const uint8_t *p;
+    if (!codec_ogg_first_packet(data, len, accept, &p))
+        return 0;
+    return len > 26 && p == data + PAGE_HEADER + data[26] ? 100 : 90;
+}
+
 int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len))
 {
     struct page pg;

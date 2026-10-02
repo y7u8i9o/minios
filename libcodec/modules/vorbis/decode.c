@@ -420,8 +420,7 @@ static void vorbis_close(void *state)
 
 static int vorbis_probe(const uint8_t *data, size_t len)
 {
-    const uint8_t *p;
-    return codec_ogg_first_packet(data, len, is_vorbis, &p) ? 100 : 0;
+    return codec_ogg_probe(data, len, is_vorbis);
 }
 
 static const struct codec vorbis_codecs[] = {

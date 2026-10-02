@@ -78,3 +78,24 @@ int flac_open(const uint8_t *data, size_t len, struct codec_audio_format *fmt, l
 long flac_read(void *state, int32_t *out, long frames);
 void flac_close(void *state);
 long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result);
+
+/* The encoder's output before it is packed into a file: STREAMINFO, the
+ * frames, and the end offset and sample count of every frame. */
+struct flac_encoded {
+    uint8_t streaminfo[FLAC_STREAMINFO_LEN];
+    uint8_t *frames;
+    size_t len;
+    size_t *ends;
+    unsigned *samples;
+    long count;
+};
+int flac_encode_stream(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
+                       struct flac_encoded *out);
+void flac_encoded_free(struct flac_encoded *e);
+
+/* FLAC in Ogg (oggflac.c). */
+int oggflac_open(const uint8_t *data, size_t len, struct codec_audio_format *fmt, long *frames, void **state);
+long oggflac_read(void *state, int32_t *out, long frames);
+void oggflac_close(void *state);
+long oggflac_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result);
+int oggflac_probe(const uint8_t *data, size_t len);

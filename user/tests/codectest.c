@@ -4,8 +4,9 @@
  * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
  * and the WAV module, "codectest flac" the FLAC module and "codectest
  * vorbis" the Vorbis decoder, both with the fixtures of
- * tools/gen_codec_fixtures.py, and "codectest vorbisenc" the Vorbis
- * encoder. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
+ * tools/gen_codec_fixtures.py, "codectest vorbisenc" the Vorbis encoder
+ * and "codectest oggflac" FLAC in Ogg. Any other argument runs every
+ * section. "codectest count" prints the number of codecs and is used by
  * the child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
@@ -489,14 +490,25 @@ static void test_vorbis(void)
         else
             snprintf(ogg, sizeof ogg, "/etc/tests/codec-vorbis-%s.ogg", names[i]);
         snprintf(ref, sizeof ref, "/etc/tests/codec-vorbis-%s.ref.flac", names[i]);
+        /* The multiplexed file begins with its FLAC stream, which decides
+         * the codec found by content, and its Vorbis stream is opened with
+         * the Vorbis codec explicitly. */
         struct codec_audio *a, *b;
-        int ea = codec_audio_open_file(ogg, &a), eb = codec_audio_open_file(ref, &b);
+        uint8_t *mux = NULL;
+        size_t muxlen;
+        int mux_file = strcmp(names[i], "mux") == 0, ea;
+        if (mux_file)
+            ea = codec_read_file(ogg, &mux, &muxlen) ? -1 : codec_audio_open(vorbis, mux, muxlen, NULL, &a);
+        else
+            ea = codec_audio_open_file(ogg, &a);
+        int eb = codec_audio_open_file(ref, &b);
         CHECK(ea == 0 && eb == 0, "open %s %d, %s %d", ogg, ea, ref, eb);
         if (ea || eb) {
             if (!ea)
                 codec_audio_close(a);
             if (!eb)
                 codec_audio_close(b);
+            free(mux);
             continue;
         }
         CHECK(codec_audio_codec(a) == vorbis, "%s is identified as Vorbis", ogg);
@@ -525,6 +537,7 @@ static void test_vorbis(void)
         free(sb);
         codec_audio_close(a);
         codec_audio_close(b);
+        free(mux);
     }
 
     /* A changed byte in a page fails its CRC, and a cut file ends early. */
@@ -701,6 +714,92 @@ static void test_vorbis_encoder(void)
     free(six);
 }
 
+/* ---- FLAC in Ogg ---- */
+
+static void test_oggflac(void)
+{
+    const struct codec *oggflac = codec_find("oggflac");
+    CHECK(oggflac && oggflac->caps == (CODEC_DECODE | CODEC_ENCODE), "oggflac codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/x-oggflac", 0) == oggflac, "oggflac by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/x/a.oga", CODEC_ENCODE) == oggflac, "oggflac by extension");
+    CHECK(codec_for_path(CODEC_AUDIO, "/x/a.ogg", CODEC_ENCODE) == codec_find("vorbis"), ".ogg stays Vorbis");
+    if (!oggflac)
+        return;
+    static const struct {
+        const char *name;
+        int rate, channels, bits;
+        long frames;
+    } files[] = {
+        { "codec-oggflac-ref.oga", 44100, 2, 16, 22050 },     { "codec-oggflac-ffmpeg.oga", 48000, 2, 24, 9600 },
+        { "codec-oggflac-chained.oga", 16000, 1, 16, 13000 }, { "codec-vorbis-mux.ogg", 22050, 1, 16, 22050 },
+    };
+    for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
+        char path[96];
+        snprintf(path, sizeof path, "/etc/tests/%s", files[i].name);
+        struct codec_audio *a;
+        int err = codec_audio_open_file(path, &a);
+        CHECK(err == 0 && codec_audio_codec(a) == oggflac, "%s opens as Ogg FLAC: %d", path, err);
+        if (err)
+            continue;
+        const struct codec_audio_format *f = codec_audio_format(a);
+        long announced = codec_audio_frames(a);
+        int32_t *s;
+        long n = decode_all(a, &s, &err);
+        CHECK(err == 0 && n == files[i].frames && announced == n && f->rate == files[i].rate &&
+                  f->channels == files[i].channels && f->bits == files[i].bits,
+              "%s: %ld frames (%ld announced), %d Hz, %d channels, %d bit, error %d", path, n, announced, f->rate,
+              f->channels, f->bits, err);
+        printf("codectest: oggflac %s %ld frames\n", files[i].name, n);
+        free(s);
+        codec_audio_close(a);
+    }
+
+    /* Round trips through the encoder, and files for the post script. */
+    static const int sizes[] = { 16, 24, 8 }, layouts[] = { 1, 2, 8 };
+    for (int k = 0; k < 3; k++) {
+        int bits = sizes[k], ch = layouts[k];
+        long frames = 9000;
+        int32_t *in = malloc(sizeof *in * (size_t)frames * ch), *out = NULL;
+        if (!in)
+            continue;
+        flac_signal(in, frames, ch, bits);
+        struct codec_audio_format fmt = { 32000, ch, bits };
+        uint8_t *file;
+        long size = codec_audio_encode(oggflac, &fmt, in, frames, &file);
+        CHECK(size > 0, "oggflac encode %d bit %d channels: %ld", bits, ch, size);
+        if (size <= 0) {
+            free(in);
+            continue;
+        }
+        struct codec_audio *a;
+        int err = codec_audio_open(NULL, file, (size_t)size, NULL, &a);
+        long n = err ? -1 : decode_all(a, &out, &err);
+        CHECK(err == 0 && n == frames && memcmp(in, out, sizeof *in * (size_t)frames * ch) == 0 &&
+                  codec_audio_codec(a) == oggflac,
+              "oggflac round trip %d bit %d channels: %ld frames, error %d", bits, ch, n, err);
+        if (n >= 0)
+            codec_audio_close(a);
+        char path[48];
+        snprintf(path, sizeof path, "/oggflac-enc-%d-%d.oga", bits, ch);
+        CHECK(codec_write_file(path, file, (size_t)size) == 0, "write %s", path);
+        /* A changed byte in the middle fails the CRC of its page. */
+        file[size / 2] ^= 0x20;
+        if (codec_audio_open(NULL, file, (size_t)size, NULL, &a) == 0) {
+            int32_t *s;
+            long m = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && m < frames, "a damaged Ogg FLAC page: %d after %ld frames", err, m);
+            free(s);
+            codec_audio_close(a);
+        } else {
+            CHECK(0, "a damaged Ogg FLAC file still opens up to the damage");
+        }
+        free(file);
+        free(in);
+        free(out);
+    }
+    printf("codectest: oggflac round trips done\n");
+}
+
 static void list_registry(void)
 {
     int modules = codec_module_count();
@@ -714,7 +813,7 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc" };
+    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -734,6 +833,8 @@ int main(int argc, char **argv)
         test_vorbis();
     if (WANTS("vorbisenc"))
         test_vorbis_encoder();
+    if (WANTS("oggflac"))
+        test_oggflac();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

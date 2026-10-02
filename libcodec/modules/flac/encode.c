@@ -512,22 +512,27 @@ static int write_frame(struct flac_writer *w, struct encoder *enc, int64_t *cons
     return w->failed ? -ENOMEM : 0;
 }
 
-long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result)
+int flac_encode_stream(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
+                       struct flac_encoded *out)
 {
     unsigned bits = fmt->bits ? (unsigned)fmt->bits : 16, channels = (unsigned)fmt->channels;
+    memset(out, 0, sizeof *out);
     if (bits < 4 || bits > 32 || channels < 1 || channels > FLAC_MAX_CHANNELS || fmt->rate <= 0 ||
         fmt->rate >= 1 << 20 || (uint64_t)frames >= 1ull << 36)
         return -EINVAL;
+    long count = (frames + BLOCK - 1) / BLOCK;
     struct encoder *enc = calloc(1, sizeof *enc);
     if (enc)
         enc->wk = calloc(channels == 2 ? 4 : channels, sizeof *enc->wk);
     int64_t *ch[FLAC_MAX_CHANNELS] = { NULL };
     for (unsigned c = 0; c < channels; c++)
         ch[c] = malloc(BLOCK * sizeof *ch[c]);
+    out->ends = malloc(sizeof *out->ends * (size_t)(count ? count : 1));
+    out->samples = malloc(sizeof *out->samples * (size_t)(count ? count : 1));
     struct flac_writer w = { 0 };
     struct codec_md5 md5;
     codec_md5_init(&md5);
-    int err = enc && enc->wk ? 0 : -ENOMEM;
+    int err = enc && enc->wk && out->ends && out->samples ? 0 : -ENOMEM;
     for (unsigned c = 0; c < channels && !err; c++)
         if (!ch[c])
             err = -ENOMEM;
@@ -546,6 +551,9 @@ long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, l
             min_frame = size;
         if (size > max_frame)
             max_frame = size;
+        out->ends[number] = w.len;
+        out->samples[number] = n;
+        out->count = number + 1;
     }
     if (enc)
         free(enc->wk);
@@ -554,17 +562,15 @@ long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, l
         free(ch[c]);
     if (err) {
         free(w.data);
+        flac_encoded_free(out);
         return err;
     }
-    /* The stream header: the marker and STREAMINFO as the only and last
-     * metadata block. */
+    /* STREAMINFO: the block size of the frames, the frame size limits,
+     * the format, the sample count and the MD5 sum. */
     struct flac_writer h = { 0 };
     unsigned block = frames >= BLOCK ? BLOCK : frames < 16 ? 16 : (unsigned)frames;
     uint8_t sum[16];
     codec_md5_final(&md5, sum);
-    flac_put(&h, 0x664c6143, 32);       /* "fLaC" */
-    flac_put(&h, 0x80, 8);
-    flac_put(&h, FLAC_STREAMINFO_LEN, 24);
     flac_put(&h, block, 16);
     flac_put(&h, block, 16);
     flac_put(&h, frames ? min_frame : 0, 24);
@@ -575,18 +581,50 @@ long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, l
     flac_put(&h, (uint64_t)frames, 36);
     for (int i = 0; i < 16; i++)
         flac_put(&h, sum[i], 8);
-    uint8_t *out = h.failed ? NULL : malloc(h.len + w.len);
-    if (!out) {
+    if (h.failed || h.len != FLAC_STREAMINFO_LEN) {
         free(h.data);
         free(w.data);
+        flac_encoded_free(out);
         return -ENOMEM;
     }
-    memcpy(out, h.data, h.len);
-    if (w.len)
-        memcpy(out + h.len, w.data, w.len);
-    long total = (long)(h.len + w.len);
+    memcpy(out->streaminfo, h.data, FLAC_STREAMINFO_LEN);
     free(h.data);
-    free(w.data);
+    out->frames = w.data;
+    out->len = w.len;
+    return 0;
+}
+
+void flac_encoded_free(struct flac_encoded *e)
+{
+    free(e->frames);
+    free(e->ends);
+    free(e->samples);
+    memset(e, 0, sizeof *e);
+}
+
+/* A native stream: the marker, STREAMINFO as the only and last metadata
+ * block, and the frames. */
+long flac_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result)
+{
+    struct flac_encoded e;
+    int err = flac_encode_stream(fmt, samples, frames, &e);
+    if (err)
+        return err;
+    size_t total = 8 + FLAC_STREAMINFO_LEN + e.len;
+    uint8_t *out = malloc(total);
+    if (!out) {
+        flac_encoded_free(&e);
+        return -ENOMEM;
+    }
+    memcpy(out, "fLaC", 4);
+    out[4] = 0x80;                      /* the last metadata block, STREAMINFO */
+    out[5] = 0;
+    out[6] = 0;
+    out[7] = FLAC_STREAMINFO_LEN;
+    memcpy(out + 8, e.streaminfo, FLAC_STREAMINFO_LEN);
+    if (e.len)
+        memcpy(out + 8 + FLAC_STREAMINFO_LEN, e.frames, e.len);
+    flac_encoded_free(&e);
     *result = out;
-    return total;
+    return (long)total;
 }
