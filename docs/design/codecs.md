@@ -140,6 +140,30 @@ The data must stay valid until `codec_audio_close`.
 contents. `codec_audio_encode` and `codec_audio_save` take samples in
 the same form and the format to write.
 
+The module of C2:
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `wav.so` | `wav`, `audio/x-wav audio/wav audio/vnd.wave`, `.wav .wave` | decode, encode | `RIFF` and `WAVE`, 100 |
+
+`wav.so` walks the RIFF chunks for `fmt ` and `data`, skipping the pad
+byte of odd chunks. It accepts the PCM format tag, and the extensible
+tag when the first two bytes of its sub-format GUID name PCM; one to
+eight channels; and 8 bit unsigned or 16, 24 and 32 bit signed samples. A
+`data` chunk longer than the file is cut to the file, and the frames are
+the whole frames in it. Samples are moved to the top of the 32 bit value
+(an 8 bit sample has its sign bit flipped first), so the most negative
+sample of every size is -2^31. The encoder writes the PCM tag and a
+44 byte header at the sample size of the format (16 when it is 0), keeps
+the upper bits of each sample, and pads odd data. A file decoded and
+encoded again at its own size is therefore unchanged.
+
+`player` (`audio.md`) opens files with `codec_audio_open_file` and reads
+them in chunks of 4096 frames into 16 bit samples, the upper half of each
+value, before its resampling; it no longer contains a WAV reader. Its
+package records `libcodec.so` among its needs, from its `DT_NEEDED`
+entries.
+
 ## Files and errors
 
 `codec_read_file` reads a whole file into memory and `codec_write_file`
@@ -171,12 +195,21 @@ keeps a copy of the name of every object `dlopen` opens
 
 ## Tests
 
-`user/tests/codectest.c`, run by the boot test `codec_image`, lists the
-registry and checks the lookups by name, MIME type and extension, the
+`user/tests/codectest.c` lists the modules it finds and runs the checks
+of its argument. With `image`, the boot test `codec_image`, it checks
+the lookups by name, MIME type and extension, the
 capability filter, the refusal of a module of another ABI, probing of
 PNG and SVG data and of text, the extension fallback, a PNG round trip
 of opaque, translucent and transparent pixels in memory and through a
 file, a truncated PNG, saving to an unknown extension and to a format
 without an encoder, a missing file, SVG rendering with a request and
 without one, libgui's wrappers, and a child process whose `CODEC_PATH`
-names an empty directory. `make check` covers the same codecs built in.
+names an empty directory. With `audio`, the boot test `codec_audio`, it
+looks the WAV codec up by name, MIME type and extension, encodes and
+decodes 301 frames at every sample size with one to three channels and
+compares every sample, reading in chunks of seven frames, checks the
+bytes of 8 bit samples and the pad byte, probing, a header without
+chunks, a cut in the middle of a sample, a 12 bit request, the
+extensible format with PCM and with float, image data, and a file saved
+by extension and opened again. `make check` covers the same codecs built
+in, and `audio_player` the player.

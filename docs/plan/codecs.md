@@ -86,10 +86,10 @@ The scope is images and audio. Compression (gzip) stays in libc.
   path buffer returned the previous module. The loader copies the name,
   and `dltest` checks it.
 
-### C2: audio codecs and the WAV module
+### C2: audio codecs and the WAV module (completed 2026-10-03)
 
 - The module `wav.so` decodes PCM WAV files with 8, 16, 24 and 32 bit
-  samples and any number of channels, and encodes 16 and 24 bit PCM.
+  samples and up to eight channels, and encodes the same sample sizes.
 - `player` decodes through libcodec and keeps its resampling.
 - Boot test `codec_audio`: the test program writes WAV files of each
   sample size through the encoder, decodes them back sample for sample,

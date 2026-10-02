@@ -1,0 +1,3 @@
+codectest: module wav from /lib/codecs/wav.so
+codectest: 0 failures
+TEST PASS

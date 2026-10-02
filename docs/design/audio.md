@@ -212,9 +212,12 @@ decay and volume controls; the gate of a step closes halfway through it so
 that repeated notes are heard separately.  Space plays and stops, D loads
 the demo pattern, C clears the grid, and a click toggles a cell.
 
-`/home/.local/bin/player` plays PCM WAV files with 8, 16, 24 or 32-bit
-samples, one or two channels and any sample rate.  A loader thread converts
-the file to 48 kHz stereo when it is opened.  The player draws the whole file
+`/home/.local/bin/player` plays every audio format a codec module decodes
+(`codecs.md`), such as PCM WAV files with 8, 16, 24 or 32-bit samples, at
+any sample rate.  A loader thread decodes the file through libcodec, keeps
+the upper 16 bits of each sample, and converts it to 48 kHz stereo when it
+is opened; a mono file plays on both channels and a file with more channels
+plays its first two.  The player draws the whole file
 as a waveform of the minimum and the maximum in each pixel column, with a
 vertical line at the play position.  A click on the waveform sets the play
 position, space plays and pauses, and the Loop check box repeats the file.

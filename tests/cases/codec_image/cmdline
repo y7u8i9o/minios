@@ -1,1 +1,1 @@
-test=run prog=/bin/codectest
+test=run prog=/bin/codectest args=image

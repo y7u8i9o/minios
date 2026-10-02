@@ -1,14 +1,18 @@
-/* The player program plays WAV files and draws their waveform.
+/* The player program plays audio files and draws their waveform.
  *
- * The program accepts PCM files with 8, 16, 24 or 32-bit samples, one or
- * two channels and any sample rate.  It converts each file to the 48 kHz
- * stereo format of the audio server when the file is opened.  Linear
+ * The program reads every format a codec module of libcodec decodes
+ * (docs/design/codecs.md), such as PCM WAV files with 8, 16, 24 or 32-bit
+ * samples, at any sample rate.  Mono files play on both channels, and
+ * files with more than two channels play their first two.  It converts
+ * each file to the 48 kHz stereo format of the audio server when the
+ * file is opened.  Linear
  * interpolation converts other sample rates by default.  The option -s and
  * the Resampling menu select an experimental windowed sinc resampler.  The
  * waveform view draws the minimum and the maximum of the samples in each
  * pixel column of the whole file, and a vertical line marks the play
  * position. */
 #include <audio/audio.h>
+#include <codec/codec.h>
 #include <gui/app.h>
 #include <gui/i18n.h>
 #include <langinfo.h>
@@ -38,31 +42,9 @@ static char format_text[96];
 static int use_sinc;                /* The next load uses the sinc resampler when set. */
 static int *column_min, *column_max, columns;
 
-/* The functions below decode WAV files. */
-
-static uint32_t le32(const uint8_t *p)
-{
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-static uint16_t le16(const uint8_t *p)
-{
-    return (uint16_t)(p[0] | p[1] << 8);
-}
-
-/* file_sample returns one sample of the file as a 16-bit value.  It
- * accepts 8-bit unsigned samples and 16, 24 and 32-bit signed little
- * endian samples.  For 24 and 32-bit samples it returns the upper 16 bits. */
-static int16_t file_sample(const uint8_t *data, uint32_t index, int bits)
-{
-    const uint8_t *p = data + (size_t)index * (bits / 8);
-    switch (bits) {
-    case 8: return (int16_t)((p[0] - 128) << 8);
-    case 24: return (int16_t)(p[1] | p[2] << 8);
-    case 32: return (int16_t)(p[2] | p[3] << 8);
-    default: return (int16_t)le16(p);
-    }
-}
+/* The functions below decode and convert audio files.  A decoded file
+ * is kept as interleaved 16-bit samples in the file's channel count: the
+ * upper 16 bits of the 32-bit samples libcodec returns. */
 
 /* A load_job describes a file that the loader thread reads and decodes.
  * The main thread reads the result at the next timer tick.  job_lock
@@ -85,7 +67,7 @@ static int loading;
 
 /* resample_linear converts in_frames frames at rate to out_frames frames at
  * RATE by linear interpolation between the two nearest source frames. */
-static void resample_linear(const uint8_t *data, int channels, int bits, uint32_t rate,
+static void resample_linear(const int16_t *data, int channels, uint32_t rate,
                             uint32_t in_frames, int16_t *out, uint64_t out_frames)
 {
     for (uint64_t i = 0; i < out_frames; i++) {
@@ -96,9 +78,9 @@ static void resample_linear(const uint8_t *data, int channels, int bits, uint32_
         uint32_t src = (uint32_t)(pos >> 16), frac = (uint32_t)(pos & 0xffff);
         uint32_t next = src + 1 < in_frames ? src + 1 : src;
         for (int c = 0; c < 2; c++) {
-            uint32_t ch = channels == 2 ? (uint32_t)c : 0;
-            int32_t a = file_sample(data, src * channels + ch, bits);
-            int32_t b = file_sample(data, next * channels + ch, bits);
+            uint32_t ch = channels >= 2 ? (uint32_t)c : 0;
+            int32_t a = data[(size_t)src * channels + ch];
+            int32_t b = data[(size_t)next * channels + ch];
             out[i * 2 + c] = (int16_t)(a + (((b - a) * (int32_t)frac) >> 16));
         }
     }
@@ -116,9 +98,10 @@ static void resample_linear(const uint8_t *data, int channels, int bits, uint32_
 #define SINC_PHASES 4096
 #define SINC_SHIFT 15
 
-static int resample_sinc(const uint8_t *data, int channels, int bits, uint32_t rate,
+static int resample_sinc(const int16_t *data, int file_channels, uint32_t rate,
                          uint32_t in_frames, int16_t *out, uint64_t out_frames)
 {
+    int channels = file_channels >= 2 ? 2 : 1;
     double cutoff = 0.95 * (rate > RATE ? (double)RATE / rate : 1.0);
     int half = (int)ceil(SINC_ZEROS / cutoff);
     int taps = 2 * half;
@@ -137,7 +120,7 @@ static int resample_sinc(const uint8_t *data, int channels, int bits, uint32_t r
     }
     for (int c = 0; c < channels; c++)
         for (uint32_t f = 0; f < in_frames; f++)
-            in[(size_t)c * stride + (size_t)half + f] = file_sample(data, f * (uint32_t)channels + (uint32_t)c, bits);
+            in[(size_t)c * stride + (size_t)half + f] = data[(size_t)f * file_channels + c];
     for (int p = 0; p <= SINC_PHASES; p++) {
         /* Tap j of row p weights the source frame at distance x from the
          * output position.  The coefficients of a row are scaled to a sum
@@ -182,61 +165,79 @@ static int resample_sinc(const uint8_t *data, int channels, int bits, uint32_t r
     return 0;
 }
 
-static int decode(const uint8_t *file, size_t size, struct load_job *j)
+/* read_all decodes the whole stream into 16-bit samples; it returns the
+ * number of frames, or -1. */
+static long read_all(struct codec_audio *a, int channels, int16_t **result)
 {
-    if (size < 12 || memcmp(file, "RIFF", 4) != 0 || memcmp(file + 8, "WAVE", 4) != 0)
-        return -1;
-    uint16_t format = 0, channels = 0, bits = 0;
-    uint32_t rate = 0;
-    const uint8_t *data = NULL;
-    uint32_t data_size = 0;
-    size_t at = 12;
-    while (at + 8 <= size) {
-        uint32_t len = le32(file + at + 4);
-        const uint8_t *body = file + at + 8;
-        if (len > size - at - 8)
-            len = (uint32_t)(size - at - 8);
-        if (memcmp(file + at, "fmt ", 4) == 0 && len >= 16) {
-            format = le16(body);
-            channels = le16(body + 2);
-            rate = le32(body + 4);
-            bits = le16(body + 14);
-        } else if (memcmp(file + at, "data", 4) == 0) {
-            data = body;
-            data_size = len;
+    long cap = codec_audio_frames(a) > 0 ? codec_audio_frames(a) : 65536, n = 0;
+    int16_t *all = malloc((size_t)cap * channels * sizeof *all);
+    int32_t *chunk = malloc(4096 * (size_t)channels * sizeof *chunk);
+    while (all && chunk) {
+        long got = codec_audio_read(a, chunk, 4096);
+        if (got <= 0)
+            break;
+        if (n + got > cap) {
+            int16_t *grown = realloc(all, (size_t)(cap * 2 + got) * channels * sizeof *all);
+            if (!grown)
+                break;
+            all = grown;
+            cap = cap * 2 + got;
         }
-        at += 8 + len + (len & 1);
+        for (long i = 0; i < got * channels; i++)
+            all[n * channels + i] = (int16_t)(chunk[i] >> 16);
+        n += got;
     }
-    if ((format != 1 && format != 0xfffe) || !data || rate == 0 ||
-        (channels != 1 && channels != 2) || (bits != 8 && bits != 16 && bits != 24 && bits != 32))
+    free(chunk);
+    if (!all)
         return -1;
-    uint32_t frame_bytes = channels * bits / 8;
-    uint32_t in_frames = data_size / frame_bytes;
-    if (in_frames < 2)
+    *result = all;
+    return n;
+}
+
+static int decode(const char *path, struct load_job *j)
+{
+    struct codec_audio *a;
+    if (codec_audio_open_file(path, &a) < 0)
         return -1;
+    struct codec_audio_format fmt = *codec_audio_format(a);
+    int16_t *data = NULL;
+    long got = read_all(a, fmt.channels, &data);
+    codec_audio_close(a);
+    uint32_t rate = (uint32_t)fmt.rate;
+    if (got < 2 || got > 0x7fffffff) {
+        free(data);
+        return -1;
+    }
+    uint32_t in_frames = (uint32_t)got;
     uint64_t out_frames = (uint64_t)in_frames * RATE / rate;
-    if (out_frames > 64u << 20)
+    int16_t *out = out_frames <= 64u << 20 ? malloc((size_t)out_frames * 2 * sizeof *out) : NULL;
+    if (!out) {
+        free(data);
         return -1;
-    int16_t *out = malloc((size_t)out_frames * 2 * sizeof *out);
-    if (!out)
-        return -1;
+    }
     /* A file at RATE is copied unchanged by the linear resampler. */
     const char *method = "";
     if (rate == RATE || !j->sinc) {
-        resample_linear(data, channels, bits, rate, in_frames, out, out_frames);
+        resample_linear(data, fmt.channels, rate, in_frames, out, out_frames);
         if (rate != RATE)
             method = ", linear";
     } else {
-        if (resample_sinc(data, channels, bits, rate, in_frames, out, out_frames) < 0) {
+        if (resample_sinc(data, fmt.channels, rate, in_frames, out, out_frames) < 0) {
+            free(data);
             free(out);
             return -1;
         }
         method = ", sinc";
     }
+    free(data);
     j->samples = out;
     j->frames = (uint32_t)out_frames;
-    snprintf(j->format, sizeof j->format, "%u Hz %s %u-bit%s", rate, channels == 2 ? "stereo" : "mono",
-             bits, method);
+    char layout[24];
+    if (fmt.channels <= 2)
+        snprintf(layout, sizeof layout, "%s", fmt.channels == 2 ? "stereo" : "mono");
+    else
+        snprintf(layout, sizeof layout, "%d channels", fmt.channels);
+    snprintf(j->format, sizeof j->format, "%u Hz %s %d-bit%s", rate, layout, fmt.bits, method);
     return 0;
 }
 
@@ -246,18 +247,7 @@ static int decode(const uint8_t *file, size_t size, struct load_job *j)
 static void *load_thread(void *arg)
 {
     struct load_job *j = arg;
-    int r = -1;
-    FILE *f = fopen(j->path, "r");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        uint8_t *buf = size > 0 ? malloc((size_t)size) : NULL;
-        if (buf && fread(buf, 1, (size_t)size, f) == (size_t)size)
-            r = decode(buf, (size_t)size, j);
-        free(buf);
-        fclose(f);
-    }
+    int r = decode(j->path, j);
     pthread_mutex_lock(&job_lock);
     j->error = r < 0;
     j->done = 1;
