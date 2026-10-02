@@ -51,7 +51,7 @@ program:
 
 - `signal.h`: `sig_atomic_t`.
 - `ctype.h`: `isgraph`, `isblank`.
-- `string.h`: `strcoll`, which is `strcmp` because the sole locale is C.
+- `string.h`: `strcoll`, which follows LC_COLLATE (`locale.md`).
 - `setjmp.h`: `_setjmp` and `_longjmp`, aliases of `setjmp` and `longjmp`
   in `setjmp.S` because there is no signal mask to save.
 - `stdio.h`: `ungetc` (one byte in the read window; a push back onto an
@@ -449,7 +449,7 @@ status, and `os.getenv`. The expected output pins every printed line.
   `app_watch_fd`.
 - libgui exposes no primary selection and no drag and drop, and the
   layer protocol has no margins, so the module offers none of them.
-- `os.setlocale` accepts only `C`, `POSIX` and the empty string, and
-  `os.date` reports UTC because `localtime` is `gmtime`.
+- `os.setlocale` accepts the locale names of `locale.md`, and `os.date`
+  reports UTC because `localtime` is `gmtime`.
 - `LUA_INIT` and the `-E`/`-W` options work as upstream; nothing sets
   `LUA_INIT` in the profile.

@@ -78,14 +78,15 @@ result into `-1` with `errno` set. Numbers come from
   `docs/design/time.md`.
 - `setjmp.h`: x86-64 System V `setjmp` and `longjmp`, including the rule
   that a zero value passed to `longjmp` is observed as one. `locale.h`
-  supplies the deterministic `C`/`POSIX` locale and its complete
-  `lconv`. `wchar.h` supplies wide strings and memory operations,
+  supplies named locales, locale objects and `localeconv`, and
+  `langinfo.h` supplies `nl_langinfo` (`locale.md`). `wchar.h` supplies wide strings and memory operations,
   restartable strict UTF-8 conversion, wide numeric conversion and
   wide-character stream input/output. `regex.h` supplies compiled POSIX
   basic and extended byte regular expressions, captures, BRE back
   references, counted repetition, named character classes, anchors and
   the `REG_ICASE`, `REG_NEWLINE`, `REG_NOSUB` and `REG_STARTEND` modes.
-  Collation and character classes follow the sole C locale.
+  Collation follows LC_COLLATE, and the character classes are those of
+  Unicode in every locale.
 - `time.h` additionally exposes the C `TIME_UTC`, `timespec_get` and
   `timespec_getres` interfaces and the POSIX UTC timezone state
   (`tzname`, `timezone`, `daylight`, `tzset`).

@@ -345,11 +345,6 @@ size_t strlcat(char *dst, const char *src, size_t size)
 }
 
 /* The sole locale is C, whose collation order is the byte order. */
-int strcoll(const char *a, const char *b)
-{
-    return strcmp(a, b);
-}
-
 static int lower(int c)
 {
     return (c >= 'A' && c <= 'Z') ? c + 0x20 : c;

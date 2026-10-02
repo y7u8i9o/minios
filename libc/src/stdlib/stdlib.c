@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include "../locale/locale_impl.h"
 
 #define LONG_MAX_PLUS_ONE (1UL << 63)
 
@@ -151,7 +152,8 @@ static double parse_hex_double(const char *s, const char **parsed_end)
     return value;
 }
 
-double strtod(const char *s, char **end)
+/* strtod_c parses with the full stop as the radix character. */
+static double strtod_c(const char *s, char **end)
 {
     const char *original = s;
     while (isspace((unsigned char)*s))
@@ -258,6 +260,47 @@ double strtod(const char *s, char **end)
     if (mantissa && (__builtin_isinf(value) || value == 0.0))
         errno = ERANGE;
     return negative ? -value : value;
+}
+
+/* strtod_l copies the number with the radix character of the locale
+ * replaced by a full stop, parses the copy with strtod_c and maps the end
+ * of the number back to s.  A full stop ends the number in a locale whose
+ * radix character differs.  The copy has room for 511 bytes. */
+double strtod_l(const char *s, char **end, locale_t loc)
+{
+    if (loc == LC_GLOBAL_LOCALE)
+        loc = &__global_locale;
+    const char *radix = loc->cat[LC_NUMERIC]->str[RADIXCHAR];
+    if (radix[0] == '.' && radix[1] == '\0')
+        return strtod_c(s, end);
+    size_t rlen = strlen(radix), n = 0, i = 0, at = (size_t)-1;
+    char buf[512];
+    while (s[i] && n < sizeof buf - 1) {
+        if (at == (size_t)-1 && rlen && strncmp(s + i, radix, rlen) == 0) {
+            at = n;
+            buf[n++] = '.';
+            i += rlen;
+            continue;
+        }
+        if (s[i] == '.')
+            break;
+        buf[n++] = s[i++];
+    }
+    buf[n] = '\0';
+    char *e;
+    double value = strtod_c(buf, &e);
+    if (end) {
+        size_t used = (size_t)(e - buf);
+        if (at != (size_t)-1 && used > at)
+            used += rlen - 1;
+        *end = (char *)s + used;
+    }
+    return value;
+}
+
+double strtod(const char *s, char **end)
+{
+    return strtod_l(s, end, __locale_current());
 }
 
 double atof(const char *s)

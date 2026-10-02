@@ -3,9 +3,13 @@
 #include <stdint.h>
 #include <fenv.h>
 #include "../ldouble.h"
+#include "../locale/locale_impl.h"
 
 /* Formatter shared by the printf family. Supports integer, string and
- * floating conversions, the flags - 0 + space #, width and precision. */
+ * floating conversions, the flags - 0 + space # and ', width and
+ * precision. Floating conversions write the radix character of LC_NUMERIC,
+ * and the flag ' groups the integer digits of d, i, u, f, F, g and G with
+ * its thousands separator. */
 typedef void (*emit_fn)(char c, void *arg);
 
 struct out {
@@ -382,6 +386,70 @@ static int format_hex_body(char *buffer, struct hex_rep *hex, char conversion,
     return length;
 }
 
+/* group_digits writes the n digits of in, most significant first, into
+ * out with the thousands separator of LC_NUMERIC between the groups.
+ * Returns the length of out, which has room for 4 * n bytes. */
+static int group_digits(const char *in, int n, char *out)
+{
+    const struct locale_data *d = __locale_current()->cat[LC_NUMERIC];
+    const char *sep = d->str[THOUSEP], *grouping = d->str[LI_GROUPING];
+    size_t seplen = strlen(sep);
+    /* Mark the positions, counted from the right, after which a separator
+     * follows. */
+    char cut[512] = { 0 };
+    if (seplen && *grouping) {
+        int pos = 0;
+        const char *g = grouping;
+        int size = *g;
+        while (size > 0 && size < 127 && pos + size < n && n <= (int)sizeof cut) {
+            pos += size;
+            cut[pos] = 1;
+            if (g[1])
+                size = *++g;
+        }
+    }
+    int len = 0;
+    for (int i = 0; i < n; i++) {
+        out[len++] = in[i];
+        int right = n - 1 - i;
+        if (right > 0 && cut[right]) {
+            memcpy(out + len, sep, seplen);
+            len += (int)seplen;
+        }
+    }
+    return len;
+}
+
+/* localize replaces the full stop of a floating body by the radix
+ * character and groups the digits before it when group is set. */
+static int localize(const char *in, int len, char *out, int group)
+{
+    const char *radix = __locale_current()->cat[LC_NUMERIC]->str[RADIXCHAR];
+    int digits = 0;
+    while (digits < len && in[digits] >= '0' && in[digits] <= '9')
+        digits++;
+    int scientific = 0;
+    for (int i = 0; i < len; i++)
+        scientific |= in[i] == 'e' || in[i] == 'E';
+    int n = 0;
+    if (group && !scientific) {
+        n = group_digits(in, digits, out);
+    } else {
+        memcpy(out, in, (size_t)digits);
+        n = digits;
+    }
+    for (int i = digits; i < len; i++) {
+        if (in[i] == '.') {
+            size_t r = strlen(radix);
+            memcpy(out + n, radix, r);
+            n += (int)r;
+        } else {
+            out[n++] = in[i];
+        }
+    }
+    return n;
+}
+
 static void out_hex_float(struct out *o, long double value, int is_long,
                           char conversion, int width, int precision, int left,
                           int zero, int plus, int space, int alternate)
@@ -391,8 +459,9 @@ static void out_hex_float(struct out *o, long double value, int is_long,
         hex_rep_long(value, &hex);
     else
         hex_rep_double((double)value, &hex);
-    char body[FLOAT_BUFFER_SIZE];
-    int length = format_hex_body(body, &hex, conversion, precision, alternate);
+    char raw[FLOAT_BUFFER_SIZE], body[FLOAT_BUFFER_SIZE + 16];
+    int length = format_hex_body(raw, &hex, conversion, precision, alternate);
+    length = localize(raw, length, body, 0);
     char sign = hex.negative ? '-' : plus ? '+' : space ? ' ' : '\0';
     int total = length + (sign != '\0');
     int pad = width > total ? width - total : 0;
@@ -409,12 +478,13 @@ static void out_hex_float(struct out *o, long double value, int is_long,
 }
 
 static void out_float(struct out *o, double value, char conversion, int width,
-                      int precision, int left, int zero, int plus, int space, int alternate)
+                      int precision, int left, int zero, int plus, int space, int alternate, int group)
 {
     union { double value; uint64_t bits; } bits = { value };
     char sign = bits.bits >> 63 ? '-' : plus ? '+' : space ? ' ' : '\0';
-    char body[FLOAT_BUFFER_SIZE];
-    int length = format_float_body(body, value, conversion, precision, alternate);
+    char raw[FLOAT_BUFFER_SIZE], body[FLOAT_BUFFER_SIZE * 2];
+    int length = format_float_body(raw, value, conversion, precision, alternate);
+    length = localize(raw, length, body, group);
     int total = length + (sign != '\0');
     int pad = width > total ? width - total : 0;
     if (!left && !zero)
@@ -438,9 +508,10 @@ int __vformat(emit_fn emit, void *arg, const char *fmt, va_list ap)
             continue;
         }
         fmt++;
-        int left = 0, zero = 0, plus = 0, space = 0, alt = 0;
+        int left = 0, zero = 0, plus = 0, space = 0, alt = 0, group = 0;
         for (;; fmt++) {
-            if (*fmt == '-') left = 1;
+            if (*fmt == '\'') group = 1;
+            else if (*fmt == '-') left = 1;
             else if (*fmt == '0') zero = 1;
             else if (*fmt == '+') plus = 1;
             else if (*fmt == ' ') space = 1;
@@ -516,7 +587,7 @@ int __vformat(emit_fn emit, void *arg, const char *fmt, va_list ap)
         if (conv == 'f' || conv == 'F' || conv == 'e' || conv == 'E' ||
             conv == 'g' || conv == 'G') {
             double value = lmod == 3 ? (double)va_arg(ap, long double) : va_arg(ap, double);
-            out_float(&o, value, conv, width, prec, left, zero, plus, space, alt);
+            out_float(&o, value, conv, width, prec, left, zero, plus, space, alt, group);
             continue;
         }
 
@@ -556,6 +627,27 @@ int __vformat(emit_fn emit, void *arg, const char *fmt, va_list ap)
                 digits[n++] = set[v % (unsigned)base];
                 v /= (unsigned)base;
             } while (v);
+        }
+        if (group && base == 10 && n > 3) {
+            char msd[32], grouped[128];
+            for (int i = 0; i < n; i++)
+                msd[i] = digits[n - 1 - i];
+            int g = group_digits(msd, n, grouped);
+            int zeros = prec > n ? prec - n : 0;
+            const char *sign = neg ? "-" : plus ? "+" : space ? " " : "";
+            int total = (int)strlen(sign) + zeros + g;
+            int pad = width > total ? width - total : 0;
+            if (!left && !(zero && prec < 0))
+                out_pad(&o, pad, ' ');
+            for (const char *s = sign; *s; s++) out_char(&o, *s);
+            if (!left && zero && prec < 0)
+                out_pad(&o, pad, '0');
+            out_pad(&o, zeros, '0');
+            for (int i = 0; i < g; i++)
+                out_char(&o, grouped[i]);
+            if (left)
+                out_pad(&o, pad, ' ');
+            continue;
         }
         int zeros = prec > n ? prec - n : 0;
         const char *sign = neg ? "-" : plus ? "+" : space ? " " : "";

@@ -1,0 +1,29 @@
+LOCALE(1)                   User Commands                  LOCALE(1)
+
+NAME
+    locale - print locale information
+
+SYNOPSIS
+    locale [-a]
+    locale [-k] keyword...
+
+DESCRIPTION
+    locale prints the locale of each category that LANG, LC_ALL and the
+    LC_* variables select, the installed locales, or the values of locale
+    keywords. The locales are the files in /usr/share/i18n/locales.
+
+OPTIONS
+    -a   list the installed locales
+    -k   print each keyword with its name
+
+KEYWORDS
+    codeset, decimal_point, thousands_sep, d_t_fmt, d_fmt, t_fmt,
+    t_fmt_ampm, date_fmt, am_pm, day, abday, mon, abmon, alt_mon,
+    yesexpr, noexpr, crncystr
+
+EXAMPLES
+    LANG=fr_FR.UTF-8 locale
+    LANG=ru_RU.UTF-8 locale -k mon
+
+SEE ALSO
+    date(1), index(7)

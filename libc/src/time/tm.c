@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
+#include "../locale/locale_impl.h"
 
 static const char *const day_names[7] = {
     "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
@@ -120,71 +121,149 @@ time_t mktime(struct tm *tm)
     return timegm(tm);
 }
 
-static size_t put(char *buf, size_t size, size_t at, const char *s)
+/* The output of strftime: characters past size are counted but not
+ * stored. */
+struct out {
+    char *buf;
+    size_t size, at;
+};
+
+static void put(struct out *o, const char *s)
 {
     size_t n = strlen(s);
-    if (at + n < size)
-        memcpy(buf + at, s, n);
-    return at + n;
+    if (o->at + n < o->size)
+        memcpy(o->buf + o->at, s, n);
+    o->at += n;
 }
 
-size_t strftime(char *buf, size_t size, const char *format, const struct tm *tm)
+static int weeks_in_year(long y)
+{
+    long p = (y + y / 4 - y / 100 + y / 400) % 7, q = ((y - 1) + (y - 1) / 4 - (y - 1) / 100 + (y - 1) / 400) % 7;
+    return p == 4 || q == 3 ? 53 : 52;
+}
+
+/* iso_week returns the ISO 8601 week number and stores its year. */
+static int iso_week(const struct tm *tm, long *year)
+{
+    long y = tm->tm_year + 1900L;
+    int wday = tm->tm_wday == 0 ? 7 : tm->tm_wday;
+    int week = (tm->tm_yday + 1 - wday + 10) / 7;
+    if (week < 1) {
+        y--;
+        week = weeks_in_year(y);
+    } else if (week > weeks_in_year(y)) {
+        y++;
+        week = 1;
+    }
+    *year = y;
+    return week;
+}
+
+static void format(struct out *o, const char *f, const struct tm *tm, locale_t loc, int depth)
 {
     char item[64];
-    size_t at = 0;
     int hour12 = tm->tm_hour % 12 ? tm->tm_hour % 12 : 12;
-    for (const char *f = format; *f; f++) {
+    int wday = ((tm->tm_wday % 7) + 7) % 7, mon = ((tm->tm_mon % 12) + 12) % 12;
+    long year;
+    for (; *f; f++) {
         if (*f != '%') {
-            if (at + 1 < size)
-                buf[at] = *f;
-            at++;
+            if (o->at + 1 < o->size)
+                o->buf[o->at] = *f;
+            o->at++;
             continue;
         }
         f++;
+        /* E selects an era form, which no locale has. O selects the
+         * month names used without a day for b, B and h. */
+        int alt = 0;
+        if (*f == 'E') {
+            f++;
+        } else if (*f == 'O') {
+            alt = 1;
+            f++;
+        }
+        const char *sub = NULL;
+        item[0] = '\0';
         switch (*f) {
-        case 'a': snprintf(item, sizeof item, "%.3s", day_names[tm->tm_wday % 7]); break;
-        case 'A': snprintf(item, sizeof item, "%s", day_names[tm->tm_wday % 7]); break;
-        case 'b': case 'h': snprintf(item, sizeof item, "%.3s", month_names[tm->tm_mon % 12]); break;
-        case 'B': snprintf(item, sizeof item, "%s", month_names[tm->tm_mon % 12]); break;
-        case 'c': snprintf(item, sizeof item, "%.3s %.3s %2d %02d:%02d:%02d %d", day_names[tm->tm_wday % 7],
-                           month_names[tm->tm_mon % 12], tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
-                           tm->tm_year + 1900); break;
+        case 'a': sub = __locale_item(loc, ABDAY_1 + wday); break;
+        case 'A': sub = __locale_item(loc, DAY_1 + wday); break;
+        case 'b': case 'h': sub = __locale_item(loc, (alt ? _NL_ABALTMON_1 : ABMON_1) + mon); break;
+        case 'B': sub = __locale_item(loc, (alt ? ALTMON_1 : MON_1) + mon); break;
+        case 'c': if (depth < 4) format(o, __locale_item(loc, D_T_FMT), tm, loc, depth + 1); continue;
         case 'C': snprintf(item, sizeof item, "%02d", (tm->tm_year + 1900) / 100); break;
         case 'd': snprintf(item, sizeof item, "%02d", tm->tm_mday); break;
-        case 'D': snprintf(item, sizeof item, "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, (tm->tm_year + 1900) % 100); break;
+        case 'D': if (depth < 4) format(o, "%m/%d/%y", tm, loc, depth + 1); continue;
         case 'e': snprintf(item, sizeof item, "%2d", tm->tm_mday); break;
         case 'F': snprintf(item, sizeof item, "%04d-%02d-%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday); break;
+        case 'g': iso_week(tm, &year); snprintf(item, sizeof item, "%02ld", year % 100); break;
+        case 'G': iso_week(tm, &year); snprintf(item, sizeof item, "%ld", year); break;
         case 'H': snprintf(item, sizeof item, "%02d", tm->tm_hour); break;
         case 'I': snprintf(item, sizeof item, "%02d", hour12); break;
         case 'j': snprintf(item, sizeof item, "%03d", tm->tm_yday + 1); break;
+        case 'k': snprintf(item, sizeof item, "%2d", tm->tm_hour); break;
+        case 'l': snprintf(item, sizeof item, "%2d", hour12); break;
         case 'm': snprintf(item, sizeof item, "%02d", tm->tm_mon + 1); break;
         case 'M': snprintf(item, sizeof item, "%02d", tm->tm_min); break;
-        case 'n': snprintf(item, sizeof item, "\n"); break;
-        case 'p': snprintf(item, sizeof item, "%s", tm->tm_hour < 12 ? "AM" : "PM"); break;
+        case 'n': sub = "\n"; break;
+        case 'p': sub = __locale_item(loc, tm->tm_hour < 12 ? AM_STR : PM_STR); break;
+        case 'P':
+            strlcpy(item, __locale_item(loc, tm->tm_hour < 12 ? AM_STR : PM_STR), sizeof item);
+            for (char *c = item; *c; c++)
+                if (*c >= 'A' && *c <= 'Z')
+                    *c = (char)(*c - 'A' + 'a');
+            break;
+        case 'r': {
+            const char *ampm = __locale_item(loc, T_FMT_AMPM);
+            if (depth < 4)
+                format(o, *ampm ? ampm : "%I:%M:%S %p", tm, loc, depth + 1);
+            continue;
+        }
         case 'R': snprintf(item, sizeof item, "%02d:%02d", tm->tm_hour, tm->tm_min); break;
+        case 's': {
+            struct tm copy = *tm;
+            snprintf(item, sizeof item, "%lld", (long long)mktime(&copy));
+            break;
+        }
         case 'S': snprintf(item, sizeof item, "%02d", tm->tm_sec); break;
-        case 't': snprintf(item, sizeof item, "\t"); break;
-        case 'T': case 'X': snprintf(item, sizeof item, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); break;
-        case 'u': snprintf(item, sizeof item, "%d", tm->tm_wday == 0 ? 7 : tm->tm_wday); break;
-        case 'w': snprintf(item, sizeof item, "%d", tm->tm_wday); break;
-        case 'x': snprintf(item, sizeof item, "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, (tm->tm_year + 1900) % 100); break;
+        case 't': sub = "\t"; break;
+        case 'T': snprintf(item, sizeof item, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); break;
+        case 'u': snprintf(item, sizeof item, "%d", wday == 0 ? 7 : wday); break;
+        case 'U': snprintf(item, sizeof item, "%02d", (tm->tm_yday + 7 - wday) / 7); break;
+        case 'V': snprintf(item, sizeof item, "%02d", iso_week(tm, &year)); break;
+        case 'w': snprintf(item, sizeof item, "%d", wday); break;
+        case 'W': snprintf(item, sizeof item, "%02d", (tm->tm_yday + 7 - (wday + 6) % 7) / 7); break;
+        case 'x': if (depth < 4) format(o, __locale_item(loc, D_FMT), tm, loc, depth + 1); continue;
+        case 'X': if (depth < 4) format(o, __locale_item(loc, T_FMT), tm, loc, depth + 1); continue;
         case 'y': snprintf(item, sizeof item, "%02d", (tm->tm_year + 1900) % 100); break;
         case 'Y': snprintf(item, sizeof item, "%d", tm->tm_year + 1900); break;
-        case 'z': snprintf(item, sizeof item, "+0000"); break;
-        case 'Z': snprintf(item, sizeof item, "UTC"); break;
-        case '%': snprintf(item, sizeof item, "%%"); break;
-        case '\0': f--; item[0] = '\0'; break;
+        case 'z': sub = "+0000"; break;
+        case 'Z': sub = "UTC"; break;
+        case '%': sub = "%"; break;
+        case '\0': f--; continue;
         default: snprintf(item, sizeof item, "%%%c", *f); break;
         }
-        at = put(buf, size, at, item);
+        put(o, sub ? sub : item);
     }
-    if (at < size) {
-        buf[at] = '\0';
-        return at;
+}
+
+size_t strftime_l(char *buf, size_t size, const char *fmt, const struct tm *tm, locale_t loc)
+{
+    if (loc == LC_GLOBAL_LOCALE)
+        loc = &__global_locale;
+    struct out o = { buf, size, 0 };
+    format(&o, fmt, tm, loc, 0);
+    if (o.at < size) {
+        buf[o.at] = '\0';
+        return o.at;
     }
     if (size)
         buf[0] = '\0';
     return 0;
+}
+
+size_t strftime(char *buf, size_t size, const char *fmt, const struct tm *tm)
+{
+    return strftime_l(buf, size, fmt, tm, __locale_current());
 }
 
 char *asctime_r(const struct tm *tm, char *buf)

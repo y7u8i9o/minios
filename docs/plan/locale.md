@@ -68,7 +68,7 @@ no-break space U+00A0, and `libc_ext` expects that. The cases
 `unicode_data`, `libc_ext`, `gui_term`, `gui_term_scale2`, `lineedit`,
 `lineedit_screen`, `awk`, `sed` and `lua` pass.
 
-### L1. Locale core
+### L1. Locale core (completed 2026-10-02)
 
 - A parser for locale files in `libc/src/locale/`, `<langinfo.h>` with
   `nl_langinfo`, and `locale_t` with `newlocale`, `uselocale`, `freelocale`
@@ -83,6 +83,12 @@ no-break space U+00A0, and `libc_ext` expects that. The cases
   and the `locale` utility with a manual page.
 - The boot test is `locale`, and the design document is
   `docs/design/locale.md`.
+
+The locale files are text files that libc parses when `setlocale` selects
+them. `collate` and `collate_after` select the collation per locale. The
+`uselocale` locale is stored in `struct pthread`. The size of `struct tm` is
+unchanged. The cases `locale`, `libc`, `libc_ext`, `float`, `time`, `awk`, `sed`,
+`lua`, `unicode_data` and `calculator` pass.
 
 ### L2. Time zones
 

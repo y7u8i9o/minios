@@ -14,10 +14,10 @@ OUT = os.path.join(TOP, 'libc', 'src', 'wchar', 'unidata.h')
 
 
 def read_unicode_data():
-    """Return the general category and the simple case mappings of every
-    assigned code point.  Ranges given as First and Last lines are
-    expanded."""
-    category, upper, lower = {}, {}, {}
+    """Return the general category, the simple case mappings and the
+    canonical decompositions of every assigned code point.  Ranges given as
+    First and Last lines are expanded."""
+    category, upper, lower, decomp = {}, {}, {}, {}
     first = None
     with open(os.path.join(UCD, 'UnicodeData.txt')) as f:
         for line in f:
@@ -32,11 +32,35 @@ def read_unicode_data():
                 first = None
                 continue
             category[cp] = cat
+            if fields[5] and not fields[5].startswith('<'):
+                decomp[cp] = [int(x, 16) for x in fields[5].split()]
             if fields[12]:
                 upper[cp] = int(fields[12], 16)
             if fields[13]:
                 lower[cp] = int(fields[13], 16)
-    return category, upper, lower
+    return category, upper, lower, decomp
+
+
+def base_letters(category, decomp):
+    """Return (code point, base letter, first mark) for the letters of the
+    Latin, Greek and Cyrillic blocks whose full canonical decomposition is
+    a letter followed by combining marks."""
+    def full(c):
+        if c not in decomp:
+            return [c]
+        out = []
+        for d in decomp[c]:
+            out += full(d)
+        return out
+    blocks = [(0xc0, 0x24f), (0x370, 0x3ff), (0x400, 0x52f), (0x1e00, 0x1fff)]
+    out = []
+    for c in sorted(decomp):
+        if not any(a <= c <= b for a, b in blocks) or not category.get(c, '').startswith('L'):
+            continue
+        seq = full(c)
+        if len(seq) >= 2 and category.get(seq[0], '').startswith('L') and all(category.get(m) == 'Mn' for m in seq[1:]):
+            out.append((c, seq[0], seq[1]))
+    return out
 
 
 def read_property(filename, wanted):
@@ -111,7 +135,7 @@ def emit_case(out, name, comment, runs):
 
 def main():
     version = open(os.path.join(UCD, 'VERSION')).read().strip()
-    category, upper, lower = read_unicode_data()
+    category, upper, lower, decomp = read_unicode_data()
     alpha = read_property('DerivedCoreProperties.txt', 'Alphabetic')
     uppercase = read_property('DerivedCoreProperties.txt', 'Uppercase')
     lowercase = read_property('DerivedCoreProperties.txt', 'Lowercase')
@@ -160,6 +184,12 @@ def main():
         '    uint32_t first, last;',
         '};',
         '',
+        '/* A base letter entry gives the letter and the first combining mark of',
+        ' * the canonical decomposition of cp, for collation. */',
+        'struct uni_base {',
+        '    uint32_t cp, base, mark;',
+        '};',
+        '',
         '/* A case run maps first, first + stride, ... up to last to the code',
         ' * point plus delta. */',
         'struct uni_case {',
@@ -179,6 +209,13 @@ def main():
     emit_ranges(out, 'uni_wide', 'Code points of width 2: East Asian Width W and F.', ranges(wide))
     emit_case(out, 'uni_toupper', 'Simple uppercase mappings (UnicodeData.txt field 12).', case_runs(to_upper))
     emit_case(out, 'uni_tolower', 'Simple lowercase mappings (UnicodeData.txt field 13).', case_runs(to_lower))
+    bases = base_letters(category, decomp)
+    out.append('/* Latin, Greek and Cyrillic letters with their base letter and first mark. */')
+    out.append('static const struct uni_base uni_bases[] = {')
+    for i in range(0, len(bases), 4):
+        out.append('    ' + ' '.join(f'{{0x{a:x}, 0x{b:x}, 0x{m:x}}},' for a, b, m in bases[i:i + 4]))
+    out.append('};')
+    out.append('')
     with open(OUT, 'w') as f:
         f.write('\n'.join(out))
     print(f'genunicode: wrote {OUT}')

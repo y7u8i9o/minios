@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include "../locale/locale_impl.h"
 
 /* Formatted input. Every conversion reads through a source with one
  * character of push back, which is all the C scanf grammar needs. */
@@ -112,6 +113,9 @@ static size_t collect_int(struct source *src, int base, size_t width, char *buf,
 
 static size_t collect_float(struct source *src, size_t width, char *buf, size_t size)
 {
+    /* The radix character of LC_NUMERIC, when it is one byte. */
+    const char *radix = __locale_current()->cat[LC_NUMERIC]->str[RADIXCHAR];
+    int point = radix[0] && !radix[1] ? radix[0] : '.';
     size_t n = 0;
     int c = src_get(src);
     int seen_digit = 0, seen_point = 0, seen_exp = 0, hex = 0;
@@ -132,7 +136,7 @@ static size_t collect_float(struct source *src, size_t width, char *buf, size_t 
     while (c != EOF && n < width && n < size - 1) {
         if (isdigit(c) || (hex && isxdigit(c))) {
             seen_digit = 1;
-        } else if (c == '.' && !seen_point && !seen_exp) {
+        } else if (c == point && !seen_point && !seen_exp) {
             seen_point = 1;
         } else if ((c == 'x' || c == 'X') && n == (size_t)(1 + (buf[0] == '+' || buf[0] == '-')) && buf[n - 1] == '0') {
             hex = 1;

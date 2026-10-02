@@ -15,7 +15,12 @@ char *strcat(char *dst, const char *src);
 char *strncat(char *dst, const char *src, size_t n);
 int strcmp(const char *a, const char *b);
 int strncmp(const char *a, const char *b, size_t n);
+/* strcoll and strxfrm follow LC_COLLATE (docs/design/locale.md). */
 int strcoll(const char *a, const char *b);
+size_t strxfrm(char *dst, const char *src, size_t n);
+struct __locale_struct;
+int strcoll_l(const char *a, const char *b, struct __locale_struct *loc);
+size_t strxfrm_l(char *dst, const char *src, size_t n, struct __locale_struct *loc);
 char *strchr(const char *s, int c);
 char *strrchr(const char *s, int c);
 char *strstr(const char *h, const char *n);

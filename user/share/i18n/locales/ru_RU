@@ -1,0 +1,50 @@
+# Russian (Russia). The format is described in docs/design/locale.md.
+# The values follow CLDR. mon contains the genitive month names used with
+# a day, alt_mon the nominative names (%OB).
+language_name "Русский"
+territory_name "Россия"
+
+# LC_NUMERIC
+decimal_point ","
+thousands_sep " "
+grouping "3"
+
+# LC_MONETARY
+int_curr_symbol "RUB "
+currency_symbol "₽"
+mon_decimal_point ","
+mon_thousands_sep " "
+mon_grouping "3"
+positive_sign ""
+negative_sign "-"
+int_frac_digits 2
+frac_digits 2
+p_cs_precedes 0
+p_sep_by_space 1
+n_cs_precedes 0
+n_sep_by_space 1
+p_sign_posn 1
+n_sign_posn 1
+
+# LC_TIME
+abday "Вс;Пн;Вт;Ср;Чт;Пт;Сб"
+day "воскресенье;понедельник;вторник;среда;четверг;пятница;суббота"
+abmon "янв.;февр.;мар.;апр.;мая;июн.;июл.;авг.;сент.;окт.;нояб.;дек."
+mon "января;февраля;марта;апреля;мая;июня;июля;августа;сентября;октября;ноября;декабря"
+ab_alt_mon "янв.;февр.;март;апр.;май;июнь;июль;авг.;сент.;окт.;нояб.;дек."
+alt_mon "январь;февраль;март;апрель;май;июнь;июль;август;сентябрь;октябрь;ноябрь;декабрь"
+am_pm ";"
+d_t_fmt "%a %d %b %Y %T"
+d_fmt "%d.%m.%Y"
+t_fmt "%T"
+t_fmt_ampm ""
+date_fmt "%a %d %b %Y %T %Z"
+
+# LC_MESSAGES
+yesexpr "^[+1yYдД]"
+noexpr "^[-0nNнН]"
+yesstr "да"
+nostr "нет"
+
+# LC_COLLATE: ё sorts as е with a different accent.
+collate "latin"

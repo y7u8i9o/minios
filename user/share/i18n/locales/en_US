@@ -1,0 +1,47 @@
+# English (United States). The format is described in docs/design/locale.md.
+# The values follow CLDR.
+language_name "English"
+territory_name "United States"
+
+# LC_NUMERIC
+decimal_point "."
+thousands_sep ","
+grouping "3"
+
+# LC_MONETARY
+int_curr_symbol "USD "
+currency_symbol "$"
+mon_decimal_point "."
+mon_thousands_sep ","
+mon_grouping "3"
+positive_sign ""
+negative_sign "-"
+int_frac_digits 2
+frac_digits 2
+p_cs_precedes 1
+p_sep_by_space 0
+n_cs_precedes 1
+n_sep_by_space 0
+p_sign_posn 1
+n_sign_posn 1
+
+# LC_TIME
+abday "Sun;Mon;Tue;Wed;Thu;Fri;Sat"
+day "Sunday;Monday;Tuesday;Wednesday;Thursday;Friday;Saturday"
+abmon "Jan;Feb;Mar;Apr;May;Jun;Jul;Aug;Sep;Oct;Nov;Dec"
+mon "January;February;March;April;May;June;July;August;September;October;November;December"
+am_pm "AM;PM"
+d_t_fmt "%a %d %b %Y %r %Z"
+d_fmt "%m/%d/%Y"
+t_fmt "%r"
+t_fmt_ampm "%I:%M:%S %p"
+date_fmt "%a %b %e %r %Z %Y"
+
+# LC_MESSAGES
+yesexpr "^[+1yY]"
+noexpr "^[-0nN]"
+yesstr "yes"
+nostr "no"
+
+# LC_COLLATE
+collate "latin"

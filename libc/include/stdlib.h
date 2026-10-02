@@ -19,7 +19,10 @@ long strtol(const char *s, char **end, int base);
 unsigned long strtoul(const char *s, char **end, int base);
 long long strtoll(const char *s, char **end, int base);
 unsigned long long strtoull(const char *s, char **end, int base);
+/* strtod, strtof and strtold accept the radix character of LC_NUMERIC. */
 double strtod(const char *s, char **end);
+struct __locale_struct;
+double strtod_l(const char *s, char **end, struct __locale_struct *loc);
 float strtof(const char *s, char **end);
 /* strtold parses with the precision of double. */
 long double strtold(const char *s, char **end);

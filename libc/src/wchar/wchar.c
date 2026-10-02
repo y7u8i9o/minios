@@ -85,21 +85,6 @@ int wcsncmp(const wchar_t *a, const wchar_t *b, size_t n)
     return *a < *b ? -1 : *a != *b;
 }
 
-int wcscoll(const wchar_t *a, const wchar_t *b)
-{
-    return wcscmp(a, b);
-}
-
-size_t wcsxfrm(wchar_t *dst, const wchar_t *src, size_t n)
-{
-    size_t length = wcslen(src);
-    if (n) {
-        size_t copy = length < n - 1 ? length : n - 1;
-        wmemcpy(dst, src, copy);
-        dst[copy] = 0;
-    }
-    return length;
-}
 
 wchar_t *wcschr(const wchar_t *s, wchar_t c)
 {

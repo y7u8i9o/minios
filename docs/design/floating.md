@@ -97,8 +97,9 @@ exponents, C hexadecimal significands with binary `p` exponents,
 case-insensitive infinity, and NaN with an optional alphanumeric payload. The
 decimal parser retains 18 significant digits; the hexadecimal parser retains
 60 significand bits before narrowing. Both observe the standard no-conversion
-`endptr` rule and set `ERANGE` on overflow or underflow to zero. Locale-specific
-decimal separators are not supported.
+`endptr` rule and set `ERANGE` on overflow or underflow to zero. `strtod`
+accepts the radix character of LC_NUMERIC, and `printf` writes it
+(`locale.md`).
 
 The printf family handles `%f`, `%e`, `%g`, `%a` and their uppercase forms,
 together with sign, alternate form, width, zero padding, left alignment and

@@ -9,6 +9,7 @@
 #include <libc_arch.h>
 
 struct dl_dtv;
+struct __locale_struct;
 
 struct pthread {
     struct pthread *self;           /* %fs:0 */
@@ -25,6 +26,7 @@ struct pthread {
     int exited;                     /* protected by __threads_lock */
     const void *keys[PTHREAD_KEYS_MAX];
     char sgr_sequence[16];          /* the buffer term_sgr returns */
+    struct __locale_struct *locale; /* set by uselocale, NULL for the global locale */
     struct pthread *next;           /* __threads list, protected by __threads_lock */
 };
 

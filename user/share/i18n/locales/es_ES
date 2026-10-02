@@ -1,0 +1,48 @@
+# Spanish (Spain). The format is described in docs/design/locale.md.
+# The values follow CLDR.
+language_name "Español"
+territory_name "España"
+
+# LC_NUMERIC
+decimal_point ","
+thousands_sep "."
+grouping "3"
+
+# LC_MONETARY
+int_curr_symbol "EUR "
+currency_symbol "€"
+mon_decimal_point ","
+mon_thousands_sep "."
+mon_grouping "3"
+positive_sign ""
+negative_sign "-"
+int_frac_digits 2
+frac_digits 2
+p_cs_precedes 0
+p_sep_by_space 1
+n_cs_precedes 0
+n_sep_by_space 1
+p_sign_posn 1
+n_sign_posn 1
+
+# LC_TIME
+abday "dom;lun;mar;mié;jue;vie;sáb"
+day "domingo;lunes;martes;miércoles;jueves;viernes;sábado"
+abmon "ene;feb;mar;abr;may;jun;jul;ago;sept;oct;nov;dic"
+mon "enero;febrero;marzo;abril;mayo;junio;julio;agosto;septiembre;octubre;noviembre;diciembre"
+am_pm ";"
+d_t_fmt "%a %d %b %Y %T %Z"
+d_fmt "%d/%m/%y"
+t_fmt "%T"
+t_fmt_ampm ""
+date_fmt "%a %d %b %Y %T %Z"
+
+# LC_MESSAGES
+yesexpr "^[+1sSyY]"
+noexpr "^[-0nN]"
+yesstr "sí"
+nostr "no"
+
+# LC_COLLATE: ñ is a letter of its own after n.
+collate "latin"
+collate_after "n ñ"

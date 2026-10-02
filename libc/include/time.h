@@ -43,9 +43,14 @@ struct tm *localtime_r(const time_t *t, struct tm *out);
 time_t timegm(struct tm *tm);
 time_t mktime(struct tm *tm);
 
-/* Formatting: strftime supports %a %A %b %B %c %C %d %D %e %F %H %I %j
- * %m %M %n %p %R %S %t %T %u %w %x %X %y %Y %z %Z %%. */
+/* Formatting: strftime supports %a %A %b %B %c %C %d %D %e %F %g %G %h
+ * %H %I %j %k %l %m %M %n %p %P %r %R %s %S %t %T %u %U %V %w %W %x %X %y
+ * %Y %z %Z %% and the modifiers E and O. Names and the formats of %c, %x,
+ * %X and %r come from LC_TIME, and %OB and %Ob give the month names used
+ * without a day. */
 size_t strftime(char *buf, size_t size, const char *format, const struct tm *tm);
+struct __locale_struct;
+size_t strftime_l(char *buf, size_t size, const char *format, const struct tm *tm, struct __locale_struct *loc);
 char *asctime(const struct tm *tm);
 char *asctime_r(const struct tm *tm, char *buf);   /* at least 26 bytes */
 char *ctime(const time_t *t);
