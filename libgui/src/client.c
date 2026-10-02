@@ -43,6 +43,7 @@ struct win {
     struct wbuf bufs[2];
     struct rect damage;
     int has_damage, frame_pending, need_commit;
+    struct wire_proxy *frame_cb;    /* The frame callback that is pending, or NULL. */
     int min_w, min_h;
     int buttons;
     struct wire_proxy *old_pool, *old_bufs[2];
@@ -778,6 +779,7 @@ static void on_frame_done(void *user, struct wire_proxy *cb, uint32_t t)
     struct gui_window *w = user;
     struct win *wi = w->priv;
     wire_proxy_destroy(cb);
+    wi->frame_cb = NULL;
     wi->frame_pending = 0;
     if (wi->need_commit)
         commit_now(w);
@@ -818,6 +820,7 @@ static void commit_now(struct gui_window *w)
     surface_damage(wi->surface, lx0, ly0, lx1 - lx0, ly1 - ly0);
     struct wire_proxy *cb = surface_frame(wi->surface);
     callback_add_listener(cb, &frame_events, w);
+    wi->frame_cb = cb;
     surface_commit(wi->surface);
     release_old(wi);
     wi->frame_pending = 1;
@@ -1101,6 +1104,10 @@ void gui_destroy_window(struct gui_window *w)
         }
     if (pointer_win == w) pointer_win = NULL;
     if (keyboard_win == w) keyboard_win = NULL;
+    /* The event of a pending frame callback would reach the freed window,
+     * so the callback is destroyed with it, and libwire drops the event. */
+    if (wi->frame_cb)
+        wire_proxy_destroy(wi->frame_cb);
     if (wi->decoration)
         decoration_destroy(wi->decoration);
     if (wi->toplevel)
