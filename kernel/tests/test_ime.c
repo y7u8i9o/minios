@@ -1,7 +1,9 @@
-/* L6: input methods.  Super+Space selects the Japanese engine, then the
- * Chinese engine, then the layout again.  Keys typed into gedit compose
- * kanji from romaji and hanzi from pinyin through the candidates of the
- * compositor, and the keys that a composition uses do not reach gedit. */
+/* L6 and I0: input methods.  A Ctrl+Shift tap selects the Japanese engine,
+ * then the Chinese engine, a Shift tap the layout, the Chinese engine again
+ * and the layout, and Ctrl+Space the Chinese engine.  Keys typed into gedit
+ * compose kanji from romaji and hanzi from pinyin through the candidates
+ * of the compositor, and the keys that a composition uses do not reach
+ * gedit. */
 #include <tests/ktest.h>
 #include <drivers/ps2kbd.h>
 #include <drivers/fbdev.h>
@@ -12,6 +14,7 @@
 #include <lib/string.h>
 #include <lib/printf.h>
 #include <console.h>
+#include <ipc/signal.h>
 #include <errno.h>
 #include "gui_helpers.h"
 
@@ -33,18 +36,36 @@ static void type(const char *s)
         tap(letter_code[*s - 'a']);
 }
 
-static void super_space(void)
+static void keys(const uint8_t *codes, size_t n)
 {
-    const uint8_t down[] = { 0xe0, 0x5b }, up[] = { 0xe0, 0xdb };
-    ps2kbd_feed_scancode(down[0]);
-    ps2kbd_feed_scancode(down[1]);
-    tap(0x39);
-    ps2kbd_feed_scancode(up[0]);
-    ps2kbd_feed_scancode(up[1]);
+    for (size_t i = 0; i < n; i++)
+        ps2kbd_feed_scancode(codes[i]);
     sleep_ms(200);
 }
 
+static void ctrl_shift_tap(void)
+{
+    const uint8_t seq[] = { 0x1d, 0x2a, 0xaa, 0x9d };
+    keys(seq, sizeof seq);
+}
+
+static void shift_tap(void)
+{
+    const uint8_t seq[] = { 0x2a, 0xaa };
+    keys(seq, sizeof seq);
+}
+
+static void ctrl_space(void)
+{
+    const uint8_t seq[] = { 0x1d, 0x39, 0xb9, 0x9d };
+    keys(seq, sizeof seq);
+}
+
 #define SPACE 0x39
+/* The panel geometry of user/panel/panel.h. */
+#define CLOCK_W 80
+#define MIXER_W 30
+#define INPUT_W 30
 #define ENTER 0x1c
 #define F7    0x41
 #define KEY2  0x03
@@ -63,12 +84,16 @@ static void test_ime(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     vfs_unlink("/ime.txt");
     struct proc *srv = start_server();
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL },
+                                          &kernel_proc);
+    ktest_assert(panel != NULL, "cannot start the panel");
+    sleep_ms(800);
     struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/ime.txt", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);
 
-    super_space();                  /* Japanese */
+    ctrl_shift_tap();               /* Japanese */
     type("yama");
     tap(SPACE);                     /* 山 is the first candidate of やま */
     tap(ENTER);
@@ -86,7 +111,7 @@ static void test_ime(void)
     tap(ENTER);                     /* in katakana */
     sleep_ms(300);
 
-    super_space();                  /* Chinese */
+    ctrl_shift_tap();               /* Chinese */
     type("zhongguo");
     tap(SPACE);                     /* 中, then the candidates of guo */
     tap(SPACE);                     /* 国 */
@@ -95,8 +120,16 @@ static void test_ime(void)
     tap(SPACE);
     sleep_ms(300);
 
-    super_space();                  /* the layout */
+    shift_tap();                    /* the layout */
     type("a");
+    shift_tap();                    /* the Chinese engine again */
+    type("hao");
+    tap(SPACE);
+    shift_tap();                    /* the layout */
+    type("b");
+    ctrl_space();                   /* the Chinese engine */
+    type("ni");
+    tap(SPACE);
     sleep_ms(300);
     ctrl_key(0x1f);                 /* Ctrl+S */
     sleep_ms(500);
@@ -108,10 +141,18 @@ static void test_ime(void)
     file_put(f);
     buf[n > 0 ? n : 0] = '\0';
     kprintf("ime: gedit wrote %s\n", buf);
-    ktest_assert(strcmp(buf, "山水二かなカナ中国你好a") == 0, "gedit text '%s'", buf);
+    ktest_assert(strcmp(buf, "山水二かなカナ中国你好a好b你") == 0, "gedit text '%s'", buf);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "gedit status 0x%x", status);
+    /* A click on the label of the panel selects the next method: after the
+     * Chinese engine the layout. */
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    mouse_move_to(&cx, &cy, logical_w() - CLOCK_W - MIXER_W - 4 - 4 - INPUT_W / 2, logical_h() - 14, 0);
+    mouse_click(1);
+    sleep_ms(500);
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
     stop_server(srv);
     run("/bin/sh", (char *const[]){ "sh", "-c", "rm -f /ime.txt", NULL });
     kprintf("ime: text ok\n");

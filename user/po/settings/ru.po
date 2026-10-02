@@ -154,23 +154,23 @@ msgstr "Постоянное"
 msgid "Adaptive"
 msgstr "Адаптивное"
 
-#: user/settings/region.c:135
+#: user/settings/region.c:138
 msgid "Example: %s, %s"
 msgstr "Пример: %s, %s"
 
-#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "ОК"
 
-#: user/settings/region.c:172 user/settings/settings.c:129
+#: user/settings/region.c:175 user/settings/settings.c:129
 msgid "Region and language"
 msgstr "Регион и язык"
 
-#: user/settings/region.c:172
+#: user/settings/region.c:175
 msgid "The time zone cannot be set."
 msgstr "Не удаётся установить часовой пояс."
 
-#: user/settings/region.c:197
+#: user/settings/region.c:199
 msgid "Language"
 msgstr "Язык"
 
@@ -182,21 +182,21 @@ msgstr "Форматы"
 msgid "Same as the language"
 msgstr "Как у языка"
 
-#: user/settings/region.c:222
+#: user/settings/region.c:220
 msgid "Time zone"
 msgstr "Часовой пояс"
 
-#: user/settings/region.c:230
+#: user/settings/region.c:228
 msgid "Keyboard layout"
 msgstr "Раскладка клавиатуры"
 
-#: user/settings/region.c:235
+#: user/settings/region.c:233
 msgid "A new language applies to the programs started afterwards."
 msgstr "Новый язык применяется к программам, запущенным после изменения."
 
-#: user/settings/region.c:236
-msgid "Super+Space switches to the Japanese and Chinese input methods."
-msgstr "Super+Пробел переключает на японский и китайский методы ввода."
+#: user/settings/region.c:234
+msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
+msgstr "Нажатие Shift включает и выключает метод ввода, а Ctrl+Shift выбирает следующий."
 
 #: user/settings/settings.c:126
 msgid "Appearance"

@@ -2,9 +2,28 @@
 
 The compositor X12 has two input methods, one for Japanese and one for
 Simplified Chinese. They compose text for the clients that use the text
-input protocol, which are the text widgets of libgui. Super+Space selects
-the Japanese engine, then the Chinese engine, then the keyboard layout
-again. The panel shows the current choice next to the mixer button.
+input protocol, which are the text widgets of libgui. The panel shows the
+current choice next to the mixer button. `docs/plan/ime.md` replaces these
+engines with an input method daemon.
+
+## Switch keys
+
+The switch keys work on a macOS host, where Cmd+Space opens Spotlight and
+Ctrl+Space switches the input source of macOS before QEMU sees them.
+
+| Keys | Effect |
+|---|---|
+| a Shift tap | toggles between the layout and the last engine (the Chinese engine at first) |
+| a Ctrl+Shift tap | selects the next method in the order layout, Japanese, Chinese |
+| Ctrl+Space, Super+Space | toggle as a Shift tap does, where the host passes them |
+| a click on the panel label | selects the next method |
+
+A tap is a press and a release without another key between them. Shift
+with a letter therefore types a capital, and Ctrl+Shift+U still starts the
+Unicode entry. A change of method commits the composition as it is shown.
+`seat.c` detects the taps. The panel sends the settings key
+`input_method` with the value -1, and `seat_select_input_method` selects
+the next method.
 
 ## Candidate tables
 
@@ -93,8 +112,8 @@ The seat of version 2 has the event `input_method` with a short label: あ
 for the Japanese engine, 拼 for the Chinese engine, and otherwise the
 layout name in capitals. The `us` layout and the first group of a layout
 with two groups are EN. The compositor sends the label after the bind,
-after Super+Space, after Alt+Shift changes the group and after a keymap
-reload. The panel binds the seat with a listener and draws the label.
+after a change of method, after Alt+Shift changes the group and after a
+keymap reload. The panel binds the seat with a listener and draws the label.
 
 ## Limits
 
@@ -106,11 +125,14 @@ events and is not covered.
 
 ## Test
 
-`ime` starts gedit and selects the Japanese engine. It types `yama` and
-chooses 山 with Space and Enter, chooses 水 for `kawa` with a second Space,
-chooses 二 for `ni` with the digit 2, and commits `kana` once as hiragana
-and once in katakana after F7. It then selects the Chinese engine and
-types `zhongguo` and `nihao` with Space after each syllable, and selects
-the layout again and types `a`. gedit must save 山水二かなカナ中国你好a,
-which also shows that no Space, Enter or digit reached gedit as a key. The
-compositor log must report the labels あ, 拼 and EN.
+`ime` starts the panel and gedit and selects the Japanese engine with a
+Ctrl+Shift tap. It types `yama` and chooses 山 with Space and Enter,
+chooses 水 for `kawa` with a second Space, chooses 二 for `ni` with the
+digit 2, and commits `kana` once as hiragana and once in katakana after
+F7. A Ctrl+Shift tap selects the Chinese engine, which composes `zhongguo`
+and `nihao` with Space after each syllable. A Shift tap selects the layout
+for `a`, another one the Chinese engine for `hao`, another one the layout
+for `b`, and Ctrl+Space the Chinese engine for `ni`. gedit must save
+山水二かなカナ中国你好a好b你, which also shows that no Space, Enter or digit
+reached gedit as a key. A click on the panel label must then select the
+layout, and the compositor log must report the labels あ, 拼 and EN.

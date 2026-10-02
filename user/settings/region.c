@@ -231,7 +231,7 @@ void build_region(struct widget *page)
     sample = label_new(page, "");
     widget_set_hint(sample, 0, 28);
     label_new(page, _("A new language applies to the programs started afterwards."));
-    label_new(page, _("Super+Space switches to the Japanese and Chinese input methods."));
+    label_new(page, _("A Shift tap toggles the input method, and Ctrl+Shift selects the next one."));
     show_sample();
     app_timer_add(app, 1000, 1, sample_tick, NULL);
     building = 0;

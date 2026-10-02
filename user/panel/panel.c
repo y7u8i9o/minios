@@ -20,6 +20,7 @@
 #include "panel.h"
 #include <minios/local.h>
 #include <minios/conf.h>
+#include "debug-client.h"
 
 #define MAX_TASKS 16
 
@@ -27,7 +28,7 @@ struct task { struct wire_proxy *handle; char title[48]; int active, minimized; 
 
 struct wire_display *display;
 struct wire_proxy *compositor, *shm, *shell, *seat;
-static struct wire_proxy *pointer, *manager;
+static struct wire_proxy *pointer, *manager, *settings;
 struct canvas panel;
 static struct wire_proxy *layer;
 static struct task tasks[MAX_TASKS];
@@ -196,6 +197,12 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
         mixer_toggle();
         return;
     }
+    /* The input method label selects the next layout or engine. */
+    if (settings && px >= mixer_button_x() - INPUT_W - 4 && px < mixer_button_x() - 4) {
+        log_line("input method next");
+        settings_set(settings, "input_method", -1);
+        return;
+    }
     int limit = (screen_w - CLOCK_W - MIXER_BTN_W - INPUT_W - MENU_BTN_W - 24) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
@@ -318,6 +325,7 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
         seat_add_listener(seat, &seat_events, NULL);
     }
     else if (strcmp(iface, "toplevel_manager") == 0) manager = registry_bind(registry, name, iface, version, &toplevel_manager_interface, 1);
+    else if (strcmp(iface, "settings") == 0) settings = registry_bind(registry, name, iface, version, &settings_interface, 1);
     else if (strcmp(iface, "output") == 0) {
         struct wire_proxy *o = registry_bind(registry, name, iface, version, &output_interface, 1);
         output_add_listener(o, &output_events, NULL);

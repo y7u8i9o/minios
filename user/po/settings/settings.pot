@@ -151,23 +151,23 @@ msgstr ""
 msgid "Adaptive"
 msgstr ""
 
-#: user/settings/region.c:135
+#: user/settings/region.c:138
 msgid "Example: %s, %s"
 msgstr ""
 
-#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr ""
 
-#: user/settings/region.c:172 user/settings/settings.c:129
+#: user/settings/region.c:175 user/settings/settings.c:129
 msgid "Region and language"
 msgstr ""
 
-#: user/settings/region.c:172
+#: user/settings/region.c:175
 msgid "The time zone cannot be set."
 msgstr ""
 
-#: user/settings/region.c:197
+#: user/settings/region.c:199
 msgid "Language"
 msgstr ""
 
@@ -179,20 +179,20 @@ msgstr ""
 msgid "Same as the language"
 msgstr ""
 
-#: user/settings/region.c:222
+#: user/settings/region.c:220
 msgid "Time zone"
 msgstr ""
 
-#: user/settings/region.c:230
+#: user/settings/region.c:228
 msgid "Keyboard layout"
 msgstr ""
 
-#: user/settings/region.c:235
+#: user/settings/region.c:233
 msgid "A new language applies to the programs started afterwards."
 msgstr ""
 
-#: user/settings/region.c:236
-msgid "Super+Space switches to the Japanese and Chinese input methods."
+#: user/settings/region.c:234
+msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
 msgstr ""
 
 #: user/settings/settings.c:126

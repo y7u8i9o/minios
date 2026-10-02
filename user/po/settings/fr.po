@@ -154,23 +154,23 @@ msgstr "Plate"
 msgid "Adaptive"
 msgstr "Adaptative"
 
-#: user/settings/region.c:135
+#: user/settings/region.c:138
 msgid "Example: %s, %s"
 msgstr "Exemple : %s, %s"
 
-#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "OK"
 
-#: user/settings/region.c:172 user/settings/settings.c:129
+#: user/settings/region.c:175 user/settings/settings.c:129
 msgid "Region and language"
 msgstr "Région et langue"
 
-#: user/settings/region.c:172
+#: user/settings/region.c:175
 msgid "The time zone cannot be set."
 msgstr "Le fuseau horaire ne peut pas être défini."
 
-#: user/settings/region.c:197
+#: user/settings/region.c:199
 msgid "Language"
 msgstr "Langue"
 
@@ -182,21 +182,21 @@ msgstr "Formats"
 msgid "Same as the language"
 msgstr "Identiques à la langue"
 
-#: user/settings/region.c:222
+#: user/settings/region.c:220
 msgid "Time zone"
 msgstr "Fuseau horaire"
 
-#: user/settings/region.c:230
+#: user/settings/region.c:228
 msgid "Keyboard layout"
 msgstr "Disposition du clavier"
 
-#: user/settings/region.c:235
+#: user/settings/region.c:233
 msgid "A new language applies to the programs started afterwards."
 msgstr "Une nouvelle langue s'applique aux programmes démarrés ensuite."
 
-#: user/settings/region.c:236
-msgid "Super+Space switches to the Japanese and Chinese input methods."
-msgstr "Super+Espace passe aux méthodes de saisie japonaise et chinoise."
+#: user/settings/region.c:234
+msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
+msgstr "Un appui sur Maj active ou désactive la méthode de saisie, et Ctrl+Maj choisit la suivante."
 
 #: user/settings/settings.c:126
 msgid "Appearance"

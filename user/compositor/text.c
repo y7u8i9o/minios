@@ -263,12 +263,17 @@ static void apply_ime(struct text_context *t, const struct ime_result *r)
         text_input_send_done(t->res, t->serial);
 }
 
-void text_ime_reset(void)
+void text_ime_end(int commit)
 {
     struct csurface *focus = seat_keyboard_focus();
     struct text_context *t = focus ? context_of(focus->client) : NULL;
-    if (t && t->entered)
+    if (t && t->entered && commit) {
+        struct ime_result r;
+        ime_finish(&r);
+        apply_ime(t, &r);
+    } else if (t && t->entered) {
         drop_ime(t);
+    }
     ime_reset();
 }
 

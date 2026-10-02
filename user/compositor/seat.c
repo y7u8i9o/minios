@@ -1,7 +1,7 @@
 /* The seat: pointer focus and events, keyboard focus and events with
  * the keymap descriptor, modifiers, serials, cursor surfaces, and the
- * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, Super+Space for
- * the input method). */
+ * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, and the switch
+ * keys of the input methods). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +39,11 @@ static char keymap_name[32];
  * of an input method): their release does not reach the client either. */
 static uint32_t used_keys[16];
 static int nused;
+/* The switch keys of the input methods (docs/design/ime.md).  A Shift tap
+ * is a press and a release of Shift without another key between them, a
+ * Ctrl+Shift tap a press of both and a release without another key. */
+static int shift_tap, ctrl_shift_tap;
+static int last_engine = IME_CHINESE;   /* the engine that a toggle selects */
 
 uint32_t seat_last_serial(void) { return last_serial; }
 int seat_modifiers(void) { return modifiers; }
@@ -242,16 +247,30 @@ static void broadcast_input_label(void)
     }
 }
 
-/* Super+Space switches from the layout to the Japanese engine, then to the
- * Chinese engine, then back.  A composition in progress is dropped. */
-static void cycle_input_method(void)
+/* seat_select_input_method selects the layout (IME_OFF) or an engine, or
+ * the next one in the order layout, Japanese, Chinese for -1.  A
+ * composition in progress is committed as it is shown. */
+void seat_select_input_method(int mode)
 {
-    text_ime_reset();
-    ime_set_mode((ime_mode() + 1) % 3);
+    if (mode < 0)
+        mode = (ime_mode() + 1) % 3;
+    if (mode > IME_CHINESE || mode == ime_mode())
+        return;
+    text_ime_end(1);
+    ime_set_mode(mode);
+    if (mode != IME_OFF)
+        last_engine = mode;
     char label[16];
     input_label(label, sizeof label);
     comp_log("input method %s", label);
     broadcast_input_label();
+}
+
+/* A Shift tap, Ctrl+Space and Super+Space toggle between the layout and the
+ * last engine. */
+static void toggle_input_method(void)
+{
+    seat_select_input_method(ime_mode() == IME_OFF ? last_engine : IME_OFF);
 }
 
 static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint32_t id)
@@ -497,6 +516,17 @@ void seat_key(uint32_t key, int pressed)
     uint8_t *mod = modifier_of(key, &side);
     if (mod || key == KEY_CAPSLOCK) {
         if (mod) {
+            if (pressed && !*mod) {
+                shift_tap = mod == &mod_shift && !mod_ctrl && !mod_alt && !mod_logo && !mod_altgr && !npressed;
+                ctrl_shift_tap = ((mod == &mod_shift && mod_ctrl) || (mod == &mod_ctrl && mod_shift)) && !mod_alt &&
+                                 !mod_logo && !mod_altgr && !npressed;
+            } else if (!pressed && mod == &mod_shift && shift_tap) {
+                shift_tap = 0;
+                toggle_input_method();
+            } else if (!pressed && (mod == &mod_shift || mod == &mod_ctrl) && ctrl_shift_tap) {
+                ctrl_shift_tap = 0;
+                seat_select_input_method(-1);
+            }
             /* Alt+Shift switches the group of a layout with two groups when
              * the second of the two keys goes down. */
             int other = mod == &mod_shift ? mod_alt != 0 : mod == &mod_alt ? mod_shift != 0 : 0;
@@ -508,6 +538,7 @@ void seat_key(uint32_t key, int pressed)
             *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
         } else if (pressed) {
             caps_locked = !caps_locked;
+            shift_tap = ctrl_shift_tap = 0;
         }
         modifiers = (mod_shift ? KEYMAP_MOD_SHIFT : 0) | (mod_ctrl ? KEYMAP_MOD_CTRL : 0) |
                     (mod_alt ? KEYMAP_MOD_ALT : 0) | (mod_logo ? KEYMAP_MOD_LOGO : 0) |
@@ -516,6 +547,8 @@ void seat_key(uint32_t key, int pressed)
             send_modifiers(keyboard_focus->client, serial_for(keyboard_focus->client));
         return;
     }
+    if (pressed)
+        shift_tap = ctrl_shift_tap = 0;
     if (pressed) {
         if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_TAB) { toplevel_cycle(); return; }
         if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_F4) {
@@ -536,9 +569,10 @@ void seat_key(uint32_t key, int pressed)
             popup_dismiss_all();
             return;
         }
-        int used = (modifiers & KEYMAP_MOD_LOGO) && key == KEY_SPACE;
+        int used = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_CTRL)) && !(modifiers & KEYMAP_MOD_ALT) &&
+                   key == KEY_SPACE;
         if (used)
-            cycle_input_method();
+            toggle_input_method();
         else if (keyboard_focus && keyboard_focus->client->keyboard)
             used = text_key(key, 1, modifiers);
         if (used) {

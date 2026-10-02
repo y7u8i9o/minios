@@ -154,23 +154,23 @@ msgstr "一定"
 msgid "Adaptive"
 msgstr "適応"
 
-#: user/settings/region.c:135
+#: user/settings/region.c:138
 msgid "Example: %s, %s"
 msgstr "例: %s、%s"
 
-#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
+#: user/settings/region.c:174 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "OK"
 
-#: user/settings/region.c:172 user/settings/settings.c:129
+#: user/settings/region.c:175 user/settings/settings.c:129
 msgid "Region and language"
 msgstr "地域と言語"
 
-#: user/settings/region.c:172
+#: user/settings/region.c:175
 msgid "The time zone cannot be set."
 msgstr "タイムゾーンを設定できません。"
 
-#: user/settings/region.c:197
+#: user/settings/region.c:199
 msgid "Language"
 msgstr "言語"
 
@@ -182,21 +182,21 @@ msgstr "形式"
 msgid "Same as the language"
 msgstr "言語と同じ"
 
-#: user/settings/region.c:222
+#: user/settings/region.c:220
 msgid "Time zone"
 msgstr "タイムゾーン"
 
-#: user/settings/region.c:230
+#: user/settings/region.c:228
 msgid "Keyboard layout"
 msgstr "キーボード配列"
 
-#: user/settings/region.c:235
+#: user/settings/region.c:233
 msgid "A new language applies to the programs started afterwards."
 msgstr "新しい言語はこの後に起動するプログラムに適用されます。"
 
-#: user/settings/region.c:236
-msgid "Super+Space switches to the Japanese and Chinese input methods."
-msgstr "Super+Space で日本語と中国語の入力方式に切り替えます。"
+#: user/settings/region.c:234
+msgid "A Shift tap toggles the input method, and Ctrl+Shift selects the next one."
+msgstr "Shift キーを単独で押すと入力方式をオン・オフし、Ctrl+Shift で次の入力方式に切り替えます。"
 
 #: user/settings/settings.c:126
 msgid "Appearance"

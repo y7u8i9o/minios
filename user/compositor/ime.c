@@ -499,6 +499,16 @@ int ime_key(uint32_t key, int ch, int mods, struct ime_result *r)
     return mode == IME_JAPANESE ? japanese_key(key, ch, mods, r) : chinese_key(key, ch, mods, r);
 }
 
+void ime_finish(struct ime_result *r)
+{
+    r->commit[0] = r->preedit[0] = '\0';
+    r->preedit_changed = 0;
+    if (ime_composing() || ncands) {
+        commit_all(r);
+        result_preedit(r);
+    }
+}
+
 void ime_reset(void)
 {
     text[0] = roma[0] = '\0';
