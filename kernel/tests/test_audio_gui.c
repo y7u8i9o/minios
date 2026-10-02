@@ -76,7 +76,9 @@ static void test_audio_player(void)
      * resampled before the window appears. */
     const char *track = "/usr/share/sounds/58_Hammer_of_Justice.wav";
     struct inode *ino;
+    int windows = 1;
     if (vfs_lookup(track, &ino) == 0) {
+        windows++;
         inode_put(ino);
         cl = proc_create_user("/home/.local/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
                               &kernel_proc);
@@ -102,7 +104,14 @@ static void test_audio_player(void)
                           (char *const[]){ "player", "-s", "/usr/share/sounds/chime.wav", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start player -s");
-    sleep_ms(1500);
+    /* The window cascades below the earlier ones. The sinc resampler takes
+     * longer than the linear one, and the test waits for the waveform. */
+    int wx = 40 + 30 * windows, wy = 60 + 30 * windows;
+    uint64_t t1 = timer_ms();
+    while (count_color(wx + 10, wy + 70, 540, 190, ACCENT) <= 500 && timer_ms() - t1 < 20000)
+        sleep_ms(100);
+    kprintf("audio_player: sinc load after %lu ms\n", timer_ms() - t1);
+    ktest_assert(count_color(wx + 10, wy + 70, 540, 190, ACCENT) > 500, "sinc waveform drawn");
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "player -s status 0x%x", status);
