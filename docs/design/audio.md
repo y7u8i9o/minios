@@ -212,13 +212,51 @@ decay and volume controls; the gate of a step closes halfway through it so
 that repeated notes are heard separately.  Space plays and stops, D loads
 the demo pattern, C clears the grid, and a click toggles a cell.
 
-`/home/.local/bin/player` plays WAV files (PCM, 8 or 16 bit, mono or stereo, any rate;
-other rates are converted by linear interpolation when the file is opened)
-and shows the whole file as a waveform of per-column minima and maxima with
-a play head; a click seeks, space plays and pauses, and a loop check box
-repeats the file.  `/etc/mime.types` maps `.wav` to `audio/x-wav` and
-`/etc/mime.apps` opens `audio/*` with the player; `/usr/share/sounds/chime.wav`
-is a sample file.
+`/home/.local/bin/player` plays PCM WAV files with 8, 16, 24 or 32-bit
+samples, one or two channels and any sample rate.  A loader thread converts
+the file to 48 kHz stereo when it is opened.  The player draws the whole file
+as a waveform of the minimum and the maximum in each pixel column, with a
+vertical line at the play position.  A click on the waveform sets the play
+position, space plays and pauses, and the Loop check box repeats the file.
+`/etc/mime.types` maps `.wav` to `audio/x-wav`, and `/etc/mime.apps` opens
+`audio/*` with the player.  `/usr/share/sounds/chime.wav` is a sample file
+at 16 kHz.
+
+The player converts other sample rates by linear interpolation between the
+two nearest source frames.  The option `-s` and the Resampling menu select an
+experimental sinc resampler.  A selection in the menu loads the current file
+again and continues playback at the same position.  The sinc resampler
+weights the source frames within 16 zero crossings on either side of the
+output position with a sinc kernel and a Blackman window.  The cutoff is 0.95
+of the lower of the source and the output Nyquist frequencies.  The kernel
+therefore covers more source frames when the source rate is above 48 kHz.
+The coefficients are computed in double precision for 4097 fractional
+positions when a file is loaded, scaled to a sum of 1 and stored as 32-bit
+integers with 15 fraction bits.  Each output frame uses the coefficients of
+the nearest fractional position and a 64-bit accumulator.  The information
+line and the message `player: loaded` on standard output name the method,
+`linear` or `sinc`, when the file rate differs from 48 kHz.
+
+The following table lists the signal-to-noise ratio of a 16000-amplitude
+sine tone after conversion to 48 kHz, measured on the host with the two
+functions of `user/apps/player.c`.
+
+| Source rate | Tone | Linear | Sinc |
+|---|---|---|---|
+| 16000 Hz | 1000 Hz | 37.1 dB | 86.6 dB |
+| 16000 Hz | 5000 Hz | 9.9 dB | 75.9 dB |
+| 16000 Hz | 7000 Hz | 4.7 dB | 21.6 dB |
+| 44100 Hz | 1000 Hz | 54.6 dB | 84.4 dB |
+| 44100 Hz | 7000 Hz | 21.0 dB | 80.7 dB |
+| 96000 Hz | 5000 Hz | 93.7 dB | 85.6 dB |
+
+A table of 257 positions limited the sinc resampler to between 53 and 76 dB
+in the same measurement.  The table of 4097 positions requires 557 KB for a
+44.1 kHz file and 1.1 MB for a 96 kHz file.  For a 16 kHz file the
+transition band of the kernel is centred on the 7600 Hz cutoff.  The kernel
+attenuates the 7000 Hz tone because the tone is inside this band.  The rate
+96 kHz is twice the output rate.  Linear interpolation then copies every
+second source frame and adds no error for tones below 24 kHz.
 
 The panel's audio applet (`user/panel/mixer.c`) is a speaker button left of
 the clock.  It opens a popup that connects to the server, shows the master
@@ -257,8 +295,9 @@ piecewise, and a reader that stops returning buffers sees xruns.
 list with names, directions and states, per-stream and master volume
 changes verified through the monitor capture of the mix, level events and
 removal.  `audio_player`, `audio_sequencer` and `gui_mixer` run the desktop
-applications against the server: the player draws the chime's waveform and
-reports the end of the file, the sequencer loads and plays the demo
+applications against the server: the player draws the chime's waveform,
+reports the end of the file and converts the chime a second time with
+`-s`, the sequencer loads and plays the demo
 pattern from the keyboard, and the panel applet lists the synthesizer's
 stream and sets the master volume by a click on its bar.
 

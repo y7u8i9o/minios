@@ -1,12 +1,16 @@
-/* player: a WAV player with a waveform view.
+/* The player program plays WAV files and draws their waveform.
  *
- * The file (PCM, 8 or 16 bit, mono or stereo, any rate) is decoded to
- * the 48 kHz stereo format of the audio server when it is opened, with
- * linear interpolation for other sample rates.  The waveform view shows
- * the whole file as one column of minimum and maximum per pixel and a play
- * head. */
+ * The program accepts PCM files with 8, 16, 24 or 32-bit samples, one or
+ * two channels and any sample rate.  It converts each file to the 48 kHz
+ * stereo format of the audio server when the file is opened.  Linear
+ * interpolation converts other sample rates by default.  The option -s and
+ * the Resampling menu select an experimental windowed sinc resampler.  The
+ * waveform view draws the minimum and the maximum of the samples in each
+ * pixel column of the whole file, and a vertical line marks the play
+ * position. */
 #include <audio/audio.h>
 #include <gui/app.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,16 +25,18 @@ static struct audio_playback *playback;
 static struct watch *audio_watch;
 static struct timer *tick;
 static struct widget *wave, *play_button, *loop_box, *volume, *volume_label, *info, *time_label;
-static int16_t *samples;            /* interleaved stereo sample at 48 kHz */
-static uint32_t frames, position;   /* in frames */
+static int16_t *samples;            /* The samples are interleaved stereo at 48 kHz. */
+static uint32_t frames, position;   /* Both values count frames. */
 static int16_t *period;
 static uint32_t quantum;
 static int playing, loop;
 static char file_name[128];
-static char format_text[64];
+static char file_path[256];
+static char format_text[96];
+static int use_sinc;                /* The next load uses the sinc resampler when set. */
 static int *column_min, *column_max, columns;
 
-/* ---- WAV decoding ---- */
+/* The functions below decode WAV files. */
 
 static uint32_t le32(const uint8_t *p)
 {
@@ -42,8 +48,9 @@ static uint16_t le16(const uint8_t *p)
     return (uint16_t)(p[0] | p[1] << 8);
 }
 
-/* One sample of the file as a 16-bit value: 8-bit unsigned, 16, 24 and
- * 32-bit signed little endian, the wider ones by their top 16 bits. */
+/* file_sample returns one sample of the file as a 16-bit value.  It
+ * accepts 8-bit unsigned samples and 16, 24 and 32-bit signed little
+ * endian samples.  For 24 and 32-bit samples it returns the upper 16 bits. */
 static int16_t file_sample(const uint8_t *data, uint32_t index, int bits)
 {
     const uint8_t *p = data + (size_t)index * (bits / 8);
@@ -55,21 +62,123 @@ static int16_t file_sample(const uint8_t *data, uint32_t index, int bits)
     }
 }
 
-/* A file being read and decoded by the loader thread; the main loop takes
- * the result at the next tick. lock protects done. */
+/* A load_job describes a file that the loader thread reads and decodes.
+ * The main thread reads the result at the next timer tick.  job_lock
+ * protects done. */
 struct load_job {
     char path[256];
     int16_t *samples;
     uint32_t frames;
-    char format[64];
+    char format[96];
     int error;
     int done;
     int autoplay;
+    int sinc;
+    uint32_t start;                 /* start is the play position in frames after the load. */
 };
 static struct load_job job;
 static pthread_t loader;
 static pthread_mutex_t job_lock = PTHREAD_MUTEX_INITIALIZER;
 static int loading;
+
+/* resample_linear converts in_frames frames at rate to out_frames frames at
+ * RATE by linear interpolation between the two nearest source frames. */
+static void resample_linear(const uint8_t *data, int channels, int bits, uint32_t rate,
+                            uint32_t in_frames, int16_t *out, uint64_t out_frames)
+{
+    for (uint64_t i = 0; i < out_frames; i++) {
+        /* pos is the source position of output frame i in 16.16 fixed
+         * point.  Its fractional part is the weight of the linear
+         * interpolation. */
+        uint64_t pos = i * rate * 65536 / RATE;
+        uint32_t src = (uint32_t)(pos >> 16), frac = (uint32_t)(pos & 0xffff);
+        uint32_t next = src + 1 < in_frames ? src + 1 : src;
+        for (int c = 0; c < 2; c++) {
+            uint32_t ch = channels == 2 ? (uint32_t)c : 0;
+            int32_t a = file_sample(data, src * channels + ch, bits);
+            int32_t b = file_sample(data, next * channels + ch, bits);
+            out[i * 2 + c] = (int16_t)(a + (((b - a) * (int32_t)frac) >> 16));
+        }
+    }
+}
+
+/* The sinc resampler is experimental.  Each output frame is the sum of the
+ * source frames within SINC_ZEROS zero crossings of the sinc function on
+ * either side, weighted by a sinc kernel with a Blackman window.  The cutoff
+ * is 0.95 of the lower of the two Nyquist frequencies.  The kernel is
+ * wider in source frames when the source rate is above RATE.  The coefficients are
+ * computed once per file for SINC_PHASES + 1 fractional positions and
+ * stored in fixed point with SINC_SHIFT fraction bits.  Each output frame
+ * uses the table row of the nearest fractional position. */
+#define SINC_ZEROS 16
+#define SINC_PHASES 4096
+#define SINC_SHIFT 15
+
+static int resample_sinc(const uint8_t *data, int channels, int bits, uint32_t rate,
+                         uint32_t in_frames, int16_t *out, uint64_t out_frames)
+{
+    double cutoff = 0.95 * (rate > RATE ? (double)RATE / rate : 1.0);
+    int half = (int)ceil(SINC_ZEROS / cutoff);
+    int taps = 2 * half;
+    /* Each channel is converted to 16-bit samples with half zero frames
+     * before and after it.  The inner loop therefore needs no bounds
+     * checks.  Source frame f of channel c is at in[c * stride + half + f]. */
+    size_t stride = (size_t)in_frames + (size_t)taps;
+    int32_t *table = malloc((size_t)(SINC_PHASES + 1) * (size_t)taps * sizeof *table);
+    double *coef = malloc((size_t)taps * sizeof *coef);
+    int16_t *in = calloc(stride * (size_t)channels, sizeof *in);
+    if (!table || !coef || !in) {
+        free(table);
+        free(coef);
+        free(in);
+        return -1;
+    }
+    for (int c = 0; c < channels; c++)
+        for (uint32_t f = 0; f < in_frames; f++)
+            in[(size_t)c * stride + (size_t)half + f] = file_sample(data, f * (uint32_t)channels + (uint32_t)c, bits);
+    for (int p = 0; p <= SINC_PHASES; p++) {
+        /* Tap j of row p weights the source frame at distance x from the
+         * output position.  The coefficients of a row are scaled to a sum
+         * of 1.  A constant signal therefore has the same level after the
+         * conversion. */
+        double frac = (double)p / SINC_PHASES, sum = 0;
+        for (int j = 0; j < taps; j++) {
+            double x = j - half + 1 - frac;
+            double u = M_PI * cutoff * x;
+            double t = M_PI * x / half;
+            double window = 0.42 + 0.5 * cos(t) + 0.08 * cos(2 * t);
+            coef[j] = (u == 0 ? 1.0 : sin(u) / u) * window;
+            sum += coef[j];
+        }
+        for (int j = 0; j < taps; j++) {
+            double v = coef[j] / sum * (1 << SINC_SHIFT);
+            table[p * taps + j] = (int32_t)(v >= 0 ? v + 0.5 : v - 0.5);
+        }
+    }
+    for (uint64_t i = 0; i < out_frames; i++) {
+        uint64_t num = i * rate;
+        uint32_t src = (uint32_t)(num / RATE);
+        uint32_t p = (uint32_t)(((num % RATE) * SINC_PHASES + RATE / 2) / RATE);
+        const int32_t *h = table + (size_t)p * (size_t)taps;
+        for (int c = 0; c < channels; c++) {
+            /* The taps cover the source frames src - half + 1 to src + half. */
+            const int16_t *x = in + (size_t)c * stride + src + 1;
+            int64_t acc = 0;
+            for (int j = 0; j < taps; j++)
+                acc += (int64_t)x[j] * h[j];
+            acc = (acc + (1 << (SINC_SHIFT - 1))) >> SINC_SHIFT;
+            if (acc > 32767) acc = 32767;
+            if (acc < -32768) acc = -32768;
+            out[i * 2 + c] = (int16_t)acc;
+        }
+        if (channels == 1)
+            out[i * 2 + 1] = out[i * 2];
+    }
+    free(table);
+    free(coef);
+    free(in);
+    return 0;
+}
 
 static int decode(const uint8_t *file, size_t size, struct load_job *j)
 {
@@ -109,27 +218,29 @@ static int decode(const uint8_t *file, size_t size, struct load_job *j)
     int16_t *out = malloc((size_t)out_frames * 2 * sizeof *out);
     if (!out)
         return -1;
-    for (uint64_t i = 0; i < out_frames; i++) {
-        /* The source position of output frame i and its fraction, in
-         * 16.16 fixed point, for linear interpolation. */
-        uint64_t pos = i * rate * 65536 / RATE;
-        uint32_t src = (uint32_t)(pos >> 16), frac = (uint32_t)(pos & 0xffff);
-        uint32_t next = src + 1 < in_frames ? src + 1 : src;
-        for (int c = 0; c < 2; c++) {
-            uint32_t ch = channels == 2 ? (uint32_t)c : 0;
-            int32_t a = file_sample(data, src * channels + ch, bits);
-            int32_t b = file_sample(data, next * channels + ch, bits);
-            out[i * 2 + c] = (int16_t)(a + (((b - a) * (int32_t)frac) >> 16));
+    /* A file at RATE is copied unchanged by the linear resampler. */
+    const char *method = "";
+    if (rate == RATE || !j->sinc) {
+        resample_linear(data, channels, bits, rate, in_frames, out, out_frames);
+        if (rate != RATE)
+            method = ", linear";
+    } else {
+        if (resample_sinc(data, channels, bits, rate, in_frames, out, out_frames) < 0) {
+            free(out);
+            return -1;
         }
+        method = ", sinc";
     }
     j->samples = out;
     j->frames = (uint32_t)out_frames;
-    snprintf(j->format, sizeof j->format, "%u Hz %s %u-bit", rate, channels == 2 ? "stereo" : "mono", bits);
+    snprintf(j->format, sizeof j->format, "%u Hz %s %u-bit%s", rate, channels == 2 ? "stereo" : "mono",
+             bits, method);
     return 0;
 }
 
-/* The loader thread: reads and decodes the file without touching the
- * user interface, so the window keeps answering the server meanwhile. */
+/* load_thread reads and decodes the file and makes no calls into the user
+ * interface.  The main thread continues to process server events during
+ * the load. */
 static void *load_thread(void *arg)
 {
     struct load_job *j = arg;
@@ -152,14 +263,18 @@ static void *load_thread(void *arg)
     return NULL;
 }
 
-/* Start loading path; returns -1 when a load is already running. */
-static int load_start(const char *path, int autoplay)
+/* load_start creates the loader thread for path.  The load starts playback
+ * at frame start when autoplay is set.  It returns -1 when a load is
+ * already running or when the thread cannot be created. */
+static int load_start(const char *path, int autoplay, uint32_t start)
 {
     if (loading)
         return -1;
     memset(&job, 0, sizeof job);
     snprintf(job.path, sizeof job.path, "%s", path);
     job.autoplay = autoplay;
+    job.sinc = use_sinc;
+    job.start = start;
     if (pthread_create(&loader, NULL, load_thread, &job) != 0)
         return -1;
     loading = 1;
@@ -173,7 +288,8 @@ static int load_start(const char *path, int autoplay)
 static void show_info(void);
 static void set_playing(int on);
 
-/* Take a finished load: the main loop owns samples and the view. */
+/* load_finish installs the result of a finished load.  Only the main
+ * thread modifies samples and the view. */
 static void load_finish(void)
 {
     pthread_mutex_lock(&job_lock);
@@ -193,9 +309,12 @@ static void load_finish(void)
     samples = job.samples;
     frames = job.frames;
     snprintf(format_text, sizeof format_text, "%s", job.format);
+    snprintf(file_path, sizeof file_path, "%s", job.path);
     const char *base = strrchr(job.path, '/');
     snprintf(file_name, sizeof file_name, "%s", base ? base + 1 : job.path);
-    position = 0;
+    printf("player: loaded %s, %s\n", file_name, format_text);
+    fflush(stdout);
+    position = job.start < frames ? job.start : 0;
     columns = 0;                    /* the overview is rebuilt on the next paint */
     if (job.autoplay)
         set_playing(1);
@@ -203,7 +322,7 @@ static void load_finish(void)
     widget_invalidate(wave);
 }
 
-/* ---- audio ---- */
+/* The functions below write samples to the audio server. */
 
 static void update_time(void)
 {
@@ -225,7 +344,9 @@ static void set_playing(int on)
     fflush(stdout);
 }
 
-/* Fill one period from the file; silence past the end (or wrap). */
+/* render_period fills one period with samples from the file.  After the
+ * last frame it writes silence, or it restarts at the first frame when
+ * looping is enabled. */
 static void render_period(void)
 {
     uint32_t i = 0;
@@ -282,7 +403,7 @@ static void on_tick(void *arg)
     widget_invalidate(wave);
 }
 
-/* ---- the view ---- */
+/* The functions below draw the waveform view. */
 
 static void build_overview(int width)
 {
@@ -356,7 +477,7 @@ static int on_press(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-/* ---- controls ---- */
+/* The functions below implement the controls. */
 
 static void show_info(void)
 {
@@ -393,9 +514,24 @@ static int on_open(struct widget *w, void *args, void *arg)
     static const char *const buttons[] = { "Close" };
     if (app_prompt(app, "Open", "File:", name, sizeof name)) {
         set_playing(0);
-        if (load_start(name, 1) < 0)
+        if (load_start(name, 1, 0) < 0)
             app_dialog(app, "Error", "A file is still being loaded.", buttons, 1);
     }
+    return 1;
+}
+
+/* on_resampling selects the resampler for later loads and loads the
+ * current file again with it.  The playback of the old samples continues
+ * until the new samples replace them at the same position. */
+static int on_resampling(struct widget *w, void *args, void *arg)
+{
+    static const char *const buttons[] = { "Close" };
+    int sinc = arg != NULL;
+    if (sinc == use_sinc)
+        return 1;
+    use_sinc = sinc;
+    if (file_path[0] && load_start(file_path, playing, position) < 0)
+        app_dialog(app, "Error", "A file is still being loaded.", buttons, 1);
     return 1;
 }
 
@@ -423,7 +559,7 @@ static int on_quit(struct widget *w, void *args, void *arg)
 static int on_key(struct widget *w, void *args, void *arg)
 {
     struct sig_key *key = args;
-    if (key->code == 0x39) {        /* space */
+    if (key->code == 0x39) {        /* 0x39 is the space bar. */
         on_play(w, NULL, NULL);
         return 1;
     }
@@ -459,6 +595,9 @@ int main(int argc, char **argv)
     widget_connect(menu_add(file, "Open...", "open"), "clicked", on_open, NULL);
     menu_add_separator(file);
     widget_connect(menu_add(file, "Quit", "quit"), "clicked", on_quit, NULL);
+    struct widget *resampling = menu_new(bar, "Resampling");
+    widget_connect(menu_add(resampling, "Linear", NULL), "clicked", on_resampling, NULL);
+    widget_connect(menu_add(resampling, "Sinc (experimental)", NULL), "clicked", on_resampling, &use_sinc);
 
     struct widget *transport = box_new(win, 0);
     widget_set_stretch(transport, 1, 0);
@@ -483,8 +622,13 @@ int main(int argc, char **argv)
     info = label_new(win, "");
 
     show_info();
-    if (argc > 1)
-        load_start(argv[1], 1);
+    int arg = 1;
+    if (arg < argc && strcmp(argv[arg], "-s") == 0) {
+        use_sinc = 1;
+        arg++;
+    }
+    if (arg < argc)
+        load_start(argv[arg], 1, 0);
 
     if (fill_ready_buffers() < 0 || audio_playback_start(playback) < 0) {
         audio_disconnect(audio);

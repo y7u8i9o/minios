@@ -48,8 +48,9 @@ static int count_color(int x0, int y0, int w, int h, uint32_t color)
     return n;
 }
 
-/* The player draws the chime's waveform and reports the end of the file;
- * space restarts it. */
+/* The player draws the chime's waveform and reports the end of the file.
+ * Space restarts it.  A second run converts the chime with the experimental
+ * sinc resampler. */
 static void test_audio_player(void)
 {
     install_app("player");
@@ -97,6 +98,14 @@ static void test_audio_player(void)
         ktest_assert(status == 0, "player status for the track 0x%x", status);
         kprintf("audio_player: 24-bit track ok\n");
     }
+    cl = proc_create_user("/home/.local/bin/player",
+                          (char *const[]){ "player", "-s", "/usr/share/sounds/chime.wav", NULL },
+                          (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start player -s");
+    sleep_ms(1500);
+    alt_key(0x3e);
+    status = proc_reap(cl);
+    ktest_assert(status == 0, "player -s status 0x%x", status);
     stop_server(srv);
     stop_audiod(audiod);
     kprintf("audio_player: player ok\n");

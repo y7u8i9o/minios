@@ -1,6 +1,8 @@
 audiod: started 48000 Hz stereo
+player: loaded chime.wav, 16000 Hz mono 16-bit, linear
 player: playing chime.wav
 player: finished chime.wav
 player: playing chime.wav
+player: loaded chime.wav, 16000 Hz mono 16-bit, sinc
 audio_player: player ok
 TEST PASS
