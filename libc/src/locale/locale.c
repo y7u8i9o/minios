@@ -314,7 +314,7 @@ static int first_file_of(const char *lang, char *out, size_t size)
 }
 
 /* load returns the loaded locale of a name: C, POSIX, C.UTF-8, ll_CC with
- * an optional codeset UTF-8 or utf8, or ll.  The caller holds lock. */
+ * an optional codeset UTF-8 or utf8, or ll.  The caller has acquired lock. */
 static const struct locale_data *load(const char *name)
 {
     if (strcmp(name, "C") == 0 || strcmp(name, "POSIX") == 0)

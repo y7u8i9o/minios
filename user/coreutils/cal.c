@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 {
     time_t now = time(NULL);
     struct tm today;
-    gmtime_r(&now, &today);
+    localtime_r(&now, &today);
     int month = today.tm_mon, year = today.tm_year + 1900;
     if (argc == 3) {
         month = atoi(argv[1]) - 1;

@@ -1,6 +1,6 @@
 #pragma once
-/* Time (M35): clocks from the kernel, calendar conversion in UTC (the
- * system has no time zones), formatting and sleeping. */
+/* Time (M35, L2): clocks from the kernel, calendar conversion in UTC and
+ * in the local time zone, formatting and sleeping. */
 #include <stddef.h>
 #include <sys/types.h>
 #include <minios/abi.h>
@@ -35,7 +35,9 @@ int nanosleep(const struct timespec *request, struct timespec *remain);
 int timespec_get(struct timespec *ts, int base);
 int timespec_getres(struct timespec *res, int base);
 
-/* Calendar conversion, UTC only. localtime is gmtime. */
+/* Calendar conversion. gmtime and timegm use UTC. localtime and mktime
+ * use the zone of TZ, or of /etc/localtime when TZ is not set, or UTC
+ * (docs/design/time.md). */
 struct tm *gmtime(const time_t *t);
 struct tm *gmtime_r(const time_t *t, struct tm *out);
 struct tm *localtime(const time_t *t);
@@ -56,7 +58,8 @@ char *asctime_r(const struct tm *tm, char *buf);   /* at least 26 bytes */
 char *ctime(const time_t *t);
 char *ctime_r(const time_t *t, char *buf);
 
-/* MiniOS has no time-zone database: the sole zone is UTC. */
+/* The names and the standard offset in seconds west of UTC of the local
+ * zone, set by tzset, localtime and mktime. */
 extern char *tzname[2];
 extern long timezone;
 extern int daylight;

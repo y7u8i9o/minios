@@ -145,16 +145,16 @@ static void time_tick(void *arg)
 {
     time_t t = time(NULL);
     struct tm tm;
-    gmtime_r(&t, &tm);
+    localtime_r(&t, &tm);
     char text[80];
-    strftime(text, sizeof text, "%Y-%m-%d %H:%M:%S UTC", &tm);
+    strftime(text, sizeof text, "%Y-%m-%d %H:%M:%S %Z", &tm);
     widget_set_text(now_label, text);
 }
 static int on_load_now(struct widget *w, void *args, void *arg)
 {
     time_t t = time(NULL);
     struct tm tm;
-    gmtime_r(&t, &tm);
+    localtime_r(&t, &tm);
     int v[6] = { tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec };
     for (int i = 0; i < 6; i++)
         widget_set_value(fields[i], v[i]);
@@ -170,7 +170,8 @@ static int on_set_time(struct widget *w, void *args, void *arg)
     tm.tm_hour = fields[3]->value;
     tm.tm_min = fields[4]->value;
     tm.tm_sec = fields[5]->value;
-    struct timeval tv = { timegm(&tm), 0 };
+    tm.tm_isdst = -1;
+    struct timeval tv = { mktime(&tm), 0 };
     if (settimeofday(&tv, NULL) < 0) {
         static const char *const buttons[] = { "OK" };
         app_dialog(app, "Date and time", "The clock could not be set.", buttons, 1);

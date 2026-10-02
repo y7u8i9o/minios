@@ -73,7 +73,8 @@ result into `-1` with `errno` set. Numbers come from
 - `pthread.h` (M35): threads, mutexes, condition variables, keys, once,
   spin and read-write locks on the kernel's threads and futexes; `errno`
   is per thread. `time.h` and `sys/time.h` (M35): the real time and
-  monotonic clocks, calendar conversion in UTC, `strftime`, `nanosleep`.
+  monotonic clocks, calendar conversion in UTC and in the local zone,
+  `strftime`, `nanosleep`.
   `malloc` and every `FILE` are locked. See `docs/design/threads.md` and
   `docs/design/time.md`.
 - `setjmp.h`: x86-64 System V `setjmp` and `longjmp`, including the rule
@@ -88,8 +89,8 @@ result into `-1` with `errno` set. Numbers come from
   Collation follows LC_COLLATE, and the character classes are those of
   Unicode in every locale.
 - `time.h` additionally exposes the C `TIME_UTC`, `timespec_get` and
-  `timespec_getres` interfaces and the POSIX UTC timezone state
-  (`tzname`, `timezone`, `daylight`, `tzset`).
+  `timespec_getres` interfaces and the POSIX zone state (`tzname`,
+  `timezone`, `daylight`, `tzset`) of the local zone (`time.md`).
 - Added for the Lua port (see `lua.md`): `ungetc`, `freopen`, `tmpfile`,
   `tmpnam`, `popen`, `pclose`, `getc_unlocked`, `flockfile`,
   `funlockfile`, `fseeko`, `ftello` in `stdio.h`; `system` and `mkstemp`

@@ -58,7 +58,7 @@ binds `shm` and `screencopy`, creates a buffer of the reported size,
 requests the copy and saves the buffer with `image_save_png`. Without a
 file argument it writes `$HOME/Pictures/screenshot-YYYY-MM-DD-HHMMSS.png`
 and creates the directory. It prints the path on standard output. The
-time is UTC, because the libc has no time zones.
+time is the local time.
 
 The launcher menu has a Screenshot entry, and X12 starts
 `/bin/screenshot` through `mime_spawn` when Print Screen (`KEY_SYSRQ`) is

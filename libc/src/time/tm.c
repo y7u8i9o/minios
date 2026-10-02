@@ -1,4 +1,4 @@
-/* Calendar conversion and formatting (M35), UTC only. The civil date
+/* Calendar conversion and formatting (M35). Time zones are in tz.c. The civil date
  * arithmetic follows the era based algorithms of Howard Hinnant, which
  * work for any year of the proleptic Gregorian calendar. */
 #include <time.h>
@@ -17,16 +17,6 @@ static const int days_before_month[2][12] = {
     { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 },
     { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 },
 };
-
-static char utc[] = "UTC";
-char *tzname[2] = { utc, utc };
-long timezone;
-int daylight;
-
-void tzset(void)
-{
-    /* The kernel clock and every calendar conversion use UTC. */
-}
 
 static int is_leap(long y)
 {
@@ -88,16 +78,6 @@ struct tm *gmtime(const time_t *t)
     return gmtime_r(t, &shared);
 }
 
-struct tm *localtime_r(const time_t *t, struct tm *out)
-{
-    return gmtime_r(t, out);
-}
-
-struct tm *localtime(const time_t *t)
-{
-    return gmtime(t);
-}
-
 /* Normalizes the fields as mktime does. */
 time_t timegm(struct tm *tm)
 {
@@ -116,10 +96,7 @@ time_t timegm(struct tm *tm)
     return t;
 }
 
-time_t mktime(struct tm *tm)
-{
-    return timegm(tm);
-}
+void __tz_for_tm(const struct tm *tm, long *off, char *abbr, size_t size);
 
 /* The output of strftime: characters past size are counted but not
  * stored. */
@@ -236,8 +213,18 @@ static void format(struct out *o, const char *f, const struct tm *tm, locale_t l
         case 'X': if (depth < 4) format(o, __locale_item(loc, T_FMT), tm, loc, depth + 1); continue;
         case 'y': snprintf(item, sizeof item, "%02d", (tm->tm_year + 1900) % 100); break;
         case 'Y': snprintf(item, sizeof item, "%d", tm->tm_year + 1900); break;
-        case 'z': sub = "+0000"; break;
-        case 'Z': sub = "UTC"; break;
+        case 'z': case 'Z': {
+            long off;
+            char abbr[16];
+            __tz_for_tm(tm, &off, abbr, sizeof abbr);
+            if (*f == 'Z') {
+                strlcpy(item, abbr, sizeof item);
+            } else {
+                long a = off < 0 ? -off : off;
+                snprintf(item, sizeof item, "%c%02ld%02ld", off < 0 ? '-' : '+', a / 3600, a / 60 % 60);
+            }
+            break;
+        }
         case '%': sub = "%"; break;
         case '\0': f--; continue;
         default: snprintf(item, sizeof item, "%%%c", *f); break;

@@ -90,7 +90,7 @@ them. `collate` and `collate_after` select the collation per locale. The
 unchanged. The cases `locale`, `libc`, `libc_ext`, `float`, `time`, `awk`, `sed`,
 `lua`, `unicode_data` and `calculator` pass.
 
-### L2. Time zones
+### L2. Time zones (completed 2026-10-02)
 
 - A parser for POSIX TZ strings, a TZif reader for versions 1 to 3, and
   `tzset`. `localtime`, `mktime`, `tzname`, `timezone` and `daylight` follow
@@ -100,6 +100,12 @@ unchanged. The cases `locale`, `libc`, `libc_ext`, `float`, `time`, `awk`, `sed`
 - `date`, `ls`, `cal`, the panel clock, the clock program, Files, Settings and
   the screenshot file names show local time.
 - The boot test is `timezone`, and `docs/design/time.md` describes the zones.
+
+The zone files are generated into `user/share/zoneinfo` and checked in, as
+the build runs no Python. A value of `TZ` is a rule when it parses as one,
+because rules such as `M10.5.0/3` contain slashes. The cases `timezone`,
+`time`, `libc_ext`, `locale`, `lua`, `comp_panel`, `gui_images` and
+`gui_settings` pass.
 
 ### L3. Message catalogues
 

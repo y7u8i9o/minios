@@ -1,5 +1,9 @@
-/* date: print the current time in UTC, optionally with a strftime
- * format (+FORMAT), or set it with -s "YYYY-MM-DD HH:MM:SS". */
+/* date: print the current local time, or with -u the time in UTC,
+ * optionally with a strftime format (+FORMAT), or set the clock with -s
+ * "YYYY-MM-DD HH:MM:SS" in local time.  The default format is date_fmt of
+ * LC_TIME. */
+#include <langinfo.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,12 +35,14 @@ static int parse(const char *text, struct tm *tm)
     tm->tm_hour = hour;
     tm->tm_min = min;
     tm->tm_sec = sec;
+    tm->tm_isdst = -1;
     return 0;
 }
 
 int main(int argc, char **argv)
 {
-    const char *format = "%a %b %e %H:%M:%S %Z %Y";
+    setlocale(LC_ALL, "");
+    const char *format = nl_langinfo(_DATE_FMT);
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
             struct tm tm;
@@ -50,7 +56,7 @@ int main(int argc, char **argv)
                 return 1;
             }
         } else if (strcmp(argv[i], "-u") == 0) {
-            continue;                       /* the clock is always UTC */
+            setenv("TZ", "UTC0", 1);
         } else if (argv[i][0] == '+') {
             format = argv[i] + 1;
         } else {
@@ -60,7 +66,7 @@ int main(int argc, char **argv)
     }
     time_t now = time(NULL);
     struct tm tm;
-    gmtime_r(&now, &tm);
+    localtime_r(&now, &tm);
     char buf[256];
     strftime(buf, sizeof buf, format, &tm);
     printf("%s\n", buf);

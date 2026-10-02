@@ -122,8 +122,8 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
 - Sound: the master volume and the streams of the audio server with a
   volume slider for the selected stream, through the mixer interface of
   libaudio; without `audiod` the page shows "No audio server".
-- Date and time: the clock in UTC, fields for a new date and time, and
-  Set clock (`settimeofday`).
+- Date and time: the local time with the zone abbreviation, fields for a
+  new local date and time, and Set clock (`settimeofday`).
 - File types: the handler table with a program field, Set and Add type;
   writes `/etc/mime.apps` immediately.
 - Launcher: the entries of `/etc/launcher` with fields for the title and

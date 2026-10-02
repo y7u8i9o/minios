@@ -450,6 +450,6 @@ status, and `os.getenv`. The expected output pins every printed line.
 - libgui exposes no primary selection and no drag and drop, and the
   layer protocol has no margins, so the module offers none of them.
 - `os.setlocale` accepts the locale names of `locale.md`, and `os.date`
-  reports UTC because `localtime` is `gmtime`.
+  reports the local time of `time.md`.
 - `LUA_INIT` and the `-E`/`-W` options work as upstream; nothing sets
   `LUA_INIT` in the profile.

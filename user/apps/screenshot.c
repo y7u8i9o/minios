@@ -47,7 +47,7 @@ static int default_path(char *path, size_t size)
     time_t now = time(NULL);
     struct tm tm;
     char stamp[32];
-    strftime(stamp, sizeof stamp, "%Y-%m-%d-%H%M%S", gmtime_r(&now, &tm));
+    strftime(stamp, sizeof stamp, "%Y-%m-%d-%H%M%S", localtime_r(&now, &tm));
     struct stat st;
     for (int n = 1; n < 100; n++) {
         if (n == 1)

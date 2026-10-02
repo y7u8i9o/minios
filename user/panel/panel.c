@@ -133,7 +133,7 @@ void draw_panel(void)
     }
     time_t now = time(NULL);
     struct tm tm;
-    gmtime_r(&now, &tm);
+    localtime_r(&now, &tm);
     char t[16];
     snprintf(t, sizeof t, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     panel_label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);

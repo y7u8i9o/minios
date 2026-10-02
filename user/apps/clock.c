@@ -1,4 +1,4 @@
-/* clock: the time of day (UTC) on a canvas, redrawn every second by a timer. */
+/* clock: the local time of day on a canvas, redrawn every second by a timer. */
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
@@ -12,7 +12,7 @@ static int draw(struct widget *w, void *args, void *arg)
     painter_fill(p, 0, 0, w->w, w->h, 0x00ffffff);
     time_t now = time(NULL);
     struct tm tm;
-    gmtime_r(&now, &tm);
+    localtime_r(&now, &tm);
     char buf[16];
     snprintf(buf, sizeof buf, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     int tw = painter_text_width(p, buf, -1);
