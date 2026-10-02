@@ -15,8 +15,9 @@
 #include <stdint.h>
 
 /* The version of the interface between the library and its modules. The
- * registry does not load a module built for a different version. */
-#define CODEC_MODULE_ABI 1
+ * registry does not load a module built for a different version. Version
+ * 2 appended audio_encode_options to struct codec. */
+#define CODEC_MODULE_ABI 2
 /* The directory of the modules. The environment variable CODEC_PATH
  * overrides it. */
 #define CODEC_DIR "/lib/codecs"
@@ -78,6 +79,10 @@ struct codec {
     void (*audio_close)(void *state);
     long (*audio_encode)(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
                          uint8_t **data);
+    /* Encode with options, a string of name=value pairs separated by
+     * commas, or NULL. A codec without options leaves this NULL. */
+    long (*audio_encode_options)(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
+                                 const char *options, uint8_t **data);
 };
 
 /* The one symbol a module exports. */
@@ -163,6 +168,18 @@ long codec_audio_encode(const struct codec *c, const struct codec_audio_format *
                         long frames, uint8_t **data);
 int codec_audio_save(const char *path, const char *name, const struct codec_audio_format *fmt,
                      const int32_t *samples, long frames);
+/* The same with encoder options, such as "quality=0.6". -EINVAL when the
+ * codec takes no options or rejects one. */
+long codec_audio_encode_options(const struct codec *c, const struct codec_audio_format *fmt, const int32_t *samples,
+                                long frames, const char *options, uint8_t **data);
+int codec_audio_save_options(const char *path, const char *name, const struct codec_audio_format *fmt,
+                             const int32_t *samples, long frames, const char *options);
+/* The value of option name in options, copied into value. Returns 1 when
+ * the option is present, else 0. */
+int codec_option(const char *options, const char *name, char *value, size_t size);
+/* Returns 0 when every option in options is one of the names in known, a
+ * list separated by spaces, else -EINVAL. */
+int codec_options_check(const char *options, const char *known);
 
 /* ---- shared helpers of the modules ---- */
 
@@ -217,6 +234,29 @@ size_t codec_ogg_first_packet(const uint8_t *data, size_t len, int (*accept)(con
  * accept accepts, summed. Returns -1 when no such page exists. */
 int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));
 uint32_t codec_ogg_crc(const uint8_t *p, size_t n);
+
+/* The writer packs the packets of one logical stream into pages of about
+ * 4 KiB. A page carries the granule position of the last packet completed
+ * on it. codec_ogg_flush ends the current page, for example after the
+ * first header packet, which must be alone on the first page, and with
+ * eos set it writes the last page of the stream. The pages accumulate in
+ * out[0..len). */
+struct codec_ogg_writer {
+    uint32_t serial, sequence;
+    uint8_t *out;
+    size_t len, cap;
+    uint8_t lacing[255];
+    unsigned segments;
+    uint8_t *body;
+    size_t body_len, body_cap;
+    int64_t granule;
+    int first, continued, failed;
+};
+
+void codec_ogg_writer_init(struct codec_ogg_writer *w, uint32_t serial);
+int codec_ogg_write_packet(struct codec_ogg_writer *w, const uint8_t *data, size_t len, int64_t granule);
+int codec_ogg_flush(struct codec_ogg_writer *w, int eos);
+void codec_ogg_writer_free(struct codec_ogg_writer *w);
 
 /* MD5 (RFC 1321), used by FLAC for the checksum of the audio data. */
 struct codec_md5 {

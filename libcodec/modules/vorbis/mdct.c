@@ -24,7 +24,7 @@ int vb_mdct_init(struct vb_mdct *m, unsigned n)
     m->fft_cos = malloc(sizeof *m->fft_cos * quarter);
     m->fft_sin = malloc(sizeof *m->fft_sin * quarter);
     m->bitrev = malloc(sizeof *m->bitrev * quarter);
-    m->work = malloc(sizeof *m->work * (2 * quarter + half));
+    m->work = malloc(sizeof *m->work * (2 * quarter + 2 * half));
     if (!m->twiddle || !m->post || !m->fft_cos || !m->fft_sin || !m->bitrev || !m->work) {
         vb_mdct_free(m);
         return -ENOMEM;
@@ -89,10 +89,11 @@ static void fft(const struct vb_mdct *m, float *z, unsigned q)
     }
 }
 
-void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
+/* The DCT-IV of length n/2 from in to u. */
+static void dct4(const struct vb_mdct *m, const float *in, float *u)
 {
     unsigned half = m->n / 2, quarter = m->n / 4;
-    float *z = m->work, *u = m->work + 2 * quarter;
+    float *z = m->work;
     for (unsigned k = 0; k < quarter; k++) {
         float re = in[2 * k], im = in[half - 1 - 2 * k];
         float c = m->twiddle[2 * k], s = m->twiddle[2 * k + 1];
@@ -106,6 +107,13 @@ void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
         u[2 * k] = re * c - im * s;
         u[half - 1 - 2 * k] = -(re * s + im * c);
     }
+}
+
+void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
+{
+    unsigned half = m->n / 2, quarter = m->n / 4;
+    float *u = m->work + 2 * quarter;
+    dct4(m, in, u);
     unsigned h2 = half / 2;
     for (unsigned n = 0; n < h2; n++)
         out[n] = u[n + h2];
@@ -113,6 +121,66 @@ void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
         out[n] = -u[3 * h2 - 1 - n];
     for (unsigned n = 3 * h2; n < m->n; n++)
         out[n] = -u[n - 3 * h2];
+}
+
+/* The forward MDCT, the transpose of the inverse: the n samples are
+ * folded into n/2 values and transformed by the same DCT-IV. With the
+ * window of the decoder applied before and after, the overlap and add of
+ * the inverse of (4 / n) times this transform restores the samples. */
+void vb_mdct(const struct vb_mdct *m, const float *in, float *out)
+{
+    unsigned half = m->n / 2, quarter = m->n / 4, h = half / 2;
+    float *u = m->work + 2 * quarter;
+    for (unsigned i = 0; i < h; i++)
+        u[i] = -in[3 * h - 1 - i] - in[3 * h + i];
+    for (unsigned i = h; i < half; i++)
+        u[i] = in[i - h] - in[3 * h - 1 - i];
+    /* The DCT-IV reads its input before it writes u. */
+    float *copy = m->work + 2 * quarter + half;
+    memcpy(copy, u, sizeof *u * half);
+    dct4(m, copy, out);
+}
+
+void vb_window_ramp(float *ramp, unsigned n)
+{
+    for (unsigned i = 0; i < n; i++) {
+        double x = sin((i + 0.5) / n * M_PI / 2);
+        ramp[i] = (float)sin(M_PI / 2 * x * x);
+    }
+}
+
+void vb_window(float *const ramp[2], const unsigned blocksize[2], float *v, unsigned n, unsigned blockflag,
+               unsigned prevflag, unsigned nextflag)
+{
+    unsigned bs0 = blocksize[0];
+    unsigned ls, le, rs, re;
+    const float *lramp, *rramp;
+    if (blockflag && !prevflag) {
+        ls = n / 4 - bs0 / 4;
+        le = n / 4 + bs0 / 4;
+        lramp = ramp[0];
+    } else {
+        ls = 0;
+        le = n / 2;
+        lramp = ramp[blockflag];
+    }
+    if (blockflag && !nextflag) {
+        rs = n * 3 / 4 - bs0 / 4;
+        re = n * 3 / 4 + bs0 / 4;
+        rramp = ramp[0];
+    } else {
+        rs = n / 2;
+        re = n;
+        rramp = ramp[blockflag];
+    }
+    for (unsigned i = 0; i < ls; i++)
+        v[i] = 0;
+    for (unsigned i = ls; i < le; i++)
+        v[i] *= lramp[i - ls];
+    for (unsigned i = rs; i < re; i++)
+        v[i] *= rramp[re - 1 - i];
+    for (unsigned i = re; i < n; i++)
+        v[i] = 0;
 }
 
 void vb_imdct_direct(unsigned n, const float *in, float *out)

@@ -169,22 +169,48 @@ The scope is images and audio. Compression (gzip) stays in libc.
   sample of it, and damaged pages and cut files are reported. `make check` compares the inverse
   MDCT with the direct formula.
 
-### C6: Vorbis encoding
+### C6: Vorbis encoding (completed 2026-10-03)
 
-- The Vorbis encoder writes the three headers with codebooks, floors,
-  residues, mappings and modes of its own design, chooses between short
-  and long blocks by transient detection, computes a floor 1 curve from a
-  masking estimate of each block, quantises the residue against the
-  floor, encodes it with residue type 2 for coupled stereo and type 1
-  otherwise, applies square polar coupling to stereo, and writes the
-  packets into Ogg pages with correct granule positions. A quality
-  setting selects the quantisation.
-- The encoder can also write floor 0 streams, which the decoder test uses
-  to verify floor 0 decoding.
-- Boot test `codec_vorbis_enc`: encoded files decode in minios with the
-  expected length and a signal-to-noise ratio above a fixed limit for each
-  quality, and the post script decodes them with ffmpeg on the host and
-  checks the same limits.
+- Encoders take options. `codec_audio_encode_options` and
+  `codec_audio_save_options` pass a string of `name=value` pairs
+  separated by commas, such as `quality=0.6`, to a new member
+  `audio_encode_options` of `struct codec`. The member is appended to the
+  structure, which changes the module ABI to 2. libcodec keeps ABI 1,
+  because the existing members keep their offsets and programs only gain
+  functions. `codecs convert` passes options with `-o`.
+- libcodec gains an Ogg writer that packs packets into pages with
+  lacing, continuation, granule positions, the flags of the first and the
+  last page, and the CRC-32.
+- The encoder chooses between blocks of 256 and 2048 samples by transient
+  detection, applies the window of the decoder and a forward MDCT through
+  the same DCT-IV, and computes per block a floor 1 curve from the
+  spectral envelope minus a signal-to-noise ratio set by the quality
+  (-0.1 to 1.0, 0.4 by default). The residue is the spectrum divided by
+  the rendered floor and rounded to integers. Stereo uses square polar
+  coupling and residue type 2, other channel counts residue type 1. The
+  residue partitions fall into five classes, from silent partitions to
+  values beyond 15, coded by vector books over integer grids, the largest
+  class in two cascade passes.
+- The encoder quantises the whole input first, counts the symbols of
+  every codebook, builds Huffman codes from the counts and writes them
+  into the setup header, then writes the packets. The first block is
+  centred on the first sample and the granule position of the last page
+  equals the length of the input, and no samples are trimmed or added.
+- With the option `floor=0` the encoder writes floor 0 instead: it fits
+  an LPC filter to the floor curve on the Bark scale, converts it to line
+  spectral pairs and codes their differences with a scalar book. These
+  files verify the floor 0 decoder against libvorbis, which no longer
+  writes floor 0 itself.
+- Boot test `codec_vorbis_enc`: files encoded at several qualities, with
+  floor 0, in mono, stereo and 5.1, decode in minios with the length of
+  the input and a signal-to-noise ratio above a limit for each quality.
+  The post script decodes the same files with libvorbis on the host and
+  requires its result to match the decoder of minios.
+- Changed during the work: the masking estimate lowers the ratio for
+  noise-like bands, applies the absolute threshold of hearing, and lets
+  both allowances vanish at quality 1.0. A sixth residue class codes
+  values up to 8190, because a floor 0 curve cannot follow narrow
+  spectral lines without large residues.
 
 ### C7: FLAC in Ogg
 

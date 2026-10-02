@@ -122,48 +122,9 @@ static int alloc_buffers(struct vb_state *s)
         s->ramp[b] = malloc(sizeof *s->ramp[b] * ramp);
         if (!s->ramp[b])
             return -ENOMEM;
-        for (unsigned i = 0; i < ramp; i++) {
-            double x = sin((i + 0.5) / ramp * M_PI / 2);
-            s->ramp[b][i] = (float)sin(M_PI / 2 * x * x);
-        }
+        vb_window_ramp(s->ramp[b], ramp);
     }
     return 0;
-}
-
-/* Multiply a block of size n by its window. A long block next to a short
- * one uses the short slope on that side, centred on the quarter point. */
-static void apply_window(const struct vb_state *s, float *v, unsigned n, unsigned blockflag, unsigned prevflag,
-                         unsigned nextflag)
-{
-    unsigned bs0 = s->setup.blocksize[0];
-    unsigned ls, le, rs, re;
-    const float *lramp, *rramp;
-    if (blockflag && !prevflag) {
-        ls = n / 4 - bs0 / 4;
-        le = n / 4 + bs0 / 4;
-        lramp = s->ramp[0];
-    } else {
-        ls = 0;
-        le = n / 2;
-        lramp = s->ramp[blockflag];
-    }
-    if (blockflag && !nextflag) {
-        rs = n * 3 / 4 - bs0 / 4;
-        re = n * 3 / 4 + bs0 / 4;
-        rramp = s->ramp[0];
-    } else {
-        rs = n / 2;
-        re = n;
-        rramp = s->ramp[blockflag];
-    }
-    for (unsigned i = 0; i < ls; i++)
-        v[i] = 0;
-    for (unsigned i = ls; i < le; i++)
-        v[i] *= lramp[i - ls];
-    for (unsigned i = rs; i < re; i++)
-        v[i] *= rramp[re - 1 - i];
-    for (unsigned i = re; i < n; i++)
-        v[i] = 0;
 }
 
 static int out_reserve(struct vb_state *s, size_t frames)
@@ -264,7 +225,7 @@ static long audio_packet(struct vb_state *s, const uint8_t *data, size_t len)
         for (unsigned j = 0; j < half; j++)
             s->coeff[c][j] *= s->curve[j];
         vb_imdct(&s->mdct[blockflag], s->coeff[c], s->pcm[c]);
-        apply_window(s, s->pcm[c], n, blockflag, prevflag, nextflag);
+        vb_window(s->ramp, su->blocksize, s->pcm[c], n, blockflag, prevflag, nextflag);
     }
 
     long produced = 0;
@@ -468,13 +429,15 @@ static const struct codec vorbis_codecs[] = {
         .name = "vorbis",
         .description = "Ogg Vorbis",
         .kind = CODEC_AUDIO,
-        .caps = CODEC_DECODE,
+        .caps = CODEC_DECODE | CODEC_ENCODE,
         .mime_types = "audio/ogg audio/vorbis application/ogg",
         .extensions = "ogg oga",
         .probe = vorbis_probe,
         .audio_open = vorbis_open,
         .audio_read = vorbis_read,
         .audio_close = vorbis_close,
+        .audio_encode = vorbis_encode,
+        .audio_encode_options = vorbis_encode_options,
     },
 };
 

@@ -132,4 +132,15 @@ struct vb_mdct {
 int vb_mdct_init(struct vb_mdct *m, unsigned n);
 void vb_mdct_free(struct vb_mdct *m);
 void vb_imdct(const struct vb_mdct *m, const float *in, float *out);
+void vb_mdct(const struct vb_mdct *m, const float *in, float *out);    /* n samples to n/2 values */
+/* The rising slope of a window of n/2 samples, and the window of a block
+ * of size n with the slopes chosen by the flags of its neighbours. */
+void vb_window_ramp(float *ramp, unsigned n);
+void vb_window(float *const ramp[2], const unsigned blocksize[2], float *v, unsigned n, unsigned blockflag,
+               unsigned prevflag, unsigned nextflag);
 void vb_imdct_direct(unsigned n, const float *in, float *out);  /* the definition, for the tests */
+
+/* encode.c */
+long vorbis_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result);
+long vorbis_encode_options(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
+                           const char *options, uint8_t **result);

@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
     codecs
     codecs info file...
-    codecs convert [-f name] [-b bits] [-s size] in out
+    codecs convert [-f name] [-b bits] [-s size] [-o options] in out
 
 DESCRIPTION
     The formats of minios are modules in /lib/codecs, which the codec
@@ -30,6 +30,10 @@ OPTIONS
     -f name      encode with this codec, whatever the extension
     -b bits      sample size of the converted audio (the source's)
     -s size      size in pixels at which a vector image is rendered
+    -o options   options of the audio encoder as name=value pairs
+                 separated by commas. The Vorbis encoder takes
+                 quality (-0.1 to 1.0, 0.4 by default) and floor
+                 (1 by default, or 0)
 
 EXIT STATUS
     0 on success, 1 when a file cannot be read, identified, decoded,
@@ -41,6 +45,7 @@ EXAMPLES
     codecs convert shot.png shot.bmp
     codecs convert -s 64 /usr/share/icons/app-default.svg icon.png
     codecs convert -b 24 chime.wav chime24.wav
+    codecs convert -o quality=0.7 chime.wav chime.ogg
 
 SEE ALSO
     screenshot(1)

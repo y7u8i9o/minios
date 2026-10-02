@@ -3,12 +3,13 @@
  *
  *   codecs                       list the codecs and their modules
  *   codecs info FILE...          name the format of each file and describe it
- *   codecs convert [-f NAME] [-b BITS] [-s SIZE] IN OUT
+ *   codecs convert [-f NAME] [-b BITS] [-s SIZE] [-o OPTIONS] IN OUT
  *                                convert IN to the format of OUT's extension,
  *                                or to the codec NAME
  *
  * -b gives the sample size of converted audio (the source's by default),
- * -s the size at which a vector image is rendered (its own by default).
+ * -s the size at which a vector image is rendered (its own by default),
+ * and -o the options of an audio encoder, such as quality=0.6.
  * Exit status 0 on success, 1 on an error, 2 for wrong usage. */
 #include <codec/codec.h>
 #include <errno.h>
@@ -21,7 +22,7 @@ static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "usage: codecs\n"
                     "       codecs info FILE...\n"
-                    "       codecs convert [-f NAME] [-b BITS] [-s SIZE] IN OUT\n");
+                    "       codecs convert [-f NAME] [-b BITS] [-s SIZE] [-o OPTIONS] IN OUT\n");
     exit(2);
 }
 
@@ -142,7 +143,7 @@ static int convert_image(const struct codec *from, const struct codec *to, const
 }
 
 static int convert_audio(const struct codec *from, const struct codec *to, const uint8_t *data, size_t len,
-                         const char *in, const char *out, int bits)
+                         const char *in, const char *out, int bits, const char *options)
 {
     struct codec_audio *a;
     int err = codec_audio_open(from, data, len, in, &a);
@@ -170,7 +171,7 @@ static int convert_audio(const struct codec *from, const struct codec *to, const
     if (bits)
         fmt.bits = bits;
     uint8_t *file;
-    long size = codec_audio_encode(to, &fmt, samples, n, &file);
+    long size = codec_audio_encode_options(to, &fmt, samples, n, options, &file);
     free(samples);
     if (size < 0)
         return fail("cannot encode", out, (int)size);
@@ -181,12 +182,13 @@ static int convert_audio(const struct codec *from, const struct codec *to, const
 
 static int convert(int argc, char **argv)
 {
-    const char *name = NULL;
+    const char *name = NULL, *options = NULL;
     int bits = 0, size = 0, opt;
     optind = 1;
-    while ((opt = getopt(argc, argv, "f:b:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "f:b:s:o:")) != -1) {
         switch (opt) {
         case 'f': name = optarg; break;
+        case 'o': options = optarg; break;
         case 'b': bits = atoi(optarg); break;
         case 's': size = atoi(optarg); break;
         default: usage();
@@ -209,10 +211,12 @@ static int convert(int argc, char **argv)
         status = fail(name ? "no encoder of that name" : "no encoder for the extension", out, 0);
     else if (to->kind != from->kind)
         status = fail("the formats are of different kinds", out, 0);
+    else if (from->kind == CODEC_IMAGE && options)
+        status = fail("images take no encoder options", out, 0);
     else if (from->kind == CODEC_IMAGE)
         status = convert_image(from, to, data, len, in, out, size);
     else
-        status = convert_audio(from, to, data, len, in, out, bits);
+        status = convert_audio(from, to, data, len, in, out, bits, options);
     if (!status)
         printf("%s (%s) -> %s (%s)\n", in, from->name, out, to->name);
     free(data);

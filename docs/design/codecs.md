@@ -32,9 +32,10 @@ number of libgui remains 1.
 ## Modules
 
 A module is a shared object that exports exactly one symbol,
-`codec_module`. This symbol is a `struct codec_module` that holds the
-module ABI number (`CODEC_MODULE_ABI`, currently 1), a name, and a table
-of `struct codec`. Modules are compiled with `-fvisibility=hidden`, and
+`codec_module`. This symbol is a `struct codec_module` holding the module
+ABI number (`CODEC_MODULE_ABI`), a name, and a table of `struct codec`.
+The number is 2 since C6 appended `audio_encode_options` to `struct
+codec`, which changed the size of the entries in the table. Modules are compiled with `-fvisibility=hidden`, and
 the `CODEC_MODULE` macro gives the table default visibility. The helper
 functions of different modules can therefore never resolve to each
 other. A module links against `libcodec.so`, which provides shared
@@ -52,9 +53,10 @@ Each `struct codec` describes one format with these members:
   `CODEC_PROBE_LEN`, 512 bytes) from 0 to 100, in the way a gdk-pixbuf
   loader matches its patterns.
 - The functions for its kind: `image_decode` and `image_encode` for
-  images, and `audio_open`, `audio_read`, `audio_close` and
-  `audio_encode` for audio. A function for a capability the codec lacks
-  is NULL.
+  images, and `audio_open`, `audio_read`, `audio_close`, `audio_encode`
+  and `audio_encode_options` for audio. A function for a capability the
+  codec lacks is NULL, and a codec without encoder options leaves
+  `audio_encode_options` NULL.
 
 The build turns every directory `libcodec/modules/NAME/` into
 `build/lib/codecs/NAME.so`, which is installed as `/lib/codecs/NAME.so`.
@@ -153,6 +155,20 @@ the stream the function returns 0. The data must remain valid until
 stores the contents in the decoder, and `codec_audio_close` frees them. `codec_audio_encode` and
 `codec_audio_save` take samples in the same representation, together with
 the format to write.
+
+### Encoder options
+
+`codec_audio_encode_options` and `codec_audio_save_options` pass a string
+of `name=value` pairs separated by commas to the encoder, for example
+`quality=0.6,floor=0`, the way the `-q` and codec options of ffmpeg
+reach an encoder. The functions return `-EINVAL` for an option string
+that is not empty when the codec takes no options, and an encoder
+returns the same for an option it does not know or a value outside its
+range. Modules parse the string with
+`codec_option`, which copies the value of a named option, and
+`codec_options_check`, which compares the names with a list of known
+ones. The extension of `struct codec` keeps the offsets of all existing
+members, and libcodec therefore keeps ABI 1 for programs.
 
 The audio module of C2 is:
 
@@ -309,13 +325,24 @@ file and serves the probes, and `codec_ogg_total_granule` adds up the
 last granule positions of all accepted chained streams, which gives the
 length of a file in samples.
 
+The writer (`struct codec_ogg_writer`) builds the pages of one logical
+stream in memory. `codec_ogg_write_packet` appends the lacing values and
+the bytes of a packet to the current page, starts a new page with the
+continuation flag when a packet needs more than the 255 lacing values of
+a page, and starts a new page before a packet once the current one holds
+4096 bytes. A page carries the granule position of the last packet that
+ends on it, or -1 when none does. `codec_ogg_flush` ends the current page,
+with the flag for the first page on the first one and the flag for the
+last page when its argument asks for it, and computes the CRC.
+
 ## Vorbis
 
-C5 added `vorbis.so`, a decoder for Vorbis I in Ogg.
+C5 added `vorbis.so` with a decoder for Vorbis I in Ogg, and C6 added its
+encoder.
 
 | Module | Codec | Capabilities | Probe |
 |---|---|---|---|
-| `vorbis.so` | `vorbis`, `audio/ogg audio/vorbis application/ogg`, `.ogg .oga` | decode | an Ogg stream whose first packet starts with `\x01vorbis`, 100 |
+| `vorbis.so` | `vorbis`, `audio/ogg audio/vorbis application/ogg`, `.ogg .oga` | decode, encode | an Ogg stream whose first packet starts with `\x01vorbis`, 100 |
 
 `setup.c` reads the identification header with the channel count, the
 sample rate and the two block sizes, checks the comment header, and
@@ -398,6 +425,83 @@ libvorbis. Rounded to 16 bits, its samples differ from the reference by
 at most one step, with an RMS difference between 0.02 and 0.31 steps,
 which comes from the rounding of the float arithmetic.
 
+### Encoding
+
+`encode.c` encodes in two passes over the whole input. The first pass
+plans the blocks, computes the floor and the quantised residue of every
+block and channel, and counts the symbols of every codebook. Huffman
+codes are then built from those counts, and the second pass writes the
+three headers and one packet per block into Ogg pages. The options are
+`quality`, from -0.1 to 1.0 with 0.4 as the default, and `floor`, 1 by
+default or 0.
+
+The blocks have 256 or 2048 samples. The first block is long and centred
+on the first sample, and the centres of neighbouring blocks lie a
+quarter of each block apart, as the decoder overlaps them. A block is
+short when the energy of 64 samples of the high-passed mix of the
+channels rises more than eightfold over the mean of the preceding 512
+samples anywhere within the span of a long block around its centre. The
+blocks continue until a centre lies at or beyond the end of the input.
+The granule position of a packet is the centre of its block, limited to
+the length of the input, which makes the decoder return exactly the
+input length without trimming at the start.
+
+Each block is windowed with the window of the decoder (`vb_window`),
+transformed by the forward MDCT (`vb_mdct` in `mdct.c`, which folds the
+samples into the DCT-IV used by the inverse transform) and scaled by
+4/N, the factor at which the overlap and add of the decoder restores the
+input. The floor is a masking estimate. For a band around each floor
+position, the largest magnitude is lowered by a signal-to-noise ratio of
+12 + 36 * quality dB. A band whose power is spectrally flat, which marks
+noise, needs up to 18 dB less, and above 8 kHz the ratio falls by up to
+6 dB. Both allowances shrink with rising quality and vanish at 1.0. The
+estimate never falls below the absolute threshold of hearing in
+Terhardt's approximation, with full scale taken as 96 dB SPL, lowered by
+up to 30 dB at the highest quality and capped at 90 - 70 * quality dB
+SPL.
+
+Floor 1 has 16 positions for short blocks and 60 for long ones, spaced
+geometrically and coded in an order that halves the intervals, which
+keeps the predictions of the decoder close. The encoder computes the
+value for each position that makes the decoder's prediction rule produce
+the desired point, and renders the floor with the decoder's own
+function. The residue is the spectrum divided by that rendered curve and
+rounded, which makes the floor the quantisation step. Should a residue
+exceed 4095, the floor is lifted until none does.
+
+Stereo is coupled with square polar coupling, the exact inverse of the
+decoder's step, and coded with residue type 2 over the interleaved
+channels. Other channel counts use residue type 1, and their channels
+are written in the Vorbis order, the inverse of the order the decoder
+returns. A residue partition of 32 values falls into one of six classes
+by its largest magnitude: silent, up to 1, 4, 15, 496 or 8190. The vector
+books of the first four classes cover the integer grids of those ranges,
+and the two largest classes code a value in cascade passes as multiples
+of 16, or of 256 and 16, plus a rest. The classbook codes the classes of
+two partitions per codeword. Every book receives a Huffman code built
+from the counts of the first pass, with lengths up to 32 bits, and a
+book with fewer than two used entries receives a second one, because
+decoders read single entry books in different ways.
+
+With `floor=0` the encoder writes floor 0 of order 12 and 24, which no
+current libvorbis encoder produces. The target curve in decibels, raised
+by the amplitude offset of 140 dB and limited to 60 dB below its
+maximum, is sampled as the maximum of each Bark bin of the decoder's
+map, with empty Bark bins interpolated. An LPC filter is fitted to its
+square, and the roots of the sum and difference polynomials of the
+filter, found by sign changes on 4096 angles and bisection, give the
+line spectral pairs. Their cumulative angles are quantised in steps of
+pi/256 and coded as increments with a scalar book. The amplitude keeps
+the decoder's curve at or below the target at all but 2% of the bins.
+
+On a mono chime the encoder reaches 16, 33 and 54 dB signal-to-noise
+ratio at quality -0.1, 0.4 and 1.0, and 51 dB with floor 0. On a stereo
+signal with clicks, which produce short blocks, it reaches 27 dB at 0.4,
+55 dB at 1.0 and 43 dB with floor 0, and on six channels 29 and 56 dB.
+libvorbis and ffmpeg decode every file, and libvorbis returns the same
+samples as the decoder of minios to within one step at 16 bits. Floor 0
+decoding in minios is verified through these files.
+
 ## A new format: BMP
 
 After the viewer and paint stopped naming formats (see below), adding
@@ -457,11 +561,12 @@ of `ffmpeg`.
   whether the image has alpha and whether it is scalable. For an audio
   stream it prints the rate, the channels, the sample size, the number
   of frames and the duration.
-- `codecs convert [-f NAME] [-b BITS] [-s SIZE] IN OUT` decodes `IN` and
-  encodes it with the codec called `NAME`, or with the encoder of the
-  same kind that matches the extension of `OUT`. `-b` sets the sample
-  size of converted audio and `-s` the size at which a vector image is
-  rendered. On success it prints `IN (codec) -> OUT (codec)`.
+- `codecs convert [-f NAME] [-b BITS] [-s SIZE] [-o OPTIONS] IN OUT`
+  decodes `IN` and encodes it with the codec called `NAME`, or with the
+  encoder of the same kind that matches the extension of `OUT`. `-b` sets
+  the sample size of converted audio, `-s` the size at which a vector
+  image is rendered, and `-o` the options of an audio encoder. On success
+  it prints `IN (codec) -> OUT (codec)`.
 
 The exit status is 0 on success, 1 when a file cannot be read,
 identified, decoded, encoded or written, and 2 for incorrect usage.
@@ -562,6 +667,19 @@ that a changed byte in a page and a cut file are reported as damage.
 MD5 against the vectors of RFC 1321, the inverse MDCT against its
 definition for all block sizes from 64 to 2048, and the FLAC and Vorbis
 fixtures as above.
+
+With the argument `vorbisenc`, used by the boot test `codec_vorbis_enc`,
+the program encodes the chime at quality -0.1, 0.4 and 1.0 and with floor
+0, a stereo signal with clicks and a 5.1 signal at 0.4 and 1.0, and the
+stereo signal with floor 0. Every file must decode in minios to the
+length of the input with a signal-to-noise ratio above a limit a few dB
+below the values measured on the host, and a higher quality must give a
+larger file. The program also checks the rejection of a quality of 2, of
+an unknown option, of options for a codec without options, and of floor
+0 above 65535 Hz. Five of the files are kept with their decoding by
+minios, and the post script decodes them with libvorbis on the host,
+requires the same samples to within one step, and decodes them with
+ffmpeg as well.
 
 `gui_images` converts the saved drawing to BMP with `codecs` and shows
 the BMP file in the viewer. Its post script decodes the BMP file with its

@@ -1,0 +1,37 @@
+#!/bin/sh
+# Decode the files written by the Vorbis encoder of minios with libvorbis
+# on the host (tools/codecref/vorbisref.c) and with ffmpeg, and compare the
+# samples of libvorbis with those of the decoder of minios, which the test
+# wrote beside each file. They may differ by one step where the two float
+# computations round differently.
+FSCK="$BUILD/host/fsck"
+MKFS="$BUILD/host/mkfs"
+for tool in pkg-config ffmpeg; do
+    command -v $tool > /dev/null || { echo "  $tool is needed on the host"; exit 1; }
+done
+"$FSCK" -y "$DISK" > "$DISK.fsck" 2>&1
+RC=$?
+[ "$RC" = 0 ] || [ "$RC" = 1 ] || { echo "  fsck -y exit $RC"; cat "$DISK.fsck"; exit 1; }
+DIR="$(dirname "$DISK")"
+cc -O2 -o "$DIR/vorbisref" "$TOP/tools/codecref/vorbisref.c" \
+    $(pkg-config --cflags --libs vorbisenc vorbisfile vorbis ogg) -lm || { echo "  cannot build vorbisref"; exit 1; }
+for f in venc-chime-q10 venc-chime-floor0 venc-music-q04 venc-music-floor0 venc-six-q04; do
+    "$MKFS" --cat "$DISK" "/$f.ogg" > "$DIR/$f.ogg" || { echo "  /$f.ogg missing"; exit 1; }
+    "$MKFS" --cat "$DISK" "/$f.raw" > "$DIR/$f.raw" || { echo "  /$f.raw missing"; exit 1; }
+    "$DIR/vorbisref" decode "$DIR/$f.ogg" "$DIR/$f.ref" || { echo "  libvorbis rejects $f.ogg"; exit 1; }
+    ffmpeg -v error -i "$DIR/$f.ogg" -f null - || { echo "  ffmpeg rejects $f.ogg"; exit 1; }
+    python3 - "$DIR/$f.raw" "$DIR/$f.ref" "$f" <<'PY' || exit 1
+import struct, sys
+a = open(sys.argv[1], "rb").read()
+b = open(sys.argv[2], "rb").read()
+if len(a) != len(b):
+    sys.exit("  %s: minios decodes %d bytes, libvorbis %d" % (sys.argv[3], len(a), len(b)))
+n = len(a) // 2
+x = struct.unpack("<%dh" % n, a)
+y = struct.unpack("<%dh" % n, b)
+worst = max(abs(p - q) for p, q in zip(x, y))
+if worst > 1:
+    sys.exit("  %s: libvorbis differs by up to %d" % (sys.argv[3], worst))
+PY
+done
+echo "  libvorbis and ffmpeg decode the encoder's files, libvorbis within one step of minios"

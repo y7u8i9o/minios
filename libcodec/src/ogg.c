@@ -264,3 +264,103 @@ int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(c
         total = (total < 0 ? 0 : total) + chain;
     return total;
 }
+
+/* ---- writing ---- */
+
+#define PAGE_TARGET 4096
+
+void codec_ogg_writer_init(struct codec_ogg_writer *w, uint32_t serial)
+{
+    memset(w, 0, sizeof *w);
+    w->serial = serial;
+    w->granule = -1;
+    w->first = 1;
+}
+
+void codec_ogg_writer_free(struct codec_ogg_writer *w)
+{
+    free(w->out);
+    free(w->body);
+    w->out = w->body = NULL;
+}
+
+static int grow(uint8_t **buf, size_t *cap, size_t need)
+{
+    if (need <= *cap)
+        return 0;
+    size_t c = *cap ? *cap : 8192;
+    while (c < need)
+        c *= 2;
+    uint8_t *g = realloc(*buf, c);
+    if (!g)
+        return -ENOMEM;
+    *buf = g;
+    *cap = c;
+    return 0;
+}
+
+static void put_le(uint8_t *p, uint64_t v, int n)
+{
+    for (int i = 0; i < n; i++)
+        p[i] = (uint8_t)(v >> (8 * i));
+}
+
+int codec_ogg_flush(struct codec_ogg_writer *w, int eos)
+{
+    if (w->failed)
+        return -ENOMEM;
+    if (!w->segments && !eos)
+        return 0;
+    size_t size = PAGE_HEADER + w->segments + w->body_len;
+    if (grow(&w->out, &w->cap, w->len + size) < 0) {
+        w->failed = 1;
+        return -ENOMEM;
+    }
+    uint8_t *h = w->out + w->len;
+    memcpy(h, "OggS", 4);
+    h[4] = 0;
+    h[5] = (uint8_t)((w->continued ? FLAG_CONTINUED : 0) | (w->first ? FLAG_BOS : 0) | (eos ? FLAG_EOS : 0));
+    put_le(h + 6, (uint64_t)w->granule, 8);
+    put_le(h + 14, w->serial, 4);
+    put_le(h + 18, w->sequence++, 4);
+    put_le(h + 22, 0, 4);
+    h[26] = (uint8_t)w->segments;
+    memcpy(h + PAGE_HEADER, w->lacing, w->segments);
+    memcpy(h + PAGE_HEADER + w->segments, w->body, w->body_len);
+    put_le(h + 22, codec_ogg_crc(h, size), 4);
+    w->len += size;
+    w->segments = 0;
+    w->body_len = 0;
+    w->granule = -1;
+    w->first = 0;
+    w->continued = 0;
+    return 0;
+}
+
+int codec_ogg_write_packet(struct codec_ogg_writer *w, const uint8_t *data, size_t len, int64_t granule)
+{
+    if (w->body_len >= PAGE_TARGET && codec_ogg_flush(w, 0) < 0)
+        return -ENOMEM;
+    size_t at = 0;
+    for (;;) {
+        if (w->segments == 255) {
+            /* The page is full in the middle of the packet. */
+            if (codec_ogg_flush(w, 0) < 0)
+                return -ENOMEM;
+            w->continued = 1;
+        }
+        size_t n = len - at < 255 ? len - at : 255;
+        if (grow(&w->body, &w->body_cap, w->body_len + n) < 0) {
+            w->failed = 1;
+            return -ENOMEM;
+        }
+        memcpy(w->body + w->body_len, data + at, n);
+        w->body_len += n;
+        w->lacing[w->segments++] = (uint8_t)n;
+        at += n;
+        if (n < 255)
+            break;
+    }
+    w->granule = granule;
+    return 0;
+}

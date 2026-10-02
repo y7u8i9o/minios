@@ -10,7 +10,7 @@ cd /ct
 # The registry: four modules, one codec each, with their capabilities.
 codecs > list.txt; check list-status "$?" "0"
 check list-total "$(tail -n 1 list.txt)" "6 codecs in 6 modules"
-check list-vorbis "$(grep -c '^D-- vorbis audio  vorbis.so' list.txt)" "1"
+check list-vorbis "$(grep -c '^DE- vorbis audio  vorbis.so' list.txt)" "1"
 check list-flac "$(grep -c '^DE- flac  audio  flac.so' list.txt)" "1"
 check list-bmp "$(grep -c '^DE- bmp   image  bmp.so' list.txt)" "1"
 check list-png "$(grep -c '^DE- png   image  png.so' list.txt)" "1"
@@ -60,6 +60,15 @@ check info-vorbis "$(codecs info /usr/share/sounds/chime.ogg | cut -d: -f2)" " v
 codecs convert /usr/share/sounds/chime.ogg v.wav > /dev/null; check vorbis-to-wav "$?" "0"
 check info-vorbis-wav "$(codecs info v.wav)" "v.wav: wav audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
 codecs convert /usr/share/sounds/chime.ogg v.flac > /dev/null; check vorbis-to-flac "$?" "0"
+
+# Encoder options: the quality of Vorbis, and none for FLAC.
+codecs convert -o quality=0.0 same.wav low.ogg > /dev/null; check quality-low "$?" "0"
+codecs convert -o quality=0.9 same.wav high.ogg > /dev/null; check quality-high "$?" "0"
+check quality-size "$(test $(wc -c < high.ogg) -gt $(wc -c < low.ogg) && echo larger)" "larger"
+check info-encoded "$(codecs info high.ogg | cut -d: -f2)" " vorbis audio, 16000 Hz, 1 channel, 32000 frames, 2.000 s"
+codecs convert -o quality=2 same.wav bad.ogg 2> err.txt; check quality-range "$?" "1"
+codecs convert -o quality=1 same.wav x.flac 2> err.txt; check flac-options "$?" "1"
+check flac-options-text "$(cat err.txt)" "codecs: x.flac: cannot encode: Invalid argument"
 
 # Errors.
 echo "plain text" > note.txt

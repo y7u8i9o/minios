@@ -3,8 +3,9 @@
  * and lookups, image round trips through the modules and through libgui,
  * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
  * and the WAV module, "codectest flac" the FLAC module and "codectest
- * vorbis" the Vorbis module, both with the fixtures of
- * tools/gen_codec_fixtures.py. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
+ * vorbis" the Vorbis decoder, both with the fixtures of
+ * tools/gen_codec_fixtures.py, and "codectest vorbisenc" the Vorbis
+ * encoder. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
  * the child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
@@ -551,6 +552,155 @@ static void test_vorbis(void)
     }
 }
 
+/* ---- the Vorbis encoder ---- */
+
+/* Test signals: a sequence of chords with decaying notes and clicks every
+ * half second, which produce short blocks, or a sine per channel with a
+ * little noise. */
+static void vorbis_signal(int32_t *s, long frames, int ch, int rate, int kind)
+{
+    static const double notes[6] = { 220, 277.18, 329.63, 440, 554.37, 659.25 };
+    uint32_t seed = 11;
+    for (long i = 0; i < frames; i++) {
+        double t = (double)i / rate;
+        for (int c = 0; c < ch; c++) {
+            double v = 0;
+            seed = seed * 1103515245u + 12345u;
+            double noise = (double)(seed >> 8) / (1 << 24) - 0.5;
+            if (kind == 0) {
+                int seg = (int)(t * 4) % 6;
+                double env = exp(-3 * fmod(t * 4, 1));
+                for (int k = 0; k < 3; k++)
+                    for (int h = 1; h <= 5; h++)
+                        v += 0.1 / h * sin(2 * M_PI * notes[(seg + k) % 6] * h * t + c) * env;
+                if (i % (rate / 2) < 30)
+                    v += 1.2 * noise;
+            } else {
+                v = 0.3 * sin(2 * M_PI * (200 + 100 * c) * t) + 0.02 * noise;
+            }
+            v = v > 0.99 ? 0.99 : v < -0.99 ? -0.99 : v;
+            s[i * ch + c] = (int32_t)(v * 32767) * 65536;
+        }
+    }
+}
+
+static double snr_db(const int32_t *a, const int32_t *b, long n)
+{
+    double sig = 0, noise = 0;
+    for (long i = 0; i < n; i++) {
+        double x = a[i] / 2147483648.0, d = x - b[i] / 2147483648.0;
+        sig += x * x;
+        noise += d * d;
+    }
+    return 10 * log10(sig / (noise + 1e-30));
+}
+
+/* Encode, decode in minios, and return the signal-to-noise ratio, or -99.
+ * With keep set, the file and the decoded 16 bit samples are written for
+ * the post script, which decodes the file with libvorbis on the host. */
+static double vorbis_round(const char *name, const int32_t *in, long frames, int ch, int rate, const char *options,
+                           long *size, const char *keep)
+{
+    struct codec_audio_format fmt = { rate, ch, 16 };
+    uint8_t *file;
+    *size = codec_audio_encode_options(codec_find("vorbis"), &fmt, in, frames, options, &file);
+    CHECK(*size > 0, "encode %s with %s: %ld", name, options, *size);
+    if (*size <= 0)
+        return -99;
+    struct codec_audio *a;
+    int err = codec_audio_open(NULL, file, (size_t)*size, NULL, &a);
+    int32_t *out = NULL;
+    long n = err ? -1 : decode_all(a, &out, &err);
+    CHECK(err == 0 && n == frames && codec_audio_frames(a) == frames, "%s with %s decodes to %ld of %ld frames, error %d",
+          name, options, n, frames, err);
+    double snr = n == frames ? snr_db(in, out, frames * ch) : -99;
+    if (keep && n == frames) {
+        char path[64];
+        snprintf(path, sizeof path, "/%s.ogg", keep);
+        CHECK(codec_write_file(path, file, (size_t)*size) == 0, "write %s", path);
+        uint8_t *raw = malloc((size_t)frames * ch * 2);
+        for (long i = 0; raw && i < frames * ch; i++) {
+            int64_t v = ((int64_t)out[i] + 0x8000) >> 16;
+            v = v > 32767 ? 32767 : v;
+            raw[2 * i] = (uint8_t)v;
+            raw[2 * i + 1] = (uint8_t)(v >> 8);
+        }
+        snprintf(path, sizeof path, "/%s.raw", keep);
+        CHECK(raw && codec_write_file(path, raw, (size_t)frames * ch * 2) == 0, "write %s", path);
+        free(raw);
+    }
+    if (!err || n >= 0)
+        codec_audio_close(a);
+    free(out);
+    free(file);
+    printf("codectest: vorbis encoder %s %s: %ld bytes, %d.%d dB\n", name, options, *size, (int)snr,
+           (int)(fabs(snr) * 10) % 10);
+    return snr;
+}
+
+static void test_vorbis_encoder(void)
+{
+    const struct codec *vorbis = codec_find("vorbis");
+    CHECK(vorbis && (vorbis->caps & CODEC_ENCODE) && vorbis->audio_encode_options, "the vorbis encoder");
+    if (!vorbis)
+        return;
+    struct codec_audio *a;
+    int32_t *chime = NULL;
+    int err = codec_audio_open_file("/usr/share/sounds/chime.wav", &a);
+    long nchime = err ? -1 : decode_all(a, &chime, &err);
+    if (nchime >= 0)
+        codec_audio_close(a);
+    long music_n = 44100, six_n = 12000;
+    int32_t *music = malloc(sizeof *music * (size_t)music_n * 2), *six = malloc(sizeof *six * (size_t)six_n * 6);
+    if (!chime || !music || !six) {
+        CHECK(0, "test signals");
+        return;
+    }
+    vorbis_signal(music, music_n, 2, 44100, 0);
+    vorbis_signal(six, six_n, 6, 48000, 1);
+    /* The signal-to-noise ratio required at each setting, a few dB below
+     * the values measured on the host. */
+    static const struct {
+        int signal;
+        const char *options, *keep;
+        double snr;
+    } runs[] = {
+        { 0, "quality=-0.1", NULL, 14 },          { 0, "quality=0.4", NULL, 30 },
+        { 0, "quality=1.0", "venc-chime-q10", 49 }, { 0, "floor=0", "venc-chime-floor0", 46 },
+        { 1, "quality=0.4", "venc-music-q04", 24 }, { 1, "quality=1.0", NULL, 50 },
+        { 1, "floor=0", "venc-music-floor0", 38 },  { 2, "quality=0.4", "venc-six-q04", 24 },
+        { 2, "quality=1.0", NULL, 50 },
+    };
+    long previous = 0;
+    for (size_t i = 0; i < sizeof runs / sizeof runs[0]; i++) {
+        const int32_t *in = runs[i].signal == 0 ? chime : runs[i].signal == 1 ? music : six;
+        long frames = runs[i].signal == 0 ? nchime : runs[i].signal == 1 ? music_n : six_n;
+        int ch = runs[i].signal == 0 ? 1 : runs[i].signal == 1 ? 2 : 6;
+        int rate = runs[i].signal == 0 ? 16000 : runs[i].signal == 1 ? 44100 : 48000;
+        const char *name = runs[i].signal == 0 ? "chime" : runs[i].signal == 1 ? "music" : "5.1";
+        long size;
+        double snr = vorbis_round(name, in, frames, ch, rate, runs[i].options, &size, runs[i].keep);
+        CHECK(snr >= runs[i].snr, "%s with %s: %.1f dB, required %.1f", name, runs[i].options, snr, runs[i].snr);
+        /* Within one signal, a higher quality takes more bytes. */
+        if (i && runs[i].signal == runs[i - 1].signal && strstr(runs[i].options, "quality") &&
+            strstr(runs[i - 1].options, "quality"))
+            CHECK(size > previous, "%s: %ld bytes at %s, %ld before", name, size, runs[i].options, previous);
+        previous = size;
+    }
+    uint8_t *file;
+    struct codec_audio_format fmt = { 16000, 1, 16 };
+    CHECK(codec_audio_encode_options(vorbis, &fmt, chime, nchime, "quality=2", &file) == -EINVAL, "quality 2");
+    CHECK(codec_audio_encode_options(vorbis, &fmt, chime, nchime, "speed=1", &file) == -EINVAL, "an unknown option");
+    CHECK(codec_audio_encode_options(codec_find("wav"), &fmt, chime, nchime, "quality=1", &file) == -EINVAL,
+          "a codec without options");
+    struct codec_audio_format fast = { 96000, 1, 16 };
+    CHECK(codec_audio_encode_options(vorbis, &fast, chime, nchime, "floor=0", &file) == -EINVAL,
+          "floor 0 above 65535 Hz");
+    free(chime);
+    free(music);
+    free(six);
+}
+
 static void list_registry(void)
 {
     int modules = codec_module_count();
@@ -564,7 +714,7 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    static const char *const sections[] = { "image", "audio", "flac", "vorbis" };
+    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -582,6 +732,8 @@ int main(int argc, char **argv)
         test_flac();
     if (WANTS("vorbis"))
         test_vorbis();
+    if (WANTS("vorbisenc"))
+        test_vorbis_encoder();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

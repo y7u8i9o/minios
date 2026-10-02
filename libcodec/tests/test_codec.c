@@ -137,12 +137,43 @@ static void test_vorbis(void)
     }
 }
 
+/* The chime through the Vorbis encoder and decoder. */
+static void test_vorbis_encoder(void)
+{
+    int32_t *in, *out;
+    struct codec_audio_format f;
+    int err;
+    char path[512];
+    snprintf(path, sizeof path, "%s/chime.wav", sounds);
+    long n = decode(path, &in, &f, &err);
+    uint8_t *file;
+    long size = codec_audio_encode_options(codec_find("vorbis"), &f, in, n, "quality=0.4", &file);
+    CHECK(size > 0, "vorbis encode: %ld", size);
+    if (size <= 0)
+        return;
+    codec_write_file("/tmp/libcodec-test.ogg", file, (size_t)size);
+    struct codec_audio_format g;
+    long m = decode("/tmp/libcodec-test.ogg", &out, &g, &err);
+    double sig = 0, noise = 0;
+    for (long i = 0; i < n && m == n; i++) {
+        double a = in[i] / 2147483648.0, b = out[i] / 2147483648.0;
+        sig += a * a;
+        noise += (a - b) * (a - b);
+    }
+    double snr = 10 * log10(sig / (noise + 1e-30));
+    CHECK(err == 0 && m == n && snr > 30, "vorbis round trip: %ld of %ld frames, %.1f dB", m, n, snr);
+    free(in);
+    free(out);
+    free(file);
+}
+
 int main(void)
 {
     test_md5();
     test_imdct();
     test_flac();
     test_vorbis();
+    test_vorbis_encoder();
     printf("libcodec tests: %d checks, %d failures\n", checks, failures);
     return failures != 0;
 }
