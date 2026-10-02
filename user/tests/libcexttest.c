@@ -354,7 +354,7 @@ static void test_port_additions(void)
     srandom(11);
     CHECK(r1 == random() && r1 >= 0, "random repeats for a seed");
 
-    CHECK(iswalpha(L'a') && iswalpha(0xe9) && !iswalpha(L'1') && iswdigit(L'7') && iswspace(0xa0),
+    CHECK(iswalpha(L'a') && iswalpha(0xe9) && !iswalpha(L'1') && iswdigit(L'7') && iswspace(0x3000) && !iswspace(0xa0),
           "wide character classes");
     CHECK(towupper(L'a') == L'A' && towupper(0xe9) == 0xc9 && towlower(0x410) == 0x430 && towupper(L'1') == L'1',
           "towupper and towlower");

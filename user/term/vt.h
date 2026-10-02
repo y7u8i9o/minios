@@ -18,8 +18,12 @@
  * background, which the window paints with its own colours. */
 #define VC_DEFAULT 0x01000000u
 
+/* The right half of a wide character has this value in cp. */
+#define VC_WIDE_TAIL 0x110000u
+
 struct vcell {
     uint32_t cp;                /* code point, ' ' when empty */
+    uint32_t mark;              /* a combining mark drawn over cp, or 0 */
     uint32_t fg, bg;
     uint8_t attr;               /* VA_* */
 };

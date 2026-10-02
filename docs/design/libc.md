@@ -105,8 +105,8 @@ result into `-1` with `errno` set. Numbers come from
   offset, mark, no-check and no-sort modes. `globfree` owns the result
   cleanup. Matching follows symbolic links to directories, since the
   walk opens every directory by name.
-- `wchar.h`: `wcwidth`/`wcswidth` report zero-width combining and
-  double-width ranges for cursor and column arithmetic.
+- `wchar.h`: `wcwidth`/`wcswidth` report the display width of a
+  character from the Unicode tables described in `unicode.md`.
 - `stdio.h`: `getline`/`getdelim` grow a caller-owned allocation, retain
   the delimiter and return the byte count or -1 at EOF/error.
 - `term.h`: `term_use_color(fd)` requires a tty, nonempty nondumb TERM,
@@ -195,10 +195,9 @@ count consumed, `*` suppresses assignment, and `hh h l ll j z t L` set
 the width of the target. A directive that fails on the first input
 character before anything was assigned returns `EOF`.
 
-`wctype.h` classifies the Latin-1 supplement, Latin Extended-A and B,
-Greek and Cyrillic; every other code point above U+009F is printable and
-neither alphabetic nor a digit. `towupper` and `towlower` map the same
-blocks.
+`wctype.h` classifies every code point with tables generated from the
+Unicode Character Database, and `towupper` and `towlower` apply its simple
+case mappings (`unicode.md`).
 
 ## Additions for make
 

@@ -3,9 +3,9 @@
 
 typedef unsigned long wctype_t;
 
-/* Character classes for the C locale extended to the Latin-1 supplement,
- * Latin Extended-A and B, Greek and Cyrillic; every other code point above
- * 0x9f is printable and neither alphabetic nor a digit. */
+/* Character classes and simple case mappings of Unicode, generated from
+ * the Unicode Character Database (libc/src/wchar/unidata.h). The digit and
+ * xdigit classes contain the ASCII digits only. */
 int iswalnum(wint_t c);
 int iswalpha(wint_t c);
 int iswblank(wint_t c);

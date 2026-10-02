@@ -84,8 +84,12 @@ static char *selection_text(struct tab *t, int *out_len)
         while (to >= from && l[to].cp == ' ')
             to--;
         for (int c = from; c <= to; c++) {
-            char s[4];
+            if (l[c].cp == VC_WIDE_TAIL)
+                continue;
+            char s[8];
             int k = gui_utf8_encode(l[c].cp ? l[c].cp : ' ', s);
+            if (l[c].mark)
+                k += gui_utf8_encode(l[c].mark, s + k);
             if (n + (size_t)k + 2 > cap) {
                 cap *= 2;
                 char *nb = realloc(buf, cap);

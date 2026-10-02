@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <wchar.h>
 
 enum { ST_GROUND, ST_ESC, ST_CSI, ST_OSC, ST_OSC_ESC, ST_CHARSET, ST_DCS, ST_DCS_ESC };
 
@@ -37,6 +38,7 @@ static void blank(struct vt *v, struct vcell *c, int n)
 {
     for (int i = 0; i < n; i++) {
         c[i].cp = ' ';
+        c[i].mark = 0;
         c[i].fg = v->fg;
         c[i].bg = v->bg;
         c[i].attr = 0;
@@ -189,26 +191,78 @@ static uint32_t current_fg(const struct vt *v)
     return v->fg;
 }
 
+/* clear_wide removes the other half of a wide character when one half of
+ * it is overwritten. */
+static void clear_wide(struct vt *v, int x)
+{
+    struct vcell *c = cell(v, v->cy, x);
+    if (c->cp == VC_WIDE_TAIL && x > 0) {
+        cell(v, v->cy, x - 1)->cp = ' ';
+        cell(v, v->cy, x - 1)->mark = 0;
+    } else if (x + 1 < v->cols && cell(v, v->cy, x + 1)->cp == VC_WIDE_TAIL) {
+        cell(v, v->cy, x + 1)->cp = ' ';
+    }
+}
+
+/* put_char writes a character at the cursor.  A character of width 2
+ * occupies its cell and the next one, whose cp is VC_WIDE_TAIL, and it
+ * starts a new line when only the last column is left.  A character of
+ * width 0 is stored as the mark of the previous character. */
 static void put_char(struct vt *v, uint32_t cp)
 {
-    if (v->wrap_pending) {
+    int width = wcwidth((wchar_t)cp);
+    if (width == 0) {
+        int x = v->wrap_pending ? v->cx : v->cx - 1;
+        if (x >= 0) {
+            struct vcell *base = cell(v, v->cy, x);
+            if (base->cp == VC_WIDE_TAIL && x > 0)
+                base = cell(v, v->cy, x - 1);
+            if (!base->mark)
+                base->mark = cp;
+            v->dirty = 1;
+        }
+        return;
+    }
+    if (width < 0)
+        width = 1;
+    if (width == 2 && v->cols < 2)
+        width = 1;
+    if (v->wrap_pending || (width == 2 && v->cx == v->cols - 1)) {
+        if (!v->wrap_pending && v->autowrap) {
+            clear_wide(v, v->cx);
+            cell(v, v->cy, v->cx)->cp = ' ';
+            cell(v, v->cy, v->cx)->mark = 0;
+        }
         v->wrap_pending = 0;
         if (v->autowrap) {
             v->cx = 0;
             index_down(v);
+        } else if (width == 2) {
+            v->cx = v->cols - 2;
         }
     }
-    if (v->insert && v->cx < v->cols - 1)
-        memmove(cell(v, v->cy, v->cx + 1), cell(v, v->cy, v->cx), (size_t)(v->cols - 1 - v->cx) * sizeof(struct vcell));
+    if (v->insert && v->cx < v->cols - width)
+        memmove(cell(v, v->cy, v->cx + width), cell(v, v->cy, v->cx),
+                (size_t)(v->cols - width - v->cx) * sizeof(struct vcell));
+    clear_wide(v, v->cx);
+    if (width == 2)
+        clear_wide(v, v->cx + 1);
     struct vcell *c = cell(v, v->cy, v->cx);
     c->cp = cp;
+    c->mark = 0;
     c->fg = current_fg(v);
     c->bg = v->bg;
     c->attr = v->attr;
-    if (v->cx < v->cols - 1)
-        v->cx++;
-    else
+    if (width == 2) {
+        c[1] = c[0];
+        c[1].cp = VC_WIDE_TAIL;
+    }
+    if (v->cx + width < v->cols)
+        v->cx += width;
+    else {
+        v->cx = v->cols - 1;
         v->wrap_pending = 1;
+    }
     v->dirty = 1;
 }
 

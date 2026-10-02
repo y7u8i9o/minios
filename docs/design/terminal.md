@@ -21,8 +21,8 @@ opening the unrelated framebuffer console.
 
 ## Emulator (`vt.c`)
 
-`struct vt` holds a grid of `struct vcell` (code point, foreground,
-background, attributes), a second grid for the alternate screen, the
+`struct vt` has a grid of `struct vcell` (code point, combining mark,
+foreground, background, attributes), a second grid for the alternate screen, the
 cursor, the scrolling region, the current rendition, a saved cursor,
 the modes and the parser state. Colours are `0x00rrggbb`; the bit
 `VC_DEFAULT` marks the default foreground or background so the window
@@ -77,6 +77,9 @@ the font height (8 by 17 at 13 px). The grid is the canvas size less 4
 pixels of padding on the left and right, 3 above and below, and the
 scrollback bar on the right; every tab has the same grid and receives
 `TIOCSWINSZ`, which the kernel turns into SIGWINCH.
+
+Wide characters occupy two cells and combining marks attach to the
+previous cell, as `unicode.md` describes.
 
 Painting fills runs of one background, draws each non blank cell with
 `painter_text_font` at its column (the advance is not an integer number

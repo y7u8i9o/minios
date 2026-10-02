@@ -105,6 +105,16 @@ static uint32_t mix(uint32_t a, uint32_t b)
     return ((a >> 1) & 0x7f7f7f) + ((b >> 1) & 0x7f7f7f);
 }
 
+/* cell_text encodes the character of a cell and its combining mark as
+ * UTF-8 into s, which has room for 12 bytes, and returns the length. */
+static int cell_text(const struct vcell *c, char *s)
+{
+    int n = gui_utf8_encode(c->cp, s);
+    if (c->mark)
+        n += gui_utf8_encode(c->mark, s + n);
+    return n;
+}
+
 static int on_paint(struct widget *w, void *args, void *arg)
 {
     struct tab *t = arg;
@@ -114,7 +124,7 @@ static int on_paint(struct widget *w, void *args, void *arg)
     struct rect clip = painter_clip_local(p);
     int total = vt_total_lines(v);
     int first = total - v->rows - t->view;
-    char s[8];
+    char s[12];
     for (int r = 0; r < v->rows; r++) {
         int y = PAD_Y + r * cell_h;
         if (y + cell_h <= clip.y || y >= clip.y + clip.h)
@@ -155,8 +165,8 @@ static int on_paint(struct widget *w, void *args, void *arg)
                 if (cc->attr & VA_FAINT)
                     cfg = mix(cfg, bg);
                 int cx = x + k * cell_w;
-                if (cc->cp != ' ' && cc->cp) {
-                    int n = gui_utf8_encode(cc->cp, s);
+                if (cc->cp != ' ' && cc->cp && cc->cp != VC_WIDE_TAIL) {
+                    int n = cell_text(cc, s);
                     s[n] = '\0';
                     painter_text_font(p, text_font(), cx, y, s, cfg, 0xffffffffu);
                 }
@@ -173,8 +183,8 @@ static int on_paint(struct widget *w, void *args, void *arg)
         const struct vcell *cc = v->cells + v->cy * v->cols + v->cx;
         if (focused && blink_on) {
             painter_fill(p, x, y, cell_w, cell_h, CURSOR);
-            if (cc->cp != ' ' && cc->cp) {
-                int n = gui_utf8_encode(cc->cp, s);
+            if (cc->cp != ' ' && cc->cp && cc->cp != VC_WIDE_TAIL) {
+                int n = cell_text(cc, s);
                 s[n] = '\0';
                 painter_text_font(p, text_font(), x, y, s, DEFAULT_BG, 0xffffffffu);
             }
