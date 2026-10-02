@@ -394,6 +394,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             hang_draw(s, pieces[k]);
         }
     }
+    ime_draw(r);
     draw_cursor(r);
     backend_flush(r);
 }

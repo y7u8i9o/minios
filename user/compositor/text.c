@@ -1,6 +1,8 @@
 /* Text input and X12's small built-in Unicode composer. Physical keys
  * remain on the keyboard interface; committed text and preedit state use
- * this protocol so clients do not have to infer text from scancodes. */
+ * this protocol so clients do not have to infer text from scancodes.
+ * The input methods of ime.c compose through the same contexts, and a key
+ * that a composition uses does not reach the client as a key event. */
 #include <stdlib.h>
 #include <string.h>
 #include <gui/keymap.h>
@@ -19,6 +21,8 @@ struct text_context {
     int composing, nhex;
     char hex[7];
     int dead;                           /* the dead key that waits for its base, or 0 */
+    int rect[4], pending_rect[4];       /* the caret in surface coordinates: x, y, width, height */
+    int has_rect, has_pending_rect;
 };
 
 static void end_preedit(struct text_context *t)
@@ -45,10 +49,21 @@ static struct text_context *context_of(struct client *cl)
     return cl && cl->text_input ? cl->text_input->data : NULL;
 }
 
+/* drop_ime cancels the composition of an input method in the context. */
+static void drop_ime(struct text_context *t)
+{
+    if (!ime_composing())
+        return;
+    ime_reset();
+    text_input_send_preedit_string(t->res, "", 0, 0);
+    text_input_send_done(t->res, t->serial);
+}
+
 static void leave(struct text_context *t)
 {
     if (t && t->entered) {
         end_preedit(t);
+        drop_ime(t);
         text_input_send_leave(t->res, t->active->res);
         t->entered = 0;
     }
@@ -108,10 +123,41 @@ static void h_content(struct wire_client *c, struct wire_resource *self, uint32_
     t->purpose = purpose;
 }
 
+static void h_cursor_rectangle(struct wire_client *c, struct wire_resource *self, int32_t x, int32_t y,
+                               int32_t width, int32_t height)
+{
+    struct text_context *t = self->data;
+    t->pending_rect[0] = x;
+    t->pending_rect[1] = y;
+    t->pending_rect[2] = width;
+    t->pending_rect[3] = height;
+    t->has_pending_rect = 1;
+}
+
+/* update_anchor tells the input methods where the caret of the active
+ * surface is on the screen. */
+static void update_anchor(struct text_context *t)
+{
+    struct csurface *s = t->active;
+    if (!s)
+        return;
+    if (t->has_rect)
+        ime_set_anchor(s->x + t->rect[0], s->y + t->rect[1], t->rect[3]);
+    else
+        ime_set_anchor(s->x + 8, s->y + 8, 16);
+}
+
 static void h_commit(struct wire_client *c, struct wire_resource *self, uint32_t serial)
 {
     struct text_context *t = self->data;
     t->serial = serial;
+    if (t->has_pending_rect) {
+        memcpy(t->rect, t->pending_rect, sizeof t->rect);
+        t->has_rect = 1;
+        t->has_pending_rect = 0;
+        if (t->entered)
+            update_anchor(t);
+    }
     if (t->pending_action >= 0) {
         leave(t);
         t->active = t->pending_action ? t->pending : NULL;
@@ -123,7 +169,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self, uint32_t
 
 static void h_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
 static const struct text_input_impl text_handlers = {
-    h_enable, h_disable, h_surrounding, h_content, h_commit, h_destroy,
+    h_enable, h_disable, h_surrounding, h_content, h_commit, h_destroy, h_cursor_rectangle,
 };
 
 static void text_gone(struct wire_resource *r)
@@ -143,7 +189,7 @@ static void h_get_text_input(struct wire_client *c, struct wire_resource *self, 
         return;
     }
     struct text_context *t = calloc(1, sizeof *t);
-    struct wire_resource *r = t ? wire_resource_create(c, &text_input_interface, 1, id) : NULL;
+    struct wire_resource *r = t ? wire_resource_create(c, &text_input_interface, self->obj.version, id) : NULL;
     if (!r) {
         free(t);
         return;
@@ -166,7 +212,7 @@ static void bind_manager(struct wire_client *c, void *data, uint32_t version, ui
 
 void text_init(struct wire_server *srv)
 {
-    wire_global_create(srv, &text_input_manager_interface, 1, bind_manager, NULL);
+    wire_global_create(srv, &text_input_manager_interface, 2, bind_manager, NULL);
 }
 
 void text_focus_changed(struct csurface *old, struct csurface *now)
@@ -204,12 +250,34 @@ static void clear_dead(struct text_context *t)
     text_input_send_preedit_string(t->res, "", 0, 0);
 }
 
-void text_key(uint32_t key, int pressed, int mods)
+/* apply_ime sends what an input method composed. */
+static void apply_ime(struct text_context *t, const struct ime_result *r)
+{
+    if (r->commit[0])
+        text_input_send_commit_string(t->res, r->commit);
+    if (r->preedit_changed) {
+        int n = (int)strlen(r->preedit);
+        text_input_send_preedit_string(t->res, r->preedit, n, n);
+    }
+    if (r->commit[0] || r->preedit_changed)
+        text_input_send_done(t->res, t->serial);
+}
+
+void text_ime_reset(void)
+{
+    struct csurface *focus = seat_keyboard_focus();
+    struct text_context *t = focus ? context_of(focus->client) : NULL;
+    if (t && t->entered)
+        drop_ime(t);
+    ime_reset();
+}
+
+int text_key(uint32_t key, int pressed, int mods)
 {
     struct csurface *focus = seat_keyboard_focus();
     struct text_context *t = focus ? context_of(focus->client) : NULL;
     if (!pressed || !t || !t->entered || t->active != focus)
-        return;
+        return 0;
     /* Ctrl+Shift+U starts Unicode hexadecimal entry. */
     if (!t->composing && (mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_SHIFT)) ==
         (KEYMAP_MOD_CTRL | KEYMAP_MOD_SHIFT) && key == 0x16) {
@@ -217,18 +285,18 @@ void text_key(uint32_t key, int pressed, int mods)
         t->nhex = 0;
         t->hex[0] = '\0';
         send_preedit(t);
-        return;
+        return 1;
     }
     if (t->composing) {
         if (key == 0x01) {
             end_preedit(t);
-            return;
+            return 1;
         }
         if (key == 0x0e) {
             if (t->nhex)
                 t->hex[--t->nhex] = '\0';
             send_preedit(t);
-            return;
+            return 1;
         }
         if (key == 0x1c || key == 0x39) {
             uint32_t cp = 0;
@@ -237,7 +305,7 @@ void text_key(uint32_t key, int pressed, int mods)
             end_preedit(t);
             if (t->nhex || cp)
                 commit_codepoint(t, cp);
-            return;
+            return 1;
         }
         int ch = seat_translate(key, 0);
         if (t->nhex < 6 && ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))) {
@@ -246,10 +314,22 @@ void text_key(uint32_t key, int pressed, int mods)
             t->hex[t->nhex] = '\0';
             send_preedit(t);
         }
-        return;
+        return 1;
+    }
+    if (ime_mode() != IME_OFF) {
+        struct ime_result r;
+        update_anchor(t);
+        int used = ime_key(key, seat_translate(key, mods), mods, &r);
+        apply_ime(t, &r);
+        if (used) {
+            char shown[160];
+            ime_describe(shown, sizeof shown);
+            comp_debug("ime: preedit '%s' candidates %s", r.preedit, shown);
+            return 1;
+        }
     }
     if (mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT))
-        return;
+        return 0;
     int ch = seat_translate(key, mods);
     /* A dead key waits for the next character.  The two compose one
      * character, or the accent and the character are committed when the
@@ -264,12 +344,12 @@ void text_key(uint32_t key, int pressed, int mods)
         }
         t->dead = ch;
         show_dead(t);
-        return;
+        return 0;
     }
     if (t->dead && (key == KEY_ESC || key == KEY_BACKSPACE)) {
         clear_dead(t);
         text_input_send_done(t->res, t->serial);
-        return;
+        return 1;
     }
     if (ch >= 32 && !keysym_is_symbol(ch)) {
         if (t->dead) {
@@ -278,13 +358,14 @@ void text_key(uint32_t key, int pressed, int mods)
             clear_dead(t);
             if (composed) {
                 commit_codepoint(t, (uint32_t)composed);
-                return;
+                return 0;
             }
             if (spacing)
                 commit_codepoint(t, (uint32_t)spacing);
         }
         commit_codepoint(t, (uint32_t)ch);
     }
+    return 0;
 }
 
 void text_surface_gone(struct csurface *s)

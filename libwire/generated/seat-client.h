@@ -10,6 +10,7 @@ extern const struct wire_interface keyboard_interface;
 struct seat_listener {
     void (*capabilities)(void *user, struct wire_proxy *self, uint32_t capabilities);
     void (*name)(void *user, struct wire_proxy *self, const char * name);
+    void (*input_method)(void *user, struct wire_proxy *self, const char * label);
 };
 static inline int seat_add_listener(struct wire_proxy *p, const struct seat_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }

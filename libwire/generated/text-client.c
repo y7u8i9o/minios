@@ -59,3 +59,13 @@ void text_input_destroy(struct wire_proxy *text_input)
     wire_proxy_destroy(text_input);
 }
 
+void text_input_set_cursor_rectangle(struct wire_proxy *text_input, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].i = x;
+    args[1].i = y;
+    args[2].i = width;
+    args[3].i = height;
+    wire_proxy_marshal(text_input, 6, args, NULL);
+}
+

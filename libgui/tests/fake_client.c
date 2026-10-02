@@ -64,6 +64,10 @@ struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width
 
 int gui_has_popup_surfaces(void) { return 0; }
 void gui_text_input_set(struct gui_window *window, int enabled) { (void)window; (void)enabled; }
+void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int width, int height)
+{
+    (void)window; (void)x; (void)y; (void)width; (void)height;
+}
 
 struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab)
 {

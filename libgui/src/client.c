@@ -118,6 +118,7 @@ static long repeat_at;
 static struct gui_window *text_win;
 static int text_active;
 static uint32_t text_serial;
+static int text_cursor[4];          /* the caret rectangle sent last, surface coordinates */
 static int next_id = 1;
 static struct wire_proxy *selection_offer, *selection_source;
 static char *clip_text;
@@ -1077,6 +1078,7 @@ void gui_text_input_set(struct gui_window *window, int enabled)
     struct win *wi = window->priv;
     if (enabled) {
         text_input_enable(text_input, wi->surface);
+        memset(text_cursor, 0, sizeof text_cursor);
         text_input_set_surrounding_text(text_input, "", 0, 0);
         text_input_set_content_type(text_input, 0, 0);
     } else {
@@ -1084,6 +1086,21 @@ void gui_text_input_set(struct gui_window *window, int enabled)
         text_active = 0;
         text_win = NULL;
     }
+    text_input_commit(text_input, ++text_serial);
+}
+
+/* Only a changed rectangle is sent.  A new enable sends it again. */
+void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int width, int height)
+{
+    if (!text_input || !window)
+        return;
+    int ox, oy;
+    content_origin(window, &ox, &oy);
+    int r[4] = { x + ox, y + oy, width, height };
+    if (memcmp(r, text_cursor, sizeof r) == 0)
+        return;
+    memcpy(text_cursor, r, sizeof r);
+    text_input_set_cursor_rectangle(text_input, r[0], r[1], r[2], r[3]);
     text_input_commit(text_input, ++text_serial);
 }
 

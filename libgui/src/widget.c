@@ -287,6 +287,16 @@ void widget_abs(const struct widget *w, int *x, int *y)
     }
 }
 
+void widget_text_cursor(struct widget *w, int x, int y, int width, int height)
+{
+    struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
+    if (!ws || !ws->win || ws->focus != w)
+        return;
+    int ax, ay;
+    widget_abs(w, &ax, &ay);
+    gui_text_input_set_cursor(ws->win, ax + x, ay + y, width, height);
+}
+
 struct widget *widget_at(struct widget *w, int x, int y)
 {
     if (!w->visible || x < 0 || y < 0 || x >= w->w || y >= w->h)

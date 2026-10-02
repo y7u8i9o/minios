@@ -671,6 +671,7 @@ static void editor_paint(struct widget *w, struct painter *p)
         }
         if (w->focused && !ed->readonly && l == ed->cl && ed->cc >= start && (ed->cc < start + len || (ed->cc == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
             int cx = PAD - ed->scroll_x + gfx_text_width_font(ed_font(ed), s + start, ed->cc - start);
+            widget_text_cursor(w, 1 + gw + cx, 1 + y, 1, lh);
             if (ed->preedit[0]) {
                 painter_text_font(p, ed_font(ed), cx, ty, ed->preedit, t->color[TC_TEXT], 0xffffffffu);
                 int pw = gfx_text_width_font(ed_font(ed), ed->preedit, -1);

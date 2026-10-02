@@ -299,9 +299,28 @@ int seat_translate(uint32_t key, int mods);
 struct keymap;
 const struct keymap *seat_keymap(void);
 /* text.c */
+/* ime.c: the input methods (docs/design/ime.md).  ime_key returns 1 when
+ * the engine used the key.  The result has the text to commit and the new
+ * preedit. */
+enum { IME_OFF, IME_JAPANESE, IME_CHINESE };
+struct ime_result {
+    char commit[256];
+    char preedit[256];
+    int preedit_changed;
+};
+int ime_mode(void);
+void ime_set_mode(int mode);
+int ime_composing(void);
+int ime_key(uint32_t key, int ch, int mods, struct ime_result *r);
+void ime_reset(void);
+void ime_set_anchor(int x, int y, int h);
+void ime_draw(struct rect clip);
+void ime_describe(char *out, size_t size);
+
 void text_init(struct wire_server *srv);
 void text_focus_changed(struct csurface *old, struct csurface *now);
-void text_key(uint32_t key, int pressed, int mods);
+int text_key(uint32_t key, int pressed, int mods);   /* 1: a composition used the key */
+void text_ime_reset(void);
 void text_surface_gone(struct csurface *s);
 void text_client_gone(struct client *c);
 /* data.c */

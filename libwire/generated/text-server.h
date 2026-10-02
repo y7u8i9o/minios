@@ -17,6 +17,7 @@ struct text_input_impl {
     void (*set_content_type)(struct wire_client *client, struct wire_resource *self, uint32_t hints, uint32_t purpose);
     void (*commit)(struct wire_client *client, struct wire_resource *self, uint32_t serial);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_cursor_rectangle)(struct wire_client *client, struct wire_resource *self, int32_t x, int32_t y, int32_t width, int32_t height);
 };
 void text_input_send_enter(struct wire_resource *text_input, struct wire_resource * surface);
 void text_input_send_leave(struct wire_resource *text_input, struct wire_resource * surface);

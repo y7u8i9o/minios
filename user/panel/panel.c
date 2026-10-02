@@ -1,7 +1,8 @@
 /* panel: a layer surface at the bottom of the screen with the launcher
  * menu of launcher.c, one button per toplevel from the toplevel manager,
- * and a clock. Built directly on libwire and the libgui painter; the
- * buffers are rendered at the output's scale. */
+ * the label of the keyboard layout or input method, and a clock. Built
+ * directly on libwire and the libgui painter; the buffers are rendered at
+ * the output's scale. */
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ uint32_t press_serial;
 static int layer_configured;
 int output_scale = 1;
 struct theme ui;
+static char input_label[16];             /* from the seat: "EN", "FR", "あ", ... */
 
 /* ---- canvases ---- */
 
@@ -124,7 +126,7 @@ void draw_panel(void)
     painter_fill(&p, 0, 0, w, 1, PANEL_LINE);
     painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, launcher_is_open() ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
     panel_label(&p, 4, 4, MENU_BTN_W, h - 8, _("Menu"), PANEL_TEXT, 1);
-    int limit = (w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
+    int limit = (w - CLOCK_W - MIXER_BTN_W - INPUT_W - MENU_BTN_W - 24) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
         int active = tasks[i].active && !tasks[i].minimized;
@@ -140,6 +142,8 @@ void draw_panel(void)
     snprintf(t, sizeof t, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     panel_label(&p, w - CLOCK_W, 0, CLOCK_W - 6, h, t, PANEL_TEXT, 1);
     mixer_draw_button(&p);
+    if (input_label[0])
+        panel_label(&p, mixer_button_x() - INPUT_W - 4, 0, INPUT_W, h, input_label, PANEL_TEXT, 1);
     canvas_commit(&panel);
 }
 
@@ -191,7 +195,7 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
         mixer_toggle();
         return;
     }
-    int limit = (screen_w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
+    int limit = (screen_w - CLOCK_W - MIXER_BTN_W - INPUT_W - MENU_BTN_W - 24) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
         if (px >= x && px < x + TASK_BTN_W) {
@@ -291,12 +295,27 @@ static void on_output_done(void *user, struct wire_proxy *o) {}
 static void on_transform(void *user, struct wire_proxy *o, uint32_t transform) {}
 static const struct output_listener output_events = { on_geometry, on_mode, on_scale, on_transform, on_output_done };
 
+/* The seat of version 2 reports the keyboard layout or input method that
+ * Super+Space and Alt+Shift select (docs/design/ime.md). */
+static void on_capabilities(void *user, struct wire_proxy *s, uint32_t caps) {}
+static void on_seat_name(void *user, struct wire_proxy *s, const char *name) {}
+static void on_input_method(void *user, struct wire_proxy *s, const char *label)
+{
+    strlcpy(input_label, label, sizeof input_label);
+    if (layer_configured)
+        draw_panel();
+}
+static const struct seat_listener seat_events = { on_capabilities, on_seat_name, on_input_method };
+
 static void on_global(void *user, struct wire_proxy *registry, uint32_t name, const char *iface, uint32_t version)
 {
     if (strcmp(iface, "compositor") == 0) compositor = registry_bind(registry, name, iface, version, &compositor_interface, 1);
     else if (strcmp(iface, "shm") == 0) shm = registry_bind(registry, name, iface, version, &shm_interface, 1);
     else if (strcmp(iface, "shell") == 0) shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
-    else if (strcmp(iface, "seat") == 0) seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
+    else if (strcmp(iface, "seat") == 0) {
+        seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
+        seat_add_listener(seat, &seat_events, NULL);
+    }
     else if (strcmp(iface, "toplevel_manager") == 0) manager = registry_bind(registry, name, iface, version, &toplevel_manager_interface, 1);
     else if (strcmp(iface, "output") == 0) {
         struct wire_proxy *o = registry_bind(registry, name, iface, version, &output_interface, 1);

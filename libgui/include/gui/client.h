@@ -67,6 +67,9 @@ struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int
 int gui_has_popup_surfaces(void);
 /* Enable the text-input protocol for the focused text widget. */
 void gui_text_input_set(struct gui_window *window, int enabled);
+/* The caret of the focused text widget in window coordinates, where the
+ * compositor shows the candidates of an input method. */
+void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int width, int height);
 /* A layer surface (no decorations): layer 0 background, 1 bottom, 2 top,
  * 3 overlay; anchor is a mask of GUI_ANCHOR_* edges; a dimension of 0
  * takes the free desktop area; keyboard 1 asks for key events. */

@@ -4,14 +4,14 @@
      composer is the first input method, and another provider can drive
      the same preedit/commit contract later. -->
 <protocol name="text">
-  <interface name="text_input_manager" version="1">
+  <interface name="text_input_manager" version="2">
     <request name="get_text_input">
       <arg name="id" type="new_id" interface="text_input"/>
       <arg name="seat" type="object" interface="seat"/>
     </request>
   </interface>
 
-  <interface name="text_input" version="1">
+  <interface name="text_input" version="2">
     <request name="enable"><arg name="surface" type="object" interface="surface"/></request>
     <request name="disable"/>
     <request name="set_surrounding_text">
@@ -20,6 +20,12 @@
     <request name="set_content_type"><arg name="hints" type="uint"/><arg name="purpose" type="uint"/></request>
     <request name="commit"><arg name="serial" type="uint"/></request>
     <request name="destroy" type="destructor"/>
+    <!-- Version 2 (L6): the caret of the enabled surface in surface
+         coordinates, where the compositor places the candidates of an
+         input method.  It applies at the next commit. -->
+    <request name="set_cursor_rectangle">
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </request>
     <event name="enter"><arg name="surface" type="object" interface="surface"/></event>
     <event name="leave"><arg name="surface" type="object" interface="surface"/></event>
     <event name="preedit_string"><arg name="text" type="string"/><arg name="cursor_begin" type="int"/><arg name="cursor_end" type="int"/></event>

@@ -172,7 +172,7 @@ launcher search accepts characters outside ASCII. The cases `keymap`,
 `comp_panel`, `gui_settings`, `gui_term`, `lineedit`, `lineedit_screen`
 and `gui_files` pass.
 
-### L6. Input methods for Chinese and Japanese
+### L6. Input methods for Chinese and Japanese (completed 2026-10-03)
 
 - A `set_cursor_rectangle` request in `protocol/text.xml`, sent by the text
   widgets of libgui.
@@ -185,6 +185,15 @@ and `gui_files` pass.
   current one.
 - `tools/fetch_unihan.sh` and `tools/genime.py`.
 - The boot test is `ime`, and the design document is `docs/design/ime.md`.
+
+The kanji come from `kJapanese`, which replaced `kJapaneseOn` and
+`kJapaneseKun` in Unihan 16.0, with the Jōyō kanji first. The hanzi come
+from `kHanyuPinlu` in its frequency order instead of `kMandarin` with the
+levels of `kTGHZ2013`, because the frequency gives the common character of
+a syllable first. The panel label arrives through a new event of the seat
+version 2. The cases `ime`, `comp_seat`, `comp_core`, `comp_panel`,
+`comp_shell`, `comp_data`, `gui_editor`, `editor` and `keymap` pass, and
+`make check` passes.
 
 ### L7. Region and language settings
 

@@ -29,4 +29,5 @@ void text_input_set_surrounding_text(struct wire_proxy *text_input, const char *
 void text_input_set_content_type(struct wire_proxy *text_input, uint32_t hints, uint32_t purpose);
 void text_input_commit(struct wire_proxy *text_input, uint32_t serial);
 void text_input_destroy(struct wire_proxy *text_input);
+void text_input_set_cursor_rectangle(struct wire_proxy *text_input, int32_t x, int32_t y, int32_t width, int32_t height);
 

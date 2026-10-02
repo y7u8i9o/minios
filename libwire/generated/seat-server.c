@@ -16,6 +16,13 @@ void seat_send_name(struct wire_resource *seat, const char * name)
     wire_resource_post(seat, 1, args);
 }
 
+void seat_send_input_method(struct wire_resource *seat, const char * label)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].s = label;
+    wire_resource_post(seat, 2, args);
+}
+
 void pointer_send_enter(struct wire_resource *pointer, uint32_t serial, struct wire_resource * surface, int32_t x, int32_t y)
 {
     union wire_arg args[4] = { { 0 } };

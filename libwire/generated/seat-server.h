@@ -13,6 +13,7 @@ struct seat_impl {
 };
 void seat_send_capabilities(struct wire_resource *seat, uint32_t capabilities);
 void seat_send_name(struct wire_resource *seat, const char * name);
+void seat_send_input_method(struct wire_resource *seat, const char * label);
 
 struct pointer_impl {
     void (*set_cursor)(struct wire_client *client, struct wire_resource *self, uint32_t serial, struct wire_resource * surface, int32_t hotspot_x, int32_t hotspot_y);

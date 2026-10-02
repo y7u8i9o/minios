@@ -101,6 +101,7 @@ static void textfield_paint(struct widget *w, struct painter *p)
     painter_text(p, tx, ty, text, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     if (w->focused) {
         int cx = tx + painter_text_width(p, text, f->cursor);
+        widget_text_cursor(w, 1 + cx, ty - 1, 1, th + 2);
         if (f->preedit[0]) {
             painter_text(p, cx, ty, f->preedit, t->color[TC_TEXT]);
             int pw = painter_text_width(p, f->preedit, -1);

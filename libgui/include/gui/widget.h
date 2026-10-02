@@ -138,6 +138,9 @@ void widget_focus(struct widget *w);
 struct widget *widget_focused(struct widget *window);
 void widget_capture(struct widget *w);          /* mouse events until release */
 void widget_abs(const struct widget *w, int *x, int *y);   /* position in the window */
+/* A focused text widget reports its caret, in its own coordinates, for
+ * the candidates of an input method. */
+void widget_text_cursor(struct widget *w, int x, int y, int width, int height);
 struct widget *widget_at(struct widget *w, int x, int y);   /* deepest visible child */
 const struct theme *widget_theme(const struct widget *w);
 /* Deliver an event to a widget and let it bubble to its ancestors. */

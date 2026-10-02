@@ -15,6 +15,7 @@
 #define TASK_BTN_W 120
 #define CLOCK_W 80
 #define MIXER_BTN_W 30
+#define INPUT_W 30                      /* the label of the layout or input method */
 #define MENU_ITEM_H 24
 #define MENU_PAD 6
 #define LAUNCHER_COLUMN_W 200

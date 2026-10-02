@@ -18,6 +18,7 @@ static const struct wire_message text_input_requests[] = {
     { "set_content_type", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "commit", "u", 1, (const char *const[]){ NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_cursor_rectangle", "iiii", 4, (const char *const[]){ NULL, NULL, NULL, NULL }, 0 },
 };
 static const struct wire_message text_input_events[] = {
     { "enter", "o", 1, (const char *const[]){ "surface" }, 0 },
@@ -27,5 +28,5 @@ static const struct wire_message text_input_events[] = {
     { "delete_surrounding_text", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "done", "u", 1, (const char *const[]){ NULL }, 0 },
 };
-const struct wire_interface text_input_manager_interface = { "text_input_manager", 1, 1, text_input_manager_requests, 0, text_input_manager_events };
-const struct wire_interface text_input_interface = { "text_input", 1, 6, text_input_requests, 6, text_input_events };
+const struct wire_interface text_input_manager_interface = { "text_input_manager", 2, 1, text_input_manager_requests, 0, text_input_manager_events };
+const struct wire_interface text_input_interface = { "text_input", 2, 7, text_input_requests, 6, text_input_events };

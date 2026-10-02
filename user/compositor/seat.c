@@ -1,6 +1,7 @@
 /* The seat: pointer focus and events, keyboard focus and events with
  * the keymap descriptor, modifiers, serials, cursor surfaces, and the
- * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag). */
+ * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, Super+Space for
+ * the input method). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,11 @@ static uint32_t keymap_size;
 static struct keymap *server_keymap;
 static uint32_t pressed_keys[16];
 static int npressed;
+static char keymap_name[32];
+/* Keys whose press went to the compositor (a shortcut or a composition
+ * of an input method): their release does not reach the client either. */
+static uint32_t used_keys[16];
+static int nused;
 
 uint32_t seat_last_serial(void) { return last_serial; }
 int seat_modifiers(void) { return modifiers; }
@@ -197,6 +203,57 @@ static void h_get_keyboard(struct wire_client *c, struct wire_resource *self, ui
 }
 static const struct seat_impl seat_handlers = { h_get_pointer, h_get_keyboard };
 
+/* The label of the input method for the panel: the hiragana a or the
+ * pinyin pin for an engine, else the layout name in capitals.  The first
+ * group of a layout with two groups and the us layout are EN. */
+static void input_label(char *out, size_t size)
+{
+    if (ime_mode() == IME_JAPANESE) {
+        strlcpy(out, "あ", size);
+        return;
+    }
+    if (ime_mode() == IME_CHINESE) {
+        strlcpy(out, "拼", size);
+        return;
+    }
+    int en = strcmp(keymap_name, "us") == 0 || (server_keymap && server_keymap->groups == 2 && group == 0);
+    strlcpy(out, en ? "en" : keymap_name, size);
+    for (char *p = out; *p; p++)
+        if (*p >= 'a' && *p <= 'z')
+            *p = (char)(*p - 'a' + 'A');
+}
+
+static void send_input_label(struct client *cl)
+{
+    char label[16];
+    input_label(label, sizeof label);
+    if (cl->seat_res && cl->seat_res->obj.version >= 2)
+        seat_send_input_method(cl->seat_res, label);
+}
+
+static void broadcast_input_label(void)
+{
+    if (!server_of_seat)
+        return;
+    for (struct wire_client *c = wire_server_first_client(server_of_seat); c; c = wire_client_next(c)) {
+        struct client *cl = wire_client_get_user_data(c);
+        if (cl)
+            send_input_label(cl);
+    }
+}
+
+/* Super+Space switches from the layout to the Japanese engine, then to the
+ * Chinese engine, then back.  A composition in progress is dropped. */
+static void cycle_input_method(void)
+{
+    text_ime_reset();
+    ime_set_mode((ime_mode() + 1) % 3);
+    char label[16];
+    input_label(label, sizeof label);
+    comp_log("input method %s", label);
+    broadcast_input_label();
+}
+
 static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
     struct wire_resource *r = wire_resource_create(c, &seat_interface, (int)version, id);
@@ -208,6 +265,8 @@ static void bind_seat(struct wire_client *c, void *data, uint32_t version, uint3
     wire_resource_set_listener(r, &seat_handlers, NULL, NULL);
     seat_send_capabilities(r, 3);
     seat_send_name(r, "seat0");
+    if (cl)
+        send_input_label(cl);
 }
 
 /* The keymap file is copied into a memfd of its size, which clients map.
@@ -255,6 +314,7 @@ int seat_load_keymap(const char *name)
     keymap_fd = mfd;
     keymap_size = (uint32_t)n;
     group = 0;
+    strlcpy(keymap_name, name, sizeof keymap_name);
     comp_log("keymap %s", name);
     /* Clients that bound the keyboard earlier receive the new keymap. */
     if (server_of_seat)
@@ -265,6 +325,7 @@ int seat_load_keymap(const char *name)
                 send_modifiers(cl, last_serial);
             }
         }
+    broadcast_input_label();
     return 0;
 }
 
@@ -272,7 +333,7 @@ void seat_init(struct wire_server *srv)
 {
     seat_load_keymap("us");
     server_of_seat = srv;
-    wire_global_create(srv, &seat_interface, 1, bind_seat, NULL);
+    wire_global_create(srv, &seat_interface, 2, bind_seat, NULL);
 }
 
 /* ---- pointer ---- */
@@ -440,8 +501,10 @@ void seat_key(uint32_t key, int pressed)
              * the second of the two keys goes down. */
             int other = mod == &mod_shift ? mod_alt != 0 : mod == &mod_alt ? mod_shift != 0 : 0;
             if (pressed && other && !*mod && server_keymap && server_keymap->groups == 2 &&
-                server_keymap->switch_mode == 1)
+                server_keymap->switch_mode == 1) {
                 group = !group;
+                broadcast_input_label();
+            }
             *mod = pressed ? (uint8_t)(*mod | (1u << side)) : (uint8_t)(*mod & ~(1u << side));
         } else if (pressed) {
             caps_locked = !caps_locked;
@@ -473,9 +536,24 @@ void seat_key(uint32_t key, int pressed)
             popup_dismiss_all();
             return;
         }
+        int used = (modifiers & KEYMAP_MOD_LOGO) && key == KEY_SPACE;
+        if (used)
+            cycle_input_method();
+        else if (keyboard_focus && keyboard_focus->client->keyboard)
+            used = text_key(key, 1, modifiers);
+        if (used) {
+            if (nused < 16)
+                used_keys[nused++] = key;
+            return;
+        }
         if (npressed < 16)
             pressed_keys[npressed++] = key;
     } else {
+        for (int i = 0; i < nused; i++)
+            if (used_keys[i] == key) {
+                used_keys[i] = used_keys[--nused];
+                return;
+            }
         for (int i = 0; i < npressed; i++)
             if (pressed_keys[i] == key) {
                 pressed_keys[i] = pressed_keys[--npressed];
@@ -483,7 +561,6 @@ void seat_key(uint32_t key, int pressed)
             }
     }
     if (keyboard_focus && keyboard_focus->client->keyboard) {
-        text_key(key, pressed, modifiers);
         keyboard_send_key(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), now_ms(), key, pressed ? 1 : 0);
         if (pressed)
             comp_debug("key 0x%02x to surface %d", key, keyboard_focus->id);

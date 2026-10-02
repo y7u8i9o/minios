@@ -36,7 +36,9 @@ set_buffer_transform, damage_buffer, commit, destroy; enter) and
 also carries the liveness pair `ping` (event) and `pong` (request) and
 `set_pid`, used for the not responding dialog (`compositor.md`). The shell protocol
 adds toplevel parent/modal state and popup configure/acknowledge/grab;
-`protocol/text.xml` carries UTF-8 text-input and preedit events.
+`protocol/text.xml` has the UTF-8 text input and preedit events, and since
+version 2 the caret rectangle for the candidates of an input method. The
+seat of version 2 reports the label of the input method (`ime.md`).
 `protocol/debug.xml` contains the `debug`, `tracer`, `settings` and
 `screencopy` interfaces of the debugging tools and of `screenshot`
 (`tools.md`, `images.md`).
