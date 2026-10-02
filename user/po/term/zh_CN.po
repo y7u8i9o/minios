@@ -1,0 +1,47 @@
+# Simplified Chinese messages of the term domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/term/term.c:217 user/term/term.c:259
+msgid "%s - Terminal"
+msgstr "%s - 终端"
+
+#: user/term/term.c:261 user/term/term.c:690
+msgid "Terminal"
+msgstr "终端"
+
+#: user/term/term.c:703
+msgid "Copy"
+msgstr "复制"
+
+#: user/term/term.c:704
+msgid "Paste"
+msgstr "粘贴"
+
+#: user/term/term.c:706
+msgid "New tab"
+msgstr "新建标签页"
+
+#: user/term/term.c:707
+msgid "Close tab"
+msgstr "关闭标签页"
+
+#: user/term/term.c:709
+msgid "Larger text"
+msgstr "放大文字"
+
+#: user/term/term.c:710
+msgid "Smaller text"
+msgstr "缩小文字"
+
+#: user/term/term.c:711
+msgid "Normal size"
+msgstr "正常大小"
+
+#: user/term/term.c:713
+msgid "Clear scrollback"
+msgstr "清除回滚记录"

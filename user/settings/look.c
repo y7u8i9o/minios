@@ -9,12 +9,14 @@
 /* ---- appearance ---- */
 
 static const char *const modes[] = { "fill", "center", "tile", "stretch" };
-static const char *const mode_names[] = { "Fill the screen", "Centre", "Tile", "Stretch" };
+static const char *const mode_names[] = { N_("Fill the screen"), N_("Centre"), N_("Tile"), N_("Stretch") };
+/* The names are configuration values. Only the last one is translated, and
+ * only where the combo box shows it. */
 static const struct { const char *name; const char *path; } fonts[] = {
     { "DejaVu Sans", "/etc/fonts/DejaVuSans.ttf" },
     { "Noto Sans", "/etc/fonts/NotoSans-Regular.ttf" },
     { "Latin Modern Roman", "/etc/fonts/lmroman10-regular.otf" },
-    { "Builtin bitmap font", "" },
+    { N_("Builtin bitmap font"), "" },
 };
 #define NFONTS 4
 
@@ -100,7 +102,7 @@ void build_appearance(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
-    row_label(grid, r, "Wallpaper");
+    row_label(grid, r, _("Wallpaper"));
     wall_combo = combobox_new(grid);
     list_wallpapers();
     int current = nwallpapers;
@@ -110,15 +112,15 @@ void build_appearance(struct widget *page)
         if (strcmp(wallpapers[i], conf_get("wallpaper")) == 0)
             current = i;
     }
-    combobox_add(wall_combo, "None (solid colour)");
+    combobox_add(wall_combo, _("None (solid colour)"));
     combobox_select(wall_combo, current);
     widget_connect(wall_combo, "changed", on_wallpaper, NULL);
     widget_set_grid(wall_combo, r++, 1, 1, 1);
-    row_label(grid, r, "Placement");
+    row_label(grid, r, _("Placement"));
     mode_combo = combobox_new(grid);
     int mode = 0;
     for (int i = 0; i < 4; i++) {
-        combobox_add(mode_combo, mode_names[i]);
+        combobox_add(mode_combo, _(mode_names[i]));
         if (strcmp(modes[i], conf_get("wallpaper_mode")) == 0)
             mode = i;
     }
@@ -126,13 +128,13 @@ void build_appearance(struct widget *page)
     widget_connect(mode_combo, "changed", on_mode, NULL);
     widget_set_grid(mode_combo, r++, 1, 1, 1);
     uint32_t color = (uint32_t)strtoul(conf_get("desktop_color"), NULL, 0);
-    row_label(grid, r, "Desktop colour");
+    row_label(grid, r, _("Desktop colour"));
     swatch = canvas_new(grid);
     widget_set_hint(swatch, 0, 22);
     widget_connect(swatch, "paint", on_swatch, NULL);
     widget_set_grid(swatch, r++, 1, 1, 1);
     struct widget **sliders[] = { &red, &green, &blue };
-    const char *names[] = { "Red", "Green", "Blue" };
+    const char *names[] = { _("Red"), _("Green"), _("Blue") };
     for (int i = 0; i < 3; i++) {
         row_label(grid, r, names[i]);
         *sliders[i] = slider_new(grid, 0, 255, (int)(color >> (16 - 8 * i)) & 0xff);
@@ -140,30 +142,30 @@ void build_appearance(struct widget *page)
         widget_connect(*sliders[i], "changed", on_color, NULL);
     }
     widget_set_grid(separator_new(grid), r++, 0, 1, 2);
-    row_label(grid, r, "Interface font");
+    row_label(grid, r, _("Interface font"));
     font_combo = combobox_new(grid);
     int fi = 0;
     for (int i = 0; i < NFONTS; i++) {
-        combobox_add(font_combo, fonts[i].name);
+        combobox_add(font_combo, _(fonts[i].name));
         if (strcmp(fonts[i].name, conf_get("ui_font")) == 0)
             fi = i;
     }
     combobox_select(font_combo, fi);
     widget_connect(font_combo, "changed", on_font, NULL);
     widget_set_grid(font_combo, r++, 1, 1, 1);
-    row_label(grid, r, "Font size (px)");
+    row_label(grid, r, _("Font size (px)"));
     size_spin = spinner_new(grid, 10, 24, conf_int("ui_font_px", 14));
     widget_connect(size_spin, "changed", on_font_size, NULL);
     widget_set_grid(size_spin, r++, 1, 1, 1);
-    row_label(grid, r, "Terminal font size (px)");
+    row_label(grid, r, _("Terminal font size (px)"));
     term_spin = spinner_new(grid, 8, 32, conf_int("term_font_px", 13));
     widget_connect(term_spin, "changed", on_term_font_size, NULL);
     widget_set_grid(term_spin, r++, 1, 1, 1);
-    row_label(grid, r, "Interface scale");
+    row_label(grid, r, _("Interface scale"));
     scale_combo = combobox_new(grid);
-    combobox_add(scale_combo, "100 %");
-    combobox_add(scale_combo, "125 %");
-    combobox_add(scale_combo, "150 %");
+    combobox_add(scale_combo, _("100 %"));
+    combobox_add(scale_combo, _("125 %"));
+    combobox_add(scale_combo, _("150 %"));
     int sc = conf_int("ui_scale", 100);
     combobox_select(scale_combo, sc >= 150 ? 2 : sc >= 125 ? 1 : 0);
     widget_connect(scale_combo, "changed", on_scale, NULL);
@@ -207,17 +209,23 @@ void build_display(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
-    char current[64] = "unknown";
+    /* The untranslated mode in current selects the resolution below, and the
+     * translated description in shown is what the label displays. */
+    char current[64] = "unknown", shown[128];
+    strlcpy(shown, _("unknown"), sizeof shown);
     struct gui_output_info info;
-    if (gui_get_output(0, &info) == 0)
+    if (gui_get_output(0, &info) == 0) {
         snprintf(current, sizeof current, "%dx%d pixels, scale %d (%dx%d logical), %d Hz", info.width * info.scale,
                  info.height * info.scale, info.scale, info.width, info.height, info.refresh_hz);
-    row_label(grid, r, "Current mode");
-    current_label = label_new(grid, current);
+        snprintf(shown, sizeof shown, _("%dx%d pixels, scale %d (%dx%d logical), %d Hz"), info.width * info.scale,
+                 info.height * info.scale, info.scale, info.width, info.height, info.refresh_hz);
+    }
+    row_label(grid, r, _("Current mode"));
+    current_label = label_new(grid, shown);
     widget_set_grid(current_label, r++, 1, 1, 1);
     const char *wanted = conf_get("display_mode")[0] ? conf_get("display_mode") : current;
     int scale = strchr(wanted, '@') ? atoi(strchr(wanted, '@') + 1) : (gui_get_output(0, &info) == 0 ? info.scale : 1);
-    row_label(grid, r, "Resolution");
+    row_label(grid, r, _("Resolution"));
     res_combo = combobox_new(grid);
     int selected = 0;
     for (int i = 0; i < NRES; i++) {
@@ -229,22 +237,22 @@ void build_display(struct widget *page)
     combobox_select(res_combo, selected);
     widget_connect(res_combo, "changed", on_res, NULL);
     widget_set_grid(res_combo, r++, 1, 1, 1);
-    row_label(grid, r, "Pixel density");
+    row_label(grid, r, _("Pixel density"));
     pixel_combo = combobox_new(grid);
-    combobox_add(pixel_combo, "Standard (1 pixel per point)");
-    combobox_add(pixel_combo, "High (2 pixels per point)");
+    combobox_add(pixel_combo, _("Standard (1 pixel per point)"));
+    combobox_add(pixel_combo, _("High (2 pixels per point)"));
     combobox_select(pixel_combo, scale >= 2 ? 1 : 0);
     widget_connect(pixel_combo, "changed", on_res, NULL);
     widget_set_grid(pixel_combo, r++, 1, 1, 1);
     widget_set_grid(separator_new(grid), r++, 0, 1, 2);
-    row_label(grid, r, "Frame interval (ms)");
+    row_label(grid, r, _("Frame interval (ms)"));
     frame_spin = spinner_new(grid, 4, 200, conf_int("frame_ms", 16));
     widget_connect(frame_spin, "changed", on_frame, NULL);
     widget_set_grid(frame_spin, r++, 1, 1, 1);
-    row_label(grid, r, "Window decorations");
+    row_label(grid, r, _("Window decorations"));
     decor_combo = combobox_new(grid);
-    combobox_add(decor_combo, "Drawn by the application (client side)");
-    combobox_add(decor_combo, "Drawn by X12 (server side)");
+    combobox_add(decor_combo, _("Drawn by the application (client side)"));
+    combobox_add(decor_combo, _("Drawn by X12 (server side)"));
     combobox_select(decor_combo, strcmp(conf_get("decorations"), "server") == 0 ? 1 : 0);
     widget_connect(decor_combo, "changed", on_decor, NULL);
     widget_set_grid(decor_combo, r++, 1, 1, 1);
@@ -259,10 +267,10 @@ static int nlayouts;
 
 static void show_rates(void)
 {
-    char text[48];
-    snprintf(text, sizeof text, "Repeat rate: %d per second", rate_slider->value);
+    char text[96];
+    snprintf(text, sizeof text, _("Repeat rate: %d per second"), rate_slider->value);
     widget_set_text(rate_label, text);
-    snprintf(text, sizeof text, "Repeat delay: %d ms", delay_slider->value);
+    snprintf(text, sizeof text, _("Repeat delay: %d ms"), delay_slider->value);
     widget_set_text(delay_label, text);
 }
 static int on_rate(struct widget *w, void *args, void *arg)
@@ -291,7 +299,7 @@ void build_keyboard(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
-    row_label(grid, r, "Layout");
+    row_label(grid, r, _("Layout"));
     layout_combo = combobox_new(grid);
     nlayouts = 0;
     DIR *d = opendir(KEYMAP_DIR);
@@ -334,8 +342,8 @@ static struct widget *speed_slider, *speed_label, *accel_combo;
 
 static void show_speed(void)
 {
-    char text[48];
-    snprintf(text, sizeof text, "Pointer speed: %d", speed_slider->value);
+    char text[96];
+    snprintf(text, sizeof text, _("Pointer speed: %d"), speed_slider->value);
     widget_set_text(speed_label, text);
 }
 static int on_speed(struct widget *w, void *args, void *arg)
@@ -358,10 +366,10 @@ void build_mouse(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
-    row_label(grid, r, "Acceleration");
+    row_label(grid, r, _("Acceleration"));
     accel_combo = combobox_new(grid);
-    combobox_add(accel_combo, "Flat");
-    combobox_add(accel_combo, "Adaptive");
+    combobox_add(accel_combo, _("Flat"));
+    combobox_add(accel_combo, _("Adaptive"));
     combobox_select(accel_combo, strcmp(conf_get("pointer_accel"), "flat") == 0 ? 0 : 1);
     widget_connect(accel_combo, "changed", on_accel, NULL);
     widget_set_grid(accel_combo, r++, 1, 1, 1);

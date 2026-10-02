@@ -1,0 +1,405 @@
+# Russian messages of the settings domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/settings/look.c:105
+msgid "Wallpaper"
+msgstr "Обои"
+
+#: user/settings/look.c:115
+msgid "None (solid colour)"
+msgstr "Нет (сплошной цвет)"
+
+#: user/settings/look.c:119
+msgid "Placement"
+msgstr "Размещение"
+
+#: user/settings/look.c:12
+msgid "Fill the screen"
+msgstr "Заполнить экран"
+
+#: user/settings/look.c:12
+msgid "Centre"
+msgstr "По центру"
+
+#: user/settings/look.c:12
+msgid "Tile"
+msgstr "Мозаика"
+
+#: user/settings/look.c:12
+msgid "Stretch"
+msgstr "Растянуть"
+
+#: user/settings/look.c:131
+msgid "Desktop colour"
+msgstr "Цвет рабочего стола"
+
+#: user/settings/look.c:137
+msgid "Red"
+msgstr "Красный"
+
+#: user/settings/look.c:137
+msgid "Green"
+msgstr "Зелёный"
+
+#: user/settings/look.c:137
+msgid "Blue"
+msgstr "Синий"
+
+#: user/settings/look.c:145
+msgid "Interface font"
+msgstr "Шрифт интерфейса"
+
+#: user/settings/look.c:156
+msgid "Font size (px)"
+msgstr "Размер шрифта (px)"
+
+#: user/settings/look.c:160
+msgid "Terminal font size (px)"
+msgstr "Размер шрифта терминала (px)"
+
+#: user/settings/look.c:164
+msgid "Interface scale"
+msgstr "Масштаб интерфейса"
+
+#: user/settings/look.c:166
+msgid "100 %"
+msgstr "100 %"
+
+#: user/settings/look.c:167
+msgid "125 %"
+msgstr "125 %"
+
+#: user/settings/look.c:168
+msgid "150 %"
+msgstr "150 %"
+
+#: user/settings/look.c:19
+msgid "Builtin bitmap font"
+msgstr "Встроенный растровый шрифт"
+
+#: user/settings/look.c:215
+msgid "unknown"
+msgstr "неизвестно"
+
+#: user/settings/look.c:220
+msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
+msgstr "%dx%d пикселей, масштаб %d (%dx%d логических), %d Гц"
+
+#: user/settings/look.c:223
+msgid "Current mode"
+msgstr "Текущий режим"
+
+#: user/settings/look.c:228
+msgid "Resolution"
+msgstr "Разрешение"
+
+#: user/settings/look.c:240
+msgid "Pixel density"
+msgstr "Плотность пикселей"
+
+#: user/settings/look.c:242
+msgid "Standard (1 pixel per point)"
+msgstr "Стандартная (1 пиксель на точку)"
+
+#: user/settings/look.c:243
+msgid "High (2 pixels per point)"
+msgstr "Высокая (2 пикселя на точку)"
+
+#: user/settings/look.c:248
+msgid "Frame interval (ms)"
+msgstr "Интервал кадров (мс)"
+
+#: user/settings/look.c:252
+msgid "Window decorations"
+msgstr "Оформление окон"
+
+#: user/settings/look.c:254
+msgid "Drawn by the application (client side)"
+msgstr "Рисует приложение (на стороне клиента)"
+
+#: user/settings/look.c:255
+msgid "Drawn by X12 (server side)"
+msgstr "Рисует X12 (на стороне сервера)"
+
+#: user/settings/look.c:271
+msgid "Repeat rate: %d per second"
+msgstr "Частота повтора: %d в секунду"
+
+#: user/settings/look.c:273
+msgid "Repeat delay: %d ms"
+msgstr "Задержка повтора: %d мс"
+
+#: user/settings/look.c:302
+msgid "Layout"
+msgstr "Раскладка"
+
+#: user/settings/look.c:346
+msgid "Pointer speed: %d"
+msgstr "Скорость указателя: %d"
+
+#: user/settings/look.c:369
+msgid "Acceleration"
+msgstr "Ускорение"
+
+#: user/settings/look.c:371
+msgid "Flat"
+msgstr "Постоянное"
+
+#: user/settings/look.c:372
+msgid "Adaptive"
+msgstr "Адаптивное"
+
+#: user/settings/settings.c:124
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: user/settings/settings.c:125
+msgid "Display"
+msgstr "Экран"
+
+#: user/settings/settings.c:126
+msgid "Keyboard"
+msgstr "Клавиатура"
+
+#: user/settings/settings.c:127
+msgid "Mouse"
+msgstr "Мышь"
+
+#: user/settings/settings.c:128
+msgid "Sound"
+msgstr "Звук"
+
+#: user/settings/settings.c:129 user/settings/system.c:179
+msgid "Date and time"
+msgstr "Дата и время"
+
+#: user/settings/settings.c:130
+msgid "File types"
+msgstr "Типы файлов"
+
+#: user/settings/settings.c:131
+msgid "Launcher"
+msgstr "Меню запуска"
+
+#: user/settings/settings.c:132
+msgid "System"
+msgstr "Система"
+
+#: user/settings/settings.c:90 user/settings/system.c:178
+msgid "OK"
+msgstr "ОК"
+
+#: user/settings/settings.c:91 user/settings/settings.c:166
+msgid "Settings"
+msgstr "Параметры"
+
+#: user/settings/settings.c:91
+msgid "The settings file cannot be written."
+msgstr "Не удаётся записать файл параметров."
+
+#: user/settings/system.c:106
+msgid "Output volume"
+msgstr "Громкость вывода"
+
+#: user/settings/system.c:110
+msgid "Streams"
+msgstr "Потоки"
+
+#: user/settings/system.c:142
+msgid "Year"
+msgstr "Год"
+
+#: user/settings/system.c:142
+msgid "Month"
+msgstr "Месяц"
+
+#: user/settings/system.c:142
+msgid "Day"
+msgstr "День"
+
+#: user/settings/system.c:142
+msgid "Hour"
+msgstr "Час"
+
+#: user/settings/system.c:142
+msgid "Minute"
+msgstr "Минута"
+
+#: user/settings/system.c:143
+msgid "Second"
+msgstr "Секунда"
+
+#: user/settings/system.c:179
+msgid "The clock could not be set."
+msgstr "Не удалось установить часы."
+
+#: user/settings/system.c:201
+msgid "Load current time"
+msgstr "Загрузить текущее время"
+
+#: user/settings/system.c:202
+msgid "Set clock"
+msgstr "Установить часы"
+
+#: user/settings/system.c:219
+msgid "Type"
+msgstr "Тип"
+
+#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+msgid "Program"
+msgstr "Программа"
+
+#: user/settings/system.c:248
+msgid "New file type"
+msgstr "Новый тип файла"
+
+#: user/settings/system.c:248
+msgid "Type (for example text/x-log):"
+msgstr "Тип (например, text/x-log):"
+
+#: user/settings/system.c:266
+msgid "(select a type)"
+msgstr "(выберите тип)"
+
+#: user/settings/system.c:271
+msgid "Set"
+msgstr "Задать"
+
+#: user/settings/system.c:272
+msgid "Add type..."
+msgstr "Добавить тип..."
+
+#: user/settings/system.c:322 user/settings/system.c:396
+msgid "Menu entry"
+msgstr "Пункт меню"
+
+#: user/settings/system.c:34
+msgid "capture"
+msgstr "запись"
+
+#: user/settings/system.c:34
+msgid "playback"
+msgstr "воспроизведение"
+
+#: user/settings/system.c:35
+msgid "%u %%"
+msgstr "%u %%"
+
+#: user/settings/system.c:36
+msgid "running"
+msgstr "работает"
+
+#: user/settings/system.c:36
+msgid "error"
+msgstr "ошибка"
+
+#: user/settings/system.c:36
+msgid "paused"
+msgstr "приостановлен"
+
+#: user/settings/system.c:404
+msgid "Save entry"
+msgstr "Сохранить пункт"
+
+#: user/settings/system.c:405
+msgid "New"
+msgstr "Создать"
+
+#: user/settings/system.c:406
+msgid "Remove"
+msgstr "Удалить"
+
+#: user/settings/system.c:407
+msgid "Move up"
+msgstr "Вверх"
+
+#: user/settings/system.c:408
+msgid "Move down"
+msgstr "Вниз"
+
+#: user/settings/system.c:41
+msgid "Stream"
+msgstr "Поток"
+
+#: user/settings/system.c:41
+msgid "Direction"
+msgstr "Направление"
+
+#: user/settings/system.c:41
+msgid "Volume"
+msgstr "Громкость"
+
+#: user/settings/system.c:41
+msgid "State"
+msgstr "Состояние"
+
+#: user/settings/system.c:425
+msgid "Up %ld:%02ld:%02ld"
+msgstr "Работает %ld:%02ld:%02ld"
+
+#: user/settings/system.c:438
+msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
+msgstr "Память: занято %ld из %ld МиБ, подкачка: занято %ld из %ld МиБ"
+
+#: user/settings/system.c:454
+msgid "%s %s (%s) on %s"
+msgstr "%s %s (%s) на %s"
+
+#: user/settings/system.c:457
+msgid "%d processor"
+msgid_plural "%d processors"
+msgstr[0] "%d процессор"
+msgstr[1] "%d процессора"
+msgstr[2] "%d процессоров"
+
+#: user/settings/system.c:461
+msgid "Display %dx%d pixels at scale %d"
+msgstr "Экран %dx%d пикселей, масштаб %d"
+
+#: user/settings/system.c:470
+msgid "Tools"
+msgstr "Инструменты"
+
+#: user/settings/system.c:472
+msgid "System monitor"
+msgstr "Системный монитор"
+
+#: user/settings/system.c:473
+msgid "Kernel log"
+msgstr "Журнал ядра"
+
+#: user/settings/system.c:474
+msgid "X12 settings"
+msgstr "Параметры X12"
+
+#: user/settings/system.c:52
+msgid "Output volume: %u %%"
+msgstr "Громкость вывода: %u %%"
+
+#: user/settings/system.c:59
+msgid "%s: %u %%"
+msgstr "%s: %u %%"
+
+#: user/settings/system.c:64 user/settings/system.c:119
+msgid "Stream volume"
+msgstr "Громкость потока"
+
+#: user/settings/system.c:67
+msgid "%d stream"
+msgid_plural "%d streams"
+msgstr[0] "%d поток"
+msgstr[1] "%d потока"
+msgstr[2] "%d потоков"
+
+#: user/settings/system.c:76 user/settings/system.c:128
+msgid "No audio server"
+msgstr "Нет звукового сервера"
+
+#: user/settings/system.c:90
+msgid "Output volume: %d %%"
+msgstr "Громкость вывода: %d %%"

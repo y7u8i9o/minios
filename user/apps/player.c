@@ -10,6 +10,8 @@
  * position. */
 #include <audio/audio.h>
 #include <gui/app.h>
+#include <gui/i18n.h>
+#include <langinfo.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -280,7 +282,7 @@ static int load_start(const char *path, int autoplay, uint32_t start)
     loading = 1;
     const char *base = strrchr(path, '/');
     char text[300];
-    snprintf(text, sizeof text, "Loading %s", base ? base + 1 : path);
+    snprintf(text, sizeof text, _("Loading %s"), base ? base + 1 : path);
     widget_set_text(info, text);
     return 0;
 }
@@ -300,9 +302,9 @@ static void load_finish(void)
     pthread_join(loader, NULL);
     loading = 0;
     if (job.error) {
-        static const char *const buttons[] = { "Close" };
+        const char *const buttons[] = { _("Close") };
         show_info();
-        app_dialog(app, "Error", "The file is not a PCM WAV file.", buttons, 1);
+        app_dialog(app, _("Error"), _("The file is not a PCM WAV file."), buttons, 1);
         return;
     }
     free(samples);
@@ -339,7 +341,7 @@ static void set_playing(int on)
     if (on == playing)
         return;
     playing = on;
-    widget_set_text(play_button, playing ? "Pause" : "Play");
+    widget_set_text(play_button, playing ? _("Pause") : _("Play"));
     printf("player: %s %s\n", playing ? "playing" : "paused", file_name);
     fflush(stdout);
 }
@@ -358,7 +360,7 @@ static void render_period(void)
             }
             if (playing) {
                 playing = 0;
-                widget_set_text(play_button, "Play");
+                widget_set_text(play_button, _("Play"));
                 printf("player: finished %s\n", file_name);
                 fflush(stdout);
             }
@@ -388,7 +390,7 @@ static void audio_event(int fd, int revents, void *arg)
 {
     if (revents & (POLLERR | POLLHUP | POLLNVAL) ||
         audio_connection_dispatch(audio, 1) < 0 || fill_ready_buffers() < 0) {
-        widget_set_text(info, "The audio server disconnected");
+        widget_set_text(info, _("The audio server disconnected"));
         if (audio_watch) {
             app_unwatch_fd(app, audio_watch);
             audio_watch = NULL;
@@ -446,7 +448,7 @@ static int on_paint(struct widget *w, void *args, void *arg)
     int mid = w->h / 2, scale = mid - 3;
     painter_line(p, 1, mid, w->w - 2, mid, t->color[TC_BORDER]);
     if (!frames) {
-        const char *text = "No file";
+        const char *text = _("No file");
         painter_text(p, (w->w - painter_text_width(p, text, -1)) / 2,
                      mid - painter_text_height(p) / 2, text, t->color[TC_TEXT_DISABLED]);
         return 1;
@@ -483,10 +485,10 @@ static void show_info(void)
 {
     char text[256];
     if (frames)
-        snprintf(text, sizeof text, "%s    %s    %u.%u s", file_name, format_text,
-                 frames / RATE, (frames % RATE) * 10 / RATE);
+        snprintf(text, sizeof text, _("%s    %s    %u%s%u s"), file_name, format_text,
+                 frames / RATE, nl_langinfo(RADIXCHAR), (frames % RATE) * 10 / RATE);
     else
-        snprintf(text, sizeof text, "No file loaded");
+        snprintf(text, sizeof text, "%s", _("No file loaded"));
     widget_set_text(info, text);
     update_time();
 }
@@ -511,11 +513,11 @@ static int on_stop(struct widget *w, void *args, void *arg)
 static int on_open(struct widget *w, void *args, void *arg)
 {
     static char name[256] = "/usr/share/sounds/";
-    static const char *const buttons[] = { "Close" };
-    if (app_prompt(app, "Open", "File:", name, sizeof name)) {
+    const char *const buttons[] = { _("Close") };
+    if (app_prompt(app, _("Open"), _("File:"), name, sizeof name)) {
         set_playing(0);
         if (load_start(name, 1, 0) < 0)
-            app_dialog(app, "Error", "A file is still being loaded.", buttons, 1);
+            app_dialog(app, _("Error"), _("A file is still being loaded."), buttons, 1);
     }
     return 1;
 }
@@ -525,13 +527,13 @@ static int on_open(struct widget *w, void *args, void *arg)
  * until the new samples replace them at the same position. */
 static int on_resampling(struct widget *w, void *args, void *arg)
 {
-    static const char *const buttons[] = { "Close" };
+    const char *const buttons[] = { _("Close") };
     int sinc = arg != NULL;
     if (sinc == use_sinc)
         return 1;
     use_sinc = sinc;
     if (file_path[0] && load_start(file_path, playing, position) < 0)
-        app_dialog(app, "Error", "A file is still being loaded.", buttons, 1);
+        app_dialog(app, _("Error"), _("A file is still being loaded."), buttons, 1);
     return 1;
 }
 
@@ -544,7 +546,7 @@ static int on_loop(struct widget *w, void *args, void *arg)
 static int on_volume(struct widget *w, void *args, void *arg)
 {
     char text[32];
-    snprintf(text, sizeof text, "Volume: %d%%", w->value);
+    snprintf(text, sizeof text, _("Volume: %d%%"), w->value);
     widget_set_text(volume_label, text);
     audio_playback_set_volume(playback, (unsigned)w->value);
     return 1;
@@ -575,14 +577,15 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
-    struct widget *win = app_window(app, 560, 300, "player");
+    textdomain("player");
+    struct widget *win = app_window(app, 560, 300, _("player"));
     if (!win)
         return 1;
     audio = audio_connect();
     playback = audio ? audio_playback_create(audio, "player") : NULL;
     if (!playback) {
-        static const char *const buttons[] = { "Close" };
-        app_dialog(app, "Player", "The desktop audio service is unavailable.", buttons, 1);
+        const char *const buttons[] = { _("Close") };
+        app_dialog(app, _("Player"), _("The desktop audio service is unavailable."), buttons, 1);
         audio_disconnect(audio);
         app_destroy(app);
         return 1;
@@ -591,22 +594,24 @@ int main(int argc, char **argv)
     period = calloc((size_t)quantum * 2, sizeof *period);
 
     struct widget *bar = menubar_new(win);
-    struct widget *file = menu_new(bar, "File");
-    widget_connect(menu_add(file, "Open...", "open"), "clicked", on_open, NULL);
+    struct widget *file = menu_new(bar, _("File"));
+    widget_connect(menu_add(file, _("Open..."), "open"), "clicked", on_open, NULL);
     menu_add_separator(file);
-    widget_connect(menu_add(file, "Quit", "quit"), "clicked", on_quit, NULL);
-    struct widget *resampling = menu_new(bar, "Resampling");
-    widget_connect(menu_add(resampling, "Linear", NULL), "clicked", on_resampling, NULL);
-    widget_connect(menu_add(resampling, "Sinc (experimental)", NULL), "clicked", on_resampling, &use_sinc);
+    widget_connect(menu_add(file, _("Quit"), "quit"), "clicked", on_quit, NULL);
+    struct widget *resampling = menu_new(bar, _("Resampling"));
+    widget_connect(menu_add(resampling, _("Linear"), NULL), "clicked", on_resampling, NULL);
+    widget_connect(menu_add(resampling, _("Sinc (experimental)"), NULL), "clicked", on_resampling, &use_sinc);
 
     struct widget *transport = box_new(win, 0);
     widget_set_stretch(transport, 1, 0);
-    play_button = button_new(transport, "Play");
+    play_button = button_new(transport, _("Play"));
     widget_connect(play_button, "clicked", on_play, NULL);
-    widget_connect(button_new(transport, "Stop"), "clicked", on_stop, NULL);
-    loop_box = checkbox_new(transport, "Loop");
+    widget_connect(button_new(transport, _("Stop")), "clicked", on_stop, NULL);
+    loop_box = checkbox_new(transport, _("Loop"));
     widget_connect(loop_box, "toggled", on_loop, NULL);
-    volume_label = label_new(transport, "Volume: 100%");
+    char volume_text[32];
+    snprintf(volume_text, sizeof volume_text, _("Volume: %d%%"), 100);
+    volume_label = label_new(transport, volume_text);
     volume = slider_new(transport, 0, 100, 100);
     widget_set_stretch(volume, 1, 0);
     widget_connect(volume, "changed", on_volume, NULL);

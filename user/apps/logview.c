@@ -16,6 +16,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <langinfo.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@
 #include <unistd.h>
 #include <gui/app.h>
 #include <gui/model.h>
+#include <gui/i18n.h>
 #include <minios/input.h>
 
 #define MAX_ENTRIES 10000       /* the oldest rows are dropped beyond this */
@@ -30,7 +32,7 @@
 #define LINE_MAX_LEN 1024
 
 enum { L_DEBUG, L_INFO, L_WARNING, L_ERROR, NLEVELS };
-static const char *const level_names[NLEVELS] = { "Debug", "Info", "Warning", "Error" };
+static const char *const level_names[NLEVELS] = { N_("Debug"), N_("Info"), N_("Warning"), N_("Error") };
 static const char *const level_args[NLEVELS] = { "debug", "info", "warning", "error" };
 static const uint32_t level_colors[NLEVELS] = { 0xff9a9a9a, 0xff3a7bd5, 0xffe08a1e, 0xffd03b3b };
 
@@ -149,9 +151,9 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
     case 0:
         if (e->us < 0)
             return "";
-        snprintf(buf, size, "%ld.%06ld", e->us / 1000000, e->us % 1000000);
+        snprintf(buf, size, "%ld%s%06ld", e->us / 1000000, nl_langinfo(RADIXCHAR), e->us % 1000000);
         return buf;
-    case 1: return level_names[e->level];
+    case 1: return _(level_names[e->level]);
     case 2: return e->subsys;
     default: return e->msg;
     }
@@ -159,8 +161,8 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
 
 static const char *m_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Time", "Level", "Subsystem", "Message" };
-    return names[col];
+    static const char *const names[] = { N_("Time"), N_("Level"), N_("Subsystem"), N_("Message") };
+    return _(names[col]);
 }
 
 static const struct image *m_icon(struct model *m, int row)
@@ -190,14 +192,17 @@ static struct image *make_dot(uint32_t color)
 
 static void update_status(void)
 {
-    char text[64];
-    snprintf(text, sizeof text, "%ld of %ld lines", nshown, next_seq - first_seq);
+    char text[96], warning_text[48], error_text[48];
+    long total = next_seq - first_seq;
+    snprintf(text, sizeof text, ngettext("%ld of %ld line", "%ld of %ld lines", (unsigned long)total), nshown, total);
     widget_set_text(st_rows, text);
-    snprintf(text, sizeof text, "%ld warning%s, %ld error%s", warnings, warnings == 1 ? "" : "s", errors,
-             errors == 1 ? "" : "s");
+    snprintf(warning_text, sizeof warning_text, ngettext("%ld warning", "%ld warnings", (unsigned long)warnings),
+             warnings);
+    snprintf(error_text, sizeof error_text, ngettext("%ld error", "%ld errors", (unsigned long)errors), errors);
+    snprintf(text, sizeof text, _("%s, %s"), warning_text, error_text);
     widget_set_text(st_levels, text);
     if (lost) {
-        snprintf(text, sizeof text, "%ld bytes lost", lost);
+        snprintf(text, sizeof text, ngettext("%ld byte lost", "%ld bytes lost", (unsigned long)lost), lost);
         widget_set_text(st_lost, text);
     } else {
         widget_set_text(st_lost, "");
@@ -324,8 +329,8 @@ static void on_klog(int fd, int revents, void *arg)
 
 static void message(const char *text)
 {
-    const char *const buttons[] = { "OK" };
-    app_dialog(app, "Kernel log", text, buttons, 1);
+    const char *const buttons[] = { _("OK") };
+    app_dialog(app, _("Kernel log"), text, buttons, 1);
 }
 
 static int on_select(struct widget *w, void *args, void *arg)
@@ -374,12 +379,12 @@ static int on_save(struct widget *w, void *args, void *arg)
 {
     char name[PATH_MAX];
     snprintf(name, sizeof name, "%s/klog.txt", getenv("HOME") ? getenv("HOME") : "/home");
-    if (!app_prompt(app, "Save", "File:", name, sizeof name))
+    if (!app_prompt(app, _("Save"), _("File:"), name, sizeof name))
         return 1;
     FILE *f = fopen(name, "w");
     if (!f) {
         char text[PATH_MAX + 64];
-        snprintf(text, sizeof text, "%s cannot be written: %s", name, strerror(errno));
+        snprintf(text, sizeof text, _("%s cannot be written: %s"), name, strerror(errno));
         message(text);
         return 1;
     }
@@ -387,7 +392,7 @@ static int on_save(struct widget *w, void *args, void *arg)
         fprintf(f, "%s\n", entry_of(shown[i])->raw);
     int err = ferror(f);
     if (fclose(f) != 0 || err) {
-        message("The file was not written completely.");
+        message(_("The file was not written completely."));
         return 1;
     }
     printf("logview: saved %ld lines to %s\n", nshown, name);
@@ -437,6 +442,7 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
+    textdomain("logview");
     klog_fd = open("/dev/klog", O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (klog_fd < 0) {
         perror("logview: /dev/klog");
@@ -444,42 +450,42 @@ int main(int argc, char **argv)
     }
     for (int l = 0; l < NLEVELS; l++)
         dots[l] = make_dot(level_colors[l]);
-    win = app_window(app, 820, 500, "Kernel log");
+    win = app_window(app, 820, 500, _("Kernel log"));
     if (!win)
         return 1;
     struct widget *mb = menubar_new(win);
-    struct widget *file = menu_new(mb, "File");
-    struct widget *m = menu_add(file, "Save...", "save");
+    struct widget *file = menu_new(mb, _("File"));
+    struct widget *m = menu_add(file, _("Save..."), "save");
     widget_connect(m, "clicked", on_save, NULL);
     widget_set_accel(m, KEY_S, WMOD_CTRL);
     menu_add_separator(file);
-    widget_connect(menu_add(file, "Quit", "quit"), "clicked", on_quit, NULL);
-    struct widget *edit = menu_new(mb, "Edit");
-    m = menu_add(edit, "Copy", "copy");
+    widget_connect(menu_add(file, _("Quit"), "quit"), "clicked", on_quit, NULL);
+    struct widget *edit = menu_new(mb, _("Edit"));
+    m = menu_add(edit, _("Copy"), "copy");
     widget_connect(m, "clicked", on_copy, NULL);
     widget_set_accel(m, KEY_C, WMOD_CTRL);
-    widget_connect(menu_add(edit, "Clear", NULL), "clicked", on_clear, NULL);
+    widget_connect(menu_add(edit, _("Clear"), NULL), "clicked", on_clear, NULL);
 
     struct widget *tools = toolbar_new(win);
-    widget_connect(toolbar_add(tools, "save", "Save"), "clicked", on_save, NULL);
-    widget_connect(toolbar_add(tools, "copy", "Copy"), "clicked", on_copy, NULL);
+    widget_connect(toolbar_add(tools, "save", _("Save")), "clicked", on_save, NULL);
+    widget_connect(toolbar_add(tools, "copy", _("Copy")), "clicked", on_copy, NULL);
     level_combo = combobox_new(tools);
-    combobox_add(level_combo, "All levels");
-    combobox_add(level_combo, "Info and above");
-    combobox_add(level_combo, "Warnings and errors");
-    combobox_add(level_combo, "Errors");
+    combobox_add(level_combo, _("All levels"));
+    combobox_add(level_combo, _("Info and above"));
+    combobox_add(level_combo, _("Warnings and errors"));
+    combobox_add(level_combo, _("Errors"));
     combobox_select(level_combo, min_level);
     widget_connect(level_combo, "changed", on_level, NULL);
     subsys_combo = combobox_new(tools);
-    combobox_add(subsys_combo, "All subsystems");
+    combobox_add(subsys_combo, _("All subsystems"));
     combobox_select(subsys_combo, 0);
     widget_connect(subsys_combo, "changed", on_subsys, NULL);
     search = textfield_new(tools, needle);
     widget_set_hint(search, 180, 0);
     widget_set_max(search, 180, 0);
-    widget_set_tip(search, "Find");
+    widget_set_tip(search, _("Find"));
     widget_connect(search, "changed", on_search, NULL);
-    follow_box = checkbox_new(tools, "Follow");
+    follow_box = checkbox_new(tools, _("Follow"));
     widget_set_value(follow_box, 1);
     widget_connect(follow_box, "toggled", on_follow, NULL);
 

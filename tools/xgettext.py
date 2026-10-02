@@ -5,8 +5,9 @@ docs/design/gettext.md).
     tools/xgettext.py -o user/po/DOMAIN/DOMAIN.pot FILE.c...
 
 A translatable string is the argument of _("..."), N_("...") or
-gettext("..."), the first two arguments of ngettext("...", "...", n), or
-the context and string of C_("context", "...").  Adjacent string literals
+gettext("..."), the second argument of dgettext("domain", "..."), the
+first two arguments of ngettext("...", "...", n), or the context and string
+of C_("context", "...").  Adjacent string literals
 are joined.  The escapes of C are those of the .po format and are copied
 unchanged.  Each message lists the files and lines where it occurs."""
 import re
@@ -18,6 +19,7 @@ PATTERNS = [
     ('one', re.compile(r'\b(?:_|N_|gettext)\(\s*' + STRINGS + r'\)')),
     ('plural', re.compile(r'\bngettext\(\s*' + STRINGS + r',\s*' + STRINGS + r',')),
     ('context', re.compile(r'\bC_\(\s*' + STRINGS + r',\s*' + STRINGS + r'\)')),
+    ('domain', re.compile(r'\bdgettext\(\s*' + STRINGS + r',\s*' + STRINGS + r'\)')),
 ]
 
 
@@ -51,6 +53,8 @@ def main():
                     key = (None, join(m.group(1)), None)
                 elif kind == 'plural':
                     key = (None, join(m.group(1)), join(m.group(2)))
+                elif kind == 'domain':
+                    key = (None, join(m.group(2)), None)
                 else:
                     key = (join(m.group(1)), join(m.group(2)), None)
                 if key[1]:

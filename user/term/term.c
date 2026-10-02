@@ -22,6 +22,7 @@
 #include <sys/ipc.h>
 #include <sys/wait.h>
 #include <gui/app.h>
+#include <gui/i18n.h>
 #include <gui/utf8.h>
 #include "term.h"
 
@@ -213,7 +214,7 @@ static void on_frame(void *arg)
             widget_invalidate(tabs);
             if (i == current) {
                 char title[96];
-                snprintf(title, sizeof title, "%s - Terminal", t->title);
+                snprintf(title, sizeof title, _("%s - Terminal"), t->title);
                 gui_set_title(window_state_of(win)->win, title);
             }
         }
@@ -255,9 +256,9 @@ static void update_title(void)
     struct tab *t = cur();
     char title[96];
     if (t && t->vt->title[0])
-        snprintf(title, sizeof title, "%s - Terminal", t->title);
+        snprintf(title, sizeof title, _("%s - Terminal"), t->title);
     else
-        strlcpy(title, "Terminal", sizeof title);
+        strlcpy(title, _("Terminal"), sizeof title);
     gui_set_title(window_state_of(win)->win, title);
 }
 
@@ -683,9 +684,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "term: no window server\n");
         return 1;
     }
+    textdomain("term");
     sbw = theme_px(app_theme(app), TM_SCROLLBAR);
     load_font(conf_font_px());
-    win = app_window(app, cols * cell_w + 2 * PAD_X + sbw, rows * cell_h + 2 * PAD_Y, "Terminal");
+    win = app_window(app, cols * cell_w + 2 * PAD_X + sbw, rows * cell_h + 2 * PAD_Y, _("Terminal"));
     if (!win)
         return 1;
     widget_set_padding(win, 0);
@@ -698,17 +700,17 @@ int main(int argc, char **argv)
     widget_connect(win, "focus", on_focus, NULL);
     widget_connect(win, "close", on_close, NULL);
     menu = popupmenu_new(win);
-    widget_connect(menu_add(menu, "Copy", "copy"), "clicked", on_menu_copy, NULL);
-    widget_connect(menu_add(menu, "Paste", "paste"), "clicked", on_menu_paste, NULL);
+    widget_connect(menu_add(menu, _("Copy"), "copy"), "clicked", on_menu_copy, NULL);
+    widget_connect(menu_add(menu, _("Paste"), "paste"), "clicked", on_menu_paste, NULL);
     menu_add_separator(menu);
-    widget_connect(menu_add(menu, "New tab", "new"), "clicked", on_menu_new_tab, NULL);
-    widget_connect(menu_add(menu, "Close tab", NULL), "clicked", on_menu_close_tab, NULL);
+    widget_connect(menu_add(menu, _("New tab"), "new"), "clicked", on_menu_new_tab, NULL);
+    widget_connect(menu_add(menu, _("Close tab"), NULL), "clicked", on_menu_close_tab, NULL);
     menu_add_separator(menu);
-    widget_connect(menu_add(menu, "Larger text", NULL), "clicked", on_menu_zoom_in, NULL);
-    widget_connect(menu_add(menu, "Smaller text", NULL), "clicked", on_menu_zoom_out, NULL);
-    widget_connect(menu_add(menu, "Normal size", NULL), "clicked", on_menu_zoom_reset, NULL);
+    widget_connect(menu_add(menu, _("Larger text"), NULL), "clicked", on_menu_zoom_in, NULL);
+    widget_connect(menu_add(menu, _("Smaller text"), NULL), "clicked", on_menu_zoom_out, NULL);
+    widget_connect(menu_add(menu, _("Normal size"), NULL), "clicked", on_menu_zoom_reset, NULL);
     menu_add_separator(menu);
-    widget_connect(menu_add(menu, "Clear scrollback", NULL), "clicked", on_menu_clear, NULL);
+    widget_connect(menu_add(menu, _("Clear scrollback"), NULL), "clicked", on_menu_clear, NULL);
     if (!open_tab(child_argv, start_dir))
         return 1;
     grid_from_canvas();

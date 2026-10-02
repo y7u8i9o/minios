@@ -1,0 +1,47 @@
+# Spanish messages of the term domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: user/term/term.c:217 user/term/term.c:259
+msgid "%s - Terminal"
+msgstr "%s - Terminal"
+
+#: user/term/term.c:261 user/term/term.c:690
+msgid "Terminal"
+msgstr "Terminal"
+
+#: user/term/term.c:703
+msgid "Copy"
+msgstr "Copiar"
+
+#: user/term/term.c:704
+msgid "Paste"
+msgstr "Pegar"
+
+#: user/term/term.c:706
+msgid "New tab"
+msgstr "Pestaña nueva"
+
+#: user/term/term.c:707
+msgid "Close tab"
+msgstr "Cerrar pestaña"
+
+#: user/term/term.c:709
+msgid "Larger text"
+msgstr "Texto más grande"
+
+#: user/term/term.c:710
+msgid "Smaller text"
+msgstr "Texto más pequeño"
+
+#: user/term/term.c:711
+msgid "Normal size"
+msgstr "Tamaño normal"
+
+#: user/term/term.c:713
+msgid "Clear scrollback"
+msgstr "Borrar el historial"

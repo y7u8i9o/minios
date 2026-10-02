@@ -1,0 +1,53 @@
+# French messages of the panel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr "Applications"
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr "Système"
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr "Rechercher"
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr "Aucun service audio"
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr "Sortie"
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr "capture %u%%"
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr "lecture %u%%"
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr "en pause %u%%"
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr "Aucun flux"
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "%d de plus"
+msgstr[1] "%d de plus"
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr "Menu"

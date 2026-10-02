@@ -123,7 +123,7 @@ build runs no Python. The build compiles every `user/po/DOMAIN/LL.po`.
 `tools/xgettext.py` remains a Python program for maintainers. The cases
 `gettext` and `locale` pass.
 
-### L4. Fonts and translated desktop
+### L4. Fonts and translated desktop (completed 2026-10-03)
 
 - The font fallback is a chain: DejaVu Sans, DejaVu Sans Mono, Droid Sans
   Fallback.
@@ -137,6 +137,18 @@ build runs no Python. The build compiles every `user/po/DOMAIN/LL.po`.
   separator of the locale.
 - The boot test is `gui_locale`, and the design document is
   `docs/design/i18n.md`.
+
+The CJK font is in `third_party/droidfallback` and is read on first use,
+because libfont reads a font file into memory and the file has 4 MB.
+screenshot has no graphical interface and no catalogue. The work found a
+race in libgui: a window destroyed with a pending frame callback received
+the callback's event after it was freed, and Files died in about one run
+of `gui_files` in three. That fix is a separate commit. The cases
+`gui_locale`, `gui_settings`, `gui_desktop`, `gui_files`, `gui_term`,
+`gui_term_scale2`, `comp_panel`, `gui_wm`, `gui_sysmon`, `gui_logview`,
+`gui_editor`, `gui_mandel`, `audio_player`, `gui_images`, `gui_tools`,
+`prof_gui`, `gui_widgets` and `gui_controls` pass, and `make check` for
+libgui passes.
 
 ### L5. Keyboard layouts
 

@@ -1,0 +1,143 @@
+# Spanish messages of the mandel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: user/apps/mandel.c:556
+msgid "Julia %s"
+msgstr "Julia %s"
+
+#: user/apps/mandel.c:558
+msgid "Centre %s"
+msgstr "Centro %s"
+
+#: user/apps/mandel.c:563
+msgid "Zoom %.2e"
+msgstr "Zoom %.2e"
+
+#: user/apps/mandel.c:565
+msgid "Zoom %.0fx"
+msgstr "Zoom %.0fx"
+
+#: user/apps/mandel.c:567
+msgid "Zoom 1/%.0fx"
+msgstr "Zoom 1/%.0fx"
+
+#: user/apps/mandel.c:573
+msgid "%d iteration, %d%%"
+msgid_plural "%d iterations, %d%%"
+msgstr[0] "%d iteración, %d%%"
+msgstr[1] "%d iteraciones, %d%%"
+
+#: user/apps/mandel.c:576
+msgid "%d iteration, %ld%s%01ld s"
+msgid_plural "%d iterations, %ld%s%01ld s"
+msgstr[0] "%d iteración, %ld%s%01ld s"
+msgstr[1] "%d iteraciones, %ld%s%01ld s"
+
+#: user/apps/mandel.c:580
+msgid "%d iteration, %ld ms"
+msgid_plural "%d iterations, %ld ms"
+msgstr[0] "%d iteración, %ld ms"
+msgstr[1] "%d iteraciones, %ld ms"
+
+#: user/apps/mandel.c:583
+msgid "%d iteration"
+msgid_plural "%d iterations"
+msgstr[0] "%d iteración"
+msgstr[1] "%d iteraciones"
+
+#: user/apps/mandel.c:632
+msgid "Pointer %s"
+msgstr "Puntero %s"
+
+#: user/apps/mandel.c:729
+msgid "Close"
+msgstr "Cerrar"
+
+#: user/apps/mandel.c:730 user/apps/mandel.c:826
+msgid "Save image"
+msgstr "Guardar imagen"
+
+#: user/apps/mandel.c:730
+msgid "File:"
+msgstr "Archivo:"
+
+#: user/apps/mandel.c:742
+msgid "Error"
+msgstr "Error"
+
+#: user/apps/mandel.c:742
+msgid "The image cannot be written."
+msgstr "No se puede escribir la imagen."
+
+#: user/apps/mandel.c:799
+msgid "Mandelbrot"
+msgstr "Mandelbrot"
+
+#: user/apps/mandel.c:803
+msgid "File"
+msgstr "Archivo"
+
+#: user/apps/mandel.c:804
+msgid "Save image..."
+msgstr "Guardar imagen..."
+
+#: user/apps/mandel.c:808
+msgid "Quit"
+msgstr "Salir"
+
+#: user/apps/mandel.c:811
+msgid "View"
+msgstr "Ver"
+
+#: user/apps/mandel.c:812 user/apps/mandel.c:823
+msgid "Zoom in"
+msgstr "Acercar"
+
+#: user/apps/mandel.c:813 user/apps/mandel.c:824
+msgid "Zoom out"
+msgstr "Alejar"
+
+#: user/apps/mandel.c:814 user/apps/mandel.c:825
+msgid "Reset view"
+msgstr "Restablecer la vista"
+
+#: user/apps/mandel.c:816
+msgid "Mandelbrot set"
+msgstr "Conjunto de Mandelbrot"
+
+#: user/apps/mandel.c:819
+msgid "Julia set of the centre"
+msgstr "Conjunto de Julia del centro"
+
+#: user/apps/mandel.c:828
+msgid "Colours"
+msgstr "Colores"
+
+#: user/apps/mandel.c:830
+msgid "Classic"
+msgstr "Clásico"
+
+#: user/apps/mandel.c:831
+msgid "Fire"
+msgstr "Fuego"
+
+#: user/apps/mandel.c:832
+msgid "Ocean"
+msgstr "Océano"
+
+#: user/apps/mandel.c:833
+msgid "Grey"
+msgstr "Gris"
+
+#: user/apps/mandel.c:836
+msgid "Iterations"
+msgstr "Iteraciones"
+
+#: user/apps/mandel.c:838
+msgid "Automatic"
+msgstr "Automático"

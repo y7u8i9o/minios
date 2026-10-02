@@ -1,0 +1,52 @@
+# Japanese messages of the panel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr "アプリケーション"
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr "システム"
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr "検索"
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr "オーディオサービスがありません"
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr "出力"
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr "録音 %u%%"
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr "再生中 %u%%"
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr "一時停止 %u%%"
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr "ストリームがありません"
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "ほか %d 件"
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr "メニュー"

@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <gui/app.h>
+#include <gui/i18n.h>
 
 static struct app *app;
 static struct widget *win, *editor, *status, *lang_label, *pos_label, *lines_label;
@@ -22,7 +23,7 @@ static char needle[128], replacement[128];
 static const char *base_name(void)
 {
     const char *slash = strrchr(path, '/');
-    return path[0] ? (slash ? slash + 1 : path) : "untitled";
+    return path[0] ? (slash ? slash + 1 : path) : _("untitled");
 }
 
 static void update_title(void)
@@ -51,7 +52,7 @@ static void update_commands(void)
 static void set_highlighter(void)
 {
     const char *dot = strrchr(path, '.');
-    const char *lang = "Plain text";
+    const char *lang = _("Plain text");
     if (dot && (strcmp(dot, ".c") == 0 || strcmp(dot, ".h") == 0)) {
         editor_set_highlighter(editor, highlight_c, NULL);
         lang = "C";
@@ -77,10 +78,10 @@ static int on_cursor(struct widget *w, void *args, void *arg)
     int l, c;
     editor_cursor(editor, &l, &c);
     char s[48];
-    snprintf(s, sizeof s, "Ln %d, Col %d", l + 1, c + 1);
+    snprintf(s, sizeof s, _("Ln %d, Col %d"), l + 1, c + 1);
     widget_set_text(pos_label, s);
     int lines = editor_line_count(editor);
-    snprintf(s, sizeof s, "%d %s", lines, lines == 1 ? "line" : "lines");
+    snprintf(s, sizeof s, ngettext("%d line", "%d lines", (unsigned long)lines), lines);
     widget_set_text(lines_label, s);
     update_commands();
     return 0;
@@ -131,7 +132,7 @@ static int save(void)
     editor_set_modified(editor, 0);
     update_title();
     char msg[300];
-    snprintf(msg, sizeof msg, "Saved %s", base_name());
+    snprintf(msg, sizeof msg, _("Saved %s"), base_name());
     show_message(msg);
     printf("gedit: saved %s\n", path);
     fflush(stdout);
@@ -140,19 +141,19 @@ static int save(void)
 
 static void error(const char *text)
 {
-    const char *const buttons[] = { "OK" };
-    app_dialog(app, "Error", text, buttons, 1);
+    const char *const buttons[] = { _("OK") };
+    app_dialog(app, _("Error"), text, buttons, 1);
 }
 
 static int on_save_as(struct widget *w, void *args, void *arg)
 {
     char name[256];
     strlcpy(name, path, sizeof name);
-    if (app_prompt(app, "Save as", "File:", name, sizeof name)) {
+    if (app_prompt(app, _("Save as"), _("File:"), name, sizeof name)) {
         strlcpy(path, name, sizeof path);
         set_highlighter();
         if (save() < 0)
-            error("The file cannot be written.");
+            error(_("The file cannot be written."));
     }
     return 1;
 }
@@ -162,7 +163,7 @@ static int on_save(struct widget *w, void *args, void *arg)
     if (!path[0])
         return on_save_as(w, args, arg);
     if (save() < 0)
-        error("The file cannot be written.");
+        error(_("The file cannot be written."));
     return 1;
 }
 
@@ -172,8 +173,8 @@ static int may_discard(void)
 {
     if (!editor_modified(editor))
         return 1;
-    const char *const buttons[] = { "Save", "Discard", "Cancel" };
-    int r = app_dialog(app, "Unsaved changes", "Save the changes?", buttons, 3);
+    const char *const buttons[] = { _("Save"), _("Discard"), _("Cancel") };
+    int r = app_dialog(app, _("Unsaved changes"), _("Save the changes?"), buttons, 3);
     if (r == 0) {
         on_save(NULL, NULL, NULL);
         return !editor_modified(editor);
@@ -199,8 +200,8 @@ static int on_open(struct widget *w, void *args, void *arg)
         return 1;
     char name[256];
     strlcpy(name, path, sizeof name);
-    if (app_prompt(app, "Open", "File:", name, sizeof name) && load(name) < 0)
-        error("The file cannot be opened.");
+    if (app_prompt(app, _("Open"), _("File:"), name, sizeof name) && load(name) < 0)
+        error(_("The file cannot be opened."));
     return 1;
 }
 
@@ -239,7 +240,7 @@ static void find_next(void)
         return;
     if (!editor_find(editor, needle, 1)) {
         char msg[200];
-        snprintf(msg, sizeof msg, "\"%s\" not found", needle);
+        snprintf(msg, sizeof msg, _("\"%s\" not found"), needle);
         show_message(msg);
     } else {
         show_message("");
@@ -249,7 +250,7 @@ static void find_next(void)
 static int on_find(struct widget *w, void *args, void *arg)
 {
     selection_needle(needle, sizeof needle);
-    if (app_prompt(app, "Find", "Text:", needle, sizeof needle))
+    if (app_prompt(app, _("Find"), _("Text:"), needle, sizeof needle))
         find_next();
     widget_focus(editor);
     return 1;
@@ -264,11 +265,11 @@ static int on_find_next(struct widget *w, void *args, void *arg)
 static int on_replace(struct widget *w, void *args, void *arg)
 {
     selection_needle(needle, sizeof needle);
-    if (app_prompt(app, "Replace", "Find:", needle, sizeof needle) && needle[0] &&
-        app_prompt(app, "Replace", "Replace with:", replacement, sizeof replacement)) {
+    if (app_prompt(app, _("Replace"), _("Find:"), needle, sizeof needle) && needle[0] &&
+        app_prompt(app, _("Replace"), _("Replace with:"), replacement, sizeof replacement)) {
         int n = editor_replace_all(editor, needle, replacement);
-        char msg[64];
-        snprintf(msg, sizeof msg, "%d %s replaced", n, n == 1 ? "occurrence" : "occurrences");
+        char msg[128];
+        snprintf(msg, sizeof msg, ngettext("%d occurrence replaced", "%d occurrences replaced", (unsigned long)n), n);
         show_message(msg);
         printf("gedit: %d replaced\n", n);
         fflush(stdout);
@@ -280,7 +281,7 @@ static int on_replace(struct widget *w, void *args, void *arg)
 static int on_goto(struct widget *w, void *args, void *arg)
 {
     char line[16] = "";
-    if (app_prompt(app, "Go to line", "Line:", line, sizeof line)) {
+    if (app_prompt(app, _("Go to line"), _("Line:"), line, sizeof line)) {
         int n = atoi(line);
         if (n > 0)
             editor_goto(editor, n - 1, 0);
@@ -313,52 +314,53 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
+    textdomain("gedit");
     win = app_window(app, 680, 480, "gedit");
     if (!win)
         return 1;
     struct widget *bar = menubar_new(win);
-    struct widget *file = menu_new(bar, "File");
-    add_item(file, "New", "new", on_new, KEY_N, WMOD_CTRL);
-    add_item(file, "Open...", "open", on_open, KEY_O, WMOD_CTRL);
-    add_item(file, "Save", "save", on_save, KEY_S, WMOD_CTRL);
-    add_item(file, "Save as...", NULL, on_save_as, KEY_S, WMOD_CTRL | WMOD_SHIFT);
+    struct widget *file = menu_new(bar, _("File"));
+    add_item(file, _("New"), "new", on_new, KEY_N, WMOD_CTRL);
+    add_item(file, _("Open..."), "open", on_open, KEY_O, WMOD_CTRL);
+    add_item(file, _("Save"), "save", on_save, KEY_S, WMOD_CTRL);
+    add_item(file, _("Save as..."), NULL, on_save_as, KEY_S, WMOD_CTRL | WMOD_SHIFT);
     menu_add_separator(file);
-    add_item(file, "Quit", "quit", on_quit, KEY_Q, WMOD_CTRL);
-    struct widget *edit = menu_new(bar, "Edit");
-    undo_item = add_item(edit, "Undo", "undo", on_undo, KEY_Z, WMOD_CTRL);
-    redo_item = add_item(edit, "Redo", "redo", on_redo, KEY_Y, WMOD_CTRL);
+    add_item(file, _("Quit"), "quit", on_quit, KEY_Q, WMOD_CTRL);
+    struct widget *edit = menu_new(bar, _("Edit"));
+    undo_item = add_item(edit, _("Undo"), "undo", on_undo, KEY_Z, WMOD_CTRL);
+    redo_item = add_item(edit, _("Redo"), "redo", on_redo, KEY_Y, WMOD_CTRL);
     menu_add_separator(edit);
-    cut_item = add_item(edit, "Cut", "cut", on_cut, KEY_X, WMOD_CTRL);
-    copy_item = add_item(edit, "Copy", "copy", on_copy, KEY_C, WMOD_CTRL);
-    add_item(edit, "Paste", "paste", on_paste, KEY_V, WMOD_CTRL);
-    delete_item = add_item(edit, "Delete", NULL, on_delete, 0, 0);
-    add_item(edit, "Select all", NULL, on_select_all, KEY_A, WMOD_CTRL);
+    cut_item = add_item(edit, _("Cut"), "cut", on_cut, KEY_X, WMOD_CTRL);
+    copy_item = add_item(edit, _("Copy"), "copy", on_copy, KEY_C, WMOD_CTRL);
+    add_item(edit, _("Paste"), "paste", on_paste, KEY_V, WMOD_CTRL);
+    delete_item = add_item(edit, _("Delete"), NULL, on_delete, 0, 0);
+    add_item(edit, _("Select all"), NULL, on_select_all, KEY_A, WMOD_CTRL);
     menu_add_separator(edit);
-    add_item(edit, "Find...", "search", on_find, KEY_F, WMOD_CTRL);
-    add_item(edit, "Find next", NULL, on_find_next, KEY_F3, 0);
-    add_item(edit, "Replace...", NULL, on_replace, KEY_H, WMOD_CTRL);
-    add_item(edit, "Go to line...", NULL, on_goto, KEY_L, WMOD_CTRL);
+    add_item(edit, _("Find..."), "search", on_find, KEY_F, WMOD_CTRL);
+    add_item(edit, _("Find next"), NULL, on_find_next, KEY_F3, 0);
+    add_item(edit, _("Replace..."), NULL, on_replace, KEY_H, WMOD_CTRL);
+    add_item(edit, _("Go to line..."), NULL, on_goto, KEY_L, WMOD_CTRL);
 
     struct widget *tools = toolbar_new(win);
-    widget_connect(toolbar_add(tools, "new", "New"), "clicked", on_new, NULL);
-    widget_connect(toolbar_add(tools, "open", "Open"), "clicked", on_open, NULL);
-    widget_connect(toolbar_add(tools, "save", "Save"), "clicked", on_save, NULL);
+    widget_connect(toolbar_add(tools, "new", _("New")), "clicked", on_new, NULL);
+    widget_connect(toolbar_add(tools, "open", _("Open")), "clicked", on_open, NULL);
+    widget_connect(toolbar_add(tools, "save", _("Save")), "clicked", on_save, NULL);
     separator_new(tools);
-    undo_button = toolbar_add(tools, "undo", "Undo");
+    undo_button = toolbar_add(tools, "undo", _("Undo"));
     widget_connect(undo_button, "clicked", on_undo, NULL);
-    redo_button = toolbar_add(tools, "redo", "Redo");
+    redo_button = toolbar_add(tools, "redo", _("Redo"));
     widget_connect(redo_button, "clicked", on_redo, NULL);
     separator_new(tools);
-    cut_button = toolbar_add(tools, "cut", "Cut");
+    cut_button = toolbar_add(tools, "cut", _("Cut"));
     widget_connect(cut_button, "clicked", on_cut, NULL);
-    copy_button = toolbar_add(tools, "copy", "Copy");
+    copy_button = toolbar_add(tools, "copy", _("Copy"));
     widget_connect(copy_button, "clicked", on_copy, NULL);
-    widget_connect(toolbar_add(tools, "paste", "Paste"), "clicked", on_paste, NULL);
+    widget_connect(toolbar_add(tools, "paste", _("Paste")), "clicked", on_paste, NULL);
     separator_new(tools);
-    widget_connect(toolbar_add(tools, "search", "Find"), "clicked", on_find, NULL);
-    struct widget *wrap = checkbox_new(tools, "Wrap");
+    widget_connect(toolbar_add(tools, "search", _("Find")), "clicked", on_find, NULL);
+    struct widget *wrap = checkbox_new(tools, _("Wrap"));
     widget_connect(wrap, "toggled", on_wrap, NULL);
-    struct widget *nums = checkbox_new(tools, "Line numbers");
+    struct widget *nums = checkbox_new(tools, _("Line numbers"));
     widget_connect(nums, "toggled", on_numbers, NULL);
 
     editor = editor_new(win);

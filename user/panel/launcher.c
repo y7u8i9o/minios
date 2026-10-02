@@ -20,6 +20,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <gui/i18n.h>
 #include <gui/image.h>
 #include <gui/keymap.h>
 #include <minios/local.h>
@@ -31,7 +32,7 @@
 enum section { SEC_APPS, SEC_SYSTEM, SEC_LOGOUT };
 
 struct entry {
-    char title[32];
+    char title[96];
     char path[96];
     enum section section;
     const struct image *icon;
@@ -108,7 +109,7 @@ static void load_file(const char *path, enum section section)
             continue;
         *eq = '\0';
         struct entry *e = &entries[nentries++];
-        strlcpy(e->title, line, sizeof e->title);
+        strlcpy(e->title, dgettext("launcher", line), sizeof e->title);
         strlcpy(e->path, eq + 1, sizeof e->path);
         e->section = strcmp(e->path, "@logout") == 0 ? SEC_LOGOUT : section;
         e->icon = entry_icon(e->path);
@@ -193,10 +194,10 @@ static void layout_rows(void)
 {
     nrows = 0;
     int top = MENU_PAD + LAUNCHER_SEARCH_H, y = top;
-    add_section(SEC_APPS, "Applications", MENU_PAD, &y);
+    add_section(SEC_APPS, _("Applications"), MENU_PAD, &y);
     if (columns == 2)
         y = top;
-    add_section(SEC_SYSTEM, "System", MENU_PAD + (columns == 2 ? LAUNCHER_COLUMN_W : 0), &y);
+    add_section(SEC_SYSTEM, _("System"), MENU_PAD + (columns == 2 ? LAUNCHER_COLUMN_W : 0), &y);
     for (int i = 0; i < nentries; i++)
         if (entries[i].section == SEC_LOGOUT)
             rows[nrows++] = (struct row){ i, NULL, MENU_PAD, menu_h - MENU_PAD - MENU_ITEM_H,
@@ -229,7 +230,7 @@ static void draw(void)
         painter_text(&p, tx, fy + (fh - th) / 2, query, MENU_TEXT);
         tx += painter_text_width(&p, query, -1);
     } else {
-        painter_text(&p, tx, fy + (fh - th) / 2, "Search", MENU_TEXT_DIM);
+        painter_text(&p, tx, fy + (fh - th) / 2, _("Search"), MENU_TEXT_DIM);
     }
     if (keyboard_surface == menu.surface)
         painter_fill(&p, tx + 1, fy + (fh - th) / 2, 1, th, MENU_TEXT);

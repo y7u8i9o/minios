@@ -1,19 +1,24 @@
 /* The context menu of the text widgets: Undo, Redo, Cut, Copy, Paste,
  * Delete and Select all. */
+#include <libintl.h>
 #include <stdlib.h>
 #include <string.h>
 #include "editmenu.h"
 
+/* N_ marks the strings that tools/xgettext.py extracts into the libgui
+ * domain. */
+#define N_(s) s
+
 static const struct {
     const char *text, *icon;
 } items[EDIT_NACTIONS] = {
-    [EDIT_UNDO] = { "Undo", "undo" },
-    [EDIT_REDO] = { "Redo", "redo" },
-    [EDIT_CUT] = { "Cut", "cut" },
-    [EDIT_COPY] = { "Copy", "copy" },
-    [EDIT_PASTE] = { "Paste", "paste" },
-    [EDIT_DELETE] = { "Delete", NULL },
-    [EDIT_SELECT_ALL] = { "Select all", NULL },
+    [EDIT_UNDO] = { N_("Undo"), "undo" },
+    [EDIT_REDO] = { N_("Redo"), "redo" },
+    [EDIT_CUT] = { N_("Cut"), "cut" },
+    [EDIT_COPY] = { N_("Copy"), "copy" },
+    [EDIT_PASTE] = { N_("Paste"), "paste" },
+    [EDIT_DELETE] = { N_("Delete"), NULL },
+    [EDIT_SELECT_ALL] = { N_("Select all"), NULL },
 };
 
 /* The handler argument of an item is its action.  The menu stores the
@@ -31,7 +36,7 @@ static void add_item(struct widget *menu, enum edit_action a, unsigned shown)
 {
     if (!(shown & EDIT_BIT(a)))
         return;
-    struct widget *it = menu_add(menu, items[a].text, items[a].icon);
+    struct widget *it = menu_add(menu, dgettext("libgui", items[a].text), items[a].icon);
     widget_set_id(it, items[a].text);
     widget_connect(it, "clicked", on_item, (void *)(long)a);
 }

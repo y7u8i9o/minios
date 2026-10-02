@@ -1,0 +1,107 @@
+# Russian messages of the player domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/player.c:285
+msgid "Loading %s"
+msgstr "Загрузка %s"
+
+#: user/apps/player.c:305 user/apps/player.c:516 user/apps/player.c:530 user/apps/player.c:587
+msgid "Close"
+msgstr "Закрыть"
+
+#: user/apps/player.c:307 user/apps/player.c:520 user/apps/player.c:536
+msgid "Error"
+msgstr "Ошибка"
+
+#: user/apps/player.c:307
+msgid "The file is not a PCM WAV file."
+msgstr "Файл не является файлом WAV PCM."
+
+#: user/apps/player.c:344
+msgid "Pause"
+msgstr "Пауза"
+
+#: user/apps/player.c:344 user/apps/player.c:363 user/apps/player.c:607
+msgid "Play"
+msgstr "Воспроизвести"
+
+#: user/apps/player.c:393
+msgid "The audio server disconnected"
+msgstr "Звуковой сервер отключился"
+
+#: user/apps/player.c:451
+msgid "No file"
+msgstr "Нет файла"
+
+#: user/apps/player.c:488
+msgid "%s    %s    %u%s%u s"
+msgstr "%s    %s    %u%s%u с"
+
+#: user/apps/player.c:491
+msgid "No file loaded"
+msgstr "Файл не загружен"
+
+#: user/apps/player.c:517
+msgid "Open"
+msgstr "Открыть"
+
+#: user/apps/player.c:517
+msgid "File:"
+msgstr "Файл:"
+
+#: user/apps/player.c:520 user/apps/player.c:536
+msgid "A file is still being loaded."
+msgstr "Файл ещё загружается."
+
+#: user/apps/player.c:549 user/apps/player.c:613
+msgid "Volume: %d%%"
+msgstr "Громкость: %d%%"
+
+#: user/apps/player.c:581
+msgid "player"
+msgstr "Проигрыватель"
+
+#: user/apps/player.c:588
+msgid "Player"
+msgstr "Проигрыватель"
+
+#: user/apps/player.c:588
+msgid "The desktop audio service is unavailable."
+msgstr "Звуковая служба рабочего стола недоступна."
+
+#: user/apps/player.c:597
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/player.c:598
+msgid "Open..."
+msgstr "Открыть..."
+
+#: user/apps/player.c:600
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/player.c:601
+msgid "Resampling"
+msgstr "Передискретизация"
+
+#: user/apps/player.c:602
+msgid "Linear"
+msgstr "Линейная"
+
+#: user/apps/player.c:603
+msgid "Sinc (experimental)"
+msgstr "Sinc (экспериментальная)"
+
+#: user/apps/player.c:609
+msgid "Stop"
+msgstr "Стоп"
+
+#: user/apps/player.c:610
+msgid "Loop"
+msgstr "Повтор"

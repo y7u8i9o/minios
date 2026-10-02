@@ -1,0 +1,401 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/settings/look.c:105
+msgid "Wallpaper"
+msgstr ""
+
+#: user/settings/look.c:115
+msgid "None (solid colour)"
+msgstr ""
+
+#: user/settings/look.c:119
+msgid "Placement"
+msgstr ""
+
+#: user/settings/look.c:12
+msgid "Fill the screen"
+msgstr ""
+
+#: user/settings/look.c:12
+msgid "Centre"
+msgstr ""
+
+#: user/settings/look.c:12
+msgid "Tile"
+msgstr ""
+
+#: user/settings/look.c:12
+msgid "Stretch"
+msgstr ""
+
+#: user/settings/look.c:131
+msgid "Desktop colour"
+msgstr ""
+
+#: user/settings/look.c:137
+msgid "Red"
+msgstr ""
+
+#: user/settings/look.c:137
+msgid "Green"
+msgstr ""
+
+#: user/settings/look.c:137
+msgid "Blue"
+msgstr ""
+
+#: user/settings/look.c:145
+msgid "Interface font"
+msgstr ""
+
+#: user/settings/look.c:156
+msgid "Font size (px)"
+msgstr ""
+
+#: user/settings/look.c:160
+msgid "Terminal font size (px)"
+msgstr ""
+
+#: user/settings/look.c:164
+msgid "Interface scale"
+msgstr ""
+
+#: user/settings/look.c:166
+msgid "100 %"
+msgstr ""
+
+#: user/settings/look.c:167
+msgid "125 %"
+msgstr ""
+
+#: user/settings/look.c:168
+msgid "150 %"
+msgstr ""
+
+#: user/settings/look.c:19
+msgid "Builtin bitmap font"
+msgstr ""
+
+#: user/settings/look.c:215
+msgid "unknown"
+msgstr ""
+
+#: user/settings/look.c:220
+msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
+msgstr ""
+
+#: user/settings/look.c:223
+msgid "Current mode"
+msgstr ""
+
+#: user/settings/look.c:228
+msgid "Resolution"
+msgstr ""
+
+#: user/settings/look.c:240
+msgid "Pixel density"
+msgstr ""
+
+#: user/settings/look.c:242
+msgid "Standard (1 pixel per point)"
+msgstr ""
+
+#: user/settings/look.c:243
+msgid "High (2 pixels per point)"
+msgstr ""
+
+#: user/settings/look.c:248
+msgid "Frame interval (ms)"
+msgstr ""
+
+#: user/settings/look.c:252
+msgid "Window decorations"
+msgstr ""
+
+#: user/settings/look.c:254
+msgid "Drawn by the application (client side)"
+msgstr ""
+
+#: user/settings/look.c:255
+msgid "Drawn by X12 (server side)"
+msgstr ""
+
+#: user/settings/look.c:271
+msgid "Repeat rate: %d per second"
+msgstr ""
+
+#: user/settings/look.c:273
+msgid "Repeat delay: %d ms"
+msgstr ""
+
+#: user/settings/look.c:302
+msgid "Layout"
+msgstr ""
+
+#: user/settings/look.c:346
+msgid "Pointer speed: %d"
+msgstr ""
+
+#: user/settings/look.c:369
+msgid "Acceleration"
+msgstr ""
+
+#: user/settings/look.c:371
+msgid "Flat"
+msgstr ""
+
+#: user/settings/look.c:372
+msgid "Adaptive"
+msgstr ""
+
+#: user/settings/settings.c:124
+msgid "Appearance"
+msgstr ""
+
+#: user/settings/settings.c:125
+msgid "Display"
+msgstr ""
+
+#: user/settings/settings.c:126
+msgid "Keyboard"
+msgstr ""
+
+#: user/settings/settings.c:127
+msgid "Mouse"
+msgstr ""
+
+#: user/settings/settings.c:128
+msgid "Sound"
+msgstr ""
+
+#: user/settings/settings.c:129 user/settings/system.c:179
+msgid "Date and time"
+msgstr ""
+
+#: user/settings/settings.c:130
+msgid "File types"
+msgstr ""
+
+#: user/settings/settings.c:131
+msgid "Launcher"
+msgstr ""
+
+#: user/settings/settings.c:132
+msgid "System"
+msgstr ""
+
+#: user/settings/settings.c:90 user/settings/system.c:178
+msgid "OK"
+msgstr ""
+
+#: user/settings/settings.c:91 user/settings/settings.c:166
+msgid "Settings"
+msgstr ""
+
+#: user/settings/settings.c:91
+msgid "The settings file cannot be written."
+msgstr ""
+
+#: user/settings/system.c:106
+msgid "Output volume"
+msgstr ""
+
+#: user/settings/system.c:110
+msgid "Streams"
+msgstr ""
+
+#: user/settings/system.c:142
+msgid "Year"
+msgstr ""
+
+#: user/settings/system.c:142
+msgid "Month"
+msgstr ""
+
+#: user/settings/system.c:142
+msgid "Day"
+msgstr ""
+
+#: user/settings/system.c:142
+msgid "Hour"
+msgstr ""
+
+#: user/settings/system.c:142
+msgid "Minute"
+msgstr ""
+
+#: user/settings/system.c:143
+msgid "Second"
+msgstr ""
+
+#: user/settings/system.c:179
+msgid "The clock could not be set."
+msgstr ""
+
+#: user/settings/system.c:201
+msgid "Load current time"
+msgstr ""
+
+#: user/settings/system.c:202
+msgid "Set clock"
+msgstr ""
+
+#: user/settings/system.c:219
+msgid "Type"
+msgstr ""
+
+#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+msgid "Program"
+msgstr ""
+
+#: user/settings/system.c:248
+msgid "New file type"
+msgstr ""
+
+#: user/settings/system.c:248
+msgid "Type (for example text/x-log):"
+msgstr ""
+
+#: user/settings/system.c:266
+msgid "(select a type)"
+msgstr ""
+
+#: user/settings/system.c:271
+msgid "Set"
+msgstr ""
+
+#: user/settings/system.c:272
+msgid "Add type..."
+msgstr ""
+
+#: user/settings/system.c:322 user/settings/system.c:396
+msgid "Menu entry"
+msgstr ""
+
+#: user/settings/system.c:34
+msgid "capture"
+msgstr ""
+
+#: user/settings/system.c:34
+msgid "playback"
+msgstr ""
+
+#: user/settings/system.c:35
+msgid "%u %%"
+msgstr ""
+
+#: user/settings/system.c:36
+msgid "running"
+msgstr ""
+
+#: user/settings/system.c:36
+msgid "error"
+msgstr ""
+
+#: user/settings/system.c:36
+msgid "paused"
+msgstr ""
+
+#: user/settings/system.c:404
+msgid "Save entry"
+msgstr ""
+
+#: user/settings/system.c:405
+msgid "New"
+msgstr ""
+
+#: user/settings/system.c:406
+msgid "Remove"
+msgstr ""
+
+#: user/settings/system.c:407
+msgid "Move up"
+msgstr ""
+
+#: user/settings/system.c:408
+msgid "Move down"
+msgstr ""
+
+#: user/settings/system.c:41
+msgid "Stream"
+msgstr ""
+
+#: user/settings/system.c:41
+msgid "Direction"
+msgstr ""
+
+#: user/settings/system.c:41
+msgid "Volume"
+msgstr ""
+
+#: user/settings/system.c:41
+msgid "State"
+msgstr ""
+
+#: user/settings/system.c:425
+msgid "Up %ld:%02ld:%02ld"
+msgstr ""
+
+#: user/settings/system.c:438
+msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
+msgstr ""
+
+#: user/settings/system.c:454
+msgid "%s %s (%s) on %s"
+msgstr ""
+
+#: user/settings/system.c:457
+msgid "%d processor"
+msgid_plural "%d processors"
+msgstr[0] ""
+msgstr[1] ""
+
+#: user/settings/system.c:461
+msgid "Display %dx%d pixels at scale %d"
+msgstr ""
+
+#: user/settings/system.c:470
+msgid "Tools"
+msgstr ""
+
+#: user/settings/system.c:472
+msgid "System monitor"
+msgstr ""
+
+#: user/settings/system.c:473
+msgid "Kernel log"
+msgstr ""
+
+#: user/settings/system.c:474
+msgid "X12 settings"
+msgstr ""
+
+#: user/settings/system.c:52
+msgid "Output volume: %u %%"
+msgstr ""
+
+#: user/settings/system.c:59
+msgid "%s: %u %%"
+msgstr ""
+
+#: user/settings/system.c:64 user/settings/system.c:119
+msgid "Stream volume"
+msgstr ""
+
+#: user/settings/system.c:67
+msgid "%d stream"
+msgid_plural "%d streams"
+msgstr[0] ""
+msgstr[1] ""
+
+#: user/settings/system.c:76 user/settings/system.c:128
+msgid "No audio server"
+msgstr ""
+
+#: user/settings/system.c:90
+msgid "Output volume: %d %%"
+msgstr ""
+

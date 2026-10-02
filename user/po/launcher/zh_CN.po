@@ -1,0 +1,82 @@
+# Simplified Chinese messages of the launcher domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Terminal"
+msgstr "终端"
+
+msgid "Files"
+msgstr "文件"
+
+msgid "Clock"
+msgstr "时钟"
+
+msgid "System monitor"
+msgstr "系统监视器"
+
+msgid "Kernel log"
+msgstr "内核日志"
+
+msgid "Profiler"
+msgstr "性能分析器"
+
+msgid "Event viewer"
+msgstr "事件查看器"
+
+msgid "Screenshot"
+msgstr "截图"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "X12 settings"
+msgstr "X12 设置"
+
+msgid "Protocol viewer"
+msgstr "协议查看器"
+
+msgid "Log out"
+msgstr "注销"
+
+msgid "Calculator"
+msgstr "计算器"
+
+msgid "Code"
+msgstr "代码"
+
+msgid "Editor"
+msgstr "编辑器"
+
+msgid "Hex viewer"
+msgstr "十六进制查看器"
+
+msgid "Lua Synthesizer"
+msgstr "Lua 合成器"
+
+msgid "Mandelbrot"
+msgstr "曼德博集合"
+
+msgid "Paint"
+msgstr "画图"
+
+msgid "Player"
+msgstr "播放器"
+
+msgid "Pong"
+msgstr "乒乓球"
+
+msgid "Sequencer"
+msgstr "音序器"
+
+msgid "Synthesizer"
+msgstr "合成器"
+
+msgid "Unicode viewer"
+msgstr "Unicode 查看器"
+
+msgid "Viewer"
+msgstr "查看器"

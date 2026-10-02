@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <locale.h>
 #ifdef MINIOS_HOST
 #include <poll.h>
 long uptime_ms(void);
@@ -42,6 +43,9 @@ struct app {
 
 struct app *app_create(void)
 {
+    /* The programs of the desktop follow the locale of the environment
+     * (docs/design/i18n.md). */
+    setlocale(LC_ALL, "");
     struct app *a = calloc(1, sizeof *a);
     if (!a)
         return NULL;

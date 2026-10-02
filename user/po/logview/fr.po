@@ -1,0 +1,143 @@
+# French messages of the logview domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/apps/logview.c:164
+msgid "Time"
+msgstr "Heure"
+
+#: user/apps/logview.c:164
+msgid "Level"
+msgstr "Niveau"
+
+#: user/apps/logview.c:164
+msgid "Subsystem"
+msgstr "Sous-système"
+
+#: user/apps/logview.c:164
+msgid "Message"
+msgstr "Message"
+
+#: user/apps/logview.c:197
+msgid "%ld of %ld line"
+msgid_plural "%ld of %ld lines"
+msgstr[0] "%ld ligne sur %ld"
+msgstr[1] "%ld lignes sur %ld"
+
+#: user/apps/logview.c:199
+msgid "%ld warning"
+msgid_plural "%ld warnings"
+msgstr[0] "%ld avertissement"
+msgstr[1] "%ld avertissements"
+
+#: user/apps/logview.c:201
+msgid "%ld error"
+msgid_plural "%ld errors"
+msgstr[0] "%ld erreur"
+msgstr[1] "%ld erreurs"
+
+#: user/apps/logview.c:202
+msgid "%s, %s"
+msgstr "%s, %s"
+
+#: user/apps/logview.c:205
+msgid "%ld byte lost"
+msgid_plural "%ld bytes lost"
+msgstr[0] "%ld octet perdu"
+msgstr[1] "%ld octets perdus"
+
+#: user/apps/logview.c:332
+msgid "OK"
+msgstr "OK"
+
+#: user/apps/logview.c:333 user/apps/logview.c:453
+msgid "Kernel log"
+msgstr "Journal du noyau"
+
+#: user/apps/logview.c:35
+msgid "Debug"
+msgstr "Débogage"
+
+#: user/apps/logview.c:35
+msgid "Info"
+msgstr "Info"
+
+#: user/apps/logview.c:35
+msgid "Warning"
+msgstr "Avertissement"
+
+#: user/apps/logview.c:35
+msgid "Error"
+msgstr "Erreur"
+
+#: user/apps/logview.c:382 user/apps/logview.c:470
+msgid "Save"
+msgstr "Enregistrer"
+
+#: user/apps/logview.c:382
+msgid "File:"
+msgstr "Fichier :"
+
+#: user/apps/logview.c:387
+msgid "%s cannot be written: %s"
+msgstr "%s ne peut pas être écrit : %s"
+
+#: user/apps/logview.c:395
+msgid "The file was not written completely."
+msgstr "Le fichier n'a pas été écrit entièrement."
+
+#: user/apps/logview.c:457
+msgid "File"
+msgstr "Fichier"
+
+#: user/apps/logview.c:458
+msgid "Save..."
+msgstr "Enregistrer..."
+
+#: user/apps/logview.c:462
+msgid "Quit"
+msgstr "Quitter"
+
+#: user/apps/logview.c:463
+msgid "Edit"
+msgstr "Édition"
+
+#: user/apps/logview.c:464 user/apps/logview.c:471
+msgid "Copy"
+msgstr "Copier"
+
+#: user/apps/logview.c:467
+msgid "Clear"
+msgstr "Effacer"
+
+#: user/apps/logview.c:473
+msgid "All levels"
+msgstr "Tous les niveaux"
+
+#: user/apps/logview.c:474
+msgid "Info and above"
+msgstr "Info et au-dessus"
+
+#: user/apps/logview.c:475
+msgid "Warnings and errors"
+msgstr "Avertissements et erreurs"
+
+#: user/apps/logview.c:476
+msgid "Errors"
+msgstr "Erreurs"
+
+#: user/apps/logview.c:480
+msgid "All subsystems"
+msgstr "Tous les sous-systèmes"
+
+#: user/apps/logview.c:486
+msgid "Find"
+msgstr "Rechercher"
+
+#: user/apps/logview.c:488
+msgid "Follow"
+msgstr "Suivre"

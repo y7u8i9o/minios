@@ -63,8 +63,9 @@ compiled without SSE and x87, so no floating point appears anywhere.
   Unicode cmap, and returns glyph ids and pen positions in 26.6 pixels,
   adding the kerning of each pair. Combining marks are positioned at the
   current cluster. libgui uses the shaped result for drawing, measuring
-  and cursor placement and can select a fallback font for an unmapped
-  code point.
+  and cursor placement and takes an unmapped code point from the chain of
+  fallback fonts and, for CJK characters, from the CJK font that
+  `i18n.md` describes.
 
 ## Integration (`libgui/src/font.c`)
 

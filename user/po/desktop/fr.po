@@ -1,0 +1,83 @@
+# French messages of the desktop domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/desktop/desktop.c:452
+msgid "Open with"
+msgstr "Ouvrir avec"
+
+#: user/desktop/desktop.c:452
+msgid "Program:"
+msgstr "Programme :"
+
+#: user/desktop/desktop.c:466
+msgid "Rename"
+msgstr "Renommer"
+
+#: user/desktop/desktop.c:466
+msgid "New name:"
+msgstr "Nouveau nom :"
+
+#: user/desktop/desktop.c:480 user/desktop/desktop.c:483 user/desktop/desktop.c:539
+msgid "Delete"
+msgstr "Supprimer"
+
+#: user/desktop/desktop.c:480
+msgid "Cancel"
+msgstr "Annuler"
+
+#: user/desktop/desktop.c:482
+msgid "Delete \"%s\"?"
+msgstr "Supprimer « %s » ?"
+
+#: user/desktop/desktop.c:499 user/desktop/desktop.c:500
+msgid "New folder"
+msgstr "Nouveau dossier"
+
+#: user/desktop/desktop.c:500 user/desktop/desktop.c:513
+msgid "Name:"
+msgstr "Nom :"
+
+#: user/desktop/desktop.c:512
+msgid "New file.txt"
+msgstr "Nouveau fichier.txt"
+
+#: user/desktop/desktop.c:513
+msgid "New text file"
+msgstr "Nouveau fichier texte"
+
+#: user/desktop/desktop.c:535
+msgid "Open"
+msgstr "Ouvrir"
+
+#: user/desktop/desktop.c:536
+msgid "Open with..."
+msgstr "Ouvrir avec..."
+
+#: user/desktop/desktop.c:538
+msgid "Rename..."
+msgstr "Renommer..."
+
+#: user/desktop/desktop.c:543
+msgid "New folder..."
+msgstr "Nouveau dossier..."
+
+#: user/desktop/desktop.c:544
+msgid "New text file..."
+msgstr "Nouveau fichier texte..."
+
+#: user/desktop/desktop.c:546
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: user/desktop/desktop.c:548
+msgid "Change wallpaper..."
+msgstr "Changer le fond d'écran..."
+
+#: user/desktop/desktop.c:549
+msgid "Settings"
+msgstr "Paramètres"

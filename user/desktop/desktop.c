@@ -5,6 +5,7 @@
  * file when its contents change. */
 #include <minios/conf.h>
 #include <gui/app.h>
+#include <gui/i18n.h>
 #include <gui/mime.h>
 #include <debug-client.h>
 #include <dirent.h>
@@ -448,7 +449,7 @@ static int on_open_with(struct widget *w, void *args, void *arg)
     if (selected < 0)
         return 1;
     char prog[128] = "/bin/";
-    if (!app_prompt(app, "Open with", "Program:", prog, sizeof prog))
+    if (!app_prompt(app, _("Open with"), _("Program:"), prog, sizeof prog))
         return 1;
     char path[512];
     entry_path(selected, path, sizeof path);
@@ -462,7 +463,7 @@ static int on_rename(struct widget *w, void *args, void *arg)
         return 1;
     char name[NAME_MAX + 1];
     strlcpy(name, entries[selected].name, sizeof name);
-    if (!app_prompt(app, "Rename", "New name:", name, sizeof name) || !name[0] || strchr(name, '/'))
+    if (!app_prompt(app, _("Rename"), _("New name:"), name, sizeof name) || !name[0] || strchr(name, '/'))
         return 1;
     char from[512], to[512];
     entry_path(selected, from, sizeof from);
@@ -476,10 +477,10 @@ static int on_delete(struct widget *w, void *args, void *arg)
 {
     if (selected < 0)
         return 1;
-    static const char *const buttons[] = { "Delete", "Cancel" };
-    char text[300];
-    snprintf(text, sizeof text, "Delete \"%s\"?", entries[selected].name);
-    if (app_dialog(app, "Delete", text, buttons, 2) != 0)
+    const char *buttons[] = { _("Delete"), _("Cancel") };
+    char text[400];
+    snprintf(text, sizeof text, _("Delete \"%s\"?"), entries[selected].name);
+    if (app_dialog(app, _("Delete"), text, buttons, 2) != 0)
         return 1;
     char path[512];
     entry_path(selected, path, sizeof path);
@@ -494,8 +495,9 @@ static int on_delete(struct widget *w, void *args, void *arg)
 }
 static int on_new_folder(struct widget *w, void *args, void *arg)
 {
-    char name[NAME_MAX + 1] = "New folder";
-    if (!app_prompt(app, "New folder", "Name:", name, sizeof name) || !name[0] || strchr(name, '/'))
+    char name[NAME_MAX + 1];
+    strlcpy(name, _("New folder"), sizeof name);
+    if (!app_prompt(app, _("New folder"), _("Name:"), name, sizeof name) || !name[0] || strchr(name, '/'))
         return 1;
     char path[512];
     snprintf(path, sizeof path, DESKTOP_DIR "/%s", name);
@@ -506,8 +508,9 @@ static int on_new_folder(struct widget *w, void *args, void *arg)
 }
 static int on_new_file(struct widget *w, void *args, void *arg)
 {
-    char name[NAME_MAX + 1] = "New file.txt";
-    if (!app_prompt(app, "New text file", "Name:", name, sizeof name) || !name[0] || strchr(name, '/'))
+    char name[NAME_MAX + 1];
+    strlcpy(name, _("New file.txt"), sizeof name);
+    if (!app_prompt(app, _("New text file"), _("Name:"), name, sizeof name) || !name[0] || strchr(name, '/'))
         return 1;
     char path[512];
     snprintf(path, sizeof path, DESKTOP_DIR "/%s", name);
@@ -529,21 +532,21 @@ static int on_settings(struct widget *w, void *args, void *arg)
 static void build_menus(void)
 {
     item_menu = popupmenu_new(win);
-    widget_connect(menu_add(item_menu, "Open", "open"), "clicked", on_open, NULL);
-    widget_connect(menu_add(item_menu, "Open with...", NULL), "clicked", on_open_with, NULL);
+    widget_connect(menu_add(item_menu, _("Open"), "open"), "clicked", on_open, NULL);
+    widget_connect(menu_add(item_menu, _("Open with..."), NULL), "clicked", on_open_with, NULL);
     menu_add_separator(item_menu);
-    widget_connect(menu_add(item_menu, "Rename...", "edit"), "clicked", on_rename, NULL);
-    struct widget *del = menu_add(item_menu, "Delete", "quit");
+    widget_connect(menu_add(item_menu, _("Rename..."), "edit"), "clicked", on_rename, NULL);
+    struct widget *del = menu_add(item_menu, _("Delete"), "quit");
     widget_set_id(del, "delete");
     widget_connect(del, "clicked", on_delete, NULL);
     desk_menu = popupmenu_new(win);
-    widget_connect(menu_add(desk_menu, "New folder...", "folder"), "clicked", on_new_folder, NULL);
-    widget_connect(menu_add(desk_menu, "New text file...", "new"), "clicked", on_new_file, NULL);
+    widget_connect(menu_add(desk_menu, _("New folder..."), "folder"), "clicked", on_new_folder, NULL);
+    widget_connect(menu_add(desk_menu, _("New text file..."), "new"), "clicked", on_new_file, NULL);
     menu_add_separator(desk_menu);
-    widget_connect(menu_add(desk_menu, "Refresh", NULL), "clicked", on_refresh, NULL);
+    widget_connect(menu_add(desk_menu, _("Refresh"), NULL), "clicked", on_refresh, NULL);
     menu_add_separator(desk_menu);
-    widget_connect(menu_add(desk_menu, "Change wallpaper...", "paint"), "clicked", on_settings, "appearance");
-    widget_connect(menu_add(desk_menu, "Settings", NULL), "clicked", on_settings, NULL);
+    widget_connect(menu_add(desk_menu, _("Change wallpaper..."), "paint"), "clicked", on_settings, "appearance");
+    widget_connect(menu_add(desk_menu, _("Settings"), NULL), "clicked", on_settings, NULL);
 }
 
 int main(int argc, char **argv)
@@ -551,6 +554,7 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
+    textdomain("desktop");
     settings = gui_bind_global("settings", &settings_interface, 1);
     win = app_layer_window(app, 0, 0, 0, GUI_ANCHOR_TOP | GUI_ANCHOR_BOTTOM | GUI_ANCHOR_LEFT | GUI_ANCHOR_RIGHT,
                            0, 1, "desktop");

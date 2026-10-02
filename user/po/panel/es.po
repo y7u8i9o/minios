@@ -1,0 +1,53 @@
+# Spanish messages of the panel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr "Aplicaciones"
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr "Sistema"
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr "Buscar"
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr "No hay servicio de audio"
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr "Salida"
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr "captura %u%%"
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr "reproduciendo %u%%"
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr "en pausa %u%%"
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr "No hay flujos"
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "%d más"
+msgstr[1] "%d más"
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr "Menú"

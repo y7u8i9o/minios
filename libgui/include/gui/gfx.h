@@ -43,6 +43,10 @@ struct font *gfx_font_load(const char *path);   /* .mfnt; NULL with errno on fai
 /* TrueType or OpenType file rendered at px pixels per em. */
 struct font *gfx_font_open_ttf(const char *path, int px);
 void gfx_font_set_fallback(struct font *font, const struct font *fallback);
+/* The fallback font for Chinese and Japanese text at px pixels, or NULL
+ * (/etc/fonts/DroidSansFallbackFull.ttf).  The text functions take CJK
+ * characters that the font and its fallbacks lack from it. */
+const struct font *gfx_font_cjk(int px);
 void gfx_font_free(struct font *f);
 /* Blend an 8 bit coverage bitmap of color fg at (x, y). */
 void gfx_blend_mask(struct surface *s, int x, int y, const uint8_t *mask, int w, int h, uint32_t fg);

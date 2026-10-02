@@ -1,0 +1,43 @@
+# French messages of the libgui domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr "OK"
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr "Annuler"
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr "Annuler"
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr "Rétablir"
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr "Couper"
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr "Copier"
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr "Coller"
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr "Supprimer"
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr "Tout sélectionner"

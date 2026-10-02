@@ -1508,6 +1508,45 @@ static void test_gui_sysmon(void)
 }
 KTEST_DEFINE("gui_sysmon", test_gui_sysmon);
 
+/* L4: translated programs.  The panel runs with LANG=ja_JP.UTF-8, and
+ * sysmon runs once with LANG=fr_FR.UTF-8 and once with LANG=ja_JP.UTF-8.
+ * The compositor log names the translated window titles, and the launcher
+ * menu draws its Japanese titles with the CJK font. */
+static void test_gui_locale(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    char *const fr[] = { "LANG=fr_FR.UTF-8", NULL }, *const ja[] = { "LANG=ja_JP.UTF-8", NULL };
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    sleep_ms(600);
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, ja, &kernel_proc);
+    ktest_assert(panel != NULL, "cannot start the panel");
+    sleep_ms(800);
+    char *const *envs[] = { fr, ja };
+    for (int i = 0; i < 2; i++) {
+        struct proc *cl = proc_create_user("/bin/sysmon", (char *const[]){ "sysmon", NULL }, envs[i], &kernel_proc);
+        ktest_assert(cl != NULL, "cannot start sysmon");
+        sleep_ms(1500);
+        alt_key(0x3e);
+        int status = proc_reap(cl);
+        ktest_assert(status == 0, "sysmon status 0x%x", status);
+    }
+    int sh = logical_h(), cx = logical_w() / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 30, sh - 14, 0);
+    mouse_click(1);
+    sleep_ms(1500);
+    kprintf("gui_locale: launcher menu open\n");
+    press_key(0x01);
+    sleep_ms(300);
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+    kprintf("gui_locale: locale ok\n");
+}
+KTEST_DEFINE("gui_locale", test_gui_locale);
+
 /* The protocol viewer: the text mode prints the requests and events of
  * the clock while it connects, then the window records a second clock
  * and reports what it received when it is closed. Windows cascade by

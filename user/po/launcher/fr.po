@@ -1,0 +1,82 @@
+# French messages of the launcher domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Files"
+msgstr "Fichiers"
+
+msgid "Clock"
+msgstr "Horloge"
+
+msgid "System monitor"
+msgstr "Moniteur système"
+
+msgid "Kernel log"
+msgstr "Journal du noyau"
+
+msgid "Profiler"
+msgstr "Profileur"
+
+msgid "Event viewer"
+msgstr "Visionneuse d'événements"
+
+msgid "Screenshot"
+msgstr "Capture d'écran"
+
+msgid "Settings"
+msgstr "Paramètres"
+
+msgid "X12 settings"
+msgstr "Paramètres X12"
+
+msgid "Protocol viewer"
+msgstr "Visionneuse de protocole"
+
+msgid "Log out"
+msgstr "Se déconnecter"
+
+msgid "Calculator"
+msgstr "Calculatrice"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Editor"
+msgstr "Éditeur"
+
+msgid "Hex viewer"
+msgstr "Visionneuse hexadécimale"
+
+msgid "Lua Synthesizer"
+msgstr "Synthétiseur Lua"
+
+msgid "Mandelbrot"
+msgstr "Mandelbrot"
+
+msgid "Paint"
+msgstr "Dessin"
+
+msgid "Player"
+msgstr "Lecteur"
+
+msgid "Pong"
+msgstr "Pong"
+
+msgid "Sequencer"
+msgstr "Séquenceur"
+
+msgid "Synthesizer"
+msgstr "Synthétiseur"
+
+msgid "Unicode viewer"
+msgstr "Visionneuse Unicode"
+
+msgid "Viewer"
+msgstr "Visionneuse"

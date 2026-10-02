@@ -1,0 +1,107 @@
+# Spanish messages of the player domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: user/apps/player.c:285
+msgid "Loading %s"
+msgstr "Cargando %s"
+
+#: user/apps/player.c:305 user/apps/player.c:516 user/apps/player.c:530 user/apps/player.c:587
+msgid "Close"
+msgstr "Cerrar"
+
+#: user/apps/player.c:307 user/apps/player.c:520 user/apps/player.c:536
+msgid "Error"
+msgstr "Error"
+
+#: user/apps/player.c:307
+msgid "The file is not a PCM WAV file."
+msgstr "El archivo no es un archivo WAV PCM."
+
+#: user/apps/player.c:344
+msgid "Pause"
+msgstr "Pausa"
+
+#: user/apps/player.c:344 user/apps/player.c:363 user/apps/player.c:607
+msgid "Play"
+msgstr "Reproducir"
+
+#: user/apps/player.c:393
+msgid "The audio server disconnected"
+msgstr "El servidor de audio se desconectó"
+
+#: user/apps/player.c:451
+msgid "No file"
+msgstr "Ningún archivo"
+
+#: user/apps/player.c:488
+msgid "%s    %s    %u%s%u s"
+msgstr "%s    %s    %u%s%u s"
+
+#: user/apps/player.c:491
+msgid "No file loaded"
+msgstr "No hay ningún archivo cargado"
+
+#: user/apps/player.c:517
+msgid "Open"
+msgstr "Abrir"
+
+#: user/apps/player.c:517
+msgid "File:"
+msgstr "Archivo:"
+
+#: user/apps/player.c:520 user/apps/player.c:536
+msgid "A file is still being loaded."
+msgstr "Todavía se está cargando un archivo."
+
+#: user/apps/player.c:549 user/apps/player.c:613
+msgid "Volume: %d%%"
+msgstr "Volumen: %d%%"
+
+#: user/apps/player.c:581
+msgid "player"
+msgstr "Reproductor"
+
+#: user/apps/player.c:588
+msgid "Player"
+msgstr "Reproductor"
+
+#: user/apps/player.c:588
+msgid "The desktop audio service is unavailable."
+msgstr "El servicio de audio del escritorio no está disponible."
+
+#: user/apps/player.c:597
+msgid "File"
+msgstr "Archivo"
+
+#: user/apps/player.c:598
+msgid "Open..."
+msgstr "Abrir..."
+
+#: user/apps/player.c:600
+msgid "Quit"
+msgstr "Salir"
+
+#: user/apps/player.c:601
+msgid "Resampling"
+msgstr "Remuestreo"
+
+#: user/apps/player.c:602
+msgid "Linear"
+msgstr "Lineal"
+
+#: user/apps/player.c:603
+msgid "Sinc (experimental)"
+msgstr "Sinc (experimental)"
+
+#: user/apps/player.c:609
+msgid "Stop"
+msgstr "Detener"
+
+#: user/apps/player.c:610
+msgid "Loop"
+msgstr "Repetir"

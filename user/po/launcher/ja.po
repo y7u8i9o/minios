@@ -1,0 +1,82 @@
+# Japanese messages of the launcher domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Terminal"
+msgstr "端末"
+
+msgid "Files"
+msgstr "ファイル"
+
+msgid "Clock"
+msgstr "時計"
+
+msgid "System monitor"
+msgstr "システムモニター"
+
+msgid "Kernel log"
+msgstr "カーネルログ"
+
+msgid "Profiler"
+msgstr "プロファイラー"
+
+msgid "Event viewer"
+msgstr "イベントビューアー"
+
+msgid "Screenshot"
+msgstr "スクリーンショット"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "X12 settings"
+msgstr "X12 設定"
+
+msgid "Protocol viewer"
+msgstr "プロトコルビューアー"
+
+msgid "Log out"
+msgstr "ログアウト"
+
+msgid "Calculator"
+msgstr "電卓"
+
+msgid "Code"
+msgstr "コード"
+
+msgid "Editor"
+msgstr "エディター"
+
+msgid "Hex viewer"
+msgstr "16 進ビューアー"
+
+msgid "Lua Synthesizer"
+msgstr "Lua シンセサイザー"
+
+msgid "Mandelbrot"
+msgstr "マンデルブロ集合"
+
+msgid "Paint"
+msgstr "ペイント"
+
+msgid "Player"
+msgstr "プレーヤー"
+
+msgid "Pong"
+msgstr "ポン"
+
+msgid "Sequencer"
+msgstr "シーケンサー"
+
+msgid "Synthesizer"
+msgstr "シンセサイザー"
+
+msgid "Unicode viewer"
+msgstr "Unicode ビューアー"
+
+msgid "Viewer"
+msgstr "ビューアー"

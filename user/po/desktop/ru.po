@@ -1,0 +1,83 @@
+# Russian messages of the desktop domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/desktop/desktop.c:452
+msgid "Open with"
+msgstr "Открыть с помощью"
+
+#: user/desktop/desktop.c:452
+msgid "Program:"
+msgstr "Программа:"
+
+#: user/desktop/desktop.c:466
+msgid "Rename"
+msgstr "Переименовать"
+
+#: user/desktop/desktop.c:466
+msgid "New name:"
+msgstr "Новое имя:"
+
+#: user/desktop/desktop.c:480 user/desktop/desktop.c:483 user/desktop/desktop.c:539
+msgid "Delete"
+msgstr "Удалить"
+
+#: user/desktop/desktop.c:480
+msgid "Cancel"
+msgstr "Отмена"
+
+#: user/desktop/desktop.c:482
+msgid "Delete \"%s\"?"
+msgstr "Удалить «%s»?"
+
+#: user/desktop/desktop.c:499 user/desktop/desktop.c:500
+msgid "New folder"
+msgstr "Новая папка"
+
+#: user/desktop/desktop.c:500 user/desktop/desktop.c:513
+msgid "Name:"
+msgstr "Имя:"
+
+#: user/desktop/desktop.c:512
+msgid "New file.txt"
+msgstr "Новый файл.txt"
+
+#: user/desktop/desktop.c:513
+msgid "New text file"
+msgstr "Новый текстовый файл"
+
+#: user/desktop/desktop.c:535
+msgid "Open"
+msgstr "Открыть"
+
+#: user/desktop/desktop.c:536
+msgid "Open with..."
+msgstr "Открыть с помощью..."
+
+#: user/desktop/desktop.c:538
+msgid "Rename..."
+msgstr "Переименовать..."
+
+#: user/desktop/desktop.c:543
+msgid "New folder..."
+msgstr "Новая папка..."
+
+#: user/desktop/desktop.c:544
+msgid "New text file..."
+msgstr "Новый текстовый файл..."
+
+#: user/desktop/desktop.c:546
+msgid "Refresh"
+msgstr "Обновить"
+
+#: user/desktop/desktop.c:548
+msgid "Change wallpaper..."
+msgstr "Сменить обои..."
+
+#: user/desktop/desktop.c:549
+msgid "Settings"
+msgstr "Параметры"

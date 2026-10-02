@@ -1,0 +1,82 @@
+# Russian messages of the launcher domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Terminal"
+msgstr "Терминал"
+
+msgid "Files"
+msgstr "Файлы"
+
+msgid "Clock"
+msgstr "Часы"
+
+msgid "System monitor"
+msgstr "Системный монитор"
+
+msgid "Kernel log"
+msgstr "Журнал ядра"
+
+msgid "Profiler"
+msgstr "Профилировщик"
+
+msgid "Event viewer"
+msgstr "Просмотр событий"
+
+msgid "Screenshot"
+msgstr "Снимок экрана"
+
+msgid "Settings"
+msgstr "Параметры"
+
+msgid "X12 settings"
+msgstr "Параметры X12"
+
+msgid "Protocol viewer"
+msgstr "Просмотр протокола"
+
+msgid "Log out"
+msgstr "Выйти"
+
+msgid "Calculator"
+msgstr "Калькулятор"
+
+msgid "Code"
+msgstr "Код"
+
+msgid "Editor"
+msgstr "Редактор"
+
+msgid "Hex viewer"
+msgstr "Шестнадцатеричный просмотр"
+
+msgid "Lua Synthesizer"
+msgstr "Синтезатор Lua"
+
+msgid "Mandelbrot"
+msgstr "Мандельброт"
+
+msgid "Paint"
+msgstr "Рисование"
+
+msgid "Player"
+msgstr "Проигрыватель"
+
+msgid "Pong"
+msgstr "Понг"
+
+msgid "Sequencer"
+msgstr "Секвенсор"
+
+msgid "Synthesizer"
+msgstr "Синтезатор"
+
+msgid "Unicode viewer"
+msgstr "Просмотр Юникода"
+
+msgid "Viewer"
+msgstr "Просмотрщик"

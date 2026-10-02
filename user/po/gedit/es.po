@@ -1,0 +1,191 @@
+# Spanish messages of the gedit domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: user/apps/gedit.c:135
+msgid "Saved %s"
+msgstr "Guardado %s"
+
+#: user/apps/gedit.c:144
+msgid "OK"
+msgstr "Aceptar"
+
+#: user/apps/gedit.c:145
+msgid "Error"
+msgstr "Error"
+
+#: user/apps/gedit.c:152
+msgid "Save as"
+msgstr "Guardar como"
+
+#: user/apps/gedit.c:152 user/apps/gedit.c:203
+msgid "File:"
+msgstr "Archivo:"
+
+#: user/apps/gedit.c:156 user/apps/gedit.c:166
+msgid "The file cannot be written."
+msgstr "No se puede escribir el archivo."
+
+#: user/apps/gedit.c:176 user/apps/gedit.c:325 user/apps/gedit.c:347
+msgid "Save"
+msgstr "Guardar"
+
+#: user/apps/gedit.c:176
+msgid "Discard"
+msgstr "Descartar"
+
+#: user/apps/gedit.c:176
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: user/apps/gedit.c:177
+msgid "Unsaved changes"
+msgstr "Cambios sin guardar"
+
+#: user/apps/gedit.c:177
+msgid "Save the changes?"
+msgstr "¿Guardar los cambios?"
+
+#: user/apps/gedit.c:203 user/apps/gedit.c:346
+msgid "Open"
+msgstr "Abrir"
+
+#: user/apps/gedit.c:204
+msgid "The file cannot be opened."
+msgstr "No se puede abrir el archivo."
+
+#: user/apps/gedit.c:243
+msgid "\"%s\" not found"
+msgstr "No se encontró «%s»"
+
+#: user/apps/gedit.c:253 user/apps/gedit.c:360
+msgid "Find"
+msgstr "Buscar"
+
+#: user/apps/gedit.c:253
+msgid "Text:"
+msgstr "Texto:"
+
+#: user/apps/gedit.c:26
+msgid "untitled"
+msgstr "sin título"
+
+#: user/apps/gedit.c:268 user/apps/gedit.c:269
+msgid "Replace"
+msgstr "Reemplazar"
+
+#: user/apps/gedit.c:268
+msgid "Find:"
+msgstr "Buscar:"
+
+#: user/apps/gedit.c:269
+msgid "Replace with:"
+msgstr "Reemplazar con:"
+
+#: user/apps/gedit.c:272
+msgid "%d occurrence replaced"
+msgid_plural "%d occurrences replaced"
+msgstr[0] "%d coincidencia reemplazada"
+msgstr[1] "%d coincidencias reemplazadas"
+
+#: user/apps/gedit.c:284
+msgid "Go to line"
+msgstr "Ir a la línea"
+
+#: user/apps/gedit.c:284
+msgid "Line:"
+msgstr "Línea:"
+
+#: user/apps/gedit.c:322
+msgid "File"
+msgstr "Archivo"
+
+#: user/apps/gedit.c:323 user/apps/gedit.c:345
+msgid "New"
+msgstr "Nuevo"
+
+#: user/apps/gedit.c:324
+msgid "Open..."
+msgstr "Abrir..."
+
+#: user/apps/gedit.c:326
+msgid "Save as..."
+msgstr "Guardar como..."
+
+#: user/apps/gedit.c:328
+msgid "Quit"
+msgstr "Salir"
+
+#: user/apps/gedit.c:329
+msgid "Edit"
+msgstr "Editar"
+
+#: user/apps/gedit.c:330 user/apps/gedit.c:349
+msgid "Undo"
+msgstr "Deshacer"
+
+#: user/apps/gedit.c:331 user/apps/gedit.c:351
+msgid "Redo"
+msgstr "Rehacer"
+
+#: user/apps/gedit.c:333 user/apps/gedit.c:354
+msgid "Cut"
+msgstr "Cortar"
+
+#: user/apps/gedit.c:334 user/apps/gedit.c:356
+msgid "Copy"
+msgstr "Copiar"
+
+#: user/apps/gedit.c:335 user/apps/gedit.c:358
+msgid "Paste"
+msgstr "Pegar"
+
+#: user/apps/gedit.c:336
+msgid "Delete"
+msgstr "Eliminar"
+
+#: user/apps/gedit.c:337
+msgid "Select all"
+msgstr "Seleccionar todo"
+
+#: user/apps/gedit.c:339
+msgid "Find..."
+msgstr "Buscar..."
+
+#: user/apps/gedit.c:340
+msgid "Find next"
+msgstr "Buscar siguiente"
+
+#: user/apps/gedit.c:341
+msgid "Replace..."
+msgstr "Reemplazar..."
+
+#: user/apps/gedit.c:342
+msgid "Go to line..."
+msgstr "Ir a la línea..."
+
+#: user/apps/gedit.c:361
+msgid "Wrap"
+msgstr "Ajustar líneas"
+
+#: user/apps/gedit.c:363
+msgid "Line numbers"
+msgstr "Números de línea"
+
+#: user/apps/gedit.c:55
+msgid "Plain text"
+msgstr "Texto sin formato"
+
+#: user/apps/gedit.c:81
+msgid "Ln %d, Col %d"
+msgstr "Lín %d, Col %d"
+
+#: user/apps/gedit.c:84
+msgid "%d line"
+msgid_plural "%d lines"
+msgstr[0] "%d línea"
+msgstr[1] "%d líneas"

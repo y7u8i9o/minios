@@ -1,0 +1,54 @@
+# Russian messages of the panel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr "Приложения"
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr "Система"
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr "Поиск"
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr "Нет звуковой службы"
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr "Вывод"
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr "запись %u%%"
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr "воспроизведение %u%%"
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr "пауза %u%%"
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr "Нет потоков"
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "ещё %d"
+msgstr[1] "ещё %d"
+msgstr[2] "ещё %d"
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr "Меню"

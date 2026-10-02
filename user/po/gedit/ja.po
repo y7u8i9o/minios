@@ -1,0 +1,189 @@
+# Japanese messages of the gedit domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/gedit.c:135
+msgid "Saved %s"
+msgstr "%s を保存しました"
+
+#: user/apps/gedit.c:144
+msgid "OK"
+msgstr "OK"
+
+#: user/apps/gedit.c:145
+msgid "Error"
+msgstr "エラー"
+
+#: user/apps/gedit.c:152
+msgid "Save as"
+msgstr "名前を付けて保存"
+
+#: user/apps/gedit.c:152 user/apps/gedit.c:203
+msgid "File:"
+msgstr "ファイル:"
+
+#: user/apps/gedit.c:156 user/apps/gedit.c:166
+msgid "The file cannot be written."
+msgstr "ファイルを書き込めません。"
+
+#: user/apps/gedit.c:176 user/apps/gedit.c:325 user/apps/gedit.c:347
+msgid "Save"
+msgstr "保存"
+
+#: user/apps/gedit.c:176
+msgid "Discard"
+msgstr "破棄"
+
+#: user/apps/gedit.c:176
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: user/apps/gedit.c:177
+msgid "Unsaved changes"
+msgstr "未保存の変更"
+
+#: user/apps/gedit.c:177
+msgid "Save the changes?"
+msgstr "変更を保存しますか?"
+
+#: user/apps/gedit.c:203 user/apps/gedit.c:346
+msgid "Open"
+msgstr "開く"
+
+#: user/apps/gedit.c:204
+msgid "The file cannot be opened."
+msgstr "ファイルを開けません。"
+
+#: user/apps/gedit.c:243
+msgid "\"%s\" not found"
+msgstr "「%s」は見つかりません"
+
+#: user/apps/gedit.c:253 user/apps/gedit.c:360
+msgid "Find"
+msgstr "検索"
+
+#: user/apps/gedit.c:253
+msgid "Text:"
+msgstr "テキスト:"
+
+#: user/apps/gedit.c:26
+msgid "untitled"
+msgstr "無題"
+
+#: user/apps/gedit.c:268 user/apps/gedit.c:269
+msgid "Replace"
+msgstr "置換"
+
+#: user/apps/gedit.c:268
+msgid "Find:"
+msgstr "検索:"
+
+#: user/apps/gedit.c:269
+msgid "Replace with:"
+msgstr "置換後:"
+
+#: user/apps/gedit.c:272
+msgid "%d occurrence replaced"
+msgid_plural "%d occurrences replaced"
+msgstr[0] "%d 件を置換しました"
+
+#: user/apps/gedit.c:284
+msgid "Go to line"
+msgstr "行へ移動"
+
+#: user/apps/gedit.c:284
+msgid "Line:"
+msgstr "行:"
+
+#: user/apps/gedit.c:322
+msgid "File"
+msgstr "ファイル"
+
+#: user/apps/gedit.c:323 user/apps/gedit.c:345
+msgid "New"
+msgstr "新規"
+
+#: user/apps/gedit.c:324
+msgid "Open..."
+msgstr "開く..."
+
+#: user/apps/gedit.c:326
+msgid "Save as..."
+msgstr "名前を付けて保存..."
+
+#: user/apps/gedit.c:328
+msgid "Quit"
+msgstr "終了"
+
+#: user/apps/gedit.c:329
+msgid "Edit"
+msgstr "編集"
+
+#: user/apps/gedit.c:330 user/apps/gedit.c:349
+msgid "Undo"
+msgstr "元に戻す"
+
+#: user/apps/gedit.c:331 user/apps/gedit.c:351
+msgid "Redo"
+msgstr "やり直す"
+
+#: user/apps/gedit.c:333 user/apps/gedit.c:354
+msgid "Cut"
+msgstr "切り取り"
+
+#: user/apps/gedit.c:334 user/apps/gedit.c:356
+msgid "Copy"
+msgstr "コピー"
+
+#: user/apps/gedit.c:335 user/apps/gedit.c:358
+msgid "Paste"
+msgstr "貼り付け"
+
+#: user/apps/gedit.c:336
+msgid "Delete"
+msgstr "削除"
+
+#: user/apps/gedit.c:337
+msgid "Select all"
+msgstr "すべて選択"
+
+#: user/apps/gedit.c:339
+msgid "Find..."
+msgstr "検索..."
+
+#: user/apps/gedit.c:340
+msgid "Find next"
+msgstr "次を検索"
+
+#: user/apps/gedit.c:341
+msgid "Replace..."
+msgstr "置換..."
+
+#: user/apps/gedit.c:342
+msgid "Go to line..."
+msgstr "行へ移動..."
+
+#: user/apps/gedit.c:361
+msgid "Wrap"
+msgstr "折り返し"
+
+#: user/apps/gedit.c:363
+msgid "Line numbers"
+msgstr "行番号"
+
+#: user/apps/gedit.c:55
+msgid "Plain text"
+msgstr "プレーンテキスト"
+
+#: user/apps/gedit.c:81
+msgid "Ln %d, Col %d"
+msgstr "%d 行、%d 列"
+
+#: user/apps/gedit.c:84
+msgid "%d line"
+msgid_plural "%d lines"
+msgstr[0] "%d 行"

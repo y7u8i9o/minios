@@ -7,6 +7,7 @@
 #include <gui/app.h>
 #include <gui/widget.h>
 #include <gui/model.h>
+#include <gui/i18n.h>
 #include <stddef.h>
 
 #define WALLPAPER_DIR "/usr/share/wallpapers"

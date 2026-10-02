@@ -10,10 +10,12 @@
  * on the Print Screen key. */
 #include <gui/client.h>
 #include <gui/image.h>
+#include <gui/i18n.h>
 #include <wire/client.h>
 #include <core-client.h>
 #include <debug-client.h>
 #include <errno.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,6 +70,8 @@ static void usage(void)
 
 int main(int argc, char **argv)
 {
+    setlocale(LC_ALL, "");
+    textdomain("screenshot");
     int delay = 0;
     const char *file = NULL;
     for (int i = 1; i < argc; i++) {

@@ -1,0 +1,403 @@
+# French messages of the settings domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/settings/look.c:105
+msgid "Wallpaper"
+msgstr "Fond d'écran"
+
+#: user/settings/look.c:115
+msgid "None (solid colour)"
+msgstr "Aucun (couleur unie)"
+
+#: user/settings/look.c:119
+msgid "Placement"
+msgstr "Disposition"
+
+#: user/settings/look.c:12
+msgid "Fill the screen"
+msgstr "Remplir l'écran"
+
+#: user/settings/look.c:12
+msgid "Centre"
+msgstr "Centrer"
+
+#: user/settings/look.c:12
+msgid "Tile"
+msgstr "Mosaïque"
+
+#: user/settings/look.c:12
+msgid "Stretch"
+msgstr "Étirer"
+
+#: user/settings/look.c:131
+msgid "Desktop colour"
+msgstr "Couleur du bureau"
+
+#: user/settings/look.c:137
+msgid "Red"
+msgstr "Rouge"
+
+#: user/settings/look.c:137
+msgid "Green"
+msgstr "Vert"
+
+#: user/settings/look.c:137
+msgid "Blue"
+msgstr "Bleu"
+
+#: user/settings/look.c:145
+msgid "Interface font"
+msgstr "Police de l'interface"
+
+#: user/settings/look.c:156
+msgid "Font size (px)"
+msgstr "Taille de police (px)"
+
+#: user/settings/look.c:160
+msgid "Terminal font size (px)"
+msgstr "Taille de police du terminal (px)"
+
+#: user/settings/look.c:164
+msgid "Interface scale"
+msgstr "Échelle de l'interface"
+
+#: user/settings/look.c:166
+msgid "100 %"
+msgstr "100 %"
+
+#: user/settings/look.c:167
+msgid "125 %"
+msgstr "125 %"
+
+#: user/settings/look.c:168
+msgid "150 %"
+msgstr "150 %"
+
+#: user/settings/look.c:19
+msgid "Builtin bitmap font"
+msgstr "Police bitmap intégrée"
+
+#: user/settings/look.c:215
+msgid "unknown"
+msgstr "inconnu"
+
+#: user/settings/look.c:220
+msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
+msgstr "%dx%d pixels, échelle %d (%dx%d logiques), %d Hz"
+
+#: user/settings/look.c:223
+msgid "Current mode"
+msgstr "Mode actuel"
+
+#: user/settings/look.c:228
+msgid "Resolution"
+msgstr "Résolution"
+
+#: user/settings/look.c:240
+msgid "Pixel density"
+msgstr "Densité de pixels"
+
+#: user/settings/look.c:242
+msgid "Standard (1 pixel per point)"
+msgstr "Standard (1 pixel par point)"
+
+#: user/settings/look.c:243
+msgid "High (2 pixels per point)"
+msgstr "Haute (2 pixels par point)"
+
+#: user/settings/look.c:248
+msgid "Frame interval (ms)"
+msgstr "Intervalle d'image (ms)"
+
+#: user/settings/look.c:252
+msgid "Window decorations"
+msgstr "Décorations des fenêtres"
+
+#: user/settings/look.c:254
+msgid "Drawn by the application (client side)"
+msgstr "Dessinées par l'application (côté client)"
+
+#: user/settings/look.c:255
+msgid "Drawn by X12 (server side)"
+msgstr "Dessinées par X12 (côté serveur)"
+
+#: user/settings/look.c:271
+msgid "Repeat rate: %d per second"
+msgstr "Fréquence de répétition : %d par seconde"
+
+#: user/settings/look.c:273
+msgid "Repeat delay: %d ms"
+msgstr "Délai de répétition : %d ms"
+
+#: user/settings/look.c:302
+msgid "Layout"
+msgstr "Disposition"
+
+#: user/settings/look.c:346
+msgid "Pointer speed: %d"
+msgstr "Vitesse du pointeur : %d"
+
+#: user/settings/look.c:369
+msgid "Acceleration"
+msgstr "Accélération"
+
+#: user/settings/look.c:371
+msgid "Flat"
+msgstr "Plate"
+
+#: user/settings/look.c:372
+msgid "Adaptive"
+msgstr "Adaptative"
+
+#: user/settings/settings.c:124
+msgid "Appearance"
+msgstr "Apparence"
+
+#: user/settings/settings.c:125
+msgid "Display"
+msgstr "Affichage"
+
+#: user/settings/settings.c:126
+msgid "Keyboard"
+msgstr "Clavier"
+
+#: user/settings/settings.c:127
+msgid "Mouse"
+msgstr "Souris"
+
+#: user/settings/settings.c:128
+msgid "Sound"
+msgstr "Son"
+
+#: user/settings/settings.c:129 user/settings/system.c:179
+msgid "Date and time"
+msgstr "Date et heure"
+
+#: user/settings/settings.c:130
+msgid "File types"
+msgstr "Types de fichiers"
+
+#: user/settings/settings.c:131
+msgid "Launcher"
+msgstr "Lanceur"
+
+#: user/settings/settings.c:132
+msgid "System"
+msgstr "Système"
+
+#: user/settings/settings.c:90 user/settings/system.c:178
+msgid "OK"
+msgstr "OK"
+
+#: user/settings/settings.c:91 user/settings/settings.c:166
+msgid "Settings"
+msgstr "Paramètres"
+
+#: user/settings/settings.c:91
+msgid "The settings file cannot be written."
+msgstr "Le fichier des paramètres ne peut pas être écrit."
+
+#: user/settings/system.c:106
+msgid "Output volume"
+msgstr "Volume de sortie"
+
+#: user/settings/system.c:110
+msgid "Streams"
+msgstr "Flux"
+
+#: user/settings/system.c:142
+msgid "Year"
+msgstr "Année"
+
+#: user/settings/system.c:142
+msgid "Month"
+msgstr "Mois"
+
+#: user/settings/system.c:142
+msgid "Day"
+msgstr "Jour"
+
+#: user/settings/system.c:142
+msgid "Hour"
+msgstr "Heure"
+
+#: user/settings/system.c:142
+msgid "Minute"
+msgstr "Minute"
+
+#: user/settings/system.c:143
+msgid "Second"
+msgstr "Seconde"
+
+#: user/settings/system.c:179
+msgid "The clock could not be set."
+msgstr "L'horloge n'a pas pu être réglée."
+
+#: user/settings/system.c:201
+msgid "Load current time"
+msgstr "Charger l'heure actuelle"
+
+#: user/settings/system.c:202
+msgid "Set clock"
+msgstr "Régler l'horloge"
+
+#: user/settings/system.c:219
+msgid "Type"
+msgstr "Type"
+
+#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+msgid "Program"
+msgstr "Programme"
+
+#: user/settings/system.c:248
+msgid "New file type"
+msgstr "Nouveau type de fichier"
+
+#: user/settings/system.c:248
+msgid "Type (for example text/x-log):"
+msgstr "Type (par exemple text/x-log) :"
+
+#: user/settings/system.c:266
+msgid "(select a type)"
+msgstr "(choisir un type)"
+
+#: user/settings/system.c:271
+msgid "Set"
+msgstr "Définir"
+
+#: user/settings/system.c:272
+msgid "Add type..."
+msgstr "Ajouter un type..."
+
+#: user/settings/system.c:322 user/settings/system.c:396
+msgid "Menu entry"
+msgstr "Entrée du menu"
+
+#: user/settings/system.c:34
+msgid "capture"
+msgstr "capture"
+
+#: user/settings/system.c:34
+msgid "playback"
+msgstr "lecture"
+
+#: user/settings/system.c:35
+msgid "%u %%"
+msgstr "%u %%"
+
+#: user/settings/system.c:36
+msgid "running"
+msgstr "en cours"
+
+#: user/settings/system.c:36
+msgid "error"
+msgstr "erreur"
+
+#: user/settings/system.c:36
+msgid "paused"
+msgstr "en pause"
+
+#: user/settings/system.c:404
+msgid "Save entry"
+msgstr "Enregistrer l'entrée"
+
+#: user/settings/system.c:405
+msgid "New"
+msgstr "Nouveau"
+
+#: user/settings/system.c:406
+msgid "Remove"
+msgstr "Supprimer"
+
+#: user/settings/system.c:407
+msgid "Move up"
+msgstr "Monter"
+
+#: user/settings/system.c:408
+msgid "Move down"
+msgstr "Descendre"
+
+#: user/settings/system.c:41
+msgid "Stream"
+msgstr "Flux"
+
+#: user/settings/system.c:41
+msgid "Direction"
+msgstr "Direction"
+
+#: user/settings/system.c:41
+msgid "Volume"
+msgstr "Volume"
+
+#: user/settings/system.c:41
+msgid "State"
+msgstr "État"
+
+#: user/settings/system.c:425
+msgid "Up %ld:%02ld:%02ld"
+msgstr "Actif depuis %ld:%02ld:%02ld"
+
+#: user/settings/system.c:438
+msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
+msgstr "Mémoire : %ld sur %ld Mio utilisés, échange : %ld sur %ld Mio utilisés"
+
+#: user/settings/system.c:454
+msgid "%s %s (%s) on %s"
+msgstr "%s %s (%s) sur %s"
+
+#: user/settings/system.c:457
+msgid "%d processor"
+msgid_plural "%d processors"
+msgstr[0] "%d processeur"
+msgstr[1] "%d processeurs"
+
+#: user/settings/system.c:461
+msgid "Display %dx%d pixels at scale %d"
+msgstr "Écran de %dx%d pixels à l'échelle %d"
+
+#: user/settings/system.c:470
+msgid "Tools"
+msgstr "Outils"
+
+#: user/settings/system.c:472
+msgid "System monitor"
+msgstr "Moniteur système"
+
+#: user/settings/system.c:473
+msgid "Kernel log"
+msgstr "Journal du noyau"
+
+#: user/settings/system.c:474
+msgid "X12 settings"
+msgstr "Paramètres X12"
+
+#: user/settings/system.c:52
+msgid "Output volume: %u %%"
+msgstr "Volume de sortie : %u %%"
+
+#: user/settings/system.c:59
+msgid "%s: %u %%"
+msgstr "%s : %u %%"
+
+#: user/settings/system.c:64 user/settings/system.c:119
+msgid "Stream volume"
+msgstr "Volume du flux"
+
+#: user/settings/system.c:67
+msgid "%d stream"
+msgid_plural "%d streams"
+msgstr[0] "%d flux"
+msgstr[1] "%d flux"
+
+#: user/settings/system.c:76 user/settings/system.c:128
+msgid "No audio server"
+msgstr "Aucun serveur audio"
+
+#: user/settings/system.c:90
+msgid "Output volume: %d %%"
+msgstr "Volume de sortie : %d %%"

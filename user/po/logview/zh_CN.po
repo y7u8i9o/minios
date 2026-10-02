@@ -1,0 +1,139 @@
+# Simplified Chinese messages of the logview domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/logview.c:164
+msgid "Time"
+msgstr "时间"
+
+#: user/apps/logview.c:164
+msgid "Level"
+msgstr "级别"
+
+#: user/apps/logview.c:164
+msgid "Subsystem"
+msgstr "子系统"
+
+#: user/apps/logview.c:164
+msgid "Message"
+msgstr "消息"
+
+#: user/apps/logview.c:197
+msgid "%ld of %ld line"
+msgid_plural "%ld of %ld lines"
+msgstr[0] "%ld / %ld 行"
+
+#: user/apps/logview.c:199
+msgid "%ld warning"
+msgid_plural "%ld warnings"
+msgstr[0] "%ld 个警告"
+
+#: user/apps/logview.c:201
+msgid "%ld error"
+msgid_plural "%ld errors"
+msgstr[0] "%ld 个错误"
+
+#: user/apps/logview.c:202
+msgid "%s, %s"
+msgstr "%s，%s"
+
+#: user/apps/logview.c:205
+msgid "%ld byte lost"
+msgid_plural "%ld bytes lost"
+msgstr[0] "丢失 %ld 字节"
+
+#: user/apps/logview.c:332
+msgid "OK"
+msgstr "确定"
+
+#: user/apps/logview.c:333 user/apps/logview.c:453
+msgid "Kernel log"
+msgstr "内核日志"
+
+#: user/apps/logview.c:35
+msgid "Debug"
+msgstr "调试"
+
+#: user/apps/logview.c:35
+msgid "Info"
+msgstr "信息"
+
+#: user/apps/logview.c:35
+msgid "Warning"
+msgstr "警告"
+
+#: user/apps/logview.c:35
+msgid "Error"
+msgstr "错误"
+
+#: user/apps/logview.c:382 user/apps/logview.c:470
+msgid "Save"
+msgstr "保存"
+
+#: user/apps/logview.c:382
+msgid "File:"
+msgstr "文件："
+
+#: user/apps/logview.c:387
+msgid "%s cannot be written: %s"
+msgstr "无法写入 %s：%s"
+
+#: user/apps/logview.c:395
+msgid "The file was not written completely."
+msgstr "文件未完整写入。"
+
+#: user/apps/logview.c:457
+msgid "File"
+msgstr "文件"
+
+#: user/apps/logview.c:458
+msgid "Save..."
+msgstr "保存..."
+
+#: user/apps/logview.c:462
+msgid "Quit"
+msgstr "退出"
+
+#: user/apps/logview.c:463
+msgid "Edit"
+msgstr "编辑"
+
+#: user/apps/logview.c:464 user/apps/logview.c:471
+msgid "Copy"
+msgstr "复制"
+
+#: user/apps/logview.c:467
+msgid "Clear"
+msgstr "清除"
+
+#: user/apps/logview.c:473
+msgid "All levels"
+msgstr "所有级别"
+
+#: user/apps/logview.c:474
+msgid "Info and above"
+msgstr "信息及以上"
+
+#: user/apps/logview.c:475
+msgid "Warnings and errors"
+msgstr "警告和错误"
+
+#: user/apps/logview.c:476
+msgid "Errors"
+msgstr "错误"
+
+#: user/apps/logview.c:480
+msgid "All subsystems"
+msgstr "所有子系统"
+
+#: user/apps/logview.c:486
+msgid "Find"
+msgstr "查找"
+
+#: user/apps/logview.c:488
+msgid "Follow"
+msgstr "跟随"

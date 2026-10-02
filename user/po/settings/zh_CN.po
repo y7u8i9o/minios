@@ -1,0 +1,401 @@
+# Simplified Chinese messages of the settings domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/settings/look.c:105
+msgid "Wallpaper"
+msgstr "壁纸"
+
+#: user/settings/look.c:115
+msgid "None (solid colour)"
+msgstr "无（纯色）"
+
+#: user/settings/look.c:119
+msgid "Placement"
+msgstr "放置方式"
+
+#: user/settings/look.c:12
+msgid "Fill the screen"
+msgstr "填满屏幕"
+
+#: user/settings/look.c:12
+msgid "Centre"
+msgstr "居中"
+
+#: user/settings/look.c:12
+msgid "Tile"
+msgstr "平铺"
+
+#: user/settings/look.c:12
+msgid "Stretch"
+msgstr "拉伸"
+
+#: user/settings/look.c:131
+msgid "Desktop colour"
+msgstr "桌面颜色"
+
+#: user/settings/look.c:137
+msgid "Red"
+msgstr "红"
+
+#: user/settings/look.c:137
+msgid "Green"
+msgstr "绿"
+
+#: user/settings/look.c:137
+msgid "Blue"
+msgstr "蓝"
+
+#: user/settings/look.c:145
+msgid "Interface font"
+msgstr "界面字体"
+
+#: user/settings/look.c:156
+msgid "Font size (px)"
+msgstr "字号（像素）"
+
+#: user/settings/look.c:160
+msgid "Terminal font size (px)"
+msgstr "终端字号（像素）"
+
+#: user/settings/look.c:164
+msgid "Interface scale"
+msgstr "界面缩放"
+
+#: user/settings/look.c:166
+msgid "100 %"
+msgstr "100 %"
+
+#: user/settings/look.c:167
+msgid "125 %"
+msgstr "125 %"
+
+#: user/settings/look.c:168
+msgid "150 %"
+msgstr "150 %"
+
+#: user/settings/look.c:19
+msgid "Builtin bitmap font"
+msgstr "内置位图字体"
+
+#: user/settings/look.c:215
+msgid "unknown"
+msgstr "未知"
+
+#: user/settings/look.c:220
+msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
+msgstr "%dx%d 像素，缩放 %d（逻辑 %dx%d），%d Hz"
+
+#: user/settings/look.c:223
+msgid "Current mode"
+msgstr "当前模式"
+
+#: user/settings/look.c:228
+msgid "Resolution"
+msgstr "分辨率"
+
+#: user/settings/look.c:240
+msgid "Pixel density"
+msgstr "像素密度"
+
+#: user/settings/look.c:242
+msgid "Standard (1 pixel per point)"
+msgstr "标准（每点 1 像素）"
+
+#: user/settings/look.c:243
+msgid "High (2 pixels per point)"
+msgstr "高（每点 2 像素）"
+
+#: user/settings/look.c:248
+msgid "Frame interval (ms)"
+msgstr "帧间隔（毫秒）"
+
+#: user/settings/look.c:252
+msgid "Window decorations"
+msgstr "窗口装饰"
+
+#: user/settings/look.c:254
+msgid "Drawn by the application (client side)"
+msgstr "由应用程序绘制（客户端）"
+
+#: user/settings/look.c:255
+msgid "Drawn by X12 (server side)"
+msgstr "由 X12 绘制（服务器端）"
+
+#: user/settings/look.c:271
+msgid "Repeat rate: %d per second"
+msgstr "重复速率：每秒 %d 次"
+
+#: user/settings/look.c:273
+msgid "Repeat delay: %d ms"
+msgstr "重复延迟：%d 毫秒"
+
+#: user/settings/look.c:302
+msgid "Layout"
+msgstr "布局"
+
+#: user/settings/look.c:346
+msgid "Pointer speed: %d"
+msgstr "指针速度：%d"
+
+#: user/settings/look.c:369
+msgid "Acceleration"
+msgstr "加速"
+
+#: user/settings/look.c:371
+msgid "Flat"
+msgstr "平稳"
+
+#: user/settings/look.c:372
+msgid "Adaptive"
+msgstr "自适应"
+
+#: user/settings/settings.c:124
+msgid "Appearance"
+msgstr "外观"
+
+#: user/settings/settings.c:125
+msgid "Display"
+msgstr "显示"
+
+#: user/settings/settings.c:126
+msgid "Keyboard"
+msgstr "键盘"
+
+#: user/settings/settings.c:127
+msgid "Mouse"
+msgstr "鼠标"
+
+#: user/settings/settings.c:128
+msgid "Sound"
+msgstr "声音"
+
+#: user/settings/settings.c:129 user/settings/system.c:179
+msgid "Date and time"
+msgstr "日期和时间"
+
+#: user/settings/settings.c:130
+msgid "File types"
+msgstr "文件类型"
+
+#: user/settings/settings.c:131
+msgid "Launcher"
+msgstr "启动器"
+
+#: user/settings/settings.c:132
+msgid "System"
+msgstr "系统"
+
+#: user/settings/settings.c:90 user/settings/system.c:178
+msgid "OK"
+msgstr "确定"
+
+#: user/settings/settings.c:91 user/settings/settings.c:166
+msgid "Settings"
+msgstr "设置"
+
+#: user/settings/settings.c:91
+msgid "The settings file cannot be written."
+msgstr "无法写入设置文件。"
+
+#: user/settings/system.c:106
+msgid "Output volume"
+msgstr "输出音量"
+
+#: user/settings/system.c:110
+msgid "Streams"
+msgstr "音频流"
+
+#: user/settings/system.c:142
+msgid "Year"
+msgstr "年"
+
+#: user/settings/system.c:142
+msgid "Month"
+msgstr "月"
+
+#: user/settings/system.c:142
+msgid "Day"
+msgstr "日"
+
+#: user/settings/system.c:142
+msgid "Hour"
+msgstr "时"
+
+#: user/settings/system.c:142
+msgid "Minute"
+msgstr "分"
+
+#: user/settings/system.c:143
+msgid "Second"
+msgstr "秒"
+
+#: user/settings/system.c:179
+msgid "The clock could not be set."
+msgstr "无法设置时钟。"
+
+#: user/settings/system.c:201
+msgid "Load current time"
+msgstr "载入当前时间"
+
+#: user/settings/system.c:202
+msgid "Set clock"
+msgstr "设置时钟"
+
+#: user/settings/system.c:219
+msgid "Type"
+msgstr "类型"
+
+#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+msgid "Program"
+msgstr "程序"
+
+#: user/settings/system.c:248
+msgid "New file type"
+msgstr "新文件类型"
+
+#: user/settings/system.c:248
+msgid "Type (for example text/x-log):"
+msgstr "类型（例如 text/x-log）："
+
+#: user/settings/system.c:266
+msgid "(select a type)"
+msgstr "（选择类型）"
+
+#: user/settings/system.c:271
+msgid "Set"
+msgstr "设置"
+
+#: user/settings/system.c:272
+msgid "Add type..."
+msgstr "添加类型..."
+
+#: user/settings/system.c:322 user/settings/system.c:396
+msgid "Menu entry"
+msgstr "菜单项"
+
+#: user/settings/system.c:34
+msgid "capture"
+msgstr "录音"
+
+#: user/settings/system.c:34
+msgid "playback"
+msgstr "播放"
+
+#: user/settings/system.c:35
+msgid "%u %%"
+msgstr "%u %%"
+
+#: user/settings/system.c:36
+msgid "running"
+msgstr "运行中"
+
+#: user/settings/system.c:36
+msgid "error"
+msgstr "错误"
+
+#: user/settings/system.c:36
+msgid "paused"
+msgstr "已暂停"
+
+#: user/settings/system.c:404
+msgid "Save entry"
+msgstr "保存菜单项"
+
+#: user/settings/system.c:405
+msgid "New"
+msgstr "新建"
+
+#: user/settings/system.c:406
+msgid "Remove"
+msgstr "移除"
+
+#: user/settings/system.c:407
+msgid "Move up"
+msgstr "上移"
+
+#: user/settings/system.c:408
+msgid "Move down"
+msgstr "下移"
+
+#: user/settings/system.c:41
+msgid "Stream"
+msgstr "音频流"
+
+#: user/settings/system.c:41
+msgid "Direction"
+msgstr "方向"
+
+#: user/settings/system.c:41
+msgid "Volume"
+msgstr "音量"
+
+#: user/settings/system.c:41
+msgid "State"
+msgstr "状态"
+
+#: user/settings/system.c:425
+msgid "Up %ld:%02ld:%02ld"
+msgstr "已运行 %ld:%02ld:%02ld"
+
+#: user/settings/system.c:438
+msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
+msgstr "内存：已用 %ld / %ld MiB，交换：已用 %ld / %ld MiB"
+
+#: user/settings/system.c:454
+msgid "%s %s (%s) on %s"
+msgstr "%s %s（%s），运行于 %s"
+
+#: user/settings/system.c:457
+msgid "%d processor"
+msgid_plural "%d processors"
+msgstr[0] "%d 个处理器"
+
+#: user/settings/system.c:461
+msgid "Display %dx%d pixels at scale %d"
+msgstr "显示器 %dx%d 像素，缩放 %d"
+
+#: user/settings/system.c:470
+msgid "Tools"
+msgstr "工具"
+
+#: user/settings/system.c:472
+msgid "System monitor"
+msgstr "系统监视器"
+
+#: user/settings/system.c:473
+msgid "Kernel log"
+msgstr "内核日志"
+
+#: user/settings/system.c:474
+msgid "X12 settings"
+msgstr "X12 设置"
+
+#: user/settings/system.c:52
+msgid "Output volume: %u %%"
+msgstr "输出音量：%u %%"
+
+#: user/settings/system.c:59
+msgid "%s: %u %%"
+msgstr "%s：%u %%"
+
+#: user/settings/system.c:64 user/settings/system.c:119
+msgid "Stream volume"
+msgstr "音频流音量"
+
+#: user/settings/system.c:67
+msgid "%d stream"
+msgid_plural "%d streams"
+msgstr[0] "%d 个音频流"
+
+#: user/settings/system.c:76 user/settings/system.c:128
+msgid "No audio server"
+msgstr "没有音频服务器"
+
+#: user/settings/system.c:90
+msgid "Output volume: %d %%"
+msgstr "输出音量：%d %%"

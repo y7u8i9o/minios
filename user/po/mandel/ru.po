@@ -1,0 +1,147 @@
+# Russian messages of the mandel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/mandel.c:556
+msgid "Julia %s"
+msgstr "Жюлиа %s"
+
+#: user/apps/mandel.c:558
+msgid "Centre %s"
+msgstr "Центр %s"
+
+#: user/apps/mandel.c:563
+msgid "Zoom %.2e"
+msgstr "Масштаб %.2e"
+
+#: user/apps/mandel.c:565
+msgid "Zoom %.0fx"
+msgstr "Масштаб %.0fx"
+
+#: user/apps/mandel.c:567
+msgid "Zoom 1/%.0fx"
+msgstr "Масштаб 1/%.0fx"
+
+#: user/apps/mandel.c:573
+msgid "%d iteration, %d%%"
+msgid_plural "%d iterations, %d%%"
+msgstr[0] "%d итерация, %d%%"
+msgstr[1] "%d итерации, %d%%"
+msgstr[2] "%d итераций, %d%%"
+
+#: user/apps/mandel.c:576
+msgid "%d iteration, %ld%s%01ld s"
+msgid_plural "%d iterations, %ld%s%01ld s"
+msgstr[0] "%d итерация, %ld%s%01ld с"
+msgstr[1] "%d итерации, %ld%s%01ld с"
+msgstr[2] "%d итераций, %ld%s%01ld с"
+
+#: user/apps/mandel.c:580
+msgid "%d iteration, %ld ms"
+msgid_plural "%d iterations, %ld ms"
+msgstr[0] "%d итерация, %ld мс"
+msgstr[1] "%d итерации, %ld мс"
+msgstr[2] "%d итераций, %ld мс"
+
+#: user/apps/mandel.c:583
+msgid "%d iteration"
+msgid_plural "%d iterations"
+msgstr[0] "%d итерация"
+msgstr[1] "%d итерации"
+msgstr[2] "%d итераций"
+
+#: user/apps/mandel.c:632
+msgid "Pointer %s"
+msgstr "Указатель %s"
+
+#: user/apps/mandel.c:729
+msgid "Close"
+msgstr "Закрыть"
+
+#: user/apps/mandel.c:730 user/apps/mandel.c:826
+msgid "Save image"
+msgstr "Сохранить изображение"
+
+#: user/apps/mandel.c:730
+msgid "File:"
+msgstr "Файл:"
+
+#: user/apps/mandel.c:742
+msgid "Error"
+msgstr "Ошибка"
+
+#: user/apps/mandel.c:742
+msgid "The image cannot be written."
+msgstr "Не удаётся записать изображение."
+
+#: user/apps/mandel.c:799
+msgid "Mandelbrot"
+msgstr "Мандельброт"
+
+#: user/apps/mandel.c:803
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/mandel.c:804
+msgid "Save image..."
+msgstr "Сохранить изображение..."
+
+#: user/apps/mandel.c:808
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/mandel.c:811
+msgid "View"
+msgstr "Вид"
+
+#: user/apps/mandel.c:812 user/apps/mandel.c:823
+msgid "Zoom in"
+msgstr "Увеличить"
+
+#: user/apps/mandel.c:813 user/apps/mandel.c:824
+msgid "Zoom out"
+msgstr "Уменьшить"
+
+#: user/apps/mandel.c:814 user/apps/mandel.c:825
+msgid "Reset view"
+msgstr "Сбросить вид"
+
+#: user/apps/mandel.c:816
+msgid "Mandelbrot set"
+msgstr "Множество Мандельброта"
+
+#: user/apps/mandel.c:819
+msgid "Julia set of the centre"
+msgstr "Множество Жюлиа для центра"
+
+#: user/apps/mandel.c:828
+msgid "Colours"
+msgstr "Цвета"
+
+#: user/apps/mandel.c:830
+msgid "Classic"
+msgstr "Классические"
+
+#: user/apps/mandel.c:831
+msgid "Fire"
+msgstr "Огонь"
+
+#: user/apps/mandel.c:832
+msgid "Ocean"
+msgstr "Океан"
+
+#: user/apps/mandel.c:833
+msgid "Grey"
+msgstr "Серые"
+
+#: user/apps/mandel.c:836
+msgid "Iterations"
+msgstr "Итерации"
+
+#: user/apps/mandel.c:838
+msgid "Automatic"
+msgstr "Автоматически"

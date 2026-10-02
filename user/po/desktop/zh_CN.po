@@ -1,0 +1,83 @@
+# Simplified Chinese messages of the desktop domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/desktop/desktop.c:452
+msgid "Open with"
+msgstr "打开方式"
+
+#: user/desktop/desktop.c:452
+msgid "Program:"
+msgstr "程序："
+
+#: user/desktop/desktop.c:466
+msgid "Rename"
+msgstr "重命名"
+
+#: user/desktop/desktop.c:466
+msgid "New name:"
+msgstr "新名称："
+
+#: user/desktop/desktop.c:480 user/desktop/desktop.c:483 user/desktop/desktop.c:539
+msgid "Delete"
+msgstr "删除"
+
+#: user/desktop/desktop.c:480
+msgid "Cancel"
+msgstr "取消"
+
+#: user/desktop/desktop.c:482
+msgid "Delete \"%s\"?"
+msgstr "删除“%s”？"
+
+#: user/desktop/desktop.c:499 user/desktop/desktop.c:500
+msgid "New folder"
+msgstr "新建文件夹"
+
+#: user/desktop/desktop.c:500 user/desktop/desktop.c:513
+msgid "Name:"
+msgstr "名称："
+
+#: user/desktop/desktop.c:512
+msgid "New file.txt"
+msgstr "新文件.txt"
+
+#: user/desktop/desktop.c:513
+msgid "New text file"
+msgstr "新建文本文件"
+
+#: user/desktop/desktop.c:535
+msgid "Open"
+msgstr "打开"
+
+#: user/desktop/desktop.c:536
+msgid "Open with..."
+msgstr "打开方式..."
+
+#: user/desktop/desktop.c:538
+msgid "Rename..."
+msgstr "重命名..."
+
+#: user/desktop/desktop.c:543
+msgid "New folder..."
+msgstr "新建文件夹..."
+
+#: user/desktop/desktop.c:544
+msgid "New text file..."
+msgstr "新建文本文件..."
+
+#: user/desktop/desktop.c:546
+msgid "Refresh"
+msgstr "刷新"
+
+#: user/desktop/desktop.c:548
+msgid "Change wallpaper..."
+msgstr "更换壁纸..."
+
+#: user/desktop/desktop.c:549
+msgid "Settings"
+msgstr "设置"

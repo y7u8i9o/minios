@@ -18,8 +18,10 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <langinfo.h>
 #include <gui/app.h>
 #include <gui/model.h>
+#include <gui/i18n.h>
 
 #define MAX_PROCS 64
 #define MAX_THREADS 128
@@ -289,33 +291,37 @@ static void read_resources(long elapsed)
 
 /* The functions below format values for the tables and the graphs. */
 
+/* The sizes and percentages with one decimal place use the radix
+ * character of the locale. */
 static void format_size(char *buf, size_t size, long kib)
 {
+    const char *radix = nl_langinfo(RADIXCHAR);
     if (kib >= 10 * KIB * KIB)
-        snprintf(buf, size, "%ld GiB", kib / (KIB * KIB));
+        snprintf(buf, size, _("%ld GiB"), kib / (KIB * KIB));
     else if (kib >= KIB * KIB)
-        snprintf(buf, size, "%ld.%ld GiB", kib / (KIB * KIB), kib % (KIB * KIB) * 10 / (KIB * KIB));
+        snprintf(buf, size, _("%ld%s%ld GiB"), kib / (KIB * KIB), radix, kib % (KIB * KIB) * 10 / (KIB * KIB));
     else if (kib >= 10 * KIB)
-        snprintf(buf, size, "%ld MiB", kib / KIB);
+        snprintf(buf, size, _("%ld MiB"), kib / KIB);
     else if (kib >= KIB)
-        snprintf(buf, size, "%ld.%ld MiB", kib / KIB, kib % KIB * 10 / KIB);
+        snprintf(buf, size, _("%ld%s%ld MiB"), kib / KIB, radix, kib % KIB * 10 / KIB);
     else
-        snprintf(buf, size, "%ld KiB", kib);
+        snprintf(buf, size, _("%ld KiB"), kib);
 }
 
 static void format_rate(char *buf, size_t size, long bytes)
 {
     if (bytes < KIB)
-        snprintf(buf, size, "%ld B/s", bytes);
+        snprintf(buf, size, _("%ld B/s"), bytes);
     else {
-        format_size(buf, size, bytes / KIB);
-        strncat(buf, "/s", size - strlen(buf) - 1);
+        char amount[32];
+        format_size(amount, sizeof amount, bytes / KIB);
+        snprintf(buf, size, _("%s/s"), amount);
     }
 }
 
 static void format_percent(char *buf, size_t size, int tenths)
 {
-    snprintf(buf, size, "%d.%d %%", tenths / 10, tenths % 10);
+    snprintf(buf, size, _("%d%s%d %%"), tenths / 10, nl_langinfo(RADIXCHAR), tenths % 10);
 }
 
 /* The functions below implement the process table model.  The row id of
@@ -374,8 +380,9 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
 
 static const char *m_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Name", "PID", "Parent", "State", "CPU", "CPU time", "Memory" };
-    return names[col];
+    static const char *const names[] = { N_("Name"), N_("PID"), N_("Parent"), N_("State"), N_("CPU"),
+                                         N_("CPU time"), N_("Memory") };
+    return _(names[col]);
 }
 
 static void m_sort(struct model *m, int col, int descending)
@@ -403,15 +410,16 @@ static const char *t_cell(struct model *m, int row, int col, char *buf, size_t s
     default:
         if (t->wait_ms < 0)
             return "";
-        snprintf(buf, size, "%ld ms", t->wait_ms);
+        snprintf(buf, size, _("%ld ms"), t->wait_ms);
         return buf;
     }
 }
 
 static const char *t_header(struct model *m, int col)
 {
-    static const char *const names[] = { "TID", "Name", "State", "CPU", "Wait queue", "Bounded wait" };
-    return names[col];
+    static const char *const names[] = { N_("TID"), N_("Name"), N_("State"), N_("CPU"), N_("Wait queue"),
+                                         N_("Bounded wait") };
+    return _(names[col]);
 }
 
 static struct model thread_model = { t_rows, t_child, t_columns, t_cell, t_header, NULL, NULL, NULL };
@@ -543,14 +551,14 @@ static int on_paint_graphs(struct widget *w, void *args, void *arg)
     int cpu_h = (w->h - 2 * pad - 2 * gap) * 45 / 100;
     int mem_h = (w->h - 2 * pad - 2 * gap - cpu_h) / 2;
     format_percent(a, sizeof a, nhist ? cpu_total_hist[nhist - 1] : 0);
-    y += draw_heading(p, x, y, width, "CPU", a);
+    y += draw_heading(p, x, y, width, _("CPU"), a);
     int n = ncpus > 0 ? ncpus : 1;
     int cols = n < 4 ? n : 4, lines = (n + cols - 1) / cols;
     int cell_w = (width - (cols - 1) * pad) / cols;
     int cell_h = (cpu_h - th - (lines - 1) * pad) / lines;
     for (int c = 0; c < n; c++) {
         int cx = x + (c % cols) * (cell_w + pad), cy = y + (c / cols) * (cell_h + pad);
-        snprintf(text, sizeof text, "CPU %d", c);
+        snprintf(text, sizeof text, _("CPU %d"), c);
         format_percent(a, sizeof a, nhist ? cpu_hist[c][nhist - 1] : 0);
         int hh = cell_h > 3 * th ? draw_heading(p, cx, cy, cell_w, text, a) : 0;
         draw_frame(p, cx, cy + hh, cell_w, cell_h - hh);
@@ -564,14 +572,14 @@ static int on_paint_graphs(struct widget *w, void *args, void *arg)
     char used[64], swap[64], cache[48];
     format_size(a, sizeof a, mem_used_kb);
     format_size(b, sizeof b, mem_total_kb);
-    snprintf(used, sizeof used, "Used %s of %s", a, b);
+    snprintf(used, sizeof used, _("Used %s of %s"), a, b);
     format_size(a, sizeof a, swap_used_kb);
     format_size(b, sizeof b, swap_total_kb);
-    snprintf(swap, sizeof swap, "Swap %s of %s", a, b);
+    snprintf(swap, sizeof swap, _("Swap %s of %s"), a, b);
     format_size(a, sizeof a, cache_kb);
-    snprintf(cache, sizeof cache, "File cache %s", a);
+    snprintf(cache, sizeof cache, _("File cache %s"), a);
     struct legend_item mem_items[] = { { used, accent }, { swap, second }, { cache, 0 } };
-    int hh = draw_heading(p, x, y, width, "Memory", NULL);
+    int hh = draw_heading(p, x, y, width, _("Memory"), NULL);
     if (swap_total_kb > 0)
         draw_legend(p, x, y, width, mem_items, 3);
     else {
@@ -597,11 +605,11 @@ static int on_paint_graphs(struct widget *w, void *args, void *arg)
     long max = nice_max(peak);
     char receive[48], transmit[48];
     format_rate(a, sizeof a, nhist ? rx_hist[nhist - 1] : 0);
-    snprintf(receive, sizeof receive, "Receive %s", a);
+    snprintf(receive, sizeof receive, _("Receive %s"), a);
     format_rate(a, sizeof a, nhist ? tx_hist[nhist - 1] : 0);
-    snprintf(transmit, sizeof transmit, "Transmit %s", a);
+    snprintf(transmit, sizeof transmit, _("Transmit %s"), a);
     struct legend_item net_items[] = { { receive, accent }, { transmit, second } };
-    hh = draw_heading(p, x, y, width, "Network", NULL);
+    hh = draw_heading(p, x, y, width, _("Network"), NULL);
     draw_legend(p, x, y, width, net_items, 2);
     int net_h = w->h - pad - y;
     draw_frame(p, x, y + hh, width, net_h - hh);
@@ -625,17 +633,17 @@ static void update_threads(void)
 static void update_status(void)
 {
     char text[64], a[24], b[24];
-    snprintf(text, sizeof text, "%d processes", nrows);
+    snprintf(text, sizeof text, ngettext("%d process", "%d processes", (unsigned long)nrows), nrows);
     widget_set_text(st_procs, text);
     format_percent(a, sizeof a, nhist ? cpu_total_hist[nhist - 1] : 0);
-    snprintf(text, sizeof text, "CPU %s", a);
+    snprintf(text, sizeof text, _("CPU %s"), a);
     widget_set_text(st_cpu, text);
     format_size(a, sizeof a, mem_used_kb);
     format_size(b, sizeof b, mem_total_kb);
-    snprintf(text, sizeof text, "Memory %s of %s", a, b);
+    snprintf(text, sizeof text, _("Memory %s of %s"), a, b);
     widget_set_text(st_mem, text);
     long up = uptime_ms() / 1000;
-    snprintf(text, sizeof text, "Up %ld:%02ld:%02ld", up / 3600, up / 60 % 60, up % 60);
+    snprintf(text, sizeof text, _("Up %ld:%02ld:%02ld"), up / 3600, up / 60 % 60, up % 60);
     widget_set_text(st_up, text);
 }
 
@@ -702,10 +710,10 @@ static int on_signal(struct widget *w, void *args, void *arg)
     printf("sysmon: signal %d to pid %d\n", sig, selected_pid);
     fflush(stdout);
     if (kill(selected_pid, sig) < 0) {
-        static const char *const buttons[] = { "Close" };
-        char text[96];
-        snprintf(text, sizeof text, "The signal could not be sent to process %d.", selected_pid);
-        app_dialog(app, "Error", text, buttons, 1);
+        const char *buttons[] = { _("Close") };
+        char text[160];
+        snprintf(text, sizeof text, _("The signal could not be sent to process %d."), selected_pid);
+        app_dialog(app, _("Error"), text, buttons, 1);
     }
     refresh();
     return 1;
@@ -762,16 +770,16 @@ static int on_quit(struct widget *w, void *args, void *arg)
  * the menu bar receive the accelerators Ctrl+E and Ctrl+K. */
 static void add_process_items(struct widget *menu, int accel)
 {
-    struct widget *m = menu_add(menu, "End process", "stop");
+    struct widget *m = menu_add(menu, _("End process"), "stop");
     widget_connect(m, "clicked", on_signal, (void *)SIGTERM);
     if (accel)
         widget_set_accel(m, KEY_E, WMOD_CTRL);
-    m = menu_add(menu, "Kill process", "kill");
+    m = menu_add(menu, _("Kill process"), "kill");
     widget_connect(m, "clicked", on_signal, (void *)SIGKILL);
     if (accel)
         widget_set_accel(m, KEY_K, WMOD_CTRL);
     menu_add_separator(menu);
-    widget_connect(menu_add(menu, "Profile", "profile"), "clicked", on_profile, NULL);
+    widget_connect(menu_add(menu, _("Profile"), "profile"), "clicked", on_profile, NULL);
 }
 
 int main(void)
@@ -779,36 +787,37 @@ int main(void)
     app = app_create();
     if (!app)
         return 1;
-    win = app_window(app, 760, 540, "System monitor");
+    textdomain("sysmon");
+    win = app_window(app, 760, 540, _("System monitor"));
     if (!win)
         return 1;
     struct widget *mb = menubar_new(win);
-    struct widget *file = menu_new(mb, "File");
-    struct widget *m = menu_add(file, "Quit", "quit");
+    struct widget *file = menu_new(mb, _("File"));
+    struct widget *m = menu_add(file, _("Quit"), "quit");
     widget_connect(m, "clicked", on_quit, NULL);
     widget_set_accel(m, KEY_Q, WMOD_CTRL);
-    struct widget *process = menu_new(mb, "Process");
+    struct widget *process = menu_new(mb, _("Process"));
     add_process_items(process, 1);
-    struct widget *view = menu_new(mb, "View");
-    m = menu_add(view, "Processes", NULL);
+    struct widget *view = menu_new(mb, _("View"));
+    m = menu_add(view, _("Processes"), NULL);
     widget_connect(m, "clicked", on_show_tab, (void *)0L);
     widget_set_accel(m, KEY_1, WMOD_CTRL);
-    m = menu_add(view, "Resources", NULL);
+    m = menu_add(view, _("Resources"), NULL);
     widget_connect(m, "clicked", on_show_tab, (void *)1L);
     widget_set_accel(m, KEY_2, WMOD_CTRL);
 
     tabs = tabs_new(win);
     widget_set_stretch(tabs, 1, 1);
     widget_connect(tabs, "changed", on_tab_changed, NULL);
-    struct widget *procs = tabs_add(tabs, "Processes");
+    struct widget *procs = tabs_add(tabs, _("Processes"));
     struct widget *tools = toolbar_new(procs);
-    widget_connect(toolbar_add(tools, "stop", "End process"), "clicked", on_signal, (void *)SIGTERM);
-    widget_connect(toolbar_add(tools, "kill", "Kill process"), "clicked", on_signal, (void *)SIGKILL);
-    widget_connect(toolbar_add(tools, "profile", "Profile"), "clicked", on_profile, NULL);
+    widget_connect(toolbar_add(tools, "stop", _("End process")), "clicked", on_signal, (void *)SIGTERM);
+    widget_connect(toolbar_add(tools, "kill", _("Kill process")), "clicked", on_signal, (void *)SIGKILL);
+    widget_connect(toolbar_add(tools, "profile", _("Profile")), "clicked", on_profile, NULL);
     filter = textfield_new(tools, "");
     widget_set_hint(filter, 180, 0);
     widget_set_max(filter, 180, 0);
-    widget_set_tip(filter, "Filter by name");
+    widget_set_tip(filter, _("Filter by name"));
     widget_connect(filter, "changed", on_filter, NULL);
 
     struct widget *split = splitpane_new(procs, 1);
@@ -827,7 +836,7 @@ int main(void)
         table_set_column_width(threads_table, c, thread_widths[c]);
     splitpane_set_position(split, 300);
 
-    struct widget *resources = tabs_add(tabs, "Resources");
+    struct widget *resources = tabs_add(tabs, _("Resources"));
     graphs = canvas_new(resources);
     widget_set_stretch(graphs, 1, 1);
     widget_connect(graphs, "paint", on_paint_graphs, NULL);

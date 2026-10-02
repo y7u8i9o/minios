@@ -1,0 +1,139 @@
+# Simplified Chinese messages of the mandel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/mandel.c:556
+msgid "Julia %s"
+msgstr "朱利亚 %s"
+
+#: user/apps/mandel.c:558
+msgid "Centre %s"
+msgstr "中心 %s"
+
+#: user/apps/mandel.c:563
+msgid "Zoom %.2e"
+msgstr "缩放 %.2e"
+
+#: user/apps/mandel.c:565
+msgid "Zoom %.0fx"
+msgstr "缩放 %.0fx"
+
+#: user/apps/mandel.c:567
+msgid "Zoom 1/%.0fx"
+msgstr "缩放 1/%.0fx"
+
+#: user/apps/mandel.c:573
+msgid "%d iteration, %d%%"
+msgid_plural "%d iterations, %d%%"
+msgstr[0] "%d 次迭代，%d%%"
+
+#: user/apps/mandel.c:576
+msgid "%d iteration, %ld%s%01ld s"
+msgid_plural "%d iterations, %ld%s%01ld s"
+msgstr[0] "%d 次迭代，%ld%s%01ld 秒"
+
+#: user/apps/mandel.c:580
+msgid "%d iteration, %ld ms"
+msgid_plural "%d iterations, %ld ms"
+msgstr[0] "%d 次迭代，%ld 毫秒"
+
+#: user/apps/mandel.c:583
+msgid "%d iteration"
+msgid_plural "%d iterations"
+msgstr[0] "%d 次迭代"
+
+#: user/apps/mandel.c:632
+msgid "Pointer %s"
+msgstr "指针 %s"
+
+#: user/apps/mandel.c:729
+msgid "Close"
+msgstr "关闭"
+
+#: user/apps/mandel.c:730 user/apps/mandel.c:826
+msgid "Save image"
+msgstr "保存图像"
+
+#: user/apps/mandel.c:730
+msgid "File:"
+msgstr "文件："
+
+#: user/apps/mandel.c:742
+msgid "Error"
+msgstr "错误"
+
+#: user/apps/mandel.c:742
+msgid "The image cannot be written."
+msgstr "无法写入图像。"
+
+#: user/apps/mandel.c:799
+msgid "Mandelbrot"
+msgstr "曼德博集合"
+
+#: user/apps/mandel.c:803
+msgid "File"
+msgstr "文件"
+
+#: user/apps/mandel.c:804
+msgid "Save image..."
+msgstr "保存图像..."
+
+#: user/apps/mandel.c:808
+msgid "Quit"
+msgstr "退出"
+
+#: user/apps/mandel.c:811
+msgid "View"
+msgstr "查看"
+
+#: user/apps/mandel.c:812 user/apps/mandel.c:823
+msgid "Zoom in"
+msgstr "放大"
+
+#: user/apps/mandel.c:813 user/apps/mandel.c:824
+msgid "Zoom out"
+msgstr "缩小"
+
+#: user/apps/mandel.c:814 user/apps/mandel.c:825
+msgid "Reset view"
+msgstr "重置视图"
+
+#: user/apps/mandel.c:816
+msgid "Mandelbrot set"
+msgstr "曼德博集合"
+
+#: user/apps/mandel.c:819
+msgid "Julia set of the centre"
+msgstr "中心点的朱利亚集合"
+
+#: user/apps/mandel.c:828
+msgid "Colours"
+msgstr "颜色"
+
+#: user/apps/mandel.c:830
+msgid "Classic"
+msgstr "经典"
+
+#: user/apps/mandel.c:831
+msgid "Fire"
+msgstr "火焰"
+
+#: user/apps/mandel.c:832
+msgid "Ocean"
+msgstr "海洋"
+
+#: user/apps/mandel.c:833
+msgid "Grey"
+msgstr "灰度"
+
+#: user/apps/mandel.c:836
+msgid "Iterations"
+msgstr "迭代次数"
+
+#: user/apps/mandel.c:838
+msgid "Automatic"
+msgstr "自动"

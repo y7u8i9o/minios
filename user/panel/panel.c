@@ -8,12 +8,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/timerfd.h>
 #include <time.h>
+#include <gui/i18n.h>
 #include "panel.h"
 #include <minios/local.h>
 
@@ -121,7 +123,7 @@ void draw_panel(void)
     painter_fill(&p, 0, 0, w, h, PANEL_BG);
     painter_fill(&p, 0, 0, w, 1, PANEL_LINE);
     painter_rounded(&p, 4, 4, MENU_BTN_W, h - 8, launcher_is_open() ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
-    panel_label(&p, 4, 4, MENU_BTN_W, h - 8, "Menu", PANEL_TEXT, 1);
+    panel_label(&p, 4, 4, MENU_BTN_W, h - 8, _("Menu"), PANEL_TEXT, 1);
     int limit = (w - CLOCK_W - MIXER_BTN_W - MENU_BTN_W - 20) / (TASK_BTN_W + 4);
     for (int i = 0; i < ntasks && i < limit; i++) {
         int x = MENU_BTN_W + 12 + i * (TASK_BTN_W + 4);
@@ -319,6 +321,8 @@ static void on_chld(int sig) {}
 
 int main(void)
 {
+    setlocale(LC_ALL, "");
+    textdomain("panel");
     signal(SIGCHLD, on_chld);
     signal(SIGPIPE, SIG_IGN);
     display = wire_display_connect(NULL);

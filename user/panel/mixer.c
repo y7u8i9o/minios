@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <audio/audio.h>
+#include <gui/i18n.h>
 #include "panel.h"
 
 #define MIXER_W 280
@@ -114,30 +115,31 @@ static void draw_mixer(void)
     painter_fill(&p, 0, 0, w, h, MENU_BG);
     painter_frame(&p, 0, 0, w, h, MENU_BORDER);
     if (!view) {
-        panel_label(&p, 0, 0, w, h, "No audio service", MENU_TEXT_DIM, 1);
+        panel_label(&p, 0, 0, w, h, _("No audio service"), MENU_TEXT_DIM, 1);
         canvas_commit(&mixer);
         rows = 0;
         return;
     }
     char detail[32];
     snprintf(detail, sizeof detail, "%u%%", audio_mixer_master(view));
-    draw_row(&p, 0, "Output", detail, audio_mixer_master(view), 0, 1);
+    draw_row(&p, 0, _("Output"), detail, audio_mixer_master(view), 0, 1);
     rows = 1;
     /* The popup keeps the size it opened with: rows beyond it are counted. */
     int fit = (h - 2 * MIXER_PAD) / ROW_H;
     int n = audio_mixer_count(view);
     for (int i = 0; i < n && rows < fit; i++) {
         const struct audio_mixer_stream *s = audio_mixer_stream(view, i);
-        snprintf(detail, sizeof detail, "%s %u%%",
-                 s->direction ? "capture" : s->state == AUDIO_PLAYBACK_RUNNING ? "playing" : "paused",
-                 s->volume);
+        const char *format = s->direction                         ? _("capture %u%%")
+                             : s->state == AUDIO_PLAYBACK_RUNNING ? _("playing %u%%")
+                                                                  : _("paused %u%%");
+        snprintf(detail, sizeof detail, format, s->volume);
         draw_row(&p, rows, s->name, detail, s->volume, s->peak, s->state == AUDIO_PLAYBACK_RUNNING);
         rows++;
     }
     if (n == 0)
-        panel_label(&p, 0, MIXER_PAD + ROW_H, w, ROW_H, "No streams", MENU_TEXT_DIM, 1);
+        panel_label(&p, 0, MIXER_PAD + ROW_H, w, ROW_H, _("No streams"), MENU_TEXT_DIM, 1);
     else if (n > rows - 1) {
-        snprintf(detail, sizeof detail, "%d more", n - (rows - 1));
+        snprintf(detail, sizeof detail, ngettext("%d more", "%d more", n - (rows - 1)), n - (rows - 1));
         panel_label(&p, 0, h - MIXER_PAD - 14, w, 14, detail, MENU_TEXT_DIM, 1);
     }
     drawn_generation = audio_mixer_generation(view);

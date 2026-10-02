@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <gui/app.h>
+#include <gui/i18n.h>
 #include <gui/mime.h>
 #include <gui/model.h>
 #include "files.h"
@@ -46,8 +47,8 @@ static char typed[64];
 static long typed_ms;
 
 static const struct { const char *name, *path; } places_list[] = {
-    { "Home", "/home" }, { "Desktop", "/home/desktop" }, { "Root", "/" }, { "Programs", "/bin" },
-    { "Shared files", "/usr/share" }, { "Fonts", "/etc/fonts" }, { "Devices", "/dev" },
+    { N_("Home"), "/home" }, { N_("Desktop"), "/home/desktop" }, { N_("Root"), "/" }, { N_("Programs"), "/bin" },
+    { N_("Shared files"), "/usr/share" }, { N_("Fonts"), "/etc/fonts" }, { N_("Devices"), "/dev" },
 };
 
 /* ---- the listing ---- */
@@ -55,15 +56,15 @@ static const struct { const char *name, *path; } places_list[] = {
 static const char *describe(const char *type, int exec)
 {
     static const struct { const char *type, *desc; } names[] = {
-        { MIME_DIRECTORY, "Folder" }, { "text/plain", "Text" }, { "text/x-csrc", "C source" },
-        { "text/x-shellscript", "Shell script" }, { "image/png", "PNG image" }, { "audio/x-wav", "WAV audio" },
-        { MIME_LAUNCHER, "Launcher" },
+        { MIME_DIRECTORY, N_("Folder") }, { "text/plain", N_("Text") }, { "text/x-csrc", N_("C source") },
+        { "text/x-shellscript", N_("Shell script") }, { "image/png", N_("PNG image") },
+        { "audio/x-wav", N_("WAV audio") }, { MIME_LAUNCHER, N_("Launcher") },
     };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++)
         if (strcmp(names[i].type, type) == 0)
-            return names[i].desc;
+            return _(names[i].desc);
     if (strcmp(type, "application/octet-stream") == 0)
-        return exec ? "Program" : "File";
+        return exec ? _("Program") : _("File");
     return type;
 }
 
@@ -173,15 +174,15 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
         time_t t = (time_t)e->mtime;
         struct tm tm;
         localtime_r(&t, &tm);
-        strftime(buf, size, "%Y-%m-%d %H:%M", &tm);
+        strftime(buf, size, "%x %H:%M", &tm);
         return buf;
     }
     }
 }
 static const char *m_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Name", "Size", "Type", "Modified" };
-    return names[col];
+    static const char *const names[] = { N_("Name"), N_("Size"), N_("Type"), N_("Modified") };
+    return _(names[col]);
 }
 static void m_sort(struct model *m, int col, int desc)
 {
@@ -202,12 +203,14 @@ static struct entry *selected_entry(void)
     return row >= 0 && row < nentries ? &entries[row] : NULL;
 }
 
-static void fail(const char *what, int err)
+/* The message names the failed operation as a whole sentence, such as
+ * "Cannot read the folder", which the dialog completes with the error. */
+static void fail(const char *message, int err)
 {
     char text[256];
-    snprintf(text, sizeof text, "Cannot %s: %s.", what, strerror(err < 0 ? -err : err));
-    const char *const buttons[] = { "OK" };
-    app_dialog(app, "Files", text, buttons, 1);
+    snprintf(text, sizeof text, "%s: %s.", message, strerror(err < 0 ? -err : err));
+    const char *const buttons[] = { _("OK") };
+    app_dialog(app, _("Files"), text, buttons, 1);
 }
 
 static void log_line(const char *fmt, const char *a, const char *b)
@@ -234,17 +237,18 @@ static void update_selection_label(void)
 static void update_chrome(void)
 {
     char title[300];
-    snprintf(title, sizeof title, "%s - Files", fs_basename(cwd));
+    snprintf(title, sizeof title, _("%s - Files"), fs_basename(cwd));
     gui_set_title(window_state_of(win)->win, title);
     widget_set_text(path_field, cwd);
     widget_set_enabled(back_button, hist_pos > 0);
     widget_set_enabled(forward_button, hist_pos < hist_len - 1);
     widget_set_enabled(up_button, strcmp(cwd, "/") != 0);
-    char text[64];
+    char items[32], text[64];
+    snprintf(items, sizeof items, ngettext("%d item", "%d items", nentries), nentries);
     if (nhidden && !show_hidden)
-        snprintf(text, sizeof text, "%d items, %d hidden", nentries, nhidden);
+        snprintf(text, sizeof text, ngettext("%s, %d hidden", "%s, %d hidden", nhidden), items, nhidden);
     else
-        snprintf(text, sizeof text, "%d items", nentries);
+        strlcpy(text, items, sizeof text);
     widget_set_text(status, text);
     update_selection_label();
 }
@@ -260,7 +264,7 @@ static void refresh(void)
     int hidden = 0;
     int n = scan(cwd, &list, &hidden);
     if (n < 0) {
-        fail("read the folder", n);
+        fail(_("Cannot read the folder"), n);
         n = 0;
     }
     free(entries);
@@ -291,7 +295,7 @@ static void navigate(const char *path, int record)
     fs_normalize(target);
     struct stat st;
     if (stat(target, &st) < 0 || !S_ISDIR(st.st_mode)) {
-        fail("open the folder", stat(target, &st) < 0 ? errno : ENOTDIR);
+        fail(_("Cannot open the folder"), stat(target, &st) < 0 ? errno : ENOTDIR);
         widget_set_text(path_field, cwd);
         return;
     }
@@ -337,7 +341,7 @@ static void open_entry(struct entry *e)
     log_line("open %s", path, NULL);
     pid_t pid = mime_open(path);
     if (pid < 0)
-        fail("open the file", (int)pid);
+        fail(_("Cannot open the file"), (int)pid);
 }
 
 /* ---- handlers: navigation ---- */
@@ -419,13 +423,14 @@ static int on_sort(struct widget *w, void *args, void *arg)
 
 static int on_new_folder(struct widget *w, void *args, void *arg)
 {
-    char name[NAME_MAX + 1] = "New folder";
-    if (!app_prompt(app, "New folder", "Name:", name, sizeof name) || !name[0])
+    char name[NAME_MAX + 1];
+    strlcpy(name, _("New folder"), sizeof name);
+    if (!app_prompt(app, _("New folder"), _("Name:"), name, sizeof name) || !name[0])
         return 1;
     char path[512];
     fs_join(path, sizeof path, cwd, name);
     if (mkdir(path, 0755) < 0) {
-        fail("create the folder", errno);
+        fail(_("Cannot create the folder"), errno);
         return 1;
     }
     log_line("mkdir %s", path, NULL);
@@ -436,14 +441,15 @@ static int on_new_folder(struct widget *w, void *args, void *arg)
 
 static int on_new_file(struct widget *w, void *args, void *arg)
 {
-    char name[NAME_MAX + 1] = "New file.txt";
-    if (!app_prompt(app, "New file", "Name:", name, sizeof name) || !name[0])
+    char name[NAME_MAX + 1];
+    strlcpy(name, _("New file.txt"), sizeof name);
+    if (!app_prompt(app, _("New file"), _("Name:"), name, sizeof name) || !name[0])
         return 1;
     char path[512];
     fs_join(path, sizeof path, cwd, name);
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
     if (fd < 0) {
-        fail("create the file", errno);
+        fail(_("Cannot create the file"), errno);
         return 1;
     }
     close(fd);
@@ -461,14 +467,14 @@ static int on_open_with(struct widget *w, void *args, void *arg)
     if (!e)
         return 1;
     char program[128] = "/bin/";
-    if (!app_prompt(app, "Open with", "Program:", program, sizeof program) || !program[0])
+    if (!app_prompt(app, _("Open with"), _("Program:"), program, sizeof program) || !program[0])
         return 1;
     char path[512];
     fs_join(path, sizeof path, cwd, e->name);
     log_line("open %s with %s", path, program);
     int r = mime_spawn((char *const[]){ program, path, NULL });
     if (r < 0)
-        fail("start the program", r);
+        fail(_("Cannot start the program"), r);
     return 1;
 }
 
@@ -483,7 +489,7 @@ static int on_terminal(struct widget *w, void *args, void *arg)
     log_line("terminal in %s", path, NULL);
     int r = mime_spawn((char *const[]){ "/bin/term", "-d", path, NULL });
     if (r < 0)
-        fail("start the terminal", r);
+        fail(_("Cannot start the terminal"), r);
     return 1;
 }
 
@@ -494,13 +500,13 @@ static int on_rename(struct widget *w, void *args, void *arg)
         return 1;
     char name[NAME_MAX + 1];
     strlcpy(name, e->name, sizeof name);
-    if (!app_prompt(app, "Rename", "New name:", name, sizeof name) || !name[0] || strcmp(name, e->name) == 0)
+    if (!app_prompt(app, _("Rename"), _("New name:"), name, sizeof name) || !name[0] || strcmp(name, e->name) == 0)
         return 1;
     char from[512], to[512];
     fs_join(from, sizeof from, cwd, e->name);
     fs_join(to, sizeof to, cwd, name);
     if (rename(from, to) < 0) {
-        fail("rename", errno);
+        fail(_("Cannot rename"), errno);
         return 1;
     }
     log_line("rename %s -> %s", from, to);
@@ -515,15 +521,18 @@ static int on_delete(struct widget *w, void *args, void *arg)
     if (!e)
         return 1;
     char text[300];
-    snprintf(text, sizeof text, "Delete \"%s\"%s?", e->name, e->dir ? " and everything in it" : "");
-    const char *const buttons[] = { "Delete", "Cancel" };
-    if (app_dialog(app, "Delete", text, buttons, 2) != 0)
+    if (e->dir)
+        snprintf(text, sizeof text, _("Delete \"%s\" and everything in it?"), e->name);
+    else
+        snprintf(text, sizeof text, _("Delete \"%s\"?"), e->name);
+    const char *const buttons[] = { _("Delete"), _("Cancel") };
+    if (app_dialog(app, _("Delete"), text, buttons, 2) != 0)
         return 1;
     char path[512];
     fs_join(path, sizeof path, cwd, e->name);
     int r = fs_remove(path);
     if (r < 0) {
-        fail("delete", r);
+        fail(_("Cannot delete"), r);
         return 1;
     }
     log_line("delete %s", path, NULL);
@@ -552,17 +561,17 @@ static int on_paste(struct widget *w, void *args, void *arg)
         if (clip_cut)
             return 1;
         char name[NAME_MAX + 1];
-        snprintf(name, sizeof name, "Copy of %s", fs_basename(clip_path));
+        snprintf(name, sizeof name, _("Copy of %s"), fs_basename(clip_path));
         fs_join(to, sizeof to, cwd, name);
     }
     struct stat st;
     if (stat(to, &st) == 0) {
-        fail("paste", EEXIST);
+        fail(_("Cannot paste"), EEXIST);
         return 1;
     }
     int r = clip_cut ? fs_move(clip_path, to) : fs_copy(clip_path, to);
     if (r < 0) {
-        fail(clip_cut ? "move" : "copy", r);
+        fail(clip_cut ? _("Cannot move") : _("Cannot copy"), r);
         return 1;
     }
     log_line(clip_cut ? "move %s -> %s" : "copy %s -> %s", clip_path, to);
@@ -591,14 +600,14 @@ static void prop_row(struct widget *grid, int row, const char *name, const char 
 static int on_properties(struct widget *w, void *args, void *arg)
 {
     struct entry *e = selected_entry();
-    char path[512], size[64], date[32], count[96];
+    char path[512], size[64], date[64], count[96], files_text[48], dirs_text[48];
     if (e)
         fs_join(path, sizeof path, cwd, e->name);
     else
         strlcpy(path, cwd, sizeof path);
     struct stat st;
     if (stat(path, &st) < 0) {
-        fail("read the properties", errno);
+        fail(_("Cannot read the properties"), errno);
         return 1;
     }
     int files = 0, dirs = 0;
@@ -606,29 +615,32 @@ static int on_properties(struct widget *w, void *args, void *arg)
     time_t t = (time_t)st.st_mtime;
     struct tm tm;
     localtime_r(&t, &tm);
-    strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &tm);
+    strftime(date, sizeof date, "%c", &tm);
     const char *type = mime_type(path, S_ISDIR(st.st_mode));
-    prop_win = app_modal_window(app, win, 420, 7 * 26 + 60, "Properties");
+    prop_win = app_modal_window(app, win, 420, 7 * 26 + 60, _("Properties"));
     if (!prop_win)
         return 1;
     struct widget *grid = grid_new(prop_win);
     grid_set_stretch(grid, -1, 1, 1);
-    prop_row(grid, 0, "Name", fs_basename(path));
-    prop_row(grid, 1, "Location", cwd);
-    prop_row(grid, 2, "Type", describe(type, (st.st_mode & 0111) != 0));
+    prop_row(grid, 0, _("Name"), fs_basename(path));
+    prop_row(grid, 1, _("Location"), cwd);
+    prop_row(grid, 2, _("Type"), describe(type, (st.st_mode & 0111) != 0));
     if (S_ISDIR(st.st_mode)) {
-        snprintf(count, sizeof count, "%d files, %d folders", files, dirs - 1);
-        prop_row(grid, 3, "Contents", count);
-        prop_row(grid, 4, "Size", fs_human_size(bytes, size, sizeof size));
+        snprintf(files_text, sizeof files_text, ngettext("%d file", "%d files", files), files);
+        snprintf(dirs_text, sizeof dirs_text, ngettext("%d folder", "%d folders", dirs - 1), dirs - 1);
+        snprintf(count, sizeof count, "%s, %s", files_text, dirs_text);
+        prop_row(grid, 3, _("Contents"), count);
+        prop_row(grid, 4, _("Size"), fs_human_size(bytes, size, sizeof size));
     } else {
-        snprintf(count, sizeof count, "%s (%ld bytes)", fs_human_size(bytes, size, sizeof size), bytes);
-        prop_row(grid, 3, "Size", count);
+        snprintf(count, sizeof count, ngettext("%s (%ld byte)", "%s (%ld bytes)", bytes),
+                 fs_human_size(bytes, size, sizeof size), bytes);
+        prop_row(grid, 3, _("Size"), count);
         snprintf(count, sizeof count, "%lu", (unsigned long)st.st_ino);
-        prop_row(grid, 4, "Inode", count);
+        prop_row(grid, 4, _("Inode"), count);
     }
-    prop_row(grid, 5, "Modified", date);
+    prop_row(grid, 5, _("Modified"), date);
     struct widget *row = box_new(prop_win, 0);
-    struct widget *ok = button_new(row, "OK");
+    struct widget *ok = button_new(row, _("OK"));
     widget_set_align(ok, ALIGN_END, ALIGN_CENTER);
     widget_set_stretch(row, 1, 0);
     widget_connect(ok, "clicked", on_prop_close, NULL);
@@ -711,79 +723,79 @@ static struct widget *item(struct widget *menu, const char *text, const char *ic
 static void build_menus(void)
 {
     struct widget *bar = menubar_new(win);
-    struct widget *file = menu_new(bar, "File");
-    item(file, "New folder...", "folder", on_new_folder, NULL, KEY_N, WMOD_CTRL);
-    item(file, "New file...", "new", on_new_file, NULL, 0, 0);
+    struct widget *file = menu_new(bar, _("File"));
+    item(file, _("New folder..."), "folder", on_new_folder, NULL, KEY_N, WMOD_CTRL);
+    item(file, _("New file..."), "new", on_new_file, NULL, 0, 0);
     menu_add_separator(file);
-    item(file, "Open", "open", on_open, NULL, 0, 0);
-    item(file, "Open with...", NULL, on_open_with, NULL, 0, 0);
-    item(file, "Open in terminal", "terminal", on_terminal, NULL, KEY_T, WMOD_CTRL | WMOD_SHIFT);
+    item(file, _("Open"), "open", on_open, NULL, 0, 0);
+    item(file, _("Open with..."), NULL, on_open_with, NULL, 0, 0);
+    item(file, _("Open in terminal"), "terminal", on_terminal, NULL, KEY_T, WMOD_CTRL | WMOD_SHIFT);
     menu_add_separator(file);
-    item(file, "Rename...", "edit", on_rename, NULL, KEY_F2, 0);
-    item(file, "Delete", "quit", on_delete, NULL, KEY_DELETE, 0);
-    item(file, "Properties", NULL, on_properties, NULL, KEY_ENTER, WMOD_ALT);
+    item(file, _("Rename..."), "edit", on_rename, NULL, KEY_F2, 0);
+    item(file, _("Delete"), "quit", on_delete, NULL, KEY_DELETE, 0);
+    item(file, _("Properties"), NULL, on_properties, NULL, KEY_ENTER, WMOD_ALT);
     menu_add_separator(file);
-    item(file, "Close", NULL, on_close, NULL, KEY_W, WMOD_CTRL);
-    struct widget *edit = menu_new(bar, "Edit");
-    item(edit, "Copy", "copy", on_copy, (void *)0, KEY_C, WMOD_CTRL);
-    item(edit, "Cut", "cut", on_copy, (void *)1, KEY_X, WMOD_CTRL);
-    item(edit, "Paste", "paste", on_paste, NULL, KEY_V, WMOD_CTRL);
-    struct widget *view = menu_new(bar, "View");
-    item(view, "Refresh", "refresh", on_refresh, NULL, KEY_F5, 0);
-    item(view, "Show hidden files", NULL, on_toggle_hidden, NULL, KEY_H, WMOD_CTRL);
+    item(file, _("Close"), NULL, on_close, NULL, KEY_W, WMOD_CTRL);
+    struct widget *edit = menu_new(bar, _("Edit"));
+    item(edit, _("Copy"), "copy", on_copy, (void *)0, KEY_C, WMOD_CTRL);
+    item(edit, _("Cut"), "cut", on_copy, (void *)1, KEY_X, WMOD_CTRL);
+    item(edit, _("Paste"), "paste", on_paste, NULL, KEY_V, WMOD_CTRL);
+    struct widget *view = menu_new(bar, _("View"));
+    item(view, _("Refresh"), "refresh", on_refresh, NULL, KEY_F5, 0);
+    item(view, _("Show hidden files"), NULL, on_toggle_hidden, NULL, KEY_H, WMOD_CTRL);
     menu_add_separator(view);
-    item(view, "Sort by name", NULL, on_sort, (void *)0, 0, 0);
-    item(view, "Sort by size", NULL, on_sort, (void *)1, 0, 0);
-    item(view, "Sort by type", NULL, on_sort, (void *)2, 0, 0);
-    item(view, "Sort by date", NULL, on_sort, (void *)3, 0, 0);
-    struct widget *go = menu_new(bar, "Go");
-    item(go, "Back", "back", on_back, NULL, KEY_LEFT, WMOD_ALT);
-    item(go, "Forward", "forward", on_forward, NULL, KEY_RIGHT, WMOD_ALT);
-    item(go, "Parent folder", "up", on_up, NULL, KEY_UP, WMOD_ALT);
+    item(view, _("Sort by name"), NULL, on_sort, (void *)0, 0, 0);
+    item(view, _("Sort by size"), NULL, on_sort, (void *)1, 0, 0);
+    item(view, _("Sort by type"), NULL, on_sort, (void *)2, 0, 0);
+    item(view, _("Sort by date"), NULL, on_sort, (void *)3, 0, 0);
+    struct widget *go = menu_new(bar, _("Go"));
+    item(go, _("Back"), "back", on_back, NULL, KEY_LEFT, WMOD_ALT);
+    item(go, _("Forward"), "forward", on_forward, NULL, KEY_RIGHT, WMOD_ALT);
+    item(go, _("Parent folder"), "up", on_up, NULL, KEY_UP, WMOD_ALT);
     menu_add_separator(go);
-    item(go, "Home", "home", on_home, NULL, KEY_HOME, WMOD_ALT);
-    item(go, "Root", NULL, on_root, NULL, 0, 0);
+    item(go, _("Home"), "home", on_home, NULL, KEY_HOME, WMOD_ALT);
+    item(go, _("Root"), NULL, on_root, NULL, 0, 0);
 
     item_menu = popupmenu_new(win);
-    item(item_menu, "Open", "open", on_open, NULL, 0, 0);
-    item(item_menu, "Open with...", NULL, on_open_with, NULL, 0, 0);
-    item(item_menu, "Open in terminal", "terminal", on_terminal, NULL, 0, 0);
+    item(item_menu, _("Open"), "open", on_open, NULL, 0, 0);
+    item(item_menu, _("Open with..."), NULL, on_open_with, NULL, 0, 0);
+    item(item_menu, _("Open in terminal"), "terminal", on_terminal, NULL, 0, 0);
     menu_add_separator(item_menu);
-    item(item_menu, "Copy", "copy", on_copy, (void *)0, 0, 0);
-    item(item_menu, "Cut", "cut", on_copy, (void *)1, 0, 0);
-    item(item_menu, "Paste", "paste", on_paste, NULL, 0, 0);
+    item(item_menu, _("Copy"), "copy", on_copy, (void *)0, 0, 0);
+    item(item_menu, _("Cut"), "cut", on_copy, (void *)1, 0, 0);
+    item(item_menu, _("Paste"), "paste", on_paste, NULL, 0, 0);
     menu_add_separator(item_menu);
-    item(item_menu, "Rename...", "edit", on_rename, NULL, 0, 0);
-    item(item_menu, "Delete", "quit", on_delete, NULL, 0, 0);
+    item(item_menu, _("Rename..."), "edit", on_rename, NULL, 0, 0);
+    item(item_menu, _("Delete"), "quit", on_delete, NULL, 0, 0);
     menu_add_separator(item_menu);
-    item(item_menu, "Properties", NULL, on_properties, NULL, 0, 0);
+    item(item_menu, _("Properties"), NULL, on_properties, NULL, 0, 0);
 
     dir_menu = popupmenu_new(win);
-    item(dir_menu, "New folder...", "folder", on_new_folder, NULL, 0, 0);
-    item(dir_menu, "New file...", "new", on_new_file, NULL, 0, 0);
-    item(dir_menu, "Open in terminal", "terminal", on_terminal, NULL, 0, 0);
+    item(dir_menu, _("New folder..."), "folder", on_new_folder, NULL, 0, 0);
+    item(dir_menu, _("New file..."), "new", on_new_file, NULL, 0, 0);
+    item(dir_menu, _("Open in terminal"), "terminal", on_terminal, NULL, 0, 0);
     menu_add_separator(dir_menu);
-    item(dir_menu, "Paste", "paste", on_paste, NULL, 0, 0);
+    item(dir_menu, _("Paste"), "paste", on_paste, NULL, 0, 0);
     menu_add_separator(dir_menu);
-    item(dir_menu, "Refresh", "refresh", on_refresh, NULL, 0, 0);
-    item(dir_menu, "Properties", NULL, on_properties, NULL, 0, 0);
+    item(dir_menu, _("Refresh"), "refresh", on_refresh, NULL, 0, 0);
+    item(dir_menu, _("Properties"), NULL, on_properties, NULL, 0, 0);
 }
 
 static void build_toolbar(void)
 {
     struct widget *bar = toolbar_new(win);
-    back_button = toolbar_add(bar, "back", "Back");
+    back_button = toolbar_add(bar, "back", _("Back"));
     widget_connect(back_button, "clicked", on_back, NULL);
-    forward_button = toolbar_add(bar, "forward", "Forward");
+    forward_button = toolbar_add(bar, "forward", _("Forward"));
     widget_connect(forward_button, "clicked", on_forward, NULL);
-    up_button = toolbar_add(bar, "up", "Parent folder");
+    up_button = toolbar_add(bar, "up", _("Parent folder"));
     widget_connect(up_button, "clicked", on_up, NULL);
-    widget_connect(toolbar_add(bar, "home", "Home"), "clicked", on_home, NULL);
+    widget_connect(toolbar_add(bar, "home", _("Home")), "clicked", on_home, NULL);
     path_field = textfield_new(bar, cwd);
     widget_set_stretch(path_field, 1, 0);
     widget_connect(path_field, "activate", on_go, NULL);
-    widget_connect(toolbar_add(bar, "refresh", "Refresh"), "clicked", on_refresh, NULL);
-    hidden_check = checkbox_new(bar, "Hidden");
+    widget_connect(toolbar_add(bar, "refresh", _("Refresh")), "clicked", on_refresh, NULL);
+    hidden_check = checkbox_new(bar, _("Hidden"));
     widget_connect(hidden_check, "toggled", on_hidden, NULL);
 }
 
@@ -795,8 +807,9 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
+    textdomain("files");
     char title[300];
-    snprintf(title, sizeof title, "%s - Files", fs_basename(cwd));
+    snprintf(title, sizeof title, _("%s - Files"), fs_basename(cwd));
     win = app_window(app, 680, 460, title);
     if (!win)
         return 1;
@@ -805,7 +818,7 @@ int main(int argc, char **argv)
     struct widget *split = splitpane_new(win, 0);
     places = listview_new(split);
     for (size_t i = 0; i < sizeof places_list / sizeof places_list[0]; i++)
-        listview_add(places, places_list[i].name);
+        listview_add(places, _(places_list[i].name));
     widget_connect(places, "selected", on_place, NULL);
     table = table_new(split);
     view_set_model(table, &model);

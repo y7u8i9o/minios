@@ -44,7 +44,8 @@ UCPP   += -I../libedit/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
 HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/home/.shrc
-FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf
+FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf \
+          $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
 all: $(LIBS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
@@ -112,6 +113,11 @@ $(ROOT)/etc/fonts/%.otf: ../third_party/lmodern/%.otf
 	cp $< $@
 
 $(ROOT)/etc/fonts/NotoSans-Regular.ttf: ../third_party/notosans/NotoSans-Regular.ttf
+	@mkdir -p $(dir $@)
+	cp $< $@
+
+# The fallback font for Chinese and Japanese text (tools/fetch_fonts.sh).
+$(ROOT)/etc/fonts/DroidSansFallbackFull.ttf: ../third_party/droidfallback/DroidSansFallbackFull.ttf
 	@mkdir -p $(dir $@)
 	cp $< $@
 

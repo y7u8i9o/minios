@@ -31,15 +31,15 @@ static const char *s_cell(struct model *m, int row, int col, char *buf, size_t s
         return "";
     switch (col) {
     case 0: return s->name;
-    case 1: return s->direction ? "capture" : "playback";
-    case 2: snprintf(buf, size, "%u %%", s->volume); return buf;
-    default: return s->state == AUDIO_PLAYBACK_RUNNING ? "running" : s->state == AUDIO_PLAYBACK_ERROR ? "error" : "paused";
+    case 1: return s->direction ? _("capture") : _("playback");
+    case 2: snprintf(buf, size, _("%u %%"), s->volume); return buf;
+    default: return s->state == AUDIO_PLAYBACK_RUNNING ? _("running") : s->state == AUDIO_PLAYBACK_ERROR ? _("error") : _("paused");
     }
 }
 static const char *s_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Stream", "Direction", "Volume", "State" };
-    return names[col];
+    static const char *const names[] = { N_("Stream"), N_("Direction"), N_("Volume"), N_("State") };
+    return _(names[col]);
 }
 static struct model stream_model = { s_rows, s_child, s_columns, s_cell, s_header, NULL, NULL, NULL };
 
@@ -48,23 +48,24 @@ static void sound_refresh(void)
     if (!mixer)
         return;
     sound_building = 1;
-    char text[64];
-    snprintf(text, sizeof text, "Output volume: %u %%", audio_mixer_master(mixer));
+    char text[96];
+    snprintf(text, sizeof text, _("Output volume: %u %%"), audio_mixer_master(mixer));
     widget_set_text(master_label, text);
     widget_set_value(master_slider, (int)audio_mixer_master(mixer));
     view_refresh(stream_table);
     int sel = stream_table->value;
     const struct audio_mixer_stream *s = sel >= 0 ? audio_mixer_stream(mixer, sel) : NULL;
     if (s) {
-        snprintf(text, sizeof text, "%s: %u %%", s->name, s->volume);
+        snprintf(text, sizeof text, _("%s: %u %%"), s->name, s->volume);
         widget_set_text(stream_label, text);
         widget_set_value(stream_slider, (int)s->volume);
         widget_set_enabled(stream_slider, 1);
     } else {
-        widget_set_text(stream_label, "Stream volume");
+        widget_set_text(stream_label, _("Stream volume"));
         widget_set_enabled(stream_slider, 0);
     }
-    snprintf(text, sizeof text, "%d stream%s", audio_mixer_count(mixer), audio_mixer_count(mixer) == 1 ? "" : "s");
+    snprintf(text, sizeof text, ngettext("%d stream", "%d streams", (unsigned long)audio_mixer_count(mixer)),
+             audio_mixer_count(mixer));
     widget_set_text(sound_status, text);
     sound_building = 0;
 }
@@ -72,7 +73,7 @@ static void sound_refresh(void)
 static void on_audio(int fd, int revents, void *arg)
 {
     if ((revents & (POLLERR | POLLHUP | POLLNVAL)) || audio_connection_dispatch(audio, 0) < 0) {
-        widget_set_text(sound_status, "No audio server");
+        widget_set_text(sound_status, _("No audio server"));
         mixer = NULL;
         return;
     }
@@ -85,8 +86,8 @@ static int on_master(struct widget *w, void *args, void *arg)
 {
     if (sound_building || !mixer) return 1;
     audio_mixer_set_master(mixer, (unsigned)w->value);
-    char text[64];
-    snprintf(text, sizeof text, "Output volume: %d %%", w->value);
+    char text[96];
+    snprintf(text, sizeof text, _("Output volume: %d %%"), w->value);
     widget_set_text(master_label, text);
     return 1;
 }
@@ -102,11 +103,11 @@ static int on_stream_selected(struct widget *w, void *args, void *arg) { sound_r
 
 void build_sound(struct widget *page)
 {
-    master_label = label_new(page, "Output volume");
+    master_label = label_new(page, _("Output volume"));
     master_slider = slider_new(page, 0, 100, 100);
     widget_set_stretch(master_slider, 1, 0);
     widget_connect(master_slider, "changed", on_master, NULL);
-    label_new(page, "Streams");
+    label_new(page, _("Streams"));
     stream_table = table_new(page);
     view_set_model(stream_table, &stream_model);
     table_set_column_width(stream_table, 0, 200);
@@ -115,7 +116,7 @@ void build_sound(struct widget *page)
     table_set_column_width(stream_table, 3, 80);
     widget_set_stretch(stream_table, 1, 1);
     widget_connect(stream_table, "selected", on_stream_selected, NULL);
-    stream_label = label_new(page, "Stream volume");
+    stream_label = label_new(page, _("Stream volume"));
     stream_slider = slider_new(page, 0, 100, 100);
     widget_set_stretch(stream_slider, 1, 0);
     widget_set_enabled(stream_slider, 0);
@@ -124,7 +125,7 @@ void build_sound(struct widget *page)
     audio = audio_connect();
     mixer = audio ? audio_mixer_create(audio) : NULL;
     if (!mixer) {
-        widget_set_text(sound_status, "No audio server");
+        widget_set_text(sound_status, _("No audio server"));
         widget_set_enabled(master_slider, 0);
         return;
     }
@@ -138,7 +139,8 @@ void build_sound(struct widget *page)
 
 static struct widget *now_label, *fields[6];
 static const struct { const char *name; int min, max; } field_defs[6] = {
-    { "Year", 2000, 2099 }, { "Month", 1, 12 }, { "Day", 1, 31 }, { "Hour", 0, 23 }, { "Minute", 0, 59 }, { "Second", 0, 59 },
+    { N_("Year"), 2000, 2099 }, { N_("Month"), 1, 12 }, { N_("Day"), 1, 31 }, { N_("Hour"), 0, 23 }, { N_("Minute"), 0, 59 },
+    { N_("Second"), 0, 59 },
 };
 
 static void time_tick(void *arg)
@@ -173,8 +175,8 @@ static int on_set_time(struct widget *w, void *args, void *arg)
     tm.tm_isdst = -1;
     struct timeval tv = { mktime(&tm), 0 };
     if (settimeofday(&tv, NULL) < 0) {
-        static const char *const buttons[] = { "OK" };
-        app_dialog(app, "Date and time", "The clock could not be set.", buttons, 1);
+        const char *buttons[] = { _("OK") };
+        app_dialog(app, _("Date and time"), _("The clock could not be set."), buttons, 1);
         return 1;
     }
     printf("settings: clock set to %ld\n", (long)tv.tv_sec);
@@ -191,13 +193,13 @@ void build_datetime(struct widget *page)
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
     for (int i = 0; i < 6; i++) {
-        row_label(grid, i, field_defs[i].name);
+        row_label(grid, i, _(field_defs[i].name));
         fields[i] = spinner_new(grid, field_defs[i].min, field_defs[i].max, field_defs[i].min);
         widget_set_grid(fields[i], i, 1, 1, 1);
     }
     struct widget *row = box_new(page, 0);
-    widget_connect(button_new(row, "Load current time"), "clicked", on_load_now, NULL);
-    widget_connect(button_new(row, "Set clock"), "clicked", on_set_time, NULL);
+    widget_connect(button_new(row, _("Load current time")), "clicked", on_load_now, NULL);
+    widget_connect(button_new(row, _("Set clock")), "clicked", on_set_time, NULL);
     on_load_now(NULL, NULL, NULL);
     time_tick(NULL);
     app_timer_add(app, 1000, 1, time_tick, NULL);
@@ -214,7 +216,7 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
 {
     return col == 0 ? mime_handler_type(row) : mime_handler_program(row);
 }
-static const char *m_header(struct model *m, int col) { return col == 0 ? "Type" : "Program"; }
+static const char *m_header(struct model *m, int col) { return col == 0 ? _("Type") : _("Program"); }
 static struct model apps_model = { m_rows, m_child, m_columns, m_cell, m_header, NULL, NULL, NULL };
 
 static int on_type_selected(struct widget *w, void *args, void *arg)
@@ -243,7 +245,7 @@ static int on_set_program(struct widget *w, void *args, void *arg)
 static int on_add_type(struct widget *w, void *args, void *arg)
 {
     char type[64] = "";
-    if (!app_prompt(app, "New file type", "Type (for example text/x-log):", type, sizeof type) || !type[0])
+    if (!app_prompt(app, _("New file type"), _("Type (for example text/x-log):"), type, sizeof type) || !type[0])
         return 1;
     mime_set_handler(type, "/home/.local/bin/gedit");
     mime_save(NULL);
@@ -261,13 +263,13 @@ void build_filetypes(struct widget *page)
     widget_connect(apps_table, "selected", on_type_selected, NULL);
     struct widget *row = box_new(page, 0);
     widget_set_stretch(row, 1, 0);
-    type_label = label_new(row, "(select a type)");
+    type_label = label_new(row, _("(select a type)"));
     widget_set_hint(type_label, 160, 0);
     prog_field = textfield_new(row, "");
     widget_set_stretch(prog_field, 1, 0);
     widget_connect(prog_field, "activate", on_set_program, NULL);
-    widget_connect(button_new(row, "Set"), "clicked", on_set_program, NULL);
-    widget_connect(button_new(row, "Add type..."), "clicked", on_add_type, NULL);
+    widget_connect(button_new(row, _("Set")), "clicked", on_set_program, NULL);
+    widget_connect(button_new(row, _("Add type...")), "clicked", on_add_type, NULL);
 }
 
 /* ---- launcher ---- */
@@ -317,7 +319,7 @@ static const char *l_cell(struct model *m, int row, int col, char *buf, size_t s
 {
     return col == 0 ? entries[row].title : entries[row].program;
 }
-static const char *l_header(struct model *m, int col) { return col == 0 ? "Menu entry" : "Program"; }
+static const char *l_header(struct model *m, int col) { return col == 0 ? _("Menu entry") : _("Program"); }
 static struct model launch_model = { l_rows, l_child, l_columns, l_cell, l_header, NULL, NULL, NULL };
 
 static int on_entry_selected(struct widget *w, void *args, void *arg)
@@ -391,19 +393,19 @@ void build_launcher(struct widget *page)
     struct widget *grid = grid_new(page);
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);
-    row_label(grid, 0, "Menu entry");
+    row_label(grid, 0, _("Menu entry"));
     title_field = textfield_new(grid, "");
     widget_set_grid(title_field, 0, 1, 1, 1);
-    row_label(grid, 1, "Program");
+    row_label(grid, 1, _("Program"));
     program_field = textfield_new(grid, "");
     widget_set_grid(program_field, 1, 1, 1, 1);
     widget_connect(program_field, "activate", on_entry_save, NULL);
     struct widget *row = box_new(page, 0);
-    widget_connect(button_new(row, "Save entry"), "clicked", on_entry_save, NULL);
-    widget_connect(button_new(row, "New"), "clicked", on_entry_add, NULL);
-    widget_connect(button_new(row, "Remove"), "clicked", on_entry_remove, NULL);
-    widget_connect(button_new(row, "Move up"), "clicked", on_entry_move, (void *)-1L);
-    widget_connect(button_new(row, "Move down"), "clicked", on_entry_move, (void *)1L);
+    widget_connect(button_new(row, _("Save entry")), "clicked", on_entry_save, NULL);
+    widget_connect(button_new(row, _("New")), "clicked", on_entry_add, NULL);
+    widget_connect(button_new(row, _("Remove")), "clicked", on_entry_remove, NULL);
+    widget_connect(button_new(row, _("Move up")), "clicked", on_entry_move, (void *)-1L);
+    widget_connect(button_new(row, _("Move down")), "clicked", on_entry_move, (void *)1L);
 }
 
 /* ---- system ---- */
@@ -420,7 +422,7 @@ static void system_tick(void *arg)
 {
     long s = uptime_ms() / 1000;
     char text[160];
-    snprintf(text, sizeof text, "Up %ld:%02ld:%02ld", s / 3600, (s / 60) % 60, s % 60);
+    snprintf(text, sizeof text, _("Up %ld:%02ld:%02ld"), s / 3600, (s / 60) % 60, s % 60);
     widget_set_text(uptime_label, text);
     int fd = open("/dev/meminfo", O_RDONLY);
     if (fd < 0)
@@ -433,7 +435,7 @@ static void system_tick(void *arg)
     buf[n] = '\0';
     long total = meminfo_kb(buf, "MemTotal:"), free_kb = meminfo_kb(buf, "MemFree:");
     long stotal = meminfo_kb(buf, "SwapTotal:"), sfree = meminfo_kb(buf, "SwapFree:");
-    snprintf(text, sizeof text, "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use", (total - free_kb) / 1024,
+    snprintf(text, sizeof text, _("Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"), (total - free_kb) / 1024,
              total / 1024, (stotal - sfree) / 1024, stotal / 1024);
     widget_set_text(mem_label, text);
 }
@@ -449,14 +451,14 @@ void build_system(struct widget *page)
     struct utsname u;
     char text[160];
     if (uname(&u) == 0) {
-        snprintf(text, sizeof text, "%s %s (%s) on %s", u.sysname, u.release, u.version, u.machine);
+        snprintf(text, sizeof text, _("%s %s (%s) on %s"), u.sysname, u.release, u.version, u.machine);
         label_new(page, text);
     }
-    snprintf(text, sizeof text, "%d processor%s", nproc(), nproc() == 1 ? "" : "s");
+    snprintf(text, sizeof text, ngettext("%d processor", "%d processors", (unsigned long)nproc()), nproc());
     label_new(page, text);
     struct gui_output_info info;
     if (gui_get_output(0, &info) == 0) {
-        snprintf(text, sizeof text, "Display %dx%d pixels at scale %d", info.width * info.scale, info.height * info.scale,
+        snprintf(text, sizeof text, _("Display %dx%d pixels at scale %d"), info.width * info.scale, info.height * info.scale,
                  info.scale);
         label_new(page, text);
     }
@@ -465,9 +467,9 @@ void build_system(struct widget *page)
     system_tick(NULL);
     app_timer_add(app, 1000, 1, system_tick, NULL);
     separator_new(page);
-    label_new(page, "Tools");
+    label_new(page, _("Tools"));
     struct widget *row = box_new(page, 0);
-    widget_connect(button_new(row, "System monitor"), "clicked", on_launch, "/bin/sysmon");
-    widget_connect(button_new(row, "Kernel log"), "clicked", on_launch, "/bin/logview");
-    widget_connect(button_new(row, "X12 settings"), "clicked", on_launch, "/bin/x12settings");
+    widget_connect(button_new(row, _("System monitor")), "clicked", on_launch, "/bin/sysmon");
+    widget_connect(button_new(row, _("Kernel log")), "clicked", on_launch, "/bin/logview");
+    widget_connect(button_new(row, _("X12 settings")), "clicked", on_launch, "/bin/x12settings");
 }

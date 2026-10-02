@@ -1,0 +1,353 @@
+# Japanese messages of the files domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/files/files.c:184 user/files/files.c:625
+msgid "Name"
+msgstr "名前"
+
+#: user/files/files.c:184 user/files/files.c:633 user/files/files.c:637
+msgid "Size"
+msgstr "サイズ"
+
+#: user/files/files.c:184 user/files/files.c:627
+msgid "Type"
+msgstr "種類"
+
+#: user/files/files.c:184 user/files/files.c:641
+msgid "Modified"
+msgstr "更新日時"
+
+#: user/files/files.c:212 user/files/files.c:643
+msgid "OK"
+msgstr "OK"
+
+#: user/files/files.c:213
+msgid "Files"
+msgstr "ファイル"
+
+#: user/files/files.c:240 user/files/files.c:812
+msgid "%s - Files"
+msgstr "%s - ファイル"
+
+#: user/files/files.c:247
+msgid "%d item"
+msgid_plural "%d items"
+msgstr[0] "%d 個の項目"
+
+#: user/files/files.c:249
+msgid "%s, %d hidden"
+msgid_plural "%s, %d hidden"
+msgstr[0] "%s、%d 個は非表示"
+
+#: user/files/files.c:267
+msgid "Cannot read the folder"
+msgstr "フォルダーを読み込めません"
+
+#: user/files/files.c:298
+msgid "Cannot open the folder"
+msgstr "フォルダーを開けません"
+
+#: user/files/files.c:344
+msgid "Cannot open the file"
+msgstr "ファイルを開けません"
+
+#: user/files/files.c:427 user/files/files.c:428
+msgid "New folder"
+msgstr "新しいフォルダー"
+
+#: user/files/files.c:428 user/files/files.c:446
+msgid "Name:"
+msgstr "名前:"
+
+#: user/files/files.c:433
+msgid "Cannot create the folder"
+msgstr "フォルダーを作成できません"
+
+#: user/files/files.c:445
+msgid "New file.txt"
+msgstr "新しいファイル.txt"
+
+#: user/files/files.c:446
+msgid "New file"
+msgstr "新しいファイル"
+
+#: user/files/files.c:452
+msgid "Cannot create the file"
+msgstr "ファイルを作成できません"
+
+#: user/files/files.c:470
+msgid "Open with"
+msgstr "アプリケーションで開く"
+
+#: user/files/files.c:470
+msgid "Program:"
+msgstr "プログラム:"
+
+#: user/files/files.c:477
+msgid "Cannot start the program"
+msgstr "プログラムを起動できません"
+
+#: user/files/files.c:492
+msgid "Cannot start the terminal"
+msgstr "端末を起動できません"
+
+#: user/files/files.c:50 user/files/files.c:756 user/files/files.c:793
+msgid "Home"
+msgstr "ホーム"
+
+#: user/files/files.c:50
+msgid "Desktop"
+msgstr "デスクトップ"
+
+#: user/files/files.c:50 user/files/files.c:757
+msgid "Root"
+msgstr "ルート"
+
+#: user/files/files.c:50
+msgid "Programs"
+msgstr "プログラム"
+
+#: user/files/files.c:503
+msgid "Rename"
+msgstr "名前を変更"
+
+#: user/files/files.c:503
+msgid "New name:"
+msgstr "新しい名前:"
+
+#: user/files/files.c:509
+msgid "Cannot rename"
+msgstr "名前を変更できません"
+
+#: user/files/files.c:51
+msgid "Shared files"
+msgstr "共有ファイル"
+
+#: user/files/files.c:51
+msgid "Fonts"
+msgstr "フォント"
+
+#: user/files/files.c:51
+msgid "Devices"
+msgstr "デバイス"
+
+#: user/files/files.c:525
+msgid "Delete \"%s\" and everything in it?"
+msgstr "「%s」とその中身をすべて削除しますか?"
+
+#: user/files/files.c:527
+msgid "Delete \"%s\"?"
+msgstr "「%s」を削除しますか?"
+
+#: user/files/files.c:528 user/files/files.c:529 user/files/files.c:735 user/files/files.c:769
+msgid "Delete"
+msgstr "削除"
+
+#: user/files/files.c:528
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: user/files/files.c:535
+msgid "Cannot delete"
+msgstr "削除できません"
+
+#: user/files/files.c:564
+msgid "Copy of %s"
+msgstr "%s のコピー"
+
+#: user/files/files.c:569
+msgid "Cannot paste"
+msgstr "貼り付けできません"
+
+#: user/files/files.c:574
+msgid "Cannot move"
+msgstr "移動できません"
+
+#: user/files/files.c:574
+msgid "Cannot copy"
+msgstr "コピーできません"
+
+#: user/files/files.c:59
+msgid "Folder"
+msgstr "フォルダー"
+
+#: user/files/files.c:59
+msgid "Text"
+msgstr "テキスト"
+
+#: user/files/files.c:59
+msgid "C source"
+msgstr "C ソース"
+
+#: user/files/files.c:60
+msgid "Shell script"
+msgstr "シェルスクリプト"
+
+#: user/files/files.c:60
+msgid "PNG image"
+msgstr "PNG 画像"
+
+#: user/files/files.c:61
+msgid "WAV audio"
+msgstr "WAV オーディオ"
+
+#: user/files/files.c:61
+msgid "Launcher"
+msgstr "ランチャー"
+
+#: user/files/files.c:610
+msgid "Cannot read the properties"
+msgstr "プロパティを読み込めません"
+
+#: user/files/files.c:620 user/files/files.c:736 user/files/files.c:771 user/files/files.c:781
+msgid "Properties"
+msgstr "プロパティ"
+
+#: user/files/files.c:626
+msgid "Location"
+msgstr "場所"
+
+#: user/files/files.c:629
+msgid "%d file"
+msgid_plural "%d files"
+msgstr[0] "%d 個のファイル"
+
+#: user/files/files.c:630
+msgid "%d folder"
+msgid_plural "%d folders"
+msgstr[0] "%d 個のフォルダー"
+
+#: user/files/files.c:632
+msgid "Contents"
+msgstr "内容"
+
+#: user/files/files.c:635
+msgid "%s (%ld byte)"
+msgid_plural "%s (%ld bytes)"
+msgstr[0] "%s（%ld バイト）"
+
+#: user/files/files.c:639
+msgid "Inode"
+msgstr "i ノード"
+
+#: user/files/files.c:67
+msgid "Program"
+msgstr "プログラム"
+
+#: user/files/files.c:67 user/files/files.c:726
+msgid "File"
+msgstr "ファイル"
+
+#: user/files/files.c:727 user/files/files.c:774
+msgid "New folder..."
+msgstr "新しいフォルダー..."
+
+#: user/files/files.c:728 user/files/files.c:775
+msgid "New file..."
+msgstr "新しいファイル..."
+
+#: user/files/files.c:730 user/files/files.c:760
+msgid "Open"
+msgstr "開く"
+
+#: user/files/files.c:731 user/files/files.c:761
+msgid "Open with..."
+msgstr "アプリケーションで開く..."
+
+#: user/files/files.c:732 user/files/files.c:762 user/files/files.c:776
+msgid "Open in terminal"
+msgstr "端末で開く"
+
+#: user/files/files.c:734 user/files/files.c:768
+msgid "Rename..."
+msgstr "名前を変更..."
+
+#: user/files/files.c:738
+msgid "Close"
+msgstr "閉じる"
+
+#: user/files/files.c:739
+msgid "Edit"
+msgstr "編集"
+
+#: user/files/files.c:740 user/files/files.c:764
+msgid "Copy"
+msgstr "コピー"
+
+#: user/files/files.c:741 user/files/files.c:765
+msgid "Cut"
+msgstr "切り取り"
+
+#: user/files/files.c:742 user/files/files.c:766 user/files/files.c:778
+msgid "Paste"
+msgstr "貼り付け"
+
+#: user/files/files.c:743
+msgid "View"
+msgstr "表示"
+
+#: user/files/files.c:744 user/files/files.c:780 user/files/files.c:797
+msgid "Refresh"
+msgstr "再読み込み"
+
+#: user/files/files.c:745
+msgid "Show hidden files"
+msgstr "隠しファイルを表示"
+
+#: user/files/files.c:747
+msgid "Sort by name"
+msgstr "名前で並べ替え"
+
+#: user/files/files.c:748
+msgid "Sort by size"
+msgstr "サイズで並べ替え"
+
+#: user/files/files.c:749
+msgid "Sort by type"
+msgstr "種類で並べ替え"
+
+#: user/files/files.c:750
+msgid "Sort by date"
+msgstr "日付で並べ替え"
+
+#: user/files/files.c:751
+msgid "Go"
+msgstr "移動"
+
+#: user/files/files.c:752 user/files/files.c:787
+msgid "Back"
+msgstr "戻る"
+
+#: user/files/files.c:753 user/files/files.c:789
+msgid "Forward"
+msgstr "進む"
+
+#: user/files/files.c:754 user/files/files.c:791
+msgid "Parent folder"
+msgstr "親フォルダー"
+
+#: user/files/files.c:798
+msgid "Hidden"
+msgstr "非表示"
+
+#: user/files/fsops.c:199
+msgid "%ld byte"
+msgid_plural "%ld bytes"
+msgstr[0] "%ld バイト"
+
+#: user/files/fsops.c:203
+msgid "%s KB"
+msgstr "%s KB"
+
+#: user/files/fsops.c:206
+msgid "%s GB"
+msgstr "%s GB"
+
+#: user/files/fsops.c:209
+msgid "%s MB"
+msgstr "%s MB"

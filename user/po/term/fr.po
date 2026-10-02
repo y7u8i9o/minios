@@ -1,0 +1,47 @@
+# French messages of the term domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/term/term.c:217 user/term/term.c:259
+msgid "%s - Terminal"
+msgstr "%s - Terminal"
+
+#: user/term/term.c:261 user/term/term.c:690
+msgid "Terminal"
+msgstr "Terminal"
+
+#: user/term/term.c:703
+msgid "Copy"
+msgstr "Copier"
+
+#: user/term/term.c:704
+msgid "Paste"
+msgstr "Coller"
+
+#: user/term/term.c:706
+msgid "New tab"
+msgstr "Nouvel onglet"
+
+#: user/term/term.c:707
+msgid "Close tab"
+msgstr "Fermer l'onglet"
+
+#: user/term/term.c:709
+msgid "Larger text"
+msgstr "Agrandir le texte"
+
+#: user/term/term.c:710
+msgid "Smaller text"
+msgstr "Réduire le texte"
+
+#: user/term/term.c:711
+msgid "Normal size"
+msgstr "Taille normale"
+
+#: user/term/term.c:713
+msgid "Clear scrollback"
+msgstr "Effacer l'historique"

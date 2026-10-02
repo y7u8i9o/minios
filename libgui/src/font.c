@@ -86,6 +86,47 @@ struct font *gfx_font_open_ttf(const char *path, int px)
     return f;
 }
 
+/* The CJK font is read on first use, because the file has 4 MB.  Its
+ * fonts of every size share one outline and are never freed.  The cache is
+ * used by the thread that draws, which is the only one in a libgui
+ * program. */
+#define CJK_PATH "/etc/fonts/DroidSansFallbackFull.ttf"
+static struct ofont *cjk_outline;
+static int cjk_missing;
+static struct { int px; struct font *font; } cjk_cache[8];
+static int cjk_count;
+
+const struct font *gfx_font_cjk(int px)
+{
+    for (int i = 0; i < cjk_count; i++)
+        if (cjk_cache[i].px == px)
+            return cjk_cache[i].font;
+    if (cjk_missing || cjk_count == 8)
+        return NULL;
+    if (!cjk_outline && !(cjk_outline = font_open(CJK_PATH))) {
+        cjk_missing = 1;
+        return NULL;
+    }
+    struct font *f = calloc(1, sizeof *f);
+    if (!f)
+        return NULL;
+    int ascent, descent, gap;
+    font_metrics(cjk_outline, &ascent, &descent, &gap);
+    f->outline = cjk_outline;
+    f->px = px;
+    f->ascent = (font_scale(cjk_outline, ascent, px) + 63) >> 6;
+    f->height = f->ascent + ((font_scale(cjk_outline, -descent, px) + 63) >> 6);
+    cjk_cache[cjk_count].px = px;
+    cjk_cache[cjk_count].font = f;
+    cjk_count++;
+    return f;
+}
+
+static int cjk_range(uint32_t cp)
+{
+    return (cp >= 0x2e80 && cp < 0xfe00) || (cp >= 0xff00 && cp < 0xfff0) || (cp >= 0x20000 && cp < 0x40000);
+}
+
 void gfx_font_set_fallback(struct font *f, const struct font *fallback)
 {
     if (f)
@@ -156,10 +197,20 @@ static int shape_outline(const struct font *f, const char *text, int n,
         uint32_t cp = gui_utf8_decode(text, len, &at);
         const struct font *use = f;
         int glyph = font_glyph_index(f->outline, cp);
-        if (!glyph && f->fallback && f->fallback->outline) {
-            int alt = font_glyph_index(f->fallback->outline, cp);
+        /* The fallback fonts form a chain.  A CJK character that none of
+         * them has comes from the CJK font. */
+        for (const struct font *fb = f->fallback; !glyph && fb; fb = fb->fallback) {
+            int alt = fb->outline ? font_glyph_index(fb->outline, cp) : 0;
             if (alt) {
-                use = f->fallback;
+                use = fb;
+                glyph = alt;
+            }
+        }
+        if (!glyph && cjk_range(cp)) {
+            const struct font *cjk = gfx_font_cjk(f->px);
+            int alt = cjk ? font_glyph_index(cjk->outline, cp) : 0;
+            if (alt) {
+                use = cjk;
                 glyph = alt;
             }
         }

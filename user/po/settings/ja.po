@@ -1,0 +1,401 @@
+# Japanese messages of the settings domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/settings/look.c:105
+msgid "Wallpaper"
+msgstr "壁紙"
+
+#: user/settings/look.c:115
+msgid "None (solid colour)"
+msgstr "なし（単色）"
+
+#: user/settings/look.c:119
+msgid "Placement"
+msgstr "配置"
+
+#: user/settings/look.c:12
+msgid "Fill the screen"
+msgstr "画面全体に表示"
+
+#: user/settings/look.c:12
+msgid "Centre"
+msgstr "中央"
+
+#: user/settings/look.c:12
+msgid "Tile"
+msgstr "並べて表示"
+
+#: user/settings/look.c:12
+msgid "Stretch"
+msgstr "拡大縮小"
+
+#: user/settings/look.c:131
+msgid "Desktop colour"
+msgstr "デスクトップの色"
+
+#: user/settings/look.c:137
+msgid "Red"
+msgstr "赤"
+
+#: user/settings/look.c:137
+msgid "Green"
+msgstr "緑"
+
+#: user/settings/look.c:137
+msgid "Blue"
+msgstr "青"
+
+#: user/settings/look.c:145
+msgid "Interface font"
+msgstr "インターフェイスのフォント"
+
+#: user/settings/look.c:156
+msgid "Font size (px)"
+msgstr "フォントサイズ（px）"
+
+#: user/settings/look.c:160
+msgid "Terminal font size (px)"
+msgstr "端末のフォントサイズ（px）"
+
+#: user/settings/look.c:164
+msgid "Interface scale"
+msgstr "インターフェイスの拡大率"
+
+#: user/settings/look.c:166
+msgid "100 %"
+msgstr "100 %"
+
+#: user/settings/look.c:167
+msgid "125 %"
+msgstr "125 %"
+
+#: user/settings/look.c:168
+msgid "150 %"
+msgstr "150 %"
+
+#: user/settings/look.c:19
+msgid "Builtin bitmap font"
+msgstr "内蔵ビットマップフォント"
+
+#: user/settings/look.c:215
+msgid "unknown"
+msgstr "不明"
+
+#: user/settings/look.c:220
+msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
+msgstr "%dx%d ピクセル、拡大率 %d（論理 %dx%d）、%d Hz"
+
+#: user/settings/look.c:223
+msgid "Current mode"
+msgstr "現在のモード"
+
+#: user/settings/look.c:228
+msgid "Resolution"
+msgstr "解像度"
+
+#: user/settings/look.c:240
+msgid "Pixel density"
+msgstr "ピクセル密度"
+
+#: user/settings/look.c:242
+msgid "Standard (1 pixel per point)"
+msgstr "標準（1 ポイントあたり 1 ピクセル）"
+
+#: user/settings/look.c:243
+msgid "High (2 pixels per point)"
+msgstr "高（1 ポイントあたり 2 ピクセル）"
+
+#: user/settings/look.c:248
+msgid "Frame interval (ms)"
+msgstr "フレーム間隔（ms）"
+
+#: user/settings/look.c:252
+msgid "Window decorations"
+msgstr "ウィンドウの装飾"
+
+#: user/settings/look.c:254
+msgid "Drawn by the application (client side)"
+msgstr "アプリケーションが描画（クライアント側）"
+
+#: user/settings/look.c:255
+msgid "Drawn by X12 (server side)"
+msgstr "X12 が描画（サーバー側）"
+
+#: user/settings/look.c:271
+msgid "Repeat rate: %d per second"
+msgstr "リピート速度: 毎秒 %d 回"
+
+#: user/settings/look.c:273
+msgid "Repeat delay: %d ms"
+msgstr "リピート開始までの時間: %d ms"
+
+#: user/settings/look.c:302
+msgid "Layout"
+msgstr "配列"
+
+#: user/settings/look.c:346
+msgid "Pointer speed: %d"
+msgstr "ポインターの速度: %d"
+
+#: user/settings/look.c:369
+msgid "Acceleration"
+msgstr "加速"
+
+#: user/settings/look.c:371
+msgid "Flat"
+msgstr "一定"
+
+#: user/settings/look.c:372
+msgid "Adaptive"
+msgstr "適応"
+
+#: user/settings/settings.c:124
+msgid "Appearance"
+msgstr "外観"
+
+#: user/settings/settings.c:125
+msgid "Display"
+msgstr "ディスプレイ"
+
+#: user/settings/settings.c:126
+msgid "Keyboard"
+msgstr "キーボード"
+
+#: user/settings/settings.c:127
+msgid "Mouse"
+msgstr "マウス"
+
+#: user/settings/settings.c:128
+msgid "Sound"
+msgstr "サウンド"
+
+#: user/settings/settings.c:129 user/settings/system.c:179
+msgid "Date and time"
+msgstr "日付と時刻"
+
+#: user/settings/settings.c:130
+msgid "File types"
+msgstr "ファイルの種類"
+
+#: user/settings/settings.c:131
+msgid "Launcher"
+msgstr "ランチャー"
+
+#: user/settings/settings.c:132
+msgid "System"
+msgstr "システム"
+
+#: user/settings/settings.c:90 user/settings/system.c:178
+msgid "OK"
+msgstr "OK"
+
+#: user/settings/settings.c:91 user/settings/settings.c:166
+msgid "Settings"
+msgstr "設定"
+
+#: user/settings/settings.c:91
+msgid "The settings file cannot be written."
+msgstr "設定ファイルを書き込めません。"
+
+#: user/settings/system.c:106
+msgid "Output volume"
+msgstr "出力音量"
+
+#: user/settings/system.c:110
+msgid "Streams"
+msgstr "ストリーム"
+
+#: user/settings/system.c:142
+msgid "Year"
+msgstr "年"
+
+#: user/settings/system.c:142
+msgid "Month"
+msgstr "月"
+
+#: user/settings/system.c:142
+msgid "Day"
+msgstr "日"
+
+#: user/settings/system.c:142
+msgid "Hour"
+msgstr "時"
+
+#: user/settings/system.c:142
+msgid "Minute"
+msgstr "分"
+
+#: user/settings/system.c:143
+msgid "Second"
+msgstr "秒"
+
+#: user/settings/system.c:179
+msgid "The clock could not be set."
+msgstr "時計を設定できませんでした。"
+
+#: user/settings/system.c:201
+msgid "Load current time"
+msgstr "現在の時刻を読み込む"
+
+#: user/settings/system.c:202
+msgid "Set clock"
+msgstr "時計を設定"
+
+#: user/settings/system.c:219
+msgid "Type"
+msgstr "種類"
+
+#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+msgid "Program"
+msgstr "プログラム"
+
+#: user/settings/system.c:248
+msgid "New file type"
+msgstr "新しいファイルの種類"
+
+#: user/settings/system.c:248
+msgid "Type (for example text/x-log):"
+msgstr "種類（例: text/x-log）:"
+
+#: user/settings/system.c:266
+msgid "(select a type)"
+msgstr "（種類を選択）"
+
+#: user/settings/system.c:271
+msgid "Set"
+msgstr "設定"
+
+#: user/settings/system.c:272
+msgid "Add type..."
+msgstr "種類を追加..."
+
+#: user/settings/system.c:322 user/settings/system.c:396
+msgid "Menu entry"
+msgstr "メニュー項目"
+
+#: user/settings/system.c:34
+msgid "capture"
+msgstr "録音"
+
+#: user/settings/system.c:34
+msgid "playback"
+msgstr "再生"
+
+#: user/settings/system.c:35
+msgid "%u %%"
+msgstr "%u %%"
+
+#: user/settings/system.c:36
+msgid "running"
+msgstr "実行中"
+
+#: user/settings/system.c:36
+msgid "error"
+msgstr "エラー"
+
+#: user/settings/system.c:36
+msgid "paused"
+msgstr "一時停止"
+
+#: user/settings/system.c:404
+msgid "Save entry"
+msgstr "項目を保存"
+
+#: user/settings/system.c:405
+msgid "New"
+msgstr "新規"
+
+#: user/settings/system.c:406
+msgid "Remove"
+msgstr "削除"
+
+#: user/settings/system.c:407
+msgid "Move up"
+msgstr "上へ"
+
+#: user/settings/system.c:408
+msgid "Move down"
+msgstr "下へ"
+
+#: user/settings/system.c:41
+msgid "Stream"
+msgstr "ストリーム"
+
+#: user/settings/system.c:41
+msgid "Direction"
+msgstr "方向"
+
+#: user/settings/system.c:41
+msgid "Volume"
+msgstr "音量"
+
+#: user/settings/system.c:41
+msgid "State"
+msgstr "状態"
+
+#: user/settings/system.c:425
+msgid "Up %ld:%02ld:%02ld"
+msgstr "稼働時間 %ld:%02ld:%02ld"
+
+#: user/settings/system.c:438
+msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
+msgstr "メモリ: %ld / %ld MiB 使用中、スワップ: %ld / %ld MiB 使用中"
+
+#: user/settings/system.c:454
+msgid "%s %s (%s) on %s"
+msgstr "%s %s（%s）、%s 上で実行"
+
+#: user/settings/system.c:457
+msgid "%d processor"
+msgid_plural "%d processors"
+msgstr[0] "%d 個のプロセッサー"
+
+#: user/settings/system.c:461
+msgid "Display %dx%d pixels at scale %d"
+msgstr "ディスプレイ %dx%d ピクセル、拡大率 %d"
+
+#: user/settings/system.c:470
+msgid "Tools"
+msgstr "ツール"
+
+#: user/settings/system.c:472
+msgid "System monitor"
+msgstr "システムモニター"
+
+#: user/settings/system.c:473
+msgid "Kernel log"
+msgstr "カーネルログ"
+
+#: user/settings/system.c:474
+msgid "X12 settings"
+msgstr "X12 設定"
+
+#: user/settings/system.c:52
+msgid "Output volume: %u %%"
+msgstr "出力音量: %u %%"
+
+#: user/settings/system.c:59
+msgid "%s: %u %%"
+msgstr "%s: %u %%"
+
+#: user/settings/system.c:64 user/settings/system.c:119
+msgid "Stream volume"
+msgstr "ストリームの音量"
+
+#: user/settings/system.c:67
+msgid "%d stream"
+msgid_plural "%d streams"
+msgstr[0] "%d 個のストリーム"
+
+#: user/settings/system.c:76 user/settings/system.c:128
+msgid "No audio server"
+msgstr "オーディオサーバーがありません"
+
+#: user/settings/system.c:90
+msgid "Output volume: %d %%"
+msgstr "出力音量: %d %%"

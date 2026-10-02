@@ -1,0 +1,43 @@
+# Spanish messages of the libgui domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr "Aceptar"
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr "Deshacer"
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr "Rehacer"
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr "Cortar"
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr "Copiar"
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr "Pegar"
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr "Eliminar"
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr "Seleccionar todo"

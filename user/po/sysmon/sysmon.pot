@@ -1,0 +1,183 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/apps/sysmon.c:300
+msgid "%ld GiB"
+msgstr ""
+
+#: user/apps/sysmon.c:302
+msgid "%ld%s%ld GiB"
+msgstr ""
+
+#: user/apps/sysmon.c:304
+msgid "%ld MiB"
+msgstr ""
+
+#: user/apps/sysmon.c:306
+msgid "%ld%s%ld MiB"
+msgstr ""
+
+#: user/apps/sysmon.c:308
+msgid "%ld KiB"
+msgstr ""
+
+#: user/apps/sysmon.c:314
+msgid "%ld B/s"
+msgstr ""
+
+#: user/apps/sysmon.c:318
+msgid "%s/s"
+msgstr ""
+
+#: user/apps/sysmon.c:324
+msgid "%d%s%d %%"
+msgstr ""
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420
+msgid "Name"
+msgstr ""
+
+#: user/apps/sysmon.c:383
+msgid "PID"
+msgstr ""
+
+#: user/apps/sysmon.c:383
+msgid "Parent"
+msgstr ""
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420
+msgid "State"
+msgstr ""
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420 user/apps/sysmon.c:554
+msgid "CPU"
+msgstr ""
+
+#: user/apps/sysmon.c:384
+msgid "CPU time"
+msgstr ""
+
+#: user/apps/sysmon.c:384 user/apps/sysmon.c:582
+msgid "Memory"
+msgstr ""
+
+#: user/apps/sysmon.c:413
+msgid "%ld ms"
+msgstr ""
+
+#: user/apps/sysmon.c:420
+msgid "TID"
+msgstr ""
+
+#: user/apps/sysmon.c:420
+msgid "Wait queue"
+msgstr ""
+
+#: user/apps/sysmon.c:421
+msgid "Bounded wait"
+msgstr ""
+
+#: user/apps/sysmon.c:561
+msgid "CPU %d"
+msgstr ""
+
+#: user/apps/sysmon.c:575
+msgid "Used %s of %s"
+msgstr ""
+
+#: user/apps/sysmon.c:578
+msgid "Swap %s of %s"
+msgstr ""
+
+#: user/apps/sysmon.c:580
+msgid "File cache %s"
+msgstr ""
+
+#: user/apps/sysmon.c:608
+msgid "Receive %s"
+msgstr ""
+
+#: user/apps/sysmon.c:610
+msgid "Transmit %s"
+msgstr ""
+
+#: user/apps/sysmon.c:612
+msgid "Network"
+msgstr ""
+
+#: user/apps/sysmon.c:636
+msgid "%d process"
+msgid_plural "%d processes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: user/apps/sysmon.c:639
+msgid "CPU %s"
+msgstr ""
+
+#: user/apps/sysmon.c:643
+msgid "Memory %s of %s"
+msgstr ""
+
+#: user/apps/sysmon.c:646
+msgid "Up %ld:%02ld:%02ld"
+msgstr ""
+
+#: user/apps/sysmon.c:713
+msgid "Close"
+msgstr ""
+
+#: user/apps/sysmon.c:715
+msgid "The signal could not be sent to process %d."
+msgstr ""
+
+#: user/apps/sysmon.c:716
+msgid "Error"
+msgstr ""
+
+#: user/apps/sysmon.c:773 user/apps/sysmon.c:814
+msgid "End process"
+msgstr ""
+
+#: user/apps/sysmon.c:777 user/apps/sysmon.c:815
+msgid "Kill process"
+msgstr ""
+
+#: user/apps/sysmon.c:782 user/apps/sysmon.c:816
+msgid "Profile"
+msgstr ""
+
+#: user/apps/sysmon.c:791
+msgid "System monitor"
+msgstr ""
+
+#: user/apps/sysmon.c:795
+msgid "File"
+msgstr ""
+
+#: user/apps/sysmon.c:796
+msgid "Quit"
+msgstr ""
+
+#: user/apps/sysmon.c:799
+msgid "Process"
+msgstr ""
+
+#: user/apps/sysmon.c:801
+msgid "View"
+msgstr ""
+
+#: user/apps/sysmon.c:802 user/apps/sysmon.c:812
+msgid "Processes"
+msgstr ""
+
+#: user/apps/sysmon.c:805 user/apps/sysmon.c:839
+msgid "Resources"
+msgstr ""
+
+#: user/apps/sysmon.c:820
+msgid "Filter by name"
+msgstr ""
+

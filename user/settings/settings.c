@@ -87,8 +87,8 @@ int conf_set(const char *key, const char *value)
     strlcpy(values[i], value, sizeof values[i]);
     if (conf_write() < 0) {
         if (app) {
-            static const char *const buttons[] = { "OK" };
-            app_dialog(app, "Settings", "The settings file cannot be written.", buttons, 1);
+            const char *buttons[] = { _("OK") };
+            app_dialog(app, _("Settings"), _("The settings file cannot be written."), buttons, 1);
         }
         return -1;
     }
@@ -121,15 +121,15 @@ struct category {
     struct widget *page;
 };
 static struct category categories[] = {
-    { "Appearance", "appearance", build_appearance, NULL },
-    { "Display", "display", build_display, NULL },
-    { "Keyboard", "keyboard", build_keyboard, NULL },
-    { "Mouse", "mouse", build_mouse, NULL },
-    { "Sound", "sound", build_sound, NULL },
-    { "Date and time", "time", build_datetime, NULL },
-    { "File types", "filetypes", build_filetypes, NULL },
-    { "Launcher", "launcher", build_launcher, NULL },
-    { "System", "system", build_system, NULL },
+    { N_("Appearance"), "appearance", build_appearance, NULL },
+    { N_("Display"), "display", build_display, NULL },
+    { N_("Keyboard"), "keyboard", build_keyboard, NULL },
+    { N_("Mouse"), "mouse", build_mouse, NULL },
+    { N_("Sound"), "sound", build_sound, NULL },
+    { N_("Date and time"), "time", build_datetime, NULL },
+    { N_("File types"), "filetypes", build_filetypes, NULL },
+    { N_("Launcher"), "launcher", build_launcher, NULL },
+    { N_("System"), "system", build_system, NULL },
 };
 #define NCATEGORIES ((int)(sizeof categories / sizeof categories[0]))
 
@@ -162,7 +162,8 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
-    struct widget *win = app_window(app, 680, 480, "Settings");
+    textdomain("settings");
+    struct widget *win = app_window(app, 680, 480, _("Settings"));
     if (!win)
         return 1;
     struct widget *split = box_new(win, 0);
@@ -171,7 +172,7 @@ int main(int argc, char **argv)
     widget_set_hint(sidebar, 150, 0);
     widget_set_stretch(sidebar, 0, 1);
     for (int i = 0; i < NCATEGORIES; i++)
-        listview_add(sidebar, categories[i].name);
+        listview_add(sidebar, _(categories[i].name));
     widget_connect(sidebar, "selected", on_category, NULL);
     pages = box_new(split, 1);
     widget_set_stretch(pages, 1, 1);

@@ -2,6 +2,7 @@
  * a button is chosen or the window is closed. */
 #include <gui/app.h>
 #include <string.h>
+#include <libintl.h>
 
 struct dialog {
     struct app *app;
@@ -80,7 +81,7 @@ int app_prompt(struct app *a, const char *title, const char *label, char *buf, i
     d.field = textfield_new(d.win, buf);
     widget_connect(d.field, "activate", on_activate, &d);
     struct widget *row = box_new(d.win, 0);
-    struct widget *ok = button_new(row, "OK"), *cancel = button_new(row, "Cancel");
+    struct widget *ok = button_new(row, dgettext("libgui", "OK")), *cancel = button_new(row, dgettext("libgui", "Cancel"));
     widget_set_stretch(ok, 1, 0);
     widget_set_stretch(cancel, 1, 0);
     widget_connect(ok, "clicked", on_button, &d);

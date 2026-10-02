@@ -1,0 +1,41 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr ""
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr ""
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr ""
+

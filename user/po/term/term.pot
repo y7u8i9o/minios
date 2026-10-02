@@ -1,0 +1,45 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/term/term.c:217 user/term/term.c:259
+msgid "%s - Terminal"
+msgstr ""
+
+#: user/term/term.c:261 user/term/term.c:690
+msgid "Terminal"
+msgstr ""
+
+#: user/term/term.c:703
+msgid "Copy"
+msgstr ""
+
+#: user/term/term.c:704
+msgid "Paste"
+msgstr ""
+
+#: user/term/term.c:706
+msgid "New tab"
+msgstr ""
+
+#: user/term/term.c:707
+msgid "Close tab"
+msgstr ""
+
+#: user/term/term.c:709
+msgid "Larger text"
+msgstr ""
+
+#: user/term/term.c:710
+msgid "Smaller text"
+msgstr ""
+
+#: user/term/term.c:711
+msgid "Normal size"
+msgstr ""
+
+#: user/term/term.c:713
+msgid "Clear scrollback"
+msgstr ""
+

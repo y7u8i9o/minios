@@ -1,0 +1,81 @@
+# Titles of the launcher entries of the base system (user/etc/launcher) and of
+# the packages in user/packages. The panel translates them with
+# dgettext("launcher", title).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Terminal"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "Clock"
+msgstr ""
+
+msgid "System monitor"
+msgstr ""
+
+msgid "Kernel log"
+msgstr ""
+
+msgid "Profiler"
+msgstr ""
+
+msgid "Event viewer"
+msgstr ""
+
+msgid "Screenshot"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "X12 settings"
+msgstr ""
+
+msgid "Protocol viewer"
+msgstr ""
+
+msgid "Log out"
+msgstr ""
+
+msgid "Calculator"
+msgstr ""
+
+msgid "Code"
+msgstr ""
+
+msgid "Editor"
+msgstr ""
+
+msgid "Hex viewer"
+msgstr ""
+
+msgid "Lua Synthesizer"
+msgstr ""
+
+msgid "Mandelbrot"
+msgstr ""
+
+msgid "Paint"
+msgstr ""
+
+msgid "Player"
+msgstr ""
+
+msgid "Pong"
+msgstr ""
+
+msgid "Sequencer"
+msgstr ""
+
+msgid "Synthesizer"
+msgstr ""
+
+msgid "Unicode viewer"
+msgstr ""
+
+msgid "Viewer"
+msgstr ""

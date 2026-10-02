@@ -1,0 +1,43 @@
+# Simplified Chinese messages of the libgui domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr "确定"
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr "取消"
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr "撤销"
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr "重做"
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr "剪切"
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr "复制"
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr "粘贴"
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr "删除"
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr "全选"

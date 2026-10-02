@@ -1,0 +1,139 @@
+# Japanese messages of the logview domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/logview.c:164
+msgid "Time"
+msgstr "時刻"
+
+#: user/apps/logview.c:164
+msgid "Level"
+msgstr "レベル"
+
+#: user/apps/logview.c:164
+msgid "Subsystem"
+msgstr "サブシステム"
+
+#: user/apps/logview.c:164
+msgid "Message"
+msgstr "メッセージ"
+
+#: user/apps/logview.c:197
+msgid "%ld of %ld line"
+msgid_plural "%ld of %ld lines"
+msgstr[0] "%ld / %ld 行"
+
+#: user/apps/logview.c:199
+msgid "%ld warning"
+msgid_plural "%ld warnings"
+msgstr[0] "%ld 件の警告"
+
+#: user/apps/logview.c:201
+msgid "%ld error"
+msgid_plural "%ld errors"
+msgstr[0] "%ld 件のエラー"
+
+#: user/apps/logview.c:202
+msgid "%s, %s"
+msgstr "%s、%s"
+
+#: user/apps/logview.c:205
+msgid "%ld byte lost"
+msgid_plural "%ld bytes lost"
+msgstr[0] "%ld バイトを失いました"
+
+#: user/apps/logview.c:332
+msgid "OK"
+msgstr "OK"
+
+#: user/apps/logview.c:333 user/apps/logview.c:453
+msgid "Kernel log"
+msgstr "カーネルログ"
+
+#: user/apps/logview.c:35
+msgid "Debug"
+msgstr "デバッグ"
+
+#: user/apps/logview.c:35
+msgid "Info"
+msgstr "情報"
+
+#: user/apps/logview.c:35
+msgid "Warning"
+msgstr "警告"
+
+#: user/apps/logview.c:35
+msgid "Error"
+msgstr "エラー"
+
+#: user/apps/logview.c:382 user/apps/logview.c:470
+msgid "Save"
+msgstr "保存"
+
+#: user/apps/logview.c:382
+msgid "File:"
+msgstr "ファイル:"
+
+#: user/apps/logview.c:387
+msgid "%s cannot be written: %s"
+msgstr "%s を書き込めません: %s"
+
+#: user/apps/logview.c:395
+msgid "The file was not written completely."
+msgstr "ファイルは完全には書き込まれませんでした。"
+
+#: user/apps/logview.c:457
+msgid "File"
+msgstr "ファイル"
+
+#: user/apps/logview.c:458
+msgid "Save..."
+msgstr "保存..."
+
+#: user/apps/logview.c:462
+msgid "Quit"
+msgstr "終了"
+
+#: user/apps/logview.c:463
+msgid "Edit"
+msgstr "編集"
+
+#: user/apps/logview.c:464 user/apps/logview.c:471
+msgid "Copy"
+msgstr "コピー"
+
+#: user/apps/logview.c:467
+msgid "Clear"
+msgstr "消去"
+
+#: user/apps/logview.c:473
+msgid "All levels"
+msgstr "すべてのレベル"
+
+#: user/apps/logview.c:474
+msgid "Info and above"
+msgstr "情報以上"
+
+#: user/apps/logview.c:475
+msgid "Warnings and errors"
+msgstr "警告とエラー"
+
+#: user/apps/logview.c:476
+msgid "Errors"
+msgstr "エラー"
+
+#: user/apps/logview.c:480
+msgid "All subsystems"
+msgstr "すべてのサブシステム"
+
+#: user/apps/logview.c:486
+msgid "Find"
+msgstr "検索"
+
+#: user/apps/logview.c:488
+msgid "Follow"
+msgstr "追従"

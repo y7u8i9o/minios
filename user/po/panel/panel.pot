@@ -1,0 +1,51 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr ""
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr ""
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr ""
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr ""
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr ""
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr ""
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr ""
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr ""
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr ""
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] ""
+msgstr[1] ""
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr ""
+

@@ -1,0 +1,193 @@
+# Russian messages of the gedit domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/gedit.c:135
+msgid "Saved %s"
+msgstr "Сохранено: %s"
+
+#: user/apps/gedit.c:144
+msgid "OK"
+msgstr "ОК"
+
+#: user/apps/gedit.c:145
+msgid "Error"
+msgstr "Ошибка"
+
+#: user/apps/gedit.c:152
+msgid "Save as"
+msgstr "Сохранить как"
+
+#: user/apps/gedit.c:152 user/apps/gedit.c:203
+msgid "File:"
+msgstr "Файл:"
+
+#: user/apps/gedit.c:156 user/apps/gedit.c:166
+msgid "The file cannot be written."
+msgstr "Не удаётся записать файл."
+
+#: user/apps/gedit.c:176 user/apps/gedit.c:325 user/apps/gedit.c:347
+msgid "Save"
+msgstr "Сохранить"
+
+#: user/apps/gedit.c:176
+msgid "Discard"
+msgstr "Не сохранять"
+
+#: user/apps/gedit.c:176
+msgid "Cancel"
+msgstr "Отмена"
+
+#: user/apps/gedit.c:177
+msgid "Unsaved changes"
+msgstr "Несохранённые изменения"
+
+#: user/apps/gedit.c:177
+msgid "Save the changes?"
+msgstr "Сохранить изменения?"
+
+#: user/apps/gedit.c:203 user/apps/gedit.c:346
+msgid "Open"
+msgstr "Открыть"
+
+#: user/apps/gedit.c:204
+msgid "The file cannot be opened."
+msgstr "Не удаётся открыть файл."
+
+#: user/apps/gedit.c:243
+msgid "\"%s\" not found"
+msgstr "«%s» не найдено"
+
+#: user/apps/gedit.c:253 user/apps/gedit.c:360
+msgid "Find"
+msgstr "Найти"
+
+#: user/apps/gedit.c:253
+msgid "Text:"
+msgstr "Текст:"
+
+#: user/apps/gedit.c:26
+msgid "untitled"
+msgstr "без имени"
+
+#: user/apps/gedit.c:268 user/apps/gedit.c:269
+msgid "Replace"
+msgstr "Заменить"
+
+#: user/apps/gedit.c:268
+msgid "Find:"
+msgstr "Найти:"
+
+#: user/apps/gedit.c:269
+msgid "Replace with:"
+msgstr "Заменить на:"
+
+#: user/apps/gedit.c:272
+msgid "%d occurrence replaced"
+msgid_plural "%d occurrences replaced"
+msgstr[0] "Заменено %d вхождение"
+msgstr[1] "Заменено %d вхождения"
+msgstr[2] "Заменено %d вхождений"
+
+#: user/apps/gedit.c:284
+msgid "Go to line"
+msgstr "Перейти к строке"
+
+#: user/apps/gedit.c:284
+msgid "Line:"
+msgstr "Строка:"
+
+#: user/apps/gedit.c:322
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/gedit.c:323 user/apps/gedit.c:345
+msgid "New"
+msgstr "Создать"
+
+#: user/apps/gedit.c:324
+msgid "Open..."
+msgstr "Открыть..."
+
+#: user/apps/gedit.c:326
+msgid "Save as..."
+msgstr "Сохранить как..."
+
+#: user/apps/gedit.c:328
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/gedit.c:329
+msgid "Edit"
+msgstr "Правка"
+
+#: user/apps/gedit.c:330 user/apps/gedit.c:349
+msgid "Undo"
+msgstr "Отменить"
+
+#: user/apps/gedit.c:331 user/apps/gedit.c:351
+msgid "Redo"
+msgstr "Повторить"
+
+#: user/apps/gedit.c:333 user/apps/gedit.c:354
+msgid "Cut"
+msgstr "Вырезать"
+
+#: user/apps/gedit.c:334 user/apps/gedit.c:356
+msgid "Copy"
+msgstr "Копировать"
+
+#: user/apps/gedit.c:335 user/apps/gedit.c:358
+msgid "Paste"
+msgstr "Вставить"
+
+#: user/apps/gedit.c:336
+msgid "Delete"
+msgstr "Удалить"
+
+#: user/apps/gedit.c:337
+msgid "Select all"
+msgstr "Выделить всё"
+
+#: user/apps/gedit.c:339
+msgid "Find..."
+msgstr "Найти..."
+
+#: user/apps/gedit.c:340
+msgid "Find next"
+msgstr "Найти далее"
+
+#: user/apps/gedit.c:341
+msgid "Replace..."
+msgstr "Заменить..."
+
+#: user/apps/gedit.c:342
+msgid "Go to line..."
+msgstr "Перейти к строке..."
+
+#: user/apps/gedit.c:361
+msgid "Wrap"
+msgstr "Перенос строк"
+
+#: user/apps/gedit.c:363
+msgid "Line numbers"
+msgstr "Номера строк"
+
+#: user/apps/gedit.c:55
+msgid "Plain text"
+msgstr "Обычный текст"
+
+#: user/apps/gedit.c:81
+msgid "Ln %d, Col %d"
+msgstr "Стр %d, Стлб %d"
+
+#: user/apps/gedit.c:84
+msgid "%d line"
+msgid_plural "%d lines"
+msgstr[0] "%d строка"
+msgstr[1] "%d строки"
+msgstr[2] "%d строк"

@@ -1,0 +1,43 @@
+# Japanese messages of the libgui domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr "OK"
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr "元に戻す"
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr "やり直す"
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr "切り取り"
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr "コピー"
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr "貼り付け"
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr "削除"
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr "すべて選択"

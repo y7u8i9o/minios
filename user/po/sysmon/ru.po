@@ -1,0 +1,186 @@
+# Russian messages of the sysmon domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/sysmon.c:300
+msgid "%ld GiB"
+msgstr "%ld ГиБ"
+
+#: user/apps/sysmon.c:302
+msgid "%ld%s%ld GiB"
+msgstr "%ld%s%ld ГиБ"
+
+#: user/apps/sysmon.c:304
+msgid "%ld MiB"
+msgstr "%ld МиБ"
+
+#: user/apps/sysmon.c:306
+msgid "%ld%s%ld MiB"
+msgstr "%ld%s%ld МиБ"
+
+#: user/apps/sysmon.c:308
+msgid "%ld KiB"
+msgstr "%ld КиБ"
+
+#: user/apps/sysmon.c:314
+msgid "%ld B/s"
+msgstr "%ld Б/с"
+
+#: user/apps/sysmon.c:318
+msgid "%s/s"
+msgstr "%s/с"
+
+#: user/apps/sysmon.c:324
+msgid "%d%s%d %%"
+msgstr "%d%s%d %%"
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420
+msgid "Name"
+msgstr "Имя"
+
+#: user/apps/sysmon.c:383
+msgid "PID"
+msgstr "PID"
+
+#: user/apps/sysmon.c:383
+msgid "Parent"
+msgstr "Родитель"
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420
+msgid "State"
+msgstr "Состояние"
+
+#: user/apps/sysmon.c:383 user/apps/sysmon.c:420 user/apps/sysmon.c:554
+msgid "CPU"
+msgstr "ЦП"
+
+#: user/apps/sysmon.c:384
+msgid "CPU time"
+msgstr "Время ЦП"
+
+#: user/apps/sysmon.c:384 user/apps/sysmon.c:582
+msgid "Memory"
+msgstr "Память"
+
+#: user/apps/sysmon.c:413
+msgid "%ld ms"
+msgstr "%ld мс"
+
+#: user/apps/sysmon.c:420
+msgid "TID"
+msgstr "TID"
+
+#: user/apps/sysmon.c:420
+msgid "Wait queue"
+msgstr "Очередь ожидания"
+
+#: user/apps/sysmon.c:421
+msgid "Bounded wait"
+msgstr "Ограниченное ожидание"
+
+#: user/apps/sysmon.c:561
+msgid "CPU %d"
+msgstr "ЦП %d"
+
+#: user/apps/sysmon.c:575
+msgid "Used %s of %s"
+msgstr "Занято %s из %s"
+
+#: user/apps/sysmon.c:578
+msgid "Swap %s of %s"
+msgstr "Подкачка %s из %s"
+
+#: user/apps/sysmon.c:580
+msgid "File cache %s"
+msgstr "Файловый кэш %s"
+
+#: user/apps/sysmon.c:608
+msgid "Receive %s"
+msgstr "Приём %s"
+
+#: user/apps/sysmon.c:610
+msgid "Transmit %s"
+msgstr "Передача %s"
+
+#: user/apps/sysmon.c:612
+msgid "Network"
+msgstr "Сеть"
+
+#: user/apps/sysmon.c:636
+msgid "%d process"
+msgid_plural "%d processes"
+msgstr[0] "%d процесс"
+msgstr[1] "%d процесса"
+msgstr[2] "%d процессов"
+
+#: user/apps/sysmon.c:639
+msgid "CPU %s"
+msgstr "ЦП %s"
+
+#: user/apps/sysmon.c:643
+msgid "Memory %s of %s"
+msgstr "Память %s из %s"
+
+#: user/apps/sysmon.c:646
+msgid "Up %ld:%02ld:%02ld"
+msgstr "Работает %ld:%02ld:%02ld"
+
+#: user/apps/sysmon.c:713
+msgid "Close"
+msgstr "Закрыть"
+
+#: user/apps/sysmon.c:715
+msgid "The signal could not be sent to process %d."
+msgstr "Не удалось отправить сигнал процессу %d."
+
+#: user/apps/sysmon.c:716
+msgid "Error"
+msgstr "Ошибка"
+
+#: user/apps/sysmon.c:773 user/apps/sysmon.c:814
+msgid "End process"
+msgstr "Завершить процесс"
+
+#: user/apps/sysmon.c:777 user/apps/sysmon.c:815
+msgid "Kill process"
+msgstr "Убить процесс"
+
+#: user/apps/sysmon.c:782 user/apps/sysmon.c:816
+msgid "Profile"
+msgstr "Профилировать"
+
+#: user/apps/sysmon.c:791
+msgid "System monitor"
+msgstr "Системный монитор"
+
+#: user/apps/sysmon.c:795
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/sysmon.c:796
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/sysmon.c:799
+msgid "Process"
+msgstr "Процесс"
+
+#: user/apps/sysmon.c:801
+msgid "View"
+msgstr "Вид"
+
+#: user/apps/sysmon.c:802 user/apps/sysmon.c:812
+msgid "Processes"
+msgstr "Процессы"
+
+#: user/apps/sysmon.c:805 user/apps/sysmon.c:839
+msgid "Resources"
+msgstr "Ресурсы"
+
+#: user/apps/sysmon.c:820
+msgid "Filter by name"
+msgstr "Фильтр по имени"

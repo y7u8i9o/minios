@@ -17,6 +17,7 @@
  * r resets the view, j switches between the Mandelbrot set and the Julia
  * set of the centre, and Escape or q quits.  Without a window server, or
  * with `mandel columns rows`, the set is printed as text. */
+#include <langinfo.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -26,6 +27,7 @@
 #include <sys/ioctl.h>
 #include <gui/app.h>
 #include <gui/image.h>
+#include <gui/i18n.h>
 
 #define TILE 64
 #define FIRST_BLOCK 16
@@ -551,30 +553,34 @@ static void status_update(void)
     if (view.julia) {
         char jc[96];
         format_complex(jc, sizeof jc, view.jr, view.ji);
-        snprintf(buf, sizeof buf, "Julia %s", jc);
+        snprintf(buf, sizeof buf, _("Julia %s"), jc);
     } else {
-        snprintf(buf, sizeof buf, "Centre %s", c);
+        snprintf(buf, sizeof buf, _("Centre %s"), c);
     }
     widget_set_text(st_centre, buf);
     double mag = home_scale / view.scale;
     if (mag >= 1e6)
-        snprintf(buf, sizeof buf, "Zoom %.2e", mag);
+        snprintf(buf, sizeof buf, _("Zoom %.2e"), mag);
     else if (mag >= 1)
-        snprintf(buf, sizeof buf, "Zoom %.0fx", mag);
+        snprintf(buf, sizeof buf, _("Zoom %.0fx"), mag);
     else
-        snprintf(buf, sizeof buf, "Zoom 1/%.0fx", 1 / mag);
+        snprintf(buf, sizeof buf, _("Zoom 1/%.0fx"), 1 / mag);
     widget_set_text(st_zoom, buf);
     pthread_mutex_lock(&lock);
     int done = tiles_done, total = ntiles, run = running;
     pthread_mutex_unlock(&lock);
     if (run)
-        snprintf(buf, sizeof buf, "%d iterations, %d%%", view.maxiter, total ? done * 100 / total : 0);
+        snprintf(buf, sizeof buf, ngettext("%d iteration, %d%%", "%d iterations, %d%%", (unsigned long)view.maxiter),
+                 view.maxiter, total ? done * 100 / total : 0);
     else if (render_ms >= 1000)
-        snprintf(buf, sizeof buf, "%d iterations, %ld.%01ld s", view.maxiter, render_ms / 1000, render_ms % 1000 / 100);
+        snprintf(buf, sizeof buf, ngettext("%d iteration, %ld%s%01ld s", "%d iterations, %ld%s%01ld s",
+                                           (unsigned long)view.maxiter),
+                 view.maxiter, render_ms / 1000, nl_langinfo(RADIXCHAR), render_ms % 1000 / 100);
     else if (render_ms >= 0)
-        snprintf(buf, sizeof buf, "%d iterations, %ld ms", view.maxiter, render_ms);
+        snprintf(buf, sizeof buf, ngettext("%d iteration, %ld ms", "%d iterations, %ld ms", (unsigned long)view.maxiter),
+                 view.maxiter, render_ms);
     else
-        snprintf(buf, sizeof buf, "%d iterations", view.maxiter);
+        snprintf(buf, sizeof buf, ngettext("%d iteration", "%d iterations", (unsigned long)view.maxiter), view.maxiter);
     widget_set_text(st_state, buf);
 }
 
@@ -623,7 +629,7 @@ static int on_motion(struct widget *w, void *args, void *arg)
     struct sig_click *c = args;
     char pos[96], text[112];
     format_complex(pos, sizeof pos, view.cr + (c->x - width / 2) * view.scale, view.ci + (c->y - height / 2) * view.scale);
-    snprintf(text, sizeof text, "Pointer %s", pos);
+    snprintf(text, sizeof text, _("Pointer %s"), pos);
     widget_set_text(st_pointer, text);
     if (!dragging)
         return 0;
@@ -720,8 +726,8 @@ static int on_iterations(struct widget *w, void *args, void *arg)
 static int on_save(struct widget *w, void *args, void *arg)
 {
     static char name[256] = "/home/mandel.png";
-    static const char *const buttons[] = { "Close" };
-    if (!app_prompt(app, "Save image", "File:", name, sizeof name))
+    const char *const buttons[] = { _("Close") };
+    if (!app_prompt(app, _("Save image"), _("File:"), name, sizeof name))
         return 1;
     render_stop();
     struct image *out = image_create(width, height);
@@ -733,7 +739,7 @@ static int on_save(struct widget *w, void *args, void *arg)
         image_free(out);
     }
     if (!ok)
-        app_dialog(app, "Error", "The image cannot be written.", buttons, 1);
+        app_dialog(app, _("Error"), _("The image cannot be written."), buttons, 1);
     else {
         printf("mandel: saved %s\n", name);
         fflush(stdout);
@@ -766,6 +772,7 @@ int main(int argc, char **argv)
         }
         return text_mode(cols, rows);
     }
+    textdomain("mandel");
     palettes_init();
     /* The home view spans 3.2 units of the real axis over 640 pixels. */
     home_scale = 3.2 / 640;
@@ -789,46 +796,46 @@ int main(int argc, char **argv)
     printf("mandel: %d worker threads\n", nworkers);
     fflush(stdout);
 
-    win = app_window(app, 640, 480, "Mandelbrot");
+    win = app_window(app, 640, 480, _("Mandelbrot"));
     if (!win)
         return 1;
     struct widget *bar = menubar_new(win);
-    struct widget *file = menu_new(bar, "File");
-    struct widget *m = menu_add(file, "Save image...", "save");
+    struct widget *file = menu_new(bar, _("File"));
+    struct widget *m = menu_add(file, _("Save image..."), "save");
     widget_connect(m, "clicked", on_save, NULL);
     widget_set_accel(m, KEY_S, WMOD_CTRL);
     menu_add_separator(file);
-    m = menu_add(file, "Quit", "quit");
+    m = menu_add(file, _("Quit"), "quit");
     widget_connect(m, "clicked", on_quit, NULL);
     widget_set_accel(m, KEY_Q, WMOD_CTRL);
-    struct widget *viewm = menu_new(bar, "View");
-    widget_connect(menu_add(viewm, "Zoom in", "zoom-in"), "clicked", on_zoom_in, NULL);
-    widget_connect(menu_add(viewm, "Zoom out", "zoom-out"), "clicked", on_zoom_out, NULL);
-    widget_connect(menu_add(viewm, "Reset view", "fit"), "clicked", on_reset, NULL);
+    struct widget *viewm = menu_new(bar, _("View"));
+    widget_connect(menu_add(viewm, _("Zoom in"), "zoom-in"), "clicked", on_zoom_in, NULL);
+    widget_connect(menu_add(viewm, _("Zoom out"), "zoom-out"), "clicked", on_zoom_out, NULL);
+    widget_connect(menu_add(viewm, _("Reset view"), "fit"), "clicked", on_reset, NULL);
     menu_add_separator(viewm);
-    mandel_item = menu_add(viewm, "Mandelbrot set", NULL);
+    mandel_item = menu_add(viewm, _("Mandelbrot set"), NULL);
     widget_connect(mandel_item, "clicked", on_mandel, NULL);
     widget_set_enabled(mandel_item, 0);
-    julia_item = menu_add(viewm, "Julia set of the centre", NULL);
+    julia_item = menu_add(viewm, _("Julia set of the centre"), NULL);
     widget_connect(julia_item, "clicked", on_julia, NULL);
 
     struct widget *tools = toolbar_new(win);
-    widget_connect(toolbar_add(tools, "zoom-in", "Zoom in"), "clicked", on_zoom_in, NULL);
-    widget_connect(toolbar_add(tools, "zoom-out", "Zoom out"), "clicked", on_zoom_out, NULL);
-    widget_connect(toolbar_add(tools, "fit", "Reset view"), "clicked", on_reset, NULL);
-    widget_connect(toolbar_add(tools, "save", "Save image"), "clicked", on_save, NULL);
+    widget_connect(toolbar_add(tools, "zoom-in", _("Zoom in")), "clicked", on_zoom_in, NULL);
+    widget_connect(toolbar_add(tools, "zoom-out", _("Zoom out")), "clicked", on_zoom_out, NULL);
+    widget_connect(toolbar_add(tools, "fit", _("Reset view")), "clicked", on_reset, NULL);
+    widget_connect(toolbar_add(tools, "save", _("Save image")), "clicked", on_save, NULL);
     separator_new(tools);
-    label_new(tools, "Colours");
+    label_new(tools, _("Colours"));
     palette_box = combobox_new(tools);
-    combobox_add(palette_box, "Classic");
-    combobox_add(palette_box, "Fire");
-    combobox_add(palette_box, "Ocean");
-    combobox_add(palette_box, "Grey");
+    combobox_add(palette_box, _("Classic"));
+    combobox_add(palette_box, _("Fire"));
+    combobox_add(palette_box, _("Ocean"));
+    combobox_add(palette_box, _("Grey"));
     combobox_select(palette_box, 0);
     widget_connect(palette_box, "changed", on_palette, NULL);
-    label_new(tools, "Iterations");
+    label_new(tools, _("Iterations"));
     iter_box = combobox_new(tools);
-    combobox_add(iter_box, "Automatic");
+    combobox_add(iter_box, _("Automatic"));
     combobox_add(iter_box, "256");
     combobox_add(iter_box, "1024");
     combobox_add(iter_box, "4096");

@@ -1,0 +1,5 @@
+x12: toplevel [0-9]+ 'Moniteur système' mapped
+x12: toplevel [0-9]+ 'システムモニター' mapped
+panel: menu opened
+gui_locale: locale ok
+TEST PASS

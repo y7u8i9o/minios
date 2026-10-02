@@ -1,0 +1,147 @@
+# Russian messages of the logview domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/logview.c:164
+msgid "Time"
+msgstr "Время"
+
+#: user/apps/logview.c:164
+msgid "Level"
+msgstr "Уровень"
+
+#: user/apps/logview.c:164
+msgid "Subsystem"
+msgstr "Подсистема"
+
+#: user/apps/logview.c:164
+msgid "Message"
+msgstr "Сообщение"
+
+#: user/apps/logview.c:197
+msgid "%ld of %ld line"
+msgid_plural "%ld of %ld lines"
+msgstr[0] "%ld из %ld строки"
+msgstr[1] "%ld из %ld строк"
+msgstr[2] "%ld из %ld строк"
+
+#: user/apps/logview.c:199
+msgid "%ld warning"
+msgid_plural "%ld warnings"
+msgstr[0] "%ld предупреждение"
+msgstr[1] "%ld предупреждения"
+msgstr[2] "%ld предупреждений"
+
+#: user/apps/logview.c:201
+msgid "%ld error"
+msgid_plural "%ld errors"
+msgstr[0] "%ld ошибка"
+msgstr[1] "%ld ошибки"
+msgstr[2] "%ld ошибок"
+
+#: user/apps/logview.c:202
+msgid "%s, %s"
+msgstr "%s, %s"
+
+#: user/apps/logview.c:205
+msgid "%ld byte lost"
+msgid_plural "%ld bytes lost"
+msgstr[0] "потерян %ld байт"
+msgstr[1] "потеряно %ld байта"
+msgstr[2] "потеряно %ld байт"
+
+#: user/apps/logview.c:332
+msgid "OK"
+msgstr "ОК"
+
+#: user/apps/logview.c:333 user/apps/logview.c:453
+msgid "Kernel log"
+msgstr "Журнал ядра"
+
+#: user/apps/logview.c:35
+msgid "Debug"
+msgstr "Отладка"
+
+#: user/apps/logview.c:35
+msgid "Info"
+msgstr "Сведения"
+
+#: user/apps/logview.c:35
+msgid "Warning"
+msgstr "Предупреждение"
+
+#: user/apps/logview.c:35
+msgid "Error"
+msgstr "Ошибка"
+
+#: user/apps/logview.c:382 user/apps/logview.c:470
+msgid "Save"
+msgstr "Сохранить"
+
+#: user/apps/logview.c:382
+msgid "File:"
+msgstr "Файл:"
+
+#: user/apps/logview.c:387
+msgid "%s cannot be written: %s"
+msgstr "Не удаётся записать %s: %s"
+
+#: user/apps/logview.c:395
+msgid "The file was not written completely."
+msgstr "Файл записан не полностью."
+
+#: user/apps/logview.c:457
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/logview.c:458
+msgid "Save..."
+msgstr "Сохранить..."
+
+#: user/apps/logview.c:462
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/logview.c:463
+msgid "Edit"
+msgstr "Правка"
+
+#: user/apps/logview.c:464 user/apps/logview.c:471
+msgid "Copy"
+msgstr "Копировать"
+
+#: user/apps/logview.c:467
+msgid "Clear"
+msgstr "Очистить"
+
+#: user/apps/logview.c:473
+msgid "All levels"
+msgstr "Все уровни"
+
+#: user/apps/logview.c:474
+msgid "Info and above"
+msgstr "Сведения и выше"
+
+#: user/apps/logview.c:475
+msgid "Warnings and errors"
+msgstr "Предупреждения и ошибки"
+
+#: user/apps/logview.c:476
+msgid "Errors"
+msgstr "Ошибки"
+
+#: user/apps/logview.c:480
+msgid "All subsystems"
+msgstr "Все подсистемы"
+
+#: user/apps/logview.c:486
+msgid "Find"
+msgstr "Найти"
+
+#: user/apps/logview.c:488
+msgid "Follow"
+msgstr "Следить"

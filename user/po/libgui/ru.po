@@ -1,0 +1,43 @@
+# Russian messages of the libgui domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: libgui/src/dialog.c:84
+msgid "OK"
+msgstr "ОК"
+
+#: libgui/src/dialog.c:84
+msgid "Cancel"
+msgstr "Отмена"
+
+#: libgui/src/widgets/editmenu.c:15
+msgid "Undo"
+msgstr "Отменить"
+
+#: libgui/src/widgets/editmenu.c:16
+msgid "Redo"
+msgstr "Повторить"
+
+#: libgui/src/widgets/editmenu.c:17
+msgid "Cut"
+msgstr "Вырезать"
+
+#: libgui/src/widgets/editmenu.c:18
+msgid "Copy"
+msgstr "Копировать"
+
+#: libgui/src/widgets/editmenu.c:19
+msgid "Paste"
+msgstr "Вставить"
+
+#: libgui/src/widgets/editmenu.c:20
+msgid "Delete"
+msgstr "Удалить"
+
+#: libgui/src/widgets/editmenu.c:21
+msgid "Select all"
+msgstr "Выделить всё"

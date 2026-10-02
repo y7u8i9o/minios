@@ -1,0 +1,82 @@
+# Spanish messages of the launcher domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Terminal"
+msgstr "Terminal"
+
+msgid "Files"
+msgstr "Archivos"
+
+msgid "Clock"
+msgstr "Reloj"
+
+msgid "System monitor"
+msgstr "Monitor del sistema"
+
+msgid "Kernel log"
+msgstr "Registro del núcleo"
+
+msgid "Profiler"
+msgstr "Perfilador"
+
+msgid "Event viewer"
+msgstr "Visor de eventos"
+
+msgid "Screenshot"
+msgstr "Captura de pantalla"
+
+msgid "Settings"
+msgstr "Configuración"
+
+msgid "X12 settings"
+msgstr "Configuración de X12"
+
+msgid "Protocol viewer"
+msgstr "Visor de protocolo"
+
+msgid "Log out"
+msgstr "Cerrar sesión"
+
+msgid "Calculator"
+msgstr "Calculadora"
+
+msgid "Code"
+msgstr "Código"
+
+msgid "Editor"
+msgstr "Editor"
+
+msgid "Hex viewer"
+msgstr "Visor hexadecimal"
+
+msgid "Lua Synthesizer"
+msgstr "Sintetizador Lua"
+
+msgid "Mandelbrot"
+msgstr "Mandelbrot"
+
+msgid "Paint"
+msgstr "Dibujo"
+
+msgid "Player"
+msgstr "Reproductor"
+
+msgid "Pong"
+msgstr "Pong"
+
+msgid "Sequencer"
+msgstr "Secuenciador"
+
+msgid "Synthesizer"
+msgstr "Sintetizador"
+
+msgid "Unicode viewer"
+msgstr "Visor Unicode"
+
+msgid "Viewer"
+msgstr "Visor"

@@ -1,0 +1,52 @@
+# Simplified Chinese messages of the panel domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/panel/launcher.c:197
+msgid "Applications"
+msgstr "应用程序"
+
+#: user/panel/launcher.c:200
+msgid "System"
+msgstr "系统"
+
+#: user/panel/launcher.c:233
+msgid "Search"
+msgstr "搜索"
+
+#: user/panel/mixer.c:118
+msgid "No audio service"
+msgstr "没有音频服务"
+
+#: user/panel/mixer.c:125
+msgid "Output"
+msgstr "输出"
+
+#: user/panel/mixer.c:132
+msgid "capture %u%%"
+msgstr "录音 %u%%"
+
+#: user/panel/mixer.c:133
+msgid "playing %u%%"
+msgstr "播放 %u%%"
+
+#: user/panel/mixer.c:134
+msgid "paused %u%%"
+msgstr "暂停 %u%%"
+
+#: user/panel/mixer.c:140
+msgid "No streams"
+msgstr "没有音频流"
+
+#: user/panel/mixer.c:142
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "另有 %d 个"
+
+#: user/panel/panel.c:126
+msgid "Menu"
+msgstr "菜单"
