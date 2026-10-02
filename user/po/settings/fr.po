@@ -126,79 +126,119 @@ msgstr "Dessinées par l'application (côté client)"
 msgid "Drawn by X12 (server side)"
 msgstr "Dessinées par X12 (côté serveur)"
 
-#: user/settings/look.c:271
+#: user/settings/look.c:272
 msgid "Repeat rate: %d per second"
 msgstr "Fréquence de répétition : %d par seconde"
 
-#: user/settings/look.c:273
+#: user/settings/look.c:274
 msgid "Repeat delay: %d ms"
 msgstr "Délai de répétition : %d ms"
 
-#: user/settings/look.c:302
+#: user/settings/look.c:350
 msgid "Layout"
 msgstr "Disposition"
 
-#: user/settings/look.c:346
+#: user/settings/look.c:373
 msgid "Pointer speed: %d"
 msgstr "Vitesse du pointeur : %d"
 
-#: user/settings/look.c:369
+#: user/settings/look.c:396
 msgid "Acceleration"
 msgstr "Accélération"
 
-#: user/settings/look.c:371
+#: user/settings/look.c:398
 msgid "Flat"
 msgstr "Plate"
 
-#: user/settings/look.c:372
+#: user/settings/look.c:399
 msgid "Adaptive"
 msgstr "Adaptative"
 
-#: user/settings/settings.c:124
-msgid "Appearance"
-msgstr "Apparence"
+#: user/settings/region.c:135
+msgid "Example: %s, %s"
+msgstr "Exemple : %s, %s"
 
-#: user/settings/settings.c:125
-msgid "Display"
-msgstr "Affichage"
-
-#: user/settings/settings.c:126
-msgid "Keyboard"
-msgstr "Clavier"
-
-#: user/settings/settings.c:127
-msgid "Mouse"
-msgstr "Souris"
-
-#: user/settings/settings.c:128
-msgid "Sound"
-msgstr "Son"
-
-#: user/settings/settings.c:129 user/settings/system.c:179
-msgid "Date and time"
-msgstr "Date et heure"
-
-#: user/settings/settings.c:130
-msgid "File types"
-msgstr "Types de fichiers"
-
-#: user/settings/settings.c:131
-msgid "Launcher"
-msgstr "Lanceur"
-
-#: user/settings/settings.c:132
-msgid "System"
-msgstr "Système"
-
-#: user/settings/settings.c:90 user/settings/system.c:178
+#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "OK"
 
-#: user/settings/settings.c:91 user/settings/settings.c:166
+#: user/settings/region.c:172 user/settings/settings.c:129
+msgid "Region and language"
+msgstr "Région et langue"
+
+#: user/settings/region.c:172
+msgid "The time zone cannot be set."
+msgstr "Le fuseau horaire ne peut pas être défini."
+
+#: user/settings/region.c:197
+msgid "Language"
+msgstr "Langue"
+
+#: user/settings/region.c:210
+msgid "Formats"
+msgstr "Formats"
+
+#: user/settings/region.c:212
+msgid "Same as the language"
+msgstr "Identiques à la langue"
+
+#: user/settings/region.c:222
+msgid "Time zone"
+msgstr "Fuseau horaire"
+
+#: user/settings/region.c:230
+msgid "Keyboard layout"
+msgstr "Disposition du clavier"
+
+#: user/settings/region.c:235
+msgid "A new language applies to the programs started afterwards."
+msgstr "Une nouvelle langue s'applique aux programmes démarrés ensuite."
+
+#: user/settings/region.c:236
+msgid "Super+Space switches to the Japanese and Chinese input methods."
+msgstr "Super+Espace passe aux méthodes de saisie japonaise et chinoise."
+
+#: user/settings/settings.c:126
+msgid "Appearance"
+msgstr "Apparence"
+
+#: user/settings/settings.c:127
+msgid "Display"
+msgstr "Affichage"
+
+#: user/settings/settings.c:128
+msgid "Keyboard"
+msgstr "Clavier"
+
+#: user/settings/settings.c:130
+msgid "Mouse"
+msgstr "Souris"
+
+#: user/settings/settings.c:131
+msgid "Sound"
+msgstr "Son"
+
+#: user/settings/settings.c:132 user/settings/system.c:179
+msgid "Date and time"
+msgstr "Date et heure"
+
+#: user/settings/settings.c:133
+msgid "File types"
+msgstr "Types de fichiers"
+
+#: user/settings/settings.c:134
+msgid "Launcher"
+msgstr "Lanceur"
+
+#: user/settings/settings.c:135
+msgid "System"
+msgstr "Système"
+
+#: user/settings/settings.c:93 user/settings/settings.c:169
 msgid "Settings"
 msgstr "Paramètres"
 
-#: user/settings/settings.c:91
+#: user/settings/settings.c:93
 msgid "The settings file cannot be written."
 msgstr "Le fichier des paramètres ne peut pas être écrit."
 

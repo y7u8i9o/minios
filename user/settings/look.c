@@ -261,7 +261,8 @@ void build_display(struct widget *page)
 
 /* ---- keyboard ---- */
 
-static struct widget *layout_combo, *rate_slider, *delay_slider, *rate_label, *delay_label;
+static struct widget *layout_combos[2], *rate_slider, *delay_slider, *rate_label, *delay_label;
+static int ncombos;
 static char layouts[16][32];
 static int nlayouts;
 
@@ -285,11 +286,58 @@ static int on_delay(struct widget *w, void *args, void *arg)
     if (!building) conf_set_int("repeat_delay", delay_slider->value);
     return 1;
 }
+/* The Keyboard page and the Region and language page both show the
+ * layout.  A change in one combo box selects the layout in the other. */
 static int on_layout(struct widget *w, void *args, void *arg)
 {
-    if (!building && w->value >= 0 && w->value < nlayouts)
-        conf_set("keymap", layouts[w->value]);
+    if (building || w->value < 0 || w->value >= nlayouts)
+        return 1;
+    conf_set("keymap", layouts[w->value]);
+    building = 1;
+    for (int i = 0; i < ncombos; i++)
+        if (layout_combos[i] != w)
+            combobox_select(layout_combos[i], w->value);
+    building = 0;
     return 1;
+}
+
+static int by_name(const void *a, const void *b)
+{
+    return strcmp(a, b);
+}
+
+struct widget *layout_combo_new(struct widget *parent)
+{
+    if (!nlayouts) {
+        DIR *d = opendir(KEYMAP_DIR);
+        if (d) {
+            struct dirent *e;
+            while ((e = readdir(d)) != NULL && nlayouts < 16) {
+                char *dot = strrchr(e->d_name, '.');
+                if (e->d_name[0] == '.' || !dot || strcmp(dot, ".mkm") != 0)
+                    continue;
+                *dot = '\0';
+                strlcpy(layouts[nlayouts++], e->d_name, sizeof layouts[0]);
+            }
+            closedir(d);
+        }
+        qsort(layouts, (size_t)nlayouts, sizeof layouts[0], by_name);
+    }
+    struct widget *combo = combobox_new(parent);
+    int current = 0;
+    for (int i = 0; i < nlayouts; i++) {
+        combobox_add(combo, layouts[i]);
+        if (strcmp(layouts[i], conf_get("keymap")) == 0)
+            current = i;
+    }
+    int was = building;
+    building = 1;
+    combobox_select(combo, current);
+    building = was;
+    widget_connect(combo, "changed", on_layout, NULL);
+    if (ncombos < 2)
+        layout_combos[ncombos++] = combo;
+    return combo;
 }
 
 void build_keyboard(struct widget *page)
@@ -300,28 +348,7 @@ void build_keyboard(struct widget *page)
     grid_set_stretch(grid, -1, 1, 1);
     int r = 0;
     row_label(grid, r, _("Layout"));
-    layout_combo = combobox_new(grid);
-    nlayouts = 0;
-    DIR *d = opendir(KEYMAP_DIR);
-    int current = 0;
-    if (d) {
-        struct dirent *e;
-        while ((e = readdir(d)) != NULL && nlayouts < 16) {
-            char *dot = strrchr(e->d_name, '.');
-            if (e->d_name[0] == '.' || !dot || strcmp(dot, ".mkm") != 0)
-                continue;
-            *dot = '\0';
-            strlcpy(layouts[nlayouts], e->d_name, sizeof layouts[0]);
-            if (strcmp(layouts[nlayouts], conf_get("keymap")) == 0)
-                current = nlayouts;
-            combobox_add(layout_combo, layouts[nlayouts]);
-            nlayouts++;
-        }
-        closedir(d);
-    }
-    combobox_select(layout_combo, current);
-    widget_connect(layout_combo, "changed", on_layout, NULL);
-    widget_set_grid(layout_combo, r++, 1, 1, 1);
+    widget_set_grid(layout_combo_new(grid), r++, 1, 1, 1);
     rate_label = label_new(grid, "");
     widget_set_grid(rate_label, r++, 0, 1, 2);
     rate_slider = slider_new(grid, 1, 100, conf_int("repeat_rate", 30));

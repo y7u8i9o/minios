@@ -37,3 +37,6 @@ void build_datetime(struct widget *page);
 void build_filetypes(struct widget *page);
 void build_launcher(struct widget *page);
 void build_system(struct widget *page);
+void build_region(struct widget *page);
+/* A combo box of the keyboard layouts, which writes the keymap setting. */
+struct widget *layout_combo_new(struct widget *parent);

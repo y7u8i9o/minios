@@ -126,79 +126,119 @@ msgstr "アプリケーションが描画（クライアント側）"
 msgid "Drawn by X12 (server side)"
 msgstr "X12 が描画（サーバー側）"
 
-#: user/settings/look.c:271
+#: user/settings/look.c:272
 msgid "Repeat rate: %d per second"
 msgstr "リピート速度: 毎秒 %d 回"
 
-#: user/settings/look.c:273
+#: user/settings/look.c:274
 msgid "Repeat delay: %d ms"
 msgstr "リピート開始までの時間: %d ms"
 
-#: user/settings/look.c:302
+#: user/settings/look.c:350
 msgid "Layout"
 msgstr "配列"
 
-#: user/settings/look.c:346
+#: user/settings/look.c:373
 msgid "Pointer speed: %d"
 msgstr "ポインターの速度: %d"
 
-#: user/settings/look.c:369
+#: user/settings/look.c:396
 msgid "Acceleration"
 msgstr "加速"
 
-#: user/settings/look.c:371
+#: user/settings/look.c:398
 msgid "Flat"
 msgstr "一定"
 
-#: user/settings/look.c:372
+#: user/settings/look.c:399
 msgid "Adaptive"
 msgstr "適応"
 
-#: user/settings/settings.c:124
-msgid "Appearance"
-msgstr "外観"
+#: user/settings/region.c:135
+msgid "Example: %s, %s"
+msgstr "例: %s、%s"
 
-#: user/settings/settings.c:125
-msgid "Display"
-msgstr "ディスプレイ"
-
-#: user/settings/settings.c:126
-msgid "Keyboard"
-msgstr "キーボード"
-
-#: user/settings/settings.c:127
-msgid "Mouse"
-msgstr "マウス"
-
-#: user/settings/settings.c:128
-msgid "Sound"
-msgstr "サウンド"
-
-#: user/settings/settings.c:129 user/settings/system.c:179
-msgid "Date and time"
-msgstr "日付と時刻"
-
-#: user/settings/settings.c:130
-msgid "File types"
-msgstr "ファイルの種類"
-
-#: user/settings/settings.c:131
-msgid "Launcher"
-msgstr "ランチャー"
-
-#: user/settings/settings.c:132
-msgid "System"
-msgstr "システム"
-
-#: user/settings/settings.c:90 user/settings/system.c:178
+#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "OK"
 
-#: user/settings/settings.c:91 user/settings/settings.c:166
+#: user/settings/region.c:172 user/settings/settings.c:129
+msgid "Region and language"
+msgstr "地域と言語"
+
+#: user/settings/region.c:172
+msgid "The time zone cannot be set."
+msgstr "タイムゾーンを設定できません。"
+
+#: user/settings/region.c:197
+msgid "Language"
+msgstr "言語"
+
+#: user/settings/region.c:210
+msgid "Formats"
+msgstr "形式"
+
+#: user/settings/region.c:212
+msgid "Same as the language"
+msgstr "言語と同じ"
+
+#: user/settings/region.c:222
+msgid "Time zone"
+msgstr "タイムゾーン"
+
+#: user/settings/region.c:230
+msgid "Keyboard layout"
+msgstr "キーボード配列"
+
+#: user/settings/region.c:235
+msgid "A new language applies to the programs started afterwards."
+msgstr "新しい言語はこの後に起動するプログラムに適用されます。"
+
+#: user/settings/region.c:236
+msgid "Super+Space switches to the Japanese and Chinese input methods."
+msgstr "Super+Space で日本語と中国語の入力方式に切り替えます。"
+
+#: user/settings/settings.c:126
+msgid "Appearance"
+msgstr "外観"
+
+#: user/settings/settings.c:127
+msgid "Display"
+msgstr "ディスプレイ"
+
+#: user/settings/settings.c:128
+msgid "Keyboard"
+msgstr "キーボード"
+
+#: user/settings/settings.c:130
+msgid "Mouse"
+msgstr "マウス"
+
+#: user/settings/settings.c:131
+msgid "Sound"
+msgstr "サウンド"
+
+#: user/settings/settings.c:132 user/settings/system.c:179
+msgid "Date and time"
+msgstr "日付と時刻"
+
+#: user/settings/settings.c:133
+msgid "File types"
+msgstr "ファイルの種類"
+
+#: user/settings/settings.c:134
+msgid "Launcher"
+msgstr "ランチャー"
+
+#: user/settings/settings.c:135
+msgid "System"
+msgstr "システム"
+
+#: user/settings/settings.c:93 user/settings/settings.c:169
 msgid "Settings"
 msgstr "設定"
 
-#: user/settings/settings.c:91
+#: user/settings/settings.c:93
 msgid "The settings file cannot be written."
 msgstr "設定ファイルを書き込めません。"
 

@@ -7,3 +7,12 @@ alias la='ls -a'
 if test -n "$TERM" && test "$TERM" != dumb && test -z "${NO_COLOR+x}"; then
     PS1='\[\e[32m\]\u\[\e[0m\]:\[\e[34m\]\w\[\e[0m\] \$ '
 fi
+# The language and the formats of the desktop settings, as startgui
+# exports them (docs/design/desktop.md).
+conf=/etc/desktop.conf
+if [ -r "$HOME/.config/desktop.conf" ]; then conf="$HOME/.config/desktop.conf"; fi
+lang=$(sed -n 's/^lang=//p' "$conf")
+formats=$(sed -n 's/^formats=//p' "$conf")
+if [ -n "$lang" ]; then export LANG="$lang"; fi
+if [ -n "$formats" ]; then export LC_NUMERIC="$formats" LC_TIME="$formats" LC_MONETARY="$formats"; fi
+unset conf lang formats

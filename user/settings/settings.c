@@ -14,13 +14,15 @@ struct app *app;
 
 /* ---- the configuration file ---- */
 
-#define NKEYS 14
+#define NKEYS 17
 static const char *const keys[NKEYS] = {
     "wallpaper", "wallpaper_mode", "desktop_color", "repeat_rate", "repeat_delay", "display_mode",
-    "frame_ms", "decorations", "keymap", "ui_font", "ui_font_px", "ui_scale", "pointer_speed", "pointer_accel",
+    "frame_ms", "decorations", "keymap", "ui_font", "ui_font_px", "ui_scale", "term_font_px", "pointer_speed",
+    "pointer_accel", "lang", "formats",
 };
 static char values[NKEYS][128] = {
-    "", "fill", "0x306080", "30", "500", "", "16", "client", "us", "DejaVu Sans", "14", "100", "0", "adaptive",
+    "", "fill", "0x306080", "30", "500", "", "16", "client", "us", "DejaVu Sans", "14", "100", "13", "0", "adaptive",
+    "", "",
 };
 
 static int key_index(const char *key)
@@ -124,6 +126,7 @@ static struct category categories[] = {
     { N_("Appearance"), "appearance", build_appearance, NULL },
     { N_("Display"), "display", build_display, NULL },
     { N_("Keyboard"), "keyboard", build_keyboard, NULL },
+    { N_("Region and language"), "region", build_region, NULL },
     { N_("Mouse"), "mouse", build_mouse, NULL },
     { N_("Sound"), "sound", build_sound, NULL },
     { N_("Date and time"), "time", build_datetime, NULL },
@@ -169,7 +172,7 @@ int main(int argc, char **argv)
     struct widget *split = box_new(win, 0);
     widget_set_stretch(split, 1, 1);
     sidebar = listview_new(split);
-    widget_set_hint(sidebar, 150, 0);
+    widget_set_hint(sidebar, 170, 0);
     widget_set_stretch(sidebar, 0, 1);
     for (int i = 0; i < NCATEGORIES; i++)
         listview_add(sidebar, _(categories[i].name));

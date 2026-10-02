@@ -67,6 +67,13 @@ it, `stretch` scales both dimensions independently.
 - `display_mode`: `WxH` or `WxH@S`, forwarded as the compositor's packed
   `display_mode` setting; absent means the boot mode (M32).
 
+The keys `lang` and `formats` name locales such as `fr_FR.UTF-8`
+(`locale.md`). `startgui` exports `lang` as `LANG` and `formats` as
+`LC_NUMERIC`, `LC_TIME` and `LC_MONETARY` before it starts the session.
+`/etc/profile` exports them in the same way for the shells of the console
+and of the terminal. An empty value exports nothing, and programs then use
+the C locale. `term_font_px` is the font size of the terminal.
+
 ## MIME types
 
 `libgui/src/mime.c` (`gui/mime.h`) reads two tables on first use:
@@ -101,8 +108,8 @@ written to `/etc/desktop.conf` at once (there is no Apply button); the
 desktop client reads the file within a second and pushes the values X12
 owns through the settings protocol. `settings set KEY VALUE` changes one
 entry without a window, `settings PAGE` opens on a page (`appearance`,
-`display`, `keyboard`, `sound`, `time`, `filetypes`, `launcher`,
-`system`).
+`display`, `keyboard`, `region`, `mouse`, `sound`, `time`, `filetypes`,
+`launcher`, `system`).
 
 - Appearance: wallpaper (the files of `/usr/share/wallpapers` or none),
   placement, desktop colour sliders with a preview, the interface font
@@ -133,6 +140,19 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
   and swap in use, and buttons that start the system monitor, the kernel
   log and the X12 tool.
 
+The Region and language page (`region.c`, L7 of `docs/plan/locale.md`)
+lists the locales of `/usr/share/i18n/locales` by the language and
+territory names of their files, for example Français (France). The
+Language list writes `lang`, and the Formats list writes `formats`, whose
+first entry, Same as the language, writes an empty value. Both apply to
+programs started afterwards. The Time zone list shows the zones of
+`/usr/share/zoneinfo/zones.tab` and replaces `/etc/localtime` with a
+symbolic link to the selected zone file. libc reads the zone again when the
+link changes (`time.md`), and the panel clock follows at once. The page
+also shows the keyboard layout, in a combo box that the Keyboard page
+shares, and a line with the current time and a number in the selected
+formats.
+
 `x12settings` changes the running server (see `tools.md`).
 
 ## Session
@@ -141,11 +161,16 @@ The panel also carries the audio applet described in `docs/design/audio.md`:
 a speaker button left of the clock opens a popup with the master volume and
 the streams of the audio server.
 
-`startgui` starts X12, the panel, the desktop and the requested program,
-and stops them on logout. The audio server is the `audio` service of
+`startgui` exports the language and the formats of the configuration
+file, starts X12, the panel, the desktop and the requested program, and
+stops them on logout. The audio server is the `audio` service of
 init (`init.md`), started at boot when `/dev/pcm0` exists and living
 across sessions. A desktop or panel that ends abnormally is
 restarted up to three times. The `gui_desktop` boot test covers the
 wallpaper, opening a launcher by double click, both context menus, a
-configuration change through `settings set` and the settings window.
+configuration change through `settings set` and the settings window. The
+`gui_region` boot test selects French and Asia/Tokyo on the Region and
+language page with the keyboard, then checks `lang` in the configuration
+file, the zone abbreviation that `date` prints and the French title of
+sysmon started through `/etc/profile`.
 The host test `libgui/tests/test_mime.c` covers the tables.

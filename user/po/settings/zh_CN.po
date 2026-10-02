@@ -126,79 +126,119 @@ msgstr "由应用程序绘制（客户端）"
 msgid "Drawn by X12 (server side)"
 msgstr "由 X12 绘制（服务器端）"
 
-#: user/settings/look.c:271
+#: user/settings/look.c:272
 msgid "Repeat rate: %d per second"
 msgstr "重复速率：每秒 %d 次"
 
-#: user/settings/look.c:273
+#: user/settings/look.c:274
 msgid "Repeat delay: %d ms"
 msgstr "重复延迟：%d 毫秒"
 
-#: user/settings/look.c:302
+#: user/settings/look.c:350
 msgid "Layout"
 msgstr "布局"
 
-#: user/settings/look.c:346
+#: user/settings/look.c:373
 msgid "Pointer speed: %d"
 msgstr "指针速度：%d"
 
-#: user/settings/look.c:369
+#: user/settings/look.c:396
 msgid "Acceleration"
 msgstr "加速"
 
-#: user/settings/look.c:371
+#: user/settings/look.c:398
 msgid "Flat"
 msgstr "平稳"
 
-#: user/settings/look.c:372
+#: user/settings/look.c:399
 msgid "Adaptive"
 msgstr "自适应"
 
-#: user/settings/settings.c:124
-msgid "Appearance"
-msgstr "外观"
+#: user/settings/region.c:135
+msgid "Example: %s, %s"
+msgstr "示例：%s，%s"
 
-#: user/settings/settings.c:125
-msgid "Display"
-msgstr "显示"
-
-#: user/settings/settings.c:126
-msgid "Keyboard"
-msgstr "键盘"
-
-#: user/settings/settings.c:127
-msgid "Mouse"
-msgstr "鼠标"
-
-#: user/settings/settings.c:128
-msgid "Sound"
-msgstr "声音"
-
-#: user/settings/settings.c:129 user/settings/system.c:179
-msgid "Date and time"
-msgstr "日期和时间"
-
-#: user/settings/settings.c:130
-msgid "File types"
-msgstr "文件类型"
-
-#: user/settings/settings.c:131
-msgid "Launcher"
-msgstr "启动器"
-
-#: user/settings/settings.c:132
-msgid "System"
-msgstr "系统"
-
-#: user/settings/settings.c:90 user/settings/system.c:178
+#: user/settings/region.c:171 user/settings/settings.c:92 user/settings/system.c:178
 msgid "OK"
 msgstr "确定"
 
-#: user/settings/settings.c:91 user/settings/settings.c:166
+#: user/settings/region.c:172 user/settings/settings.c:129
+msgid "Region and language"
+msgstr "区域和语言"
+
+#: user/settings/region.c:172
+msgid "The time zone cannot be set."
+msgstr "无法设置时区。"
+
+#: user/settings/region.c:197
+msgid "Language"
+msgstr "语言"
+
+#: user/settings/region.c:210
+msgid "Formats"
+msgstr "格式"
+
+#: user/settings/region.c:212
+msgid "Same as the language"
+msgstr "与语言相同"
+
+#: user/settings/region.c:222
+msgid "Time zone"
+msgstr "时区"
+
+#: user/settings/region.c:230
+msgid "Keyboard layout"
+msgstr "键盘布局"
+
+#: user/settings/region.c:235
+msgid "A new language applies to the programs started afterwards."
+msgstr "新的语言将应用于之后启动的程序。"
+
+#: user/settings/region.c:236
+msgid "Super+Space switches to the Japanese and Chinese input methods."
+msgstr "Super+空格键切换到日语和中文输入法。"
+
+#: user/settings/settings.c:126
+msgid "Appearance"
+msgstr "外观"
+
+#: user/settings/settings.c:127
+msgid "Display"
+msgstr "显示"
+
+#: user/settings/settings.c:128
+msgid "Keyboard"
+msgstr "键盘"
+
+#: user/settings/settings.c:130
+msgid "Mouse"
+msgstr "鼠标"
+
+#: user/settings/settings.c:131
+msgid "Sound"
+msgstr "声音"
+
+#: user/settings/settings.c:132 user/settings/system.c:179
+msgid "Date and time"
+msgstr "日期和时间"
+
+#: user/settings/settings.c:133
+msgid "File types"
+msgstr "文件类型"
+
+#: user/settings/settings.c:134
+msgid "Launcher"
+msgstr "启动器"
+
+#: user/settings/settings.c:135
+msgid "System"
+msgstr "系统"
+
+#: user/settings/settings.c:93 user/settings/settings.c:169
 msgid "Settings"
 msgstr "设置"
 
-#: user/settings/settings.c:91
+#: user/settings/settings.c:93
 msgid "The settings file cannot be written."
 msgstr "无法写入设置文件。"
 

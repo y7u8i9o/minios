@@ -1,0 +1,7 @@
+settings: set lang fr_FR.UTF-8
+settings: time zone Asia/Tokyo
+lang=fr_FR.UTF-8
+zone=JST
+x12: toplevel [0-9]+ 'Moniteur système' mapped
+gui_region: ok
+TEST PASS

@@ -195,7 +195,7 @@ version 2. The cases `ime`, `comp_seat`, `comp_core`, `comp_panel`,
 `comp_shell`, `comp_data`, `gui_editor`, `editor` and `keymap` pass, and
 `make check` passes.
 
-### L7. Region and language settings
+### L7. Region and language settings (completed 2026-10-03)
 
 - A Region and language page in Settings with the language, the formats, the
   time zone and the keyboard layouts.
@@ -204,3 +204,8 @@ version 2. The cases `ime`, `comp_seat`, `comp_core`, `comp_panel`,
   export `LANG` and the format categories.
 - The boot test is `gui_region`, and `docs/design/desktop.md` describes the
   page.
+
+The page also shows the current time and a number in the selected
+formats. `settings` writes `term_font_px` again, which the configuration
+table had lost. The cases `gui_region`, `gui_settings`, `gui_locale`,
+`timezone`, `lineedit` and `gui_term` pass.
