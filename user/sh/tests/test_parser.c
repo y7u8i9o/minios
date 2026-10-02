@@ -17,6 +17,14 @@ static void tree_tests(void)
     assert(!n && status == 1);
     n = parse("if true; then\n", &status);
     assert(!n && status == 1);
+    /* A line that ends in a backslash continues on the next one. */
+    n = parse("echo a \\\n", &status);
+    assert(!n && status == 1);
+    n = parse("echo a \\\nb\n", &status);
+    assert(!status && n && n->kind == N_SIMPLE && !strcmp(n->words->next->next->text, "b"));
+    node_free(n);
+    n = parse("echo 'a \\\n", &status);
+    assert(!n && status == 1);
     n = parse("echo | ;", &status);
     assert(!n && status == 2);
     n = parse("read x <<'EOF'\nhello $x\nEOF\n", &status);

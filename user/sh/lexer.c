@@ -58,6 +58,8 @@ void lex_next(struct lexer *lx)
             p++;
         if (s[p] == '\\' && s[p + 1] == '\n') {
             p += 2;
+            if (!s[p])
+                lx->incomplete = 1;     /* the line continues on the next one */
             continue;
         }
         if (s[p] == '#')
@@ -139,6 +141,8 @@ void lex_next(struct lexer *lx)
                         p++;
                         break;
                     }
+                    if (s[p + 1] == '\n' && !s[p + 2])
+                        lx->incomplete = 1;     /* a word continued on the next line */
                     p += 2;
                     continue;
                 }
