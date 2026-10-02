@@ -44,7 +44,7 @@ REPO     := $(TOP)/build/repo/$(ARCH)
 
 export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN MSGFMT PKG_KEY_FILE PKG_PUB REPO
 
-.PHONY: all kernel libc libfont libwire libaudio libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo check-pkg $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libcodec libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo check-pkg $(DISK)
 
 all: kernel libc user
 
@@ -116,7 +116,10 @@ libwire: libc
 libaudio: libc libwire
 	$(MAKE) -C libaudio
 
-libgui: libc libfont libwire
+libcodec: libc
+	$(MAKE) -C libcodec
+
+libgui: libc libcodec libfont libwire
 	$(MAKE) -C libgui
 
 libedit: libc
@@ -126,7 +129,7 @@ packages: user
 
 .PHONY: packages
 
-user: libc libfont libwire libaudio libgui libedit $(PKG_PUB) $(MSGFMT)
+user: libc libfont libwire libaudio libcodec libgui libedit $(PKG_PUB) $(MSGFMT)
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to
@@ -248,9 +251,10 @@ check-imed:
 check-headers:
 	@mkdir -p $(BUILD)/headers
 	@status=0; for h in $$(cd libc/include && find . -name '*.h' | sed 's|^\./||') \
-	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h; do \
+	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h \
+	    codec/codec.h; do \
 	    printf '#include <%s>\nint check_header_%s;\n' "$$h" "$$(echo $$h | tr -c 'A-Za-z0-9_\n' '_')" > $(BUILD)/headers/t.c; \
-	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -fsyntax-only $(BUILD)/headers/t.c \
+	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -fsyntax-only $(BUILD)/headers/t.c \
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
 # Host unit test of the Lua modules: the interpreter, user/lua and the
@@ -259,12 +263,13 @@ check-headers:
 LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
                 $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
                 $(filter-out libgui/src/client.c,$(wildcard libgui/src/*.c libgui/src/widgets/*.c)) \
-                libgui/tests/fake_client.c libgui/tests/host_compat.c $(wildcard libfont/src/*.c)
+                libgui/tests/fake_client.c libgui/tests/host_compat.c $(wildcard libfont/src/*.c) \
+                $(wildcard libcodec/src/*.c libcodec/modules/*/*.c)
 check-lua:
 	@mkdir -p $(BUILD)/lua/host
 	$(MAKE) -C libgui $(BUILD)/libgui/font.c
-	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
-	    -include libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilibgui/include -Ilibfont/include \
+	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DCODEC_BUILTIN -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
+	    -include libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilibgui/include -Ilibcodec/include -Ilibfont/include \
 	    -Ilibgui/tests -Ilibaudio/include -idirafter kernel/include \
     -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
 	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp

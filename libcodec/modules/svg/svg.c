@@ -1,11 +1,13 @@
-/* A subset of SVG for icons: the viewBox of the <svg> element and its
- * <path> elements (d, fill, fill-rule, fill-opacity, opacity) are
- * rendered into an RGBA image of px by px pixels with antialiasing.
+/* svg.so: a subset of SVG for icons. The viewBox of the <svg> element
+ * and its <path> elements (d, fill, fill-rule, fill-opacity, opacity) are
+ * rendered into an RGBA image of px by px pixels with antialiasing, px
+ * being the width of the request, else its height, else 256; paths
+ * without a fill take the colour of the request.
  * Path data supports M L H V C S Q T A Z and their relative forms;
  * curves are flattened, edges are scan converted with four sub rows per
  * pixel and exact horizontal coverage (the method of libfont's
  * rasterizer). Font Awesome's icons use nothing beyond this subset. */
-#include <gui/image.h>
+#include <codec/codec.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -466,26 +468,31 @@ static int parse_color(const char *s, uint32_t fallback, uint32_t *out)
     return 1;
 }
 
-struct image *image_render_svg(const char *text, size_t len, int px, uint32_t color)
+#define SVG_DEFAULT_PX 256
+
+static int svg_decode(const uint8_t *text, size_t len, const struct codec_image_request *req,
+                      struct codec_picture *out)
 {
+    int px = req->width > 0 ? req->width : req->height > 0 ? req->height : SVG_DEFAULT_PX;
+    uint32_t color = req->color;
     if (px < 1 || px > 1024)
-        return NULL;
+        return -EINVAL;
     char *doc = malloc(len + 1);
     if (!doc)
-        return NULL;
+        return -ENOMEM;
     memcpy(doc, text, len);
     doc[len] = '\0';
     struct canvas cv = { px, 1, 1, 0, 0, calloc((size_t)px * px, 4) };
     if (!cv.pixels) {
         free(doc);
-        return NULL;
+        return -ENOMEM;
     }
     int have_box = 0, err = 0;
     char *d = malloc(len + 1), val[64];
     if (!d) {
         free(doc);
         free(cv.pixels);
-        return NULL;
+        return -ENOMEM;
     }
     for (const char *p = doc; (p = strchr(p, '<')) != NULL && !err;) {
         if (strncmp(p, "<!--", 4) == 0) {
@@ -550,45 +557,47 @@ struct image *image_render_svg(const char *text, size_t len, int px, uint32_t co
     free(doc);
     if (!have_box || err) {
         free(cv.pixels);
-        errno = err ? -err : EINVAL;
-        return NULL;
+        return err ? err : -EINVAL;
     }
-    struct image *img = malloc(sizeof *img);
-    if (!img) {
-        free(cv.pixels);
-        return NULL;
-    }
-    img->w = img->h = px;
-    img->pixels = cv.pixels;
-    img->scale = 1;
-    return img;
+    out->w = out->h = px;
+    out->pixels = cv.pixels;
+    return 0;
 }
 
-struct image *image_load_svg(const char *path, int px, uint32_t color)
+/* An <svg element in the first bytes, after an optional XML declaration,
+ * comments and white space. */
+static int svg_probe(const uint8_t *data, size_t len)
 {
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return NULL;
-    char *text = NULL;
-    size_t len = 0, cap = 0;
-    for (;;) {
-        if (len + 4096 > cap) {
-            cap = cap ? cap * 2 : 8192;
-            char *n = realloc(text, cap);
-            if (!n) {
-                free(text);
-                fclose(f);
-                return NULL;
-            }
-            text = n;
+    size_t i = 0;
+    if (len >= 3 && data[0] == 0xef && data[1] == 0xbb && data[2] == 0xbf)
+        i = 3;
+    while (i < len) {
+        while (i < len && (data[i] == ' ' || data[i] == '\t' || data[i] == '\r' || data[i] == '\n'))
+            i++;
+        if (i + 4 <= len && memcmp(data + i, "<svg", 4) == 0)
+            return 90;
+        if (i + 2 <= len && data[i] == '<' && (data[i + 1] == '?' || data[i + 1] == '!')) {
+            while (i < len && data[i] != '>')
+                i++;
+            i++;
+            continue;
         }
-        size_t k = fread(text + len, 1, cap - len, f);
-        if (k == 0)
-            break;
-        len += k;
+        return 0;
     }
-    fclose(f);
-    struct image *img = text ? image_render_svg(text, len, px, color) : NULL;
-    free(text);
-    return img;
+    return 0;
 }
+
+static const struct codec svg_codecs[] = {
+    {
+        .name = "svg",
+        .description = "Scalable Vector Graphics (icon subset)",
+        .kind = CODEC_IMAGE,
+        .caps = CODEC_DECODE,
+        .mime_types = "image/svg+xml",
+        .extensions = "svg",
+        .probe = svg_probe,
+        .image_decode = svg_decode,
+    },
+};
+
+CODEC_MODULE(svg) = { CODEC_MODULE_ABI, "svg", 1, svg_codecs };

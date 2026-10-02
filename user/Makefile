@@ -8,9 +8,9 @@ CRT0   := $(BUILD)/libc/crt0.o
 # The shared libraries (docs/design/dynlink.md). Programs name them with
 # -l and --as-needed keeps only the ones a program references; libedit is
 # static, since a single program uses it.
-SHARED := libc libfont libwire libaudio libgui liblua
+SHARED := libc libcodec libfont libwire libaudio libgui liblua
 SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
-DYNLIBS := -lgui -laudio -lwire -lfont $(LIBEDIT) -lc
+DYNLIBS := -lgui -lcodec -laudio -lwire -lfont $(LIBEDIT) -lc
 # Every program is installed without its debugging sections; the symbol
 # table stays for the profiler.
 INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
@@ -24,6 +24,8 @@ APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
 BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc)
 LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
+# The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
+CODECS := $(addprefix $(ROOT)/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
 
 # Lua is compiled unmodified from third_party/lua/src; platform choices
 # are made here instead of in luaconf.h (see docs/design/lua.md).
@@ -39,7 +41,7 @@ LUA_OBJS := $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(wildcard lua/*.c))
 LUA_CPP  := -DLUA_USE_POSIX -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua"' \
             -DLUA_CPATH_DEFAULT='""'
 
-UCPP   := -I../libc/include -I../kernel/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
+UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
 UCPP   += -I../libedit/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
@@ -48,7 +50,7 @@ FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf 
           $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
+all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -360,9 +362,9 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 # library, so that a program compiled on minios can use the toolkit, the
 # protocol library, the audio client, the line editor and the Lua core
 # with the same headers and the same objects as the cross build.
-STATIC_LIBS := libc libgui libfont libwire libaudio libedit
+STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/lib/crt1.o $(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o $(ROOT)/lib/libm.a
-	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
+	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
 	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include $(ROOT)/usr/share/tcc/tests2
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
@@ -371,6 +373,7 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@cp -p ../libfont/include/font/*.h $(ROOT)/usr/include/font/
 	@cp -p ../libwire/include/wire/*.h $(ROOT)/usr/include/wire/
 	@cp -p ../libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
+	@cp -p ../libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
 	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/
 	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/
 	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/lib/$$l.a; done

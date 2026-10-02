@@ -131,6 +131,10 @@ content overflows).
 
 ### Images (`src/inflate.c`, `src/png.c`, `gui/image.h`)
 
+Since C1 of `docs/plan/codecs.md` the inflate code and the PNG codec are
+in libcodec (`libcodec/src/inflate.c`, the module `png.so`), and the
+functions below call it (`codecs.md`).
+
 `zlib_inflate` decodes RFC 1950 streams: stored, fixed and dynamic
 Huffman blocks through canonical code tables, with the Adler-32 trailer
 checked. `image_decode` parses PNG chunks (IHDR, PLTE, tRNS, IDAT,

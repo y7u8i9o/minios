@@ -1,7 +1,7 @@
 /* PNG encoding: RGB or RGBA at 8 bits, one adaptive filter per row, and a
  * zlib stream of a single deflate block with the fixed Huffman codes
  * (RFC 1951 3.2.6) over LZ77 matches found with hash chains. */
-#include <gui/image.h>
+#include "png.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -264,7 +264,7 @@ static void put_chunk(struct out *o, const char *type, const uint8_t *body, size
     put32(o, crc_update(0xffffffffu, o->data + start, n + 4) ^ 0xffffffffu);
 }
 
-long image_encode_png(const struct image *img, uint8_t **result)
+long png_encode(const struct codec_picture *img, uint8_t **result)
 {
     if (!img || img->w <= 0 || img->h <= 0)
         return -EINVAL;
@@ -323,9 +323,8 @@ long image_encode_png(const struct image *img, uint8_t **result)
     }
 
     struct out o = { 0 };
-    static const uint8_t sig[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
     for (int i = 0; i < 8; i++)
-        put_byte(&o, sig[i]);
+        put_byte(&o, png_signature[i]);
     uint8_t ihdr[13] = {
         (uint8_t)(img->w >> 24), (uint8_t)(img->w >> 16), (uint8_t)(img->w >> 8), (uint8_t)img->w,
         (uint8_t)(img->h >> 24), (uint8_t)(img->h >> 16), (uint8_t)(img->h >> 8), (uint8_t)img->h,
@@ -341,24 +340,4 @@ long image_encode_png(const struct image *img, uint8_t **result)
     }
     *result = o.data;
     return (long)o.len;
-}
-
-int image_save_png(const struct image *img, const char *path)
-{
-    uint8_t *data;
-    long n = image_encode_png(img, &data);
-    if (n < 0)
-        return (int)n;
-    FILE *f = fopen(path, "w");
-    if (!f) {
-        int e = errno;
-        free(data);
-        return -e;
-    }
-    size_t done = fwrite(data, 1, (size_t)n, f);
-    int e = done == (size_t)n ? 0 : errno ? errno : EIO;
-    free(data);
-    if (fclose(f) != 0 && !e)
-        e = errno ? errno : EIO;
-    return -e;
 }

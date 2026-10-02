@@ -1,7 +1,7 @@
 /* PNG decoding: chunks, zlib inflate, the five filters, Adam7
  * interlacing, and every colour type at every bit depth the format
  * allows (1, 2, 4, 8 and 16 bits); 16 bit samples are rounded to 8. */
-#include <gui/image.h>
+#include "png.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,13 +92,10 @@ static int depth_allowed(int ctype, int depth)
     }
 }
 
-struct image *image_decode(const uint8_t *data, size_t len)
+int png_decode(const uint8_t *data, size_t len, const struct codec_image_request *req, struct codec_picture *img)
 {
-    static const uint8_t sig[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
-    if (len < 33 || memcmp(data, sig, 8) != 0) {
-        errno = EINVAL;
-        return NULL;
-    }
+    if (len < 33 || memcmp(data, png_signature, 8) != 0)
+        return -EINVAL;
     int w = 0, h = 0, depth = 0, ctype = 0, interlace = 0;
     uint8_t palette[256][4];
     int npal = 0;
@@ -111,7 +108,6 @@ struct image *image_decode(const uint8_t *data, size_t len)
     uint8_t *idat = NULL;
     size_t idat_len = 0;
     size_t pos = 8;
-    struct image *img = NULL;
     while (pos + 12 <= len) {
         uint32_t clen = rd32(data + pos);
         const uint8_t *type = data + pos + 4, *body = data + pos + 8;
@@ -172,22 +168,19 @@ struct image *image_decode(const uint8_t *data, size_t len)
     uint8_t *raw = malloc(rawlen);
     if (!raw)
         goto nomem;
-    long got = zlib_inflate(raw, rawlen, idat, idat_len);
+    long got = codec_inflate(raw, rawlen, idat, idat_len);
     free(idat);
     idat = NULL;
     if (got != (long)rawlen) {
         free(raw);
         goto bad;
     }
-    img = malloc(sizeof *img);
-    if (!img || !(img->pixels = malloc((size_t)w * h * 4))) {
-        free(img);
+    if (!(img->pixels = malloc((size_t)w * h * 4))) {
         free(raw);
         goto nomem;
     }
     img->w = w;
     img->h = h;
-    img->scale = 1;
     uint8_t *pass = raw;
     for (int p = 0; p < npasses; p++) {
         int x0 = passes[p][0], y0 = passes[p][1], dx = passes[p][2], dy = passes[p][3];
@@ -197,7 +190,7 @@ struct image *image_decode(const uint8_t *data, size_t len)
         size_t stride = row_bytes(pw, bits);
         if (unfilter(pass, stride, ph, bpp) < 0) {
             free(raw);
-            image_free(img);
+            codec_picture_free(img);
             goto bad;
         }
         for (int j = 0; j < ph; j++) {
@@ -244,45 +237,11 @@ struct image *image_decode(const uint8_t *data, size_t len)
         pass += (stride + 1) * (size_t)ph;
     }
     free(raw);
-    return img;
+    return 0;
 bad:
     free(idat);
-    errno = EINVAL;
-    return NULL;
+    return -EINVAL;
 nomem:
     free(idat);
-    errno = ENOMEM;
-    return NULL;
-}
-
-struct image *image_load(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return NULL;
-    size_t cap = 4096, n = 0;
-    uint8_t *data = malloc(cap);
-    while (data) {
-        n += fread(data + n, 1, cap - n, f);
-        if (n < cap)
-            break;
-        cap *= 2;
-        data = realloc(data, cap);
-    }
-    fclose(f);
-    if (!data) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    struct image *img = image_decode(data, n);
-    free(data);
-    return img;
-}
-
-void image_free(struct image *img)
-{
-    if (img) {
-        free(img->pixels);
-        free(img);
-    }
+    return -ENOMEM;
 }

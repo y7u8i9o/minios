@@ -86,7 +86,7 @@ cat > g.c <<'C'
 int main(void) { struct app *a = app_create(); return a == NULL; }
 C
 tcc -o g g.c -lgui -lwire -lfont -laudio -llua; check tcc-link-libraries "$?" "0"
-tcc -static -o gs g.c -lgui -lwire -lfont -laudio -ledit -lc; check tcc-static-link-libraries "$?" "0"
+tcc -static -o gs g.c -lgui -lcodec -lwire -lfont -laudio -ledit -lc; check tcc-static-link-libraries "$?" "0"
 # Every installed header compiles on its own with tcc.
 bad=""
 for h in $(cd /usr/include && find . -name '*.h' | sed 's|^\./||' | sort); do

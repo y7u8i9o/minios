@@ -11,9 +11,12 @@ an entry, and `app-default` for programs without an icon. Since 2026-09-05 each 
 exist as an SVG file, which is preferred, and as a PNG file, which is
 the fallback; both paths stay in the library.
 
-## SVG icons (`libgui/src/svg.c`)
+## SVG icons (the `svg` codec)
 
-`image_render_svg(text, len, px, color)` renders the subset of SVG that
+The renderer is the module `svg.so` of libcodec
+(`libcodec/modules/svg/svg.c`, `codecs.md`); libgui's
+`image_render_svg(text, len, px, color)` asks it for a px by px image. It
+renders the subset of SVG that
 icon files use: the `viewBox` (or `width` and `height`) of the `<svg>`
 element, and every `<path>` with its `d` data, `fill` (`#rgb`,
 `#rrggbb`, `none`, `black`, `white`; other values take `color`),

@@ -10,17 +10,20 @@ ABI   := 1
 ABIFILE := $(BUILD)/lib/libgui.abi
 SRCS  := $(wildcard src/*.c src/widgets/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(OUT)/font.o
-UCPP  := -Iinclude -I../libfont/include -I../libwire/include -I../libwire/generated -I../libc/include -I../kernel/include
+UCPP  := -Iinclude -I../libcodec/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libc/include -I../kernel/include
 
 .PHONY: all clean check
 all: $(LIB) $(SO) $(ABIFILE)
 
-# Host unit tests: the library and libfont compiled with the system
-# compiler against a fake client (tests/fake_client.c).
-HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c)
+# Host unit tests: the library, libcodec with its modules compiled in
+# (CODEC_BUILTIN) and libfont compiled with the system compiler against a
+# fake client (tests/fake_client.c).
+HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c) \
+            $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c)
 check: $(OUT)/font.c
 	@mkdir -p $(OUT)/host
-	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -include tests/host_compat.h -Iinclude -I../libfont/include -Itests \
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -include tests/host_compat.h -Iinclude \
+	    -I../libcodec/include -I../libfont/include -Itests \
 	    -idirafter ../kernel/include \
 	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c
 	$(OUT)/host/test_framework
@@ -39,7 +42,7 @@ $(OUT)/%.o: %.c
 
 $(SO): $(OBJS)
 	@mkdir -p $(dir $@)
-	$(LD) $(USOFLAGS) -soname libgui.so -o $@ $(OBJS) -L$(BUILD)/lib -lfont -lwire -lc $(LIBGCC)
+	$(LD) $(USOFLAGS) -soname libgui.so -o $@ $(OBJS) -L$(BUILD)/lib -lcodec -lfont -lwire -lc $(LIBGCC)
 
 $(LIB): $(OBJS)
 	rm -f $@

@@ -1,6 +1,7 @@
 /* Inflate (RFC 1951) with zlib framing (RFC 1950): stored, fixed and
- * dynamic Huffman blocks, decoded with canonical code tables. */
-#include <gui/image.h>
+ * dynamic Huffman blocks, decoded with canonical code tables. Shared by
+ * the modules, as zlib is on Linux. */
+#include <codec/codec.h>
 #include <string.h>
 #include <errno.h>
 
@@ -230,7 +231,7 @@ static int dynamic(struct bits *b)
     return codes(b, &lc, &dc);
 }
 
-long zlib_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len)
+long codec_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len)
 {
     if (len < 6)
         return -EINVAL;

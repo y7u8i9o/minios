@@ -7,7 +7,10 @@ bitmap editor `paint`.
 
 ## PNG decoding
 
-`image_decode` in `libgui/src/png.c` reads every colour type of the PNG
+The PNG codec is the module `png.so` of libcodec
+(`libcodec/modules/png/`, `codecs.md`); libgui's `image_decode` and
+`image_load` reach it through the registry, which picks it by the PNG
+signature. The decoder (`decode.c`) reads every colour type of the PNG
 format at every bit depth the format allows: grey at 1, 2, 4, 8 and 16
 bits, palette images at 1, 2, 4 and 8 bits, and RGB, grey with alpha and
 RGBA at 8 and 16 bits. Samples below 8 bits are scaled to 8 bits by
@@ -21,7 +24,8 @@ alpha (`0xAARRGGBB`).
 
 ## PNG encoding
 
-`image_encode_png` in `libgui/src/pngenc.c` writes 8 bit RGB when every
+The encoder (`libcodec/modules/png/encode.c`, behind libgui's
+`image_encode_png`) writes 8 bit RGB when every
 pixel is opaque and 8 bit RGBA otherwise. Each row is filtered with the
 filter whose output has the smallest sum of absolute values when the
 bytes are read as signed numbers, which is the heuristic of the PNG

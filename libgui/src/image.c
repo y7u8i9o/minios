@@ -1,8 +1,99 @@
-/* Image allocation and resampling. */
+/* Image allocation and resampling, and the image functions of libgui
+ * over the codec library (docs/design/codecs.md): decoding chooses the
+ * codec by the content of the data, the PNG and SVG functions name
+ * their codec. */
 #include <gui/image.h>
+#include <codec/codec.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* A decoded picture as a struct image of scale 1, or NULL with errno. */
+static struct image *wrap(int err, struct codec_picture *pic)
+{
+    if (err < 0) {
+        errno = -err;
+        return NULL;
+    }
+    struct image *img = malloc(sizeof *img);
+    if (!img) {
+        codec_picture_free(pic);
+        errno = ENOMEM;
+        return NULL;
+    }
+    img->w = pic->w;
+    img->h = pic->h;
+    img->pixels = pic->pixels;
+    img->scale = 1;
+    return img;
+}
+
+struct image *image_decode(const uint8_t *data, size_t len)
+{
+    struct codec_picture pic;
+    return wrap(codec_image_decode(NULL, data, len, NULL, NULL, &pic), &pic);
+}
+
+struct image *image_load(const char *path)
+{
+    struct codec_picture pic;
+    return wrap(codec_image_load(path, NULL, &pic), &pic);
+}
+
+struct image *image_render_svg(const char *text, size_t len, int px, uint32_t color)
+{
+    struct codec_picture pic;
+    struct codec_image_request req = { px, px, color };
+    const struct codec *svg = codec_find("svg");
+    if (!svg) {
+        errno = ENOTSUP;
+        return NULL;
+    }
+    return wrap(codec_image_decode(svg, (const uint8_t *)text, len, NULL, &req, &pic), &pic);
+}
+
+struct image *image_load_svg(const char *path, int px, uint32_t color)
+{
+    uint8_t *data;
+    size_t len;
+    int err = codec_read_file(path, &data, &len);
+    if (err < 0) {
+        errno = -err;
+        return NULL;
+    }
+    struct image *img = image_render_svg((const char *)data, len, px, color);
+    free(data);
+    return img;
+}
+
+long image_encode_png(const struct image *img, uint8_t **data)
+{
+    if (!img)
+        return -EINVAL;
+    struct codec_picture pic = { img->w, img->h, img->pixels };
+    return codec_image_encode(codec_find("png"), &pic, data);
+}
+
+int image_save_png(const struct image *img, const char *path)
+{
+    if (!img)
+        return -EINVAL;
+    struct codec_picture pic = { img->w, img->h, img->pixels };
+    return codec_image_save(&pic, path, "png");
+}
+
+long zlib_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len)
+{
+    return codec_inflate(dst, cap, src, len);
+}
+
+void image_free(struct image *img)
+{
+    if (img) {
+        free(img->pixels);
+        free(img);
+    }
+}
 
 struct image *image_create(int w, int h)
 {
