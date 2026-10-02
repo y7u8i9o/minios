@@ -146,7 +146,7 @@ The scope is images and audio. Compression (gzip) stays in libc.
   accepts the encoder's files (checked by the post script on the host),
   and damaged headers, frames and MD5 sums are reported as errors.
 
-### C5: Ogg and Vorbis decoding
+### C5: Ogg and Vorbis decoding (completed 2026-10-03)
 
 - The module `ogg.so` reads Ogg pages, checks their CRC-32, follows the
   logical streams of a file (multiplexed and chained), and assembles
@@ -158,12 +158,15 @@ The scope is images and audio. Compression (gzip) stays in libc.
   coupling, short and long windows, the inverse MDCT through an FFT,
   overlap and add, and the trimming of the first and last samples by the
   granule positions. Channels are returned in the order of WAV files.
-- Fixtures made by ffmpeg with libvorbis (mono, stereo with short
-  blocks, 5.1, several quality levels), with ffmpeg's decoding stored as
-  FLAC files for comparison.
+- Fixtures made with libvorbis through `tools/codecref/vorbisref.c`
+  (mono, stereo with short blocks, 5.1, three channels, low and high
+  quality, chained streams, and a stream multiplexed with Ogg FLAC), with
+  the decoding by libvorbisfile stored as FLAC files for comparison.
+  Floor 0 decoding is verified in C6 with files from the encoder of
+  minios, because libvorbis no longer writes floor 0.
 - Boot test `codec_vorbis`: every fixture decodes to the same number of
-  frames as ffmpeg's decoding and within a few steps of a 16 bit sample of
-  it, and damaged pages are reported. `make check` compares the inverse
+  frames as the decoding by libvorbis and within one step of a 16 bit
+  sample of it, and damaged pages and cut files are reported. `make check` compares the inverse
   MDCT with the direct formula.
 
 ### C6: Vorbis encoding

@@ -8,6 +8,7 @@ image/bmp bmp dib
 image/svg+xml svg
 audio/x-wav wav wave
 audio/flac flac
+audio/ogg ogg oga
 application/x-launcher app
 application/x-minios-package mpk
 application/octet-stream bin img

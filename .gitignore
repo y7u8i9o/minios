@@ -6,6 +6,7 @@ qemu.conf
 user/share/sounds/*
 !user/share/sounds/chime.wav
 !user/share/sounds/chime.flac
+!user/share/sounds/chime.ogg
 /*.wav
 BUILDNUM
 /data.img

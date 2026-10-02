@@ -104,8 +104,12 @@ static int info(const char *path)
             const struct codec_audio_format *f = codec_audio_format(a);
             long frames = codec_audio_frames(a);
             long ms = frames >= 0 && f->rate ? (long)((long long)frames * 1000 / f->rate) : -1;
-            printf("%s: %s audio, %d Hz, %d channel%s, %d bit, %ld frames, %ld.%03ld s\n", path, c->name, f->rate,
-                   f->channels, f->channels == 1 ? "" : "s", f->bits, frames, ms / 1000, ms % 1000);
+            /* A lossy format reports a sample size of 0 and prints none. */
+            char size[16] = "";
+            if (f->bits)
+                snprintf(size, sizeof size, ", %d bit", f->bits);
+            printf("%s: %s audio, %d Hz, %d channel%s%s, %ld frames, %ld.%03ld s\n", path, c->name, f->rate,
+                   f->channels, f->channels == 1 ? "" : "s", size, frames, ms / 1000, ms % 1000);
             codec_audio_close(a);
         }
     }

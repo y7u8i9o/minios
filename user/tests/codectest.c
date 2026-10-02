@@ -2,13 +2,14 @@
  * (docs/design/codecs.md). "codectest image" checks the registry, probing
  * and lookups, image round trips through the modules and through libgui,
  * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
- * and the WAV module, and "codectest flac" the FLAC module with the
- * fixtures of tools/gen_codec_fixtures.py. Any other argument runs every
- * section. "codectest count" prints the number of codecs and is used by
+ * and the WAV module, "codectest flac" the FLAC module and "codectest
+ * vorbis" the Vorbis module, both with the fixtures of
+ * tools/gen_codec_fixtures.py. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
  * the child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -465,6 +466,91 @@ static void test_flac(void)
     }
 }
 
+/* ---- Vorbis ---- */
+
+/* Each fixture decoded by minios and by libvorbis on the host, whose
+ * 16 bit samples are stored as FLAC. The decoded samples rounded to 16
+ * bits may differ from the reference by one step where the two float
+ * computations round differently. */
+static void test_vorbis(void)
+{
+    const struct codec *vorbis = codec_find("vorbis");
+    CHECK(vorbis && vorbis->kind == CODEC_AUDIO && (vorbis->caps & CODEC_DECODE), "vorbis codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/ogg", CODEC_DECODE) == vorbis, "vorbis by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.OGG", CODEC_DECODE) == vorbis, "vorbis by extension");
+    if (!vorbis)
+        return;
+    static const char *const names[] = { "chime", "stereo", "51", "3ch", "low", "high", "chained", "mux" };
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+        char ogg[96], ref[96];
+        if (i == 0)
+            snprintf(ogg, sizeof ogg, "/usr/share/sounds/chime.ogg");
+        else
+            snprintf(ogg, sizeof ogg, "/etc/tests/codec-vorbis-%s.ogg", names[i]);
+        snprintf(ref, sizeof ref, "/etc/tests/codec-vorbis-%s.ref.flac", names[i]);
+        struct codec_audio *a, *b;
+        int ea = codec_audio_open_file(ogg, &a), eb = codec_audio_open_file(ref, &b);
+        CHECK(ea == 0 && eb == 0, "open %s %d, %s %d", ogg, ea, ref, eb);
+        if (ea || eb) {
+            if (!ea)
+                codec_audio_close(a);
+            if (!eb)
+                codec_audio_close(b);
+            continue;
+        }
+        CHECK(codec_audio_codec(a) == vorbis, "%s is identified as Vorbis", ogg);
+        const struct codec_audio_format *fa = codec_audio_format(a), *fb = codec_audio_format(b);
+        long total = codec_audio_frames(a);
+        int32_t *sa, *sb;
+        long na = decode_all(a, &sa, &ea), nb = decode_all(b, &sb, &eb);
+        long worst = 0;
+        double sum = 0;
+        long count = 0;
+        if (fa->channels == fb->channels && na == nb)
+            for (long k = 0; k < na * fa->channels; k++) {
+                long d = labs((long)(((int64_t)sa[k] + 0x8000) >> 16) - (long)(sb[k] >> 16));
+                if (d > worst)
+                    worst = d;
+                sum += (double)d * d;
+                count++;
+            }
+        double rms = count ? sqrt(sum / count) : 99;
+        CHECK(ea == 0 && eb == 0 && na == nb && total == na && fa->rate == fb->rate && fa->channels == fb->channels,
+              "%s: %ld frames (%ld announced), reference %ld, error %d", ogg, na, total, nb, ea);
+        CHECK(worst <= 1 && rms < 0.5, "%s differs from libvorbis by up to %ld, rms %.3f", ogg, worst, rms);
+        printf("codectest: vorbis %s %d Hz %d channels %ld frames, largest difference %ld, rms %d.%03d\n", names[i],
+               fa->rate, fa->channels, na, worst, (int)rms, (int)(rms * 1000) % 1000);
+        free(sa);
+        free(sb);
+        codec_audio_close(a);
+        codec_audio_close(b);
+    }
+
+    /* A changed byte in a page fails its CRC, and a cut file ends early. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-vorbis-stereo.ogg", &d, &len) == 0) {
+        struct codec_audio *a;
+        int32_t *s;
+        int err;
+        d[len / 2] ^= 0x40;
+        if (codec_audio_open(NULL, d, len, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 66150, "a damaged page: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        d[len / 2] ^= 0x40;
+        if (codec_audio_open(NULL, d, len - 1000, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 66150, "a cut file: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        free(d);
+    }
+}
+
 static void list_registry(void)
 {
     int modules = codec_module_count();
@@ -478,7 +564,7 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    static const char *const sections[] = { "image", "audio", "flac" };
+    static const char *const sections[] = { "image", "audio", "flac", "vorbis" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -494,6 +580,8 @@ int main(int argc, char **argv)
         test_audio();
     if (WANTS("flac"))
         test_flac();
+    if (WANTS("vorbis"))
+        test_vorbis();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

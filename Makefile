@@ -230,6 +230,7 @@ test-kvm:
 check: check-headers check-pkg
 	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
+	$(MAKE) -C libcodec check
 	$(MAKE) -C libgui check
 	$(MAKE) check-lua
 	$(MAKE) check-imed

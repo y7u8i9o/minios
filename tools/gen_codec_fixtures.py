@@ -5,10 +5,16 @@
 
 The script synthesises deterministic signals, encodes them with the
 reference tools of the host and writes the results to user/etc/tests,
-from where the build installs them in /etc/tests. It needs flac and
-ffmpeg. Every FLAC fixture is checked with `flac -t`, whose MD5 test
-verifies the file against the samples it encodes, and the boot test
-codec_flac verifies the decoder of minios against the same sums.
+from where the build installs them in /etc/tests. It needs flac, ffmpeg,
+a C compiler, pkg-config and libvorbis. Every FLAC fixture is checked
+with `flac -t`, whose MD5 test verifies the file against the samples it
+encodes, and the boot test codec_flac verifies the decoder of minios
+against the same sums.
+
+The Vorbis fixtures are encoded by libvorbis through tools/codecref/
+vorbisref.c, and the same program decodes them with libvorbisfile into
+16 bit samples, stored as FLAC files named *.ref.flac. The boot test
+codec_vorbis compares the decoder of minios with those samples.
 
 The FLAC fixtures cover the paths that the encoder of minios does not
 write: LPC up to order 32 from the reference encoder, every sample rate
@@ -324,11 +330,116 @@ def flac_fixtures(tmp):
     return made
 
 
+# ---- Ogg ----
+
+def ogg_pages(path):
+    """The pages of an Ogg file as (serial, flags, bytes)."""
+    data = open(path, "rb").read()
+    pages = []
+    at = 0
+    while at < len(data):
+        if data[at:at + 4] != b"OggS":
+            sys.exit("gen_codec_fixtures: %s is not a sequence of Ogg pages" % path)
+        segments = data[at + 26]
+        body = sum(data[at + 27:at + 27 + segments])
+        size = 27 + segments + body
+        pages.append((int.from_bytes(data[at + 14:at + 18], "little"), data[at + 5], data[at:at + size]))
+        at += size
+    return pages
+
+
+def multiplex(paths, out):
+    """Interleave the pages of several single stream files into one file:
+    the first pages of all streams, then the other pages in turn."""
+    streams = [ogg_pages(p) for p in paths]
+    result = bytearray()
+    for st in streams:
+        result += st[0][2]
+    rest = [st[1:] for st in streams]
+    while any(rest):
+        for r in rest:
+            if r:
+                result += r.pop(0)[2]
+    open(out, "wb").write(result)
+
+
+def reference_tool(tmp, name, packages):
+    src = os.path.join(TOP, "tools", "codecref", name + ".c")
+    exe = os.path.join(tmp, name)
+    flags = subprocess.run(["pkg-config", "--cflags", "--libs"] + packages, check=True, capture_output=True,
+                           text=True).stdout.split()
+    subprocess.run([os.environ.get("CC", "cc"), "-O2", "-o", exe, src] + flags + ["-lm"], check=True)
+    return exe
+
+
+def raw_to_flac(raw, out, channels, rate):
+    run("flac", "-f", "-s", "--no-padding", "-8", "--force-raw-format", "--endian=little", "--sign=signed",
+        "--channels=%d" % channels, "--bps=16", "--sample-rate=%d" % rate, "--channel-map=none", "-o", out, raw)
+
+
+def vorbis_fixtures(tmp):
+    tool = reference_tool(tmp, "vorbisref", ["vorbisenc", "vorbisfile", "vorbis", "ogg"])
+    made = []
+
+    def encode(name, wav, quality, serial, out_dir=OUT):
+        dst = os.path.join(out_dir, name)
+        run(tool, "encode", wav, dst, str(quality), str(serial))
+        return dst
+
+    def reference(ogg, channels, rate, name=None):
+        raw = os.path.join(tmp, os.path.basename(ogg) + ".raw")
+        run(tool, "decode", ogg, raw)
+        dst = os.path.join(OUT, (name or os.path.basename(ogg)[:-4]) + ".ref.flac")
+        raw_to_flac(raw, dst, channels, rate)
+        made.append(dst)
+
+    def source(name, frames, channels, rate, seed):
+        path = os.path.join(tmp, name + ".wav")
+        write_wav(path, signal(frames, channels, 16, rate, seed), channels, 16, rate)
+        return path
+
+    chime_wav = os.path.join(TOP, "user", "share", "sounds", "chime.wav")
+    chime = encode("chime.ogg", chime_wav, 0.3, 4001, os.path.join(TOP, "user", "share", "sounds"))
+    made.append(chime)
+    reference(chime, 1, 16000, "codec-vorbis-chime")
+    for name, frames, channels, rate, quality, seed in (
+            ("codec-vorbis-stereo.ogg", 66150, 2, 44100, 0.5, 11),
+            ("codec-vorbis-51.ogg", 24000, 6, 48000, 0.2, 12),
+            ("codec-vorbis-3ch.ogg", 8000, 3, 16000, 0.0, 13),
+            ("codec-vorbis-low.ogg", 22050, 2, 22050, -0.1, 14),
+            ("codec-vorbis-high.ogg", 19200, 2, 48000, 1.0, 15)):
+        ogg = encode(name, source(name, frames, channels, rate, seed), quality, 4100 + seed)
+        made.append(ogg)
+        reference(ogg, channels, rate)
+
+    # Two chained streams of one format.
+    a = encode("chain-a.ogg", source("chain-a", 11025, 1, 22050, 21), 0.3, 4201, tmp)
+    b = encode("chain-b.ogg", source("chain-b", 7000, 1, 22050, 22), 0.3, 4202, tmp)
+    chained = os.path.join(OUT, "codec-vorbis-chained.ogg")
+    open(chained, "wb").write(open(a, "rb").read() + open(b, "rb").read())
+    made.append(chained)
+    reference(chained, 1, 22050)
+
+    # A Vorbis stream multiplexed with an Ogg FLAC stream.
+    v = encode("mux-v.ogg", source("mux-v", 22050, 2, 22050, 31), 0.2, 4301, tmp)
+    f = os.path.join(tmp, "mux-f.oga")
+    run("flac", "-f", "-s", "--ogg", "--serial-number=4302", "-8", "-o", f, source("mux-f", 22050, 1, 22050, 32))
+    mux = os.path.join(OUT, "codec-vorbis-mux.ogg")
+    multiplex([f, v], mux)
+    made.append(mux)
+    reference(v, 2, 22050, "codec-vorbis-mux")
+
+    for path in made:
+        if path.endswith(".flac"):
+            run("flac", "-t", "-s", path)
+    return made
+
+
 def main():
-    for tool in ("flac", "ffmpeg"):
+    for tool in ("flac", "ffmpeg", "pkg-config"):
         need(tool)
     with tempfile.TemporaryDirectory() as tmp:
-        for path in flac_fixtures(tmp):
+        for path in flac_fixtures(tmp) + vorbis_fixtures(tmp):
             print("%7d %s" % (os.path.getsize(path), os.path.relpath(path, TOP)))
 
 

@@ -9,7 +9,8 @@ cd /ct
 
 # The registry: four modules, one codec each, with their capabilities.
 codecs > list.txt; check list-status "$?" "0"
-check list-total "$(tail -n 1 list.txt)" "5 codecs in 5 modules"
+check list-total "$(tail -n 1 list.txt)" "6 codecs in 6 modules"
+check list-vorbis "$(grep -c '^D-- vorbis audio  vorbis.so' list.txt)" "1"
 check list-flac "$(grep -c '^DE- flac  audio  flac.so' list.txt)" "1"
 check list-bmp "$(grep -c '^DE- bmp   image  bmp.so' list.txt)" "1"
 check list-png "$(grep -c '^DE- png   image  png.so' list.txt)" "1"
@@ -53,6 +54,12 @@ cmp back.wav same.wav; check flac-lossless "$?" "0"
 codecs convert -b 24 c.flac c24.flac > /dev/null
 check info-flac24 "$(codecs info c24.flac | cut -d, -f4)" " 24 bit"
 check info-shipped "$(codecs info /usr/share/sounds/chime.flac | cut -d: -f2)" " flac audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
+
+# Vorbis: identified by content, decoded to WAV and FLAC.
+check info-vorbis "$(codecs info /usr/share/sounds/chime.ogg | cut -d: -f2)" " vorbis audio, 16000 Hz, 1 channel, 32000 frames, 2.000 s"
+codecs convert /usr/share/sounds/chime.ogg v.wav > /dev/null; check vorbis-to-wav "$?" "0"
+check info-vorbis-wav "$(codecs info v.wav)" "v.wav: wav audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
+codecs convert /usr/share/sounds/chime.ogg v.flac > /dev/null; check vorbis-to-flac "$?" "0"
 
 # Errors.
 echo "plain text" > note.txt

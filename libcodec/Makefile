@@ -18,7 +18,7 @@ MODULES := $(notdir $(wildcard modules/*))
 MODSOS  := $(addprefix $(BUILD)/lib/codecs/,$(addsuffix .so,$(MODULES)))
 MODOBJS := $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/*/*.c))
 
-.PHONY: all clean
+.PHONY: all clean check
 # The module objects are named here so that make does not treat them as
 # intermediate files of the chain to the modules, which it would not
 # remake when they are missing.
@@ -50,6 +50,15 @@ module_objs = $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/$(1)/*.c))
 $(BUILD)/lib/codecs/%.so: $$(call module_objs,$$*) $(SO)
 	@mkdir -p $(dir $@)
 	$(LD) $(USOFLAGS) -soname $*.so -o $@ $(filter %.o,$^) -L$(BUILD)/lib -lcodec -lc $(LIBGCC)
+
+# Host unit tests: the library and every module compiled into one program
+# with the system compiler (CODEC_BUILTIN), run from this directory to
+# find the fixtures in ../user.
+check:
+	@mkdir -p $(OUT)/host
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -Iinclude \
+	    -o $(OUT)/host/test_codec tests/test_codec.c $(SRCS) $(wildcard modules/*/*.c) -lm
+	$(OUT)/host/test_codec
 
 clean:
 	rm -rf $(OUT) $(SO) $(ABIFILE) $(BUILD)/lib/codecs

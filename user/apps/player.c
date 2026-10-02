@@ -237,7 +237,11 @@ static int decode(const char *path, struct load_job *j)
         snprintf(layout, sizeof layout, "%s", fmt.channels == 2 ? "stereo" : "mono");
     else
         snprintf(layout, sizeof layout, "%d channels", fmt.channels);
-    snprintf(j->format, sizeof j->format, "%u Hz %s %d-bit%s", rate, layout, fmt.bits, method);
+    /* A lossy format such as Vorbis has no sample size and reports 0. */
+    char size[16] = "";
+    if (fmt.bits)
+        snprintf(size, sizeof size, " %d-bit", fmt.bits);
+    snprintf(j->format, sizeof j->format, "%u Hz %s%s%s", rate, layout, size, method);
     return 0;
 }
 

@@ -278,6 +278,126 @@ On the chime the encoder writes 15148 bytes against 18317 bytes from
 `flac -8`, and on four seconds of synthesised stereo music it writes
 394695 bytes against 395100.
 
+## Ogg
+
+The Ogg container (RFC 3533) carries Vorbis, Opus and FLAC. Its reader
+lives in libcodec (`src/ogg.c`) and is shared by the modules of these
+codecs, in the way libogg serves the Ogg codecs on Linux. A page begins
+with `OggS`, the version 0, the flags for a continued packet, the first
+page and the last page of a logical stream, the granule position, the
+serial number of the stream, the page number, a CRC-32 over the page
+with its CRC field set to zero, and the lacing values, whose sum is the
+length of the body. A packet consists of lacing values of 255 ended by
+one below 255 and may continue on the following pages of its stream.
+
+`codec_ogg_reader_init` takes the file in memory and an `accept`
+function supplied by the codec, which examines the first packet of a
+logical stream. The reader follows the first stream that `accept`
+accepts and skips the pages of all other streams, which is how a
+decoder finds its stream in a multiplexed file. When the followed
+stream ends, the reader moves on to the next stream accepted by
+`accept` and in this way decodes chained files. `codec_ogg_next`
+returns the packets of the followed streams in order, together with the
+granule position of the page for the last packet ending on it, and
+flags for the first and the last packet of a stream. A page that is cut
+or fails its CRC, a packet left unfinished by the next page, and a file
+that ends before the last page of the followed stream are reported as
+`-EBADMSG`. Bytes after the last page that contain no page header, such
+as a tag, end the file normally. `codec_ogg_first_packet` finds the
+first packet of the first accepted stream among the first pages of a
+file and serves the probes, and `codec_ogg_total_granule` adds up the
+last granule positions of all accepted chained streams, which gives the
+length of a file in samples.
+
+## Vorbis
+
+C5 added `vorbis.so`, a decoder for Vorbis I in Ogg.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `vorbis.so` | `vorbis`, `audio/ogg audio/vorbis application/ogg`, `.ogg .oga` | decode | an Ogg stream whose first packet starts with `\x01vorbis`, 100 |
+
+`setup.c` reads the identification header with the channel count, the
+sample rate and the two block sizes, checks the comment header, and
+parses the setup header. A codebook stores its codeword lengths, either
+ordered or unordered and sparse, and assigns the codewords in the order
+of the entries, giving each entry the lowest free codeword of its
+length as the specification requires. The codewords are inserted into a
+binary tree, which the decoder walks one bit at a time. A codebook with
+lookup type 1 or 2 also holds the vector of every entry, computed from
+the packed float minimum and delta, the multiplicands and the sequence
+flag. The setup header then supplies the floors, the residues, the
+mappings with their submaps and coupling steps, and the modes.
+
+For an audio packet, `decode.c` reads the mode and, for a long block,
+the window flags of the neighbouring blocks. It decodes the floor of
+every channel. The coupling steps mark a channel for residue decoding
+when either of its partners has a floor in use, and the residues are
+decoded per submap, where type 2 interleaves all channels of the submap
+into one vector. The decoder then undoes the square polar coupling in
+reverse order, multiplies each channel by its floor curve, and sets the
+channels whose floor is unused to zero. The inverse MDCT and the window
+follow. The end of a packet inside a floor makes that floor unused, and
+inside a residue it ends the residue decode with the values read up to
+that point, as the specification prescribes.
+
+Floor 1 (`floor.c`) reads the two end points and the partition values
+with their class and subclass books, predicts every further point from
+its neighbours, and draws the curve as integer lines in the decibel
+domain. The table of the specification for the conversion to amplitude
+runs geometrically from 1.0649863e-07 to 1.0 in 256 steps, and the
+decoder computes it instead of storing it. Floor 0 reads an amplitude,
+a book number and the LSP coefficients as vectors, and renders the
+filter curve at the positions of a Bark map, which is computed at setup
+for both block sizes.
+
+`mdct.c` computes the inverse MDCT of a block of size N through a DCT-IV
+of length N/2, which is a complex FFT of length N/4 between a rotation of
+the coefficient pairs and a rotation of the result. The IMDCT reads the
+DCT-IV forwards and backwards with changed signs. The window of a block
+rises and falls with the curve sin(pi/2 sin^2(...)) of the
+specification, and a long block next to a short one uses the short
+slope on that side, centred on its quarter point. The output of a
+packet is the overlap of the previous block, from its centre, with the
+current block, up to its centre, which is N_prev/4 + N/4 samples. The
+first packet of a stream produces no output.
+
+The granule positions trim the start and the end of every stream. The
+decoder keeps the output of a stream until the first page with a granule
+position. If that position is smaller than the number of samples decoded
+up to it, the difference is removed from the start of the stream. If the
+last page of a stream has a position smaller than the decoded samples,
+the difference is removed from its end. Chained streams with the rate and
+the channel count of the first stream are decoded one after another. A
+chained stream of a different format ends the file, because the format
+of a decoder cannot change. The number of frames reported at open time
+is the sum of the last granule positions of the chained streams.
+
+The decoder converts the float samples to 32 bit integers with rounding
+and clipping, and it returns the channels in the order of WAV files
+instead of the Vorbis order. Vorbis has no sample size, and the format
+reports 0 bits. `codecs info` omits the sample size in that case, the
+player shows none, and conversions to WAV or FLAC write 16 bits.
+
+### Fixtures and comparison
+
+`tools/codecref/vorbisref.c` is compiled by the fixture generator
+against the libvorbis of the host. It encodes WAV files with
+libvorbisenc and decodes Ogg files with libvorbisfile into 16 bit
+samples, rounded and reordered to WAV order. The generator encodes the
+chime (`/usr/share/sounds/chime.ogg`) and test signals in stereo with
+transients, which produce short blocks, in 5.1, in three channels, at a
+low and at the highest quality, as two chained streams, and as a stream
+multiplexed with an Ogg FLAC stream. The reference decodings are stored
+as FLAC files. libvorbisfile 1.3.7 starts reading a chained file at its
+last stream, and `vorbisref` therefore seeks to the first sample before
+it reads.
+
+On all eight fixtures the decoder returns the same number of frames as
+libvorbis. Rounded to 16 bits, its samples differ from the reference by
+at most one step, with an RMS difference between 0.02 and 0.31 steps,
+which comes from the rounding of the float arithmetic.
+
 ## A new format: BMP
 
 After the viewer and paint stopped naming formats (see below), adding
@@ -432,8 +552,17 @@ damaged frame, a wrong MD5 sum, a cut file and a cut header are reported.
 Its post script runs `flac -t` on five files written by the encoder in
 minios.
 
+With the argument `vorbis`, used by the boot test `codec_vorbis`, the
+program decodes the eight Vorbis fixtures and their reference decodings
+and requires the same sample rate, channel count and length, a length
+equal to the one reported at open time, and a difference of at most one
+step and an RMS difference below half a step at 16 bits. It also checks
+that a changed byte in a page and a cut file are reported as damage.
+`make check` runs `libcodec/tests/test_codec.c` on the host, which checks
+MD5 against the vectors of RFC 1321, the inverse MDCT against its
+definition for all block sizes from 64 to 2048, and the FLAC and Vorbis
+fixtures as above.
+
 `gui_images` converts the saved drawing to BMP with `codecs` and shows
 the BMP file in the viewer. Its post script decodes the BMP file with its
-own reader and compares the pixels with the PNG file. `make check` runs
-the same codecs compiled into the host tests, and `audio_player` covers
-the player.
+own reader and compares the pixels with the PNG file. `audio_player` covers the player.

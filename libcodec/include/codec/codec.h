@@ -170,6 +170,54 @@ int codec_audio_save(const char *path, const char *name, const struct codec_audi
  * length. */
 long codec_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len);
 
+/* Ogg (RFC 3533), the container of Vorbis, Opus and Ogg FLAC. The reader
+ * follows one logical stream of a file in memory and returns its packets
+ * in order. accept selects the stream by its first packet: the reader
+ * starts with the first stream it accepts, skips the pages of other
+ * streams in a multiplexed file, and after the end of the stream moves on
+ * to the next chained stream that it accepts, if there is one. */
+struct codec_ogg_packet {
+    const uint8_t *data;
+    size_t len;
+    int64_t granule;                    /* of the page, for the last packet ending on it, else -1 */
+    int bos;                            /* the first packet of a logical stream */
+    int eos;                            /* the last packet of a logical stream */
+    uint32_t serial;
+};
+
+struct codec_ogg_reader {
+    const uint8_t *data;
+    size_t len, next;                   /* the file, and the offset of the next page */
+    int (*accept)(const uint8_t *packet, size_t len);
+    uint32_t serial;
+    int have_serial, ended;
+    /* The current page of the stream: its lacing values and body. */
+    const uint8_t *lacing, *body;
+    unsigned segments, segment, last_end;
+    size_t body_at;
+    int64_t granule;
+    int page_eos, page_bos;
+    /* The packet being assembled across pages. */
+    uint8_t *packet;
+    size_t packet_len, packet_cap;
+    int packet_bos;
+};
+
+void codec_ogg_reader_init(struct codec_ogg_reader *r, const uint8_t *data, size_t len,
+                           int (*accept)(const uint8_t *packet, size_t len));
+/* The next packet, valid until the next call. Returns 1, 0 at the end of
+ * the last accepted stream, or -EBADMSG for a damaged page. */
+int codec_ogg_next(struct codec_ogg_reader *r, struct codec_ogg_packet *p);
+void codec_ogg_reader_free(struct codec_ogg_reader *r);
+/* The first packet of the first logical stream in data that accept
+ * accepts, for probes. Returns its length, or 0. */
+size_t codec_ogg_first_packet(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len),
+                              const uint8_t **packet);
+/* The granule position of the last page of every chained stream that
+ * accept accepts, summed. Returns -1 when no such page exists. */
+int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));
+uint32_t codec_ogg_crc(const uint8_t *p, size_t n);
+
 /* MD5 (RFC 1321), used by FLAC for the checksum of the audio data. */
 struct codec_md5 {
     uint32_t h[4];
