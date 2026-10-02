@@ -1,0 +1,5 @@
+codectest: module flac from /lib/codecs/flac.so
+codectest: codec-variable.flac 44100 Hz 2 channels 16 bit 11000 frames
+codectest: flac round trips done
+codectest: 0 failures
+TEST PASS

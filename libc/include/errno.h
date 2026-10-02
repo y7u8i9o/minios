@@ -41,6 +41,7 @@ int *__errno_location(void);
 #define ENOTEMPTY   39
 #define ELOOP       40
 #define EOVERFLOW   75
+#define EBADMSG     74
 #define EILSEQ      84
 #define EMSGSIZE    90
 #define EPROTONOSUPPORT 93

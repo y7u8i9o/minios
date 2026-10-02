@@ -300,6 +300,7 @@ static const char *const errors[] = {
     [ENOTEMPTY] = "Directory not empty",
     [ELOOP] = "Too many levels of symbolic links",
     [EOVERFLOW] = "Value too large for defined data type",
+    [EBADMSG] = "Bad message",
     [EILSEQ] = "Invalid or incomplete multibyte or wide character",
     [ENOTSOCK] = "Socket operation on non-socket",
     [EDESTADDRREQ] = "Destination address required",

@@ -169,3 +169,13 @@ int codec_audio_save(const char *path, const char *name, const struct codec_audi
 /* Inflate a zlib stream (RFC 1950) into dst and return the output
  * length. */
 long codec_inflate(uint8_t *dst, size_t cap, const uint8_t *src, size_t len);
+
+/* MD5 (RFC 1321), used by FLAC for the checksum of the audio data. */
+struct codec_md5 {
+    uint32_t h[4];
+    uint64_t len;
+    uint8_t buf[64];
+};
+void codec_md5_init(struct codec_md5 *m);
+void codec_md5_update(struct codec_md5 *m, const void *data, size_t len);
+void codec_md5_final(struct codec_md5 *m, uint8_t digest[16]);

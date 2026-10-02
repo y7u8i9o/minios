@@ -2,9 +2,10 @@
  * (docs/design/codecs.md). "codectest image" checks the registry, probing
  * and lookups, image round trips through the modules and through libgui,
  * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
- * and the WAV module. Any other argument runs both. "codectest count"
- * prints the number of codecs and is used by the child process that runs
- * with a different CODEC_PATH. */
+ * and the WAV module, and "codectest flac" the FLAC module with the
+ * fixtures of tools/gen_codec_fixtures.py. Any other argument runs every
+ * section. "codectest count" prints the number of codecs and is used by
+ * the child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
 #include <errno.h>
@@ -275,6 +276,195 @@ static void test_audio(void)
     CHECK(err == -EINVAL, "the extension picks wav, which refuses the data: %d", err);
 }
 
+/* ---- FLAC ---- */
+
+/* Decode a whole stream in chunks of 1000 frames. Returns the frames, and
+ * the error of the read that failed in *err (0 when the stream ended
+ * normally). */
+static long decode_all(struct codec_audio *a, int32_t **out, int *err)
+{
+    int ch = codec_audio_format(a)->channels;
+    long cap = 1 << 15, n = 0;
+    int32_t *buf = malloc(sizeof *buf * (size_t)cap * ch);
+    *err = 0;
+    while (buf) {
+        if (n + 1000 > cap) {
+            int32_t *grown = realloc(buf, sizeof *buf * (size_t)cap * 2 * ch);
+            if (!grown) {
+                free(buf);
+                buf = NULL;
+                break;
+            }
+            buf = grown;
+            cap *= 2;
+        }
+        long got = codec_audio_read(a, buf + n * ch, 1000);
+        if (got < 0)
+            *err = (int)got;
+        if (got <= 0)
+            break;
+        n += got;
+    }
+    *out = buf;
+    return buf ? n : -1;
+}
+
+/* The fixtures with the format that STREAMINFO records. The decoder
+ * compares the MD5 sum of each stream with the decoded samples. */
+static const struct {
+    const char *name;
+    int rate, channels, bits;
+    long frames;
+} flac_fixtures[] = {
+    { "codec-stereo16.flac", 44100, 2, 16, 22050 },  { "codec-mono24-lpc32.flac", 48000, 1, 24, 14400 },
+    { "codec-u8-3ch.flac", 22050, 3, 8, 6615 },      { "codec-8ch.flac", 8000, 8, 16, 1600 },
+    { "codec-wasted.flac", 32000, 2, 16, 4000 },     { "codec-rate12k.flac", 12000, 1, 16, 2000 },
+    { "codec-rate11025.flac", 11025, 1, 16, 2000 },  { "codec-rate37800.flac", 37800, 1, 16, 2000 },
+    { "codec-rate88200.flac", 88200, 1, 16, 2000 },  { "codec-rate705600.flac", 705600, 1, 16, 2000 },
+    { "codec-s12.flac", 16000, 2, 12, 3000 },        { "codec-s20.flac", 16000, 2, 20, 3000 },
+    { "codec-s32.flac", 12000, 1, 32, 3000 },        { "codec-ffmpeg24.flac", 96000, 2, 24, 9600 },
+    { "codec-variable.flac", 44100, 2, 16, 11000 },  { "codec-id3.flac", 16000, 1, 16, 32000 },
+};
+
+/* A test signal of every kind of block: a chord, noise, a constant and a
+ * full scale square, quantised to bits. */
+static void flac_signal(int32_t *s, long frames, int ch, int bits)
+{
+    uint32_t seed = 7;
+    for (long i = 0; i < frames; i++)
+        for (int c = 0; c < ch; c++) {
+            long part = i * 4 / frames;
+            int32_t v;
+            if (part == 0) {
+                long phase = i * (97 + 31 * c) % 4096, tri = phase < 2048 ? phase : 4095 - phase;
+                v = (int32_t)((tri - 1024) * (1 << 20));
+            } else if (part == 1) {
+                seed = seed * 1103515245u + 12345u;
+                v = (int32_t)seed;
+            } else if (part == 2) {
+                v = c == 1 ? 0x30000000 : 0;
+            } else {
+                v = (i / 7) & 1 ? INT32_MAX : INT32_MIN;
+            }
+            if (bits < 32)
+                v = (int32_t)((uint32_t)v & ~((1u << (32 - bits)) - 1));
+            s[i * ch + c] = v;
+        }
+}
+
+static void test_flac(void)
+{
+    const struct codec *flac = codec_find("flac");
+    CHECK(flac && flac->kind == CODEC_AUDIO && flac->caps == (CODEC_DECODE | CODEC_ENCODE), "flac codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/flac", CODEC_DECODE) == flac, "flac by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.FLAC", CODEC_ENCODE) == flac, "flac by extension");
+    if (!flac)
+        return;
+
+    for (size_t i = 0; i < sizeof flac_fixtures / sizeof flac_fixtures[0]; i++) {
+        char path[96];
+        snprintf(path, sizeof path, "/etc/tests/%s", flac_fixtures[i].name);
+        struct codec_audio *a;
+        int err = codec_audio_open_file(path, &a);
+        CHECK(err == 0 && codec_audio_codec(a) == flac, "open %s: %d", path, err);
+        if (err)
+            continue;
+        const struct codec_audio_format *f = codec_audio_format(a);
+        CHECK(f->rate == flac_fixtures[i].rate && f->channels == flac_fixtures[i].channels &&
+              f->bits == flac_fixtures[i].bits, "%s format %d %d %d", path, f->rate, f->channels, f->bits);
+        int32_t *s;
+        long n = decode_all(a, &s, &err);
+        CHECK(err == 0 && n == flac_fixtures[i].frames, "%s: %ld frames, error %d", path, n, err);
+        printf("codectest: %s %d Hz %d channels %d bit %ld frames\n", flac_fixtures[i].name, f->rate, f->channels,
+               f->bits, n);
+        free(s);
+        codec_audio_close(a);
+    }
+
+    /* The chime as FLAC and as WAV. */
+    struct codec_audio *a, *b;
+    int32_t *sa = NULL, *sb = NULL;
+    int ea = codec_audio_open_file("/usr/share/sounds/chime.flac", &a), eb = codec_audio_open_file("/usr/share/sounds/chime.wav", &b);
+    long na = ea ? -1 : decode_all(a, &sa, &ea), nb = eb ? -1 : decode_all(b, &sb, &eb);
+    CHECK(ea == 0 && eb == 0 && na == nb && na > 0 && memcmp(sa, sb, sizeof *sa * (size_t)na) == 0,
+          "the chime as FLAC equals the WAV file: %ld %ld frames", na, nb);
+    free(sa);
+    free(sb);
+    if (!ea)
+        codec_audio_close(a);
+    if (!eb)
+        codec_audio_close(b);
+
+    /* Round trips through the encoder. Some files are kept for the post
+     * script, which tests them with the reference flac. */
+    static const int sizes[] = { 4, 8, 12, 16, 20, 24, 32 }, layouts[] = { 1, 2, 5, 8 };
+    for (int si = 0; si < 7; si++)
+        for (int li = 0; li < 4; li++) {
+            int bits = sizes[si], ch = layouts[li];
+            long frames = 5000 + ch * 37;
+            int32_t *in = malloc(sizeof *in * (size_t)frames * ch), *out = NULL;
+            if (!in)
+                continue;
+            flac_signal(in, frames, ch, bits);
+            struct codec_audio_format fmt = { 44100, ch, bits };
+            uint8_t *file;
+            long size = codec_audio_encode(flac, &fmt, in, frames, &file);
+            CHECK(size > 0, "encode %d bit %d channels: %ld", bits, ch, size);
+            if (size > 0) {
+                int err = codec_audio_open(NULL, file, (size_t)size, NULL, &a);
+                long n = err ? -1 : decode_all(a, &out, &err);
+                CHECK(err == 0 && n == frames && memcmp(in, out, sizeof *in * (size_t)frames * ch) == 0,
+                      "round trip at %d bit with %d channels: %ld frames, error %d", bits, ch, n, err);
+                if (n >= 0)
+                    codec_audio_close(a);
+                if ((bits == 16 && ch == 2) || (bits == 24 && ch == 1) || (bits == 32 && ch == 2) ||
+                    (bits == 8 && ch == 8) || (bits == 12 && ch == 5)) {
+                    char path[48];
+                    snprintf(path, sizeof path, "/flac-enc-%d-%d.flac", bits, ch);
+                    CHECK(codec_write_file(path, file, (size_t)size) == 0, "write %s", path);
+                }
+                free(file);
+            }
+            free(in);
+            free(out);
+        }
+    printf("codectest: flac round trips done\n");
+
+    /* Damage. A changed byte in a frame fails its CRC-16, a changed byte
+     * in the MD5 sum of STREAMINFO fails the check at the end, and a cut
+     * file ends early. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-stereo16.flac", &d, &len) == 0) {
+        int err;
+        int32_t *s;
+        d[len / 2] ^= 0x10;
+        if (codec_audio_open(NULL, d, len, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 22050, "a damaged frame: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        d[len / 2] ^= 0x10;
+        d[8 + 18] ^= 0x01;              /* the first byte of the MD5 sum */
+        if (codec_audio_open(NULL, d, len, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n == 22050, "a wrong MD5 sum: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        d[8 + 18] ^= 0x01;
+        if (codec_audio_open(NULL, d, len - 300, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 22050, "a cut file: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        CHECK(codec_audio_open(NULL, d, 40, NULL, &a) == -EINVAL, "a cut header");
+        free(d);
+    }
+}
+
 static void list_registry(void)
 {
     int modules = codec_module_count();
@@ -288,17 +478,22 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    int image = argc < 2 || strcmp(argv[1], "audio") != 0;
-    int audio = argc < 2 || strcmp(argv[1], "image") != 0;
+    static const char *const sections[] = { "image", "audio", "flac" };
+    int known = 0;
+    for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
+        known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
+#define WANTS(name) (!known || strcmp(argv[1], name) == 0)
     list_registry();
-    if (image) {
+    if (WANTS("image")) {
         test_registry();
         test_probe();
         test_images();
         test_path();
     }
-    if (audio)
+    if (WANTS("audio"))
         test_audio();
+    if (WANTS("flac"))
+        test_flac();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

@@ -115,40 +115,108 @@ The scope is images and audio. Compression (gzip) stays in libc.
   newline without the next line. The lexer now reports such input as
   incomplete.
 
-### C4: FLAC
+### C4: FLAC (completed 2026-10-03)
 
-- The module `flac.so` decodes FLAC streams: the metadata blocks (with
-  STREAMINFO required and the others skipped, also after an ID3v2 tag),
-  fixed and variable block sizes, every sample rate and size code, one to
-  eight channels with the three stereo decorrelations, CONSTANT,
+- The module `flac.so` decodes native FLAC streams. It reads the
+  metadata blocks, requires STREAMINFO, skips the other blocks, and
+  accepts an ID3v2 tag before the stream. It decodes fixed and variable
+  block sizes, every sample rate and sample size code, one to eight
+  channels with the three stereo decorrelation modes, CONSTANT,
   VERBATIM, FIXED and LPC subframes with wasted bits, and both Rice
-  coding methods with escaped partitions. The CRC-8 of every frame
-  header and the CRC-16 of every frame are checked, and the MD5 sum of
-  STREAMINFO is checked at the end of the stream, as `flac -t` does.
-- The encoder writes blocks of 4096 samples with CONSTANT, FIXED (orders
-  0 to 4) and VERBATIM subframes, the best of the four stereo modes,
-  Rice partitions of the best order, and STREAMINFO with the MD5 sum.
-- libcodec gains MD5 for the modules.
-- Fixtures made on the host by `tools/gen_codec_fixtures.py` with the
-  reference `flac` encoder (LPC up to order 32) and ffmpeg's FLAC
-  encoder, checked by their MD5 sums.
-- Boot test `codec_flac`: the fixtures decode with correct MD5 sums, the
-  encoder's files decode to the same samples at 8, 16, 24 and 32 bits
-  and one to eight channels, and corrupted frames are detected.
+  coding methods with escaped partitions. It checks the CRC-8 of every
+  frame header and the CRC-16 of every frame, and it compares the MD5 sum
+  in STREAMINFO with the decoded samples at the end of the stream, as
+  `flac -t` does.
+- The encoder writes CONSTANT, VERBATIM, FIXED and LPC subframes. LPC
+  coefficients come from the autocorrelation of the windowed block and
+  the Levinson-Durbin recursion, with orders up to 32 and a search of the
+  order and the coefficient precision. Each frame uses the stereo mode
+  with the smallest output, Rice partitions of the best order with the
+  best parameter in each partition, and escaped partitions where they are
+  smaller. STREAMINFO carries the frame size limits and the MD5 sum.
+- libcodec provides MD5 to the modules.
+- `tools/gen_codec_fixtures.py` creates fixtures on the host with the
+  reference `flac` encoder (including LPC order 32, odd block sizes and
+  12 and 20 bit samples) and with ffmpeg's FLAC encoder. A stream with
+  variable block sizes is assembled from the frames of two encodes. The
+  MD5 sums in the files verify the decoder.
+- Boot test `codec_flac`: every fixture decodes with a matching MD5 sum,
+  the encoder's files decode to identical samples at 8, 12, 16, 20, 24
+  and 32 bits and one to eight channels, the reference `flac` tool
+  accepts the encoder's files (checked by the post script on the host),
+  and damaged headers, frames and MD5 sums are reported as errors.
 
-### C5: Ogg Vorbis
+### C5: Ogg and Vorbis decoding
 
-- The module `ogg.so` reads Ogg pages with their CRC, assembles the
-  packets of the first logical stream, and decodes Vorbis I: the three
-  headers, codebooks with both lookup types, floor 1, residues 0, 1 and
-  2, mappings with submaps and channel coupling, short and long windows,
-  the inverse MDCT through an FFT, overlap and add, and the trimming of
-  the first and last samples by the granule positions. Channels are
-  returned in the order of WAV files. Floor 0, which no current encoder
-  writes, is refused.
+- The module `ogg.so` reads Ogg pages, checks their CRC-32, follows the
+  logical streams of a file (multiplexed and chained), and assembles
+  packets. It selects the codec of each logical stream by its first
+  packet. The Ogg layer is written once and serves Vorbis, FLAC and Opus.
+- The Vorbis decoder implements Vorbis I completely: the identification,
+  comment and setup headers, codebooks with both lookup types, floor 0
+  and floor 1, residues 0, 1 and 2, mappings with submaps and channel
+  coupling, short and long windows, the inverse MDCT through an FFT,
+  overlap and add, and the trimming of the first and last samples by the
+  granule positions. Channels are returned in the order of WAV files.
 - Fixtures made by ffmpeg with libvorbis (mono, stereo with short
-  blocks, 5.1), and their decoding by ffmpeg stored as FLAC files.
+  blocks, 5.1, several quality levels), with ffmpeg's decoding stored as
+  FLAC files for comparison.
 - Boot test `codec_vorbis`: every fixture decodes to the same number of
   frames as ffmpeg's decoding and within a few steps of a 16 bit sample of
-  it. Damaged pages are detected. `make check` compares the inverse MDCT
-  with the direct formula.
+  it, and damaged pages are reported. `make check` compares the inverse
+  MDCT with the direct formula.
+
+### C6: Vorbis encoding
+
+- The Vorbis encoder writes the three headers with codebooks, floors,
+  residues, mappings and modes of its own design, chooses between short
+  and long blocks by transient detection, computes a floor 1 curve from a
+  masking estimate of each block, quantises the residue against the
+  floor, encodes it with residue type 2 for coupled stereo and type 1
+  otherwise, applies square polar coupling to stereo, and writes the
+  packets into Ogg pages with correct granule positions. A quality
+  setting selects the quantisation.
+- The encoder can also write floor 0 streams, which the decoder test uses
+  to verify floor 0 decoding.
+- Boot test `codec_vorbis_enc`: encoded files decode in minios with the
+  expected length and a signal-to-noise ratio above a fixed limit for each
+  quality, and the post script decodes them with ffmpeg on the host and
+  checks the same limits.
+
+### C7: FLAC in Ogg
+
+- Decoding and encoding of the Ogg mapping of FLAC: the `\x7fFLAC`
+  identification packet with STREAMINFO, the metadata packets, and one
+  frame per packet, with granule positions in samples.
+- Boot test `codec_oggflac`: ffmpeg's Ogg FLAC fixtures decode with
+  matching MD5 sums, and files from the encoder decode in minios and with
+  ffmpeg on the host.
+
+### C8: Opus decoding
+
+- The Opus decoder implements RFC 6716 with the updates of RFC 8251: the
+  range decoder, the TOC byte and the frame packing modes, SILK (LPC,
+  long-term prediction, stereo prediction, the excitation decoder and the
+  resamplers), CELT (energy envelopes, the pyramid vector quantiser,
+  band folding, anti-collapse, the post-filter and the inverse MDCT),
+  hybrid mode, the redundancy frames for mode transitions, and packet
+  loss concealment. The Ogg mapping of RFC 7845 supplies the header, the
+  pre-skip, the output gain and the channel mapping families 0, 1 and
+  255. Output is at 48 kHz.
+- Fixtures made by ffmpeg with libopus in SILK, CELT and hybrid modes at
+  several bit rates and channel layouts, with libopus' decoding stored as
+  FLAC files for comparison.
+- Boot test `codec_opus`: every fixture decodes to the same length as
+  libopus and within the accuracy that the `opus_compare` tool of the
+  RFC accepts.
+
+### C9: Opus encoding
+
+- The Opus encoder writes CELT frames with energy quantisation, the
+  pyramid vector quantiser and band allocation, SILK frames with LPC and
+  pitch analysis and excitation quantisation, and chooses between the
+  modes by bit rate and signal. It writes Ogg Opus files with the header,
+  the comment header and correct granule positions.
+- Boot test `codec_opus_enc`: encoded files decode in minios and with
+  ffmpeg and libopus on the host at the expected quality for each bit
+  rate.

@@ -9,7 +9,8 @@ cd /ct
 
 # The registry: four modules, one codec each, with their capabilities.
 codecs > list.txt; check list-status "$?" "0"
-check list-total "$(tail -n 1 list.txt)" "4 codecs in 4 modules"
+check list-total "$(tail -n 1 list.txt)" "5 codecs in 5 modules"
+check list-flac "$(grep -c '^DE- flac  audio  flac.so' list.txt)" "1"
 check list-bmp "$(grep -c '^DE- bmp   image  bmp.so' list.txt)" "1"
 check list-png "$(grep -c '^DE- png   image  png.so' list.txt)" "1"
 check list-svg "$(grep -c '^D-S svg   image  svg.so' list.txt)" "1"
@@ -43,6 +44,15 @@ check info-24 "$(codecs info c24.wav)" "c24.wav: wav audio, 16000 Hz, 1 channel,
 codecs convert -b 16 c24.wav c16.wav > /dev/null
 codecs convert /usr/share/sounds/chime.wav same.wav > /dev/null
 cmp c16.wav same.wav; check wav-lossless "$?" "0"
+
+# FLAC: the chime compressed and expanded again is the same WAV file.
+codecs convert same.wav c.flac > /dev/null; check to-flac "$?" "0"
+check info-flac "$(codecs info c.flac)" "c.flac: flac audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
+codecs convert c.flac back.wav > /dev/null; check from-flac "$?" "0"
+cmp back.wav same.wav; check flac-lossless "$?" "0"
+codecs convert -b 24 c.flac c24.flac > /dev/null
+check info-flac24 "$(codecs info c24.flac | cut -d, -f4)" " 24 bit"
+check info-shipped "$(codecs info /usr/share/sounds/chime.flac | cut -d: -f2)" " flac audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
 
 # Errors.
 echo "plain text" > note.txt

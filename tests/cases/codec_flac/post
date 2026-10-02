@@ -1,0 +1,16 @@
+#!/bin/sh
+# Test the files written by the FLAC encoder of minios with the reference
+# decoder of the host, whose MD5 test compares the decoded samples with
+# the sum in STREAMINFO.
+FSCK="$BUILD/host/fsck"
+MKFS="$BUILD/host/mkfs"
+command -v flac > /dev/null || { echo "  the reference flac is needed on the host"; exit 1; }
+"$FSCK" -y "$DISK" > "$DISK.fsck" 2>&1
+RC=$?
+[ "$RC" = 0 ] || [ "$RC" = 1 ] || { echo "  fsck -y exit $RC"; cat "$DISK.fsck"; exit 1; }
+DIR="$(dirname "$DISK")"
+for f in flac-enc-16-2 flac-enc-24-1 flac-enc-32-2 flac-enc-8-8 flac-enc-12-5; do
+    "$MKFS" --cat "$DISK" "/$f.flac" > "$DIR/$f.flac" || { echo "  /$f.flac missing"; exit 1; }
+    flac -t -s "$DIR/$f.flac" 2> "$DIR/$f.err" || { echo "  flac -t $f.flac:"; cat "$DIR/$f.err"; exit 1; }
+done
+echo "  the reference flac accepts the encoder's files"

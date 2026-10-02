@@ -181,6 +181,103 @@ for its resampler and no longer contains its own WAV reader. Its package
 lists `libcodec.so` as a requirement, derived from its `DT_NEEDED`
 entries.
 
+## FLAC
+
+C4 added `flac.so`, which reads and writes native FLAC streams as
+specified in RFC 9639.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `flac.so` | `flac`, `audio/flac audio/x-flac`, `.flac` | decode, encode | `fLaC`, also after an ID3v2 tag within the probed bytes, 100 |
+
+The module consists of `common.c` with the bit reader and writer, the
+CRC-8 and CRC-16 of the format, the code tables and the STREAMINFO
+parser, `decode.c`, `encode.c` and `module.c`. Both directions process
+samples as 64 bit integers, because the side channel of a 32 bit stereo
+stream needs 33 bits and an LPC prediction sum of such samples needs
+more than 32.
+
+### Decoding
+
+`flac_open` skips an ID3v2 tag in front of the stream and requires the
+`fLaC` marker followed by STREAMINFO as the first metadata block. It skips
+all other metadata blocks and rejects the reserved block type 127. The
+format reported to the caller is the sample rate, the channel count and
+the sample size from STREAMINFO, and the number of frames is the total
+sample count, or -1 when STREAMINFO records 0.
+
+`flac_read` decodes one frame at a time into 64 bit channel buffers,
+which grow with the largest block size met, and copies the interleaved
+samples out with every sample shifted to the top of a 32 bit value. The
+frame header parser accepts both blocking strategies, the frame or
+sample number coded like UTF-8 in up to seven bytes, every block size
+code including the 8 and 16 bit fields, every sample rate code including
+the values in kHz, Hz and tens of Hz, the channel assignments for one to
+eight independent channels and the left/side, side/right and mid/side
+pairs, and the sample size codes for 8, 12, 16, 20, 24 and 32 bits. A
+header must match its CRC-8, and its channel count and sample size must
+match STREAMINFO.
+
+A subframe is CONSTANT, VERBATIM, FIXED of order 0 to 4, or LPC of order
+1 to 32 with a coefficient precision of up to 15 bits and a shift from 0
+to 15, and it may declare wasted bits, which the decoder restores by a
+left shift at the end. The residual uses Rice coding with 4 or 5 bit
+parameters and partition orders up to 15, and an escaped partition
+stores raw signed values of the given width. The decoder rejects
+reserved subframe types and coding methods, partitions that do not
+divide the block or leave the first partition with fewer samples than
+the predictor order, Rice quotients that would exceed 32 bits, and a
+frame whose CRC-16 does not match. It then undoes the stereo
+decorrelation and adds the samples of the frame to an MD5 sum computed
+over the layout defined by FLAC, which is each sample as a signed little
+endian integer of `(bits + 7) / 8` bytes, interleaved by channel.
+
+When no further frame header follows, the stream has ended. Bytes after
+the last frame that contain no valid header, such as an ID3v1 tag, are
+ignored. If a valid header appears later in those bytes, the stream is
+damaged. At the end the decoder compares the number of decoded samples
+with the total in STREAMINFO and its MD5 sum with the recorded one,
+unless STREAMINFO records 0 for either. A damaged frame, a missing
+frame, a wrong sample count and a wrong MD5 sum make the read that
+encounters them return `-EBADMSG`, after the frames decoded before the
+damage. `EBADMSG` was added to libc with the Linux value 74.
+
+### Encoding
+
+`flac_encode` accepts sample sizes from 4 to 32 bits (16 when the format
+gives 0), one to eight channels and rates below 2^20. It cuts the input
+into blocks of 4096 samples and writes each block as one frame with a
+fixed block size. For every channel signal the encoder determines the
+wasted bits common to all samples of the block and then compares the
+exact size of a CONSTANT subframe for a constant block, a VERBATIM
+subframe, the FIXED subframe whose order gives the smallest sum of
+absolute residuals, and LPC subframes.
+
+The LPC candidates come from the samples under a Tukey window with half
+of the block in its cosine tapers. The encoder computes the
+autocorrelation up to lag 32 and runs the Levinson-Durbin recursion,
+which yields the coefficients and the prediction error of every order up
+to 32. The three orders with the smallest size estimated from their
+prediction errors are coded exactly at coefficient precisions of 12 and
+15 bits. Quantisation carries the rounding error of each coefficient into
+the next one and uses the largest shift from 0 to 15 at which the largest
+coefficient still fits.
+
+The residual of each candidate is coded for every partition order up to
+8 that divides the block, with both Rice methods. In every partition the
+encoder evaluates the parameter closest to the logarithm of the mean of
+the folded residuals and its two neighbours, and it uses an escaped
+partition with raw values whenever that takes fewer bits. A candidate
+whose residual exceeds 32 bits is discarded. For a stereo frame the
+encoder codes the left, right, side and mid signals and writes the
+cheapest of the four channel assignments. STREAMINFO records the block
+size, the smallest and the largest frame, the sample count and the MD5
+sum of the input.
+
+On the chime the encoder writes 15148 bytes against 18317 bytes from
+`flac -8`, and on four seconds of synthesised stereo music it writes
+394695 bytes against 395100.
+
 ## A new format: BMP
 
 After the viewer and paint stopped naming formats (see below), adding
@@ -308,7 +405,7 @@ format with PCM and with floating point samples, image data, and a file
 saved by extension and opened again.
 
 The boot test `codec_tool` runs `/etc/tests/codecs.sh`. The script checks
-that the listing shows the four modules with their capabilities. It
+that the listing shows the modules with their capabilities. It
 converts an icon from PNG to BMP and back and verifies that the two BMP
 files are identical byte for byte. It runs `info` on both files, on a BMP
 file named `.png`, which must be identified by its content, and on a
@@ -316,7 +413,24 @@ generated SVG file. It converts with `-f` and renders an SVG file with
 `-s`. It identifies the chime, converts it to 24 bits and back to 16, and
 compares the result with a direct conversion. Finally it checks the
 errors for unknown data, an extension without an encoder, formats of
-different kinds, incorrect usage and a missing file.
+different kinds, incorrect usage and a missing file. It also converts the
+chime from WAV to FLAC and back and compares the result with the original
+file.
+
+With the argument `flac`, used by the boot test `codec_flac`, the
+program decodes sixteen fixtures produced by `tools/gen_codec_fixtures.py`
+with the reference `flac` encoder and with ffmpeg. They cover LPC of
+order 32 with odd block sizes, 8, 12, 16, 20, 24 and 32 bit samples, three
+and eight channels, wasted bits, the sample rate codes for kHz, Hz, tens
+of Hz and STREAMINFO, a stream with variable block sizes assembled from
+the frames of two encodes, and a stream behind an ID3v2 tag. Every
+fixture must decode to the format and length recorded in STREAMINFO with
+a matching MD5 sum. The test compares the shipped `chime.flac` with
+`chime.wav`, encodes and decodes a test signal at every sample size from
+4 to 32 bits with one, two, five and eight channels, and checks that a
+damaged frame, a wrong MD5 sum, a cut file and a cut header are reported.
+Its post script runs `flac -t` on five files written by the encoder in
+minios.
 
 `gui_images` converts the saved drawing to BMP with `codecs` and shows
 the BMP file in the viewer. Its post script decodes the BMP file with its

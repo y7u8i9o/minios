@@ -1,9 +1,11 @@
 build/
 *.o
 qemu.conf
-# bought media stays out of the repository; chime.wav is the system sound
+# bought media stays out of the repository. chime.wav is the system sound,
+# and the other chime files are made from it by tools/gen_codec_fixtures.py
 user/share/sounds/*
 !user/share/sounds/chime.wav
+!user/share/sounds/chime.flac
 /*.wav
 BUILDNUM
 /data.img
