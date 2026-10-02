@@ -21,6 +21,7 @@ its boot tests pass.
 | `network-progress.md` | Progress record and validation evidence of N00 to N16 | completed 2026-09-30 |
 | `terminal.md` | The terminal userland plan | completed 2026-09-06 |
 | `arm64.md` | The aarch64 port, milestones A0 to A9 | A0 to A7 completed 2026-10-01, A8 and A9 completed 2026-10-02 |
+| `locale.md` | Locales, time zones, message catalogues, keyboard layouts and input methods, milestones L0 to L7 | in progress |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.
