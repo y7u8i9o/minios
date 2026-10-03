@@ -326,7 +326,7 @@ in place for inspection.
    fixtures, the tcc test sources and the luasynth test scripts. The
    build directory is separate from the one of the boot cases,
    because the options are not dependencies of the objects.
-4. The script builds the repository of the medium, which holds the base
+4. The script builds the repository of the medium, which contains the base
    packages without the tests and the applications of this version, and
    a copy of the medium with the answer file of `tests/cases/install_auto`
    as `installer.conf`. `tools/run.sh --devdisk` boots that copy with an
