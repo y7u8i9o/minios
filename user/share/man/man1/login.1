@@ -7,7 +7,9 @@ SYNOPSIS
     login [name]
 
 DESCRIPTION
-    init runs login as root on the console (init.conf(5)). login asks for
+    login runs as root on the console, started by the greeter(1) on a
+    machine without a display or by init when the console entry of
+    init.conf(5) names it. login asks for
     an account name and its password, which is typed without echo. An
     unknown name is asked for a password like any other, which hides
     whether an account exists. After a wrong answer login waits two

@@ -37,10 +37,7 @@ static void test_login(void)
     type_line("userdel -r anna\n");
     type_line("ls /home\n");
     type_line("initctl poweroff\n");
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
-                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start /bin/init");
-    proc_set_init(p);
+    struct proc *p = ktest_start_init();
     int status = proc_reap(p);
     ktest_fail("init exited with status 0x%x", status);
 }
@@ -53,10 +50,7 @@ KTEST_DEFINE("login_console", test_login);
  * login_gui case. */
 static void test_login_gui(void)
 {
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
-                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start /bin/init");
-    proc_set_init(p);
+    struct proc *p = ktest_start_init();
     sleep_ms(2500);
     type_line("user\n");
     sleep_ms(1000);

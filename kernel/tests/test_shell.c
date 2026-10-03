@@ -313,6 +313,45 @@ static void test_ctrlc(void)
 }
 KTEST_DEFINE("ctrlc", test_ctrlc);
 
+/* Start init with the configuration of the image, whose console entry is
+ * the greeter, changed to the console login, which the typed session tests
+ * drive. The copy is /tmp/init-login.conf, which the initctl test reloads
+ * as well. */
+struct proc *ktest_start_init(void)
+{
+    static char conf[4096], out[4200];
+    static const char greeter[] = "console greeter greeter", login[] = "console login login";
+    struct file *f;
+    long n = -1;
+    if (vfs_open("/etc/init.conf", O_RDONLY, 0, &f) == 0) {
+        n = file_read(f, conf, sizeof conf - 1);
+        file_put(f);
+    }
+    ktest_assert(n > 0, "cannot read /etc/init.conf");
+    conf[n] = '\0';
+    size_t len = (size_t)n, glen = sizeof greeter - 1, at = len;
+    for (size_t i = 0; i + glen <= len; i++)
+        if (memcmp(conf + i, greeter, glen) == 0) {
+            at = i;
+            break;
+        }
+    ktest_assert(at < len, "no greeter console entry in /etc/init.conf");
+    memcpy(out, conf, at);
+    memcpy(out + at, login, sizeof login - 1);
+    memcpy(out + at + sizeof login - 1, conf + at + glen, len - at - glen);
+    size_t outlen = len - glen + sizeof login - 1;
+    ktest_assert(vfs_open("/tmp/init-login.conf", O_WRONLY | O_CREAT | O_TRUNC, 0644, &f) == 0,
+                 "cannot write /tmp/init-login.conf");
+    long w = file_write(f, out, outlen);
+    file_put(f);
+    ktest_assert(w == (long)outlen, "short write of /tmp/init-login.conf");
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", "/tmp/init-login.conf", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    return p;
+}
+
 /* M15: the shutdown utility signals init, which performs the orderly
  * power off through reboot(). The host checks the image afterwards. */
 static void test_shutdown_cmd(void)
@@ -325,10 +364,7 @@ static void test_shutdown_cmd(void)
     type_line("echo before shutdown > /marker.txt\n");
     type_line("cat /marker.txt\n");
     type_line("shutdown\n");
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
-                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start /bin/init");
-    proc_set_init(p);
+    struct proc *p = ktest_start_init();
     int status = proc_reap(p);
     ktest_fail("init exited with status 0x%x", status);
 }
@@ -346,27 +382,24 @@ static void test_initctl(void)
     type_line("root\n");
     type_line("rootpw\n");
     type_line("rootpw\n");
-    type_line("cp /etc/init.conf /tmp/init.conf\n");
+    type_line("cp /tmp/init-login.conf /tmp/init.conf\n");
     type_line("echo 'service spin sleep 1000' >> /tmp/init.conf\n");
     type_line("initctl reload /tmp/init.conf\n");
     type_line("initctl status spin\n");
     type_line("initctl stop spin\n");
     type_line("initctl status spin\n");
     type_line("initctl start spin\n");
-    type_line("cp /etc/init.conf /tmp/init2.conf\n");
+    type_line("cp /tmp/init-login.conf /tmp/init2.conf\n");
     type_line("echo 'service spin test 1 = 2' >> /tmp/init2.conf\n");
     type_line("initctl reload /tmp/init2.conf\n");
     type_line("initctl restart spin\n");
     type_line("sleep 6\n");
     type_line("initctl list\n");
-    type_line("initctl reload /etc/init.conf\n");
+    type_line("initctl reload /tmp/init-login.conf\n");
     type_line("initctl status spin\n");
     type_line("initctl nosuch\n");
     type_line("initctl poweroff\n");
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
-                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start /bin/init");
-    proc_set_init(p);
+    struct proc *p = ktest_start_init();
     int status = proc_reap(p);
     ktest_fail("init exited with status 0x%x", status);
 }

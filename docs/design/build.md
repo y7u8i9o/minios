@@ -287,9 +287,10 @@ in place for inspection.
    fixtures, the tcc test sources and the luasynth test scripts. The
    build directory is separate from the one of the boot cases,
    because the options are not dependencies of the objects.
-4. `tools/run.sh` boots the release image without a data volume, sound or
-   display, and the step succeeds when `minios login:` appears on the
-   serial line within `BOOT_TIMEOUT` seconds (300). A kernel panic, an
+4. `tools/run.sh` boots the release image without a data volume or
+   sound and without a display window, and the step succeeds when the
+   greeter reports its display server on the serial line, or the console
+   login prints `minios login:`, within `BOOT_TIMEOUT` seconds (300). A kernel panic, an
    early exit of QEMU or the timeout fails it.
 
 The kernels of a release report as their build number the number of

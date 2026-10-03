@@ -7,10 +7,15 @@ SYNOPSIS
     greeter [-s]
 
 DESCRIPTION
-    init runs the greeter as root on the console in place of login(1)
-    when /etc/init.conf names it in the console entry:
+    init runs the greeter as root on the console, as the console entry of
+    /etc/init.conf names it:
 
         console greeter greeter
+
+    On a machine without a display, or when the display server or the
+    login window cannot start, the greeter runs login(1) in its place.
+    Replacing greeter with login in the console entry gives the console
+    login alone.
 
     The greeter starts the display server and restarts it when it ends.
     Its window lists root and the accounts from uid 1000 on, with the

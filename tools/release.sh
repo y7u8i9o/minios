@@ -22,7 +22,7 @@
 #
 # For every architecture the pipeline runs the boot cases with the default
 # build options, builds the release with the debugging options off, boots
-# the release image until the login prompt appears, and copies the results
+# the release image until the login appears, and copies the results
 # into minios-VERSION in the output directory. The host checks of make
 # check run once before the first architecture. The package repositories
 # are signed with RELEASE_KEY, $HOME/.config/minios/release-signing.key by
@@ -32,7 +32,7 @@
 #
 # RELEASE_CONFIG replaces the build options of the release build, and
 # BOOT_TIMEOUT the seconds that the release image has to reach the login
-# prompt (300). A failing step stops the pipeline, names its log and leaves
+# (300). A failing step stops the pipeline, names its log and leaves
 # the worktree in place for inspection.
 set -eu
 
@@ -169,8 +169,8 @@ for a in $ARCHES; do
         fail "the $a release build" "$LOGS/build-$a.log"
 
     # The release image boots without test= on the command line, which
-    # ends at the login prompt of the console. QEMU continues to run after
-    # that and is stopped here.
+    # ends at the greeter, or at the console login without a display.
+    # QEMU continues to run after that and is stopped here.
     step "$a release boot"
     SERIAL="$LOGS/boot-$a.txt"
     : > "$SERIAL"
@@ -184,7 +184,7 @@ for a in $ARCHES; do
     waited=0
     result=timeout
     while [ "$waited" -lt "$BOOT_TIMEOUT" ]; do
-        if grep -aq "minios login:" "$SERIAL"; then
+        if grep -aq "greeter: display server running\|minios login:" "$SERIAL"; then
             result=ok
             break
         fi
@@ -199,7 +199,7 @@ for a in $ARCHES; do
     kill "$QPID" 2>/dev/null || true
     wait "$QPID" 2>/dev/null || true
     [ "$result" = ok ] || fail "the $a release boot ($result after $waited s)" "$SERIAL"
-    echo "  $a reached the login prompt after about $waited s"
+    echo "  $a reached the login after about $waited s"
 done
 
 # The results. The root image is compressed, since it is mostly empty.

@@ -1,0 +1,4 @@
+greeter: no display, starting the console login
+minios login:
+greeter_fallback: console login
+TEST PASS

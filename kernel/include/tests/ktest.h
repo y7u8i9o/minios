@@ -36,9 +36,14 @@ void ktest_run_selected(void);
 __noreturn void ktest_pass(void);
 __noreturn void ktest_fail(const char *fmt, ...) __printf(1, 2);
 
+struct proc;
+
 /* Keyboard helpers shared by typed session tests (tests/test_shell.c). */
 void type_line(const char *s);
 void type_ctrl(char c);
+/* Start init as process 1 with the console login in place of the greeter
+ * (tests/test_shell.c). */
+struct proc *ktest_start_init(void);
 
 #define ktest_assert(cond, ...)                          \
     do {                                                 \

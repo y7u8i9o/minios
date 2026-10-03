@@ -236,7 +236,8 @@ and the marker is written. `fsinit` then makes the home of every account
 of `/etc/passwd` that lies on the volume and does not exist
 (`account_make_home`). `fsinit -m DIR` converts a directory alone.
 
-`login` (run by init on the console as `console login login`) asks for
+`login` (run by init on the console as `console login login`, or by the
+greeter in its place since 2026-10-03) asks for
 the name and the password, gives the terminal to the account with mode
 0620, calls `initgroups`, `setgid` and `setuid`, enters the home and runs
 the shell as a login shell with `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`
@@ -282,8 +283,17 @@ A change disconnects the clients of a user who is no longer admitted.
 init uses the same option to authorize its control requests (`init.md`).
 
 The greeter (`user/greeter/greeter.c`, `greeter(1)`) runs as root in the
-console entry of init (`console greeter greeter`). It starts X12, restarts
-it when it ends, and runs its login window as a second process,
+console entry of init (`console greeter greeter`), which is the entry of
+`/etc/init.conf` since 2026-10-03. Without `/dev/fb0`, or when X12 does
+not answer within five seconds or the login window fails to start five
+times in a row, it runs `login` in its place. Once X12 answers, it prints
+"greeter: display server running" on the console, which the boot check of
+the release pipeline waits for. The typed console tests start init with
+a copy of `init.conf` whose console entry is `login`
+(`ktest_start_init`), and the cases `greeter_boot` and `greeter_fallback`
+boot the default configuration with and without a display. The greeter
+starts X12, restarts it when it ends, and runs its login window as a
+second process,
 `greeter --window`, which reports `login NAME`, `poweroff` or `reboot` on
 a pipe. The window lists root and the accounts from uid 1000 on, selects
 the account after root, checks the password with `account_check` in a

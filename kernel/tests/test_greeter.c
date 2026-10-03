@@ -132,3 +132,33 @@ static void test_greeter(void)
     proc_reap_children(&kernel_proc);
 }
 KTEST_DEFINE("gui_greeter", test_greeter);
+
+/* A normal boot starts the greeter as the console entry of init. */
+static void test_greeter_boot(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    ktest_assert(wait_procs("greeter", 0, 2, 15000), "no login window");
+    ktest_assert(count_procs("x12", 0) == 1, "no display server");
+    ktest_assert(count_procs("login", -1) == 0, "the console login runs");
+    kprintf("greeter_boot: login window shown\n");
+    ktest_pass();
+}
+KTEST_DEFINE("greeter_boot", test_greeter_boot);
+
+/* Without a display the greeter runs the console login in its place. */
+static void test_greeter_fallback(void)
+{
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    ktest_assert(wait_procs("login", 0, 1, 15000), "no console login");
+    ktest_assert(count_procs("x12", -1) == 0, "a display server runs");
+    kprintf("greeter_fallback: console login\n");
+    ktest_pass();
+}
+KTEST_DEFINE("greeter_fallback", test_greeter_fallback);

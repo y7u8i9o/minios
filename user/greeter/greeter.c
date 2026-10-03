@@ -12,7 +12,11 @@
  * "startgui -s" as the account in a process group of its own. When the
  * session ends with the panel's Log out, the greeter ends the rest of the
  * group, withdraws the admission and shows the window again. -s mirrors
- * the log of X12 to the console, as the boot tests read it. */
+ * the log of X12 to the console, as the boot tests read it.
+ *
+ * Without a display, or when X12 or the login window cannot start, the
+ * greeter runs the console login in its place, which lets the default
+ * init.conf serve machines without a framebuffer as well. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -263,7 +267,25 @@ static pid_t spawn(char *const argv[], int out_fd)
 }
 
 /* Start X12 and wait until it accepts connections. */
-static void start_server(void)
+static int wait_child(pid_t pid);
+
+/* Replace the greeter with the console login. */
+static void fall_back(const char *reason)
+{
+    fprintf(stderr, "greeter: %s, starting the console login\n", reason);
+    if (server > 0) {
+        kill(server, SIGTERM);
+        wait_child(server);
+    }
+    char *argv[] = { "login", NULL };
+    execv("/bin/login", argv);
+    perror("greeter: /bin/login");
+    exit(1);
+}
+
+/* Start X12 and wait until it answers. Returns 0, or -1 when it does not
+ * answer within five seconds. */
+static int start_server(void)
 {
     char *argv[] = { "x12", server_log_serial ? "-s" : NULL, NULL };
     server = spawn(argv, -1);
@@ -274,10 +296,10 @@ static void start_server(void)
         if (fd >= 0)
             close(fd);
         if (ok)
-            return;
+            return 0;
         sleep_ms(100);
     }
-    fprintf(stderr, "greeter: the display server does not answer\n");
+    return -1;
 }
 
 /* Wait for pid, restarting X12 when it is the one that ended. Returns the
@@ -398,13 +420,21 @@ int main(int argc, char **argv)
         return 1;
     }
     conf_export_locale();
-    start_server();
+    if (access("/dev/fb0", R_OK | W_OK) < 0)
+        fall_back("no display");
+    if (start_server() < 0)
+        fall_back("the display server does not answer");
+    fprintf(stderr, "greeter: display server running, showing the login window\n");
+    int failures = 0;
     for (;;) {
         char line[96];
         if (ask(line, sizeof line) < 0) {
+            if (++failures == 5)
+                fall_back("the login window does not start");
             sleep_ms(500);
             continue;
         }
+        failures = 0;
         if (strncmp(line, "login ", 6) == 0) {
             run_session(line + 6);
         } else if (strcmp(line, "poweroff") == 0 || strcmp(line, "reboot") == 0) {

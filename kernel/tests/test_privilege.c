@@ -20,10 +20,7 @@ static void line_after(int ms, const char *text)
 
 static void test_privilege(void)
 {
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
-                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start /bin/init");
-    proc_set_init(p);
+    struct proc *p = ktest_start_init();
     line_after(2500, "root\n");
     /* root has no password and chooses one at its first login. */
     line_after(1500, "rootpw\n");
