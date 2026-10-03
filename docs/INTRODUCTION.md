@@ -2,7 +2,7 @@
 
 MiniOS is a monolithic x86_64 kernel written in C with a custom user space. It boots through the Limine bootloader and runs under QEMU. The kernel implements physical and virtual memory management, processes and threads on several processors, a virtual filesystem with two disk filesystems, device drivers, an IPv4 network stack, and a POSIX subset of system calls. User space consists of a C library, a dynamic loader, an init that supervises services, a display server with a client toolkit, an audio server, a shell, command line utilities, a package installer, graphical applications, and the Lua 5.5 interpreter.
 
-The release is `0.2.0`, recorded in `VERSION` under semantic versioning. `tools/version.sh` numbers every kernel link and records the commit hash and date. `uname`, the boot log and the System page of Settings print the release, the build number and the commit.
+The release is `0.3.0`, recorded in `VERSION` under semantic versioning. `tools/version.sh` numbers every kernel link and records the commit hash and date. `uname`, the boot log and the System page of Settings print the release, the build number and the commit.
 
 ## Design decisions
 
