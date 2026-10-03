@@ -241,7 +241,8 @@ case "${ARCH:-x86_64}" in
         [ "$ACCEL" = hvf ] && CPU=host
         GIC=3
         [ -f "$CASE/gic" ] && GIC="$(cat "$CASE/gic")"
-        MACHINE="-M virt,gic-version=$GIC,acpi=off -cpu $CPU -bios $EDK2_AARCH64"
+        # A boot menu wait of 0 ms replaces the five second TianoCore screen.
+        MACHINE="-M virt,gic-version=$GIC,acpi=off -cpu $CPU -bios $EDK2_AARCH64 -boot menu=on,splash-time=0"
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
         # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2

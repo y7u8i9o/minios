@@ -406,7 +406,10 @@ case "$ARCH" in
             *)      gpu="-device ramfb" ;;
         esac
         # shellcheck disable=SC2086
-        set -- -M "virt,gic-version=$QEMU_GIC,acpi=off" -cpu "$cpu" -bios "$EDK2" $gpu "$@"
+        # A boot menu wait of 0 ms, which edk2 reads from etc/boot-menu-wait,
+        # replaces the five second TianoCore screen of its boot manager.
+        set -- -M "virt,gic-version=$QEMU_GIC,acpi=off" -cpu "$cpu" -bios "$EDK2" -boot menu=on,splash-time=0 \
+            $gpu "$@"
         [ "$QEMU_NIC" = none ] || [ -z "$QEMU_NIC" ] && set -- "$@" -nic none
         BOOT="aarch64"
         ;;

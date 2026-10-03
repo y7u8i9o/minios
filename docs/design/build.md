@@ -76,7 +76,9 @@ stdio`, the root and swap virtio-blk devices, a virtio-snd device with an
 audio backend and the ISO. The machine follows `ARCH`. For x86_64 it is `-M q35` with
 `-vga virtio`. For aarch64 (`make ARCH=aarch64 run`) it is `-M virt` with
 GICv3 and without ACPI, `-cpu host` under HVF, the edk2 firmware that QEMU
-installs (`EDK2_AARCH64` names another file), virtio-gpu-pci as the
+installs (`EDK2_AARCH64` names another file) with `-boot
+menu=on,splash-time=0`, which replaces the five second TianoCore screen of
+its boot manager, virtio-gpu-pci as the
 display with ramfb as the boot framebuffer, the ISO as a SCSI CD and
 `-nic none` unless `--nic` names a network. Settings come from four
 layers, each of which overrides the previous one.
