@@ -41,6 +41,9 @@ MSGFMT   := $(BUILD)/host/msgfmt
 PKG_KEY  ?= $(BUILD)/pkg/signing.key
 PKG_KEY_FILE := $(abspath $(PKG_KEY))
 PKG_PUB  := $(BUILD)/pkg/signing.pub
+# PKG_ORIGIN is the origin that the key may sign and that the indexes of
+# the build name (docs/design/packages.md).
+PKG_ORIGIN ?= minios
 # The repository of each architecture is a directory of build/repo, and
 # one HTTP server serves both (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
@@ -105,7 +108,7 @@ $(PKG_KEY_FILE): | $(PKGSIGN)
 .PHONY: FORCE
 $(PKG_PUB): $(PKG_KEY_FILE) $(PKGSIGN) FORCE
 	@mkdir -p $(dir $@)
-	@$(PKGSIGN) public $(PKG_KEY_FILE) > $@.tmp
+	@$(PKGSIGN) public $(PKG_KEY_FILE) $(PKG_ORIGIN) > $@.tmp
 	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
 
 $(LIMINE): third_party/limine/limine.c

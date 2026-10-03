@@ -20,6 +20,13 @@ WWW="$OUTDIR/www"
 rm -rf "$WWW" "$OUTDIR/other.key"
 mkdir -p "$WWW"
 V1="$FIX/repohello-1.0.mpk $FIX/repolib-1.0.mpk $FIX/repoprog-1.0.mpk"
+# Every repository has the sequence 100, since the guest switches between
+# them in both directions. old has a lower sequence, expired an expiry time
+# in 2001, and elsewhere an origin that the key of the build may not sign.
+export REPO_SEQUENCE=100
+REPO_SEQUENCE=50 "$MKREPO" "$SIGN" "$KEY" "$WWW/old" $V1
+REPO_EXPIRES=1000000000 "$MKREPO" "$SIGN" "$KEY" "$WWW/expired" $V1
+REPO_ORIGIN=elsewhere "$MKREPO" "$SIGN" "$KEY" "$WWW/elsewhere" $V1
 "$MKREPO" "$SIGN" "$KEY" "$WWW/v1" $V1
 "$MKREPO" "$SIGN" "$KEY" "$WWW/v2" $V1 "$FIX/repohello-1.1.mpk"
 cp -R "$WWW/v2" "$WWW/badarchive"

@@ -3,18 +3,21 @@
  * ed25519.c, the code with which pkg(1) verifies on minios.
  *
  *   pkgsign keygen SECRET
- *   pkgsign public SECRET
+ *   pkgsign public SECRET ORIGIN...
  *   pkgsign sign SECRET FILE
  *   pkgsign verify PUBLIC FILE
  *   pkgsign digest FILE
  *
  * keygen writes a new secret key with mode 0600, public prints the public
- * key file of a secret key, sign writes the signature FILE.sig, verify
- * checks FILE.sig against a public key file, and digest prints the size
- * and SHA-256 of FILE. A secret key file contains `ed25519-secret HEX` with the 32 byte seed of
- * RFC 8032; a public key file contains `ed25519 HEX`; a signature file
- * contains `ed25519 KEYID HEX`, where KEYID is the first eight bytes of the
+ * key file of a secret key for the named origins, sign writes the
+ * signature FILE.sig, verify checks FILE.sig against a public key file,
+ * and digest prints the size and SHA-256 of FILE. A secret key file
+ * contains `ed25519-secret HEX` with the 32 byte seed of RFC 8032. A
+ * public key file contains `ed25519 HEX` and one line `origin NAME` for
+ * each origin whose indexes the key may sign. A signature file contains
+ * `ed25519 KEYID HEX`, where KEYID is the first eight bytes of the
  * SHA-256 of the public key. */
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -91,6 +94,19 @@ static void read_key(const char *path, const char *kind, uint8_t *out, size_t n)
     free(text);
 }
 
+/* An origin name consists of letters, digits and the characters ._-, at
+ * most 63 of them, as pkg accepts it. */
+static int origin_valid(const char *s)
+{
+    size_t n = strlen(s);
+    if (n == 0 || n > 63)
+        return 0;
+    for (; *s; s++)
+        if (!isalnum((unsigned char)*s) && !strchr("._-", *s))
+            return 0;
+    return 1;
+}
+
 static void key_id(char id[17], const uint8_t pub[ED25519_PUBLIC_SIZE])
 {
     uint8_t d[SHA256_DIGEST_SIZE];
@@ -118,14 +134,21 @@ static int keygen(const char *path)
     return 0;
 }
 
-static int public(const char *secret)
+/* public prints the public key file of a secret key: the key line and
+ * one line `origin NAME` for each origin whose indexes the key may sign. */
+static int public(const char *secret, int norigins, char **origins)
 {
     uint8_t seed[ED25519_SEED_SIZE], pub[ED25519_PUBLIC_SIZE];
     char text[2 * ED25519_PUBLIC_SIZE + 1];
+    for (int i = 0; i < norigins; i++)
+        if (!origin_valid(origins[i]))
+            die("%s: not a valid origin name", origins[i]);
     read_key(secret, "ed25519-secret", seed, sizeof seed);
     ed25519_public_key(pub, seed);
     hex(text, pub, sizeof pub);
     printf("ed25519 %s\n", text);
+    for (int i = 0; i < norigins; i++)
+        printf("origin %s\n", origins[i]);
     return 0;
 }
 
@@ -199,8 +222,8 @@ int main(int argc, char **argv)
 {
     if (argc == 3 && strcmp(argv[1], "keygen") == 0)
         return keygen(argv[2]);
-    if (argc == 3 && strcmp(argv[1], "public") == 0)
-        return public(argv[2]);
+    if (argc >= 4 && strcmp(argv[1], "public") == 0)
+        return public(argv[2], argc - 3, argv + 3);
     if (argc == 4 && strcmp(argv[1], "sign") == 0)
         return sign(argv[2], argv[3]);
     if (argc == 4 && strcmp(argv[1], "verify") == 0)
@@ -208,7 +231,7 @@ int main(int argc, char **argv)
     if (argc == 3 && strcmp(argv[1], "digest") == 0)
         return digest(argv[2]);
     fprintf(stderr, "usage: pkgsign keygen SECRET\n"
-                    "       pkgsign public SECRET\n"
+                    "       pkgsign public SECRET ORIGIN...\n"
                     "       pkgsign sign SECRET FILE\n"
                     "       pkgsign verify PUBLIC FILE\n"
                     "       pkgsign digest FILE\n");

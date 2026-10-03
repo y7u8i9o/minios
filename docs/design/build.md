@@ -317,7 +317,7 @@ in place for inspection.
    `make test` runs the cases of `tests/release-cases` with the default
    build options. `--cases` replaces the list, and `--skip-tests` leaves
    out this step and the first.
-3. `make image repo` builds the release into `build/release-ARCH` of the
+3. `make installer repo` with `PKG_SERIAL=0` builds the installation medium `installer.img` and the repository into `build/release-ARCH` of the
    worktree with the options of `RELEASE_CONFIG`. By default the kernel
    self tests, the exit through isa-debug-exit, the lock debugging, the
    lock statistics and the slab debugging are off, and the log level is
@@ -326,11 +326,19 @@ in place for inspection.
    fixtures, the tcc test sources and the luasynth test scripts. The
    build directory is separate from the one of the boot cases,
    because the options are not dependencies of the objects.
-4. `tools/run.sh` boots the release image without a data volume or
-   sound and without a display window, and the step succeeds when the
-   greeter reports its display server on the serial line, or the console
-   login prints `minios login:`, within `BOOT_TIMEOUT` seconds (300). A kernel panic, an
-   early exit of QEMU or the timeout fails it.
+4. The script builds the repository of the medium, which holds the base
+   packages without the tests and the applications of this version, and
+   a copy of the medium with the answer file of `tests/cases/install_auto`
+   as `installer.conf`. `tools/run.sh --devdisk` boots that copy with an
+   empty 2048 MiB disk as the installation target, and the step succeeds
+   when QEMU exits, which the installer causes by powering off, and the
+   serial line shows `installer: done`, within `BOOT_TIMEOUT` seconds
+   (300). A kernel panic or the timeout fails it.
+5. `tools/run.sh --devdisk` boots the installed disk alone without a data
+   volume or sound and without a display window. The step succeeds when
+   the greeter reports its display server on the serial line, or the
+   console login prints `minios login:`, within `BOOT_TIMEOUT` seconds.
+   A kernel panic, an early exit of QEMU or the timeout fails it.
 
 The kernels of a release report as their build number the number of
 commits up to the released commit, which the script passes to
@@ -341,10 +349,9 @@ The results go to `build/release/minios-VERSION`.
 
 | File | Content |
 |---|---|
-| `minios-VERSION-ARCH.iso` | the bootable image with the kernel and the initrd |
-| `minios-VERSION-ARCH-root.img.gz` | the root filesystem, compressed with gzip |
+| `minios-VERSION-ARCH-installer.img.gz` | the installation medium without an answer file, compressed with gzip |
 | `minios-VERSION-ARCH-kernel.elf` | the kernel with its debugging information |
-| `minios-VERSION-ARCH-repo.tar.gz` | the signed package repository of the bundled applications |
+| `minios-VERSION-ARCH-repo.tar.gz` | the signed package repository that the medium contains |
 | `minios-VERSION-signing.pub` | the public half of the signing key |
 | `BUILDINFO` | the commit, the date, the build options, the compilers, the kernel version and the boot cases |
 | `SHA256SUMS` | the SHA-256 sums of the other files |
@@ -352,7 +359,7 @@ The results go to `build/release/minios-VERSION`.
 The package repositories are signed with `RELEASE_KEY`, by default
 `$HOME/.config/minios/release-signing.key`, which `pkgsign keygen`
 creates on the first release. Every release must use the same key,
-because the root image installs its public half as
+because the base packages install its public half as
 `/etc/pkg/keys/build.pub` and installed systems verify the repository
 index against it. `--tag` creates the annotated tag `vVERSION` at the
 commit after a successful run, and an existing tag must already point at

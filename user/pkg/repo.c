@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <minios/ed25519.h>
 #include <minios/http.h>
@@ -32,7 +33,19 @@
 #define INDEX_MAX (4 << 20)
 #define SIG_MAX 1024
 #define INDEX_ENTRIES_MAX 512
-#define INDEX_MAGIC "minios-pkg-index 1"
+#define INDEX_MAGIC "minios-pkg-index 2"
+#define INDEX_MAGIC_V1 "minios-pkg-index 1"
+#define ORIGINS_MAX 512
+
+/* The header of an index names the origin whose key may sign it, a
+ * sequence number that grows with every new index of the origin, and
+ * optionally the time, in seconds since the epoch, after which the index
+ * is no longer accepted (0 when it does not expire). */
+struct index_meta {
+    char origin[64];
+    long long sequence;
+    long long expires;
+};
 
 /* --config sets config_path, and without it pkg reads <root>/etc/pkg.conf.
  * --keys sets keys_path, and without it the trusted keys are the files
@@ -230,8 +243,12 @@ static void key_id(char id[17], const uint8_t pub[ED25519_PUBLIC_SIZE])
 }
 
 /* key_lookup finds the trusted key named id. It returns 0 with pub and
- * the file name set, or -1 when no key file in the key directory has that id. A key file contains one line, `ed25519 HEX`. */
-static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *file, size_t filelen)
+ * the file name and the origins of the key, separated by spaces, set, or
+ * -1 when no key file in the key directory has that id. A key file
+ * contains the line `ed25519 HEX` and one line `origin NAME` for each
+ * origin whose indexes the key may sign. */
+static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *file, size_t filelen,
+                      char *origins, size_t originslen)
 {
     char dir[PKG_PATH_MAX];
     keys_dir(dir, sizeof dir);
@@ -251,16 +268,29 @@ static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *fi
         if (read_file(path, &data, &len) < 0)
             continue;
         char *text = (char *)data, *line;
+        int matched = 0;
         while ((line = next_line(&text)) != NULL) {
-            char this_id[17];
+            char this_id[17], name[64];
             if (!*line || *line == '#')
                 continue;
+            if (matched) {
+                /* The lines after the key name the origins it may sign. */
+                if (sscanf(line, "origin %63s", name) == 1) {
+                    if (*origins)
+                        strlcat(origins, " ", originslen);
+                    strlcat(origins, name, originslen);
+                }
+                continue;
+            }
             if (sscanf(line, "%15s %79s", kind, hex) == 2 && strcmp(kind, "ed25519") == 0 &&
                 unhex(pub, ED25519_PUBLIC_SIZE, hex) == 0) {
                 key_id(this_id, pub);
                 if (strcmp(this_id, id) == 0) {
                     snprintf(file, filelen, "%s", path);
+                    *origins = '\0';
+                    matched = 1;
                     found = 0;
+                    continue;
                 }
             }
             break;
@@ -272,19 +302,22 @@ static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *fi
 }
 
 /* index_verify checks the signature file sig (`ed25519 KEYID HEX`) over
- * the index text. err receives the reason of a refusal. */
-static int index_verify(const uint8_t *text, size_t len, const char *sig, char *err, size_t errlen)
+ * the index text. keyfile (PKG_PATH_MAX bytes) receives the key file and
+ * origins (ORIGINS_MAX bytes) the origins of its key. err receives the
+ * reason of a refusal. */
+static int index_verify(const uint8_t *text, size_t len, const char *sig, char *keyfile, char *origins,
+                        char *err, size_t errlen)
 {
     char kind[16], id[32], hex[160];
     uint8_t signature[ED25519_SIGNATURE_SIZE], pub[ED25519_PUBLIC_SIZE];
-    char keyfile[PKG_PATH_MAX], kdir[PKG_PATH_MAX];
+    char kdir[PKG_PATH_MAX];
     if (sscanf(sig, "%15s %31s %159s", kind, id, hex) != 3 || strcmp(kind, "ed25519") != 0 ||
         strlen(id) != 16 || unhex(signature, sizeof signature, hex) < 0) {
         snprintf(err, errlen, "the signature file is malformed");
         return -1;
     }
     keys_dir(kdir, sizeof kdir);
-    if (key_lookup(id, pub, keyfile, sizeof keyfile) < 0) {
+    if (key_lookup(id, pub, keyfile, PKG_PATH_MAX, origins, ORIGINS_MAX) < 0) {
         snprintf(err, errlen, "the index is signed by key %s, which is not in %s", id, kdir);
         return -1;
     }
@@ -377,13 +410,109 @@ static int entry_parse(struct index_entry *e, char *text, char *err, size_t errl
 
 /* index_parse adds the entries of an index text to ix. The first line
  * names the format, and every entry begins with a name line. */
-static int index_parse(struct index *ix, int repo, char *text, char *err, size_t errlen)
+/* index_header parses the first line and the header of an index into
+ * meta and leaves text at the first entry. The header ends at the first
+ * blank line or `name` line. */
+static int index_header(char **text, struct index_meta *meta, char *err, size_t errlen)
 {
-    char *first = next_line(&text);
+    memset(meta, 0, sizeof *meta);
+    char *first = next_line(text);
+    if (first && strcmp(first, INDEX_MAGIC_V1) == 0) {
+        snprintf(err, errlen, "the index has format 1, which pkg no longer accepts, and the repository must be built again");
+        return -1;
+    }
     if (!first || strcmp(first, INDEX_MAGIC) != 0) {
         snprintf(err, errlen, "the index does not begin with %s", INDEX_MAGIC);
         return -1;
     }
+    int have_sequence = 0;
+    while (**text) {
+        char *p = *text;
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (strncmp(p, "name ", 5) == 0 || strncmp(p, "name\t", 5) == 0)
+            break;
+        char *line = next_line(text);
+        if (!*line)
+            break;
+        if (*line == '#')
+            continue;
+        char key[16], value[80];
+        if (sscanf(line, "%15s %79s", key, value) != 2) {
+            snprintf(err, errlen, "malformed header line: %s", line);
+            return -1;
+        }
+        char *end;
+        if (strcmp(key, "origin") == 0 && strlen(value) < sizeof meta->origin) {
+            strlcpy(meta->origin, value, sizeof meta->origin);
+        } else if (strcmp(key, "sequence") == 0) {
+            meta->sequence = strtoll(value, &end, 10);
+            if (*end || meta->sequence <= 0) {
+                snprintf(err, errlen, "invalid sequence %s", value);
+                return -1;
+            }
+            have_sequence = 1;
+        } else if (strcmp(key, "expires") == 0) {
+            meta->expires = strtoll(value, &end, 10);
+            if (*end || meta->expires <= 0) {
+                snprintf(err, errlen, "invalid expiry time %s", value);
+                return -1;
+            }
+        } else {
+            snprintf(err, errlen, "unknown header line: %s", line);
+            return -1;
+        }
+    }
+    if (!meta->origin[0] || !have_sequence) {
+        snprintf(err, errlen, "the index names no origin or no sequence");
+        return -1;
+    }
+    return 0;
+}
+
+/* origin_allowed tells whether name is one of the origins, a list
+ * separated by spaces. */
+static int origin_allowed(const char *origins, const char *name)
+{
+    size_t n = strlen(name);
+    for (const char *p = origins; *p; ) {
+        const char *e = strchr(p, ' ');
+        size_t len = e ? (size_t)(e - p) : strlen(p);
+        if (len == n && strncmp(p, name, n) == 0)
+            return 1;
+        p += len;
+        if (*p == ' ')
+            p++;
+    }
+    return 0;
+}
+
+/* index_accept checks the header of a verified index: the key that signed
+ * it must be bound to its origin, and it must not have expired. */
+static int index_accept(const struct index_meta *meta, const char *keyfile, const char *origins,
+                        char *err, size_t errlen)
+{
+    if (!origin_allowed(origins, meta->origin)) {
+        snprintf(err, errlen, "the index is of the origin %s, which the key %s may not sign",
+                 meta->origin, keyfile);
+        return -1;
+    }
+    if (meta->expires && (long long)time(NULL) >= meta->expires) {
+        char when[40];
+        time_t t = (time_t)meta->expires;
+        struct tm *tm = gmtime(&t);
+        if (!tm || strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S UTC", tm) == 0)
+            snprintf(when, sizeof when, "%lld", meta->expires);
+        snprintf(err, errlen, "the index expired at %s", when);
+        return -1;
+    }
+    return 0;
+}
+
+static int index_parse(struct index *ix, int repo, char *text, struct index_meta *meta, char *err, size_t errlen)
+{
+    if (index_header(&text, meta, err, errlen) < 0)
+        return -1;
     while (*text) {
         /* The entry runs to the next line beginning with "name ". */
         char *start = text, *end = text;
@@ -495,13 +624,17 @@ static int load_one(const struct repo_config *c, int i, struct index *ix, char *
         snprintf(err, errlen, "%s: %s", path, strerror(errno));
         goto out;
     }
-    if (index_verify(text, len, (char *)sig, err, errlen) < 0)
+    char keyfile[PKG_PATH_MAX], origins[ORIGINS_MAX];
+    struct index_meta meta;
+    if (index_verify(text, len, (char *)sig, keyfile, origins, err, errlen) < 0)
         goto out;
     if (memchr(text, '\0', len)) {
         snprintf(err, errlen, "the index contains a zero byte");
         goto out;
     }
-    r = index_parse(ix, i, (char *)text, err, errlen);
+    r = index_parse(ix, i, (char *)text, &meta, err, errlen);
+    if (r == 0 && index_accept(&meta, keyfile, origins, err, errlen) < 0)
+        r = -1;
 out:
     free(text);
     free(sig);
@@ -686,6 +819,33 @@ int repo_local_archive(const struct repo_config *c, const struct index_entry *e,
     return 1;
 }
 
+/* stored_sequence_check refuses a fetched index whose sequence is lower
+ * than that of the index stored for the repository, which protects
+ * against a server that offers an older index that was validly signed. */
+static int stored_sequence_check(const char *dir, const struct index_meta *meta, char *err, size_t errlen)
+{
+    char path[PKG_PATH_MAX], herr[200];
+    uint8_t *old;
+    size_t len;
+    path_join(path, sizeof path, dir, "index");
+    if (read_file(path, &old, &len) < 0)
+        return 0;
+    old = realloc(old, len + 1);
+    if (!old)
+        return 0;
+    old[len] = '\0';
+    struct index_meta stored;
+    char *text = (char *)old;
+    int r = 0;
+    if (index_header(&text, &stored, herr, sizeof herr) == 0 && meta->sequence < stored.sequence) {
+        snprintf(err, errlen, "the index has sequence %lld, lower than %lld of the stored index",
+                 meta->sequence, stored.sequence);
+        r = -1;
+    }
+    free(old);
+    return r;
+}
+
 static int update_one(const struct repo_config *c, int i)
 {
     const struct repo *r = &c->repos[i];
@@ -711,14 +871,17 @@ static int update_one(const struct repo_config *c, int i)
     uint8_t *text = NULL, *sig = NULL;
     size_t len, siglen;
     struct index ix = {0};
+    struct index_meta meta;
+    char keyfile[PKG_PATH_MAX], origins[ORIGINS_MAX];
     int status = -1;
     if (read_file(index_new, &text, &len) < 0 || read_file(sig_new, &sig, &siglen) < 0)
         snprintf(err, sizeof err, "cannot read the fetched index: %s", strerror(errno));
-    else if (index_verify(text, len, (char *)sig, err, sizeof err) == 0) {
+    else if (index_verify(text, len, (char *)sig, keyfile, origins, err, sizeof err) == 0) {
         if (memchr(text, '\0', len))
             snprintf(err, sizeof err, "the index contains a zero byte");
-        else if (index_parse(&ix, i, (char *)text, err, sizeof err) == 0)
-            status = 0;
+        else if (index_parse(&ix, i, (char *)text, &meta, err, sizeof err) == 0 &&
+                 index_accept(&meta, keyfile, origins, err, sizeof err) == 0)
+            status = stored_sequence_check(dir, &meta, err, sizeof err);
     }
     free(text);
     free(sig);

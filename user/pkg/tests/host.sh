@@ -136,7 +136,7 @@ if test -n "$PKGSIGN" && test -n "$MKREPO"; then
     $PKGSIGN keygen fr/key > /dev/null
     $PKGSIGN keygen fr/other > /dev/null
     mkdir -p fr/keys
-    $PKGSIGN public fr/key > fr/keys/test.pub
+    $PKGSIGN public fr/key minios > fr/keys/test.pub
     sh "$MKREPO" "$PKGSIGN" fr/key "$WORK/fr/repo" fr/liba-1.0.mpk fr/appb-2.0.mpk > /dev/null
     printf 'repo local file://%s/fr/repo\n' "$WORK" > fr/pkg.conf
     R2="$WORK/root2"
@@ -169,6 +169,21 @@ if test -n "$PKGSIGN" && test -n "$MKREPO"; then
     check file-digest "$($P3 install liba 2>&1)" "pkg: liba: the SHA-256 digest of liba-1.0.mpk differs from the index of local"
     check file-tampered-retained "$(test -f fr/repo/liba-1.0.mpk && echo present)" "present"
     check file-tampered-none "$($P3 list | wc -l | tr -d ' ')" "0"
+
+    # An older index, an expired index and an index of an origin that the
+    # key may not sign are refused.
+    REPO_SEQUENCE=1 sh "$MKREPO" "$PKGSIGN" fr/key "$WORK/fr/old" fr/appb-2.0.mpk > /dev/null
+    printf 'repo local file://%s/fr/old\n' "$WORK" > fr/old.conf
+    check file-old "$($PKG --root $R3 --arch x86_64 --config $WORK/fr/old.conf --keys $WORK/fr/keys update 2>&1)" \
+        "pkg: local: the index has sequence 1, lower than $(sed -n 's/^sequence //p' $R3/var/lib/pkg/_repos/local/index) of the stored index"
+    REPO_EXPIRES=1000000000 sh "$MKREPO" "$PKGSIGN" fr/key "$WORK/fr/expired" fr/appb-2.0.mpk > /dev/null
+    printf 'repo local file://%s/fr/expired\n' "$WORK" > fr/expired.conf
+    check file-expired "$($PKG --root $R3 --arch x86_64 --config $WORK/fr/expired.conf --keys $WORK/fr/keys update 2>&1)" \
+        "pkg: local: the index expired at 2001-09-09 01:46:40 UTC"
+    REPO_ORIGIN=elsewhere sh "$MKREPO" "$PKGSIGN" fr/key "$WORK/fr/elsewhere" fr/appb-2.0.mpk > /dev/null
+    printf 'repo local file://%s/fr/elsewhere\n' "$WORK" > fr/elsewhere.conf
+    check file-origin "$($PKG --root $R3 --arch x86_64 --config $WORK/fr/elsewhere.conf --keys $WORK/fr/keys update 2>&1)" \
+        "pkg: local: the index is of the origin elsewhere, which the key $WORK/fr/keys/test.pub may not sign"
 
     # An index signed by another key is refused.
     $PKGSIGN sign fr/other fr/repo/index

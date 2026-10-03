@@ -75,6 +75,20 @@ check no-version "$(pkg install repohello-2.0 2>&1; echo $?)" "pkg: repohello: n
 1"
 check verify "$(pkg verify repohello repolib repoprog; echo $?)" "0"
 
+# An older index, an expired index and an index of an origin that the key
+# may not sign are refused, and the stored index remains in place.
+conf $URL/old
+check old-index "$(pkg update 2>&1; echo $?)" "pkg: main: the index has sequence 50, lower than 100 of the stored index
+1"
+conf $URL/expired
+check expired-index "$(pkg update 2>&1; echo $?)" "pkg: main: the index expired at 2001-09-09 01:46:40 UTC
+1"
+conf $URL/elsewhere
+check other-origin "$(pkg update 2>&1; echo $?)" "pkg: main: the index is of the origin elsewhere, which the key /etc/pkg/keys/build.pub may not sign
+1"
+check refused-retained "$(cat /var/lib/pkg/_repos/main/url)" "$URL/v2"
+conf $URL/v2
+
 # A local archive is checked against the signed index. The archive of the
 # repository matches, and one built here with the same name and version
 # does not.

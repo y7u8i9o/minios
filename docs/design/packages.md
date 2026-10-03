@@ -583,12 +583,17 @@ also bounds the download, so a server cannot fill the disk with an
 oversized archive. An index is limited to 4 MiB and a signature file to
 1 KiB.
 
-The model does not cover freshness. The index carries no date or
-sequence number, so a server can continue offering an older index that was
-validly signed, and `pkg update` accepts it. The archives it lists are
-older, but each of them was signed. Every key in `/etc/pkg/keys/` is
-trusted for every repository, and whoever possesses a private key can sign
-any index.
+Since P9 the index begins with `minios-pkg-index 2` and a header of the
+lines `origin NAME`, `sequence N` and optionally `expires SECONDS`, which
+`tools/mkrepo.sh` writes from `REPO_ORIGIN` (`minios`), `REPO_SEQUENCE`
+(the current time) and `REPO_EXPIRES`. A key file names the origins its
+key may sign with lines `origin NAME` after the key line, and `pkgsign
+public SECRET ORIGIN...` writes them. `pkg` refuses an index of an origin
+that its signing key may not sign, an index past its expiry time, and in
+`pkg update` an index whose sequence is lower than that of the index it
+has stored for the repository, which defeats a server that offers an
+older index that was validly signed. A format 1 index is refused with a
+request to build the repository again.
 
 ### Keys and signing
 
