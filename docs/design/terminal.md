@@ -11,8 +11,8 @@ share.
 Without a command the shell runs; `-d` sets the working directory of
 the program (the Files program opens terminals this way).
 
-Each child starts with `PATH=/bin`, `HOME=/home`, `USER=user`,
-`SHELL=/bin/sh` and `TERM=xterm-256color`. The interactive shell loads
+Each child starts with `TERM=xterm-256color` and the `HOME`, `USER`,
+`LOGNAME` and `SHELL` of the account of the window's user (`users.md`). The interactive shell loads
 the same profile, `.shrc` and history as the framebuffer-console shell;
 the latter starts with `TERM=minios`. See [Shell](sh.md) and
 [libedit](libedit.md). Terminal descriptors are read/write, so a pager

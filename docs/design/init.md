@@ -21,7 +21,8 @@ when `/dev/pcm0` exists, runs `net apply` for the static network entries,
 starts `dhcpc -a` as the `dhcp` service with `restart=failure` (the client
 reads the dhcp entry of `/etc/network` itself and exits with status 0
 when there is nothing to do, so the service stops on a machine without
-a network), and then the shell. Before this, `startgui` started the
+a network), and then the shell, since U3 of the multiuser plan `login`
+(`users.md`). Before this, `startgui` started the
 audio server per session and `net apply` forked the DHCP client as an
 unsupervised orphan. When the file cannot be read init parses a
 built-in table with the same entries, so a damaged root image still

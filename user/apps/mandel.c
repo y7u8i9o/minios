@@ -17,6 +17,7 @@
  * r resets the view, j switches between the Mandelbrot set and the Julia
  * set of the centre, and Escape or q quits.  Without a window server, or
  * with `mandel columns rows`, the set is printed as text. */
+#include <minios/conf.h>
 #include <langinfo.h>
 #include <math.h>
 #include <pthread.h>
@@ -725,8 +726,10 @@ static int on_iterations(struct widget *w, void *args, void *arg)
 
 static int on_save(struct widget *w, void *args, void *arg)
 {
-    static char name[256] = "/home/mandel.png";
+    static char name[256];
     const char *const buttons[] = { _("Close") };
+    if (!name[0])
+        snprintf(name, sizeof name, "%s/mandel.png", conf_home());
     if (!app_prompt(app, _("Save image"), _("File:"), name, sizeof name))
         return 1;
     render_stop();

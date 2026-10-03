@@ -9,6 +9,7 @@
  * E eraser, L line, R rectangle, O ellipse, F fill; + and - change the
  * brush size; Ctrl+N new, Ctrl+O open, Ctrl+S save, Ctrl+Z undo, Ctrl+Y
  * redo. The image has one pixel per logical pixel of the window. */
+#include <minios/conf.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -437,7 +438,7 @@ static int save_as(void)
     if (path[0])
         strlcpy(name, path, sizeof name);
     else
-        snprintf(name, sizeof name, "%s/Pictures/untitled.png", getenv("HOME") ? getenv("HOME") : "/home");
+        snprintf(name, sizeof name, "%s/Pictures/untitled.png", conf_home());
     if (!app_prompt(app, "Save as", "File:", name, sizeof name))
         return 1;
     return save_to(name);
@@ -544,7 +545,7 @@ static int on_open(struct widget *w, void *args, void *arg)
     if (path[0])
         strlcpy(name, path, sizeof name);
     else
-        snprintf(name, sizeof name, "%s/", getenv("HOME") ? getenv("HOME") : "/home");
+        snprintf(name, sizeof name, "%s/", conf_home());
     if (!app_prompt(app, "Open", "File:", name, sizeof name))
         return 1;
     int err = load(name);

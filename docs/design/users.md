@@ -201,7 +201,77 @@ Opening `/dev/ptmx` gives the slave node of the new pair to the real uid
 and gid of the opener with mode 0620 (`devfs_set_owner`), and closing the
 master returns it to root with mode 0600, the mode of an unused slave.
 
- runs `/bin/credtest` as root. It checks the initial
+## Accounts and homes (U3)
+
+The account databases live in `/usr/local/etc` on the data volume, and
+`/etc/passwd`, `/etc/group` and `/etc/shadow` of the root image are
+symbolic links to them, which keeps accounts across rebuilds of the root
+image. `/usr/local` is itself a symbolic link of the root image to
+`/home/.local`, the package prefix that belonged to the single user
+before and now belongs to root (`LOCAL_PREFIX`). Without a data volume
+the root image's `/home` holds the same tree.
+
+| Path | Owner | Content |
+|---|---|---|
+| `/home/<name>` | the account, mode 0700 | the home, made from `/etc/skel` |
+| `/home/.local` (`/usr/local`) | root | packages, `etc/` with the databases, `state/` |
+| `/home/.layout` | root | the layout marker, `2` |
+| `/root` | root, mode 0700 | root's home on the root image, rebuilt with it |
+| `/etc/skel` | root | the skeleton of new homes, `user/skel/` in the tree |
+
+The image ships `root` (home `/root`) and `user` (uid and gid 1000, home
+`/home/user`), both with an empty hash. `user/Makefile` copies the skeleton
+into `/etc/skel`, `/home/user` and `/root`, installs `user/local/` as the
+prefix of the root image and of the seed `/usr/share/skel/home`, writes the
+marker, sets the special modes on the build tree (`/tmp` 1777, the homes
+0700, the shadow file 0600, `su` and `passwd` 4755) and links the
+databases. The manifest `user/perms` gives `/home/user` to uid 1000.
+
+The data volume's `/etc/fstab` entry carries the option `homes`. After the
+mount, `fsinit` converts a volume of the single user layout, recognised by
+the missing marker. Every entry but `.local` and `lost+found` moves
+through a temporary directory into `user/`, which goes to uid 1000 with
+mode 0700, `.local` goes to root and receives the databases of the seed,
+and the marker is written. `fsinit` then makes the home of every account
+of `/etc/passwd` that lies on the volume and does not exist
+(`account_make_home`). `fsinit -m DIR` converts a directory alone.
+
+`login` (run by init on the console as `console login login`) asks for
+the name and the password, gives the terminal to the account with mode
+0620, calls `initgroups`, `setgid` and `setuid`, enters the home and runs
+the shell as a login shell with `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`
+and `PATH=/bin:/usr/local/bin`. At its start it returns the terminal to
+root. `su` and `passwd` are set user id root. `su` asks a caller other
+than root for the target's password and reads it from standard input when
+that is not a terminal. `passwd` changes the caller's password after the
+current one, root changes any account without one, `-d` removes a
+password and `-n` sets the full name. `useradd` and `userdel` are for
+root. A new account gets the lowest free id from 1000 on for its uid and
+its own group, a locked hash and a home from `/etc/skel`.
+`account_read_password` turns echo off on a terminal, and `account_today`
+gives the day count of the shadow file. The commands write the databases
+through `account_replace`.
+
+The shell prints `#` for `\$` when the effective uid is 0 and expands
+`~name`. `term` sets `HOME`, `USER`, `LOGNAME` and `SHELL` of the window's
+user. `conf_home` in `minios/conf.h` gives `HOME`, or the home of the real
+uid when it is unset, which replaces the fixed `/home` of the desktop, the
+files window, the input method daemon and the applications that save
+files. `conf_user_file` and `conf_user_write_file` give the per-user
+launcher menu `~/.config/launcher` and MIME handler table
+`~/.config/mime.apps`, which replace `/etc/launcher` and `/etc/mime.apps`
+for that user.
+
+`pkg` refuses to change a prefix the caller cannot write and names
+`su -c` and `--prefix ~/.local`. `ld.so` searches `/lib`,
+`/usr/local/lib` and `$HOME/.local/lib`, the last only without
+`AT_SECURE`. `/etc/profile` adds `/usr/local/bin` and `~/.local/bin` to
+`PATH`, and the panel reads the launcher entries of
+`/usr/local/share/launcher` and `~/.local/share/launcher`.
+
+## Test
+
+The case `user_cred` runs `/bin/credtest` as root. It checks the initial
 identity and mask, drops a child to uid 1000 with groups 1000 and 50 and
 checks that the child cannot regain root or change its groups, that
 `/dev/proc` reports its uid, that a grandchild inherits the ids and that an
@@ -230,3 +300,14 @@ directory to another parent, `utimensat`, `access`, exec, the setuid copy
 and of their own, and the ownership of a pseudo terminal. Root finally
 checks that it keeps its access but cannot execute a file without execute
 bits.
+
+The case `login_console` types on the console before init starts. root
+logs in, sets its password, creates `anna` and gives her a password, and
+logs out. A wrong password for `anna` fails with "Login incorrect", the
+right one gives a shell in `/home/anna` with the console hers, in which
+`su` fails with a wrong root password and succeeds with the right one and
+`/etc/shadow` cannot be read. root logs in again, removes `anna` with her
+home and powers off. The case `fs_migrate` runs `/bin/migratetest`, which
+builds a directory of the single user layout below `/tmp`, including an
+entry named `user`, a symbolic link and a package prefix, converts it with
+`fsinit -m` and checks the result and that a second run changes nothing.

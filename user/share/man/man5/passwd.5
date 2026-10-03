@@ -30,9 +30,13 @@ DESCRIPTION
     means that the account has no password and logs in without a prompt.
     A hash beginning with ! or * locks the account.
 
+    The three files live in /usr/local/etc, the package prefix on the
+    data volume, and the names in /etc are symbolic links to them, which
+    keeps the accounts across rebuilds of the root image.
+
     Lines beginning with # and lines with missing or malformed fields are
     ignored. Account and group names start with a lowercase letter and
     continue with lowercase letters, digits, _ and -, up to 32 characters.
 
 SEE ALSO
-    id(1), index(7)
+    login(1), passwd(1), useradd(1), id(1), index(7)

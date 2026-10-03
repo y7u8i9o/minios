@@ -22,6 +22,7 @@
  * address in the INIT-REBOOT state of RFC 2131 section 3.2. -A divides
  * every interval of conflict detection by ten for tests. */
 #include <stdio.h>
+#include <minios/local.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -49,7 +50,7 @@ static int accelerated;
 
 /* The root image is rebuilt by every build; only the home volume persists
  * (docs/design/storage.md), so the lease is state below it. */
-#define DEFAULT_LEASE_DIR "/home/.local/state/dhcpc"
+#define DEFAULT_LEASE_DIR LOCAL_PREFIX "/state/dhcpc"
 
 /* These are the constants of RFC 5227 section 1.1 in milliseconds and the
  * ten seconds that RFC 2131 section 3.1 asks a client to wait after
@@ -408,8 +409,8 @@ static void announce(uint32_t address)
 static void lease_save(const struct lease *l)
 {
     if (!strncmp(lease_path, DEFAULT_LEASE_DIR "/", sizeof DEFAULT_LEASE_DIR)) {
-        mkdir("/home/.local", 0755);
-        mkdir("/home/.local/state", 0755);
+        mkdir(LOCAL_PREFIX, 0755);
+        mkdir(LOCAL_PREFIX "/state", 0755);
         mkdir(DEFAULT_LEASE_DIR, 0755);
     }
     char temporary[160];

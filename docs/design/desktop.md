@@ -18,7 +18,7 @@ when the configured size changes, and receives key events when created
 with keyboard interactivity.
 
 The desktop widget paints the wallpaper, then one cell of 90x84 pixels
-per entry of `/home/desktop`, filled column by column. Directories are
+per entry of `desktop` in the user's home (`users.md`), filled column by column. Directories are
 listed first, then files by name. Each entry shows its icon at twice
 the 16x16 size and its name, with the `.app` extension removed for
 launcher files. A left click selects an entry and a second click
@@ -31,7 +31,7 @@ click opens a context menu (`popupmenu_new` and `menu_popup` in
 - On the desktop: New folder, New text file, Refresh, Change wallpaper
   (starts `settings appearance`), Settings.
 
-Every second the desktop re-reads `/home/desktop` and compares the
+Every second the desktop re-reads its folder and compares the
 configuration file (`$HOME/.config/desktop.conf` when it exists, the
 shipped `/etc/desktop.conf` otherwise; `storage.md`) with the last
 contents. A changed file is applied:
@@ -84,12 +84,13 @@ the C locale. `term_font_px` is the font size of the terminal.
   matches the extension case-insensitively and returns
   `application/octet-stream` when nothing matches, `inode/directory`
   for directories.
-- `/etc/mime.apps`: `type program` lines. `mime_handler(type)` tries the
+- `/etc/mime.apps`, or the user's `~/.config/mime.apps` when it exists
+  (`users.md`): `type program` lines. `mime_handler(type)` tries the
   exact type, then `type/*`, then `*`.
 
 `mime_open(path)` starts the handler with the path as its argument and
 returns the child's pid. The tables of installed packages under
-`/home/.local/share` (`packages.md`) are read after the system tables;
+`/usr/local/share` (`packages.md`) are read after the system tables;
 a package entry for a type the system table names is ignored, and
 `mime_save` writes the system entries only. A launcher file (`application/x-launcher`,
 extension `.app`) is opened by running the command in its `exec=`
@@ -134,8 +135,10 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
 - Date and time: the local time with the zone abbreviation, fields for a
   new local date and time, and Set clock (`settimeofday`).
 - File types: the handler table with a program field, Set and Add type;
-  writes `/etc/mime.apps` immediately.
-- Launcher: the entries of `/etc/launcher` with fields for the title and
+  writes the user's `~/.config/mime.apps` immediately.
+- Launcher: the entries of the user's `~/.config/launcher`, or of
+  `/etc/launcher` before the first change, which the page saves to the
+  user's file, with fields for the title and
   program, Save, New, Remove, Move up and Move down; the panel reads the
   file when it starts.
 - System: kernel name and release, processors, display, uptime, memory

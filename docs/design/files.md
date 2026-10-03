@@ -53,7 +53,7 @@ A two second timer rereads the directory and refreshes the table when
 the names, sizes, times or kinds differ, so files written by other
 programs appear; the selection is kept by name.
 
-The places list has Home (`/home`), Desktop (`/home/desktop`), Root,
+The places list has Home (the user's home), Desktop (`desktop` in the home), Root,
 Programs (`/bin`), Shared files (`/usr/share`), Fonts (`/etc/fonts`)
 and Devices (`/dev`).
 

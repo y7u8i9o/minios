@@ -45,12 +45,11 @@ UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgu
 UCPP   += -I../libedit/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
-HOME_FILES := $(patsubst home/%,$(ROOT)/home/%,$(wildcard home/*/*)) $(ROOT)/home/.shrc
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf \
           $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(HOME_FILES) $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links
+all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
 
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
@@ -59,11 +58,16 @@ $(ROOT)/etc/%: etc/%
 # Two symbolic links that the symlink test resolves on the root image and
 # under /initrd, which mkfs and the initrd reader store as links: a
 # relative one to the tar fixture beside it and an absolute one to
-# /etc/motd. They are recreated on every build.
+# /etc/motd. The account databases in /etc lead to the package prefix
+# /usr/local, itself a link to /home/.local on the data volume, which
+# keeps accounts across rebuilds of the root image (docs/design/users.md).
+# They are recreated on every build.
 .PHONY: links
 links: $(ETC)
 	@ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar
 	@ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd
+	@for f in passwd group shadow; do ln -sfn /usr/local/etc/$$f $(ROOT)/etc/$$f; done
+	@mkdir -p $(ROOT)/usr && ln -sfn /home/.local $(ROOT)/usr/local
 
 # pkg-key installs the public half of the key that signs the package
 # repository index (docs/design/packages.md), which the top level Makefile
@@ -94,17 +98,31 @@ share-tree:
 	@cp -Rp share/. $(ROOT)/usr/share/
 	@if [ -d ../third_party/fontawesome/svgs ]; then cp ../third_party/fontawesome/svgs/*.svg $(ROOT)/usr/share/icons/; fi
 
-# The home directory is installed twice: on the root image, for a boot
-# without a data volume, and as the skeleton that fsinit copies onto a
-# fresh data volume (etc/fstab).
+# The home skeleton skel/ is installed as /etc/skel, from which useradd
+# and fsinit make new homes, and copied into the homes of the two accounts
+# of the image, /root and /home/user, for a boot without a data volume.
+# local/ holds the account databases of the package prefix /home/.local
+# (/usr/local), which go to the root image and, with the layout marker,
+# into /usr/share/skel/home, the seed of a fresh data volume (etc/fstab,
+# docs/design/users.md). Files of the single user layout that earlier
+# builds left behind are removed.
 .PHONY: skel-tree
 skel-tree:
-	@mkdir -p $(ROOT)/usr/share/skel/home
-	@cp -Rp home/. $(ROOT)/usr/share/skel/home/
+	@rm -rf $(ROOT)/home/desktop $(ROOT)/home/.shrc $(ROOT)/usr/share/skel/home/desktop \
+	    $(ROOT)/usr/share/skel/home/.shrc
+	@for d in $(ROOT)/etc/skel $(ROOT)/home/user $(ROOT)/root; do mkdir -p $$d && cp -Rp skel/. $$d/; done
+	@for d in $(ROOT)/home $(ROOT)/usr/share/skel/home; do \
+	    mkdir -p $$d/.local && cp -Rp local/. $$d/.local/ && echo 2 > $$d/.layout; done
 
-$(ROOT)/home/%: home/%
-	@mkdir -p $(dir $@)
-	cp $< $@
+# Modes that differ from those of the sources, set on the build tree, from
+# which both mkfs and the initrd archive take them. Owners other than root
+# come from the manifest perms.
+.PHONY: modes
+modes: $(BINS) skel-tree $(ROOT)/tmp
+	@chmod 1777 $(ROOT)/tmp
+	@chmod 0700 $(ROOT)/root $(ROOT)/home/user
+	@chmod 0600 $(ROOT)/home/.local/etc/shadow $(ROOT)/usr/share/skel/home/.local/etc/shadow
+	@chmod 4755 $(ROOT)/bin/su $(ROOT)/bin/passwd
 
 $(ROOT)/etc/fonts/%.ttf: ../third_party/dejavu/%.ttf
 	@mkdir -p $(dir $@)

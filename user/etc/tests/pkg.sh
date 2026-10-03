@@ -7,7 +7,7 @@
 check() {
     test "$2" = "$3" || echo "FAIL $1: [$2]"
 }
-P=${P:-/home/.local}
+P=${P:-/usr/local}
 PKG=${PKG:-pkg}
 FIX=${FIX:-/etc/tests/pkgfix}
 ABI=${ABI:-/lib/abi}

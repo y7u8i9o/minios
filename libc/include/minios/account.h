@@ -32,3 +32,27 @@ bool account_check(const char *password, const char *hash);
 /* True if name is a valid account or group name: a lowercase letter, then
  * up to 31 lowercase letters, digits, "_" or "-". */
 bool account_name_valid(const char *name);
+
+/* Copy the tree below from into the existing directory to, keeping the
+ * permission bits less the umask and copying symbolic links as links.
+ * Entries that exist already are kept. Returns 0 or -1 with errno set. */
+int account_copy_tree(const char *from, const char *to);
+
+/* Give path and, when it is a directory, everything below it to uid and
+ * gid, changing symbolic links themselves. Returns 0 or -1. */
+int account_chown_tree(const char *path, unsigned uid, unsigned gid);
+
+/* Make the home directory dir of an account: mode 0700, the contents of
+ * ACCOUNT_SKEL, everything owned by uid and gid. A dir that exists is left
+ * as it is. Returns 0 or -1 with errno set. */
+int account_make_home(const char *dir, unsigned uid, unsigned gid);
+
+/* Read one line into buf without its newline. On a terminal the prompt is
+ * written to standard error and echo is off while the line is typed,
+ * otherwise the line is read from standard input without a prompt, which
+ * lets a program pass a password through a pipe. Returns 0, or -1 at the
+ * end of the input. */
+int account_read_password(const char *prompt, char *buf, size_t size);
+
+/* The days since the epoch, for the last change field of /etc/shadow. */
+long account_today(void);

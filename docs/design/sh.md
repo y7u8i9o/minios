@@ -87,8 +87,12 @@ handling; the interactive shell ignores `SIGINT` and `SIGPIPE`.
 
 ## Interactive defaults
 
-Init sets `PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios`
-from the `env` line of `/etc/init.conf`.
+Init sets `PATH=/bin TERM=minios` from the `env` line of
+`/etc/init.conf`, and since U3 of the multiuser plan (`users.md`) `login`
+adds `HOME`, `USER`, `LOGNAME` and `SHELL` of the account and
+`/usr/local/bin` to `PATH`. The prompt escape `\$` prints `#` for
+effective uid 0, `\u` falls back to the account of the effective uid
+without `USER`, and `~name` expands to the home of the account `name`.
 Interactive shells source `/etc/profile`, then `$HOME/.shrc`. The profile
 sets `PAGER=less`, `ll` and `la` aliases, and a coloured prompt when colour
 is enabled. Without these environment defaults the prompt remains `/ $ `.

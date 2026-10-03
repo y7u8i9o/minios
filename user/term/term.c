@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <termios.h>
+#include <pwd.h>
 #include <sys/ioctl.h>
 #include <sys/ipc.h>
 #include <sys/wait.h>
@@ -405,9 +406,14 @@ static struct tab *open_tab(char *const argv[], const char *dir)
             close(tab_list[i]->master);
         tcsetpgrp(0, getpgrp());
         setenv("TERM", "xterm-256color", 1);
-        setenv("HOME", "/home", 1);
-        setenv("USER", "user", 1);
-        setenv("SHELL", "/bin/sh", 1);
+        /* The shell runs as the account of the terminal window's user. */
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) {
+            setenv("HOME", pw->pw_dir, 1);
+            setenv("USER", pw->pw_name, 1);
+            setenv("LOGNAME", pw->pw_name, 1);
+            setenv("SHELL", pw->pw_shell[0] ? pw->pw_shell : "/bin/sh", 1);
+        }
         if (dir && dir[0])
             chdir(dir);
         execvp(argv[0], argv);

@@ -292,12 +292,12 @@ static void parse_line(char *line, int lineno)
 static void builtin_config(void)
 {
     static const char *const lines[] = {
-        "env PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios",
+        "env PATH=/bin TERM=minios",
         "task fsinit fsinit",
         "service audio if=/dev/pcm0 audiod",
         "task network net apply",
         "service dhcp restart=failure dhcpc -a",
-        "console sh sh",
+        "console login login",
     };
     env_count = 0;
     for (size_t i = 0; i < sizeof lines / sizeof lines[0]; i++) {

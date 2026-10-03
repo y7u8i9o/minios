@@ -20,7 +20,11 @@ static int nexts;
 static struct app_entry apps[MIME_MAX];
 static int napps;
 static int loaded;
-static char apps_file[128] = "/etc/mime.apps";
+/* The handler table: the user's ~/.config/mime.apps when it exists, else
+ * /etc/mime.apps, unless mime_load names one. mime_save writes to the
+ * user's file in the first case (docs/design/users.md). */
+static char apps_file[256];
+static int apps_named;
 
 static int ext_equal(const char *a, const char *b)
 {
@@ -99,8 +103,12 @@ int mime_load(const char *types_path, const char *apps_path)
     loaded = 1;
     nexts = napps = 0;
     load_types(types_path ? types_path : "/etc/mime.types", 0);
-    if (apps_path)
+    if (apps_path) {
         strlcpy(apps_file, apps_path, sizeof apps_file);
+        apps_named = 1;
+    } else if (!apps_named) {
+        conf_user_file("mime.apps", "/etc/mime.apps", apps_file, sizeof apps_file);
+    }
     int r = load_apps(apps_file, 0);
     if (r < 0)
         return r;
@@ -165,7 +173,10 @@ void mime_set_handler(const char *type, const char *program)
 int mime_save(const char *apps_path)
 {
     ensure();
-    FILE *f = fopen(apps_path ? apps_path : apps_file, "w");
+    char user_file[256];
+    if (!apps_path)
+        apps_path = apps_named ? apps_file : conf_user_write_file("mime.apps", user_file, sizeof user_file);
+    FILE *f = fopen(apps_path, "w");
     if (!f)
         return -errno;
     fprintf(f, "# type program\n");

@@ -1,5 +1,6 @@
 #include "sh.h"
 #include <time.h>
+#include <pwd.h>
 #include <sys/stat.h>
 
 char *prompt_render(int secondary)
@@ -27,8 +28,10 @@ char *prompt_render(int secondary)
         switch (*++p) {
         case 'u':
             value = var_get("USER");
-            if (!value)
-                value = "user";
+            if (!value) {
+                struct passwd *pw = getpwuid(geteuid());
+                value = pw ? pw->pw_name : "?";
+            }
             break;
         case 'h':
             value = "minios";
@@ -41,7 +44,7 @@ char *prompt_render(int secondary)
             value = value && value[1] ? value + 1 : cwd;
             break;
         case '$':
-            value = "$";
+            value = geteuid() == 0 ? "#" : "$";
             break;
         case 't':
             value = clock;

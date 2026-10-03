@@ -39,15 +39,15 @@ OPTIONS
     restart=failure  restart only after a non zero status or a signal
 
     Without a readable file init uses a built-in table equivalent to
-    the example below, so the system still boots to a shell.
+    the example below, so the system still boots to a login prompt.
 
 EXAMPLE
-    env PATH=/bin HOME=/home USER=user SHELL=/bin/sh TERM=minios
+    env PATH=/bin TERM=minios
     task fsinit fsinit
     service audio if=/dev/pcm0 audiod
     task network net apply
     service dhcp restart=failure dhcpc -a
-    console sh sh
+    console login login
 
 SEE ALSO
-    initctl(1), fsinit(1), fstab(5)
+    initctl(1), fsinit(1), login(1), fstab(5)

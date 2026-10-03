@@ -35,3 +35,22 @@ int conf_export_locale(void)
 {
     return 0;
 }
+
+const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size)
+{
+    strncpy(buf, default_path, size - 1);
+    buf[size - 1] = '\0';
+    return buf;
+}
+
+const char *conf_user_write_file(const char *name, char *buf, size_t size)
+{
+    strncpy(buf, "/nonexistent/user-file", size - 1);
+    buf[size - 1] = '\0';
+    return buf;
+}
+
+const char *conf_home(void)
+{
+    return "/nonexistent";
+}

@@ -3,5 +3,5 @@ name=$1
 shift
 /bin/pkg install /usr/share/packages/$name-*.mpk || exit 1
 if test $# -gt 0; then
-    /home/.local/bin/$name "$@"
+    /usr/local/bin/$name "$@"
 fi

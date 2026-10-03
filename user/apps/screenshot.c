@@ -22,6 +22,7 @@
  * and exits with status 1.
  * The display server starts this program on the screenshot keys
  * (docs/design/images.md). */
+#include <minios/conf.h>
 #include <gui/client.h>
 #include <gui/image.h>
 #include <gui/i18n.h>
@@ -863,7 +864,7 @@ static int default_path(char *path, size_t size)
 {
     const char *home = getenv("HOME");
     char dir[200];
-    snprintf(dir, sizeof dir, "%s/Pictures", home && home[0] ? home : "/home");
+    snprintf(dir, sizeof dir, "%s/Pictures", home && home[0] ? home : conf_home());
     if (mkdir(dir, 0755) < 0 && errno != EEXIST)
         return -errno;
     time_t now = time(NULL);

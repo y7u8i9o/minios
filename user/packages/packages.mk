@@ -64,8 +64,7 @@ repo: $(PKG_FILES)
 prune-packaged: share-tree skel-tree
 	@rm -f $(addprefix $(ROOT)/bin/,$(PKG_NAMES))
 	@rm -f $(ROOT)/usr/share/apps/code.lua $(ROOT)/usr/share/apps/pong.lua $(ROOT)/usr/share/man/man1/code.1
-	@rm -f $(ROOT)/home/desktop/Code.app $(ROOT)/home/desktop/Pong.app
-	@rm -f $(ROOT)/usr/share/skel/home/desktop/Code.app $(ROOT)/usr/share/skel/home/desktop/Pong.app
+	@rm -f $(foreach d,etc/skel home/user root,$(ROOT)/$(d)/desktop/Code.app $(ROOT)/$(d)/desktop/Pong.app)
 
 all: $(ROOT)/etc/tests/luasynth-engine.lua
 $(ROOT)/etc/tests/luasynth-engine.lua: packages/luasynth/tests/engine.lua

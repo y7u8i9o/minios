@@ -1,3 +1,4 @@
+#include <minios/local.h>
 #include <minios/profile.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -587,7 +588,7 @@ static struct prof_symtab *resolver_symtab(struct prof_resolver *r, pid_t pid)
     const char *name = prof_resolver_procname(r, pid);
     if (!name)
         return NULL;
-    static const char *const dirs[] = { "/bin", "/home/.local/bin", "/usr/bin" };
+    static const char *const dirs[] = { "/bin", LOCAL_BIN, "/usr/bin" };
     char path[160];
     for (size_t i = 0; i < sizeof dirs / sizeof dirs[0] && !p->syms; i++) {
         snprintf(path, sizeof path, "%s/%s", dirs[i], name);

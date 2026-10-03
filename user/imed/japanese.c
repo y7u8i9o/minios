@@ -16,6 +16,7 @@
  *                composes anew
  *
  * The state below belongs to the single thread of imed. */
+#include <minios/conf.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +51,7 @@ static void load(void)
         printf("imed: cannot load the Japanese dictionary: %d\n", err);
     const char *home = getenv("HOME");
     char path[256];
-    snprintf(path, sizeof path, "%s/.config", home && home[0] == '/' ? home : "/home");
+    snprintf(path, sizeof path, "%s/.config", home && home[0] == '/' ? home : conf_home());
     mkdir(path, 0755);
     strlcat(path, "/imed", sizeof path);
     mkdir(path, 0755);

@@ -107,8 +107,10 @@ misaligned load segments, and initializers outside executable segments.
 An error prints `ld.so: what: name` to standard error and exits with
 status 127.
 
-A library is `/lib/<soname>`, or `/home/.local/lib/<soname>` when `/lib`
-does not hold it, the directory of installed packages (`packages.md`).
+A library is `/lib/<soname>`, or `/usr/local/lib/<soname>` when `/lib`
+does not hold it, the directory of installed packages (`packages.md`), or
+since U3 of the multiuser plan `$HOME/.local/lib/<soname>` of the user,
+which a program with `AT_SECURE` never searches (`users.md`).
 Its span is reserved with `PROT_NONE` at the
 next address of an arena that starts at `0x7e0010000000` and ends at
 `0x7e8000000000`, each library on a 1 MiB boundary or the alignment its
@@ -219,7 +221,7 @@ and, when they had TLS, give up their vector slot. A thread that used
 the storage of an unloaded object keeps that block until its exit or
 until the slot is reused, when the generation stored with the block no
 longer matches the module's and the block is replaced. Object records
-return to a free list. Package libraries in `/home/.local/lib` are found
+return to a free list. Package libraries in `/usr/local/lib` are found
 by soname like the system ones.
 
 ## Initialization and finalization

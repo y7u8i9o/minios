@@ -3,31 +3,55 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <pwd.h>
 
 #define DEFAULT_CONF "/etc/desktop.conf"
 
+const char *conf_home(void)
+{
+    static char dir[256];
+    const char *home = getenv("HOME");
+    if (home != NULL && home[0] == '/')
+        return home;
+    if (!dir[0]) {
+        struct passwd *pw = getpwuid(getuid());
+        snprintf(dir, sizeof dir, "%s", pw && pw->pw_dir[0] == '/' ? pw->pw_dir : "/");
+    }
+    return dir;
+}
+
 static const char *home_dir(void)
 {
-    const char *home = getenv("HOME");
-    return home != NULL && home[0] == '/' ? home : "/home";
+    return conf_home();
+}
+
+const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size)
+{
+    snprintf(buf, size, "%s/.config/%s", home_dir(), name);
+    struct stat st;
+    if (stat(buf, &st) == 0 && S_ISREG(st.st_mode))
+        return buf;
+    strlcpy(buf, default_path, size);
+    return buf;
+}
+
+const char *conf_user_write_file(const char *name, char *buf, size_t size)
+{
+    snprintf(buf, size, "%s/.config", home_dir());
+    mkdir(buf, 0755);
+    snprintf(buf, size, "%s/.config/%s", home_dir(), name);
+    return buf;
 }
 
 const char *conf_read_path(char *buf, size_t size)
 {
-    snprintf(buf, size, "%s/.config/desktop.conf", home_dir());
-    struct stat st;
-    if (stat(buf, &st) == 0 && S_ISREG(st.st_mode))
-        return buf;
-    strlcpy(buf, DEFAULT_CONF, size);
-    return buf;
+    return conf_user_file("desktop.conf", DEFAULT_CONF, buf, size);
 }
 
 const char *conf_write_path(char *buf, size_t size)
 {
-    snprintf(buf, size, "%s/.config", home_dir());
-    mkdir(buf, 0755);
-    snprintf(buf, size, "%s/.config/desktop.conf", home_dir());
-    return buf;
+    return conf_user_write_file("desktop.conf", buf, size);
 }
 
 /* set_var sets or removes one variable and reports a change. */

@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <minios/conf.h>
 #include <gui/app.h>
 #include <gui/i18n.h>
 #include <gui/mime.h>
@@ -46,10 +47,20 @@ static int clip_cut;
 static char typed[64];
 static long typed_ms;
 
+/* A path starting with "~" lies in the home of the user. */
 static const struct { const char *name, *path; } places_list[] = {
-    { N_("Home"), "/home" }, { N_("Desktop"), "/home/desktop" }, { N_("Root"), "/" }, { N_("Programs"), "/bin" },
+    { N_("Home"), "~" }, { N_("Desktop"), "~/desktop" }, { N_("Root"), "/" }, { N_("Programs"), "/bin" },
     { N_("Shared files"), "/usr/share" }, { N_("Fonts"), "/etc/fonts" }, { N_("Devices"), "/dev" },
 };
+
+/* The path of a place, with "~" replaced by the home directory. */
+static const char *place_path(const char *path, char *buf, size_t size)
+{
+    if (path[0] != '~')
+        return path;
+    snprintf(buf, size, "%s%s", conf_home(), path + 1);
+    return buf;
+}
 
 /* ---- the listing ---- */
 
@@ -386,7 +397,7 @@ static int on_forward(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-static int on_home(struct widget *w, void *args, void *arg) { navigate("/home", 1); return 1; }
+static int on_home(struct widget *w, void *args, void *arg) { navigate(conf_home(), 1); return 1; }
 static int on_root(struct widget *w, void *args, void *arg) { navigate("/", 1); return 1; }
 static int on_go(struct widget *w, void *args, void *arg) { navigate(widget_text(path_field), 1); return 1; }
 static int on_refresh(struct widget *w, void *args, void *arg) { refresh(); return 1; }
@@ -394,8 +405,10 @@ static int on_refresh(struct widget *w, void *args, void *arg) { refresh(); retu
 static int on_place(struct widget *w, void *args, void *arg)
 {
     int i = ((struct sig_select *)args)->index;
-    if (i >= 0 && i < (int)(sizeof places_list / sizeof places_list[0]))
-        navigate(places_list[i].path, 1);
+    if (i >= 0 && i < (int)(sizeof places_list / sizeof places_list[0])) {
+        char buf[300];
+        navigate(place_path(places_list[i].path, buf, sizeof buf), 1);
+    }
     return 1;
 }
 

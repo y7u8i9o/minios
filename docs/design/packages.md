@@ -29,24 +29,29 @@ survive the next build. The only persistent volume is the data volume,
 mounted at `/home`. Symbolic links exist since 2026-09-30 (`vfs.md`),
 but a link placed in `/bin` or `/lib` of the root image would disappear
 with the next rebuild as well, and there are no bind mounts. Packages are
-therefore installed under `/home/.local` (`LOCAL_PREFIX` in
-`minios/local.h`), with the layout of a per-user prefix: `bin/`, `lib/`,
-`share/`, and `lib/pkg/` for the installer's records. Without a data
-volume the prefix lies on the root image's `/home` and disappears with
-the next build, as every other file of the home directory does.
+therefore installed under `/home/.local`, with the layout of a per-user
+prefix: `bin/`, `lib/`, `share/`, and `lib/pkg/` for the installer's
+records. Since U3 of the multiuser plan (`users.md`) the prefix is
+`/usr/local` (`LOCAL_PREFIX` in `minios/local.h`), a symbolic link of the
+root image to `/home/.local`, which belongs to root and is shared by all
+users, and installing or removing a package needs root (`su -c 'pkg
+install NAME'`) or a prefix of the user's own such as `--prefix
+~/.local`. Without a data volume the prefix lies on the root image's
+`/home` and disappears with the next build.
 `--prefix DIR` selects another prefix, for tests and for images prepared
 on another system.
 
 Three places know the prefix:
 
-- `/etc/profile` appends `/home/.local/bin` to `PATH`. The launcher menu
+- `/etc/profile` appends `/usr/local/bin` and `~/.local/bin` to `PATH`. The launcher menu
   and `mime_spawn` start programs by absolute path.
-- `/lib/ld.so` searches `/lib` and then `/home/.local/lib` for a library
+- `/lib/ld.so` searches `/lib`, then `/usr/local/lib` and then `~/.local/lib` for a library
   named in `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a
   slash stays refused, and no environment variable changes the list.
-- The panel reads `/etc/launcher` and then `/home/.local/share/launcher`;
+- The panel reads `/usr/local/share/launcher`, `~/.local/share/launcher`
+  and then `/etc/launcher` or the user's `~/.config/launcher`;
   `mime_load` reads the system tables and then
-  `/home/.local/share/mime.types` and `mime.apps`. A package handler for
+  `/usr/local/share/mime.types` and `mime.apps`. A package handler for
   a type the system table names is ignored, so the user's handler table,
   which the settings program edits, takes precedence, and `mime_save`
   writes the system entries only. The installer rewrites the three files

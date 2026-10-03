@@ -12,6 +12,7 @@
  * size. The mouse wheel scrolls a large image, Shift with the wheel
  * scrolls it sideways, Ctrl with the wheel zooms, and dragging with the
  * left button moves it. */
+#include <minios/conf.h>
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
@@ -415,7 +416,7 @@ static int on_open(struct widget *w, void *args, void *arg)
     if (current >= 0)
         file_path(current, name, sizeof name);
     else
-        snprintf(name, sizeof name, "%s/", getenv("HOME") ? getenv("HOME") : "/home");
+        snprintf(name, sizeof name, "%s/", conf_home());
     if (app_prompt(app, "Open", "File:", name, sizeof name) && open_path(name) < 0)
         error_dialog("The file cannot be opened.");
     return 1;

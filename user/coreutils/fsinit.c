@@ -2,14 +2,24 @@
  * created one with a directory tree. init runs it before the shell.
  *
  *     fsinit [-f fstab] [-v]
+ *     fsinit -m DIR
  *
  * Each line of the table names a device, a mount point, a filesystem type
  * and a comma separated list of options: nofail (a missing device is not
  * an error), noauto (the entry is skipped), seed=DIR (DIR is copied into
- * the mount point when the mounted filesystem is empty). Any other option,
+ * the mount point when the mounted filesystem is empty), homes (the volume
+ * holds the home directories, see below). Any other option,
  * such as uid=, gid= or umask= of FAT, is passed to the filesystem. Mount
  * points that are mounted already are skipped, so the program may run
- * again. The exit status is 1 when a required mount failed. */
+ * again. The exit status is 1 when a required mount failed.
+ *
+ * On a volume with the homes option fsinit converts the layout of the
+ * single user, in which the volume itself was the home directory, into the
+ * layout of docs/design/users.md: the old contents move to user/, the
+ * package prefix .local stays and gains the account databases, and the
+ * marker .layout records the conversion. It then makes the missing homes
+ * of the accounts of /etc/passwd that lie on the volume. -m DIR converts
+ * the directory DIR alone, for the fs_migrate test. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +29,8 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
+#include <pwd.h>
+#include <minios/account.h>
 
 static int verbose;
 
@@ -68,86 +80,13 @@ static int dir_is_empty(const char *path)
     return empty;
 }
 
-static int copy_file(const char *from, const char *to, mode_t mode)
-{
-    int in = open(from, O_RDONLY);
-    if (in < 0)
-        return -1;
-    int out = open(to, O_WRONLY | O_CREAT | O_TRUNC, mode & 07777);
-    if (out < 0) {
-        close(in);
-        return -1;
-    }
-    char buf[16384];
-    ssize_t n;
-    int r = 0;
-    while ((n = read(in, buf, sizeof buf)) > 0) {
-        for (ssize_t done = 0; done < n; ) {
-            ssize_t w = write(out, buf + done, (size_t)(n - done));
-            if (w <= 0) {
-                r = -1;
-                break;
-            }
-            done += w;
-        }
-        if (r < 0)
-            break;
-    }
-    if (n < 0)
-        r = -1;
-    close(in);
-    close(out);
-    return r;
-}
-
-/* Copy the tree below from into to, which exists. */
-static int copy_tree(const char *from, const char *to)
-{
-    DIR *d = opendir(from);
-    if (d == NULL)
-        return -1;
-    struct dirent *e;
-    int r = 0;
-    while (r == 0 && (e = readdir(d)) != NULL) {
-        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
-            continue;
-        char src[512], dst[512];
-        snprintf(src, sizeof src, "%s/%s", from, e->d_name);
-        snprintf(dst, sizeof dst, "%s/%s", to, e->d_name);
-        struct stat st;
-        if (lstat(src, &st) < 0) {
-            r = -1;
-        } else if (S_ISLNK(st.st_mode)) {
-            /* A link is copied as a link, never through its target. */
-            char target[256];
-            ssize_t n = readlink(src, target, sizeof target - 1);
-            if (n < 0) {
-                r = -1;
-            } else {
-                target[n] = '\0';
-                if (symlink(target, dst) < 0 && errno != EEXIST)
-                    r = -1;
-            }
-        } else if (S_ISDIR(st.st_mode)) {
-            if (mkdir(dst, st.st_mode & 07777) < 0 && errno != EEXIST)
-                r = -1;
-            else
-                r = copy_tree(src, dst);
-        } else if (S_ISREG(st.st_mode)) {
-            r = copy_file(src, dst, st.st_mode);
-        }
-    }
-    closedir(d);
-    return r;
-}
-
 struct entry {
     char device[64];
     char target[256];
     char type[16];
     char seed[256];
     char fsopts[128];               /* options for the filesystem itself */
-    int nofail, noauto;
+    int nofail, noauto, homes;
 };
 
 static int parse_options(struct entry *e, char *options)
@@ -159,6 +98,8 @@ static int parse_options(struct entry *e, char *options)
             e->noauto = 1;
         else if (strncmp(opt, "seed=", 5) == 0)
             strlcpy(e->seed, opt + 5, sizeof e->seed);
+        else if (strcmp(opt, "homes") == 0)
+            e->homes = 1;
         else if (strcmp(opt, "defaults") != 0) {
             size_t used = strlen(e->fsopts);
             if (used + strlen(opt) + 2 > sizeof e->fsopts)
@@ -167,6 +108,111 @@ static int parse_options(struct entry *e, char *options)
         }
     }
     return 0;
+}
+
+#define LAYOUT_MARKER ".layout"
+#define LAYOUT_VERSION "2\n"
+#define SEED_LOCAL "/usr/share/skel/home/.local"
+#define FIRST_USER 1000
+
+/* Convert dir from the single user layout, in which dir was the home of
+ * the one user, uid FIRST_USER. Every entry but the package prefix .local
+ * and lost+found moves into user/, through a temporary name, since the old
+ * home may hold an entry named user itself. Returns 1 after a conversion,
+ * 0 when there was nothing to do, -1 on an error. */
+static int migrate(const char *dir)
+{
+    char path[512], from[512], to[512];
+    snprintf(path, sizeof path, "%s/" LAYOUT_MARKER, dir);
+    if (access(path, F_OK) == 0)
+        return 0;
+    char tmp[512];
+    snprintf(tmp, sizeof tmp, "%s/.migrate-user", dir);
+    if (mkdir(tmp, 0700) < 0 && errno != EEXIST)
+        return -1;
+    /* The directory changes with every move, so it is read again from the
+     * start for the next entry. */
+    int moved = 0;
+    for (;;) {
+        DIR *d = opendir(dir);
+        if (d == NULL)
+            return -1;
+        struct dirent *e;
+        char name[256] = "";
+        while ((e = readdir(d)) != NULL) {
+            const char *n = e->d_name;
+            if (strcmp(n, ".") && strcmp(n, "..") && strcmp(n, ".local") && strcmp(n, "lost+found") &&
+                strcmp(n, ".migrate-user")) {
+                snprintf(name, sizeof name, "%s", n);
+                break;
+            }
+        }
+        closedir(d);
+        if (!name[0])
+            break;
+        snprintf(from, sizeof from, "%s/%s", dir, name);
+        snprintf(to, sizeof to, "%s/%s", tmp, name);
+        if (rename(from, to) < 0)
+            return -1;
+        moved++;
+    }
+    snprintf(to, sizeof to, "%s/user", dir);
+    /* With nothing to move the home is made from the skeleton later. */
+    if (moved == 0) {
+        rmdir(tmp);
+    } else if (rename(tmp, to) < 0 || chmod(to, 0700) < 0 ||
+               account_chown_tree(to, FIRST_USER, FIRST_USER) < 0) {
+        return -1;
+    }
+    /* The package prefix belongs to root, and it holds the account
+     * databases from now on. */
+    snprintf(path, sizeof path, "%s/.local", dir);
+    if (mkdir(path, 0755) < 0 && errno != EEXIST)
+        return -1;
+    if (account_chown_tree(path, 0, 0) < 0 || chmod(path, 0755) < 0)
+        return -1;
+    snprintf(path, sizeof path, "%s/.local/etc", dir);
+    if (mkdir(path, 0755) < 0 && errno != EEXIST)
+        return -1;
+    snprintf(from, sizeof from, SEED_LOCAL "/etc");
+    if (account_copy_tree(from, path) < 0)
+        return -1;
+    snprintf(path, sizeof path, "%s/" LAYOUT_MARKER, dir);
+    FILE *f = fopen(path, "w");
+    if (f == NULL)
+        return -1;
+    fputs(LAYOUT_VERSION, f);
+    fclose(f);
+    printf("fsinit: moved %d entries of the single user home into %s/user\n", moved, dir);
+    return 1;
+}
+
+/* Make the missing homes of the accounts whose home lies below dir. */
+static int make_homes(const char *dir)
+{
+    size_t len = strlen(dir);
+    setpwent();
+    struct passwd *pw;
+    int r = 0;
+    char home[256];
+    unsigned uid, gid;
+    while ((pw = getpwent()) != NULL) {
+        if (strncmp(pw->pw_dir, dir, len) != 0 || pw->pw_dir[len] != '/')
+            continue;
+        snprintf(home, sizeof home, "%s", pw->pw_dir);
+        uid = pw->pw_uid;
+        gid = pw->pw_gid;
+        if (access(home, F_OK) == 0)
+            continue;
+        if (account_make_home(home, uid, gid) < 0) {
+            fprintf(stderr, "fsinit: home %s: %s\n", home, strerror(errno));
+            r = -1;
+        } else {
+            note("made the home %s", home, "");
+        }
+    }
+    endpwent();
+    return r;
 }
 
 static int process(const struct entry *e)
@@ -188,11 +234,19 @@ static int process(const struct entry *e)
     }
     note("mounted %s on %s", e->device, e->target);
     if (e->seed[0] != '\0' && dir_is_empty(e->target)) {
-        if (copy_tree(e->seed, e->target) < 0) {
+        if (account_copy_tree(e->seed, e->target) < 0) {
             fprintf(stderr, "fsinit: seeding %s from %s: %s\n", e->target, e->seed, strerror(errno));
             return -1;
         }
         printf("fsinit: seeded %s from %s\n", e->target, e->seed);
+    }
+    if (e->homes) {
+        if (migrate(e->target) < 0) {
+            fprintf(stderr, "fsinit: converting the layout of %s: %s\n", e->target, strerror(errno));
+            return -1;
+        }
+        if (make_homes(e->target) < 0)
+            return -1;
     }
     return 0;
 }
@@ -201,15 +255,25 @@ int main(int argc, char **argv)
 {
     const char *table = "/etc/fstab";
     int opt;
-    while ((opt = getopt(argc, argv, "f:v")) != -1) {
+    const char *migrate_dir = NULL;
+    while ((opt = getopt(argc, argv, "f:vm:")) != -1) {
         if (opt == 'f')
             table = optarg;
         else if (opt == 'v')
             verbose = 1;
+        else if (opt == 'm')
+            migrate_dir = optarg;
         else {
-            fprintf(stderr, "usage: fsinit [-f fstab] [-v]\n");
+            fprintf(stderr, "usage: fsinit [-f fstab] [-v] | fsinit -m DIR\n");
             return 2;
         }
+    }
+    if (migrate_dir) {
+        if (migrate(migrate_dir) < 0) {
+            fprintf(stderr, "fsinit: converting the layout of %s: %s\n", migrate_dir, strerror(errno));
+            return 1;
+        }
+        return 0;
     }
     FILE *f = fopen(table, "r");
     if (f == NULL) {

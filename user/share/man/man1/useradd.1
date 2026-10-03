@@ -1,0 +1,39 @@
+USERADD(1)                  User Commands
+
+NAME
+    useradd, userdel - create and remove accounts
+
+SYNOPSIS
+    useradd [-u uid] [-g group] [-G group,...] [-c full-name] [-d home]
+            [-s shell] [-M] name
+    userdel [-r] name
+
+DESCRIPTION
+    useradd creates the account name. It receives the lowest uid from
+    1000 on that is free, together with the same gid, unless -u gives the
+    uid. A group of the account's name and gid is created unless -g names
+    an existing group as the account's group. -G adds the account to the
+    member lists of further groups. -c sets the full name, -s the shell
+    (/bin/sh by default) and -d the home, /home/name by default, which
+    useradd makes from /etc/skel with mode 0700 unless -M is given. The
+    password is locked until passwd(1) sets one.
+
+    userdel removes the account name from /etc/passwd, /etc/shadow and
+    the member lists of /etc/group. Its own group goes as well when no
+    other account has it as its group. -r also removes the home
+    directory. root cannot be removed.
+
+    Only root may run either command. Names start with a lowercase letter
+    and continue with lowercase letters, digits, _ and -, up to 32
+    characters.
+
+EXAMPLES
+    useradd -c 'Anna Example' anna
+    passwd anna
+    userdel -r anna
+
+FILES
+    /etc/passwd, /etc/group, /etc/shadow, /etc/skel
+
+SEE ALSO
+    passwd(1), id(1), fsinit(1), passwd(5), index(7)

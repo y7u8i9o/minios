@@ -1,7 +1,7 @@
 builtins: cd exit pwd export
 hello from sh
-^/ \$ /
-^/ \$ /bin \$ /bin
+^/ # /
+^/ # /bin # /bin
 hello from user mode, pid [0-9]+, ppid [0-9]+, argc 3
 argv\[2\] = "two"
 nosuchprogram: No such file or directory

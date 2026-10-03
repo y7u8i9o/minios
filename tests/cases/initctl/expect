@@ -5,7 +5,7 @@ spin +service +failed +- +7 +status 1
 fsinit +task +done +- +1
 audio +service +skipped +- +0 +/dev/pcm0 absent
 dhcp +service +stopped +- +1
-sh +console +running +[0-9]+ +1
+login +console +running +[0-9]+ +1
 init: spin removed
 initctl: spin: no such entry
 initctl: nosuch: unknown command

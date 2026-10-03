@@ -702,19 +702,19 @@ static void test_gui_mandel(void)
     sleep_ms(1500);
     press_key(0x24);                        /* j */
     sleep_ms(1500);
-    vfs_unlink("/home/mandel.png");
+    vfs_unlink("/root/mandel.png");
     ctrl_key(0x1f);                         /* Ctrl+S */
     sleep_ms(800);
     type_line("\n");
     sleep_ms(800);
     struct file *f;
-    ktest_assert(vfs_open("/home/mandel.png", O_RDONLY, 0, &f) == 0, "open /home/mandel.png");
+    ktest_assert(vfs_open("/root/mandel.png", O_RDONLY, 0, &f) == 0, "open /root/mandel.png");
     char sig[8] = { 0 };
     file_read(f, sig, sizeof sig);
     file_put(f);
     ktest_assert((uint8_t)sig[0] == 0x89 && sig[1] == 'P' && sig[2] == 'N' && sig[3] == 'G', "PNG signature %02x %02x",
                  (uint8_t)sig[0], (uint8_t)sig[1]);
-    vfs_unlink("/home/mandel.png");
+    vfs_unlink("/root/mandel.png");
     press_key(0x01);                        /* escape */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "mandel status 0x%x", status);
@@ -1464,7 +1464,7 @@ static void test_gui_logview(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     klog_print(LOG_INFO, "ktest", "logview info marker");
     klog_print(LOG_WARN, "ktest", "logview warning marker");
-    vfs_unlink("/home/klog.txt");
+    vfs_unlink("/root/klog.txt");
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/logview",
                                        (char *const[]){ "logview", "-l", "warning", "-s", "ktest", "-f", "MARKER", NULL },
@@ -1478,7 +1478,7 @@ static void test_gui_logview(void)
     type_line("\n");
     sleep_ms(600);
     struct file *f;
-    ktest_assert(vfs_open("/home/klog.txt", O_RDONLY, 0, &f) == 0, "open /home/klog.txt");
+    ktest_assert(vfs_open("/root/klog.txt", O_RDONLY, 0, &f) == 0, "open /root/klog.txt");
     static char buf[2048];
     long n = file_read(f, buf, sizeof buf - 1);
     file_put(f);
@@ -1495,7 +1495,7 @@ static void test_gui_logview(void)
     int status = proc_reap(cl);
     ktest_assert(status == 0, "logview status 0x%x", status);
     stop_server(srv);
-    vfs_unlink("/home/klog.txt");
+    vfs_unlink("/root/klog.txt");
     kprintf("gui_logview: log viewer ok\n");
 }
 KTEST_DEFINE("gui_logview", test_gui_logview);

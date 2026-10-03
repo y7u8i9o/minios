@@ -29,8 +29,13 @@
 #define PAGE 4096UL
 #define ALIGN_DOWN(x, a) ((x) & ~((a) - 1))
 #define ALIGN_UP(x, a) (((x) + (a) - 1) & ~((a) - 1))
-/* The system libraries, then the package prefix (minios/local.h). */
-static const char *const lib_dirs[] = { "/lib/", "/home/.local/lib/" };
+/* The system libraries, then the shared package prefix (minios/local.h).
+ * The libraries of the user in ~/.local/lib come last, and not at all for
+ * a program that runs with changed ids, which the kernel marks with
+ * AT_SECURE (docs/design/users.md). */
+static const char *const lib_dirs[] = { "/lib/", "/usr/local/lib/" };
+static int secure;
+static char *home_lib;              /* "$HOME/.local/lib/" or NULL */
 /* Keep DSOs above the interpreter and below the ordinary mmap area. Every
  * image reserves its holes too, so later mappings cannot occupy them. */
 #define LIB_ARENA 0x7e0010000000UL
@@ -114,6 +119,7 @@ struct rela { uint64_t r_offset, r_info; int64_t r_addend; };
 #define AT_PHNUM 5
 #define AT_BASE 7
 #define AT_ENTRY 9
+#define AT_SECURE 23
 
 struct object;
 
@@ -934,10 +940,14 @@ static struct object *load_library(const char *name, int allow_path)
         dl_memcpy(path, name, n + 1);
         fd = sys(SYS_open, (long)path, O_RDONLY, 0, 0, 0, 0);
     }
-    for (size_t d = 0; !is_path && d < sizeof lib_dirs / sizeof lib_dirs[0] && fd < 0; d++) {
-        size_t dn = dl_strlen(lib_dirs[d]);
+    size_t ndirs = sizeof lib_dirs / sizeof lib_dirs[0];
+    for (size_t d = 0; !is_path && d <= ndirs && fd < 0; d++) {
+        const char *dir = d < ndirs ? lib_dirs[d] : home_lib;
+        if (!dir)
+            break;
+        size_t dn = dl_strlen(dir);
         path = dl_alloc(dn + n + 1);
-        dl_memcpy(path, lib_dirs[d], dn);
+        dl_memcpy(path, dir, dn);
         dl_memcpy(path + dn, name, n + 1);
         fd = sys(SYS_open, (long)path, O_RDONLY, 0, 0, 0, 0);
     }
@@ -1560,9 +1570,10 @@ uintptr_t _dl_main(uintptr_t *sp)
     while (*aux)
         aux++;
     aux++;
-    uintptr_t phdr = 0, phnum = 0, phent = 0, base = 0, entry = 0;
+    uintptr_t phdr = 0, phnum = 0, phent = 0, base = 0, entry = 0, is_secure = 0;
     for (; aux[0] != AT_NULL; aux += 2) {
         switch (aux[0]) {
+        case AT_SECURE: is_secure = aux[1]; break;
         case AT_PHDR: phdr = aux[1]; break;
         case AT_PHENT: phent = aux[1]; break;
         case AT_PHNUM: phnum = aux[1]; break;
@@ -1574,6 +1585,16 @@ uintptr_t _dl_main(uintptr_t *sp)
     relocate_self(base);
     if (!base || !phdr || !phnum || phnum > UINT16_MAX || phent != sizeof(struct phdr) || !entry)
         die("invalid program auxiliary vector", NULL);
+    secure = is_secure != 0;
+    for (char **env = (char **)(sp + argc + 2); !secure && *env; env++) {
+        const char *e = *env;
+        if (e[0] == 'H' && e[1] == 'O' && e[2] == 'M' && e[3] == 'E' && e[4] == '=' && e[5] == '/') {
+            size_t hn = dl_strlen(e + 5);
+            home_lib = dl_alloc(hn + sizeof "/.local/lib/");
+            dl_memcpy(home_lib, e + 5, hn);
+            dl_memcpy(home_lib + hn, "/.local/lib/", sizeof "/.local/lib/");
+        }
+    }
     struct object *prog = new_object("program");
     commit_object(prog);
     prog->phdr = (const void *)phdr;

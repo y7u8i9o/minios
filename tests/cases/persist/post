@@ -4,5 +4,5 @@
 MKFS="$BUILD/host/mkfs"
 content="$("$MKFS" --cat "$DISK2" /persisted.txt 2>/dev/null)"
 [ "$content" = "persisted" ] || { echo "  persisted.txt missing or wrong in $DISK2: '$content'"; exit 1; }
-"$MKFS" --cat "$DISK2" /desktop/Clock.app > /dev/null 2>&1 || { echo "  seeded file missing in $DISK2"; exit 1; }
+"$MKFS" --cat "$DISK2" /.local/etc/passwd > /dev/null 2>&1 || { echo "  seeded file missing in $DISK2"; exit 1; }
 exit 0

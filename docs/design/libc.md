@@ -229,3 +229,13 @@ libraries the loader mapped (`dlopen`, `dlsym`, `dlclose`, `dlerror`),
 `strtoumax` and `imaxabs`, a `stdint.h` of the C library, a
 `limits.h` that gives the integer limits itself when the compiler is not
 gcc, and `crti.o` and `crtn.o` with empty `_init` and `_fini`.
+
+## Additions for multiple users
+
+The multiuser plan (`users.md`) added `shadow.h`, `minios/account.h` and
+the readers of the account databases in `pwd.h` and `grp.h`, `crypt` with
+SHA-256 crypt, `getlogin`, the identity calls from `getuid` to
+`setgroups`, `umask`, `faccessat`, `fchmodat` and `fchownat`, and
+`mount_options` for the option string of `mount`. `minios/conf.h` gained
+`conf_home`, the home of the caller, and `conf_user_file` and
+`conf_user_write_file` for any file of `$HOME/.config`.

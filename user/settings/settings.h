@@ -12,6 +12,7 @@
 
 #define WALLPAPER_DIR "/usr/share/wallpapers"
 #define KEYMAP_DIR "/usr/share/keymaps"
+/* The system launcher menu, which a user's ~/.config/launcher replaces. */
 #define LAUNCHER_PATH "/etc/launcher"
 
 extern struct app *app;

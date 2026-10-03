@@ -141,7 +141,7 @@ programs directly as root.
   `gui_desktop`, `gui_files`, `gui_settings`, `comp_shell` and
   `audio_player` pass as well.
 
-### U3. Accounts, home directories and the console login
+### U3. Accounts, home directories and the console login (completed 2026-10-03)
 
 - `/etc/skel` replaces the old home skeleton, homes move to `/home/<name>`,
   and the account databases move to `/usr/local/etc` with links in `/etc`.
@@ -158,6 +158,17 @@ programs directly as root.
 - The boot test `login_console` logs in, runs `id`, `passwd` and `su` and
   logs out, and `fs_migrate` runs `fsinit -m` on an old layout. The cases of
   every touched module must still pass.
+- During the work root received the home `/root` on the root image, filled
+  from the skeleton, because the programs that boot tests start run as
+  root without `HOME` and now fall back to root's home instead of `/home`.
+  The cases `gui_desktop`, `gui_files`, `gui_images`, `gui_logview`,
+  `gui_mandel`, `keymap`, `shell`, `initctl`, `persist`, `pkg`, `pkg_apps`
+  and `luasynth` were adjusted to the new paths and the root prompt.
+  `ld.so` reads `AT_SECURE` here, as noted under U2. `fsinit` converts a
+  volume only for entries with the new option `homes`. `pkg` checks write
+  access to its prefix instead of the uid, which leaves `--prefix
+  ~/.local` open to every user. A copy of the existing `data-aarch64.img`
+  was converted at boot with its 14 packages kept.
 
 ### U4. The graphical login and session
 

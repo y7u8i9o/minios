@@ -220,6 +220,20 @@ static void expand_text(struct buffer *b, const char *s, int force_quote, int he
             append(b, home, strlen(home), QUOTED);
             p = 1;
         }
+    } else if (!heredoc && s[0] == '~') {
+        /* ~name is the home of the account name. A word whose name part
+         * holds anything but the characters of account names is left. */
+        size_t n = strcspn(s + 1, "/:");
+        char name[33];
+        if (n < sizeof name && strspn(s + 1, "abcdefghijklmnopqrstuvwxyz0123456789_-") >= n) {
+            memcpy(name, s + 1, n);
+            name[n] = 0;
+            struct passwd *pw = getpwnam(name);
+            if (pw) {
+                append(b, pw->pw_dir, strlen(pw->pw_dir), QUOTED);
+                p = 1 + n;
+            }
+        }
     }
     while (s[p]) {
         char c = s[p];

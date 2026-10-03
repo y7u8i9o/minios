@@ -4,7 +4,7 @@ settings: set wallpaper /usr/share/wallpapers/default.png
 desktop: wallpaper /usr/share/wallpapers/default.png mode 0
 desktop: config applied
 desktop: started with 4 entries
-desktop: open /home/desktop/Clock.app
+desktop: open /root/desktop/Clock.app
 x12: toplevel 1 'clock' mapped
 desktop: menu desktop
 desktop: menu readme.txt

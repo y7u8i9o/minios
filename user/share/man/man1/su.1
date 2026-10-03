@@ -1,0 +1,27 @@
+SU(1)                       User Commands
+
+NAME
+    su - run a shell or a command as another account
+
+SYNOPSIS
+    su [-] [-c command] [name]
+
+DESCRIPTION
+    su runs the shell of the account name, root by default, or with -c
+    the command through that shell. su is set user id root. A caller other
+    than root gives the password of the target account, unless that
+    account has none. On a terminal the password is typed without echo.
+    Otherwise it is the first line of standard input, which lets a program
+    pass it through a pipe. After a wrong password su waits two seconds
+    and fails with "su: authentication failure".
+
+    Without - the environment is kept, with HOME, SHELL, USER and LOGNAME
+    of the account. With - (or -l) su starts a login shell in the home of
+    the account with a fresh environment, as login(1) does.
+
+EXAMPLES
+    su -c 'pkg install gedit'
+    su - anna
+
+SEE ALSO
+    login(1), passwd(1), id(1), index(7)

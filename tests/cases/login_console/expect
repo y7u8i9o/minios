@@ -1,0 +1,13 @@
+minios login:
+passwd: password of root changed
+passwd: password of anna changed
+drwx------ +[0-9]+ anna +anna
+Login incorrect
+uid=1001\(anna\) gid=1001\(anna\) groups=1001\(anna\)
+\$ /home/anna
+crw--w---- +[0-9]+ anna +anna
+su: authentication failure
+uid=0\(root\) gid=0\(root\) groups=0\(root\)
+cat: /etc/shadow: Permission denied
+# .\[34muser.\[0m
+system powering off

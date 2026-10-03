@@ -13,6 +13,7 @@
  * and Clear removes the rows read so far from the window. The status bar
  * counts the rows, the warnings and errors, and the bytes that the kernel
  * ring dropped after the start before logview read them. */
+#include <minios/conf.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -378,7 +379,7 @@ static int on_copy(struct widget *w, void *args, void *arg)
 static int on_save(struct widget *w, void *args, void *arg)
 {
     char name[PATH_MAX];
-    snprintf(name, sizeof name, "%s/klog.txt", getenv("HOME") ? getenv("HOME") : "/home");
+    snprintf(name, sizeof name, "%s/klog.txt", conf_home());
     if (!app_prompt(app, _("Save"), _("File:"), name, sizeof name))
         return 1;
     FILE *f = fopen(name, "w");

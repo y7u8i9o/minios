@@ -1,0 +1,32 @@
+PASSWD(1)                   User Commands
+
+NAME
+    passwd - change the password or the full name of an account
+
+SYNOPSIS
+    passwd [name]
+    passwd -d name
+    passwd -n full-name [name]
+
+DESCRIPTION
+    passwd sets a new password for the account of the caller, or for the
+    account name. passwd is set user id root. Only root may name another
+    account. A caller other than root first gives the current password,
+    unless the account has none. The new password is asked twice and may
+    not be empty. On a terminal the passwords are typed without echo,
+    otherwise they are read one per line from standard input, the current
+    one first when it is asked for.
+
+    -d removes the password of an account, which then logs in without
+    one. Only root may do so. -n sets the full name of the account, the
+    fifth field of /etc/passwd, for the caller's own account or, for
+    root, any account.
+
+    The password is stored as a SHA-256 crypt hash with a random salt in
+    /etc/shadow.
+
+FILES
+    /etc/passwd, /etc/shadow
+
+SEE ALSO
+    login(1), su(1), useradd(1), passwd(5), index(7)

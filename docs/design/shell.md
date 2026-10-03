@@ -153,8 +153,10 @@ width (mode change) or a new output scale reallocates them, and the
 panel never commits from an output event, since that would race with
 the configure's serial.
 
-The launcher menu (`launcher.c`) reads `/etc/launcher` and the table of
-installed packages, `/home/.local/share/launcher`, each time it opens.
+The launcher menu (`launcher.c`) reads `/etc/launcher`, or the user's
+`~/.config/launcher` when it exists, and the tables of installed
+packages, `/usr/local/share/launcher` and `~/.local/share/launcher`, each
+time it opens (`users.md`).
 Both files contain `title=program` lines, where the program may be
 followed by arguments separated by spaces (`Screenshot=/bin/screenshot
 -i`). The entries of packages are

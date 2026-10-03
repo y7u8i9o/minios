@@ -21,7 +21,7 @@ device, `vdc`, after the root image and the swap image; `--data FILE` or
 mount point, type and options (`fstab(5)`). The shipped table has one
 entry:
 
-    vdc /home mfs nofail,seed=/usr/share/skel/home
+    vdc /home mfs nofail,seed=/usr/share/skel/home,homes
 
 `fsinit` (`user/coreutils/fsinit.c`) reads the table and mounts every
 entry whose mount point is not listed in `/dev/mounts` yet. `nofail`
@@ -31,16 +31,20 @@ proceeds with the home directory of the root image. `seed=DIR` copies the
 tree below `DIR` into the mount point when the mounted filesystem is
 empty: the first boot with a fresh volume fills `/home` with the
 skeleton, later boots find it populated and leave it alone. `noauto`
-skips an entry. The exit status is 1 when a required mount fails.
+skips an entry. `homes` (U3 of the multiuser plan, `users.md`) converts a
+volume of the single user layout and makes the missing homes of the
+accounts. The exit status is 1 when a required mount fails.
 
 `init` runs `/bin/fsinit` and waits for it before the first shell; a
 failure is reported on the console and the system continues from the
 root image. `fsinit` may run again at any time, since mounted entries are
 skipped.
 
-The skeleton is `user/home/`, installed twice by `user/Makefile`: on the
+The skeleton was `user/home/`, installed twice by `user/Makefile`: on the
 root image as `/home`, for a boot without a data volume, and as
-`/usr/share/skel/home`, the seed. `mkfs` used to skip every name that
+`/usr/share/skel/home`, the seed. Since U3 it is `user/skel/`, installed
+as `/etc/skel` and copied into the homes of the accounts, and the seed
+holds the package prefix with the account databases (`users.md`). `mkfs` used to skip every name that
 begins with a dot, so `.shrc` never reached an image; it now skips only
 `.`, `..` and `.DS_Store`.
 
@@ -56,7 +60,8 @@ toolkit theme use them.
 
 ## System state
 
-The DHCP client keeps its lease in `/home/.local/state/dhcpc/IF.lease`
+The DHCP client keeps its lease in `/usr/local/state/dhcpc/IF.lease`,
+`/home/.local/state/dhcpc` on the data volume,
 (N16, `docs/design/network.md`), since the home volume is the only
 storage that survives a build, and `fsinit` mounts it before init starts
 the `dhcp` service.

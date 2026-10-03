@@ -11,6 +11,7 @@
  *   profiler [-p pid]     preselect a process, as sysmon does
  *   profiler -r seconds   record at once and report when the time is up,
  *                         which is how the boot test drives it */
+#include <minios/conf.h>
 #include <minios/local.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -695,7 +696,7 @@ static int on_export(struct widget *w, void *args, void *arg)
 {
     int format = arg ? PROF_EXPORT_FOLDED : PROF_EXPORT_JSON;
     char path[256];
-    snprintf(path, sizeof path, "/home/profile.%s", format == PROF_EXPORT_JSON ? "json" : "folded");
+    snprintf(path, sizeof path, "%s/profile.%s", conf_home(), format == PROF_EXPORT_JSON ? "json" : "folded");
     if (!app_prompt(app, "Export capture", "Save path (capture stops on export):", path, sizeof path))
         return 1;
     if (access(path, F_OK) == 0) {

@@ -1,4 +1,6 @@
 /* Sound, date and time, file types, launcher and system pages. */
+#include <minios/conf.h>
+#include <minios/local.h>
 #include "settings.h"
 #include <gui/client.h>
 #include <gui/mime.h>
@@ -247,7 +249,7 @@ static int on_add_type(struct widget *w, void *args, void *arg)
     char type[64] = "";
     if (!app_prompt(app, _("New file type"), _("Type (for example text/x-log):"), type, sizeof type) || !type[0])
         return 1;
-    mime_set_handler(type, "/home/.local/bin/gedit");
+    mime_set_handler(type, LOCAL_BIN "/gedit");
     mime_save(NULL);
     view_refresh(apps_table);
     return 1;
@@ -282,7 +284,8 @@ static struct widget *launch_table, *title_field, *program_field;
 static void launcher_read(void)
 {
     nentries = 0;
-    FILE *f = fopen(LAUNCHER_PATH, "r");
+    char path[256];
+    FILE *f = fopen(conf_user_file("launcher", LAUNCHER_PATH, path, sizeof path), "r");
     if (!f)
         return;
     char line[256];
@@ -301,7 +304,8 @@ static void launcher_read(void)
 }
 static int launcher_write(void)
 {
-    FILE *f = fopen(LAUNCHER_PATH, "w");
+    char path[256];
+    FILE *f = fopen(conf_user_write_file("launcher", path, sizeof path), "w");
     if (!f)
         return -1;
     fprintf(f, "# Launcher menu of the window server: title=program\n");

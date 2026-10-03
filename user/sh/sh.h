@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <sys/resource.h>
 #include <ctype.h>
+#include <pwd.h>
 
 #define MAX_ARGS 512
 #define MAX_CMDS 32

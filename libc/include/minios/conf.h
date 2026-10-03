@@ -10,6 +10,19 @@
 const char *conf_read_path(char *buf, size_t size);
 const char *conf_write_path(char *buf, size_t size);
 
+/* The same rule for any file of the user's configuration directory:
+ * conf_user_file names $HOME/.config/NAME when it exists and default_path
+ * otherwise, conf_user_write_file names $HOME/.config/NAME and creates
+ * $HOME/.config. The launcher menu and the MIME handlers follow it
+ * (docs/design/users.md). */
+const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size);
+const char *conf_user_write_file(const char *name, char *buf, size_t size);
+
+/* The home directory of the caller: HOME when it is an absolute path,
+ * else the home of the real uid in /etc/passwd, else "/"
+ * (docs/design/users.md). */
+const char *conf_home(void);
+
 /* conf_export_locale sets LANG from the lang setting and LC_NUMERIC,
  * LC_TIME and LC_MONETARY from the formats setting. Without formats the
  * three categories are removed and follow LANG. Without lang the

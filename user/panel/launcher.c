@@ -28,6 +28,7 @@
 #include <gui/image.h>
 #include <gui/keymap.h>
 #include <minios/local.h>
+#include <minios/conf.h>
 #include "panel.h"
 
 #define MAX_ENTRIES 64
@@ -137,9 +138,13 @@ static void load_entries(void)
 {
     nentries = 0;
     load_file(LOCAL_LAUNCHER, SEC_APPS);
+    /* Packages that the user installed into ~/.local. */
+    char path[300];
+    snprintf(path, sizeof path, "%s/.local/share/launcher", conf_home());
+    load_file(path, SEC_APPS);
     int apps = nentries;
     qsort(entries, (size_t)apps, sizeof entries[0], compare_titles);
-    load_file("/etc/launcher", SEC_SYSTEM);
+    load_file(conf_user_file("launcher", "/etc/launcher", path, sizeof path), SEC_SYSTEM);
 }
 
 /* lower decodes UTF-8 text into lower case code points and returns their

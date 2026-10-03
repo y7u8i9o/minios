@@ -20,7 +20,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define DESKTOP_DIR "/home/desktop"
+/* The folder of the icons, desktop in the home of the user. */
+static const char *desktop_dir(void)
+{
+    static char dir[300];
+    if (!dir[0])
+        snprintf(dir, sizeof dir, "%s/desktop", conf_home());
+    return dir;
+}
+
 #define CELL_W 90
 #define CELL_H 84
 #define ICON_SIZE 32
@@ -127,7 +135,7 @@ static int entry_cmp(const void *a, const void *b)
 static void refresh(void)
 {
     nentries = 0;
-    DIR *d = opendir(DESKTOP_DIR);
+    DIR *d = opendir(desktop_dir());
     if (d) {
         struct dirent *e;
         while ((e = readdir(d)) != NULL && nentries < MAX_ENTRIES) {
@@ -154,7 +162,7 @@ static void refresh(void)
 
 static void entry_path(int i, char *buf, size_t size)
 {
-    snprintf(buf, size, DESKTOP_DIR "/%s", entries[i].name);
+    snprintf(buf, size, "%s/%s", desktop_dir(), entries[i].name);
 }
 
 static int rows_per_column(int h)
@@ -486,7 +494,7 @@ static int on_rename(struct widget *w, void *args, void *arg)
         return 1;
     char from[512], to[512];
     entry_path(selected, from, sizeof from);
-    snprintf(to, sizeof to, DESKTOP_DIR "/%s", name);
+    snprintf(to, sizeof to, "%s/%s", desktop_dir(), name);
     if (rename(from, to) < 0)
         logline("rename failed: %s", strerror(errno));
     refresh();
@@ -519,7 +527,7 @@ static int on_new_folder(struct widget *w, void *args, void *arg)
     if (!app_prompt(app, _("New folder"), _("Name:"), name, sizeof name) || !name[0] || strchr(name, '/'))
         return 1;
     char path[512];
-    snprintf(path, sizeof path, DESKTOP_DIR "/%s", name);
+    snprintf(path, sizeof path, "%s/%s", desktop_dir(), name);
     if (mkdir(path, 0755) < 0)
         logline("mkdir failed: %s", strerror(errno));
     refresh();
@@ -532,7 +540,7 @@ static int on_new_file(struct widget *w, void *args, void *arg)
     if (!app_prompt(app, _("New text file"), _("Name:"), name, sizeof name) || !name[0] || strchr(name, '/'))
         return 1;
     char path[512];
-    snprintf(path, sizeof path, DESKTOP_DIR "/%s", name);
+    snprintf(path, sizeof path, "%s/%s", desktop_dir(), name);
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0)
         logline("create failed: %s", strerror(errno));
@@ -584,7 +592,7 @@ int main(int argc, char **argv)
     desk->focusable = 1;
     widget_set_stretch(desk, 1, 1);
     build_menus();
-    mkdir(DESKTOP_DIR, 0755);
+    mkdir(desktop_dir(), 0755);
     if (read_conf(conf_text, sizeof conf_text) < 0)
         logline("no configuration file, using defaults");
     apply_conf(1);

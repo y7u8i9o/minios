@@ -34,7 +34,7 @@ static void test_gui_files(void)
     /* The text editor that opens the file ships as a package. */
     install_app("gedit");
     struct proc *srv = start_server();
-    struct proc *files = proc_create_user("/bin/files", (char *const[]){ "files", "/home/desktop", NULL },
+    struct proc *files = proc_create_user("/bin/files", (char *const[]){ "files", "/home/user/desktop", NULL },
                                           (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(files != NULL, "cannot start files");
     sleep_ms(1500);
@@ -44,15 +44,15 @@ static void test_gui_files(void)
     sleep_ms(500);
     type_ctrl('a');
     type_line("testdir\n");
-    ktest_assert(wait_for("/home/desktop/testdir", true), "the folder was not created");
+    ktest_assert(wait_for("/home/user/desktop/testdir", true), "the folder was not created");
     sleep_ms(500);
     /* F2 renames the folder, which the program selected. */
     press_key(0x3c);
     sleep_ms(500);
     type_ctrl('a');
     type_line("renamed\n");
-    ktest_assert(wait_for("/home/desktop/renamed", true), "the folder was not renamed");
-    ktest_assert(!exists("/home/desktop/testdir"), "the old folder name remains");
+    ktest_assert(wait_for("/home/user/desktop/renamed", true), "the folder was not renamed");
+    ktest_assert(!exists("/home/user/desktop/testdir"), "the old folder name remains");
     sleep_ms(500);
     /* Delete asks for confirmation; Enter chooses the Delete button. */
     ps2kbd_feed_scancode(0xe0);
@@ -61,7 +61,7 @@ static void test_gui_files(void)
     ps2kbd_feed_scancode(0xd3);
     sleep_ms(500);
     type_line("\n");
-    ktest_assert(wait_for("/home/desktop/renamed", false), "the folder was not deleted");
+    ktest_assert(wait_for("/home/user/desktop/renamed", false), "the folder was not deleted");
     sleep_ms(500);
     /* Typing a name selects the entry; Enter opens it with gedit. */
     type_line("readme\n");

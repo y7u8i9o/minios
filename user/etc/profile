@@ -1,7 +1,9 @@
 # Shared defaults for interactive console and Terminal sessions.
 export PAGER=less
-# Programs installed by pkg(1) live under the package prefix.
-export PATH="$PATH:/home/.local/bin"
+# Programs installed by pkg(1) live under the shared package prefix, and
+# each user may keep programs in ~/.local/bin (docs/design/users.md).
+case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="$PATH:/usr/local/bin" ;; esac
+export PATH="$PATH:$HOME/.local/bin"
 alias ll='ls -lh'
 alias la='ls -a'
 if test -n "$TERM" && test "$TERM" != dumb && test -z "${NO_COLOR+x}"; then
