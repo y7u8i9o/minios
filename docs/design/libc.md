@@ -181,8 +181,8 @@ are mapped separately as before.
 
 The ports of FreeBSD sed and the One True AWK (`sedawk.md`) added
 `err.h`, `getopt`, `readv` and `writev`, the permission bit macros and
-`lstat`, `fchmod`, `chmod`, `fchown` and `chown` (which return 0 without
-effect, since the kernel ignores permission bits), the `scanf` family in
+`lstat`, `fchmod`, `chmod`, `fchown` and `chown` (which returned 0
+without effect until the ownership of U1, `users.md`), the `scanf` family in
 `src/stdio/scan.c`, `asprintf`, `bsearch`, `random`, `mbtowc`, `wctomb`,
 `mblen`, `getprogname` (set from `argv[0]` by `__libc_start`),
 `wctype.h`, `strings.h`, `libgen.h`, `limits.h` with the POSIX limits,
@@ -214,8 +214,9 @@ two second resolution on FAT; `st_mtime` is now a macro for
 ## Additions for ar and tar
 
 The ar utility and the sbase tar (`artar.md`) added `openat` and
-`fstatat`, `pwd.h` and `grp.h` describing the single user, the uid and
-gid functions, `lchown`, `symlink` and `readlink` (refused until the
+`fstatat`, `pwd.h` and `grp.h` describing the single user (replaced by
+the readers of the account databases in U0 of the multiuser plan,
+`users.md`), the uid and gid functions, `lchown`, `symlink` and `readlink` (refused until the
 symbolic links of 2026-09-30, system calls since then, with `symlinkat`,
 `readlinkat` and `lstat`), `mknod` and `mkfifo` (refused), `execl`,
 `execlp` and `sys/sysmacros.h`.

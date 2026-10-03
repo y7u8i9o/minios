@@ -113,6 +113,13 @@ long sys_symlinkat(struct trapframe *tf);
 long sys_readlink(struct trapframe *tf);
 long sys_readlinkat(struct trapframe *tf);
 long sys_lstat(struct trapframe *tf);
+long sys_getresuid(struct trapframe *tf);
+long sys_getresgid(struct trapframe *tf);
+long sys_setresuid(struct trapframe *tf);
+long sys_setresgid(struct trapframe *tf);
+long sys_getgroups(struct trapframe *tf);
+long sys_setgroups(struct trapframe *tf);
+long sys_umask(struct trapframe *tf);
 /* N01 */
 long sys_getsockname(struct trapframe *tf);
 long sys_getpeername(struct trapframe *tf);

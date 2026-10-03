@@ -563,7 +563,7 @@ static void load_procs(void)
         if (end == line || pid <= 0)
             continue;
         char *tok = end;
-        for (int col = 0; col < 5; col++) {
+        for (int col = 0; col < 6; col++) {
             while (*tok == ' ')
                 tok++;
             while (*tok && *tok != ' ')

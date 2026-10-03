@@ -1,0 +1,30 @@
+ID(1)                       User Commands
+
+NAME
+    id, whoami, groups - print user and group identities
+
+SYNOPSIS
+    id [-u | -g | -G] [-n] [user]
+    whoami
+    groups [user...]
+
+DESCRIPTION
+    id prints the real user and group ids of the calling process with
+    their account names, the effective ids when they differ, and the
+    supplementary groups. With a user argument it prints the ids that
+    account receives at login from /etc/passwd and /etc/group.
+
+    -u prints only the effective uid, -g only the effective gid and -G
+    only the group list. -n prints names instead of numbers with these
+    options.
+
+    whoami prints the account name of the effective uid.
+
+    groups prints the group names of the calling process, or of each named
+    account, with the primary group first.
+
+FILES
+    /etc/passwd, /etc/group
+
+SEE ALSO
+    ps(1), passwd(5), index(7)

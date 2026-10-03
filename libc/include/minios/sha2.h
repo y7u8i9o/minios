@@ -35,3 +35,8 @@ void sha512_init(struct sha512_ctx *c);
 void sha512_update(struct sha512_ctx *c, const void *data, size_t len);
 void sha512_final(struct sha512_ctx *c, uint8_t digest[SHA512_DIGEST_SIZE]);
 void sha512(const void *data, size_t len, uint8_t digest[SHA512_DIGEST_SIZE]);
+
+/* SHA-256 crypt: hash key with the "$5$[rounds=N$]salt" setting into out
+ * in the form "$5$[rounds=N$]salt$hash". A stored hash may serve as the
+ * setting. Returns out, or NULL for another method or a short buffer. */
+char *sha256_crypt(const char *key, const char *setting, char *out, size_t size);

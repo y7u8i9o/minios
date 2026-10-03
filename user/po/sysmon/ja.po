@@ -182,3 +182,6 @@ msgstr "リソース"
 #: user/apps/sysmon.c:820
 msgid "Filter by name"
 msgstr "名前で絞り込み"
+
+msgid "User"
+msgstr "ユーザー"

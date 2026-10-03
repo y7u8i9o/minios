@@ -1,6 +1,7 @@
 /* This program checks libc/src/crypto against the test vectors of RFC
  * 6234 (SHA-256 and SHA-512, TEST1 to TEST4 of section 8.5) and RFC 8032
- * (Ed25519, TEST 1, 2, 3 and SHA(abc) of section 7.1). The same source runs on minios
+ * (Ed25519, TEST 1, 2, 3 and SHA(abc) of section 7.1), and SHA-256 crypt
+ * against hashes made by OpenSSL 3 (`openssl passwd -5`). The same source runs on minios
  * as /bin/cryptotest, from the pkg_repo case, and on the host through
  * `make check-pkg`. */
 #include <stdio.h>
@@ -206,10 +207,34 @@ static void test_signatures(void)
     check(ed25519_verify(sig, "", 0, pub) == 0, "Ed25519 refuses a key with y >= p");
 }
 
+/* The settings and results of `openssl passwd -5 -salt SALT KEY`. */
+static void test_shacrypt(void)
+{
+    static const struct {
+        const char *setting, *key, *hash;
+    } v[] = {
+        { "$5$saltstring", "Hello world!", "$5$saltstring$5B8vYYiY.CVt1RlTTf8KbXBH3hsxY/GNooZaBBGWEc5" },
+        { "$5$rounds=10000$saltstringsaltstring", "Hello world!",
+          "$5$rounds=10000$saltstringsaltst$3xv.VbSHBb41AL9AvLeujZkZRBAwqFMz2.opqey6IcA" },
+        { "$5$rounds=77777$short", "we have a short salt string but not a short password",
+          "$5$rounds=77777$short$JiO1O3ZpDAxGJeaDIuqCoEFysAe1mZNJRs3pw0KQRd/" },
+    };
+    char out[128];
+    for (size_t i = 0; i < sizeof v / sizeof v[0]; i++) {
+        check(sha256_crypt(v[i].key, v[i].setting, out, sizeof out) && strcmp(out, v[i].hash) == 0,
+              v[i].setting);
+        /* The stored hash is its own setting. */
+        check(sha256_crypt(v[i].key, v[i].hash, out, sizeof out) && strcmp(out, v[i].hash) == 0,
+              "hash as setting");
+    }
+    check(sha256_crypt("x", "$1$md5", out, sizeof out) == NULL, "other method refused");
+}
+
 int main(void)
 {
     test_hashes();
     test_signatures();
+    test_shacrypt();
     printf("cryptotest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

@@ -100,4 +100,11 @@
 #define SYS_readlink      93
 #define SYS_readlinkat    94
 #define SYS_lstat         95
-#define SYS_MAX           96
+#define SYS_getresuid     96
+#define SYS_getresgid     97
+#define SYS_setresuid     98
+#define SYS_setresgid     99
+#define SYS_getgroups     100
+#define SYS_setgroups     101
+#define SYS_umask         102
+#define SYS_MAX           103

@@ -81,7 +81,7 @@ static struct wclient *client_find(uint32_t number, int create)
 }
 
 /* The name of a process from the NAME column of /dev/proc, whose rows are
- * "PID PPID PGID STATE TIME RSS NAME". */
+ * "PID PPID PGID STATE TIME RSS UID NAME". */
 static void process_name(uint32_t pid, char *out, size_t size)
 {
     out[0] = '\0';

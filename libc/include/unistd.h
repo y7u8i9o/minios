@@ -58,11 +58,32 @@ int fchown(int fd, uid_t owner, gid_t group);
 int chown(const char *path, uid_t owner, gid_t group);
 int lchown(const char *path, uid_t owner, gid_t group);
 
-/* The single user has uid 0 and gid 0. */
+/* Real, effective and saved ids of the process (docs/design/users.md).
+ * An unprivileged process may set each id only to one of its current
+ * three, root to any value. setuid and setgid set all three for root and
+ * only the effective id otherwise. The value (uid_t)-1 leaves an id of the
+ * res calls unchanged. */
 uid_t getuid(void);
 uid_t geteuid(void);
 gid_t getgid(void);
 gid_t getegid(void);
+int setuid(uid_t uid);
+int setgid(gid_t gid);
+int seteuid(uid_t uid);
+int setegid(gid_t gid);
+int setreuid(uid_t ruid, uid_t euid);
+int setregid(gid_t rgid, gid_t egid);
+int setresuid(uid_t ruid, uid_t euid, uid_t suid);
+int setresgid(gid_t rgid, gid_t egid, gid_t sgid);
+int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid);
+int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid);
+/* Supplementary groups, at most NGROUPS_MAX. Setting them requires root. */
+int getgroups(int size, gid_t list[]);
+int setgroups(size_t size, const gid_t *list);
+/* The account of the session (LOGNAME, else the real uid). */
+char *getlogin(void);
+/* SHA-256 crypt ("$5$"), the only method: NULL with EINVAL otherwise. */
+char *crypt(const char *key, const char *salt);
 
 /* symlink creates path as a symbolic link holding target, which is not
  * checked and may name nothing. readlink copies at most size bytes of a

@@ -55,7 +55,8 @@ Numbers are defined in `kernel/include/syscall_nums.h`, shared with libc:
 append to the table; symbolic links added `symlink` (91), `symlinkat`
 (92), `readlink` (93), `readlinkat` (94) and `lstat` (95) on 2026-09-30,
 and `fstatat` and `utimensat` honour `AT_SYMLINK_NOFOLLOW` since then
-(`vfs.md`). Arguments arrive in
+(`vfs.md`). The credentials of U0 added `getresuid` (96) to `umask` (102)
+on 2026-10-03 (`users.md`). Arguments arrive in
 rdi, rsi, rdx, r10, r8, r9. `write` accepts descriptors 1 and 2 only until
 the VFS exists and checks that the buffer lies in user space with
 `user_range_ok`. An address that is in range but unmapped still faults in

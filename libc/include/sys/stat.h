@@ -45,6 +45,10 @@ int mkdir(const char *path, mode_t mode);
 int fchmod(int fd, mode_t mode);
 int chmod(const char *path, mode_t mode);
 
+/* Set the file creation mask of the process and return the old one. The
+ * mask starts at 022. */
+mode_t umask(mode_t mask);
+
 /* Set the modification time of path: times NULL for now, otherwise the
  * second timespec, with UTIME_NOW or UTIME_OMIT in tv_nsec. The path is
  * resolved as in openat; with AT_SYMLINK_NOFOLLOW a symbolic link named

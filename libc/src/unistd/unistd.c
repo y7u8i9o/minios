@@ -665,10 +665,112 @@ int lchown(const char *path, uid_t owner, gid_t group)
     return 0;
 }
 
-uid_t getuid(void) { return 0; }
-uid_t geteuid(void) { return 0; }
-gid_t getgid(void) { return 0; }
-gid_t getegid(void) { return 0; }
+int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)
+{
+    return (int)syscall3(SYS_getresuid, ruid, euid, suid);
+}
+
+int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
+{
+    return (int)syscall3(SYS_getresgid, rgid, egid, sgid);
+}
+
+uid_t getuid(void)
+{
+    uid_t r;
+    getresuid(&r, NULL, NULL);
+    return r;
+}
+
+uid_t geteuid(void)
+{
+    uid_t e;
+    getresuid(NULL, &e, NULL);
+    return e;
+}
+
+gid_t getgid(void)
+{
+    gid_t r;
+    getresgid(&r, NULL, NULL);
+    return r;
+}
+
+gid_t getegid(void)
+{
+    gid_t e;
+    getresgid(NULL, &e, NULL);
+    return e;
+}
+
+int setresuid(uid_t ruid, uid_t euid, uid_t suid)
+{
+    return (int)syscall3(SYS_setresuid, ruid, euid, suid);
+}
+
+int setresgid(gid_t rgid, gid_t egid, gid_t sgid)
+{
+    return (int)syscall3(SYS_setresgid, rgid, egid, sgid);
+}
+
+int setuid(uid_t uid)
+{
+    if (geteuid() == 0)
+        return setresuid(uid, uid, uid);
+    return setresuid((uid_t)-1, uid, (uid_t)-1);
+}
+
+int setgid(gid_t gid)
+{
+    if (geteuid() == 0)
+        return setresgid(gid, gid, gid);
+    return setresgid((gid_t)-1, gid, (gid_t)-1);
+}
+
+int seteuid(uid_t uid)
+{
+    return setresuid((uid_t)-1, uid, (uid_t)-1);
+}
+
+int setegid(gid_t gid)
+{
+    return setresgid((gid_t)-1, gid, (gid_t)-1);
+}
+
+/* POSIX setreuid: the saved id follows the new effective id when the real
+ * id is set or the effective id differs from the old real id. */
+int setreuid(uid_t ruid, uid_t euid)
+{
+    uid_t r, e, s;
+    getresuid(&r, &e, &s);
+    uid_t new_e = euid == (uid_t)-1 ? e : euid;
+    uid_t saved = (ruid != (uid_t)-1 || (euid != (uid_t)-1 && euid != r)) ? new_e : (uid_t)-1;
+    return setresuid(ruid, euid, saved);
+}
+
+int setregid(gid_t rgid, gid_t egid)
+{
+    gid_t r, e, s;
+    getresgid(&r, &e, &s);
+    gid_t new_e = egid == (gid_t)-1 ? e : egid;
+    gid_t saved = (rgid != (gid_t)-1 || (egid != (gid_t)-1 && egid != r)) ? new_e : (gid_t)-1;
+    return setresgid(rgid, egid, saved);
+}
+
+int getgroups(int size, gid_t list[])
+{
+    return (int)syscall2(SYS_getgroups, size, list);
+}
+
+int setgroups(size_t size, const gid_t *list)
+{
+    return (int)syscall2(SYS_setgroups, size, list);
+}
+
+mode_t umask(mode_t mask)
+{
+    return (mode_t)syscall1(SYS_umask, mask);
+}
 
 int symlink(const char *target, const char *path)
 {

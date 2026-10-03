@@ -50,8 +50,10 @@ static void proc_setup(struct proc *p, int pid, const char *name, struct proc *p
     if (parent) {
         spin_lock(&parent->lock);
         memcpy(p->rlim, parent->rlim, sizeof p->rlim);
+        p->cred = parent->cred;
         spin_unlock(&parent->lock);
     } else {
+        cred_init_root(&p->cred);
         for (int i = 0; i < RLIMIT_NLIMITS; i++)
             p->rlim[i].rlim_cur = p->rlim[i].rlim_max = RLIM_INFINITY;
         p->rlim[RLIMIT_NOFILE].rlim_cur = p->rlim[RLIMIT_NOFILE].rlim_max = OPEN_MAX;
@@ -333,6 +335,7 @@ struct proc_row {
     int pid, ppid, pgid;
     bool zombie, stopped;
     uint64_t ticks;
+    uint32_t uid;
     struct vmspace *vm;
     char name[PROC_NAME_LEN];
 };
@@ -380,7 +383,7 @@ size_t proc_format_maps(char *buf, size_t size)
 size_t proc_format_table(char *buf, size_t size)
 {
     size_t off = 0;
-    off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %8s %8s %s\n", "PID", "PPID", "PGID", "STATE", "TIME", "RSS", "NAME");
+    off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %8s %8s %5s %s\n", "PID", "PPID", "PGID", "STATE", "TIME", "RSS", "UID", "NAME");
     /* Snapshot first: counting resident pages walks page tables and must
      * not run under the process locks. The rows hold pids only, so a
      * process that exits meanwhile is reported without its size. */
@@ -402,6 +405,9 @@ size_t proc_format_table(char *buf, size_t size)
         r->stopped = p->stopped;
         r->ticks = __atomic_load_n(&p->utime, __ATOMIC_RELAXED) + __atomic_load_n(&p->stime, __ATOMIC_RELAXED);
         r->vm = r->zombie ? NULL : p->vm;
+        /* The effective uid is one word written under p->lock. It cannot
+         * be torn, and a stale value is harmless in a listing. */
+        r->uid = __atomic_load_n(&p->cred.euid, __ATOMIC_RELAXED);
         memcpy(r->name, p->name, sizeof r->name);
     }
     spin_unlock(&proc_list_lock);
@@ -420,9 +426,9 @@ size_t proc_format_table(char *buf, size_t size)
                 rss = vma_count_resident(r->vm) * (PAGE_SIZE / 1024);
             spin_unlock(&proc_tree_lock);
         }
-        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %s\n", r->pid, r->ppid, r->pgid,
+        off += (size_t)ksnprintf(buf + off, size - off, "%5d %5d %5d %-8s %8lu %8zu %5u %s\n", r->pid, r->ppid, r->pgid,
                                  r->zombie ? "zombie" : r->stopped ? "stopped" : "running",
-                                 r->ticks, rss, r->name);
+                                 r->ticks, rss, r->uid, r->name);
     }
     return off < size ? off : size - 1;
 }

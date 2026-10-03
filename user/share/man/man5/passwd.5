@@ -1,0 +1,38 @@
+PASSWD(5)                   File Formats
+
+NAME
+    passwd, group, shadow - account databases
+
+SYNOPSIS
+    /etc/passwd
+    /etc/group
+    /etc/shadow
+
+DESCRIPTION
+    Each line of /etc/passwd describes one account in seven fields
+    separated by colons.
+
+        name:x:uid:gid:full name:home:shell
+
+    The second field holds x, because the password hash is kept in
+    /etc/shadow, which only root can read. Each line of /etc/group
+    describes one group in four fields, the last of which lists the member
+    accounts separated by commas.
+
+        name:x:gid:member,member
+
+    Each line of /etc/shadow holds the hash of one account in nine fields,
+    of which minios uses the first two.
+
+        name:hash:lastchange:min:max:warn:inactive:expire:flag
+
+    A hash is a SHA-256 crypt string beginning with $5$. An empty hash
+    means that the account has no password and logs in without a prompt.
+    A hash beginning with ! or * locks the account.
+
+    Lines beginning with # and lines with missing or malformed fields are
+    ignored. Account and group names start with a lowercase letter and
+    continue with lowercase letters, digits, _ and -, up to 32 characters.
+
+SEE ALSO
+    id(1), index(7)

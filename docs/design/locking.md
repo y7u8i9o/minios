@@ -506,3 +506,12 @@ These locks are in user space and do not add a kernel lock-order level.
   without other locks and allocate table pages from the buddy allocator
   under it, which gives the order `its_lock -> pmm_lock` (and the per CPU
   page cache lock). It exists only on aarch64.
+
+## U0 additions
+
+- No new lock. `proc.cred` is written under `proc.lock` by the identity
+  system calls and copied out under it by `cred_get`, which takes no other
+  lock and is called with no lock held. A new process copies the parent's
+  credentials under the parent's `proc.lock`, together with the resource
+  limits. `proc_format_table` reads the effective uid with a relaxed atomic
+  load under `proc_tree_lock` and `proc_list_lock`, without `proc.lock`.

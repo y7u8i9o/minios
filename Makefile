@@ -75,7 +75,7 @@ $(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scrip
 # pkgsign generates keys and signs the index of a package repository. It
 # compiles the SHA-2 and Ed25519 code of libc, with which pkg verifies on
 # minios.
-CRYPTO_SRCS := libc/src/crypto/sha2.c libc/src/crypto/ed25519.c
+CRYPTO_SRCS := libc/src/crypto/sha2.c libc/src/crypto/ed25519.c libc/src/crypto/shacrypt.c
 CRYPTO_HDRS := libc/include/minios/sha2.h libc/include/minios/ed25519.h
 $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 	@mkdir -p $(dir $@)

@@ -184,3 +184,6 @@ msgstr "Ресурсы"
 #: user/apps/sysmon.c:820
 msgid "Filter by name"
 msgstr "Фильтр по имени"
+
+msgid "User"
+msgstr "Пользователь"

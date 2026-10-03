@@ -5,6 +5,7 @@
 #include <sched/wait.h>
 #include <fs/fdtable.h>
 #include <ipc/signal.h>
+#include <sched/cred.h>
 
 #define PROC_NAME_LEN 32
 #define PROC_CWD_LEN  256
@@ -18,8 +19,8 @@ struct vmspace;
 struct thread;
 
 /* A process: an address space and a set of threads.
- * lock protects threads, zombies, nthreads, exit_status, cwd and
- * sig_actions. exiting and sig_pending are atomic words. fds has its own lock. pgid is protected
+ * lock protects threads, zombies, nthreads, exit_status, cwd,
+ * sig_actions and cred. exiting and sig_pending are atomic words. fds has its own lock. pgid is protected
  * by proc_tree_lock.
  * parent, children, sibling and state are protected by proc_tree_lock. */
 struct proc {
@@ -51,6 +52,8 @@ struct proc {
     /* Resource limits (M40): written under lock, read without it by the
      * timer tick and the enforcement points, which tolerate a stale value. */
     struct rlimit rlim[RLIMIT_NLIMITS];
+    /* Identity (U0): written under lock, read through cred_get. */
+    struct cred cred;
     /* CPU accounting in timer ticks and event counters, atomic updates;
      * the c* fields sum reaped children and are protected by lock. */
     uint64_t utime, stime;

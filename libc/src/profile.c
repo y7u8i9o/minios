@@ -522,7 +522,7 @@ int prof_resolver_kernel(struct prof_resolver *r)
     return r->kernel ? 0 : -1;
 }
 
-/* The PID PPID PGID STATE TIME RSS NAME table of /dev/proc. */
+/* The PID PPID PGID STATE TIME RSS UID NAME table of /dev/proc. */
 static int read_proc_name(pid_t pid, char *out, size_t size)
 {
     FILE *f = fopen("/dev/proc", "r");
@@ -536,7 +536,7 @@ static int read_proc_name(pid_t pid, char *out, size_t size)
         if (end == line || p != pid)
             continue;
         char *tok = end;
-        for (int col = 0; col < 5; col++) {
+        for (int col = 0; col < 6; col++) {
             while (*tok == ' ')
                 tok++;
             while (*tok && *tok != ' ')

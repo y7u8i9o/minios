@@ -7,8 +7,10 @@ SYNOPSIS
     ps
 
 DESCRIPTION
-    Prints aligned PID, PPID, PGID, STATE, TIME, RSS and NAME columns from
-    /dev/proc. The kernel supplies the snapshot and its accounting units.
+    Prints aligned PID, PPID, PGID, USER, STATE, TIME, RSS and NAME columns
+    from /dev/proc. The kernel supplies the snapshot, its accounting units
+    and the effective uid of each process, which ps shows as the account
+    name of /etc/passwd, or as the number when no account has it.
 
 SEE ALSO
-    sh(1), man(1), index(7)
+    id(1), sh(1), man(1), index(7)

@@ -1,8 +1,11 @@
 #pragma once
+#include <stdio.h>
 #include <sys/types.h>
 
-/* The single user of minios: name "user", uid 0, gid 0, home /home, shell
- * /bin/sh. Lookups of any other uid or name fail with ENOENT. */
+/* The accounts of /etc/passwd (docs/design/users.md), one per line:
+ * name:password:uid:gid:gecos:home:shell. The password field holds "x"
+ * when the hash is in /etc/shadow. The functions return pointers to
+ * storage that the next call of any of them overwrites. */
 struct passwd {
     char *pw_name;
     char *pw_passwd;
@@ -15,3 +18,9 @@ struct passwd {
 
 struct passwd *getpwuid(uid_t uid);
 struct passwd *getpwnam(const char *name);
+/* Walk /etc/passwd from the start (setpwent) to the end (NULL). */
+struct passwd *getpwent(void);
+void setpwent(void);
+void endpwent(void);
+/* The next valid entry of stream, skipping malformed lines. */
+struct passwd *fgetpwent(FILE *stream);

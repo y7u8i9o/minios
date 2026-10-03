@@ -111,6 +111,13 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_readlink]      = sys_readlink,
     [SYS_readlinkat]    = sys_readlinkat,
     [SYS_lstat]         = sys_lstat,
+    [SYS_getresuid]     = sys_getresuid,
+    [SYS_getresgid]     = sys_getresgid,
+    [SYS_setresuid]     = sys_setresuid,
+    [SYS_setresgid]     = sys_setresgid,
+    [SYS_getgroups]     = sys_getgroups,
+    [SYS_setgroups]     = sys_setgroups,
+    [SYS_umask]         = sys_umask,
 };
 
 bool user_range_ok(uintptr_t addr, size_t len, bool write)

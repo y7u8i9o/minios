@@ -19,6 +19,9 @@
 #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
 #define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
 
+/* Supplementary groups a process may carry (setgroups, getgroups). */
+#define NGROUPS_MAX 16
+
 struct timespec {
     int64_t tv_sec;
     int64_t tv_nsec;

@@ -1,8 +1,10 @@
 #pragma once
+#include <stdio.h>
 #include <sys/types.h>
 
-/* The single group of minios: name "user", gid 0, with the one user as
- * its member. */
+/* The groups of /etc/group, one per line: name:password:gid:members,
+ * with the members separated by commas. The functions return pointers to
+ * storage that the next call of any of them overwrites. */
 struct group {
     char *gr_name;
     char *gr_passwd;
@@ -12,3 +14,13 @@ struct group {
 
 struct group *getgrgid(gid_t gid);
 struct group *getgrnam(const char *name);
+struct group *getgrent(void);
+void setgrent(void);
+void endgrent(void);
+struct group *fgetgrent(FILE *stream);
+/* The groups of user: group first, then every group that lists user as a
+ * member. At most *ngroups are stored. Returns the count, or -1 with the
+ * count needed in *ngroups when the array is too small. */
+int getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups);
+/* Set the supplementary groups of the caller from getgrouplist. */
+int initgroups(const char *user, gid_t group);

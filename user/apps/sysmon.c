@@ -19,6 +19,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <langinfo.h>
+#include <pwd.h>
 #include <gui/app.h>
 #include <gui/model.h>
 #include <gui/i18n.h>
@@ -33,7 +34,8 @@ struct proc_row {
     int pid, ppid, pgid;
     long ticks, rss;
     int cpu;                        /* cpu is the CPU share in tenths of a percent. */
-    char state[12], name[32];
+    unsigned uid;
+    char state[12], name[32], user[32];
 };
 
 struct thread_row {
@@ -113,6 +115,23 @@ static struct proc_row *find_row(int pid)
     return NULL;
 }
 
+/* The account name of uid, or the number when /etc/passwd has none. The
+ * last answer is kept because consecutive rows mostly share a user. */
+static void user_name(unsigned uid, char *out, size_t size)
+{
+    static unsigned last_uid = (unsigned)-1;
+    static char last_name[32];
+    if (uid != last_uid) {
+        struct passwd *pw = getpwuid(uid);
+        if (pw)
+            snprintf(last_name, sizeof last_name, "%s", pw->pw_name);
+        else
+            snprintf(last_name, sizeof last_name, "%u", uid);
+        last_uid = uid;
+    }
+    snprintf(out, size, "%s", last_name);
+}
+
 static void read_procs(long elapsed)
 {
     memcpy(prev_rows, rows, sizeof rows);
@@ -134,7 +153,9 @@ static void read_procs(long elapsed)
         copy_word(&end, r.state, sizeof r.state);
         r.ticks = strtol(end, &end, 10);
         r.rss = strtol(end, &end, 10);
+        r.uid = (unsigned)strtoul(end, &end, 10);
         copy_word(&end, r.name, sizeof r.name);
+        user_name(r.uid, r.user, sizeof r.user);
         if (!r.state[0] || !r.name[0])
             continue;
         r.cpu = 0;
@@ -334,11 +355,12 @@ static int compare_rows(const void *a, const void *b)
     long d = 0;
     switch (sort_col) {
     case 0: d = strcmp(x->name, y->name); break;
-    case 1: d = x->pid - y->pid; break;
-    case 2: d = x->ppid - y->ppid; break;
-    case 3: d = strcmp(x->state, y->state); break;
-    case 4: d = x->cpu - y->cpu; break;
-    case 5: d = x->ticks - y->ticks; break;
+    case 1: d = strcmp(x->user, y->user); break;
+    case 2: d = x->pid - y->pid; break;
+    case 3: d = x->ppid - y->ppid; break;
+    case 4: d = strcmp(x->state, y->state); break;
+    case 5: d = x->cpu - y->cpu; break;
+    case 6: d = x->ticks - y->ticks; break;
     default: d = x->rss - y->rss; break;
     }
     if (d == 0)
@@ -360,7 +382,7 @@ static void build_view(void)
 
 static int m_rows(struct model *m, int parent) { return parent < 0 ? nview : 0; }
 static int m_child(struct model *m, int parent, int index) { return rows[order[index]].pid; }
-static int m_columns(struct model *m) { return 7; }
+static int m_columns(struct model *m) { return 8; }
 
 static const char *m_cell(struct model *m, int row, int col, char *buf, size_t size)
 {
@@ -369,18 +391,19 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
         return "";
     switch (col) {
     case 0: return r->name;
-    case 1: snprintf(buf, size, "%d", r->pid); return buf;
-    case 2: snprintf(buf, size, "%d", r->ppid); return buf;
-    case 3: return r->state;
-    case 4: format_percent(buf, size, r->cpu); return buf;
-    case 5: snprintf(buf, size, "%ld:%02ld", r->ticks / 60000, r->ticks / 1000 % 60); return buf;
+    case 1: return r->user;
+    case 2: snprintf(buf, size, "%d", r->pid); return buf;
+    case 3: snprintf(buf, size, "%d", r->ppid); return buf;
+    case 4: return r->state;
+    case 5: format_percent(buf, size, r->cpu); return buf;
+    case 6: snprintf(buf, size, "%ld:%02ld", r->ticks / 60000, r->ticks / 1000 % 60); return buf;
     default: format_size(buf, size, r->rss); return buf;
     }
 }
 
 static const char *m_header(struct model *m, int col)
 {
-    static const char *const names[] = { N_("Name"), N_("PID"), N_("Parent"), N_("State"), N_("CPU"),
+    static const char *const names[] = { N_("Name"), N_("User"), N_("PID"), N_("Parent"), N_("State"), N_("CPU"),
                                          N_("CPU time"), N_("Memory") };
     return _(names[col]);
 }
@@ -824,8 +847,8 @@ int main(void)
     widget_set_stretch(split, 1, 1);
     table = table_new(split);
     view_set_model(table, &model);
-    static const int widths[] = { 170, 60, 60, 80, 70, 80, 90 };
-    for (int c = 0; c < 7; c++)
+    static const int widths[] = { 170, 80, 60, 60, 80, 70, 80, 90 };
+    for (int c = 0; c < 8; c++)
         table_set_column_width(table, c, widths[c]);
     widget_connect(table, "selected", on_select, NULL);
     widget_connect(table, "context", on_context, NULL);

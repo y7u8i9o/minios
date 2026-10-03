@@ -30,6 +30,7 @@
 #define NAME_MAX 255
 #endif
 #define PATH_MAX 1024
+#define NGROUPS_MAX 16
 #define LINE_MAX 2048
 #define _POSIX2_LINE_MAX 2048
 #define ARG_MAX 65536
