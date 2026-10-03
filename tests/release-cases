@@ -1,0 +1,12 @@
+# The boot cases that tools/release.sh runs on every architecture before it
+# builds a release (docs/design/build.md). They cover booting, memory,
+# storage, processes, users, the shell, the graphical session, packages and
+# networking, one case or two for each, and leave out the long suites of
+# each subsystem. Text from # to the end of a line is a comment.
+boot smp vmm swap
+fs mfs mfs_journal fat persist
+fork signals pty dynlink libc
+user_cred perm_user fs_owner login_console privilege
+shell shell2 initctl shutdown
+gui comp_shell gui_term gui_greeter gui_settings
+pkg_repo net_core

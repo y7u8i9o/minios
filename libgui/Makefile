@@ -3,9 +3,10 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libgui
 LIB   := $(OUT)/libgui.a
 SO    := $(BUILD)/lib/libgui.so
-# The ABI number of the shared object (docs/design/packages.md): raised
-# whenever a structure, constant, signature or documented behaviour that
-# programs depend on changes incompatibly; additions leave it alone.
+# The ABI number of the shared object (docs/design/packages.md). It is
+# raised whenever a structure, constant, signature or documented behaviour
+# that programs depend on changes incompatibly, and additions leave it
+# alone.
 ABI   := 1
 ABIFILE := $(BUILD)/lib/libgui.abi
 SRCS  := $(wildcard src/*.c src/widgets/*.c)
@@ -15,9 +16,9 @@ UCPP  := -Iinclude -I../libcodec/include -I../libfont/include -I../libwire/inclu
 .PHONY: all clean check
 all: $(LIB) $(SO) $(ABIFILE)
 
-# Host unit tests: the library, libcodec with its modules compiled in
-# (CODEC_BUILTIN) and libfont compiled with the system compiler against a
-# fake client (tests/fake_client.c).
+# The host unit tests compile the library, libcodec with its modules
+# (CODEC_BUILTIN) and libfont with the system compiler against a fake
+# client (tests/fake_client.c).
 HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c) \
             $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c)
 check: $(OUT)/font.c

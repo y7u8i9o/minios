@@ -33,8 +33,8 @@ $(OUT)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(KASFLAGS) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
-# Pass 1: link with an empty symbol table. The .ksyms section is filled by a
-# generated assembly stub that .incbin's the blob.
+# The first pass links with an empty symbol table. The .ksyms section is
+# filled by a generated assembly stub that includes the blob with .incbin.
 $(OUT)/ksyms_empty.bin:
 	@mkdir -p $(dir $@)
 	: > $@
@@ -44,14 +44,15 @@ $(OUT)/ksyms_empty.o: $(OUT)/ksyms_empty.bin
 	$(CC) $(KASFLAGS) -c -o $@ $(OUT)/ksyms_empty.S
 
 # The identification (VERSION, the build number, the commit) is generated
-# before pass 1 so that both passes link the same objects.
+# before the first pass, and both passes therefore link the same objects.
 $(OUT)/kernel_pass1.elf: $(LDSCRIPT) $(OBJS) $(OUT)/ksyms_empty.o ../tools/version.sh ../VERSION
 	../tools/version.sh .. $(OUT)/version.c
 	$(CC) $(KCFLAGS) $(CPPFLAGS) -c -o $(OUT)/version.o $(OUT)/version.c
 	$(LD) $(KLDFLAGS) -T $(LDSCRIPT) -o $@ $(OBJS) $(OUT)/version.o $(OUT)/ksyms_empty.o
 
-# Pass 2: extract symbols and relink with the populated .ksyms section.
-# .ksyms is the last section in the image, so no other address changes.
+# The second pass extracts the symbols and relinks with the populated
+# .ksyms section. Because .ksyms is the last section in the image, no other
+# address changes.
 $(OUT)/ksyms.bin: $(OUT)/kernel_pass1.elf $(GENSYMS)
 	$(NM) -n -S $< | $(GENSYMS) $@
 

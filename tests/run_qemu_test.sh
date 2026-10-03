@@ -1,8 +1,8 @@
 #!/bin/sh
-# Boot one test case headless and check its serial output.
-# usage: LIMINE=<tool> run_qemu_test.sh <kernel.elf> <build dir> <case dir>
+# Boot one test case headless and check its serial output. The script is
+# run as LIMINE=<tool> run_qemu_test.sh <kernel.elf> <build dir> <case dir>.
 #
-# A case directory contains:
+# A case directory contains the following files.
 #   cmdline   kernel command line (optional, typically test=<name>)
 #   arches    the architectures the case runs on, one per line (optional,
 #             default all). On another architecture the case is reported
@@ -10,32 +10,33 @@
 #   expect    one extended regex per line, every line must match the serial log
 #   reject    one extended regex per line, no line may match (optional)
 #   timeout   seconds to wait before declaring failure (optional, default 30)
-#   mem       QEMU memory size in MiB (optional, default 512)
+#   mem       QEMU memory size in MiB (optional, default 512), replaced by
+#             mem.ARCH on that architecture
 #   cpus      number of CPUs (optional, default $CPUS or 4)
 #   swap      size in MiB of a zero filled swap image attached as vdb (optional)
 #   mfs2      size in MiB of an empty mfs image attached as the next virtio-blk
-#             device (optional); the post script sees it as DISK2
+#             device (optional), which the post script sees as DISK2
 #   fat       one line per FAT image to attach, "<size_mb> <12|16|32> [dir]"
-#             built by mkfat from the directory under the case (optional);
-#             the post script sees the first as FATIMG, all as FATIMGS
-#   audio     QEMU audio backend for a virtio-sound device: none or wav
+#             built by mkfat from the directory under the case (optional),
+#             and the post script sees the first as FATIMG and all as FATIMGS
+#   audio     QEMU audio backend for a virtio-sound device, none or wav
 #   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver),
 #             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
-#   tablet    present: attach a virtio-tablet-pci device
-#   keyboard  present: attach a virtio-keyboard-pci device
+#   tablet    attaches a virtio-tablet-pci device when present
+#   keyboard  attaches a virtio-keyboard-pci device when present
 #   disk.img  a private root image instead of the shared one (optional)
-#   nic       network backend of a virtio-net-pci device (optional): dgram
-#             exchanges raw Ethernet frames with the case's peer program
+#   nic       network backend of a virtio-net-pci device (optional), where
+#             dgram exchanges raw Ethernet frames with the case's peer program
 #             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
 #             none attaches nothing. Frames are captured to <out>/capture.pcap
 #             (docs/design/network.md)
 #   peer      executable started before QEMU (required for dgram, optional
-#             for user; for user a nonzero guest port in PEER_READY is
+#             for user, where a nonzero guest port in PEER_READY is
 #             forwarded to guest port 9100), with NETPEER
 #             (the host tool tools/netpeer), PEER_READY, PEER_LOG, PEER_PID,
 #             OUTDIR, TOP and BUILD in the environment. It writes
 #             "<peer port> <guest port>" to PEER_READY once it listens and
-#             is terminated when QEMU has exited; the post script sees
+#             is terminated when QEMU has exited, and the post script sees
 #             PEER_LOG and PEER_READY
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
@@ -57,6 +58,7 @@ TIMEOUT=30
 [ -f "$CASE/timeout" ] && TIMEOUT="$(cat "$CASE/timeout")"
 MEM=512
 [ -f "$CASE/mem" ] && MEM="$(cat "$CASE/mem")"
+[ -f "$CASE/mem.${ARCH:-x86_64}" ] && MEM="$(cat "$CASE/mem.${ARCH:-x86_64}")"
 CPUS="${CPUS:-4}"
 [ -f "$CASE/cpus" ] && CPUS="$(cat "$CASE/cpus")"
 SERIAL="$OUTDIR/serial.txt"
@@ -66,7 +68,7 @@ PEER_READY="$OUTDIR/peer.ready"
 PEER_LOG="$OUTDIR/peer.log"
 PEER_PID="$OUTDIR/peer.pid"
 
-# The peer of a network case is stopped whenever this script ends: after
+# The peer of a network case is stopped whenever this script ends, after
 # QEMU exited, after the timeout killed it, and on every early failure.
 # A peer that ignores SIGTERM for five seconds is killed.
 stop_peer() {
@@ -87,11 +89,11 @@ fail() {
     echo "FAIL $NAME ($1)"
     exit 1
 }
-# Every case gets a private copy of the disk image so writes do not leak
-# between cases. A case may provide its own image as <case>/disk.img.
+# Every case gets a private copy of the disk image, which keeps writes from
+# leaking between cases. A case may provide its own image as <case>/disk.img.
 # The copy is a copy-on-write clone where the file system supports it
-# (APFS: cp -c) and is deleted when the case ends, so a run never holds
-# more than one image per running case.
+# (cp -c on APFS) and is deleted when the case ends, and a run therefore
+# never holds more than one image per running case.
 clone() {
     cp -c "$1" "$2" 2>/dev/null || cp "$1" "$2"
 }
@@ -101,8 +103,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The network device and its peer are prepared before the image so that
-# a peer that fails to start costs nothing else. The backend named in
+# The network device and its peer are prepared before the image, which
+# lets a peer that fails to start cost nothing else. The backend named in
 # the nic file must be one this QEMU offers.
 NETFLAGS=""
 if [ -f "$CASE/nic" ]; then
@@ -134,7 +136,7 @@ if [ -f "$CASE/nic" ]; then
         else
             NETFLAGS="-netdev user,id=net0"
             # A nonzero guest port forwards that host port to guest port
-            # 9100, the xfer(1) server, so the peer can reach into the guest.
+            # 9100, the xfer(1) server, which lets the peer reach the guest.
             [ "$GUESTPORT" != 0 ] && NETFLAGS="$NETFLAGS,hostfwd=tcp:127.0.0.1:$GUESTPORT-:9100"
             CMDLINE="$CMDLINE netpeer_port=$PEERPORT"
         fi
@@ -208,7 +210,7 @@ if [ -f "$CASE/fat" ]; then
     done < "$CASE/fat"
 fi
 # Use HVF on macOS when offered. Tests use TCG elsewhere for deterministic
-# behavior; ACCEL can explicitly select another accelerator.
+# behavior, and ACCEL can explicitly select another accelerator.
 if [ -z "$ACCEL" ]; then
     ACCELS="$("$QEMU" -accel help 2>/dev/null)"
     if [ "$(uname -s)" = Darwin ] && echo "$ACCELS" | grep -q '^hvf$'; then
@@ -239,7 +241,7 @@ case "${ARCH:-x86_64}" in
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
         # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2
-        # sets up no framebuffer on virtio-gpu-pci, so ramfb is added to it.
+        # sets up no framebuffer on virtio-gpu-pci, and ramfb is added to it.
         # virt adds a virtio-net device unless -nic none is given. A case
         # without a nic file gets no network device, like the PC, whose
         # e1000 has no driver.
@@ -270,8 +272,8 @@ while kill -0 $QPID 2>/dev/null; do
 done
 wait $QPID
 echo "$?" > "$OUTDIR/exitcode"
-# The peer's log is complete once it has been stopped, so the checks
-# below and the post script can read it.
+# The peer's log is complete once it has been stopped, and the checks
+# below and the post script read it afterwards.
 stop_peer
 
 STATUS=0

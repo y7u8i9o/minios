@@ -6,17 +6,17 @@ LIBC   := $(BUILD)/libc/libc.a
 LIBEDIT := $(BUILD)/libedit/libedit.a
 CRT0   := $(BUILD)/libc/crt0.o
 # The shared libraries (docs/design/dynlink.md). Programs name them with
-# -l and --as-needed keeps only the ones a program references; libedit is
+# -l and --as-needed keeps only the ones a program references. libedit is
 # static, since a single program uses it.
 SHARED := libc libcodec libfont libwire libaudio libgui liblua
 SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
 DYNLIBS := -lgui -lcodec -laudio -lwire -lfont $(LIBEDIT) -lc
-# Every program is installed without its debugging sections; the symbol
-# table stays for the profiler.
+# Every program is installed without its debugging sections, while the
+# symbol table stays for the profiler.
 INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
-# Every directory holding a main program: one binary per directory named
-# after it, plus tests/*.c which each become one binary.
+# Every directory holding a main program gives one binary named after it,
+# and each file of tests/*.c becomes one binary as well.
 PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg imed greeter
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
@@ -27,12 +27,12 @@ LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
 
-# Lua is compiled unmodified from third_party/lua/src; platform choices
-# are made here instead of in luaconf.h (see docs/design/lua.md).
+# Lua is compiled unmodified from third_party/lua/src, with the platform
+# choices made here instead of in luaconf.h (see docs/design/lua.md).
 # LUA_USE_POSIX selects _setjmp, getc_unlocked, fseeko, mkstemp, popen
 # and the wait status macros, all of which libc provides. Modules load
-# only from the share tree and the current directory; there is no
-# dynamic loading. lua/ holds the replacement linit.c and the minios
+# only from the share tree and the current directory, without dynamic
+# loading. lua/ holds the replacement linit.c and the minios
 # modules (fs, sys), compiled with the interpreter headers.
 LUA_SRC  := ../third_party/lua/src
 LUA_CORE := $(filter-out $(LUA_SRC)/lua.c $(LUA_SRC)/luac.c $(LUA_SRC)/linit.c,$(wildcard $(LUA_SRC)/*.c))
@@ -56,9 +56,9 @@ $(ROOT)/etc/%: etc/%
 	@if [ -f $< ]; then cp $< $@; else mkdir -p $@; fi
 
 # Two symbolic links that the symlink test resolves on the root image and
-# under /initrd, which mkfs and the initrd reader store as links: a
-# relative one to the tar fixture beside it and an absolute one to
-# /etc/motd. The account databases in /etc lead to the package prefix
+# under /initrd, which mkfs and the initrd reader store as links. One is
+# relative and leads to the tar fixture beside it, and the other is
+# absolute and leads to /etc/motd. The account databases in /etc lead to the package prefix
 # /usr/local, itself a link to /home/.local on the data volume, which
 # keeps accounts across rebuilds of the root image (docs/design/users.md).
 # They are recreated on every build.
@@ -79,8 +79,8 @@ pkg-key:
 	@mkdir -p $(ROOT)/etc/pkg/keys
 	@cmp -s $(PKG_PUB) $(ROOT)/etc/pkg/keys/build.pub || cp $(PKG_PUB) $(ROOT)/etc/pkg/keys/build.pub
 
-# The share tree is copied whole: make cannot name files with spaces, and
-# media files may carry them.
+# The share tree is copied whole, because make cannot name files with
+# spaces, and media files may carry them.
 # Every po/DOMAIN/LL.po becomes /usr/share/locale/LL/LC_MESSAGES/DOMAIN.mo
 # (docs/design/gettext.md).
 .PHONY: locale-tree
@@ -142,9 +142,9 @@ $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf: ../third_party/droidfallback/DroidS
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-# Installed without its release number so that upgrading Unifont does not
-# touch the paths compiled into the Unicode viewer; the release is
-# recorded in third_party/unifont/NOTICE.
+# The font is installed without its release number, which keeps an upgrade
+# of Unifont from touching the paths compiled into the Unicode viewer. The
+# release is recorded in third_party/unifont/NOTICE.
 $(ROOT)/etc/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -172,8 +172,9 @@ $(BUILD)/lib/liblua.abi: Makefile
 	@mkdir -p $(dir $@)
 	@echo $(LUA_ABI) > $@
 
-# The ABI table the package installer reads: one "soname number" line per
-# shared library, from the ABI variables of the library Makefiles.
+# The ABI table that the package installer reads holds one "soname number"
+# line per shared library, taken from the ABI variables of the library
+# Makefiles.
 $(ROOT)/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
 	@mkdir -p $(dir $@)
 	@rm -f $@
@@ -189,7 +190,8 @@ $(ROOT)/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/lua.elf $@
 
 # luac uses internal functions of the core, which the shared object hides
-# (LUAI_FUNC in luaconf.h), so it links the core objects directly.
+# (LUAI_FUNC in luaconf.h), and it therefore links the core objects
+# directly.
 $(ROOT)/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
@@ -259,8 +261,8 @@ $(ROOT)/bin/make: $(MAKE_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 -include $(MAKE_OBJS:.o=.d)
 
 # tar is the tar of sbase, compiled unmodified from third_party/sbase with
-# the utility library files it needs (see docs/design/artar.md). sbase's
-# strlcpy is renamed so that it does not collide with the libc one.
+# the utility library files it needs (see docs/design/artar.md). The
+# strlcpy of sbase is renamed to avoid a collision with the one of libc.
 TAR_SRC  := ../third_party/sbase/src
 TAR_UTIL := eprintf.c ealloc.c reallocarray.c mkdirp.c recurse.c strlcpy.c
 TAR_OBJS := $(OUT)/tar/tar.o $(patsubst %.c,$(OUT)/tar/util_%.o,$(TAR_UTIL))
@@ -490,9 +492,9 @@ $(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
 
-# crt1.o is the C runtime start; crti.o defines the empty _init and _fini
-# and crtn.o is empty, the objects tcc links around every program; libm.a
-# is empty because the math functions are in libc.so.
+# crt1.o is the C runtime start, crti.o defines the empty _init and _fini
+# and crtn.o is empty, and tcc links these objects around every program.
+# libm.a is empty because the math functions are in libc.so.
 $(ROOT)/lib/crt1.o: $(CRT0)
 	@mkdir -p $(dir $@)
 	cp $< $@
@@ -510,9 +512,9 @@ $(ROOT)/lib/libm.a:
 	rm -f $@
 	$(AR) rcs $@
 
-# A selection of the tcc test suite runs on minios (tests/cases/tcc): the
-# programs that need neither arguments, input files, bound checking,
-# threads, thread local storage nor a specific assembler.
+# A selection of the tcc test suite runs on minios (tests/cases/tcc),
+# namely the programs that need neither arguments, input files, bound
+# checking, threads, thread local storage nor a specific assembler.
 TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 06_case 07_function \
     08_while 09_do_while 10_pointer 11_precedence 12_hashdefine 13_integer_literals 14_if 15_recursion \
     16_nesting 17_enum 18_include 19_pointer_arithmetic 20_pointer_comparison 21_char_array \
@@ -525,7 +527,7 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 
 .PHONY: tcc-support
 # The headers and the static archives of every library go beside the C
-# library, so that a program compiled on minios can use the toolkit, the
+# library, where a program compiled on minios can use the toolkit, the
 # protocol library, the audio client, the line editor and the Lua core
 # with the same headers and the same objects as the cross build.
 STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit
@@ -547,8 +549,8 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@for t in $(TCC_TEST_NAMES); do cp -p $(TCC_TESTS)/$$t.c $(TCC_TESTS)/$$t.expect $(ROOT)/usr/share/tcc/tests2/; done
 	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/
 
-# bin/ld is named explicitly: the pattern rule for program directories
-# would match the loader's directory ld/ for that name.
+# bin/ld is named explicitly, because the pattern rule for program
+# directories would match the loader's directory ld/ for that name.
 $(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/ld.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
@@ -557,7 +559,7 @@ $(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 -include $(TCC_GEN)/tcc.d
 
 # The loader is a freestanding position independent object with its own
-# entry; init is linked statically, so that the system starts even when
+# entry. init is linked statically, which lets the system start even when
 # /lib is damaged.
 $(ROOT)/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
 	@mkdir -p $(dir $@) $(OUT)/ld
@@ -581,8 +583,8 @@ $(ROOT)/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(INSTALL)
 
-# X12 keeps its implementation in compositor/ for source-history
-# continuity; the installed server and user-facing name are X12.
+# X12 keeps its implementation in compositor/ for the continuity of the
+# source history, while the installed server and its visible name are X12.
 $(ROOT)/bin/x12: compositor/*.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
@@ -593,8 +595,8 @@ $(ROOT)/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/x12settings.elf $@
 
-# Named explicitly so that the generated block table is a prerequisite;
-# the generic apps rule below tracks only the .c file.
+# This program is named explicitly to make the generated block table a
+# prerequisite, because the generic rule below tracks only the .c file.
 $(APPBIN)/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
@@ -619,7 +621,7 @@ clean:
 	rm -rf $(OUT) $(ROOT)
 
 # Executable loader fixtures are kept together with their source and the
-# ELF mutation generator; they run only in the targeted dynlink test.
+# ELF mutation generator, and they run only in the dynlink test.
 include ld/tests/fixtures.mk
 include pkg/tests/fixtures.mk
 

@@ -2,8 +2,8 @@
 
 # ARCH selects the target architecture. The kernel builds arch/$(ARCH) and
 # takes its architecture headers from arch/$(ARCH)/include
-# (docs/design/arch.md). x86_64 is the only implemented architecture; the
-# aarch64 port is planned in docs/plan/arm64.md.
+# (docs/design/arch.md). x86_64 and aarch64 are implemented, the latter as
+# described in docs/plan/arm64.md.
 ARCH ?= x86_64
 
 # A native Linux GCC/binutils toolchain for ARCH produces the same
@@ -29,8 +29,8 @@ HOSTCC  ?= cc
 YACC    ?= yacc
 HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 # Darwin hides socket ancillary-data macros and resource-limit extensions
-# under strict POSIX visibility. Host tests use those native interfaces;
-# this flag never reaches the freestanding MiniOS build.
+# under strict POSIX visibility. Host tests use those native interfaces,
+# and this flag never reaches the freestanding MiniOS build.
 ifeq ($(HOST_OS),Darwin)
 HOSTCPPFLAGS += -D_DARWIN_C_SOURCE
 endif
@@ -44,7 +44,7 @@ CONFIG_PANIC_EXIT ?= 1   # panic exits QEMU through isa-debug-exit instead of ha
 CONFIG_LOCKDEBUG  ?= 1   # spinlock owner tracking and misuse detection
 CONFIG_LOCKSTAT   ?= 1   # per lock name acquisition, contention and hold time counters, /dev/lockstat
 CONFIG_SLABDEBUG  ?= 1   # slab redzones and poisoning on free
-CONFIG_LOG_LEVEL  ?= 1   # compile time klog threshold: 0 debug, 1 info, 2 warn, 3 error
+CONFIG_LOG_LEVEL  ?= 1   # compile time klog threshold, 0 debug, 1 info, 2 warn or 3 error
 
 CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
                -DCONFIG_PANIC_EXIT=$(strip $(CONFIG_PANIC_EXIT)) \
@@ -53,14 +53,14 @@ CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
                -DCONFIG_SLABDEBUG=$(strip $(CONFIG_SLABDEBUG)) \
                -DCONFIG_LOG_LEVEL=$(strip $(CONFIG_LOG_LEVEL))
 
-# The architecture flags of the kernel and of user programs.
-# Kernel: no red zone, the kernel code model for the higher half, and no
-# SIMD or floating point registers (the kernel never saves them for
-# itself). User: M23 saves x87 and all 128-bit XMM registers. Keep AVX
-# disabled until the kernel migrates from FXSAVE to XSAVE/XRSTOR and enables
-# the matching XCR0 state components. TCC_TARGET selects the backend of the
+# The architecture flags of the kernel and of user programs. The kernel
+# uses no red zone, the kernel code model for the higher half, and no SIMD
+# or floating point registers, which it never saves for itself. For user
+# programs M23 saves x87 and all 128-bit XMM registers. AVX stays disabled
+# until the kernel migrates from FXSAVE to XSAVE/XRSTOR and enables the
+# matching XCR0 state components. TCC_TARGET selects the backend of the
 # bundled tcc.
-# ARCH_USERLAND is "no" while an architecture runs the kernel only: the
+# ARCH_USERLAND is "no" while an architecture runs the kernel only, and the
 # build and the boot tests then use an empty initrd and no root disk.
 ifeq ($(ARCH),x86_64)
 KARCHFLAGS := -mno-red-zone -mcmodel=kernel -mno-sse -mno-sse2 -mno-mmx -mno-80387
@@ -74,9 +74,9 @@ else ifeq ($(ARCH),aarch64)
 # run time through the auxiliary vector. The small code model reaches the
 # whole image with PC relative addressing from its higher half address.
 KARCHFLAGS := -march=armv8-a -mgeneral-regs-only -mno-outline-atomics -mcmodel=small
-# User code reaches dynamic TLS through __tls_get_addr; the loader
-# implements no TLS descriptors. The loader itself uses no FP registers,
-# so its recovery buffer (_dl_setjmp) holds only general registers.
+# User code reaches dynamic TLS through __tls_get_addr, and the loader
+# implements no TLS descriptors. Because the loader itself uses no FP
+# registers, its recovery buffer (_dl_setjmp) holds only general registers.
 UARCHFLAGS := -march=armv8-a -mno-outline-atomics -mtls-dialect=trad
 LDSO_ARCHFLAGS := -mgeneral-regs-only
 TCC_TARGET := ARM64
@@ -96,18 +96,18 @@ KLDFLAGS := -nostdlib -static -z max-page-size=0x1000 --no-dynamic-linker
 
 AR      := $(CROSS)ar
 
-# User space flags: position independent code, so that the same objects go
-# into the shared libraries and the programs; red zone allowed.
+# User code is compiled position independent, which lets the same objects
+# go into the shared libraries and the programs, and may use the red zone.
 UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC \
             $(UARCHFLAGS) -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
 UASFLAGS := -g
 # Programs are linked at 0x400000 against the shared libraries in
-# build/lib, with every relocation applied at load (docs/design/dynlink.md);
-# ULDFLAGS_STATIC links a program on its own, for init and the loader.
+# build/lib, with every relocation applied at load (docs/design/dynlink.md),
+# and ULDFLAGS_STATIC links a program on its own, for init and the loader.
 # The layout options are stated rather than left to the linker's defaults,
-# which differ: the ld of a Linux distribution enables RELRO and separate
+# which differ. The ld of a Linux distribution enables RELRO and separate
 # code segments and its gcc links position independent executables, while
 # the x86_64-elf tools do none of this. Both toolchains therefore produce
 # the same layout, and the boot tests exercise the one a Linux host builds.
@@ -116,8 +116,8 @@ ULAYOUT_WL := -Wl,-z,relro -Wl,-z,separate-code
 ULDFLAGS := -nostdlib -no-pie -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 $(ULAYOUT_WL) \
             -Wl,--hash-style=sysv -Wl,-z,now -Wl,--as-needed -Wl,-dynamic-linker,/lib/ld.so -L$(BUILD)/lib
 ULDFLAGS_STATIC := -nostdlib -static -no-pie -z max-page-size=0x1000 -Wl,-Ttext-segment=0x400000 $(ULAYOUT_WL)
-# Shared libraries are linked with ld directly: the compiler driver of the
-# bare metal target does not pass -shared on.
+# Shared libraries are linked with ld directly, because the compiler driver
+# of the bare metal target does not pass -shared on.
 USOFLAGS := -shared -z now --hash-style=sysv -z max-page-size=0x1000 $(ULAYOUT)
 
 # Machine size and accelerator for `make run` live in tools/run.sh

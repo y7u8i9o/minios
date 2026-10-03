@@ -3,9 +3,10 @@ include ../toolchain.mk
 OUT  := $(BUILD)/libaudio
 LIB  := $(OUT)/libaudio.a
 SO   := $(BUILD)/lib/libaudio.so
-# The ABI number of the shared object (docs/design/packages.md): raised
-# whenever a structure, constant, signature or documented behaviour that
-# programs depend on changes incompatibly; additions leave it alone.
+# The ABI number of the shared object (docs/design/packages.md). It is
+# raised whenever a structure, constant, signature or documented behaviour
+# that programs depend on changes incompatibly, and additions leave it
+# alone.
 ABI   := 1
 ABIFILE := $(BUILD)/lib/libaudio.abi
 SRCS := $(wildcard src/*.c)

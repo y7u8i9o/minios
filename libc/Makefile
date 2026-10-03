@@ -3,16 +3,17 @@ include ../toolchain.mk
 OUT   := $(BUILD)/libc
 LIB   := $(OUT)/libc.a
 SO    := $(BUILD)/lib/libc.so
-# The ABI number of the shared object (docs/design/packages.md): raised
-# whenever a structure, constant, signature or documented behaviour that
-# programs depend on changes incompatibly; additions leave it alone.
+# The ABI number of the shared object (docs/design/packages.md). It is
+# raised whenever a structure, constant, signature or documented behaviour
+# that programs depend on changes incompatibly, and additions leave it
+# alone.
 ABI   := 1
 ABIFILE := $(BUILD)/lib/libc.abi
 CRT0  := $(OUT)/crt0.o
 CRTI  := $(OUT)/crti.o $(OUT)/crtn.o
-# The code of the target architecture: the system call stub, the start
-# files, setjmp, the floating point environment and the math primitives
-# (docs/design/libc.md).
+# The code of the target architecture comprises the system call stub, the
+# start files, setjmp, the floating point environment and the math
+# primitives (docs/design/libc.md).
 ARCHDIR := arch/$(ARCH)
 
 SRCS  := $(wildcard src/*/*.c) $(wildcard src/*.c) $(wildcard $(ARCHDIR)/*.c)

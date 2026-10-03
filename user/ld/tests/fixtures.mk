@@ -1,5 +1,5 @@
-# Loader integration fixtures. Keep the dependency graph explicit so a
-# parallel build cannot link a node before its predecessor exists.
+# The loader integration fixtures. The dependency graph is explicit, which
+# keeps a parallel build from linking a node before its predecessor exists.
 LDTEST := $(OUT)/ldtests
 LDTEST_LEVELS := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
 LDTEST_CHAIN := $(addprefix $(ROOT)/lib/libldchain,$(addsuffix .so,$(LDTEST_LEVELS)))
@@ -7,7 +7,7 @@ all: $(LDTEST_CHAIN) $(ROOT)/bin/ldlifecycle $(ROOT)/bin/ldstatic $(LDTEST)/fixt
      $(ROOT)/lib/libldtls.so $(ROOT)/lib/libldplugdep.so $(ROOT)/lib/libldplugin.so $(ROOT)/bin/ldlazy $(ROOT)/bin/dltest
 
 # Thread local storage, dlopen and lazy binding (dltest). The plugin and
-# its dependency are not linked into any program; dlopen loads them.
+# its dependency are not linked into any program, and dlopen loads them.
 $(LDTEST)/%.o: ld/tests/%.c
 	@mkdir -p $(LDTEST)
 	$(CC) $(UCFLAGS) $(UCPP) -c -o $@ $<

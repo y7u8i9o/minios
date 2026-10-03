@@ -12,14 +12,14 @@ ABIFILE := $(BUILD)/lib/libcodec.abi
 SRCS  := $(wildcard src/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS))
 UCPP  := -Iinclude -I../libc/include -I../kernel/include
-# Every directory of modules/ is one module: modules/NAME/*.c become
-# $(BUILD)/lib/codecs/NAME.so, installed in /lib/codecs.
+# Every directory of modules/ is one module, whose files modules/NAME/*.c
+# become $(BUILD)/lib/codecs/NAME.so, installed in /lib/codecs.
 MODULES := $(notdir $(wildcard modules/*))
 MODSOS  := $(addprefix $(BUILD)/lib/codecs/,$(addsuffix .so,$(MODULES)))
 MODOBJS := $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/*/*.c))
 
 .PHONY: all clean check
-# The module objects are named here so that make does not treat them as
+# The module objects are named here to keep make from treating them as
 # intermediate files of the chain to the modules, which it would not
 # remake when they are missing.
 all: $(LIB) $(SO) $(ABIFILE) $(MODOBJS) $(MODSOS)
@@ -51,9 +51,9 @@ $(BUILD)/lib/codecs/%.so: $$(call module_objs,$$*) $(SO)
 	@mkdir -p $(dir $@)
 	$(LD) $(USOFLAGS) -soname $*.so -o $@ $(filter %.o,$^) -L$(BUILD)/lib -lcodec -lc $(LIBGCC)
 
-# Host unit tests: the library and every module compiled into one program
-# with the system compiler (CODEC_BUILTIN), run from this directory to
-# find the fixtures in ../user.
+# The host unit tests compile the library and every module into one
+# program with the system compiler (CODEC_BUILTIN), which runs from this
+# directory to find the fixtures in ../user.
 check:
 	@mkdir -p $(OUT)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -Iinclude \

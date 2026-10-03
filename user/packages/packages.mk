@@ -54,7 +54,7 @@ packages:
 	@cp $(PKG_FILES) $(ROOT)/usr/share/packages/
 
 # make repo writes the signed repository of the same archives anew each
-# time, so that it lists the current archives only.
+# time, which keeps it to the current archives.
 .PHONY: repo
 repo: $(PKG_FILES)
 	../tools/mkrepo.sh $(PKGSIGN) $(PKG_KEY_FILE) $(REPO) $(PKG_FILES)

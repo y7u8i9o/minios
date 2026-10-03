@@ -1,7 +1,7 @@
-# Fixtures of the package installer test (tests/cases/pkg): a library in
-# two builds, one without the symbol the program uses, the program that
-# loads it from the package prefix, and a package built on the host by
-# tools/mkpkg.sh from the hello program.
+# The fixtures of the package installer test (tests/cases/pkg) are a
+# library in two builds, one without the symbol the program uses, the
+# program that loads it from the package prefix, and a package built on
+# the host by tools/mkpkg.sh from the hello program.
 PKGFIX := $(ROOT)/etc/tests/pkgfix
 PKGFIX_OUT := $(OUT)/pkgfix
 all: $(PKGFIX)/libpkgfix.so $(PKGFIX)/bad/libpkgfix.so $(PKGFIX)/pkgprog $(ROOT)/etc/tests/pkghello-1.0.mpk
@@ -35,9 +35,9 @@ $(ROOT)/etc/tests/pkghello-1.0.mpk: ../tools/mkpkg.sh pkg/tests/pkghello.manifes
 # These rules build the archives of the repository test
 # (tests/cases/pkg_repo). They stay on the host, where the case's peer
 # assembles repositories from them. repohello comes in two versions, each
-# with a NEWS file naming its version. repolib provides libpkgfix.so, and
-# repoprog needs that library and depends on repohello, so that
-# installing it resolves both through the index.
+# with a NEWS file naming its version. repolib provides libpkgfix.so.
+# repoprog needs that library and depends on repohello, which lets its
+# installation resolve both through the index.
 PKGREPO := $(OUT)/pkgrepo
 all: $(PKGREPO)/repohello-1.0.mpk $(PKGREPO)/repohello-1.1.mpk $(PKGREPO)/repolib-1.0.mpk $(PKGREPO)/repoprog-1.0.mpk
 
