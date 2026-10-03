@@ -75,10 +75,6 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
-#: user/apps/logview.c:382
-msgid "File:"
-msgstr ""
-
 #: user/apps/logview.c:387
 msgid "%s cannot be written: %s"
 msgstr ""

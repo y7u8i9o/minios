@@ -32,7 +32,7 @@ msgstr "播放"
 
 #: user/apps/player.c:393
 msgid "The audio server disconnected"
-msgstr "音频服务器已断开连接"
+msgstr "音频服务器连接已断开"
 
 #: user/apps/player.c:451
 msgid "No file"
@@ -56,7 +56,7 @@ msgstr "文件："
 
 #: user/apps/player.c:520 user/apps/player.c:536
 msgid "A file is still being loaded."
-msgstr "仍在加载文件。"
+msgstr "文件仍在加载中。"
 
 #: user/apps/player.c:549 user/apps/player.c:613
 msgid "Volume: %d%%"
@@ -105,3 +105,11 @@ msgstr "停止"
 #: user/apps/player.c:610
 msgid "Loop"
 msgstr "循环"
+
+#: user/apps/player.c:511
+msgid "Audio files"
+msgstr "音频文件"
+
+#: user/apps/player.c:511
+msgid "All files"
+msgstr "所有文件"

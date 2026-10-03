@@ -508,7 +508,8 @@ static int on_open(struct widget *w, void *args, void *arg)
 {
     static char name[256] = "/usr/share/sounds/";
     const char *const buttons[] = { _("Close") };
-    if (app_prompt(app, _("Open"), _("File:"), name, sizeof name)) {
+    const struct file_filter filters[] = { { _("Audio files"), "audio/*" }, { _("All files"), "*" } };
+    if (app_choose_file(app, FILE_CHOOSER_OPEN, _("Open"), filters, 2, name, sizeof name)) {
         set_playing(0);
         if (load_start(name, 1, 0) < 0)
             app_dialog(app, _("Error"), _("A file is still being loaded."), buttons, 1);

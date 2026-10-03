@@ -176,7 +176,7 @@ local function error_box(text)
 end
 
 local function save_as()
-  local name = app:prompt("Save as", "File:", path or "")
+  local name = app:save_file("Save as", path or "")
   if not name or name == "" then return false end
   path = name
   set_language(language_of(name))
@@ -193,7 +193,7 @@ local function new_file(lang)
 end
 
 local function open_file()
-  local name = app:prompt("Open", "File:", path or "")
+  local name = app:open_file("Open", path or "")
   if name and name ~= "" then
     local ok, err = load(name)
     if not ok then error_box("The file cannot be opened: " .. tostring(err)) end

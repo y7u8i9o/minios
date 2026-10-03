@@ -191,3 +191,11 @@ msgid_plural "%d lines"
 msgstr[0] "%d строка"
 msgstr[1] "%d строки"
 msgstr[2] "%d строк"
+
+#: user/apps/gedit.c:149
+msgid "All files"
+msgstr "Все файлы"
+
+#: user/apps/gedit.c:149
+msgid "Text files"
+msgstr "Текстовые файлы"

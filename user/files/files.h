@@ -14,5 +14,3 @@ int fs_remove(const char *path);                          /* files and whole dir
 int fs_move(const char *src, const char *dst);            /* rename, else copy and remove */
 /* Bytes, files and directories below a path (the path itself counted). */
 long fs_tree_size(const char *path, int *files, int *dirs);
-/* "512 bytes", "1.2 KB", "3.4 MB" into buf. */
-const char *fs_human_size(long size, char *buf, size_t size_buf);

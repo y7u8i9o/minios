@@ -503,3 +503,21 @@ window captures. Layer surfaces gained margins, and X12 gives the
 keyboard focus to a keyboard interactive overlay layer when it is
 mapped. Launcher entries can include arguments. Documented in
 `docs/design/images.md`, tested by the boot test `gui_images`.
+
+## File chooser and folder view (2026-10-03)
+
+The path prompt that the programs used for Open and Save was replaced by
+a file chooser in the manner of GNOME's (`app_choose_file`), and the file
+chooser and the Files program were unified around a folder view in
+libgui (`gui/folderview.h`) with a places sidebar, a path bar that keeps
+the folders below the current one, a location entry with inline
+completion, a search started by typing, a Recent place fed by both and a
+table with the name, size, type and modification time. The chooser adds
+filters, a name field, a New folder button and a confirmation before a
+file is replaced, and the Lua binding gained `open_file` and
+`save_file`. Documented in `docs/design/folderview.md` and
+`docs/design/files.md`, tested by the libgui host test
+`test_filechooser.c` and the boot cases `gui_filechooser` and
+`gui_files`. `gui_logview` and `gui_mandel` passed with the first
+version of the chooser, and the boot cases have not yet run against the
+unified version.

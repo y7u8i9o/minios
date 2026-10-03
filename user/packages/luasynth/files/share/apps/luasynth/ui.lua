@@ -255,15 +255,16 @@ function M.new(synth, engine)
     self.demo:text(self.demo_on and "Stop demo" or "Demo"); self.keys:focus()
   end)
   local patch_path = (os.getenv("HOME") or "/home") .. "/luasynth.lsynth"
+  local patch_filters = { { "Synthesizer patches", "*.lsynth" }, { "All files", "*" } }
   save:on("clicked", function()
     self:release_all()
-    local path = self.app:prompt("Save Lua Synthesizer patch", "File path", patch_path)
+    local path = self.app:save_file("Save Lua Synthesizer patch", patch_path, patch_filters)
     if path then local ok, err = self:save(path); if not ok then self.message = "Save failed: " .. tostring(err) end end
     self.keys:focus()
   end)
   load:on("clicked", function()
     self:release_all()
-    local path = self.app:prompt("Load Lua Synthesizer patch", "File path", patch_path)
+    local path = self.app:open_file("Load Lua Synthesizer patch", patch_path, patch_filters)
     if path then local ok, err = self:load(path); if not ok then self.message = "Load failed: " .. tostring(err) end end
     self.keys:focus()
   end)

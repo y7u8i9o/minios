@@ -293,6 +293,8 @@ static int view_event(struct widget *w, struct event *e)
         widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN: {
+        if (e->mods & WMOD_ALT)
+            return 0;                   /* accelerators such as Alt+Up */
         int idx = flat_index_of(v, w->value);
         switch (e->code) {
         case KEY_UP: select_flat(v, idx < 0 ? 0 : idx - 1, "selected"); return 1;

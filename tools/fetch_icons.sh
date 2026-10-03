@@ -49,6 +49,14 @@ wallpaper:desktop
 stop:circle-stop
 kill:ban
 profile:chart-line
+folder-new:folder-plus
+drive:hard-drive
+recent:clock-rotate-left
+documents:file-lines
+pictures:image
+music:music
+videos:film
+downloads:download
 app-default:window-maximize
 app-term:terminal
 app-files:folder

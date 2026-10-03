@@ -351,3 +351,19 @@ msgstr "%s GB"
 #: user/files/fsops.c:209
 msgid "%s MB"
 msgstr "%s MB"
+
+#: user/files/files.c:104 user/files/files.c:479
+msgid "Recent"
+msgstr "最近使用したファイル"
+
+#: user/files/files.c:105 user/files/files.c:464
+msgid "Search"
+msgstr "検索"
+
+#: user/files/files.c:481
+msgid "Location..."
+msgstr "場所..."
+
+#: user/files/files.c:486
+msgid "Open item location"
+msgstr "アイテムの場所を開く"

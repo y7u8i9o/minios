@@ -105,3 +105,11 @@ msgstr "停止"
 #: user/apps/player.c:610
 msgid "Loop"
 msgstr "ループ"
+
+#: user/apps/player.c:511
+msgid "Audio files"
+msgstr "オーディオファイル"
+
+#: user/apps/player.c:511
+msgid "All files"
+msgstr "すべてのファイル"

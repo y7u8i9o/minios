@@ -727,7 +727,8 @@ static int on_save(struct widget *w, void *args, void *arg)
 {
     static char name[256] = "/home/mandel.png";
     const char *const buttons[] = { _("Close") };
-    if (!app_prompt(app, _("Save image"), _("File:"), name, sizeof name))
+    const struct file_filter filters[] = { { _("PNG images"), "*.png" }, { _("All files"), "*" } };
+    if (!app_choose_file(app, FILE_CHOOSER_SAVE, _("Save image"), filters, 2, name, sizeof name))
         return 1;
     render_stop();
     struct image *out = image_create(width, height);

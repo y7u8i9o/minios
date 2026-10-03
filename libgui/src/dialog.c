@@ -3,6 +3,7 @@
 #include <gui/app.h>
 #include <string.h>
 #include <libintl.h>
+#include "dialog.h"
 
 struct dialog {
     struct app *app;
@@ -46,14 +47,15 @@ static void run(struct dialog *d)
     app_step(d->app, 0);
 }
 
-int app_dialog(struct app *a, const char *title, const char *text, const char *const *buttons, int nbuttons)
+int dialog_message(struct app *a, struct widget *parent, const char *title, const char *text,
+                   const char *const *buttons, int nbuttons)
 {
     const struct theme *t = app_theme(a);
     int width = gfx_text_width_font(t->font, text, -1) + 40;
     if (width < 240)
         width = 240;
     struct dialog d = { a, NULL, -1, 0, NULL };
-    d.win = app_modal_window(a, app_first_window(a), width, 3 * theme_px(t, TM_CONTROL_H) + 30, title);
+    d.win = app_modal_window(a, parent, width, 3 * theme_px(t, TM_CONTROL_H) + 30, title);
     if (!d.win)
         return -1;
     label_new(d.win, text);
@@ -70,11 +72,11 @@ int app_dialog(struct app *a, const char *title, const char *text, const char *c
     return d.result;
 }
 
-int app_prompt(struct app *a, const char *title, const char *label, char *buf, int size)
+int dialog_prompt(struct app *a, struct widget *parent, const char *title, const char *label, char *buf, int size)
 {
     const struct theme *t = app_theme(a);
     struct dialog d = { a, NULL, -1, 0, NULL };
-    d.win = app_modal_window(a, app_first_window(a), 360, 4 * theme_px(t, TM_CONTROL_H) + 30, title);
+    d.win = app_modal_window(a, parent, 360, 4 * theme_px(t, TM_CONTROL_H) + 30, title);
     if (!d.win)
         return 0;
     label_new(d.win, label);
@@ -98,4 +100,14 @@ int app_prompt(struct app *a, const char *title, const char *label, char *buf, i
     window_close(d.win);
     app_step(a, 0);
     return ok_pressed;
+}
+
+int app_dialog(struct app *a, const char *title, const char *text, const char *const *buttons, int nbuttons)
+{
+    return dialog_message(a, app_first_window(a), title, text, buttons, nbuttons);
+}
+
+int app_prompt(struct app *a, const char *title, const char *label, char *buf, int size)
+{
+    return dialog_prompt(a, app_first_window(a), title, label, buf, size);
 }

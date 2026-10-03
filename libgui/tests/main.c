@@ -20,9 +20,11 @@ void run_widget2_tests(void);
 void run_gedit_tree_test(void);
 void run_mime_tests(void);
 void run_svg_tests(void);
+void run_filechooser_tests(void);
 
 int main(void)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);   /* failures before a crash stay visible */
     signal(SIGSEGV, on_crash);
     signal(SIGBUS, on_crash);
     signal(SIGALRM, on_crash);
@@ -33,6 +35,7 @@ int main(void)
     RUN(run_gedit_tree_test);
     RUN(run_mime_tests);
     RUN(run_svg_tests);
+    RUN(run_filechooser_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

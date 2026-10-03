@@ -206,7 +206,9 @@ strings, numbers, line and block comments and preprocessor lines,
 ### Dialogs and applications
 
 `app_dialog` and `app_prompt` (`src/dialog.c`) open a second window and
-run nested `app_step` calls until a button is chosen. The applications
+run nested `app_step` calls until a button is chosen. `app_choose_file`
+(`src/filechooser.c`) is the file chooser for Open and Save, built on the
+folder view that the file manager shares (`folderview.md`). The applications
 moved to the framework: `term` (a canvas over a watched pseudo terminal
 descriptor), `files` (a table over a directory model, tool bar, status
 bar), `view` (a read only editor with menus and a tool bar), `gedit`

@@ -189,3 +189,11 @@ msgid "%d line"
 msgid_plural "%d lines"
 msgstr[0] "%d ligne"
 msgstr[1] "%d lignes"
+
+#: user/apps/gedit.c:149
+msgid "All files"
+msgstr "Tous les fichiers"
+
+#: user/apps/gedit.c:149
+msgid "Text files"
+msgstr "Fichiers texte"

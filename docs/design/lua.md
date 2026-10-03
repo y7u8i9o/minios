@@ -116,7 +116,10 @@ it fails with `nil` and a message without a server. The application has
 `watch(fd, "r"|"w"|"rw", fn)` (the watch has `remove()`; `fn(fd, ready)`),
 `theme()` (tables `color` and `metric` by name, `scale`), `dialog(title,
 text, {buttons})` returning the index of the button, `prompt(title,
-label, default)` returning the text or `nil`, `layer(w, h, options)`,
+label, default)` returning the text or `nil`, `open_file(title, path [,
+filters])` and `save_file(...)` running the file chooser of
+`folderview.md` with filters as an array of `{name, patterns}` and
+returning the chosen path or `nil`, `layer(w, h, options)`,
 `screen()`, `clipboard([text])` (the three are described below) and
 `destroy()`.
 

@@ -199,6 +199,9 @@ struct widget *button_new(struct widget *parent, const char *text);
 struct widget *checkbox_new(struct widget *parent, const char *text);
 struct widget *radio_new(struct widget *parent, const char *text);
 struct widget *textfield_new(struct widget *parent, const char *text);
+/* Put the cursor at byte offset cursor, or at the end for -1, and select
+ * from anchor to it, or nothing for an anchor of -1. */
+void textfield_select(struct widget *w, int anchor, int cursor);
 struct widget *listview_new(struct widget *parent);
 void listview_clear(struct widget *w);
 void listview_add(struct widget *w, const char *item);
