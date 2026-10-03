@@ -30,7 +30,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/utsname.h>
+#include <time.h>
 #include <gui/app.h>
+#include <gui/image.h>
+#include <gui/theme.h>
+#include <minios/input.h>
 #include <gui/i18n.h>
 #include <minios/account.h>
 #include <minios/conf.h>
@@ -40,15 +44,32 @@
 
 /* ---- the login window ---- */
 
+/* The login window is a layer surface over the whole screen, laid out in
+ * the manner of GDM. A top bar holds the host name, the clock and the
+ * power buttons. A card in the middle shows one of three pages: the
+ * accounts, the password of the chosen account, and the first password of
+ * an account that has none. The background is the desktop colour of
+ * /etc/desktop.conf with a gradient, or its wallpaper when one is set. */
+
+#define CARD_W 340
+#define AVATAR 40
+#define ROW_H  52
+
+enum page { PAGE_USERS, PAGE_PASSWORD, PAGE_CHOOSE };
+
 static struct app *app;
-static struct widget *main_win, *accounts, *password, *message, *login_button;
-/* The window that asks an account without a password for a new one. */
-static struct widget *choose_win, *new_field, *repeat_field, *choose_message;
-static char choose_name[33];
-static int choose_done;                 /* 1 cancelled, 2 password stored */
+static struct widget *main_win, *card;
+static struct widget *pages[3];
+static struct widget *rows[MAX_ACCOUNTS];
+static struct widget *pw_header, *password, *message, *login_button;
+static struct widget *ch_header, *new_field, *repeat_field, *choose_message;
+static struct widget *clock_label;
 static char names[MAX_ACCOUNTS][33];
+static char full_names[MAX_ACCOUNTS][64];
 static int naccounts, selected;
 static int waiting;                     /* after a wrong password */
+static uint32_t desktop_color = 0x00306080;
+static struct image *wallpaper;
 
 static void load_accounts(void)
 {
@@ -59,22 +80,214 @@ static void load_accounts(void)
         if (pw->pw_uid != 0 && pw->pw_uid < ACCOUNT_FIRST_ID)
             continue;
         snprintf(names[naccounts], sizeof names[0], "%s", pw->pw_name);
-        char line[128];
-        if (pw->pw_gecos[0])
-            snprintf(line, sizeof line, "%s (%s)", pw->pw_gecos, pw->pw_name);
-        else
-            snprintf(line, sizeof line, "%s", pw->pw_name);
-        listview_add(accounts, line);
+        snprintf(full_names[naccounts], sizeof full_names[0], "%s", pw->pw_gecos[0] ? pw->pw_gecos : pw->pw_name);
         naccounts++;
     }
     endpwent();
 }
+
+/* The desktop colour and the wallpaper of the system's desktop settings. */
+static void load_background(void)
+{
+    FILE *f = fopen("/etc/desktop.conf", "r");
+    if (!f)
+        return;
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        line[strcspn(line, "\n")] = '\0';
+        if (strncmp(line, "desktop_color=", 14) == 0)
+            desktop_color = (uint32_t)strtoul(line + 14, NULL, 0) & 0xffffff;
+        else if (strncmp(line, "wallpaper=", 10) == 0 && line[10])
+            wallpaper = image_load(line + 10);
+    }
+    fclose(f);
+}
+
+/* color with each channel scaled by percent. */
+static uint32_t shade(uint32_t color, int percent)
+{
+    uint32_t r = ((color >> 16) & 0xff) * (uint32_t)percent / 100;
+    uint32_t g = ((color >> 8) & 0xff) * (uint32_t)percent / 100;
+    uint32_t b = (color & 0xff) * (uint32_t)percent / 100;
+    return (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (b > 255 ? 255 : b);
+}
+
+/* ---- the widgets of the window ---- */
+
+/* The backdrop is a vertical box that paints the background. */
+static void backdrop_measure(struct widget *w, struct size_hint *h) { box_class.measure(w, h); }
+static void backdrop_layout(struct widget *w) { box_class.layout(w); }
+
+static void backdrop_paint(struct widget *w, struct painter *p)
+{
+    if (wallpaper) {
+        /* The wallpaper covers the screen and is cut at the longer side. */
+        int iw = wallpaper->w / wallpaper->scale, ih = wallpaper->h / wallpaper->scale;
+        int sw = w->w, sh = ih * w->w / (iw ? iw : 1);
+        if (sh < w->h) {
+            sh = w->h;
+            sw = iw * w->h / (ih ? ih : 1);
+        }
+        painter_image_scaled(p, (w->w - sw) / 2, (w->h - sh) / 2, sw, sh, wallpaper);
+        return;
+    }
+    for (int y = 0; y < w->h; y += 4)
+        painter_fill(p, 0, y, w->w, 4, shade(desktop_color, 115 - 55 * y / (w->h ? w->h : 1)));
+}
+
+static const struct widget_class backdrop_class = { "greeter-backdrop", sizeof(struct widget), backdrop_measure,
+                                                    backdrop_layout, backdrop_paint, NULL, NULL };
+
+/* The top bar and the card are boxes with a background of the theme. */
+static void bar_paint(struct widget *w, struct painter *p)
+{
+    const struct theme *t = widget_theme(w);
+    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
+    painter_fill(p, 0, w->h - 1, w->w, 1, t->color[TC_BORDER]);
+}
+
+static void card_paint(struct widget *w, struct painter *p)
+{
+    const struct theme *t = widget_theme(w);
+    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_WINDOW], t->color[TC_BORDER]);
+}
+
+static const struct widget_class bar_class = { "greeter-bar", sizeof(struct widget), backdrop_measure,
+                                               backdrop_layout, bar_paint, NULL, NULL };
+static const struct widget_class card_class = { "greeter-card", sizeof(struct widget), backdrop_measure,
+                                                backdrop_layout, card_paint, NULL, NULL };
+
+/* A spacer takes the free space of the backdrop and paints nothing. */
+static void spacer_measure(struct widget *w, struct size_hint *h) { (void)w; (void)h; }
+
+static const struct widget_class spacer_class = { "greeter-spacer", sizeof(struct widget), spacer_measure, NULL,
+                                                  NULL, NULL, NULL };
+
+static struct widget *container_new(const struct widget_class *cls, struct widget *parent, int vertical, int padding)
+{
+    struct widget *w = widget_new(cls, parent);
+    if (w) {
+        w->value = vertical;
+        w->padding = padding;
+    }
+    return w;
+}
+
+/* An account row shows an avatar with the initial of the account, the
+ * full name and the account name. value is the index of the account. In
+ * the list a row is focusable and emits "clicked" for a click, Enter or
+ * Space, and the arrow keys move between the rows. Above the password the
+ * same widget is a header that does not take the focus. */
+static uint32_t avatar_color(const char *name)
+{
+    static const uint32_t colors[] = { 0x003c78c8, 0x00c0504d, 0x009bbb59, 0x008064a2, 0x00f79646, 0x004bacc6 };
+    unsigned h = 0;
+    for (const char *s = name; *s; s++)
+        h = h * 31 + (unsigned char)*s;
+    return colors[h % (sizeof colors / sizeof colors[0])];
+}
+
+static void row_measure(struct widget *w, struct size_hint *h)
+{
+    h->min_h = h->pref_h = ROW_H;
+    h->min_w = h->pref_w = CARD_W - 40;
+}
+
+static void row_paint(struct widget *w, struct painter *p)
+{
+    const struct theme *t = widget_theme(w);
+    int i = w->value, active = w->focusable && (w->focused || w->hover);
+    if (i < 0 || i >= naccounts)
+        return;
+    uint32_t text = t->color[TC_TEXT], dim = t->color[TC_TEXT_DISABLED];
+    if (w->focusable && w->focused) {
+        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_SELECTION], t->color[TC_SELECTION]);
+        text = dim = t->color[TC_SELECTION_TEXT];
+    } else if (active) {
+        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], t->color[TC_BUTTON_HOVER]);
+    }
+    int ay = (w->h - AVATAR) / 2;
+    uint32_t c = avatar_color(names[i]);
+    painter_rounded(p, 8, ay, AVATAR, AVATAR, c, c);
+    char initial[2] = { full_names[i][0], '\0' };
+    if (initial[0] >= 'a' && initial[0] <= 'z')
+        initial[0] = (char)(initial[0] - 'a' + 'A');
+    int fh = t->metric[TM_FONT_PX];
+    painter_text(p, 8 + (AVATAR - painter_text_width(p, initial, 1)) / 2, ay + (AVATAR - fh) / 2 - 1, initial,
+                 0x00ffffff);
+    int tx = 8 + AVATAR + 12, ty = (w->h - 2 * fh - 4) / 2;
+    painter_text(p, tx, ty, full_names[i], text);
+    painter_text(p, tx, ty + fh + 4, names[i], dim);
+    if (w->focused)
+        painter_focus_ring(p, 0, 0, w->w, w->h);
+}
+
+static int row_event(struct widget *w, struct event *e)
+{
+    if (!w->focusable)
+        return 0;
+    if (e->type == EV_MOUSE_UP && e->x >= 0 && e->y >= 0 && e->x < w->w && e->y < w->h) {
+        widget_emit(w, "clicked", NULL);
+        return 1;
+    }
+    if (e->type == EV_KEY_DOWN && (e->code == KEY_ENTER || e->code == KEY_SPACE)) {
+        widget_emit(w, "clicked", NULL);
+        return 1;
+    }
+    if (e->type == EV_KEY_DOWN && (e->code == KEY_UP || e->code == KEY_DOWN)) {
+        int i = w->value + (e->code == KEY_DOWN ? 1 : -1);
+        if (i >= 0 && i < naccounts)
+            widget_focus(rows[i]);
+        return 1;
+    }
+    if (e->type == EV_ENTER || e->type == EV_LEAVE || e->type == EV_FOCUS_IN || e->type == EV_FOCUS_OUT)
+        widget_invalidate(w);
+    return 0;
+}
+
+static const struct widget_class row_class = { "greeter-account", sizeof(struct widget), row_measure, NULL,
+                                               row_paint, row_event, NULL };
+
+static struct widget *row_new(struct widget *parent, int index, int focusable)
+{
+    struct widget *w = widget_new(&row_class, parent);
+    if (w) {
+        w->value = index;
+        w->focusable = focusable ? 1 : 0;
+    }
+    return w;
+}
+
+/* ---- the pages ---- */
 
 static void report(const char *line)
 {
     printf("%s\n", line);
     fflush(stdout);
     app_quit(app, 0);
+}
+
+static void show_page(enum page page)
+{
+    for (int i = 0; i < 3; i++)
+        widget_set_visible(pages[i], i == (int)page);
+    widget_relayout(main_win);
+    if (page == PAGE_USERS)
+        widget_focus(rows[selected]);
+    else if (page == PAGE_PASSWORD)
+        widget_focus(password);
+    else
+        widget_focus(new_field);
+}
+
+static void tick(void *arg)
+{
+    char text[64];
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    strftime(text, sizeof text, "%a %d %b  %H:%M", &tm);
+    widget_set_text(clock_label, text);
 }
 
 static void retry(void *arg)
@@ -85,84 +298,26 @@ static void retry(void *arg)
     widget_focus(password);
 }
 
-static int on_choose_close(struct widget *w, void *args, void *arg)
+static int on_account(struct widget *w, void *args, void *arg)
 {
-    choose_done = 1;
+    selected = w->value;
+    pw_header->value = ch_header->value = selected;
+    widget_invalidate(pw_header);
+    widget_invalidate(ch_header);
+    widget_set_text(password, "");
+    widget_set_text(message, "");
+    show_page(PAGE_PASSWORD);
     return 1;
 }
 
-static int on_choose(struct widget *w, void *args, void *arg)
+static int on_back(struct widget *w, void *args, void *arg)
 {
-    const char *first = widget_text(new_field), *second = widget_text(repeat_field);
-    if (!first[0]) {
-        widget_set_text(choose_message, _("The password must not be empty"));
-        return 1;
-    }
-    if (strcmp(first, second) != 0) {
-        widget_set_text(choose_message, _("The passwords differ"));
-        widget_set_text(repeat_field, "");
-        widget_focus(repeat_field);
-        return 1;
-    }
-    int r = account_set_password(choose_name, first);
+    widget_set_text(password, "");
     widget_set_text(new_field, "");
     widget_set_text(repeat_field, "");
-    if (r < 0) {
-        widget_set_text(choose_message, _("The password cannot be stored"));
-        return 1;
-    }
-    choose_done = 2;
+    widget_set_text(choose_message, "");
+    show_page(PAGE_USERS);
     return 1;
-}
-
-static int on_new_activate(struct widget *w, void *args, void *arg)
-{
-    widget_focus(repeat_field);
-    return 1;
-}
-
-/* An account without a password, such as root and user on a new system,
- * chooses one before its first session starts. */
-static void choose_password(const char *name)
-{
-    snprintf(choose_name, sizeof choose_name, "%s", name);
-    choose_win = app_modal_window(app, main_win, 340, 230, _("Choose a password"));
-    if (!choose_win)
-        return;
-    char text[128];
-    snprintf(text, sizeof text, _("The account %s has no password. Choose one to log in."), name);
-    label_new(choose_win, text);
-    label_new(choose_win, _("New password"));
-    new_field = textfield_new(choose_win, "");
-    textfield_set_masked(new_field, 1);
-    widget_connect(new_field, "activate", on_new_activate, NULL);
-    label_new(choose_win, _("Repeat the password"));
-    repeat_field = textfield_new(choose_win, "");
-    textfield_set_masked(repeat_field, 1);
-    widget_connect(repeat_field, "activate", on_choose, NULL);
-    choose_message = label_new(choose_win, "");
-    struct widget *row = box_new(choose_win, 0);
-    struct widget *gap = label_new(row, "");
-    widget_set_stretch(gap, 1, 0);
-    struct widget *cancel = button_new(row, _("Cancel"));
-    widget_connect(cancel, "clicked", on_choose_close, NULL);
-    struct widget *set = button_new(row, _("Set password"));
-    widget_connect(set, "clicked", on_choose, NULL);
-    widget_connect(choose_win, "close", on_choose_close, NULL);
-    widget_focus(new_field);
-    choose_done = 0;
-    while (!choose_done && app_step(app, -1))
-        ;
-    window_close(choose_win);
-    app_step(app, 0);
-    choose_win = NULL;
-    if (choose_done == 2) {
-        char line[64];
-        snprintf(line, sizeof line, "login %s", choose_name);
-        report(line);
-    } else {
-        widget_focus(password);
-    }
 }
 
 static int on_login(struct widget *w, void *args, void *arg)
@@ -174,7 +329,9 @@ static int on_login(struct widget *w, void *args, void *arg)
     int ok = sp && account_check(widget_text(password), sp->sp_pwdp);
     widget_set_text(password, "");
     if (ok && !sp->sp_pwdp[0]) {
-        choose_password(name);
+        /* An account without a password, such as root and user on a new
+         * system, chooses one before its first session starts. */
+        show_page(PAGE_CHOOSE);
         return 1;
     }
     if (ok) {
@@ -191,10 +348,35 @@ static int on_login(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-static int on_select(struct widget *w, void *args, void *arg)
+static int on_new_activate(struct widget *w, void *args, void *arg)
 {
-    selected = ((struct sig_select *)args)->index;
-    widget_focus(password);
+    widget_focus(repeat_field);
+    return 1;
+}
+
+static int on_choose(struct widget *w, void *args, void *arg)
+{
+    const char *first = widget_text(new_field), *second = widget_text(repeat_field);
+    if (!first[0]) {
+        widget_set_text(choose_message, _("The password must not be empty"));
+        return 1;
+    }
+    if (strcmp(first, second) != 0) {
+        widget_set_text(choose_message, _("The passwords differ"));
+        widget_set_text(repeat_field, "");
+        widget_focus(repeat_field);
+        return 1;
+    }
+    int r = account_set_password(names[selected], first);
+    widget_set_text(new_field, "");
+    widget_set_text(repeat_field, "");
+    if (r < 0) {
+        widget_set_text(choose_message, _("The password cannot be stored"));
+        return 1;
+    }
+    char line[64];
+    snprintf(line, sizeof line, "login %s", names[selected]);
+    report(line);
     return 1;
 }
 
@@ -204,44 +386,110 @@ static int on_power(struct widget *w, void *args, void *arg)
     return 1;
 }
 
+static struct widget *masked_field(struct widget *parent, signal_fn activate)
+{
+    struct widget *f = textfield_new(parent, "");
+    textfield_set_masked(f, 1);
+    widget_connect(f, "activate", activate, NULL);
+    return f;
+}
+
+static struct widget *button_row(struct widget *parent, const char *back, const char *forward, signal_fn fn,
+                                 struct widget **forward_button)
+{
+    struct widget *row = box_new(parent, 0);
+    struct widget *b = button_new(row, back);
+    widget_connect(b, "clicked", on_back, NULL);
+    struct widget *gap = label_new(row, "");
+    widget_set_stretch(gap, 1, 0);
+    struct widget *f = button_new(row, forward);
+    widget_connect(f, "clicked", fn, NULL);
+    if (forward_button)
+        *forward_button = f;
+    return row;
+}
+
 static int window_main(void)
 {
     app = app_create();
     if (!app)
         return 1;
     textdomain("greeter");
-    struct widget *win = main_win = app_window(app, 360, 320, _("Log in"));
+    load_accounts();
+    load_background();
+    if (naccounts == 0)
+        return 1;
+    struct widget *win = main_win =
+        app_layer_window(app, 0, 0, 3, GUI_ANCHOR_TOP | GUI_ANCHOR_BOTTOM | GUI_ANCHOR_LEFT | GUI_ANCHOR_RIGHT,
+                         0, 1, "greeter");
     if (!win)
         return 1;
+    widget_set_padding(win, 0);
     struct utsname u;
     const char *host = uname(&u) == 0 && u.nodename[0] ? u.nodename : "minios";
+
+    struct widget *back = container_new(&backdrop_class, win, 1, 0);
+    widget_set_stretch(back, 1, 1);
+
+    /* The top bar: the host name, the clock in the middle, the power
+     * buttons on the right. */
+    struct widget *bar = container_new(&bar_class, back, 0, 4);
+    struct widget *host_label = label_new(bar, host);
+    widget_set_stretch(host_label, 1, 0);
+    clock_label = label_new(bar, "");
+    struct widget *right = box_new(bar, 0);
+    widget_set_stretch(right, 1, 0);
+    struct widget *gap = label_new(right, "");
+    widget_set_stretch(gap, 1, 0);
+    struct widget *restart = button_new(right, _("Restart"));
+    widget_connect(restart, "clicked", on_power, "reboot");
+    struct widget *off = button_new(right, _("Shut down"));
+    widget_connect(off, "clicked", on_power, "poweroff");
+
+    struct widget *top = widget_new(&spacer_class, back);
+    widget_set_stretch(top, 0, 1);
+    card = container_new(&card_class, back, 1, 16);
+    widget_set_align(card, ALIGN_CENTER, ALIGN_CENTER);
+    widget_set_min(card, CARD_W, 0);
+    widget_set_max(card, CARD_W, 0);
+    struct widget *bottom = widget_new(&spacer_class, back);
+    widget_set_stretch(bottom, 0, 2);
+
+    /* The accounts. */
+    pages[PAGE_USERS] = box_new(card, 1);
     char welcome[128];
     snprintf(welcome, sizeof welcome, _("Welcome to %s"), host);
-    label_new(win, welcome);
-    label_new(win, _("Account"));
-    accounts = listview_new(win);
-    widget_set_stretch(accounts, 1, 1);
-    widget_connect(accounts, "selected", on_select, NULL);
-    widget_connect(accounts, "activate", on_select, NULL);
-    load_accounts();
+    label_new(pages[PAGE_USERS], welcome);
+    for (int i = 0; i < naccounts; i++) {
+        rows[i] = row_new(pages[PAGE_USERS], i, 1);
+        widget_connect(rows[i], "clicked", on_account, NULL);
+    }
+
+    /* The password of the chosen account. */
+    pages[PAGE_PASSWORD] = box_new(card, 1);
+    pw_header = row_new(pages[PAGE_PASSWORD], 0, 0);
+    label_new(pages[PAGE_PASSWORD], _("Password"));
+    password = masked_field(pages[PAGE_PASSWORD], on_login);
+    message = label_new(pages[PAGE_PASSWORD], "");
+    button_row(pages[PAGE_PASSWORD], _("Back"), _("Log in"), on_login, &login_button);
+
+    /* The first password of an account that has none. */
+    pages[PAGE_CHOOSE] = box_new(card, 1);
+    ch_header = row_new(pages[PAGE_CHOOSE], 0, 0);
+    label_new(pages[PAGE_CHOOSE], _("This account has no password yet."));
+    label_new(pages[PAGE_CHOOSE], _("Choose one to log in."));
+    label_new(pages[PAGE_CHOOSE], _("New password"));
+    new_field = masked_field(pages[PAGE_CHOOSE], on_new_activate);
+    label_new(pages[PAGE_CHOOSE], _("Repeat the password"));
+    repeat_field = masked_field(pages[PAGE_CHOOSE], on_choose);
+    choose_message = label_new(pages[PAGE_CHOOSE], "");
+    button_row(pages[PAGE_CHOOSE], _("Back"), _("Set password"), on_choose, NULL);
+
     /* The first account after root is the likely one. */
     selected = naccounts > 1 ? 1 : 0;
-    widget_set_value(accounts, selected);
-    label_new(win, _("Password"));
-    password = textfield_new(win, "");
-    textfield_set_masked(password, 1);
-    widget_connect(password, "activate", on_login, NULL);
-    message = label_new(win, "");
-    struct widget *row = box_new(win, 0);
-    struct widget *restart = button_new(row, _("Restart"));
-    widget_connect(restart, "clicked", on_power, "reboot");
-    struct widget *off = button_new(row, _("Shut down"));
-    widget_connect(off, "clicked", on_power, "poweroff");
-    struct widget *gap = label_new(row, "");
-    widget_set_stretch(gap, 1, 0);
-    login_button = button_new(row, _("Log in"));
-    widget_connect(login_button, "clicked", on_login, NULL);
-    widget_focus(password);
+    tick(NULL);
+    app_timer_add(app, 10000, 1, tick, NULL);
+    show_page(PAGE_USERS);
     int r = app_run(app);
     app_destroy(app);
     return r;

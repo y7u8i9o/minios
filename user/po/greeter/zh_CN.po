@@ -15,9 +15,6 @@ msgstr "登录"
 msgid "Welcome to %s"
 msgstr "欢迎使用 %s"
 
-msgid "Account"
-msgstr "帐户"
-
 msgid "Password"
 msgstr "密码"
 
@@ -27,20 +24,11 @@ msgstr "重新启动"
 msgid "Shut down"
 msgstr "关机"
 
-msgid "Choose a password"
-msgstr "设置密码"
-
-msgid "The account %s has no password. Choose one to log in."
-msgstr "账户 %s 没有密码。请设置密码后登录。"
-
 msgid "New password"
 msgstr "新密码"
 
 msgid "Repeat the password"
 msgstr "再次输入密码"
-
-msgid "Cancel"
-msgstr "取消"
 
 msgid "Set password"
 msgstr "设置密码"
@@ -53,3 +41,12 @@ msgstr "两次输入的密码不一致"
 
 msgid "The password cannot be stored"
 msgstr "无法保存密码"
+
+msgid "Back"
+msgstr "返回"
+
+msgid "This account has no password yet."
+msgstr "此账户还没有密码。"
+
+msgid "Choose one to log in."
+msgstr "请设置密码后登录。"

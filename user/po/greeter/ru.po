@@ -15,9 +15,6 @@ msgstr "Войти"
 msgid "Welcome to %s"
 msgstr "Добро пожаловать в %s"
 
-msgid "Account"
-msgstr "Учётная запись"
-
 msgid "Password"
 msgstr "Пароль"
 
@@ -27,20 +24,11 @@ msgstr "Перезагрузить"
 msgid "Shut down"
 msgstr "Выключить"
 
-msgid "Choose a password"
-msgstr "Выбор пароля"
-
-msgid "The account %s has no password. Choose one to log in."
-msgstr "У учётной записи %s нет пароля. Задайте пароль, чтобы войти."
-
 msgid "New password"
 msgstr "Новый пароль"
 
 msgid "Repeat the password"
 msgstr "Повторите пароль"
-
-msgid "Cancel"
-msgstr "Отмена"
 
 msgid "Set password"
 msgstr "Задать пароль"
@@ -53,3 +41,12 @@ msgstr "Пароли не совпадают"
 
 msgid "The password cannot be stored"
 msgstr "Не удалось сохранить пароль"
+
+msgid "Back"
+msgstr "Назад"
+
+msgid "This account has no password yet."
+msgstr "У этой учётной записи ещё нет пароля."
+
+msgid "Choose one to log in."
+msgstr "Задайте пароль, чтобы войти."

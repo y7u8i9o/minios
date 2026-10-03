@@ -95,8 +95,11 @@ static void test_greeter(void)
     if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
         sleep_ms(8000);                 /* screenshots of the login window */
 
-    /* user has no password. Enter logs in with the empty one, and the
-     * greeter asks for a new password twice before the session starts. */
+    /* Enter chooses the preselected account, user, which has no password.
+     * A second Enter logs in with the empty one, and the greeter asks for a
+     * new password twice before the session starts. */
+    press_key(0x1c);
+    sleep_ms(800);
     press_key(0x1c);
     sleep_ms(1500);
     type_line("userpw\n");

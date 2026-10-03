@@ -11,10 +11,6 @@ msgstr ""
 msgid "Welcome to %s"
 msgstr ""
 
-#: user/greeter/greeter.c:129
-msgid "Account"
-msgstr ""
-
 #: user/greeter/greeter.c:138
 msgid "Password"
 msgstr ""
@@ -32,23 +28,11 @@ msgid "Wrong password"
 msgstr ""
 
 #: user/greeter/greeter.c
-msgid "Choose a password"
-msgstr ""
-
-#: user/greeter/greeter.c
-msgid "The account %s has no password. Choose one to log in."
-msgstr ""
-
-#: user/greeter/greeter.c
 msgid "New password"
 msgstr ""
 
 #: user/greeter/greeter.c
 msgid "Repeat the password"
-msgstr ""
-
-#: user/greeter/greeter.c
-msgid "Cancel"
 msgstr ""
 
 #: user/greeter/greeter.c
@@ -65,4 +49,16 @@ msgstr ""
 
 #: user/greeter/greeter.c
 msgid "The password cannot be stored"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "Back"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "This account has no password yet."
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "Choose one to log in."
 msgstr ""

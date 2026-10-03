@@ -295,10 +295,18 @@ boot the default configuration with and without a display. The greeter
 starts X12, restarts it when it ends, and runs its login window as a
 second process,
 `greeter --window`, which reports `login NAME`, `poweroff` or `reboot` on
-a pipe. The window lists root and the accounts from uid 1000 on, selects
-the account after root, checks the password with `account_check` in a
-masked text field (`textfield_set_masked`, which shows one `*` per byte
-and never copies its text) and pauses after a wrong one. For a login the
+a pipe. Since 2026-10-03 the window is a layer surface over the whole
+screen in the manner of GDM. Its background is the desktop colour of
+`/etc/desktop.conf` with a gradient, or its wallpaper. A top bar holds the
+host name, the clock and the Restart and Shut down buttons, and a card in
+the middle shows one page at a time. The first page lists root and the
+accounts from uid 1000 on, each with an avatar that shows its initial,
+with the account after root selected. Enter, a click or the arrow keys
+choose an account. The second page checks the password with
+`account_check` in a masked text field (`textfield_set_masked`, which
+shows one `*` per byte and never copies its text) and pauses after a
+wrong one. The third page asks an account without a password for a new
+one. For a login the
 greeter sets the session uid of X12 and of init and starts
 `startgui -s`, which starts the session programs without a server, as
 the account in a process group of its own, with `initgroups`, `setgid`,
