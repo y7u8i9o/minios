@@ -63,7 +63,6 @@ static struct widget *pages[3];
 static struct widget *rows[MAX_ACCOUNTS];
 static struct widget *pw_header, *password, *message, *login_button;
 static struct widget *ch_header, *new_field, *repeat_field, *choose_message;
-static struct widget *clock_label;
 static char names[MAX_ACCOUNTS][33];
 static char full_names[MAX_ACCOUNTS][64];
 static int naccounts, selected;
@@ -152,8 +151,22 @@ static void card_paint(struct widget *w, struct painter *p)
     painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_WINDOW], t->color[TC_BORDER]);
 }
 
+/* The clock is centred on the whole bar, whatever the widths of the host
+ * name on its left and of the buttons on its right. */
+static struct widget *clock_label;
+
+static void bar_layout(struct widget *w)
+{
+    box_class.layout(w);
+    if (clock_label && clock_label->parent == w)
+        clock_label->x = (w->w - clock_label->w) / 2;
+}
+
 static const struct widget_class bar_class = { "greeter-bar", sizeof(struct widget), backdrop_measure,
-                                               backdrop_layout, bar_paint, NULL, NULL };
+                                               bar_layout, bar_paint, NULL, NULL };
+/* A box that paints nothing, for the buttons beside the centred clock. */
+static const struct widget_class clear_box_class = { "greeter-box", sizeof(struct widget), backdrop_measure,
+                                                     backdrop_layout, NULL, NULL, NULL };
 static const struct widget_class card_class = { "greeter-card", sizeof(struct widget), backdrop_measure,
                                                 backdrop_layout, card_paint, NULL, NULL };
 
@@ -437,9 +450,10 @@ static int window_main(void)
     struct widget *host_label = label_new(bar, host);
     widget_set_stretch(host_label, 1, 0);
     clock_label = label_new(bar, "");
-    struct widget *right = box_new(bar, 0);
+    struct widget *right = container_new(&clear_box_class, bar, 0, 0);
     widget_set_stretch(right, 1, 0);
-    struct widget *gap = label_new(right, "");
+    /* A transparent spacer, which leaves the centred clock visible. */
+    struct widget *gap = widget_new(&spacer_class, right);
     widget_set_stretch(gap, 1, 0);
     struct widget *restart = button_new(right, _("Restart"));
     widget_connect(restart, "clicked", on_power, "reboot");
