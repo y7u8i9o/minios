@@ -9,7 +9,7 @@
 #                   commit by default
 #   --skip-tests    leave out the host checks and the boot cases
 #   --tag           create the annotated tag vVERSION at the commit afterwards
-#   --keep          keep the worktree after a successful release
+#   --keep          do not remove the worktree after a successful release
 #   --out DIR       directory of the results, build/release by default
 #   -j N            parallel make jobs, the number of processors by default
 #
@@ -18,7 +18,7 @@
 # in use untouched and gives a kernel version without the -dirty mark. The
 # only file it copies in is the tinycc submodule, which must be checked out
 # at the commit that REF records. Ignored files such as the purchased sounds
-# of user/share/sounds stay out of the release.
+# of user/share/sounds are not part of the release.
 #
 # For every architecture the pipeline runs the boot cases with the default
 # build options, builds the release with the debugging options off, boots
@@ -32,8 +32,8 @@
 #
 # RELEASE_CONFIG replaces the build options of the release build, and
 # BOOT_TIMEOUT the seconds that the release image has to reach the login
-# prompt (300). A failing step stops the pipeline, names its log and keeps
-# the worktree for inspection.
+# prompt (300). A failing step stops the pipeline, names its log and leaves
+# the worktree in place for inspection.
 set -eu
 
 TOP="$(cd "$(dirname "$0")/.." && pwd)"
@@ -114,7 +114,7 @@ step "minios $VERSION from $SHORT ($REF), architectures $ARCHES"
 git -C "$TOP" worktree add --quiet --detach "$WT" "$COMMIT"
 fail() {
     echo "release: $1 failed, see $2" >&2
-    echo "release: the worktree stays in $WT" >&2
+    echo "release: the worktree is left at $WT for inspection" >&2
     exit 1
 }
 mkdir -p "$WT/third_party/tinycc"
@@ -127,6 +127,16 @@ if [ -z "$CASES" ]; then
     [ -f "$LIST" ] || LIST="$TOP/tests/release-cases"
     [ -f "$LIST" ] || die "no tests/release-cases, name the cases with --cases"
     CASES="$(sed 's/#.*//' "$LIST" | tr -s ' \n' '  ' | sed 's/^ //; s/ $//')"
+    # An older commit lacks some of the cases of a newer list.
+    PRESENT=""
+    for c in $CASES; do
+        if [ -d "$WT/tests/cases/$c" ]; then
+            PRESENT="$PRESENT $c"
+        else
+            step "case $c does not exist at $SHORT and is left out"
+        fi
+    done
+    CASES="${PRESENT# }"
 fi
 
 if [ "$TESTS" = 1 ]; then
@@ -154,7 +164,7 @@ for a in $ARCHES; do
         fail "the $a release build" "$LOGS/build-$a.log"
 
     # The release image boots without test= on the command line, which
-    # ends at the login prompt of the console. QEMU stays running after
+    # ends at the login prompt of the console. QEMU continues to run after
     # that and is stopped here.
     step "$a release boot"
     SERIAL="$LOGS/boot-$a.txt"

@@ -256,12 +256,12 @@ worktree add --detach` into `build/release/work-VERSION`, which leaves the
 checkout in use untouched and gives a kernel version without the `-dirty`
 mark. The only file copied into the worktree is the tinycc submodule, and
 the script refuses to start when the checked out submodule differs from
-the one the commit records. Ignored files stay out of the release, among
-them the purchased sounds of `user/share/sounds`.
+the one the commit records. Ignored files are not part of the release,
+including the purchased sounds in `user/share/sounds`.
 
 The pipeline then runs these steps and stops at the first failure, naming
-the log of the step in `build/release/logs-VERSION` and keeping the
-worktree for inspection.
+the log of the step in `build/release/logs-VERSION`. The worktree is left
+in place for inspection.
 
 1. `make check` runs the host checks once.
 2. For each architecture, x86_64 and aarch64 unless `--arch` limits them,
@@ -271,7 +271,7 @@ worktree for inspection.
 3. `make image repo` builds the release into `build/release-ARCH` of the
    worktree with the options of `RELEASE_CONFIG`. By default the kernel
    self tests, the exit through isa-debug-exit, the lock debugging, the
-   lock statistics and the slab debugging are off and the log level stays
+   lock statistics and the slab debugging are off, and the log level is
    1. The build directory is separate from the one of the boot cases,
    because the options are not dependencies of the objects.
 4. `tools/run.sh` boots the release image without a data volume, sound or
