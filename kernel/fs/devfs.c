@@ -135,6 +135,26 @@ int devfs_set_owner(const char *name, uint32_t perm, uint32_t uid, uint32_t gid)
     return r;
 }
 
+int devfs_set_size(const char *name, uint64_t size)
+{
+    struct devnode *n = devnode_find(ROOT_INO, name, strlen(name));
+    if (!n)
+        return -ENOENT;
+    spin_lock(&devfs_lock);
+    n->size = size;
+    spin_unlock(&devfs_lock);
+    if (!devfs_sb)
+        return 0;
+    struct inode *ino = inode_get(devfs_sb, n->ino);
+    if (!ino)
+        return -ENOMEM;
+    mutex_lock(&ino->lock);
+    ino->size = size;
+    mutex_unlock(&ino->lock);
+    inode_put(ino);
+    return 0;
+}
+
 /* One line naming every node in the root of /dev; subdirectories show
  * their entry count. Called once the boot time drivers have registered. */
 void devfs_log_nodes(void)

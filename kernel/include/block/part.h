@@ -7,14 +7,17 @@
 
 #define PART_GUID_STR 37            /* 36 characters and the NUL */
 
-/* A partition. Partitions are registered once, by part_scan, and never
- * removed. The list is protected by part_lock. The other fields do not
- * change after registration. */
+/* A partition. A partition is registered once for an entry number of a
+ * disk and never removed. part_rescan changes first, bdev.nsectors, type
+ * and uuid, and a partition that disappeared from the table has no
+ * sectors. These fields, size_reported and the list are protected by
+ * part_lock, and index and bdev.name do not change. */
 struct partition {
     struct blockdev bdev;           /* the device, bdev.disk is the disk */
     uint64_t first;                 /* first sector on the disk */
     int index;                      /* the entry of the table, from 1 */
     uint8_t type[16], uuid[16];     /* GUIDs in their on-disk byte order */
+    uint64_t size_reported;         /* the size last given to devfs */
     struct list_head link;
 };
 
@@ -25,6 +28,12 @@ extern const uint8_t part_type_root[16], part_type_swap[16];
 /* Read the partition table of every registered disk and register its
  * partitions. Called once, from a thread, since it reads the disks. */
 void part_scan(void);
+/* Read the table of disk again, after a program wrote it (BLKRRPART).
+ * Returns -EBUSY when the root or swap lies on the disk. */
+int part_rescan(struct blockdev *disk);
+/* Mark dev, a disk or a partition, as in use by the root or swap, which
+ * makes part_rescan of its disk fail. */
+void part_hold(struct blockdev *dev);
 /* The disk with a GPT whose disk GUID is the one the bootloader loaded
  * the kernel from, or NULL. */
 struct blockdev *part_boot_disk(void);

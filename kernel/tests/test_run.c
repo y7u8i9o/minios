@@ -62,17 +62,22 @@ static void test_run(void)
      * process; their memory must be returned before it is counted. */
     proc_reap_children(&kernel_proc);
 
+    /* held_pages=N allows the program to leave up to N pages to objects of
+     * the kernel that last until shutdown, such as the partitions of a
+     * disk it partitioned (docs/design/block.md). */
+    char held[16];
+    long allowed = cmdline_lookup("held_pages", held, sizeof held) && held[0] ? (long)strtol_simple(held) : 0;
     swap_drain();
     /* Another CPU may still be finishing the last switch away from an
      * exited thread; give deferred frees a moment before judging. */
     for (int i = 0; i < 100; i++) {
         swap_drain();
         pmm_get_stats(&after);
-        if (after.free_pages == before.free_pages)
+        if ((long)before.free_pages - (long)after.free_pages <= allowed)
             break;
         sleep_ms(2);
     }
-    ktest_assert(after.free_pages == before.free_pages, "leaked %ld pages",
+    ktest_assert((long)before.free_pages - (long)after.free_pages <= allowed, "leaked %ld pages",
                  (long)before.free_pages - (long)after.free_pages);
     struct swap_stats ss;
     swap_get_stats(&ss);

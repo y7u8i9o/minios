@@ -4,6 +4,20 @@
  *   mkfs --dump <image>                       print superblock state and tree
  *   mkfs --cat <image> <path>                 print the contents of a file
  *
+ * SIZE_MB 0 stands for the size of the existing image file or block device,
+ * which is then written in place without truncation. A nonzero size on a
+ * block device is an error. The tool is also built for minios, where it
+ * installs as /usr/bin/mkfs.
+ *
+ * No buffer of the size of the image exists, which matters for disks of
+ * several GiB on a small machine. Only the blocks the format touches are
+ * held in memory and written out in block order. A new image is created with
+ * its full size by ftruncate. On an existing target the superblock, both
+ * bitmaps, the inode table and the journal (everything below the data area)
+ * are written in full, with zeros where the tree does not use them, and
+ * free data blocks are left as they are. The read modes fetch blocks on
+ * demand.
+ *
  * Exits non zero on any error. --dump reports "clean" or "unclean" and
  * the state of the journal. Symbolic links of the host tree are stored as
  * links (their target in one data block). A target longer than 255 bytes,
@@ -47,8 +61,33 @@ static uint64_t host_mtime_ns(const struct stat *st)
 #endif
 }
 
-static uint8_t *img;
+/* The image is never held in memory as a whole. While an image is built,
+ * only the blocks the format touches exist, each in a buffer that is created
+ * zeroed on first access and found again through a hash table keyed by the
+ * block number. They are written out in block order at the end. While an
+ * image is read, blocks are fetched on demand into a small cache. A pointer
+ * returned by block() stays valid until RING_SIZE other blocks have been
+ * fetched. */
+struct map_entry {
+    uint64_t blk;
+    uint8_t *data;                  /* NULL marks an unused slot */
+};
+
+#define RING_SIZE 16
+
+static struct map_entry *map;       /* slots of the table, a power of two */
+static size_t map_cap, map_count;
+
+static FILE *img_file;              /* the open image in the read modes */
+static struct {
+    uint64_t blk;
+    uint8_t *data;                  /* NULL until first used */
+} ring[RING_SIZE];
+static int ring_next;
+
+static int building;                /* 1 while an image is created */
 static uint64_t img_blocks;
+static uint64_t next_data;          /* no data block below this one is free */
 static struct mfs_superblock *sb;
 
 static __attribute__((noreturn)) void die(const char *msg)
@@ -57,11 +96,81 @@ static __attribute__((noreturn)) void die(const char *msg)
     exit(1);
 }
 
+static size_t map_slot(uint64_t blk, size_t cap)
+{
+    return (size_t)((blk * 0x9e3779b97f4a7c15ull) >> 20) & (cap - 1);
+}
+
+/* The entry of blk, or NULL when the block was never touched. */
+static struct map_entry *map_find(uint64_t blk)
+{
+    if (!map_cap)
+        return NULL;
+    for (size_t i = map_slot(blk, map_cap); map[i].data; i = (i + 1) & (map_cap - 1))
+        if (map[i].blk == blk)
+            return &map[i];
+    return NULL;
+}
+
+static void map_grow(void)
+{
+    size_t cap = map_cap ? map_cap * 2 : 1024;
+    struct map_entry *nm = calloc(cap, sizeof *nm);
+    if (!nm)
+        die("out of memory");
+    for (size_t k = 0; k < map_cap; k++) {
+        if (!map[k].data)
+            continue;
+        size_t i = map_slot(map[k].blk, cap);
+        while (nm[i].data)
+            i = (i + 1) & (cap - 1);
+        nm[i] = map[k];
+    }
+    free(map);
+    map = nm;
+    map_cap = cap;
+}
+
+static uint8_t *map_get(uint64_t blk)
+{
+    struct map_entry *e = map_find(blk);
+    if (e)
+        return e->data;
+    if ((map_count + 1) * 2 > map_cap)
+        map_grow();
+    size_t i = map_slot(blk, map_cap);
+    while (map[i].data)
+        i = (i + 1) & (map_cap - 1);
+    map[i].blk = blk;
+    map[i].data = calloc(1, MFS_BLOCK_SIZE);
+    if (!map[i].data)
+        die("out of memory");
+    map_count++;
+    return map[i].data;
+}
+
 static uint8_t *block(uint64_t n)
 {
     if (n >= img_blocks)
         die("block out of range");
-    return img + n * MFS_BLOCK_SIZE;
+    if (building)
+        return map_get(n);
+    for (int i = 0; i < RING_SIZE; i++)
+        if (ring[i].data && ring[i].blk == n)
+            return ring[i].data;
+    int slot = ring_next;
+    ring_next = (ring_next + 1) % RING_SIZE;
+    if (!ring[slot].data) {
+        ring[slot].data = malloc(MFS_BLOCK_SIZE);
+        if (!ring[slot].data)
+            die("out of memory");
+    }
+    ring[slot].data[0] = 0;
+    if (fseeko(img_file, (off_t)(n * MFS_BLOCK_SIZE), SEEK_SET) != 0 ||
+        fread(ring[slot].data, 1, MFS_BLOCK_SIZE, img_file) != MFS_BLOCK_SIZE)
+        die("cannot read image");
+    ring[slot].blk = n;
+    return ring[slot].data;
 }
 
 static struct mfs_dinode *dinode(uint32_t ino)
@@ -82,13 +191,16 @@ static void bitmap_set(uint32_t start, uint64_t bit)
     block(start + bit / (MFS_BLOCK_SIZE * 8))[(bit / 8) % MFS_BLOCK_SIZE] |= (uint8_t)(1 << (bit % 8));
 }
 
+/* Blocks are never freed while an image is built, thus the first free one
+ * is found by advancing next_data. A new block reads as zeros because the
+ * map creates it zeroed. */
 static uint32_t alloc_block(void)
 {
-    for (uint64_t b = sb->data_start; b < sb->nblocks; b++) {
+    for (uint64_t b = next_data; b < sb->nblocks; b++) {
         if (!bitmap_test(sb->block_bitmap_start, b)) {
             bitmap_set(sb->block_bitmap_start, b);
             sb->free_blocks--;
-            memset(block(b), 0, MFS_BLOCK_SIZE);
+            next_data = b + 1;
             return (uint32_t)b;
         }
     }
@@ -147,14 +259,19 @@ static uint32_t bmap(struct mfs_dinode *di, uint64_t idx, int alloc)
     return l2[i2];
 }
 
-static void write_data(uint32_t ino, const void *data, uint64_t len)
+/* Store len bytes into the data blocks of ino, taken from data or, when
+ * data is NULL, read block by block from the open file f. */
+static void write_data(uint32_t ino, const void *data, uint64_t len, FILE *f)
 {
     struct mfs_dinode *di = dinode(ino);
     const uint8_t *p = data;
     for (uint64_t off = 0; off < len; off += MFS_BLOCK_SIZE) {
         uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 1);
         uint64_t n = len - off < MFS_BLOCK_SIZE ? len - off : MFS_BLOCK_SIZE;
-        memcpy(block(b), p + off, n);
+        if (p)
+            memcpy(block(b), p + off, n);
+        else if (fread(block(b), 1, n, f) != n)
+            die("short read");
     }
     di->size = len;
 }
@@ -216,7 +333,7 @@ static void add_tree(uint32_t dir, const char *path)
             di->mode = S_IFLNK_ | 0777;
             di->nlink = 1;
             di->mtime = host_mtime_ns(&st);
-            write_data(ino, target, (uint64_t)n);
+            write_data(ino, target, (uint64_t)n, NULL);
             add_dirent(dir, e->d_name, ino);
         } else if (S_ISDIR(st.st_mode)) {
             uint32_t sub = make_dir(dir, st.st_mode & 07777);
@@ -227,17 +344,13 @@ static void add_tree(uint32_t dir, const char *path)
             FILE *f = fopen(full, "rb");
             if (!f)
                 die(full);
-            uint8_t *data = malloc(st.st_size ? (size_t)st.st_size : 1);
-            if (fread(data, 1, (size_t)st.st_size, f) != (size_t)st.st_size)
-                die("short read");
-            fclose(f);
             uint32_t ino = alloc_inode();
             struct mfs_dinode *di = dinode(ino);
             di->mode = S_IFREG_ | (st.st_mode & 07777);
             di->nlink = 1;
             di->mtime = host_mtime_ns(&st);
-            write_data(ino, data, (uint64_t)st.st_size);
-            free(data);
+            write_data(ino, NULL, (uint64_t)st.st_size, f);
+            fclose(f);
             add_dirent(dir, e->d_name, ino);
         }
     }
@@ -247,10 +360,8 @@ static void add_tree(uint32_t dir, const char *path)
 static void format(uint64_t nblocks)
 {
     img_blocks = nblocks;
-    img = calloc(nblocks, MFS_BLOCK_SIZE);
-    if (!img)
-        die("out of memory");
-    sb = (struct mfs_superblock *)img;
+    building = 1;
+    sb = (struct mfs_superblock *)block(0);
     sb->magic = MFS_MAGIC;
     sb->version = MFS_VERSION;
     sb->block_size = MFS_BLOCK_SIZE;
@@ -278,6 +389,7 @@ static void format(uint64_t nblocks)
     jh->magic = MFS_JOURNAL_MAGIC;
     jh->count = 0;
     jh->sequence = 1;
+    next_data = sb->data_start;
     sb->free_blocks = nblocks - sb->data_start;
     bitmap_set(sb->inode_bitmap_start, 0);
     sb->free_inodes = ninodes - 1;
@@ -287,20 +399,40 @@ static void format(uint64_t nblocks)
         die("root inode is not 1");
 }
 
+/* The size in bytes of an existing block device or regular file, which
+ * SIZE_MB 0 selects. The target is then written in place without creating
+ * or truncating it. */
+static uint64_t existing_size(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) < 0)
+        die(path);
+    if (!S_ISBLK(st.st_mode) && !S_ISREG(st.st_mode))
+        die("not a block device or regular file");
+    return (uint64_t)st.st_size;
+}
+
+/* Whether path is a block device, whose size cannot be changed. */
+static int is_block_device(const char *path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISBLK(st.st_mode);
+}
+
 static void load(const char *path)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f)
+    img_file = fopen(path, "rb");
+    if (!img_file)
         die(path);
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    img_blocks = (uint64_t)size / MFS_BLOCK_SIZE;
-    img = malloc((size_t)size);
-    if (!img || fread(img, 1, (size_t)size, f) != (size_t)size)
+    if (fseeko(img_file, 0, SEEK_END) != 0)
         die("cannot read image");
-    fclose(f);
-    sb = (struct mfs_superblock *)img;
+    off_t size = ftello(img_file);
+    if (size < MFS_BLOCK_SIZE)
+        die("cannot read image");
+    img_blocks = (uint64_t)size / MFS_BLOCK_SIZE;
+    sb = malloc(MFS_BLOCK_SIZE);
+    if (!sb || fseeko(img_file, 0, SEEK_SET) != 0 || fread(sb, 1, MFS_BLOCK_SIZE, img_file) != MFS_BLOCK_SIZE)
+        die("cannot read image");
     if (sb->magic != MFS_MAGIC)
         die("not an mfs image");
     if (sb->version < MFS_VERSION_MIN || sb->version > MFS_VERSION)
@@ -309,9 +441,58 @@ static void load(const char *path)
         die("image truncated");
 }
 
+static int map_cmp(const void *a, const void *b)
+{
+    uint64_t x = ((const struct map_entry *)a)->blk, y = ((const struct map_entry *)b)->blk;
+    return x < y ? -1 : x > y;
+}
+
+/* Write the blocks of the map to f in block order. Everything below the data
+ * area has a required content, thus on an existing target the blocks there
+ * that were never touched are written as zeros (the free data blocks are
+ * left as they are). A new target is made as large as the image first and
+ * reads as zeros wherever nothing is written. */
+static void write_image(FILE *f, int existing)
+{
+    static const uint8_t zero[MFS_BLOCK_SIZE];
+    uint64_t at = UINT64_MAX;       /* the block the file position is at */
+    if (!existing) {
+        if (fflush(f) != 0 || ftruncate(fileno(f), (long)(img_blocks * MFS_BLOCK_SIZE)) != 0)
+            die("cannot set the image size");
+    }
+    for (uint64_t b = 0; b < sb->data_start; b++) {
+        struct map_entry *e = map_find(b);
+        if (!e && !existing)
+            continue;
+        if (at != b && fseeko(f, (off_t)(b * MFS_BLOCK_SIZE), SEEK_SET) != 0)
+            die("seek failed");
+        if (fwrite(e ? e->data : zero, 1, MFS_BLOCK_SIZE, f) != MFS_BLOCK_SIZE)
+            die("short write");
+        at = b + 1;
+    }
+    struct map_entry *list = malloc(map_count * sizeof *list);
+    if (!list)
+        die("out of memory");
+    size_t n = 0;
+    for (size_t i = 0; i < map_cap; i++)
+        if (map[i].data && map[i].blk >= sb->data_start)
+            list[n++] = map[i];
+    qsort(list, n, sizeof *list, map_cmp);
+    for (size_t i = 0; i < n; i++) {
+        if (at != list[i].blk && fseeko(f, (off_t)(list[i].blk * MFS_BLOCK_SIZE), SEEK_SET) != 0)
+            die("seek failed");
+        if (fwrite(list[i].data, 1, MFS_BLOCK_SIZE, f) != MFS_BLOCK_SIZE)
+            die("short write");
+        at = list[i].blk + 1;
+    }
+    free(list);
+}
+
 static void dump_tree(uint32_t ino, const char *prefix, int depth)
 {
-    struct mfs_dinode *di = dinode(ino);
+    /* A copy, because the block cache may reuse the buffer of the inode. */
+    struct mfs_dinode copy = *dinode(ino);
+    struct mfs_dinode *di = &copy;
     for (uint64_t off = 0; off < di->size; off += MFS_DIRENT_SIZE) {
         uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
         struct mfs_dirent *e = (struct mfs_dirent *)(block(b) + off % MFS_BLOCK_SIZE);
@@ -340,7 +521,8 @@ static uint32_t lookup(const char *path)
     buf[sizeof buf - 1] = '\0';
     char *save = NULL;
     for (char *comp = strtok_r(buf, "/", &save); comp; comp = strtok_r(NULL, "/", &save)) {
-        struct mfs_dinode *di = dinode(ino);
+        struct mfs_dinode copy = *dinode(ino);  /* the cache may reuse the inode buffer */
+        struct mfs_dinode *di = &copy;
         uint32_t found = 0;
         for (uint64_t off = 0; off < di->size && !found; off += MFS_DIRENT_SIZE) {
             uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
@@ -428,7 +610,8 @@ int main(int argc, char **argv)
     if (argc == 4 && strcmp(argv[1], "--cat") == 0) {
         load(argv[2]);
         uint32_t ino = lookup(argv[3]);
-        struct mfs_dinode *di = dinode(ino);
+        struct mfs_dinode copy = *dinode(ino);  /* the cache may reuse the inode buffer */
+        struct mfs_dinode *di = &copy;
         for (uint64_t off = 0; off < di->size; off += MFS_BLOCK_SIZE) {
             uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
             uint64_t n = di->size - off < MFS_BLOCK_SIZE ? di->size - off : MFS_BLOCK_SIZE;
@@ -438,22 +621,32 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc != 4) {
-        fprintf(stderr, "usage: mkfs [-p perms] <image> <size_mb> <dir> | --dump <image> | --cat <image> <path>\n");
+        fprintf(stderr, "usage: mkfs [-p perms] <image> <size_mb|0> <dir> | --dump <image> | --cat <image> <path>\n");
         return 2;
     }
     uint64_t mb = strtoull(argv[2], NULL, 10);
-    if (mb < 1)
+    int existing = 0;
+    uint64_t bytes;
+    if (mb == 0 && strcmp(argv[2], "0") == 0) {
+        bytes = existing_size(argv[1]);
+        existing = 1;
+    } else {
+        if (is_block_device(argv[1]))
+            die("the size of a device cannot be changed, use 0");
+        bytes = mb * 1024 * 1024;
+    }
+    if (bytes < 1024 * 1024)
         die("size must be at least 1 MiB");
-    format(mb * 1024 * 1024 / MFS_BLOCK_SIZE);
+    format(bytes / MFS_BLOCK_SIZE);
     add_tree(MFS_ROOT_INO, argv[3]);
     if (manifest)
         apply_manifest(manifest);
-    FILE *f = fopen(argv[1], "wb");
+    FILE *f = fopen(argv[1], existing ? "r+b" : "wb");
     if (!f)
         die(argv[1]);
-    if (fwrite(img, MFS_BLOCK_SIZE, img_blocks, f) != img_blocks)
+    write_image(f, existing);
+    if (fclose(f) != 0)
         die("short write");
-    fclose(f);
     printf("mkfs: %s: %llu blocks, %u inodes, %llu free blocks\n", argv[1],
            (unsigned long long)sb->nblocks, sb->ninodes, (unsigned long long)sb->free_blocks);
     return 0;

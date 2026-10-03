@@ -1,12 +1,32 @@
 /* mkgpt: write a GPT partitioned disk image.
  *
  *   mkgpt [--disk-uuid UUID] IMAGE SIZE_MB PARTITION...
+ *   mkgpt -l IMAGE
+ *
+ * The same source is built for minios as /usr/bin/part, where IMAGE is
+ * usually a block device such as /dev/vdb. SIZE_MB 0 stands for the current
+ * size of the existing file or device, which is then written in place
+ * without truncating or creating it. A device cannot be resized, thus a
+ * nonzero SIZE_MB is an error for one. The option -l reads the table of
+ * IMAGE, checks the header and array CRCs (falling back to the backup header
+ * at the last sector when the primary fails) and prints the lines described
+ * below.
  *
  * PARTITION is TYPE:SIZE[:FILE[:UUID]]. TYPE is one of bios, esp, swap,
  * root-x86_64, root-aarch64, home and linux. SIZE is a number of MiB, or
  * rest for all remaining space, which only the last partition may use. FILE
  * is an image whose bytes are copied to the start of the partition and must
- * fit in it. UUID is the unique partition GUID, random when omitted.
+ * fit in it, and is copied in chunks of at most 1 MiB. UUID is the unique partition GUID, random when omitted.
+ *
+ * No buffer of the size of the disk is allocated. A new image is created
+ * with its full size by ftruncate and then only the protective MBR, both
+ * headers, both arrays and the FILE contents are written. On an existing
+ * target those regions are written in full as well, and the rest of the
+ * disk is left as it is. After a table was written to a block device, the
+ * kernel is asked to read it again (BLKRRPART, only in the minios build,
+ * which defines MINIOS_TARGET). A failure of that request is a warning,
+ * except for EBUSY, which means that the root or swap lies on the disk and
+ * is an error with exit status 1.
  *
  * The sector size is 512. The image holds a protective MBR, the primary
  * header at LBA 1 with its array of 128 entries, and the backup array and
@@ -19,6 +39,12 @@
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#ifdef MINIOS_TARGET
+#include <sys/ioctl.h>
+#endif
 
 #define SECTOR      512
 #define ALIGN_SECT  2048
@@ -26,6 +52,7 @@
 #define ENTRY_SIZE  128
 #define ARRAY_SECT  (NENTRIES * ENTRY_SIZE / SECTOR)
 #define MAX_PARTS   NENTRIES
+#define COPY_CHUNK  (1u << 20)      /* the most that is read from a FILE at once */
 
 struct type_name {
     const char *name;
@@ -52,9 +79,11 @@ struct part {
     uint64_t first, last;
 };
 
+static const char *prog = "mkgpt";
+
 static __attribute__((noreturn)) void die(const char *fmt, const char *arg)
 {
-    fprintf(stderr, "mkgpt: ");
+    fprintf(stderr, "%s: ", prog);
     fprintf(stderr, fmt, arg);
     fputc('\n', stderr);
     exit(1);
@@ -200,11 +229,117 @@ static void write_header(uint8_t *h, uint64_t my, uint64_t alt, uint64_t last_us
     put32(h + 16, crc32(h, 92));
 }
 
+static uint32_t get32(const uint8_t *p)
+{
+    return p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+static uint64_t get64(const uint8_t *p)
+{
+    return get32(p) | (uint64_t)get32(p + 4) << 32;
+}
+
+/* Print the line of one partition, shared by the creating and the list mode. */
+static void print_part(int n, const char *type, uint64_t first, uint64_t last, const uint8_t uuid[16])
+{
+    char u[37];
+    guid_format(uuid, u);
+    printf("%d %s %llu %llu %s\n", n, type, (unsigned long long)first, (unsigned long long)last, u);
+}
+
+/* Write n sectors of buf at sector number lba. */
+static int write_sectors(FILE *f, uint64_t lba, const uint8_t *buf, size_t n)
+{
+    if (fseeko(f, (off_t)(lba * SECTOR), SEEK_SET) != 0)
+        return -1;
+    return fwrite(buf, SECTOR, n, f) == n ? 0 : -1;
+}
+
+/* Read the sectors [lba, lba + n) of the open image into buf. */
+static int read_sectors(FILE *f, uint64_t lba, size_t n, uint8_t *buf)
+{
+    if (fseeko(f, (off_t)(lba * SECTOR), SEEK_SET) != 0)
+        return -1;
+    return fread(buf, SECTOR, n, f) == n ? 0 : -1;
+}
+
+/* Read the header at lba and the entry array it names, and check both CRCs.
+ * Returns 0 and fills hdr and array when the table is intact. */
+static int read_table(FILE *f, uint64_t total, uint64_t lba, uint8_t hdr[SECTOR], uint8_t *array)
+{
+    if (lba >= total || read_sectors(f, lba, 1, hdr) != 0)
+        return -1;
+    if (memcmp(hdr, "EFI PART", 8) != 0)
+        return -1;
+    uint32_t size = get32(hdr + 12);
+    if (size < 92 || size > SECTOR)
+        return -1;
+    uint8_t copy[SECTOR];
+    memcpy(copy, hdr, SECTOR);
+    put32(copy + 16, 0);
+    if (crc32(copy, size) != get32(hdr + 16))
+        return -1;
+    if (get32(hdr + 80) != NENTRIES || get32(hdr + 84) != ENTRY_SIZE)
+        return -1;
+    uint64_t alba = get64(hdr + 72);
+    if (alba >= total || alba + ARRAY_SECT > total)
+        return -1;
+    if (read_sectors(f, alba, ARRAY_SECT, array) != 0)
+        return -1;
+    if (crc32(array, NENTRIES * ENTRY_SIZE) != get32(hdr + 88))
+        return -1;
+    return 0;
+}
+
+static int list_table(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) < 0)
+        die("cannot open '%s'", path);
+    uint64_t total = (uint64_t)st.st_size / SECTOR;
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        die("cannot open '%s'", path);
+    uint8_t hdr[SECTOR];
+    uint8_t *array = malloc(NENTRIES * ENTRY_SIZE);
+    if (!array)
+        die("%s", "out of memory");
+    if (read_table(f, total, 1, hdr, array) != 0 &&
+        (total < 2 || read_table(f, total, total - 1, hdr, array) != 0))
+        die("no valid partition table in '%s'", path);
+    fclose(f);
+    for (int i = 0; i < NENTRIES; i++) {
+        const uint8_t *e = array + i * ENTRY_SIZE;
+        uint8_t zero[16] = { 0 };
+        if (!memcmp(e, zero, 16))
+            continue;
+        const char *type = NULL;
+        char guid[37];
+        guid_format(e, guid);
+        for (size_t k = 0; k < sizeof types / sizeof types[0]; k++) {
+            uint8_t t[16];
+            guid_parse(types[k].guid, t);
+            if (!memcmp(t, e, 16))
+                type = types[k].name;
+        }
+        print_part(i + 1, type ? type : guid, get64(e + 32), get64(e + 40), e + 16);
+    }
+    free(array);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     uint8_t disk[16];
     int have_disk = 0;
     int a = 1;
+
+    const char *slash = strrchr(argv[0], '/');
+    const char *base = slash ? slash + 1 : argv[0];
+    if (!strcmp(base, "part"))
+        prog = "part";
+    if (argc == 3 && !strcmp(argv[1], "-l"))
+        return list_table(argv[2]);
 
     if (a + 1 < argc && !strcmp(argv[a], "--disk-uuid")) {
         guid_parse(argv[a + 1], disk);
@@ -212,13 +347,31 @@ int main(int argc, char **argv)
         a += 2;
     }
     if (argc - a < 3 || argc - a - 2 > MAX_PARTS) {
-        fprintf(stderr, "usage: mkgpt [--disk-uuid UUID] IMAGE SIZE_MB PARTITION...\n");
+        fprintf(stderr, "usage: %s [--disk-uuid UUID] IMAGE SIZE_MB PARTITION...\n"
+                        "       %s -l IMAGE\n", prog, prog);
         return 1;
     }
     if (!have_disk)
         guid_random(disk);
     const char *path = argv[a];
-    uint64_t total = parse_mib(argv[a + 1]) * ALIGN_SECT;
+    int existing = 0;       /* write in place, without creating or truncating */
+    int is_device = 0;      /* the target is a block device */
+    uint64_t total;
+    if (!strcmp(argv[a + 1], "0")) {
+        struct stat st;
+        if (stat(path, &st) < 0)
+            die("cannot open '%s'", path);
+        if (!S_ISBLK(st.st_mode) && !S_ISREG(st.st_mode))
+            die("'%s' is neither a block device nor a regular file", path);
+        total = (uint64_t)st.st_size / SECTOR;
+        existing = 1;
+        is_device = S_ISBLK(st.st_mode);
+    } else {
+        struct stat st;
+        if (stat(path, &st) == 0 && S_ISBLK(st.st_mode))
+            die("the size of the device '%s' cannot be changed, use 0", path);
+        total = parse_mib(argv[a + 1]) * ALIGN_SECT;
+    }
     int np = argc - a - 2;
     if (total < 2 * ALIGN_SECT)
         die("%s", "image too small");
@@ -250,9 +403,32 @@ int main(int argc, char **argv)
         next = (p->last + 1 + ALIGN_SECT - 1) / ALIGN_SECT * ALIGN_SECT;
     }
 
-    uint8_t *img = calloc(total, SECTOR);
-    if (!img)
-        die("cannot allocate the image%s", "");
+    /* No buffer of the size of the disk exists. Only the table structures
+     * are built in memory, and the contents of FILE arguments pass through a
+     * buffer of at most COPY_CHUNK bytes. */
+    /* A missing or oversized FILE is found before the target is touched. */
+    for (int i = 0; i < np; i++) {
+        struct stat fst;
+        if (!parts[i].file)
+            continue;
+        if (stat(parts[i].file, &fst) < 0)
+            die("cannot open '%s'", parts[i].file);
+        if (S_ISREG(fst.st_mode) && (uint64_t)fst.st_size > parts[i].sectors * SECTOR)
+            die("'%s' does not fit in its partition", parts[i].file);
+    }
+    uint8_t *array = calloc(NENTRIES, ENTRY_SIZE);
+    uint8_t *chunk = malloc(COPY_CHUNK);
+    if (!array || !chunk)
+        die("%s", "out of memory");
+
+    FILE *out = fopen(path, existing ? "r+b" : "wb");
+    if (!out)
+        die("cannot create '%s'", path);
+    /* A new image gets its full size first and reads as zeros wherever
+     * nothing is written. On an existing target, every region of the table
+     * is written in full below, since old contents are still there. */
+    if (!existing && (fflush(out) != 0 || ftruncate(fileno(out), (long)(total * SECTOR)) != 0))
+        die("cannot set the size of '%s'", path);
 
     for (int i = 0; i < np; i++) {
         struct part *p = &parts[i];
@@ -262,14 +438,26 @@ int main(int argc, char **argv)
         if (!f)
             die("cannot open '%s'", p->file);
         uint64_t cap = p->sectors * SECTOR;
-        uint8_t *dst = img + p->first * SECTOR;
-        size_t got = fread(dst, 1, cap, f);
-        if (got == cap && fgetc(f) != EOF)
+        uint64_t off = 0;
+        for (;;) {
+            size_t want = cap - off < COPY_CHUNK ? (size_t)(cap - off) : COPY_CHUNK;
+            size_t got = want ? fread(chunk, 1, want, f) : 0;
+            if (got == 0)
+                break;
+            /* The last piece is padded with zeros to a whole sector. */
+            size_t padded = (got + SECTOR - 1) / SECTOR * SECTOR;
+            memset(chunk + got, 0, padded - got);
+            if (fseeko(out, (off_t)(p->first * SECTOR + off), SEEK_SET) != 0 ||
+                fwrite(chunk, 1, padded, out) != padded)
+                die("write to '%s' failed", path);
+            off += got;
+        }
+        if (off == cap && fgetc(f) != EOF)
             die("'%s' does not fit in its partition", p->file);
         fclose(f);
     }
+    free(chunk);
 
-    uint8_t *array = img + 2 * SECTOR;
     for (int i = 0; i < np; i++) {
         uint8_t *e = array + i * ENTRY_SIZE;
         struct part *p = &parts[i];
@@ -282,7 +470,7 @@ int main(int argc, char **argv)
     }
     uint32_t array_crc = crc32(array, NENTRIES * ENTRY_SIZE);
 
-    uint8_t *mbr = img;
+    uint8_t mbr[SECTOR] = { 0 };
     mbr[446 + 4] = 0xEE;
     mbr[446 + 1] = 0x00; mbr[446 + 2] = 0x02; mbr[446 + 3] = 0x00;
     mbr[446 + 5] = 0xFF; mbr[446 + 6] = 0xFF; mbr[446 + 7] = 0xFF;
@@ -292,22 +480,41 @@ int main(int argc, char **argv)
     mbr[511] = 0xAA;
 
     uint64_t backup_array = total - 1 - ARRAY_SECT;
-    memcpy(img + backup_array * SECTOR, array, NENTRIES * ENTRY_SIZE);
-    write_header(img + SECTOR, 1, total - 1, last_usable, disk, 2, array_crc);
-    write_header(img + (total - 1) * SECTOR, total - 1, 1, last_usable, disk, backup_array,
-                 array_crc);
+    uint8_t primary[SECTOR], backup[SECTOR];
+    write_header(primary, 1, total - 1, last_usable, disk, 2, array_crc);
+    write_header(backup, total - 1, 1, last_usable, disk, backup_array, array_crc);
 
-    FILE *out = fopen(path, "wb");
-    if (!out)
-        die("cannot create '%s'", path);
-    if (fwrite(img, SECTOR, total, out) != total || fclose(out) != 0)
+    /* The backup comes first and the protective MBR last, thus a table that
+     * is cut short by a failure is never taken for a complete one. */
+    if (write_sectors(out, backup_array, array, ARRAY_SECT) != 0 ||
+        write_sectors(out, total - 1, backup, 1) != 0 ||
+        write_sectors(out, 2, array, ARRAY_SECT) != 0 ||
+        write_sectors(out, 1, primary, 1) != 0 ||
+        write_sectors(out, 0, mbr, 1) != 0)
+        die("write to '%s' failed", path);
+    free(array);
+    if (fflush(out) != 0)
         die("write to '%s' failed", path);
 
-    for (int i = 0; i < np; i++) {
-        char u[37];
-        guid_format(parts[i].uuid, u);
-        printf("%d %s %llu %llu %s\n", i + 1, parts[i].type,
-               (unsigned long long)parts[i].first, (unsigned long long)parts[i].last, u);
+    /* A device is told to read the table again. */
+    int status = 0;
+#ifdef MINIOS_TARGET
+    if (is_device && ioctl(fileno(out), BLKRRPART) < 0) {
+        if (errno == EBUSY) {
+            fprintf(stderr, "%s: '%s' cannot be read again, the root or swap lies on this disk\n", prog, path);
+            status = 1;
+        } else {
+            fprintf(stderr, "%s: warning: the kernel did not read the table of '%s' again: %s\n",
+                    prog, path, strerror(errno));
+        }
     }
-    return 0;
+#else
+    (void)is_device;
+#endif
+    if (fclose(out) != 0)
+        die("write to '%s' failed", path);
+
+    for (int i = 0; i < np; i++)
+        print_part(i + 1, parts[i].type, parts[i].first, parts[i].last, parts[i].uuid);
+    return status;
 }

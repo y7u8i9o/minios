@@ -9,3 +9,4 @@ depends pkg
 depends accounts
 depends keymaps
 depends tzdata
+depends limine

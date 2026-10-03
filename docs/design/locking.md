@@ -572,13 +572,14 @@ These locks are in user space and do not add a kernel lock-order level.
 ## P4 additions
 
 - `part_lock` (spinlock, `kernel/block/part.c`) protects the list of GPT
-  partitions. `part_scan` appends to it from `kinit` before any lookup
-  runs, and the lookups take it alone. It is taken before
-  `blockdev_lock` only in the sense that `part_scan` releases it before
-  `blockdev_register` takes `blockdev_lock`, which means the two are
-  never held together. The disk table of `part.c` and the text of
-  `/dev/partitions` are written once by `part_scan` and constant
-  afterwards.
+  partitions, the fields of a partition that a rescan changes (`first`,
+  `bdev.nsectors`, `type`, `uuid`, `size_reported`), the table of disks
+  with their GUIDs and the devices that hold a disk busy. It is a leaf
+  lock: `part_rw` reads the position of a partition under it and calls
+  the driver after releasing it, and `apply_table` releases it before
+  `blockdev_register` takes `blockdev_lock` and before `devfs_set_size`
+  takes an inode mutex. `/dev/partitions` is written into a buffer of
+  its own when it is opened.
 - `tmpfs_sb.lock` (spinlock, `kernel/fs/tmpfs.c`) protects the hash table
   of the nodes, the next inode number and the page count of one tmpfs.
   It is a leaf lock, taken under `inode.lock` of the inode being changed

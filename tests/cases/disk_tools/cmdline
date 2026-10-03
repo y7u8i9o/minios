@@ -1,0 +1,1 @@
+test=run prog=/bin/sh args=/etc/tests/disktools.sh held_pages=4

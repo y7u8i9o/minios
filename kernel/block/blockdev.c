@@ -3,6 +3,8 @@
 #include <drivers/timer.h>
 #include <block/blockdev.h>
 #include <block/bcache.h>
+#include <block/part.h>
+#include <sched/cred.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <lib/string.h>
@@ -68,9 +70,25 @@ static long bdev_write(struct file *f, const char *buf, size_t n, uint64_t *pos)
     return (long)done;
 }
 
+/* BLKRRPART reads the partition table of a disk again (block/part.h).
+ * Only root may ask, since a disk is written through it. */
+static long bdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
+{
+    struct blockdev *dev = f->inode->priv;
+    if (req != BLKRRPART)
+        return -ENOTTY;
+    if (dev->disk)
+        return -EINVAL;
+    if (!cred_current_is_root())
+        return -EPERM;
+    bcache_sync(dev);
+    return part_rescan(dev);
+}
+
 static const struct file_ops bdev_fops = {
     .read = bdev_read,
     .write = bdev_write,
+    .ioctl = bdev_ioctl,
 };
 
 int blockdev_register(struct blockdev *dev)

@@ -293,7 +293,7 @@ installer comes last.
   batch, and `gpt_boot`, `boot`, `fs`, `persist`, `shutdown`, `swap`,
   `blk`, `initctl` and `login_console` on aarch64.
 
-### P5. Disk tools on minios
+### P5. Disk tools on minios (completed 2026-10-03)
 
 - `part` creates, lists and edits GPT partition tables, aligned to 1 MiB.
 - `mkfs` and `mkfat` are built for the target from the sources of
@@ -303,6 +303,25 @@ installer comes last.
 - The boot test `disk_tools` partitions and formats a blank `vdb` in the
   guest, and its `post` script checks the result with the host `mkfs
   --cat` and `fsck`.
+- During the work `part` became `tools/mkgpt/mkgpt.c` built for the
+  target, with a list mode `-l`, and it writes a whole new table rather
+  than editing single entries. With the size 0, `part`, `mkfs` and
+  `mkfat` write into an existing file or a device file at its size. None
+  of the three holds the whole disk in memory any more: they write the
+  metadata, which they clear explicitly on a used disk, and the copied
+  files, and the images they make for new files are byte for byte the
+  ones of before. The kernel reads a table again on the `ioctl`
+  `BLKRRPART`, which `part` issues after writing a disk. The rescan
+  refuses a disk that holds the root or swap, updates the partition of
+  each entry number in place and gives a removed one the size 0, and
+  `devfs_set_size` reports the new sizes. `limine.c` builds for minios
+  unmodified. The tools form the package `disktools` in the standard
+  group, and the utility the package `limine` in the minimal group. The
+  case uses `vdc`, since a disk without a table as `vdb` is swap, and the
+  run test gained the option `held_pages=N` for the partitions that the
+  program leaves registered. `disk_tools`, `gpt_boot`, `pkg`, `pkg_apps`
+  and the file system cases pass on x86_64, and `disk_tools`, `gpt_boot`,
+  `persist`, `fs`, `fat` and `boot` on aarch64.
 
 ### P6. Boot packages
 

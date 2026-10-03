@@ -5,6 +5,19 @@
  *   mkfat --dump <image>                          print the volume and tree
  *   mkfat --cat <image> <path>                    print a file
  *
+ * SIZE_MB 0 stands for the size of the existing image file or block device,
+ * which is then written in place without truncation. A nonzero size on a
+ * block device is an error. The tool is also built for minios, where it
+ * installs as /usr/bin/mkfat.
+ *
+ * No buffer of the size of the image exists. The boot sectors, one copy of
+ * the file allocation table and the root directory region are held in
+ * memory, and the clusters of the data area only when the tree touches them.
+ * A new image is created with its full size by ftruncate. On an existing
+ * target the reserved sectors, every copy of the table and the FAT12/16 root
+ * directory region are written in full, and free clusters are left as they
+ * are. The read modes load the table and fetch clusters on demand.
+ *
  * Without -t the type follows the size: FAT12 below 4 MiB, FAT16 below
  * 256 MiB, FAT32 above. Names that are not plain 8.3 names get long name
  * entries; --dump prints long names where they exist and short names in
@@ -17,12 +30,45 @@
 #include <ctype.h>
 #include <time.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <fs/fat_format.h>
 
-static uint8_t *img;
+/* The image is never held in memory as a whole. The boot sector, the FSInfo
+ * sector, one copy of the file allocation table and the FAT12/16 root
+ * directory region are buffers of their own, because the format requires
+ * them in full. The clusters of the data area exist only when touched.
+ * While an image is built, each touched cluster is a buffer created zeroed
+ * on first access and found through a hash table keyed by the cluster
+ * number, and all of them are written out in order at the end. While an
+ * image is read, clusters are fetched on demand into a small cache. A
+ * pointer returned by cluster() stays valid until RING_SIZE other clusters
+ * have been fetched. */
+struct map_entry {
+    uint32_t cluster;
+    uint8_t *data;                  /* NULL marks an unused slot */
+};
+
+#define RING_SIZE 16
+
+static struct map_entry *map;       /* slots of the table, a power of two */
+static size_t map_cap, map_count;
+
+static FILE *img_file;              /* the open image in the read modes */
+static struct {
+    uint32_t cluster;
+    uint8_t *data;                  /* NULL until first used */
+} ring[RING_SIZE];
+static int ring_next;
+
+static int building;                /* 1 while an image is created */
+static uint8_t boot_sector[FAT_SECTOR_SIZE];
+static uint8_t backup_boot[FAT_SECTOR_SIZE];    /* FAT32, at sector 6 */
+static uint8_t fsinfo_sector[FAT_SECTOR_SIZE];  /* FAT32, at sector 1 */
+static uint8_t *fat_buf;            /* one copy of the table, written nfats times */
+static uint8_t *root_buf;           /* the FAT12/16 root directory region */
 static uint64_t img_size;
-static struct fat_bpb *bpb;
+static struct fat_bpb *bpb = (struct fat_bpb *)boot_sector;
 static int fat_type;                /* 12, 16 or 32 */
 static uint32_t fat_start, fat_sectors, root_start, root_sectors, data_start, nclusters;
 static uint32_t spc;                /* sectors per cluster */
@@ -34,18 +80,78 @@ static __attribute__((noreturn)) void die(const char *msg)
     exit(1);
 }
 
-static uint8_t *sector(uint64_t n)
+static uint32_t cluster_bytes(void);
+
+static size_t map_slot(uint32_t c, size_t cap)
 {
-    if ((n + 1) * FAT_SECTOR_SIZE > img_size)
-        die("sector out of range");
-    return img + n * FAT_SECTOR_SIZE;
+    return (size_t)(((uint64_t)c * 0x9e3779b97f4a7c15ull) >> 20) & (cap - 1);
+}
+
+static void map_grow(void)
+{
+    size_t cap = map_cap ? map_cap * 2 : 1024;
+    struct map_entry *nm = calloc(cap, sizeof *nm);
+    if (!nm)
+        die("out of memory");
+    for (size_t k = 0; k < map_cap; k++) {
+        if (!map[k].data)
+            continue;
+        size_t i = map_slot(map[k].cluster, cap);
+        while (nm[i].data)
+            i = (i + 1) & (cap - 1);
+        nm[i] = map[k];
+    }
+    free(map);
+    map = nm;
+    map_cap = cap;
+}
+
+static uint8_t *map_get(uint32_t c)
+{
+    if (map_cap) {
+        for (size_t i = map_slot(c, map_cap); map[i].data; i = (i + 1) & (map_cap - 1))
+            if (map[i].cluster == c)
+                return map[i].data;
+    }
+    if ((map_count + 1) * 2 > map_cap)
+        map_grow();
+    size_t i = map_slot(c, map_cap);
+    while (map[i].data)
+        i = (i + 1) & (map_cap - 1);
+    map[i].cluster = c;
+    map[i].data = calloc(1, cluster_bytes());
+    if (!map[i].data)
+        die("out of memory");
+    map_count++;
+    return map[i].data;
+}
+
+static uint64_t cluster_offset(uint32_t c)
+{
+    return ((uint64_t)data_start + (uint64_t)(c - 2) * spc) * FAT_SECTOR_SIZE;
 }
 
 static uint8_t *cluster(uint32_t c)
 {
     if (c < 2 || c >= nclusters + 2)
         die("cluster out of range");
-    return sector(data_start + (uint64_t)(c - 2) * spc);
+    if (building)
+        return map_get(c);
+    for (int i = 0; i < RING_SIZE; i++)
+        if (ring[i].data && ring[i].cluster == c)
+            return ring[i].data;
+    int slot = ring_next;
+    ring_next = (ring_next + 1) % RING_SIZE;
+    if (!ring[slot].data) {
+        ring[slot].data = malloc(cluster_bytes());
+        if (!ring[slot].data)
+            die("out of memory");
+    }
+    if (fseeko(img_file, (off_t)cluster_offset(c), SEEK_SET) != 0 ||
+        fread(ring[slot].data, 1, cluster_bytes(), img_file) != cluster_bytes())
+        die("cannot read image");
+    ring[slot].cluster = c;
+    return ring[slot].data;
 }
 
 static uint32_t cluster_bytes(void)
@@ -57,7 +163,9 @@ static uint32_t cluster_bytes(void)
 
 static uint32_t fat_get(uint32_t c)
 {
-    uint8_t *fat = sector(fat_start);
+    uint8_t *fat = fat_buf;
+    if ((fat_type == 12 ? c + c / 2 + 2 : fat_type == 16 ? c * 2 + 2 : c * 4 + 4) > fat_sectors * FAT_SECTOR_SIZE)
+        die("cluster out of range");
     if (fat_type == 12) {
         uint32_t off = c + c / 2;
         uint16_t v = (uint16_t)(fat[off] | fat[off + 1] << 8);
@@ -72,26 +180,24 @@ static uint32_t fat_get(uint32_t c)
 
 static void fat_set(uint32_t c, uint32_t v)
 {
-    for (int n = 0; n < bpb->nfats; n++) {
-        uint8_t *fat = sector(fat_start + (uint64_t)n * fat_sectors);
-        if (fat_type == 12) {
-            uint32_t off = c + c / 2;
-            if (c & 1) {
-                fat[off] = (uint8_t)((fat[off] & 0x0f) | (v << 4));
-                fat[off + 1] = (uint8_t)(v >> 4);
-            } else {
-                fat[off] = (uint8_t)v;
-                fat[off + 1] = (uint8_t)((fat[off + 1] & 0xf0) | ((v >> 8) & 0x0f));
-            }
-        } else if (fat_type == 16) {
-            fat[c * 2] = (uint8_t)v;
-            fat[c * 2 + 1] = (uint8_t)(v >> 8);
+    uint8_t *fat = fat_buf;
+    if (fat_type == 12) {
+        uint32_t off = c + c / 2;
+        if (c & 1) {
+            fat[off] = (uint8_t)((fat[off] & 0x0f) | (v << 4));
+            fat[off + 1] = (uint8_t)(v >> 4);
         } else {
-            uint32_t old;
-            memcpy(&old, fat + c * 4, 4);
-            v = (old & ~FAT32_MASK) | (v & FAT32_MASK);
-            memcpy(fat + c * 4, &v, 4);
+            fat[off] = (uint8_t)v;
+            fat[off + 1] = (uint8_t)((fat[off + 1] & 0xf0) | ((v >> 8) & 0x0f));
         }
+    } else if (fat_type == 16) {
+        fat[c * 2] = (uint8_t)v;
+        fat[c * 2 + 1] = (uint8_t)(v >> 8);
+    } else {
+        uint32_t old;
+        memcpy(&old, fat + c * 4, 4);
+        v = (old & ~FAT32_MASK) | (v & FAT32_MASK);
+        memcpy(fat + c * 4, &v, 4);
     }
 }
 
@@ -112,7 +218,7 @@ static uint32_t alloc_cluster(uint32_t prev)
             fat_set(c, eoc());
             if (prev)
                 fat_set(prev, c);
-            memset(cluster(c), 0, cluster_bytes());
+            /* The cluster reads as zeros because the map creates it zeroed. */
             next_free = c + 1;
             return c;
         }
@@ -142,7 +248,7 @@ static struct fat_dirent *dir_entry(struct dir *d, uint32_t index, int grow)
     if (d->first_cluster == 0) {
         if (index >= bpb->root_entries)
             die("root directory full");
-        return (struct fat_dirent *)(sector(root_start) + index * 32);
+        return (struct fat_dirent *)(root_buf + index * 32);
     }
     uint32_t per = cluster_bytes() / 32;
     uint32_t c = d->first_cluster, prev = 0;
@@ -358,7 +464,8 @@ static struct fat_dirent *add_entry(struct dir *d, const char *name, uint8_t att
     return e;
 }
 
-static uint32_t write_file_data(const uint8_t *data, uint64_t len)
+/* Store len bytes read from the open file f into a new cluster chain. */
+static uint32_t write_file_data(FILE *f, uint64_t len)
 {
     if (len == 0)
         return 0;
@@ -368,7 +475,8 @@ static uint32_t write_file_data(const uint8_t *data, uint64_t len)
         if (!first)
             first = c;
         uint64_t n = len - off < cluster_bytes() ? len - off : cluster_bytes();
-        memcpy(cluster(c), data + off, n);
+        if (fread(cluster(c), 1, n, f) != n)
+            die("short read");
         prev = c;
     }
     return first;
@@ -413,13 +521,9 @@ static void add_tree(struct dir *d, const char *path)
             FILE *f = fopen(full, "rb");
             if (!f)
                 die(full);
-            uint8_t *data = malloc(st.st_size ? (size_t)st.st_size : 1);
-            if (fread(data, 1, (size_t)st.st_size, f) != (size_t)st.st_size)
-                die("short read");
+            uint32_t first = write_file_data(f, (uint64_t)st.st_size);
             fclose(f);
-            uint32_t first = write_file_data(data, (uint64_t)st.st_size);
             add_entry(d, e->d_name, FAT_ATTR_ARCHIVE, first, (uint32_t)st.st_size);
-            free(data);
         }
     }
     closedir(dir);
@@ -437,6 +541,12 @@ static void layout(void)
     data_start = root_start + root_sectors;
     uint32_t total = bpb->total_sectors16 ? bpb->total_sectors16 : bpb->total_sectors32;
     nclusters = (total - data_start) / spc;
+    free(fat_buf);
+    free(root_buf);
+    fat_buf = calloc(fat_sectors ? fat_sectors : 1, FAT_SECTOR_SIZE);
+    root_buf = calloc(root_sectors ? root_sectors : 1, FAT_SECTOR_SIZE);
+    if (!fat_buf || !root_buf)
+        die("out of memory");
     if (fat_type == 0)
         fat_type = nclusters < FAT12_MAX_CLUSTERS ? 12 : nclusters < FAT16_MAX_CLUSTERS ? 16 : 32;
 }
@@ -444,9 +554,7 @@ static void layout(void)
 static void format(uint64_t size, int type)
 {
     img_size = size;
-    img = calloc(1, size);
-    if (!img)
-        die("out of memory");
+    building = 1;
     uint32_t total = (uint32_t)(size / FAT_SECTOR_SIZE);
     if (type == 0)
         type = size < 4u << 20 ? 12 : size < 256u << 20 ? 16 : 32;
@@ -462,7 +570,6 @@ static void format(uint64_t size, int type)
         want *= 2;
     if (total / want < min)
         die(type == 16 ? "image too small for FAT16 (use -t 12)" : "image too small for FAT32 (use -t 16)");
-    bpb = (struct fat_bpb *)img;
     bpb->jump[0] = 0xeb;
     bpb->jump[1] = 0x58;
     bpb->jump[2] = 0x90;
@@ -501,8 +608,8 @@ static void format(uint64_t size, int type)
         memcpy(bpb->f16.label, "MINIOS     ", 11);
         memcpy(bpb->f16.fs_type, type == 12 ? "FAT12   " : "FAT16   ", 8);
     }
-    img[510] = 0x55;
-    img[511] = 0xaa;
+    boot_sector[510] = 0x55;
+    boot_sector[511] = 0xaa;
     layout();
     if (fat_type != type)
         die("cluster count does not match the requested type");
@@ -510,7 +617,7 @@ static void format(uint64_t size, int type)
     fat_set(0, 0x0fffff00u | bpb->media);
     fat_set(1, eoc());
     if (type == 32) {
-        struct fat_fsinfo *fi = (struct fat_fsinfo *)sector(1);
+        struct fat_fsinfo *fi = (struct fat_fsinfo *)fsinfo_sector;
         fi->lead_signature = FAT_FSINFO_LEAD;
         fi->struct_signature = FAT_FSINFO_STRUCT;
         fi->free_clusters = 0xffffffff;
@@ -519,28 +626,119 @@ static void format(uint64_t size, int type)
         uint32_t root = alloc_cluster(0);
         if (root != 2)
             die("root cluster is not 2");
-        memcpy(sector(6), sector(0), FAT_SECTOR_SIZE);
+        memcpy(backup_boot, boot_sector, FAT_SECTOR_SIZE);
     }
+}
+
+/* The size in bytes of an existing block device or regular file, which
+ * SIZE_MB 0 selects. The target is then written in place without creating
+ * or truncating it. */
+static uint64_t existing_size(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) < 0)
+        die(path);
+    if (!S_ISBLK(st.st_mode) && !S_ISREG(st.st_mode))
+        die("not a block device or regular file");
+    return (uint64_t)st.st_size;
+}
+
+/* Whether path is a block device, whose size cannot be changed. */
+static int is_block_device(const char *path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISBLK(st.st_mode);
+}
+
+/* Read count sectors from sector number first into buf. */
+static void read_sectors(uint64_t first, uint32_t count, uint8_t *buf)
+{
+    if (fseeko(img_file, (off_t)(first * FAT_SECTOR_SIZE), SEEK_SET) != 0 ||
+        fread(buf, FAT_SECTOR_SIZE, count, img_file) != count)
+        die("cannot read image");
 }
 
 static void load(const char *path)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f)
+    img_file = fopen(path, "rb");
+    if (!img_file)
         die(path);
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    img_size = (uint64_t)size;
-    img = malloc((size_t)size);
-    if (!img || fread(img, 1, (size_t)size, f) != (size_t)size)
+    if (fseeko(img_file, 0, SEEK_END) != 0)
         die("cannot read image");
-    fclose(f);
-    bpb = (struct fat_bpb *)img;
-    if (img[510] != 0x55 || img[511] != 0xaa || bpb->bytes_per_sector != FAT_SECTOR_SIZE)
+    img_size = (uint64_t)ftello(img_file);
+    if (img_size < FAT_SECTOR_SIZE)
+        die("cannot read image");
+    read_sectors(0, 1, boot_sector);
+    if (boot_sector[510] != 0x55 || boot_sector[511] != 0xaa || bpb->bytes_per_sector != FAT_SECTOR_SIZE)
         die("not a FAT image");
     fat_type = 0;
     layout();
+    if ((uint64_t)data_start * FAT_SECTOR_SIZE > img_size)
+        die("image truncated");
+    read_sectors(fat_start, fat_sectors, fat_buf);
+    read_sectors(root_start, root_sectors, root_buf);
+}
+
+static int map_cmp(const void *a, const void *b)
+{
+    uint32_t x = ((const struct map_entry *)a)->cluster, y = ((const struct map_entry *)b)->cluster;
+    return x < y ? -1 : x > y;
+}
+
+/* Write count sectors of buf to sector number first. */
+static void write_sectors(FILE *f, uint64_t first, uint32_t count, const uint8_t *buf)
+{
+    if (fseeko(f, (off_t)(first * FAT_SECTOR_SIZE), SEEK_SET) != 0 ||
+        fwrite(buf, FAT_SECTOR_SIZE, count, f) != count)
+        die("write failed");
+}
+
+/* Write the image to f. A new target is made as large as the image first
+ * and reads as zeros wherever nothing is written. An existing target still
+ * holds old data, therefore every region the format requires is written
+ * explicitly: the reserved sectors (zeros besides the boot sector, the
+ * FSInfo sector and the backup boot sector), every copy of the table in
+ * full, and the FAT12/16 root directory region in full. The clusters of the
+ * data area are written if they were touched, each one in full, which
+ * means a new directory cluster has no stale entries. Free clusters are
+ * left as they are. */
+static void write_image(FILE *f, int existing)
+{
+    static const uint8_t zero[FAT_SECTOR_SIZE];
+    if (!existing) {
+        if (fflush(f) != 0 || ftruncate(fileno(f), (long)img_size) != 0)
+            die("cannot set the image size");
+    } else {
+        for (uint32_t s = 0; s < fat_start; s++)
+            write_sectors(f, s, 1, zero);
+    }
+    write_sectors(f, 0, 1, boot_sector);
+    if (fat_type == 32) {
+        write_sectors(f, bpb->f32.fsinfo_sector, 1, fsinfo_sector);
+        write_sectors(f, bpb->f32.backup_boot_sector, 1, backup_boot);
+    }
+    for (int n = 0; n < bpb->nfats; n++)
+        write_sectors(f, fat_start + (uint64_t)n * fat_sectors, fat_sectors, fat_buf);
+    if (root_sectors)
+        write_sectors(f, root_start, root_sectors, root_buf);
+    struct map_entry *list = malloc((map_count ? map_count : 1) * sizeof *list);
+    if (!list)
+        die("out of memory");
+    size_t n = 0;
+    for (size_t i = 0; i < map_cap; i++)
+        if (map[i].data)
+            list[n++] = map[i];
+    qsort(list, n, sizeof *list, map_cmp);
+    uint64_t at = UINT64_MAX;       /* the byte offset the file position is at */
+    for (size_t i = 0; i < n; i++) {
+        uint64_t off = cluster_offset(list[i].cluster);
+        if (at != off && fseeko(f, (off_t)off, SEEK_SET) != 0)
+            die("seek failed");
+        if (fwrite(list[i].data, 1, cluster_bytes(), f) != cluster_bytes())
+            die("short write");
+        at = off + cluster_bytes();
+    }
+    free(list);
 }
 
 /* ---- inspection ---- */
@@ -626,12 +824,13 @@ static void dump_tree(struct dir *d, const char *prefix, int depth)
     while ((index = next_entry(d, index, &e, name, sizeof name)) != 0) {
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
             continue;
-        int isdir = e->attr & FAT_ATTR_DIRECTORY;
-        printf("%s/%s%s cluster %u size %u\n", prefix, name, isdir ? "/" : "", first_cluster_of(e), e->size);
+        struct fat_dirent ent = *e;     /* the cache may reuse the buffer of e */
+        int isdir = ent.attr & FAT_ATTR_DIRECTORY;
+        printf("%s/%s%s cluster %u size %u\n", prefix, name, isdir ? "/" : "", first_cluster_of(&ent), ent.size);
         if (isdir && depth < 16) {
             char sub[1024];
             snprintf(sub, sizeof sub, "%s/%s", prefix, name);
-            struct dir sd = { first_cluster_of(e) };
+            struct dir sd = { first_cluster_of(&ent) };
             dump_tree(&sd, sub, depth + 1);
         }
     }
@@ -692,7 +891,8 @@ int main(int argc, char **argv)
     }
     if (argc == 4 && strcmp(argv[1], "--cat") == 0) {
         load(argv[2]);
-        struct fat_dirent *e = lookup(argv[3]);
+        struct fat_dirent ent = *lookup(argv[3]);   /* the cache may reuse the buffer */
+        struct fat_dirent *e = &ent;
         if (e->attr & FAT_ATTR_DIRECTORY)
             die("is a directory");
         uint32_t left = e->size;
@@ -711,28 +911,38 @@ int main(int argc, char **argv)
         argi = 3;
     }
     if (argc - argi != 2 && argc - argi != 3) {
-        fprintf(stderr, "usage: mkfat [-t 12|16|32] <image> <size_mb> [dir] | --dump <image> | --cat <image> <path>\n");
+        fprintf(stderr, "usage: mkfat [-t 12|16|32] <image> <size_mb|0> [dir] | --dump <image> | --cat <image> <path>\n");
         return 2;
     }
     uint64_t mb = strtoull(argv[argi + 1], NULL, 10);
-    if (mb < 1)
+    int existing = 0;
+    uint64_t bytes;
+    if (mb == 0 && strcmp(argv[argi + 1], "0") == 0) {
+        bytes = existing_size(argv[argi]);
+        existing = 1;
+    } else {
+        if (is_block_device(argv[argi]))
+            die("the size of a device cannot be changed, use 0");
+        bytes = mb << 20;
+    }
+    if (bytes < (1u << 20))
         die("size must be at least 1 MiB");
-    format(mb << 20, type);
+    format(bytes, type);
     if (argc - argi == 3) {
         struct dir root = root_dir();
         add_tree(&root, argv[argi + 2]);
     }
     if (fat_type == 32) {
-        struct fat_fsinfo *fi = (struct fat_fsinfo *)sector(1);
+        struct fat_fsinfo *fi = (struct fat_fsinfo *)fsinfo_sector;
         fi->free_clusters = count_free();
         fi->next_free = next_free;
     }
-    FILE *f = fopen(argv[argi], "wb");
+    FILE *f = fopen(argv[argi], existing ? "r+b" : "wb");
     if (!f)
         die(argv[argi]);
-    if (fwrite(img, 1, img_size, f) != img_size)
+    write_image(f, existing);
+    if (fclose(f) != 0)
         die("short write");
-    fclose(f);
     printf("mkfat: %s: FAT%d, %u clusters of %u bytes, %u free\n", argv[argi], fat_type, nclusters,
            cluster_bytes(), count_free());
     return 0;

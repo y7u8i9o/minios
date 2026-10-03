@@ -329,6 +329,10 @@ struct termios {
 #define TCOFLUSH  1
 #define TCIOFLUSH 2
 #define TIOCGWINSZ 0x5413
+/* Read the partition table of a disk again (the number of Linux), on its
+ * device file. It fails with EBUSY while the root or swap lies on the
+ * disk (docs/design/block.md). */
+#define BLKRRPART 0x125f
 
 struct winsize {
     uint16_t ws_row;

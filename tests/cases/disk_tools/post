@@ -1,0 +1,26 @@
+#!/bin/sh
+# Checks on the host the disk that /etc/tests/disktools.sh partitioned and
+# formatted in the guest: the table with the host mkgpt, the FAT file
+# system of the first partition with mkfat, and the mfs of the third with
+# mkfs and fsck, including the file the guest wrote into it.
+set -e
+WORK="$(dirname "$DISK2")/post"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKGPT" -l "$DISK2" > "$WORK/table"
+test "$(cut -d' ' -f1,2,5 "$WORK/table" | tr '\n' ' ')" = \
+    "1 esp c0ffee00-0000-4000-8000-0000000000a1 2 swap c0ffee00-0000-4000-8000-0000000000a2 3 root-$ARCH c0ffee00-0000-4000-8000-0000000000a3 " ||
+    { echo "post: table"; cat "$WORK/table"; exit 1; }
+extract() {
+    first=$(sed -n "$1p" "$WORK/table" | cut -d' ' -f3)
+    last=$(sed -n "$1p" "$WORK/table" | cut -d' ' -f4)
+    dd if="$DISK2" of="$2" bs=512 skip="$first" count=$((last - first + 1)) 2>/dev/null
+}
+extract 1 "$WORK/esp.img"
+extract 3 "$WORK/root.img"
+test "$("$MKFAT" --cat "$WORK/esp.img" /hello.txt)" = "hello from the tree" || { echo "post: esp"; exit 1; }
+test "$("$MKFS" --cat "$WORK/root.img" /hello.txt)" = "hello from the tree" || { echo "post: root"; exit 1; }
+test "$("$MKFS" --cat "$WORK/root.img" /written.txt)" = "written on minios" || { echo "post: written"; exit 1; }
+"$FSCK" "$WORK/root.img" > "$WORK/fsck.log" || { echo "post: fsck"; cat "$WORK/fsck.log"; exit 1; }
+rm -rf "$WORK"
+echo "post: the table and both file systems are valid"

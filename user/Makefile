@@ -26,7 +26,10 @@ PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop aud
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
-BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
+# part, mkfs and mkfat are the host tools of tools/ built for minios, and
+# limine the utility of the boot loader (docs/design/block.md).
+DISKTOOLS := part mkfs mkfat limine
+BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo $(DISKTOOLS))
 LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so $(addsuffix .so,$(SHARED))) $(BUILD)/lib/abi
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
@@ -331,6 +334,37 @@ $(ROOT)/usr/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/tar.elf $@
 
 -include $(TAR_OBJS:.o=.d)
+
+# The disk tools are the host tools of tools/ built for the target, in order that
+# the installer can partition and format a disk (docs/plan/packaging.md, P5).
+# MINIOS_TARGET selects the code that only exists on the target, such as the
+# BLKRRPART request of part. part is mkgpt, limine is the unmodified
+# third_party/limine/limine.c, which is built with LIMINE_NO_BIOS undefined
+# and the compatibility header of user/compat/limine for what libc lacks.
+DT_CFLAGS := $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -std=gnu17 -O2 -MMD -MP
+
+$(OUT)/disktools/part.o: ../tools/mkgpt/mkgpt.c
+	@mkdir -p $(dir $@)
+	$(CC) $(DT_CFLAGS) -DMINIOS_TARGET -c -o $@ $<
+
+$(OUT)/disktools/mkfs.o: ../tools/mkfs/mkfs.c ../kernel/include/fs/mfs_format.h
+	@mkdir -p $(dir $@)
+	$(CC) $(DT_CFLAGS) -DMINIOS_TARGET -I../kernel/include -c -o $@ $<
+
+$(OUT)/disktools/mkfat.o: ../tools/mkfat/mkfat.c ../kernel/include/fs/fat_format.h
+	@mkdir -p $(dir $@)
+	$(CC) $(DT_CFLAGS) -DMINIOS_TARGET -I../kernel/include -c -o $@ $<
+
+$(OUT)/disktools/limine.o: ../third_party/limine/limine.c compat/limine/compat.h
+	@mkdir -p $(dir $@)
+	$(CC) $(DT_CFLAGS) -I../third_party/limine -include compat/limine/compat.h -c -o $@ $<
+
+$(addprefix $(ROOT)/usr/bin/,$(DISKTOOLS)): $(ROOT)/usr/bin/%: $(OUT)/disktools/%.o $(BUILD)/lib/libc.so $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/disktools/$*.elf $(ULDFLAGS) $(CRT0) $< -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/disktools/$*.elf $@
+
+-include $(addprefix $(OUT)/disktools/,$(addsuffix .d,$(DISKTOOLS)))
 
 # doas is OpenDoas, compiled unmodified from third_party/opendoas with the
 # shadow file authentication, a config.h written here in place of its

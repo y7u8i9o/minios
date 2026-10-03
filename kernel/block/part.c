@@ -1,13 +1,18 @@
 /* GUID partition tables (UEFI specification, chapter 5). part_scan reads
- * the table of every disk once, checks the CRCs of the header and of the
- * entry array, falls back to the backup header at the end of the disk when
- * the primary one is damaged, and registers every used entry as a block
- * device whose transfers go to the disk at an offset. /dev/partitions
- * lists them, one line "name disk partuuid typeuuid bytes" each.
+ * the table of every disk at boot, checks the CRCs of the header and of
+ * the entry array, falls back to the backup header at the end of the disk
+ * when the primary one is damaged, and registers every used entry as a
+ * block device whose transfers go to the disk at an offset. part_rescan
+ * reads the table of one disk again after a program wrote it (BLKRRPART).
+ * The device of an entry number stays registered: a rescan updates it
+ * and gives a partition that disappeared the size 0. /dev/partitions lists
+ * the partitions of nonzero size, one line "name disk partuuid typeuuid
+ * bytes" each.
  *
  * A partition and its disk have separate entries in the block cache, which
  * means a disk is not written as a whole while one of its partitions is
- * mounted. */
+ * mounted, and a table is read again only when neither the root nor swap
+ * lies on the disk. */
 #define KLOG_SUBSYS "part"
 #include <block/part.h>
 #include <fs/devfs.h>
@@ -21,19 +26,17 @@
 
 #define GPT_MAX_ENTRY_BYTES (128 * 1024)
 
-/* The partitions. Protected by part_lock. */
+/* The partitions, their fields first, bdev.nsectors, type, uuid and
+ * size_reported, the disks with a valid table with their disk GUIDs, and
+ * the devices that hold a disk busy. Protected by part_lock. */
 static LIST_HEAD(partitions);
 static DEFINE_SPINLOCK(part_lock);
-
-/* The disks with a valid table and their disk GUIDs, written by part_scan
- * before any reader runs and constant afterwards. */
 #define PART_MAX_DISKS 16
 static struct { struct blockdev *disk; uint8_t guid[16]; } tables[PART_MAX_DISKS];
 static int ntables;
-
-/* The text of /dev/partitions, written once by part_scan. */
-static char *listing;
-static size_t listing_len;
+#define PART_MAX_HELD 4
+static struct blockdev *held[PART_MAX_HELD];
+static int nheld;
 
 /* GUIDs in their on-disk byte order: the first three groups are little
  * endian. */
@@ -155,9 +158,12 @@ out:
 static int part_rw(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf, bool write)
 {
     struct partition *p = container_of(dev, struct partition, bdev);
-    if (sector + count > dev->nsectors || sector + count < sector)
+    spin_lock(&part_lock);
+    uint64_t first = p->first, size = dev->nsectors;
+    spin_unlock(&part_lock);
+    if (sector + count > size || sector + count < sector)
         return -EIO;
-    return p->bdev.disk->rw(p->bdev.disk, p->first + sector, count, buf, write);
+    return dev->disk->rw(dev->disk, first + sector, count, buf, write);
 }
 
 static int part_flush(struct blockdev *dev)
@@ -166,23 +172,54 @@ static int part_flush(struct blockdev *dev)
     return disk->flush ? disk->flush(disk) : 0;
 }
 
-static void scan_disk(struct blockdev *disk)
+static struct partition *find_index(struct blockdev *disk, int index)
+{
+    struct list_head *pos;
+    list_for_each(pos, &partitions) {
+        struct partition *p = list_entry(pos, struct partition, link);
+        if (p->bdev.disk == disk && p->index == index)
+            return p;
+    }
+    return NULL;
+}
+
+static void set_table(struct blockdev *disk, const uint8_t guid[16])
+{
+    int i = 0;
+    while (i < ntables && tables[i].disk != disk)
+        i++;
+    if (!guid) {
+        if (i < ntables)
+            tables[i] = tables[--ntables];
+        return;
+    }
+    if (i == ntables && ntables == PART_MAX_DISKS)
+        return;
+    if (i == ntables)
+        ntables++;
+    tables[i].disk = disk;
+    memcpy(tables[i].guid, guid, 16);
+}
+
+/* Register or update the partitions of disk from its table, or empty all
+ * of them when it has none. Returns the number of used entries. */
+static int apply_table(struct blockdev *disk)
 {
     struct gpt_header h;
     struct gpt_entry *entries = read_table(disk, 1, &h);
-    if (!entries) {
-        entries = read_table(disk, disk->nsectors - 1, &h);
-        if (!entries)
-            return;
+    if (!entries && (entries = read_table(disk, disk->nsectors - 1, &h)))
         klog_warn("%s: the primary partition table is damaged, using the backup", disk->name);
+    spin_lock(&part_lock);
+    set_table(disk, entries ? h.disk_guid : NULL);
+    struct list_head *pos;
+    list_for_each(pos, &partitions) {
+        struct partition *p = list_entry(pos, struct partition, link);
+        if (p->bdev.disk == disk)
+            p->bdev.nsectors = 0;
     }
-    if (ntables < PART_MAX_DISKS) {
-        tables[ntables].disk = disk;
-        memcpy(tables[ntables].guid, h.disk_guid, 16);
-        ntables++;
-    }
+    spin_unlock(&part_lock);
     int count = 0;
-    for (uint32_t i = 0; i < h.nentries; i++) {
+    for (uint32_t i = 0; entries && i < h.nentries; i++) {
         const struct gpt_entry *e = (const void *)((const uint8_t *)entries + (size_t)i * h.entry_size);
         if (guid_zero(e->type))
             continue;
@@ -190,8 +227,19 @@ static void scan_disk(struct blockdev *disk)
             klog_warn("%s: entry %u lies outside the usable sectors", disk->name, i + 1);
             continue;
         }
-        struct partition *p = kzalloc(sizeof *p);
-        if (!p)
+        count++;
+        spin_lock(&part_lock);
+        struct partition *p = find_index(disk, (int)i + 1);
+        if (p) {
+            p->first = e->first;
+            p->bdev.nsectors = e->last - e->first + 1;
+            memcpy(p->type, e->type, 16);
+            memcpy(p->uuid, e->uuid, 16);
+        }
+        spin_unlock(&part_lock);
+        if (p)
+            continue;
+        if (!(p = kzalloc(sizeof *p)))
             break;
         ksnprintf(p->bdev.name, sizeof p->bdev.name, "%s%u", disk->name, i + 1);
         p->bdev.sector_size = disk->sector_size;
@@ -208,77 +256,151 @@ static void scan_disk(struct blockdev *disk)
         spin_unlock(&part_lock);
         if (blockdev_register(&p->bdev) < 0)
             klog_warn("%s: cannot register", p->bdev.name);
-        count++;
     }
     kfree(entries);
-    klog_info("%s: GPT with %d partitions", disk->name, count);
+    if (entries || count)
+        klog_info("%s: GPT with %d partitions", disk->name, count);
+    return count;
 }
 
-static long listing_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+/* The devices of the partitions of disk report their current sizes. */
+static void update_sizes(struct blockdev *disk)
 {
-    if (*pos >= listing_len)
-        return 0;
-    n = MIN(n, listing_len - (size_t)*pos);
-    memcpy(buf, listing + *pos, n);
-    *pos += n;
-    return (long)n;
+    struct list_head *pos;
+    for (;;) {
+        /* devfs_set_size takes an inode mutex, which part_lock may not
+         * be held across, and the walk therefore restarts for each. */
+        struct partition *next = NULL;
+        spin_lock(&part_lock);
+        list_for_each(pos, &partitions) {
+            struct partition *p = list_entry(pos, struct partition, link);
+            if (p->bdev.disk == disk && p->size_reported != blockdev_size(&p->bdev)) {
+                next = p;
+                p->size_reported = blockdev_size(&p->bdev);
+                break;
+            }
+        }
+        spin_unlock(&part_lock);
+        if (!next)
+            return;
+        devfs_set_size(next->bdev.name, next->size_reported);
+    }
 }
 
-static const struct file_ops listing_fops = { .read = listing_read };
+/* The text of /dev/partitions, made when the file is opened. */
+struct listing { char *text; size_t len; };
 
-static void write_listing(void)
+static int listing_open(struct inode *ino, struct file *f)
 {
-    size_t size = 128, used = 0;
+    struct listing *l = kzalloc(sizeof *l);
+    size_t size = 128;
     struct list_head *pos;
     spin_lock(&part_lock);
     list_for_each(pos, &partitions)
         size += 128;
     spin_unlock(&part_lock);
-    listing = kmalloc(size);
-    if (!listing)
-        return;
+    if (!l || !(l->text = kmalloc(size))) {
+        kfree(l);
+        return -ENOMEM;
+    }
     spin_lock(&part_lock);
     list_for_each(pos, &partitions) {
         struct partition *p = list_entry(pos, struct partition, link);
         char uuid[PART_GUID_STR], type[PART_GUID_STR];
+        if (!p->bdev.nsectors)
+            continue;
         part_format_guid(p->uuid, uuid);
         part_format_guid(p->type, type);
-        int n = ksnprintf(listing + used, size - used, "%s %s %s %s %lu\n", p->bdev.name, p->bdev.disk->name, uuid,
-                         type, (unsigned long)blockdev_size(&p->bdev));
-        if (n > 0 && (size_t)n < size - used)
-            used += (size_t)n;
+        int n = ksnprintf(l->text + l->len, size - l->len, "%s %s %s %s %lu\n", p->bdev.name, p->bdev.disk->name,
+                          uuid, type, (unsigned long)blockdev_size(&p->bdev));
+        if (n > 0 && (size_t)n < size - l->len)
+            l->len += (size_t)n;
     }
     spin_unlock(&part_lock);
-    listing_len = used;
+    f->priv = l;
+    return 0;
 }
+
+static long listing_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    struct listing *l = f->priv;
+    if (*pos >= l->len)
+        return 0;
+    n = MIN(n, l->len - (size_t)*pos);
+    memcpy(buf, l->text + *pos, n);
+    *pos += n;
+    return (long)n;
+}
+
+static void listing_release(struct file *f)
+{
+    struct listing *l = f->priv;
+    kfree(l->text);
+    kfree(l);
+}
+
+static const struct file_ops listing_fops = {
+    .open = listing_open, .read = listing_read, .release = listing_release,
+};
 
 void part_scan(void)
 {
     struct blockdev *devs[PART_MAX_DISKS];
     int n = blockdev_list(devs, PART_MAX_DISKS);
     for (int i = 0; i < n; i++)
-        if (!devs[i]->disk)
-            scan_disk(devs[i]);
-    write_listing();
+        if (!devs[i]->disk) {
+            apply_table(devs[i]);
+            update_sizes(devs[i]);
+        }
     devfs_register("partitions", S_IFCHR | 0444, &listing_fops, NULL, 0);
+}
+
+void part_hold(struct blockdev *dev)
+{
+    if (!dev)
+        return;
+    spin_lock(&part_lock);
+    if (nheld < PART_MAX_HELD)
+        held[nheld++] = dev;
+    spin_unlock(&part_lock);
+}
+
+int part_rescan(struct blockdev *disk)
+{
+    spin_lock(&part_lock);
+    bool busy = false;
+    for (int i = 0; i < nheld; i++)
+        if (held[i] == disk || held[i]->disk == disk)
+            busy = true;
+    spin_unlock(&part_lock);
+    if (busy)
+        return -EBUSY;
+    apply_table(disk);
+    update_sizes(disk);
+    return 0;
 }
 
 struct blockdev *part_boot_disk(void)
 {
+    struct blockdev *found = NULL;
     if (guid_zero(bootinfo.boot_disk_guid))
         return NULL;
-    for (int i = 0; i < ntables; i++)
+    spin_lock(&part_lock);
+    for (int i = 0; i < ntables && !found; i++)
         if (memcmp(tables[i].guid, bootinfo.boot_disk_guid, 16) == 0)
-            return tables[i].disk;
-    return NULL;
+            found = tables[i].disk;
+    spin_unlock(&part_lock);
+    return found;
 }
 
 bool part_has_table(struct blockdev *disk)
 {
-    for (int i = 0; i < ntables; i++)
-        if (tables[i].disk == disk)
-            return true;
-    return false;
+    bool found = false;
+    spin_lock(&part_lock);
+    for (int i = 0; i < ntables && !found; i++)
+        found = tables[i].disk == disk;
+    spin_unlock(&part_lock);
+    return found;
 }
 
 struct partition *part_find_type(struct blockdev *disk, const uint8_t type[16])
@@ -288,7 +410,7 @@ struct partition *part_find_type(struct blockdev *disk, const uint8_t type[16])
     spin_lock(&part_lock);
     list_for_each(pos, &partitions) {
         struct partition *p = list_entry(pos, struct partition, link);
-        if (p->bdev.disk == disk && memcmp(p->type, type, 16) == 0) {
+        if (p->bdev.disk == disk && p->bdev.nsectors && memcmp(p->type, type, 16) == 0) {
             found = p;
             break;
         }
@@ -304,7 +426,7 @@ struct partition *part_find_uuid(const uint8_t uuid[16])
     spin_lock(&part_lock);
     list_for_each(pos, &partitions) {
         struct partition *p = list_entry(pos, struct partition, link);
-        if (memcmp(p->uuid, uuid, 16) == 0) {
+        if (p->bdev.nsectors && memcmp(p->uuid, uuid, 16) == 0) {
             found = p;
             break;
         }

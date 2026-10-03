@@ -14,3 +14,6 @@ int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops,
  * owner, as chmod and chown would, for drivers that hand a node to the
  * process using it (U2). No inode lock may be held. */
 int devfs_set_owner(const char *name, uint32_t perm, uint32_t uid, uint32_t gid);
+/* Set the size that stat reports for the node name in the root of /dev,
+ * for a partition whose table was read again. No inode lock may be held. */
+int devfs_set_size(const char *name, uint64_t size);

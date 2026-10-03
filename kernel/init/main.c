@@ -97,8 +97,10 @@ static void mount_root(void)
             strlcpy(source, disk->name, sizeof source);
     }
     int r = source[0] ? vfs_mount("mfs", source, "/", NULL) : -ENODEV;
-    if (r == 0)
+    if (r == 0) {
         klog_info("root: mfs on %s", source);
+        part_hold(blockdev_find(source));
+    }
     if (r < 0) {
         r = vfs_mount("initrd", "initrd", "/", NULL);
         if (r < 0)

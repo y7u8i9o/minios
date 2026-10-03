@@ -127,10 +127,38 @@ whole of `vdb` when it has no partition table. `fsinit` accepts
 `PARTUUID=GUID` as the device of an fstab entry and finds its name in
 `/dev/partitions`.
 
+Since P5 a program that wrote a new table asks for it to be read again
+with the `ioctl` `BLKRRPART` on the device file of the disk, which only
+root may use. `part_rescan` refuses with `EBUSY` while the root or the
+swap device lies on the disk (`part_hold`). Otherwise it writes back the
+buffers of the disk and reads its table again. The device of an entry
+number remains registered after a rescan, which updates its position,
+size and GUIDs, gives a partition whose entry is now empty the size 0, which also
+removes it from `/dev/partitions`, and registers the entries that are
+new. `devfs_set_size` gives the device files their new sizes. Mounting a
+partition of the disk while its table changes is not prevented and is
+the caller's mistake.
+
 `tools/mkgpt` (`MKGPT`) writes GPT disk images on the host: a protective
 MBR, both headers and arrays, partitions aligned to 1 MiB with the type
 `bios`, `esp`, `swap`, `root-x86_64`, `root-aarch64`, `home` or `linux`,
-an image copied into a partition and fixed or random GUIDs.
+an image copied into a partition and fixed or random GUIDs. The same
+source runs on minios as `part`, and `mkfs`, `mkfat` and the `limine`
+utility run there as well (package `disktools`, and `limine`). With the
+size 0, each of the three formats an existing file or a device file such
+as `/dev/vdc` at its current size without truncating it. `part -l` lists a
+table. None of them holds the whole disk in memory: they write the
+metadata and the copied files, and `part` asks the kernel to read the new
+table.
+
+The `disk_tools` case attaches swap as `vdb` and an empty disk as `vdc`.
+`/etc/tests/disktools.sh` divides `vdc` with `part` into an EFI system
+partition, a swap partition and a root partition, finds them in
+`/dev/partitions`, formats the first with `mkfat` and the third with
+`mkfs` from a small tree, mounts both, writes a file, and writes two other
+tables, the second of which brings the first layout back. The post
+script lists the table with the host `mkgpt`, reads the files with the
+host `mkfat` and `mkfs`, and checks the mfs with `fsck`.
 
 ## Disk image and tests
 

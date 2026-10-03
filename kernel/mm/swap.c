@@ -484,6 +484,7 @@ void swap_attach(void)
         klog_info("no swap device");
         return;
     }
+    part_hold(dev);
     nslots = blockdev_size(dev) / PAGE_SIZE;
     slot_bitmap = kzalloc(ALIGN_UP(nslots, 64) / 8);
     if (!slot_bitmap) {
