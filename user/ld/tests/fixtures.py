@@ -276,7 +276,7 @@ def missing(e):
 def main():
     source, program, root = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
     library_bytes, program_bytes = source.read_bytes(), program.read_bytes()
-    libdir, bindir, manifest_dir = root / "lib", root / "bin", root / "usr/share/ldtests"
+    libdir, bindir, manifest_dir = root / "usr/lib", root / "usr/bin", root / "usr/share/ldtests"
     for directory in (libdir, bindir, manifest_dir):
         directory.mkdir(parents=True, exist_ok=True)
     manifest = []

@@ -2,7 +2,7 @@
 
 This document describes `libcodec`, the library that minios programs use
 to read and write image and audio files, and the format modules in
-`/lib/codecs`. The plan is `docs/plan/codecs.md`.
+`/usr/lib/codecs`. The plan is `docs/plan/codecs.md`.
 
 ## Model
 
@@ -21,7 +21,7 @@ and the command line tools all use the same registry.
           |                      |
         libcodec.so: registry, probing, files, inflate
           |  dlopen at the first lookup
-        /lib/codecs/png.so  svg.so  ...
+        /usr/lib/codecs/png.so  svg.so  ...
 ```
 
 `libcodec.so` depends only on libc, and its header is `<codec/codec.h>`.
@@ -59,12 +59,12 @@ Each `struct codec` describes one format with these members:
   `audio_encode_options` NULL.
 
 The build turns every directory `libcodec/modules/NAME/` into
-`build/lib/codecs/NAME.so`, which is installed as `/lib/codecs/NAME.so`.
+`build/lib/codecs/NAME.so`, which is installed as `/usr/lib/codecs/NAME.so`.
 
 ## The registry
 
 The first call that needs the registry builds it, once per process,
-under `pthread_once`. It lists the `*.so` files in `/lib/codecs`, or in
+under `pthread_once`. It lists the `*.so` files in `/usr/lib/codecs`, or in
 the directory named by the environment variable `CODEC_PATH` (the
 counterpart of `GST_PLUGIN_PATH`). It sorts the names, opens each file
 with `dlopen` by path and `RTLD_NOW`, and resolves the symbol
@@ -553,7 +553,7 @@ for the multiplexed fixture.
 After the viewer and paint stopped naming formats (see below), adding
 `bmp.so` required no change to any program. The viewer, paint, the
 desktop wallpaper and the `codecs` command read BMP files as soon as the
-module is installed in `/lib/codecs`.
+module is installed in `/usr/lib/codecs`.
 
 | Module | Codec | Capabilities | Probe |
 |---|---|---|---|

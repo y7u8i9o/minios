@@ -25,10 +25,10 @@ WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
-LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
+BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
+LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
-CODECS := $(addprefix $(ROOT)/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
+CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
 
 # Lua is compiled unmodified from third_party/lua/src, with the platform
 # choices made here instead of in luaconf.h (see docs/design/lua.md).
@@ -48,8 +48,8 @@ UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgu
 UCPP   += -I../libedit/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(filter-out $(if $(WITH_TESTS),,etc/tests etc/tests/%),$(wildcard etc/* etc/*/*)))
-FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf \
-          $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf
+FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuSansMono.ttf $(ROOT)/usr/share/fonts/lmroman10-regular.otf $(ROOT)/usr/share/fonts/NotoSans-Regular.ttf $(ROOT)/usr/share/fonts/unifont.otf \
+          $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
 all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
@@ -60,7 +60,10 @@ $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
 	@if [ -f $< ]; then rm -f $@ && cp $< $@; else mkdir -p $@; fi
 
-# Two symbolic links that the symlink test resolves on the root image and
+# /bin and /lib are links to /usr/bin and /usr/lib, the merged /usr of
+# docs/plan/packaging.md (P1), which a build tree of an earlier layout has
+# as directories, and its /etc/fonts moved to /usr/share/fonts. Two
+# symbolic links that the symlink test resolves on the root image and
 # under /initrd, which mkfs and the initrd reader store as links. One is
 # relative and leads to the tar fixture beside it, and the other is
 # absolute and leads to /etc/motd. The account databases in /etc lead to the package prefix
@@ -68,7 +71,11 @@ $(ROOT)/etc/%: etc/%
 # keeps accounts across rebuilds of the root image (docs/design/users.md).
 # They are recreated on every build.
 .PHONY: links
-links: $(ETC)
+links: $(ETC) $(BINS) $(LIBS)
+	@for d in bin lib; do \
+	    if [ -d $(ROOT)/$$d ] && [ ! -L $(ROOT)/$$d ]; then rm -rf $(ROOT)/$$d; fi; \
+	    ln -sfn usr/$$d $(ROOT)/$$d; done
+	@rm -rf $(ROOT)/etc/fonts
 	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar; fi
 	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd; fi
 	@for f in passwd group shadow; do ln -sfn /usr/local/etc/$$f $(ROOT)/etc/$$f; done
@@ -127,30 +134,30 @@ modes: $(BINS) $(ETC) skel-tree $(ROOT)/tmp $(ROOT)/var/log $(ROOT)/var/run $(RO
 	@chmod 1777 $(ROOT)/tmp
 	@chmod 0700 $(ROOT)/root $(ROOT)/home/user
 	@chmod 0600 $(ROOT)/home/.local/etc/shadow $(ROOT)/usr/share/skel/home/.local/etc/shadow
-	@chmod 4755 $(ROOT)/bin/su $(ROOT)/bin/passwd $(ROOT)/bin/doas $(ROOT)/bin/sudo
+	@chmod 4755 $(ROOT)/usr/bin/su $(ROOT)/usr/bin/passwd $(ROOT)/usr/bin/doas $(ROOT)/usr/bin/sudo
 	@chmod 0440 $(ROOT)/etc/sudoers
 
-$(ROOT)/etc/fonts/%.ttf: ../third_party/dejavu/%.ttf
+$(ROOT)/usr/share/fonts/%.ttf: ../third_party/dejavu/%.ttf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/etc/fonts/%.otf: ../third_party/lmodern/%.otf
+$(ROOT)/usr/share/fonts/%.otf: ../third_party/lmodern/%.otf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/etc/fonts/NotoSans-Regular.ttf: ../third_party/notosans/NotoSans-Regular.ttf
+$(ROOT)/usr/share/fonts/NotoSans-Regular.ttf: ../third_party/notosans/NotoSans-Regular.ttf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
 # The fallback font for Chinese and Japanese text (tools/fetch_fonts.sh).
-$(ROOT)/etc/fonts/DroidSansFallbackFull.ttf: ../third_party/droidfallback/DroidSansFallbackFull.ttf
+$(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf: ../third_party/droidfallback/DroidSansFallbackFull.ttf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
 # The font is installed without its release number, which keeps an upgrade
 # of Unifont from touching the paths compiled into the Unicode viewer. The
 # release is recorded in third_party/unifont/NOTICE.
-$(ROOT)/etc/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
+$(ROOT)/usr/share/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
@@ -180,7 +187,7 @@ $(BUILD)/lib/liblua.abi: Makefile
 # The ABI table that the package installer reads holds one "soname number"
 # line per shared library, taken from the ABI variables of the library
 # Makefiles.
-$(ROOT)/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
+$(ROOT)/usr/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
 	@mkdir -p $(dir $@)
 	@rm -f $@
 	@for l in $(SHARED); do echo "$$l.so $$(cat $(BUILD)/lib/$$l.abi)" >> $@; done
@@ -189,7 +196,7 @@ $(BUILD)/lib/liblua.so: $(LUA_CORE_OBJS) $(BUILD)/lib/libc.so
 	@mkdir -p $(dir $@)
 	$(LD) $(USOFLAGS) -soname liblua.so -o $@ $(LUA_CORE_OBJS) -L$(BUILD)/lib -lc $(LIBGCC)
 
-$(ROOT)/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
+$(ROOT)/usr/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/lua.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(OUT)/lua/lua.o -llua $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/lua.elf $@
@@ -197,7 +204,7 @@ $(ROOT)/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
 # luac uses internal functions of the core, which the shared object hides
 # (LUAI_FUNC in luaconf.h), and it therefore links the core objects
 # directly.
-$(ROOT)/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LIBEDIT) $(CRT0)
+$(ROOT)/usr/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/luac.elf $@
@@ -219,7 +226,7 @@ $(OUT)/sed/%.o: $(SED_SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SED_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/sed: $(SED_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/sed: $(SED_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/sed.elf $(ULDFLAGS) $(CRT0) $(SED_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/sed.elf $@
@@ -242,7 +249,7 @@ $(OUT)/awk/%.o: $(AWK_GEN)/%.c $(AWK_GEN)/awkgram.tab.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) -Wno-unused-variable -Wno-unused-function -Wno-unused-label $(UCPP) -I$(AWK_SRC) -I$(AWK_GEN) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/awk: $(AWK_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/awk: $(AWK_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/awk.elf $(ULDFLAGS) $(CRT0) $(AWK_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/awk.elf $@
@@ -258,7 +265,7 @@ $(OUT)/make/%.o: $(MAKE_SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(MAKE_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/make: $(MAKE_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/make: $(MAKE_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/make.elf $(ULDFLAGS) $(CRT0) $(MAKE_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/make.elf $@
@@ -284,7 +291,7 @@ $(OUT)/tar/util_%.o: $(TAR_SRC)/libutil/%.c $(OUT)/tar/compat.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(TAR_SRC) -I$(OUT)/tar -Dstrlcpy=sbase_strlcpy -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/tar.elf $(ULDFLAGS) $(CRT0) $(TAR_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/tar.elf $@
@@ -323,7 +330,7 @@ $(DOAS_GEN)/parse.o: $(DOAS_GEN)/parse.c $(DOAS_GEN)/config.h
 $(DOAS_GEN)/compat_%.o: $(DOAS_SRC)/libopenbsd/%.c $(DOAS_GEN)/config.h
 	$(CC) $(UCFLAGS) $(DOAS_CFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/doas: $(DOAS_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/doas: $(DOAS_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/doas.elf $(ULDFLAGS) $(CRT0) $(DOAS_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/doas.elf $@
@@ -344,7 +351,7 @@ $(OUT)/su/%.o: $(SU_SRC)/libutil/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SU_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/su: $(SU_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/su: $(SU_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/su.elf $(ULDFLAGS) $(CRT0) $(SU_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/su.elf $@
@@ -431,7 +438,7 @@ $(OUT)/sudo/protobuf-c/%.o: $(SUDO_SRC)/lib/protobuf-c/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/sudo: $(SUDO_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/sudo: $(SUDO_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/sudo.elf $(ULDFLAGS) $(CRT0) $(SUDO_OBJS) -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/sudo.elf $@
@@ -450,7 +457,7 @@ TCC_VERSION := $(shell cat $(TCC_SRC)/VERSION)
 TCC_DEFS := -DONE_SOURCE=1 -DTCC_TARGET_$(TCC_TARGET) -DCONFIG_TCC_SEMLOCK=0 -DCONFIG_TCC_BCHECK=0 \
             -DCONFIG_TCC_BACKTRACE=0 -DTCC_VERSION='"$(TCC_VERSION)"' -DCONFIG_TCCDIR='"/usr/lib/tcc"' \
             -DCONFIG_TCC_ELFINTERP='"/lib/ld.so"' -DCONFIG_TCC_SYSINCLUDEPATHS='"{B}/include:/usr/include"' \
-            -DCONFIG_TCC_LIBPATHS='"{B}:/lib"' -DCONFIG_TCC_CRTPREFIX='"/lib"'
+            -DCONFIG_TCC_LIBPATHS='"{B}:/usr/lib"' -DCONFIG_TCC_CRTPREFIX='"/usr/lib"'
 TCC_LIB1 := builtin.c stdatomic.c dsohandle.c alloca.S alloca-bt.S atomic.S
 ifeq ($(TCC_TARGET),ARM64)
 # The binary128 long double arithmetic and __clear_cache for tcc -run.
@@ -470,7 +477,7 @@ $(TCC_GEN)/tcc.o: $(TCC_SRC)/tcc.c $(TCC_GEN)/config.h Makefile
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC $(UARCHFLAGS) -O2 -g -fno-builtin -w \
 	    $(TCC_DEFS) -I../libc/include -I../kernel/include -I$(TCC_GEN) -I$(TCC_SRC) -MMD -MP -c -o $@ $<
 
-$(ROOT)/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
+$(ROOT)/usr/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) -o $(OUT)/tcc.elf $(ULDFLAGS) $(CRT0) $< -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/tcc.elf $@
@@ -500,19 +507,19 @@ $(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
 # crt1.o is the C runtime start, crti.o defines the empty _init and _fini
 # and crtn.o is empty, and tcc links these objects around every program.
 # libm.a is empty because the math functions are in libc.so.
-$(ROOT)/lib/crt1.o: $(CRT0)
+$(ROOT)/usr/lib/crt1.o: $(CRT0)
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/lib/crti.o: $(BUILD)/libc/crti.o
+$(ROOT)/usr/lib/crti.o: $(BUILD)/libc/crti.o
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/lib/crtn.o: $(BUILD)/libc/crtn.o
+$(ROOT)/usr/lib/crtn.o: $(BUILD)/libc/crtn.o
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/lib/libm.a:
+$(ROOT)/usr/lib/libm.a:
 	@mkdir -p $(dir $@)
 	rm -f $@
 	$(AR) rcs $@
@@ -536,7 +543,7 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 # protocol library, the audio client, the line editor and the Lua core
 # with the same headers and the same objects as the cross build.
 STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit
-tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/lib/crt1.o $(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o $(ROOT)/lib/libm.a
+tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/usr/lib/crt1.o $(ROOT)/usr/lib/crti.o $(ROOT)/usr/lib/crtn.o $(ROOT)/usr/lib/libm.a
 	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
 	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
@@ -549,7 +556,7 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@cp -p ../libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
 	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/
 	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/
-	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/lib/$$l.a; done
+	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/usr/lib/$$l.a; done
 	@cp -p $(TCC_SRC)/include/*.h $(ROOT)/usr/lib/tcc/include/
 ifneq ($(WITH_TESTS),)
 	@mkdir -p $(ROOT)/usr/share/tcc/tests2
@@ -559,7 +566,7 @@ endif
 
 # bin/ld is named explicitly, because the pattern rule for program
 # directories would match the loader's directory ld/ for that name.
-$(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/ld.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/ld.elf $@
@@ -569,7 +576,7 @@ $(ROOT)/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 # The loader is a freestanding position independent object with its own
 # entry. init is linked statically, which lets the system start even when
 # /lib is damaged.
-$(ROOT)/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
+$(ROOT)/usr/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
 	@mkdir -p $(dir $@) $(OUT)/ld
 	$(CC) -std=c17 -ffreestanding -fno-stack-protector -fPIC -fvisibility=hidden -fno-plt -O2 -g \
 	    -fno-builtin -Wall -Wextra $(LDSO_ARCHFLAGS) -I../kernel/include -I../libc/include -Ild/arch/$(ARCH) -c -o $(OUT)/ld/ld.o ld/ld.c
@@ -577,28 +584,28 @@ $(ROOT)/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
 	$(LD) $(USOFLAGS) -Bsymbolic -e _dl_start -o $(OUT)/ld.so.elf $(OUT)/ld/start.o $(OUT)/ld/ld.o $(LIBGCC)
 	$(OBJCOPY) --strip-debug $(OUT)/ld.so.elf $@
 
-$(ROOT)/lib/%.so: $(BUILD)/lib/%.so
+$(ROOT)/usr/lib/%.so: $(BUILD)/lib/%.so
 	@mkdir -p $(dir $@)
 	$(OBJCOPY) --strip-debug $< $@
 
-$(ROOT)/bin/init: init/*.c $(LIBC) $(CRT0)
+$(ROOT)/usr/bin/init: init/*.c $(LIBC) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/init.elf $(ULDFLAGS_STATIC) $(CRT0) $(filter %.c,$^) $(LIBC) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/init.elf $@
 
-$(ROOT)/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
+$(ROOT)/usr/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(INSTALL)
 
 # X12 keeps its implementation in compositor/ for the continuity of the
 # source history, while the installed server and its visible name are X12.
-$(ROOT)/bin/x12: compositor/*.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/x12: compositor/*.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/x12.elf $@
 
-$(ROOT)/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/x12settings.elf $@
@@ -610,17 +617,17 @@ $(APPBIN)/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/unicode.elf $@
 
-$(ROOT)/bin/%: coreutils/%.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/%: coreutils/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(INSTALL)
 
-$(ROOT)/bin/%: apps/%.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/%: apps/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(INSTALL)
 
-$(ROOT)/bin/%: tests/%.c $(SOS) $(CRT0)
+$(ROOT)/usr/bin/%: tests/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(INSTALL)

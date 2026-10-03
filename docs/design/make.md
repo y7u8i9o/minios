@@ -76,8 +76,9 @@ creating the missing ones, and `touch -c` does not create files.
 - `access` with `F_OK`, `R_OK`, `W_OK` and `X_OK` (`unistd.h`): the
   file must exist. Since U2 of the multiuser plan the kernel checks the
   permission bits against the real ids (`faccessat`, `users.md`).
-- `confstr(_CS_PATH)` (`unistd.h`) returns `/bin`, where make looks for
-  `sh`.
+- `confstr(_CS_PATH)` (`unistd.h`) returns `/usr/bin`, where make looks
+  for `sh`. It returned `/bin` before P1 of `docs/plan/packaging.md` made
+  `/bin` a link to `/usr/bin`.
 - `ar.h`: the archive member header, which make reads to date
   `lib.a(member.o)` prerequisites.
 

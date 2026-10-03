@@ -95,7 +95,7 @@ static void test_shell(void)
     type_line("help\n");
     type_line("echo hello from sh\n");
     type_line("pwd\n");
-    type_line("cd /bin\n");
+    type_line("cd /usr/bin\n");
     type_line("pwd\n");
     type_line("hello one two\n");
     type_line("nosuchprogram\n");

@@ -41,11 +41,11 @@ static const struct {
     const char *label;
     const char *path;
 } font_choices[] = {
-    { "Unifont",     "/etc/fonts/unifont.otf" },
-    { "DejaVu Sans", "/etc/fonts/DejaVuSans.ttf" },
-    { "DejaVu Mono", "/etc/fonts/DejaVuSansMono.ttf" },
-    { "Noto Sans",   "/etc/fonts/NotoSans-Regular.ttf" },
-    { "LM Roman",    "/etc/fonts/lmroman10-regular.otf" },
+    { "Unifont",     "/usr/share/fonts/unifont.otf" },
+    { "DejaVu Sans", "/usr/share/fonts/DejaVuSans.ttf" },
+    { "DejaVu Mono", "/usr/share/fonts/DejaVuSansMono.ttf" },
+    { "Noto Sans",   "/usr/share/fonts/NotoSans-Regular.ttf" },
+    { "LM Roman",    "/usr/share/fonts/lmroman10-regular.otf" },
 };
 #define NFONTS ((int)(sizeof font_choices / sizeof font_choices[0]))
 

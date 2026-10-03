@@ -90,7 +90,7 @@ struct font *gfx_font_open_ttf(const char *path, int px)
  * fonts of every size share one outline and are never freed.  The cache is
  * used by the thread that draws, which is the only one in a libgui
  * program. */
-#define CJK_PATH "/etc/fonts/DroidSansFallbackFull.ttf"
+#define CJK_PATH "/usr/share/fonts/DroidSansFallbackFull.ttf"
 static struct ofont *cjk_outline;
 static int cjk_missing;
 static struct { int px; struct font *font; } cjk_cache[8];

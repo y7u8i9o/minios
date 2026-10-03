@@ -29,7 +29,7 @@
 #include <minios/input.h>
 
 #define ROW 16
-#define FONT_PATH "/etc/fonts/DejaVuSansMono.ttf"
+#define FONT_PATH "/usr/share/fonts/DejaVuSansMono.ttf"
 #define DEFAULT_PX 13
 #define FIND_MAX 256
 #define CHUNK 65536

@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     fd = open("motd", O_RDONLY);
     CHECK(fd >= 0, "relative open");
     close(fd);
-    fd = open("../bin/../etc/./motd", O_RDONLY);
+    fd = open("../var/../etc/./motd", O_RDONLY);
     CHECK(fd >= 0, "dot components");
     close(fd);
     CHECK(chdir("/") == 0, "chdir /");

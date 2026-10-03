@@ -15,7 +15,7 @@ The release is `0.3.1`, recorded in `VERSION` under semantic versioning. `tools/
 | Per CPU state | One `struct cpu` per processor, reached through the GS base. The current thread is a field of that structure. |
 | Locking | Every shared structure names the lock that protects it. `docs/design/locking.md` records the lock order. |
 | Scope | One user. Permission bits are stored and ignored. Networking is IPv4 only, without forwarding or TLS. |
-| Linking | Programs are ELF64 executables linked against shared libraries in `/lib`, loaded by `/lib/ld.so` with thread local storage, `dlopen` and lazy binding. `init` and the loader are static. |
+| Linking | Programs are ELF64 executables in `/usr/bin` linked against shared libraries in `/usr/lib`, loaded by `/lib/ld.so` (`/bin` and `/lib` are links into `/usr`) with thread local storage, `dlopen` and lazy binding. `init` and the loader are static. |
 | Storage | The root image is rebuilt by the build. The home directory and the user's configuration are on a data volume, `data.img`, that the build creates once and mounts at boot through `/etc/fstab`. |
 
 ## Memory management

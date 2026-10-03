@@ -2,12 +2,12 @@
 # Build a minios package on the host from a directory holding manifest and
 # files/ (docs/design/packages.md).
 # usage: mkpkg.sh DIR OUT.mpk ROOT
-# ROOT is the root tree of the build (build/initrd_root); its lib/abi gives
+# ROOT is the root tree of the build (build/initrd_root), whose usr/lib/abi gives
 # the ABI numbers of the system libraries. The needs lines of the manifest
 # are derived from the DT_NEEDED entries of every ELF file with readelf
 # ($READELF, default x86_64-elf-readelf). As with pkg build, a needs line
 # of the source manifest supplies the number of a library that neither the
-# package nor lib/abi provides. The arch line is derived from the ELF
+# package nor usr/lib/abi provides. The arch line is derived from the ELF
 # files as well. The archive is of format 2, with paths relative to the
 # installation root, and its members belong to root with the modes of the
 # tree.
@@ -17,7 +17,7 @@ READELF="${READELF:-x86_64-elf-readelf}"
 [ -n "$DIR" ] && [ -n "$OUT" ] && [ -n "$ROOT" ] || { echo "usage: mkpkg.sh DIR OUT.mpk ROOT" >&2; exit 2; }
 [ -f "$DIR/manifest" ] || { echo "mkpkg.sh: $DIR/manifest: no such file" >&2; exit 1; }
 [ -d "$DIR/files" ] || { echo "mkpkg.sh: $DIR/files: no such directory" >&2; exit 1; }
-[ -f "$ROOT/lib/abi" ] || { echo "mkpkg.sh: $ROOT/lib/abi: no such file" >&2; exit 1; }
+[ -f "$ROOT/usr/lib/abi" ] || { echo "mkpkg.sh: $ROOT/usr/lib/abi: no such file" >&2; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 grep -q '^format ' "$DIR/manifest" || echo "format 2" > "$TMP/manifest"
@@ -57,7 +57,7 @@ done | LC_ALL=C sort -u > "$TMP/needed"
 while read -r so; do
     [ -n "$so" ] || continue
     abi="$(sed -n "s/^provides $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
-    [ -n "$abi" ] || abi="$(sed -n "s/^$so \([0-9]*\)$/\1/p" "$ROOT/lib/abi" | head -1)"
+    [ -n "$abi" ] || abi="$(sed -n "s/^$so \([0-9]*\)$/\1/p" "$ROOT/usr/lib/abi" | head -1)"
     [ -n "$abi" ] || abi="$(sed -n "s/^needs $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
     [ -n "$abi" ] || { echo "mkpkg.sh: the ABI number of $so is unknown" >&2; exit 1; }
     echo "needs $so $abi" >> "$TMP/manifest"

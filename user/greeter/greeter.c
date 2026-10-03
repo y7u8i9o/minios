@@ -642,7 +642,7 @@ static void run_session(const char *name)
         snprintf(e_user, sizeof e_user, "USER=%s", name);
         snprintf(e_logname, sizeof e_logname, "LOGNAME=%s", name);
         snprintf(e_shell, sizeof e_shell, "SHELL=%s", shell);
-        char *envp[] = { e_home, e_user, e_logname, e_shell, "TERM=minios", "PATH=/bin:/usr/bin:/usr/local/bin", NULL };
+        char *envp[] = { e_home, e_user, e_logname, e_shell, "TERM=minios", "PATH=/usr/bin:/usr/local/bin", NULL };
         char *argv[] = { "/bin/startgui", "-s", NULL };
         execve(argv[0], argv, envp);
         _exit(127);

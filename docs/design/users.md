@@ -244,7 +244,7 @@ greeter in its place since 2026-10-03) asks for
 the name and the password, gives the terminal to the account with mode
 0620, calls `initgroups`, `setgid` and `setuid`, enters the home and runs
 the shell as a login shell with `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`
-and `PATH=/bin:/usr/bin:/usr/local/bin`. At its start it returns the terminal to
+and `PATH=/usr/bin:/usr/local/bin`. At its start it returns the terminal to
 root. `su` and `passwd` are set user id root. The `su` of U3 asked a
 caller other than root for the target's password and read it from
 standard input when that was not a terminal, and U5 replaced it with the
@@ -268,7 +268,7 @@ launcher menu `~/.config/launcher` and MIME handler table
 for that user.
 
 `pkg` refuses to change a root the caller cannot write and names
-`sudo pkg`. `ld.so` searches `/lib`, `/usr/lib`, `/usr/local/lib` and
+`sudo pkg`. `ld.so` searches `/usr/lib`, `/usr/local/lib` and
 `$HOME/.local/lib`, the last only without `AT_SECURE`. `/etc/profile`
 adds `/usr/bin`, `/usr/local/bin` and `~/.local/bin` to `PATH`, and the
 panel reads the launcher entries of `/var/lib/pkg/launcher` and
@@ -371,7 +371,7 @@ recognises by the session id of the caller.
 The image ships the group `wheel` (gid 10) with `user` as its member.
 `/etc/doas.conf` permits the members of wheel with their password and
 root without one, and `/etc/sudoers` (mode 0440) permits root and the
-members of wheel and sets the secure path `/bin:/usr/bin:/usr/local/bin`. Both
+members of wheel and sets the secure path `/usr/bin:/usr/local/bin`. Both
 files are part of the root image. The membership of wheel lives in
 `/etc/group` on the data volume, and a volume set up before U5 keeps its
 group file without wheel until root adds the entry with an editor.

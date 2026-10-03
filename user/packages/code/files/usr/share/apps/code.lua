@@ -14,7 +14,7 @@ local fs = require "fs"
 
 -- Settings that $HOME/.config/code.lua may change as well.
 local settings = {
-  font = "/etc/fonts/DejaVuSansMono.ttf",
+  font = "/usr/share/fonts/DejaVuSansMono.ttf",
   font_px = 13,
 }
 

@@ -1,4 +1,4 @@
-codectest: module png from /lib/codecs/png.so
-codectest: module svg from /lib/codecs/svg.so
+codectest: module png from /usr/lib/codecs/png.so
+codectest: module svg from /usr/lib/codecs/svg.so
 codectest: 0 failures
 TEST PASS

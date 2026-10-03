@@ -147,7 +147,7 @@ int main(int argc, char **argv, char **envp)
     }
     char cwd[64];
     CHECK(getcwd(cwd, sizeof cwd) && strcmp(cwd, "/") == 0, "cwd %s", cwd);
-    CHECK(chdir("/bin") == 0 && getcwd(cwd, sizeof cwd) && strcmp(cwd, "/bin") == 0, "chdir");
+    CHECK(chdir("/etc") == 0 && getcwd(cwd, sizeof cwd) && strcmp(cwd, "/etc") == 0, "chdir");
     CHECK(chdir("/nope") < 0 && errno == ENOENT, "chdir missing");
     CHECK(chdir("..") == 0 && getcwd(cwd, sizeof cwd) && strcmp(cwd, "/") == 0, "chdir ..");
 

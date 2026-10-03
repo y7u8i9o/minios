@@ -254,7 +254,8 @@ int prof_symtab_add_maps(struct prof_symtab *t, pid_t pid)
         char path[256];
         if (sscanf(line, "%d %lx %lx %lx %255s", &lpid, &start, &end, &offset, path) != 5 || lpid != pid)
             continue;
-        if (strncmp(path, "/lib/", 5) != 0)
+        if (strncmp(path, "/usr/lib/", 9) != 0 && strncmp(path, "/usr/local/lib/", 15) != 0 &&
+            strncmp(path, "/lib/", 5) != 0)
             continue;
         struct prof_module *m = realloc(t->modules, (t->nmodules + 1) * sizeof *m);
         if (!m)
@@ -588,7 +589,7 @@ static struct prof_symtab *resolver_symtab(struct prof_resolver *r, pid_t pid)
     const char *name = prof_resolver_procname(r, pid);
     if (!name)
         return NULL;
-    static const char *const dirs[] = { "/bin", LOCAL_BIN, "/usr/bin" };
+    static const char *const dirs[] = { "/usr/bin", LOCAL_BIN };
     char path[160];
     for (size_t i = 0; i < sizeof dirs / sizeof dirs[0] && !p->syms; i++) {
         snprintf(path, sizeof path, "%s/%s", dirs[i], name);

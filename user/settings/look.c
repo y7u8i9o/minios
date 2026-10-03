@@ -13,9 +13,9 @@ static const char *const mode_names[] = { N_("Fill the screen"), N_("Centre"), N
 /* The names are configuration values. Only the last one is translated, and
  * only where the combo box shows it. */
 static const struct { const char *name; const char *path; } fonts[] = {
-    { "DejaVu Sans", "/etc/fonts/DejaVuSans.ttf" },
-    { "Noto Sans", "/etc/fonts/NotoSans-Regular.ttf" },
-    { "Latin Modern Roman", "/etc/fonts/lmroman10-regular.otf" },
+    { "DejaVu Sans", "/usr/share/fonts/DejaVuSans.ttf" },
+    { "Noto Sans", "/usr/share/fonts/NotoSans-Regular.ttf" },
+    { "Latin Modern Roman", "/usr/share/fonts/lmroman10-regular.otf" },
     { N_("Builtin bitmap font"), "" },
 };
 #define NFONTS 4

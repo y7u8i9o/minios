@@ -160,6 +160,6 @@ ssize_t writev(int fd, const struct iovec *iov, int count);
 int access(const char *path, int mode);
 int faccessat(int dirfd, const char *path, int mode, int flags);
 
-/* confstr knows _CS_PATH, the default command search path "/bin". */
+/* confstr knows _CS_PATH, the default command search path "/usr/bin". */
 #define _CS_PATH 0
 size_t confstr(int name, char *buf, size_t len);

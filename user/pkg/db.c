@@ -514,7 +514,7 @@ int db_write_tables(void)
     return r;
 }
 
-/* The ABI number of a system library from /lib/abi, or -1. The libraries
+/* The ABI number of a system library from /usr/lib/abi, or -1. The libraries
  * of the root image that no package provides have their numbers there
  * until the base system is packaged (docs/plan/packaging.md, P3). */
 int system_abi(const char *soname)
@@ -522,7 +522,7 @@ int system_abi(const char *soname)
     uint8_t *data;
     size_t len;
     char path[PKG_PATH_MAX];
-    root_path(path, sizeof path, "lib/abi");
+    root_path(path, sizeof path, "usr/lib/abi");
     if (read_file(path, &data, &len) < 0)
         return -1;
     int abi = -1;

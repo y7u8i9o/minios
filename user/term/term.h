@@ -15,7 +15,7 @@
 #define MAX_TABS 12
 #define MIN_COLS 20
 #define MIN_ROWS 5
-#define FONT_PATH "/etc/fonts/DejaVuSansMono.ttf"
+#define FONT_PATH "/usr/share/fonts/DejaVuSansMono.ttf"
 #define DEFAULT_PX 13
 
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);

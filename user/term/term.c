@@ -48,7 +48,7 @@ static void load_font(int px)
 {
     struct font *f = gfx_font_open_ttf(FONT_PATH, px);
     if (!f) {
-        f = gfx_font_load("/etc/fonts/mono20.mfnt");
+        f = gfx_font_load("/usr/share/fonts/mono20.mfnt");
         if (!f) {
             font = NULL;
             cell_w = gfx_font_builtin()->advance['M'];

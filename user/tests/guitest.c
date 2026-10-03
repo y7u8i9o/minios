@@ -84,7 +84,7 @@ int main(int argc, char **argv)
     }
     if (strcmp(mode, "ttf") == 0) {
         /* One white window with a line of kerned, antialiased text. */
-        struct font *f = gfx_font_open_ttf(argc > 2 ? argv[2] : "/etc/fonts/DejaVuSans.ttf", 32);
+        struct font *f = gfx_font_open_ttf(argc > 2 ? argv[2] : "/usr/share/fonts/DejaVuSans.ttf", 32);
         if (!f) {
             printf("guitest: cannot open the outline font\n");
             return 1;

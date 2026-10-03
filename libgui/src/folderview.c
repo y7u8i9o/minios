@@ -1148,7 +1148,7 @@ static void build_places(struct folderview *fv)
     };
     static const struct { const char *path, *label, *icon; } system_dirs[] = {
         { "/bin", N_("Programs"), "terminal" }, { "/usr/share", N_("Shared files"), "documents" },
-        { "/etc/fonts", N_("Fonts"), "app-unicode" }, { "/dev", N_("Devices"), "drive" },
+        { "/usr/share/fonts", N_("Fonts"), "app-unicode" }, { "/dev", N_("Devices"), "drive" },
     };
     add_place(fv, _("Recent"), "", "recent", 0);
     add_place(fv, _("Home"), fv->home, "home", 0);

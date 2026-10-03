@@ -35,7 +35,7 @@ $(APPBIN)/luasynth: packages/luasynth/launcher.c $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/luasynth.elf $@
 
 define APP_PACKAGE
-$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(ROOT)/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
+$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(ROOT)/usr/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
 	@rm -rf $(OUT)/packages/$(1)
 	@mkdir -p $(OUT)/packages/$(1)/files/usr/bin $(PKG_OUT)
 	@cat packages/$(1)/manifest > $(OUT)/packages/$(1)/manifest
@@ -62,7 +62,7 @@ repo: $(PKG_FILES)
 # Remove the old built-in copies on incremental builds, including their
 # default desktop shortcuts. Never touch the persistent data volume.
 prune-packaged: share-tree skel-tree
-	@rm -f $(addprefix $(ROOT)/bin/,$(PKG_NAMES))
+	@rm -f $(addprefix $(ROOT)/usr/bin/,$(PKG_NAMES))
 	@rm -f $(ROOT)/usr/share/apps/code.lua $(ROOT)/usr/share/apps/pong.lua $(ROOT)/usr/share/man/man1/code.1
 	@rm -f $(foreach d,etc/skel home/user root,$(ROOT)/$(d)/desktop/Code.app $(ROOT)/$(d)/desktop/Pong.app)
 

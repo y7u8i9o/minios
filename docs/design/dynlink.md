@@ -2,8 +2,11 @@
 
 Programs are linked against shared libraries since 2026-09-06. The C
 library, the toolkit stack, the audio client library and the Lua core are
-shared objects in `/lib`, loaded into each process by `/lib/ld.so`, the
-dynamic loader of minios. `init` and the loader itself are static.
+shared objects in `/usr/lib`, loaded into each process by `/lib/ld.so`,
+the dynamic loader of minios. `init` and the loader itself are static.
+Since P1 of `docs/plan/packaging.md`, `/bin` and `/lib` are symbolic
+links to `/usr/bin` and `/usr/lib`, which means `/lib/ld.so`, the program
+interpreter every executable names, is `/usr/lib/ld.so`.
 
 ## Measurements
 

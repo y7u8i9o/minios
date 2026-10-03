@@ -1,4 +1,4 @@
-codectest: module vorbis from /lib/codecs/vorbis.so
+codectest: module vorbis from /usr/lib/codecs/vorbis.so
 codectest: vorbis chained 22050 Hz 1 channels 18025 frames
 codectest: vorbis 51 48000 Hz 6 channels 24000 frames
 codectest: 0 failures

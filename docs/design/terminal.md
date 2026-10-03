@@ -70,7 +70,7 @@ The window holds a `tabs` widget whose title row is hidden while there
 is one page (`tabs_set_autohide`); each page is a canvas with one
 `struct tab`: the emulator, the pseudo terminal master, the child's
 pid, the view offset and the selection. The text is DejaVu Sans Mono
-from `/etc/fonts` at `term_font_px` pixels (from `/etc/desktop.conf`,
+from `/usr/share/fonts` at `term_font_px` pixels (from `/etc/desktop.conf`,
 default 13, set in the Appearance page of Settings), rasterised with
 antialiasing at the output scale; the cell is the advance of `M` by
 the font height (8 by 17 at 13 px). The grid is the canvas size less 4

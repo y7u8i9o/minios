@@ -20,7 +20,7 @@
 #define CODEC_MODULE_ABI 2
 /* The directory of the modules. The environment variable CODEC_PATH
  * overrides it. */
-#define CODEC_DIR "/lib/codecs"
+#define CODEC_DIR "/usr/lib/codecs"
 
 enum codec_kind { CODEC_IMAGE = 1, CODEC_AUDIO = 2 };
 

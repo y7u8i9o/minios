@@ -184,6 +184,19 @@ static const struct member *find_member(struct pending *p, const char *rel, stru
     return NULL;
 }
 
+/* True if usr/lib/SONAME of the root is a library of the root image that
+ * no package owns. /lib is a link to /usr/lib since P1 of
+ * docs/plan/packaging.md, which means the library of an installed package
+ * lies at the same path. */
+static int system_library(const char *soname)
+{
+    char rel[PKG_PATH_MAX], path[PKG_PATH_MAX], owner[PKG_NAME_MAX];
+    struct stat st;
+    snprintf(rel, sizeof rel, "usr/lib/%s", soname);
+    root_path(path, sizeof path, rel);
+    return stat(path, &st) == 0 && !db_owner(rel, owner, sizeof owner);
+}
+
 /* Where a soname comes from: a pending package, an installed package, or
  * the system, loaded once. NULL when nothing provides it. */
 static struct lib *find_library(const char *soname)
@@ -225,8 +238,8 @@ static struct lib *find_library(const char *soname)
         nlibs++;
         return l;
     }
-    snprintf(path, sizeof path, "%s/lib/%s", root, soname);
-    if (read_file(path, &l->owned, &l->len) == 0) {
+    root_path(path, sizeof path, rel);
+    if (system_library(soname) && read_file(path, &l->owned, &l->len) == 0) {
         l->data = l->owned;
         l->abi = system_abi(soname);
         strlcpy(l->from, "the system", sizeof l->from);
@@ -515,11 +528,9 @@ static int check_all(void)
         if (p->skip)
             continue;
         for (int j = 0; j < p->m.nprovides; j++) {
-            char path[PKG_PATH_MAX], rel[PKG_PATH_MAX];
+            char rel[PKG_PATH_MAX];
             struct member m;
-            struct stat st;
-            snprintf(path, sizeof path, "%s/lib/%s", root, p->m.provides[j].soname);
-            if (stat(path, &st) == 0)
+            if (system_library(p->m.provides[j].soname))
                 return error(p->m.name, "provides %s, which is a system library", p->m.provides[j].soname);
             snprintf(rel, sizeof rel, "usr/lib/%s", p->m.provides[j].soname);
             if (!find_member(p, rel, &m))
@@ -595,8 +606,8 @@ static int check_all(void)
 /* ---- installation ---- */
 
 /* Gives a file or directory the mode and owner of its archive member. Only
- * root can give a file away, and without root a file keeps no setuid or
- * setgid bit, which the host build of pkg relies on when it installs into
+ * root can give a file away, and without root a file loses its setuid and
+ * setgid bits, which the host build of pkg relies on when it installs into
  * a tree for an image (pkg perms). */
 static int apply_owner(const char *path, uint32_t mode, uint32_t uid, uint32_t gid)
 {
@@ -919,13 +930,6 @@ static const struct index_entry *resolve_name(const struct index *ix, const char
     return NULL;
 }
 
-static int system_library(const char *soname)
-{
-    char path[PKG_PATH_MAX];
-    struct stat st;
-    snprintf(path, sizeof path, "%s/lib/%s", root, soname);
-    return stat(path, &st) == 0;
-}
 
 /* resolve_dependencies adds what the wanted packages need and nothing
  * else provides. A

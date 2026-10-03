@@ -79,7 +79,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   `gfx_text_index_font` use shaped positions. Bitmap fonts follow the
   previous code path, so `term`, the toolkit and the applications work
   with either kind.
-- `/etc/fonts/` holds `DejaVuSans.ttf`, `DejaVuSansMono.ttf` (Bitstream
+- `/usr/share/fonts/` holds `DejaVuSans.ttf`, `DejaVuSansMono.ttf` (Bitstream
   Vera license, `third_party/dejavu/LICENSE`),
   `lmroman10-regular.otf` (GUST Font License,
   `third_party/lmodern/NOTICE`), `NotoSans-Regular.ttf` (SIL Open

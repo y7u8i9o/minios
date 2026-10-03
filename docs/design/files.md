@@ -56,7 +56,7 @@ Delete and Properties, or the directory menu with New folder, New
 file, Open in terminal, Paste, Refresh and Properties.
 
 The places Home, which is the user's home folder, Desktop, Programs
-(`/bin`), Shared files (`/usr/share`), Fonts (`/etc/fonts`) and Devices
+(`/bin`), Shared files (`/usr/share`), Fonts (`/usr/share/fonts`) and Devices
 (`/dev`) of the former places list are part of the sidebar of the folder
 view, which adds Recent, the other folders of the home folder, the
 mounted volumes and Computer.

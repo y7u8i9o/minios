@@ -32,8 +32,8 @@ void theme_init_default(struct theme *t)
     t->metric[TM_FONT_PX] = 14;
     t->metric[TM_CONTROL_H] = 26;
     t->scale = 100;
-    strlcpy(t->font_path, "/etc/fonts/DejaVuSans.ttf", sizeof t->font_path);
-    strlcpy(t->fallback_path, "/etc/fonts/DejaVuSansMono.ttf", sizeof t->fallback_path);
+    strlcpy(t->font_path, "/usr/share/fonts/DejaVuSans.ttf", sizeof t->font_path);
+    strlcpy(t->fallback_path, "/usr/share/fonts/DejaVuSansMono.ttf", sizeof t->fallback_path);
     t->font = gfx_font_builtin();
     theme_read_conf(t);
 }
@@ -43,9 +43,9 @@ void theme_init_default(struct theme *t)
  * (ui_font, ui_font_px, ui_scale), written by the settings program. A
  * missing file keeps the defaults. */
 static const struct { const char *name; const char *path; } ui_fonts[] = {
-    { "DejaVu Sans", "/etc/fonts/DejaVuSans.ttf" },
-    { "Noto Sans", "/etc/fonts/NotoSans-Regular.ttf" },
-    { "Latin Modern Roman", "/etc/fonts/lmroman10-regular.otf" },
+    { "DejaVu Sans", "/usr/share/fonts/DejaVuSans.ttf" },
+    { "Noto Sans", "/usr/share/fonts/NotoSans-Regular.ttf" },
+    { "Latin Modern Roman", "/usr/share/fonts/lmroman10-regular.otf" },
     { "Builtin bitmap font", "" },
 };
 

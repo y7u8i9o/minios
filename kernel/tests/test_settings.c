@@ -25,6 +25,10 @@ static void open_and_close(const char *path, const char *arg0, const char *arg1,
                                        &kernel_proc);
     ktest_assert(cl != NULL, "cannot start %s", path);
     sleep_ms(hold_ms);
+    /* A page that reads more data, or a host running several guests,
+     * may map the window later than hold_ms. */
+    for (int waited = 0; pixel(wx + 2, wy - 10) != 0x00ebebeb && waited < 5000; waited += 100)
+        sleep_ms(100);
     kprintf("gui_settings: %s %s shown\n", arg0, arg1 ? arg1 : "");
     ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s %s window has an active title bar: %08x", arg0,
                  arg1 ? arg1 : "", pixel(wx + 2, wy - 10));

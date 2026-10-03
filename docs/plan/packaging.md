@@ -154,7 +154,7 @@ installer comes last.
   `initctl`, `comp_panel`, `lua_sys` and `ime` pass on x86_64, and the
   package, loader, login and privilege cases on aarch64.
 
-### P1. Merged /usr
+### P1. Merged /usr (completed 2026-10-03)
 
 - The install paths of `user/Makefile` follow the layout of section 2,
   and the root tree carries the `/bin` and `/lib` links.
@@ -164,6 +164,25 @@ installer comes last.
   the font paths of libfont and libgui follow the new layout.
 - The boot tests `boot`, `dynlink`, `shell`, `tcc`, the `codec` cases,
   `gui`, `gui_term` and `login_console` must pass.
+- During the work the default `PATH` became `/usr/bin:/usr/local/bin`,
+  with packages before unmanaged software, which means a program that an
+  earlier `pkg` left in `/usr/local/bin` on a data volume does not
+  replace the packaged one. `confstr(_CS_PATH)` returns `/usr/bin`. A
+  library of `/usr/lib` counts as a system library for `pkg` only when no
+  package owns it, since `/lib/NAME` and `/usr/lib/NAME` are now one
+  file, and `mkpkg.sh` and the loader fixtures read `usr/lib` of the
+  build tree, which a parallel build fills before the links exist. The
+  profiler accepts libraries in `/usr/lib` and `/usr/local/lib`. The
+  kernel resolves `..` after a link physically, and the shell prints the
+  physical directory, which changed four tests that entered `/bin`
+  (`shell`, `fs`, `fork`, `libc_ext`) to real directories or to the
+  resolved path. `gui_settings` failed twice when it shared the host with
+  three other guests, because it read a pixel 1.5 seconds after starting
+  each page. It now waits up to five more seconds for the title bar. The
+  release cases, the `codec` cases, `dlopen`, `symlink`, `pkg`,
+  `pkg_apps`, `pkg_repo`, the profiler cases, the font cases and the
+  application GUI cases pass on x86_64, and the loader, shell, file
+  system, libc, tcc, codec, package, login and GUI cases on aarch64.
 
 ### P2. Splitting libc and Lua
 

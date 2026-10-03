@@ -773,7 +773,7 @@ size_t confstr(int name, char *buf, size_t len)
         errno = EINVAL;
         return 0;
     }
-    const char *value = "/bin";
+    const char *value = "/usr/bin";
     if (buf != NULL && len > 0) {
         strncpy(buf, value, len - 1);
         buf[len - 1] = '\0';

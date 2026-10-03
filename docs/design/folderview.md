@@ -29,7 +29,7 @@ The sidebar lists Recent, the home folder (`$HOME`, else `/home`) and the
 usual folders below it that exist (`desktop` or `Desktop`, `Documents`,
 `Downloads`, `Music`, `Pictures`, `Videos`), then the system folders that
 the file manager had offered before (Programs `/bin`, Shared files
-`/usr/share`, Fonts `/etc/fonts`, Devices `/dev`), then every mounted
+`/usr/share`, Fonts `/usr/share/fonts`, Devices `/dev`), then every mounted
 volume from `/dev/mounts` other than the root, the home volume and devfs,
 and last Computer for `/`. Lines separate the four groups, the place of
 the current folder is highlighted, and the icons are the single colour

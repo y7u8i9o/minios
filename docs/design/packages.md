@@ -3,7 +3,7 @@
 `pkg` (`user/pkg/`, `pkg(1)`) installs packages from local archives
 and from signed repositories over HTTP, lists, verifies and removes them,
 and builds the archives. This document describes the package format, the
-manifest, the installation root, the records the installer keeps, the
+manifest, the installation root, the records of the installer, the
 dependency and library rules, the repository format with its trust
 model, and the changes made elsewhere in the system. Format 2 of the
 packages, with paths relative to the installation root, owners, modes
@@ -48,9 +48,9 @@ Three places know the locations of installed packages:
 - `/etc/profile`, `login`, the greeter and `sudo` put `/usr/bin` on the
   `PATH` after `/bin`. The launcher menu and `mime_spawn` start programs
   by absolute path.
-- `/lib/ld.so` searches `/lib`, then `/usr/lib`, then `/usr/local/lib`
-  and then `~/.local/lib` for a library named in `DT_NEEDED` (`lib_dirs`
-  in `user/ld/ld.c`). A name with a slash stays refused, and no
+- `/lib/ld.so` searches `/usr/lib`, where `/lib` leads since P1, then
+  `/usr/local/lib` and then `~/.local/lib` for a library named in
+  `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a slash stays refused, and no
   environment variable changes the list.
 - The panel reads `/var/lib/pkg/launcher` and then `/etc/launcher` or the
   user's `~/.config/launcher`. `mime_load` reads the system tables and
@@ -137,7 +137,7 @@ built for another machine, also in a package without an `arch` line.
 `pkg build` derives the `needs` lines from the `DT_NEEDED` entries of every
 ELF file in the package. The ABI number of a soname comes from the
 package's own `provides` line, from an installed package that provides
-it, or from the system table `/lib/abi`. A `needs` line in the source
+it, or from the system table `/usr/lib/abi`. A `needs` line in the source
 manifest supplies the number of a library that is neither on the build
 system nor installed, for a package built against a library that is
 installed separately; such a line is used only when the other sources
@@ -145,7 +145,7 @@ have no number.
 
 ## Records
 
-The installer keeps its state under `/var/lib/pkg/` (`PKG_DB`):
+The installer stores its state under `/var/lib/pkg/` (`PKG_DB`):
 
     lock                 created exclusively during every operation
     NAME/manifest        the manifest as installed
@@ -267,7 +267,7 @@ Each shared library of the system carries an ABI number, `ABI` in its
 Makefile (`LUA_ABI` in `user/Makefile` for the Lua core), incremented
 whenever a structure, a constant, a function signature or a documented
 behaviour that programs depend on changes incompatibly. Adding functions
-leaves it alone. The build writes the table to `/lib/abi`:
+leaves it alone. The build writes the table to `/usr/lib/abi`:
 
     libc.so 1
     libfont.so 1
@@ -278,13 +278,15 @@ leaves it alone. The build writes the table to `/lib/abi`:
 
 The rule has three parts:
 
-1. Every `needs` soname must be provided, by `/lib`, by an installed
-   package or by one on the same command line. A package provides a
-   library as `usr/lib/SONAME`. A soname provided by a package may not
-   exist in `/lib` and may not be provided by two packages. When the
-   base system becomes packages (P3), `/lib/abi` and the libraries of
-   `/lib` that no package provides go away, and the second sentence
-   becomes the only rule.
+1. Every `needs` soname must be provided, by the system, by an
+   installed package or by one on the same command line. A package
+   provides a library as `usr/lib/SONAME`. A system library is a file of
+   `/usr/lib` that no package owns, since `/lib` leads to `/usr/lib`
+   and the libraries of packages lie beside it. A soname provided by a
+   package may not be a system library and may not be provided by two
+   packages. When the base system becomes packages (P3), `/usr/lib/abi`
+   and the system libraries go away, and the rule about two packages
+   becomes the only one.
 2. The recorded ABI number must equal the provider's. A different number
    refuses the installation: `pkgprog: needs libpkgfix.so ABI 1, pkgfix
    has 2`.
@@ -309,7 +311,7 @@ writes `format 2` and ustar headers naming root as the owner with the
 modes of the tree, setuid bits included, and compresses the archive with
 `gzip_compress`. `tools/mkpkg.sh DIR OUT ROOT` does the same on the host
 with `tar --format ustar` and `gzip`, deriving `needs` with `readelf -d`
-and the `lib/abi` of the build tree given as `ROOT`. It passes the owner
+and the `usr/lib/abi` of the build tree given as `ROOT`. It passes the owner
 options of bsdtar or of GNU tar, whichever the host has, in order that
 the members belong to root whoever runs the build. Both refuse a
 manifest whose configuration files are not in the tree.
@@ -490,7 +492,7 @@ of a package name, and URL has the form `http://HOST[:PORT]/PATH`.
 `timeout SECONDS` bounds the connection and every wait for data, 30
 seconds by default. `--config FILE` reads another file, and `--root DIR`
 makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/` as it reads
-`DIR/lib/abi`.
+`DIR/usr/lib/abi`.
 
 ### Commands
 
@@ -693,5 +695,3 @@ another key. `make check` includes it.
 - The index should carry a sequence number, so that `pkg update` refuses
   an index older than the one it holds, and a key should be bound to the
   repositories it signs for.
-- The profiler reads the symbol tables of `/lib` only, and a library
-  installed by a package appears in a profile without symbols.

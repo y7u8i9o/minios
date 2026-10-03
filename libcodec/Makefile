@@ -13,7 +13,7 @@ SRCS  := $(wildcard src/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS))
 UCPP  := -Iinclude -I../libc/include -I../kernel/include
 # Every directory of modules/ is one module, whose files modules/NAME/*.c
-# become $(BUILD)/lib/codecs/NAME.so, installed in /lib/codecs.
+# become $(BUILD)/lib/codecs/NAME.so, installed in /usr/lib/codecs.
 MODULES := $(notdir $(wildcard modules/*))
 MODSOS  := $(addprefix $(BUILD)/lib/codecs/,$(addsuffix .so,$(MODULES)))
 MODOBJS := $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/*/*.c))

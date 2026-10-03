@@ -25,8 +25,9 @@ is not set: tcc resolves the symbols of a program run with `-run`
 through `dlfcn.h`. The paths are
 `CONFIG_TCCDIR /usr/lib/tcc` (the runtime library and the compiler's own
 headers), `CONFIG_TCC_SYSINCLUDEPATHS {B}/include:/usr/include`,
-`CONFIG_TCC_LIBPATHS {B}:/lib`, `CONFIG_TCC_CRTPREFIX /lib` and
-`CONFIG_TCC_ELFINTERP /lib/ld.so`. The object depends on the Makefile, so
+`CONFIG_TCC_LIBPATHS {B}:/usr/lib`, `CONFIG_TCC_CRTPREFIX /usr/lib`
+and `CONFIG_TCC_ELFINTERP /lib/ld.so`, the interpreter every program
+names, through the link `/lib` to `/usr/lib`. The object depends on the Makefile, so
 that a change of these flags rebuilds it.
 
 On aarch64 a program that writes code must clean the data cache and
@@ -56,14 +57,15 @@ CPU (`SCTLR_EL1.UCI` and `UCT`, `cpu_init_el0_access`).
   `limits.h` used to reach the compiler's copy with `#include_next`.
   `minios/abi.h` includes `stddef.h` itself now; every header compiles
   alone.
-- `/lib/crt1.o`, a copy of `crt0.o`; `/lib/crti.o`, which defines empty
-  `_init` and `_fini` functions; `/lib/crtn.o`, empty. tcc links them
+- `/usr/lib/crt1.o`, a copy of `crt0.o`, `/usr/lib/crti.o`, which defines
+  empty `_init` and `_fini` functions, and `/usr/lib/crtn.o`, which is
+  empty. tcc links them
   around every program. `__libc_start` of a static program tests the
   weak `_init` and `_fini` through the global offset table, and tcc
   leaves the table slot of an undefined weak function pointing at a
   stub; without the definitions a static program crashed at exit.
-- `/lib/libm.a`, an empty archive for `-lm`, since the math functions
-  are in `libc.so`. `/lib/libc.a`, `libcodec.a`, `libgui.a`, `libfont.a`,
+- `/usr/lib/libm.a`, an empty archive for `-lm`, since the math functions
+  are in `libc.so`. `/usr/lib/libc.a`, `libcodec.a`, `libgui.a`, `libfont.a`,
   `libwire.a`, `libaudio.a` and `libedit.a`, the static archives of the
   cross build, for `tcc -static`. A static program that uses libgui must
   also link `-lcodec`. A static program has no dynamic loader and cannot
@@ -77,7 +79,7 @@ CPU (`SCTLR_EL1.UCI` and `UCT`, `cpu_init_el0_access`).
 A program compiled on minios and a program of the cross build meet the
 same interface. Both see the same headers, since `/usr/include` is a copy
 of the headers the cross build uses; both link the same objects, since
-the archives and shared objects in `/lib` are the ones the cross build
+the archives and shared objects in `/usr/lib` are the ones the cross build
 produces, compiled with `-fPIC`, `-msse2 -mfpmath=sse` and
 `-fno-builtin`; and both use the SysV calling convention, the same
 structure layouts and the same 80 bit `long double`. tcc predefines

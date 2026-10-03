@@ -219,7 +219,7 @@ table is a growable array of pointers.
   advance and width and 32 bit wide rows. `gfx_font_builtin` wraps the
   8x16 font; `gfx_font_load` reads `.mfnt` files produced by
   `tools/genfont/genfont.py mfnt <ttf> <px> <out>` from the DejaVu faces
-  in `third_party/dejavu/` (`/etc/fonts/sans18.mfnt`, `mono20.mfnt`).
+  in `third_party/dejavu/` (`/usr/share/fonts/sans18.mfnt`, `mono20.mfnt`).
   `gfx_text_font`, `gfx_text_width_font` and `gfx_text_index_font` draw
   and measure with any font; the older 8x16 calls remain.
 - Double buffering: `gui_window.surf` is a private buffer allocated by

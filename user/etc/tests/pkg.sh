@@ -176,7 +176,7 @@ check remove-all "$($PKG list)" ""
 check remove-missing "$($PKG remove pkgfix 2>&1)" "pkg: pkgfix: not installed"
 
 # Owners, modes and configuration files. A setuid program installed by
-# root keeps its bit, and a configuration file changed by the
+# root has its bit, and a configuration file changed by the
 # administrator survives an upgrade and the removal.
 mkdir -p cfg/files/usr/bin cfg/files/etc
 printf '#!/bin/sh\nid -u\n' > cfg/files/usr/bin/pkgsetuid
@@ -193,7 +193,7 @@ printf 'value=2\n' > cfg/files/etc/pkgcfg.conf
 printf 'name pkgcfg\nversion 1.1\nsummary Configuration\nconfig etc/pkgcfg.conf\n' > cfg/manifest
 $PKG build cfg > /dev/null
 check cfg-upgrade "$($PKG install pkgcfg-1.1.mpk 2>&1 | tr '\n' ' ')" "pkg: pkgcfg: etc/pkgcfg.conf was modified, and the new version is etc/pkgcfg.conf.pkgnew upgraded pkgcfg 1.1 "
-check cfg-kept "$(cat /etc/pkgcfg.conf)" "value=local"
+check cfg-unchanged "$(cat /etc/pkgcfg.conf)" "value=local"
 check cfg-new "$(cat /etc/pkgcfg.conf.pkgnew)" "value=2"
 check cfg-verify "$($PKG verify pkgcfg; echo $?)" "pkgcfg: etc/pkgcfg.conf: modified configuration file
 0"

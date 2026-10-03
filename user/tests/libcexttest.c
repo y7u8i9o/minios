@@ -374,14 +374,14 @@ static void test_port_additions(void)
     char *end = stpcpy(stpcpy(joined, "ab"), "cd");
     CHECK(!strcmp(joined, "abcd") && end == joined + 4, "stpcpy");
     char pathbuf[PATH_MAX];
-    CHECK(realpath("/bin/../bin/./sh", pathbuf) == pathbuf && !strcmp(pathbuf, "/bin/sh"), "realpath normalizes");
+    CHECK(realpath("/usr/../usr/bin/./sh", pathbuf) == pathbuf && !strcmp(pathbuf, "/usr/bin/sh"), "realpath normalizes");
     char *alloc = realpath("/bin//sh", NULL);
-    CHECK(alloc && !strcmp(alloc, "/bin/sh"), "realpath allocates");
+    CHECK(alloc && !strcmp(alloc, "/usr/bin/sh"), "realpath allocates");
     free(alloc);
     CHECK(realpath("/bin/nosuchfile", pathbuf) == NULL && errno == ENOENT, "realpath of a missing file");
     CHECK(access("/bin/sh", X_OK) == 0 && access("/bin/nosuchfile", F_OK) < 0, "access");
     char cs[16];
-    CHECK(confstr(_CS_PATH, cs, sizeof cs) == 5 && !strcmp(cs, "/bin"), "confstr");
+    CHECK(confstr(_CS_PATH, cs, sizeof cs) == 9 && !strcmp(cs, "/usr/bin"), "confstr");
 
     FILE *tf = fopen("/tmp/utime-test", "w");
     if (tf) fclose(tf);
