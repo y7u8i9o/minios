@@ -131,7 +131,7 @@ static int partition_of(const char *guid, char *disk, size_t dsize, char *index,
     return found ? 0 : -1;
 }
 
-/* /etc/kernel/bios-disk holds the disk the BIOS boots from and, after a
+/* /etc/kernel/bios-disk names the disk the BIOS boots from and, after a
  * space, the GPT partition index of its BIOS boot partition, or
  * PARTUUID=GUID of that partition, which the installer writes, since the
  * name of a disk depends on the disks attached. The installation into

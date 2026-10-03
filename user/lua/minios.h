@@ -17,7 +17,7 @@ int luaopen_audio(lua_State *L);    /* laudio.c: playback, capture and mixer, au
 int luaopen_mime(lua_State *L);     /* lmime.c: MIME types and handlers, mime.so */
 void minios_sys_extra(lua_State *L);
 
-/* The registry field that holds the job of a worker state (lthread.c). */
+/* The registry field that stores the job of a worker state (lthread.c). */
 #define MINIOS_WORKER_KEY "minios.worker"
 
 /* True in the state of a worker thread. */

@@ -46,10 +46,28 @@ int execv(const char *path, char *const argv[])
     return execve(path, argv, environ);
 }
 
+/* A file that the kernel does not recognize as a program (ENOEXEC) is a
+ * shell script, which execvp and execlp run with /bin/sh as POSIX asks. */
+static int exec_script(const char *path, char *const argv[])
+{
+    int argc = 0;
+    while (argv[argc])
+        argc++;
+    char *args[argc + 2];
+    args[0] = "sh";
+    args[1] = (char *)path;
+    for (int i = 1; i <= argc; i++)
+        args[i + 1] = argv[i];
+    execve("/bin/sh", args, environ);
+    return -1;
+}
+
 int execvp(const char *file, char *const argv[])
 {
-    if (strchr(file, '/'))
-        return execve(file, argv, environ);
+    if (strchr(file, '/')) {
+        execve(file, argv, environ);
+        return errno == ENOEXEC ? exec_script(file, argv) : -1;
+    }
     const char *path = getenv("PATH");
     if (!path)
         path = "/bin";
@@ -62,6 +80,8 @@ int execvp(const char *file, char *const argv[])
             buf[n] = '/';
             strcpy(buf + n + 1, file);
             execve(buf, argv, environ);
+            if (errno == ENOEXEC)
+                return exec_script(buf, argv);
             if (errno != ENOENT)
                 return -1;
         }

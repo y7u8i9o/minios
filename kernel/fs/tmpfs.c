@@ -1,6 +1,6 @@
 /* tmpfs: a filesystem in memory for /tmp and /run (docs/design/vfs.md,
  * P4 of docs/plan/packaging.md). Each file, directory and symbolic link is
- * a node that the filesystem holds for as long as it has a name. The VFS
+ * a node that the filesystem retains for as long as it has a name. The VFS
  * caches inodes only while they are referenced, which makes an inode a
  * view of its node: read_inode fills it from the node, and every operation changes
  * the node and the inode together. The data are the pages of a file, the
@@ -234,7 +234,7 @@ static void entry_remove(struct inode *dir, struct tmpfs_dirent **pp)
 }
 
 /* Change the link count of the node of a directory entry through its
- * inode, which the caller does not hold locked. */
+ * inode, which the caller has not locked. */
 static void links_add(struct superblock *sb, struct tmpfs_node *n, int delta)
 {
     struct inode *ino = inode_get(sb, n->ino);
@@ -492,7 +492,7 @@ static long tmpfs_file_read(struct file *f, char *buf, size_t count, uint64_t *p
     return (long)done;
 }
 
-/* Grow the page array to hold count pages. */
+/* Grow the page array to a capacity of count pages. */
 static int pages_reserve(struct tmpfs_node *n, size_t count)
 {
     if (count <= n->npages)

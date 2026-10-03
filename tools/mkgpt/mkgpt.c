@@ -28,7 +28,7 @@
  * except for EBUSY, which means that the root or swap lies on the disk and
  * is an error with exit status 1.
  *
- * The sector size is 512. The image holds a protective MBR, the primary
+ * The sector size is 512. The image contains a protective MBR, the primary
  * header at LBA 1 with its array of 128 entries, and the backup array and
  * header at the end of the disk. Partitions start at LBA 2048 and every
  * start is aligned to 1 MiB. For each partition one line
@@ -67,6 +67,10 @@ static const struct type_name types[] = {
     { "root-aarch64", "B921B045-1DF0-41C3-AF44-4C6F280D3FAE" },
     { "home",         "933AC7E1-2EB4-4F13-B844-0E14E2AEF915" },
     { "linux",        "0FC63DAF-8483-4772-8E79-3D69D8477DE4" },
+    /* A signed package repository of minios, on the installation medium
+     * and on the update medium of the development disk
+     * (docs/design/installer.md, docs/design/packages.md). */
+    { "repo",         "6D696E69-6F73-4E70-6B67-7265706F7369" },
 };
 
 struct part {

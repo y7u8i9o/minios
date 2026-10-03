@@ -28,7 +28,7 @@ on the compiler command line:
   `gmtime_r`/`localtime_r`, `isatty` for the prompt decision, `sigaction`
   for the interrupt handler, and the `sys/wait.h` macros that turn the
   status of `os.execute` and `io.close` into `exit`/`signal` and a code.
-  `LUA_USE_READLINE` stays off. The line editing of the prompt comes
+  `LUA_USE_READLINE` remains off. The line editing of the prompt comes
   from `user/lua/lreadline.h` instead (see "The interactive prompt"
   below).
 - `LUA_USE_DLOPEN` is on since P2 of `docs/plan/packaging.md`, which

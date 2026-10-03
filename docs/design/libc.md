@@ -61,7 +61,8 @@ result into `-1` with `errno` set. Numbers come from
   `labs`, `exit`, `_Exit`, `abort`, `atexit`, `getenv`, `setenv`, `rand`,
   `srand`, `qsort`.
 - `unistd.h`: `write`, `read`, `fork`, `execve`, `execv`, `execvp` (PATH
-  search), `_exit`, `getpid`, `getppid`, `sbrk`, `chdir`, `getcwd`,
+  search, and a file that `execve` refuses with `ENOEXEC` runs as a script
+  of `/bin/sh`, as POSIX requires), `_exit`, `getpid`, `getppid`, `sbrk`, `chdir`, `getcwd`,
   `sched_yield`; descriptor operations beyond the console fail with
   `ENOSYS` until M11.
 - `sys/wait.h`: `wait`, `waitpid`, `wait4` and the `W*` macros matching

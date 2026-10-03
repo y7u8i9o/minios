@@ -45,7 +45,7 @@ The skeleton was `user/home/`, installed twice by `user/Makefile`: on the
 root image as `/home`, for a boot without a data volume, and as
 `/usr/share/skel/home`, the seed. Since U3 it is `user/skel/`, installed
 as `/etc/skel` and copied into the homes of the accounts, and the seed
-holds `.local` with the account databases (`users.md`). `mkfs` used to skip every name that
+contains `.local` with the account databases (`users.md`). `mkfs` used to skip every name that
 begins with a dot, so `.shrc` never reached an image; it now skips only
 `.`, `..` and `.DS_Store`.
 

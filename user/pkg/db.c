@@ -397,7 +397,7 @@ int db_delete(const char *name)
 }
 
 /* The owners of all recorded files, sorted by path, built on the first
- * lookup and dropped whenever a record changes. A base system holds
+ * lookup and dropped whenever a record changes. A base system contains
  * thousands of files, and every member of every archive is looked up. */
 struct owner_entry { char *path; int pkg; };
 static struct owner_entry *owners;

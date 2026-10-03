@@ -30,7 +30,7 @@ bindings are compiled into the interpreter. Every boot case clones
 empty package database.
 
 After this plan every file of the system belongs to a package. The
-release is a disk image holding the installer environment and a signed
+release is a disk image containing the installer environment and a signed
 repository. The installer writes a GPT disk with an EFI system partition,
 a swap partition and a root partition, installs the package groups the
 user selects, creates the accounts and installs the boot loader. An
@@ -53,7 +53,7 @@ installer comes last.
   in `files/usr/bin/calc`. The manifest carries `format 2`, and `pkg`
   refuses an archive of format 1 with a message that it must be rebuilt.
 - The records are in `/var/lib/pkg/NAME/`. Each line of the file record
-  holds the path, mode, uid, gid, size and SHA-256 of one file.
+  contains the path, mode, uid, gid, size and SHA-256 of one file.
 - The owner and mode fields of the ustar headers are applied. Setuid and
   setgid bits are applied only to files owned by root.
 - Installation writes every member to a temporary file in its target
@@ -76,7 +76,7 @@ installer comes last.
   launcher and MIME tables, as now, and in addition the boot loader
   configuration (P6).
 - The packages and their groups are the following. A group is a
-  metapackage without files, holding only `depends` lines. Manual pages
+  metapackage without files, with only `depends` lines. Manual pages
   ship in the package of their program.
 
 | Group | Packages |
@@ -91,7 +91,7 @@ installer comes last.
 - An installed disk is partitioned with GPT. On x86_64 it begins with a
   BIOS boot partition of 1 MiB. Every installed disk has an EFI system
   partition of 256 MiB formatted as FAT32 and mounted at `/boot`, a swap
-  partition and an mfs root partition, which also holds `/home`.
+  partition and an mfs root partition, which also contains `/home`.
 - The kernel takes root from `root=PARTUUID=UUID`. Without that option
   it looks for the root partition type of the Discoverable Partitions
   Specification for its architecture on the disk it was booted from, and
@@ -99,9 +99,9 @@ installer comes last.
   need no partition table. Swap uses the swap partition type of the boot
   disk, or else the whole `vdb` as now.
 - The installer medium `installer.img` is a GPT disk image, the form
-  that is written to a USB stick. Its EFI system partition holds Limine,
+  that is written to a USB stick. Its EFI system partition contains Limine,
   the kernel and the initrd of the installer environment, and a second
-  partition holds the signed repository as an mfs filesystem. QEMU
+  partition contains the signed repository as an mfs filesystem. QEMU
   attaches it as a virtio disk. The installer verifies the repository
   index against the keys in its own initrd.
 - The installer has a back end and a text front end. An answer file
@@ -282,7 +282,7 @@ installer comes last.
   the virtio disks, as when a test boots from its CD, the kernel looks
   for the root and swap partitions on `vda`. The partition table is read
   from `kinit`, since the block drivers sleep, and `swap_attach` runs
-  there as well. The tmpfs holds its own nodes, found through a hash
+  there as well. The tmpfs stores its own nodes, found through a hash
   table, because the VFS treats a mount with cached inodes as busy, and
   its data pages come from the page allocator. Its unmount frees the
   superblock, which a page that the run test counted as leaked revealed.
@@ -307,18 +307,18 @@ installer comes last.
   target, with a list mode `-l`, and it writes a whole new table rather
   than editing single entries. With the size 0, `part`, `mkfs` and
   `mkfat` write into an existing file or a device file at its size. None
-  of the three holds the whole disk in memory any more: they write the
+  of the three reads the whole disk into memory any more: they write the
   metadata, which they clear explicitly on a used disk, and the copied
   files, and the images they make for new files are byte for byte the
   ones of before. The kernel reads a table again on the `ioctl`
   `BLKRRPART`, which `part` issues after writing a disk. The rescan
-  refuses a disk that holds the root or swap, updates the partition of
+  refuses a disk that contains the root or swap, updates the partition of
   each entry number in place and gives a removed one the size 0, and
   `devfs_set_size` reports the new sizes. `limine.c` builds for minios
   unmodified. The tools form the package `disktools` in the standard
   group, and the utility the package `limine` in the minimal group. The
   case uses `vdc`, since a disk without a table as `vdb` is swap, and the
-  run test gained the option `held_pages=N` for the partitions that the
+  run test gained the option `resident_pages=N` for the partitions that the
   program leaves registered. `disk_tools`, `gpt_boot`, `pkg`, `pkg_apps`
   and the file system cases pass on x86_64, and `disk_tools`, `gpt_boot`,
   `persist`, `fs`, `fat` and `boot` on aarch64.
@@ -349,7 +349,7 @@ installer comes last.
 
 ### P7. The installer (completed 2026-10-03)
 
-- `user/installer/` holds the back end and the text front end. The
+- `user/installer/` contains the back end and the text front end. The
   installer asks for the language, the keymap, the time zone, the target
   disk, an optional existing data volume to be reused as `/home` with its
   accounts imported from `/home/.local/etc`, the host name, the root
@@ -387,7 +387,7 @@ installer comes last.
   init and login cases pass on x86_64, and the installation cases and
   `symlink` on aarch64.
 
-### P8. The development disk and offline updates
+### P8. The development disk and offline updates (completed 2026-10-03)
 
 - `make devdisk` creates `build/dev.img` with the unattended installer.
 - `tools/run.sh` and `make run` attach the build repository as an update
@@ -399,8 +399,31 @@ installer comes last.
 - An existing `data.img` moves to the new layout through the reuse
   option of the installer.
 - The boot test `offline_update` boots an installed image with a
-  repository disk that holds a newer package and checks that the package
+  repository disk that contains a newer package and checks that the package
   is upgraded before the login.
+- During the work `tools/mkdisk.sh` replaced the unattended installer as
+  the writer of the development disk, since it builds the same layout on
+  the host in seconds without a boot under QEMU. The data volume remains
+  `vdc`, mounted on `/home` by the `fstab` of the base system, and an
+  existing `data.img` therefore needs no migration. `make run BOOT=kernel`
+  takes the place of `KERNEL=build`, and `make run-image` boots the CD
+  with the root image of the tests. The update medium is a GPT disk with
+  a partition of the new type repo
+  (`6d696e69-6f73-4e70-6b67-7265706f7369`), which the installer medium
+  uses as well, written by `tools/mkupdate.sh`. The base packages of a
+  development build receive the versions `VERSION.N`, raised by
+  `mkbase.py --serial` whenever a package changes, without which a rebuilt
+  package would not count as an upgrade. `pkg-update` is a task of
+  `init.conf` rather than a service and requests the restart with
+  `initctl reboot` in the background, because init serves its control
+  socket only after the task has ended. `execvp` runs a file that `execve`
+  refuses with `ENOEXEC` through `/bin/sh`, which init needs to start the
+  script, the shell announces background jobs only when it is
+  interactive, and `run.sh` attaches the medium writable and omits
+  `-no-reboot` for the development disk. `offline_update`, `shell2` and
+  `jobcontrol` pass on x86_64, `offline_update` on aarch64, and `make
+  run` performed the upgrade of the kernel, the restart and the second
+  boot to the greeter on x86_64 and the first boot on aarch64.
 
 ### P9. The release and the freshness of the index
 
@@ -410,7 +433,7 @@ installer comes last.
   `kernel.elf`, the public key, `BUILDINFO` and `SHA256SUMS`. The ISO and
   `root.img.gz` are no longer produced.
 - The index carries a sequence number and an expiry date, `pkg update`
-  refuses an index older than the one it holds or past its expiry, and
+  refuses an index older than the one it has stored or past its expiry, and
   each key is bound to the repositories it signs.
 - `packages.md`, `storage.md`, `build.md`, `users.md` and `dynlink.md`
   describe the result, `installer.md` describes the installer, and

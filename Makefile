@@ -45,7 +45,7 @@ PKG_PUB  := $(BUILD)/pkg/signing.pub
 # one HTTP server serves both (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
 
-export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT MKGPT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT PKG_KEY_FILE PKG_PUB REPO
+export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT MKGPT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT READELF PKG_KEY_FILE PKG_PUB REPO
 
 .PHONY: all kernel libc libfont libwire libaudio libcodec libgui libprof user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
 
@@ -166,6 +166,10 @@ repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 # (docs/plan/packaging.md, P3). A package whose files did not change is
 # not packed again.
 BASE     := $(BUILD)/base
+# A development build numbers its packages, which makes a rebuilt package
+# an upgrade on the development disk. The release sets PKG_SERIAL=0 and
+# gives every package the version of VERSION alone.
+PKG_SERIAL ?= 1
 SYSROOT  := $(BUILD)/sysroot
 .PHONY: base sysimage
 base: user kernel
@@ -180,12 +184,13 @@ else
 	@cp -p third_party/limine/BOOTAA64.EFI $(BUILD)/initrd_root/boot/EFI/BOOT/
 endif
 	READELF=$(READELF) python3 tools/mkbase.py --root $(BUILD)/initrd_root --defs user/packages \
-	    --abi $(BUILD)/lib/abi --out $(BASE) --version $(shell cat VERSION) $(if $(filter 1,$(strip $(CONFIG_TESTS))),,--skip tests)
+	    --abi $(BUILD)/lib/abi --out $(BASE) --version $(shell cat VERSION) $(if $(filter 1,$(strip $(CONFIG_TESTS))),,--skip tests) \
+	    $(if $(filter 1,$(PKG_SERIAL)),--serial)
 
-# The root image and the initrd hold the base system as the host build of
+# The root image and the initrd contain the base system as the host build of
 # pkg installs it into build/sysroot, every package of build/base except
 # the metapackage apps, whose applications are installed by the tests and
-# the user. The disk is attached as a virtio-blk device and holds the
+# the user. The disk is attached as a virtio-blk device and contains the
 # root filesystem, an mfs image (M13). It is rebuilt with every build,
 # which discards files written during earlier runs. Owners and setuid bits
 # come from pkg perms and user/perms (docs/design/users.md).
@@ -244,10 +249,42 @@ endif
 image: kernel initrd $(LIMINE) $(DISK) $(SWAP) $(DATA)
 	LIMINE=$(LIMINE) INITRD=$(INITRD) tools/mkiso.sh $(KERNEL) $(ISO) "$(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"
 
+# The development disk (P8, docs/design/packages.md): an installed system
+# that tools/mkdisk.sh writes once from the packages, with VIDEO on its
+# kernel command line. make run attaches it with the update medium of
+# the current build, whose packages pkg-update installs at boot, and the
+# data volume on /home. BOOT=kernel boots the kernel of the build from the
+# CD instead of the one on the disk, with the root of the disk.
+DEVDISK  := $(BUILD)/dev.img
+UPDATE   := $(BUILD)/update.img
+DEVDISK_MB ?= 4096
+.PHONY: devdisk updates devprep clean-devdisk run-image gdb-image
+$(DEVDISK):
+	$(MAKE) sysimage
+	uuid=$$(python3 -c 'import uuid; print(uuid.uuid4())'); \
+	ROOT_UUID=$$uuid SWAP_MB=256 tools/mkdisk.sh $(PKGHOST) $(ARCH) $(SYSROOT) user/perms $@ $(DEVDISK_MB) \
+	    $(MKFS) $(MKFAT) $(MKGPT) $(LIMINE) "$(if $(VIDEO),video=$(VIDEO))" && echo $$uuid > $@.root
+devdisk: $(DEVDISK)
+clean-devdisk:
+	rm -f $(DEVDISK) $(DEVDISK).root
+updates: base $(PKGSIGN) $(PKG_KEY_FILE) $(MKFS) $(MKGPT)
+	tools/mkupdate.sh $(ARCH) $(BASE) $(BUILD)/packages $(UPDATE)
+devprep: updates $(DEVDISK) kernel $(LIMINE)
+ifeq ($(BOOT),kernel)
+	LIMINE=$(LIMINE) tools/mkiso.sh $(KERNEL) $(ISO) "root=PARTUUID=$$(cat $(DEVDISK).root) $(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"
+endif
+
 run:
-	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build $(RUNFLAGS)
+	ISO=$(ISO) DEVDISK=$(DEVDISK) UPDATE=$(UPDATE) DATA=$(DATA) RUN_BOOT=$(BOOT) $(RUN) --build $(RUNFLAGS)
 
 gdb:
+	ISO=$(ISO) DEVDISK=$(DEVDISK) UPDATE=$(UPDATE) DATA=$(DATA) RUN_BOOT=$(BOOT) $(RUN) --build --gdb $(RUNFLAGS)
+
+# The image of the boot tests with the CD, as make run booted it before P8.
+run-image:
+	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build $(RUNFLAGS)
+
+gdb-image:
 	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build --gdb $(RUNFLAGS)
 
 # CASES="gui gui_wm" runs only those cases, because the whole suite takes

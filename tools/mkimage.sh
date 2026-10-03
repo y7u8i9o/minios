@@ -8,7 +8,7 @@
 # the accounts of the image, which belong to no package. TREE is emptied
 # and receives the installation. DISK is written with MKFS as an mfs image
 # of DISK_MB MiB, and INITRD as a ustar archive of the same tree without
-# the sounds, which the boot firmware would have to hold in memory.
+# the sounds, which the boot firmware would have to load into memory.
 #
 # The host build of pkg runs without root, which means the tree has
 # neither the owners nor the setuid bits of the packages. pkg perms lists

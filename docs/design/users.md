@@ -210,7 +210,7 @@ image. `/usr/local` is itself a symbolic link of the root image to
 `/home/.local`, the package prefix that belonged to the single user
 before and now belongs to root (`LOCAL_PREFIX`). Since P0 of
 `docs/plan/packaging.md` packages install into the root filesystem
-instead, and `/usr/local` holds the databases, the state and software
+instead, and `/usr/local` contains the databases, the state and software
 that the package installer does not manage. Without a data volume
 the root image's `/home` holds the same tree.
 
@@ -302,7 +302,7 @@ second process,
 `greeter --window`, which reports `login NAME`, `poweroff` or `reboot` on
 a pipe. Since 2026-10-03 the window is a layer surface over the whole
 screen in the manner of GDM. Its background is the desktop colour of
-`/etc/desktop.conf` with a gradient, or its wallpaper. A top bar holds the
+`/etc/desktop.conf` with a gradient, or its wallpaper. A top bar shows the
 host name, the clock and the Restart and Shut down buttons, and a card in
 the middle shows one page at a time. The first page lists root and the
 accounts from uid 1000 on, each with an avatar that shows its initial,

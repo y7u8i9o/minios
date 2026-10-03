@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build an installed disk on the host (docs/plan/packaging.md, P6, and
-# docs/design/packages.md): a GPT disk whose EFI system partition holds
+# docs/design/packages.md): a GPT disk whose EFI system partition contains
 # /boot of an installation tree, with the kernel, the boot loader and its
 # configuration, followed by a swap partition and the root partition with
 # the rest of the tree.
@@ -45,12 +45,12 @@ if [ "$ARCH" = x86_64 ]; then
     BIOS="bios:1::$BIOS_UUID"
     BIOS_MB=1
 fi
-printf '# The EFI system partition, which holds the kernel and the boot loader.\nPARTUUID=%s /boot fat\n' "$ESP_UUID" >> "$R/etc/fstab"
+printf '# The EFI system partition, which contains the kernel and the boot loader.\nPARTUUID=%s /boot fat\n' "$ESP_UUID" >> "$R/etc/fstab"
 "$PKG" --root "$R" --arch "$ARCH" bootconfig
 
-# /boot goes to the EFI system partition, and the root holds it as the
+# /boot goes to the EFI system partition, and the root contains it as an
 # empty mount point. The owners and modes of the root come from pkg perms
-# without the paths below /boot, which FAT cannot hold.
+# without the paths below /boot, which FAT cannot store.
 mkdir -p "$WORK/esp"
 mv "$R/boot"/* "$WORK/esp"/ 2>/dev/null || true
 "$PKG" --root "$R" perms | grep -v '^/boot/' > "$WORK/perms"

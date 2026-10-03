@@ -91,14 +91,14 @@ check conflict "$($PKG install pkgconf-1.0.mpk 2>&1)" "pkg: pkgconf: conflicts w
 printf 'name pkgfix\nversion 2.0\nsummary A library\nprovides libpkgfix.so 2\n' > lib/manifest
 $PKG build lib > /dev/null
 check abi-refused "$($PKG install pkgfix-2.0.mpk 2>&1)" "pkg: pkgprog: needs libpkgfix.so ABI 1, pkgfix has 2"
-check abi-kept "$(mine | head -n 1)" "pkgfix 1.0 A library"
+check abi-retained "$(mine | head -n 1)" "pkgfix 1.0 A library"
 
 # The same ABI number, but the build without the symbol.
 printf 'name pkgfix\nversion 1.1\nsummary A library\nprovides libpkgfix.so 1\n' > lib/manifest
 cp $FIX/bad/libpkgfix.so lib/files/usr/lib/libpkgfix.so
 $PKG build lib > /dev/null
 check symbol-refused "$($PKG install pkgfix-1.1.mpk 2>&1)" "pkg: pkgprog: usr/bin/pkgprog: undefined symbol pkgfix_value"
-check symbol-kept "$(/usr/bin/pkgprog)" "pkgfix 42"
+check symbol-retained "$(/usr/bin/pkgprog)" "pkgfix 42"
 
 # A file owned by another package, and a file of the root image that no
 # package owns.

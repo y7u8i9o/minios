@@ -8,9 +8,9 @@
 # and KERNEL. BASE is the directory of the base packages (build/base) and
 # APPS the one of the application packages (build/packages), of which the
 # archives of the current version are taken. The medium is a GPT disk.
-# Its EFI system partition holds Limine, the kernel and the initrd of the
+# Its EFI system partition contains Limine, the kernel and the initrd of the
 # installer environment, with the command line root=initrd swap=off, and a
-# second partition, of the type linux, holds the signed repository of all
+# second partition, of the type repo, contains the signed repository of all
 # packages but the tests below repo/ARCH and, when ANSWERS is given, that
 # file as installer.conf, which makes the installer run without questions.
 # On x86_64 the medium also boots through the BIOS. The installer
@@ -97,7 +97,7 @@ NEED=$((3 + BIOS_MB + ESP_MB + MED_MB))
 [ "$SIZE_MB" -ge "$NEED" ] || { echo "mkinstaller.sh: the medium needs $NEED MiB" >&2; exit 1; }
 "$MKFAT" -t 32 "$WORK/esp.img" "$ESP_MB" "$WORK/esp" > /dev/null
 "$MKFS" "$WORK/medium.img" "$MED_MB" "$WORK/medium" > /dev/null
-"$MKGPT" "$OUT" "$SIZE_MB" $BIOS "esp:$ESP_MB:$WORK/esp.img" "linux:rest:$WORK/medium.img" > /dev/null
+"$MKGPT" "$OUT" "$SIZE_MB" $BIOS "esp:$ESP_MB:$WORK/esp.img" "repo:rest:$WORK/medium.img" > /dev/null
 if [ -n "$BIOS" ]; then
     "$LIMINE" bios-install "$OUT" 1 > /dev/null 2>&1
 fi

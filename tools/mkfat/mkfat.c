@@ -11,7 +11,7 @@
  * installs as /usr/bin/mkfat.
  *
  * No buffer of the size of the image exists. The boot sectors, one copy of
- * the file allocation table and the root directory region are held in
+ * the file allocation table and the root directory region reside in
  * memory, and the clusters of the data area only when the tree touches them.
  * A new image is created with its full size by ftruncate. On an existing
  * target the reserved sectors, every copy of the table and the FAT12/16 root
@@ -34,7 +34,7 @@
 #include <sys/stat.h>
 #include <fs/fat_format.h>
 
-/* The image is never held in memory as a whole. The boot sector, the FSInfo
+/* The image is never read into memory as a whole. The boot sector, the FSInfo
  * sector, one copy of the file allocation table and the FAT12/16 root
  * directory region are buffers of their own, because the format requires
  * them in full. The clusters of the data area exist only when touched.
@@ -42,7 +42,7 @@
  * on first access and found through a hash table keyed by the cluster
  * number, and all of them are written out in order at the end. While an
  * image is read, clusters are fetched on demand into a small cache. A
- * pointer returned by cluster() stays valid until RING_SIZE other clusters
+ * pointer returned by cluster() remains valid until RING_SIZE other clusters
  * have been fetched. */
 struct map_entry {
     uint32_t cluster;
@@ -695,7 +695,7 @@ static void write_sectors(FILE *f, uint64_t first, uint32_t count, const uint8_t
 
 /* Write the image to f. A new target is made as large as the image first
  * and reads as zeros wherever nothing is written. An existing target still
- * holds old data, therefore every region the format requires is written
+ * contains old data, therefore every region the format requires is written
  * explicitly: the reserved sectors (zeros besides the boot sector, the
  * FSInfo sector and the backup boot sector), every copy of the table in
  * full, and the FAT12/16 root directory region in full. The clusters of the
@@ -758,8 +758,8 @@ static uint32_t next_entry(struct dir *d, uint32_t index, struct fat_dirent **ou
     size_t lfn_len = 0;
     uint32_t n = dir_entries(d);
     /* The entries are copies, because a hit does not renew a cache entry and
-     * the next fetch may reuse the buffer of the cluster. The entry handed
-     * back stays valid until the next call. */
+     * the next fetch may reuse the buffer of the cluster. The entry returned
+     * remains valid until the next call. */
     static struct fat_dirent cur;
     for (; index < n; index++) {
         struct fat_dirent *src = dir_entry(d, index, 0);

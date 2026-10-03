@@ -156,8 +156,8 @@ would be another terminal.
 
 ## tmpfs (P4)
 
-`fs/tmpfs.c` holds files, directories and symbolic links in memory. Each
-is a node that the filesystem holds as long as it has a name, found by
+`fs/tmpfs.c` stores files, directories and symbolic links in memory. Each
+is a node that the filesystem retains as long as it has a name, found by
 its inode number in a hash table. The VFS caches inodes only while they
 are referenced, and an inode is therefore a view of its node:
 `read_inode` fills it from the node, and every operation changes both.

@@ -1,5 +1,5 @@
 /* This file implements signed repositories (docs/design/packages.md). A
- * repository is a directory, served over HTTP or named by a file:// URL, holding the archives, an index that lists
+ * repository is a directory, served over HTTP or named by a file:// URL, containing the archives, an index that lists
  * each archive with its name, version, size and SHA-256 digest, and a
  * detached Ed25519 signature of the index. The transport is plain HTTP,
  * so nothing fetched is trusted until the signature of the index verifies
@@ -230,7 +230,7 @@ static void key_id(char id[17], const uint8_t pub[ED25519_PUBLIC_SIZE])
 }
 
 /* key_lookup finds the trusted key named id. It returns 0 with pub and
- * the file name set, or -1 when no key file in the key directory has that id. A key file holds one line, `ed25519 HEX`. */
+ * the file name set, or -1 when no key file in the key directory has that id. A key file contains one line, `ed25519 HEX`. */
 static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *file, size_t filelen)
 {
     char dir[PKG_PATH_MAX];

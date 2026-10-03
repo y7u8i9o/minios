@@ -220,7 +220,7 @@ static int pipeline(struct node *first, int background, int one)
     }
     if (background) {
         last_background = pgid;
-        job_add(pgid, pids, count, first->text ? first->text : "pipeline", JOB_RUNNING, 1);
+        job_add(pgid, pids, count, first->text ? first->text : "pipeline", JOB_RUNNING, interactive);
         return 0;
     }
     struct job job = {.used = 1, .state = JOB_RUNNING, .pgid = pgid, .npids = count};

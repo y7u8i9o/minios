@@ -45,7 +45,7 @@
 /* ---- the login window ---- */
 
 /* The login window is a layer surface over the whole screen, laid out in
- * the manner of GDM. A top bar holds the host name, the clock and the
+ * the manner of GDM. A top bar shows the host name, the clock and the
  * power buttons. A card in the middle shows one of three pages: the
  * accounts, the password of the chosen account, and the first password of
  * an account that has none. The background is the desktop colour of

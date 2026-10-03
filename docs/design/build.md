@@ -56,7 +56,11 @@ passed to the compiler as `CONFIG_*` macros, as the following table lists.
 |---|---|
 | `make` | `build/kernel.elf`, plus libc and user programs once they exist |
 | `make image` | `build/minios.iso`, bootable under BIOS and UEFI |
-| `make run` | builds the image and boots it through `tools/run.sh` (see below) |
+| `make run` | builds the update medium and boots the development disk through `tools/run.sh` (see below) |
+| `make run-image` | builds the image and boots the CD with the root image, as `make run` did before P8 of `docs/plan/packaging.md` |
+| `make devdisk` | `build/dev.img`, the development disk, created once (see The development disk below) |
+| `make clean-devdisk` | removes the development disk |
+| `make updates` | `build/update.img`, the update medium with the packages of the build |
 | `make gdb` | boots with `-s -S` and prints the GDB command line |
 | `make test CASES="case ..."` | runs the named cases under `tests/cases/` (without `CASES` every case, which is too slow to use) |
 | `make repo` | `build/repo/`, the signed package repository of the bundled applications (`packages.md`) |
@@ -110,12 +114,45 @@ layers, each of which overrides the previous one.
 | `--video MODE` | `QEMU_VIDEO` | framebuffer mode `WxH[xBPP][@SCALE]`, applied when the image is built |
 | `--extra ARGS` | `QEMU_EXTRA` | appended to the command line, the same as arguments after `--` |
 | `--gdb` | | `-s -S`, what `make gdb` passes |
-| `--build` | | run `make image VIDEO=$QEMU_VIDEO` first, as `make run` does |
+| `--devdisk FILE` | `DEVDISK` | boot the development disk FILE instead of the CD, root image and swap |
+| `--update FILE` | `UPDATE` | the update medium, attached as `vdb` beside the development disk |
+| `--boot-kernel` | `RUN_BOOT=kernel` | boot the kernel of the CD with the development disk as the root |
+| `--build` | | run `make image VIDEO=$QEMU_VIDEO` first, or `make devprep` with `--devdisk`, as `make run` does |
 | `--dry-run`, `--verbose` | | print the QEMU command line |
 | `--config FILE` | `QEMU_CONF` | read another configuration file |
 
 The script rejects an audio backend that the QEMU binary does not list in
 `-audiodev help`. `tools/run.sh --help` prints the full option list.
+
+### The development disk
+
+Since P8 of `docs/plan/packaging.md`, `make run` boots an installed
+system that persists between runs and receives the packages of each
+build through `pkg`, as an installed machine receives updates. `make
+devdisk` creates the development disk once as `dev.img` in the build
+directory of the architecture, a GPT disk of `DEVDISK_MB` (4096) MiB
+that `tools/mkdisk.sh` writes from `build/sysroot` with a swap partition
+of 256 MiB and the `video=` mode of `VIDEO`, and records the GUID of its
+root partition in `dev.img.root`. `make clean-devdisk` removes it, and
+the next run creates it again. `make updates` writes the update medium
+`update.img` with `tools/mkupdate.sh`, a GPT disk with one partition of
+the type repo, whose mfs contains the signed repository of the base
+packages and the applications below `repo/ARCH`. `make run` runs `make
+devprep`, which builds both, and boots the development disk from its own
+boot loader with the medium as `vdb` and the data volume as `vdc`, where
+`/etc/fstab` of the base system mounts it on `/home` as before.
+
+At boot the task `pkg-update` installs the packages of the medium that
+are newer than the installed ones (`packages.md`) and restarts the
+machine when the kernel, the boot loader or libc changed. `-no-reboot` is
+not passed for the development disk, and QEMU therefore starts the
+machine again. The medium is attached writable, as a USB stick is,
+because mounting an mfs updates its superblock, and make writes the
+medium anew before every run. `make run BOOT=kernel` builds a CD with
+the kernel of the build and the command line `root=PARTUUID` of the
+development disk and boots it, which starts a new kernel without the
+update and the restart. `make run-image` and `make gdb-image` boot the
+CD with the root image of the tests, as `make run` did before.
 
 ## Kernel link
 

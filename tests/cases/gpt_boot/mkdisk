@@ -1,6 +1,6 @@
 #!/bin/sh
 # The disk of the gpt_boot case: an EFI system partition with a FAT file
-# system holding hello.txt, a swap partition, and the shared root image as
+# system containing hello.txt, a swap partition, and the shared root image as
 # the root partition of the machine (docs/design/block.md). The partition
 # GUIDs are fixed, since the test names them.
 set -e

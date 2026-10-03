@@ -29,7 +29,7 @@ Packages install into the root filesystem. An archive names every file
 relative to the root, as `usr/bin/calc` or `etc/calc.conf`, and the
 installer writes it there. Programs of packages are in `/usr/bin`,
 their libraries in `/usr/lib` and their data in `/usr/share`.
-`/usr/local` holds software that `pkg` does not manage (`minios/local.h`).
+`/usr/local` contains software that `pkg` does not manage (`minios/local.h`).
 `--root DIR` installs into the tree `DIR` instead and reads the records,
 `etc/pkg.conf` and `etc/pkg/keys` below it. The host build of
 `pkg` uses it to fill the tree of an image (P3 of the plan), and `--arch`
@@ -50,7 +50,7 @@ Three places know the locations of installed packages:
   by absolute path.
 - `/lib/ld.so` searches `/usr/lib`, where `/lib` leads since P1, then
   `/usr/local/lib` and then `~/.local/lib` for a library named in
-  `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a slash stays refused, and no
+  `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a slash is still refused, and no
   environment variable changes the list.
 - The panel reads `/var/lib/pkg/launcher` and then `/etc/launcher` or the
   user's `~/.config/launcher`. `mime_load` reads the system tables and
@@ -129,8 +129,8 @@ repeat where the value is a list.
 | `mime-handler` | `type command` | a line for the handler table, the command relative to the root |
 | `icon` | path relative to the root | the icon of the launcher entries |
 | `config` | path relative to the root | a configuration file of the package, which must be a regular file of the archive (see Configuration files) |
-| `kernel` | path relative to the root | the kernel file of the package that holds the kernel (see The boot loader), once |
-| `bios-stage` | path relative to the root | the BIOS stage of the package that holds the boot loader, once |
+| `kernel` | path relative to the root | the kernel file of the package that contains the kernel (see The boot loader), once |
+| `bios-stage` | path relative to the root | the BIOS stage of the package that contains the boot loader, once |
 | `unchecked` | pattern relative to the root | files of test data that the ELF checks and the library rule leave alone, such as the deliberately broken fixtures of the loader tests. A `*` also matches `/`. Only the package `tests` uses it |
 
 `pkg build` writes the `arch` line from the machine of the ELF files in the
@@ -160,14 +160,15 @@ The installer stores its state under `/var/lib/pkg/` (`PKG_DB`):
     _repos/REPO/         the verified index of a repository
 
 The mode is octal and the digest hexadecimal. The path comes last in
-each line, since it may contain spaces. The lock file holds the pid of
-the holder, and a lock whose holder no longer exists is taken over.
+each line, since it may contain spaces. The lock file contains the pid of
+its process, and a lock whose process no longer exists is removed and
+acquired anew.
 `files` is the file ownership record. A path belongs to at most one
 package. An archive naming a path listed in another package's record is
 refused before extraction, naming both packages and the path, and an
 archive naming a file that exists in the filesystem and belongs to no
 package is refused as well. The installer reads all records once per
-command into a table sorted by path, since a base system holds thousands
+command into a table sorted by path, since a base system contains thousands
 of files. `dirs` lists the directories the installer created for the
 package. Removal deletes them again when they are empty and leaves
 `usr/bin` or `usr/share` alone while other packages use them.
@@ -410,7 +411,7 @@ The packages follow the table of section 2 of the plan. `minimal`,
 contain no files and depend on their members. The group of the desktop
 is named `desktop-system`, because `desktop` is the package of the
 panel, the desktop and the settings. `kernel` and `limine` join the
-minimal group in P6. `tests`, built only with `CONFIG_TESTS=1`, holds
+minimal group in P6. `tests`, built only with `CONFIG_TESTS=1`, contains
 every test program, fixture and script and the archive shelf of the
 applications.
 
@@ -466,6 +467,49 @@ previous kernel and both entries of the configuration. The case file
 `boot2` then boots the disk itself, where Limine, through the BIOS stage
 on x86_64 and through UEFI on aarch64, loads the new kernel with the
 command line of the disk, which runs `/etc/tests/kupgrade2.sh`.
+
+## Offline updates
+
+Since P8 an installed system applies updates from an update medium at
+boot, before any session starts, as the offline updates of Fedora do.
+`/usr/bin/pkg-update`, a shell script of the package `pkg`, runs as the
+task `update` of `init.conf` after `fsinit`. It looks in
+`/dev/partitions` for a partition of the type repo
+(`6d696e69-6f73-4e70-6b67-7265706f7369`, which `mkgpt`, `part` and the
+installer also use), mounts its mfs on `/run/update`, writes
+`/run/pkg-update.conf` with the `file://` repository `repo/ARCH` of the
+medium, and runs `pkg update` and `pkg upgrade` with that configuration
+and the keys of `/etc/pkg/keys`. The task ends at once when no such
+partition exists. The output of `pkg` is written to
+`/run/pkg-update.log` and to the console with the prefix `pkg-update:`.
+When `kernel`, `limine` or `libc` was upgraded, the script runs
+`initctl reboot` in the background, since init answers a request of its
+control socket only after the task has ended, and init then stops the
+services and restarts the machine with the new kernel.
+
+The base packages of a development build have versions of the form
+`VERSION.N`. `mkbase.py --serial` starts `N` at 1, raises it whenever
+the contents of a package change, and stores it in `build/base/NAME.serial`.
+The digest that detects a change is computed over the manifest with the
+plain `VERSION`, and a new serial alone therefore does not count as a
+change. A rebuilt package therefore has a higher version than the
+installed one, and `pkg upgrade` replaces it. `PKG_SERIAL=0` turns the
+serial off, and every package then has the version of `VERSION` alone,
+as the release requires.
+
+`tools/mkupdate.sh ARCH BASE APPS OUT` writes an update medium. It
+builds a repository of the archives of `BASE` and the current archives
+of the applications with `mkrepo`, signed with the key of the build,
+formats it with `mkfs` and places it in a GPT disk with one partition of
+the type repo through `mkgpt`.
+
+The `offline_update` case boots a disk from `mkdisk.sh` with a second
+disk from `mkupdate.sh` that contains `games` and `kernel` repacked at
+version 99.0. The first boot must upgrade both and restart, the second
+must find the packages up to date and reach the greeter, and the post
+script reads the disk on the host and checks the records of both
+packages, the entry `minios 99.0` of `limine.conf` with the previous
+kernel as the second entry, and `kernel.elf.old`.
 
 ## Repositories
 

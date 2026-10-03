@@ -147,7 +147,7 @@ source runs on minios as `part`, and `mkfs`, `mkfat` and the `limine`
 utility run there as well (package `disktools`, and `limine`). With the
 size 0, each of the three formats an existing file or a device file such
 as `/dev/vdc` at its current size without truncating it. `part -l` lists a
-table. None of them holds the whole disk in memory: they write the
+table. None of them reads the whole disk into memory: they write the
 metadata and the copied files, and `part` asks the kernel to read the new
 table.
 

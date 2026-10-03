@@ -1,6 +1,6 @@
 /* installer: install minios from its installation medium onto a disk
  * (docs/design/installer.md). It runs on the console of the installer
- * environment, whose init starts it. When the medium holds an answer file,
+ * environment, whose init starts it. When the medium contains an answer file,
  * installer.conf, or one is given with -a FILE, it installs without
  * questions and powers off. Otherwise it asks for the disk, the package
  * group, the language, the keyboard layout, the time zone, the size of

@@ -17,7 +17,7 @@ attaches as a virtio disk. It has these partitions.
 |---|---|
 | BIOS boot, 1 MiB, x86_64 only | the BIOS stage of Limine, written by `limine bios-install` |
 | EFI system, FAT32 | `EFI/BOOT/BOOTX64.EFI` or `BOOTAA64.EFI`, `limine/limine-bios.sys`, `minios/kernel.elf`, `minios/initrd.tar` and `limine.conf` with the command line `root=initrd swap=off` |
-| linux, mfs | `repo/ARCH/`, the repository of every package except `tests`, signed with the key of the build, and optionally `installer.conf` |
+| repo, mfs | `repo/ARCH/`, the repository of every package except `tests`, signed with the key of the build, and optionally `installer.conf` |
 
 The installer environment is the initrd. `mkinstaller.sh` installs the
 groups and packages `minimal`, `disktools` and `installer` into a tree with
@@ -32,11 +32,11 @@ and runs from the initrd.
 
 ## The installer program
 
-`user/installer/` holds the back end (`backend.c`) and the text front end
+`user/installer/` contains the back end (`backend.c`) and the text front end
 (`text.c`) with their shared declarations (`installer.h`). The installer
-first finds the medium: the partition of the type linux that holds an mfs
+first finds the medium: the partition of the type repo (`6d696e69-6f73-4e70-6b67-7265706f7369`, a type of minios) that contains an mfs
 with `repo/MACHINE/index`, which it mounts on `/run/installer/medium` and
-whose disk it excludes from the targets. When the medium holds
+whose disk it excludes from the targets. When the medium contains
 `installer.conf`, or `-a FILE` names an answer file, it installs without
 questions and powers off afterwards, also after a failure, since init
 would start it again with the same answers. Otherwise it lists the disks
@@ -45,7 +45,7 @@ packages, the language, the keyboard layout, the time zone, the size of
 swap, the password of root, the first account with its full name and
 password, shows the disk to be erased and installs after the word `yes`.
 
-The answer file holds `key value` lines: `disk`, `group`
+The answer file consists of `key value` lines: `disk`, `group`
 (`desktop-system` by default), `packages`, `lang` (`en_US.UTF-8`),
 `keymap` (`us`), `timezone` (`UTC`), `swap_mb` (256), `root_password`,
 `user`, `user_fullname`, `user_password`, `reuse_home`, `cmdline` and

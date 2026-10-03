@@ -1,5 +1,5 @@
 # The GPT test, run as sh /etc/tests/gpt.sh by tests/cases/gpt_boot. Its
-# disk holds an EFI system partition, a swap partition and the root
+# disk contains an EFI system partition, a swap partition and the root
 # partition, which the kernel found by its type. Every failing check prints
 # a line starting with FAIL and the value received.
 check() {
@@ -52,7 +52,7 @@ check first-copy "$(cp $F /mnt/small/a 2>/dev/null; echo $?)" "0"
 check full "$(cp $F /mnt/small/b 2>/dev/null; echo $?)" "1"
 check umount "$(mount -u /mnt/small; echo $?)" "0"
 check umounted "$(mount | grep -c '^/mnt/small ')" "0"
-# The run harness counts the pages that the mounts would hold.
+# The run harness counts the pages that the mounts would occupy.
 check umount-tmp "$(mount -u /tmp; echo $?)" "0"
 check umount-boot "$(mount -u /boot; echo $?)" "0"
 echo "gpt: done"

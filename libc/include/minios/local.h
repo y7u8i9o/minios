@@ -1,8 +1,8 @@
 #pragma once
-/* /usr/local holds software that the package installer does not manage.
+/* /usr/local contains software that the package installer does not manage.
  * Until the development disk of docs/plan/packaging.md (P8), it is also a
  * symbolic link on the root image to /home/.local on the data volume,
- * which holds the account databases and the state that survives a
+ * which contains the account databases and the state that survives a
  * rebuild of the root image (docs/design/users.md). */
 #define LOCAL_PREFIX "/usr/local"
 #define LOCAL_BIN LOCAL_PREFIX "/bin"

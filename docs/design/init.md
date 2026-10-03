@@ -19,7 +19,9 @@ desktop, init starts `login` in its place (P7 of
 `docs/plan/packaging.md`). Options between the name and the command are
 `if=PATH` (start only when the path exists), `log=FILE` (standard
 output and error appended to the file) and `restart=always|never|failure`.
-The shipped file runs `fsinit`, starts `audiod` as the `audio` service
+The shipped file runs `fsinit`, then `pkg-update` as the task `update`,
+which applies an update medium when one is attached (P8 of
+`docs/plan/packaging.md`, `packages.md`), starts `audiod` as the `audio` service
 when `/dev/pcm0` exists, runs `net apply` for the static network entries,
 starts `dhcpc -a` as the `dhcp` service with `restart=failure` (the client
 reads the dhcp entry of `/etc/network` itself and exits with status 0

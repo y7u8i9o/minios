@@ -75,12 +75,23 @@
 #       --swap FILE        SWAP              swap image (default build/swap.img)
 #       --data FILE        DATA              data volume (default data.img in the repository)
 #       --no-data          DATA=             boot without the data volume
+#       --devdisk FILE     DEVDISK           boot the development disk FILE, an
+#                                            installed system (make run), in
+#                                            place of the CD with --disk and
+#                                            --swap, with the data volume as vdc
+#       --update FILE      UPDATE            the update medium attached as vdb
+#                                            beside the development disk
+#       --boot-kernel      RUN_BOOT=kernel   boot the kernel of the CD with the
+#                                            development disk as the root
 #       --qemu BINARY      QEMU              qemu-system-x86_64 to run
 #       --extra ARGS       QEMU_EXTRA        arguments appended to the command
 #   -g, --gdb                                start halted with the gdbstub
 #                                            on port 1234 (-s -S)
 #   -B, --build                              run `make image` first (with
-#                                            VIDEO=$QEMU_VIDEO)
+#                                            VIDEO=$QEMU_VIDEO), or with
+#                                            --devdisk `make devprep`, which
+#                                            creates the development disk
+#                                            once and writes the update medium
 #   -n, --dry-run                            print the command, do not run it
 #   -v, --verbose                            print the command before running
 #   -c, --config FILE      QEMU_CONF         configuration file to read
@@ -222,6 +233,9 @@ while [ $# -gt 0 ]; do
         --data)           DATA="$2"; shift ;;
         --data=*)         DATA="${1#*=}" ;;
         --no-data)        DATA="" ;;
+        --devdisk)        DEVDISK="$2"; shift ;;
+        --update)         UPDATE="$2"; shift ;;
+        --boot-kernel)    RUN_BOOT=kernel ;;
         --qemu)           QEMU="$2"; shift ;;
         --qemu=*)         QEMU="${1#*=}" ;;
         --extra)          QEMU_EXTRA="$QEMU_EXTRA $2"; shift ;;
@@ -367,7 +381,11 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
     fi
 fi
 
-if [ "$DO_BUILD" = 1 ]; then
+if [ "$DO_BUILD" = 1 ] && [ -n "$DEVDISK" ]; then
+    # The video mode reaches the development disk when make creates it,
+    # and the CD of RUN_BOOT=kernel on every build.
+    "${MAKE:-make}" -C "$TOP" devprep ${QEMU_VIDEO:+"VIDEO=$QEMU_VIDEO"} ${RUN_BOOT:+"BOOT=$RUN_BOOT"}
+elif [ "$DO_BUILD" = 1 ]; then
     if [ -n "$QEMU_VIDEO" ]; then
         "${MAKE:-make}" -C "$TOP" image "VIDEO=$QEMU_VIDEO"
     else
@@ -376,7 +394,11 @@ if [ "$DO_BUILD" = 1 ]; then
 elif [ -n "$QEMU_VIDEO" ] && [ "$VERBOSE" = 1 ]; then
     echo "run.sh: --video $QEMU_VIDEO applies when the image is built (make run or --build)" >&2
 fi
-if [ "$DRY_RUN" = 0 ]; then
+if [ "$DRY_RUN" = 0 ] && [ -n "$DEVDISK" ]; then
+    [ -f "$DEVDISK" ] || die "$DEVDISK not found, run 'make devdisk' or pass --build"
+    [ "$RUN_BOOT" != kernel ] || [ -f "$ISO" ] || die "$ISO not found, run 'make devprep BOOT=kernel'"
+    [ -z "$DATA" ] || [ -f "$DATA" ] || die "$DATA not found, run 'make image' or pass --build"
+elif [ "$DRY_RUN" = 0 ]; then
     [ -f "$ISO" ]  || die "$ISO not found, run 'make image' or pass --build"
     [ -f "$DISK" ] || die "$DISK not found, run 'make image' or pass --build"
     [ -f "$SWAP" ] || die "$SWAP not found, run 'make image' or pass --build"
@@ -418,9 +440,28 @@ esac
 set -- "$@" -accel "$QEMU_ACCEL" -m "$QEMU_MEM" -smp "$QEMU_SMP" \
        -object rng-random,id=rng0,filename=/dev/urandom \
        -device virtio-rng-pci,rng=rng0,disable-legacy=on \
-       -serial "$QEMU_SERIAL" -no-reboot \
-       -drive "file=$DISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0 \
-       -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1
+       -serial "$QEMU_SERIAL"
+# A restart ends QEMU, except on the development disk, where pkg-update
+# restarts the machine after it has upgraded the kernel, the boot loader
+# or libc.
+[ -z "$DEVDISK" ] && set -- "$@" -no-reboot
+# The development disk replaces the root image and swap, which it contains
+# itself, and the update medium takes the place of swap as vdb. The medium
+# is writable, as a USB stick is, since mounting an mfs updates its
+# superblock, and make writes it anew before every run. A medium that make
+# has not built is replaced by an empty disk, and the data volume therefore
+# remains vdc.
+if [ -n "$DEVDISK" ]; then
+    set -- "$@" -drive "file=$DEVDISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0
+    if [ -n "$UPDATE" ] && [ -f "$UPDATE" ]; then
+        set -- "$@" -drive "file=$UPDATE,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1
+    else
+        set -- "$@" -drive "driver=null-co,if=none,id=vd1" -device virtio-blk-pci,drive=vd1
+    fi
+else
+    set -- "$@" -drive "file=$DISK,if=none,id=vd0,format=raw" -device virtio-blk-pci,drive=vd0 \
+        -drive "file=$SWAP,if=none,id=vd1,format=raw" -device virtio-blk-pci,drive=vd1
+fi
 [ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
@@ -446,8 +487,11 @@ if [ "$QEMU_FULLSCREEN" = 1 ]; then
 fi
 [ -n "$QEMU_DISPLAY" ] && set -- "$@" -display "$QEMU_DISPLAY"
 [ "$GDB" = 1 ] && set -- "$@" -s -S
-if [ "$BOOT" = -cdrom ]; then
-    set -- "$@" -cdrom "$ISO"
+if [ -n "$DEVDISK" ] && [ "$RUN_BOOT" != kernel ]; then
+    # The firmware loads the boot loader of the development disk.
+    [ "$BOOT" = -cdrom ] && set -- "$@" -boot order=c
+elif [ "$BOOT" = -cdrom ]; then
+    set -- "$@" -cdrom "$ISO" -boot order=d
 else
     set -- "$@" -drive "file=$ISO,if=none,id=cd0,media=cdrom,readonly=on" \
         -device virtio-scsi-pci -device scsi-cd,drive=cd0

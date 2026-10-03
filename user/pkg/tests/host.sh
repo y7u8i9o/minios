@@ -68,7 +68,7 @@ printf 'name one\nversion 1.2\nsummary The first package\nconfig etc/one.conf\n'
 $P build one one-1.2.mpk > /dev/null
 check upgrade-modified "$($P install one-1.2.mpk 2>&1 | tr '\n' ',')" \
     "pkg: one: etc/one.conf was modified, and the new version is etc/one.conf.pkgnew,upgraded one 1.2,"
-check config-kept "$(cat $R/etc/one.conf)" "setting=local"
+check config-retained "$(cat $R/etc/one.conf)" "setting=local"
 check config-new "$(cat $R/etc/one.conf.pkgnew)" "setting=3"
 check verify-config "$($P verify one; echo $?)" "one: etc/one.conf: modified configuration file
 0"
@@ -150,7 +150,7 @@ if test -n "$PKGSIGN" && test -n "$MKREPO"; then
     check file-list "$($P2 list | tr '\n' ',')" "appb 2.0 An application package,liba 1.0 A library package,"
     check file-data "$(cat $R2/usr/share/appb/data)" "b"
     check file-verify "$($P2 verify; echo $?)" "0"
-    check file-kept "$(ls fr/repo | tr '\n' ' ')" "appb-2.0.mpk index index.sig liba-1.0.mpk "
+    check file-retained "$(ls fr/repo | tr '\n' ' ')" "appb-2.0.mpk index index.sig liba-1.0.mpk "
     check file-tmp "$(ls -d /tmp/pkg-* 2>/dev/null | wc -l | tr -d ' ')" "0"
 
     # An archive that changed after the signing is refused and not removed.
@@ -167,7 +167,7 @@ if test -n "$PKGSIGN" && test -n "$MKREPO"; then
     printf 'Z' >> fr/swap
     cp fr/swap fr/repo/liba-1.0.mpk
     check file-digest "$($P3 install liba 2>&1)" "pkg: liba: the SHA-256 digest of liba-1.0.mpk differs from the index of local"
-    check file-tampered-kept "$(test -f fr/repo/liba-1.0.mpk && echo present)" "present"
+    check file-tampered-retained "$(test -f fr/repo/liba-1.0.mpk && echo present)" "present"
     check file-tampered-none "$($P3 list | wc -l | tr -d ' ')" "0"
 
     # An index signed by another key is refused.

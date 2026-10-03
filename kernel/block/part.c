@@ -4,7 +4,7 @@
  * when the primary one is damaged, and registers every used entry as a
  * block device whose transfers go to the disk at an offset. part_rescan
  * reads the table of one disk again after a program wrote it (BLKRRPART).
- * The device of an entry number stays registered: a rescan updates it
+ * The device of an entry number remains registered: a rescan updates it
  * and gives a partition that disappeared the size 0. /dev/partitions lists
  * the partitions of nonzero size, one line "name disk partuuid typeuuid
  * bytes" each.
@@ -28,15 +28,15 @@
 
 /* The partitions, their fields first, bdev.nsectors, type, uuid and
  * size_reported, the disks with a valid table with their disk GUIDs, and
- * the devices that hold a disk busy. Protected by part_lock. */
+ * the devices that mark a disk as busy. Protected by part_lock. */
 static LIST_HEAD(partitions);
 static DEFINE_SPINLOCK(part_lock);
 #define PART_MAX_DISKS 16
 static struct { struct blockdev *disk; uint8_t guid[16]; } tables[PART_MAX_DISKS];
 static int ntables;
-#define PART_MAX_HELD 4
-static struct blockdev *held[PART_MAX_HELD];
-static int nheld;
+#define PART_MAX_BUSY 4
+static struct blockdev *busy_disks[PART_MAX_BUSY];
+static int nbusy;
 
 /* GUIDs in their on-disk byte order: the first three groups are little
  * endian. */
@@ -268,8 +268,8 @@ static void update_sizes(struct blockdev *disk)
 {
     struct list_head *pos;
     for (;;) {
-        /* devfs_set_size takes an inode mutex, which part_lock may not
-         * be held across, and the walk therefore restarts for each. */
+        /* devfs_set_size takes an inode mutex, which may not be acquired
+         * while part_lock is, and the walk therefore restarts for each. */
         struct partition *next = NULL;
         spin_lock(&part_lock);
         list_for_each(pos, &partitions) {
@@ -360,8 +360,8 @@ void part_hold(struct blockdev *dev)
     if (!dev)
         return;
     spin_lock(&part_lock);
-    if (nheld < PART_MAX_HELD)
-        held[nheld++] = dev;
+    if (nbusy < PART_MAX_BUSY)
+        busy_disks[nbusy++] = dev;
     spin_unlock(&part_lock);
 }
 
@@ -369,8 +369,8 @@ int part_rescan(struct blockdev *disk)
 {
     spin_lock(&part_lock);
     bool busy = false;
-    for (int i = 0; i < nheld; i++)
-        if (held[i] == disk || held[i]->disk == disk)
+    for (int i = 0; i < nbusy; i++)
+        if (busy_disks[i] == disk || busy_disks[i]->disk == disk)
             busy = true;
     spin_unlock(&part_lock);
     if (busy)

@@ -574,7 +574,7 @@ These locks are in user space and do not add a kernel lock-order level.
 - `part_lock` (spinlock, `kernel/block/part.c`) protects the list of GPT
   partitions, the fields of a partition that a rescan changes (`first`,
   `bdev.nsectors`, `type`, `uuid`, `size_reported`), the table of disks
-  with their GUIDs and the devices that hold a disk busy. It is a leaf
+  with their GUIDs and the devices that mark a disk as busy. It is a leaf
   lock: `part_rw` reads the position of a partition under it and calls
   the driver after releasing it, and `apply_table` releases it before
   `blockdev_register` takes `blockdev_lock` and before `devfs_set_size`

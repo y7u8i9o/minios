@@ -1,0 +1,25 @@
+#!/bin/sh
+# Checks on the host the installed disk after the update: the package
+# record of the kernel names version 99.0, and limine.conf on the EFI
+# system partition names it with the previous kernel as the second entry.
+set -e
+WORK="$(dirname "$DISK")/post"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKGPT" -l "$DISK" > "$WORK/table"
+extract() {
+    first=$(grep " $1 " "$WORK/table" | cut -d' ' -f3)
+    last=$(grep " $1 " "$WORK/table" | cut -d' ' -f4)
+    dd if="$DISK" of="$2" bs=512 skip="$first" count=$((last - first + 1)) 2>/dev/null
+}
+extract esp "$WORK/esp.img"
+extract "root-$ARCH" "$WORK/root.img"
+fail() { echo "post: $1"; exit 1; }
+"$MKFS" --cat "$WORK/root.img" /var/lib/pkg/kernel/manifest | grep -q '^version 99.0$' || fail "the record of kernel"
+"$MKFS" --cat "$WORK/root.img" /var/lib/pkg/games/manifest | grep -q '^version 99.0$' || fail "the record of games"
+"$MKFAT" --cat "$WORK/esp.img" /limine.conf > "$WORK/limine.conf"
+grep -q '^/minios 99.0$' "$WORK/limine.conf" || fail "limine.conf has no entry of 99.0"
+grep -q '^/minios, the previous kernel$' "$WORK/limine.conf" || fail "limine.conf has no previous kernel"
+"$MKFAT" --cat "$WORK/esp.img" /minios/kernel.elf.old > /dev/null || fail "kernel.elf.old"
+rm -rf "$WORK"
+echo "post: the installed system has kernel 99.0"

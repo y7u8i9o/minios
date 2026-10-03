@@ -28,7 +28,7 @@
 #define TYPE_ESP   "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 #define TYPE_SWAP  "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
 #define TYPE_BIOS  "21686148-6449-6e6f-744e-656564454649"
-#define TYPE_LINUX "0fc63daf-8483-4772-8e79-3d69d8477de4"
+#define TYPE_REPO  "6d696e69-6f73-4e70-6b67-7265706f7369"
 
 static const char *machine(void)
 {
@@ -147,7 +147,7 @@ int inst_find_medium(char *disk, size_t size)
     if (m)
         fclose(m);
     while (f && !found && fgets(line, sizeof line, f)) {
-        if (sscanf(line, "%31s %31s %63s %63s", n, d, u, t) != 4 || strcmp(t, TYPE_LINUX) != 0)
+        if (sscanf(line, "%31s %31s %63s %63s", n, d, u, t) != 4 || strcmp(t, TYPE_REPO) != 0)
             continue;
         if (mount(n, INST_MEDIUM, "mfs") < 0)
             continue;
@@ -282,7 +282,7 @@ int inst_check(const struct plan *p, const char *medium_disk)
         inst_log("the password of root is missing");
         return -1;
     }
-    /* The installer environment holds the packages keymaps and tzdata,
+    /* The installer environment contains the packages keymaps and tzdata,
      * which the target receives as well. */
     char keymap[64];
     snprintf(keymap, sizeof keymap, "/usr/share/keymaps/%.32s.mkm", p->keymap);
@@ -361,7 +361,7 @@ static int write_fstab(const struct plan *p, const char *esp_uuid)
             continue;
         fputs(buf, out);
     }
-    fprintf(out, "# The EFI system partition, which holds the kernel and the boot loader.\n");
+    fprintf(out, "# The EFI system partition, which contains the kernel and the boot loader.\n");
     fprintf(out, "PARTUUID=%s /boot fat\n", esp_uuid);
     if (p->reuse_home[0])
         fprintf(out, "# The data volume of an earlier installation.\n%s /home mfs homes\n", p->reuse_home);
@@ -396,7 +396,7 @@ static int accounts(const struct plan *p)
     inst_log("set the password of root");
     if (!p->user[0])
         return 0;
-    /* The seed holds the account user, uid 1000, which the first account
+    /* The seed contains the account user, uid 1000, which the first account
      * replaces. */
     if (strcmp(p->user, "user") != 0) {
         account_replace(passwd, "user", NULL);

@@ -30,4 +30,4 @@ root_uuid=$(grep " root-$ARCH " "$WORK/table" | cut -d' ' -f5)
 "$MKFAT" --cat "$WORK/esp.img" /limine.conf | grep -q "cmdline: root=PARTUUID=$root_uuid" || fail "limine.conf"
 "$FSCK" "$WORK/root.img" > "$WORK/fsck.log" || { cat "$WORK/fsck.log"; fail "fsck"; }
 rm -rf "$WORK"
-echo "post: the installed system holds the answers"
+echo "post: the installed system matches the answers"

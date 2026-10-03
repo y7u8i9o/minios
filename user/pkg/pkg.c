@@ -723,7 +723,7 @@ static void remove_files(const struct manifest *m, const struct record *r, const
  * when all of them are written are they renamed into place. A failure
  * before that point removes the temporary files and the new directories
  * and leaves the installed files untouched. A file that a running program
- * maps stays valid after the rename, since the filesystem frees an
+ * maps remains valid after the rename, since the filesystem frees an
  * unlinked file only when its last reference goes away. */
 enum { STAGE_REPLACE, STAGE_PKGNEW, STAGE_SAME };
 struct staged {

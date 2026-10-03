@@ -32,8 +32,8 @@ struct plan {
 /* Messages go to the console and to the log, which the installation
  * copies to /var/log/installer.log of the target. */
 void inst_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-/* Find the installation medium, a partition with an mfs that holds
- * repo/index below the directory of the machine, and mount it on
+/* Find the installation medium, a partition of the type repo with an mfs
+ * that contains repo/MACHINE/index, and mount it on
  * INST_MEDIUM. Returns 0 with the name of its disk in disk, or -1. */
 int inst_find_medium(char *disk, size_t size);
 /* Read the answer file at path into p. Returns 0 or -1. */

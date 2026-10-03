@@ -1,0 +1,22 @@
+#!/bin/sh
+# The disks of the offline_update case: an installed system from
+# build/sysroot, written by tools/mkdisk.sh, and an update medium with
+# version 99.0 of the packages games and kernel, written by
+# tools/mkupdate.sh, which pkg-update applies at the first boot.
+set -e
+B="$(dirname "$DISK")"
+"$TOP/tools/mkdisk.sh" "$PKGHOST" "$ARCH" "$B/sysroot" "$TOP/user/perms" "$OUT" 700 \
+    "$MKFS" "$MKFAT" "$MKGPT" "$LIMINE" ""
+WORK="$(dirname "$OUT")/newer"
+rm -rf "$WORK"
+mkdir -p "$WORK/base" "$WORK/apps"
+for name in games kernel; do
+    archive="$(ls "$B/base/$name"-[0-9]*.mpk | head -n 1)"
+    mkdir -p "$WORK/$name"
+    (cd "$WORK/$name" && tar -xzf "$archive")
+    sed 's/^version .*/version 99.0/' "$WORK/$name/manifest" > "$WORK/$name/manifest.new"
+    mv "$WORK/$name/manifest.new" "$WORK/$name/manifest"
+    "$TOP/tools/mkpkg.sh" "$WORK/$name" "$WORK/base/$name-99.0.mpk" "$B/lib/abi"
+done
+"$TOP/tools/mkupdate.sh" "$ARCH" "$WORK/base" "$WORK/apps" "$OUT2"
+rm -rf "$WORK"

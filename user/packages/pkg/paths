@@ -1,4 +1,5 @@
 usr/bin/pkg
+usr/bin/pkg-update
 etc/pkg.conf
 etc/pkg/**
 usr/share/man/man1/pkg.1

@@ -68,7 +68,12 @@ FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuS
           $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ROOT)/usr/bin/pkg-update $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+
+# pkg-update applies an update medium at boot (docs/design/packages.md).
+$(ROOT)/usr/bin/pkg-update: pkg/pkg-update.sh
+	@mkdir -p $(dir $@)
+	@rm -f $@ && cp $< $@ && chmod 755 $@
 
 # The copy replaces the old file rather than writing into it, since the
 # modes step leaves files such as /etc/sudoers without a write bit.
@@ -201,10 +206,10 @@ $(BUILD)/lib/liblua.abi: Makefile
 	@mkdir -p $(dir $@)
 	@echo $(LUA_ABI) > $@
 
-# The ABI table holds one "soname number" line per shared library, taken
+# The ABI table contains one "soname number" line per shared library, taken
 # from the ABI variables of the library Makefiles. tools/mkbase.py writes
 # the provides lines of the library packages from it, and tools/mkpkg.sh
-# the needs lines of every package. It stays on the host, since the
+# the needs lines of every package. It is used only on the host, since the
 # installer takes the numbers from the provides lines of installed
 # packages (docs/design/packages.md).
 $(BUILD)/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
@@ -240,7 +245,7 @@ $(ROOT)/usr/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LI
 	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/luac.elf $@
 
-# The Lua objects depend on this Makefile, which holds LUA_CPP, and a
+# The Lua objects depend on this Makefile, which defines LUA_CPP, and a
 # change of the paths or of LUA_USE_DLOPEN therefore rebuilds them.
 $(LUA_CORE_OBJS) $(LUA_OBJS) $(OUT)/lua/lua.o $(OUT)/lua/luac.o: Makefile
 $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(foreach m,$(LUA_MODULES),$(LUA_MODSRCS_$(m)))): Makefile

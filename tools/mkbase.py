@@ -3,9 +3,9 @@
 (docs/plan/packaging.md, P3, and docs/design/packages.md).
 
 usage: mkbase.py --root DIR --defs DIR --abi FILE --out DIR --version V
-                 [--mkpkg FILE] [--check] [--skip NAME]...
+                 [--mkpkg FILE] [--check] [--serial] [--skip NAME]...
 
-A base package is a directory of --defs that holds a file named paths,
+A base package is a directory of --defs that contains a file named paths,
 beside its manifest. Each line of paths is a pattern relative to the root:
 "*" and "?" match within one path component, "[...]" a set of characters,
 and a component "**" any number of components. A pattern that matches a
@@ -30,7 +30,10 @@ tools/mkpkg.sh. The ABI number of a library is the one of the ABI table
 the tests, which no other package is meant to use. A library that an
 unchecked line of the manifest names gets no provides line. A package
 whose manifest and file contents did not change since the last run is not
-packed again. --check only
+packed again. With --serial, which the build of a development tree
+gives, the version of a package is V and a serial number that grows each
+time the package is packed again, as 0.3.1.4, which makes a changed
+package an upgrade for pkg on the development disk (P8). --check only
 reports the coverage. --skip leaves a package out, as the build does with
 the package tests when CONFIG_TESTS is 0.
 """
@@ -162,6 +165,20 @@ def abi_table(path):
     return table
 
 
+def serial_version(out, name, version, bump):
+    """V and the serial number of the package, which starts at 1 and is
+    raised by one when bump."""
+    path = os.path.join(out, f"{name}.serial")
+    if os.path.exists(path):
+        with open(path) as f:
+            serial = int(f.read().strip() or 0) + (1 if bump else 0)
+    else:
+        serial = 1
+    with open(path, "w") as f:
+        f.write(f"{serial}\n")
+    return f"{version}.{serial}"
+
+
 def manifest_text(name, pkg, version, abi, entries):
     lines = [l for l in pkg["manifest"].splitlines() if l.strip()]
     unchecked = [l.split(None, 1)[1] for l in lines if l.startswith("unchecked ")]
@@ -233,6 +250,7 @@ def main():
     ap.add_argument("--version", required=True)
     ap.add_argument("--mkpkg", default=os.path.join(os.path.dirname(__file__), "mkpkg.sh"))
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--serial", action="store_true")
     ap.add_argument("--skip", action="append", default=[])
     args = ap.parse_args()
 
@@ -250,12 +268,17 @@ def main():
     abi = abi_table(args.abi)
     os.makedirs(args.out, exist_ok=True)
     for name, pkg in packages.items():
-        manifest = manifest_text(name, pkg, args.version, abi, entries)
+        # The digest covers the manifest without the version, which a
+        # serial number changes.
+        base_manifest = manifest_text(name, pkg, args.version, abi, entries)
+        stamp = os.path.join(args.out, f"{name}.stamp")
+        sums = digest(args.root, pkg["members"], base_manifest)
+        unchanged = os.path.exists(stamp) and open(stamp).read() == sums
+        version = serial_version(args.out, name, args.version, not unchanged) if args.serial else args.version
+        manifest = base_manifest if not args.serial else manifest_text(name, pkg, version, abi, entries)
         version = re.search(r"^version (\S+)$", manifest, re.M).group(1)
         archive = os.path.join(args.out, f"{name}-{version}.mpk")
-        stamp = os.path.join(args.out, f"{name}.stamp")
-        sums = digest(args.root, pkg["members"], manifest)
-        if os.path.exists(archive) and os.path.exists(stamp) and open(stamp).read() == sums:
+        if unchanged and os.path.exists(archive):
             continue
         for old in os.listdir(args.out):
             if old.startswith(name + "-") and old.endswith(".mpk") and re.fullmatch(

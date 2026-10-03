@@ -110,14 +110,14 @@ check oversized-list "$(mine)" ""
 conf $URL/badindex
 check bad-signature "$(pkg update 2>&1; echo $?)" "pkg: main: the index signature does not verify with /etc/pkg/keys/build.pub
 1"
-check bad-signature-kept "$(cat /var/lib/pkg/_repos/main/url)" "$URL/badsize"
+check bad-signature-retained "$(cat /var/lib/pkg/_repos/main/url)" "$URL/badsize"
 check bad-signature-files "$(ls /var/lib/pkg/_repos/main | tr '\n' ' ')" "index index.sig url "
 conf $URL/otherkey
 out="$(pkg update 2>&1; echo $?)"
 contains unknown-key "$out" "pkg: main: the index is signed by key "
 contains unknown-key-dir "$out" ", which is not in /etc/pkg/keys"
 check unknown-key-status "$(echo "$out" | tail -n 1)" "1"
-check unknown-key-kept "$(cat /var/lib/pkg/_repos/main/url)" "$URL/badsize"
+check unknown-key-retained "$(cat /var/lib/pkg/_repos/main/url)" "$URL/badsize"
 check unknown-key-install "$(pkg install repohello 2>&1 | head -n 1)" "pkg: main: the index was fetched from $URL/badsize; run pkg update"
 
 # The transfers fail with a refused connection, a missing index, a short

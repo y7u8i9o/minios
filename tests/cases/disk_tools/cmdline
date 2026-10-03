@@ -1,1 +1,1 @@
-test=run prog=/bin/sh args=/etc/tests/disktools.sh held_pages=4
+test=run prog=/bin/sh args=/etc/tests/disktools.sh resident_pages=4

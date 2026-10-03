@@ -29,8 +29,9 @@
 #   disk.img  a private root image instead of the shared one (optional)
 #   mkdisk    executable that writes the case's disk instead (optional),
 #             run with DISK (the shared root image), OUT (the disk to
-#             write), MKGPT, MKFAT, MKFS, ARCH, CASE and TOP in the
-#             environment
+#             write), OUT2, MKGPT, MKFAT, MKFS, ARCH, CASE and TOP in the
+#             environment. A disk it writes to OUT2 is attached as the
+#             second disk, which the post script sees as DISK2
 #   nic       network backend of a virtio-net-pci device (optional), where
 #             dgram exchanges raw Ethernet frames with the case's peer program
 #             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
@@ -51,7 +52,7 @@
 #   boot2     boots a second time, without the CD, when the first boot
 #             passed (optional). The firmware loads the boot loader of the
 #             case's disk, or of the mfs2 disk alone when boot2 contains
-#             the word disk2. expect2 (or expect2.ARCH) holds the patterns
+#             the word disk2. expect2 (or expect2.ARCH) contains the patterns
 #             of the second serial log, serial2.txt, which must not
 #             contain TEST FAIL either
 #   stop      an extended regex (optional): the first boot ends as soon
@@ -170,7 +171,8 @@ fi
 rm -f "$SERIAL"
 DISKFLAGS=""
 if [ -x "$CASE/mkdisk" ]; then
-    DISK="$DISK" OUT="$OUTDIR/disk.img" MKGPT="$MKGPT" MKFAT="$MKFAT" MKFS="$MKFS" ARCH="${ARCH:-x86_64}" \
+    rm -f "$OUTDIR/disk2.img"
+    DISK="$DISK" OUT="$OUTDIR/disk.img" OUT2="$OUTDIR/disk2.img" MKGPT="$MKGPT" MKFAT="$MKFAT" MKFS="$MKFS" ARCH="${ARCH:-x86_64}" \
         CASE="$CASE" TOP="$TOP" "$CASE/mkdisk" > "$OUTDIR/mkdisk.log" 2>&1 || fail "mkdisk, see $OUTDIR/mkdisk.log"
 elif [ -f "$CASE/disk.img" ]; then
     clone "$CASE/disk.img" "$OUTDIR/disk.img"
@@ -203,7 +205,11 @@ if [ -f "$CASE/swap" ]; then
     NDISK=$((NDISK + 1))
 fi
 DISK2=""
-if [ -f "$CASE/mfs2" ]; then
+if [ -x "$CASE/mkdisk" ] && [ -f "$OUTDIR/disk2.img" ]; then
+    DISK2="$OUTDIR/disk2.img"
+    DISKFLAGS="$DISKFLAGS -drive file=$DISK2,if=none,id=vd$NDISK,format=raw -device virtio-blk-pci,drive=vd$NDISK"
+    NDISK=$((NDISK + 1))
+elif [ -f "$CASE/mfs2" ]; then
     mkdir -p "$OUTDIR/empty"
     "${MKFS:-$(dirname "$BUILD")/host/mkfs}" "$OUTDIR/disk2.img" "$(cat "$CASE/mfs2")" "$OUTDIR/empty" >/dev/null || { echo "FAIL $NAME (mfs2 image)"; exit 1; }
     DISK2="$OUTDIR/disk2.img"

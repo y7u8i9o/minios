@@ -11,7 +11,7 @@
  *
  * No buffer of the size of the image exists, which matters for disks of
  * several GiB on a small machine. Only the blocks the format touches are
- * held in memory and written out in block order. A new image is created with
+ * read into memory and written out in block order. A new image is created with
  * its full size by ftruncate. On an existing target the superblock, both
  * bitmaps, the inode table and the journal (everything below the data area)
  * are written in full, with zeros where the tree does not use them, and
@@ -61,12 +61,12 @@ static uint64_t host_mtime_ns(const struct stat *st)
 #endif
 }
 
-/* The image is never held in memory as a whole. While an image is built,
+/* The image is never read into memory as a whole. While an image is built,
  * only the blocks the format touches exist, each in a buffer that is created
  * zeroed on first access and found again through a hash table keyed by the
  * block number. They are written out in block order at the end. While an
  * image is read, blocks are fetched on demand into a small cache. A pointer
- * returned by block() stays valid until RING_SIZE other blocks have been
+ * returned by block() remains valid until RING_SIZE other blocks have been
  * fetched. */
 struct map_entry {
     uint64_t blk;

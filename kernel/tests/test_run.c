@@ -62,11 +62,11 @@ static void test_run(void)
      * process; their memory must be returned before it is counted. */
     proc_reap_children(&kernel_proc);
 
-    /* held_pages=N allows the program to leave up to N pages to objects of
+    /* resident_pages=N allows the program to leave up to N pages to objects of
      * the kernel that last until shutdown, such as the partitions of a
      * disk it partitioned (docs/design/block.md). */
-    char held[16];
-    long allowed = cmdline_lookup("held_pages", held, sizeof held) && held[0] ? (long)strtol_simple(held) : 0;
+    char resident[16];
+    long allowed = cmdline_lookup("resident_pages", resident, sizeof resident) && resident[0] ? (long)strtol_simple(resident) : 0;
     swap_drain();
     /* Another CPU may still be finishing the last switch away from an
      * exited thread; give deferred frees a moment before judging. */
