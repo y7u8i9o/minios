@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc)
+BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
 LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
@@ -118,11 +118,12 @@ skel-tree:
 # which both mkfs and the initrd archive take them. Owners other than root
 # come from the manifest perms.
 .PHONY: modes
-modes: $(BINS) skel-tree $(ROOT)/tmp
+modes: $(BINS) $(ETC) skel-tree $(ROOT)/tmp $(ROOT)/var/log $(ROOT)/var/run $(ROOT)/var/db
 	@chmod 1777 $(ROOT)/tmp
 	@chmod 0700 $(ROOT)/root $(ROOT)/home/user
 	@chmod 0600 $(ROOT)/home/.local/etc/shadow $(ROOT)/usr/share/skel/home/.local/etc/shadow
-	@chmod 4755 $(ROOT)/bin/su $(ROOT)/bin/passwd
+	@chmod 4755 $(ROOT)/bin/su $(ROOT)/bin/passwd $(ROOT)/bin/doas $(ROOT)/bin/sudo
+	@chmod 0440 $(ROOT)/etc/sudoers
 
 $(ROOT)/etc/fonts/%.ttf: ../third_party/dejavu/%.ttf
 	@mkdir -p $(dir $@)
@@ -148,7 +149,7 @@ $(ROOT)/etc/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp:
+$(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/var/log $(ROOT)/var/run $(ROOT)/var/db:
 	mkdir -p $@
 
 $(OUT)/lua/%.o: $(LUA_SRC)/%.c
@@ -282,6 +283,153 @@ $(ROOT)/bin/tar: $(TAR_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/tar.elf $@
 
 -include $(TAR_OBJS:.o=.d)
+
+# doas is OpenDoas, compiled unmodified from third_party/opendoas with the
+# shadow file authentication, a config.h written here in place of its
+# configure script, and the functions of its libopenbsd that libc lacks
+# (docs/design/users.md). parse.y goes through the host yacc.
+DOAS_SRC  := ../third_party/opendoas
+DOAS_GEN  := $(OUT)/doas
+DOAS_COMPAT := closefrom.c execvpe.c explicit_bzero.c reallocarray.c strtonum.c readpassphrase.c
+DOAS_OBJS := $(DOAS_GEN)/doas.o $(DOAS_GEN)/env.o $(DOAS_GEN)/shadow.o $(DOAS_GEN)/parse.o \
+             $(patsubst %.c,$(DOAS_GEN)/compat_%.o,$(DOAS_COMPAT))
+DOAS_CFLAGS := $(PORT_CFLAGS) -D__minios__ -Wno-sign-compare -Wno-unused-parameter -Wno-implicit-fallthrough \
+               -I$(DOAS_GEN) -I$(DOAS_SRC) -I$(DOAS_SRC)/libopenbsd
+
+$(DOAS_GEN)/config.h:
+	@mkdir -p $(dir $@)
+	@printf '%s\n' '#ifndef CONFIG_H' '#define CONFIG_H' '#define HAVE_ERRC' '#define HAVE_VERRC' \
+	    '#define HAVE_SETRESUID' '#define HAVE_SETRESGID' '#define HAVE_STRLCAT' '#define HAVE_STRLCPY' \
+	    '#define HAVE_SETPROGNAME' '#define USE_SHADOW' '#define UID_MAX 4294967295U' \
+	    '#define GID_MAX 4294967295U' '#define DOAS_CONF "/etc/doas.conf"' '#endif' > $@
+
+$(DOAS_GEN)/parse.c: $(DOAS_SRC)/parse.y
+	@mkdir -p $(dir $@)
+	$(YACC) -o $@ $<
+
+$(DOAS_GEN)/%.o: $(DOAS_SRC)/%.c $(DOAS_GEN)/config.h
+	$(CC) $(UCFLAGS) $(DOAS_CFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
+
+$(DOAS_GEN)/parse.o: $(DOAS_GEN)/parse.c $(DOAS_GEN)/config.h
+	$(CC) $(UCFLAGS) $(DOAS_CFLAGS) -Wno-unused-function $(UCPP) -MMD -MP -c -o $@ $<
+
+$(DOAS_GEN)/compat_%.o: $(DOAS_SRC)/libopenbsd/%.c $(DOAS_GEN)/config.h
+	$(CC) $(UCFLAGS) $(DOAS_CFLAGS) $(UCPP) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/doas: $(DOAS_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/doas.elf $(ULDFLAGS) $(CRT0) $(DOAS_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/doas.elf $@
+
+-include $(DOAS_OBJS:.o=.d)
+
+# su is the su of ubase, the suckless Linux base utilities, compiled
+# unmodified from third_party/ubase with the parts of its utility library
+# it uses (docs/design/users.md).
+SU_SRC  := ../third_party/ubase/src
+SU_OBJS := $(OUT)/su/su.o $(OUT)/su/passwd.o $(OUT)/su/eprintf.o
+
+$(OUT)/su/su.o: $(SU_SRC)/su.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SU_SRC) -MMD -MP -c -o $@ $<
+
+$(OUT)/su/%.o: $(SU_SRC)/libutil/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) $(PORT_CFLAGS) $(UCPP) -I$(SU_SRC) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/su: $(SU_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/su.elf $(ULDFLAGS) $(CRT0) $(SU_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/su.elf $@
+
+-include $(SU_OBJS:.o=.d)
+
+# sudo is sudo 1.9.17p1, compiled unmodified from third_party/sudo with the
+# sudoers policy linked in statically. Its configure script ran once
+# against the minios libc with the cross compiler, and the headers it
+# generated, with the signal name table, are kept in ports/sudo
+# (docs/design/users.md). The object lists follow the makefiles of the
+# configured tree, covering the front end of src, the sudoers plugin and
+# its parser and authentication, the event and I/O log libraries,
+# protobuf-c and the utility library with the replacement functions that
+# configure selected.
+SUDO_SRC  := ../third_party/sudo
+SUDO_CFG  := ports/sudo
+SUDO_UTIL := basename digest event fatal key_val gethostname gettime getgrouplist gidlist hexchar \
+              json lbuf locking logfac login_max logpri mkdir_parents mmap_alloc multiarch parseln \
+              progname rcstr regex roundup secure_path setgroups strsplit strtobool strtoid strtomode \
+              strtonum sudo_conf sudo_debug sudo_dso term ttyname_dev ttysize uuid event_poll pread \
+              pwrite getusershell reallocarray arc4random arc4random_uniform getentropy utimens \
+              explicit_bzero fnmatch memrchr freezero mkdirat unlinkat dup3 pw_dup getopt_long \
+              closefrom mktemp sha2 sig2str str2sig
+SUDO_FRONT := conversation copy_file edit_open env_hooks exec exec_common exec_intercept exec_iolog \
+              exec_monitor exec_nopty exec_preload exec_ptrace exec_pty get_pty hooks limits \
+              load_plugins net_ifs parse_args preserve_fds signal sudo sudo_edit suspend_parent \
+              tgetpass ttyname utmp preload
+SUDO_AUTH := sudo_auth passwd
+SUDO_POLICY := getspwuid audit boottime check check_util display editor env \
+              sudoers_hooks env_pattern file find_path fmtsudoers gc goodpath group_plugin interfaces \
+              iolog iolog_path_escapes locale log_client logging lookup policy prompt serialize_list \
+              set_perms sethost starttime strlcpy_unesc strvec_join sudo_nss sudoers sudoers_cb \
+              sudoers_ctx_free timestamp unesc_str alias b64_decode canon_path defaults digestname \
+              exptilde filedigest gentime gram match match_addr match_command match_digest \
+              parser_warnx pwutil pwutil_impl redblack resolve_cmnd strlist sudoers_debug timeout \
+              timestr toke toke_util
+SUDO_IOLOG := host_port hostcheck iolog_clearerr iolog_close iolog_conf iolog_eof iolog_filter \
+              iolog_flush iolog_gets iolog_json iolog_legacy iolog_loginfo iolog_mkdirs iolog_mkdtemp \
+              iolog_mkpath iolog_nextid iolog_open iolog_openat iolog_path iolog_read iolog_seek \
+              iolog_swapids iolog_timing iolog_util iolog_write
+SUDO_EVLOG := eventlog eventlog_conf eventlog_free logwrap parse_json
+SUDO_OBJS := $(patsubst %,$(OUT)/sudo/util/%.o,$(SUDO_UTIL)) $(OUT)/sudo/util/signame.o \
+             $(patsubst %,$(OUT)/sudo/src/%.o,$(SUDO_FRONT)) \
+             $(patsubst %,$(OUT)/sudo/sudoers/%.o,$(SUDO_POLICY)) \
+             $(patsubst %,$(OUT)/sudo/auth/%.o,$(SUDO_AUTH)) \
+             $(patsubst %,$(OUT)/sudo/iolog/%.o,$(SUDO_IOLOG)) \
+             $(patsubst %,$(OUT)/sudo/eventlog/%.o,$(SUDO_EVLOG)) $(OUT)/sudo/protobuf-c/protobuf-c.o
+SUDO_CFLAGS := $(UCFLAGS) -std=gnu17 $(PORT_CFLAGS) -Wno-unused-parameter -Wno-sign-compare -Wno-unused-function \
+               -Wno-missing-field-initializers -Wno-cast-function-type $(UCPP) -I$(SUDO_CFG) -I$(SUDO_SRC)/include \
+               -DZLIB_CONST -D_PATH_SUDO_CONF=\"/etc/sudo.conf\" -DLOCALEDIR=\"/usr/share/locale\"
+
+$(OUT)/sudo/util/%.o: $(SUDO_SRC)/lib/util/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/lib/util -DDEFAULT_TEXT_DOMAIN=\"sudo\" -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/util/signame.o: $(SUDO_CFG)/signame.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/lib/util -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/src/%.o: $(SUDO_SRC)/src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/src -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/sudoers/%.o: $(SUDO_SRC)/plugins/sudoers/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/plugins/sudoers -DLIBDIR=\"/usr/lib\" -D_PATH_SUDOERS=\"/etc/sudoers\" \
+	    -D_PATH_CVTSUDOERS_CONF=\"/etc/cvtsudoers.conf\" -DSUDOERS_UID=0 -DSUDOERS_GID=0 -DSUDOERS_MODE=0440 \
+	    -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/auth/%.o: $(SUDO_SRC)/plugins/sudoers/auth/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/plugins/sudoers -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/iolog/%.o: $(SUDO_SRC)/lib/iolog/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/lib/iolog -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/eventlog/%.o: $(SUDO_SRC)/lib/eventlog/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC)/lib/eventlog -I$(SUDO_SRC) -MMD -MP -c -o $@ $<
+
+$(OUT)/sudo/protobuf-c/%.o: $(SUDO_SRC)/lib/protobuf-c/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(SUDO_CFLAGS) -I$(SUDO_SRC) -MMD -MP -c -o $@ $<
+
+$(ROOT)/bin/sudo: $(SUDO_OBJS) $(BUILD)/lib/libc.so $(CRT0)
+	@mkdir -p $(dir $@)
+	$(CC) $(UCFLAGS) -o $(OUT)/sudo.elf $(ULDFLAGS) $(CRT0) $(SUDO_OBJS) -lc -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/sudo.elf $@
+
+-include $(SUDO_OBJS:.o=.d)
 
 # tcc is the Tiny C Compiler, compiled unmodified from the submodule
 # third_party/tinycc as one source with the configuration on the command

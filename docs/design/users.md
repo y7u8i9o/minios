@@ -241,9 +241,10 @@ the name and the password, gives the terminal to the account with mode
 0620, calls `initgroups`, `setgid` and `setuid`, enters the home and runs
 the shell as a login shell with `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`
 and `PATH=/bin:/usr/local/bin`. At its start it returns the terminal to
-root. `su` and `passwd` are set user id root. `su` asks a caller other
-than root for the target's password and reads it from standard input when
-that is not a terminal. `passwd` changes the caller's password after the
+root. `su` and `passwd` are set user id root. The `su` of U3 asked a
+caller other than root for the target's password and read it from
+standard input when that was not a terminal, and U5 replaced it with the
+`su` of ubase. `passwd` changes the caller's password after the
 current one, root changes any account without one, `-d` removes a
 password and `-n` sets the full name. `useradd` and `userdel` are for
 root. A new account gets the lowest free id from 1000 on for its uid and
@@ -263,7 +264,7 @@ launcher menu `~/.config/launcher` and MIME handler table
 for that user.
 
 `pkg` refuses to change a prefix the caller cannot write and names
-`su -c` and `--prefix ~/.local`. `ld.so` searches `/lib`,
+`sudo pkg` and `--prefix ~/.local`. `ld.so` searches `/lib`,
 `/usr/local/lib` and `$HOME/.local/lib`, the last only without
 `AT_SECURE`. `/etc/profile` adds `/usr/local/bin` and `~/.local/bin` to
 `PATH`, and the panel reads the launcher entries of
@@ -300,11 +301,96 @@ The panel shows the account name at the end of the Log out row of its
 menu. The settings program gained the Users page (`user/settings/users.c`).
 It lists the accounts, sets the full name of the user's own account with
 `passwd -n`, changes its password with `passwd`, and adds and removes
-accounts with `su -c 'useradd ... && passwd NAME' root` and
-`su -c 'userdel -r NAME' root`. The passwords go to these programs through
-a pipe, one per line, and `su` and `passwd` read a line for every
-password they could ask for when their input is not a terminal, which
-lets the page pass them without knowing which accounts have one.
+accounts. The passwords go to these programs through a pipe, one per
+line, and `passwd` reads a line for every password it could ask for when
+its input is not a terminal, which lets the page pass them without
+knowing which accounts have one. Until U5 the page added and removed
+accounts through `su -c` with the root password, and since U5 it uses
+`sudo` with the password of the logged in user (below).
+
+## su, doas and sudo (U5)
+
+Three existing programs give a user the rights of another account, each
+compiled without changes to its source. `tools/fetch_privilege.sh` places
+their sources in `third_party/` (`ubase/`, `opendoas/` and `sudo/`, each
+with a file `ORIGIN` naming the revision), and `user/Makefile` builds them
+into `/bin` as set user id root programs.
+
+| Program | Source | Configuration | Manual |
+|---|---|---|---|
+| `su` | ubase, commit e8249b4 | none | `su(1)` |
+| `doas` | OpenDoas 6.8.2 | `/etc/doas.conf` | `doas(1)`, `doas.conf(5)` |
+| `sudo` | sudo 1.9.17p1 | `/etc/sudoers` | `sudo(1)`, `sudoers(5)` |
+
+The `su` of ubase takes `-l` and `-p` and no command. It checks the
+password of the target account with `crypt` against `/etc/shadow` and
+refuses an account with an empty or locked hash to a caller other than
+root, for which `crypt` returns `*0` on a setting it does not support
+instead of a null pointer. OpenDoas is built with `USE_SHADOW` and a
+`config.h` that `user/Makefile` writes, the compatibility sources of its
+`libopenbsd` directory for the functions the libc lacks, and its grammar
+`parse.y` translated by the host `yacc`. Without `USE_TIMESTAMP` doas
+asks for the password every time and ignores the rule option `persist`.
+
+sudo has a configure script that the cross compiler ran once against the
+minios libc with the sudoers policy linked statically, without PAM, mail,
+the log server, LDAP, Python or zlib. The headers it generated
+(`config.h`, `pathnames.h`, `sudo_usage.h`) and its signal name table
+`signame.c` are kept in `user/ports/sudo`, and `user/Makefile` compiles
+the objects that the configured makefiles list from `src/`,
+`plugins/sudoers/`, `lib/util/`, `lib/iolog/`, `lib/eventlog/` and
+`lib/protobuf-c/` into one static program linked against the shared
+libc. Its time stamps are kept in `/var/run/sudo/ts` and the lecture
+records in `/var/db/sudo/lectured`, directories the image creates. A
+time stamp is valid for one terminal and one session, which sudo
+recognises by the session id of the caller.
+
+The image ships the group `wheel` (gid 10) with `user` as its member.
+`/etc/doas.conf` permits the members of wheel with their password and
+root without one, and `/etc/sudoers` (mode 0440) permits root and the
+members of wheel and sets the secure path `/bin:/usr/local/bin`. Both
+files are part of the root image. The membership of wheel lives in
+`/etc/group` on the data volume, and a volume set up before U5 keeps its
+group file without wheel until root adds the entry with an editor.
+
+The Users page of settings runs `sudo -S -k -p '' /bin/sh -c 'useradd
+-c NAME ... && passwd ...'` and `sudo -S -k -p '' /bin/sh -c 'userdel -r
+...'`, where the field Your password gives the first line of the input.
+sudo reads that line, and the rest reaches `passwd`. `-k` makes sudo ask
+even with a valid time stamp, and the empty prompt keeps the prompt text
+out of the status line of the page.
+
+The programs needed the following additions to the kernel and the libc.
+
+- `struct proc` has a session id beside its process group, both under
+  `proc_tree_lock`. `setsid` (111) makes the caller the
+  leader of a new session and process group and refuses a process group
+  leader, and `getsid` (112) reports the session. init starts its console
+  entry and the greeter starts a graphical session with `setsid`.
+  Sessions carry no controlling terminal.
+- `/dev/tty`, mode 0666, opens the terminal on the first of the
+  descriptors 0 to 2 that is the console or the slave side of a pseudo
+  terminal. It is where `getpass` and the three programs read passwords.
+- The terminal keeps the whole `struct termios` with the flag values of
+  Linux, `TCSETS` stores it, and `TCFLSH` and `TCSAFLUSH` discard the
+  typed input. Password prompts flush that input as on other Unix
+  systems.
+- Signals deliver a `siginfo_t` to handlers installed with `SA_SIGINFO`,
+  with `si_pid` and `si_uid` of the sender for `kill` (`SI_USER`) and
+  `SI_KERNEL` for signals of the kernel. `SA_RESETHAND` is honoured.
+  `sigpending` (109) and `alarm` (110) are new, and `alarm` keeps its
+  timers in a list that the timer interrupt checks (`kernel/ipc/alarm.c`).
+- `fchdir` (108) changes the directory to an open one, and `fcntl` accepts
+  the record locks `F_GETLK`, `F_SETLK`
+  and `F_SETLKW` as no-ops, which programs that lock their own files on a
+  single system need. `ftruncate` works on regular files through
+  `vfs_truncate`, which `O_TRUNC` uses too.
+- The libc gained `syslog` (appending to `/var/log/messages`), `getpass`,
+  `ttyname`, `sysconf`, `gethostname`, `killpg`, `clearenv`, `strsep`,
+  the reentrant account lookups `getpwnam_r` and the like, `getspent`,
+  `openpty` with the BSD signature, the `cf*` and `tc*` terminal
+  functions, and the headers `paths.h`, `utmp.h`, `poll.h`, `utime.h`,
+  `alloca.h`, `net/if.h` and `netinet/tcp.h` (`libc.md`).
 
 ## Test
 
@@ -342,7 +428,7 @@ The case `login_console` types on the console before init starts. root
 logs in, sets its password, creates `anna` and gives her a password, and
 logs out. A wrong password for `anna` fails with "Login incorrect", the
 right one gives a shell in `/home/anna` with the console hers, in which
-`su` fails with a wrong root password and succeeds with the right one and
+`doas` and `sudo` refuse her because she is not a member of wheel and
 `/etc/shadow` cannot be read. root logs in again, removes `anna` with her
 home and powers off. The case `fs_migrate` runs `/bin/migratetest`, which
 builds a directory of the single user layout below `/tmp`, including an
@@ -354,6 +440,17 @@ process that takes pid 1, which the kernel protects from `SIGKILL`. It
 waits for the login window, logs in the preselected account `user` with
 Enter, finds the panel and the desktop running as uid 1000 in
 `/dev/proc`, chooses Log out in the panel's menu, finds the login window
-again, and has `su` run a settings request of uid 1000, which X12 must
-refuse. `hold=1` keeps the window open for screenshots. `gui_settings`
+again, and has `doas -u user` run a settings request of uid 1000, which
+X12 must refuse. `hold=1` keeps the window open for screenshots. `gui_settings`
 opens the Users page with the other pages.
+
+The case `privilege` drives init on the console with pauses, because
+password prompts discard the input typed before them. root sets the
+passwords of root and `user` and writes a doas rule file that denies.
+`user` runs `doas id -u`, checks the rule file with `doas -C`, enters a
+root shell with `su`, finds the doas command in `/var/log/messages`, runs
+`sudo` with its lecture and prompt, fails `sudo -S -k` with a wrong
+password and succeeds with the right one, adds an account with the
+command line of the Users page, reads its hash with `sudo -n` through the
+time stamp, and removes it again. Each result passes through `sed`,
+which adds a tag that the echo of the typed command does not contain.

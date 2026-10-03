@@ -80,3 +80,17 @@ int reboot(int cmd)
 {
     return (int)syscall1(SYS_reboot, cmd);
 }
+
+int sigpending(sigset_t *set)
+{
+    return (int)syscall1(SYS_sigpending, set);
+}
+
+int killpg(pid_t pgrp, int sig)
+{
+    if (pgrp <= 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    return kill(-pgrp, sig);
+}

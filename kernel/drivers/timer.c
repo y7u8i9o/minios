@@ -1,4 +1,5 @@
 #define KLOG_SUBSYS "timer"
+#include <ipc/alarm.h>
 #include <drivers/timer.h>
 #include <ipc/eventfd.h>
 #include <sched/wait.h>
@@ -40,6 +41,7 @@ static void timer_irq(struct trapframe *tf, void *arg)
     if (tick_handler)
         tick_handler();
     timerfd_tick();
+    alarm_tick();
     waitq_timeouts_tick();
 }
 

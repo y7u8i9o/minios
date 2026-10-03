@@ -115,10 +115,10 @@ static void test_greeter(void)
     kprintf("gui_greeter: login window shown again\n");
 
     /* Without a session X12 refuses the clients of uid 1000. */
-    struct proc *su = proc_create_user("/bin/su", (char *const[]){ "su", "-c", "x12settings set verbose 0", "user", NULL },
+    struct proc *as = proc_create_user("/bin/doas", (char *const[]){ "doas", "-u", "user", "x12settings", "set", "verbose", "0", NULL },
                                        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
-    ktest_assert(su != NULL, "cannot start su");
-    proc_reap(su);
+    ktest_assert(as != NULL, "cannot start doas");
+    proc_reap(as);
     sleep_ms(300);
 
     signal_send_pgrp(g->pid, SIGKILL);

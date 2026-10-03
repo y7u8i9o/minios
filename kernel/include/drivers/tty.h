@@ -21,7 +21,8 @@ struct tty {
     struct spinlock lock;
     struct waitq rd_waitq;
     struct poll_source poll;
-    uint32_t lflag;                 /* ICANON, ECHO, ISIG */
+    uint32_t lflag;                 /* ICANON, ECHO and ISIG take effect */
+    struct termios tio;             /* the other fields, stored for TCGETS */
     int fg_pgid;
     uint16_t cols, rows;
     char line[TTY_LINE_MAX];
@@ -45,6 +46,9 @@ long tty_read(struct tty *t, char *buf, size_t n);
 int tty_poll(struct tty *t);
 struct poll_source *tty_poll_source(struct tty *t);
 long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg);
+/* Discard the input not read yet, both the ready bytes and the line in
+ * progress. */
+void tty_flush_input(struct tty *t);
 uint32_t tty_get_lflag(struct tty *t);
 void tty_set_lflag(struct tty *t, uint32_t lflag);
 int tty_get_fg_pgid(struct tty *t);

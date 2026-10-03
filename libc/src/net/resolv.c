@@ -101,7 +101,7 @@ static int lookup_hosts(const char *name, uint32_t *address)
         char *hash = strchr(line, '#');
         if (hash)
             *hash = 0;
-        const char *save;
+        char *save;
         char *field = strtok_r(line, " \t\r\n", &save);
         struct in_addr in;
         if (!field || !inet_aton(field, &in))
@@ -140,7 +140,7 @@ static void read_config(struct resolv_config *config)
         return;
     char line[512];
     while (fgets(line, sizeof line, f)) {
-        const char *save;
+        char *save;
         char *key = strtok_r(line, " \t\r\n", &save);
         if (!key)
             continue;

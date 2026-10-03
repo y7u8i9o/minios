@@ -538,8 +538,8 @@ msgstr "Имя"
 msgid "Password"
 msgstr "Пароль"
 
-msgid "Root password"
-msgstr "Пароль root"
+msgid "Your password"
+msgstr "Ваш пароль"
 
 msgid "Add account"
 msgstr "Добавить учётную запись"

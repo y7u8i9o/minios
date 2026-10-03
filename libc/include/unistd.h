@@ -86,8 +86,51 @@ int getgroups(int size, gid_t list[]);
 int setgroups(size_t size, const gid_t *list);
 /* The account of the session (LOGNAME, else the real uid). */
 char *getlogin(void);
-/* SHA-256 crypt ("$5$"), the only method: NULL with EINVAL otherwise. */
+/* SHA-256 crypt ("$5$"), the only method. Any other setting gives "*0"
+ * (or "*1" for the setting "*0") with EINVAL, a string that no stored hash
+ * equals. */
 char *crypt(const char *key, const char *salt);
+/* System limits for sysconf. Unknown names fail with EINVAL. */
+#define _SC_ARG_MAX           0
+#define _SC_CHILD_MAX         1
+#define _SC_CLK_TCK           2
+#define _SC_NGROUPS_MAX       3
+#define _SC_OPEN_MAX          4
+#define _SC_PAGESIZE          5
+#define _SC_PAGE_SIZE         _SC_PAGESIZE
+#define _SC_LINE_MAX          6
+#define _SC_LOGIN_NAME_MAX    7
+#define _SC_HOST_NAME_MAX     8
+#define _SC_NPROCESSORS_CONF  9
+#define _SC_NPROCESSORS_ONLN  10
+#define _SC_GETPW_R_SIZE_MAX  11
+#define _SC_GETGR_R_SIZE_MAX  12
+#define _SC_TTY_NAME_MAX      13
+#define _SC_SYMLOOP_MAX       14
+long sysconf(int name);
+/* Enter the directory open on fd, which must have been opened by name. */
+int fchdir(int fd);
+/* The path of the terminal open on fd, found in /dev by its device
+ * number, or NULL with ENOTTY. ttyname returns static storage. */
+char *ttyname(int fd);
+int ttyname_r(int fd, char *buf, size_t size);
+/* SIGALRM after seconds, 0 cancels. Returns the seconds left of the
+ * previous alarm. */
+unsigned alarm(unsigned seconds);
+/* Start a new session and process group led by the caller and return its
+ * id. A process group leader gets EPERM. Sessions have no controlling
+ * terminal in minios. */
+pid_t setsid(void);
+/* minios has no chroot, and the call fails with ENOSYS. */
+int chroot(const char *path);
+/* The session of pid, 0 meaning the caller. */
+pid_t getsid(pid_t pid);
+/* The node name of uname, at most size bytes with the terminating NUL. */
+int gethostname(char *name, size_t size);
+
+/* Read a password without echo from /dev/tty, or from standard input
+ * without a terminal. The result lives in static storage. */
+char *getpass(const char *prompt);
 
 /* symlink creates path as a symbolic link holding target, which is not
  * checked and may name nothing. readlink copies at most size bytes of a

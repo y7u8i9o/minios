@@ -1,8 +1,11 @@
 /* The Users page (docs/design/users.md): the accounts of /etc/passwd, the
  * full name and the password of the user's own account, and accounts
- * added or removed with the root password. The page changes nothing
- * itself. It runs passwd, and su with useradd, passwd and userdel, and
- * hands them the passwords through a pipe, one per line. */
+ * added or removed by a member of wheel, who confirms with their own
+ * password. The page changes nothing itself. It runs passwd, and sudo
+ * with useradd, passwd and userdel, and hands them the passwords through
+ * a pipe, one per line. sudo -S reads the first line, -k makes it ask
+ * even when a time stamp is still valid, and the empty -p prompt keeps
+ * the prompt out of the output shown in the status line. */
 #include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +18,7 @@
 #define MAX_ROWS 64
 
 static struct widget *list, *full_field, *current_field, *new_field, *repeat_field;
-static struct widget *add_name, *add_full, *add_password, *root_field, *status;
+static struct widget *add_name, *add_full, *add_password, *admin_field, *status;
 static char row_names[MAX_ROWS][33];
 static int nrows, selected = -1;
 
@@ -151,12 +154,12 @@ static int on_add(struct widget *w, void *args, void *arg)
     }
     char command[256], input[400], out[512];
     snprintf(command, sizeof command, "useradd -c '%s' %s && passwd %s", full, name, name);
-    snprintf(input, sizeof input, "%s\n%s\n%s\n", widget_text(root_field), widget_text(add_password),
+    snprintf(input, sizeof input, "%s\n%s\n%s\n", widget_text(admin_field), widget_text(add_password),
              widget_text(add_password));
-    char *argv[] = { "/bin/su", "-c", command, "root", NULL };
+    char *argv[] = { "/bin/sudo", "-S", "-k", "-p", "", "/bin/sh", "-c", command, NULL };
     int r = run_with_input(argv, input, out, sizeof out);
     memset(input, 0, sizeof input);
-    clear_secret(root_field);
+    clear_secret(admin_field);
     clear_secret(add_password);
     show_result(r, out, _("Account added"));
     if (r == 0) {
@@ -181,11 +184,11 @@ static int on_remove(struct widget *w, void *args, void *arg)
     }
     char command[128], input[200], out[512];
     snprintf(command, sizeof command, "userdel -r %s", name);
-    snprintf(input, sizeof input, "%s\n", widget_text(root_field));
-    char *argv[] = { "/bin/su", "-c", command, "root", NULL };
+    snprintf(input, sizeof input, "%s\n", widget_text(admin_field));
+    char *argv[] = { "/bin/sudo", "-S", "-k", "-p", "", "/bin/sh", "-c", command, NULL };
     int r = run_with_input(argv, input, out, sizeof out);
     memset(input, 0, sizeof input);
-    clear_secret(root_field);
+    clear_secret(admin_field);
     show_result(r, out, _("Account removed"));
     fill_list();
     return 1;
@@ -245,7 +248,7 @@ void build_users(struct widget *page)
     add_full = textfield_new(grid, "");
     widget_set_grid(add_full, 1, 1, 1, 1);
     add_password = masked_field(grid, 2, _("Password"));
-    root_field = masked_field(grid, 3, _("Root password"));
+    admin_field = masked_field(grid, 3, _("Your password"));
     struct widget *row = box_new(page, 0);
     b = button_new(row, _("Add account"));
     widget_connect(b, "clicked", on_add, NULL);

@@ -907,15 +907,9 @@ static int open_common(const char *path, int flags, uint32_t mode, bool exec, st
             r = -EROFS;
             goto fail;
         }
-        vfs_op_begin(ino->sb);
-        mutex_lock(&ino->lock);
-        r = ino->ops->truncate(ino, 0);
-        mutex_unlock(&ino->lock);
-        vfs_op_end(ino->sb);
+        r = vfs_truncate(ino, 0);
         if (r < 0)
             goto fail;
-        if (ino->mapping)
-            filemap_truncate(ino, 0);
     }
     struct file *f = file_alloc(ino, ino->fops, flags);
     if (!f) {
@@ -939,6 +933,22 @@ static int open_common(const char *path, int flags, uint32_t mode, bool exec, st
     return 0;
 fail:
     inode_put(ino);
+    return r;
+}
+
+int vfs_truncate(struct inode *ino, uint64_t size)
+{
+    if (!S_ISREG(ino->mode))
+        return -EINVAL;
+    if (!ino->ops || !ino->ops->truncate)
+        return -EROFS;
+    vfs_op_begin(ino->sb);
+    mutex_lock(&ino->lock);
+    int r = ino->ops->truncate(ino, size);
+    mutex_unlock(&ino->lock);
+    vfs_op_end(ino->sb);
+    if (r == 0 && ino->mapping)
+        filemap_truncate(ino, size);
     return r;
 }
 

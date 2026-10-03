@@ -23,7 +23,8 @@ exec and on signals, and privileged operations require root. Accounts live
 in `/etc/passwd`, `/etc/group` and `/etc/shadow`, homes in `/home/<name>`,
 packages in the shared prefix `/usr/local`, and a normal boot ends in a
 console login or a graphical greeter. Boot tests keep starting their
-programs directly as root.
+programs directly as root. U5, added after U4, brings the existing
+programs su, doas and sudo for changing to another account.
 
 ## 2. Fixed decisions
 
@@ -199,3 +200,43 @@ programs directly as root.
   output, and the case passed in seven later runs, alone and in parallel
   batches. Screenshots of the login window, a session and the Users page
   were taken through the QEMU monitor.
+
+### U5. su, doas and sudo (completed 2026-10-03)
+
+- `tools/fetch_privilege.sh` places the sources of ubase su, OpenDoas
+  6.8.2 and sudo 1.9.17p1 in `third_party/`, and `user/Makefile` builds
+  them unmodified into `/bin` as set user id root programs. The ubase
+  `su` replaces the `su` of U3. sudo uses the headers that its configure
+  script generated once for minios, kept in `user/ports/sudo`, and links
+  the sudoers policy statically.
+- The image ships the group `wheel` with `user` as its member,
+  `/etc/doas.conf` and `/etc/sudoers`, which let the members of wheel run
+  commands as root with their own password.
+- The kernel gains sessions (`setsid`, `getsid`), `/dev/tty`, the whole
+  `struct termios` with input flushing, `SA_SIGINFO` with `siginfo_t`,
+  `SA_RESETHAND`, `sigpending`, `alarm`, `fchdir`, no-op record locks and
+  `ftruncate` on regular files. The libc gains `syslog`, `getpass`,
+  `ttyname`, `sysconf`, the reentrant account lookups and the other
+  functions and headers the three programs use.
+- The settings Users page adds and removes accounts through `sudo -S`
+  with the password of the logged in user instead of `su -c` with the
+  root password. `login_console` and `gui_greeter` stop using `su -c`.
+- The manuals `su(1)`, `doas(1)`, `sudo(1)`, `doas.conf(5)` and
+  `sudoers(5)`.
+- The boot test `privilege` logs in on the console, runs doas, su and
+  sudo with their password prompts, checks a denying doas rule, the
+  syslog record, a wrong and a right password for `sudo -S`, the command
+  lines of the Users page and the sudo time stamp. `login_console`,
+  `gui_greeter`, `user_cred`, `libc`, `libc_ext`, `pty`, `gui_term`,
+  `signals`, `ctrlc`, `shell`, `shell2`, `initctl`, `shutdown`,
+  `perm_user`, `fs_owner`, `mfs`, `fat`, `sockets`, `awk`, `utils`,
+  `lua_sys`, `comp_shell` and `gui_settings` must still pass.
+- During the work sudo showed that `ftruncate` refused regular files and
+  that `getsid`, then the process group, changed with every pipeline,
+  which made every time stamp invalid. The kernel gained `vfs_truncate`
+  and real sessions in response. The case `libc_ext` had still expected
+  the single user from before U0 and was corrected, and `user_cred` now
+  expects `user` in the groups 1000 and 10. One run of `gui_settings`
+  in a batch of 23 cases failed on the title bar of the mouse page and
+  passed when it was repeated. `privilege`, `login_console` and
+  `user_cred` also pass with `ARCH=aarch64`.

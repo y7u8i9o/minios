@@ -24,3 +24,8 @@ void setpwent(void);
 void endpwent(void);
 /* The next valid entry of stream, skipping malformed lines. */
 struct passwd *fgetpwent(FILE *stream);
+/* The reentrant lookups fill pw with strings kept in buf (size bytes) and
+ * store pw or, when there is no such account, NULL in *result. They
+ * return 0 or an errno value, ERANGE for a buffer that is too small. */
+int getpwnam_r(const char *name, struct passwd *pw, char *buf, size_t size, struct passwd **result);
+int getpwuid_r(uid_t uid, struct passwd *pw, char *buf, size_t size, struct passwd **result);

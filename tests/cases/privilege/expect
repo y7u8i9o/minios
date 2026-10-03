@@ -1,0 +1,13 @@
+doas \(user@minios\) password:
+doas=0
+rule=deny
+su=0
+logged=[1-9]
+sudo=root
+Sorry, try again\.
+sudo: 1 incorrect password attempt
+group=root
+passwd: password of bob changed
+added=1
+home=user
+system powering off

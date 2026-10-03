@@ -112,4 +112,9 @@
 #define SYS_fchownat      105
 #define SYS_fchown        106
 #define SYS_faccessat     107
-#define SYS_MAX           108
+#define SYS_fchdir        108
+#define SYS_sigpending    109
+#define SYS_alarm         110
+#define SYS_setsid        111
+#define SYS_getsid        112
+#define SYS_MAX           113

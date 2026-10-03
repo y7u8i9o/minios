@@ -85,6 +85,20 @@ long sys_fcntl(struct trapframe *tf)
     case F_SETFL:
         f->flags = (f->flags & ~(O_NONBLOCK | O_APPEND)) | (int)(arg & (O_NONBLOCK | O_APPEND));
         break;
+    case F_GETLK: {
+        uintptr_t lk = (uintptr_t)arg;
+        if (!user_range_ok(lk, sizeof(struct flock), true)) {
+            r = -EFAULT;
+            break;
+        }
+        ((struct flock *)lk)->l_type = F_UNLCK;
+        break;
+    }
+    case F_SETLK:
+    case F_SETLKW:
+        if (!user_range_ok((uintptr_t)arg, sizeof(struct flock), false))
+            r = -EFAULT;
+        break;
     case F_DUPFD:
     case F_DUPFD_CLOEXEC:
         file_ref(f);
@@ -599,6 +613,31 @@ long sys_chdir(struct trapframe *tf)
     strlcpy(p->cwd, resolved, sizeof p->cwd);
     spin_unlock(&p->lock);
     return 0;
+}
+
+/* fchdir(fd) enters the directory open on fd by name, which keeps its
+ * canonical path in file.path (U5). */
+long sys_fchdir(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = 0;
+    if (!f->inode || !S_ISDIR(f->inode->mode) || !f->path) {
+        r = -ENOTDIR;
+    } else {
+        struct cred c;
+        cred_get_current(&c);
+        r = vfs_permission(f->inode, MAY_EXEC, &c);
+    }
+    if (r == 0) {
+        struct proc *p = thread_current()->proc;
+        spin_lock(&p->lock);
+        strlcpy(p->cwd, f->path, sizeof p->cwd);
+        spin_unlock(&p->lock);
+    }
+    file_put(f);
+    return r;
 }
 
 long sys_getcwd(struct trapframe *tf)

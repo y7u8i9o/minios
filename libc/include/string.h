@@ -28,10 +28,15 @@ size_t strspn(const char *s, const char *accept);
 size_t strcspn(const char *s, const char *reject);
 char *strpbrk(const char *s, const char *accept);
 char *strtok(char *s, const char *delim);
-char *strtok_r(char *s, const char *delim, const char **save);
+char *strtok_r(char *s, const char *delim, char **save);
 char *strdup(const char *s);
 size_t strlcat(char *dst, const char *src, size_t size);
 char *strerror(int errnum);
 
 char *strndup(const char *s, size_t n);
 char *stpcpy(char *dst, const char *src);
+/* Split *stringp at the first of the characters of delim, as in BSD. */
+char *strsep(char **stringp, const char *delim);
+/* The BSD functions of strings.h, which BSD and glibc programs expect
+ * from string.h as well. */
+#include <strings.h>

@@ -10,8 +10,9 @@
  *     task NAME [options] COMMAND...   run once, wait, then continue
  *     service NAME [options] COMMAND.. run in the background, restarted
  *     console NAME [options] COMMAND.. the session on the console, with
- *                                      its own process group and the
- *                                      terminal, restarted when it ends
+ *                                      its own session, process group
+ *                                      and the terminal, restarted when
+ *                                      it ends
  *
  * Options are if=PATH (start only when PATH exists), log=FILE (standard
  * output and error appended to FILE) and restart=always|never|failure.
@@ -225,7 +226,7 @@ static void parse_line(char *line, int lineno)
         *hash = 0;
     char *words[MAX_ARGS + 8];
     int count = 0;
-    const char *save;
+    char *save;
     for (char *w = strtok_r(line, " \t\r\n", &save); w; w = strtok_r(NULL, " \t\r\n", &save)) {
         if (count == (int)(sizeof words / sizeof words[0])) {
             report("%s line %d: too many words", config_path, lineno);
@@ -355,8 +356,10 @@ static void start_entry(struct entry *e)
             close(listener);
         if (connection >= 0)
             close(connection);
+        /* A console program leads its own session, which sudo uses to
+         * recognise the login in its time stamps. */
         if (e->kind == KIND_CONSOLE) {
-            setpgid(0, 0);
+            setsid();
             tcsetpgrp(0, getpid());
         }
         if (e->log[0]) {
@@ -381,8 +384,6 @@ static void start_entry(struct entry *e)
         report("%s: fork: %s", e->name, strerror(errno));
         return;
     }
-    if (e->kind == KIND_CONSOLE)
-        setpgid(pid, pid);
     e->pid = pid;
     e->state = STATE_RUNNING;
     e->starts++;
@@ -641,7 +642,7 @@ static void list_entries(char *reply, size_t size)
  * "session UID" and "session -" (docs/design/users.md). */
 static void handle_request(char *request, char *reply, size_t size, unsigned uid)
 {
-    const char *save;
+    char *save;
     char *cmd = strtok_r(request, " \t\r\n", &save);
     char *arg = strtok_r(NULL, " \t\r\n", &save);
     reply[0] = 0;

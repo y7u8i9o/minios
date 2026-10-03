@@ -96,7 +96,7 @@ static int apply(void)
             *hash = 0;
         char *words[8];
         int n = 0;
-        const char *save;
+        char *save;
         for (char *w = strtok_r(line, " \t\r\n", &save); w && n < 8; w = strtok_r(NULL, " \t\r\n", &save))
             words[n++] = w;
         if (n >= 2 && strcmp(words[0], "nameserver") == 0) {

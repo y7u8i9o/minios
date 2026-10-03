@@ -38,6 +38,7 @@ int atexit(void (*fn)(void));
 char *getenv(const char *name);
 int setenv(const char *name, const char *value, int overwrite);
 int unsetenv(const char *name);
+int clearenv(void);
 int system(const char *command);
 int mkstemp(char *template);
 int rand(void);
@@ -64,3 +65,5 @@ int wctomb(char *s, wchar_t wc);
  * The result is written to resolved (PATH_MAX bytes) or allocated when
  * resolved is NULL. */
 char *realpath(const char *path, char *resolved);
+/* Stack allocation that ends with the calling function. */
+#define alloca(size) __builtin_alloca(size)

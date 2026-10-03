@@ -558,7 +558,15 @@ long sys_ftruncate(struct trapframe *tf)
     struct file *f = fdtable_get(&thread_current()->proc->fds, (int)SYSARG0(tf));
     if (!f)
         return -EBADF;
-    long r = f->ops && f->ops->truncate ? f->ops->truncate(f, SYSARG1(tf)) : -EINVAL;
+    long r;
+    if ((long)SYSARG1(tf) < 0)
+        r = -EINVAL;
+    else if (f->ops && f->ops->truncate)
+        r = f->ops->truncate(f, SYSARG1(tf));
+    else if (f->inode && S_ISREG(f->inode->mode))
+        r = (f->flags & O_ACCMODE) == O_RDONLY ? -EBADF : vfs_truncate(f->inode, SYSARG1(tf));
+    else
+        r = -EINVAL;
     file_put(f);
     return r;
 }

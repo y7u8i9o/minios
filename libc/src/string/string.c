@@ -233,10 +233,10 @@ char *strpbrk(const char *s, const char *accept)
     return NULL;
 }
 
-char *strtok_r(char *s, const char *delim, const char **save)
+char *strtok_r(char *s, const char *delim, char **save)
 {
     if (!s)
-        s = (char *)*save;
+        s = *save;
     s += strspn(s, delim);
     if (!*s) {
         *save = s;
@@ -254,7 +254,7 @@ char *strtok_r(char *s, const char *delim, const char **save)
 
 char *strtok(char *s, const char *delim)
 {
-    static const char *save;
+    static char *save;
     return strtok_r(s, delim, &save);
 }
 
@@ -290,6 +290,7 @@ static const char *const errors[] = {
     [EINVAL] = "Invalid argument",
     [EMFILE] = "Too many open files",
     [ENOTTY] = "Inappropriate ioctl for device",
+    [ETXTBSY] = "Text file busy",
     [ENOSPC] = "No space left on device",
     [ESPIPE] = "Illegal seek",
     [EROFS] = "Read-only file system",
@@ -393,4 +394,19 @@ char *stpcpy(char *dst, const char *src)
         src++;
     }
     return dst;
+}
+
+char *strsep(char **stringp, const char *delim)
+{
+    char *s = *stringp;
+    if (!s)
+        return NULL;
+    char *end = s + strcspn(s, delim);
+    if (*end) {
+        *end = '\0';
+        *stringp = end + 1;
+    } else {
+        *stringp = NULL;
+    }
+    return s;
 }

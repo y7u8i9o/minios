@@ -31,6 +31,10 @@
 #endif
 #define PATH_MAX 1024
 #define NGROUPS_MAX 16
+#define HOST_NAME_MAX 64
+#define _POSIX_HOST_NAME_MAX 255
+#define LOGIN_NAME_MAX 33
+#define _POSIX_OPEN_MAX 20
 #define LINE_MAX 2048
 #define _POSIX2_LINE_MAX 2048
 #define ARG_MAX 65536

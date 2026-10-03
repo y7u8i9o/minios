@@ -13,6 +13,7 @@
 #include <debug/panic.h>
 #include <lib/printf.h>
 #include <ipc/signal.h>
+#include <ipc/alarm.h>
 #include <arch/frame.h>
 #include <arch/cpu.h>
 #include <drivers/timer.h>
@@ -38,9 +39,11 @@ static void proc_setup(struct proc *p, int pid, const char *name, struct proc *p
     list_init(&p->zombies);
     list_init(&p->children);
     list_init(&p->sibling);
+    list_init(&p->alarm_link);
     p->state = PROC_RUNNING;
     p->parent = parent;
     p->pgid = pid;
+    p->sid = pid;
     spinlock_init(&p->lock, "proc");
     waitq_init(&p->exit_waitq, "proc_exit");
     waitq_init(&p->child_waitq, "proc_child");
@@ -112,6 +115,7 @@ void proc_free(struct proc *p)
 {
     kassert(p != &kernel_proc);
     kassert(p->nthreads == 0);
+    alarm_cancel(p);
     spin_lock(&proc_list_lock);
     list_del(&p->link);
     spin_unlock(&proc_list_lock);

@@ -322,7 +322,7 @@ static void launch(const struct entry *e)
     pid_t pid = fork();
     if (pid == 0) {
         char line[sizeof e->path], *args[8];
-        const char *save;
+        char *save;
         int n = 0;
         strlcpy(line, e->path, sizeof line);
         for (char *w = strtok_r(line, " ", &save); w && n < 7; w = strtok_r(NULL, " ", &save))

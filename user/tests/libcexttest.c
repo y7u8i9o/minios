@@ -416,9 +416,9 @@ static void test_port_additions(void)
 
     struct passwd *pw = getpwuid(0);
     struct group *gr = getgrgid(0);
-    CHECK(pw && !strcmp(pw->pw_name, "user") && !strcmp(pw->pw_dir, "/home") && getpwuid(7) == NULL, "getpwuid");
-    CHECK(gr && !strcmp(gr->gr_name, "user") && getgrnam("nobody") == NULL, "getgrgid and getgrnam");
-    CHECK(getuid() == 0 && geteuid() == 0 && getgid() == 0, "single user ids");
+    CHECK(pw && !strcmp(pw->pw_name, "root") && !strcmp(pw->pw_dir, "/root") && getpwuid(7) == NULL, "getpwuid");
+    CHECK(gr && !strcmp(gr->gr_name, "root") && getgrnam("nobody") == NULL, "getgrgid and getgrnam");
+    CHECK(getuid() == 0 && geteuid() == 0 && getgid() == 0, "root ids");
     CHECK(major(makedev(5, 9)) == 5 && minor(makedev(5, 9)) == 9, "device numbers");
     CHECK(symlink("/bin/sh", "/tmp/link") == 0, "symlink");
     char lbuf[16];

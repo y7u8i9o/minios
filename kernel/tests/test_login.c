@@ -5,8 +5,8 @@
 /* U3: the console login. init runs login on the console. root sets its
  * password and creates the account anna with useradd and passwd, then logs
  * out. anna logs in with her password, finds herself in her home with the
- * terminal hers, fails su with a wrong password and succeeds with the right
- * one, and cannot read /etc/shadow. root removes the account again and
+ * terminal hers, is refused by doas and sudo because she is not a member
+ * of wheel, and cannot read /etc/shadow. root removes the account again and
  * powers off. The serial output is matched by the expect file of the
  * login_console case. */
 static void test_login(void)
@@ -24,8 +24,8 @@ static void test_login(void)
     type_line("id\n");
     type_line("pwd\n");
     type_line("ls -l /dev/console\n");
-    type_line("echo wrongpw | su -c id\n");
-    type_line("echo rootpw | su -c id\n");
+    type_line("doas -n true\n");
+    type_line("echo annapw | sudo -S id\n");
     type_line("cat /etc/shadow\n");
     type_line("exit\n");
     type_line("root\n");

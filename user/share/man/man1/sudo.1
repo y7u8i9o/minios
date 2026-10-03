@@ -1,0 +1,74 @@
+SUDO(1)                     User Commands
+
+NAME
+    sudo, sudoedit - run a command or edit files as another account
+
+SYNOPSIS
+    sudo [-bEHknPS] [-g group] [-p prompt] [-u name] command [argument ...]
+    sudo [-kn] [-u name] -i | -s [command]
+    sudo -e [-kn] [-u name] file ...
+    sudo -l [-U name] | -v | -k | -K | -V
+
+DESCRIPTION
+    sudo is sudo 1.9.17p1, compiled unmodified from third_party/sudo with
+    the sudoers policy linked into the program. It runs command as the
+    account name, root by default, when /etc/sudoers permits it, and asks
+    for the password of the caller first. The password is checked
+    against /etc/shadow, read from the terminal without echo, and three
+    wrong answers end sudo. The first run of each account prints a short
+    lecture before the prompt. sudo is set user id root.
+
+    After a correct password sudo writes a time stamp in /var/run/sudo/ts
+    and asks no password again for five minutes, as long as the command
+    comes from the same terminal and the same login session. The command
+    runs with the environment reset to a few variables of the caller and
+    with PATH set to the secure_path of /etc/sudoers. Every command and
+    every refusal is recorded in /var/log/messages through syslog(3).
+
+OPTIONS
+    -b          Run the command in the background.
+    -E          Keep the environment of the caller, when sudoers allows it.
+    -e          Edit the files as the caller with a copy, as sudoedit does,
+                and write them back as the target account. The editor is
+                taken from SUDO_EDITOR, VISUAL or EDITOR, /bin/edit by
+                default.
+    -g group    Run the command with group as its primary group.
+    -H          Set HOME to the home of the target account.
+    -i          Run the shell of the target account as a login shell, or
+                command through it.
+    -K          Remove every time stamp of the caller.
+    -k          Ignore the time stamp for this command, or remove it when
+                no command is given.
+    -l          List the commands that the caller, or the account of -U,
+                may run.
+    -n          Fail instead of asking for a password.
+    -P          Keep the supplementary groups of the caller.
+    -p prompt   Ask with prompt, where %u stands for the caller and %h for
+                the host name. An empty prompt prints nothing.
+    -S          Read the password from the first line of standard input
+                instead of the terminal. The rest of the input reaches the
+                command, which lets a program run a command that reads
+                further lines.
+    -s          Run the shell named by SHELL, or command through it.
+    -u name     Run the command as name.
+    -V          Print the version and the configuration.
+    -v          Renew the time stamp without running a command.
+
+    sudo on minios has no PAM, no mail to the administrator, no I/O log
+    server, no LDAP and no SELinux. visudo and cvtsudoers are not built,
+    and root edits /etc/sudoers with an editor directly.
+
+FILES
+    /etc/sudoers            the rules, see sudoers(5)
+    /var/run/sudo/ts        the time stamps of each account
+    /var/db/sudo/lectured   the accounts that have seen the lecture
+    /var/log/messages       the log of commands and refusals
+
+EXAMPLES
+    sudo pkg install gedit
+    sudo -u anna ls /home/anna
+    sudo -i
+    echo password | sudo -S -k -p '' useradd bob
+
+SEE ALSO
+    sudoers(5), doas(1), su(1), id(1), index(7)

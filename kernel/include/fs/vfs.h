@@ -247,6 +247,10 @@ int vfs_access(const char *path, int mask, unsigned flags);
  * permission against the access mode, except for a file that the call
  * itself created. */
 int vfs_open(const char *path, int flags, uint32_t mode, struct file **out);
+/* Set the size of a regular file, inside a filesystem operation and under
+ * inode.lock, and drop the cached pages past the new end. Growing leaves
+ * a hole that reads as zeros. Used by O_TRUNC and ftruncate (U5). */
+int vfs_truncate(struct inode *ino, uint64_t size);
 /* Open a program for exec: a regular file with execute permission, which
  * need not be readable. */
 int vfs_open_exec(const char *path, struct file **out);

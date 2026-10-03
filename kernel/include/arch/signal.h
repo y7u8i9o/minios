@@ -1,15 +1,18 @@
 #pragma once
 #include <kernel.h>
+#include <minios/abi.h>
 
 struct thread;
 struct trapframe;
 
 /* Save the interrupted user state of t (tf, the FPU state and saved_mask)
  * in a signal frame on the user stack, and redirect tf to handler(sig)
- * with restorer as its return address. Returns 0, or -EFAULT if the frame
- * does not fit in writable user memory. */
-int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig,
-                            uintptr_t handler, uintptr_t restorer, uint64_t saved_mask);
+ * with restorer as its return address. With info the frame also holds a
+ * copy of it, and the handler is called as handler(sig, &copy, NULL), as
+ * SA_SIGINFO asks. Returns 0, or -EFAULT if the frame does not fit in
+ * writable user memory. */
+int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig, uintptr_t handler,
+                            uintptr_t restorer, uint64_t saved_mask, const siginfo_t *info);
 /* Restore the user state saved by arch_signal_setup_frame, as found by
  * the sigreturn system call issued from the restorer. Sanitizes the
  * privileged parts of the frame and stores the saved signal mask in

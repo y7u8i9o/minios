@@ -14,6 +14,11 @@ struct ksigaction {
     void (*restorer)(void);
 };
 
+/* signal_send_from posts sig to p as sent by the process from with kill
+ * (si_code SI_USER and its pid and real uid), signal_send as sent by the
+ * kernel (SI_KERNEL). */
+struct proc;
+int signal_send_from(struct proc *p, int sig, struct proc *from);
 /* Post sig to p. SIGKILL terminates immediately; ignored signals are
  * dropped; others become pending and interrupt blocked threads. */
 int signal_send(struct proc *p, int sig);

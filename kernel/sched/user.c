@@ -236,6 +236,7 @@ struct proc *proc_fork(struct trapframe *tf)
     signal_copy(child, parent);
     spin_lock(&proc_tree_lock);
     child->pgid = parent->pgid;
+    child->sid = parent->sid;
     spin_unlock(&proc_tree_lock);
     struct trapframe *ctf = kmalloc(sizeof *ctf);
     if (!ctf)

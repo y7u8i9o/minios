@@ -238,9 +238,12 @@ static void test_parsers(void)
     CHECK(count == 2, "getpwent walked %d accounts", count);
     gid_t groups[4];
     int n = 4;
-    CHECK(getgrouplist("user", 1000, groups, &n) == 1 && groups[0] == 1000, "getgrouplist(user)");
+    /* user belongs to its own group and to wheel, which may use doas
+     * and sudo (U5). */
+    CHECK(getgrouplist("user", 1000, groups, &n) == 2 && groups[0] == 1000 && groups[1] == 10,
+          "getgrouplist(user)");
     n = 0;
-    CHECK(getgrouplist("user", 5, groups, &n) == -1 && n == 1, "getgrouplist with no room");
+    CHECK(getgrouplist("user", 5, groups, &n) == -1 && n == 2, "getgrouplist with no room");
     struct spwd *sp = getspnam("user");
     CHECK(sp && sp->sp_pwdp[0] == '\0', "getspnam(user)");
 }

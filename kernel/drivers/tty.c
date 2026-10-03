@@ -29,6 +29,14 @@ void tty_init(struct tty *t, const char *name, tty_output_fn output, bool defer_
     poll_source_init(&t->poll, "tty_poll");
     ring_init(&t->ready_ring, t->ready, sizeof t->ready);
     t->lflag = ICANON | ECHO | ISIG;
+    t->tio.c_iflag = ICRNL | IXON;
+    t->tio.c_oflag = OPOST | ONLCR;
+    t->tio.c_cflag = CS8 | CREAD;
+    t->tio.c_ispeed = t->tio.c_ospeed = B38400;
+    static const uint8_t cc[NCCS] = { [VINTR] = 0x03, [VQUIT] = 0x1c, [VERASE] = 0x7f, [VKILL] = 0x15,
+                                      [VEOF] = 0x04, [VMIN] = 1, [VSTART] = 0x11, [VSTOP] = 0x13,
+                                      [VSUSP] = 0x1a, [VREPRINT] = 0x12, [VWERASE] = 0x17, [VLNEXT] = 0x16 };
+    memcpy(t->tio.c_cc, cc, sizeof cc);
     t->output = output;
     t->defer_signals = defer_signals;
     t->cols = 80;
@@ -217,10 +225,21 @@ uint32_t tty_get_lflag(struct tty *t)
     return f;
 }
 
+void tty_flush_input(struct tty *t)
+{
+    spin_lock(&t->lock);
+    char c;
+    while (ring_read(&t->ready_ring, &c, 1) == 1)
+        ;
+    t->line_len = 0;
+    spin_unlock(&t->lock);
+    poll_source_notify(&t->poll);
+}
+
 void tty_set_lflag(struct tty *t, uint32_t lflag)
 {
     spin_lock(&t->lock);
-    t->lflag = lflag & (ICANON | ECHO | ISIG);
+    t->lflag = lflag;
     if (!(t->lflag & ICANON) && t->line_len) {
         for (size_t i = 0; i < t->line_len; i++)
             ready_push(t, t->line[i]);
@@ -262,7 +281,10 @@ long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg)
     case TCGETS: {
         if (!vma_range_ok(p->vm, arg, sizeof(struct termios), true))
             return -EFAULT;
-        struct termios tm = { .c_lflag = tty_get_lflag(t) };
+        spin_lock(&t->lock);
+        struct termios tm = t->tio;
+        tm.c_lflag = t->lflag;
+        spin_unlock(&t->lock);
         memcpy((void *)arg, &tm, sizeof tm);
         return 0;
     }
@@ -271,9 +293,19 @@ long tty_ioctl(struct tty *t, unsigned long req, uintptr_t arg)
             return -EFAULT;
         struct termios tm;
         memcpy(&tm, (void *)arg, sizeof tm);
+        spin_lock(&t->lock);
+        t->tio = tm;
+        spin_unlock(&t->lock);
         tty_set_lflag(t, tm.c_lflag);
         return 0;
     }
+    case TCFLSH:
+        if (arg > TCIOFLUSH)
+            return -EINVAL;
+        /* Output is written at once, and only input can be discarded. */
+        if (arg != TCOFLUSH)
+            tty_flush_input(t);
+        return 0;
     case TIOCGWINSZ: {
         if (!vma_range_ok(p->vm, arg, sizeof(struct winsize), true))
             return -EFAULT;

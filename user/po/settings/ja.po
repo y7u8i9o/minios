@@ -534,8 +534,8 @@ msgstr "名前"
 msgid "Password"
 msgstr "パスワード"
 
-msgid "Root password"
-msgstr "root のパスワード"
+msgid "Your password"
+msgstr "あなたのパスワード"
 
 msgid "Add account"
 msgstr "アカウントを追加"

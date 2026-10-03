@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <limits.h>
 #include <minios/account.h>
@@ -263,6 +264,125 @@ struct spwd *getspnam(const char *name)
     if (!sp)
         errno = ENOENT;
     return sp;
+}
+
+static FILE *sp_stream;
+
+void setspent(void)
+{
+    if (sp_stream)
+        rewind(sp_stream);
+}
+
+void endspent(void)
+{
+    if (sp_stream)
+        fclose(sp_stream);
+    sp_stream = NULL;
+}
+
+struct spwd *getspent(void)
+{
+    if (!sp_stream && !(sp_stream = fopen(ACCOUNT_SHADOW, "r")))
+        return NULL;
+    return fgetspent(sp_stream);
+}
+
+/* The reentrant lookups. The entry found by the shared functions is copied
+ * into the caller's buffer at once, which needs no lock while the
+ * process has one thread looking up accounts at a time, as every program
+ * of minios does. */
+static char *copy_str(char **at, size_t *left, const char *s)
+{
+    size_t n = strlen(s) + 1;
+    if (n > *left)
+        return NULL;
+    char *d = *at;
+    memcpy(d, s, n);
+    *at += n;
+    *left -= n;
+    return d;
+}
+
+static int copy_passwd(const struct passwd *src, struct passwd *pw, char *buf, size_t size)
+{
+    char *at = buf;
+    size_t left = size;
+    pw->pw_uid = src->pw_uid;
+    pw->pw_gid = src->pw_gid;
+    if (!(pw->pw_name = copy_str(&at, &left, src->pw_name)) ||
+        !(pw->pw_passwd = copy_str(&at, &left, src->pw_passwd)) ||
+        !(pw->pw_gecos = copy_str(&at, &left, src->pw_gecos)) ||
+        !(pw->pw_dir = copy_str(&at, &left, src->pw_dir)) ||
+        !(pw->pw_shell = copy_str(&at, &left, src->pw_shell)))
+        return ERANGE;
+    return 0;
+}
+
+static int passwd_r(const char *name, uid_t uid, struct passwd *pw, char *buf, size_t size, struct passwd **result)
+{
+    int saved = errno;
+    struct passwd *found = find_passwd(name, uid);
+    *result = NULL;
+    errno = saved;
+    if (!found)
+        return 0;
+    int r = copy_passwd(found, pw, buf, size);
+    if (r == 0)
+        *result = pw;
+    return r;
+}
+
+int getpwnam_r(const char *name, struct passwd *pw, char *buf, size_t size, struct passwd **result)
+{
+    return passwd_r(name, 0, pw, buf, size, result);
+}
+
+int getpwuid_r(uid_t uid, struct passwd *pw, char *buf, size_t size, struct passwd **result)
+{
+    return passwd_r(NULL, uid, pw, buf, size, result);
+}
+
+static int group_r(const char *name, gid_t gid, struct group *gr, char *buf, size_t size, struct group **result)
+{
+    int saved = errno;
+    struct group *found = find_group(name, gid);
+    *result = NULL;
+    errno = saved;
+    if (!found)
+        return 0;
+    size_t nmem = 0;
+    while (found->gr_mem[nmem])
+        nmem++;
+    /* The member pointers come first, aligned for a pointer. */
+    uintptr_t base = ((uintptr_t)buf + sizeof(char *) - 1) & ~(uintptr_t)(sizeof(char *) - 1);
+    size_t skip = base - (uintptr_t)buf, need = (nmem + 1) * sizeof(char *);
+    if (skip + need > size)
+        return ERANGE;
+    char **mem = (char **)base;
+    char *at = (char *)base + need;
+    size_t left = size - skip - need;
+    gr->gr_gid = found->gr_gid;
+    if (!(gr->gr_name = copy_str(&at, &left, found->gr_name)) ||
+        !(gr->gr_passwd = copy_str(&at, &left, found->gr_passwd)))
+        return ERANGE;
+    for (size_t i = 0; i < nmem; i++)
+        if (!(mem[i] = copy_str(&at, &left, found->gr_mem[i])))
+            return ERANGE;
+    mem[nmem] = NULL;
+    gr->gr_mem = mem;
+    *result = gr;
+    return 0;
+}
+
+int getgrnam_r(const char *name, struct group *gr, char *buf, size_t size, struct group **result)
+{
+    return group_r(name, 0, gr, buf, size, result);
+}
+
+int getgrgid_r(gid_t gid, struct group *gr, char *buf, size_t size, struct group **result)
+{
+    return group_r(NULL, gid, gr, buf, size, result);
 }
 
 /* getlogin names the user of the session: LOGNAME as set by login and

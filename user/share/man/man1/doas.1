@@ -1,0 +1,47 @@
+DOAS(1)                     User Commands
+
+NAME
+    doas - run a command as another account
+
+SYNOPSIS
+    doas [-ns] [-C config] [-u name] command [argument ...]
+    doas -C config [-u name] [command [argument ...]]
+
+DESCRIPTION
+    doas is OpenDoas 6.8.2, compiled unmodified from third_party/opendoas
+    against the shadow passwords of minios. It runs command as the account
+    name, root by default, when a rule of /etc/doas.conf permits it, and
+    asks for the password of the caller unless the rule says nopass. The
+    password is read from the terminal without echo, and input typed
+    before the prompt appears is discarded. doas is set user id root.
+
+    The command runs with a fresh environment that keeps DISPLAY, TERM and
+    PATH, sets HOME, LOGNAME, USER and SHELL for the target account and
+    DOAS_USER to the name of the caller, and takes the variables named by
+    the keepenv and setenv options of the rule. Every permitted command and every refusal is recorded in
+    /var/log/messages through syslog(3).
+
+OPTIONS
+    -C config   Parse config instead of running a command and report
+                syntax errors. With a command, print permit, permit nopass
+                or deny for the rule that would apply.
+    -n          Fail instead of asking for a password.
+    -s          Run the shell of the target account, or the one named by
+                SHELL.
+    -u name     Run the command as name.
+
+    The -L option and the persist rule option of OpenDoas need a time
+    stamp facility that minios does not provide. doas therefore asks for
+    the password every time a rule without nopass applies.
+
+FILES
+    /etc/doas.conf      the rules, see doas.conf(5)
+    /var/log/messages   the log of permitted and refused commands
+
+EXAMPLES
+    doas pkg install gedit
+    doas -u anna ls /home/anna
+    doas -C /etc/doas.conf
+
+SEE ALSO
+    doas.conf(5), sudo(1), su(1), id(1), index(7)

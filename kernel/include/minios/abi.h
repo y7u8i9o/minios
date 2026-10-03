@@ -45,6 +45,13 @@ struct stat {
     struct timespec st_mtim;        /* modification time; the filesystems keep seconds */
 };
 #define st_mtime st_mtim.tv_sec
+/* minios keeps no access or change time. Both names report the
+ * modification time, which leaves the structure unchanged for programs
+ * built before U5. */
+#define st_atim st_mtim
+#define st_ctim st_mtim
+#define st_atime st_mtim.tv_sec
+#define st_ctime st_mtim.tv_sec
 
 /* The *at system calls: the directory descriptor meaning the working
  * directory, the flag that makes fstatat and utimensat act on a symbolic
@@ -91,6 +98,9 @@ struct dirent {
 #define O_NOFOLLOW  0x20000         /* fail with ELOOP when the last component is a symbolic link */
 #define O_NONBLOCK  0x800
 #define O_CLOEXEC   0x80000
+#define O_NOCTTY    0x100           /* accepted, minios has no controlling terminal to acquire */
+#define O_DSYNC     0x1000          /* accepted, writes reach the block cache at once */
+#define O_SYNC      0x101000
 
 /* lseek whence */
 #define SEEK_SET 0
@@ -155,8 +165,49 @@ struct dirent {
 #define SIG_IGN ((void (*)(int))1)
 #define SIG_ERR ((void (*)(int))-1)
 
+#define SA_NOCLDSTOP 0x00000001
+#define SA_SIGINFO  0x00000004      /* the handler is sa_sigaction (U5) */
+#define SA_ONSTACK  0x08000000      /* accepted, minios has no alternate stack */
+#define SA_RESTART  0x10000000      /* accepted, interrupted calls still fail with EINTR */
 #define SA_NODEFER  0x40000000
+#define SA_RESETHAND 0x80000000
 #define SA_RESTORER 0x04000000
+
+/* The values of si_code, which tell a signal from kill or the kernel and
+ * give the reasons of SIGCHLD, SIGFPE and SIGSEGV. */
+#define SI_USER     0
+#define SI_KERNEL   0x80
+#define CLD_EXITED  1
+#define CLD_KILLED  2
+#define CLD_DUMPED  3
+#define CLD_TRAPPED 4
+#define CLD_STOPPED 5
+#define CLD_CONTINUED 6
+/* The si_code values of SIGFPE and SIGSEGV. minios posts these signals
+ * with SI_KERNEL. */
+#define FPE_INTDIV  1
+#define FPE_INTOVF  2
+#define FPE_FLTDIV  3
+#define FPE_FLTOVF  4
+#define FPE_FLTUND  5
+#define FPE_FLTRES  6
+#define FPE_FLTINV  7
+#define FPE_FLTSUB  8
+#define SEGV_MAPERR 1
+#define SEGV_ACCERR 2
+
+/* The information a handler with SA_SIGINFO receives (U5). si_pid and
+ * si_uid name the sending process for SI_USER. */
+typedef struct {
+    int32_t si_signo;
+    int32_t si_errno;
+    int32_t si_code;
+    int32_t si_pid;
+    uint32_t si_uid;
+    int32_t si_status;
+    uint64_t si_addr;
+    uint64_t si_value;
+} siginfo_t;
 
 #define SIG_BLOCK   0
 #define SIG_UNBLOCK 1
@@ -165,7 +216,10 @@ struct dirent {
 typedef uint64_t sigset_t;
 
 struct sigaction {
-    void (*sa_handler)(int);
+    union {
+        void (*sa_handler)(int);
+        void (*sa_sigaction)(int, siginfo_t *, void *);
+    };
     sigset_t sa_mask;
     int sa_flags;
     void (*sa_restorer)(void);
@@ -176,17 +230,104 @@ struct sigaction {
 #define RB_AUTOBOOT  1
 #define RB_HALT      2
 
-/* Terminal control: a small termios subset for the console. */
-#define ICANON 0x0002   /* line editing, deliver whole lines */
-#define ECHO   0x0008   /* echo typed characters */
-#define ISIG   0x0001   /* control C sends SIGINT */
+/* Terminal control. The line discipline interprets ISIG, ICANON and ECHO
+ * of c_lflag. The other flags, the speeds and the control characters are
+ * stored and reported as set, for programs that save and restore them
+ * (U5 of docs/plan/multiuser.md). The values are those of Linux. */
+#define ISIG    0x0001  /* control C sends SIGINT */
+#define ICANON  0x0002  /* line editing, deliver whole lines */
+#define ECHO    0x0008  /* echo typed characters */
+#define ECHOE   0x0010
+#define ECHOK   0x0020
+#define ECHONL  0x0040
+#define NOFLSH  0x0080
+#define TOSTOP  0x0100
+#define IEXTEN  0x8000
+
+#define IGNBRK  0x0001
+#define BRKINT  0x0002
+#define IGNPAR  0x0004
+#define PARMRK  0x0008
+#define INPCK   0x0010
+#define ISTRIP  0x0020
+#define INLCR   0x0040
+#define IGNCR   0x0080
+#define ICRNL   0x0100
+#define IXON    0x0400
+#define IXANY   0x0800
+#define IXOFF   0x1000
+#define IMAXBEL 0x2000
+
+#define OPOST   0x0001
+#define ONLCR   0x0004
+#define OCRNL   0x0008
+#define ONOCR   0x0010
+#define ONLRET  0x0020
+
+#define CSIZE   0x0030
+#define CS5     0x0000
+#define CS6     0x0010
+#define CS7     0x0020
+#define CS8     0x0030
+#define CSTOPB  0x0040
+#define CREAD   0x0080
+#define PARENB  0x0100
+#define PARODD  0x0200
+#define HUPCL   0x0400
+#define CLOCAL  0x0800
+
+#define B0      0
+#define B50     1
+#define B75     2
+#define B110    3
+#define B134    4
+#define B150    5
+#define B200    6
+#define B300    7
+#define B600    8
+#define B1200   9
+#define B1800   10
+#define B2400   11
+#define B4800   12
+#define B9600   13
+#define B19200  14
+#define B38400  15
+
+#define VINTR    0
+#define VQUIT    1
+#define VERASE   2
+#define VKILL    3
+#define VEOF     4
+#define VTIME    5
+#define VMIN     6
+#define VSTART   8
+#define VSTOP    9
+#define VSUSP    10
+#define VEOL     11
+#define VREPRINT 12
+#define VDISCARD 13
+#define VWERASE  14
+#define VLNEXT   15
+#define VEOL2    16
+#define NCCS     20
+#define _POSIX_VDISABLE 0
 
 struct termios {
-    uint32_t c_lflag;
+    uint32_t c_lflag;           /* first, as in the subset before U5 */
+    uint32_t c_iflag;
+    uint32_t c_oflag;
+    uint32_t c_cflag;
+    uint8_t c_cc[NCCS];
+    uint32_t c_ispeed;
+    uint32_t c_ospeed;
 };
 
 #define TCGETS   0x5401
 #define TCSETS   0x5402
+#define TCFLSH   0x540B         /* TCIFLUSH, TCOFLUSH or TCIOFLUSH */
+#define TCIFLUSH  0
+#define TCOFLUSH  1
+#define TCIOFLUSH 2
 #define TIOCGWINSZ 0x5413
 
 struct winsize {
@@ -366,7 +507,12 @@ struct net_ping {
 
 #define AF_UNSPEC 0
 #define AF_UNIX 1
+#define PF_UNSPEC AF_UNSPEC
+#define PF_UNIX AF_UNIX
+#define AF_LOCAL AF_UNIX
+#define PF_LOCAL AF_UNIX
 #define AF_INET 2
+#define PF_INET AF_INET
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
 #define SOCK_RAW 3
@@ -490,6 +636,22 @@ struct cmsghdr {
 #define F_GETFL 3
 #define F_SETFL 4
 #define F_DUPFD_CLOEXEC 1030
+/* Record locks (U5) are accepted and not enforced. minios keeps none, and
+ * F_GETLK always reports the region unlocked. */
+#define F_GETLK  5
+#define F_SETLK  6
+#define F_SETLKW 7
+#define F_RDLCK  0
+#define F_WRLCK  1
+#define F_UNLCK  2
+
+struct flock {
+    int16_t l_type;
+    int16_t l_whence;
+    int64_t l_start;
+    int64_t l_len;
+    int32_t l_pid;
+};
 #define FD_CLOEXEC 1
 
 #define MFD_CLOEXEC 1

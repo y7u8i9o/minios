@@ -57,7 +57,10 @@ append to the table; symbolic links added `symlink` (91), `symlinkat`
 and `fstatat` and `utimensat` honour `AT_SYMLINK_NOFOLLOW` since then
 (`vfs.md`). The credentials of U0 added `getresuid` (96) to `umask` (102),
 and the ownership of U1 `fchmodat` (103), `fchmod` (104), `fchownat`
-(105) and `fchown` (106), on 2026-10-03 (`users.md`). Arguments arrive in
+(105) and `fchown` (106), on 2026-10-03 (`users.md`). U2 added
+`faccessat` (107), and the ports of su, doas and sudo in U5 added
+`fchdir` (108), `sigpending` (109), `alarm` (110), `setsid` (111) and
+`getsid` (112). Arguments arrive in
 rdi, rsi, rdx, r10, r8, r9. `write` accepts descriptors 1 and 2 only until
 the VFS exists and checks that the buffer lies in user space with
 `user_range_ok`. An address that is in range but unmapped still faults in

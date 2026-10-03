@@ -2,6 +2,8 @@
 #include <fs/devfs.h>
 #include <fs/vfs.h>
 #include <drivers/tty.h>
+#include <drivers/pty.h>
+#include <fs/fdtable.h>
 #include <sched/proc.h>
 #include <sched/thread.h>
 #include <cpu.h>
@@ -542,6 +544,37 @@ static const struct file_ops condev_fops = { .read = condev_read, .write = conde
                                              .ioctl = condev_ioctl, .poll = condev_poll,
                                              .poll_source = condev_source, .flags = FOPS_STREAM };
 
+/* /dev/tty, the terminal of the calling process (U5). Because minios keeps
+ * no controlling terminal, the first of the standard descriptors 0, 1 and
+ * 2 that is the console or a pseudo terminal slave stands for it. The new
+ * open file takes on that terminal's inode and operations and opens it
+ * through them, as if its own name had been given. */
+static int ctty_open(struct inode *ino, struct file *f)
+{
+    struct fdtable *fds = &thread_current()->proc->fds;
+    for (int fd = 0; fd < 3; fd++) {
+        struct file *t = fdtable_get(fds, fd);
+        if (!t)
+            continue;
+        if (t->ops != &condev_fops && !pty_is_slave(t)) {
+            file_put(t);
+            continue;
+        }
+        struct inode *ti = t->inode;
+        inode_ref(ti);
+        struct inode *old = f->inode;
+        f->inode = ti;
+        f->ops = t->ops;
+        f->priv = NULL;
+        file_put(t);
+        inode_put(old);
+        return f->ops->open ? f->ops->open(ti, f) : 0;
+    }
+    return -ENXIO;
+}
+
+static const struct file_ops ctty_fops = { .open = ctty_open };
+
 static const struct file_ops null_fops = { .read = null_read, .write = null_write };
 static const struct file_ops zero_fops = { .read = zero_read, .write = null_write };
 
@@ -549,6 +582,7 @@ void devfs_init(void)
 {
     vfs_register_fs(&devfs_type);
     devfs_register("console", S_IFCHR | 0666, &condev_fops, NULL, 0);
+    devfs_register("tty", S_IFCHR | 0666, &ctty_fops, NULL, 0);
     devfs_register("klog", S_IFCHR | 0444, &klogdev_fops, NULL, 0);
     devfs_register("null", S_IFCHR | 0666, &null_fops, NULL, 0);
     devfs_register("zero", S_IFCHR | 0666, &zero_fops, NULL, 0);

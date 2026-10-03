@@ -1386,7 +1386,7 @@ int main(int argc, char **argv)
     int modifies = strcmp(cmd, "install") == 0 || strcmp(cmd, "update") == 0 || strcmp(cmd, "upgrade") == 0 ||
                    strcmp(cmd, "remove") == 0;
     if (modifies && access(prefix, W_OK) < 0 && errno == EACCES) {
-        fprintf(stderr, "pkg: %s belongs to root, run su -c 'pkg %s ...' or give --prefix ~/.local\n", prefix, cmd);
+        fprintf(stderr, "pkg: %s belongs to root, run sudo pkg %s ... or give --prefix ~/.local\n", prefix, cmd);
         return 1;
     }
     int r = 0;

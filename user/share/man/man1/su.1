@@ -1,28 +1,34 @@
 SU(1)                       User Commands
 
 NAME
-    su - run a shell or a command as another account
+    su - run a shell as another account
 
 SYNOPSIS
-    su [-] [-c command] [name]
+    su [-lp] [name]
 
 DESCRIPTION
-    su runs the shell of the account name, root by default, or with -c
-    the command through that shell. su is set user id root. A caller other
-    than root gives the password of the target account, unless that
-    account has none. On a terminal the password is typed without echo.
-    Otherwise it is the first line of standard input, read even when the
-    account has no password, which lets a program pass it through a pipe
-    without knowing whether one is set. After a wrong password su waits
-    two seconds and fails with "su: authentication failure".
+    su is the su of ubase, compiled unmodified from third_party/ubase. It
+    runs the shell of the account name, root by default. su is set user
+    id root. A caller other than root types the password of the target
+    account, which su reads from the terminal without echo, and input
+    typed before the prompt appears is discarded. An account whose
+    password is locked or empty cannot be entered by others, and a wrong
+    password ends su with "su: incorrect password".
 
-    Without - the environment is kept, with HOME, SHELL, USER and LOGNAME
-    of the account. With - (or -l) su starts a login shell in the home of
-    the account with a fresh environment, as login(1) does.
+    Without options su keeps the environment and sets HOME and SHELL, and
+    also USER and LOGNAME unless the target is root. With -p the shell
+    named by SHELL in the environment runs instead of the shell of the
+    account. With -l su starts a login shell in the home of the account
+    with an environment that holds only HOME, SHELL, USER, LOGNAME and
+    TERM, as login(1) does.
+
+    su runs no single command. A command is run as another account with
+    doas(1) or sudo(1), and a program that has to pass a password through
+    a pipe uses sudo -S.
 
 EXAMPLES
-    su -c 'pkg install gedit'
-    su - anna
+    su
+    su -l anna
 
 SEE ALSO
-    login(1), passwd(1), id(1), index(7)
+    doas(1), sudo(1), login(1), passwd(1), id(1), index(7)

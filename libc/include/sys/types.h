@@ -10,6 +10,7 @@ typedef unsigned long ino_t;
 typedef unsigned long dev_t;
 typedef unsigned int uid_t;
 typedef unsigned int gid_t;
+typedef unsigned int id_t;              /* a pid, uid or gid, for getpriority */
 typedef unsigned long nlink_t;
 typedef long time_t;
 typedef long blkcnt_t;

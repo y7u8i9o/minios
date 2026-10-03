@@ -44,9 +44,10 @@ static int expect(int master, const char *text, char *out, size_t size)
 int main(void)
 {
     printf("ptytest: pid %d\n", getpid());
-    int master;
+    int master, slave_fd;
     char slave[32];
-    CHECK(openpty(&master, slave, sizeof slave) == 0, "openpty: %s", strerror(errno));
+    CHECK(openpty(&master, &slave_fd, slave, NULL, NULL) == 0, "openpty: %s", strerror(errno));
+    close(slave_fd);
     CHECK(strncmp(slave, "/dev/pts", 8) == 0, "slave path %s", slave);
     struct winsize ws = { 30, 100 };
     CHECK(ioctl(master, TIOCSWINSZ, &ws) == 0, "set window size");
@@ -117,7 +118,8 @@ int main(void)
     CHECK(open(slave, O_RDWR) < 0 && errno == ENXIO, "slave without master refused");
 
     /* A second pair is independent and raw mode delivers bytes at once. */
-    CHECK(openpty(&master, slave, sizeof slave) == 0, "second openpty");
+    CHECK(openpty(&master, &slave_fd, slave, NULL, NULL) == 0, "second openpty");
+    close(slave_fd);
     s = open(slave, O_RDWR);
     struct termios t;
     CHECK(tcgetattr(s, &t) == 0 && (t.c_lflag & ICANON), "default canonical");

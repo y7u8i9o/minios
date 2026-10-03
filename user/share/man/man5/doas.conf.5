@@ -1,0 +1,45 @@
+DOAS.CONF(5)                File Formats
+
+NAME
+    doas.conf - the rules of doas
+
+SYNOPSIS
+    /etc/doas.conf
+
+DESCRIPTION
+    Each line of /etc/doas.conf holds one rule, and the last rule that
+    matches a request decides it. A rule has the form
+
+        permit|deny [options] identity [as target] [cmd command [args ...]]
+
+    where identity is an account name, or a group name preceded by a
+    colon. A rule without as applies to every target account. A rule
+    with cmd applies only to that command, and with args only when the
+    arguments are exactly the ones listed. Text from # to the end of the
+    line is a comment.
+
+    The options of a permit rule are nopass, which runs the command
+    without asking for a password, nolog, which leaves the command out of
+    the log, keepenv, which keeps the environment of the caller, and
+    setenv { name name=value -name }, which keeps, sets or removes the
+    listed variables. The persist option is accepted and has no effect on
+    minios.
+
+    The file must belong to root and must not be writable by others.
+    doas -C checks a file without running a command. minios ships rules
+    that let the members of the group wheel run any command with their
+    own password and let root run commands without one.
+
+        permit :wheel
+        permit nopass root
+
+    The file is part of the system image, while the membership of wheel
+    is kept in /etc/group with the other account databases on the data
+    volume (passwd(5)).
+
+EXAMPLES
+    permit nopass :wheel cmd pkg
+    deny anna as root
+
+SEE ALSO
+    doas(1), passwd(5), index(7)

@@ -18,6 +18,10 @@ struct group *getgrent(void);
 void setgrent(void);
 void endgrent(void);
 struct group *fgetgrent(FILE *stream);
+/* Reentrant lookups in the manner of getpwnam_r. The member list is kept
+ * in buf as well. */
+int getgrnam_r(const char *name, struct group *gr, char *buf, size_t size, struct group **result);
+int getgrgid_r(gid_t gid, struct group *gr, char *buf, size_t size, struct group **result);
 /* The groups of user: group first, then every group that lists user as a
  * member. At most *ngroups are stored. Returns the count, or -1 with the
  * count needed in *ngroups when the array is too small. */

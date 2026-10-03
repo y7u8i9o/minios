@@ -85,6 +85,32 @@ process group that reads the console while it is not foreground receives
 `SIGCONT`; only `fg` transfers the console. `init` puts the shell into its
 own group.
 
+## Signal information, alarms and sessions (U5)
+
+A handler installed with `SA_SIGINFO` receives a `siginfo_t` as its
+second argument, in `rsi` on x86_64 and `x1` on aarch64, which points to
+a copy inside the signal frame. Posting a signal records its
+information in `proc.sig_info` under `proc.lock`. `kill` records
+`SI_USER` with the pid and the real uid of the sender
+(`signal_send_from`), and the signals of the kernel record `SI_KERNEL`.
+A signal posted without a record, as by a fault, is delivered with
+`SI_KERNEL`. `SA_RESETHAND` restores the default action when the
+handler is entered. `sigpending` reports the pending signals that the
+thread blocks.
+
+`alarm` arms a timer of whole seconds per process. The armed processes
+form a list under `alarm_lock`, which the timer interrupt of the boot
+processor walks after the timer descriptors (`kernel/ipc/alarm.c`). It
+collects the processes whose time has come and sends them `SIGALRM`
+after releasing the lock. A process that goes away cancels its alarm in
+`proc_free`.
+
+Each process also has a session id under `proc_tree_lock`, initially its
+own pid and inherited across `fork`. `setsid` starts a new session and
+process group led by the caller, and `getsid` reports the session.
+Sessions have no controlling terminal, and `/dev/tty` finds the terminal
+through the standard descriptors instead (`users.md`).
+
 ## Process listing
 
 `/dev/proc` renders the process table (`PID PPID PGID STATE TIME RSS NAME` since M40) on

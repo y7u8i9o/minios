@@ -15,14 +15,15 @@ struct sigframe {
     struct trapframe tf;
     uint64_t saved_mask;
     uint64_t signo;
+    siginfo_t info;                 /* for SA_SIGINFO handlers (U5) */
     uint8_t fpu[FPU_AREA_SIZE];
 } __aligned(16);
 
 /* NZCV, the only PSTATE bits a user frame may set. */
 #define PSTATE_USER_MASK 0xf0000000UL
 
-int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig,
-                            uintptr_t handler, uintptr_t restorer, uint64_t saved_mask)
+int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig, uintptr_t handler,
+                            uintptr_t restorer, uint64_t saved_mask, const siginfo_t *info)
 {
     uintptr_t sp = ALIGN_DOWN(tf->sp - sizeof(struct sigframe), 16);
     if (!vma_range_ok(t->proc->vm, sp, sizeof(struct sigframe), true))
@@ -31,12 +32,17 @@ int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig,
     frame.tf = *tf;
     frame.saved_mask = saved_mask;
     frame.signo = (uint64_t)sig;
+    memset(&frame.info, 0, sizeof frame.info);
+    if (info)
+        frame.info = *info;
     fpu_save(t->arch.fpu);
     memcpy(frame.fpu, t->arch.fpu, FPU_AREA_SIZE);
     memcpy((void *)sp, &frame, sizeof frame);
 
     tf->pc = handler;
     tf->x[0] = (uint64_t)sig;
+    tf->x[1] = info ? sp + offsetof(struct sigframe, info) : 0;
+    tf->x[2] = 0;
     tf->x[30] = restorer;
     tf->sp = sp;
     return 0;

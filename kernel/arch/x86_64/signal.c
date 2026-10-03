@@ -20,11 +20,12 @@ struct sigframe {
     struct trapframe tf;
     uint64_t saved_mask;
     uint64_t signo;
+    siginfo_t info;                 /* for SA_SIGINFO handlers (U5) */
     uint8_t fpu[FPU_AREA_SIZE];     /* the interrupted FPU and SSE state (M23) */
 };
 
-int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig,
-                            uintptr_t handler, uintptr_t restorer, uint64_t saved_mask)
+int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig, uintptr_t handler,
+                            uintptr_t restorer, uint64_t saved_mask, const siginfo_t *info)
 {
     /* Build the frame below the red zone, 16 byte aligned so the handler
      * sees rsp + 8 aligned as after a call. */
@@ -37,12 +38,17 @@ int arch_signal_setup_frame(struct trapframe *tf, struct thread *t, int sig,
     frame.tf = *tf;
     frame.saved_mask = saved_mask;
     frame.signo = (uint64_t)sig;
+    memset(&frame.info, 0, sizeof frame.info);
+    if (info)
+        frame.info = *info;
     fpu_save(t->arch.fpu);
     memcpy(frame.fpu, t->arch.fpu, FPU_AREA_SIZE);
     memcpy((void *)sp, &frame, sizeof frame);
 
     tf->rip = handler;
     tf->rdi = (uint64_t)sig;
+    tf->rsi = info ? sp + offsetof(struct sigframe, info) : 0;
+    tf->rdx = 0;
     tf->rsp = sp;
     tf->rax = 0;
     return 0;

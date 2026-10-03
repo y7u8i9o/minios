@@ -536,6 +536,20 @@ These locks are in user space and do not add a kernel lock-order level.
   `devfs_lock`, the order of U1, and is called by the pseudo terminal
   driver with no lock held.
 
+## U5 additions
+
+- `alarm_lock` (spinlock) protects the list of armed alarms and the
+  fields `alarm_link` and `alarm_ms` of every process. The timer
+  interrupt takes it, and the system call and `proc_free` take it with no
+  other lock held. It is a leaf. The tick collects the due pids under it
+  and posts the signals after releasing it, which keeps `proc.lock`
+  outside it.
+- `proc.sig_info` is written when a signal is posted and read when it is
+  delivered, both under `proc.lock`, the lock of `sig_actions`.
+- `proc.sid` is protected by `proc_tree_lock`, like `proc.pgid`.
+- `tty.tio`, the stored terminal settings, is protected by `tty.lock`
+  like the other fields of the terminal.
+
 ## U4 additions
 
 - No new lock. `conn.cred` is written by the connecting thread before the

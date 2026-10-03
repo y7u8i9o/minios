@@ -534,8 +534,8 @@ msgstr "名称"
 msgid "Password"
 msgstr "密码"
 
-msgid "Root password"
-msgstr "root 密码"
+msgid "Your password"
+msgstr "您的密码"
 
 msgid "Add account"
 msgstr "添加帐户"

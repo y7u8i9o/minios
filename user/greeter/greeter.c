@@ -260,7 +260,7 @@ static void run_session(const char *name)
     account_session((int)uid);
     pid_t pid = fork();
     if (pid == 0) {
-        setpgid(0, 0);
+        setsid();
         if (initgroups(name, gid) < 0 || setgid(gid) < 0 || setuid(uid) < 0)
             _exit(126);
         if (chdir(home) < 0)
@@ -276,7 +276,6 @@ static void run_session(const char *name)
         _exit(127);
     }
     if (pid > 0) {
-        setpgid(pid, pid);
         wait_child(pid);
         /* Programs the session left behind end with it. */
         kill(-pid, SIGTERM);

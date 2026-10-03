@@ -34,9 +34,9 @@ prefix: `bin/`, `lib/`, `share/`, and `lib/pkg/` for the installer's
 records. Since U3 of the multiuser plan (`users.md`) the prefix is
 `/usr/local` (`LOCAL_PREFIX` in `minios/local.h`), a symbolic link of the
 root image to `/home/.local`, which belongs to root and is shared by all
-users, and installing or removing a package needs root (`su -c 'pkg
-install NAME'`) or a prefix of the user's own such as `--prefix
-~/.local`. Without a data volume the prefix lies on the root image's
+users, and installing or removing a package needs root (`sudo pkg
+install NAME` or `doas pkg install NAME` since U5) or a prefix of the
+user's own such as `--prefix ~/.local`. Without a data volume the prefix lies on the root image's
 `/home` and disappears with the next build.
 `--prefix DIR` selects another prefix, for tests and for images prepared
 on another system.

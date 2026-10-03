@@ -536,8 +536,8 @@ msgstr "Nombre"
 msgid "Password"
 msgstr "Contraseña"
 
-msgid "Root password"
-msgstr "Contraseña de root"
+msgid "Your password"
+msgstr "Su contraseña"
 
 msgid "Add account"
 msgstr "Añadir cuenta"

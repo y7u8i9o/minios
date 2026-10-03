@@ -1,0 +1,55 @@
+SUDOERS(5)                  File Formats
+
+NAME
+    sudoers - the rules of sudo
+
+SYNOPSIS
+    /etc/sudoers
+
+DESCRIPTION
+    /etc/sudoers holds the settings and the rules of sudo(1). It must
+    belong to root with mode 0440, or sudo refuses to run. Text from # to
+    the end of a line is a comment, except in #include, and a backslash at
+    the end of a line continues it on the next one.
+
+    A rule names who may run what, on which host and as whom.
+
+        who host = (runas:group) [tag:] command, ...
+
+    who is an account name, a group name preceded by %, a numeric id
+    preceded by #, an alias or ALL. host is ALL on minios. runas lists
+    the accounts that the command may run as, and group the groups. A
+    command is a full path, optionally followed by the arguments it must
+    be given, or ALL. The tag NOPASSWD: lets the command run without a
+    password, and PASSWD: restores the question. When several rules
+    match, the last one decides.
+
+    Lines starting with Defaults change settings. Among them secure_path
+    sets the PATH of commands, timestamp_timeout the minutes a time stamp
+    stays valid (5 by default, 0 asks every time), passwd_tries the number
+    of attempts (3), lecture whether the lecture is shown (once, always or
+    never), env_keep the variables kept from the environment of the
+    caller, and insults, targetpw and rootpw who is asked for which
+    password. Aliases of the form User_Alias, Runas_Alias and Cmnd_Alias
+    give a name to a list of accounts or commands.
+
+    minios ships a file that lets root and the members of the group wheel
+    run any command as any account with their own password.
+
+        Defaults secure_path="/bin:/usr/local/bin"
+        root ALL=(ALL:ALL) ALL
+        %wheel ALL=(ALL:ALL) ALL
+
+    The file is part of the system image, while the membership of wheel
+    is kept in /etc/group with the other account databases on the data
+    volume (passwd(5)). The full description of the format is the
+    sudoers manual of sudo 1.9.17p1, which is not installed.
+
+EXAMPLES
+    Defaults timestamp_timeout=15
+    anna ALL=(root) NOPASSWD: /bin/pkg
+    Cmnd_Alias POWER = /bin/initctl poweroff, /bin/initctl reboot
+    %user ALL=(root) POWER
+
+SEE ALSO
+    sudo(1), doas.conf(5), passwd(5), index(7)

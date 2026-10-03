@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     CHECK(dup && strcmp(dup, "dup") == 0, "strdup");
     free(dup);
     char toks[] = "a,b,,c";
-    const char *save;
+    char *save;
     char *t = strtok_r(toks, ",", &save);
     CHECK(t && strcmp(t, "a") == 0, "strtok 1");
     t = strtok_r(NULL, ",", &save);

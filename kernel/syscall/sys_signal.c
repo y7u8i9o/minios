@@ -5,6 +5,7 @@
 #include <sched/proc.h>
 #include <sched/sched.h>
 #include <ipc/signal.h>
+#include <ipc/alarm.h>
 #include <fs/vfs.h>
 #include <fs/fdtable.h>
 #include <mm/vma.h>
@@ -41,7 +42,8 @@ long sys_sigaction(struct trapframe *tf)
     }
     spin_unlock(&p->lock);
     if (oldact) {
-        struct sigaction out = { old.handler, old.mask, old.flags, old.restorer };
+        struct sigaction out = { .sa_handler = old.handler, .sa_mask = old.mask, .sa_flags = old.flags,
+                                 .sa_restorer = old.restorer };
         memcpy((void *)oldact, &out, sizeof out);
     }
     return 0;
@@ -109,7 +111,7 @@ long sys_kill(struct trapframe *tf)
             return -ESRCH;
         if (!may_signal(&sender, p))
             return -EPERM;
-        return sig ? signal_send(p, sig) : 0;
+        return sig ? signal_send_from(p, sig, self) : 0;
     }
     int pgid;
     if (pid == 0) {
@@ -131,10 +133,28 @@ long sys_kill(struct trapframe *tf)
         found++;
         if (!may_signal(&sender, p))
             continue;
-        if (!sig || signal_send(p, sig) == 0)
+        if (!sig || signal_send_from(p, sig, self) == 0)
             permitted++;
     }
     return permitted ? 0 : found ? -EPERM : -ESRCH;
+}
+
+/* alarm(seconds) sends SIGALRM to the caller after seconds, and 0 cancels. */
+long sys_alarm(struct trapframe *tf)
+{
+    return alarm_set(thread_current()->proc, (unsigned)SYSARG0(tf));
+}
+
+/* sigpending(set) reports the pending signals that the calling thread blocks. */
+long sys_sigpending(struct trapframe *tf)
+{
+    uintptr_t set = SYSARG0(tf);
+    if (!user_range_ok(set, sizeof(sigset_t), true))
+        return -EFAULT;
+    struct thread *t = thread_current();
+    sigset_t pending = __atomic_load_n(&t->proc->sig_pending, __ATOMIC_ACQUIRE) & t->sig_mask;
+    memcpy((void *)set, &pending, sizeof pending);
+    return 0;
 }
 
 long sys_setpgid(struct trapframe *tf)
@@ -154,6 +174,38 @@ long sys_setpgid(struct trapframe *tf)
     p->pgid = pgid ? pgid : p->pid;
     spin_unlock(&proc_tree_lock);
     return 0;
+}
+
+/* setsid() makes the caller the leader of a new session and of a new
+ * process group, both numbered by its pid. A process group leader may not,
+ * because its group would then span two sessions. Sessions carry no
+ * controlling terminal in minios, which finds the terminal of /dev/tty
+ * through the standard descriptors instead (docs/design/users.md). */
+long sys_setsid(struct trapframe *tf)
+{
+    struct proc *self = thread_current()->proc;
+    spin_lock(&proc_tree_lock);
+    if (self->pgid == self->pid) {
+        spin_unlock(&proc_tree_lock);
+        return -EPERM;
+    }
+    self->sid = self->pid;
+    self->pgid = self->pid;
+    spin_unlock(&proc_tree_lock);
+    return self->pid;
+}
+
+/* getsid(pid) reports the session of pid, 0 meaning the caller. */
+long sys_getsid(struct trapframe *tf)
+{
+    int pid = (int)SYSARG0(tf);
+    struct proc *p = pid ? proc_find(pid) : thread_current()->proc;
+    if (!p || p == &kernel_proc)
+        return -ESRCH;
+    spin_lock(&proc_tree_lock);
+    int sid = p->sid;
+    spin_unlock(&proc_tree_lock);
+    return sid;
 }
 
 long sys_getpgid(struct trapframe *tf)

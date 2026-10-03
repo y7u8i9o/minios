@@ -262,6 +262,11 @@ static const struct file_ops pts_fops = {
     .release = pts_release,
 };
 
+bool pty_is_slave(const struct file *f)
+{
+    return f->ops == &pts_fops;
+}
+
 void pty_init(void)
 {
     devfs_register("ptmx", S_IFCHR | 0666, &ptmx_fops, NULL, 0);

@@ -552,7 +552,7 @@ msgid "Password"
 msgstr ""
 
 #: user/settings/users.c:248
-msgid "Root password"
+msgid "Your password"
 msgstr ""
 
 #: user/settings/users.c:250

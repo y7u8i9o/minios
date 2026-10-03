@@ -1,4 +1,6 @@
 #include <unistd.h>
+#include <utime.h>
+#include <sys/resource.h>
 #include <sys/utsname.h>
 #include <string.h>
 #include <stdlib.h>
@@ -404,7 +406,219 @@ int tcgetattr(int fd, struct termios *t)
 
 int tcsetattr(int fd, int action, const struct termios *t)
 {
+    if (action < TCSANOW || action > TCSAFLUSH) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (action == TCSAFLUSH && ioctl(fd, TCFLSH, (void *)TCIFLUSH) < 0)
+        return -1;
     return ioctl(fd, TCSETS, t);
+}
+
+int tcflush(int fd, int queue)
+{
+    return ioctl(fd, TCFLSH, (void *)(long)queue);
+}
+
+/* Output reaches the terminal when write returns. */
+int tcdrain(int fd)
+{
+    struct termios t;
+    return tcgetattr(fd, &t);
+}
+
+int tcsendbreak(int fd, int duration)
+{
+    return tcdrain(fd);
+}
+
+speed_t cfgetispeed(const struct termios *t) { return t->c_ispeed; }
+speed_t cfgetospeed(const struct termios *t) { return t->c_ospeed; }
+
+int cfsetispeed(struct termios *t, speed_t speed)
+{
+    if (speed > B38400) {
+        errno = EINVAL;
+        return -1;
+    }
+    t->c_ispeed = speed;
+    return 0;
+}
+
+int cfsetospeed(struct termios *t, speed_t speed)
+{
+    if (speed > B38400) {
+        errno = EINVAL;
+        return -1;
+    }
+    t->c_ospeed = speed;
+    return 0;
+}
+
+int cfsetspeed(struct termios *t, speed_t speed)
+{
+    return cfsetispeed(t, speed) < 0 ? -1 : cfsetospeed(t, speed);
+}
+
+void cfmakeraw(struct termios *t)
+{
+    t->c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+    t->c_oflag &= ~(tcflag_t)OPOST;
+    t->c_lflag &= ~(tcflag_t)(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    t->c_cflag = (t->c_cflag & ~(tcflag_t)(CSIZE | PARENB)) | CS8;
+    t->c_cc[VMIN] = 1;
+    t->c_cc[VTIME] = 0;
+}
+
+int gethostname(char *name, size_t size)
+{
+    struct utsname u;
+    if (uname(&u) < 0)
+        return -1;
+    if (strlen(u.nodename) >= size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    strcpy(name, u.nodename);
+    return 0;
+}
+
+int fchdir(int fd)
+{
+    return (int)syscall1(SYS_fchdir, fd);
+}
+
+int ttyname_r(int fd, char *buf, size_t size)
+{
+    struct stat st, dst;
+    if (!isatty(fd))
+        return errno = ENOTTY;
+    if (fstat(fd, &st) < 0)
+        return errno;
+    DIR *d = opendir("/dev");
+    if (!d)
+        return errno;
+    struct dirent *e;
+    int r = ENOTTY;
+    char path[64];
+    while ((e = readdir(d))) {
+        snprintf(path, sizeof path, "/dev/%s", e->d_name);
+        if (stat(path, &dst) == 0 && S_ISCHR(dst.st_mode) && dst.st_rdev == st.st_rdev) {
+            r = strlen(path) < size ? 0 : ERANGE;
+            if (r == 0)
+                strcpy(buf, path);
+            break;
+        }
+    }
+    closedir(d);
+    return errno = r;
+}
+
+char *ttyname(int fd)
+{
+    static char name[64];
+    return ttyname_r(fd, name, sizeof name) == 0 ? name : NULL;
+}
+
+unsigned alarm(unsigned seconds)
+{
+    return (unsigned)syscall1(SYS_alarm, seconds);
+}
+
+pid_t setsid(void)
+{
+    return (pid_t)syscall0(SYS_setsid);
+}
+
+int chroot(const char *path)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+pid_t getsid(pid_t pid)
+{
+    return (pid_t)syscall1(SYS_getsid, pid);
+}
+
+int getpriority(int which, id_t who)
+{
+    errno = 0;
+    return 0;
+}
+
+int setpriority(int which, id_t who, int prio)
+{
+    if (prio != 0) {
+        errno = EACCES;
+        return -1;
+    }
+    return 0;
+}
+
+int utime(const char *path, const struct utimbuf *times)
+{
+    if (!times)
+        return utimensat(AT_FDCWD, path, NULL, 0);
+    struct timespec ts[2] = { { times->actime, 0 }, { times->modtime, 0 } };
+    return utimensat(AT_FDCWD, path, ts, 0);
+}
+
+long sysconf(int name)
+{
+    switch (name) {
+    case _SC_ARG_MAX: return 4096;
+    case _SC_CHILD_MAX: return 64;
+    case _SC_CLK_TCK: return 1000;
+    case _SC_NGROUPS_MAX: return NGROUPS_MAX;
+    case _SC_OPEN_MAX: {
+        struct rlimit rl;
+        return getrlimit(RLIMIT_NOFILE, &rl) == 0 ? (long)rl.rlim_cur : 64;
+    }
+    case _SC_PAGESIZE: return 4096;
+    case _SC_LINE_MAX: return 2048;
+    case _SC_LOGIN_NAME_MAX: return 33;
+    case _SC_HOST_NAME_MAX: return 31;
+    case _SC_NPROCESSORS_CONF:
+    case _SC_NPROCESSORS_ONLN: return nproc();
+    case _SC_GETPW_R_SIZE_MAX:
+    case _SC_GETGR_R_SIZE_MAX: return 1024;
+    case _SC_TTY_NAME_MAX: return 32;
+    case _SC_SYMLOOP_MAX: return 8;
+    }
+    errno = EINVAL;
+    return -1;
+}
+
+/* getpass reads a line without echo from /dev/tty, or from standard
+ * input when there is no terminal, and returns it without the newline. */
+char *getpass(const char *prompt)
+{
+    static char buf[128];
+    int fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
+    int in = fd >= 0 ? fd : 0, out = fd >= 0 ? fd : 2;
+    struct termios saved, quiet;
+    int tty = tcgetattr(in, &saved) == 0;
+    if (tty) {
+        quiet = saved;
+        quiet.c_lflag &= ~(tcflag_t)(ECHO | ECHONL);
+        tcsetattr(in, TCSAFLUSH, &quiet);
+    }
+    write(out, prompt, strlen(prompt));
+    size_t n = 0;
+    char c;
+    ssize_t r = 0;
+    while ((r = read(in, &c, 1)) == 1 && c != '\n')
+        if (n + 1 < sizeof buf)
+            buf[n++] = c;
+    buf[n] = '\0';
+    if (tty) {
+        tcsetattr(in, TCSAFLUSH, &saved);
+        write(out, "\n", 1);
+    }
+    if (fd >= 0)
+        close(fd);
+    return r < 0 && n == 0 ? NULL : buf;
 }
 
 int sleep_ms(unsigned long ms)
@@ -428,18 +642,33 @@ long uptime_ms(void)
     return syscall0(SYS_uptime_ms);
 }
 
-int openpty(int *master, char *slave_path, size_t size)
+int openpty(int *master, int *slave, char *name, const struct termios *termp, const struct winsize *winp)
 {
     int m = open("/dev/ptmx", O_RDWR);
     if (m < 0)
         return -1;
     int n;
+    char path[32];
     if (ioctl(m, TIOCGPTN, &n) < 0) {
         close(m);
         return -1;
     }
-    snprintf(slave_path, size, "/dev/pts%d", n);
+    snprintf(path, sizeof path, "/dev/pts%d", n);
+    int s = open(path, O_RDWR);
+    if (s < 0) {
+        int e = errno;
+        close(m);
+        errno = e;
+        return -1;
+    }
+    if (termp)
+        tcsetattr(s, TCSANOW, termp);
+    if (winp)
+        ioctl(m, TIOCSWINSZ, (void *)winp);
+    if (name)
+        strcpy(name, path);
     *master = m;
+    *slave = s;
     return 0;
 }
 

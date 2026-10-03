@@ -239,3 +239,21 @@ SHA-256 crypt, `getlogin`, the identity calls from `getuid` to
 `mount_options` for the option string of `mount`. `minios/conf.h` gained
 `conf_home`, the home of the caller, and `conf_user_file` and
 `conf_user_write_file` for any file of `$HOME/.config`.
+
+The ports of su, doas and sudo in U5 added `syslog.h` (`openlog`,
+`syslog`, `vsyslog`, `setlogmask` and `closelog`, which append to
+`/var/log/messages` and understand `%m`, `LOG_PID`, `LOG_CONS` and
+`LOG_PERROR`), `getpass`, which reads `/dev/tty` with echo off after
+discarding the typed input, `ttyname` and `ttyname_r`, `sysconf`,
+`gethostname`, `fchdir`, `alarm`, `setsid`, `getsid`, `killpg`,
+`sigpending`, `clearenv`, `strsep`, `getpwnam_r`, `getpwuid_r`,
+`getgrnam_r`, `getgrgid_r`, `getspent`, `setspent` and `endspent`. The
+terminal functions gained `tcflush`, `tcdrain`, `tcsendbreak`, the `cf*`
+speed functions, `cfmakeraw` and the `TCSA*` actions, and `openpty`
+took the BSD signature with the slave descriptor, the name, the settings
+and the window size. `strtok_r` takes `char **` as POSIX has it.
+`getpriority` and `setpriority` report and accept priority 0, `utime`
+sets the modification time, and `chroot` fails with `ENOSYS`. New
+headers are `paths.h`, `utmp.h` (types only, minios keeps no login
+records), `poll.h`, `utime.h`, `alloca.h`, `net/if.h` and
+`netinet/tcp.h`.

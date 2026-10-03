@@ -474,6 +474,15 @@ void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const voi
     }
 }
 
+/* clearenv leaves an empty environment. setenv builds a new vector, so
+ * the static empty one is never written. */
+int clearenv(void)
+{
+    static char *empty[1];
+    environ = empty;
+    return 0;
+}
+
 int unsetenv(const char *name)
 {
     size_t n = strlen(name);

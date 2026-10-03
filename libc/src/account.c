@@ -291,12 +291,14 @@ long account_today(void)
     return (long)(time(NULL) / 86400);
 }
 
+/* A setting of another method, or an empty one, gives "*0", which matches
+ * no stored hash, as the crypt of libxcrypt does. */
 char *crypt(const char *key, const char *salt)
 {
     static char out[128];
     if (!sha256_crypt(key, salt, out, sizeof out)) {
         errno = EINVAL;
-        return NULL;
+        strcpy(out, salt[0] == '*' && salt[1] == '0' ? "*1" : "*0");
     }
     return out;
 }

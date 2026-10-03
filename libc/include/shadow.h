@@ -20,3 +20,7 @@ struct spwd {
 
 struct spwd *getspnam(const char *name);
 struct spwd *fgetspent(FILE *stream);
+/* Walk /etc/shadow entry by entry, like getpwent. */
+struct spwd *getspent(void);
+void setspent(void);
+void endspent(void);

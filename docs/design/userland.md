@@ -15,7 +15,9 @@ they need (raw keyboard mode, console cursor control, a sleep call).
   Escape key itself sends `ESC`. Leaving canonical mode releases a
   partially typed line. Control C sends `SIGINT` and control Z sends
   `SIGTSTP` while `ISIG` is set. libc provides `tcgetattr` and `tcsetattr` (`termios.h`) and
-  `ioctl` (`sys/ioctl.h`).
+  `ioctl` (`sys/ioctl.h`). Since U5 of the multiuser plan the terminal
+  stores the whole `struct termios` with the flag values of Linux, and
+  `TCFLSH` and `TCSAFLUSH` discard the typed input (`users.md`).
 - Console escapes. `drivers/fbcon.c` parses CSI sequences: `ESC[row;colH`
   (cursor position), `ESC[2J` (clear screen), `ESC[J` (clear to the end
   of the screen), `ESC[K` (clear to the end of the line) and `ESC[nA` to

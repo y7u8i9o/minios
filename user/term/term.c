@@ -368,12 +368,15 @@ static struct tab *open_tab(char *const argv[], const char *dir)
         return NULL;
     t->vt = vt_create(cols, rows, SCROLLBACK);
     char slave[32];
-    if (!t->vt || openpty(&t->master, slave, sizeof slave) < 0) {
+    int slave_fd = -1;
+    if (!t->vt || openpty(&t->master, &slave_fd, slave, NULL, NULL) < 0) {
         perror("term: openpty");
         vt_free(t->vt);
         free(t);
         return NULL;
     }
+    /* The child opens the slave by its path. */
+    close(slave_fd);
     struct winsize ws = { (uint16_t)rows, (uint16_t)cols };
     ioctl(t->master, TIOCSWINSZ, &ws);
     const char *name = strrchr(argv[0], '/');

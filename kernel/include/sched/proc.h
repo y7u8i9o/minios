@@ -20,8 +20,8 @@ struct thread;
 
 /* A process: an address space and a set of threads.
  * lock protects threads, zombies, nthreads, exit_status, cwd,
- * sig_actions and cred. exiting and sig_pending are atomic words. fds has its own lock. pgid is protected
- * by proc_tree_lock.
+ * sig_actions and cred. exiting and sig_pending are atomic words. fds has its own lock. pgid and sid are
+ * protected by proc_tree_lock.
  * parent, children, sibling and state are protected by proc_tree_lock. */
 struct proc {
     int pid;
@@ -47,8 +47,15 @@ struct proc {
     char cwd[PROC_CWD_LEN];
     struct fdtable fds;             /* open files */
     int pgid;                       /* process group */
+    int sid;                        /* session, the pid of its leader (U5) */
     uint64_t sig_pending;           /* atomic pending-signal bitmap */
     struct ksigaction sig_actions[NSIG];
+    /* The sender of each pending signal, for SA_SIGINFO (U5), under lock. */
+    siginfo_t sig_info[NSIG];
+    /* The deadline of alarm(2) in timer_ms and the link in the list of
+     * armed processes (U5), both under alarm_lock. */
+    struct list_head alarm_link;
+    uint64_t alarm_ms;
     /* Resource limits (M40): written under lock, read without it by the
      * timer tick and the enforcement points, which tolerate a stale value. */
     struct rlimit rlim[RLIMIT_NLIMITS];

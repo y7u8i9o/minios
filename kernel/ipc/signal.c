@@ -125,7 +125,23 @@ static void interrupt_threads(struct proc *p, int sig)
     }
 }
 
+static int send_info(struct proc *p, int sig, const siginfo_t *info);
+
 int signal_send(struct proc *p, int sig)
+{
+    siginfo_t info = { .si_signo = sig, .si_code = SI_KERNEL };
+    return send_info(p, sig, &info);
+}
+
+int signal_send_from(struct proc *p, int sig, struct proc *from)
+{
+    struct cred c;
+    cred_get(from, &c);
+    siginfo_t info = { .si_signo = sig, .si_code = SI_USER, .si_pid = from->pid, .si_uid = c.ruid };
+    return send_info(p, sig, &info);
+}
+
+static int send_info(struct proc *p, int sig, const siginfo_t *info)
 {
     if (!valid_sig(sig))
         return -EINVAL;
@@ -147,6 +163,7 @@ int signal_send(struct proc *p, int sig)
     bool ignored = h == SIG_IGN || (h == SIG_DFL &&
         ((DEFAULT_IGNORE & SIGBIT(sig)) || sig == SIGCONT || is_init));
     if (!ignored && !__atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
+        p->sig_info[sig] = *info;
         __atomic_fetch_or(&p->sig_pending, SIGBIT(sig), __ATOMIC_RELEASE);
         interrupt_threads(p, sig);
     }
@@ -236,6 +253,12 @@ void signal_deliver(struct trapframe *tf)
     int sig = __builtin_ctzl(ready);
     __atomic_fetch_and(&p->sig_pending, ~SIGBIT(sig), __ATOMIC_RELAXED);
     struct ksigaction act = p->sig_actions[sig];
+    siginfo_t info = p->sig_info[sig];
+    if (info.si_signo != sig)               /* posted without a sender, as by a fault */
+        info = (siginfo_t){ .si_signo = sig, .si_code = SI_KERNEL };
+    p->sig_info[sig].si_signo = 0;
+    if (act.flags & SA_RESETHAND)
+        p->sig_actions[sig].handler = SIG_DFL;
     spin_unlock(&p->lock);
     klog_debug("deliver %d to pid %d handler %p", sig, p->pid, act.handler);
 
@@ -253,8 +276,8 @@ void signal_deliver(struct trapframe *tf)
         default_terminate(p, sig);
     }
 
-    if (arch_signal_setup_frame(tf, t, sig, (uintptr_t)act.handler,
-                                (uintptr_t)act.restorer, t->sig_mask) < 0) {
+    if (arch_signal_setup_frame(tf, t, sig, (uintptr_t)act.handler, (uintptr_t)act.restorer, t->sig_mask,
+                                act.flags & SA_SIGINFO ? &info : NULL) < 0) {
         klog_error("process %s (pid %d): no room for a signal frame", p->name, p->pid);
         default_terminate(p, SIGSEGV);
     }
