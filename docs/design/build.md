@@ -139,14 +139,17 @@ change from milestone numbers on 2026-09-05, `0.2.0` on 2026-09-30 the
 dynamic loader, tcc, networking, packages, `dlopen` and init's service
 supervision. `0.3.0` on 2026-10-03 added the aarch64 port, locales and
 input methods, the codec library, the file chooser, multiple users with
-su, doas and sudo, and the release pipeline. Application packages take their version from `VERSION`
+su, doas and sudo, and the release pipeline. `0.3.1` on the same day
+lifted the limit of the initrd, required a password at the first login,
+added the GICv2, and left the tests and the build paths out of the
+release. Application packages take their version from `VERSION`
 unless `packages.mk` sets one. `tools/version.sh` runs before every
 first pass link. It increments `BUILDNUM` (a counter local to the working
 tree, ignored by git), reads the short commit hash and marks it
 `-dirty` when tracked files differ from HEAD, and writes
 `build/kernel/version.c` with `kernel_release`, `kernel_version`
 (`#build commit date`) and `kernel_build_number`. `uname` reports the
-release and version, the boot log prints `minios 0.3.0 build N (#N
+release and version, the boot log prints `minios 0.3.1 build N (#N
 commit date) booting, gcc V`, and the System page of Settings shows
 the same line.
 
