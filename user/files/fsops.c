@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <langinfo.h>
 #include <sys/stat.h>
 #include <gui/i18n.h>
 
@@ -191,27 +190,4 @@ long fs_tree_size(const char *path, int *files, int *dirs)
     }
     closedir(d);
     return total;
-}
-
-const char *fs_human_size(long size, char *buf, size_t size_buf)
-{
-    if (size < 1024) {
-        snprintf(buf, size_buf, ngettext("%ld byte", "%ld bytes", (unsigned long)size), size);
-        return buf;
-    }
-    long unit = 1024;
-    const char *format = N_("%s KB");
-    if (size >= 1024L * 1024 * 1024) {
-        unit = 1024L * 1024 * 1024;
-        format = N_("%s GB");
-    } else if (size >= 1024 * 1024) {
-        unit = 1024 * 1024;
-        format = N_("%s MB");
-    }
-    /* The number uses the decimal separator of LC_NUMERIC. */
-    long tenths = size * 10 / unit;
-    char number[32];
-    snprintf(number, sizeof number, "%ld%s%ld", tenths / 10, nl_langinfo(RADIXCHAR), tenths % 10);
-    snprintf(buf, size_buf, _(format), number);
-    return buf;
 }

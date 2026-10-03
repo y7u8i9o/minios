@@ -1,0 +1,5 @@
+x12: toplevel [0-9]+ 'Open' mapped
+x12: toplevel [0-9]+ 'Save as' mapped
+gedit: saved /home/user/desktop/copy.txt
+gui_filechooser: ok
+TEST PASS

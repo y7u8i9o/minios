@@ -141,3 +141,11 @@ msgstr "Itérations"
 #: user/apps/mandel.c:838
 msgid "Automatic"
 msgstr "Automatique"
+
+#: user/apps/mandel.c:730
+msgid "PNG images"
+msgstr "Images PNG"
+
+#: user/apps/mandel.c:730
+msgid "All files"
+msgstr "Tous les fichiers"

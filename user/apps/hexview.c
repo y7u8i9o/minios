@@ -415,7 +415,7 @@ static int on_open(struct widget *w, void *args, void *arg)
 {
     char name[PATH_MAX];
     strlcpy(name, path, sizeof name);
-    if (!app_prompt(app, "Open", "File or device:", name, sizeof name))
+    if (!app_choose_file(app, FILE_CHOOSER_OPEN, "Open file or device", NULL, 0, name, sizeof name))
         return 1;
     int err = open_path(name);
     if (err < 0) {

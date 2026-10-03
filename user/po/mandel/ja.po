@@ -137,3 +137,11 @@ msgstr "反復回数"
 #: user/apps/mandel.c:838
 msgid "Automatic"
 msgstr "自動"
+
+#: user/apps/mandel.c:730
+msgid "PNG images"
+msgstr "PNG 画像"
+
+#: user/apps/mandel.c:730
+msgid "All files"
+msgstr "すべてのファイル"

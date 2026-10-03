@@ -430,8 +430,10 @@ static int save_to(const char *name)
     return 0;
 }
 
-/* save_as and save return 0 when the file was written, 1 when the name
- * prompt was cancelled, or a negative errno. */
+static const struct file_filter image_filters[] = { { "Images", "image/*" }, { "All files", "*" } };
+
+/* save_as and save return 0 when the file was written, 1 when the file
+ * chooser was cancelled, or a negative errno. */
 static int save_as(void)
 {
     char name[PATH_MAX];
@@ -439,7 +441,7 @@ static int save_as(void)
         strlcpy(name, path, sizeof name);
     else
         snprintf(name, sizeof name, "%s/Pictures/untitled.png", conf_home());
-    if (!app_prompt(app, "Save as", "File:", name, sizeof name))
+    if (!app_choose_file(app, FILE_CHOOSER_SAVE, "Save as", image_filters, 2, name, sizeof name))
         return 1;
     return save_to(name);
 }
@@ -546,7 +548,7 @@ static int on_open(struct widget *w, void *args, void *arg)
         strlcpy(name, path, sizeof name);
     else
         snprintf(name, sizeof name, "%s/", conf_home());
-    if (!app_prompt(app, "Open", "File:", name, sizeof name))
+    if (!app_choose_file(app, FILE_CHOOSER_OPEN, "Open", image_filters, 2, name, sizeof name))
         return 1;
     int err = load(name);
     if (err < 0)

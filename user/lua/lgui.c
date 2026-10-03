@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #ifdef MINIOS_HOST
 #include <poll.h>
 #else
@@ -1351,6 +1352,43 @@ static int a_prompt(lua_State *L)
     return 1;
 }
 
+/* app:open_file(title, path [, filters]) and app:save_file(...) run the
+ * file chooser, where filters is an array of {name, patterns}, and return
+ * the chosen path or nil. */
+static int choose_file(lua_State *L, enum file_chooser_mode mode)
+{
+    struct app *a = check_app(L, 1);
+    const char *title = luaL_optstring(L, 2, NULL);
+    char buf[PATH_MAX];
+    strlcpy(buf, luaL_optstring(L, 3, ""), sizeof buf);
+    struct file_filter filters[8];
+    int n = 0;
+    if (!lua_isnoneornil(L, 4)) {
+        luaL_checktype(L, 4, LUA_TTABLE);
+        for (int i = 1; n < 8; i++) {
+            if (lua_rawgeti(L, 4, i) != LUA_TTABLE) {
+                lua_pop(L, 1);
+                break;
+            }
+            lua_rawgeti(L, -1, 1);
+            lua_rawgeti(L, -2, 2);
+            filters[n].name = luaL_checkstring(L, -2);
+            filters[n].patterns = luaL_checkstring(L, -1);
+            n++;
+            /* The strings stay alive because the argument table refers to them. */
+            lua_pop(L, 3);
+        }
+    }
+    if (app_choose_file(a, mode, title, filters, n, buf, sizeof buf))
+        lua_pushstring(L, buf);
+    else
+        lua_pushnil(L);
+    return 1;
+}
+
+static int a_open_file(lua_State *L) { return choose_file(L, FILE_CHOOSER_OPEN); }
+static int a_save_file(lua_State *L) { return choose_file(L, FILE_CHOOSER_SAVE); }
+
 static const char *const layer_names[] = { "background", "bottom", "top", "overlay", NULL };
 
 /* Returns the anchor mask of a string of edge names separated by spaces
@@ -1492,7 +1530,8 @@ static int a_destroy(lua_State *L)
 static const luaL_Reg app_methods[] = {
     { "window", a_window }, { "modal", a_modal }, { "run", a_run }, { "quit", a_quit },
     { "step", a_step }, { "timer", a_timer }, { "watch", a_watch }, { "theme", a_theme },
-    { "dialog", a_dialog }, { "prompt", a_prompt }, { "destroy", a_destroy },
+    { "dialog", a_dialog }, { "prompt", a_prompt },
+    { "open_file", a_open_file }, { "save_file", a_save_file }, { "destroy", a_destroy },
     { "layer", a_layer }, { "screen", a_screen }, { "clipboard", a_clipboard },
     { NULL, NULL }
 };

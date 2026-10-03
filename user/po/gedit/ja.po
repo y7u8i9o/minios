@@ -187,3 +187,11 @@ msgstr "%d 行、%d 列"
 msgid "%d line"
 msgid_plural "%d lines"
 msgstr[0] "%d 行"
+
+#: user/apps/gedit.c:149
+msgid "All files"
+msgstr "すべてのファイル"
+
+#: user/apps/gedit.c:149
+msgid "Text files"
+msgstr "テキストファイル"

@@ -41,3 +41,248 @@ msgstr "删除"
 #: libgui/src/widgets/editmenu.c:21
 msgid "Select all"
 msgstr "全选"
+
+#: libgui/src/filechooser.c:100
+msgid "A file named “%s” already exists. Do you want to replace it?"
+msgstr "名为“%s”的文件已存在。要替换它吗?"
+
+#: libgui/src/filechooser.c:102
+msgid "Replace"
+msgstr "替换"
+
+#: libgui/src/filechooser.c:103
+msgid "Replace file"
+msgstr "替换文件"
+
+#: libgui/src/filechooser.c:246 libgui/src/filechooser.c:357
+msgid "New folder"
+msgstr "新建文件夹"
+
+#: libgui/src/filechooser.c:246
+msgid "Folder name:"
+msgstr "文件夹名称:"
+
+#: libgui/src/filechooser.c:250
+msgid "A folder name cannot contain “/”."
+msgstr "文件夹名称不能包含“/”。"
+
+#: libgui/src/filechooser.c:256
+msgid "The folder “%s” cannot be created: %s."
+msgstr "无法创建文件夹“%s”:%s。"
+
+#: libgui/src/filechooser.c:291
+msgid "Hide hidden files"
+msgstr "不显示隐藏文件"
+
+#: libgui/src/filechooser.c:291 libgui/src/filechooser.c:371
+msgid "Show hidden files"
+msgstr "显示隐藏文件"
+
+#: libgui/src/filechooser.c:323
+msgid "Name:"
+msgstr "名称："
+
+#: libgui/src/filechooser.c:343
+msgid "Save"
+msgstr "保存"
+
+#: libgui/src/filechooser.c:343
+msgid "Open"
+msgstr "打开"
+
+#: libgui/src/filechooser.c:367
+msgid "Visit file"
+msgstr "转到文件"
+
+#: libgui/src/filechooser.c:369
+msgid "Copy location"
+msgstr "复制位置"
+
+#: libgui/src/filechooser.c:421
+msgid "Save file"
+msgstr "保存文件"
+
+#: libgui/src/filechooser.c:421
+msgid "Open file"
+msgstr "打开文件"
+
+#: libgui/src/filechooser.c:94
+msgid "The folder “%s” does not exist."
+msgstr "文件夹“%s”不存在。"
+
+#: libgui/src/folderview.c:1139 libgui/src/folderview.c:1139
+msgid "Desktop"
+msgstr "桌面"
+
+#: libgui/src/folderview.c:1140
+msgid "Documents"
+msgstr "文档"
+
+#: libgui/src/folderview.c:1140
+msgid "Downloads"
+msgstr "下载"
+
+#: libgui/src/folderview.c:1141
+msgid "Music"
+msgstr "音乐"
+
+#: libgui/src/folderview.c:1141
+msgid "Pictures"
+msgstr "图片"
+
+#: libgui/src/folderview.c:1142
+msgid "Videos"
+msgstr "视频"
+
+#: libgui/src/folderview.c:1145
+msgid "Programs"
+msgstr "程序"
+
+#: libgui/src/folderview.c:1145
+msgid "Shared files"
+msgstr "共享文件"
+
+#: libgui/src/folderview.c:1146
+msgid "Fonts"
+msgstr "字体"
+
+#: libgui/src/folderview.c:1146
+msgid "Devices"
+msgstr "设备"
+
+#: libgui/src/folderview.c:1148 libgui/src/folderview.c:1203
+msgid "Recent"
+msgstr "最近使用"
+
+#: libgui/src/folderview.c:1149 libgui/src/folderview.c:1210
+msgid "Home"
+msgstr "主目录"
+
+#: libgui/src/folderview.c:1169
+msgid "Computer"
+msgstr "计算机"
+
+#: libgui/src/folderview.c:1377
+msgid "Search"
+msgstr "搜索"
+
+#: libgui/src/folderview.c:245
+msgid "%ld byte"
+msgid_plural "%ld bytes"
+msgstr[0] "%ld 字节"
+
+#: libgui/src/folderview.c:249
+msgid "%s kB"
+msgstr "%s kB"
+
+#: libgui/src/folderview.c:252
+msgid "%s GB"
+msgstr "%s GB"
+
+#: libgui/src/folderview.c:255
+msgid "%s MB"
+msgstr "%s MB"
+
+#: libgui/src/folderview.c:268
+msgid "Folder"
+msgstr "文件夹"
+
+#: libgui/src/folderview.c:268
+msgid "Text"
+msgstr "文本"
+
+#: libgui/src/folderview.c:268
+msgid "C source"
+msgstr "C 源代码"
+
+#: libgui/src/folderview.c:269
+msgid "Shell script"
+msgstr "Shell 脚本"
+
+#: libgui/src/folderview.c:269
+msgid "Lua source"
+msgstr "Lua 源代码"
+
+#: libgui/src/folderview.c:270
+msgid "PNG image"
+msgstr "PNG 图像"
+
+#: libgui/src/folderview.c:270
+msgid "BMP image"
+msgstr "BMP 图像"
+
+#: libgui/src/folderview.c:270
+msgid "SVG image"
+msgstr "SVG 图像"
+
+#: libgui/src/folderview.c:271
+msgid "WAV audio"
+msgstr "WAV 音频"
+
+#: libgui/src/folderview.c:271
+msgid "FLAC audio"
+msgstr "FLAC 音频"
+
+#: libgui/src/folderview.c:271
+msgid "Ogg audio"
+msgstr "Ogg 音频"
+
+#: libgui/src/folderview.c:272
+msgid "Launcher"
+msgstr "启动器"
+
+#: libgui/src/folderview.c:272
+msgid "Package"
+msgstr "软件包"
+
+#: libgui/src/folderview.c:278
+msgid "Program"
+msgstr "程序"
+
+#: libgui/src/folderview.c:278
+msgid "File"
+msgstr "文件"
+
+#: libgui/src/folderview.c:474
+msgid "Yesterday"
+msgstr "昨天"
+
+#: libgui/src/folderview.c:480
+msgid "%e %b"
+msgstr "%m月%d日"
+
+#: libgui/src/folderview.c:482
+msgid "%e %b %Y"
+msgstr "%Y年%m月%d日"
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Name"
+msgstr "名称"
+
+#: libgui/src/folderview.c:524
+msgid "Size"
+msgstr "大小"
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Type"
+msgstr "类型"
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Modified"
+msgstr "修改时间"
+
+#: libgui/src/folderview.c:525
+msgid "Location"
+msgstr "位置"
+
+#: libgui/src/folderview.c:611
+msgid "The folder “%s” cannot be read: %s."
+msgstr "无法读取文件夹“%s”:%s。"
+
+#: libgui/src/folderview.c:659
+msgid "The folder “%s” cannot be opened: %s."
+msgstr "无法打开文件夹“%s”:%s。"
+
+#: libgui/src/folderview.c:872
+msgid "The file “%s” does not exist."
+msgstr "文件“%s”不存在。"

@@ -145,11 +145,26 @@ static void error(const char *text)
     app_dialog(app, _("Error"), text, buttons, 1);
 }
 
+static const struct file_filter text_filters[] = {
+    { N_("All files"), "*" }, { N_("Text files"), "text/*" },
+};
+
+/* The filters with their names translated. */
+static int filters(struct file_filter *out)
+{
+    int n = (int)(sizeof text_filters / sizeof text_filters[0]);
+    for (int i = 0; i < n; i++)
+        out[i] = (struct file_filter){ _(text_filters[i].name), text_filters[i].patterns };
+    return n;
+}
+
 static int on_save_as(struct widget *w, void *args, void *arg)
 {
     char name[256];
+    struct file_filter f[2];
+    int nf = filters(f);
     strlcpy(name, path, sizeof name);
-    if (app_prompt(app, _("Save as"), _("File:"), name, sizeof name)) {
+    if (app_choose_file(app, FILE_CHOOSER_SAVE, _("Save as"), f, nf, name, sizeof name)) {
         strlcpy(path, name, sizeof path);
         set_highlighter();
         if (save() < 0)
@@ -199,8 +214,10 @@ static int on_open(struct widget *w, void *args, void *arg)
     if (!may_discard())
         return 1;
     char name[256];
+    struct file_filter f[2];
+    int nf = filters(f);
     strlcpy(name, path, sizeof name);
-    if (app_prompt(app, _("Open"), _("File:"), name, sizeof name) && load(name) < 0)
+    if (app_choose_file(app, FILE_CHOOSER_OPEN, _("Open"), f, nf, name, sizeof name) && load(name) < 0)
         error(_("The file cannot be opened."));
     return 1;
 }

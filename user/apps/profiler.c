@@ -697,13 +697,9 @@ static int on_export(struct widget *w, void *args, void *arg)
     int format = arg ? PROF_EXPORT_FOLDED : PROF_EXPORT_JSON;
     char path[256];
     snprintf(path, sizeof path, "%s/profile.%s", conf_home(), format == PROF_EXPORT_JSON ? "json" : "folded");
-    if (!app_prompt(app, "Export capture", "Save path (capture stops on export):", path, sizeof path))
+    /* The chooser asks before an existing file is replaced. */
+    if (!app_choose_file(app, FILE_CHOOSER_SAVE, "Export capture (the capture stops)", NULL, 0, path, sizeof path))
         return 1;
-    if (access(path, F_OK) == 0) {
-        static const char *const buttons[] = { "Cancel", "Replace" };
-        if (app_dialog(app, "Replace export", path, buttons, 2) != 1)
-            return 1;
-    }
     save_capture(path, format);
     return 1;
 }

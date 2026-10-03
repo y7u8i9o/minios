@@ -380,7 +380,7 @@ static int on_save(struct widget *w, void *args, void *arg)
 {
     char name[PATH_MAX];
     snprintf(name, sizeof name, "%s/klog.txt", conf_home());
-    if (!app_prompt(app, _("Save"), _("File:"), name, sizeof name))
+    if (!app_choose_file(app, FILE_CHOOSER_SAVE, _("Save"), NULL, 0, name, sizeof name))
         return 1;
     FILE *f = fopen(name, "w");
     if (!f) {

@@ -357,3 +357,19 @@ msgstr "%s Go"
 #: user/files/fsops.c:209
 msgid "%s MB"
 msgstr "%s Mo"
+
+#: user/files/files.c:104 user/files/files.c:479
+msgid "Recent"
+msgstr "Récents"
+
+#: user/files/files.c:105 user/files/files.c:464
+msgid "Search"
+msgstr "Rechercher"
+
+#: user/files/files.c:481
+msgid "Location..."
+msgstr "Emplacement..."
+
+#: user/files/files.c:486
+msgid "Open item location"
+msgstr "Ouvrir l'emplacement de l'élément"

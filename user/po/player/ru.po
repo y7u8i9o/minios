@@ -105,3 +105,11 @@ msgstr "Стоп"
 #: user/apps/player.c:610
 msgid "Loop"
 msgstr "Повтор"
+
+#: user/apps/player.c:511
+msgid "Audio files"
+msgstr "Аудиофайлы"
+
+#: user/apps/player.c:511
+msgid "All files"
+msgstr "Все файлы"

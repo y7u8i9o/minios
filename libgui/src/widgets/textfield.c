@@ -389,3 +389,13 @@ struct widget *textfield_new(struct widget *parent, const char *text)
     widget_set_stretch(w, 1, 0);
     return w;
 }
+
+void textfield_select(struct widget *w, int anchor, int cursor)
+{
+    struct textfield *f = (struct textfield *)w;
+    int n = len_of(f);
+    f->cursor = cursor < 0 || cursor > n ? n : cursor;
+    f->sel = anchor < 0 ? -1 : anchor > n ? n : anchor;
+    scroll_to_cursor(f, widget_theme(w));
+    widget_invalidate(w);
+}

@@ -3,12 +3,258 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: libgui/src/dialog.c:84
+#: libgui/src/dialog.c:86 libgui/src/filechooser.c:45 libgui/src/folderview.c:547
 msgid "OK"
 msgstr ""
 
-#: libgui/src/dialog.c:84
+#: libgui/src/dialog.c:86 libgui/src/filechooser.c:102 libgui/src/filechooser.c:340
 msgid "Cancel"
+msgstr ""
+
+#: libgui/src/filechooser.c:100
+msgid "A file named “%s” already exists. Do you want to replace it?"
+msgstr ""
+
+#: libgui/src/filechooser.c:102
+msgid "Replace"
+msgstr ""
+
+#: libgui/src/filechooser.c:103
+msgid "Replace file"
+msgstr ""
+
+#: libgui/src/filechooser.c:246 libgui/src/filechooser.c:357
+msgid "New folder"
+msgstr ""
+
+#: libgui/src/filechooser.c:246
+msgid "Folder name:"
+msgstr ""
+
+#: libgui/src/filechooser.c:250
+msgid "A folder name cannot contain “/”."
+msgstr ""
+
+#: libgui/src/filechooser.c:256
+msgid "The folder “%s” cannot be created: %s."
+msgstr ""
+
+#: libgui/src/filechooser.c:291
+msgid "Hide hidden files"
+msgstr ""
+
+#: libgui/src/filechooser.c:291 libgui/src/filechooser.c:371
+msgid "Show hidden files"
+msgstr ""
+
+#: libgui/src/filechooser.c:323
+msgid "Name:"
+msgstr ""
+
+#: libgui/src/filechooser.c:343
+msgid "Save"
+msgstr ""
+
+#: libgui/src/filechooser.c:343
+msgid "Open"
+msgstr ""
+
+#: libgui/src/filechooser.c:367
+msgid "Visit file"
+msgstr ""
+
+#: libgui/src/filechooser.c:369
+msgid "Copy location"
+msgstr ""
+
+#: libgui/src/filechooser.c:421
+msgid "Save file"
+msgstr ""
+
+#: libgui/src/filechooser.c:421
+msgid "Open file"
+msgstr ""
+
+#: libgui/src/filechooser.c:94
+msgid "The folder “%s” does not exist."
+msgstr ""
+
+#: libgui/src/folderview.c:1139 libgui/src/folderview.c:1139
+msgid "Desktop"
+msgstr ""
+
+#: libgui/src/folderview.c:1140
+msgid "Documents"
+msgstr ""
+
+#: libgui/src/folderview.c:1140
+msgid "Downloads"
+msgstr ""
+
+#: libgui/src/folderview.c:1141
+msgid "Music"
+msgstr ""
+
+#: libgui/src/folderview.c:1141
+msgid "Pictures"
+msgstr ""
+
+#: libgui/src/folderview.c:1142
+msgid "Videos"
+msgstr ""
+
+#: libgui/src/folderview.c:1145
+msgid "Programs"
+msgstr ""
+
+#: libgui/src/folderview.c:1145
+msgid "Shared files"
+msgstr ""
+
+#: libgui/src/folderview.c:1146
+msgid "Fonts"
+msgstr ""
+
+#: libgui/src/folderview.c:1146
+msgid "Devices"
+msgstr ""
+
+#: libgui/src/folderview.c:1148 libgui/src/folderview.c:1203
+msgid "Recent"
+msgstr ""
+
+#: libgui/src/folderview.c:1149 libgui/src/folderview.c:1210
+msgid "Home"
+msgstr ""
+
+#: libgui/src/folderview.c:1169
+msgid "Computer"
+msgstr ""
+
+#: libgui/src/folderview.c:1377
+msgid "Search"
+msgstr ""
+
+#: libgui/src/folderview.c:245
+msgid "%ld byte"
+msgid_plural "%ld bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: libgui/src/folderview.c:249
+msgid "%s kB"
+msgstr ""
+
+#: libgui/src/folderview.c:252
+msgid "%s GB"
+msgstr ""
+
+#: libgui/src/folderview.c:255
+msgid "%s MB"
+msgstr ""
+
+#: libgui/src/folderview.c:268
+msgid "Folder"
+msgstr ""
+
+#: libgui/src/folderview.c:268
+msgid "Text"
+msgstr ""
+
+#: libgui/src/folderview.c:268
+msgid "C source"
+msgstr ""
+
+#: libgui/src/folderview.c:269
+msgid "Shell script"
+msgstr ""
+
+#: libgui/src/folderview.c:269
+msgid "Lua source"
+msgstr ""
+
+#: libgui/src/folderview.c:270
+msgid "PNG image"
+msgstr ""
+
+#: libgui/src/folderview.c:270
+msgid "BMP image"
+msgstr ""
+
+#: libgui/src/folderview.c:270
+msgid "SVG image"
+msgstr ""
+
+#: libgui/src/folderview.c:271
+msgid "WAV audio"
+msgstr ""
+
+#: libgui/src/folderview.c:271
+msgid "FLAC audio"
+msgstr ""
+
+#: libgui/src/folderview.c:271
+msgid "Ogg audio"
+msgstr ""
+
+#: libgui/src/folderview.c:272
+msgid "Launcher"
+msgstr ""
+
+#: libgui/src/folderview.c:272
+msgid "Package"
+msgstr ""
+
+#: libgui/src/folderview.c:278
+msgid "Program"
+msgstr ""
+
+#: libgui/src/folderview.c:278
+msgid "File"
+msgstr ""
+
+#: libgui/src/folderview.c:474
+msgid "Yesterday"
+msgstr ""
+
+#: libgui/src/folderview.c:480
+msgid "%e %b"
+msgstr ""
+
+#: libgui/src/folderview.c:482
+msgid "%e %b %Y"
+msgstr ""
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Name"
+msgstr ""
+
+#: libgui/src/folderview.c:524
+msgid "Size"
+msgstr ""
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Type"
+msgstr ""
+
+#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+msgid "Modified"
+msgstr ""
+
+#: libgui/src/folderview.c:525
+msgid "Location"
+msgstr ""
+
+#: libgui/src/folderview.c:611
+msgid "The folder “%s” cannot be read: %s."
+msgstr ""
+
+#: libgui/src/folderview.c:659
+msgid "The folder “%s” cannot be opened: %s."
+msgstr ""
+
+#: libgui/src/folderview.c:872
+msgid "The file “%s” does not exist."
 msgstr ""
 
 #: libgui/src/widgets/editmenu.c:15

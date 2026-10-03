@@ -15,161 +15,165 @@ msgstr ""
 msgid "Error"
 msgstr ""
 
-#: user/apps/gedit.c:152
+#: user/apps/gedit.c:149
+msgid "All files"
+msgstr ""
+
+#: user/apps/gedit.c:149
+msgid "Text files"
+msgstr ""
+
+#: user/apps/gedit.c:167
 msgid "Save as"
 msgstr ""
 
-#: user/apps/gedit.c:152 user/apps/gedit.c:203
-msgid "File:"
-msgstr ""
-
-#: user/apps/gedit.c:156 user/apps/gedit.c:166
+#: user/apps/gedit.c:171 user/apps/gedit.c:181
 msgid "The file cannot be written."
 msgstr ""
 
-#: user/apps/gedit.c:176 user/apps/gedit.c:325 user/apps/gedit.c:347
+#: user/apps/gedit.c:191 user/apps/gedit.c:342 user/apps/gedit.c:364
 msgid "Save"
 msgstr ""
 
-#: user/apps/gedit.c:176
+#: user/apps/gedit.c:191
 msgid "Discard"
 msgstr ""
 
-#: user/apps/gedit.c:176
+#: user/apps/gedit.c:191
 msgid "Cancel"
 msgstr ""
 
-#: user/apps/gedit.c:177
+#: user/apps/gedit.c:192
 msgid "Unsaved changes"
 msgstr ""
 
-#: user/apps/gedit.c:177
+#: user/apps/gedit.c:192
 msgid "Save the changes?"
 msgstr ""
 
-#: user/apps/gedit.c:203 user/apps/gedit.c:346
+#: user/apps/gedit.c:220 user/apps/gedit.c:363
 msgid "Open"
 msgstr ""
 
-#: user/apps/gedit.c:204
+#: user/apps/gedit.c:221
 msgid "The file cannot be opened."
-msgstr ""
-
-#: user/apps/gedit.c:243
-msgid "\"%s\" not found"
-msgstr ""
-
-#: user/apps/gedit.c:253 user/apps/gedit.c:360
-msgid "Find"
-msgstr ""
-
-#: user/apps/gedit.c:253
-msgid "Text:"
 msgstr ""
 
 #: user/apps/gedit.c:26
 msgid "untitled"
 msgstr ""
 
-#: user/apps/gedit.c:268 user/apps/gedit.c:269
+#: user/apps/gedit.c:260
+msgid "\"%s\" not found"
+msgstr ""
+
+#: user/apps/gedit.c:270 user/apps/gedit.c:377
+msgid "Find"
+msgstr ""
+
+#: user/apps/gedit.c:270
+msgid "Text:"
+msgstr ""
+
+#: user/apps/gedit.c:285 user/apps/gedit.c:286
 msgid "Replace"
 msgstr ""
 
-#: user/apps/gedit.c:268
+#: user/apps/gedit.c:285
 msgid "Find:"
 msgstr ""
 
-#: user/apps/gedit.c:269
+#: user/apps/gedit.c:286
 msgid "Replace with:"
 msgstr ""
 
-#: user/apps/gedit.c:272
+#: user/apps/gedit.c:289
 msgid "%d occurrence replaced"
 msgid_plural "%d occurrences replaced"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/apps/gedit.c:284
+#: user/apps/gedit.c:301
 msgid "Go to line"
 msgstr ""
 
-#: user/apps/gedit.c:284
+#: user/apps/gedit.c:301
 msgid "Line:"
 msgstr ""
 
-#: user/apps/gedit.c:322
+#: user/apps/gedit.c:339
 msgid "File"
 msgstr ""
 
-#: user/apps/gedit.c:323 user/apps/gedit.c:345
+#: user/apps/gedit.c:340 user/apps/gedit.c:362
 msgid "New"
 msgstr ""
 
-#: user/apps/gedit.c:324
+#: user/apps/gedit.c:341
 msgid "Open..."
 msgstr ""
 
-#: user/apps/gedit.c:326
+#: user/apps/gedit.c:343
 msgid "Save as..."
 msgstr ""
 
-#: user/apps/gedit.c:328
+#: user/apps/gedit.c:345
 msgid "Quit"
 msgstr ""
 
-#: user/apps/gedit.c:329
+#: user/apps/gedit.c:346
 msgid "Edit"
 msgstr ""
 
-#: user/apps/gedit.c:330 user/apps/gedit.c:349
+#: user/apps/gedit.c:347 user/apps/gedit.c:366
 msgid "Undo"
 msgstr ""
 
-#: user/apps/gedit.c:331 user/apps/gedit.c:351
+#: user/apps/gedit.c:348 user/apps/gedit.c:368
 msgid "Redo"
 msgstr ""
 
-#: user/apps/gedit.c:333 user/apps/gedit.c:354
+#: user/apps/gedit.c:350 user/apps/gedit.c:371
 msgid "Cut"
 msgstr ""
 
-#: user/apps/gedit.c:334 user/apps/gedit.c:356
+#: user/apps/gedit.c:351 user/apps/gedit.c:373
 msgid "Copy"
 msgstr ""
 
-#: user/apps/gedit.c:335 user/apps/gedit.c:358
+#: user/apps/gedit.c:352 user/apps/gedit.c:375
 msgid "Paste"
 msgstr ""
 
-#: user/apps/gedit.c:336
+#: user/apps/gedit.c:353
 msgid "Delete"
 msgstr ""
 
-#: user/apps/gedit.c:337
+#: user/apps/gedit.c:354
 msgid "Select all"
 msgstr ""
 
-#: user/apps/gedit.c:339
+#: user/apps/gedit.c:356
 msgid "Find..."
 msgstr ""
 
-#: user/apps/gedit.c:340
+#: user/apps/gedit.c:357
 msgid "Find next"
 msgstr ""
 
-#: user/apps/gedit.c:341
+#: user/apps/gedit.c:358
 msgid "Replace..."
 msgstr ""
 
-#: user/apps/gedit.c:342
+#: user/apps/gedit.c:359
 msgid "Go to line..."
 msgstr ""
 
-#: user/apps/gedit.c:361
+#: user/apps/gedit.c:378
 msgid "Wrap"
 msgstr ""
 
-#: user/apps/gedit.c:363
+#: user/apps/gedit.c:380
 msgid "Line numbers"
 msgstr ""
 

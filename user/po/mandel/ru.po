@@ -145,3 +145,11 @@ msgstr "Итерации"
 #: user/apps/mandel.c:838
 msgid "Automatic"
 msgstr "Автоматически"
+
+#: user/apps/mandel.c:730
+msgid "PNG images"
+msgstr "Изображения PNG"
+
+#: user/apps/mandel.c:730
+msgid "All files"
+msgstr "Все файлы"

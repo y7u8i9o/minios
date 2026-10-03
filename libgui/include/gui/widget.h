@@ -202,6 +202,9 @@ struct widget *textfield_new(struct widget *parent, const char *text);
 /* A masked field shows one '*' per byte of its text and refuses to copy
  * it, for passwords. */
 void textfield_set_masked(struct widget *w, int masked);
+/* Put the cursor at byte offset cursor, or at the end for -1, and select
+ * from anchor to it, or nothing for an anchor of -1. */
+void textfield_select(struct widget *w, int anchor, int cursor);
 struct widget *listview_new(struct widget *parent);
 void listview_clear(struct widget *w);
 void listview_add(struct widget *w, const char *item);

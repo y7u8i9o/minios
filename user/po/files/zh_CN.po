@@ -351,3 +351,19 @@ msgstr "%s GB"
 #: user/files/fsops.c:209
 msgid "%s MB"
 msgstr "%s MB"
+
+#: user/files/files.c:104 user/files/files.c:479
+msgid "Recent"
+msgstr "最近使用"
+
+#: user/files/files.c:105 user/files/files.c:464
+msgid "Search"
+msgstr "搜索"
+
+#: user/files/files.c:481
+msgid "Location..."
+msgstr "位置..."
+
+#: user/files/files.c:486
+msgid "Open item location"
+msgstr "打开所在位置"
