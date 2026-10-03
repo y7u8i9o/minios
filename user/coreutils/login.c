@@ -3,10 +3,11 @@
  *     login [name]
  *
  * init runs login as root on the console. login asks for an account name
- * and its password, unless the account has none, gives the terminal to the
- * account, takes on its groups, gid and uid and runs its shell as a login
- * shell in its home with a fresh environment. When the shell ends, init
- * starts login again. */
+ * and its password. An account without a password, such as root and user
+ * on a new system, has to choose one before its session starts. login then
+ * gives the terminal to the account, takes on its groups, gid and uid and
+ * runs its shell as a login shell in its home with a fresh environment.
+ * When the shell ends, init starts login again. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,38 @@ static int read_line(char *buf, size_t size)
         return -1;
     buf[strcspn(buf, "\n")] = '\0';
     return 0;
+}
+
+/* Ask an account without a password for a new one until two entries
+ * match, and store it. Returns 0, or -1 when the input ends or the
+ * password cannot be stored. */
+static int choose_password(const struct account *a)
+{
+    printf("The account %s has no password. Choose one now.\n", a->name);
+    for (;;) {
+        char first[128], second[128];
+        if (account_read_password("New password: ", first, sizeof first) < 0 ||
+            account_read_password("Retype new password: ", second, sizeof second) < 0)
+            return -1;
+        int same = strcmp(first, second) == 0;
+        int r = 1;
+        if (!first[0])
+            printf("The password must not be empty.\n");
+        else if (!same)
+            printf("The passwords differ.\n");
+        else
+            r = account_set_password(a->name, first);
+        memset(first, 0, sizeof first);
+        memset(second, 0, sizeof second);
+        if (r == 0) {
+            printf("The password of %s is set.\n", a->name);
+            return 0;
+        }
+        if (r < 0) {
+            fprintf(stderr, "login: %s: %s\n", ACCOUNT_SHADOW, strerror(errno));
+            return -1;
+        }
+    }
 }
 
 static void start_session(const struct account *a)
@@ -131,6 +164,8 @@ int main(int argc, char **argv)
         }
         int ok = known && account_check(password, a.hash);
         memset(password, 0, sizeof password);
+        if (ok && !a.hash[0] && choose_password(&a) < 0)
+            return 1;
         if (ok)
             start_session(&a);
         sleep(ATTEMPT_DELAY);

@@ -25,6 +25,9 @@ static void test_privilege(void)
     ktest_assert(p != NULL, "cannot start /bin/init");
     proc_set_init(p);
     line_after(2500, "root\n");
+    /* root has no password and chooses one at its first login. */
+    line_after(1500, "rootpw\n");
+    line_after(800, "rootpw\n");
     line_after(800, "printf 'rootpw\\nrootpw\\n' | passwd\n");
     line_after(800, "printf 'userpw\\nuserpw\\n' | passwd user\n");
     line_after(800, "printf 'deny user\\n' > /tmp/deny.conf\n");

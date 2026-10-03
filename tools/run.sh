@@ -25,6 +25,9 @@
 #       --no-sound         QEMU_SOUND=0      do not attach virtio-snd at all
 #   -m, --mem SIZE         QEMU_MEM          guest memory (default 512M)
 #   -s, --smp N            QEMU_SMP          number of CPUs (default 4)
+#       --gic N            QEMU_GIC          GIC version of the aarch64 virt
+#                                            machine, 2 or 3 (default 3), a
+#                                            GICv2 serves at most 8 CPUs
 #       --accel NAME       QEMU_ACCEL        hvf, tcg, kvm (default: hvf on
 #                                            macOS and kvm on Linux when
 #                                            offered and /dev/kvm is
@@ -108,7 +111,7 @@ die() {
 # --- configuration file ------------------------------------------------
 # Environment variables must beat the file, so remember them, source the
 # file, then put them back.
-VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
+VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP QEMU_GIC \
       QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_NIC QEMU_VIDEO \
       QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP DATA"
 
@@ -151,6 +154,7 @@ SWAP="${SWAP:-$BUILD/swap.img}"
 DATA="${DATA-$TOP/data.img}"
 QEMU_MEM="${QEMU_MEM:-512M}"
 QEMU_SMP="${QEMU_SMP:-4}"
+QEMU_GIC="${QEMU_GIC:-3}"
 QEMU_SERIAL="${QEMU_SERIAL:-stdio}"
 QEMU_SOUND="${QEMU_SOUND:-1}"
 QEMU_VGA="${QEMU_VGA:-virtio}"
@@ -192,6 +196,8 @@ while [ $# -gt 0 ]; do
         --mem=*)          QEMU_MEM="${1#*=}" ;;
         -s|--smp)         QEMU_SMP="$2"; shift ;;
         --smp=*)          QEMU_SMP="${1#*=}" ;;
+        --gic)            QEMU_GIC="$2"; shift ;;
+        --gic=*)          QEMU_GIC="${1#*=}" ;;
         --accel)          QEMU_ACCEL="$2"; shift ;;
         --accel=*)        QEMU_ACCEL="${1#*=}" ;;
         -d|--display)     QEMU_DISPLAY="$2"; shift ;;
@@ -400,7 +406,7 @@ case "$ARCH" in
             *)      gpu="-device ramfb" ;;
         esac
         # shellcheck disable=SC2086
-        set -- -M virt,gic-version=3,acpi=off -cpu "$cpu" -bios "$EDK2" $gpu "$@"
+        set -- -M "virt,gic-version=$QEMU_GIC,acpi=off" -cpu "$cpu" -bios "$EDK2" $gpu "$@"
         [ "$QEMU_NIC" = none ] || [ -z "$QEMU_NIC" ] && set -- "$@" -nic none
         BOOT="aarch64"
         ;;

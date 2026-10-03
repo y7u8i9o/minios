@@ -94,6 +94,11 @@ if git -C "$TOP" rev-parse --verify --quiet "refs/tags/$TAGNAME" > /dev/null; th
     TAG=0
 fi
 SHORT="$(git -C "$TOP" rev-parse --short "$COMMIT")"
+# The build number of the release kernels is the number of commits up to
+# the released one, the same for every architecture and growing from one
+# release to the next.
+BUILD_NUMBER="$(git -C "$TOP" rev-list --count "$COMMIT")"
+export BUILD_NUMBER
 
 DIST="$OUT/minios-$VERSION"
 WT="$OUT/work-$VERSION"

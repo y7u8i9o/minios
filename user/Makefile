@@ -19,10 +19,13 @@ INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 # and each file of tests/*.c becomes one binary as well.
 PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg imed greeter
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
+# A build with CONFIG_TESTS=0, which the release pipeline uses, installs no
+# test programs, test fixtures or test data (docs/design/build.md).
+WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
-BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(TESTS) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
+BINS   := $(addprefix $(ROOT)/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
 LIBS   := $(addprefix $(ROOT)/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
@@ -44,7 +47,7 @@ LUA_CPP  := -DLUA_USE_POSIX -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/s
 UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
 UCPP   += -I../libedit/include
 
-ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(wildcard etc/* etc/*/*))
+ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(filter-out $(if $(WITH_TESTS),,etc/tests etc/tests/%),$(wildcard etc/* etc/*/*)))
 FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf $(ROOT)/etc/fonts/lmroman10-regular.otf $(ROOT)/etc/fonts/NotoSans-Regular.ttf $(ROOT)/etc/fonts/unifont.otf \
           $(ROOT)/etc/fonts/DroidSansFallbackFull.ttf
 
@@ -64,8 +67,8 @@ $(ROOT)/etc/%: etc/%
 # They are recreated on every build.
 .PHONY: links
 links: $(ETC)
-	@ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar
-	@ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd
+	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar; fi
+	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd; fi
 	@for f in passwd group shadow; do ln -sfn /usr/local/etc/$$f $(ROOT)/etc/$$f; done
 	@mkdir -p $(ROOT)/usr && ln -sfn /home/.local $(ROOT)/usr/local
 
@@ -533,7 +536,7 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/lib/crt1.o $(ROOT)/lib/crti.o $(ROOT)/lib/crtn.o $(ROOT)/lib/libm.a
 	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
-	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include $(ROOT)/usr/share/tcc/tests2
+	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
 	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
@@ -546,8 +549,11 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/
 	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/lib/$$l.a; done
 	@cp -p $(TCC_SRC)/include/*.h $(ROOT)/usr/lib/tcc/include/
+ifneq ($(WITH_TESTS),)
+	@mkdir -p $(ROOT)/usr/share/tcc/tests2
 	@for t in $(TCC_TEST_NAMES); do cp -p $(TCC_TESTS)/$$t.c $(TCC_TESTS)/$$t.expect $(ROOT)/usr/share/tcc/tests2/; done
 	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/
+endif
 
 # bin/ld is named explicitly, because the pattern rule for program
 # directories would match the loader's directory ld/ for that name.
@@ -622,7 +628,9 @@ clean:
 
 # Executable loader fixtures are kept together with their source and the
 # ELF mutation generator, and they run only in the dynlink test.
+ifneq ($(WITH_TESTS),)
 include ld/tests/fixtures.mk
 include pkg/tests/fixtures.mk
+endif
 
 include packages/packages.mk

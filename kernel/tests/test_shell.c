@@ -317,8 +317,11 @@ KTEST_DEFINE("ctrlc", test_ctrlc);
  * power off through reboot(). The host checks the image afterwards. */
 static void test_shutdown_cmd(void)
 {
-    /* init runs login on the console. root has no password. */
+    /* init runs login on the console. root has no password and chooses
+     * one before the shell starts. */
     type_line("root\n");
+    type_line("rootpw\n");
+    type_line("rootpw\n");
     type_line("echo before shutdown > /marker.txt\n");
     type_line("cat /marker.txt\n");
     type_line("shutdown\n");
@@ -338,8 +341,11 @@ KTEST_DEFINE("shutdown_cmd", test_shutdown_cmd);
  * same orderly shutdown as the signal. */
 static void test_initctl(void)
 {
-    /* init runs login on the console. root has no password. */
+    /* init runs login on the console. root has no password and chooses
+     * one before the shell starts. */
     type_line("root\n");
+    type_line("rootpw\n");
+    type_line("rootpw\n");
     type_line("cp /etc/init.conf /tmp/init.conf\n");
     type_line("echo 'service spin sleep 1000' >> /tmp/init.conf\n");
     type_line("initctl reload /tmp/init.conf\n");

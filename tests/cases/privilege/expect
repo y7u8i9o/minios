@@ -1,4 +1,6 @@
 doas \(user@minios\) password:
+The account root has no password\. Choose one now\.
+The password of root is set\.
 doas=0
 rule=deny
 su=0

@@ -85,24 +85,30 @@ else
 $(error ARCH=$(ARCH) is not supported; see docs/plan/arm64.md)
 endif
 
-KCFLAGS := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
+# Paths below the source tree and the build directory are recorded relative
+# to them in debugging information and __FILE__, which leaves the location
+# of both out of the binaries. Generated sources such as version.c lie in
+# the build directory, which may be outside the source tree.
+PREFIX_MAP = $(if $(BUILD),-ffile-prefix-map=$(BUILD)/=build/) $(if $(TOP),-ffile-prefix-map=$(TOP)/=)
+
+KCFLAGS := -std=c17 -ffreestanding -fno-stack-protector -fno-pic -fno-pie $(PREFIX_MAP) \
            $(KARCHFLAGS) \
            -O2 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-asynchronous-unwind-tables \
            -fno-strict-aliasing -fno-builtin \
            -Wall -Wextra -Werror -Wno-unused-parameter -Wmissing-prototypes \
            $(CONFIG_DEFS)
-KASFLAGS := -g $(CONFIG_DEFS)
+KASFLAGS := -g $(PREFIX_MAP) $(CONFIG_DEFS)
 KLDFLAGS := -nostdlib -static -z max-page-size=0x1000 --no-dynamic-linker
 
 AR      := $(CROSS)ar
 
 # User code is compiled position independent, which lets the same objects
 # go into the shared libraries and the programs, and may use the red zone.
-UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC \
+UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC $(PREFIX_MAP) \
             $(UARCHFLAGS) -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
-UASFLAGS := -g
+UASFLAGS := -g $(PREFIX_MAP)
 # Programs are linked at 0x400000 against the shared libraries in
 # build/lib, with every relocation applied at load (docs/design/dynlink.md),
 # and ULDFLAGS_STATIC links a program on its own, for init and the loader.

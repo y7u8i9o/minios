@@ -2,6 +2,7 @@
 #include <fs/initrd.h>
 #include <boot.h>
 #include <lib/string.h>
+#include <mm/slab.h>
 #include <klog.h>
 
 struct tar_header {
@@ -24,7 +25,8 @@ struct tar_header {
     char pad[12];
 };
 
-static struct initrd_entry entries[INITRD_MAX_ENTRIES];
+/* Written once by initrd_init during boot and only read afterwards. */
+static struct initrd_entry *entries;
 static size_t nentries;
 
 static uint64_t newest_mtime;
@@ -59,54 +61,62 @@ void initrd_init(void)
         klog_warn("no initrd module");
         return;
     }
-    const uint8_t *p = bootinfo.initrd;
-    const uint8_t *end = p + bootinfo.initrd_size;
-    size_t dropped = 0;
-    while (p + sizeof(struct tar_header) <= end) {
+    const uint8_t *start = bootinfo.initrd;
+    const uint8_t *end = start + bootinfo.initrd_size;
+    /* The first pass counts the members, which sizes the table. */
+    size_t members = 0;
+    for (const uint8_t *p = start; p + sizeof(struct tar_header) <= end;) {
+        const struct tar_header *h = (const struct tar_header *)p;
+        if (h->name[0] == '\0')
+            break;
+        members++;
+        p += 512 + ALIGN_UP(parse_octal(h->size, sizeof h->size), 512);
+    }
+    entries = members ? kmalloc(members * sizeof *entries) : NULL;
+    if (members && !entries) {
+        klog_warn("no memory for the table of %zu members", members);
+        return;
+    }
+    const uint8_t *p = start;
+    while (p + sizeof(struct tar_header) <= end && nentries < members) {
         const struct tar_header *h = (const struct tar_header *)p;
         if (h->name[0] == '\0')
             break;
         size_t size = parse_octal(h->size, sizeof h->size);
-        if (nentries < INITRD_MAX_ENTRIES) {
-            struct initrd_entry *e = &entries[nentries];
-            char full[256];
-            if (h->prefix[0]) {
-                size_t pl = strnlen(h->prefix, sizeof h->prefix);
-                memcpy(full, h->prefix, pl);
-                full[pl] = '/';
-                size_t nl = strnlen(h->name, sizeof h->name);
-                memcpy(full + pl + 1, h->name, nl);
-                full[pl + 1 + nl] = '\0';
-            } else {
-                size_t nl = strnlen(h->name, sizeof h->name);
-                memcpy(full, h->name, nl);
-                full[nl] = '\0';
-            }
-            normalize(e->name, full, INITRD_NAME_MAX);
-            e->type = h->typeflag == '5' ? INITRD_DIR : h->typeflag == '2' ? INITRD_LINK : INITRD_FILE;
-            e->data = p + 512;
-            e->size = e->type == INITRD_DIR ? 0 : size;
-            if (e->type == INITRD_LINK) {
-                /* The target is the header's link name field, NUL
-                 * terminated only when shorter than the field. */
-                e->data = (const uint8_t *)h->linkname;
-                e->size = strnlen(h->linkname, sizeof h->linkname);
-            }
-            e->mtime = parse_octal(h->mtime, sizeof h->mtime);
-            e->mode = (uint32_t)parse_octal(h->mode, sizeof h->mode) & 07777;
-            e->uid = (uint32_t)parse_octal(h->uid, sizeof h->uid);
-            e->gid = (uint32_t)parse_octal(h->gid, sizeof h->gid);
-            if (e->mtime > newest_mtime)
-                newest_mtime = e->mtime;
-            if (e->name[0] != '\0')
-                nentries++;
+        struct initrd_entry *e = &entries[nentries];
+        char full[256];
+        if (h->prefix[0]) {
+            size_t pl = strnlen(h->prefix, sizeof h->prefix);
+            memcpy(full, h->prefix, pl);
+            full[pl] = '/';
+            size_t nl = strnlen(h->name, sizeof h->name);
+            memcpy(full + pl + 1, h->name, nl);
+            full[pl + 1 + nl] = '\0';
         } else {
-            dropped++;
+            size_t nl = strnlen(h->name, sizeof h->name);
+            memcpy(full, h->name, nl);
+            full[nl] = '\0';
         }
+        normalize(e->name, full, INITRD_NAME_MAX);
+        e->type = h->typeflag == '5' ? INITRD_DIR : h->typeflag == '2' ? INITRD_LINK : INITRD_FILE;
+        e->data = p + 512;
+        e->size = e->type == INITRD_DIR ? 0 : size;
+        if (e->type == INITRD_LINK) {
+            /* The target is the header's link name field, NUL
+             * terminated only when shorter than the field. */
+            e->data = (const uint8_t *)h->linkname;
+            e->size = strnlen(h->linkname, sizeof h->linkname);
+        }
+        e->mtime = parse_octal(h->mtime, sizeof h->mtime);
+        e->mode = (uint32_t)parse_octal(h->mode, sizeof h->mode) & 07777;
+        e->uid = (uint32_t)parse_octal(h->uid, sizeof h->uid);
+        e->gid = (uint32_t)parse_octal(h->gid, sizeof h->gid);
+        if (e->mtime > newest_mtime)
+            newest_mtime = e->mtime;
+        if (e->name[0] != '\0')
+            nentries++;
         p += 512 + ALIGN_UP(size, 512);
     }
-    if (dropped)
-        klog_warn("%zu members beyond the first %d are not available", dropped, INITRD_MAX_ENTRIES);
     size_t files = 0, links = 0;
     for (size_t i = 0; i < nentries; i++) {
         files += entries[i].type == INITRD_FILE;

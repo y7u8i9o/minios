@@ -15,8 +15,11 @@ DESCRIPTION
     The greeter starts the display server and restarts it when it ends.
     Its window lists root and the accounts from uid 1000 on, with the
     account after root selected, and asks for the password, which is not
-    shown. A wrong password is refused with a pause. Restart and Shut down
-    ask init to restart or power off the machine.
+    shown. A wrong password is refused with a pause. An account without a
+    password, such as user on a new system, logs in with an empty one and
+    then has to choose a new password, typed twice in a second window,
+    before its session starts. Restart and Shut down ask init to restart
+    or power off the machine.
 
     After a login the greeter admits the account to the display server,
     tells init that the session on the console belongs to it, which lets

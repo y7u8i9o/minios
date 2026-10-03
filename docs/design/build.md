@@ -20,6 +20,11 @@ kernel is compiled with the following flags.
     -O2 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls
     -fno-asynchronous-unwind-tables -fno-strict-aliasing -fno-builtin
 
+Kernel and user code is also compiled with `-ffile-prefix-map`, which
+records paths below the source tree and the build directory relative to
+them in debugging information and `__FILE__`. The binaries therefore
+contain no path of the machine that built them.
+
 `-fno-omit-frame-pointer` and `-fno-optimize-sibling-calls` together keep the
 frame pointer chain intact for the backtrace code. `-mno-red-zone` is required
 because interrupt handlers run on the interrupted stack.
@@ -274,12 +279,20 @@ in place for inspection.
    worktree with the options of `RELEASE_CONFIG`. By default the kernel
    self tests, the exit through isa-debug-exit, the lock debugging, the
    lock statistics and the slab debugging are off, and the log level is
-   1. The build directory is separate from the one of the boot cases,
+   1. With `CONFIG_TESTS=0`, `user/Makefile` also leaves out the test
+   programs of `user/tests`, `/etc/tests`, the loader and package test
+   fixtures, the tcc test sources and the luasynth test scripts. The
+   build directory is separate from the one of the boot cases,
    because the options are not dependencies of the objects.
 4. `tools/run.sh` boots the release image without a data volume, sound or
    display, and the step succeeds when `minios login:` appears on the
    serial line within `BOOT_TIMEOUT` seconds (300). A kernel panic, an
    early exit of QEMU or the timeout fails it.
+
+The kernels of a release report as their build number the number of
+commits up to the released commit, which the script passes to
+`tools/version.sh` as `BUILD_NUMBER`. Both architectures carry the same
+number, and it grows from one release to the next.
 
 The results go to `build/release/minios-VERSION`.
 

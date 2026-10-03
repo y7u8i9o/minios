@@ -9,10 +9,13 @@ SYNOPSIS
 DESCRIPTION
     init runs login as root on the console (init.conf(5)). login asks for
     an account name and its password, which is typed without echo. An
-    account without a password logs in without the second question, and
-    an unknown name is asked for a password like any other, which keeps
-    the existence of accounts hidden. After a wrong answer login waits two
+    unknown name is asked for a password like any other, which hides
+    whether an account exists. After a wrong answer login waits two
     seconds, prints "Login incorrect" and asks again.
+
+    An account without a password, such as root and user on a new system,
+    logs in with an empty password and then has to choose a new one,
+    typed twice, before its session starts.
 
     For a valid account login gives the terminal to it with mode 0620,
     takes on its supplementary groups, its group and its uid, enters its

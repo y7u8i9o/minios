@@ -19,6 +19,9 @@
 # Machine.
 #QEMU_MEM=1G
 #QEMU_SMP=2
+# GIC version of the aarch64 virt machine, 2 or 3. A GICv2 serves at most
+# 8 CPUs.
+#QEMU_GIC=2
 # The default is HVF on macOS and KVM on Linux when QEMU offers them and,
 # on Linux, /dev/kvm is writable; TCG otherwise.
 #QEMU_ACCEL=tcg

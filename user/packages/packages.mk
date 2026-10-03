@@ -66,6 +66,7 @@ prune-packaged: share-tree skel-tree
 	@rm -f $(ROOT)/usr/share/apps/code.lua $(ROOT)/usr/share/apps/pong.lua $(ROOT)/usr/share/man/man1/code.1
 	@rm -f $(foreach d,etc/skel home/user root,$(ROOT)/$(d)/desktop/Code.app $(ROOT)/$(d)/desktop/Pong.app)
 
+ifneq ($(WITH_TESTS),)
 all: $(ROOT)/etc/tests/luasynth-engine.lua
 $(ROOT)/etc/tests/luasynth-engine.lua: packages/luasynth/tests/engine.lua
 	@mkdir -p $(dir $@)
@@ -80,3 +81,4 @@ all: $(ROOT)/etc/tests/luasynth-worker.lua
 $(ROOT)/etc/tests/luasynth-worker.lua: packages/luasynth/tests/worker.lua
 	@mkdir -p $(dir $@)
 	@cp $< $@
+endif

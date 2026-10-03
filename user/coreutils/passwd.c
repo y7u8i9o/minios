@@ -26,30 +26,6 @@ static int usage(void)
     return 2;
 }
 
-/* A numeric field of /etc/shadow, empty for -1. */
-static const char *field(long v, char *buf, size_t size)
-{
-    if (v < 0)
-        buf[0] = '\0';
-    else
-        snprintf(buf, size, "%ld", v);
-    return buf;
-}
-
-static int set_hash(const char *name, const char *hash)
-{
-    struct spwd *sp = getspnam(name);
-    char line[512], a[24], b[24], c[24], d[24], e[24], f[24];
-    if (sp)
-        snprintf(line, sizeof line, "%s:%s:%ld:%s:%s:%s:%s:%s:%s", name, hash, account_today(),
-                 field(sp->sp_min, a, sizeof a), field(sp->sp_max, b, sizeof b), field(sp->sp_warn, c, sizeof c),
-                 field(sp->sp_inact, d, sizeof d), field(sp->sp_expire, e, sizeof e),
-                 sp->sp_flag == (unsigned long)-1 ? "" : field((long)sp->sp_flag, f, sizeof f));
-    else
-        snprintf(line, sizeof line, "%s:%s:%ld::::::", name, hash, account_today());
-    return account_replace(ACCOUNT_SHADOW, name, line);
-}
-
 static int set_full_name(const char *name, const char *full)
 {
     if (strpbrk(full, ":\n")) {
@@ -116,7 +92,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (remove) {
-        if (set_hash(name, "") < 0) {
+        if (account_set_hash(name, "") < 0) {
             fprintf(stderr, "passwd: %s: %s\n", ACCOUNT_SHADOW, strerror(errno));
             return 1;
         }
@@ -148,7 +124,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "passwd: the passwords differ\n");
     else if (!first[0])
         fprintf(stderr, "passwd: the password is empty, -d removes a password\n");
-    else if (account_hash(first, hash, sizeof hash) < 0 || set_hash(name, hash) < 0)
+    else if (account_hash(first, hash, sizeof hash) < 0 || account_set_hash(name, hash) < 0)
         fprintf(stderr, "passwd: %s: %s\n", ACCOUNT_SHADOW, strerror(errno));
     else {
         printf("passwd: password of %s changed\n", name);

@@ -407,7 +407,27 @@ The GICv3 code (`gic.c`, A5) programs the distributor, the redistributors
 and the CPU interface through the ICC system registers, with every
 interrupt in group 1. Under HVF the GIC of Hypervisor.framework does not
 complete a write of `GICR_IGROUPR0`, so the redistributor registers are
-written only when their value differs. The clock reads `CNTVCT_EL0` and
+written only when their value differs.
+
+The same file drives a GICv2, which the device tree names by the
+compatible string of its implementation, such as `arm,cortex-a15-gic` on
+QEMU virt. `devtree.c` records the distributor and the CPU interface, and
+the GICv2m frame (`arm,gic-v2m-frame`) when there is one. The distributor
+banks the SGI and PPI registers for each CPU, and the CPU interface is
+read and written in memory. A shared interrupt is routed to the boot CPU
+through its target bit, which each CPU reads from the banked target
+register of SGI 0. IPIs go through `GICD_SGIR`. `irq_alloc` hands out the
+shared interrupts of the v2m frame for MSI, which are edge triggered, and
+`platform_msi_compose` gives the address of `MSI_SETSPI_NS` with the
+interrupt number as the data. Every MSI then goes to the boot CPU. QEMU
+emulates a GICv2 by decoding each trapped access, and its HVF backend
+stops on an access whose syndrome does not describe it, such as one with
+writeback. The register accessors of `gic.c` are therefore single `ldr`
+and `str` instructions. Before 2026-10-03 the device tree parser used the
+GICv3 addresses on a GICv2 machine, and the kernel panicked when it found
+no redistributor.
+
+The clock reads `CNTVCT_EL0` and
 `CNTFRQ_EL0`, and the tick is the virtual timer, PPI 27, programmed one
 period ahead through `CNTV_CVAL_EL0` (`clock.c`, A5).
 
@@ -503,7 +523,8 @@ The ramfb framebuffer is in RAM that the memory map reserves. `pmm_is_ram`
 is false for reserved frames, so a mapping of the framebuffer takes no
 page references, as for a framebuffer in a PCI BAR. Without user programs
 (`ARCH_USERLAND = no` in `toolchain.mk`) the initrd is an empty archive and
-no disk is attached. The machine uses GICv3 (`gic-version=3`) and, since
+no disk is attached. The machine uses GICv3 (`gic-version=3`) unless the
+case has a `gic` file, as `tests/cases/gicv2` does, and, since
 A8, the number of CPUs of the case, four by default, as on x86_64. A case
 may have an `expect.$(ARCH)` file that replaces `expect` where the output
 names architecture state, as `tests/cases/exception` and

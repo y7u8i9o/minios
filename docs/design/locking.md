@@ -536,6 +536,16 @@ These locks are in user space and do not add a kernel lock-order level.
   `devfs_lock`, the order of U1, and is called by the pseudo terminal
   driver with no lock held.
 
+## GICv2 additions
+
+- No new lock. The GICv2 state of `gic.c` (the mapped registers, the
+  v2m range and the version) is written once by `arch_init_interrupts`
+  on the boot CPU before the application processors start, and read
+  without a lock afterwards. `irq_alloc` takes the next v2m interrupt with
+  an atomic increment of `v2m_next`. `arch_cpu.gic_mask` is written by its
+  CPU in `gic_init_cpu` before that CPU takes interrupts and read by other
+  CPUs when they send it an IPI.
+
 ## U5 additions
 
 - `alarm_lock` (spinlock) protects the list of armed alarms and the

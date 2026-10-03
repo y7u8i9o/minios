@@ -137,8 +137,9 @@ the operation reports `EROFS`.
   `fs/initrd.c` read only. Inode 1 is the root, entry i is inode i + 2. A
   directory lists entries whose name has the directory as prefix and no
   further slash. A member of typeflag `2` is a symbolic link whose target
-  is the header's link name field (at most 100 bytes). The table holds
-  1024 members, and the boot log reports members beyond that.
+  is the header's link name field (at most 100 bytes). `initrd_init`
+  counts the members first and allocates a table with one entry for each,
+  which removes the earlier limit of 1024 members.
 - `devfs` (`fs/devfs.c`) is a flat in memory directory of nodes registered
   by drivers with `devfs_register(name, mode, fops, priv)`. It provides
   `/dev/console` (keyboard line discipline for reading, console for

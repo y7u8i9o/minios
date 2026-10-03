@@ -95,7 +95,13 @@ static void test_greeter(void)
     if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
         sleep_ms(8000);                 /* screenshots of the login window */
 
-    press_key(0x1c);                    /* Enter: user has no password */
+    /* user has no password. Enter logs in with the empty one, and the
+     * greeter asks for a new password twice before the session starts. */
+    press_key(0x1c);
+    sleep_ms(1500);
+    type_line("userpw\n");
+    sleep_ms(300);
+    type_line("userpw\n");
     ktest_assert(wait_procs("panel", 1000, 1, 10000), "no panel of uid 1000");
     ktest_assert(wait_procs("desktop", 1000, 1, 5000), "no desktop of uid 1000");
     ktest_assert(count_procs("greeter", -1) == 1, "the login window remains");

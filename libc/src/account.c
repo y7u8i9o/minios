@@ -2,6 +2,7 @@
  * (docs/design/users.md). */
 #include <minios/account.h>
 #include <minios/sha2.h>
+#include <shadow.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -289,6 +290,43 @@ int account_session(int uid)
 long account_today(void)
 {
     return (long)(time(NULL) / 86400);
+}
+
+/* A numeric field of /etc/shadow, empty for -1. */
+static const char *shadow_field(long v, char *buf, size_t size)
+{
+    if (v < 0)
+        buf[0] = '\0';
+    else
+        snprintf(buf, size, "%ld", v);
+    return buf;
+}
+
+int account_set_hash(const char *name, const char *hash)
+{
+    struct spwd *sp = getspnam(name);
+    char line[512], a[24], b[24], c[24], d[24], e[24], f[24];
+    if (sp)
+        snprintf(line, sizeof line, "%s:%s:%ld:%s:%s:%s:%s:%s:%s", name, hash, account_today(),
+                 shadow_field(sp->sp_min, a, sizeof a), shadow_field(sp->sp_max, b, sizeof b),
+                 shadow_field(sp->sp_warn, c, sizeof c), shadow_field(sp->sp_inact, d, sizeof d),
+                 shadow_field(sp->sp_expire, e, sizeof e),
+                 sp->sp_flag == (unsigned long)-1 ? "" : shadow_field((long)sp->sp_flag, f, sizeof f));
+    else
+        snprintf(line, sizeof line, "%s:%s:%ld::::::", name, hash, account_today());
+    return account_replace(ACCOUNT_SHADOW, name, line);
+}
+
+int account_set_password(const char *name, const char *password)
+{
+    char hash[128];
+    if (!password[0]) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (account_hash(password, hash, sizeof hash) < 0)
+        return -1;
+    return account_set_hash(name, hash);
 }
 
 /* A setting of another method, or an empty one, gives "*0", which matches

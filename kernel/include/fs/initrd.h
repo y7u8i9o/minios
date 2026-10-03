@@ -2,10 +2,10 @@
 #include <kernel.h>
 
 /* The initial ramdisk is a ustar archive loaded by Limine as a module. It
- * is parsed once at boot into a static table; contents stay in the module
- * memory, which is mapped in the direct map. Until the VFS exists (M11)
- * this table is the only filesystem. */
-#define INITRD_MAX_ENTRIES 1024    /* the archive of build/initrd_root has about 700 */
+ * is parsed once at boot into a table with one entry per member, allocated
+ * from the heap after the members are counted. The contents are read from
+ * the module memory, which is mapped in the direct map. Until the VFS
+ * exists (M11) this table is the only filesystem. */
 #define INITRD_NAME_MAX    100
 
 enum initrd_type {

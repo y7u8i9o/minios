@@ -31,3 +31,38 @@ msgstr ""
 msgid "Wrong password"
 msgstr ""
 
+#: user/greeter/greeter.c
+msgid "Choose a password"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "The account %s has no password. Choose one to log in."
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "New password"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "Repeat the password"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "Cancel"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "Set password"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "The password must not be empty"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "The passwords differ"
+msgstr ""
+
+#: user/greeter/greeter.c
+msgid "The password cannot be stored"
+msgstr ""

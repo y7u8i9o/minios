@@ -26,3 +26,30 @@ msgstr "Перезагрузить"
 
 msgid "Shut down"
 msgstr "Выключить"
+
+msgid "Choose a password"
+msgstr "Выбор пароля"
+
+msgid "The account %s has no password. Choose one to log in."
+msgstr "У учётной записи %s нет пароля. Задайте пароль, чтобы войти."
+
+msgid "New password"
+msgstr "Новый пароль"
+
+msgid "Repeat the password"
+msgstr "Повторите пароль"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Set password"
+msgstr "Задать пароль"
+
+msgid "The password must not be empty"
+msgstr "Пароль не может быть пустым"
+
+msgid "The passwords differ"
+msgstr "Пароли не совпадают"
+
+msgid "The password cannot be stored"
+msgstr "Не удалось сохранить пароль"

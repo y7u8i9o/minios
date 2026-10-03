@@ -5,18 +5,27 @@
 #include <arch/trap.h>
 #include <mm/vmm.h>
 #include <klog.h>
+#include <errno.h>
 #include <debug/panic.h>
 #include "gic.h"
 #include "timer_internal.h"
 #include "devtree.h"
 #include "its.h"
 
-/* The GICv3 (A5): the distributor and the redistributors, 128 KiB per
- * CPU, at the addresses of the device tree (A7). The CPU interface is
+/* The GICv3 (A5) has a distributor and one redistributor of 128 KiB per
+ * CPU at the addresses of the device tree (A7), and its CPU interface is
  * reached through the ICC system registers. Every interrupt is in group 1.
  * Shared peripheral interrupts are routed to the CPU that registers them,
  * the boot CPU. SGIs are the IPIs (A8). LPIs, the interrupts of MSI, are
- * in its.c. */
+ * in its.c.
+ *
+ * A GICv2, which the device tree describes by the compatible string of its
+ * implementation, has a distributor whose SGI and PPI registers are banked
+ * per CPU and a CPU interface in memory. Shared peripheral interrupts are
+ * routed through the target bits of the boot CPU, and SGIs are sent
+ * through GICD_SGIR. MSI uses the shared peripheral interrupts of a GICv2m
+ * frame, which raise an interrupt when its number is written to
+ * MSI_SETSPI_NS. A GICv2 serves at most 8 CPUs. */
 
 #define GICR_STRIDE     0x20000UL
 
@@ -40,10 +49,28 @@
 #define GICR_ISENABLER0 (GICR_SGI + 0x0100)
 #define GICR_IPRIORITYR (GICR_SGI + 0x0400)
 
+#define GICD_ITARGETSR  0x0800          /* GICv2 */
+#define GICD_ICFGR      0x0c00
+#define GICD_SGIR       0x0f00          /* GICv2 */
+#define ICFGR_EDGE      2u
+
+#define GICC_CTLR       0x0000          /* GICv2 CPU interface */
+#define GICC_PMR        0x0004
+#define GICC_BPR        0x0008
+#define GICC_IAR        0x000c
+#define GICC_EOIR       0x0010
+
+#define V2M_TYPER       0x0008          /* GICv2m frame */
+#define V2M_SETSPI      0x0040
+
 #define DEFAULT_PRIORITY 0xa0
 #define MAX_IRQS        1020
 
+static int v2;                          /* a GICv2, set once by arch_init_interrupts */
 static volatile uint8_t *gicd;
+static volatile uint8_t *gicc;          /* GICv2 */
+static unsigned v2m_base, v2m_count;    /* the MSI interrupts of the GICv2m frame */
+static unsigned v2m_next;               /* atomic, the next one irq_alloc hands out */
 static volatile uint8_t *gicr_base;     /* every redistributor, mapped once */
 static unsigned gicr_count;
 static unsigned nlines;
@@ -55,14 +82,25 @@ static struct {
     void *arg;
 } handlers[MAX_IRQS];
 
+/* Register accesses are single loads and stores without writeback. QEMU
+ * emulates the registers of a GICv2 by decoding the trapped access, which
+ * the syndrome of an access with writeback or of a load pair does not
+ * describe, and its HVF backend stops on such an access. */
 static inline uint32_t rd32(volatile uint8_t *base, unsigned off)
 {
-    return *(volatile uint32_t *)(base + off);
+    uint32_t v;
+    __asm__ volatile("ldr %w0, [%1]" : "=r"(v) : "r"(base + off) : "memory");
+    return v;
 }
 
 static inline void wr32(volatile uint8_t *base, unsigned off, uint32_t v)
 {
-    *(volatile uint32_t *)(base + off) = v;
+    __asm__ volatile("str %w0, [%1]" : : "rZ"(v), "r"(base + off) : "memory");
+}
+
+static inline void wr8(volatile uint8_t *base, unsigned off, uint8_t v)
+{
+    __asm__ volatile("strb %w0, [%1]" : : "rZ"(v), "r"(base + off) : "memory");
 }
 
 static void dist_wait(void)
@@ -127,11 +165,69 @@ static uintptr_t init_cpu_interface(struct cpu *c)
     return phys;
 }
 
+/* The GICv2 part of a CPU. The distributor banks the registers of SGIs
+ * and PPIs per CPU, and the CPU interface is in memory. */
+static void init_cpu_interface_v2(struct cpu *c)
+{
+    /* The banked target register of SGI 0 holds the bit of the calling
+     * CPU. An implementation for one CPU reads it as zero. */
+    uint8_t mask = (uint8_t)(rd32(gicd, GICD_ITARGETSR) & 0xff);
+    c->arch.gic_mask = mask ? mask : 1;
+    for (unsigned i = 0; i < 32; i += 4)
+        wr32(gicd, GICD_IPRIORITYR + i, 0x01010101u * DEFAULT_PRIORITY);
+    uint32_t enabled = 0;
+    for (unsigned irq = 0; irq < 32; irq++)
+        if (handlers[irq].fn)
+            enabled |= 1u << irq;
+    if (enabled)
+        wr32(gicd, GICD_ISENABLER, enabled);
+    wr32(gicc, GICC_PMR, 0xff);
+    wr32(gicc, GICC_BPR, 0);
+    wr32(gicc, GICC_CTLR, 1);
+}
+
+static void init_v2(void)
+{
+    gicc = vmm_map_mmio(devtree.gicc, 0x2000, VM_KERNEL_RW | VM_NOCACHE);
+    if (!gicc)
+        panic("gic: cannot map the cpu interface");
+    wr32(gicd, GICD_CTLR, 0);
+    for (unsigned i = 32; i < nlines; i += 4)
+        wr32(gicd, GICD_IPRIORITYR + i, 0x01010101u * DEFAULT_PRIORITY);
+    if (devtree.v2m) {
+        volatile uint8_t *v2m = vmm_map_mmio(devtree.v2m, 0x1000, VM_KERNEL_RW | VM_NOCACHE);
+        if (!v2m)
+            panic("gic: cannot map the v2m frame");
+        uint32_t typer = rd32(v2m, V2M_TYPER);
+        v2m_base = (typer >> 16) & 0x3ff;
+        v2m_count = typer & 0x3ff;
+        if (v2m_base + v2m_count > nlines)
+            v2m_count = v2m_base < nlines ? nlines - v2m_base : 0;
+        /* MSIs are edge triggered. */
+        for (unsigned irq = v2m_base; irq < v2m_base + v2m_count; irq++) {
+            unsigned off = GICD_ICFGR + (irq / 16) * 4;
+            wr32(gicd, off, rd32(gicd, off) | ICFGR_EDGE << (irq % 16) * 2);
+        }
+    }
+    wr32(gicd, GICD_CTLR, 1);
+    init_cpu_interface_v2(cpu_current());
+    klog_info("gicv2: distributor at %lx with %u interrupt lines, cpu interface at %lx, %u msi interrupts from %u",
+              devtree.gicd, nlines, devtree.gicc, v2m_count, v2m_base);
+}
+
 void arch_init_interrupts(void)
 {
     gicd = vmm_map_mmio(devtree.gicd, 0x10000, VM_KERNEL_RW | VM_NOCACHE);
     if (!gicd)
         panic("gic: cannot map the distributor");
+    if (devtree.gic_version == 2) {
+        v2 = 1;
+        nlines = ((rd32(gicd, GICD_TYPER) & 0x1f) + 1) * 32;
+        if (nlines > MAX_IRQS)
+            nlines = MAX_IRQS;
+        init_v2();
+        return;
+    }
     gicr_count = (unsigned)(devtree.gicr_size / GICR_STRIDE);
     gicr_base = vmm_map_mmio(devtree.gicr, gicr_count * GICR_STRIDE, VM_KERNEL_RW | VM_NOCACHE);
     if (!gicr_base)
@@ -158,6 +254,10 @@ void arch_init_interrupts(void)
 void gic_init_cpu(void)
 {
     struct cpu *c = cpu_current();
+    if (v2) {
+        init_cpu_interface_v2(c);
+        return;
+    }
     uintptr_t gicr_phys = init_cpu_interface(c);
     its_init_cpu(c->arch.gicr, gicr_phys);
 }
@@ -173,7 +273,13 @@ void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
     handlers[irq].fn = fn;
     handlers[irq].arg = arg;
     __asm__ volatile("dsb ish" : : : "memory");
-    if (irq < 32) {
+    if (v2) {
+        /* SGIs and PPIs are enabled in the banked register of the calling
+         * CPU, and a shared interrupt is routed to that CPU. */
+        if (irq >= 32)
+            wr8(gicd, GICD_ITARGETSR + irq, cpu_current()->arch.gic_mask);
+        wr32(gicd, GICD_ISENABLER + (irq / 32) * 4, 1u << (irq % 32));
+    } else if (irq < 32) {
         /* An SGI or PPI is enabled in the redistributor of the calling
          * CPU. gic_init_cpu enables it on the application processors,
          * which start after every SGI and PPI is registered. */
@@ -186,8 +292,29 @@ void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
     }
 }
 
+static void dispatch_v2(struct trapframe *tf)
+{
+    /* The IAR of an SGI also names the sending CPU, and the end of the
+     * interrupt is written with the whole value. */
+    uint32_t iar = rd32(gicc, GICC_IAR);
+    unsigned irq = iar & 0x3ff;
+    if (irq >= 1020)
+        return;                         /* spurious: no end of interrupt */
+    if (irq == IRQ_TIMER)
+        timer_rearm();
+    if (handlers[irq].fn)
+        handlers[irq].fn(tf, handlers[irq].arg);
+    else
+        klog_warn("unhandled interrupt %u", irq);
+    wr32(gicc, GICC_EOIR, iar);
+}
+
 void irq_dispatch(struct trapframe *tf)
 {
+    if (v2) {
+        dispatch_v2(tf);
+        return;
+    }
     uint64_t iar;
     __asm__ volatile("mrs %0, icc_iar1_el1" : "=r"(iar));
     unsigned irq = iar & 0xffffff;
@@ -204,10 +331,24 @@ void irq_dispatch(struct trapframe *tf)
     __asm__ volatile("msr icc_eoir1_el1, %0; isb" : : "r"(iar) : "memory");
 }
 
-/* Interrupt numbers for MSI are LPIs. */
+/* Interrupt numbers for MSI are LPIs on a GICv3 and the shared interrupts
+ * of the v2m frame on a GICv2. */
 int irq_alloc(void)
 {
-    return its_alloc();
+    if (!v2)
+        return its_alloc();
+    if (!v2m_count)
+        return -ENODEV;
+    unsigned n = __atomic_fetch_add(&v2m_next, 1, __ATOMIC_RELAXED);
+    if (n >= v2m_count)
+        return -ENOSPC;
+    return (int)(v2m_base + n);
+}
+
+void gic_v2m_msi_compose(unsigned irq, uint64_t *addr, uint32_t *data)
+{
+    *addr = devtree.v2m + V2M_SETSPI;
+    *data = irq;
 }
 
 /* An SGI to one CPU through ICC_SGI1R_EL1: the affinity levels 3 to 1
@@ -215,6 +356,13 @@ int irq_alloc(void)
  * range selector RS covers 16 values of affinity 0. */
 void arch_send_ipi(unsigned cpu, unsigned irq)
 {
+    if (v2) {
+        /* GICD_SGIR names the targets by their CPU interface bits. */
+        uint32_t target = cpu_by_id(cpu)->arch.gic_mask;
+        __asm__ volatile("dsb ish" : : : "memory");
+        wr32(gicd, GICD_SGIR, target << 16 | (irq & 0xf));
+        return;
+    }
     uint64_t mpidr = cpu_by_id(cpu)->arch.mpidr;
     uint64_t aff0 = mpidr & 0xff;
     uint64_t v = ((mpidr >> 32) & 0xff) << 48 | ((mpidr >> 16) & 0xff) << 32 |

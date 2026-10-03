@@ -6,10 +6,13 @@
  * that contains the tree is reclaimed, and read only afterwards. Without a
  * tree, or for a missing node, the addresses of QEMU virt apply. */
 struct devtree {
-    uintptr_t gicd;                 /* GICv3 distributor */
-    uintptr_t gicr;                 /* first redistributor region */
+    unsigned gic_version;           /* 2 or 3 */
+    uintptr_t gicd;                 /* distributor */
+    uintptr_t gicr;                 /* GICv3: first redistributor region */
     size_t gicr_size;
     uintptr_t its;                  /* GICv3 ITS, 0 if absent */
+    uintptr_t gicc;                 /* GICv2: CPU interface */
+    uintptr_t v2m;                  /* GICv2m MSI frame, 0 if absent */
     uintptr_t ecam;                 /* PCIe configuration space, 0 if absent */
     size_t ecam_size;
     unsigned bus_start, bus_end;    /* buses the ECAM window covers */

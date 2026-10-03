@@ -1,0 +1,4 @@
+gicv2 at 8000000 and 8010000, v2m at
+gicv2: distributor at 8000000 with [0-9]+ interrupt lines
+smptest: ok
+TEST PASS

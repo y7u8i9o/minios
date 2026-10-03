@@ -1,16 +1,22 @@
 #!/bin/sh
-# usage: version.sh <top> <out.c>
-# Writes the kernel's identification source: the release from VERSION
+# version.sh <top> <out.c> writes the kernel's identification source with
+# the release from VERSION
 # (semantic versioning, MAJOR.MINOR.PATCH), the build number from
-# BUILDNUM (incremented here on every kernel link; the file is local to
-# the working tree and not in git), the git commit and the date.
+# BUILDNUM (incremented here on every kernel link, and local to the
+# working tree and not in git), the git commit and the date. BUILD_NUMBER
+# in the environment replaces the counter, which the release pipeline
+# sets to the number of commits of the released commit.
 set -e
 TOP="$1"
 OUT="$2"
 RELEASE="$(tr -d ' \n' < "$TOP/VERSION")"
-N="$(cat "$TOP/BUILDNUM" 2>/dev/null || echo 0)"
-N=$((N + 1))
-echo "$N" > "$TOP/BUILDNUM"
+if [ -n "${BUILD_NUMBER:-}" ]; then
+    N="$BUILD_NUMBER"
+else
+    N="$(cat "$TOP/BUILDNUM" 2>/dev/null || echo 0)"
+    N=$((N + 1))
+    echo "$N" > "$TOP/BUILDNUM"
+fi
 COMMIT="$(git -C "$TOP" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 if [ "$COMMIT" != unknown ] && ! git -C "$TOP" diff-index --quiet HEAD -- 2>/dev/null; then
     COMMIT="$COMMIT-dirty"

@@ -11,7 +11,10 @@
  * login_console case. */
 static void test_login(void)
 {
+    /* root has no password and chooses one at its first login. */
     type_line("root\n");
+    type_line("rootpw\n");
+    type_line("rootpw\n");
     type_line("printf 'rootpw\\nrootpw\\n' | passwd\n");
     type_line("useradd -c 'Anna Example' anna\n");
     type_line("printf 'annapw\\nannapw\\n' | passwd anna\n");

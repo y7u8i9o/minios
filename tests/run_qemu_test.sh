@@ -13,6 +13,8 @@
 #   mem       QEMU memory size in MiB (optional, default 512), replaced by
 #             mem.ARCH on that architecture
 #   cpus      number of CPUs (optional, default $CPUS or 4)
+#   gic       GIC version of the aarch64 virt machine, 2 or 3 (optional,
+#             default 3)
 #   swap      size in MiB of a zero filled swap image attached as vdb (optional)
 #   mfs2      size in MiB of an empty mfs image attached as the next virtio-blk
 #             device (optional), which the post script sees as DISK2
@@ -237,7 +239,9 @@ case "${ARCH:-x86_64}" in
         [ -f "$EDK2_AARCH64" ] || fail "no edk2 firmware at $EDK2_AARCH64"
         CPU=max
         [ "$ACCEL" = hvf ] && CPU=host
-        MACHINE="-M virt,gic-version=3,acpi=off -cpu $CPU -bios $EDK2_AARCH64"
+        GIC=3
+        [ -f "$CASE/gic" ] && GIC="$(cat "$CASE/gic")"
+        MACHINE="-M virt,gic-version=$GIC,acpi=off -cpu $CPU -bios $EDK2_AARCH64"
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
         # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2

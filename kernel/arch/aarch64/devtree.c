@@ -6,6 +6,7 @@
 
 /* The addresses of QEMU virt (hw/arm/virt.c), used without a tree. */
 struct devtree devtree = {
+    .gic_version = 3,
     .gicd = 0x08000000,
     .gicr = 0x080a0000,
     .gicr_size = 0xf60000,
@@ -59,19 +60,42 @@ void devtree_init(void)
         return;
     }
     uint64_t addr, size;
-    if (find_reg(blob, "arm,gic-v3", 0, &addr, &size))
+    /* A GICv2 is described by the compatible string of its implementation,
+     * with the distributor and the CPU interface as its first two
+     * registers. QEMU virt names a GICv2 arm,cortex-a15-gic. */
+    static const char *const gicv2[] = { "arm,cortex-a15-gic", "arm,gic-400", "arm,cortex-a9-gic",
+                                         "arm,cortex-a7-gic" };
+    if (find_reg(blob, "arm,gic-v3", 0, &addr, &size)) {
         devtree.gicd = addr;
-    if (find_reg(blob, "arm,gic-v3", 1, &addr, &size)) {
-        devtree.gicr = addr;
-        devtree.gicr_size = size;
+        if (find_reg(blob, "arm,gic-v3", 1, &addr, &size)) {
+            devtree.gicr = addr;
+            devtree.gicr_size = size;
+        }
+        if (find_reg(blob, "arm,gic-v3-its", 0, &addr, &size))
+            devtree.its = addr;
+    } else {
+        for (size_t i = 0; i < sizeof gicv2 / sizeof gicv2[0]; i++) {
+            uint64_t caddr, csize;
+            if (find_reg(blob, gicv2[i], 0, &addr, &size) && find_reg(blob, gicv2[i], 1, &caddr, &csize)) {
+                devtree.gic_version = 2;
+                devtree.gicd = addr;
+                devtree.gicc = caddr;
+                devtree.gicr = devtree.gicr_size = 0;
+                break;
+            }
+        }
+        if (devtree.gic_version == 2 && find_reg(blob, "arm,gic-v2m-frame", 0, &addr, &size))
+            devtree.v2m = addr;
     }
-    if (find_reg(blob, "arm,gic-v3-its", 0, &addr, &size))
-        devtree.its = addr;
     if (find_reg(blob, "arm,pl031", 0, &addr, &size))
         devtree.rtc = addr;
     read_pcie(blob);
-    klog_info("gicv3 at %lx and %lx, its %s%lx, rtc at %lx", devtree.gicd, devtree.gicr,
-              devtree.its ? "at " : "", devtree.its, devtree.rtc);
+    if (devtree.gic_version == 2)
+        klog_info("gicv2 at %lx and %lx, v2m %s%lx, rtc at %lx", devtree.gicd, devtree.gicc,
+                  devtree.v2m ? "at " : "", devtree.v2m, devtree.rtc);
+    else
+        klog_info("gicv3 at %lx and %lx, its %s%lx, rtc at %lx", devtree.gicd, devtree.gicr,
+                  devtree.its ? "at " : "", devtree.its, devtree.rtc);
     if (devtree.ecam)
         klog_info("pcie ecam at %lx for buses %u to %u, msi requester ids %x to %x as device ids from %x",
                   devtree.ecam, devtree.bus_start, devtree.bus_end, devtree.msi_rid_base,

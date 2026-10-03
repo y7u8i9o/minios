@@ -26,3 +26,30 @@ msgstr "再起動"
 
 msgid "Shut down"
 msgstr "シャットダウン"
+
+msgid "Choose a password"
+msgstr "パスワードの設定"
+
+msgid "The account %s has no password. Choose one to log in."
+msgstr "アカウント %s にはパスワードがありません。ログインするにはパスワードを設定してください。"
+
+msgid "New password"
+msgstr "新しいパスワード"
+
+msgid "Repeat the password"
+msgstr "パスワードの再入力"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Set password"
+msgstr "パスワードを設定"
+
+msgid "The password must not be empty"
+msgstr "パスワードを空にすることはできません"
+
+msgid "The passwords differ"
+msgstr "パスワードが一致しません"
+
+msgid "The password cannot be stored"
+msgstr "パスワードを保存できません"

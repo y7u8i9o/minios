@@ -37,7 +37,11 @@
 /* ---- the login window ---- */
 
 static struct app *app;
-static struct widget *accounts, *password, *message, *login_button;
+static struct widget *main_win, *accounts, *password, *message, *login_button;
+/* The window that asks an account without a password for a new one. */
+static struct widget *choose_win, *new_field, *repeat_field, *choose_message;
+static char choose_name[33];
+static int choose_done;                 /* 1 cancelled, 2 password stored */
 static char names[MAX_ACCOUNTS][33];
 static int naccounts, selected;
 static int waiting;                     /* after a wrong password */
@@ -77,6 +81,86 @@ static void retry(void *arg)
     widget_focus(password);
 }
 
+static int on_choose_close(struct widget *w, void *args, void *arg)
+{
+    choose_done = 1;
+    return 1;
+}
+
+static int on_choose(struct widget *w, void *args, void *arg)
+{
+    const char *first = widget_text(new_field), *second = widget_text(repeat_field);
+    if (!first[0]) {
+        widget_set_text(choose_message, _("The password must not be empty"));
+        return 1;
+    }
+    if (strcmp(first, second) != 0) {
+        widget_set_text(choose_message, _("The passwords differ"));
+        widget_set_text(repeat_field, "");
+        widget_focus(repeat_field);
+        return 1;
+    }
+    int r = account_set_password(choose_name, first);
+    widget_set_text(new_field, "");
+    widget_set_text(repeat_field, "");
+    if (r < 0) {
+        widget_set_text(choose_message, _("The password cannot be stored"));
+        return 1;
+    }
+    choose_done = 2;
+    return 1;
+}
+
+static int on_new_activate(struct widget *w, void *args, void *arg)
+{
+    widget_focus(repeat_field);
+    return 1;
+}
+
+/* An account without a password, such as root and user on a new system,
+ * chooses one before its first session starts. */
+static void choose_password(const char *name)
+{
+    snprintf(choose_name, sizeof choose_name, "%s", name);
+    choose_win = app_modal_window(app, main_win, 340, 230, _("Choose a password"));
+    if (!choose_win)
+        return;
+    char text[128];
+    snprintf(text, sizeof text, _("The account %s has no password. Choose one to log in."), name);
+    label_new(choose_win, text);
+    label_new(choose_win, _("New password"));
+    new_field = textfield_new(choose_win, "");
+    textfield_set_masked(new_field, 1);
+    widget_connect(new_field, "activate", on_new_activate, NULL);
+    label_new(choose_win, _("Repeat the password"));
+    repeat_field = textfield_new(choose_win, "");
+    textfield_set_masked(repeat_field, 1);
+    widget_connect(repeat_field, "activate", on_choose, NULL);
+    choose_message = label_new(choose_win, "");
+    struct widget *row = box_new(choose_win, 0);
+    struct widget *gap = label_new(row, "");
+    widget_set_stretch(gap, 1, 0);
+    struct widget *cancel = button_new(row, _("Cancel"));
+    widget_connect(cancel, "clicked", on_choose_close, NULL);
+    struct widget *set = button_new(row, _("Set password"));
+    widget_connect(set, "clicked", on_choose, NULL);
+    widget_connect(choose_win, "close", on_choose_close, NULL);
+    widget_focus(new_field);
+    choose_done = 0;
+    while (!choose_done && app_step(app, -1))
+        ;
+    window_close(choose_win);
+    app_step(app, 0);
+    choose_win = NULL;
+    if (choose_done == 2) {
+        char line[64];
+        snprintf(line, sizeof line, "login %s", choose_name);
+        report(line);
+    } else {
+        widget_focus(password);
+    }
+}
+
 static int on_login(struct widget *w, void *args, void *arg)
 {
     if (waiting || selected < 0 || selected >= naccounts)
@@ -85,6 +169,10 @@ static int on_login(struct widget *w, void *args, void *arg)
     struct spwd *sp = getspnam(name);
     int ok = sp && account_check(widget_text(password), sp->sp_pwdp);
     widget_set_text(password, "");
+    if (ok && !sp->sp_pwdp[0]) {
+        choose_password(name);
+        return 1;
+    }
     if (ok) {
         char line[64];
         snprintf(line, sizeof line, "login %s", name);
@@ -118,7 +206,7 @@ static int window_main(void)
     if (!app)
         return 1;
     textdomain("greeter");
-    struct widget *win = app_window(app, 360, 320, _("Log in"));
+    struct widget *win = main_win = app_window(app, 360, 320, _("Log in"));
     if (!win)
         return 1;
     struct utsname u;

@@ -6,6 +6,7 @@
 #include <sync/spinlock.h>
 #include "devtree.h"
 #include "its.h"
+#include "gic.h"
 
 /* PSCI calls through hvc, the conduit QEMU uses for virt without EL2 or
  * EL3 firmware. */
@@ -106,11 +107,16 @@ void platform_pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t off, 
         *reg = v;
 }
 
-/* MSI through the ITS (its.c): the device ID is the requester ID
- * translated by the msi-map of the device tree. */
+/* MSI goes through the ITS on a GICv3 (its.c), where the device ID is the
+ * requester ID translated by the msi-map of the device tree, and through
+ * the v2m frame on a GICv2, where the interrupt goes to the boot CPU. */
 void platform_msi_compose(const struct pci_dev *dev, unsigned irq, unsigned cpu,
                           uint64_t *addr, uint32_t *data)
 {
+    if (devtree.gic_version == 2) {
+        gic_v2m_msi_compose(irq, addr, data);
+        return;
+    }
     uint32_t rid = (uint32_t)dev->bus << 8 | (uint32_t)dev->slot << 3 | dev->func;
     its_msi_compose(rid - devtree.msi_rid_base + devtree.msi_base, irq, cpu, addr, data);
 }

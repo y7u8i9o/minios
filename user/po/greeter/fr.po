@@ -26,3 +26,30 @@ msgstr "Redémarrer"
 
 msgid "Shut down"
 msgstr "Éteindre"
+
+msgid "Choose a password"
+msgstr "Choisissez un mot de passe"
+
+msgid "The account %s has no password. Choose one to log in."
+msgstr "Le compte %s n'a pas de mot de passe. Choisissez-en un pour vous connecter."
+
+msgid "New password"
+msgstr "Nouveau mot de passe"
+
+msgid "Repeat the password"
+msgstr "Répétez le mot de passe"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Set password"
+msgstr "Définir le mot de passe"
+
+msgid "The password must not be empty"
+msgstr "Le mot de passe ne doit pas être vide"
+
+msgid "The passwords differ"
+msgstr "Les mots de passe sont différents"
+
+msgid "The password cannot be stored"
+msgstr "Le mot de passe ne peut pas être enregistré"

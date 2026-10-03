@@ -392,6 +392,23 @@ The programs needed the following additions to the kernel and the libc.
   functions, and the headers `paths.h`, `utmp.h`, `poll.h`, `utime.h`,
   `alloca.h`, `net/if.h` and `netinet/tcp.h` (`libc.md`).
 
+## The first password (2026-10-03)
+
+The image ships root and user with an empty hash. An empty hash accepts
+only the empty password, and every account that logs in with it has to
+choose a password before its session starts. login prints "The account
+NAME has no password. Choose one now." and asks for the new password
+twice until both entries match and are not empty. The greeter opens a
+second window for the same purpose. Both store the hash with
+`account_set_password` from `minios/account.h`, which hashes the password
+with `account_hash` and writes it with `account_set_hash`. The second
+function took over the shadow update of `passwd`, which preserves the aging
+fields of the line and sets the day of the last change. An account whose
+password `passwd -d` removed is asked again at its next login. su, doas
+and sudo accept no empty password, which leaves the console login and the
+greeter as the only places where an account without a password can be
+used.
+
 ## Test
 
 The case `user_cred` runs `/bin/credtest` as root. It checks the initial

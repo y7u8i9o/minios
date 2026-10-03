@@ -1,4 +1,6 @@
 minios login:
+The account root has no password\. Choose one now\.
+The password of root is set\.
 passwd: password of root changed
 passwd: password of anna changed
 drwx------ +[0-9]+ anna +anna
