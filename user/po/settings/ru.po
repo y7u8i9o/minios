@@ -471,3 +471,78 @@ msgstr "Нет звукового сервера"
 #: user/settings/system.c:90
 msgid "Output volume: %d %%"
 msgstr "Громкость вывода: %d %%"
+
+msgid "Users"
+msgstr "Пользователи"
+
+msgid "The change failed"
+msgstr "Изменение не удалось"
+
+msgid "The full name may not contain : ' or \\"
+msgstr "Полное имя не может содержать : ' или \\"
+
+msgid "Full name changed"
+msgstr "Полное имя изменено"
+
+msgid "The new passwords differ"
+msgstr "Новые пароли не совпадают"
+
+msgid "Password changed"
+msgstr "Пароль изменён"
+
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr "Имя начинается со строчной буквы, далее буквы, цифры, _ или -"
+
+msgid "The new account needs a password"
+msgstr "Новой учётной записи нужен пароль"
+
+msgid "Account added"
+msgstr "Учётная запись добавлена"
+
+msgid "Select an account first"
+msgstr "Сначала выберите учётную запись"
+
+msgid "Neither root nor the own account can be removed"
+msgstr "Нельзя удалить root и собственную учётную запись"
+
+msgid "Account removed"
+msgstr "Учётная запись удалена"
+
+msgid "Accounts"
+msgstr "Учётные записи"
+
+msgid "Your account %s"
+msgstr "Ваша учётная запись %s"
+
+msgid "Full name"
+msgstr "Полное имя"
+
+msgid "Current password"
+msgstr "Текущий пароль"
+
+msgid "New password"
+msgstr "Новый пароль"
+
+msgid "Repeat"
+msgstr "Повтор"
+
+msgid "Change password"
+msgstr "Сменить пароль"
+
+msgid "Add or remove accounts"
+msgstr "Добавление и удаление учётных записей"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "Password"
+msgstr "Пароль"
+
+msgid "Root password"
+msgstr "Пароль root"
+
+msgid "Add account"
+msgstr "Добавить учётную запись"
+
+msgid "Remove selected account"
+msgstr "Удалить выбранную учётную запись"

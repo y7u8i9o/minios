@@ -1,0 +1,28 @@
+# Japanese messages of the greeter domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Wrong password"
+msgstr "パスワードが違います"
+
+msgid "Log in"
+msgstr "ログイン"
+
+msgid "Welcome to %s"
+msgstr "%s へようこそ"
+
+msgid "Account"
+msgstr "アカウント"
+
+msgid "Password"
+msgstr "パスワード"
+
+msgid "Restart"
+msgstr "再起動"
+
+msgid "Shut down"
+msgstr "シャットダウン"

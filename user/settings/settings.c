@@ -133,6 +133,7 @@ static struct category categories[] = {
     { N_("Date and time"), "time", build_datetime, NULL },
     { N_("File types"), "filetypes", build_filetypes, NULL },
     { N_("Launcher"), "launcher", build_launcher, NULL },
+    { N_("Users"), "users", build_users, NULL },
     { N_("System"), "system", build_system, NULL },
 };
 #define NCATEGORIES ((int)(sizeof categories / sizeof categories[0]))

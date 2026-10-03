@@ -11,6 +11,8 @@ struct textfield {
     struct widget w;
     int cursor, sel;            /* sel: anchor, -1 none */
     int scroll_x;
+    int masked;                 /* shows one '*' per byte and never copies */
+    char *mask;                 /* the stars, as long as the text */
     char preedit[WSRV_TITLE_MAX];
     struct widget *context_menu;
 };
@@ -23,6 +25,22 @@ static void changed(struct textfield *f)
 }
 
 static int len_of(struct textfield *f) { return (int)strlen(widget_text(&f->w)); }
+
+/* The text as it is drawn and measured: the text itself, or for a masked
+ * field one '*' per byte, which keeps byte offsets valid as positions. */
+static const char *shown(struct textfield *f)
+{
+    if (!f->masked)
+        return widget_text(&f->w);
+    int n = len_of(f);
+    char *m = realloc(f->mask, (size_t)n + 1);
+    if (!m)
+        return "";
+    f->mask = m;
+    memset(m, '*', (size_t)n);
+    m[n] = '\0';
+    return m;
+}
 
 static void clamp(struct textfield *f)
 {
@@ -67,7 +85,7 @@ static void insert(struct textfield *f, const char *s, int n)
 
 static void scroll_to_cursor(struct textfield *f, const struct theme *t)
 {
-    int cx = gfx_text_width_font(t->font, widget_text(&f->w), f->cursor);
+    int cx = gfx_text_width_font(t->font, shown(f), f->cursor);
     int avail = f->w.w - 2 * PAD;
     if (cx < f->scroll_x) f->scroll_x = cx;
     if (cx > f->scroll_x + avail - 1) f->scroll_x = cx - avail + 1;
@@ -89,7 +107,7 @@ static void textfield_paint(struct widget *w, struct painter *p)
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_FIELD], t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     painter_push(p, 1, 1, w->w - 2, w->h - 2);
-    const char *text = widget_text(w);
+    const char *text = shown(f);
     int th = painter_text_height(p);
     int ty = (w->h - 2 - th) / 2, tx = PAD - 1 - f->scroll_x;
     if (f->sel >= 0 && f->sel != f->cursor) {
@@ -117,7 +135,7 @@ static int pos_at(struct textfield *f, int px)
 {
     const struct theme *t = widget_theme(&f->w);
     int rel = px - PAD + f->scroll_x;
-    return gfx_text_index_font(t->font, widget_text(&f->w), -1, rel < 0 ? 0 : rel);
+    return gfx_text_index_font(t->font, shown(f), -1, rel < 0 ? 0 : rel);
 }
 
 static int key(struct textfield *f, struct event *e)
@@ -135,7 +153,7 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     if (ctrl && (e->ch == 3 || e->ch == 24)) {   /* Ctrl+C, Ctrl+X */
-        if (f->sel >= 0 && f->sel != f->cursor) {
+        if (f->sel >= 0 && f->sel != f->cursor && !f->masked) {
             int a, b;
             sel_range(f, &a, &b);
             gui_clipboard_set(widget_text(&f->w) + a, b - a);
@@ -215,7 +233,7 @@ static void context_action(struct widget *w, enum edit_action a)
     switch (a) {
     case EDIT_CUT:
     case EDIT_COPY:
-        if (f->sel >= 0 && f->sel != f->cursor) {
+        if (f->sel >= 0 && f->sel != f->cursor && !f->masked) {
             sel_range(f, &a0, &b0);
             gui_clipboard_set(widget_text(w) + a0, b0 - a0);
             if (a == EDIT_CUT && delete_selection(f))
@@ -258,7 +276,7 @@ static void context_menu(struct textfield *f, int x)
     widget_invalidate(&f->w);
     unsigned enabled = EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_SELECT_ALL);
     if (sel)
-        enabled |= EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY) | EDIT_BIT(EDIT_DELETE);
+        enabled |= (f->masked ? 0 : EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY)) | EDIT_BIT(EDIT_DELETE);
     unsigned shown = EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY) | EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_DELETE) |
                      EDIT_BIT(EDIT_SELECT_ALL);
     edit_menu_popup(&f->w, &f->context_menu, x, f->w.h / 2, shown, enabled, context_action);
@@ -338,7 +356,24 @@ static int textfield_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class textfield_class = { "textfield", sizeof(struct textfield), textfield_measure, NULL, textfield_paint, textfield_event, NULL };
+static void textfield_destroy(struct widget *w)
+{
+    struct textfield *f = (struct textfield *)w;
+    if (f->mask) {
+        memset(f->mask, 0, strlen(f->mask));
+        free(f->mask);
+    }
+}
+
+const struct widget_class textfield_class = { "textfield", sizeof(struct textfield), textfield_measure, NULL, textfield_paint, textfield_event, textfield_destroy };
+
+void textfield_set_masked(struct widget *w, int masked)
+{
+    struct textfield *f = (struct textfield *)w;
+    f->masked = masked != 0;
+    f->scroll_x = 0;
+    widget_invalidate(w);
+}
 
 struct widget *textfield_new(struct widget *parent, const char *text)
 {

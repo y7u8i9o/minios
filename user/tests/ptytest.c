@@ -68,7 +68,8 @@ int main(void)
         _exit(127);
     }
     char buf[2048] = "";
-    CHECK(expect(master, "$ ", buf, sizeof buf), "prompt: '%s'", buf);
+    /* The test runs as root, whose prompt ends in "# ". */
+    CHECK(expect(master, "# ", buf, sizeof buf), "prompt: '%s'", buf);
 
     /* Echo of the input line comes back through the line discipline,
      * then the command output. */
@@ -100,7 +101,7 @@ int main(void)
      * the shell that is still running or not yet reaped, since nothing
      * reaps orphans while init is not running. */
     buf[0] = '\0';
-    CHECK(expect(master, "$ ", buf, sizeof buf), "prompt after the round trip: '%s'", buf);
+    CHECK(expect(master, "# ", buf, sizeof buf), "prompt after the round trip: '%s'", buf);
 
     /* Closing the master hangs the slave up: the shell exits. */
     close(master);

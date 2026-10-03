@@ -535,3 +535,12 @@ These locks are in user space and do not add a kernel lock-order level.
   `devfs_set_owner` takes the node's `inode.lock` and below it
   `devfs_lock`, the order of U1, and is called by the pseudo terminal
   driver with no lock held.
+
+## U4 additions
+
+- No new lock. `conn.cred` is written by the connecting thread before the
+  connection is shared and read by `SO_PEERCRED` under `conn.lock`.
+  `unix_sock.cred` of a listener is written under its `unix_sock.lock`,
+  inside `sock_table_lock` as the existing order has it, and read under
+  the same lock by `unix_connect`. The caller's credentials are copied
+  under `proc.lock` before either lock is taken.

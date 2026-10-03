@@ -1,8 +1,11 @@
-/* startgui [program]: start the desktop session (X12, the input method
- * daemon, the panel, the desktop), run the program (the terminal by
- * default) and stop the session on logout. The audio server is a service of init and lives
- * across sessions. */
+/* startgui [-s] [program]: start the desktop session (X12, the input
+ * method daemon, the panel, the desktop), run the program (the terminal by
+ * default) and stop the session on logout. The audio server is a service
+ * of init and lives across sessions. With -s the server runs already, as
+ * the greeter starts it and keeps it across sessions, and startgui starts
+ * the session programs alone (docs/design/users.md). */
 #include <stdio.h>
+#include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -22,9 +25,17 @@ static pid_t spawn(const char *path)
 
 int main(int argc, char **argv)
 {
+    int session_only = argc > 1 && strcmp(argv[1], "-s") == 0;
+    if (session_only) {
+        argc--;
+        argv++;
+    }
     conf_export_locale();
-    pid_t server = spawn("x12");
-    sleep_ms(400);
+    pid_t server = -1;
+    if (!session_only) {
+        server = spawn("x12");
+        sleep_ms(400);
+    }
     pid_t ime = spawn("imed");
     pid_t panel = spawn("panel");
     sleep_ms(200);
@@ -44,7 +55,7 @@ int main(int argc, char **argv)
             client = -1;
             continue;
         }
-        if (done == server)
+        if (server > 0 && done == server)
             break;
         if (done == ime) {
             if (++restarts > 3) {
@@ -89,7 +100,9 @@ int main(int argc, char **argv)
         kill(ime, SIGTERM);
         waitpid(ime, NULL, 0);
     }
-    kill(server, SIGTERM);
-    waitpid(server, NULL, 0);
+    if (server > 0) {
+        kill(server, SIGTERM);
+        waitpid(server, NULL, 0);
+    }
     return 0;
 }

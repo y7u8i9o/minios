@@ -469,3 +469,78 @@ msgstr "Aucun serveur audio"
 #: user/settings/system.c:90
 msgid "Output volume: %d %%"
 msgstr "Volume de sortie : %d %%"
+
+msgid "Users"
+msgstr "Utilisateurs"
+
+msgid "The change failed"
+msgstr "La modification a échoué"
+
+msgid "The full name may not contain : ' or \\"
+msgstr "Le nom complet ne peut pas contenir : ' ou \\"
+
+msgid "Full name changed"
+msgstr "Nom complet modifié"
+
+msgid "The new passwords differ"
+msgstr "Les nouveaux mots de passe diffèrent"
+
+msgid "Password changed"
+msgstr "Mot de passe modifié"
+
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr "Un nom commence par une lettre minuscule, suivie de lettres, de chiffres, de _ ou de -"
+
+msgid "The new account needs a password"
+msgstr "Le nouveau compte doit avoir un mot de passe"
+
+msgid "Account added"
+msgstr "Compte ajouté"
+
+msgid "Select an account first"
+msgstr "Sélectionnez d'abord un compte"
+
+msgid "Neither root nor the own account can be removed"
+msgstr "Ni root ni votre propre compte ne peuvent être supprimés"
+
+msgid "Account removed"
+msgstr "Compte supprimé"
+
+msgid "Accounts"
+msgstr "Comptes"
+
+msgid "Your account %s"
+msgstr "Votre compte %s"
+
+msgid "Full name"
+msgstr "Nom complet"
+
+msgid "Current password"
+msgstr "Mot de passe actuel"
+
+msgid "New password"
+msgstr "Nouveau mot de passe"
+
+msgid "Repeat"
+msgstr "Répéter"
+
+msgid "Change password"
+msgstr "Changer le mot de passe"
+
+msgid "Add or remove accounts"
+msgstr "Ajouter ou supprimer des comptes"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Password"
+msgstr "Mot de passe"
+
+msgid "Root password"
+msgstr "Mot de passe de root"
+
+msgid "Add account"
+msgstr "Ajouter le compte"
+
+msgid "Remove selected account"
+msgstr "Supprimer le compte sélectionné"

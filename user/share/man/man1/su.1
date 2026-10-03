@@ -11,9 +11,10 @@ DESCRIPTION
     the command through that shell. su is set user id root. A caller other
     than root gives the password of the target account, unless that
     account has none. On a terminal the password is typed without echo.
-    Otherwise it is the first line of standard input, which lets a program
-    pass it through a pipe. After a wrong password su waits two seconds
-    and fails with "su: authentication failure".
+    Otherwise it is the first line of standard input, read even when the
+    account has no password, which lets a program pass it through a pipe
+    without knowing whether one is set. After a wrong password su waits
+    two seconds and fails with "su: authentication failure".
 
     Without - the environment is kept, with HOME, SHELL, USER and LOGNAME
     of the account. With - (or -l) su starts a login shell in the home of

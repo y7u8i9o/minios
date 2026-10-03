@@ -1,0 +1,32 @@
+GREETER(1)                  User Commands
+
+NAME
+    greeter - the graphical login
+
+SYNOPSIS
+    greeter [-s]
+
+DESCRIPTION
+    init runs the greeter as root on the console in place of login(1)
+    when /etc/init.conf names it in the console entry:
+
+        console greeter greeter
+
+    The greeter starts the display server and restarts it when it ends.
+    Its window lists root and the accounts from uid 1000 on, with the
+    account after root selected, and asks for the password, which is not
+    shown. A wrong password is refused with a pause. Restart and Shut down
+    ask init to restart or power off the machine.
+
+    After a login the greeter admits the account to the display server,
+    tells init that the session on the console belongs to it, which lets
+    the user power off with initctl(1), and runs startgui -s as the
+    account in its home with a fresh environment. Log out in the panel's
+    menu ends the session. The greeter then ends the programs the session
+    left behind, withdraws the admission and shows its window again.
+
+    -s mirrors the log of the display server to the console, as the boot
+    tests read it.
+
+SEE ALSO
+    login(1), su(1), initctl(1), init.conf(5), index(7)

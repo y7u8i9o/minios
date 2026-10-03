@@ -28,6 +28,7 @@
 #include <gui/image.h>
 #include <gui/keymap.h>
 #include <minios/local.h>
+#include <pwd.h>
 #include <minios/conf.h>
 #include "panel.h"
 
@@ -234,6 +235,20 @@ static void layout_rows(void)
                 selected = r;
 }
 
+/* The name of the account the panel runs as, looked up once. */
+static const char *session_user(void)
+{
+    static char name[40];
+    if (!name[0]) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw)
+            snprintf(name, sizeof name, "%s", pw->pw_name);
+        else
+            snprintf(name, sizeof name, "%u", getuid());
+    }
+    return name;
+}
+
 static void draw(void)
 {
     struct painter p;
@@ -278,6 +293,12 @@ static void draw(void)
             painter_image(&p, x, row->y + (row->h - image_lh(e->icon)) / 2, e->icon);
         x += LAUNCHER_ICON + 8;
         panel_label(&p, x - 6, row->y, row->w - (x - row->x) - 2, row->h, e->title, MENU_TEXT, 0);
+        /* The account of the session, at the end of the Log out row. */
+        if (e->section == SEC_LOGOUT) {
+            const char *who = session_user();
+            int ww = painter_text_width(&p, who, -1);
+            painter_text(&p, row->x + row->w - 10 - ww, row->y + (row->h - th) / 2, who, MENU_TEXT_DIM);
+        }
     }
     canvas_commit(&menu);
 }

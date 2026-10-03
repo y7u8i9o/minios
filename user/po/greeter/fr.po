@@ -1,0 +1,28 @@
+# French messages of the greeter domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Wrong password"
+msgstr "Mot de passe incorrect"
+
+msgid "Log in"
+msgstr "Se connecter"
+
+msgid "Welcome to %s"
+msgstr "Bienvenue sur %s"
+
+msgid "Account"
+msgstr "Compte"
+
+msgid "Password"
+msgstr "Mot de passe"
+
+msgid "Restart"
+msgstr "Redémarrer"
+
+msgid "Shut down"
+msgstr "Éteindre"

@@ -186,6 +186,19 @@ static void reload_keymap(void)
 
 static void h_set(struct wire_client *c, struct wire_resource *self, const char *key, int32_t value)
 {
+    /* The session user, which only a root client may name. Clients of a
+     * user who is no longer admitted are disconnected. */
+    if (strcmp(key, "session_uid") == 0) {
+        struct client *cl = wire_client_get_user_data(c);
+        if (!cl || cl->uid != 0 || value < -1) {
+            comp_log("setting session_uid refused");
+            return;
+        }
+        session_uid = value;
+        comp_log("session uid %d", value);
+        clients_drop_disallowed();
+        return;
+    }
     if (strcmp(key, "keymap_reload") == 0) {
         reload_keymap();
         return;

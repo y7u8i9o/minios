@@ -269,6 +269,43 @@ for that user.
 `PATH`, and the panel reads the launcher entries of
 `/usr/local/share/launcher` and `~/.local/share/launcher`.
 
+## The graphical login (U4)
+
+AF_UNIX sockets report the process at the other end through
+`getsockopt(SOL_SOCKET, SO_PEERCRED)` as a `struct ucred` with its pid,
+effective uid and effective gid (`sockets.md`). X12 reads it for every new
+client (`client_attach`) and admits root, the user who runs the server
+and the session user, `session_uid`, which only a root client may change
+through the setting of the same name (`x12settings set session_uid UID`).
+A change disconnects the clients of a user who is no longer admitted.
+init uses the same option to authorize its control requests (`init.md`).
+
+The greeter (`user/greeter/greeter.c`, `greeter(1)`) runs as root in the
+console entry of init (`console greeter greeter`). It starts X12, restarts
+it when it ends, and runs its login window as a second process,
+`greeter --window`, which reports `login NAME`, `poweroff` or `reboot` on
+a pipe. The window lists root and the accounts from uid 1000 on, selects
+the account after root, checks the password with `account_check` in a
+masked text field (`textfield_set_masked`, which shows one `*` per byte
+and never copies its text) and pauses after a wrong one. For a login the
+greeter sets the session uid of X12 and of init and starts
+`startgui -s`, which starts the session programs without a server, as
+the account in a process group of its own, with `initgroups`, `setgid`,
+`setuid`, its home and a fresh environment. After the panel's Log out it
+ends that process group, clears both session uids and shows the window
+again. Running the window as a separate process gives every login a new
+connection to X12 and a new toolkit state.
+
+The panel shows the account name at the end of the Log out row of its
+menu. The settings program gained the Users page (`user/settings/users.c`).
+It lists the accounts, sets the full name of the user's own account with
+`passwd -n`, changes its password with `passwd`, and adds and removes
+accounts with `su -c 'useradd ... && passwd NAME' root` and
+`su -c 'userdel -r NAME' root`. The passwords go to these programs through
+a pipe, one per line, and `su` and `passwd` read a line for every
+password they could ask for when their input is not a terminal, which
+lets the page pass them without knowing which accounts have one.
+
 ## Test
 
 The case `user_cred` runs `/bin/credtest` as root. It checks the initial
@@ -311,3 +348,12 @@ home and powers off. The case `fs_migrate` runs `/bin/migratetest`, which
 builds a directory of the single user layout below `/tmp`, including an
 entry named `user`, a symbolic link and a package prefix, converts it with
 `fsinit -m` and checks the result and that a second run changes nothing.
+
+The case `gui_greeter` starts the greeter with `-s`, after a short first
+process that takes pid 1, which the kernel protects from `SIGKILL`. It
+waits for the login window, logs in the preselected account `user` with
+Enter, finds the panel and the desktop running as uid 1000 in
+`/dev/proc`, chooses Log out in the panel's menu, finds the login window
+again, and has `su` run a settings request of uid 1000, which X12 must
+refuse. `hold=1` keeps the window open for screenshots. `gui_settings`
+opens the Users page with the other pages.

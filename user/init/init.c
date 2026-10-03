@@ -46,6 +46,9 @@
 #define STOP_MS       3000      /* grace period between SIGTERM and SIGKILL */
 #define REPLY_MAX     4096
 
+/* The user of the session on the console, or -1. */
+static int session_uid = -1;
+
 enum kind { KIND_TASK, KIND_SERVICE, KIND_CONSOLE };
 enum restart { RESTART_ALWAYS, RESTART_NEVER, RESTART_FAILURE };
 enum state {
@@ -439,8 +442,10 @@ static void entry_exited(struct entry *e, int status)
     uint64_t ran = now_ms() - e->started_ms;
     e->quick = ran < QUICK_MS ? e->quick + 1 : 0;
     int restart = e->restart == RESTART_ALWAYS || (e->restart == RESTART_FAILURE && failed);
-    if (e->kind == KIND_CONSOLE)
+    if (e->kind == KIND_CONSOLE) {
         restart = 1;            /* the system is unusable without a session */
+        session_uid = -1;       /* the session on the console ended */
+    }
     if (!restart) {
         e->state = failed ? STATE_FAILED : STATE_STOPPED;
         report("%s %s exited with %s after %lu ms, not restarted", kind_names[e->kind], e->name, how,
@@ -629,7 +634,12 @@ static void list_entries(char *reply, size_t size)
         format_entry(&entries[i], reply, size);
 }
 
-static void handle_request(char *request, char *reply, size_t size)
+/* uid is the user of the requesting process. Everyone may list the
+ * entries and ask for their status, root and the user of the session on
+ * the console may power off and restart, and the rest is for root. The
+ * session user is named by login or the greeter, which run as root, with
+ * "session UID" and "session -" (docs/design/users.md). */
+static void handle_request(char *request, char *reply, size_t size, unsigned uid)
 {
     const char *save;
     char *cmd = strtok_r(request, " \t\r\n", &save);
@@ -638,6 +648,18 @@ static void handle_request(char *request, char *reply, size_t size)
     if (!cmd || strcmp(cmd, "list") == 0) {
         append(reply, size, "ok\n");
         list_entries(reply, size);
+        return;
+    }
+    int power = strcmp(cmd, "poweroff") == 0 || strcmp(cmd, "reboot") == 0 || strcmp(cmd, "halt") == 0;
+    int allowed = uid == 0 || strcmp(cmd, "status") == 0 ||
+                  (power && session_uid >= 0 && uid == (unsigned)session_uid);
+    if (!allowed) {
+        snprintf(reply, size, "error: %s: permission denied\n", cmd);
+        return;
+    }
+    if (strcmp(cmd, "session") == 0) {
+        session_uid = arg && strcmp(arg, "-") != 0 ? atoi(arg) : -1;
+        snprintf(reply, size, "ok\n");
         return;
     }
     if (strcmp(cmd, "reload") == 0) {
@@ -707,8 +729,11 @@ static void serve_connection(int fd)
             break;
     }
     request[got] = 0;
+    struct ucred peer;
+    socklen_t peer_len = sizeof peer;
+    unsigned uid = getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &peer, &peer_len) == 0 ? peer.uid : (unsigned)-1;
     static char reply[REPLY_MAX];
-    handle_request(request, reply, sizeof reply);
+    handle_request(request, reply, sizeof reply, uid);
     size_t len = strlen(reply), done = 0;
     while (done < len) {
         ssize_t n = write(fd, reply + done, len - done);

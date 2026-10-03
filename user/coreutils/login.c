@@ -58,6 +58,9 @@ static int read_line(char *buf, size_t size)
 
 static void start_session(const struct account *a)
 {
+    /* init lets the session user power off. Without init, as in a test,
+     * the request fails and nothing changes. */
+    account_session((int)a->uid);
     /* The terminal belongs to the account for the session. */
     if (isatty(0)) {
         fchown(0, a->uid, a->gid);

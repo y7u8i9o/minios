@@ -467,3 +467,78 @@ msgstr "没有音频服务器"
 #: user/settings/system.c:90
 msgid "Output volume: %d %%"
 msgstr "输出音量：%d %%"
+
+msgid "Users"
+msgstr "用户"
+
+msgid "The change failed"
+msgstr "更改失败"
+
+msgid "The full name may not contain : ' or \\"
+msgstr "全名不能包含 : ' 或 \\"
+
+msgid "Full name changed"
+msgstr "全名已更改"
+
+msgid "The new passwords differ"
+msgstr "新密码不一致"
+
+msgid "Password changed"
+msgstr "密码已更改"
+
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr "名称以小写字母开头,其后为字母、数字、_ 或 -"
+
+msgid "The new account needs a password"
+msgstr "新帐户需要密码"
+
+msgid "Account added"
+msgstr "帐户已添加"
+
+msgid "Select an account first"
+msgstr "请先选择一个帐户"
+
+msgid "Neither root nor the own account can be removed"
+msgstr "不能删除 root 或自己的帐户"
+
+msgid "Account removed"
+msgstr "帐户已删除"
+
+msgid "Accounts"
+msgstr "帐户"
+
+msgid "Your account %s"
+msgstr "您的帐户 %s"
+
+msgid "Full name"
+msgstr "全名"
+
+msgid "Current password"
+msgstr "当前密码"
+
+msgid "New password"
+msgstr "新密码"
+
+msgid "Repeat"
+msgstr "重复"
+
+msgid "Change password"
+msgstr "更改密码"
+
+msgid "Add or remove accounts"
+msgstr "添加或删除帐户"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Root password"
+msgstr "root 密码"
+
+msgid "Add account"
+msgstr "添加帐户"
+
+msgid "Remove selected account"
+msgstr "删除所选帐户"

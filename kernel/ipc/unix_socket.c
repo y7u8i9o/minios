@@ -58,6 +58,7 @@ struct conn {
     int refs;
     struct poll_source *poll[2];            /* the sockets' sources, NULL once a side released */
     char name[2][SOCK_NAME_MAX];            /* the bound name of each side, empty if unnamed */
+    struct ucred cred[2];                   /* the process of each side, for SO_PEERCRED (U4) */
 };
 
 enum { UNIX_UNBOUND, UNIX_LISTENING, UNIX_CONNECTED };
@@ -72,7 +73,19 @@ struct unix_sock {
     struct conn *backlog[SOMAXCONN];
     int nbacklog;
     struct waitq accept_waitq;
+    struct ucred cred;                      /* the process that called listen, under lock */
 };
+
+/* The pid and effective ids of the calling process. */
+static void current_ucred(struct ucred *out)
+{
+    struct proc *p = thread_current()->proc;
+    struct cred c;
+    cred_get(p, &c);
+    out->pid = p->pid;
+    out->uid = c.euid;
+    out->gid = c.egid;
+}
 
 static struct unix_sock *listeners[SOCK_MAX_LISTENERS];
 static DEFINE_SPINLOCK(sock_table_lock);
@@ -98,6 +111,10 @@ static struct conn *conn_create(void)
     if (!c)
         return NULL;
     spinlock_init(&c->lock, "sockconn");
+    /* Both ends start as the creator, which is right for socketpair. connect
+     * replaces the listener's side. */
+    current_ucred(&c->cred[0]);
+    c->cred[1] = c->cred[0];
     for (int i = 0; i < 2; i++) {
         struct sock_dir *d = &c->dir[i];
         d->pages = pmm_alloc(SOCK_BUF_ORDER);
@@ -223,6 +240,9 @@ static int unix_listen(struct socket *s, int backlog)
     struct unix_sock *u = s->priv;
     if (backlog < 0)
         return -EINVAL;
+    /* Taken before the table lock, since it takes proc.lock. */
+    struct ucred me;
+    current_ucred(&me);
     spin_lock(&sock_table_lock);
     if (u->state == UNIX_LISTENING) {
         spin_unlock(&sock_table_lock);
@@ -240,6 +260,9 @@ static int unix_listen(struct socket *s, int backlog)
         spin_unlock(&sock_table_lock);
         return -ENOSPC;
     }
+    spin_lock(&u->lock);
+    u->cred = me;
+    spin_unlock(&u->lock);
     listeners[slot] = u;
     u->state = UNIX_LISTENING;
     spin_unlock(&sock_table_lock);
@@ -283,8 +306,10 @@ static int unix_connect(struct socket *s, const struct sockaddr_storage *addr, s
         conn_put(c);
         return -ECONNREFUSED;
     }
-    /* The listener's name is the peer name the client reports. */
+    /* The listener's name is the peer name the client reports, and its
+     * process the peer credentials. c is not shared yet. */
     strlcpy(c->name[1], l->name, SOCK_NAME_MAX);
+    c->cred[1] = l->cred;
     l->backlog[l->nbacklog++] = c;          /* the listener's reference */
     waitq_wake_all(&l->accept_waitq);
     spin_unlock(&l->lock);
@@ -584,9 +609,23 @@ static int unix_setsockopt(struct socket *s, int level, int name, const void *va
     return -ENOPROTOOPT;
 }
 
+/* SO_PEERCRED reports the process at the other end (U4). */
 static int unix_getsockopt(struct socket *s, int level, int name, void *val, socklen_t *len)
 {
-    return -ENOPROTOOPT;
+    struct unix_sock *u = s->priv;
+    if (level != SOL_SOCKET || name != SO_PEERCRED)
+        return -ENOPROTOOPT;
+    if (*len < sizeof(struct ucred))
+        return -EINVAL;
+    struct conn *c = u->state == UNIX_CONNECTED ? u->conn : NULL;
+    if (!c)
+        return -ENOTCONN;
+    spin_lock(&c->lock);
+    struct ucred peer = c->cred[1 - u->side];
+    spin_unlock(&c->lock);
+    memcpy(val, &peer, sizeof peer);
+    *len = sizeof peer;
+    return 0;
 }
 
 static void unix_release(struct socket *s)

@@ -14,8 +14,9 @@ DESCRIPTION
     account. A caller other than root first gives the current password,
     unless the account has none. The new password is asked twice and may
     not be empty. On a terminal the passwords are typed without echo,
-    otherwise they are read one per line from standard input, the current
-    one first when it is asked for.
+    otherwise they are read one per line from standard input: for a caller
+    other than root the current one first, an empty line for an account
+    without a password, then the new one twice.
 
     -d removes the password of an account, which then logs in without
     one. Only root may do so. -n sets the full name of the account, the

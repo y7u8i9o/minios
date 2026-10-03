@@ -1,0 +1,28 @@
+# Spanish messages of the greeter domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Wrong password"
+msgstr "Contraseña incorrecta"
+
+msgid "Log in"
+msgstr "Iniciar sesión"
+
+msgid "Welcome to %s"
+msgstr "Bienvenido a %s"
+
+msgid "Account"
+msgstr "Cuenta"
+
+msgid "Password"
+msgstr "Contraseña"
+
+msgid "Restart"
+msgstr "Reiniciar"
+
+msgid "Shut down"
+msgstr "Apagar"

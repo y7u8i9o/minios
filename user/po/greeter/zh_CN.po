@@ -1,0 +1,28 @@
+# Simplified Chinese messages of the greeter domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Wrong password"
+msgstr "密码错误"
+
+msgid "Log in"
+msgstr "登录"
+
+msgid "Welcome to %s"
+msgstr "欢迎使用 %s"
+
+msgid "Account"
+msgstr "帐户"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Restart"
+msgstr "重新启动"
+
+msgid "Shut down"
+msgstr "关机"

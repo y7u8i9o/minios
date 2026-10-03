@@ -5,8 +5,9 @@
  * su is set user id root. Without a name it switches to root. A caller
  * that is not root gives the password of the target account, unless the
  * account has none. On a terminal the password is typed without echo,
- * otherwise it is the first line of standard input, which lets a program
- * such as the settings window pass it through a pipe. "-" starts a login
+ * otherwise it is the first line of standard input, read even for an
+ * account without a password, which lets a program such as the settings
+ * window pass it through a pipe without knowing whether one is set. "-" starts a login
  * shell in the home of the account with a fresh environment, otherwise the
  * environment is kept with HOME, SHELL, USER and LOGNAME of the account. */
 #include <stdio.h>
@@ -67,7 +68,7 @@ int main(int argc, char **argv)
         char hash[128];
         snprintf(hash, sizeof hash, "%s", sp ? sp->sp_pwdp : "!");
         char password[128] = "";
-        if (hash[0] && account_read_password("Password: ", password, sizeof password) < 0)
+        if ((hash[0] || !isatty(0)) && account_read_password("Password: ", password, sizeof password) < 0)
             password[0] = '\0';
         int ok = account_check(password, hash);
         memset(password, 0, sizeof password);

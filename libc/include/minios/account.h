@@ -56,3 +56,8 @@ int account_read_password(const char *prompt, char *buf, size_t size);
 
 /* The days since the epoch, for the last change field of /etc/shadow. */
 long account_today(void);
+
+/* Tell init that the session on the console belongs to uid, or with -1
+ * that it ended, which lets that user power off and restart through
+ * initctl. Only root may do so. Returns 0 or -1 with errno set. */
+int account_session(int uid);

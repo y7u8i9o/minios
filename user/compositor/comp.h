@@ -143,6 +143,7 @@ struct csurface {
 struct client {
     struct wire_client *wc;
     int number;
+    unsigned uid;                           /* SO_PEERCRED at connect */
     long stall_since;                       /* uptime when its socket first stayed full */
     struct wire_resource *pointer, *keyboard, *data_device;
     struct wire_resource *text_input;
@@ -159,6 +160,15 @@ struct client {
     int unresponsive;
     long snooze_until;                      /* Wait pressed: the overlay stays away until then */
 };
+
+/* Clients may connect from root, from the user running the server and
+ * from the session user, which a root client sets with the setting
+ * session_uid (-1 for none) when the greeter starts and ends a session
+ * (docs/design/users.md). surface.c. */
+extern int session_uid;
+int client_uid_allowed(unsigned uid);
+/* Disconnect the clients that client_uid_allowed no longer admits. */
+void clients_drop_disallowed(void);
 
 /* hang.c: unresponsive clients. */
 void hang_init(struct wire_server *srv);

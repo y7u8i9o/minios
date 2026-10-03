@@ -1,0 +1,9 @@
+gui_greeter: login window shown
+greeter: session of user
+x12: session uid 1000
+gui_greeter: session of uid 1000
+greeter: session of user ended
+x12: session uid -1
+gui_greeter: login window shown again
+x12: client of uid 1000 refused
+TEST PASS

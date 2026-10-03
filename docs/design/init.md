@@ -82,7 +82,12 @@ request is one text line, the reply starts with `ok` or `error: message`
 and continues with the output. `initctl` (`user/coreutils/initctl.c`)
 joins its arguments into the request, prints the body and exits with the
 first line's verdict. The commands are `list`, `status`, `start`, `stop`,
-`restart`, `reload [FILE]`, `poweroff`, `reboot` and `halt`. A reload
+`restart`, `reload [FILE]`, `poweroff`, `reboot` and `halt`, and since U4
+of the multiuser plan `session UID|-` (`users.md`). Init identifies the
+requesting user through `SO_PEERCRED`. Everyone may ask for `list` and
+`status`, root and the user of the session on the console may power off
+and restart, and everything else is for root. `login` and the greeter
+name the session user, and the end of the console entry clears it. A reload
 reads the file again: entries no longer present are stopped and removed,
 new ones start, and an existing entry keeps its state with the new
 command taking effect at its next start.

@@ -105,7 +105,8 @@ label, button (`clicked`), check box and radio button (`toggled`, radios
 exclusive among siblings), separator, canvas (`paint`, `press`,
 `release`, `motion`, `wheel`, `key`), text field (`changed`,
 `activate`; cursor, selection with Shift and the mouse, Ctrl+A, C, X,
-V through the server clipboard), list view (`selected`, `activate`;
+V through the server clipboard, and a masked mode for passwords that
+shows one `*` per byte and never copies, `textfield_set_masked`), list view (`selected`, `activate`;
 keyboard navigation, wheel, internal scroll bar), scroll bar
 (`scrolled`; thumb dragging, paging, wheel, keys) and scroll area (a
 viewport over its content box, `w->user`, with bars shown when the

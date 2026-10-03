@@ -467,3 +467,78 @@ msgstr "オーディオサーバーがありません"
 #: user/settings/system.c:90
 msgid "Output volume: %d %%"
 msgstr "出力音量: %d %%"
+
+msgid "Users"
+msgstr "ユーザー"
+
+msgid "The change failed"
+msgstr "変更に失敗しました"
+
+msgid "The full name may not contain : ' or \\"
+msgstr "氏名に : ' \\ は使えません"
+
+msgid "Full name changed"
+msgstr "氏名を変更しました"
+
+msgid "The new passwords differ"
+msgstr "新しいパスワードが一致しません"
+
+msgid "Password changed"
+msgstr "パスワードを変更しました"
+
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr "名前は小文字で始め、その後は英字、数字、_ または - です"
+
+msgid "The new account needs a password"
+msgstr "新しいアカウントにはパスワードが必要です"
+
+msgid "Account added"
+msgstr "アカウントを追加しました"
+
+msgid "Select an account first"
+msgstr "先にアカウントを選択してください"
+
+msgid "Neither root nor the own account can be removed"
+msgstr "root と自分のアカウントは削除できません"
+
+msgid "Account removed"
+msgstr "アカウントを削除しました"
+
+msgid "Accounts"
+msgstr "アカウント"
+
+msgid "Your account %s"
+msgstr "あなたのアカウント %s"
+
+msgid "Full name"
+msgstr "氏名"
+
+msgid "Current password"
+msgstr "現在のパスワード"
+
+msgid "New password"
+msgstr "新しいパスワード"
+
+msgid "Repeat"
+msgstr "再入力"
+
+msgid "Change password"
+msgstr "パスワードを変更"
+
+msgid "Add or remove accounts"
+msgstr "アカウントの追加と削除"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "Password"
+msgstr "パスワード"
+
+msgid "Root password"
+msgstr "root のパスワード"
+
+msgid "Add account"
+msgstr "アカウントを追加"
+
+msgid "Remove selected account"
+msgstr "選択したアカウントを削除"

@@ -1,0 +1,33 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/greeter/greeter.c:121 user/greeter/greeter.c:150
+msgid "Log in"
+msgstr ""
+
+#: user/greeter/greeter.c:127
+msgid "Welcome to %s"
+msgstr ""
+
+#: user/greeter/greeter.c:129
+msgid "Account"
+msgstr ""
+
+#: user/greeter/greeter.c:138
+msgid "Password"
+msgstr ""
+
+#: user/greeter/greeter.c:144
+msgid "Restart"
+msgstr ""
+
+#: user/greeter/greeter.c:146
+msgid "Shut down"
+msgstr ""
+
+#: user/greeter/greeter.c:95
+msgid "Wrong password"
+msgstr ""
+

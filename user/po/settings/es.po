@@ -469,3 +469,78 @@ msgstr "No hay servidor de audio"
 #: user/settings/system.c:90
 msgid "Output volume: %d %%"
 msgstr "Volumen de salida: %d %%"
+
+msgid "Users"
+msgstr "Usuarios"
+
+msgid "The change failed"
+msgstr "El cambio ha fallado"
+
+msgid "The full name may not contain : ' or \\"
+msgstr "El nombre completo no puede contener : ' ni \\"
+
+msgid "Full name changed"
+msgstr "Nombre completo cambiado"
+
+msgid "The new passwords differ"
+msgstr "Las contraseñas nuevas no coinciden"
+
+msgid "Password changed"
+msgstr "Contraseña cambiada"
+
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr "Un nombre empieza con una letra minúscula, seguida de letras, cifras, _ o -"
+
+msgid "The new account needs a password"
+msgstr "La cuenta nueva necesita una contraseña"
+
+msgid "Account added"
+msgstr "Cuenta añadida"
+
+msgid "Select an account first"
+msgstr "Seleccione primero una cuenta"
+
+msgid "Neither root nor the own account can be removed"
+msgstr "No se pueden eliminar root ni la cuenta propia"
+
+msgid "Account removed"
+msgstr "Cuenta eliminada"
+
+msgid "Accounts"
+msgstr "Cuentas"
+
+msgid "Your account %s"
+msgstr "Su cuenta %s"
+
+msgid "Full name"
+msgstr "Nombre completo"
+
+msgid "Current password"
+msgstr "Contraseña actual"
+
+msgid "New password"
+msgstr "Contraseña nueva"
+
+msgid "Repeat"
+msgstr "Repetir"
+
+msgid "Change password"
+msgstr "Cambiar contraseña"
+
+msgid "Add or remove accounts"
+msgstr "Añadir o eliminar cuentas"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Password"
+msgstr "Contraseña"
+
+msgid "Root password"
+msgstr "Contraseña de root"
+
+msgid "Add account"
+msgstr "Añadir cuenta"
+
+msgid "Remove selected account"
+msgstr "Eliminar la cuenta seleccionada"

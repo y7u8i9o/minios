@@ -170,7 +170,7 @@ programs directly as root.
   ~/.local` open to every user. A copy of the existing `data-aarch64.img`
   was converted at boot with its 14 packages kept.
 
-### U4. The graphical login and session
+### U4. The graphical login and session (completed 2026-10-03)
 
 - `greeter` runs as root, supervises X12, shows a login window with the
   accounts, Restart and Shut down, and starts `startgui -s` as the chosen
@@ -185,3 +185,17 @@ programs directly as root.
   running as uid 1000, logs out, and finds the greeter again. `gui_settings`
   opens the Users page, and `gui_desktop`, `gui_files`, `comp_shell` and
   `initctl` must still pass.
+- During the work the account name went to the end of the Log out row of
+  the panel's menu instead of a row above it, which keeps the menu
+  geometry that the GUI cases measure. The login window runs as a process
+  of its own, `greeter --window`, and the greeter takes `-s` for the X12
+  log on the console. `su` and `passwd` read one line for every password
+  they could ask for when their input is a pipe, which the Users page
+  needs. The cases `pty` (root prompt), `initctl`, `shutdown`,
+  `shutdown_cmd`, `login_console`, the `comp_*` cases above, `comp_seat`,
+  `comp_data`, `gui_widgets`, `gui_controls`, `gui_term`, `gui_app`,
+  `sockets`, `sockets_api`, `ime_protocol` and `audio_server` pass. One
+  run of `perm_user` inside a large parallel batch timed out without
+  output, and the case passed in seven later runs, alone and in parallel
+  batches. Screenshots of the login window, a session and the Users page
+  were taken through the QEMU monitor.

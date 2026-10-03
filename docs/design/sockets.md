@@ -37,6 +37,13 @@ M23 adds the kernel primitives the display server rework relies on.
   address copies, flag validation and the `SOL_SOCKET` options live
   there, `send` and `recv` carry flags, and `getsockname`,
   `getpeername`, `setsockopt` and `getsockopt` exist.
+- Since U4 of the multiuser plan (`users.md`) `getsockopt` with
+  `SO_PEERCRED` returns the `struct ucred` (pid, effective uid and gid) of
+  the other end: the connecting process for the accepted socket, the
+  process that called `listen` for the connecting one, and the creator for
+  both ends of a socket pair. `struct conn` records both under
+  `conn.lock`, and `struct unix_sock` keeps the listener's under its
+  `lock`.
 
 ## Anonymous shared memory (`memfd_create`, `ftruncate`)
 

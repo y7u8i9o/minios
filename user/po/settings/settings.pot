@@ -155,7 +155,7 @@ msgstr ""
 msgid "Example: %s, %s"
 msgstr ""
 
-#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:178
+#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:180
 msgid "OK"
 msgstr ""
 
@@ -171,7 +171,7 @@ msgstr ""
 msgid "Input methods"
 msgstr ""
 
-#: user/settings/region.c:292 user/settings/system.c:407
+#: user/settings/region.c:292 user/settings/system.c:411
 msgid "Move up"
 msgstr ""
 
@@ -247,7 +247,7 @@ msgstr ""
 msgid "Sound"
 msgstr ""
 
-#: user/settings/settings.c:133 user/settings/system.c:179
+#: user/settings/settings.c:133 user/settings/system.c:181
 msgid "Date and time"
 msgstr ""
 
@@ -260,10 +260,14 @@ msgid "Launcher"
 msgstr ""
 
 #: user/settings/settings.c:136
+msgid "Users"
+msgstr ""
+
+#: user/settings/settings.c:137
 msgid "System"
 msgstr ""
 
-#: user/settings/settings.c:94 user/settings/settings.c:170
+#: user/settings/settings.c:94 user/settings/settings.c:171
 msgid "Settings"
 msgstr ""
 
@@ -271,199 +275,295 @@ msgstr ""
 msgid "The settings file cannot be written."
 msgstr ""
 
-#: user/settings/system.c:106
+#: user/settings/system.c:108
 msgid "Output volume"
 msgstr ""
 
-#: user/settings/system.c:110
+#: user/settings/system.c:112
 msgid "Streams"
 msgstr ""
 
-#: user/settings/system.c:142
+#: user/settings/system.c:144
 msgid "Year"
 msgstr ""
 
-#: user/settings/system.c:142
+#: user/settings/system.c:144
 msgid "Month"
 msgstr ""
 
-#: user/settings/system.c:142
+#: user/settings/system.c:144
 msgid "Day"
 msgstr ""
 
-#: user/settings/system.c:142
+#: user/settings/system.c:144
 msgid "Hour"
 msgstr ""
 
-#: user/settings/system.c:142
+#: user/settings/system.c:144
 msgid "Minute"
 msgstr ""
 
-#: user/settings/system.c:143
+#: user/settings/system.c:145
 msgid "Second"
 msgstr ""
 
-#: user/settings/system.c:179
+#: user/settings/system.c:181
 msgid "The clock could not be set."
 msgstr ""
 
-#: user/settings/system.c:201
+#: user/settings/system.c:203
 msgid "Load current time"
 msgstr ""
 
-#: user/settings/system.c:202
+#: user/settings/system.c:204
 msgid "Set clock"
 msgstr ""
 
-#: user/settings/system.c:219
+#: user/settings/system.c:221
 msgid "Type"
 msgstr ""
 
-#: user/settings/system.c:219 user/settings/system.c:322 user/settings/system.c:399
+#: user/settings/system.c:221 user/settings/system.c:326 user/settings/system.c:403
 msgid "Program"
 msgstr ""
 
-#: user/settings/system.c:248
+#: user/settings/system.c:250
 msgid "New file type"
 msgstr ""
 
-#: user/settings/system.c:248
+#: user/settings/system.c:250
 msgid "Type (for example text/x-log):"
 msgstr ""
 
-#: user/settings/system.c:266
+#: user/settings/system.c:268
 msgid "(select a type)"
 msgstr ""
 
-#: user/settings/system.c:271
+#: user/settings/system.c:273 user/settings/users.c:227
 msgid "Set"
 msgstr ""
 
-#: user/settings/system.c:272
+#: user/settings/system.c:274
 msgid "Add type..."
 msgstr ""
 
-#: user/settings/system.c:322 user/settings/system.c:396
+#: user/settings/system.c:326 user/settings/system.c:400
 msgid "Menu entry"
 msgstr ""
 
-#: user/settings/system.c:34
+#: user/settings/system.c:36
 msgid "capture"
 msgstr ""
 
-#: user/settings/system.c:34
+#: user/settings/system.c:36
 msgid "playback"
 msgstr ""
 
-#: user/settings/system.c:35
+#: user/settings/system.c:37
 msgid "%u %%"
 msgstr ""
 
-#: user/settings/system.c:36
+#: user/settings/system.c:38
 msgid "running"
 msgstr ""
 
-#: user/settings/system.c:36
+#: user/settings/system.c:38
 msgid "error"
 msgstr ""
 
-#: user/settings/system.c:36
+#: user/settings/system.c:38
 msgid "paused"
 msgstr ""
 
-#: user/settings/system.c:404
+#: user/settings/system.c:408
 msgid "Save entry"
 msgstr ""
 
-#: user/settings/system.c:405
+#: user/settings/system.c:409
 msgid "New"
 msgstr ""
 
-#: user/settings/system.c:406
+#: user/settings/system.c:410
 msgid "Remove"
 msgstr ""
 
-#: user/settings/system.c:408
+#: user/settings/system.c:412
 msgid "Move down"
 msgstr ""
 
-#: user/settings/system.c:41
-msgid "Stream"
-msgstr ""
-
-#: user/settings/system.c:41
-msgid "Direction"
-msgstr ""
-
-#: user/settings/system.c:41
-msgid "Volume"
-msgstr ""
-
-#: user/settings/system.c:41
-msgid "State"
-msgstr ""
-
-#: user/settings/system.c:425
+#: user/settings/system.c:429
 msgid "Up %ld:%02ld:%02ld"
 msgstr ""
 
-#: user/settings/system.c:438
+#: user/settings/system.c:43
+msgid "Stream"
+msgstr ""
+
+#: user/settings/system.c:43
+msgid "Direction"
+msgstr ""
+
+#: user/settings/system.c:43
+msgid "Volume"
+msgstr ""
+
+#: user/settings/system.c:43
+msgid "State"
+msgstr ""
+
+#: user/settings/system.c:442
 msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
 msgstr ""
 
-#: user/settings/system.c:454
+#: user/settings/system.c:458
 msgid "%s %s (%s) on %s"
 msgstr ""
 
-#: user/settings/system.c:457
+#: user/settings/system.c:461
 msgid "%d processor"
 msgid_plural "%d processors"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/settings/system.c:461
+#: user/settings/system.c:465
 msgid "Display %dx%d pixels at scale %d"
 msgstr ""
 
-#: user/settings/system.c:470
+#: user/settings/system.c:474
 msgid "Tools"
 msgstr ""
 
-#: user/settings/system.c:472
+#: user/settings/system.c:476
 msgid "System monitor"
 msgstr ""
 
-#: user/settings/system.c:473
+#: user/settings/system.c:477
 msgid "Kernel log"
 msgstr ""
 
-#: user/settings/system.c:474
+#: user/settings/system.c:478
 msgid "X12 settings"
 msgstr ""
 
-#: user/settings/system.c:52
+#: user/settings/system.c:54
 msgid "Output volume: %u %%"
 msgstr ""
 
-#: user/settings/system.c:59
+#: user/settings/system.c:61
 msgid "%s: %u %%"
 msgstr ""
 
-#: user/settings/system.c:64 user/settings/system.c:119
+#: user/settings/system.c:66 user/settings/system.c:121
 msgid "Stream volume"
 msgstr ""
 
-#: user/settings/system.c:67
+#: user/settings/system.c:69
 msgid "%d stream"
 msgid_plural "%d streams"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/settings/system.c:76 user/settings/system.c:128
+#: user/settings/system.c:78 user/settings/system.c:130
 msgid "No audio server"
 msgstr ""
 
-#: user/settings/system.c:90
+#: user/settings/system.c:92
 msgid "Output volume: %d %%"
+msgstr ""
+
+#: user/settings/users.c:108 user/settings/users.c:145
+msgid "The full name may not contain : ' or \\"
+msgstr ""
+
+#: user/settings/users.c:113
+msgid "Full name changed"
+msgstr ""
+
+#: user/settings/users.c:121
+msgid "The new passwords differ"
+msgstr ""
+
+#: user/settings/users.c:133
+msgid "Password changed"
+msgstr ""
+
+#: user/settings/users.c:141
+msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
+msgstr ""
+
+#: user/settings/users.c:149
+msgid "The new account needs a password"
+msgstr ""
+
+#: user/settings/users.c:161
+msgid "Account added"
+msgstr ""
+
+#: user/settings/users.c:173
+msgid "Select an account first"
+msgstr ""
+
+#: user/settings/users.c:179
+msgid "Neither root nor the own account can be removed"
+msgstr ""
+
+#: user/settings/users.c:189
+msgid "Account removed"
+msgstr ""
+
+#: user/settings/users.c:211
+msgid "Accounts"
+msgstr ""
+
+#: user/settings/users.c:220
+msgid "Your account %s"
+msgstr ""
+
+#: user/settings/users.c:224 user/settings/users.c:244
+msgid "Full name"
+msgstr ""
+
+#: user/settings/users.c:230
+msgid "Current password"
+msgstr ""
+
+#: user/settings/users.c:231
+msgid "New password"
+msgstr ""
+
+#: user/settings/users.c:232
+msgid "Repeat"
+msgstr ""
+
+#: user/settings/users.c:233
+msgid "Change password"
+msgstr ""
+
+#: user/settings/users.c:238
+msgid "Add or remove accounts"
+msgstr ""
+
+#: user/settings/users.c:241
+msgid "Name"
+msgstr ""
+
+#: user/settings/users.c:247
+msgid "Password"
+msgstr ""
+
+#: user/settings/users.c:248
+msgid "Root password"
+msgstr ""
+
+#: user/settings/users.c:250
+msgid "Add account"
+msgstr ""
+
+#: user/settings/users.c:252
+msgid "Remove selected account"
+msgstr ""
+
+#: user/settings/users.c:91
+msgid "The change failed"
 msgstr ""
 

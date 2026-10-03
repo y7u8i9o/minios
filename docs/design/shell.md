@@ -163,7 +163,8 @@ followed by arguments separated by spaces (`Screenshot=/bin/screenshot
 listed under the heading Applications in the order of their titles. The
 entries of `/etc/launcher` are listed under the heading System in the
 order of the file. The entry with the program `@logout` is drawn in the
-last row below a rule. Each entry has a 16 pixel icon
+last row below a rule, with the account name of the panel's user at its
+right end (`users.md`). Each entry has a 16 pixel icon
 `/usr/share/icons/app-NAME.svg`, where NAME is the file name of the
 program, or `app-default.svg` when that file does not exist. The panel
 renders the icons at the output scale and caches them by name.

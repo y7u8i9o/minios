@@ -439,8 +439,18 @@ struct sockaddr_storage {
 #define SO_SNDBUF    7
 #define SO_RCVBUF    8
 #define SO_KEEPALIVE 9
+#define SO_PEERCRED  17                 /* struct ucred, AF_UNIX, read only (U4) */
 #define SO_PROTOCOL  38
 #define SO_DOMAIN    39
+
+/* The process at the other end of an AF_UNIX connection, recorded when
+ * the connection was made: the connecting process, or the process that
+ * called listen. */
+struct ucred {
+    int32_t pid;
+    uint32_t uid;
+    uint32_t gid;
+};
 
 struct iovec {
     void *iov_base;

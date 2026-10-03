@@ -1,5 +1,7 @@
 /* Globals, clients, shared memory pools and buffers, surfaces with
  * pending and current state, commits, releases and frame callbacks. */
+#include <sys/socket.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -478,13 +480,45 @@ void surfaces_init(struct wire_server *srv)
     wire_global_create(srv, &output_interface, 1, bind_output, NULL);
 }
 
+int session_uid = -1;
+
+int client_uid_allowed(unsigned uid)
+{
+    return uid == 0 || uid == getuid() || (session_uid >= 0 && uid == (unsigned)session_uid);
+}
+
+void clients_drop_disallowed(void)
+{
+    for (;;) {
+        struct wire_client *drop = NULL;
+        for (struct wire_client *k = wire_server_first_client(server); k && !drop; k = wire_client_next(k)) {
+            struct client *c = wire_client_get_user_data(k);
+            if (c && !client_uid_allowed(c->uid))
+                drop = k;
+        }
+        if (!drop)
+            break;
+        struct client *c = wire_client_get_user_data(drop);
+        comp_log("client %d of uid %u disconnected", c->number, c->uid);
+        wire_client_destroy(drop);
+    }
+}
+
 void client_attach(struct wire_client *wc);
 void client_attach(struct wire_client *wc)
 {
+    struct ucred peer = { 0 };
+    socklen_t len = sizeof peer;
+    if (getsockopt(wire_client_fd(wc), SOL_SOCKET, SO_PEERCRED, &peer, &len) < 0 || !client_uid_allowed(peer.uid)) {
+        comp_log("client of uid %u refused", peer.uid);
+        wire_client_destroy(wc);
+        return;
+    }
     struct client *c = calloc(1, sizeof *c);
     if (!c)
         return;
     c->wc = wc;
+    c->uid = peer.uid;
     c->number = next_client++;
     wire_client_set_user_data(wc, c, client_gone);
     hang_client_attached(c);

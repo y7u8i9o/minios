@@ -1,0 +1,28 @@
+# Russian messages of the greeter domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Wrong password"
+msgstr "Неверный пароль"
+
+msgid "Log in"
+msgstr "Войти"
+
+msgid "Welcome to %s"
+msgstr "Добро пожаловать в %s"
+
+msgid "Account"
+msgstr "Учётная запись"
+
+msgid "Password"
+msgstr "Пароль"
+
+msgid "Restart"
+msgstr "Перезагрузить"
+
+msgid "Shut down"
+msgstr "Выключить"

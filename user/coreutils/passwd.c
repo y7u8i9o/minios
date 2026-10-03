@@ -7,8 +7,8 @@
  * password with -d. A caller other than root confirms the current
  * password first, unless the account has none. On a terminal the
  * passwords are typed without echo, otherwise they are read one per line
- * from standard input: the current one when it is asked for, then the new
- * one twice. -n sets the full name, the fifth field of /etc/passwd. */
+ * from standard input: for a caller other than root the current one,
+ * empty for an account without a password, then the new one twice. -n sets the full name, the fifth field of /etc/passwd. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
         struct spwd *sp = getspnam(name);
         char hash[128];
         snprintf(hash, sizeof hash, "%s", sp ? sp->sp_pwdp : "!");
-        if (hash[0] && account_read_password("Current password: ", current, sizeof current) < 0)
+        if ((hash[0] || !isatty(0)) && account_read_password("Current password: ", current, sizeof current) < 0)
             return 1;
         int ok = account_check(current, hash);
         memset(current, 0, sizeof current);
