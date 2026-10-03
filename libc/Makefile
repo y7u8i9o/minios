@@ -7,7 +7,8 @@ SO    := $(BUILD)/lib/libc.so
 # raised whenever a structure, constant, signature or documented behaviour
 # that programs depend on changes incompatibly, and additions leave it
 # alone.
-ABI   := 1
+# 2 since the profiler client moved to libprof (docs/plan/packaging.md, P2).
+ABI   := 2
 ABIFILE := $(BUILD)/lib/libc.abi
 CRT0  := $(OUT)/crt0.o
 CRTI  := $(OUT)/crti.o $(OUT)/crtn.o

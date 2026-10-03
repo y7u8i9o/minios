@@ -28,14 +28,17 @@ on the compiler command line:
   `gmtime_r`/`localtime_r`, `isatty` for the prompt decision, `sigaction`
   for the interrupt handler, and the `sys/wait.h` macros that turn the
   status of `os.execute` and `io.close` into `exit`/`signal` and a code.
-  `LUA_USE_DLOPEN` and `LUA_USE_READLINE` stay off. The line editing of
-  the prompt comes from `user/lua/lreadline.h` instead (see "The
-  interactive prompt" below).
+  `LUA_USE_READLINE` stays off. The line editing of the prompt comes
+  from `user/lua/lreadline.h` instead (see "The interactive prompt"
+  below).
+- `LUA_USE_DLOPEN` is on since P2 of `docs/plan/packaging.md`, which
+  lets `require` load C modules with `dlopen`.
 - `LUA_PATH_DEFAULT` is `/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua`
-  and `LUA_CPATH_DEFAULT` is empty: `require` finds Lua modules in the
-  share tree and the current directory and there is no dynamic loading.
-  The share tree rule of `user/Makefile` creates `/usr/share/lua/5.5/`,
-  which stays empty until a module is installed there.
+  and `LUA_CPATH_DEFAULT` is `/usr/lib/lua/5.5/?.so`. `require` finds Lua
+  modules in the share tree and the current directory, and C modules in
+  `/usr/lib/lua/5.5`. The share tree rule of `user/Makefile` creates
+  `/usr/share/lua/5.5/`, which is empty until a module is installed
+  there.
 - Numbers are the defaults, 64-bit integers and `double`. User programs
   compile with SSE2 and the kernel saves the FXSAVE area per thread, so
   floating point needs no further support (see `floating.md`).
@@ -70,14 +73,26 @@ program:
 
 ## Modules
 
-The interpreter links libgui, libaudio, libwire, libfont and libedit.
-`user/lua/linit.c` replaces the upstream `linit.c` (the upstream file
-states that it may be replaced): it opens the standard libraries under
-the same selection masks and registers the minios modules in
-`package.preload`, so `require "fs"` works without a file search.
-The objects of `user/lua/` are named `minios_*.o` so that the pattern
-rule for the upstream sources does not produce them. Failures in the
-modules return `nil`, the message and the errno, as `io.open` does.
+The interpreter links liblua and libc, and libedit statically for its
+prompt. `user/lua/linit.c` replaces the upstream `linit.c`, which the
+upstream file permits. It opens the standard libraries under the same
+selection masks and registers the modules of the interpreter, `fs`,
+`sys` and `thread`, in `package.preload`, so `require "fs"` works
+without a file search. `gui`, `audio` and `mime` are C modules,
+`/usr/lib/lua/5.5/gui.so`, `audio.so` and `mime.so`, which `require`
+loads through `package.cpath`. Each links liblua and its own library,
+`gui.so` libgui, `audio.so` libaudio and `mime.so` libgui, and none uses
+a symbol of the interpreter program. The two helpers they share,
+`minios_errresult` and `minios_lua_worker`, are inline functions of
+`user/lua/minios.h`, and a worker state is marked by the registry field
+`minios.worker`. Each module is therefore a library like any other for
+the library rule of `pkg`, and `lua` with its modules can form the
+packages `lua`, `lua-gui` and `lua-audio`. Before P2 the interpreter
+linked libgui, libaudio, libwire and libfont and preloaded `gui` and
+`audio` as well. The objects of `user/lua/` are named `minios_*.o` so
+that the pattern rule for the upstream sources does not produce them.
+Failures in the modules return `nil`, the message and the errno, as
+`io.open` does.
 
 `fs` (`user/lua/lfs.c`) provides `dir(path)`, an iterator over name and
 type (`file`, `directory`, `link`, `char`, `block`, `fifo`, `unknown`)
@@ -89,14 +104,19 @@ link itself; `exists`; `mkdir(path [, mode])`, `rmdir`,
 `write(path, data [, append])`.
 
 `sys` (`user/lua/lsys.c`) provides `spawn(program, args...)`, which
-starts a program as a child of init through `mime_spawn`; `run(program,
-args...)`, which waits and returns `true` or `nil`, `"exit"` or
-`"signal"`, and the number; `open(path)`, which starts the program
-registered for the file type or the exec line of a launcher;
-`type(path)`, `handler(type)` and `mime_load(types, apps)`; `pid`,
-`ppid`, `kill(pid [, signal])` with a number or a name such as `"TERM"`;
-`sleep(ms)`, `uptime()` in milliseconds, `yield`; `uname()` as a table,
-`nproc` and `cpu`.
+starts a program as a child of init through an intermediate child, with
+the language of the desktop settings, and `run(program, args...)`,
+which waits and returns `true` or `nil`, `"exit"` or `"signal"`, and the
+number. It also provides `pid`, `ppid`, `kill(pid [, signal])` with a
+number or a name such as `"TERM"`, `sleep(ms)`, `uptime()` in
+milliseconds, `yield`, `uname()` as a table, `nproc` and `cpu`.
+
+`mime` (`user/lua/lmime.c`) provides `open(path)`, which starts the
+program registered for the file type or the exec line of a launcher,
+`type(path)`, `handler(type)` and `load(types, apps)`. These functions
+were `sys.open`, `sys.type`, `sys.handler` and `sys.mime_load` until P2.
+They form a module of their own, not a part of `gui`, because a worker
+thread may use them and `gui` refuses to load in a worker.
 
 Native workers are available through `require "thread"`. The `sys` module
 also supplies raw descriptor I/O, polling, monotonic nanosecond clocks,
@@ -373,10 +393,13 @@ synthesizer with two oscillators, modulation, delay and saved presets.
 
 ## Tests
 
-`user/etc/tests/modules.lua` checks every function of `fs` and `sys`.
-`make check-lua` (part of `make check`) compiles the interpreter,
+`user/etc/tests/modules.lua` checks every function of `fs`, `sys` and
+`mime`. `make check-lua` (part of `make check`) compiles the interpreter,
 `user/lua/` and `libgui/src/mime.c` with the host compiler and runs the
-script on a scratch directory with the MIME tables from `user/etc/`.
+script on a scratch directory with the MIME tables from `user/etc/`. The
+host program links the C modules in, and `linit.c` compiled for the host
+registers them in `package.preload`, where worker states find them as
+well.
 `user/lua/tests/gui.lua` runs on the host only, over the fake client
 of libgui: layout, signals, painting and pixels, the painter lifetime,
 close handling, destroyed widgets, timers and the constructors. It also

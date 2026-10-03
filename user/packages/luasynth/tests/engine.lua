@@ -1,4 +1,4 @@
-local root = arg[1] or "user/packages/luasynth/files/share/apps/luasynth/"
+local root = arg[1] or "user/packages/luasynth/files/usr/share/apps/luasynth/"
 local Synth = dofile(root .. "engine.lua")
 local checks = 0
 local function check(value, why) assert(value, why); checks = checks + 1 end

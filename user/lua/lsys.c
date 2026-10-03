@@ -1,6 +1,6 @@
-/* The sys module: starting programs, opening files by type, signals
- * and the system identification. Failures return nil, the message and
- * the errno, like io.open. */
+/* The sys module: starting programs, signals and the system
+ * identification. Failures return nil, the message and the errno, like
+ * io.open. The MIME types and handlers are in the mime module (lmime.c). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #include <sys/utsname.h>
 #include <sched.h>
-#include <gui/mime.h>
+#include <minios/conf.h>
 #include "lauxlib.h"
 #include "minios.h"
 
@@ -51,15 +51,31 @@ static char **argv_from(lua_State *L, int first)
 }
 
 /* sys.spawn(program, args...): starts the program as a child of init,
- * for programs that outlive the caller such as launched applications. */
+ * for programs that outlive the caller such as launched applications. An
+ * intermediate child starts it and exits at once, which hands the program
+ * to init. The program follows the language of the desktop settings. */
 static int sys_spawn(lua_State *L)
 {
     luaL_checkstring(L, 1);
     char **argv = argv_from(L, 1);
-    int r = mime_spawn(argv);
+    pid_t pid = fork();
+    if (pid == 0) {
+        pid_t grandchild = fork();
+        if (grandchild == 0) {
+            conf_export_locale();
+            execvp(argv[0], argv);
+            _exit(127);
+        }
+        _exit(grandchild < 0 ? 1 : 0);
+    }
     free(argv);
-    if (r < 0) {
-        errno = -r;
+    if (pid < 0)
+        return minios_errresult(L);
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+        ;
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        errno = EAGAIN;
         return minios_errresult(L);
     }
     lua_pushboolean(L, 1);
@@ -200,51 +216,6 @@ static int sys_wait(lua_State *L)
     return 2;
 }
 
-/* sys.open(path): starts the program registered for the file's type,
- * or the exec line of a launcher. */
-static int sys_open(lua_State *L)
-{
-    int r = (int)mime_open(luaL_checkstring(L, 1));
-    if (r < 0) {
-        errno = -r;
-        return minios_errresult(L);
-    }
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-static int sys_type(lua_State *L)
-{
-    const char *path = luaL_checkstring(L, 1);
-    struct stat st;
-    int is_dir = stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-    lua_pushstring(L, mime_type(path, is_dir));
-    return 1;
-}
-
-/* sys.mime_load(types, apps): reads the tables from other paths; the
- * host unit test uses it, programs on the target rely on the defaults. */
-static int sys_mime_load(lua_State *L)
-{
-    int r = mime_load(luaL_checkstring(L, 1), luaL_checkstring(L, 2));
-    if (r < 0) {
-        errno = -r;
-        return minios_errresult(L);
-    }
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-static int sys_handler(lua_State *L)
-{
-    const char *prog = mime_handler(luaL_checkstring(L, 1));
-    if (prog)
-        lua_pushstring(L, prog);
-    else
-        lua_pushnil(L);
-    return 1;
-}
-
 static int sys_pid(lua_State *L)
 {
     lua_pushinteger(L, getpid());
@@ -342,10 +313,6 @@ static const luaL_Reg sys_funcs[] = {
     { "read", sys_read },
     { "close", sys_close },
     { "wait", sys_wait },
-    { "open", sys_open },
-    { "type", sys_type },
-    { "handler", sys_handler },
-    { "mime_load", sys_mime_load },
     { "pid", sys_pid },
     { "ppid", sys_ppid },
     { "kill", sys_kill },

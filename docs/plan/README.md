@@ -25,7 +25,7 @@ its boot tests pass.
 | `ime.md` | Input method daemon after IBus, pinyin and Japanese engines, milestones I0 to I5 | completed 2026-10-03 |
 | `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C7 | completed 2026-10-03 |
 | `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, su, doas and sudo, milestones U0 to U5 | completed 2026-10-03 |
-| `packaging.md` | The base system as packages, partitions, the installer as the release image and offline updates, milestones P0 to P10 | P0 and P1 completed 2026-10-03 |
+| `packaging.md` | The base system as packages, partitions, the installer as the release image and offline updates, milestones P0 to P10 | P0 to P2 completed 2026-10-03 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.

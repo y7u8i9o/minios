@@ -1,4 +1,4 @@
--- Test of the fs and sys modules. arg[1] is a writable scratch
+-- Test of the fs, sys and mime modules. arg[1] is a writable scratch
 -- directory. On the host (make check-lua) arg[2] and arg[3] name the
 -- MIME tables. On minios the lua_sys boot test passes --no-init as
 -- arg[2]: the kernel run test starts the program without init, so a
@@ -6,9 +6,10 @@
 -- leaked pages.
 local fs = require "fs"
 local sys = require "sys"
+local mime = require "mime"
 local scratch = assert(arg[1], "scratch directory argument")
 local no_init = arg[2] == "--no-init"
-if arg[2] and not no_init then assert(sys.mime_load(arg[2], arg[3])) end
+if arg[2] and not no_init then assert(mime.load(arg[2], arg[3])) end
 
 local function check(cond, name)
   if cond then print("ok " .. name) else error("failed: " .. name, 2) end
@@ -73,8 +74,8 @@ sys.yield()
 local u = sys.uname()
 check(type(u.sysname) == "string" and #u.sysname > 0 and type(u.machine) == "string", "uname")
 check(sys.nproc() >= 1 and sys.cpu() >= 0, "processors")
-check(sys.type("script.lua") == "text/x-lua", "mime type")
-check(sys.type(scratch) == "inode/directory", "mime directory")
-check(sys.handler("text/x-lua") == nil, "mime handler")
-check(sys.handler("inode/directory") == "/bin/files", "mime handler exact")
+check(mime.type("script.lua") == "text/x-lua", "mime type")
+check(mime.type(scratch) == "inode/directory", "mime directory")
+check(mime.handler("text/x-lua") == nil, "mime handler")
+check(mime.handler("inode/directory") == "/bin/files", "mime handler exact")
 print("modules: done")

@@ -1,5 +1,7 @@
 /* Host driver of the module test: runs a script with the arguments in
- * arg, as /bin/lua does, and exits with 1 on an error. */
+ * arg, as /bin/lua does, and exits with 1 on an error. The C modules that
+ * minios loads from /usr/lib/lua/5.5 are linked into this program, and
+ * linit.c registers them for the host. */
 #include <stdio.h>
 #include "lua.h"
 #include "lualib.h"

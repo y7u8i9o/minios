@@ -4,7 +4,7 @@
  *
  * Nothing here talks to the device; a session is fed records and is the
  * only place that knows how each event type is charged. */
-#include <minios/profile.h>
+#include <prof/profile.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

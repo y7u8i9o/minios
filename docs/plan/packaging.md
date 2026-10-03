@@ -184,7 +184,7 @@ installer comes last.
   application GUI cases pass on x86_64, and the loader, shell, file
   system, libc, tcc, codec, package, login and GUI cases on aarch64.
 
-### P2. Splitting libc and Lua
+### P2. Splitting libc and Lua (completed 2026-10-03)
 
 - `libc/src/profile.c`, `profanalyze.c` and `profreport.c` move to
   `libprof/`, built as `libprof.so` with the header `prof/profile.h`, and
@@ -195,6 +195,26 @@ installer comes last.
   module. `lua` then links liblua and libc only.
 - The boot tests `proftest`, `profreporttest`, the `lua` cases and
   `luasynth` must pass.
+- During the work the MIME functions became a module of their own,
+  `mime.so`, with `mime.open`, `mime.type`, `mime.handler` and
+  `mime.load`, because `gui` refuses to load in a worker thread and
+  `sys.handler` had worked there. `sys.spawn` forks and executes the
+  program itself instead of calling `mime_spawn` of libgui. The modules
+  use no symbol of the `lua` program, which makes each a library like
+  any other for the library rule of `pkg`. `minios_errresult` and
+  `minios_lua_worker` became inline functions of `user/lua/minios.h`,
+  and a worker state is marked by the registry field `minios.worker`
+  instead of the address of a static variable. libc has ABI 2, since
+  removing the profiler functions is an incompatible change. The Lua
+  objects depend on `user/Makefile`, since a change of `LUA_CPP` did not
+  rebuild them. `linit.c` compiled for the host test registers the
+  modules, which the host program links in, for worker states as well.
+  `make check-lua` had failed since P0 because the luasynth host tests
+  named the old source path, and `lineedit_screen` had failed since U3
+  because it expected the `$` prompt from a shell running as root. Both
+  are corrected. The Lua, luasynth, profiler, package, tcc, loader,
+  shell, line editor and editor cases pass on x86_64, and the Lua,
+  profiler, package, tcc and line editor cases on aarch64.
 
 ### P3. The base system as packages and the image builder
 

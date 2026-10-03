@@ -14,7 +14,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/resource.h>
-#include <minios/profile.h>
+#include <prof/profile.h>
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)

@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <time.h>
-#include <minios/profile.h>
+#include <prof/profile.h>
 
 #define READ_BYTES 65536
 

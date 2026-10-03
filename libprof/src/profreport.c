@@ -1,6 +1,6 @@
 /* Queries and portable exports of an aggregated capture. No device access.
  * Keep weights as integers on disk so sub-millisecond work is not rounded. */
-#include <minios/profile.h>
+#include <prof/profile.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

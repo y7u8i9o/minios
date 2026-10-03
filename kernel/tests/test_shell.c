@@ -198,12 +198,14 @@ static void test_lineedit_screen(void)
     ktest_assert(columns <= 256 && rows > 7, "console geometry");
     for (uint32_t row = 0; row < 6; row++) {
         screen_line(row, text, columns);
-        const char *expected = row % 2 == 0 ? "user:/ $ thisisnotacommand"
+        /* The shell runs as root, and \$ prints # for uid 0 since U3 of
+         * the multiuser plan (docs/design/sh.md). */
+        const char *expected = row % 2 == 0 ? "user:/ # thisisnotacommand"
                                             : "thisisnotacommand: No such file or directory";
         ktest_assert(!strcmp(text, expected), "screen row %u: '%s' expected '%s'", row, text, expected);
     }
     screen_line(6, text, columns);
-    ktest_assert(!strcmp(text, "user:/ $"), "final prompt contains stale text: '%s'", text);
+    ktest_assert(!strcmp(text, "user:/ #"), "final prompt contains stale text: '%s'", text);
     type_line("exit 0\n");
     ktest_assert(proc_reap(p) == 0, "shell exit");
     kprintf("lineedit_screen: repeated commands render without duplicate or stale text\n");

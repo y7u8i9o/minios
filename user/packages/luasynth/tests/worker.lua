@@ -1,4 +1,4 @@
-local root = arg[1] or 'user/packages/luasynth/files/share/apps/luasynth/'
+local root = arg[1] or 'user/packages/luasynth/files/usr/share/apps/luasynth/'
 local Synth = dofile(root .. 'engine.lua')
 local Control = dofile(root .. 'controller.lua')
 local thread, sys = require 'thread', require 'sys'

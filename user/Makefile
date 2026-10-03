@@ -8,9 +8,9 @@ CRT0   := $(BUILD)/libc/crt0.o
 # The shared libraries (docs/design/dynlink.md). Programs name them with
 # -l and --as-needed keeps only the ones a program references. libedit is
 # static, since a single program uses it.
-SHARED := libc libcodec libfont libwire libaudio libgui liblua
+SHARED := libc libcodec libfont libwire libaudio libgui liblua libprof
 SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
-DYNLIBS := -lgui -lcodec -laudio -lwire -lfont $(LIBEDIT) -lc
+DYNLIBS := -lgui -lcodec -laudio -lwire -lfont -lprof $(LIBEDIT) -lc
 # Every program is installed without its debugging sections, while the
 # symbol table stays for the profiler.
 INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
@@ -40,19 +40,31 @@ CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcar
 LUA_SRC  := ../third_party/lua/src
 LUA_CORE := $(filter-out $(LUA_SRC)/lua.c $(LUA_SRC)/luac.c $(LUA_SRC)/linit.c,$(wildcard $(LUA_SRC)/*.c))
 LUA_CORE_OBJS := $(patsubst $(LUA_SRC)/%.c,$(OUT)/lua/%.o,$(LUA_CORE))
-LUA_OBJS := $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(wildcard lua/*.c))
-LUA_CPP  := -DLUA_USE_POSIX -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua"' \
-            -DLUA_CPATH_DEFAULT='""'
+# gui, audio and mime are C modules in /usr/lib/lua/5.5, which require
+# loads with dlopen (lua/minios.h), and the other files of lua/ are part
+# of the interpreter.
+LUA_MODSRCS_gui   := lua/lgui.c lua/lpaint.c lua/limage.c
+LUA_MODSRCS_audio := lua/laudio.c
+LUA_MODSRCS_mime  := lua/lmime.c
+LUA_MODLIBS_gui   := -lgui -lcodec
+LUA_MODLIBS_audio := -laudio
+LUA_MODLIBS_mime  := -lgui
+LUA_MODULES := gui audio mime
+LUA_MODS := $(addprefix $(ROOT)/usr/lib/lua/5.5/,$(addsuffix .so,$(LUA_MODULES)))
+LUA_OBJS := $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(filter-out $(foreach m,$(LUA_MODULES),$(LUA_MODSRCS_$(m))),$(wildcard lua/*.c)))
+LUA_CPP  := -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
+            -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua"' \
+            -DLUA_CPATH_DEFAULT='"/usr/lib/lua/5.5/?.so"'
 
 UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
-UCPP   += -I../libedit/include
+UCPP   += -I../libedit/include -I../libprof/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(filter-out $(if $(WITH_TESTS),,etc/tests etc/tests/%),$(wildcard etc/* etc/*/*)))
 FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuSansMono.ttf $(ROOT)/usr/share/fonts/lmroman10-regular.otf $(ROOT)/usr/share/fonts/NotoSans-Regular.ttf $(ROOT)/usr/share/fonts/unifont.otf \
           $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
+all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
 
 # The copy replaces the old file rather than writing into it, since the
 # modes step leaves files such as /etc/sudoers without a write bit.
@@ -201,6 +213,17 @@ $(ROOT)/usr/bin/lua: $(LUA_OBJS) $(OUT)/lua/lua.o $(SOS) $(LIBEDIT) $(CRT0)
 	$(CC) $(UCFLAGS) -o $(OUT)/lua.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(OUT)/lua/lua.o -llua $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/lua.elf $@
 
+# A module needs Lua, which liblua.so provides, and its own libraries, and
+# nothing of the interpreter program, which makes it a library like any
+# other for the checks of pkg (docs/design/packages.md).
+define LUA_MODULE
+$(ROOT)/usr/lib/lua/5.5/$(1).so: $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(LUA_MODSRCS_$(1))) $(SOS)
+	@mkdir -p $$(dir $$@)
+	$(LD) $(USOFLAGS) -soname $(1).so -o $(OUT)/lua/$(1).so.elf $$(filter %.o,$$^) -L$(BUILD)/lib --as-needed -llua $(LUA_MODLIBS_$(1)) -lc $(LIBGCC)
+	$(OBJCOPY) --strip-debug $(OUT)/lua/$(1).so.elf $$@
+endef
+$(foreach m,$(LUA_MODULES),$(eval $(call LUA_MODULE,$(m))))
+
 # luac uses internal functions of the core, which the shared object hides
 # (LUAI_FUNC in luaconf.h), and it therefore links the core objects
 # directly.
@@ -209,7 +232,13 @@ $(ROOT)/usr/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LI
 	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/luac.elf $@
 
--include $(LUA_CORE_OBJS:.o=.d) $(LUA_OBJS:.o=.d) $(OUT)/lua/lua.d $(OUT)/lua/luac.d
+# The Lua objects depend on this Makefile, which holds LUA_CPP, so that a
+# change of the paths or of LUA_USE_DLOPEN rebuilds them.
+$(LUA_CORE_OBJS) $(LUA_OBJS) $(OUT)/lua/lua.o $(OUT)/lua/luac.o: Makefile
+$(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(foreach m,$(LUA_MODULES),$(LUA_MODSRCS_$(m)))): Makefile
+
+-include $(LUA_CORE_OBJS:.o=.d) $(LUA_OBJS:.o=.d) $(OUT)/lua/lua.d $(OUT)/lua/luac.d \
+    $(patsubst lua/%.c,$(OUT)/lua/minios_%.d,$(foreach m,$(LUA_MODULES),$(LUA_MODSRCS_$(m))))
 
 # sed and awk are compiled unmodified from third_party/ (see
 # docs/design/sedawk.md). The awk grammar is generated with yacc and the
@@ -542,10 +571,10 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 # library, where a program compiled on minios can use the toolkit, the
 # protocol library, the audio client, the line editor and the Lua core
 # with the same headers and the same objects as the cross build.
-STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit
+STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit libprof
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/usr/lib/crt1.o $(ROOT)/usr/lib/crti.o $(ROOT)/usr/lib/crtn.o $(ROOT)/usr/lib/libm.a
 	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
-	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/lib/tcc/include
+	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/include/prof $(ROOT)/usr/lib/tcc/include
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
 	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
@@ -553,6 +582,7 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@cp -p ../libfont/include/font/*.h $(ROOT)/usr/include/font/
 	@cp -p ../libwire/include/wire/*.h $(ROOT)/usr/include/wire/
 	@cp -p ../libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
+	@cp -p ../libprof/include/prof/*.h $(ROOT)/usr/include/prof/
 	@cp -p ../libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
 	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/
 	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/

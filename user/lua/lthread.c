@@ -42,17 +42,15 @@ struct job {
     char error[1024];
 };
 struct handle { struct job *job; pthread_t tid; int joinable; };
-static char worker_key;
 static unsigned active_workers;
 
 static struct job *current_job(lua_State *L)
 {
-    lua_rawgetp(L, LUA_REGISTRYINDEX, &worker_key);
+    lua_getfield(L, LUA_REGISTRYINDEX, MINIOS_WORKER_KEY);
     struct job *j = lua_touserdata(L, -1);
     lua_pop(L, 1);
     return j;
 }
-int minios_lua_worker(lua_State *L) { return current_job(L) != NULL; }
 
 static int failure(lua_State *L, int err)
 {
@@ -194,7 +192,7 @@ static int traceback(lua_State *L)
 static int bootstrap(lua_State *L)
 {
     struct job *j = lua_touserdata(L, 1);
-    lua_pushlightuserdata(L, j); lua_rawsetp(L, LUA_REGISTRYINDEX, &worker_key);
+    lua_pushlightuserdata(L, j); lua_setfield(L, LUA_REGISTRYINDEX, MINIOS_WORKER_KEY);
     luaL_openlibs(L);
     lua_getglobal(L, "package"); lua_pushstring(L, j->package_path);
     lua_setfield(L, -2, "path"); lua_pop(L, 1);

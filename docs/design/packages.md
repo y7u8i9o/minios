@@ -269,12 +269,18 @@ whenever a structure, a constant, a function signature or a documented
 behaviour that programs depend on changes incompatibly. Adding functions
 leaves it alone. The build writes the table to `/usr/lib/abi`:
 
-    libc.so 1
+    libc.so 2
+    libcodec.so 1
     libfont.so 1
     libwire.so 1
     libaudio.so 1
     libgui.so 1
     liblua.so 1
+    libprof.so 1
+
+libc has ABI 2 since the profiler client left it for `libprof.so` (P2 of
+`docs/plan/packaging.md`). Removing functions is an incompatible change,
+which means a package built against ABI 1 is refused until it is rebuilt.
 
 The rule has three parts:
 

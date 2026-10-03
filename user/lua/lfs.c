@@ -21,15 +21,6 @@
 #define DT_REG 8
 #endif
 
-int minios_errresult(lua_State *L)
-{
-    int err = errno;
-    lua_pushnil(L);
-    lua_pushstring(L, strerror(err));
-    lua_pushinteger(L, err);
-    return 3;
-}
-
 static const char *type_name(unsigned mode)
 {
     switch (mode & S_IFMT) {

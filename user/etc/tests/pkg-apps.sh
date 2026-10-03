@@ -28,7 +28,7 @@ test -f /usr/share/apps/code.lua
 test -f /usr/share/apps/pong.lua
 grep 'Code=/usr/bin/code' /var/lib/pkg/launcher
 grep 'Unicode viewer=/usr/bin/unicode' /var/lib/pkg/launcher
-lua -e 'local s=require "sys"; assert(s.handler("text/x-lua")=="/usr/bin/code"); assert(s.handler("text/plain")=="/usr/bin/gedit"); assert(s.handler("image/png")=="/usr/bin/view"); assert(s.handler("audio/wav")=="/usr/bin/player"); assert(s.handler("application/octet-stream")=="/usr/bin/hexview"); assert(s.handler("inode/directory")=="/bin/files")'
+lua -e 'local s=require "mime"; assert(s.handler("text/x-lua")=="/usr/bin/code"); assert(s.handler("text/plain")=="/usr/bin/gedit"); assert(s.handler("image/png")=="/usr/bin/view"); assert(s.handler("audio/wav")=="/usr/bin/player"); assert(s.handler("application/octet-stream")=="/usr/bin/hexview"); assert(s.handler("inode/directory")=="/bin/files")'
 pkg remove code
 test ! -f /usr/bin/code
 test ! -f /usr/share/apps/code.lua
@@ -37,7 +37,7 @@ if man -w code 2>/dev/null; then
     echo 'FAIL removed manual still found'
     exit 1
 fi
-lua -e 'assert(require("sys").handler("text/x-lua")=="/usr/bin/gedit")'
+lua -e 'assert(require("mime").handler("text/x-lua")=="/usr/bin/gedit")'
 pkg install /usr/share/packages/code-*.mpk
 pkg verify code
 pkg remove $names
@@ -45,5 +45,5 @@ test "$(pkg list)" = ''
 for name in $names; do
     test ! -f /usr/bin/$name
 done
-lua -e 'assert(require("sys").handler("text/x-lua")==nil)'
+lua -e 'assert(require("mime").handler("text/x-lua")==nil)'
 echo 'pkg-apps: done'

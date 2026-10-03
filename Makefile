@@ -46,7 +46,7 @@ REPO     := $(TOP)/build/repo/$(ARCH)
 
 export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT PKG_KEY_FILE PKG_PUB REPO
 
-.PHONY: all kernel libc libfont libwire libaudio libcodec libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libcodec libgui libprof user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
 
 all: kernel libc user
 
@@ -135,11 +135,14 @@ libgui: libc libcodec libfont libwire
 libedit: libc
 	$(MAKE) -C libedit
 
+libprof: libc
+	$(MAKE) -C libprof
+
 packages: user
 
 .PHONY: packages
 
-user: libc libfont libwire libaudio libcodec libgui libedit $(PKG_PUB) $(MSGFMT)
+user: libc libfont libwire libaudio libcodec libgui libedit libprof $(PKG_PUB) $(MSGFMT)
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to
@@ -266,9 +269,9 @@ check-headers:
 	@mkdir -p $(BUILD)/headers
 	@status=0; for h in $$(cd libc/include && find . -name '*.h' | sed 's|^\./||') \
 	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h \
-	    codec/codec.h; do \
+	    codec/codec.h prof/profile.h; do \
 	    printf '#include <%s>\nint check_header_%s;\n' "$$h" "$$(echo $$h | tr -c 'A-Za-z0-9_\n' '_')" > $(BUILD)/headers/t.c; \
-	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -fsyntax-only $(BUILD)/headers/t.c \
+	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -Ilibprof/include -fsyntax-only $(BUILD)/headers/t.c \
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
 # The host unit test of the Lua modules compiles the interpreter, user/lua

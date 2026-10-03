@@ -1,6 +1,6 @@
 /* Deterministic report tests: no timer distribution or process scheduling
  * assumptions. Also exercise real guest file I/O and the CLI export path. */
-#include <minios/profile.h>
+#include <prof/profile.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

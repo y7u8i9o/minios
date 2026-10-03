@@ -1,8 +1,10 @@
 /* Replacement for third_party/lua/src/linit.c. The upstream file states
- * that it may be replaced to add libraries; this copy opens the same
+ * that it may be replaced to add libraries. This copy opens the same
  * standard libraries under the same selection masks and registers the
- * minios modules in package.preload, so that require "fs" and
- * require "sys" work in every program without a search on the disk. */
+ * minios modules of the interpreter in package.preload, so that
+ * require "fs" and require "sys" work in every program without a search
+ * on the disk. gui, audio and mime are C modules in /usr/lib/lua/5.5
+ * (minios.h). */
 #define linit_c
 #define LUA_LIB
 #include "lprefix.h"
@@ -30,9 +32,14 @@ static const luaL_Reg stdlibs[] = {
 static const luaL_Reg minios_libs[] = {
     { "fs", luaopen_fs },
     { "sys", luaopen_sys },
+    { "thread", luaopen_thread },
+#ifdef MINIOS_HOST
+    /* The host unit test links the C modules into its program, and its
+     * worker states find them here as well. */
     { "gui", luaopen_gui },
     { "audio", luaopen_audio },
-    { "thread", luaopen_thread },
+    { "mime", luaopen_mime },
+#endif
     { NULL, NULL }
 };
 

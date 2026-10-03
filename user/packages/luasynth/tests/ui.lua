@@ -1,4 +1,4 @@
-local root = "user/packages/luasynth/files/share/apps/luasynth/"
+local root = "user/packages/luasynth/files/usr/share/apps/luasynth/"
 local Synth, UI = dofile(root .. "engine.lua"), dofile(root .. "ui.lua")
 local gui = require "gui"
 local v = UI.new(Synth, Synth.new(Synth.presets[2]))

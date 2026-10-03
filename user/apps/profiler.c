@@ -2,7 +2,7 @@
  * the Profile tab of sysmon.
  *
  * It records the event classes selected in the toolbar through
- * /dev/profile, feeds every record to a session from minios/profile.h and
+ * /dev/profile, feeds every record to a session from prof/profile.h (libprof) and
  * shows the result four ways: a flame graph of the call tree that can be
  * zoomed by clicking a frame, a table of the hottest frames, per thread
  * scheduling, the kernel heap with the allocations that were never freed,
@@ -21,7 +21,7 @@
 #include <sys/ipc.h>
 #include <gui/app.h>
 #include <gui/model.h>
-#include <minios/profile.h>
+#include <prof/profile.h>
 
 #define READ_BYTES 65536
 #define MAX_PROCS 64

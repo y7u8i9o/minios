@@ -23,7 +23,7 @@ printf 'name pkgfix\nversion 1.0\nsummary A library\nprovides libpkgfix.so 1\n' 
 cp $FIX/libpkgfix.so lib/files/usr/lib/libpkgfix.so
 check build-lib "$($PKG build lib)" "pkgfix-1.0.mpk"
 check info-format "$($PKG info pkgfix-1.0.mpk | head -n 1)" "format 2"
-check info-needs "$($PKG info pkgfix-1.0.mpk | grep needs)" "needs libc.so 1"
+check info-needs "$($PKG info pkgfix-1.0.mpk | grep needs)" "needs libc.so 2"
 check info-file "$($PKG info pkgfix-1.0.mpk | grep '^file' | cut -d' ' -f2)" "usr/lib/libpkgfix.so"
 check info-arch "$($PKG info pkgfix-1.0.mpk | grep '^arch')" "arch $(uname -m)"
 
@@ -41,7 +41,7 @@ printf 'name pkgprog\nversion 1.0\nsummary A program\ndepends pkgfix >= 1.0\nnee
 cp $FIX/pkgprog prog/files/usr/bin/pkgprog
 printf 'read me\n' > prog/files/usr/share/pkgprog/readme
 check build-prog "$($PKG build prog)" "pkgprog-1.0.mpk"
-check info-needs-prog "$($PKG info pkgprog-1.0.mpk | grep needs | tr '\n' ' ')" "needs libpkgfix.so 1 needs libc.so 1 "
+check info-needs-prog "$($PKG info pkgprog-1.0.mpk | grep needs | tr '\n' ' ')" "needs libpkgfix.so 1 needs libc.so 2 "
 
 # Alone, the program lacks its dependency.
 check dep-missing "$($PKG install pkgprog-1.0.mpk 2>&1)" "pkg: pkgprog: depends on pkgfix, which is not installed"
@@ -97,7 +97,7 @@ check symbol-refused "$($PKG install pkgfix-1.1.mpk 2>&1)" "pkg: pkgprog: usr/bi
 check symbol-kept "$(/usr/bin/pkgprog)" "pkgfix 42"
 
 # A wrong ABI number of a system library.
-sed 's/^libc.so 1$/libc.so 9/' $ABI > abi.new
+sed 's/^libc.so 2$/libc.so 9/' $ABI > abi.new
 cp $ABI abi.old
 cp abi.new $ABI
 mkdir -p sys/files/usr/bin
@@ -106,7 +106,7 @@ cp $FIX/pkgprog sys/files/usr/bin/pkgsys
 cp abi.old $ABI
 $PKG build sys > /dev/null
 cp abi.new $ABI
-check system-abi "$($PKG install pkgsys-1.0.mpk 2>&1)" "pkg: pkgsys: needs libc.so ABI 1, the system has 9"
+check system-abi "$($PKG install pkgsys-1.0.mpk 2>&1)" "pkg: pkgsys: needs libc.so ABI 2, the system has 9"
 cp abi.old $ABI
 
 # A file owned by another package, and a file of the root image that no
