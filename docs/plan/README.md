@@ -24,7 +24,7 @@ its boot tests pass.
 | `locale.md` | Locales, time zones, message catalogues, keyboard layouts and input methods, milestones L0 to L7 | completed 2026-10-03 |
 | `ime.md` | Input method daemon after IBus, pinyin and Japanese engines, milestones I0 to I5 | completed 2026-10-03 |
 | `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C7 | completed 2026-10-03 |
-| `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, milestones U0 to U4 | U0 completed 2026-10-03 |
+| `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, milestones U0 to U4 | U0 and U1 completed 2026-10-03 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.

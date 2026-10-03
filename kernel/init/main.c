@@ -72,15 +72,15 @@ static void mount_root(void)
     bool force_initrd = cmdline_lookup("root", root, sizeof root) && strcmp(root, "initrd") == 0;
     int r = -ENODEV;
     if (!force_initrd)
-        r = vfs_mount("mfs", "vda", "/");
+        r = vfs_mount("mfs", "vda", "/", NULL);
     if (r < 0) {
-        r = vfs_mount("initrd", "initrd", "/");
+        r = vfs_mount("initrd", "initrd", "/", NULL);
         if (r < 0)
             panic("cannot mount root: %d", r);
-    } else if (vfs_mount("initrd", "initrd", "/initrd") < 0) {
+    } else if (vfs_mount("initrd", "initrd", "/initrd", NULL) < 0) {
         klog_warn("initrd not mounted on /initrd");
     }
-    r = vfs_mount("devfs", "devfs", "/dev");
+    r = vfs_mount("devfs", "devfs", "/dev", NULL);
     if (r < 0)
         panic("cannot mount /dev: %d", r);
 }

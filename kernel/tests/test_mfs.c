@@ -116,9 +116,9 @@ static void test_mfs(void)
     ktest_assert(vfs_lookup("/big", &root) == -ENOENT, "gone");
 
     /* Directories and names. */
-    ktest_assert(vfs_mkdir("/d") == 0, "mkdir /d");
-    ktest_assert(vfs_mkdir("/d") == -EEXIST, "mkdir twice");
-    ktest_assert(vfs_mkdir("/d/sub") == 0, "mkdir /d/sub");
+    ktest_assert(vfs_mkdir("/d", 0777) == 0, "mkdir /d");
+    ktest_assert(vfs_mkdir("/d", 0777) == -EEXIST, "mkdir twice");
+    ktest_assert(vfs_mkdir("/d/sub", 0777) == 0, "mkdir /d/sub");
     ktest_assert(vfs_open("/d/sub/file", O_WRONLY | O_CREAT, 0644, &f) == 0, "create nested");
     write_all(f, "hello", 5);
     file_put(f);

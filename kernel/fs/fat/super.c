@@ -110,6 +110,17 @@ static void set_ops(struct inode *i)
     i->fops = S_ISDIR(i->mode) ? &fat_dir_fops : &fat_file_fops;
 }
 
+/* Directories get every permission and files read and write, both less
+ * the mask of the mount, and the read only attribute removes the write
+ * bits. FAT files are never executable. */
+uint32_t fat_mode(const struct fat_sb *m, uint8_t attr)
+{
+    uint32_t perm = (attr & FAT_ATTR_DIRECTORY) ? 0777 : 0666;
+    if (attr & FAT_ATTR_READ_ONLY)
+        perm &= ~0222u;
+    return ((attr & FAT_ATTR_DIRECTORY) ? S_IFDIR : S_IFREG) | (perm & ~m->umask);
+}
+
 static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
 {
     struct fat_sb *m = sb->priv;
@@ -117,8 +128,10 @@ static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     if (!info)
         return -ENOMEM;
     i->priv = info;
+    i->uid = m->uid;
+    i->gid = m->gid;
     if (ino == FAT_ROOT_INO) {
-        i->mode = S_IFDIR | 0755;
+        i->mode = fat_mode(m, FAT_ATTR_DIRECTORY);
         i->nlink = 2;
         info->attr = FAT_ATTR_DIRECTORY;
         if (m->type == 32) {
@@ -149,12 +162,11 @@ static int fat_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     info->ctime_tenths = e.ctime_tenths;
     info->adate = e.adate;
     i->mtime = fat_epoch(e.mdate, e.mtime) * 1000000000;
+    i->mode = fat_mode(m, e.attr);
     if (e.attr & FAT_ATTR_DIRECTORY) {
-        i->mode = S_IFDIR | 0755;
         i->nlink = 2;
         i->size = (uint64_t)chain_length(m, info->first_cluster) * m->cluster_bytes;
     } else {
-        i->mode = S_IFREG | ((e.attr & FAT_ATTR_READ_ONLY) ? 0444 : 0644);
         i->nlink = 1;
         i->size = e.size;
     }
@@ -173,6 +185,7 @@ int fat_inode_flush_time(struct inode *ino, int64_t mtime)
     int r = fat_read(m, info->entry_off, &e, sizeof e);
     if (r < 0)
         return r;
+    e.attr = info->attr;
     e.cluster_lo = (uint16_t)info->first_cluster;
     e.cluster_hi = m->type == 32 ? (uint16_t)(info->first_cluster >> 16) : 0;
     e.size = S_ISDIR(ino->mode) ? 0 : (uint32_t)ino->size;
@@ -258,7 +271,27 @@ static const struct sb_ops fat_sb_ops = {
 
 /* ---- mount ---- */
 
-static int fat_mount(const struct fs_type *type, const char *source, struct superblock **out)
+/* The options uid=N, gid=N and umask=OOO, separated by commas. */
+static int parse_options(struct fat_sb *m, const char *options)
+{
+    m->umask = 022;
+    for (const char *p = options; *p;) {
+        const char *comma = strchr(p, ',');
+        size_t len = comma ? (size_t)(comma - p) : strlen(p);
+        int r = vfs_option_uint(p, len, "uid", 10, &m->uid);
+        if (r == 0)
+            r = vfs_option_uint(p, len, "gid", 10, &m->gid);
+        if (r == 0)
+            r = vfs_option_uint(p, len, "umask", 8, &m->umask);
+        if (r <= 0 || m->umask > 0777)
+            return -EINVAL;
+        p += len + (comma ? 1 : 0);
+    }
+    return 0;
+}
+
+static int fat_mount(const struct fs_type *type, const char *source, const char *options,
+                     struct superblock **out)
 {
     struct blockdev *dev = blockdev_find(source);
     if (!dev)
@@ -267,6 +300,10 @@ static int fat_mount(const struct fs_type *type, const char *source, struct supe
     if (!m)
         return -ENOMEM;
     m->dev = dev;
+    if (parse_options(m, options) < 0) {
+        kfree(m);
+        return -EINVAL;
+    }
     struct fat_bpb bpb;
     uint8_t sig[2];
     if (fat_read(m, 0, &bpb, sizeof bpb) < 0 || fat_read(m, 510, sig, 2) < 0) {

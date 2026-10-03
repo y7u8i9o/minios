@@ -465,7 +465,7 @@ static int fat_create(struct inode *dir, const char *name, size_t len, uint32_t 
     return *out ? 0 : -ENOMEM;
 }
 
-static int fat_mkdir(struct inode *dir, const char *name, size_t len)
+static int fat_mkdir(struct inode *dir, const char *name, size_t len, uint32_t mode)
 {
     struct fat_sb *m = fat_of(dir);
     struct fat_inode_info *pinfo = dir->priv;
@@ -666,6 +666,25 @@ static int fat_setmtime(struct inode *ino, int64_t mtime)
     return fat_inode_flush_time(ino, mtime);
 }
 
+/* FAT keeps no owner, and of the permission bits only the owner's write
+ * bit, as the read only attribute. Other changes are refused. */
+static int fat_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
+{
+    struct fat_sb *m = fat_of(ino);
+    struct fat_inode_info *info = ino->priv;
+    if (uid != ino->uid || gid != ino->gid)
+        return -EPERM;
+    if (ino->ino == FAT_ROOT_INO)
+        return mode == (ino->mode & 07777) ? 0 : -EPERM;
+    uint8_t attr = (mode & 0200) ? info->attr & ~FAT_ATTR_READ_ONLY : info->attr | FAT_ATTR_READ_ONLY;
+    uint32_t want = fat_mode(m, attr) & 07777;
+    if ((mode & 07777) != want)
+        return -EPERM;
+    info->attr = attr;
+    ino->mode = (ino->mode & S_IFMT) | want;
+    return fat_inode_flush_time(ino, ino->mtime);
+}
+
 /* FAT has no entry type for a symbolic link. */
 static int fat_symlink(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen)
 {
@@ -682,6 +701,7 @@ const struct inode_ops fat_dir_ops = {
     .rename = fat_rename,
     .truncate = fat_truncate,
     .setmtime = fat_setmtime,
+    .setattr = fat_setattr,
 };
 
 /* getdents: positions 0 and 1 are "." and ".." for every directory (the

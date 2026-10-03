@@ -107,4 +107,8 @@
 #define SYS_getgroups     100
 #define SYS_setgroups     101
 #define SYS_umask         102
-#define SYS_MAX           103
+#define SYS_fchmodat      103
+#define SYS_fchmod        104
+#define SYS_fchownat      105
+#define SYS_fchown        106
+#define SYS_MAX           107

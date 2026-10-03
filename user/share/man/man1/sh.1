@@ -21,7 +21,11 @@ JOB CONTROL
 BUILTINS
     cd, exit, pwd, export, unset, set, jobs, fg, bg, wait, true, false,
     ulimit, help, test, [, echo, read, shift, local, return, source, .,
-    alias, unalias, eval, type, command, break, continue, history, :.
+    alias, unalias, eval, type, command, break, continue, history, :,
+    umask.
+
+    umask prints the file creation mask in octal, or with -S as the
+    permissions it leaves, and umask MODE sets it from an octal mode.
 
 EXPANSIONS
     Expansion happens when a command executes: tilde, parameters, arithmetic

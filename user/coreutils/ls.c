@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <pwd.h>
+#include <grp.h>
 #include <errno.h>
 #include <time.h>
 #include <term.h>
@@ -88,6 +90,46 @@ static void print_name(const struct entry *e)
         fputs(term_sgr(0), stdout);
 }
 
+/* The name of an owner or group id, through a small cache, since a long
+ * listing asks for the same few ids again and again. The number is printed
+ * when the database has no entry. */
+struct id_name {
+    unsigned id;
+    char name[33];
+};
+
+static const char *id_lookup(struct id_name *cache, int *count, unsigned id, int group)
+{
+    for (int i = 0; i < *count; i++)
+        if (cache[i].id == id)
+            return cache[i].name;
+    struct id_name *c = &cache[*count < 16 ? (*count)++ : 15];
+    c->id = id;
+    struct passwd *pw = group ? NULL : getpwuid(id);
+    struct group *gr = group ? getgrgid(id) : NULL;
+    if (pw)
+        snprintf(c->name, sizeof c->name, "%s", pw->pw_name);
+    else if (gr)
+        snprintf(c->name, sizeof c->name, "%s", gr->gr_name);
+    else
+        snprintf(c->name, sizeof c->name, "%u", id);
+    return c->name;
+}
+
+static const char *owner_name(unsigned uid)
+{
+    static struct id_name cache[16];
+    static int count;
+    return id_lookup(cache, &count, uid, 0);
+}
+
+static const char *group_name(unsigned gid)
+{
+    static struct id_name cache[16];
+    static int count;
+    return id_lookup(cache, &count, gid, 1);
+}
+
 static void print_long(const struct entry *e)
 {
     unsigned mode = e->st.st_mode;
@@ -101,6 +143,14 @@ static void print_long(const struct entry *e)
     for (int i = 0; i < 9; i++)
         if (mode & (1u << (8 - i)))
             permissions[i + 1] = "rwx"[i % 3];
+    /* The set id and sticky bits replace the execute letters, in capitals
+     * when the execute bit itself is clear. */
+    if (mode & S_ISUID)
+        permissions[3] = (mode & S_IXUSR) ? 's' : 'S';
+    if (mode & S_ISGID)
+        permissions[6] = (mode & S_IXGRP) ? 's' : 'S';
+    if (mode & S_ISVTX)
+        permissions[9] = (mode & S_IXOTH) ? 't' : 'T';
     char size[32];
     if (human && e->st.st_size >= 1024) {
         double value = (double)e->st.st_size;
@@ -118,7 +168,8 @@ static void print_long(const struct entry *e)
     char date[32] = "?";
     if (localtime_r(&mtime, &tm))
         strftime(date, sizeof date, "%b %d %H:%M", &tm);
-    printf("%s %3lu %8s %s ", permissions, (unsigned long)e->st.st_nlink, size, date);
+    printf("%s %3lu %-8s %-8s %8s %s ", permissions, (unsigned long)e->st.st_nlink, owner_name(e->st.st_uid),
+           group_name(e->st.st_gid), size, date);
     print_name(e);
     if (e->target)
         printf(" -> %s", e->target);

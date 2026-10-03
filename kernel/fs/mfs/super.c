@@ -62,6 +62,8 @@ static int mfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i)
     }
     i->mode = d->mode;
     i->nlink = d->nlink;
+    i->uid = d->uid;
+    i->gid = d->gid;
     i->size = d->size;
     i->mtime = (int64_t)d->mtime;
     memcpy(info->direct, d->direct, sizeof info->direct);
@@ -92,6 +94,8 @@ int mfs_inode_flush(struct inode *ino)
         return -EIO;
     d->mode = ino->mode;
     d->nlink = ino->nlink;
+    d->uid = ino->uid;
+    d->gid = ino->gid;
     d->size = ino->size;
     d->mtime = (uint64_t)ino->mtime;
     memcpy(d->direct, info->direct, sizeof d->direct);
@@ -102,8 +106,9 @@ int mfs_inode_flush(struct inode *ino)
     return 0;
 }
 
-struct inode *mfs_inode_new(struct superblock *sb, uint32_t mode, uint32_t nlink)
+struct inode *mfs_inode_new(struct inode *dir, uint32_t mode, uint32_t nlink)
 {
+    struct superblock *sb = dir->sb;
     struct mfs_sb *m = mfs_of(sb);
     uint32_t num = mfs_alloc_inode(m);
     if (!num)
@@ -117,6 +122,7 @@ struct inode *mfs_inode_new(struct superblock *sb, uint32_t mode, uint32_t nlink
     memset(d, 0, sizeof *d);
     d->mode = mode;
     d->nlink = nlink;
+    vfs_new_owner(dir, &d->uid, &d->gid);
     d->mtime = (uint64_t)vfs_now();
     mfs_journal_write(m, b);
     brelse(b);
@@ -226,8 +232,11 @@ static int read_super(struct mfs_sb *m)
     return 0;
 }
 
-static int mfs_mount(const struct fs_type *type, const char *source, struct superblock **out)
+static int mfs_mount(const struct fs_type *type, const char *source, const char *options,
+                     struct superblock **out)
 {
+    if (options[0])
+        return -EINVAL;
     struct blockdev *dev = blockdev_find(source);
     if (!dev)
         return -ENODEV;
@@ -244,9 +253,9 @@ static int mfs_mount(const struct fs_type *type, const char *source, struct supe
         kfree(m);
         return -EINVAL;
     }
-    if (m->sb.version != MFS_VERSION) {
-        klog_error("%s: format version %u, expected %u (rebuild the image)", source,
-                   m->sb.version, MFS_VERSION);
+    if (m->sb.version < MFS_VERSION_MIN || m->sb.version > MFS_VERSION) {
+        klog_error("%s: format version %u, expected %u to %u (rebuild the image)", source,
+                   m->sb.version, MFS_VERSION_MIN, MFS_VERSION);
         kfree(m);
         return -EINVAL;
     }

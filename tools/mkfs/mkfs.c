@@ -1,15 +1,21 @@
 /* mkfs: build an mfs image from a directory tree, or inspect one.
  *
- *   mkfs <image> <size_mb> <dir>      create image with the tree of dir
- *   mkfs --dump <image>               print superblock state and tree
- *   mkfs --cat <image> <path>         print the contents of a file
+ *   mkfs [-p perms] <image> <size_mb> <dir>   create image with the tree of dir
+ *   mkfs --dump <image>                       print superblock state and tree
+ *   mkfs --cat <image> <path>                 print the contents of a file
  *
  * Exits non zero on any error. --dump reports "clean" or "unclean" and
  * the state of the journal. Symbolic links of the host tree are stored as
- * links (their target in one data block); a target longer than 255 bytes,
- * which the kernel would not resolve, is an error. Images are written in format version 4, which
- * places a journal between the inode table and the data blocks and stores
- * modification times in nanoseconds.
+ * links (their target in one data block). A target longer than 255 bytes,
+ * which the kernel would not resolve, is an error. Images are written in
+ * format version 5, which places a journal between the inode table and the
+ * data blocks, stores modification times in nanoseconds and owners.
+ *
+ * Files and directories keep the permission bits of the host tree and
+ * belong to root. The manifest of -p changes modes and owners, one entry
+ * per line in the form "path mode uid gid", where mode is octal or "-" to
+ * keep the bits. A path ending in "/" names a directory and everything
+ * below it, and lines starting with "#" are comments.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,11 +173,11 @@ static void add_dirent(uint32_t dir, const char *name, uint32_t ino)
     di->size += MFS_DIRENT_SIZE;
 }
 
-static uint32_t make_dir(uint32_t parent)
+static uint32_t make_dir(uint32_t parent, uint32_t perm)
 {
     uint32_t ino = alloc_inode();
     struct mfs_dinode *di = dinode(ino);
-    di->mode = S_IFDIR_ | 0755;
+    di->mode = S_IFDIR_ | perm;
     di->nlink = 2;
     add_dirent(ino, ".", ino);
     add_dirent(ino, "..", parent ? parent : ino);
@@ -213,7 +219,7 @@ static void add_tree(uint32_t dir, const char *path)
             write_data(ino, target, (uint64_t)n);
             add_dirent(dir, e->d_name, ino);
         } else if (S_ISDIR(st.st_mode)) {
-            uint32_t sub = make_dir(dir);
+            uint32_t sub = make_dir(dir, st.st_mode & 07777);
             dinode(sub)->mtime = host_mtime_ns(&st);
             add_dirent(dir, e->d_name, sub);
             add_tree(sub, full);
@@ -227,7 +233,7 @@ static void add_tree(uint32_t dir, const char *path)
             fclose(f);
             uint32_t ino = alloc_inode();
             struct mfs_dinode *di = dinode(ino);
-            di->mode = S_IFREG_ | 0755;
+            di->mode = S_IFREG_ | (st.st_mode & 07777);
             di->nlink = 1;
             di->mtime = host_mtime_ns(&st);
             write_data(ino, data, (uint64_t)st.st_size);
@@ -275,7 +281,7 @@ static void format(uint64_t nblocks)
     sb->free_blocks = nblocks - sb->data_start;
     bitmap_set(sb->inode_bitmap_start, 0);
     sb->free_inodes = ninodes - 1;
-    uint32_t root = make_dir(0);
+    uint32_t root = make_dir(0, 0755);
     dinode(root)->mtime = (uint64_t)time(NULL) * 1000000000ull;
     if (root != MFS_ROOT_INO)
         die("root inode is not 1");
@@ -297,7 +303,7 @@ static void load(const char *path)
     sb = (struct mfs_superblock *)img;
     if (sb->magic != MFS_MAGIC)
         die("not an mfs image");
-    if (sb->version != MFS_VERSION)
+    if (sb->version < MFS_VERSION_MIN || sb->version > MFS_VERSION)
         die("unsupported format version (rebuild the image)");
     if (sb->nblocks > img_blocks)
         die("image truncated");
@@ -313,8 +319,8 @@ static void dump_tree(uint32_t ino, const char *prefix, int depth)
             continue;
         struct mfs_dinode *c = dinode(e->ino);
         int isdir = (c->mode & S_IFMT_) == S_IFDIR_;
-        printf("%s/%s%s ino %u size %llu nlink %u", prefix, e->name, isdir ? "/" : "",
-               e->ino, (unsigned long long)c->size, c->nlink);
+        printf("%s/%s%s ino %u size %llu nlink %u mode %o uid %u gid %u", prefix, e->name, isdir ? "/" : "",
+               e->ino, (unsigned long long)c->size, c->nlink, c->mode & 07777, c->uid, c->gid);
         if ((c->mode & S_IFMT_) == S_IFLNK_ && c->direct[0] && c->size < MFS_BLOCK_SIZE)
             printf(" -> %.*s", (int)c->size, (const char *)block(c->direct[0]));
         printf("\n");
@@ -349,8 +355,64 @@ static uint32_t lookup(const char *path)
     return ino;
 }
 
+/* Set the mode (unless keep) and owner of ino, and of everything below it
+ * when recursive. */
+static void set_owner(uint32_t ino, int keep, uint32_t mode, uint32_t uid, uint32_t gid, int recursive)
+{
+    struct mfs_dinode *di = dinode(ino);
+    if (!keep)
+        di->mode = (di->mode & S_IFMT_) | mode;
+    di->uid = uid;
+    di->gid = gid;
+    if (!recursive || (di->mode & S_IFMT_) != S_IFDIR_)
+        return;
+    for (uint64_t off = 0; off < di->size; off += MFS_DIRENT_SIZE) {
+        uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
+        struct mfs_dirent *e = (struct mfs_dirent *)(block(b) + off % MFS_BLOCK_SIZE);
+        if (e->ino && strcmp(e->name, ".") != 0 && strcmp(e->name, "..") != 0)
+            set_owner(e->ino, keep, mode, uid, gid, 1);
+    }
+}
+
+static void apply_manifest(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f)
+        die(path);
+    char line[1024];
+    int n = 0;
+    while (fgets(line, sizeof line, f)) {
+        n++;
+        char file[900], mode[16];
+        unsigned uid, gid;
+        if (line[0] == '#' || strspn(line, " \t\n") == strlen(line))
+            continue;
+        if (sscanf(line, "%899s %15s %u %u", file, mode, &uid, &gid) != 4) {
+            fprintf(stderr, "mkfs: %s:%d: expected \"path mode uid gid\"\n", path, n);
+            exit(1);
+        }
+        size_t len = strlen(file);
+        int recursive = len > 1 && file[len - 1] == '/';
+        int keep = strcmp(mode, "-") == 0;
+        char *end;
+        unsigned long bits = keep ? 0 : strtoul(mode, &end, 8);
+        if (!keep && (*end || bits > 07777)) {
+            fprintf(stderr, "mkfs: %s:%d: bad mode %s\n", path, n, mode);
+            exit(1);
+        }
+        set_owner(lookup(file), keep, (uint32_t)bits, uid, gid, recursive);
+    }
+    fclose(f);
+}
+
 int main(int argc, char **argv)
 {
+    const char *manifest = NULL;
+    if (argc > 2 && strcmp(argv[1], "-p") == 0) {
+        manifest = argv[2];
+        argc -= 2;
+        argv += 2;
+    }
     if (argc == 3 && strcmp(argv[1], "--dump") == 0) {
         load(argv[2]);
         printf("mfs: %llu blocks, %u inodes, %llu free blocks, %u free inodes, mounts %u, %s\n",
@@ -376,7 +438,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc != 4) {
-        fprintf(stderr, "usage: mkfs <image> <size_mb> <dir> | --dump <image> | --cat <image> <path>\n");
+        fprintf(stderr, "usage: mkfs [-p perms] <image> <size_mb> <dir> | --dump <image> | --cat <image> <path>\n");
         return 2;
     }
     uint64_t mb = strtoull(argv[2], NULL, 10);
@@ -384,6 +446,8 @@ int main(int argc, char **argv)
         die("size must be at least 1 MiB");
     format(mb * 1024 * 1024 / MFS_BLOCK_SIZE);
     add_tree(MFS_ROOT_INO, argv[3]);
+    if (manifest)
+        apply_manifest(manifest);
     FILE *f = fopen(argv[1], "wb");
     if (!f)
         die(argv[1]);

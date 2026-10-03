@@ -97,7 +97,8 @@ tree -d /ufind | grep a.txt > /dev/null && echo 'FAIL tree-directories'
 echo 'utils: text and tree checked'
 test "$(less -RNS /u2.txt)" = copy || echo 'FAIL less-pipe'
 test "$(df | grep -c '^mfs ')" = 1 || echo 'FAIL df-mfs'
-test "$(ps | head -n 1 | tr -s ' ')" = ' PID PPID PGID STATE TIME RSS NAME' || echo 'FAIL ps-columns'
+test "$(ps | head -n 1 | tr -s ' ')" = ' PID PPID PGID USER STATE TIME RSS NAME' || echo 'FAIL ps-columns'
+ps | grep ' root ' > /dev/null || echo 'FAIL ps-user'
 echo 'utils: system options checked'
 echo first > /follow.txt
 tail -n 0 -f /follow.txt > /follow.out &

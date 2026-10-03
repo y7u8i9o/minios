@@ -25,8 +25,10 @@ struct poll_source;
  * Lookups return a referenced inode. */
 struct inode_ops {
     int (*lookup)(struct inode *dir, const char *name, size_t len, struct inode **out);
+    /* create, mkdir and symlink give the new inode the owner chosen by
+     * vfs_new_owner. mode holds the permission bits after the umask. */
     int (*create)(struct inode *dir, const char *name, size_t len, uint32_t mode, struct inode **out);
-    int (*mkdir)(struct inode *dir, const char *name, size_t len);
+    int (*mkdir)(struct inode *dir, const char *name, size_t len, uint32_t mode);
     int (*unlink)(struct inode *dir, const char *name, size_t len);
     int (*rmdir)(struct inode *dir, const char *name, size_t len);
     int (*link)(struct inode *dir, const char *name, size_t len, struct inode *target);
@@ -45,6 +47,11 @@ struct inode_ops {
      * and the call is bracketed by op_begin and op_end. Optional: a
      * filesystem without it refuses utimensat with EROFS. */
     int (*setmtime)(struct inode *ino, int64_t mtime);
+    /* Set the permission bits (07777) and the owner and write the inode
+     * back (U1). ino->lock is held and the call is bracketed by op_begin
+     * and op_end. A filesystem that cannot store a change returns -EPERM,
+     * one without the operation makes chmod and chown fail with EROFS. */
+    int (*setattr)(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid);
 };
 
 /* Operations on open files. read and write receive the position to use and
@@ -78,14 +85,18 @@ struct file_ops {
 #define FOPS_STREAM 1
 
 /* An in memory inode. refcount and link are protected by sb->lock. size,
- * nlink and the contents are protected by lock, a mutex because filesystem
- * operations may sleep on a block device. The remaining fields are set when
+ * nlink, the permission bits of mode, uid, gid and the contents are
+ * protected by lock, a mutex because filesystem operations may sleep on a
+ * block device. The file type bits of mode never change and may be read
+ * without the lock, and a permission check may read the other fields
+ * without it, since each is one word. The remaining fields are set when
  * the inode is read and do not change. */
 struct inode {
     struct superblock *sb;
     uint64_t ino;
     uint32_t mode;
     uint32_t nlink;
+    uint32_t uid, gid;              /* owner (U1) */
     uint64_t size;
     uint64_t rdev;
     int64_t mtime;                  /* nanoseconds since the epoch; lock */
@@ -135,10 +146,13 @@ struct superblock {
     struct list_head inodes;        /* cached inodes, all referenced */
 };
 
-/* A filesystem type. mount builds a superblock from a source string. */
+/* A filesystem type. mount builds a superblock from a source string and
+ * a comma separated option string, which is empty when none was given. A
+ * filesystem rejects options it does not know with -EINVAL. */
 struct fs_type {
     const char *name;
-    int (*mount)(const struct fs_type *type, const char *source, struct superblock **out);
+    int (*mount)(const struct fs_type *type, const char *source, const char *options,
+                 struct superblock **out);
     struct list_head link;          /* fs_types, fs_types_lock */
 };
 
@@ -184,7 +198,7 @@ void inode_put(struct inode *ino);
 struct superblock *sb_alloc(const struct fs_type *type, const struct sb_ops *ops);
 
 /* Mount table. */
-int vfs_mount(const char *fstype, const char *source, const char *target);
+int vfs_mount(const char *fstype, const char *source, const char *target, const char *options);
 int vfs_umount(const char *target);
 int vfs_sync(void);
 /* Text records: path type total-blocks free-blocks block-size. */
@@ -226,7 +240,8 @@ long file_getdents(struct file *f, struct dirent *buf, size_t count);
 int64_t vfs_now(void);
 void inode_stat(struct inode *ino, struct stat *st);
 
-int vfs_mkdir(const char *path);
+/* mode is masked by the umask of the calling process. */
+int vfs_mkdir(const char *path, uint32_t mode);
 int vfs_unlink(const char *path);
 /* Set the modification time of the file at path to mtime (nanoseconds).
  * flags is 0 or VFS_NOFOLLOW. */
@@ -236,6 +251,26 @@ int vfs_rename(const char *oldpath, const char *newpath);
 int vfs_link(const char *oldpath, const char *newpath);
 /* Create path as a symbolic link holding target. */
 int vfs_symlink(const char *target, const char *path);
+/* Change the permission bits (mode, 07777) or the owner of an inode or of
+ * the file at path (U1). VFS_CHOWN_KEEP leaves the uid or gid as it is.
+ * Only the owner and root may change the mode, only root the owner, and
+ * the owner may change the group to one of its own groups. flags is 0 or
+ * VFS_NOFOLLOW. */
+#define VFS_CHOWN_KEEP 0xffffffffu
+int vfs_chmod_inode(struct inode *ino, uint32_t mode);
+int vfs_chown_inode(struct inode *ino, uint32_t uid, uint32_t gid);
+int vfs_chmod(const char *path, uint32_t mode, unsigned flags);
+int vfs_chown(const char *path, uint32_t uid, uint32_t gid, unsigned flags);
+/* The owner of an inode created in dir by the calling process: its
+ * effective uid, and its effective gid unless dir has the setgid bit, in
+ * which case dir's group. */
+void vfs_new_owner(struct inode *dir, uint32_t *uid, uint32_t *gid);
+/* The umask of the calling process. */
+uint32_t vfs_umask(void);
+/* Match the mount option token opt (len bytes, no comma) against
+ * "name=value" with value a number in base 8 or 10. Returns 1 and stores
+ * the value on a match, 0 when the name differs, -EINVAL for a bad value. */
+int vfs_option_uint(const char *opt, size_t len, const char *name, unsigned base, uint32_t *out);
 /* Copy the target of the symbolic link at path into the kernel buffer buf
  * (size bytes, no NUL added); returns the length, -EINVAL when path is
  * not a link. */

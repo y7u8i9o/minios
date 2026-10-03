@@ -2,7 +2,9 @@
 #include <sys/types.h>
 #include <minios/abi.h>
 
-/* Permission bits, stored by the filesystems and ignored by the kernel. */
+/* Permission bits, checked by the kernel against the credentials of the
+ * caller (docs/design/users.md). S_ISUID, S_ISGID and S_ISVTX come from
+ * minios/abi.h. */
 #define S_IRWXU 0700
 #define S_IRUSR 0400
 #define S_IWUSR 0200
@@ -15,9 +17,6 @@
 #define S_IROTH 0004
 #define S_IWOTH 0002
 #define S_IXOTH 0001
-#define S_ISUID 04000
-#define S_ISGID 02000
-#define S_ISVTX 01000
 #define ACCESSPERMS (S_IRWXU | S_IRWXG | S_IRWXO)
 #define ALLPERMS (S_ISUID | S_ISGID | S_ISVTX | ACCESSPERMS)
 #define DEFFILEMODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
@@ -40,10 +39,13 @@ int mknod(const char *path, mode_t mode, dev_t dev);
 int mkfifo(const char *path, mode_t mode);
 int mkdir(const char *path, mode_t mode);
 
-/* Permission bits are stored but not enforced and cannot be changed: both
- * return 0 without effect. */
+/* Change the permission bits. Only the owner and root may do so, and the
+ * set group id bit is dropped when the caller is not in the file's group.
+ * fchmodat takes AT_SYMLINK_NOFOLLOW, which changes a symbolic link
+ * itself. */
 int fchmod(int fd, mode_t mode);
 int chmod(const char *path, mode_t mode);
+int fchmodat(int dirfd, const char *path, mode_t mode, int flags);
 
 /* Set the file creation mask of the process and return the old one. The
  * mask starts at 022. */

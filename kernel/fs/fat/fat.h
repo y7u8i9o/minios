@@ -25,6 +25,9 @@ struct fat_sb {
     uint32_t nclusters;             /* usable clusters, numbered 2 .. nclusters + 1 */
     uint32_t next_free;
     uint32_t free_clusters;
+    /* The owner and the mask of every file, from the mount options uid=,
+     * gid= and umask= (U1). FAT stores neither. */
+    uint32_t uid, gid, umask;
     struct mutex lock;
 };
 
@@ -76,6 +79,9 @@ int fat_inode_flush_time(struct inode *ino, int64_t mtime);
 /* Current time in FAT form. */
 void fat_now(uint16_t *date, uint16_t *time);
 void fat_time_of(int64_t ns, uint16_t *date, uint16_t *time);
+/* The st_mode of an entry with the attributes attr on the mount m. */
+uint32_t fat_mode(const struct fat_sb *m, uint8_t attr);
+
 static inline struct fat_sb *fat_of(struct inode *ino)
 {
     return ino->sb->priv;

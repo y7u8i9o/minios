@@ -116,7 +116,7 @@ static void remount(struct superblock *sb, int crash)
     mfs_journal_set_crash(sb, crash);
     int r = vfs_umount("/mnt");
     ktest_assert(r == 0, "umount /mnt: %d", r);
-    r = vfs_mount("mfs", "vdb", "/mnt");
+    r = vfs_mount("mfs", "vdb", "/mnt", NULL);
     ktest_assert(r == 0, "mount vdb again: %d", r);
 }
 
@@ -151,8 +151,8 @@ static void test_journal(void)
 {
     struct blockdev *dev = blockdev_find("vdb");
     ktest_assert(dev != NULL, "vdb present");
-    ktest_assert(vfs_mkdir("/mnt") == 0, "mkdir /mnt");
-    int r = vfs_mount("mfs", "vdb", "/mnt");
+    ktest_assert(vfs_mkdir("/mnt", 0777) == 0, "mkdir /mnt");
+    int r = vfs_mount("mfs", "vdb", "/mnt", NULL);
     ktest_assert(r == 0, "mount vdb: %d", r);
     struct superblock *sb = sb_of("/mnt");
     ktest_assert(strcmp(sb->type->name, "mfs") == 0 && sb != sb_of("/"), "/mnt is a second mfs");
@@ -161,13 +161,13 @@ static void test_journal(void)
     for (size_t i = 0; i < sizeof pattern; i++)
         pattern[i] = (char)('A' + (i * 7) % 26);
     write_file("/mnt/base.txt", "base", 4);
-    ktest_assert(vfs_mkdir("/mnt/dir") == 0, "mkdir /mnt/dir");
+    ktest_assert(vfs_mkdir("/mnt/dir", 0777) == 0, "mkdir /mnt/dir");
     check_consistent(dev, "after setup");
 
     /* A crash after the commit: the journal restores every change. */
     mfs_journal_set_crash(sb, CRASH_AFTER_COMMIT);
     write_file("/mnt/dir/after.txt", pattern, sizeof pattern);
-    ktest_assert(vfs_mkdir("/mnt/dir/sub") == 0, "mkdir sub");
+    ktest_assert(vfs_mkdir("/mnt/dir/sub", 0777) == 0, "mkdir sub");
     ktest_assert(vfs_unlink("/mnt/base.txt") == 0, "unlink base");
     remount(sb, CRASH_AFTER_COMMIT);
     sb = sb_of("/mnt");
@@ -214,7 +214,7 @@ static void test_journal(void)
 
     /* Clean unmount for the host check of the second image. */
     ktest_assert(vfs_umount("/mnt") == 0, "final umount");
-    ktest_assert(vfs_mount("mfs", "vdb", "/mnt") == 0, "mount after clean unmount");
+    ktest_assert(vfs_mount("mfs", "vdb", "/mnt", NULL) == 0, "mount after clean unmount");
     ktest_assert(file_holds("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt after clean remount");
     ktest_assert(vfs_umount("/mnt") == 0, "umount again");
 

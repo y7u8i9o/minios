@@ -97,7 +97,7 @@ static int mfs_create(struct inode *dir, const char *name, size_t len, uint32_t 
 {
     if (entry_find(dir, name, len, NULL))
         return -EEXIST;
-    struct inode *ino = mfs_inode_new(dir->sb, mode, 1);
+    struct inode *ino = mfs_inode_new(dir, mode, 1);
     if (!ino)
         return -ENOSPC;
     int r = entry_add(dir, name, len, (uint32_t)ino->ino);
@@ -110,11 +110,11 @@ static int mfs_create(struct inode *dir, const char *name, size_t len, uint32_t 
     return 0;
 }
 
-static int mfs_mkdir(struct inode *dir, const char *name, size_t len)
+static int mfs_mkdir(struct inode *dir, const char *name, size_t len, uint32_t mode)
 {
     if (entry_find(dir, name, len, NULL))
         return -EEXIST;
-    struct inode *sub = mfs_inode_new(dir->sb, S_IFDIR | 0755, 2);
+    struct inode *sub = mfs_inode_new(dir, S_IFDIR | (mode & 07777), 2);
     if (!sub)
         return -ENOSPC;
     int r = entry_add(sub, ".", 1, (uint32_t)sub->ino);
@@ -290,7 +290,7 @@ static int mfs_symlink(struct inode *dir, const char *name, size_t len, const ch
         return -EEXIST;
     if (tlen == 0 || tlen > MFS_SYMLINK_MAX)
         return -ENAMETOOLONG;
-    struct inode *ino = mfs_inode_new(dir->sb, S_IFLNK | 0777, 1);
+    struct inode *ino = mfs_inode_new(dir, S_IFLNK | 0777, 1);
     if (!ino)
         return -ENOSPC;
     mutex_lock(&ino->lock);
@@ -322,6 +322,14 @@ static int mfs_setmtime(struct inode *ino, int64_t mtime)
     return mfs_inode_flush(ino);
 }
 
+static int mfs_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
+{
+    ino->mode = (ino->mode & S_IFMT) | mode;
+    ino->uid = uid;
+    ino->gid = gid;
+    return mfs_inode_flush(ino);
+}
+
 const struct inode_ops mfs_dir_ops = {
     .lookup = mfs_lookup,
     .create = mfs_create,
@@ -333,6 +341,7 @@ const struct inode_ops mfs_dir_ops = {
     .rename = mfs_rename,
     .truncate = mfs_truncate,
     .setmtime = mfs_setmtime,
+    .setattr = mfs_setattr,
 };
 
 /* A symbolic link has no directory or file operations; utimensat with
@@ -340,6 +349,7 @@ const struct inode_ops mfs_dir_ops = {
 const struct inode_ops mfs_link_ops = {
     .readlink = mfs_readlink,
     .setmtime = mfs_setmtime,
+    .setattr = mfs_setattr,
 };
 
 static long mfs_getdents(struct file *f, struct dirent *buf, size_t count)

@@ -1,5 +1,6 @@
-/* mount: mount <type> <source> <target>, umount <target> with -u, and the
- * list of mounted filesystems from /dev/mounts without arguments. */
+/* mount: mount [-o options] <type> <source> <target>, umount <target> with
+ * -u, and the list of mounted filesystems from /dev/mounts without
+ * arguments. The options go to the filesystem (mount(1)). */
 #include <stdio.h>
 #include <string.h>
 #include <sys/mount.h>
@@ -31,11 +32,17 @@ int main(int argc, char **argv)
         }
         return 0;
     }
+    const char *options = NULL;
+    if (argc == 6 && strcmp(argv[1], "-o") == 0) {
+        options = argv[2];
+        argc -= 2;
+        argv += 2;
+    }
     if (argc != 4) {
-        fprintf(stderr, "usage: mount [<type> <source> <target>] | mount -u <target>\n");
+        fprintf(stderr, "usage: mount [[-o options] <type> <source> <target>] | mount -u <target>\n");
         return 2;
     }
-    if (mount(argv[2], argv[3], argv[1]) < 0) {
+    if (mount_options(argv[2], argv[3], argv[1], options) < 0) {
         fprintf(stderr, "mount: %s: %s\n", argv[3], strerror(errno));
         return 1;
     }

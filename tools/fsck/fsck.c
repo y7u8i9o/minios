@@ -163,8 +163,8 @@ static void check_superblock(void)
 {
     if (sb->magic != MFS_MAGIC)
         fatal("not an mfs image");
-    if (sb->version != MFS_VERSION)
-        fatal("format version %u, expected %u", sb->version, MFS_VERSION);
+    if (sb->version < MFS_VERSION_MIN || sb->version > MFS_VERSION)
+        fatal("format version %u, expected %u to %u", sb->version, MFS_VERSION_MIN, MFS_VERSION);
     if (sb->block_size != MFS_BLOCK_SIZE)
         fatal("block size %u", sb->block_size);
     if (sb->nblocks > img_blocks)
@@ -494,7 +494,7 @@ static uint32_t find_lost_found(void)
         return 0;
     struct mfs_dinode *d = dinode(ino);
     memset(d, 0, sizeof *d);
-    d->mode = S_IFDIR_ | 0755;
+    d->mode = S_IFDIR_ | 0700;          /* recovered files are for root only */
     d->nlink = 2;
     bit_write(sb->inode_bitmap_start, ino, 1);
     checked[ino] = 1;

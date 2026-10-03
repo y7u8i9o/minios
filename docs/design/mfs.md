@@ -23,20 +23,28 @@ the flag clear logs `previous shutdown was unclean`. Version 1 images
 rebuilds the image in version 2.
 
 An inode holds the mode, link count, size, twelve direct block pointers,
-one indirect pointer (1024 blocks) and one double indirect pointer
-(1024 x 1024 blocks). Unused pointers are zero; reading such a block yields
-zeros, which gives sparse files. Inode 1 is the root directory.
+one indirect pointer (1024 blocks), one double indirect pointer (1024 x
+1024 blocks), and since format version 5 the owner's uid and gid in two of
+the words that were spare (U1 of `docs/plan/multiuser.md`, `users.md`).
+Version 4 images are still mounted and checked, since their zero owner
+words read as root, and the kernel keeps their version number. New inodes
+take the effective uid of the creating process and its effective gid or,
+below a directory with the set group id bit, the directory's group.
+`mfs_setattr` changes the permission bits and the owner and writes the
+inode through the journal like any other metadata change. Unused pointers
+are zero; reading such a block yields zeros, which gives sparse files.
+Inode 1 is the root directory.
 
 A symbolic link (mode `S_IFLNK | 0777`) keeps its target in its first
-direct block, without a NUL, and its size is the target's length; it has
-no other block. This is a slow link: the target is not stored in the
-inode, whose 48 spare bytes would hold short targets only and would give
-the block pointers two meanings for `free_from`, `bmap` and `fsck`. The
-kernel accepts targets of 1 to 255 bytes (`VFS_SYMLINK_MAX`), the format
-up to `MFS_SYMLINK_MAX` (4095). The on disk layout is unchanged, so the
-format version stays 4: a link is an inode of a new type in the existing
-fields. A kernel or `fsck` built before links reads such an inode as a
-file or reports its mode as invalid.
+direct block, without a NUL, and its size is the target's length; it has no
+other block. This is a slow link: the target is not stored in the inode,
+whose spare bytes (48 before version 5, 40 since) would hold short targets
+only and would give the block pointers two meanings for `free_from`, `bmap`
+and `fsck`. The kernel accepts targets of 1 to 255 bytes
+(`VFS_SYMLINK_MAX`), the format up to `MFS_SYMLINK_MAX` (4095). The on disk
+layout is unchanged, so the format version stays 4: a link is an inode of a
+new type in the existing fields. A kernel or `fsck` built before links
+reads such an inode as a file or reports its mode as invalid.
 
 Directories are arrays of 256 byte entries (format version 3; version 2
 used 64 byte entries and 59 character names): a 32 bit inode number

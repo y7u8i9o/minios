@@ -7,14 +7,14 @@ MKFS="$BUILD/host/mkfs"
 "$FSCK" -n "$DISK2" > "$DISK2.fsck" 2>&1 || { echo "  fsck of the volume failed"; cat "$DISK2.fsck"; exit 1; }
 grep -q ' 2 symbolic links, .* 0 problems' "$DISK2.fsck" || { echo "  volume check"; cat "$DISK2.fsck"; exit 1; }
 "$MKFS" --dump "$DISK2" > "$DISK2.dump" || exit 1
-grep -q '^/in ino [0-9]* size 5 nlink 1 -> m.txt$' "$DISK2.dump" || { echo "  /in missing"; cat "$DISK2.dump"; exit 1; }
-grep -q '^/out ino [0-9]* size 18 nlink 1 -> \.\./sl/dir/file\.txt$' "$DISK2.dump" ||
+grep -q '^/in ino [0-9]* size 5 nlink 1 mode 777 uid 0 gid 0 -> m.txt$' "$DISK2.dump" || { echo "  /in missing"; cat "$DISK2.dump"; exit 1; }
+grep -q '^/out ino [0-9]* size 18 nlink 1 mode 777 uid 0 gid 0 -> \.\./sl/dir/file\.txt$' "$DISK2.dump" ||
     { echo "  /out missing"; cat "$DISK2.dump"; exit 1; }
 "$FSCK" -n "$DISK" > "$DISK.fsck" 2>&1 || { echo "  fsck of the root image failed"; cat "$DISK.fsck"; exit 1; }
 grep -q ' 0 problems' "$DISK.fsck" || { echo "  root image check"; cat "$DISK.fsck"; exit 1; }
 "$MKFS" --dump "$DISK" > "$DISK.dump" || exit 1
-grep -q '^/etc/tests/link-motd ino [0-9]* size 9 nlink 1 -> /etc/motd$' "$DISK.dump" ||
+grep -q '^/etc/tests/link-motd ino [0-9]* size 9 nlink 1 mode 777 uid 0 gid 0 -> /etc/motd$' "$DISK.dump" ||
     { echo "  mkfs link missing"; exit 1; }
-grep -q '^/sl/dang ino [0-9]* size 11 nlink 1 -> created\.txt$' "$DISK.dump" ||
+grep -q '^/sl/dang ino [0-9]* size 11 nlink 1 mode 777 uid 0 gid 0 -> created\.txt$' "$DISK.dump" ||
     { echo "  /sl/dang missing"; exit 1; }
 exit 0

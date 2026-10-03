@@ -16,8 +16,9 @@
 #include <lib/printf.h>
 #include <errno.h>
 
-/* Device nodes. The list is protected by devfs_lock. Nodes are never
- * removed, so an inode may keep a pointer to its node without a lock.
+/* Device nodes. The list, and the mode and owner of each node, are
+ * protected by devfs_lock. Nodes are never removed, so an inode may keep
+ * a pointer to its node without a lock.
  * A node registered with S_IFDIR is a directory; parent is the inode of
  * the directory holding the node (ROOT_INO for /dev itself). */
 struct devnode {
@@ -25,6 +26,7 @@ struct devnode {
     uint64_t ino;
     uint64_t parent;
     uint32_t mode;
+    uint32_t uid, gid;              /* owner (U1), root unless changed */
     const struct file_ops *fops;
     void *priv;
     uint64_t size;
@@ -180,9 +182,31 @@ static int devfs_symlink(struct inode *dir, const char *name, size_t len, const 
     return -EPERM;
 }
 
+/* chmod and chown change the node, which outlives its cached inode. The
+ * root of /dev has no node and keeps its mode. */
+static int devfs_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
+{
+    struct devnode *n = devnode_by_ino(ino->ino);
+    if (!n)
+        return -EPERM;
+    spin_lock(&devfs_lock);
+    n->mode = (n->mode & S_IFMT) | mode;
+    n->uid = uid;
+    n->gid = gid;
+    spin_unlock(&devfs_lock);
+    ino->mode = (ino->mode & S_IFMT) | mode;
+    ino->uid = uid;
+    ino->gid = gid;
+    return 0;
+}
+
 static const struct inode_ops devfs_dir_ops = {
     .lookup = devfs_lookup,
     .symlink = devfs_symlink,
+    .setattr = devfs_setattr,
+};
+static const struct inode_ops devfs_node_ops = {
+    .setattr = devfs_setattr,
 };
 static const struct file_ops devfs_dir_fops = {
     .getdents = devfs_getdents,
@@ -201,7 +225,11 @@ static int devfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i
     struct devnode *n = devnode_by_ino(ino);
     if (!n)
         return -ENOENT;
+    spin_lock(&devfs_lock);
     i->mode = n->mode;
+    i->uid = n->uid;
+    i->gid = n->gid;
+    spin_unlock(&devfs_lock);
     if (S_ISDIR(n->mode)) {
         i->nlink = 2;
         i->ops = &devfs_dir_ops;
@@ -209,6 +237,7 @@ static int devfs_read_inode(struct superblock *sb, uint64_t ino, struct inode *i
         return 0;
     }
     i->nlink = 1;
+    i->ops = &devfs_node_ops;
     i->fops = n->fops;
     i->priv = n->priv;
     i->size = n->size;
@@ -220,8 +249,11 @@ static const struct sb_ops devfs_sb_ops = {
     .read_inode = devfs_read_inode,
 };
 
-static int devfs_mount(const struct fs_type *type, const char *source, struct superblock **out)
+static int devfs_mount(const struct fs_type *type, const char *source, const char *options,
+                       struct superblock **out)
 {
+    if (options[0])
+        return -EINVAL;
     if (devfs_sb)
         return -EBUSY;
     struct superblock *sb = sb_alloc(type, &devfs_sb_ops);

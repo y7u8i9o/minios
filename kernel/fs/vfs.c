@@ -546,7 +546,7 @@ long vfs_format_mounts(char *buf, size_t size)
     return error ? error : (long)used;
 }
 
-int vfs_mount(const char *fstype, const char *source, const char *target)
+int vfs_mount(const char *fstype, const char *source, const char *target, const char *options)
 {
     struct fs_type *type = fs_type_find(fstype);
     if (!type)
@@ -575,7 +575,7 @@ int vfs_mount(const char *fstype, const char *source, const char *target)
         r = -ENOMEM;
         goto out;
     }
-    r = type->mount(type, source, &m->sb);
+    r = type->mount(type, source, options ? options : "", &m->sb);
     if (r < 0) {
         kfree(m);
         goto out;
@@ -770,7 +770,7 @@ static int open_create(const char *path, int flags, uint32_t mode, struct inode 
             if (!dir->ops || !dir->ops->create)
                 r = -EROFS;
             else
-                r = dir->ops->create(dir, b->name, len, S_IFREG | (mode & 0777), &ino);
+                r = dir->ops->create(dir, b->name, len, S_IFREG | (mode & 07777 & ~vfs_umask()), &ino);
         }
         mutex_unlock(&dir->lock);
         vfs_op_end(dir->sb);
@@ -876,7 +876,7 @@ fail:
 }
 
 /* Run a directory operation on the parent of path. */
-enum dir_op_kind { DIR_OP_MKDIR, DIR_OP_UNLINK, DIR_OP_RMDIR };
+enum dir_op_kind { DIR_OP_UNLINK, DIR_OP_RMDIR };
 
 static int dir_op(const char *path, enum dir_op_kind kind)
 {
@@ -886,13 +886,8 @@ static int dir_op(const char *path, enum dir_op_kind kind)
     if (r < 0)
         return r;
     int (*fn)(struct inode *, const char *, size_t) = NULL;
-    if (dir->ops) {
-        switch (kind) {
-        case DIR_OP_MKDIR:  fn = dir->ops->mkdir; break;
-        case DIR_OP_UNLINK: fn = dir->ops->unlink; break;
-        case DIR_OP_RMDIR:  fn = dir->ops->rmdir; break;
-        }
-    }
+    if (dir->ops)
+        fn = kind == DIR_OP_UNLINK ? dir->ops->unlink : dir->ops->rmdir;
     if (!fn) {
         inode_put(dir);
         return -EROFS;
@@ -906,9 +901,129 @@ static int dir_op(const char *path, enum dir_op_kind kind)
     return r;
 }
 
-int vfs_mkdir(const char *path)
+/* A directory made in a directory with the set group id bit inherits the
+ * bit, which keeps the group of a shared tree. */
+int vfs_mkdir(const char *path, uint32_t mode)
 {
-    return dir_op(path, DIR_OP_MKDIR);
+    struct inode *dir;
+    char name[NAME_MAX + 1];
+    int r = vfs_lookup_parent(path, &dir, name, sizeof name);
+    if (r < 0)
+        return r;
+    if (!dir->ops || !dir->ops->mkdir) {
+        inode_put(dir);
+        return -EROFS;
+    }
+    mode &= 07777 & ~vfs_umask();
+    if (dir->mode & S_ISGID)
+        mode |= S_ISGID;
+    vfs_op_begin(dir->sb);
+    mutex_lock(&dir->lock);
+    r = dir->ops->mkdir(dir, name, strlen(name), mode);
+    mutex_unlock(&dir->lock);
+    vfs_op_end(dir->sb);
+    inode_put(dir);
+    return r;
+}
+
+int vfs_option_uint(const char *opt, size_t len, const char *name, unsigned base, uint32_t *out)
+{
+    size_t n = strlen(name);
+    if (len <= n || strncmp(opt, name, n) != 0 || opt[n] != '=')
+        return 0;
+    uint64_t v = 0;
+    for (size_t i = n + 1; i < len; i++) {
+        unsigned d = (unsigned)(opt[i] - '0');
+        if (d >= base)
+            return -EINVAL;
+        v = v * base + d;
+        if (v > 0xfffffffeu)
+            return -EINVAL;
+    }
+    *out = (uint32_t)v;
+    return 1;
+}
+
+uint32_t vfs_umask(void)
+{
+    struct proc *p = thread_current()->proc;
+    return __atomic_load_n(&p->cred.umask, __ATOMIC_RELAXED);
+}
+
+void vfs_new_owner(struct inode *dir, uint32_t *uid, uint32_t *gid)
+{
+    struct cred c;
+    cred_get_current(&c);
+    *uid = c.euid;
+    *gid = dir && (dir->mode & S_ISGID) ? dir->gid : c.egid;
+}
+
+static int setattr_locked(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
+{
+    if (!ino->ops || !ino->ops->setattr)
+        return -EROFS;
+    vfs_op_begin(ino->sb);
+    mutex_lock(&ino->lock);
+    int r = ino->ops->setattr(ino, mode & 07777, uid, gid);
+    mutex_unlock(&ino->lock);
+    vfs_op_end(ino->sb);
+    return r;
+}
+
+int vfs_chmod_inode(struct inode *ino, uint32_t mode)
+{
+    struct cred c;
+    cred_get_current(&c);
+    if (!cred_is_root(&c)) {
+        if (c.euid != ino->uid)
+            return -EPERM;
+        /* Only a member of the file's group may set its set group id bit. */
+        if ((mode & S_ISGID) && !cred_in_group(&c, ino->gid))
+            mode &= ~(uint32_t)S_ISGID;
+    }
+    return setattr_locked(ino, mode, ino->uid, ino->gid);
+}
+
+int vfs_chown_inode(struct inode *ino, uint32_t uid, uint32_t gid)
+{
+    struct cred c;
+    cred_get_current(&c);
+    uint32_t new_uid = uid == VFS_CHOWN_KEEP ? ino->uid : uid;
+    uint32_t new_gid = gid == VFS_CHOWN_KEEP ? ino->gid : gid;
+    uint32_t mode = ino->mode & 07777;
+    if (!cred_is_root(&c)) {
+        if (new_uid != ino->uid || c.euid != ino->uid)
+            return -EPERM;
+        if (new_gid != ino->gid && !cred_in_group(&c, new_gid))
+            return -EPERM;
+        /* A change by anyone but root drops the set id bits of a file, which
+         * would otherwise run with privileges its new owner never granted. */
+        if (!S_ISDIR(ino->mode))
+            mode &= ~(uint32_t)(S_ISUID | S_ISGID);
+    }
+    return setattr_locked(ino, mode, new_uid, new_gid);
+}
+
+int vfs_chmod(const char *path, uint32_t mode, unsigned flags)
+{
+    struct inode *ino;
+    int r = vfs_lookup_path(path, flags & VFS_NOFOLLOW, &ino, NULL, 0);
+    if (r < 0)
+        return r;
+    r = vfs_chmod_inode(ino, mode);
+    inode_put(ino);
+    return r;
+}
+
+int vfs_chown(const char *path, uint32_t uid, uint32_t gid, unsigned flags)
+{
+    struct inode *ino;
+    int r = vfs_lookup_path(path, flags & VFS_NOFOLLOW, &ino, NULL, 0);
+    if (r < 0)
+        return r;
+    r = vfs_chown_inode(ino, uid, gid);
+    inode_put(ino);
+    return r;
 }
 
 int vfs_utimens(const char *path, int64_t mtime, unsigned flags)
@@ -1093,6 +1208,8 @@ void inode_stat(struct inode *ino, struct stat *st)
     st->st_ino = ino->ino;
     st->st_mode = ino->mode;
     st->st_nlink = ino->nlink;
+    st->st_uid = ino->uid;
+    st->st_gid = ino->gid;
     st->st_rdev = ino->rdev;
     st->st_size = (int64_t)ino->size;
     st->st_mtim.tv_sec = ino->mtime / 1000000000;

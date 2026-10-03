@@ -6,7 +6,10 @@
 #include <stdint.h>
 
 #define MFS_MAGIC          0x3153464du   /* "MFS1" */
-#define MFS_VERSION        4             /* 2: journal region (M36), 3: 256 byte directory entries, 4: mtime in nanoseconds */
+#define MFS_VERSION        5             /* 2: journal region (M36), 3: 256 byte directory entries, 4: mtime in nanoseconds, 5: owners (U1) */
+/* The oldest version still mounted. Version 4 differs only in leaving the
+ * owner words zero, which reads as root. */
+#define MFS_VERSION_MIN    4
 #define MFS_BLOCK_SIZE     4096
 #define MFS_NDIRECT        12
 #define MFS_INODE_SIZE     128
@@ -51,7 +54,9 @@ struct mfs_dinode {
     uint32_t direct[MFS_NDIRECT];
     uint32_t indirect;
     uint32_t dindirect;
-    uint32_t pad[12];
+    uint32_t uid;                   /* owner (version 5, zero before) */
+    uint32_t gid;
+    uint32_t pad[10];
 };
 
 struct mfs_dirent {

@@ -10,7 +10,10 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
 ## Objects
 
 - `struct fs_type` names a filesystem and provides `mount`, which builds a
-  superblock from a source string. Types register with `vfs_register_fs`.
+  superblock from a source string and, since U1 of the multiuser plan
+  (`users.md`), a comma separated option string that is empty when none
+  was given. mfs, devfs and the initrd accept no options, and FAT takes
+  `uid=`, `gid=` and `umask=`. Types register with `vfs_register_fs`.
 - `struct superblock` is one mounted instance. It carries the root inode
   number, a `dev` identifier and the cache of inodes currently in use.
   `sb_ops` provides `read_inode`, `put_inode`, `sync` and `unmount`, and
@@ -23,7 +26,7 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
   nested calls (an unlinked inode released inside an operation) do not
   start a second one.
 - `struct inode` holds the metadata of one object: mode, link count,
-  size, modification time (seconds since the epoch, reported as
+  owner and group (U1), size, modification time (seconds since the epoch, reported as
   `st_mtime`; `vfs_now` reads it from the real time clock), device
   number for device nodes, the operation tables and a filesystem
   private pointer. mfs stores the time in its inode, FAT converts the
@@ -36,7 +39,12 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
   so a completed test leaves no allocations behind.
 - `struct inode_ops` covers directory operations: `lookup`, `create`,
   `mkdir`, `unlink`, `rmdir`, `link`, `symlink`, `rename` and `truncate`,
-  and `readlink` on a symbolic link. Names are passed as pointer and
+  `readlink` on a symbolic link, and `setmtime` and `setattr` on any
+  inode. `create` and `mkdir` receive the permission bits after the
+  umask, and the new inode takes the owner `vfs_new_owner` chooses.
+  `setattr` (U1) stores new permission bits and a new owner, which
+  `vfs_chmod_inode` and `vfs_chown_inode` compute after checking that the
+  caller may make the change. Names are passed as pointer and
   length. The caller holds the directory inode mutex, or the link's own
   mutex for `readlink`. A filesystem without a given operation leaves the
   pointer NULL and the VFS reports `EROFS`.
@@ -185,8 +193,11 @@ processes of a pipeline exit together.
 the make port, `make.md`), `openat` and `fstatat` (since the tar port,
 `artar.md`; a directory opened by name keeps its canonical path in
 `file.path` for them), and `symlink`, `symlinkat`, `readlink`,
-`readlinkat` and `lstat` (numbers 91 to 95, 2026-09-30) are implemented
-in `syscall/sys_fs.c`. `readlink` copies at most the given size of the
+`readlinkat` and `lstat` (numbers 91 to 95, 2026-09-30), and `fchmodat`,
+`fchmod`, `fchownat` and `fchown` (numbers 103 to 106, U1, `users.md`) are
+implemented in `syscall/sys_fs.c`. `mount` takes a fourth argument, an
+option string or NULL, and `mkdir` passes its mode, which the kernel
+ignored before U1. `readlink` copies at most the given size of the
 target without a NUL and returns the byte count; a size of zero is
 `EINVAL`. User buffers are checked with `user_range_ok` and
 then accessed directly. `read` and `write` on descriptors 0 to 2 go

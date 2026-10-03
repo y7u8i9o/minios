@@ -141,15 +141,16 @@ repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 
 # The initrd is a ustar archive of build/initrd_root, populated by user/.
 initrd: user
-	cd $(BUILD)/initrd_root && tar --format ustar --exclude .DS_Store --exclude ./usr/share/sounds -cf $(INITRD) .
+	cd $(BUILD)/initrd_root && tar --format ustar --owner=0 --group=0 --exclude .DS_Store --exclude ./usr/share/sounds -cf $(INITRD) .
 
 # The disk image is attached as a virtio-blk device and holds the root
 # filesystem: an mfs image built from build/initrd_root (M13). It is
 # rebuilt whenever a user program changes, which discards files written
-# during earlier runs.
-$(DISK): $(MKFS) user
+# during earlier runs. Files keep their permission bits and belong to root,
+# and the manifest user/perms sets the exceptions (docs/design/users.md).
+$(DISK): $(MKFS) user user/perms
 	@mkdir -p $(dir $@)
-	$(MKFS) $@ $(DISK_MB) $(BUILD)/initrd_root
+	$(MKFS) -p user/perms $@ $(DISK_MB) $(BUILD)/initrd_root
 
 # Swap lives on a second virtio-blk device (M14), zero filled.
 $(SWAP):

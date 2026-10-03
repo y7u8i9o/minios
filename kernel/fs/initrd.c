@@ -93,6 +93,9 @@ void initrd_init(void)
                 e->size = strnlen(h->linkname, sizeof h->linkname);
             }
             e->mtime = parse_octal(h->mtime, sizeof h->mtime);
+            e->mode = (uint32_t)parse_octal(h->mode, sizeof h->mode) & 07777;
+            e->uid = (uint32_t)parse_octal(h->uid, sizeof h->uid);
+            e->gid = (uint32_t)parse_octal(h->gid, sizeof h->gid);
             if (e->mtime > newest_mtime)
                 newest_mtime = e->mtime;
             if (e->name[0] != '\0')

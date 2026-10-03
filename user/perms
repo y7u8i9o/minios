@@ -1,0 +1,7 @@
+# Modes and owners on the root image that differ from the build tree, read
+# by mkfs -p (tools/mkfs/mkfs.c, docs/design/users.md). One entry per line,
+# "path mode uid gid", mode octal or "-" to keep the bits of the build
+# tree. A path ending in "/" includes everything below it. Everything not
+# named here belongs to root.
+/tmp 1777 0 0
+/etc/shadow 0600 0 0

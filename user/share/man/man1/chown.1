@@ -1,0 +1,27 @@
+CHOWN(1)                    User Commands
+
+NAME
+    chown, chgrp - change the owner and group of files
+
+SYNOPSIS
+    chown [-R] [-h] owner[:group] file...
+    chown [-R] [-h] :group file...
+    chgrp [-R] [-h] group file...
+
+DESCRIPTION
+    chown sets the owner, and with :group also the group, of each file.
+    owner: with an empty group sets the login group of owner from
+    /etc/passwd, and :group alone changes only the group. chgrp changes
+    the group. Owners and groups are names of /etc/passwd and /etc/group
+    or numbers.
+
+    -R changes directories and everything below them, changing symbolic
+    links met during the walk themselves. -h changes a symbolic link named
+    on the command line itself instead of the file it leads to.
+
+    Only root may change the owner. The owner of a file may change its
+    group to one of the groups the owner belongs to. A change made by
+    anyone but root clears the set user id and set group id bits of a file.
+
+SEE ALSO
+    chmod(1), id(1), ls(1), passwd(5), index(7)

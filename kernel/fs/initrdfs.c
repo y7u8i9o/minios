@@ -120,8 +120,10 @@ static int initrd_read_inode(struct superblock *sb, uint64_t ino, struct inode *
     i->priv = (void *)e;
     i->nlink = 1;
     i->mtime = (int64_t)e->mtime * 1000000000;
+    i->uid = e->uid;
+    i->gid = e->gid;
     if (e->type == INITRD_DIR) {
-        i->mode = S_IFDIR | 0755;
+        i->mode = S_IFDIR | e->mode;
         i->ops = &initrd_dir_ops;
         i->fops = &initrd_dir_fops;
     } else if (e->type == INITRD_LINK) {
@@ -129,7 +131,7 @@ static int initrd_read_inode(struct superblock *sb, uint64_t ino, struct inode *
         i->size = e->size;
         i->ops = &initrd_link_ops;
     } else {
-        i->mode = S_IFREG | 0755;
+        i->mode = S_IFREG | e->mode;
         i->size = e->size;
         i->fops = &initrd_file_fops;
     }
@@ -140,8 +142,11 @@ static const struct sb_ops initrd_sb_ops = {
     .read_inode = initrd_read_inode,
 };
 
-static int initrd_mount(const struct fs_type *type, const char *source, struct superblock **out)
+static int initrd_mount(const struct fs_type *type, const char *source, const char *options,
+                        struct superblock **out)
 {
+    if (options[0])
+        return -EINVAL;
     struct superblock *sb = sb_alloc(type, &initrd_sb_ops);
     if (!sb)
         return -ENOMEM;

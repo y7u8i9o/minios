@@ -9,7 +9,9 @@ SYNOPSIS
 DESCRIPTION
     Lists names in columns on a terminal, one per line in a pipe. -1 forces
     one name per line; -C forces columns. -l shows permissions, link count,
-    size and modification date; -h uses KiB-based units. -a includes hidden
+    owner, group, size and modification date, with s, S, t and T in place
+    of the execute letters for the set id and sticky bits; -h uses
+    KiB-based units. -a includes hidden
     names. -t sorts by modification time, -S by size, -r reverses order.
     -d lists directories themselves, -F adds / for directories, @ for
     symbolic links, * for executables and | for pipes. Names are sorted
@@ -25,4 +27,4 @@ DESCRIPTION
     shown.
 
 SEE ALSO
-    sh(1), man(1), index(7)
+    chmod(1), chown(1), sh(1), man(1), index(7)

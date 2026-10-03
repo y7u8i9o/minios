@@ -192,8 +192,14 @@ long sys_fstat(struct trapframe *tf)
     if (f->inode) {
         inode_stat(f->inode, (struct stat *)st);
     } else {
+        /* Pipes, sockets and the other objects without an inode keep no
+         * owner. They are reported as the caller's own. */
+        struct cred c;
+        cred_get_current(&c);
         memset((void *)st, 0, sizeof(struct stat));
         ((struct stat *)st)->st_mode = S_IFIFO | 0600;
+        ((struct stat *)st)->st_uid = c.euid;
+        ((struct stat *)st)->st_gid = c.egid;
     }
     file_put(f);
     return 0;
@@ -237,9 +243,14 @@ static long path2_op(struct trapframe *tf, int (*fn)(const char *, const char *)
     return fn(a, b);
 }
 
+/* mkdir(path, mode): mode is masked by the umask in vfs_mkdir. */
 long sys_mkdir(struct trapframe *tf)
 {
-    return path_op(tf, vfs_mkdir);
+    char path[USER_PATH_MAX];
+    long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
+    if (r < 0)
+        return r;
+    return vfs_mkdir(path, (uint32_t)SYSARG1(tf));
 }
 
 long sys_unlink(struct trapframe *tf)
@@ -470,7 +481,62 @@ long sys_mount(struct trapframe *tf)
     r = copy_string_from_user(type, SYSARG2(tf), sizeof type);
     if (r < 0)
         return r;
-    return vfs_mount(type, source, target);
+    /* The fourth argument, when not NULL, is a comma separated option
+     * string for the filesystem (U1). */
+    char options[128] = "";
+    if (SYSARG3(tf)) {
+        r = copy_string_from_user(options, SYSARG3(tf), sizeof options);
+        if (r < 0)
+            return r;
+    }
+    return vfs_mount(type, source, target, options);
+}
+
+/* fchmodat(dirfd, path, mode, flags) and fchownat(dirfd, path, uid, gid,
+ * flags), with AT_SYMLINK_NOFOLLOW to change a symbolic link itself. */
+long sys_fchmodat(struct trapframe *tf)
+{
+    if (SYSARG3(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
+        return -EINVAL;
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    return vfs_chmod(path, (uint32_t)SYSARG2(tf), SYSARG3(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0);
+}
+
+long sys_fchownat(struct trapframe *tf)
+{
+    if (SYSARG4(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
+        return -EINVAL;
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    return vfs_chown(path, (uint32_t)SYSARG2(tf), (uint32_t)SYSARG3(tf),
+                     SYSARG4(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0);
+}
+
+/* fchmod(fd, mode) and fchown(fd, uid, gid) act on the inode of an open
+ * file. Objects without an inode cannot be changed. */
+long sys_fchmod(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = f->inode ? vfs_chmod_inode(f->inode, (uint32_t)SYSARG1(tf)) : -EINVAL;
+    file_put(f);
+    return r;
+}
+
+long sys_fchown(struct trapframe *tf)
+{
+    struct file *f = fdtable_get(cur_fds(), (int)SYSARG0(tf));
+    if (!f)
+        return -EBADF;
+    long r = f->inode ? vfs_chown_inode(f->inode, (uint32_t)SYSARG1(tf), (uint32_t)SYSARG2(tf)) : -EINVAL;
+    file_put(f);
+    return r;
 }
 
 long sys_umount(struct trapframe *tf)

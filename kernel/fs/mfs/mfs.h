@@ -64,7 +64,7 @@ int mfs_super_journal(struct mfs_sb *m);
 int mfs_inode_flush(struct inode *ino);
 /* Create a fresh inode of the given mode with nlink links. Returns it
  * referenced, or NULL. */
-struct inode *mfs_inode_new(struct superblock *sb, uint32_t mode, uint32_t nlink);
+struct inode *mfs_inode_new(struct inode *dir, uint32_t mode, uint32_t nlink);
 
 /* bitmap.c */
 uint32_t mfs_alloc_block(struct mfs_sb *m);

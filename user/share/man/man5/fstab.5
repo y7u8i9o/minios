@@ -18,6 +18,13 @@ OPTIONS
     noauto     the entry is not mounted by fsinit
     seed=DIR   copy the tree below DIR into the mount point when the
                mounted filesystem is empty
+    uid=N      owner of every file of a fat volume (default 0)
+    gid=N      group of every file of a fat volume (default 0)
+    umask=OOO  permission bits removed from the files of a fat volume
+               (default 022), which keeps no permissions of its own
+
+    The last three options are passed to the filesystem, and mfs accepts
+    none, since it stores owners and permissions itself.
 
 EXAMPLE
     vdc /home mfs nofail,seed=/usr/share/skel/home

@@ -85,7 +85,7 @@ static struct fat_sb *fat_sb_of(const char *path)
 
 static void exercise(const char *dev, int type)
 {
-    int r = vfs_mount("fat", dev, "/mnt");
+    int r = vfs_mount("fat", dev, "/mnt", NULL);
     ktest_assert(r == 0, "mount %s: %d", dev, r);
     struct fat_sb *m = fat_sb_of("/mnt");
     ktest_assert(m->type == type, "%s: type %d, expected %d", dev, m->type, type);
@@ -117,8 +117,8 @@ static void exercise(const char *dev, int type)
     static char pattern[100000];
     for (size_t i = 0; i < sizeof pattern; i++)
         pattern[i] = i % 26 == 0 ? ' ' : (char)('a' + i % 26);
-    ktest_assert(vfs_mkdir("/mnt/kept") == 0, "mkdir kept");
-    ktest_assert(vfs_mkdir("/mnt/kept") == -EEXIST, "mkdir twice");
+    ktest_assert(vfs_mkdir("/mnt/kept", 0777) == 0, "mkdir kept");
+    ktest_assert(vfs_mkdir("/mnt/kept", 0777) == -EEXIST, "mkdir twice");
     struct file *f;
     r = vfs_open("/mnt/kept/Written by the kernel.txt", O_RDWR | O_CREAT | O_EXCL, 0644, &f);
     ktest_assert(r == 0, "create: %d", r);
@@ -163,7 +163,7 @@ static void exercise(const char *dev, int type)
     ktest_assert(file_holds("/mnt/removed elsewhere.txt", "one", 3), "moved");
     ktest_assert(vfs_rename("/mnt/removed elsewhere.txt", "/mnt/kept/removed file two.txt") == 0, "rename over");
     ktest_assert(file_holds("/mnt/kept/removed file two.txt", "one", 3), "replaced");
-    ktest_assert(vfs_mkdir("/mnt/removed dir") == 0, "mkdir removed dir");
+    ktest_assert(vfs_mkdir("/mnt/removed dir", 0777) == 0, "mkdir removed dir");
     ktest_assert(vfs_rename("/mnt/removed dir", "/mnt/kept/removed dir") == 0, "rename directory");
     ktest_assert(vfs_open("/mnt/kept/removed dir/inner", O_WRONLY | O_CREAT, 0644, &f) == 0, "create inner");
     file_put(f);
@@ -197,7 +197,7 @@ static void exercise(const char *dev, int type)
     ktest_assert(vfs_sync() == 0, "sync");
     r = vfs_umount("/mnt");
     ktest_assert(r == 0, "umount: %d", r);
-    ktest_assert(vfs_mount("fat", dev, "/mnt") == 0, "remount");
+    ktest_assert(vfs_mount("fat", dev, "/mnt", NULL) == 0, "remount");
     m = fat_sb_of("/mnt");
     ktest_assert(m->free_clusters == free0 - 1 - per_file, "clusters after remount");
     ktest_assert(file_holds("/mnt/kept/Written by the kernel.txt", pattern, sizeof pattern), "kept after remount");
@@ -208,8 +208,8 @@ static void exercise(const char *dev, int type)
 
 static void test_fat(void)
 {
-    ktest_assert(vfs_mkdir("/mnt") == 0, "mkdir /mnt");
-    ktest_assert(vfs_mount("fat", "vda", "/mnt") == -EINVAL, "mfs image is not FAT");
+    ktest_assert(vfs_mkdir("/mnt", 0777) == 0, "mkdir /mnt");
+    ktest_assert(vfs_mount("fat", "vda", "/mnt", NULL) == -EINVAL, "mfs image is not FAT");
     exercise("vdb", 12);
     exercise("vdc", 16);
     exercise("vdd", 32);

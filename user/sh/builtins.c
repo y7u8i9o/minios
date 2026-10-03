@@ -5,13 +5,45 @@ static const char *const names[] = {"cd",     "exit",     "pwd",     "export",  
                                     "fg",     "bg",       "wait",    "true",    "false", "ulimit", "help",
                                     "test",   "[",        "echo",    "read",    "shift", "local",  "return",
                                     "source", ".",        "alias",   "unalias", "eval",  "type",   "command",
-                                    "break",  "continue", "history", ":",       NULL};
+                                    "break",  "continue", "history", ":",       "umask", NULL};
 
 int is_builtin(const char *name)
 {
     for (int i = 0; names[i]; i++)
         if (!strcmp(names[i], name))
             return 1;
+    return 0;
+}
+
+/* umask [-S] [mode]: print the file creation mask, in octal or with -S
+ * as the permissions it leaves, or set it from an octal mode. */
+static int builtin_umask(int argc, char **argv)
+{
+    int symbolic = argc > 1 && !strcmp(argv[1], "-S");
+    int i = symbolic ? 2 : 1;
+    if (i < argc) {
+        char *end;
+        unsigned long v = strtoul(argv[i], &end, 8);
+        if (!argv[i][0] || *end || v > 0777) {
+            fprintf(stderr, "umask: %s: octal mode expected\n", argv[i]);
+            return 1;
+        }
+        umask((mode_t)v);
+        return 0;
+    }
+    mode_t mask = umask(0);
+    umask(mask);
+    if (!symbolic) {
+        printf("%04o\n", (unsigned)mask);
+        return 0;
+    }
+    const char *who = "ugo";
+    for (int k = 0; k < 3; k++) {
+        unsigned allowed = ~mask >> (6 - 3 * k) & 7;
+        printf("%s%c=%s%s%s", k ? "," : "", who[k], allowed & 4 ? "r" : "", allowed & 2 ? "w" : "",
+               allowed & 1 ? "x" : "");
+    }
+    printf("\n");
     return 0;
 }
 
@@ -379,6 +411,8 @@ int builtin(int argc, char **argv)
         return 1;
     if (!strcmp(name, "ulimit"))
         return builtin_ulimit(argv);
+    if (!strcmp(name, "umask"))
+        return builtin_umask(argc, argv);
     if (!strcmp(name, "history")) {
         shell_history(argc, argv);
         return 0;

@@ -52,11 +52,15 @@ extern char *optarg;
 extern int optind, opterr, optopt, optreset;
 int getopt(int argc, char *const argv[], const char *optstring);
 
-/* Ownership is stored but not enforced and cannot be changed: both return 0
- * without effect. */
+/* Change the owner and group of a file, (uid_t)-1 and (gid_t)-1 keeping
+ * one. Only root may change the owner. The owner may change the group to
+ * one of its own groups. A change by anyone but root clears the set user
+ * id and set group id bits. lchown changes a symbolic link itself, and
+ * fchownat does so with AT_SYMLINK_NOFOLLOW. */
 int fchown(int fd, uid_t owner, gid_t group);
 int chown(const char *path, uid_t owner, gid_t group);
 int lchown(const char *path, uid_t owner, gid_t group);
+int fchownat(int dirfd, const char *path, uid_t owner, gid_t group, int flags);
 
 /* Real, effective and saved ids of the process (docs/design/users.md).
  * An unprivileged process may set each id only to one of its current

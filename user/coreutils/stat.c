@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <pwd.h>
+#include <grp.h>
 
 static const char *kind(unsigned mode)
 {
@@ -43,10 +45,15 @@ int main(int argc, char **argv)
                 printf(" -> %s", target);
             }
         }
+        struct passwd *pw = getpwuid(st.st_uid);
+        char owner[40];
+        snprintf(owner, sizeof owner, "%s", pw ? pw->pw_name : "?");
+        struct group *gr = getgrgid(st.st_gid);
         printf("\n  Size: %ld\tBlocks: %ld\tIO Block: %ld\t%s\n"
-               "Device: %lu\tInode: %lu\tLinks: %u\n  Mode: %04o\n",
+               "Device: %lu\tInode: %lu\tLinks: %u\n  Mode: %04o\tUid: %u (%s)\tGid: %u (%s)\n",
                (long)st.st_size, (long)st.st_blocks, (long)st.st_blksize, kind(st.st_mode),
-               (unsigned long)st.st_dev, (unsigned long)st.st_ino, st.st_nlink, st.st_mode & 07777);
+               (unsigned long)st.st_dev, (unsigned long)st.st_ino, st.st_nlink, st.st_mode & 07777,
+               st.st_uid, owner, st.st_gid, gr ? gr->gr_name : "?");
     }
     return status;
 }

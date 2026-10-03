@@ -1,0 +1,31 @@
+CHMOD(1)                    User Commands
+
+NAME
+    chmod - change permission bits
+
+SYNOPSIS
+    chmod [-R] mode file...
+
+DESCRIPTION
+    chmod sets the permission bits of each file. mode is an octal number
+    such as 0755, or a comma separated list of clauses of the form
+    [ugoa][+-=][rwxXst], which add, remove or set the read, write and
+    execute bits of the owner (u), the group (g), others (o) or all (a).
+    X grants execute permission only to directories and to files that are
+    executable for someone already, s stands for the set user id and set
+    group id bits and t for the sticky bit. A clause without u, g, o or a
+    applies to all three, limited by the umask.
+
+    -R changes directories and everything below them. Symbolic links met
+    during the walk are not followed.
+
+    Only the owner of a file and root may change its mode. The set group id
+    bit is dropped when the caller does not belong to the file's group.
+
+EXAMPLES
+    chmod 0644 notes.txt
+    chmod u+x,go-w script.sh
+    chmod -R go= private
+
+SEE ALSO
+    chown(1), ls(1), stat(1), sh(1), index(7)

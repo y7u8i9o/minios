@@ -6,9 +6,10 @@
  * Each line of the table names a device, a mount point, a filesystem type
  * and a comma separated list of options: nofail (a missing device is not
  * an error), noauto (the entry is skipped), seed=DIR (DIR is copied into
- * the mount point when the mounted filesystem is empty). Mount points that
- * are mounted already are skipped, so the program may run again. The exit
- * status is 1 when a required mount failed. */
+ * the mount point when the mounted filesystem is empty). Any other option,
+ * such as uid=, gid= or umask= of FAT, is passed to the filesystem. Mount
+ * points that are mounted already are skipped, so the program may run
+ * again. The exit status is 1 when a required mount failed. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -145,6 +146,7 @@ struct entry {
     char target[256];
     char type[16];
     char seed[256];
+    char fsopts[128];               /* options for the filesystem itself */
     int nofail, noauto;
 };
 
@@ -157,8 +159,12 @@ static int parse_options(struct entry *e, char *options)
             e->noauto = 1;
         else if (strncmp(opt, "seed=", 5) == 0)
             strlcpy(e->seed, opt + 5, sizeof e->seed);
-        else if (strcmp(opt, "defaults") != 0)
-            return -1;
+        else if (strcmp(opt, "defaults") != 0) {
+            size_t used = strlen(e->fsopts);
+            if (used + strlen(opt) + 2 > sizeof e->fsopts)
+                return -1;
+            snprintf(e->fsopts + used, sizeof e->fsopts - used, "%s%s", used ? "," : "", opt);
+        }
     }
     return 0;
 }
@@ -172,7 +178,7 @@ static int process(const struct entry *e)
         return 0;
     }
     const char *device = strncmp(e->device, "/dev/", 5) == 0 ? e->device + 5 : e->device;
-    if (mount(device, e->target, e->type) < 0) {
+    if (mount_options(device, e->target, e->type, e->fsopts) < 0) {
         if (e->nofail) {
             note("%s: %s, skipped", e->target, strerror(errno));
             return 0;

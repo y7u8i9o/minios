@@ -515,3 +515,14 @@ These locks are in user space and do not add a kernel lock-order level.
   credentials under the parent's `proc.lock`, together with the resource
   limits. `proc_format_table` reads the effective uid with a relaxed atomic
   load under `proc_tree_lock` and `proc_list_lock`, without `proc.lock`.
+
+## U1 additions
+
+- No new lock. The permission bits of `inode.mode`, `inode.uid` and
+  `inode.gid` are written under `inode.lock` by `setattr`, inside
+  `op_begin` and `op_end` like `setmtime`. Permission checks read them
+  without the lock, since each is one word and a check against a value
+  that changes at that moment may see either.
+- The mode and owner of a devfs node are written under `devfs_lock`,
+  taken inside `inode.lock` by `devfs_setattr`, which gives the order
+  `inode.lock -> devfs_lock`. `devfs_lock` is a leaf.

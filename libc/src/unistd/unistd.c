@@ -252,7 +252,12 @@ long getdents(int fd, struct dirent *buf, size_t count)
 
 int mount(const char *source, const char *target, const char *fstype)
 {
-    return (int)syscall3(SYS_mount, source, target, fstype);
+    return (int)syscall4(SYS_mount, source, target, fstype, NULL);
+}
+
+int mount_options(const char *source, const char *target, const char *fstype, const char *options)
+{
+    return (int)syscall4(SYS_mount, source, target, fstype, options);
 }
 
 int umount(const char *target)
@@ -455,22 +460,32 @@ int uname(struct utsname *buf)
 
 int fchown(int fd, uid_t owner, gid_t group)
 {
-    return 0;
+    return (int)syscall3(SYS_fchown, fd, owner, group);
+}
+
+int fchownat(int dirfd, const char *path, uid_t owner, gid_t group, int flags)
+{
+    return (int)syscall5(SYS_fchownat, dirfd, path, owner, group, flags);
 }
 
 int chown(const char *path, uid_t owner, gid_t group)
 {
-    return 0;
+    return fchownat(AT_FDCWD, path, owner, group, 0);
 }
 
 int fchmod(int fd, mode_t mode)
 {
-    return 0;
+    return (int)syscall2(SYS_fchmod, fd, mode);
+}
+
+int fchmodat(int dirfd, const char *path, mode_t mode, int flags)
+{
+    return (int)syscall4(SYS_fchmodat, dirfd, path, mode, flags);
 }
 
 int chmod(const char *path, mode_t mode)
 {
-    return 0;
+    return fchmodat(AT_FDCWD, path, mode, 0);
 }
 
 #include <sys/uio.h>
@@ -662,7 +677,7 @@ int fstatat(int dirfd, const char *path, struct stat *st, int flags)
 
 int lchown(const char *path, uid_t owner, gid_t group)
 {
-    return 0;
+    return fchownat(AT_FDCWD, path, owner, group, AT_SYMLINK_NOFOLLOW);
 }
 
 int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)

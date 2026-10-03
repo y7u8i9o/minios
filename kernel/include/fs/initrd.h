@@ -20,6 +20,8 @@ struct initrd_entry {
     const uint8_t *data;              /* contents; for a link its target in the header */
     size_t size;
     uint64_t mtime;                   /* seconds since the epoch, from the tar header */
+    uint32_t mode;                    /* permission bits of the tar header (U1) */
+    uint32_t uid, gid;
 };
 
 void initrd_init(void);

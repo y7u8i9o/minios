@@ -18,6 +18,10 @@
 #define S_ISBLK(m) (((m) & S_IFMT) == S_IFBLK)
 #define S_ISFIFO(m) (((m) & S_IFMT) == S_IFIFO)
 #define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
+/* The set user id, set group id and sticky bits. */
+#define S_ISUID  04000
+#define S_ISGID  02000
+#define S_ISVTX  01000
 
 /* Supplementary groups a process may carry (setgroups, getgroups). */
 #define NGROUPS_MAX 16

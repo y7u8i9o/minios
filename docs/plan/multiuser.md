@@ -86,7 +86,7 @@ programs directly as root.
   own `struct passwd`. The SHA-256 crypt vectors, made with
   `openssl passwd -5`, joined the host crypto test of `make check-pkg`.
 
-### U1. Ownership and modes in the filesystems
+### U1. Ownership and modes in the filesystems (completed 2026-10-03)
 
 - `struct inode` gains `uid` and `gid`, reported by `stat`. A `setattr`
   inode operation changes mode and owner as one journaled metadata update.
@@ -97,13 +97,19 @@ programs directly as root.
   `umask=` and refuses `chown`. devfs nodes carry an owner. The initrd keeps
   the tar header's mode, uid and gid.
 - `mkfs` takes the permission bits of the host files and reads the manifest
-  `user/etc/perms` for owners and special modes. `fsck` accepts the new
+  `user/perms` for owners and special modes. `fsck` accepts the new
   format version.
 - The commands `chmod`, `chown` and `chgrp`, owner and group columns in
   `ls -l` and `stat`, and the `umask` builtin of the shell.
 - In the boot test `fs_owner`, files created as several uids on mfs keep
   their owners and modes across a remount, and FAT and devfs report theirs.
   `mfs`, `fat`, `mfs_user` and `user_cred` must still pass.
+- During the work the manifest was placed in `user/perms` instead of
+  `user/etc/perms`, because every file below `user/etc` is installed into
+  `/etc`. FAT files keep having no execute bits. The `ps` check of the
+  `utils` case gained the USER column of U0, and `utils`, `symlink`,
+  `fat_user`, `mfs_journal`, `fs`, `persist`, `shutdown`, `shutdown_cmd`,
+  `blk`, `shell`, `shell2`, `tar` and `ar` pass as well.
 
 ### U2. Permission enforcement
 
