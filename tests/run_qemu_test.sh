@@ -46,11 +46,17 @@
 #             PEER_LOG and PEER_READY
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
-#   boot2     boots the case's disk a second time, without the CD, when the
-#             first boot passed (optional). The firmware loads the boot
-#             loader of the disk. expect2 (or expect2.ARCH) holds the
-#             patterns of the second serial log, serial2.txt, which must
-#             not contain TEST FAIL either.
+#   diskboot  boots the case's disk instead of the CD (optional), whose
+#             boot loader the firmware loads
+#   boot2     boots a second time, without the CD, when the first boot
+#             passed (optional). The firmware loads the boot loader of the
+#             case's disk, or of the mfs2 disk alone when boot2 contains
+#             the word disk2. expect2 (or expect2.ARCH) holds the patterns
+#             of the second serial log, serial2.txt, which must not
+#             contain TEST FAIL either
+#   stop      an extended regex (optional): the first boot ends as soon
+#             as its serial log matches it, for a system that does not
+#             power off by itself, and stop2 does the same for the second
 KERNEL="$1"
 BUILD="$2"
 CASE="$3"
@@ -274,15 +280,22 @@ case "${ARCH:-x86_64}" in
         ;;
     *) fail "unknown ARCH ${ARCH}" ;;
 esac
-# run_qemu SERIAL BOOTFLAGS boots the machine once and waits for it.
+# run_qemu SERIAL BOOTFLAGS DISKFLAGS [STOP] boots the machine once and
+# waits for it to power off, or until the serial log matches the extended
+# regex in the file STOP.
 run_qemu() {
     "$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
         -serial "file:$1" \
-        $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
+        $3 $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
         $2 >"$OUTDIR/qemu.log" 2>&1 &
     QPID=$!
     ELAPSED=0
     while kill -0 $QPID 2>/dev/null; do
+        if [ -n "$4" ] && [ -f "$4" ] && grep -E -q -- "$(cat "$4")" "$1" 2>/dev/null; then
+            kill $QPID 2>/dev/null
+            wait $QPID 2>/dev/null
+            return 0
+        fi
         if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
             kill $QPID 2>/dev/null
             wait $QPID 2>/dev/null
@@ -312,7 +325,8 @@ check_log() {
         done < "$2"
     fi
 }
-run_qemu "$SERIAL" "$BOOTFLAGS"
+[ -f "$CASE/diskboot" ] && BOOTFLAGS="$BOOTFLAGS2"
+run_qemu "$SERIAL" "$BOOTFLAGS" "$DISKFLAGS" "$CASE/stop"
 echo "$?" > "$OUTDIR/exitcode"
 # The peer's log is complete once it has been stopped, and the checks
 # below and the post script read it afterwards.
@@ -344,7 +358,11 @@ fi
 if [ -f "$CASE/boot2" ] && [ "$STATUS" -eq 0 ]; then
     SERIAL2="$OUTDIR/serial2.txt"
     rm -f "$SERIAL2"
-    run_qemu "$SERIAL2" "$BOOTFLAGS2"
+    DISKFLAGS2="$DISKFLAGS"
+    if grep -qw disk2 "$CASE/boot2" && [ -n "$DISK2" ]; then
+        DISKFLAGS2="-drive file=$DISK2,if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0"
+    fi
+    run_qemu "$SERIAL2" "$BOOTFLAGS2" "$DISKFLAGS2" "$CASE/stop2"
     touch "$SERIAL2"
     EXPECT2="$CASE/expect2"
     [ -f "$CASE/expect2.${ARCH:-x86_64}" ] && EXPECT2="$CASE/expect2.${ARCH:-x86_64}"

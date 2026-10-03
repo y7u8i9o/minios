@@ -4,11 +4,11 @@ NAME
     pkg - install, remove, list and build packages
 
 SYNOPSIS
-    pkg [--root dir] [--arch machine] [--config file] install file|name[-version]...
-    pkg [--root dir] [--arch machine] [--config file] check file|name[-version]...
-    pkg [--root dir] [--config file] update
-    pkg [--root dir] [--config file] search [pattern]
-    pkg [--root dir] [--arch machine] [--config file] upgrade [name...]
+    pkg [--root dir] [--arch machine] [--config file] [--keys dir] install file|name[-version]...
+    pkg [--root dir] [--arch machine] [--config file] [--keys dir] check file|name[-version]...
+    pkg [--root dir] [--config file] [--keys dir] update
+    pkg [--root dir] [--config file] [--keys dir] search [pattern]
+    pkg [--root dir] [--arch machine] [--config file] [--keys dir] upgrade [name...]
     pkg [--root dir] remove [--force] name...
     pkg [--root dir] list
     pkg [--root dir] info name|file
@@ -93,6 +93,9 @@ OPTIONS
                      another system
     --config file    read the repositories from file instead of
                      /etc/pkg.conf
+    --keys dir       read the trusted public keys from dir instead of
+                     etc/pkg/keys below the root, for a target root
+                     that has none yet
 
 CONFIGURATION
     /etc/pkg.conf names the repositories, one per line, in the order in
@@ -103,6 +106,9 @@ CONFIGURATION
         timeout 30
 
     $arch in a URL is replaced with the machine name of the system.
+    A URL of the form file:///path names a repository in the file
+    system. Its index is read from there and verified as a download
+    would be, and its archives are used in place.
     Index entries for another machine are not listed.
 
     A key file in /etc/pkg/keys has the suffix .pub and contains one

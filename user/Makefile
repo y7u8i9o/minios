@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter installer
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin

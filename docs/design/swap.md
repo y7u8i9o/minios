@@ -29,7 +29,9 @@ under `swap_lock` tracks free slots; `swap_alloc_run` hands out up to 32
 consecutive slots so a batch of evicted pages is written with one
 request. `make disk` creates `build/swap.img` (64 MiB by default,
 `SWAP_MB`) and `make run` attaches it. The test runner attaches a zero
-filled image of the size named in a case's `swap` file.
+filled image of the size named in a case's `swap` file. `swap=off` on the
+command line attaches no device, which the installer environment uses
+(`installer.md`).
 
 ## Page table representation
 

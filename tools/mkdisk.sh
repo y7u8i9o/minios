@@ -14,8 +14,9 @@
 # is applied with the output of pkg perms. On x86_64 the disk begins with a
 # BIOS boot partition, into which limine bios-install writes the BIOS
 # stage, and UEFI firmware loads EFI/BOOT/BOOT*.EFI of the EFI system
-# partition. DISK_UUID, ESP_UUID, SWAP_UUID and ROOT_UUID fix the GUIDs,
-# which are random otherwise, and ESP_MB and SWAP_MB the sizes (64 each).
+# partition. DISK_UUID, BIOS_UUID, ESP_UUID, SWAP_UUID and ROOT_UUID fix
+# the GUIDs, which are random otherwise, and ESP_MB and SWAP_MB the sizes
+# (64 each).
 set -e
 PKG="$1"; ARCH="$2"; TREE="$3"; PERMS="$4"; OUT="$5"; SIZE_MB="$6"
 MKFS="$7"; MKFAT="$8"; MKGPT="$9"
@@ -24,6 +25,7 @@ LIMINE="$1"; CMDLINE="$2"
 [ -n "$LIMINE" ] || { echo "usage: mkdisk.sh PKG ARCH TREE PERMS OUT SIZE_MB MKFS MKFAT MKGPT LIMINE [CMDLINE]" >&2; exit 2; }
 guid() { python3 -c 'import uuid; print(uuid.uuid4())'; }
 : "${DISK_UUID:=$(guid)}" "${ESP_UUID:=$(guid)}" "${SWAP_UUID:=$(guid)}" "${ROOT_UUID:=$(guid)}"
+: "${BIOS_UUID:=$(guid)}"
 : "${ESP_MB:=64}" "${SWAP_MB:=64}"
 
 WORK="$OUT.d"
@@ -39,8 +41,8 @@ echo "root=PARTUUID=$ROOT_UUID${CMDLINE:+ $CMDLINE}" > "$R/etc/kernel/cmdline"
 BIOS=""
 BIOS_MB=0
 if [ "$ARCH" = x86_64 ]; then
-    echo "vda 1" > "$R/etc/kernel/bios-disk"
-    BIOS="bios:1"
+    echo "PARTUUID=$BIOS_UUID" > "$R/etc/kernel/bios-disk"
+    BIOS="bios:1::$BIOS_UUID"
     BIOS_MB=1
 fi
 printf '# The EFI system partition, which holds the kernel and the boot loader.\nPARTUUID=%s /boot fat\n' "$ESP_UUID" >> "$R/etc/fstab"

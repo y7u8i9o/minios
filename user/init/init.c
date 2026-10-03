@@ -376,7 +376,16 @@ static void start_entry(struct entry *e)
         char *argv[MAX_ARGS + 1];
         build_argv(e, argv);
         execvp(argv[0], argv);
-        fprintf(stderr, "init: %s: exec %s: %s\n", e->name, argv[0], strerror(errno));
+        int err = errno;
+        /* The greeter belongs to the desktop, which a console system
+         * lacks, and the console login takes the place of a console
+         * program that is not installed (docs/design/init.md). */
+        if (e->kind == KIND_CONSOLE && err == ENOENT && strcmp(argv[0], "login") != 0) {
+            fprintf(stderr, "init: %s: %s is not installed, starting login\n", e->name, argv[0]);
+            execlp("login", "login", (char *)NULL);
+            err = errno;
+        }
+        fprintf(stderr, "init: %s: exec %s: %s\n", e->name, argv[0], strerror(err));
         _exit(127);
     }
     if (pid < 0) {

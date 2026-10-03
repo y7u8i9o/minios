@@ -13,7 +13,10 @@ extend the environment of every program started afterwards, `task`
 entries run to completion in file order, `service` entries run in the
 background and are restarted, and the `console` entry is the session on
 the console, started as the leader of its own session and process group
-with the terminal (`setsid`, `tcsetpgrp`). Options between the name and the command are
+with the terminal (`setsid`, `tcsetpgrp`). When the program of the
+`console` entry is not installed, as the greeter on a system without the
+desktop, init starts `login` in its place (P7 of
+`docs/plan/packaging.md`). Options between the name and the command are
 `if=PATH` (start only when the path exists), `log=FILE` (standard
 output and error appended to the file) and `restart=always|never|failure`.
 The shipped file runs `fsinit`, starts `audiod` as the `audio` service

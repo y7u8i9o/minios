@@ -757,9 +757,17 @@ static uint32_t next_entry(struct dir *d, uint32_t index, struct fat_dirent **ou
     int have_lfn = 0;
     size_t lfn_len = 0;
     uint32_t n = dir_entries(d);
+    /* The entries are copies, because a hit does not renew a cache entry and
+     * the next fetch may reuse the buffer of the cluster. The entry handed
+     * back stays valid until the next call. */
+    static struct fat_dirent cur;
     for (; index < n; index++) {
-        struct fat_dirent *e = dir_entry(d, index, 0);
-        if (!e || e->name[0] == FAT_NAME_FREE)
+        struct fat_dirent *src = dir_entry(d, index, 0);
+        if (!src)
+            return 0;
+        struct fat_dirent ent = *src;
+        struct fat_dirent *e = &ent;
+        if (e->name[0] == FAT_NAME_FREE)
             return 0;
         if (e->name[0] == FAT_NAME_DELETED) {
             have_lfn = 0;
@@ -787,7 +795,10 @@ static uint32_t next_entry(struct dir *d, uint32_t index, struct fat_dirent **ou
             have_lfn = 0;
             continue;
         }
-        if (have_lfn && fat_short_checksum(e->name) == (((struct fat_lfn *)dir_entry(d, index - 1, 0))->checksum)) {
+        uint8_t lfn_sum = 0;
+        if (have_lfn && index > 0)
+            lfn_sum = ((struct fat_lfn *)dir_entry(d, index - 1, 0))->checksum;
+        if (have_lfn && fat_short_checksum(e->name) == lfn_sum) {
             size_t len = 0;
             while (len < lfn_len && lfn[len] != 0 && lfn[len] != 0xffff)
                 len++;
@@ -805,7 +816,8 @@ static uint32_t next_entry(struct dir *d, uint32_t index, struct fat_dirent **ou
             if (name[0] == FAT_NAME_E5)
                 name[0] = (char)0xe5;
         }
-        *out = e;
+        cur = *e;
+        *out = &cur;
         return index + 1;
     }
     return 0;

@@ -347,7 +347,7 @@ installer comes last.
   second boot runs through the BIOS stage, and on aarch64, through UEFI,
   together with the package, partition, disk tool and boot cases.
 
-### P7. The installer
+### P7. The installer (completed 2026-10-03)
 
 - `user/installer/` holds the back end and the text front end. The
   installer asks for the language, the keymap, the time zone, the target
@@ -365,6 +365,27 @@ installer comes last.
 - The boot test `install_auto` installs the desktop group onto a blank
   disk and must reach the greeter in the second boot. `install_console`
   installs the standard group and must reach `minios login:`.
+- During the work the questions lost the host name, which minios does
+  not have, and a reused data volume is mounted on `/home`, where the
+  accounts on it apply without being copied. The answer file
+  `installer.conf` on the medium, rather than a kernel option, selects
+  the installation without questions. The target is mounted on
+  `/run/installer/target`, since the installer environment runs from the
+  read only initrd with tmpfs on `/tmp` and `/run`. `pkg` gained `file://`
+  repositories, which it reads in place, and `--keys DIR` for an empty
+  target, which a subagent wrote and the host test covers. The kernel
+  takes `swap=off`, which prevents the empty target from becoming swap,
+  `mkdir` reports `EEXIST` before `EROFS`, and init starts `login` when
+  the console program is not installed. `/etc/kernel/bios-disk` names the
+  BIOS boot partition by its GUID, since disk names change between the
+  installer and the installed system. The harness gained `diskboot`, the
+  word `disk2` in `boot2` and the patterns `stop` and `stop2`. The
+  `symlink` case found a mistake of the P5 rework in the read modes of
+  `mkfs` and `mkfat`, which read a cached block after evicting it, and
+  that is corrected. `install_auto`, `install_console`, `symlink`,
+  `disk_tools`, `gpt_boot`, `kernel_upgrade` and the file system, package,
+  init and login cases pass on x86_64, and the installation cases and
+  `symlink` on aarch64.
 
 ### P8. The development disk and offline updates
 

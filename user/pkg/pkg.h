@@ -160,6 +160,7 @@ struct index_entry {
 };
 struct index { struct index_entry *entries; int n, cap; };
 extern const char *config_path;
+extern const char *keys_path;
 int config_read(struct repo_config *c);
 int index_load(const struct repo_config *c, struct index *ix, int quiet);
 void index_free(struct index *ix);
@@ -167,6 +168,7 @@ const struct index_entry *index_best(const struct index *ix, const char *name, c
 const struct index_entry *index_find(const struct index *ix, const char *name, const char *version);
 const struct index_entry *index_provider(const struct index *ix, const struct pkg_lib *lib);
 int repo_fetch(const struct repo_config *c, const struct index_entry *e, const char *dest);
+int repo_local_archive(const struct repo_config *c, const struct index_entry *e, char *path, size_t n);
 int file_matches(const struct index_entry *e, const char *file, const char *label, const char *repo,
                  char *err, size_t errlen);
 int config_present(void);

@@ -1,0 +1,33 @@
+#!/bin/sh
+# Checks on the host the disk that the installer wrote: the account of the
+# answer file with its password and its membership of wheel, the language
+# and keyboard layout of desktop.conf, the log of the installer, and the
+# boot loader configuration on the EFI system partition with the root
+# named by its GUID.
+set -e
+WORK="$(dirname "$DISK2")/post"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKGPT" -l "$DISK2" > "$WORK/table"
+extract() {
+    first=$(grep " $1 " "$WORK/table" | cut -d' ' -f3)
+    last=$(grep " $1 " "$WORK/table" | cut -d' ' -f4)
+    dd if="$DISK2" of="$2" bs=512 skip="$first" count=$((last - first + 1)) 2>/dev/null
+}
+extract esp "$WORK/esp.img"
+extract "root-$ARCH" "$WORK/root.img"
+fail() { echo "post: $1"; exit 1; }
+cat_root() { "$MKFS" --cat "$WORK/root.img" "$1"; }
+cat_root /home/.local/etc/passwd | grep -q '^anna:x:1000:1000:Anna Example:/home/anna:/bin/sh$' || fail "passwd"
+cat_root /home/.local/etc/passwd | grep -q '^user:' && fail "the seed account user remains"
+cat_root /home/.local/etc/shadow | grep -q '^anna:\$5\$' || fail "shadow of anna"
+cat_root /home/.local/etc/shadow | grep -q '^root:\$5\$' || fail "shadow of root"
+cat_root /home/.local/etc/group | grep -q '^wheel:x:10:anna$' || fail "wheel"
+cat_root /etc/desktop.conf | grep -q '^lang=de_DE.UTF-8$' || fail "lang"
+cat_root /etc/desktop.conf | grep -q '^keymap=fr$' || fail "keymap"
+cat_root /var/log/installer.log | grep -q 'made the account anna, a member of wheel' || fail "installer.log"
+root_uuid=$(grep " root-$ARCH " "$WORK/table" | cut -d' ' -f5)
+"$MKFAT" --cat "$WORK/esp.img" /limine.conf | grep -q "cmdline: root=PARTUUID=$root_uuid" || fail "limine.conf"
+"$FSCK" "$WORK/root.img" > "$WORK/fsck.log" || { cat "$WORK/fsck.log"; fail "fsck"; }
+rm -rf "$WORK"
+echo "post: the installed system holds the answers"

@@ -12,6 +12,7 @@
 #include <mm/ptwalk.h>
 #include <block/blockdev.h>
 #include <block/part.h>
+#include <lib/cmdline.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <sched/thread.h>
@@ -470,9 +471,15 @@ void swap_init(void)
 /* The swap device is the swap partition of the Discoverable Partitions
  * Specification on the boot disk, or on vda when the boot disk is not
  * found, and otherwise the whole of vdb when it has no partition table
- * (docs/design/block.md). */
+ * (docs/design/block.md). swap=off on the command line, which the
+ * installer uses, attaches none, since its target disk is empty. */
 void swap_attach(void)
 {
+    char val[8];
+    if (cmdline_lookup("swap", val, sizeof val) && strcmp(val, "off") == 0) {
+        klog_info("swap is off");
+        return;
+    }
     struct blockdev *disk = part_boot_disk();
     if (!disk)
         disk = blockdev_find("vda");

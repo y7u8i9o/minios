@@ -1,5 +1,5 @@
 /* This file implements signed repositories (docs/design/packages.md). A
- * repository is a directory served over HTTP holding the archives, an index that lists
+ * repository is a directory, served over HTTP or named by a file:// URL, holding the archives, an index that lists
  * each archive with its name, version, size and SHA-256 digest, and a
  * detached Ed25519 signature of the index. The transport is plain HTTP,
  * so nothing fetched is trusted until the signature of the index verifies
@@ -34,8 +34,11 @@
 #define INDEX_ENTRIES_MAX 512
 #define INDEX_MAGIC "minios-pkg-index 1"
 
-/* --config sets config_path; without it pkg reads <root>/etc/pkg.conf. */
+/* --config sets config_path, and without it pkg reads <root>/etc/pkg.conf.
+ * --keys sets keys_path, and without it the trusted keys are the files
+ * of <root>/etc/pkg/keys. */
 const char *config_path;
+const char *keys_path;
 
 static int report(const char *who, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static int report(const char *who, const char *fmt, ...)
@@ -133,6 +136,30 @@ static void expand_arch(char *url, size_t size)
     strlcpy(url, out, size);
 }
 
+static void keys_dir(char *path, size_t n)
+{
+    if (keys_path)
+        strlcpy(path, keys_path, n);
+    else
+        snprintf(path, n, "%s/etc/pkg/keys", root);
+}
+
+/* A file repository is named file:// followed by an absolute path of
+ * plain characters without empty, dot or dot-dot components. */
+#define FILE_URL "file://"
+static int repo_url_is_file(const char *url)
+{
+    return strncmp(url, FILE_URL, sizeof FILE_URL - 1) == 0;
+}
+
+static int archive_path_valid(const char *p);
+
+static int file_url_valid(const char *url)
+{
+    return repo_url_is_file(url) && url[sizeof FILE_URL - 1] == '/' &&
+           archive_path_valid(url + sizeof FILE_URL);
+}
+
 int config_present(void)
 {
     char path[PKG_PATH_MAX];
@@ -169,8 +196,8 @@ int config_read(struct repo_config *c)
                 b[--ul] = '\0';
             if (!name_valid(a))
                 r = report(NULL, "%s line %d: invalid repository name %s", path, n, a);
-            else if (http_parse_url(b, &u) < 0)
-                r = report(NULL, "%s line %d: %s is not an http:// URL", path, n, b);
+            else if (repo_url_is_file(b) ? !file_url_valid(b) : http_parse_url(b, &u) < 0)
+                r = report(NULL, "%s line %d: %s is not an http:// or file:/// URL", path, n, b);
             else if (c->nrepos == PKG_MAX_REPOS)
                 r = report(NULL, "%s line %d: more than %d repositories", path, n, PKG_MAX_REPOS);
             for (int i = 0; r == 0 && i < c->nrepos; i++)
@@ -203,12 +230,11 @@ static void key_id(char id[17], const uint8_t pub[ED25519_PUBLIC_SIZE])
 }
 
 /* key_lookup finds the trusted key named id. It returns 0 with pub and
- * the file name set, or -1 when no key file under <root>/etc/pkg/keys has
- * that id. A key file holds one line, `ed25519 HEX`. */
+ * the file name set, or -1 when no key file in the key directory has that id. A key file holds one line, `ed25519 HEX`. */
 static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *file, size_t filelen)
 {
     char dir[PKG_PATH_MAX];
-    snprintf(dir, sizeof dir, "%s/etc/pkg/keys", root);
+    keys_dir(dir, sizeof dir);
     DIR *d = opendir(dir);
     if (!d)
         return -1;
@@ -251,14 +277,15 @@ static int index_verify(const uint8_t *text, size_t len, const char *sig, char *
 {
     char kind[16], id[32], hex[160];
     uint8_t signature[ED25519_SIGNATURE_SIZE], pub[ED25519_PUBLIC_SIZE];
-    char keyfile[PKG_PATH_MAX];
+    char keyfile[PKG_PATH_MAX], kdir[PKG_PATH_MAX];
     if (sscanf(sig, "%15s %31s %159s", kind, id, hex) != 3 || strcmp(kind, "ed25519") != 0 ||
         strlen(id) != 16 || unhex(signature, sizeof signature, hex) < 0) {
         snprintf(err, errlen, "the signature file is malformed");
         return -1;
     }
+    keys_dir(kdir, sizeof kdir);
     if (key_lookup(id, pub, keyfile, sizeof keyfile) < 0) {
-        snprintf(err, errlen, "the index is signed by key %s, which is not in %s/etc/pkg/keys", id, root);
+        snprintf(err, errlen, "the index is signed by key %s, which is not in %s", id, kdir);
         return -1;
     }
     if (!ed25519_verify(signature, text, len, pub)) {
@@ -568,6 +595,38 @@ static int fetch(const char *url, const char *path, int timeout, long long max, 
     return r < 0 ? -1 : 0;
 }
 
+/* fetch_file copies the file at path to dest and refuses more than max
+ * bytes, as fetch does for a download. err receives the reason of a
+ * failure. */
+static int fetch_file(const char *path, const char *dest, long long max, char *err, size_t errlen)
+{
+    struct stat st;
+    uint8_t *data;
+    size_t len;
+    if (stat(path, &st) < 0) {
+        snprintf(err, errlen, "%s: %s", path, strerror(errno));
+        return -1;
+    }
+    if (st.st_size > max) {
+        snprintf(err, errlen, "%s is larger than %lld bytes", path, max);
+        return -1;
+    }
+    if (read_file(path, &data, &len) < 0) {
+        snprintf(err, errlen, "%s: %s", path, strerror(errno));
+        return -1;
+    }
+    int r = 0;
+    if ((long long)len > max) {
+        snprintf(err, errlen, "%s is larger than %lld bytes", path, max);
+        r = -1;
+    } else if (write_file(dest, data, len) < 0) {
+        snprintf(err, errlen, "%s: %s", dest, strerror(errno));
+        r = -1;
+    }
+    free(data);
+    return r;
+}
+
 /* file_matches returns 1 when the file has the size and digest the entry
  * gives, 0 when it differs, and -1 when it cannot be read. err says how
  * the file differs, naming it as label and the index by repo. */
@@ -610,6 +669,23 @@ int repo_fetch(const struct repo_config *c, const struct index_entry *e, const c
     return 0;
 }
 
+/* repo_local_archive serves an archive of a file repository in place. It
+ * returns 0 when the repository of e is not a file repository, 1 with the
+ * path of the archive in path after its size and digest equal those of
+ * the index entry, and -1 after a report when they differ. */
+int repo_local_archive(const struct repo_config *c, const struct index_entry *e, char *path, size_t n)
+{
+    const struct repo *r = &c->repos[e->repo];
+    char err[400];
+    if (!repo_url_is_file(r->url))
+        return 0;
+    if (snprintf(path, n, "%s/%s", r->url + sizeof FILE_URL - 1, e->path) >= (int)n)
+        return report(e->m.name, "the archive path is too long");
+    if (file_matches(e, path, e->path, r->name, err, sizeof err) <= 0)
+        return report(e->m.name, "%s", err);
+    return 1;
+}
+
 static int update_one(const struct repo_config *c, int i)
 {
     const struct repo *r = &c->repos[i];
@@ -620,11 +696,15 @@ static int update_one(const struct repo_config *c, int i)
         return report(r->name, "%s: %s", dir, strerror(errno));
     path_join(index_new, sizeof index_new, dir, "index.new");
     path_join(sig_new, sizeof sig_new, dir, "index.sig.new");
-    snprintf(url, sizeof url, "%s/index", r->url);
-    if (fetch(url, index_new, c->timeout, INDEX_MAX, err, sizeof err) < 0)
+    int local = repo_url_is_file(r->url);
+    const char *base = local ? r->url + sizeof FILE_URL - 1 : r->url;
+    snprintf(url, sizeof url, "%s/index", base);
+    if ((local ? fetch_file(url, index_new, INDEX_MAX, err, sizeof err)
+               : fetch(url, index_new, c->timeout, INDEX_MAX, err, sizeof err)) < 0)
         return report(r->name, "%s", err);
-    snprintf(url, sizeof url, "%s/index.sig", r->url);
-    if (fetch(url, sig_new, c->timeout, SIG_MAX, err, sizeof err) < 0) {
+    snprintf(url, sizeof url, "%s/index.sig", base);
+    if ((local ? fetch_file(url, sig_new, SIG_MAX, err, sizeof err)
+               : fetch(url, sig_new, c->timeout, SIG_MAX, err, sizeof err)) < 0) {
         unlink(index_new);
         return report(r->name, "%s", err);
     }

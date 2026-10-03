@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -111,17 +112,44 @@ void boot_save_previous(const char *target)
         fprintf(stderr, "pkg: %s: cannot save the previous kernel: %s\n", target, strerror(errno));
 }
 
+/* The disk and the index of the partition with the unique GUID guid, from
+ * /dev/partitions ("name disk partuuid typeuuid bytes"). */
+static int partition_of(const char *guid, char *disk, size_t dsize, char *index, size_t isize)
+{
+    FILE *f = fopen("/dev/partitions", "r");
+    char line[256], name[32], d[32], uuid[64];
+    int found = 0;
+    while (f && !found && fgets(line, sizeof line, f))
+        if (sscanf(line, "%31s %31s %63s", name, d, uuid) == 3 && strcasecmp(uuid, guid) == 0 &&
+            strncmp(name, d, strlen(d)) == 0) {
+            snprintf(disk, dsize, "%s", d);
+            snprintf(index, isize, "%s", name + strlen(d));
+            found = 1;
+        }
+    if (f)
+        fclose(f);
+    return found ? 0 : -1;
+}
+
 /* /etc/kernel/bios-disk holds the disk the BIOS boots from and, after a
- * space, the GPT partition index of its BIOS boot partition. The
- * installation into another root leaves this to the installer. */
+ * space, the GPT partition index of its BIOS boot partition, or
+ * PARTUUID=GUID of that partition, which the installer writes, since the
+ * name of a disk depends on the disks attached. The installation into
+ * another root leaves this to the installer. */
 int boot_bios_install(void)
 {
-    char line[64], dev[48], index[16] = "";
+    char line[96], dev[48], index[16] = "";
     if (root[0])
         return 0;
     first_line("etc/kernel/bios-disk", line, sizeof line);
-    if (!line[0] || sscanf(line, "%31s %15s", dev + 5, index) < 1)
+    if (strncmp(line, "PARTUUID=", 9) == 0) {
+        if (partition_of(line + 9, dev + 5, sizeof dev - 5, index, sizeof index) < 0) {
+            fprintf(stderr, "pkg: /etc/kernel/bios-disk: no partition %s\n", line + 9);
+            return -1;
+        }
+    } else if (!line[0] || sscanf(line, "%31s %15s", dev + 5, index) < 1) {
         return 0;
+    }
     memcpy(dev, "/dev/", 5);
     pid_t pid = fork();
     if (pid < 0)

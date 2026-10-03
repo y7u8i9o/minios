@@ -196,6 +196,15 @@ sysimage: base $(PKGHOST) $(MKFS) user/perms
 
 initrd: sysimage
 
+# The installation medium (P7, docs/design/installer.md): a GPT disk with
+# the boot files, the installer environment and the signed repository of
+# every package. QEMU attaches it as a virtio disk, and on hardware it is
+# written to a USB stick.
+INSTALLER := $(BUILD)/installer.img
+.PHONY: installer
+installer: base kernel $(PKGHOST) $(PKGSIGN) $(PKG_KEY_FILE) $(PKG_PUB) $(MKFS) $(MKFAT) $(MKGPT) $(LIMINE)
+	tools/mkinstaller.sh $(ARCH) $(BASE) $(BUILD)/packages $(INSTALLER) 1024
+
 $(DISK): sysimage
 
 # Swap lives on a second virtio-blk device (M14), zero filled.
@@ -335,12 +344,12 @@ check-lua:
 # the vectors of RFC 6234 and RFC 8032, and the pkg_repo case runs the same
 # test on minios. It then runs the host build of pkg against an
 # installation root in build/host/pkgtest.
-check-pkg: $(PKGHOST)
+check-pkg: $(PKGHOST) $(PKGSIGN)
 	@mkdir -p $(BUILD)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter libc/include \
 	    -o $(BUILD)/host/cryptotest user/tests/cryptotest.c $(CRYPTO_SRCS)
 	$(BUILD)/host/cryptotest
-	PKG=$(abspath $(PKGHOST)) WORK=$(abspath $(BUILD)/host/pkgtest) sh user/pkg/tests/host.sh
+	PKG=$(abspath $(PKGHOST)) PKGSIGN=$(abspath $(PKGSIGN)) MKREPO=$(abspath tools/mkrepo.sh) WORK=$(abspath $(BUILD)/host/pkgtest) sh user/pkg/tests/host.sh
 
 .PHONY: check-sh libedit
 check-sh:

@@ -495,10 +495,14 @@ static void dump_tree(uint32_t ino, const char *prefix, int depth)
     struct mfs_dinode *di = &copy;
     for (uint64_t off = 0; off < di->size; off += MFS_DIRENT_SIZE) {
         uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
-        struct mfs_dirent *e = (struct mfs_dirent *)(block(b) + off % MFS_BLOCK_SIZE);
+        /* Copies, because a hit does not renew a cache entry and the next fetch
+         * may reuse the buffer of the directory block or of the inode block. */
+        struct mfs_dirent ent = *(struct mfs_dirent *)(block(b) + off % MFS_BLOCK_SIZE);
+        struct mfs_dirent *e = &ent;
         if (!e->ino || strcmp(e->name, ".") == 0 || strcmp(e->name, "..") == 0)
             continue;
-        struct mfs_dinode *c = dinode(e->ino);
+        struct mfs_dinode cin = *dinode(e->ino);
+        struct mfs_dinode *c = &cin;
         int isdir = (c->mode & S_IFMT_) == S_IFDIR_;
         printf("%s/%s%s ino %u size %llu nlink %u mode %o uid %u gid %u", prefix, e->name, isdir ? "/" : "",
                e->ino, (unsigned long long)c->size, c->nlink, c->mode & 07777, c->uid, c->gid);

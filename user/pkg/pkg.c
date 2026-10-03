@@ -28,6 +28,7 @@ struct pending {
     int skip;                   /* the same version is installed */
     int done;                   /* ordering */
     int fetched;                /* The archive came from a repository. */
+    int temporary;              /* The archive is a download in fetch_dir. */
     struct record rec;          /* the files and directories once installed */
     struct record old;          /* the record of the version being replaced */
     int have_old;
@@ -42,7 +43,7 @@ static int force;
 
 static void usage(void)
 {
-    fputs("usage: pkg [--root DIR] [--arch MACHINE] [--config FILE] command...\n"
+    fputs("usage: pkg [--root DIR] [--arch MACHINE] [--config FILE] [--keys DIR] command...\n"
           "       pkg install FILE|NAME[-VERSION]...\n"
           "       pkg check FILE|NAME[-VERSION]...\n"
           "       pkg update\n"
@@ -1071,24 +1072,36 @@ static int resolve_dependencies(const struct index *ix)
 }
 
 /* fetch_wanted downloads every wanted package into a private directory
- * under /tmp and adds the verified archives to the pending list. */
+ * under /tmp and adds the verified archives to the pending list. An
+ * archive of a file repository is verified and used in place. */
 static int fetch_wanted(const struct repo_config *c)
 {
-    snprintf(fetch_dir, sizeof fetch_dir, "/tmp/pkg-%d", (int)getpid());
-    if (mkdir(fetch_dir, 0700) < 0 && errno != EEXIST)
-        return error(NULL, "%s: %s", fetch_dir, strerror(errno));
     for (int i = 0; i < nwanted; i++) {
         const struct index_entry *e = wanted[i];
         if (npend == MAX_PENDING)
             return error(NULL, "at most %d packages per command", MAX_PENDING);
         char *file = fetched_files[npend];
-        snprintf(file, PKG_PATH_MAX, "%s/%s-%s.mpk", fetch_dir, e->m.name, e->m.version);
-        if (repo_fetch(c, e, file) < 0)
+        int local = repo_local_archive(c, e, file, PKG_PATH_MAX);
+        if (local < 0)
             return -1;
-        printf("fetched %s %s from %s\n", e->m.name, e->m.version, c->repos[e->repo].name);
+        if (!local) {
+            if (!fetch_dir[0]) {
+                snprintf(fetch_dir, sizeof fetch_dir, "/tmp/pkg-%d", (int)getpid());
+                if (mkdir(fetch_dir, 0700) < 0 && errno != EEXIST) {
+                    int err = errno;
+                    fetch_dir[0] = '\0';
+                    return error(NULL, "cannot create the download directory: %s", strerror(err));
+                }
+            }
+            snprintf(file, PKG_PATH_MAX, "%s/%s-%s.mpk", fetch_dir, e->m.name, e->m.version);
+            if (repo_fetch(c, e, file) < 0)
+                return -1;
+        }
+        printf("%s %s %s from %s\n", local ? "found" : "fetched", e->m.name, e->m.version, c->repos[e->repo].name);
         struct pending *p = &pend[npend++];
         p->file = file;
         p->fetched = 1;
+        p->temporary = !local;
         if (open_package(p) < 0)
             return -1;
         if (strcmp(p->m.name, e->m.name) != 0 || strcmp(p->m.version, e->m.version) != 0)
@@ -1101,7 +1114,7 @@ static int fetch_wanted(const struct repo_config *c)
 static void remove_fetched(void)
 {
     for (int i = 0; i < npend; i++)
-        if (pend[i].fetched)
+        if (pend[i].temporary)
             unlink(pend[i].file);
     if (fetch_dir[0])
         rmdir(fetch_dir);
@@ -1703,11 +1716,13 @@ int main(int argc, char **argv)
 {
     int i = 1;
     while (argc > i + 1 && (strcmp(argv[i], "--root") == 0 || strcmp(argv[i], "--arch") == 0 ||
-                            strcmp(argv[i], "--config") == 0)) {
+                            strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--keys") == 0)) {
         if (argv[i][2] == 'r')
             root = argv[i + 1];
         else if (argv[i][2] == 'a')
             target_arch = argv[i + 1];
+        else if (argv[i][2] == 'k')
+            keys_path = argv[i + 1];
         else
             config_path = argv[i + 1];
         i += 2;

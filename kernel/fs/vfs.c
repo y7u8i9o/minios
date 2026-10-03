@@ -1044,6 +1044,21 @@ int vfs_mkdir(const char *path, uint32_t mode)
     int r = vfs_lookup_parent(path, &dir, name, sizeof name);
     if (r < 0)
         return r;
+    /* A name that exists gives EEXIST before any other error, as POSIX
+     * and Linux order them, which lets a program create the missing
+     * directories of a path that leads across a read only filesystem,
+     * such as the initrd of the installer (docs/design/installer.md). */
+    if (dir->ops && dir->ops->lookup) {
+        struct inode *found = NULL;
+        mutex_lock(&dir->lock);
+        int e = dir->ops->lookup(dir, name, strlen(name), &found);
+        mutex_unlock(&dir->lock);
+        if (e == 0) {
+            inode_put(found);
+            inode_put(dir);
+            return -EEXIST;
+        }
+    }
     if (!dir->ops || !dir->ops->mkdir) {
         inode_put(dir);
         return -EROFS;

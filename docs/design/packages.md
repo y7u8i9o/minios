@@ -523,7 +523,8 @@ trust anchor is the set of public keys under `/etc/pkg/keys/` on the
 image. A key file there is named `*.pub` and holds one line,
 `ed25519 HEX`, with the 32 byte public key. The build installs the
 public half of its signing key as `/etc/pkg/keys/build.pub`, and further
-files add keys.
+files add keys. The option `--keys DIR` names another directory for the
+same purpose, which a target root without `etc/pkg/keys` needs.
 
 `pkg` accepts an index only when the key its signature names is one of
 those files and the signature verifies against that key. It accepts an
@@ -582,7 +583,19 @@ each, in the order in which they are searched. NAME follows the rules
 of a package name, and URL has the form `http://HOST[:PORT]/PATH`.
 `timeout SECONDS` bounds the connection and every wait for data, 30
 seconds by default. `--config FILE` reads another file, and `--root DIR`
-makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/`.
+makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/`. An empty
+target has neither, and `--keys DIR` names the directory of the trusted
+public keys instead of `ROOT/etc/pkg/keys/`.
+
+A URL may also have the form `file:///ABSOLUTE/PATH` for a repository in
+the file system, for example the medium of the installer. The path
+consists of letters, digits and `._+-/` and has no empty, dot or dot-dot
+component, and `$arch` is replaced as in other URLs. For such a
+repository `update` reads `PATH/index` and `PATH/index.sig` with the
+same size limits and the same verification as a download, and `install`
+and `upgrade` use `PATH/ENTRY-PATH` in place after its size and SHA-256
+digest equal those of the verified index entry. The archive is not
+copied to `/tmp` and is never removed.
 
 ### Commands
 
@@ -622,7 +635,7 @@ provides, a package whose `provides` line names the soname with the same
 ABI number is added. The resolution continues with what it added. A
 dependency that the indexes cannot supply is left to the checks of
 install, which report it. The selected archives are downloaded into
-`/tmp/pkg-PID/`, checked against the index and handed, together with
+`/tmp/pkg-PID/` (archives of file repositories are used in place), checked against the index and handed, together with
 the archive files of the command line, to the installation path of the
 previous sections. The directory is removed afterwards whether the
 installation succeeded or not.

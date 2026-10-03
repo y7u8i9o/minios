@@ -1,0 +1,5 @@
+#!/bin/sh
+# The installation medium of the case, with the answer file beside this
+# script, which makes the installer run without questions and power off.
+set -e
+"$TOP/tools/mkinstaller.sh" "$ARCH" "$(dirname "$DISK")/base" "$(dirname "$DISK")/packages" "$OUT" 1024 "$CASE/answers.conf"

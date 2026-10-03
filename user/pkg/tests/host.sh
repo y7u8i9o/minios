@@ -3,7 +3,8 @@
 # packages without ELF files into an installation root below WORK and
 # checks the records, the owners that pkg perms prints, configuration
 # files, a failed transaction and the refusals of format 1 and of a file
-# that belongs to no package. Every failing check prints a line starting
+# that belongs to no package. With PKGSIGN and MKREPO it also installs from
+# a signed file repository into a second root. Every failing check prints a line starting
 # with FAIL, and the exit status is 1 when any check failed.
 PKG=${PKG:?}
 WORK=${WORK:?}
@@ -121,6 +122,59 @@ printf 'x\n' > old/files/share/x
 (cd old && COPYFILE_DISABLE=1 tar --format ustar -cf - manifest files | gzip > ../old-1.0.mpk)
 check format-1 "$($P install old-1.0.mpk 2>&1)" \
     "pkg: old: old-1.0.mpk is a package of format 1, and this installer reads format 2; rebuild it"
+
+# A signed repository in the file system serves a second, empty root. The
+# trusted keys and the configuration are outside that root.
+if test -n "$PKGSIGN" && test -n "$MKREPO"; then
+    mkdir -p fr/liba/files/usr/share/liba fr/appb/files/usr/share/appb
+    printf 'name liba\nversion 1.0\nsummary A library package\n' > fr/liba/manifest
+    printf 'a\n' > fr/liba/files/usr/share/liba/data
+    printf 'name appb\nversion 2.0\nsummary An application package\ndepends liba\n' > fr/appb/manifest
+    printf 'b\n' > fr/appb/files/usr/share/appb/data
+    $P build fr/liba fr/liba-1.0.mpk > /dev/null
+    $P build fr/appb fr/appb-2.0.mpk > /dev/null
+    $PKGSIGN keygen fr/key > /dev/null
+    $PKGSIGN keygen fr/other > /dev/null
+    mkdir -p fr/keys
+    $PKGSIGN public fr/key > fr/keys/test.pub
+    sh "$MKREPO" "$PKGSIGN" fr/key "$WORK/fr/repo" fr/liba-1.0.mpk fr/appb-2.0.mpk > /dev/null
+    printf 'repo local file://%s/fr/repo\n' "$WORK" > fr/pkg.conf
+    R2="$WORK/root2"
+    mkdir -p "$R2"
+    P2="$PKG --root $R2 --arch x86_64 --config $WORK/fr/pkg.conf --keys $WORK/fr/keys"
+    check file-update "$($P2 update)" "local: 2 packages from file://$WORK/fr/repo"
+    check file-cache "$(cmp $R2/var/lib/pkg/_repos/local/index fr/repo/index && echo same)" "same"
+    check file-search "$($P2 search application)" "appb 2.0 local An application package"
+    check file-install "$($P2 install appb | tr '\n' ',')" \
+        "found appb 2.0 from local,found liba 1.0 from local,installed liba 1.0,installed appb 2.0,"
+    check file-list "$($P2 list | tr '\n' ',')" "appb 2.0 An application package,liba 1.0 A library package,"
+    check file-data "$(cat $R2/usr/share/appb/data)" "b"
+    check file-verify "$($P2 verify; echo $?)" "0"
+    check file-kept "$(ls fr/repo | tr '\n' ' ')" "appb-2.0.mpk index index.sig liba-1.0.mpk "
+    check file-tmp "$(ls -d /tmp/pkg-* 2>/dev/null | wc -l | tr -d ' ')" "0"
+
+    # An archive that changed after the signing is refused and not removed.
+    R3="$WORK/root3"
+    mkdir -p "$R3"
+    P3="$PKG --root $R3 --arch x86_64 --config $WORK/fr/pkg.conf --keys $WORK/fr/keys"
+    $P3 update > /dev/null
+    size=$(wc -c < fr/repo/liba-1.0.mpk | tr -d ' ')
+    printf 'x' >> fr/repo/liba-1.0.mpk
+    check file-tampered "$($P3 install liba 2>&1)" \
+        "pkg: liba: liba-1.0.mpk is $((size + 1)) bytes, the index of local gives $size"
+    # Same size, other content, which only the digest can tell.
+    head -c "$((size - 1))" fr/repo/liba-1.0.mpk > fr/swap
+    printf 'Z' >> fr/swap
+    cp fr/swap fr/repo/liba-1.0.mpk
+    check file-digest "$($P3 install liba 2>&1)" "pkg: liba: the SHA-256 digest of liba-1.0.mpk differs from the index of local"
+    check file-tampered-kept "$(test -f fr/repo/liba-1.0.mpk && echo present)" "present"
+    check file-tampered-none "$($P3 list | wc -l | tr -d ' ')" "0"
+
+    # An index signed by another key is refused.
+    $PKGSIGN sign fr/other fr/repo/index
+    check file-wrong-key "$($P3 update 2>&1 | grep -c '^pkg: local: the index is signed by key .* which is not in ')" "1"
+    check file-tmp-end "$(ls -d /tmp/pkg-* 2>/dev/null | wc -l | tr -d ' ')" "0"
+fi
 
 if test $status = 0; then
     echo "pkg host test: done"
