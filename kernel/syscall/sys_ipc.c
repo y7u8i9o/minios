@@ -98,7 +98,7 @@ static long install_flags(struct file *f, int flags)
 
 /* socket(domain, type, protocol). The type carries SOCK_NONBLOCK and
  * SOCK_CLOEXEC. AF_UNIX callers of M23 pass those flags in the protocol
- * argument instead, which stays accepted for that family alone. */
+ * argument instead, which remains accepted for that family alone. */
 long sys_socket(struct trapframe *tf)
 {
     int family = (int)SYSARG0(tf);

@@ -16,10 +16,10 @@ Every access goes through the block cache by byte offset (`fat_rw`), so
 clusters of 512 bytes to 32 KiB work regardless of the 4 KiB cache block.
 
 `table.c` reads and writes table entries (12 bit entries straddle bytes,
-32 bit entries keep their top nibble) in every FAT copy, allocates
+32 bit entries retain their top nibble) in every FAT copy, allocates
 zeroed clusters from a search hint, frees chains and walks a file's
 chain from a cached position (`fat_cluster_at`, which also extends the
-chain). The free cluster count is computed at mount and kept in
+chain). The free cluster count is computed at mount and retained in
 `fat_sb`; on FAT32 `sync` writes it to the FSInfo sector.
 
 ## Inodes
@@ -28,7 +28,7 @@ The root directory is inode 1. Every other inode number is the byte
 offset of the file's short directory entry divided by 32, which is
 unique and stable while the entry exists; a rename moves the entry and
 therefore changes the number of an open file (the driver updates the
-cached inode in place, so the file stays usable). An unlinked entry is
+cached inode in place, so the file remains usable). An unlinked entry is
 marked in the inode (`unlinked`) so that nothing is written back to a
 slot another file may reuse; the clusters are released when the last
 reference goes away, as for mfs.
@@ -50,7 +50,7 @@ short name without long name pieces is presented in lower case. Lookups
 compare names case insensitively (ASCII). A created name gets long name
 entries unless it already is a valid upper case 8.3 name; its short name
 is up to six characters of the base, `~N` with the first N that is unused
-in the directory, and up to three of the extension. Names may hold any
+in the directory, and up to three of the extension. Names may contain any
 UTF-8 character of the basic multilingual plane except the characters
 FAT forbids.
 
@@ -61,7 +61,7 @@ FAT forbids.
 - `mkfat [-t 12|16|32] <image> <size_mb> [dir]` writes an image with the
   tree under `dir`; without `-t` the type follows the size (FAT12 below
   4 MiB, FAT16 below 256 MiB). The cluster size is the largest up to
-  4 KiB that keeps the cluster count inside the type's range.
+  4 KiB that retains the cluster count inside the type's range.
 - `mkfat --dump <image>` prints the type, cluster count and the tree
   with clusters and sizes; `mkfat --cat <image> <path>` prints a file.
 

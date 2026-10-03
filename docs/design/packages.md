@@ -193,7 +193,7 @@ from it receives them through this list.
     pkg verify [NAME...]                check the recorded files
     pkg perms                           the modes and owners of all recorded paths
     pkg bootconfig                      write the boot loader configuration again
-    pkg build DIR [OUT]                 make an archive from a directory holding manifest and files/
+    pkg build DIR [OUT]                 make an archive from a directory containing manifest and files/
 
 This section describes the operations on archive files; the commands
 that use repositories are described under Repositories, and they hand
@@ -305,7 +305,7 @@ The rule has three parts:
    library in the transitive `DT_NEEDED` closure of that file. The
    installer sorts the defined symbols of each library once, since a
    base system checks thousands of references against a few libraries. The
-   installer reads the section headers, which the installed files keep,
+   installer reads the section headers, which the installed files retain,
    of the package's members and of the libraries on disk. This catches a
    program built against a newer state of a library with the same ABI
    number.
@@ -317,7 +317,7 @@ refused with the program's name.
 
 ## Building packages
 
-A package is built from a directory holding `manifest` and `files/`.
+A package is built from a directory containing `manifest` and `files/`.
 `pkg build` walks the tree in sorted order, derives the `needs` lines,
 writes `format 2` and ustar headers naming root as the owner with the
 modes of the tree, setuid bits included, and compresses the archive with
@@ -513,7 +513,7 @@ kernel as the second entry, and `kernel.elf.old`.
 
 ## Repositories
 
-A repository is a directory served over HTTP. It holds the archives, a
+A repository is a directory served over HTTP. It contains the archives, a
 file `index` that lists them, and `index.sig`, the Ed25519 signature of
 the index. Each architecture has its own repository (A9). `make repo`
 writes the repository of the bundled applications to `build/repo/x86_64/`
@@ -555,7 +555,7 @@ several versions of a package, each name and version once. The parser
 accepts an index of at most 4 MiB and at most 512 entries over all
 configured repositories.
 
-`index.sig` holds one line, `ed25519 KEYID SIGNATURE`. KEYID is the
+`index.sig` contains one line, `ed25519 KEYID SIGNATURE`. KEYID is the
 first eight bytes of the SHA-256 of the signing public key, and
 SIGNATURE is the 64 byte Ed25519 signature (RFC 8032) of the exact
 bytes of `index`, both in hexadecimal.
@@ -564,7 +564,7 @@ bytes of `index`, both in hexadecimal.
 
 The server, the network and everything between them are untrusted. The
 trust anchor is the set of public keys under `/etc/pkg/keys/` on the
-image. A key file there is named `*.pub` and holds one line,
+image. A key file there is named `*.pub` and contains one line,
 `ed25519 HEX`, with the 32 byte public key. The build installs the
 public half of its signing key as `/etc/pkg/keys/build.pub`, and further
 files add keys. The option `--keys DIR` names another directory for the
@@ -578,16 +578,16 @@ package and version as the entry. What the installer does with the
 archive afterwards is the local installation with all its checks. The
 digest binds each archive to the signed index, so a party that can
 change the index or the archives in transit cannot make `pkg` install
-anything that the holder of the key did not list. The size in the index
+anything that the party that possesses the key did not list. The size in the index
 also bounds the download, so a server cannot fill the disk with an
 oversized archive. An index is limited to 4 MiB and a signature file to
 1 KiB.
 
 The model does not cover freshness. The index carries no date or
-sequence number, so a server can keep offering an older index that was
+sequence number, so a server can continue offering an older index that was
 validly signed, and `pkg update` accepts it. The archives it lists are
 older, but each of them was signed. Every key in `/etc/pkg/keys/` is
-trusted for every repository, and whoever holds a private key can sign
+trusted for every repository, and whoever possesses a private key can sign
 any index.
 
 ### Keys and signing
@@ -604,7 +604,7 @@ file. `tools/mkrepo.sh PKGSIGN KEY OUTDIR ARCHIVE...` empties OUTDIR,
 copies the archives into it, writes the index from the manifest of each
 archive with the name line first, and signs it.
 
-The private key stays out of git. The build uses
+The private key remains out of git. The build uses
 `build/pkg/signing.key`, which `pkgsign keygen` creates when it does not
 exist, or the file that the make variable `PKG_KEY` names. Every build
 derives the public half into `build/pkg/signing.pub` and copies it to
@@ -647,8 +647,8 @@ copied to `/tmp` and is never removed.
 into `/var/lib/pkg/_repos/NAME/` as `index.new` and
 `index.sig.new`, verifies the signature, parses the index, and only then
 renames both into place and records the URL in `url`. A refused index
-is deleted and the last verified one stays in place. The underscore
-keeps the directory apart from the package records, since a package
+is deleted and the last verified one remains in place. The underscore
+separates the directory from the package records, since a package
 name cannot contain one. The repositories are updated one after another
 and independently of each other, and the exit status is 1 when any of
 them failed.
@@ -845,5 +845,5 @@ another key. `make check` includes it.
 - A window for the installer, opened by Files for `.mpk` files, showing
   the manifest and the checks before installation.
 - The index should carry a sequence number, so that `pkg update` refuses
-  an index older than the one it holds, and a key should be bound to the
+  an index older than the one it contains, and a key should be bound to the
   repositories it signs for.

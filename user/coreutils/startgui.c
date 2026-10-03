@@ -2,7 +2,7 @@
  * method daemon, the panel, the desktop), run the program (the terminal by
  * default) and stop the session on logout. The audio server is a service
  * of init and lives across sessions. With -s the server runs already, as
- * the greeter starts it and keeps it across sessions, and startgui starts
+ * the greeter starts it and retains it across sessions, and startgui starts
  * the session programs alone (docs/design/users.md). */
 #include <stdio.h>
 #include <string.h>

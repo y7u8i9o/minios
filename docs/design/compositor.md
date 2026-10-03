@@ -37,7 +37,7 @@ serial line to the kernel and the programs.
   the previous one (`buffer.release`) and damages the old and new
   extents, or only the contents when the geometry is unchanged (the
   usual frame of a double buffered client, whose decorations and shadow
-  stay as drawn); a commit without a new buffer damages the listed
+  remain as drawn); a commit without a new buffer damages the listed
   rectangles. A damage rectangle lying entirely inside one opaque
   surface skips the desktop fill. Surfaces are placed in a cascade until M25 gives them
   roles and positions; a surface is mapped once it has a buffer.
@@ -53,7 +53,7 @@ serial line to the kernel and the programs.
   object and the arguments formatted by `wire_format_args`. `client`
   events follow when a client connects, reports its pid through the
   shell or disconnects. The traffic of a client that traces is never
-  traced, so two tracers cannot feed each other, and a flag keeps the
+  traced, so two tracers cannot feed each other, and a flag retains the
   hook from tracing the events it queues itself. When more than 48 KiB
   are queued to a tracer, its messages are counted instead of queued
   and reported by one `dropped` event once it reads again, so a slow
@@ -73,7 +73,7 @@ serial line to the kernel and the programs.
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
   buffer and every coordinate above it are logical pixels, the screen is
   `width/2` by `height/2`, and the flush expands each logical row once
-  (M32). Since M33 the back buffer holds device pixels: the scene
+  (M32). Since M33 the back buffer contains device pixels: the scene
   composes at `screen_scale` device pixels per logical pixel, buffers
   with the output's scale are copied 1:1 and others resampled, and
   decorations and the cursor are drawn at the scale (`display.md`).
@@ -88,7 +88,7 @@ error. A layer surface records the last four configures it was sent. Its
 client may acknowledge an older one that arrived before a newer one, as
 the desktop does when the panel maps and reconfigures it during its first
 configure, and may then commit a buffer of that older size. The newer
-configure stays pending until the client acknowledges it. libwire's server logs every protocol error it posts and every
+configure remains pending until the client acknowledges it. libwire's server logs every protocol error it posts and every
 failed send on stderr.
 
 Layer surfaces on the overlay layer (3) are stacked above the top
@@ -149,12 +149,12 @@ framebuffer and the compositor's log.
   the connection) is dropped instead of the process dying.
 - Client sockets are accepted non blocking, so one client cannot stall
   the display server; when a client's socket is full, libwire drops the
-  event instead of blocking or overflowing its buffer. The terminal keeps
+  event instead of blocking or overflowing its buffer. The terminal leaves
   its pseudo terminal master non blocking for the same reason.
 - Unresponsive clients (`user/compositor/hang.c`): X12 sends `shell.ping`
   to every client once a second and the client answers with
   `shell.pong` (libgui does this in its event dispatch). A client that
-  has not answered for three seconds, or whose socket has stayed full
+  has not answered for three seconds, or whose socket has remained full
   that long, is shown as not responding: its toplevels are dimmed and
   carry a dialog drawn by the server with "<title> is not responding",
   Wait and Force quit. Wait hides the dialog for fifteen seconds; Force

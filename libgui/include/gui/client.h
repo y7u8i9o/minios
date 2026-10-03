@@ -1,7 +1,7 @@
 #pragma once
 /* Client side of the display protocol (M26): windows are toplevel
  * surfaces with double buffered shared memory; events are delivered as
- * struct wmsg records, kept from the M17 design so the framework and
+ * struct wmsg records, carried over from the M17 design so the framework and
  * the applications are unchanged. */
 #include <gui/gfx.h>
 #include <minios/input.h>
@@ -27,7 +27,7 @@ enum wmsg_type {
 
 /* WM_KEY: a = key code (the Linux codes KEY_* of minios/input.h),
  * b = 1 down / 0 up, c = modifiers, d = translated character or 0. A
- * held key repeats after the compositor's delay at its rate: the
+ * pressed key repeats after the compositor's delay at its rate: the
  * library queues further WM_KEY down messages until the release.
  * WM_MOUSE: a = x, b = y in window contents coordinates, c = buttons
  * (WMOUSE_WHEEL: the delta), d = kind. WM_FOCUS: a = 1 gained / 0 lost.
@@ -109,7 +109,7 @@ int gui_next_event(struct wmsg *ev, int timeout_ms);
 /* Descriptor of the connection, for callers with their own poll loop. */
 int gui_event_fd(void);
 /* Milliseconds until the next key repeat is due, or -1 when no key is
- * held; callers with their own poll loop cap their timeout with it and
+ * pressed; callers with their own poll loop cap their timeout with it and
  * call gui_next_event(ev, 0) afterwards. */
 int gui_repeat_timeout(void);
 /* The modifier keys that are pressed now (WMOD_*), for mouse events. */

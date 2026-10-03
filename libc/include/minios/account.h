@@ -17,7 +17,7 @@
  * line (given without its newline), append it when there is none, or
  * remove it when line is NULL. A symbolic link at path is followed, and
  * the new contents are written to a temporary file in the directory of the
- * target and renamed over it, which keeps the mode and the owner of the
+ * target and renamed over it, which preserves the mode and the owner of the
  * old file. Returns 0 or -1 with errno set. */
 int account_replace(const char *path, const char *name, const char *line);
 
@@ -33,9 +33,9 @@ bool account_check(const char *password, const char *hash);
  * up to 31 lowercase letters, digits, "_" or "-". */
 bool account_name_valid(const char *name);
 
-/* Copy the tree below from into the existing directory to, keeping the
+/* Copy the tree below from into the existing directory to, retaining the
  * permission bits less the umask and copying symbolic links as links.
- * Entries that exist already are kept. Returns 0 or -1 with errno set. */
+ * Entries that exist already are preserved. Returns 0 or -1 with errno set. */
 int account_copy_tree(const char *from, const char *to);
 
 /* Give path and, when it is a directory, everything below it to uid and

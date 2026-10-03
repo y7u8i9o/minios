@@ -23,9 +23,9 @@ clean:
 fail:
 	@false
 	@echo not reached
-keep:
+retain:
 	-@false
-	@echo kept
+	@echo retained
 M
 make > out.txt 2>&1 || echo "FAIL make-build"
 check make-result "$(cat prog | tr '\n' ' ')" "x y "
@@ -39,7 +39,7 @@ check make-n "$(make -n | tr '\n' ' ')" "cp a.c a.o "
 check make-s "$(make -s)" ""
 make -q; check make-q-rebuilt "$?" "0"
 make fail > /dev/null 2>&1; test $? != 0 || echo "FAIL make-error-status"
-check make-ignore-prefix "$(make keep 2>/dev/null)" "kept"
+check make-ignore-prefix "$(make retain 2>/dev/null)" "retained"
 check make-i "$(make -i fail 2>/dev/null)" "not reached"
 make clean > /dev/null || echo "FAIL make-clean"
 ls prog > /dev/null 2>&1 && echo "FAIL make-clean-result"

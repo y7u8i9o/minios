@@ -83,7 +83,7 @@ static void test_lockfree(void)
     struct rcu_head head;
     rcu_called = false;
     rcu_read_lock();
-    ktest_assert(rcu_read_held(), "rcu read state");
+    ktest_assert(rcu_read_locked(), "rcu read state");
     rcu_read_unlock();
     rcu_call(&head, test_rcu_callback);
     uint64_t deadline = timer_ms() + 1000;

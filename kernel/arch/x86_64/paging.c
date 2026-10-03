@@ -55,7 +55,7 @@ uintptr_t paging_init_kernel_root(void)
     if (!root)
         return 0;
     /* Populate every kernel half root entry now so user spaces can copy
-     * them once and stay in sync with all later kernel mappings. */
+     * them once and remain in sync with all later kernel mappings. */
     pte_t *table = P2V(root);
     for (int i = PT_ROOT_USER_ENTRIES; i < PT_ENTRIES; i++) {
         uintptr_t pdpt = paging_alloc_table();
@@ -122,7 +122,7 @@ void paging_enable_features(void)
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NXE);
 
     /* PAT entry 1 becomes write combining, selected by PTE_PWT. Entries
-     * 0 (WB), 2 (UC-) and 3 (UC) keep their defaults. */
+     * 0 (WB), 2 (UC-) and 3 (UC) retain their defaults. */
     uint64_t pat = rdmsr(MSR_PAT);
     pat = (pat & ~(0xffUL << 8)) | (0x01UL << 8);
     wrmsr(MSR_PAT, pat);

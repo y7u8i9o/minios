@@ -34,7 +34,7 @@ extern char boot_stack_top[];
 static uint64_t gdt_entry(uint8_t access, uint8_t flags)
 {
     /* Base and limit are ignored in long mode for code and data segments,
-     * but a full limit keeps 32 bit compatibility checks happy. */
+     * but a full limit ensures that 32 bit compatibility checks pass. */
     return 0xffffULL | ((uint64_t)0x0f << 48) | ((uint64_t)access << 40) |
            ((uint64_t)flags << 52);
 }

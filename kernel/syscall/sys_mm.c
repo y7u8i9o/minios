@@ -10,7 +10,7 @@
 #include <minios/abi.h>
 #include <errno.h>
 
-/* True if adding extra bytes of regions stays within RLIMIT_AS. */
+/* True if adding extra bytes of regions remains within RLIMIT_AS. */
 static bool within_as(struct proc *p, size_t extra)
 {
     uint64_t lim = proc_rlimit_cur(p, RLIMIT_AS);

@@ -15,11 +15,11 @@ DESCRIPTION
     password is locked or empty cannot be entered by others, and a wrong
     password ends su with "su: incorrect password".
 
-    Without options su keeps the environment and sets HOME and SHELL, and
+    Without options su retains the environment and sets HOME and SHELL, and
     also USER and LOGNAME unless the target is root. With -p the shell
     named by SHELL in the environment runs instead of the shell of the
     account. With -l su starts a login shell in the home of the account
-    with an environment that holds only HOME, SHELL, USER, LOGNAME and
+    with an environment that contains only HOME, SHELL, USER, LOGNAME and
     TERM, as login(1) does.
 
     su runs no single command. A command is run as another account with

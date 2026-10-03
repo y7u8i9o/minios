@@ -52,7 +52,7 @@ extern char *optarg;
 extern int optind, opterr, optopt, optreset;
 int getopt(int argc, char *const argv[], const char *optstring);
 
-/* Change the owner and group of a file, (uid_t)-1 and (gid_t)-1 keeping
+/* Change the owner and group of a file, (uid_t)-1 and (gid_t)-1 retaining
  * one. Only root may change the owner. The owner may change the group to
  * one of its own groups. A change by anyone but root clears the set user
  * id and set group id bits. lchown changes a symbolic link itself, and
@@ -132,7 +132,7 @@ int gethostname(char *name, size_t size);
  * without a terminal. The result lives in static storage. */
 char *getpass(const char *prompt);
 
-/* symlink creates path as a symbolic link holding target, which is not
+/* symlink creates path as a symbolic link containing target, which is not
  * checked and may name nothing. readlink copies at most size bytes of a
  * link's target into buf without a terminating NUL and returns the count.
  * The *at forms resolve a relative path from the directory dirfd. */

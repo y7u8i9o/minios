@@ -1,7 +1,7 @@
 /* Romaji to hiragana for the Japanese engine of imed (I4,
  * docs/design/ime.md), with the table of the L6 engine.  A sequence that
  * begins a longer one waits, a doubled consonant is a small tsu, an n
- * before a consonant is ん, and a letter that begins no sequence stays as
+ * before a consonant is ん, and a letter that begins no sequence remains as
  * it is. */
 #include <string.h>
 #include "romaji.h"

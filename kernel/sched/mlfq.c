@@ -58,7 +58,7 @@ void sched_unlock_current(void)
 
 static void enqueue_locked(struct run_queues *r, struct thread *t)
 {
-    kassert(spin_holding(&r->lock));
+    kassert(spin_locked_by_current(&r->lock));
     if (t->waiting_on)
         panic("enqueue waiter %s tid %d state %d wq %p", t->name, t->tid, t->state, t->waiting_on);
     __atomic_store_n(&t->state, THREAD_READY, __ATOMIC_RELEASE);
@@ -158,7 +158,7 @@ static void drain_inbound_locked(struct run_queues *r)
     }
 }
 
-/* Victim locks are tried while the local lock is held, never waited for. */
+/* Victim locks are tried while the local lock is locked, never waited for. */
 static struct thread *steal_best_locked(void)
 {
     unsigned me = cpu_current()->id;
@@ -229,7 +229,7 @@ void sched_finish_switch(void)
     spin_lock(&z->exit_lock);
     z->finished = true;
     waitq_wake_all(&z->exit_waitq);
-    /* A joiner may free z as soon as it observes finished. Keep the
+    /* A joiner may free z as soon as it observes finished. Retain the
      * condition lock until our last access to the embedded wait queue. */
     spin_unlock(&z->exit_lock);
     sched_lock_current();
@@ -238,7 +238,7 @@ void sched_finish_switch(void)
 void sched_switch_locked(void)
 {
     struct run_queues *r = local_rq();
-    kassert(spin_holding(&r->lock));
+    kassert(spin_locked_by_current(&r->lock));
     struct cpu *c = cpu_current();
     struct thread *prev = c->current;
     kassert(__atomic_load_n(&prev->state, __ATOMIC_ACQUIRE) != THREAD_RUNNING);

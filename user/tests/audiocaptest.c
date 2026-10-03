@@ -53,7 +53,7 @@ static void raw_capture(void)
     CHECK(ioctl(fd, AUDIO_GET_CAPTURE_STATUS, &status) == 0, "status after drop");
     CHECK(status.state == AUDIO_STATE_OPEN && status.queued_frames == 0,
           "stopped state %u queued %u", status.state, status.queued_frames);
-    /* Playback stays independent of the capture stream. */
+    /* Playback remains independent of the capture stream. */
     CHECK(ioctl(fd, AUDIO_GET_STATUS, &status) == 0 && status.state == AUDIO_STATE_OPEN,
           "playback untouched %u", status.state);
     free(period);

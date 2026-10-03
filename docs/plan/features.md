@@ -88,7 +88,7 @@ the per frame, per key and per commit lines need the verbose setting
 libgui renders a subset of SVG (`libgui/src/svg.c`: view box, paths
 with fills, both fill rules, curves and arcs, antialiased) into images
 that carry their device scale; `icon_get` prefers `<name>.svg` in
-`/usr/share/icons` and keeps the PNG fallback. The icons are Font
+`/usr/share/icons` and retains the PNG fallback. The icons are Font
 Awesome Free (solid), downloaded by `tools/fetch_icons.sh` into
 `third_party/fontawesome/`. Documented in `docs/design/icons.md`,
 tested by `libgui/tests/test_svg.c`.
@@ -125,7 +125,7 @@ of date.
 format of the GNU binutils, and the tar of sbase is compiled unmodified
 from `third_party/sbase` (downloaded by `tools/fetch_tar.sh`) into
 `/bin/tar`. The kernel gained `openat` and `fstatat` (a directory opened
-by name keeps its path in `file.path`) and `proc_reap_children` for the
+by name retains its path in `file.path`) and `proc_reap_children` for the
 run test; the libc gained `pwd.h`, `grp.h`, `sys/sysmacros.h`, `execlp`
 and the refused `symlink`, `readlink`, `mknod` and `mkfifo`; `gzip`
 accepts `-f`. Documented in `docs/design/artar.md`, tested by
@@ -209,7 +209,7 @@ history, completion, reverse search and bracketed paste. `/bin/sh` was
 rewritten as a parser of complete command trees (`if`, `for`, `while`,
 `until`, `case`, functions, subshells, brace groups) with POSIX expansion
 order, here documents, `local`, `alias`, `source` and startup files
-(`/etc/profile`, `$HOME/.shrc`). The framebuffer console keeps 16 colour
+(`/etc/profile`, `$HOME/.shrc`). The framebuffer console stores 16 colour
 SGR attributes per cell and preserves the order of user output across
 CPUs. libc gained `glob`, `fnmatch`, `wcwidth`, `getline` and the `term.h`
 helpers; `ls`, `grep`, `less`, `tree` and `df` use colour and the terminal
@@ -331,9 +331,9 @@ tested by `make check-lua`, `gui_lua_bindings` and `lua_prompt`.
 
 The VFS resolves symbolic links in every component of a path, and in the
 last one unless the caller asks for the link itself, with relative
-targets taken from the directory holding the link, at most 40 links per
+targets taken from the directory that contains the link, at most 40 links per
 lookup and `..` resolved against the directory a link led to; the working
-directory and the paths of open directories are kept without links.
+directory and the paths of open directories are stored without links.
 `open` refuses a link with `O_NOFOLLOW` and creates the target of a
 dangling link with `O_CREAT`. The system calls `symlink`, `symlinkat`,
 `readlink`, `readlinkat` and `lstat` were added and `fstatat` and
@@ -377,7 +377,7 @@ needs them; a resolver cache per process with TTLs bounded to one hour,
 negative caching after RFC 2308 and the search list of
 `/etc/resolv.conf`; and RFC 5227 conflict detection in `dhcpc` through a
 new `/dev/net` probe operation, with DHCPDECLINE, announcements and a
-lease kept on the home volume for INIT-REBOOT. `netpeer` gained a scripted
+lease stored on the home volume for INIT-REBOOT. `netpeer` gained a scripted
 TCP peer and `check_capture.py` checks option use on the wire. Documented
 in `docs/design/network.md` and `docs/design/network-n13-n16-validation.md`,
 tested by `net_tcp_options`, `net_tcp_options_peer`, `net_tcp_sack`,
@@ -509,7 +509,7 @@ mapped. Launcher entries can include arguments. Documented in
 The path prompt that the programs used for Open and Save was replaced by
 a file chooser in the manner of GNOME's (`app_choose_file`), and the file
 chooser and the Files program were unified around a folder view in
-libgui (`gui/folderview.h`) with a places sidebar, a path bar that keeps
+libgui (`gui/folderview.h`) with a places sidebar, a path bar that retains
 the folders below the current one, a location entry with inline
 completion, a search started by typing, a Recent place fed by both and a
 table with the name, size, type and modification time. The chooser adds

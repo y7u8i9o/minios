@@ -13,7 +13,7 @@ struct vmspace;
  * so a file that is not mapped has no cache. inode->mapping and refs are
  * protected by filemap_lock; pages, npages and the array sizes by lock (a
  * mutex, a page fill reads the file); the dirty bitmap by dirty_lock so
- * hardware dirty bits can be gathered while a vmspace lock is held. Every
+ * hardware dirty bits can be gathered while a vmspace lock is locked. Every
  * cached frame carries one reference from the mapping plus one per page
  * table entry that maps it. */
 struct mapping {
@@ -41,20 +41,20 @@ void filemap_mark_dirty(struct mapping *m, uint64_t pgoff);
 /* Write the dirty pages in [first, last] back through file. */
 int filemap_writeback(struct mapping *m, struct file *file, uint64_t first, uint64_t last);
 
-/* Fault handler for a VM_FILE region: called with vm->lock held, returns
+/* Fault handler for a VM_FILE region: called with vm->lock acquired, returns
  * with it released. */
 bool filemap_fault(struct vmspace *vm, uintptr_t va, bool write);
 
 /* Coherence with ordinary I/O: read overlays cached pages onto data the
  * filesystem returned, write copies new data through cached pages,
  * truncate drops pages beyond the new size. Called with no mapping lock
- * held. */
+ * locked. */
 void filemap_read_overlay(struct inode *ino, char *buf, uint64_t pos, size_t n);
 void filemap_write_through(struct inode *ino, const char *buf, uint64_t pos, size_t n);
 void filemap_truncate(struct inode *ino, uint64_t size);
 
 struct filemap_stats {
-    uint64_t cached_pages;      /* frames held by mappings right now */
+    uint64_t cached_pages;      /* frames referenced by mappings right now */
     uint64_t fills;             /* pages read from files */
     uint64_t writebacks;        /* pages written back */
 };

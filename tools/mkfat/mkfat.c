@@ -350,12 +350,12 @@ static void make_short_name(struct dir *d, const char *name, uint8_t out[11])
     for (int n = 1; n < 1000000; n++) {
         char tail[8];
         snprintf(tail, sizeof tail, "~%d", n);
-        size_t keep = 8 - strlen(tail);
-        if (keep > bl)
-            keep = bl;
+        size_t prefix_len = 8 - strlen(tail);
+        if (prefix_len > bl)
+            prefix_len = bl;
         memset(out, ' ', 11);
-        memcpy(out, base, keep);
-        memcpy(out + keep, tail, strlen(tail));
+        memcpy(out, base, prefix_len);
+        memcpy(out + prefix_len, tail, strlen(tail));
         memcpy(out + 8, ext, el);
         if (!short_name_used(d, out))
             return;
@@ -559,7 +559,7 @@ static void format(uint64_t size, int type)
     if (type == 0)
         type = size < 4u << 20 ? 12 : size < 256u << 20 ? 16 : 32;
     fat_type = type;
-    /* Cluster size: the largest up to 4 KiB that keeps the cluster count
+    /* Cluster size: the largest up to 4 KiB that leaves the cluster count
      * inside the type's range. */
     uint32_t want = 8;
     uint32_t min = type == 12 ? 1 : type == 16 ? FAT12_MAX_CLUSTERS + 16 : FAT16_MAX_CLUSTERS + 16;

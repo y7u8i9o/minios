@@ -8,7 +8,7 @@ SYNOPSIS
 
 DESCRIPTION
     init reads the file at boot and processes the entries in order. A
-    line holds words separated by blanks; # starts a comment. The first
+    line contains words separated by blanks; # starts a comment. The first
     word is the keyword, the second the entry name, then options of the
     form key=value, then the command and its arguments. Commands are
     looked up in PATH.
@@ -35,7 +35,7 @@ OPTIONS
     if=PATH          start only when PATH exists (skipped otherwise)
     log=FILE         append standard output and error to FILE
     restart=always   restart a service whenever it exits (default)
-    restart=never    a service that exits stays stopped
+    restart=never    a service that exits remains stopped
     restart=failure  restart only after a non zero status or a signal
 
     Without a readable file init uses a built-in table equivalent to

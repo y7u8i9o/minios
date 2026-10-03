@@ -8,7 +8,7 @@
     entries { u64 addr; u32 size; u32 name_off } [count], sorted by address
     strtab  NUL terminated names
 
-Only text symbols are kept. `debug/symbols.c` reads the blob between
+Only text symbols are retained. `debug/symbols.c` reads the blob between
 `__ksyms_start` and `__ksyms_end` and answers `ksyms_lookup(addr)` with a
 binary search. A symbol without a recorded size extends to the next symbol.
 
@@ -48,12 +48,12 @@ the wait in `thread.bounded_since`. Waits for input, for a child or in
 checks every thread once a second. For each bounded wait longer than the
 limit it prints `hung: pid P tid T (name) in a bounded wait for N s` once,
 followed by the table of `/dev/threads`, so the report also shows the
-thread that holds the lock or the device that does not answer. The limit
+thread that has acquired the lock or the device that does not answer. The limit
 is 30 seconds, and `hung_task=SECONDS` on the kernel command line changes
 it, 0 disables the reports. Alt+SysRq prints the same table on the console
 within a second. The input core detects the combination before it
 delivers the key, so it also works while X12 has grabbed the keyboard.
-The case `hung_task` holds a mutex for four seconds with `hung_task=2`,
+The case `hung_task` acquires a mutex and does not release it for four seconds with `hung_task=2`,
 checks the report and the frames down to `mutex_lock`, and feeds
 Alt+SysRq through the PS/2 decoder.
 

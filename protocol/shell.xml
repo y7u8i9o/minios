@@ -97,7 +97,7 @@
     <request name="ack_configure"><arg name="serial" type="uint"/></request>
     <request name="destroy" type="destructor"/>
     <!-- Distances from the anchored edges of the desktop area (the
-         screen minus exclusive zones), so that a layer with margins stays
+         screen minus exclusive zones), so that a layer with margins remains
          clear of the panel. Without margins an anchored edge touches the
          screen edge. -->
     <request name="set_margin">

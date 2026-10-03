@@ -257,9 +257,9 @@ static int lookup_child(struct inode *dir, const char *name, size_t len, struct 
     return *out ? 0 : -ENOMEM;
 }
 
-/* Read the target of the symbolic link link into buf, which holds
+/* Read the target of the symbolic link link into buf, which contains
  * VFS_SYMLINK_MAX + 1 bytes, and terminate it. An empty target names
- * nothing. No other inode lock may be held. */
+ * nothing. No other inode lock may be locked by the caller. */
 static int link_target(struct inode *link, char *buf)
 {
     if (!link->ops || !link->ops->readlink)
@@ -278,7 +278,7 @@ static int link_target(struct inode *link, char *buf)
 }
 
 /* The state of one path walk, kmalloc'd because it is too large for the
- * kernel stack of a deep call chain. rest holds the components still to
+ * kernel stack of a deep call chain. rest contains the components still to
  * be resolved: a symbolic link replaces its own component by its target,
  * so the remainder may grow beyond one path. path is the canonical name of
  * cur without symbolic links: a component is appended only when the walk
@@ -349,7 +349,7 @@ static int walk_up(struct walk *w)
  * component, and in the last one unless flags has VFS_NOFOLLOW and the
  * component has no trailing slash; *links counts the links followed and
  * may not exceed SYMLOOP_MAX. With WALK_PARENT the walk stops at the
- * directory holding the last component and copies the component to name;
+ * directory containing the last component and copies the component to name;
  * "." and ".." are refused there. On failure w->cur is NULL. */
 static int walk(struct walk *w, const char *path, unsigned flags, int *links, char *name, size_t namesize)
 {
@@ -427,7 +427,7 @@ static int walk_as(struct walk *w, const char *path, unsigned flags, int *links,
             continue;
         }
         /* Entering a component needs search permission on the directory
-         * holding it. */
+         * containing it. */
         r = vfs_permission(w->cur, MAY_EXEC, &w->cred);
         if (r < 0)
             goto fail;
@@ -437,7 +437,7 @@ static int walk_as(struct walk *w, const char *path, unsigned flags, int *links,
             goto fail;
         if (S_ISLNK(next->mode) && (!last || trailing || !(flags & VFS_NOFOLLOW))) {
             /* Replace the component by the target and continue from the
-             * directory holding the link, or from the root. */
+             * directory containing the link, or from the root. */
             int tlen = ++*links > SYMLOOP_MAX ? -ELOOP : link_target(next, w->target);
             inode_put(next);
             if (tlen < 0) {
@@ -741,8 +741,8 @@ int vfs_umount_all(void)
         klog_info("unmounted %s", m->path);
         kfree(m);
     }
-    /* Filesystems without an unmount operation keep no state on disk, so
-     * leaving them mounted (devfs holds the console of the caller) is
+    /* Filesystems without an unmount operation retain no state on disk, so
+     * leaving them mounted (devfs references the console of the caller) is
      * harmless. */
     spin_lock(&mount_lock);
     struct list_head *pos;
@@ -1036,7 +1036,7 @@ static int dir_op(const char *path, enum dir_op_kind kind)
 }
 
 /* A directory made in a directory with the set group id bit inherits the
- * bit, which keeps the group of a shared tree. */
+ * bit, which retains the group of a shared tree. */
 int vfs_mkdir(const char *path, uint32_t mode)
 {
     struct inode *dir;
@@ -1142,8 +1142,8 @@ int vfs_chown_inode(struct inode *ino, uint32_t uid, uint32_t gid)
 {
     struct cred c;
     cred_get_current(&c);
-    uint32_t new_uid = uid == VFS_CHOWN_KEEP ? ino->uid : uid;
-    uint32_t new_gid = gid == VFS_CHOWN_KEEP ? ino->gid : gid;
+    uint32_t new_uid = uid == VFS_CHOWN_UNCHANGED ? ino->uid : uid;
+    uint32_t new_gid = gid == VFS_CHOWN_UNCHANGED ? ino->gid : gid;
     uint32_t mode = ino->mode & 07777;
     if (!cred_is_root(&c)) {
         if (new_uid != ino->uid || c.euid != ino->uid)

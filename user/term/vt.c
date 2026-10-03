@@ -719,7 +719,7 @@ void vt_free(struct vt *v)
     free(v);
 }
 
-static struct vcell *resize_screen(struct vt *v, struct vcell *old, int cols, int rows, int keep_rows)
+static struct vcell *resize_screen(struct vt *v, struct vcell *old, int cols, int rows, int retain_rows)
 {
     struct vcell *n = calloc((size_t)cols * rows, sizeof *n);
     if (!n)
@@ -730,7 +730,7 @@ static struct vcell *resize_screen(struct vt *v, struct vcell *old, int cols, in
     v->fg = fg;
     v->bg = bg;
     int w = cols < v->cols ? cols : v->cols;
-    for (int r = 0; r < keep_rows && r < rows; r++)
+    for (int r = 0; r < retain_rows && r < rows; r++)
         memcpy(n + r * cols, old + r * v->cols, (size_t)w * sizeof *n);
     return n;
 }

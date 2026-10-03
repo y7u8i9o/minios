@@ -1,7 +1,7 @@
 /* Scene: the ordered surfaces, damage merging, occlusion culling and
  * per rectangle composition into the back buffer (from the M19 server),
  * plus the cursor. Rectangles, positions and damage are logical pixels;
- * the back buffer holds screen_scale device pixels per logical pixel:
+ * the back buffer contains screen_scale device pixels per logical pixel:
  * buffers with the output's scale are copied 1:1, others are resampled. */
 #include <stdio.h>
 #include <errno.h>
@@ -17,7 +17,7 @@ static int ndamage;
 static int shown_x, shown_y;            /* where the cursor was drawn */
 static int cursor_suppressed;           /* compose without the cursor (screen copies) */
 /* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
- * keeps 60 percent of the background's brightness. */
+ * retains 60 percent of the background's brightness. */
 #define CURSOR_W 12
 #define CURSOR_H 18
 #define CURSOR_SHADOW 1
@@ -449,7 +449,7 @@ struct rect scene_pointer_rect(void)
     return rect_intersect(dev(r), (struct rect){ 0, 0, back.width, back.height });
 }
 
-/* The back buffer holds the last composed frame. For a copy without the
+/* The back buffer contains the last composed frame. For a copy without the
  * pointer, the rectangle under the pointer is composed again without the
  * cursor, the buffer is copied, and the rectangle is composed once more
  * with the cursor. Nothing is flushed in between, and the screen never

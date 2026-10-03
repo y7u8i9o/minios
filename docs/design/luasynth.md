@@ -28,7 +28,7 @@ measured from the envelope's current level.
 Each voice mixes two oscillators. Sine uses a 2048-entry wavetable. Saw and variable-width pulse apply
 PolyBLEP discontinuity correction, and triangle is piecewise linear. Corrected waveforms are cached in 2048-entry tables,
 with correction widths rounded upward to quarter-octave frequency bands.
-This keeps oscillator calls out of the sample loop. The cache shared
+This excludes oscillator calls from the sample loop. The cache shared
 by voices within the engine is bounded to 128 tables. Oscillator B has a two-octave range in either direction
 and detune of up to 50 cents. A shared sinusoidal LFO supplies vibrato,
 and note-dependent panning spreads a chord across the stereo field.
@@ -72,11 +72,11 @@ The window groups oscillator, envelope, filter, modulation, stereo and
 delay controls above a scope and a two-octave keyboard. The lower typing
 row is `Z S X D C V G B H N J M`, and the upper row is
 `Q 2 W 3 E R 5 T 6 Y 7 U I`. Space is sustain, brackets shift octave,
-Escape is panic, and Ctrl+Q closes. Mouse holds and keyboard holds use
+Escape is panic, and Ctrl+Q closes. Sustained mouse notes and sustained keyboard notes use
 separate input identifiers, so releasing one does not cut off the other.
 Captured mouse motion supports dragging outside and back into the keyboard.
 Window focus loss releases notes. Moving focus to a control releases
-keyboard holds. Panic also clears the delay and stops the demo.
+sustained keyboard notes. Panic also clears the delay and stops the demo.
 
 Six factory presets cover a pad, keys, bass, glass-like tone, pulse lead
 and pure sine. Save/load uses a bounded plain-text key/value format,
@@ -99,7 +99,7 @@ the native audio worker lifecycle test.
 They check sample format and A4 frequency, polyphony, retrigger suppression,
 velocity, pedal and release, stereo output, delay tails, bounded output
 for every preset, patch validation and round trips, mouse drag/release,
-simultaneous keyboard notes, shared mouse/keyboard holds, layout bounds,
+simultaneous keyboard notes, shared mouse/keyboard sustained notes, layout bounds,
 and audio-resource cleanup. The UI test can write a native-widget preview
 with `LUASYNTH_PREVIEW=/tmp/luasynth.ppm`.
 

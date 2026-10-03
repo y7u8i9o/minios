@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     char name[64];
     if (argc == 2 && strcmp(argv[1], "-c") == 0) {
         if (configured(name, sizeof name) < 0)
-            return 0;               /* Without a setting the console keeps its layout. */
+            return 0;               /* Without a setting the console retains its layout. */
     } else if (argc == 2 && argv[1][0] != '-' && !strchr(argv[1], '/')) {
         strlcpy(name, argv[1], sizeof name);
     } else {

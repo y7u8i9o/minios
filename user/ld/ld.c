@@ -5,14 +5,14 @@
  * its thread state and standard streams before calling ELF initializers.
  * start.S passes the initialization and finalization callbacks to crt0.
  *
- * After startup the loader stays in the process for three services that
+ * After startup the loader remains in the process for three services that
  * libc reaches through the record described in minios/dl.h: thread local
  * storage (the static layout of the initial objects and the blocks of
  * objects loaded later), dlopen with its symbol lookup and unloading, and
  * lazy binding of the procedure linkage table entries of objects linked
  * without -z now, which _dl_runtime_resolve in start.S hands to _dl_fixup.
  *
- * Metadata lives in a small mmap arena so that object addresses stay
+ * Metadata lives in a small mmap arena so that object addresses remain
  * stable as dependencies are discovered; no libc allocation or TLS is
  * used here, and the loader has its own recursive lock (dl_lock) that
  * every runtime entry takes. Errors during startup print a diagnostic
@@ -38,7 +38,7 @@
 static const char *const lib_dirs[] = { "/usr/lib/", "/usr/local/lib/" };
 static int secure;
 static char *home_lib;              /* "$HOME/.local/lib/" or NULL */
-/* Keep DSOs above the interpreter and below the ordinary mmap area. Every
+/* Place DSOs above the interpreter and below the ordinary mmap area. Every
  * image reserves its holes too, so later mappings cannot occupy them. */
 #define LIB_ARENA 0x7e0010000000UL
 #define LIB_LIMIT 0x7e8000000000UL
@@ -125,7 +125,7 @@ struct rela { uint64_t r_offset, r_info; int64_t r_addend; };
 
 struct object;
 
-/* The objects a symbol lookup walks, in order. The global scope holds
+/* The objects a symbol lookup walks, in order. The global scope contains
  * the initial objects and those opened with RTLD_GLOBAL; every dlopen
  * builds a local scope of the opened object and its dependencies. */
 struct scope {
@@ -779,7 +779,7 @@ static struct dl_tls_module *require_tls(const struct object *o)
 
 /* COPY must run after every library's ordinary relocations: a copied
  * data object may itself contain relocated pointers. A lazily bound
- * object keeps its JUMP_SLOT entries pointing into its own procedure
+ * object retains its JUMP_SLOT entries pointing into its own procedure
  * linkage table, rebased, and hands the table to _dl_runtime_resolve. */
 static void apply(struct object *o, const struct rela *table, size_t bytes, int copies)
 {
@@ -921,7 +921,7 @@ static void protect(uintptr_t start, size_t bytes, int prot, const char *name)
 }
 
 /* Map a library by its soname from the library directories, or by path
- * when the name holds a slash (dlopen only). The record is returned
+ * when the name contains a slash (dlopen only). The record is returned
  * uncommitted; the caller adds it to the loaded list or, on failure,
  * unload_object releases what was mapped. */
 static struct object *load_library(const char *name, int allow_path)
@@ -966,18 +966,18 @@ static struct object *load_library(const char *name, int allow_path)
         eh.e_phentsize != sizeof(struct phdr) || !eh.e_phnum ||
         !within(eh.e_phoff, (size_t)eh.e_phnum * sizeof(struct phdr), st.st_size))
         die("invalid ELF64 shared object", path);
-    /* An object opened by dlopen keeps a copy of its name, since the
+    /* An object opened by dlopen retains a copy of its name, since the
      * caller may reuse its buffer for the next dlopen and find_loaded
      * compares the names. The name of a DT_NEEDED entry lives in the
      * string table of the object that needs it. */
-    const char *kept = name;
+    const char *retained = name;
     if (allow_path) {
         char *copy = is_path ? path : dl_alloc(n + 1);
         if (!is_path)
             dl_memcpy(copy, name, n + 1);
-        kept = copy;
+        retained = copy;
     }
-    struct object *o = new_object(kept);
+    struct object *o = new_object(retained);
     loading = o;
     o->phnum = eh.e_phnum;
     struct phdr *ph = dl_alloc(o->phnum * sizeof *ph);
@@ -1375,7 +1375,7 @@ static void *dl_open(const char *name, int mode)
     }
     scope_add(group, load_library(name, 1));
     loaded = 1;
-    /* Breadth first, as at startup: the group holds the new objects
+    /* Breadth first, as at startup: the group contains the new objects
      * first, then the loaded ones they depend on. */
     for (size_t i = 0; i < loaded; i++) {
         struct object *o = group->objects[i];
@@ -1484,7 +1484,7 @@ static void *dl_sym(void *handle, const char *name)
 /* Drop one reference of the handle's group and unload the members no
  * group refers to any more: their finalizers run in the reverse of the
  * order they initialized in, their mappings go, and a TLS slot they
- * held is released, the blocks of other threads with the next thread
+ * used is released, the blocks of other threads with the next thread
  * exit or the slot's reuse. */
 static int dl_close(void *handle)
 {

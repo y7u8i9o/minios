@@ -235,7 +235,7 @@ static void test_objects(void)
     same(buf, "mardi 14 juillet", "strftime_l");
     same(nl_langinfo_l(RADIXCHAR, fr), ",", "nl_langinfo_l");
     CHECK(strtod_l("1,5", NULL, fr) == 1.5, "strtod_l");
-    same(nl_langinfo_l(YESEXPR, fr), "^[yY]", "categories outside the mask stay C");
+    same(nl_langinfo_l(YESEXPR, fr), "^[yY]", "categories outside the mask remain C");
     pthread_t t;
     void *result = NULL;
     CHECK(pthread_create(&t, NULL, thread_main, fr) == 0 && pthread_join(t, &result) == 0 && result,

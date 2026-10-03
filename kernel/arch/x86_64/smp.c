@@ -90,8 +90,8 @@ static __noreturn void ap_entry(struct limine_mp_info *info)
     __builtin_unreachable();
 }
 
-/* Reached only through the stack switch above; keeps ap_main off the
- * bootloader stack entirely. */
+/* Reached only through the stack switch above; ensures that ap_main does not run on the
+ * bootloader stack. */
 __noreturn void ap_main_trampoline(struct cpu *c);
 __noreturn void ap_main_trampoline(struct cpu *c)
 {

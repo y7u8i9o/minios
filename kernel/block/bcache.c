@@ -119,7 +119,7 @@ struct buf *bread(struct blockdev *dev, uint64_t block)
 
 void bwrite(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     spin_lock(&bcache_lock);
     b->dirty = true;
     spin_unlock(&bcache_lock);
@@ -127,7 +127,7 @@ void bwrite(struct buf *b)
 
 void brelse(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     mutex_unlock(&b->lock);
     spin_lock(&bcache_lock);
     kassert(b->refcount > 0);
@@ -169,7 +169,7 @@ int bcache_sync(struct blockdev *dev)
 
 bool bpin(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     spin_lock(&bcache_lock);
     b->dirty = true;
     bool fresh = !b->pinned;
@@ -183,7 +183,7 @@ bool bpin(struct buf *b)
 
 void bunpin(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     spin_lock(&bcache_lock);
     kassert(b->pinned && b->refcount > 0);
     b->pinned = false;
@@ -193,13 +193,13 @@ void bunpin(struct buf *b)
 
 int bwrite_now(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     return write_back(b);
 }
 
 void bforget(struct buf *b)
 {
-    kassert(mutex_held(&b->lock));
+    kassert(mutex_locked_by_current(&b->lock));
     spin_lock(&bcache_lock);
     b->dirty = false;
     b->valid = false;

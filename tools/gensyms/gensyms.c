@@ -5,7 +5,7 @@
  *   struct ksyms_header { u32 magic; u32 count; u32 strtab_off; u32 strtab_len; }
  *   struct ksyms_entry  { u64 addr; u32 size; u32 name_off; } [count], sorted by addr
  *   char strtab[strtab_len]
- * Only text symbols (t, T, W, w) are kept.
+ * Only text symbols (t, T, W, w) are retained.
  */
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,4 +1,4 @@
-/* tail: bounded rings keep only the requested suffix of streamed input. */
+/* tail: bounded rings retain only the requested suffix of streamed input. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

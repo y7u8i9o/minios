@@ -96,7 +96,7 @@ static double parse_hex_double(const char *s, const char **parsed_end)
     const char *p = s + 2;
     uint64_t mantissa = 0;
     long long fractional_digits = 0, dropped = 0;
-    int kept = 0, after_point = 0, first_dropped = -1;
+    int retained = 0, after_point = 0, first_dropped = -1;
     for (;;) {
         if (*p == '.' && !after_point) {
             after_point = 1;
@@ -109,11 +109,11 @@ static double parse_hex_double(const char *s, const char **parsed_end)
         p++;
         if (after_point && fractional_digits < 1000000)
             fractional_digits++;
-        if (kept == 0 && digit == 0)
+        if (retained == 0 && digit == 0)
             continue;
-        if (kept < 15) {
+        if (retained < 15) {
             mantissa = mantissa * 16U + (unsigned)digit;
-            kept++;
+            retained++;
         } else {
             if (first_dropped < 0)
                 first_dropped = digit;
@@ -199,7 +199,7 @@ static double strtod_c(const char *s, char **end)
     }
 
     uint64_t mantissa = 0;
-    int kept = 0, dropped = 0, decimal_digits = 0;
+    int retained = 0, dropped = 0, decimal_digits = 0;
     int first_dropped = -1, seen_digit = 0, after_point = 0;
     for (;;) {
         if (*s == '.' && !after_point) {
@@ -213,11 +213,11 @@ static double strtod_c(const char *s, char **end)
         seen_digit = 1;
         if (after_point)
             decimal_digits++;
-        if (kept == 0 && digit == 0)
+        if (retained == 0 && digit == 0)
             continue;
-        if (kept < 18) {
+        if (retained < 18) {
             mantissa = mantissa * 10U + (unsigned)digit;
-            kept++;
+            retained++;
         } else {
             if (first_dropped < 0)
                 first_dropped = digit;

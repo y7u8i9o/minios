@@ -1,6 +1,6 @@
 # Filesystems mounted by fsinit at boot: device, mount point, type, options.
 # The data volume (data.img in the repository, attached as the third
-# virtio-blk device) keeps the home directories, the packages and the
+# virtio-blk device) stores the home directories, the packages and the
 # account databases across boots and rebuilds of the root image. A fresh
 # volume is seeded with the skeleton, and the homes option makes the
 # missing homes of the accounts (docs/design/users.md).

@@ -12,10 +12,10 @@ M23 adds the kernel primitives the display server rework relies on.
   `ECONNREFUSED` beyond that or for an unknown name); `accept` dequeues
   a connection and returns the server end; `socketpair` creates a
   connected pair directly; `shutdown` closes one or both directions.
-- A connection holds two directions, each a 64 KiB ring (16 pages from
+- A connection contains two directions, each a 64 KiB ring (16 pages from
   the buddy allocator) with a read and a write wait queue. Reads and
   writes block, or return `EAGAIN` when the descriptor is non blocking;
-  data moves through a 256 byte bounce buffer so no lock is held while
+  data moves through a 256 byte bounce buffer so no lock is locked while
   user memory is touched (as in `pipe.c`). When the peer has closed,
   reads return end of file and writes return `EPIPE` after raising
   `SIGPIPE`. `poll` reports `POLLIN` (data or peer closed), `POLLOUT`
@@ -42,7 +42,7 @@ M23 adds the kernel primitives the display server rework relies on.
   the other end: the connecting process for the accepted socket, the
   process that called `listen` for the connecting one, and the creator for
   both ends of a socket pair. `struct conn` records both under
-  `conn.lock`, and `struct unix_sock` keeps the listener's under its
+  `conn.lock`, and `struct unix_sock` retains the listener's under its
   `lock`.
 
 ## Anonymous shared memory (`memfd_create`, `ftruncate`)
@@ -56,7 +56,7 @@ freed with its last descriptor and mapping. `struct file_ops` gained
 
 ## Event and timer descriptors (`kernel/ipc/eventfd.c`, `timerfd.c`)
 
-`eventfd` holds a 64 bit counter: `write` adds, `read` returns and
+`eventfd` contains a 64 bit counter: `write` adds, `read` returns and
 clears it, blocking or `EAGAIN` while zero. `timerfd_create` with
 `timerfd_settime(fd, {initial_ms, interval_ms})` counts expirations
 from the timer interrupt (`timerfd_tick` runs on the boot CPU every
@@ -66,7 +66,7 @@ tick); `read` returns the count and clears it, `poll` reports
 ## Descriptor flags
 
 `struct file.flags` carries `O_NONBLOCK`, honoured by sockets, pipes,
-message queues, eventfd and timerfd. `struct fdtable` keeps a close on
+message queues, eventfd and timerfd. `struct fdtable` stores a close on
 exec bit per descriptor: set by `O_CLOEXEC` on `open`, `pipe2`,
 `socket`, `socketpair`, `accept4`, `eventfd`, `timerfd_create` and
 `MFD_CLOEXEC`, by `fcntl(F_SETFD)` and `F_DUPFD_CLOEXEC`, copied by
@@ -79,7 +79,7 @@ exec bit per descriptor: set by `O_CLOEXEC` on `open`, `pipe2`,
 `poll` accepts up to 64 descriptors and defines `POLLERR`, `POLLHUP`
 and `POLLNVAL`. A positive timeout now sleeps on the poll wait queue
 with a deadline (`waitq_wait_timeout`, `kernel/sched/wait.c`): timed
-waiters are kept on a list scanned by the timer interrupt, which wakes
+waiters are retained on a list scanned by the timer interrupt, which wakes
 expired ones through `waitq_interrupt`; the previous implementation
 polled every 5 ms.
 

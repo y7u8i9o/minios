@@ -13,7 +13,7 @@ minios was designed for a single user. Processes carry no identity,
 `struct inode` has a mode but no owner, the mfs disk inode stores no uid or
 gid, libc returns uid 0 from constant functions, `chmod` and `chown` do
 nothing, and init starts `sh` on the console with `HOME=/home`. The data
-volume mounted at `/home` is itself the home of the one user and also holds
+volume mounted at `/home` is itself the home of the one user and also contains
 the packages in `/home/.local`.
 
 After this plan every process has real, effective and saved ids and
@@ -22,13 +22,13 @@ and the initrd, the kernel checks permissions on every path operation, on
 exec and on signals, and privileged operations require root. Accounts live
 in `/etc/passwd`, `/etc/group` and `/etc/shadow`, homes in `/home/<name>`,
 packages in the shared prefix `/usr/local`, and a normal boot ends in a
-console login or a graphical greeter. Boot tests keep starting their
+console login or a graphical greeter. Boot tests continue to start their
 programs directly as root. U5, added after U4, brings the existing
 programs su, doas and sudo for changing to another account.
 
 ## 2. Fixed decisions
 
-- Credentials live in `struct proc` as `struct cred`, which holds the real,
+- Credentials live in `struct proc` as `struct cred`, which contains the real,
   effective and saved uid and gid, up to 16 supplementary groups and the
   umask. They are written under `proc.lock` and read through a snapshot
   under that lock. Processes created by the kernel, init and every boot test
@@ -43,14 +43,14 @@ programs su, doas and sudo for changing to another account.
   The file type bits never change and may be read without it.
 - Root (euid 0) bypasses permission checks, except that executing a regular
   file requires at least one execute bit.
-- Accounts are kept in `/etc/passwd`, `/etc/group` and `/etc/shadow` in the
+- Accounts are stored in `/etc/passwd`, `/etc/group` and `/etc/shadow` in the
   familiar formats, with SHA-256 crypt (`$5$`) for the hashes. The real
   files live in `/usr/local/etc` on the data volume, and the root image
-  holds symbolic links to them, which keeps accounts across rebuilds of
+  contains symbolic links to them, which preserves accounts across rebuilds of
   the root image. The image ships `root` (uid 0) and `user` (uid 1000),
   both without a password until `passwd` sets one.
 - `/usr/local` on the root image is a symbolic link to `/home/.local`, the
-  directory that already holds the packages. Homes are `/home/<name>`, mode
+  directory that already contains the packages. Homes are `/home/<name>`, mode
   0700, created from `/etc/skel`.
 - The X12 server, audiod and the greeter run as root. Sessions are clients,
   and X12 accepts connections from root and the uid of the current session,
@@ -61,7 +61,7 @@ programs su, doas and sudo for changing to another account.
 ### U0. Kernel credentials and the account database (completed 2026-10-03)
 
 - `struct cred` in `kernel/include/sched/cred.h` is part of `struct proc`,
-  inherited at process creation and kept across exec.
+  inherited at process creation and retained across exec.
 - The system calls `getresuid` (96), `getresgid` (97), `setresuid` (98),
   `setresgid` (99), `getgroups` (100), `setgroups` (101) and `umask` (102)
   in `kernel/syscall/sys_cred.c`, with the POSIX rule that an unprivileged
@@ -77,7 +77,7 @@ programs su, doas and sudo for changing to another account.
 - The commands `id`, `whoami` and `groups`.
 - The boot test `user_cred` runs `/bin/credtest`, which checks the root
   identity, drops to uid 1000 in children and checks that it cannot regain
-  root, that fork and exec keep the ids and that `/dev/proc` reports them,
+  root, that fork and exec retain the ids and that `/dev/proc` reports them,
   moves between the effective ids with root in the saved uid, checks
   `umask`, parses account files with malformed lines, and checks the
   password helpers and the line editor of the account files. `initctl` and
@@ -95,19 +95,19 @@ programs su, doas and sudo for changing to another account.
 - New files, directories and symbolic links take the creator's effective
   uid and gid and the requested mode masked by the umask.
 - FAT reports the owner and mode of the mount options `uid=`, `gid=` and
-  `umask=` and refuses `chown`. devfs nodes carry an owner. The initrd keeps
+  `umask=` and refuses `chown`. devfs nodes carry an owner. The initrd retains
   the tar header's mode, uid and gid.
 - `mkfs` takes the permission bits of the host files and reads the manifest
   `user/perms` for owners and special modes. `fsck` accepts the new
   format version.
 - The commands `chmod`, `chown` and `chgrp`, owner and group columns in
   `ls -l` and `stat`, and the `umask` builtin of the shell.
-- In the boot test `fs_owner`, files created as several uids on mfs keep
+- In the boot test `fs_owner`, files created as several uids on mfs retain
   their owners and modes across a remount, and FAT and devfs report theirs.
   `mfs`, `fat`, `mfs_user` and `user_cred` must still pass.
 - During the work the manifest was placed in `user/perms` instead of
   `user/etc/perms`, because every file below `user/etc` is installed into
-  `/etc`. FAT files keep having no execute bits. The `ps` check of the
+  `/etc`. FAT files continue to have no execute bits. The `ps` check of the
   `utils` case gained the USER column of U0, and `utils`, `symlink`,
   `fat_user`, `mfs_journal`, `fs`, `persist`, `shutdown`, `shutdown_cmd`,
   `blk`, `shell`, `shell2`, `tar` and `ar` pass as well.
@@ -146,7 +146,7 @@ programs su, doas and sudo for changing to another account.
 
 - `/etc/skel` replaces the old home skeleton, homes move to `/home/<name>`,
   and the account databases move to `/usr/local/etc` with links in `/etc`.
-- `fsinit` migrates a volume of the old layout into `/home/user`, keeps the
+- `fsinit` migrates a volume of the old layout into `/home/user`, retains the
   packages in `/home/.local` and creates missing homes after every mount.
 - The commands `login`, `su`, `passwd`, `useradd` and `userdel`. init runs
   `login` on the console.
@@ -169,7 +169,7 @@ programs su, doas and sudo for changing to another account.
   volume only for entries with the new option `homes`. `pkg` checks write
   access to its prefix instead of the uid, which leaves `--prefix
   ~/.local` open to every user. A copy of the existing `data-aarch64.img`
-  was converted at boot with its 14 packages kept.
+  was converted at boot with its 14 packages retained.
 
 ### U4. The graphical login and session (completed 2026-10-03)
 
@@ -187,7 +187,7 @@ programs su, doas and sudo for changing to another account.
   opens the Users page, and `gui_desktop`, `gui_files`, `comp_shell` and
   `initctl` must still pass.
 - During the work the account name went to the end of the Log out row of
-  the panel's menu instead of a row above it, which keeps the menu
+  the panel's menu instead of a row above it, which preserves the menu
   geometry that the GUI cases measure. The login window runs as a process
   of its own, `greeter --window`, and the greeter takes `-s` for the X12
   log on the console. `su` and `passwd` read one line for every password
@@ -207,7 +207,7 @@ programs su, doas and sudo for changing to another account.
   6.8.2 and sudo 1.9.17p1 in `third_party/`, and `user/Makefile` builds
   them unmodified into `/bin` as set user id root programs. The ubase
   `su` replaces the `su` of U3. sudo uses the headers that its configure
-  script generated once for minios, kept in `user/ports/sudo`, and links
+  script generated once for minios, stored in `user/ports/sudo`, and links
   the sudoers policy statically.
 - The image ships the group `wheel` with `user` as its member,
   `/etc/doas.conf` and `/etc/sudoers`, which let the members of wheel run

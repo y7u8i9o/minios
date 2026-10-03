@@ -46,7 +46,7 @@ $(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manif
 endef
 $(foreach a,$(PKG_NAMES),$(eval $(call APP_PACKAGE,$(a))))
 
-# Keep an offline archive shelf on the image. Replacing only this generated
+# Maintain an offline archive shelf on the image. Replacing only this generated
 # directory also drops old release archives on incremental builds.
 packages:
 	@rm -rf $(ROOT)/usr/share/packages
@@ -54,7 +54,7 @@ packages:
 	@cp $(PKG_FILES) $(ROOT)/usr/share/packages/
 
 # make repo writes the signed repository of the same archives anew each
-# time, which keeps it to the current archives.
+# time, which limits it to the current archives.
 .PHONY: repo
 repo: $(PKG_FILES)
 	../tools/mkrepo.sh $(PKGSIGN) $(PKG_KEY_FILE) $(REPO) $(PKG_FILES)

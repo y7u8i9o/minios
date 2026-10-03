@@ -7,7 +7,7 @@ struct trapframe;
 
 /* Save the interrupted user state of t (tf, the FPU state and saved_mask)
  * in a signal frame on the user stack, and redirect tf to handler(sig)
- * with restorer as its return address. With info the frame also holds a
+ * with restorer as its return address. With info the frame also contains a
  * copy of it, and the handler is called as handler(sig, &copy, NULL), as
  * SA_SIGINFO asks. Returns 0, or -EFAULT if the frame does not fit in
  * writable user memory. */

@@ -82,7 +82,7 @@ void trap_dispatch(struct trapframe *tf)
     }
     bool abort = ec == EC_DABT_LOWER || ec == EC_DABT_CUR || ec == EC_IABT_LOWER || ec == EC_IABT_CUR;
     if (kind == TRAP_SYNC && abort) {
-        /* Interrupts stay masked, as after the interrupt gate of a page
+        /* Interrupts remain masked, as after the interrupt gate of a page
          * fault on x86_64. */
         if (vmm_handle_fault(tf, tf->far)) {
             if (user)

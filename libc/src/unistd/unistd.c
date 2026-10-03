@@ -809,7 +809,7 @@ int utimensat(int dirfd, const char *path, const struct timespec times[2], int f
 /* Build the absolute form of path without ".", ".." and symbolic links.
  * The components are resolved one at a time: a symbolic link is replaced
  * by its target, which restarts from the root when it is absolute and
- * otherwise continues in the directory holding the link, and ".." removes
+ * otherwise continues in the directory containing the link, and ".." removes
  * the last component of the result so far, which never names a link.
  * Every component but the last must be a directory, and the last must
  * exist. At most SYMLOOP_MAX links are followed (ELOOP). */

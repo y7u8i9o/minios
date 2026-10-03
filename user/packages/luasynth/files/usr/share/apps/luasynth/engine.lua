@@ -126,24 +126,24 @@ function Engine:note_on(note, velocity)
   velocity = velocity or 100
   assert(type(velocity) == "number" and velocity >= 1 and velocity <= 127, "Velocity out of range")
   for _, v in ipairs(self.voices) do
-    if v.note == note and v.held then return end -- ignore keyboard auto-repeat
+    if v.note == note and v.pressed then return end -- ignore keyboard auto-repeat
   end
   if #self.voices == M.max_voices then
     local index = 1
     for i = 2, #self.voices do
       local a, b = self.voices[i], self.voices[index]
-      if (not a.held and b.held) or (a.held == b.held and (a.env < b.env or (a.env == b.env and a.serial < b.serial))) then index = i end
+      if (not a.pressed and b.pressed) or (a.pressed == b.pressed and (a.env < b.env or (a.env == b.env and a.serial < b.serial))) then index = i end
     end
     table.remove(self.voices, index)
   end
   self.serial = self.serial + 1
-  self.voices[#self.voices + 1] = {note = note, velocity = velocity / 127, held = true, serial = self.serial,
+  self.voices[#self.voices + 1] = {note = note, velocity = velocity / 127, pressed = true, serial = self.serial,
     phase_a = 0, phase_b = 0.17, env = 0, stage = 1, frequency = 440 * 2 ^ ((note - 69) / 12)}
 end
 function Engine:note_off(note)
   for _, v in ipairs(self.voices) do
-    if v.note == note and v.held then
-      v.held = false
+    if v.note == note and v.pressed then
+      v.pressed = false
       if not self.pedal then release(v, self.params.release) end
     end
   end
@@ -152,14 +152,14 @@ function Engine:set_pedal(down)
   self.pedal = not not down
   if not self.pedal then
     for _, v in ipairs(self.voices) do
-      if not v.held and v.stage ~= 4 then release(v, self.params.release) end
+      if not v.pressed and v.stage ~= 4 then release(v, self.params.release) end
     end
   end
 end
 function Engine:all_off()
   self:set_pedal(false)
   for _, v in ipairs(self.voices) do
-    if v.held then v.held = false; release(v, self.params.release) end
+    if v.pressed then v.pressed = false; release(v, self.params.release) end
   end
 end
 function Engine:panic()

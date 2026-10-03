@@ -14,16 +14,16 @@ every address space, file or inode shows up as a single row, and a lock
 that is freed leaves nothing dangling. `spin_lock` and `spin_lock_irqsave`
 count acquisitions, count contended acquisitions (the first `xchg`
 failed) and add the cycles spent spinning; `spin_unlock` adds the cycles
-held and records the longest hold with the acquirer's return address
+spent with the lock acquired and records the longest duration with the acquirer's return address
 (`CONFIG_LOCKDEBUG` supplies it). The table has 128 rows and is append
 only; a row is looked up once per lock and then cached in the lock.
 
 `/dev/lockstat` prints the table as text (`NAME ACQUIRES CONTENDED
-SPIN_CYCLES HOLD_CYCLES MAX_HOLD MAX_HOLD_CALLER`); writing anything to it
+SPIN_CYCLES LOCKED_CYCLES MAX_LOCKED MAX_LOCKED_CALLER`); writing anything to it
 resets the counters. With the TSC at about 1 GHz under QEMU on this host,
 cycles are nanoseconds.
 
-The profiler attributes kernel samples to the code that held a lock:
+The profiler attributes kernel samples to the code that acquired a lock:
 a sample whose innermost frames are `pop_cli`, `push_cli`, `spin_lock`,
 `spin_unlock` or their `irqsave` variants is charged to the first frame
 outside them, marked `(locked)` (`prof_attribute` in libc, used by `prof`
@@ -43,7 +43,7 @@ every process for ten seconds with `prof -k -c -a` and prints
 
 The screenshot of the sysmon Profile tab on the real desktop (four CPUs,
 2560x1600 at scale 2) showed 1253 samples: 850 user, 403 kernel, and
-`pop_cli` held 291 of the kernel samples (72 percent). The kernel time of
+`pop_cli` accounted for 291 of the kernel samples (72 percent). The kernel time of
 an idle desktop is therefore spent almost entirely inside spinlock
 critical sections, and the user time is painting (`painter_blit`,
 `csd_copy`, `memcpy`, `draw_surface`).
@@ -52,7 +52,7 @@ The headless scenario reproduces the kernel side. Over about eleven
 seconds with one client (`mandel`, whose 1 ms repeating timer makes
 `app_step` call `poll` about 155,000 times per second):
 
-| Lock | Acquisitions | Contended | Held (ms) | Longest hold | Longest holder |
+| Lock | Acquisitions | Contended | Locked (ms) | Longest duration | Longest acquirer |
 |---|---|---|---|---|---|
 | `proc` | 11,131,915 | 0 | 537 | 55 us | `signal_deliver` |
 | `fdtable` | 1,862,418 | 0 | 380 | 423 us | `fdtable_get` |
@@ -94,19 +94,19 @@ taken 4,000 times per second by the timer ticks alone (every CPU,
 `sched_tick_cpu`, to decrement the running thread's slice) and by every
 wakeup and switch; 10.8 percent of its acquisitions found it taken.
 
-`console_lock` is held for up to 543 us per write with interrupts
+`console_lock` remains locked for up to 543 us per write with interrupts
 disabled, because `console_write` drives the polled UART and the
 framebuffer console under the lock. X12 logs every commit and pointer
 event to the console, so this is a steady cost on the desktop.
 
-`vmspace.lock` is held for 5.5 ms by `vma_populate` when exec zeroes the
+`vmspace.lock` remains locked for 5.5 ms by `vma_populate` when exec zeroes the
 stack pages under the lock, and `kmalloc-32` for 353 us when a slab grows
 (page allocation, redzone and poison writes under the cache lock).
 
 `proc_format_table` (M40) walked page tables under `proc_tree_lock` and
 `proc_list_lock`, 157 us per read of `/dev/proc`, and took `vmspace.lock`
 under a leaf lock against the recorded order; this branch moves the walk
-outside `proc_list_lock` and keeps only `proc_tree_lock`, which is above
+outside `proc_list_lock` and acquires only `proc_tree_lock`, which is above
 `vmspace.lock`, while a process's size is counted. The complete fix is
 the resident counter of M46.
 
@@ -124,7 +124,7 @@ A controlled four-CPU TCG run of `tests/cases/prof_gui` on 2026-09-05 after
 M46 produced the following relevant rows. The removed `files_lock`,
 `poll_lock` and `sched_lock` names were absent.
 
-| Lock | Acquisitions | Contended | Longest hold |
+| Lock | Acquisitions | Contended | Longest duration |
 |---|---:|---:|---:|
 | `run_queue` | 50,223 | 3 (0.006%) | 96 us |
 | `console` | 317 | 0 | 399 us |
@@ -135,7 +135,7 @@ M46 produced the following relevant rows. The removed `files_lock`,
 
 The UART work is serialized by the sleeping console drain mutex, so the
 `console_drain` row measures only its internal condition spinlock; the slow
-polled serial write does not hold a spinlock. `vmspace` had no acquisition
+polled serial write does not acquire a spinlock. `vmspace` had no acquisition
 after the test reset the counters: `vma_populate` no longer allocates or
 zeroes data or page-table frames under the space lock, and whole-space
 teardown relies on the mandatory drop performed by `vmspace_destroy`.

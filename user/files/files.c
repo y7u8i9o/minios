@@ -1,6 +1,6 @@
 /* files is the file manager window, built like GNOME Files around the
  * folder view that the file chooser of libgui shows as well
- * (gui/folderview.h), which holds the places sidebar, the path bar with
+ * (gui/folderview.h), which contains the places sidebar, the path bar with
  * the location entry and the search, and the table of the folder.  Around
  * it are a menu bar with the file operations of fsops.c, Back and
  * Forward, a context menu and a status bar.
@@ -520,7 +520,7 @@ int main(int argc, char **argv)
     if (!win)
         return 1;
     build_menus();
-    /* The tool bar holds Back and Forward, followed by the path bar, the
+    /* The tool bar contains Back and Forward, followed by the path bar, the
      * location entry, the search field and the search button of the
      * folder view. */
     struct widget *bar = toolbar_new(win);

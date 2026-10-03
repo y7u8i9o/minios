@@ -2,8 +2,8 @@
 #include <console.h>
 
 /* M2: a page fault deep in a call chain yields a symbolized backtrace. Each
- * function is kept out of line and reads through a volatile pointer so the
- * optimizer cannot collapse the chain. The faulting function keeps working
+ * function is retained out of line and reads through a volatile pointer so the
+ * optimizer cannot collapse the chain. The faulting function continues to work
  * after the load so the fault happens while its frame is still set up, and
  * the address is canonical so the CPU raises #PF rather than #GP. */
 static volatile uint64_t *bad_pointer = (volatile uint64_t *)0xfffffffe00000000UL;

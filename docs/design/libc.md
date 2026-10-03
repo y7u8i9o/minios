@@ -115,7 +115,7 @@ result into `-1` with `errno` set. Numbers come from
   the delimiter and return the byte count or -1 at EOF/error.
 - `term.h`: `term_use_color(fd)` requires a tty, nonempty nondumb TERM,
   and an unset NO_COLOR; `term_columns(fd)` uses the window size, then
-  COLUMNS, then 80. `term_sgr` returns a small SGR string kept in the
+  COLUMNS, then 80. `term_sgr` returns a small SGR string retained in the
   thread control block (a thread local variable would give the shared
   library a TLS segment, `dynlink.md`).
 
@@ -154,7 +154,7 @@ by booting the default image and typing through QEMU's monitor.
 ## Large allocations (M33)
 
 `malloc` serves requests of 256 KiB or more with a private anonymous
-`mmap` of their own and `free` unmaps them, while smaller blocks stay in
+`mmap` of their own and `free` unmaps them, while smaller blocks remain in
 the heap over `sbrk`. Window surfaces and buffer pools are
 re-created at every mode change; on the list they fragmented the heap
 and each new size cost another 30 MiB that never came back.
@@ -165,7 +165,7 @@ The first fit list was replaced on 2026-09-06 after the Lua garbage
 collection test showed allocation and freeing times growing with the
 square of the number of live objects: every `malloc` walked the list
 from its head and every `free` walked it to coalesce. `malloc.c` now
-keeps free blocks in bins by size, one bin per 16 bytes up to 512 bytes
+retains free blocks in bins by size, one bin per 16 bytes up to 512 bytes
 and one per power of two above, with the bin links in the payload of
 the free block. Every block has a 16 byte header with the payload size
 and two flags; a free block also writes its size in its last 8 bytes,
@@ -255,6 +255,6 @@ took the BSD signature with the slave descriptor, the name, the settings
 and the window size. `strtok_r` takes `char **` as POSIX has it.
 `getpriority` and `setpriority` report and accept priority 0, `utime`
 sets the modification time, and `chroot` fails with `ENOSYS`. New
-headers are `paths.h`, `utmp.h` (types only, minios keeps no login
+headers are `paths.h`, `utmp.h` (types only, minios retains no login
 records), `poll.h`, `utime.h`, `alloca.h`, `net/if.h` and
 `netinet/tcp.h`.

@@ -50,7 +50,7 @@ static void buffer_resource_destroy(struct wire_resource *r)
 {
     struct buffer *b = r->data;
     b->res = NULL;
-    /* Surfaces still showing it keep the memory alive through the pool. */
+    /* Surfaces still showing it retain the memory through the pool. */
     for (struct csurface *s = surfaces; s; s = s->next) {
         if (s->current.buffer == b) {
             s->current.buffer = NULL;
@@ -361,7 +361,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         s->pending.attach_x = s->pending.attach_y = 0;
         /* A new buffer for an unchanged geometry (the usual frame of a
          * double buffered client) changes the contents only; the
-         * decorations and the shadow around them stay as drawn. */
+         * decorations and the shadow around them remain as drawn. */
         struct rect now = decor_has(s) ? decor_extent(s) : surface_rect(s);
         int same = was_mapped && b && old.x == now.x && old.y == now.y && old.w == now.w && old.h == now.h;
         if (same) {

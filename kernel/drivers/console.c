@@ -43,7 +43,7 @@ static void console_write_unlocked(const char *s, size_t n)
         fbcon_write(s, n);
 }
 
-/* Once async output starts, consoleout is the sole serial producer. Keep the
+/* Once async output starts, consoleout is the sole serial producer. Maintain the
  * slow polled UART outside console_lock; the lock is needed only around the
  * framebuffer state shared with mode changes and the GPU flush thread. */
 static void console_write_async_chunk(const char *s, size_t n)
@@ -73,7 +73,7 @@ void console_flush(void)
 void console_write_user(const char *s, size_t n)
 {
     /* Finish queued echo and diagnostics before drawing a user's next
-     * terminal update. Hold the same mutex as consoleout for the complete
+     * terminal update. Acquire the same mutex as consoleout for the complete
      * write so CPU migration cannot reorder successive user writes. */
     console_flush();
     mutex_lock(&console_drain_mutex);
@@ -87,7 +87,7 @@ void console_write_user(const char *s, size_t n)
 }
 
 /* Panic path: the daemon is gone and other CPUs are halted, so write out
- * whatever the CPU rings still hold before the panic text follows it. Only
+ * whatever the CPU rings still contain before the panic text follows it. Only
  * the serial port receives it: the daemon may have been halted in the
  * middle of a framebuffer update, and the panic text itself still reaches
  * the screen through fb_panic_flush. */
@@ -104,7 +104,7 @@ void console_panic_drain(void)
 
 void console_write(const char *s, size_t n)
 {
-    /* A panicking CPU may hold the lock already: print without it. */
+    /* A panicking CPU may have acquired the lock already: print without it. */
     if (panic_in_progress) {
         console_write_unlocked(s, n);
         return;

@@ -1,5 +1,5 @@
 /* dlopen and friends forward to the loader through its interface record
- * (minios/dl.h); the loader holds the objects, their scopes and the
+ * (minios/dl.h); the loader contains the objects, their scopes and the
  * error text. Without a loader every call fails with one message. */
 #include <dlfcn.h>
 #include <stddef.h>

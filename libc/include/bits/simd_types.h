@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-/* Native 128-bit vector types of minios/simd.h. They may be kept in vector
+/* Native 128-bit vector types of minios/simd.h. They may be stored in vector
  * registers across a scheduling point because the kernel saves the
  * complete FP and SIMD state of a thread. */
 typedef float simd_f32x4 __attribute__((vector_size(16)));

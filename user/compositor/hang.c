@@ -1,6 +1,6 @@
 /* Unresponsive clients. The server pings every client through its shell
  * global once a second; a client that has not answered for three seconds
- * (or whose socket has stayed full that long) is shown as not responding:
+ * (or whose socket has remained full that long) is shown as not responding:
  * its toplevels are dimmed and carry a dialog with the title, Wait and
  * Force quit. Wait hides the dialog for fifteen seconds, Force quit kills
  * the process (when the client reported its pid) and drops the connection.

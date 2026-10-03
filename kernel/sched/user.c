@@ -30,7 +30,7 @@ static void user_thread_entry(void *arg)
 
 /* Build a new address space from an ELF on the initrd. */
 /* The main stack size for a new image: RLIMIT_STACK of the creating
- * process, kept between 64 KiB and 1 GiB and page aligned. */
+ * process, limited to between 64 KiB and 1 GiB and page aligned. */
 static size_t stack_size_for(struct proc *p)
 {
     uint64_t lim = p ? proc_rlimit_cur(p, RLIMIT_STACK) : 8UL << 20;

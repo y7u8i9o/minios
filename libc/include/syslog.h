@@ -2,7 +2,7 @@
 #include <stdarg.h>
 
 /* The system log (docs/design/users.md). syslog appends one line per
- * message to /var/log/messages, holding the date, the host name, the
+ * message to /var/log/messages, containing the date, the host name, the
  * identity given to openlog with the process id when LOG_PID is set, and
  * the text.
  * A process that cannot write the file loses the message, unless LOG_CONS

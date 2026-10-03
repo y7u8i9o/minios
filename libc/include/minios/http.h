@@ -21,11 +21,11 @@ struct http_url {
  * oversized host, port or path. */
 int http_parse_url(const char *url, struct http_url *u);
 
-/* status holds the status code and stays 0 until the status line has
- * arrived. length holds Content-Length and is -1 when the server sent
+/* status contains the status code and remains 0 until the status line has
+ * arrived. length contains Content-Length and is -1 when the server sent
  * none. received counts the body bytes written to the descriptor. head
- * holds the status line and the headers, truncated to fit, and error
- * holds the reason when http_get fails. */
+ * contains the status line and the headers, truncated to fit, and error
+ * contains the reason when http_get fails. */
 struct http_response {
     int status;
     long long length;
@@ -38,7 +38,7 @@ struct http_response {
  * timeout bounds, in seconds, the connection and every wait for data, and
  * 0 sets no bound. max_body refuses a body larger than that many bytes,
  * and 0 sets no bound. http_get returns 0 when a complete response has
- * arrived, whatever its status, which res->status holds. Otherwise it
+ * arrived, whatever its status, which res->status contains. Otherwise it
  * returns a negative errno and describes the failure in res->error. The
  * errors are -EPROTONOSUPPORT or -EINVAL for the URL, -EHOSTUNREACH when
  * the name does not resolve, the error of connect, -ETIMEDOUT, -EIO for a

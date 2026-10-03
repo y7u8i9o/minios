@@ -205,7 +205,7 @@ static void test_shared(void)
     memset(want + 3 * PG, 0x3c, 64);
     CHECK(munmap(alias, 2 * PG) == 0 && munmap(p, NPAGES * PG) == 0, "munmap shared");
     close(fd);
-    CHECK(file_matches(want, 0, FILE_SIZE), "file holds the shared writes after msync and munmap");
+    CHECK(file_matches(want, 0, FILE_SIZE), "file contains the shared writes after msync and munmap");
 
     /* Writes without msync are written back by munmap. */
     fd = open(PATH, O_RDWR);
@@ -268,7 +268,7 @@ static void test_mprotect(void)
     CHECK(munmap(p + 4 * PG, PG) == 0, "release the page after the region");
     memset(p, 0x31, 4 * PG);
     CHECK(mprotect(p + PG, PG, PROT_READ) == 0, "mprotect middle page read only: %s", strerror(errno));
-    CHECK(p[PG] == 0x31 && p[2 * PG] == 0x31, "data kept across mprotect");
+    CHECK(p[PG] == 0x31 && p[2 * PG] == 0x31, "data retained across mprotect");
     int status = in_child(touch_write, p + PG);
     CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV, "write to read only page faults: %x", status);
     p[2 * PG] = 0x32;
@@ -318,7 +318,7 @@ static void test_fixed(void)
     int fd = open(PATH, O_RDONLY);
     unsigned char *f = mmap(a + PG, 2 * PG, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, PG);
     CHECK(f == a + PG, "MAP_FIXED placed the mapping: %p vs %p (%s)", (void *)f, (void *)(a + PG), strerror(errno));
-    CHECK(a[0] == 0x51 && a[3 * PG] == 0x51, "pages around the fixed mapping kept");
+    CHECK(a[0] == 0x51 && a[3 * PG] == 0x51, "pages around the fixed mapping retained");
     CHECK(f[0] == pattern(PG, 4) && f[PG] == pattern(2 * PG, 4), "fixed file mapping content");
     /* A fixed anonymous mapping over the whole range replaces everything. */
     unsigned char *z = mmap(a, 4 * PG, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);

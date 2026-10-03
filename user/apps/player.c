@@ -43,7 +43,7 @@ static int use_sinc;                /* The next load uses the sinc resampler whe
 static int *column_min, *column_max, columns;
 
 /* The functions below decode and convert audio files.  A decoded file
- * is kept as interleaved 16-bit samples in the file's channel count: the
+ * is stored as interleaved 16-bit samples in the file's channel count: the
  * upper 16 bits of the 32-bit samples libcodec returns. */
 
 /* A load_job describes a file that the loader thread reads and decodes.

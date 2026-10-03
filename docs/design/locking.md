@@ -16,7 +16,7 @@ before the code that uses them.
 | `kmem_cache.lock` | spinlock | slab lists and free lists of one cache | M5 |
 | `kmem_caches_lock` | spinlock | list of all caches | M5 |
 | `kbd_lock` | spinlock | keyboard modifier state and line buffers, taken in the IRQ handler | M6 |
-| `run_queue.lock` | per-CPU spinlock | that CPU's ready queues, sleeper list and scheduling transitions; held across context switches | M44 |
+| `run_queue.lock` | per-CPU spinlock | that CPU's ready queues, sleeper list and scheduling transitions; locked across context switches | M44 |
 | `waitq.lock` | spinlock | waiters list of one wait queue | M7 |
 | `mutex.lock`, `semaphore.lock` | spinlock | the state of one blocking primitive | M7 |
 | `condvar.lock` | spinlock | orders waiter registration against signals | M7 |
@@ -25,7 +25,7 @@ before the code that uses them.
 | `proc_tree_lock` | spinlock | parent/children links and process state of every process | M9 |
 | `tid_lock` | spinlock | thread id counter | M7 |
 | `inode.lock` | mutex | contents, size and directory entries of one inode | M11 |
-| `file.lock` | mutex | position of one open file description, held across the driver read or write | M11 |
+| `file.lock` | mutex | position of one open file description, locked across the driver read or write | M11 |
 | `superblock.lock` | spinlock | inode cache list and inode reference counts of one filesystem | M11 |
 | `fdtable.lock` | spinlock | descriptor slots of one process | M11 |
 | `mount_lock` | spinlock | mount table | M11 |
@@ -33,7 +33,7 @@ before the code that uses them.
 | `devfs_lock` | spinlock | device node list | M11 |
 | `pipe.lock` | spinlock | pipe end counts and lost-wakeup checks; byte indexes are SPSC atomics | M11/M45 |
 | `virtqueue.lock` | spinlock | descriptor free list, ring indexes and completion cookies of one virtqueue, taken in the MSI-X handler, condition lock for request completion | M12 |
-| `buf.lock` | mutex | data of one block cache buffer, held from `bread` to `brelse` | M12 |
+| `buf.lock` | mutex | data of one block cache buffer, locked from `bread` to `brelse` | M12 |
 | `bcache_lock` | spinlock | buffer LRU list, buffer identity, reference counts and flags | M12 |
 | `blockdev_lock` | spinlock | list of block devices | M12 |
 | `mfs_sb.lock` | mutex | inode and block bitmaps and the superblock counters of one mfs mount | M13 |
@@ -55,13 +55,13 @@ before the code that uses them.
 | `kbd_lock` (reduced) | spinlock | keyboard modifier state only | M17 |
 | `pty.lock` | spinlock | output ring of one pseudo terminal pair, condition lock of `pty.out_waitq` | M17 |
 | `pty_table_lock` | spinlock | allocation of pseudo terminal pairs | M17 |
-| `tlb_lock` | spinlock | the TLB shootdown request in flight and its statistics, held by the sender while it waits for acknowledgements | M18 |
+| `tlb_lock` | spinlock | the TLB shootdown request in flight and its statistics, locked by the sender while it waits for acknowledgements | M18 |
 | `prof_lock` | spinlock | profiler session reconfiguration; timer samples use per-CPU rings | M41/M45 |
 | `slab_magazine.lock` | per-cache/per-CPU spinlock | one CPU magazine; cross-CPU use occurs only during reclaim | M46 |
 | `pmm_cpu_cache` | per-CPU spinlock | one CPU's cached order-zero physical pages | M46 |
 | `filemap_lock` | spinlock | `inode->mapping` pointers and the reference counts of mappings | M37 |
-| `mapping.lock` | mutex | the page array of one file mapping, held while a page is read from the file or written back | M37 |
-| `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is held | M37 |
+| `mapping.lock` | mutex | the page array of one file mapping, locked while a page is read from the file or written back | M37 |
+| `mapping.dirty_lock` | spinlock | the dirty bitmap of one file mapping, set while a `vmspace.lock` is locked | M37 |
 | `socket.lock` | spinlock | the pending asynchronous error of one socket | N01 |
 | `families_lock`, `inet_protocols_lock` | spinlock | the socket family table and the Internet protocol table | N01 |
 | `net_worker.lock` | spinlock | the worker's packet and request queues, timer list, kick flag and counters; condition lock of its sleep and of request completion | N02 |
@@ -71,7 +71,7 @@ before the code that uses them.
 
 ## Ordering
 
-Locks are listed from outermost to innermost. A CPU holding a lock may only
+Locks are listed from outermost to innermost. A CPU having acquired a lock may only
 acquire locks that appear later in this list.
 
 1. `file.lock` (mutex)
@@ -87,7 +87,7 @@ acquire locks that appear later in this list.
 10. the calling CPU's `run_queue.lock`
 11. `vmspaces_lock`, then `vmspace.lock` (user spaces)
 12. `kvm_lock`
-12a. `tlb_lock` (taken inside any `vmspace.lock` or `kvm_lock` by `tlb_flush_range`, and by `vmspace_destroy` with no space lock held)
+12a. `tlb_lock` (taken inside any `vmspace.lock` or `kvm_lock` by `tlb_flush_range`, and by `vmspace_destroy` with no space lock acquired)
 13. `kmem_caches_lock`
 14. `slab_magazine.lock`, then `kmem_cache.lock` on refill, drain or reclaim
 15. `pmm_lock`
@@ -101,8 +101,8 @@ is safe because every spinlock disables interrupts. The page fault handler
 takes `vmspace.lock` and then `pmm_lock` from exception context.
 
 Blocking primitives never run in interrupt context.  A CPU's run-queue lock
-is held across `context_switch` and released by the resumed thread on its new
-CPU, so nothing is allocated or freed while it is held.  Remote wakers publish
+remains locked across `context_switch` and released by the resumed thread on its new
+CPU, so nothing is allocated or freed while it is locked.  Remote wakers publish
 through MPSC and therefore do not nest a destination queue lock under a
 condition or wait-queue lock.
 
@@ -113,7 +113,7 @@ sit above `pmm_lock`. Slab caches take pages from the buddy allocator, so
 setting up a process.
 
 The filesystem mutexes are outermost because a driver read or write runs
-with `file.lock` held and may block on the keyboard or a pipe, taking
+with `file.lock` acquired and may block on the keyboard or a pipe, taking
 their condition locks inside. `pipe.lock` and `kbd_lock` read `proc.lock`
 to check the exit flag before blocking, so they sit at the same level as
 the other condition locks and never nest with each other. The leaf
@@ -121,26 +121,26 @@ spinlocks in level 16 protect reference counts and small tables and take
 no other lock; `fdtable.lock` is released before `file_put` runs so a
 release callback may sleep.
 
-`mfs_sb.lock` is taken while an inode mutex is held (allocating a block
+`mfs_sb.lock` is taken while an inode mutex is locked (allocating a block
 for a file) and takes buffer locks for the bitmap blocks, so it sits
 between them. `buf.lock` sits below the inode mutex because a filesystem operation
-reads and writes blocks while holding its inode, and above the condition
+reads and writes blocks while it has acquired its inode, and above the condition
 locks because a block transfer sleeps on `virtqueue.lock`. `bcache_lock`
 is a leaf: it is dropped before any buffer mutex or device transfer.
 
-`vmspaces_lock` is held by kswapd while it takes one `vmspace.lock` at a
+`vmspaces_lock` remains locked by kswapd while it takes one `vmspace.lock` at a
 time; nothing takes two space locks at once. `swap_lock` is taken under
 `vmspace.lock` (slot allocation and release while an entry is rewritten),
 which places it below the space locks; as the condition lock of
 `swap_waitq` it is also taken on its own. `swap_io_lock` is taken by
-kswapd and by the fault handler with no spinlock held and sleeps on the
-block device below it. Since M18 kswapd holds it across the whole
+kswapd and by the fault handler with no spinlock acquired and sleeps on the
+block device below it. Since M18 kswapd has acquired it across the whole
 eviction batch, from before an entry is rewritten to its swap slot until
 the frame data is written, so a swap in on another CPU cannot read a slot
 whose data is still in flight.
 
 `signal_send` takes `proc.lock` and then `waitq.lock` through
-`waitq_interrupt`, and `proc_exit_notify` sends `SIGCHLD` with no lock held.
+`waitq_interrupt`, and `proc_exit_notify` sends `SIGCHLD` with no lock acquired.
 Poll sleeps on a private waiter registered with each object source; signal
 interruption wakes the thread's current wait queue and needs no global poll
 lock.
@@ -153,29 +153,29 @@ context.
 `tty_input_char` on a pseudo terminal runs in the writer's process
 context and posts `SIGINT` after dropping `tty.lock`; on the console it
 only sets a flag under `tty.lock` and wakes `ttyd`. A pseudo terminal's
-`tty.output` callback takes `pty.lock` while `tty.lock` is held, so
+`tty.output` callback takes `pty.lock` while `tty.lock` is locked, so
 `pty.lock` is never taken first.
 
-`tlb_lock` is taken with a space lock held and the sender spins on it
+`tlb_lock` is taken with a space lock acquired and the sender spins on it
 with interrupts disabled while waiting for other CPUs. A CPU that spins
 on any spinlock services pending shootdown requests from its spin loop
 (`tlb_shootdown_poll`), so a target that waits for a lock the sender
-holds still acknowledges the request. Nothing is acquired under
+has acquired still acknowledges the request. Nothing is acquired under
 `tlb_lock` except `console_lock` through the interrupt path. The sender
 never targets itself.
 
 Each `run_queue.lock` covers only one CPU's ready and sleeper lists.  A remote
-wake uses that CPU's MPSC inbox and a reschedule IPI.  Stealing holds the
+wake uses that CPU's MPSC inbox and a reschedule IPI.  Stealing acquires the
 local lock and only tries a victim lock; it never waits for a second queue
 lock.  `cpu.current`, `idle` and `zombie_pending` are local-queue state, while
 `need_resched` is atomically set by the local tick or IPI.
 
-`console_lock` is innermost because any subsystem may print while holding its
-own lock. Code holding `console_lock` must not call into any other subsystem.
+`console_lock` is innermost because any subsystem may print while having acquired its
+own lock. Code having acquired `console_lock` must not call into any other subsystem.
 The panic path bypasses `console_lock` once `panic_in_progress` is set.
 After `consoleout` starts, a sleeping `console_drain` mutex serializes the
-single normal consumer with explicit flushes. The slow polled UART runs while
-holding that mutex but no spinlock; `console_lock` is acquired separately for
+single normal consumer with explicit flushes. The slow polled UART runs with
+that mutex locked and no spinlock; `console_lock` is acquired separately for
 the framebuffer state and framebuffer write.
 
 ## M23 additions
@@ -217,7 +217,7 @@ the framebuffer state and framebuffer write.
   releasing `console_lock` before touching the device).
 - `virtio_gpu->lock` (mutex; the scanout resource ids and every control
   sequence) is taken before the control queue's `vq->lock`. The panic
-  path skips the mutex and the flush entirely when the queue lock is held.
+  path skips the mutex and the flush entirely when the queue lock is already locked.
 - `input_dev->lock` (the report assembled between `SYN_REPORT` events) is
   taken under `vq->lock` in the completion callback and alone by
   `virtio_input_feed`.
@@ -239,8 +239,8 @@ the framebuffer state and framebuffer write.
   of one journal) is a condition lock: `mfs_journal.lock -> waitq.lock ->`
   the calling CPU's `run_queue.lock` while blocking. It is taken from
   `op_begin` and `op_end`, which the VFS
-  calls with no inode or file lock held, and from `mfs_journal_write`
-  under an inode mutex, `mfs_sb.lock` and a buffer mutex; it is never held
+  calls with no inode or file lock acquired, and from `mfs_journal_write`
+  under an inode mutex, `mfs_sb.lock` and a buffer mutex; it is never acquired
   across a device transfer. The commit itself runs with `committing` set
   and the spinlock released, taking one `buf.lock` at a time.
 - `fat_sb.lock` (mutex; the allocation table) sits where `mfs_sb.lock`
@@ -251,28 +251,28 @@ the framebuffer state and framebuffer write.
 ## M37 additions
 
 - `mapping.lock` (mutex) sits between `file.lock` and `inode.lock`:
-  `file_read` and `file_write` hold `file.lock` and take it to overlay or
+  `file_read` and `file_write` acquire `file.lock` and take it to overlay or
   copy through cached pages, and a page fill or writeback takes it and then
   calls the filesystem's read or write operation, which takes `inode.lock`.
   `filemap_writeback` calls `vfs_op_begin` before taking it, as the VFS
-  does for writes. The fault handler and the unmap paths never hold a
+  does for writes. The fault handler and the unmap paths never acquire a
   `vmspace.lock` while taking it: `filemap_fault` releases the space lock
   first and the unmap and msync paths queue their writebacks and run them
   after the space lock is released.
 - `mapping.dirty_lock` is a leaf taken under `vmspace.lock` (gathering
   hardware dirty bits) and under `mapping.lock` (writeback).
 - `filemap_lock` is a leaf in level 16; it is taken while a `vmspace.lock`
-  is held only through `filemap_ref`, which is atomic and takes no lock.
+  is locked, and only through `filemap_ref`, which is atomic and takes no lock.
 
 ## M40 additions
 
 - No new lock. `proc.rlim` is written under `proc.lock` and read without
   it by the timer tick and the enforcement points; the CPU time, fault and
   switch counters of a process are updated atomically from the tick, the
-  fault handler and `sched_switch_locked` (which holds the calling CPU's
+  fault handler and `sched_switch_locked` (which has acquired the calling CPU's
   `run_queue.lock`). The
   tick calls `signal_send` for `RLIMIT_CPU`, taking `proc.lock` from the
-  timer interrupt like `waitq_interrupt` already did; no spinlock is held
+  timer interrupt like `waitq_interrupt` already did; no spinlock is locked
   when an interrupt arrives, so the ordering is unaffected.
 
 ## M41 additions
@@ -280,7 +280,7 @@ the framebuffer state and framebuffer write.
 - `prof_lock` protects start, stop and close.  Sampling uses a per-CPU SPSC
   ring and per-CPU active count without this lock; `/dev/profile` merges the
   consumer sides.  Frame-chain translation still takes the interrupted
-  process's `vmspace.lock` with no other lock held.
+  process's `vmspace.lock` with no other lock acquired.
 
 ## M42 additions
 
@@ -304,11 +304,11 @@ the framebuffer state and framebuffer write.
   preemption by entering a per-CPU read section and are forbidden to block.
   Callback producers publish through a per-CPU MPSC list; a dedicated kernel
   thread consumes all lists after every started CPU has crossed the target
-  epoch. It holds no RCU lock across callbacks, which may acquire filesystem
+  epoch. It has acquired no RCU lock across callbacks, which may acquire filesystem
   locks and sleep. Callbacks must never execute in the timer interrupt.
-- Each scheduler path may block while holding only its own `run_queue.lock`.
+- Each scheduler path may block while having acquired only its own `run_queue.lock`.
   Work stealing uses `spin_try_lock` for a victim and skips that victim on
-  failure, so it never waits while holding two run-queue locks.
+  failure, so it never waits while having acquired two run-queue locks.
 - The local slab fast path takes `slab_magazine.lock`. Refill and drain then
   take the corresponding `kmem_cache.lock`; allocation of backing pages may
   continue to `pmm_lock`. `slab_reclaim` is an externally serialized
@@ -321,10 +321,10 @@ the framebuffer state and framebuffer write.
 ## N01 additions
 
 - `socket.lock` is a leaf protecting the error word of a socket; it is
-  never held across a backend call. `families_lock` and
+  never locked across a backend call. `families_lock` and
   `inet_protocols_lock` are leaves over registration tables.
 - The Unix backend's `conn.lock` is now taken before `poll_source.lock`:
-  readiness changes are announced while it is held, and a side that
+  readiness changes are announced while it is locked, and a side that
   releases clears its pointer to the socket's poll source under it, so
   the source of a freed socket is never notified. The order below it is
   `conn.lock -> poll_source.lock -> poll_waiter.lock -> waitq.lock`,
@@ -335,8 +335,8 @@ the framebuffer state and framebuffer write.
   `FOPS_STREAM` (sockets, and since 2026-10-02 the pty master, the pty
   slaves and `/dev/console`): they have no position, and a reader blocked
   in the backend must not exclude a writer on the same open file
-  description. Regular files keep the mutex. Before the terminals carried
-  the flag, a shell waiting at its prompt held the mutex of its terminal
+  description. Regular files retain the mutex. Before the terminals carried
+  the flag, a shell waiting at its prompt retained the mutex of its terminal
   in `read`, and a background job that wrote to the same description
   blocked until the next key press.
 
@@ -345,8 +345,8 @@ the framebuffer state and framebuffer write.
 - `net_worker.lock` is the condition lock of the worker's sleep and of
   request completion: `net_worker.lock -> waitq.lock ->` the calling
   CPU's `run_queue.lock`, and `net_worker.lock -> timed_lock` through
-  `waitq_wait_timeout`. It is never held while a packet, a request or a
-  timer function runs, and not held across device processing. N03 extends its producer
+  `waitq_wait_timeout`. It is never acquired while a packet, a request or a
+  timer function runs, and not locked across device processing. N03 extends its producer
   use to an IRQ-side kick/wakeup after recording queue completions, as
   described below.
 - `pbuf_pool.lock` and `netif_lock` are leaves in level 16. The pool
@@ -360,7 +360,7 @@ the framebuffer state and framebuffer write.
 - No lock is added. A path walk reads the target of a link with the
   `readlink` operation under that link's `inode.lock` alone, after the
   directory mutex of the lookup that found it has been released, so no
-  two inode mutexes are held. `open` with `O_CREAT` releases the
+  two inode mutexes are acquired. `open` with `O_CREAT` releases the
   directory mutex and ends the operation (`op_end`) before it reads a
   link it found in place of the file. `mfs_symlink` runs under the
   directory mutex and takes the new inode's mutex to write the target,
@@ -390,12 +390,12 @@ These locks are in user space and do not add a kernel lock-order level.
   -> waitq.lock`. Completion callbacks only record tokens and kick netd;
   they never allocate, free packets, refill descriptors or parse frames.
   This extends N02: the worker condition lock may be taken in an interrupt
-  solely to record a kick and wake its waiter. Netd holds none of its locks
+  solely to record a kick and wake its waiter. Netd has acquired none of its locks
   while servicing the NIC. The NIC's DMA buffers and completion slots are
   protected by the corresponding queue lock.
 - IPv4 configuration, routes, ARP entries and deadlines belong exclusively
   to netd. Configuration and socket sends use bounded synchronous requests
-  holding kernel copies; file references keep socket objects alive until
+  containing kernel copies; file references maintain socket objects until
   completion. Close uses an uninterruptible request to remove its endpoint.
 - `udp_lock` protects the bounded endpoint table, bindings, peer selection
   and receive rings. Its order is `udp_lock -> socket.lock` and
@@ -414,9 +414,9 @@ These locks are in user space and do not add a kernel lock-order level.
   address snapshots, receive rings and wait conditions. The order is
   `tcp_lock -> socket.lock` and `tcp_lock -> poll_source.lock ->
   poll_waiter.lock -> waitq.lock`. No packet output, allocation, user copy or
-  worker request submission occurs while tcp_lock is held.
+  worker request submission occurs while tcp_lock is locked.
 - Socket operations submit copied, bounded requests while their file reference
-  keeps the endpoint alive. Close removes the endpoint with an uninterruptible
+  maintains the endpoint. Close removes the endpoint with an uninterruptible
   worker barrier; remaining protocol state then contains no socket pointer.
   A blocked connect interrupted by a signal leaves the connection in progress;
   a later poll/SO_ERROR or close observes/terminates it. Accept waiters register
@@ -434,7 +434,7 @@ These locks are in user space and do not add a kernel lock-order level.
   (`fragment.c`, `path.c`) belong to netd. `netif_set_up(false)` from another
   thread drains the worker and then runs a request that fails the interface's
   connections, flushes its reassembly contexts, the path tables and its ARP
-  entries; called on netd it runs the same function directly. No lock is held
+  entries; called on netd it runs the same function directly. No lock remains locked
   across that request.
 - `random_lock` is a leaf in level 16 protecting the generator state of
   `kernel/lib/random.c`. It is taken from thread context by `random_u32`,
@@ -458,7 +458,7 @@ These locks are in user space and do not add a kernel lock-order level.
 ## N13–N16 additions
 
 - The send store, receive store and presence bitmap of a TCP connection
-  are allocated by netd with no lock held when the connection is created
+  are allocated by netd with no lock acquired when the connection is created
   and freed by netd. The receive pointers are set before any endpoint can
   reach the connection and are cleared only when no endpoint exists, so a
   reader that finds the connection under `tcp_lock` always finds its
@@ -478,7 +478,7 @@ These locks are in user space and do not add a kernel lock-order level.
   deadline, which gives the order `arp_probe_lock -> waitq.lock ->
   run_queue.lock`. netd marks a
   conflict from `arp_input` under the same lock and wakes the waiter; it
-  holds no other lock then and never sleeps on a slot.
+  has acquired no other lock then and never sleeps on a slot.
 
 ## A5 additions
 
@@ -511,7 +511,7 @@ These locks are in user space and do not add a kernel lock-order level.
 
 - No new lock. `proc.cred` is written under `proc.lock` by the identity
   system calls and copied out under it by `cred_get`, which takes no other
-  lock and is called with no lock held. A new process copies the parent's
+  lock and is called with no lock acquired. A new process copies the parent's
   credentials under the parent's `proc.lock`, together with the resource
   limits. `proc_format_table` reads the effective uid with a relaxed atomic
   load under `proc_tree_lock` and `proc_list_lock`, without `proc.lock`.
@@ -531,10 +531,10 @@ These locks are in user space and do not add a kernel lock-order level.
 
 - No new lock. A path walk copies the caller's credentials once under
   `proc.lock` before it takes any inode lock. `kill` copies the target's
-  credentials under the target's `proc.lock` with no other lock held.
+  credentials under the target's `proc.lock` with no other lock acquired.
   `devfs_set_owner` takes the node's `inode.lock` and below it
   `devfs_lock`, the order of U1, and is called by the pseudo terminal
-  driver with no lock held.
+  driver with no lock acquired.
 
 ## GICv2 additions
 
@@ -551,8 +551,8 @@ These locks are in user space and do not add a kernel lock-order level.
 - `alarm_lock` (spinlock) protects the list of armed alarms and the
   fields `alarm_link` and `alarm_ms` of every process. The timer
   interrupt takes it, and the system call and `proc_free` take it with no
-  other lock held. It is a leaf. The tick collects the due pids under it
-  and posts the signals after releasing it, which keeps `proc.lock`
+  other lock acquired. It is a leaf. The tick collects the due pids under it
+  and posts the signals after releasing it, which leaves `proc.lock`
   outside it.
 - `proc.sig_info` is written when a signal is posted and read when it is
   delivered, both under `proc.lock`, the lock of `sig_actions`.

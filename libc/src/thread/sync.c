@@ -1,5 +1,5 @@
 /* Mutexes, condition variables, spin locks and read-write locks (M35).
- * The mutex is the three state futex mutex: 0 free, 1 held, 2 held with
+ * The mutex is the three state futex mutex: 0 free, 1 locked, 2 locked with
  * a possible waiter; an uncontended lock and unlock are one atomic
  * operation each and only the contended paths enter the kernel. */
 #include "tcb.h"

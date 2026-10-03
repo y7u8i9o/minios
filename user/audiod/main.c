@@ -15,7 +15,7 @@
 #include <sys/ipc.h>
 #include "audiod.h"
 
-#define INPUT_RING 4            /* device periods held for the capture streams */
+#define INPUT_RING 4            /* device periods stored for the capture streams */
 #define LEVEL_PERIODS 5         /* periods between level events (50 ms) */
 
 struct wire_server *server;
@@ -101,7 +101,7 @@ static int32_t apply_gain(int16_t sample, uint32_t gain)
     return (int32_t)(((int64_t)sample * gain) >> 16);
 }
 
-/* Every captured period the device holds, newest last; the ring drops
+/* Every captured period the device contains, newest last; the ring drops
  * its oldest period when the mixer falls behind. */
 static void read_input(void)
 {
@@ -211,7 +211,7 @@ static void feed_capture(void)
         audio_stream_send_captured(s->resource, index, QUANTUM);
     }
     if (!device_taken)
-        take_input();           /* nobody listens: keep the ring fresh */
+        take_input();           /* nobody listens: ensure the ring remains current */
 }
 
 static int mix_period(void)

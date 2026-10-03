@@ -181,7 +181,7 @@ static void test_mfs(void)
     /* Programs on the disk root run. */
     struct inode *sh;
     ktest_assert(vfs_lookup("/bin/sh", &sh) == 0 && S_ISREG(sh->mode) && sh->size > 1000, "/bin/sh on disk");
-    ktest_assert(sh->mtime > 1600000000LL * 1000000000, "mkfs kept the host time: %ld", sh->mtime);
+    ktest_assert(sh->mtime > 1600000000LL * 1000000000, "mkfs retained the host time: %ld", sh->mtime);
     inode_put(sh);
     ktest_assert(vfs_lookup("/initrd/bin/sh", &sh) == 0, "initrd on /initrd");
     inode_put(sh);

@@ -10,7 +10,7 @@ for _, n in ipairs{48, 55, 60, 64, 67, 72, 76, 79} do assert(c:note_on(n)) end
 assert(c:sync())
 assert(c:active() == 8, 'worker applied eight-note chord')
 local frames = c.stats.frames
--- Deliberately stop consuming GUI events. The worker must keep generating.
+-- Deliberately stop consuming GUI events. The worker must continue generating.
 sys.sleep(250)
 assert(c:sync())
 assert(c.stats.frames > frames + 4800, 'audio progresses while GUI sleeps')

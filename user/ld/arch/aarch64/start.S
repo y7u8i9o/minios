@@ -24,7 +24,7 @@ _dl_start:
 
 /* Lazy binding. The first entry of a procedure linkage table pushes x16
  * (the address of the GOT slot the called entry loaded) and x30, sets x16
- * to the address of GOT[2] and jumps here through GOT[2]. GOT[1] holds
+ * to the address of GOT[2] and jumps here through GOT[2]. GOT[1] contains
  * the object record. The slot GOT[3 + i] belongs to the relocation i of
  * the jump slot table. Every register an argument may travel in is
  * preserved around _dl_fixup: x0 to x8 and q0 to q7. */

@@ -57,9 +57,9 @@ extern const struct file_ops mfs_file_fops;
 void mfs_init(void);
 /* Write the superblock directly (mount and unmount, outside transactions). */
 int mfs_write_super(struct mfs_sb *m);
-/* Write the superblock counters through the journal. Caller holds m->lock. */
+/* Write the superblock counters through the journal. Caller has acquired m->lock. */
 int mfs_super_journal(struct mfs_sb *m);
-/* Write the inode metadata to the inode table. Caller holds ino->lock or
+/* Write the inode metadata to the inode table. Caller has acquired ino->lock or
  * is the only user of a fresh inode. */
 int mfs_inode_flush(struct inode *ino);
 /* Create a fresh inode of the given mode with nlink links. Returns it
@@ -74,7 +74,7 @@ void mfs_free_inode(struct mfs_sb *m, uint32_t ino);
 /* True when the inode bitmap marks ino allocated. */
 int mfs_inode_allocated(struct mfs_sb *m, uint32_t ino);
 
-/* inode.c: all take ino->lock held by the caller. */
+/* inode.c: all take ino->lock locked by the caller. */
 long mfs_read_locked(struct inode *ino, char *buf, size_t n, uint64_t off);
 long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off);
 int mfs_truncate_locked(struct inode *ino, uint64_t size);

@@ -253,7 +253,7 @@ static unsigned book_entries(unsigned b)
 
 /* The floor 1 positions of a block size: 0, the end, and the others
  * spaced geometrically, in an order that halves the intervals, which
- * keeps the predictions of the decoder close. */
+ * ensures that the predictions of the decoder remain close. */
 static void floor1_layout(struct vb_floor1 *f, unsigned half, unsigned count)
 {
     unsigned sorted[VB_MAX_FLOOR1_VALUES], n = 0;
@@ -337,7 +337,7 @@ static void floor1_neighbours(struct vb_floor1 *g)
 }
 
 /* The value that makes the decoder's floor 1 prediction pred become
- * want (section 7.2.4), or 0 to keep the prediction. */
+ * want (section 7.2.4), or 0 to retain the prediction. */
 static int post_value(int pred, int want, int range)
 {
     int highroom = range - pred, lowroom = pred, room = (highroom < lowroom ? highroom : lowroom) * 2;
@@ -367,7 +367,7 @@ static int render_point(int x0, int y0, int x1, int y1, int x)
  * never falls below the absolute threshold of hearing (Terhardt's
  * approximation, with full scale taken as 96 dB SPL), which is lowered
  * by up to 30 dB at the highest quality and capped at 90 - 70 * quality
- * dB SPL, keeping the high frequencies at high qualities. */
+ * dB SPL, retaining the high frequencies at high qualities. */
 static double threshold_index(const struct encoder *e, const float *spec, unsigned half, unsigned lo, unsigned hi,
                               unsigned center)
 {
@@ -481,7 +481,7 @@ static void floor0_encode(const struct encoder *e, const struct vb_floor0 *f, un
     for (unsigned k = 0; k < half; k++)
         target[k] = fmax(target[k], tmax - 60);
     /* The upper envelope on the Bark scale: the largest target in each
-     * Bark bin, which keeps the fitted curve on the spectral peaks. */
+     * Bark bin, which maintains the fitted curve on the spectral peaks. */
     for (unsigned k = 0; k < half; k++) {
         double s = target[k] + FLOOR0_OFFSET;
         s = s < 1 ? 1 : s;
@@ -580,7 +580,7 @@ static void floor0_encode(const struct encoder *e, const struct vb_floor0 *f, un
     }
     /* The amplitude: the decoder's curve in decibels is amp * c - offset,
      * with c computed here from the curve at amplitude 1. The amplitude
-     * keeps the curve at or below the target at all but 2% of the bins,
+     * maintains the curve at or below the target at all but 2% of the bins,
      * because a floor above the masking estimate lets audible
      * quantisation noise through. */
     d.amplitude = 1;
@@ -592,7 +592,7 @@ static void floor0_encode(const struct encoder *e, const struct vb_floor0 *f, un
         if (c1 > 1e-6 && nlimit < FLOOR0_BARK)
             limit[nlimit++] = (target[k] + FLOOR0_OFFSET) / c1;
         else if (c1 > 1e-6) {
-            /* Keep the smallest values seen. */
+            /* Retain the smallest values seen. */
             unsigned big = 0;
             for (unsigned i = 1; i < nlimit; i++)
                 if (limit[i] > limit[big])

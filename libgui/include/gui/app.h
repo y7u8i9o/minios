@@ -44,7 +44,7 @@ void app_set_damage_log(struct app *a, int on);
 int app_dialog(struct app *a, const char *title, const char *text, const char *const *buttons, int nbuttons);
 int app_prompt(struct app *a, const char *title, const char *label, char *buf, int size);
 
-/* The file chooser (src/filechooser.c).  path holds the initial file or
+/* The file chooser (src/filechooser.c).  path contains the initial file or
  * folder, empty for the home folder, and receives the chosen path of
  * size bytes.  The result is 1 when a file was chosen and 0 when the
  * window was cancelled.  A save chooser asks before an existing file is

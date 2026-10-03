@@ -7,7 +7,7 @@ luabind: the image is enlarged on the canvas
 luabind: the icon is drawn at twice its size
 luabind: the clipboard is set
 luabind: the clipboard child started
-luaclip: the clipboard held 'from parent'
+luaclip: the clipboard contained 'from parent'
 luaclip: the child set the clipboard
 luabind: the clipboard child exited
 luabind: the clipboard came back from the child

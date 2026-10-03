@@ -89,7 +89,7 @@ pipe and the choice between retransmission and new data, the timeout path
 over the scoreboard, the delayed-ACK timer, the ACK for every second full
 segment, receiver silly window avoidance and the FIN in a closed window.
 The existing `net_tcp`, `net_tcp_transfer`, `net_path` and `net_pressure`
-cases establish that the N06–N09 behaviour holds with the larger stores.
+cases establish that the N06–N09 behaviour remains correct with the larger stores.
 
 `net_tcp_options_peer` (kernel over the real NIC, dgram backend, scripted
 peer in `tools/netpeer/scripted.c`) establishes the same options on the

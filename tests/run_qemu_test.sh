@@ -107,11 +107,11 @@ fail() {
     echo "FAIL $NAME ($1)"
     exit 1
 }
-# Every case gets a private copy of the disk image, which keeps writes from
-# leaking between cases. A case may provide its own image as <case>/disk.img.
+# Every case gets a private copy of the disk image, which prevents writes from
+# affecting other cases. A case may provide its own image as <case>/disk.img.
 # The copy is a copy-on-write clone where the file system supports it
 # (cp -c on APFS) and is deleted when the case ends, and a run therefore
-# never holds more than one image per running case.
+# never stores more than one image per running case.
 clone() {
     cp -c "$1" "$2" 2>/dev/null || cp "$1" "$2"
 }

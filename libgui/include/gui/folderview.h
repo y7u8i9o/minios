@@ -3,7 +3,7 @@
  * the manner of GNOME's Files and its file chooser.  It consists of a
  * places sidebar (Recent, the home folder and the folders below it that exist, the
  * system folders, mounted volumes and the root), a path bar of folder
- * buttons that keeps the folders below the current one, a location
+ * buttons that retains the folders below the current one, a location
  * entry with inline completion (Ctrl+L, or typing / or ~), a search
  * below the folder started by typing, and a table of the entries with
  * the name, size, type and modification time.  The listing is reread
@@ -67,7 +67,7 @@ void folderview_home(struct folderview *fv);
 /* Leave Recent or a search for the folder of the selected entry, with
  * the entry selected. */
 void folderview_visit(struct folderview *fv);
-/* Reread the view, keeping the selection by name. */
+/* Reread the view, retaining the selection by name. */
 void folderview_reload(struct folderview *fv);
 void folderview_select_name(struct folderview *fv, const char *name);
 

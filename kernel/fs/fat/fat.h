@@ -73,7 +73,7 @@ static inline int fat_write(struct fat_sb *m, uint64_t off, const void *buf, siz
     return fat_rw(m, off, (void *)buf, n, true);
 }
 /* Write size, first cluster and modification time to the entry. Caller
- * holds ino->lock. */
+ * has acquired ino->lock. */
 int fat_inode_flush(struct inode *ino);
 int fat_inode_flush_time(struct inode *ino, int64_t mtime);
 /* Current time in FAT form. */
@@ -97,12 +97,12 @@ uint32_t fat_alloc_cluster(struct fat_sb *m, uint32_t prev);
 /* Free a chain starting at first. */
 void fat_free_chain(struct fat_sb *m, uint32_t first);
 /* Cluster of index idx in the inode's chain, allocating when alloc is
- * set (and setting first_cluster). 0 for none. Caller holds ino->lock. */
+ * set (and setting first_cluster). 0 for none. Caller has acquired ino->lock. */
 uint32_t fat_cluster_at(struct inode *ino, uint32_t idx, bool alloc);
 uint64_t fat_cluster_off(struct fat_sb *m, uint32_t cluster);
 uint32_t fat_count_free(struct fat_sb *m);
 
-/* file.c: caller holds ino->lock. */
+/* file.c: caller has acquired ino->lock. */
 int fat_truncate_locked(struct inode *ino, uint64_t size);
 
 /* dir.c */

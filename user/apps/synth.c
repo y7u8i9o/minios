@@ -7,7 +7,7 @@
  *
  * Audio runs from the application event loop: whenever the audiod
  * connection becomes readable, every buffer the server has handed back is
- * rendered and queued again, so the server always holds a full pool and a
+ * rendered and queued again, so the server always contains a full pool and a
  * late wakeup of up to three periods does not cause an xrun. */
 #include <audio/audio.h>
 #include <gui/app.h>

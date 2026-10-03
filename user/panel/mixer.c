@@ -1,6 +1,6 @@
 /* The audio applet of the panel: a speaker button left of the clock
  * opens a popup listing the master volume and every stream of the
- * audio server with a volume bar and a level meter.  The popup holds
+ * audio server with a volume bar and a level meter.  The popup contains
  * an audio connection while it is open; the bars are dragged with the
  * pointer. */
 #include <stdio.h>
@@ -124,7 +124,7 @@ static void draw_mixer(void)
     snprintf(detail, sizeof detail, "%u%%", audio_mixer_master(view));
     draw_row(&p, 0, _("Output"), detail, audio_mixer_master(view), 0, 1);
     rows = 1;
-    /* The popup keeps the size it opened with: rows beyond it are counted. */
+    /* The popup retains the size it opened with: rows beyond it are counted. */
     int fit = (h - 2 * MIXER_PAD) / ROW_H;
     int n = audio_mixer_count(view);
     for (int i = 0; i < n && rows < fit; i++) {

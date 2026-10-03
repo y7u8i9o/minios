@@ -18,7 +18,7 @@ DESCRIPTION
     address. A NAK removes the address at once.
 
     Before an address is used, the client checks that no other host
-    holds it (RFC 5227). After a random delay of up to one second it
+    uses it (RFC 5227). After a random delay of up to one second it
     sends three ARP probes one to two seconds apart and waits two more
     seconds. If another host answers for the address or probes for it,
     the client sends DHCPDECLINE, waits ten seconds and starts again.
@@ -32,14 +32,14 @@ DESCRIPTION
     starts, and without an answer the address is asked for again during
     discovery.
 
-    Without -1 or -f the client detaches and keeps running. -1 exits with
+    Without -1 or -f the client detaches and continues to run. -1 exits with
     status 0 after the first lease or 1 after SECONDS (default 60) without
-    one. -f stays in the foreground. -s and -p send to a unicast test
+    one. -f remains in the foreground. -s and -p send to a unicast test
     server instead of broadcasting to port 67.
 
     -a is the form init runs as the dhcp service: the interface comes
     from the first "iface NAME dhcp" line of /etc/network, the client
-    stays in the foreground, and it exits with status 0 when the file
+    remains in the foreground, and it exits with status 0 when the file
     has no such line or the interface is absent, so the service stops
     quietly on a machine without a network. initctl restart dhcp starts
     it again after /etc/network changed.

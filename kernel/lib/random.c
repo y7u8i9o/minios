@@ -57,7 +57,7 @@ int random_u32(uint32_t *value)
     chacha20_block(state, block);
     for (unsigned i = 0; i < 8; i++)
         state[4 + i] = block[i];
-    /* Re-keying keeps the next block distinct even across counter wrap. */
+    /* Re-keying makes the next block distinct even across counter wrap. */
     state[12]++;
     *value = block[8];
     for (unsigned i = 0; i < 16; i++)

@@ -23,7 +23,7 @@ onto the user frames that caused them when available. The client resolver
 loads kernel symbols from `/dev/ksyms`, process executables from their ELF
 symbol tables, and shared-library mappings from `/dev/maps`. Unresolved
 addresses remain numeric. Lock-release samples are attributed past the
-lock primitives to the code that held the lock.
+lock primitives to the code that acquired the lock.
 
 The client is `libprof.so` (`libprof/`, header `prof/profile.h`), which
 was part of libc until P2 of `docs/plan/packaging.md`. `prof`, the
@@ -34,7 +34,7 @@ Each tree node stores inclusive weight, exclusive self weight, an inclusive
 secondary magnitude, and the number of events ending at that node. The
 weights are CPU nanoseconds estimated from samples, off-CPU nanoseconds,
 allocated kernel heap bytes, and I/O latency nanoseconds. Heap secondary
-weights are bytes still held. I/O secondary weights are transferred bytes.
+weights are bytes still allocated. I/O secondary weights are transferred bytes.
 Thread scheduling measurements are separate from sampled CPU estimates.
 
 ## Graphical analysis
@@ -63,12 +63,12 @@ The Flame graph tab supports:
   The matched amount is the weight of stacks containing a match within
   the current subtree. Nested and recursive matches count only once.
 - Hover details with inclusive cost, self cost, self event count, mode,
-  and held or transferred bytes where applicable. Warm colors identify
+  and allocated or transferred bytes where applicable. Warm colors identify
   user code and cool colors identify kernel code.
 
 The Frames tab lists exclusive hotspots for the selected view. Threads
 shows CPU, off-CPU and ready time together with scheduling counts. Heap
-lists allocation call sites still holding memory. Transfers lists latency
+lists allocation call sites still retaining memory. Transfers lists latency
 and bytes by leaf function. The status bar reports capture duration and
 dropped events. Updates stop when recording stops, preserving hover and
 search context. Reads are bounded per UI callback during capture so a

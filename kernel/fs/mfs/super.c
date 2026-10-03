@@ -26,7 +26,7 @@ int mfs_write_super(struct mfs_sb *m)
 
 int mfs_super_journal(struct mfs_sb *m)
 {
-    kassert(mutex_held(&m->lock));
+    kassert(mutex_locked_by_current(&m->lock));
     struct buf *b = bread(m->dev, 0);
     if (!b)
         return -EIO;
@@ -283,7 +283,7 @@ static int mfs_mount(const struct fs_type *type, const char *source, const char 
     }
     if (replayed > 0) {
         klog_info("%s: journal replayed, %d blocks", source, replayed);
-        r = read_super(m);      /* the transaction may have held block 0 */
+        r = read_super(m);      /* the transaction may have locked block 0 */
         if (r < 0) {
             mfs_journal_destroy(m);
             kfree(m);

@@ -13,7 +13,7 @@ static bool present(struct tcp_connection *c, unsigned index)
 
 void tcp_receive_discard(struct tcp_connection *c)
 {
-    /* Caller holds tcp_lock. */
+    /* Caller has acquired tcp_lock. */
     c->receive_count = 0;
     c->out_of_order = 0;
     c->pending_fin = false;
@@ -27,7 +27,7 @@ void tcp_receive_discard(struct tcp_connection *c)
  * requires the first reported block to be exactly this run. The scan never
  * passes rcv_nxt (that byte is missing, or rcv_nxt would have advanced) or
  * the right edge, and it skips whole bitmap bytes where it can. The caller
- * holds tcp_lock. */
+ * has acquired tcp_lock. */
 static struct tcp_range stored_run(struct tcp_connection *c, uint32_t start, uint32_t end,
                                    uint32_t right)
 {
@@ -53,11 +53,11 @@ static struct tcp_range stored_run(struct tcp_connection *c, uint32_t start, uin
  * most recently received out-of-order segment, followed by the blocks
  * reported most recently. The new run absorbs every reported block it
  * overlaps or touches; blocks at or below rcv_nxt are dropped. At most
- * TCP_SACK_REPORT blocks are kept. */
+ * TCP_SACK_REPORT blocks are retained. */
 static void sack_report(struct tcp_connection *c, uint32_t start, uint32_t end)
 {
     struct tcp_range merged = {start, end};
-    struct tcp_range kept[TCP_SACK_REPORT];
+    struct tcp_range retained[TCP_SACK_REPORT];
     unsigned count = 0;
     for (unsigned i = 0; i < c->sack_report_count; i++) {
         struct tcp_range r = c->sack_report[i];
@@ -73,10 +73,10 @@ static void sack_report(struct tcp_connection *c, uint32_t start, uint32_t end)
             continue;
         }
         if (count < TCP_SACK_REPORT - 1)
-            kept[count++] = r;
+            retained[count++] = r;
     }
     c->sack_report[0] = merged;
-    memcpy(c->sack_report + 1, kept, count * sizeof kept[0]);
+    memcpy(c->sack_report + 1, retained, count * sizeof retained[0]);
     c->sack_report_count = count + 1;
 }
 
@@ -172,7 +172,7 @@ void tcp_receive_segment(struct tcp_connection *c, const struct tcp_segment *seg
     }
     if (c->read_shutdown) {
         /* Advance the ring origin by discarded contiguous bytes so retained
-         * out-of-order positions keep their sequence-to-slot mapping. */
+         * out-of-order positions retain their sequence-to-slot mapping. */
         c->receive_head = (c->receive_head + c->receive_count) % TCP_RECEIVE_CAPACITY;
         c->receive_count = 0;
     }

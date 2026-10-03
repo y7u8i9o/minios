@@ -2,7 +2,7 @@
  * buffers, damage committed once per compositor frame, input events
  * translated with the seat's keymap, the clipboard through the data
  * device. Toplevels carry client side decorations (csd.c): the drawing
- * surface holds the chrome around the contents, gui_window.surf is the
+ * surface contains the chrome around the contents, gui_window.surf is the
  * view of the contents, and the compositor is told the window geometry. */
 #include <gui/client.h>
 #include <gui/keymap.h>
@@ -27,7 +27,7 @@
 
 struct wbuf {
     struct wire_proxy *proxy;
-    int busy;                   /* held by the compositor */
+    int busy;                   /* in use by the compositor */
     struct rect stale;          /* damage not yet copied into it */
     int has_stale;
 };
@@ -39,7 +39,7 @@ struct win {
     int fd;
     uint8_t *map;
     size_t map_size;
-    int buf_w, buf_h;           /* size the pool holds */
+    int buf_w, buf_h;           /* size the pool contains */
     struct wbuf bufs[2];
     struct rect damage;
     int has_damage, frame_pending, need_commit;
@@ -110,7 +110,7 @@ static int group;                   /* the keymap group that the compositor repo
 static int pending_dead;            /* a dead key of a window without text input, or 0 */
 static uint32_t last_serial;
 static struct gui_window *pointer_win, *keyboard_win;
-/* Key repeat from the seat's repeat_info: the held key and the time of
+/* Key repeat from the seat's repeat_info: the pressed key and the time of
  * its next repeat (0: none). */
 static int repeat_rate = 30, repeat_delay = 500;
 static uint32_t repeat_key;
@@ -251,8 +251,8 @@ static void on_output_done(void *user, struct wire_proxy *o)
 }
 const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
-/* The zone under the pointer, with the button hover state kept up to
- * date; a press holds its zone until the release. */
+/* The zone under the pointer, with the button hover state maintained up to
+ * date; a press retains its zone until the release. */
 static enum csd_zone pointer_zone(struct gui_window *w, int *edges)
 {
     struct win *wi = w->priv;
@@ -482,7 +482,7 @@ static void on_repeat(void *user, struct wire_proxy *k, int32_t rate, int32_t de
     repeat_at = 0;
 }
 
-/* Queue the repeat of the held key when its time has come. */
+/* Queue the repeat of the pressed key when its time has come. */
 static void repeat_tick(void)
 {
     if (!repeat_at || !keyboard_win)
@@ -713,7 +713,7 @@ static int pool_alloc(struct win *wi, int w, int h)
         close(fd);
         return -1;
     }
-    /* The previous pool stays until the new buffer is on screen, so
+    /* The previous pool remains until the new buffer is on screen, so
      * the compositor never sees the surface without a buffer. */
     release_old(wi);
     for (int i = 0; i < 2; i++) {
@@ -751,7 +751,7 @@ const struct buffer_listener buffer_events = { on_release };
 
 /* Size the surface and the buffers for contents of width by height
  * logical pixels at the output's scale, with the chrome around them.
- * Damage is kept in device pixels of the whole surface. */
+ * Damage is recorded in device pixels of the whole surface. */
 static void surface_resize(struct gui_window *w, int width, int height)
 {
     struct win *wi = w->priv;

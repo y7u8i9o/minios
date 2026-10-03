@@ -3,9 +3,9 @@
 ## Limits
 
 Every process carries `struct rlimit rlim[RLIMIT_NLIMITS]` (`sched/proc.h`).
-The kernel process holds the defaults (everything unlimited except
+The kernel process contains the defaults (everything unlimited except
 `RLIMIT_NOFILE`, which is `OPEN_MAX`, and the 8 MiB soft `RLIMIT_STACK`);
-`proc_setup` copies the parent's table into a new process, and exec keeps
+`proc_setup` copies the parent's table into a new process, and exec retains
 it. `getrlimit`, `setrlimit` and `prlimit` (`syscall/sys_rlimit.c`) read and
 write the table under `proc.lock`; the enforcement points read the soft
 limit without the lock through `proc_rlimit_cur`, since a stale value only
@@ -20,7 +20,7 @@ anyone but root (`EPERM`) and `prlimit` on a process of another user
 | `RLIMIT_AS` | `sys_mmap` and `sys_sbrk` compare `vma_total_size` plus the request, `ENOMEM` |
 | `RLIMIT_DATA` | `sys_sbrk` compares the heap size (break minus heap start) after growth, `ENOMEM` |
 | `RLIMIT_STACK` | `proc_exec` and `proc_create_user` size the main stack region by the creating process's soft limit, clamped to 64 KiB to 1 GiB; the arguments may use half of it |
-| `RLIMIT_NOFILE` | `fdtable.limit`: `fdtable_install` searches below it (`EMFILE`), `fdtable_install_at` refuses slots above it (`EBADF`); open descriptors above a lowered limit stay usable |
+| `RLIMIT_NOFILE` | `fdtable.limit`: `fdtable_install` searches below it (`EMFILE`), `fdtable_install_at` refuses slots above it (`EBADF`); open descriptors above a lowered limit remain usable |
 | `RLIMIT_NPROC` | `sys_fork` counts live user processes, `EAGAIN` |
 | `RLIMIT_FSIZE` | `file_write` on a regular file clamps the count to the limit and, at the limit, sends `SIGXFSZ` and returns `EFBIG` |
 | `RLIMIT_CPU` | the timer tick sends `SIGXCPU` when the process's user plus system ticks reach the soft limit and once per second afterwards, `SIGKILL` at the hard limit |
@@ -79,6 +79,6 @@ child with `SIGXCPU` and then `SIGKILL`, and `getrusage`/`wait4` times,
 faults, resident size and switches.
 
 The `dup2` failure above the soft descriptor limit must drop the temporary
-reference acquired by `fdtable_get`. Otherwise the file and its inode stay
+reference acquired by `fdtable_get`. Otherwise the file and its inode remain
 allocated after process teardown even though every user-visible limit check
 passes. The test runner's unchanged physical-page comparison catches this.

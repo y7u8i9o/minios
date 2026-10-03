@@ -193,7 +193,7 @@ static bool timestamp_acceptable(struct tcp_connection *c, const struct tcp_segm
 
 /* By RFC 7323 section 4.3, TS.Recent follows the newest timestamp of a
  * segment that begins at or before the last acknowledgement sent, which
- * keeps the timestamp of the earliest unacknowledged segment when ACKs are
+ * retains the timestamp of the earliest unacknowledged segment when ACKs are
  * delayed or segments arrive out of order. */
 static void timestamp_update(struct tcp_connection *c, const struct tcp_segment *segment)
 {
@@ -322,7 +322,7 @@ void tcp_icmp_error(const uint8_t *ip, size_t length, int error)
             continue;
         /* Only a handshake is aborted by an ICMP error; icmp_input has
          * already matched the quote against a recent transmission. An
-         * established connection keeps retransmitting until its own
+         * established connection continues to retransmit until its own
          * deadlines fail it, and fragmentation-needed errors reach it
          * through the path MTU cache instead. */
         tcp_fail(c, -error);

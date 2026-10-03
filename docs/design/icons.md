@@ -11,7 +11,7 @@ view `folder-new`, `drive`, `recent`, `documents`, `pictures`, `music`,
 uses the icons `app-NAME`, where NAME is the file name of the program of
 an entry, and `app-default` for programs without an icon. Since 2026-09-05 each name may
 exist as an SVG file, which is preferred, and as a PNG file, which is
-the fallback; both paths stay in the library.
+the fallback; both paths remain in the library.
 
 ## SVG icons (the `svg` codec)
 
@@ -29,7 +29,7 @@ their relative forms; cubic and quadratic curves are flattened into
 segments in proportion to their size, arcs through the endpoint to
 centre conversion of the specification. The view box is scaled to fit
 a `px` by `px` square and centred, so Font Awesome's 448 and 576 wide
-boxes keep their proportions. Edges are scan converted in 26.6 fixed
+boxes retain their proportions. Edges are scan converted in 26.6 fixed
 point with four sub rows per pixel and exact horizontal coverage, the
 method of libfont's rasterizer, into an RGBA image with straight alpha;
 several paths composite over each other. `image_load_svg(path, px,
@@ -48,7 +48,7 @@ and `image_lh`, the logical size.
 pixels high at the scale of the first output, then for `<name>.png`.
 `icon_get_size(name, px)` renders an SVG icon at another logical size
 (the desktop asks for 32) and returns NULL without an SVG, so the
-desktop keeps doubling PNG icons. Renders are cached per name and size
+desktop continues doubling PNG icons. Renders are cached per name and size
 for the process. Font Awesome icons are single colour: the cache fills
 them with the text colour `0x2a2a2a`, `folder` and `open` in amber
 `0xd9a520` and `quit` in red `0xc04040`.

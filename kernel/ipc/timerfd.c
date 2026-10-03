@@ -1,7 +1,7 @@
 /* timerfd: expirations counted by the timer interrupt, read as a 64 bit
  * count. timerfd_lock protects the list of armed timers and every
  * timer's fields, and is the condition lock of each timer's waitq; it
- * is taken from interrupt context, so holders disable interrupts
+ * is taken from interrupt context, so the acquiring code disables interrupts
  * (spin_lock does). */
 #include <ipc/eventfd.h>
 #include <ipc/poll.h>

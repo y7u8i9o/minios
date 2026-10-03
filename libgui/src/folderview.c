@@ -33,7 +33,7 @@
 #define RECENT_MAX 50
 #define RECENT_FILE "/.local/share/recent-files"
 /* A search visits at most this many folders, this deep, for this many
- * results, so that a search from the root stays quick. */
+ * results, so that a search from the root remains quick. */
 #define SEARCH_DEPTH 6
 #define SEARCH_DIRS 400
 #define SEARCH_RESULTS 300
@@ -233,10 +233,10 @@ void folderview_recent_add(const char *path)
     if (!f)
         return;
     fprintf(f, "%s\n", path);
-    for (int i = 0, kept = 1; i < n && kept < RECENT_MAX; i++)
+    for (int i = 0, retained = 1; i < n && retained < RECENT_MAX; i++)
         if (strcmp(list[i], path) != 0) {
             fprintf(f, "%s\n", list[i]);
-            kept++;
+            retained++;
         }
     fclose(f);
 }
@@ -620,19 +620,19 @@ static void reload(struct folderview *fv)
 
 void folderview_reload(struct folderview *fv)
 {
-    char keep[NAME_MAX + 1] = "";
+    char retain[NAME_MAX + 1] = "";
     const struct folderview_entry *e = folderview_selected(fv);
     if (e)
-        strlcpy(keep, e->name, sizeof keep);
+        strlcpy(retain, e->name, sizeof retain);
     int scroll = view_scroll_position(fv->table);
     reload(fv);
     if (fv->nentries)
         view_scroll_to(fv->table, scroll < fv->nentries ? scroll : fv->nentries - 1);
-    if (keep[0])
-        folderview_select_name(fv, keep);
+    if (retain[0])
+        folderview_select_name(fv, retain);
 }
 
-/* Called every two seconds, it rereads the folder when what it holds changed. */
+/* Called every two seconds, it rereads the folder when what it contains changed. */
 static void poll(void *arg)
 {
     struct folderview *fv = arg;
@@ -651,7 +651,7 @@ static void show_bar(struct folderview *fv, struct widget *which)
     widget_set_visible(fv->search, which == fv->search);
 }
 
-/* Show a folder.  The path bar keeps the folders below it when the folder
+/* Show a folder.  The path bar retains the folders below it when the folder
  * is one of those it already shows. */
 int folderview_navigate(struct folderview *fv, const char *path)
 {

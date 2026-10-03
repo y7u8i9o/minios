@@ -12,7 +12,7 @@ DESCRIPTION
     per voice, ADSR envelopes, a shared resonant stereo low-pass filter,
     vibrato, stereo spread, and a ping-pong delay. Output is stereo S16
     PCM at 48000 Hz through audiod. Excess notes steal a quiet released
-    voice first, then a quiet held voice (oldest when equally loud).
+    voice first, then a quiet voice whose key is pressed (oldest when equally loud).
 
     Oscillators offer sine, saw, pulse and triangle. Saw and pulse use
     polynomial edge correction to reduce aliasing. Oscillator B has
@@ -31,14 +31,14 @@ KEYBOARD
     Click the on-screen keyboard to give it keyboard focus.
     Z S X D C V G B H N J M     lower chromatic octave
     Q 2 W 3 E R 5 T 6 Y 7 U I   upper octave and the next C
-    Space                       sustain while held
+    Space                       sustain while pressed
     [ and ]                     shift the keyboard octave
     Esc                         panic: stop voices, demo and delay
     Ctrl+Q or window Close      close the application
 
-    Several keys can be held at once. Click and drag on the on-screen
-    keyboard to play a glissando. Keyboard and mouse holds on the same
-    note are tracked independently. Losing window focus releases held
+    Several keys can be pressed at once. Click and drag on the on-screen
+    keyboard to play a glissando. Keyboard and mouse presses on the same
+    note are tracked independently. Losing window focus releases pressed
     notes. Moving focus to other controls releases keyboard notes.
 
 AUDIO

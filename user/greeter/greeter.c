@@ -4,7 +4,7 @@
  *     greeter --window
  *
  * init runs the greeter as root on the console in place of login. It
- * starts X12 and keeps it running, and in a loop runs the login window as
+ * starts X12 and ensures that it continues to run, and in a loop runs the login window as
  * a child, "greeter --window", which shows the accounts, checks the
  * password and reports the result on its standard output: "login NAME",
  * "poweroff" or "reboot". For a login the greeter admits the account to

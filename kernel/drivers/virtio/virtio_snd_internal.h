@@ -60,7 +60,7 @@ enum snd_period_state {
     SND_PERIOD_FREE,        /* owned by the driver, no data */
     SND_PERIOD_FILLING,     /* playback: a writer copies into it */
     SND_PERIOD_IN_FLIGHT,   /* submitted to the device */
-    SND_PERIOD_FULL,        /* capture: holds data for the reader */
+    SND_PERIOD_FULL,        /* capture: contains data for the reader */
 };
 
 /* One period of the device ring. */
@@ -87,7 +87,7 @@ struct snd_stream {
     struct audio_params params;
     struct snd_period *ring;       /* params.periods entries, allocated by prepare;
                                     * freed by stop once the device returned them all,
-                                    * otherwise kept: the device may still write to it */
+                                    * otherwise retained: the device may still write to it */
     uint32_t period_bytes;
     uint32_t generation;
     uint32_t queued_frames;        /* playback: submitted; capture: captured, unread */

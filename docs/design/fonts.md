@@ -20,7 +20,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   format 4, then formats 0 and 6. `font_glyph_index` returns glyph 0 for
   unmapped code points.
 - `font_outline` returns contours of points in font units. `glyf`
-  outlines keep TrueType's on-curve and quadratic control points;
+  outlines retain TrueType's on-curve and quadratic control points;
   composite glyphs are flattened by applying each component's offset and
   2.14 transform (point matching is not supported and treated as no
   offset), to a depth of eight. CFF outlines come from a Type 2
@@ -48,7 +48,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   is then scaled to 0..255. The result is `struct font_glyph`: the
   bitmap, its bearing (`left`, `top` relative to the pen with y down)
   and the advance in 26.6 pixels.
-- `font_render` keeps up to `FONT_CACHE_SIZE` (512) bitmaps per font,
+- `font_render` retains up to `FONT_CACHE_SIZE` (512) bitmaps per font,
   keyed by glyph and pixel size, replacing the least recently used one.
 
 ## Kerning and shaping (`libfont/src/kern.c`)
@@ -90,7 +90,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   entry.
 - The four text fonts cover the scripts their families were drawn for.
   Noto Sans carries 3094 code points (Latin, Greek, Cyrillic, phonetics
-  and punctuation); the Noto project keeps CJK, Hangul, kana, Hebrew,
+  and punctuation); the Noto project retains CJK, Hangul, kana, Hebrew,
   Arabic and emoji in separate families that are not installed here.
   DejaVu Sans carries 5906. Unifont carries 58910, covering the Basic
   Multilingual Plane and 1840 code points between U+1F12F and U+3237F,

@@ -271,7 +271,7 @@ static void choose(struct work *wk, const int64_t *signal, unsigned n, unsigned 
     }
     if (autoc[0] <= 0)
         return;
-    autoc[0] *= 1.0 + 1e-9;             /* keeps the recursion stable on pure tones */
+    autoc[0] *= 1.0 + 1e-9;             /* ensures the recursion remains stable on pure tones */
     double a[FLAC_MAX_ORDER + 1] = { 1 }, coef[FLAC_MAX_ORDER][FLAC_MAX_ORDER], err[FLAC_MAX_ORDER];
     double e = autoc[0];
     unsigned orders = 0;

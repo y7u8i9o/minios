@@ -1105,7 +1105,7 @@ static int fetch_wanted(const struct repo_config *c)
         if (open_package(p) < 0)
             return -1;
         if (strcmp(p->m.name, e->m.name) != 0 || strcmp(p->m.version, e->m.version) != 0)
-            return error(e->m.name, "the archive holds %s %s, the index lists %s %s", p->m.name,
+            return error(e->m.name, "the archive contains %s %s, the index lists %s %s", p->m.name,
                          p->m.version, e->m.name, e->m.version);
     }
     return 0;

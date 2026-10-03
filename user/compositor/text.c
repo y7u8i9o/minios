@@ -109,9 +109,9 @@ static void h_surrounding(struct wire_client *c, struct wire_resource *self, con
         return;
     }
     strlcpy(t->surrounding, text, sizeof t->surrounding);
-    size_t kept = strlen(t->surrounding);
-    t->cursor = cursor <= kept ? cursor : (uint32_t)kept;
-    t->anchor = anchor <= kept ? anchor : (uint32_t)kept;
+    size_t retained = strlen(t->surrounding);
+    t->cursor = cursor <= retained ? cursor : (uint32_t)retained;
+    t->anchor = anchor <= retained ? anchor : (uint32_t)retained;
 }
 
 static void h_content(struct wire_client *c, struct wire_resource *self, uint32_t hints, uint32_t purpose)

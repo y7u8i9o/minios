@@ -37,7 +37,7 @@ idle loop publish quiescent epochs.  `rcu_call` attaches the next epoch to an
 intrusive callback and puts it on the calling CPU's MPSC queue. A dedicated
 `rcu` kernel thread is the sole consumer of all CPU queues and reclaims a
 callback after every started CPU has published that epoch. It sleeps one
-millisecond between scans and holds no RCU lock across a callback.
+millisecond between scans and acquires no RCU lock across a callback.
 Callbacks may sleep: releasing a VMA's last file reference can enter an MFS
 journal transaction. Running that path from the timer interrupt could block
 an interrupted idle thread and corrupt its wait-queue membership.
@@ -57,7 +57,7 @@ at the last reference; the file allocation itself remains available until an
 RCU callback, covering a reader that loaded the old slot immediately before
 close.
 
-The VMA list has an RCU-published forward link.  Writers still hold
+The VMA list has an RCU-published forward link.  Writers still acquire
 `vmspace.lock` for list surgery and page-table changes.  Removal updates the
 predecessor with a release store and leaves the removed node's old forward
 link intact until its callback.  `vma_range_ok` therefore walks the list
@@ -92,7 +92,7 @@ thread cannot be inserted twice because only the producer that changes
 The timer decrements the locally running thread's slice without a lock.  It
 takes the local queue lock only to drain wakeups, expire local sleepers and
 perform the local one-second boost.  An empty CPU tries victim locks while
-holding its own lock; a failed try is skipped, so two stealing CPUs never
+having acquired its own lock; a failed try is skipped, so two stealing CPUs never
 wait on each other.  The old global `sched_lock` has been removed.  Full
 context-switch and wait-queue details are in `sched.md`.
 
@@ -107,7 +107,7 @@ keyboard feeds the console tty ring.
 Console and klog producers have one SPSC staging ring per CPU.  Interrupts
 are disabled only around the owner CPU's enqueue, which serializes thread and
 interrupt producers on that CPU without a cross-CPU lock.  `consoleout`
-merges the rings and is the sole ordinary UART writer.  Its drain mutex keeps
+merges the rings and is the sole ordinary UART writer.  Its drain mutex retains
 an explicit flush ordered with the daemon, while the slow polled UART runs
 without `console_lock`; that spinlock now covers only framebuffer state and
 the short framebuffer write.  The panic path bypasses the queue and writes
@@ -140,8 +140,8 @@ Every present user mapping path increments `vmspace.resident`, and
 unmap, swap-out and lazy-free paths decrement it. `munmap` clears all entries
 under the space lock, detaches empty leaf page tables, and issues one range
 TLB shootdown before returning those table frames to the buddy allocator.
-Keeping empty tables allocated can fragment otherwise free 2 MiB blocks
-after a large small-page workload. Swap and `PROT_NONE` entries keep their
+Retaining empty tables allocated can fragment otherwise free 2 MiB blocks
+after a large small-page workload. Swap and `PROT_NONE` entries retain their
 tables alive, and absent upper levels are skipped for sparse ranges.
 Whole-space teardown omits that redundant range round because the immediately
 following `vmspace_destroy` drops the address space from every CPU before it

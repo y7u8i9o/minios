@@ -40,7 +40,7 @@ void rusage_of_proc(struct proc *p, struct rusage *ru, bool children)
         ru->ru_maxrss = (int64_t)(vma_count_resident(p->vm) * (PAGE_SIZE / 1024));
 }
 
-/* Apply a new limit to p. Called with no lock held. Raising the hard limit
+/* Apply a new limit to p. Called with no lock acquired. Raising the hard limit
  * requires root (U2). */
 static long set_limit(struct proc *p, int resource, const struct rlimit *new)
 {

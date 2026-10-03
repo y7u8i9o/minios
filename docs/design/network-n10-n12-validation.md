@@ -22,7 +22,7 @@ localhost ports. No public service is a dependency.
 |---|---|
 | 39 cases, four vCPUs | 39 passed, 0 failed |
 | 39 cases, one vCPU | 39 passed, 0 failed |
-| `make check-net`, `make check-headers`, `git diff --check` | pass (the header check keeps the pre-existing nested-comment warning in `libgui/include/gui/mime.h`) |
+| `make check-net`, `make check-headers`, `git diff --check` | pass (the header check retains the pre-existing nested-comment warning in `libgui/include/gui/mime.h`) |
 | `make check-net-fuzz` (N09 record) | three seeds of 30 s, no finding |
 
 The 39 cases are the 26 network cases (`net_dns net_tools net_dhcp
@@ -83,7 +83,7 @@ captures of the last run are under `build/tests/<case>/`.
 ## Limitations carried into the supported feature set
 
 N13 to N16 (2026-09-30) closed several items of this list, as each item
-now states; `network-n13-n16-validation.md` holds the list that remains.
+now states; `network-n13-n16-validation.md` contains the list that remains.
 
 - Window scaling and timestamps arrived in N13, SACK and delayed ACKs in
   N14. Scripted loss with a native peer is still not in the suite; recovery

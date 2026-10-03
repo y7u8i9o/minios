@@ -38,24 +38,24 @@ static void retransmit(struct tcp_connection *c)
     c->data_deadline = net_clock_ms() + c->rto_ms;
 }
 
-/* The scoreboard (RFC 6675 section 3) holds at most TCP_SCOREBOARD sorted,
+/* The scoreboard (RFC 6675 section 3) contains at most TCP_SCOREBOARD sorted,
  * disjoint, non-adjacent ranges of SACKed sequence space inside
  * [snd_una, snd_nxt]. When a new block would need one range more, the
- * highest range is dropped: forgetting that the peer holds data is safe,
+ * highest range is dropped: forgetting that the peer contains data is safe,
  * since at worst that data is sent again, while the ranges nearest to
  * snd_una decide what is retransmitted next. */
 static void scoreboard_trim(struct tcp_connection *c)
 {
-    unsigned kept = 0;
+    unsigned retained = 0;
     for (unsigned i = 0; i < c->scoreboard_count; i++) {
         struct tcp_range r = c->scoreboard[i];
         if (!tcp_after(r.end, c->snd_una))
             continue;
         if (tcp_before(r.start, c->snd_una))
             r.start = c->snd_una;
-        c->scoreboard[kept++] = r;
+        c->scoreboard[retained++] = r;
     }
-    c->scoreboard_count = kept;
+    c->scoreboard_count = retained;
 }
 
 /* scoreboard_insert merges [start, end) into the scoreboard and returns the
@@ -64,17 +64,17 @@ static uint32_t scoreboard_insert(struct tcp_connection *c, uint32_t start, uint
 {
     uint32_t added = end - start;
     struct tcp_range merged = {start, end};
-    struct tcp_range kept[TCP_SCOREBOARD + 1];
+    struct tcp_range retained[TCP_SCOREBOARD + 1];
     unsigned count = 0, position = 0;
     for (unsigned i = 0; i < c->scoreboard_count; i++) {
         struct tcp_range r = c->scoreboard[i];
         if (tcp_before(r.end, start)) {
-            kept[count++] = r;
+            retained[count++] = r;
             position = count;
             continue;
         }
         if (tcp_after(r.start, end)) {
-            kept[count++] = r;
+            retained[count++] = r;
             continue;
         }
         /* An overlapping or adjacent range is absorbed, and its overlap is
@@ -88,14 +88,14 @@ static uint32_t scoreboard_insert(struct tcp_connection *c, uint32_t start, uint
         if (tcp_after(r.end, merged.end))
             merged.end = r.end;
     }
-    memmove(kept + position + 1, kept + position, (count - position) * sizeof kept[0]);
-    kept[position] = merged;
+    memmove(retained + position + 1, retained + position, (count - position) * sizeof retained[0]);
+    retained[position] = merged;
     count++;
     if (count > TCP_SCOREBOARD) {
         count = TCP_SCOREBOARD;
         tcp_counters.scoreboard_drops++;
     }
-    memcpy(c->scoreboard, kept, count * sizeof kept[0]);
+    memcpy(c->scoreboard, retained, count * sizeof retained[0]);
     c->scoreboard_count = count;
     return added;
 }
@@ -349,7 +349,7 @@ static void sample_rtt(struct tcp_connection *c, uint32_t acknowledgement)
 
 /* With timestamps the echoed value identifies the transmission that the
  * peer acknowledged, retransmissions included, so Karn's rule is not
- * needed (RFC 7323 section 4). One sample is taken per flight, which keeps
+ * needed (RFC 7323 section 4). One sample is taken per flight, which preserves
  * the RFC 6298 gains meaningful; the first ACK that covers the data sent
  * when the previous sample was taken provides the next one. An echo of 0
  * or one that lies in the future is ignored. */
@@ -396,11 +396,11 @@ void tcp_data_ack(struct tcp_connection *c, const struct tcp_segment *segment)
         memmove(c->transmit, c->transmit + consumed, c->transmit_length - consumed);
         c->transmit_length -= consumed;
         c->transmit_sent -= consumed;
-        /* RFC 6675 keeps the window during fast recovery and lets the pipe
+        /* RFC 6675 retains the window during fast recovery and lets the pipe
          * decide what is sent; after a timeout slow start applies. */
         bool fast_recovery = c->sack && c->recovering && !c->rto_recovery;
         if (fast_recovery) {
-            /* The window stays at the threshold set on entry. */
+            /* The window remains at the threshold set on entry. */
         } else if (c->congestion_window < c->slow_start_threshold) {
             c->congestion_window += MIN(consumed, tcp_send_mss(c));
         } else {
@@ -454,7 +454,7 @@ void tcp_data_timeout(struct tcp_connection *c)
         tcp_emit(c, TCP_ACK, c->snd_una - 1, c->transmit, 1);
         c->sampling = false;
     } else if (c->transmit_sent) {
-        /* RFC 6675 section 5.1 keeps using SACK information after a
+        /* RFC 6675 section 5.1 continues to use SACK information after a
          * timeout. A second consecutive timeout suggests that the peer
          * discarded data it had SACKed (RFC 2018 section 8), so the
          * scoreboard is cleared then. */

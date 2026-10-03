@@ -37,7 +37,7 @@ static int write_all(FILE *f, const uint8_t *p, size_t n)
     return fwrite(p, 1, n, f) == n ? 0 : -1;
 }
 
-static int convert(const char *path, int decompress, int stdout_mode, int keep, int test)
+static int convert(const char *path, int decompress, int stdout_mode, int retain, int test)
 {
     FILE *in = path ? fopen(path, "r") : stdin;
     if (!in) {
@@ -93,7 +93,7 @@ static int convert(const char *path, int decompress, int stdout_mode, int keep, 
         if (r < 0) {
             fprintf(stderr, "gzip: %s: write error\n", output);
             unlink(output);
-        } else if (!keep) {
+        } else if (!retain) {
             unlink(path);
         }
     }
@@ -103,13 +103,13 @@ static int convert(const char *path, int decompress, int stdout_mode, int keep, 
 
 int main(int argc, char **argv)
 {
-    int decompress = 0, stdout_mode = 0, keep = 0, test = 0, i = 1;
+    int decompress = 0, stdout_mode = 0, retain = 0, test = 0, i = 1;
     for (; i < argc && argv[i][0] == '-' && argv[i][1]; i++) {
         if (strcmp(argv[i], "--") == 0) { i++; break; }
         for (const char *p = argv[i] + 1; *p; p++) {
             if (*p == 'c') stdout_mode = 1;
             else if (*p == 'd') decompress = 1;
-            else if (*p == 'k') keep = 1;
+            else if (*p == 'k') retain = 1;
             else if (*p == 't') { test = 1; decompress = 1; }
             else if (*p == 'f') ;   /* force: output files are always replaced */
             else {
@@ -122,6 +122,6 @@ int main(int argc, char **argv)
         return convert(NULL, decompress, 1, 1, test);
     int status = 0;
     for (; i < argc; i++)
-        status |= convert(argv[i], decompress, stdout_mode, keep, test);
+        status |= convert(argv[i], decompress, stdout_mode, retain, test);
     return status;
 }

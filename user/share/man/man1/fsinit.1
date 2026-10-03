@@ -14,10 +14,10 @@ DESCRIPTION
     filesystem is empty. The exit status is 1 when a required mount or the
     table itself failed.
 
-    An entry with the homes option holds the home directories. A volume
+    An entry with the homes option contains the home directories. A volume
     of the single user layout, in which the volume itself was the home of
     the one user, is converted first. Its contents move to user/, the
-    home of uid 1000, the package prefix .local stays and receives the
+    home of uid 1000, the package prefix .local remains and receives the
     account databases, and the file .layout marks the conversion, which
     happens once. fsinit then makes the missing home of every account in
     /etc/passwd whose home lies on the volume, from /etc/skel.

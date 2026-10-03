@@ -190,7 +190,7 @@ static int tarw_member(struct tar_writer *w, const char *path, char type, const 
     if (l < sizeof h.name) {
         memcpy(h.name, path, l);
     } else {
-        /* Split at a slash so that the prefix holds at most 155 bytes and
+        /* Split at a slash so that the prefix contains at most 155 bytes and
          * the name at most 100. */
         const char *cut = NULL;
         for (const char *s = strchr(path, '/'); s; s = strchr(s + 1, '/'))

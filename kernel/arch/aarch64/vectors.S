@@ -84,7 +84,7 @@ trap_entry_common:
     /* Restore the state the handler may have changed and return. sp is
      * the frame; trap_return enters here with a frame of its own. */
 trap_restore:
-    /* ELR_EL1 and SPSR_EL1 hold the return state from here to eret; an
+    /* ELR_EL1 and SPSR_EL1 contain the return state from here to eret; an
      * exception taken in between would replace them. user_enter reaches
      * this point with interrupts enabled. */
     msr daifset, #0xf

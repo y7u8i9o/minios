@@ -36,8 +36,8 @@ int main(void)
 
     /* A handler runs and returns through sigreturn with state intact. */
     CHECK(signal(SIGUSR1, on_usr1) == SIG_DFL, "signal returns old disposition");
-    volatile long keep = 0x1234567;
-    CHECK(raise(SIGUSR1) == 0 && got_usr1 == 1 && keep == 0x1234567, "raise handled %d", got_usr1);
+    volatile long retain = 0x1234567;
+    CHECK(raise(SIGUSR1) == 0 && got_usr1 == 1 && retain == 0x1234567, "raise handled %d", got_usr1);
     CHECK(signal(SIGUSR1, on_usr1) == on_usr1, "old handler reported");
 
     /* Blocking defers delivery until unblocked. */
@@ -135,7 +135,7 @@ int main(void)
     status = child_status(pid);
     CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGPIPE, "SIGPIPE status 0x%x", status);
 
-    /* Handlers are reset by exec, ignored signals stay ignored. */
+    /* Handlers are reset by exec, ignored signals remain ignored. */
     signal(SIGTERM, SIG_IGN);
     pid = fork();
     if (pid == 0) {

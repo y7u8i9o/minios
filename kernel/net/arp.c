@@ -1,4 +1,4 @@
-/* Bounded, worker-owned neighbor cache. A queued IP packet stays stack
+/* Bounded, worker-owned neighbor cache. A queued IP packet remains stack
  * owned by this module until resolution, timeout, or interface reconfiguration.
  * No endpoint pointer is retained: errors use the packet's protocol tuple. */
 #include <net/ipv4.h>

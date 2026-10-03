@@ -5,7 +5,7 @@
  * The journal is replayed first (a committed transaction whose checksum
  * matches is copied to the home blocks, anything else is discarded), then
  * five passes check the inodes, the directory tree, connectivity, the
- * bitmaps and the superblock counters. A symbolic link must keep its
+ * bitmaps and the superblock counters. A symbolic link must retain its
  * target, 1 to MFS_SYMLINK_MAX bytes without a NUL, in its first direct
  * block and use no other block; a link that does not is released and its
  * directory entries are removed. Without -y problems are reported
@@ -283,7 +283,7 @@ static uint64_t count_blocks(uint32_t ino, struct mfs_dinode *d)
     return n;
 }
 
-/* A link's target fills the first data block up to the size and holds no
+/* A link's target fills the first data block up to the size and contains no
  * NUL; the link has no other block. */
 static int link_valid(uint32_t ino, const struct mfs_dinode *d)
 {
@@ -459,7 +459,7 @@ static int add_entry(uint32_t dir, const char *name, uint32_t ino)
             break;
     uint64_t idx = s * MFS_DIRENT_SIZE / MFS_BLOCK_SIZE;
     if (idx >= MFS_NDIRECT)
-        return 0;               /* keep the repair simple: direct blocks only */
+        return 0;               /* the repair remains simple: direct blocks only */
     if (!d->direct[idx]) {
         d->direct[idx] = alloc_block_for_fsck();
         if (!d->direct[idx])

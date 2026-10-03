@@ -51,7 +51,7 @@ __attribute__((noinline)) void outer(double secs)
 }
 
 /* A recursive chain, so the samples carry more frames than the eight the
- * first profiler could hold. */
+ * first profiler could contain. */
 __attribute__((noinline)) void deep(int n, double secs)
 {
     if (n > 0) {
@@ -147,7 +147,7 @@ static void test_symbols(void)
     prof_format_addr(self_syms, kernel_syms, 0, (uint64_t)(uintptr_t)outer + 3, 1, text, sizeof text);
     CHECK(strcmp(text, "outer+0x3") == 0, "format with offset: %s", text);
     prof_format_addr(self_syms, kernel_syms, 0, 0x10, 0, text, sizeof text);
-    CHECK(strcmp(text, "0x10") == 0, "unknown address stays numeric: %s", text);
+    CHECK(strcmp(text, "0x10") == 0, "unknown address remains numeric: %s", text);
     CHECK(prof_is_lock_primitive("pop_cli") && !prof_is_lock_primitive("main"), "lock primitives named");
 }
 
@@ -316,8 +316,8 @@ static void test_session(int fd)
 
     struct prof_tree *t = &s->view[PROF_VIEW_CPU];
     prof_tree_sort(t);
-    /* Every node holds the weight of its subtree, so a child can never be
-     * wider than its parent and the root holds the total. */
+    /* Every node contains the weight of its subtree, so a child can never be
+     * wider than its parent and the root contains the total. */
     uint64_t sum_self = 0;
     int bad_parent = 0;
     for (int i = 1; i < t->count; i++) {
@@ -327,7 +327,7 @@ static void test_session(int fd)
     }
     sum_self += t->nodes[0].self;
     CHECK(bad_parent == 0, "no node outweighs its parent: %d", bad_parent);
-    CHECK(sum_self == t->nodes[0].total, "the root holds every weight: %llu of %llu",
+    CHECK(sum_self == t->nodes[0].total, "the root contains every weight: %llu of %llu",
           (unsigned long long)sum_self, (unsigned long long)t->nodes[0].total);
 
     struct prof_flame_box *boxes = malloc((size_t)t->count * sizeof *boxes);

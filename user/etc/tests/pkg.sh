@@ -160,7 +160,7 @@ check verify-status "$($PKG verify > /dev/null; echo $?)" "1"
 rm /usr/share/pkgprog/notes
 check verify-missing "$($PKG verify pkgprog)" "pkgprog: usr/share/pkgprog/notes: missing"
 
-# Removal: a dependency stays while something depends on it.
+# Removal: a dependency remains while something depends on it.
 check remove-refused "$($PKG remove pkgfix 2>&1)" "pkg: pkgfix: pkgprog depends on it (--force removes it anyway)"
 check remove-prog "$($PKG remove pkgprog)" "removed pkgprog 1.1"
 check remove-prog-gone "$(test -e /usr/bin/pkgprog && echo present || echo absent)" "absent"

@@ -43,14 +43,14 @@ Programs link with `ULDFLAGS`: `-no-pie`, `-Ttext-segment=0x400000`,
 `-dynamic-linker /lib/ld.so`, `-z now`, `-z relro`, `-z separate-code`,
 `--hash-style=sysv` and `--as-needed`, against `-lgui -laudio -lwire -lfont libedit.a -lc`.
 `--as-needed` records only the libraries a program references. Programs
-stay `ET_EXEC` at `0x400000`; the linker resolves their references to the
+remain `ET_EXEC` at `0x400000`; the linker resolves their references to the
 libraries with `R_X86_64_JUMP_SLOT` (functions), `R_X86_64_GLOB_DAT`
 (data through the global offset table) and, for data referenced from
 assembly, `R_X86_64_COPY`. `init` uses `ULDFLAGS_STATIC`.
 
 `user/Makefile` installs every program and library with `objcopy
---strip-debug`, which removes the DWARF sections and keeps the symbol
-table the profiler reads. The unstripped files stay in `build/user/` and
+--strip-debug`, which removes the DWARF sections and retains the symbol
+table the profiler reads. The unstripped files remain in `build/user/` and
 `build/lib/` for gdb.
 
 ## Kernel
@@ -120,7 +120,7 @@ Its span is reserved with `PROT_NONE` at the
 next address of an arena that starts at `0x7e0010000000` and ends at
 `0x7e8000000000`, each library on a 1 MiB boundary or the alignment its
 segments ask for, followed by an unmapped page; the mmap area below
-`USER_MMAP_TOP` stays as it was. Each `PT_LOAD` segment is mapped
+`USER_MMAP_TOP` remains as it was. Each `PT_LOAD` segment is mapped
 privately from the file, the tail of the last file page is zeroed, and
 pages beyond the file are mapped anonymously, including the first page of
 a segment without file bytes.
@@ -132,7 +132,7 @@ definition binds inside its own object. The relocation types applied are
 `RELATIVE`, `GLOB_DAT`, `JUMP_SLOT`, `64` and `COPY`. The TLS relocation types
 `DTPMOD64`, `DTPOFF64` and `TPOFF64` are described below. Relocations
 run in two passes, the ordinary ones of every object and then the `COPY`
-relocations of the program, because a copied data object may itself hold
+relocations of the program, because a copied data object may itself contain
 relocated pointers; a `COPY` relocation is refused when its source is
 smaller than its destination or its owner is not the program. Every
 relocation of an object linked with `-z now` (`DT_FLAGS` with
@@ -146,7 +146,7 @@ writable data after its RELRO sections, such as `libwire.so`, has a RELRO
 range longer than its writable segment. Every other table and relocation
 target must lie within the memory size of one load segment.
 
-Symbol lookup walks scopes. The global scope holds the program and the
+Symbol lookup walks scopes. The global scope contains the program and the
 libraries loaded at start in breadth first order, then any object opened
 with `RTLD_GLOBAL`; every `dlopen` gives the object it loads and the
 libraries loaded with it a local scope, searched after the global one
@@ -155,7 +155,7 @@ the initial objects share the global scope as theirs.
 
 ## Lazy binding
 
-An object without `DF_BIND_NOW` keeps its `JUMP_SLOT` entries pointing
+An object without `DF_BIND_NOW` retains its `JUMP_SLOT` entries pointing
 into its own procedure linkage table, rebased for a shared object, and
 the loader stores the object record in the second word of the table
 named by `DT_PLTGOT` and `_dl_runtime_resolve` in the third. The first
@@ -199,7 +199,7 @@ handle searches the global scope (`RTLD_DEFAULT`). A name whose
 basename matches a loaded object returns that object with one more
 reference, promoted to the global scope when `RTLD_GLOBAL` is given.
 Otherwise the object is mapped, from the library directories by soname
-or from the path when the name holds a slash. The loader stores a copy
+or from the path when the name contains a slash. The loader stores a copy
 of the name, because the caller may reuse its buffer for the next
 `dlopen` (the names of `DT_NEEDED` entries remain in the string tables of
 their objects). The libraries it needs
@@ -223,7 +223,7 @@ never an initial object, run their finalizers in the reverse of their
 initialization order (they are removed from the finalization chain that
 `exit` walks), leave the global scope and the object list, are unmapped
 and, when they had TLS, give up their vector slot. A thread that used
-the storage of an unloaded object keeps that block until its exit or
+the storage of an unloaded object retains that block until its exit or
 until the slot is reused, when the generation stored with the block no
 longer matches the module's and the block is replaced. Object records
 return to a free list. Package libraries in `/usr/lib` are found
@@ -288,7 +288,7 @@ vector to cover the slot, allocates and initializes a block on the first
 access, or again when the slot's generation changed because a later
 object reuses it after the earlier one was closed, and returns the
 address. `pthread_exit` frees the blocks and the vector through the
-loader's `tls_free`. A static program keeps one module, its own `PT_TLS`
+loader's `tls_free`. A static program retains one module, its own `PT_TLS`
 segment read from `AT_PHDR`, handled by libc's `tls.c` without the
 loader.
 
@@ -299,7 +299,7 @@ resolves user addresses through the symbol table of `/bin/<name>`.
 `/dev/maps` (`proc_format_maps` in `sched/proc.c`) lists the file backed
 regions of every process, one line with the pid, the start and end
 addresses, the file offset of the start and the file's path; for that,
-`vfs_open` now keeps the canonical path of regular files in `file.path`
+`vfs_open` now retains the canonical path of regular files in `file.path`
 as it did for directories. `prof_symtab_add_maps` in the libc profiler
 support reads the lines of one process, loads the symbol table of each
 library under `/lib` once, and attaches the regions as modules of the
@@ -324,7 +324,7 @@ program links against, needs `libldplugdep.so`, calls back into the
 program through the exported `dltest_events` and into `libldtls.so`, and
 has TLS of its own: the dependency initializes before the plugin,
 `dlsym` finds the plugin's functions, its dependency's symbols and the
-calling thread's copy of a TLS variable, `RTLD_LOCAL` keeps it out of the
+calling thread's copy of a TLS variable, `RTLD_LOCAL` retains it out of the
 global scope until a second `dlopen` with `RTLD_GLOBAL` promotes it, the
 worker thread created before the load gets its own block, the first
 `dlclose` drops a reference and the second unloads with the finalizers

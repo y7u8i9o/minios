@@ -29,12 +29,12 @@
 #define SECTORS_PER_SLOT (PAGE_SIZE / 512)
 /* kswapd reclaims when free pages drop below LOW until they reach HIGH. */
 /* User frames are not handed out below RESERVE so kernel allocations
- * made on the swap path (request bounce buffers) keep succeeding. */
+ * made on the swap path (request bounce buffers) continue to succeed. */
 #define WATERMARK_RESERVE 256
 #define WATERMARK_HIGH    768
 #define EVICT_BATCH       32      /* pages written per swap request */
 #define SWAPIN_CLUSTER    16      /* consecutive slots read per fault */
-#define SCAN_BUDGET    2048     /* page table entries examined per lock hold */
+#define SCAN_BUDGET    2048     /* page table entries examined per lock acquisition */
 
 static struct blockdev *swapdev;
 /* Slot bitmap and counters. Protected by swap_lock. */
@@ -128,7 +128,7 @@ static uintptr_t hand_va;
 /* Scan vm from *cursor for an evictable page: a present user page whose
  * frame is not shared and whose accessed bit is clear. Accessed bits seen
  * on the way are cleared. Returns the entry or NULL, leaving *cursor at
- * the next address to examine. Caller holds vm->lock. */
+ * the next address to examine. Caller has acquired vm->lock. */
 static pte_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *victim_va)
 {
     unsigned budget = SCAN_BUDGET;
@@ -142,7 +142,7 @@ static pte_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *vict
                 continue;
             struct page *pg = phys_to_page(pte_addr(e));
             if (pte_lazyfree(e)) {
-                /* MADV_FREE: a page written since keeps its data, a clean
+                /* MADV_FREE: a page written since retains its data, a clean
                  * one is discarded instead of swapped. */
                 if (pte_dirty(e)) {
                     pt[i] = pte_clear_lazyfree(e);
@@ -174,7 +174,7 @@ static pte_t *find_victim(struct vmspace *vm, uintptr_t *cursor, uintptr_t *vict
 }
 
 /* Evict a batch of pages into consecutive slots with one write. Returns
- * the number of pages written out. swap_io_lock is held from the moment
+ * the number of pages written out. swap_io_lock is locked from the moment
  * an entry is marked swapped until its data is on the disk, so a fault
  * on another CPU that reads the slot waits for the write. */
 static unsigned evict_batch_locked(void)
@@ -270,7 +270,7 @@ static unsigned evict_batch(void)
     return n;
 }
 
-/* True while kswapd holds frames or buffers of a batch in flight. */
+/* True while kswapd retains frames or buffers of a batch in flight. */
 static volatile bool evicting;
 
 void swap_drain(void)
@@ -398,7 +398,7 @@ int swap_in_page(struct vmspace *vm, uintptr_t va)
     return 0;
 }
 
-/* First swapped entry at or after *va, or false. Caller holds vm->lock. */
+/* First swapped entry at or after *va, or false. Caller has acquired vm->lock. */
 static bool find_swapped(struct vmspace *vm, uintptr_t *va)
 {
     uintptr_t a = *va;
@@ -491,7 +491,7 @@ void swap_attach(void)
         klog_info("no swap device");
         return;
     }
-    part_hold(dev);
+    part_retain(dev);
     nslots = blockdev_size(dev) / PAGE_SIZE;
     slot_bitmap = kzalloc(ALIGN_UP(nslots, 64) / 8);
     if (!slot_bitmap) {

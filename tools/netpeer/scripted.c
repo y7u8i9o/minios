@@ -66,8 +66,8 @@ struct range {
 /* iss and snd_nxt describe our sequence space, guest_iss and rcv_nxt the
  * guest's. guest_shift is -1 when the guest did not offer scaling.
  * ts_recent is the newest in-order guest timestamp, and ts_first and
- * ts_last bound the timestamps we sent. held lists the out-of-order guest
- * data we hold and recent the range reported first. The fields from
+ * ts_last bound the timestamps we sent. ooo lists the out-of-order guest
+ * data we store and recent the range reported first. The fields from
  * dropped onwards record the deliberate loss. */
 struct script {
     int fd;
@@ -85,8 +85,8 @@ struct script {
     uint32_t last_ack_sent;
     unsigned long received, pattern_errors, missing_ts, echo_errors;
     unsigned long beyond_unscaled, max_flight, guest_window;
-    struct range held[MAX_RANGES];
-    unsigned held_count;
+    struct range ooo[MAX_RANGES];
+    unsigned ooo_count;
     struct range recent;
     int dropped, repaired;
     uint32_t drop_sequence, drop_ts;
@@ -158,7 +158,7 @@ static unsigned char peer_byte(unsigned long i)
 
 /* send_segment sends one segment. A ts_value of 0 selects a fresh
  * timestamp. An ACK reports
- * the held ranges as SACK blocks, the most recent one first. */
+ * the recorded ranges as SACK blocks, the most recent one first. */
 static void send_segment(struct script *s, uint8_t flags, uint32_t sequence,
                          const unsigned char *data, size_t length, uint32_t ts_value)
 {
@@ -186,17 +186,17 @@ static void send_segment(struct script *s, uint8_t flags, uint32_t sequence,
         put32(o + options + 8, s->ts_recent);
         options += 12;
     }
-    if (s->sack && s->held_count && (flags & 0x12) == 0x10) {
+    if (s->sack && s->ooo_count && (flags & 0x12) == 0x10) {
         unsigned blocks = 0;
         unsigned char *b = o + options + 4;
         put32(b, s->recent.start);
         put32(b + 4, s->recent.end);
         blocks = 1;
-        for (unsigned i = 0; i < s->held_count && blocks < 3; i++) {
-            if (s->held[i].start == s->recent.start)
+        for (unsigned i = 0; i < s->ooo_count && blocks < 3; i++) {
+            if (s->ooo[i].start == s->recent.start)
                 continue;
-            put32(b + 8 * blocks, s->held[i].start);
-            put32(b + 8 * blocks + 4, s->held[i].end);
+            put32(b + 8 * blocks, s->ooo[i].start);
+            put32(b + 8 * blocks + 4, s->ooo[i].end);
             blocks++;
         }
         memcpy(o + options, "\x01\x01\x05", 3);
@@ -370,16 +370,16 @@ static void check_timestamp(struct script *s, const struct segment *g)
         s->ts_recent = g->ts_value;
 }
 
-/* hold records [start, end) as held out of order, merges touching ranges
- * and makes the merged range the one reported first. */
-static void hold(struct script *s, uint32_t start, uint32_t end)
+/* ooo_record records [start, end) as received out of order, merges
+ * touching ranges and makes the merged range the one reported first. */
+static void ooo_record(struct script *s, uint32_t start, uint32_t end)
 {
     struct range merged = {start, end};
-    unsigned kept = 0;
-    for (unsigned i = 0; i < s->held_count; i++) {
-        struct range r = s->held[i];
+    unsigned remaining = 0;
+    for (unsigned i = 0; i < s->ooo_count; i++) {
+        struct range r = s->ooo[i];
         if (before(r.end, merged.start) || before(merged.end, r.start)) {
-            s->held[kept++] = r;
+            s->ooo[remaining++] = r;
             continue;
         }
         if (before(r.start, merged.start))
@@ -387,33 +387,33 @@ static void hold(struct script *s, uint32_t start, uint32_t end)
         if (before(merged.end, r.end))
             merged.end = r.end;
     }
-    if (kept < MAX_RANGES)
-        s->held[kept++] = merged;
-    s->held_count = kept;
+    if (remaining < MAX_RANGES)
+        s->ooo[remaining++] = merged;
+    s->ooo_count = remaining;
     s->recent = merged;
 }
 
-/* absorb moves rcv_nxt across held ranges that now continue the stream. */
+/* absorb moves rcv_nxt across recorded ranges that now continue the stream. */
 static void absorb(struct script *s)
 {
     for (int moved = 1; moved;) {
         moved = 0;
-        for (unsigned i = 0; i < s->held_count; i++) {
-            if (before(s->rcv_nxt, s->held[i].start))
+        for (unsigned i = 0; i < s->ooo_count; i++) {
+            if (before(s->rcv_nxt, s->ooo[i].start))
                 continue;
-            if (before(s->rcv_nxt, s->held[i].end))
-                s->rcv_nxt = s->held[i].end;
-            s->held[i] = s->held[--s->held_count];
+            if (before(s->rcv_nxt, s->ooo[i].end))
+                s->rcv_nxt = s->ooo[i].end;
+            s->ooo[i] = s->ooo[--s->ooo_count];
             moved = 1;
             break;
         }
     }
 }
 
-static int is_held(const struct script *s, uint32_t start, uint32_t end)
+static int ooo_covers(const struct script *s, uint32_t start, uint32_t end)
 {
-    for (unsigned i = 0; i < s->held_count; i++)
-        if (!before(start, s->held[i].start) && !before(s->held[i].end, end))
+    for (unsigned i = 0; i < s->ooo_count; i++)
+        if (!before(start, s->ooo[i].start) && !before(s->ooo[i].end, end))
             return 1;
     return 0;
 }
@@ -465,20 +465,20 @@ static int receive_stream(struct script *s, volatile sig_atomic_t *stopping,
             s->repaired = 1;
             s->repair_ms = g.ts_value - s->drop_ts;
         }
-        if (g.length && is_held(s, g.sequence, end))
+        if (g.length && ooo_covers(s, g.sequence, end))
             s->sacked_resent++;
         int in_order = g.length && g.sequence == s->rcv_nxt;
         if (g.length && before(s->rcv_nxt, g.sequence)) {
-            /* An out-of-order segment is held and answered by a duplicate
+            /* An out-of-order segment is recorded and answered by a duplicate
              * ACK with blocks. */
             check_pattern(s, &g);
-            hold(s, g.sequence, end);
+            ooo_record(s, g.sequence, end);
             send_ack(s);
             pending = 0;
         } else if (in_order) {
             check_pattern(s, &g);
             s->rcv_nxt = end;
-            int had_hole = s->held_count > 0;
+            int had_hole = s->ooo_count > 0;
             absorb(s);
             if (had_hole) {
                 send_ack(s);
@@ -601,8 +601,8 @@ void scripted_peer(int fd, const struct sockaddr_in *guest, FILE *log,
     }
 
     /* The segments go out of order, the third one first, then the first
-     * and the second. The guest must report the held segment as a SACK
-     * block. */
+     * and the second. The guest must report the out-of-order segment as a
+     * SACK block. */
     int sack_ok = 1;
     send_segment(&s, 0x18, base + 2000, data + 2000, 1000, 0);
     if (!await_ack(&s, 500, stopping, buffer, sizeof buffer, &g, NULL) ||

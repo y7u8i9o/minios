@@ -4,8 +4,8 @@
 MKFAT="$BUILD/host/mkfat"
 for img in $FATIMGS; do
     "$MKFAT" --dump "$img" > "$img.dump" || { echo "  mkfat --dump failed on $img"; exit 1; }
-    grep -q '^/kept/Written by the kernel.txt cluster [0-9]* size 100000$' "$img.dump" || { echo "  kept file missing in $img"; cat "$img.dump"; exit 1; }
+    grep -q '^/retained/Written by the kernel.txt cluster [0-9]* size 100000$' "$img.dump" || { echo "  stored file missing in $img"; cat "$img.dump"; exit 1; }
     grep -q 'removed' "$img.dump" && { echo "  removed entries present in $img"; cat "$img.dump"; exit 1; }
-    [ "$("$MKFAT" --cat "$img" '/kept/Written by the kernel.txt' | head -c 25)" = "kernel pattern 0000000000" ] || { echo "  content wrong in $img"; exit 1; }
+    [ "$("$MKFAT" --cat "$img" '/retained/Written by the kernel.txt' | head -c 25)" = "kernel pattern 0000000000" ] || { echo "  content wrong in $img"; exit 1; }
 done
 exit 0

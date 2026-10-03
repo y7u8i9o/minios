@@ -111,7 +111,7 @@ static void test_containers(struct app *a)
     click(win, ax + w1 + 5, ay + 5);
     window_paint(win);
     CHECK(tabs->value == 1 && last_value == 1 && p2->visible && !p1->visible, "second tab selected");
-    CHECK(b2->w > 0 && b1->parent == p1, "pages hold their children");
+    CHECK(b2->w > 0 && b1->parent == p1, "pages contain their children");
     window_close(win);
 
     win = app_window(a, 300, 200, "split");
@@ -363,7 +363,7 @@ static void test_editor(struct app *a)
     t = editor_text(ed);
     CHECK(strcmp(t, "    a\n    b\n    c") == 0, "Tab indents the selection: '%s'", t);
     free(t);
-    CHECK(editor_has_selection(ed), "the lines stay selected");
+    CHECK(editor_has_selection(ed), "the lines remain selected");
     window_message(win, &stab);
     t = editor_text(ed);
     CHECK(strcmp(t, "a\nb\nc") == 0, "Shift+Tab unindents: '%s'", t);

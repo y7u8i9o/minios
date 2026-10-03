@@ -213,7 +213,7 @@ static void test_listview(struct app *a)
     struct wmsg up = key_msg(win, KEY_UP, 0, 0);
     window_message(win, &up);
     CHECK(l->value == 18, "Up moves the selection: %d", l->value);
-    CHECK(listview_count(l) == 20 && strcmp(listview_item(l, 3), "3") == 0, "items are kept");
+    CHECK(listview_count(l) == 20 && strcmp(listview_item(l, 3), "3") == 0, "items are retained");
     window_close(win);
 }
 

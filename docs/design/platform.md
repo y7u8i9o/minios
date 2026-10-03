@@ -37,7 +37,7 @@ builds on, is described in `arch.md`.
 |------|-------|-----|--------|
 | `sysret` selectors | `STAR[63:48]+8 \| 3`, `+16 \| 3` | `STAR[63:48]+8`, `+16 \| 3` (no OR into SS) | base 0x13, `syscall/table.c` |
 | `sysret` SS attributes | reloaded | cached attributes unchanged | no effect on 64 bit only user programs; documented in `console.md` |
-| null selector into FS or GS | base cleared | base kept | GS base is rewritten with `wrmsr` after every segment load (`smp.c`, `gdt.c`) |
+| null selector into FS or GS | base cleared | base retained | GS base is rewritten with `wrmsr` after every segment load (`smp.c`, `gdt.c`) |
 | family and model encoding | extended fields for family 6 and 15 | extended fields for family 15 | `cpu_identify` |
 
 ## Environment differences

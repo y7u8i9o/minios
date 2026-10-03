@@ -82,7 +82,7 @@ static int tree_insert(struct vb_codebook *b, unsigned *cap, uint32_t code, unsi
 
 /* Assign the codewords in the order of the entries: each entry receives
  * the lowest codeword of its length that is still free (section 3.2.1).
- * available[l] holds the next free codeword of length l, aligned to the
+ * available[l] contains the next free codeword of length l, aligned to the
  * top of 32 bits, or 0. */
 static int build_tree(struct vb_codebook *b)
 {

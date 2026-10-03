@@ -53,7 +53,7 @@ static void listview_paint(struct widget *w, struct painter *p)
         scrollbar_paint_track(p, w->w - sbw, 0, sbw, w->h, l->scroll, l->nitems, rows, 1);
 }
 
-static void keep_visible(struct listview *l)
+static void ensure_visible(struct listview *l)
 {
     int rows = rows_of(&l->w);
     if (rows <= 0)
@@ -69,7 +69,7 @@ static void select(struct listview *l, int idx, const char *signal)
     if (idx < 0 || idx >= l->nitems)
         return;
     l->w.value = idx;
-    keep_visible(l);
+    ensure_visible(l);
     widget_invalidate(&l->w);
     struct sig_select s = { idx };
     widget_emit(&l->w, signal, &s);

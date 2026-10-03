@@ -4,7 +4,7 @@
 #include <kernel.h>
 
 void futex_init(void);
-/* Sleep while the word at uaddr holds value; timeout_ms 0 is unlimited.
+/* Sleep while the word at uaddr contains value; timeout_ms 0 is unlimited.
  * Returns 0 when woken, -EAGAIN when the value differs, -ETIMEDOUT or
  * -EINTR. */
 int futex_wait(uintptr_t uaddr, uint32_t value, uint64_t timeout_ms);

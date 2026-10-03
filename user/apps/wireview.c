@@ -18,7 +18,7 @@
 #include <gui/theme.h>
 #include "debug-client.h"
 
-/* The last MSG_MAX messages are kept in a ring. A message is addressed
+/* The last MSG_MAX messages are retained in a ring. A message is addressed
  * by its absolute number, the count of messages received before it. */
 #define MSG_MAX 20000
 #define CLIENTS_MAX 64
@@ -361,7 +361,7 @@ static void refresh_clients(void)
 {
     if (!client_combo)
         return;
-    int keep = client_filter();
+    int retain = client_filter();
     combobox_clear(client_combo);
     combobox_add(client_combo, "All clients");
     ncombo = 0;
@@ -371,7 +371,7 @@ static void refresh_clients(void)
         client_label(&clients[i], label, sizeof label);
         combobox_add(client_combo, label);
         combo_clients[ncombo++] = (int)clients[i].number;
-        if ((int)clients[i].number == keep)
+        if ((int)clients[i].number == retain)
             select = ncombo;
     }
     combobox_select(client_combo, select);

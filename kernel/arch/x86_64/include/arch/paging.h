@@ -37,7 +37,7 @@ typedef uint64_t pte_t;
 #define PTE_G       (1UL << 8)
 #define PTE_COW     (1UL << 9)    /* software: copy on write, see mm/vma.c */
 #define PTE_SWAPPED (1UL << 10)   /* software: not present, bits 12+ contain the swap slot, see mm/swap.c */
-#define PTE_LAZYFREE (1UL << 52)  /* software: MADV_FREE, kswapd may discard the frame while the dirty bit stays clear (M38) */
+#define PTE_LAZYFREE (1UL << 52)  /* software: MADV_FREE, kswapd may discard the frame while the dirty bit remains clear (M38) */
 #define PTE_PROTNONE (1UL << 53)  /* software: not present, a frame is attached but the region is PROT_NONE (M37) */
 #define PTE_NX      (1UL << 63)
 #define PTE_ADDR_MASK 0x000ffffffffff000UL
@@ -51,7 +51,7 @@ static inline bool pte_present(pte_t e)
     return (e & PTE_P) != 0;
 }
 
-/* A frame is attached: present, or kept for a PROT_NONE region. */
+/* A frame is attached: present, or retained for a PROT_NONE region. */
 static inline bool pte_mapped(pte_t e)
 {
     return (e & (PTE_P | PTE_PROTNONE)) != 0;

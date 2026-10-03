@@ -2,7 +2,7 @@
 """This is the HTTP server of the pkg_repo case. It serves the files under
 DIR and answers two prefixes badly, for the error paths of the client.
    server.py PORT DIR
-/short/PATH announces 100 bytes more than the file PATH holds and closes
+/short/PATH announces 100 bytes more than the file PATH contains and closes
 the connection after the file; /stall/PATH sends the headers of PATH and
 then nothing for 30 seconds."""
 import functools

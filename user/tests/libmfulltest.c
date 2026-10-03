@@ -152,7 +152,7 @@ static void test_environment(void)
     fenv_t environment;
     feraiseexcept(FE_OVERFLOW);
     feholdexcept(&environment);
-    CHECK(fetestexcept(FE_ALL_EXCEPT) == 0, "hold clears flags");
+    CHECK(fetestexcept(FE_ALL_EXCEPT) == 0, "feholdexcept clears flags");
     feraiseexcept(FE_UNDERFLOW);
     feupdateenv(&environment);
     CHECK((fetestexcept(FE_ALL_EXCEPT) & (FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW)) ==

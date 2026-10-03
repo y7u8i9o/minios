@@ -1,7 +1,7 @@
 /* The gui module binds the libgui application object, windows and
  * layer windows, widgets, signals, timers, descriptor watches and the
  * clipboard; limage.c binds the images. A widget is a full userdata
- * holding the C pointer; the registry table WIDGETS maps the pointer to
+ * containing the C pointer; the registry table WIDGETS maps the pointer to
  * that userdata, so the same object is returned every time and the
  * "destroy" signal of libgui clears the pointer when the C widget dies.
  * Handlers live in the user value table of the widget. */
@@ -201,7 +201,7 @@ static int trampoline(struct widget *w, void *args, void *arg)
     int painted = strcmp(name, "paint") == 0;
     if (painted) {
         /* A copy below the call survives it, so the painter the handler
-         * may have kept is invalidated afterwards. */
+         * may have retained is invalidated afterwards. */
         lua_pushvalue(L, -1);
         lua_insert(L, top + 1);
     }
@@ -641,7 +641,7 @@ static int w_icon(lua_State *L)
     struct widget *w = gui_check_widget(L, 1);
     widget_set_icon(w, lua_isnoneornil(L, 2) ? NULL : icon_get(luaL_checkstring(L, 2)));
     /* A named icon replaces an image set with widget:image, which the
-     * widget no longer needs to keep. */
+     * widget no longer needs to retain. */
     push_handler_table(L, 1);
     lua_pushnil(L);
     lua_setfield(L, -2, "image");
@@ -697,7 +697,7 @@ static int w_readonly(lua_State *L)
     return 1;
 }
 
-/* A language table is kept in the widget's handler table under
+/* A language table is stored in the widget's handler table under
  * "language", with its C description and the keyword strings it owns. */
 struct language_box {
     struct highlight_language lang;
@@ -857,7 +857,7 @@ static int w_modified(lua_State *L)
 
 /* ---- data views with a Lua model ---- */
 
-/* The C model of a view calls the functions of the Lua table kept in the
+/* The C model of a view calls the functions of the Lua table stored in the
  * widget's handler table under "model". */
 struct lua_model {
     struct model m;
@@ -1375,7 +1375,7 @@ static int choose_file(lua_State *L, enum file_chooser_mode mode)
             filters[n].name = luaL_checkstring(L, -2);
             filters[n].patterns = luaL_checkstring(L, -1);
             n++;
-            /* The strings stay alive because the argument table refers to them. */
+            /* The strings remain alive because the argument table refers to them. */
             lua_pop(L, 3);
         }
     }
@@ -1509,7 +1509,7 @@ static int a_clipboard(lua_State *L)
         int e = errno ? errno : ENOENT;
         free(buf);
         lua_pushnil(L);
-        lua_pushstring(L, e == ENOENT ? "the clipboard holds no text" : strerror(e));
+        lua_pushstring(L, e == ENOENT ? "the clipboard contains no text" : strerror(e));
         lua_pushinteger(L, e);
         return 3;
     }

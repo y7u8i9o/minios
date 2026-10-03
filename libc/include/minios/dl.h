@@ -96,7 +96,7 @@ static inline size_t dl_tls_place(size_t *total, size_t memsz, size_t align)
 
 struct dl_dtv_entry {
     void *block;                /* aligned start of the module's block */
-    void *raw;                  /* the allocation holding it */
+    void *raw;                  /* the allocation containing it */
     unsigned generation;
 };
 

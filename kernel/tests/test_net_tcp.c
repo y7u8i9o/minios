@@ -733,18 +733,18 @@ static int pressure_cycle(struct net_request *request)
     file_put(file);
 
     /* Data allocations cannot consume the control reserve. A SYN still
-     * traverses production output while every data buffer is held. */
-    struct pbuf *held[NET_PBUF_COUNT];
-    unsigned held_count = 0;
-    while ((held[held_count] = pbuf_alloc(PBUF_DATA)))
-        held_count++;
-    ktest_assert(held_count == NET_PBUF_COUNT - NET_PBUF_RESERVE, "data floor enforced");
+     * traverses production output while every data buffer is allocated. */
+    struct pbuf *bufs[NET_PBUF_COUNT];
+    unsigned nbufs = 0;
+    while ((bufs[nbufs] = pbuf_alloc(PBUF_DATA)))
+        nbufs++;
+    ktest_assert(nbufs == NET_PBUF_COUNT - NET_PBUF_RESERVE, "data floor enforced");
     file = active_open();
     c = connection_of(file);
     expect_output(TCP_SYN, c->iss, 0);
     file_put(file);
-    for (unsigned i = 0; i < held_count; i++)
-        pbuf_free(held[i]);
+    for (unsigned i = 0; i < nbufs; i++)
+        pbuf_free(bufs[i]);
 
     file = active_open();
     c = connection_of(file);

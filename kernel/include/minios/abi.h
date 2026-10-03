@@ -42,10 +42,10 @@ struct stat {
     int64_t  st_size;
     int64_t  st_blksize;
     int64_t  st_blocks;
-    struct timespec st_mtim;        /* modification time; the filesystems keep seconds */
+    struct timespec st_mtim;        /* modification time; the filesystems retain seconds */
 };
 #define st_mtime st_mtim.tv_sec
-/* minios keeps no access or change time. Both names report the
+/* minios retains no access or change time. Both names report the
  * modification time, which leaves the structure unchanged for programs
  * built before U5. */
 #define st_atim st_mtim
@@ -377,7 +377,7 @@ struct fb_mode {
 #define FBIO_ACQUIRE 0x4601  /* stop the kernel text console from drawing */
 #define FBIO_RELEASE 0x4602  /* restore the text console */
 #define FBIO_FLUSH   0x4603  /* struct fb_rect: push a rectangle to the display, no-op without FB_CAP_FLUSH */
-#define FBIO_SET_MODE 0x4604 /* struct fb_mode: display owner only; the mapping stays valid, geometry changes */
+#define FBIO_SET_MODE 0x4604 /* struct fb_mode: display owner only; the mapping remains valid, geometry changes */
 
 /* Raw PCM audio devices.  Clients normally use audiod rather than opening
  * /dev/pcmN directly.  Structures have fixed-width fields so the ABI can be
@@ -475,7 +475,7 @@ struct pollfd {
 #define TIOCGPTN   0x5430
 /* /dev/net (N10): interface configuration and the ICMP echo interface.
  * Addresses are host order. address 0 detaches the address, the mask and
- * the gateway of the interface but keeps it as the broadcast interface. */
+ * the gateway of the interface but retains it as the broadcast interface. */
 #define NETIOC_CONFIGURE 0x4e01  /* struct net_config * */
 #define NETIOC_PING      0x4e02  /* struct net_ping *, returns 0 or -errno */
 /* NETIOC_ARP_PROBE takes a struct net_arp_probe and implements RFC 5227
@@ -640,7 +640,7 @@ struct cmsghdr {
 #define F_GETFL 3
 #define F_SETFL 4
 #define F_DUPFD_CLOEXEC 1030
-/* Record locks (U5) are accepted and not enforced. minios keeps none, and
+/* Record locks (U5) are accepted and not enforced. minios retains none, and
  * F_GETLK always reports the region unlocked. */
 #define F_GETLK  5
 #define F_SETLK  6
@@ -737,7 +737,7 @@ struct rusage {
  * Every record starts with the same header, so a reader that does not know
  * a type can still skip it with size. */
 
-#define PROF_MAX_FRAMES 32      /* frames one chain can hold */
+#define PROF_MAX_FRAMES 32      /* frames one chain can contain */
 
 /* Event types. A type is also a bit position in the class mask. */
 #define PROF_EV_SAMPLE 0        /* timer sample of the running thread */
@@ -768,7 +768,7 @@ struct rusage {
  * that led into the kernel. It is never a valid address. */
 #define PROF_FRAME_BOUNDARY 0xffffffffffffffffULL
 
-/* One observation. chain holds depth addresses, innermost first.
+/* One observation. chain contains depth addresses, innermost first.
  * a and b depend on the type:
  *   SAMPLE  a: 0                     b: 0
  *   BLOCK   a: nanoseconds on CPU    b: thread state left behind
@@ -791,7 +791,7 @@ struct prof_event {
 #define PROF_EVENT_HEADER ((unsigned)sizeof(struct prof_event))
 #define PROF_EVENT_MAX (PROF_EVENT_HEADER + PROF_MAX_FRAMES * 8u)
 
-/* What the engine records. A zero field keeps the current setting. */
+/* What the engine records. A zero field retains the current setting. */
 struct prof_config {
     uint32_t pid;               /* 0: every process */
     uint32_t divider;           /* timer ticks between samples, 1..1000 */

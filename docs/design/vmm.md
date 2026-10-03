@@ -13,7 +13,7 @@
 
 ## Page tables
 
-`arch/x86_64/paging.c` holds the entry level operations: table allocation
+`arch/x86_64/paging.c` contains the entry level operations: table allocation
 from the buddy allocator, `paging_walk` (returns the level 1 PTE or a 2 MiB
 PDE), `paging_walk_preallocated` for consuming table pages prepared before a
 space lock is taken, `paging_map_large` for the kernel's bulk mappings and
@@ -49,7 +49,7 @@ pages. Flags are `VM_READ`, `VM_WRITE`, `VM_EXEC`, `VM_USER`, `VM_NOCACHE`,
 `VM_WC` and `VM_GLOBAL`. Mapping an already mapped page returns `-EEXIST`.
 A user space rejects kernel addresses with `-EINVAL`.
 
-`tlb_flush_range(vm, va, size)` is called with `vm->lock` held by every
+`tlb_flush_range(vm, va, size)` is called with `vm->lock` acquired by every
 unmap and protect. It uses `invlpg` for kernel addresses (global pages
 survive CR3 reloads) and for short user ranges, and a CR3 reload for long
 user ranges. Since M18 the function is in `mm/tlb.c`. `smp.md` describes how the flush reaches the other CPUs whose TLBs may contain the translations, by shootdown IPIs on x86_64 and by broadcast invalidation on aarch64 (A8).

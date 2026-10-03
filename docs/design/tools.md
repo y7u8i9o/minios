@@ -17,7 +17,7 @@ in percent of one processor. Memory is the resident size from the `RSS`
 column. A click on a column header sorts the table by that column, and
 a second click reverses the order. The text field of the toolbar shows
 only the processes whose name contains its text. The row id of a process
-in the table model is its pid. The selection therefore stays on the same
+in the table model is its pid. The selection therefore remains on the same
 process when the order of the rows changes. The table below lists the threads of
 the selected process from `/dev/threads` with their thread id, name,
 state, last CPU, the wait queue they block on and the duration of a
@@ -170,19 +170,19 @@ The client list, the filter field (a substring of
 table; the last removes `callback` messages, `surface.frame`, `attach`,
 `damage` and `commit`, `buffer.release` and `display.delete_id`, which
 every redrawing client sends each frame. Record starts and stops the
-trace, Clear empties it, and Follow keeps the newest message selected.
+trace, Clear empties it, and Follow leaves the newest message selected.
 The detail pane shows the selected message and up to 40 earlier
 messages on the same object of the same client, which is the history
 of that object. The activity pane draws one strip per client with a
 bar per quarter second over the last 30 seconds, requests in the
-accent colour stacked on events. The last 20000 messages are kept, and
+accent colour stacked on events. The last 20000 messages are retained, and
 the view is refreshed at most ten times a second. The status bar counts
 messages, shown rows, dropped messages and clients.
 
 `wireview -t` prints the trace on standard output instead, one line per
 message such as `[    0.017] 3 -> registry@2.bind(6, "seat", 1, new
 seat@5)`, with `->` for a request and `<-` for an event. `-n COUNT`
-exits after COUNT messages and `-c CLIENT` keeps only one client. The
+exits after COUNT messages and `-c CLIENT` restricts the output to one client. The
 window prints a summary line when it closes.
 
 `tests/cases/gui_wireview` runs `wireview -t -n 40` while the clock

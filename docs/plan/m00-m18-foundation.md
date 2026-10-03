@@ -186,7 +186,7 @@ Stage 2, IPC:
   `ipc/mqueue.c` with its own lock recorded in `locking.md`.
 
 Stage 3, window server (`user/wsrv/`):
-- Owns fb0, the mouse and the keyboard; keeps a window list with z order,
+- Owns fb0, the mouse and the keyboard; maintains a window list with z order,
   position, size, title, owning client and surface.
 - Compositor with damage rectangles: only regions that changed are
   recomposed into a back buffer and copied to the framebuffer. Windows

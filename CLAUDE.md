@@ -20,7 +20,7 @@ A monolithic x86_64 and aarch64 kernel written in C, booted by Limine, running u
 - `make run` boots QEMU with serial on stdio.
 - `make gdb` boots QEMU halted with the gdbstub on port 1234.
 - `make test CASES="case ..."` runs the named boot tests from `tests/cases/`; `make test` alone runs all of them, which takes far too long and is not used.
-- `VERSION` holds the semantic version (`MAJOR.MINOR.PATCH`), changed only when a release is cut; `BUILDNUM` counts kernel links on this machine and is not in git. See `docs/design/build.md`.
+- `VERSION` contains the semantic version (`MAJOR.MINOR.PATCH`), changed only when a release is cut; `BUILDNUM` counts kernel links on this machine and is not in git. See `docs/design/build.md`.
 
 ## Conventions
 

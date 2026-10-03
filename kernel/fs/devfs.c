@@ -19,10 +19,10 @@
 #include <errno.h>
 
 /* Device nodes. The list, and the mode and owner of each node, are
- * protected by devfs_lock. Nodes are never removed, so an inode may keep
+ * protected by devfs_lock. Nodes are never removed, so an inode may retain
  * a pointer to its node without a lock.
  * A node registered with S_IFDIR is a directory; parent is the inode of
- * the directory holding the node (ROOT_INO for /dev itself). */
+ * the directory containing the node (ROOT_INO for /dev itself). */
 struct devnode {
     char name[32];
     uint64_t ino;
@@ -229,7 +229,7 @@ static int devfs_symlink(struct inode *dir, const char *name, size_t len, const 
 }
 
 /* chmod and chown change the node, which outlives its cached inode. The
- * root of /dev has no node and keeps its mode. */
+ * root of /dev has no node and retains its mode. */
 static int devfs_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
 {
     struct devnode *n = devnode_by_ino(ino->ino);
@@ -564,7 +564,7 @@ static const struct file_ops condev_fops = { .read = condev_read, .write = conde
                                              .ioctl = condev_ioctl, .poll = condev_poll,
                                              .poll_source = condev_source, .flags = FOPS_STREAM };
 
-/* /dev/tty, the terminal of the calling process (U5). Because minios keeps
+/* /dev/tty, the terminal of the calling process (U5). Because minios retains
  * no controlling terminal, the first of the standard descriptors 0, 1 and
  * 2 that is the console or a pseudo terminal slave stands for it. The new
  * open file takes on that terminal's inode and operations and opens it

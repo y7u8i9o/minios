@@ -122,7 +122,7 @@ static void test_input(void)
     }
     ktest_assert(tty_getc(&console_tty) < 0, "console has extra bytes");
 
-    /* Software repeat: a held key repeats after the delay, at the
+    /* Software repeat: a pressed key repeats after the delay, at the
      * period, and the console sees the repeats as presses. */
     uint32_t rep[REP_CNT] = { 200, 50 };
     spin_lock(&kbd->lock);
@@ -251,7 +251,7 @@ static void test_mouse_wheel(void)
     expect_event(&ev[5], EV_KEY, BTN_RIGHT, 1, "right down");
     expect_event(&ev[7], EV_REL, REL_WHEEL, 8, "large wheel delta");
     expect_event(&ev[8], EV_KEY, BTN_RIGHT, 0, "right up");
-    /* A device without a wheel keeps three byte packets. */
+    /* A device without a wheel retains three byte packets. */
     ps2mouse_set_wheel(false);
     feed_packet(0x01, 2, 2);
     n = read_events(f, ev, 32);

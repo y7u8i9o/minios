@@ -355,7 +355,7 @@ void part_scan(void)
     devfs_register("partitions", S_IFCHR | 0444, &listing_fops, NULL, 0);
 }
 
-void part_hold(struct blockdev *dev)
+void part_retain(struct blockdev *dev)
 {
     if (!dev)
         return;

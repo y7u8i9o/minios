@@ -10,7 +10,7 @@
  * <root>/var/lib/pkg/_repos/<name>/, verifies both and only then replaces
  * the previous copy, so a refused index leaves the last verified one in
  * place. Every later reader verifies the cached copy again. The
- * underscore keeps the directory apart from the package records, whose
+ * underscore separates the directory from the package records, whose
  * names cannot contain one. */
 #include "pkg.h"
 #include <minios/local.h>
@@ -27,7 +27,7 @@
 #include <minios/http.h>
 #include <minios/sha2.h>
 
-/* An index may hold 4 MiB and a signature file 1 KiB, and the indexes of
+/* An index may contain 4 MiB and a signature file 1 KiB, and the indexes of
  * all repositories together may list 512 entries. */
 #define INDEX_MAX (4 << 20)
 #define SIG_MAX 1024
@@ -168,7 +168,7 @@ int config_present(void)
     return stat(path, &st) == 0;
 }
 
-/* /etc/pkg.conf holds `repo NAME URL` lines, searched in their order,
+/* /etc/pkg.conf contains `repo NAME URL` lines, searched in their order,
  * and an optional `timeout SECONDS`. */
 int config_read(struct repo_config *c)
 {

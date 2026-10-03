@@ -8,7 +8,7 @@ void condvar_init(struct condvar *cv, const char *name)
 
 void condvar_wait(struct condvar *cv, struct mutex *m)
 {
-    /* cv->lock is held from before the mutex is released until the thread
+    /* cv->lock is locked from before the mutex is released until the thread
      * is on the wait queue, so a signal in between cannot be missed. */
     spin_lock(&cv->lock);
     mutex_unlock(m);

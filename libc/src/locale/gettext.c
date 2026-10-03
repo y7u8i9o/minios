@@ -10,7 +10,7 @@
  * locale of LC_MESSAGES.  A locale of C or C.UTF-8 translates nothing, as
  * in GNU gettext.  For an entry ll_CC.UTF-8 the catalogues of ll_CC.UTF-8,
  * ll_CC and ll are tried in that order.  A catalogue is read once and
- * stays in memory.  The bindings, the current domain and the catalogues
+ * remains in memory.  The bindings, the current domain and the catalogues
  * are protected by lock. */
 #include <fcntl.h>
 #include <libintl.h>

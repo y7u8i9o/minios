@@ -11,13 +11,13 @@ void sched_init(void);
 void sched_init_cpu(void);
 __noreturn void sched_idle_loop(void);
 
-/* Give up the CPU, staying runnable. */
+/* Give up the CPU, remaining runnable. */
 void sched_yield(void);
 /* Lock the calling CPU's run queue around a state change and switch. */
 void sched_lock_current(void);
 void sched_unlock_current(void);
-/* Switch away with the local run-queue lock held and current state already
- * changed from RUNNING. Returns with the same local lock held. */
+/* Switch away with the local run-queue lock acquired and current state already
+ * changed from RUNNING. Returns with the same local lock acquired. */
 void sched_switch_locked(void);
 /* Make a blocked or sleeping thread runnable. */
 void sched_wake(struct thread *t);
@@ -34,6 +34,6 @@ bool sched_need_resched(void);
 /* Preemption point used before returning to user mode and by the idle loop. */
 void sched_preempt(void);
 bool sched_started(void);
-/* Post switch bookkeeping, run with the local run-queue lock held. */
+/* Post switch bookkeeping, run with the local run-queue lock acquired. */
 void sched_finish_switch(void);
 void sched_dump(void);

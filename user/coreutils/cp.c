@@ -4,7 +4,7 @@
  *   cp [-R] [-H | -L | -P] source... directory
  *
  * -R copies directories recursively. A symbolic link among the sources is
- * copied as a link (a new link holding the same target) with -P, and
+ * copied as a link (a new link containing the same target) with -P, and
  * followed so that the file it leads to is copied with -L; -H follows the
  * links named as operands only. Without an option cp follows links, and
  * with -R alone it copies them as links. A target that is an existing

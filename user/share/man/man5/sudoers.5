@@ -7,7 +7,7 @@ SYNOPSIS
     /etc/sudoers
 
 DESCRIPTION
-    /etc/sudoers holds the settings and the rules of sudo(1). It must
+    /etc/sudoers contains the settings and the rules of sudo(1). It must
     belong to root with mode 0440, or sudo refuses to run. Text from # to
     the end of a line is a comment, except in #include, and a backslash at
     the end of a line continues it on the next one.
@@ -26,9 +26,9 @@ DESCRIPTION
 
     Lines starting with Defaults change settings. Among them secure_path
     sets the PATH of commands, timestamp_timeout the minutes a time stamp
-    stays valid (5 by default, 0 asks every time), passwd_tries the number
+    remains valid (5 by default, 0 asks every time), passwd_tries the number
     of attempts (3), lecture whether the lecture is shown (once, always or
-    never), env_keep the variables kept from the environment of the
+    never), env_keep the variables retained from the environment of the
     caller, and insults, targetpw and rootpw who is asked for which
     password. Aliases of the form User_Alias, Runas_Alias and Cmnd_Alias
     give a name to a list of accounts or commands.
@@ -41,7 +41,7 @@ DESCRIPTION
         %wheel ALL=(ALL:ALL) ALL
 
     The file is part of the system image, while the membership of wheel
-    is kept in /etc/group with the other account databases on the data
+    is retained in /etc/group with the other account databases on the data
     volume (passwd(5)). The full description of the format is the
     sudoers manual of sudo 1.9.17p1, which is not installed.
 

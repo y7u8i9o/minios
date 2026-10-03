@@ -224,7 +224,7 @@ static void flame_describe(int index)
     double pct = total ? 100.0 * (double)boxes[index].width / (double)total : 0.0;
     char extra[64] = "";
     if (view == PROF_VIEW_HEAP)
-        snprintf(extra, sizeof extra, ", %s still held",
+        snprintf(extra, sizeof extra, ", %s still allocated",
                  fmt_bytes(n->extra, amount, sizeof amount));
     else if (view == PROF_VIEW_IO)
         snprintf(extra, sizeof extra, ", %s moved", fmt_bytes(n->extra, amount, sizeof amount));
@@ -334,7 +334,7 @@ static const char *thread_header(struct model *m, int col)
 }
 static struct model thread_model = { thread_rows, m_child, thread_columns, thread_cell, thread_header, NULL, NULL, NULL };
 
-/* The heap table lists the call sites that still hold memory. */
+/* The heap table lists the call sites that still contain memory. */
 static int leak_nodes[TABLE_ROWS];
 static uint64_t leak_bytes[TABLE_ROWS];
 static size_t nleaks;
@@ -363,7 +363,7 @@ static const char *heap_cell(struct model *m, int row, int col, char *buf, size_
 }
 static const char *heap_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Still held", "Allocated", "Call site" };
+    static const char *const names[] = { "Still allocated", "Allocated", "Call site" };
     return names[col];
 }
 static struct model heap_model = { heap_rows, m_child, heap_columns, heap_cell, heap_header, NULL, NULL, NULL };
@@ -417,7 +417,7 @@ static const char *break_cell(struct model *m, int row, int col, char *buf, size
 }
 static const char *break_header(struct model *m, int col)
 {
-    static const char *const names[] = { "Self / direct callee", "% selected", "Inclusive", "Self", "Held / I/O bytes" };
+    static const char *const names[] = { "Self / direct callee", "% selected", "Inclusive", "Self", "Live / I/O bytes" };
     return names[col];
 }
 static struct model break_model = { break_count, m_child, break_columns, break_cell, break_header, NULL, NULL, NULL };
@@ -506,10 +506,10 @@ static void refresh_views(void)
     struct prof_stats st = { 0 };
     if (fd >= 0)
         prof_get_stats(fd, &st);
-    char text[220], span[32], held[32];
+    char text[220], span[32], live[32];
     snprintf(text, sizeof text,
              "%s | %llu events: %llu samples, %llu switches, %llu allocations, %llu transfers | "
-             "%llu dropped | %s recorded | %s held by the kernel heap",
+             "%llu dropped | %s recorded | %s allocated in the kernel heap",
              running ? "recording" : "stopped", (unsigned long long)session->events,
              (unsigned long long)session->counts[PROF_EV_SAMPLE],
              (unsigned long long)session->counts[PROF_EV_BLOCK],
@@ -517,7 +517,7 @@ static void refresh_views(void)
              (unsigned long long)session->counts[PROF_EV_IO],
              (unsigned long long)st.dropped,
              fmt_time(session->last_ns - session->first_ns, span, sizeof span),
-             fmt_bytes(session->live_bytes, held, sizeof held));
+             fmt_bytes(session->live_bytes, live, sizeof live));
     widget_set_text(status, capture_error[0] ? capture_error : text);
 }
 

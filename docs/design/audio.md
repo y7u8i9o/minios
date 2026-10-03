@@ -2,7 +2,7 @@
 
 MiniOS provides one low-level PCM device with a playback and a capture
 side, and a user-space audio server.  The internal format is fixed at
-48 kHz, stereo, signed 16-bit little-endian samples.  This keeps the
+48 kHz, stereo, signed 16-bit little-endian samples.  This retains the
 driver and real-time path small while establishing interfaces that can
 later support more devices and formats.
 
@@ -22,7 +22,7 @@ QEMU audio backend -> virtio-snd RX virtqueue -> /dev/pcm0 (read side)
 
 The design takes several useful ideas from PipeWire: the hardware endpoint is
 owned by one server, clients exchange payloads through shared
-memory, buffer ownership is explicit, protocol traffic stays off the sample
+memory, buffer ownership is explicit, protocol traffic remains off the sample
 data path, the output device supplies the scheduling clock, and the mix
 sent to the output is available again as a monitor source.  The current
 server reduces a general processing graph to the topology MiniOS needs:
@@ -75,7 +75,7 @@ the oldest one out and submits it again.  Submitted chains remain
 device-owned until their used entries arrive; therefore a playback drop
 lets the small hardware queue finish before `STOP`, while a capture drop
 sends `STOP` and `RELEASE`, which hands the pending periods back, and waits
-a bounded time for them.  A period the device keeps beyond that stays
+a bounded time for them.  A period the device retains beyond that remains
 allocated and is ignored through its generation when it finally returns.
 The device writes the capture status after the data it delivered, so a
 short transfer (a flush at release) leaves the status structure untouched;
@@ -164,7 +164,7 @@ sequence is:
 Capture mirrors it: `audio_capture_create()` with a source
 (`AUDIO_SOURCE_INPUT` or `AUDIO_SOURCE_MONITOR`), `audio_capture_start()`,
 then `audio_capture_read()`, which blocks for captured frames, consumes a
-buffer partially when asked for fewer frames than it holds and returns
+buffer partially when asked for fewer frames than it contains and returns
 each buffer to the server once it is drained.  `audio_capture_available()`
 reports the frames an event driven client may read without blocking.
 `audio_mixer_create()` returns the mixer view: a list of
@@ -179,7 +179,7 @@ The connection descriptor and dispatch function are also public so a GUI or
 event-driven application can include audio events in its own poll loop.  Such
 a client must refill every buffer reported by `audio_playback_ready()` each
 time the connection becomes readable, not one buffer per wakeup: the server
-keeps a full three-buffer pool for it and the client survives the device
+retains a full three-buffer pool for it and the client survives the device
 returning several periods at once.  Writing one buffer per wakeup leaves a
 single period of headroom and produces a 10 ms gap whenever two periods
 complete together.  `audio_connection_dispatch()` with a timeout of 0 takes
@@ -193,7 +193,7 @@ what has already arrived on the socket without waiting.
 triangle oscillator with a five octave range feeds an ADSR amplitude
 envelope and a resonant state-variable low-pass filter whose cutoff is swept
 by the envelope; a cubic soft clipper follows.  The filter runs twice per
-sample so that it stays stable up to the highest cutoff the sweep reaches.
+sample so that it remains stable up to the highest cutoff the sweep reaches.
 The voice is defined in `user/apps/synthvoice.h` (`struct synth_voice`,
 `synth_voice_on`, `synth_voice_off`, `synth_voice_sample` with coefficients
 derived from `struct synth_params`) so that other programs can play it.
@@ -215,7 +215,7 @@ the demo pattern, C clears the grid, and a click toggles a cell.
 `/usr/bin/player` plays every audio format that a codec module
 decodes (`codecs.md`), for example PCM WAV files with 8, 16, 24 or 32-bit
 samples at any sample rate.  When a file is opened, a loader thread
-decodes it through libcodec, keeps the upper 16 bits of each sample, and
+decodes it through libcodec, retains the upper 16 bits of each sample, and
 converts the result to 48 kHz stereo.  The player outputs a mono file on
 both channels and outputs only the first two channels of a file with
 more channels.  The player draws the whole file
@@ -265,7 +265,7 @@ second source frame and adds no error for tones below 24 kHz.
 The panel's audio applet (`user/panel/mixer.c`) is a speaker button left of
 the clock.  It opens a popup that connects to the server, shows the master
 volume and one row per stream with its name, state, volume bar and peak
-meter, and sets volumes by clicking or dragging a bar; the popup keeps the
+meter, and sets volumes by clicking or dragging a bar; the popup retains the
 size it opened with and counts rows beyond it.  The connection is closed
 with the popup.
 

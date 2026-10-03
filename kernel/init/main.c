@@ -99,7 +99,7 @@ static void mount_root(void)
     int r = source[0] ? vfs_mount("mfs", source, "/", NULL) : -ENODEV;
     if (r == 0) {
         klog_info("root: mfs on %s", source);
-        part_hold(blockdev_find(source));
+        part_retain(blockdev_find(source));
     }
     if (r < 0) {
         r = vfs_mount("initrd", "initrd", "/", NULL);

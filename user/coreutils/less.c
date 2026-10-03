@@ -1,4 +1,4 @@
-/* A seekable pager: input is kept as logical lines, display width is
+/* A seekable pager: input is retained as logical lines, display width is
  * computed separately so SGR attributes never consume screen columns. */
 #include <stdio.h>
 #include <stdlib.h>

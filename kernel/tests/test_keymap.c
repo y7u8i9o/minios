@@ -32,7 +32,7 @@ static void loadkeys(const char *name)
 }
 
 /* Key presses: a scancode, or 0xe0 followed by one.  A press of a
- * modifier stays down until the same code with 0x80 releases it. */
+ * modifier remains down until the same code with 0x80 releases it. */
 static void keys(const uint8_t *codes, size_t n)
 {
     for (size_t i = 0; i < n; i++)

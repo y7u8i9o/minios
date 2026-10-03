@@ -22,12 +22,12 @@ the flag clear logs `previous shutdown was unclean`. Version 1 images
 (without a journal) are refused by the kernel and the tools; `make disk`
 rebuilds the image in version 2.
 
-An inode holds the mode, link count, size, twelve direct block pointers,
+An inode contains the mode, link count, size, twelve direct block pointers,
 one indirect pointer (1024 blocks), one double indirect pointer (1024 x
 1024 blocks), and since format version 5 the owner's uid and gid in two of
 the words that were spare (U1 of `docs/plan/multiuser.md`, `users.md`).
 Version 4 images are still mounted and checked, since their zero owner
-words read as root, and the kernel keeps their version number. New inodes
+words read as root, and the kernel retains their version number. New inodes
 take the effective uid of the creating process and its effective gid or,
 below a directory with the set group id bit, the directory's group.
 `mfs_setattr` changes the permission bits and the owner and writes the
@@ -35,14 +35,14 @@ inode through the journal like any other metadata change. Unused pointers
 are zero; reading such a block yields zeros, which gives sparse files.
 Inode 1 is the root directory.
 
-A symbolic link (mode `S_IFLNK | 0777`) keeps its target in its first
+A symbolic link (mode `S_IFLNK | 0777`) retains its target in its first
 direct block, without a NUL, and its size is the target's length; it has no
 other block. This is a slow link: the target is not stored in the inode,
-whose spare bytes (48 before version 5, 40 since) would hold short targets
+whose spare bytes (48 before version 5, 40 since) would contain short targets
 only and would give the block pointers two meanings for `free_from`, `bmap`
 and `fsck`. The kernel accepts targets of 1 to 255 bytes
 (`VFS_SYMLINK_MAX`), the format up to `MFS_SYMLINK_MAX` (4095). The on disk
-layout is unchanged, so the format version stays 4: a link is an inode of a
+layout is unchanged, so the format version remains 4: a link is an inode of a
 new type in the existing fields. A kernel or `fsck` built before links
 reads such an inode as a file or reports its mode as invalid.
 
@@ -57,7 +57,7 @@ free and is reused by the next create. Every directory starts with `.` and
 
 `build/host/mkfs`, built from `tools/mkfs/mkfs.c`:
 
-- `mkfs <image> <size_mb> <dir>` writes a fresh image whose root holds the
+- `mkfs <image> <size_mb> <dir>` writes a fresh image whose root contains the
   tree under `dir`. Hidden files are skipped. The inode count is one per
   four blocks with a minimum of 64. The tree is read with `lstat`, so a
   symbolic link of the host becomes a link with the target that
@@ -99,13 +99,13 @@ changes, which discards files written during earlier runs.
   returning. `read_inode` and `mfs_inode_flush` copy between
   `struct inode` plus `struct mfs_inode_info` (the block pointers) and the
   inode table through the block cache; the `mtime` field of the disk
-  inode holds the modification time in nanoseconds since the epoch
+  inode contains the modification time in nanoseconds since the epoch
   (format version 4; versions 2 and 3 stored seconds), set by
   `mkfs` from the host file, by `mfs_inode_new`, and by every write and
   truncation (a write that does not grow the file flushes the inode once
   at its end). `put_inode` runs when the last
   reference to an inode goes away and frees its blocks and inode number if
-  the link count is zero, so an unlinked open file keeps its data until it
+  the link count is zero, so an unlinked open file retains its data until it
   is closed. `sync` writes the superblock and flushes the cache; `unmount`
   additionally sets the clean flag.
 - `bitmap.c`: first fit allocation in the inode and block bitmaps under
@@ -116,7 +116,7 @@ changes, which discards files written during earlier runs.
   the inode. `mfs_truncate_locked` frees blocks past the new size, zeroes
   the tail of the last block and releases indirect tables that became
   empty. The file operations take the inode mutex around these helpers.
-- `dir.c`: directory operations run with the directory mutex held by the
+- `dir.c`: directory operations run with the directory mutex acquired by the
   VFS. `lookup`, `create`, `mkdir`, `unlink`, `rmdir`, `link`, `symlink`
   and `rename` scan and rewrite entries through the data helpers.
   `symlink` allocates the inode, writes the target with
@@ -144,7 +144,7 @@ Every modifying VFS operation runs between the superblock hooks
 commit is in progress or fewer than 16 slots are free, then counts the
 operation in. Metadata buffers changed by the operation go through
 `mfs_journal_write`, which pins them in the block cache (`bpin`): they
-stay dirty in memory and are neither evicted nor written by
+remain dirty in memory and are neither evicted nor written by
 `bcache_sync`. Nested operations by the same thread (an unlinked inode
 released while its directory entry is removed) are counted in
 `thread.fs_txn_depth` and join the outer transaction; the release of an
@@ -174,11 +174,11 @@ before step 3 and the transaction is discarded. Journal blocks are never
 accessed through the block cache, so the raw writes of the commit cannot
 be shadowed by stale cached copies.
 
-The journal holds one transaction of up to 127 blocks; a single operation
+The journal contains one transaction of up to 127 blocks; a single operation
 touches around ten metadata blocks at most (`free_from` no longer clears
 the entries of an indirect table that is released as a whole), so with
 the 16 block reservation up to seven operations run concurrently and
-further ones wait in `op_begin`, where no lock is held.
+further ones wait in `op_begin`, where no lock is locked.
 
 `mfs_journal_set_crash` is a test hook: mode 1 makes the next commit do
 nothing, mode 2 stops it after step 3; while a crash mode is set, `sync`
@@ -195,7 +195,7 @@ remains the root. `init=<path>` selects the first program.
 The `shutdown` system call (`shutdown_system` in libc, the `shutdown`
 utility, `-r` to reboot) syncs and unmounts every filesystem that has no
 inode in use, most recent mount first, then powers off through ACPI.
-Filesystems without on disk state (devfs, initrd) may stay mounted; a
+Filesystems without on disk state (devfs, initrd) may remain mounted; a
 persistent filesystem that is still busy is reported and left unclean.
 
 ## Tests
@@ -222,7 +222,7 @@ persistent filesystem that is still busy is reported and left unclean.
   root image is finally left with a committed, not checkpointed
   transaction; the `post` script runs `fsck` on both images: the second
   reports no problems, the first prints `journal: replaying transaction`
-  and afterwards holds `/journaled.txt`, and a second `fsck` run finds it
+  and afterwards contains `/journaled.txt`, and a second `fsck` run finds it
   clean. Repair paths of `fsck` were checked by hand on images corrupted
   with `dd` (bitmap zeroed, link count wrong, entry removed).
 - `shutdown`: boots with `init=/bin/shutdowntest`, which writes
@@ -248,7 +248,7 @@ Freeing a block or an inode whose bitmap bit is clear was a kernel
 assertion until 2026-09-06, when `ls /bin` panicked in `bitmap_clear`
 from `mfs_put_inode`: a directory entry named an inode with no links and
 no allocation. The kernel now treats that as an inconsistency of the
-filesystem: `bitmap_clear` reports it, the counters stay unchanged, an
+filesystem: `bitmap_clear` reports it, the counters remain unchanged, an
 inode with no links that the bitmap does not mark allocated releases
 nothing (its blocks may belong to other files by then), and `getdents`
 reports such an entry with `DT_UNKNOWN` and a log line naming the

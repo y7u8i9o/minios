@@ -47,11 +47,11 @@ static inline int logical_h(void);
 /* Place the cursor at a logical position through the tablet (the
  * attached virtio tablet, or the virtual one): absolute events are
  * exact, relative motion of the PS/2 mouse is accelerated by the
- * compositor. held is unused: the buttons pressed through PS/2 packets
- * stay pressed across the move. */
-static inline void mouse_move_to(int *cx, int *cy, int x, int y, int held)
+ * compositor. pressed is unused: the buttons pressed through PS/2 packets
+ * remain pressed across the move. */
+static inline void mouse_move_to(int *cx, int *cy, int x, int y, int pressed)
 {
-    (void)held;
+    (void)pressed;
     /* The compositor maps ax to floor(ax * width / 32768). */
     int w = logical_w(), h = logical_h();
     virtio_input_feed(EV_ABS, ABS_X, (uint32_t)((x * (VIRTIO_INPUT_ABS_MAX + 1) + w - 1) / w));

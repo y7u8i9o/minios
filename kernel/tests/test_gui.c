@@ -31,7 +31,7 @@ static void test_fb0(void)
     struct proc *p = proc_create_user("/bin/fbtest", (char *const[]){ "fbtest", NULL },
                                       (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(p != NULL, "cannot start /bin/fbtest");
-    /* Wait until the program has drawn and is holding the display. */
+    /* Wait until the program has drawn and is using the display. */
     struct inode *marker = NULL;
     for (int i = 0; i < 200 && vfs_lookup("/fb.ready", &marker) < 0; i++)
         sleep_ms(50);
@@ -186,7 +186,7 @@ static void test_gui_term(void)
     ktest_assert(drawn, "no text rendered in the terminal");
     /* M19: drag the grip so the window shrinks by 240x96 pixels (30
      * columns and 6 rows of the 8x17 cells: 422 - 8 - 14 = 400 pixels
-     * hold 50 columns, 335 - 6 = 329 hold 19 rows); the shell sees the
+     * fit 50 columns, 335 - 6 = 329 fit 19 rows); the shell sees the
      * size. */
     int sw = logical_w();
     int wx = 40, wy = 60;                       /* 662x431 at the cascade origin */
@@ -723,7 +723,7 @@ static void test_gui_mandel(void)
 }
 KTEST_DEFINE("gui_mandel", test_gui_mandel);
 
-/* Drag performance: 200 motion packets with the button held on the
+/* Drag performance: 200 motion packets with the button pressed on the
  * terminal window's title bar; the elapsed time is logged and the
  * server reports compositions slower than 20 ms. */
 static void test_gui_drag(void)
@@ -833,7 +833,7 @@ static void test_comp_scale(void)
 KTEST_DEFINE("comp_scale", test_comp_scale);
 
 /* A client killed without disconnecting must not block the server: its
- * queue fills, the server drops it after two seconds and keeps serving
+ * queue fills, the server drops it after two seconds and continues to serve
  * a new client. */
 static void test_gui_dead_client(void)
 {
@@ -846,7 +846,7 @@ static void test_gui_dead_client(void)
     sleep_ms(800);
     signal_send(cl, SIGKILL);
     proc_reap(cl);
-    /* Flood the focused window with more messages than the queue holds. */
+    /* Flood the focused window with more messages than the queue contains. */
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 70 + 100, 90 + 80, 0);
     for (int i = 0; i < 40; i++) {
@@ -991,8 +991,8 @@ static void test_comp_hang(void)
     while (pixel(75, 95) != 0x0088889f && timer_ms() - t0 < 8000)
         sleep_ms(100);
     ktest_assert(pixel(75, 95) == 0x0088889f, "second hung window dimmed: %08x", pixel(75, 95));
-    char hold[8];
-    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+    char pause_arg[8];
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);                 /* screenshots of the dialog */
     mouse_move_to(&cx, &cy, 174 + 38, 175 + 13, 0);
     mouse_click(1);
@@ -1237,8 +1237,8 @@ static void test_gui_images(void)
     ktest_assert(pixel(5, sh / 2) == 0x00183040, "dimmed outside the selection: %08x", pixel(5, sh / 2));
     ktest_assert(pixel(sw / 2, sh / 2) == 0x00306080, "bright inside the selection: %08x", pixel(sw / 2, sh / 2));
     kprintf("gui_images: capture interface shown\n");
-    char hold[8];
-    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+    char pause_arg[8];
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);                 /* screenshots of the interface */
     press_key(0x1c);
     int thumb_y = sh - 28 - 16 - 71;
@@ -1297,7 +1297,7 @@ static void test_gui_images(void)
     ps2kbd_feed_scancode(0xcd);
     sleep_ms(400);
     ktest_assert(count_pixels(40, 60, 640, 480, 0x00306080, 0x00ffffff) > 20000, "viewer after the zoom keys");
-    /* Window mode of the capture interface: W keeps the active window
+    /* Window mode of the capture interface: W retains the active window
      * bright and dims the rest, Enter saves it. */
     uint32_t inside = pixel(340, 260);
     ps2kbd_feed_scancode(0xe0);
@@ -1312,7 +1312,7 @@ static void test_gui_images(void)
     ktest_assert(pixel(5, sh / 2) == 0x00183040, "dimmed beside the window: %08x", pixel(5, sh / 2));
     ktest_assert(pixel(340, 260) == inside, "window bright in window mode: %08x, not %08x", pixel(340, 260), inside);
     kprintf("gui_images: window mode shown\n");
-    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);
     press_key(0x1c);
     sleep_ms(2500);
@@ -1808,7 +1808,7 @@ static void test_gui_desktop(void)
     alt_key(0x3e);
     sleep_ms(600);
     /* The desktop starts programs as children of init, so the clock is
-     * not its zombie; here the kernel process adopted and holds it. */
+     * not its zombie; here the kernel process adopted and retains it. */
     ktest_assert(zombies_of(desktop->pid) == 0, "the desktop left a zombie child");
     ktest_assert(zombies_of(0) == 1, "the clock became the kernel's orphan: %d", zombies_of(0));
     /* Context menus: on the desktop, then on the fourth icon (readme.txt). */

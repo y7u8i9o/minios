@@ -9,8 +9,8 @@ The array is carved from the start of the first usable region large enough
 and is accessed through the higher half direct map (`P2V` in
 `mm/memlayout.h`).
 
-Bootloader reclaimable regions hold the Limine structures and the initial
-page tables. They stay reserved until the kernel owns its page tables in M4.
+Bootloader reclaimable regions contain the Limine structures and the initial
+page tables. They remain reserved until the kernel owns its page tables in M4.
 
 ## Data structures
 
@@ -18,7 +18,7 @@ page tables. They stay reserved until the kernel owns its page tables in M4.
 
 `PG_RESERVED` marks frames outside the allocator. `PG_FREE` is set only on
 the head of a free block, whose `order` field is then valid. Allocated blocks
-keep their order in the head so `pmm_free` can check the caller's value.
+retain their order in the head so `pmm_free` can check the caller's value.
 
 Free blocks of each order 0 to 12 (4 KiB to 16 MiB) sit on one list. All
 lists, the per order counts and `pmm_stats` are protected by `pmm_lock`.

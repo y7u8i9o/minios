@@ -143,7 +143,7 @@ static void *alloc_zeroed(unsigned order, uintptr_t *phys)
 
 static void its_command(uint64_t d0, uint64_t d1, uint64_t d2)
 {
-    kassert(spin_holding(&its_lock));
+    kassert(spin_locked_by_current(&its_lock));
     unsigned next = (cmdq_write + 32) % CMDQ_SIZE;
     while ((rd64(its, GITS_CREADR) & 0xfffe0) == next)
         cpu_relax();                    /* the queue is full */
@@ -161,7 +161,7 @@ static void its_command(uint64_t d0, uint64_t d1, uint64_t d2)
  * with the redistributor that rdbase names. */
 static void its_wait(uint64_t rdbase)
 {
-    kassert(spin_holding(&its_lock));
+    kassert(spin_locked_by_current(&its_lock));
     its_command(CMD_SYNC, 0, rdbase);
     while ((rd64(its, GITS_CREADR) & 0xfffe0) != cmdq_write)
         cpu_relax();

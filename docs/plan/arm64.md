@@ -22,7 +22,7 @@ every milestone.
 
 - The target is QEMU `virt` with UEFI firmware (edk2) and Limine on aarch64.
   The Limine boot protocol, the higher half kernel and the Limine MP protocol
-  are kept.
+  are retained.
 - Paging uses the 4 KiB granule with four levels. TTBR1 maps the kernel and
   TTBR0 maps user space, with ASIDs.
 - Devices are found through the device tree that Limine passes. PCI uses

@@ -1,6 +1,6 @@
 /* This file implements Ed25519 (RFC 8032, section 5.1) from the
  * description in the RFC. Field elements modulo p = 2^255 - 19 are five limbs of 51 bits;
- * products use 128 bit intermediates. Points are kept in the extended
+ * products use 128 bit intermediates. Points are stored in the extended
  * homogeneous coordinates (X:Y:Z:T) of the twisted Edwards curve
  * -x^2 + y^2 = 1 + d x^2 y^2, with the addition and doubling formulas of
  * section 5.1.4. Scalars modulo the group order L are reduced bit by bit.
@@ -61,7 +61,7 @@ static void fe_add(struct fe *h, const struct fe *f, const struct fe *g)
     fe_carry(h);
 }
 
-/* The difference f - g is computed as f + 4p - g, which keeps every limb
+/* The difference f - g is computed as f + 4p - g, which preserves every limb
  * positive for carried inputs. */
 static void fe_sub(struct fe *h, const struct fe *f, const struct fe *g)
 {
@@ -407,9 +407,9 @@ static void sc_reduce(uint8_t out[32], const uint8_t *in, size_t n)
             t[i] = (uint32_t)d;
             borrow = (d >> 32) & 1;
         }
-        uint32_t keep = (uint32_t)0 - (uint32_t)borrow;     /* keep is all ones when r < L. */
+        uint32_t retain = (uint32_t)0 - (uint32_t)borrow;     /* all ones when r < L. */
         for (int i = 0; i < 9; i++)
-            r[i] = (r[i] & keep) | (t[i] & ~keep);
+            r[i] = (r[i] & retain) | (t[i] & ~retain);
     }
     for (int i = 0; i < 32; i++)
         out[i] = (uint8_t)(r[i / 4] >> (8 * (i % 4)));

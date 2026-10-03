@@ -24,7 +24,7 @@ Blocking operations (`wait4`, console reads, pipe reads and writes,
 signal is then delivered on the way back to user mode.
 
 `fork` copies the dispositions and the thread mask and clears the pending
-set. `exec` resets caught signals to the default and keeps ignored ones.
+set. `exec` resets caught signals to the default and retains ignored ones.
 
 ## Delivery
 

@@ -2,7 +2,7 @@
 
 `user/term/` (`/bin/term`) is the terminal window. It was rebuilt on
 2026-09-05 on the emulator in `vt.c`; the window code in `term.c` runs
-the programs, paints and handles keys, `select.c` holds the mouse
+the programs, paints and handles keys, `select.c` contains the mouse
 selection and the clipboard, and `term.h` the tab structure they
 share.
 
@@ -33,7 +33,7 @@ screen has no scrollback. Rows are numbered for the window from the
 oldest scrollback line (0) through the screen rows, so a view offset
 is a plain subtraction.
 
-`vt_resize` keeps the top left of the screen. When rows are removed,
+`vt_resize` retains the top left of the screen. When rows are removed,
 lines above the cursor go to the scrollback first; when rows are added,
 lines come back from the scrollback and the cursor moves down with
 them. Columns are not rewrapped.
@@ -66,7 +66,7 @@ foreground is `0xd4d4d4` on `0x1e1e1e`.
 
 ## Window (`term.c`)
 
-The window holds a `tabs` widget whose title row is hidden while there
+The window contains a `tabs` widget whose title row is hidden while there
 is one page (`tabs_set_autohide`); each page is a canvas with one
 `struct tab`: the emulator, the pseudo terminal master, the child's
 pid, the view offset and the selection. The text is DejaVu Sans Mono
@@ -104,8 +104,8 @@ Ctrl+minus and Ctrl+0 change the font size for the window. The right
 button opens a context menu with the same actions and Clear scrollback.
 
 The selection is made with the left button: a drag selects characters,
-a double click selects a word, a triple click a line. It is kept in
-line numbers of the emulator so it stays on scrolled lines. A click in
+a double click selects a word, a triple click a line. It is retained in
+line numbers of the emulator so it remains on scrolled lines. A click in
 the bar moves the view so that the clicked point is the centre of the
 page, and dragging there follows the pointer.
 

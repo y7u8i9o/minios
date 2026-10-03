@@ -80,7 +80,7 @@ int main(void)
     nanosleep(&nap, NULL);
     CHECK(clock() - c0 >= 120000, "clock advances with wall time");
 
-    /* Setting the clock moves realtime, monotonic stays. */
+    /* Setting the clock moves realtime, monotonic remains unchanged. */
     struct timespec set = { 1900000000, 0 };   /* 2030-03-17 */
     CHECK(clock_settime(CLOCK_REALTIME, &set) == 0, "clock_settime");
     CHECK(clock_gettime(CLOCK_REALTIME, &later) == 0 && later.tv_sec >= 1900000000 && later.tv_sec < 1900000002, "realtime set: %ld", (long)later.tv_sec);

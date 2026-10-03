@@ -17,10 +17,10 @@ struct waitq {
 #define DEFINE_WAITQ(name) struct waitq name = WAITQ_INIT(name)
 
 void waitq_init(struct waitq *wq, const char *name);
-/* Block the current thread until woken. held is the spinlock protecting
+/* Block the current thread until woken. lock is the spinlock protecting
  * the condition; it is released while blocked and re-acquired before
  * return. May be NULL. Never call from interrupt context. */
-void waitq_wait(struct waitq *wq, struct spinlock *held);
+void waitq_wait(struct waitq *wq, struct spinlock *lock);
 /* Wake one or all waiters. Returns the number of threads woken. */
 int waitq_wake_one(struct waitq *wq);
 int waitq_wake_all(struct waitq *wq);
@@ -30,7 +30,7 @@ int waitq_wake_all(struct waitq *wq);
 /* waitq_wait for a wait that ends soon in a working system: a sleeping
  * lock or the completion of a block request. The hung task detector
  * (debug/hung.c) reports a thread that waits here longer than its limit. */
-void waitq_wait_bounded(struct waitq *wq, struct spinlock *held);
+void waitq_wait_bounded(struct waitq *wq, struct spinlock *lock);
 struct thread;
 void waitq_interrupt(struct thread *t);
 /* waitq_interrupt for a signal or an exit sent to t. If t is about to call
@@ -39,6 +39,6 @@ void waitq_interrupt(struct thread *t);
 void waitq_signal(struct thread *t);
 /* Like waitq_wait, but the wait ends at deadline_ms (timer_ms clock)
  * as if woken; callers re-check their condition and the time. */
-void waitq_wait_timeout(struct waitq *wq, struct spinlock *held, uint64_t deadline_ms);
+void waitq_wait_timeout(struct waitq *wq, struct spinlock *lock, uint64_t deadline_ms);
 /* Called from the timer interrupt on the boot CPU. */
 void waitq_timeouts_tick(void);

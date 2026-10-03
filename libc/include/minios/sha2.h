@@ -11,7 +11,7 @@
 
 /* In both contexts, h is the chaining state, length counts the bytes
  * hashed so far and used counts the bytes waiting in block. A message
- * must stay below 2^64 bytes. */
+ * must remain below 2^64 bytes. */
 struct sha256_ctx {
     uint32_t h[8];
     uint64_t length;

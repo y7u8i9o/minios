@@ -589,7 +589,7 @@ wchar_t *fgetws(wchar_t *s, int n, FILE *stream)
     return s;
 }
 
-/* mbtowc, wctomb and mblen keep no state between calls because UTF-8 is
+/* mbtowc, wctomb and mblen store no state between calls because UTF-8 is
  * stateless; a null s resets nothing and reports that. */
 int mbtowc(wchar_t *out, const char *s, size_t n)
 {

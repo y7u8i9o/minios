@@ -418,8 +418,8 @@ static void live_insert(struct prof_session *s, uint64_t addr, uint64_t bytes, i
     s->live_count = s->live_used;
 }
 
-/* Remove addr, reporting what it held. Deletion rehashes the run that
- * follows so the open addressing stays searchable. */
+/* Remove addr, reporting what it recorded. Deletion rehashes the run that
+ * follows so the open addressing remains searchable. */
 static int live_remove(struct prof_session *s, uint64_t addr, uint64_t *bytes, int *node)
 {
     size_t slot = live_slot(s, addr);

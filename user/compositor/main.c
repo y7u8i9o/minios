@@ -90,7 +90,7 @@ void frame_clock_set(int ms)
     timerfd_settime(frame_fd, &spec);
 }
 
-/* Flush every client and note since when a socket has stayed full; a
+/* Flush every client and note since when a socket has remained full; a
  * client that stops reading or answering pings is shown as not
  * responding (hang.c) and dropped only through its Force quit button. */
 static void flush_clients(void)

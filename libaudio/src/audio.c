@@ -119,7 +119,7 @@ int audio_connection_dispatch(struct audio_connection *connection,
         return -1;
     if (dispatched > 0)
         return dispatched;
-    /* Nothing queued: read what the socket holds, waiting up to
+    /* Nothing queued: read what is pending on the socket, waiting up to
      * timeout_ms (0 only takes what has already arrived). */
     if (wire_display_flush(connection->display) < 0)
         return -1;

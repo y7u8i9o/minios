@@ -5,7 +5,7 @@
 #include <klog.h>
 #include <errno.h>
 
-/* Directory entries are fixed size slots. The caller holds dir->lock. */
+/* Directory entries are fixed size slots. The caller has acquired dir->lock. */
 
 static int entry_read(struct inode *dir, uint64_t slot, struct mfs_dirent *e)
 {
@@ -281,7 +281,7 @@ static int mfs_rename(struct inode *olddir, const char *oldname, size_t oldlen,
     return r;
 }
 
-/* A symbolic link keeps its target in its first data block, written
+/* A symbolic link retains its target in its first data block, written
  * through the journal like directory contents, so the link and its target
  * are committed in one transaction. */
 static int mfs_symlink(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen)

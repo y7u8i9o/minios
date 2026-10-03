@@ -1,6 +1,6 @@
 /* The interactive prompt of /bin/lua edits lines with libedit. It moves
  * the cursor, recalls the history with the arrow keys and Ctrl+R,
- * completes global names and table fields with Tab, and keeps a
+ * completes global names and table fields with Tab, and maintains a
  * history file, $HOME/.lua_history, which is loaded at the first
  * prompt and written at exit. lreadline.h maps the readline hooks of
  * lua.c to these functions. The host test program has no prompt and

@@ -266,8 +266,8 @@ static void apply_granule(struct vb_state *s, int64_t granule, int eos, long pro
 {
     int64_t before = s->chain_produced - produced;
     if (eos && granule < s->chain_produced) {
-        int64_t keep = granule - before;
-        long cut = keep < 0 ? produced : (long)(produced - keep);
+        int64_t retain = granule - before;
+        long cut = retain < 0 ? produced : (long)(produced - retain);
         if (cut > 0) {
             s->out_n -= (size_t)cut;
             s->chain_produced -= cut;

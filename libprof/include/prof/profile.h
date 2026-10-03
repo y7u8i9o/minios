@@ -34,7 +34,7 @@ struct prof_sym {
     const char *name;
 };
 /* A shared library mapped into the process the table describes: the
- * addresses [start, end) hold the file from offset on, and the library's
+ * addresses [start, end) contain the file from offset on, and the library's
  * own table gives the symbols by link address. */
 struct prof_module {
     uint64_t start, end, offset;
@@ -64,12 +64,12 @@ const struct prof_sym *prof_symtab_lookup(const struct prof_symtab *t, uint64_t 
 struct prof_resolver;
 struct prof_resolver *prof_resolver_new(void);
 void prof_resolver_free(struct prof_resolver *r);
-/* Load the kernel table; without it kernel addresses stay numeric. */
+/* Load the kernel table; without it kernel addresses remain numeric. */
 int prof_resolver_kernel(struct prof_resolver *r);
 /* The command name of a pid, read from /dev/proc and cached, or NULL. */
 const char *prof_resolver_procname(struct prof_resolver *r, pid_t pid);
 /* Name of an address: "symbol", or "0x..." when it cannot be resolved.
- * The returned string stays valid for the life of the resolver. */
+ * The returned string remains valid for the life of the resolver. */
 const char *prof_resolve(struct prof_resolver *r, pid_t pid, int kernel, uint64_t addr);
 
 /* ---- interned names ---- */
@@ -84,7 +84,7 @@ const char *prof_names_get(const struct prof_names *n, int id);
 /* Weights depend on the view: nanoseconds for CPU, off CPU and IO time,
  * bytes for allocations. extra carries the second magnitude of a view:
  * bytes for IO, bytes still allocated for the heap. Both are accumulated
- * along the whole path, so a node holds the totals of its subtree. */
+ * along the whole path, so a node contains the totals of its subtree. */
 struct prof_node {
     int name;                   /* id in the tree's name table */
     int parent, child, sibling;

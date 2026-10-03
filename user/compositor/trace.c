@@ -14,7 +14,7 @@
 #define TRACERS_MAX 8
 /* Bytes queued to a tracer beyond which its messages are only counted.
  * A message event is at most about 500 bytes, and the output buffer of
- * a connection holds 64 KiB, so a queued event is never dropped by libwire. */
+ * a connection buffers 64 KiB, so a queued event is never dropped by libwire. */
 #define TRACE_BACKLOG 49152
 
 struct tracer {

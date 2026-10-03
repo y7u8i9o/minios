@@ -220,7 +220,7 @@ static void scale_wallpaper(int w, int h)
     int dw = w, dh = h, dx = 0, dy = 0;
     switch (conf.mode) {
     case MODE_FILL: {
-        /* Scale to cover the window, keeping the aspect ratio (16.16). */
+        /* Scale to cover the window, retaining the aspect ratio (16.16). */
         long sx = ((long)w << 16) / im->w, sy = ((long)h << 16) / im->h;
         long s = sx > sy ? sx : sy;
         dw = (int)((im->w * s) >> 16);

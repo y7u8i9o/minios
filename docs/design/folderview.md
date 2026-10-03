@@ -15,7 +15,7 @@ used for Open and Save.
 location entry, the search field and the search button to `bar`, a
 horizontal box or tool bar that the program places, and adds the places
 sidebar and the table to `split`, a horizontal split pane. The program
-keeps the rest of the window, so the chooser adds a name field and its
+fills the rest of the window, so the chooser adds a name field and its
 buttons and Files adds its menus, Back and Forward and a status bar. The
 callbacks of `struct folderview_ops` tell the program that a file was
 activated (`open`), that the folder, the kind of view or the listing
@@ -38,7 +38,7 @@ Font Awesome ones of `icons.md`.
 The path bar shows one button per folder of the current path, the first
 being Home with its icon when the path lies below the home folder and the
 root otherwise. The current folder's button is drawn pressed. When the
-view goes up, the path bar keeps the folders below, so that their buttons
+view goes up, the path bar retains the folders below, so that their buttons
 and Alt+Down lead back, and it forgets them when the view moves to another
 branch. Buttons that do not fit give way from the left to one marked
 with an ellipsis, which opens the folder above the first button shown.
@@ -74,7 +74,7 @@ selected after going up.
 ## The recent list
 
 `folderview_recent_add` puts a path at the head of
-`$HOME/.local/share/recent-files`, one path per line, and keeps fifty.
+`$HOME/.local/share/recent-files`, one path per line, and retains fifty.
 The file chooser records every chosen file there and Files records the
 files it opens, so that the Recent place of both shows the files used
 last that still exist.
@@ -123,8 +123,8 @@ path [, filters])` and `app:save_file(...)` with filters as an array of
 `textfield_select` places the cursor and the selection of a text field,
 and `dialog_message` and `dialog_prompt` (`src/dialog.h`) are
 `app_dialog` and `app_prompt` over a given parent window, so that the
-chooser's own dialogs stay above it. The tree view and the table no
-longer take keys held with Alt, which leaves Alt+Up and the other Alt
+chooser's own dialogs remain above it. The tree view and the table no
+longer take keys pressed with Alt, which leaves Alt+Up and the other Alt
 accelerators of a window working while a list has the focus. The icons
 `folder-new`, `drive`, `recent`, `documents`, `pictures`, `music`,
 `videos` and `downloads` were added to `tools/fetch_icons.sh`.

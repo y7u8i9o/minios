@@ -19,7 +19,7 @@ MODSOS  := $(addprefix $(BUILD)/lib/codecs/,$(addsuffix .so,$(MODULES)))
 MODOBJS := $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/*/*.c))
 
 .PHONY: all clean check
-# The module objects are named here to keep make from treating them as
+# The module objects are named here to prevent make from treating them as
 # intermediate files of the chain to the modules, which it would not
 # remake when they are missing.
 all: $(LIB) $(SO) $(ABIFILE) $(MODOBJS) $(MODSOS)

@@ -33,7 +33,7 @@ void part_scan(void);
 int part_rescan(struct blockdev *disk);
 /* Mark dev, a disk or a partition, as in use by the root or swap, which
  * makes part_rescan of its disk fail. */
-void part_hold(struct blockdev *dev);
+void part_retain(struct blockdev *dev);
 /* The disk with a GPT whose disk GUID is the one the bootloader loaded
  * the kernel from, or NULL. */
 struct blockdev *part_boot_disk(void);

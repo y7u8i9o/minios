@@ -124,7 +124,7 @@ static void source_gone(struct wire_resource *r)
         selection = NULL;
         use_store();
     }
-    /* Another client may hold an offer of this source, because the focus
+    /* Another client may have an offer of this source, because the focus
      * moves to it when the owner's window closes, before the owner
      * disconnects. Such an offer now reads the stored copy, or nothing. */
     for (struct offer *o = offers; o; o = o->next)

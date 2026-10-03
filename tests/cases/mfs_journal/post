@@ -1,6 +1,6 @@
 #!/bin/sh
 # The second image was unmounted cleanly and must check out; the root
-# image holds a committed transaction that fsck replays.
+# image contains a committed transaction that fsck replays.
 FSCK="$BUILD/host/fsck"
 MKFS="$BUILD/host/mkfs"
 "$FSCK" "$DISK2" > "$DISK2.fsck" 2>&1 || { echo "  fsck of the second image failed"; cat "$DISK2.fsck"; exit 1; }

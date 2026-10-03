@@ -1,7 +1,7 @@
 /* Framebuffer backend: the device mapping, a 32 bit back buffer and the
  * copy with format conversion (from the M19 window server).
  *
- * The back buffer holds device pixels; the scene composes into it at
+ * The back buffer contains device pixels; the scene composes into it at
  * screen_scale device pixels per logical pixel (video=WxH@N, high
  * density displays), so scaled client buffers and decorations are sharp.
  * The scene, the shell and input work in logical pixels: width/N by
@@ -56,7 +56,7 @@ int backend_init(void)
     if (fb_fd < 0 || ioctl(fb_fd, FBIOGET_INFO, &fbinfo) < 0)
         return -1;
     /* With mode setting the whole buffer is mapped once; the mapping
-     * stays valid across mode changes. */
+     * remains valid across mode changes. */
     map_size = (fbinfo.caps & FB_CAP_SET_MODE) ? fbinfo.size : (size_t)fbinfo.pitch * fbinfo.height;
     fbmem = mmap(NULL, map_size, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
     if (fbmem == MAP_FAILED)

@@ -16,7 +16,7 @@ OPTIONS
     -a            open w files when first written to
     -e command    add command to the script; may be repeated
     -f file       add the commands in file to the script; may be repeated
-    -i extension  edit files in place; a copy is kept with the extension
+    -i extension  edit files in place; a copy is retained with the extension
                   appended, or none when the extension is empty
     -l            line buffer the output
     -n            print only lines selected with p
@@ -32,7 +32,7 @@ COMMANDS
     p  P            print the pattern space; print its first line
     d  D            delete the pattern space; delete its first line
     n  N            next line; append the next line
-    g  G  h  H  x   copy or append between the pattern and hold spaces
+    g  G  h  H  x   copy or append between the pattern space and the spare buffer
     a\ i\ c\        append, insert or change text; the text follows on the
                     next line
     r file  w file  read a file after the line; write the line to a file

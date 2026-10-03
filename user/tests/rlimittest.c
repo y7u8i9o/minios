@@ -30,7 +30,7 @@ static int in_child(void (*fn)(void *), void *arg)
 
 static void touch_read(void *p) { volatile unsigned char *c = p; (void)*c; }
 
-/* The exec'd child: argv[2] holds the expected stack size in KiB. A
+/* The exec'd child: argv[2] contains the expected stack size in KiB. A
  * probe well inside the stack works, one beyond it faults. */
 static int stack_probe(const char *kb_text)
 {
@@ -175,7 +175,7 @@ static void test_nofile_nproc(void)
         close(b);
         if (dup(a) != 4)
             _exit(6);
-        rl.rlim_cur = 1;                            /* already open descriptors stay usable */
+        rl.rlim_cur = 1;                            /* already open descriptors remain usable */
         setrlimit(RLIMIT_NOFILE, &rl);
         char c;
         if (read(a, &c, 1) != 0)

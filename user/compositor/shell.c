@@ -54,7 +54,7 @@ void toplevel_configure_size(const struct toplevel *t, int *w, int *h)
     }
 }
 
-/* Keep 40 pixels of the frame on screen horizontally and its top row
+/* Leave 40 pixels of the frame on screen horizontally and its top row
  * (the title bar) inside the desktop area. */
 static void clamp_toplevel(struct csurface *s)
 {
@@ -354,7 +354,7 @@ static void h_set_max_size(struct wire_client *c, struct wire_resource *self, in
 static void h_move(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial)
 {
     struct toplevel *t = self->data;
-    /* The press must still be held: a request that arrives after the
+    /* The button must still be pressed: a request that arrives after the
      * release (a client that answered late) would drag with no button. */
     if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized && seat_buttons())
         decor_press(t->s, 1 | 0x100);           /* a move grab from the client */
@@ -807,7 +807,7 @@ static void layer_gone(struct wire_resource *r)
     l->s->layer = NULL;
     l->s->mapped = 0;
     seat_surface_gone(l->s);
-    /* An overlay that held the keyboard returns it to the active window. */
+    /* An overlay that had the keyboard returns it to the active window. */
     struct toplevel *t = toplevel_focused();
     if (focused && t && t->s)
         seat_set_keyboard_focus(t->s);
@@ -909,7 +909,7 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
     }
     if (serial && acked != serial) {
         /* A state-only configure does not make the already mapped
-         * geometry unsafe. Keep accepting matching old-size buffers
+         * geometry unsafe. Continue accepting matching old-size buffers
          * while the event is in flight; do not consume the configure. */
         if (s->mapped && (want_w <= 0 || want_w == s->width) &&
             (want_h <= 0 || want_h == s->height))
@@ -923,7 +923,7 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         if (s->mapped && bw == s->width && bh == s->height)
             return 1;
         /* A layer whose client acknowledged an older configure commits a
-         * buffer of that configure.  The newer one stays pending. */
+         * buffer of that configure.  The newer one remains pending. */
         if (s->role == ROLE_LAYER && acked && bw == s->layer->acked_w && bh == s->layer->acked_h)
             return 1;
         wire_client_post_error(c, s->res, 23, "buffer committed before configure acknowledgement");
@@ -983,7 +983,7 @@ void shell_surface_committed(struct csurface *s, int first_map)
             comp_log("toplevel %d '%s' mapped at %d,%d %dx%d", t->number, t->title, f.x, f.y, f.w, f.h);
             toplevel_activate(t);
         } else if (t->minimized) {
-            s->mapped = 1;      /* keeps its buffer; hidden by the scene */
+            s->mapped = 1;      /* retains its buffer; hidden by the scene */
         }
         break;
     }

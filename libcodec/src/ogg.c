@@ -126,7 +126,7 @@ void codec_ogg_reader_free(struct codec_ogg_reader *r)
 /* Find the next page of the followed stream and make it current. Returns
  * 1, 0 at the end of the data, or -EBADMSG. A page that is cut or fails
  * its CRC is damage, and the data must not end before the last page of
- * the followed stream. Bytes after the last page that hold no page
+ * the followed stream. Bytes after the last page that contain no page
  * header, such as a tag, end the data. */
 static int load_page(struct codec_ogg_reader *r)
 {

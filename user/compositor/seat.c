@@ -106,8 +106,8 @@ int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t 
     if (seat_validate_grab(client, origin, n))
         return 1;
     /* Older clients start a drag from the pointer-enter serial rather than
-     * waiting for a button event. Keep that form safe: it is accepted only
-     * while the pointer still targets the origin and no button is held. */
+     * waiting for a button event. Ensure that form remains safe: it is accepted only
+     * while the pointer still targets the origin and no button is pressed. */
     return client && origin && origin == pointer_focus && origin->client == client &&
            !buttons && seat_validate_serial(client, n);
 }
@@ -465,7 +465,7 @@ void seat_set_keyboard_focus(struct csurface *s)
     }
 }
 
-/* Modifier keys: both keys of a pair count, and the modifier stays
+/* Modifier keys: both keys of a pair count, and the modifier remains
  * down until both are released. */
 static uint8_t *modifier_of(uint32_t key, int *side)
 {
@@ -583,7 +583,7 @@ void seat_key(uint32_t key, int pressed)
                 return;
             }
     }
-    /* The input method daemon sees the key first and may keep it. */
+    /* The input method daemon sees the key first and may retain it. */
     if (keyboard_focus && keyboard_focus->client->keyboard && im_filter_key(key, pressed, modifiers))
         return;
     seat_deliver_key(key, pressed, modifiers);

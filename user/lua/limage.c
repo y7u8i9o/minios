@@ -1,11 +1,11 @@
-/* This file holds the images of the gui module. It loads PNG and SVG
+/* This file contains the images of the gui module. It loads PNG and SVG
  * files and pixel strings into struct image (gui/image.h), defines the
  * image view widget, and makes the resampled renditions that the
  * painter and the view draw at other sizes.
  *
  * An image is a full userdata that owns its struct image and one cached
  * rendition at another size. Only the garbage collector frees it. A
- * label, button or image view showing an image keeps the userdata in
+ * label, button or image view showing an image retains the userdata in
  * the widget's handler table, so the pixels outlive every widget that
  * points at them. */
 #include <stdio.h>
@@ -18,7 +18,7 @@
 #include "lgui.h"
 
 /* An image built or resampled here has sides of at most this many
- * device pixels, which keeps width * height * 4 far inside size_t and
+ * device pixels, which retains width * height * 4 far inside size_t and
  * int. */
 #define IMAGE_SIDE_MAX 16384
 /* image_render_svg refuses larger renderings. */
@@ -287,7 +287,7 @@ static const luaL_Reg image_methods[] = {
 /* ---- the image view ---- */
 
 /* The image view shows one image centred, reduced to fit its area with
- * the proportions kept and never enlarged. After the image it emits
+ * the proportions retained and never enlarged. After the image it emits
  * "paint", so a handler can draw over it. */
 struct imageview {
     struct widget base;
@@ -329,9 +329,9 @@ static const struct widget_class imageview_class = {
     "imageview", sizeof(struct imageview), imageview_measure, NULL, imageview_paint, NULL, NULL
 };
 
-/* Keeps the image userdata at index (or nil) in the handler table of the
+/* Retains the image userdata at index (or nil) in the handler table of the
  * widget at index 1, under "image". */
-static void keep_image(lua_State *L, int index)
+static void retain_image(lua_State *L, int index)
 {
     lua_getiuservalue(L, 1, 1);
     lua_pushvalue(L, index);
@@ -354,7 +354,7 @@ int gui_widget_image(lua_State *L)
     } else {
         return luaL_error(L, "image: %s shows no image", w->cls->name);
     }
-    keep_image(L, 2);
+    retain_image(L, 2);
     lua_settop(L, 1);
     return 1;
 }
@@ -371,7 +371,7 @@ static int g_imageview(lua_State *L)
     gui_push_widget(L, w);
     lua_replace(L, 1);
     lua_settop(L, 2);
-    keep_image(L, 2);
+    retain_image(L, 2);
     lua_settop(L, 1);
     return 1;
 }

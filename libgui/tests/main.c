@@ -24,7 +24,7 @@ void run_filechooser_tests(void);
 
 int main(void)
 {
-    setvbuf(stdout, NULL, _IONBF, 0);   /* failures before a crash stay visible */
+    setvbuf(stdout, NULL, _IONBF, 0);   /* failures before a crash remain visible */
     signal(SIGSEGV, on_crash);
     signal(SIGBUS, on_crash);
     signal(SIGALRM, on_crash);

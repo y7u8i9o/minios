@@ -144,7 +144,7 @@ struct client {
     struct wire_client *wc;
     int number;
     unsigned uid;                           /* SO_PEERCRED at connect */
-    long stall_since;                       /* uptime when its socket first stayed full */
+    long stall_since;                       /* uptime when its socket first remained full */
     struct wire_resource *pointer, *keyboard, *data_device;
     struct wire_resource *text_input;
     uint32_t input_serials[16];
@@ -158,7 +158,7 @@ struct client {
     uint32_t ping_serial;
     long ping_sent, last_pong;              /* uptime ms; last_pong is the connect time until the first pong */
     int unresponsive;
-    long snooze_until;                      /* Wait pressed: the overlay stays away until then */
+    long snooze_until;                      /* Wait pressed: the overlay remains away until then */
 };
 
 /* Clients may connect from root, from the user running the server and
@@ -319,7 +319,7 @@ struct csurface *seat_keyboard_focus(void);
 void seat_surface_gone(struct csurface *s);
 uint32_t seat_last_serial(void);
 int seat_modifiers(void);
-int seat_buttons(void);                  /* pointer buttons held, bit 0 = left */
+int seat_buttons(void);                  /* pointer buttons pressed, bit 0 = left */
 int seat_validate_serial(struct client *client, uint32_t serial);
 int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t serial);
 int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t serial);

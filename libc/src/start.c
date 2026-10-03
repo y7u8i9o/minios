@@ -67,7 +67,7 @@ void __assert_fail(const char *expr, const char *file, int line, const char *fun
 
 /* Static executables use the linker's array boundaries directly. Dynamic
  * programs delegate the entire dependency graph, including their own
- * arrays, to the loader. Weak references keep a program without arrays
+ * arrays, to the loader. Weak references leave a program without arrays
  * valid and avoid imposing initialization sections on the static init. */
 extern void (*__preinit_array_start[])(void) __attribute__((weak));
 extern void (*__preinit_array_end[])(void) __attribute__((weak));

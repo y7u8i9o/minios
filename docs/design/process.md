@@ -25,7 +25,7 @@ M43 that validation walks the RCU-published VMA forward links without taking
 grace period.
 
 `struct page` gained a 32 bit `refcount` (flags shrank to 16 bits). A frame
-mapped into user space holds one reference per mapping; `page_put` frees
+mapped into user space contains one reference per mapping; `page_put` frees
 the frame when the last reference goes.
 
 ## fork with copy on write
@@ -88,7 +88,7 @@ refused with `-EBUSY` while other threads exist.
 process with `rdi = arg`; `thread_exit(code)` ends it; `thread_join(tid)`
 waits for the `finished` flag, returns the code and frees the thread.
 Exited threads wait on `proc->zombies` until joined or until the process
-is reaped. M35 adds thread local storage (`set_tls`, the FS base kept per
+is reaped. M35 adds thread local storage (`set_tls`, the FS base retained per
 thread), `gettid` and futexes; `docs/design/threads.md` describes them and
 the POSIX interface in libc.
 

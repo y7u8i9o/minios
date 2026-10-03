@@ -8,7 +8,7 @@
      the engines through ime_control. -->
 <protocol name="ime">
   <interface name="input_method_manager" version="1">
-    <!-- One client at a time holds the input method of the seat.  A
+    <!-- One client at a time uses the input method of the seat.  A
          second request is a protocol error. -->
     <request name="get_input_method">
       <arg name="id" type="new_id" interface="input_method"/>

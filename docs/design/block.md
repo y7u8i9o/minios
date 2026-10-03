@@ -38,11 +38,11 @@ required, FEATURES_OK, queue setup, then DRIVER_OK.
 
 A `struct virtqueue` is a split ring of up to 128 entries occupying two
 physically contiguous pages: descriptors and the available ring in the
-first, the used ring in the second. Descriptors are kept on a free list
+first, the used ring in the second. Descriptors are retained on a free list
 through their `next` fields. `virtq_alloc_chain` takes a chain of n
 descriptors, `virtq_submit` publishes the head in the available ring
 with a memory fence and writes the queue index to the notification
-address. Every queue keeps a completion cookie per head descriptor.
+address. Every queue retains a completion cookie per head descriptor.
 
 Interrupts arrive through MSI-X. Each device gets one interrupt number
 from `irq_alloc` (a vector from 40 upwards on x86_64, an LPI from 8192 on
@@ -58,14 +58,14 @@ and `0x1042` (modern only), negotiates `VIRTIO_BLK_F_FLUSH` when offered
 and registers `vda`, `vdb`, ... with the block layer. A request is a three
 descriptor chain: the 16 byte header (type, sector), the data buffer and
 the status byte. The caller sleeps on the queue wait queue until the
-completion callback marks the request done, holding `virtqueue.lock` as
+completion callback marks the request done, with `virtqueue.lock` acquired as
 the condition lock. Transfers are split into 8 KiB pieces and bounced
 through a `kmalloc` block so the device always sees physically contiguous
 memory regardless of the caller's buffer.
 
 ## Block layer
 
-`block/blockdev.c` keeps the list of `struct blockdev`: name, sector size,
+`block/blockdev.c` retains the list of `struct blockdev`: name, sector size,
 sector count and the driver's `rw` and `flush` callbacks.
 `blockdev_register` also creates `/dev/<name>` in devfs. The device file
 supports byte addressed reads and writes through the block cache and
@@ -84,13 +84,13 @@ flush. The `sync` system call runs the filesystem sync hooks and then
 M36 adds pinned buffers for the mfs journal: `bpin` marks a locked buffer
 dirty and pinned and takes a reference, so neither eviction nor
 `bcache_sync` writes it; the filesystem writes it itself with `bwrite_now`
-once the journal holds a copy and releases it with `bunpin`. `bforget`
+once the journal contains a copy and releases it with `bunpin`. `bforget`
 drops the contents of a buffer and `bcache_discard` forgets every
 unreferenced buffer of a device; both exist for the simulated crashes of
 the journal test.
 
 Locks: `bcache_lock` protects the LRU list and the identity, reference
-count and flags of every buffer; `buf.lock` is a mutex held between
+count and flags of every buffer; `buf.lock` is a mutex locked between
 `bread` and `brelse` and during write back. `virtqueue.lock` protects the
 ring bookkeeping and is taken from the interrupt handler. See
 `locking.md` for the ordering.
@@ -130,7 +130,7 @@ whole of `vdb` when it has no partition table. `fsinit` accepts
 Since P5 a program that wrote a new table asks for it to be read again
 with the `ioctl` `BLKRRPART` on the device file of the disk, which only
 root may use. `part_rescan` refuses with `EBUSY` while the root or the
-swap device lies on the disk (`part_hold`). Otherwise it writes back the
+swap device lies on the disk (`part_retain`). Otherwise it writes back the
 buffers of the disk and reads its table again. The device of an entry
 number remains registered after a rescan, which updates its position,
 size and GUIDs, gives a partition whose entry is now empty the size 0, which also

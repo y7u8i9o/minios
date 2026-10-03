@@ -79,7 +79,7 @@ rejects(function() m:volume(0, 100) end, "zero stream id")
 rejects(function() m:volume(math.maxinteger, 100) end, "stream id overflow")
 rejects(function() m:master(201) end, "bad master volume")
 check(p:pause() and p:drain() and r:stop(), "stop and drain")
--- A child keeps its connection alive, even without a Lua connection variable.
+-- A child maintains its connection, even without a Lua connection variable.
 local weak = setmetatable({c}, {__mode = "v"})
 c = nil
 collectgarbage("collect")

@@ -44,7 +44,7 @@ void arch_thread_resume(struct thread *t)
     __asm__ volatile("msr tpidr_el0, %0" : : "r"(t->arch.tls_base));
 }
 
-/* An exception from EL0 is taken on SP_EL1, which keeps the value it had
+/* An exception from EL0 is taken on SP_EL1, which retains the value it had
  * at the eret to EL0: user_enter returns from the top of the thread's
  * kernel stack, so nothing needs to be loaded here. */
 void arch_set_kernel_stack(uintptr_t top)

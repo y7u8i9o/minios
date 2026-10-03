@@ -1,4 +1,4 @@
--- GUI-side model. Mutable DSP state is held exclusively by worker.lua.
+-- GUI-side model. Mutable DSP state is confined to worker.lua.
 local thread, sys = require 'thread', require 'sys'
 local root = debug.getinfo(1, 'S').source:sub(2):match('^(.*[/])') or './'
 local M, Control = {}, {}

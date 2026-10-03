@@ -163,7 +163,7 @@ int main(int argc, char **argv)
         struct account a;
         int known = find_account(name, &a) == 0;
         char password[128] = "";
-        /* An unknown name is asked for a password as well, which keeps the
+        /* An unknown name is asked for a password as well, which leaves the
          * existence of accounts hidden. */
         if (!known || a.hash[0]) {
             if (account_read_password("Password: ", password, sizeof password) < 0)

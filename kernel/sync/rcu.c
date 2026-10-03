@@ -23,7 +23,7 @@ void rcu_read_unlock(void)
     c->rcu_read_depth--;
 }
 
-bool rcu_read_held(void)
+bool rcu_read_locked(void)
 {
     return cpu_current()->rcu_read_depth != 0;
 }

@@ -14,12 +14,12 @@ void waitq_init(struct waitq *wq, const char *name)
     list_init(&wq->waiters);
 }
 
-void waitq_wait(struct waitq *wq, struct spinlock *held)
+void waitq_wait(struct waitq *wq, struct spinlock *lock)
 {
     struct thread *t = thread_current();
     kassert(t != NULL);
     kassert(t != cpu_current()->idle);
-    if (rcu_read_held())
+    if (rcu_read_locked())
         panic("sleep inside RCU read section");
 
     /* Register as a waiter and mark blocked before releasing the condition
@@ -44,12 +44,12 @@ void waitq_wait(struct waitq *wq, struct spinlock *held)
      * drain_inbound_locked). */
     __atomic_store_n(&t->state, THREAD_BLOCKED, __ATOMIC_RELEASE);
     spin_unlock(&wq->lock);
-    if (held)
-        spin_unlock(held);
+    if (lock)
+        spin_unlock(lock);
     sched_switch_locked();
     sched_unlock_current();
-    if (held)
-        spin_lock(held);
+    if (lock)
+        spin_lock(lock);
 }
 
 static int wake(struct waitq *wq, bool all)
@@ -99,11 +99,11 @@ void waitq_interrupt(struct thread *t)
     spin_unlock(&wq->lock);
 }
 
-void waitq_wait_bounded(struct waitq *wq, struct spinlock *held)
+void waitq_wait_bounded(struct waitq *wq, struct spinlock *lock)
 {
     struct thread *t = thread_current();
     __atomic_store_n(&t->bounded_since, timer_ms() + 1, __ATOMIC_RELAXED);
-    waitq_wait(wq, held);
+    waitq_wait(wq, lock);
     __atomic_store_n(&t->bounded_since, 0, __ATOMIC_RELAXED);
 }
 
@@ -127,13 +127,13 @@ struct timed_waiter {
 static LIST_HEAD(timed_waiters);
 static DEFINE_SPINLOCK(timed_lock);
 
-void waitq_wait_timeout(struct waitq *wq, struct spinlock *held, uint64_t deadline_ms)
+void waitq_wait_timeout(struct waitq *wq, struct spinlock *lock, uint64_t deadline_ms)
 {
     struct timed_waiter w = { .t = thread_current(), .deadline_ms = deadline_ms };
     spin_lock(&timed_lock);
     list_add_tail(&w.link, &timed_waiters);
     spin_unlock(&timed_lock);
-    waitq_wait(wq, held);
+    waitq_wait(wq, lock);
     spin_lock(&timed_lock);
     list_del(&w.link);
     spin_unlock(&timed_lock);

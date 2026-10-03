@@ -27,7 +27,7 @@ path; it is how a new user thread first reaches ring 3.
 The kernel is not preemptible. The timer marks a reschedule request and it
 is honoured in `trap_dispatch` after an interrupt from user mode and in
 `syscall_dispatch` before returning, both with interrupts disabled. Kernel
-threads keep yielding voluntarily.
+threads continue yielding voluntarily.
 
 ## Processes
 
@@ -38,7 +38,7 @@ an entry frame with user selectors, `RFLAGS.IF` set and `rip` at the load
 address. The thread starts in `user_thread_entry`, which copies the frame
 to its kernel stack and calls `user_enter`.
 
-Exited user threads stay on `proc->zombies`. `proc_reap` waits for the
+Exited user threads remain on `proc->zombies`. `proc_reap` waits for the
 process to become a zombie, waits for each thread to have switched away,
 frees them, releases every user frame with `vmspace_free_user_pages` and
 frees the process. Kernel threads switch address spaces lazily, so

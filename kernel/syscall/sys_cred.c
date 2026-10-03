@@ -8,7 +8,7 @@
 #include <errno.h>
 
 /* The value -1 of the set calls leaves an id unchanged. */
-#define ID_KEEP 0xffffffffu
+#define ID_UNCHANGED 0xffffffffu
 
 static long put_ids(uintptr_t a, uintptr_t b, uintptr_t c, uint32_t x, uint32_t y, uint32_t z)
 {
@@ -41,7 +41,7 @@ long sys_getresgid(struct trapframe *tf)
  * effective or saved ids. Root may set any value. */
 static bool id_allowed(uint32_t want, uint32_t r, uint32_t e, uint32_t s)
 {
-    return want == ID_KEEP || want == r || want == e || want == s;
+    return want == ID_UNCHANGED || want == r || want == e || want == s;
 }
 
 static long set_res(uint32_t r, uint32_t e, uint32_t s, bool group)
@@ -57,11 +57,11 @@ static long set_res(uint32_t r, uint32_t e, uint32_t s, bool group)
         spin_unlock(&p->lock);
         return -EPERM;
     }
-    if (r != ID_KEEP)
+    if (r != ID_UNCHANGED)
         *cr = r;
-    if (e != ID_KEEP)
+    if (e != ID_UNCHANGED)
         *ce = e;
-    if (s != ID_KEEP)
+    if (s != ID_UNCHANGED)
         *cs = s;
     spin_unlock(&p->lock);
     return 0;

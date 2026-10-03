@@ -112,13 +112,13 @@ void run_filechooser_tests(void)
     CHECK(chooser_state(c, out, sizeof out) == -1, "Escape cancels");
     chooser_close(c);
 
-    /* The path bar keeps the folders below, so Alt+Down returns after Alt+Up. */
+    /* The path bar retains the folders below, so Alt+Down returns after Alt+Up. */
     path_of(path, sizeof path, "Pictures/sub/");
     c = chooser_open(a, NULL, FILE_CHOOSER_OPEN, NULL, NULL, 0, path);
     win = chooser_window(c);
     window_paint(win);
     table = widget_find(win, "fv-table");
-    CHECK(rows(win) == 1, "sub holds deep.png: %d", rows(win));
+    CHECK(rows(win) == 1, "sub contains deep.png: %d", rows(win));
     key(win, KEY_UP, 0, WMOD_ALT);
     key(win, KEY_UP, 0, WMOD_ALT);
     CHECK(rows(win) == 4, "Alt+Up twice reaches the home folder: %d", rows(win));
@@ -149,7 +149,7 @@ void run_filechooser_tests(void)
     path_of(path, sizeof path, "Pictures/");
     CHECK(strcmp(widget_text(loc), path) == 0, "P completes to '%s'", widget_text(loc));
     type(win, "ic");
-    CHECK(strcmp(widget_text(loc), path) == 0, "typing over the completion keeps it: '%s'", widget_text(loc));
+    CHECK(strcmp(widget_text(loc), path) == 0, "typing over the completion retains it: '%s'", widget_text(loc));
     enter(win);
     CHECK(!loc->visible && rows(win) == 3, "Enter opens Pictures: %d rows", rows(win));
     key(win, KEY_L, 12, WMOD_CTRL);
@@ -206,7 +206,7 @@ void run_filechooser_tests(void)
     m.c = 0;
     m.d = WMOUSE_UP;
     window_message(win, &m);
-    CHECK(rows(win) == 2, "Recent holds a.png and song.wav: %d", rows(win));
+    CHECK(rows(win) == 2, "Recent contains a.png and song.wav: %d", rows(win));
     window_message(win, &(struct wmsg){ .type = WM_CLOSE, .window = window_state_of(win)->win->id });
     CHECK(chooser_state(c, out, sizeof out) == -1, "closing the window cancels");
     chooser_close(c);

@@ -46,7 +46,7 @@ static void test_blk(void)
     ktest_assert(blockdev_read(dev, dev->nsectors - 1000, 1, r) == 0 && r[0] == 0 && r[511] == 0, "unused sector is zero");
     ktest_assert(blockdev_read(dev, dev->nsectors, 1, r) < 0, "read past end rejected");
 
-    /* Block cache: writes stay in memory until sync. Block 5 may hold
+    /* Block cache: writes remain in memory until sync. Block 5 may contain
      * filesystem data, so the check compares against its previous
      * contents rather than expecting zeros. */
     uint8_t *before = kmalloc(BCACHE_BLOCK_SIZE);
@@ -66,7 +66,7 @@ static void test_blk(void)
     ktest_assert(bcache_sync(dev) == 0 && bcache_dirty_count() == 0, "sync");
     ktest_assert(blockdev_read(dev, 40, 8, r) == 0 && check(r, BCACHE_BLOCK_SIZE, 3), "on disk after sync");
 
-    /* Eviction: touch more blocks than the cache holds, then find the
+    /* Eviction: touch more blocks than the cache contains, then find the
      * data still intact when it is read back from disk. */
     for (uint64_t blk = 1000; blk < 1000 + BCACHE_NBUF + 8; blk++) {
         b = bread(dev, blk);

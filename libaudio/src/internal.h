@@ -80,7 +80,7 @@ struct audio_mixer {
     struct audio_mixer *next;
 };
 
-/* Dispatch until condition(arg) holds; -1 with errno on error, timeout
+/* Dispatch until condition(arg) is true; -1 with errno on error, timeout
  * or when *error becomes set. */
 int audio_wait(struct audio_connection *connection, int (*condition)(const void *arg),
                const void *arg, const int *error);

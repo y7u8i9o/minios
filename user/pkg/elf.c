@@ -1,6 +1,6 @@
 /* The parts of an ELF64 file the library rule reads: the DT_NEEDED
  * entries and the dynamic symbol table, through the section headers,
- * which the installed files keep (objcopy --strip-debug). */
+ * which the installed files retain (objcopy --strip-debug). */
 #include "pkg.h"
 #include <string.h>
 
@@ -130,7 +130,7 @@ static const struct shdr *dynsym(const uint8_t *data, size_t len, const struct s
 }
 
 /* fn for every undefined symbol the loader must resolve (weak references
- * may stay unresolved). Returns 0, fn's first non-zero result, or -1 for a
+ * may remain unresolved). Returns 0, fn's first non-zero result, or -1 for a
  * file without a dynamic symbol table. */
 int elf_undefined(const uint8_t *data, size_t len, elf_symbol_fn fn, void *arg)
 {

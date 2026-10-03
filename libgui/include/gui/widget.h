@@ -20,7 +20,7 @@ enum event_type {
 struct event {
     enum event_type type;
     int x, y;                   /* local coordinates for mouse events */
-    int button;                 /* bit mask of held buttons, or wheel delta */
+    int button;                 /* bit mask of pressed buttons, or wheel delta */
     int mods;                   /* WMOD_* */
     int code, ch;               /* keys: scancode, translated character */
     const char *text;           /* EV_TEXT: committed UTF-8, event lifetime */
@@ -242,7 +242,7 @@ extern const struct widget_class statusbar_class;
 struct widget *tabs_new(struct widget *parent);
 struct widget *tabs_add(struct widget *tabs, const char *title);    /* returns the page (a vertical box) */
 void tabs_select(struct widget *tabs, int index);
-/* Hide the title row while the tabs hold a single page. */
+/* Hide the title row while the tabs contain a single page. */
 void tabs_set_autohide(struct widget *tabs, int on);
 struct widget *splitpane_new(struct widget *parent, int vertical);  /* two children added by the caller */
 void splitpane_set_position(struct widget *w, int pos);

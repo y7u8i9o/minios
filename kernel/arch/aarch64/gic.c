@@ -169,7 +169,7 @@ static uintptr_t init_cpu_interface(struct cpu *c)
  * and PPIs per CPU, and the CPU interface is in memory. */
 static void init_cpu_interface_v2(struct cpu *c)
 {
-    /* The banked target register of SGI 0 holds the bit of the calling
+    /* The banked target register of SGI 0 contains the bit of the calling
      * CPU. An implementation for one CPU reads it as zero. */
     uint8_t mask = (uint8_t)(rd32(gicd, GICD_ITARGETSR) & 0xff);
     c->arch.gic_mask = mask ? mask : 1;

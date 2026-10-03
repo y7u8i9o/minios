@@ -71,7 +71,7 @@ pass.
 
 The test input method is the test engine of `imed -t` instead of a
 separate program. The compositor sends the keys of an active context only,
-and the switch keys stay in the compositor, as GNOME Shell does with IBus.
+and the switch keys remain in the compositor, as GNOME Shell does with IBus.
 `startgui` starts `imed` from I3 on, when the daemon has its first engine.
 The cases `ime_protocol`, `ime`, `comp_seat`, `comp_core`, `comp_shell`,
 `gui_editor` and `keymap` pass.
@@ -97,10 +97,10 @@ The page size and the orientation come from `ime_page_size` and
 - Host unit tests, and the boot test `ime_pinyin`.
 
 Only the Chinese engine of L6 and its `pinyin.tab` are removed here. The
-Japanese engine of L6, `kana.tab` and `tools/fetch_unihan.sh` stay until
+Japanese engine of L6, `kana.tab` and `tools/fetch_unihan.sh` remain until
 I4 replaces them. Scores are logarithms of probabilities, and the sentence
 follows the best division into syllables without abbreviations, which
-keeps one-letter syllables out of sentences. `startgui` starts `imed`. The
+excludes one-letter syllables from sentences. `startgui` starts `imed`. The
 cases `ime_pinyin`, `ime`, `ime_protocol`, `ime_candidates`, `comp_seat`
 and `gui_editor` pass, and `make check` passes.
 

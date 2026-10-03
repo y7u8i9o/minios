@@ -87,10 +87,10 @@ static void test_static_tls(void)
           values[0], values[1], values[2]);
     CHECK((int *)(intptr_t)values[3] != &tls_counter, "the worker has its own block");
     CHECK(local_value == 10 && tls_counter == 20 && tls_ie_get() == 30 && strcmp(tls_buffer, "main") == 0,
-          "the worker's writes stay in its block");
+          "the worker's writes remain in its block");
     CHECK(tls_ld_next() == 3, "local dynamic variable is per thread");
     values = run_in_worker(read_static_tls, NULL);
-    CHECK(values[0] == 100 && values[1] == 200 && values[2] == 300, "the worker keeps its values");
+    CHECK(values[0] == 100 && values[1] == 200 && values[2] == 300, "the worker retains its values");
 }
 
 static void *read_plugin_tls(void *arg)
@@ -115,7 +115,7 @@ static void test_dlopen(void)
     void *libc = dlopen("libc.so", RTLD_NOW);
     CHECK(libc != NULL, "a library loaded at start is found");
     CHECK(dlsym(libc, "printf") == (void *)printf, "and its symbols resolve to the loaded copies");
-    CHECK(dlsym(RTLD_DEFAULT, "tls_ie_get") == (void *)tls_ie_get, "the global scope holds the start libraries");
+    CHECK(dlsym(RTLD_DEFAULT, "tls_ie_get") == (void *)tls_ie_get, "the global scope contains the start libraries");
     CHECK(dlsym(libc, "no_such_symbol") == NULL && strstr(dlerror(), "undefined symbol"), "an unknown symbol fails");
     CHECK(dlclose(libc) == 0, "closing a start library is a no-op");
 
@@ -134,7 +134,7 @@ static void test_dlopen(void)
     CHECK(count() == 1 && count() == 2, "the plugin's static data");
     CHECK(compute(4) == 8 + tls_counter, "the plugin calls its dependency and a start library");
     CHECK(dlsym(plugin, "plugdep_double") != NULL, "dlsym searches the plugin's dependencies");
-    CHECK(dlsym(RTLD_DEFAULT, "plugin_count") == NULL, "RTLD_LOCAL keeps the plugin out of the global scope");
+    CHECK(dlsym(RTLD_DEFAULT, "plugin_count") == NULL, "RTLD_LOCAL excludes the plugin from the global scope");
     dlerror();
     int *main_tls = tls_address();
     CHECK(*main_tls == 30, "dynamic TLS starts from the image in the main thread");
@@ -177,7 +177,7 @@ static void test_dlopen(void)
     CHECK(compute && compute(1) == 2 + tls_counter, "lazy binding inside a dlopen'd library");
     CHECK(dlclose(plugin) == 0 && strcmp(dltest_events, "dpPD") == 0, "unloaded again: '%s'", dltest_events);
 
-    /* dlopen keeps its own copy of the name: a plugin host that reuses
+    /* dlopen retains its own copy of the name: a plugin host that reuses
      * one buffer for its paths must get the library the buffer names now.
      * The plugin is opened first, so that the second path names its
      * dependency, which is loaded already and is found by name. */

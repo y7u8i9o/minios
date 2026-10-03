@@ -1,5 +1,5 @@
 /* M23: close on exec and descriptor flags. Re-executes itself with
- * "child <kept> <closed>". */
+ * "child <retained> <closed>". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +15,7 @@ static int failures;
 int main(int argc, char **argv)
 {
     if (argc == 4 && strcmp(argv[1], "child") == 0) {
-        int kept = atoi(argv[2]), closed = atoi(argv[3]);
+        int retained = atoi(argv[2]), closed = atoi(argv[3]);
         errno = 0;
         int r = fcntl(closed, F_GETFD);
         if (r != -1 || errno != EBADF) {
@@ -23,8 +23,8 @@ int main(int argc, char **argv)
             return 1;
         }
         char c;
-        if (read(kept, &c, 1) != 1 || c == 0) {
-            printf("fdflags: FAIL kept descriptor %d unreadable\n", kept);
+        if (read(retained, &c, 1) != 1 || c == 0) {
+            printf("fdflags: FAIL retained descriptor %d unreadable\n", retained);
             return 1;
         }
         printf("fdflags: child ok\n");
@@ -50,17 +50,17 @@ int main(int argc, char **argv)
     CHECK(write(p2[1], "x", 1) == 1, "write for the child");
     pid_t pid = fork();
     if (pid == 0) {
-        char kept[8], closed[8];
-        snprintf(kept, sizeof kept, "%d", p2[0]);
+        char retained[8], closed[8];
+        snprintf(retained, sizeof retained, "%d", p2[0]);
         snprintf(closed, sizeof closed, "%d", p1[0]);
-        char *const args[] = { "fdflags", "child", kept, closed, NULL };
+        char *const args[] = { "fdflags", "child", retained, closed, NULL };
         execvp("/bin/fdflags", args);
         _exit(127);
     }
     int status;
     waitpid(pid, &status, 0);
     CHECK(status == 0, "child status 0x%x", status);
-    CHECK(fcntl(p1[0], F_GETFD) == FD_CLOEXEC, "parent keeps its descriptor after the child's exec");
+    CHECK(fcntl(p1[0], F_GETFD) == FD_CLOEXEC, "parent retains its descriptor after the child's exec");
     printf("fdflags: %d failures\n", failures);
     return failures ? 1 : 0;
 }

@@ -2,7 +2,7 @@
  * request queues, the timer list, the kick flag and the statistics; it
  * is the condition lock of waitq (the worker's sleep) and done_waitq
  * (request completion), so it sits with the other condition locks above
- * waitq.lock and timed_lock. Nothing is held while a packet, a request
+ * waitq.lock and timed_lock. Nothing is locked while a packet, a request
  * or a timer function runs. */
 #define KLOG_SUBSYS "netd"
 #include <net/worker.h>

@@ -1,6 +1,6 @@
 /* alarm(2) sends SIGALRM after a number of seconds (U5). alarm_lock
  * protects the list of armed processes and the alarm fields of every
- * process. The timer interrupt takes it, which is why holders disable
+ * process. The timer interrupt takes it, which is why the acquiring code disables
  * interrupts, as spin_lock does. It is a leaf, because the tick collects
  * the due pids under it and sends the signals after releasing it. */
 #include <ipc/alarm.h>

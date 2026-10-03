@@ -128,7 +128,7 @@ static bool take_dirty(struct mapping *m, uint64_t pgoff)
     return d;
 }
 
-/* Make room for page index pgoff. Caller holds m->lock. */
+/* Make room for page index pgoff. Caller has acquired m->lock. */
 static int grow(struct mapping *m, uint64_t pgoff)
 {
     if (pgoff < m->npages)
@@ -163,7 +163,7 @@ static int grow(struct mapping *m, uint64_t pgoff)
     return 0;
 }
 
-/* Read page pgoff of the file into a fresh frame. Caller holds m->lock. */
+/* Read page pgoff of the file into a fresh frame. Caller has acquired m->lock. */
 static struct page *fill_page(struct mapping *m, struct file *file, uint64_t pgoff)
 {
     struct page *pg = swap_alloc_user_frame();
@@ -355,8 +355,8 @@ void filemap_truncate(struct inode *ino, uint64_t size)
     if (!m)
         return;
     mutex_lock(&m->lock);
-    uint64_t keep = ALIGN_UP(size, PAGE_SIZE) >> PAGE_SHIFT;
-    for (uint64_t i = keep; i < m->npages; i++) {
+    uint64_t retain = ALIGN_UP(size, PAGE_SIZE) >> PAGE_SHIFT;
+    for (uint64_t i = retain; i < m->npages; i++) {
         if (!m->pages[i])
             continue;
         take_dirty(m, i);
@@ -364,8 +364,8 @@ void filemap_truncate(struct inode *ino, uint64_t size)
         m->pages[i] = NULL;
         __atomic_fetch_sub(&stats.cached_pages, 1, __ATOMIC_RELAXED);
     }
-    if (keep && keep - 1 < m->npages && m->pages[keep - 1] && (size & (PAGE_SIZE - 1)))
-        memset((char *)P2V(page_to_phys(m->pages[keep - 1])) + (size & (PAGE_SIZE - 1)), 0,
+    if (retain && retain - 1 < m->npages && m->pages[retain - 1] && (size & (PAGE_SIZE - 1)))
+        memset((char *)P2V(page_to_phys(m->pages[retain - 1])) + (size & (PAGE_SIZE - 1)), 0,
                PAGE_SIZE - (size & (PAGE_SIZE - 1)));
     mutex_unlock(&m->lock);
     filemap_put(m);

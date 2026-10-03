@@ -25,7 +25,7 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
   thread records the transaction it is inside in `thread.fs_txn`, so
   nested calls (an unlinked inode released inside an operation) do not
   start a second one.
-- `struct inode` holds the metadata of one object: mode, link count,
+- `struct inode` contains the metadata of one object: mode, link count,
   owner and group (U1), size, modification time (seconds since the epoch, reported as
   `st_mtime`; `vfs_now` reads it from the real time clock), device
   number for device nodes, the operation tables and a filesystem
@@ -45,7 +45,7 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
   `setattr` (U1) stores new permission bits and a new owner, which
   `vfs_chmod_inode` and `vfs_chown_inode` compute after checking that the
   caller may make the change. Names are passed as pointer and
-  length. The caller holds the directory inode mutex, or the link's own
+  length. The caller has acquired the directory inode mutex, or the link's own
   mutex for `readlink`. A filesystem without a given operation leaves the
   pointer NULL and the VFS reports `EROFS`.
 - `struct file_ops` covers open files: `open`, `release`, `read`, `write`,
@@ -57,19 +57,19 @@ system call boundary (`struct stat`, `struct dirent`, open flags) are defined in
   one description after `fork` or `dup`, so the position is shared as well.
 - `struct fdtable` is the per process descriptor table of `OPEN_MAX`
   slots, embedded in `struct proc`. `fork` copies it with an extra
-  reference per file, `exec` keeps it and process exit closes everything
+  reference per file, `exec` retains it and process exit closes everything
   before the parent is notified so pipe peers see the end promptly.
 - `struct mount` records a mounted superblock and the `(superblock, inode
   number)` pair of the directory it covers. Identifying the mount point by
-  number rather than pointer means the covered inode does not need to stay
+  number rather than pointer means the covered inode does not need to remain
   in memory.
 
 ## Path resolution
 
 Every lookup walks from the root mount. A relative path is first joined
-to the working directory, which `proc->cwd` holds as the canonical path
+to the working directory, which `proc->cwd` contains as the canonical path
 of the directory without symbolic links (the string `getcwd` returns).
-The walk (`walk` in `vfs.c`) keeps the remaining components in a buffer
+The walk (`walk` in `vfs.c`) retains the remaining components in a buffer
 and the canonical path of the directory reached so far beside it, and
 takes one component at a time, calling `lookup` under the directory
 mutex and dropping the reference to the previous directory. After each
@@ -79,26 +79,26 @@ root of a mount that covers it.
 A component that names a symbolic link (mode `S_IFLNK`) is replaced in
 the buffer by the link's target, read with the `readlink` operation
 under the link's mutex alone. A relative target continues from the
-directory that holds the link, an absolute one from the root. Links are
+directory that contains the link, an absolute one from the root. Links are
 followed in every intermediate component and in the last one, unless
 the caller passes `VFS_NOFOLLOW` and the last component has no trailing
 slash. A lookup follows at most `SYMLOOP_MAX` (40) links in total and
 fails with `ELOOP` beyond that, which also ends every loop. A target
-holds 1 to `VFS_SYMLINK_MAX` (255) bytes: an empty target resolves to
+contains 1 to `VFS_SYMLINK_MAX` (255) bytes: an empty target resolves to
 `ENOENT`, and the remainder buffer of four paths bounds the growth by
 nested targets (`ENAMETOOLONG`).
 
 Since the canonical path of the current directory contains no link,
 `..` removes its last component and the walk finds that directory again
 from the root. `..` after a link therefore leaves the directory the link
-led to, not the one holding the link, and `..` at the root of a mounted
+led to, not the one containing the link, and `..` at the root of a mounted
 filesystem reaches the parent of the directory it covers. A component
 after a regular file fails with `ENOTDIR`, also for `.` and `..`, and
 an empty path with `ENOENT`.
 
 `vfs_lookup` follows every link; `vfs_lookup_path` takes the flags and
 also returns the canonical path of the result, which `chdir` stores,
-`open` keeps in `file.path` for the `*at` system calls and `mount`
+`open` retains in `file.path` for the `*at` system calls and `mount`
 records in the mount table (so `/dev/mounts` and `umount` name mounts by
 that path, and `umount` accepts a path through links).
 `vfs_lookup_parent` stops before the last component and returns its
@@ -197,7 +197,7 @@ two wait queues, all under `pipe.lock`. A read on an empty pipe blocks
 until data arrives or the last writer closes, in which case it returns 0.
 A write blocks while the buffer is full and fails with `EPIPE` once no
 reader remains. Blocked readers and writers return `EINTR` when their
-process is being terminated. Each end holds a reference (`pipe.refs`);
+process is being terminated. Each end contains a reference (`pipe.refs`);
 `pipe_release` drops it as its last step, after waking the peers and the
 pollers, so the pipe outlives both releases even when the two ends are
 closed at the same moment on different CPUs, as happens when the
@@ -209,7 +209,7 @@ processes of a pipeline exit together.
 `fstat`, `getdents`, `mkdir`, `unlink`, `rmdir`, `rename`, `link`,
 `pipe`, `mount`, `umount`, `sync`, `chdir`, `getcwd`, `utimensat` (since
 the make port, `make.md`), `openat` and `fstatat` (since the tar port,
-`artar.md`; a directory opened by name keeps its canonical path in
+`artar.md`; a directory opened by name retains its canonical path in
 `file.path` for them), and `symlink`, `symlinkat`, `readlink`,
 `readlinkat` and `lstat` (numbers 91 to 95, 2026-09-30), and `fchmodat`,
 `fchmod`, `fchownat` and `fchown` (numbers 103 to 106, U1, `users.md`) are
@@ -278,4 +278,4 @@ and `utimensat(AT_SYMLINK_NOFOLLOW)`.
 - `pipe_close` (`kernel/tests/test_pipe.c`) has two kernel threads release
   the read ends and the write ends of 256 pipes in step, forty rounds, so
   both ends of a pipe are closed at the same moment on different CPUs; it
-  hung before `pipe_release` held its own reference across the wakeups.
+  hung before `pipe_release` contained its own reference across the wakeups.

@@ -1,7 +1,7 @@
 /* The common socket layer: family dispatch, files, addresses, flags and
  * options shared by every backend (N01). Locks: socket.lock (the error
  * word) is a leaf; families_lock (the family table) is a leaf. Neither
- * is held across a backend call. */
+ * is locked across a backend call. */
 #define KLOG_SUBSYS "socket"
 #include <ipc/socket.h>
 #include <ipc/socket_validate.h>
@@ -403,7 +403,7 @@ int socket_addr_to_user(uintptr_t uaddr, uintptr_t ulenp, const struct sockaddr_
 /* read/write reach file operations with a caller buffer, unlike sendmsg/
  * recvmsg whose syscall layer already copies the message. Internet backends
  * run on netd or copy under endpoint locks, so they must see kernel storage.
- * The file reference keeps the socket alive through the worker request. */
+ * The file reference prevents the socket from being freed during the worker request. */
 static long sock_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
     struct socket *s = f->priv;

@@ -42,7 +42,7 @@ XORRISO ?= xorriso
 CONFIG_TESTS      ?= 1   # compile kernel self tests, selected with test=<name>
 CONFIG_PANIC_EXIT ?= 1   # panic exits QEMU through isa-debug-exit instead of halting
 CONFIG_LOCKDEBUG  ?= 1   # spinlock owner tracking and misuse detection
-CONFIG_LOCKSTAT   ?= 1   # per lock name acquisition, contention and hold time counters, /dev/lockstat
+CONFIG_LOCKSTAT   ?= 1   # per lock name acquisition, contention and locked time counters, /dev/lockstat
 CONFIG_SLABDEBUG  ?= 1   # slab redzones and poisoning on free
 CONFIG_LOG_LEVEL  ?= 1   # compile time klog threshold, 0 debug, 1 info, 2 warn or 3 error
 
@@ -56,7 +56,7 @@ CONFIG_DEFS := -DCONFIG_TESTS=$(strip $(CONFIG_TESTS)) \
 # The architecture flags of the kernel and of user programs. The kernel
 # uses no red zone, the kernel code model for the higher half, and no SIMD
 # or floating point registers, which it never saves for itself. For user
-# programs M23 saves x87 and all 128-bit XMM registers. AVX stays disabled
+# programs M23 saves x87 and all 128-bit XMM registers. AVX remains disabled
 # until the kernel migrates from FXSAVE to XSAVE/XRSTOR and enables the
 # matching XCR0 state components. TCC_TARGET selects the backend of the
 # bundled tcc.
@@ -76,7 +76,7 @@ else ifeq ($(ARCH),aarch64)
 KARCHFLAGS := -march=armv8-a -mgeneral-regs-only -mno-outline-atomics -mcmodel=small
 # User code reaches dynamic TLS through __tls_get_addr, and the loader
 # implements no TLS descriptors. Because the loader itself uses no FP
-# registers, its recovery buffer (_dl_setjmp) holds only general registers.
+# registers, its recovery buffer (_dl_setjmp) contains only general registers.
 UARCHFLAGS := -march=armv8-a -mno-outline-atomics -mtls-dialect=trad
 LDSO_ARCHFLAGS := -mgeneral-regs-only
 TCC_TARGET := ARM64

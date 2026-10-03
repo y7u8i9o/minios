@@ -112,7 +112,7 @@ static void continue_process(struct proc *p)
     notify_parent(p);
 }
 
-/* Wake threads of p that would take the signal. Caller holds p->lock. */
+/* Wake threads of p that would take the signal. Caller has acquired p->lock. */
 static void interrupt_threads(struct proc *p, int sig)
 {
     struct list_head *pos;

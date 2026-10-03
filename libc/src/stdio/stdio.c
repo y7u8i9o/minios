@@ -31,7 +31,7 @@ struct FILE {
 static struct FILE files[3];
 FILE *stdin = &files[0], *stdout = &files[1], *stderr = &files[2];
 
-/* streams_lock protects registration and keeps entries alive while
+/* streams_lock protects registration and preserves entries while
  * fflush(NULL) walks them. It nests outside each FILE's recursive lock. */
 static struct FILE *open_streams[32];
 static struct __libc_lock streams_lock = __LIBC_LOCK_INIT;
@@ -372,8 +372,8 @@ FILE *fopen(const char *path, const char *mode)
 
 int fclose(FILE *f)
 {
-    /* Unpublish before flushing/freeing. fflush(NULL) holds the registry
-     * lock while accessing entries, so it cannot retain a freed FILE. */
+    /* Unpublish before flushing/freeing. fflush(NULL) acquires the registry
+     * lock while accessing entries, so it cannot reach a freed FILE. */
     __libc_lock_lock(&streams_lock);
     for (size_t i = 0; i < sizeof open_streams / sizeof open_streams[0]; i++)
         if (open_streams[i] == f)
@@ -442,7 +442,7 @@ int ungetc(int c, FILE *f)
 }
 
 /* Replaces the file behind an existing stream; the standard streams
- * keep their identity so that stdin can be turned into a file. On
+ * preserve their identity so that stdin can be turned into a file. On
  * failure the stream is closed, as the standard requires. */
 FILE *freopen(const char *path, const char *mode, FILE *f)
 {
@@ -500,7 +500,7 @@ FILE *tmpfile(void)
     return f;
 }
 
-/* The lock is not recursive, so a caller holding it through flockfile
+/* The lock is not recursive, so a caller that has acquired it through flockfile
  * must read with getc_unlocked. */
 void flockfile(FILE *f) { LOCK(f); }
 void funlockfile(FILE *f) { UNLOCK(f); }

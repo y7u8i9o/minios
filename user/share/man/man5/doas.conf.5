@@ -7,7 +7,7 @@ SYNOPSIS
     /etc/doas.conf
 
 DESCRIPTION
-    Each line of /etc/doas.conf holds one rule, and the last rule that
+    Each line of /etc/doas.conf contains one rule, and the last rule that
     matches a request decides it. A rule has the form
 
         permit|deny [options] identity [as target] [cmd command [args ...]]
@@ -20,8 +20,8 @@ DESCRIPTION
 
     The options of a permit rule are nopass, which runs the command
     without asking for a password, nolog, which leaves the command out of
-    the log, keepenv, which keeps the environment of the caller, and
-    setenv { name name=value -name }, which keeps, sets or removes the
+    the log, keepenv, which retains the environment of the caller, and
+    setenv { name name=value -name }, which retains, sets or removes the
     listed variables. The persist option is accepted and has no effect on
     minios.
 
@@ -34,7 +34,7 @@ DESCRIPTION
         permit nopass root
 
     The file is part of the system image, while the membership of wheel
-    is kept in /etc/group with the other account databases on the data
+    is retained in /etc/group with the other account databases on the data
     volume (passwd(5)).
 
 EXAMPLES

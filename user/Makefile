@@ -6,16 +6,16 @@ LIBC   := $(BUILD)/libc/libc.a
 LIBEDIT := $(BUILD)/libedit/libedit.a
 CRT0   := $(BUILD)/libc/crt0.o
 # The shared libraries (docs/design/dynlink.md). Programs name them with
-# -l and --as-needed keeps only the ones a program references. libedit is
+# -l and --as-needed retains only the ones a program references. libedit is
 # static, since a single program uses it.
 SHARED := libc libcodec libfont libwire libaudio libgui liblua libprof
 SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
 DYNLIBS := -lgui -lcodec -laudio -lwire -lfont -lprof $(LIBEDIT) -lc
 # Every program is installed without its debugging sections, while the
-# symbol table stays for the profiler.
+# symbol table remains for the profiler.
 INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
-# Every directory holding a main program gives one binary named after it,
+# Every directory containing a main program gives one binary named after it,
 # and each file of tests/*.c becomes one binary as well.
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # A build with CONFIG_TESTS=0, which the release pipeline uses, installs no
@@ -39,7 +39,7 @@ CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcar
 # LUA_USE_POSIX selects _setjmp, getc_unlocked, fseeko, mkstemp, popen
 # and the wait status macros, all of which libc provides. Modules load
 # only from the share tree and the current directory, without dynamic
-# loading. lua/ holds the replacement linit.c and the minios
+# loading. lua/ contains the replacement linit.c and the minios
 # modules (fs, sys), compiled with the interpreter headers.
 LUA_SRC  := ../third_party/lua/src
 LUA_CORE := $(filter-out $(LUA_SRC)/lua.c $(LUA_SRC)/luac.c $(LUA_SRC)/linit.c,$(wildcard $(LUA_SRC)/*.c))
@@ -90,7 +90,7 @@ $(ROOT)/etc/%: etc/%
 # relative and leads to the tar fixture beside it, and the other is
 # absolute and leads to /etc/motd. The account databases in /etc lead to the package prefix
 # /usr/local, itself a link to /home/.local on the data volume, which
-# keeps accounts across rebuilds of the root image (docs/design/users.md).
+# retains accounts across rebuilds of the root image (docs/design/users.md).
 # They are recreated on every build.
 .PHONY: links
 links: $(ETC) $(BINS) $(LIBS)
@@ -135,7 +135,7 @@ share-tree:
 # The home skeleton skel/ is installed as /etc/skel, from which useradd
 # and fsinit make new homes, and copied into the homes of the two accounts
 # of the image, /root and /home/user, for a boot without a data volume.
-# local/ holds the account databases of the package prefix /home/.local
+# local/ contains the account databases of the package prefix /home/.local
 # (/usr/local), which go to the root image and, with the layout marker,
 # into /usr/share/skel/home, the seed of a fresh data volume (etc/fstab,
 # docs/design/users.md). Files of the single user layout that earlier
@@ -176,7 +176,7 @@ $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf: ../third_party/droidfallback/
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-# The font is installed without its release number, which keeps an upgrade
+# The font is installed without its release number, which prevents an upgrade
 # of Unifont from touching the paths compiled into the Unicode viewer. The
 # release is recorded in third_party/unifont/NOTICE.
 $(ROOT)/usr/share/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
@@ -434,7 +434,7 @@ $(ROOT)/usr/bin/su: $(SU_OBJS) $(BUILD)/lib/libc.so $(CRT0)
 # sudo is sudo 1.9.17p1, compiled unmodified from third_party/sudo with the
 # sudoers policy linked in statically. Its configure script ran once
 # against the minios libc with the cross compiler, and the headers it
-# generated, with the signal name table, are kept in ports/sudo
+# generated, with the signal name table, are stored in ports/sudo
 # (docs/design/users.md). The object lists follow the makefiles of the
 # configured tree, covering the front end of src, the sudoers plugin and
 # its parser and authentication, the event and I/O log libraries,
@@ -672,7 +672,7 @@ $(ROOT)/usr/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(INSTALL)
 
-# X12 keeps its implementation in compositor/ for the continuity of the
+# X12 retains its implementation in compositor/ for the continuity of the
 # source history, while the installed server and its visible name are X12.
 $(ROOT)/usr/bin/x12: compositor/*.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
@@ -709,7 +709,7 @@ $(ROOT)/usr/bin/%: tests/%.c $(SOS) $(CRT0)
 clean:
 	rm -rf $(OUT) $(ROOT)
 
-# Executable loader fixtures are kept together with their source and the
+# Executable loader fixtures are stored together with their source and the
 # ELF mutation generator, and they run only in the dynlink test.
 ifneq ($(WITH_TESTS),)
 include ld/tests/fixtures.mk

@@ -26,6 +26,6 @@ const char *conf_home(void);
 /* conf_export_locale sets LANG from the lang setting and LC_NUMERIC,
  * LC_TIME and LC_MONETARY from the formats setting. Without formats the
  * three categories are removed and follow LANG. Without lang the
- * environment stays as it is. It returns 1 when a variable changed, else
+ * environment remains as it is. It returns 1 when a variable changed, else
  * 0 (docs/design/desktop.md). */
 int conf_export_locale(void);

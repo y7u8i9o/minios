@@ -31,12 +31,12 @@ void spinlock_init(struct spinlock *lk, const char *name);
 void spin_lock(struct spinlock *lk);
 bool spin_try_lock(struct spinlock *lk);
 void spin_unlock(struct spinlock *lk);
-/* True if the current CPU holds the lock. Always true when locked without CONFIG_LOCKDEBUG. */
-bool spin_holding(struct spinlock *lk);
+/* True if the current CPU has acquired the lock. Always true when locked without CONFIG_LOCKDEBUG. */
+bool spin_locked_by_current(struct spinlock *lk);
 
 /* Variants for data shared with interrupt handlers. They save the exact
  * RFLAGS.IF state in *flags instead of using the per CPU nesting counter,
- * which keeps them usable before struct cpu exists and inside handlers that
+ * which leaves them usable before struct cpu exists and inside handlers that
  * must restore the interrupted state precisely. */
 void spin_lock_irqsave(struct spinlock *lk, unsigned long *flags);
 void spin_unlock_irqrestore(struct spinlock *lk, unsigned long flags);
@@ -48,9 +48,9 @@ struct lockstat {
     uint64_t acquires;      /* successful acquisitions */
     uint64_t contended;     /* acquisitions that found the lock taken */
     uint64_t spin_cycles;   /* TSC cycles spent waiting */
-    uint64_t hold_cycles;   /* TSC cycles held, summed */
-    uint64_t max_hold;      /* longest single hold */
-    void *max_hold_caller;  /* acquirer of the longest hold (CONFIG_LOCKDEBUG) */
+    uint64_t locked_cycles;   /* TSC cycles locked, summed */
+    uint64_t max_locked;      /* longest single lock interval */
+    void *max_locked_caller;  /* acquirer of the longest lock interval (CONFIG_LOCKDEBUG) */
 };
 #define LOCKSTAT_MAX 128
 /* The table and the number of names in use, for /dev/lockstat. */

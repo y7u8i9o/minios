@@ -1,6 +1,6 @@
 /* Native workers with isolated Lua states. Only copied byte strings cross
  * states. GUI objects and Lua pointers never leave their owning thread.
- * The parent handle and worker each hold a reference to the job. */
+ * The parent handle and worker each contain a reference to the job. */
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +31,7 @@ struct channel {
 };
 /* lock protects both channels and stop/done/ok. refs and active_workers are
  * atomic. Startup strings are immutable, error is published with completion.
- * No Lua allocation or callback occurs while lock is held. */
+ * No Lua allocation or callback occurs while lock is locked. */
 struct job {
     pthread_mutex_t lock;
     unsigned refs;
@@ -155,7 +155,7 @@ static int receive_message(lua_State *L, struct job *j, struct channel *c, int a
         if (m) {
             /* A channel has exactly one receiving Lua state. Allocate before
              * removing its head, so a Lua allocation failure leaks no message
-             * and cannot longjmp while holding a native mutex. */
+             * and cannot longjmp while a native mutex is locked. */
             luaL_Buffer b;
             char *data = luaL_buffinitsize(L, &b, m->size);
             size_t size = m->size;

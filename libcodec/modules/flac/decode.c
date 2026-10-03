@@ -13,7 +13,7 @@ struct flac_state {
     size_t len, pos;                    /* pos: the byte offset of the next frame */
     struct flac_streaminfo si;
     int64_t *ch[FLAC_MAX_CHANNELS];     /* the samples of the current frame */
-    unsigned cap;                       /* frames that the buffers can hold */
+    unsigned cap;                       /* frames that the buffers can contain */
     int32_t *out;                       /* the current frame, interleaved, full scale */
     unsigned out_n, out_pos;
     struct codec_md5 md5;
@@ -69,7 +69,7 @@ static int coded_number(struct flac_reader *r, uint64_t *v)
     return r->failed ? -EINVAL : 0;
 }
 
-/* Parse the frame header at p. Returns 0, or -EINVAL when p holds no
+/* Parse the frame header at p. Returns 0, or -EINVAL when p contains no
  * valid header. */
 static int parse_header(const uint8_t *p, size_t len, const struct flac_streaminfo *si, struct header *h)
 {

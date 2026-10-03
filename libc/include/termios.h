@@ -2,7 +2,7 @@
 #include <minios/abi.h>
 
 /* Terminal attributes (struct termios and its flags in minios/abi.h). The
- * line discipline acts on ISIG, ICANON and ECHO, and keeps the rest as
+ * line discipline acts on ISIG, ICANON and ECHO, and preserves the rest as
  * set. TCSAFLUSH discards the unread input before the change, and the
  * speeds are recorded without effect. */
 typedef uint32_t tcflag_t;

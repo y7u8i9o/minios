@@ -87,7 +87,7 @@ void run_svg_tests(void)
         painter_image(&p, 4, 4, i);
         CHECK(s.pixels[8 * 64 + 8] == 0x002a2a2a, "device pixel at the icon's origin: %08x", s.pixels[8 * 64 + 8]);
         CHECK(s.pixels[39 * 64 + 39] == 0x002a2a2a, "last device pixel of the icon: %08x", s.pixels[39 * 64 + 39]);
-        CHECK(s.pixels[40 * 64 + 40] == 0x00ff00ff, "pixel after the icon keeps the background: %08x", s.pixels[40 * 64 + 40]);
+        CHECK(s.pixels[40 * 64 + 40] == 0x00ff00ff, "pixel after the icon retains the background: %08x", s.pixels[40 * 64 + 40]);
         free(s.pixels);
         image_free(i);
     }

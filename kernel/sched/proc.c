@@ -361,7 +361,7 @@ size_t proc_format_maps(char *buf, size_t size)
     }
     spin_unlock(&proc_list_lock);
     for (int i = 0; i < n && off < size - 1; i++) {
-        /* proc_tree_lock keeps the process from being reaped and sits above
+        /* proc_tree_lock prevents the process from being reaped and sits above
          * vmspace.lock in the lock order. */
         spin_lock(&proc_tree_lock);
         struct proc *p = proc_find(pids[i]);
@@ -389,7 +389,7 @@ size_t proc_format_table(char *buf, size_t size)
     size_t off = 0;
     off += (size_t)ksnprintf(buf + off, size - off, "%5s %5s %5s %-8s %8s %8s %5s %s\n", "PID", "PPID", "PGID", "STATE", "TIME", "RSS", "UID", "NAME");
     /* Snapshot first: counting resident pages walks page tables and must
-     * not run under the process locks. The rows hold pids only, so a
+     * not run under the process locks. The rows contain pids only, so a
      * process that exits meanwhile is reported without its size. */
     enum { MAX_ROWS = 64 };
     static struct proc_row rows[MAX_ROWS];  /* procdev_read is serialized by the file lock */
@@ -418,10 +418,10 @@ size_t proc_format_table(char *buf, size_t size)
     spin_unlock(&proc_tree_lock);
     for (int i = 0; i < n && off < size - 1; i++) {
         struct proc_row *r = &rows[i];
-        /* The process may have been reaped meanwhile. proc_tree_lock keeps
+        /* The process may have been reaped meanwhile. proc_tree_lock prevents
          * it from being reaped during the walk (proc_reap takes it) and
          * sits above vmspace.lock in the lock order; proc_list_lock, a
-         * leaf, is not held while the page tables are walked. */
+         * leaf, is not locked while the page tables are walked. */
         size_t rss = 0;
         if (r->vm) {
             spin_lock(&proc_tree_lock);
@@ -448,7 +448,7 @@ static const char *const thread_state_names[] = {
  * start to run meanwhile, so a report can show stale frames. The kernel
  * process is listed as well. proc_list_lock is a leaf below proc.lock, so
  * the pids are copied first and each process is looked up again under
- * proc_tree_lock, which keeps it from being reaped while its lock is
+ * proc_tree_lock, which prevents it from being reaped while its lock is
  * acquired. */
 /* The pids of the processes, copied under proc_list_lock, which is a leaf
  * below proc.lock. */

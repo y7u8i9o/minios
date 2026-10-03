@@ -128,7 +128,7 @@ int fs_copy(const char *src, const char *dst)
     return err;
 }
 
-/* A symbolic link is removed itself; the tree it leads to is kept. */
+/* A symbolic link is removed itself; the tree it leads to is retained. */
 int fs_remove(const char *path)
 {
     struct stat st;

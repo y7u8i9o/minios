@@ -107,7 +107,7 @@ static void test_smp(void)
     /* A kernel range flush must reach every other CPU: a reader on another
      * CPU caches the translation of a kernel page, the page is remapped to
      * another frame, and the reader's next access must see that frame.
-     * Kernel threads are not preempted, so the reader stays on its CPU
+     * Kernel threads are not preempted, so the reader remains on its CPU
      * while it spins, and this thread cannot run on that CPU meanwhile. */
     struct tlb_stats before, after;
     void *stack = kstack_alloc();

@@ -2,7 +2,7 @@
 
 ## Thread ownership
 
-`struct thread` holds the saved context, kernel stack, process, MLFQ level,
+`struct thread` contains the saved context, kernel stack, process, MLFQ level,
 slice, home CPU and intrusive links used by ready, sleep, wait and remote-wake
 queues.  A running thread and a thread linked on a ready or sleeper list are
 owned by that CPU's run queue.  State changes are release-published because a
@@ -17,7 +17,7 @@ sleep list until that CPU consumes the wake notification.
 
 Every CPU has eight MLFQ lists, a sorted sleeper list, a `run_queue` spinlock
 and an MPSC inbound list.  `sched_add` chooses the least-loaded started CPU.
-`sched_wake` keeps an existing thread on its home CPU, changes
+`sched_wake` retains an existing thread on its home CPU, changes
 `wake_queued` from false to true and pushes the node with release ordering.
 It sets `need_resched`; a remote target also receives `IRQ_RESCHED`, which
 wakes an idle `hlt` and requests a scheduling point on return to user mode.
@@ -33,7 +33,7 @@ that found the claim taken (and pushed nothing) is observed by the state
 read that follows the clear.
 
 A queued wake can be stale.  Signal delivery calls `waitq_interrupt` and
-then `sched_wake` without holding the wait queue lock across both; when
+then `sched_wake` without acquiring the wait queue lock across both; when
 the thread was woken by somebody else in between, ran, and blocked on a
 wait queue again, the second call queues a thread that is legitimately
 waiting.  The drain recognizes this as `THREAD_BLOCKED` with `waiting_on`
@@ -43,7 +43,7 @@ again.  The case was found with the new init (2026-09-15), the first
 process to sleep in `wait4` with a `SIGCHLD` handler installed: every
 child exit wakes the parent's `child_waitq` and then sends the signal.
 
-An empty CPU attempts to steal the highest-priority ready thread.  It holds
+An empty CPU attempts to steal the highest-priority ready thread.  It acquires
 its local lock and uses `spin_try_lock` on each victim; it never waits for a
 second queue lock.  This avoids a lock-order cycle between simultaneous
 stealers.  The tick of an idle CPU requests a scheduling point when its own
@@ -51,7 +51,7 @@ queue or the queue of any other CPU has a ready thread (`others_have_ready`,
 counts read without locks), so an idle CPU that missed the placement of new
 threads steals one within a tick.  Before A8 only its own queue counted, and
 under HVF a virtual CPU that the host descheduled while eight threads were
-placed stayed idle for the rest of the `smp` case.
+placed remained idle for the rest of the `smp` case.
 
 ## Context switch
 
@@ -59,7 +59,7 @@ placed stayed idle for the rest of the `smp` case.
 the stack pointer, loads the next stack and returns into that context.  New
 threads have a synthetic frame returning to `thread_start`.
 
-`sched_switch_locked` is entered with the calling CPU's run-queue lock held
+`sched_switch_locked` is entered with the calling CPU's run-queue lock acquired
 and current already changed from `THREAD_RUNNING`.  It drains inbound work,
 picks or steals the next thread, updates `cpu.current`, TSS `rsp0`, the kernel
 stack pointer, address space and FPU state, then switches while retaining the
@@ -87,7 +87,7 @@ promoted when the target CPU consumes its wake.
 
 ## Blocking and lost-wakeup rule
 
-`waitq_wait(wq, held)` acquires `wq.lock`, links current, then acquires the
+`waitq_wait(wq, lock)` acquires `wq.lock`, links current, then acquires the
 local run-queue lock and publishes `THREAD_BLOCKED`.  It releases `wq.lock`
 and the caller's condition lock before switching.  A waker either sees no
 waiter before registration or removes the registered waiter and publishes a

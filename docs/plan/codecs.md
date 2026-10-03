@@ -22,21 +22,21 @@ a decoder plugin by the capabilities of the stream, and both pick a
 module by the magic bytes of the data before the MIME type or the file
 name. A new module makes every program read the new format.
 
-The scope is images and audio. Compression (gzip) stays in libc.
+The scope is images and audio. Compression (gzip) remains in libc.
 
 ## 2. Fixed decisions
 
-- A new shared library `libcodec.so` holds the registry, the probing and
+- A new shared library `libcodec.so` contains the registry, the probing and
   the high level functions. It depends only on libc, so that libgui,
   libaudio users and command line tools can all use it. Its header is
   `<codec/codec.h>`.
 - Every format is a module, a shared object in `/lib/codecs/`, which
   exports one `struct codec_module` named `codec_module` with an ABI
-  number and a table of `struct codec` entries. A module may hold several
+  number and a table of `struct codec` entries. A module may contain several
   codecs.
 - The registry is built once per process, on the first call that needs
   it, under `pthread_once`: it opens every `*.so` of `/lib/codecs` with
-  `dlopen` by path, checks the ABI number and keeps the module open. The
+  `dlopen` by path, checks the ABI number and leaves the module open. The
   registry is read only afterwards. A module that fails to load is
   skipped with a message on standard error.
 - A codec describes itself by a name, a description, its kind (image or
@@ -59,8 +59,8 @@ The scope is images and audio. Compression (gzip) stays in libc.
 - Errors are negative errno values, as everywhere in minios.
 - The functions of libgui (`image_load`, `image_decode`,
   `image_load_svg`, `image_render_svg`, `image_encode_png`,
-  `image_save_png`) stay with their signatures and behaviour and call
-  libcodec, so programs and packages built against libgui keep working
+  `image_save_png`) retain their signatures and behaviour and call
+  libcodec, so programs and packages built against libgui continue to work
   and the ABI number of libgui does not change.
 - The host unit tests (`make check`) compile the modules into the test
   program with `CODEC_BUILTIN`, which registers them without `dlopen`.
@@ -75,14 +75,14 @@ The scope is images and audio. Compression (gzip) stays in libc.
   functions that C2's module implements.
 - The PNG decoder, the PNG encoder and zlib inflate move from libgui into
   the module `png.so`, the SVG renderer into `svg.so`.
-- libgui's image functions call libcodec. `zlib_inflate` stays exported
+- libgui's image functions call libcodec. `zlib_inflate` remains exported
   by libgui as a wrapper.
 - The build installs `libcodec.so`, its ABI entry and the modules.
 - Boot test `codec_image`: a test program lists the registry, probes PNG
   and SVG data and data of no known format, decodes and re-encodes a PNG
   file, renders an SVG icon, and checks the errors. `gui_images` and
   `icons` must still pass.
-- Found on the way: `dlopen` kept the caller's name pointer, so a reused
+- Found on the way: `dlopen` retained the caller's name pointer, so a reused
   path buffer returned the previous module. The loader copies the name,
   and `dltest` checks it.
 
@@ -90,7 +90,7 @@ The scope is images and audio. Compression (gzip) stays in libc.
 
 - The module `wav.so` decodes PCM WAV files with 8, 16, 24 and 32 bit
   samples and up to eight channels, and encodes the same sample sizes.
-- `player` decodes through libcodec and keeps its resampling.
+- `player` decodes through libcodec and retains its resampling.
 - Boot test `codec_audio`: the test program writes WAV files of each
   sample size through the encoder, decodes them back sample for sample,
   and checks truncated and foreign data. `audio_player` must still pass.
@@ -175,8 +175,8 @@ The scope is images and audio. Compression (gzip) stays in libc.
   `codec_audio_save_options` pass a string of `name=value` pairs
   separated by commas, such as `quality=0.6`, to a new member
   `audio_encode_options` of `struct codec`. The member is appended to the
-  structure, which changes the module ABI to 2. libcodec keeps ABI 1,
-  because the existing members keep their offsets and programs only gain
+  structure, which changes the module ABI to 2. libcodec retains ABI 1,
+  because the existing members retain their offsets and programs only gain
   functions. `codecs convert` passes options with `-o`.
 - libcodec gains an Ogg writer that packs packets into pages with
   lacing, continuation, granule positions, the flags of the first and the

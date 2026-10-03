@@ -163,7 +163,7 @@ long mfs_write_locked(struct inode *ino, const char *buf, size_t n, uint64_t off
 }
 
 /* Free every block with index >= first. A table that is released as a
- * whole is not rewritten first; only tables that stay have their freed
+ * whole is not rewritten first; only tables that remain have their freed
  * entries cleared (through the journal). */
 static void free_from(struct inode *ino, uint64_t first)
 {
@@ -177,48 +177,48 @@ static void free_from(struct inode *ino, uint64_t first)
     }
     if (info->indirect) {
         uint64_t base = MFS_NDIRECT;
-        bool keep = first > base;
+        bool retain = first > base;
         for (uint32_t i = 0; i < MFS_PTRS_PER_BLOCK; i++) {
             if (base + i < first)
                 continue;
             uint32_t v = ptr_get(m, info->indirect, i);
             if (v) {
                 mfs_free_block(m, v);
-                if (keep)
+                if (retain)
                     ptr_set(m, info->indirect, i, 0);
             }
         }
-        if (!keep) {
+        if (!retain) {
             mfs_free_block(m, info->indirect);
             info->indirect = 0;
         }
     }
     if (info->dindirect) {
         uint64_t base = MFS_NDIRECT + MFS_PTRS_PER_BLOCK;
-        bool keep_l1 = first > base;
+        bool retain_l1 = first > base;
         for (uint32_t i1 = 0; i1 < MFS_PTRS_PER_BLOCK; i1++) {
             uint32_t l1 = ptr_get(m, info->dindirect, i1);
             if (!l1)
                 continue;
             uint64_t l1_base = base + (uint64_t)i1 * MFS_PTRS_PER_BLOCK;
-            bool keep_l2 = first > l1_base;
+            bool retain_l2 = first > l1_base;
             for (uint32_t i2 = 0; i2 < MFS_PTRS_PER_BLOCK; i2++) {
                 if (l1_base + i2 < first)
                     continue;
                 uint32_t v = ptr_get(m, l1, i2);
                 if (v) {
                     mfs_free_block(m, v);
-                    if (keep_l2)
+                    if (retain_l2)
                         ptr_set(m, l1, i2, 0);
                 }
             }
-            if (!keep_l2) {
+            if (!retain_l2) {
                 mfs_free_block(m, l1);
-                if (keep_l1)
+                if (retain_l1)
                     ptr_set(m, info->dindirect, i1, 0);
             }
         }
-        if (!keep_l1) {
+        if (!retain_l1) {
             mfs_free_block(m, info->dindirect);
             info->dindirect = 0;
         }
@@ -231,9 +231,9 @@ int mfs_truncate_locked(struct inode *ino, uint64_t size)
     if (size / MFS_BLOCK_SIZE >= MFS_MAX_FILE_BLOCKS)
         return -EFBIG;
     if (size < ino->size) {
-        uint64_t keep = (size + MFS_BLOCK_SIZE - 1) / MFS_BLOCK_SIZE;
-        free_from(ino, keep);
-        /* Zero the tail of the last kept block so later growth reads zeros. */
+        uint64_t retain = (size + MFS_BLOCK_SIZE - 1) / MFS_BLOCK_SIZE;
+        free_from(ino, retain);
+        /* Zero the tail of the last retained block so later growth reads zeros. */
         if (size % MFS_BLOCK_SIZE) {
             uint32_t blk = bmap(ino, size / MFS_BLOCK_SIZE, false);
             if (blk) {

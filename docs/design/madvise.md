@@ -11,7 +11,7 @@ regions at the range boundaries with `vma_split_locked`, the same helper
 |---|---|
 | `MADV_NORMAL`, `MADV_RANDOM`, `MADV_SEQUENTIAL` | recorded in `VM_RANDOM` and `VM_SEQUENTIAL`; nothing reads them yet |
 | `MADV_WILLNEED` | every not present page is resolved as a read fault would resolve it (`vma_resolve_fault`): zero pages, swapped pages and file pages are brought in; `PROT_NONE` pages and pages beyond the end of a file are skipped |
-| `MADV_DONTNEED` | `vma_unmap_range_locked` drops the frames and swap slots of the range; the next touch yields zero pages or the file's contents. Shared file pages stay in the mapping's cache and their dirty bits are recorded, so nothing written through a shared mapping is lost |
+| `MADV_DONTNEED` | `vma_unmap_range_locked` drops the frames and swap slots of the range; the next touch yields zero pages or the file's contents. Shared file pages remain in the mapping's cache and their dirty bits are recorded, so nothing written through a shared mapping is lost |
 | `MADV_FREE` | private anonymous regions only (`EINVAL` otherwise); present entries lose their dirty bit and gain `PTE_LAZYFREE`, swapped entries are dropped at once |
 | `MADV_DONTFORK`, `MADV_DOFORK` | set and clear `VM_DONTFORK`; `vmspace_fork` copies neither the region nor its page table entries, so the child faults on the range |
 | `MADV_HUGEPAGE`, `MADV_NOHUGEPAGE` | set and clear `VM_HUGE` on private anonymous regions (M39 acts on it); `EINVAL` on file and shared regions |
@@ -26,9 +26,9 @@ treated normally; a tagged page that is still clean is unmapped and its
 frame released instead of being written to swap, and `LazyFreed:` in
 `/dev/meminfo` counts it. The next access to such a page gets a zero
 page. Since kswapd runs only when free memory falls below its low
-watermark, an idle system keeps lazily freed pages until they are needed.
+watermark, an idle system retains lazily freed pages until they are needed.
 
-`/dev/meminfo` also gained `FileMapped:`, the number of frames held by
+`/dev/meminfo` also gained `FileMapped:`, the number of frames referenced by
 file mappings.
 
 ## Test

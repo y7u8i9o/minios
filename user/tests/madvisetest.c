@@ -42,7 +42,7 @@ static void fill(unsigned char *p, size_t len, unsigned seed)
     }
 }
 
-/* 1 when the page holds the pattern, 0 when it is all zero, -1 otherwise. */
+/* 1 when the page contains the pattern, 0 when it is all zero, -1 otherwise. */
 static int page_state(const unsigned char *p, size_t off, unsigned seed)
 {
     const unsigned *w = (const unsigned *)(p + off);
@@ -137,7 +137,7 @@ static void test_file(void)
     CHECK(s != MAP_FAILED, "shared file mapping");
     s[PG + 1] = 0xab;
     CHECK(madvise(s, 4 * PG, MADV_DONTNEED) == 0, "DONTNEED on a shared file mapping");
-    CHECK(s[PG + 1] == 0xab && s[3] == (unsigned char)9, "shared page kept its data in the cache: %02x", s[PG + 1]);
+    CHECK(s[PG + 1] == 0xab && s[3] == (unsigned char)9, "shared page retained its data in the cache: %02x", s[PG + 1]);
     CHECK(madvise(s, 4 * PG, MADV_WILLNEED) == 0, "WILLNEED on a file mapping");
     CHECK(madvise(s, PG, MADV_FREE) < 0 && errno == EINVAL, "MADV_FREE on a shared mapping refused");
     CHECK(madvise(s, PG, MADV_HUGEPAGE) < 0 && errno == EINVAL, "MADV_HUGEPAGE on a file mapping refused");
@@ -170,7 +170,7 @@ static void test_dontfork(void)
     CHECK(madvise(a, 2 * PG, MADV_DONTFORK) == 0, "MADV_DONTFORK");
     int status = in_child(child_touch, a);
     CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV, "child has no DONTFORK region: status %x", status);
-    CHECK(page_state(a, 0, 9) == 1 && page_state(a, PG, 9) == 1, "parent keeps the region");
+    CHECK(page_state(a, 0, 9) == 1 && page_state(a, PG, 9) == 1, "parent retains the region");
     CHECK(madvise(a, 2 * PG, MADV_DOFORK) == 0, "MADV_DOFORK");
     pid_t pid = fork();
     if (pid == 0)
@@ -195,8 +195,8 @@ static void test_free_under_pressure(void)
     CHECK(madvise(a, len, MADV_FREE) == 0, "MADV_FREE");
     /* Half the pages are written again; they must survive. */
     fill(a, len / 2, 22);
-    /* A page read after MADV_FREE stays a candidate. */
-    CHECK(page_state(a, len / 2, 21) == 1, "page still holds its data before pressure");
+    /* A page read after MADV_FREE remains a candidate. */
+    CHECK(page_state(a, len / 2, 21) == 1, "page still contains its data before pressure");
 
     /* Pressure: touch more memory than is free so kswapd reclaims. */
     long free_kb = meminfo("MemFree:");
@@ -209,19 +209,19 @@ static void test_free_under_pressure(void)
     long lazy1 = meminfo("LazyFreed:");
     printf("madvisetest: LazyFreed %ld -> %ld, swapped out %ld\n", lazy0, lazy1, meminfo("SwappedOut:"));
     CHECK(lazy1 > lazy0, "kswapd discarded lazily freed pages");
-    int kept = 0, zeroed = 0, bad = 0;
+    int retained = 0, zeroed = 0, bad = 0;
     for (size_t off = 0; off < len / 2; off += PG)
         if (page_state(a, off, 22) != 1)
             bad++;
     CHECK(bad == 0, "%d rewritten pages lost their data", bad);
     for (size_t off = len / 2; off < len; off += PG) {
         int st = page_state(a, off, 21);
-        if (st == 1) kept++;
+        if (st == 1) retained++;
         else if (st == 0) zeroed++;
         else bad++;
     }
-    printf("madvisetest: freed pages: %d kept, %d zeroed, %d bad\n", kept, zeroed, bad);
-    CHECK(bad == 0, "freed pages hold neither their data nor zero");
+    printf("madvisetest: freed pages: %d retained, %d zeroed, %d bad\n", retained, zeroed, bad);
+    CHECK(bad == 0, "freed pages contain neither their data nor zero");
     CHECK(zeroed > 0, "no lazily freed page was discarded");
     CHECK(page_state(m, 0, 31) == 1 && page_state(m, big - PG, 31) == 1, "pressure data intact");
 

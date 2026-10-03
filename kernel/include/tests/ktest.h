@@ -21,7 +21,7 @@ struct ktest {
 };
 
 /* The entries form an array between __ktests_start and __ktests_end. An
- * explicit alignment keeps the compiler from padding the 24 byte entries
+ * explicit alignment prevents the compiler from padding the 24 byte entries
  * to a larger alignment, which would leave gaps in that array. */
 #define KTEST_DEFINE_STAGE(testname, func, when) \
     static const struct ktest __ktest_##func __used __section(".ktests") __aligned(8) = { testname, func, when }

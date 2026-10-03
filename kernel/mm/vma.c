@@ -581,7 +581,7 @@ static int copy_vmas_locked(struct vmspace *vm, struct vmspace *child)
 struct vmspace *vmspace_fork(struct vmspace *vm)
 {
     /* Swapped pages are not present and would be skipped by the copy, so
-     * bring everything in first and keep kswapd away until done. */
+     * bring everything in first and exclude kswapd until done. */
     spin_lock(&vm->lock);
     vm->pinned = true;
     spin_unlock(&vm->lock);

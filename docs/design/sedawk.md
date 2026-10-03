@@ -7,7 +7,7 @@ manual pages and two boot tests.
 
 ## Sources
 
-`third_party/sed/src/` holds the six source files, the manual page and
+`third_party/sed/src/` contains the six source files, the manual page and
 the `POSIX` notes of `usr.bin/sed` from the FreeBSD source tree, and
 `third_party/awk/src/` the sources, the yacc grammar, `maketab.c` and
 the manual page of `contrib/one-true-awk` from the same tree. Both
@@ -78,7 +78,7 @@ date.
 
 `tests/cases/sed` runs `/etc/tests/sed.sh`: addresses, ranges, `s` with
 flags and back references in both syntaxes, `y`, `a`, `i`, `c`, groups,
-`q`, `=`, `l`, `t` with labels, `N`, hold space reversal, in place
+`q`, `=`, `l`, `t` with labels, `N`, reversal through the spare buffer, in place
 editing with and without a backup, `-f`, `w` and `r`.
 `tests/cases/awk` runs `/etc/tests/awk.sh`: fields and separators,
 patterns, `BEGIN` and `END`, `printf`, the string, array, arithmetic and

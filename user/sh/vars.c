@@ -154,7 +154,7 @@ void var_unset(const char *name)
     while (*p) {
         struct variable *v = *p;
         if (!strcmp(v->name, name)) {
-            /* Keep a local tombstone so scope_pop restores the outer binding. */
+            /* Retain a local tombstone so scope_pop restores the outer binding. */
             if (v->level) {
                 free(v->value);
                 v->value = NULL;

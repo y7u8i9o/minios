@@ -18,7 +18,7 @@ struct group *getgrent(void);
 void setgrent(void);
 void endgrent(void);
 struct group *fgetgrent(FILE *stream);
-/* Reentrant lookups in the manner of getpwnam_r. The member list is kept
+/* Reentrant lookups in the manner of getpwnam_r. The member list is stored
  * in buf as well. */
 int getgrnam_r(const char *name, struct group *gr, char *buf, size_t size, struct group **result);
 int getgrgid_r(gid_t gid, struct group *gr, char *buf, size_t size, struct group **result);

@@ -1,7 +1,7 @@
 #include <fenv.h>
 
 /* The floating point environment of AArch64: the rounding mode in FPCR,
- * the exception flags in FPSR. Traps stay disabled. */
+ * the exception flags in FPSR. Traps remain disabled. */
 
 static uint64_t read_fpcr(void)
 {

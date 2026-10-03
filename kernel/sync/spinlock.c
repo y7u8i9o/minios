@@ -42,7 +42,7 @@ static void debug_acquired(struct spinlock *lk, void *caller)
 static void debug_check_acquire(struct spinlock *lk)
 {
     if (lk->locked && lk->cpu == cpu_current())
-        panic("spinlock %s: double acquire, held from %p", lk->name, lk->caller);
+        panic("spinlock %s: double acquire, first acquired at %p", lk->name, lk->caller);
 }
 
 static void debug_check_release(struct spinlock *lk)
@@ -117,11 +117,11 @@ static inline void stat_released(struct spinlock *lk, void *caller)
     struct lockstat *st = lk->stat;
     if (!st)
         return;
-    uint64_t held = arch_cycles() - lk->acquired_tsc;
-    st->hold_cycles += held;
-    if (held > st->max_hold) {
-        st->max_hold = held;
-        st->max_hold_caller = caller;
+    uint64_t locked = arch_cycles() - lk->acquired_tsc;
+    st->locked_cycles += locked;
+    if (locked > st->max_locked) {
+        st->max_locked = locked;
+        st->max_locked_caller = caller;
     }
 }
 
@@ -129,8 +129,8 @@ void lockstat_reset(void)
 {
     for (unsigned i = 0; i < lockstat_count; i++) {
         struct lockstat *st = &lockstat_table[i];
-        st->acquires = st->contended = st->spin_cycles = st->hold_cycles = st->max_hold = 0;
-        st->max_hold_caller = NULL;
+        st->acquires = st->contended = st->spin_cycles = st->locked_cycles = st->max_locked = 0;
+        st->max_locked_caller = NULL;
     }
 }
 #else
@@ -141,7 +141,7 @@ void lockstat_reset(void) {}
 
 /* Spinning happens with interrupts disabled, so a CPU waiting here cannot
  * take the TLB shootdown interrupt. It services pending shootdowns while
- * it waits, which keeps a lock holder that sends a shootdown from
+ * it waits, which prevents a lock owner that sends a shootdown from
  * deadlocking against a CPU that spins on that same lock. */
 void spin_lock(struct spinlock *lk)
 {
@@ -189,7 +189,7 @@ void spin_unlock(struct spinlock *lk)
     pop_cli();
 }
 
-bool spin_holding(struct spinlock *lk)
+bool spin_locked_by_current(struct spinlock *lk)
 {
 #if CONFIG_LOCKDEBUG
     return lk->locked && lk->cpu == cpu_current();

@@ -377,10 +377,10 @@ static void rounded(struct painter *p, struct rect r, int radius, uint32_t fill,
 {
     struct theme t = *p->theme;
     t.metric[TM_RADIUS] = radius * 100 / (t.scale > 0 ? t.scale : 100);
-    const struct theme *keep = p->theme;
+    const struct theme *retain = p->theme;
     p->theme = &t;
     painter_rounded(p, r.x, r.y, r.w, r.h, fill, border);
-    p->theme = keep;
+    p->theme = retain;
 }
 
 static void frame(struct painter *p, struct rect r, int n, uint32_t c)
@@ -621,7 +621,7 @@ static void motion(struct ui *u, int x, int y)
     switch (u->drag) {
     case DRAG_NEW:
         /* A new selection starts once the pointer moved a few pixels, so
-         * that a click keeps the old one. */
+         * that a click retains the old one. */
         if (abs(x - u->ax) >= MIN_SELECTION || abs(y - u->ay) >= MIN_SELECTION)
             u->started = 1;
         if (u->started) {

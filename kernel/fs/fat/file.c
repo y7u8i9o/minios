@@ -1,6 +1,6 @@
 #define KLOG_SUBSYS "fat"
 /* File contents: reads and writes cluster by cluster, truncation. The
- * callers hold ino->lock. */
+ * callers have acquired ino->lock. */
 #include "fat.h"
 #include <lib/string.h>
 #include <kassert.h>
@@ -83,11 +83,11 @@ int fat_truncate_locked(struct inode *ino, uint64_t size)
                     fat_free_chain(m, next);
                 /* Zero the tail of the last cluster so later growth
                  * reads zeros. */
-                uint32_t keep = (uint32_t)(size % m->cluster_bytes);
-                if (keep) {
+                uint32_t retain = (uint32_t)(size % m->cluster_bytes);
+                if (retain) {
                     static const uint8_t zeros[FAT_SECTOR_SIZE];
-                    uint64_t off = fat_cluster_off(m, c) + keep;
-                    uint32_t left = m->cluster_bytes - keep;
+                    uint64_t off = fat_cluster_off(m, c) + retain;
+                    uint32_t left = m->cluster_bytes - retain;
                     while (left) {
                         uint32_t chunk = MIN(left, (uint32_t)FAT_SECTOR_SIZE);
                         fat_write(m, off, zeros, chunk);

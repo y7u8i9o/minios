@@ -21,12 +21,12 @@ syllables and abbreviations.
 user/share/ime/japanese.dict, for the Japanese engine of imed (I4), comes
 from dictionary_oss of Mozc in third_party/imedata.  The 2672 part of
 speech ids become about 1430 classes: a verb or an adjective without a
-word of its own keeps its group, conjugation type and conjugation form,
-every other id stays a class (particles, auxiliary verbs, nouns, and the
+word of its own retains its group, conjugation type and conjugation form,
+every other id remains a class (particles, auxiliary verbs, nouns, and the
 verbs with a word such as いる or 来る).  The connection cost between two
 classes is the mean of the costs between their ids, stored in steps of
 60.  The entries with a
-cost below 6000 and every particle and auxiliary verb are kept.  The file
+cost below 6000 and every particle and auxiliary verb are retained.  The file
 is little endian:
 
     "MJP1", then the uint32 values nclass, nreadings, nentries, the class

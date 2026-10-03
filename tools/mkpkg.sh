@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build a minios package on the host from a directory holding manifest and
+# Build a minios package on the host from a directory containing manifest and
 # files/ (docs/design/packages.md).
 # usage: mkpkg.sh DIR OUT.mpk ABI
 # ABI is the ABI table of the build (build/lib/abi), which gives the ABI

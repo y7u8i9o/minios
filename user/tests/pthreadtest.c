@@ -121,7 +121,7 @@ static void *errno_worker(void *arg)
     while (errno_stage != 2)
         pthread_cond_wait(&errno_cond, &errno_lock);
     pthread_mutex_unlock(&errno_lock);
-    CHECK(errno == ENOENT, "worker errno kept %d", errno);
+    CHECK(errno == ENOENT, "worker errno retained %d", errno);
     return NULL;
 }
 
@@ -256,7 +256,7 @@ int main(void)
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
     pthread_mutex_init(&chk, &attr);
     CHECK(pthread_mutex_lock(&chk) == 0 && pthread_mutex_lock(&chk) == EDEADLK, "error checking mutex");
-    CHECK(pthread_mutex_trylock(&chk) == EBUSY, "trylock of a held mutex");
+    CHECK(pthread_mutex_trylock(&chk) == EBUSY, "trylock of a locked mutex");
     pthread_mutex_unlock(&chk);
     CHECK(pthread_mutex_trylock(&chk) == 0, "trylock of a free mutex");
     pthread_mutex_unlock(&chk);
@@ -292,7 +292,7 @@ int main(void)
     pthread_cond_broadcast(&errno_cond);
     pthread_mutex_unlock(&errno_lock);
     pthread_join(ew, NULL);
-    CHECK(errno == EINVAL, "main errno kept");
+    CHECK(errno == EINVAL, "main errno retained");
 
     /* Keys and destructors. */
     CHECK(pthread_key_create(&key, key_destructor) == 0, "key create");
@@ -303,7 +303,7 @@ int main(void)
     for (int i = 0; i < 3; i++)
         pthread_join(kw[i], NULL);
     CHECK(destructor_runs == 6, "destructors ran for the workers: %d", destructor_runs);
-    CHECK(pthread_getspecific(key) == (void *)100, "main keeps its value");
+    CHECK(pthread_getspecific(key) == (void *)100, "main retains its value");
 
     /* Once. */
     pthread_t ow[4];

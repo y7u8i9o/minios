@@ -52,7 +52,7 @@ static inline bool block_is_free(uint64_t pfn, unsigned order)
 /* Insert a free block, merging with its buddy as far as possible. */
 static void free_block(uint64_t pfn, unsigned order)
 {
-    kassert(spin_holding(&pmm_lock));
+    kassert(spin_locked_by_current(&pmm_lock));
     kassert(IS_ALIGNED(pfn, 1UL << order));
 
     while (order < PMM_MAX_ORDER) {

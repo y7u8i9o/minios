@@ -17,7 +17,7 @@
 # version SUDO_VERSION from sudo.ws, limited to the headers, the C sources
 # of the front end, of the sudoers policy and of the libraries that
 # user/Makefile builds, the licence and the readme. The configure script ran once on the whole
-# tarball, and its output is kept in user/ports/sudo.
+# tarball, and its output is stored in user/ports/sudo.
 #
 # Each directory records its source and version in a file named ORIGIN.
 # SUDO_VERSION and DOAS_VERSION may be set in the environment to fetch

@@ -24,7 +24,7 @@ over the fake client in `tests/fake_client.c` with the builtin font.
 
 ## Widget model (`src/widget.c`, `src/window.c`)
 
-- `struct widget` holds the class pointer, tree links, geometry inside
+- `struct widget` contains the class pointer, tree links, geometry inside
   the parent, flags (visible, enabled, focusable, focused, hover,
   pressed, dirty, child_dirty, needs_layout), the application's size
   hint and the measured hint, stretch factors, alignment, margin, grid
@@ -44,7 +44,7 @@ over the fake client in `tests/fake_client.c` with the builtin font.
   (`sig_click`, `sig_change`, `sig_key`, `sig_select`, `sig_resize`,
   `sig_scroll`, `sig_paint`).
 - Windows translate server messages: mouse messages go to the widget
-  under the cursor or to the capturing widget (`widget_capture`, held
+  under the cursor or to the capturing widget (`widget_capture`, active
   until the button is released), with enter and leave events for
   hover; a press focuses focusable widgets. Keys go to the focused
   widget, then Tab and Shift+Tab traverse focusable widgets in tree
@@ -57,7 +57,7 @@ over the fake client in `tests/fake_client.c` with the builtin font.
 
 Measurement runs bottom up: `widget_measure` calls the class `measure`
 and overrides it with the application's hint (`widget_set_hint`,
-`widget_set_min`, `widget_set_max`), keeping preferred sizes inside the
+`widget_set_min`, `widget_set_max`), confining preferred sizes inside the
 bounds. Layout runs top down after measurement.
 
 - Padding: a container's inner padding is `widget_set_padding`, else
@@ -78,7 +78,7 @@ bounds. Layout runs top down after measurement.
 
 ## Theme and painter (`src/theme.c`, `src/paint.c`)
 
-`struct theme` holds named colours (`TC_*`) and metrics (`TM_*`) at
+`struct theme` contains named colours (`TC_*`) and metrics (`TM_*`) at
 scale 100, a scale in percent, and the font. `theme_apply` loads the
 outline font at `TM_FONT_PX` scaled (DejaVu Sans at 14 pixels by
 default, the builtin 8x16 font when the file is missing);
@@ -172,7 +172,7 @@ labels gained `widget_set_icon`.
 
 ### Menus (`src/widgets/menu.c`)
 
-`menubar_new`, `menu_new` (an invisible widget holding items) and
+`menubar_new`, `menu_new` (an invisible widget containing items) and
 `menu_add` / `menu_add_separator`. Opening a title creates a drop down
 popup that paints the items, tracks hover, activates on click or Enter
 (`clicked` on the item), moves between menus with Left and Right, and
@@ -183,7 +183,7 @@ closes with Escape or an outside click.
 `struct model` supplies row counts and children by row id, columns,
 cell text, headers and an optional sort. Both views flatten the visible
 rows on demand (the tree view following its set of expanded row ids),
-draw only the rows in view and keep an internal scroll bar. The tree
+draw only the rows in view and retain an internal scroll bar. The tree
 view draws expanders and handles Left, Right and expander clicks; the
 table draws a header row, sorts on header clicks through the model and
 resizes columns by dragging the header borders. `view_refresh` is
@@ -235,7 +235,7 @@ colour on screen, Ctrl+S writes the file).
 
 Windows render at the output's integer scale: `gui_window.scale` device
 pixels per logical pixel, buffers with `set_buffer_scale`. `struct
-painter` carries the scale, so widget code keeps drawing in logical
+painter` carries the scale, so widget code continues drawing in logical
 pixels while text is rasterized at `px * scale` and lines are `scale`
 pixels thick; see `display.md`. Only code that writes into
 `gui_window.surf` directly sees device pixels.

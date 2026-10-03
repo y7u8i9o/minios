@@ -303,7 +303,7 @@ static void probe(struct pci_dev *pci)
     uint32_t streams = cfg ? cfg->streams : 0;
     if (!streams || find_stream(d, streams, VIRTIO_SND_D_OUTPUT, &d->playback.stream_id) < 0) {
         klog_error("no 48 kHz stereo S16 playback stream");
-        return;                 /* live IRQ refers to d; keep it allocated */
+        return;                 /* live IRQ refers to d: it remains allocated */
     }
     d->playback.present = true;
     d->capture.present = find_stream(d, streams, VIRTIO_SND_D_INPUT, &d->capture.stream_id) == 0;

@@ -15,9 +15,9 @@ struct page;
 /* Per CPU state. Reached exclusively through cpu_current() (<arch/cpu.h>),
  * or through cpu_by_id(id) for another processor. Fields are private to
  * the owning CPU except where a comment says otherwise. The fields up to
- * arch keep fixed offsets for the entry code of the architecture. */
+ * arch retain fixed offsets for the entry code of the architecture. */
 struct cpu {
-    struct cpu *self;           /* must stay at offset 0 */
+    struct cpu *self;           /* must remain at offset 0 */
     uint32_t id;
     struct thread *current;     /* running thread, local run-queue lock */
     void *kstack_top;           /* top of the running thread's kernel stack */
@@ -53,7 +53,7 @@ struct cpu *cpu_by_id(unsigned id);
 
 /* Interrupt disable nesting. push_cli disables interrupts and records the
  * previous state on first entry, pop_cli restores it when the depth hits
- * 0. The names are kept on every architecture: the profiler recognises
+ * 0. The names are retained on every architecture: the profiler recognises
  * lock primitives by them (docs/design/arch.md). */
 void push_cli(void);
 void pop_cli(void);

@@ -97,7 +97,7 @@ void ps2mouse_init(void)
     unsigned packet_len = 3;
     /* The IntelliMouse sequence: sample rates 200, 100, 80, then the
      * device reports id 3 if it has a wheel and switches to four byte
-     * packets. Devices without a wheel keep id 0 and three byte packets. */
+     * packets. Devices without a wheel retain id 0 and three byte packets. */
     if (a1 == 0xfa && mouse_set_rate(200) && mouse_set_rate(100) && mouse_set_rate(80) &&
         mouse_cmd(0xf2) == 0xfa) {
         wait_output_full();

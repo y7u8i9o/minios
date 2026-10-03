@@ -1,6 +1,6 @@
 #define KLOG_SUBSYS "fat"
 /* Directories: entry iteration with long names, lookup, create, mkdir,
- * unlink, rmdir, rename and getdents. The VFS holds the directory mutex
+ * unlink, rmdir, rename and getdents. The VFS has acquired the directory mutex
  * around every operation here. */
 #include "fat.h"
 #include <mm/slab.h>
@@ -205,10 +205,10 @@ static int make_short_name(struct inode *dir, const char *name, size_t len, uint
             digits[dl++] = (char)('0' + v % 10);
         while (dl)
             tail[tl++] = digits[--dl];
-        size_t keep = MIN(8 - tl, bl);
+        size_t head = MIN(8 - tl, bl);
         memset(out, ' ', 11);
-        memcpy(out, base, keep);
-        memcpy(out + keep, tail, tl);
+        memcpy(out, base, head);
+        memcpy(out + head, tail, tl);
         memcpy(out + 8, ext, el);
         if (!short_name_used(dir, out))
             return 0;
@@ -666,7 +666,7 @@ static int fat_setmtime(struct inode *ino, int64_t mtime)
     return fat_inode_flush_time(ino, mtime);
 }
 
-/* FAT keeps no owner, and of the permission bits only the owner's write
+/* FAT retains no owner, and of the permission bits only the owner's write
  * bit, as the read only attribute. Other changes are refused. */
 static int fat_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid)
 {

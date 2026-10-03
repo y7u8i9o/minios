@@ -1,8 +1,8 @@
 /* FLAC in Ogg, after the Ogg mapping of FLAC 1.0. The first packet of a
- * logical stream holds 0x7f and "FLAC", the mapping version 1.0, the
+ * logical stream contains 0x7f and "FLAC", the mapping version 1.0, the
  * number of header packets that follow it (0 when unknown), the "fLaC"
  * marker and the STREAMINFO block with its header. Each further header
- * packet holds one metadata block, and each audio packet one frame. The
+ * packet contains one metadata block, and each audio packet one frame. The
  * granule position of a page is the number of samples up to the end of
  * the last frame completed on it.
  *

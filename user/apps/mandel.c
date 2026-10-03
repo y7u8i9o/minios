@@ -92,7 +92,7 @@ static int level_of(const struct view *v)
 }
 
 /* iterate returns the smooth iteration count of the orbit of z0 under
- * z = z^2 + c, or limit when the orbit stays bounded for limit steps. */
+ * z = z^2 + c, or limit when the orbit remains bounded for limit steps. */
 static double iterate(double zr, double zi, double cr, double ci, int limit, int julia)
 {
     if (!julia) {
@@ -485,7 +485,7 @@ static void zoom_rect(int x0, int y0, int x1, int y1)
 }
 
 /* pan moves the view by a pixel offset.  The old picture is shifted so
- * that the known part stays in place while the rest is rendered. */
+ * that the known part remains in place while the rest is rendered. */
 static void pan(int dx, int dy)
 {
     render_stop();

@@ -1,7 +1,7 @@
 /* U3 test: the conversion of a data volume from the single user layout.
  * Started as root by the fs_migrate case, it builds a directory in the old
  * layout below /tmp, runs fsinit -m on it and checks that the old home
- * moved into user/ with uid 1000, that the package prefix stayed with root
+ * moved into user/ with uid 1000, that the package prefix remained with root
  * and gained the account databases, and that a second run changes
  * nothing. */
 #include <stdio.h>
@@ -57,7 +57,7 @@ int main(void)
     write_file(VOL "/.shrc", "# shell\n");
     mkdir(VOL "/.config", 0755);
     write_file(VOL "/.config/desktop.conf", "lang=fr_FR\n");
-    /* The old home holds an entry named user, which must not collide. */
+    /* The old home contains an entry named user, which must not collide. */
     write_file(VOL "/user", "a file called user\n");
     symlink("desktop/readme.txt", VOL "/link");
     mkdir(VOL "/.local", 0755);

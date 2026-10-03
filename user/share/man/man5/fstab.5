@@ -20,12 +20,12 @@ OPTIONS
     noauto     the entry is not mounted by fsinit
     seed=DIR   copy the tree below DIR into the mount point when the
                mounted filesystem is empty
-    homes      the volume holds the home directories: convert it from the
+    homes      the volume contains the home directories: convert it from the
                single user layout once and make missing homes (fsinit(1))
     uid=N      owner of every file of a fat volume (default 0)
     gid=N      group of every file of a fat volume (default 0)
     umask=OOO  permission bits removed from the files of a fat volume
-               (default 022), which keeps no permissions of its own
+               (default 022), which stores no permissions of its own
     size=MIB   the largest size of a tmpfs (default a quarter of the
                memory)
     mode=OOOO  permission bits of the root directory of a tmpfs

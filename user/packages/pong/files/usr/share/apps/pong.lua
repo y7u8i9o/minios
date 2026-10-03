@@ -8,7 +8,7 @@ local W, H = 480, 320
 local ly, ry = H // 2 - PAD_H // 2, H // 2 - PAD_H // 2
 local bx, by, vx, vy = 0, 0, 0, 0
 local lscore, rscore = 0, 0
-local held = {}
+local pressed = {}
 local winner_ticks = 0
 
 local function reset_ball(dir)
@@ -43,10 +43,10 @@ local function step()
     canvas:invalidate()
     return
   end
-  if held[gui.key.w] and ly > 0 then ly = ly - 4 end
-  if held[gui.key.s] and ly < H - PAD_H then ly = ly + 4 end
-  if held[gui.key.up] and ry > 0 then ry = ry - 4 end
-  if held[gui.key.down] and ry < H - PAD_H then ry = ry + 4 end
+  if pressed[gui.key.w] and ly > 0 then ly = ly - 4 end
+  if pressed[gui.key.s] and ly < H - PAD_H then ly = ly + 4 end
+  if pressed[gui.key.up] and ry > 0 then ry = ry - 4 end
+  if pressed[gui.key.down] and ry < H - PAD_H then ry = ry + 4 end
   bx, by = bx + vx, by + vy
   if by <= 0 or by + BALL >= H then vy = -vy end
   if bx <= 10 + PAD_W and by + BALL >= ly and by <= ly + PAD_H then vx = -vx; bx = 10 + PAD_W end
@@ -59,10 +59,10 @@ end
 
 canvas:on("key", function(w, k)
   if k.code == gui.key.esc then app:quit(0) end
-  held[k.code] = true
+  pressed[k.code] = true
   return true
 end)
-canvas:on("keyup", function(w, k) held[k.code] = nil; return true end)
+canvas:on("keyup", function(w, k) pressed[k.code] = nil; return true end)
 canvas:focus()
 reset_ball(1)
 app:timer(16, true, step)

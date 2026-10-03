@@ -26,7 +26,7 @@ static int tid_alloc(void)
 }
 
 /* First code run by a new thread, entered through its first switch
- * (arch_thread_init). The local run-queue lock is held across the switch
+ * (arch_thread_init). The local run-queue lock is locked across the switch
  * and released here. */
 void thread_start(void)
 {

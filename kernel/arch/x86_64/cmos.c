@@ -20,7 +20,7 @@
 
 static uint8_t cmos_read(uint8_t reg)
 {
-    outb(CMOS_ADDRESS, (uint8_t)(0x80 | reg));   /* NMI stays disabled during the access */
+    outb(CMOS_ADDRESS, (uint8_t)(0x80 | reg));   /* NMI remains disabled during the access */
     return inb(CMOS_DATA);
 }
 

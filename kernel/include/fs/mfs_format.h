@@ -1,6 +1,6 @@
 #pragma once
 /* On disk format of mfs, shared with tools/mkfs and tools/fsck. All fields
- * are little endian. Block 0 holds the superblock, followed by the inode
+ * are little endian. Block 0 contains the superblock, followed by the inode
  * bitmap, the block bitmap, the inode table, the journal and the data
  * blocks. */
 #include <stdint.h>
@@ -18,7 +18,7 @@
 #define MFS_NAME_MAX       251
 #define MFS_DIRENT_SIZE    256
 #define MFS_ROOT_INO       1
-/* A symbolic link (mode S_IFLNK) keeps its target, without a NUL, in the
+/* A symbolic link (mode S_IFLNK) retains its target, without a NUL, in the
  * first data block; its size is the target's length. */
 #define MFS_SYMLINK_MAX    (MFS_BLOCK_SIZE - 1)
 

@@ -65,7 +65,7 @@ static void test_gui_pointer(void)
     expect_cursor(x, y, "flat profile at speed 100");
 
     /* The cursor sits at the centre of its pixel: two packets of 0.2
-     * pixels stay inside it, the third crosses into the next one. */
+     * pixels remain inside it, the third crosses into the next one. */
     set_setting("pointer_speed", "-100");
     feed_packet(0, 0, -1);            /* down by 0.2 pixels */
     feed_packet(0, 0, -1);
@@ -83,7 +83,7 @@ static void test_gui_pointer(void)
 }
 KTEST_DEFINE("gui_pointer", test_gui_pointer);
 
-/* A key held in a libgui window repeats after the delay: evtest logs
+/* A key pressed in a libgui window repeats after the delay: evtest logs
  * the repeated press. */
 static void test_gui_repeat(void)
 {

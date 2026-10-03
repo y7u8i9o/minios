@@ -248,7 +248,7 @@ int virtio_start(struct virtio_dev *dev)
 
 int virtq_alloc_chain(struct virtqueue *vq, unsigned n, uint16_t *ids)
 {
-    kassert(spin_holding(&vq->lock));
+    kassert(spin_locked_by_current(&vq->lock));
     if (vq->broken || !n || n > vq->num_free)
         return -ENOSPC;
     for (unsigned i = 0; i < n; i++) {
@@ -265,7 +265,7 @@ int virtq_alloc_chain(struct virtqueue *vq, unsigned n, uint16_t *ids)
 
 void virtq_free_chain(struct virtqueue *vq, uint16_t head)
 {
-    kassert(spin_holding(&vq->lock));
+    kassert(spin_locked_by_current(&vq->lock));
     uint16_t i = head;
     for (;;) {
         uint16_t next = vq->desc[i].next;
@@ -283,7 +283,7 @@ void virtq_free_chain(struct virtqueue *vq, uint16_t head)
 
 void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie)
 {
-    kassert(spin_holding(&vq->lock));
+    kassert(spin_locked_by_current(&vq->lock));
     kassert(head < vq->size && !vq->active[head] && !vq->broken);
     vq->active[head] = true;
     vq->cookie[head] = cookie;

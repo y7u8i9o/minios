@@ -31,7 +31,7 @@ static void unlink_thread(struct pthread *t)
         }
 }
 
-/* Free the mappings of exited detached threads. Caller holds threads_lock. */
+/* Free the mappings of exited detached threads. The caller has acquired threads_lock. */
 static void reap_detached(void)
 {
     for (struct pthread *t = threads; t;) {

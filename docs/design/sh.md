@@ -43,7 +43,7 @@ assignment, alternate values, errors, length and prefix/suffix removal.
 short-circuit boolean operators and the conditional operator.
 
 `vars.c` imports the environment into its own table. Exported updates
-also update `environ`; ordinary shell variables stay private. Function
+also update `environ`; ordinary shell variables remain private. Function
 calls push a scope, and `local` shadows an outer binding until scope pop.
 Positional parameters are separately owned copies: `shift` and `set --`
 must not mutate an expanded command's argument array. Calls save and

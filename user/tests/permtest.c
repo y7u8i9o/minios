@@ -1,7 +1,7 @@
 /* U2 test: permission enforcement. Started as root by the perm_user case,
  * it builds a tree under /tmp/perm and checks in children running as uid
  * 1000 that the kernel refuses what the permission bits, the sticky bit
- * and the privilege rules forbid and allows the rest, and that root keeps
+ * and the privilege rules forbid and allows the rest, and that root retains
  * its access. Copies of the program serve as the setuid helper:
  * "--secure" reports AT_SECURE and the ids, "--access PATH" compares
  * access and faccessat with AT_EACCESS. */

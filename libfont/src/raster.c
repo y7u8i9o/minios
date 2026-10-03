@@ -1,7 +1,7 @@
 /* Rasterizer: outlines scaled to 26.6 pixels, curves flattened, edges
  * scan converted with non zero winding into 8 bit coverage using four
  * sub scanlines per row and exact horizontal coverage. Glyph bitmaps
- * are kept in a per font cache. */
+ * are stored in a per font cache. */
 #include "internal.h"
 #include <stdlib.h>
 #include <errno.h>
@@ -87,7 +87,7 @@ static int cubic(struct edges *es, int32_t x0, int32_t y0, int32_t ax, int32_t a
     int n = segments_for(x1 - x0, y1 - y0);
     int32_t px = x0, py = y0;
     for (int i = 1; i <= n; i++) {
-        int64_t t = (int64_t)i * 4096 / n, u = 4096 - t;   /* 12 bit parameters keep products in 64 bits */
+        int64_t t = (int64_t)i * 4096 / n, u = 4096 - t;   /* 12 bit parameters confine products to 64 bits */
         int64_t w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t;
         int32_t x = (int32_t)((w0 * x0 + w1 * ax + w2 * bx + w3 * x1) >> 36);
         int32_t y = (int32_t)((w0 * y0 + w1 * ay + w2 * by + w3 * y1) >> 36);

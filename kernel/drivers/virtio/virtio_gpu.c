@@ -35,7 +35,7 @@
 #define VIRTIO_GPU_MAX_SCANOUTS 16
 
 /* One 16 MiB block (PMM_MAX_ORDER) backs every mode, so a mode change
- * keeps user mappings valid. */
+ * leaves user mappings valid. */
 #define GPU_BUFFER_ORDER PMM_MAX_ORDER
 #define GPU_CTRL_MAX 512
 #define GPU_FLUSH_MS 20
@@ -159,7 +159,7 @@ static int ctrl_xfer(struct virtio_gpu *g, const void *request, size_t request_l
     struct virtqueue *vq = g->ctrlq;
     uint16_t ids[2];
     if (poll && vq->lock.locked)
-        return -EBUSY;          /* held by a halted CPU or by us: cannot make progress */
+        return -EBUSY;          /* locked by a halted CPU or by us: cannot make progress */
     spin_lock(&vq->lock);
     while (virtq_alloc_chain(vq, 2, ids) < 0) {
         if (poll) {
@@ -276,7 +276,7 @@ static int gpu_commit_mode(void *priv)
 }
 
 /* Transfer a rectangle of the buffer to the host and show it. Caller
- * holds g->lock, or is the panic path. */
+ * has acquired g->lock, or is the panic path. */
 static int flush_locked(struct virtio_gpu *g, struct fb_rect r, bool poll)
 {
     if (!g->resource)
@@ -369,13 +369,13 @@ static void probe(struct pci_dev *pci)
     g->pages = pmm_alloc(GPU_BUFFER_ORDER);
     if (!g->pages) {
         klog_error("cannot allocate the %u MiB scanout buffer", (1u << GPU_BUFFER_ORDER) >> 8);
-        return;             /* live IRQ refers to g; keep it allocated */
+        return;             /* live IRQ refers to g: it remains allocated */
     }
     g->buf_phys = page_to_phys(g->pages);
     g->buf = phys_to_virt(g->buf_phys);
     g->buf_size = (size_t)PAGE_SIZE << GPU_BUFFER_ORDER;
     /* User mappings take and drop a reference per page; the driver's own
-     * reference keeps every page of the block allocated for good. */
+     * reference retains every page of the block allocated permanently. */
     for (size_t off = 0; off < g->buf_size; off += PAGE_SIZE)
         page_get(phys_to_page(g->buf_phys + off));
 
@@ -426,5 +426,5 @@ void virtio_gpu_init(void)
             probe(p);
     }
     if (!gpu)
-        klog_info("no device, the boot framebuffer stays in use");
+        klog_info("no device, the boot framebuffer remains in use");
 }

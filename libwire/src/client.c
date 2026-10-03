@@ -136,7 +136,7 @@ void wire_proxy_destroy(struct wire_proxy *p)
     struct wire_display *d = p->display;
     if (p == &d->display)
         return;
-    /* The id stays reserved until the server's delete_id arrives. */
+    /* The id remains reserved until the server's delete_id arrives. */
     p->destroyed = 1;
     p->listener = NULL;
 }

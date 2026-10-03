@@ -35,7 +35,7 @@ static void asid_worker(void *arg)
     for (int r = 0; r < ASID_ROUNDS; r++) {
         seed = seed * 1103515245u + 12345u;
         unsigned i = (seed >> 16) % ASID_SPACES;
-        /* Kernel threads are not preempted, so the space stays loaded on
+        /* Kernel threads are not preempted, so the space remains loaded on
          * this CPU between the activation and the read. */
         vmspace_activate(spaces[i]);
         uint64_t v = *(volatile uint64_t *)ASID_VA;
@@ -67,7 +67,7 @@ static void map_frames(uint64_t base, bool replace)
         struct page *pg = pmm_alloc_page();
         ktest_assert(pg != NULL, "pmm_alloc_page");
         *(volatile uint64_t *)P2V(page_to_phys(pg)) = base + (uint64_t)i;
-        /* The mapping holds the frame's reference, which the teardown of
+        /* The mapping retains the frame's reference, which the teardown of
          * the space drops (free_user_level). vmm_unmap leaves the
          * reference to the caller. */
         page_get(pg);

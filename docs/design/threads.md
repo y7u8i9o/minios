@@ -42,7 +42,7 @@ before writing the slot. Raw entries must finish with `thread_exit`.
 
 `futex(addr, op, value, timeout_ms)` in `kernel/ipc/futex.c` is the
 sleeping half of every lock. `FUTEX_WAIT` sleeps while the 32-bit word at
-`addr` still holds `value`, `FUTEX_WAKE` wakes up to `value` sleepers of
+`addr` still contains `value`, `FUTEX_WAKE` wakes up to `value` sleepers of
 that word. A sleeper hashes (process, address) into one of 64 buckets,
 links a record with its own wait queue there and blocks; the check of the
 word happens under the bucket lock, so a wake issued after the caller's own
@@ -71,7 +71,7 @@ unmaps. The main thread's `pthread_exit` ends only that thread; the process
 lives on until its last thread exits, as the kernel already did for raw
 threads.
 
-The mutex is the three state futex mutex: 0 free, 1 held, 2 held with a
+The mutex is the three state futex mutex: 0 free, 1 acquired, 2 acquired with a
 possible waiter. An uncontended lock is one compare and exchange and an
 uncontended unlock one exchange; the contended path marks the word with 2,
 sleeps on it, and an unlock that finds a 2 wakes one sleeper. Recursive and
@@ -86,9 +86,9 @@ conditions with writer preference; spin locks are a single exchanged word.
 ## libc under threads
 
 `malloc`, `free` and `realloc` run under one lock, every `FILE` has its own
-recursive lock (so `vfprintf` may call `fputc` on the stream it holds), and
+recursive lock (so `vfprintf` may call `fputc` on the stream it has acquired), and
 `atexit` is locked. The open-stream registry has a separate `streams_lock`.
-`fdopen` publishes under that lock, `fflush(NULL)` holds it while walking
+`fdopen` publishes under that lock, `fflush(NULL)` acquires it while walking
 entries, and `fclose` unpublishes before flushing and freeing the object.
 The registry lock nests outside each FILE lock, preventing a global flush
 from retaining a stream that another thread frees. Callers still own the
@@ -107,7 +107,7 @@ not thread safe in POSIX (`gmtime`, `asctime`, `strtok`).
 `pthreads` (`user/tests/pthreadtest.c`): eight threads incrementing a
 counter under a mutex, producers and consumers on a bounded queue with
 two condition variables, recursive and error checking mutexes, a timed
-wait that expires, `errno` kept per thread across a blocking exchange with
+wait that expires, `errno` retained per thread across a blocking exchange with
 another thread, keys with destructors, `pthread_once` from four threads,
 detached threads with small stacks that are reclaimed, `malloc` and `printf`
 from several threads, spin and read-write locks, aligned SIMD stack access,

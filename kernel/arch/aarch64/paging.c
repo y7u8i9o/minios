@@ -93,7 +93,7 @@ static bool hw_access_flag, hw_dirty;
  * and are not released when a space is destroyed. When the generation has
  * no free ASID left, it advances: the bitmap is cleared except for the
  * ASIDs that the CPUs are running, and one broadcast invalidation drops
- * every TLB entry of the old generation. A space keeps its ASID across
+ * every TLB entry of the old generation. A space retains its ASID across
  * the change when a CPU is running it, and otherwise receives a new one
  * at its next load. ASID 0 is the empty root of the kernel space.
  * asid_lock protects asid_generation, asid_map, asid_next, the tags and
@@ -126,9 +126,9 @@ uint64_t paging_asid_rollovers(void)
     return __atomic_load_n(&asid_rollovers, __ATOMIC_RELAXED);
 }
 
-/* A new generation. The ASIDs that the CPUs run stay reserved, with the
- * tag of their space, so that the spaces keep them. A CPU that has not
- * switched since an earlier rollover keeps its reserved tag, which
+/* A new generation. The ASIDs that the CPUs run remain reserved, with the
+ * tag of their space, so that the spaces retain them. A CPU that has not
+ * switched since an earlier rollover retains its reserved tag, which
  * asid_assign updated when its space was assigned again. */
 static void asid_rollover(void)
 {
@@ -160,7 +160,7 @@ static uint64_t asid_assign(struct vmspace *vm)
         return tag;
     uint64_t old = tag & asid_mask();
     if (tag) {
-        /* A space that a CPU ran across the last rollover keeps its ASID,
+        /* A space that a CPU ran across the last rollover retains its ASID,
          * and the reservation follows the new tag. */
         bool reserved = false;
         for (unsigned i = 0; i < smp_cpu_count(); i++) {
@@ -210,7 +210,7 @@ void paging_init_user_root(uintptr_t root, uintptr_t kroot)
 
 void paging_release_user_root(struct vmspace *vm)
 {
-    /* No CPU uses the space any more (vmspace_destroy). Its ASID stays
+    /* No CPU uses the space any more (vmspace_destroy). Its ASID remains
      * assigned until the next rollover, so its TLB entries are dropped
      * now, before its tables are freed. */
     uint64_t asid = vm->tlb_tag & asid_mask();

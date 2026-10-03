@@ -47,10 +47,10 @@ void mutex_unlock(struct mutex *m)
     waitq_wake_one(&m->wq);
 }
 
-bool mutex_held(struct mutex *m)
+bool mutex_locked_by_current(struct mutex *m)
 {
     spin_lock(&m->lock);
-    bool held = m->locked && m->owner == thread_current();
+    bool locked = m->locked && m->owner == thread_current();
     spin_unlock(&m->lock);
-    return held;
+    return locked;
 }

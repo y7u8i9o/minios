@@ -25,10 +25,10 @@
  * format version 5, which places a journal between the inode table and the
  * data blocks, stores modification times in nanoseconds and owners.
  *
- * Files and directories keep the permission bits of the host tree and
+ * Files and directories retain the permission bits of the host tree and
  * belong to root. The manifest of -p changes modes and owners, one entry
  * per line in the form "path mode uid gid", where mode is octal or "-" to
- * keep the bits. A path ending in "/" names a directory and everything
+ * leave the bits unchanged. A path ending in "/" names a directory and everything
  * below it, and lines starting with "#" are comments.
  */
 #include <stdio.h>
@@ -541,12 +541,12 @@ static uint32_t lookup(const char *path)
     return ino;
 }
 
-/* Set the mode (unless keep) and owner of ino, and of everything below it
+/* Set the mode (unless preserve) and owner of ino, and of everything below it
  * when recursive. */
-static void set_owner(uint32_t ino, int keep, uint32_t mode, uint32_t uid, uint32_t gid, int recursive)
+static void set_owner(uint32_t ino, int preserve, uint32_t mode, uint32_t uid, uint32_t gid, int recursive)
 {
     struct mfs_dinode *di = dinode(ino);
-    if (!keep)
+    if (!preserve)
         di->mode = (di->mode & S_IFMT_) | mode;
     di->uid = uid;
     di->gid = gid;
@@ -556,7 +556,7 @@ static void set_owner(uint32_t ino, int keep, uint32_t mode, uint32_t uid, uint3
         uint32_t b = bmap(di, off / MFS_BLOCK_SIZE, 0);
         struct mfs_dirent *e = (struct mfs_dirent *)(block(b) + off % MFS_BLOCK_SIZE);
         if (e->ino && strcmp(e->name, ".") != 0 && strcmp(e->name, "..") != 0)
-            set_owner(e->ino, keep, mode, uid, gid, 1);
+            set_owner(e->ino, preserve, mode, uid, gid, 1);
     }
 }
 
@@ -579,14 +579,14 @@ static void apply_manifest(const char *path)
         }
         size_t len = strlen(file);
         int recursive = len > 1 && file[len - 1] == '/';
-        int keep = strcmp(mode, "-") == 0;
+        int preserve = strcmp(mode, "-") == 0;
         char *end;
-        unsigned long bits = keep ? 0 : strtoul(mode, &end, 8);
-        if (!keep && (*end || bits > 07777)) {
+        unsigned long bits = preserve ? 0 : strtoul(mode, &end, 8);
+        if (!preserve && (*end || bits > 07777)) {
             fprintf(stderr, "mkfs: %s:%d: bad mode %s\n", path, n, mode);
             exit(1);
         }
-        set_owner(lookup(file), keep, (uint32_t)bits, uid, gid, recursive);
+        set_owner(lookup(file), preserve, (uint32_t)bits, uid, gid, recursive);
     }
     fclose(f);
 }

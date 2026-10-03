@@ -7,8 +7,8 @@
  * receives links named after the last component of each target; without
  * a name the link is created in the working directory. -f removes an
  * existing name first. A symbolic link stores the target text as given,
- * so a relative target is resolved from the directory holding the link.
- * A filesystem that cannot hold a hard link (FAT) or a symbolic link
+ * so a relative target is resolved from the directory containing the link.
+ * A filesystem that cannot contain a hard link (FAT) or a symbolic link
  * (FAT, devfs) reports the kernel's error. */
 #include <stdio.h>
 #include <stdlib.h>

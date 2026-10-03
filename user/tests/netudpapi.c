@@ -84,7 +84,7 @@ int main(void)
           "short source buffer reports full size");
     CHECK(small.first[0] == 'a' && small.first[1] == 'b' && small.guard[0] == 0x55 &&
               small.guard[5] == 0x55,
-          "MSG_TRUNC copy stays within iovec");
+          "MSG_TRUNC copy remains within iovec");
     CHECK(recv(b, buf, 2, 0) == 2 && !memcmp(buf, "ab", 2),
           "receive truncates and discards remainder");
     CHECK(recv(b, buf, 8, 0) == -1 && errno == EAGAIN, "no remainder stream");

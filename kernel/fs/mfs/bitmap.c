@@ -14,7 +14,7 @@
 static uint64_t bitmap_alloc(struct mfs_sb *m, uint32_t start, uint32_t nblocks,
                              uint64_t first, uint64_t limit)
 {
-    kassert(mutex_held(&m->lock));
+    kassert(mutex_locked_by_current(&m->lock));
     for (uint32_t b = (uint32_t)(first / BITS_PER_BLOCK); b < nblocks; b++) {
         struct buf *buf = bread(m->dev, start + b);
         if (!buf)
@@ -38,10 +38,10 @@ static uint64_t bitmap_alloc(struct mfs_sb *m, uint32_t start, uint32_t nblocks,
 
 /* Clear a bit. A bit that is clear already is an inconsistency of the
  * filesystem, not of the kernel: it is reported and left alone, and the
- * caller keeps its counters. Returns 0, or -1 for a clear bit. */
+ * caller retains its counters. Returns 0, or -1 for a clear bit. */
 static int bitmap_clear(struct mfs_sb *m, uint32_t start, uint64_t bit)
 {
-    kassert(mutex_held(&m->lock));
+    kassert(mutex_locked_by_current(&m->lock));
     struct buf *buf = bread(m->dev, start + (uint32_t)(bit / BITS_PER_BLOCK));
     if (!buf)
         return -1;

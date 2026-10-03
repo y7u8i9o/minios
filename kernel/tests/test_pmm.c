@@ -96,14 +96,14 @@ static void test_pmm(void)
     expect_same(before, &sb, "scrambled free");
 
     /* Exhaustion at the top order returns NULL without damage. */
-    struct page **hold = (struct page **)P2V(page_to_phys(pmm_alloc(2)));
+    struct page **blocks = (struct page **)P2V(page_to_phys(pmm_alloc(2)));
     size_t maxhold = (PAGE_SIZE << 2) / sizeof(struct page *);
     size_t nhold = 0;
     while (nhold < maxhold) {
         struct page *pg = pmm_alloc(PMM_MAX_ORDER);
         if (!pg)
             break;
-        hold[nhold++] = pg;
+        blocks[nhold++] = pg;
     }
     ktest_assert(nhold < maxhold, "did not exhaust order %u", PMM_MAX_ORDER);
     ktest_assert(pmm_alloc(PMM_MAX_ORDER) == NULL, "alloc succeeded after exhaustion");
@@ -111,8 +111,8 @@ static void test_pmm(void)
     pmm_get_free_counts(counts);
     ktest_assert(counts[PMM_MAX_ORDER] == 0, "order %u list not empty", PMM_MAX_ORDER);
     for (size_t i = 0; i < nhold; i++)
-        pmm_free(hold[i], PMM_MAX_ORDER);
-    pmm_free(phys_to_page(V2P(hold)), 2);
+        pmm_free(blocks[i], PMM_MAX_ORDER);
+    pmm_free(phys_to_page(V2P(blocks)), 2);
     expect_same(before, &sb, "exhaustion");
 
     pmm_dump_stats();

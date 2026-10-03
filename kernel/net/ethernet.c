@@ -11,8 +11,8 @@ void ethernet_input(struct netif *n, struct pbuf *p)
         (p->data[6] & 1))
         goto drop;
     uint16_t type = net_get_be16(p->data + 12);
-    /* IPv4 to the broadcast MAC is accepted; ipv4_input keeps only the
-     * limited broadcast UDP case and never answers it. Multicast stays out. */
+    /* IPv4 to the broadcast MAC is accepted; ipv4_input retains only the
+     * limited broadcast UDP case and never answers it. Multicast is excluded. */
     if (type == 0x0800) {
         pbuf_pull(p, 14);
         ipv4_input(n, p);

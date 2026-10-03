@@ -1,6 +1,6 @@
 #pragma once
 /* C floating point classification and the MiniOS scalar libm interface. The
- * implementation keeps floating point exceptions masked under the default
+ * implementation leaves floating point exceptions masked under the default
  * environment installed by the kernel; on x86_64 it targets the SSE2
  * baseline and the default MXCSR. */
 

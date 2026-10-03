@@ -7,7 +7,7 @@ the port and the work that remains.
 
 ## Sources
 
-`third_party/lua/` holds the `src/` directory of the release archive, the
+`third_party/lua/` contains the `src/` directory of the release archive, the
 manual and the manual pages from `doc/`, the upstream `README`, the MIT
 license in `LICENSE` and the release, download address and SHA-256 in
 `NOTICE`. Nothing in `src/` is edited: a later release is dropped in
@@ -58,7 +58,7 @@ program:
 - `setjmp.h`: `_setjmp` and `_longjmp`, aliases of `setjmp` and `longjmp`
   in `setjmp.S` because there is no signal mask to save.
 - `stdio.h`: `ungetc` (one byte in the read window; a push back onto an
-  empty window shifts it), `freopen` (the standard streams keep their
+  empty window shifts it), `freopen` (the standard streams retain their
   identity), `tmpfile` (a file under `/tmp` that `fclose` removes; the
   stream remembers the path), `tmpnam` with `L_tmpnam`, `TMP_MAX`,
   `P_tmpdir` and `FILENAME_MAX`, `popen` and `pclose` (a pipe to
@@ -179,7 +179,7 @@ The registry maps each C widget to one userdata, so a widget returned
 twice is the same object. libgui emits `destroy` when a widget is freed
 (`widget_destroy`), which clears the pointer; a method on a destroyed
 widget raises "widget was destroyed". Errors inside handlers are printed
-with a traceback to stderr and the program continues. `gui.test` holds
+with a traceback to stderr and the program continues. `gui.test` contains
 `key`, `mouse`, `close`, `paint` and `pixel`, which inject messages into
 a window and read its surface for tests.
 
@@ -198,7 +198,7 @@ A launcher file starts a script with `exec=/bin/lua /usr/share/apps/name.lua`;
 or an SVG file, recognised by the `.svg` suffix, rendered `size` by
 `size` logical pixels (16 by default, at most 1024 device pixels). An
 SVG image is rendered at the scale of the first output, the way the
-icon cache renders icons, so it stays sharp on a high density display;
+icon cache renders icons, so it remains sharp on a high density display;
 `color` fills the paths that name no fill and defaults to black. A
 missing file returns `nil`, `"path: No such file or directory"` and
 `ENOENT`; a file that does not decode returns `nil`, `"path: not a
@@ -216,7 +216,7 @@ device pixel as `0xAARRGGBB` or stores one and returns the image, and
 values carry the alpha in the top byte, so opaque red is `0xffff0000`;
 coordinates outside the image raise an error. The pixels belong to the
 userdata and only the garbage collector frees them. A widget that shows
-an image keeps its userdata in the widget's handler table, so the
+an image retains its userdata in the widget's handler table, so the
 pixels outlive every widget that points at them.
 
 The painter gained `image(img, x, y [, w, h])`. Without a size the image
@@ -225,13 +225,13 @@ nearest pixel when the image's scale differs from the window's. With a
 size the binding resamples the image to `w * scale` by `h * scale`
 device pixels with a box filter over premultiplied samples (each target
 pixel averages the source pixels its area covers, which is the nearest
-pixel when enlarging) and keeps that rendition in the image until a
+pixel when enlarging) and retains that rendition in the image until a
 different size, scale or a `pixel` store replaces it. A size of zero
 draws nothing, and a side beyond 16384 device pixels raises an error.
 
 libgui has no image widget, so the binding defines the class
 `imageview`. `gui.imageview(parent [, img])` shows the image centred,
-reduced to fit its area with the proportions kept and never enlarged,
+reduced to fit its area with the proportions retained and never enlarged,
 on the window colour, and then emits `paint`, so a handler can draw
 over it. Its preferred size is the image's logical size.
 `widget:image(img | nil)` replaces the image of an image view, or sets
@@ -241,7 +241,7 @@ this way.
 
 `app:clipboard()` returns the text of the clipboard and
 `app:clipboard(text)` makes `text` the selection and returns the
-application; the text holds any bytes up to 65536. Both go through
+application; the text contains any bytes up to 65536. Both go through
 `gui_clipboard_get` and `gui_clipboard_set` of libgui, which complete
 the transfer through the data device before they return. The read
 passes a pipe to the offer and waits until the owner (or the
@@ -252,12 +252,12 @@ the client received, so a program sets the clipboard from an input
 handler or after its window gained the keyboard focus (the window's
 `focus` signal with `value` 1); a selection set earlier is silently
 ignored by X12. A read without any selection returns `nil`, `"the
-clipboard holds no text"` and `ENOENT`. libgui exposes neither a
+clipboard contains no text"` and `ENOENT`. libgui exposes neither a
 primary selection nor drag and drop, so the module has neither.
 
 `app:layer(w, h [, options])` creates a window on a layer surface
 (`app_layer_window`), without decorations, for panels, docks and
-overlays. The options table holds `layer` (`"background"`, `"bottom"`,
+overlays. The options table contains `layer` (`"background"`, `"bottom"`,
 `"top"`, the default, or `"overlay"`), `anchor` (edge names separated
 by spaces or commas from `top`, `bottom`, `left` and `right`; none by
 default), `exclusive` (the exclusive zone in logical pixels, 0 by
@@ -280,7 +280,7 @@ put a short bar along the top edge.
 `lua_freeline`, and defines its own versions only when `lua_readline`
 is not defined. `user/Makefile` compiles `lua.c` with `-include
 lua/lreadline.h`, whose macros map the four hooks to
-`user/lua/lreadline.c`, so the vendored file stays unmodified. The glue
+`user/lua/lreadline.c`, so the vendored file remains unmodified. The glue
 opens a libedit editor on the terminal at the first prompt and gives the
 prompt the editing keys of the shell, which move the cursor, recall the
 history with the arrows and Ctrl+R, and complete with Tab global names
@@ -290,7 +290,7 @@ completion reads tables with raw access, so no metamethod runs while a
 line is edited. Ctrl+C discards the line being edited, and Ctrl+D on an
 empty line ends the session as the end of input does. lua.c saves whole
 statements; the glue adds each of their lines to the history on its
-own, so that recalling a line edits one line. The history holds 500
+own, so that recalling a line edits one line. The history contains 500
 lines, is read from `$HOME/.lua_history` at the first prompt and is
 written back at exit. When the editor cannot be opened, the prompt
 falls back to `fgets`. The host test program replaces `lua.c` and
@@ -346,7 +346,7 @@ returns zero frames (and an empty string for capture).
 
 `playback:ready()` reports frames that can be submitted without waiting,
 while `capture:available()` reports frames already captured. These are
-cached counts updated by dispatch. Each playback buffer holds one
+cached counts updated by dispatch. Each playback buffer contains one
 quantum; even a short write consumes a buffer. Start playback before a
 write larger than the ready capacity, otherwise a paused stream cannot
 release buffers. For GUI work, use `app:watch(connection:fd(), "r", fn)`
@@ -363,7 +363,7 @@ before examining the result of an asynchronous state or volume change.
 `xruns`, `error` (an errno number, zero on success), and `state` (`"paused"`,
 `"running"`, or `"error"`).
 
-`mixer:streams()` returns a new array of snapshots, each holding `id`,
+`mixer:streams()` returns a new array of snapshots, each containing `id`,
 `name`, `direction` (`"playback"` or `"capture"`), `volume`, `state` and
 `peak` (0 to 32767). Later events do not mutate a returned table. The
 mixer sees streams from every client. `master()` reads its cached master
@@ -375,7 +375,7 @@ Operations that return no data return `true` on success. Audio failures
 return `nil, message, errno`, like `io.open`. Invalid arguments and use of
 closed objects raise Lua errors. `close()` is the exception: it returns
 no values and is idempotent. All four object types support `__gc` and
-Lua's `<close>` variables. A stream or mixer keeps its connection alive;
+Lua's `<close>` variables. A stream or mixer maintains its connection;
 closing a connection destroys its native children and makes subsequent
 operations on their Lua objects fail safely. Explicitly close or scope
 objects when timely release matters.
@@ -407,7 +407,7 @@ loads `libgui/tests/data/rgba.png` and `shape.svg` and compares their
 sizes and pixels with the formulas of `genicons.py`, checks the missing
 and malformed file results, `from_pixels` and pixel stores, reads back
 images drawn on a canvas at their size, enlarged and reduced, checks
-the image view's placement and fitting and that a label keeps its image
+the image view's placement and fitting and that a label retains its image
 through a garbage collection, round trips the fake clipboard, and
 creates, sizes and closes layer windows, with the errors of bad layer
 names, anchors and sizes.
@@ -444,7 +444,7 @@ recall with Up, a line discarded with Ctrl+C and Ctrl+D; then
 directory.
 `tests/cases/lua_sys` runs the same script on minios; it passes
 `--no-init`, which skips the `spawn` check because the kernel run test
-starts the program without init and a child of init would stay a
+starts the program without init and a child of init would remain a
 zombie and count as leaked pages.
 
 `tests/cases/lua_conf` runs `/etc/tests/conformance.lua`, twelve

@@ -123,13 +123,13 @@ int fesetround(int mode)
 
 int feholdexcept(fenv_t *env)
 {
-    fenv_t held;
+    fenv_t saved;
     environment_read(env);
-    held = *env;
-    held.x87.control |= X87_ALL_FLAGS;
-    held.x87.status &= (uint16_t)~X87_ALL_FLAGS;
-    held.mxcsr = (held.mxcsr & ~MXCSR_ALL_FLAGS) | MXCSR_ALL_MASKS;
-    environment_write(&held);
+    saved = *env;
+    saved.x87.control |= X87_ALL_FLAGS;
+    saved.x87.status &= (uint16_t)~X87_ALL_FLAGS;
+    saved.mxcsr = (saved.mxcsr & ~MXCSR_ALL_FLAGS) | MXCSR_ALL_MASKS;
+    environment_write(&saved);
     return 0;
 }
 

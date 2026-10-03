@@ -105,7 +105,7 @@ static void load_all(void)
         else if (add_module(m, path) < 0)
             fprintf(stderr, "codec: %s: too many modules or codecs\n", path);
         else
-            h = NULL;                   /* kept loaded */
+            h = NULL;                   /* remains loaded */
         if (h)
             dlclose(h);
         free(names[i]);

@@ -30,7 +30,7 @@ struct vcell {
 
 struct vline {
     struct vcell *cells;
-    int len;                    /* cells kept after trimming blanks */
+    int len;                    /* cells retained after trimming blanks */
 };
 
 struct vt {

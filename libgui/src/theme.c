@@ -41,7 +41,7 @@ void theme_init_default(struct theme *t)
 /* The interface font, its size and the scale come from the configuration
  * file (conf_read_path)
  * (ui_font, ui_font_px, ui_scale), written by the settings program. A
- * missing file keeps the defaults. */
+ * missing file leaves the defaults in effect. */
 static const struct { const char *name; const char *path; } ui_fonts[] = {
     { "DejaVu Sans", "/usr/share/fonts/DejaVuSans.ttf" },
     { "Noto Sans", "/usr/share/fonts/NotoSans-Regular.ttf" },

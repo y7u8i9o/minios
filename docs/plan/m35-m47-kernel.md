@@ -2,7 +2,7 @@
 
 ## M35. POSIX threads and time (completed 2026-09-03)
 
-1. Thread local storage: the kernel keeps an FS base per thread
+1. Thread local storage: the kernel maintains an FS base per thread
    (`set_tls`, loaded at every switch and first run, inherited by fork and
    raw threads, cleared by exec) and adds `gettid`. libc gives every thread
    a control block at its FS base; `errno` lives there.
@@ -76,12 +76,12 @@ through `mount`, stdio and `dirent`).
    region is unmapped or synced, and dirty pages are written back through
    the file; the cache is dropped with the last mapper, so a file that is
    not mapped costs nothing. `read` overlays the cached pages and `write`
-   copies through them, so ordinary I/O and mappings stay coherent.
+   copies through them, so ordinary I/O and mappings remain coherent.
    `msync` writes the dirty pages of a range.
 2. `mprotect` splits regions at the boundaries and rewrites present
-   entries; copy on write frames keep their protection. `PROT_NONE`
-   entries keep their frame behind the software bit `PTE_PROTNONE`.
-   `MAP_FIXED` replaces whatever the range held.
+   entries; copy on write frames retain their protection. `PROT_NONE`
+   entries retain their frame behind the software bit `PTE_PROTNONE`.
+   `MAP_FIXED` replaces whatever the range contained.
 3. libc: `mprotect`, `msync`, `MAP_SHARED`, `MAP_FIXED`, `MS_*`.
    `docs/design/filemap.md` describes it.
 
@@ -101,7 +101,7 @@ fault beyond the end of the file, `mprotect` splitting and `PROT_NONE`,
    again, `MADV_FREE` clears the dirty bits and tags the entries with
    `PTE_LAZYFREE`: kswapd frees such a frame instead of swapping it when
    the dirty bit is still clear, and a page written again in the meantime
-   is kept. `MADV_DONTFORK` and `MADV_DOFORK` set and clear `VM_DONTFORK`,
+   is retained. `MADV_DONTFORK` and `MADV_DOFORK` set and clear `VM_DONTFORK`,
    which `vmspace_fork` skips. `MADV_HUGEPAGE` and `MADV_NOHUGEPAGE` set
    the flag M39 acts on. Regions are split as needed.
 2. `/dev/meminfo` gains `LazyFreed:`, the count of frames reclaimed
@@ -138,7 +138,7 @@ the buddy allocator has no order 9 block, and no leak).
 ## M40. Per process resource limits and CPU accounting (completed 2026-09-04)
 
 1. Every process carries `struct rlimit rlim[RLIMIT_NLIMITS]`, inherited
-   by fork, kept by exec, read and written with `getrlimit`, `setrlimit`
+   by fork, retained by exec, read and written with `getrlimit`, `setrlimit`
    and `prlimit` (any pid). Enforced: `RLIMIT_AS` (sum of region sizes,
    checked by `mmap`, `sbrk` and thread stacks), `RLIMIT_DATA` (heap
    size), `RLIMIT_STACK` (size of the main stack region set up by exec,
@@ -200,15 +200,15 @@ existing `gui_tools` case with sysmon.
 
 1. `CONFIG_LOCKSTAT` (`kernel/sync/spinlock.c`, `kernel/sync/lockstat.c`):
    every spinlock counts acquisitions, contended acquisitions, cycles
-   spent spinning, cycles held and the longest hold with its acquirer,
+   spent spinning, cycles spent locked and the longest locked period with its acquirer,
    aggregated by lock name; `/dev/lockstat` prints the table and a write
    resets it.
 2. The profiler attributes kernel samples taken with interrupts disabled
-   to the code that held the lock (`prof_attribute` in libc, marked
+   to the code that had acquired the lock (`prof_attribute` in libc, marked
    `(locked)` in `prof` and sysmon); `prof -a` samples every process with
    a per process table.
 3. `/dev/proc` no longer walks page tables under `proc_list_lock`.
-   `docs/design/lockstat.md` holds the measurements of the desktop and
+   `docs/design/lockstat.md` contains the measurements of the desktop and
    `docs/design/lockfree.md` the design and plan for M43 to M46.
 
 Tests: `prof_gui` (the desktop headless with a terminal, `mandel`,
@@ -265,28 +265,28 @@ with no `sched_lock` row and run queue contention under one percent.
 Tests: `pipes`, `pty`, `sockets`, `kbd`, `mouse`, `profile` unchanged,
 `ring` (producer and consumer on different CPUs, wrap around, full and
 empty transitions), and `prof_gui` with the `console` row under one
-millisecond of hold time.
+millisecond of locked time.
 
 ## M46. Per CPU allocators and address space counters (completed 2026-09-05)
 
 1. Per CPU magazines in front of the slab caches and per CPU single page
    lists in front of the buddy allocator; reported allocator totals include
-   objects and pages held in those per CPU caches.
+   objects and pages stored in those per CPU caches.
 2. `vma_populate` zeroes pages before taking the space lock; a per CPU
    resident counter per address space replaces `vma_count_resident`;
    `munmap` batches its TLB shootdowns.
 
 Tests: `slab`, `pmm`, `vmm`, `swap`, `hugepages` unchanged, `prof_gui`
 with `kmalloc-*` and `pmm_lock` rows near zero for the steady state and
-`vmspace` holds under 100 microseconds.
+`vmspace` locked times under 100 microseconds.
 
 ## M47. Input subsystem (completed 2026-09-05)
 
 1. An input core (`kernel/input/`): drivers register `struct input_dev`
    with capabilities and report evdev style events (Linux key codes,
    `REL_*`, `ABS_*`, `SYN_REPORT`) with microsecond timestamps. The core
-   keeps the keys down per device, drops presses of keys already down,
-   repeats the held key in software, delivers to `/dev/input/eventN`
+   records the keys down per device, drops presses of keys already down,
+   repeats the pressed key in software, delivers to `/dev/input/eventN`
    readers (queues of 1024 events, `SYN_DROPPED` on overflow, `EVIOCGRAB`,
    `EVIOCGCAPS`, `EVIOCGKEY`, `EVIOCGABS`, `EVIOCGREP`/`EVIOCSREP`) and
    feeds ungrabbed keyboards to the console terminal through
@@ -297,10 +297,10 @@ with `kmalloc-*` and `pmm_lock` rows near zero for the steady state and
    mouse and virtio-input (now including keyboards, attached by
    `tools/run.sh` as `virtio-keyboard-pci`) report to the core.
 3. The compositor reads and grabs every `/dev/input` device; the cursor
-   is kept in fractions of a pixel with an acceleration profile
+   is stored in fractions of a pixel with an acceleration profile
    (`pointer_speed`, `pointer_accel` flat or adaptive, in the settings
    program's Mouse page); motion and wheel values are fixed point.
-4. libgui repeats a held key from `repeat_info`; key codes in the
+4. libgui repeats a pressed key from `repeat_info`; key codes in the
    toolkit and the applications are the `KEY_*` names.
 
 Tests: `input`, `mouse`, `mouse_wheel`, `kbd`, `input_tablet`,

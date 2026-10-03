@@ -9,7 +9,7 @@
 #                   commit by default
 #   --skip-tests    leave out the host checks and the boot cases
 #   --tag           create the annotated tag vVERSION at the commit afterwards
-#   --keep          do not remove the worktree after a successful release
+#   --retain        do not remove the worktree after a successful release
 #   --out DIR       directory of the results, build/release by default
 #   -j N            parallel make jobs, the number of processors by default
 #
@@ -42,7 +42,7 @@ ARCHES=x86_64,aarch64
 CASES=""
 TESTS=1
 TAG=0
-KEEP=0
+RETAIN=0
 OUT="$TOP/build/release"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
 KEY="${RELEASE_KEY:-$HOME/.config/minios/release-signing.key}"
@@ -59,7 +59,7 @@ while [ $# -gt 0 ]; do
         --cases) CASES="$2"; shift ;;
         --skip-tests) TESTS=0 ;;
         --tag) TAG=1 ;;
-        --keep) KEEP=1 ;;
+        --retain) RETAIN=1 ;;
         --out) OUT="$2"; shift ;;
         -j) JOBS="$2"; shift ;;
         -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -234,7 +234,7 @@ if [ "$TAG" = 1 ]; then
     git -C "$TOP" tag -a "$TAGNAME" -m "minios $VERSION" "$COMMIT"
     step "tagged $TAGNAME at $SHORT, push it with git push origin $TAGNAME"
 fi
-if [ "$KEEP" = 0 ]; then
+if [ "$RETAIN" = 0 ]; then
     git -C "$TOP" worktree remove --force "$WT"
 fi
 step "done"

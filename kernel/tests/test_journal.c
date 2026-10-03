@@ -43,7 +43,7 @@ static void write_file(const char *path, const char *data, size_t n)
     file_put(f);
 }
 
-static bool file_holds(const char *path, const char *data, size_t n)
+static bool file_has_content(const char *path, const char *data, size_t n)
 {
     struct file *f;
     if (vfs_open(path, O_RDONLY, 0, &f) < 0)
@@ -171,7 +171,7 @@ static void test_journal(void)
     ktest_assert(vfs_unlink("/mnt/base.txt") == 0, "unlink base");
     remount(sb, CRASH_AFTER_COMMIT);
     sb = sb_of("/mnt");
-    ktest_assert(file_holds("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt restored by the journal");
+    ktest_assert(file_has_content("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt restored by the journal");
     ktest_assert(exists("/mnt/dir/sub"), "sub restored by the journal");
     ktest_assert(!exists("/mnt/base.txt"), "base.txt removal restored by the journal");
     check_consistent(dev, "after replay");
@@ -183,7 +183,7 @@ static void test_journal(void)
     remount(sb, CRASH_BEFORE_COMMIT);
     sb = sb_of("/mnt");
     ktest_assert(!exists("/mnt/lost.txt"), "lost.txt did not survive");
-    ktest_assert(file_holds("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt unchanged");
+    ktest_assert(file_has_content("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt unchanged");
     ktest_assert(!exists("/mnt/dir/moved.txt"), "rename did not survive");
     check_consistent(dev, "after the lost transaction");
 
@@ -215,7 +215,7 @@ static void test_journal(void)
     /* Clean unmount for the host check of the second image. */
     ktest_assert(vfs_umount("/mnt") == 0, "final umount");
     ktest_assert(vfs_mount("mfs", "vdb", "/mnt", NULL) == 0, "mount after clean unmount");
-    ktest_assert(file_holds("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt after clean remount");
+    ktest_assert(file_has_content("/mnt/dir/after.txt", pattern, sizeof pattern), "after.txt after clean remount");
     ktest_assert(vfs_umount("/mnt") == 0, "umount again");
 
     /* Leave a committed transaction on the root image for fsck. */

@@ -1,4 +1,4 @@
-/* RFC 1071 checksum over unaligned data. The sum is kept in 32 bits and
+/* RFC 1071 checksum over unaligned data. The sum is retained in 32 bits and
  * folded at the end; a piece of at most 64 KiB cannot overflow it. */
 #include <net/checksum.h>
 #include <net/byteorder.h>

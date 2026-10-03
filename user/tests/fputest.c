@@ -50,9 +50,9 @@ int main(void)
     CHECK(r == expected, "result differs while other processes compute: %d", (int)(r * 1000));
     signal(SIGUSR1, on_signal);
     double before = work(7.0, 50000);
-    double keep = before * 2.0;                 /* held in a register across the signal */
+    double retain = before * 2.0;                 /* stored in a register across the signal */
     kill(getpid(), SIGUSR1);
-    double after = keep / 2.0;
+    double after = retain / 2.0;
     CHECK(after == before, "registers restored after a signal handler");
     for (int i = 0; i < 3; i++) {
         int status;

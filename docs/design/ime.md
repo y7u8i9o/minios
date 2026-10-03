@@ -13,7 +13,7 @@ and the switch keys, and the terminal composes as the text widgets do.
 
 ## Methods
 
-`user/compositor/inputmethod.c` keeps the list of methods that the switch
+`user/compositor/inputmethod.c` retains the list of methods that the switch
 keys select. The keyboard layout is the first method. The engines of the
 daemon follow in the order of its `set_engines` request: `pinyin`, then
 `japanese`. Until the user selects an engine, the first toggle selects the
@@ -68,12 +68,12 @@ context has the keyboard focus. It then receives `activate`, the
 surrounding text, the content type and the caret in screen coordinates,
 and `deactivate` when the focus or the method changes. Every key of the
 active context goes to the daemon as `key` with a serial. The compositor
-holds the key in a queue of 32 entries until `key_handled` arrives. A used
+contains the key in a queue of 32 entries until `key_handled` arrives. A used
 key and its release do not reach the client. A passed key goes the usual
 way through the dead keys of `text.c` to the client, with the modifiers of
 the moment it was typed. A key without a reply in 150 ms passes, and the
 compositor logs a timeout. The keys typed after a waiting key wait behind
-it, unsent, and the order stays. The switch keys and the Japanese keys wait
+it, unsent, and the order remains. The switch keys and the Japanese keys wait
 in the same queue: a switch typed after letters takes effect after the
 daemon has answered for the letters, and the keys typed after a waiting
 switch go where the switch sends them. A key with Ctrl, Alt or Super goes
@@ -137,7 +137,7 @@ public domain and BSD 3-clause, whose README is installed beside it as
 `mozc.README.txt`): 225811 entries of 138863 readings, 9.3 MB. The 2672
 part of speech ids of Mozc become 1427 classes. A verb or an adjective
 without a word of its own is grouped by its group, conjugation type and
-conjugation form, and every other id stays a class: particles, auxiliary
+conjugation form, and every other id remains a class: particles, auxiliary
 verbs, nouns, and verbs with a word such as いる or 来る. The conjugation
 type decides between た and だ after a verb, and the ids of single words
 separate forms such as the hiragana わたし, which Mozc gives cost 0 and
@@ -322,7 +322,7 @@ accepts text, and the terminal (`user/term/term.c`) sets `accepts_text` on
 its canvas. The text of the printable keys then arrives as committed text,
 from the dead keys of the compositor or from an engine, and the terminal
 writes it to the pty. Keys with Ctrl or Alt, the cursor keys and the
-function keys stay key events, which the terminal turns into bytes as
+function keys remain key events, which the terminal turns into bytes as
 before. The preedit covers the cells from the cursor, underlined, and the
 terminal reports the cursor cell as the caret, where the candidate window
 appears.
@@ -343,7 +343,7 @@ comes from sentences. The Japanese engine has no bigram costs between
 words and no prediction. かんじへんかん therefore becomes 感じ変換, where
 Mozc gives 漢字変換. The pinyin engine has no fuzzy syllables (zh for z, ing for in)
 and neither engine has a caret inside the input. The compositor repeats no
-key for the daemon: a Backspace that stays down deletes one letter of the
+key for the daemon: a Backspace that remains down deletes one letter of the
 input.
 The engines compose only in clients with text input enabled: the text
 widgets of libgui and the terminal.

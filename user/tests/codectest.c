@@ -212,7 +212,7 @@ static void test_audio(void)
         CHECK(codec_for_data(CODEC_IMAGE, file, (size_t)n, 0) == NULL, "not as an image");
         struct codec_audio *a;
         CHECK(codec_audio_open(NULL, file, 12, NULL, &a) == -EINVAL, "a header alone is invalid");
-        /* A cut in the middle of the last sample keeps the whole frames. */
+        /* A cut in the middle of the last sample retains the whole frames. */
         file[40] = 3;
         put32le(file + 4, 0);
         if (codec_audio_open(NULL, file, 46, NULL, &a) == 0) {
@@ -398,7 +398,7 @@ static void test_flac(void)
     if (!eb)
         codec_audio_close(b);
 
-    /* Round trips through the encoder. Some files are kept for the post
+    /* Round trips through the encoder. Some files are retained for the post
      * script, which tests them with the reference flac. */
     static const int sizes[] = { 4, 8, 12, 16, 20, 24, 32 }, layouts[] = { 1, 2, 5, 8 };
     for (int si = 0; si < 7; si++)
@@ -609,10 +609,10 @@ static double snr_db(const int32_t *a, const int32_t *b, long n)
 }
 
 /* Encode, decode in minios, and return the signal-to-noise ratio, or -99.
- * With keep set, the file and the decoded 16 bit samples are written for
+ * With retain set, the file and the decoded 16 bit samples are written for
  * the post script, which decodes the file with libvorbis on the host. */
 static double vorbis_round(const char *name, const int32_t *in, long frames, int ch, int rate, const char *options,
-                           long *size, const char *keep)
+                           long *size, const char *retain)
 {
     struct codec_audio_format fmt = { rate, ch, 16 };
     uint8_t *file;
@@ -627,9 +627,9 @@ static double vorbis_round(const char *name, const int32_t *in, long frames, int
     CHECK(err == 0 && n == frames && codec_audio_frames(a) == frames, "%s with %s decodes to %ld of %ld frames, error %d",
           name, options, n, frames, err);
     double snr = n == frames ? snr_db(in, out, frames * ch) : -99;
-    if (keep && n == frames) {
+    if (retain && n == frames) {
         char path[64];
-        snprintf(path, sizeof path, "/%s.ogg", keep);
+        snprintf(path, sizeof path, "/%s.ogg", retain);
         CHECK(codec_write_file(path, file, (size_t)*size) == 0, "write %s", path);
         uint8_t *raw = malloc((size_t)frames * ch * 2);
         for (long i = 0; raw && i < frames * ch; i++) {
@@ -638,7 +638,7 @@ static double vorbis_round(const char *name, const int32_t *in, long frames, int
             raw[2 * i] = (uint8_t)v;
             raw[2 * i + 1] = (uint8_t)(v >> 8);
         }
-        snprintf(path, sizeof path, "/%s.raw", keep);
+        snprintf(path, sizeof path, "/%s.raw", retain);
         CHECK(raw && codec_write_file(path, raw, (size_t)frames * ch * 2) == 0, "write %s", path);
         free(raw);
     }
@@ -675,7 +675,7 @@ static void test_vorbis_encoder(void)
      * the values measured on the host. */
     static const struct {
         int signal;
-        const char *options, *keep;
+        const char *options, *retain;
         double snr;
     } runs[] = {
         { 0, "quality=-0.1", NULL, 14 },          { 0, "quality=0.4", NULL, 30 },
@@ -692,7 +692,7 @@ static void test_vorbis_encoder(void)
         int rate = runs[i].signal == 0 ? 16000 : runs[i].signal == 1 ? 44100 : 48000;
         const char *name = runs[i].signal == 0 ? "chime" : runs[i].signal == 1 ? "music" : "5.1";
         long size;
-        double snr = vorbis_round(name, in, frames, ch, rate, runs[i].options, &size, runs[i].keep);
+        double snr = vorbis_round(name, in, frames, ch, rate, runs[i].options, &size, runs[i].retain);
         CHECK(snr >= runs[i].snr, "%s with %s: %.1f dB, required %.1f", name, runs[i].options, snr, runs[i].snr);
         /* Within one signal, a higher quality takes more bytes. */
         if (i && runs[i].signal == runs[i - 1].signal && strstr(runs[i].options, "quality") &&
@@ -722,7 +722,7 @@ static void test_oggflac(void)
     CHECK(oggflac && oggflac->caps == (CODEC_DECODE | CODEC_ENCODE), "oggflac codec");
     CHECK(codec_for_mime(CODEC_AUDIO, "audio/x-oggflac", 0) == oggflac, "oggflac by MIME type");
     CHECK(codec_for_path(CODEC_AUDIO, "/x/a.oga", CODEC_ENCODE) == oggflac, "oggflac by extension");
-    CHECK(codec_for_path(CODEC_AUDIO, "/x/a.ogg", CODEC_ENCODE) == codec_find("vorbis"), ".ogg stays Vorbis");
+    CHECK(codec_for_path(CODEC_AUDIO, "/x/a.ogg", CODEC_ENCODE) == codec_find("vorbis"), ".ogg remains Vorbis");
     if (!oggflac)
         return;
     static const struct {

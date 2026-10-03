@@ -9,7 +9,7 @@ SYNOPSIS
 DESCRIPTION
     getaddrinfo(3) reads this file for every name that is neither
     numeric, localhost nor listed in /etc/hosts. dhcpc(1) writes it from
-    a lease and net(1) apply writes it from /etc/network. Each line holds
+    a lease and net(1) apply writes it from /etc/network. Each line contains
     a keyword and its values:
 
         nameserver ADDR       names a DNS server; three are used at most
@@ -24,12 +24,12 @@ DESCRIPTION
     each search domain first and as given last. Only a negative answer
     moves on to the next candidate.
 
-    Every process keeps the answers it received for the smallest TTL of
+    Every process retains the answers it received for the smallest TTL of
     the records used, at most one hour, in a cache of 32 names. A
-    negative answer is kept for the TTL of the SOA record that came with
+    negative answer is retained for the TTL of the SOA record that came with
     it or its MINIMUM field, whichever is smaller (RFC 2308), again at
     most one hour; a negative answer without an SOA record, a server
-    failure and an answer with TTL 0 are not kept.
+    failure and an answer with TTL 0 are not retained.
 
 ENVIRONMENT
     RESOLV_CONF names another file, which tests use.

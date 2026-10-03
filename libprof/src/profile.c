@@ -458,7 +458,7 @@ int prof_is_lock_primitive(const char *name)
 {
     static const char *const names[] = {
         "pop_cli", "push_cli", "spin_lock", "spin_unlock", "spin_lock_irqsave", "spin_unlock_irqrestore",
-        "tlb_shootdown_poll", "spin_holding",
+        "tlb_shootdown_poll", "spin_locked_by_current",
     };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++)
         if (strcmp(name, names[i]) == 0)

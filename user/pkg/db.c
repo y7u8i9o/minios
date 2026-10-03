@@ -137,8 +137,8 @@ static void db_dir(char *buf, size_t n, const char *name)
         snprintf(buf, n, "%s%s", root, PKG_DB);
 }
 
-/* The lock is a file created exclusively with the holder's pid; a lock
- * whose holder no longer exists is taken over. */
+/* The lock is a file created exclusively with the pid of its locker; a lock
+ * whose locker no longer exists is replaced. */
 int db_lock(void)
 {
     char dir[PKG_PATH_MAX], lock[PKG_PATH_MAX];
@@ -161,9 +161,9 @@ int db_lock(void)
         size_t len;
         if (read_file(lock, &data, &len) < 0)
             return -EBUSY;
-        int holder = atoi((const char *)data);
+        int locker = atoi((const char *)data);
         free(data);
-        if (holder > 0 && (kill(holder, 0) == 0 || errno != ESRCH))
+        if (locker > 0 && (kill(locker, 0) == 0 || errno != ESRCH))
             return -EBUSY;
         unlink(lock);
     }

@@ -304,7 +304,7 @@ static void set_address(struct sockaddr_storage *storage, uint32_t address, uint
 
 /* recv consumes a datagram even when its caller offers zero bytes. In
  * contrast, read(fd, ..., 0) returns in file_read before reaching here.
- * MSG_PEEK keeps ownership in the ring; ordinary receive frees after unlock. */
+ * MSG_PEEK retains ownership in the ring; ordinary receive frees after unlock. */
 static long udp_receive(struct socket *s, struct socket_msg *m)
 {
     if (m->flags & ~(MSG_DONTWAIT | MSG_PEEK | MSG_TRUNC))

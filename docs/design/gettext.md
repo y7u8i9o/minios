@@ -48,7 +48,7 @@ nonempty translation of the message gives the result. Without a
 translation the result is the message, or for a plural message with
 n other than 1 the plural.
 
-A catalogue is read into memory on first use and stays there with its
+A catalogue is read into memory on first use and remains there with its
 plural rule. The catalogue of a domain is in the directory that
 `bindtextdomain` set, `/usr/share/locale` by default. A missing file is
 remembered as missing. A lock protects the bindings, the current domain

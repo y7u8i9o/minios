@@ -16,7 +16,7 @@
 
 static int failures;
 
-/* counts holds the queries received per name; the server threads write it
+/* counts records the queries received per name; the server threads write it
  * under counts_lock. */
 static pthread_mutex_t counts_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct {
@@ -324,7 +324,7 @@ static int cache_tests(void)
     }
     CHECK(res_cache_remaining("fill0.test") == -1 && res_cache_remaining("fill7.test") == -1 &&
           res_cache_remaining("fill8.test") > 0 && res_cache_remaining("fill39.test") > 0,
-          "32 entries kept, the least recently used replaced");
+          "32 entries retained, the least recently used replaced");
 
     write_resolv("search example.test other.test\n");
     CHECK(resolve("www", &a) == 0 && a == 0x0a00000b && queries("www.example.test") == 1 &&

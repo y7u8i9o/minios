@@ -29,7 +29,7 @@ int signal_send_pgrp(int pgid, int sig);
 bool signal_should_interrupt(void);
 /* Deliver one pending signal before returning to user mode with tf. */
 void signal_deliver(struct trapframe *tf);
-/* Reset dispositions for exec: handlers become default, ignores stay. */
+/* Reset dispositions for exec: handlers become default, ignores remain. */
 void signal_reset_for_exec(struct proc *p);
 /* Copy dispositions from parent to child (fork). */
 void signal_copy(struct proc *dst, const struct proc *src);

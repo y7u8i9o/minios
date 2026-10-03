@@ -1,5 +1,5 @@
 /* The PS/2 keyboard: scancode set 1 bytes are translated to key codes and
- * reported to the input core, which keeps the key state, repeats held keys
+ * reported to the input core, which retains the key state, repeats pressed keys
  * and feeds the console terminal. The 8042 controller that delivers the
  * bytes is platform code (arch/x86_64/i8042.c). */
 #define KLOG_SUBSYS "ps2kbd"

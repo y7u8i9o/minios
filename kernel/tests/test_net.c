@@ -136,7 +136,7 @@ static void socket_cycle(int round)
 /* The free page count once it has stopped moving: the files of released
  * sockets are freed by the rcu thread on whichever CPU runs it, so the
  * magazines and CPU page caches are drained before each reading and the
- * count must hold for ten readings five milliseconds apart. */
+ * count must remain valid for ten readings five milliseconds apart. */
 static uint64_t settled_free_pages(void)
 {
     struct pmm_stats st;
@@ -187,21 +187,21 @@ static void test_pbuf(void)
     ktest_assert(st.free == st.total, "pool starts full: %u of %u", st.free, st.total);
     uint32_t total = st.total, reserve = st.reserve;
     uint64_t fails = st.alloc_fail;
-    static struct pbuf *held[NET_PBUF_COUNT];
+    static struct pbuf *bufs[NET_PBUF_COUNT];
     uint32_t n = 0;
     /* Data allocations stop at the reserve, control allocations use it,
      * then everything fails and is counted. */
-    while (n < NET_PBUF_COUNT && (held[n] = pbuf_alloc(PBUF_DATA)))
+    while (n < NET_PBUF_COUNT && (bufs[n] = pbuf_alloc(PBUF_DATA)))
         n++;
     ktest_assert(n == total - reserve, "data allocations stop at the reserve: %u", n);
-    while (n < NET_PBUF_COUNT && (held[n] = pbuf_alloc(PBUF_CONTROL)))
+    while (n < NET_PBUF_COUNT && (bufs[n] = pbuf_alloc(PBUF_CONTROL)))
         n++;
     ktest_assert(n == total, "control allocations take the reserve: %u", n);
     ktest_assert(pbuf_alloc(PBUF_CONTROL) == NULL, "an empty pool fails");
     pbuf_get_stats(&st);
     ktest_assert(st.alloc_fail == fails + 2 && st.free == 0 && st.low_water == 0, "failures counted: %lu", st.alloc_fail);
     for (uint32_t i = 0; i < n; i++)
-        pbuf_free(held[i]);
+        pbuf_free(bufs[i]);
     pbuf_get_stats(&st);
     ktest_assert(st.free == total, "pool full again: %u", st.free);
 
@@ -216,7 +216,7 @@ static void test_pbuf(void)
     pbuf_get_stats(&st);
     ktest_assert(st.bad_transfer == bad + 1, "one bad transfer counted: %lu", st.bad_transfer);
 
-    /* Header room: push, pull, put and trim stay inside the buffer. */
+    /* Header room: push, pull, put and trim remain inside the buffer. */
     ktest_assert(pbuf_put(p, 100) != NULL && p->len == 100, "put");
     ktest_assert(pbuf_push(p, 14) == p->data && p->len == 114 && pbuf_headroom(p) == PBUF_HEADROOM - 14, "push");
     ktest_assert(pbuf_push(p, PBUF_HEADROOM) == NULL, "push beyond the headroom");
@@ -233,7 +233,7 @@ static void test_checksum(void)
     /* The RFC 1071 example. */
     static const uint8_t v[] = { 0x00, 0x01, 0xf2, 0x03, 0xf4, 0xf5, 0xf6, 0xf7 };
     ktest_assert(net_checksum(v, sizeof v) == 0x220d, "RFC 1071 example: %04x", net_checksum(v, sizeof v));
-    /* A datagram whose (word aligned) checksum field holds the checksum
+    /* A datagram whose (word aligned) checksum field contains the checksum
      * sums to zero, with an odd length. */
     uint8_t with[11] = { 0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0, 0, 0x11 };
     uint16_t c = net_checksum(with, sizeof with);
@@ -258,7 +258,7 @@ static void test_checksum(void)
 }
 
 /* The test's IP entry point counts and frees. While input_gate is set it
- * holds the worker inside its packet batch, which is how the tests fill
+ * blocks the worker inside its packet batch, which is how the tests fill
  * the queues; protocol code never waits like this. */
 static volatile int input_count;
 static volatile int input_gate;
@@ -293,21 +293,21 @@ static void wait_input(int count)
                  input_count, count);
 }
 
-/* Hold the worker at the gate: one packet is queued and taken by the
+/* Stall the worker at the gate: one packet is queued and taken by the
  * worker, which then waits in the test handler. */
-static void hold_worker(void)
+static void stall_worker(void)
 {
     struct net_worker_stats ws;
     net_worker_drain();
     __atomic_store_n(&input_gate, 1, __ATOMIC_RELEASE);
-    ktest_assert(send_loopback(0xee, 4) == 0, "the packet that holds the worker");
+    ktest_assert(send_loopback(0xee, 4) == 0, "the packet that stalls the worker");
     for (int i = 0; i < 5000; i++) {
         net_worker_get_stats(&ws);
         if (ws.queued_packets == 0)
             return;
         sleep_ms(1);
     }
-    ktest_fail("the worker did not take the holding packet");
+    ktest_fail("the worker did not take the stalling packet");
 }
 
 static void release_worker(void)
@@ -348,12 +348,12 @@ static void test_queues(void)
     struct pbuf_stats ps;
     input_count = 0;
 
-    /* Queue exhaustion: with the worker held the input queue fills to
+    /* Queue exhaustion: with the worker stalled the input queue fills to
      * its limit; beyond it output fails, the buffer is freed and the
      * drop is counted. */
     pbuf_get_stats(&ps);
     uint32_t free_before = ps.free;
-    hold_worker();                      /* one buffer is now held by the handler */
+    stall_worker();                      /* one buffer is now retained by the handler */
     int queued = 0, refused = 0;
     for (int i = 0; i < NET_INPUT_QUEUE_MAX + 5; i++) {
         int r = send_loopback(4, 10);
@@ -416,13 +416,13 @@ static void test_interface_down(void)
     struct netif *lo = netif_loopback();
     struct net_worker_stats ws;
     input_count = 0;
-    hold_worker();
+    stall_worker();
     for (int i = 0; i < 4; i++)
         ktest_assert(send_loopback(5, 10) == 0, "queue before down");
     uint64_t rx_dropped = atomic_u64_load_relaxed(&lo->stats.rx_dropped);
     net_worker_get_stats(&ws);
     uint64_t down_before = ws.packets_dropped_down;
-    /* Taking the interface down drains the worker, which is held: a
+    /* Taking the interface down drains the worker, which is stalled: a
      * helper opens the gate, and the down returns once the batch that
      * was running is over. */
     struct thread *t = thread_create("net_gate", open_gate_later, NULL, 0);
@@ -432,7 +432,7 @@ static void test_interface_down(void)
     ktest_assert(!netif_is_up(lo), "lo is down");
     net_worker_drain();
     net_worker_get_stats(&ws);
-    ktest_assert(input_count == 1, "only the holding packet was delivered: %d", input_count);
+    ktest_assert(input_count == 1, "only the stalling packet was delivered: %d", input_count);
     ktest_assert(ws.packets_dropped_down == down_before + 4, "queued packets of a down interface are dropped: %lu",
                  ws.packets_dropped_down - down_before);
     ktest_assert(atomic_u64_load_relaxed(&lo->stats.rx_dropped) == rx_dropped + 4, "and counted on the interface");
@@ -508,7 +508,7 @@ static void test_timers(void)
     net_timer_arm(&timers[0], now + 1000);
     net_worker_drain();
     sleep_ms(20);
-    ktest_assert(nfired == 0 && net_timer_armed(&timers[0]), "a future timer stays quiet");
+    ktest_assert(nfired == 0 && net_timer_armed(&timers[0]), "a future timer remains quiet");
     ktest_assert(net_timer_cancel(&timers[0]) && !net_timer_cancel(&timers[0]), "cancel once");
     net_worker_get_stats(&ws);
     ktest_assert(ws.armed_timers == 0, "no armed timer left: %u", ws.armed_timers);
@@ -540,7 +540,7 @@ static void test_timers(void)
     net_clock_advance(200);
     net_worker_kick();
     net_worker_drain();
-    ktest_assert(nfired == 3 && net_timer_armed(&timers[3]), "a moved timer keeps its new deadline");
+    ktest_assert(nfired == 3 && net_timer_armed(&timers[3]), "a moved timer retains its new deadline");
     ktest_assert(net_timer_cancel(&timers[3]), "cancelled");
 
     /* A timer re-arming itself from its own function. */
@@ -558,7 +558,7 @@ static void test_timers(void)
     ktest_assert(!net_timer_armed(&timers[3]), "the periodic timer stopped itself");
 
     /* Sustained input does not postpone a due timer past one batch:
-     * a flood keeps the queue full while a timer becomes due. */
+     * a flood leaves the queue full while a timer becomes due. */
     net_set_ip_input(test_ip_input);
     input_count = 0;
     flood_stop = 0;

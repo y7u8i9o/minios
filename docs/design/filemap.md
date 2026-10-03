@@ -8,11 +8,11 @@ reference on the file's `struct mapping`. `VM_FILE` marks such a region,
 `VM_SHARED` distinguishes `MAP_SHARED` from `MAP_PRIVATE`. `sys_mmap`
 (`kernel/syscall/sys_mm.c`) routes regular files to `mmap_regular` when the
 file has no `mmap` operation of its own; devices and shared memory objects
-keep their driver hook. A shared writable mapping needs a descriptor open
+retain their driver hook. A shared writable mapping needs a descriptor open
 for reading and writing without `O_APPEND`, otherwise `EACCES`. Anonymous
 `MAP_SHARED` regions are backed by an unnamed shared memory object (the
 memfd machinery), so fork shares their frames. `MAP_FIXED` unmaps whatever
-mmap regions the range holds and refuses ranges that touch the program
+mmap regions the range contains and refuses ranges that touch the program
 image, heap or stack.
 
 Regions are split by `vma_split_locked` when `munmap` or `mprotect` cuts
@@ -29,7 +29,7 @@ points to it while at least one region references it; the last
 back, drops the frames and clears the pointer, so an unmapped file has no
 cache. `pages` is indexed by page offset, `dirty` is a bitmap, both grow on
 demand. Every cached frame carries one reference from the mapping plus one
-per page table entry, which keeps kswapd away from it (it evicts only
+per page table entry, which makes kswapd skip it (it evicts only
 frames with a single reference) and lets `vma_unmap_range_locked` drop
 frames uniformly with `page_put`.
 
@@ -57,7 +57,7 @@ while it drops the entries of a shared file region, `vma_msync` over the
 requested range (which also clears the bit and flushes the TLB so the next
 write dirties the page again) and `reprotect_range_locked` when a region
 loses read access. The unmap and msync paths queue a `sync_job` per range
-while the space lock is held and run the jobs afterwards:
+while the space lock is locked and run the jobs afterwards:
 `filemap_writeback` writes each dirty page through the region's file
 inside `vfs_op_begin`/`vfs_op_end`, clamped to the file size so the zero
 tail of the last page never extends the file. Process exit and exec go
@@ -71,7 +71,7 @@ too.
 mapping before they are written back. `file_write` copies the written
 bytes into cached pages (`filemap_write_through`), so mappings see ordinary
 writes. `O_TRUNC` drops cached pages beyond the new size and zeroes the
-tail of the last kept page (`filemap_truncate`); mappers keep their old
+tail of the last retained page (`filemap_truncate`); mappers retain their old
 entries, which is the documented difference from a `SIGBUS` on Linux.
 
 ## mprotect and PROT_NONE
@@ -79,12 +79,12 @@ entries, which is the documented difference from a `SIGBUS` on Linux.
 `vma_mprotect` requires the whole range to be mapped (`ENOMEM`), refuses
 device regions (`EACCES`) and a write upgrade of a shared file region whose
 descriptor cannot write, splits the regions at the boundaries and rewrites
-their present entries. An entry keeps `PTE_COW` and never gains `PTE_W`
+their present entries. An entry retains `PTE_COW` and never gains `PTE_W`
 while the bit is set. Because a later `mprotect` may add write access,
 `vmspace_fork` now marks every frame of a private region copy on write,
 whether or not it was writable.
 
-`PROT_NONE` cannot be expressed by x86 protection bits, so the frame stays
+`PROT_NONE` cannot be expressed by x86 protection bits, so the frame remains
 attached to a not present entry tagged with the software bit `PTE_PROTNONE`
 (bit 53). The fault handler refuses access to regions without `VM_READ`,
 `vma_range_ok` refuses them for kernel accesses, unmapping and fork treat

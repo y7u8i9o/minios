@@ -1,6 +1,6 @@
 # Owners on the root image other than root, read by mkfs -p
 # (tools/mkfs/mkfs.c, docs/design/users.md). One entry per line, "path mode
-# uid gid", mode octal or "-" to keep the bits of the build tree, where
+# uid gid", mode octal or "-" to retain the bits of the build tree, where
 # user/Makefile sets the special modes. A path ending in "/" includes
 # everything below it.
 /home/user/ - 1000 1000

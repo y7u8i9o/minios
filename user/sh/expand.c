@@ -9,7 +9,7 @@ struct buffer {
     char *s;
     unsigned char *q;
     size_t n, cap;
-    int keep;
+    int retain;
 };
 static void append(struct buffer *b, const char *s, size_t n, int flags)
 {
@@ -196,7 +196,7 @@ static void dollar(struct buffer *b, const char *s, size_t *position, int quoted
                 if (i > 1)
                     append(b, "\0", 1, BOUNDARY);
                 append(b, script_argv[i], strlen(script_argv[i]), QUOTED);
-                b->keep = 1;
+                b->retain = 1;
             }
             free(name);
             *position = p;
@@ -222,7 +222,7 @@ static void expand_text(struct buffer *b, const char *s, int force_quote, int he
         }
     } else if (!heredoc && s[0] == '~') {
         /* ~name is the home of the account name. A word whose name part
-         * holds anything but the characters of account names is left. */
+         * contains anything but the characters of account names is left. */
         size_t n = strcspn(s + 1, "/:");
         char name[33];
         if (n < sizeof name && strspn(s + 1, "abcdefghijklmnopqrstuvwxyz0123456789_-") >= n) {
@@ -243,7 +243,7 @@ static void expand_text(struct buffer *b, const char *s, int force_quote, int he
             else {
                 quote = c;
                 if (!(c == '"' && s[p + 1] == '$' && s[p + 2] == '@' && s[p + 3] == '"' && script_argc <= 1))
-                    b->keep = 1;
+                    b->retain = 1;
             }
             p++;
             continue;
@@ -290,9 +290,9 @@ char *expand_here(const char *text)
     free(b.q);
     return b.s;
 }
-static void glob_field(struct fields *f, struct buffer *b, size_t start, size_t end, int keep)
+static void glob_field(struct fields *f, struct buffer *b, size_t start, size_t end, int retain)
 {
-    if (start == end && !keep)
+    if (start == end && !retain)
         return;
     char *pattern = sh_alloc((end - start) * 2 + 1);
     size_t n = 0;
@@ -345,7 +345,7 @@ struct fields expand_words(struct word *w)
             }
         }
         int trailing_argument = b.n && (b.q[b.n - 1] & BOUNDARY);
-        glob_field(&f, &b, start, b.n, trailing_argument || (b.keep && !emitted));
+        glob_field(&f, &b, start, b.n, trailing_argument || (b.retain && !emitted));
         free(b.s);
         free(b.q);
     }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# The mfs volume was unmounted by the test and must hold its links; the
+# The mfs volume was unmounted by the test and must contain its links; the
 # root image was synced and must check out with the links that mkfs and
 # the test created on it.
 FSCK="$BUILD/host/fsck"

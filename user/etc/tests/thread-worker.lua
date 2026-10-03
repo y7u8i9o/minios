@@ -3,8 +3,8 @@ local mode = ...
 assert(_G.parent_only == nil, 'Lua globals leaked into worker')
 if mode == 'error' then error('intentional worker error') end
 if mode == 'exit' then os.exit(7) end
-if mode == 'hold' then
-  assert(thread.send('holding')); sys.sleep(500)
+if mode == 'park' then
+  assert(thread.send('parked')); sys.sleep(500)
   return
 end
 assert(not pcall(require, 'gui'), 'worker must not initialize process-global GUI')

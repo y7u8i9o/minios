@@ -14,14 +14,14 @@ DESCRIPTION
 
         name:x:uid:gid:full name:home:shell
 
-    The second field holds x, because the password hash is kept in
+    The second field contains x, because the password hash is retained in
     /etc/shadow, which only root can read. Each line of /etc/group
     describes one group in four fields, the last of which lists the member
     accounts separated by commas.
 
         name:x:gid:member,member
 
-    Each line of /etc/shadow holds the hash of one account in nine fields,
+    Each line of /etc/shadow contains the hash of one account in nine fields,
     of which minios uses the first two.
 
         name:hash:lastchange:min:max:warn:inactive:expire:flag
@@ -32,7 +32,7 @@ DESCRIPTION
 
     The three files live in /usr/local/etc, the package prefix on the
     data volume, and the names in /etc are symbolic links to them, which
-    keeps the accounts across rebuilds of the root image.
+    retains the accounts across rebuilds of the root image.
 
     Lines beginning with # and lines with missing or malformed fields are
     ignored. Account and group names start with a lowercase letter and

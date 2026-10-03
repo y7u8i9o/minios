@@ -18,10 +18,10 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
   `FBIOGET_INFO`, maps the framebuffer with `mmap` (write combining,
   `VM_DEVICE` regions whose frames are not reference counted, shared
   across `fork`), and hands the display over with `FBIO_ACQUIRE`, which
-  stops the text console from drawing while its cell buffer keeps
+  stops the text console from drawing while its cell buffer retains
   receiving output. `FBIO_RELEASE`, or closing the descriptor, redraws
   the text console. `video=WxH[xBPP][@SCALE]` on the command line selects the mode
-  through Limine; the default is 1024x768. `@2` is kept out of the Limine
+  through Limine; the default is 1024x768. `@2` is excluded from the Limine
   mode and parsed by the kernel into `bootinfo.fb_scale`: the console
   draws glyphs twice as large and `struct fb_info.scale` tells the
   compositor to compose a half size desktop and double every pixel
@@ -35,8 +35,8 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
 - IPC (`ipc/mqueue.c`, `ipc/shm.c`): named message queues carry fixed
   size messages (up to 256 bytes, 64 deep) with blocking send and receive;
   named shared memory objects are page sets that several address spaces
-  map with `MAP_SHARED`; the object holds one reference per frame and
-  every mapping adds its own, so unmapping stays uniform and kswapd never
+  map with `MAP_SHARED`; the object contains one reference per frame and
+  every mapping adds its own, so unmapping remains uniform and kswapd never
   evicts a frame mapped twice. `fork` shares `VM_SHARED` regions without
   copy on write. Objects live until unlinked and closed by everyone.
   `poll` checks readiness through `file_ops.poll`, registers with each
@@ -97,7 +97,7 @@ a tree of boxes (vertical or horizontal layout with padding, spacing
 and expanding children), labels, buttons, text fields with a cursor,
 list boxes with selection and scrolling, and canvases drawn by a
 callback. `ui_run` redraws on demand, routes mouse and key events to
-widgets, keeps keyboard focus, calls a periodic tick, and stops on
+widgets, maintains keyboard focus, calls a periodic tick, and stops on
 `WM_CLOSE`; unhandled keys reach `ui->on_key`.
 
 Applications: `term` (the terminal emulator, described in
@@ -112,7 +112,7 @@ plotter on the application framework, described in `userland.md`).
   mode returns untranslated bytes.
 - `fb0`: `/bin/fbtest` maps the framebuffer, acquires the display, draws
   a checkerboard the kernel verifies pixel by pixel while the program
-  holds the display, shares the mapping with a child, and releases.
+  contains the display, shares the mapping with a child, and releases.
 - `mq`: `/bin/mqtest` exchanges messages and shared memory between a
   parent and a child, checks `poll` with and without timeout, message
   boundaries, oversize rejection and unlink semantics.
@@ -132,15 +132,15 @@ plotter on the application framework, described in `userland.md`).
 - Mouse wheel: `ps2mouse_init` runs the IntelliMouse sequence (sample
   rates 200, 100, 80, then a device id request). A device answering id 3
   switches to four byte packets whose fourth byte carries the signed
-  wheel delta in its low nibble; other devices keep three byte packets.
+  wheel delta in its low nibble; other devices retain three byte packets.
   `struct mouse_event` gained `dz`, positive towards the user. Tests use
   `ps2mouse_has_wheel` and `ps2mouse_set_wheel` to inject packets of the
   right length.
 - Framebuffer layout: `struct fb_info` reports the size and shift of the
   red, green and blue channels from the Limine response, and `bpp` may
-  be 24 or 32. `drivers/fbdev.h` holds `fb_pack_pixel`, `fb_unpack_pixel`,
+  be 24 or 32. `drivers/fbdev.h` contains `fb_pack_pixel`, `fb_unpack_pixel`,
   `fb_write_pixel` and `fb_read_rgb`, used by the console, the device and
-  the tests. The console keeps a 32 bit fast path and writes 24 bit
+  the tests. The console retains a 32 bit fast path and writes 24 bit
   pixels byte by byte. `video=WxHxBPP` selects a 24 bit mode.
 - `SIGWINCH` (28) is ignored by default and sent to the foreground group
   of a terminal whose size changes through `TIOCSWINSZ`.
@@ -158,14 +158,14 @@ table is a growable array of pointers.
   surface, allocates the next generation filled with light grey, and
   sends `WM_RESIZED(width, height, generation)`; the client library maps
   the new surface before the application sees the event. Objects live
-  until unmapped, so the client's old mapping stays valid meanwhile.
+  until unmapped, so the client's old mapping remains valid meanwhile.
   Windows have minimum sizes (`WM_CREATE` c, d or `WM_SET_MINSIZE`,
   default 64x32).
 - Title bar boxes from the right: close, maximize, minimize. Maximize
   fills the desktop above the task bar and remembers the previous frame;
-  the box restores it. Minimized windows are hidden, keep their z order,
+  the box restores it. Minimized windows are hidden, retain their z order,
   and are listed in the task bar with a leading underscore. Window
-  positions are clamped so that part of the title bar stays on the
+  positions are clamped so that part of the title bar remains on the
   desktop.
 - Shortcuts handled by the server: Alt+Tab raises and focuses the lowest
   visible window so repeated presses visit every window, Alt+F4 sends
@@ -245,7 +245,7 @@ table is a growable array of pointers.
 
 - `term`: the cell grid follows the window size (cells from the mono20
   font when present, else 8x16), `WM_RESIZED` reallocates the grid,
-  keeps the overlapping contents and sets the pseudo terminal size with
+  retains the overlapping contents and sets the pseudo terminal size with
   `TIOCSWINSZ`, which raises `SIGWINCH` in the shell's group. Lines
   scrolled off the top enter a 1000 line ring; the wheel and
   Shift+PageUp/PageDown move the view (`term: view N` in the log), and
@@ -283,7 +283,7 @@ clipboard object are gone. `libgui/src/client.c` implements the same
   compositor fetched a copy; `gui_clipboard_get` reads the current
   selection offer through a pipe (or answers from the process's own
   text when it owns the selection).
-- The compositor keeps a copy of every selection (`data.c`, fetched
+- The compositor retains a copy of every selection (`data.c`, fetched
   when it is set) and serves it itself after the owner exits, so copy,
   quit, paste works. A client that dies is detected through `POLLHUP`
   on its socket and destroyed with its surfaces.
@@ -299,11 +299,11 @@ Wayland, in a light style that matches the rest of the toolkit. The
 drawing surface of a window is the whole buffer: a `CSD_MARGIN` (16 px)
 band for the shadow around the frame, and inside the frame a
 `CSD_HEADER` (36 px) header bar above the contents; `gui_window.surf` is a view of the contents, so applications,
-the framework and `gui_damage` keep their contents coordinates, and the
+the framework and `gui_damage` retain their contents coordinates, and the
 client layer adds the offset to damage, popup anchors, regions and
 pointer coordinates. The buffers are ARGB; `csd_copy` makes the frame
 opaque while copying into them and blends the contents over the chrome
-at the four rounded corners (`CSD_RADIUS` 6). The margins hold the
+at the four rounded corners (`CSD_RADIUS` 6). The margins contain the
 outline (one logical pixel of 20 percent black) and the shadow (black,
 `(1 - t)^2` over an 8 px reach, shifted 2 px down, half as strong for
 inactive windows); they are painted once per resize or state change,
@@ -329,5 +329,5 @@ the window body is the header bar's `0xebebeb`, borders `0xb0b0b0`,
 buttons `0xdcdcdc` without borders (hover `0xd0d0d0`, pressed
 `0xbcbcbc`), accent `0x3c78c8`; tabs are marked by an accent underline,
 scrollbar tracks and progress bars have no frame, and the theme radius
-is 5 px. A top level window keeps the theme padding around its
+is 5 px. A top level window retains the theme padding around its
 contents.

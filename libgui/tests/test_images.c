@@ -205,7 +205,7 @@ void run_image_tests(void)
         painter_fill(&p, 0, 0, 32, 32, 0x00ff00ff);
         painter_image(&p, 8, 8, img);
         CHECK(s.pixels[0] == 0x00ff00ff, "background outside the icon");
-        CHECK(s.pixels[8 * 32 + 8] == 0x00ff00ff, "transparent icon corner keeps the background");
+        CHECK(s.pixels[8 * 32 + 8] == 0x00ff00ff, "transparent icon corner retains the background");
         CHECK(s.pixels[9 * 32 + 9] == 0x00202020, "opaque icon pixel painted: %08x", s.pixels[9 * 32 + 9]);
         free(s.pixels);
         image_free(img);

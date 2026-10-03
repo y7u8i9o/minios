@@ -83,7 +83,7 @@ local function read_back(tries)
   elseif tries > 0 then
     app:timer(200, false, function() read_back(tries - 1) end)
   else
-    check(false, "the clipboard held " .. tostring(text) .. " instead of the child's text")
+    check(false, "the clipboard contained " .. tostring(text) .. " instead of the child's text")
     open_layer()
   end
 end

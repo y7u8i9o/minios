@@ -61,7 +61,7 @@ toolkit theme use them.
 
 ## System state
 
-The DHCP client keeps its lease in `/usr/local/state/dhcpc/IF.lease`,
+The DHCP client retains its lease in `/usr/local/state/dhcpc/IF.lease`,
 `/home/.local/state/dhcpc` on the data volume,
 (N16, `docs/design/network.md`), since the home volume is the only
 storage that survives a build, and `fsinit` mounts it before init starts

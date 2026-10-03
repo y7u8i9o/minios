@@ -217,7 +217,7 @@ $(SWAP):
 	@mkdir -p $(dir $@)
 	dd if=/dev/zero of=$@ bs=1048576 count=$(SWAP_MB) status=none
 
-# The data volume keeps the home directory across boots and across rebuilds
+# The data volume retains the home directory across boots and across rebuilds
 # of the root image. It is created once, empty, outside build/, and is
 # never rebuilt, while `make clean-data` removes it.
 $(DATA): | $(MKFS)
@@ -231,7 +231,7 @@ disk: $(DISK) $(SWAP) $(DATA)
 
 # QEMU is started by tools/run.sh, which reads qemu.conf, QEMU_* variables
 # and RUNFLAGS. Variables given on the make command line are exported, and
-# `make QEMU_AUDIO=none run` keeps working through them. `run` and `gdb` let
+# `make QEMU_AUDIO=none run` continues to work through them. `run` and `gdb` let
 # the script build the image, since the framebuffer mode it picks (VIDEO,
 # or QEMU_VIDEO, or a doubled mode on a Retina display) is baked into it.
 RUN := tools/run.sh

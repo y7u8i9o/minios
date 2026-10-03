@@ -11,9 +11,9 @@
  * keygen writes a new secret key with mode 0600, public prints the public
  * key file of a secret key, sign writes the signature FILE.sig, verify
  * checks FILE.sig against a public key file, and digest prints the size
- * and SHA-256 of FILE. A secret key file holds `ed25519-secret HEX` with the 32 byte seed of
- * RFC 8032; a public key file holds `ed25519 HEX`; a signature file
- * holds `ed25519 KEYID HEX`, where KEYID is the first eight bytes of the
+ * and SHA-256 of FILE. A secret key file contains `ed25519-secret HEX` with the 32 byte seed of
+ * RFC 8032; a public key file contains `ed25519 HEX`; a signature file
+ * contains `ed25519 KEYID HEX`, where KEYID is the first eight bytes of the
  * SHA-256 of the public key. */
 #include <errno.h>
 #include <fcntl.h>

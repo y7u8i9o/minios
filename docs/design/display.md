@@ -9,7 +9,7 @@ layout, plus `fb_screen_scale`, the integer pixel scale. At boot
 `video=`. The console (`drivers/fbcon.c`), `/dev/fb0` and the kernel tests
 read `fb_screen`; it changes only through `console_set_screen`, which takes
 `console_lock`, replaces the description and re-initializes the console
-grid, keeping the last rows of text when the grid shrinks. `/dev/fb0`
+grid, retaining the last rows of text when the grid shrinks. `/dev/fb0`
 ioctls read it under `fb_mode_lock`.
 
 A GPU driver registers `struct fb_gpu_ops` (prepare a mode, commit it,
@@ -21,12 +21,12 @@ flushes the whole screen. Without a GPU only the scale may change.
 
 `struct fb_info` gained `caps` (`FB_CAP_FLUSH`, `FB_CAP_SET_MODE`) and
 `size`, the number of bytes `mmap` may map. With mode setting the size is
-the whole GPU buffer: the mapping stays valid across mode changes, only
+the whole GPU buffer: the mapping remains valid across mode changes, only
 the geometry reported by `FBIOGET_INFO` changes. `FBIO_FLUSH` takes a
 `struct fb_rect`; `FBIO_SET_MODE` takes `struct fb_mode` and is allowed to
 the display owner only. Device mappings of RAM (the GPU buffer) take one
 page reference per mapped page, matching the release at unmap; the driver
-holds its own reference on every page, so the block is never freed and the
+has its own reference on every page, so the block is never freed and the
 swap daemon (which only takes frames referenced exactly once) never
 touches it.
 
@@ -48,16 +48,16 @@ new pitch, so the buffer is never interpreted with mixed geometries.
 Flushing a rectangle is `TRANSFER_TO_HOST_2D` followed by
 `RESOURCE_FLUSH`, each a control queue round trip (a request descriptor
 and a response descriptor). The console cannot talk to the device while
-holding `console_lock`, so it accumulates a dirty rectangle and the
+having acquired `console_lock`, so it accumulates a dirty rectangle and the
 `gpu_flushd` thread fetches it every 20 ms with `console_take_dirty` and
 flushes it. The panic path (`fb_panic_flush`) transfers the whole screen
 by polling the used ring with a preallocated request, skipping the flush
-when the queue lock is held.
+when the queue lock is already locked.
 
 ## virtio-input
 
 `drivers/virtio/virtio_input.c` accepts virtio-input devices (0x1052):
-tablets, mice and, since M47, keyboards. The event queue holds 32
+tablets, mice and, since M47, keyboards. The event queue contains 32
 posted 8 byte event buffers, each re-posted from its completion
 callback; every event is reported unchanged to the input core
 (`input.md`), which delivers it through `/dev/input/eventN`. The
@@ -107,7 +107,7 @@ command line `video=` remains the boot and console mode.
 ## Toolkit side HiDPI (M33)
 
 The output announces `scale` = the screen's pixel scale. libgui windows
-keep logical sizes (`gui_window.width`, `height`) and get a `scale`; the
+retain logical sizes (`gui_window.width`, `height`) and get a `scale`; the
 surface and the two shared memory buffers are `width * scale` by
 `height * scale` device pixels and the surface carries
 `set_buffer_scale(scale)`. `gui_damage` takes logical rectangles, damage
@@ -116,7 +116,7 @@ pixels rounded outwards. When the output's `done` event reports another
 scale (a mode change from Settings > Display), every window is
 re-created at the new scale and receives `WM_RESIZED`.
 
-`struct painter` gained `scale`: local coordinates stay logical, the
+`struct painter` gained `scale`: local coordinates remain logical, the
 origin and clip are device pixels, fills, frames and lines are `scale`
 pixels thick, rounded rectangles get a `scale` pixel border, images,
 blits and masks are enlarged with nearest neighbour, and text is
@@ -128,8 +128,8 @@ canvas paint handlers are unchanged; programs that write into
 `gui_window.surf` directly must use its device size (`guitest` draws a
 device checkerboard that way).
 
-The compositor's back buffer holds device pixels. Damage, surface
-positions, input and the shell stay logical; `compose_rect` converts
+The compositor's back buffer contains device pixels. Damage, surface
+positions, input and the shell remain logical; `compose_rect` converts
 each rectangle with `dev()`. `draw_surface` copies a buffer whose scale
 equals the screen scale row by row and resamples other buffers (nearest
 neighbour through the buffer scale and transform), so an unscaled client

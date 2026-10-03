@@ -1,6 +1,6 @@
 #pragma once
 /* The settings program: the user's configuration file (conf_write_path,
- * $HOME/.config/desktop.conf over the shipped /etc/desktop.conf) holds the
+ * $HOME/.config/desktop.conf over the shipped /etc/desktop.conf) contains the
  * user's choices, the
  * desktop client applies them and pushes the ones X12 owns through the
  * settings protocol; other pages act on their subsystem directly. */

@@ -29,7 +29,7 @@ enum capture_source { SOURCE_INPUT = 0, SOURCE_MONITOR = 1 };
 
 /* Playback: CLIENT buffers are being filled by the client, QUEUED ones
  * wait in the queue for the mixer.  Capture: QUEUED buffers wait in the
- * queue for the server to fill, CLIENT ones hold captured data. */
+ * queue for the server to fill, CLIENT ones contain captured data. */
 enum buffer_state {
     BUFFER_CLIENT,
     BUFFER_QUEUED,

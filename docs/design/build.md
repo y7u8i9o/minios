@@ -25,7 +25,7 @@ records paths below the source tree and the build directory relative to
 them in debugging information and `__FILE__`. The binaries therefore
 contain no path of the machine that built them.
 
-`-fno-omit-frame-pointer` and `-fno-optimize-sibling-calls` together keep the
+`-fno-omit-frame-pointer` and `-fno-optimize-sibling-calls` together retain the
 frame pointer chain intact for the backtrace code. `-mno-red-zone` is required
 because interrupt handlers run on the interrupted stack.
 
@@ -159,7 +159,7 @@ CD with the root image of the tests, as `make run` did before.
 `kernel/arch/x86_64/linker.ld` places the kernel at `0xffffffff80000000`
 with four `PT_LOAD` segments, `.text` (RX), `.rodata` with
 `.limine_requests` (R), `.data` with `.bss` (RW) and `.ksyms` (R). All
-sections are 4 KiB aligned. `.ksyms` comes last, which keeps the second
+sections are 4 KiB aligned. `.ksyms` comes last, which prevents the second
 link pass, which fills it with the symbol table, from changing the
 address of any other symbol. The link happens twice.
 
@@ -171,7 +171,7 @@ address of any other symbol. The link happens twice.
 
 ## Version and build number
 
-`VERSION` at the top of the tree holds the release under semantic
+`VERSION` at the top of the tree contains the release under semantic
 versioning (`MAJOR.MINOR.PATCH`) and is changed by hand when a release
 is cut, on `develop` before the merge into `main`. `0.1.0` marked the
 change from milestone numbers on 2026-09-05, `0.2.0` on 2026-09-30 the
@@ -214,7 +214,7 @@ screen. The answer is a doubled mode. `make VIDEO=2560x1600@2 run` boots a
 The framebuffer console draws its glyphs at twice the size, `/dev/fb0`
 reports `scale` in `struct fb_info`, and the compositor composes a
 1280x800 desktop and writes every logical pixel as a 2x2 block. Windows
-keep their size on screen and stay sharp, and clients are unchanged. On
+retain their size on screen and remain sharp, and clients are unchanged. On
 macOS `tools/run.sh` picks `2560x1600@2` by itself when the main display
 is a Retina display and the cocoa window is used, and `QEMU_VIDEO=1024x768`
 in `qemu.conf` restores the plain mode. With the default `virtio-vga` the
@@ -234,7 +234,7 @@ as a small window. `tools/run.sh` therefore reads the primary screen from
 screen's aspect ratio, that is at most 90 percent of the screen in each
 direction and whose frame fits the 16 MiB virtio-gpu buffer. The gtk
 window resizes to the guest resolution on every mode change (QEMU's
-default, `zoom-to-fit=off`), and the 90 percent limit keeps it inside the
+default, `zoom-to-fit=off`), and the 90 percent limit confines it inside the
 screen next to panels and the title bar. The mode is `@2` when the screen
 has 150 dpi or more, is reported 3000 pixels wide or more, or `GDK_SCALE`
 is 2, and `@1` otherwise. XWayland reports a scaled size. A 2560x1440
@@ -242,7 +242,7 @@ panel with 150 percent scaling appears as 3840x2160 with no physical
 size, which gives `2560x1440@2`, a 2560x1440 laptop panel at 189 dpi
 gives `2304x1296@2`, and a 1920x1080 monitor gives `1728x968@1`. `QEMU_DISPLAY`
 values other than gtk and sdl, and systems without `xrandr` or
-`xdpyinfo`, keep the image default. Limine cannot set these modes on
+`xdpyinfo`, leave the image default unchanged. Limine cannot set these modes on
 `virtio-vga`, and the guest therefore boots at 1024x768 until the
 kernel's virtio-gpu driver switches to the mode a few seconds later. A gtk
 window on a native Wayland session does not follow that change, and an
@@ -267,7 +267,7 @@ contains `cmdline`, `expect` (one extended regular expression per line, all
 must match the serial log), optionally `reject`, `timeout` and `mem`, the
 memory size in MiB, which `mem.ARCH` replaces on one architecture. The
 cases `swap` and `madvise` boot with 128 MiB on x86_64 and 160 MiB on
-aarch64, where the edk2 firmware and Limine hold the whole initrd in
+aarch64, where the edk2 firmware and Limine contain the whole initrd in
 memory before the kernel starts and run out of memory at 128 MiB. Any line
 containing `TEST FAIL` fails the case. `tests/run_all.sh` runs every case and
 prints a summary. Test images and logs are written to `build/tests/<case>/`.
@@ -357,7 +357,7 @@ because the root image installs its public half as
 index against it. `--tag` creates the annotated tag `vVERSION` at the
 commit after a successful run, and an existing tag must already point at
 that commit. The script pushes nothing. The worktree is removed after a
-successful run unless `--keep` is given, and the script refuses to
+successful run unless `--retain` is given, and the script refuses to
 overwrite an existing `minios-VERSION` or worktree.
 
 A release follows the branch model below. `VERSION` is raised on

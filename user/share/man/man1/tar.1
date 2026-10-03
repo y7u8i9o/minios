@@ -13,7 +13,7 @@ DESCRIPTION
     archive in the ustar format, lists the members of an archive, or
     extracts all or the named members. Without -f the archive is standard
     output for -c and standard input for -t and -x. A symbolic link is
-    archived as a link member holding its target, which may have at most
+    archived as a link member containing its target, which may have at most
     100 bytes, and extracted as a symbolic link with the recorded time.
 
 OPTIONS
@@ -25,7 +25,7 @@ OPTIONS
     -z        compress with gzip when creating, decompress when reading;
               gzip runs as a child that tar does not wait for
     -m        give extracted files the current time
-    -p        keep the recorded permissions
+    -p        retain the recorded permissions
     -v        print each member name
     -h        archive the files that symbolic links lead to instead of
               the links

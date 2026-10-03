@@ -56,7 +56,7 @@ const struct pkg_lib *manifest_provides(const struct manifest *m, const char *so
 int manifest_is_config(const struct manifest *m, const char *rel);
 int manifest_is_unchecked(const struct manifest *m, const char *rel);
 
-/* archive.c: a gzip compressed ustar archive held in memory. */
+/* archive.c: a gzip compressed ustar archive stored in memory. */
 struct member {
     char path[PKG_PATH_MAX];    /* as named in the archive */
     int dir;
@@ -140,7 +140,7 @@ void boot_save_previous(const char *target);
 
 /* repo.c verifies repository indexes and fetches archives over HTTP. The
  * timeout of a configuration bounds, in seconds, the connection and each
- * wait for data. An index entry holds the manifest keys of the archive in
+ * wait for data. An index entry contains the manifest keys of the archive in
  * m, its path relative to the repository URL, its size and digest, and
  * the position of its repository in repo_config.repos. */
 #define PKG_MAX_REPOS 8

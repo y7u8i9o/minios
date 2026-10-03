@@ -37,7 +37,7 @@ static int on_mouse(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-static int held_code;
+static int pressed_code;
 
 static int on_key(struct widget *w, void *args, void *arg)
 {
@@ -45,11 +45,11 @@ static int on_key(struct widget *w, void *args, void *arg)
     char line[96];
     /* A second press without a release is a key repeat from libgui. */
     int down = strcmp(arg, "key") == 0;
-    if (down && k->code == held_code) {
+    if (down && k->code == pressed_code) {
         printf("evtest: repeat code 0x%02x\n", k->code);
         fflush(stdout);
     }
-    held_code = down ? k->code : 0;
+    pressed_code = down ? k->code : 0;
     snprintf(line, sizeof line, "%s code 0x%02x mods %d char %d%s%c%s", (const char *)arg, k->code, k->mods, k->ch,
              k->ch >= 32 && k->ch < 127 ? " '" : "", k->ch >= 32 && k->ch < 127 ? (char)k->ch : ' ',
              k->ch >= 32 && k->ch < 127 ? "'" : "");

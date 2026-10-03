@@ -96,19 +96,19 @@ static void test_mfs_owners(void)
     expect("/mnt/user.txt", 0, 0644, 1000, 1000);
     ktest_assert(vfs_chmod("/mnt/root.txt", 0666, 0) == -EPERM, "chmod of root's file");
     /* Only root gives a file away, and the owner may move it to its groups. */
-    ktest_assert(vfs_chown("/mnt/user.txt", 0, VFS_CHOWN_KEEP, 0) == -EPERM, "chown to root");
-    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_KEEP, 7, 0) == -EPERM, "chgrp to a foreign group");
-    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_KEEP, 50, 0) == 0, "chgrp to an own group");
+    ktest_assert(vfs_chown("/mnt/user.txt", 0, VFS_CHOWN_UNCHANGED, 0) == -EPERM, "chown to root");
+    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_UNCHANGED, 7, 0) == -EPERM, "chgrp to a foreign group");
+    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_UNCHANGED, 50, 0) == 0, "chgrp to an own group");
     expect("/mnt/user.txt", 0, 0644, 1000, 50);
-    ktest_assert(vfs_chown("/mnt/root.txt", VFS_CHOWN_KEEP, 50, 0) == -EPERM, "chgrp of root's file");
+    ktest_assert(vfs_chown("/mnt/root.txt", VFS_CHOWN_UNCHANGED, 50, 0) == -EPERM, "chgrp of root's file");
     /* The set group id bit needs membership in the file's group. */
-    ktest_assert(vfs_chown("/mnt/udir", VFS_CHOWN_KEEP, 50, 0) == 0, "chgrp udir");
+    ktest_assert(vfs_chown("/mnt/udir", VFS_CHOWN_UNCHANGED, 50, 0) == 0, "chgrp udir");
     become(1000, 1000, 077, 0, NULL);
     ktest_assert(vfs_chmod("/mnt/udir", 02750, 0) == 0, "chmod udir");
     expect("/mnt/udir", 0, 0750, 1000, 50);
     /* lchown changes the link, not its target. */
     become(1000, 1000, 077, 1, groups);
-    ktest_assert(vfs_chown("/mnt/ulink", VFS_CHOWN_KEEP, 50, VFS_NOFOLLOW) == 0, "lchown");
+    ktest_assert(vfs_chown("/mnt/ulink", VFS_CHOWN_UNCHANGED, 50, VFS_NOFOLLOW) == 0, "lchown");
     expect("/mnt/ulink", VFS_NOFOLLOW, 0777, 1000, 50);
 
     /* A change by the owner drops the set id bits root gave the file. */
@@ -116,7 +116,7 @@ static void test_mfs_owners(void)
     ktest_assert(vfs_chmod("/mnt/user.txt", 06755, 0) == 0, "root sets the set id bits");
     expect("/mnt/user.txt", 0, 06755, 1000, 50);
     become(1000, 1000, 077, 1, groups);
-    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_KEEP, 1000, 0) == 0, "owner chgrp");
+    ktest_assert(vfs_chown("/mnt/user.txt", VFS_CHOWN_UNCHANGED, 1000, 0) == 0, "owner chgrp");
     expect("/mnt/user.txt", 0, 0755, 1000, 1000);
     become_root();
     ktest_assert(vfs_chown("/mnt/root.txt", 1000, 1000, 0) == 0, "root gives a file away");

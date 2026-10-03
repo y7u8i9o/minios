@@ -7,9 +7,9 @@
 
 #define PAINTER_DEPTH 16
 
-/* Local coordinates are logical pixels; the surface holds scale by scale
+/* Local coordinates are logical pixels; the surface contains scale by scale
  * device pixels per logical pixel (1 unless the window is on a high
- * density output). Origin and clip are kept in device pixels. */
+ * density output). Origin and clip are stored in device pixels. */
 struct painter {
     struct surface *s;
     const struct theme *theme;

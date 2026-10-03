@@ -79,7 +79,7 @@ suite pass (66 passed, 0 failed).
    an integer, and evaluates binary80 sine/cosine kernels on [-pi/4, pi/4].
 4. `fenv.h` and its libc implementation manage x87 and MXCSR together:
    exception clearing, testing, raising and flag images; all four rounding
-   modes; environment get/set, hold and update; and the default masked,
+   modes; environment get/set, save with masking and update; and the default masked,
    round-to-nearest-even environment.
 5. The printf family gains `%a` and `%A`. Bit-based conversion emits exact
    normal and subnormal double values, preserves binary80 precision for `%La`,

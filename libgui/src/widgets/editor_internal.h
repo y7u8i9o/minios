@@ -26,7 +26,7 @@ struct editor {
     /* visual rows */
     int *row_line, *row_start, *row_len;
     int nrows, rows_dirty, rows_width;
-    int wanted_x;               /* column pixel to keep on vertical moves */
+    int wanted_x;               /* column pixel to retain on vertical moves */
     char preedit[WSRV_TITLE_MAX];
     struct font *font;          /* own font (editor_set_font), NULL for the theme's */
     int group, next_group;      /* group is the undo group of new operations, or 0. */

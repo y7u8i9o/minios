@@ -1,6 +1,6 @@
 # MiniOS TCP/IP progress record
 
-This is section 7 of the network plan (`network.md`), kept in its own file because of its length.
+This is section 7 of the network plan (`network.md`), stored in its own file because of its length.
 
 ## 7. Progress record
 
@@ -205,9 +205,9 @@ ICMP quotes field by field except TTL and checksum before UDP or TCP see the
 error, fragmentation-needed lowers a 16-entry ten-minute cache with the RFC
 1191 plateaus when no MTU is given, TCP shrinks its MSS and retransmits, and
 a black hole falls back through 576/296/68-byte paths from the second data
-timeout while the retry and progress bounds keep running. Route replacement
+timeout while the retry and progress bounds continue to run. Route replacement
 and interface down flush the tables. Packet buffers grew from 2048 to 8192
-bytes (256 buffers, 2 MiB) so one buffer holds `IPV4_MAX_PACKET`.
+bytes (256 buffers, 2 MiB) so one buffer can contain `IPV4_MAX_PACKET`.
 
 Tests: `net_fragment` (reverse order, duplicate, overlap quarantine, global
 bound, oversized offset, worker expiry, recovery, pool baseline), `net_path`
@@ -295,8 +295,8 @@ RFC 7323 window scaling and timestamps are implemented in `wire.c` and
 `kernel/net/tcp/`. Every SYN offers both options, and a connection uses an
 option only when the other SYN carried it. The peer's shift is clamped to
 14 and the local shift is 2 over a 131072-byte receive store; the send
-store holds 65536 bytes. The stores are allocated per connection and
-released as soon as no endpoint can use them, and out-of-order bytes stay
+store contains 65536 bytes. The stores are allocated per connection and
+released as soon as no endpoint can use them, and out-of-order bytes remain
 inside the window instead of shrinking it. PAWS applies the 24-day rule,
 TS.Recent follows section 4.3, one timestamp sample per flight feeds the
 RFC 6298 estimator without Karn's restriction, and segments carry the
@@ -322,11 +322,11 @@ RFC 2018 SACK, RFC 6675 loss recovery and delayed ACKs are implemented in
 `wire.c` and `kernel/net/tcp/`. SACK-permitted is offered in every SYN and
 used only when both SYNs carried it. The receiver reports up to four blocks
 with the run containing the newest out-of-order segment first, found in the
-presence bitmap. The sender keeps a scoreboard of eight ranges and drops the
+presence bitmap. The sender maintains a scoreboard of eight ranges and drops the
 highest when a ninth is needed, counts duplicates as ACKs that SACK new
 data, decides IsLost per hole, enters recovery at the third duplicate or an
 earlier loss, halves the window, and runs the SetPipe and NextSeg loop with
-rules 1 to 3 and at most 16 segments per ACK. A timeout keeps the
+rules 1 to 3 and at most 16 segments per ACK. A timeout retains the
 scoreboard for an ACK-clocked recovery of the holes, and a second
 consecutive timeout clears it. ACKs of in-order data wait 100 ms unless two
 full segments are owed; FINs, duplicates, out-of-order data and hole fills

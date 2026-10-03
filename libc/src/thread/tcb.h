@@ -33,7 +33,7 @@ struct pthread {
 /* A recursive lock for libc's own structures (malloc, stdio, the thread
  * list): futex based, so a contended thread sleeps. */
 struct __libc_lock {
-    int state;                      /* 0 free, 1 held, 2 held with waiters */
+    int state;                      /* 0 free, 1 locked, 2 locked with waiters */
     int owner;                      /* tid */
     int count;
 };
@@ -57,7 +57,7 @@ void __pthread_init_main(void);
 /* Thread local storage (tls.c): the space below a control block, its
  * initialization for a new thread and its release. */
 void __tls_init(const uintptr_t *aux);
-/* The bytes and the alignment of the area that holds a thread's struct
+/* The bytes and the alignment of the area that contains a thread's struct
  * pthread and its static TLS blocks, and the struct pthread inside such an
  * area at an aligned address. */
 size_t __tls_area_size(size_t *align);

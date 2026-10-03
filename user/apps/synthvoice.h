@@ -4,7 +4,7 @@
  * linear ADSR amplitude envelope and a resonant state-variable low-pass
  * filter whose cutoff follows the envelope; a cubic soft clipper
  * follows.  The filter runs twice per sample at half the coefficient so
- * that it stays stable up to the highest cutoff the envelope sweeps to.
+ * that it remains stable up to the highest cutoff the envelope sweeps to.
  *
  * The functions are static: every program includes this header once. */
 #include <math.h>

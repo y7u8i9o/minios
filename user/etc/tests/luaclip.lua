@@ -12,7 +12,7 @@ win:on("focus", function(w, e)
   if e.value ~= 1 or done then return end
   done = true
   local text, err = app:clipboard()
-  print("luaclip: the clipboard held '" .. tostring(text or err) .. "'")
+  print("luaclip: the clipboard contained '" .. tostring(text or err) .. "'")
   if app:clipboard("from child") == app then
     print("luaclip: the child set the clipboard")
   else

@@ -33,7 +33,7 @@ struct thread {
     int tid;
     enum thread_state state;
     int level;                      /* MLFQ queue, 0 is highest priority */
-    unsigned cpu;                   /* CPU whose run queue holds or last ran the thread */
+    unsigned cpu;                   /* CPU whose run queue contains or last ran the thread */
     int slice_left;                 /* ms left in the current slice */
     uint64_t wake_at;               /* tick to wake a sleeping thread */
     struct list_head run_link;      /* run queue, sleep list or wait queue */

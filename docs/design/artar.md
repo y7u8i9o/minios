@@ -32,7 +32,7 @@ a fractional time; pdpmake behaves the same on every system.
 
 ## tar
 
-`third_party/sbase/src/` holds `tar.c`, its manual page, the headers it
+`third_party/sbase/src/` contains `tar.c`, its manual page, the headers it
 includes and the whole `libutil/` directory; `NOTICE` records the
 commit, and `tools/fetch_tar.sh` downloads them again. `user/Makefile`
 compiles `tar.c` and the six library files it needs, writes the empty
@@ -97,7 +97,7 @@ table, in place replacement, verbose forms, extraction, deletion, `q`,
 make dates through the member header. `tests/cases/tar` runs
 `/etc/tests/tar.sh`: creation, listing, the ustar magic and block size,
 extraction into another directory with `-C`, verbose forms, a single
-member, `-z` through gzip, kept and current times (`-m`), an archive
+member, `-z` through gzip, retained and current times (`-m`), an archive
 written by the host tar (`/etc/tests/fixture.tar`), the error cases and
 the standard output and input forms. `tests/cases/libc_ext` checks the
 libc additions and the two system calls directly.

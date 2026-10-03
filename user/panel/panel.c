@@ -60,7 +60,7 @@ void canvas_release_buffer(struct canvas *c)
 }
 
 /* Allocate the buffer for lw by lh logical pixels at the output scale;
- * the surface keeps its role. */
+ * the surface retains its role. */
 static int canvas_alloc(struct canvas *c, int w, int h)
 {
     canvas_release_buffer(c);

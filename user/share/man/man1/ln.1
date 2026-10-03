@@ -9,15 +9,15 @@ SYNOPSIS
 
 DESCRIPTION
     ln creates name as a hard link to the file target, or as a symbolic
-    link holding the text target when -s is given. Without a name the link
+    link containing the text target when -s is given. Without a name the link
     is created in the working directory under the last component of
     target. When the last operand is a directory, or a symbolic link to
     one, each target receives a link in it under its last component. -f
     removes an existing name that is not a directory first.
 
     A symbolic link stores target as given and does not check that it
-    exists. A relative target is resolved from the directory that holds
-    the link, not from the working directory, and a target may hold at
+    exists. A relative target is resolved from the directory that contains
+    the link, not from the working directory, and a target may contain at
     most 255 bytes. A hard link needs both names on one filesystem; FAT
     has neither kind of link, devfs has no symbolic links, and ln then
     prints the error the kernel returns and exits with status 1.

@@ -4,8 +4,8 @@
  * password. The page changes nothing itself. It runs passwd, and sudo
  * with useradd, passwd and userdel, and hands them the passwords through
  * a pipe, one per line. sudo -S reads the first line, -k makes it ask
- * even when a time stamp is still valid, and the empty -p prompt keeps
- * the prompt out of the output shown in the status line. */
+ * even when a time stamp is still valid, and the empty -p prompt omits
+ * the prompt from the output shown in the status line. */
 #include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>

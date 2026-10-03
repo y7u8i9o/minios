@@ -115,7 +115,7 @@ sys_exit             syscall/sys_proc.c:17
 
 The thread spun on the lock of the poll source inside a pipe. The slab
 allocator fills freed memory with the byte `0x6b`. A lock word with this
-value reads as held. The pipe was freed.
+value reads as locked. The pipe was freed.
 
 The serial log of this run ended after `yes` (pid 78) received `SIGPIPE`.
 This is the check `yes | head -n 2` in `user/etc/tests/utils.sh`. Both
@@ -141,9 +141,9 @@ steps and frees the pipe. CPU A then does step 6 on freed memory.
 
 The result depends on the content of the freed memory:
 
-- The lock word reads as held. CPU A spins forever. The parent waits forever
+- The lock word reads as locked. CPU A spins forever. The parent waits forever
   for the child. The test runner reports a timeout.
-- The waiter list holds invalid pointers. CPU A dereferences a non canonical
+- The waiter list contains invalid pointers. CPU A dereferences a non canonical
   address. The CPU raises a general protection fault.
 
 The race is old. The terminal branch made it visible because its shell
@@ -155,14 +155,14 @@ The investigation was slow for three reasons.
 
 **Stale disk image.** The target `make` rebuilds the programs but not
 `build/disk.img`. Only `make test` rebuilds the image. The image from the
-previous session held old binaries. It made the `uname -a` check fail in
+previous session contained old binaries. It made the `uname -a` check fail in
 every run. This failure had no relation to the race.
 
 **Lost panic report.** When CPU A faulted, CPU B also faulted on the same
 memory. The halt IPI cannot stop a CPU that is already inside a fault. CPU B
 entered `panic`, saw `panic_in_progress`, printed `nested panic`, and exited
 QEMU. CPU A had not yet printed the frame and the backtrace. The serial log
-held no register dump.
+contained no register dump.
 
 **Incomplete snapshot.** The first gdb script walked only the `threads`
 list of each process. It did not show exiting threads.
@@ -218,7 +218,7 @@ Screenshots of the console show that `ls /bin | less`:
 
 ## 10 Lessons
 
-1. An object shared by two file ends must keep a reference for each end.
+1. An object shared by two file ends must retain a reference for each end.
    Release the reference after the last access to the object.
 2. Rebuild `build/disk.img` after `make` before you run cases through
    `tests/run_all.sh` directly. Use `make test CASES=...` when in doubt.

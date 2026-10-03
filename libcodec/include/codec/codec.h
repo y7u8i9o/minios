@@ -1,5 +1,5 @@
 #pragma once
-/* Formats and codecs (docs/design/codecs.md). The library keeps a
+/* Formats and codecs (docs/design/codecs.md). The library maintains a
  * registry of the codecs that the modules in /lib/codecs provide, in the
  * manner of the gdk-pixbuf loaders and the GStreamer plugins. A program
  * passes a file or the bytes of one, and the registry selects the codec
@@ -150,11 +150,11 @@ void codec_picture_free(struct codec_picture *pic);
 /* ---- audio ---- */
 
 struct codec_audio;
-/* Open a decoder for data, which must stay valid until the decoder is
+/* Open a decoder for data, which must remain valid until the decoder is
  * closed. */
 int codec_audio_open(const struct codec *c, const uint8_t *data, size_t len, const char *path,
                      struct codec_audio **out);
-/* Open a file. The decoder keeps the file contents in memory and
+/* Open a file. The decoder stores the file contents in memory and
  * codec_audio_close frees them. */
 int codec_audio_open_file(const char *path, struct codec_audio **out);
 const struct codec_audio_format *codec_audio_format(const struct codec_audio *a);

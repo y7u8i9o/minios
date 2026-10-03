@@ -30,7 +30,7 @@
 #define MAX_SEARCH 6
 #define SEARCH_BYTES 256
 #define MAX_NDOTS 15
-/* The cache holds CACHE_ENTRIES names and replaces the least recently used
+/* The cache contains CACHE_ENTRIES names and replaces the least recently used
  * one when full. Every entry lives at most CACHE_TTL_MAX seconds. */
 #define CACHE_ENTRIES 32
 #define CACHE_TTL_MAX 3600
@@ -118,7 +118,7 @@ static int lookup_hosts(const char *name, uint32_t *address)
     return found;
 }
 
-/* struct resolv_config holds the parts of /etc/resolv.conf that the
+/* struct resolv_config contains the parts of /etc/resolv.conf that the
  * resolver uses. As in resolv.conf(5), the last "search" or "domain" line
  * gives the search list (a "domain" line is a list of one), and "options
  * ndots:N" sets how many dots make a name be tried as given before the
@@ -207,7 +207,7 @@ static void cache_key(const char *name, char *key)
     key[n] = 0;
 }
 
-/* The caller holds cache_lock. Expired entries are dropped when found. */
+/* The caller has acquired cache_lock. Expired entries are dropped when found. */
 static struct cache_entry *cache_find(const char *key, uint64_t now)
 {
     for (unsigned i = 0; i < CACHE_ENTRIES; i++) {

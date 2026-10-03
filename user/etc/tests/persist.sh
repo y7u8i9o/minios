@@ -20,7 +20,7 @@ rm /mnt/data/.local/etc/group
 mount -u /mnt/data || echo "FAIL umount"
 check unmounted "$(mount | grep -c '^/mnt/data ')" "0"
 fsinit -f /tmp/fstab; check fsinit-again "$?" "0"
-check file-kept "$(cat /mnt/data/persisted.txt)" "persisted"
+check file-retained "$(cat /mnt/data/persisted.txt)" "persisted"
 ls /mnt/data/.local/etc/group > /dev/null 2>&1 && echo "FAIL reseeded-a-used-volume"
 fsinit -f /tmp/fstab -v > /tmp/out.txt; check fsinit-idempotent "$?" "0"
 grep 'is mounted already' /tmp/out.txt > /dev/null || echo "FAIL fsinit-already-mounted-message"

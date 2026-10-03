@@ -127,7 +127,7 @@ int main(int argc, char **argv)
     for (char **e = environ; *e != NULL; e++)
         if (strcmp(*e, "DYNTEST=shared") == 0)
             found = 1;
-    CHECK(found, "environ holds what setenv wrote");
+    CHECK(found, "environ contains what setenv wrote");
     CHECK(fileno(stdout) == 1 && fileno(stderr) == 2, "stdout and stderr are the library's streams");
     optind = 1;
     char *args[] = { "dyntest", "-x", NULL };

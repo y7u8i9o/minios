@@ -116,7 +116,7 @@ void klog_ring_drain(void)
 }
 
 /* Copy up to n bytes starting at absolute offset *pos; an offset that
- * fell out of the ring is moved to the oldest byte kept. */
+ * fell out of the ring is moved to the oldest byte retained. */
 size_t klog_ring_read(uint64_t *pos, char *buf, size_t n)
 {
     klog_ring_drain();

@@ -24,7 +24,7 @@ static void write_all(struct file *f, const char *buf, size_t n)
     }
 }
 
-static bool file_holds(const char *path, const char *data, size_t n)
+static bool file_has_content(const char *path, const char *data, size_t n)
 {
     struct file *f;
     if (vfs_open(path, O_RDONLY, 0, &f) < 0)
@@ -103,12 +103,12 @@ static void exercise(const char *dev, int type)
     static char big[20000];
     for (int i = 0; i < 20000; i++)
         big[i] = (char)((i * 7) % 251);
-    ktest_assert(file_holds("/mnt/readme.txt", "hello\n", 6), "readme.txt");
-    ktest_assert(file_holds("/mnt/README.TXT", "hello\n", 6), "README.TXT (case)");
-    ktest_assert(file_holds("/mnt/lower.txt", "lower\n", 6), "lower.txt");
-    ktest_assert(file_holds("/mnt/\xc3\x9c" "bersicht.txt", "\xc3\xbc\n", 3), "Übersicht.txt");
-    ktest_assert(file_holds("/mnt/Long Directory Name/nested/big data file.bin", big, sizeof big), "big data file");
-    ktest_assert(file_holds("/mnt/long directory name/NESTED/Big Data File.BIN", big, sizeof big), "case folded path");
+    ktest_assert(file_has_content("/mnt/readme.txt", "hello\n", 6), "readme.txt");
+    ktest_assert(file_has_content("/mnt/README.TXT", "hello\n", 6), "README.TXT (case)");
+    ktest_assert(file_has_content("/mnt/lower.txt", "lower\n", 6), "lower.txt");
+    ktest_assert(file_has_content("/mnt/\xc3\x9c" "bersicht.txt", "\xc3\xbc\n", 3), "Übersicht.txt");
+    ktest_assert(file_has_content("/mnt/Long Directory Name/nested/big data file.bin", big, sizeof big), "big data file");
+    ktest_assert(file_has_content("/mnt/long directory name/NESTED/Big Data File.BIN", big, sizeof big), "case folded path");
     ktest_assert(count_entries("/mnt", "Long Directory Name") == 6, "root listing");
     ktest_assert(count_entries("/mnt/Long Directory Name/nested", "big data file.bin") == 3, "nested listing");
     ktest_assert(!exists("/mnt/missing"), "missing");
@@ -117,10 +117,10 @@ static void exercise(const char *dev, int type)
     static char pattern[100000];
     for (size_t i = 0; i < sizeof pattern; i++)
         pattern[i] = i % 26 == 0 ? ' ' : (char)('a' + i % 26);
-    ktest_assert(vfs_mkdir("/mnt/kept", 0777) == 0, "mkdir kept");
-    ktest_assert(vfs_mkdir("/mnt/kept", 0777) == -EEXIST, "mkdir twice");
+    ktest_assert(vfs_mkdir("/mnt/retained", 0777) == 0, "mkdir retained");
+    ktest_assert(vfs_mkdir("/mnt/retained", 0777) == -EEXIST, "mkdir twice");
     struct file *f;
-    r = vfs_open("/mnt/kept/Written by the kernel.txt", O_RDWR | O_CREAT | O_EXCL, 0644, &f);
+    r = vfs_open("/mnt/retained/Written by the kernel.txt", O_RDWR | O_CREAT | O_EXCL, 0644, &f);
     ktest_assert(r == 0, "create: %d", r);
     ksnprintf(pattern, 32, "kernel pattern %010u", 0u);
     pattern[25] = 'x';
@@ -128,70 +128,70 @@ static void exercise(const char *dev, int type)
     ktest_assert(f->inode->size == sizeof pattern, "size %lu", f->inode->size);
     ktest_assert(f->inode->mtime > 1600000000LL * 1000000000 && vfs_now() - f->inode->mtime < 30LL * 1000000000, "mtime %ld", f->inode->mtime);
     file_put(f);
-    ktest_assert(file_holds("/mnt/kept/written BY the KERNEL.txt", pattern, sizeof pattern), "read back");
+    ktest_assert(file_has_content("/mnt/retained/written BY the KERNEL.txt", pattern, sizeof pattern), "read back");
     /* The time survives the directory entry: read the inode again. */
     struct inode *written;
-    ktest_assert(vfs_lookup("/mnt/kept/Written by the kernel.txt", &written) == 0, "lookup written");
+    ktest_assert(vfs_lookup("/mnt/retained/Written by the kernel.txt", &written) == 0, "lookup written");
     ktest_assert(written->mtime > 1600000000LL * 1000000000, "entry time %ld", written->mtime);
     inode_put(written);
-    ktest_assert(vfs_open("/mnt/kept/Written by the kernel.txt", O_WRONLY | O_CREAT | O_EXCL, 0644, &f) == -EEXIST,
+    ktest_assert(vfs_open("/mnt/retained/Written by the kernel.txt", O_WRONLY | O_CREAT | O_EXCL, 0644, &f) == -EEXIST,
                  "O_EXCL");
     uint32_t per_file = (sizeof pattern + m->cluster_bytes - 1) / m->cluster_bytes;
     ktest_assert(m->free_clusters == free0 - 1 - per_file, "clusters after create: %u, expected %u",
                  m->free_clusters, free0 - 1 - per_file);
 
     /* Short names must be unique: two long names with the same prefix. */
-    ktest_assert(vfs_open("/mnt/kept/removed file one.txt", O_WRONLY | O_CREAT, 0644, &f) == 0, "create one");
+    ktest_assert(vfs_open("/mnt/retained/removed file one.txt", O_WRONLY | O_CREAT, 0644, &f) == 0, "create one");
     write_all(f, "one", 3);
     file_put(f);
-    ktest_assert(vfs_open("/mnt/kept/removed file two.txt", O_WRONLY | O_CREAT, 0644, &f) == 0, "create two");
+    ktest_assert(vfs_open("/mnt/retained/removed file two.txt", O_WRONLY | O_CREAT, 0644, &f) == 0, "create two");
     write_all(f, "two", 3);
     file_put(f);
-    ktest_assert(file_holds("/mnt/kept/removed file one.txt", "one", 3) &&
-                 file_holds("/mnt/kept/removed file two.txt", "two", 3), "distinct files");
+    ktest_assert(file_has_content("/mnt/retained/removed file one.txt", "one", 3) &&
+                 file_has_content("/mnt/retained/removed file two.txt", "two", 3), "distinct files");
     struct inode *a, *b;
-    ktest_assert(vfs_lookup("/mnt/kept/removed file one.txt", &a) == 0 &&
-                 vfs_lookup("/mnt/kept/removed file two.txt", &b) == 0 && a->ino != b->ino, "distinct inodes");
+    ktest_assert(vfs_lookup("/mnt/retained/removed file one.txt", &a) == 0 &&
+                 vfs_lookup("/mnt/retained/removed file two.txt", &b) == 0 && a->ino != b->ino, "distinct inodes");
     inode_put(a);
     inode_put(b);
 
     /* Rename within and across directories, over an existing file. */
-    ktest_assert(vfs_rename("/mnt/kept/removed file one.txt", "/mnt/kept/removed file 1.txt") == 0, "rename");
-    ktest_assert(!exists("/mnt/kept/removed file one.txt") && file_holds("/mnt/kept/removed file 1.txt", "one", 3),
+    ktest_assert(vfs_rename("/mnt/retained/removed file one.txt", "/mnt/retained/removed file 1.txt") == 0, "rename");
+    ktest_assert(!exists("/mnt/retained/removed file one.txt") && file_has_content("/mnt/retained/removed file 1.txt", "one", 3),
                  "renamed");
-    ktest_assert(vfs_rename("/mnt/kept/removed file 1.txt", "/mnt/removed elsewhere.txt") == 0, "rename across");
-    ktest_assert(file_holds("/mnt/removed elsewhere.txt", "one", 3), "moved");
-    ktest_assert(vfs_rename("/mnt/removed elsewhere.txt", "/mnt/kept/removed file two.txt") == 0, "rename over");
-    ktest_assert(file_holds("/mnt/kept/removed file two.txt", "one", 3), "replaced");
+    ktest_assert(vfs_rename("/mnt/retained/removed file 1.txt", "/mnt/removed elsewhere.txt") == 0, "rename across");
+    ktest_assert(file_has_content("/mnt/removed elsewhere.txt", "one", 3), "moved");
+    ktest_assert(vfs_rename("/mnt/removed elsewhere.txt", "/mnt/retained/removed file two.txt") == 0, "rename over");
+    ktest_assert(file_has_content("/mnt/retained/removed file two.txt", "one", 3), "replaced");
     ktest_assert(vfs_mkdir("/mnt/removed dir", 0777) == 0, "mkdir removed dir");
-    ktest_assert(vfs_rename("/mnt/removed dir", "/mnt/kept/removed dir") == 0, "rename directory");
-    ktest_assert(vfs_open("/mnt/kept/removed dir/inner", O_WRONLY | O_CREAT, 0644, &f) == 0, "create inner");
+    ktest_assert(vfs_rename("/mnt/removed dir", "/mnt/retained/removed dir") == 0, "rename directory");
+    ktest_assert(vfs_open("/mnt/retained/removed dir/inner", O_WRONLY | O_CREAT, 0644, &f) == 0, "create inner");
     file_put(f);
-    ktest_assert(vfs_rmdir("/mnt/kept/removed dir") == -ENOTEMPTY, "rmdir non empty");
-    ktest_assert(vfs_unlink("/mnt/kept/removed dir") == -EISDIR, "unlink dir");
-    ktest_assert(vfs_rmdir("/mnt/kept/removed dir/inner") == -ENOTDIR, "rmdir file");
+    ktest_assert(vfs_rmdir("/mnt/retained/removed dir") == -ENOTEMPTY, "rmdir non empty");
+    ktest_assert(vfs_unlink("/mnt/retained/removed dir") == -EISDIR, "unlink dir");
+    ktest_assert(vfs_rmdir("/mnt/retained/removed dir/inner") == -ENOTDIR, "rmdir file");
 
     /* Truncate, append, unlink with the file open. */
-    ktest_assert(vfs_open("/mnt/kept/removed file two.txt", O_WRONLY | O_TRUNC, 0, &f) == 0, "truncate");
+    ktest_assert(vfs_open("/mnt/retained/removed file two.txt", O_WRONLY | O_TRUNC, 0, &f) == 0, "truncate");
     ktest_assert(f->inode->size == 0, "size after truncate");
     write_all(f, "again", 5);
     file_put(f);
-    ktest_assert(vfs_open("/mnt/kept/removed file two.txt", O_WRONLY | O_APPEND, 0, &f) == 0, "append");
+    ktest_assert(vfs_open("/mnt/retained/removed file two.txt", O_WRONLY | O_APPEND, 0, &f) == 0, "append");
     write_all(f, " more", 5);
     file_put(f);
-    ktest_assert(file_holds("/mnt/kept/removed file two.txt", "again more", 10), "appended");
-    ktest_assert(vfs_open("/mnt/kept/removed file two.txt", O_RDONLY, 0, &f) == 0, "open for unlink");
-    ktest_assert(vfs_unlink("/mnt/kept/removed file two.txt") == 0, "unlink open file");
-    ktest_assert(!exists("/mnt/kept/removed file two.txt"), "name gone");
+    ktest_assert(file_has_content("/mnt/retained/removed file two.txt", "again more", 10), "appended");
+    ktest_assert(vfs_open("/mnt/retained/removed file two.txt", O_RDONLY, 0, &f) == 0, "open for unlink");
+    ktest_assert(vfs_unlink("/mnt/retained/removed file two.txt") == 0, "unlink open file");
+    ktest_assert(!exists("/mnt/retained/removed file two.txt"), "name gone");
     char tmp[16];
     ktest_assert(file_read(f, tmp, 16) == 10 && memcmp(tmp, "again more", 10) == 0, "data until close");
     file_put(f);
-    ktest_assert(vfs_unlink("/mnt/kept/removed dir/inner") == 0, "unlink inner");
-    ktest_assert(vfs_rmdir("/mnt/kept/removed dir") == 0, "rmdir");
+    ktest_assert(vfs_unlink("/mnt/retained/removed dir/inner") == 0, "unlink inner");
+    ktest_assert(vfs_rmdir("/mnt/retained/removed dir") == 0, "rmdir");
     ktest_assert(m->free_clusters == free0 - 1 - per_file, "clusters after cleanup: %u, expected %u",
                  m->free_clusters, free0 - 1 - per_file);
     ktest_assert(m->free_clusters == fat_count_free(m), "free count agrees with the table");
-    ktest_assert(count_entries("/mnt/kept", "Written by the kernel.txt") == 3, "kept listing");
+    ktest_assert(count_entries("/mnt/retained", "Written by the kernel.txt") == 3, "retained listing");
 
     /* Persistence across a remount. */
     ktest_assert(vfs_sync() == 0, "sync");
@@ -200,8 +200,8 @@ static void exercise(const char *dev, int type)
     ktest_assert(vfs_mount("fat", dev, "/mnt", NULL) == 0, "remount");
     m = fat_sb_of("/mnt");
     ktest_assert(m->free_clusters == free0 - 1 - per_file, "clusters after remount");
-    ktest_assert(file_holds("/mnt/kept/Written by the kernel.txt", pattern, sizeof pattern), "kept after remount");
-    ktest_assert(file_holds("/mnt/Long Directory Name/nested/big data file.bin", big, sizeof big), "tree after remount");
+    ktest_assert(file_has_content("/mnt/retained/Written by the kernel.txt", pattern, sizeof pattern), "retained after remount");
+    ktest_assert(file_has_content("/mnt/Long Directory Name/nested/big data file.bin", big, sizeof big), "tree after remount");
     ktest_assert(vfs_umount("/mnt") == 0, "umount again");
     kprintf("fat: %s FAT%d ok\n", dev, type);
 }

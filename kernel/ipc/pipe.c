@@ -33,7 +33,7 @@ struct pipe {
 
 
 /* User buffers may fault on swapped pages, which blocks, so they are never
- * touched with p->lock held: data moves through a bounce buffer. */
+ * touched with p->lock acquired: data moves through a bounce buffer. */
 #define BOUNCE 256
 
 static long pipe_read(struct file *f, char *buf, size_t n, uint64_t *pos)

@@ -1,6 +1,6 @@
 #pragma once
 /* The FLAC module (RFC 9639): decode.c reads native FLAC streams, encode.c
- * writes them, and module.c holds the codec table. This header declares
+ * writes them, and module.c contains the codec table. This header declares
  * the bit reader, the bit writer, the two CRCs and the code tables used
  * by both directions. */
 #include <codec/codec.h>

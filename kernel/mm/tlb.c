@@ -99,7 +99,7 @@ static cpu_mask_t targets_for(struct vmspace *vm, bool kernel_range)
 
 void tlb_flush_range(struct vmspace *vm, uintptr_t va, size_t size)
 {
-    kassert(spin_holding(&vm->lock));
+    kassert(spin_locked_by_current(&vm->lock));
     flush_local(vm, va, size);
     if (!smp_active() || PAGING_TLB_BROADCAST)
         return;

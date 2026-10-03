@@ -44,7 +44,7 @@ uint32_t audio_playback_quantum(const struct audio_playback *playback);
 uint32_t audio_playback_xruns(const struct audio_playback *playback);
 /* Buffers the client may fill right now without blocking.  An event driven
  * client refills every ready buffer whenever its connection becomes
- * readable, so the server always holds a full pool for it. */
+ * readable, so the server always contains a full pool for it. */
 uint32_t audio_playback_ready(const struct audio_playback *playback);
 int audio_playback_state(const struct audio_playback *playback);
 int audio_playback_error(const struct audio_playback *playback);

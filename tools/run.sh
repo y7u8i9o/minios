@@ -287,7 +287,7 @@ fi
 # --- video mode -----------------------------------------------------------
 # QEMU's cocoa window maps one guest pixel to one screen pixel, so on a
 # Retina display the default 1024x768 mode is a quarter of the screen. A
-# doubled mode with @2 keeps the desktop at its size and makes it sharp.
+# doubled mode with @2 retains the desktop at its size and makes it sharp.
 # Only the built image carries the mode; without --build it is a no-op.
 hidpi_display() {
     [ "$(uname -s)" = Darwin ] || return 1
@@ -352,7 +352,7 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
         # so the mode must leave room for panels and the title bar: at
         # most 90 percent of the screen in each direction. The frame must
         # also fit the 16 MiB virtio-gpu buffer. The size is reduced with
-        # the aspect ratio kept until both conditions are met.
+        # the aspect ratio preserved until both conditions are met.
         screen="${w}x${h}"
         max=$((16 * 1024 * 1024))
         limw=$((w * 9 / 10)); limh=$((h * 9 / 10))

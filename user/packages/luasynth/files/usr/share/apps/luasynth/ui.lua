@@ -17,24 +17,24 @@ end
 local function log(message) io.write("luasynth: " .. message .. "\n"); io.flush() end
 function View:base() return (self.octave:value() + 1) * 12 end
 function View:press(id, note)
-  if self.held[id] == note then return end
+  if self.pressed[id] == note then return end
   self:release_key(id)
-  self.held[id] = note
+  self.pressed[id] = note
   self.counts[note] = (self.counts[note] or 0) + 1
   if self.counts[note] == 1 then self.engine:note_on(note, self.velocity:value()) end
   self.keys:invalidate()
   if not self.engine.remote then log(string.format("note %d on, voices %d", note, self.engine:active())) end
 end
 function View:release_key(id)
-  local note = self.held[id]
+  local note = self.pressed[id]
   if not note then return end
-  self.held[id] = nil
+  self.pressed[id] = nil
   self.counts[note] = self.counts[note] - 1
   if self.counts[note] == 0 then self.counts[note] = nil; self.engine:note_off(note) end
   self.keys:invalidate()
 end
 function View:release_all()
-  self.held, self.counts, self.mouse_down = {}, {}, false
+  self.pressed, self.counts, self.mouse_down = {}, {}, false
   self.engine:all_off()
   self.sustain:value(0)
   self.keys:invalidate()
@@ -123,7 +123,7 @@ function View:note_at(x, y)
 end
 function M.new(synth, engine)
   local self = setmetatable({synth = synth, engine = engine or Controller.new(synth), controls = {}, labels = {},
-    held = {}, counts = {}, message = "Bright keys", demo_step = 0}, View)
+    pressed = {}, counts = {}, message = "Bright keys", demo_step = 0}, View)
   self.engine.on_note = function(note, voices)
     log(string.format("note %d on, voices %d", note, voices))
   end
@@ -271,7 +271,7 @@ function M.new(synth, engine)
   gui.label(self.win, "Lower: Z S X D C V G B H N J M    Upper: Q 2 W 3 E R 5 T 6 Y 7 U I")
   gui.label(self.win, "Space: sustain    [ / ]: octave    Esc: panic    Ctrl+Q: close    Click the keyboard to play")
   -- A label's text setter requests layout and repaints the entire window.
-  -- Keep live meters in a fixed canvas so a peak change cannot hold up audio
+  -- Live meters are drawn in a fixed canvas, which prevents a peak change from delaying audio
   -- behind a full-window layout/paint (particularly expensive at scale 2).
   self.status_text = "Connecting to audio..."
   self.status = gui.canvas(self.win):hint(0, 20)
@@ -289,7 +289,7 @@ function M.new(synth, engine)
     end)
   end
   self.timer = self.app:timer(100, true, function()
-    if not self.keys:focused() and next(self.held) and not self.demo_on then self:release_all() end
+    if not self.keys:focused() and next(self.pressed) and not self.demo_on then self:release_all() end
     if self.demo_on and sys.uptime() >= self.next_demo then
       for i = 1, 3 do self:release_key("demo" .. i) end
       local chords = {{0, 4, 7}, {5, 9, 12}, {7, 11, 14}, {0, 7, 12}}
@@ -299,7 +299,7 @@ function M.new(synth, engine)
     end
     if self.engine.error and not self.audio_failed then self:audio_error(self.engine.error) end
     self:update_status()
-    -- Key transitions already invalidate the keyboard; a held chord is static.
+    -- Key transitions already invalidate the keyboard; a pressed chord is static.
     self.scope:invalidate()
   end)
   self:update_status()

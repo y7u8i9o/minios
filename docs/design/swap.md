@@ -10,11 +10,11 @@ demand allocated by the fault handler like every other region.
 `vma_munmap` unmaps the frames and swap slots of the overlap and shrinks,
 splits or removes the regions involved; regions that were not created by
 `mmap` (text, data, heap, stack) are refused with `EINVAL` so the heap
-bookkeeping of `brk` stays valid. Only `MAP_ANONYMOUS | MAP_PRIVATE` is
+bookkeeping of `brk` remains valid. Only `MAP_ANONYMOUS | MAP_PRIVATE` is
 supported: file mappings return `ENODEV`, `MAP_FIXED` returns `EINVAL`.
 `brk` and `sbrk` are unchanged.
 
-Since M46, a multi-page unmap clears the complete range while holding the
+Since M46, a multi-page unmap clears the complete range while it has acquired the
 space lock and then issues one range TLB shootdown. Resident accounting is
 updated through the address space's per-CPU counter as present entries are
 removed.
@@ -46,17 +46,17 @@ swapped page back (see below), and the fault handler swaps in.
 `kswapd`, a kernel thread started once the scheduler runs, polls the free
 page count every 10 ms. Below `WATERMARK_HIGH` (768 pages) it runs
 `evict_batch` until the count recovers. The clock hand is a pair (address
-space, address) kept across calls. Address spaces are registered in
+space, address) retained across calls. Address spaces are registered in
 `vmspaces` under `vmspaces_lock`; the hand walks them round robin and
 within one space scans the lower half page tables with a budget of 2048
-entries per lock hold. A candidate is a present user page whose frame
+entries per lock acquisition. A candidate is a present user page whose frame
 has reference count 1 (frames shared copy on write are skipped) and
 whose accessed bit is clear; accessed bits found set are cleared, with a
 TLB flush, so the page becomes a candidate on the next pass. Spaces
 marked `pinned` are skipped.
 
 For each victim the entry is rewritten to the swapped form and the TLB
-flushed while holding the space lock; the frame stays allocated. After
+flushed while having acquired the space lock; the frame remains allocated. After
 the locks are dropped, the batch is copied into one contiguous buffer,
 written with one request under `swap_io_lock`, and the frames are
 released. With no large buffer available the pages are written one at a
@@ -64,7 +64,7 @@ time.
 
 User frames are allocated through `swap_alloc_user_frame`, which refuses
 to go below `WATERMARK_RESERVE` (256 pages) while swap is enabled and
-waits on `swap_waitq` for kswapd to make progress. The reserve keeps the
+waits on `swap_waitq` for kswapd to make progress. The reserve retains the
 kernel allocations of the swap path itself (request structures, bounce
 buffers) from failing. The fault handler drops the space lock around the
 allocation and re-checks the entry afterwards, so a page that appeared
@@ -88,7 +88,7 @@ is done, because the copy on write sharing walks present entries only.
 
 A fault may now block: on the frame allocation, on the swap mutex and
 on the device. Faults on user memory raised by kernel code therefore
-must not happen while a spinlock is held. The pipe and keyboard paths
+must not happen while a spinlock is locked. The pipe and keyboard paths
 copy through bounce buffers with their locks dropped and `getcwd` copies
 the path outside `proc.lock`; every other user access already happened
 without a spinlock.

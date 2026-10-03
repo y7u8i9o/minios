@@ -175,7 +175,7 @@ void build_appearance(struct widget *page)
 
 /* ---- display ---- */
 
-/* Modes any virtio-gpu scanout accepts; the 16 MiB buffer holds up to 2560x1600. */
+/* Modes any virtio-gpu scanout accepts; the 16 MiB buffer contains up to 2560x1600. */
 static const char *const resolutions[] = { "1024x768", "1280x800", "1280x1024", "1440x900", "1600x1200",
                                            "1680x1050", "1920x1080", "1920x1200", "2560x1440", "2560x1600" };
 #define NRES 10

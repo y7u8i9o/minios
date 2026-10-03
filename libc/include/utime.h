@@ -2,7 +2,7 @@
 #include <sys/types.h>
 
 /* utime sets the modification time of path to times->modtime, or to the
- * current time when times is NULL. minios keeps no access time. */
+ * current time when times is NULL. minios stores no access time. */
 struct utimbuf {
     time_t actime;
     time_t modtime;

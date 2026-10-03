@@ -11,7 +11,7 @@ ids, up to `NGROUPS_MAX` (16) supplementary groups and its file creation
 mask. The credentials belong to the process rather than to its threads,
 which matches what POSIX requires of `setuid` in a threaded process. They
 are written under `proc.lock`, and every reader takes a snapshot under the
-same lock through `cred_get` or `cred_get_current`, which keeps a
+same lock through `cred_get` or `cred_get_current`, which retains a
 permission check consistent while another thread of the process changes
 the ids. `proc_format_table` reads the effective uid without the lock,
 since a single word cannot be torn and a stale value is harmless in a
@@ -21,7 +21,7 @@ The kernel process starts as root with no supplementary groups and the
 mask 022 (`cred_init_root`). A new process copies the credentials of its
 parent in `proc_setup`, under the parent's `proc.lock` together with the
 resource limits, which gives fork, `proc_create_user` and the boot tests
-the identity of their creator. Exec keeps the credentials. The setuid and
+the identity of their creator. Exec retains the credentials. The setuid and
 setgid bits are applied by U2.
 
 The system calls are
@@ -30,8 +30,8 @@ The system calls are
 |---|---|---|
 | 96 | `getresuid(r, e, s)` | stores the three user ids, NULL pointers are skipped |
 | 97 | `getresgid(r, e, s)` | the same for the group ids |
-| 98 | `setresuid(r, e, s)` | sets the user ids, -1 keeps one |
-| 99 | `setresgid(r, e, s)` | sets the group ids, -1 keeps one |
+| 98 | `setresuid(r, e, s)` | sets the user ids, -1 leaves one unchanged |
+| 99 | `setresgid(r, e, s)` | sets the group ids, -1 leaves one unchanged |
 | 100 | `getgroups(size, list)` | stores the supplementary groups, size 0 returns the count |
 | 101 | `setgroups(size, list)` | replaces the supplementary groups, root only |
 | 102 | `umask(mask)` | sets the mask to `mask & 0777` and returns the old one |
@@ -40,7 +40,7 @@ A process whose effective uid is 0 may set any id. Any other process may
 set each id only to one of its current real, effective or saved ids, and
 the whole call fails with `EPERM` otherwise. The group calls are governed by
 the effective uid as well, which means that a process without root cannot
-change its groups to a gid it does not already hold. libc builds `getuid`,
+change its groups to a gid it does not already contain. libc builds `getuid`,
 `geteuid`, `getgid`, `getegid`, `setuid`, `setgid`, `seteuid`, `setegid`,
 `setreuid` and `setregid` on these calls. `setuid` and `setgid` set all
 three ids for root and only the effective id otherwise, and `setreuid`
@@ -58,7 +58,7 @@ The accounts are lines of `/etc/passwd` in the form
 in the form `name:password:gid:member,member`, and the password hashes lines
 of `/etc/shadow` in the form `name:hash:lastchange:min:max:warn:inactive:expire:flag`,
 of which minios uses the name and the hash. The password field of
-`/etc/passwd` holds `x`. Lines beginning with `#` and malformed lines are
+`/etc/passwd` contains `x`. Lines beginning with `#` and malformed lines are
 skipped.
 
 libc reads the files on every lookup (`libc/src/pwd.c`), with `getpwnam`,
@@ -125,9 +125,9 @@ a group and the bits `0666` (files) or `0777` (directories) less the mask
 (default 022), less the write bits for an entry with the read only
 attribute. `chmod` on FAT can only set or clear the owner's write bit,
 which maps to that attribute, and `chown` fails with `EPERM`. FAT files are
-never executable. devfs keeps the mode and owner of each node in the node,
+never executable. devfs retains the mode and owner of each node in the node,
 which `chmod` and `chown` change in memory until the next boot. The initrd
-keeps the mode, uid and gid of each tar header. The build archives the
+retains the mode, uid and gid of each tar header. The build archives the
 initrd with owner and group 0.
 
 `mount` takes the options as a fourth argument, which libc exposes as
@@ -159,7 +159,7 @@ all. The checks are
 
 | Operation | Permission |
 |---|---|
-| every path component that a lookup enters | search (`MAY_EXEC`) on the directory holding it |
+| every path component that a lookup enters | search (`MAY_EXEC`) on the directory containing it |
 | `open` | read, write or both by the access mode, write for `O_TRUNC`, none for a file the call created |
 | create, `mkdir`, `link`, `symlink`, `unlink`, `rmdir` | write and search on the parent directory |
 | `rename` | write and search on both parents, write on a directory that moves to another parent |
@@ -182,7 +182,7 @@ image receives `AT_SECURE` 1 in its auxiliary vector (`elf_info.secure`),
 every other image 0.
 
 The privileged operations require effective uid 0 and fail with `EPERM`
-otherwise, namely `mount`, `umount`, `reboot` (which also stays limited to
+otherwise, namely `mount`, `umount`, `reboot` (which also remains limited to
 init), `clock_settime`, raising a hard resource limit, `prlimit` on a
 process whose ids are not all the caller's effective uid, and the
 `NETIOC_CONFIGURE` and `NETIOC_ARP_PROBE` requests of `/dev/net`. Binding
@@ -205,14 +205,14 @@ master returns it to root with mode 0600, the mode of an unused slave.
 
 The account databases live in `/usr/local/etc` on the data volume, and
 `/etc/passwd`, `/etc/group` and `/etc/shadow` of the root image are
-symbolic links to them, which keeps accounts across rebuilds of the root
+symbolic links to them, which retains accounts across rebuilds of the root
 image. `/usr/local` is itself a symbolic link of the root image to
 `/home/.local`, the package prefix that belonged to the single user
 before and now belongs to root (`LOCAL_PREFIX`). Since P0 of
 `docs/plan/packaging.md` packages install into the root filesystem
 instead, and `/usr/local` contains the databases, the state and software
 that the package installer does not manage. Without a data volume
-the root image's `/home` holds the same tree.
+the root image's `/home` contains the same tree.
 
 | Path | Owner | Content |
 |---|---|---|
@@ -359,11 +359,11 @@ sudo has a configure script that the cross compiler ran once against the
 minios libc with the sudoers policy linked statically, without PAM, mail,
 the log server, LDAP, Python or zlib. The headers it generated
 (`config.h`, `pathnames.h`, `sudo_usage.h`) and its signal name table
-`signame.c` are kept in `user/ports/sudo`, and `user/Makefile` compiles
+`signame.c` are retained in `user/ports/sudo`, and `user/Makefile` compiles
 the objects that the configured makefiles list from `src/`,
 `plugins/sudoers/`, `lib/util/`, `lib/iolog/`, `lib/eventlog/` and
 `lib/protobuf-c/` into one static program linked against the shared
-libc. Its time stamps are kept in `/var/run/sudo/ts` and the lecture
+libc. Its time stamps are retained in `/var/run/sudo/ts` and the lecture
 records in `/var/db/sudo/lectured`, directories the image creates. A
 time stamp is valid for one terminal and one session, which sudo
 recognises by the session id of the caller.
@@ -373,14 +373,14 @@ The image ships the group `wheel` (gid 10) with `user` as its member.
 root without one, and `/etc/sudoers` (mode 0440) permits root and the
 members of wheel and sets the secure path `/usr/bin:/usr/local/bin`. Both
 files are part of the root image. The membership of wheel lives in
-`/etc/group` on the data volume, and a volume set up before U5 keeps its
+`/etc/group` on the data volume, and a volume set up before U5 retains its
 group file without wheel until root adds the entry with an editor.
 
 The Users page of settings runs `sudo -S -k -p '' /bin/sh -c 'useradd
 -c NAME ... && passwd ...'` and `sudo -S -k -p '' /bin/sh -c 'userdel -r
 ...'`, where the field Your password gives the first line of the input.
 sudo reads that line, and the rest reaches `passwd`. `-k` makes sudo ask
-even with a valid time stamp, and the empty prompt keeps the prompt text
+even with a valid time stamp, and the empty prompt retains the prompt text
 out of the status line of the page.
 
 The programs needed the following additions to the kernel and the libc.
@@ -394,14 +394,14 @@ The programs needed the following additions to the kernel and the libc.
 - `/dev/tty`, mode 0666, opens the terminal on the first of the
   descriptors 0 to 2 that is the console or the slave side of a pseudo
   terminal. It is where `getpass` and the three programs read passwords.
-- The terminal keeps the whole `struct termios` with the flag values of
+- The terminal retains the whole `struct termios` with the flag values of
   Linux, `TCSETS` stores it, and `TCFLSH` and `TCSAFLUSH` discard the
   typed input. Password prompts flush that input as on other Unix
   systems.
 - Signals deliver a `siginfo_t` to handlers installed with `SA_SIGINFO`,
   with `si_pid` and `si_uid` of the sender for `kill` (`SI_USER`) and
   `SI_KERNEL` for signals of the kernel. `SA_RESETHAND` is honoured.
-  `sigpending` (109) and `alarm` (110) are new, and `alarm` keeps its
+  `sigpending` (109) and `alarm` (110) are new, and `alarm` retains its
   timers in a list that the timer interrupt checks (`kernel/ipc/alarm.c`).
 - `fchdir` (108) changes the directory to an open one, and `fcntl` accepts
   the record locks `F_GETLK`, `F_SETLK`
@@ -449,7 +449,7 @@ The case `user_cred` runs `/bin/credtest` as root. It checks the initial
 identity and mask, drops a child to uid 1000 with groups 1000 and 50 and
 checks that the child cannot regain root or change its groups, that
 `/dev/proc` reports its uid, that a grandchild inherits the ids and that an
-exec of `credtest --check` keeps them. A second child keeps root in its
+exec of `credtest --check` retains them. A second child retains root in its
 saved uid and moves its effective uid back and forth until `setreuid`
 discards the saved root. The program then parses account files with
 malformed lines, looks up the accounts of the image, checks the password
@@ -472,7 +472,7 @@ directory to another parent, `utimensat`, `access`, exec, the setuid copy
 (which must report `AT_SECURE` 1 and euid 0 and see `access` refuse what
 `open` allows), the privileged operations, signals to processes of root
 and of their own, and the ownership of a pseudo terminal. Root finally
-checks that it keeps its access but cannot execute a file without execute
+checks that it retains its access but cannot execute a file without execute
 bits.
 
 The case `login_console` types on the console before init starts. root
@@ -492,7 +492,7 @@ waits for the login window, logs in the preselected account `user` with
 Enter, finds the panel and the desktop running as uid 1000 in
 `/dev/proc`, chooses Log out in the panel's menu, finds the login window
 again, and has `doas -u user` run a settings request of uid 1000, which
-X12 must refuse. `hold=1` keeps the window open for screenshots. `gui_settings`
+X12 must refuse. `pause=1` leaves the window open for screenshots. `gui_settings`
 opens the Users page with the other pages.
 
 The case `privilege` drives init on the console with pauses, because

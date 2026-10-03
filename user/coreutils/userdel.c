@@ -72,7 +72,7 @@ static int fix_groups(const char *name, gid_t own)
         n++;
     }
     fclose(f);
-    /* The own group stays while another account has it as its group. */
+    /* The own group remains while another account has it as its group. */
     if (remove_own >= 0) {
         setpwent();
         struct passwd *pw;

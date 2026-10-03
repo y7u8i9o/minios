@@ -230,7 +230,7 @@ static uint32_t codepoint_cell(uint32_t cp)
     return covered_index(cp);
 }
 
-/* While the code space is only partly classified the covered grid keeps
+/* While the code space is only partly classified the covered grid includes
  * one extra screen of rows, so that scrolling past the end reaches
  * unclassified code points and extends the table. */
 static int total_rows(void)

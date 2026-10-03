@@ -437,7 +437,7 @@ static void select_line(struct editor *ed)
 
 /* indent_lines inserts four spaces at the start of the lines l0 to l1, or
  * removes up to four leading spaces from them when out is set.  The lines
- * stay selected. */
+ * remain selected. */
 static void indent_lines(struct editor *ed, int l0, int l1, int out)
 {
     group_begin(ed);

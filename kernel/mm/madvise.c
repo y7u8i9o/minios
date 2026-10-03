@@ -12,7 +12,7 @@
 #include <errno.h>
 
 /* Every page of [addr, end) must belong to a region; device regions accept
- * no advice. Caller holds vm->lock. */
+ * no advice. Caller has acquired vm->lock. */
 static int check_range_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
 {
     uintptr_t va = addr;
@@ -28,7 +28,7 @@ static int check_range_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
 }
 
 /* Split the regions so that addr and end fall on region boundaries and
- * set or clear flag bits on every region inside. Caller holds vm->lock.
+ * set or clear flag bits on every region inside. Caller has acquired vm->lock.
  * required_absent names region flags that make the advice invalid. */
 static int set_flags_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end, unsigned set, unsigned clear,
                             unsigned required_absent)
@@ -55,7 +55,7 @@ static int set_flags_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end, u
 }
 
 /* MADV_DONTNEED: drop the frames and swap slots of the range. Shared file
- * pages stay in the mapping, their dirty bits are recorded on the way. */
+ * pages remain in the mapping, their dirty bits are recorded on the way. */
 static int dontneed_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
 {
     struct list_head *pos;
@@ -70,7 +70,7 @@ static int dontneed_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
 }
 
 /* MADV_FREE: tag present private anonymous pages so kswapd may discard
- * them while they stay clean; swapped pages are dropped right away. */
+ * them while they remain clean; swapped pages are dropped right away. */
 static int lazyfree_locked(struct vmspace *vm, uintptr_t addr, uintptr_t end)
 {
     struct list_head *pos;

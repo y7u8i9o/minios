@@ -27,7 +27,7 @@ DESCRIPTION
 
 OPTIONS
     -b          Run the command in the background.
-    -E          Keep the environment of the caller, when sudoers allows it.
+    -E          Retain the environment of the caller, when sudoers allows it.
     -e          Edit the files as the caller with a copy, as sudoedit does,
                 and write them back as the target account. The editor is
                 taken from SUDO_EDITOR, VISUAL or EDITOR, /bin/edit by
@@ -42,7 +42,7 @@ OPTIONS
     -l          List the commands that the caller, or the account of -U,
                 may run.
     -n          Fail instead of asking for a password.
-    -P          Keep the supplementary groups of the caller.
+    -P          Retain the supplementary groups of the caller.
     -p prompt   Ask with prompt, where %u stands for the caller and %h for
                 the host name. An empty prompt prints nothing.
     -S          Read the password from the first line of standard input

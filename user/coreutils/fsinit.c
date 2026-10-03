@@ -8,7 +8,7 @@
  * and a comma separated list of options: nofail (a missing device is not
  * an error), noauto (the entry is skipped), seed=DIR (DIR is copied into
  * the mount point when the mounted filesystem is empty), homes (the volume
- * holds the home directories, see below). Any other option,
+ * contains the home directories, see below). Any other option,
  * such as uid=, gid= or umask= of FAT, is passed to the filesystem. Mount
  * points that are mounted already are skipped, so the program may run
  * again. The exit status is 1 when a required mount failed.
@@ -16,7 +16,7 @@
  * On a volume with the homes option fsinit converts the layout of the
  * single user, in which the volume itself was the home directory, into the
  * layout of docs/design/users.md: the old contents move to user/, the
- * package prefix .local stays and gains the account databases, and the
+ * package prefix .local remains and gains the account databases, and the
  * marker .layout records the conversion. It then makes the missing homes
  * of the accounts of /etc/passwd that lie on the volume. -m DIR converts
  * the directory DIR alone, for the fs_migrate test. */
@@ -119,7 +119,7 @@ static int parse_options(struct entry *e, char *options)
 /* Convert dir from the single user layout, in which dir was the home of
  * the one user, uid FIRST_USER. Every entry but the package prefix .local
  * and lost+found moves into user/, through a temporary name, since the old
- * home may hold an entry named user itself. Returns 1 after a conversion,
+ * home may contain an entry named user itself. Returns 1 after a conversion,
  * 0 when there was nothing to do, -1 on an error. */
 static int migrate(const char *dir)
 {
@@ -165,7 +165,7 @@ static int migrate(const char *dir)
                account_chown_tree(to, FIRST_USER, FIRST_USER) < 0) {
         return -1;
     }
-    /* The package prefix belongs to root, and it holds the account
+    /* The package prefix belongs to root, and it contains the account
      * databases from now on. */
     snprintf(path, sizeof path, "%s/.local", dir);
     if (mkdir(path, 0755) < 0 && errno != EEXIST)

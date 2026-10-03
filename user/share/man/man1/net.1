@@ -18,7 +18,7 @@ DESCRIPTION
 
     config assigns an address to an Ethernet interface; the gateway must
     lie inside the subnet. down removes the address, netmask and gateway
-    while the interface stays attached, so DHCP can start again. apply
+    while the interface remains attached, so DHCP can start again. apply
     reads /etc/network, which init runs as a boot task:
 
         iface eth0 dhcp                   left to the dhcp service

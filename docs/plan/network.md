@@ -3,7 +3,7 @@
 N00–N12 are complete on the branch `bleeding-edge-net` (2026-09-12), and
 N13 to N16 are complete on `bleeding-edge-net-options` (2026-09-30).
 `network-progress.md` (section 7) contains the evidence and the remaining limitations of each
-milestone, and `docs/design/network-n13-n16-validation.md` holds the
+milestone, and `docs/design/network-n13-n16-validation.md` contains the
 release evidence of N13 to N16.
 
 Prepared on 2026-09-10 from source inspection of the working tree on
@@ -42,11 +42,11 @@ investigation did not evaluate library versions, licenses, or porting effort.
 | Existing source | Finding | Required treatment |
 |---|---|---|
 | `kernel/drivers/virtio/virtio.c`, `kernel/include/drivers/virtio/virtio.h` | Modern PCI VirtIO transport, MSI-X, split queues, at most four queues per device and 128 descriptors per queue | Reuse for one RX queue and one TX queue; negotiate only supported features. |
-| `kernel/ipc/socket.c` | Unix-domain streams, shared connection rings, descriptor passing, and a file-operations-pointer socket type check | Introduce common socket dispatch and keep Unix connection state in its backend. |
+| `kernel/ipc/socket.c` | Unix-domain streams, shared connection rings, descriptor passing, and a file-operations-pointer socket type check | Introduce common socket dispatch and store Unix connection state in its backend. |
 | `kernel/syscall/sys_ipc.c` | Socket creation accepts only `AF_UNIX`; the third argument is treated as flags; bind/connect assume Unix addresses; accept ignores address outputs | Add family-aware address handling and real Internet protocol selection without breaking existing Unix callers. |
 | `libwire/src/client.c`, `libwire/src/server.c` | MiniOS callers pass socket flags in the third argument | Preserve this legacy Unix convention initially; use standard type flags for new Internet calls. |
 | `libc/src/ipc.c` | `send()` and `recv()` call write/read and ignore message flags | Route through socket operations and explicitly validate flags. |
-| `kernel/fs/file.c` | Read and write hold the same position mutex while the backend may block | Add an explicit position-independent I/O path for sockets so a blocked read does not exclude a concurrent write. |
+| `kernel/fs/file.c` | Read and write acquire the same position mutex while the backend may block | Add an explicit position-independent I/O path for sockets so a blocked read does not exclude a concurrent write. |
 | `kernel/ipc/poll.c` | Poll registers an object's source before checking readiness | Give each new socket a stable poll source across connection state changes. |
 | `kernel/sched/wait.c`, `kernel/drivers/timer.c` | Timed waits and monotonic time already exist | Run protocol timer work in a worker thread; timer interrupts arrange wakeups only. |
 | `kernel/arch/x86_64/boot.c` | `kinit()` initializes devices requiring a schedulable thread | Initialize networking here with explicit worker/device publication order. |
@@ -62,9 +62,9 @@ errno values already exist; add missing values consistently in kernel and libc.
 ### Socket and protocol separation
 
 Introduce a common socket object with family, type, protocol, backend
-operations, error state, references, and a stable poll source. Keep descriptor
-installation, close-on-exec, and file reference handling shared. Keep
-`SCM_RIGHTS` processing specific to Unix sockets.
+operations, error state, references, and a stable poll source. Share descriptor
+installation, close-on-exec, and file reference handling. Restrict
+`SCM_RIGHTS` processing to Unix sockets.
 
 Internet endpoints use separate UDP and TCP state. A TCP connection may remain
 alive after its application file has closed because retransmissions, FIN
@@ -77,8 +77,8 @@ Use one kernel networking worker initially. It owns protocol state transitions,
 route/neighbor updates, and protocol deadlines. System calls exchange copied
 data and bounded requests with the worker; short endpoint locks protect the
 application-visible queues and readiness state. The worker never waits for a
-peer response, application buffer space, or a device descriptor while holding
-up unrelated connections.
+peer response, application buffer space, or a device descriptor while delaying
+unrelated connections.
 
 Document field ownership and lock ordering in `docs/design/locking.md` before
 introducing the locks. No spinlock or RCU read section may span a blocking
@@ -106,14 +106,14 @@ completion or a completed device reset that ends DMA access.
 NIC transmit completion permits reclaiming a device transmission buffer. TCP
 acknowledgement permits reclaiming acknowledged stream data. These are
 independent events. The first implementation may copy retransmission data into
-fresh transmit buffers to keep the ownership rules simple.
+fresh transmit buffers to maintain simple ownership rules.
 
 ### Resource policy
 
 Set documented limits for packet storage, sockets, per-socket queued bytes,
 pending requests, ARP entries and queued packets, fragments, half-open TCP
 connections, accepted connections, and TIME_WAIT state. Define failure behavior
-for every limit. Keep bounded capacity available for control traffic under
+for every limit. Reserve bounded capacity for control traffic under
 data-buffer pressure so ACKs and teardown do not depend on unbounded allocation.
 
 ## 4. Milestone overview
@@ -153,7 +153,7 @@ Scope:
   during implementation; record the specifications and supported subset in the
   design documentation. The source investigation was not a standards audit.
 - Create host-test seams for packet injection and a controllable monotonic
-  clock. Keep protocol logic independent of PCI and user pointers.
+  clock. Maintain protocol logic independent of PCI and user pointers.
 - Extend the boot harness with explicit NIC/backend configuration, controlled
   host peer startup, readiness synchronization, packet capture, and cleanup on
   success, failure, and timeout. Verify backend capabilities on the actual
@@ -176,7 +176,7 @@ Scope:
 - Introduce common socket operations and retain the existing Unix backend.
 - Preserve legacy third-argument flags for `AF_UNIX` initially. Define
   `AF_INET` creation with a protocol argument and flags in the type argument;
-  reject unsupported combinations. Keep existing syscall numbers stable and
+  reject unsupported combinations. Maintain existing syscall numbers and
   append new calls where needed.
 - Add Internet address types and bounded address input/output helpers. Implement
   accept peer-address reporting, address-length truncation conventions,
@@ -189,7 +189,7 @@ Scope:
   failure cleanup while restructuring message handling.
 - Add position-independent file I/O for sockets. Preserve regular-file offset
   locking and do not globally remove file mutexes.
-- Keep poll-source identity stable; specify readiness for disconnected,
+- Maintain a stable poll-source identity; specify readiness for disconnected,
   connecting, established, failed, and closed endpoints.
 
 Likely paths: `kernel/ipc/socket.c`, `kernel/include/ipc/socket.h`,
@@ -240,7 +240,7 @@ Scope:
 - Defer protocol processing and refill to the worker. Handle descriptor
   exhaustion without losing buffers or requiring a spare descriptor inside a
   completion callback.
-- Keep transmit memory alive through completion and implement safe cleanup for
+- Maintain transmit memory through completion and implement safe cleanup for
   partial initialization, queue failure, and device reset.
 - Audit any shared transport changes against block, input, GPU, and sound users.
 
@@ -268,7 +268,7 @@ Scope:
 - Implement ICMP echo and the initial error handling/generation needed by the
   stack, including rate limits and suppression of inappropriate error replies.
 - Provide a minimal kernel configuration/control interface for tests and later
-  user tools. Keep ordinary socket creation separate from interface mutation.
+  user tools. Separate ordinary socket creation from interface mutation.
 - Explicitly reject incoming fragments during this milestone and constrain
   outgoing packets to the interface MTU. Count these restrictions; do not
   describe this stage as general IPv4 interoperability.
@@ -345,7 +345,7 @@ Scope:
 - Implement retransmission scheduling, exponential backoff, RTT measurement
   with retransmission ambiguity handling, and an explicit retry/failure policy.
 - Implement an initial established congestion-control algorithm with slow
-  start, congestion avoidance and a defined loss-recovery policy. Keep the
+  start, congestion avoidance and a defined loss-recovery policy. Maintain the
   congestion window distinct from the peer's advertised receive window.
 - Implement zero-window probes/recovery and small-write/ACK policies that cannot
   leave mutually waiting endpoints stalled indefinitely.
@@ -390,7 +390,7 @@ Scope:
   for example a separately implemented VirtIO entropy device, after checking
   platform support; specify seeding, failure and unavailable-source behavior.
   Do not silently substitute libc rand or a timer-derived value.
-- Keep deterministic test injection separate from normal operation and expose
+- Separate deterministic test injection from normal operation and expose
   whether the required provider is ready before broader network exposure.
 - Fuzz packet parsers and socket address/iovec handling with host sanitizers
   where available. Cover lengths, options, checksums and integer overflow.
@@ -491,7 +491,7 @@ N13 closes the first TCP limitation that the N12 record carried into the
 supported feature set. The window scale and timestamp options of RFC 7323
 are offered in every SYN and used only when the other SYN of the handshake
 carried them too. The receive store grows beyond 65535 bytes so that
-scaling has an effect, and the stores stay bounded and are released when
+scaling has an effect, and the stores remain bounded and are released when
 no endpoint can use them. PAWS runs before the sequence check, TS.Recent
 follows RFC 7323 section 4.3, and round-trip samples taken from echoed
 timestamps feed the existing RFC 6298 estimator. Negotiations, PAWS drops
@@ -506,7 +506,7 @@ guest's parsers observes both options on the wire.
 
 SACK-permitted is negotiated in SYN and SYN ACK like the options of N13.
 The receiver reports out-of-order data as SACK blocks by the rules of RFC
-2018. The sender keeps a bounded scoreboard of SACKed ranges and recovers
+2018. The sender maintains a bounded scoreboard of SACKed ranges and recovers
 from loss with the pipe and NextSeg rules of RFC 6675, retransmitting only
 what the scoreboard shows missing. In-order data is acknowledged after at
 most 500 ms and at once for every second full segment, as RFC 1122 and RFC
@@ -522,8 +522,8 @@ without a timeout, correct guest blocks and the delayed ACK on the wire.
 
 ### N15. Resolver cache, negative caching and search domains
 
-The resolver keeps DNS answers for the TTL of their records with an upper
-bound, keeps negative answers for the time RFC 2308 derives from the SOA
+The resolver caches DNS answers for the TTL of their records with an upper
+bound, caches negative answers for the time RFC 2308 derives from the SOA
 record of the answer, and applies the search list and the ndots option of
 `/etc/resolv.conf`. The cache is bounded in entries and lifetime, and the
 DHCP client and `net apply` provide the search list.
@@ -538,7 +538,7 @@ The DHCP client probes an offered address with ARP as RFC 5227 describes
 before it uses it, declines it with DHCPDECLINE on a conflict and
 announces it after configuration. The kernel provides the probe through a
 narrow `/dev/net` operation, since there are no raw sockets. The lease is
-kept on the persistent home volume, and a client that restarts with an
+stored on the persistent home volume, and a client that restarts with an
 unexpired lease asks for its address again in INIT-REBOOT.
 
 The milestone is complete when injected ARP packets cover the conflict
@@ -549,8 +549,8 @@ appear in the capture.
 
 ## 5. Verification and implementation discipline
 
-- Keep host protocol tests, simulated-device tests and live QEMU/peer tests
-  distinct. Report exactly which layer each result validates.
+- Separate host protocol tests, simulated-device tests and live QEMU/peer tests.
+  Report exactly which layer each result validates.
 - Use production parsers/state transitions in the deterministic harness; avoid
   a second test-only protocol implementation that can pass independently.
 - Give concurrent network tests isolated disks, ports, captures and peer
@@ -564,7 +564,7 @@ appear in the capture.
   paths. All `net_*` names in this plan are proposed tests.
 - Use root-level libc build targets such as `make libc` when ABI work requires
   rebuilding libc and applications. Verify both static and dynamic consumers.
-- Keep coherent subsystem boundaries and explanatory ownership/locking comments;
+- Maintain coherent subsystem boundaries and explanatory ownership/locking comments;
   do not impose an arbitrary source-file line limit.
 - Recheck local changes before editing shared files. Treat completion as the
   implementation plus its required tests and documentation, not a commit title

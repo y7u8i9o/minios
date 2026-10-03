@@ -26,26 +26,26 @@ struct vma {
 };
 
 /* The entry that maps the frame pa in a region with the VM_* flags: a
- * present user entry, or a PROT_NONE entry that keeps the frame when the
+ * present user entry, or a PROT_NONE entry that retains the frame when the
  * region is not readable. */
 pte_t vma_make_pte(uintptr_t pa, unsigned flags);
 
 /* Add [start, end) to vm. Fails with -EEXIST on overlap. */
 int vma_add(struct vmspace *vm, uintptr_t start, uintptr_t end, unsigned flags);
-/* Find the region containing addr. Caller holds vm->lock. */
+/* Find the region containing addr. Caller has acquired vm->lock. */
 struct vma *vma_find_locked(struct vmspace *vm, uintptr_t addr);
 /* Allocate and map zero pages for every page of [start, end) that is not
  * mapped yet. Used when the kernel is about to write into a region. */
 int vma_populate(struct vmspace *vm, uintptr_t start, uintptr_t end);
 /* Unmap [start, end) of region v releasing frames and swap slots. Dirty
- * bits of shared file pages are recorded in the mapping. Caller holds
- * vm->lock; v may be NULL when the range holds no file pages. */
+ * bits of shared file pages are recorded in the mapping. Caller has acquired
+ * vm->lock; v may be NULL when the range contains no file pages. */
 void vma_unmap_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, uintptr_t end);
 /* Split v at addr (inside v, page aligned) into v and a new tail. Returns
- * the tail or NULL without memory. Caller holds vm->lock. */
+ * the tail or NULL without memory. Caller has acquired vm->lock. */
 struct vma *vma_split_locked(struct vmspace *vm, struct vma *v, uintptr_t addr);
 /* Drop the file and mapping references of a region and free it. Called
- * with no lock held. */
+ * with no lock acquired. */
 void vma_release(struct vma *v);
 /* Anonymous mmap: pick a free range below USER_MMAP_TOP (or use the hint
  * when it is free) and add a region. Returns the address or -errno. */
@@ -66,7 +66,7 @@ bool vma_range_replaceable(struct vmspace *vm, uintptr_t addr, size_t len);
 int vma_mprotect(struct vmspace *vm, uintptr_t addr, size_t len, unsigned prot);
 /* Write the dirty pages of shared file regions in [addr, addr + len) back. */
 int vma_msync(struct vmspace *vm, uintptr_t addr, size_t len);
-/* Writebacks of shared file ranges are queued while vm->lock is held and
+/* Writebacks of shared file ranges are queued while vm->lock is locked and
  * run once it is released (mm/mmap.c). */
 void vma_queue_sync(struct list_head *jobs, struct vma *v, uintptr_t start, uintptr_t end);
 int vma_run_sync_jobs(struct list_head *jobs);

@@ -206,7 +206,7 @@ long sys_fstat(struct trapframe *tf)
     if (f->inode) {
         inode_stat(f->inode, (struct stat *)st);
     } else {
-        /* Pipes, sockets and the other objects without an inode keep no
+        /* Pipes, sockets and the other objects without an inode retain no
          * owner. They are reported as the caller's own. */
         struct cred c;
         cred_get_current(&c);
@@ -346,7 +346,7 @@ long sys_fstatat(struct trapframe *tf)
 }
 
 /* symlinkat(target, dirfd, path): create path, resolved as in openat, as a
- * symbolic link holding target. */
+ * symbolic link containing target. */
 long sys_symlinkat(struct trapframe *tf)
 {
     char target[USER_PATH_MAX], path[USER_PATH_MAX];
@@ -377,7 +377,7 @@ static long readlink_common(const char *path, uintptr_t buf, size_t size)
     if (r < 0)
         return r;
     size_t n = MIN((size_t)r, size);
-    /* User memory is written with no lock held: the copy may fault. */
+    /* User memory is written with no lock acquired: the copy may fault. */
     memcpy((char *)buf, target, n);
     return (long)n;
 }
@@ -407,7 +407,7 @@ long sys_readlinkat(struct trapframe *tf)
  * the current time or two timespecs of which
  * the second is the modification time, with UTIME_NOW and UTIME_OMIT in
  * tv_nsec. The access time is not stored and is ignored. Inode times are
- * nanoseconds, so the given time is kept exactly by mfs. */
+ * nanoseconds, so the given time is retained exactly by mfs. */
 long sys_utimensat(struct trapframe *tf)
 {
     if (SYSARG3(tf) & ~(uintptr_t)AT_SYMLINK_NOFOLLOW)
@@ -594,7 +594,7 @@ long sys_chdir(struct trapframe *tf)
     long r = copy_string_from_user(path, SYSARG0(tf), sizeof path);
     if (r < 0)
         return r;
-    /* The working directory is kept as the path of the directory without
+    /* The working directory is retained as the path of the directory without
      * symbolic links, which getcwd returns. */
     struct proc *p = thread_current()->proc;
     char resolved[PROC_CWD_LEN];
@@ -615,7 +615,7 @@ long sys_chdir(struct trapframe *tf)
     return 0;
 }
 
-/* fchdir(fd) enters the directory open on fd by name, which keeps its
+/* fchdir(fd) enters the directory open on fd by name, which retains its
  * canonical path in file.path (U5). */
 long sys_fchdir(struct trapframe *tf)
 {
@@ -654,7 +654,7 @@ long sys_getcwd(struct trapframe *tf)
     size_t n = strlen(cwd);
     if (n + 1 > size)
         return -ERANGE;
-    /* User memory is touched without a spinlock held: the copy may fault
+    /* User memory is touched with no spinlock acquired: the copy may fault
      * on a swapped page. */
     memcpy((char *)buf, cwd, n + 1);
     return (long)n;

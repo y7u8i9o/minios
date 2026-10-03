@@ -17,14 +17,14 @@ static long lockstat_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     uint64_t off = 0;
     size_t got = 0;
     int len = ksnprintf(line, sizeof line, "%-22s %12s %10s %14s %14s %12s %s\n", "NAME", "ACQUIRES", "CONTENDED",
-                        "SPIN_CYCLES", "HOLD_CYCLES", "MAX_HOLD", "MAX_HOLD_CALLER");
+                        "SPIN_CYCLES", "LOCKED_CYCLES", "MAX_LOCKED", "MAX_LOCKED_CALLER");
     unsigned count = __atomic_load_n(&lockstat_count, __ATOMIC_ACQUIRE);
     for (unsigned i = 0; i <= count && got < n; i++) {
         if (i > 0) {
             struct lockstat st = lockstat_table[i - 1];
-            const char *caller = st.max_hold_caller ? ksyms_lookup((uintptr_t)st.max_hold_caller, NULL, NULL) : NULL;
+            const char *caller = st.max_locked_caller ? ksyms_lookup((uintptr_t)st.max_locked_caller, NULL, NULL) : NULL;
             len = ksnprintf(line, sizeof line, "%-22s %12lu %10lu %14lu %14lu %12lu %s\n", st.name, st.acquires,
-                            st.contended, st.spin_cycles, st.hold_cycles, st.max_hold, caller ? caller : "-");
+                            st.contended, st.spin_cycles, st.locked_cycles, st.max_locked, caller ? caller : "-");
         }
         if (off + (uint64_t)len <= *pos) {
             off += (uint64_t)len;

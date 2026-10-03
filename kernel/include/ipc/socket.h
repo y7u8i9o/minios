@@ -14,7 +14,7 @@
 
 struct socket;
 
-/* A message crossing the layer. data is a kernel buffer holding the bytes
+/* A message crossing the layer. data is a kernel buffer containing the bytes
  * to send or the room to receive into. addr is the destination or, on
  * receive, receives the source; addrlen is the bytes valid or the bytes
  * filled, 0 when there is none. files are the SCM_RIGHTS references of
@@ -51,9 +51,9 @@ struct socket_ops {
     void (*release)(struct socket *s);
 };
 
-/* One socket. lock protects error and is never held across a backend
+/* One socket. lock protects error and is never locked across a backend
  * operation. poll is the sole source pollers register on; the backend
- * notifies it after every readiness change and it stays valid until the
+ * notifies it after every readiness change and it remains valid until the
  * socket is freed. file is the open file description, set once when the
  * descriptor is created, and is what carries O_NONBLOCK. */
 struct socket {

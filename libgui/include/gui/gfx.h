@@ -20,7 +20,7 @@ struct rect {
 extern const uint8_t gfx_font8x16[256][16];
 
 /* Bitmap fonts: 256 glyphs, 1 bit per pixel, variable advance. Files
- * (.mfnt, written by tools/genfont/genfont.py) hold a 16 byte header
+ * (.mfnt, written by tools/genfont/genfont.py) contain a 16 byte header
  * ("MFNT", uint16 height, ascent, max width, glyph count, uint32
  * reserved), 256 advances, 256 widths, then per glyph height rows of
  * 32 bits with bit 31 leftmost. */

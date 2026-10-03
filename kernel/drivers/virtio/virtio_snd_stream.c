@@ -4,7 +4,7 @@
  * Playback: write() copies exactly one period into a free period and
  * submits it; the completion frees it again.  Capture: prepare submits
  * every period to the device, which fills them in order; read() copies
- * the oldest full period out and submits it again.  Both rings keep the
+ * the oldest full period out and submits it again.  Both rings retain the
  * device owning its periods until their used entries arrive. */
 #define KLOG_SUBSYS "virtio-snd"
 #include "virtio_snd_internal.h"
@@ -182,7 +182,7 @@ void snd_rx_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
     poll_source_notify(&s->dev->pcm.poll);
 }
 
-/* Submit period p to the RX queue.  Caller holds vq->lock. */
+/* Submit period p to the RX queue.  Caller has acquired vq->lock. */
 static int submit_rx(struct snd_stream *s, struct snd_period *p)
 {
     struct virtqueue *vq = s->vq;
@@ -269,7 +269,7 @@ int snd_stream_start(struct snd_stream *s)
  * state changes; data not yet submitted by the caller is discarded and
  * the small, fixed hardware queue is allowed to finish.  Capture periods
  * come back when the stream is released: the wait for them is bounded,
- * and a period the device keeps stays allocated and is ignored through
+ * and a period still used by the device remains allocated and is ignored through
  * its generation when it finally returns. */
 int snd_stream_stop(struct snd_stream *s)
 {
@@ -316,7 +316,7 @@ int snd_stream_stop(struct snd_stream *s)
     if (returned)
         free_ring(s);
     else
-        s->ring = NULL;         /* kept: the device may still write to it */
+        s->ring = NULL;         /* retained: the device may still write to it */
     spin_unlock(&vq->lock);
     return r;
 }

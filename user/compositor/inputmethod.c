@@ -7,7 +7,7 @@
  * selected and a text input context has the keyboard focus, the daemon is
  * active: it receives every key of the context and replies whether it
  * used it.  The keys wait in a queue for the reply, at most 150 ms each.
- * The queue keeps the order of the keys and of the switch keys: a switch
+ * The queue retains the order of the keys and of the switch keys: a switch
  * waits for the keys typed before it, and the keys typed after a waiting
  * switch wait for it and go where it sends them.
  *
@@ -43,7 +43,7 @@ struct pending_key {
 
 static struct method methods[MAX_METHODS];
 static int nmethods, current, last_engine;
-static int engine_chosen;                         /* the user selected an engine: last_engine stays */
+static int engine_chosen;                         /* the user selected an engine: last_engine remains */
 static char daemon_engines[MAX_METHODS][3][64];   /* name, label and title of each engine of the daemon */
 static int ndaemon;
 static struct wire_resource *im;                  /* the input method of the daemon, or NULL */
@@ -82,7 +82,7 @@ static void add_method(const char *name, const char *label, const char *title)
 }
 
 /* rebuild_methods makes the list again after the daemon came, went or
- * changed its engines.  The current method stays selected by its name. */
+ * changed its engines.  The current method remains selected by its name. */
 static void rebuild_methods(void)
 {
     char was[32] = "", last[32] = "";
@@ -389,7 +389,7 @@ int im_filter_key(uint32_t key, int pressed, int mods)
     if (!pressed && !nqueue && take_handled(key))
         return 1;
     long now = uptime_ms();
-    /* Behind a waiting entry every key waits, unsent, to keep the order. */
+    /* Behind a waiting entry every key waits, unsent, to preserve the order. */
     if (nqueue)
         return push((struct pending_key){ .kind = Q_KEY, .key = key, .pressed = pressed, .mods = mods,
                                           .time = now, .decided = !pressed });
@@ -657,7 +657,7 @@ static void h_get_input_method(struct wire_client *c, struct wire_resource *self
                                struct wire_resource *seat)
 {
     if (im) {
-        wire_client_post_error(c, self, 51, "another client holds the input method");
+        wire_client_post_error(c, self, 51, "another client uses the input method");
         return;
     }
     struct wire_resource *r = wire_resource_create(c, &input_method_interface, 1, id);

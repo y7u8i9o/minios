@@ -18,7 +18,7 @@ page and `HugeFallbacks:` in `/dev/meminfo` counts it.
 ## Invariants
 
 A huge frame is refcounted through its head `struct page`: one reference
-per page directory entry that maps it. Two rules keep this simple:
+per page directory entry that maps it. Two rules make this simple:
 
 1. A huge entry never straddles a region boundary. `vma_split_locked`
    splits a huge page that contains the split address before it splits the

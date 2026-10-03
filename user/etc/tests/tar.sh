@@ -37,8 +37,8 @@ check tar-list-gzip "$(tar -tzf all.tgz | sort | head -n 1)" "src"
 sleep 1
 mkdir out4
 tar -C out4 -xf all.tar
-printf 'out4/src/one.txt: src/one.txt\n\t@echo rebuild\n' > kept.mk
-make -q -f kept.mk; check tar-mtime-kept "$?" "1"
+printf 'out4/src/one.txt: src/one.txt\n\t@echo rebuild\n' > retained.mk
+make -q -f retained.mk; check tar-mtime-retained "$?" "1"
 mkdir out5
 tar -C out5 -xmf all.tar
 printf 'out5/src/one.txt: src/one.txt\n\t@echo rebuild\n' > now.mk

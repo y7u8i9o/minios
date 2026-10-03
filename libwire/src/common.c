@@ -63,7 +63,7 @@ int wire_conn_marshal(struct wire_conn *c, uint32_t id, uint32_t opcode, const s
         if (wire_conn_flush(c) < 0)
             return -1;
         /* The peer is not reading: the message is dropped, the
-         * connection kept (the server shows the client as not responding). */
+         * connection preserved (the server shows the client as not responding). */
         if (c->out_len + size > sizeof c->out || c->nout_fds + nfds > 16)
             return -1;
     }

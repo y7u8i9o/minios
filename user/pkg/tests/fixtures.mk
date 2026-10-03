@@ -33,7 +33,7 @@ $(ROOT)/etc/tests/pkghello-1.0.mpk: ../tools/mkpkg.sh pkg/tests/pkghello.manifes
 	READELF=$(READELF) ../tools/mkpkg.sh $(PKGFIX_OUT)/pkghello $@ $(BUILD)/lib/abi
 
 # These rules build the archives of the repository test
-# (tests/cases/pkg_repo). They stay on the host, where the case's peer
+# (tests/cases/pkg_repo). They remain on the host, where the case's peer
 # assembles repositories from them. repohello comes in two versions, each
 # with a NEWS file naming its version. repolib provides libpkgfix.so.
 # repoprog needs that library and depends on repohello, which lets its

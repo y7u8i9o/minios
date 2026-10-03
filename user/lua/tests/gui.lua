@@ -57,10 +57,10 @@ check(gui.key.a == 30 and gui.key.up == 103 and gui.mod.ctrl == 2, "key tables")
 
 -- painting
 local canvas = gui.canvas(win):stretch(1, 1)
-local painted, kept = 0, nil
+local painted, retained = 0, nil
 canvas:on("paint", function(w, p)
   painted = painted + 1
-  kept = p
+  retained = p
   local cw, ch = w:size()
   p:fill(0, 0, cw, ch, gui.rgb(0x20, 0xa0, 0x40))
   p:text(4, 4, "canvas", 0xffffff)
@@ -72,7 +72,7 @@ gui.test.paint(win)
 local cx, cy = canvas:pos()
 local cw, ch = canvas:size()
 check(painted == 1 and gui.test.pixel(win, cx + cw - 2, cy + ch - 2) == 0x20a040, "canvas painted")
-check(not pcall(kept.fill, kept, 0, 0, 1, 1, 0), "painter is closed after the handler")
+check(not pcall(retained.fill, retained, 0, 0, 1, 1, 0), "painter is closed after the handler")
 canvas:invalidate()
 local dx, dy, dw, dh = gui.test.paint(win)
 check(painted == 2 and dx == cx and dy == cy and dw == cw and dh == ch, "invalidate repaints the canvas only")
@@ -200,7 +200,7 @@ local iw, ih = img:size()
 check(iw == 37 and ih == 23 and img:scale() == 1, "the PNG image has its size")
 check(img:pixel(0, 0) == rgba(0, 0) and img:pixel(5, 9) == rgba(5, 9) and img:pixel(36, 22) == rgba(36, 22), "the PNG pixels follow the formulas")
 local data = img:pixels()
-check(#data == 37 * 23 * 4 and string.unpack("<I4", data, (9 * 37 + 5) * 4 + 1) == rgba(5, 9), "the pixel string holds the pixels")
+check(#data == 37 * 23 * 4 and string.unpack("<I4", data, (9 * 37 + 5) * 4 + 1) == rgba(5, 9), "the pixel string contains the pixels")
 check(not pcall(img.pixel, img, 37, 0) and not pcall(img.pixel, img, 0, -1), "a pixel outside the image raises an error")
 check(tostring(img) == "image: 37x23", "tostring names the size")
 local none, msg, errno = gui.image("libgui/tests/data/missing.png")
@@ -281,7 +281,7 @@ check(not pcall(box.image, box, img), "an image on a check box raises an error")
 win:close()
 app:step(0)
 
--- A label keeps its image alive.
+-- A label retains its image.
 win = app:window(100, 40, "label"):padding(0)
 local lab = gui.label(win, ""):image(gui.from_pixels(4, 4, string.rep(string.pack("<I4", 0xff4080c0), 16)))
 collectgarbage()
@@ -295,7 +295,7 @@ gui.button(win, "b"):image(img):icon("open")
 win:close()
 app:step(0)
 
--- The fake client keeps the clipboard in memory.
+-- The fake client retains the clipboard in memory.
 check(app:clipboard("copied\0text") == app and app:clipboard() == "copied\0text", "the clipboard returns the text it was given")
 check(not pcall(app.clipboard, app, string.rep("x", 65537)), "the clipboard refuses a text beyond its limit")
 

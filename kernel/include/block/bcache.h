@@ -9,9 +9,9 @@ struct blockdev;
 #define BCACHE_NBUF       256
 
 /* A cached block. dev, block, refcount, valid, dirty, pinned and the list
- * links are protected by bcache_lock. data is protected by lock, held by
+ * links are protected by bcache_lock. data is protected by lock, locked by
  * the owner between bread and brelse. A pinned buffer belongs to a
- * filesystem transaction (M36): it holds an extra reference so it cannot
+ * filesystem transaction (M36): it contains an extra reference so it cannot
  * be evicted, and bcache_sync leaves it alone until the filesystem writes
  * it with bwrite_now and unpins it. */
 struct buf {
@@ -39,7 +39,7 @@ int bcache_sync(struct blockdev *dev);
 /* Mark the locked buffer dirty and pinned (a no-op when already pinned).
  * Returns true when the buffer was newly pinned. */
 bool bpin(struct buf *b);
-/* Drop the pin of a buffer the caller has locked; the buffer stays
+/* Drop the pin of a buffer the caller has locked; the buffer remains
  * referenced by the caller until brelse. */
 void bunpin(struct buf *b);
 /* Write the locked buffer to its block now, clearing dirty. */

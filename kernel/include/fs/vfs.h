@@ -17,38 +17,38 @@ struct poll_source;
 
 #define VFS_PATH_MAX 256
 /* The longest symbolic link target: like every path the kernel accepts, a
- * target holds at most VFS_PATH_MAX - 1 bytes. */
+ * target contains at most VFS_PATH_MAX - 1 bytes. */
 #define VFS_SYMLINK_MAX (VFS_PATH_MAX - 1)
 
 /* Operations on directory and file inodes. name is not NUL terminated,
- * len is its length. The caller holds dir->lock for directory operations.
+ * len is its length. The caller has acquired dir->lock for directory operations.
  * Lookups return a referenced inode. */
 struct inode_ops {
     int (*lookup)(struct inode *dir, const char *name, size_t len, struct inode **out);
     /* create, mkdir and symlink give the new inode the owner chosen by
-     * vfs_new_owner. mode holds the permission bits after the umask. */
+     * vfs_new_owner. mode contains the permission bits after the umask. */
     int (*create)(struct inode *dir, const char *name, size_t len, uint32_t mode, struct inode **out);
     int (*mkdir)(struct inode *dir, const char *name, size_t len, uint32_t mode);
     int (*unlink)(struct inode *dir, const char *name, size_t len);
     int (*rmdir)(struct inode *dir, const char *name, size_t len);
     int (*link)(struct inode *dir, const char *name, size_t len, struct inode *target);
-    /* Create name as a symbolic link holding target (tlen bytes, 1 to
+    /* Create name as a symbolic link containing target (tlen bytes, 1 to
      * VFS_SYMLINK_MAX, not NUL terminated). A filesystem that cannot store
      * links returns -EPERM; without the operation the VFS reports EROFS. */
     int (*symlink)(struct inode *dir, const char *name, size_t len, const char *target, size_t tlen);
     /* Copy the target of the symbolic link ino into buf, at most size
-     * bytes and without a NUL; returns the length. ino->lock is held. */
+     * bytes and without a NUL; returns the length. ino->lock is locked. */
     int (*readlink)(struct inode *ino, char *buf, size_t size);
-    /* Both directory locks are held, olddir first when they differ. */
+    /* Both directory locks are locked, olddir first when they differ. */
     int (*rename)(struct inode *olddir, const char *oldname, size_t oldlen,
                   struct inode *newdir, const char *newname, size_t newlen);
     int (*truncate)(struct inode *ino, uint64_t size);
-    /* Set the modification time and write the inode back. ino->lock is held
+    /* Set the modification time and write the inode back. ino->lock is locked
      * and the call is bracketed by op_begin and op_end. Optional: a
      * filesystem without it refuses utimensat with EROFS. */
     int (*setmtime)(struct inode *ino, int64_t mtime);
     /* Set the permission bits (07777) and the owner and write the inode
-     * back (U1). ino->lock is held and the call is bracketed by op_begin
+     * back (U1). ino->lock is locked and the call is bracketed by op_begin
      * and op_end. A filesystem that cannot store a change returns -EPERM,
      * one without the operation makes chmod and chown fail with EROFS. */
     int (*setattr)(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid);
@@ -116,7 +116,7 @@ struct inode {
  * ever being published, because another CPU read the same inode first;
  * optional. op_begin and op_end (optional, M36) bracket every modifying
  * operation the VFS issues (create, write, truncate, mkdir, unlink, rmdir,
- * link, rename); they are called with no inode or file lock held, so a
+ * link, rename); they are called with no inode or file lock acquired, so a
  * journaling filesystem may block in op_begin for log space. */
 struct fs_space {
     uint64_t blocks, free_blocks;
@@ -157,7 +157,7 @@ struct fs_type {
 };
 
 /* A mount. The covered directory is identified by (sb, ino) of the
- * mountpoint so it can be recognized without keeping the inode alive.
+ * mountpoint so it can be recognized without retaining the inode.
  * Protected by mount_lock. */
 struct mount {
     struct superblock *sb;
@@ -276,14 +276,14 @@ int vfs_utimens(const char *path, int64_t mtime, unsigned flags);
 int vfs_rmdir(const char *path);
 int vfs_rename(const char *oldpath, const char *newpath);
 int vfs_link(const char *oldpath, const char *newpath);
-/* Create path as a symbolic link holding target. */
+/* Create path as a symbolic link containing target. */
 int vfs_symlink(const char *target, const char *path);
 /* Change the permission bits (mode, 07777) or the owner of an inode or of
- * the file at path (U1). VFS_CHOWN_KEEP leaves the uid or gid as it is.
+ * the file at path (U1). VFS_CHOWN_UNCHANGED leaves the uid or gid as it is.
  * Only the owner and root may change the mode, only root the owner, and
  * the owner may change the group to one of its own groups. flags is 0 or
  * VFS_NOFOLLOW. */
-#define VFS_CHOWN_KEEP 0xffffffffu
+#define VFS_CHOWN_UNCHANGED 0xffffffffu
 int vfs_chmod_inode(struct inode *ino, uint32_t mode);
 int vfs_chown_inode(struct inode *ino, uint32_t uid, uint32_t gid);
 int vfs_chmod(const char *path, uint32_t mode, unsigned flags);

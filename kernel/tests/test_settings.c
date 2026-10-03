@@ -1,6 +1,6 @@
 /* The settings program: every page opens on the desktop and closes with
  * Alt+F4 without a crash, and the X12 tool does the same. A page named by
- * page=<name> on the command line is opened alone and held open for
+ * page=<name> on the command line is opened alone and left open for
  * screenshots. */
 #include <tests/ktest.h>
 #include <sched/user.h>
@@ -17,16 +17,16 @@ static const char *const pages[] = { "appearance", "display", "keyboard", "mouse
 
 static int windows;             /* toplevels created so far: the server cascades by 30 px each, 8 places */
 
-static void open_and_close(const char *path, const char *arg0, const char *arg1, int hold_ms)
+static void open_and_close(const char *path, const char *arg0, const char *arg1, int open_ms)
 {
     int wx = 40 + windows % 8 * 30, wy = 60 + windows % 8 * 30;
     windows++;
     struct proc *cl = proc_create_user(path, (char *const[]){ (char *)arg0, (char *)arg1, NULL }, (char *const[]){ NULL },
                                        &kernel_proc);
     ktest_assert(cl != NULL, "cannot start %s", path);
-    sleep_ms(hold_ms);
+    sleep_ms(open_ms);
     /* A page that reads more data, or a host running several guests,
-     * may map the window later than hold_ms. */
+     * may map the window later than open_ms. */
     for (int waited = 0; pixel(wx + 2, wy - 10) != 0x00ebebeb && waited < 5000; waited += 100)
         sleep_ms(100);
     kprintf("gui_settings: %s %s shown\n", arg0, arg1 ? arg1 : "");

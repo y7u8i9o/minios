@@ -28,7 +28,7 @@ void profile_sample(const struct trapframe *tf);
 void profile_tick(void);
 
 /* Scheduler hooks, called from sched_switch_locked with the run queue lock
- * held. They take no lock and never wake a poller. */
+ * locked. They take no lock and never wake a poller. */
 void profile_leave_cpu(struct thread *prev, bool preempted);
 void profile_enter_cpu(struct thread *next);
 /* Called when a thread becomes runnable, to measure run queue latency. */

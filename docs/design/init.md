@@ -34,7 +34,7 @@ built-in table with the same entries, so a damaged root image still
 boots to a shell.
 
 Entries are records in a fixed array (`struct entry`, at most 32). The
-command words are kept NUL separated in the record and the argument
+command words are retained NUL separated in the record and the argument
 vector is rebuilt at every start, so records can be copied and moved
 when the configuration is reloaded.
 
@@ -94,7 +94,7 @@ requesting user through `SO_PEERCRED`. Everyone may ask for `list` and
 and restart, and everything else is for root. `login` and the greeter
 name the session user, and the end of the console entry clears it. A reload
 reads the file again: entries no longer present are stopped and removed,
-new ones start, and an existing entry keeps its state with the new
+new ones start, and an existing entry retains its state with the new
 command taking effect at its next start.
 
 ## Shutdown
@@ -115,7 +115,7 @@ the drain thread time, while the new one has already stopped everything
 and the final lines were lost. `sys_reboot` now calls `console_flush`
 before halting. Second, the regions of a reaped process release their
 file references through RCU callbacks, and a dynamically linked init
-holds the shared libraries mapped; both kept `/lib/libc.so` referenced
+contains the shared libraries mapped; both retained `/lib/libc.so` referenced
 and the root filesystem busy. `sys_reboot` removes the regions of init
 (it never returns to user mode) and waits with the new `rcu_synchronize`
 before `vfs_umount_all`. The `shutdown` case, whose init is the dynamic
@@ -126,7 +126,7 @@ before `vfs_umount_all`. The `shutdown` case, whose init is the dynamic
 `tests/cases/initctl` (`test_initctl` in `kernel/tests/test_shell.c`)
 boots the real init with a typed script: a service added through
 `initctl reload` of a copied configuration is stopped, started and
-restarted, a command that keeps failing is given up after five quick
+restarted, a command that continues failing is given up after five quick
 exits with seven starts on record, a reload of the original file removes
 it, unknown commands and names are reported, and `initctl poweroff` goes
 through the orderly shutdown. `shutdown_cmd` and `shutdown` cover the

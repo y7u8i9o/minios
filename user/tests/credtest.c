@@ -66,7 +66,7 @@ static void test_root(void)
     CHECK(getgroups(0, NULL) == 0, "root starts with supplementary groups");
     CHECK(umask(077) == 022, "initial umask is not 022");
     CHECK(umask(022) == 077, "umask did not return the previous mask");
-    CHECK(umask(01777) == 022 && umask(022) == 0777, "umask keeps bits beyond 0777");
+    CHECK(umask(01777) == 022 && umask(022) == 0777, "umask retains bits beyond 0777");
 }
 
 /* The row of pid in /dev/proc reports uid in its UID column. */
@@ -129,7 +129,7 @@ static int drop_child(void)
     return 21;
 }
 
-/* A child that keeps root in the saved uid, as a setuid program does, and
+/* A child that retains root in the saved uid, as a setuid program does, and
  * moves between the effective ids. */
 static int saved_child(void)
 {

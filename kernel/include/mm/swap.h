@@ -23,11 +23,11 @@ uint64_t swap_alloc_slot(void);
 void swap_free_slot(uint64_t slot);
 
 /* Allocate a frame for user data, waiting for kswapd to reclaim memory
- * when none is free. Must not be called with a spinlock held. Returns
+ * when none is free. Must not be called with a spinlock acquired. Returns
  * NULL when memory cannot be reclaimed. */
 struct page *swap_alloc_user_frame(void);
 /* Bring the swapped page at va of vm back into memory. vm->lock must not
- * be held. Returns 0, or -errno. */
+ * be locked. Returns 0, or -errno. */
 int swap_in_page(struct vmspace *vm, uintptr_t va);
 /* Swap in every page of vm so it can be copied by fork. */
 int swap_in_all(struct vmspace *vm);

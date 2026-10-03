@@ -57,7 +57,7 @@ static void test_reports(void)
         total += rows[i].total;
     CHECK(total == t->nodes[alpha].total && total == 60, "breakdown conserves selected cost");
     CHECK(prof_tree_match_weight(t, 0, "alpha") == 100, "recursive matches counted once");
-    CHECK(prof_tree_match_weight(t, alpha, "alpha") == 60, "search stays inside selected caller");
+    CHECK(prof_tree_match_weight(t, alpha, "alpha") == 60, "search remains inside selected caller");
     CHECK(prof_tree_match_weight(t, alpha, "beta") == 30, "search includes matching descendant");
     CHECK(prof_tree_match_weight(t, beta, "alpha") == 0, "ancestors outside zoom do not match");
     CHECK(prof_tree_match_weight(t, 0, "absent") == 0 && prof_tree_match_weight(t, 0, "") == 0,

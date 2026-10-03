@@ -290,7 +290,7 @@ static int mnemonic_of(const struct widget *w)
     return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
 }
 
-/* Accelerators of items in closed menus stay active; their mnemonics
+/* Accelerators of items in closed menus remain active; their mnemonics
  * do not (those belong to the open menu). */
 static int activate_accel(struct widget *w, int code, int ch, int mods, int in_closed_menu)
 {

@@ -1,6 +1,6 @@
 /* Input devices: every /dev/input/eventN is opened and grabbed at start.
  * Keyboards feed the seat with key codes; pointers move the cursor,
- * which is kept in fractions of a logical pixel: tablets place it
+ * which is retained in fractions of a logical pixel: tablets place it
  * exactly, mice move it through the acceleration profile below. */
 #include <stdio.h>
 #include <stdlib.h>

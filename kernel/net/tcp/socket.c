@@ -1,4 +1,4 @@
-/* Socket-facing TCP operations. Files keep endpoints alive during requests;
+/* Socket-facing TCP operations. Files retain references to endpoints during requests;
  * endpoint waiters sleep only after checking readiness under tcp_lock. */
 #include "internal.h"
 #include <net/byteorder.h>

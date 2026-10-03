@@ -59,7 +59,7 @@ void __libc_lock_lock(struct __libc_lock *l)
     int expected = 0;
     if (!__atomic_compare_exchange_n(&l->state, &expected, 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
         /* Contended: mark the lock as having a waiter and sleep until an
-         * unlock hands it over; the mark stays until a holder unlocks
+         * unlock hands it over; the mark remains until an unlock occurs
          * with no one left. */
         int c = expected;
         if (c != 2)

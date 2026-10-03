@@ -58,7 +58,7 @@ static void test_kbd(void)
 
     /* Incomplete line is not readable, backspace erases, then completed.
      * Every key is released: the input core drops a press of a key that
-     * is still down and repeats a held key. */
+     * is still down and repeats a pressed key. */
     static const uint8_t s2[] = { 0x1e, 0x9e, 0x30, 0xb0, 0x0e, 0x8e, 0x2e, 0xae };   /* a b <bs> c */
     feed(s2, sizeof s2);
     ktest_assert(tty_getc(&console_tty) == -1, "partial line readable");

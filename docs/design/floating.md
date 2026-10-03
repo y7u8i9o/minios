@@ -87,7 +87,7 @@ instructions.
 set. The stored environment contains the 28-byte x87 image and MXCSR. Every
 operation updates both units: exception queries merge their status flags,
 rounding-mode changes write the x87 control word and MXCSR rounding field, and
-hold/update operations preserve and merge pending flags. The default
+`feholdexcept` and `feupdateenv` preserve and merge pending flags. The default
 environment is x87 control word `0x037f` and MXCSR `0x1f80`, with exceptions
 masked and round-to-nearest-even selected. `FLT_ROUNDS` queries the active
 control word and therefore follows changes made by `fesetround`.

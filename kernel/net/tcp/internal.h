@@ -28,7 +28,7 @@
 #define TCP_TIMESTAMP_SPACE 12
 #define TCP_PAWS_IDLE_MS (24ull * 24 * 60 * 60 * 1000)
 /* Following RFC 2018 and RFC 6675 (N14), at most four blocks are reported
- * to the peer, the scoreboard keeps at most eight disjoint SACKed ranges,
+ * to the peer, the scoreboard retains at most eight disjoint SACKed ranges,
  * and three duplicate ACKs or SACKed segments declare a loss. */
 #define TCP_SACK_REPORT 4
 #define TCP_SCOREBOARD 8

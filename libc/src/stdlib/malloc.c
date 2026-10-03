@@ -11,7 +11,7 @@
  * free block also carries the links of its bin in the payload and a
  * footer with the size in the last 8 bytes, so that the physical
  * predecessor of a block is found in constant time when the header says
- * it is free. Free blocks are kept in bins by size: one bin per 16 bytes
+ * it is free. Free blocks are stored in bins by size: one bin per 16 bytes
  * up to 512 bytes, then one per power of two. Allocation takes the first
  * fitting block of the smallest usable bin and splits it; free coalesces
  * with both neighbours and inserts the result. Both are constant time
@@ -100,7 +100,7 @@ static void bin_remove(struct block *b)
     next_block(b)->flags &= ~F_PREV_FREE;
 }
 
-/* Cuts a used block down to size when the rest can hold a free block. */
+/* Cuts a used block down to size when the rest can contain a free block. */
 static void split(struct block *b, size_t size)
 {
     if (b->size < size + HDR + MIN_PAYLOAD)

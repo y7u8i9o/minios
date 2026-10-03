@@ -211,7 +211,7 @@ these functions:
 | Function | True for |
 |---|---|
 | `pte_present` | an entry the hardware translates through |
-| `pte_mapped` | an entry with a frame: present, or kept for a `PROT_NONE` region |
+| `pte_mapped` | an entry with a frame: present, or retained for a `PROT_NONE` region |
 | `pte_is_table`, `pte_is_block` | a table pointer, a 2 MiB block (level 2) |
 | `pte_write`, `pte_user`, `pte_young`, `pte_dirty` | the hardware permission and status bits |
 | `pte_cow`, `pte_lazyfree`, `pte_protnone`, `pte_swapped` | the software states of `vma.c`, `madvise.c`, `filemap.md` and `swap.c` |
@@ -255,7 +255,7 @@ written by `tlb_replace_entry`, which performs break before make
 A fault on an entry that permits the access sets the access flag, and for
 a write the dirty state, before the region is consulted (`update_access` in
 `mm/vma.c`). aarch64 needs this where the processor does not manage these
-bits in hardware (FEAT_HAFDBS): a writable entry stays read only until its
+bits in hardware (FEAT_HAFDBS): a writable entry remains read only until its
 first write, and an entry made old by the swap daemon faults on its next
 access. On x86_64 the path is taken only after a stale TLB entry.
 The x86_64 bit layout, including the software bits, is described in
@@ -389,10 +389,10 @@ otherwise, and `asid_bits=N` on the command line uses fewer bits. A space
 receives its ASID at its first load in a generation and stores it with the
 generation in `vmspace.tlb_tag`, so loads and flushes need no lookup. When
 a generation has no free ASID left, it advances. The bitmap is cleared
-except for the ASIDs that the CPUs are running, which stay reserved for
+except for the ASIDs that the CPUs are running, which remain reserved for
 their spaces, and one `tlbi vmalle1is` drops the entries of the old
 generation. A space that no CPU runs receives a new ASID at its next
-load. A CPU that runs the same space across two rollovers keeps its
+load. A CPU that runs the same space across two rollovers retains its
 reservation, which follows the tag of the space. ASID 0 belongs to the
 empty root of the kernel space. Before 2026-10-02 a table of 256 roots was
 searched at every load and flush, and spaces beyond 255 shared ASID 0 with

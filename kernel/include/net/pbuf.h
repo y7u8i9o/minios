@@ -7,7 +7,7 @@
  * and fails when the expectation is wrong, so a buffer freed while a
  * device still reads it, or queued twice, is detected rather than
  * corrupting memory. Data allocations leave a reserve for control
- * traffic (ACKs, teardown, ARP replies), which keeps progress possible
+ * traffic (ACKs, teardown, ARP replies), which makes progress possible
  * when data buffers are exhausted. */
 #include <kernel.h>
 #include <lib/list.h>
@@ -15,7 +15,7 @@
 #define PBUF_SIZE     8192          /* bytes of buffer, headroom included */
 #define PBUF_HEADROOM 64            /* room for link and network headers pushed later */
 #define NET_PBUF_COUNT   256        /* buffers in the pool: 2 MiB */
-#define NET_PBUF_RESERVE 32         /* kept for control allocations */
+#define NET_PBUF_RESERVE 32         /* retained for control allocations */
 
 enum pbuf_owner {
     PBUF_OWNER_POOL,

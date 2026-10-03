@@ -26,7 +26,7 @@ static void worker(void *p)
     for (int i = 0; i < a->iterations; i++) {
         mutex_lock(&counter_lock);
         long v = counter;
-        sched_yield();          /* invite contention while holding the mutex */
+        sched_yield();          /* invite contention while the mutex is locked */
         counter = v + 1;
         mutex_unlock(&counter_lock);
         if ((i % 200) == 0)
@@ -119,7 +119,7 @@ static void test_sched(void)
     ktest_assert(counter == 2000, "counter %ld, expected 2000", counter);
 
     /* A CPU bound thread is demoted by slice exhaustion; a sleeping thread
-     * keeps a good level. */
+     * maintains a good level. */
     volatile uint64_t stop = 0;
     struct thread *sp = thread_create("spinner", spinner, (void *)&stop, 0);
     uint64_t slept = 0;

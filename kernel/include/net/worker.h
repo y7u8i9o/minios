@@ -4,7 +4,7 @@
  * system call. It never blocks on a peer, on application buffer space or
  * on a device descriptor: it dequeues, runs a bounded batch, checks the
  * timers and sleeps until work arrives or the earliest deadline, taken
- * from the network clock, expires. Producers hold net_worker.lock while
+ * from the network clock, expires. Producers lock net_worker.lock while
  * they enqueue and wake, and the worker checks its queues under the same
  * lock before sleeping, so nothing that arrives just before the sleep
  * is lost. */
@@ -16,7 +16,7 @@
 #define NET_REQUEST_MAX     64      /* requests waiting for the worker */
 #define NET_BATCH           32      /* packets, then requests, between timer checks */
 
-/* A request: fn runs on the worker with no lock held and its return
+/* A request: fn runs on the worker with no lock acquired and its return
  * value becomes result. The requester either waits with
  * net_request_wait, which owns the storage until the request is done,
  * or sets done, which the worker calls last and which may free the
@@ -53,7 +53,7 @@ bool net_request_cancel(struct net_request *r);
 int net_request_run(struct net_request *r);
 
 /* A one shot deadline on the network clock; fn runs on the worker with
- * no lock held and may re-arm. link, deadline and armed are protected
+ * no lock acquired and may re-arm. link, deadline and armed are protected
  * by net_worker.lock. */
 struct net_timer {
     struct list_head link;

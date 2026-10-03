@@ -3,7 +3,7 @@
 # repositories from the test archives the build writes to
 # build/user/pkgrepo, with the build's signing key, and serves them over
 # HTTP with server.py on a free port, which the guest reaches as 10.0.2.2
-# through QEMU user networking. The repository v1 holds repohello 1.0,
+# through QEMU user networking. The repository v1 contains repohello 1.0,
 # repolib 1.0 and repoprog 1.0, and v2 adds repohello 1.1. badarchive is
 # v2 with one byte of repohello-1.1.mpk changed after signing, and badsize
 # is v2 with repohello-1.1.mpk longer than the index says. badindex is v1

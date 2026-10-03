@@ -187,7 +187,7 @@ long copy_vector_from_user(uintptr_t uvec, char ***out)
         return r;
     }
     vec[n] = NULL;
-    /* Keep the buffer reachable for free_user_vector through slot MAX. */
+    /* Retain a reference to the buffer for free_user_vector through slot MAX. */
     vec[USER_ARG_MAX] = buf;
     *out = vec;
     return (long)n;

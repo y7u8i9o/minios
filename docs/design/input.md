@@ -1,7 +1,7 @@
 # Input (M47)
 
 The input subsystem has three layers: drivers that report events, the
-input core in `kernel/input/` that keeps device state and delivers the
+input core in `kernel/input/` that retains device state and delivers the
 events to `/dev/input/eventN` and to the console terminal, and the
 compositor, which reads the nodes, moves the cursor and dispatches
 keys to its clients through the seat protocol.
@@ -50,7 +50,7 @@ and `input_sync`, from interrupt handlers or virtqueue completions.
 
 ## The core
 
-`input/core.c` keeps, per device under `input_dev.lock`, the bitmap of
+`input/core.c` retains, per device under `input_dev.lock`, the bitmap of
 keys down, the repeat state and the list of readers. `input_event`
 applies the rules of evdev:
 
@@ -85,7 +85,7 @@ it, so a display server that dies gives the keyboard back.
 
 `input/keyboard.c` is the console keyboard: the keys of every
 ungrabbed keyboard, with both shift, control and alt keys counted
-separately (a modifier stays down until both of its keys are up), caps
+separately (a modifier remains down until both of its keys are up), caps
 lock, control characters, and repeats treated as presses. Characters go
 through `tty_input_char` of `console_tty`; in raw mode the cursor,
 editing and function keys become the VT escape sequences, Escape
@@ -105,7 +105,7 @@ device and forwarded to the seat, which derives the modifier mask from
 both keys of each pair (`KEYMAP_MOD_LOGO` is new for the meta keys);
 repeats (value 2) are ignored because the clients repeat themselves.
 
-The cursor position is kept in fractions of a logical pixel
+The cursor position is retained in fractions of a logical pixel
 (`cursor_fx`, `cursor_fy`; `cursor_x` and `cursor_y` are the floor).
 Tablets place it exactly from the axis range. Relative motion is
 scaled by the acceleration profile in `accel_factor`: the setting
@@ -154,7 +154,7 @@ timeout for its own poll.
 - `gui_pointer`: the compositor's cursor after slow and fast PS/2
   motion under the adaptive profile, the flat profile at speed 100, and
   fractions accumulating at speed -100.
-- `gui_repeat`: a key held for 900 ms in evtest logs a repeat;
+- `gui_repeat`: a key pressed for 900 ms in evtest logs a repeat;
   `gui_tools` rejects a repeat for a key released at once.
 - `gui_tablet`, `comp_seat` and the other GUI cases, which place the
   cursor through the virtual tablet.

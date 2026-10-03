@@ -9,7 +9,7 @@
  * pointers), which is taken before the sockets' poll_source.lock when a
  * readiness change is announced, so a socket that goes away can clear
  * its pointer under conn->lock and never be notified afterwards. No lock
- * is held across a user copy: data moves through a bounce buffer as in
+ * is locked across a user copy: data moves through a bounce buffer as in
  * pipe.c. */
 #define KLOG_SUBSYS "unix"
 #include <ipc/socket.h>
@@ -144,7 +144,7 @@ static void conn_put(struct conn *c)
     }
 }
 
-/* Announce a readiness change to both ends. Called with c->lock held so
+/* Announce a readiness change to both ends. Called with c->lock acquired so
  * a side that released cannot be notified after clearing its pointer. */
 static void conn_notify_locked(struct conn *c)
 {

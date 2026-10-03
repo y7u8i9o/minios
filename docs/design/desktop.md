@@ -47,13 +47,13 @@ Wallpapers are PNG files in `/usr/share/wallpapers` (`default.png`,
 `dusk.png`, generated 320x240 gradients). The desktop scales the image
 to its window once per size change with nearest neighbour sampling
 and 16.16 fixed point ratios. Modes: `fill` scales to cover the window
-keeping the aspect ratio and crops the excess, `center` draws the
+retaining the aspect ratio and crops the excess, `center` draws the
 image unscaled in the middle over the desktop colour, `tile` repeats
 it, `stretch` scales both dimensions independently.
 
 ## Configuration file
 
-`/etc/desktop.conf` holds `key=value` lines:
+`/etc/desktop.conf` contains `key=value` lines:
 
 - `wallpaper`: path of the PNG, empty for none, which is the default: the
   desktop is the solid `desktop_color` until a wallpaper is chosen.
@@ -156,7 +156,7 @@ their environment, and `setlocale`. The panel draws its labels and the
 next launcher menu in the new language, and the desktop builds its context
 menus again. Programs started from the panel or the desktop, and every
 program that `mime_spawn` starts, inherit the new variables. A program
-that was already running stays in its language, and a new session is not
+that was already running remains in its language, and a new session is not
 needed. The Time zone list shows the zones of
 `/usr/share/zoneinfo/zones.tab` and replaces `/etc/localtime` with a
 symbolic link to the selected zone file. libc reads the zone again when the

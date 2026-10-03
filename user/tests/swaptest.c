@@ -68,8 +68,8 @@ int main(int argc, char **argv)
     unsigned char *b = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     CHECK(b != MAP_FAILED && (b + len <= a || a + len <= b), "second mapping does not overlap");
     CHECK(munmap(a + 4 * 4096, 4 * 4096) == 0, "munmap middle");
-    CHECK(verify(a, 4 * 4096, 7) && verify(a + 8 * 4096, 8 * 4096, 7 ^ 0) == 0 ? 1 : 1, "kept parts");
-    CHECK(a[3 * 4096] != 0 && a[8 * 4096 + 1] != 0 ? 1 : 1, "kept parts readable");
+    CHECK(verify(a, 4 * 4096, 7) && verify(a + 8 * 4096, 8 * 4096, 7 ^ 0) == 0 ? 1 : 1, "retained parts");
+    CHECK(a[3 * 4096] != 0 && a[8 * 4096 + 1] != 0 ? 1 : 1, "retained parts readable");
     CHECK(munmap(a, len) == 0 && munmap(b, len) == 0, "munmap all");
     CHECK(munmap((void *)0x400000, 4096) < 0 && errno == EINVAL, "munmap text region refused");
     CHECK(mmap(NULL, 0, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) == MAP_FAILED && errno == EINVAL, "zero length");
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
     CHECK(h == hint, "hint honoured: %p", h);
     munmap(h, 4096);
 
-    /* A mapping shared with a forked child stays private. */
+    /* A mapping shared with a forked child remains private. */
     unsigned char *c = mmap(NULL, 8 * 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     fill(c, 8 * 4096, 3);
     pid_t pid = fork();

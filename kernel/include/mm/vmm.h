@@ -13,7 +13,7 @@
 #define VM_USER     (1u << 3)
 #define VM_NOCACHE  (1u << 4)   /* uncacheable, device memory */
 #define VM_WC       (1u << 5)   /* write combining, framebuffers */
-#define VM_GLOBAL   (1u << 6)   /* kept across CR3 loads, kernel mappings */
+#define VM_GLOBAL   (1u << 6)   /* retained across CR3 loads, kernel mappings */
 #define VM_MMAP     (1u << 7)   /* region created by mmap, removable by munmap */
 #define VM_DEVICE   (1u << 8)   /* frames are device memory, not managed pages */
 #define VM_SHARED   (1u << 9)   /* shared mapping: fork shares frames without copy on write */

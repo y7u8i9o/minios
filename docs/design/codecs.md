@@ -25,14 +25,14 @@ and the command line tools all use the same registry.
 ```
 
 `libcodec.so` depends only on libc, and its header is `<codec/codec.h>`.
-libgui links against it and keeps its own image functions as wrappers.
+libgui links against it and retains its own image functions as wrappers.
 Programs and packages built against libgui need no change, and the ABI
 number of libgui remains 1.
 
 ## Modules
 
 A module is a shared object that exports exactly one symbol,
-`codec_module`. This symbol is a `struct codec_module` holding the module
+`codec_module`. This symbol is a `struct codec_module` containing the module
 ABI number (`CODEC_MODULE_ABI`), a name, and a table of `struct codec`.
 The number is 2 since C6 appended `audio_encode_options` to `struct
 codec`, which changed the size of the entries in the table. Modules are compiled with `-fvisibility=hidden`, and
@@ -103,7 +103,7 @@ CODEC_ENCODE)` returns NULL even though an SVG decoder exists.
 
 ## Images
 
-A picture (`struct codec_picture`) holds `w` by `h` pixels of
+A picture (`struct codec_picture`) contains `w` by `h` pixels of
 `0xAARRGGBB` with straight alpha in memory allocated with `malloc`. This
 is the layout of libgui's `struct image`, and libgui uses the pixel
 memory directly without copying it. A request (`struct codec_image_request`)
@@ -167,8 +167,8 @@ returns the same for an option it does not know or a value outside its
 range. Modules parse the string with
 `codec_option`, which copies the value of a named option, and
 `codec_options_check`, which compares the names with a list of known
-ones. The extension of `struct codec` keeps the offsets of all existing
-members, and libcodec therefore keeps ABI 1 for programs.
+ones. The extension of `struct codec` retains the offsets of all existing
+members, and libcodec therefore retains ABI 1 for programs.
 
 The audio module of C2 is:
 
@@ -186,13 +186,13 @@ stream contains the complete frames that remain. Each sample is shifted
 to the top of the 32 bit value, and an 8 bit sample has its sign bit
 inverted first. The most negative sample of every size therefore
 becomes -2^31. The encoder writes the PCM tag and a 44 byte header at the
-sample size of the format, or 16 bits when the format gives 0. It keeps
+sample size of the format, or 16 bits when the format gives 0. It retains
 the upper bits of each sample and pads data of odd length. Decoding a
 file and encoding it again at its own sample size gives an identical
 file.
 
 `player` (`audio.md`) opens files with `codec_audio_open_file` and reads
-them in chunks of 4096 frames. It keeps the upper 16 bits of each sample
+them in chunks of 4096 frames. It retains the upper 16 bits of each sample
 for its resampler and no longer contains its own WAV reader. Its package
 lists `libcodec.so` as a requirement, derived from its `DT_NEEDED`
 entries.
@@ -329,7 +329,7 @@ The writer (`struct codec_ogg_writer`) builds the pages of one logical
 stream in memory. `codec_ogg_write_packet` appends the lacing values and
 the bytes of a packet to the current page, starts a new page with the
 continuation flag when a packet needs more than the 255 lacing values of
-a page, and starts a new page before a packet once the current one holds
+a page, and starts a new page before a packet once the current one contains
 4096 bytes. A page carries the granule position of the last packet that
 ends on it, or -1 when none does. `codec_ogg_flush` ends the current page,
 with the flag for the first page on the first one and the flag for the
@@ -351,7 +351,7 @@ ordered or unordered and sparse, and assigns the codewords in the order
 of the entries, giving each entry the lowest free codeword of its
 length as the specification requires. The codewords are inserted into a
 binary tree, which the decoder walks one bit at a time. A codebook with
-lookup type 1 or 2 also holds the vector of every entry, computed from
+lookup type 1 or 2 also contains the vector of every entry, computed from
 the packed float minimum and delta, the multiplicands and the sequence
 flag. The setup header then supplies the floors, the residues, the
 mappings with their submaps and coupling steps, and the modes.
@@ -390,7 +390,7 @@ current block, up to its centre, which is N_prev/4 + N/4 samples. The
 first packet of a stream produces no output.
 
 The granule positions trim the start and the end of every stream. The
-decoder keeps the output of a stream until the first page with a granule
+decoder retains the output of a stream until the first page with a granule
 position. If that position is smaller than the number of samples decoded
 up to it, the difference is removed from the start of the stream. If the
 last page of a stream has a position smaller than the decoded samples,
@@ -462,7 +462,7 @@ SPL.
 
 Floor 1 has 16 positions for short blocks and 60 for long ones, spaced
 geometrically and coded in an order that halves the intervals, which
-keeps the predictions of the decoder close. The encoder computes the
+retains the predictions of the decoder close. The encoder computes the
 value for each position that makes the decoder's prediction rule produce
 the desired point, and renders the floor with the decoder's own
 function. The residue is the spectrum divided by that rendered curve and
@@ -491,7 +491,7 @@ map, with empty Bark bins interpolated. An LPC filter is fitted to its
 square, and the roots of the sum and difference polynomials of the
 filter, found by sign changes on 4096 angles and bisection, give the
 line spectral pairs. Their cumulative angles are quantised in steps of
-pi/256 and coded as increments with a scalar book. The amplitude keeps
+pi/256 and coded as increments with a scalar book. The amplitude retains
 the decoder's curve at or below the target at all but 2% of the bins.
 
 On a mono chime the encoder reaches 16, 33 and 54 dB signal-to-noise
@@ -508,7 +508,7 @@ C7 added the codec `oggflac` to `flac.so`.
 
 | Module | Codec | Capabilities | Probe |
 |---|---|---|---|
-| `flac.so` | `oggflac`, `audio/x-oggflac`, `.oga` | decode, encode | an Ogg stream whose first packet starts with `\x7fFLAC`, version 1, and holds `fLaC`, 100 or 90 |
+| `flac.so` | `oggflac`, `audio/x-oggflac`, `.oga` | decode, encode | an Ogg stream whose first packet starts with `\x7fFLAC`, version 1, and contains `fLaC`, 100 or 90 |
 
 The Ogg mapping of FLAC 1.0 puts a first packet at the start of a logical
 stream with `\x7f` and `FLAC`, the mapping version 1.0, the number of
@@ -540,7 +540,7 @@ its end as granule position.
 
 The codec claims the extension `.oga`, the Xiph name for Ogg audio other
 than Vorbis, and the MIME type `audio/x-oggflac`. `.ogg` and `audio/ogg`
-stay with Vorbis, the format of most such files. Content identification
+remain with Vorbis, the format of most such files. Content identification
 does not depend on these names, because the probes of all Ogg codecs use
 `codec_ogg_probe`. It scores 100 when the first logical stream of the file
 is accepted and 90 when a later stream of a multiplexed file is. The
@@ -629,7 +629,7 @@ passed through unchanged.
 ## Static programs and host tests
 
 A static program has no dynamic loader. `dlopen` fails in such a
-program, the registry stays empty, and the image functions return
+program, the registry remains empty, and the image functions return
 `-ENOTSUP`. A static link against `libgui.a` must add `-lcodec`
 (`tcc.md`).
 
@@ -642,7 +642,7 @@ module must be added to that list.
 ## The loader
 
 Loading the modules one after another through a single path buffer
-revealed a bug in `/lib/ld.so`. An object opened with `dlopen` kept a
+revealed a bug in `/lib/ld.so`. An object opened with `dlopen` retained a
 pointer to the caller's string as its name. The next `dlopen` call with
 the same buffer then compared the new path with itself and returned the
 first module again. The loader now stores a copy of the name of every
@@ -722,7 +722,7 @@ length of the input with a signal-to-noise ratio above a limit a few dB
 below the values measured on the host, and a higher quality must give a
 larger file. The program also checks the rejection of a quality of 2, of
 an unknown option, of options for a codec without options, and of floor
-0 above 65535 Hz. Five of the files are kept with their decoding by
+0 above 65535 Hz. Five of the files are retained with their decoding by
 minios, and the post script decodes them with libvorbis on the host,
 requires the same samples to within one step, and decodes them with
 ffmpeg as well.
@@ -733,7 +733,7 @@ of ffmpeg, two chained streams, and the FLAC stream of the multiplexed
 Vorbis fixture, which identification by content must select. It requires
 the lengths, the formats and the lengths reported at open time. It
 encodes 16 bit mono, 24 bit stereo and 8 bit eight-channel signals,
-requires identical samples after decoding, keeps the files for the post
+requires identical samples after decoding, retains the files for the post
 script, and checks that a changed byte in a page is reported. The post
 script tests the files with `flac -t` and ffmpeg on the host.
 

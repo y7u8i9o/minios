@@ -1,6 +1,6 @@
 # X12 shell, seat, data device and panel
 
-M25 gives surfaces roles and delivers input and data transfers; X12 keeps
+M25 gives surfaces roles and delivers input and data transfers; X12 retains
 the protocol interface names stable for clients.
 Protocol definitions: `protocol/shell.xml`, `seat.xml`, `data.xml`;
 compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
@@ -55,13 +55,13 @@ server side by default.
 
 `toplevel.set_window_geometry(x, y, w, h)` names the visible window
 inside the surface, without the client's shadow margins. The server
-keeps it in `struct toplevel.geo` and works on the visible frame,
+retains it in `struct toplevel.geo` and works on the visible frame,
 `toplevel_frame` (the server decorations, the geometry, or the surface):
 configure sizes are geometry sizes (`toplevel_configure_size`), the
 cascade puts the frame of the n-th new window at (40, 24) plus n times
 (30, 30) of the desktop area, so that the contents under a 36 pixel
 header bar start at y 60; a modal child is centred on its parent's
-frame; `clamp_toplevel` keeps 40 pixels of the frame and its top row on
+frame; `clamp_toplevel` retains 40 pixels of the frame and its top row on
 screen; a maximized window's geometry is the desktop area. The commit
 check compares the acknowledged configure with the geometry when one is
 set. The `mapped at` log line reports the frame.
@@ -93,12 +93,12 @@ left button moves any toplevel from anywhere, whichever side decorates.
 
 A move or resize the client requested (`toplevel.move`, `toplevel.resize`
 with the press serial) is driven by the same drag code, but the release
-that ends it is still delivered to the client, so its button state stays
+that ends it is still delivered to the client, so its button state remains
 consistent (`decor_release` returns 2 for such drags). A move or resize
-request is honoured only while a pointer button is held: one that
+request is honoured only while a pointer button is pressed: one that
 arrives after the release, for example from a client that answered late,
-is ignored instead of starting a drag with no button held. Popup grabs
-keep accepting the press serial after the release, as the panel needs.
+is ignored instead of starting a drag with no button pressed. Popup grabs
+continue accepting the press serial after the release, as the panel needs.
 
 ## Seat (`seat.c`)
 
@@ -107,7 +107,7 @@ the topmost surface under the cursor (a popup grab restricts it to
 popups); `enter`, `leave`, `motion`, `button`, `axis` and `frame`
 carry surface coordinates in 24.8 fixed point and serials. A press on
 a toplevel activates it and sets the keyboard focus; the pressed
-surface keeps the pointer until release. The keyboard sends the keymap
+surface retains the pointer until release. The keyboard sends the keymap
 as a memfd, `repeat_info (30, 500)`, `enter` with the pressed keys, `key`
 with the raw code (0x80 added for the 0xe0 prefix) and `modifiers` (Shift
 1, Ctrl 2, Alt 4, AltGr 16, with Caps Lock and the group in the locked and
@@ -129,10 +129,10 @@ validates the source, origin and initiating input serial, then the
 surface under the cursor gets `data_offer`, `enter`, `motion`, `leave`
 and `drop`. The normal serial is the button press; the legacy client
 path may use the still-current pointer-enter serial while no button is
-held. The target must accept the offered MIME type for a drop; `finish`
+pressed. The target must accept the offered MIME type for a drop; `finish`
 ends the drag with `dnd_finished` at the source.
 
-X12 keeps a list of the live offers. When a source is destroyed, the
+X12 retains a list of the live offers. When a source is destroyed, the
 offers made for it read the compositor's stored copy if the source was
 the selection and a copy exists, and nothing otherwise. This matters
 when the owner's window closes before its client disconnects. The

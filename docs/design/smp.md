@@ -4,7 +4,7 @@ The kernel runs on every processor QEMU provides (`-smp N`, `QEMU_SMP` or
 `--smp` for `make run`, the `cpus` file of a test case, default 4). All CPUs execute
 the same kernel with the same page tables. Each CPU has a `struct cpu`
 reached through the GS base, its own idle thread, kernel stack, GDT, TSS,
-local APIC timer and run queues. Shared structures keep the locks they
+local APIC timer and run queues. Shared structures retain the locks they
 have carried since their introduction. M18 added `tlb_lock`; M44 later
 replaced the scheduler's global lock with one run-queue lock and one
 remote-wake inbox per CPU.
@@ -52,13 +52,13 @@ interrupts in `cpu.ticks`.
 
 ## Scheduler
 
-`sched/mlfq.c` keeps one set of MLFQ run queues, a sorted sleeper list and an
-MPSC remote-wake inbox per CPU. Each run queue has its own lock, held across
+`sched/mlfq.c` retains one set of MLFQ run queues, a sorted sleeper list and an
+MPSC remote-wake inbox per CPU. Each run queue has its own lock, locked across
 the local context switch. A remote waker publishes to the inbox and sends
 `IRQ_RESCHED`; it does not take the destination queue's lock.
 
 - A new thread is placed on the least-loaded started CPU. A blocked thread
-  normally keeps its home CPU so the local consumer can remove it from that
+  normally retains its home CPU so the local consumer can remove it from that
   CPU's sleeper list before making it ready.
 - `sched_pick_next` takes the best thread from the calling CPU's queues.
   When they are empty it steals the highest priority ready thread of any
@@ -81,7 +81,7 @@ timer tick.
 
 `mm/tlb.c` implements `tlb_flush_range` and `tlb_drop_vmspace`. Every
 unmap and protection change still calls `tlb_flush_range` with the space
-lock held. The local TLB is flushed directly through `paging_flush_range`.
+lock acquired. The local TLB is flushed directly through `paging_flush_range`.
 On aarch64 that flush uses the inner shareable TLBI instructions, which
 reach every CPU (`PAGING_TLB_BROADCAST`), and no interrupt is sent for a
 range (A8). On x86_64, if the TLBs of other CPUs may contain the
@@ -98,11 +98,11 @@ range), publishes the target mask in `pending`, sends one IPI per target
 and spins until every target has cleared its bit. Targets service the
 request in the interrupt handler or, when they spin on a spinlock with
 interrupts disabled, from the spin loop through `tlb_shootdown_poll`.
-This keeps a CPU that holds a lock and sends a shootdown from
+This prevents a CPU that has acquired a lock and sends a shootdown from
 deadlocking against a CPU that spins on that lock with interrupts
-disabled. The sender is never one of its own targets. Kernel threads keep
+disabled. The sender is never one of its own targets. Kernel threads retain
 the previous user space loaded, so `vmspace_destroy` sends a
-`TLB_DROP_VMSPACE` request that makes every CPU still holding the space
+`TLB_DROP_VMSPACE` request that makes every CPU that still has the space loaded
 switch to the kernel space before the tables are freed. aarch64 sends it
 as well, because a loaded root may be walked speculatively. A CPU that is
 switching away from the space when the request arrives acknowledges it
@@ -138,7 +138,7 @@ and stop. `klog` formats each line into a buffer and writes it with one
 - Swap eviction rewrote a page table entry to its swap slot, released the
   space lock and only then took `swap_io_lock` to write the frame. A fault
   on another CPU could take `swap_io_lock` first and read the slot before
-  the data was on the disk. `evict_batch` now holds `swap_io_lock` from
+  the data was on the disk. `evict_batch` now acquires `swap_io_lock` from
   before the first entry is rewritten until the write has completed.
 - `inode_get` on two CPUs could read the same inode at the same time. The
   loser freed its duplicate `struct inode` but not the private data that
@@ -159,7 +159,7 @@ and stop. `klog` formats each line into a buffer and writes it with one
 
 - Per CPU page caches in the buddy allocator and per CPU slab magazines
   (listed as optional).
-- Interrupt routing stays on the boot CPU; device interrupts are not
+- Interrupt routing remains on the boot CPU; device interrupts are not
   distributed.
 - The Limine protocol replaces a kernel side INIT/SIPI sequence and low
   memory trampoline. The plan named that sequence as the mechanism; the

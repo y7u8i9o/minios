@@ -2,8 +2,8 @@
 
 ## M19. Windowing system enhancements (completed 2026-08-30)
 
-Decisions (2026-08-30): the GUI stays on demand through `startgui`; the
-protocol keeps 256 byte messages while the window and client tables
+Decisions (2026-08-30): the GUI remains on demand through `startgui`; the
+protocol retains 256 byte messages while the window and client tables
 become dynamic; verification continues with the serial event log plus
 CRC32 and pixel checks of framebuffer regions; the work forms one
 milestone with one design document (`docs/design/gui.md` extended) and
@@ -12,7 +12,7 @@ one boot test per stage.
 Stage 1, kernel input and output (done 2026-08-30):
 - Mouse scroll wheel: the IntelliMouse enable sequence (sample rate 200,
   100, 80, then device id 3), four byte packets, a `dz` field in
-  `struct mouse_event`. Devices that stay at id 0 keep three byte packets.
+  `struct mouse_event`. Devices that remain at id 0 retain three byte packets.
 - Framebuffer format: `FBIOGET_INFO` gains the red, green and blue mask
   sizes and shifts taken from the Limine framebuffer response. `fbcon`
   and `wsrv` compose pixels through the reported layout, so 24 bit and
@@ -30,7 +30,7 @@ Stage 2, protocol and server (`user/wsrv/`, done 2026-08-30):
   minimize boxes in the title bar. Maximize fills the desktop area above
   the task bar and remembers the previous frame. Minimized windows are
   hidden and listed in the task bar. Windows are clamped so that their
-  title bar stays on screen.
+  title bar remains on screen.
 - Server keyboard shortcuts: Alt+Tab cycles focus in z order, Alt+F4
   sends `WM_CLOSE`, Alt+drag anywhere in a window moves it.
 - Clipboard: contents always go through the shared memory object
@@ -53,7 +53,7 @@ Stage 3, client library and toolkit (`libgui/`, done 2026-08-30):
   width font file (`.mfnt`: header, glyph advances, bitmaps) from a
   larger source face, built into `user/etc/fonts/`. `gfx` loads fonts
   from the filesystem (`gfx_font_load`) and draws with either font; the
-  built in 8x16 font stays the default and the fallback.
+  built in 8x16 font remains the default and the fallback.
 - Widgets: scroll bar, check box, text area with multi line editing,
   menu bar with drop down menus, modal message dialog. Text fields and
   areas support selection, and Ctrl+C, Ctrl+V and Ctrl+X through the
@@ -78,7 +78,7 @@ framebuffer.
 
 Tests:
 - `mouse_wheel`: injected four byte packets produce `dz` events, three
-  byte devices keep working.
+  byte devices continue to work.
 - `fb_format`: the kernel reports the mask layout and a user program
   draws a known color that the kernel verifies in the native format
   (run with a 24 bit mode in addition to the default).
@@ -126,7 +126,7 @@ Stage 2, rasterizer (`libfont/src/raster.c`):
   and exact horizontal coverage between crossings, accumulated in a per
   row buffer. Output is a glyph bitmap with bearing and advance in
   pixels (advance in 26.6 for subpixel positioning of the pen).
-- A glyph cache keyed by font, size and glyph id keeps the last few
+- A glyph cache keyed by font, size and glyph id retains the last few
   hundred bitmaps.
 
 Stage 3, kerning and shaping (`libfont/src/kern.c`):
@@ -142,7 +142,7 @@ Stage 4, integration (`libgui/`):
   (alpha over a solid colour or the surface contents), `gfx_text_width_font`
   and `gfx_text_index_font` use shaped positions, so widgets, `term` and
   `view` work unchanged. `view` gains an "Outline font" menu entry, the
-  launcher font list in `/etc/fonts/` holds the three test fonts.
+  launcher font list in `/etc/fonts/` contains the three test fonts.
 
 Tests:
 - `ttf`: `/bin/fonttest` parses both fonts and checks units per em,
@@ -175,7 +175,7 @@ menus, tooltips and popups as undecorated override windows; per window
 alpha in the compositor; boot tests plus a host unit test build. The
 work is split into M21 (core), M22 (widgets, images, editor) and M23
 (interface files, popups, drag and drop, compositor alpha). The M19
-toolkit (`gui/widgets.h`) stays available until every application has
+toolkit (`gui/widgets.h`) remains available until every application has
 moved to the framework in M22, then it is removed.
 
 Stage 1, application object (`libgui/src/app.c`, `gui/app.h`):
@@ -356,7 +356,7 @@ prototypes in `kernel/include/syscall/syscalls.h`, implementations in
    `fninit` and a default `MXCSR`, CR4 `OSFXSR` and `OSXMMEXCPT` set in
    `cpu_init`, the signal frame saves and restores the area, and the
    user flags in `toolchain.mk` drop `-mno-sse -mno-sse2 -mno-80387`
-   (the kernel keeps them). libc `memcpy` may then use 16 byte moves.
+   (the kernel retains them). libc `memcpy` may then use 16 byte moves.
 8. Documents: `docs/design/sockets.md` (sockets, descriptor passing,
    memfd, eventfd, timerfd, descriptor flags) and an FPU section in
    `docs/design/scheduler.md`; lock ordering in `docs/design/locking.md`.
@@ -498,7 +498,7 @@ keymap translation.
    accumulated by `gui_damage` and committed once per `app_step` when
    the previous frame callback has fired; server events become the
    framework's `struct gui_event` (renamed from `struct wmsg`; the
-   `window_message` entry point keeps its shape); keyboard events
+   `window_message` entry point retains its shape); keyboard events
    translated with `gui/keymap.h`, key repeat from the application
    timer; `gui_set_title`, `gui_resize`, `gui_set_min_size` mapped to
    the toplevel requests; window resizes follow the configure and
@@ -506,14 +506,14 @@ keymap translation.
    relayouts and acknowledges on its next commit).
 2. Popups: menus, combo boxes and tooltips become popup surfaces (M25
    `popup` with positioners) instead of floating widgets, so they can
-   extend beyond their window; `window_popup_open` keeps its signature.
+   extend beyond their window; `window_popup_open` retains its signature.
 3. Clipboard and drag and drop: `gui_clipboard_set` and `get` over the
    data device; framework signals `drag_begin` (a widget starts a drag
    with text or file paths and an icon) and `drop` (`struct sig_drop`
    with mime type and contents); the editor, text field and file table
    support text and path drops.
 4. `libgui` host tests: `fake_client.c` reimplemented over the new
-   internal event structure; the existing framework tests keep passing.
+   internal event structure; the existing framework tests continue to pass.
 5. Applications: `term`, `files`, `view`, `gedit`, `clock`, `paint`,
    `pong`, `mandel`, `widgettest`, `guitest`, `apptest`, `fonttest`
    unchanged except where they used `wmsg` fields directly; `wsrv`,

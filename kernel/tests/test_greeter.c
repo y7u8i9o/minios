@@ -2,7 +2,7 @@
  * Enter logs in the preselected account user (uid 1000, no password), the
  * session's panel and desktop run as uid 1000, Log out in the panel's menu
  * ends the session, the greeter shows its window again, and X12 then
- * refuses a client of uid 1000. hold=1 keeps the login window open for
+ * refuses a client of uid 1000. pause=1 leaves the login window open for
  * eight seconds, for screenshots. */
 #include <tests/ktest.h>
 #include <sched/user.h>
@@ -58,7 +58,7 @@ static int count_procs(const char *name, int uid)
     return n;
 }
 
-/* Wait until the count holds for half a second. The greeter forks its
+/* Wait until the count is unchanged for half a second. The greeter forks its
  * helpers, which carry its name until they exec, so a single look could
  * count one of them. */
 static bool wait_procs(const char *name, int uid, int want, int ms)
@@ -77,7 +77,7 @@ static void test_greeter(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sh = logical_h();
-    /* The kernel keeps pid 1, init, from SIGKILL. A first short process
+    /* The kernel protects pid 1, init, from SIGKILL. A first short process
      * takes that pid, which lets the end of the test kill the greeter. */
     struct proc *first = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", "exit 0", NULL },
                                           (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
@@ -91,8 +91,8 @@ static void test_greeter(void)
     ktest_assert(count_procs("x12", 0) == 1, "no display server");
     sleep_ms(1500);
     kprintf("gui_greeter: login window shown\n");
-    char hold[8];
-    if (cmdline_lookup("hold", hold, sizeof hold) && hold[0] == '1')
+    char pause_arg[8];
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);                 /* screenshots of the login window */
 
     /* Enter chooses the preselected account, user, which has no password.

@@ -48,7 +48,7 @@ the pool, the stack (protocol code or a system call), a queue, or a device.
 Each hand-over names the owner it expects and the owner it installs and
 fails when the expectation is wrong. Application memory is never referenced
 by asynchronous work or by DMA; data is copied into kernel buffers before
-a request is queued. A buffer given to a device stays valid until the
+a request is queued. A buffer given to a device remains valid until the
 device completes it or a completed reset ends its access.
 
 ### Worker requests
@@ -85,7 +85,7 @@ reports it again.
 
 ## Test infrastructure (N00)
 
-Three layers of tests are kept apart and the layer of every result is
+Three layers of tests are separate and the layer of every result is
 named with it: kernel self tests of the protocol code alone (`net_*`
 cases running `test=net_*`), boot tests with a controlled host peer, and
 later interoperability runs against real peers.
@@ -130,7 +130,7 @@ free port for QEMU by binding and releasing one, publishes both, logs one
 line per frame (timestamp, length, the Ethernet header) and a `summary`
 line on termination. The modes are `count` and `echo`; `--probe PORT` tells
 whether a port is free, which the self test uses. Later milestones add
-responder modes to this tool rather than new peers, so the lifecycle stays
+responder modes to this tool rather than new peers, so the lifecycle remains
 the one tested here. `tests/net/peer-count.sh` is the peer script a case
 copies or calls.
 
@@ -148,7 +148,7 @@ by default, `user`, or a complete `-netdev` argument without the id.
 
 ## The socket layer (N01)
 
-`kernel/ipc/socket.c` holds the common layer, `kernel/ipc/unix_socket.c`
+`kernel/ipc/socket.c` contains the common layer, `kernel/ipc/unix_socket.c`
 the Unix backend of M23 moved behind it, and `kernel/net/inet_socket.c`
 the Internet family.
 
@@ -174,7 +174,7 @@ leaves first.
 
 ### ABI
 
-`socket(AF_UNIX, SOCK_STREAM, flags)` keeps the M23 convention of flags
+`socket(AF_UNIX, SOCK_STREAM, flags)` retains the M23 convention of flags
 in the protocol argument; any other value there is `EPROTONOSUPPORT`.
 `SOCK_NONBLOCK` and `SOCK_CLOEXEC` in the type are accepted for every
 family. `socket(AF_INET, type, protocol)` validates the pair: a type other
@@ -235,7 +235,7 @@ are released on every later failure.
 
 `struct file_ops.flags` carries `FOPS_STREAM`; `file_read` and
 `file_write` call such an object without taking `file.lock`, which
-regular files keep for their position. A thread blocked in `read` on a
+regular files retain for their position. A thread blocked in `read` on a
 socket therefore no longer excludes a `write` on the same open file
 description, which `sockets_api` demonstrates with a reader thread and a
 writer on one descriptor of a pair.
@@ -272,7 +272,7 @@ compositor cases `comp_core`, `comp_data`, `comp_seat`, `comp_panel` and
 
 ## The packet core (N02)
 
-`kernel/net/` holds `pbuf.c` (the pool), `checksum.c`, `netif.c` (the
+`kernel/net/` contains `pbuf.c` (the pool), `checksum.c`, `netif.c` (the
 interface table and the two data paths), `loopback.c`, `worker.c` (the
 worker, its requests and its timers), `net.c` (initialization and the IP
 entry point) and `clock.c` (N00). `net_init` runs from `kinit` after the
@@ -347,7 +347,7 @@ basis of the later configuration utility.
 ### The worker
 
 `netd` is a kernel thread at the highest scheduler level. Under
-`net_worker.lock` it keeps the input queue (at most 128 buffers), the
+`net_worker.lock` it retains the input queue (at most 128 buffers), the
 request queue (at most 64) and the armed timers sorted by deadline. Its
 loop takes the lock, checks whether a packet, a request or a due timer
 exists or a kick arrived, and otherwise sleeps on its wait queue with the
@@ -362,7 +362,7 @@ cannot postpone a due timer past one batch; the test measures the
 distance in packets and requires at most two batches.
 
 A request (`struct net_request`) carries a function the worker runs with
-no lock held; the caller either waits (`net_request_wait`, which returns
+no lock acquired; the caller either waits (`net_request_wait`, which returns
 the function's result) or sets `done`, which the worker calls last and
 which may free the request. `net_request_submit` fails with `ENOBUFS` on
 a full queue and counts the rejection. A queued request can be withdrawn
@@ -386,12 +386,12 @@ the function is over synchronizes with a request.
 failures and refilled; the ownership transitions including the refused
 ones; the data window operations at their limits; the checksum vectors;
 loopback delivery to the default and to a test entry point with an MTU
-sized packet; the input queue filled to its limit with the worker held
+sized packet; the input queue filled to its limit with the worker blocked
 (refused buffers freed and counted), the request queue filled with
 rejections counted, cancellation of a queued and of a finished request,
 completion of everything queued once the worker is released; an
 interface taken down with packets queued (dropped and counted, output
-refused with `ENETDOWN`, output again after up); timers that stay quiet,
+refused with `ENETDOWN`, output again after up); timers that remain quiet,
 fire when due without a kick, fire in deadline order after the controlled
 clock moved, move when re-armed, re-arm themselves, fire within two
 batches under a flood, and fire on the real clock without a kick; four
@@ -426,7 +426,7 @@ covered by the simulated header tests and the live captures.
 ### DMA ownership and limits
 
 There are 32 dedicated RX slots, each 1526 bytes including the VirtIO header,
-and 32 TX slots holding device-owned packet buffers. Four TX slots are
+and 32 TX slots containing device-owned packet buffers. Four TX slots are
 available only to ARP/ICMP control traffic. RX does not pin buffers from the
 shared packet pool. A completion callback records its slot and used length;
 it does not process protocols, allocate, free, or refill descriptors.
@@ -434,7 +434,7 @@ it does not process protocols, allocate, free, or refill descriptors.
 Netd services completions between timer and packet batches. It copies a valid
 RX frame into a shared packet buffer, hands that buffer to the input queue,
 and refills the DMA slot after the transport has released its descriptor.
-When the pool has no suitable buffer, the completed RX slot remains held and
+When the pool has no suitable buffer, the completed RX slot remains occupied and
 a worker timer retries after 10 ms. ARP and ICMP may use the control reserve
 on receive as well as transmit. Invalid lengths/headers are dropped and
 counted without accessing bytes beyond the completed buffer.
@@ -512,12 +512,12 @@ messages do not alter route or protocol state.
 ## UDP sockets (N05)
 
 `AF_INET/SOCK_DGRAM` selects UDP for protocol 0 or `IPPROTO_UDP`. The endpoint
-table has 64 slots. A socket receive ring holds at most 16 datagrams and
+table has 64 slots. A socket receive ring contains at most 16 datagrams and
 16384 payload bytes, subject to the shared packet pool. Queue overflow drops
 the new datagram and increments `udp_full`. Closing removes the endpoint on
 the worker with an uninterruptible lifetime barrier and releases unread
 packets. Duplicated descriptors retain the endpoint until the last reference
-closes. Sends retain kernel copies only, and the file reference remains held
+closes. Sends retain kernel copies only, and the file reference remains retained
 until the worker request finishes or is withdrawn before execution.
 
 ### Binding and messages
@@ -556,7 +556,7 @@ original length while copyout remains bounded by the supplied iovecs.
 `MSG_PEEK` leaves the datagram queued. Send implements `MSG_DONTWAIT` and
 `MSG_NOSIGNAL`; receive implements `MSG_DONTWAIT`, `MSG_PEEK` and `MSG_TRUNC`.
 Other known flags return `EOPNOTSUPP`, and invalid directional/unknown flags
-are rejected by the common layer. Ancillary descriptor passing stays Unix-only.
+are rejected by the common layer. Ancillary descriptor passing remains Unix-only.
 
 ### Readiness and errors
 
@@ -682,7 +682,7 @@ SYN payload is not acknowledged or delivered during this stage.
 
 Outgoing SYNs advertise the smaller of 1460 and route MTU minus 40. Peer MSS
 limits each segment, with a default of 536 when absent. Sequence comparisons
-use modular 32-bit arithmetic and are tested across wraparound. N06 held one
+use modular 32-bit arithmetic and are tested across wraparound. N06 stored one
 outgoing segment at a time and stored only in-order receive data; the send
 buffer, the out-of-order store and the recovery rules of N07 replaced that
 boundary. Reading reopens the window through a worker ACK request.
@@ -756,7 +756,7 @@ Exact commands, results and retained artifacts are recorded in
 N07 turns the lifecycle of N06 into a stream. `transfer.c` owns the send
 buffer, acknowledgement accounting, round-trip estimation and congestion
 control; `receive.c` owns ordered delivery and the out-of-order store. Both
-run only on netd, and both keep the rule that device packets are copies:
+run only on netd, and both retain the rule that device packets are copies:
 retransmission copies from the send buffer into a fresh packet, and device
 completion never acknowledges TCP sequence space. The behaviour follows
 [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) for the stream,
@@ -769,15 +769,15 @@ taken at face value; N13 and N14 changed that and are described below.
 
 ### Send buffering and acknowledgement
 
-Each connection holds a send buffer of `TCP_SEND_CAPACITY` bytes (8192 in
+Each connection contains a send buffer of `TCP_SEND_CAPACITY` bytes (8192 in
 N07, 65536 since N13). A send
 copies as many bytes as fit and returns that partial count; a full buffer
 returns `EAGAIN` to nonblocking callers and blocks the others until an
 acknowledgement frees space. The prefix `transmit_sent` is on the wire and the
-whole buffer stays owned by the connection until a cumulative ACK covers it or
+whole buffer remains owned by the connection until a cumulative ACK covers it or
 a terminal error discards it. `tcp_flush` sends at most eight new segments per
 call, each at most the peer MSS, up to the smaller of the congestion window
-and the peer window; a packet allocation failure keeps the bytes and retries
+and the peer window; a packet allocation failure retains the bytes and retries
 at the next ACK or deadline instead of dropping them.
 
 ACK processing (`tcp_data_ack`) ignores acknowledgements outside
@@ -791,7 +791,7 @@ unchanged.
 
 ### Ordered receive and the out-of-order store
 
-One circular store (4096 bytes in N07, 131072 since N13) holds both readable
+One circular store (4096 bytes in N07, 131072 since N13) contains both readable
 bytes and bytes that arrived ahead of a hole. A presence bitmap marks the out-of-order positions; only the
 contiguous prefix counts toward `receive_count`. N07 subtracted the
 out-of-order bytes from the advertised window; since N13 they are stored
@@ -801,9 +801,9 @@ overlapping retransmission with different content cannot change a byte
 already accepted, and no byte is delivered twice. When a hole is filled the
 loop advances `rcv_nxt` across every present byte. A FIN whose sequence lies
 beyond a hole is retained (`pending_fin`) and consumed only when the bytes
-before it have arrived, so EOF still follows all data. Read shutdown keeps
+before it have arrived, so EOF still follows all data. Read shutdown retains
 the out-of-order positions but discards the contiguous bytes by moving the
-ring origin, which keeps the sequence-to-slot mapping intact.
+ring origin, which preserves the sequence-to-slot mapping.
 
 In N07 every segment that carried data or a FIN was acknowledged at once.
 N14 replaced that with delayed ACKs within the rules of RFC 1122 (see N14);
@@ -845,7 +845,7 @@ the lifetime deadline; `tcp_schedule` arms it for the earliest one.
 
 ### Zero windows, small writes and independence
 
-When the peer advertises a zero window queued data stays in the buffer and
+When the peer advertises a zero window queued data remains in the buffer and
 the data timer becomes a probe timer. Each expiry sends one byte at
 `snd_una - 1`, a sequence the peer has already consumed, so the byte cannot
 enter its stream while its acknowledgement reports the current window. The
@@ -853,12 +853,12 @@ probe backs off like a retransmission and the progress deadline still bounds
 the whole stall. A window update is applied by the ordinary ACK rules and
 `tcp_flush` resumes at once, tested with a lost window-opening ACK.
 
-Readiness and errors keep the N06 semantics. `POLLOUT` reflects buffer room,
+Readiness and errors retain the N06 semantics. `POLLOUT` reflects buffer room,
 not the peer window, so an application can fill the buffer while the peer
 is stalled and blocks only when the buffer is full. A reader consumes from
 the ring under `tcp_lock` and asks netd for a window update afterwards; a
 failure of that request cannot turn a completed read into an error. Stalled
-connections hold only their own buffers and timers: netd never waits for a
+connections contain only their own buffers and timers: netd never waits for a
 peer, and the pressure test sends on one connection while another has filled
 its receive ring and a third waits in a zero window.
 
@@ -869,7 +869,7 @@ output: a write larger than the buffer returns the partial count, the
 congestion window limits the first burst below the buffer size, a partial ACK
 across wraparound leaves the exact suffix, an RTT sample sets the timeout,
 three duplicate ACKs enter recovery with the expected threshold and window
-and suppress sampling, a timeout doubles the timeout and keeps the bytes, a
+and suppress sampling, a timeout doubles the timeout and retains the bytes, a
 zero window retains data and is probed with `snd_una - 1`, and reordered,
 overlapping and FIN-before-gap input delivers the exact stream. `net_tcp_bulk`
 exchanges 262144 bytes in each direction with a native host TCP peer through
@@ -885,7 +885,7 @@ N08 removes the N04 fragment rejection and the N05 datagram-size limit on the
 Ethernet path. Reassembly (`fragment.c`), the path MTU cache and the
 recent-transmission table (`path.c`) belong to netd. Packet buffers grew to
 8192 bytes so that a reassembled packet of `IPV4_MAX_PACKET` bytes (8128) is
-one buffer, which keeps the ownership rules of N02. Fragmentation follows
+one buffer, which retains the ownership rules of N02. Fragmentation follows
 [RFC 791](https://www.rfc-editor.org/info/rfc791/) and
 [RFC 1122, section 3.3.2](https://www.rfc-editor.org/info/rfc1122/); path
 MTU discovery follows [RFC 1191](https://www.rfc-editor.org/info/rfc1191/)
@@ -913,7 +913,7 @@ detects any fragment that covers a byte already present; an exact duplicate
 (same offset, length, more flag and bytes) is ignored without effect on the
 deadline, while a conflicting overlap, a fragment past a known end, a second
 different end, or a 65th fragment poisons the context: its buffer is freed
-and the key stays reserved until expiry, so a later fragment cannot
+and the key remains reserved until expiry, so a later fragment cannot
 resurrect a datagram assembled from mixed sources. The reassembled packet
 gets the first fragment's header with the total length, cleared fragment
 fields and a fresh checksum, then enters the same protocol dispatch as an
@@ -945,7 +945,7 @@ it, so a forged error needs the exact identification and sequence of a recent
 packet. Fragmentation needed lowers the cached path MTU for the quoted
 destination to the advertised next-hop MTU, or to the next plateau below the
 quoted total length when the router reports none; a value below 68 or not
-below the quoted length is rejected. The cache holds 16 destinations for ten
+below the quoted length is rejected. The cache contains 16 destinations for ten
 minutes each and the smallest of the interface MTU and the cached value is
 used by TCP segment sizing, UDP fragmentation and the DF check. Lowering a
 path shrinks the MSS and congestion window of every connection to that
@@ -1010,7 +1010,7 @@ state, which would need reseeding that the single boot seed does not provide.
 TCP initial sequence numbers and ephemeral TCP and UDP ports come from the
 provider. While it is unavailable, connect, listen and passive open on TCP
 and an automatic UDP port fail with `EAGAIN`; explicit binds, UDP sends from
-bound ports, loopback and ICMP keep working. The kernel test seam
+bound ports, loopback and ICMP continue working. The kernel test seam
 (`tcp_set_generators`) replaces the generators only on netd and only for the
 duration of a test; it is not reachable from user space. The three
 `net_random*` cases run the same kernel with a working device, no device and
@@ -1048,7 +1048,7 @@ checks the half-open bound, fills a receive ring with a slow reader while an
 unrelated connection sends, allocates every data buffer and shows that a SYN
 still leaves through the control reserve, takes the interface down under an
 established connection and observes `ENETDOWN`, fills the connection table
-with TIME_WAIT state that holds no socket files, and checks that a further
+with TIME_WAIT state that contains no socket files, and checks that a further
 connect fails with `ENOBUFS`. After each cycle TIME_WAIT expires through the
 real worker timer and the connection, endpoint and packet accounting return
 to the baseline, with the packet low-water mark at the 32-buffer reserve.
@@ -1096,7 +1096,7 @@ written to `/etc/resolv.conf`; an `iface NAME dhcp` line is left to the
 and is supervised by init (`init.md`). The default file asks for DHCP on
 `eth0`. A missing file, a missing interface or an absent server never
 delays the shell or the desktop: the task exits, the client exits with
-status 0 when there is nothing to do, or keeps retrying with an
+status 0 when there is nothing to do, or continues retrying with an
 unconfigured interface. Booting without a NIC is unchanged.
 
 ### Broadcast before an address
@@ -1124,9 +1124,9 @@ through `/dev/net`, writes `/etc/resolv.conf` from option 6, renews at T1 by
 unicast, rebinds at T2 by broadcast, and at expiry or on NAK removes the
 address, empties the resolver configuration and starts discovery again.
 Retries back off from 4 to 64 seconds. `-1` acquires once for scripts and
-tests, `-f` stays in the foreground, `-s`/`-p` address a unicast test server,
+tests, `-f` remains in the foreground, `-s`/`-p` address a unicast test server,
 and `-a` takes the interface from `/etc/network` for the init service.
-N10 had no address-conflict detection and kept no lease across a restart;
+N10 had no address-conflict detection and retained no lease across a restart;
 N16 added both and is described below.
 
 `net_dhcp` runs `netdhcptest`, which drives the real client against a
@@ -1219,14 +1219,14 @@ invalid, which is the policy N06 applied to a malformed MSS option.
 The stores of a connection grew and moved out of the connection table.
 When a connection is created, netd allocates a 65536-byte send store, a
 131072-byte receive store and its 16384-byte presence bitmap from the
-kernel heap with no lock held. A connection that cannot allocate them is
+kernel heap with no lock acquired. A connection that cannot allocate them is
 not created; passive open then counts a backlog drop and connect returns
 `ENOBUFS`. The stores are released as soon as nothing can use them. The
 receive store goes when the endpoint closes, because data that arrives
 after the final close resets the connection instead of being stored, and
 the send store goes when its last byte has been acknowledged after the
 close. A connection that is finishing its FIN exchange or waits in
-TIME_WAIT therefore holds its table entry and nothing more. With all 64
+TIME_WAIT therefore contains its table entry and nothing more. With all 64
 connections open the stores take 13 MiB.
 
 The receive window is the free space of the receive store. Out-of-order
@@ -1250,7 +1250,7 @@ Every segment of a connection that negotiated timestamps carries one and
 echoes TS.Recent; a reset carries one as well, which RFC 7323 section 3.2
 recommends. TS.Recent follows section 4.3: it takes the value of an
 acceptable segment whose timestamp is not older than TS.Recent and whose
-sequence starts at or before the last acknowledgement sent, which keeps the
+sequence starts at or before the last acknowledgement sent, which retains the
 timestamp of the earliest unacknowledged segment when segments arrive out
 of order.
 
@@ -1267,10 +1267,10 @@ replaces it.
 With timestamps, a round-trip sample is the timestamp clock minus the
 echoed value of an ACK that acknowledges new data. One sample is taken per
 flight; after a sample, the next one comes from the first ACK that covers
-everything sent at the time of the previous one, which keeps the RFC 6298
+everything sent at the time of the previous one, which retains the RFC 6298
 gains of N07 meaningful. The echo identifies the transmission that the peer
 acknowledged, so sampling continues after a retransmission; Karn's rule
-applies only to connections without timestamps, which keep the timed
+applies only to connections without timestamps, which retain the timed
 segment of N07. An echo of 0 and an echo more than 60 seconds old are
 ignored.
 
@@ -1298,7 +1298,7 @@ flight to 128 bytes, that full segments carry 1188 bytes for a peer MSS of
 1200, and that the timestamp sample equals the 40 ms by which the controlled
 clock moved. PAWS rejects an older timestamp with an ACK, a segment without
 a timestamp is dropped silently, and a newer one is accepted and echoed.
-TS.Recent stays unchanged for a segment beyond the last ACK and advances
+TS.Recent remains unchanged for a segment beyond the last ACK and advances
 when the hole is filled, a retransmission's echo yields a sample, and a
 reset without a timestamp is accepted. A passive open repeats both options
 and scales the window of the final ACK, a SYN without options is answered
@@ -1333,12 +1333,12 @@ it too. When both SACK-permitted and a timestamp are present, SACK-permitted
 takes the place of the two padding bytes before the timestamp, as in the
 layout of RFC 7323 appendix A. `wire.c` reads SACK-permitted from SYN
 segments only and SACK blocks from every other segment; a block list whose
-length is not 2 plus a multiple of 8, that holds no block or more than
+length is not 2 plus a multiple of 8, that contains no block or more than
 four, or that repeats the option makes the segment invalid.
 
 ### Reporting received data
 
-The receiver keeps up to four blocks to report (`TCP_SACK_REPORT`). When an
+The receiver retains up to four blocks to report (`TCP_SACK_REPORT`). When an
 out-of-order segment is stored, the run of stored bytes that contains it is
 found in the presence bitmap of the receive store, since RFC 2018 section 4
 requires the first block to be that whole run, and it becomes the first
@@ -1352,12 +1352,12 @@ peer's MSS together with the data. A duplicate report (D-SACK) is not sent.
 
 ### The scoreboard and loss recovery
 
-The sender keeps a scoreboard of at most eight SACKed ranges
+The sender retains a scoreboard of at most eight SACKed ranges
 (`TCP_SCOREBOARD`), sorted and disjoint, within `[snd_una, snd_nxt]`. A
 block that is empty, starts below `snd_una` or ends beyond `snd_nxt` is
 ignored. A new block absorbs every range it overlaps or touches; when it
 would need a ninth range the highest range is dropped and counted in
-`scoreboard_drops`. Forgetting that the peer holds data is safe, because the
+`scoreboard_drops`. Forgetting that the peer contains data is safe, because the
 data is at worst sent again, and the ranges nearest `snd_una` decide what is
 retransmitted next. A cumulative ACK trims the ranges it covers.
 
@@ -1379,13 +1379,13 @@ congestion window does not grow during this recovery, which ends when
 `snd_una` reaches the recovery point. The optional rescue retransmission of
 rule 4 is not implemented.
 
-A retransmission timeout on a SACK connection keeps the scoreboard, as
+A retransmission timeout on a SACK connection retains the scoreboard, as
 section 5.1 permits, and starts a timeout recovery. The window returns to
 one segment with slow start, and every unSACKed byte below the recovery
 point counts as lost, so the ACK-clocked loop retransmits the holes in
 order and skips the SACKed ranges. A second consecutive timeout without
 progress clears the scoreboard, because the peer may have discarded data it
-had SACKed (RFC 2018 section 8). Connections without SACK keep the Tahoe
+had SACKed (RFC 2018 section 8). Connections without SACK retain the Tahoe
 recovery of N07 unchanged.
 
 ### Delayed acknowledgements
@@ -1428,7 +1428,7 @@ showed this as a stall of 1.1 seconds. `net_tcp_sack` checks the case.
 the receiver with and without timestamps. An out-of-order segment is
 acknowledged at once with its block, the most recent block comes first,
 four blocks fit without timestamps and three beside them, filling a gap
-reports the merged run, filling the first hole keeps the remaining blocks
+reports the merged run, filling the first hole retains the remaining blocks
 in report order, and a contiguous stream carries no block. For the
 delayed ACK, a 100-byte segment is not acknowledged until the timer fires
 exactly 100 ms later, the second of two full segments is acknowledged at
@@ -1436,7 +1436,7 @@ once by one ACK for both, a reply carries the pending ACK, a 100-byte read
 announces no window and a larger read does. On a flight of eight 1000-byte
 segments whose first is lost, two duplicates do not start recovery, the
 third retransmits exactly the lost segment and halves the window and
-threshold to 4000, the pipe then holds further sending until more data is
+threshold to 4000, the pipe then withholds further sending until more data is
 SACKed, the next transmission is new data rather than SACKed data, only one
 retransmission happens, and a cumulative ACK at the recovery point ends
 recovery. After a timeout the ACK-clocked loop retransmits the hole below
@@ -1473,7 +1473,7 @@ cache would need a service and a protocol of its own and was not built.
 
 ### Cache
 
-The cache holds 32 names (`CACHE_ENTRIES`). A key is the queried name in
+The cache contains 32 names (`CACHE_ENTRIES`). A key is the queried name in
 lower case without a trailing dot, so `Host.Test` and `host.test.` share
 an entry. When the cache is full, the entry used least recently is
 replaced; expired entries are removed when they are found. A mutex
@@ -1501,7 +1501,7 @@ remaining lifetime of a name and empty the cache; the tests use them.
 
 ### Search list
 
-`/etc/resolv.conf` may hold a `search` line with up to six domains of at
+`/etc/resolv.conf` may contain a `search` line with up to six domains of at
 most 256 bytes together, or a `domain` line with one; the last such line
 wins, as in resolv.conf(5). `options ndots:N` (default 1, at most 15) sets
 how many dots a name needs to be tried as given before the search list. A
@@ -1511,7 +1511,7 @@ dots is tried with each domain and then as given. Only a negative answer
 moves on to the next candidate, and every candidate is looked up through
 the cache, so a negative answer for one candidate is remembered as well.
 `dhcpc` writes the domain name of option 15 as a `search` line after
-checking that it holds only letters, digits, hyphens and dots, and
+checking that it contains only letters, digits, hyphens and dots, and
 `net apply` copies `search` lines from `/etc/network`. The manual page
 resolv.conf(5) documents the file.
 
@@ -1545,7 +1545,7 @@ announcement for an address on an Ethernet interface and then waits up to
 the given time, at most ten seconds, for another host to claim the
 address. A probe is a broadcast request with sender address 0 and a zero
 target hardware address; an announcement carries the address as sender
-and target (RFC 5227 sections 2.1.1 and 2.3). `arp.c` keeps two probe
+and target (RFC 5227 sections 2.1.1 and 2.3). `arp.c` retains two probe
 slots under `arp_probe_lock` (`docs/design/locking.md`); a caller that
 finds both in use gets `EBUSY`, an interface other than Ethernet
 `EOPNOTSUPP` and an address that is not unicast `EINVAL`.
@@ -1583,7 +1583,7 @@ at `/home` survives (`docs/design/storage.md`), and `fsinit` mounts it
 before init starts the `dhcp` service. The lease is therefore stored in
 `/home/.local/state/dhcpc/IF.lease`. The lease is state rather than
 configuration, so it lies where the XDG convention puts state, and the
-client creates the file with its directories on the first lease. `-l FILE` selects another file. The file holds the
+client creates the file with its directories on the first lease. `-l FILE` selects another file. The file contains the
 address, the server and the expiry in seconds of the real-time clock,
 which the RTC sets at boot, so an expiry survives a reboot. It is written
 under a temporary name and renamed at every bind and renewal, and removed

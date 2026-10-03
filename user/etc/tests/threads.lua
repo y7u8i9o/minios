@@ -17,7 +17,7 @@ check(w:receive() == binary, 'binary round trip')
 local value, _, code = w:receive(5)
 check(value == nil and code == sys.errno.ETIMEDOUT, 'receive timeout')
 check(w:send('quit') and w:join() and w:join(), 'repeat join')
-check(w:status() == 'done' and sys.poll(fds, 0) == 1, 'completion stays pollable')
+check(w:status() == 'done' and sys.poll(fds, 0) == 1, 'completion remains pollable')
 value, _, code = w:receive()
 check(value == nil and code == sys.errno.EPIPE, 'closed channel')
 check(w:close() and w:close(), 'repeat close')
@@ -30,12 +30,12 @@ for _, mode in ipairs{'error', 'exit'} do
 end
 local missing = assert(thread.spawn(root .. 'missing-worker.lua'))
 check(not missing:join(), 'load failure contained'); missing:close()
-local held = assert(thread.spawn(path, 'hold')); check(held:receive(2000) == 'holding', 'queue test ready')
-for _ = 1, 64 do assert(held:send(string.rep('q', 1024))) end
-value, _, code = held:send('x')
+local parker = assert(thread.spawn(path, 'park')); check(parker:receive(2000) == 'parked', 'queue test ready')
+for _ = 1, 64 do assert(parker:send(string.rep('q', 1024))) end
+value, _, code = parker:send('x')
 check(not value and code == sys.errno.EAGAIN, 'bounded queue backpressure')
-check(not pcall(held.send, held, string.rep('x', 8193)), 'oversize message rejected')
-held:close()
+check(not pcall(parker.send, parker, string.rep('x', 8193)), 'oversize message rejected')
+parker:close()
 local waiting = assert(thread.spawn(path, 'gc')); assert(waiting:receive(2000))
 waiting = nil; collectgarbage('collect')
 local deadline = sys.uptime() + 2000

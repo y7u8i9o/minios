@@ -5,7 +5,7 @@
  * lstat against stat, dangling links and O_CREAT through them, unlink and
  * rename of links, ".." after a link, links across mount points, links on
  * the initrd and on the root image built by mkfs, the filesystems that
- * refuse links, and links that survive an unmount. The mfs volume stays
+ * refuse links, and links that survive an unmount. The mfs volume remains
  * mounted on /mnt with its links; the script unmounts it for the post
  * script's fsck. Exits 0 on success. */
 #include <stdio.h>
@@ -108,7 +108,7 @@ static void creation_and_readlink(void)
     CHECK(strcmp(read_file("/sl/abs"), "hello\n") == 0, "read through an absolute link");
     CHECK(dirent_type("/sl", "abs") == DT_LNK, "getdents reports DT_LNK");
 
-    /* A relative target is resolved from the directory holding the link,
+    /* A relative target is resolved from the directory containing the link,
      * not from the working directory. */
     CHECK(symlink("file.txt", "/sl/dir/in") == 0, "symlink in dir");
     CHECK(chdir("/sl") == 0, "chdir /sl");
@@ -188,7 +188,7 @@ static void nofollow_and_lstat(void)
     CHECK(utimensat(AT_FDCWD, "/sl/abs", times, AT_SYMLINK_NOFOLLOW) == 0, "utimensat nofollow: %s",
           strerror(errno));
     CHECK(lstat("/sl/abs", &ls) == 0 && ls.st_mtime == 1000, "link time set");
-    CHECK(stat("/sl/abs", &ss) == 0 && ss.st_mtime != 1000, "target time kept");
+    CHECK(stat("/sl/abs", &ss) == 0 && ss.st_mtime != 1000, "target time retained");
 }
 
 static void dangling(void)
@@ -207,7 +207,7 @@ static void dangling(void)
         close(fd);
     }
     CHECK(strcmp(read_file("/sl/created.txt"), "made\n") == 0, "the target was created");
-    CHECK(is_link("/sl/dang"), "the link stays a link");
+    CHECK(is_link("/sl/dang"), "the link remains a link");
     CHECK(symlink("/sl/nodir/x", "/sl/dang2") == 0, "link into a missing directory");
     CHECK(fails_with(open("/sl/dang2", O_WRONLY | O_CREAT, 0644), ENOENT), "O_CREAT with a missing directory");
     CHECK(symlink("dir/newfile", "/sl/dang3") == 0, "second dangling link");
@@ -230,7 +230,7 @@ static void unlink_rename_and_dotdot(void)
 
     CHECK(rename("/sl/abs", "/sl/abs2") == 0, "rename a link");
     CHECK(strcmp(target_of("/sl/abs2"), "/sl/dir/file.txt") == 0 && lstat("/sl/abs", &st) < 0,
-          "the renamed link keeps its target");
+          "the renamed link retains its target");
     /* A relative link moved to another directory resolves from there. */
     CHECK(rename("/sl/dir/in", "/sl/in") == 0, "move a relative link");
     CHECK(fails_with(stat("/sl/in", &st), ENOENT), "the moved relative link now dangles");
@@ -286,13 +286,13 @@ static void mounts(void)
     CHECK(strcmp(target_of("/mnt/in"), "m.txt") == 0, "link target after remount");
     CHECK(strcmp(read_file("/mnt/out"), "hello\n") == 0, "link resolves after remount");
 
-    /* The initrd holds links from the tar archive, the root image the
+    /* The initrd contains links from the tar archive, the root image the
      * same links from mkfs. */
     CHECK(is_link("/initrd/etc/tests/link-fixture.tar"), "link on the initrd");
     CHECK(strcmp(target_of("/initrd/etc/tests/link-fixture.tar"), "fixture.tar") == 0, "initrd link target");
     struct stat a, b;
     CHECK(stat("/initrd/etc/tests/link-fixture.tar", &a) == 0 && stat("/initrd/etc/tests/fixture.tar", &b) == 0 &&
-          a.st_ino == b.st_ino && a.st_dev == b.st_dev, "relative initrd link stays on the initrd");
+          a.st_ino == b.st_ino && a.st_dev == b.st_dev, "relative initrd link remains on the initrd");
     CHECK(strcmp(target_of("/initrd/etc/tests/link-motd"), "/etc/motd") == 0, "absolute initrd link target");
     CHECK(stat("/initrd/etc/tests/link-motd", &a) == 0 && stat("/etc/motd", &b) == 0 && a.st_ino == b.st_ino &&
           a.st_dev == b.st_dev, "absolute initrd link resolves from the root");

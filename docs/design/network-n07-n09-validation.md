@@ -3,7 +3,7 @@
 N07 (reliable TCP transfer), N08 (IPv4 reassembly and path MTU) and N09
 (entropy, input robustness and resource recovery) were implemented on
 `bleeding-edge-net` on top of the uncommitted N03–N06 tree based on
-`87a10c3`. The implementation stays uncommitted; unrelated working-tree
+`87a10c3`. The implementation remains uncommitted; unrelated working-tree
 changes were preserved. This record lists what was run, what each layer
 establishes and what remains untested. It is bounded evidence, not a
 conformance or security claim.
@@ -15,7 +15,7 @@ serially (`JOBS=1`). Native interoperability uses the real VirtIO NIC, QEMU
 user networking, guest address 10.0.2.15 and a native host TCP listener on an
 ephemeral localhost port reached through 10.0.2.2. Every case attaches a
 `virtio-rng-pci` device backed by `/dev/urandom` unless its case directory
-holds `no-rng` or `rng-zero`. No public service is a dependency.
+contains `no-rng` or `rng-zero`. No public service is a dependency.
 
 | Validation | Result |
 |---|---|
@@ -45,7 +45,7 @@ initialization on this macOS beta. The runner now prefers Homebrew LLVM
 wait and falls back to UBSan alone if the address sanitizer does not start.
 The recorded results are from the Homebrew toolchain with both sanitizers.
 
-The repository holds no clang-format configuration, so no formatting claim
+The repository contains no clang-format configuration, so no formatting claim
 is made for these sources; the earlier N06 record's formatting row applied
 a style that was not written down.
 
@@ -57,7 +57,7 @@ of 8229 bytes into the 8192-byte buffer, the initial burst limited by the
 congestion window to 1200 bytes, a partial ACK across 32-bit wraparound
 leaving the exact suffix, an RTT sample and slow start, three duplicate ACKs
 entering recovery with window one MSS and threshold at least two MSS and no
-sample in progress, a timeout doubling the RTO to 2 s and keeping the bytes,
+sample in progress, a timeout doubling the RTO to 2 s and retaining the bytes,
 complete acknowledgement, a zero window retaining a 37-byte write and probed
 at `snd_una - 1`, resumption on the window update, and out-of-order data
 plus FIN before a hole delivered as the exact stream `abcdefgh` followed by
@@ -91,7 +91,7 @@ kernel with a working entropy device, without one, and with `/dev/zero`
 entropy. The first draws 64 distinct values; the other two check the
 warning, `EAGAIN` from the provider without a substituted value, and
 `EAGAIN` from TCP connect, TCP listen and automatic UDP binding while
-socket creation stays available.
+socket creation remains available.
 
 `net_pressure` (kernel, controlled clock, three cycles) is described in
 `network.md`; each cycle ends with the TIME_WAIT table full and no endpoint,
@@ -120,7 +120,7 @@ Artifacts are retained under `build/network-n07-n09/`:
 - `new-cases-4cpu.log`, `regression-4cpu.log` and `all-1cpu.log` are the
   runner outputs; the per-case serial logs, QEMU logs, peer logs and
   captures of the last run are under `build/tests/<case>/`.
-- `fuzz.log` holds the fuzz output; `build/network-fuzz/` the binary.
+- `fuzz.log` contains the fuzz output; `build/network-fuzz/` the binary.
 - `headers.log` and `format.log` record the header check and the
   formatting probe.
 - `source-sha256.txt` identifies the implemented source and test files.

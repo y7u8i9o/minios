@@ -43,7 +43,7 @@ interrupt only provides the moments at which sleepers are examined.
 
 ## Interrupt dispatch
 
-`arch/x86_64/irq.c` keeps a handler table indexed by vector. `trap_dispatch`
+`arch/x86_64/irq.c` retains a handler table indexed by vector. `trap_dispatch`
 routes vectors 32 and above to `irq_dispatch`, which calls the handler with
 interrupts disabled and sends the EOI afterwards. Spurious interrupts get no
 EOI. Handlers are registered before their line is unmasked, so the table

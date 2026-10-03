@@ -322,7 +322,7 @@ static void fbcon_setup(void)
     fb.fg = fb_pack_pixel(fb.lfb, FBCON_FG);
     fb.bg = fb_pack_pixel(fb.lfb, FBCON_BG);
     fb.scale = fb_screen_scale ? fb_screen_scale : 1;
-    /* A scale the mode cannot hold (fewer than 40x12 cells) is ignored. */
+    /* A scale the mode cannot contain (fewer than 40x12 cells) is ignored. */
     if (fb.width / (FONT_WIDTH * fb.scale) < 40 || fb.height / (FONT_HEIGHT * fb.scale) < 12)
         fb.scale = 1;
     fb.cols = MIN(fb.width / (FONT_WIDTH * fb.scale), FBCON_MAX_COLS);
@@ -366,7 +366,7 @@ void fbcon_screen_changed(void)
     if (fb.cx >= fb.cols)
         fb.cx = fb.cols - 1;
     if (fb.cy >= fb.rows) {
-        /* Keep the last rows of text when the grid shrinks. */
+        /* Retain the last rows of text when the grid shrinks. */
         uint32_t drop = fb.cy - (fb.rows - 1);
         memmove(fb.cells[0], fb.cells[drop], (size_t)(FBCON_MAX_ROWS - drop) * FBCON_MAX_COLS);
         memmove(fb.attrs[0], fb.attrs[drop], (size_t)(FBCON_MAX_ROWS - drop) * FBCON_MAX_COLS);

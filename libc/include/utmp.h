@@ -1,7 +1,7 @@
 #pragma once
 #include <sys/types.h>
 
-/* The login records of BSD, for programs that name them. minios keeps
+/* The login records of BSD, for programs that name them. minios stores
  * no utmp file, because login and the greeter tell init the session user
  * instead (docs/design/users.md). */
 #define _PATH_UTMP "/var/run/utmp"

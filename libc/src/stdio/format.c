@@ -72,20 +72,20 @@ static void decimal_generate(double value, struct decimal_rep *decimal)
 
 /* Round to a count of significant digits. A zero count is useful when a
  * fixed conversion rounds a value such as 0.6 to an integer. */
-static void decimal_round(struct decimal_rep *decimal, int keep)
+static void decimal_round(struct decimal_rep *decimal, int retain)
 {
-    if (decimal->zero || keep < 0) {
+    if (decimal->zero || retain < 0) {
         decimal->zero = 1;
         return;
     }
-    if (keep > DECIMAL_DIGITS)
-        keep = DECIMAL_DIGITS;
-    int round_up = decimal->digit[keep] >= 5;
-    for (int i = keep; i <= DECIMAL_DIGITS; i++)
+    if (retain > DECIMAL_DIGITS)
+        retain = DECIMAL_DIGITS;
+    int round_up = decimal->digit[retain] >= 5;
+    for (int i = retain; i <= DECIMAL_DIGITS; i++)
         decimal->digit[i] = 0;
     if (!round_up)
         return;
-    for (int i = keep - 1; i >= 0; i--) {
+    for (int i = retain - 1; i >= 0; i--) {
         if (++decimal->digit[i] < 10)
             return;
         decimal->digit[i] = 0;
@@ -313,10 +313,10 @@ static int hex_fraction_digit(uint64_t significand, int index)
 
 static void hex_round(struct hex_rep *hex, int precision)
 {
-    int keep = 1 + precision * 4;
-    if (hex->zero || hex->special || keep >= 64)
+    int retain = 1 + precision * 4;
+    if (hex->zero || hex->special || retain >= 64)
         return;
-    int shift = 64 - keep;
+    int shift = 64 - retain;
     uint64_t retained = hex->significand >> shift;
     uint64_t discarded = hex->significand & ((1ULL << shift) - 1ULL);
     if (!discarded)
@@ -334,7 +334,7 @@ static void hex_round(struct hex_rep *hex, int precision)
     if (!round_up)
         return;
     retained++;
-    if (retained == (1ULL << keep)) {
+    if (retained == (1ULL << retain)) {
         retained >>= 1;
         hex->exponent++;
     }

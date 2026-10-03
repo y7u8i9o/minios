@@ -72,7 +72,7 @@ void virtio_input_feed(uint16_t type, uint16_t code, uint32_t value)
     input_event(d, type, code, (int32_t)value);
 }
 
-/* Post one event buffer. Caller holds eventq->lock. */
+/* Post one event buffer. Caller has acquired eventq->lock. */
 static void post(struct vinput *d, struct virtio_input_event *ev)
 {
     struct virtqueue *vq = d->eventq;

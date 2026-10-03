@@ -60,7 +60,7 @@ static void test_full_duplex(void)
     CHECK(pthread_create(&t, NULL, blocked_reader, &r) == 0, "reader thread");
     usleep(50000);                              /* let it block in read */
     /* A write on the same open file description while the reader
-     * blocks: with a position lock held across the read this would
+     * blocks: if the position lock remained locked across the read, this would
      * never return. */
     uint64_t t0 = now_ms();
     CHECK(write(sp[0], "ping", 4) == 4, "write on the descriptor the reader blocks on");
@@ -254,7 +254,7 @@ static void test_iovecs(void)
     errno = 0;
     CHECK(recvmsg(sp[0], &m, MSG_DONTWAIT) == -1 && errno == EFAULT, "an unmapped receive iovec");
     /* A malformed control message must not leave a descriptor behind:
-     * the next descriptor number stays the same. */
+     * the next descriptor number remains the same. */
     int probe = dup(sp[0]);
     close(probe);
     struct iovec iov = { data, 4 };

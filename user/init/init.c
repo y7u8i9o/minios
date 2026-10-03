@@ -217,8 +217,8 @@ static void build_argv(const struct entry *e, char *argv[MAX_ARGS + 1])
 }
 
 /* Parse one configuration line. Entries are created or, when their
- * name exists, updated in place so that a reload keeps the runtime
- * state of the programs that keep running. */
+ * name exists, updated in place so that a reload retains the runtime
+ * state of the programs that continue to run. */
 static void parse_line(char *line, int lineno)
 {
     char *hash = strchr(line, '#');
@@ -349,8 +349,8 @@ static void start_entry(struct entry *e)
     fflush(stdout);
     pid_t pid = fork();
     if (pid == 0) {
-        /* The control descriptors stay with init: a program holding the
-         * connection would keep the client waiting for the end of the
+        /* The control descriptors remain with init: a program that has the
+         * connection open would leave the client waiting for the end of the
          * reply. */
         if (listener >= 0)
             close(listener);
@@ -547,7 +547,7 @@ static void start_due(void)
 }
 
 /* Reload the configuration: entries that vanished are stopped, new ones
- * started, existing ones keep running with their new command taking
+ * started, existing ones continue to run with their new command taking
  * effect at the next start. */
 static void reload(const char *path, char *reply, size_t size)
 {
@@ -555,7 +555,7 @@ static void reload(const char *path, char *reply, size_t size)
         snprintf(reply, size, "error: cannot read %s\n", path);
         return;
     }
-    int stopped = 0, kept = 0;
+    int stopped = 0, retained = 0;
     for (int i = 0; i < entry_count; i++) {
         struct entry *e = &entries[i];
         if (!e->present) {
@@ -568,11 +568,11 @@ static void reload(const char *path, char *reply, size_t size)
             entry_count--;
             i--;
         } else {
-            kept++;
+            retained++;
         }
     }
     start_due();
-    snprintf(reply, size, "ok\n%d entries, %d stopped\n", kept, stopped);
+    snprintf(reply, size, "ok\n%d entries, %d stopped\n", retained, stopped);
 }
 
 /* ---- shutdown ---- */

@@ -27,7 +27,7 @@
       <arg name="rate" type="uint"/>
       <arg name="channels" type="uint"/>
     </request>
-    <!-- Playback: the buffer holds frames frames to mix.  Capture: the
+    <!-- Playback: the buffer contains frames frames to mix.  Capture: the
          buffer is returned to the server for filling (frames is 0). -->
     <request name="queue_buffer">
       <arg name="index" type="uint"/>
@@ -53,7 +53,7 @@
     <event name="state"><arg name="state" type="uint"/><arg name="error" type="int"/></event>
     <event name="drained"/>
     <event name="xrun"><arg name="count" type="uint"/></event>
-    <!-- Capture: the buffer holds frames captured frames for the client. -->
+    <!-- Capture: the buffer contains frames captured frames for the client. -->
     <event name="captured"><arg name="index" type="uint"/><arg name="frames" type="uint"/></event>
   </interface>
 

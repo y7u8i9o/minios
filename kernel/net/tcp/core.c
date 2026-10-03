@@ -34,7 +34,7 @@ uint32_t tcp_initial_sequence(void)
 
 static bool port_available(struct tcp_endpoint *self, uint32_t address, uint16_t port)
 {
-    /* Caller holds tcp_lock. Closing connections, including TIME_WAIT,
+    /* Caller has acquired tcp_lock. Closing connections, including TIME_WAIT,
      * reserve the local port independently of their former socket file. */
     for (unsigned i = 0; i < TCP_ENDPOINTS; i++) {
         struct tcp_endpoint *e = &tcp_endpoints[i];
@@ -88,7 +88,7 @@ int tcp_bind_port(struct tcp_endpoint *endpoint, uint32_t address, uint16_t port
     return 0;
 }
 
-/* The stores are allocated on netd with no lock held. A connection whose
+/* The stores are allocated on netd with no lock acquired. A connection whose
  * stores cannot be allocated is not created, which callers report as they
  * report a full table. */
 struct tcp_connection *tcp_connection_alloc(void)
@@ -115,7 +115,7 @@ struct tcp_connection *tcp_connection_alloc(void)
 }
 
 /* The stores are released as soon as nothing can use them, so a closing
- * connection that outlives its socket holds no more memory than its
+ * connection that outlives its socket contains no more memory than its
  * protocol state needs. Only netd calls these. The receive store serves
  * readers alone: once the endpoint is gone, data arriving resets the
  * connection instead of being stored, and a FIN needs no store. The
@@ -237,7 +237,7 @@ void tcp_connection_free(struct tcp_connection *c)
  * right edge never moves left through reordering. Without window scaling
  * the 16-bit field caps it at 65535 bytes of the larger store; with it the
  * window is rounded down to the scale unit, so what is advertised is
- * exactly what is accepted. The caller holds tcp_lock. */
+ * exactly what is accepted. The caller has acquired tcp_lock. */
 unsigned tcp_receive_window_locked(struct tcp_connection *c)
 {
     unsigned available =

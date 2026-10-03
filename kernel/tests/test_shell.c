@@ -374,7 +374,7 @@ KTEST_DEFINE("shutdown_cmd", test_shutdown_cmd);
 
 /* Init supervises the entries of its configuration and answers initctl:
  * a service added by a reload is stopped, started and restarted, a
- * command that keeps failing is given up after five quick exits, a
+ * command that fails repeatedly is given up after five quick exits, a
  * removed entry disappears, and the power off request goes through the
  * same orderly shutdown as the signal. */
 static void test_initctl(void)

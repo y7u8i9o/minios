@@ -116,7 +116,7 @@ static struct proc_row *find_row(int pid)
 }
 
 /* The account name of uid, or the number when /etc/passwd has none. The
- * last answer is kept because consecutive rows mostly share a user. */
+ * last answer is retained because consecutive rows mostly share a user. */
 static void user_name(unsigned uid, char *out, size_t size)
 {
     static unsigned last_uid = (unsigned)-1;
@@ -346,7 +346,7 @@ static void format_percent(char *buf, size_t size, int tenths)
 }
 
 /* The functions below implement the process table model.  The row id of
- * a process is its pid.  The selection therefore stays on the same process
+ * a process is its pid.  The selection therefore remains on the same process
  * when the order of the rows changes. */
 
 static int compare_rows(const void *a, const void *b)

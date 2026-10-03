@@ -1,4 +1,4 @@
-/* Audio streams through the registry. A decoder keeps the codec, its
+/* Audio streams through the registry. A decoder retains the codec, its
  * state and, when it was opened from a file, the contents of the file. */
 #include <codec/codec.h>
 #include <errno.h>

@@ -6,9 +6,9 @@
 `2^slab_order` pages starting with a `struct slab` header, followed by
 `objs_per_slab` slots of `stride` bytes. The order is the smallest that fits
 at least four objects, capped at order 4 (64 KiB). Free slots form a singly
-linked list through their first four bytes. A cache keeps a `partial` and a
+linked list through their first four bytes. A cache retains a `partial` and a
 `full` list; a slab whose last object is freed is returned to the buddy
-allocator immediately, so an idle cache holds no memory and page accounting
+allocator immediately, so an idle cache contains no memory and page accounting
 in tests is exact. Each cache has its own spinlock. The list of caches is
 protected by `kmem_caches_lock`. Cache descriptors are allocated from a
 static bootstrap cache.
@@ -20,9 +20,9 @@ down to the block size and reads the owning cache from it.
 ## Debugging
 
 With `CONFIG_SLABDEBUG=1` each slot is `[redzone][object][redzone]`. The
-front redzone is rounded up to the cache alignment so objects keep their
+front redzone is rounded up to the cache alignment so objects retain their
 alignment. On free the redzones are verified and the object is filled with
-`0x6b`; on allocation the poison is verified (except the four bytes holding
+`0x6b`; on allocation the poison is verified (except the four bytes containing
 the free list link) to catch writes after free. Violations panic with the
 cache name and object address.
 

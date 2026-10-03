@@ -27,7 +27,7 @@ static void changed(struct textfield *f)
 static int len_of(struct textfield *f) { return (int)strlen(widget_text(&f->w)); }
 
 /* The text as it is drawn and measured: the text itself, or for a masked
- * field one '*' per byte, which keeps byte offsets valid as positions. */
+ * field one '*' per byte, which preserves the validity of byte offsets as positions. */
 static const char *shown(struct textfield *f)
 {
     if (!f->masked)

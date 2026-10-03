@@ -82,7 +82,7 @@ void input_set_repeat(struct input_dev *dev, uint32_t delay_ms, uint32_t period_
 
 /* ---- delivery ---- */
 
-/* Caller holds dev->lock. A full queue loses everything queued so far
+/* Caller has acquired dev->lock. A full queue loses everything queued so far
  * and starts again with SYN_DROPPED, which tells the reader to resync. */
 static void reader_push(struct input_reader *r, const struct input_event *e)
 {
@@ -98,7 +98,7 @@ static void reader_push(struct input_reader *r, const struct input_event *e)
     }
 }
 
-/* Caller holds dev->lock. */
+/* Caller has acquired dev->lock. */
 static void deliver(struct input_dev *dev, const struct input_event *e)
 {
     if (dev->grab) {
@@ -202,7 +202,7 @@ struct input_dev *input_device_by_name(const char *name)
 
 /* ---- key repeat ---- */
 
-/* Emits value 2 events for the held key of every device with EV_REP at
+/* Emits value 2 events for the pressed key of every device with EV_REP at
  * its delay and period; the console and readers see them like presses,
  * a display server ignores them and repeats in its clients. */
 static void input_repeatd(void *arg)

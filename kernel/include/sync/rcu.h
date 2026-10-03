@@ -14,7 +14,7 @@ struct rcu_head {
 
 void rcu_read_lock(void);
 void rcu_read_unlock(void);
-bool rcu_read_held(void);
+bool rcu_read_locked(void);
 void rcu_quiescent(void);
 void rcu_call(struct rcu_head *head, void (*func)(struct rcu_head *head));
 /* Block until every callback queued before the call has run. Sleeps, so

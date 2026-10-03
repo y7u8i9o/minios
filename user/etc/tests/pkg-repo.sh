@@ -106,7 +106,7 @@ check oversized-status "$(echo "$out" | tail -n 1)" "1"
 check oversized-list "$(mine)" ""
 
 # An index changed after signing and an index signed by an unknown key
-# are refused, and the last verified index stays in place.
+# are refused, and the last verified index remains in place.
 conf $URL/badindex
 check bad-signature "$(pkg update 2>&1; echo $?)" "pkg: main: the index signature does not verify with /etc/pkg/keys/build.pub
 1"

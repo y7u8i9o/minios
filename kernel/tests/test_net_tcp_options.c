@@ -88,7 +88,7 @@ static size_t build_options(uint8_t *o, const struct peer_options *p)
         net_put_be16(o + n + 2, p->mss);
         n += 4;
     }
-    /* A bad length keeps the option well framed, so the parser has to
+    /* A bad length leaves the option well framed, so the parser has to
      * reject it for its length rather than for overrunning the header. */
     if (p->window_scale >= 0 && p->bad_length) {
         uint8_t bad[4] = {3, 4, (uint8_t)p->window_scale, 0};
@@ -169,13 +169,13 @@ static void inject(struct tcp_connection *c,
                    size_t length)
 {
     /* A SYN ACK acknowledges our SYN; other injected segments acknowledge
-     * nothing new, so outstanding data stays outstanding. */
+     * nothing new, so outstanding data remains outstanding. */
     uint32_t acknowledgement = flags & TCP_SYN ? c->snd_nxt : c->snd_una;
     send_segment(c->peer_port, c->local_port, sequence, acknowledgement, flags, window, options,
                  data, length);
 }
 
-/* struct decoded holds one captured TCP segment, decoded independently of
+/* struct decoded contains one captured TCP segment, decoded independently of
  * wire.c. */
 struct decoded {
     uint8_t flags;
@@ -624,7 +624,7 @@ static void receiver_checks(bool timestamps)
     d = last();
     ktest_assert(frame_count == before + 1 && d.acknowledgement == r + 400 &&
                      d.sack_count == 3 && d.sack[0][0] == r + 900 && d.sack[2][0] == r + 500,
-                 "hole filled: immediate ACK keeps the remaining blocks in report order");
+                 "hole filled: immediate ACK preserves the remaining blocks in report order");
     peer_data(c, r + 400, 100);
     peer_data(c, r + 600, 100);
     peer_data(c, r + 800, 100);
@@ -682,7 +682,7 @@ static void delayed_ack_checks(void)
     file_put(file);
 }
 
-/* Grows the congestion window with full ACKs until it holds at least
+/* Grows the congestion window with full ACKs until it contains at least
  * `segments` segments of 1000 bytes, then leaves a full flight
  * outstanding. */
 static uint32_t fill_flight(struct file *file, struct tcp_connection *c, unsigned segments)
@@ -765,14 +765,14 @@ static void timeout_checks(void)
     ktest_assert(!c->recovering && c->scoreboard_count == 1, "one duplicate with a SACK block");
     expire_next(c);
     ktest_assert(c->rto_recovery && last().sequence == u && c->congestion_window == 1000,
-                 "timeout retransmits the first segment and keeps the scoreboard");
+                 "timeout retransmits the first segment and retains the scoreboard");
     unsigned before = frame_count;
     peer_ack(c, u + 1000, 1, sack);
     ktest_assert(frame_count == before + 2 && decode_frame(before).sequence == u + 1000 &&
                      decode_frame(before + 1).sequence == u + 4000,
                  "after the timeout the SACKed range is skipped");
     expire_next(c);
-    ktest_assert(c->scoreboard_count == 1, "one timeout after progress keeps the scoreboard");
+    ktest_assert(c->scoreboard_count == 1, "one timeout after progress retains the scoreboard");
     expire_next(c);
     ktest_assert(!c->scoreboard_count, "second consecutive timeout clears the scoreboard");
     reset(c);

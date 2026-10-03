@@ -21,7 +21,7 @@ check ar-long-table "$(head -c 70 lib.a | tail -c 62 | head -c 2)" "//"
 printf 'alpha two\n' > a.o
 check ar-replace "$(ar rv lib.a a.o)" "r - a.o"
 check ar-replaced-content "$(ar p lib.a a.o)" "alpha two"
-check ar-order-kept "$(ar t lib.a | tr '\n' ' ')" "a.o b.o a-name-that-is-longer-than-fifteen.o "
+check ar-order-retained "$(ar t lib.a | tr '\n' ' ')" "a.o b.o a-name-that-is-longer-than-fifteen.o "
 check ar-tv "$(ar tv lib.a b.o | cut -c1-9)" "rw-r--r--"
 check ar-tv-size "$(ar tv lib.a b.o | tr -s ' ' | cut -d' ' -f3)" "5"
 mkdir out
@@ -40,7 +40,7 @@ sleep 1
 printf 'gamma\n' > b.o
 ar ru lib.a a.o b.o
 check ar-u-updated "$(ar p lib.a b.o | head -n 1)" "gamma"
-check ar-u-kept "$(ar p lib.a a.o)" "alpha two"
+check ar-u-retained "$(ar p lib.a a.o)" "alpha two"
 ar t nosuch.a 2> /dev/null; test $? != 0 || echo "FAIL ar-missing-archive"
 ar z lib.a 2> /dev/null; test $? = 2 || echo "FAIL ar-usage"
 printf 'not an archive\n' > text.a

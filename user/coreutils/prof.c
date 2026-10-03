@@ -232,7 +232,7 @@ static void report_threads(void)
 static void report_heap(void)
 {
     char a[32], b[32], c[32];
-    printf("\nKernel heap: %s allocated in %llu calls, %s freed, %s still held, peak %s\n",
+    printf("\nKernel heap: %s allocated in %llu calls, %s freed, %s still allocated, peak %s\n",
            fmt_bytes(session->alloc_bytes, a, sizeof a),
            (unsigned long long)session->counts[PROF_EV_ALLOC],
            fmt_bytes(session->freed_bytes, b, sizeof b),
@@ -457,7 +457,7 @@ int main(int argc, char **argv)
     }
 
     char span[32];
-    printf("prof: %s, %llu of %llu events kept, %llu dropped, %s of wall time\n"
+    printf("prof: %s, %llu of %llu events retained, %llu dropped, %s of wall time\n"
            "prof: %llu samples, %llu blocks, %llu wakeups, %llu allocations, %llu frees,"
            " %llu transfers\n",
            target, (unsigned long long)session->events, (unsigned long long)st.events,
@@ -471,7 +471,7 @@ int main(int argc, char **argv)
            (unsigned long long)session->counts[PROF_EV_IO]);
     if (session->locked_samples)
         printf("prof: %d kernel samples were taken with interrupts disabled and are charged to the"
-               " code that held the lock\n", session->locked_samples);
+               " code that had acquired the lock\n", session->locked_samples);
     report_flat(PROF_VIEW_CPU, "Flat profile (CPU time)", 0);
     if (want_chains)
         report_chains(PROF_VIEW_CPU, "Call chains by CPU time", 0);

@@ -54,7 +54,7 @@ shared memory buffer that the client provides. When a client binds the
 global, X12 sends `size` with the screen size in device pixels and the
 output scale, and it sends `size` again after every mode change
 (`debug_screen_changed`). `capture(buffer, pointer)` copies the back
-buffer, which holds the last composed frame, into the client buffer with
+buffer, which contains the last composed frame, into the client buffer with
 opaque alpha and answers `done`. It answers `failed` when the buffer has
 a different size. With `pointer` set to 1 the copy includes the pointer,
 and X12 reports the pointer rectangle in device pixels with a `pointer`
@@ -64,7 +64,7 @@ pointer again without the cursor, copies the back buffer, and then
 composes the area once more with the cursor. Neither composition is
 flushed to the framebuffer, and the screen therefore never shows a frame
 without the pointer. X12 makes every copy while it decodes the request
-and keeps no reference to the buffer afterwards.
+and retains no reference to the buffer afterwards.
 
 `get_windows` sends one `window` event for every mapped toplevel that is
 not minimized, starting at the top of the stack. Each event carries the
@@ -134,7 +134,7 @@ its size in device pixels. Dragging outside the selection starts a new
 selection after the pointer has moved four pixels, which leaves the old
 selection in place after a plain click. Dragging inside the selection
 moves it within the screen, and dragging a handle or an edge moves the
-edges it holds. Screen mode shows the whole screen at full brightness.
+edges it contains. Screen mode shows the whole screen at full brightness.
 Window mode shows the active window at full brightness with an accent
 frame and outlines the window under the pointer in white. Clicking a
 window selects it. The keys are those of GNOME. S, C and W select the
@@ -161,7 +161,7 @@ Escape cancels.
 After a capture with `-t`, `-i` or `-a`, the program shows the saved
 image as macOS does. The thumbnail is a layer surface on the overlay
 layer without keyboard interactivity. It is anchored to the bottom right
-corner with margins of 16 pixels (`gui_layer_set_margin`), which keeps it
+corner with margins of 16 pixels (`gui_layer_set_margin`), which places it
 above the panel. It shows the image scaled to at most 220 by 140 pixels
 inside a light grey frame one pixel wide. A click opens the file with
 `mime_open`, which starts the image viewer. Otherwise the thumbnail
@@ -249,7 +249,7 @@ at full brightness before it releases the button. It opens the
 screenshot in the viewer, counts the pixels of the desktop colour and of
 the window background, and presses the zoom and navigation keys. With
 the viewer still open it presses Print Screen and W, checks that the
-window stays at full brightness while the desktop beside it is dimmed,
+window remains at full brightness while the desktop beside it is dimmed,
 and presses Enter. It then runs `screenshot -w /win.png`, whose header
 must describe an RGBA image of the size of the window with its shadow.
 In paint it draws a stroke, undoes and redoes it, and saves
@@ -260,6 +260,6 @@ the disk image, extracts the files with `mkfs --cat`, decodes them with
 independent decoders written in Python, and checks the screenshot size
 and its desktop colour, the transparent corner and the opaque centre of
 the window image, the pixels of the drawing, and the identical pixels of
-the BMP copy. When the kernel command line contains `hold=1`, the test
+the BMP copy. When the kernel command line contains `pause=1`, the test
 waits eight seconds in the capture interface and in its window mode to
 allow screen dumps.

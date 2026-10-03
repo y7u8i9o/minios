@@ -2,22 +2,22 @@
  * interface, configures it through /dev/net, writes /etc/resolv.conf,
  * renews at T1 (unicast), rebinds at T2 (broadcast) and drops the address
  * at expiry before discovering again. Retries back off from 4 to 64 s and
- * never block anything else: without a server the client keeps trying in
- * the background and the interface stays unconfigured.
+ * never block anything else: without a server the client continues to try in
+ * the background and the interface remains unconfigured.
  *   dhcpc [-i IF | -a] [-1] [-f] [-s SERVER] [-p PORT] [-t SECONDS]
  *         [-l FILE] [-A]
- * -1 exits after the first lease (or failure after SECONDS), -f stays in
+ * -1 exits after the first lease (or failure after SECONDS), -f remains in
  * the foreground, -s/-p unicast to a test server instead of broadcasting.
  * -a, used by init's dhcp service, takes the interface from the first
- * "iface NAME dhcp" line of /etc/network, stays in the foreground, and
+ * "iface NAME dhcp" line of /etc/network, remains in the foreground, and
  * exits with status 0 when there is nothing to do (no such line, or no
  * such interface), so the service simply stops on a machine without a
  * network.
  *
- * Since N16, RFC 5227 probes check that no other host holds an address
+ * Since N16, RFC 5227 probes check that no other host uses an address
  * from an ACK before it is used, and a conflict is answered with
  * DHCPDECLINE. After configuration two announcements follow. The lease is
- * kept in a file on the persistent home volume (-l names another file),
+ * retained in a file on the persistent home volume (-l names another file),
  * and a client that starts with an unexpired lease asks for the same
  * address in the INIT-REBOOT state of RFC 2131 section 3.2. -A divides
  * every interval of conflict detection by ten for tests. */
@@ -68,7 +68,7 @@ struct lease {
     uint32_t address, mask, gateway, server, dns[2];
     uint32_t seconds, t1, t2;
     time_t acquired;
-    /* domain holds option 15, the search domain, and is empty when absent. */
+    /* domain contains option 15, the search domain, and is empty when absent. */
     char domain[256];
 };
 static struct lease lease;
@@ -215,7 +215,7 @@ static size_t build(unsigned char *m, int type, uint32_t ciaddr, uint32_t reques
 }
 
 /* Option 15 names the domain of the client (RFC 2132 section 3.17). It is
- * kept only when it is a plausible domain name of letters, digits, hyphens
+ * retained only when it is a plausible domain name of letters, digits, hyphens
  * and dots after trailing dots and NUL padding are removed. */
 static void domain_option(const unsigned char *v, unsigned length, char *domain)
 {
@@ -366,7 +366,7 @@ static int arp_probe(uint32_t address, int announce, unsigned wait_ms, unsigned 
 
 /* address_in_use follows RFC 5227 section 2.1.1. After a random delay of
  * up to PROBE_WAIT it sends three probes PROBE_MIN to PROBE_MAX apart and
- * waits ANNOUNCE_WAIT after the last. It returns 1 when another host holds
+ * waits ANNOUNCE_WAIT after the last. It returns 1 when another host uses
  * or claims the address. */
 static int address_in_use(uint32_t address)
 {
@@ -402,7 +402,7 @@ static void announce(uint32_t address)
     }
 }
 
-/* The lease file holds "address A", "server S" and "expires T" lines, T in
+/* The lease file contains "address A", "server S" and "expires T" lines, T in
  * seconds of the real-time clock. lease_save writes it under a temporary
  * name and renames it, so that a crash leaves either the old or the new
  * file. */
@@ -654,7 +654,7 @@ int main(int argc, char **argv)
     uint64_t start = now_ms();
     unsigned backoff = 4;
     /* A saved, unexpired lease is asked for again first; without an
-     * answer its address stays the hint of the discovery that follows. */
+     * answer its address remains the hint of the discovery that follows. */
     uint32_t hint = 0;
     if (lease_load(&hint)) {
         int result = reboot(fd, 2000, hint);

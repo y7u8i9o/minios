@@ -1,5 +1,5 @@
 # The loader integration fixtures. The dependency graph is explicit, which
-# keeps a parallel build from linking a node before its predecessor exists.
+# prevents a parallel build from linking a node before its predecessor exists.
 LDTEST := $(OUT)/ldtests
 LDTEST_LEVELS := 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
 LDTEST_CHAIN := $(addprefix $(ROOT)/usr/lib/libldchain,$(addsuffix .so,$(LDTEST_LEVELS)))

@@ -1,6 +1,6 @@
 #pragma once
 /* The input core: drivers register devices and report events; the core
- * keeps the key state of every device, repeats held keys, delivers the
+ * retains the key state of every device, repeats pressed keys, delivers the
  * events to readers of /dev/input/eventN and feeds keyboards that no
  * reader has grabbed to the console terminal (input/keyboard.c).
  * docs/design/input.md describes the design. */
@@ -37,7 +37,7 @@ struct input_dev {
     bool pending;                       /* an event since the last SYN_REPORT */
     unsigned index;                     /* N of /dev/input/eventN */
     struct list_head readers;           /* struct input_reader.link */
-    struct input_reader *grab;          /* the reader holding EVIOCGRAB */
+    struct input_reader *grab;          /* the reader with EVIOCGRAB active */
     struct list_head link;              /* input_devices, under input_devices_lock */
 };
 
@@ -92,7 +92,7 @@ static inline void input_sync(struct input_dev *dev)
     input_event(dev, EV_SYN, SYN_REPORT, 0);
 }
 
-/* Whether a reader holds the device (its keys then bypass the console). */
+/* Whether a reader has grabbed the device (its keys then bypass the console). */
 bool input_dev_grabbed(struct input_dev *dev);
 /* Whether the key is down on the device. */
 bool input_key_down(struct input_dev *dev, unsigned code);

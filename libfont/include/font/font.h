@@ -55,7 +55,7 @@ void font_outline_free(struct font_outline *o);
 
 /* Rasterize a glyph at px pixels per em. The bitmap belongs to the
  * font's cache: valid until font_close or until the cache evicts it
- * (after FONT_CACHE_SIZE other lookups); copy it when keeping it. */
+ * (after FONT_CACHE_SIZE other lookups); copy it when retaining it. */
 #define FONT_CACHE_SIZE 512
 const struct font_glyph *font_render(struct ofont *f, int glyph, int px);
 /* Scale font units to 26.6 pixels at px pixels per em. */

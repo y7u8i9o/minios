@@ -3,7 +3,7 @@
 
 /* Dynamic loading through /lib/ld.so (docs/design/dynlink.md). dlopen
  * maps a shared object by its soname from /lib and the package prefix,
- * or by path when the name holds a slash, together with the libraries
+ * or by path when the name contains a slash, together with the libraries
  * it needs, and returns a handle; a name that is loaded already returns
  * its object. dlopen(NULL) is the program, whose handle searches every
  * object in the global scope, as RTLD_DEFAULT does. dlsym searches the

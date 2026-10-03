@@ -76,7 +76,7 @@ static int ipv4_checks(struct net_request *r)
     ktest_assert(net_route_lookup(0x0b000001, &route) == 0 && route.next_hop == PEER,
                  "gateway route");
     ktest_assert(net_route_lookup(LOCAL, &route) == 0 && route.netif == netif_loopback(),
-                 "own address stays local");
+                 "own address remains local");
     captured = 0;
     ktest_assert(ipv4_output(payload(), 0, 0x0b000001, 17) == 0, "queue off-subnet packet");
     ktest_assert(captured == 1 && net_get_be16(frames[0] + 12) == 0x0806 &&

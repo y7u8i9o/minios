@@ -89,7 +89,7 @@ GUI programs in `user/apps/`, started from the terminal window: `clock`,
 `unicode` browses the code space with one font at a time, chosen from a
 toolbar list of the installed fonts and defaulting to Unifont. A cell is
 drawn only when `font_glyph_index` returns a non-zero glyph for its code
-point; cells without a glyph keep the window background and carry their
+point; cells without a glyph retain the window background and carry their
 hexadecimal label alone, so the grid shows the repertoire of the selected
 font instead of a row of empty boxes. No fallback font is installed on
 the grid font, because a fallback would fill those cells from another
@@ -216,7 +216,7 @@ restored at exit through `atexit`.
 The first scripting language was a custom one, `mint` (`user/mint/mint.c`),
 written when user programs had neither floating point nor `setjmp`. Both
 exist now and Lua 5.5 is built from `third_party/lua/` as `/bin/lua`;
-see [Lua](lua.md). mint stays for its test and as a small example of an
+see [Lua](lua.md). mint remains for its test and as a small example of an
 interpreter. mint has 64 bit integers and strings, arithmetic and
 comparison operators, `&&`, `||`, `!`, string concatenation with `+`,
 `if`/`elif`/`else`, `while`, `for x in range(a, b)`, `break`,

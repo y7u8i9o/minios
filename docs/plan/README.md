@@ -38,7 +38,7 @@ milestone is not started before the boot tests of the current one pass.
 | Language | C (C17, freestanding), GNU as (`.S` files) for assembly |
 | Boot | Limine bootloader, Limine boot protocol, higher half kernel at `0xffffffff80000000` |
 | Kernel type | Monolithic |
-| CPUs | SMP since M18, application processors started through the Limine MP protocol. All per CPU state kept in a `struct cpu` reached via the `GS` base |
+| CPUs | SMP since M18, application processors started through the Limine MP protocol. All per CPU state is stored in a `struct cpu` reached via the `GS` base |
 | Preemption | Timer interrupts trigger rescheduling only on return to user mode. Kernel code is not preempted |
 | Execution model | Processes with multiple threads. Threads are the scheduling unit, processes own the address space, file table and thread list |
 | Scheduler | Multilevel feedback queue (MLFQ) |
@@ -69,7 +69,7 @@ milestone is not started before the boot tests of the current one pass.
 ## 2. Repository Layout
 
 The layout planned at M0 has grown past recognition. The current tree is
-described under "Repository layout" in `docs/INTRODUCTION.md`, which is kept
+described under "Repository layout" in `docs/INTRODUCTION.md`, which is maintained
 with the code.
 
 ## 3. Testing Strategy

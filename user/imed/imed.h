@@ -1,5 +1,5 @@
 #pragma once
-/* imed: the input method daemon (I1, docs/design/ime.md).  It holds the
+/* imed: the input method daemon (I1, docs/design/ime.md).  It contains the
  * input method of the seat, gives the keys of the active text input
  * context to the selected engine and shows the candidates of the engine in
  * its candidate window.  Single threaded. */

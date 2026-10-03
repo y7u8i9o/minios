@@ -75,7 +75,7 @@ int main(void)
     waitpid(pid, &status, 0);
     CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0, "child status 0x%x", status);
 
-    /* Unlink: existing descriptors keep working, the name is gone. */
+    /* Unlink: existing descriptors continue to work, the name is gone. */
     CHECK(mq_unlink("test.req") == 0 && mq_open("test.req", 0) < 0 && errno == ENOENT, "mq_unlink");
     CHECK(shm_unlink("test.buf") == 0 && shm_open("test.buf", 0, 0) < 0, "shm_unlink");
     CHECK(mq_send(req, "x", 1) == 1 && mq_recv(req, msg, sizeof msg) == 1, "queue usable after unlink");

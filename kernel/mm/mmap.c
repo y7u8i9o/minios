@@ -12,7 +12,7 @@
 #include <klog.h>
 #include <errno.h>
 
-/* True if [start, end) overlaps no region. Caller holds vm->lock. */
+/* True if [start, end) overlaps no region. Caller has acquired vm->lock. */
 static bool range_free(struct vmspace *vm, uintptr_t start, uintptr_t end)
 {
     struct list_head *pos;
@@ -26,7 +26,7 @@ static bool range_free(struct vmspace *vm, uintptr_t start, uintptr_t end)
 
 /* Pick the address of a new region of len bytes: the hint when it is
  * free (or required), otherwise the highest gap below USER_MMAP_TOP.
- * Caller holds vm->lock. Returns 0 when there is no room. */
+ * Caller has acquired vm->lock. Returns 0 when there is no room. */
 static uintptr_t choose_range(struct vmspace *vm, uintptr_t hint, size_t len, bool fixed, size_t align)
 {
     if (fixed) {
@@ -78,7 +78,7 @@ long vma_mmap_file(struct vmspace *vm, uintptr_t hint, size_t len, unsigned flag
     n->file = file;
     n->mapping = mapping;
     n->offset = offset;
-    /* Keep the list sorted. */
+    /* Maintain the sorted order of the list. */
     struct list_head *pos = vm->vmas.next;
     while (pos != &vm->vmas && list_entry(pos, struct vma, link)->start < start)
         pos = pos->next;
@@ -126,7 +126,7 @@ void vma_queue_sync(struct list_head *jobs, struct vma *v, uintptr_t start, uint
         return;
     struct sync_job *j = kmalloc(sizeof *j);
     if (!j) {
-        klog_warn("no memory to queue a writeback, pages stay dirty in the cache");
+        klog_warn("no memory to queue a writeback, pages remain dirty in the cache");
         return;
     }
     j->mapping = v->mapping;
@@ -154,7 +154,7 @@ int vma_run_sync_jobs(struct list_head *jobs)
     return r;
 }
 
-/* Detach empty leaf tables touched by munmap. Their frames stay allocated
+/* Detach empty leaf tables touched by munmap. Their frames remain allocated
  * until the range shootdown completes, because another CPU may still have
  * a cached paging-structure entry referring to them. Skip absent upper
  * levels so a large sparse munmap does not walk every 2 MiB hole. */
@@ -207,7 +207,7 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
         }
         uintptr_t s = MAX(v->start, addr), e = MIN(v->end, end);
         if (s > v->start && e < v->end) {
-            /* A hole in the middle: split first so the tail keeps its
+            /* A hole in the middle: split first so the tail retains its
              * file references. */
             if (!vma_split_locked(vm, v, e)) {
                 r = -ENOMEM;
@@ -236,7 +236,7 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
         struct page *pg = list_first_entry(&tables, struct page, lru);
         list_del(&pg->lru);
         /* Return directly to the buddy allocator so the empty tables do
-         * not keep otherwise free huge-page blocks fragmented in a cache. */
+         * not leave otherwise free huge-page blocks fragmented in a cache. */
         pmm_free(pg, 0);
     }
     spin_unlock(&vm->lock);
@@ -252,7 +252,7 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
 }
 
 /* Rewrite the present entries of [start, end) for the protection in
- * flags. Copy on write frames stay read only. Caller holds vm->lock. */
+ * flags. Copy on write frames remain read only. Caller has acquired vm->lock. */
 static void reprotect_range_locked(struct vmspace *vm, struct vma *v, uintptr_t start, uintptr_t end,
                                    unsigned flags)
 {
@@ -309,7 +309,7 @@ int vma_mprotect(struct vmspace *vm, uintptr_t addr, size_t len, unsigned prot)
     if (prot & (VM_WRITE | VM_EXEC))
         prot |= VM_READ;
     spin_lock(&vm->lock);
-    /* The whole range must be mapped, and device regions keep their bits. */
+    /* The whole range must be mapped, and device regions retain their bits. */
     uintptr_t va = addr;
     while (va < end) {
         struct vma *v = vma_find_locked(vm, va);
@@ -417,7 +417,7 @@ long vma_map_device(struct vmspace *vm, uintptr_t hint, uintptr_t pa, size_t len
     }
     /* A driver buffer in RAM (the GPU scanout buffer) is unmapped like any
      * other frame, with a page_put per page, so take the references here;
-     * the driver's own reference keeps the block alive. */
+     * the driver's own reference prevents the block from being freed. */
     for (size_t off = 0; off < len; off += PAGE_SIZE)
         if (pmm_is_ram(pa + off))
             page_get(phys_to_page(pa + off));

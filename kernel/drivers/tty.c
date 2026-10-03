@@ -43,7 +43,7 @@ void tty_init(struct tty *t, const char *name, tty_output_fn output, bool defer_
     t->rows = 25;
 }
 
-/* Caller holds t->lock. */
+/* Caller has acquired t->lock. */
 static void ready_push(struct tty *t, char c)
 {
     ring_write(&t->ready_ring, &c, 1);
@@ -55,7 +55,7 @@ static void echo(struct tty *t, const char *s, size_t n)
         t->output(t, s, n);
 }
 
-/* Line discipline with the lock held. Returns the signal that must be
+/* Line discipline with the lock acquired. Returns the signal that must be
  * delivered to the foreground group, or zero for ordinary input. */
 static int input_locked(struct tty *t, char c)
 {
