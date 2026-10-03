@@ -1,6 +1,7 @@
 #include <tests/ktest.h>
 #include <sched/user.h>
 #include <sched/proc.h>
+#include <drivers/timer.h>
 
 /* U3: the console login. init runs login on the console. root sets its
  * password and creates the account anna with useradd and passwd, then logs
@@ -44,3 +45,30 @@ static void test_login(void)
     ktest_fail("init exited with status 0x%x", status);
 }
 KTEST_DEFINE("login_console", test_login);
+
+/* The graphical session from the console. user logs in, chooses a password
+ * and runs startgui, which runs the display server as user on the display
+ * that login gave to the account. The terminal of the session then powers
+ * off the machine. The serial output is matched by the expect file of the
+ * login_gui case. */
+static void test_login_gui(void)
+{
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                      (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start /bin/init");
+    proc_set_init(p);
+    sleep_ms(2500);
+    type_line("user\n");
+    sleep_ms(1000);
+    type_line("userpw\n");
+    type_line("userpw\n");
+    sleep_ms(1500);
+    type_line("ls -l /dev/fb0\n");
+    sleep_ms(800);
+    type_line("startgui\n");
+    sleep_ms(8000);
+    type_line("initctl poweroff\n");
+    int status = proc_reap(p);
+    ktest_fail("init exited with status 0x%x", status);
+}
+KTEST_DEFINE("login_gui", test_login_gui);

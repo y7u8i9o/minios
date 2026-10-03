@@ -21,6 +21,9 @@
 #include <minios/account.h>
 
 #define ATTEMPT_DELAY 2
+/* The display of the console. The session user owns it like the terminal,
+ * which lets startgui run the display server as that user. */
+#define CONSOLE_DISPLAY "/dev/fb0"
 
 struct account {
     char name[33];
@@ -94,11 +97,13 @@ static void start_session(const struct account *a)
     /* init lets the session user power off. Without init, as in a test,
      * the request fails and nothing changes. */
     account_session((int)a->uid);
-    /* The terminal belongs to the account for the session. */
+    /* The terminal and the display belong to the account for the
+     * session. */
     if (isatty(0)) {
         fchown(0, a->uid, a->gid);
         fchmod(0, 0620);
     }
+    chown(CONSOLE_DISPLAY, a->uid, a->gid);
     if (initgroups(a->name, a->gid) < 0 || setgid(a->gid) < 0 || setuid(a->uid) < 0) {
         perror("login: cannot change the identity");
         exit(1);
@@ -132,11 +137,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "login: must be run by root\n");
         return 1;
     }
-    /* Between sessions the terminal belongs to root again. */
+    /* Between sessions the terminal and the display belong to root
+     * again. */
     if (isatty(0)) {
         fchown(0, 0, 0);
         fchmod(0, 0620);
     }
+    chown(CONSOLE_DISPLAY, 0, 0);
     struct utsname u;
     const char *host = uname(&u) == 0 && u.nodename[0] ? u.nodename : "minios";
     char name[64];

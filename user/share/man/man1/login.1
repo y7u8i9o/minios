@@ -17,12 +17,14 @@ DESCRIPTION
     logs in with an empty password and then has to choose a new one,
     typed twice, before its session starts.
 
-    For a valid account login gives the terminal to it with mode 0620,
-    takes on its supplementary groups, its group and its uid, enters its
-    home directory and runs its shell as a login shell, with an argument
-    zero starting with "-", in an environment of HOME, USER, LOGNAME,
-    SHELL, TERM and PATH alone. When the shell ends, init starts login
-    again, which returns the terminal to root first.
+    For a valid account login gives the terminal to it with mode 0620 and
+    the display /dev/fb0 with mode 0600, which lets startgui run the
+    display server as the account. It then takes on the account's
+    supplementary groups, group and uid, enters its home directory and
+    runs its shell as a login shell, with an argument zero starting with
+    "-", in an environment of HOME, USER, LOGNAME, SHELL, TERM and PATH
+    alone. When the shell ends, init starts login again, which returns
+    the terminal and the display to root first.
 
 FILES
     /etc/passwd, /etc/shadow

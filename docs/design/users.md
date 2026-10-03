@@ -392,6 +392,17 @@ The programs needed the following additions to the kernel and the libc.
   functions, and the headers `paths.h`, `utmp.h`, `poll.h`, `utime.h`,
   `alloca.h`, `net/if.h` and `netinet/tcp.h` (`libc.md`).
 
+## The display of a console session (2026-10-03)
+
+login gives `/dev/fb0` to the account of the session, as it gives the
+terminal, and returns both to root before it asks for the next name.
+`startgui` started from a console session runs X12 as the account, which
+admits the user who runs it. Before this change X12 failed with
+"framebuffer: Permission denied" for every account but root, because
+`/dev/fb0` has mode 0600. The input devices are readable by everyone, and
+the greeter runs X12 as root. The case `login_gui` logs in as user on the
+console, runs `startgui` and finds the panel and the terminal mapped.
+
 ## The first password (2026-10-03)
 
 The image ships root and user with an empty hash. An empty hash accepts

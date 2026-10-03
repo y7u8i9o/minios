@@ -1,0 +1,5 @@
+The password of user is set\.
+crw------- +[0-9]+ user +user .*fb0
+panel: toplevel listed
+x12: toplevel [0-9]+ .*mapped
+system powering off
