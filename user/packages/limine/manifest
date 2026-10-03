@@ -1,2 +1,3 @@
 name limine
 summary The Limine boot loader and its installer
+bios-stage boot/limine/limine-bios.sys

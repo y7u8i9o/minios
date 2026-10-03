@@ -157,6 +157,9 @@ user: libc libfont libwire libaudio libcodec libgui libedit libprof $(PKG_PUB) $
 repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 	$(MAKE) -C user repo
 
+# The kernel and the files of the boot loader belong to the packages
+# kernel and limine (P6), which install them below /boot, the EFI system
+# partition of an installed disk.
 # user/ installs the whole system into build/initrd_root, and
 # tools/mkbase.py splits that tree into the packages of the base system in
 # build/base, following the definitions in user/packages/*/paths
@@ -165,7 +168,17 @@ repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 BASE     := $(BUILD)/base
 SYSROOT  := $(BUILD)/sysroot
 .PHONY: base sysimage
-base: user
+base: user kernel
+	@mkdir -p $(BUILD)/initrd_root/boot/minios $(BUILD)/initrd_root/boot/EFI/BOOT
+	@cmp -s $(KERNEL) $(BUILD)/initrd_root/boot/minios/kernel.elf || \
+	    { cp $(KERNEL) $(BUILD)/initrd_root/boot/minios/kernel.elf && chmod 644 $(BUILD)/initrd_root/boot/minios/kernel.elf; }
+ifeq ($(ARCH),x86_64)
+	@mkdir -p $(BUILD)/initrd_root/boot/limine
+	@cp -p third_party/limine/BOOTX64.EFI $(BUILD)/initrd_root/boot/EFI/BOOT/
+	@cp -p third_party/limine/limine-bios.sys $(BUILD)/initrd_root/boot/limine/
+else
+	@cp -p third_party/limine/BOOTAA64.EFI $(BUILD)/initrd_root/boot/EFI/BOOT/
+endif
 	READELF=$(READELF) python3 tools/mkbase.py --root $(BUILD)/initrd_root --defs user/packages \
 	    --abi $(BUILD)/lib/abi --out $(BASE) --version $(shell cat VERSION) $(if $(filter 1,$(strip $(CONFIG_TESTS))),,--skip tests)
 

@@ -129,6 +129,8 @@ repeat where the value is a list.
 | `mime-handler` | `type command` | a line for the handler table, the command relative to the root |
 | `icon` | path relative to the root | the icon of the launcher entries |
 | `config` | path relative to the root | a configuration file of the package, which must be a regular file of the archive (see Configuration files) |
+| `kernel` | path relative to the root | the kernel file of the package that holds the kernel (see The boot loader), once |
+| `bios-stage` | path relative to the root | the BIOS stage of the package that holds the boot loader, once |
 | `unchecked` | pattern relative to the root | files of test data that the ELF checks and the library rule leave alone, such as the deliberately broken fixtures of the loader tests. A `*` also matches `/`. Only the package `tests` uses it |
 
 `pkg build` writes the `arch` line from the machine of the ELF files in the
@@ -189,6 +191,7 @@ from it receives them through this list.
     pkg info NAME|FILE                  the manifest and the files
     pkg verify [NAME...]                check the recorded files
     pkg perms                           the modes and owners of all recorded paths
+    pkg bootconfig                      write the boot loader configuration again
     pkg build DIR [OUT]                 make an archive from a directory holding manifest and files/
 
 This section describes the operations on archive files; the commands
@@ -418,6 +421,51 @@ seconds, copies the homes of the image from `build/initrd_root`, and
 writes the root image with `mkfs -p` and the output of `pkg perms`
 together with `user/perms`. It applies the same modes to the tree, which
 gives the initrd archive of the tree its setuid bits.
+
+## The boot loader
+
+Since P6 the kernel and the boot loader are packages. `kernel` installs
+`/boot/minios/kernel.elf` and names it with the manifest line `kernel`.
+`limine` installs `/usr/bin/limine`, `/boot/EFI/BOOT/BOOTX64.EFI` or
+`BOOTAA64.EFI`, and on x86_64 `/boot/limine/limine-bios.sys`, which its
+line `bios-stage` names. The build copies these files into its
+installation tree before `mkbase.py` runs. On an installed disk `/boot`
+is the EFI system partition, a FAT file system, where UEFI firmware finds
+`EFI/BOOT` and Limine its configuration. FAT refuses `chown` and `chmod`,
+and `pkg` accepts the refusal when the file has the mode and owner that
+the archive asks for already, as the files of these two packages do.
+
+`user/pkg/boot.c` writes `/boot/limine.conf` after every transaction that
+installs, upgrades or removes the package with a `kernel` line, and on
+`pkg bootconfig`, which an administrator runs after changing
+`/etc/kernel/cmdline`. The configuration has an entry for the kernel,
+titled with the version of its package, with the command line from the
+first line of `/etc/kernel/cmdline` and the `resolution` of a `video=`
+option, and an entry for the previous kernel when one exists. Before an
+upgrade renames the new kernel into place, the installed one is renamed
+to `kernel.elf.old`. When the package with a `bios-stage` line changes on
+the running system and `/etc/kernel/bios-disk` names a disk and the GPT
+index of its BIOS boot partition, `pkg` runs `limine bios-install` for
+that disk again. An installation into another root leaves this to the
+installer.
+
+`tools/mkdisk.sh` builds an installed disk on the host from an
+installation tree such as `build/sysroot`: it writes `/etc/kernel/cmdline`
+with `root=PARTUUID`, the `/boot` entry of `/etc/fstab` and, on x86_64,
+`/etc/kernel/bios-disk`, runs `pkg bootconfig`, moves `/boot` into a FAT32
+image of the EFI system partition, writes the rest with `mkfs` and the
+output of `pkg perms`, combines both with a swap partition and, on
+x86_64, a BIOS boot partition through `mkgpt`, and runs `limine
+bios-install`.
+
+The `kernel_upgrade` case boots its CD with a disk from `mkdisk.sh`.
+`/etc/tests/kupgrade.sh` mounts the EFI system partition through
+`fsinit`, verifies the two packages on FAT, builds a kernel package of
+version 99.0 from the installed kernel and installs it, and checks the
+previous kernel and both entries of the configuration. The case file
+`boot2` then boots the disk itself, where Limine, through the BIOS stage
+on x86_64 and through UEFI on aarch64, loads the new kernel with the
+command line of the disk, which runs `/etc/tests/kupgrade2.sh`.
 
 ## Repositories
 

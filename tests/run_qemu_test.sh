@@ -46,6 +46,11 @@
 #             PEER_LOG and PEER_READY
 #   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
+#   boot2     boots the case's disk a second time, without the CD, when the
+#             first boot passed (optional). The firmware loads the boot
+#             loader of the disk. expect2 (or expect2.ARCH) holds the
+#             patterns of the second serial log, serial2.txt, which must
+#             not contain TEST FAIL either.
 KERNEL="$1"
 BUILD="$2"
 CASE="$3"
@@ -242,6 +247,7 @@ case "${ARCH:-x86_64}" in
         # The CD first: a GPT disk carries a protective MBR with a boot
         # signature, which the BIOS would otherwise try to boot.
         BOOTFLAGS="-cdrom $ISO -boot order=d"
+        BOOTFLAGS2="-boot order=c"
         ;;
     aarch64)
         EDK2_AARCH64="${EDK2_AARCH64:-$(dirname "$(command -v "$QEMU")")/../share/qemu/edk2-aarch64-code.fd}"
@@ -253,6 +259,7 @@ case "${ARCH:-x86_64}" in
         # A boot menu wait of 0 ms replaces the five second TianoCore screen.
         MACHINE="-M virt,gic-version=$GIC,acpi=off -cpu $CPU -bios $EDK2_AARCH64 -boot menu=on,splash-time=0"
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
+        BOOTFLAGS2=""
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
         # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2
         # sets up no framebuffer on virtio-gpu-pci, and ramfb is added to it.
@@ -267,24 +274,45 @@ case "${ARCH:-x86_64}" in
         ;;
     *) fail "unknown ARCH ${ARCH}" ;;
 esac
-"$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
-    -serial "file:$SERIAL" \
-    $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
-    $BOOTFLAGS >"$OUTDIR/qemu.log" 2>&1 &
-QPID=$!
-ELAPSED=0
-while kill -0 $QPID 2>/dev/null; do
-    if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-        kill $QPID 2>/dev/null
-        wait $QPID 2>/dev/null
-        stop_peer
-        echo "FAIL $NAME (timeout after ${TIMEOUT}s, log: $SERIAL)"
-        exit 1
+# run_qemu SERIAL BOOTFLAGS boots the machine once and waits for it.
+run_qemu() {
+    "$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
+        -serial "file:$1" \
+        $DISKFLAGS $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
+        $2 >"$OUTDIR/qemu.log" 2>&1 &
+    QPID=$!
+    ELAPSED=0
+    while kill -0 $QPID 2>/dev/null; do
+        if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+            kill $QPID 2>/dev/null
+            wait $QPID 2>/dev/null
+            stop_peer
+            echo "FAIL $NAME (timeout after ${TIMEOUT}s, log: $1)"
+            exit 1
+        fi
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+    done
+    wait $QPID
+}
+# check_log SERIAL EXPECT fails the case on TEST FAIL in the log or on a
+# pattern of EXPECT that it lacks.
+check_log() {
+    if grep -q "TEST FAIL" "$1"; then
+        echo "FAIL $NAME: $(grep -m1 'TEST FAIL' "$1")"
+        STATUS=1
     fi
-    sleep 1
-    ELAPSED=$((ELAPSED + 1))
-done
-wait $QPID
+    if [ -f "$2" ]; then
+        while IFS= read -r pat; do
+            [ -z "$pat" ] && continue
+            if ! grep -E -q -- "$pat" "$1"; then
+                echo "FAIL $NAME: missing /$pat/"
+                STATUS=1
+            fi
+        done < "$2"
+    fi
+}
+run_qemu "$SERIAL" "$BOOTFLAGS"
 echo "$?" > "$OUTDIR/exitcode"
 # The peer's log is complete once it has been stopped, and the checks
 # below and the post script read it afterwards.
@@ -292,22 +320,10 @@ stop_peer
 
 STATUS=0
 touch "$SERIAL"
-if grep -q "TEST FAIL" "$SERIAL"; then
-    echo "FAIL $NAME: $(grep -m1 'TEST FAIL' "$SERIAL")"
-    STATUS=1
-fi
 # expect.$ARCH replaces expect where the output names architecture state.
 EXPECT="$CASE/expect"
 [ -f "$CASE/expect.${ARCH:-x86_64}" ] && EXPECT="$CASE/expect.${ARCH:-x86_64}"
-if [ -f "$EXPECT" ]; then
-    while IFS= read -r pat; do
-        [ -z "$pat" ] && continue
-        if ! grep -E -q -- "$pat" "$SERIAL"; then
-            echo "FAIL $NAME: missing /$pat/"
-            STATUS=1
-        fi
-    done < "$EXPECT"
-fi
+check_log "$SERIAL" "$EXPECT"
 if [ -f "$CASE/reject" ]; then
     while IFS= read -r pat; do
         [ -z "$pat" ] && continue
@@ -324,6 +340,16 @@ if [ -x "$CASE/post" ]; then
         echo "FAIL $NAME: post check failed"
         STATUS=1
     fi
+fi
+if [ -f "$CASE/boot2" ] && [ "$STATUS" -eq 0 ]; then
+    SERIAL2="$OUTDIR/serial2.txt"
+    rm -f "$SERIAL2"
+    run_qemu "$SERIAL2" "$BOOTFLAGS2"
+    touch "$SERIAL2"
+    EXPECT2="$CASE/expect2"
+    [ -f "$CASE/expect2.${ARCH:-x86_64}" ] && EXPECT2="$CASE/expect2.${ARCH:-x86_64}"
+    check_log "$SERIAL2" "$EXPECT2"
+    [ "$STATUS" -ne 0 ] && echo "  second serial log: $SERIAL2"
 fi
 [ "$STATUS" -eq 0 ] && echo "PASS $NAME"
 [ "$STATUS" -ne 0 ] && echo "  serial log: $SERIAL"

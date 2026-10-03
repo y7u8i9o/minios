@@ -1,0 +1,11 @@
+#!/bin/sh
+# The disk of the kernel_upgrade case: the installed system of
+# build/sysroot on a GPT disk with an EFI system partition, written by
+# tools/mkdisk.sh. Its kernel command line runs the second part of the
+# test, which the second boot loads from the disk itself. The GUIDs are
+# fixed, since the test names the root partition.
+set -e
+DISK_UUID=c0ffee00-0000-4000-8000-0000000000c0 ESP_UUID=c0ffee00-0000-4000-8000-0000000000c2 \
+SWAP_UUID=c0ffee00-0000-4000-8000-0000000000c3 ROOT_UUID=c0ffee00-0000-4000-8000-0000000000c4 \
+    "$TOP/tools/mkdisk.sh" "$PKGHOST" "$ARCH" "$(dirname "$DISK")/sysroot" "$TOP/user/perms" "$OUT" 700 \
+    "$MKFS" "$MKFAT" "$MKGPT" "$LIMINE" "test=run prog=/bin/sh args=/etc/tests/kupgrade2.sh"

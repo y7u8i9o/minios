@@ -323,7 +323,7 @@ installer comes last.
   and the file system cases pass on x86_64, and `disk_tools`, `gpt_boot`,
   `persist`, `fs`, `fat` and `boot` on aarch64.
 
-### P6. Boot packages
+### P6. Boot packages (completed 2026-10-03)
 
 - The package `kernel` installs `/boot/minios/kernel.elf`, and the
   package `limine` installs the EFI binaries and `limine-bios.sys`.
@@ -335,6 +335,17 @@ installer comes last.
   without the test ISO, selected by the case file `boot2`.
 - The boot test `kernel_upgrade` installs a newer kernel package, boots
   it in the second boot and checks the fallback entry.
+- During the work the triggers became two declarative manifest lines,
+  `kernel` and `bios-stage`, and `pkg bootconfig` writes the
+  configuration on request. `/etc/kernel/bios-disk` names the disk and
+  the BIOS boot partition for `bios-install`, which runs only on the
+  running system. `pkg` accepts the refusal of `chown` and `chmod` by the
+  FAT file system of `/boot` when the file has the asked mode and owner
+  already. `tools/mkdisk.sh` builds an installed disk on the host from
+  `build/sysroot`, which the case uses and which the installer and the
+  development disk can build on. The case passes on x86_64, where the
+  second boot runs through the BIOS stage, and on aarch64, through UEFI,
+  together with the package, partition, disk tool and boot cases.
 
 ### P7. The installer
 

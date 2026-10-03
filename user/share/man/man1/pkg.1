@@ -14,6 +14,7 @@ SYNOPSIS
     pkg [--root dir] info name|file
     pkg [--root dir] verify [name...]
     pkg [--root dir] perms
+    pkg [--root dir] bootconfig
     pkg [--root dir] build dir [file]
 
 DESCRIPTION
@@ -74,6 +75,10 @@ COMMANDS
     perms     print every installed file and every directory the
               packages created as "path mode uid gid", the form mkfs -p
               reads
+    bootconfig
+              write /boot/limine.conf from the installed kernel package
+              and /etc/kernel/cmdline, which an upgrade of the kernel
+              package also does
     build     write a package from a directory with manifest and
               files/, with the arch and needs lines derived from the
               ELF files. The members belong to root and have the modes

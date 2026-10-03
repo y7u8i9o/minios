@@ -258,6 +258,11 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
         } else if (strcmp(key, "icon") == 0) {
             if (!relative_valid(value)) return fail(err, errlen, line, "icon must be a path relative to the root", value);
             strlcpy(m->icon, value, sizeof m->icon);
+        } else if (strcmp(key, "kernel") == 0 || strcmp(key, "bios-stage") == 0) {
+            char *field = key[0] == 'k' ? m->kernel : m->bios_stage;
+            if (field[0]) return fail(err, errlen, line, "given twice", key);
+            if (!relative_valid(value)) return fail(err, errlen, line, "must be a path relative to the root", value);
+            strlcpy(field, value, sizeof m->kernel);
         } else if (strcmp(key, "unchecked") == 0) {
             if (m->nunchecked >= PKG_MAX_CONFIG) return fail(err, errlen, line, "too many unchecked lines", NULL);
             if (!relative_valid(value)) return fail(err, errlen, line, "unchecked must be a pattern relative to the root", value);
@@ -321,4 +326,8 @@ void manifest_write(FILE *f, const struct manifest *m)
         fprintf(f, "config %s\n", m->config[i]);
     for (int i = 0; i < m->nunchecked; i++)
         fprintf(f, "unchecked %s\n", m->unchecked[i]);
+    if (m->kernel[0])
+        fprintf(f, "kernel %s\n", m->kernel);
+    if (m->bios_stage[0])
+        fprintf(f, "bios-stage %s\n", m->bios_stage);
 }

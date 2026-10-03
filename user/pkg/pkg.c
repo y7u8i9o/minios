@@ -53,6 +53,7 @@ static void usage(void)
           "       pkg info NAME|FILE\n"
           "       pkg verify [NAME...]\n"
           "       pkg perms\n"
+          "       pkg bootconfig\n"
           "       pkg build DIR [FILE]\n", stderr);
     exit(2);
 }
@@ -665,12 +666,25 @@ static int check_all(void)
 /* Gives a file or directory the mode and owner of its archive member. Only
  * root can give a file away, and without root a file loses its setuid and
  * setgid bits, which the host build of pkg relies on when it installs into
- * a tree for an image (pkg perms). */
+ * a tree for an image (pkg perms). A file system that refuses the change
+ * is accepted when the file has the mode and owner already. */
 static int apply_owner(const char *path, uint32_t mode, uint32_t uid, uint32_t gid)
 {
-    if (geteuid() == 0 && chown(path, uid, gid) < 0)
-        return -1;
-    return chmod(path, geteuid() == 0 ? mode : mode & ~06000u);
+    if (geteuid() != 0)
+        mode &= ~06000u;
+    if ((geteuid() == 0 && chown(path, uid, gid) < 0) || chmod(path, mode) < 0) {
+        /* A FAT file system, such as the EFI system partition on /boot,
+         * refuses both and reports the owner and mode of its mount
+         * options, which suffice when they are the ones asked for. */
+        struct stat st;
+        int e = errno;
+        if (e != EPERM || stat(path, &st) < 0 || (st.st_mode & 07777) != mode ||
+            (geteuid() == 0 && (st.st_uid != uid || st.st_gid != gid))) {
+            errno = e;
+            return -1;
+        }
+    }
+    return 0;
 }
 
 /* Removes the files of record r that record newer does not list, then its
@@ -887,6 +901,8 @@ static int commit(struct pending **sorted, int n)
             snprintf(dest, sizeof dest, "%s.pkgnew", f->target);
         else
             strlcpy(dest, f->target, sizeof dest);
+        if (f->p->have_old && f->p->m.kernel[0] && strcmp(f->rel, f->p->m.kernel) == 0)
+            boot_save_previous(f->target);
         if (rename(f->tmp, dest) < 0) {
             status = error(f->p->m.name, "%s: %s; the installation is incomplete", f->rel, strerror(errno));
             unlink(f->tmp);
@@ -1203,6 +1219,16 @@ static int install(int argc, char **argv, const struct index_entry **upgrades, i
             unstage();
         else
             status = commit(sorted, npend);
+        int kernel = 0, loader = 0;
+        for (int i = 0; i < npend; i++)
+            if (!pend[i].skip) {
+                kernel |= pend[i].m.kernel[0] != 0;
+                loader |= pend[i].m.bios_stage[0] != 0;
+            }
+        if (status == 0 && kernel && (r = boot_write_config()) < 0)
+            status = error(NULL, "cannot write the boot loader configuration: %s", strerror(-r));
+        if (status == 0 && loader && boot_bios_install() < 0)
+            status = -1;
         r = db_write_tables();
         if (r < 0)
             status = error(NULL, "cannot write the launcher and MIME tables: %s", strerror(-r));
@@ -1308,11 +1334,14 @@ static int cmd_remove(int argc, char **argv)
             remove_files(m, &rec, NULL);
             record_free(&rec);
         }
+        int kernel = m->kernel[0] != 0;
         r = db_delete(name);
         if (r < 0)
             status = error(name, "cannot remove the record: %s", strerror(-r));
         else
             printf("removed %s %s\n", name, m->version);
+        if (r == 0 && kernel)
+            boot_write_config();
     }
     r = db_write_tables();
     if (r < 0)
@@ -1690,7 +1719,7 @@ int main(int argc, char **argv)
     const char *cmd = argv[i++];
     /* The installation root belongs to root (docs/design/users.md). */
     int modifies = strcmp(cmd, "install") == 0 || strcmp(cmd, "update") == 0 || strcmp(cmd, "upgrade") == 0 ||
-                   strcmp(cmd, "remove") == 0;
+                   strcmp(cmd, "remove") == 0 || strcmp(cmd, "bootconfig") == 0;
     if (modifies && access(root[0] ? root : "/", W_OK) < 0 && errno == EACCES) {
         fprintf(stderr, "pkg: %s belongs to root, run sudo pkg %s ...\n", root[0] ? root : "/", cmd);
         return 1;
@@ -1716,6 +1745,8 @@ int main(int argc, char **argv)
         r = cmd_verify(argc - i, argv + i);
     else if (strcmp(cmd, "perms") == 0 && argc == i)
         r = cmd_perms();
+    else if (strcmp(cmd, "bootconfig") == 0 && argc == i)
+        r = (r = boot_write_config()) < 0 ? error(NULL, "cannot write the boot loader configuration: %s", strerror(-r)) : 0;
     else if (strcmp(cmd, "build") == 0)
         r = cmd_build(argc - i, argv + i);
     else

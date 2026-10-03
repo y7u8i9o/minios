@@ -173,7 +173,9 @@ the post script) and `fat` one FAT image per line (`<size_mb> <12|16|32>
 that order after the root disk. An executable `mkdisk` writes the
 case's disk instead, with `MKGPT`, `MKFAT` and `MKFS` in its environment.
 On x86_64 the harness boots the CD first, since a GPT disk has a
-protective MBR with a boot signature that the BIOS would try first.
+protective MBR with a boot signature that the BIOS would try first. A
+case file `boot2` boots the disk a second time without the CD, through
+its own boot loader, and checks `serial2.txt` against `expect2`.
 
 The `gpt_boot` case boots from a disk that `mkdisk` writes with an EFI
 system partition, a swap partition and the shared root image as the root

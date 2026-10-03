@@ -37,6 +37,8 @@ struct manifest {
     char icon[128];
     char config[PKG_MAX_CONFIG][128]; int nconfig;
     char unchecked[PKG_MAX_CONFIG][128]; int nunchecked;  /* fnmatch patterns, "*" matching "/" too */
+    char kernel[128];           /* the kernel file the boot loader loads (boot.c) */
+    char bios_stage[128];       /* the BIOS stage of the boot loader (boot.c) */
 };
 
 /* The machine name of the running system, as uname -m prints it (pkg.c). */
@@ -128,6 +130,13 @@ int mkdir_all(const char *path);
 void path_join(char *buf, size_t n, const char *dir, const char *rel);
 void root_path(char *buf, size_t n, const char *rel);
 int file_sha256(const char *path, uint8_t sha256[32]);
+
+/* boot.c: the boot loader configuration that pkg writes from the
+ * installed kernel package and /etc/kernel/cmdline, and the BIOS stage
+ * that it installs again when the boot loader package changes. */
+int boot_write_config(void);
+int boot_bios_install(void);
+void boot_save_previous(const char *target);
 
 /* repo.c verifies repository indexes and fetches archives over HTTP. The
  * timeout of a configuration bounds, in seconds, the connection and each

@@ -10,3 +10,4 @@ depends accounts
 depends keymaps
 depends tzdata
 depends limine
+depends kernel
