@@ -1,0 +1,3 @@
+name libprof-dev
+summary Headers and static archive of the profiler library
+depends libc-dev

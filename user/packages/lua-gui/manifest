@@ -1,0 +1,4 @@
+name lua-gui
+summary Lua modules for the graphics toolkit and MIME types
+depends lua
+depends libgui

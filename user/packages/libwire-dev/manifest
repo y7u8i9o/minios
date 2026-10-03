@@ -1,0 +1,3 @@
+name libwire-dev
+summary Headers and static archive of the desktop wire protocol library
+depends libc-dev

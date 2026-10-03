@@ -1,9 +1,9 @@
 /* Replacement for third_party/lua/src/linit.c. The upstream file states
  * that it may be replaced to add libraries. This copy opens the same
  * standard libraries under the same selection masks and registers the
- * minios modules of the interpreter in package.preload, so that
- * require "fs" and require "sys" work in every program without a search
- * on the disk. gui, audio and mime are C modules in /usr/lib/lua/5.5
+ * minios modules of the interpreter in package.preload, where
+ * require "fs" and require "sys" find them in every program without a
+ * search on the disk. gui, audio and mime are C modules in /usr/lib/lua/5.5
  * (minios.h). */
 #define linit_c
 #define LUA_LIB

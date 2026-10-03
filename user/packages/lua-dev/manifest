@@ -1,0 +1,4 @@
+name lua-dev
+summary Headers of the Lua library
+depends libc-dev
+depends lua

@@ -1,0 +1,8 @@
+name standard
+summary The standard console system
+depends minimal
+depends net
+depends textutils
+depends locales
+depends edit
+depends games

@@ -1,0 +1,4 @@
+usr/bin/pkg
+etc/pkg.conf
+etc/pkg/**
+usr/share/man/man1/pkg.1

@@ -122,10 +122,20 @@ int archive_next(struct archive *a, struct member *m, char *err, size_t errlen)
             m->size = 0;
         } else if (h->typeflag == '0' || h->typeflag == '\0' || h->typeflag == '7') {
             m->dir = 0;
+        } else if (h->typeflag == '2') {
+            size_t tl = strnlen(h->linkname, sizeof h->linkname);
+            if (!tl) {
+                snprintf(err, errlen, "link %s has no target", m->path);
+                return -1;
+            }
+            m->link = 1;
+            m->size = 0;
+            memcpy(m->target, h->linkname, tl);
+            m->target[tl] = '\0';
         } else if (h->typeflag == 'x' || h->typeflag == 'g') {
             continue;               /* pax headers carry nothing the installer needs */
         } else {
-            snprintf(err, errlen, "member %s is not a regular file or a directory", m->path);
+            snprintf(err, errlen, "member %s is not a regular file, a directory or a link", m->path);
             return -1;
         }
         if (!l)
@@ -155,8 +165,25 @@ static void put_octal(char *field, size_t n, uint64_t v)
     snprintf(field, n, "%0*llo", (int)n - 1, (unsigned long long)v);
 }
 
+static int tarw_member(struct tar_writer *w, const char *path, char type, const char *target, uint32_t mode,
+                       time_t mtime, const uint8_t *data, size_t size);
+
 int tarw_add(struct tar_writer *w, const char *path, int dir, uint32_t mode, time_t mtime, const uint8_t *data, size_t size)
 {
+    return tarw_member(w, path, dir ? '5' : '0', NULL, mode, mtime, data, size);
+}
+
+int tarw_add_link(struct tar_writer *w, const char *path, const char *target, time_t mtime)
+{
+    if (!*target || strlen(target) > 100)
+        return -1;
+    return tarw_member(w, path, '2', target, 0777, mtime, NULL, 0);
+}
+
+static int tarw_member(struct tar_writer *w, const char *path, char type, const char *target, uint32_t mode,
+                       time_t mtime, const uint8_t *data, size_t size)
+{
+    int dir = type != '0';
     struct ustar h;
     memset(&h, 0, sizeof h);
     size_t l = strlen(path);
@@ -179,7 +206,9 @@ int tarw_add(struct tar_writer *w, const char *path, int dir, uint32_t mode, tim
     put_octal(h.gid, sizeof h.gid, 0);
     put_octal(h.size, sizeof h.size, dir ? 0 : size);
     put_octal(h.mtime, sizeof h.mtime, (uint64_t)mtime);
-    h.typeflag = dir ? '5' : '0';
+    h.typeflag = type;
+    if (target)
+        memcpy(h.linkname, target, strlen(target) < sizeof h.linkname ? strlen(target) : sizeof h.linkname);
     memcpy(h.magic, "ustar", 6);
     memcpy(h.version, "00", 2);
     memcpy(h.uname, "root", 4);

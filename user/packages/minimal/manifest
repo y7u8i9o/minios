@@ -1,0 +1,11 @@
+name minimal
+summary The minimal bootable system
+depends libc
+depends init
+depends sh
+depends coreutils
+depends base-files
+depends pkg
+depends accounts
+depends keymaps
+depends tzdata

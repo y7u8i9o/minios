@@ -16,6 +16,11 @@ contains() {
 }
 URL=http://10.0.2.2:$NETPEER_PORT
 HOST=10.0.2.2:$NETPEER_PORT
+# The packages of this test. The base system of the image is installed as
+# packages as well.
+mine() {
+    pkg list | grep '^repo'
+}
 conf() {
     printf 'repo main %s\ntimeout %s\n' "$1" "${2:-20}" > /etc/pkg.conf
 }
@@ -42,7 +47,7 @@ check otherarch-update "$(pkg update 2>&1)" "main: 2 packages from $URL/otherarc
 check otherarch-search "$(pkg search | cut -d' ' -f1 | tr '\n' ' ')" "repolib repoprog "
 conf $URL/v1
 pkg update > /dev/null
-check list-empty "$(pkg list)" ""
+check list-empty "$(mine)" ""
 
 # repoprog is installed by name. It depends on repohello and needs
 # libpkgfix.so, which repolib provides, and both come from the index.
@@ -68,7 +73,7 @@ check upgrade-done "$(pkg upgrade)" "the installed packages are up to date"
 check by-version "$(pkg install repohello-1.1)" "repohello 1.1 is installed already"
 check no-version "$(pkg install repohello-2.0 2>&1; echo $?)" "pkg: repohello: no repository offers version 2.0
 1"
-check verify "$(pkg verify; echo $?)" "0"
+check verify "$(pkg verify repohello repolib repoprog; echo $?)" "0"
 
 # A local archive is checked against the signed index. The archive of the
 # repository matches, and one built here with the same name and version
@@ -91,14 +96,14 @@ conf $URL/badarchive
 check update-badarchive "$(pkg update)" "main: 4 packages from $URL/badarchive"
 check tampered "$(pkg install repohello 2>&1; echo $?)" "pkg: repohello: the SHA-256 digest of repohello-1.1.mpk differs from the index of main
 1"
-check tampered-list "$(pkg list)" ""
+check tampered-list "$(mine)" ""
 check tampered-temporary "$(ls /tmp | grep '^pkg-')" ""
 conf $URL/badsize
 check update-badsize "$(pkg update)" "main: 4 packages from $URL/badsize"
 out="$(pkg install repohello 2>&1; echo $?)"
 contains oversized "$out" "pkg: repohello: $HOST announces"
 check oversized-status "$(echo "$out" | tail -n 1)" "1"
-check oversized-list "$(pkg list)" ""
+check oversized-list "$(mine)" ""
 
 # An index changed after signing and an index signed by an unknown key
 # are refused, and the last verified index stays in place.

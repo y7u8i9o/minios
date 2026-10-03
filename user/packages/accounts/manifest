@@ -1,0 +1,4 @@
+name accounts
+summary User accounts, login and privilege commands
+config etc/doas.conf
+config etc/sudoers

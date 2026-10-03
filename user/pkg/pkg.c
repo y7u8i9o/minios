@@ -14,7 +14,9 @@
 #include <minios/local.h>
 #include <minios/sha2.h>
 
-#define MAX_PENDING 32
+/* A base system is some fifty packages, which an image builder installs
+ * with one command. */
+#define MAX_PENDING 256
 #define MAX_LIBS 64
 #define MAX_SYMBOLS 4096
 
@@ -161,10 +163,12 @@ static int open_package(struct pending *p)
 struct lib {
     char soname[PKG_NAME_MAX];
     int abi;
-    char from[PKG_NAME_MAX];    /* "the system" or a package name */
+    char from[PKG_NAME_MAX];    /* the providing package */
     uint8_t *owned;
     const uint8_t *data;
     size_t len;
+    char **defs;                /* the defined symbols, sorted, built on first use */
+    int ndefs, have_defs;
 };
 static struct lib libs[MAX_LIBS];
 static int nlibs;
@@ -184,21 +188,9 @@ static const struct member *find_member(struct pending *p, const char *rel, stru
     return NULL;
 }
 
-/* True if usr/lib/SONAME of the root is a library of the root image that
- * no package owns. /lib is a link to /usr/lib since P1 of
- * docs/plan/packaging.md, which means the library of an installed package
- * lies at the same path. */
-static int system_library(const char *soname)
-{
-    char rel[PKG_PATH_MAX], path[PKG_PATH_MAX], owner[PKG_NAME_MAX];
-    struct stat st;
-    snprintf(rel, sizeof rel, "usr/lib/%s", soname);
-    root_path(path, sizeof path, rel);
-    return stat(path, &st) == 0 && !db_owner(rel, owner, sizeof owner);
-}
-
-/* Where a soname comes from: a pending package, an installed package, or
- * the system, loaded once. NULL when nothing provides it. */
+/* Where a soname comes from: a pending package or an installed package,
+ * loaded once. NULL when nothing provides it. Every library of the system
+ * belongs to a package since P3 of docs/plan/packaging.md. */
 static struct lib *find_library(const char *soname)
 {
     for (int i = 0; i < nlibs; i++)
@@ -238,15 +230,39 @@ static struct lib *find_library(const char *soname)
         nlibs++;
         return l;
     }
-    root_path(path, sizeof path, rel);
-    if (system_library(soname) && read_file(path, &l->owned, &l->len) == 0) {
-        l->data = l->owned;
-        l->abi = system_abi(soname);
-        strlcpy(l->from, "the system", sizeof l->from);
-        nlibs++;
-        return l;
-    }
     return NULL;
+}
+
+static int add_def(const char *name, void *arg)
+{
+    struct lib *l = arg;
+    if (l->ndefs % 256 == 0) {
+        char **grown = realloc(l->defs, ((size_t)l->ndefs + 256) * sizeof *grown);
+        if (!grown)
+            return 1;
+        l->defs = grown;
+    }
+    l->defs[l->ndefs++] = (char *)name;   /* points into the library's data */
+    return 0;
+}
+
+static int cmp_def(const void *a, const void *b)
+{
+    return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+/* True if the library defines name. The symbols are sorted once per
+ * library, since a base system checks thousands of references against
+ * the same few libraries. */
+static int lib_defines(struct lib *l, const char *name)
+{
+    if (!l->have_defs) {
+        l->have_defs = 1;
+        elf_defined(l->data, l->len, add_def, l);
+        if (l->ndefs)
+            qsort(l->defs, (size_t)l->ndefs, sizeof *l->defs, cmp_def);
+    }
+    return l->ndefs && bsearch(&name, l->defs, (size_t)l->ndefs, sizeof *l->defs, cmp_def) != NULL;
 }
 
 struct symbols { char (*names)[PKG_NAME_MAX]; int n; };
@@ -313,7 +329,7 @@ static int check_elf(const char *name, const char *rel, const uint8_t *data, siz
         int defined = 0;
         for (int j = 0; j < nneeded && !defined; j++) {
             struct lib *l = find_library(needed[j]);
-            if (l && elf_defines(l->data, l->len, syms.names[i]))
+            if (l && lib_defines(l, syms.names[i]))
                 defined = 1;
         }
         if (!defined)
@@ -346,7 +362,8 @@ static int check_pending_elves(struct pending *p)
     archive_rewind(&p->ar);
     while ((r = archive_next(&p->ar, &m, err, sizeof err)) > 0) {
         const char *rel;
-        if (member_rel(&m, &rel) < 0 || !rel || m.dir || !elf_is(m.data, m.size))
+        if (member_rel(&m, &rel) < 0 || !rel || m.dir || m.link || !elf_is(m.data, m.size) ||
+            manifest_is_unchecked(&p->m, rel))
             continue;
         if (check_elf(p->m.name, rel, m.data, m.size) < 0) {
             archive_rewind(&p->ar);
@@ -361,13 +378,16 @@ static int check_pending_elves(struct pending *p)
 static int check_installed_elves(const char *name)
 {
     struct record rec;
-    if (db_read_record(name, &rec) < 0)
+    struct manifest m;
+    if (db_read_record(name, &rec) < 0 || db_read(name, &m) < 0)
         return 0;
     int r = 0;
     for (int i = 0; i < rec.nfiles && r == 0; i++) {
         char path[PKG_PATH_MAX];
         uint8_t *data;
         size_t len;
+        if (S_ISLNK(rec.files[i].mode) || manifest_is_unchecked(&m, rec.files[i].path))
+            continue;
         root_path(path, sizeof path, rec.files[i].path);
         if (read_file(path, &data, &len) < 0)
             continue;
@@ -398,7 +418,8 @@ static int installed_foreign(const char *name, const struct manifest *im)
         root_path(path, sizeof path, rec.files[i].path);
         if (read_file(path, &data, &len) < 0)
             continue;
-        if (elf_is(data, len) && strcmp(elf_arch(data, len), system_arch()) != 0)
+        if (elf_is(data, len) && !manifest_is_unchecked(im, rec.files[i].path) &&
+            strcmp(elf_arch(data, len), system_arch()) != 0)
             foreign = 1;
         free(data);
     }
@@ -428,9 +449,12 @@ static int installed_differs(struct pending *p)
         const struct owned *o = record_file(&rec, rel);
         if (o) {
             uint8_t digest[32];
-            sha256(m.data, m.size, digest);
+            const uint8_t *content = m.link ? (const uint8_t *)m.target : m.data;
+            size_t size = m.link ? strlen(m.target) : m.size;
+            uint32_t mode = m.link ? S_IFLNK | 0777 : m.mode;
+            sha256(content, size, digest);
             found = 1;
-            differs = o->size != m.size || memcmp(o->sha256, digest, sizeof digest) != 0 || o->mode != m.mode ||
+            differs = o->size != size || memcmp(o->sha256, digest, sizeof digest) != 0 || o->mode != mode ||
                       o->uid != m.uid || o->gid != m.gid;
         }
         if (!found)
@@ -444,6 +468,45 @@ static int installed_differs(struct pending *p)
 }
 
 /* ---- the checks of install ---- */
+
+/* The file paths of all pending packages, sorted to find a path that two
+ * of them contain. */
+struct pending_path { char *path; int pkg; };
+static struct pending_path *ppaths;
+static int nppaths, cap_ppaths;
+
+static int add_pending_path(const char *path, int pkg)
+{
+    if (nppaths == cap_ppaths) {
+        int cap = cap_ppaths ? cap_ppaths * 2 : 1024;
+        struct pending_path *grown = realloc(ppaths, (size_t)cap * sizeof *ppaths);
+        if (!grown)
+            return -1;
+        ppaths = grown;
+        cap_ppaths = cap;
+    }
+    ppaths[nppaths].path = strdup(path);
+    ppaths[nppaths].pkg = pkg;
+    return ppaths[nppaths++].path ? 0 : -1;
+}
+
+static int cmp_ppath(const void *a, const void *b)
+{
+    const struct pending_path *x = a, *y = b;
+    int c = strcmp(x->path, y->path);
+    return c ? c : x->pkg - y->pkg;
+}
+
+static int check_pending_paths(void)
+{
+    if (nppaths)
+        qsort(ppaths, (size_t)nppaths, sizeof *ppaths, cmp_ppath);
+    for (int i = 1; i < nppaths; i++)
+        if (strcmp(ppaths[i].path, ppaths[i - 1].path) == 0)
+            return error(pend[ppaths[i].pkg].m.name, "%s is in %s as well", ppaths[i].path,
+                         pend[ppaths[i - 1].pkg].m.name);
+    return 0;
+}
 
 static int check_all(void)
 {
@@ -520,8 +583,7 @@ static int check_all(void)
             }
         }
     }
-    /* Libraries: a soname provided by a package lies in its usr/lib, may
-     * not be a library of the root image that no package provides, and
+    /* Libraries: a soname provided by a package lies in its usr/lib and
      * may not be provided by two packages. */
     for (int i = 0; i < npend; i++) {
         struct pending *p = &pend[i];
@@ -530,8 +592,6 @@ static int check_all(void)
         for (int j = 0; j < p->m.nprovides; j++) {
             char rel[PKG_PATH_MAX];
             struct member m;
-            if (system_library(p->m.provides[j].soname))
-                return error(p->m.name, "provides %s, which is a system library", p->m.provides[j].soname);
             snprintf(rel, sizeof rel, "usr/lib/%s", p->m.provides[j].soname);
             if (!find_member(p, rel, &m))
                 return error(p->m.name, "provides %s but does not contain usr/lib/%s", p->m.provides[j].soname, p->m.provides[j].soname);
@@ -592,15 +652,12 @@ static int check_all(void)
             } else if (lstat(full, &st) == 0) {
                 return error(p->m.name, "%s exists in the filesystem and belongs to no package", rel);
             }
-            for (int j = 0; j < i; j++) {
-                struct member other;
-                if (!pend[j].skip && find_member(&pend[j], rel, &other))
-                    return error(p->m.name, "%s is in %s as well", rel, pend[j].m.name);
-            }
+            if (add_pending_path(rel, i) < 0)
+                return error(p->m.name, "out of memory");
         }
         archive_rewind(&p->ar);
     }
-    return 0;
+    return check_pending_paths();
 }
 
 /* ---- installation ---- */
@@ -616,14 +673,14 @@ static int apply_owner(const char *path, uint32_t mode, uint32_t uid, uint32_t g
     return chmod(path, geteuid() == 0 ? mode : mode & ~06000u);
 }
 
-/* Removes the files of record r that keep does not list, then its
+/* Removes the files of record r that record newer does not list, then its
  * directories that are empty, deepest first. A configuration file of m
  * that was changed after its installation is saved as PATH.pkgsave. */
-static void remove_files(const struct manifest *m, const struct record *r, const struct record *keep)
+static void remove_files(const struct manifest *m, const struct record *r, const struct record *newer)
 {
     char path[PKG_PATH_MAX];
     for (int i = 0; i < r->nfiles; i++) {
-        if (keep && record_file(keep, r->files[i].path))
+        if (newer && record_file(newer, r->files[i].path))
             continue;
         root_path(path, sizeof path, r->files[i].path);
         uint8_t digest[32];
@@ -639,7 +696,7 @@ static void remove_files(const struct manifest *m, const struct record *r, const
         unlink(path);
     }
     for (int i = r->ndirs - 1; i >= 0; i--) {
-        if (keep && record_has_dir(keep, r->dirs[i].path))
+        if (newer && record_has_dir(newer, r->dirs[i].path))
             continue;
         root_path(path, sizeof path, r->dirs[i].path);
         rmdir(path);
@@ -747,6 +804,28 @@ static int stage(struct pending *p)
         }
         if (m.dir)
             continue;
+        if (m.link) {
+            struct staged *f = stage_new();
+            if (!f) {
+                archive_rewind(&p->ar);
+                return error(p->m.name, "out of memory");
+            }
+            f->p = p;
+            f->action = STAGE_REPLACE;
+            strlcpy(f->rel, rel, sizeof f->rel);
+            root_path(f->target, sizeof f->target, rel);
+            snprintf(f->tmp, sizeof f->tmp, "%s.pkgtmp", f->target);
+            if (symlink(m.target, f->tmp) < 0) {
+                int e = errno;
+                nstaged--;
+                archive_rewind(&p->ar);
+                return error(p->m.name, "%s: %s", rel, strerror(e));
+            }
+            uint8_t digest[32];
+            sha256(m.target, strlen(m.target), digest);
+            record_add_file(&p->rec, rel, S_IFLNK | 0777, m.uid, m.gid, strlen(m.target), digest);
+            continue;
+        }
         struct staged *f = stage_new();
         if (!f) {
             archive_rewind(&p->ar);
@@ -955,7 +1034,7 @@ static int resolve_dependencies(const struct index *ix)
         }
         for (int j = 0; j < m->nneeds; j++) {
             const struct pkg_lib *n = &m->needs[j];
-            int provided = system_library(n->soname);
+            int provided = 0;
             for (int k = 0; k < nwanted && !provided; k++)
                 if (manifest_provides(&wanted[k]->m, n->soname))
                     provided = 1;
@@ -1300,6 +1379,22 @@ static int verify_one(const char *name)
         struct stat st;
         uint8_t digest[32];
         root_path(path, sizeof path, o->path);
+        if (S_ISLNK(o->mode)) {
+            char target[PKG_PATH_MAX];
+            ssize_t n = readlink(path, target, sizeof target - 1);
+            if (n < 0) {
+                printf("%s: %s: missing\n", name, o->path);
+                bad = 1;
+                continue;
+            }
+            target[n] = '\0';
+            sha256(target, (size_t)n, digest);
+            if ((size_t)n != o->size || memcmp(digest, o->sha256, sizeof digest) != 0) {
+                printf("%s: %s: changed\n", name, o->path);
+                bad = 1;
+            }
+            continue;
+        }
         if (lstat(path, &st) < 0 || file_sha256(path, digest) < 0) {
             printf("%s: %s: missing\n", name, o->path);
             bad = 1;
@@ -1360,7 +1455,8 @@ static int cmd_perms(void)
             printf("/%s %04o %u %u\n", rec.dirs[j].path, (unsigned)rec.dirs[j].mode, (unsigned)rec.dirs[j].uid,
                    (unsigned)rec.dirs[j].gid);
         for (int j = 0; j < rec.nfiles; j++)
-            printf("/%s %04o %u %u\n", rec.files[j].path, (unsigned)rec.files[j].mode, (unsigned)rec.files[j].uid,
+            if (!S_ISLNK(rec.files[j].mode))
+                printf("/%s %04o %u %u\n", rec.files[j].path, (unsigned)rec.files[j].mode, (unsigned)rec.files[j].uid,
                    (unsigned)rec.files[j].gid);
         record_free(&rec);
     }
@@ -1469,8 +1565,12 @@ static int build_dir(struct build *b, const char *rel)
         if (lstat(full, &st) < 0) {
             r = error(b->m->name, "%s: %s", full, strerror(errno));
         } else if (S_ISLNK(st.st_mode)) {
-            /* The package format has no link member. */
-            r = error(b->m->name, "%s: symbolic links cannot be packaged", full);
+            char target[PKG_PATH_MAX];
+            ssize_t n = readlink(full, target, sizeof target - 1);
+            if (n < 0)
+                r = error(b->m->name, "%s: %s", full, strerror(errno));
+            else if ((target[n] = '\0', tarw_add_link(&b->w, member, target, st.st_mtime) < 0))
+                r = error(b->m->name, "%s: the target is longer than 100 bytes", full);
         } else if (S_ISDIR(st.st_mode)) {
             if (tarw_add(&b->w, member, 1, st.st_mode & 07777, st.st_mtime, NULL, 0) < 0)
                 r = error(b->m->name, "%s: cannot add", member);
@@ -1482,9 +1582,10 @@ static int build_dir(struct build *b, const char *rel)
             if (read_file(full, &data, &len) < 0) {
                 r = error(b->m->name, "%s: %s", full, strerror(errno));
             } else {
-                if (elf_is(data, len))
+                int elf = elf_is(data, len) && !manifest_is_unchecked(b->m, sub);
+                if (elf)
                     r = note_arch(b, data, len, sub);
-                if (r == 0 && elf_is(data, len))
+                if (r == 0 && elf)
                     r = add_needed(b, data, len, sub);
                 if (r == 0 && tarw_add(&b->w, member, 0, st.st_mode & 07777, st.st_mtime, data, len) < 0)
                     r = error(b->m->name, "%s: cannot add", member);

@@ -81,8 +81,8 @@ COMMANDS
 
 OPTIONS
     --root dir       install into the tree dir instead of the root
-                     filesystem, and read the records, etc/pkg.conf,
-                     etc/pkg/keys and lib/abi below it
+                     filesystem, and read the records, etc/pkg.conf
+                     and etc/pkg/keys below it
     --arch machine   accept packages for machine instead of the machine
                      of the running system, for a tree prepared on
                      another system
@@ -130,7 +130,6 @@ FILES
     /var/lib/pkg/launcher           launcher entries of the packages
     /var/lib/pkg/mime.types         MIME types of the packages
     /var/lib/pkg/mime.apps          MIME handlers of the packages
-    /lib/abi                        ABI numbers of the system libraries
 
 EXAMPLES
     pkg install /usr/share/packages/calc-*.mpk

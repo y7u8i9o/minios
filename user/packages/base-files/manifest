@@ -1,0 +1,7 @@
+name base-files
+summary Default configuration, skeleton files and the directory layout
+config etc/fstab
+config etc/profile
+config etc/motd
+config etc/hosts
+config etc/network

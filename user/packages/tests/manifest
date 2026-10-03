@@ -1,0 +1,6 @@
+name tests
+summary Programs and fixtures for the boot tests
+unchecked usr/bin/ld?*
+unchecked usr/bin/dltest
+unchecked usr/lib/libld*
+unchecked etc/tests/*

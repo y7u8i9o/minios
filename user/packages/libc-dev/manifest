@@ -1,0 +1,3 @@
+name libc-dev
+summary C library headers, startup files and static archives
+depends libc

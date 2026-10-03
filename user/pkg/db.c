@@ -448,7 +448,8 @@ static void load_owners(void)
         qsort(owners, (size_t)nowners, sizeof *owners, cmp_owner);
 }
 
-/* The package owning a root relative path; 1 with owner set, else 0. */
+/* Returns 1 and sets owner when a package owns the root relative path,
+ * and 0 otherwise. */
 int db_owner(const char *relpath, char *owner, size_t n)
 {
     if (nowners < 0)
@@ -512,30 +513,4 @@ int db_write_tables(void)
     if (r == 0)
         r = write_table("mime.apps", "# type program, written by pkg", emit_handlers);
     return r;
-}
-
-/* The ABI number of a system library from /usr/lib/abi, or -1. The libraries
- * of the root image that no package provides have their numbers there
- * until the base system is packaged (docs/plan/packaging.md, P3). */
-int system_abi(const char *soname)
-{
-    uint8_t *data;
-    size_t len;
-    char path[PKG_PATH_MAX];
-    root_path(path, sizeof path, "usr/lib/abi");
-    if (read_file(path, &data, &len) < 0)
-        return -1;
-    int abi = -1;
-    char *line = strtok((char *)data, "\n");
-    while (line && abi < 0) {
-        char *sp = strchr(line, ' ');
-        if (sp) {
-            *sp = '\0';
-            if (strcmp(line, soname) == 0)
-                abi = atoi(sp + 1);
-        }
-        line = strtok(NULL, "\n");
-    }
-    free(data);
-    return abi;
 }

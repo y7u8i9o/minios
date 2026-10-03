@@ -1,0 +1,3 @@
+name tcc
+summary The Tiny C Compiler
+depends libc-dev

@@ -35,14 +35,14 @@ $(APPBIN)/luasynth: packages/luasynth/launcher.c $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/luasynth.elf $@
 
 define APP_PACKAGE
-$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(ROOT)/usr/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
+$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(BUILD)/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
 	@rm -rf $(OUT)/packages/$(1)
 	@mkdir -p $(OUT)/packages/$(1)/files/usr/bin $(PKG_OUT)
 	@cat packages/$(1)/manifest > $(OUT)/packages/$(1)/manifest
 	@printf 'version $(call pkg_version,$(1))\n' >> $(OUT)/packages/$(1)/manifest
 	@if [ -d packages/$(1)/files ]; then cp -Rp packages/$(1)/files/. $(OUT)/packages/$(1)/files/; fi
 	@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/usr/bin/$(1)
-	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(ROOT)
+	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(BUILD)/lib/abi
 endef
 $(foreach a,$(PKG_NAMES),$(eval $(call APP_PACKAGE,$(a))))
 

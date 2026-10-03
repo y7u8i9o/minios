@@ -1,0 +1,3 @@
+name x12
+summary The X12 display server
+depends libwire

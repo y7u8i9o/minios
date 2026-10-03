@@ -1,6 +1,11 @@
 # Exercise the actual application archives, not copies of base binaries.
 set -e
 names='calc code gedit hexview luasynth mandel paint player playtone pong sequencer synth unicode view'
+# The installed application packages. The base system of the image is
+# installed as packages as well.
+apps() {
+    pkg list | grep -E "^($(echo $names | tr ' ' '|')) " || true
+}
 for name in $names; do
     test ! -f /bin/$name
 done
@@ -9,9 +14,9 @@ test ! -f /usr/share/man/man1/code.1
 test ! -f /etc/skel/desktop/Code.app
 test ! -f /etc/skel/desktop/Pong.app
 pkg check /usr/share/packages/*.mpk
-test "$(pkg list)" = ''
+test "$(apps)" = ''
 pkg install /usr/share/packages/*.mpk
-count=$(pkg list | wc -l | tr -d ' ')
+count=$(apps | wc -l | tr -d ' ')
 test "$count" = 14 || { echo "FAIL package count: [$count]"; exit 1; }
 pkg verify
 echo 'pkg-apps: records verified'
@@ -41,7 +46,7 @@ lua -e 'assert(require("mime").handler("text/x-lua")=="/usr/bin/gedit")'
 pkg install /usr/share/packages/code-*.mpk
 pkg verify code
 pkg remove $names
-test "$(pkg list)" = ''
+test "$(apps)" = ''
 for name in $names; do
     test ! -f /usr/bin/$name
 done

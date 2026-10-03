@@ -1,0 +1,6 @@
+usr/lib/libcodec.so
+usr/lib/codecs/png.so
+usr/lib/codecs/svg.so
+usr/lib/codecs/bmp.so
+usr/bin/codecs
+usr/share/man/man1/codecs.1

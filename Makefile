@@ -152,18 +152,33 @@ user: libc libfont libwire libaudio libcodec libgui libedit libprof $(PKG_PUB) $
 repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 	$(MAKE) -C user repo
 
-# The initrd is a ustar archive of build/initrd_root, populated by user/.
-initrd: user
-	cd $(BUILD)/initrd_root && tar --format ustar --owner=0 --group=0 --exclude .DS_Store --exclude ./usr/share/sounds -cf $(INITRD) .
+# user/ installs the whole system into build/initrd_root, and
+# tools/mkbase.py splits that tree into the packages of the base system in
+# build/base, following the definitions in user/packages/*/paths
+# (docs/plan/packaging.md, P3). A package whose files did not change is
+# not packed again.
+BASE     := $(BUILD)/base
+SYSROOT  := $(BUILD)/sysroot
+.PHONY: base sysimage
+base: user
+	READELF=$(READELF) python3 tools/mkbase.py --root $(BUILD)/initrd_root --defs user/packages \
+	    --abi $(BUILD)/lib/abi --out $(BASE) --version $(shell cat VERSION) $(if $(filter 1,$(strip $(CONFIG_TESTS))),,--skip tests)
 
-# The disk image is attached as a virtio-blk device and holds the root
-# filesystem, an mfs image built from build/initrd_root (M13). It is
-# rebuilt whenever a user program changes, which discards files written
-# during earlier runs. Files keep their permission bits and belong to root,
-# and the manifest user/perms sets the exceptions (docs/design/users.md).
-$(DISK): $(MKFS) user user/perms
-	@mkdir -p $(dir $@)
-	$(MKFS) -p user/perms $@ $(DISK_MB) $(BUILD)/initrd_root
+# The root image and the initrd hold the base system as the host build of
+# pkg installs it into build/sysroot, every package of build/base except
+# the metapackage apps, whose applications are installed by the tests and
+# the user. The disk is attached as a virtio-blk device and holds the
+# root filesystem, an mfs image (M13). It is rebuilt with every build,
+# which discards files written during earlier runs. Owners and setuid bits
+# come from pkg perms and user/perms (docs/design/users.md).
+sysimage: base $(PKGHOST) $(MKFS) user/perms
+	@mkdir -p $(dir $(DISK))
+	tools/mkimage.sh $(PKGHOST) $(ARCH) $(BUILD)/initrd_root $(SYSROOT) $(DISK) $(DISK_MB) $(MKFS) $(INITRD) \
+	    $$(ls $(BASE)/*.mpk | grep -v '/apps-[0-9.]*\.mpk$$')
+
+initrd: sysimage
+
+$(DISK): sysimage
 
 # Swap lives on a second virtio-blk device (M14), zero filled.
 $(SWAP):

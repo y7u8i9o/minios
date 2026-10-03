@@ -36,6 +36,7 @@ struct manifest {
     struct pkg_handler handlers[PKG_MAX_MIME]; int nhandlers;
     char icon[128];
     char config[PKG_MAX_CONFIG][128]; int nconfig;
+    char unchecked[PKG_MAX_CONFIG][128]; int nunchecked;  /* fnmatch patterns, "*" matching "/" too */
 };
 
 /* The machine name of the running system, as uname -m prints it (pkg.c). */
@@ -51,6 +52,7 @@ int version_cmp(const char *a, const char *b);
 int dep_satisfied(const struct pkg_dep *d, const char *version);
 const struct pkg_lib *manifest_provides(const struct manifest *m, const char *soname);
 int manifest_is_config(const struct manifest *m, const char *rel);
+int manifest_is_unchecked(const struct manifest *m, const char *rel);
 
 /* archive.c: a gzip compressed ustar archive held in memory. */
 struct member {
@@ -58,6 +60,8 @@ struct member {
     int dir;
     uint32_t mode;              /* without setuid and setgid unless uid is 0 */
     uint32_t uid, gid;
+    int link;                   /* a symbolic link to target */
+    char target[101];
     time_t mtime;
     size_t size;
     const uint8_t *data;
@@ -69,6 +73,7 @@ void archive_rewind(struct archive *a);
 void archive_free(struct archive *a);
 struct tar_writer { uint8_t *data; size_t len, cap; };
 int tarw_add(struct tar_writer *w, const char *path, int dir, uint32_t mode, time_t mtime, const uint8_t *data, size_t size);
+int tarw_add_link(struct tar_writer *w, const char *path, const char *target, time_t mtime);
 int tarw_finish(struct tar_writer *w, const char *outpath);
 
 /* elf.c: what the loader will ask of an ELF file. */
@@ -77,13 +82,16 @@ int elf_is(const uint8_t *data, size_t len);
 int elf_needed(const uint8_t *data, size_t len, char (*names)[PKG_NAME_MAX], int max);
 int elf_undefined(const uint8_t *data, size_t len, elf_symbol_fn fn, void *arg);
 int elf_defines(const uint8_t *data, size_t len, const char *name);
+int elf_defined(const uint8_t *data, size_t len, elf_symbol_fn fn, void *arg);
 /* The machine name of an ELF file in the form of uname -m: x86_64,
  * aarch64, or unknown. */
 const char *elf_arch(const uint8_t *data, size_t len);
 
 /* db.c: the records under <root>/var/lib/pkg and the tables the desktop
  * reads. A file or directory of a record carries the mode and owner the
- * archive gave it, and a file its size and SHA-256 digest. */
+ * archive gave it, and a file its size and SHA-256 digest. A symbolic link
+ * is a file whose mode has the type bits S_IFLNK, whose size is the length
+ * of its target and whose digest is that of the target. */
 struct owned {
     char path[PKG_PATH_MAX];
     uint32_t mode, uid, gid;
@@ -113,7 +121,6 @@ int record_add_dir(struct record *r, const char *path, uint32_t mode, uint32_t u
 int record_has_dir(const struct record *r, const char *path);
 const struct owned *record_file(const struct record *r, const char *path);
 void record_free(struct record *r);
-int system_abi(const char *soname);
 int read_file(const char *path, uint8_t **data, size_t *len);
 int write_file(const char *path, const uint8_t *data, size_t len);
 int write_file_mode(const char *path, const uint8_t *data, size_t len, uint32_t mode);

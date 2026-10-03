@@ -1,23 +1,23 @@
 #!/bin/sh
 # Build a minios package on the host from a directory holding manifest and
 # files/ (docs/design/packages.md).
-# usage: mkpkg.sh DIR OUT.mpk ROOT
-# ROOT is the root tree of the build (build/initrd_root), whose usr/lib/abi gives
-# the ABI numbers of the system libraries. The needs lines of the manifest
+# usage: mkpkg.sh DIR OUT.mpk ABI
+# ABI is the ABI table of the build (build/lib/abi), which gives the ABI
+# numbers of the libraries of the system. The needs lines of the manifest
 # are derived from the DT_NEEDED entries of every ELF file with readelf
 # ($READELF, default x86_64-elf-readelf). As with pkg build, a needs line
 # of the source manifest supplies the number of a library that neither the
-# package nor usr/lib/abi provides. The arch line is derived from the ELF
+# package nor the ABI table provides. The arch line is derived from the ELF
 # files as well. The archive is of format 2, with paths relative to the
 # installation root, and its members belong to root with the modes of the
 # tree.
 set -e
-DIR="$1"; OUT="$2"; ROOT="$3"
+DIR="$1"; OUT="$2"; ABI="$3"
 READELF="${READELF:-x86_64-elf-readelf}"
-[ -n "$DIR" ] && [ -n "$OUT" ] && [ -n "$ROOT" ] || { echo "usage: mkpkg.sh DIR OUT.mpk ROOT" >&2; exit 2; }
+[ -n "$DIR" ] && [ -n "$OUT" ] && [ -n "$ABI" ] || { echo "usage: mkpkg.sh DIR OUT.mpk ABI" >&2; exit 2; }
 [ -f "$DIR/manifest" ] || { echo "mkpkg.sh: $DIR/manifest: no such file" >&2; exit 1; }
 [ -d "$DIR/files" ] || { echo "mkpkg.sh: $DIR/files: no such directory" >&2; exit 1; }
-[ -f "$ROOT/usr/lib/abi" ] || { echo "mkpkg.sh: $ROOT/usr/lib/abi: no such file" >&2; exit 1; }
+[ -f "$ABI" ] || { echo "mkpkg.sh: $ABI: no such file" >&2; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 grep -q '^format ' "$DIR/manifest" || echo "format 2" > "$TMP/manifest"
@@ -26,11 +26,23 @@ grep -v '^needs ' "$DIR/manifest" >> "$TMP/manifest"
 sed -n 's/^config \(.*\)$/\1/p' "$DIR/manifest" | while read -r c; do
     [ -f "$DIR/files/$c" ] || { echo "mkpkg.sh: the configuration file $c is not in $DIR/files" >&2; exit 1; }
 done
+# unchecked lines name files of test data that the ELF rules leave alone,
+# as patterns relative to the root.
+sed -n 's/^unchecked \(.*\)$/\1/p' "$DIR/manifest" > "$TMP/unchecked"
+checked() {
+    rel="${1#"$DIR/files/"}"
+    while read -r pat; do
+        # shellcheck disable=SC2254
+        case "$rel" in $pat) return 1 ;; esac
+    done < "$TMP/unchecked"
+    return 0
+}
 # The arch line is the machine of the ELF files, from e_machine at offset
 # 18 (62 x86_64, 183 aarch64). All ELF files must agree with each other and
 # with an arch line of the source manifest.
 find "$DIR/files" -type f | LC_ALL=C sort | while read -r f; do
     head -c 4 "$f" | od -An -c | grep -q 'E   L   F' || continue
+    checked "$f" || continue
     # od of macOS ends its output with blank lines.
     printf '%s\n' "$(od -An -tu2 -j18 -N2 "$f" | tr -d ' \n')"
 done | LC_ALL=C sort -u > "$TMP/machines"
@@ -52,12 +64,13 @@ fi
 # The sonames every ELF file needs, once each.
 find "$DIR/files" -type f | LC_ALL=C sort | while read -r f; do
     head -c 4 "$f" | od -An -c | grep -q 'E   L   F' || continue
+    checked "$f" || continue
     "$READELF" -d "$f" 2>/dev/null | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'
 done | LC_ALL=C sort -u > "$TMP/needed"
 while read -r so; do
     [ -n "$so" ] || continue
     abi="$(sed -n "s/^provides $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
-    [ -n "$abi" ] || abi="$(sed -n "s/^$so \([0-9]*\)$/\1/p" "$ROOT/usr/lib/abi" | head -1)"
+    [ -n "$abi" ] || abi="$(sed -n "s/^$so \([0-9]*\)$/\1/p" "$ABI" | head -1)"
     [ -n "$abi" ] || abi="$(sed -n "s/^needs $so \([0-9]*\)$/\1/p" "$DIR/manifest" | head -1)"
     [ -n "$abi" ] || { echo "mkpkg.sh: the ABI number of $so is unknown" >&2; exit 1; }
     echo "needs $so $abi" >> "$TMP/manifest"

@@ -1,0 +1,4 @@
+name lua-audio
+summary Lua module for audio
+depends lua
+depends libaudio

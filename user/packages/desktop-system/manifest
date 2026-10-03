@@ -1,0 +1,20 @@
+name desktop-system
+summary The standard system with the graphical desktop
+depends standard
+depends libwire
+depends libfont
+depends libcodec
+depends codecs-audio
+depends libaudio
+depends audiod
+depends libgui
+depends x12
+depends desktop
+depends term
+depends files
+depends clock
+depends imed
+depends fonts
+depends theme
+depends sounds
+depends diagnostics

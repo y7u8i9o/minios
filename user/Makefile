@@ -17,16 +17,17 @@ INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
 
 # Every directory holding a main program gives one binary named after it,
 # and each file of tests/*.c becomes one binary as well.
-PROGS  := init sh hello edit mint term x12 panel desktop audiod settings files pkg imed greeter
 TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # A build with CONFIG_TESTS=0, which the release pipeline uses, installs no
-# test programs, test fixtures or test data (docs/design/build.md).
+# test programs, test fixtures or test data (docs/design/build.md). hello
+# exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
 BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo)
-LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so abi $(addsuffix .so,$(SHARED)))
+LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so $(addsuffix .so,$(SHARED))) $(BUILD)/lib/abi
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
 
@@ -74,7 +75,8 @@ $(ROOT)/etc/%: etc/%
 
 # /bin and /lib are links to /usr/bin and /usr/lib, the merged /usr of
 # docs/plan/packaging.md (P1), which a build tree of an earlier layout has
-# as directories, and its /etc/fonts moved to /usr/share/fonts. Two
+# as directories, and its /etc/fonts moved to /usr/share/fonts. The ABI
+# table moved out of the tree to build/lib/abi with P3. Two
 # symbolic links that the symlink test resolves on the root image and
 # under /initrd, which mkfs and the initrd reader store as links. One is
 # relative and leads to the tar fixture beside it, and the other is
@@ -87,7 +89,7 @@ links: $(ETC) $(BINS) $(LIBS)
 	@for d in bin lib; do \
 	    if [ -d $(ROOT)/$$d ] && [ ! -L $(ROOT)/$$d ]; then rm -rf $(ROOT)/$$d; fi; \
 	    ln -sfn usr/$$d $(ROOT)/$$d; done
-	@rm -rf $(ROOT)/etc/fonts
+	@rm -rf $(ROOT)/etc/fonts $(ROOT)/usr/lib/abi
 	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn fixture.tar $(ROOT)/etc/tests/link-fixture.tar; fi
 	@if [ -n "$(WITH_TESTS)" ]; then ln -sfn /etc/motd $(ROOT)/etc/tests/link-motd; fi
 	@for f in passwd group shadow; do ln -sfn /usr/local/etc/$$f $(ROOT)/etc/$$f; done
@@ -196,10 +198,13 @@ $(BUILD)/lib/liblua.abi: Makefile
 	@mkdir -p $(dir $@)
 	@echo $(LUA_ABI) > $@
 
-# The ABI table that the package installer reads holds one "soname number"
-# line per shared library, taken from the ABI variables of the library
-# Makefiles.
-$(ROOT)/usr/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
+# The ABI table holds one "soname number" line per shared library, taken
+# from the ABI variables of the library Makefiles. tools/mkbase.py writes
+# the provides lines of the library packages from it, and tools/mkpkg.sh
+# the needs lines of every package. It stays on the host, since the
+# installer takes the numbers from the provides lines of installed
+# packages (docs/design/packages.md).
+$(BUILD)/lib/abi: $(addprefix $(BUILD)/lib/,$(addsuffix .abi,$(SHARED)))
 	@mkdir -p $(dir $@)
 	@rm -f $@
 	@for l in $(SHARED); do echo "$$l.so $$(cat $(BUILD)/lib/$$l.abi)" >> $@; done
@@ -232,8 +237,8 @@ $(ROOT)/usr/bin/luac: $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(SOS) $(LI
 	$(CC) $(UCFLAGS) -o $(OUT)/luac.elf $(ULDFLAGS) $(CRT0) $(LUA_OBJS) $(LUA_CORE_OBJS) $(OUT)/lua/luac.o $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/luac.elf $@
 
-# The Lua objects depend on this Makefile, which holds LUA_CPP, so that a
-# change of the paths or of LUA_USE_DLOPEN rebuilds them.
+# The Lua objects depend on this Makefile, which holds LUA_CPP, and a
+# change of the paths or of LUA_USE_DLOPEN therefore rebuilds them.
 $(LUA_CORE_OBJS) $(LUA_OBJS) $(OUT)/lua/lua.o $(OUT)/lua/luac.o: Makefile
 $(patsubst lua/%.c,$(OUT)/lua/minios_%.o,$(foreach m,$(LUA_MODULES),$(LUA_MODSRCS_$(m)))): Makefile
 

@@ -1,0 +1,6 @@
+usr/bin/sysmon
+usr/bin/logview
+usr/bin/evtest
+usr/bin/wireview
+usr/bin/screenshot
+usr/share/man/man1/screenshot.1

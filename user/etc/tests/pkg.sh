@@ -2,20 +2,24 @@
 # prints a line starting with FAIL and the value received. Packages install
 # into the root image, and the records are in /var/lib/pkg. The fixtures
 # under /etc/tests/pkgfix are a library in two builds and a program calling
-# it; pkghello-1.0.mpk was built on the host. The host build of pkg has its
+# it, and pkghello-1.0.mpk was built on the host. The host build of pkg has its
 # own test, user/pkg/tests/host.sh.
 check() {
     test "$2" = "$3" || echo "FAIL $1: [$2]"
 }
 PKG=${PKG:-pkg}
 FIX=${FIX:-/etc/tests/pkgfix}
-ABI=${ABI:-/lib/abi}
 HELLO=${HELLO:-/etc/tests/pkghello-1.0.mpk}
 DB=/var/lib/pkg
+# The packages of this test, whose names begin with pkg and a letter. The
+# base system of the image is installed as packages as well.
+mine() {
+    $PKG list | grep '^pkg[a-z]'
+}
 WORK=${WORK:-/pt}
 mkdir -p $WORK
 cd $WORK
-check list-empty "$($PKG list)" ""
+check list-empty "$(mine)" ""
 
 # The library package, then the program package that depends on it.
 mkdir -p lib/files/usr/lib
@@ -46,11 +50,11 @@ check info-needs-prog "$($PKG info pkgprog-1.0.mpk | grep needs | tr '\n' ' ')" 
 # Alone, the program lacks its dependency.
 check dep-missing "$($PKG install pkgprog-1.0.mpk 2>&1)" "pkg: pkgprog: depends on pkgfix, which is not installed"
 check dep-missing-status "$($PKG install pkgprog-1.0.mpk 2>/dev/null; echo $?)" "1"
-check nothing-installed "$($PKG list)" ""
+check nothing-installed "$(mine)" ""
 
 # Together, in dependency order regardless of the command line order.
 check install-both "$($PKG install pkgprog-1.0.mpk pkgfix-1.0.mpk | tr '\n' ' ')" "installed pkgfix 1.0 installed pkgprog 1.0 "
-check list-two "$($PKG list | tr '\n' ' ')" "pkgfix 1.0 A library pkgprog 1.0 A program "
+check list-two "$(mine | tr '\n' ' ')" "pkgfix 1.0 A library pkgprog 1.0 A program "
 check runs "$(/usr/bin/pkgprog)" "pkgfix 42"
 check launcher-table "$(grep -v '^#' $DB/launcher)" "Prog=/usr/bin/pkgprog"
 check types-table "$(grep -v '^#' $DB/mime.types)" "text/x-pkgfix pkf"
@@ -87,7 +91,7 @@ check conflict "$($PKG install pkgconf-1.0.mpk 2>&1)" "pkg: pkgconf: conflicts w
 printf 'name pkgfix\nversion 2.0\nsummary A library\nprovides libpkgfix.so 2\n' > lib/manifest
 $PKG build lib > /dev/null
 check abi-refused "$($PKG install pkgfix-2.0.mpk 2>&1)" "pkg: pkgprog: needs libpkgfix.so ABI 1, pkgfix has 2"
-check abi-kept "$($PKG list | head -n 1)" "pkgfix 1.0 A library"
+check abi-kept "$(mine | head -n 1)" "pkgfix 1.0 A library"
 
 # The same ABI number, but the build without the symbol.
 printf 'name pkgfix\nversion 1.1\nsummary A library\nprovides libpkgfix.so 1\n' > lib/manifest
@@ -96,19 +100,6 @@ $PKG build lib > /dev/null
 check symbol-refused "$($PKG install pkgfix-1.1.mpk 2>&1)" "pkg: pkgprog: usr/bin/pkgprog: undefined symbol pkgfix_value"
 check symbol-kept "$(/usr/bin/pkgprog)" "pkgfix 42"
 
-# A wrong ABI number of a system library.
-sed 's/^libc.so 2$/libc.so 9/' $ABI > abi.new
-cp $ABI abi.old
-cp abi.new $ABI
-mkdir -p sys/files/usr/bin
-printf 'name pkgsys\nversion 1.0\nsummary Built against another system\n' > sys/manifest
-cp $FIX/pkgprog sys/files/usr/bin/pkgsys
-cp abi.old $ABI
-$PKG build sys > /dev/null
-cp abi.new $ABI
-check system-abi "$($PKG install pkgsys-1.0.mpk 2>&1)" "pkg: pkgsys: needs libc.so ABI 2, the system has 9"
-cp abi.old $ABI
-
 # A file owned by another package, and a file of the root image that no
 # package owns.
 mkdir -p dup/files/usr/bin
@@ -116,11 +107,15 @@ printf 'name pkgdup\nversion 1.0\nsummary Duplicate\n' > dup/manifest
 cp $FIX/pkgprog dup/files/usr/bin/pkgprog
 $PKG build dup > /dev/null
 check owned "$($PKG install pkgdup-1.0.mpk 2>&1)" "pkg: pkgdup: usr/bin/pkgprog belongs to pkgprog"
-mkdir -p stray/files/etc
+mkdir -p stray/files/root stray/files/etc
 printf 'name pkgstray\nversion 1.0\nsummary Replaces a file of the image\n' > stray/manifest
+printf 'x\n' > stray/files/root/.shrc
+$PKG build stray > /dev/null
+check unowned "$($PKG install pkgstray-1.0.mpk 2>&1)" "pkg: pkgstray: root/.shrc exists in the filesystem and belongs to no package"
+rm stray/files/root/.shrc
 printf 'x\n' > stray/files/etc/fstab
 $PKG build stray > /dev/null
-check unowned "$($PKG install pkgstray-1.0.mpk 2>&1)" "pkg: pkgstray: etc/fstab exists in the filesystem and belongs to no package"
+check owned-base "$($PKG install pkgstray-1.0.mpk 2>&1)" "pkg: pkgstray: etc/fstab belongs to base-files"
 
 # A member outside files/.
 mkdir bad
@@ -146,7 +141,7 @@ $PKG build prog > /dev/null
 mkdir /usr/share/pkgprog/notes.pkgtmp
 check failed-status "$($PKG install pkgprog-1.1.mpk > /dev/null 2>&1; echo $?)" "1"
 rmdir /usr/share/pkgprog/notes.pkgtmp
-check failed-version "$($PKG list | tail -n 1)" "pkgprog 1.0 A program"
+check failed-version "$(mine | tail -n 1)" "pkgprog 1.0 A program"
 check failed-file "$(cat /usr/share/pkgprog/readme)" "read me again"
 check failed-runs "$(/usr/bin/pkgprog)" "pkgfix 42"
 check failed-verify "$($PKG verify; echo $?)" "0"
@@ -155,7 +150,7 @@ check failed-verify "$($PKG verify; echo $?)" "0"
 check upgrade "$($PKG install pkgprog-1.1.mpk)" "upgraded pkgprog 1.1"
 check upgrade-old-gone "$(test -e /usr/share/pkgprog/readme && echo present || echo absent)" "absent"
 check upgrade-new "$(cat /usr/share/pkgprog/notes)" "notes"
-check upgrade-list "$($PKG list | tail -n 1)" "pkgprog 1.1 A program"
+check upgrade-list "$(mine | tail -n 1)" "pkgprog 1.1 A program"
 check upgrade-apps "$(grep -v '^#' $DB/mime.apps)" ""
 
 # Verification after a change.
@@ -172,7 +167,7 @@ check remove-prog-gone "$(test -e /usr/bin/pkgprog && echo present || echo absen
 check remove-dir-gone "$(test -e /usr/share/pkgprog && echo present || echo absent)" "absent"
 check remove-launcher "$(grep -v '^#' $DB/launcher)" ""
 check remove-lib "$($PKG remove pkgfix)" "removed pkgfix 1.0"
-check remove-all "$($PKG list)" ""
+check remove-all "$(mine)" ""
 check remove-missing "$($PKG remove pkgfix 2>&1)" "pkg: pkgfix: not installed"
 
 # Owners, modes and configuration files. A setuid program installed by
@@ -207,6 +202,6 @@ check host-runs "$(/usr/bin/pkghello | head -n 1 | cut -d, -f1)" "hello from use
 check host-launcher "$(grep -v '^#' $DB/launcher)" "Hello=/usr/bin/pkghello"
 check host-owner "$(cut -d' ' -f1-3 $DB/pkghello/files)" "0755 0 0"
 check host-remove "$($PKG remove pkghello)" "removed pkghello 1.0"
-check all-removed "$($PKG list)" ""
+check all-removed "$(mine)" ""
 
 echo "pkg: done"

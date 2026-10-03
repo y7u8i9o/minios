@@ -1,0 +1,3 @@
+name audiod
+summary The audio mixing daemon
+depends libaudio

@@ -1,0 +1,16 @@
+name apps
+summary The desktop applications
+depends calc
+depends code
+depends gedit
+depends hexview
+depends luasynth
+depends mandel
+depends paint
+depends player
+depends playtone
+depends pong
+depends sequencer
+depends synth
+depends unicode
+depends view

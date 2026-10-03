@@ -94,6 +94,26 @@ check saved "$(cat $R/etc/one.conf.pkgsave)" "setting=local"
 check removed-dir "$(test -e $R/usr/share/one && echo present || echo absent)" "absent"
 check removed-launcher "$(grep -v '^#' $R/var/lib/pkg/launcher)" ""
 
+# Symbolic links are members of their own. They are recorded with their
+# target, verified by it, left out of pkg perms and removed with the
+# package.
+mkdir -p lnk/files/usr/share/lnk
+printf 'name lnk\nversion 1.0\nsummary Links\n' > lnk/manifest
+printf 'x\n' > lnk/files/usr/share/lnk/file
+ln -s usr/share lnk/files/share
+ln -s file lnk/files/usr/share/lnk/alias
+$P build lnk lnk-1.0.mpk > /dev/null
+check link-install "$($P install lnk-1.0.mpk)" "installed lnk 1.0"
+check link-target "$(readlink $R/share)" "usr/share"
+check link-through "$(cat $R/share/lnk/alias)" "x"
+check link-record "$(grep ' share$' $R/var/lib/pkg/lnk/files | cut -d' ' -f1,4)" "120777 9"
+check link-perms "$($P perms | grep -c 'alias\|/share ')" "0"
+check link-verify "$($P verify lnk; echo $?)" "0"
+rm $R/share && ln -s elsewhere $R/share
+check link-changed "$($P verify lnk)" "lnk: share: changed"
+check link-remove "$($P remove lnk)" "removed lnk 1.0"
+check link-gone "$(test -L $R/share && echo present || echo absent)" "absent"
+
 # An archive of format 1 is refused.
 mkdir -p old/files/share
 printf 'name old\nversion 1.0\nsummary An archive of format 1\n' > old/manifest

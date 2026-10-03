@@ -1,0 +1,4 @@
+usr/share/locale/**
+usr/share/i18n/**
+usr/bin/locale
+usr/share/man/man1/locale.1

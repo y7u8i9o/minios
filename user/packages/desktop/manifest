@@ -1,0 +1,9 @@
+name desktop
+summary The desktop shell with panel, greeter and settings
+depends x12
+depends fonts
+depends theme
+config etc/desktop.conf
+config etc/launcher
+config etc/mime.types
+config etc/mime.apps

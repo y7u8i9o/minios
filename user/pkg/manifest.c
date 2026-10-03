@@ -2,6 +2,7 @@
 #include "pkg.h"
 #include <ctype.h>
 #include <errno.h>
+#include <fnmatch.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,6 +71,18 @@ int manifest_is_config(const struct manifest *m, const char *rel)
 {
     for (int i = 0; i < m->nconfig; i++)
         if (strcmp(m->config[i], rel) == 0)
+            return 1;
+    return 0;
+}
+
+/* True if rel matches an unchecked pattern: a file of test data, such as
+ * a deliberately broken ELF fixture, that the ELF and library rules leave
+ * alone. A "*" also matches "/", as in the shell case statement of
+ * tools/mkpkg.sh and in tools/mkbase.py. */
+int manifest_is_unchecked(const struct manifest *m, const char *rel)
+{
+    for (int i = 0; i < m->nunchecked; i++)
+        if (fnmatch(m->unchecked[i], rel, 0) == 0)
             return 1;
     return 0;
 }
@@ -245,6 +258,10 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
         } else if (strcmp(key, "icon") == 0) {
             if (!relative_valid(value)) return fail(err, errlen, line, "icon must be a path relative to the root", value);
             strlcpy(m->icon, value, sizeof m->icon);
+        } else if (strcmp(key, "unchecked") == 0) {
+            if (m->nunchecked >= PKG_MAX_CONFIG) return fail(err, errlen, line, "too many unchecked lines", NULL);
+            if (!relative_valid(value)) return fail(err, errlen, line, "unchecked must be a pattern relative to the root", value);
+            strlcpy(m->unchecked[m->nunchecked++], value, sizeof m->unchecked[0]);
         } else if (strcmp(key, "config") == 0) {
             if (m->nconfig >= PKG_MAX_CONFIG) return fail(err, errlen, line, "too many config lines", NULL);
             if (!relative_valid(value)) return fail(err, errlen, line, "config must be a path relative to the root", value);
@@ -302,4 +319,6 @@ void manifest_write(FILE *f, const struct manifest *m)
         fprintf(f, "icon %s\n", m->icon);
     for (int i = 0; i < m->nconfig; i++)
         fprintf(f, "config %s\n", m->config[i]);
+    for (int i = 0; i < m->nunchecked; i++)
+        fprintf(f, "unchecked %s\n", m->unchecked[i]);
 }

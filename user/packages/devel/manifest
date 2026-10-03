@@ -1,0 +1,14 @@
+name devel
+summary The development tools and headers
+depends tcc
+depends make
+depends binutils
+depends libc-dev
+depends libgui-dev
+depends libfont-dev
+depends libwire-dev
+depends libaudio-dev
+depends libcodec-dev
+depends libprof-dev
+depends libedit-dev
+depends lua-dev

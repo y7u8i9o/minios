@@ -1,0 +1,3 @@
+usr/share/keymaps/**
+usr/bin/loadkeys
+usr/share/man/man1/loadkeys.1

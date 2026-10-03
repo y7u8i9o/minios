@@ -1,0 +1,3 @@
+name codecs-audio
+summary The FLAC, Vorbis and WAV audio codecs
+depends libcodec

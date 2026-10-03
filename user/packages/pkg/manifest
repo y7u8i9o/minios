@@ -1,0 +1,3 @@
+name pkg
+summary The package manager
+config etc/pkg.conf

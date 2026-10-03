@@ -1,0 +1,3 @@
+name libgui-dev
+summary Headers and static archive of the graphics toolkit library
+depends libc-dev

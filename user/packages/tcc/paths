@@ -1,0 +1,3 @@
+usr/bin/tcc
+usr/lib/tcc/**
+usr/share/man/man1/tcc.1

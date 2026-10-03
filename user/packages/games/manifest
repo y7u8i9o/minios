@@ -1,0 +1,3 @@
+name games
+summary Console games and amusements
+config etc/fortunes

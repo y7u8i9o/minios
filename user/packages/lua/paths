@@ -1,0 +1,6 @@
+usr/bin/lua
+usr/bin/luac
+usr/lib/liblua.so
+usr/share/lua/**
+usr/share/man/man1/lua.1
+usr/share/man/man1/luac.1

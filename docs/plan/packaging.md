@@ -216,7 +216,7 @@ installer comes last.
   shell, line editor and editor cases pass on x86_64, and the Lua,
   profiler, package, tcc and line editor cases on aarch64.
 
-### P3. The base system as packages and the image builder
+### P3. The base system as packages and the image builder (completed 2026-10-03)
 
 - Every package and group of section 2 has a manifest under
   `user/packages/`.
@@ -230,6 +230,32 @@ installer comes last.
   packages are absent instead of checking for an empty database.
 - The 32 release cases must pass on both architectures, together with
   `pkg` and `pkg_apps`.
+- During the work `build/initrd_root` became the installation tree of
+  the build instead of disappearing. `user/` installs into it as before,
+  and `tools/mkbase.py` splits it into the packages of `build/base` by the
+  patterns of `user/packages/NAME/paths`, with a check that every file
+  belongs to exactly one package. `tools/mkimage.sh` installs every
+  package of `build/base` except `apps` and writes both the root image
+  and the initrd, which mirrors the image until the installer
+  environment of P7 replaces it. The image builder takes about five
+  seconds. The group of the desktop is named `desktop-system`, because
+  `desktop` names the package of the panel and the settings, and the
+  archive shelf of the applications became the package `app-archives`,
+  since a build without tests installs it as well. `hello` is built only
+  with tests. `pkg` gained symbolic link members, the manifest key
+  `unchecked` for the deliberately broken loader fixtures and the test
+  data, a sorted table for paths that two pending packages contain, a
+  sorted symbol table per library and up to 256 packages per command.
+  `/usr/lib/abi` and the system libraries are gone, and the ABI table is
+  `build/lib/abi` on the host, from which `mkbase.py` writes the
+  `provides` lines and `mkpkg.sh` the `needs` lines. `mkbase.py` packs a
+  package again only when its contents change. The `system-abi` check of
+  the `pkg` test was removed with the system libraries, and a check that
+  a file of `base-files` is refused replaced it. The release cases,
+  `pkg`, `pkg_apps`, `pkg_repo`, `symlink`, `lua_sys`, `tcc` and
+  `gui_code` pass on x86_64, the loader, shell, file system, package,
+  login, privilege, symlink, GUI, Lua, tcc and persist cases on aarch64,
+  and a build with `CONFIG_TESTS=0` produces its 54 packages and image.
 
 ### P4. Partitions and discovery in the kernel
 

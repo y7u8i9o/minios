@@ -1,0 +1,10 @@
+usr/bin/init
+usr/bin/initctl
+usr/bin/fsinit
+usr/bin/halt
+usr/bin/reboot
+usr/bin/shutdown
+etc/init.conf
+usr/share/man/man1/initctl.1
+usr/share/man/man1/fsinit.1
+usr/share/man/man5/init.conf.5

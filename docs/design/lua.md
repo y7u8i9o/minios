@@ -77,8 +77,8 @@ The interpreter links liblua and libc, and libedit statically for its
 prompt. `user/lua/linit.c` replaces the upstream `linit.c`, which the
 upstream file permits. It opens the standard libraries under the same
 selection masks and registers the modules of the interpreter, `fs`,
-`sys` and `thread`, in `package.preload`, so `require "fs"` works
-without a file search. `gui`, `audio` and `mime` are C modules,
+`sys` and `thread`, in `package.preload`, where `require "fs"` finds
+them without a file search. `gui`, `audio` and `mime` are C modules,
 `/usr/lib/lua/5.5/gui.so`, `audio.so` and `mime.so`, which `require`
 loads through `package.cpath`. Each links liblua and its own library,
 `gui.so` libgui, `audio.so` libaudio and `mime.so` libgui, and none uses

@@ -170,3 +170,22 @@ int elf_defines(const uint8_t *data, size_t len, const char *name)
     }
     return 0;
 }
+
+/* Calls fn for every symbol the dynamic symbol table defines. */
+int elf_defined(const uint8_t *data, size_t len, elf_symbol_fn fn, void *arg)
+{
+    const struct shdr *str;
+    const struct shdr *ds = dynsym(data, len, &str);
+    if (!ds)
+        return 0;
+    const struct sym *s = (const struct sym *)(data + ds->sh_offset);
+    size_t count = ds->sh_size / sizeof *s;
+    for (size_t i = 1; i < count; i++) {
+        if (s[i].st_shndx == SHN_UNDEF)
+            continue;
+        const char *n = string_at(data, str, s[i].st_name);
+        if (n && fn(n, arg) != 0)
+            return 1;
+    }
+    return 0;
+}
