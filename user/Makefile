@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter installer
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
@@ -666,6 +666,18 @@ $(ROOT)/usr/bin/init: init/*.c $(LIBC) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/init.elf $(ULDFLAGS_STATIC) $(CRT0) $(filter %.c,$^) $(LIBC) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/init.elf $@
+
+# The installer has a text and a graphical front end on one back end, so
+# neither can use the generic rule, which would link both main functions.
+$(ROOT)/usr/bin/installer: installer/text.c installer/backend.c installer/installer.h $(SOS) $(LIBEDIT) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/installer.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/installer.elf $@
+
+$(ROOT)/usr/bin/installer-gui: installer/gui.c installer/backend.c installer/installer.h $(SOS) $(LIBEDIT) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/installer-gui.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/installer-gui.elf $@
 
 $(ROOT)/usr/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)

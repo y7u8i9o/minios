@@ -425,7 +425,7 @@ installer comes last.
   run` performed the upgrade of the kernel, the restart and the second
   boot to the greeter on x86_64 and the first boot on aarch64.
 
-### P9. The release and the freshness of the index
+### P9. The release and the freshness of the index (completed 2026-10-03)
 
 - `tools/release.sh` builds the repository and `installer.img`, and its
   boot check becomes `install_auto`.
@@ -439,6 +439,14 @@ installer comes last.
   describe the result, `installer.md` describes the installer, and
   `CLAUDE.md` and `docs/plan/README.md` follow the new design.
 - The boot test `pkg_repo` refuses an older index and an expired one.
+- During the work the key binding became an `origin` line of the index
+  and of the key file, and the expiry time is optional, since an
+  installation medium must remain usable after any date. The release
+  script builds the repository of the medium, installs from a copy of the
+  medium with the answer file of `install_auto` onto an empty disk and
+  boots that disk. `pkg_repo` passes on x86_64 and aarch64, and `pkg`,
+  `offline_update` and `install_auto` on x86_64. The release script itself
+  has not run yet.
 
 ### P10. The graphical installer
 
@@ -447,3 +455,6 @@ installer comes last.
   the fonts.
 - The boot test `gui_installer` drives it through the installation of
   the desktop group.
+- The front end `user/installer/gui.c` (`installer-gui`) exists and
+  builds. The installer environment does not start an X12 session yet,
+  and `gui_installer` does not exist yet.
