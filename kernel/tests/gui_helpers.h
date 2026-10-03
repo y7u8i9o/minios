@@ -11,6 +11,8 @@
 #include <sched/user.h>
 #include <sched/proc.h>
 #include <ipc/signal.h>
+#include <mm/slab.h>
+#include <lib/string.h>
 
 static struct proc *panel_proc;
 
@@ -141,4 +143,61 @@ static inline void ctrl_key(uint8_t code)
     press_key(code);
     ps2kbd_feed_scancode(0x9d);
     sleep_ms(150);
+}
+
+/* The number of live processes named name with effective uid uid, or of
+ * any uid when uid is -1, from the table of /dev/proc. */
+static inline int count_procs(const char *name, int uid)
+{
+    size_t size = 8192;
+    char *table = kmalloc(size);
+    ktest_assert(table != NULL, "alloc");
+    proc_format_table(table, size);
+    int n = 0;
+    for (char *line = table; *line;) {
+        char *end = strchr(line, '\n');
+        if (end)
+            *end = '\0';
+        /* PID PPID PGID STATE TIME RSS UID NAME */
+        char *f[8];
+        int nf = 0;
+        for (char *p = line; *p && nf < 8;) {
+            while (*p == ' ')
+                p++;
+            if (!*p)
+                break;
+            f[nf++] = p;
+            while (*p && *p != ' ')
+                p++;
+            if (*p)
+                *p++ = '\0';
+        }
+        if (nf == 8 && strcmp(f[3], "zombie") != 0 && strcmp(f[7], name) == 0) {
+            int u = 0;
+            for (const char *d = f[6]; *d >= '0' && *d <= '9'; d++)
+                u = u * 10 + (*d - '0');
+            if (uid < 0 || u == uid)
+                n++;
+        }
+        if (!end)
+            break;
+        line = end + 1;
+    }
+    kfree(table);
+    return n;
+}
+
+/* Wait until the count is unchanged for half a second. The greeter forks its
+ * helpers, which carry its name until they exec, so a single look could
+ * count one of them. */
+static inline bool wait_procs(const char *name, int uid, int want, int ms)
+{
+    int steady = 0;
+    for (int t = 0; t < ms; t += 100) {
+        steady = count_procs(name, uid) == want ? steady + 1 : 0;
+        if (steady == 5)
+            return true;
+        sleep_ms(100);
+    }
+    return false;
 }

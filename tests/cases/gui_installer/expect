@@ -1,0 +1,5 @@
+gui_installer: window shown
+gui_installer: install pressed
+installer: done
+gui_installer: installed
+gui_installer: power off pressed

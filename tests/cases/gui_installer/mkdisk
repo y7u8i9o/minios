@@ -1,0 +1,5 @@
+#!/bin/sh
+# The installation medium of the case without an answer file, with the
+# kernel test on its command line, which drives the graphical installer.
+set -e
+CMDLINE=test=gui_installer "$TOP/tools/mkinstaller.sh" "$ARCH" "$(dirname "$DISK")/base" "$(dirname "$DISK")/packages" "$OUT" 1024

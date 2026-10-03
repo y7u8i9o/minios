@@ -448,13 +448,20 @@ installer comes last.
   `offline_update` and `install_auto` on x86_64. The release script itself
   has not run yet.
 
-### P10. The graphical installer
+### P10. The graphical installer (completed 2026-10-04)
 
 - A libgui front end on the back end of P7 runs in an X12 session of the
   installer environment, which then contains the desktop libraries and
   the fonts.
 - The boot test `gui_installer` drives it through the installation of
   the desktop group.
-- The front end `user/installer/gui.c` (`installer-gui`) exists and
-  builds. The installer environment does not start an X12 session yet,
-  and `gui_installer` does not exist yet.
+- During the work `installer-gui` became the console program of the
+  installer environment. It starts X12 itself and runs the text installer
+  in its place when the medium contains an answer file, when no display
+  exists, when X12 does not answer and when the window is closed. The
+  package `installer` depends on `x12` and `fonts`, which brings the
+  desktop libraries into the environment. `mkinstaller.sh` takes
+  `CMDLINE` for the kernel test of a case, and the process counting of
+  the greeter test moved into `gui_helpers.h` for the new test.
+  `gui_installer` passes on x86_64 and aarch64, together with
+  `install_auto` and `install_console`.

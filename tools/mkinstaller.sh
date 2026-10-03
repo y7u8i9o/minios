@@ -5,7 +5,8 @@
 #
 # The tools come from the environment as the top level Makefile exports
 # them: PKGHOST, PKGSIGN, PKG_KEY_FILE, PKG_PUB, MKFS, MKFAT, MKGPT, LIMINE
-# and KERNEL. BASE is the directory of the base packages (build/base) and
+# and KERNEL, and CMDLINE optionally adds options to the kernel command
+# line of the medium, such as the test of a boot case. BASE is the directory of the base packages (build/base) and
 # APPS the one of the application packages (build/packages), of which the
 # archives of the current version are taken. The medium is a GPT disk.
 # Its EFI system partition contains Limine, the kernel and the initrd of the
@@ -15,8 +16,10 @@
 # file as installer.conf, which makes the installer run without questions.
 # On x86_64 the medium also boots through the BIOS. The installer
 # environment is the minimal group with the disk tools and the installer,
-# whose init mounts the tmpfs of /tmp and /run and starts the installer on
-# the console.
+# which brings X12, the desktop libraries and the fonts. Its init mounts the
+# tmpfs of /tmp and /run and starts the graphical installer as the console
+# program, which runs the text installer in its place without a display or
+# with an answer file.
 set -e
 ARCH="$1"; BASE="$2"; APPS="$3"; OUT="$4"; SIZE_MB="$5"; ANSWERS="$6"
 [ -n "$SIZE_MB" ] || { echo "usage: mkinstaller.sh ARCH BASE APPS OUT SIZE_MB [ANSWERS]" >&2; exit 2; }
@@ -48,14 +51,14 @@ rm -rf "$ENV/var/lib/pkg/_repos"
     chmod "$mode" "$ENV$path"
 done
 # The environment runs from memory. Its init mounts the tmpfs of /tmp and
-# /run and runs the installer on the console, and the account databases
-# exist for the programs that look accounts up.
+# /run and runs the installer as the console program, and the account
+# databases exist for the programs that look accounts up.
 cat > "$ENV/etc/init.conf" <<'CONF'
 # The init of the installer environment (tools/mkinstaller.sh).
 env PATH=/usr/bin TERM=minios
 task fsinit fsinit
 task keymap loadkeys -c
-console installer installer
+console installer installer-gui
 CONF
 cat > "$ENV/etc/fstab" <<'CONF'
 # The installer environment runs from the initrd, with /tmp and /run in memory.
@@ -83,7 +86,7 @@ serial: yes
     protocol: limine
     path: boot():/minios/kernel.elf
     module_path: boot():/minios/initrd.tar
-    cmdline: root=initrd swap=off
+    cmdline: root=initrd swap=off${CMDLINE:+ $CMDLINE}
 CONF
 
 ESP_MB=$(( $(du -sk "$WORK/esp" | cut -f1) / 1024 + 16 ))

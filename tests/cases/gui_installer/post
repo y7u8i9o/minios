@@ -1,0 +1,24 @@
+#!/bin/sh
+# Checks on the host the disk that the graphical installer wrote: the
+# account typed into the window with its password and its membership of
+# wheel, the defaults of the window in desktop.conf, the log of the
+# installer and the file system.
+set -e
+WORK="$(dirname "$DISK2")/post"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKGPT" -l "$DISK2" > "$WORK/table"
+first=$(grep " root-$ARCH " "$WORK/table" | cut -d' ' -f3)
+last=$(grep " root-$ARCH " "$WORK/table" | cut -d' ' -f4)
+dd if="$DISK2" of="$WORK/root.img" bs=512 skip="$first" count=$((last - first + 1)) 2>/dev/null
+fail() { echo "post: $1"; exit 1; }
+cat_root() { "$MKFS" --cat "$WORK/root.img" "$1"; }
+cat_root /home/.local/etc/passwd | grep -q '^berta:x:1000:1000:Berta Example:/home/berta:/bin/sh$' || fail "passwd"
+cat_root /home/.local/etc/shadow | grep -q '^berta:\$5\$' || fail "shadow of berta"
+cat_root /home/.local/etc/shadow | grep -q '^root:\$5\$' || fail "shadow of root"
+cat_root /home/.local/etc/group | grep -q '^wheel:x:10:berta$' || fail "wheel"
+cat_root /etc/desktop.conf | grep -q '^keymap=us$' || fail "keymap"
+cat_root /var/log/installer.log | grep -q 'made the account berta, a member of wheel' || fail "installer.log"
+"$FSCK" "$WORK/root.img" > "$WORK/fsck.log" || { cat "$WORK/fsck.log"; fail "fsck"; }
+rm -rf "$WORK"
+echo "post: the installed system matches the choices of the window"

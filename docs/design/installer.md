@@ -23,17 +23,23 @@ The installer environment is the initrd. `mkinstaller.sh` installs the
 groups and packages `minimal`, `disktools` and `installer` into a tree with
 the host build of `pkg`, from the repository it has just written and with
 the public key of the build, and replaces `/etc/init.conf` and
-`/etc/fstab` of that tree. Its init runs `fsinit`, which mounts tmpfs
-instances on `/tmp` and `/run`, sets the keyboard layout and starts
-`/usr/bin/installer` as the console program. `swap=off` makes the kernel
+`/etc/fstab` of that tree. The package `installer` depends on `x12` and
+`fonts`, and its graphical front end needs `libgui`, which brings X12,
+the desktop libraries and the fonts into the environment. Its init runs
+`fsinit`, which mounts tmpfs instances on `/tmp` and `/run`, sets the
+keyboard layout and starts `/usr/bin/installer-gui` as the console
+program. The variable `CMDLINE` of `mkinstaller.sh` adds options to the
+kernel command line of the medium, which the boot test of the graphical
+installer uses for its kernel test. `swap=off` makes the kernel
 leave every disk alone, since the target disk has no table yet and would
 otherwise become swap. The kernel finds no root partition on the medium
 and runs from the initrd.
 
 ## The installer program
 
-`user/installer/` contains the back end (`backend.c`) and the text front end
-(`text.c`) with their shared declarations (`installer.h`). The installer
+`user/installer/` contains the back end (`backend.c`), the text front end
+(`text.c`, `installer`), the graphical front end (`gui.c`,
+`installer-gui`) and their shared declarations (`installer.h`). The installer
 first finds the medium: the partition of the type repo (`6d696e69-6f73-4e70-6b67-7265706f7369`, a type of minios) that contains an mfs
 with `repo/MACHINE/index`, which it mounts on `/run/installer/medium` and
 whose disk it excludes from the targets. When the medium contains
@@ -97,6 +103,32 @@ administrator would run:
 minios has no host name, and the installer therefore does not ask for
 one.
 
+## The graphical front end
+
+`installer-gui` starts in the manner of the greeter (`users.md`). It finds
+the medium, and it replaces itself with the text installer when the
+medium contains `installer.conf`, when `/dev/fb0` cannot be opened and
+when X12 does not accept connections within five seconds. Otherwise it
+starts X12 and opens one window, which is the whole session: there is no
+panel and no desktop. The window shows the disks other than the medium
+with their sizes, the package groups `minimal`, `standard` and
+`desktop-system` (selected), the keyboard layouts of
+`/usr/share/keymaps`, the time zone, the password of root, the name of
+the first account (proposed as `user`), its full name and its password,
+the Install and Power off buttons, a list with the log and a status line.
+The language, further packages, the size of swap and the reuse of a data
+volume take the defaults of the answer file.
+
+Install refuses an empty password of root or of the account, and
+otherwise clears the log and runs `inst_check` and `inst_install` in a
+child process, so that the window continues to react. A timer appends the
+new lines of `/run/installer/installer.log` to the list every 300 ms and
+shows the last one in the status line. When the child ends, Power off is
+enabled after a successful installation, and Install again after a
+failure. The window cannot be closed while the child runs. Closing it
+otherwise, or the end of X12, stops X12 and starts the text installer on
+the console.
+
 ## Changes elsewhere
 
 - `mkdir` reports `EEXIST` for an existing name before any other error,
@@ -124,4 +156,20 @@ reads the installed disk on the host and checks the account, its
 membership of `wheel`, the password hashes, `desktop.conf`, the log of the
 installer, the boot loader configuration and the file system with
 `fsck`. `install_console` installs `standard` with the account `user` and
-must reach `minios login:` through the fallback of init.
+must reach `minios login:` through the fallback of init. In both cases
+`installer-gui` hands over to the text installer because of the answer
+file.
+
+`gui_installer` boots a medium without an answer file, with
+`test=gui_installer` on its command line. The kernel test starts init,
+waits for X12 and the title bar of the window, and fills the window
+through the keyboard: five presses of Tab reach the password of root past
+the disk, the group, the layout and the zone, which retain their
+defaults, then Ctrl+A and typing replace the proposed account with
+`berta`, followed by its full name and password, and Enter on Install
+starts the installation. The test reads the log of the back end until it
+reports `done` or a failure, then presses Power off through Tab and
+Enter. The second boot starts the installed disk and must reach the
+greeter, and the post script checks the account, its membership of
+`wheel`, the default keyboard layout, the log of the installer and the
+file system.

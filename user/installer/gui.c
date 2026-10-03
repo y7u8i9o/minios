@@ -1,17 +1,23 @@
 /* installer-gui: the graphical front end of the installer
- * (docs/design/installer.md, P10 of docs/plan/packaging.md). It runs in an
- * X12 session of the installer environment and shows one page with the
- * choices of struct plan. The Install button runs the back end of
- * backend.c in a child process, so that the window continues to react,
- * and a timer shows the lines that the back end appends to the log. When
- * the child has ended, the page offers the Power off button. */
+ * (docs/design/installer.md, P10 of docs/plan/packaging.md). It is the
+ * console program of the installer environment. It starts X12 and shows
+ * one page with the choices of struct plan in its own X12 session. The
+ * Install button runs the back end of backend.c in a child process, so
+ * that the window continues to react, and a timer shows the lines that the
+ * back end appends to the log. When the child has ended, the page offers
+ * the Power off button. The text installer takes its place when the medium
+ * contains an answer file, when there is no display, when X12 does not
+ * answer, and when the window is closed. */
 #include "installer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <signal.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <gui/app.h>
@@ -27,7 +33,7 @@ static char medium[16];
 static char disks[MAX_DISKS][16];
 static char keymaps[MAX_KEYMAPS][32];
 static int ndisks, nkeymaps;
-static pid_t child;
+static pid_t child, server = -1;
 static struct timer *poll_timer;
 static long log_offset;
 
@@ -187,6 +193,43 @@ static int close_clicked(struct widget *w, void *args, void *arg)
     return child != 0;      /* Closing is refused while the installation runs. */
 }
 
+/* Replace the graphical installer with the text installer on the
+ * console, after stopping X12, which owns the framebuffer. */
+static void fall_back(const char *reason)
+{
+    if (reason)
+        inst_log("%s, starting the text installer", reason);
+    if (server > 0) {
+        kill(server, SIGTERM);
+        waitpid(server, NULL, 0);
+    }
+    execl("/usr/bin/installer", "installer", (char *)NULL);
+    perror("installer-gui: /usr/bin/installer");
+    exit(1);
+}
+
+/* Start X12 and wait until it accepts connections. Returns 0, or -1 when
+ * it does not answer within five seconds. */
+static int start_server(void)
+{
+    server = fork();
+    if (server == 0) {
+        execlp("x12", "x12", (char *)NULL);
+        _exit(127);
+    }
+    for (int i = 0; server > 0 && i < 50; i++) {
+        int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        struct sockaddr_un addr = { AF_UNIX, "display" };
+        int ok = fd >= 0 && connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0;
+        if (fd >= 0)
+            close(fd);
+        if (ok)
+            return 0;
+        sleep_ms(100);
+    }
+    return -1;
+}
+
 int main(void)
 {
     mkdir(INST_DIR, 0755);
@@ -194,6 +237,13 @@ int main(void)
         inst_log("no installation medium with a repository for this machine was found");
         return 1;
     }
+    struct stat st;
+    if (stat(INST_MEDIUM "/" INST_ANSWERS, &st) == 0)
+        fall_back(NULL);        /* the text installer installs without questions */
+    if (access("/dev/fb0", R_OK | W_OK) < 0)
+        fall_back("there is no display");
+    if (start_server() < 0)
+        fall_back("the display server does not answer");
     long mib[MAX_DISKS];
     ndisks = inst_list_disks(medium, disks, mib, MAX_DISKS);
     load_keymaps();
@@ -202,10 +252,10 @@ int main(void)
 
     app = app_create();
     if (!app)
-        return 1;
+        fall_back("the window cannot connect to the display server");
     win = app_window(app, 560, 640, "Install minios");
     if (!win)
-        return 1;
+        fall_back("the window cannot be created");
     widget_connect(win, "close", close_clicked, NULL);
     struct widget *box = box_new(win, 1);
     widget_set_stretch(box, 1, 1);
@@ -251,5 +301,12 @@ int main(void)
 
     app_run(app);
     app_destroy(app);
-    return 0;
+    /* The window was closed before or after an installation, or the
+     * display server ended. An installation that still runs completes
+     * before the console is handed over. */
+    if (child) {
+        int status;
+        waitpid(child, &status, 0);
+    }
+    fall_back("the graphical installer has ended");
 }
