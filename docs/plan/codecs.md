@@ -224,3 +224,14 @@ The scope is images and audio. Compression (gzip) remains in libc.
 - Added during the work: the probes of Ogg codecs score the first logical
   stream of a file higher than later ones, which makes the first stream
   decide the codec of a multiplexed file.
+
+### C8: JPEG through stb (completed 2026-10-04)
+
+- The module `jpeg.so` compiles stb_image and stb_image_write of the stb
+  project, imported unchanged into `third_party/stb`, and decodes
+  baseline and progressive JPEG and encodes baseline JPEG at quality 90.
+- Boot tests `codec_image` and `codec_tool` gained a JPEG round trip and
+  conversions between PNG and JPEG, and a JPEG written by macOS `sips`
+  decodes on the host.
+- The user chose imported code over an implementation from the standard.
+  Arithmetic coding and the EXIF orientation are not supported.

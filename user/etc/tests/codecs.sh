@@ -9,11 +9,12 @@ cd /ct
 
 # The registry: four modules, one codec each, with their capabilities.
 codecs > list.txt; check list-status "$?" "0"
-check list-total "$(tail -n 1 list.txt)" "7 codecs in 6 modules"
+check list-total "$(tail -n 1 list.txt)" "8 codecs in 7 modules"
 check list-oggflac "$(grep -c '^DE- oggflac audio  flac.so' list.txt)" "1"
 check list-vorbis "$(grep -c '^DE- vorbis audio  vorbis.so' list.txt)" "1"
 check list-flac "$(grep -c '^DE- flac  audio  flac.so' list.txt)" "1"
 check list-bmp "$(grep -c '^DE- bmp   image  bmp.so' list.txt)" "1"
+check list-jpeg "$(grep -c '^DE- jpeg  image  jpeg.so' list.txt)" "1"
 check list-png "$(grep -c '^DE- png   image  png.so' list.txt)" "1"
 check list-svg "$(grep -c '^D-S svg   image  svg.so' list.txt)" "1"
 check list-wav "$(grep -c '^DE- wav   audio  wav.so' list.txt)" "1"
@@ -26,6 +27,12 @@ codecs convert f.bmp f.png > /dev/null; check to-png "$?" "0"
 codecs convert f.png g.bmp > /dev/null
 cmp f.bmp g.bmp; check same-pixels "$?" "0"
 check info-png "$(codecs info f.png)" "f.png: png image, 16x16, with alpha"
+# PNG to JPEG and back: JPEG has no alpha and loses detail, which leaves
+# the size.
+codecs convert f.png f.jpg > /dev/null; check to-jpeg "$?" "0"
+check info-jpeg "$(codecs info f.jpg)" "f.jpg: jpeg image, 16x16"
+codecs convert f.jpg j.png > /dev/null; check from-jpeg "$?" "0"
+check info-from-jpeg "$(codecs info j.png)" "j.png: png image, 16x16"
 # The content decides, not the name.
 cp f.bmp misnamed.png
 check content-wins "$(codecs info misnamed.png)" "misnamed.png: bmp image, 16x16, with alpha"

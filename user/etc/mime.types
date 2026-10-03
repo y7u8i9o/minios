@@ -5,6 +5,7 @@ text/x-shellscript sh
 text/x-lua lua
 image/png png
 image/bmp bmp dib
+image/jpeg jpg jpeg jpe jfif
 image/svg+xml svg
 audio/x-wav wav wave
 audio/flac flac

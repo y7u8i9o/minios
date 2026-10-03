@@ -73,6 +73,29 @@ static void test_images(void)
     CHECK(codec_image_decode(NULL, data, 20, NULL, NULL, &back) == -EINVAL, "a truncated png is invalid");
     free(data);
 
+    /* JPEG is lossy and has no alpha: a flat colour returns within a few
+     * steps per channel, and opaque. */
+    uint32_t flat[64];
+    for (int i = 0; i < 64; i++)
+        flat[i] = 0xff3080c0;
+    struct codec_picture square = { 8, 8, flat };
+    n = codec_image_encode(codec_find("jpeg"), &square, &data);
+    CHECK(n > 100, "jpeg encode: %ld", n);
+    if (n > 100) {
+        err = codec_image_decode(NULL, data, (size_t)n, NULL, NULL, &back);
+        int close = err == 0 && back.w == 8 && back.h == 8;
+        for (int i = 0; close && i < 64; i++) {
+            uint32_t v = back.pixels[i];
+            int dr = (int)(v >> 16 & 0xff) - 0x30, dg = (int)(v >> 8 & 0xff) - 0x80, db = (int)(v & 0xff) - 0xc0;
+            close = v >> 24 == 0xff && dr * dr < 16 && dg * dg < 16 && db * db < 16;
+        }
+        CHECK(close, "jpeg round trip: %d", err);
+        if (err == 0)
+            codec_picture_free(&back);
+        CHECK(codec_image_decode(NULL, data, 40, NULL, NULL, &back) == -EINVAL, "a truncated jpeg is invalid");
+        free(data);
+    }
+
     mkdir("/tmp", 0755);
     CHECK(codec_image_save(&pic, "/tmp/codec.png", NULL) == 0, "save by extension");
     err = codec_image_load("/tmp/codec.png", NULL, &back);

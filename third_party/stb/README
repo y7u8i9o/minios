@@ -1,0 +1,5 @@
+stb_image.h (v2.30) and stb_image_write.h (v1.16) of the stb project,
+https://github.com/nothings/stb, commit 2c980bb59875b0d32144a71867fbdebb2f77cd20,
+taken without changes. Both files are available under the public domain
+(unlicense) or the MIT licence, as the text at the end of each file states.
+libcodec/modules/jpeg/jpeg.c compiles them into the JPEG module of libcodec.

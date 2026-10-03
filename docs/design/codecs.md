@@ -578,6 +578,30 @@ the masks of `0xAARRGGBB` and the sRGB colour space, with rows from the
 bottom up. Alpha survives the file, and a picture that is encoded and
 decoded again is unchanged.
 
+## JPEG
+
+`jpeg.so` is the first module built on imported code. It compiles
+`stb_image.h` and `stb_image_write.h` of the stb project from
+`third_party/stb`, which are available under the public domain or the
+MIT licence, without changes. The module restricts stb_image to JPEG and
+turns off its standard I/O, SIMD, floating point and thread local
+storage. Like every module, it exports only `codec_module`.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `jpeg.so` | `jpeg`, `image/jpeg image/pjpeg`, `.jpg .jpeg .jpe .jfif` | decode, encode | `FF D8 FF`, 90 |
+
+The decoder reads baseline and progressive JPEG with Huffman coding, in
+grey or in colour, up to 16384 pixels per side, and returns opaque
+pixels. It does not support arithmetic coding, and it does not apply the
+EXIF orientation, which means that a photo taken in portrait orientation
+can appear sideways. The encoder writes baseline JPEG at quality 90 and
+drops alpha, which JPEG cannot store. A picture that is encoded and
+decoded again is therefore close to the original, not equal to it. The
+case `codec_image` checks a round trip within a tolerance of four steps
+per channel, and `codec_tool` converts PNG to JPEG and back with
+`codecs`.
+
 ## Programs
 
 `view` lists the files of a directory whose extension a codec can decode
