@@ -117,7 +117,7 @@ installer comes last.
 
 ## 3. Milestones
 
-### P0. Package format 2 and a host build of pkg
+### P0. Package format 2 and a host build of pkg (completed 2026-10-03)
 
 - `pkg` compiles for the host as `build/host/pkg` from `user/pkg/*.c`,
   `libc/src/gzip.c`, `libc/src/crypto/*.c` and `libc/src/net/http.c`.
@@ -126,15 +126,33 @@ installer comes last.
 - Format 2, the records in `/var/lib/pkg`, owners and modes, the
   transactional installation, configuration files and the new library
   rule.
-- `--perms-out FILE` writes the owners and modes of the installed files
-  in the format of `user/perms`, for `mkfs -p`.
+- `pkg perms` prints the owners and modes of the installed files in the
+  format of `user/perms`, for `mkfs -p`.
 - `tools/mkpkg.sh` writes archives of format 2 with owner 0 and the modes
   of the build tree.
 - The boot test `pkg` gains configuration files, a failed upgrade that
   leaves the old files in place, and owners and setuid bits.
-  `make check-pkg` runs the same script against the host build.
+  `make check-pkg` runs a test of the host build.
 - Until P3 the root image is still a copy of the build tree, and packages
   installed in a development run disappear with the next build.
+- During the work the option `--perms-out FILE` became the command
+  `pkg perms`, since an image builder calls it once after all
+  installations. `pkg.sh` runs target programs and could not drive the
+  host build, which has its own script, `user/pkg/tests/host.sh`, with
+  packages that contain no ELF files. `--arch MACHINE` was added for a
+  tree prepared on another machine. The launcher and MIME tables moved
+  from `/usr/local/share` to `/var/lib/pkg`, `/usr/bin` joined the `PATH`
+  of init, `login`, the greeter, `sudo` and `/etc/profile`, and `ld.so`
+  searches `/usr/lib` after `/lib`. A file of the root image that no
+  package owns is refused, which replaces the special rule for libraries
+  in `/lib` with the general one. The HTTP client makes its socket non
+  blocking with `fcntl` where `SOCK_NONBLOCK` is missing, and the build
+  rule of `/etc` replaces a file instead of writing into it, since
+  `/etc/sudoers` has no write bit. The cases `pkg`, `pkg_apps`,
+  `pkg_repo`, `calculator`, `luasynth`, the application GUI cases,
+  `dynlink`, `login_console`, `gui_greeter`, `privilege`, `gui_settings`,
+  `initctl`, `comp_panel`, `lua_sys` and `ime` pass on x86_64, and the
+  package, loader, login and privilege cases on aarch64.
 
 ### P1. Merged /usr
 

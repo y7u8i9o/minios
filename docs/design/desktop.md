@@ -89,8 +89,8 @@ the C locale. `term_font_px` is the font size of the terminal.
   exact type, then `type/*`, then `*`.
 
 `mime_open(path)` starts the handler with the path as its argument and
-returns the child's pid. The tables of installed packages under
-`/usr/local/share` (`packages.md`) are read after the system tables;
+returns the child's pid. The tables of installed packages in
+`/var/lib/pkg` (`packages.md`) are read after the system tables;
 a package entry for a type the system table names is ignored, and
 `mime_save` writes the system entries only. A launcher file (`application/x-launcher`,
 extension `.app`) is opened by running the command in its `exec=`

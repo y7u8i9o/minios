@@ -14,7 +14,7 @@ static void test_gui_code(void)
     install_app("code");
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/code", (char *const[]){ "code", "/etc/tests/sample.lua", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/code", (char *const[]){ "code", "/etc/tests/sample.lua", NULL },
                                        (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start code");
     sleep_ms(2500);

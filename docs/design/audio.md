@@ -187,9 +187,9 @@ what has already arrived on the socket without waiting.
 
 ## Applications
 
-`/home/.local/bin/playtone` is a minimal client that emits a one-second triangle wave.
+`/usr/bin/playtone` is a minimal client that emits a one-second triangle wave.
 
-`/home/.local/bin/synth` is a small monophonic subtractive synthesizer: a saw, square or
+`/usr/bin/synth` is a small monophonic subtractive synthesizer: a saw, square or
 triangle oscillator with a five octave range feeds an ADSR amplitude
 envelope and a resonant state-variable low-pass filter whose cutoff is swept
 by the envelope; a cubic soft clipper follows.  The filter runs twice per
@@ -204,7 +204,7 @@ Audio runs from the application event loop through `fill_ready_buffers()`,
 which refills every returned buffer, and the phase continues across
 retriggers so note changes do not click.
 
-`/home/.local/bin/sequencer` is a step sequencer on the same voice: sixteen steps by
+`/usr/bin/sequencer` is a step sequencer on the same voice: sixteen steps by
 eight notes of a major scale, one voice per row so that chords play
 polyphonically.  The transport runs on the audio clock (the render loop
 counts frames per step), with tempo, octave, waveform, cutoff, resonance,
@@ -212,7 +212,7 @@ decay and volume controls; the gate of a step closes halfway through it so
 that repeated notes are heard separately.  Space plays and stops, D loads
 the demo pattern, C clears the grid, and a click toggles a cell.
 
-`/home/.local/bin/player` plays every audio format that a codec module
+`/usr/bin/player` plays every audio format that a codec module
 decodes (`codecs.md`), for example PCM WAV files with 8, 16, 24 or 32-bit
 samples at any sample rate.  When a file is opened, a loader thread
 decodes it through libcodec, keeps the upper 16 bits of each sample, and

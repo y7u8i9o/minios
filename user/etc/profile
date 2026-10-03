@@ -1,7 +1,9 @@
 # Shared defaults for interactive console and Terminal sessions.
 export PAGER=less
-# Programs installed by pkg(1) live under the shared package prefix, and
-# each user may keep programs in ~/.local/bin (docs/design/users.md).
+# Programs installed by pkg(1) live in /usr/bin, software that pkg does
+# not manage in /usr/local/bin, and each user may keep programs in
+# ~/.local/bin (docs/design/users.md).
+case ":$PATH:" in *:/usr/bin:*) ;; *) PATH="$PATH:/usr/bin" ;; esac
 case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="$PATH:/usr/local/bin" ;; esac
 export PATH="$PATH:$HOME/.local/bin"
 alias ll='ls -lh'

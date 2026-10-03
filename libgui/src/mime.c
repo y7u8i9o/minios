@@ -10,8 +10,8 @@
 #include <minios/local.h>
 #include <minios/conf.h>
 
-/* local: from the tables of installed packages under the package prefix,
- * which mime_save leaves out. */
+/* local: from the tables of installed packages (PKG_MIME_TYPES and
+ * PKG_MIME_APPS), which mime_save leaves out. */
 struct ext_entry { char type[48]; char ext[16]; int local; };
 struct app_entry { char type[48]; char program[64]; int local; };
 
@@ -112,8 +112,8 @@ int mime_load(const char *types_path, const char *apps_path)
     int r = load_apps(apps_file, 0);
     if (r < 0)
         return r;
-    load_types(LOCAL_MIME_TYPES, 1);
-    load_apps(LOCAL_MIME_APPS, 1);
+    load_types(PKG_MIME_TYPES, 1);
+    load_apps(PKG_MIME_APPS, 1);
     return 0;
 }
 

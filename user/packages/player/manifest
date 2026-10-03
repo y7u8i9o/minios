@@ -1,4 +1,4 @@
 name player
 summary Audio player
-launcher Player bin/player
-mime-handler audio/* bin/player
+launcher Player usr/bin/player
+mime-handler audio/* usr/bin/player

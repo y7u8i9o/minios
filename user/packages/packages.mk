@@ -22,14 +22,14 @@ $(APPBIN)/%: apps/%.c $(SOS) $(LIBEDIT) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(INSTALL)
 
-$(APPBIN)/code: coreutils/code.c ../libc/include/minios/local.h $(SOS) $(CRT0)
+$(APPBIN)/code: coreutils/code.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/code.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/code.elf $@
 
 $(APPBIN)/synth $(APPBIN)/sequencer: apps/synthvoice.h
 
-$(APPBIN)/luasynth: packages/luasynth/launcher.c ../libc/include/minios/local.h $(BUILD)/lib/libc.so $(CRT0)
+$(APPBIN)/luasynth: packages/luasynth/launcher.c $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/luasynth.elf $(ULDFLAGS) $(CRT0) $< -lc -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/luasynth.elf $@
@@ -37,11 +37,11 @@ $(APPBIN)/luasynth: packages/luasynth/launcher.c ../libc/include/minios/local.h 
 define APP_PACKAGE
 $(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(ROOT)/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
 	@rm -rf $(OUT)/packages/$(1)
-	@mkdir -p $(OUT)/packages/$(1)/files/bin $(PKG_OUT)
+	@mkdir -p $(OUT)/packages/$(1)/files/usr/bin $(PKG_OUT)
 	@cat packages/$(1)/manifest > $(OUT)/packages/$(1)/manifest
 	@printf 'version $(call pkg_version,$(1))\n' >> $(OUT)/packages/$(1)/manifest
 	@if [ -d packages/$(1)/files ]; then cp -Rp packages/$(1)/files/. $(OUT)/packages/$(1)/files/; fi
-	@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/bin/$(1)
+	@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/usr/bin/$(1)
 	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(ROOT)
 endef
 $(foreach a,$(PKG_NAMES),$(eval $(call APP_PACKAGE,$(a))))

@@ -19,8 +19,8 @@ static void test_gui_luasynth(void)
     ktest_assert(daemon != NULL, "cannot start audiod");
     sleep_ms(300);
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/luasynth", (char *const[]){ "luasynth", NULL },
-                                      (char *const[]){ "HOME=/home", "PATH=/bin:/home/.local/bin", NULL }, &kernel_proc);
+    struct proc *cl = proc_create_user("/usr/bin/luasynth", (char *const[]){ "luasynth", NULL },
+                                      (char *const[]){ "HOME=/home", "PATH=/bin:/usr/bin", NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start Lua Synthesizer");
     int found = 0;
     for (int attempt = 0; attempt < 60 && !found; attempt++) {
@@ -69,8 +69,8 @@ static void test_luasynth_profile(void)
     ktest_assert(daemon != NULL, "cannot start audiod");
     sleep_ms(300);
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/bin/lua", (char *const[]){ "lua", "/etc/tests/luasynth-profile.lua", "/home/.local/share/apps/luasynth/", mode, NULL },
-                                      (char *const[]){ "HOME=/home", "PATH=/bin:/home/.local/bin", NULL }, &kernel_proc);
+    struct proc *cl = proc_create_user("/bin/lua", (char *const[]){ "lua", "/etc/tests/luasynth-profile.lua", "/usr/share/apps/luasynth/", mode, NULL },
+                                      (char *const[]){ "HOME=/home", "PATH=/bin:/usr/bin", NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start audio profile");
     int status = proc_reap(cl);
     stop_server(srv);

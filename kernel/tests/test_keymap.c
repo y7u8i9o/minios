@@ -148,7 +148,7 @@ static void test_compositor(void)
     vfs_unlink("/keymap.txt");
     struct proc *srv = start_server();
     set_keymap("fr");
-    struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/keymap.txt", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/keymap.txt", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);

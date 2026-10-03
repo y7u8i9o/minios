@@ -1,4 +1,4 @@
 name gedit
 summary Text editor
-launcher Editor bin/gedit
-mime-handler text/* bin/gedit
+launcher Editor usr/bin/gedit
+mime-handler text/* usr/bin/gedit

@@ -119,7 +119,7 @@ static void start_session(const struct account *a)
     snprintf(shell, sizeof shell, "SHELL=%s", a->shell);
     const char *t = getenv("TERM");
     snprintf(term, sizeof term, "TERM=%s", t ? t : "minios");
-    char *envp[] = { home, user, logname, shell, term, "PATH=/bin:/usr/local/bin", NULL };
+    char *envp[] = { home, user, logname, shell, term, "PATH=/bin:/usr/bin:/usr/local/bin", NULL };
     /* A leading "-" in argv[0] marks a login shell. */
     static char arg0[64];
     const char *base = strrchr(a->shell, '/');

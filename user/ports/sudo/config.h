@@ -1276,7 +1276,7 @@
 #define RUNAS_DEFAULT "root"
 
 /* A colon-separated list of directories to override the user's PATH with. */
-#define SECURE_PATH "/bin:/usr/local/bin"
+#define SECURE_PATH "/bin:/usr/bin:/usr/local/bin"
 
 /* Define to 1 to send mail when the user is not allowed to run a command. */
 /* #undef SEND_MAIL_WHEN_NOT_OK */

@@ -296,7 +296,7 @@ static void parse_line(char *line, int lineno)
 static void builtin_config(void)
 {
     static const char *const lines[] = {
-        "env PATH=/bin TERM=minios",
+        "env PATH=/bin:/usr/bin TERM=minios",
         "task fsinit fsinit",
         "service audio if=/dev/pcm0 audiod",
         "task network net apply",

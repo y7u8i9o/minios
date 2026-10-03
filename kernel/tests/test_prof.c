@@ -36,7 +36,7 @@ static void test_prof_gui(void)
     struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", "yes", NULL }, (char *const[]){ NULL },
                                          &kernel_proc);
     ktest_assert(term != NULL, "cannot start the terminal");
-    struct proc *mandel = start("/home/.local/bin/mandel", "mandel");
+    struct proc *mandel = start("/usr/bin/mandel", "mandel");
     sleep_ms(2000);
     /* Reset the lock counters after startup so they describe the steady
      * state, then generate pointer motion while sampling. */
@@ -78,7 +78,7 @@ static void test_profiler_gui(void)
     install_app("mandel");
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
-    struct proc *mandel = start("/home/.local/bin/mandel", "mandel");
+    struct proc *mandel = start("/usr/bin/mandel", "mandel");
     sleep_ms(1500);
     struct proc *gui = proc_create_user("/bin/profiler",
                                         (char *const[]){ "profiler", "-r", "6", "-o", "/tmp/profiler-gui.json", "--test-ui", NULL },

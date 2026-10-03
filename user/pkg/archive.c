@@ -95,7 +95,12 @@ int archive_next(struct archive *a, struct member *m, char *err, size_t errlen)
         } else {
             memcpy(m->path, h->name, nn);
         }
-        m->mode = (uint32_t)octal(h->mode, sizeof h->mode);
+        m->mode = (uint32_t)octal(h->mode, sizeof h->mode) & 07777;
+        m->uid = (uint32_t)octal(h->uid, sizeof h->uid);
+        m->gid = (uint32_t)octal(h->gid, sizeof h->gid);
+        /* Only a file owned by root may change the ids of a process. */
+        if (m->uid != 0)
+            m->mode &= ~06000u;
         m->mtime = (time_t)octal(h->mtime, sizeof h->mtime);
         m->size = (size_t)octal(h->size, sizeof h->size);
         size_t blocks = (m->size + BLOCK - 1) / BLOCK;
@@ -177,8 +182,8 @@ int tarw_add(struct tar_writer *w, const char *path, int dir, uint32_t mode, tim
     h.typeflag = dir ? '5' : '0';
     memcpy(h.magic, "ustar", 6);
     memcpy(h.version, "00", 2);
-    memcpy(h.uname, "user", 4);
-    memcpy(h.gname, "user", 4);
+    memcpy(h.uname, "root", 4);
+    memcpy(h.gname, "root", 4);
     memset(h.chksum, ' ', sizeof h.chksum);
     unsigned sum = 0;
     for (size_t i = 0; i < sizeof h; i++)

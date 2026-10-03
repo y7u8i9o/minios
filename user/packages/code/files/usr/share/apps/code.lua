@@ -6,7 +6,7 @@
 -- may add or change entries and settings: it is loaded with the tables
 -- as `languages` and `settings`.
 --
---     lua /home/.local/share/apps/code.lua [file]
+--     lua /usr/share/apps/code.lua [file]
 
 local gui = require "gui"
 local sys = require "sys"

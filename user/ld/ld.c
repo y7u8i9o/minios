@@ -29,11 +29,12 @@
 #define PAGE 4096UL
 #define ALIGN_DOWN(x, a) ((x) & ~((a) - 1))
 #define ALIGN_UP(x, a) (((x) + (a) - 1) & ~((a) - 1))
-/* The system libraries, then the shared package prefix (minios/local.h).
- * The libraries of the user in ~/.local/lib come last, and not at all for
- * a program that runs with changed ids, which the kernel marks with
- * AT_SECURE (docs/design/users.md). */
-static const char *const lib_dirs[] = { "/lib/", "/usr/local/lib/" };
+/* The system libraries, the libraries of packages (docs/design/packages.md),
+ * then the software that the package installer does not manage
+ * (minios/local.h). The libraries of the user in ~/.local/lib come last,
+ * and not at all for a program that runs with changed ids, which the
+ * kernel marks with AT_SECURE (docs/design/users.md). */
+static const char *const lib_dirs[] = { "/lib/", "/usr/lib/", "/usr/local/lib/" };
 static int secure;
 static char *home_lib;              /* "$HOME/.local/lib/" or NULL */
 /* Keep DSOs above the interpreter and below the ordinary mmap area. Every

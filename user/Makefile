@@ -54,9 +54,11 @@ FONTS  := $(ROOT)/etc/fonts/DejaVuSans.ttf $(ROOT)/etc/fonts/DejaVuSansMono.ttf 
 .PHONY: all clean
 all: $(LIBS) $(CODECS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
 
+# The copy replaces the old file rather than writing into it, since the
+# modes step leaves files such as /etc/sudoers without a write bit.
 $(ROOT)/etc/%: etc/%
 	@mkdir -p $(dir $@)
-	@if [ -f $< ]; then cp $< $@; else mkdir -p $@; fi
+	@if [ -f $< ]; then rm -f $@ && cp $< $@; else mkdir -p $@; fi
 
 # Two symbolic links that the symlink test resolves on the root image and
 # under /initrd, which mkfs and the initrd reader store as links. One is

@@ -31,6 +31,7 @@ FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
 NETPEER  := $(BUILD)/host/netpeer
 PKGSIGN  := $(BUILD)/host/pkgsign
+PKGHOST  := $(BUILD)/host/pkg
 MSGFMT   := $(BUILD)/host/msgfmt
 # PKG_KEY names the key that signs the package repository index
 # (docs/design/packages.md). The build generates one under build/ unless
@@ -43,13 +44,13 @@ PKG_PUB  := $(BUILD)/pkg/signing.pub
 # one HTTP server serves both (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
 
-export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN MSGFMT PKG_KEY_FILE PKG_PUB REPO
+export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT PKG_KEY_FILE PKG_PUB REPO
 
 .PHONY: all kernel libc libfont libwire libaudio libcodec libgui user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN) $(MSGFMT)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN) $(PKGHOST) $(MSGFMT)
 
 # msgfmt compiles the message catalogues of user/po (docs/design/gettext.md).
 $(MSGFMT): tools/msgfmt/msgfmt.c
@@ -81,6 +82,14 @@ CRYPTO_HDRS := libc/include/minios/sha2.h libc/include/minios/ed25519.h
 $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
+
+# The host build of pkg installs packages into the tree of an image with
+# --root and prints the owners mkfs gives the files with pkg perms
+# (docs/design/packages.md).
+PKGHOST_SRCS := $(wildcard user/pkg/*.c) libc/src/gzip.c libc/src/net/http.c libc/src/crypto/sha2.c libc/src/crypto/ed25519.c
+$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) libc/include/minios/local.h libc/include/minios/gzip.h libc/include/minios/http.h
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ $(PKGHOST_SRCS)
 
 $(PKG_KEY_FILE): | $(PKGSIGN)
 	@mkdir -p $(dir $@)
@@ -288,12 +297,14 @@ check-lua:
 
 # check-pkg tests the SHA-256, SHA-512 and Ed25519 code on the host with
 # the vectors of RFC 6234 and RFC 8032, and the pkg_repo case runs the same
-# test on minios.
-check-pkg:
+# test on minios. It then runs the host build of pkg against an
+# installation root in build/host/pkgtest.
+check-pkg: $(PKGHOST)
 	@mkdir -p $(BUILD)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter libc/include \
 	    -o $(BUILD)/host/cryptotest user/tests/cryptotest.c $(CRYPTO_SRCS)
 	$(BUILD)/host/cryptotest
+	PKG=$(abspath $(PKGHOST)) WORK=$(abspath $(BUILD)/host/pkgtest) sh user/pkg/tests/host.sh
 
 .PHONY: check-sh libedit
 check-sh:

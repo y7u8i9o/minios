@@ -3,13 +3,12 @@
  * arguments. */
 #include <stdio.h>
 #include <unistd.h>
-#include <minios/local.h>
 
 int main(int argc, char **argv)
 {
     char *args[argc + 3];
     args[0] = "lua";
-    args[1] = LOCAL_SHARE "/apps/code.lua";
+    args[1] = "/usr/share/apps/code.lua";
     for (int i = 1; i < argc; i++)
         args[i + 1] = argv[i];
     args[argc + 1] = NULL;

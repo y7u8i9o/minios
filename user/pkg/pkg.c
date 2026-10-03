@@ -11,7 +11,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
-#include <minios/gzip.h>
+#include <minios/local.h>
+#include <minios/sha2.h>
 
 #define MAX_PENDING 32
 #define MAX_LIBS 64
@@ -25,6 +26,9 @@ struct pending {
     int skip;                   /* the same version is installed */
     int done;                   /* ordering */
     int fetched;                /* The archive came from a repository. */
+    struct record rec;          /* the files and directories once installed */
+    struct record old;          /* the record of the version being replaced */
+    int have_old;
 };
 
 static struct pending pend[MAX_PENDING];
@@ -36,7 +40,7 @@ static int force;
 
 static void usage(void)
 {
-    fputs("usage: pkg [--prefix DIR] [--root DIR] [--config FILE] command...\n"
+    fputs("usage: pkg [--root DIR] [--arch MACHINE] [--config FILE] command...\n"
           "       pkg install FILE|NAME[-VERSION]...\n"
           "       pkg check FILE|NAME[-VERSION]...\n"
           "       pkg update\n"
@@ -46,6 +50,7 @@ static void usage(void)
           "       pkg list\n"
           "       pkg info NAME|FILE\n"
           "       pkg verify [NAME...]\n"
+          "       pkg perms\n"
           "       pkg build DIR [FILE]\n", stderr);
     exit(2);
 }
@@ -94,7 +99,7 @@ static struct pending *pending_named(const char *name)
 
 /* ---- members ---- */
 
-/* The prefix relative path of a member, or NULL for the manifest and
+/* The root relative path of a member, or NULL for the manifest and
  * the files/ directory itself; -1 for a member outside files/. */
 static int member_rel(const struct member *m, const char **rel)
 {
@@ -130,15 +135,23 @@ static int open_package(struct pending *p)
         return error(p->file, "the first member is not the manifest");
     if (manifest_parse(&p->m, (const char *)m.data, m.size, err, sizeof err) < 0)
         return error(p->file, "%s", err);
+    if (p->m.format != PKG_FORMAT)
+        return error(p->m.name, "%s is a package of format %d, and this installer reads format %d; rebuild it",
+                     p->file, p->m.format ? p->m.format : 1, PKG_FORMAT);
+    int configs = 0;
     while ((r = archive_next(&p->ar, &m, err, sizeof err)) > 0) {
         const char *rel;
         if (member_rel(&m, &rel) < 0)
             return error(p->m.name, "member %s is outside files/", m.path);
         if (strcmp(m.path, "manifest") == 0)
             return error(p->m.name, "the manifest appears twice");
+        if (rel && !m.dir && manifest_is_config(&p->m, rel))
+            configs++;
     }
     if (r < 0)
         return error(p->m.name, "%s", err);
+    if (configs != p->m.nconfig)
+        return error(p->m.name, "the manifest names a configuration file that the package does not contain");
     archive_rewind(&p->ar);
     return 0;
 }
@@ -184,7 +197,7 @@ static struct lib *find_library(const char *soname)
     memset(l, 0, sizeof *l);
     strlcpy(l->soname, soname, sizeof l->soname);
     char rel[PKG_PATH_MAX], path[PKG_PATH_MAX];
-    snprintf(rel, sizeof rel, "lib/%s", soname);
+    snprintf(rel, sizeof rel, "usr/lib/%s", soname);
     for (int i = 0; i < npend; i++) {
         const struct pkg_lib *pl = manifest_provides(&pend[i].m, soname);
         struct member m;
@@ -203,7 +216,7 @@ static struct lib *find_library(const char *soname)
         const struct pkg_lib *pl = manifest_provides(&installed_m[i], soname);
         if (!pl || pending_named(installed[i]))
             continue;
-        path_join(path, sizeof path, prefix, rel);
+        root_path(path, sizeof path, rel);
         if (read_file(path, &l->owned, &l->len) < 0)
             return NULL;
         l->data = l->owned;
@@ -212,7 +225,7 @@ static struct lib *find_library(const char *soname)
         nlibs++;
         return l;
     }
-    snprintf(path, sizeof path, "%s/lib/%s", sysroot, soname);
+    snprintf(path, sizeof path, "%s/lib/%s", root, soname);
     if (read_file(path, &l->owned, &l->len) == 0) {
         l->data = l->owned;
         l->abi = system_abi(soname);
@@ -243,6 +256,8 @@ static int collect_symbol(const char *name, void *arg)
 const char *system_arch(void)
 {
     static struct utsname u;
+    if (target_arch)
+        return target_arch;
     if (!u.machine[0] && uname(&u) < 0)
         strlcpy(u.machine, "unknown", sizeof u.machine);
     return u.machine;
@@ -340,7 +355,7 @@ static int check_installed_elves(const char *name)
         char path[PKG_PATH_MAX];
         uint8_t *data;
         size_t len;
-        path_join(path, sizeof path, prefix, rec.files[i].path);
+        root_path(path, sizeof path, rec.files[i].path);
         if (read_file(path, &data, &len) < 0)
             continue;
         if (elf_is(data, len))
@@ -367,7 +382,7 @@ static int installed_foreign(const char *name, const struct manifest *im)
         char path[PKG_PATH_MAX];
         uint8_t *data;
         size_t len;
-        path_join(path, sizeof path, prefix, rec.files[i].path);
+        root_path(path, sizeof path, rec.files[i].path);
         if (read_file(path, &data, &len) < 0)
             continue;
         if (elf_is(data, len) && strcmp(elf_arch(data, len), system_arch()) != 0)
@@ -379,9 +394,9 @@ static int installed_foreign(const char *name, const struct manifest *im)
 }
 
 /* True if the files of the archive differ from the record of the
- * installed package of the same name: a file has another size or CRC, or
- * one of the two lists names a file that the other does not. A package
- * rebuilt without a new version is then replaced. */
+ * installed package of the same name: a file has another size, digest,
+ * mode or owner, or one of the two lists names a file that the other does
+ * not. A package rebuilt without a new version is then replaced. */
 static int installed_differs(struct pending *p)
 {
     struct record rec;
@@ -397,11 +412,14 @@ static int installed_differs(struct pending *p)
             continue;
         nfiles++;
         int found = 0;
-        for (int i = 0; i < rec.nfiles && !found; i++)
-            if (strcmp(rec.files[i].path, rel) == 0) {
-                found = 1;
-                differs = rec.files[i].size != m.size || rec.files[i].crc != gzip_crc32(m.data, m.size);
-            }
+        const struct owned *o = record_file(&rec, rel);
+        if (o) {
+            uint8_t digest[32];
+            sha256(m.data, m.size, digest);
+            found = 1;
+            differs = o->size != m.size || memcmp(o->sha256, digest, sizeof digest) != 0 || o->mode != m.mode ||
+                      o->uid != m.uid || o->gid != m.gid;
+        }
         if (!found)
             differs = 1;
     }
@@ -489,7 +507,9 @@ static int check_all(void)
             }
         }
     }
-    /* Libraries: a soname provided by a package may not exist in /lib. */
+    /* Libraries: a soname provided by a package lies in its usr/lib, may
+     * not be a library of the root image that no package provides, and
+     * may not be provided by two packages. */
     for (int i = 0; i < npend; i++) {
         struct pending *p = &pend[i];
         if (p->skip)
@@ -498,12 +518,12 @@ static int check_all(void)
             char path[PKG_PATH_MAX], rel[PKG_PATH_MAX];
             struct member m;
             struct stat st;
-            snprintf(path, sizeof path, "%s/lib/%s", sysroot, p->m.provides[j].soname);
+            snprintf(path, sizeof path, "%s/lib/%s", root, p->m.provides[j].soname);
             if (stat(path, &st) == 0)
                 return error(p->m.name, "provides %s, which is a system library", p->m.provides[j].soname);
-            snprintf(rel, sizeof rel, "lib/%s", p->m.provides[j].soname);
+            snprintf(rel, sizeof rel, "usr/lib/%s", p->m.provides[j].soname);
             if (!find_member(p, rel, &m))
-                return error(p->m.name, "provides %s but does not contain lib/%s", p->m.provides[j].soname, p->m.provides[j].soname);
+                return error(p->m.name, "provides %s but does not contain usr/lib/%s", p->m.provides[j].soname, p->m.provides[j].soname);
             for (int k = 0; k < ninstalled; k++)
                 if (!pending_named(installed[k]) && manifest_provides(&installed_m[k], p->m.provides[j].soname))
                     return error(p->m.name, "provides %s, which %s provides already", p->m.provides[j].soname, installed[k]);
@@ -545,10 +565,22 @@ static int check_all(void)
         while ((r = archive_next(&p->ar, &m, err, sizeof err)) > 0) {
             const char *rel;
             char owner[PKG_NAME_MAX];
-            if (member_rel(&m, &rel) < 0 || !rel || m.dir)
+            if (member_rel(&m, &rel) < 0 || !rel)
                 continue;
-            if (db_owner(rel, owner, sizeof owner) && strcmp(owner, p->m.name) != 0)
-                return error(p->m.name, "%s belongs to %s", rel, owner);
+            char full[PKG_PATH_MAX];
+            struct stat st;
+            root_path(full, sizeof full, rel);
+            if (m.dir) {
+                if (lstat(full, &st) == 0 && !S_ISDIR(st.st_mode))
+                    return error(p->m.name, "%s exists in the filesystem and is not a directory", rel);
+                continue;
+            }
+            if (db_owner(rel, owner, sizeof owner)) {
+                if (strcmp(owner, p->m.name) != 0)
+                    return error(p->m.name, "%s belongs to %s", rel, owner);
+            } else if (lstat(full, &st) == 0) {
+                return error(p->m.name, "%s exists in the filesystem and belongs to no package", rel);
+            }
             for (int j = 0; j < i; j++) {
                 struct member other;
                 if (!pend[j].skip && find_member(&pend[j], rel, &other))
@@ -562,45 +594,113 @@ static int check_all(void)
 
 /* ---- installation ---- */
 
-static int remove_files(const struct record *r, const struct record *keep)
+/* Gives a file or directory the mode and owner of its archive member. Only
+ * root can give a file away, and without root a file keeps no setuid or
+ * setgid bit, which the host build of pkg relies on when it installs into
+ * a tree for an image (pkg perms). */
+static int apply_owner(const char *path, uint32_t mode, uint32_t uid, uint32_t gid)
+{
+    if (geteuid() == 0 && chown(path, uid, gid) < 0)
+        return -1;
+    return chmod(path, geteuid() == 0 ? mode : mode & ~06000u);
+}
+
+/* Removes the files of record r that keep does not list, then its
+ * directories that are empty, deepest first. A configuration file of m
+ * that was changed after its installation is saved as PATH.pkgsave. */
+static void remove_files(const struct manifest *m, const struct record *r, const struct record *keep)
 {
     char path[PKG_PATH_MAX];
     for (int i = 0; i < r->nfiles; i++) {
-        int kept = 0;
-        for (int j = 0; keep && j < keep->nfiles; j++)
-            if (strcmp(keep->files[j].path, r->files[i].path) == 0)
-                kept = 1;
-        if (kept)
+        if (keep && record_file(keep, r->files[i].path))
             continue;
-        path_join(path, sizeof path, prefix, r->files[i].path);
+        root_path(path, sizeof path, r->files[i].path);
+        uint8_t digest[32];
+        if (m && manifest_is_config(m, r->files[i].path) && file_sha256(path, digest) == 0 &&
+            memcmp(digest, r->files[i].sha256, sizeof digest) != 0) {
+            char saved[PKG_PATH_MAX];
+            snprintf(saved, sizeof saved, "%s.pkgsave", path);
+            if (rename(path, saved) == 0)
+                fprintf(stderr, "pkg: %s: %s was modified and is saved as %s.pkgsave\n", m->name,
+                        r->files[i].path, r->files[i].path);
+            continue;
+        }
         unlink(path);
     }
     for (int i = r->ndirs - 1; i >= 0; i--) {
-        if (keep && record_has_dir(keep, r->dirs[i]))
+        if (keep && record_has_dir(keep, r->dirs[i].path))
             continue;
-        path_join(path, sizeof path, prefix, r->dirs[i]);
+        root_path(path, sizeof path, r->dirs[i].path);
         rmdir(path);
     }
+}
+
+/* An installation is one transaction over all packages of a command. Every
+ * file is first written to a temporary name beside its target, and only
+ * when all of them are written are they renamed into place. A failure
+ * before that point removes the temporary files and the new directories
+ * and leaves the installed files untouched. A file that a running program
+ * maps stays valid after the rename, since the filesystem frees an
+ * unlinked file only when its last reference goes away. */
+enum { STAGE_REPLACE, STAGE_PKGNEW, STAGE_SAME };
+struct staged {
+    struct pending *p;
+    char rel[PKG_PATH_MAX], target[PKG_PATH_MAX], tmp[PKG_PATH_MAX];
+    int action;
+};
+static struct staged *staged;
+static int nstaged, cap_staged;
+static char (*made)[PKG_PATH_MAX];  /* directories the transaction created */
+static int nmade, cap_made;
+
+static struct staged *stage_new(void)
+{
+    if (nstaged == cap_staged) {
+        int cap = cap_staged ? cap_staged * 2 : 256;
+        struct staged *grown = realloc(staged, (size_t)cap * sizeof *staged);
+        if (!grown)
+            return NULL;
+        staged = grown;
+        cap_staged = cap;
+    }
+    return &staged[nstaged++];
+}
+
+static int note_made(const char *path)
+{
+    if (nmade == cap_made) {
+        int cap = cap_made ? cap_made * 2 : 64;
+        char (*grown)[PKG_PATH_MAX] = realloc(made, (size_t)cap * PKG_PATH_MAX);
+        if (!grown)
+            return -1;
+        made = grown;
+        cap_made = cap;
+    }
+    strlcpy(made[nmade++], path, PKG_PATH_MAX);
     return 0;
 }
 
-/* Creates the directories of a prefix relative path, recording the new ones. */
-static int make_parents(struct record *r, const char *rel, int including_last)
+/* Creates the missing directories of a root relative path and records
+ * them in r. A directory the archive names (dir set) takes the mode and
+ * owner of its member, a parent that it does not name 0755 and root. */
+static int make_parents(struct record *r, const char *rel, const struct member *dir)
 {
     char buf[PKG_PATH_MAX], full[PKG_PATH_MAX];
     strlcpy(buf, rel, sizeof buf);
     for (char *p = buf; *p; p++) {
         char *slash = strchr(p, '/');
-        if (!slash && !including_last)
+        if (!slash && !dir)
             break;
         if (slash)
             *slash = '\0';
-        path_join(full, sizeof full, prefix, buf);
+        root_path(full, sizeof full, buf);
         struct stat st;
         if (stat(full, &st) < 0) {
-            if (mkdir(full, 0755) < 0)
+            int last = !slash;
+            uint32_t mode = last ? dir->mode : 0755, uid = last ? dir->uid : 0, gid = last ? dir->gid : 0;
+            if (mkdir(full, 0700) < 0 || note_made(full) < 0 || apply_owner(full, mode, uid, gid) < 0)
                 return -1;
-            record_add_dir(r, buf);
+            record_add_dir(r, buf, mode, uid, gid);
         } else if (!S_ISDIR(st.st_mode)) {
             errno = ENOTDIR;
             return -1;
@@ -613,62 +713,113 @@ static int make_parents(struct record *r, const char *rel, int including_last)
     return 0;
 }
 
-static int extract(struct pending *p)
+/* Writes the files of one package to their temporary names. A
+ * configuration file that exists already is replaced only when it is
+ * unchanged since the installed version wrote it. A changed one is left
+ * in place and the new version goes to PATH.pkgnew. */
+static int stage(struct pending *p)
 {
-    struct record rec = {0}, old = {0};
-    int have_old = p->upgrade && db_read_record(p->m.name, &old) == 0;
-    if (have_old)
-        for (int i = 0; i < old.ndirs; i++)
-            record_add_dir(&rec, old.dirs[i]);
-    char err[128], full[PKG_PATH_MAX];
+    memset(&p->rec, 0, sizeof p->rec);
+    p->have_old = p->upgrade && db_read_record(p->m.name, &p->old) == 0;
+    for (int i = 0; p->have_old && i < p->old.ndirs; i++)
+        record_add_dir(&p->rec, p->old.dirs[i].path, p->old.dirs[i].mode, p->old.dirs[i].uid, p->old.dirs[i].gid);
+    char err[128];
     struct member m;
-    int r, failed = 0;
-    while (!failed && (r = archive_next(&p->ar, &m, err, sizeof err)) > 0) {
+    int r;
+    while ((r = archive_next(&p->ar, &m, err, sizeof err)) > 0) {
         const char *rel;
         if (member_rel(&m, &rel) < 0 || !rel)
             continue;
-        if (m.dir) {
-            if (make_parents(&rec, rel, 1) < 0)
-                failed = 1;
+        if (make_parents(&p->rec, rel, m.dir ? &m : NULL) < 0) {
+            archive_rewind(&p->ar);
+            return error(p->m.name, "%s: %s", rel, strerror(errno));
+        }
+        if (m.dir)
             continue;
+        struct staged *f = stage_new();
+        if (!f) {
+            archive_rewind(&p->ar);
+            return error(p->m.name, "out of memory");
         }
-        if (make_parents(&rec, rel, 0) < 0) {
-            failed = 1;
-            break;
+        f->p = p;
+        strlcpy(f->rel, rel, sizeof f->rel);
+        root_path(f->target, sizeof f->target, rel);
+        snprintf(f->tmp, sizeof f->tmp, "%s.pkgtmp", f->target);
+        f->action = STAGE_REPLACE;
+        uint8_t digest[32], current[32];
+        sha256(m.data, m.size, digest);
+        if (manifest_is_config(&p->m, rel) && file_sha256(f->target, current) == 0) {
+            const struct owned *o = p->have_old ? record_file(&p->old, rel) : NULL;
+            if (memcmp(current, digest, sizeof digest) == 0)
+                f->action = STAGE_SAME;
+            else if (!o || memcmp(current, o->sha256, sizeof current) != 0)
+                f->action = STAGE_PKGNEW;
         }
-        path_join(full, sizeof full, prefix, rel);
-        /* MiniOS chmod is currently a stub. Recreate payload files so the
-         * archive's mode is applied by open, including during upgrades. */
-        if (unlink(full) < 0 && errno != ENOENT) {
-            error(p->m.name, "%s: %s", rel, strerror(errno));
-            failed = 1;
-            break;
+        if (f->action != STAGE_SAME) {
+            struct timespec ts[2] = { { m.mtime, 0 }, { m.mtime, 0 } };
+            if (write_file_mode(f->tmp, m.data, m.size, 0600) < 0 || apply_owner(f->tmp, m.mode, m.uid, m.gid) < 0) {
+                int e = errno;
+                unlink(f->tmp);
+                nstaged--;
+                archive_rewind(&p->ar);
+                return error(p->m.name, "%s: %s", rel, strerror(e));
+            }
+            utimensat(AT_FDCWD, f->tmp, ts, 0);
         }
-        if (write_file_mode(full, m.data, m.size, m.mode & 0777) < 0) {
-            error(p->m.name, "%s: %s", rel, strerror(errno));
-            failed = 1;
-            break;
-        }
-        struct timespec ts[2] = { { m.mtime, 0 }, { m.mtime, 0 } };
-        utimensat(AT_FDCWD, full, ts, 0);
-        record_add_file(&rec, rel, m.size, gzip_crc32(m.data, m.size));
+        record_add_file(&p->rec, rel, m.mode, m.uid, m.gid, m.size, digest);
     }
     archive_rewind(&p->ar);
-    if (!failed && db_write(p->m.name, &p->m, &rec) < 0) {
-        error(p->m.name, "cannot write the record: %s", strerror(errno));
-        failed = 1;
+    return r < 0 ? error(p->m.name, "%s", err) : 0;
+}
+
+/* Undoes the staging of a failed transaction. */
+static void unstage(void)
+{
+    for (int i = 0; i < nstaged; i++)
+        if (staged[i].action != STAGE_SAME)
+            unlink(staged[i].tmp);
+    for (int i = nmade - 1; i >= 0; i--)
+        rmdir(made[i]);
+    nstaged = nmade = 0;
+}
+
+/* Renames the staged files into place, then removes what the replaced
+ * versions had and the new ones do not, and writes the records. */
+static int commit(struct pending **sorted, int n)
+{
+    int status = 0;
+    for (int i = 0; i < nstaged; i++) {
+        struct staged *f = &staged[i];
+        if (f->action == STAGE_SAME)
+            continue;
+        char dest[PKG_PATH_MAX];
+        if (f->action == STAGE_PKGNEW)
+            snprintf(dest, sizeof dest, "%s.pkgnew", f->target);
+        else
+            strlcpy(dest, f->target, sizeof dest);
+        if (rename(f->tmp, dest) < 0) {
+            status = error(f->p->m.name, "%s: %s; the installation is incomplete", f->rel, strerror(errno));
+            unlink(f->tmp);
+        } else if (f->action == STAGE_PKGNEW) {
+            fprintf(stderr, "pkg: %s: %s was modified, and the new version is %s.pkgnew\n", f->p->m.name,
+                    f->rel, f->rel);
+        }
     }
-    if (failed) {
-        remove_files(&rec, have_old ? &old : NULL);
-        if (!have_old)
-            db_delete(p->m.name);
-    } else if (have_old) {
-        remove_files(&old, &rec);
+    for (int i = 0; i < n; i++) {
+        struct pending *p = sorted[i];
+        if (p->skip)
+            continue;
+        if (p->have_old) {
+            struct manifest oldm;
+            remove_files(db_read(p->m.name, &oldm) == 0 ? &oldm : NULL, &p->old, &p->rec);
+        }
+        if (db_write(p->m.name, &p->m, &p->rec) < 0)
+            status = error(p->m.name, "cannot write the record: %s", strerror(errno));
+        else
+            printf("%s %s %s\n", p->upgrade ? "upgraded" : "installed", p->m.name, p->m.version);
     }
-    if (have_old)
-        record_free(&old);
-    record_free(&rec);
-    return failed ? -1 : 0;
+    nstaged = nmade = 0;
+    return status;
 }
 
 /* Pending packages in an order that installs dependencies first. */
@@ -772,7 +923,7 @@ static int system_library(const char *soname)
 {
     char path[PKG_PATH_MAX];
     struct stat st;
-    snprintf(path, sizeof path, "%s/lib/%s", sysroot, soname);
+    snprintf(path, sizeof path, "%s/lib/%s", root, soname);
     return stat(path, &st) == 0;
 }
 
@@ -931,7 +1082,7 @@ static int install(int argc, char **argv, const struct index_entry **upgrades, i
         return error(NULL, "at most %d packages per command", MAX_PENDING);
     int r = db_lock();
     if (r < 0)
-        return error(NULL, "cannot lock %s/lib/pkg: %s", prefix, strerror(-r));
+        return error(NULL, "cannot lock %s%s: %s", root, PKG_DB, strerror(-r));
     load_installed();
     int status = 0;
     for (int i = 0; i < argc && status == 0; i++) {
@@ -962,22 +1113,22 @@ static int install(int argc, char **argv, const struct index_entry **upgrades, i
                 printf("%s %s can be installed\n", pend[i].m.name, pend[i].m.version);
         status = check_local_against_index();
     } else if (status == 0) {
-        for (int i = 0; i < npend && status == 0; i++) {
-            struct pending *p = sorted[i];
-            if (p->skip)
-                continue;
-            if (extract(p) < 0) {
+        for (int i = 0; i < npend && status == 0; i++)
+            if (!sorted[i]->skip && stage(sorted[i]) < 0)
                 status = -1;
-                break;
-            }
-            printf("%s %s %s\n", p->upgrade ? "upgraded" : "installed", p->m.name, p->m.version);
-        }
+        if (status < 0)
+            unstage();
+        else
+            status = commit(sorted, npend);
         r = db_write_tables();
         if (r < 0)
             status = error(NULL, "cannot write the launcher and MIME tables: %s", strerror(-r));
     }
-    for (int i = 0; i < npend; i++)
+    for (int i = 0; i < npend; i++) {
         archive_free(&pend[i].ar);
+        record_free(&pend[i].rec);
+        record_free(&pend[i].old);
+    }
     remove_fetched();
     db_unlock();
     return status;
@@ -1043,7 +1194,7 @@ static int cmd_remove(int argc, char **argv)
         usage();
     int r = db_lock();
     if (r < 0)
-        return error(NULL, "cannot lock %s/lib/pkg: %s", prefix, strerror(-r));
+        return error(NULL, "cannot lock %s%s: %s", root, PKG_DB, strerror(-r));
     load_installed();
     int status = 0;
     for (int i = 0; i < argc && status == 0; i++) {
@@ -1071,7 +1222,7 @@ static int cmd_remove(int argc, char **argv)
             break;
         struct record rec;
         if (db_read_record(name, &rec) == 0) {
-            remove_files(&rec, NULL);
+            remove_files(m, &rec, NULL);
             record_free(&rec);
         }
         r = db_delete(name);
@@ -1129,27 +1280,46 @@ static int cmd_info(const char *arg)
     return 0;
 }
 
+/* Checks the recorded files of one package: content, mode, and, when run
+ * by root, owner. A changed configuration file is reported without
+ * counting as a failure. */
 static int verify_one(const char *name)
 {
     struct record rec;
-    if (db_read_record(name, &rec) < 0)
+    struct manifest m;
+    if (db_read_record(name, &rec) < 0 || db_read(name, &m) < 0)
         return error(name, "not installed");
     int bad = 0;
     for (int i = 0; i < rec.nfiles; i++) {
+        const struct owned *o = &rec.files[i];
         char path[PKG_PATH_MAX];
-        uint8_t *data;
-        size_t len;
-        path_join(path, sizeof path, prefix, rec.files[i].path);
-        if (read_file(path, &data, &len) < 0) {
-            printf("%s: %s: missing\n", name, rec.files[i].path);
+        struct stat st;
+        uint8_t digest[32];
+        root_path(path, sizeof path, o->path);
+        if (lstat(path, &st) < 0 || file_sha256(path, digest) < 0) {
+            printf("%s: %s: missing\n", name, o->path);
             bad = 1;
             continue;
         }
-        if (len != rec.files[i].size || gzip_crc32(data, len) != rec.files[i].crc) {
-            printf("%s: %s: changed\n", name, rec.files[i].path);
+        if ((size_t)st.st_size != o->size || memcmp(digest, o->sha256, sizeof digest) != 0) {
+            if (manifest_is_config(&m, o->path)) {
+                printf("%s: %s: modified configuration file\n", name, o->path);
+            } else {
+                printf("%s: %s: changed\n", name, o->path);
+                bad = 1;
+            }
+            continue;
+        }
+        uint32_t want = geteuid() == 0 ? o->mode : o->mode & ~06000u;
+        if ((st.st_mode & 07777) != want) {
+            printf("%s: %s: mode %04o, recorded %04o\n", name, o->path, (unsigned)(st.st_mode & 07777), (unsigned)want);
             bad = 1;
         }
-        free(data);
+        if (geteuid() == 0 && (st.st_uid != o->uid || st.st_gid != o->gid)) {
+            printf("%s: %s: owner %u:%u, recorded %u:%u\n", name, o->path, (unsigned)st.st_uid,
+                   (unsigned)st.st_gid, (unsigned)o->uid, (unsigned)o->gid);
+            bad = 1;
+        }
     }
     record_free(&rec);
     return bad ? -1 : 0;
@@ -1169,6 +1339,28 @@ static int cmd_verify(int argc, char **argv)
                 status = -1;
     }
     return status;
+}
+
+/* cmd_perms prints the mode and owner of every installed file and of
+ * every directory the packages created, in the form "path mode uid gid"
+ * that mkfs -p reads. An image built from a tree that the host build of
+ * pkg filled receives its owners and setuid bits this way. */
+static int cmd_perms(void)
+{
+    load_installed();
+    for (int i = 0; i < ninstalled; i++) {
+        struct record rec;
+        if (db_read_record(installed[i], &rec) < 0)
+            continue;
+        for (int j = 0; j < rec.ndirs; j++)
+            printf("/%s %04o %u %u\n", rec.dirs[j].path, (unsigned)rec.dirs[j].mode, (unsigned)rec.dirs[j].uid,
+                   (unsigned)rec.dirs[j].gid);
+        for (int j = 0; j < rec.nfiles; j++)
+            printf("/%s %04o %u %u\n", rec.files[j].path, (unsigned)rec.files[j].mode, (unsigned)rec.files[j].uid,
+                   (unsigned)rec.files[j].gid);
+        record_free(&rec);
+    }
+    return 0;
 }
 
 /* ---- build ---- */
@@ -1276,7 +1468,7 @@ static int build_dir(struct build *b, const char *rel)
             /* The package format has no link member. */
             r = error(b->m->name, "%s: symbolic links cannot be packaged", full);
         } else if (S_ISDIR(st.st_mode)) {
-            if (tarw_add(&b->w, member, 1, 0755, st.st_mtime, NULL, 0) < 0)
+            if (tarw_add(&b->w, member, 1, st.st_mode & 07777, st.st_mtime, NULL, 0) < 0)
                 r = error(b->m->name, "%s: cannot add", member);
             else
                 r = build_dir(b, sub);
@@ -1290,7 +1482,7 @@ static int build_dir(struct build *b, const char *rel)
                     r = note_arch(b, data, len, sub);
                 if (r == 0 && elf_is(data, len))
                     r = add_needed(b, data, len, sub);
-                if (r == 0 && tarw_add(&b->w, member, 0, st.st_mode & 0777, st.st_mtime, data, len) < 0)
+                if (r == 0 && tarw_add(&b->w, member, 0, st.st_mode & 07777, st.st_mtime, data, len) < 0)
                     r = error(b->m->name, "%s: cannot add", member);
                 free(data);
             }
@@ -1314,6 +1506,14 @@ static int cmd_build(int argc, char **argv)
     if (manifest_read(&m, path, err, sizeof err) < 0)
         return error(NULL, "%s", err);
     load_installed();
+    m.format = PKG_FORMAT;
+    for (int i = 0; i < m.nconfig; i++) {
+        struct stat st;
+        char file[PKG_PATH_MAX];
+        snprintf(file, sizeof file, "%s/files/%s", argv[0], m.config[i]);
+        if (stat(file, &st) < 0 || !S_ISREG(st.st_mode))
+            return error(m.name, "the configuration file %s is not in files/", m.config[i]);
+    }
     struct build b = { .m = &m };
     /* The needs lines are derived from the ELF files; a line of the
      * source manifest supplies the number of a library that is neither
@@ -1368,25 +1568,26 @@ static int cmd_build(int argc, char **argv)
 int main(int argc, char **argv)
 {
     int i = 1;
-    while (argc > i + 1 && (strcmp(argv[i], "--prefix") == 0 || strcmp(argv[i], "--root") == 0 ||
+    while (argc > i + 1 && (strcmp(argv[i], "--root") == 0 || strcmp(argv[i], "--arch") == 0 ||
                             strcmp(argv[i], "--config") == 0)) {
-        if (argv[i][2] == 'p')
-            prefix = argv[i + 1];
-        else if (argv[i][2] == 'r')
-            sysroot = argv[i + 1];
+        if (argv[i][2] == 'r')
+            root = argv[i + 1];
+        else if (argv[i][2] == 'a')
+            target_arch = argv[i + 1];
         else
             config_path = argv[i + 1];
         i += 2;
     }
+    if (strcmp(root, "/") == 0)
+        root = "";
     if (i >= argc)
         usage();
     const char *cmd = argv[i++];
-    /* The shared prefix belongs to root (docs/design/users.md). A user
-     * installs there through su, or into a prefix of their own. */
+    /* The installation root belongs to root (docs/design/users.md). */
     int modifies = strcmp(cmd, "install") == 0 || strcmp(cmd, "update") == 0 || strcmp(cmd, "upgrade") == 0 ||
                    strcmp(cmd, "remove") == 0;
-    if (modifies && access(prefix, W_OK) < 0 && errno == EACCES) {
-        fprintf(stderr, "pkg: %s belongs to root, run sudo pkg %s ... or give --prefix ~/.local\n", prefix, cmd);
+    if (modifies && access(root[0] ? root : "/", W_OK) < 0 && errno == EACCES) {
+        fprintf(stderr, "pkg: %s belongs to root, run sudo pkg %s ...\n", root[0] ? root : "/", cmd);
         return 1;
     }
     int r = 0;
@@ -1408,6 +1609,8 @@ int main(int argc, char **argv)
         r = cmd_info(argv[i]);
     else if (strcmp(cmd, "verify") == 0)
         r = cmd_verify(argc - i, argv + i);
+    else if (strcmp(cmd, "perms") == 0 && argc == i)
+        r = cmd_perms();
     else if (strcmp(cmd, "build") == 0)
         r = cmd_build(argc - i, argv + i);
     else

@@ -100,7 +100,7 @@ static void test_gui_filechooser(void)
     vfs_unlink("/home/user/.local/share/recent-files");
     vfs_unlink("/home/user/desktop/copy.txt");
     struct proc *srv = start_server();
-    struct proc *ed = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", NULL },
+    struct proc *ed = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", NULL },
                                        (char *const[]){ "PATH=/bin", "HOME=/home/user", NULL }, &kernel_proc);
     ktest_assert(ed != NULL, "cannot start gedit");
     sleep_ms(1500);

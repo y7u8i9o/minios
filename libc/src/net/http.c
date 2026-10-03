@@ -13,8 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <poll.h>
 #include <unistd.h>
-#include <sys/ipc.h>
 #include <sys/socket.h>
 
 #define HEAD_MAX 8192
@@ -203,7 +203,17 @@ int http_get(const char *url, int fd, int timeout, long long max_body, struct ht
     int gai = getaddrinfo(u.host, u.port, &hints, &ai);
     if (gai)
         return fail(res, -EHOSTUNREACH, "%s: %s", u.host, gai_strerror(gai));
+    /* The host build of pkg (docs/design/packages.md) runs on systems
+     * without SOCK_NONBLOCK, where fcntl makes the socket non blocking. */
+#ifdef SOCK_NONBLOCK
     int s = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s >= 0 && fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK) < 0) {
+        close(s);
+        s = -1;
+    }
+#endif
     if (s < 0) {
         freeaddrinfo(ai);
         return fail(res, -errno, "socket: %s", strerror(errno));

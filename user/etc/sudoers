@@ -1,6 +1,6 @@
 # The rules of sudo (sudoers(5), docs/design/users.md). Commands run with
 # the system path, and the members of the group wheel may run any command
 # as any account after giving their own password.
-Defaults secure_path="/bin:/usr/local/bin"
+Defaults secure_path="/bin:/usr/bin:/usr/local/bin"
 root ALL=(ALL:ALL) ALL
 %wheel ALL=(ALL:ALL) ALL

@@ -1,11 +1,13 @@
 # Package installer
 
-`pkg` (`user/pkg/`, `pkg(1)`) installs applications from local archives
+`pkg` (`user/pkg/`, `pkg(1)`) installs packages from local archives
 and from signed repositories over HTTP, lists, verifies and removes them,
 and builds the archives. This document describes the package format, the
-manifest, the installation prefix, the records the installer keeps, the
+manifest, the installation root, the records the installer keeps, the
 dependency and library rules, the repository format with its trust
-model, and the changes made elsewhere in the system.
+model, and the changes made elsewhere in the system. Format 2 of the
+packages, with paths relative to the installation root, owners, modes
+and configuration files, is milestone P0 of `docs/plan/packaging.md`.
 
 ## Scope
 
@@ -21,41 +23,46 @@ scripts that run at installation: every effect of an installation is
 declared in the manifest and performed by the installer, so that removal
 undoes it exactly.
 
-## Installation prefix
+## Installation root
 
-The root filesystem is rebuilt from `build/initrd_root` whenever a program
-changes (`storage.md`), so an installation into `/bin` or `/lib` would not
-survive the next build. The only persistent volume is the data volume,
-mounted at `/home`. Symbolic links exist since 2026-09-30 (`vfs.md`),
-but a link placed in `/bin` or `/lib` of the root image would disappear
-with the next rebuild as well, and there are no bind mounts. Packages are
-therefore installed under `/home/.local`, with the layout of a per-user
-prefix: `bin/`, `lib/`, `share/`, and `lib/pkg/` for the installer's
-records. Since U3 of the multiuser plan (`users.md`) the prefix is
-`/usr/local` (`LOCAL_PREFIX` in `minios/local.h`), a symbolic link of the
-root image to `/home/.local`, which belongs to root and is shared by all
-users, and installing or removing a package needs root (`sudo pkg
-install NAME` or `doas pkg install NAME` since U5) or a prefix of the
-user's own such as `--prefix ~/.local`. Without a data volume the prefix lies on the root image's
-`/home` and disappears with the next build.
-`--prefix DIR` selects another prefix, for tests and for images prepared
-on another system.
+Packages install into the root filesystem. An archive names every file
+relative to the root, as `usr/bin/calc` or `etc/calc.conf`, and the
+installer writes it there. Programs of packages are in `/usr/bin`,
+their libraries in `/usr/lib` and their data in `/usr/share`.
+`/usr/local` holds software that `pkg` does not manage (`minios/local.h`).
+`--root DIR` installs into the tree `DIR` instead and reads the records,
+`etc/pkg.conf`, `etc/pkg/keys` and `lib/abi` below it. The host build of
+`pkg` uses it to fill the tree of an image (P3 of the plan), and `--arch`
+then names the machine the packages must be built for.
 
-Three places know the prefix:
+Until the base system is itself a set of packages (P3) and the system is
+installed on a disk of its own (P7 and P8), the root image is rebuilt
+from `build/initrd_root` with every build, and the packages installed
+into it disappear with the next build. Before P0 packages were installed
+under `/usr/local`, a symbolic link to `/home/.local` on the data volume.
+The installer no longer reads those records, and the files installed
+there remain where they are until they are removed by hand.
 
-- `/etc/profile` appends `/usr/local/bin` and `~/.local/bin` to `PATH`. The launcher menu
-  and `mime_spawn` start programs by absolute path.
-- `/lib/ld.so` searches `/lib`, then `/usr/local/lib` and then `~/.local/lib` for a library
-  named in `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a
-  slash stays refused, and no environment variable changes the list.
-- The panel reads `/usr/local/share/launcher`, `~/.local/share/launcher`
-  and then `/etc/launcher` or the user's `~/.config/launcher`;
-  `mime_load` reads the system tables and then
-  `/usr/local/share/mime.types` and `mime.apps`. A package handler for
-  a type the system table names is ignored, so the user's handler table,
-  which the settings program edits, takes precedence, and `mime_save`
-  writes the system entries only. The installer rewrites the three files
-  from its records after every installation and removal.
+Three places know the locations of installed packages:
+
+- `/etc/profile`, `login`, the greeter and `sudo` put `/usr/bin` on the
+  `PATH` after `/bin`. The launcher menu and `mime_spawn` start programs
+  by absolute path.
+- `/lib/ld.so` searches `/lib`, then `/usr/lib`, then `/usr/local/lib`
+  and then `~/.local/lib` for a library named in `DT_NEEDED` (`lib_dirs`
+  in `user/ld/ld.c`). A name with a slash stays refused, and no
+  environment variable changes the list.
+- The panel reads `/var/lib/pkg/launcher` and then `/etc/launcher` or the
+  user's `~/.config/launcher`. `mime_load` reads the system tables and
+  then `/var/lib/pkg/mime.types` and `mime.apps` (`PKG_LAUNCHER`,
+  `PKG_MIME_TYPES` and `PKG_MIME_APPS` in `minios/local.h`). A package
+  handler for a type the system table names is ignored, so the user's
+  handler table, which the settings program edits, takes precedence, and
+  `mime_save` writes the system entries only. The installer rewrites the
+  three files from its records after every installation and removal.
+
+Installing or removing a package needs root (`sudo pkg install NAME` or
+`doas pkg install NAME`), since the root filesystem belongs to root.
 
 ## Package format
 
@@ -66,11 +73,16 @@ with the extension `mpk`. The archive contains, in this order:
 
 1. `manifest`, a regular file. It is the first member so that the
    installer reads it before the rest of the archive.
-2. `files/`, a directory tree whose paths are relative to the prefix:
-   `files/bin/pong`, `files/share/apps/pong.lua`, `files/lib/libpong.so`.
+2. `files/`, a directory tree whose paths are relative to the
+   installation root: `files/usr/bin/pong`,
+   `files/usr/share/apps/pong.lua`, `files/usr/lib/libpong.so`.
 
-Members are regular files and directories. Modes and modification times
-are preserved; the owner fields are ignored, since minios has one user.
+Members are regular files and directories. Modes, owners and
+modification times are applied. A setuid or setgid bit is applied only
+to a file whose owner is root, and the installer drops it otherwise. A
+directory the archive names receives its mode and owner when the
+installer creates it, and a directory that exists already is left as it
+is.
 Names longer than 100 bytes use the ustar prefix field, which both `tar`
 implementations write; pax extended headers are skipped. A member outside
 `files/` other than `manifest`, a path with an empty or dot component, or
@@ -86,31 +98,35 @@ The manifest is a text file of `key value` lines, blank lines and `#`
 comments ignored, the format of `/etc/fstab` and `/etc/mime.apps`. Keys
 repeat where the value is a list.
 
+    format 2
     name pong
     version 1.2.0
     summary Pong for the desktop
     depends lua >= 5.5
     needs libgui.so 1
     needs libc.so 1
-    launcher Pong bin/pong
+    launcher Pong usr/bin/pong
     mime-type text/x-pong pong
-    mime-handler text/x-pong bin/pong
-    icon share/icons/pong.svg
+    mime-handler text/x-pong usr/bin/pong
+    icon usr/share/icons/pong.svg
+    config etc/pong.conf
 
 | key | value | meaning |
 |---|---|---|
+| `format` | `2` | the package format, once. An archive without it is of format 1, which the installer refuses with a message that it must be rebuilt |
 | `name` | package name | required, once |
 | `version` | version | required, once |
 | `summary` | one line of text | required, once |
 | `arch` | `x86_64` or `aarch64` | the machine of the ELF files, once, absent in a package without ELF files |
 | `depends` | `name` or `name OP version`, OP one of `>=`, `=`, `<` | a package that must be installed first |
 | `conflicts` | `name` | a package that may not be installed at the same time |
-| `provides` | `soname abi` | a shared library in `lib/` of the package and its ABI number |
+| `provides` | `soname abi` | a shared library in `usr/lib/` of the package and its ABI number |
 | `needs` | `soname abi` | a shared library the package's files load and the ABI number they were built against |
-| `launcher` | `title command` | an entry of the launcher menu; the command is relative to the prefix |
+| `launcher` | `title command` | an entry of the launcher menu, the command relative to the root |
 | `mime-type` | `type extensions...` | a line for the MIME type table |
-| `mime-handler` | `type command` | a line for the handler table; the command is relative to the prefix |
-| `icon` | path relative to the prefix | the icon of the launcher entries |
+| `mime-handler` | `type command` | a line for the handler table, the command relative to the root |
+| `icon` | path relative to the root | the icon of the launcher entries |
+| `config` | path relative to the root | a configuration file of the package, which must be a regular file of the archive (see Configuration files) |
 
 `pkg build` writes the `arch` line from the machine of the ELF files in the
 package and refuses a package whose ELF files are built for two machines
@@ -129,25 +145,34 @@ have no number.
 
 ## Records
 
-The installer keeps its state under `<prefix>/lib/pkg/`:
+The installer keeps its state under `/var/lib/pkg/` (`PKG_DB`):
 
-    lib/pkg/lock                 created exclusively during every operation
-    lib/pkg/<name>/manifest      the manifest as installed
-    lib/pkg/<name>/files         one line per installed path: path size crc32
-    lib/pkg/<name>/dirs          the directories the package created
+    lock                 created exclusively during every operation
+    NAME/manifest        the manifest as installed
+    NAME/files           one line per installed file: mode uid gid size sha256 path
+    NAME/dirs            one line per directory the package created: mode uid gid path
+    launcher, mime.types, mime.apps   the tables written from the manifests
+    _repos/REPO/         the verified index of a repository
 
-The lock file holds the pid of the holder; a lock whose holder no longer
-exists is taken over. `files` is the file ownership record. A path
-belongs to at most one package; an archive naming a path listed in
-another package's record is refused before extraction, naming both
-packages and the path. `dirs` lists the directories the installer created
-for the package, so that removal deletes them again when they are empty
-and leaves `bin/` or `share/` alone while other packages, or the
-installer's own tables, use them.
+The mode is octal and the digest hexadecimal. The path comes last in
+each line, since it may contain spaces. The lock file holds the pid of
+the holder, and a lock whose holder no longer exists is taken over.
+`files` is the file ownership record. A path belongs to at most one
+package. An archive naming a path listed in another package's record is
+refused before extraction, naming both packages and the path, and an
+archive naming a file that exists in the filesystem and belongs to no
+package is refused as well. The installer reads all records once per
+command into a table sorted by path, since a base system holds thousands
+of files. `dirs` lists the directories the installer created for the
+package, so that removal deletes them again when they are empty and
+leaves `usr/bin` or `usr/share` alone while other packages use them.
 
-The CRC-32 is the one of the gzip format, computed while the member is
-written. `pkg verify` recomputes size and CRC of every recorded file and
-reports the files that changed or disappeared.
+`pkg verify` recomputes the SHA-256 of every recorded file and compares
+its mode and, when root runs it, its owner. `pkg perms` prints every
+recorded file and directory as `path mode uid gid`, the format of
+`mkfs -p`. A tree that the host build of `pkg` filled without root has
+neither the owners nor the setuid bits of its files, and an image made
+from it receives them through this list.
 
 ## Operations
 
@@ -160,6 +185,7 @@ reports the files that changed or disappeared.
     pkg list                            installed packages, one `name version summary` line each
     pkg info NAME|FILE                  the manifest and the files
     pkg verify [NAME...]                check the recorded files
+    pkg perms                           the modes and owners of all recorded paths
     pkg build DIR [OUT]                 make an archive from a directory holding manifest and files/
 
 This section describes the operations on archive files; the commands
@@ -168,20 +194,43 @@ the archives they fetched to the same installation path.
 
 `install` decompresses each archive into memory (`gzip_decompress` in
 libc, `minios/gzip.h`) and reads the manifest and every member header
-before it runs the checks: the manifest syntax, the member paths, the
-dependency rule, the conflict rule, the library rule and the ownership
-rule, for every package on the command line. Only when every package
-passes are the members written, in an order that installs dependencies
-first. A package already installed with the same version and the same
-files is reported and skipped. A package installed with the same version
-is replaced when the size or CRC of a file differs from the record or a
-file is added or missing, because a rebuild changes the programs without
-changing the version. One installed with another version is upgraded, which removes
-the old files that the new archive does not contain and keeps the
-directories the old version created. A failure during extraction removes
-what the failing package wrote and leaves the packages installed before
-it in place. After the last package the installer rewrites the launcher
-and MIME tables from the records of all installed packages.
+before it runs the checks: the manifest syntax, the format, the member
+paths, the dependency rule, the conflict rule, the library rule and the
+ownership rule, for every package on the command line. Only when every
+package passes are the members written, in an order that installs
+dependencies first. A package already installed with the same version
+and the same files is reported and skipped. A package installed with
+the same version is replaced when the size, digest, mode or owner of a
+file differs from the record or a file is added or missing, because a
+rebuild changes the programs without changing the version. One
+installed with another version is upgraded, which removes the old files
+that the new archive does not contain and preserves the directories the
+old version created. After the last package the installer rewrites the
+launcher and MIME tables from the records of all installed packages.
+
+All packages of one command form a transaction. The installer first
+writes every file to `PATH.pkgtmp` beside its target, with its mode and
+owner, and creates the missing directories. Only when every file of
+every package is written does it rename the files into place, then
+remove the files of the replaced versions that the new ones lack, and
+write the records last. A failure while writing removes the temporary
+files and the new directories and leaves the installed packages as they
+were. A program that maps a replaced library or runs a replaced program
+is not affected, since mfs frees an unlinked file only when its last
+reference goes away. A rename that fails, which happens only when the
+filesystem fails, is reported as an incomplete installation.
+
+### Configuration files
+
+A file that a `config` line names is a configuration file. When it
+exists already, the installer compares it with its record. A file that
+equals the new version is left alone. A file unchanged since the
+installed version wrote it is replaced. A file the administrator changed
+is left in place, and the new version is written beside it as
+`PATH.pkgnew` with a message on the standard error. Removal, and an
+upgrade whose new version no longer contains the file, save a changed
+configuration file as `PATH.pkgsave` instead of deleting it. `verify`
+reports a changed configuration file without counting it as a failure.
 
 `remove` refuses a package that another installed package depends on or
 loads a library from, and names that package; `--force` removes it
@@ -200,10 +249,10 @@ as required. The dependency graph of one command line must be acyclic. An
 upgrade is refused when an installed package depends on a version the
 new one does not satisfy.
 
-The base system is not a package. A dependency on it is expressed through
-`needs`, which names the libraries of `/lib`; a dependency on a program
-of `/bin` is not expressed, since `/bin` is the same on every image of a
-build.
+Until P3 of the plan the base system is not a package. A dependency on
+it is expressed through `needs`, which names the libraries of `/lib`. A
+dependency on a program of `/bin` is not expressed, since `/bin` is the
+same on every image of a build.
 
 ## Library rule
 
@@ -230,9 +279,12 @@ leaves it alone. The build writes the table to `/lib/abi`:
 The rule has three parts:
 
 1. Every `needs` soname must be provided, by `/lib`, by an installed
-   package or by one on the same command line. A soname provided by a
-   package may not exist in `/lib` and may not be provided by two
-   packages.
+   package or by one on the same command line. A package provides a
+   library as `usr/lib/SONAME`. A soname provided by a package may not
+   exist in `/lib` and may not be provided by two packages. When the
+   base system becomes packages (P3), `/lib/abi` and the libraries of
+   `/lib` that no package provides go away, and the second sentence
+   becomes the only rule.
 2. The recorded ABI number must equal the provider's. A different number
    refuses the installation: `pkgprog: needs libpkgfix.so ABI 1, pkgfix
    has 2`.
@@ -253,14 +305,14 @@ refused with the program's name.
 
 A package is built from a directory holding `manifest` and `files/`.
 `pkg build` walks the tree in sorted order, derives the `needs` lines,
-writes ustar headers and compresses the archive with `gzip_compress`.
-`tools/mkpkg.sh DIR OUT ROOT` does the same on the host with `tar
---format ustar` and `gzip`, deriving `needs` with `readelf -d` and the
-`lib/abi` of the build tree given as `ROOT`, so a package built by the
-cross build can be copied onto the data volume for installation.
-`--root DIR` makes `pkg` itself read `lib/abi` and the system libraries
-below another tree, which lets a host build of the installer check
-packages against a build tree.
+writes `format 2` and ustar headers naming root as the owner with the
+modes of the tree, setuid bits included, and compresses the archive with
+`gzip_compress`. `tools/mkpkg.sh DIR OUT ROOT` does the same on the host
+with `tar --format ustar` and `gzip`, deriving `needs` with `readelf -d`
+and the `lib/abi` of the build tree given as `ROOT`. It passes the owner
+options of bsdtar or of GNU tar, whichever the host has, in order that
+the members belong to root whoever runs the build. Both refuse a
+manifest whose configuration files are not in the tree.
 
 ## Bundled application packages
 
@@ -296,9 +348,12 @@ remain usable before installing any application.
 handlers; the build adds the version from `VERSION` and derives library
 requirements. Optional `files/` trees supply data and manuals. Code owns
 its Lua source and `code(1)` manual, and Pong also owns its Lua example.
-The base Lua interpreter supports both. `man` searches the base manual
-tree and `/home/.local/share/man`, including keyword searches.
+The base Lua interpreter supports both. The manual pages of packages are
+in `/usr/share/man` beside those of the base system, where `man` and its
+keyword searches find them.
 
+The archives place their programs in `usr/bin` and their data in
+`usr/share`, and their launcher and MIME commands name `usr/bin/NAME`.
 Application entries are absent from the base launcher and MIME handler
 table. Installing packages registers these entries; removing packages
 unregisters them. The panel reloads the launcher when opening its menu,
@@ -317,7 +372,7 @@ its archive shelf with the current release. This cleanup never edits
 built-in copies, installation, all file records, launcher and MIME
 registration, manual lookup and search, calculator execution, removal,
 reinstallation, and fallback handlers. Application GUI tests install
-the relevant archive before opening its program from `/home/.local/bin`.
+the relevant archive before opening its program from `/usr/bin`.
 
 ## Repositories
 
@@ -440,7 +495,7 @@ makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/` as it reads
 ### Commands
 
 `update` fetches `URL/index` and `URL/index.sig` of every repository
-into `<prefix>/lib/pkg/_repos/NAME/` as `index.new` and
+into `/var/lib/pkg/_repos/NAME/` as `index.new` and
 `index.sig.new`, verifies the signature, parses the index, and only then
 renames both into place and records the URL in `url`. A refused index
 is deleted and the last verified one stays in place. The underscore
@@ -536,14 +591,20 @@ system headers.
 
 ## Program structure
 
-`user/pkg/` is one program, `/bin/pkg`, linked against libc only:
+`user/pkg/` is one program, `/bin/pkg`, linked against libc only. The
+same sources compile on the host into `build/host/pkg` (`PKGHOST` in the
+Makefile), with the gzip, HTTP, SHA-2 and Ed25519 code of libc. The HTTP
+client creates its socket with `SOCK_NONBLOCK` where the system has it
+and makes it non blocking with `fcntl` elsewhere, which is the only
+change the host build needed.
 
 - `manifest.c`: parsing, validation, version comparison, writing.
 - `archive.c`: the in-memory ustar reader and writer.
-- `db.c`: the lock, the records, ownership lookup across packages, the
+- `db.c`: the lock, the records, the sorted ownership table, the
   rewriting of the launcher and MIME tables, the ABI table.
 - `elf.c`: `DT_NEEDED` and the dynamic symbol table of a file in memory.
-- `pkg.c`: the commands, the check order and the messages.
+- `pkg.c`: the commands, the check order, the transaction and the
+  messages.
 
 `repo.c` reads the configuration, verifies and parses the indexes,
 fetches and checks the archives, and implements `update` and `search`.
@@ -563,18 +624,33 @@ builds, one without the symbol the program calls, and the program that
 loads it. The script builds packages with `pkg build` and checks: the
 derived `needs` lines; the refusal of a missing dependency; installation
 of two packages in dependency order regardless of the command line
-order; the program running with its library from `/home/.local/lib`; the
-launcher and MIME tables; the records; a repeated installation; `verify`;
-the refusals of a conflict, of a library upgrade with another ABI number,
-of a library build without the symbol, of a wrong system ABI number, of a
-path owned by another package and of a member outside `files/`; an
-upgrade that removes a file; `verify` after a change and after a
-deletion; removal with and without a dependent; the removal of an
-emptied directory; and the installation and removal of
-`/etc/tests/pkghello-1.0.mpk`, which `tools/mkpkg.sh` builds on the host
-from the hello program, so the archives of the host tools are covered as
-well. The variables at the top of the script let the same script drive a
-host build of the installer.
+order; the program running with its library from `/usr/lib`; the
+launcher and MIME tables; the records with modes and owners; a repeated
+installation; `verify`; the refusals of a conflict, of a library upgrade
+with another ABI number, of a library build without the symbol, of a
+wrong system ABI number, of a path owned by another package, of a file
+of the image that no package owns, of a member outside `files/` and of
+an archive of format 1; an upgrade that fails because the temporary
+name of one file is taken, after which the installed version runs and
+verifies unchanged; an upgrade that removes a file; `verify` after a
+change and after a deletion; removal with and without a dependent; the
+removal of an emptied directory; a setuid program that root installs
+with its bit and `pkg perms`; a configuration file that an upgrade
+replaces with `.pkgnew` beside it and removal saves as `.pkgsave`; and
+the installation and removal of `/etc/tests/pkghello-1.0.mpk`, which
+`tools/mkpkg.sh` builds on the host from the hello program, so the
+archives of the host tools and their owners are covered as well.
+
+`make check-pkg` runs `user/pkg/tests/host.sh` against `build/host/pkg`
+with an installation root in `build/host/pkgtest`. Its packages contain
+no ELF files, which means the host needs no target programs. It checks
+the records, `pkg perms` with a setuid file that the host installs
+without its bit, the refusal of a file that no package owns, an upgrade
+that replaces an unchanged configuration file and one that writes
+`.pkgnew` beside a changed one, a transaction that fails on a directory
+without write permission and leaves the installed version, its files and
+its record untouched, removal with `.pkgsave`, and the refusal of an
+archive of format 1.
 
 `tests/cases/pkg_repo` runs `/etc/tests/pkg-repo.sh` against the HTTP
 server of its host peer, `tests/cases/pkg_repo/server.py`, reached as
@@ -617,5 +693,5 @@ another key. `make check` includes it.
 - The index should carry a sequence number, so that `pkg update` refuses
   an index older than the one it holds, and a key should be bound to the
   repositories it signs for.
-- The profiler reads the symbol tables of `/lib` only; a library
-  installed under the prefix appears in a profile without symbols.
+- The profiler reads the symbol tables of `/lib` only, and a library
+  installed by a package appears in a profile without symbols.

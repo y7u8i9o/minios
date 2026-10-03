@@ -81,7 +81,7 @@ static void test_ime_candidates(void)
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", "-t", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
     sleep_ms(500);
-    struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/imecand.txt", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/imecand.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);

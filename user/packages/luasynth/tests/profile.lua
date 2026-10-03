@@ -5,7 +5,7 @@ if arg[2] == 'worker' then
   print('AUDIOPROFILE complete')
   return
 end
-local root = arg[1] or '/home/.local/share/apps/luasynth/'
+local root = arg[1] or '/usr/share/apps/luasynth/'
 local Synth = dofile(root .. 'engine.lua')
 local UI = dofile(root .. 'ui.lua')
 local audio, sys, thread = require 'audio', require 'sys', require 'thread'

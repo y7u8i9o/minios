@@ -66,6 +66,14 @@ const struct pkg_lib *manifest_provides(const struct manifest *m, const char *so
     return NULL;
 }
 
+int manifest_is_config(const struct manifest *m, const char *rel)
+{
+    for (int i = 0; i < m->nconfig; i++)
+        if (strcmp(m->config[i], rel) == 0)
+            return 1;
+    return 0;
+}
+
 static int fail(char *err, size_t errlen, int line, const char *what, const char *value)
 {
     if (value)
@@ -75,7 +83,8 @@ static int fail(char *err, size_t errlen, int line, const char *what, const char
     return -1;
 }
 
-/* A path relative to the prefix: not absolute, no empty or dot components. */
+/* A path relative to the installation root: not absolute, no empty or dot
+ * components. */
 static int relative_valid(const char *p)
 {
     if (!*p || *p == '/' || strlen(p) >= 128)
@@ -147,7 +156,13 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
         *p++ = '\0';
         while (*p == ' ' || *p == '\t') p++;
         char *value = p;
-        if (strcmp(key, "name") == 0) {
+        if (strcmp(key, "format") == 0) {
+            if (m->format) return fail(err, errlen, line, "format given twice", NULL);
+            char *fend;
+            long f = strtol(value, &fend, 10);
+            if (*fend || f < 1 || f > 1000) return fail(err, errlen, line, "invalid format", value);
+            m->format = (int)f;
+        } else if (strcmp(key, "name") == 0) {
             if (m->name[0]) return fail(err, errlen, line, "name given twice", NULL);
             if (!name_valid(value)) return fail(err, errlen, line, "invalid name", value);
             strlcpy(m->name, value, sizeof m->name);
@@ -202,7 +217,7 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
             *sp++ = '\0';
             while (*sp == ' ') sp++;
             if (strlen(value) >= 64 || strchr(value, '=')) return fail(err, errlen, line, "invalid launcher title", value);
-            if (!relative_valid(sp)) return fail(err, errlen, line, "command must be relative to the prefix", sp);
+            if (!relative_valid(sp)) return fail(err, errlen, line, "command must be a path relative to the root", sp);
             strlcpy(m->launchers[m->nlaunchers].title, value, 64);
             strlcpy(m->launchers[m->nlaunchers].command, sp, 128);
             m->nlaunchers++;
@@ -223,13 +238,18 @@ int manifest_parse(struct manifest *m, const char *text, size_t len, char *err, 
             *sp++ = '\0';
             while (*sp == ' ') sp++;
             if (strlen(value) >= 48) return fail(err, errlen, line, "type too long", value);
-            if (!relative_valid(sp)) return fail(err, errlen, line, "command must be relative to the prefix", sp);
+            if (!relative_valid(sp)) return fail(err, errlen, line, "command must be a path relative to the root", sp);
             strlcpy(m->handlers[m->nhandlers].type, value, 48);
             strlcpy(m->handlers[m->nhandlers].command, sp, 128);
             m->nhandlers++;
         } else if (strcmp(key, "icon") == 0) {
-            if (!relative_valid(value)) return fail(err, errlen, line, "icon must be relative to the prefix", value);
+            if (!relative_valid(value)) return fail(err, errlen, line, "icon must be a path relative to the root", value);
             strlcpy(m->icon, value, sizeof m->icon);
+        } else if (strcmp(key, "config") == 0) {
+            if (m->nconfig >= PKG_MAX_CONFIG) return fail(err, errlen, line, "too many config lines", NULL);
+            if (!relative_valid(value)) return fail(err, errlen, line, "config must be a path relative to the root", value);
+            if (manifest_is_config(m, value)) return fail(err, errlen, line, "config file named twice", value);
+            strlcpy(m->config[m->nconfig++], value, sizeof m->config[0]);
         } else {
             return fail(err, errlen, line, "unknown key", key);
         }
@@ -255,6 +275,8 @@ int manifest_read(struct manifest *m, const char *path, char *err, size_t errlen
 
 void manifest_write(FILE *f, const struct manifest *m)
 {
+    if (m->format)
+        fprintf(f, "format %d\n", m->format);
     fprintf(f, "name %s\nversion %s\nsummary %s\n", m->name, m->version, m->summary);
     if (m->arch[0])
         fprintf(f, "arch %s\n", m->arch);
@@ -278,4 +300,6 @@ void manifest_write(FILE *f, const struct manifest *m)
         fprintf(f, "mime-handler %s %s\n", m->handlers[i].type, m->handlers[i].command);
     if (m->icon[0])
         fprintf(f, "icon %s\n", m->icon);
+    for (int i = 0; i < m->nconfig; i++)
+        fprintf(f, "config %s\n", m->config[i]);
 }

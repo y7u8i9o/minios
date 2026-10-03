@@ -479,7 +479,7 @@ static void test_gui_editor(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
     vfs_unlink("/gedit.c");
-    struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);
@@ -623,7 +623,7 @@ static void test_gui_calc(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/calc", (char *const[]){ "calc", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/calc", (char *const[]){ "calc", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start calc");
     sleep_ms(1200);
@@ -676,7 +676,7 @@ static void test_gui_mandel(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/mandel", (char *const[]){ "mandel", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/mandel", (char *const[]){ "mandel", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start mandel");
     int mid_x = 40 + 320, mid_y = 60 + 300, edge_x = 40 + 8;
@@ -1127,7 +1127,7 @@ static void test_gui_tools(void)
     const char *tools[] = { "evtest", "sysmon", "logview", "hexview" };
     int cx = sw / 2, cy = sh / 2;
     for (int i = 0; i < 4; i++) {
-        cl = proc_create_user(i == 3 ? "/home/.local/bin/hexview" : tools[i][0] == 'e' ? "/bin/evtest" : tools[i][0] == 's' ? "/bin/sysmon" : "/bin/logview",
+        cl = proc_create_user(i == 3 ? "/usr/bin/hexview" : tools[i][0] == 'e' ? "/bin/evtest" : tools[i][0] == 's' ? "/bin/sysmon" : "/bin/logview",
                               (char *const[]){ (char *)tools[i], NULL }, (char *const[]){ NULL }, &kernel_proc);
         ktest_assert(cl != NULL, "cannot start %s", tools[i]);
         int wx = 40 + i * 30, wy = 60 + i * 30;   /* cascade by creation number */
@@ -1274,7 +1274,7 @@ static void test_gui_images(void)
 
     /* The viewer fits the screenshot into its window: the desktop colour
      * of the image and the dark bars beside it. */
-    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/shot.png", NULL },
+    cl = proc_create_user("/usr/bin/view", (char *const[]){ "view", "/shot.png", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start view");
     wait_active(40, 60, "view");
@@ -1339,7 +1339,7 @@ static void test_gui_images(void)
 
     /* Paint: find the white drawing inside the window. */
     vfs_unlink("/drawing.png");
-    cl = proc_create_user("/home/.local/bin/paint", (char *const[]){ "paint", "/drawing.png", NULL },
+    cl = proc_create_user("/usr/bin/paint", (char *const[]){ "paint", "/drawing.png", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start paint");
     int wx = 70, wy = 90;
@@ -1388,7 +1388,7 @@ static void test_gui_images(void)
     ktest_assert(status == 0, "codecs convert status 0x%x", status);
     read_head("/drawing.bmp", head, 2);
     ktest_assert(head[0] == 'B' && head[1] == 'M', "/drawing.bmp is not a BMP file");
-    cl = proc_create_user("/home/.local/bin/view", (char *const[]){ "view", "/drawing.bmp", NULL },
+    cl = proc_create_user("/usr/bin/view", (char *const[]){ "view", "/drawing.bmp", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start the second view");
     wait_active(100, 120, "second view");
@@ -1423,7 +1423,7 @@ static void test_gui_hexview(void)
     ktest_assert(file_write(f, data, sizeof data) == (long)sizeof data, "write /hex.bin");
     file_put(f);
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/hexview", (char *const[]){ "hexview", "/hex.bin", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/hexview", (char *const[]){ "hexview", "/hex.bin", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start hexview");
     wait_active(40, 60, "hexview");
@@ -1700,7 +1700,7 @@ static void test_gui_unicode(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/unicode", (char *const[]){ "unicode", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/unicode", (char *const[]){ "unicode", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start unicode");
     int active = 0;

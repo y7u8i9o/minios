@@ -7,12 +7,13 @@
  * digest the index gives for it.
  *
  * `pkg update` fetches the index and its signature into
- * <prefix>/lib/pkg/_repos/<name>/, verifies both and only then replaces
+ * <root>/var/lib/pkg/_repos/<name>/, verifies both and only then replaces
  * the previous copy, so a refused index leaves the last verified one in
  * place. Every later reader verifies the cached copy again. The
  * underscore keeps the directory apart from the package records, whose
  * names cannot contain one. */
 #include "pkg.h"
+#include <minios/local.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -102,7 +103,7 @@ static void config_file(char *path, size_t n)
     if (config_path)
         strlcpy(path, config_path, n);
     else
-        snprintf(path, n, "%s/etc/pkg.conf", sysroot);
+        snprintf(path, n, "%s/etc/pkg.conf", root);
 }
 
 /* Replace every $arch in a repository URL with the machine name of the
@@ -207,7 +208,7 @@ static void key_id(char id[17], const uint8_t pub[ED25519_PUBLIC_SIZE])
 static int key_lookup(const char *id, uint8_t pub[ED25519_PUBLIC_SIZE], char *file, size_t filelen)
 {
     char dir[PKG_PATH_MAX];
-    snprintf(dir, sizeof dir, "%s/etc/pkg/keys", sysroot);
+    snprintf(dir, sizeof dir, "%s/etc/pkg/keys", root);
     DIR *d = opendir(dir);
     if (!d)
         return -1;
@@ -257,7 +258,7 @@ static int index_verify(const uint8_t *text, size_t len, const char *sig, char *
         return -1;
     }
     if (key_lookup(id, pub, keyfile, sizeof keyfile) < 0) {
-        snprintf(err, errlen, "the index is signed by key %s, which is not in %s/etc/pkg/keys", id, sysroot);
+        snprintf(err, errlen, "the index is signed by key %s, which is not in %s/etc/pkg/keys", id, root);
         return -1;
     }
     if (!ed25519_verify(signature, text, len, pub)) {
@@ -435,7 +436,7 @@ void index_free(struct index *ix)
 
 static void repo_dir(char *buf, size_t n, const struct repo *r)
 {
-    snprintf(buf, n, "%s/lib/pkg/_repos/%s", prefix, r->name);
+    snprintf(buf, n, "%s%s/_repos/%s", root, PKG_DB, r->name);
 }
 
 /* load_one reads, verifies and parses the cached index of repository i. */
@@ -674,7 +675,7 @@ int cmd_update(void)
         return -1;
     int r = db_lock();
     if (r < 0)
-        return report(NULL, "cannot lock %s/lib/pkg: %s", prefix, strerror(-r));
+        return report(NULL, "cannot lock %s%s: %s", root, PKG_DB, strerror(-r));
     int status = 0;
     for (int i = 0; i < c.nrepos; i++)
         if (update_one(&c, i) < 0)

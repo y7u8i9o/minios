@@ -1,13 +1,17 @@
 #pragma once
-/* The installation prefix of packages (docs/design/packages.md), shared
- * by every user. The data volume, the only persistent storage, is mounted
- * at /home, and /usr/local on the root image is a symbolic link to
- * /home/.local on it (docs/design/users.md). The loader (user/ld/ld.c)
- * repeats LOCAL_LIB. */
+/* /usr/local holds software that the package installer does not manage.
+ * Until the development disk of docs/plan/packaging.md (P8), it is also a
+ * symbolic link on the root image to /home/.local on the data volume,
+ * which holds the account databases and the state that survives a
+ * rebuild of the root image (docs/design/users.md). */
 #define LOCAL_PREFIX "/usr/local"
 #define LOCAL_BIN LOCAL_PREFIX "/bin"
 #define LOCAL_LIB LOCAL_PREFIX "/lib"
 #define LOCAL_SHARE LOCAL_PREFIX "/share"
-#define LOCAL_LAUNCHER LOCAL_SHARE "/launcher"
-#define LOCAL_MIME_TYPES LOCAL_SHARE "/mime.types"
-#define LOCAL_MIME_APPS LOCAL_SHARE "/mime.apps"
+
+/* The records of the package installer and the launcher and MIME tables
+ * it writes from them (docs/design/packages.md). */
+#define PKG_DB "/var/lib/pkg"
+#define PKG_LAUNCHER PKG_DB "/launcher"
+#define PKG_MIME_TYPES PKG_DB "/mime.types"
+#define PKG_MIME_APPS PKG_DB "/mime.apps"

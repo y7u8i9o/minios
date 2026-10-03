@@ -177,7 +177,7 @@ Kernel `profile_mode=stress` selects ten-second phases. The former `detail`
 isolation mode has been replaced by the two-thread comparison. In an
 already running desktop with the installed 0.1.1 package:
 
-    lua /etc/tests/luasynth-profile.lua /home/.local/share/apps/luasynth/ stress
+    lua /etc/tests/luasynth-profile.lua /usr/share/apps/luasynth/ stress
 
 The historical logs are under `build/audio-profile/display`, `detail`, `fixed`, and
 `optimized`. `build/audio-profile/results.json` retains the numeric results.

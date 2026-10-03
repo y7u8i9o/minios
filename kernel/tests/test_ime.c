@@ -80,7 +80,7 @@ static void test_ime(void)
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, env, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(800);
-    struct proc *cl = proc_create_user("/home/.local/bin/gedit", (char *const[]){ "gedit", "/ime.txt", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/ime.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
     sleep_ms(1500);

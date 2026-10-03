@@ -1,7 +1,7 @@
 /* The launcher menu of the panel: a popup above the Menu button.
  *
  * The menu reads /etc/launcher and the table of installed packages
- * (LOCAL_LAUNCHER) each time it opens.  The entries of packages are
+ * (PKG_LAUNCHER) each time it opens.  The entries of packages are
  * listed under the heading Applications in the order of their titles,
  * the entries of /etc/launcher under the heading System in the order of
  * the file.  The entry with the program @logout is drawn at the bottom
@@ -138,7 +138,7 @@ static int compare_titles(const void *a, const void *b)
 static void load_entries(void)
 {
     nentries = 0;
-    load_file(LOCAL_LAUNCHER, SEC_APPS);
+    load_file(PKG_LAUNCHER, SEC_APPS);
     /* Packages that the user installed into ~/.local. */
     char path[300];
     snprintf(path, sizeof path, "%s/.local/share/launcher", conf_home());

@@ -249,7 +249,7 @@ static int on_add_type(struct widget *w, void *args, void *arg)
     char type[64] = "";
     if (!app_prompt(app, _("New file type"), _("Type (for example text/x-log):"), type, sizeof type) || !type[0])
         return 1;
-    mime_set_handler(type, LOCAL_BIN "/gedit");
+    mime_set_handler(type, "/usr/bin/gedit");
     mime_save(NULL);
     view_refresh(apps_table);
     return 1;

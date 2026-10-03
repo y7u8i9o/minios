@@ -1,4 +1,4 @@
 name pkghello
 version 1.0
 summary The hello program as a package built on the host
-launcher Hello bin/pkghello
+launcher Hello usr/bin/pkghello

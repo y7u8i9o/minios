@@ -164,11 +164,11 @@ with a traceback to stderr and the program continues. `gui.test` holds
 a window and read its surface for tests.
 
 The Pong package includes its Lua version at
-`/home/.local/share/apps/pong.lua`.
+`/usr/share/apps/pong.lua`.
 
 `.lua` has the MIME type `text/x-lua`; installing the Code package
 registers its editor as the handler.
-A launcher file starts a script with `exec=/bin/lua /home/.local/share/apps/name.lua`;
+A launcher file starts a script with `exec=/bin/lua /usr/share/apps/name.lua`;
 `mime_open` passes one argument after the program.
 
 ## Images, the clipboard and layer windows

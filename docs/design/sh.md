@@ -87,10 +87,11 @@ handling; the interactive shell ignores `SIGINT` and `SIGPIPE`.
 
 ## Interactive defaults
 
-Init sets `PATH=/bin TERM=minios` from the `env` line of
+Init sets `PATH=/bin:/usr/bin TERM=minios` from the `env` line of
 `/etc/init.conf`, and since U3 of the multiuser plan (`users.md`) `login`
 adds `HOME`, `USER`, `LOGNAME` and `SHELL` of the account and
-`/usr/local/bin` to `PATH`. The prompt escape `\$` prints `#` for
+`/usr/local/bin` to `PATH`. `/usr/bin` holds the programs of packages
+since P0 of `docs/plan/packaging.md`. The prompt escape `\$` prints `#` for
 effective uid 0, `\u` falls back to the account of the effective uid
 without `USER`, and `~name` expands to the home of the account `name`.
 Interactive shells source `/etc/profile`, then `$HOME/.shrc`. The profile

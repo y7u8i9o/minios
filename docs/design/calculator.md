@@ -1,6 +1,6 @@
 # Calculator
 
-The calculator is a native `libgui` application installed as `/home/.local/bin/calc` and
+The calculator is a native `libgui` application installed as `/usr/bin/calc` and
 listed in `/etc/launcher`.  Its default input model is reverse Polish
 notation (RPN); the input-mode combo box changes the same window to an
 algebraic expression editor.  The calculation state does not depend on the

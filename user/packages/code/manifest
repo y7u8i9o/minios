@@ -1,6 +1,6 @@
 name code
 summary Source editor for C, Lua and shell scripts
-launcher Code bin/code
-mime-handler text/x-lua bin/code
-mime-handler text/x-csrc bin/code
-mime-handler text/x-shellscript bin/code
+launcher Code usr/bin/code
+mime-handler text/x-lua usr/bin/code
+mime-handler text/x-csrc usr/bin/code
+mime-handler text/x-shellscript usr/bin/code

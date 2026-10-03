@@ -1,10 +1,10 @@
 #pragma once
-/* The installation prefix of packages (docs/design/packages.md), as in
- * libc/include/minios/local.h. */
+/* The paths of libc/include/minios/local.h for the host tests. */
 #define LOCAL_PREFIX "/usr/local"
 #define LOCAL_BIN LOCAL_PREFIX "/bin"
 #define LOCAL_LIB LOCAL_PREFIX "/lib"
 #define LOCAL_SHARE LOCAL_PREFIX "/share"
-#define LOCAL_LAUNCHER LOCAL_SHARE "/launcher"
-#define LOCAL_MIME_TYPES LOCAL_SHARE "/mime.types"
-#define LOCAL_MIME_APPS LOCAL_SHARE "/mime.apps"
+#define PKG_DB "/var/lib/pkg"
+#define PKG_LAUNCHER PKG_DB "/launcher"
+#define PKG_MIME_TYPES PKG_DB "/mime.types"
+#define PKG_MIME_APPS PKG_DB "/mime.apps"

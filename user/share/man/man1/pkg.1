@@ -4,26 +4,38 @@ NAME
     pkg - install, remove, list and build packages
 
 SYNOPSIS
-    pkg [--prefix dir] [--root dir] [--config file] install file|name[-version]...
-    pkg [--prefix dir] [--root dir] [--config file] check file|name[-version]...
-    pkg [--prefix dir] [--root dir] [--config file] update
-    pkg [--prefix dir] [--root dir] [--config file] search [pattern]
-    pkg [--prefix dir] [--root dir] [--config file] upgrade [name...]
-    pkg [--prefix dir] remove [--force] name...
-    pkg [--prefix dir] list
-    pkg [--prefix dir] info name|file
-    pkg [--prefix dir] verify [name...]
+    pkg [--root dir] [--arch machine] [--config file] install file|name[-version]...
+    pkg [--root dir] [--arch machine] [--config file] check file|name[-version]...
+    pkg [--root dir] [--config file] update
+    pkg [--root dir] [--config file] search [pattern]
+    pkg [--root dir] [--arch machine] [--config file] upgrade [name...]
+    pkg [--root dir] remove [--force] name...
+    pkg [--root dir] list
+    pkg [--root dir] info name|file
+    pkg [--root dir] verify [name...]
+    pkg [--root dir] perms
     pkg [--root dir] build dir [file]
 
 DESCRIPTION
-    pkg installs applications from package files and from signed
-    repositories into /home/.local and keeps a record of every installed
-    file. A package is a gzip compressed ustar archive named
-    name-version.mpk whose first member is the manifest and whose files
-    lie under files/, relative to the prefix. Every check of an
+    pkg installs packages from package files and from signed
+    repositories into the root filesystem and keeps a record of every
+    installed file with its mode, owner, size and SHA-256 digest. A
+    package is a gzip compressed ustar archive named name-version.mpk
+    whose first member is the manifest and whose files lie under files/,
+    relative to the root, as in files/usr/bin/calc. Every check of an
     installation runs before anything is written: the dependencies, the
     conflicts, the shared libraries with their ABI numbers and symbols,
-    and the ownership of every path.
+    and the ownership of every path. A file that exists already and
+    belongs to no package is not replaced.
+
+    An installation writes every file to a temporary name beside its
+    target and renames the files into place only when all of them are
+    written, which means that a failed installation leaves the installed
+    files as they were. A file the manifest names with a config line is
+    a configuration file: an upgrade replaces it only when it is
+    unchanged since its installation, and otherwise writes the new
+    version beside it as file.pkgnew. remove saves a changed
+    configuration file as file.pkgsave.
 
     A repository is a directory served over plain HTTP that holds the
     archives, an index and the Ed25519 signature of the index. The index
@@ -42,8 +54,8 @@ COMMANDS
               package file is also compared with the entry of the same
               name and version in the indexes
     update    fetch the index of every repository, verify its signature
-              and keep it under /home/.local/lib/pkg/_repos; a refused
-              index leaves the previous one in place
+              and store it under /var/lib/pkg/_repos. A refused index
+              leaves the previous one in place
     search    print the entries of the indexes whose name or summary
               contains pattern, one name, version, repository and
               summary per line
@@ -55,18 +67,27 @@ COMMANDS
               summary per line
     info      print the manifest and the files of an installed package
               or of a package file
-    verify    compare the recorded size and checksum of every installed
-              file with the file on disk
+    verify    compare the recorded digest, mode and, for root, owner of
+              every installed file with the file on disk. A changed
+              configuration file is reported without counting as a
+              failure
+    perms     print every installed file and every directory the
+              packages created as "path mode uid gid", the form mkfs -p
+              reads
     build     write a package from a directory with manifest and
               files/, with the arch and needs lines derived from the
-              ELF files
+              ELF files. The members belong to root and have the modes
+              of the files
 
 OPTIONS
-    --prefix dir   install under dir instead of /home/.local
-    --root dir     read lib/abi, the system libraries, etc/pkg.conf and
-                   etc/pkg/keys below dir
-    --config file  read the repositories from file instead of
-                   /etc/pkg.conf
+    --root dir       install into the tree dir instead of the root
+                     filesystem, and read the records, etc/pkg.conf,
+                     etc/pkg/keys and lib/abi below it
+    --arch machine   accept packages for machine instead of the machine
+                     of the running system, for a tree prepared on
+                     another system
+    --config file    read the repositories from file instead of
+                     /etc/pkg.conf
 
 CONFIGURATION
     /etc/pkg.conf names the repositories, one per line, in the order in
@@ -94,21 +115,22 @@ EXIT STATUS
 BUNDLED APPLICATIONS
     Optional applications are available as archives in /usr/share/packages.
     Install selected archives, or all of them, with the examples below.
-    They are not installed automatically. The package prefix persists on
-    the data volume across root image rebuilds. make repo writes the same
+    They are not installed automatically. Until the system is installed
+    on a disk of its own, the root image is rebuilt with every build, and
+    installed packages disappear with it. make repo writes the same
     archives as a signed repository to build/repo/ARCH on the host.
 
 FILES
-    /etc/pkg.conf                        the repositories
-    /etc/pkg/keys/*.pub                  the trusted public keys
-    /home/.local/lib/pkg/name/manifest   the manifest as installed
-    /home/.local/lib/pkg/name/files      path, size and CRC-32 of each file
-    /home/.local/lib/pkg/name/dirs       the directories the package created
-    /home/.local/lib/pkg/_repos/repo/    the verified index of a repository
-    /home/.local/share/launcher          launcher entries of the packages
-    /home/.local/share/mime.types        MIME types of the packages
-    /home/.local/share/mime.apps         MIME handlers of the packages
-    /lib/abi                             ABI numbers of the system libraries
+    /etc/pkg.conf                   the repositories
+    /etc/pkg/keys/*.pub             the trusted public keys
+    /var/lib/pkg/name/manifest      the manifest as installed
+    /var/lib/pkg/name/files         mode, owner, size, SHA-256 and path of each file
+    /var/lib/pkg/name/dirs          mode, owner and path of each directory created
+    /var/lib/pkg/_repos/repo/       the verified index of a repository
+    /var/lib/pkg/launcher           launcher entries of the packages
+    /var/lib/pkg/mime.types         MIME types of the packages
+    /var/lib/pkg/mime.apps          MIME handlers of the packages
+    /lib/abi                        ABI numbers of the system libraries
 
 EXAMPLES
     pkg install /usr/share/packages/calc-*.mpk

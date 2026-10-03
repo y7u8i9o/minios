@@ -8,7 +8,9 @@
 # ($READELF, default x86_64-elf-readelf). As with pkg build, a needs line
 # of the source manifest supplies the number of a library that neither the
 # package nor lib/abi provides. The arch line is derived from the ELF
-# files as well.
+# files as well. The archive is of format 2, with paths relative to the
+# installation root, and its members belong to root with the modes of the
+# tree.
 set -e
 DIR="$1"; OUT="$2"; ROOT="$3"
 READELF="${READELF:-x86_64-elf-readelf}"
@@ -18,7 +20,12 @@ READELF="${READELF:-x86_64-elf-readelf}"
 [ -f "$ROOT/lib/abi" ] || { echo "mkpkg.sh: $ROOT/lib/abi: no such file" >&2; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-grep -v '^needs ' "$DIR/manifest" > "$TMP/manifest"
+grep -q '^format ' "$DIR/manifest" || echo "format 2" > "$TMP/manifest"
+grep -v '^needs ' "$DIR/manifest" >> "$TMP/manifest"
+# Every configuration file the manifest names must be in the tree.
+sed -n 's/^config \(.*\)$/\1/p' "$DIR/manifest" | while read -r c; do
+    [ -f "$DIR/files/$c" ] || { echo "mkpkg.sh: the configuration file $c is not in $DIR/files" >&2; exit 1; }
+done
 # The arch line is the machine of the ELF files, from e_machine at offset
 # 18 (62 x86_64, 183 aarch64). All ELF files must agree with each other and
 # with an arch line of the source manifest.
@@ -55,7 +62,14 @@ while read -r so; do
     [ -n "$abi" ] || { echo "mkpkg.sh: the ABI number of $so is unknown" >&2; exit 1; }
     echo "needs $so $abi" >> "$TMP/manifest"
 done < "$TMP/needed"
-cp -R "$DIR/files" "$TMP/files"
-# Members are manifest, then files/ with its tree; ustar keeps the order
-# given. COPYFILE_DISABLE keeps the resource forks of macOS out.
-(cd "$TMP" && COPYFILE_DISABLE=1 tar --format ustar -cf - manifest files) | gzip -9 > "$OUT"
+cp -Rp "$DIR/files" "$TMP/files"
+# Members are manifest, then files/ with its tree, and ustar writes them in
+# the order given. The owner fields name root whatever user runs the
+# build, with the options of bsdtar or of GNU tar. COPYFILE_DISABLE leaves
+# the resource forks of macOS out.
+if tar --version 2>/dev/null | grep -q bsdtar; then
+    OWNER="--uid 0 --gid 0 --uname root --gname root"
+else
+    OWNER="--owner=0 --group=0 --numeric-owner"
+fi
+(cd "$TMP" && COPYFILE_DISABLE=1 tar --format ustar $OWNER -cf - manifest files) | gzip -9 > "$OUT"

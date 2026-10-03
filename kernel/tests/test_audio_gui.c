@@ -57,7 +57,7 @@ static void test_audio_player(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/player",
+    struct proc *cl = proc_create_user("/usr/bin/player",
                                        (char *const[]){ "player", "/usr/share/sounds/chime.wav", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start player");
@@ -80,7 +80,7 @@ static void test_audio_player(void)
     if (vfs_lookup(track, &ino) == 0) {
         windows++;
         inode_put(ino);
-        cl = proc_create_user("/home/.local/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
+        cl = proc_create_user("/usr/bin/player", (char *const[]){ "player", (char *)track, NULL }, (char *const[]){ NULL },
                               &kernel_proc);
         ktest_assert(cl != NULL, "cannot start player");
         uint64_t t0 = timer_ms();
@@ -100,7 +100,7 @@ static void test_audio_player(void)
         ktest_assert(status == 0, "player status for the track 0x%x", status);
         kprintf("audio_player: 24-bit track ok\n");
     }
-    cl = proc_create_user("/home/.local/bin/player",
+    cl = proc_create_user("/usr/bin/player",
                           (char *const[]){ "player", "-s", "/usr/share/sounds/chime.wav", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start player -s");
@@ -129,7 +129,7 @@ static void test_audio_sequencer(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/sequencer", (char *const[]){ "sequencer", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/sequencer", (char *const[]){ "sequencer", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start sequencer");
     sleep_ms(1500);
@@ -161,7 +161,7 @@ static void test_gui_mixer(void)
     int sw = logical_w(), sh = logical_h();
     struct proc *audiod = start_audiod();
     struct proc *srv = start_server();
-    struct proc *cl = proc_create_user("/home/.local/bin/synth", (char *const[]){ "synth", NULL },
+    struct proc *cl = proc_create_user("/usr/bin/synth", (char *const[]){ "synth", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start synth");
     sleep_ms(1500);
