@@ -220,14 +220,36 @@ int vfs_lookup(const char *path, struct inode **out);
  * the result without symbolic links (physsize bytes, VFS_PATH_MAX is
  * enough). */
 #define VFS_NOFOLLOW 1
+/* vfs_access checks with the effective instead of the real ids. */
+#define VFS_EACCESS  4
+/* vfs_utimens sets the current time, which write permission allows. */
+#define VFS_UTIME_NOW 8
 int vfs_lookup_path(const char *path, unsigned flags, struct inode **out, char *phys, size_t physsize);
 /* Resolve everything but the last component, which is copied to name and
  * is never followed. Fails with -EINVAL for "/" and for "." or ".." as
  * last component. */
 int vfs_lookup_parent(const char *path, struct inode **dir, char *name, size_t namesize);
 
-/* File level API used by the system calls. */
+/* Permission checks (U2). mask combines MAY_READ, MAY_WRITE and MAY_EXEC.
+ * The owner class of the mode applies to the owner, the group class to
+ * members of the file's group and the other class to everyone else. Root
+ * passes every check, except that executing a file that is not a
+ * directory needs one execute bit. Returns 0 or -EACCES. */
+#define MAY_EXEC  1
+#define MAY_WRITE 2
+#define MAY_READ  4
+struct cred;
+int vfs_permission(struct inode *ino, int mask, const struct cred *c);
+/* access(2) with the real ids, or the effective ones with VFS_EACCESS. */
+int vfs_access(const char *path, int mask, unsigned flags);
+
+/* File level API used by the system calls. Opening checks read and write
+ * permission against the access mode, except for a file that the call
+ * itself created. */
 int vfs_open(const char *path, int flags, uint32_t mode, struct file **out);
+/* Open a program for exec: a regular file with execute permission, which
+ * need not be readable. */
+int vfs_open_exec(const char *path, struct file **out);
 struct file *file_alloc(struct inode *ino, const struct file_ops *ops, int flags);
 void file_ref(struct file *f);
 void file_put(struct file *f);
@@ -244,7 +266,8 @@ void inode_stat(struct inode *ino, struct stat *st);
 int vfs_mkdir(const char *path, uint32_t mode);
 int vfs_unlink(const char *path);
 /* Set the modification time of the file at path to mtime (nanoseconds).
- * flags is 0 or VFS_NOFOLLOW. */
+ * flags combines VFS_NOFOLLOW and VFS_UTIME_NOW. The owner and root may
+ * set any time, and anyone with write permission the current one. */
 int vfs_utimens(const char *path, int64_t mtime, unsigned flags);
 int vfs_rmdir(const char *path);
 int vfs_rename(const char *oldpath, const char *newpath);

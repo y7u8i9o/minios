@@ -52,6 +52,7 @@ struct stat {
  * timespec. */
 #define AT_FDCWD   (-100)
 #define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_EACCESS 0x200                /* faccessat: effective ids */
 #define AT_REMOVEDIR        0x200
 #define UTIME_NOW  ((1l << 30) - 1l)
 #define UTIME_OMIT ((1l << 30) - 2l)

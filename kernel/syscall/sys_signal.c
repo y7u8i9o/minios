@@ -77,8 +77,23 @@ long sys_sigreturn(struct trapframe *tf)
     return signal_return(tf);
 }
 
+/* The permission rule of POSIX (U2): root may signal any process, any
+ * other sender one whose real or saved uid equals the sender's real or
+ * effective uid. Signals that terminals generate do not pass here. */
+static bool may_signal(const struct cred *sender, struct proc *target)
+{
+    if (cred_is_root(sender))
+        return true;
+    struct cred t;
+    cred_get(target, &t);
+    return sender->ruid == t.ruid || sender->ruid == t.suid || sender->euid == t.ruid ||
+           sender->euid == t.suid;
+}
+
 /* kill(pid, sig): pid > 0 one process, 0 the caller's group, -1 every
- * process except init, < -1 the group -pid. sig 0 only checks. */
+ * process except init, < -1 the group -pid. sig 0 only checks. A group
+ * receives the signal in each process the caller may signal, and the call
+ * fails with EPERM when there are processes but none of them qualifies. */
 long sys_kill(struct trapframe *tf)
 {
     int pid = (int)SYSARG0(tf);
@@ -86,10 +101,14 @@ long sys_kill(struct trapframe *tf)
     if (sig < 0 || sig >= NSIG)
         return -EINVAL;
     struct proc *self = thread_current()->proc;
+    struct cred sender;
+    cred_get(self, &sender);
     if (pid > 0) {
         struct proc *p = proc_find(pid);
         if (!p || p == &kernel_proc)
             return -ESRCH;
+        if (!may_signal(&sender, p))
+            return -EPERM;
         return sig ? signal_send(p, sig) : 0;
     }
     int pgid;
@@ -102,10 +121,20 @@ long sys_kill(struct trapframe *tf)
     } else {
         pgid = -pid;
     }
-    if (!sig)
-        return 0;
-    int n = signal_send_pgrp(pgid, sig);
-    return n ? 0 : -ESRCH;
+    int pids[64];
+    int n = proc_collect_pgrp(pgid, pids, ARRAY_SIZE(pids));
+    int found = 0, permitted = 0;
+    for (int i = 0; i < n; i++) {
+        struct proc *p = proc_find(pids[i]);
+        if (!p)
+            continue;
+        found++;
+        if (!may_signal(&sender, p))
+            continue;
+        if (!sig || signal_send(p, sig) == 0)
+            permitted++;
+    }
+    return permitted ? 0 : found ? -EPERM : -ESRCH;
 }
 
 long sys_setpgid(struct trapframe *tf)
@@ -170,7 +199,7 @@ long sys_reboot(struct trapframe *tf)
     struct proc *self = thread_current()->proc;
     if (cmd != RB_POWER_OFF && cmd != RB_AUTOBOOT && cmd != RB_HALT)
         return -EINVAL;
-    if (self->pid != 1)
+    if (self->pid != 1 || !cred_current_is_root())
         return -EPERM;
     klog_info("reboot(%d) requested by init", cmd);
     signal_send_pgrp(0, SIGTERM);

@@ -526,3 +526,12 @@ These locks are in user space and do not add a kernel lock-order level.
 - The mode and owner of a devfs node are written under `devfs_lock`,
   taken inside `inode.lock` by `devfs_setattr`, which gives the order
   `inode.lock -> devfs_lock`. `devfs_lock` is a leaf.
+
+## U2 additions
+
+- No new lock. A path walk copies the caller's credentials once under
+  `proc.lock` before it takes any inode lock. `kill` copies the target's
+  credentials under the target's `proc.lock` with no other lock held.
+  `devfs_set_owner` takes the node's `inode.lock` and below it
+  `devfs_lock`, the order of U1, and is called by the pseudo terminal
+  driver with no lock held.

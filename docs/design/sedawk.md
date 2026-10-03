@@ -43,8 +43,9 @@ available to every program and documented in `libc.md`.
 - `sys/stat.h`: the permission bit macros, `DEFFILEMODE`, `lstat` (the
   same as `stat` until symbolic links were added on 2026-09-30, a system
   call since then), `fchmod` and `chmod`.
-  Permission bits are stored and ignored by the kernel and cannot be
-  changed, so the four change functions return 0 without effect.
+  Permission bits were stored and ignored by the kernel and could not be
+  changed, so the four change functions returned 0 without effect. They
+  are system calls since U1 of the multiuser plan (`users.md`).
 - `stdio.h`: `scanf`, `fscanf`, `sscanf` and their `v` forms
   (`libc/src/stdio/scan.c`), `asprintf`, `vasprintf`, `FOPEN_MAX`.
 - `stdlib.h`: `bsearch`, `random`, `srandom`, `mbtowc`, `wctomb`,

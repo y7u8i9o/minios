@@ -530,8 +530,12 @@ int lstat(const char *path, struct stat *st)
 
 int access(const char *path, int mode)
 {
-    struct stat st;
-    return stat(path, &st);
+    return faccessat(AT_FDCWD, path, mode, 0);
+}
+
+int faccessat(int dirfd, const char *path, int mode, int flags)
+{
+    return (int)syscall4(SYS_faccessat, dirfd, path, mode, flags);
 }
 
 size_t confstr(int name, char *buf, size_t len)

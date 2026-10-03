@@ -9,9 +9,11 @@ The kernel process holds the defaults (everything unlimited except
 it. `getrlimit`, `setrlimit` and `prlimit` (`syscall/sys_rlimit.c`) read and
 write the table under `proc.lock`; the enforcement points read the soft
 limit without the lock through `proc_rlimit_cur`, since a stale value only
-moves a check by one call. There is a single user, so raising a hard limit
-is allowed; the only refusals are a soft limit above the hard one
-(`EINVAL`) and a `RLIMIT_NOFILE` hard limit above `OPEN_MAX` (`EPERM`).
+moves a check by one call. The refusals are a soft limit above the hard one
+(`EINVAL`) and a `RLIMIT_NOFILE` hard limit above `OPEN_MAX` (`EPERM`), and
+since U2 of the multiuser plan (`users.md`) the raising of a hard limit by
+anyone but root (`EPERM`) and `prlimit` on a process of another user
+(`EPERM`).
 
 | Limit | Enforced by |
 |---|---|

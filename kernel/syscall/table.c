@@ -122,6 +122,7 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_fchmod]        = sys_fchmod,
     [SYS_fchownat]      = sys_fchownat,
     [SYS_fchown]        = sys_fchown,
+    [SYS_faccessat]     = sys_faccessat,
 };
 
 bool user_range_ok(uintptr_t addr, size_t len, bool write)

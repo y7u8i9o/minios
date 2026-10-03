@@ -10,7 +10,7 @@ A monolithic x86_64 and aarch64 kernel written in C, booted by Limine, running u
 - Buddy physical allocator, slab kernel heap, copy on write fork, swap to a virtio-blk swap device.
 - VFS with mount points and devfs. Custom inode filesystem `mfs`. virtio-blk storage.
 - POSIX subset syscalls, ELF64 user programs dynamically linked against the shared libraries in `/lib` (`init` and `/lib/ld.so` are static), own libc in `libc/`.
-- Single user, no permission enforcement. IPv4 networking over virtio-net (`docs/design/network.md`), no IPv6, forwarding or TLS.
+- Multiple users since `docs/plan/multiuser.md`: credentials per process, owners on disk, permission bits enforced by the kernel, root (uid 0) for privileged operations (`docs/design/users.md`). IPv4 networking over virtio-net (`docs/design/network.md`), no IPv6, forwarding or TLS.
 - SMP since milestone M18 (application processors started through the Limine MP protocol). All per CPU state is in `struct cpu`, reached through `cpu_current()` (the GS base on x86_64, `TPIDR_EL1` on aarch64).
 
 ## Build and run

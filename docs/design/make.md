@@ -74,7 +74,8 @@ creating the missing ones, and `touch -c` does not create files.
   repeated slashes removed, checked with `stat`. Since symbolic links
   were added (2026-09-30, `vfs.md`) it also resolves every link.
 - `access` with `F_OK`, `R_OK`, `W_OK` and `X_OK` (`unistd.h`): the
-  file must exist; permission bits are not enforced.
+  file must exist. Since U2 of the multiuser plan the kernel checks the
+  permission bits against the real ids (`faccessat`, `users.md`).
 - `confstr(_CS_PATH)` (`unistd.h`) returns `/bin`, where make looks for
   `sh`.
 - `ar.h`: the archive member header, which make reads to date

@@ -40,14 +40,20 @@ void rusage_of_proc(struct proc *p, struct rusage *ru, bool children)
         ru->ru_maxrss = (int64_t)(vma_count_resident(p->vm) * (PAGE_SIZE / 1024));
 }
 
-/* Apply a new limit to p. Called with no lock held. */
+/* Apply a new limit to p. Called with no lock held. Raising the hard limit
+ * requires root (U2). */
 static long set_limit(struct proc *p, int resource, const struct rlimit *new)
 {
     if (new->rlim_cur > new->rlim_max)
         return -EINVAL;
     if (resource == RLIMIT_NOFILE && new->rlim_max > OPEN_MAX)
         return -EPERM;
+    bool root = cred_current_is_root();
     spin_lock(&p->lock);
+    if (new->rlim_max > p->rlim[resource].rlim_max && !root) {
+        spin_unlock(&p->lock);
+        return -EPERM;
+    }
     p->rlim[resource] = *new;
     spin_unlock(&p->lock);
     if (resource == RLIMIT_NOFILE)
@@ -67,9 +73,16 @@ static long do_prlimit(int pid, int resource, uintptr_t new_ptr, uintptr_t old_p
         return -EFAULT;
     struct proc *p = thread_current()->proc;
     if (pid != 0 && pid != p->pid) {
+        struct cred self, target;
+        cred_get(p, &self);
         p = proc_find(pid);
         if (!p || p == &kernel_proc)
             return -ESRCH;
+        /* Another process's limits belong to processes of the same user. */
+        cred_get(p, &target);
+        if (!cred_is_root(&self) && (self.euid != target.ruid || self.euid != target.euid ||
+                                     self.euid != target.suid))
+            return -EPERM;
     }
     struct rlimit new;
     if (new_ptr)

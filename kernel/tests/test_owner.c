@@ -70,6 +70,9 @@ static void test_mfs_owners(void)
     expect("/mnt/shared", 0, 0755, 0, 0);
     ktest_assert(vfs_chown("/mnt/shared", 0, 50, 0) == 0 && vfs_chmod("/mnt/shared", 02775, 0) == 0,
                  "prepare the shared directory");
+    /* The root of the volume is root's, mode 0755. uid 1000 needs write
+     * permission there for the files below. */
+    ktest_assert(vfs_chmod("/mnt", 0777, 0) == 0, "open the volume root");
 
     /* uid 1000 with umask 077 and the supplementary group 50. */
     uint32_t groups[1] = { 50 };
@@ -125,6 +128,7 @@ static void test_mfs_owners(void)
     expect("/mnt/user.txt", 0, 0755, 1000, 1000);
     expect("/mnt/udir", 0, 0750, 1000, 50);
     expect("/mnt/ulink", VFS_NOFOLLOW, 0777, 1000, 50);
+    expect("/mnt", 0, 0777, 0, 0);
     expect("/mnt/shared", 0, 02775, 0, 50);
     expect("/mnt/shared/f", 0, 0600, 1000, 50);
     expect("/mnt/shared/d", 0, 02700, 1000, 50);

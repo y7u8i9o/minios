@@ -106,12 +106,16 @@ struct iovec;
 ssize_t readv(int fd, const struct iovec *iov, int count);
 ssize_t writev(int fd, const struct iovec *iov, int count);
 
-/* access checks that the file exists; permission bits are not enforced. */
+/* access checks existence (F_OK) or permission (R_OK, W_OK, X_OK) with
+ * the real ids, as a setuid program needs to judge its caller. faccessat
+ * resolves a relative path from dirfd and takes AT_EACCESS for the
+ * effective ids and AT_SYMLINK_NOFOLLOW. */
 #define F_OK 0
 #define X_OK 1
 #define W_OK 2
 #define R_OK 4
 int access(const char *path, int mode);
+int faccessat(int dirfd, const char *path, int mode, int flags);
 
 /* confstr knows _CS_PATH, the default command search path "/bin". */
 #define _CS_PATH 0

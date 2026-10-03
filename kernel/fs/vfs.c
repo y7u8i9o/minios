@@ -215,6 +215,32 @@ static struct inode *root_inode(void)
     return inode_get(root_mount->sb, root_mount->sb->root_ino);
 }
 
+int vfs_permission(struct inode *ino, int mask, const struct cred *c)
+{
+    uint32_t mode = __atomic_load_n(&ino->mode, __ATOMIC_RELAXED);
+    if (cred_is_root(c)) {
+        if ((mask & MAY_EXEC) && !S_ISDIR(mode) && !(mode & 0111))
+            return -EACCES;
+        return 0;
+    }
+    uint32_t bits;
+    if (c->euid == __atomic_load_n(&ino->uid, __ATOMIC_RELAXED))
+        bits = mode >> 6;
+    else if (cred_in_group(c, __atomic_load_n(&ino->gid, __ATOMIC_RELAXED)))
+        bits = mode >> 3;
+    else
+        bits = mode;
+    return ((bits & 7) & (uint32_t)mask) == (uint32_t)mask ? 0 : -EACCES;
+}
+
+/* vfs_permission for the calling process. */
+static int may_current(struct inode *ino, int mask)
+{
+    struct cred c;
+    cred_get_current(&c);
+    return vfs_permission(ino, mask, &c);
+}
+
 /* Look up one component under dir, taking dir->lock. */
 static int lookup_child(struct inode *dir, const char *name, size_t len, struct inode **out)
 {
@@ -263,11 +289,14 @@ static int link_target(struct inode *link, char *buf)
 
 struct walk {
     struct inode *cur;              /* referenced */
+    struct cred cred;               /* identity whose search permission counts */
     size_t plen;
     char path[VFS_PATH_MAX];
     char rest[WALK_REST_MAX];
     char target[VFS_SYMLINK_MAX + 1];
 };
+
+static int walk_as(struct walk *w, const char *path, unsigned flags, int *links, char *name, size_t namesize);
 
 static int walk_to_root(struct walk *w)
 {
@@ -323,6 +352,13 @@ static int walk_up(struct walk *w)
  * directory holding the last component and copies the component to name;
  * "." and ".." are refused there. On failure w->cur is NULL. */
 static int walk(struct walk *w, const char *path, unsigned flags, int *links, char *name, size_t namesize)
+{
+    cred_get_current(&w->cred);
+    return walk_as(w, path, flags, links, name, namesize);
+}
+
+/* walk with the identity already in w->cred. */
+static int walk_as(struct walk *w, const char *path, unsigned flags, int *links, char *name, size_t namesize)
 {
     w->cur = NULL;
     size_t n = strlen(path);
@@ -390,6 +426,11 @@ static int walk(struct walk *w, const char *path, unsigned flags, int *links, ch
                 goto fail;
             continue;
         }
+        /* Entering a component needs search permission on the directory
+         * holding it. */
+        r = vfs_permission(w->cur, MAY_EXEC, &w->cred);
+        if (r < 0)
+            goto fail;
         struct inode *next;
         r = lookup_child(w->cur, c, len, &next);
         if (r < 0)
@@ -743,8 +784,9 @@ int vfs_sync(void)
  * and O_NOFOLLOW refuse it), and a link whose target does not exist
  * creates the target, as POSIX specifies for open. phys (VFS_PATH_MAX
  * bytes) receives the canonical path of the result. */
-static int open_create(const char *path, int flags, uint32_t mode, struct inode **out, char *phys)
+static int open_create(const char *path, int flags, uint32_t mode, struct inode **out, char *phys, bool *created)
 {
+    *created = false;
     struct open_create_bufs {
         char name[NAME_MAX + 1];
         char target[VFS_SYMLINK_MAX + 1];
@@ -760,6 +802,13 @@ static int open_create(const char *path, int flags, uint32_t mode, struct inode 
         if (r < 0)
             break;
         size_t len = strlen(b->name);
+        /* Looking the name up needs search permission on the directory,
+         * creating it also write permission. */
+        r = may_current(dir, MAY_EXEC);
+        if (r < 0) {
+            inode_put(dir);
+            break;
+        }
         vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
         r = dir->ops && dir->ops->lookup ? dir->ops->lookup(dir, b->name, len, &ino) : -ENOENT;
@@ -767,10 +816,14 @@ static int open_create(const char *path, int flags, uint32_t mode, struct inode 
             inode_put(ino);
             r = -EEXIST;
         } else if (r == -ENOENT) {
-            if (!dir->ops || !dir->ops->create)
+            if (!dir->ops || !dir->ops->create) {
                 r = -EROFS;
-            else
-                r = dir->ops->create(dir, b->name, len, S_IFREG | (mode & 07777 & ~vfs_umask()), &ino);
+            } else {
+                r = may_current(dir, MAY_WRITE);
+                if (r == 0)
+                    r = dir->ops->create(dir, b->name, len, S_IFREG | (mode & 07777 & ~vfs_umask()), &ino);
+                *created = r == 0;
+            }
         }
         mutex_unlock(&dir->lock);
         vfs_op_end(dir->sb);
@@ -807,13 +860,17 @@ static int open_create(const char *path, int flags, uint32_t mode, struct inode 
     return r;
 }
 
-int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
+/* The body of vfs_open and vfs_open_exec. With exec the file must be a
+ * regular file with execute permission instead of satisfying the access
+ * mode. */
+static int open_common(const char *path, int flags, uint32_t mode, bool exec, struct file **out)
 {
     struct inode *ino = NULL;
     char phys[VFS_PATH_MAX];
+    bool created = false;
     int r;
     if (flags & O_CREAT) {
-        r = open_create(path, flags, mode, &ino, phys);
+        r = open_create(path, flags, mode, &ino, phys, &created);
         if (r < 0)
             return r;
     } else {
@@ -831,6 +888,16 @@ int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
         r = -EISDIR;
         goto fail;
     }
+    if (exec) {
+        r = S_ISREG(ino->mode) ? may_current(ino, MAY_EXEC) : -EACCES;
+    } else if (!created) {
+        int mask = acc == O_WRONLY ? MAY_WRITE : acc == O_RDWR ? MAY_READ | MAY_WRITE : MAY_READ;
+        if (flags & O_TRUNC)
+            mask |= MAY_WRITE;
+        r = may_current(ino, mask);
+    }
+    if (r < 0)
+        goto fail;
     if ((flags & O_DIRECTORY) && !S_ISDIR(ino->mode)) {
         r = -ENOTDIR;
         goto fail;
@@ -875,6 +942,56 @@ fail:
     return r;
 }
 
+int vfs_open(const char *path, int flags, uint32_t mode, struct file **out)
+{
+    return open_common(path, flags, mode, false, out);
+}
+
+int vfs_open_exec(const char *path, struct file **out)
+{
+    return open_common(path, O_RDONLY, 0, true, out);
+}
+
+int vfs_access(const char *path, int mask, unsigned flags)
+{
+    struct walk *w = kmalloc(sizeof *w);
+    if (!w)
+        return -ENOMEM;
+    cred_get_current(&w->cred);
+    if (!(flags & VFS_EACCESS)) {
+        w->cred.euid = w->cred.ruid;
+        w->cred.egid = w->cred.rgid;
+    }
+    int links = 0;
+    int r = walk_as(w, path, flags & VFS_NOFOLLOW, &links, NULL, 0);
+    if (r == 0) {
+        if (mask)
+            r = vfs_permission(w->cur, mask, &w->cred);
+        inode_put(w->cur);
+    }
+    kfree(w);
+    return r;
+}
+
+/* Removing or replacing an entry of a sticky directory is reserved to the
+ * owners of the entry and of the directory, and to root. */
+static int sticky_check(struct inode *dir, const char *name)
+{
+    if (!(dir->mode & S_ISVTX))
+        return 0;
+    struct cred c;
+    cred_get_current(&c);
+    if (cred_is_root(&c) || c.euid == dir->uid)
+        return 0;
+    struct inode *child;
+    int r = lookup_child(dir, name, strlen(name), &child);
+    if (r < 0)
+        return r == -ENOENT ? 0 : r;
+    r = child->uid == c.euid ? 0 : -EPERM;
+    inode_put(child);
+    return r;
+}
+
 /* Run a directory operation on the parent of path. */
 enum dir_op_kind { DIR_OP_UNLINK, DIR_OP_RMDIR };
 
@@ -891,6 +1008,13 @@ static int dir_op(const char *path, enum dir_op_kind kind)
     if (!fn) {
         inode_put(dir);
         return -EROFS;
+    }
+    r = may_current(dir, MAY_WRITE | MAY_EXEC);
+    if (r == 0)
+        r = sticky_check(dir, name);
+    if (r < 0) {
+        inode_put(dir);
+        return r;
     }
     vfs_op_begin(dir->sb);
     mutex_lock(&dir->lock);
@@ -913,6 +1037,11 @@ int vfs_mkdir(const char *path, uint32_t mode)
     if (!dir->ops || !dir->ops->mkdir) {
         inode_put(dir);
         return -EROFS;
+    }
+    r = may_current(dir, MAY_WRITE | MAY_EXEC);
+    if (r < 0) {
+        inode_put(dir);
+        return r;
     }
     mode &= 07777 & ~vfs_umask();
     if (dir->mode & S_ISGID)
@@ -1036,6 +1165,15 @@ int vfs_utimens(const char *path, int64_t mtime, unsigned flags)
         inode_put(ino);
         return -EROFS;
     }
+    struct cred c;
+    cred_get_current(&c);
+    if (!cred_is_root(&c) && c.euid != ino->uid) {
+        r = flags & VFS_UTIME_NOW ? vfs_permission(ino, MAY_WRITE, &c) : -EPERM;
+        if (r < 0) {
+            inode_put(ino);
+            return r;
+        }
+    }
     vfs_op_begin(ino->sb);
     mutex_lock(&ino->lock);
     r = ino->ops->setmtime(ino, mtime);
@@ -1076,7 +1214,7 @@ int vfs_link(const char *oldpath, const char *newpath)
         r = -EPERM;
     else if (!dir->ops || !dir->ops->link)
         r = -EROFS;
-    else {
+    else if ((r = may_current(dir, MAY_WRITE | MAY_EXEC)) == 0) {
         vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
         r = dir->ops->link(dir, name, strlen(name), target);
@@ -1102,7 +1240,7 @@ int vfs_symlink(const char *target, const char *path)
         return r;
     if (!dir->ops || !dir->ops->symlink) {
         r = -EROFS;
-    } else {
+    } else if ((r = may_current(dir, MAY_WRITE | MAY_EXEC)) == 0) {
         vfs_op_begin(dir->sb);
         mutex_lock(&dir->lock);
         r = dir->ops->symlink(dir, name, strlen(name), target, tlen);
@@ -1130,6 +1268,30 @@ int vfs_readlink(const char *path, char *buf, size_t size)
     return r;
 }
 
+/* Renaming needs write and search permission on both directories, obeys
+ * the sticky bit for the moved entry and for an entry it replaces, and a
+ * directory that moves to another parent must be writable itself, since
+ * its ".." entry changes. */
+static int rename_allowed(struct inode *olddir, const char *oldname, struct inode *newdir, const char *newname)
+{
+    int r = may_current(olddir, MAY_WRITE | MAY_EXEC);
+    if (r == 0 && newdir != olddir)
+        r = may_current(newdir, MAY_WRITE | MAY_EXEC);
+    if (r == 0)
+        r = sticky_check(olddir, oldname);
+    if (r == 0)
+        r = sticky_check(newdir, newname);
+    if (r == 0 && newdir != olddir) {
+        struct inode *child;
+        if (lookup_child(olddir, oldname, strlen(oldname), &child) == 0) {
+            if (S_ISDIR(child->mode))
+                r = may_current(child, MAY_WRITE);
+            inode_put(child);
+        }
+    }
+    return r;
+}
+
 int vfs_rename(const char *oldpath, const char *newpath)
 {
     struct inode *olddir, *newdir;
@@ -1146,7 +1308,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
         r = -EXDEV;
     else if (!olddir->ops || !olddir->ops->rename)
         r = -EROFS;
-    else {
+    else if ((r = rename_allowed(olddir, oldname, newdir, newname)) == 0) {
         /* Lock in a fixed order (lower inode number first) so two renames
          * between the same directories cannot deadlock. */
         struct inode *first = olddir, *second = newdir;

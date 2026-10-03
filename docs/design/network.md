@@ -1082,9 +1082,11 @@ line with the address, netmask and gateway, `arp` lines, and the IP, ARP,
 ICMP, UDP, TCP and packet pool counters. `NETIOC_CONFIGURE` takes a
 `struct net_config` and runs `net_configure`; an address of 0 removes the
 address, netmask and gateway while the interface remains the broadcast
-interface. `NETIOC_PING` is described under N11. MiniOS enforces no
-permissions, so every process may reconfigure the network; the plan's
-authority bound is the single-user model itself, not privilege separation.
+interface. `NETIOC_PING` is described under N11. Until U2 of the
+multiuser plan every process could reconfigure the network. Since then
+`NETIOC_CONFIGURE` and `NETIOC_ARP_PROBE` require root, `NETIOC_PING` does
+not, and binding a TCP or UDP port below 1024 requires root as well
+(`users.md`).
 
 `net(1)` wraps the device. `net apply`, a boot task of init after the
 filesystems are mounted, reads `/etc/network`: `iface NAME static ADDRESS

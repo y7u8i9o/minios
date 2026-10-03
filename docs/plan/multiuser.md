@@ -111,7 +111,7 @@ programs directly as root.
   `fat_user`, `mfs_journal`, `fs`, `persist`, `shutdown`, `shutdown_cmd`,
   `blk`, `shell`, `shell2`, `tar` and `ar` pass as well.
 
-### U2. Permission enforcement
+### U2. Permission enforcement (completed 2026-10-03)
 
 - `vfs_permission` checks search permission on every path component, read
   and write access on open and truncation, write and search permission on
@@ -130,6 +130,16 @@ programs directly as root.
   permitted case as uid 1000, including a setuid program, the sticky `/tmp`
   and signals across users. `shell`, `shell2`, `initctl`, `lua_sys`,
   `fs_owner` and `user_cred` must still pass.
+- During the work `ld.so` was left to read `AT_SECURE` in U3, since the
+  library path in the home that it must then ignore arrives with U3. The
+  `fs_owner` case opens the root of its volume to uid 1000 before creating
+  files there, and the `ctrlc` case expects the USER column of `ps`. The
+  cases `pty`, `script`, `script2`, `tcc`, `make`, `pkg`, `pkg_apps`,
+  `gui_term`, `symlink`, `utils`, `shutdown`, `persist`, `jobcontrol`,
+  `ctrlc`, `signals`, `rlimit`, `time`, `net_clock`, `net_tools`,
+  `dynlink`, `dlopen`, `fs`, `mfs_user`, `fat_user`, `sockets`,
+  `gui_desktop`, `gui_files`, `gui_settings`, `comp_shell` and
+  `audio_player` pass as well.
 
 ### U3. Accounts, home directories and the console login
 

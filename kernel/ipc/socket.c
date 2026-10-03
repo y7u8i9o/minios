@@ -8,6 +8,8 @@
 _Static_assert(AF_UNIX == 1 && AF_INET == 2 && sizeof(struct sockaddr_in) == 16 &&
                sizeof(struct sockaddr_storage) == 128, "socket validator ABI");
 #include <net/inet.h>
+#include <net/byteorder.h>
+#include <sched/cred.h>
 #include <syscall/syscalls.h>
 #include <mm/slab.h>
 #include <lib/string.h>
@@ -203,6 +205,12 @@ int socket_bind(struct socket *s, const struct sockaddr_storage *addr, socklen_t
 {
     if (addr->ss_family != s->family)
         return -EAFNOSUPPORT;
+    /* The ports below 1024 are reserved to root (U2). */
+    if (s->family == AF_INET && len >= sizeof(struct sockaddr_in)) {
+        uint16_t port = ntohs(((const struct sockaddr_in *)addr)->sin_port);
+        if (port && port < 1024 && !cred_current_is_root())
+            return -EACCES;
+    }
     if (!s->ops->bind)
         return -EOPNOTSUPP;
     return s->ops->bind(s, addr, len);

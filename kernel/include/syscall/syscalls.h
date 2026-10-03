@@ -124,6 +124,7 @@ long sys_fchmodat(struct trapframe *tf);
 long sys_fchmod(struct trapframe *tf);
 long sys_fchownat(struct trapframe *tf);
 long sys_fchown(struct trapframe *tf);
+long sys_faccessat(struct trapframe *tf);
 /* N01 */
 long sys_getsockname(struct trapframe *tf);
 long sys_getpeername(struct trapframe *tf);

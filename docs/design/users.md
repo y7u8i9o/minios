@@ -147,9 +147,61 @@ The commands `chmod` (octal and symbolic modes, `-R`), `chown` and `chgrp`
 columns and the set id and sticky letters, `stat` prints uid and gid, and
 the shell has a `umask` builtin.
 
-## Test
+## Enforcement (U2)
 
-The case `user_cred` runs `/bin/credtest` as root. It checks the initial
+`vfs_permission(inode, mask, cred)` decides every check. The mask combines
+`MAY_READ`, `MAY_WRITE` and `MAY_EXEC`. The owner bits apply when the
+effective uid owns the inode, the group bits when the inode's group is the
+effective or a supplementary group, and the other bits otherwise, without
+falling through from one class to the next. Root passes every check except
+the execution of a file that is not a directory and has no execute bit at
+all. The checks are
+
+| Operation | Permission |
+|---|---|
+| every path component that a lookup enters | search (`MAY_EXEC`) on the directory holding it |
+| `open` | read, write or both by the access mode, write for `O_TRUNC`, none for a file the call created |
+| create, `mkdir`, `link`, `symlink`, `unlink`, `rmdir` | write and search on the parent directory |
+| `rename` | write and search on both parents, write on a directory that moves to another parent |
+| removal or replacement in a directory with the sticky bit | the owner of the entry or of the directory, or root (`EPERM`) |
+| `utimensat` | the owner or root for any time, write permission for the current time |
+| `chdir` | search on the directory |
+| exec | execute on a regular file, which need not be readable |
+| `faccessat`, `access` | the requested bits with the real ids, or the effective ids with `AT_EACCESS` |
+
+Each walk takes one snapshot of the credentials into `struct walk`, and
+`vfs_access` replaces its effective ids by the real ones before the walk.
+A relative path is resolved from the root along the working directory, so
+search permission on the ancestors of the working directory counts for it
+as well.
+
+Exec opens the program through `vfs_open_exec`. When the program has the
+set user id bit, its owner becomes the effective and saved uid of the
+process, and the set group id bit does the same with its group. Such an
+image receives `AT_SECURE` 1 in its auxiliary vector (`elf_info.secure`),
+every other image 0.
+
+The privileged operations require effective uid 0 and fail with `EPERM`
+otherwise, namely `mount`, `umount`, `reboot` (which also stays limited to
+init), `clock_settime`, raising a hard resource limit, `prlimit` on a
+process whose ids are not all the caller's effective uid, and the
+`NETIOC_CONFIGURE` and `NETIOC_ARP_PROBE` requests of `/dev/net`. Binding
+an AF_INET socket to a port from 1 to 1023 fails with `EACCES` for anyone
+but root.
+
+`kill` follows the rule of POSIX. Root may signal any process, and any
+other sender a process whose real or saved uid equals the sender's real or
+effective uid, which also governs `kill(pid, 0)`. For a process group or
+-1 the signal goes to each process the sender may signal, and the call
+fails with `EPERM` when the group has processes but none qualifies. The
+signals that terminals, pseudo terminal hangups and `reboot` send go
+through `signal_send` and `signal_send_pgrp` directly and are not checked.
+
+Opening `/dev/ptmx` gives the slave node of the new pair to the real uid
+and gid of the opener with mode 0620 (`devfs_set_owner`), and closing the
+master returns it to root with mode 0600, the mode of an unused slave.
+
+ runs `/bin/credtest` as root. It checks the initial
 identity and mask, drops a child to uid 1000 with groups 1000 and 50 and
 checks that the child cannot regain root or change its groups, that
 `/dev/proc` reports its uid, that a grandchild inherits the ids and that an
@@ -166,3 +218,15 @@ the modes and owners, the inheritance below a set group id directory, the
 rules for `chmod` and `chown` and the clearing of the set id bits, and
 finds every value again after an unmount and a new mount. It then mounts
 the FAT volume with and without owner options and changes a devfs node.
+
+The case `perm_user` runs `/bin/permtest` as root. It builds a tree below
+`/tmp/perm` with files and directories of several modes, a sticky
+directory, programs without execute bits and with execute bits only, and a
+setuid root copy of itself. Children that drop to uid 1000 then check the
+refused and the permitted file operations, the sticky bit, the rename of a
+directory to another parent, `utimensat`, `access`, exec, the setuid copy
+(which must report `AT_SECURE` 1 and euid 0 and see `access` refuse what
+`open` allows), the privileged operations, signals to processes of root
+and of their own, and the ownership of a pseudo terminal. Root finally
+checks that it keeps its access but cannot execute a file without execute
+bits.

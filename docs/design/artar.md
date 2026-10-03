@@ -76,9 +76,11 @@ after the program exits.
   `AT_SYMLINK_NOFOLLOW` and `AT_REMOVEDIR`.
 - `pwd.h` and `grp.h`: `getpwuid`, `getpwnam`, `getgrgid`, `getgrnam`
   describe the single user, name `user`, uid and gid 0, home `/home`,
-  shell `/bin/sh`; other ids and names fail with `ENOENT`.
+  shell `/bin/sh`; other ids and names fail with `ENOENT`. Since U0 of the
+  multiuser plan they read `/etc/passwd` and `/etc/group` (`users.md`).
 - `getuid`, `geteuid`, `getgid`, `getegid` return 0; `lchown` returns 0
-  without effect like `chown`.
+  without effect like `chown`. Since U0 and U1 they report and change the
+  real credentials and owners (`users.md`).
 - `symlink` failed with `EPERM` and `readlink` with `EINVAL` until
   2026-09-30, when both became system calls; `mknod` and `mkfifo`
   fail with `EPERM`.

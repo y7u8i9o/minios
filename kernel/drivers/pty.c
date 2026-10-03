@@ -59,6 +59,11 @@ static int ptmx_open(struct inode *ino, struct file *f)
             tty_init(&p->tty, p->name, pty_output, false);
             ring_init(&p->out_ring, p->out, sizeof p->out);
             f->priv = p;
+            /* The slave belongs to the real user of the opener while the
+             * master is open, readable and writable by that user only. */
+            struct cred c;
+            cred_get_current(&c);
+            devfs_set_owner(p->name, 0620, c.ruid, c.rgid);
             klog_info("pts%d opened", i);
             return 0;
         }
@@ -140,6 +145,7 @@ static void ptmx_release(struct file *f)
     tty_hangup(&p->tty);
     if (pgid > 0)
         signal_send_pgrp(pgid, SIGHUP);
+    devfs_set_owner(p->name, 0600, 0, 0);
     spin_lock(&pty_table_lock);
     p->master_open = false;
     spin_unlock(&pty_table_lock);
@@ -268,7 +274,7 @@ void pty_init(void)
         poll_source_init(&p->poll, "pty_poll");
         ksnprintf(p->name, sizeof p->name, "pts%d", i);
         tty_init(&p->tty, p->name, pty_output, false);
-        devfs_register(p->name, S_IFCHR | 0666, &pts_fops, p, 0);
+        devfs_register(p->name, S_IFCHR | 0600, &pts_fops, p, 0);
     }
     klog_info("/dev/ptmx with %d slaves /dev/pts0../dev/pts%d, %zu byte output ring each",
               PTY_MAX, PTY_MAX - 1, sizeof ptys[0].out);

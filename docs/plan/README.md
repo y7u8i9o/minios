@@ -24,7 +24,7 @@ its boot tests pass.
 | `locale.md` | Locales, time zones, message catalogues, keyboard layouts and input methods, milestones L0 to L7 | completed 2026-10-03 |
 | `ime.md` | Input method daemon after IBus, pinyin and Japanese engines, milestones I0 to I5 | completed 2026-10-03 |
 | `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C7 | completed 2026-10-03 |
-| `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, milestones U0 to U4 | U0 and U1 completed 2026-10-03 |
+| `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, milestones U0 to U4 | U0 to U2 completed 2026-10-03 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.
@@ -58,7 +58,7 @@ milestone is not started before the boot tests of the current one pass.
 | Graphics | The X12 display server with a Wayland-like protocol (`protocol/`), the `libgui` toolkit, virtio-gpu mode setting with the std VGA framebuffer as fallback |
 | Audio | virtio-snd through `/dev/pcm0`, the `audiod` mixing server, `libaudio` |
 | Privilege | Ring 3 from the first user process |
-| Permissions | Single user, permission bits stored but not enforced |
+| Permissions | Multiple users since `multiuser.md`, owners and permission bits enforced by the kernel, root for privileged operations |
 | Testing | Automated QEMU boot tests checked via serial output, exit via `isa-debug-exit` |
 | Debugging | GDB attached to QEMU gdbstub, kernel panic with symbolized backtrace |
 | Build | Plain Makefiles |

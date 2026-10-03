@@ -236,7 +236,8 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
         phdr = USER_STACK_TOP - ALIGN_UP(phdr_bytes, 16);
     const uint64_t aux[] = {
         AT_PHDR, phdr, AT_PHENT, sizeof(struct elf64_phdr), AT_PHNUM, info->phnum,
-        AT_PAGESZ, PAGE_SIZE, AT_BASE, info->interp_base, AT_ENTRY, info->entry, AT_NULL, 0,
+        AT_PAGESZ, PAGE_SIZE, AT_BASE, info->interp_base, AT_ENTRY, info->entry, AT_SECURE, info->secure,
+        AT_NULL, 0,
     };
     size_t vectors = (1 + argc + 1 + envc + 1 + sizeof aux / sizeof aux[0]) * sizeof(uint64_t);
     if (bytes + vectors + 64 > stack_size / 2)

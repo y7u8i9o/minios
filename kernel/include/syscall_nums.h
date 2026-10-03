@@ -111,4 +111,5 @@
 #define SYS_fchmod        104
 #define SYS_fchownat      105
 #define SYS_fchown        106
-#define SYS_MAX           107
+#define SYS_faccessat     107
+#define SYS_MAX           108

@@ -10,3 +10,7 @@ void devfs_log_nodes(void);      /* log the registered nodes once at boot */
  * in the inode for the driver. */
 int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops, void *priv,
                    uint64_t size);
+/* Give the node name (in the root of /dev) the permission bits perm and an
+ * owner, as chmod and chown would, for drivers that hand a node to the
+ * process using it (U2). No inode lock may be held. */
+int devfs_set_owner(const char *name, uint32_t perm, uint32_t uid, uint32_t gid);

@@ -41,16 +41,27 @@ static size_t stack_size_for(struct proc *p)
     return ALIGN_UP(lim, PAGE_SIZE);
 }
 
-/* Read a whole regular file into kernel memory. */
-static int read_file_image(const char *path, void **image_out, size_t *size_out)
+/* The set id bits of a program and the ids they confer (U2). */
+struct exec_ids {
+    bool setuid, setgid;
+    uint32_t uid, gid;
+};
+
+/* Read a whole regular file with execute permission into kernel memory,
+ * and report its set id bits when ids is not NULL. */
+static int read_file_image(const char *path, void **image_out, size_t *size_out, struct exec_ids *ids)
 {
     struct file *f;
-    int r = vfs_open(path, O_RDONLY, 0, &f);
+    int r = vfs_open_exec(path, &f);
     if (r < 0)
         return r;
-    if (!S_ISREG(f->inode->mode)) {
-        file_put(f);
-        return -EACCES;
+    if (ids) {
+        mutex_lock(&f->inode->lock);
+        ids->setuid = f->inode->mode & S_ISUID;
+        ids->setgid = f->inode->mode & S_ISGID;
+        ids->uid = f->inode->uid;
+        ids->gid = f->inode->gid;
+        mutex_unlock(&f->inode->lock);
     }
     size_t size = f->inode->size;
     void *image = kmalloc(size ? size : 1);
@@ -82,11 +93,12 @@ static int read_file_image(const char *path, void **image_out, size_t *size_out)
  * the initial stack. The thread starts in the loader in that case. */
 static int load_image(const char *path, char *const argv[], char *const envp[],
                       struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
-                      char *interp, size_t interp_len)
+                      char *interp, size_t interp_len, struct exec_ids *ids)
 {
     void *image;
     size_t size;
-    int r = read_file_image(path, &image, &size);
+    struct exec_ids none;
+    int r = read_file_image(path, &image, &size, ids ? ids : &none);
     if (r < 0)
         return r;
     struct vmspace *vm = vmspace_create();
@@ -97,8 +109,11 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
     struct elf_info info = { 0 };
     r = elf_load(vm, image, size, &info);
     kfree(image);
+    /* A program that changes the ids gets AT_SECURE, which tells the loader
+     * and libc not to trust the environment. elf_load cleared info. */
+    info.secure = ids && (ids->setuid || ids->setgid);
     if (r == 0 && info.interp[0]) {
-        r = read_file_image(info.interp, &image, &size);
+        r = read_file_image(info.interp, &image, &size, NULL);
         if (r == 0) {
             r = elf_load_interp(vm, image, size, USER_INTERP_BASE, &info);
             kfree(image);
@@ -168,7 +183,7 @@ struct proc *proc_create_user(const char *path, char *const argv[], char *const 
     struct vmspace *vm;
     uintptr_t entry, rsp;
     char interp[64];
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(parent), interp, sizeof interp);
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(parent), interp, sizeof interp, NULL);
     if (r < 0) {
         klog_error("cannot load %s: %d", path, r);
         return NULL;
@@ -255,9 +270,20 @@ int proc_exec(struct trapframe *tf, const char *path, char *const argv[], char *
 
     struct vmspace *vm;
     uintptr_t entry, rsp;
-    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(p), NULL, 0);
+    struct exec_ids ids = { 0 };
+    int r = load_image(path, argv, envp, &vm, &entry, &rsp, stack_size_for(p), NULL, 0, &ids);
     if (r < 0)
         return r;
+    /* The set user id and set group id bits make the owner and the group
+     * of the program the effective and saved ids. */
+    if (ids.setuid || ids.setgid) {
+        spin_lock(&p->lock);
+        if (ids.setuid)
+            p->cred.euid = p->cred.suid = ids.uid;
+        if (ids.setgid)
+            p->cred.egid = p->cred.sgid = ids.gid;
+        spin_unlock(&p->lock);
+    }
 
     struct vmspace *old = p->vm;
     p->vm = vm;

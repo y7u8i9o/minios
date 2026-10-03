@@ -55,6 +55,8 @@ long sys_clock_settime(struct trapframe *tf)
     uintptr_t ptr = SYSARG1(tf);
     if (clock != CLOCK_REALTIME)
         return -EINVAL;
+    if (!cred_current_is_root())
+        return -EPERM;
     if (!user_range_ok(ptr, sizeof(struct timespec), false))
         return -EFAULT;
     struct timespec ts;

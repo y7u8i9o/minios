@@ -22,6 +22,12 @@ void cred_get_current(struct cred *out)
     cred_get(thread_current()->proc, out);
 }
 
+bool cred_current_is_root(void)
+{
+    struct proc *p = thread_current()->proc;
+    return __atomic_load_n(&p->cred.euid, __ATOMIC_RELAXED) == 0;
+}
+
 bool cred_in_group(const struct cred *c, uint32_t gid)
 {
     if (c->egid == gid)

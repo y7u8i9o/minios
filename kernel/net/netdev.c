@@ -1,7 +1,8 @@
 /* /dev/net: the control and diagnostic interface of the stack (N10) and
  * /dev/urandom from the kernel random provider. Reading /dev/net returns a
  * text snapshot taken on netd; the ioctls configure an interface and send
- * one ICMP echo. There is no privilege separation: MiniOS is single user. */
+ * one ICMP echo. Configuring an interface and probing or announcing an
+ * address require root (U2), sending an echo does not. */
 #include <net/ipv4.h>
 #include <net/tcp.h>
 #include <net/worker.h>
@@ -97,6 +98,8 @@ static long netdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
     struct proc *p = thread_current()->proc;
     switch (req) {
     case NETIOC_CONFIGURE: {
+        if (!cred_current_is_root())
+            return -EPERM;
         if (!vma_range_ok(p->vm, arg, sizeof(struct net_config), false))
             return -EFAULT;
         struct net_config c;
@@ -108,6 +111,8 @@ static long netdev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
         return net_configure(n, c.address, c.mask, c.gateway);
     }
     case NETIOC_ARP_PROBE: {
+        if (!cred_current_is_root())
+            return -EPERM;
         if (!vma_range_ok(p->vm, arg, sizeof(struct net_arp_probe), true))
             return -EFAULT;
         struct net_arp_probe probe;

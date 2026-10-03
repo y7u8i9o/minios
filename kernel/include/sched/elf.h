@@ -14,6 +14,7 @@ struct elf_info {
     char interp[64];            /* PT_INTERP path, empty for a static program */
     uintptr_t interp_base;
     uintptr_t interp_entry;
+    bool secure;                /* AT_SECURE: the program changes the ids (U2) */
 };
 
 /* Load an ELF64 executable (ET_EXEC) into vm: one region per PT_LOAD segment
@@ -39,3 +40,4 @@ int user_stack_setup(struct vmspace *vm, char *const argv[], char *const envp[],
 #define AT_PAGESZ 6
 #define AT_BASE   7
 #define AT_ENTRY  9
+#define AT_SECURE 23

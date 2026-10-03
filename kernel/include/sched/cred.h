@@ -30,3 +30,7 @@ static inline bool cred_is_root(const struct cred *c)
 {
     return c->euid == 0;
 }
+
+/* True if the calling process has effective uid 0, the condition of the
+ * privileged operations (U2). */
+bool cred_current_is_root(void);

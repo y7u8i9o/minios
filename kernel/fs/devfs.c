@@ -41,6 +41,7 @@ static struct superblock *devfs_sb;
 
 static const struct inode_ops devfs_dir_ops;
 static const struct file_ops devfs_dir_fops;
+static int devfs_setattr(struct inode *ino, uint32_t mode, uint32_t uid, uint32_t gid);
 
 static struct devnode *devnode_find(uint64_t parent, const char *name, size_t len)
 {
@@ -107,6 +108,29 @@ int devfs_register(const char *name, uint32_t mode, const struct file_ops *fops,
     else if (parent == ROOT_INO)
         klog_debug("/dev/%s registered", name);
     return 0;
+}
+
+int devfs_set_owner(const char *name, uint32_t perm, uint32_t uid, uint32_t gid)
+{
+    struct devnode *n = devnode_find(ROOT_INO, name, strlen(name));
+    if (!n)
+        return -ENOENT;
+    if (!devfs_sb) {
+        spin_lock(&devfs_lock);
+        n->mode = (n->mode & S_IFMT) | (perm & 07777);
+        n->uid = uid;
+        n->gid = gid;
+        spin_unlock(&devfs_lock);
+        return 0;
+    }
+    struct inode *ino = inode_get(devfs_sb, n->ino);
+    if (!ino)
+        return -ENOMEM;
+    mutex_lock(&ino->lock);
+    int r = devfs_setattr(ino, perm & 07777, uid, gid);
+    mutex_unlock(&ino->lock);
+    inode_put(ino);
+    return r;
 }
 
 /* One line naming every node in the root of /dev; subdirectories show

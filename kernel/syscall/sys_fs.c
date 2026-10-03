@@ -403,6 +403,7 @@ long sys_utimensat(struct trapframe *tf)
     if (r < 0)
         return r;
     int64_t mtime = vfs_now();
+    unsigned now = VFS_UTIME_NOW;
     uintptr_t times = SYSARG2(tf);
     if (times) {
         struct timespec ts[2];
@@ -415,9 +416,10 @@ long sys_utimensat(struct trapframe *tf)
             if (ts[1].tv_nsec < 0 || ts[1].tv_nsec >= 1000000000)
                 return -EINVAL;
             mtime = ts[1].tv_sec * 1000000000 + ts[1].tv_nsec;
+            now = 0;
         }
     }
-    return vfs_utimens(path, mtime, SYSARG3(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0);
+    return vfs_utimens(path, mtime, (SYSARG3(tf) & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0) | now);
 }
 
 long sys_link(struct trapframe *tf)
@@ -471,6 +473,8 @@ static long pipe_common(uintptr_t fds, int flags)
 
 long sys_mount(struct trapframe *tf)
 {
+    if (!cred_current_is_root())
+        return -EPERM;
     char source[USER_PATH_MAX], target[USER_PATH_MAX], type[32];
     long r = copy_string_from_user(source, SYSARG0(tf), sizeof source);
     if (r < 0)
@@ -490,6 +494,25 @@ long sys_mount(struct trapframe *tf)
             return r;
     }
     return vfs_mount(type, source, target, options);
+}
+
+/* faccessat(dirfd, path, mode, flags): F_OK (0) tests existence, R_OK,
+ * W_OK and X_OK (4, 2, 1) permission, with the real ids unless flags has
+ * AT_EACCESS (U2). */
+long sys_faccessat(struct trapframe *tf)
+{
+    uintptr_t flags = SYSARG3(tf);
+    if (flags & ~(uintptr_t)(AT_SYMLINK_NOFOLLOW | AT_EACCESS))
+        return -EINVAL;
+    unsigned mask = (unsigned)SYSARG2(tf);
+    if (mask & ~7u)
+        return -EINVAL;
+    char path[USER_PATH_MAX];
+    long r = copy_path_at((int)SYSARG0(tf), SYSARG1(tf), path, sizeof path);
+    if (r < 0)
+        return r;
+    return vfs_access(path, (int)mask, (flags & AT_SYMLINK_NOFOLLOW ? VFS_NOFOLLOW : 0) |
+                                       (flags & AT_EACCESS ? VFS_EACCESS : 0));
 }
 
 /* fchmodat(dirfd, path, mode, flags) and fchownat(dirfd, path, uid, gid,
@@ -541,6 +564,8 @@ long sys_fchown(struct trapframe *tf)
 
 long sys_umount(struct trapframe *tf)
 {
+    if (!cred_current_is_root())
+        return -EPERM;
     return path_op(tf, vfs_umount);
 }
 
@@ -564,9 +589,12 @@ long sys_chdir(struct trapframe *tf)
     if (r < 0)
         return r;
     bool is_dir = S_ISDIR(ino->mode);
+    struct cred c;
+    cred_get_current(&c);
+    r = is_dir ? vfs_permission(ino, MAY_EXEC, &c) : -ENOTDIR;
     inode_put(ino);
-    if (!is_dir)
-        return -ENOTDIR;
+    if (r < 0)
+        return r;
     spin_lock(&p->lock);
     strlcpy(p->cwd, resolved, sizeof p->cwd);
     spin_unlock(&p->lock);
