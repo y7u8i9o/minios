@@ -260,9 +260,9 @@ image: kernel initrd $(LIMINE) $(DISK) $(SWAP) $(DATA)
 # CD instead of the one on the disk, with the root of the disk.
 DEVDISK  := $(BUILD)/dev.img
 UPDATE   := $(BUILD)/update.img
-DEVDISK_MB ?= 4096
+DEVDISK_MB ?= 1024
 .PHONY: devdisk updates devprep clean-devdisk run-image gdb-image
-$(DEVDISK):
+$(DEVDISK): | $(MKGPT) $(MKFS) $(MKFAT) $(LIMINE) $(PKGHOST)
 	$(MAKE) sysimage
 	uuid=$$(python3 -c 'import uuid; print(uuid.uuid4())'); \
 	ROOT_UUID=$$uuid SWAP_MB=256 tools/mkdisk.sh $(PKGHOST) $(ARCH) $(SYSROOT) user/perms $@ $(DEVDISK_MB) \
@@ -271,7 +271,7 @@ devdisk: $(DEVDISK)
 clean-devdisk:
 	rm -f $(DEVDISK) $(DEVDISK).root
 updates: base $(PKGSIGN) $(PKG_KEY_FILE) $(MKFS) $(MKGPT)
-	tools/mkupdate.sh $(ARCH) $(BASE) $(BUILD)/packages $(UPDATE)
+	VIDEO="$(VIDEO)" tools/mkupdate.sh $(ARCH) $(BASE) $(BUILD)/packages $(UPDATE)
 devprep: updates $(DEVDISK) kernel $(LIMINE)
 ifeq ($(BOOT),kernel)
 	LIMINE=$(LIMINE) tools/mkiso.sh $(KERNEL) $(ISO) "root=PARTUUID=$$(cat $(DEVDISK).root) $(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"

@@ -26,9 +26,38 @@ if ! mount mfs "$part" $MEDIUM; then
     echo "pkg-update: cannot mount $part"
     exit 1
 fi
+# The medium of make run carries the video mode of the run in the file
+# video. It becomes the video= option of /etc/kernel/cmdline, and pkg
+# bootconfig writes it into the boot loader configuration.
+restart=0
+if [ -f "$MEDIUM/video" ]; then
+    mode=$(cat "$MEDIUM/video")
+    line=$(sed -n 1p /etc/kernel/cmdline)
+    case " $line " in
+        *" video=$mode "*) ;;
+        *)
+            new=""
+            for word in $line; do
+                case "$word" in
+                    video=*) ;;
+                    *) new="$new $word" ;;
+                esac
+            done
+            sed 1d /etc/kernel/cmdline > /run/cmdline.rest
+            { echo "${new# } video=$mode"; cat /run/cmdline.rest; } > /etc/kernel/cmdline
+            pkg bootconfig > /dev/null
+            echo "pkg-update: video mode $mode"
+            restart=1
+            ;;
+    esac
+fi
 if [ ! -f "$MEDIUM/repo/$ARCH/index" ]; then
     echo "pkg-update: $part contains no repository for $ARCH"
     mount -u $MEDIUM
+    if [ $restart -eq 1 ]; then
+        sync
+        initctl reboot > /dev/null 2>&1 &
+    fi
     exit 0
 fi
 echo "repo update file://$MEDIUM/repo/\$arch" > /run/pkg-update.conf
@@ -44,6 +73,9 @@ if [ $status -ne 0 ]; then
     exit 1
 fi
 if grep -E '^upgraded (kernel|limine|libc) ' /run/pkg-update.log > /dev/null; then
+    restart=1
+fi
+if [ $restart -eq 1 ]; then
     echo "pkg-update: restarting to start the new system"
     sync
     # init waits for this task, and answers the request once it ends.

@@ -482,7 +482,11 @@ medium, and runs `pkg update` and `pkg upgrade` with that configuration
 and the keys of `/etc/pkg/keys`. The task ends at once when no such
 partition exists. The output of `pkg` is written to
 `/run/pkg-update.log` and to the console with the prefix `pkg-update:`.
-When `kernel`, `limine` or `libc` was upgraded, the script runs
+When the medium contains the file `video`, which `mkupdate.sh` writes
+from `VIDEO` and `make run` therefore fills with the mode of each run,
+the script replaces the `video=` option of `/etc/kernel/cmdline` with
+that mode, runs `pkg bootconfig` and restarts the machine once. When
+`kernel`, `limine` or `libc` was upgraded, the script runs
 `initctl reboot` in the background, since init answers a request of its
 control socket only after the task has ended, and init then stops the
 services and restarts the machine with the new kernel.

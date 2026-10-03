@@ -18,5 +18,5 @@ for name in games kernel; do
     mv "$WORK/$name/manifest.new" "$WORK/$name/manifest"
     "$TOP/tools/mkpkg.sh" "$WORK/$name" "$WORK/base/$name-99.0.mpk" "$B/lib/abi"
 done
-"$TOP/tools/mkupdate.sh" "$ARCH" "$WORK/base" "$WORK/apps" "$OUT2"
+VIDEO=1024x768 "$TOP/tools/mkupdate.sh" "$ARCH" "$WORK/base" "$WORK/apps" "$OUT2"
 rm -rf "$WORK"

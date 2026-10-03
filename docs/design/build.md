@@ -130,7 +130,7 @@ Since P8 of `docs/plan/packaging.md`, `make run` boots an installed
 system that persists between runs and receives the packages of each
 build through `pkg`, as an installed machine receives updates. `make
 devdisk` creates the development disk once as `dev.img` in the build
-directory of the architecture, a GPT disk of `DEVDISK_MB` (4096) MiB
+directory of the architecture, a GPT disk of `DEVDISK_MB` (1024) MiB, sparse on the host,
 that `tools/mkdisk.sh` writes from `build/sysroot` with a swap partition
 of 256 MiB and the `video=` mode of `VIDEO`, and records the GUID of its
 root partition in `dev.img.root`. `make clean-devdisk` removes it, and

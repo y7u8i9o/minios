@@ -382,8 +382,9 @@ if [ -z "${QEMU_VIDEO+set}" ]; then
 fi
 
 if [ "$DO_BUILD" = 1 ] && [ -n "$DEVDISK" ]; then
-    # The video mode reaches the development disk when make creates it,
-    # and the CD of RUN_BOOT=kernel on every build.
+    # The video mode reaches the development disk through the update
+    # medium on every run, where pkg-update writes it into the kernel
+    # command line, and the CD of RUN_BOOT=kernel on every build.
     "${MAKE:-make}" -C "$TOP" devprep ${QEMU_VIDEO:+"VIDEO=$QEMU_VIDEO"} ${RUN_BOOT:+"BOOT=$RUN_BOOT"}
 elif [ "$DO_BUILD" = 1 ]; then
     if [ -n "$QEMU_VIDEO" ]; then

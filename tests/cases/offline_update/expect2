@@ -1,2 +1,3 @@
+cmdline "root=PARTUUID=[-0-9a-f]+ video=1024x768"
 pkg-update: the installed packages are up to date
 greeter: display server running

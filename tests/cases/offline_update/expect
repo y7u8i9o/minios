@@ -1,3 +1,4 @@
+pkg-update: video mode 1024x768
 pkg-update: upgraded games 99.0
 pkg-update: upgraded kernel 99.0
 pkg-update: restarting to start the new system

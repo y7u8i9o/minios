@@ -252,6 +252,16 @@ static void print_part(int n, const char *type, uint64_t first, uint64_t last, c
 }
 
 /* Write n sectors of buf at sector number lba. */
+#define SPARSE_BLOCK 4096
+
+static int all_zero(const uint8_t *p, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        if (p[i])
+            return 0;
+    return 1;
+}
+
 static int write_sectors(FILE *f, uint64_t lba, const uint8_t *buf, size_t n)
 {
     if (fseeko(f, (off_t)(lba * SECTOR), SEEK_SET) != 0)
@@ -451,9 +461,17 @@ int main(int argc, char **argv)
             /* The last piece is padded with zeros to a whole sector. */
             size_t padded = (got + SECTOR - 1) / SECTOR * SECTOR;
             memset(chunk + got, 0, padded - got);
-            if (fseeko(out, (off_t)(p->first * SECTOR + off), SEEK_SET) != 0 ||
-                fwrite(chunk, 1, padded, out) != padded)
-                die("write to '%s' failed", path);
+            /* A new image is sparse after ftruncate, and blocks of zeros
+             * are not written into it, which leaves the unused space of
+             * the partitions unallocated on the host. */
+            for (size_t o = 0; o < padded; o += SPARSE_BLOCK) {
+                size_t n = padded - o < SPARSE_BLOCK ? padded - o : SPARSE_BLOCK;
+                if (!existing && all_zero(chunk + o, n))
+                    continue;
+                if (fseeko(out, (off_t)(p->first * SECTOR + off + o), SEEK_SET) != 0 ||
+                    fwrite(chunk + o, 1, n, out) != n)
+                    die("write to '%s' failed", path);
+            }
             off += got;
         }
         if (off == cap && fgetc(f) != EOF)
