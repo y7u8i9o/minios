@@ -5,3 +5,7 @@
 # volume is seeded with the skeleton, and the homes option makes the
 # missing homes of the accounts (docs/design/users.md).
 vdc /home mfs nofail,seed=/usr/share/skel/home,homes
+# /tmp and /run are in memory and empty after every boot (P4 of
+# docs/plan/packaging.md).
+tmpfs /tmp tmpfs mode=1777
+tmpfs /run tmpfs mode=755

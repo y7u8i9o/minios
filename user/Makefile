@@ -65,7 +65,7 @@ FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuS
           $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp tcc-support links modes
+all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
 
 # The copy replaces the old file rather than writing into it, since the
 # modes step leaves files such as /etc/sudoers without a write bit.
@@ -175,7 +175,7 @@ $(ROOT)/usr/share/fonts/unifont.otf: ../third_party/unifont/unifont-17.0.05.otf
 	@mkdir -p $(dir $@)
 	cp $< $@
 
-$(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/var/log $(ROOT)/var/run $(ROOT)/var/db:
+$(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run $(ROOT)/var/log $(ROOT)/var/run $(ROOT)/var/db:
 	mkdir -p $@
 
 $(OUT)/lua/%.o: $(LUA_SRC)/%.c

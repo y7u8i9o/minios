@@ -1,0 +1,16 @@
+#!/bin/sh
+# The disk of the gpt_boot case: an EFI system partition with a FAT file
+# system holding hello.txt, a swap partition, and the shared root image as
+# the root partition of the machine (docs/design/block.md). The partition
+# GUIDs are fixed, since the test names them.
+set -e
+WORK="$(dirname "$OUT")/gpt"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKFAT" -t 16 "$WORK/esp.img" 16 "$CASE/esp"
+size_mb=$(( $(wc -c < "$DISK") / 1048576 + 16 + 32 + 3 ))
+"$MKGPT" --disk-uuid 6d696e69-6f73-4770-8274-6573742d6469 "$OUT" "$size_mb" \
+    "esp:16:$WORK/esp.img:c0ffee00-0000-4000-8000-000000000001" \
+    "swap:32::c0ffee00-0000-4000-8000-000000000002" \
+    "root-$ARCH:rest:$DISK:c0ffee00-0000-4000-8000-000000000003"
+rm -rf "$WORK"

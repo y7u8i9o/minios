@@ -11,6 +11,7 @@
 #include <arch/paging.h>
 #include <mm/ptwalk.h>
 #include <block/blockdev.h>
+#include <block/part.h>
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <sched/thread.h>
@@ -464,9 +465,23 @@ void swap_init(void)
 {
     devfs_register("meminfo", S_IFCHR | 0444, &meminfo_fops, NULL, 0);
     mutex_init(&swap_io_lock, "swap_io");
-    struct blockdev *dev = blockdev_find("vdb");
+}
+
+/* The swap device is the swap partition of the Discoverable Partitions
+ * Specification on the boot disk, or on vda when the boot disk is not
+ * found, and otherwise the whole of vdb when it has no partition table
+ * (docs/design/block.md). */
+void swap_attach(void)
+{
+    struct blockdev *disk = part_boot_disk();
+    if (!disk)
+        disk = blockdev_find("vda");
+    struct partition *p = disk ? part_find_type(disk, part_type_swap) : NULL;
+    struct blockdev *dev = p ? &p->bdev : blockdev_find("vdb");
+    if (dev && !p && part_has_table(dev))
+        dev = NULL;
     if (!dev) {
-        klog_info("no swap device (vdb)");
+        klog_info("no swap device");
         return;
     }
     nslots = blockdev_size(dev) / PAGE_SIZE;

@@ -568,3 +568,21 @@ These locks are in user space and do not add a kernel lock-order level.
   inside `sock_table_lock` as the existing order has it, and read under
   the same lock by `unix_connect`. The caller's credentials are copied
   under `proc.lock` before either lock is taken.
+
+## P4 additions
+
+- `part_lock` (spinlock, `kernel/block/part.c`) protects the list of GPT
+  partitions. `part_scan` appends to it from `kinit` before any lookup
+  runs, and the lookups take it alone. It is taken before
+  `blockdev_lock` only in the sense that `part_scan` releases it before
+  `blockdev_register` takes `blockdev_lock`, which means the two are
+  never held together. The disk table of `part.c` and the text of
+  `/dev/partitions` are written once by `part_scan` and constant
+  afterwards.
+- `tmpfs_sb.lock` (spinlock, `kernel/fs/tmpfs.c`) protects the hash table
+  of the nodes, the next inode number and the page count of one tmpfs.
+  It is a leaf lock, taken under `inode.lock` of the inode being changed
+  and never while allocating memory. The fields of a node are protected
+  by the `inode.lock` of its cached inode. A directory operation runs
+  under the directory mutex and takes the mutex of the child whose link
+  count it changes, the parent before the child as in mfs.

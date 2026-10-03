@@ -16,6 +16,7 @@ struct blockdev {
     /* Flush the device write cache, if any. May be NULL. */
     int (*flush)(struct blockdev *dev);
     void *priv;
+    struct blockdev *disk;      /* the disk of a partition (block/part.h), NULL for a disk */
     struct list_head link;
 };
 
@@ -23,6 +24,10 @@ void blockdev_init(void);
 /* Register dev and create /dev/<name> backed by the block cache. */
 int blockdev_register(struct blockdev *dev);
 struct blockdev *blockdev_find(const char *name);
+/* Fill devs with up to max registered devices in the order of their
+ * registration and return the count. Devices are never removed, and the
+ * pointers therefore remain valid. */
+int blockdev_list(struct blockdev **devs, int max);
 int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf);
 int blockdev_write(struct blockdev *dev, uint64_t sector, uint32_t count, const void *buf);
 uint64_t blockdev_size(struct blockdev *dev);

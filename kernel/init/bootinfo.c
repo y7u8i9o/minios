@@ -38,6 +38,11 @@ static volatile struct limine_executable_address_request kaddr_request = {
 };
 
 __used __section(".limine_requests")
+static volatile struct limine_executable_file_request kfile_request = {
+    .id = LIMINE_EXECUTABLE_FILE_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
+__used __section(".limine_requests")
 static volatile struct limine_executable_cmdline_request cmdline_request = {
     .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST_ID, .revision = 0, .response = NULL,
 };
@@ -83,6 +88,14 @@ void boot_init(void)
         bootinfo.memmap[i] = *mm->entries[i];
     bootinfo.memmap_count = mm->entry_count;
 
+    /* The partition the kernel came from identifies the boot disk, on
+     * which the root and swap partitions are looked for (block/part.c).
+     * struct limine_uuid has the layout of a GPT GUID on disk. */
+    if (kfile_request.response && kfile_request.response->executable_file) {
+        struct limine_file *kf = kfile_request.response->executable_file;
+        memcpy(bootinfo.boot_disk_guid, (const void *)&kf->gpt_disk_uuid, 16);
+        memcpy(bootinfo.boot_part_guid, (const void *)&kf->gpt_part_uuid, 16);
+    }
     if (cmdline_request.response && cmdline_request.response->cmdline)
         strlcpy(bootinfo.cmdline, cmdline_request.response->cmdline, sizeof bootinfo.cmdline);
     if (framebuffer_request.response && framebuffer_request.response->framebuffer_count > 0) {

@@ -257,7 +257,7 @@ installer comes last.
   login, privilege, symlink, GUI, Lua, tcc and persist cases on aarch64,
   and a build with `CONFIG_TESTS=0` produces its 54 packages and image.
 
-### P4. Partitions and discovery in the kernel
+### P4. Partitions and discovery in the kernel (completed 2026-10-03)
 
 - The block layer reads GPT, with the protective MBR, the CRCs of the
   header and the entries, and the backup header as fallback, and
@@ -273,6 +273,25 @@ installer comes last.
 - The boot test `gpt_boot` boots a disk written by `tools/mkgpt`, with
   root on its root partition, swap on its swap partition, `/boot` mounted
   from its EFI system partition and a writable `/tmp`.
+- During the work the tmpfs mounts on `/tmp` and `/run` became entries of
+  `/etc/fstab`, mounted by `fsinit` at every boot, instead of mounts of
+  the kernel. For a boot test that starts its program without init,
+  `/tmp` therefore remains on the root filesystem, and the `initctl` test, which
+  writes a configuration before init starts, now writes it to `/var`.
+  `root=` also accepts a device name, and when the boot disk is not among
+  the virtio disks, as when a test boots from its CD, the kernel looks
+  for the root and swap partitions on `vda`. The partition table is read
+  from `kinit`, since the block drivers sleep, and `swap_attach` runs
+  there as well. The tmpfs holds its own nodes, found through a hash
+  table, because the VFS treats a mount with cached inodes as busy, and
+  its data pages come from the page allocator. Its unmount frees the
+  superblock, which a page that the run test counted as leaked revealed.
+  The harness gained the case file `mkdisk` and boots the CD first on
+  x86_64, since the BIOS tried to boot the protective MBR of a GPT disk.
+  The release cases, `gpt_boot`, `initctl`, `blk`, `swap` and `madvise`
+  pass on x86_64, `swap` once alone after a timing failure in a full
+  batch, and `gpt_boot`, `boot`, `fs`, `persist`, `shutdown`, `swap`,
+  `blk`, `initctl` and `login_console` on aarch64.
 
 ### P5. Disk tools on minios
 

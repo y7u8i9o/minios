@@ -29,6 +29,7 @@ GENSYMS  := $(BUILD)/host/gensyms
 MKFS     := $(BUILD)/host/mkfs
 FSCK     := $(BUILD)/host/fsck
 MKFAT    := $(BUILD)/host/mkfat
+MKGPT    := $(BUILD)/host/mkgpt
 NETPEER  := $(BUILD)/host/netpeer
 PKGSIGN  := $(BUILD)/host/pkgsign
 PKGHOST  := $(BUILD)/host/pkg
@@ -44,13 +45,13 @@ PKG_PUB  := $(BUILD)/pkg/signing.pub
 # one HTTP server serves both (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
 
-export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT PKG_KEY_FILE PKG_PUB REPO
+export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT MKGPT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT PKG_KEY_FILE PKG_PUB REPO
 
 .PHONY: all kernel libc libfont libwire libaudio libcodec libgui libprof user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
 
 all: kernel libc user
 
-tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN) $(PKGHOST) $(MSGFMT)
+tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(MKGPT) $(NETPEER) $(PKGSIGN) $(PKGHOST) $(MSGFMT)
 
 # msgfmt compiles the message catalogues of user/po (docs/design/gettext.md).
 $(MSGFMT): tools/msgfmt/msgfmt.c
@@ -68,6 +69,10 @@ $(FSCK): tools/fsck/fsck.c kernel/include/fs/mfs_format.h
 $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+
+$(MKGPT): tools/mkgpt/mkgpt.c
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
 
 # The controlled peer of the network boot tests (docs/design/network.md).
 $(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scripted.h
@@ -226,8 +231,8 @@ gdb:
 # CASES="gui gui_wm" runs only those cases, because the whole suite takes
 # too long to run for every change.
 ifeq ($(ARCH_USERLAND),yes)
-test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(NETPEER) $(PKGSIGN)
-	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
+test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(MKGPT) $(NETPEER) $(PKGSIGN)
+	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) MKGPT=$(MKGPT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 else
 # An architecture without user programs boots the kernel with an empty
 # initrd and no disk, where only kernel self tests can run.

@@ -22,6 +22,9 @@ struct bootinfo {
     uint32_t fb_scale;              /* integer UI scale from video=WxH@N, 1 by default */
     uint32_t fb_req_width, fb_req_height;   /* the video= size or 0, applied by a GPU driver */
     const uint8_t *initrd;          /* module contents in the direct map */
+    /* The GPT disk and partition GUIDs of the disk the kernel was loaded
+     * from, in their on-disk byte order, zero when it has no GPT. */
+    uint8_t boot_disk_guid[16], boot_part_guid[16];
     const void *dtb;                /* the device tree or NULL, valid until pmm_reclaim_bootloader */
     uint64_t initrd_size;
     size_t memmap_count;

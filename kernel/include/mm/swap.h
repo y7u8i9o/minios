@@ -9,8 +9,12 @@ struct page;
  * is not present and records the slot number (pte_make_swap,
  * pte_swap_slot in <arch/paging.h>). See docs/design/swap.md. */
 
-/* Attach the swap device if present. Called once block devices exist. */
+/* Register /dev/meminfo and the swap locks. Called once block devices
+ * exist. */
 void swap_init(void);
+/* Attach the swap device if present (block/part.h). Called from a thread
+ * once the partition tables are read. */
+void swap_attach(void);
 /* Start kswapd. Called once the scheduler runs. */
 void swap_start_daemon(void);
 bool swap_enabled(void);

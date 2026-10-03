@@ -99,6 +99,20 @@ struct blockdev *blockdev_find(const char *name)
     return found;
 }
 
+int blockdev_list(struct blockdev **devs, int max)
+{
+    struct list_head *pos;
+    int n = 0;
+    spin_lock(&blockdev_lock);
+    list_for_each(pos, &blockdevs) {
+        if (n == max)
+            break;
+        devs[n++] = list_entry(pos, struct blockdev, link);
+    }
+    spin_unlock(&blockdev_lock);
+    return n;
+}
+
 /* Both transfer entry points time themselves for the profiler, which
  * charges the latency and the bytes to the stack that asked for them. */
 int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf)

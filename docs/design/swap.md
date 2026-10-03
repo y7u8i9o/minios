@@ -21,8 +21,9 @@ removed.
 
 ## Swap device and slots
 
-`mm/swap.c` uses the second virtio-blk device, `vdb`, as swap space
-without any on disk format: slot `n` occupies the eight sectors starting
+`mm/swap.c` uses the swap partition of the boot disk (P4,
+`block.md`), or else the second virtio-blk device, `vdb`, when it has no
+partition table, as swap space without any on disk format: slot `n` occupies the eight sectors starting
 at `8n`, slot 0 is never used so a zero entry means "no slot". A bitmap
 under `swap_lock` tracks free slots; `swap_alloc_run` hands out up to 32
 consecutive slots so a batch of evicted pages is written with one

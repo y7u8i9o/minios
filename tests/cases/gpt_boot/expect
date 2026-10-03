@@ -1,0 +1,5 @@
+vda: GPT with 3 partitions
+root: mfs on vda3
+vda2: [0-9]+ slots
+gpt: done
+TEST PASS

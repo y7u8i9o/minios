@@ -317,7 +317,7 @@ KTEST_DEFINE("ctrlc", test_ctrlc);
 
 /* Start init with the configuration of the image, whose console entry is
  * the greeter, changed to the console login, which the typed session tests
- * drive. The copy is /tmp/init-login.conf, which the initctl test reloads
+ * drive. The copy is /var/init-login.conf, which the initctl test reloads
  * as well. */
 struct proc *ktest_start_init(void)
 {
@@ -342,12 +342,12 @@ struct proc *ktest_start_init(void)
     memcpy(out + at, login, sizeof login - 1);
     memcpy(out + at + sizeof login - 1, conf + at + glen, len - at - glen);
     size_t outlen = len - glen + sizeof login - 1;
-    ktest_assert(vfs_open("/tmp/init-login.conf", O_WRONLY | O_CREAT | O_TRUNC, 0644, &f) == 0,
-                 "cannot write /tmp/init-login.conf");
+    ktest_assert(vfs_open("/var/init-login.conf", O_WRONLY | O_CREAT | O_TRUNC, 0644, &f) == 0,
+                 "cannot write /var/init-login.conf");
     long w = file_write(f, out, outlen);
     file_put(f);
-    ktest_assert(w == (long)outlen, "short write of /tmp/init-login.conf");
-    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", "/tmp/init-login.conf", NULL },
+    ktest_assert(w == (long)outlen, "short write of /var/init-login.conf");
+    struct proc *p = proc_create_user("/bin/init", (char *const[]){ "/bin/init", "/var/init-login.conf", NULL },
                                       (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(p != NULL, "cannot start /bin/init");
     proc_set_init(p);
@@ -384,20 +384,20 @@ static void test_initctl(void)
     type_line("root\n");
     type_line("rootpw\n");
     type_line("rootpw\n");
-    type_line("cp /tmp/init-login.conf /tmp/init.conf\n");
+    type_line("cp /var/init-login.conf /tmp/init.conf\n");
     type_line("echo 'service spin sleep 1000' >> /tmp/init.conf\n");
     type_line("initctl reload /tmp/init.conf\n");
     type_line("initctl status spin\n");
     type_line("initctl stop spin\n");
     type_line("initctl status spin\n");
     type_line("initctl start spin\n");
-    type_line("cp /tmp/init-login.conf /tmp/init2.conf\n");
+    type_line("cp /var/init-login.conf /tmp/init2.conf\n");
     type_line("echo 'service spin test 1 = 2' >> /tmp/init2.conf\n");
     type_line("initctl reload /tmp/init2.conf\n");
     type_line("initctl restart spin\n");
     type_line("sleep 6\n");
     type_line("initctl list\n");
-    type_line("initctl reload /tmp/init-login.conf\n");
+    type_line("initctl reload /var/init-login.conf\n");
     type_line("initctl status spin\n");
     type_line("initctl nosuch\n");
     type_line("initctl poweroff\n");

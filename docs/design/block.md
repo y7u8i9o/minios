@@ -95,6 +95,43 @@ count and flags of every buffer; `buf.lock` is a mutex held between
 ring bookkeeping and is taken from the interrupt handler. See
 `locking.md` for the ordering.
 
+## Partitions (P4)
+
+`block/part.c` reads the GUID partition table of every disk once, from
+`kinit`, before the root is mounted. It checks the signature, the CRC of
+the header and of the entry array, and that the header names its own
+sector, and it reads the backup header from the last sector when the
+primary one fails these checks. Every used entry whose sectors lie in the
+usable range becomes a `struct partition`, a block device named after the
+disk and its entry number, as `vda1`, whose `rw` adds the first sector of
+the partition and calls the driver of the disk. `blockdev.disk` names the
+disk of a partition. `/dev/partitions` lists one line per partition,
+`name disk partuuid typeuuid bytes`, with the GUIDs in lowercase. A
+partition and its disk have separate buffers in the block cache, which
+means a disk is not written as a whole while one of its partitions is
+mounted.
+
+A Limine executable file request reports the GPT disk and partition
+GUIDs of the disk the kernel was loaded from (`bootinfo.boot_disk_guid`).
+`mount_root` mounts the device that `root=` names, either as
+`root=PARTUUID=GUID` or as a device name, or the initrd for
+`root=initrd`. Without `root=`, it looks on the boot disk, or on `vda`
+when the boot disk is not among the disks, for the partition whose type
+is the root type of the Discoverable Partitions Specification for the
+machine (`4f68bce3-e8cd-4db1-96e7-fbcaf984b709` on x86_64,
+`b921b045-1df0-41c3-af44-4c6f280d3fae` on aarch64). A `vda` without a
+partition table is mounted as a whole, as before P4, and the initrd is
+the root when nothing mounts. `swap_attach` takes the swap partition
+type (`0657fd6d-a4ab-43c4-84e5-0933c84b4f4f`) on the same disk, or the
+whole of `vdb` when it has no partition table. `fsinit` accepts
+`PARTUUID=GUID` as the device of an fstab entry and finds its name in
+`/dev/partitions`.
+
+`tools/mkgpt` (`MKGPT`) writes GPT disk images on the host: a protective
+MBR, both headers and arrays, partitions aligned to 1 MiB with the type
+`bios`, `esp`, `swap`, `root-x86_64`, `root-aarch64`, `home` or `linux`,
+an image copied into a partition and fixed or random GUIDs.
+
 ## Disk image and tests
 
 `make disk` creates `build/disk.img`, a 512 MiB mfs image (`DISK_MB`
@@ -105,7 +142,19 @@ may ship its own `disk.img`. A case file `swap` adds a zero filled swap
 device, `mfs2` an empty mfs image of the given size in MiB (`DISK2` in
 the post script) and `fat` one FAT image per line (`<size_mb> <12|16|32>
 [dir]`, built by `mkfat`; `FATIMG` and `FATIMGS` in the post script), in
-that order after the root disk.
+that order after the root disk. An executable `mkdisk` writes the
+case's disk instead, with `MKGPT`, `MKFAT` and `MKFS` in its environment.
+On x86_64 the harness boots the CD first, since a GPT disk has a
+protective MBR with a boot signature that the BIOS would try first.
+
+The `gpt_boot` case boots from a disk that `mkdisk` writes with an EFI
+system partition, a swap partition and the shared root image as the root
+partition. The kernel must find the table, mount the root partition by
+its type and use the swap partition, and `/etc/tests/gpt.sh` checks
+`/dev/partitions`, mounts the EFI system partition by its PARTUUID and
+two tmpfs instances through `fsinit`, exercises files, directories,
+links, renames and a program run from `/tmp`, refuses a copy beyond a
+size limit of 1 MiB and unmounts everything again.
 
 The `blk` case checks the geometry reported by the device, raw single
 sector, 128 sector and past the end transfers, delayed write back through

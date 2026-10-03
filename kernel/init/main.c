@@ -22,7 +22,9 @@
 #include <fs/initrd.h>
 #include <fs/vfs.h>
 #include <fs/initrdfs.h>
+#include <block/part.h>
 #include <fs/fat.h>
+#include <fs/tmpfs.h>
 #include <fs/devfs.h>
 #include <mm/tlb.h>
 #include <drivers/timer.h>
@@ -64,15 +66,39 @@ static void boot_apply_cmdline(void)
 
 /* First thread. Runs the selected self test, then starts init from the
  * initrd and reaps it, which is fatal. */
-/* Mount the root: the mfs on vda when it carries a filesystem, otherwise
- * the initrd. root=initrd on the command line forces the initrd. */
+/* Mount the root (docs/design/block.md). root=initrd selects the initrd,
+ * root=PARTUUID=GUID the partition with that unique GUID and root=NAME the
+ * device NAME. Without root=, the kernel mounts the root partition of the
+ * Discoverable Partitions Specification on the disk it was loaded from,
+ * or on vda when that disk is not found, and a vda without a partition
+ * table as a whole. The initrd is the root when nothing else mounts. */
 static void mount_root(void)
 {
-    char root[32];
-    bool force_initrd = cmdline_lookup("root", root, sizeof root) && strcmp(root, "initrd") == 0;
-    int r = -ENODEV;
-    if (!force_initrd)
-        r = vfs_mount("mfs", "vda", "/", NULL);
+    char root[64], source[BLOCKDEV_NAME_LEN] = "";
+    bool given = cmdline_lookup("root", root, sizeof root);
+    bool force_initrd = given && strcmp(root, "initrd") == 0;
+    if (given && !force_initrd) {
+        uint8_t uuid[16];
+        struct partition *p = NULL;
+        if (strncmp(root, "PARTUUID=", 9) != 0)
+            strlcpy(source, root, sizeof source);
+        else if (part_parse_guid(root + 9, uuid) == 0 && (p = part_find_uuid(uuid)))
+            strlcpy(source, p->bdev.name, sizeof source);
+        else
+            klog_error("root=%s: no such partition", root);
+    } else if (!force_initrd) {
+        struct blockdev *disk = part_boot_disk();
+        if (!disk)
+            disk = blockdev_find("vda");
+        struct partition *p = disk ? part_find_type(disk, part_type_root) : NULL;
+        if (p)
+            strlcpy(source, p->bdev.name, sizeof source);
+        else if (disk && !part_has_table(disk))
+            strlcpy(source, disk->name, sizeof source);
+    }
+    int r = source[0] ? vfs_mount("mfs", source, "/", NULL) : -ENODEV;
+    if (r == 0)
+        klog_info("root: mfs on %s", source);
     if (r < 0) {
         r = vfs_mount("initrd", "initrd", "/", NULL);
         if (r < 0)
@@ -88,6 +114,10 @@ static void mount_root(void)
 static void kinit(void *arg)
 {
     rcu_start_worker();
+    /* Reading the partition tables needs a thread, which the block
+     * drivers sleep in. */
+    part_scan();
+    swap_attach();
     mount_root();
     /* virtio-snd discovery sends synchronous control messages and therefore
      * requires interrupt delivery and a schedulable current thread. */
@@ -162,6 +192,7 @@ __noreturn void kmain(void)
     devfs_init();
     mfs_init();
     fat_init();
+    tmpfs_init();
     arch_init_interrupts();
     tlb_init();
     timer_init();

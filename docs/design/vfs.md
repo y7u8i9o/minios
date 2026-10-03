@@ -154,6 +154,23 @@ read keys from the terminal behind its output (`less` does this with
 `dup(1)`) without opening `/dev/console`, which inside a terminal window
 would be another terminal.
 
+## tmpfs (P4)
+
+`fs/tmpfs.c` holds files, directories and symbolic links in memory. Each
+is a node that the filesystem holds as long as it has a name, found by
+its inode number in a hash table. The VFS caches inodes only while they
+are referenced, and an inode is therefore a view of its node:
+`read_inode` fills it from the node, and every operation changes both.
+The data of a file are whole pages of the page allocator, a hole reads as
+zeros, a directory lists `.`, `..` and its entries in the order of their
+creation, and the last reference to a node without links frees it. The
+options are `size=MIB`, a quarter of the memory by default, `mode`, 1777
+by default, `uid` and `gid`. A write beyond the size fails with `ENOSPC`.
+Unmounting frees every node and the superblock. `/etc/fstab` mounts a
+tmpfs on `/tmp` and on `/run`, which `base-files` creates, at every boot
+through `fsinit`. For a boot test that starts its program without init,
+`/tmp` remains on the root filesystem.
+
 ## Mount capacity snapshots
 
 The optional `sb_ops.statfs` fills `struct fs_space` with total blocks,

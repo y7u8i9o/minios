@@ -27,6 +27,10 @@
 #   tablet    attaches a virtio-tablet-pci device when present
 #   keyboard  attaches a virtio-keyboard-pci device when present
 #   disk.img  a private root image instead of the shared one (optional)
+#   mkdisk    executable that writes the case's disk instead (optional),
+#             run with DISK (the shared root image), OUT (the disk to
+#             write), MKGPT, MKFAT, MKFS, ARCH, CASE and TOP in the
+#             environment
 #   nic       network backend of a virtio-net-pci device (optional), where
 #             dgram exchanges raw Ethernet frames with the case's peer program
 #             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
@@ -154,7 +158,10 @@ fi
 "$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || fail "image build"
 rm -f "$SERIAL"
 DISKFLAGS=""
-if [ -f "$CASE/disk.img" ]; then
+if [ -x "$CASE/mkdisk" ]; then
+    DISK="$DISK" OUT="$OUTDIR/disk.img" MKGPT="$MKGPT" MKFAT="$MKFAT" MKFS="$MKFS" ARCH="${ARCH:-x86_64}" \
+        CASE="$CASE" TOP="$TOP" "$CASE/mkdisk" > "$OUTDIR/mkdisk.log" 2>&1 || fail "mkdisk, see $OUTDIR/mkdisk.log"
+elif [ -f "$CASE/disk.img" ]; then
     clone "$CASE/disk.img" "$OUTDIR/disk.img"
 elif [ -n "$DISK" ] && [ -f "$DISK" ]; then
     clone "$DISK" "$OUTDIR/disk.img"
@@ -232,7 +239,9 @@ RNGFLAGS="-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pc
 case "${ARCH:-x86_64}" in
     x86_64)
         MACHINE="-M q35 -device isa-debug-exit,iobase=0xf4,iosize=0x4"
-        BOOTFLAGS="-cdrom $ISO"
+        # The CD first: a GPT disk carries a protective MBR with a boot
+        # signature, which the BIOS would otherwise try to boot.
+        BOOTFLAGS="-cdrom $ISO -boot order=d"
         ;;
     aarch64)
         EDK2_AARCH64="${EDK2_AARCH64:-$(dirname "$(command -v "$QEMU")")/../share/qemu/edk2-aarch64-code.fd}"

@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -215,6 +216,26 @@ static int make_homes(const char *dir)
     return r;
 }
 
+/* The device of a partition named by PARTUUID=GUID, from the listing of
+ * /dev/partitions ("name disk partuuid typeuuid bytes"). Returns 0 with
+ * the name in out, or -1 with errno ENODEV. */
+static int partuuid_device(const char *guid, char *out, size_t size)
+{
+    FILE *f = fopen("/dev/partitions", "r");
+    char line[256], name[32], disk[32], uuid[64];
+    int found = 0;
+    while (f && !found && fgets(line, sizeof line, f))
+        if (sscanf(line, "%31s %31s %63s", name, disk, uuid) == 3 && strcasecmp(uuid, guid) == 0) {
+            snprintf(out, size, "%s", name);
+            found = 1;
+        }
+    if (f)
+        fclose(f);
+    if (!found)
+        errno = ENODEV;
+    return found ? 0 : -1;
+}
+
 static int process(const struct entry *e)
 {
     if (e->noauto)
@@ -224,6 +245,18 @@ static int process(const struct entry *e)
         return 0;
     }
     const char *device = strncmp(e->device, "/dev/", 5) == 0 ? e->device + 5 : e->device;
+    char named[32];
+    if (strncmp(device, "PARTUUID=", 9) == 0) {
+        if (partuuid_device(device + 9, named, sizeof named) < 0) {
+            if (e->nofail) {
+                note("%s: no partition %s, skipped", e->target, device + 9);
+                return 0;
+            }
+            fprintf(stderr, "fsinit: %s: no partition %s\n", e->target, device + 9);
+            return -1;
+        }
+        device = named;
+    }
     if (mount_options(device, e->target, e->type, e->fsopts) < 0) {
         if (e->nofail) {
             note("%s: %s, skipped", e->target, strerror(errno));
