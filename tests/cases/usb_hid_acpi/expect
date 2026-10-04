@@ -1,0 +1,8 @@
+acpi: gicv2 at 8000000 and 8010000, v2m at
+xhci [0-9.]+, msi-x interrupt, [0-9]+ ports, [0-9]+ slots, [0-9]+ byte contexts
+port [0-9]+: QEMU USB Keyboard, 0627:0001, (full|high) speed
+QEMU USB Keyboard: keyboard, /dev/input/event[0-9]+
+QEMU USB Tablet: absolute pointer, /dev/input/event[0-9]+
+QEMU USB Mouse: relative pointer, /dev/input/event[0-9]+
+usb: key, absolute position 10000,20000, button and relative movement 5,-3 received
+TEST PASS

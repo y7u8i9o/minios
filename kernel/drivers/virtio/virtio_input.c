@@ -166,6 +166,7 @@ static void probe(struct pci_dev *pci)
         goto fail;
     if (virtio_start(&d->vdev) < 0)
         goto fail;
+    pci->driver = "virtio-input";
     spin_lock(&d->eventq->lock);
     for (unsigned i = 0; i < INPUT_BUFFERS && i < d->eventq->size / 2; i++)
         post(d, &d->events[i]);

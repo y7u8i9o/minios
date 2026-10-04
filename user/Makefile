@@ -24,7 +24,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
 PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
-APPS   := clock evtest logview profiler screenshot sysmon wireview x12settings
+APPS   := clock evtest logview profiler screenshot sysinfo sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
 # part, mkfs and mkfat are the host tools of tools/ built for minios, and
 # limine the utility of the boot loader (docs/design/block.md).

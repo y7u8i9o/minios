@@ -73,6 +73,12 @@ struct vmspace *vmspace_current(void);
 
 /* Map device memory into the kernel space. Returns the virtual address. */
 void *vmm_map_mmio(uintptr_t pa, size_t size, unsigned flags);
+/* Copy len bytes of physical memory at pa, such as a firmware table, into
+ * dst. A range in the direct map is read there. Another range is mapped
+ * as normal memory for the copy and unmapped afterwards. Its kernel MMIO
+ * address space is not reused, so this is for start-up code. Returns
+ * false when the range cannot be mapped. */
+bool vmm_copy_from_phys(void *dst, uintptr_t pa, size_t len);
 
 /* Kernel stacks: KSTACK_SIZE bytes preceded by an unmapped guard page.
  * Returns the top of the stack. */

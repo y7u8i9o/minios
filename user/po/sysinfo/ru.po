@@ -1,0 +1,1107 @@
+# Russian messages of the sysinfo domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: user/apps/sysinfo.c:100
+msgid "CPU ID"
+msgstr "CPU ID"
+
+#: user/apps/sysinfo.c:101
+msgid "CPUs"
+msgstr "CPUs"
+
+#: user/apps/sysinfo.c:102
+msgid "Creator"
+msgstr "Создатель"
+
+#: user/apps/sysinfo.c:103
+msgid "CTR_EL0"
+msgstr "CTR_EL0"
+
+#: user/apps/sysinfo.c:104
+msgid "Current exception level"
+msgstr "Текущий уровень исключений"
+
+#: user/apps/sysinfo.c:105
+msgid "Current speed"
+msgstr "Текущая скорость"
+
+#: user/apps/sysinfo.c:106
+msgid "Source of the description"
+msgstr "Источник описания"
+
+#: user/apps/sysinfo.c:107 user/apps/sysinfo.c:462
+msgid "Device"
+msgstr "Устройство"
+
+#: user/apps/sysinfo.c:108
+msgid "Device class"
+msgstr "Класс устройства"
+
+#: user/apps/sysinfo.c:109
+msgid "Device node"
+msgstr "Узел устройства"
+
+#: user/apps/sysinfo.c:110
+msgid "Device release"
+msgstr "Версия устройства"
+
+#: user/apps/sysinfo.c:111
+msgid "Device tree"
+msgstr "Дерево устройств"
+
+#: user/apps/sysinfo.c:112
+msgid "Devices"
+msgstr "Устройства"
+
+#: user/apps/sysinfo.c:113
+msgid "Direct map base"
+msgstr "База прямого отображения"
+
+#: user/apps/sysinfo.c:114
+msgid "Disk GUID"
+msgstr "GUID диска"
+
+#: user/apps/sysinfo.c:115
+msgid "Disks"
+msgstr "Диски"
+
+#: user/apps/sysinfo.c:116
+msgid "Driver"
+msgstr "Драйвер"
+
+#: user/apps/sysinfo.c:117
+msgid "EL0 support"
+msgstr "Поддержка EL0"
+
+#: user/apps/sysinfo.c:118
+msgid "EL1 support"
+msgstr "Поддержка EL1"
+
+#: user/apps/sysinfo.c:119
+msgid "EL2 support"
+msgstr "Поддержка EL2"
+
+#: user/apps/sysinfo.c:120
+msgid "EL3 support"
+msgstr "Поддержка EL3"
+
+#: user/apps/sysinfo.c:121
+msgid "Enabled"
+msgstr "Включено"
+
+#: user/apps/sysinfo.c:122
+msgid "End address"
+msgstr "Конечный адрес"
+
+#: user/apps/sysinfo.c:123
+msgid "Endpoints"
+msgstr "Конечные точки"
+
+#: user/apps/sysinfo.c:124
+msgid "Entries"
+msgstr "Записи"
+
+#: user/apps/sysinfo.c:125
+msgid "Table entry"
+msgstr "Запись таблицы"
+
+#: user/apps/sysinfo.c:126
+msgid "Extended features"
+msgstr "Расширенные возможности"
+
+#: user/apps/sysinfo.c:127
+msgid "External clock"
+msgstr "Внешняя тактовая частота"
+
+#: user/apps/sysinfo.c:128
+msgid "Family"
+msgstr "Семейство"
+
+#: user/apps/sysinfo.c:129
+msgid "Feature words"
+msgstr "Слова возможностей"
+
+#: user/apps/sysinfo.c:130
+msgid "Features"
+msgstr "Возможности"
+
+#: user/apps/sysinfo.c:131
+msgid "Firmware type"
+msgstr "Тип прошивки"
+
+#: user/apps/sysinfo.c:132
+msgid "First sector"
+msgstr "Первый сектор"
+
+#: user/apps/sysinfo.c:133
+msgid "Form factor"
+msgstr "Форм-фактор"
+
+#: user/apps/sysinfo.c:134
+msgid "Framebuffer"
+msgstr "Кадровый буфер"
+
+#: user/apps/sysinfo.c:135
+msgid "Framebuffer size"
+msgstr "Размер кадрового буфера"
+
+#: user/apps/sysinfo.c:136
+msgid "Free"
+msgstr "Свободно"
+
+#: user/apps/sysinfo.c:137
+msgid "Functions"
+msgstr "Функции"
+
+#: user/apps/sysinfo.c:138
+msgid "GIC CPU interface"
+msgstr "Интерфейс CPU GIC"
+
+#: user/apps/sysinfo.c:139
+msgid "GIC distributor"
+msgstr "Распределитель GIC"
+
+#: user/apps/sysinfo.c:140
+msgid "GIC redistributors"
+msgstr "Перераспределители GIC"
+
+#: user/apps/sysinfo.c:141
+msgid "GICv2m"
+msgstr "GICv2m"
+
+#: user/apps/sysinfo.c:142
+msgid "GPU buffer"
+msgstr "Буфер GPU"
+
+#: user/apps/sysinfo.c:143
+msgid "GPU PCI address"
+msgstr "PCI-адрес GPU"
+
+#: user/apps/sysinfo.c:144
+msgid "GPU preferred mode"
+msgstr "Предпочтительный режим GPU"
+
+#: user/apps/sysinfo.c:145
+msgid "GPU scanout"
+msgstr "Сканаут GPU"
+
+#: user/apps/sysinfo.c:146
+msgid "Grabbed"
+msgstr "Захвачено"
+
+#: user/apps/sysinfo.c:147
+msgid "Page granules"
+msgstr "Гранулы страниц"
+
+#: user/apps/sysinfo.c:148
+msgid "Hardware access flag update"
+msgstr "Аппаратное обновление флага доступа"
+
+#: user/apps/sysinfo.c:149
+msgid "Header type"
+msgstr "Тип заголовка"
+
+#: user/apps/sysinfo.c:150
+msgid "Hypervisor"
+msgstr "Гипервизор"
+
+#: user/apps/sysinfo.c:151
+msgid "ID_AA64ISAR0_EL1"
+msgstr "ID_AA64ISAR0_EL1"
+
+#: user/apps/sysinfo.c:152
+msgid "ID_AA64ISAR1_EL1"
+msgstr "ID_AA64ISAR1_EL1"
+
+#: user/apps/sysinfo.c:153
+msgid "ID_AA64MMFR0_EL1"
+msgstr "ID_AA64MMFR0_EL1"
+
+#: user/apps/sysinfo.c:154
+msgid "ID_AA64MMFR1_EL1"
+msgstr "ID_AA64MMFR1_EL1"
+
+#: user/apps/sysinfo.c:155
+msgid "ID_AA64MMFR2_EL1"
+msgstr "ID_AA64MMFR2_EL1"
+
+#: user/apps/sysinfo.c:156
+msgid "ID_AA64PFR0_EL1"
+msgstr "ID_AA64PFR0_EL1"
+
+#: user/apps/sysinfo.c:157
+msgid "ID_AA64PFR1_EL1"
+msgstr "ID_AA64PFR1_EL1"
+
+#: user/apps/sysinfo.c:158
+msgid "Implementer"
+msgstr "Разработчик реализации"
+
+#: user/apps/sysinfo.c:159
+msgid "Index"
+msgstr "Индекс"
+
+#: user/apps/sysinfo.c:160
+msgid "Initial RAM disk size"
+msgstr "Размер начального RAM-диска"
+
+#: user/apps/sysinfo.c:161
+msgid "Input device"
+msgstr "Устройство ввода"
+
+#: user/apps/sysinfo.c:162
+msgid "Input fields"
+msgstr "Поля ввода"
+
+#: user/apps/sysinfo.c:163
+msgid "Installed"
+msgstr "Установлено"
+
+#: user/apps/sysinfo.c:164
+msgid "Interface"
+msgstr "Интерфейс"
+
+#: user/apps/sysinfo.c:165
+msgid "Interface class"
+msgstr "Класс интерфейса"
+
+#: user/apps/sysinfo.c:166
+msgid "Interface version"
+msgstr "Версия интерфейса"
+
+#: user/apps/sysinfo.c:167
+msgid "Interfaces"
+msgstr "Интерфейсы"
+
+#: user/apps/sysinfo.c:168
+msgid "Interrupt"
+msgstr "Прерывание"
+
+#: user/apps/sysinfo.c:169
+msgid "Interrupt controller"
+msgstr "Контроллер прерываний"
+
+#: user/apps/sysinfo.c:170
+msgid "Interrupt pin"
+msgstr "Вывод прерывания"
+
+#: user/apps/sysinfo.c:171
+msgid "Invariant TSC"
+msgstr "Инвариантный TSC"
+
+#: user/apps/sysinfo.c:172
+msgid "I/O APIC"
+msgstr "I/O APIC"
+
+#: user/apps/sysinfo.c:173
+msgid "IPv4 address"
+msgstr "Адрес IPv4"
+
+#: user/apps/sysinfo.c:174
+msgid "ITS"
+msgstr "ITS"
+
+#: user/apps/sysinfo.c:175
+msgid "Kernel build number"
+msgstr "Номер сборки ядра"
+
+#: user/apps/sysinfo.c:176
+msgid "Kernel physical base"
+msgstr "Физическая база ядра"
+
+#: user/apps/sysinfo.c:177
+msgid "Kernel version"
+msgstr "Версия ядра"
+
+#: user/apps/sysinfo.c:178
+msgid "Kernel virtual base"
+msgstr "Виртуальная база ядра"
+
+#: user/apps/sysinfo.c:179
+msgid "Key repeat"
+msgstr "Автоповтор клавиш"
+
+#: user/apps/sysinfo.c:180
+msgid "Keyboard controller"
+msgstr "Контроллер клавиатуры"
+
+#: user/apps/sysinfo.c:181
+msgid "Keys"
+msgstr "Клавиши"
+
+#: user/apps/sysinfo.c:182
+msgid "Length"
+msgstr "Длина"
+
+#: user/apps/sysinfo.c:183
+msgid "Level"
+msgstr "Уровень"
+
+#: user/apps/sysinfo.c:184
+msgid "Line size"
+msgstr "Размер строки"
+
+#: user/apps/sysinfo.c:185
+msgid "Link state"
+msgstr "Состояние связи"
+
+#: user/apps/sysinfo.c:186
+msgid "Link type"
+msgstr "Тип связи"
+
+#: user/apps/sysinfo.c:187
+msgid "Local APIC"
+msgstr "Local APIC"
+
+#: user/apps/sysinfo.c:188
+msgid "Local APIC mode"
+msgstr "Режим Local APIC"
+
+#: user/apps/sysinfo.c:189
+msgid "Local APIC timer"
+msgstr "Таймер Local APIC"
+
+#: user/apps/sysinfo.c:190
+msgid "Local APIC version"
+msgstr "Версия Local APIC"
+
+#: user/apps/sysinfo.c:191
+msgid "Locator"
+msgstr "Расположение"
+
+#: user/apps/sysinfo.c:192
+msgid "Logical resolution"
+msgstr "Логическое разрешение"
+
+#: user/apps/sysinfo.c:193
+msgid "LPIs"
+msgstr "LPIs"
+
+#: user/apps/sysinfo.c:194
+msgid "MAC address"
+msgstr "MAC-адрес"
+
+#: user/apps/sysinfo.c:195
+msgid "Machine"
+msgstr "Машина"
+
+#: user/apps/sysinfo.c:196
+msgid "Managed by the kernel"
+msgstr "Управляется ядром"
+
+#: user/apps/sysinfo.c:197
+msgid "Manufacturer"
+msgstr "Производитель"
+
+#: user/apps/sysinfo.c:198
+msgid "Maximum extended CPUID leaf"
+msgstr "Максимальный расширенный лист CPUID"
+
+#: user/apps/sysinfo.c:199
+msgid "Maximum CPUID leaf"
+msgstr "Максимальный лист CPUID"
+
+#: user/apps/sysinfo.c:200
+msgid "Endpoint 0 packet size"
+msgstr "Размер пакета конечной точки 0"
+
+#: user/apps/sysinfo.c:201
+msgid "Maximum speed"
+msgstr "Максимальная скорость"
+
+#: user/apps/sysinfo.c:202
+msgid "Memory map entries"
+msgstr "Записи карты памяти"
+
+#: user/apps/sysinfo.c:203
+msgid "Memory type"
+msgstr "Тип памяти"
+
+#: user/apps/sysinfo.c:204
+msgid "MIDR_EL1"
+msgstr "MIDR_EL1"
+
+#: user/apps/sysinfo.c:205
+msgid "Model"
+msgstr "Модель"
+
+#: user/apps/sysinfo.c:206
+msgid "Model name"
+msgstr "Название модели"
+
+#: user/apps/sysinfo.c:207
+msgid "Module size"
+msgstr "Размер модуля"
+
+#: user/apps/sysinfo.c:208
+msgid "MPIDR_EL1"
+msgstr "MPIDR_EL1"
+
+#: user/apps/sysinfo.c:209
+msgid "MSI"
+msgstr "MSI"
+
+#: user/apps/sysinfo.c:210
+msgid "MSI mapping"
+msgstr "Отображение MSI"
+
+#: user/apps/sysinfo.c:211
+msgid "MSI-X"
+msgstr "MSI-X"
+
+#: user/apps/sysinfo.c:212
+msgid "MTU"
+msgstr "MTU"
+
+#: user/apps/sysinfo.c:213
+msgid "Name"
+msgstr "Имя"
+
+#: user/apps/sysinfo.c:214
+msgid "OEM ID"
+msgstr "OEM ID"
+
+#: user/apps/sysinfo.c:215
+msgid "OEM revision"
+msgstr "Ревизия OEM"
+
+#: user/apps/sysinfo.c:216
+msgid "OEM table ID"
+msgstr "ID таблицы OEM"
+
+#: user/apps/sysinfo.c:217
+msgid "Open readers"
+msgstr "Открытые читатели"
+
+#: user/apps/sysinfo.c:218
+msgid "Opened"
+msgstr "Открыто"
+
+#: user/apps/sysinfo.c:219
+msgid "Operating system"
+msgstr "Операционная система"
+
+#: user/apps/sysinfo.c:220
+msgid "Release"
+msgstr "Выпуск"
+
+#: user/apps/sysinfo.c:221
+msgid "Over-current"
+msgstr "Перегрузка по току"
+
+#: user/apps/sysinfo.c:222
+msgid "Page size"
+msgstr "Размер страницы"
+
+#: user/apps/sysinfo.c:223
+msgid "Privileged access never"
+msgstr "Запрет привилегированного доступа (PAN)"
+
+#: user/apps/sysinfo.c:224 user/apps/sysinfo.c:225
+msgid "Part number"
+msgstr "Номер детали"
+
+#: user/apps/sysinfo.c:226
+msgid "Partition table"
+msgstr "Таблица разделов"
+
+#: user/apps/sysinfo.c:227
+msgid "Partition type"
+msgstr "Тип раздела"
+
+#: user/apps/sysinfo.c:228
+msgid "PCI address"
+msgstr "PCI-адрес"
+
+#: user/apps/sysinfo.c:229
+msgid "PCI Express"
+msgstr "PCI Express"
+
+#: user/apps/sysinfo.c:230
+msgid "PCI Express configuration space"
+msgstr "Конфигурационное пространство PCI Express"
+
+#: user/apps/sysinfo.c:231
+msgid "PCI Express link"
+msgstr "Связь PCI Express"
+
+#: user/apps/sysinfo.c:232
+msgid "Physical address bits"
+msgstr "Разрядность физического адреса"
+
+#: user/apps/sysinfo.c:233
+msgid "Pitch"
+msgstr "Шаг строки"
+
+#: user/apps/sysinfo.c:234
+msgid "Pixel format"
+msgstr "Формат пикселей"
+
+#: user/apps/sysinfo.c:235
+msgid "Playback"
+msgstr "Воспроизведение"
+
+#: user/apps/sysinfo.c:236
+msgid "Populated"
+msgstr "Занято"
+
+#: user/apps/sysinfo.c:237
+msgid "Port"
+msgstr "Порт"
+
+#: user/apps/sysinfo.c:238
+msgid "Ports"
+msgstr "Порты"
+
+#: user/apps/sysinfo.c:239
+msgid "PORTSC register"
+msgstr "Регистр PORTSC"
+
+#: user/apps/sysinfo.c:240
+msgid "Power"
+msgstr "Питание"
+
+#: user/apps/sysinfo.c:241
+msgid "Power management"
+msgstr "Управление питанием"
+
+#: user/apps/sysinfo.c:242
+msgid "Power off"
+msgstr "Выключение"
+
+#: user/apps/sysinfo.c:243
+msgid "Powered"
+msgstr "Питание включено"
+
+#: user/apps/sysinfo.c:244
+msgid "Product"
+msgstr "Продукт"
+
+#: user/apps/sysinfo.c:245
+msgid "Product ID"
+msgstr "ID продукта"
+
+#: user/apps/sysinfo.c:246
+msgid "Protocol"
+msgstr "Протокол"
+
+#: user/apps/sysinfo.c:247
+msgid "PSCI"
+msgstr "PSCI"
+
+#: user/apps/sysinfo.c:248
+msgid "RAM"
+msgstr "RAM"
+
+#: user/apps/sysinfo.c:249
+msgid "Real time clock device"
+msgstr "Устройство часов реального времени"
+
+#: user/apps/sysinfo.c:250
+msgid "Reboot"
+msgstr "Перезагрузка"
+
+#: user/apps/sysinfo.c:251
+msgid "Received"
+msgstr "Получено"
+
+#: user/apps/sysinfo.c:252
+msgid "Relative axes"
+msgstr "Относительные оси"
+
+#: user/apps/sysinfo.c:253
+msgid "Firmware release"
+msgstr "Версия прошивки"
+
+#: user/apps/sysinfo.c:254
+msgid "Release date"
+msgstr "Дата выпуска"
+
+#: user/apps/sysinfo.c:255
+msgid "Report IDs"
+msgstr "ID отчётов"
+
+#: user/apps/sysinfo.c:256
+msgid "Report length"
+msgstr "Длина отчёта"
+
+#: user/apps/sysinfo.c:257
+msgid "Report protocol"
+msgstr "Протокол отчётов"
+
+#: user/apps/sysinfo.c:258
+msgid "Resolution"
+msgstr "Разрешение"
+
+#: user/apps/sysinfo.c:259
+msgid "Revision"
+msgstr "Ревизия"
+
+#: user/apps/sysinfo.c:260
+msgid "ROM size"
+msgstr "Размер ROM"
+
+#: user/apps/sysinfo.c:261
+msgid "RSDP address"
+msgstr "Адрес RSDP"
+
+#: user/apps/sysinfo.c:262
+msgid "RSDP revision"
+msgstr "Ревизия RSDP"
+
+#: user/apps/sysinfo.c:263
+msgid "Real time clock"
+msgstr "Часы реального времени"
+
+#: user/apps/sysinfo.c:264
+msgid "Scratchpad buffers"
+msgstr "Буферы scratchpad"
+
+#: user/apps/sysinfo.c:265
+msgid "Sector size"
+msgstr "Размер сектора"
+
+#: user/apps/sysinfo.c:266
+msgid "Sectors"
+msgstr "Секторы"
+
+#: user/apps/sysinfo.c:267
+msgid "Sent"
+msgstr "Отправлено"
+
+#: user/apps/sysinfo.c:268
+msgid "Serial number"
+msgstr "Серийный номер"
+
+#: user/apps/sysinfo.c:269
+msgid "Serial console"
+msgstr "Последовательная консоль"
+
+#: user/apps/sysinfo.c:270
+msgid "Sets"
+msgstr "Наборы"
+
+#: user/apps/sysinfo.c:271
+msgid "Shared by"
+msgstr "Совместно используется"
+
+#: user/apps/sysinfo.c:272
+msgid "Signature"
+msgstr "Сигнатура"
+
+#: user/apps/sysinfo.c:273
+msgid "Size"
+msgstr "Размер"
+
+#: user/apps/sysinfo.c:274
+msgid "SKU"
+msgstr "SKU"
+
+#: user/apps/sysinfo.c:275
+msgid "Slot"
+msgstr "Слот"
+
+#: user/apps/sysinfo.c:276
+msgid "Slots"
+msgstr "Слоты"
+
+#: user/apps/sysinfo.c:277
+msgid "SMBIOS"
+msgstr "SMBIOS"
+
+#: user/apps/sysinfo.c:278
+msgid "Socket"
+msgstr "Сокет"
+
+#: user/apps/sysinfo.c:279
+msgid "Speed"
+msgstr "Скорость"
+
+#: user/apps/sysinfo.c:280
+msgid "Started"
+msgstr "Запущено"
+
+#: user/apps/sysinfo.c:281
+msgid "State"
+msgstr "Состояние"
+
+#: user/apps/sysinfo.c:282
+msgid "Stepping"
+msgstr "Степпинг"
+
+#: user/apps/sysinfo.c:283
+msgid "Structures"
+msgstr "Структуры"
+
+#: user/apps/sysinfo.c:284
+msgid "Subsystem"
+msgstr "Подсистема"
+
+#: user/apps/sysinfo.c:285
+msgid "Supported format"
+msgstr "Поддерживаемый формат"
+
+#: user/apps/sysinfo.c:286
+msgid "Free swap"
+msgstr "Свободный swap"
+
+#: user/apps/sysinfo.c:287
+msgid "Total swap"
+msgstr "Всего swap"
+
+#: user/apps/sysinfo.c:288
+msgid "Table size"
+msgstr "Размер таблицы"
+
+#: user/apps/sysinfo.c:289
+msgid "Tables"
+msgstr "Таблицы"
+
+#: user/apps/sysinfo.c:290
+msgid "Threads"
+msgstr "Потоки"
+
+#: user/apps/sysinfo.c:291
+msgid "Scheduler tick rate"
+msgstr "Частота тиков планировщика"
+
+#: user/apps/sysinfo.c:292
+msgid "Type"
+msgstr "Тип"
+
+#: user/apps/sysinfo.c:293
+msgid "UEFI supported"
+msgstr "Поддержка UEFI"
+
+#: user/apps/sysinfo.c:294
+msgid "Unique GUID"
+msgstr "Уникальный GUID"
+
+#: user/apps/sysinfo.c:295
+msgid "Uptime"
+msgstr "Время работы"
+
+#: user/apps/sysinfo.c:296
+msgid "USB version"
+msgstr "Версия USB"
+
+#: user/apps/sysinfo.c:297
+msgid "Used"
+msgstr "Занято"
+
+#: user/apps/sysinfo.c:298
+msgid "UUID"
+msgstr "UUID"
+
+#: user/apps/sysinfo.c:299
+msgid "Variant"
+msgstr "Вариант"
+
+#: user/apps/sysinfo.c:300
+msgid "Vendor"
+msgstr "Поставщик"
+
+#: user/apps/sysinfo.c:301
+msgid "Vendor ID"
+msgstr "ID поставщика"
+
+#: user/apps/sysinfo.c:302
+msgid "Version"
+msgstr "Версия"
+
+#: user/apps/sysinfo.c:303
+msgid "Virtualization host extensions"
+msgstr "Расширения хоста виртуализации"
+
+#: user/apps/sysinfo.c:304
+msgid "Virtual address bits"
+msgstr "Разрядность виртуального адреса"
+
+#: user/apps/sysinfo.c:305
+msgid "Ways"
+msgstr "Пути ассоциативности"
+
+#: user/apps/sysinfo.c:316
+msgid "BAR %c"
+msgstr "BAR %c"
+
+#: user/apps/sysinfo.c:320
+msgid "Endpoint 0x%s"
+msgstr "Конечная точка 0x%s"
+
+#: user/apps/sysinfo.c:324
+msgid "Absolute axis %s"
+msgstr "Абсолютная ось %s"
+
+#: user/apps/sysinfo.c:48
+msgid "System"
+msgstr "Система"
+
+#: user/apps/sysinfo.c:48
+msgid "Firmware"
+msgstr "Прошивка"
+
+#: user/apps/sysinfo.c:48
+msgid "Processors"
+msgstr "Процессоры"
+
+#: user/apps/sysinfo.c:49
+msgid "Platform"
+msgstr "Платформа"
+
+#: user/apps/sysinfo.c:49
+msgid "Memory"
+msgstr "Память"
+
+#: user/apps/sysinfo.c:49
+msgid "PCI"
+msgstr "PCI"
+
+#: user/apps/sysinfo.c:490
+msgid "Description"
+msgstr "Описание"
+
+#: user/apps/sysinfo.c:497
+msgid "Property"
+msgstr "Свойство"
+
+#: user/apps/sysinfo.c:497
+msgid "Value"
+msgstr "Значение"
+
+#: user/apps/sysinfo.c:50
+msgid "USB"
+msgstr "USB"
+
+#: user/apps/sysinfo.c:50
+msgid "Input devices"
+msgstr "Устройства ввода"
+
+#: user/apps/sysinfo.c:50
+msgid "Storage"
+msgstr "Накопители"
+
+#: user/apps/sysinfo.c:51
+msgid "Display"
+msgstr "Экран"
+
+#: user/apps/sysinfo.c:51
+msgid "Audio"
+msgstr "Звук"
+
+#: user/apps/sysinfo.c:51
+msgid "Network"
+msgstr "Сеть"
+
+#: user/apps/sysinfo.c:534
+msgid "/dev/devices cannot be read"
+msgstr "Не удаётся прочитать /dev/devices"
+
+#: user/apps/sysinfo.c:56
+msgid "ACPI"
+msgstr "ACPI"
+
+#: user/apps/sysinfo.c:57
+msgid "Acquired"
+msgstr "Получено"
+
+#: user/apps/sysinfo.c:58
+msgid "Address"
+msgstr "Адрес"
+
+#: user/apps/sysinfo.c:583
+msgid "System information"
+msgstr "Информация о системе"
+
+#: user/apps/sysinfo.c:587
+msgid "File"
+msgstr "Файл"
+
+#: user/apps/sysinfo.c:588
+msgid "Quit"
+msgstr "Выход"
+
+#: user/apps/sysinfo.c:59
+msgid "Alternate setting"
+msgstr "Альтернативная настройка"
+
+#: user/apps/sysinfo.c:591
+msgid "View"
+msgstr "Вид"
+
+#: user/apps/sysinfo.c:592
+msgid "Refresh"
+msgstr "Обновить"
+
+#: user/apps/sysinfo.c:596
+msgid "Expand all"
+msgstr "Развернуть всё"
+
+#: user/apps/sysinfo.c:597
+msgid "Collapse all"
+msgstr "Свернуть всё"
+
+#: user/apps/sysinfo.c:60
+msgid "AMD features"
+msgstr "Возможности AMD"
+
+#: user/apps/sysinfo.c:61
+msgid "APIC ID"
+msgstr "APIC ID"
+
+#: user/apps/sysinfo.c:62
+msgid "Architecture"
+msgstr "Архитектура"
+
+#: user/apps/sysinfo.c:63
+msgid "ASID bits"
+msgstr "Разрядность ASID"
+
+#: user/apps/sysinfo.c:64
+msgid "Asset tag"
+msgstr "Инвентарный номер"
+
+#: user/apps/sysinfo.c:65
+msgid "Bank"
+msgstr "Банк"
+
+#: user/apps/sysinfo.c:66
+msgid "Base address"
+msgstr "Базовый адрес"
+
+#: user/apps/sysinfo.c:67
+msgid "Bits per pixel"
+msgstr "Бит на пиксель"
+
+#: user/apps/sysinfo.c:68
+msgid "Boot CPU"
+msgstr "Загрузочный CPU"
+
+#: user/apps/sysinfo.c:69
+msgid "Boot disk"
+msgstr "Загрузочный диск"
+
+#: user/apps/sysinfo.c:70
+msgid "Boot disk GUID"
+msgstr "GUID загрузочного диска"
+
+#: user/apps/sysinfo.c:71
+msgid "Boot framebuffer"
+msgstr "Загрузочный кадровый буфер"
+
+#: user/apps/sysinfo.c:72
+msgid "Boot partition"
+msgstr "Загрузочный раздел"
+
+#: user/apps/sysinfo.c:73
+msgid "Boot partition GUID"
+msgstr "GUID загрузочного раздела"
+
+#: user/apps/sysinfo.c:74
+msgid "Boot protocol"
+msgstr "Протокол загрузки"
+
+#: user/apps/sysinfo.c:75
+msgid "Bootloader"
+msgstr "Загрузчик"
+
+#: user/apps/sysinfo.c:76
+msgid "Bus"
+msgstr "Шина"
+
+#: user/apps/sysinfo.c:77
+msgid "Buses"
+msgstr "Шины"
+
+#: user/apps/sysinfo.c:78
+msgid "Buttons"
+msgstr "Кнопки"
+
+#: user/apps/sysinfo.c:79
+msgid "Cache size"
+msgstr "Размер кэша"
+
+#: user/apps/sysinfo.c:80
+msgid "Cache type"
+msgstr "Тип кэша"
+
+#: user/apps/sysinfo.c:81
+msgid "Capabilities"
+msgstr "Возможности"
+
+#: user/apps/sysinfo.c:82
+msgid "Capture"
+msgstr "Запись"
+
+#: user/apps/sysinfo.c:83
+msgid "Characteristics"
+msgstr "Характеристики"
+
+#: user/apps/sysinfo.c:84
+msgid "Chassis type"
+msgstr "Тип корпуса"
+
+#: user/apps/sysinfo.c:85
+msgid "Chipset"
+msgstr "Чипсет"
+
+#: user/apps/sysinfo.c:86
+msgid "Class"
+msgstr "Класс"
+
+#: user/apps/sysinfo.c:87
+msgid "Clock rate"
+msgstr "Тактовая частота"
+
+#: user/apps/sysinfo.c:88
+msgid "Command register"
+msgstr "Регистр команд"
+
+#: user/apps/sysinfo.c:89
+msgid "Command line"
+msgstr "Командная строка"
+
+#: user/apps/sysinfo.c:90
+msgid "Compatible"
+msgstr "Совместимость"
+
+#: user/apps/sysinfo.c:91
+msgid "Kernel configuration"
+msgstr "Конфигурация ядра"
+
+#: user/apps/sysinfo.c:92
+msgid "Configuration"
+msgstr "Конфигурация"
+
+#: user/apps/sysinfo.c:93
+msgid "Configurations"
+msgstr "Конфигурации"
+
+#: user/apps/sysinfo.c:94
+msgid "Configured speed"
+msgstr "Настроенная скорость"
+
+#: user/apps/sysinfo.c:95
+msgid "Connected"
+msgstr "Подключено"
+
+#: user/apps/sysinfo.c:96
+msgid "Context size"
+msgstr "Размер контекста"
+
+#: user/apps/sysinfo.c:97
+msgid "Controllers"
+msgstr "Контроллеры"
+
+#: user/apps/sysinfo.c:98
+msgid "Cores"
+msgstr "Ядра"
+
+#: user/apps/sysinfo.c:99
+msgid "Cores enabled"
+msgstr "Включённые ядра"

@@ -61,6 +61,7 @@ app-default:window-maximize
 app-term:terminal
 app-files:folder
 app-clock:clock
+app-sysinfo:microchip
 app-sysmon:gauge-high
 app-logview:file-lines
 app-profiler:chart-line

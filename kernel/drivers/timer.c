@@ -65,6 +65,11 @@ void timer_init_cpu(void)
     arch_timer_init_cpu(TIMER_HZ);
 }
 
+uint64_t timer_clock_hz(void)
+{
+    return clock_per_ms * 1000;
+}
+
 uint64_t timer_ms(void)
 {
     if (!clock_per_ms)

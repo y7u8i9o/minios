@@ -5,6 +5,7 @@
  * c->arch. Private to the owning CPU. */
 struct arch_cpu {
     uint64_t mpidr;             /* MPIDR_EL1 affinity of the processor */
+    uint64_t midr;              /* MIDR_EL1, the implementer and part, written by the CPU at start */
     volatile uint8_t *gicr;     /* its GICv3 redistributor (gic.c) */
     uint8_t gic_mask;           /* GICv2: its CPU interface as a target bit (gic.c) */
     uint64_t asid_active;       /* tag of the space loaded in TTBR0, 0 for none, asid_lock */

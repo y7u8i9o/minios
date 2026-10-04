@@ -27,6 +27,7 @@ struct netif *netif_loopback(void)
 
 void loopback_init(void)
 {
+    lo.driver = "loopback";
     if (netif_register(&lo) < 0)
         panic("net: cannot register lo");
     netif_set_up(&lo, true);

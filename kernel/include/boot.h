@@ -26,6 +26,10 @@ struct bootinfo {
      * from, in their on-disk byte order, zero when it has no GPT. */
     uint8_t boot_disk_guid[16], boot_part_guid[16];
     const void *dtb;                /* the device tree or NULL, valid until pmm_reclaim_bootloader */
+    uint64_t rsdp_phys;             /* physical address of the ACPI RSDP, 0 without ACPI */
+    uint64_t smbios32_phys, smbios64_phys;  /* physical addresses of the SMBIOS entry points, or 0 */
+    char bootloader_name[32], bootloader_version[32];
+    int firmware_type;              /* LIMINE_FIRMWARE_TYPE_*, -1 when Limine did not say */
     uint64_t initrd_size;
     size_t memmap_count;
     struct limine_memmap_entry memmap[BOOT_MAX_MEMMAP];

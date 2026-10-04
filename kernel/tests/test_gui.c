@@ -1598,6 +1598,34 @@ static void test_gui_sysmon(void)
 }
 KTEST_DEFINE("gui_sysmon", test_gui_sysmon);
 
+/* sysinfo (docs/design/sysinfo.md): the window opens with the system node
+ * selected, the Down key selects the firmware node, F5 reads /dev/devices
+ * again and Alt+F4 closes the window. The program reports each step on
+ * standard output, which the case checks. */
+static void test_gui_sysinfo(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/sysinfo", (char *const[]){ "sysinfo", NULL }, (char *const[]){ NULL },
+                                       &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start sysinfo");
+    wait_active(40, 60, "sysinfo");
+    sleep_ms(500);
+    ps2kbd_feed_scancode(0xe0);         /* Down */
+    ps2kbd_feed_scancode(0x50);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(0xd0);
+    sleep_ms(300);
+    press_key(0x3f);                    /* F5 */
+    sleep_ms(500);
+    alt_key(0x3e);                      /* Alt+F4 */
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "sysinfo status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_sysinfo: system information ok\n");
+}
+KTEST_DEFINE("gui_sysinfo", test_gui_sysinfo);
+
 /* L4: translated programs.  The panel runs with LANG=ja_JP.UTF-8, and
  * sysmon runs once with LANG=fr_FR.UTF-8 and once with LANG=ja_JP.UTF-8.
  * The compositor log names the translated window titles, and the launcher

@@ -3,6 +3,8 @@
 #include <boot.h>
 #include <minios/abi.h>
 
+struct devinfo;
+
 /* The active display. fb_screen starts as the Limine framebuffer (fb_screen_init)
  * and is replaced by the GPU driver's buffer (fb_gpu_register); its
  * geometry changes in fb_set_mode. Every change happens under console_lock
@@ -26,6 +28,9 @@ struct fb_gpu_ops {
     int (*commit_mode)(void *priv);
     int (*flush)(void *priv, struct fb_rect r);
     void (*flush_poll)(void *priv, struct fb_rect r);   /* panic path */
+    /* The properties of the GPU for the display node of /dev/devices; may
+     * be NULL. */
+    void (*describe)(void *priv, struct devinfo *d);
 };
 /* Called once at boot by the GPU driver after prepare_mode for the boot
  * mode: switches the console to screen (a 32 bpp buffer in the direct

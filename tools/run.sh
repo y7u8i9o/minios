@@ -40,7 +40,10 @@
 #                                            kernel's virtio-gpu driver sets any
 #                                            mode up to 2560x1600 at run time),
 #                                            std (VGA BIOS modes only) or none
-#       --no-keyboard      QEMU_KEYBOARD=0   no virtio keyboard; keys go to the PS/2 port
+#       --no-keyboard      QEMU_KEYBOARD=0   no virtio keyboard; keys go to the PS/2 port.
+#                                            On aarch64 a USB keyboard is added
+#                                            before the virtio keyboard for the
+#                                            firmware and the Limine menu
 #       --nic BACKEND      QEMU_NIC          network backend of a virtio-net
 #                                            (user forwards host port 9100 to
 #                                            the guest for xfer(1))
@@ -465,6 +468,12 @@ else
 fi
 [ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
+# The edk2 firmware of aarch64 has no virtio keyboard driver. A USB
+# keyboard on its own xHCI controller gives the firmware and the Limine
+# menu a keyboard, and the kernel drives it as well (docs/design/usb.md).
+# It comes first, because QEMU sends the keys to the first keyboard until
+# a guest driver activates another.
+[ "$QEMU_KEYBOARD" != 0 ] && [ "$ARCH" = aarch64 ] && set -- "$@" -device qemu-xhci,id=fwkbd -device usb-kbd,bus=fwkbd.0
 [ "$QEMU_KEYBOARD" != 0 ] && set -- "$@" -device virtio-keyboard-pci
 case "$QEMU_NIC" in
     none|"") ;;

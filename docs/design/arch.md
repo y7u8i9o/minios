@@ -446,13 +446,16 @@ before the frame is mapped executable (the ELF loader, `vma_make_pte`). On
 x86_64 the function is empty.
 
 Limine passes the flattened device tree that edk2 installs when the
-machine has no ACPI tables (`acpi=off`, A7). The generic reader
+machine has no ACPI tables (`acpi=off`, A7). A machine with ACPI tables has
+no device tree, and `devtree_init` then reads the ACPI tables through uACPI
+(D1, `acpi.md`). The generic reader
 `kernel/lib/fdt.c` finds nodes by compatible string and decodes `reg` with
 the cell counts of the parent. `devtree_init` (`arch/aarch64/devtree.c`) is
 called from `arch_init_cpu_features`, before `pmm_reclaim_bootloader`
 frees the tree. It records the addresses of the distributor, the
 redistributors, the ITS, the PL031 and the ECAM window with its bus range
-and `msi-map`. Without a tree the addresses of `virt` apply and the kernel
+and `msi-map`. It also reads the PSCI conduit of the `psci` node. Without a
+tree and without ACPI tables the addresses of `virt` apply and the kernel
 finds no PCI devices.
 
 The PCIe configuration space is accessed through ECAM (`platform.c`, A7).

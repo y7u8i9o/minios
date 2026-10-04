@@ -3,7 +3,8 @@
  * layout below /tmp, runs fsinit -m on it and checks that the old home
  * moved into user/ with uid 1000, that the package prefix remained with root
  * and gained the account databases, and that a second run changes
- * nothing. */
+ * nothing. It also checks that fsinit adds the group wheel to a group file
+ * without it. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -86,6 +87,28 @@ int main(void)
     CHECK(run_fsinit() == 0, "second fsinit -m failed");
     CHECK(has(VOL "/later", 0, 0), "a second run moved a file");
     CHECK(access(VOL "/user/later", F_OK) < 0, "a second run converted again");
+
+    /* A volume made before U5 has a group file without wheel. fsinit adds
+     * wheel with the account of uid 1000, and a second run adds nothing. */
+    write_file(VOL "/.local/etc/group", "root:x:0:\nuser:x:1000:\n");
+    CHECK(run_fsinit() == 0, "fsinit -m on a volume without wheel failed");
+    char group[256] = "";
+    int fd = open(VOL "/.local/etc/group", O_RDONLY);
+    if (fd >= 0) {
+        long n = read(fd, group, sizeof group - 1);
+        group[n > 0 ? n : 0] = '\0';
+        close(fd);
+    }
+    CHECK(strstr(group, "\nwheel:x:10:user\n") != NULL, "no wheel with user: %s", group);
+    CHECK(run_fsinit() == 0, "second fsinit -m failed");
+    fd = open(VOL "/.local/etc/group", O_RDONLY);
+    char again[256] = "";
+    if (fd >= 0) {
+        long n = read(fd, again, sizeof again - 1);
+        again[n > 0 ? n : 0] = '\0';
+        close(fd);
+    }
+    CHECK(strcmp(group, again) == 0, "a second run changed the group file: %s", again);
 
     printf("migratetest: %d failures\n", failures);
     return failures ? 1 : 0;

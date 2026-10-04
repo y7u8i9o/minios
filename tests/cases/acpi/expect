@@ -1,0 +1,6 @@
+acpi: gicv3 at 8000000 and 80a0000, its at 8080000
+pcie ecam at [0-9a-f]+ for buses 0 to 255, msi requester ids 0 to ffff as device ids from 0
+psci through hvc
+root: mfs on vda
+platform: [0-9]+ cpus, irqs 8[0-9]+ and 8[0-9]+, MSI [0-9a-f]+/[0-9a-f]+, host bridge 1b36:0008
+TEST PASS

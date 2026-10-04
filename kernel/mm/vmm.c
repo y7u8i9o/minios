@@ -321,25 +321,47 @@ static void map_kernel_image(uintptr_t root)
 
 static uint64_t hhdm_mapped_bytes;   /* written once by map_hhdm */
 
+/* The memory map types that map_hhdm puts in the direct map. */
+static bool hhdm_type(uint64_t type)
+{
+    switch (type) {
+    case LIMINE_MEMMAP_USABLE:
+    case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
+    case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
+    case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
+    case LIMINE_MEMMAP_ACPI_NVS:
+    case LIMINE_MEMMAP_FRAMEBUFFER:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool vmm_copy_from_phys(void *dst, uintptr_t pa, size_t len)
+{
+    for (size_t i = 0; i < bootinfo.memmap_count; i++) {
+        const struct limine_memmap_entry *e = &bootinfo.memmap[i];
+        if (hhdm_type(e->type) && pa >= e->base && pa + len <= e->base + e->length) {
+            memcpy(dst, P2V(pa), len);
+            return true;
+        }
+    }
+    const void *src = vmm_map_mmio(pa, len, VM_KERNEL_RW);
+    if (!src)
+        return false;
+    memcpy(dst, src, len);
+    uintptr_t va = ALIGN_DOWN((uintptr_t)src, PAGE_SIZE);
+    vmm_unmap(&kernel_vmspace, va, ALIGN_UP((uintptr_t)src + len, PAGE_SIZE) - va);
+    return true;
+}
+
 static void map_hhdm(uintptr_t root)
 {
     for (size_t i = 0; i < bootinfo.memmap_count; i++) {
         const struct limine_memmap_entry *e = &bootinfo.memmap[i];
-        unsigned flags;
-        switch (e->type) {
-        case LIMINE_MEMMAP_USABLE:
-        case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
-        case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
-        case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
-        case LIMINE_MEMMAP_ACPI_NVS:
-            flags = VM_KERNEL_RW;
-            break;
-        case LIMINE_MEMMAP_FRAMEBUFFER:
-            flags = VM_KERNEL_RW | VM_WC;
-            break;
-        default:
+        if (!hhdm_type(e->type))
             continue;
-        }
+        unsigned flags = e->type == LIMINE_MEMMAP_FRAMEBUFFER ? VM_KERNEL_RW | VM_WC : VM_KERNEL_RW;
         uintptr_t s = ALIGN_DOWN(e->base, PAGE_SIZE);
         uintptr_t end = ALIGN_UP(e->base + e->length, PAGE_SIZE);
         if (paging_map_large(root, s + hhdm_offset, s, end - s, flags) < 0)

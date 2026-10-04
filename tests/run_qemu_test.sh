@@ -15,6 +15,9 @@
 #   cpus      number of CPUs (optional, default $CPUS or 4)
 #   gic       GIC version of the aarch64 virt machine, 2 or 3 (optional,
 #             default 3)
+#   acpi      boots the aarch64 virt machine with ACPI tables (optional).
+#             The machine is then given without acpi=off, and edk2 passes
+#             the ACPI tables and no device tree (docs/design/acpi.md)
 #   swap      size in MiB of a zero filled swap image attached as vdb (optional)
 #   mfs2      size in MiB of an empty mfs image attached as the next virtio-blk
 #             device (optional), which the post script sees as DISK2
@@ -26,6 +29,13 @@
 #             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
 #   tablet    attaches a virtio-tablet-pci device when present
 #   keyboard  attaches a virtio-keyboard-pci device when present
+#   usb       an xHCI controller and USB devices on it (optional): one line,
+#             the controller with its properties followed by the devices,
+#             for example "qemu-xhci,msix=off usb-kbd usb-tablet"
+#   qmp       a script of tests/qmp_input.py (optional), run against the QMP
+#             socket of QEMU while the case boots. It sends keys and pointer
+#             events after the serial log shows a line, and its output is
+#             written to qmp.log in the case's output directory
 #   disk.img  a private root image instead of the shared one (optional)
 #   mkdisk    executable that writes the case's disk instead (optional),
 #             run with DISK (the shared root image), OUT (the disk to
@@ -118,6 +128,7 @@ clone() {
 cleanup() {
     stop_peer
     rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso"
+    [ -n "$QMPSOCK" ] && rm -f "$QMPSOCK"
 }
 trap cleanup EXIT
 
@@ -193,6 +204,28 @@ if [ -f "$CASE/audio" ]; then
 fi
 VGAFLAGS="-vga std"
 [ -f "$CASE/vga" ] && VGAFLAGS="-vga $(cat "$CASE/vga")"
+# The USB controller and its devices. The controller is named usb0, and
+# the devices are attached to its bus usb0.0.
+USBFLAGS=""
+if [ -f "$CASE/usb" ]; then
+    for word in $(cat "$CASE/usb"); do
+        if [ -z "$USBFLAGS" ]; then
+            USBFLAGS="-device $word,id=usb0"
+        else
+            USBFLAGS="$USBFLAGS -device $word,bus=usb0.0"
+        fi
+    done
+fi
+# The QMP socket of a case with a qmp script. A Unix socket path has at
+# most 104 bytes on macOS, and a longer output directory uses /tmp.
+QMPFLAGS=""
+QMPSOCK=""
+if [ -f "$CASE/qmp" ]; then
+    QMPSOCK="$OUTDIR/qmp.sock"
+    [ "${#QMPSOCK}" -ge 100 ] && QMPSOCK="/tmp/minios-qmp-$$.sock"
+    rm -f "$QMPSOCK"
+    QMPFLAGS="-qmp unix:$QMPSOCK,server=on,wait=off"
+fi
 [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
 [ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
 if [ -f "$OUTDIR/disk.img" ]; then
@@ -268,8 +301,10 @@ case "${ARCH:-x86_64}" in
         [ "$ACCEL" = hvf ] && CPU=host
         GIC=3
         [ -f "$CASE/gic" ] && GIC="$(cat "$CASE/gic")"
+        ACPIOPT=",acpi=off"
+        [ -f "$CASE/acpi" ] && ACPIOPT=""
         # A boot menu wait of 0 ms replaces the five second TianoCore screen.
-        MACHINE="-M virt,gic-version=$GIC,acpi=off -cpu $CPU -bios $EDK2_AARCH64 -boot menu=on,splash-time=0"
+        MACHINE="-M virt,gic-version=$GIC$ACPIOPT -cpu $CPU -bios $EDK2_AARCH64 -boot menu=on,splash-time=0"
         BOOTFLAGS="-drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on -device virtio-scsi-pci -device scsi-cd,drive=cd0"
         BOOTFLAGS2=""
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
@@ -292,19 +327,26 @@ esac
 run_qemu() {
     "$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
         -serial "file:$1" \
-        $3 $SOUNDFLAGS $VGAFLAGS $NETFLAGS $RNGFLAGS \
+        $3 $SOUNDFLAGS $VGAFLAGS $USBFLAGS $NETFLAGS $RNGFLAGS $QMPFLAGS \
         $2 >"$OUTDIR/qemu.log" 2>&1 &
     QPID=$!
+    QMPPID=""
+    if [ -n "$QMPSOCK" ]; then
+        python3 "$TOP/tests/qmp_input.py" "$QMPSOCK" "$1" "$CASE/qmp" > "$OUTDIR/qmp.log" 2>&1 &
+        QMPPID=$!
+    fi
     ELAPSED=0
     while kill -0 $QPID 2>/dev/null; do
         if [ -n "$4" ] && [ -f "$4" ] && grep -E -q -- "$(cat "$4")" "$1" 2>/dev/null; then
             kill $QPID 2>/dev/null
             wait $QPID 2>/dev/null
+            [ -n "$QMPPID" ] && kill "$QMPPID" 2>/dev/null
             return 0
         fi
         if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
             kill $QPID 2>/dev/null
             wait $QPID 2>/dev/null
+            [ -n "$QMPPID" ] && kill "$QMPPID" 2>/dev/null
             stop_peer
             echo "FAIL $NAME (timeout after ${TIMEOUT}s, log: $1)"
             exit 1
@@ -313,6 +355,10 @@ run_qemu() {
         ELAPSED=$((ELAPSED + 1))
     done
     wait $QPID
+    if [ -n "$QMPPID" ]; then
+        kill "$QMPPID" 2>/dev/null
+        wait "$QMPPID" 2>/dev/null
+    fi
 }
 # check_log SERIAL EXPECT fails the case on TEST FAIL in the log or on a
 # pattern of EXPECT that it lacks.

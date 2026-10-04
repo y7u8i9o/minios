@@ -1,8 +1,10 @@
 #define KLOG_SUBSYS "dt"
 #include "devtree.h"
+#include "acpi.h"
 #include <boot.h>
 #include <lib/fdt.h>
 #include <klog.h>
+#include <lib/string.h>
 
 /* The addresses of QEMU virt (hw/arm/virt.c), used without a tree. */
 struct devtree devtree = {
@@ -52,11 +54,48 @@ static void read_pcie(const void *blob)
     }
 }
 
+/* The PSCI conduit of the psci node: "hvc" or "smc". */
+static void read_psci(const void *blob)
+{
+    static const char *const compat[] = { "arm,psci-1.0", "arm,psci-0.2", "arm,psci" };
+    for (size_t i = 0; i < sizeof compat / sizeof compat[0]; i++) {
+        struct fdt_node node = { .offset = -1 };
+        if (!fdt_find_compatible(blob, compat[i], &node))
+            continue;
+        int len;
+        const char *method = fdt_prop(blob, &node, "method", &len);
+        if (method && len >= 4 && strncmp(method, "smc", 3) == 0)
+            devtree.psci_smc = true;
+        return;
+    }
+}
+
+static void log_platform(void)
+{
+    const char *source = devtree.from_acpi ? "acpi" : "device tree";
+    if (devtree.gic_version == 2)
+        klog_info("%s: gicv2 at %lx and %lx, v2m %s%lx, rtc at %lx", source, devtree.gicd, devtree.gicc,
+                  devtree.v2m ? "at " : "", devtree.v2m, devtree.rtc);
+    else
+        klog_info("%s: gicv3 at %lx and %lx, its %s%lx, rtc at %lx", source, devtree.gicd, devtree.gicr,
+                  devtree.its ? "at " : "", devtree.its, devtree.rtc);
+    if (devtree.ecam)
+        klog_info("pcie ecam at %lx for buses %u to %u, msi requester ids %x to %x as device ids from %x",
+                  devtree.ecam, devtree.bus_start, devtree.bus_end, devtree.msi_rid_base,
+                  devtree.msi_rid_base + devtree.msi_length - 1, devtree.msi_base);
+    klog_info("psci through %s", devtree.psci_smc ? "smc" : "hvc");
+}
+
 void devtree_init(void)
 {
     const void *blob = bootinfo.dtb;
     if (!blob || !fdt_valid(blob)) {
-        klog_warn("no device tree, assuming the devices of QEMU virt without PCI");
+        if (acpi_read_platform()) {
+            devtree.from_acpi = true;
+            log_platform();
+            return;
+        }
+        klog_warn("no device tree and no ACPI tables, assuming the devices of QEMU virt without PCI");
         return;
     }
     uint64_t addr, size;
@@ -90,14 +129,15 @@ void devtree_init(void)
     if (find_reg(blob, "arm,pl031", 0, &addr, &size))
         devtree.rtc = addr;
     read_pcie(blob);
-    if (devtree.gic_version == 2)
-        klog_info("gicv2 at %lx and %lx, v2m %s%lx, rtc at %lx", devtree.gicd, devtree.gicc,
-                  devtree.v2m ? "at " : "", devtree.v2m, devtree.rtc);
-    else
-        klog_info("gicv3 at %lx and %lx, its %s%lx, rtc at %lx", devtree.gicd, devtree.gicr,
-                  devtree.its ? "at " : "", devtree.its, devtree.rtc);
-    if (devtree.ecam)
-        klog_info("pcie ecam at %lx for buses %u to %u, msi requester ids %x to %x as device ids from %x",
-                  devtree.ecam, devtree.bus_start, devtree.bus_end, devtree.msi_rid_base,
-                  devtree.msi_rid_base + devtree.msi_length - 1, devtree.msi_base);
+    read_psci(blob);
+    /* The root node is the first node of the structure block. */
+    struct fdt_node root = { .offset = 0, .addr_cells = 2, .size_cells = 1 };
+    int len;
+    const char *v = fdt_prop(blob, &root, "model", &len);
+    if (v && len > 0)
+        strlcpy(devtree.model, v, MIN((size_t)len + 1, sizeof devtree.model));
+    v = fdt_prop(blob, &root, "compatible", &len);
+    if (v && len > 0)
+        strlcpy(devtree.compatible, v, MIN((size_t)len + 1, sizeof devtree.compatible));
+    log_platform();
 }

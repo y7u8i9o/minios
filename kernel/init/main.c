@@ -23,6 +23,7 @@
 #include <fs/vfs.h>
 #include <fs/initrdfs.h>
 #include <block/part.h>
+#include <lib/guid.h>
 #include <fs/fat.h>
 #include <fs/tmpfs.h>
 #include <fs/devfs.h>
@@ -37,6 +38,8 @@
 #include <drivers/tty.h>
 #include <drivers/virtio/virtio_gpu.h>
 #include <drivers/virtio/virtio_input.h>
+#include <drivers/usb.h>
+#include <drivers/devinfo.h>
 #include <drivers/fbdev.h>
 #include <drivers/pty.h>
 #include <drivers/virtio/virtio_blk.h>
@@ -82,7 +85,7 @@ static void mount_root(void)
         struct partition *p = NULL;
         if (strncmp(root, "PARTUUID=", 9) != 0)
             strlcpy(source, root, sizeof source);
-        else if (part_parse_guid(root + 9, uuid) == 0 && (p = part_find_uuid(uuid)))
+        else if (guid_parse(root + 9, uuid) == 0 && (p = part_find_uuid(uuid)))
             strlcpy(source, p->bdev.name, sizeof source);
         else
             klog_error("root=%s: no such partition", root);
@@ -126,6 +129,9 @@ static void kinit(void *arg)
     virtio_snd_init();
     virtio_gpu_init();
     virtio_input_init();
+    /* The xHCI threads enumerate the USB devices that are connected at
+     * boot before init starts the display server. */
+    usb_init();
     swap_start_daemon();
     hung_start_daemon();
     tty_start_daemon();
@@ -208,6 +214,8 @@ __noreturn void kmain(void)
     fbdev_init();
     pty_init();
     pci_init();
+    /* /dev/devices, with the SMBIOS and ACPI table copies. */
+    devinfo_init();
     blockdev_init();
     virtio_blk_init();
     swap_init();

@@ -1,0 +1,1107 @@
+# Japanese messages of the sysinfo domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: user/apps/sysinfo.c:100
+msgid "CPU ID"
+msgstr "CPU ID"
+
+#: user/apps/sysinfo.c:101
+msgid "CPUs"
+msgstr "CPUs"
+
+#: user/apps/sysinfo.c:102
+msgid "Creator"
+msgstr "作成元"
+
+#: user/apps/sysinfo.c:103
+msgid "CTR_EL0"
+msgstr "CTR_EL0"
+
+#: user/apps/sysinfo.c:104
+msgid "Current exception level"
+msgstr "現在の例外レベル"
+
+#: user/apps/sysinfo.c:105
+msgid "Current speed"
+msgstr "現在の速度"
+
+#: user/apps/sysinfo.c:106
+msgid "Source of the description"
+msgstr "説明の取得元"
+
+#: user/apps/sysinfo.c:107 user/apps/sysinfo.c:462
+msgid "Device"
+msgstr "デバイス"
+
+#: user/apps/sysinfo.c:108
+msgid "Device class"
+msgstr "デバイスクラス"
+
+#: user/apps/sysinfo.c:109
+msgid "Device node"
+msgstr "デバイスノード"
+
+#: user/apps/sysinfo.c:110
+msgid "Device release"
+msgstr "デバイスのリリース"
+
+#: user/apps/sysinfo.c:111
+msgid "Device tree"
+msgstr "デバイスツリー"
+
+#: user/apps/sysinfo.c:112
+msgid "Devices"
+msgstr "デバイス一覧"
+
+#: user/apps/sysinfo.c:113
+msgid "Direct map base"
+msgstr "ダイレクトマップのベース"
+
+#: user/apps/sysinfo.c:114
+msgid "Disk GUID"
+msgstr "ディスクの GUID"
+
+#: user/apps/sysinfo.c:115
+msgid "Disks"
+msgstr "ディスク"
+
+#: user/apps/sysinfo.c:116
+msgid "Driver"
+msgstr "ドライバー"
+
+#: user/apps/sysinfo.c:117
+msgid "EL0 support"
+msgstr "EL0 のサポート"
+
+#: user/apps/sysinfo.c:118
+msgid "EL1 support"
+msgstr "EL1 のサポート"
+
+#: user/apps/sysinfo.c:119
+msgid "EL2 support"
+msgstr "EL2 のサポート"
+
+#: user/apps/sysinfo.c:120
+msgid "EL3 support"
+msgstr "EL3 のサポート"
+
+#: user/apps/sysinfo.c:121
+msgid "Enabled"
+msgstr "有効"
+
+#: user/apps/sysinfo.c:122
+msgid "End address"
+msgstr "終了アドレス"
+
+#: user/apps/sysinfo.c:123
+msgid "Endpoints"
+msgstr "エンドポイント"
+
+#: user/apps/sysinfo.c:124
+msgid "Entries"
+msgstr "エントリ"
+
+#: user/apps/sysinfo.c:125
+msgid "Table entry"
+msgstr "テーブルエントリ"
+
+#: user/apps/sysinfo.c:126
+msgid "Extended features"
+msgstr "拡張機能"
+
+#: user/apps/sysinfo.c:127
+msgid "External clock"
+msgstr "外部クロック"
+
+#: user/apps/sysinfo.c:128
+msgid "Family"
+msgstr "ファミリー"
+
+#: user/apps/sysinfo.c:129
+msgid "Feature words"
+msgstr "機能ワード"
+
+#: user/apps/sysinfo.c:130
+msgid "Features"
+msgstr "機能"
+
+#: user/apps/sysinfo.c:131
+msgid "Firmware type"
+msgstr "ファームウェアの種類"
+
+#: user/apps/sysinfo.c:132
+msgid "First sector"
+msgstr "先頭セクター"
+
+#: user/apps/sysinfo.c:133
+msgid "Form factor"
+msgstr "フォームファクター"
+
+#: user/apps/sysinfo.c:134
+msgid "Framebuffer"
+msgstr "フレームバッファー"
+
+#: user/apps/sysinfo.c:135
+msgid "Framebuffer size"
+msgstr "フレームバッファーのサイズ"
+
+#: user/apps/sysinfo.c:136
+msgid "Free"
+msgstr "空き"
+
+#: user/apps/sysinfo.c:137
+msgid "Functions"
+msgstr "ファンクション"
+
+#: user/apps/sysinfo.c:138
+msgid "GIC CPU interface"
+msgstr "GIC CPU インターフェース"
+
+#: user/apps/sysinfo.c:139
+msgid "GIC distributor"
+msgstr "GIC ディストリビューター"
+
+#: user/apps/sysinfo.c:140
+msgid "GIC redistributors"
+msgstr "GIC リディストリビューター"
+
+#: user/apps/sysinfo.c:141
+msgid "GICv2m"
+msgstr "GICv2m"
+
+#: user/apps/sysinfo.c:142
+msgid "GPU buffer"
+msgstr "GPU バッファー"
+
+#: user/apps/sysinfo.c:143
+msgid "GPU PCI address"
+msgstr "GPU の PCI アドレス"
+
+#: user/apps/sysinfo.c:144
+msgid "GPU preferred mode"
+msgstr "GPU の推奨モード"
+
+#: user/apps/sysinfo.c:145
+msgid "GPU scanout"
+msgstr "GPU のスキャンアウト"
+
+#: user/apps/sysinfo.c:146
+msgid "Grabbed"
+msgstr "占有済み"
+
+#: user/apps/sysinfo.c:147
+msgid "Page granules"
+msgstr "ページグラニュール"
+
+#: user/apps/sysinfo.c:148
+msgid "Hardware access flag update"
+msgstr "アクセスフラグのハードウェア更新"
+
+#: user/apps/sysinfo.c:149
+msgid "Header type"
+msgstr "ヘッダータイプ"
+
+#: user/apps/sysinfo.c:150
+msgid "Hypervisor"
+msgstr "ハイパーバイザー"
+
+#: user/apps/sysinfo.c:151
+msgid "ID_AA64ISAR0_EL1"
+msgstr "ID_AA64ISAR0_EL1"
+
+#: user/apps/sysinfo.c:152
+msgid "ID_AA64ISAR1_EL1"
+msgstr "ID_AA64ISAR1_EL1"
+
+#: user/apps/sysinfo.c:153
+msgid "ID_AA64MMFR0_EL1"
+msgstr "ID_AA64MMFR0_EL1"
+
+#: user/apps/sysinfo.c:154
+msgid "ID_AA64MMFR1_EL1"
+msgstr "ID_AA64MMFR1_EL1"
+
+#: user/apps/sysinfo.c:155
+msgid "ID_AA64MMFR2_EL1"
+msgstr "ID_AA64MMFR2_EL1"
+
+#: user/apps/sysinfo.c:156
+msgid "ID_AA64PFR0_EL1"
+msgstr "ID_AA64PFR0_EL1"
+
+#: user/apps/sysinfo.c:157
+msgid "ID_AA64PFR1_EL1"
+msgstr "ID_AA64PFR1_EL1"
+
+#: user/apps/sysinfo.c:158
+msgid "Implementer"
+msgstr "実装者"
+
+#: user/apps/sysinfo.c:159
+msgid "Index"
+msgstr "インデックス"
+
+#: user/apps/sysinfo.c:160
+msgid "Initial RAM disk size"
+msgstr "初期 RAM ディスクのサイズ"
+
+#: user/apps/sysinfo.c:161
+msgid "Input device"
+msgstr "入力デバイス"
+
+#: user/apps/sysinfo.c:162
+msgid "Input fields"
+msgstr "入力フィールド"
+
+#: user/apps/sysinfo.c:163
+msgid "Installed"
+msgstr "搭載済み"
+
+#: user/apps/sysinfo.c:164
+msgid "Interface"
+msgstr "インターフェース"
+
+#: user/apps/sysinfo.c:165
+msgid "Interface class"
+msgstr "インターフェースクラス"
+
+#: user/apps/sysinfo.c:166
+msgid "Interface version"
+msgstr "インターフェースのバージョン"
+
+#: user/apps/sysinfo.c:167
+msgid "Interfaces"
+msgstr "インターフェース一覧"
+
+#: user/apps/sysinfo.c:168
+msgid "Interrupt"
+msgstr "割り込み"
+
+#: user/apps/sysinfo.c:169
+msgid "Interrupt controller"
+msgstr "割り込みコントローラー"
+
+#: user/apps/sysinfo.c:170
+msgid "Interrupt pin"
+msgstr "割り込みピン"
+
+#: user/apps/sysinfo.c:171
+msgid "Invariant TSC"
+msgstr "インバリアント TSC"
+
+#: user/apps/sysinfo.c:172
+msgid "I/O APIC"
+msgstr "I/O APIC"
+
+#: user/apps/sysinfo.c:173
+msgid "IPv4 address"
+msgstr "IPv4 アドレス"
+
+#: user/apps/sysinfo.c:174
+msgid "ITS"
+msgstr "ITS"
+
+#: user/apps/sysinfo.c:175
+msgid "Kernel build number"
+msgstr "カーネルのビルド番号"
+
+#: user/apps/sysinfo.c:176
+msgid "Kernel physical base"
+msgstr "カーネルの物理ベース"
+
+#: user/apps/sysinfo.c:177
+msgid "Kernel version"
+msgstr "カーネルのバージョン"
+
+#: user/apps/sysinfo.c:178
+msgid "Kernel virtual base"
+msgstr "カーネルの仮想ベース"
+
+#: user/apps/sysinfo.c:179
+msgid "Key repeat"
+msgstr "キーリピート"
+
+#: user/apps/sysinfo.c:180
+msgid "Keyboard controller"
+msgstr "キーボードコントローラー"
+
+#: user/apps/sysinfo.c:181
+msgid "Keys"
+msgstr "キー"
+
+#: user/apps/sysinfo.c:182
+msgid "Length"
+msgstr "長さ"
+
+#: user/apps/sysinfo.c:183
+msgid "Level"
+msgstr "レベル"
+
+#: user/apps/sysinfo.c:184
+msgid "Line size"
+msgstr "ライン サイズ"
+
+#: user/apps/sysinfo.c:185
+msgid "Link state"
+msgstr "リンク状態"
+
+#: user/apps/sysinfo.c:186
+msgid "Link type"
+msgstr "リンクの種類"
+
+#: user/apps/sysinfo.c:187
+msgid "Local APIC"
+msgstr "Local APIC"
+
+#: user/apps/sysinfo.c:188
+msgid "Local APIC mode"
+msgstr "Local APIC のモード"
+
+#: user/apps/sysinfo.c:189
+msgid "Local APIC timer"
+msgstr "Local APIC タイマー"
+
+#: user/apps/sysinfo.c:190
+msgid "Local APIC version"
+msgstr "Local APIC のバージョン"
+
+#: user/apps/sysinfo.c:191
+msgid "Locator"
+msgstr "ロケーター"
+
+#: user/apps/sysinfo.c:192
+msgid "Logical resolution"
+msgstr "論理解像度"
+
+#: user/apps/sysinfo.c:193
+msgid "LPIs"
+msgstr "LPIs"
+
+#: user/apps/sysinfo.c:194
+msgid "MAC address"
+msgstr "MAC アドレス"
+
+#: user/apps/sysinfo.c:195
+msgid "Machine"
+msgstr "マシン"
+
+#: user/apps/sysinfo.c:196
+msgid "Managed by the kernel"
+msgstr "カーネルが管理"
+
+#: user/apps/sysinfo.c:197
+msgid "Manufacturer"
+msgstr "製造元"
+
+#: user/apps/sysinfo.c:198
+msgid "Maximum extended CPUID leaf"
+msgstr "最大拡張 CPUID リーフ"
+
+#: user/apps/sysinfo.c:199
+msgid "Maximum CPUID leaf"
+msgstr "最大 CPUID リーフ"
+
+#: user/apps/sysinfo.c:200
+msgid "Endpoint 0 packet size"
+msgstr "エンドポイント 0 のパケットサイズ"
+
+#: user/apps/sysinfo.c:201
+msgid "Maximum speed"
+msgstr "最大速度"
+
+#: user/apps/sysinfo.c:202
+msgid "Memory map entries"
+msgstr "メモリマップのエントリ数"
+
+#: user/apps/sysinfo.c:203
+msgid "Memory type"
+msgstr "メモリの種類"
+
+#: user/apps/sysinfo.c:204
+msgid "MIDR_EL1"
+msgstr "MIDR_EL1"
+
+#: user/apps/sysinfo.c:205
+msgid "Model"
+msgstr "モデル"
+
+#: user/apps/sysinfo.c:206
+msgid "Model name"
+msgstr "モデル名"
+
+#: user/apps/sysinfo.c:207
+msgid "Module size"
+msgstr "モジュールサイズ"
+
+#: user/apps/sysinfo.c:208
+msgid "MPIDR_EL1"
+msgstr "MPIDR_EL1"
+
+#: user/apps/sysinfo.c:209
+msgid "MSI"
+msgstr "MSI"
+
+#: user/apps/sysinfo.c:210
+msgid "MSI mapping"
+msgstr "MSI マッピング"
+
+#: user/apps/sysinfo.c:211
+msgid "MSI-X"
+msgstr "MSI-X"
+
+#: user/apps/sysinfo.c:212
+msgid "MTU"
+msgstr "MTU"
+
+#: user/apps/sysinfo.c:213
+msgid "Name"
+msgstr "名前"
+
+#: user/apps/sysinfo.c:214
+msgid "OEM ID"
+msgstr "OEM ID"
+
+#: user/apps/sysinfo.c:215
+msgid "OEM revision"
+msgstr "OEM リビジョン"
+
+#: user/apps/sysinfo.c:216
+msgid "OEM table ID"
+msgstr "OEM テーブル ID"
+
+#: user/apps/sysinfo.c:217
+msgid "Open readers"
+msgstr "オープン中のリーダー"
+
+#: user/apps/sysinfo.c:218
+msgid "Opened"
+msgstr "オープン済み"
+
+#: user/apps/sysinfo.c:219
+msgid "Operating system"
+msgstr "オペレーティングシステム"
+
+#: user/apps/sysinfo.c:220
+msgid "Release"
+msgstr "リリース"
+
+#: user/apps/sysinfo.c:221
+msgid "Over-current"
+msgstr "過電流"
+
+#: user/apps/sysinfo.c:222
+msgid "Page size"
+msgstr "ページサイズ"
+
+#: user/apps/sysinfo.c:223
+msgid "Privileged access never"
+msgstr "特権アクセス禁止 (PAN)"
+
+#: user/apps/sysinfo.c:224 user/apps/sysinfo.c:225
+msgid "Part number"
+msgstr "部品番号"
+
+#: user/apps/sysinfo.c:226
+msgid "Partition table"
+msgstr "パーティションテーブル"
+
+#: user/apps/sysinfo.c:227
+msgid "Partition type"
+msgstr "パーティションの種類"
+
+#: user/apps/sysinfo.c:228
+msgid "PCI address"
+msgstr "PCI アドレス"
+
+#: user/apps/sysinfo.c:229
+msgid "PCI Express"
+msgstr "PCI Express"
+
+#: user/apps/sysinfo.c:230
+msgid "PCI Express configuration space"
+msgstr "PCI Express 構成空間"
+
+#: user/apps/sysinfo.c:231
+msgid "PCI Express link"
+msgstr "PCI Express リンク"
+
+#: user/apps/sysinfo.c:232
+msgid "Physical address bits"
+msgstr "物理アドレスのビット数"
+
+#: user/apps/sysinfo.c:233
+msgid "Pitch"
+msgstr "ピッチ"
+
+#: user/apps/sysinfo.c:234
+msgid "Pixel format"
+msgstr "ピクセル形式"
+
+#: user/apps/sysinfo.c:235
+msgid "Playback"
+msgstr "再生"
+
+#: user/apps/sysinfo.c:236
+msgid "Populated"
+msgstr "実装済み"
+
+#: user/apps/sysinfo.c:237
+msgid "Port"
+msgstr "ポート"
+
+#: user/apps/sysinfo.c:238
+msgid "Ports"
+msgstr "ポート一覧"
+
+#: user/apps/sysinfo.c:239
+msgid "PORTSC register"
+msgstr "PORTSC レジスター"
+
+#: user/apps/sysinfo.c:240
+msgid "Power"
+msgstr "電源"
+
+#: user/apps/sysinfo.c:241
+msgid "Power management"
+msgstr "電源管理"
+
+#: user/apps/sysinfo.c:242
+msgid "Power off"
+msgstr "電源オフ"
+
+#: user/apps/sysinfo.c:243
+msgid "Powered"
+msgstr "電源供給中"
+
+#: user/apps/sysinfo.c:244
+msgid "Product"
+msgstr "製品"
+
+#: user/apps/sysinfo.c:245
+msgid "Product ID"
+msgstr "製品 ID"
+
+#: user/apps/sysinfo.c:246
+msgid "Protocol"
+msgstr "プロトコル"
+
+#: user/apps/sysinfo.c:247
+msgid "PSCI"
+msgstr "PSCI"
+
+#: user/apps/sysinfo.c:248
+msgid "RAM"
+msgstr "RAM"
+
+#: user/apps/sysinfo.c:249
+msgid "Real time clock device"
+msgstr "リアルタイムクロックデバイス"
+
+#: user/apps/sysinfo.c:250
+msgid "Reboot"
+msgstr "再起動"
+
+#: user/apps/sysinfo.c:251
+msgid "Received"
+msgstr "受信"
+
+#: user/apps/sysinfo.c:252
+msgid "Relative axes"
+msgstr "相対軸"
+
+#: user/apps/sysinfo.c:253
+msgid "Firmware release"
+msgstr "ファームウェアのリリース"
+
+#: user/apps/sysinfo.c:254
+msgid "Release date"
+msgstr "リリース日"
+
+#: user/apps/sysinfo.c:255
+msgid "Report IDs"
+msgstr "レポート ID"
+
+#: user/apps/sysinfo.c:256
+msgid "Report length"
+msgstr "レポートの長さ"
+
+#: user/apps/sysinfo.c:257
+msgid "Report protocol"
+msgstr "レポートプロトコル"
+
+#: user/apps/sysinfo.c:258
+msgid "Resolution"
+msgstr "解像度"
+
+#: user/apps/sysinfo.c:259
+msgid "Revision"
+msgstr "リビジョン"
+
+#: user/apps/sysinfo.c:260
+msgid "ROM size"
+msgstr "ROM サイズ"
+
+#: user/apps/sysinfo.c:261
+msgid "RSDP address"
+msgstr "RSDP アドレス"
+
+#: user/apps/sysinfo.c:262
+msgid "RSDP revision"
+msgstr "RSDP リビジョン"
+
+#: user/apps/sysinfo.c:263
+msgid "Real time clock"
+msgstr "リアルタイムクロック"
+
+#: user/apps/sysinfo.c:264
+msgid "Scratchpad buffers"
+msgstr "スクラッチパッドバッファー"
+
+#: user/apps/sysinfo.c:265
+msgid "Sector size"
+msgstr "セクターサイズ"
+
+#: user/apps/sysinfo.c:266
+msgid "Sectors"
+msgstr "セクター数"
+
+#: user/apps/sysinfo.c:267
+msgid "Sent"
+msgstr "送信"
+
+#: user/apps/sysinfo.c:268
+msgid "Serial number"
+msgstr "シリアル番号"
+
+#: user/apps/sysinfo.c:269
+msgid "Serial console"
+msgstr "シリアルコンソール"
+
+#: user/apps/sysinfo.c:270
+msgid "Sets"
+msgstr "セット数"
+
+#: user/apps/sysinfo.c:271
+msgid "Shared by"
+msgstr "共有元"
+
+#: user/apps/sysinfo.c:272
+msgid "Signature"
+msgstr "シグネチャ"
+
+#: user/apps/sysinfo.c:273
+msgid "Size"
+msgstr "サイズ"
+
+#: user/apps/sysinfo.c:274
+msgid "SKU"
+msgstr "SKU"
+
+#: user/apps/sysinfo.c:275
+msgid "Slot"
+msgstr "スロット"
+
+#: user/apps/sysinfo.c:276
+msgid "Slots"
+msgstr "スロット一覧"
+
+#: user/apps/sysinfo.c:277
+msgid "SMBIOS"
+msgstr "SMBIOS"
+
+#: user/apps/sysinfo.c:278
+msgid "Socket"
+msgstr "ソケット"
+
+#: user/apps/sysinfo.c:279
+msgid "Speed"
+msgstr "速度"
+
+#: user/apps/sysinfo.c:280
+msgid "Started"
+msgstr "開始済み"
+
+#: user/apps/sysinfo.c:281
+msgid "State"
+msgstr "状態"
+
+#: user/apps/sysinfo.c:282
+msgid "Stepping"
+msgstr "ステッピング"
+
+#: user/apps/sysinfo.c:283
+msgid "Structures"
+msgstr "構造体"
+
+#: user/apps/sysinfo.c:284
+msgid "Subsystem"
+msgstr "サブシステム"
+
+#: user/apps/sysinfo.c:285
+msgid "Supported format"
+msgstr "対応フォーマット"
+
+#: user/apps/sysinfo.c:286
+msgid "Free swap"
+msgstr "空きスワップ"
+
+#: user/apps/sysinfo.c:287
+msgid "Total swap"
+msgstr "スワップ合計"
+
+#: user/apps/sysinfo.c:288
+msgid "Table size"
+msgstr "テーブルサイズ"
+
+#: user/apps/sysinfo.c:289
+msgid "Tables"
+msgstr "テーブル"
+
+#: user/apps/sysinfo.c:290
+msgid "Threads"
+msgstr "スレッド"
+
+#: user/apps/sysinfo.c:291
+msgid "Scheduler tick rate"
+msgstr "スケジューラーのティック周波数"
+
+#: user/apps/sysinfo.c:292
+msgid "Type"
+msgstr "種類"
+
+#: user/apps/sysinfo.c:293
+msgid "UEFI supported"
+msgstr "UEFI 対応"
+
+#: user/apps/sysinfo.c:294
+msgid "Unique GUID"
+msgstr "一意の GUID"
+
+#: user/apps/sysinfo.c:295
+msgid "Uptime"
+msgstr "稼働時間"
+
+#: user/apps/sysinfo.c:296
+msgid "USB version"
+msgstr "USB のバージョン"
+
+#: user/apps/sysinfo.c:297
+msgid "Used"
+msgstr "使用中"
+
+#: user/apps/sysinfo.c:298
+msgid "UUID"
+msgstr "UUID"
+
+#: user/apps/sysinfo.c:299
+msgid "Variant"
+msgstr "バリアント"
+
+#: user/apps/sysinfo.c:300
+msgid "Vendor"
+msgstr "ベンダー"
+
+#: user/apps/sysinfo.c:301
+msgid "Vendor ID"
+msgstr "ベンダー ID"
+
+#: user/apps/sysinfo.c:302
+msgid "Version"
+msgstr "バージョン"
+
+#: user/apps/sysinfo.c:303
+msgid "Virtualization host extensions"
+msgstr "仮想化ホスト拡張"
+
+#: user/apps/sysinfo.c:304
+msgid "Virtual address bits"
+msgstr "仮想アドレスのビット数"
+
+#: user/apps/sysinfo.c:305
+msgid "Ways"
+msgstr "ウェイ数"
+
+#: user/apps/sysinfo.c:316
+msgid "BAR %c"
+msgstr "BAR %c"
+
+#: user/apps/sysinfo.c:320
+msgid "Endpoint 0x%s"
+msgstr "エンドポイント 0x%s"
+
+#: user/apps/sysinfo.c:324
+msgid "Absolute axis %s"
+msgstr "絶対軸 %s"
+
+#: user/apps/sysinfo.c:48
+msgid "System"
+msgstr "システム"
+
+#: user/apps/sysinfo.c:48
+msgid "Firmware"
+msgstr "ファームウェア"
+
+#: user/apps/sysinfo.c:48
+msgid "Processors"
+msgstr "プロセッサー"
+
+#: user/apps/sysinfo.c:49
+msgid "Platform"
+msgstr "プラットフォーム"
+
+#: user/apps/sysinfo.c:49
+msgid "Memory"
+msgstr "メモリ"
+
+#: user/apps/sysinfo.c:49
+msgid "PCI"
+msgstr "PCI"
+
+#: user/apps/sysinfo.c:490
+msgid "Description"
+msgstr "説明"
+
+#: user/apps/sysinfo.c:497
+msgid "Property"
+msgstr "プロパティ"
+
+#: user/apps/sysinfo.c:497
+msgid "Value"
+msgstr "値"
+
+#: user/apps/sysinfo.c:50
+msgid "USB"
+msgstr "USB"
+
+#: user/apps/sysinfo.c:50
+msgid "Input devices"
+msgstr "入力デバイス"
+
+#: user/apps/sysinfo.c:50
+msgid "Storage"
+msgstr "ストレージ"
+
+#: user/apps/sysinfo.c:51
+msgid "Display"
+msgstr "ディスプレイ"
+
+#: user/apps/sysinfo.c:51
+msgid "Audio"
+msgstr "オーディオ"
+
+#: user/apps/sysinfo.c:51
+msgid "Network"
+msgstr "ネットワーク"
+
+#: user/apps/sysinfo.c:534
+msgid "/dev/devices cannot be read"
+msgstr "/dev/devices を読み取れません"
+
+#: user/apps/sysinfo.c:56
+msgid "ACPI"
+msgstr "ACPI"
+
+#: user/apps/sysinfo.c:57
+msgid "Acquired"
+msgstr "取得済み"
+
+#: user/apps/sysinfo.c:58
+msgid "Address"
+msgstr "アドレス"
+
+#: user/apps/sysinfo.c:583
+msgid "System information"
+msgstr "システム情報"
+
+#: user/apps/sysinfo.c:587
+msgid "File"
+msgstr "ファイル"
+
+#: user/apps/sysinfo.c:588
+msgid "Quit"
+msgstr "終了"
+
+#: user/apps/sysinfo.c:59
+msgid "Alternate setting"
+msgstr "代替設定"
+
+#: user/apps/sysinfo.c:591
+msgid "View"
+msgstr "表示"
+
+#: user/apps/sysinfo.c:592
+msgid "Refresh"
+msgstr "更新"
+
+#: user/apps/sysinfo.c:596
+msgid "Expand all"
+msgstr "すべて展開"
+
+#: user/apps/sysinfo.c:597
+msgid "Collapse all"
+msgstr "すべて折りたたむ"
+
+#: user/apps/sysinfo.c:60
+msgid "AMD features"
+msgstr "AMD の機能"
+
+#: user/apps/sysinfo.c:61
+msgid "APIC ID"
+msgstr "APIC ID"
+
+#: user/apps/sysinfo.c:62
+msgid "Architecture"
+msgstr "アーキテクチャ"
+
+#: user/apps/sysinfo.c:63
+msgid "ASID bits"
+msgstr "ASID のビット数"
+
+#: user/apps/sysinfo.c:64
+msgid "Asset tag"
+msgstr "資産タグ"
+
+#: user/apps/sysinfo.c:65
+msgid "Bank"
+msgstr "バンク"
+
+#: user/apps/sysinfo.c:66
+msgid "Base address"
+msgstr "ベースアドレス"
+
+#: user/apps/sysinfo.c:67
+msgid "Bits per pixel"
+msgstr "ピクセルあたりのビット数"
+
+#: user/apps/sysinfo.c:68
+msgid "Boot CPU"
+msgstr "ブート CPU"
+
+#: user/apps/sysinfo.c:69
+msgid "Boot disk"
+msgstr "ブートディスク"
+
+#: user/apps/sysinfo.c:70
+msgid "Boot disk GUID"
+msgstr "ブートディスクの GUID"
+
+#: user/apps/sysinfo.c:71
+msgid "Boot framebuffer"
+msgstr "ブートフレームバッファー"
+
+#: user/apps/sysinfo.c:72
+msgid "Boot partition"
+msgstr "ブートパーティション"
+
+#: user/apps/sysinfo.c:73
+msgid "Boot partition GUID"
+msgstr "ブートパーティションの GUID"
+
+#: user/apps/sysinfo.c:74
+msgid "Boot protocol"
+msgstr "ブートプロトコル"
+
+#: user/apps/sysinfo.c:75
+msgid "Bootloader"
+msgstr "ブートローダー"
+
+#: user/apps/sysinfo.c:76
+msgid "Bus"
+msgstr "バス"
+
+#: user/apps/sysinfo.c:77
+msgid "Buses"
+msgstr "バス一覧"
+
+#: user/apps/sysinfo.c:78
+msgid "Buttons"
+msgstr "ボタン"
+
+#: user/apps/sysinfo.c:79
+msgid "Cache size"
+msgstr "キャッシュサイズ"
+
+#: user/apps/sysinfo.c:80
+msgid "Cache type"
+msgstr "キャッシュの種類"
+
+#: user/apps/sysinfo.c:81
+msgid "Capabilities"
+msgstr "機能一覧"
+
+#: user/apps/sysinfo.c:82
+msgid "Capture"
+msgstr "キャプチャ"
+
+#: user/apps/sysinfo.c:83
+msgid "Characteristics"
+msgstr "特性"
+
+#: user/apps/sysinfo.c:84
+msgid "Chassis type"
+msgstr "シャーシの種類"
+
+#: user/apps/sysinfo.c:85
+msgid "Chipset"
+msgstr "チップセット"
+
+#: user/apps/sysinfo.c:86
+msgid "Class"
+msgstr "クラス"
+
+#: user/apps/sysinfo.c:87
+msgid "Clock rate"
+msgstr "クロック周波数"
+
+#: user/apps/sysinfo.c:88
+msgid "Command register"
+msgstr "コマンドレジスター"
+
+#: user/apps/sysinfo.c:89
+msgid "Command line"
+msgstr "コマンドライン"
+
+#: user/apps/sysinfo.c:90
+msgid "Compatible"
+msgstr "互換"
+
+#: user/apps/sysinfo.c:91
+msgid "Kernel configuration"
+msgstr "カーネルの構成"
+
+#: user/apps/sysinfo.c:92
+msgid "Configuration"
+msgstr "構成"
+
+#: user/apps/sysinfo.c:93
+msgid "Configurations"
+msgstr "構成一覧"
+
+#: user/apps/sysinfo.c:94
+msgid "Configured speed"
+msgstr "設定速度"
+
+#: user/apps/sysinfo.c:95
+msgid "Connected"
+msgstr "接続済み"
+
+#: user/apps/sysinfo.c:96
+msgid "Context size"
+msgstr "コンテキストサイズ"
+
+#: user/apps/sysinfo.c:97
+msgid "Controllers"
+msgstr "コントローラー"
+
+#: user/apps/sysinfo.c:98
+msgid "Cores"
+msgstr "コア"
+
+#: user/apps/sysinfo.c:99
+msgid "Cores enabled"
+msgstr "有効なコア"

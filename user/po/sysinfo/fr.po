@@ -1,0 +1,1107 @@
+# French messages of the sysinfo domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: user/apps/sysinfo.c:100
+msgid "CPU ID"
+msgstr "CPU ID"
+
+#: user/apps/sysinfo.c:101
+msgid "CPUs"
+msgstr "CPUs"
+
+#: user/apps/sysinfo.c:102
+msgid "Creator"
+msgstr "Créateur"
+
+#: user/apps/sysinfo.c:103
+msgid "CTR_EL0"
+msgstr "CTR_EL0"
+
+#: user/apps/sysinfo.c:104
+msgid "Current exception level"
+msgstr "Niveau d'exception actuel"
+
+#: user/apps/sysinfo.c:105
+msgid "Current speed"
+msgstr "Vitesse actuelle"
+
+#: user/apps/sysinfo.c:106
+msgid "Source of the description"
+msgstr "Source de la description"
+
+#: user/apps/sysinfo.c:107 user/apps/sysinfo.c:462
+msgid "Device"
+msgstr "Périphérique"
+
+#: user/apps/sysinfo.c:108
+msgid "Device class"
+msgstr "Classe de périphérique"
+
+#: user/apps/sysinfo.c:109
+msgid "Device node"
+msgstr "Nœud de périphérique"
+
+#: user/apps/sysinfo.c:110
+msgid "Device release"
+msgstr "Version du périphérique"
+
+#: user/apps/sysinfo.c:111
+msgid "Device tree"
+msgstr "Arbre de périphériques"
+
+#: user/apps/sysinfo.c:112
+msgid "Devices"
+msgstr "Périphériques"
+
+#: user/apps/sysinfo.c:113
+msgid "Direct map base"
+msgstr "Base de la correspondance directe"
+
+#: user/apps/sysinfo.c:114
+msgid "Disk GUID"
+msgstr "GUID du disque"
+
+#: user/apps/sysinfo.c:115
+msgid "Disks"
+msgstr "Disques"
+
+#: user/apps/sysinfo.c:116
+msgid "Driver"
+msgstr "Pilote"
+
+#: user/apps/sysinfo.c:117
+msgid "EL0 support"
+msgstr "Prise en charge d'EL0"
+
+#: user/apps/sysinfo.c:118
+msgid "EL1 support"
+msgstr "Prise en charge d'EL1"
+
+#: user/apps/sysinfo.c:119
+msgid "EL2 support"
+msgstr "Prise en charge d'EL2"
+
+#: user/apps/sysinfo.c:120
+msgid "EL3 support"
+msgstr "Prise en charge d'EL3"
+
+#: user/apps/sysinfo.c:121
+msgid "Enabled"
+msgstr "Activé"
+
+#: user/apps/sysinfo.c:122
+msgid "End address"
+msgstr "Adresse de fin"
+
+#: user/apps/sysinfo.c:123
+msgid "Endpoints"
+msgstr "Points de terminaison"
+
+#: user/apps/sysinfo.c:124
+msgid "Entries"
+msgstr "Entrées"
+
+#: user/apps/sysinfo.c:125
+msgid "Table entry"
+msgstr "Entrée de table"
+
+#: user/apps/sysinfo.c:126
+msgid "Extended features"
+msgstr "Fonctionnalités étendues"
+
+#: user/apps/sysinfo.c:127
+msgid "External clock"
+msgstr "Horloge externe"
+
+#: user/apps/sysinfo.c:128
+msgid "Family"
+msgstr "Famille"
+
+#: user/apps/sysinfo.c:129
+msgid "Feature words"
+msgstr "Mots de fonctionnalités"
+
+#: user/apps/sysinfo.c:130
+msgid "Features"
+msgstr "Fonctionnalités"
+
+#: user/apps/sysinfo.c:131
+msgid "Firmware type"
+msgstr "Type de micrologiciel"
+
+#: user/apps/sysinfo.c:132
+msgid "First sector"
+msgstr "Premier secteur"
+
+#: user/apps/sysinfo.c:133
+msgid "Form factor"
+msgstr "Format"
+
+#: user/apps/sysinfo.c:134
+msgid "Framebuffer"
+msgstr "Framebuffer"
+
+#: user/apps/sysinfo.c:135
+msgid "Framebuffer size"
+msgstr "Taille du framebuffer"
+
+#: user/apps/sysinfo.c:136
+msgid "Free"
+msgstr "Libre"
+
+#: user/apps/sysinfo.c:137
+msgid "Functions"
+msgstr "Fonctions"
+
+#: user/apps/sysinfo.c:138
+msgid "GIC CPU interface"
+msgstr "Interface CPU du GIC"
+
+#: user/apps/sysinfo.c:139
+msgid "GIC distributor"
+msgstr "Distributeur du GIC"
+
+#: user/apps/sysinfo.c:140
+msgid "GIC redistributors"
+msgstr "Redistributeurs du GIC"
+
+#: user/apps/sysinfo.c:141
+msgid "GICv2m"
+msgstr "GICv2m"
+
+#: user/apps/sysinfo.c:142
+msgid "GPU buffer"
+msgstr "Tampon du GPU"
+
+#: user/apps/sysinfo.c:143
+msgid "GPU PCI address"
+msgstr "Adresse PCI du GPU"
+
+#: user/apps/sysinfo.c:144
+msgid "GPU preferred mode"
+msgstr "Mode préféré du GPU"
+
+#: user/apps/sysinfo.c:145
+msgid "GPU scanout"
+msgstr "Affichage (scanout) du GPU"
+
+#: user/apps/sysinfo.c:146
+msgid "Grabbed"
+msgstr "Saisi en exclusivité"
+
+#: user/apps/sysinfo.c:147
+msgid "Page granules"
+msgstr "Granules de page"
+
+#: user/apps/sysinfo.c:148
+msgid "Hardware access flag update"
+msgstr "Mise à jour matérielle de l'indicateur d'accès"
+
+#: user/apps/sysinfo.c:149
+msgid "Header type"
+msgstr "Type d'en-tête"
+
+#: user/apps/sysinfo.c:150
+msgid "Hypervisor"
+msgstr "Hyperviseur"
+
+#: user/apps/sysinfo.c:151
+msgid "ID_AA64ISAR0_EL1"
+msgstr "ID_AA64ISAR0_EL1"
+
+#: user/apps/sysinfo.c:152
+msgid "ID_AA64ISAR1_EL1"
+msgstr "ID_AA64ISAR1_EL1"
+
+#: user/apps/sysinfo.c:153
+msgid "ID_AA64MMFR0_EL1"
+msgstr "ID_AA64MMFR0_EL1"
+
+#: user/apps/sysinfo.c:154
+msgid "ID_AA64MMFR1_EL1"
+msgstr "ID_AA64MMFR1_EL1"
+
+#: user/apps/sysinfo.c:155
+msgid "ID_AA64MMFR2_EL1"
+msgstr "ID_AA64MMFR2_EL1"
+
+#: user/apps/sysinfo.c:156
+msgid "ID_AA64PFR0_EL1"
+msgstr "ID_AA64PFR0_EL1"
+
+#: user/apps/sysinfo.c:157
+msgid "ID_AA64PFR1_EL1"
+msgstr "ID_AA64PFR1_EL1"
+
+#: user/apps/sysinfo.c:158
+msgid "Implementer"
+msgstr "Implémenteur"
+
+#: user/apps/sysinfo.c:159
+msgid "Index"
+msgstr "Index"
+
+#: user/apps/sysinfo.c:160
+msgid "Initial RAM disk size"
+msgstr "Taille du disque RAM initial"
+
+#: user/apps/sysinfo.c:161
+msgid "Input device"
+msgstr "Périphérique d'entrée"
+
+#: user/apps/sysinfo.c:162
+msgid "Input fields"
+msgstr "Champs d'entrée"
+
+#: user/apps/sysinfo.c:163
+msgid "Installed"
+msgstr "Installé"
+
+#: user/apps/sysinfo.c:164
+msgid "Interface"
+msgstr "Interface"
+
+#: user/apps/sysinfo.c:165
+msgid "Interface class"
+msgstr "Classe d'interface"
+
+#: user/apps/sysinfo.c:166
+msgid "Interface version"
+msgstr "Version de l'interface"
+
+#: user/apps/sysinfo.c:167
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: user/apps/sysinfo.c:168
+msgid "Interrupt"
+msgstr "Interruption"
+
+#: user/apps/sysinfo.c:169
+msgid "Interrupt controller"
+msgstr "Contrôleur d'interruptions"
+
+#: user/apps/sysinfo.c:170
+msgid "Interrupt pin"
+msgstr "Broche d'interruption"
+
+#: user/apps/sysinfo.c:171
+msgid "Invariant TSC"
+msgstr "TSC invariant"
+
+#: user/apps/sysinfo.c:172
+msgid "I/O APIC"
+msgstr "I/O APIC"
+
+#: user/apps/sysinfo.c:173
+msgid "IPv4 address"
+msgstr "Adresse IPv4"
+
+#: user/apps/sysinfo.c:174
+msgid "ITS"
+msgstr "ITS"
+
+#: user/apps/sysinfo.c:175
+msgid "Kernel build number"
+msgstr "Numéro de build du noyau"
+
+#: user/apps/sysinfo.c:176
+msgid "Kernel physical base"
+msgstr "Base physique du noyau"
+
+#: user/apps/sysinfo.c:177
+msgid "Kernel version"
+msgstr "Version du noyau"
+
+#: user/apps/sysinfo.c:178
+msgid "Kernel virtual base"
+msgstr "Base virtuelle du noyau"
+
+#: user/apps/sysinfo.c:179
+msgid "Key repeat"
+msgstr "Répétition des touches"
+
+#: user/apps/sysinfo.c:180
+msgid "Keyboard controller"
+msgstr "Contrôleur de clavier"
+
+#: user/apps/sysinfo.c:181
+msgid "Keys"
+msgstr "Touches"
+
+#: user/apps/sysinfo.c:182
+msgid "Length"
+msgstr "Longueur"
+
+#: user/apps/sysinfo.c:183
+msgid "Level"
+msgstr "Niveau"
+
+#: user/apps/sysinfo.c:184
+msgid "Line size"
+msgstr "Taille de ligne"
+
+#: user/apps/sysinfo.c:185
+msgid "Link state"
+msgstr "État de la liaison"
+
+#: user/apps/sysinfo.c:186
+msgid "Link type"
+msgstr "Type de liaison"
+
+#: user/apps/sysinfo.c:187
+msgid "Local APIC"
+msgstr "Local APIC"
+
+#: user/apps/sysinfo.c:188
+msgid "Local APIC mode"
+msgstr "Mode du Local APIC"
+
+#: user/apps/sysinfo.c:189
+msgid "Local APIC timer"
+msgstr "Minuteur du Local APIC"
+
+#: user/apps/sysinfo.c:190
+msgid "Local APIC version"
+msgstr "Version du Local APIC"
+
+#: user/apps/sysinfo.c:191
+msgid "Locator"
+msgstr "Emplacement"
+
+#: user/apps/sysinfo.c:192
+msgid "Logical resolution"
+msgstr "Résolution logique"
+
+#: user/apps/sysinfo.c:193
+msgid "LPIs"
+msgstr "LPIs"
+
+#: user/apps/sysinfo.c:194
+msgid "MAC address"
+msgstr "Adresse MAC"
+
+#: user/apps/sysinfo.c:195
+msgid "Machine"
+msgstr "Machine"
+
+#: user/apps/sysinfo.c:196
+msgid "Managed by the kernel"
+msgstr "Géré par le noyau"
+
+#: user/apps/sysinfo.c:197
+msgid "Manufacturer"
+msgstr "Fabricant"
+
+#: user/apps/sysinfo.c:198
+msgid "Maximum extended CPUID leaf"
+msgstr "Feuille CPUID étendue maximale"
+
+#: user/apps/sysinfo.c:199
+msgid "Maximum CPUID leaf"
+msgstr "Feuille CPUID maximale"
+
+#: user/apps/sysinfo.c:200
+msgid "Endpoint 0 packet size"
+msgstr "Taille de paquet du point de terminaison 0"
+
+#: user/apps/sysinfo.c:201
+msgid "Maximum speed"
+msgstr "Vitesse maximale"
+
+#: user/apps/sysinfo.c:202
+msgid "Memory map entries"
+msgstr "Entrées de la carte mémoire"
+
+#: user/apps/sysinfo.c:203
+msgid "Memory type"
+msgstr "Type de mémoire"
+
+#: user/apps/sysinfo.c:204
+msgid "MIDR_EL1"
+msgstr "MIDR_EL1"
+
+#: user/apps/sysinfo.c:205
+msgid "Model"
+msgstr "Modèle"
+
+#: user/apps/sysinfo.c:206
+msgid "Model name"
+msgstr "Nom du modèle"
+
+#: user/apps/sysinfo.c:207
+msgid "Module size"
+msgstr "Taille du module"
+
+#: user/apps/sysinfo.c:208
+msgid "MPIDR_EL1"
+msgstr "MPIDR_EL1"
+
+#: user/apps/sysinfo.c:209
+msgid "MSI"
+msgstr "MSI"
+
+#: user/apps/sysinfo.c:210
+msgid "MSI mapping"
+msgstr "Correspondance MSI"
+
+#: user/apps/sysinfo.c:211
+msgid "MSI-X"
+msgstr "MSI-X"
+
+#: user/apps/sysinfo.c:212
+msgid "MTU"
+msgstr "MTU"
+
+#: user/apps/sysinfo.c:213
+msgid "Name"
+msgstr "Nom"
+
+#: user/apps/sysinfo.c:214
+msgid "OEM ID"
+msgstr "OEM ID"
+
+#: user/apps/sysinfo.c:215
+msgid "OEM revision"
+msgstr "Révision OEM"
+
+#: user/apps/sysinfo.c:216
+msgid "OEM table ID"
+msgstr "ID de table OEM"
+
+#: user/apps/sysinfo.c:217
+msgid "Open readers"
+msgstr "Lecteurs ouverts"
+
+#: user/apps/sysinfo.c:218
+msgid "Opened"
+msgstr "Ouvert"
+
+#: user/apps/sysinfo.c:219
+msgid "Operating system"
+msgstr "Système d'exploitation"
+
+#: user/apps/sysinfo.c:220
+msgid "Release"
+msgstr "Version"
+
+#: user/apps/sysinfo.c:221
+msgid "Over-current"
+msgstr "Surintensité"
+
+#: user/apps/sysinfo.c:222
+msgid "Page size"
+msgstr "Taille de page"
+
+#: user/apps/sysinfo.c:223
+msgid "Privileged access never"
+msgstr "Accès privilégié jamais (PAN)"
+
+#: user/apps/sysinfo.c:224 user/apps/sysinfo.c:225
+msgid "Part number"
+msgstr "Référence"
+
+#: user/apps/sysinfo.c:226
+msgid "Partition table"
+msgstr "Table de partitions"
+
+#: user/apps/sysinfo.c:227
+msgid "Partition type"
+msgstr "Type de partition"
+
+#: user/apps/sysinfo.c:228
+msgid "PCI address"
+msgstr "Adresse PCI"
+
+#: user/apps/sysinfo.c:229
+msgid "PCI Express"
+msgstr "PCI Express"
+
+#: user/apps/sysinfo.c:230
+msgid "PCI Express configuration space"
+msgstr "Espace de configuration PCI Express"
+
+#: user/apps/sysinfo.c:231
+msgid "PCI Express link"
+msgstr "Liaison PCI Express"
+
+#: user/apps/sysinfo.c:232
+msgid "Physical address bits"
+msgstr "Bits d'adresse physique"
+
+#: user/apps/sysinfo.c:233
+msgid "Pitch"
+msgstr "Pas de ligne"
+
+#: user/apps/sysinfo.c:234
+msgid "Pixel format"
+msgstr "Format de pixel"
+
+#: user/apps/sysinfo.c:235
+msgid "Playback"
+msgstr "Lecture"
+
+#: user/apps/sysinfo.c:236
+msgid "Populated"
+msgstr "Occupé"
+
+#: user/apps/sysinfo.c:237
+msgid "Port"
+msgstr "Port"
+
+#: user/apps/sysinfo.c:238
+msgid "Ports"
+msgstr "Ports"
+
+#: user/apps/sysinfo.c:239
+msgid "PORTSC register"
+msgstr "Registre PORTSC"
+
+#: user/apps/sysinfo.c:240
+msgid "Power"
+msgstr "Alimentation"
+
+#: user/apps/sysinfo.c:241
+msgid "Power management"
+msgstr "Gestion de l'alimentation"
+
+#: user/apps/sysinfo.c:242
+msgid "Power off"
+msgstr "Éteindre"
+
+#: user/apps/sysinfo.c:243
+msgid "Powered"
+msgstr "Alimenté"
+
+#: user/apps/sysinfo.c:244
+msgid "Product"
+msgstr "Produit"
+
+#: user/apps/sysinfo.c:245
+msgid "Product ID"
+msgstr "ID de produit"
+
+#: user/apps/sysinfo.c:246
+msgid "Protocol"
+msgstr "Protocole"
+
+#: user/apps/sysinfo.c:247
+msgid "PSCI"
+msgstr "PSCI"
+
+#: user/apps/sysinfo.c:248
+msgid "RAM"
+msgstr "RAM"
+
+#: user/apps/sysinfo.c:249
+msgid "Real time clock device"
+msgstr "Périphérique d'horloge temps réel"
+
+#: user/apps/sysinfo.c:250
+msgid "Reboot"
+msgstr "Redémarrer"
+
+#: user/apps/sysinfo.c:251
+msgid "Received"
+msgstr "Reçu"
+
+#: user/apps/sysinfo.c:252
+msgid "Relative axes"
+msgstr "Axes relatifs"
+
+#: user/apps/sysinfo.c:253
+msgid "Firmware release"
+msgstr "Version du micrologiciel"
+
+#: user/apps/sysinfo.c:254
+msgid "Release date"
+msgstr "Date de publication"
+
+#: user/apps/sysinfo.c:255
+msgid "Report IDs"
+msgstr "ID de rapport"
+
+#: user/apps/sysinfo.c:256
+msgid "Report length"
+msgstr "Longueur du rapport"
+
+#: user/apps/sysinfo.c:257
+msgid "Report protocol"
+msgstr "Protocole de rapport"
+
+#: user/apps/sysinfo.c:258
+msgid "Resolution"
+msgstr "Résolution"
+
+#: user/apps/sysinfo.c:259
+msgid "Revision"
+msgstr "Révision"
+
+#: user/apps/sysinfo.c:260
+msgid "ROM size"
+msgstr "Taille de la ROM"
+
+#: user/apps/sysinfo.c:261
+msgid "RSDP address"
+msgstr "Adresse RSDP"
+
+#: user/apps/sysinfo.c:262
+msgid "RSDP revision"
+msgstr "Révision RSDP"
+
+#: user/apps/sysinfo.c:263
+msgid "Real time clock"
+msgstr "Horloge temps réel"
+
+#: user/apps/sysinfo.c:264
+msgid "Scratchpad buffers"
+msgstr "Tampons de bloc-notes"
+
+#: user/apps/sysinfo.c:265
+msgid "Sector size"
+msgstr "Taille de secteur"
+
+#: user/apps/sysinfo.c:266
+msgid "Sectors"
+msgstr "Secteurs"
+
+#: user/apps/sysinfo.c:267
+msgid "Sent"
+msgstr "Envoyé"
+
+#: user/apps/sysinfo.c:268
+msgid "Serial number"
+msgstr "Numéro de série"
+
+#: user/apps/sysinfo.c:269
+msgid "Serial console"
+msgstr "Console série"
+
+#: user/apps/sysinfo.c:270
+msgid "Sets"
+msgstr "Ensembles"
+
+#: user/apps/sysinfo.c:271
+msgid "Shared by"
+msgstr "Partagé par"
+
+#: user/apps/sysinfo.c:272
+msgid "Signature"
+msgstr "Signature"
+
+#: user/apps/sysinfo.c:273
+msgid "Size"
+msgstr "Taille"
+
+#: user/apps/sysinfo.c:274
+msgid "SKU"
+msgstr "SKU"
+
+#: user/apps/sysinfo.c:275
+msgid "Slot"
+msgstr "Emplacement"
+
+#: user/apps/sysinfo.c:276
+msgid "Slots"
+msgstr "Emplacements"
+
+#: user/apps/sysinfo.c:277
+msgid "SMBIOS"
+msgstr "SMBIOS"
+
+#: user/apps/sysinfo.c:278
+msgid "Socket"
+msgstr "Socket"
+
+#: user/apps/sysinfo.c:279
+msgid "Speed"
+msgstr "Vitesse"
+
+#: user/apps/sysinfo.c:280
+msgid "Started"
+msgstr "Démarré"
+
+#: user/apps/sysinfo.c:281
+msgid "State"
+msgstr "État"
+
+#: user/apps/sysinfo.c:282
+msgid "Stepping"
+msgstr "Stepping"
+
+#: user/apps/sysinfo.c:283
+msgid "Structures"
+msgstr "Structures"
+
+#: user/apps/sysinfo.c:284
+msgid "Subsystem"
+msgstr "Sous-système"
+
+#: user/apps/sysinfo.c:285
+msgid "Supported format"
+msgstr "Format pris en charge"
+
+#: user/apps/sysinfo.c:286
+msgid "Free swap"
+msgstr "Swap libre"
+
+#: user/apps/sysinfo.c:287
+msgid "Total swap"
+msgstr "Swap total"
+
+#: user/apps/sysinfo.c:288
+msgid "Table size"
+msgstr "Taille de la table"
+
+#: user/apps/sysinfo.c:289
+msgid "Tables"
+msgstr "Tables"
+
+#: user/apps/sysinfo.c:290
+msgid "Threads"
+msgstr "Threads"
+
+#: user/apps/sysinfo.c:291
+msgid "Scheduler tick rate"
+msgstr "Fréquence du tick de l'ordonnanceur"
+
+#: user/apps/sysinfo.c:292
+msgid "Type"
+msgstr "Type"
+
+#: user/apps/sysinfo.c:293
+msgid "UEFI supported"
+msgstr "UEFI pris en charge"
+
+#: user/apps/sysinfo.c:294
+msgid "Unique GUID"
+msgstr "GUID unique"
+
+#: user/apps/sysinfo.c:295
+msgid "Uptime"
+msgstr "Durée de fonctionnement"
+
+#: user/apps/sysinfo.c:296
+msgid "USB version"
+msgstr "Version USB"
+
+#: user/apps/sysinfo.c:297
+msgid "Used"
+msgstr "Utilisé"
+
+#: user/apps/sysinfo.c:298
+msgid "UUID"
+msgstr "UUID"
+
+#: user/apps/sysinfo.c:299
+msgid "Variant"
+msgstr "Variante"
+
+#: user/apps/sysinfo.c:300
+msgid "Vendor"
+msgstr "Fournisseur"
+
+#: user/apps/sysinfo.c:301
+msgid "Vendor ID"
+msgstr "ID de fournisseur"
+
+#: user/apps/sysinfo.c:302
+msgid "Version"
+msgstr "Version"
+
+#: user/apps/sysinfo.c:303
+msgid "Virtualization host extensions"
+msgstr "Extensions d'hôte de virtualisation"
+
+#: user/apps/sysinfo.c:304
+msgid "Virtual address bits"
+msgstr "Bits d'adresse virtuelle"
+
+#: user/apps/sysinfo.c:305
+msgid "Ways"
+msgstr "Voies"
+
+#: user/apps/sysinfo.c:316
+msgid "BAR %c"
+msgstr "BAR %c"
+
+#: user/apps/sysinfo.c:320
+msgid "Endpoint 0x%s"
+msgstr "Point de terminaison 0x%s"
+
+#: user/apps/sysinfo.c:324
+msgid "Absolute axis %s"
+msgstr "Axe absolu %s"
+
+#: user/apps/sysinfo.c:48
+msgid "System"
+msgstr "Système"
+
+#: user/apps/sysinfo.c:48
+msgid "Firmware"
+msgstr "Micrologiciel"
+
+#: user/apps/sysinfo.c:48
+msgid "Processors"
+msgstr "Processeurs"
+
+#: user/apps/sysinfo.c:49
+msgid "Platform"
+msgstr "Plateforme"
+
+#: user/apps/sysinfo.c:49
+msgid "Memory"
+msgstr "Mémoire"
+
+#: user/apps/sysinfo.c:49
+msgid "PCI"
+msgstr "PCI"
+
+#: user/apps/sysinfo.c:490
+msgid "Description"
+msgstr "Description"
+
+#: user/apps/sysinfo.c:497
+msgid "Property"
+msgstr "Propriété"
+
+#: user/apps/sysinfo.c:497
+msgid "Value"
+msgstr "Valeur"
+
+#: user/apps/sysinfo.c:50
+msgid "USB"
+msgstr "USB"
+
+#: user/apps/sysinfo.c:50
+msgid "Input devices"
+msgstr "Périphériques d'entrée"
+
+#: user/apps/sysinfo.c:50
+msgid "Storage"
+msgstr "Stockage"
+
+#: user/apps/sysinfo.c:51
+msgid "Display"
+msgstr "Affichage"
+
+#: user/apps/sysinfo.c:51
+msgid "Audio"
+msgstr "Audio"
+
+#: user/apps/sysinfo.c:51
+msgid "Network"
+msgstr "Réseau"
+
+#: user/apps/sysinfo.c:534
+msgid "/dev/devices cannot be read"
+msgstr "Impossible de lire /dev/devices"
+
+#: user/apps/sysinfo.c:56
+msgid "ACPI"
+msgstr "ACPI"
+
+#: user/apps/sysinfo.c:57
+msgid "Acquired"
+msgstr "Acquis"
+
+#: user/apps/sysinfo.c:58
+msgid "Address"
+msgstr "Adresse"
+
+#: user/apps/sysinfo.c:583
+msgid "System information"
+msgstr "Informations système"
+
+#: user/apps/sysinfo.c:587
+msgid "File"
+msgstr "Fichier"
+
+#: user/apps/sysinfo.c:588
+msgid "Quit"
+msgstr "Quitter"
+
+#: user/apps/sysinfo.c:59
+msgid "Alternate setting"
+msgstr "Paramètre alternatif"
+
+#: user/apps/sysinfo.c:591
+msgid "View"
+msgstr "Affichage"
+
+#: user/apps/sysinfo.c:592
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: user/apps/sysinfo.c:596
+msgid "Expand all"
+msgstr "Tout développer"
+
+#: user/apps/sysinfo.c:597
+msgid "Collapse all"
+msgstr "Tout réduire"
+
+#: user/apps/sysinfo.c:60
+msgid "AMD features"
+msgstr "Fonctionnalités AMD"
+
+#: user/apps/sysinfo.c:61
+msgid "APIC ID"
+msgstr "APIC ID"
+
+#: user/apps/sysinfo.c:62
+msgid "Architecture"
+msgstr "Architecture"
+
+#: user/apps/sysinfo.c:63
+msgid "ASID bits"
+msgstr "Bits d'ASID"
+
+#: user/apps/sysinfo.c:64
+msgid "Asset tag"
+msgstr "Étiquette d'inventaire"
+
+#: user/apps/sysinfo.c:65
+msgid "Bank"
+msgstr "Banque"
+
+#: user/apps/sysinfo.c:66
+msgid "Base address"
+msgstr "Adresse de base"
+
+#: user/apps/sysinfo.c:67
+msgid "Bits per pixel"
+msgstr "Bits par pixel"
+
+#: user/apps/sysinfo.c:68
+msgid "Boot CPU"
+msgstr "CPU de démarrage"
+
+#: user/apps/sysinfo.c:69
+msgid "Boot disk"
+msgstr "Disque de démarrage"
+
+#: user/apps/sysinfo.c:70
+msgid "Boot disk GUID"
+msgstr "GUID du disque de démarrage"
+
+#: user/apps/sysinfo.c:71
+msgid "Boot framebuffer"
+msgstr "Framebuffer de démarrage"
+
+#: user/apps/sysinfo.c:72
+msgid "Boot partition"
+msgstr "Partition de démarrage"
+
+#: user/apps/sysinfo.c:73
+msgid "Boot partition GUID"
+msgstr "GUID de la partition de démarrage"
+
+#: user/apps/sysinfo.c:74
+msgid "Boot protocol"
+msgstr "Protocole de démarrage"
+
+#: user/apps/sysinfo.c:75
+msgid "Bootloader"
+msgstr "Chargeur de démarrage"
+
+#: user/apps/sysinfo.c:76
+msgid "Bus"
+msgstr "Bus"
+
+#: user/apps/sysinfo.c:77
+msgid "Buses"
+msgstr "Bus"
+
+#: user/apps/sysinfo.c:78
+msgid "Buttons"
+msgstr "Boutons"
+
+#: user/apps/sysinfo.c:79
+msgid "Cache size"
+msgstr "Taille du cache"
+
+#: user/apps/sysinfo.c:80
+msgid "Cache type"
+msgstr "Type de cache"
+
+#: user/apps/sysinfo.c:81
+msgid "Capabilities"
+msgstr "Capacités"
+
+#: user/apps/sysinfo.c:82
+msgid "Capture"
+msgstr "Capture"
+
+#: user/apps/sysinfo.c:83
+msgid "Characteristics"
+msgstr "Caractéristiques"
+
+#: user/apps/sysinfo.c:84
+msgid "Chassis type"
+msgstr "Type de châssis"
+
+#: user/apps/sysinfo.c:85
+msgid "Chipset"
+msgstr "Chipset"
+
+#: user/apps/sysinfo.c:86
+msgid "Class"
+msgstr "Classe"
+
+#: user/apps/sysinfo.c:87
+msgid "Clock rate"
+msgstr "Fréquence d'horloge"
+
+#: user/apps/sysinfo.c:88
+msgid "Command register"
+msgstr "Registre de commande"
+
+#: user/apps/sysinfo.c:89
+msgid "Command line"
+msgstr "Ligne de commande"
+
+#: user/apps/sysinfo.c:90
+msgid "Compatible"
+msgstr "Compatible"
+
+#: user/apps/sysinfo.c:91
+msgid "Kernel configuration"
+msgstr "Configuration du noyau"
+
+#: user/apps/sysinfo.c:92
+msgid "Configuration"
+msgstr "Configuration"
+
+#: user/apps/sysinfo.c:93
+msgid "Configurations"
+msgstr "Configurations"
+
+#: user/apps/sysinfo.c:94
+msgid "Configured speed"
+msgstr "Vitesse configurée"
+
+#: user/apps/sysinfo.c:95
+msgid "Connected"
+msgstr "Connecté"
+
+#: user/apps/sysinfo.c:96
+msgid "Context size"
+msgstr "Taille de contexte"
+
+#: user/apps/sysinfo.c:97
+msgid "Controllers"
+msgstr "Contrôleurs"
+
+#: user/apps/sysinfo.c:98
+msgid "Cores"
+msgstr "Cœurs"
+
+#: user/apps/sysinfo.c:99
+msgid "Cores enabled"
+msgstr "Cœurs activés"

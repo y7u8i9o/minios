@@ -8,15 +8,30 @@
 #include "its.h"
 #include "gic.h"
 
-/* PSCI calls through hvc, the conduit QEMU uses for virt without EL2 or
- * EL3 firmware. */
+/* PSCI calls through the conduit of the device tree or the FADT: hvc on
+ * QEMU virt without EL2 or EL3 firmware, smc where firmware at EL3
+ * implements PSCI. */
 #define PSCI_SYSTEM_OFF   0x84000008UL
 #define PSCI_SYSTEM_RESET 0x84000009UL
 
 static void psci_call(uint64_t fn)
 {
     register uint64_t x0 __asm__("x0") = fn;
-    __asm__ volatile("hvc #0" : "+r"(x0) : : "memory");
+    if (devtree.psci_smc)
+        __asm__ volatile("smc #0" : "+r"(x0) : : "memory");
+    else
+        __asm__ volatile("hvc #0" : "+r"(x0) : : "memory");
+}
+
+/* PSCI_VERSION: the major version in bits 31:16, the minor in 15:0. */
+uint32_t platform_psci_version(void)
+{
+    register uint64_t x0 __asm__("x0") = 0x84000000UL;
+    if (devtree.psci_smc)
+        __asm__ volatile("smc #0" : "+r"(x0) : : "memory");
+    else
+        __asm__ volatile("hvc #0" : "+r"(x0) : : "memory");
+    return (uint32_t)x0;
 }
 
 __noreturn void platform_power_off(void)

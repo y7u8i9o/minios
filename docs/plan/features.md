@@ -521,3 +521,17 @@ file is replaced, and the Lua binding gained `open_file` and
 `gui_files`. `gui_logview` and `gui_mandel` passed with the first
 version of the chooser, and the boot cases have not yet run against the
 unified version.
+
+## System information (2026-10-05)
+
+The kernel describes the machine in the read-only node `/dev/devices`: the
+system, the firmware with its ACPI tables and SMBIOS data, the processors,
+the platform, the memory map, PCI functions with BARs and capabilities, USB
+controllers, ports, devices, interfaces and endpoints, input devices, disks
+and partitions, the display, audio devices and network interfaces. The
+program `sysinfo` shows it as a tree with a property table. New shared
+kernel functions: `strlcat`, `memchr`, `strstr`, `lib/endian.h`,
+`lib/guid.c`, `vmm_copy_from_phys`. Documented in
+`docs/design/sysinfo.md`, tested by the boot cases `devices`,
+`devices_acpi` and `gui_sysinfo`.
+

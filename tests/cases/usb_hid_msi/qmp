@@ -1,0 +1,6 @@
+# Sent once the self test has opened the USB input devices.
+wait usb: devices ready
+key a
+abs 10000 20000
+button left
+rel 5 -3

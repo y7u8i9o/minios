@@ -37,6 +37,7 @@ int virtio_rng_seed(uint8_t output[64])
     buffer = kzalloc(64);
     if (!queue || !buffer || virtio_start(&device) < 0)
         goto stop;
+    pci->driver = "virtio-rng, boot seed only";
     unsigned received = 0;
     uint64_t deadline = timer_ms() + 1000;
     while (received < 64 && timer_ms() < deadline) {

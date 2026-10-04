@@ -373,8 +373,9 @@ The image ships the group `wheel` (gid 10) with `user` as its member.
 root without one, and `/etc/sudoers` (mode 0440) permits root and the
 members of wheel and sets the secure path `/usr/bin:/usr/local/bin`. Both
 files are part of the root image. The membership of wheel lives in
-`/etc/group` on the data volume, and a volume set up before U5 retains its
-group file without wheel until root adds the entry with an editor.
+`/etc/group` on the data volume. A volume set up before U5 has a group
+file without wheel. `fsinit` adds `wheel:x:10:` with the account of uid
+1000 to such a file when it mounts the volume, unless gid 10 is in use.
 
 The Users page of settings runs `sudo -S -k -p '' /bin/sh -c 'useradd
 -c NAME ... && passwd ...'` and `sudo -S -k -p '' /bin/sh -c 'userdel -r

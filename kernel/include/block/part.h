@@ -5,7 +5,6 @@
 #include <kernel.h>
 #include <block/blockdev.h>
 
-#define PART_GUID_STR 37            /* 36 characters and the NUL */
 
 /* A partition. A partition is registered once for an entry number of a
  * disk and never removed. part_rescan changes first, bdev.nsectors, type
@@ -43,8 +42,3 @@ bool part_has_table(struct blockdev *disk);
 struct partition *part_find_type(struct blockdev *disk, const uint8_t type[16]);
 /* The partition with the unique GUID uuid, or NULL. */
 struct partition *part_find_uuid(const uint8_t uuid[16]);
-/* Parse the standard string form of a GUID into the on-disk byte order.
- * Returns 0 or -EINVAL. */
-int part_parse_guid(const char *s, uint8_t out[16]);
-/* Format a GUID in on-disk byte order as a lowercase string. */
-void part_format_guid(const uint8_t guid[16], char out[PART_GUID_STR]);

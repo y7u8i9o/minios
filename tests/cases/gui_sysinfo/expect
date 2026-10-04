@@ -1,0 +1,5 @@
+sysinfo: [0-9]+ nodes, [0-9]+ properties, 12 categories
+sysinfo: system, [0-9]+ properties
+sysinfo: firmware, [0-9]+ properties
+gui_sysinfo: system information ok
+TEST PASS

@@ -156,6 +156,7 @@ static void probe(struct pci_dev *pci)
     }
     if (virtio_start(&d->vdev) < 0)
         goto fail;
+    pci->driver = "virtio-blk";
     volatile uint32_t *cfg = (volatile uint32_t *)d->vdev.device_cfg;
     uint64_t capacity = cfg[0] | ((uint64_t)cfg[1] << 32);
     ksnprintf(d->bdev.name, sizeof d->bdev.name, "vd%c", 'a' + ndisks);

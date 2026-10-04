@@ -12,6 +12,7 @@
 #include <lib/string.h>
 #include <klog.h>
 #include <errno.h>
+#include <drivers/devinfo.h>
 
 struct limine_framebuffer fb_screen;
 bool fb_screen_present;
@@ -242,3 +243,43 @@ void fbdev_init(void)
               fb->green_mask_shift, fb->blue_mask_size, fb->blue_mask_shift,
               (size_t)fb->pitch * fb->height, fb_screen_scale);
 }
+
+/* ---- /dev/devices (docs/design/sysinfo.md) ---- */
+
+/* The geometry is read under fb_mode_lock, which mode changes take. The
+ * GPU driver describes itself under its own lock. */
+void fbdev_describe(struct devinfo *d)
+{
+    devinfo_node(d, "display", "Display");
+    if (!fb_screen_present) {
+        devinfo_prop(d, "framebuffer", "none");
+        return;
+    }
+    mutex_lock(&fb_mode_lock);
+    struct limine_framebuffer s = fb_screen;
+    uint32_t scale = fb_screen_scale;
+    size_t map = fb_map_size();
+    mutex_unlock(&fb_mode_lock);
+    spin_lock(&fbdev_lock);
+    bool acquired = owner != NULL;
+    spin_unlock(&fbdev_lock);
+    devinfo_prop(d, "resolution", "%lu x %lu", (unsigned long)s.width, (unsigned long)s.height);
+    devinfo_prop(d, "logical_resolution", "%lu x %lu, scale %u", (unsigned long)(s.width / scale),
+                 (unsigned long)(s.height / scale), scale);
+    devinfo_prop(d, "bits_per_pixel", "%u", s.bpp);
+    devinfo_prop(d, "pitch", "%lu bytes", (unsigned long)s.pitch);
+    devinfo_prop(d, "pixel_format", "red %u bits at %u, green %u bits at %u, blue %u bits at %u", s.red_mask_size,
+                 s.red_mask_shift, s.green_mask_size, s.green_mask_shift, s.blue_mask_size, s.blue_mask_shift);
+    devinfo_size(d, "framebuffer_size", map);
+    devinfo_prop(d, "driver", "%s", gpu.ops ? "virtio-gpu" : "boot framebuffer");
+    devinfo_prop(d, "device_node", "/dev/fb0");
+    devinfo_prop(d, "acquired", "%s", acquired ? "yes, by the display server" : "no");
+    if (bootinfo.have_framebuffer)
+        devinfo_prop(d, "boot_framebuffer", "%lu x %lu, %u bits per pixel, at 0x%lx",
+                     (unsigned long)bootinfo.framebuffer.width, (unsigned long)bootinfo.framebuffer.height,
+                     bootinfo.framebuffer.bpp,
+                     (unsigned long)((uintptr_t)bootinfo.framebuffer.address - bootinfo.hhdm_offset));
+    if (gpu.ops && gpu.ops->describe)
+        gpu.ops->describe(gpu.priv, d);
+}
+

@@ -5,6 +5,7 @@
 #include <ipc/poll.h>
 
 struct pcm_device;
+struct devinfo;
 
 /* Hardware-facing operations for one raw PCM device.  The PCM core owns
  * exclusive-open policy; the driver owns format and queue state. */
@@ -15,6 +16,8 @@ struct pcm_ops {
     long (*ioctl)(struct pcm_device *dev, struct file *f, unsigned long req, uintptr_t arg);
     int (*poll)(struct pcm_device *dev, struct file *f);
     void (*close)(struct pcm_device *dev, struct file *f);
+    /* The properties of the device for /dev/devices; may be NULL. */
+    void (*describe)(struct pcm_device *dev, struct devinfo *d);
 };
 
 struct pcm_device {

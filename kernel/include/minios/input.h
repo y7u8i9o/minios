@@ -192,6 +192,7 @@ struct input_event {
 #define REP_CNT        2
 
 /* Bus types of struct input_id. */
+#define BUS_USB        0x03
 #define BUS_VIRTUAL    0x06
 #define BUS_I8042      0x11
 #define BUS_VIRTIO     0x1c

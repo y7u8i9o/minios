@@ -12,6 +12,9 @@ void timer_init_cpu(void);
 /* Monotonic milliseconds since timer_early_init, read from the clock of the
  * architecture. */
 uint64_t timer_ms(void);
+/* The rate of the clock that timer_ms counts (the TSC on x86_64, the
+ * generic timer on aarch64), in Hz. */
+uint64_t timer_clock_hz(void);
 /* The same time in nanoseconds. */
 uint64_t timer_ns(void);
 /* The same time in scheduler ticks (TIMER_HZ per second). */

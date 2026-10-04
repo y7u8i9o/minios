@@ -334,8 +334,10 @@ void virtio_net_init(void)
         goto fail;
     if (virtio_start(&nic.dev) < 0)
         goto fail;
+    pci->driver = "virtio-net";
     if (initialization_fault("started"))
         goto fail;
+    nic.interface.driver = "virtio-net";
     if (netif_register(&nic.interface) < 0)
         goto fail;
     nic.registered = true;

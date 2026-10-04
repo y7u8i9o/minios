@@ -15,7 +15,7 @@ __used __section(".limine_requests_start")
 static volatile uint64_t limine_requests_start[] = LIMINE_REQUESTS_START_MARKER;
 
 __used __section(".limine_requests")
-static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(3);
+static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
 
 __used __section(".limine_requests")
 static volatile struct limine_hhdm_request hhdm_request = {
@@ -55,6 +55,21 @@ static volatile struct limine_module_request module_request = {
 __used __section(".limine_requests")
 static volatile struct limine_dtb_request dtb_request = {
     .id = LIMINE_DTB_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
+__used __section(".limine_requests")
+static volatile struct limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
+__used __section(".limine_requests")
+static volatile struct limine_smbios_request smbios_request = {
+    .id = LIMINE_SMBIOS_REQUEST_ID, .revision = 0, .response = NULL,
+};
+
+__used __section(".limine_requests")
+static volatile struct limine_firmware_type_request firmware_type_request = {
+    .id = LIMINE_FIRMWARE_TYPE_REQUEST_ID, .revision = 0, .response = NULL,
 };
 
 __used __section(".limine_requests")
@@ -111,6 +126,25 @@ void boot_init(void)
      * read before pmm_reclaim_bootloader (arch_init_cpu_features). */
     if (dtb_request.response && dtb_request.response->dtb_ptr)
         bootinfo.dtb = dtb_request.response->dtb_ptr;
+    /* Base revision 4 returns the RSDP as an address in the direct map.
+     * Base revision 3 returned a physical address. The kernel records the
+     * physical address. */
+    if (rsdp_request.response && rsdp_request.response->address) {
+        uintptr_t a = (uintptr_t)rsdp_request.response->address;
+        bootinfo.rsdp_phys = a >= bootinfo.hhdm_offset ? a - bootinfo.hhdm_offset : a;
+    }
+    /* Base revision 4 returns the SMBIOS entry points as physical
+     * addresses. */
+    if (smbios_request.response) {
+        bootinfo.smbios32_phys = (uintptr_t)smbios_request.response->entry_32;
+        bootinfo.smbios64_phys = (uintptr_t)smbios_request.response->entry_64;
+    }
+    bootinfo.firmware_type = firmware_type_request.response ? (int)firmware_type_request.response->firmware_type : -1;
+    if (bootloader_request.response) {
+        strlcpy(bootinfo.bootloader_name, bootloader_request.response->name, sizeof bootinfo.bootloader_name);
+        strlcpy(bootinfo.bootloader_version, bootloader_request.response->version,
+                sizeof bootinfo.bootloader_version);
+    }
     hhdm_offset = bootinfo.hhdm_offset;
     cmdline_init(bootinfo.cmdline);
     boot_parse_video();

@@ -1,6 +1,7 @@
 /* The interface table and the two data paths. netif_lock protects the
  * list and the flags word; it is a leaf. */
 #define KLOG_SUBSYS "netif"
+#include <drivers/devinfo.h>
 #include <net/netif.h>
 #include <net/worker.h>
 #include <net/net.h>
@@ -197,3 +198,59 @@ size_t netif_format_table(char *buf, size_t size)
     spin_unlock(&netif_lock);
     return n < size ? n : size - 1;
 }
+
+/* ---- /dev/devices (docs/design/sysinfo.md) ---- */
+
+/* The interfaces under netif_lock, like netif_format_table. The IPv4
+ * configuration line of route.c names its interface. */
+void netif_describe(struct devinfo *d)
+{
+    char inet[96];
+    size_t ilen = ipv4_format_config(inet, sizeof inet);
+    inet[ilen < sizeof inet ? ilen : sizeof inet - 1] = '\0';
+    devinfo_node(d, "network", "Network");
+    spin_lock(&netif_lock);
+    struct list_head *pos;
+    unsigned count = 0;
+    list_for_each(pos, &netifs)
+        count++;
+    devinfo_prop(d, "interfaces", "%u", count);
+    list_for_each(pos, &netifs) {
+        struct netif *o = list_entry(pos, struct netif, link);
+        char path[24];
+        ksnprintf(path, sizeof path, "network/%s", o->name);
+        devinfo_node(d, path, "%s", o->name);
+        devinfo_prop(d, "interface", "%s", o->name);
+        devinfo_prop(d, "index", "%d", o->index);
+        devinfo_prop(d, "driver", "%s", o->driver ? o->driver : "unknown");
+        devinfo_prop(d, "state", "%s", netif_is_up(o) ? "up" : "down");
+        devinfo_prop(d, "link_type", "%s", (o->flags & NETIF_LOOPBACK) ? "loopback"
+                                             : (o->flags & NETIF_ETHERNET) ? "Ethernet" : "other");
+        if (o->flags & NETIF_ETHERNET)
+            devinfo_prop(d, "mac_address", "%02x:%02x:%02x:%02x:%02x:%02x", o->hwaddr[0], o->hwaddr[1],
+                         o->hwaddr[2], o->hwaddr[3], o->hwaddr[4], o->hwaddr[5]);
+        devinfo_prop(d, "mtu", "%u", o->mtu);
+        char prefix[16];
+        ksnprintf(prefix, sizeof prefix, "inet %s ", o->name);
+        if (strncmp(inet, prefix, strlen(prefix)) == 0) {
+            char *line = inet + strlen(prefix);
+            char *nl = strchr(line, '\n');
+            if (nl)
+                *nl = '\0';
+            devinfo_prop(d, "ipv4", "%s", line);
+        } else if (o->flags & NETIF_LOOPBACK) {
+            devinfo_prop(d, "ipv4", "127.0.0.1/255.0.0.0");
+        }
+        devinfo_prop(d, "received", "%lu packets, %lu bytes, %lu dropped",
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.rx_packets),
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.rx_bytes),
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.rx_dropped));
+        devinfo_prop(d, "sent", "%lu packets, %lu bytes, %lu dropped, %lu errors",
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.tx_packets),
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.tx_bytes),
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.tx_dropped),
+                     (unsigned long)atomic_u64_load_relaxed(&o->stats.tx_errors));
+    }
+    spin_unlock(&netif_lock);
+}
+

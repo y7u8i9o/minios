@@ -1,6 +1,7 @@
 #define KLOG_SUBSYS "its"
 #include "its.h"
 #include "devtree.h"
+#include <drivers/devinfo.h>
 #include <arch/cpu.h>
 #include <mm/memlayout.h>
 #include <mm/pmm.h>
@@ -396,4 +397,15 @@ void its_msi_compose(uint32_t devid, unsigned irq, unsigned cpu, uint64_t *addr,
     *addr = its_phys + GITS_TRANSLATER;
     *data = lpi_map[n].event;
     spin_unlock(&its_lock);
+}
+
+/* The ITS for /dev/devices. The fields are written once by its_init. */
+void its_describe(struct devinfo *d)
+{
+    if (!its)
+        return;
+    unsigned used = MIN(__atomic_load_n(&next_lpi, __ATOMIC_RELAXED), (unsigned)LPI_MAX);
+    devinfo_prop(d, "its", "0x%lx, %u bit device IDs, %s device table", (unsigned long)its_phys, device_bits,
+                 device_indirect ? "indirect" : "flat");
+    devinfo_prop(d, "lpis", "%u to %u, %u allocated", LPI_BASE, LPI_BASE + LPI_MAX - 1, used);
 }

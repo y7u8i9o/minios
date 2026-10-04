@@ -22,4 +22,7 @@ void its_register(unsigned lpi, irq_handler_fn fn, void *arg);
 void its_dispatch(struct trapframe *tf, unsigned lpi);
 /* Map the next event of devid to the LPI irq in the collection of cpu and
  * return the MSI address and data that raise it. */
+struct devinfo;
+/* The ITS properties of the platform node of /dev/devices. */
+void its_describe(struct devinfo *d);
 void its_msi_compose(uint32_t devid, unsigned irq, unsigned cpu, uint64_t *addr, uint32_t *data);

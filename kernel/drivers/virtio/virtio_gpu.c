@@ -16,6 +16,7 @@
 #include <lib/string.h>
 #include <klog.h>
 #include <errno.h>
+#include <drivers/devinfo.h>
 
 #define VIRTIO_GPU_DEVICE_MODERN 0x1050
 
@@ -317,11 +318,23 @@ static void gpu_flush_poll(void *priv, struct fb_rect r)
     flush_locked(priv, r, true);
 }
 
+static void gpu_describe(void *priv, struct devinfo *d)
+{
+    struct virtio_gpu *g = priv;
+    mutex_lock(&g->lock);
+    devinfo_prop(d, "gpu_scanout", "%u x %u, resource %u", g->width, g->height, g->resource);
+    devinfo_prop(d, "gpu_preferred_mode", "%u x %u", g->pref_width, g->pref_height);
+    devinfo_size(d, "gpu_buffer", g->buf_size);
+    mutex_unlock(&g->lock);
+    devinfo_prop(d, "gpu_pci_address", "%02x:%02x.%u", g->vdev.pci->bus, g->vdev.pci->slot, g->vdev.pci->func);
+}
+
 static const struct fb_gpu_ops gpu_ops = {
     .prepare_mode = gpu_prepare_mode,
     .commit_mode = gpu_commit_mode,
     .flush = gpu_flush,
     .flush_poll = gpu_flush_poll,
+    .describe = gpu_describe,
 };
 
 /* The console draws into the buffer under console_lock and cannot call
@@ -356,6 +369,7 @@ static void probe(struct pci_dev *pci)
     }
     if (virtio_start(&g->vdev) < 0)
         goto fail;
+    pci->driver = "virtio-gpu";
     mutex_init(&g->lock, "virtio_gpu");
 
     struct virtio_gpu_ctrl_hdr info_req = { .type = VIRTIO_GPU_CMD_GET_DISPLAY_INFO };

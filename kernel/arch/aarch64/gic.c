@@ -10,6 +10,7 @@
 #include "gic.h"
 #include "timer_internal.h"
 #include "devtree.h"
+#include <drivers/devinfo.h>
 #include "its.h"
 
 /* The GICv3 (A5) has a distributor and one redistributor of 128 KiB per
@@ -370,4 +371,22 @@ void arch_send_ipi(unsigned cpu, unsigned irq)
                  (aff0 >> 4) << 44 | 1UL << (aff0 & 0xf);
     /* The stores the receiver reads are visible before the interrupt. */
     __asm__ volatile("dsb ish; msr icc_sgi1r_el1, %0; isb" : : "r"(v) : "memory");
+}
+
+/* The GIC for /dev/devices. The fields are written once by
+ * arch_init_interrupts. */
+void gic_describe(struct devinfo *d)
+{
+    devinfo_prop(d, "interrupt_controller", "GICv%u", v2 ? 2 : 3);
+    devinfo_prop(d, "gic_distributor", "0x%lx, %u interrupt lines", (unsigned long)devtree.gicd, nlines);
+    if (v2) {
+        devinfo_prop(d, "gic_cpu_interface", "0x%lx", (unsigned long)devtree.gicc);
+        if (v2m_count)
+            devinfo_prop(d, "gicv2m", "0x%lx, interrupts %u to %u, %u allocated", (unsigned long)devtree.v2m,
+                         v2m_base, v2m_base + v2m_count - 1,
+                         MIN(__atomic_load_n(&v2m_next, __ATOMIC_RELAXED), v2m_count));
+    } else {
+        devinfo_prop(d, "gic_redistributors", "0x%lx, %u frames", (unsigned long)devtree.gicr, gicr_count);
+        its_describe(d);
+    }
 }

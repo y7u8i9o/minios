@@ -174,9 +174,33 @@ struct cpu_features {
     bool invariant_tsc;
     bool tsc_deadline;
     unsigned phys_bits;         /* physical address width */
+    unsigned virt_bits;         /* linear address width */
+    /* For /dev/devices (docs/design/sysinfo.md): the brand string, the
+     * leaf ranges, the signature, the feature words and the caches. */
+    char brand[49];
+    uint32_t max_leaf, max_ext_leaf;
+    uint32_t signature;         /* eax of leaf 1 */
+    uint32_t leaf1_ecx, leaf1_edx;
+    uint32_t leaf7_ebx, leaf7_ecx, leaf7_edx;
+    uint32_t ext1_ecx, ext1_edx;
+    unsigned ncaches;
+    struct cpu_cache {
+        uint8_t level;
+        char type;              /* 'd' data, 'i' instruction, 'u' unified */
+        uint16_t ways;
+        uint16_t line;          /* bytes */
+        uint16_t shared;        /* logical processors sharing it, 0 if unknown */
+        uint32_t sets;          /* 0 if unknown */
+        uint32_t size;          /* bytes */
+    } caches[8];
 };
 extern struct cpu_features cpu_features;
 
 /* Fill cpu_features from CPUID and log the processor. Boot CPU only,
  * before any feature is enabled. */
 void cpu_identify(void);
+struct devinfo;
+/* The processor part of /dev/devices, from cpu_features (cpu.c). */
+void cpu_describe(struct devinfo *d);
+/* The local APIC and the I/O APIC part of /dev/devices (apic.c). */
+void apic_describe(struct devinfo *d);

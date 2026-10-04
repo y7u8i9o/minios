@@ -3,6 +3,7 @@ Terminal=/bin/term
 Files=/bin/files
 Clock=/bin/clock
 System monitor=/bin/sysmon
+System information=/bin/sysinfo
 Kernel log=/bin/logview
 Profiler=/bin/profiler
 Event viewer=/bin/evtest

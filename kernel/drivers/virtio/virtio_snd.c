@@ -3,6 +3,7 @@
  * input stream, one capture stream on the RX queue, both 48 kHz stereo
  * S16.  The period rings live in virtio_snd_stream.c. */
 #define KLOG_SUBSYS "virtio-snd"
+#include <drivers/devinfo.h>
 #include <drivers/virtio/virtio_snd.h>
 #include "virtio_snd_internal.h"
 #include <drivers/pci.h>
@@ -269,6 +270,49 @@ static void snd_close(struct pcm_device *pcm, struct file *f)
     mutex_unlock(&d->control_lock);
 }
 
+static const char *stream_state(uint32_t s)
+{
+    switch (s) {
+    case AUDIO_STATE_CLOSED:   return "closed";
+    case AUDIO_STATE_OPEN:     return "open";
+    case AUDIO_STATE_PREPARED: return "prepared";
+    case AUDIO_STATE_RUNNING:  return "running";
+    case AUDIO_STATE_ERROR:    return "error";
+    default:                   return "unknown";
+    }
+}
+
+/* The configuration is read under control_lock, which the configuration
+ * sequences take. The counters change in completions and are read with
+ * relaxed atomic loads. */
+static void describe_stream(struct devinfo *d, const char *key, struct snd_stream *s)
+{
+    if (!s->present) {
+        devinfo_prop(d, key, "not offered");
+        return;
+    }
+    if (!s->configured) {
+        devinfo_prop(d, key, "stream %u, %s", s->stream_id, stream_state(s->state));
+        return;
+    }
+    devinfo_prop(d, key, "stream %u, %s, %u Hz, %u channels, %u periods of %u frames, %lu frames transferred, %u xruns",
+                 s->stream_id, stream_state(s->state), s->params.rate, s->params.channels, s->params.periods,
+                 s->params.period_frames, (unsigned long)__atomic_load_n(&s->transferred_frames, __ATOMIC_RELAXED),
+                 __atomic_load_n(&s->xruns, __ATOMIC_RELAXED));
+}
+
+static void snd_describe(struct pcm_device *pcm, struct devinfo *d)
+{
+    struct virtio_snd *v = pcm->priv;
+    devinfo_prop(d, "driver", "virtio-snd");
+    devinfo_prop(d, "pci_address", "%02x:%02x.%u", v->vdev.pci->bus, v->vdev.pci->slot, v->vdev.pci->func);
+    devinfo_prop(d, "supported_format", "signed 16 bit little endian, 48000 Hz, 2 channels");
+    mutex_lock(&v->control_lock);
+    describe_stream(d, "playback", &v->playback);
+    describe_stream(d, "capture", &v->capture);
+    mutex_unlock(&v->control_lock);
+}
+
 static const struct pcm_ops snd_pcm_ops = {
     .open = snd_open,
     .read = snd_read,
@@ -276,6 +320,7 @@ static const struct pcm_ops snd_pcm_ops = {
     .ioctl = snd_ioctl,
     .poll = snd_poll,
     .close = snd_close,
+    .describe = snd_describe,
 };
 
 static void probe(struct pci_dev *pci)
@@ -297,6 +342,7 @@ static void probe(struct pci_dev *pci)
     snd_stream_init(&d->capture, d, rxq, true);
     if (virtio_start(&d->vdev) < 0)
         goto fail;
+    pci->driver = "virtio-snd";
     mutex_init(&d->control_lock, "virtio_snd_control");
     volatile struct virtio_snd_config *cfg =
         (volatile struct virtio_snd_config *)d->vdev.device_cfg;

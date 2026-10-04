@@ -1,4 +1,6 @@
 #define KLOG_SUBSYS "pcm"
+#include <drivers/devinfo.h>
+#include <lib/printf.h>
 #include <audio/pcm.h>
 #include <fs/devfs.h>
 #include <lib/string.h>
@@ -90,6 +92,13 @@ static const struct file_ops pcm_fops = {
     .release = pcm_release,
 };
 
+/* The registered devices for /dev/devices. pcm_register runs in the
+ * start-up thread before init starts, and the table is read only
+ * afterwards. */
+#define PCM_MAX_DEVICES 8
+static struct pcm_device *registered[PCM_MAX_DEVICES];
+static unsigned nregistered;
+
 int pcm_register(struct pcm_device *dev, const char *name,
                  const struct pcm_ops *ops, void *priv)
 {
@@ -102,7 +111,29 @@ int pcm_register(struct pcm_device *dev, const char *name,
     spinlock_init(&dev->owner_lock, "pcm_owner");
     poll_source_init(&dev->poll, "pcm_poll");
     int r = devfs_register(dev->name, S_IFCHR | 0600, &pcm_fops, dev, 0);
-    if (r == 0)
+    if (r == 0) {
         klog_info("/dev/%s registered", dev->name);
+        if (nregistered < PCM_MAX_DEVICES)
+            registered[nregistered++] = dev;
+    }
     return r;
+}
+
+void pcm_describe(struct devinfo *d)
+{
+    devinfo_node(d, "audio", "Audio");
+    devinfo_prop(d, "devices", "%u", nregistered);
+    for (unsigned i = 0; i < nregistered; i++) {
+        struct pcm_device *dev = registered[i];
+        char path[32];
+        ksnprintf(path, sizeof path, "audio/%s", dev->name);
+        devinfo_node(d, path, "%s", dev->name);
+        devinfo_prop(d, "device_node", "/dev/%s", dev->name);
+        spin_lock(&dev->owner_lock);
+        bool open = dev->owner != NULL;
+        spin_unlock(&dev->owner_lock);
+        devinfo_prop(d, "opened", "%s", open ? "yes" : "no");
+        if (dev->ops->describe)
+            dev->ops->describe(dev, d);
+    }
 }

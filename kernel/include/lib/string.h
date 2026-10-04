@@ -13,3 +13,8 @@ char *strchr(const char *s, int c);
 char *strrchr(const char *s, int c);
 char *strcpy(char *dst, const char *src);
 size_t strlcpy(char *dst, const char *src, size_t size);
+/* Append src to the string in dst of size bytes, truncated, and return the
+ * length the result would have without truncation. */
+size_t strlcat(char *dst, const char *src, size_t size);
+void *memchr(const void *s, int c, size_t n);
+char *strstr(const char *haystack, const char *needle);

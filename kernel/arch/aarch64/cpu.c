@@ -37,6 +37,7 @@ void cpu_init_boot(void)
     c->online = true;
     c->started = true;
     __asm__ volatile("mrs %0, mpidr_el1" : "=r"(c->arch.mpidr));
+    __asm__ volatile("mrs %0, midr_el1" : "=r"(c->arch.midr));
     cpu_init_el0_access();
     spinlock_init(&c->pmm_cache_lock, "pmm_cpu_cache");
     __asm__ volatile("msr tpidr_el1, %0" : : "r"(c) : "memory");

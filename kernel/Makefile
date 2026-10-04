@@ -4,7 +4,7 @@ OUT      := $(BUILD)/kernel
 KERNEL   ?= $(BUILD)/kernel.elf
 GENSYMS  ?= $(BUILD)/host/gensyms
 
-SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat ipc net net/tcp block audio input drivers drivers/virtio debug
+SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat ipc net net/tcp block audio input drivers drivers/virtio drivers/usb debug
 ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif
@@ -22,6 +22,19 @@ DEPS     := $(OBJS:.o=.d)
 CPPFLAGS := -Iinclude -Iarch/$(ARCH)/include -I../third_party/limine
 LDSCRIPT := arch/$(ARCH)/linker.ld
 
+# uACPI reads the ACPI tables of an aarch64 machine that has no device tree
+# (docs/design/acpi.md). It is built in the barebones mode, which contains
+# the table interface only. Its sources are third party code. They are
+# compiled without -Werror, so that a warning of a newer compiler in them
+# does not stop the build.
+ifeq ($(ARCH),aarch64)
+UACPI_DIR  := ../third_party/uacpi
+UACPI_OBJS := $(patsubst $(UACPI_DIR)/source/%.c,$(OUT)/uacpi/%.o,$(wildcard $(UACPI_DIR)/source/*.c))
+CPPFLAGS   += -DUACPI_BAREBONES_MODE -I$(UACPI_DIR)/include
+OBJS       += $(UACPI_OBJS)
+DEPS       += $(UACPI_OBJS:.o=.d)
+endif
+
 .PHONY: all clean
 all: $(KERNEL)
 
@@ -32,6 +45,10 @@ $(OUT)/%.o: %.c
 $(OUT)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(KASFLAGS) $(CPPFLAGS) -MMD -MP -c -o $@ $<
+
+$(OUT)/uacpi/%.o: $(UACPI_DIR)/source/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(filter-out -Werror -Wmissing-prototypes,$(KCFLAGS)) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
 # The first pass links with an empty symbol table. The .ksyms section is
 # filled by a generated assembly stub that includes the blob with .incbin.

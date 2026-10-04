@@ -37,6 +37,10 @@ and `input_sync`, from interrupt handlers or virtqueue completions.
   IntelliMouse sequence enables the wheel) and reports `REL_X`, `REL_Y`
   (positive downwards), `REL_WHEEL` (positive away from the user) and
   the three buttons. Overflow packets are dropped.
+- `drivers/usb/hid.c` (D2, `usb.md`) reports USB keyboards, mice and
+  tablets behind an xHCI controller. Each HID interface is one device with
+  the bus type `BUS_USB`. Its capabilities come from the boot keyboard
+  format or from the parsed report descriptor.
 - `drivers/virtio/virtio_input.c` accepts every virtio-input device:
   the name, the device ids, the `EV_KEY`, `EV_REL` and `EV_ABS` bitmaps
   and the absolute axis ranges come from the configuration space; the

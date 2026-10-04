@@ -83,7 +83,10 @@ GICv3 and without ACPI, `-cpu host` under HVF, the edk2 firmware that QEMU
 installs (`EDK2_AARCH64` names another file) with `-boot
 menu=on,splash-time=0`, which replaces the five second TianoCore screen of
 its boot manager, virtio-gpu-pci as the
-display with ramfb as the boot framebuffer, the ISO as a SCSI CD and
+display with ramfb as the boot framebuffer, a USB keyboard on a
+`qemu-xhci` controller before the virtio keyboard, because edk2 has no
+virtio keyboard driver and the Limine menu otherwise receives no keys, the
+ISO as a SCSI CD and
 `-nic none` unless `--nic` names a network. Settings come from four
 layers, each of which overrides the previous one.
 
@@ -196,7 +199,8 @@ the same line.
 
 Limine binaries are in `third_party/limine/` (release v10.8.5, binary branch)
 together with the protocol header `limine.h` from the `limine-protocol`
-repository. The kernel requests base revision 3. `tools/mkiso.sh` builds the
+repository. The kernel requests base revision 4, in which Limine maps the
+ACPI tables into its direct map (`acpi.md`). `tools/mkiso.sh` builds the
 ISO. It copies the kernel to `/boot/kernel.elf`, writes `limine.conf` with the
 requested command line to `/boot/limine/`, adds the BIOS and UEFI boot images,
 runs `xorriso`, and finishes with `limine bios-install`. The `limine` host tool
@@ -410,4 +414,5 @@ program compiled with tcc on minios sees them.
 
 `third_party/tinycc` is a git submodule, which `git submodule update
 --init` fetches after cloning. The other third party sources are copies fetched by the
-scripts in `tools/`.
+scripts in `tools/`. `third_party/uacpi` is fetched by `tools/fetch_uacpi.sh`
+and built into the aarch64 kernel (`acpi.md`).

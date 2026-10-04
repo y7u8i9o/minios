@@ -44,6 +44,7 @@ struct netif {
     uint8_t hwaddr[NETIF_HWADDR_LEN];
     const struct netif_ops *ops;
     void *priv;
+    const char *driver;             /* the driver's name, for /dev/devices */
     struct netif_stats stats;
     struct list_head link;
 };

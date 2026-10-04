@@ -1,0 +1,3 @@
+# A screenshot of the window with the firmware node selected.
+wait sysinfo: firmware
+screendump sysinfo.ppm

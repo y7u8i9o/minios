@@ -188,6 +188,41 @@ static int migrate(const char *dir)
     return 1;
 }
 
+#define WHEEL_GID 10
+
+/* Add the group wheel to the group file of a data volume that has none,
+ * with the account FIRST_USER as its member. Volumes made before U5
+ * (docs/design/users.md) have no wheel, and their first account therefore
+ * cannot use sudo or doas. A gid of 10 that another group uses is left
+ * alone. Returns 1 after adding the group, 0 when there was nothing to do,
+ * -1 on an error. */
+static int add_wheel(const char *dir)
+{
+    char path[512], line[256];
+    snprintf(path, sizeof path, "%s/.local/etc/group", dir);
+    FILE *f = fopen(path, "r");
+    if (f == NULL)
+        return errno == ENOENT ? 0 : -1;
+    bool found = false;
+    while (fgets(line, sizeof line, f) != NULL) {
+        char *name_end = strchr(line, ':');
+        char *gid = name_end ? strchr(name_end + 1, ':') : NULL;
+        if (name_end && (size_t)(name_end - line) == 5 && strncmp(line, "wheel", 5) == 0)
+            found = true;
+        if (gid && atoi(gid + 1) == WHEEL_GID)
+            found = true;
+    }
+    fclose(f);
+    if (found)
+        return 0;
+    struct passwd *pw = getpwuid(FIRST_USER);
+    snprintf(line, sizeof line, "wheel:x:%d:%s", WHEEL_GID, pw ? pw->pw_name : "");
+    if (account_replace(path, "wheel", line) < 0)
+        return -1;
+    printf("fsinit: added the group wheel with %s to %s\n", pw ? pw->pw_name : "no member", path);
+    return 1;
+}
+
 /* Make the missing homes of the accounts whose home lies below dir. */
 static int make_homes(const char *dir)
 {
@@ -280,6 +315,10 @@ static int process(const struct entry *e)
         }
         if (make_homes(e->target) < 0)
             return -1;
+        if (add_wheel(e->target) < 0) {
+            fprintf(stderr, "fsinit: adding the group wheel to %s: %s\n", e->target, strerror(errno));
+            return -1;
+        }
     }
     return 0;
 }
@@ -304,6 +343,10 @@ int main(int argc, char **argv)
     if (migrate_dir) {
         if (migrate(migrate_dir) < 0) {
             fprintf(stderr, "fsinit: converting the layout of %s: %s\n", migrate_dir, strerror(errno));
+            return 1;
+        }
+        if (add_wheel(migrate_dir) < 0) {
+            fprintf(stderr, "fsinit: adding the group wheel to %s: %s\n", migrate_dir, strerror(errno));
             return 1;
         }
         return 0;

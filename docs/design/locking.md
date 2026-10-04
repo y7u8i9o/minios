@@ -587,3 +587,41 @@ These locks are in user space and do not add a kernel lock-order level.
   by the `inode.lock` of its cached inode. A directory operation runs
   under the directory mutex and takes the mutex of the child whose link
   count it changes, the parent before the child as in mfs.
+
+## D1 additions
+
+- No new lock. `struct devtree` gains `psci_smc` and `from_acpi`, which
+  `devtree_init` writes once on the boot CPU before the other CPUs start,
+  like the other fields. The uACPI table state and its static buffer are
+  used only inside `acpi_read_platform` during that call.
+
+## D2 additions
+
+- `xhci.lock` (spinlock, `drivers/usb/xhci.c`) protects one xHCI
+  controller's command ring and command completion fields, its event ring
+  dequeue state, its slot table, the rings and endpoint state of every
+  slot, the ports with a pending status change, the halted endpoint flag and
+  the flag of the initial enumeration. The MSI-X or MSI handler and the
+  controller thread take it. The HID report callback runs under it and
+  reports to the input core, which gives the order
+  `xhci.lock -> input_dev.lock`. Waiters are woken under it, which gives
+  `xhci.lock -> waitq.lock`. The page allocator is not called under it.
+- `hid_free_lock` (spinlock, `drivers/usb/hid.c`) protects the list of
+  input devices of disconnected HID interfaces. It is taken by the
+  controller threads with no other lock acquired and is a leaf.
+
+## System information additions
+
+- `usb_topology_lock` (mutex, `drivers/usb/xhci.c`) protects the devices
+  published in `port_slot[]` of every xHCI controller. A controller thread
+  takes it to publish a device after its enumeration and to remove it
+  before its slot is freed. `usb_describe` takes it while it reads the
+  devices. It is taken with no spinlock acquired and before `xhci.lock`.
+- `/dev/devices` takes the locks of the subsystems it describes one after
+  another, never two of different subsystems at once: `input_devices_lock
+  -> input_dev.lock` (the existing order), `part_lock`, `fb_mode_lock`,
+  `fbdev_lock`, `virtio_gpu.lock`, `virtio_snd.control_lock`,
+  `pcm_device.owner_lock`, `netif_lock`.
+- No new lock for the PCM device table and the SMBIOS and ACPI copies,
+  which are written during start-up and read only afterwards.
+

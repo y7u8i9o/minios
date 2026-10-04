@@ -1,0 +1,1 @@
+qemu-xhci,msix=off,msi=off usb-kbd usb-tablet usb-mouse

@@ -14,7 +14,9 @@
  * mounted, and a table is read again only when neither the root nor swap
  * lies on the disk. */
 #define KLOG_SUBSYS "part"
+#include <drivers/devinfo.h>
 #include <block/part.h>
+#include <lib/guid.h>
 #include <fs/devfs.h>
 #include <lib/crc32.h>
 #include <lib/printf.h>
@@ -64,61 +66,6 @@ struct gpt_entry {
     uint64_t first, last, attributes;
     uint16_t name[36];
 } __attribute__((packed));
-
-static const char hexdigits[] = "0123456789abcdef";
-
-void part_format_guid(const uint8_t g[16], char out[PART_GUID_STR])
-{
-    /* The order of the bytes in the string form. */
-    static const int order[16] = { 3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15 };
-    char *p = out;
-    for (int i = 0; i < 16; i++) {
-        if (i == 4 || i == 6 || i == 8 || i == 10)
-            *p++ = '-';
-        *p++ = hexdigits[g[order[i]] >> 4];
-        *p++ = hexdigits[g[order[i]] & 15];
-    }
-    *p = '\0';
-}
-
-static int hexval(char c)
-{
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'a' && c <= 'f')
-        return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F')
-        return c - 'A' + 10;
-    return -1;
-}
-
-int part_parse_guid(const char *s, uint8_t out[16])
-{
-    static const int order[16] = { 3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15 };
-    if (strlen(s) != 36)
-        return -EINVAL;
-    for (int i = 0, at = 0; i < 16; i++) {
-        if (at == 8 || at == 13 || at == 18 || at == 23) {
-            if (s[at] != '-')
-                return -EINVAL;
-            at++;
-        }
-        int hi = hexval(s[at]), lo = hexval(s[at + 1]);
-        if (hi < 0 || lo < 0)
-            return -EINVAL;
-        out[order[i]] = (uint8_t)(hi << 4 | lo);
-        at += 2;
-    }
-    return 0;
-}
-
-static bool guid_zero(const uint8_t g[16])
-{
-    for (int i = 0; i < 16; i++)
-        if (g[i])
-            return false;
-    return true;
-}
 
 /* Read and check the header at lba and its entry array. Returns the array,
  * allocated, or NULL. */
@@ -221,7 +168,7 @@ static int apply_table(struct blockdev *disk)
     int count = 0;
     for (uint32_t i = 0; entries && i < h.nentries; i++) {
         const struct gpt_entry *e = (const void *)((const uint8_t *)entries + (size_t)i * h.entry_size);
-        if (guid_zero(e->type))
+        if (guid_is_zero(e->type))
             continue;
         if (e->first < h.first_usable || e->last > h.last_usable || e->first > e->last) {
             klog_warn("%s: entry %u lies outside the usable sectors", disk->name, i + 1);
@@ -306,11 +253,11 @@ static int listing_open(struct inode *ino, struct file *f)
     spin_lock(&part_lock);
     list_for_each(pos, &partitions) {
         struct partition *p = list_entry(pos, struct partition, link);
-        char uuid[PART_GUID_STR], type[PART_GUID_STR];
+        char uuid[GUID_STR], type[GUID_STR];
         if (!p->bdev.nsectors)
             continue;
-        part_format_guid(p->uuid, uuid);
-        part_format_guid(p->type, type);
+        guid_format(p->uuid, uuid);
+        guid_format(p->type, type);
         int n = ksnprintf(l->text + l->len, size - l->len, "%s %s %s %s %lu\n", p->bdev.name, p->bdev.disk->name,
                           uuid, type, (unsigned long)blockdev_size(&p->bdev));
         if (n > 0 && (size_t)n < size - l->len)
@@ -383,7 +330,7 @@ int part_rescan(struct blockdev *disk)
 struct blockdev *part_boot_disk(void)
 {
     struct blockdev *found = NULL;
-    if (guid_zero(bootinfo.boot_disk_guid))
+    if (guid_is_zero(bootinfo.boot_disk_guid))
         return NULL;
     spin_lock(&part_lock);
     for (int i = 0; i < ntables && !found; i++)
@@ -433,4 +380,89 @@ struct partition *part_find_uuid(const uint8_t uuid[16])
     }
     spin_unlock(&part_lock);
     return found;
+}
+
+/* ---- /dev/devices (docs/design/sysinfo.md) ---- */
+
+static const char *type_name(const char *guid)
+{
+    static const struct { const char *guid, *name; } types[] = {
+        { "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "EFI system" },
+        { "21686148-6449-6e6f-744e-656564454649", "BIOS boot" },
+        { "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f", "swap" },
+        { "4f68bce3-e8cd-4db1-96e7-fbcaf984b709", "root (x86_64)" },
+        { "b921b045-1df0-41c3-af44-4c6f280d3fae", "root (aarch64)" },
+        { "0fc63daf-8483-4772-8e79-3d69d8477de4", "Linux filesystem data" },
+        { "933ac7e1-2eb4-4f13-b844-0e14e2aef915", "home" },
+        { "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7", "Microsoft basic data" },
+        { "e3c9e316-0b5c-4db8-817d-f92df00215ae", "Microsoft reserved" },
+        { "6d696e69-6f73-4e70-6b67-7265706f7369", "minios package repository" },
+    };
+    for (size_t i = 0; i < sizeof types / sizeof types[0]; i++)
+        if (strcmp(types[i].guid, guid) == 0)
+            return types[i].name;
+    return "unknown";
+}
+
+/* The disks and their partitions. Block devices are never removed, so the
+ * list from blockdev_list remains valid. The partitions and the tables
+ * are read under part_lock, which a rescan takes to change them. */
+void block_describe(struct devinfo *d)
+{
+    struct blockdev *devs[64];
+    int n = blockdev_list(devs, 64);
+    unsigned disks = 0;
+    for (int i = 0; i < n; i++)
+        disks += devs[i]->disk == NULL;
+    devinfo_node(d, "storage", "Storage");
+    devinfo_prop(d, "disks", "%u", disks);
+    for (int i = 0; i < n; i++) {
+        struct blockdev *disk = devs[i];
+        if (disk->disk)
+            continue;
+        char path[48], guid[GUID_STR];
+        ksnprintf(path, sizeof path, "storage/%s", disk->name);
+        devinfo_node(d, path, "%s, %lu MiB", disk->name, (unsigned long)(blockdev_size(disk) >> 20));
+        devinfo_prop(d, "device_node", "/dev/%s", disk->name);
+        devinfo_size(d, "size", blockdev_size(disk));
+        devinfo_prop(d, "sector_size", "%u bytes", disk->sector_size);
+        devinfo_prop(d, "sectors", "%lu", (unsigned long)disk->nsectors);
+        devinfo_prop(d, "driver", "%s", strncmp(disk->name, "vd", 2) == 0 ? "virtio-blk" : "unknown");
+        spin_lock(&part_lock);
+        int t = 0;
+        while (t < ntables && tables[t].disk != disk)
+            t++;
+        bool boot = t < ntables && !guid_is_zero(bootinfo.boot_disk_guid) &&
+                    memcmp(tables[t].guid, bootinfo.boot_disk_guid, 16) == 0;
+        if (t < ntables) {
+            guid_format(tables[t].guid, guid);
+            devinfo_prop(d, "partition_table", "GPT");
+            devinfo_prop(d, "disk_guid", "%s", guid);
+        } else {
+            devinfo_prop(d, "partition_table", "none");
+        }
+        devinfo_prop(d, "boot_disk", "%s", boot ? "yes" : "no");
+        struct list_head *pos;
+        list_for_each(pos, &partitions) {
+            struct partition *p = list_entry(pos, struct partition, link);
+            if (p->bdev.disk != disk || !p->bdev.nsectors)
+                continue;
+            char ppath[64], type[GUID_STR];
+            guid_format(p->type, type);
+            guid_format(p->uuid, guid);
+            ksnprintf(ppath, sizeof ppath, "%s/%s", path, p->bdev.name);
+            devinfo_node(d, ppath, "%s, %s, %lu MiB", p->bdev.name, type_name(type),
+                         (unsigned long)(blockdev_size(&p->bdev) >> 20));
+            devinfo_prop(d, "device_node", "/dev/%s", p->bdev.name);
+            devinfo_prop(d, "entry", "%d", p->index);
+            devinfo_prop(d, "partition_type", "%s (%s)", type_name(type), type);
+            devinfo_prop(d, "unique_guid", "%s", guid);
+            devinfo_prop(d, "first_sector", "%lu", (unsigned long)p->first);
+            devinfo_prop(d, "sectors", "%lu", (unsigned long)p->bdev.nsectors);
+            devinfo_size(d, "size", blockdev_size(&p->bdev));
+            devinfo_prop(d, "boot_partition", "%s",
+                         memcmp(p->uuid, bootinfo.boot_part_guid, 16) == 0 ? "yes" : "no");
+        }
+        spin_unlock(&part_lock);
+    }
 }

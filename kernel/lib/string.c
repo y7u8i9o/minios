@@ -158,3 +158,31 @@ size_t strlcpy(char *dst, const char *src, size_t size)
     }
     return len;
 }
+
+size_t strlcat(char *dst, const char *src, size_t size)
+{
+    size_t used = strnlen(dst, size);
+    if (used == size)
+        return size + strlen(src);
+    return used + strlcpy(dst + used, src, size - used);
+}
+
+void *memchr(const void *s, int c, size_t n)
+{
+    const unsigned char *p = s;
+    for (size_t i = 0; i < n; i++)
+        if (p[i] == (unsigned char)c)
+            return (void *)(p + i);
+    return NULL;
+}
+
+char *strstr(const char *haystack, const char *needle)
+{
+    size_t n = strlen(needle);
+    if (n == 0)
+        return (char *)haystack;
+    for (; *haystack; haystack++)
+        if (*haystack == *needle && strncmp(haystack, needle, n) == 0)
+            return (char *)haystack;
+    return NULL;
+}

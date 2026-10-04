@@ -5,6 +5,7 @@
 #include <arch/pit.h>
 #include <mm/vmm.h>
 #include <klog.h>
+#include <drivers/devinfo.h>
 #include <debug/panic.h>
 
 #define MSR_APIC_BASE       0x1b
@@ -173,4 +174,24 @@ void ioapic_mask(unsigned gsi, bool masked)
     uint32_t lo = ioapic_read(IOAPIC_REG_REDIR(gsi));
     lo = masked ? (lo | IOAPIC_MASKED) : (lo & ~IOAPIC_MASKED);
     ioapic_write(IOAPIC_REG_REDIR(gsi), lo);
+}
+
+/* The interrupt controllers for /dev/devices (docs/design/sysinfo.md). The
+ * registers are read without a lock: the version registers do not change,
+ * and an I/O APIC register read is a select and a read that the boot code
+ * no longer performs. */
+void apic_describe(struct devinfo *d)
+{
+    uint64_t base = rdmsr(MSR_APIC_BASE);
+    devinfo_prop(d, "local_apic", "0x%lx", (unsigned long)(base & ~0xfffUL));
+    devinfo_prop(d, "local_apic_mode", "%s", (base & (1UL << 10)) ? "x2apic" : (base & (1UL << 11)) ? "xapic" : "off");
+    if (lapic) {
+        uint32_t ver = lapic_read(LAPIC_VERSION);
+        devinfo_prop(d, "local_apic_version", "0x%02x, %u LVT entries", ver & 0xff, ((ver >> 16) & 0xff) + 1);
+    }
+    devinfo_prop(d, "local_apic_timer", "%lu Hz, periodic", (unsigned long)timer_ticks_per_second);
+    if (ioapic) {
+        uint32_t ver = ioapic_read(IOAPIC_REG_VER);
+        devinfo_prop(d, "io_apic", "0x%x, version 0x%02x, %u inputs", IOAPIC_DEFAULT_BASE, ver & 0xff, ioapic_entries);
+    }
 }

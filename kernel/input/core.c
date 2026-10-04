@@ -1,4 +1,6 @@
 #define KLOG_SUBSYS "input"
+#include <drivers/devinfo.h>
+#include <lib/printf.h>
 #include <debug/hung.h>
 #include <input/input.h>
 #include <drivers/timer.h>
@@ -438,4 +440,91 @@ int input_register_device(struct input_dev *dev)
 void input_init(void)
 {
     devfs_register("input", S_IFDIR | 0755, NULL, NULL, 0);
+}
+
+/* ---- /dev/devices (docs/design/sysinfo.md) ---- */
+
+static const char *bus_name(uint16_t bus)
+{
+    switch (bus) {
+    case BUS_USB:     return "USB";
+    case BUS_VIRTUAL: return "virtual";
+    case BUS_I8042:   return "8042 (PS/2)";
+    case BUS_VIRTIO:  return "virtio";
+    default:          return "unknown";
+    }
+}
+
+/* The capabilities are written before input_register_device and read only
+ * afterwards. The readers, the grab and the repeat timing are read under
+ * dev->lock. The list is walked under input_devices_lock, which gives the
+ * order input_devices_lock -> input_dev.lock of the repeat thread. */
+void input_describe(struct devinfo *d)
+{
+    static const char *const rel_names[REL_CNT] = {
+        [REL_X] = "X", [REL_Y] = "Y", [REL_HWHEEL] = "horizontal wheel", [REL_WHEEL] = "wheel",
+        [REL_WHEEL_HI_RES] = "wheel (high resolution)", [REL_HWHEEL_HI_RES] = "horizontal wheel (high resolution)",
+    };
+    static const char *const abs_names[ABS_CNT] = { [ABS_X] = "X", [ABS_Y] = "Y" };
+    static const char *const button_names[] = { "left", "right", "middle", "side", "extra", "forward", "back", "task" };
+    devinfo_node(d, "input", "Input devices");
+    spin_lock(&input_devices_lock);
+    devinfo_prop(d, "devices", "%u", ndevices);
+    struct list_head *pos;
+    list_for_each(pos, &input_devices) {
+        struct input_dev *dev = list_entry(pos, struct input_dev, link);
+        char path[24];
+        ksnprintf(path, sizeof path, "input/event%u", dev->index);
+        devinfo_node(d, path, "event%u: %s", dev->index, dev->name);
+        devinfo_prop(d, "device_node", "/dev/input/event%u", dev->index);
+        devinfo_prop(d, "name", "%s", dev->name);
+        devinfo_prop(d, "bus", "%s (0x%02x)", bus_name(dev->id.bustype), dev->id.bustype);
+        devinfo_prop(d, "vendor_id", "%04x", dev->id.vendor);
+        devinfo_prop(d, "product_id", "%04x", dev->id.product);
+        devinfo_prop(d, "version", "%04x", dev->id.version);
+        unsigned keys = 0, buttons = 0;
+        char list[192];
+        list[0] = '\0';
+        for (unsigned code = 0; code <= KEY_MAX; code++) {
+            if (!bit_test(dev->keybit, code))
+                continue;
+            if (code >= BTN_LEFT && code <= BTN_TASK) {
+                buttons++;
+                devinfo_append(list, sizeof list, ", ", button_names[code - BTN_LEFT]);
+            } else {
+                keys++;
+            }
+        }
+        if (keys)
+            devinfo_prop(d, "keys", "%u", keys);
+        if (buttons)
+            devinfo_prop(d, "buttons", "%s", list);
+        list[0] = '\0';
+        for (unsigned axis = 0; axis <= REL_MAX; axis++)
+            if (dev->relbit & (1u << axis))
+                devinfo_append(list, sizeof list, ", ", rel_names[axis] ? rel_names[axis] : "other");
+        if (list[0])
+            devinfo_prop(d, "relative_axes", "%s", list);
+        for (unsigned axis = 0; axis <= ABS_MAX; axis++) {
+            if (!(dev->absbit & (1u << axis)))
+                continue;
+            char key[24];
+            ksnprintf(key, sizeof key, "absolute_axis_%s", abs_names[axis] ? abs_names[axis] : "other");
+            devinfo_prop(d, key, "%d to %d, resolution %d", dev->abs[axis].minimum, dev->abs[axis].maximum,
+                         dev->abs[axis].resolution);
+        }
+        spin_lock(&dev->lock);
+        unsigned readers = 0;
+        struct list_head *r;
+        list_for_each(r, &dev->readers)
+            readers++;
+        bool grabbed = dev->grab != NULL;
+        uint32_t delay = dev->rep[REP_DELAY], period = dev->rep[REP_PERIOD];
+        spin_unlock(&dev->lock);
+        if (dev->evbit & (1u << EV_REP))
+            devinfo_prop(d, "key_repeat", "after %u ms, every %u ms", delay, period);
+        devinfo_prop(d, "open_readers", "%u", readers);
+        devinfo_prop(d, "grabbed", "%s", grabbed ? "yes" : "no");
+    }
+    spin_unlock(&input_devices_lock);
 }
