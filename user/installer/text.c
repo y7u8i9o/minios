@@ -14,11 +14,15 @@
 #include <sys/stat.h>
 #include <minios/account.h>
 
-/* Ask a question with a default, which an empty answer takes. */
+/* Ask a question with a default. An empty answer takes the default. An
+ * empty default is not shown. */
 static void ask(const char *question, const char *def, char *out, size_t size)
 {
     char line[256];
-    printf("%s [%s]: ", question, def);
+    if (def[0])
+        printf("%s [%s]: ", question, def);
+    else
+        printf("%s: ", question);
     fflush(stdout);
     if (!fgets(line, sizeof line, stdin))
         line[0] = '\0';
@@ -32,15 +36,19 @@ static void ask_password(const char *who, char *out, size_t size, int allow_empt
 {
     char again[128], prompt[96];
     for (;;) {
-        snprintf(prompt, sizeof prompt, "Password of %s: ", who);
+        snprintf(prompt, sizeof prompt, "Password for %s: ", who);
         if (account_read_password(prompt, out, size) < 0)
             out[0] = '\0';
         if (!out[0] && allow_empty)
             return;
-        snprintf(prompt, sizeof prompt, "The password of %s again: ", who);
-        if (out[0] && account_read_password(prompt, again, sizeof again) == 0 && strcmp(out, again) == 0)
+        if (!out[0]) {
+            printf("The password must not be empty. Try again.\n");
+            continue;
+        }
+        snprintf(prompt, sizeof prompt, "Repeat the password for %s: ", who);
+        if (account_read_password(prompt, again, sizeof again) == 0 && strcmp(out, again) == 0)
             return;
-        printf("The passwords are empty or differ. Please try again.\n");
+        printf("The two passwords differ. Try again.\n");
     }
 }
 
@@ -49,24 +57,33 @@ static void interactive(struct plan *p, const char *medium_disk)
     char names[8][16], buf[64];
     long mib[8];
     int n = inst_list_disks(medium_disk, names, mib, 8);
-    printf("\nThe disks:\n");
+    printf("Disks:\n");
     for (int i = 0; i < n; i++)
         printf("  %s  %ld MiB\n", names[i], mib[i]);
-    ask("The disk to install on, which will be erased", n ? names[0] : "vdb", p->disk, sizeof p->disk);
-    printf("\nThe package groups are desktop-system (the graphical desktop), standard\n"
-           "(the console system with network and text tools) and minimal.\n");
-    ask("The package group", "desktop-system", p->group, sizeof p->group);
-    ask("Further packages, separated by spaces, such as apps or devel", "", p->packages, sizeof p->packages);
-    ask("The language", p->lang, p->lang, sizeof p->lang);
-    ask("The keyboard layout", p->keymap, p->keymap, sizeof p->keymap);
-    ask("The time zone, as Europe/Berlin", p->timezone, p->timezone, sizeof p->timezone);
+    printf("The installation erases all data on the chosen disk.\n");
+    ask("Install on which disk?", n ? names[0] : "vdb", p->disk, sizeof p->disk);
+    printf("\nPackage groups:\n"
+           "  desktop-system  the standard system with the graphical desktop\n"
+           "  standard        the standard console system\n"
+           "  minimal         the minimal bootable system\n");
+    ask("Which package group?", "desktop-system", p->group, sizeof p->group);
+    ask("Additional packages, separated by spaces (for example apps devel)", "", p->packages,
+        sizeof p->packages);
+    printf("\n");
+    ask("Language", p->lang, p->lang, sizeof p->lang);
+    ask("Keyboard layout", p->keymap, p->keymap, sizeof p->keymap);
+    ask("Time zone (for example Europe/Berlin)", p->timezone, p->timezone, sizeof p->timezone);
     snprintf(buf, sizeof buf, "%d", p->swap_mb);
-    ask("The size of the swap partition in MiB", buf, buf, sizeof buf);
+    ask("Swap partition size in MiB", buf, buf, sizeof buf);
     p->swap_mb = atoi(buf);
+    printf("\n");
     ask_password("root", p->root_password, sizeof p->root_password, 0);
-    ask("The name of the first account, a member of wheel, empty for none", "user", p->user, sizeof p->user);
+    printf("\nThe first account is a member of the group wheel. Type none to create no account.\n");
+    ask("Account name", "user", p->user, sizeof p->user);
+    if (strcmp(p->user, "none") == 0)
+        p->user[0] = '\0';
     if (p->user[0]) {
-        ask("The full name of the account", p->user, p->user_fullname, sizeof p->user_fullname);
+        ask("Full name", p->user, p->user_fullname, sizeof p->user_fullname);
         ask_password(p->user, p->user_password, sizeof p->user_password, 0);
     }
 }
@@ -102,11 +119,11 @@ int main(int argc, char **argv)
         inst_defaults(&p);
     } else {
         inst_defaults(&p);
-        printf("\nThe installation of minios\n\n");
+        printf("\nInstall minios\n\n");
         interactive(&p, medium);
-        printf("\nAll data on %s will be erased, and %s will be installed on it.\n", p.disk, p.group);
+        printf("\nThe installation erases all data on %s and installs %s on it.\n", p.disk, p.group);
         char yes[16];
-        ask("Type yes to install", "no", yes, sizeof yes);
+        ask("Type yes to start the installation", "no", yes, sizeof yes);
         if (strcmp(yes, "yes") != 0) {
             inst_log("nothing was installed");
             return 1;
