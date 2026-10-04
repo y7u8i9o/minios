@@ -91,20 +91,20 @@ $(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scrip
 # pkgsign generates signing keys and signs the index of a package
 # repository. It is compiled from the SHA-2 and Ed25519 code of libc. pkg
 # uses the same code on minios to verify signatures.
-CRYPTO_SRCS := libc/src/crypto/sha2.c libc/src/crypto/ed25519.c libc/src/crypto/shacrypt.c
-CRYPTO_HDRS := libc/include/minios/sha2.h libc/include/minios/ed25519.h
+CRYPTO_SRCS := lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c lib/libc/src/crypto/shacrypt.c
+CRYPTO_HDRS := lib/libc/include/minios/sha2.h lib/libc/include/minios/ed25519.h
 $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 	@mkdir -p $(dir $@)
-	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
 
 # PKGHOST is pkg compiled for the host. With --root, it installs packages
 # into the directory tree of a disk image. `pkg perms` prints the mode and
 # the owner of every installed file, and mkfs sets them in the image
 # (docs/design/packages.md).
-PKGHOST_SRCS := $(wildcard user/pkg/*.c) libc/src/gzip.c libc/src/net/http.c libc/src/crypto/sha2.c libc/src/crypto/ed25519.c
-$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) libc/include/minios/local.h libc/include/minios/gzip.h libc/include/minios/http.h
+PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/net/http.c lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c
+$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ $(PKGHOST_SRCS)
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ $(PKGHOST_SRCS)
 
 $(PKG_KEY_FILE): | $(PKGSIGN)
 	@mkdir -p $(dir $@)
@@ -132,31 +132,31 @@ kernel: $(GENSYMS)
 	$(MAKE) -C kernel
 
 libc:
-	$(MAKE) -C libc
+	$(MAKE) -C lib/libc
 
 libfont: libc
-	$(MAKE) -C libfont
+	$(MAKE) -C lib/libfont
 
 libwire: libc
-	$(MAKE) -C libwire
+	$(MAKE) -C lib/libwire
 
 libaudio: libc libwire
-	$(MAKE) -C libaudio
+	$(MAKE) -C lib/libaudio
 
 libcodec: libc
-	$(MAKE) -C libcodec
+	$(MAKE) -C lib/libcodec
 
 libgui: libc libcodec libfont libwire
-	$(MAKE) -C libgui
+	$(MAKE) -C lib/libgui
 
 libedit: libc
-	$(MAKE) -C libedit
+	$(MAKE) -C lib/libedit
 
 libjson: libc
-	$(MAKE) -C libjson
+	$(MAKE) -C lib/libjson
 
 libprof: libc libjson
-	$(MAKE) -C libprof
+	$(MAKE) -C lib/libprof
 
 packages: user
 
@@ -348,10 +348,10 @@ test-kvm:
 # code and pkg, libfont, libwire, libcodec, libgui, the Lua modules and the
 # input method engines.
 check: check-headers check-pkg
-	$(MAKE) -C libfont check
-	$(MAKE) -C libwire check
-	$(MAKE) -C libcodec check
-	$(MAKE) -C libgui check
+	$(MAKE) -C lib/libfont check
+	$(MAKE) -C lib/libwire check
+	$(MAKE) -C lib/libcodec check
+	$(MAKE) -C lib/libgui check
 	$(MAKE) check-lua
 	$(MAKE) check-imed
 
@@ -371,11 +371,11 @@ check-imed:
 # compiler in C17, as tcc compiles it on minios (docs/design/tcc.md).
 check-headers:
 	@mkdir -p $(BUILD)/headers
-	@status=0; for h in $$(cd libc/include && find . -name '*.h' | sed 's|^\./||') \
-	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h \
+	@status=0; for h in $$(cd lib/libc/include && find . -name '*.h' | sed 's|^\./||') \
+	    $$(cd lib/libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h \
 	    codec/codec.h prof/profile.h; do \
 	    printf '#include <%s>\nint check_header_%s;\n' "$$h" "$$(echo $$h | tr -c 'A-Za-z0-9_\n' '_')" > $(BUILD)/headers/t.c; \
-	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -Ilibjson/include -Ilibprof/include -fsyntax-only $(BUILD)/headers/t.c \
+	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilib/libc/include -Ikernel/include -Ilib/libgui/include -Ilib/libcodec/include -Ilib/libfont/include -Ilib/libwire/include -Ilib/libaudio/include -Ilib/libedit/include -Ilib/libjson/include -Ilib/libprof/include -fsyntax-only $(BUILD)/headers/t.c \
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
 # check-lua compiles the Lua interpreter and the modules in user/lua with
@@ -384,15 +384,15 @@ check-headers:
 # other Lua test scripts.
 LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
                 $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
-                $(filter-out libgui/src/client.c,$(wildcard libgui/src/*.c libgui/src/widgets/*.c)) \
-                libgui/tests/fake_client.c libgui/tests/host_compat.c $(wildcard libfont/src/*.c) \
-                $(wildcard libcodec/src/*.c libcodec/modules/*/*.c)
+                $(filter-out lib/libgui/src/client.c,$(wildcard lib/libgui/src/*.c lib/libgui/src/widgets/*.c)) \
+                lib/libgui/tests/fake_client.c lib/libgui/tests/host_compat.c $(wildcard lib/libfont/src/*.c) \
+                $(wildcard lib/libcodec/src/*.c lib/libcodec/modules/*/*.c)
 check-lua:
 	@mkdir -p $(BUILD)/lua/host
-	$(MAKE) -C libgui $(BUILD)/libgui/font.c
+	$(MAKE) -C lib/libgui $(BUILD)/libgui/font.c
 	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DCODEC_BUILTIN -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
-	    -include libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilibgui/include -Ilibcodec/include -Ilibfont/include \
-	    -Ilibgui/tests -Ilibaudio/include -idirafter kernel/include \
+	    -include lib/libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilib/libgui/include -Ilib/libcodec/include -Ilib/libfont/include \
+	    -Ilib/libgui/tests -Ilib/libaudio/include -idirafter kernel/include \
     -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
 	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp
 	$(BUILD)/lua/host/test_modules user/etc/tests/modules.lua $(BUILD)/lua/host/tmp user/etc/mime.types user/etc/mime.apps
@@ -409,7 +409,7 @@ check-lua:
 # installation root in build/host/pkgtest.
 check-pkg: $(PKGHOST) $(PKGSIGN)
 	@mkdir -p $(BUILD)/host
-	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter libc/include \
+	$(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter lib/libc/include \
 	    -o $(BUILD)/host/cryptotest user/tests/cryptotest.c $(CRYPTO_SRCS)
 	$(BUILD)/host/cryptotest
 	PKG=$(abspath $(PKGHOST)) PKGSIGN=$(abspath $(PKGSIGN)) MKREPO=$(abspath tools/mkrepo.sh) WORK=$(abspath $(BUILD)/host/pkgtest) sh user/pkg/tests/host.sh

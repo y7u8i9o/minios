@@ -61,7 +61,7 @@ with pseudo terminals, and `sleep_ms`/`uptime_ms`.
 keyboard to raw scancodes, creates the request queue `wsrv.req` and
 polls it together with the mouse and the keyboard.
 
-- Clients (`libgui/src/client.c`) create the queue `wsrv.c<pid>` for
+- Clients (`lib/libgui/src/client.c`) create the queue `wsrv.c<pid>` for
   events and replies, send `WM_CONNECT`, and create windows with
   `WM_CREATE`; the server allocates the shared surface `wsrv.s<id>`
   (32 bit RGB, stride equal to the width) which both sides map. Clients
@@ -91,7 +91,7 @@ polls it together with the mouse and the keyboard.
 
 ## Client library and toolkit
 
-`libgui/` builds `libgui.a`: `gfx` (fill, rectangle, line, 8x16 text,
+`lib/libgui/` builds `libgui.a`: `gfx` (fill, rectangle, line, 8x16 text,
 clipped blit, rectangle helpers), the client protocol, and `widgets`:
 a tree of boxes (vertical or horizontal layout with padding, spacing
 and expanding children), labels, buttons, text fields with a cursor,
@@ -258,7 +258,7 @@ table is a growable array of pointers.
 ## M26: the client library on the compositor
 
 `wsrv`, `gui/proto.h`, the message queue transport and the shared
-clipboard object are gone. `libgui/src/client.c` implements the same
+clipboard object are gone. `lib/libgui/src/client.c` implements the same
 `gui_*` API over libwire:
 
 - `gui_connect` connects to the `display` socket (non blocking), binds
@@ -296,7 +296,7 @@ clipboard object are gone. `libgui/src/client.c` implements the same
 boot tests run on X12 and the panel; their expectations use the `x12:`
 and `panel:` log lines.
 
-## Client side decorations (`libgui/src/csd.c`)
+## Client side decorations (`lib/libgui/src/csd.c`)
 
 Toplevels of libgui draw their own chrome, the way GTK 4 does under
 Wayland, in a light style that matches the rest of the toolkit. The

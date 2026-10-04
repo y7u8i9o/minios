@@ -1,10 +1,10 @@
 # Folder view and file chooser
 
 The file manager and the file chooser of libgui share one component, the
-folder view (`gui/folderview.h`, `libgui/src/folderview.c`), in the way
+folder view (`gui/folderview.h`, `lib/libgui/src/folderview.c`), in the way
 GNOME Files and the GTK file chooser share their places sidebar and path
 bar. The file chooser (`app_choose_file` in `gui/app.h`,
-`libgui/src/filechooser.c`) wraps it in a modal window, and the Files
+`lib/libgui/src/filechooser.c`) wraps it in a modal window, and the Files
 program (`files.md`) wraps it in its main window. Both were built on
 2026-10-03, when the chooser replaced the path prompt that the programs
 used for Open and Save.
@@ -146,7 +146,7 @@ the whole mechanism.
 
 ## Tests
 
-`libgui/tests/test_filechooser.c` (part of `make -C libgui check`) builds
+`lib/libgui/tests/test_filechooser.c` (part of `make -C lib/libgui check`) builds
 a temporary tree with its own MIME table and drives a chooser through
 messages to its window. It checks the initial folder and selection, a
 MIME filter and the switch to the second filter, Alt+Up and Alt+Down

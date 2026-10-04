@@ -2,17 +2,17 @@
 
 ## Build
 
-`libc/Makefile` produces `build/libc/libc.a`, `build/lib/libc.so` and
+`lib/libc/Makefile` produces `build/libc/libc.a`, `build/lib/libc.so` and
 `build/libc/crt0.o`. User code is compiled with `UCFLAGS` from
 `toolchain.mk` (PIC, and on x86_64 SSE2 enabled with saved FPU state and
 AVX disabled, `UARCHFLAGS`). The code of the target architecture is in
-`libc/arch/$(ARCH)/`: on x86_64 `syscall.S`, `crt0.S`, `crti.S`, `crtn.S`,
+`lib/libc/arch/$(ARCH)/`: on x86_64 `syscall.S`, `crt0.S`, `crti.S`, `crtn.S`,
 `setjmp.S`, `fenv.c`, `math_long.c` (the x87 long double functions),
 `math_x87.c` (the SSE2 square roots, the x87 partial remainder and arc
 tangent) and the internal header `libc_arch.h` (the thread pointer, the
 spin wait hint and the stack of a new thread). The public headers
 `setjmp.h`, `fenv.h` and `minios/simd.h` take their architecture part from
-`include/bits/<arch>/`. On aarch64 `libc/arch/aarch64/` contains the
+`include/bits/<arch>/`. On aarch64 `lib/libc/arch/aarch64/` contains the
 same assembly, an `fenv.c` over FPCR and FPSR, and `math_long.c`: the
 binary128 `long double` functions with exact `truncl`, `frexpl`,
 `ldexpl`, `fmodl` and `remainderl`, and exponential, logarithmic and

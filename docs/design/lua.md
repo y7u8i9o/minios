@@ -395,7 +395,7 @@ synthesizer with two oscillators, modulation, delay and saved presets.
 
 `user/etc/tests/modules.lua` checks every function of `fs`, `sys` and
 `mime`. `make check-lua` (part of `make check`) compiles the interpreter,
-`user/lua/` and `libgui/src/mime.c` with the host compiler and runs the
+`user/lua/` and `lib/libgui/src/mime.c` with the host compiler and runs the
 script on a scratch directory with the MIME tables from `user/etc/`. The
 host program links the C modules in, and `linit.c` compiled for the host
 registers them in `package.preload`, where worker states find them as
@@ -403,7 +403,7 @@ well.
 `user/lua/tests/gui.lua` runs on the host only, over the fake client
 of libgui: layout, signals, painting and pixels, the painter lifetime,
 close handling, destroyed widgets, timers and the constructors. It also
-loads `libgui/tests/data/rgba.png` and `shape.svg` and compares their
+loads `lib/libgui/tests/data/rgba.png` and `shape.svg` and compares their
 sizes and pixels with the formulas of `genicons.py`, checks the missing
 and malformed file results, `from_pixels` and pixel stores, reads back
 images drawn on a canvas at their size, enlarged and reduced, checks

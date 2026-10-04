@@ -9,7 +9,7 @@ Usage: genfont.py > kernel/drivers/font.c   (requires Pillow)
        genfont.py mfnt <font.ttf> <pixel size> <out.mfnt>
 
 The second form writes a variable width 1 bit font for libgui (see
-libgui/include/gui/gfx.h for the layout): a 16 byte header, 256 advances,
+lib/libgui/include/gui/gfx.h for the layout): a 16 byte header, 256 advances,
 256 widths, then 256 glyph bitmaps of height rows of 32 bits, bit 31
 leftmost. Glyphs wider than 32 pixels are clipped.
 """

@@ -44,8 +44,8 @@ investigation did not evaluate library versions, licenses, or porting effort.
 | `kernel/drivers/virtio/virtio.c`, `kernel/include/drivers/virtio/virtio.h` | Modern PCI VirtIO transport, MSI-X, split queues, at most four queues per device and 128 descriptors per queue | Reuse for one RX queue and one TX queue; negotiate only supported features. |
 | `kernel/ipc/socket.c` | Unix-domain streams, shared connection rings, descriptor passing, and a file-operations-pointer socket type check | Introduce common socket dispatch and store Unix connection state in its backend. |
 | `kernel/syscall/sys_ipc.c` | Socket creation accepts only `AF_UNIX`; the third argument is treated as flags; bind/connect assume Unix addresses; accept ignores address outputs | Add family-aware address handling and real Internet protocol selection without breaking existing Unix callers. |
-| `libwire/src/client.c`, `libwire/src/server.c` | MiniOS callers pass socket flags in the third argument | Preserve this legacy Unix convention initially; use standard type flags for new Internet calls. |
-| `libc/src/ipc.c` | `send()` and `recv()` call write/read and ignore message flags | Route through socket operations and explicitly validate flags. |
+| `lib/libwire/src/client.c`, `lib/libwire/src/server.c` | MiniOS callers pass socket flags in the third argument | Preserve this legacy Unix convention initially; use standard type flags for new Internet calls. |
+| `lib/libc/src/ipc.c` | `send()` and `recv()` call write/read and ignore message flags | Route through socket operations and explicitly validate flags. |
 | `kernel/fs/file.c` | Read and write acquire the same position mutex while the backend may block | Add an explicit position-independent I/O path for sockets so a blocked read does not exclude a concurrent write. |
 | `kernel/ipc/poll.c` | Poll registers an object's source before checking readiness | Give each new socket a stable poll source across connection state changes. |
 | `kernel/sched/wait.c`, `kernel/drivers/timer.c` | Timed waits and monotonic time already exist | Run protocol timer work in a worker thread; timer interrupts arrange wakeups only. |
@@ -195,7 +195,7 @@ Scope:
 Likely paths: `kernel/ipc/socket.c`, `kernel/include/ipc/socket.h`,
 `kernel/syscall/sys_ipc.c`, syscall declarations/table, `kernel/fs/file.c`,
 `kernel/include/fs/vfs.h`, `kernel/include/minios/abi.h`, kernel/libc errno
-headers, `libc/include/sys/socket.h`, `libc/src/ipc.c`, proposed Internet headers.
+headers, `lib/libc/include/sys/socket.h`, `lib/libc/src/ipc.c`, proposed Internet headers.
 
 Exit criteria: existing `sockets`, `fdflags`, `evfd`, `pthreads`, and relevant
 compositor IPC tests pass. A new test demonstrates a blocked reader and an
@@ -453,8 +453,8 @@ Scope:
 - Document message flags, options, resolver limitations and errors in manual
   pages. No TLS or certificate-validation claim accompanies the HTTP client.
 
-Proposed paths: `libc/include/{netdb.h,arpa/inet.h,netinet/in.h}`,
-`libc/src/net/`, `user/coreutils/`, `user/share/man/` and resolver/tool tests.
+Proposed paths: `lib/libc/include/{netdb.h,arpa/inet.h,netinet/in.h}`,
+`lib/libc/src/net/`, `user/coreutils/`, `user/share/man/` and resolver/tool tests.
 
 Exit criteria: numeric/local-name lookups work without a server; controlled DNS
 tests cover positive/negative responses, truncation, compression loops,

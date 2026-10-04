@@ -4,10 +4,10 @@ The C library supports the locales `C` (also named `POSIX`), `C.UTF-8`
 and the locales whose files are in `/usr/share/i18n/locales`: `en_US`,
 `fr_FR`, `es_ES`, `ru_RU`, `zh_CN` and `ja_JP`. Every locale decodes
 UTF-8, `MB_CUR_MAX` is 4, and `nl_langinfo(CODESET)` returns `UTF-8` in
-every locale. The code is in `libc/src/locale/` (`locale.c`, `collate.c`,
-`locale_impl.h`), with the users of the items in `libc/src/stdio/format.c`,
-`libc/src/stdio/scan.c`, `libc/src/stdlib/stdlib.c` and
-`libc/src/time/tm.c`.
+every locale. The code is in `lib/libc/src/locale/` (`locale.c`, `collate.c`,
+`locale_impl.h`), with the users of the items in `lib/libc/src/stdio/format.c`,
+`lib/libc/src/stdio/scan.c`, `lib/libc/src/stdlib/stdlib.c` and
+`lib/libc/src/time/tm.c`.
 
 ## Locale files
 

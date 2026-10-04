@@ -3,297 +3,297 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: libgui/src/dialog.c:86 libgui/src/filechooser.c:45 libgui/src/folderview.c:554
+#: lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:45 lib/libgui/src/folderview.c:554
 msgid "OK"
 msgstr ""
 
-#: libgui/src/dialog.c:86 libgui/src/filechooser.c:102 libgui/src/filechooser.c:340
+#: lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:102 lib/libgui/src/filechooser.c:340
 msgid "Cancel"
 msgstr ""
 
-#: libgui/src/filechooser.c:100
+#: lib/libgui/src/filechooser.c:100
 msgid "A file named “%s” already exists. Do you want to replace it?"
 msgstr ""
 
-#: libgui/src/filechooser.c:102
+#: lib/libgui/src/filechooser.c:102
 msgid "Replace"
 msgstr ""
 
-#: libgui/src/filechooser.c:103
+#: lib/libgui/src/filechooser.c:103
 msgid "Replace file"
 msgstr ""
 
-#: libgui/src/filechooser.c:246 libgui/src/filechooser.c:357
+#: lib/libgui/src/filechooser.c:246 lib/libgui/src/filechooser.c:357
 msgid "New folder"
 msgstr ""
 
-#: libgui/src/filechooser.c:246
+#: lib/libgui/src/filechooser.c:246
 msgid "Folder name:"
 msgstr ""
 
-#: libgui/src/filechooser.c:250
+#: lib/libgui/src/filechooser.c:250
 msgid "A folder name cannot contain “/”."
 msgstr ""
 
-#: libgui/src/filechooser.c:256
+#: lib/libgui/src/filechooser.c:256
 msgid "The folder “%s” cannot be created: %s."
 msgstr ""
 
-#: libgui/src/filechooser.c:291
+#: lib/libgui/src/filechooser.c:291
 msgid "Hide hidden files"
 msgstr ""
 
-#: libgui/src/filechooser.c:291 libgui/src/filechooser.c:371
+#: lib/libgui/src/filechooser.c:291 lib/libgui/src/filechooser.c:371
 msgid "Show hidden files"
 msgstr ""
 
-#: libgui/src/filechooser.c:323
+#: lib/libgui/src/filechooser.c:323
 msgid "Name:"
 msgstr ""
 
-#: libgui/src/filechooser.c:343
+#: lib/libgui/src/filechooser.c:343
 msgid "Save"
 msgstr ""
 
-#: libgui/src/filechooser.c:343
+#: lib/libgui/src/filechooser.c:343
 msgid "Open"
 msgstr ""
 
-#: libgui/src/filechooser.c:367
+#: lib/libgui/src/filechooser.c:367
 msgid "Visit file"
 msgstr ""
 
-#: libgui/src/filechooser.c:369
+#: lib/libgui/src/filechooser.c:369
 msgid "Copy location"
 msgstr ""
 
-#: libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:421
 msgid "Save file"
 msgstr ""
 
-#: libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:421
 msgid "Open file"
 msgstr ""
 
-#: libgui/src/filechooser.c:94
+#: lib/libgui/src/filechooser.c:94
 msgid "The folder “%s” does not exist."
 msgstr ""
 
-#: libgui/src/fileops.c:334
+#: lib/libgui/src/fileops.c:334
 msgid "Copy of %s"
 msgstr ""
 
-#: libgui/src/folderview.c:1028
+#: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be moved: %s."
 msgstr ""
 
-#: libgui/src/folderview.c:1028
+#: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be copied: %s."
 msgstr ""
 
-#: libgui/src/folderview.c:1269 libgui/src/folderview.c:1269
+#: lib/libgui/src/folderview.c:1269 lib/libgui/src/folderview.c:1269
 msgid "Desktop"
 msgstr ""
 
-#: libgui/src/folderview.c:1270
+#: lib/libgui/src/folderview.c:1270
 msgid "Documents"
 msgstr ""
 
-#: libgui/src/folderview.c:1270
+#: lib/libgui/src/folderview.c:1270
 msgid "Downloads"
 msgstr ""
 
-#: libgui/src/folderview.c:1271
+#: lib/libgui/src/folderview.c:1271
 msgid "Music"
 msgstr ""
 
-#: libgui/src/folderview.c:1271
+#: lib/libgui/src/folderview.c:1271
 msgid "Pictures"
 msgstr ""
 
-#: libgui/src/folderview.c:1272
+#: lib/libgui/src/folderview.c:1272
 msgid "Videos"
 msgstr ""
 
-#: libgui/src/folderview.c:1275
+#: lib/libgui/src/folderview.c:1275
 msgid "Programs"
 msgstr ""
 
-#: libgui/src/folderview.c:1275
+#: lib/libgui/src/folderview.c:1275
 msgid "Shared files"
 msgstr ""
 
-#: libgui/src/folderview.c:1276
+#: lib/libgui/src/folderview.c:1276
 msgid "Fonts"
 msgstr ""
 
-#: libgui/src/folderview.c:1276
+#: lib/libgui/src/folderview.c:1276
 msgid "Devices"
 msgstr ""
 
-#: libgui/src/folderview.c:1278 libgui/src/folderview.c:1333
+#: lib/libgui/src/folderview.c:1278 lib/libgui/src/folderview.c:1333
 msgid "Recent"
 msgstr ""
 
-#: libgui/src/folderview.c:1279 libgui/src/folderview.c:1340
+#: lib/libgui/src/folderview.c:1279 lib/libgui/src/folderview.c:1340
 msgid "Home"
 msgstr ""
 
-#: libgui/src/folderview.c:1299
+#: lib/libgui/src/folderview.c:1299
 msgid "Computer"
 msgstr ""
 
-#: libgui/src/folderview.c:1507
+#: lib/libgui/src/folderview.c:1507
 msgid "Search"
 msgstr ""
 
-#: libgui/src/folderview.c:251
+#: lib/libgui/src/folderview.c:251
 msgid "%ld byte"
 msgid_plural "%ld bytes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: libgui/src/folderview.c:255
+#: lib/libgui/src/folderview.c:255
 msgid "%s kB"
 msgstr ""
 
-#: libgui/src/folderview.c:258
+#: lib/libgui/src/folderview.c:258
 msgid "%s GB"
 msgstr ""
 
-#: libgui/src/folderview.c:261
+#: lib/libgui/src/folderview.c:261
 msgid "%s MB"
 msgstr ""
 
-#: libgui/src/folderview.c:274
+#: lib/libgui/src/folderview.c:274
 msgid "Folder"
 msgstr ""
 
-#: libgui/src/folderview.c:274
+#: lib/libgui/src/folderview.c:274
 msgid "Text"
 msgstr ""
 
-#: libgui/src/folderview.c:274
+#: lib/libgui/src/folderview.c:274
 msgid "C source"
 msgstr ""
 
-#: libgui/src/folderview.c:275
+#: lib/libgui/src/folderview.c:275
 msgid "Shell script"
 msgstr ""
 
-#: libgui/src/folderview.c:275
+#: lib/libgui/src/folderview.c:275
 msgid "Lua source"
 msgstr ""
 
-#: libgui/src/folderview.c:276
+#: lib/libgui/src/folderview.c:276
 msgid "PNG image"
 msgstr ""
 
-#: libgui/src/folderview.c:276
+#: lib/libgui/src/folderview.c:276
 msgid "BMP image"
 msgstr ""
 
-#: libgui/src/folderview.c:276
+#: lib/libgui/src/folderview.c:276
 msgid "SVG image"
 msgstr ""
 
-#: libgui/src/folderview.c:277
+#: lib/libgui/src/folderview.c:277
 msgid "WAV audio"
 msgstr ""
 
-#: libgui/src/folderview.c:277
+#: lib/libgui/src/folderview.c:277
 msgid "FLAC audio"
 msgstr ""
 
-#: libgui/src/folderview.c:277
+#: lib/libgui/src/folderview.c:277
 msgid "Ogg audio"
 msgstr ""
 
-#: libgui/src/folderview.c:278
+#: lib/libgui/src/folderview.c:278
 msgid "Launcher"
 msgstr ""
 
-#: libgui/src/folderview.c:278
+#: lib/libgui/src/folderview.c:278
 msgid "Package"
 msgstr ""
 
-#: libgui/src/folderview.c:284
+#: lib/libgui/src/folderview.c:284
 msgid "Program"
 msgstr ""
 
-#: libgui/src/folderview.c:284
+#: lib/libgui/src/folderview.c:284
 msgid "File"
 msgstr ""
 
-#: libgui/src/folderview.c:481
+#: lib/libgui/src/folderview.c:481
 msgid "Yesterday"
 msgstr ""
 
-#: libgui/src/folderview.c:487
+#: lib/libgui/src/folderview.c:487
 msgid "%e %b"
 msgstr ""
 
-#: libgui/src/folderview.c:489
+#: lib/libgui/src/folderview.c:489
 msgid "%e %b %Y"
 msgstr ""
 
-#: libgui/src/folderview.c:531 libgui/src/folderview.c:532
+#: lib/libgui/src/folderview.c:531 lib/libgui/src/folderview.c:532
 msgid "Name"
 msgstr ""
 
-#: libgui/src/folderview.c:531
+#: lib/libgui/src/folderview.c:531
 msgid "Size"
 msgstr ""
 
-#: libgui/src/folderview.c:531 libgui/src/folderview.c:532
+#: lib/libgui/src/folderview.c:531 lib/libgui/src/folderview.c:532
 msgid "Type"
 msgstr ""
 
-#: libgui/src/folderview.c:531 libgui/src/folderview.c:532
+#: lib/libgui/src/folderview.c:531 lib/libgui/src/folderview.c:532
 msgid "Modified"
 msgstr ""
 
-#: libgui/src/folderview.c:532
+#: lib/libgui/src/folderview.c:532
 msgid "Location"
 msgstr ""
 
-#: libgui/src/folderview.c:618
+#: lib/libgui/src/folderview.c:618
 msgid "The folder “%s” cannot be read: %s."
 msgstr ""
 
-#: libgui/src/folderview.c:666
+#: lib/libgui/src/folderview.c:666
 msgid "The folder “%s” cannot be opened: %s."
 msgstr ""
 
-#: libgui/src/folderview.c:879
+#: lib/libgui/src/folderview.c:879
 msgid "The file “%s” does not exist."
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:15
+#: lib/libgui/src/widgets/editmenu.c:15
 msgid "Undo"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:16
+#: lib/libgui/src/widgets/editmenu.c:16
 msgid "Redo"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:17
+#: lib/libgui/src/widgets/editmenu.c:17
 msgid "Cut"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:18
+#: lib/libgui/src/widgets/editmenu.c:18
 msgid "Copy"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:19
+#: lib/libgui/src/widgets/editmenu.c:19
 msgid "Paste"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:20
+#: lib/libgui/src/widgets/editmenu.c:20
 msgid "Delete"
 msgstr ""
 
-#: libgui/src/widgets/editmenu.c:21
+#: lib/libgui/src/widgets/editmenu.c:21
 msgid "Select all"
 msgstr ""
 

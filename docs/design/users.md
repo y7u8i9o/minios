@@ -61,7 +61,7 @@ of which minios uses the name and the hash. The password field of
 `/etc/passwd` contains `x`. Lines beginning with `#` and malformed lines are
 skipped.
 
-libc reads the files on every lookup (`libc/src/pwd.c`), with `getpwnam`,
+libc reads the files on every lookup (`lib/libc/src/pwd.c`), with `getpwnam`,
 `getpwuid`, `getpwent`, `setpwent`, `endpwent` and `fgetpwent` for accounts,
 the corresponding group functions, `getgrouplist` and `initgroups` for the
 groups of an account, and `getspnam` and `fgetspent` for the hashes. The
@@ -70,7 +70,7 @@ returns `LOGNAME`, which login sets, or else the account of the real uid.
 
 A hash is a SHA-256 crypt string (`$5$salt$hash` or
 `$5$rounds=N$salt$hash`) as specified by Ulrich Drepper in 2008, computed by
-`sha256_crypt` in `libc/src/crypto/shacrypt.c`, which `crypt` exposes. The
+`sha256_crypt` in `lib/libc/src/crypto/shacrypt.c`, which `crypt` exposes. The
 host crypto test of `make check-pkg` compares it with hashes made by
 `openssl passwd -5`. `minios/account.h` adds the helpers that the account
 programs share. `account_hash` hashes a password with a salt of 16

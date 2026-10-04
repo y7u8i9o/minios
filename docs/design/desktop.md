@@ -11,8 +11,8 @@ reconfigures such layers whenever a layer with an exclusive zone maps,
 so the desktop always covers the screen minus the panel. The scene
 sorts layers 0 and 1 below every toplevel.
 
-libgui gained `gui_create_layer_window` (`libgui/src/client.c`) and
-`app_layer_window` (`libgui/src/app.c`). A layer window has no
+libgui gained `gui_create_layer_window` (`lib/libgui/src/client.c`) and
+`app_layer_window` (`lib/libgui/src/app.c`). A layer window has no
 decorations, acknowledges configure events and resizes its surface
 when the configured size changes, and receives key events when created
 with keyboard interactivity.
@@ -25,7 +25,7 @@ launcher files. A left click selects an entry and a second click
 within 500 ms opens it. Enter opens the selection, F5 refreshes the
 listing, Delete asks for confirmation and removes the entry. A right
 click opens a context menu (`popupmenu_new` and `menu_popup` in
-`libgui/src/widgets/menu.c`, the menu bar's dropdown without a bar):
+`lib/libgui/src/widgets/menu.c`, the menu bar's dropdown without a bar):
 
 - On an entry: Open, Open with (program prompt), Rename, Delete.
 - On the desktop: New folder, New text file, Refresh, Change wallpaper
@@ -87,7 +87,7 @@ the C locale. `term_font_px` is the font size of the terminal.
 
 ## MIME types
 
-`libgui/src/mime.c` (`gui/mime.h`) reads two tables on first use:
+`lib/libgui/src/mime.c` (`gui/mime.h`) reads two tables on first use:
 
 - `/etc/mime.types`: `type ext ext ...` lines. `mime_type(path, is_dir)`
   matches the extension case-insensitively and returns
@@ -198,4 +198,4 @@ file, the zone abbreviation that `date` prints and the `LANG` that
 language. The launcher must draw its icons, and sysmon started from it
 must show its French title. The desktop must survive its context menu
 built again.
-The host test `libgui/tests/test_mime.c` covers the tables.
+The host test `lib/libgui/tests/test_mime.c` covers the tables.

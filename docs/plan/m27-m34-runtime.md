@@ -7,7 +7,7 @@
    model. AVX remains disabled because M23's FXSAVE context contains XMM but
    not the upper halves of YMM registers. Kernel compilation retains every
    floating point and SIMD prohibition.
-2. `libc/include/math.h` and `libc/src/stdlib/math.c`: IEEE-754 classification,
+2. `lib/libc/include/math.h` and `lib/libc/src/stdlib/math.c`: IEEE-754 classification,
    constants, `fabs`, `copysign`, `sqrt`, integral rounding, `fmin`, `fmax`,
    `frexp`, `ldexp`/`scalbn`, and `modf`, with float variants and `EDOM` or
    `ERANGE` reporting where applicable.
@@ -15,7 +15,7 @@
    end-pointer handling, and range errors. The printf family gains `%f`, `%e`
    and `%g`, uppercase forms, and their width, precision, sign, alignment,
    zero-padding and alternate-form behavior.
-4. `libc/include/minios/simd.h` exposes 128-bit `f32x4`, `f64x2` and `i32x4`
+4. `lib/libc/include/minios/simd.h` exposes 128-bit `f32x4`, `f64x2` and `i32x4`
    types with construction, unaligned load/store, arithmetic and reductions.
    libc array routines provide float/double addition and dot products plus
    float SAXPY, using packed SSE2 loops followed by scalar tails.
@@ -30,7 +30,7 @@ instructions, host framework checks, and the full boot suite (65 passed).
 
 ## M28. Extended libm, hexadecimal conversion and SSE2 primitives (completed 2026-08-30)
 
-1. `libc/include/float.h` describes the target's IEEE-754 binary32 and
+1. `lib/libc/include/float.h` describes the target's IEEE-754 binary32 and
    binary64 formats and x87 80-bit `long double`, including normal and
    subnormal range constants, radix, precision, decimal conversion limits,
    rounding mode and evaluation method.

@@ -1,4 +1,4 @@
-/* This program checks libc/src/crypto against the test vectors of RFC
+/* This program checks lib/libc/src/crypto against the test vectors of RFC
  * 6234 (SHA-256 and SHA-512, TEST1 to TEST4 of section 8.5) and RFC 8032
  * (Ed25519, TEST 1, 2, 3 and SHA(abc) of section 7.1), and SHA-256 crypt
  * against hashes made by OpenSSL 3 (`openssl passwd -5`). The same source runs on minios

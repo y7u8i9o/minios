@@ -3,7 +3,7 @@
 The C library translates messages with the interface of GNU gettext:
 `gettext`, `dgettext`, `dcgettext`, `ngettext`, `dngettext`, `dcngettext`,
 `textdomain`, `bindtextdomain` and `bind_textdomain_codeset`, declared in
-`<libintl.h>` and implemented in `libc/src/locale/gettext.c`. The catalogues
+`<libintl.h>` and implemented in `lib/libc/src/locale/gettext.c`. The catalogues
 are GNU `.mo` files, compiled during the build from the `.po` sources of
 `user/po`.
 

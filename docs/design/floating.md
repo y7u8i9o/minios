@@ -32,9 +32,9 @@ another thread and would corrupt values across scheduling points.
 
 ## Math runtime
 
-`libc/include/float.h` describes the compiler's binary32, binary64 and x87
+`lib/libc/include/float.h` describes the compiler's binary32, binary64 and x87
 extended formats, including true minima and decimal round-trip precision.
-`libc/include/math.h` supplies classification and ordered-comparison macros,
+`lib/libc/include/math.h` supplies classification and ordered-comparison macros,
 common constants and these function families:
 
 - `fabs`, `copysign`, `sqrt`, `trunc`, `floor`, `ceil` and `round`;
@@ -82,7 +82,7 @@ instructions.
 
 ## Floating environment
 
-`libc/include/fenv.h` exposes the C exception flags, four rounding modes,
+`lib/libc/include/fenv.h` exposes the C exception flags, four rounding modes,
 `fexcept_t`, `fenv_t`, `FE_DFL_ENV`, and the complete environment operation
 set. The stored environment contains the 28-byte x87 image and MXCSR. Every
 operation updates both units: exception queries merge their status flags,
@@ -112,7 +112,7 @@ conversion rather than a fully correctly-rounded decimal package.
 
 ## Explicit vector API
 
-`libc/include/minios/simd.h` defines native 128-bit `simd_f32x4`,
+`lib/libc/include/minios/simd.h` defines native 128-bit `simd_f32x4`,
 `simd_f64x2`, signed/unsigned integer mask types. Inline constructors, splats,
 unaligned loads and stores, arithmetic, absolute value, packed square root,
 native minimum/maximum, clamps, horizontal sums and dot products allow user
@@ -153,6 +153,6 @@ family, binary80 precision, Payne-Hanek references at `1e300` and `2^16000`,
 x87/MXCSR rounding and exception operations, and `%a`, `%A` and `%La` including
 directed rounding and the smallest double subnormal.
 
-The build additionally inspects `libc/src/stdlib/simd.o`; packed SSE2
+The build additionally inspects `lib/libc/src/stdlib/simd.o`; packed SSE2
 instructions such as `addps`, `mulps`, `sqrtps`, `addpd`, `mulpd` and `sqrtpd`
 must be present, while VEX/AVX instructions must be absent.

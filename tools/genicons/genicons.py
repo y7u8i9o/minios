@@ -2,7 +2,7 @@
 """Write PNG files without external libraries.
 
   genicons.py icons <dir>   16x16 icons drawn from the pixel art below
-  genicons.py tests <dir>   images for libgui/tests/test_images.c
+  genicons.py tests <dir>   images for lib/libgui/tests/test_images.c
 
 The writer applies a filter per row (cycling through all five) so the
 decoder's filters are exercised by the test images.

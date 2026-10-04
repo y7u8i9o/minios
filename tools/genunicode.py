@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Generate libc/src/wchar/unidata.h from the Unicode Character Database
+"""Generate lib/libc/src/wchar/unidata.h from the Unicode Character Database
 in third_party/unicode (tools/fetch_unicode.sh downloads it).
 
 The header contains sorted tables of code point ranges for the character
 classes and the widths, and a table of simple case mappings.  The C library
-searches each table with a binary search (libc/src/wchar/wctype.c and
+searches each table with a binary search (lib/libc/src/wchar/wctype.c and
 wcwidth.c)."""
 import os
 
 TOP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UCD = os.path.join(TOP, 'third_party', 'unicode')
-OUT = os.path.join(TOP, 'libc', 'src', 'wchar', 'unidata.h')
+OUT = os.path.join(TOP, 'lib', 'libc', 'src', 'wchar', 'unidata.h')
 
 
 def read_unicode_data():

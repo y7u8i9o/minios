@@ -96,7 +96,7 @@ The session consists of the panel (launcher menu, task list, volume mixer, clock
 
 ## User space
 
-The C library in `libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `math.h`, `time.h`, `pthread.h`, `signal.h`, `termios.h`, `dirent.h`, `fnmatch.h`, `glob.h`, `regex.h`, `wchar.h`, `locale.h`, `setjmp.h`, `fenv.h` and the `sys/` headers for sockets, memory mapping, waiting, file status, resource limits, event descriptors and audio. `minios/sha2.h`, `minios/ed25519.h` and `minios/http.h` provide SHA-256, SHA-512, Ed25519 and the HTTP client that `http` and `pkg` share. The math library has functions for `float`, `double` and x87 `long double`, the floating environment, hexadecimal and decimal conversion, `printf` floating formatting, and an SSE2 vector interface. The kernel saves the FXSAVE area of every thread.
+The C library in `lib/libc/` has the headers `stdio.h`, `stdlib.h`, `string.h`, `math.h`, `time.h`, `pthread.h`, `signal.h`, `termios.h`, `dirent.h`, `fnmatch.h`, `glob.h`, `regex.h`, `wchar.h`, `locale.h`, `setjmp.h`, `fenv.h` and the `sys/` headers for sockets, memory mapping, waiting, file status, resource limits, event descriptors and audio. `minios/sha2.h`, `minios/ed25519.h` and `minios/http.h` provide SHA-256, SHA-512, Ed25519 and the HTTP client that `http` and `pkg` share. The math library has functions for `float`, `double` and x87 `long double`, the floating environment, hexadecimal and decimal conversion, `printf` floating formatting, and an SSE2 vector interface. The kernel saves the FXSAVE area of every thread.
 
 `init` reads `/etc/init.conf`, runs its tasks in order and supervises its services with restart limits; the audio server and the DHCP client are services of the shipped configuration. `initctl` lists, starts, stops, restarts and reloads entries and requests the shutdown.
 
@@ -141,12 +141,12 @@ minios/
     debug/              panic, backtrace, symbols, profile, unwind
     lib/                printf, string, klog, kassert, crc32, cmdline, chacha, random
     tests/              kernel self tests, selected with test= on the command line
-  libc/                 C library
-  libfont/              font parser and rasterizer
-  libwire/              protocol library, client and server side
-  libaudio/             audiod client library
-  libgui/               application framework and widgets
-  libedit/              line editor
+  lib/libc/                 C library
+  lib/libfont/              font parser and rasterizer
+  lib/libwire/              protocol library, client and server side
+  lib/libaudio/             audiod client library
+  lib/libgui/               application framework and widgets
+  lib/libedit/              line editor
   protocol/             protocol definitions in XML
   user/
     init/  ld/  sh/  coreutils/  edit/  mint/  term/  compositor/  panel/  desktop/

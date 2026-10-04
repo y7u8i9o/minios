@@ -265,7 +265,7 @@ DHCP over a second interface, permission enforcement is absent by design.
 ### N11 (complete 2026-09-12)
 
 Implemented `arpa/inet.h` conversions, `netdb.h` with an IPv4 `getaddrinfo`
-subset (`libc/src/net/resolv.c`: numeric, `/etc/hosts`, DNS over UDP with
+subset (`lib/libc/src/net/resolv.c`: numeric, `/etc/hosts`, DNS over UDP with
 bounded retries, id/server/question matching, defensive compression parsing,
 CNAME limits and TCP fallback for truncation, random ids from `/dev/urandom`),
 `ping(1)` through the narrow echo interface, `nc(1)`, `http(1)` (HTTP/1.0

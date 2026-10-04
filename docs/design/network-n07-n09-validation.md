@@ -26,7 +26,7 @@ contains `no-rng` or `rng-zero`. No public service is a dependency.
 | Host fuzzing, `make check-net-fuzz` | Three seeds, 30 s each, ASan and UBSan, no finding; ChaCha20 known answer passes |
 | Pressure recovery | Three cycles return to empty TCP tables and the packet baseline; low-water mark 31 of 256 buffers, at the control reserve |
 | Reassembly pressure | Context high-water 8 of 8, all released by the worker timer, pool restored |
-| Header compilation | Passed, with the pre-existing nested-comment warning in `libgui/include/gui/mime.h` |
+| Header compilation | Passed, with the pre-existing nested-comment warning in `lib/libgui/include/gui/mime.h` |
 | Whitespace | `git diff --check` passes |
 
 Fuzz iterations per 30-second seed:

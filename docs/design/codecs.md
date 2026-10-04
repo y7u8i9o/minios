@@ -58,7 +58,7 @@ Each `struct codec` describes one format with these members:
   codec lacks is NULL, and a codec without encoder options leaves
   `audio_encode_options` NULL.
 
-The build turns every directory `libcodec/modules/NAME/` into
+The build turns every directory `lib/libcodec/modules/NAME/` into
 `build/lib/codecs/NAME.so`, which is installed as `/usr/lib/codecs/NAME.so`.
 
 ## The registry
@@ -733,7 +733,7 @@ and requires the same sample rate, channel count and length, a length
 equal to the one reported at open time, and a difference of at most one
 step and an RMS difference below half a step at 16 bits. It also checks
 that a changed byte in a page and a cut file are reported as damage.
-`make check` runs `libcodec/tests/test_codec.c` on the host, which checks
+`make check` runs `lib/libcodec/tests/test_codec.c` on the host, which checks
 MD5 against the vectors of RFC 1321, the inverse MDCT against its
 definition for all block sizes from 64 to 2048, and the FLAC and Vorbis
 fixtures as above.

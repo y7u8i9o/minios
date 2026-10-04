@@ -22,7 +22,7 @@ binds an ephemeral localhost port. There is no public service dependency.
 | Native host interoperability | 20 connections per run, payload and EOF checks passed |
 | TCP packet capture | All captured TCP packets passed length/checksum validation, with two ARP packets per run |
 | Host peer lifecycle | Success and timeout cleanup passed for raw, user and native TCP peers |
-| Header compilation | Passed, with the pre-existing nested-comment warning in `libgui/include/gui/mime.h` |
+| Header compilation | Passed, with the pre-existing nested-comment warning in `lib/libgui/include/gui/mime.h` |
 | Formatting and whitespace | New TCP sources pass clang-format verification, git diff whitespace check passes |
 
 The first controlled, user-ABI and native-host TCP runs passed. Review then

@@ -129,7 +129,7 @@ teardown use the geometry. `struct vmspace` has `pt_root` in place of
 
 ### A3. User ABI boundary (completed 2026-10-01)
 
-- The architecture code of libc moves to `libc/arch/x86_64/`: the system
+- The architecture code of libc moves to `lib/libc/arch/x86_64/`: the system
   call stub, crt0, crti, setjmp, fenv, the x87 and SSE math assembly, the
   thread pointer read and the spin hint.
 - The relocation types and `start.S` of the dynamic loader move to an
@@ -139,7 +139,7 @@ teardown use the geometry. `struct vmspace` has `pt_root` in place of
 - The boot test is `abi`.
 
 libc takes `syscall.S`, the start files, `setjmp.S`, `fenv.c`,
-`math_x87.c`, `math_long.c` and `libc_arch.h` from `libc/arch/x86_64/`. The
+`math_x87.c`, `math_long.c` and `libc_arch.h` from `lib/libc/arch/x86_64/`. The
 public headers take their architecture part from `include/bits/<arch>/`.
 `minios/simd.h` has an SSE2 and a NEON implementation. The NEON one was
 compiled with `aarch64-elf-gcc` but cannot run before A6. The loader takes
@@ -231,7 +231,7 @@ machine and relocation numbers. TLS follows variant I on aarch64
 (`minios/dl.h`), user code uses `-mtls-dialect=trad`, and the loader
 supports the AArch64 relocations and PLT. The aarch64 `long double`
 (binary128) functions compute their exponentials, logarithms and inverse
-tangents in double precision (`libc/arch/aarch64/math_long.c`). Whether the
+tangents in double precision (`lib/libc/arch/aarch64/math_long.c`). Whether the
 libm accuracy cases `mathvec` and `libmfull` need adjustment on aarch64 is
 checked with the rest of the user programs in A7. The return path masks
 exceptions before it writes `ELR_EL1`, because a thread enters EL0 with

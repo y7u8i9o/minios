@@ -69,7 +69,7 @@ The scope is images and audio. Compression (gzip) remains in libc.
 
 ### C1: the codec library, PNG and SVG modules (completed 2026-10-03)
 
-- `libcodec/` with the registry, the module loader, probing, lookups by
+- `lib/libcodec/` with the registry, the module loader, probing, lookups by
   name, MIME type, extension and data, `codec_image_load`,
   `codec_image_decode` and `codec_image_save`, and the audio stream
   functions that C2's module implements.

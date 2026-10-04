@@ -25,10 +25,10 @@ symbol tables, and shared-library mappings from `/dev/maps`. Unresolved
 addresses remain numeric. Lock-release samples are attributed past the
 lock primitives to the code that acquired the lock.
 
-The client is `libprof.so` (`libprof/`, header `prof/profile.h`), which
+The client is `libprof.so` (`lib/libprof/`, header `prof/profile.h`), which
 was part of libc until P2 of `docs/plan/packaging.md`. `prof`, the
 profiler window and the tests `proftest` and `profreporttest` link it.
-`libprof/src/profanalyze.c` maintains four call trees, flat histograms, thread
+`lib/libprof/src/profanalyze.c` maintains four call trees, flat histograms, thread
 statistics, outstanding allocation addresses and pending scheduler stacks.
 Each tree node stores inclusive weight, exclusive self weight, an inclusive
 secondary magnitude, and the number of events ending at that node. The

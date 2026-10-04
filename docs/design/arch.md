@@ -275,9 +275,9 @@ The architecture defines the addresses of the regions: `HIGHER_HALF_BASE`,
 `KHEAP_BASE`. `mm/memlayout.h` and `mm/vmm.h` include it and define the
 generic sizes (`USER_STACK_SIZE`, `KSTACK_SIZE`, `KSTACK_SLOTS`).
 
-## 14. User ABI (`libc/arch/`, `user/ld/arch/`, `toolchain.mk`)
+## 14. User ABI (`lib/libc/arch/`, `user/ld/arch/`, `toolchain.mk`)
 
-libc compiles the files of `libc/arch/$(ARCH)/` with the generic sources
+libc compiles the files of `lib/libc/arch/$(ARCH)/` with the generic sources
 and finds the internal header `libc_arch.h` through `-Iarch/$(ARCH)`:
 
 | File | Content on x86_64 |
@@ -540,7 +540,7 @@ designs that A6 found encoded for x86_64 are now stated for both
 architectures: the thread local storage layout (`minios/dl.h`), the signal
 frame interface between `arch_signal_setup_frame` and the libc restorer (a
 return address on the stack on x86_64, x30 on aarch64), and the
-`long double` format (`libc/src/ldouble.h`). Since A9 tcc compiles for
+`long double` format (`lib/libc/src/ldouble.h`). Since A9 tcc compiles for
 the arm64 target with its own runtime library, and each architecture has
 its own package repository (`tcc.md`, `packages.md`). Three cases are x86
 specific and name x86_64 in their `arches` file: `cpu` (x86 processor

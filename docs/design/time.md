@@ -42,7 +42,7 @@ calendar in both directions.
 
 ## Time zones (L2)
 
-`libc/src/time/tz.c` converts times into the local zone. The zone is the
+`lib/libc/src/time/tz.c` converts times into the local zone. The zone is the
 value of `TZ`, or the file `/etc/localtime` when `TZ` is not set, or UTC
 when neither exists. A value of `TZ` that is a valid POSIX rule, such as
 `CET-1CEST,M3.5.0,M10.5.0/3`, is that rule. Any other value names a zone

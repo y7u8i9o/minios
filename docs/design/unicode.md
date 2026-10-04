@@ -5,7 +5,7 @@ the C library come from the Unicode Character Database, version 16.0.
 `tools/fetch_unicode.sh` downloads `UnicodeData.txt`,
 `EastAsianWidth.txt`, `DerivedCoreProperties.txt` and `PropList.txt` with
 the Unicode licence into `third_party/unicode`. `tools/genunicode.py` reads
-them and writes `libc/src/wchar/unidata.h`, which is checked in. The header
+them and writes `lib/libc/src/wchar/unidata.h`, which is checked in. The header
 must be generated again after a change of the data or the generator.
 
 ## Tables

@@ -32,7 +32,7 @@ public service is a dependency.
 | 23 cases, one vCPU | 23 passed, 0 failed |
 | `make check-net` | pass |
 | `make check-net-fuzz` | three seeds of 30 s, ASan and UBSan, no finding |
-| `make check-headers` | pass, with the pre-existing nested-comment warning in `libgui/include/gui/mime.h` |
+| `make check-headers` | pass, with the pre-existing nested-comment warning in `lib/libgui/include/gui/mime.h` |
 | `git diff --check` | pass |
 
 The 23 cases are the TCP cases (`net_tcp net_tcp_api net_tcp_bulk

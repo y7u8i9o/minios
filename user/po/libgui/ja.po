@@ -6,295 +6,295 @@ msgstr ""
 "Language: ja\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: libgui/src/dialog.c:84
+#: lib/libgui/src/dialog.c:84
 msgid "OK"
 msgstr "OK"
 
-#: libgui/src/dialog.c:84
+#: lib/libgui/src/dialog.c:84
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: libgui/src/widgets/editmenu.c:15
+#: lib/libgui/src/widgets/editmenu.c:15
 msgid "Undo"
 msgstr "元に戻す"
 
-#: libgui/src/widgets/editmenu.c:16
+#: lib/libgui/src/widgets/editmenu.c:16
 msgid "Redo"
 msgstr "やり直す"
 
-#: libgui/src/widgets/editmenu.c:17
+#: lib/libgui/src/widgets/editmenu.c:17
 msgid "Cut"
 msgstr "切り取り"
 
-#: libgui/src/widgets/editmenu.c:18
+#: lib/libgui/src/widgets/editmenu.c:18
 msgid "Copy"
 msgstr "コピー"
 
-#: libgui/src/widgets/editmenu.c:19
+#: lib/libgui/src/widgets/editmenu.c:19
 msgid "Paste"
 msgstr "貼り付け"
 
-#: libgui/src/widgets/editmenu.c:20
+#: lib/libgui/src/widgets/editmenu.c:20
 msgid "Delete"
 msgstr "削除"
 
-#: libgui/src/widgets/editmenu.c:21
+#: lib/libgui/src/widgets/editmenu.c:21
 msgid "Select all"
 msgstr "すべて選択"
 
-#: libgui/src/filechooser.c:100
+#: lib/libgui/src/filechooser.c:100
 msgid "A file named “%s” already exists. Do you want to replace it?"
 msgstr "「%s」という名前のファイルは既に存在します。置き換えますか?"
 
-#: libgui/src/filechooser.c:102
+#: lib/libgui/src/filechooser.c:102
 msgid "Replace"
 msgstr "置換"
 
-#: libgui/src/filechooser.c:103
+#: lib/libgui/src/filechooser.c:103
 msgid "Replace file"
 msgstr "ファイルの置き換え"
 
-#: libgui/src/filechooser.c:246 libgui/src/filechooser.c:357
+#: lib/libgui/src/filechooser.c:246 lib/libgui/src/filechooser.c:357
 msgid "New folder"
 msgstr "新しいフォルダー"
 
-#: libgui/src/filechooser.c:246
+#: lib/libgui/src/filechooser.c:246
 msgid "Folder name:"
 msgstr "フォルダー名:"
 
-#: libgui/src/filechooser.c:250
+#: lib/libgui/src/filechooser.c:250
 msgid "A folder name cannot contain “/”."
 msgstr "フォルダー名に「/」は使えません。"
 
-#: libgui/src/filechooser.c:256
+#: lib/libgui/src/filechooser.c:256
 msgid "The folder “%s” cannot be created: %s."
 msgstr "フォルダー「%s」を作成できません: %s。"
 
-#: libgui/src/filechooser.c:291
+#: lib/libgui/src/filechooser.c:291
 msgid "Hide hidden files"
 msgstr "隠しファイルを表示しない"
 
-#: libgui/src/filechooser.c:291 libgui/src/filechooser.c:371
+#: lib/libgui/src/filechooser.c:291 lib/libgui/src/filechooser.c:371
 msgid "Show hidden files"
 msgstr "隠しファイルを表示"
 
-#: libgui/src/filechooser.c:323
+#: lib/libgui/src/filechooser.c:323
 msgid "Name:"
 msgstr "名前:"
 
-#: libgui/src/filechooser.c:343
+#: lib/libgui/src/filechooser.c:343
 msgid "Save"
 msgstr "保存"
 
-#: libgui/src/filechooser.c:343
+#: lib/libgui/src/filechooser.c:343
 msgid "Open"
 msgstr "開く"
 
-#: libgui/src/filechooser.c:367
+#: lib/libgui/src/filechooser.c:367
 msgid "Visit file"
 msgstr "ファイルの場所へ移動"
 
-#: libgui/src/filechooser.c:369
+#: lib/libgui/src/filechooser.c:369
 msgid "Copy location"
 msgstr "場所をコピー"
 
-#: libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:421
 msgid "Save file"
 msgstr "ファイルを保存"
 
-#: libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:421
 msgid "Open file"
 msgstr "ファイルを開く"
 
-#: libgui/src/filechooser.c:94
+#: lib/libgui/src/filechooser.c:94
 msgid "The folder “%s” does not exist."
 msgstr "フォルダー「%s」は存在しません。"
 
-#: libgui/src/folderview.c:1139 libgui/src/folderview.c:1139
+#: lib/libgui/src/folderview.c:1139 lib/libgui/src/folderview.c:1139
 msgid "Desktop"
 msgstr "デスクトップ"
 
-#: libgui/src/folderview.c:1140
+#: lib/libgui/src/folderview.c:1140
 msgid "Documents"
 msgstr "ドキュメント"
 
-#: libgui/src/folderview.c:1140
+#: lib/libgui/src/folderview.c:1140
 msgid "Downloads"
 msgstr "ダウンロード"
 
-#: libgui/src/folderview.c:1141
+#: lib/libgui/src/folderview.c:1141
 msgid "Music"
 msgstr "ミュージック"
 
-#: libgui/src/folderview.c:1141
+#: lib/libgui/src/folderview.c:1141
 msgid "Pictures"
 msgstr "ピクチャ"
 
-#: libgui/src/folderview.c:1142
+#: lib/libgui/src/folderview.c:1142
 msgid "Videos"
 msgstr "ビデオ"
 
-#: libgui/src/folderview.c:1145
+#: lib/libgui/src/folderview.c:1145
 msgid "Programs"
 msgstr "プログラム"
 
-#: libgui/src/folderview.c:1145
+#: lib/libgui/src/folderview.c:1145
 msgid "Shared files"
 msgstr "共有ファイル"
 
-#: libgui/src/folderview.c:1146
+#: lib/libgui/src/folderview.c:1146
 msgid "Fonts"
 msgstr "フォント"
 
-#: libgui/src/folderview.c:1146
+#: lib/libgui/src/folderview.c:1146
 msgid "Devices"
 msgstr "デバイス"
 
-#: libgui/src/folderview.c:1148 libgui/src/folderview.c:1203
+#: lib/libgui/src/folderview.c:1148 lib/libgui/src/folderview.c:1203
 msgid "Recent"
 msgstr "最近使用したファイル"
 
-#: libgui/src/folderview.c:1149 libgui/src/folderview.c:1210
+#: lib/libgui/src/folderview.c:1149 lib/libgui/src/folderview.c:1210
 msgid "Home"
 msgstr "ホーム"
 
-#: libgui/src/folderview.c:1169
+#: lib/libgui/src/folderview.c:1169
 msgid "Computer"
 msgstr "コンピューター"
 
-#: libgui/src/folderview.c:1377
+#: lib/libgui/src/folderview.c:1377
 msgid "Search"
 msgstr "検索"
 
-#: libgui/src/folderview.c:245
+#: lib/libgui/src/folderview.c:245
 msgid "%ld byte"
 msgid_plural "%ld bytes"
 msgstr[0] "%ld バイト"
 
-#: libgui/src/folderview.c:249
+#: lib/libgui/src/folderview.c:249
 msgid "%s kB"
 msgstr "%s kB"
 
-#: libgui/src/folderview.c:252
+#: lib/libgui/src/folderview.c:252
 msgid "%s GB"
 msgstr "%s GB"
 
-#: libgui/src/folderview.c:255
+#: lib/libgui/src/folderview.c:255
 msgid "%s MB"
 msgstr "%s MB"
 
-#: libgui/src/folderview.c:268
+#: lib/libgui/src/folderview.c:268
 msgid "Folder"
 msgstr "フォルダー"
 
-#: libgui/src/folderview.c:268
+#: lib/libgui/src/folderview.c:268
 msgid "Text"
 msgstr "テキスト"
 
-#: libgui/src/folderview.c:268
+#: lib/libgui/src/folderview.c:268
 msgid "C source"
 msgstr "C ソース"
 
-#: libgui/src/folderview.c:269
+#: lib/libgui/src/folderview.c:269
 msgid "Shell script"
 msgstr "シェルスクリプト"
 
-#: libgui/src/folderview.c:269
+#: lib/libgui/src/folderview.c:269
 msgid "Lua source"
 msgstr "Lua ソース"
 
-#: libgui/src/folderview.c:270
+#: lib/libgui/src/folderview.c:270
 msgid "PNG image"
 msgstr "PNG 画像"
 
-#: libgui/src/folderview.c:270
+#: lib/libgui/src/folderview.c:270
 msgid "BMP image"
 msgstr "BMP 画像"
 
-#: libgui/src/folderview.c:270
+#: lib/libgui/src/folderview.c:270
 msgid "SVG image"
 msgstr "SVG 画像"
 
-#: libgui/src/folderview.c:271
+#: lib/libgui/src/folderview.c:271
 msgid "WAV audio"
 msgstr "WAV オーディオ"
 
-#: libgui/src/folderview.c:271
+#: lib/libgui/src/folderview.c:271
 msgid "FLAC audio"
 msgstr "FLAC オーディオ"
 
-#: libgui/src/folderview.c:271
+#: lib/libgui/src/folderview.c:271
 msgid "Ogg audio"
 msgstr "Ogg オーディオ"
 
-#: libgui/src/folderview.c:272
+#: lib/libgui/src/folderview.c:272
 msgid "Launcher"
 msgstr "ランチャー"
 
-#: libgui/src/folderview.c:272
+#: lib/libgui/src/folderview.c:272
 msgid "Package"
 msgstr "パッケージ"
 
-#: libgui/src/folderview.c:278
+#: lib/libgui/src/folderview.c:278
 msgid "Program"
 msgstr "プログラム"
 
-#: libgui/src/folderview.c:278
+#: lib/libgui/src/folderview.c:278
 msgid "File"
 msgstr "ファイル"
 
-#: libgui/src/folderview.c:474
+#: lib/libgui/src/folderview.c:474
 msgid "Yesterday"
 msgstr "昨日"
 
-#: libgui/src/folderview.c:480
+#: lib/libgui/src/folderview.c:480
 msgid "%e %b"
 msgstr "%m月%d日"
 
-#: libgui/src/folderview.c:482
+#: lib/libgui/src/folderview.c:482
 msgid "%e %b %Y"
 msgstr "%Y年%m月%d日"
 
-#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+#: lib/libgui/src/folderview.c:524 lib/libgui/src/folderview.c:525
 msgid "Name"
 msgstr "名前"
 
-#: libgui/src/folderview.c:524
+#: lib/libgui/src/folderview.c:524
 msgid "Size"
 msgstr "サイズ"
 
-#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+#: lib/libgui/src/folderview.c:524 lib/libgui/src/folderview.c:525
 msgid "Type"
 msgstr "種類"
 
-#: libgui/src/folderview.c:524 libgui/src/folderview.c:525
+#: lib/libgui/src/folderview.c:524 lib/libgui/src/folderview.c:525
 msgid "Modified"
 msgstr "更新日時"
 
-#: libgui/src/folderview.c:525
+#: lib/libgui/src/folderview.c:525
 msgid "Location"
 msgstr "場所"
 
-#: libgui/src/folderview.c:611
+#: lib/libgui/src/folderview.c:611
 msgid "The folder “%s” cannot be read: %s."
 msgstr "フォルダー「%s」を読み込めません: %s。"
 
-#: libgui/src/folderview.c:659
+#: lib/libgui/src/folderview.c:659
 msgid "The folder “%s” cannot be opened: %s."
 msgstr "フォルダー「%s」を開けません: %s。"
 
-#: libgui/src/folderview.c:872
+#: lib/libgui/src/folderview.c:872
 msgid "The file “%s” does not exist."
 msgstr "ファイル「%s」は存在しません。"
 
-#: libgui/src/fileops.c:334
+#: lib/libgui/src/fileops.c:334
 msgid "Copy of %s"
 msgstr "%s のコピー"
 
-#: libgui/src/folderview.c:1028
+#: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be moved: %s."
 msgstr "「%s」を移動できません: %s。"
 
-#: libgui/src/folderview.c:1028
+#: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be copied: %s."
 msgstr "「%s」をコピーできません: %s。"

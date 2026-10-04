@@ -120,7 +120,7 @@ installer comes last.
 ### P0. Package format 2 and a host build of pkg (completed 2026-10-03)
 
 - `pkg` compiles for the host as `build/host/pkg` from `user/pkg/*.c`,
-  `libc/src/gzip.c`, `libc/src/crypto/*.c` and `libc/src/net/http.c`.
+  `lib/libc/src/gzip.c`, `lib/libc/src/crypto/*.c` and `lib/libc/src/net/http.c`.
 - `--root DIR` becomes the installation root for the files, the records,
   the configuration and the keys, and replaces `--prefix`.
 - Format 2, the records in `/var/lib/pkg`, owners and modes, the
@@ -159,7 +159,7 @@ installer comes last.
 - The install paths of `user/Makefile` follow the layout of section 2,
   and the root tree carries the `/bin` and `/lib` links.
 - `lib_dirs` in `user/ld/ld.c`, `CODEC_DIR` in
-  `libcodec/include/codec/codec.h`, the paths of `TCC_DEFS` in
+  `lib/libcodec/include/codec/codec.h`, the paths of `TCC_DEFS` in
   `user/Makefile`, `PATH` in `/etc/profile`, the search path of `man` and
   the font paths of libfont and libgui follow the new layout.
 - The boot tests `boot`, `dynlink`, `shell`, `tcc`, the `codec` cases,
@@ -186,8 +186,8 @@ installer comes last.
 
 ### P2. Splitting libc and Lua (completed 2026-10-03)
 
-- `libc/src/profile.c`, `profanalyze.c` and `profreport.c` move to
-  `libprof/`, built as `libprof.so` with the header `prof/profile.h`, and
+- `lib/libc/src/profile.c`, `profanalyze.c` and `profreport.c` move to
+  `lib/libprof/`, built as `libprof.so` with the header `prof/profile.h`, and
   `prof` and the profiler window link it.
 - The gui, paint, image and audio bindings of Lua become modules in
   `/usr/lib/lua/5.5/`, loaded through `LUA_USE_DLOPEN` and a C module

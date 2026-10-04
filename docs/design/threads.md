@@ -8,7 +8,7 @@ build locks on, and a libc that is safe to call from several threads.
 
 ## Thread local storage
 
-Every thread has a control block, `struct pthread` in `libc/src/thread/tcb.h`,
+Every thread has a control block, `struct pthread` in `lib/libc/src/thread/tcb.h`,
 whose address is the thread's FS base. The block starts with a pointer to
 itself, so `%fs:0` yields the block and `pthread_self`, `errno` and the key
 table are one load away. `errno` is a macro over `__errno_location()`,

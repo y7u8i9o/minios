@@ -33,7 +33,7 @@ The affected test sets were rerun after these fixes.
 | Final networking validation after drop-counter correction | Four-vCPU TCG, 12 cases below | 12 passed, 0 failed |
 | Final networking validation | One-vCPU TCG, the same 12 cases | 12 passed, 0 failed |
 | Peer harness lifecycle | Fake QEMU, real raw/native peer sockets | Pass: both backend success/timeout paths; unknown backend rejected |
-| Header compilation | `make check-headers` | Pass; existing `libgui/include/gui/mime.h` nested-comment warning |
+| Header compilation | `make check-headers` | Pass; existing `lib/libgui/include/gui/mime.h` nested-comment warning |
 | Kernel build and patch whitespace | Normal warning-as-error kernel build; `git diff --check` | Pass |
 
 The 27-case run:

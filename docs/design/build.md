@@ -287,7 +287,7 @@ uses `QEMU_ACCEL` for an override (see Running above).
 
 `make check` runs the font, protocol, GUI, Lua and signature checks on
 the host, and `make check-pkg` alone runs the SHA-256, SHA-512 and Ed25519
-vectors of RFC 6234 and RFC 8032 against `libc/src/crypto/`
+vectors of RFC 6234 and RFC 8032 against `lib/libc/src/crypto/`
 (`packages.md`). `make check-sh` checks the shell parser, expansion and
 execution. `make
 check-net` self-tests the network peer harness with a fake QEMU, and `make

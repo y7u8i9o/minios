@@ -53,7 +53,7 @@ begins with a dot, so `.shrc` never reached an image; it now skips only
 
 `/etc/desktop.conf` is the shipped default configuration; the user's
 choices are written to `$HOME/.config/desktop.conf`, on the data volume.
-`conf_read_path` and `conf_write_path` in `minios/conf.h` (`libc/src/conf.c`)
+`conf_read_path` and `conf_write_path` in `minios/conf.h` (`lib/libc/src/conf.c`)
 name the file to read, the user's when it exists and the default
 otherwise, and the file to write, creating `$HOME/.config`. The settings
 program, the desktop client, the terminal, X12's keymap reload and the

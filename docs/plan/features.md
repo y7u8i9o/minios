@@ -14,7 +14,7 @@ Desktop layer client with wallpaper, icons of `/home/desktop`, context menus, MI
 
 Decorations moved to the GTK 4 model: libgui toplevels draw a light
 header bar, outline, rounded corners and shadow in their own ARGB
-buffers (`libgui/src/csd.c`), negotiate the mode through
+buffers (`lib/libgui/src/csd.c`), negotiate the mode through
 the decoration interface and report their window geometry with the new
 `toplevel.set_window_geometry` request; the server places, clamps,
 maximizes and resizes by that geometry, copies opaque rows of ARGB
@@ -85,13 +85,13 @@ the per frame, per key and per commit lines need the verbose setting
 
 ## SVG icons (completed 2026-09-05)
 
-libgui renders a subset of SVG (`libgui/src/svg.c`: view box, paths
+libgui renders a subset of SVG (`lib/libgui/src/svg.c`: view box, paths
 with fills, both fill rules, curves and arcs, antialiased) into images
 that carry their device scale; `icon_get` prefers `<name>.svg` in
 `/usr/share/icons` and retains the PNG fallback. The icons are Font
 Awesome Free (solid), downloaded by `tools/fetch_icons.sh` into
 `third_party/fontawesome/`. Documented in `docs/design/icons.md`,
-tested by `libgui/tests/test_svg.c`.
+tested by `lib/libgui/tests/test_svg.c`.
 
 ## sed and awk (completed 2026-09-06)
 
@@ -204,7 +204,7 @@ language description, with Lua as a third language. Documented in
 
 ## Terminal userland (completed 2026-09-06)
 
-The work of `terminal.md`. `libedit/` is a line editor with
+The work of `terminal.md`. `lib/libedit/` is a line editor with
 history, completion, reverse search and bracketed paste. `/bin/sh` was
 rewritten as a parser of complete command trees (`if`, `for`, `while`,
 `until`, `case`, functions, subshells, brace groups) with POSIX expansion
@@ -356,8 +356,8 @@ SHA-256 digest and is signed with Ed25519. `pkg update`, `search`,
 signature verifies against a key in `/etc/pkg/keys/` and an archive only
 when it matches its entry, resolve `depends` and `needs` through the
 index, and `pkg check` compares a local archive with the index.
-SHA-256, SHA-512 and Ed25519 are written in `libc/src/crypto/` from RFC
-6234 and RFC 8032, the client of `http` moved to `libc/src/net/http.c`
+SHA-256, SHA-512 and Ed25519 are written in `lib/libc/src/crypto/` from RFC
+6234 and RFC 8032, the client of `http` moved to `lib/libc/src/net/http.c`
 with timeouts and `Content-Length` checks, and the host tool
 `tools/pkgsign` with `tools/mkrepo.sh` generates the build's key under
 `build/pkg/` and signs the repository that `make repo` writes to

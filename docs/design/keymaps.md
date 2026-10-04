@@ -43,7 +43,7 @@ still read, as one group without AltGr.
 
 ## Translation
 
-`keymap_translate_group` in `libgui/src/keymap.c` translates a key code
+`keymap_translate_group` in `lib/libgui/src/keymap.c` translates a key code
 with the modifiers and a group. Ctrl and Alt combinations use the plain
 level of the first group. Shortcuts such as Ctrl+C are therefore the same
 in every group, and Ctrl with a letter gives the control character.

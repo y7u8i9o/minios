@@ -1,6 +1,6 @@
 # Application framework
 
-M21 adds a retained widget framework to `libgui/` beside the M19
+M21 adds a retained widget framework to `lib/libgui/` beside the M19
 toolkit (`gui/widgets.h`), which remains until the applications move to
 the framework in M22. The framework consists of an application object
 (`gui/app.h`), a widget object model with signals (`gui/widget.h`), a
@@ -143,7 +143,7 @@ content overflows).
 ### Images (`src/inflate.c`, `src/png.c`, `gui/image.h`)
 
 Since C1 of `docs/plan/codecs.md` the inflate code and the PNG codec are
-in libcodec (`libcodec/src/inflate.c`, the module `png.so`), and the
+in libcodec (`lib/libcodec/src/inflate.c`, the module `png.so`), and the
 functions below call it (`codecs.md`).
 
 `zlib_inflate` decodes RFC 1950 streams: stored, fixed and dynamic
@@ -157,7 +157,7 @@ reads a file. `painter_image` blends with straight alpha.
 libraries: the 16x16 icons in `user/share/icons/` (installed under
 `/usr/share/icons/`, cached per process by `icon_get`, which prefers
 an SVG file of the same name; see `icons.md`) and the test
-images in `libgui/tests/data/`, whose rows cycle through all filter
+images in `lib/libgui/tests/data/`, whose rows cycle through all filter
 types and whose pixels follow formulas the tests recompute.
 
 ### Popups and tooltips (`src/window.c`)

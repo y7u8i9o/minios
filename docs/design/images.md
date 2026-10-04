@@ -7,7 +7,7 @@ bitmap editor `paint`.
 
 ## PNG decoding
 
-The PNG codec is the libcodec module `png.so` (`libcodec/modules/png/`,
+The PNG codec is the libcodec module `png.so` (`lib/libcodec/modules/png/`,
 `codecs.md`). The libgui functions `image_decode` and `image_load` reach
 it through the codec registry, whose lookup selects `png.so` because the
 PNG probe matches the eight byte signature. The decoder (`decode.c`) reads every colour type of the PNG
@@ -24,7 +24,7 @@ alpha (`0xAARRGGBB`).
 
 ## PNG encoding
 
-The encoder (`libcodec/modules/png/encode.c`, behind libgui's
+The encoder (`lib/libcodec/modules/png/encode.c`, behind libgui's
 `image_encode_png`) writes 8 bit RGB when every
 pixel is opaque and 8 bit RGBA otherwise. Each row is filtered with the
 filter whose output has the smallest sum of absolute values when the
@@ -231,7 +231,7 @@ Open ask whether to save such changes.
 
 ## Tests
 
-`make check` runs the host tests of libgui. `libgui/tests/test_images.c`
+`make check` runs the host tests of libgui. `lib/libgui/tests/test_images.c`
 decodes files written by `tools/genicons/genicons.py`: 4 bit grey, a 2
 bit palette, 16 bit RGBA, interlaced RGBA and interlaced 1 bit grey, each
 compared with the formula that generated it. It encodes an opaque and a

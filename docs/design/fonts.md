@@ -1,6 +1,6 @@
 # Font rendering
 
-M20 adds `libfont/` (`libfont.a`), a library independent from the window
+M20 adds `lib/libfont/` (`libfont.a`), a library independent from the window
 system that parses TrueType and CFF flavoured OpenType files, rasterizes
 outlines to 8 bit coverage bitmaps with fixed point arithmetic, and
 reads kerning from the `kern` and `GPOS` tables. libgui wraps it behind
@@ -8,7 +8,7 @@ its `struct font`, so the toolkit and the applications use outline fonts
 through the same calls as the bitmap fonts of M19. User programs are
 compiled without SSE and x87, so no floating point appears anywhere.
 
-## Parser (`libfont/src/ttf.c`, `cff.c`)
+## Parser (`lib/libfont/src/ttf.c`, `cff.c`)
 
 - `font_open` reads the whole file, accepts the sfnt versions
   `0x00010000`, `true` and `OTTO`, and locates `head` (units per em, loca
@@ -34,7 +34,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   formats 0 and 3. `seac` accents and arithmetic operators are not
   supported.
 
-## Rasterizer (`libfont/src/raster.c`)
+## Rasterizer (`lib/libfont/src/raster.c`)
 
 - Points are scaled to 26.6 pixels with `font_scale` (rounded, 64 bit
   intermediate) and flipped so y grows downwards. Quadratic and cubic
@@ -51,7 +51,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
 - `font_render` retains up to `FONT_CACHE_SIZE` (512) bitmaps per font,
   keyed by glyph and pixel size, replacing the least recently used one.
 
-## Kerning and shaping (`libfont/src/kern.c`)
+## Kerning and shaping (`lib/libfont/src/kern.c`)
 
 - `font_kern` consults `GPOS` first: the `kern` feature's lookups of
   type 2 (pair adjustment, also reached through type 9 extension
@@ -67,7 +67,7 @@ compiled without SSE and x87, so no floating point appears anywhere.
   fallback fonts and, for CJK characters, from the CJK font that
   `i18n.md` describes.
 
-## Integration (`libgui/src/font.c`)
+## Integration (`lib/libgui/src/font.c`)
 
 - `gfx_font_open_ttf(path, px)` fills a `struct font` whose `outline`
   member points at the `struct ofont`; `height` and `ascent` come from
@@ -126,13 +126,13 @@ events. In the built-in X12 input method, Ctrl+Shift+U starts a visible
 hexadecimal preedit; Enter or Space commits the code point and Escape
 cancels it.
 - The host harness used during development (a small program compiled
-  with the system compiler against `libfont/src/*.c`) is not part of the
+  with the system compiler against `lib/libfont/src/*.c`) is not part of the
   tree; the library has no dependencies beyond `stdio`, `stdlib` and
   `string`, so it compiles unchanged on the host.
 
 ## Host test
 
-`make check` runs `libfont/tests/test_raster.c` against the bundled
+`make check` runs `lib/libfont/tests/test_raster.c` against the bundled
 DejaVu Sans: narrow glyphs (`.`, `!`, `i`, `l`, `:`) and `o` must get
 coverage at 12 to 40 pixels. It guards the scan converter's crossing
 sort, which once compared a shifted x with an unshifted one and left

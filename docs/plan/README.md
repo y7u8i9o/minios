@@ -51,7 +51,7 @@ milestone is not started before the boot tests of the current one pass.
 | Storage | virtio-blk (PCI, modern virtio interface): the root image rebuilt by the build, a data volume mounted at `/home`, a swap device, FAT volumes |
 | System calls | POSIX subset, entered through `syscall` / `sysretq` |
 | Executables | ELF64, dynamically linked against the shared libraries in `/lib` since 2026-09-06 (`docs/design/dynlink.md`), with `init` and the loader static |
-| libc | Own minimal libc (`libc/`) |
+| libc | Own minimal libc (`lib/libc/`) |
 | User space | Shell with a line editor, coreutils, sed, awk, make, ar, tar, tcc, Lua 5.5, the package installer `pkg`, init with service supervision, desktop applications |
 | Console | Framebuffer text console with bitmap font and 16 colour SGR, serial (COM1) mirror, timestamped kernel log |
 | Input | Input core (`/dev/input/eventN`), PS/2 keyboard and mouse, virtio-input |

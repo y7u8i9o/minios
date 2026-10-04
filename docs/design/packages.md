@@ -603,7 +603,7 @@ request to build the repository again.
 ### Keys and signing
 
 `tools/pkgsign/pkgsign.c` is the host tool, built to
-`build/host/pkgsign` from the `libc/src/crypto/` sources that `pkg`
+`build/host/pkgsign` from the `lib/libc/src/crypto/` sources that `pkg`
 links. `pkgsign keygen FILE` writes a new secret key with mode 0600, the
 32 byte seed of RFC 8032 as `ed25519-secret HEX`, and refuses to
 overwrite a file. `pkgsign public FILE` prints the public key file of a
@@ -732,8 +732,8 @@ after a failed transfer or check. The messages are the following.
 
 ### Cryptography
 
-`libc/src/crypto/sha2.c` implements SHA-256 and SHA-512 from FIPS 180-4
-and RFC 6234, and `libc/src/crypto/ed25519.c` implements Ed25519 from
+`lib/libc/src/crypto/sha2.c` implements SHA-256 and SHA-512 from FIPS 180-4
+and RFC 6234, and `lib/libc/src/crypto/ed25519.c` implements Ed25519 from
 RFC 8032, with the headers `minios/sha2.h` and `minios/ed25519.h`. Field
 elements modulo 2^255 - 19 are five limbs of 51 bits with 128 bit
 products. Points use the extended coordinates and the formulas of
@@ -745,7 +745,7 @@ does not decode, and it compares the encoding of [S]B - [k]A with R.
 The scalar multiplication runs the same operations for every scalar, so
 signing on the host does not branch on the secret key. Both files
 depend on `string.h` alone. The host tools compile them with
-`-idirafter libc/include`, which finds the `minios/` headers after the
+`-idirafter lib/libc/include`, which finds the `minios/` headers after the
 system headers.
 
 ## Program structure
@@ -770,10 +770,10 @@ fetches and checks the archives, and implements `update` and `search`.
 The resolution of names and dependencies and `upgrade` are in `pkg.c`,
 beside the installation path they feed.
 
-The gzip codec moved from `user/coreutils/gzip.c` to `libc/src/gzip.c`
+The gzip codec moved from `user/coreutils/gzip.c` to `lib/libc/src/gzip.c`
 so that the installer and the gzip program share it. For the same
-reason the HTTP client of `http(1)` moved to `libc/src/net/http.c`, and
-the SHA-2 and Ed25519 code is in `libc/src/crypto/`.
+reason the HTTP client of `http(1)` moved to `lib/libc/src/net/http.c`, and
+the SHA-2 and Ed25519 code is in `lib/libc/src/crypto/`.
 
 ## Tests
 

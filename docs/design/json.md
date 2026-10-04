@@ -9,9 +9,9 @@ from the repository (`packages.md`).
 
 | File | Content |
 |---|---|
-| `libjson/include/json/json.h` | the interface |
-| `libjson/src/json.c` | the escaper and the writer |
-| `libjson/Makefile` | `libjson.so`, `libjson.a`, ABI 1 |
+| `lib/libjson/include/json/json.h` | the interface |
+| `lib/libjson/src/json.c` | the escaper and the writer |
+| `lib/libjson/Makefile` | `libjson.so`, `libjson.a`, ABI 1 |
 
 ## Strings
 

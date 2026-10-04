@@ -55,7 +55,7 @@ button that started a cancelled drag is not delivered either
 and so does a client that disconnects. After the drag the pointer enters
 the surface under it.
 
-## Client library (`libgui/src/client.c`, `gui/client.h`)
+## Client library (`lib/libgui/src/client.c`, `gui/client.h`)
 
 `gui_drag_start(window, items, n, actions, icon, hot_x, hot_y)` copies up
 to eight items (a MIME type and its data each), creates the source and
@@ -82,7 +82,7 @@ drop without a second read. A drop of a drag this process started copies
 the items directly, because the compositor would route the transfer back
 to this process.
 
-## Framework (`libgui/src/window.c`, `gui/widget.h`)
+## Framework (`lib/libgui/src/window.c`, `gui/widget.h`)
 
 Widgets receive `EV_DRAG_MOVE`, `EV_DRAG_LEAVE`, `EV_DROP` and
 `EV_DRAG_END` with a `struct drag_event`. The window delivers
@@ -120,7 +120,7 @@ no release follows, and the widget receives `EV_DRAG_END`.
 - The text field drags its selection in the same way, except when it is
   masked; it takes no drops.
 
-## Files and their formats (`libgui/src/fileops.c`, `gui/fileops.h`)
+## Files and their formats (`lib/libgui/src/fileops.c`, `gui/fileops.h`)
 
 Files are dragged as `text/uri-list` (one `file://` URI per line ending
 in CR LF, every byte outside the unreserved characters and the slash
@@ -157,7 +157,7 @@ folder is named "Copy of NAME", an existing name is never replaced
 
 ## Tests
 
-- `make check` for libgui: `libgui/tests/test_dnd.c` covers the uri-list
+- `make check` for libgui: `lib/libgui/tests/test_dnd.c` covers the uri-list
   format, `fileops_drop_action` and `fileops_drop` over a temporary tree,
   a folder view row dragged out and a file dropped on a folder row, the
   editor's drag of its selection, a move inside the editor with its single

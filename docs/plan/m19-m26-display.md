@@ -48,7 +48,7 @@ Stage 2, protocol and server (`user/wsrv/`, done 2026-08-30):
 - Wheel events reach the window under the cursor as `WM_MOUSE` with
   kind `WMOUSE_WHEEL` and the delta in `d`.
 
-Stage 3, client library and toolkit (`libgui/`, done 2026-08-30):
+Stage 3, client library and toolkit (`lib/libgui/`, done 2026-08-30):
 - Fonts: `tools/genfont/genfont.py` gains a mode producing a variable
   width font file (`.mfnt`: header, glyph advances, bitmaps) from a
   larger source face, built into `user/etc/fonts/`. `gfx` loads fonts
@@ -98,7 +98,7 @@ Tests:
 ## M20. Font rendering (completed 2026-08-30)
 
 Decisions (2026-08-30): outline font rendering is in its own library
-`libfont/` (`libfont.a`), independent from the window server and the
+`lib/libfont/` (`libfont.a`), independent from the window server and the
 toolkit; libgui consumes it through the existing `struct font` so every
 widget and application can switch to an outline font without changes.
 User programs still run without FPU state saving, so the rasterizer and
@@ -106,7 +106,7 @@ all transforms use fixed point integer arithmetic. Test fonts are the
 DejaVu faces (TrueType outlines, `kern` and `GPOS` tables) and Latin
 Modern Roman (CFF outlines, `GPOS` kerning) from `third_party/`.
 
-Stage 1, parser (`libfont/src/ttf.c`, `cff.c`):
+Stage 1, parser (`lib/libfont/src/ttf.c`, `cff.c`):
 - `font_open(path)` maps the file, reads the table directory of TrueType
   (`\0\1\0\0`, `true`) and OpenType (`OTTO`) files, and the `head`,
   `hhea`, `hmtx`, `maxp`, `cmap` (formats 4 and 12, format 0 as a
@@ -119,7 +119,7 @@ Stage 1, parser (`libfont/src/ttf.c`, `cff.c`):
   hstem/vstem/hintmask skipping, subroutines with bias, endchar,
   the width prefix) with cubic curves.
 
-Stage 2, rasterizer (`libfont/src/raster.c`):
+Stage 2, rasterizer (`lib/libfont/src/raster.c`):
 - Outlines are scaled to a pixel size in 26.6 fixed point, curves are
   flattened by fixed subdivision, and edges are rasterized into an 8 bit
   coverage bitmap with non zero winding: 4 sub scanlines per pixel row
@@ -129,14 +129,14 @@ Stage 2, rasterizer (`libfont/src/raster.c`):
 - A glyph cache keyed by font, size and glyph id retains the last few
   hundred bitmaps.
 
-Stage 3, kerning and shaping (`libfont/src/kern.c`):
+Stage 3, kerning and shaping (`lib/libfont/src/kern.c`):
 - `kern` table format 0 pairs and `GPOS` pair adjustment (lookup type
   2, formats 1 and 2 with class definitions, through extension lookups)
   for the `kern` feature; `font_kern(font, left, right)` in font units.
 - `font_shape(font, text, size)` walks a string, applies kerning to the
   pen, and returns glyph positions in 26.6 pixels.
 
-Stage 4, integration (`libgui/`):
+Stage 4, integration (`lib/libgui/`):
 - `gfx_font_open_ttf(path, px)` returns a `struct font` backed by an
   outline font; `gfx_text_font` blends coverage bitmaps into the surface
   (alpha over a solid colour or the surface contents), `gfx_text_width_font`
@@ -178,7 +178,7 @@ work is split into M21 (core), M22 (widgets, images, editor) and M23
 toolkit (`gui/widgets.h`) remains available until every application has
 moved to the framework in M22, then it is removed.
 
-Stage 1, application object (`libgui/src/app.c`, `gui/app.h`):
+Stage 1, application object (`lib/libgui/src/app.c`, `gui/app.h`):
 - `app_create`, `app_run`, `app_quit`; windows registered with the
   application; one `poll` loop over the event queue, timers
   (`app_timer_add(ms, repeat, cb)`, ordered by deadline) and application
@@ -188,7 +188,7 @@ Stage 1, application object (`libgui/src/app.c`, `gui/app.h`):
 - Idle work: redraws happen once per loop iteration after all pending
   events are handled, so bursts of input cost one paint.
 
-Stage 2, widget object model (`libgui/src/widget.c`, `gui/widget.h`):
+Stage 2, widget object model (`lib/libgui/src/widget.c`, `gui/widget.h`):
 - `struct widget` with a class pointer (`struct widget_class`: name,
   size, `measure`, `layout`, `paint`, `event`, `destroy`), a parent and
   children list, geometry, flags (visible, enabled, focusable, dirty),
@@ -201,7 +201,7 @@ Stage 2, widget object model (`libgui/src/widget.c`, `gui/widget.h`):
 - Focus traversal with Tab and Shift+Tab, keyboard accelerators
   (`widget_set_accel(w, key, mods)`), mnemonics in captions.
 
-Stage 3, layout (`libgui/src/layout.c`):
+Stage 3, layout (`lib/libgui/src/layout.c`):
 - Size hints: minimum, preferred and maximum width and height computed
   by `measure`, stretch factors, alignment inside the cell, margins.
 - Containers: `box` (horizontal or vertical, spacing, padding) and
@@ -209,7 +209,7 @@ Stage 3, layout (`libgui/src/layout.c`):
   runs top down after measurement bottom up; only subtrees marked for
   relayout are recomputed.
 
-Stage 4, theme and painting (`libgui/src/theme.c`, `paint.c`):
+Stage 4, theme and painting (`lib/libgui/src/theme.c`, `paint.c`):
 - `struct theme` with named colours (window, text, disabled text,
   field, selection, accent, borders, highlights) and metrics (padding,
   spacing, border width, corner radius, scroll bar width, font, font
@@ -224,13 +224,13 @@ Stage 4, theme and painting (`libgui/src/theme.c`, `paint.c`):
   overlap), unions their rectangles and sends one `gui_damage` per
   window.
 
-Stage 5, core widgets on the new model (`libgui/src/widgets/*.c`):
+Stage 5, core widgets on the new model (`lib/libgui/src/widgets/*.c`):
 - label, button, check box, radio button group, text field, list view,
   scroll bar, scroll area (viewport with two scroll bars), canvas,
   separator, box, grid, window. These replace the M19 equivalents in
   behaviour and add the signal interface.
 
-Stage 6, host unit tests (`libgui/tests/`):
+Stage 6, host unit tests (`lib/libgui/tests/`):
 - `make check` builds libgui and libfont with the host compiler against
   a fake surface and a scripted event source (`tests/harness.c`), and
   runs unit tests of layout (measured sizes, grid spans, stretch),
@@ -252,7 +252,7 @@ Tests:
 
 ## M22. Widgets, images and the text editor (completed 2026-08-30)
 
-Stage 1, images (`libgui/src/png.c`, `image.c`):
+Stage 1, images (`lib/libgui/src/png.c`, `image.c`):
 - A deflate decoder (stored, fixed and dynamic Huffman blocks), zlib
   framing with Adler-32, PNG chunks (IHDR, PLTE, tRNS, IDAT, IEND),
   filters (none, sub, up, average, Paeth), colour types grey, RGB,
@@ -271,7 +271,7 @@ expanders and indentation, table with resizable and sortable columns,
 both virtualised over the model so large data is not copied; selection
 signals.
 
-Stage 4, text editor widget (`libgui/src/editor.c`): a line array with
+Stage 4, text editor widget (`lib/libgui/src/editor.c`): a line array with
 per line strings, an undo and redo stack of edit operations, word wrap
 mode, line numbers, search, a highlighter interface with C and shell
 highlighters supplied, and the clipboard. `edit` gains a graphical
@@ -312,8 +312,8 @@ New syscalls, numbered after `SYS_uname 54` in
 `kernel/include/syscall_nums.h`, entries in `kernel/syscall/table.c`,
 prototypes in `kernel/include/syscall/syscalls.h`, implementations in
 `kernel/syscall/sys_ipc.c` and `sys_fs.c`, libc stubs through
-`syscallN` (`libc/include/minios/syscall.h`), new headers
-`libc/include/sys/socket.h`, `sys/un.h`, `sys/eventfd.h`,
+`syscallN` (`lib/libc/include/minios/syscall.h`), new headers
+`lib/libc/include/sys/socket.h`, `sys/un.h`, `sys/eventfd.h`,
 `sys/timerfd.h`, additions to `fcntl.h`, `unistd.h`, `sys/mman.h`.
 
 1. Unix domain stream sockets (`kernel/ipc/socket.c`): `socket(AF_UNIX,
@@ -388,12 +388,12 @@ the existing `mq` case.
    travel in `SCM_RIGHTS` control messages in the order the fd
    arguments appear.
 2. Scanner `tools/wscan/wscan.py` (Python, no dependencies) writes
-   `libwire/generated/core-client.h/.c` and `core-server.h/.c`:
+   `lib/libwire/generated/core-client.h/.c` and `core-server.h/.c`:
    per interface a request function set (client) or listener structure
    (server), event listener structures (client) or send functions
    (server), interface descriptors with argument signatures for the
    generic marshaller. Generated code is committed.
-3. Library `libwire/` (`libwire.a`, also compiled on the host for unit
+3. Library `lib/libwire/` (`libwire.a`, also compiled on the host for unit
    tests): connection with output buffer and descriptor queue, flush,
    read and dispatch, client proxies with listeners and user data,
    server resources with dispatch tables and destruction callbacks, id
@@ -420,7 +420,7 @@ the existing `mq` case.
    scanner, library) and `docs/design/compositor.md` (core state
    machine, frame clock, buffer lifecycle).
 
-Tests: `make check` gains `libwire/tests/` on the host (marshal and
+Tests: `make check` gains `lib/libwire/tests/` on the host (marshal and
 unmarshal every argument type, descriptor passing over a host
 socketpair, id allocation, error paths); boot test `comp_core`
 (`/bin/comptest core`: connects, binds globals, creates a pool with two
@@ -492,7 +492,7 @@ keymap translation.
 
 ## M26. libgui port and application migration (completed 2026-08-30)
 
-1. `libgui/src/client.c` rewritten on libwire: `gui_window` becomes a
+1. `lib/libgui/src/client.c` rewritten on libwire: `gui_window` becomes a
    surface with a toplevel or popup role, an shm pool with two buffers
    (swap on commit, wait for release before reusing), damage
    accumulated by `gui_damage` and committed once per `app_step` when

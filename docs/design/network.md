@@ -1141,9 +1141,9 @@ from QEMU's user-mode DHCP server over the VirtIO NIC (10.0.2.15 from
 
 ### Resolver
 
-`libc/include/arpa/inet.h` gains `inet_aton`, `inet_addr`, `inet_ntoa`,
+`lib/libc/include/arpa/inet.h` gains `inet_aton`, `inet_addr`, `inet_ntoa`,
 `inet_pton` and `inet_ntop` for AF_INET; other families fail with
-`EAFNOSUPPORT`. `libc/include/netdb.h` provides `getaddrinfo`,
+`EAFNOSUPPORT`. `lib/libc/include/netdb.h` provides `getaddrinfo`,
 `freeaddrinfo` and `gai_strerror` for IPv4 with numeric services. Lookups
 resolve numeric text and `localhost` without any file, then `/etc/hosts`,
 then DNS over UDP to the `nameserver` entries of `/etc/resolv.conf` (three
@@ -1181,7 +1181,7 @@ configuration, the `/dev/net` snapshot, echo to the gateway and to an
 unreachable host, HTTP against a loopback server (200, 404 and the
 `https://` refusal), TCP and UDP relays and a refused connection.
 
-The HTTP client of `http(1)` is `libc/src/net/http.c` behind
+The HTTP client of `http(1)` is `lib/libc/src/net/http.c` behind
 `minios/http.h`, which `pkg(1)` shares for signed repositories
 (`packages.md`). It connects with a non blocking socket and waits in
 `poll`, so a timeout bounds the connection and every wait for data;
@@ -1465,7 +1465,7 @@ the other side has sent, and the case requires blocks in both directions.
 ## Resolver cache and search domains (N15)
 
 N15 adds a cache of DNS answers, negative caching and the search list to
-the resolver in `libc/src/net/resolv.c`. Each process has its own cache,
+the resolver in `lib/libc/src/net/resolv.c`. Each process has its own cache,
 because libc is linked into every program and has no daemon to share
 answers with. A long-running program that resolves names repeatedly gains
 from it, while a short tool like `ping` exits before it could. A shared

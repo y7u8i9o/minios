@@ -46,7 +46,7 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
 
 Decorations follow the GTK 4 model: the toolkit draws its own header
 bar, outline, rounded corners and shadow (client side decorations,
-`libgui/src/csd.c`, see `gui.md`), and the server only composites,
+`lib/libgui/src/csd.c`, see `gui.md`), and the server only composites,
 places the window and drives its move and resize drags. A client asks
 for that through `shell.get_decoration` and `decoration.set_mode(2)`;
 the server grants the client's choice and answers with `mode`. Clients

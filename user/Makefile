@@ -32,7 +32,7 @@ DISKTOOLS := part mkfs mkfat limine
 BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo $(DISKTOOLS))
 LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so $(addsuffix .so,$(SHARED))) $(BUILD)/lib/abi
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
-CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../libcodec/modules/*))))
+CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../lib/libcodec/modules/*))))
 
 # Lua is compiled unmodified from third_party/lua/src, with the platform
 # choices made here instead of in luaconf.h (see docs/design/lua.md).
@@ -60,8 +60,8 @@ LUA_CPP  := -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
             -DLUA_PATH_DEFAULT='"/usr/share/lua/5.5/?.lua;/usr/share/lua/5.5/?/init.lua;./?.lua;./?/init.lua"' \
             -DLUA_CPATH_DEFAULT='"/usr/lib/lua/5.5/?.so"'
 
-UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
-UCPP   += -I../libedit/include -I../libjson/include -I../libprof/include
+UCPP   := -I../lib/libc/include -I../kernel/include -I../lib/libcodec/include -I../lib/libgui/include -I../lib/libfont/include -I../lib/libwire/include -I../lib/libwire/generated -I../lib/libaudio/include
+UCPP   += -I../lib/libedit/include -I../lib/libjson/include -I../lib/libprof/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(filter-out $(if $(WITH_TESTS),,etc/tests etc/tests/%),$(wildcard etc/* etc/*/*)))
 FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuSansMono.ttf $(ROOT)/usr/share/fonts/lmroman10-regular.otf $(ROOT)/usr/share/fonts/NotoSans-Regular.ttf $(ROOT)/usr/share/fonts/unifont.otf \
@@ -548,7 +548,7 @@ $(TCC_GEN)/config.h:
 $(TCC_GEN)/tcc.o: $(TCC_SRC)/tcc.c $(TCC_GEN)/config.h Makefile
 	@mkdir -p $(dir $@)
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC $(UARCHFLAGS) -O2 -g -fno-builtin -w \
-	    $(TCC_DEFS) -I../libc/include -I../kernel/include -I$(TCC_GEN) -I$(TCC_SRC) -MMD -MP -c -o $@ $<
+	    $(TCC_DEFS) -I../lib/libc/include -I../kernel/include -I$(TCC_GEN) -I$(TCC_SRC) -MMD -MP -c -o $@ $<
 
 $(ROOT)/usr/bin/tcc: $(TCC_GEN)/tcc.o $(BUILD)/lib/libc.so $(CRT0)
 	@mkdir -p $(dir $@)
@@ -562,7 +562,7 @@ $(TCC_GEN)/lib/armflush.o: TCC_LIB1_CFLAGS := -D__arm64_clear_cache=__builtin___
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -fno-omit-frame-pointer $(UARCHFLAGS) -O2 -w \
-	    $(TCC_LIB1_CFLAGS) -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
+	    $(TCC_LIB1_CFLAGS) -DTCC_TARGET_$(TCC_TARGET) -I../lib/libc/include -I../kernel/include -I$(TCC_SRC) -I$(TCC_SRC)/include -c -o $@ $<
 
 $(TCC_GEN)/lib/%.o: $(TCC_SRC)/lib/%.S
 	@mkdir -p $(dir $@)
@@ -575,7 +575,7 @@ $(ROOT)/usr/lib/tcc/libtcc1.a: $(TCC_LIB1_OBJS)
 
 $(ROOT)/usr/lib/tcc/runmain.o: $(TCC_SRC)/lib/runmain.c
 	@mkdir -p $(dir $@)
-	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_$(TCC_TARGET) -I../libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
+	$(CC) -std=gnu11 -ffreestanding -fno-stack-protector -fPIC -O2 -w -DTCC_TARGET_$(TCC_TARGET) -I../lib/libc/include -I../kernel/include -I$(TCC_SRC) -c -o $@ $<
 
 # crt1.o is the C runtime start, crti.o defines the empty _init and _fini
 # and crtn.o is empty, and tcc links these objects around every program.
@@ -619,17 +619,17 @@ STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit libjson lib
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/usr/lib/crt1.o $(ROOT)/usr/lib/crti.o $(ROOT)/usr/lib/crtn.o $(ROOT)/usr/lib/libm.a
 	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
 	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/include/json $(ROOT)/usr/include/prof $(ROOT)/usr/lib/tcc/include
-	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
+	@cp -Rp ../lib/libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
 	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
-	@cp -p ../libgui/include/gui/*.h $(ROOT)/usr/include/gui/
-	@cp -p ../libfont/include/font/*.h $(ROOT)/usr/include/font/
-	@cp -p ../libwire/include/wire/*.h $(ROOT)/usr/include/wire/
-	@cp -p ../libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
-	@cp -p ../libjson/include/json/*.h $(ROOT)/usr/include/json/
-	@cp -p ../libprof/include/prof/*.h $(ROOT)/usr/include/prof/
-	@cp -p ../libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
-	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/
+	@cp -p ../lib/libgui/include/gui/*.h $(ROOT)/usr/include/gui/
+	@cp -p ../lib/libfont/include/font/*.h $(ROOT)/usr/include/font/
+	@cp -p ../lib/libwire/include/wire/*.h $(ROOT)/usr/include/wire/
+	@cp -p ../lib/libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
+	@cp -p ../lib/libjson/include/json/*.h $(ROOT)/usr/include/json/
+	@cp -p ../lib/libprof/include/prof/*.h $(ROOT)/usr/include/prof/
+	@cp -p ../lib/libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
+	@cp -p ../lib/libedit/include/edit.h $(ROOT)/usr/include/
 	@cp -p $(LUA_SRC)/lua.h $(LUA_SRC)/luaconf.h $(LUA_SRC)/lauxlib.h $(LUA_SRC)/lualib.h $(ROOT)/usr/include/lua/
 	@for l in $(STATIC_LIBS); do cp -p $(BUILD)/$$l/$$l.a $(ROOT)/usr/lib/$$l.a; done
 	@cp -p $(TCC_SRC)/include/*.h $(ROOT)/usr/lib/tcc/include/
@@ -654,7 +654,7 @@ $(ROOT)/usr/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
 $(ROOT)/usr/lib/ld.so: ld/ld.c ld/arch/$(ARCH)/start.S ld/arch/$(ARCH)/ld_arch.h
 	@mkdir -p $(dir $@) $(OUT)/ld
 	$(CC) -std=c17 -ffreestanding -fno-stack-protector -fPIC -fvisibility=hidden -fno-plt -O2 -g \
-	    -fno-builtin -Wall -Wextra $(LDSO_ARCHFLAGS) -I../kernel/include -I../libc/include -Ild/arch/$(ARCH) -c -o $(OUT)/ld/ld.o ld/ld.c
+	    -fno-builtin -Wall -Wextra $(LDSO_ARCHFLAGS) -I../kernel/include -I../lib/libc/include -Ild/arch/$(ARCH) -c -o $(OUT)/ld/ld.o ld/ld.c
 	$(CC) $(UASFLAGS) -c -o $(OUT)/ld/start.o ld/arch/$(ARCH)/start.S
 	$(LD) $(USOFLAGS) -Bsymbolic -e _dl_start -o $(OUT)/ld.so.elf $(OUT)/ld/start.o $(OUT)/ld/ld.o $(LIBGCC)
 	$(OBJCOPY) --strip-debug $(OUT)/ld.so.elf $@

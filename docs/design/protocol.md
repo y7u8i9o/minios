@@ -50,7 +50,7 @@ Requests marked `type="destructor"` destroy their object; the server
 removes the resource after the handler ran.
 
 `tools/wscan/wscan.py` reads the XML and writes into
-`libwire/generated/`: `core-client.h/.c` (one function per request,
+`lib/libwire/generated/`: `core-client.h/.c` (one function per request,
 returning the new proxy for `new_id` arguments; a `struct X_listener`
 per interface with one callback per event and `X_add_listener`),
 `core-server.h/.c` (a `struct X_impl` per interface with one handler
@@ -59,7 +59,7 @@ per request; one `X_send_event` function per event) and
 argument interfaces). The generated files are committed; `make -C
 libwire generate` regenerates them.
 
-## libwire (`libwire/`)
+## libwire (`lib/libwire/`)
 
 - `wire/common.h`: `struct wire_conn` with the output buffer and queued
   descriptors, the input buffer and received descriptors;
@@ -102,7 +102,7 @@ libwire generate` regenerates them.
 
 ## Tests
 
-`make check` runs `libwire/tests/test_wire.c` on the host over a
+`make check` runs `lib/libwire/tests/test_wire.c` on the host over a
 socketpair with both sides in one process: registry and bind, every
 argument type including a null object and an array, descriptor
 passing with `create_pool` (a temporary file read on the server side),
@@ -114,7 +114,7 @@ point numbers, escaped and cut strings, descriptors and untyped new
 ids. `comp_core` covers the same
 protocol in the target against the compositor.
 
-Messages carry at most 16 arguments (`WIRE_MAX_ARGS`). The listener and handler trampolines in `libwire/src/client.c` and `server.c` cover 0 to 12 arguments, so a message with more arguments must be split.
+Messages carry at most 16 arguments (`WIRE_MAX_ARGS`). The listener and handler trampolines in `lib/libwire/src/client.c` and `server.c` cover 0 to 12 arguments, so a message with more arguments must be split.
 
 ## Window geometry
 

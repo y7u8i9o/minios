@@ -1,5 +1,5 @@
 /* pkgsign is the host side of signed package repositories
- * (docs/design/packages.md). It compiles libc/src/crypto/sha2.c and
+ * (docs/design/packages.md). It compiles lib/libc/src/crypto/sha2.c and
  * ed25519.c, the code with which pkg(1) verifies on minios.
  *
  *   pkgsign keygen SECRET

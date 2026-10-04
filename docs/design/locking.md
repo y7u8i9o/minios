@@ -372,7 +372,7 @@ the framebuffer state and framebuffer write.
 
 These locks are in user space and do not add a kernel lock-order level.
 
-- `streams_lock` in `libc/src/stdio/stdio.c` protects the open-stream registry
+- `streams_lock` in `lib/libc/src/stdio/stdio.c` protects the open-stream registry
   and the lifetime of entries visited by `fflush(NULL)`. Ordering is
   `streams_lock -> FILE.lock`. `fclose` removes the entry before acquiring
   its FILE lock for the final flush. Registration allocates before locking.

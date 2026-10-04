@@ -56,7 +56,7 @@ Japanese.
   `EastAsianWidth.txt` and `DerivedCoreProperties.txt` of Unicode 16.0 into
   `third_party/unicode`.
 - `tools/genunicode.py` generates range tables into
-  `libc/src/wchar/unidata.h`. `wcwidth`, the `isw*` classes, `towupper` and
+  `lib/libc/src/wchar/unidata.h`. `wcwidth`, the `isw*` classes, `towupper` and
   `towlower` use the generated tables.
 - The terminal uses `wcwidth`. Wide characters occupy two cells, and
   combining marks attach to the previous cell.
@@ -70,7 +70,7 @@ no-break space U+00A0, and `libc_ext` expects that. The cases
 
 ### L1. Locale core (completed 2026-10-02)
 
-- A parser for locale files in `libc/src/locale/`, `<langinfo.h>` with
+- A parser for locale files in `lib/libc/src/locale/`, `<langinfo.h>` with
   `nl_langinfo`, and `locale_t` with `newlocale`, `uselocale`, `freelocale`
   and `duplocale`. `strtod_l`, `strcoll_l`, `strxfrm` and `strftime_l`.
 - `printf`, `scanf`, `strtod` and `localeconv` take the decimal point from

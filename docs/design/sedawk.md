@@ -47,7 +47,7 @@ available to every program and documented in `libc.md`.
   changed, so the four change functions returned 0 without effect. They
   are system calls since U1 of the multiuser plan (`users.md`).
 - `stdio.h`: `scanf`, `fscanf`, `sscanf` and their `v` forms
-  (`libc/src/stdio/scan.c`), `asprintf`, `vasprintf`, `FOPEN_MAX`.
+  (`lib/libc/src/stdio/scan.c`), `asprintf`, `vasprintf`, `FOPEN_MAX`.
 - `stdlib.h`: `bsearch`, `random`, `srandom`, `mbtowc`, `wctomb`,
   `mblen`, `getprogname`, `setprogname`.
 - `wctype.h`: the `isw*` classes, `towupper`, `towlower`, `wctype` and

@@ -22,7 +22,7 @@ localhost ports. No public service is a dependency.
 |---|---|
 | 39 cases, four vCPUs | 39 passed, 0 failed |
 | 39 cases, one vCPU | 39 passed, 0 failed |
-| `make check-net`, `make check-headers`, `git diff --check` | pass (the header check retains the pre-existing nested-comment warning in `libgui/include/gui/mime.h`) |
+| `make check-net`, `make check-headers`, `git diff --check` | pass (the header check retains the pre-existing nested-comment warning in `lib/libgui/include/gui/mime.h`) |
 | `make check-net-fuzz` (N09 record) | three seeds of 30 s, no finding |
 
 The 39 cases are the 26 network cases (`net_dns net_tools net_dhcp

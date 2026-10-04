@@ -1,7 +1,7 @@
 # Reusable line editor
 
-`libedit/` builds `build/libedit/libedit.a` against MiniOS libc. It has no
-shell parser dependency. The public API is `libedit/include/edit.h`:
+`lib/libedit/` builds `build/libedit/libedit.a` against MiniOS libc. It has no
+shell parser dependency. The public API is `lib/libedit/include/edit.h`:
 
 - `edit_open(in, out)` / `edit_close` manage an editor, not its descriptors.
 - `edit_readline(editor, prompt, buf, size)` returns the byte length without

@@ -16,7 +16,7 @@ the fallback; both paths remain in the library.
 ## SVG icons (the `svg` codec)
 
 The renderer is the libcodec module `svg.so`
-(`libcodec/modules/svg/svg.c`, `codecs.md`). The libgui function
+(`lib/libcodec/modules/svg/svg.c`, `codecs.md`). The libgui function
 `image_render_svg(text, len, px, color)` calls its decode function with a
 request of px by px pixels. The renderer supports the subset of SVG that
 icon files use: the `viewBox` (or `width` and `height`) of the `<svg>`
@@ -42,7 +42,7 @@ so a PNG icon is still doubled on a scale 2 output while an SVG icon
 rendered at that scale is sharp. Widgets measure icons with `image_lw`
 and `image_lh`, the logical size.
 
-## The icon cache (`libgui/src/widgets/icons.c`)
+## The icon cache (`lib/libgui/src/widgets/icons.c`)
 
 `icon_get(name)` looks for `<name>.svg` and renders it 16 logical
 pixels high at the scale of the first output, then for `<name>.png`.
@@ -67,7 +67,7 @@ without an SVG file.
 
 ## Tests
 
-`libgui/tests/test_svg.c` (part of `make check`) renders rectangles,
+`lib/libgui/tests/test_svg.c` (part of `make check`) renders rectangles,
 nested squares under both fill rules, circles from cubic curves and
 from arcs, colour and opacity attributes, `tests/data/shape.svg` in
 Font Awesome's file layout, refuses malformed input and paints a scale
