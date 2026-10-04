@@ -315,13 +315,16 @@ int app_step(struct app *a, int timeout_ms)
     int rt = a->connected ? gui_repeat_timeout() : -1;
     if (rt >= 0 && (wait < 0 || rt < wait))
         wait = rt;
-    int nw = 1;
+    /* The connection, the data of a drop being read, then the watches. */
+    int nw = 2;
     for (struct watch *w = a->watches; w; w = w->next)
         nw++;
     struct pollfd *pf = calloc((size_t)nw, sizeof *pf);
     pf[0].fd = a->connected ? gui_event_fd() : -1;
     pf[0].events = POLLIN;
-    int i = 1;
+    pf[1].fd = a->connected ? gui_transfer_fd() : -1;
+    pf[1].events = POLLIN;
+    int i = 2;
     for (struct watch *w = a->watches; w; w = w->next, i++) {
         pf[i].fd = w->fd;
         pf[i].events = (short)w->events;
@@ -332,7 +335,7 @@ int app_step(struct app *a, int timeout_ms)
         return 0;
     }
     if (r > 0) {
-        i = 1;
+        i = 2;
         for (struct watch *w = a->watches; w; i++) {
             struct watch *next = w->next;
             if (pf[i].revents)

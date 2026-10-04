@@ -2,6 +2,7 @@
  * of the places sidebar, the path bar, the location entry, the search,
  * the recent list and the table of entries (gui/folderview.h). */
 #include <gui/app.h>
+#include <gui/fileops.h>
 #include <gui/folderview.h>
 #include <gui/mime.h>
 #include <gui/model.h>
@@ -78,6 +79,7 @@ struct folderview {
     int location_len;           /* its length before the last change */
     int ready;                  /* construction is over and callbacks run */
     struct timer *timer;
+    void (*dropped)(struct folderview *fv, const char *dir, int count, int action, void *arg);
 };
 
 /* ---- paths ---- */
@@ -995,12 +997,110 @@ static int on_key(struct widget *w, void *args, void *arg)
     return 0;
 }
 
+/* ---- drag and drop ---- */
+
+/* A drag of files over the folder dest: the type is text/uri-list, and
+ * the paths, read before the drop, decide the action. */
+static void drag_decide(const char *dest, struct drag_event *d)
+{
+    if (!widget_drag_offers("text/uri-list"))
+        return;
+    size_t len;
+    const char *uris = gui_drag_peek("text/uri-list", &len);
+    int preferred = fileops_drop_action(uris, len, dest);
+    if (!preferred)
+        return;
+    d->accept_mime = "text/uri-list";
+    d->accept_actions = GUI_DND_COPY | GUI_DND_MOVE;
+    d->preferred = preferred;
+}
+
+/* Copy or move the dropped files into dest, report a failure in a
+ * dialog and show the result. */
+static void drop_files(struct folderview *fv, const char *dest, const struct drag_event *d)
+{
+    char **paths;
+    int n = fileops_parse_drop(d->mime, d->data, d->len, &paths);
+    const char *failed = NULL;
+    int r = fileops_drop(paths, n, dest, d->action, &failed);
+    if (r < 0) {
+        char text[PATH_MAX + 120];
+        snprintf(text, sizeof text, d->action == GUI_DND_MOVE ? _("“%s” cannot be moved: %s.") : _("“%s” cannot be copied: %s."),
+                 failed ? path_base(failed) : "", strerror(-r));
+        message(fv, text);
+    } else if (fv->dropped) {
+        fv->dropped(fv, dest, r, d->action, fv->arg);
+    }
+    fileops_free_paths(paths, n);
+    folderview_reload(fv);
+}
+
+/* The folder a drag over a row of the table drops into: the folder of a
+ * folder row, else the folder shown, whose row is then -1. Recent and
+ * searches have no folder of their own. */
+static int table_drop_folder(struct folderview *fv, int *row, char *out, size_t size)
+{
+    if (*row >= 0 && *row < fv->nentries && fv->entries[*row].dir) {
+        strlcpy(out, fv->entries[*row].path, size);
+        return 1;
+    }
+    *row = -1;
+    if (fv->view != FOLDERVIEW_FOLDER)
+        return 0;
+    strlcpy(out, fv->cwd, size);
+    return 1;
+}
+
+static int on_drag_begin(struct widget *w, void *args, void *arg)
+{
+    struct folderview *fv = arg;
+    struct sig_drag *sd = args;
+    if (sd->row < 0 || sd->row >= fv->nentries)
+        return 1;
+    const struct folderview_entry *e = &fv->entries[sd->row];
+    const char *paths[1] = { e->path };
+    char *uris = fileops_uri_list(paths, 1);
+    if (!uris)
+        return 1;
+    struct gui_drag_item items[2] = { { "text/uri-list", uris, strlen(uris) }, { "text/plain", e->path, strlen(e->path) } };
+    widget_drag_start(w, items, 2, GUI_DND_COPY | GUI_DND_MOVE, e->icon, e->name);
+    free(uris);
+    return 1;
+}
+
+static int on_drag_end(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    if (sd->drag->action == GUI_DND_MOVE)
+        folderview_reload(arg);
+    return 1;
+}
+
+static int on_drag_motion(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    char dest[PATH_MAX];
+    if (table_drop_folder(arg, &sd->row, dest, sizeof dest))
+        drag_decide(dest, sd->drag);
+    return 1;
+}
+
+static int on_drop(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    char dest[PATH_MAX];
+    if (table_drop_folder(arg, &sd->row, dest, sizeof dest))
+        drop_files(arg, dest, sd->drag);
+    return 1;
+}
+
 /* ---- the places sidebar ---- */
 
 struct sidebar {
     struct widget w;
     struct folderview *fv;
     int hover;
+    int drop;                   /* the place a drag would drop into, or -1 */
 };
 
 #define GROUP_GAP 9
@@ -1047,7 +1147,9 @@ static void sidebar_paint(struct widget *w, struct painter *p)
         if (i > 0 && fv->place[i].group != fv->place[i - 1].group)
             painter_line(p, 8, y - GROUP_GAP / 2 - 1, w->w - 8, y - GROUP_GAP / 2 - 1, t->color[TC_BORDER]);
         int current = i == fv->current_place;
-        if (current)
+        if (i == sb->drop)
+            painter_rounded(p, 4, y, w->w - 8, rh, t->color[current ? TC_SELECTION : TC_BUTTON_HOVER], t->color[TC_ACCENT]);
+        else if (current)
             painter_rounded(p, 4, y, w->w - 8, rh, t->color[TC_SELECTION], 0xffffffffu);
         else if (i == sb->hover)
             painter_rounded(p, 4, y, w->w - 8, rh, t->color[TC_BUTTON_HOVER], 0xffffffffu);
@@ -1086,6 +1188,29 @@ static int sidebar_event(struct widget *w, struct event *e)
     }
     case EV_LEAVE:
         sb->hover = -1;
+        widget_invalidate(w);
+        return 1;
+    case EV_DRAG_MOVE: {
+        /* Every place but Recent is a folder that takes drops. */
+        int i = place_at(sb, e->y);
+        if (i >= 0 && !fv->place[i].path[0])
+            i = -1;
+        if (i >= 0)
+            drag_decide(fv->place[i].path, e->drag);
+        if (!e->drag->accept_mime)
+            i = -1;
+        if (i != sb->drop) {
+            sb->drop = i;
+            widget_invalidate(w);
+        }
+        return 1;
+    }
+    case EV_DROP:
+        if (sb->drop >= 0)
+            drop_files(fv, fv->place[sb->drop].path, e->drag);
+        return 1;
+    case EV_DRAG_LEAVE:
+        sb->drop = -1;
         widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN:
@@ -1388,6 +1513,7 @@ struct folderview *folderview_new(struct widget *bar, struct widget *split, cons
     struct sidebar *sb = (struct sidebar *)widget_new(&sidebar_class, split);
     sb->fv = fv;
     sb->hover = -1;
+    sb->drop = -1;
     fv->sidebar = &sb->w;
     fv->sidebar->focusable = 1;
     widget_set_id(fv->sidebar, "fv-sidebar");
@@ -1401,6 +1527,10 @@ struct folderview *folderview_new(struct widget *bar, struct widget *split, cons
     table_set_column_width(fv->table, 3, 110);
     widget_connect(fv->table, "activate", on_activate, fv);
     widget_connect(fv->table, "selected", on_selected, fv);
+    widget_connect(fv->table, "drag_begin", on_drag_begin, fv);
+    widget_connect(fv->table, "drag_end", on_drag_end, fv);
+    widget_connect(fv->table, "drag_motion", on_drag_motion, fv);
+    widget_connect(fv->table, "drop", on_drop, fv);
     splitpane_set_position(split, SIDEBAR_W);
     widget_connect(fv->win, "key", on_key, fv);
 
@@ -1411,6 +1541,11 @@ struct folderview *folderview_new(struct widget *bar, struct widget *split, cons
 }
 
 struct widget *folderview_table(struct folderview *fv) { return fv->table; }
+void folderview_on_dropped(struct folderview *fv,
+                           void (*fn)(struct folderview *fv, const char *dir, int count, int action, void *arg))
+{
+    fv->dropped = fn;
+}
 struct widget *folderview_sidebar(struct folderview *fv) { return fv->sidebar; }
 enum folderview_kind folderview_kind(const struct folderview *fv) { return fv->view; }
 const char *folderview_cwd(const struct folderview *fv) { return fv->cwd; }

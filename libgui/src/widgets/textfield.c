@@ -1,6 +1,8 @@
-/* Single line text field with cursor, selection and the clipboard. */
+/* Single line text field with cursor, selection, the clipboard and
+ * dragging of the selection. */
 #include <gui/app.h>
 #include <gui/utf8.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "editmenu.h"
@@ -15,6 +17,11 @@ struct textfield {
     char *mask;                 /* the stars, as long as the text */
     char preedit[WSRV_TITLE_MAX];
     struct widget *context_menu;
+    /* A press inside the selection that may become a drag, and the
+     * dragged bytes and text while the drag runs. */
+    int drag_pending, press_x, press_y;
+    int drag_out, drag_a, drag_b;
+    char *drag_text;
 };
 
 static void changed(struct textfield *f)
@@ -282,6 +289,45 @@ static void context_menu(struct textfield *f, int x)
     edit_menu_popup(&f->w, &f->context_menu, x, f->w.h / 2, shown, enabled, context_action);
 }
 
+/* ---- dragging the selection ---- */
+
+static void drag_begin(struct textfield *f)
+{
+    int a, b;
+    sel_range(f, &a, &b);
+    char *text = strndup(widget_text(&f->w) + a, (size_t)(b - a));
+    if (!text)
+        return;
+    char label[48];
+    snprintf(label, sizeof label, b - a > 32 ? "%.32s…" : "%s", text);
+    struct gui_drag_item item = { "text/plain", text, (size_t)(b - a) };
+    if (widget_drag_start(&f->w, &item, 1, GUI_DND_COPY | GUI_DND_MOVE, NULL, label) == 0) {
+        f->drag_out = 1;
+        f->drag_a = a;
+        f->drag_b = b;
+        free(f->drag_text);
+        f->drag_text = text;
+    } else {
+        free(text);
+    }
+}
+
+/* Text moved elsewhere is removed here, when the field still contains it. */
+static void drag_end(struct textfield *f, int action)
+{
+    const char *t = widget_text(&f->w);
+    if (f->drag_out && action == GUI_DND_MOVE && f->drag_b <= len_of(f) &&
+        strncmp(t + f->drag_a, f->drag_text, (size_t)(f->drag_b - f->drag_a)) == 0) {
+        f->sel = f->drag_a;
+        f->cursor = f->drag_b;
+        delete_selection(f);
+        changed(f);
+    }
+    f->drag_out = 0;
+    free(f->drag_text);
+    f->drag_text = NULL;
+}
+
 static int textfield_event(struct widget *w, struct event *e)
 {
     struct textfield *f = (struct textfield *)w;
@@ -294,12 +340,44 @@ static int textfield_event(struct widget *w, struct event *e)
         }
         if (!(e->button & 1))
             return 0;
-        f->cursor = pos_at(f, e->x);
+        {
+            /* A press inside the selection of a field that may copy may
+             * drag it; a release without a move clears the selection. */
+            int p = pos_at(f, e->x), a, b;
+            sel_range(f, &a, &b);
+            if (!f->masked && f->sel >= 0 && a < b && p >= a && p <= b) {
+                f->drag_pending = 1;
+                f->press_x = e->x;
+                f->press_y = e->y;
+                widget_capture(w);
+                return 1;
+            }
+            f->cursor = p;
+        }
         f->sel = -1;
         widget_capture(w);
         widget_invalidate(w);
         return 1;
+    case EV_MOUSE_UP:
+        if (f->drag_pending) {
+            f->drag_pending = 0;
+            f->cursor = pos_at(f, f->press_x);
+            f->sel = -1;
+            widget_invalidate(w);
+            return 1;
+        }
+        return 0;
+    case EV_DRAG_END:
+        drag_end(f, e->drag->action);
+        return 1;
     case EV_MOUSE_MOVE:
+        if (f->drag_pending) {
+            if ((e->button & 1) && widget_drag_moved(f->press_x, f->press_y, e->x, e->y)) {
+                f->drag_pending = 0;
+                drag_begin(f);
+            }
+            return 1;
+        }
         if (e->button & 1) {
             int p = pos_at(f, e->x);
             if (p != f->cursor) {
@@ -359,6 +437,7 @@ static int textfield_event(struct widget *w, struct event *e)
 static void textfield_destroy(struct widget *w)
 {
     struct textfield *f = (struct textfield *)w;
+    free(f->drag_text);
     if (f->mask) {
         memset(f->mask, 0, strlen(f->mask));
         free(f->mask);

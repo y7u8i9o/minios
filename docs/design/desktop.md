@@ -31,6 +31,14 @@ click opens a context menu (`popupmenu_new` and `menu_popup` in
 - On the desktop: New folder, New text file, Refresh, Change wallpaper
   (starts `settings appearance`), Settings.
 
+An icon pressed and moved by more than four pixels is dragged as
+`text/uri-list` and `text/plain` with its icon and label. Files dropped on
+a folder icon go into that folder and files dropped elsewhere on the
+desktop into `~/desktop`, moved when they are on the same file system and
+copied otherwise (Ctrl copies, Shift moves). The folder icon under the
+drag is drawn with an accent border, and failures are shown in a dialog
+(`dnd.md`).
+
 Every second the desktop re-reads its folder and compares the
 configuration file (`$HOME/.config/desktop.conf` when it exists, the
 shipped `/etc/desktop.conf` otherwise; `storage.md`) with the last
@@ -39,7 +47,8 @@ the wallpaper is reloaded and rescaled, and `desktop_color`,
 `repeat_rate` and `repeat_delay` are sent to the compositor through
 the `settings` protocol interface. Log lines: `desktop: started with N
 entries`, `desktop: wallpaper PATH mode M`, `desktop: config applied`,
-`desktop: open PATH`, `desktop: menu NAME|desktop`.
+`desktop: open PATH`, `desktop: menu NAME|desktop`, `desktop: drag PATH`,
+`desktop: drop moved|copied N into DIR`.
 
 ## Wallpaper
 

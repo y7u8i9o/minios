@@ -63,9 +63,11 @@ mounted volumes and Computer.
 
 ## Operations (`fsops.c`)
 
-`fs_join` and `fs_normalize` build and clean paths, `fs_copy` and
-`fs_remove` recurse into directories, `fs_move` renames or copies and
-removes, and `fs_tree_size` sums a tree. Results are 0 or `-errno`. Sizes
+`fs_join` and `fs_normalize` build and clean paths and `fs_tree_size`
+sums a tree. Recursive copy and remove and the move that renames or
+copies and removes moved to libgui on 2026-10-04 as `fileops_copy`,
+`fileops_remove` and `fileops_move` (`gui/fileops.h`, `dnd.md`), which the
+file chooser and the desktop share for drops. Results are 0 or `-errno`. Sizes
 in the Properties window are formatted by `folderview_format_size`, which
 replaced `fs_human_size`, and types are named by `folderview_describe`.
 
@@ -82,7 +84,9 @@ the listing and the type ahead selection, which became a search.
 ## Logging and tests
 
 The program prints `files: cd`, `open`, `mkdir`, `create`, `rename`,
-`delete`, `copy`, `move` and `terminal in` lines with the paths. The
+`delete`, `copy`, `move` and `terminal in` lines with the paths, and
+`files: drop moved|copied N into DIR` after files were dropped into the
+folder view (`dnd.md`). The
 `gui_files` case opens `/home/desktop`, creates a folder with Ctrl+N,
 renames it with F2, deletes it with Delete and Enter, opens
 `readme.txt` by typing its name, which searches the folder, and Enter,

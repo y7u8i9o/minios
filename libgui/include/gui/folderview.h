@@ -10,6 +10,10 @@
  * every two seconds, so files written by other programs appear.  The
  * folder view is freed with its widgets.
  *
+ * Rows can be dragged to other programs as text/uri-list and text/plain,
+ * and files dropped on a folder row, the empty part of the table or a
+ * place of the sidebar are copied or moved there (gui/fileops.h).
+ *
  * Keys handled on the window: typing over the table or the sidebar,
  * Ctrl+L, Ctrl+F, Ctrl+H (hidden files), Alt+Up and Backspace (the
  * parent folder), Alt+Down (back down the path bar), Alt+Home, and
@@ -54,6 +58,11 @@ struct folderview *folderview_new(struct widget *bar, struct widget *split, cons
                                   const struct folderview_ops *ops, void *arg);
 struct widget *folderview_table(struct folderview *fv);
 struct widget *folderview_sidebar(struct folderview *fv);
+
+/* fn is called after files dropped into the folder dir were copied or
+ * moved (action GUI_DND_*). */
+void folderview_on_dropped(struct folderview *fv,
+                           void (*fn)(struct folderview *fv, const char *dir, int count, int action, void *arg));
 
 /* Show a folder and report an error in a dialog.  Returns 0 or -errno. */
 int folderview_navigate(struct folderview *fv, const char *path);

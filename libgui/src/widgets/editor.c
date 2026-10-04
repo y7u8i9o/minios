@@ -680,6 +680,11 @@ static void editor_paint(struct widget *w, struct painter *p)
             }
             painter_line(p, cx, y, cx, y + lh - 1, t->color[TC_TEXT]);
         }
+        if (ed->dropping && l == ed->drop_l && ed->drop_c >= start &&
+            (ed->drop_c < start + len || (ed->drop_c == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
+            int cx = PAD - ed->scroll_x + gfx_text_width_font(ed_font(ed), s + start, ed->drop_c - start);
+            painter_fill(p, cx - 1, y, 2, lh, t->color[TC_ACCENT]);
+        }
     }
     painter_pop(p);
     free(classes);
@@ -862,6 +867,17 @@ static void context_action(struct widget *w, enum edit_action a)
     widget_focus(w);
 }
 
+/* The text position under a point, the cursor unchanged. */
+static void pos_at_point(struct editor *ed, int px, int py, int *l, int *c)
+{
+    int cl = ed->cl, cc = ed->cc;
+    set_pos_from_point(ed, px, py);
+    *l = ed->cl;
+    *c = ed->cc;
+    ed->cl = cl;
+    ed->cc = cc;
+}
+
 /* inside_selection returns 1 when (l, c) is inside the selection. */
 static int inside_selection(struct editor *ed, int l, int c)
 {
@@ -898,6 +914,154 @@ static void context_menu(struct editor *ed, int x, int y)
     edit_menu_popup(&ed->w, &ed->context_menu, x, y, ~0u, enabled, context_action);
 }
 
+/* ---- drag and drop ---- */
+
+static void drag_begin(struct editor *ed)
+{
+    char *text = editor_selection(&ed->w);
+    if (!text)
+        return;
+    char label[48];
+    size_t n = strcspn(text, "\n");
+    snprintf(label, sizeof label, n > 32 || text[n] ? "%.32s…" : "%s", text);
+    struct gui_drag_item item = { "text/plain", text, strlen(text) };
+    int actions = GUI_DND_COPY | (ed->readonly ? 0 : GUI_DND_MOVE);
+    if (widget_drag_start(&ed->w, &item, 1, actions, NULL, label) == 0) {
+        sel_range(ed, &ed->dl0, &ed->dc0, &ed->dl1, &ed->dc1);
+        ed->drag_out = 1;
+        ed->drag_moved_here = 0;
+        free(ed->drag_text);
+        ed->drag_text = text;
+    } else {
+        free(text);
+    }
+}
+
+/* A position after the deleted range [l0:c0, l1:c1) where it is now. */
+static void pos_after_delete(int l0, int c0, int l1, int c1, int *l, int *c)
+{
+    if (*l < l1 || (*l == l1 && *c < c1))
+        return;
+    if (*l == l1) {
+        *l = l0;
+        *c = c0 + (*c - c1);
+    } else {
+        *l -= l1 - l0;
+    }
+}
+
+/* The selection moved by a drop inside the same editor: one undo step. */
+static void move_dragged(struct editor *ed, int l, int c)
+{
+    char *text = copy_range(ed, ed->dl0, ed->dc0, ed->dl1, ed->dc1);
+    group_begin(ed);
+    delete_range(ed, ed->dl0, ed->dc0, ed->dl1, ed->dc1);
+    pos_after_delete(ed->dl0, ed->dc0, ed->dl1, ed->dc1, &l, &c);
+    ed->cl = l;
+    ed->cc = c;
+    insert_text(ed, text, (int)strlen(text), 0);
+    group_end(ed);
+    free(text);
+    ed->drag_moved_here = 1;
+}
+
+/* The dragged range still contains the dragged text. */
+static int dragged_unchanged(struct editor *ed)
+{
+    if (!ed->drag_text || ed->dl1 >= ed->nlines || ed->dc0 > llen(ed, ed->dl0) || ed->dc1 > llen(ed, ed->dl1))
+        return 0;
+    char *now = copy_range(ed, ed->dl0, ed->dc0, ed->dl1, ed->dc1);
+    int same = strcmp(now, ed->drag_text) == 0;
+    free(now);
+    return same;
+}
+
+static void set_dropping(struct editor *ed, int on, int l, int c)
+{
+    if (on != ed->dropping || l != ed->drop_l || c != ed->drop_c) {
+        ed->dropping = on;
+        ed->drop_l = l;
+        ed->drop_c = c;
+        widget_invalidate(&ed->w);
+    }
+}
+
+/* The owner may take a drag first through "drag_motion" and "drop"
+ * (sig_drag), as gedit does for files; otherwise text is inserted at the
+ * drop caret, and the editor's own selection is moved there. */
+static int editor_drag_event(struct editor *ed, struct event *e)
+{
+    struct widget *w = &ed->w;
+    struct sig_drag sd = { -1, e->x, e->y, e->drag };
+    switch (e->type) {
+    case EV_DRAG_MOVE: {
+        ed->drop_owner = widget_emit(w, "drag_motion", &sd);
+        if (ed->drop_owner || ed->readonly || !widget_drag_offers("text/plain")) {
+            set_dropping(ed, 0, 0, 0);
+            return 1;
+        }
+        int l, c;
+        pos_at_point(ed, e->x, e->y, &l, &c);
+        int l0, c0, l1, c1;
+        sel_range(ed, &l0, &c0, &l1, &c1);
+        int in_drag = ed->drag_out && (l > l0 || (l == l0 && c > c0)) && (l < l1 || (l == l1 && c < c1));
+        if (in_drag) {                  /* into the dragged text itself */
+            set_dropping(ed, 0, 0, 0);
+            return 1;
+        }
+        e->drag->accept_mime = "text/plain";
+        e->drag->accept_actions = GUI_DND_COPY | GUI_DND_MOVE;
+        e->drag->preferred = ed->drag_out ? GUI_DND_MOVE : GUI_DND_COPY;
+        set_dropping(ed, 1, l, c);
+        return 1;
+    }
+    case EV_DRAG_LEAVE:
+        set_dropping(ed, 0, 0, 0);
+        return 1;
+    case EV_DROP:
+        if (ed->drop_owner) {
+            widget_emit(w, "drop", &sd);
+            return 1;
+        }
+        if (!ed->dropping)
+            return 1;
+        int l = ed->drop_l, c = ed->drop_c;
+        set_dropping(ed, 0, 0, 0);
+        if (ed->drag_out && e->drag->action == GUI_DND_MOVE && dragged_unchanged(ed)) {
+            move_dragged(ed, l, c);
+        } else {
+            ed->cl = l;
+            ed->cc = c;
+            ed->has_sel = 0;
+            group_begin(ed);
+            insert_text(ed, e->drag->data, (int)e->drag->len, 0);
+            group_end(ed);
+        }
+        ed->has_sel = 0;
+        widget_focus(w);
+        cursor_moved(ed);
+        return 1;
+    case EV_DRAG_END:
+        /* Text moved to another place loses its old copy. */
+        if (ed->drag_out && e->drag->action == GUI_DND_MOVE && !ed->drag_moved_here && !ed->readonly &&
+            dragged_unchanged(ed)) {
+            group_begin(ed);
+            delete_range(ed, ed->dl0, ed->dc0, ed->dl1, ed->dc1);
+            group_end(ed);
+            ed->cl = ed->dl0;
+            ed->cc = ed->dc0;
+            ed->has_sel = 0;
+            cursor_moved(ed);
+        }
+        ed->drag_out = 0;
+        free(ed->drag_text);
+        ed->drag_text = NULL;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int editor_event(struct widget *w, struct event *e)
 {
     struct editor *ed = (struct editor *)w;
@@ -931,6 +1095,17 @@ static int editor_event(struct widget *w, struct event *e)
         ed->last_click_ms = now;
         ed->click_x = e->x;
         ed->click_y = e->y;
+        /* A press inside the selection may drag it; the selection is
+         * cleared only when the release shows that it was a click. */
+        int pl, pc;
+        pos_at_point(ed, e->x, e->y, &pl, &pc);
+        if (ed->clicks == 1 && inside_selection(ed, pl, pc)) {
+            ed->drag_pending = 1;
+            ed->press_x = e->x;
+            ed->press_y = e->y;
+            widget_capture(w);
+            return 1;
+        }
         set_pos_from_point(ed, e->x, e->y);
         ed->has_sel = 0;
         ed->wanted_x = -1;
@@ -945,6 +1120,13 @@ static int editor_event(struct widget *w, struct event *e)
         return 1;
     }
     case EV_MOUSE_MOVE:
+        if (ed->drag_pending) {
+            if ((e->button & 1) && widget_drag_moved(ed->press_x, ed->press_y, e->x, e->y)) {
+                ed->drag_pending = 0;
+                drag_begin(ed);
+            }
+            return 1;
+        }
         if (e->button & 1) {
             int bl = ed->cl, bc = ed->cc;
             set_pos_from_point(ed, e->x, e->y);
@@ -990,6 +1172,18 @@ static int editor_event(struct widget *w, struct event *e)
             cursor_moved(ed);
         }
         return 1;
+    case EV_MOUSE_UP:
+        if (ed->drag_pending) {         /* a click inside the selection */
+            ed->drag_pending = 0;
+            set_pos_from_point(ed, ed->press_x, ed->press_y);
+            ed->has_sel = 0;
+            ed->wanted_x = -1;
+            cursor_moved(ed);
+            return 1;
+        }
+        return 0;
+    case EV_DRAG_MOVE: case EV_DRAG_LEAVE: case EV_DROP: case EV_DRAG_END:
+        return editor_drag_event(ed, e);
     case EV_FOCUS_IN: case EV_FOCUS_OUT:
         widget_invalidate(w);
         return 1;
@@ -1017,6 +1211,7 @@ static void editor_destroy(struct widget *w)
     free(ed->row_line);
     free(ed->row_start);
     free(ed->row_len);
+    free(ed->drag_text);
     if (ed->font)
         gfx_font_free(ed->font);
 }

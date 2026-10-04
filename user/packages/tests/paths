@@ -9,6 +9,7 @@ usr/bin/comptest
 usr/bin/credtest
 usr/bin/cryptotest
 usr/bin/dltest
+usr/bin/dndtest
 usr/bin/dyntest
 usr/bin/evfdtest
 usr/bin/fattest

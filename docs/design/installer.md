@@ -50,6 +50,8 @@ with their sizes and asks for the disk, the package group, further
 packages, the language, the keyboard layout, the time zone, the size of
 swap, the password of root, the first account with its full name and
 password, shows the disk to be erased and installs after the word `yes`.
+The answer `none` to the account name creates no account. An empty answer
+to any question takes the default shown in brackets.
 
 The answer file consists of `key value` lines: `disk`, `group`
 (`desktop-system` by default), `packages`, `lang` (`en_US.UTF-8`),

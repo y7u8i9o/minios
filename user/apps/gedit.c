@@ -6,11 +6,14 @@
  * of the editor contain Undo, Redo, Cut, Copy, Paste, Delete and Select
  * all.  Find, Find next, Replace and Go to line ask for their text in a
  * dialog.  Highlighting follows the extension of the file.  New, Open,
- * Quit and closing the window ask before unsaved changes are lost. */
+ * Quit and closing the window ask before unsaved changes are lost.  A
+ * file dropped on the editor is opened, and dropped text is inserted by
+ * the editor widget. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <gui/app.h>
+#include <gui/fileops.h>
 #include <gui/i18n.h>
 
 static struct app *app;
@@ -222,6 +225,34 @@ static int on_open(struct widget *w, void *args, void *arg)
     return 1;
 }
 
+/* Files dragged over the editor are opened, the first one in this
+ * window; a drag of text alone goes to the editor widget. */
+static int on_drag_motion(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    if (!widget_drag_offers("text/uri-list"))
+        return 0;
+    sd->drag->accept_mime = "text/uri-list";
+    sd->drag->accept_actions = sd->drag->preferred = GUI_DND_COPY;
+    return 1;
+}
+
+static int on_drop(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    char **paths;
+    int n = fileops_parse_uri_list(sd->drag->data, sd->drag->len, &paths);
+    if (n > 0 && may_discard()) {
+        if (load(paths[0]) < 0)
+            error(_("The file cannot be opened."));
+        else
+            printf("gedit: opened %s from a drop\n", paths[0]);
+        fflush(stdout);
+    }
+    fileops_free_paths(paths, n);
+    return 1;
+}
+
 static int on_quit(struct widget *w, void *args, void *arg)
 {
     if (may_discard())
@@ -383,6 +414,8 @@ int main(int argc, char **argv)
     editor = editor_new(win);
     widget_connect(editor, "changed", on_changed, NULL);
     widget_connect(editor, "cursor", on_cursor, NULL);
+    widget_connect(editor, "drag_motion", on_drag_motion, NULL);
+    widget_connect(editor, "drop", on_drop, NULL);
     widget_connect(win, "close", on_close, NULL);
     struct widget *sb = statusbar_new(win);
     status = statusbar_add(sb, 1);

@@ -346,8 +346,12 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
             int bw = b->width / scale, bh = b->height / scale;
             s->width = s->current.transform & 1 ? bh : bw;
             s->height = s->current.transform & 1 ? bw : bh;
-            s->x += s->pending.attach_x;
-            s->y += s->pending.attach_y;
+            if (s->role == ROLE_DND_ICON) {
+                data_icon_committed(s, s->pending.attach_x, s->pending.attach_y);
+            } else {
+                s->x += s->pending.attach_x;
+                s->y += s->pending.attach_y;
+            }
             int first = !s->mapped;
             s->mapped = 1;
             if (first && s->role == ROLE_NONE)

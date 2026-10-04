@@ -522,6 +522,26 @@ file is replaced, and the Lua binding gained `open_file` and
 version of the chooser, and the boot cases have not yet run against the
 unified version.
 
+## Drag and drop (completed 2026-10-04)
+
+Drag and drop between the windows of all programs over the data device
+of X12. Version 2 of `protocol/data.xml` adds the copy and move actions,
+which X12 chooses from what the source and the target allow, the target's
+preference, Ctrl (copy) and Shift (move). Escape cancels a drag, a
+cancelled drag sends `leave` to the target, and a source that goes away
+during a drag cancels it. libgui starts drags with an icon, reads the
+data before the drop when a target needs it and during the drop without
+blocking, and gives widgets drag events, with drags of rows of the tables
+and tree views, of the selection of the editor and the text field, and
+drops into the editor at a drop caret. Recursive copy, remove and move
+moved from Files to `gui/fileops.h` with the `text/uri-list` format. The
+folder view of Files and the file chooser and the desktop drag files and
+take files dropped on folders, the sidebar places and the desktop, moving
+them on one file system and copying them otherwise; gedit opens dropped
+files, and the terminal types their quoted paths. Documented in
+`docs/design/dnd.md`, tested by `test_dnd.c` of the libgui host tests and
+the boot cases `comp_data` and `gui_dnd`.
+
 ## System information (2026-10-05)
 
 The kernel describes the machine in the read-only node `/dev/devices`: the
@@ -534,4 +554,3 @@ kernel functions: `strlcat`, `memchr`, `strstr`, `lib/endian.h`,
 `lib/guid.c`, `vmm_copy_from_phys`. Documented in
 `docs/design/sysinfo.md`, tested by the boot cases `devices`,
 `devices_acpi` and `gui_sysinfo`.
-

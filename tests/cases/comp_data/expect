@@ -10,4 +10,15 @@ comptest: source sent text/plain
 comptest: drop received 'hello from the source' as text/plain
 comptest: source finished
 comp_data: data device ok
+x12: drag action copy
+x12: drop on surface 2, action copy
+comptest: offer source actions 3
+comptest: offer action 2
+comptest: source action 2
+comptest: source action 1
+x12: drag action move
+x12: drag cancelled
+comptest: drag leave
+comptest: source cancelled
+comp_data: drag actions ok
 TEST PASS

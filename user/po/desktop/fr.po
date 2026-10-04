@@ -81,3 +81,19 @@ msgstr "Changer le fond d'écran..."
 #: user/desktop/desktop.c:549
 msgid "Settings"
 msgstr "Paramètres"
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be moved: %s."
+msgstr "Impossible de déplacer « %s » : %s."
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be copied: %s."
+msgstr "Impossible de copier « %s » : %s."
+
+#: user/desktop/desktop.c:498
+msgid "OK"
+msgstr "OK"
+
+#: user/desktop/desktop.c:499
+msgid "Desktop"
+msgstr "Bureau"

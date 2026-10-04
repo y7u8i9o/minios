@@ -283,6 +283,10 @@ clipboard object are gone. `libgui/src/client.c` implements the same
   compositor fetched a copy; `gui_clipboard_get` reads the current
   selection offer through a pipe (or answers from the process's own
   text when it owns the selection).
+- Drag and drop uses the same data device (`gui_drag_start`,
+  `WM_DRAG_ENTER`, `WM_DRAG_MOTION`, `WM_DRAG_LEAVE`, `WM_DROP`,
+  `WM_DRAG_END`, `gui_drag_accept`, `gui_drag_peek`, `gui_drop_data`),
+  described in `dnd.md`.
 - The compositor retains a copy of every selection (`data.c`, fetched
   when it is set) and serves it itself after the owner exits, so copy,
   quit, paste works. A client that dies is detected through `POLLHUP`

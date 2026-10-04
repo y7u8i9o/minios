@@ -138,3 +138,66 @@ int gui_event_fd(void) { return -1; }
 
 /* No key repeat in the fake client. */
 int gui_repeat_timeout(void) { return 0; }
+
+/* Drag and drop: a drag the program starts is recorded, and the tests
+ * set the types and the data of a drag over a window and of a drop. */
+struct fake_drag fake_drag;
+const char *fake_offers[8];
+const char *fake_peek;
+const char *fake_accept_mime;
+int fake_accept_actions, fake_accept_preferred;
+const char *fake_drop, *fake_drop_mime;
+
+int gui_drag_start(struct gui_window *w, const struct gui_drag_item *items, int nitems, int actions,
+                   const struct surface *icon, int hot_x, int hot_y)
+{
+    if (!w || nitems <= 0 || nitems > 8)
+        return -1;
+    fake_drag.started++;
+    fake_drag.window = w->id;
+    fake_drag.nitems = nitems;
+    fake_drag.actions = actions;
+    fake_drag.icon = icon && icon->pixels;
+    for (int i = 0; i < nitems; i++) {
+        snprintf(fake_drag.mime[i], sizeof fake_drag.mime[i], "%s", items[i].mime);
+        snprintf(fake_drag.data[i], sizeof fake_drag.data[i], "%.*s", (int)items[i].len, (const char *)items[i].data);
+    }
+    return 0;
+}
+
+int gui_dragging(void) { return fake_drag.started > 0; }
+
+int gui_drag_offers(const char *mime)
+{
+    for (int i = 0; i < 8 && fake_offers[i]; i++)
+        if (strcmp(fake_offers[i], mime) == 0)
+            return 1;
+    return 0;
+}
+
+void gui_drag_accept(const char *mime, int actions, int preferred)
+{
+    fake_accept_mime = mime;
+    fake_accept_actions = actions;
+    fake_accept_preferred = preferred;
+}
+
+const char *gui_drag_peek(const char *mime, size_t *len)
+{
+    if (!fake_peek || !gui_drag_offers(mime))
+        return NULL;
+    if (len)
+        *len = strlen(fake_peek);
+    return fake_peek;
+}
+
+const char *gui_drop_data(size_t *len, const char **mime)
+{
+    if (len)
+        *len = fake_drop ? strlen(fake_drop) : 0;
+    if (mime)
+        *mime = fake_drop_mime ? fake_drop_mime : "";
+    return fake_drop;
+}
+
+int gui_transfer_fd(void) { return -1; }

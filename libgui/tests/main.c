@@ -21,6 +21,7 @@ void run_gedit_tree_test(void);
 void run_mime_tests(void);
 void run_svg_tests(void);
 void run_filechooser_tests(void);
+void run_dnd_tests(void);
 
 int main(void)
 {
@@ -36,6 +37,7 @@ int main(void)
     RUN(run_mime_tests);
     RUN(run_svg_tests);
     RUN(run_filechooser_tests);
+    RUN(run_dnd_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

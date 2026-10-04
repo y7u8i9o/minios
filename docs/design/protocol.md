@@ -39,6 +39,8 @@ adds toplevel parent/modal state and popup configure/acknowledge/grab;
 `protocol/text.xml` has the UTF-8 text input and preedit events, and since
 version 2 the caret rectangle for the candidates of an input method. The
 seat of version 2 reports the label of the input method (`ime.md`).
+`protocol/data.xml` has the selection and drag and drop; its version 2
+adds the copy and move actions (`dnd.md`).
 `protocol/ime.xml` connects the compositor and the input method daemon
 `imed` (`ime.md`).
 `protocol/debug.xml` contains the `debug`, `tracer`, `settings` and

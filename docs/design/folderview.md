@@ -129,6 +129,21 @@ accelerators of a window working while a list has the focus. The icons
 `folder-new`, `drive`, `recent`, `documents`, `pictures`, `music`,
 `videos` and `downloads` were added to `tools/fetch_icons.sh`.
 
+## Drag and drop
+
+A row of the table is dragged to other programs as `text/uri-list` and
+`text/plain` with the icon and the name of the file. Files dropped on a
+folder row, on the empty part of the table (the folder shown, which
+Recent and searches do not have) or on a place of the sidebar other than
+Recent are copied or moved there with `fileops_drop`. The folder view
+reads the dragged paths before the drop and prefers move when every file
+is on the file system of the folder, and it refuses a folder dropped into
+itself and files dropped into the folder they are in. The accepted row is
+outlined in the accent colour, the accepted place drawn with an accent
+border. A failure is shown in a dialog, the listing is reread, and
+`folderview_on_dropped` lets the program log the drop. `dnd.md` describes
+the whole mechanism.
+
 ## Tests
 
 `libgui/tests/test_filechooser.c` (part of `make -C libgui check`) builds

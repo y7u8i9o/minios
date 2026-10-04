@@ -17,21 +17,26 @@ static const struct wire_message data_device_manager_events[] = {
 static const struct wire_message data_source_requests[] = {
     { "offer", "s", 1, (const char *const[]){ NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_actions", "u", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message data_source_events[] = {
     { "send", "sh", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "cancelled", "", 0, (const char *const[]){ NULL }, 0 },
     { "dnd_drop_performed", "", 0, (const char *const[]){ NULL }, 0 },
     { "dnd_finished", "", 0, (const char *const[]){ NULL }, 0 },
+    { "action", "u", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message data_offer_requests[] = {
     { "accept", "u?s", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "receive", "sh", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "finish", "", 0, (const char *const[]){ NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_actions", "uu", 2, (const char *const[]){ NULL, NULL }, 0 },
 };
 static const struct wire_message data_offer_events[] = {
     { "offer", "s", 1, (const char *const[]){ NULL }, 0 },
+    { "source_actions", "u", 1, (const char *const[]){ NULL }, 0 },
+    { "action", "u", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message data_device_requests[] = {
     { "set_selection", "?ou", 2, (const char *const[]){ "data_source", NULL }, 0 },
@@ -46,7 +51,7 @@ static const struct wire_message data_device_events[] = {
     { "drop", "", 0, (const char *const[]){ NULL }, 0 },
     { "selection", "?o", 1, (const char *const[]){ "data_offer" }, 0 },
 };
-const struct wire_interface data_device_manager_interface = { "data_device_manager", 1, 2, data_device_manager_requests, 0, data_device_manager_events };
-const struct wire_interface data_source_interface = { "data_source", 1, 2, data_source_requests, 4, data_source_events };
-const struct wire_interface data_offer_interface = { "data_offer", 1, 4, data_offer_requests, 1, data_offer_events };
-const struct wire_interface data_device_interface = { "data_device", 1, 3, data_device_requests, 6, data_device_events };
+const struct wire_interface data_device_manager_interface = { "data_device_manager", 2, 2, data_device_manager_requests, 0, data_device_manager_events };
+const struct wire_interface data_source_interface = { "data_source", 2, 3, data_source_requests, 5, data_source_events };
+const struct wire_interface data_offer_interface = { "data_offer", 2, 5, data_offer_requests, 3, data_offer_events };
+const struct wire_interface data_device_interface = { "data_device", 2, 3, data_device_requests, 6, data_device_events };

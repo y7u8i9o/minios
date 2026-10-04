@@ -81,3 +81,19 @@ msgstr "壁紙を変更..."
 #: user/desktop/desktop.c:549
 msgid "Settings"
 msgstr "設定"
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be moved: %s."
+msgstr "「%s」を移動できません: %s。"
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be copied: %s."
+msgstr "「%s」をコピーできません: %s。"
+
+#: user/desktop/desktop.c:498
+msgid "OK"
+msgstr "OK"
+
+#: user/desktop/desktop.c:499
+msgid "Desktop"
+msgstr "デスクトップ"

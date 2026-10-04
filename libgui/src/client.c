@@ -1,7 +1,7 @@
 /* Window client over libwire: toplevel surfaces with two shared memory
  * buffers, damage committed once per compositor frame, input events
- * translated with the seat's keymap, the clipboard through the data
- * device. Toplevels carry client side decorations (csd.c): the drawing
+ * translated with the seat's keymap, the clipboard and drag and drop
+ * through the data device. Toplevels carry client side decorations (csd.c): the drawing
  * surface contains the chrome around the contents, gui_window.surf is the
  * view of the contents, and the compositor is told the window geometry. */
 #include <gui/client.h>
@@ -123,7 +123,7 @@ static int next_id = 1;
 static struct wire_proxy *selection_offer, *selection_source;
 static char *clip_text;
 static int clip_len;
-static char offer_mime[64];
+static uint32_t button_serial;      /* of the last button press, for a drag */
 
 static void push(const struct wmsg *m)
 {
@@ -313,9 +313,16 @@ static void on_ptr_motion(void *user, struct wire_proxy *p, uint32_t time, int32
     if (wi->buttons ? wi->press_zone == CSD_CONTENT : z == CSD_CONTENT)
         push_mouse(pointer_win, wi->buttons, WMOUSE_MOVE);
 }
+static void drag_end(int action);
+static struct wire_proxy *drag_source;
+
 static void on_ptr_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
     last_serial = serial;
+    if (state)
+        button_serial = serial;
+    else if (drag_source)
+        drag_end(0);            /* the compositor refused the drag: it delivers the release */
     if (!pointer_win)
         return;
     struct gui_window *w = pointer_win;
@@ -545,12 +552,31 @@ static const struct text_input_listener text_events = {
     on_text_enter, on_text_leave, on_preedit, on_commit_string, on_delete_surrounding, on_text_done,
 };
 
-/* ---- data device (clipboard) ---- */
+/* ---- data device: clipboard and drag and drop ---- */
+
+static void write_all(int fd, const char *p, size_t n)
+{
+    while (n) {
+        ssize_t k = write(fd, p, n);
+        if (k > 0) {
+            p += k;
+            n -= (size_t)k;
+        } else if (k < 0 && errno == EAGAIN) {
+            struct pollfd pf = { fd, POLLOUT, 0 };
+            if (poll(&pf, 1, 2000) <= 0)
+                return;
+        } else if (k < 0 && errno == EINTR) {
+            continue;
+        } else {
+            return;
+        }
+    }
+}
 
 static void on_src_send(void *user, struct wire_proxy *s, const char *mime, int fd)
 {
     if (clip_text)
-        write(fd, clip_text, (size_t)clip_len);
+        write_all(fd, clip_text, (size_t)clip_len);
     close(fd);
 }
 static void on_src_cancelled(void *user, struct wire_proxy *s)
@@ -559,28 +585,376 @@ static void on_src_cancelled(void *user, struct wire_proxy *s)
         selection_source = NULL;
     wire_proxy_destroy(s);
 }
-static void on_src_drop(void *user, struct wire_proxy *s) {}
-static void on_src_finished(void *user, struct wire_proxy *s) {}
-static const struct data_source_listener source_events = { on_src_send, on_src_cancelled, on_src_drop, on_src_finished };
-static void on_offer_mime(void *user, struct wire_proxy *o, const char *mime) { strlcpy(offer_mime, mime, sizeof offer_mime); }
-static const struct data_offer_listener offer_events = { on_offer_mime };
+static const struct data_source_listener source_events = { on_src_send, on_src_cancelled, NULL, NULL, NULL };
+
+/* The drag started by this process: the items it serves, the window it
+ * started from, the action the compositor chose last and the icon. */
+static struct {
+    struct gui_drag_item items[8];      /* the data is owned */
+    int nitems;
+    int window;
+    int action;
+    struct wire_proxy *icon, *icon_pool, *icon_buf;
+    int icon_fd;
+    void *icon_map;
+    size_t icon_size;
+} drag = { .icon_fd = -1 };
+
+static const struct gui_drag_item *drag_item(const char *mime)
+{
+    for (int i = 0; i < drag.nitems; i++)
+        if (strcmp(drag.items[i].mime, mime) == 0)
+            return &drag.items[i];
+    return NULL;
+}
+
+static void drag_end(int action)
+{
+    if (!drag_source)
+        return;
+    struct wmsg m = { WM_DRAG_END, 0, drag.window, action, 0, 0, 0, "" };
+    push(&m);
+    data_source_destroy(drag_source);
+    drag_source = NULL;
+    for (int i = 0; i < drag.nitems; i++) {
+        free((void *)drag.items[i].mime);
+        free((void *)drag.items[i].data);
+    }
+    if (drag.icon_buf)
+        buffer_destroy(drag.icon_buf);
+    if (drag.icon_pool)
+        shm_pool_destroy(drag.icon_pool);
+    if (drag.icon)
+        surface_destroy(drag.icon);
+    if (drag.icon_map)
+        munmap(drag.icon_map, drag.icon_size);
+    if (drag.icon_fd >= 0)
+        close(drag.icon_fd);
+    memset(&drag, 0, sizeof drag);
+    drag.icon_fd = -1;
+}
+
+static void on_drag_send(void *user, struct wire_proxy *s, const char *mime, int fd)
+{
+    const struct gui_drag_item *it = drag_item(mime);
+    if (it)
+        write_all(fd, it->data, it->len);
+    close(fd);
+}
+static void on_drag_cancelled(void *user, struct wire_proxy *s) { drag_end(0); }
+static void on_drag_dropped(void *user, struct wire_proxy *s) {}
+/* The target has read the data. */
+static void on_drag_finished(void *user, struct wire_proxy *s) { drag_end(drag.action ? drag.action : GUI_DND_COPY); }
+static void on_drag_action(void *user, struct wire_proxy *s, uint32_t action) { drag.action = (int)action; }
+static const struct data_source_listener drag_source_events = {
+    on_drag_send, on_drag_cancelled, on_drag_dropped, on_drag_finished, on_drag_action,
+};
+
+/* What an offer announced, stored as the user data of its proxy, with
+ * the data read before a drop (gui_drag_peek). */
+struct offer_info {
+    char mimes[8][64];
+    int nmimes;
+    uint32_t source_actions, action;
+    char peek_mime[64];             /* requested; empty when none */
+    char *peek;                     /* NULL until all of it arrived */
+    size_t peek_len;
+};
+
+static struct offer_info *offer_info(struct wire_proxy *o) { return o ? wire_proxy_get_user_data(o) : NULL; }
+
+static void peek_stop(void);
+
+static void offer_free(struct wire_proxy *o)
+{
+    if (!o)
+        return;
+    struct offer_info *i = offer_info(o);
+    if (i)
+        free(i->peek);
+    free(i);
+    data_offer_destroy(o);
+}
+
+/* The drag over a window of this process, and the drop being read. */
+static struct wire_proxy *target_offer;
+static uint32_t target_serial;
+static struct gui_window *target_win;
+static int target_x, target_y;              /* contents coordinates */
+static char target_mime[64];                /* accepted; empty while refused */
+static int target_actions = -1, target_preferred = -1;
+/* A read through a pipe: the drop (transfer) or the data of the drag
+ * before the drop (peek); at most one of them runs at a time. */
+struct pipe_read {
+    int fd;                                 /* -1 when idle */
+    struct wire_proxy *offer;
+    char *buf;
+    size_t len, cap;
+    char mime[64];
+    int window, x, y, action;
+};
+static struct pipe_read transfer = { .fd = -1 }, peek = { .fd = -1 };
+static char *drop_buf;
+static size_t drop_len;
+static char drop_mime[64];
+
+static void target_reset(void)
+{
+    target_offer = NULL;
+    target_win = NULL;
+    target_mime[0] = '\0';
+    target_actions = target_preferred = -1;
+}
+
+static void push_drag(uint32_t type, struct gui_window *w, int x, int y, int action, int actions)
+{
+    struct wmsg m = { type, 0, w->id, x, y, action, actions, "" };
+    push(&m);
+}
+
+static void on_offer_mime(void *user, struct wire_proxy *o, const char *mime)
+{
+    struct offer_info *i = user;
+    if (i && i->nmimes < 8)
+        strlcpy(i->mimes[i->nmimes++], mime, sizeof i->mimes[0]);
+}
+static void on_offer_source_actions(void *user, struct wire_proxy *o, uint32_t actions)
+{
+    struct offer_info *i = user;
+    if (i)
+        i->source_actions = actions;
+}
+static void on_offer_action(void *user, struct wire_proxy *o, uint32_t action)
+{
+    struct offer_info *i = user;
+    if (!i)
+        return;
+    i->action = action;
+    if (o == target_offer && target_win)
+        push_drag(WM_DRAG_MOTION, target_win, target_x, target_y, (int)action, (int)i->source_actions);
+}
+static const struct data_offer_listener offer_events = { on_offer_mime, on_offer_source_actions, on_offer_action };
+
 static void on_dev_offer(void *user, struct wire_proxy *dev, struct wire_proxy *offer)
 {
+    struct offer_info *i = calloc(1, sizeof *i);
+    if (i)
+        i->source_actions = GUI_DND_COPY;
     offer->obj.interface = &data_offer_interface;
-    data_offer_add_listener(offer, &offer_events, NULL);
+    data_offer_add_listener(offer, &offer_events, i);
 }
+
+static void target_position(int32_t x, int32_t y)
+{
+    int ox, oy;
+    content_origin(target_win, &ox, &oy);
+    target_x = wire_fixed_to_int(x) - ox;
+    target_y = wire_fixed_to_int(y) - oy;
+}
+
 static void on_dev_enter(void *user, struct wire_proxy *dev, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y, struct wire_proxy *offer)
 {
-    if (offer)
-        data_offer_accept(offer, serial, offer_mime[0] ? offer_mime : "text/plain");
+    peek_stop();
+    if (target_offer && target_offer != transfer.offer)
+        offer_free(target_offer);
+    target_reset();
+    if (!offer)
+        return;
+    target_offer = offer;
+    target_serial = serial;
+    target_win = window_of_surface(s);
+    if (!target_win) {
+        data_offer_accept(offer, serial, NULL);
+        return;
+    }
+    target_position(x, y);
+    struct offer_info *i = offer_info(offer);
+    push_drag(WM_DRAG_ENTER, target_win, target_x, target_y, i ? (int)i->action : 0, i ? (int)i->source_actions : 0);
 }
-static void on_dev_leave(void *user, struct wire_proxy *dev) {}
-static void on_dev_motion(void *user, struct wire_proxy *dev, uint32_t time, int32_t x, int32_t y) {}
-static void on_dev_drop(void *user, struct wire_proxy *dev) {}
+static void on_dev_leave(void *user, struct wire_proxy *dev)
+{
+    peek_stop();
+    if (target_win)
+        push_drag(WM_DRAG_LEAVE, target_win, target_x, target_y, 0, 0);
+    if (target_offer && target_offer != transfer.offer)
+        offer_free(target_offer);
+    target_reset();
+}
+static void on_dev_motion(void *user, struct wire_proxy *dev, uint32_t time, int32_t x, int32_t y)
+{
+    if (!target_win)
+        return;
+    target_position(x, y);
+    struct offer_info *i = offer_info(target_offer);
+    push_drag(WM_DRAG_MOTION, target_win, target_x, target_y, i ? (int)i->action : 0, i ? (int)i->source_actions : 0);
+}
+
+static void drop_deliver(char *buf, size_t len, const char *mime, int window, int x, int y, int action)
+{
+    free(drop_buf);
+    drop_buf = buf;
+    drop_len = len;
+    strlcpy(drop_mime, mime, sizeof drop_mime);
+    struct wmsg m = { WM_DROP, 0, window, x, y, action, 0, "" };
+    push(&m);
+}
+
+/* Read what the source has written. Returns 1 at the end of the data,
+ * which is then terminated and cut at GUI_DND_MAX, and 0 while more may
+ * come. */
+static int pipe_pump(struct pipe_read *r)
+{
+    for (;;) {
+        if (r->len + 1 >= r->cap) {
+            if (r->cap > GUI_DND_MAX)
+                break;
+            size_t cap = r->cap ? r->cap * 2 : 4096;
+            char *b = realloc(r->buf, cap);
+            if (!b)
+                break;
+            r->buf = b;
+            r->cap = cap;
+        }
+        ssize_t k = read(r->fd, r->buf + r->len, r->cap - r->len - 1);
+        if (k > 0) {
+            r->len += (size_t)k;
+            continue;
+        }
+        if (k < 0 && (errno == EAGAIN || errno == EINTR))
+            return 0;
+        break;
+    }
+    close(r->fd);
+    r->fd = -1;
+    if (r->len > GUI_DND_MAX)
+        r->len = GUI_DND_MAX;
+    if (r->buf)
+        r->buf[r->len] = '\0';
+    return 1;
+}
+
+static int pipe_start(struct pipe_read *r, struct wire_proxy *offer, const char *mime)
+{
+    int p[2];
+    if (pipe2(p, O_CLOEXEC) < 0)
+        return -1;
+    fcntl(p[0], F_SETFL, O_NONBLOCK);
+    r->fd = p[0];
+    r->offer = offer;
+    r->buf = NULL;
+    r->len = r->cap = 0;
+    strlcpy(r->mime, mime, sizeof r->mime);
+    data_offer_receive(offer, mime, p[1]);
+    close(p[1]);
+    wire_display_flush(display);
+    return 0;
+}
+
+static void peek_stop(void)
+{
+    if (peek.fd >= 0)
+        close(peek.fd);
+    free(peek.buf);
+    memset(&peek, 0, sizeof peek);
+    peek.fd = -1;
+}
+
+/* The data of the drag has arrived: the window sees the drag again. */
+static void peek_pump(void)
+{
+    if (peek.fd < 0 || !pipe_pump(&peek))
+        return;
+    struct offer_info *i = offer_info(peek.offer);
+    if (i && peek.offer == target_offer) {
+        free(i->peek);
+        i->peek = peek.buf ? peek.buf : strdup("");
+        i->peek_len = peek.buf ? peek.len : 0;
+        peek.buf = NULL;
+        if (target_win)
+            push_drag(WM_DRAG_MOTION, target_win, target_x, target_y, (int)i->action, (int)i->source_actions);
+    }
+    peek_stop();
+}
+
+/* Read the drop; at the end of the data, or at once with stop set, the
+ * offer is finished and WM_DROP is queued. */
+static void transfer_pump(int stop)
+{
+    if (transfer.fd < 0)
+        return;
+    if (stop) {
+        close(transfer.fd);
+        transfer.fd = -1;
+        if (transfer.buf)
+            transfer.buf[transfer.len] = '\0';
+    } else if (!pipe_pump(&transfer)) {
+        return;
+    }
+    data_offer_finish(transfer.offer);
+    offer_free(transfer.offer);
+    transfer.offer = NULL;
+    drop_deliver(transfer.buf, transfer.len, transfer.mime, transfer.window, transfer.x, transfer.y, transfer.action);
+    transfer.buf = NULL;
+    transfer.len = transfer.cap = 0;
+    wire_display_flush(display);
+}
+
+static void on_dev_drop(void *user, struct wire_proxy *dev)
+{
+    struct wire_proxy *offer = target_offer;
+    struct gui_window *w = target_win;
+    if (!offer || !w || !target_mime[0]) {
+        on_dev_leave(user, dev);
+        return;
+    }
+    struct offer_info *i = offer_info(offer);
+    int action = i && i->action ? (int)i->action : GUI_DND_COPY;
+    int x = target_x, y = target_y;
+    char mime[64];
+    strlcpy(mime, target_mime, sizeof mime);
+    target_reset();
+    /* A drag of this process: the compositor would route the data back to
+     * this process, which reads it here; copy it directly. */
+    if (drag_source) {
+        const struct gui_drag_item *it = drag_item(mime);
+        size_t len = it ? it->len : 0;
+        char *buf = malloc(len + 1);
+        if (buf) {
+            if (len)
+                memcpy(buf, it->data, len);
+            buf[len] = '\0';
+        }
+        data_offer_finish(offer);
+        offer_free(offer);
+        drop_deliver(buf, buf ? len : 0, mime, w->id, x, y, action);
+        return;
+    }
+    /* Data read before the drop is the drop's data. */
+    if (i && i->peek && strcmp(i->peek_mime, mime) == 0) {
+        char *buf = i->peek;
+        size_t len = i->peek_len;
+        i->peek = NULL;
+        data_offer_finish(offer);
+        offer_free(offer);
+        drop_deliver(buf, len, mime, w->id, x, y, action);
+        wire_display_flush(display);
+        return;
+    }
+    peek_stop();
+    transfer_pump(1);                   /* a drop that is still read ends with what arrived */
+    if (pipe_start(&transfer, offer, mime) < 0) {
+        offer_free(offer);
+        return;
+    }
+    transfer.window = w->id;
+    transfer.x = x;
+    transfer.y = y;
+    transfer.action = action;
+}
 static void on_dev_selection(void *user, struct wire_proxy *dev, struct wire_proxy *offer)
 {
     if (selection_offer && selection_offer != offer)
-        data_offer_destroy(selection_offer);
+        offer_free(selection_offer);
     selection_offer = offer;
 }
 static const struct data_device_listener device_events = { on_dev_offer, on_dev_enter, on_dev_leave, on_dev_motion, on_dev_drop, on_dev_selection };
@@ -640,6 +1014,7 @@ void gui_disconnect(void)
 {
     if (!display)
         return;
+    drag_end(0);
     while (wins)
         gui_destroy_window(wins);
     wire_display_flush(display);
@@ -1340,6 +1715,148 @@ int gui_clipboard_get(char *buf, int size)
     return n;
 }
 
+/* ---- drag and drop ---- */
+
+/* The drag icon: a surface without a role whose single buffer contains a
+ * copy of the image. */
+static struct wire_proxy *icon_create(struct gui_window *w, const struct surface *icon)
+{
+    size_t size = (size_t)icon->width * icon->height * 4;
+    int fd = memfd_create("gui-drag", MFD_CLOEXEC);
+    if (fd < 0 || ftruncate(fd, (long)size) < 0) {
+        if (fd >= 0)
+            close(fd);
+        return NULL;
+    }
+    uint32_t *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) {
+        close(fd);
+        return NULL;
+    }
+    for (int y = 0; y < icon->height; y++)
+        memcpy(map + (size_t)y * icon->width, icon->pixels + (size_t)y * icon->stride, (size_t)icon->width * 4);
+    drag.icon_fd = fd;
+    drag.icon_map = map;
+    drag.icon_size = size;
+    drag.icon_pool = shm_create_pool(shm, fd, (int32_t)size);
+    drag.icon_buf = shm_pool_create_buffer(drag.icon_pool, 0, icon->width, icon->height, icon->width * 4, 2);
+    drag.icon = compositor_create_surface(compositor);
+    surface_set_buffer_scale(drag.icon, w->scale > 0 ? w->scale : 1);
+    return drag.icon;
+}
+
+int gui_drag_start(struct gui_window *w, const struct gui_drag_item *items, int nitems, int actions,
+                   const struct surface *icon, int hot_x, int hot_y)
+{
+    if (!data_device)
+        return -ENOTSUP;
+    if (!w || !items || nitems <= 0 || nitems > 8 || !(actions & (GUI_DND_COPY | GUI_DND_MOVE)))
+        return -EINVAL;
+    drag_end(0);
+    for (int i = 0; i < nitems; i++) {
+        char *mime = strdup(items[i].mime);
+        char *data = malloc(items[i].len + 1);
+        if (!mime || !data) {
+            free(mime);
+            free(data);
+            for (int k = 0; k < drag.nitems; k++) {
+                free((void *)drag.items[k].mime);
+                free((void *)drag.items[k].data);
+            }
+            drag.nitems = 0;
+            return -ENOMEM;
+        }
+        memcpy(data, items[i].data, items[i].len);
+        data[items[i].len] = '\0';
+        drag.items[i] = (struct gui_drag_item){ mime, data, items[i].len };
+        drag.nitems = i + 1;
+    }
+    struct win *wi = w->priv;
+    drag.window = w->id;
+    drag_source = data_device_manager_create_data_source(data_manager);
+    data_source_add_listener(drag_source, &drag_source_events, NULL);
+    for (int i = 0; i < nitems; i++)
+        data_source_offer(drag_source, drag.items[i].mime);
+    data_source_set_actions(drag_source, (uint32_t)(actions & (GUI_DND_COPY | GUI_DND_MOVE)));
+    struct wire_proxy *ic = icon && icon->pixels && icon->width > 0 && icon->height > 0 ? icon_create(w, icon) : NULL;
+    data_device_start_drag(data_device, drag_source, wi->surface, ic, button_serial);
+    if (ic) {
+        int s = w->scale > 0 ? w->scale : 1;
+        surface_attach(ic, drag.icon_buf, -hot_x, -hot_y);
+        surface_damage(ic, 0, 0, icon->width / s, icon->height / s);
+        surface_commit(ic);
+    }
+    wi->buttons = 0;            /* the release of the button goes to the drag */
+    wire_display_flush(display);
+    return 0;
+}
+
+int gui_dragging(void) { return drag_source != NULL; }
+
+int gui_drag_offers(const char *mime)
+{
+    struct offer_info *i = offer_info(target_offer);
+    for (int k = 0; i && mime && k < i->nmimes; k++)
+        if (strcmp(i->mimes[k], mime) == 0)
+            return 1;
+    return 0;
+}
+
+void gui_drag_accept(const char *mime, int actions, int preferred)
+{
+    if (!target_offer)
+        return;
+    if (mime && !*mime)
+        mime = NULL;
+    if (strcmp(target_mime, mime ? mime : "") != 0) {
+        data_offer_accept(target_offer, target_serial, mime);
+        strlcpy(target_mime, mime ? mime : "", sizeof target_mime);
+    }
+    if (mime && (actions != target_actions || preferred != target_preferred)) {
+        data_offer_set_actions(target_offer, (uint32_t)actions, (uint32_t)preferred);
+        target_actions = actions;
+        target_preferred = preferred;
+    }
+    wire_display_flush(display);
+}
+
+const char *gui_drop_data(size_t *len, const char **mime)
+{
+    if (len)
+        *len = drop_len;
+    if (mime)
+        *mime = drop_mime;
+    return drop_buf;
+}
+
+const char *gui_drag_peek(const char *mime, size_t *len)
+{
+    struct offer_info *i = offer_info(target_offer);
+    if (!i || !mime || !gui_drag_offers(mime))
+        return NULL;
+    if (drag_source) {                  /* a drag of this process */
+        const struct gui_drag_item *it = drag_item(mime);
+        if (len)
+            *len = it ? it->len : 0;
+        return it ? it->data : NULL;
+    }
+    if (strcmp(i->peek_mime, mime) == 0) {
+        if (i->peek && len)
+            *len = i->peek_len;
+        return i->peek;
+    }
+    if (transfer.fd >= 0)
+        return NULL;
+    peek_stop();
+    free(i->peek);
+    i->peek = NULL;
+    strlcpy(i->peek_mime, mime, sizeof i->peek_mime);
+    pipe_start(&peek, target_offer, mime);
+    return NULL;
+}
+
+int gui_transfer_fd(void) { return transfer.fd >= 0 ? transfer.fd : peek.fd; }
+
 /* ---- events ---- */
 
 int gui_next_event(struct wmsg *ev, int timeout_ms)
@@ -1349,6 +1866,8 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
     for (;;) {
         gui_flush();
         repeat_tick();
+        transfer_pump(0);
+        peek_pump();
         if (qhead != qtail) {
             *ev = queue[qhead];
             qhead = (qhead + 1) % QUEUE_MAX;
@@ -1365,8 +1884,8 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
         int wait = timeout_ms, rt = gui_repeat_timeout();
         if (rt >= 0 && (wait < 0 || rt < wait))
             wait = rt;
-        struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
-        int r = poll(&pf, 1, wait);
+        struct pollfd pf[2] = { { wire_display_fd(display), POLLIN, 0 }, { gui_transfer_fd(), POLLIN, 0 } };
+        int r = poll(pf, pf[1].fd >= 0 ? 2 : 1, wait);
         if (r == 0) {
             if (wait != timeout_ms)
                 continue;           /* a repeat is due */
@@ -1374,6 +1893,8 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
         }
         if (r < 0 && errno != EINTR)
             return -1;
+        if (r > 0 && !pf[0].revents)
+            continue;               /* drop data arrived */
         if (wire_display_dispatch(display) < 0)
             return -1;
         if (timeout_ms > 0 && qhead == qtail) {

@@ -286,3 +286,15 @@ msgstr "フォルダー「%s」を開けません: %s。"
 #: libgui/src/folderview.c:872
 msgid "The file “%s” does not exist."
 msgstr "ファイル「%s」は存在しません。"
+
+#: libgui/src/fileops.c:334
+msgid "Copy of %s"
+msgstr "%s のコピー"
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be moved: %s."
+msgstr "「%s」を移動できません: %s。"
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be copied: %s."
+msgstr "「%s」をコピーできません: %s。"

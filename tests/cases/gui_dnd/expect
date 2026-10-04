@@ -1,0 +1,15 @@
+dndtest: source ready
+dndtest: target ready
+dndtest: drag of /tmp/dnd-a.txt started
+x12: drag started by client
+dndtest: peeked 1 paths, preferred move
+x12: drag action move
+x12: drop on surface [0-9]+, action move
+dndtest: dropped 1 files, action move
+dndtest: drag of /tmp/dnd-a.txt ended, action move
+gedit: opened /tmp/dnd-b.txt from a drop
+dndtest: drag of /tmp/dnd-b.txt ended, action copy
+term: dropped 1 paths
+dndtest: drag of /tmp/dnd-c.txt ended, action copy
+gui_dnd: ok
+TEST PASS

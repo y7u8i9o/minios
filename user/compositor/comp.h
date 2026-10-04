@@ -136,7 +136,7 @@ struct csurface {
     struct popup *popup;
     struct layer *layer;
     int stack;                              /* z order among toplevels, higher on top */
-    int hotspot_x, hotspot_y;               /* cursor surfaces */
+    int hotspot_x, hotspot_y;               /* cursor surfaces and drag icons */
     struct csurface *next;
 };
 
@@ -323,6 +323,8 @@ int seat_buttons(void);                  /* pointer buttons pressed, bit 0 = lef
 int seat_validate_serial(struct client *client, uint32_t serial);
 int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t serial);
 int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t serial);
+void seat_drag_started(void);
+void seat_drag_ended(int button_pressed);
 struct csurface *seat_cursor_surface(void);
 int seat_cursor_hidden(void);
 int seat_translate(uint32_t key, int mods);
@@ -371,6 +373,9 @@ void data_init(struct wire_server *srv);
 void data_keyboard_focus_changed(struct client *c);
 void data_pointer_motion(void);
 void data_pointer_release(void);
+void data_drag_cancel(void);
+void data_drag_modifiers(void);          /* Ctrl and Shift choose copy and move */
+void data_icon_committed(struct csurface *s, int attach_x, int attach_y);
 int data_dragging(void);
 void data_surface_gone(struct csurface *s);
 void data_client_gone(struct client *c);

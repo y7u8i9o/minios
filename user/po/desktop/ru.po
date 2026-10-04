@@ -81,3 +81,19 @@ msgstr "Сменить обои..."
 #: user/desktop/desktop.c:549
 msgid "Settings"
 msgstr "Параметры"
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be moved: %s."
+msgstr "Не удаётся переместить «%s»: %s."
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be copied: %s."
+msgstr "Не удаётся скопировать «%s»: %s."
+
+#: user/desktop/desktop.c:498
+msgid "OK"
+msgstr "ОК"
+
+#: user/desktop/desktop.c:499
+msgid "Desktop"
+msgstr "Рабочий стол"

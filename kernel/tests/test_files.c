@@ -77,6 +77,77 @@ static void test_gui_files(void)
 }
 KTEST_DEFINE("gui_files", test_gui_files);
 
+/* Drag and drop through libgui (docs/design/dnd.md). The dndtest source
+ * window drags three files in turn: into the dndtest target, which moves
+ * the file into its folder after reading the paths before the drop (move
+ * is preferred on one file system), into gedit, which opens it, and into
+ * the terminal, which types its quoted path into the shell. */
+static void drag_from_to(int *cx, int *cy, int x0, int y0, int x1, int y1)
+{
+    mouse_move_to(cx, cy, x0, y0, 0);
+    sleep_ms(100);
+    feed_packet(1, 0, 0);
+    sleep_ms(300);
+    mouse_move_to(cx, cy, x1, y1, 1);
+    sleep_ms(800);                              /* the target reads the paths and answers */
+    feed_packet(0, 0, 0);
+    sleep_ms(800);
+}
+
+static void test_gui_dnd(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    install_app("gedit");
+    struct proc *srv = start_server();
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    /* Toplevels cascade by 30 pixels from the frame (40,30), and the
+     * contents begin below the 36 pixel header bar: the source (240x160)
+     * covers (40,66)-(280,226), the target (70,96)-(310,256). A press in
+     * the source raises it, so drops land outside its rectangle. */
+    struct proc *src = proc_create_user("/bin/dndtest",
+        (char *const[]){ "dndtest", "source", "/tmp/dnd-a.txt", "/tmp/dnd-b.txt", "/tmp/dnd-c.txt", NULL },
+        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(src != NULL, "cannot start the drag source");
+    sleep_ms(1500);
+    struct proc *dst = proc_create_user("/bin/dndtest", (char *const[]){ "dndtest", "target", "/tmp/dndbox", NULL },
+                                        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(dst != NULL, "cannot start the drop target");
+    sleep_ms(1500);
+    drag_from_to(&cx, &cy, 50, 150, 295, 240);
+    ktest_assert(wait_for("/tmp/dndbox/dnd-a.txt", true), "the dropped file is not in the target folder");
+    ktest_assert(!exists("/tmp/dnd-a.txt"), "the dropped file was copied, not moved");
+    /* gedit (toplevel 3) covers (100,126)-(780,606). */
+    struct proc *ed = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", NULL },
+                                       (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(ed != NULL, "cannot start gedit");
+    sleep_ms(2000);
+    drag_from_to(&cx, &cy, 50, 150, 500, 400);
+    ktest_assert(exists("/tmp/dnd-b.txt"), "the file dropped on gedit was moved");
+    /* The terminal (toplevel 4) covers (130,156)-(792,587); the shell
+     * receives "cp ", the dropped path and the rest of the line. */
+    struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", NULL },
+                                         (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(term != NULL, "cannot start term");
+    sleep_ms(2000);
+    type_line("cp ");
+    drag_from_to(&cx, &cy, 50, 150, 600, 450);
+    mouse_click(1);                             /* the terminal takes the keyboard again */
+    sleep_ms(300);
+    type_line("/tmp/dnd-copy.txt\n");
+    ktest_assert(wait_for("/tmp/dnd-copy.txt", true), "the shell did not receive the dropped path");
+    type_line("exit\n");
+    proc_reap(term);
+    signal_send(ed, SIGTERM);
+    proc_reap(ed);
+    signal_send(dst, SIGTERM);
+    proc_reap(dst);
+    signal_send(src, SIGTERM);
+    proc_reap(src);
+    stop_server(srv);
+    kprintf("gui_dnd: ok\n");
+}
+KTEST_DEFINE("gui_dnd", test_gui_dnd);
+
 /* The file chooser of libgui, opened from gedit.  Ctrl+O opens it in the
  * home folder, / starts the location entry, whose completion the typed path
  * overwrites, and Enter opens the file, which then heads the recent

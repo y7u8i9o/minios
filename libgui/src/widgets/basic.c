@@ -313,6 +313,12 @@ static int canvas_event(struct widget *w, struct event *e)
         struct sig_text t = { e->text ? e->text : "" };
         return widget_emit(w, e->type == EV_TEXT ? "text" : "preedit", &t);
     }
+    case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END: {
+        struct sig_drag d = { -1, e->x, e->y, e->drag };
+        const char *name = e->type == EV_DRAG_MOVE ? "drag_motion" : e->type == EV_DROP ? "drop"
+                           : e->type == EV_DRAG_LEAVE ? "drag_leave" : "drag_end";
+        return widget_emit(w, name, &d);
+    }
     default:
         return 0;
     }
