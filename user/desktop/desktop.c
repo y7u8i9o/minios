@@ -1,10 +1,12 @@
 /* desktop: the background layer surface. It draws the wallpaper, shows
  * the entries of /home/desktop as icons, opens them by their MIME type
- * on a double click, offers context menus, and applies
+ * on a double click, offers context menus, drags icons to other programs
+ * and takes files dropped on the desktop or on a folder icon, and applies
  * the configuration file (wallpaper and compositor settings), re-reading the
  * file when its contents change. */
 #include <minios/conf.h>
 #include <gui/app.h>
+#include <gui/fileops.h>
 #include <gui/i18n.h>
 #include <gui/mime.h>
 #include <debug-client.h>
@@ -69,6 +71,9 @@ static struct image *wallpaper;
 static struct surface bg;       /* wallpaper scaled to the window */
 static long last_click_ms;
 static int last_click_entry = -1;
+static int press_entry = -1, press_x, press_y;  /* a press on an icon that may become a drag */
+static int drop_entry = -2;     /* the folder icon a drag would drop into, -1 the desktop, -2 none */
+static char drop_dest[512];     /* its path, since the listing may be reread before the drop */
 
 static pid_t spawn(const char *prog, const char *arg)
 {
@@ -398,7 +403,10 @@ static void desk_paint(struct widget *w, struct painter *p)
     for (int i = 0; i < nentries; i++) {
         int x, y;
         cell_of(i, w->h, &x, &y);
-        if (i == selected)
+        if (i == drop_entry)
+            painter_rounded(p, x + 2, y + 2, CELL_W - 4, CELL_H - 4, i == selected ? 0x00405870 : 0x00304860,
+                            p->theme->color[TC_ACCENT]);
+        else if (i == selected)
             painter_rounded(p, x + 2, y + 2, CELL_W - 4, CELL_H - 4, 0x00405870, 0x00c0d0e0);
         if (entries[i].icon)
             painter_image(p, x + (CELL_W - image_lw(entries[i].icon)) / 2, y + 8, entries[i].icon);
@@ -421,6 +429,83 @@ static void select_entry(int i)
     }
 }
 
+/* ---- drag and drop ---- */
+
+static void drag_entry(int i)
+{
+    char path[512];
+    entry_path(i, path, sizeof path);
+    const char *paths[1] = { path };
+    char *uris = fileops_uri_list(paths, 1);
+    if (!uris)
+        return;
+    struct gui_drag_item items[2] = { { "text/uri-list", uris, strlen(uris) }, { "text/plain", path, strlen(path) } };
+    if (widget_drag_start(desk, items, 2, GUI_DND_COPY | GUI_DND_MOVE, entries[i].icon, entries[i].label) == 0)
+        logline("drag %s", path);
+    free(uris);
+}
+
+/* A drag over the desktop drops into the folder icon under it, else into
+ * the desktop folder. */
+static int drop_folder(int i, char *dest, size_t size)
+{
+    if (i >= 0 && entries[i].dir) {
+        entry_path(i, dest, size);
+        return i;
+    }
+    strlcpy(dest, desktop_dir(), size);
+    return -1;
+}
+
+static void set_drop_entry(int i)
+{
+    if (i != drop_entry) {
+        drop_entry = i;
+        widget_invalidate(desk);
+    }
+}
+
+static void drag_motion(struct widget *w, struct event *e)
+{
+    char dest[512];
+    int target = drop_folder(entry_at(e->x, e->y, w->h), dest, sizeof dest);
+    int preferred = 0;
+    if (widget_drag_offers("text/uri-list")) {
+        size_t len;
+        const char *uris = gui_drag_peek("text/uri-list", &len);
+        preferred = fileops_drop_action(uris, len, dest);
+    }
+    if (preferred) {
+        e->drag->accept_mime = "text/uri-list";
+        e->drag->accept_actions = GUI_DND_COPY | GUI_DND_MOVE;
+        e->drag->preferred = preferred;
+    }
+    set_drop_entry(preferred ? target : -2);
+    strlcpy(drop_dest, dest, sizeof drop_dest);
+}
+
+static void drop(struct event *e)
+{
+    char dest[512];
+    strlcpy(dest, drop_dest, sizeof dest);
+    char **paths;
+    int n = fileops_parse_drop(e->drag->mime, e->drag->data, e->drag->len, &paths);
+    const char *failed = NULL;
+    int r = fileops_drop(paths, n, dest, e->drag->action, &failed);
+    if (r < 0) {
+        char text[700];
+        snprintf(text, sizeof text,
+                 e->drag->action == GUI_DND_MOVE ? _("“%s” cannot be moved: %s.") : _("“%s” cannot be copied: %s."),
+                 failed ? failed : "", strerror(-r));
+        const char *buttons[] = { _("OK") };
+        app_dialog(app, _("Desktop"), text, buttons, 1);
+    } else {
+        logline("drop %s %d into %s", e->drag->action == GUI_DND_MOVE ? "moved" : "copied", r, dest);
+    }
+    fileops_free_paths(paths, n);
+    refresh();
+}
+
 static int desk_event(struct widget *w, struct event *e)
 {
     switch (e->type) {
@@ -436,6 +521,11 @@ static int desk_event(struct widget *w, struct event *e)
             } else {
                 last_click_entry = i;
                 last_click_ms = now;
+                press_entry = i;
+                press_x = e->x;
+                press_y = e->y;
+                if (i >= 0)
+                    widget_capture(w);
             }
             return 1;
         }
@@ -447,6 +537,30 @@ static int desk_event(struct widget *w, struct event *e)
         }
         return 0;
     }
+    case EV_MOUSE_MOVE:
+        if (press_entry >= 0 && (e->button & 1) && widget_drag_moved(press_x, press_y, e->x, e->y)) {
+            int i = press_entry;
+            press_entry = -1;
+            last_click_entry = -1;
+            drag_entry(i);
+        }
+        return 1;
+    case EV_MOUSE_UP:
+        press_entry = -1;
+        return 1;
+    case EV_DRAG_MOVE:
+        drag_motion(w, e);
+        return 1;
+    case EV_DROP:
+        drop(e);
+        return 1;
+    case EV_DRAG_LEAVE:
+        set_drop_entry(-2);
+        return 1;
+    case EV_DRAG_END:
+        if (e->drag->action == GUI_DND_MOVE)
+            refresh();
+        return 1;
     case EV_KEY_DOWN:
         if (e->ch == '\n' && selected >= 0) { open_entry(selected); return 1; }
         if (e->code == KEY_F5) { refresh(); return 1; }

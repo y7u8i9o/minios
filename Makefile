@@ -1,8 +1,9 @@
 include toolchain.mk
 
 TOP      := $(CURDIR)
-# The x86_64 build is in build/, and another architecture builds into
-# build/$(ARCH)/, which lets both exist side by side.
+# The x86_64 build is written to build/. The build of any other
+# architecture is written to build/$(ARCH)/, so the builds of both
+# architectures can exist at the same time.
 ifeq ($(ARCH),x86_64)
 BUILD    := $(TOP)/build
 else
@@ -15,9 +16,9 @@ DISK     := $(BUILD)/disk.img
 DISK_MB  ?= 512
 SWAP     := $(BUILD)/swap.img
 SWAP_MB  ?= 64
-# The data volume contains /home with the installed packages, which are
-# built for one machine, and each architecture therefore has its own
-# volume.
+# The data volume contains /home. The packages that the user installs are
+# stored in /home, and these packages are compiled for one architecture.
+# Therefore each architecture has its own data volume.
 ifeq ($(ARCH),x86_64)
 DATA     ?= $(TOP)/data.img
 else
@@ -34,18 +35,21 @@ NETPEER  := $(BUILD)/host/netpeer
 PKGSIGN  := $(BUILD)/host/pkgsign
 PKGHOST  := $(BUILD)/host/pkg
 MSGFMT   := $(BUILD)/host/msgfmt
-# PKG_KEY names the key that signs the package repository index
-# (docs/design/packages.md). The build generates one under build/ unless
-# PKG_KEY names another file, and its public half is installed as
+# PKG_KEY is the file of the private key that signs the index of the
+# package repository (docs/design/packages.md). The default file is
+# build/pkg/signing.key. If the file does not exist, the build generates a
+# new key in it. The matching public key is installed as
 # /etc/pkg/keys/build.pub.
 PKG_KEY  ?= $(BUILD)/pkg/signing.key
 PKG_KEY_FILE := $(abspath $(PKG_KEY))
 PKG_PUB  := $(BUILD)/pkg/signing.pub
-# PKG_ORIGIN is the origin that the key may sign and that the indexes of
-# the build name (docs/design/packages.md).
+# PKG_ORIGIN is the repository origin that the public key allows the key
+# to sign (docs/design/packages.md). The indexes that tools/mkrepo.sh
+# writes contain the origin in REPO_ORIGIN, which is also minios by
+# default.
 PKG_ORIGIN ?= minios
-# The repository of each architecture is a directory of build/repo, and
-# one HTTP server serves both (docs/design/packages.md).
+# Each architecture has its own repository directory in build/repo. One
+# HTTP server serves both directories (docs/design/packages.md).
 REPO     := $(TOP)/build/repo/$(ARCH)
 
 export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT MKGPT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT READELF PKG_KEY_FILE PKG_PUB REPO
@@ -56,7 +60,8 @@ all: kernel libc user
 
 tools: $(LIMINE) $(GENSYMS) $(MKFS) $(FSCK) $(MKFAT) $(MKGPT) $(NETPEER) $(PKGSIGN) $(PKGHOST) $(MSGFMT)
 
-# msgfmt compiles the message catalogues of user/po (docs/design/gettext.md).
+# msgfmt compiles the translation files in user/po into message
+# catalogues (docs/design/gettext.md).
 $(MSGFMT): tools/msgfmt/msgfmt.c
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
@@ -77,22 +82,24 @@ $(MKGPT): tools/mkgpt/mkgpt.c
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
 
-# The controlled peer of the network boot tests (docs/design/network.md).
+# netpeer runs on the host. In the network boot tests, the guest
+# communicates with it (docs/design/network.md).
 $(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scripted.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ tools/netpeer/netpeer.c tools/netpeer/scripted.c
 
-# pkgsign generates keys and signs the index of a package repository. It
-# compiles the SHA-2 and Ed25519 code of libc, with which pkg verifies on
-# minios.
+# pkgsign generates signing keys and signs the index of a package
+# repository. It is compiled from the SHA-2 and Ed25519 code of libc. pkg
+# uses the same code on minios to verify signatures.
 CRYPTO_SRCS := libc/src/crypto/sha2.c libc/src/crypto/ed25519.c libc/src/crypto/shacrypt.c
 CRYPTO_HDRS := libc/include/minios/sha2.h libc/include/minios/ed25519.h
 $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
 
-# The host build of pkg installs packages into the tree of an image with
-# --root and prints the owners mkfs gives the files with pkg perms
+# PKGHOST is pkg compiled for the host. With --root, it installs packages
+# into the directory tree of a disk image. `pkg perms` prints the mode and
+# the owner of every installed file, and mkfs sets them in the image
 # (docs/design/packages.md).
 PKGHOST_SRCS := $(wildcard user/pkg/*.c) libc/src/gzip.c libc/src/net/http.c libc/src/crypto/sha2.c libc/src/crypto/ed25519.c
 $(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) libc/include/minios/local.h libc/include/minios/gzip.h libc/include/minios/http.h
@@ -103,8 +110,10 @@ $(PKG_KEY_FILE): | $(PKGSIGN)
 	@mkdir -p $(dir $@)
 	$(PKGSIGN) keygen $@
 
-# The public key is derived from the key on every run and replaced only
-# when it changes, which lets another PKG_KEY install its public half.
+# The public key is computed from the private key on every build. The
+# file is replaced only if its contents change. A different PKG_KEY
+# therefore changes the installed public key, and an unchanged key causes
+# no rebuild.
 .PHONY: FORCE
 $(PKG_PUB): $(PKG_KEY_FILE) $(PKGSIGN) FORCE
 	@mkdir -p $(dir $@)
@@ -154,24 +163,27 @@ user: libc libfont libwire libaudio libcodec libgui libedit libprof $(PKG_PUB) $
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to
-# build/repo/$(ARCH), with the archives, the index and its signature.
-# `python3 -m http.server -d build/repo 8000` serves it to a guest as
-# http://10.0.2.2:8000/$(ARCH), the URL of the shipped /etc/pkg.conf.
+# build/repo/$(ARCH): the package archives, the index and the signature of
+# the index. The command `python3 -m http.server -d build/repo 8000`
+# serves the repository. A guest downloads it from
+# http://10.0.2.2:8000/$(ARCH), which is the URL in the installed
+# /etc/pkg.conf.
 repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 	$(MAKE) -C user repo
 
-# The kernel and the files of the boot loader belong to the packages
-# kernel and limine (P6), which install them below /boot, the EFI system
-# partition of an installed disk.
-# user/ installs the whole system into build/initrd_root, and
-# tools/mkbase.py splits that tree into the packages of the base system in
-# build/base, following the definitions in user/packages/*/paths
-# (docs/plan/packaging.md, P3). A package whose files did not change is
-# not packed again.
+# The kernel and the boot loader files belong to the packages kernel and
+# limine (P6). These packages install the files under /boot, which is the
+# EFI system partition on an installed disk.
+# user/ installs the whole system into build/initrd_root. tools/mkbase.py
+# then divides this tree into the packages of the base system according to
+# the definitions in user/packages/*/paths, and writes the packages to
+# build/base (docs/plan/packaging.md, P3). A package is packed again only
+# if its files changed.
 BASE     := $(BUILD)/base
-# A development build numbers its packages, which makes a rebuilt package
-# an upgrade on the development disk. The release sets PKG_SERIAL=0 and
-# gives every package the version of VERSION alone.
+# A development build adds a serial number to the version of each package,
+# so a rebuilt package is an upgrade on the development disk. A release
+# sets PKG_SERIAL=0, and every package then has the version in VERSION
+# without a serial number.
 PKG_SERIAL ?= 1
 SYSROOT  := $(BUILD)/sysroot
 .PHONY: base sysimage
@@ -190,13 +202,13 @@ endif
 	    --abi $(BUILD)/lib/abi --out $(BASE) --version $(shell cat VERSION) $(if $(filter 1,$(strip $(CONFIG_TESTS))),,--skip tests) \
 	    $(if $(filter 1,$(PKG_SERIAL)),--serial)
 
-# The root image and the initrd contain the base system as the host build of
-# pkg installs it into build/sysroot, every package of build/base except
-# the metapackage apps, whose applications are installed by the tests and
-# the user. The disk is attached as a virtio-blk device and contains the
-# root filesystem, an mfs image (M13). It is rebuilt with every build,
-# which discards files written during earlier runs. Owners and setuid bits
-# come from pkg perms and user/perms (docs/design/users.md).
+# sysimage builds the root image and the initrd. PKGHOST installs every
+# package of build/base into build/sysroot, except the metapackage apps.
+# The applications in apps are installed later by the tests or by the user.
+# The root image is an mfs filesystem (M13) on a virtio-blk disk. It is
+# rebuilt on every build, so files written during earlier runs are lost.
+# File owners and setuid bits are taken from `pkg perms` and user/perms
+# (docs/design/users.md).
 sysimage: base $(PKGHOST) $(MKFS) user/perms
 	@mkdir -p $(dir $(DISK))
 	tools/mkimage.sh $(PKGHOST) $(ARCH) $(BUILD)/initrd_root $(SYSROOT) $(DISK) $(DISK_MB) $(MKFS) $(INITRD) \
@@ -204,10 +216,10 @@ sysimage: base $(PKGHOST) $(MKFS) user/perms
 
 initrd: sysimage
 
-# The installation medium (P7, docs/design/installer.md): a GPT disk with
-# the boot files, the installer environment and the signed repository of
-# every package. QEMU attaches it as a virtio disk, and on hardware it is
-# written to a USB stick.
+# The installation medium (P7, docs/design/installer.md) is a GPT disk. It
+# contains the boot files, the installer environment and a signed
+# repository with every package. QEMU attaches it as a virtio disk. For
+# real hardware, it is written to a USB stick.
 INSTALLER := $(BUILD)/installer.img
 .PHONY: installer
 installer: base kernel $(PKGHOST) $(PKGSIGN) $(PKG_KEY_FILE) $(PKG_PUB) $(MKFS) $(MKFAT) $(MKGPT) $(LIMINE)
@@ -215,14 +227,15 @@ installer: base kernel $(PKGHOST) $(PKGSIGN) $(PKG_KEY_FILE) $(PKG_PUB) $(MKFS) 
 
 $(DISK): sysimage
 
-# Swap lives on a second virtio-blk device (M14), zero filled.
+# The swap area is a second virtio-blk device (M14), filled with zeros.
 $(SWAP):
 	@mkdir -p $(dir $@)
 	dd if=/dev/zero of=$@ bs=1048576 count=$(SWAP_MB) status=none
 
-# The data volume retains the home directory across boots and across rebuilds
-# of the root image. It is created once, empty, outside build/, and is
-# never rebuilt, while `make clean-data` removes it.
+# The data volume contains the home directories. Rebuilds of the root
+# image do not change it, so its files remain after a reboot and after a
+# rebuild. It is created once, empty, outside build/. Only
+# `make clean-data` deletes it.
 $(DATA): | $(MKFS)
 	@mkdir -p $(BUILD)/empty
 	$(MKFS) $@ $(DATA_MB) $(BUILD)/empty
@@ -232,11 +245,12 @@ clean-data:
 
 disk: $(DISK) $(SWAP) $(DATA)
 
-# QEMU is started by tools/run.sh, which reads qemu.conf, QEMU_* variables
-# and RUNFLAGS. Variables given on the make command line are exported, and
-# `make QEMU_AUDIO=none run` continues to work through them. `run` and `gdb` let
-# the script build the image, since the framebuffer mode it picks (VIDEO,
-# or QEMU_VIDEO, or a doubled mode on a Retina display) is baked into it.
+# tools/run.sh starts QEMU. It reads qemu.conf, the QEMU_* variables and
+# RUNFLAGS. Variables set on the make command line are exported to it, so
+# `make QEMU_AUDIO=none run` passes QEMU_AUDIO to tools/run.sh. For `run`
+# and `gdb`, tools/run.sh builds the image itself, because the image
+# contains the framebuffer mode that the script selects (VIDEO, QEMU_VIDEO,
+# or a doubled mode on a Retina display).
 RUN := tools/run.sh
 $(foreach v,QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP \
             QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VIDEO QEMU_SERIAL QEMU_EXTRA \
@@ -246,18 +260,20 @@ ifeq ($(origin VIDEO),command line)
 export QEMU_VIDEO := $(VIDEO)
 endif
 
-# VIDEO=WxH[xBPP][@SCALE] selects the framebuffer mode (video= on the
-# kernel command line), and @2 doubles every pixel for high density
-# displays.
+# VIDEO=WxH[xBPP][@SCALE] selects the framebuffer mode. It is passed as
+# video= on the kernel command line. @2 draws every pixel twice in each
+# direction, for high density displays.
 image: kernel initrd $(LIMINE) $(DISK) $(SWAP) $(DATA)
 	LIMINE=$(LIMINE) INITRD=$(INITRD) tools/mkiso.sh $(KERNEL) $(ISO) "$(strip $(CMDLINE) $(if $(VIDEO),video=$(VIDEO)))"
 
-# The development disk (P8, docs/design/packages.md): an installed system
-# that tools/mkdisk.sh writes once from the packages, with VIDEO on its
-# kernel command line. make run attaches it with the update medium of
-# the current build, whose packages pkg-update installs at boot, and the
-# data volume on /home. BOOT=kernel boots the kernel of the build from the
-# CD instead of the one on the disk, with the root of the disk.
+# The development disk (P8, docs/design/packages.md) contains an installed
+# system. tools/mkdisk.sh writes it once from the packages, with VIDEO on
+# its kernel command line. make run attaches three disks: the development
+# disk, the update medium of the current build, and the data volume, which
+# is mounted on /home. At boot, pkg-update installs the packages of the
+# update medium. With BOOT=kernel, QEMU boots the kernel of the current
+# build from the CD instead of the kernel on the disk, and the root
+# filesystem is the one on the development disk.
 DEVDISK  := $(BUILD)/dev.img
 UPDATE   := $(BUILD)/update.img
 DEVDISK_MB ?= 1024
@@ -283,48 +299,51 @@ run:
 gdb:
 	ISO=$(ISO) DEVDISK=$(DEVDISK) UPDATE=$(UPDATE) DATA=$(DATA) RUN_BOOT=$(BOOT) $(RUN) --build --gdb $(RUNFLAGS)
 
-# The image of the boot tests with the CD, as make run booted it before P8.
+# run-image boots the image of the boot tests from the CD. This is how
+# make run booted before P8.
 run-image:
 	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build $(RUNFLAGS)
 
 gdb-image:
 	ISO=$(ISO) DISK=$(DISK) SWAP=$(SWAP) DATA=$(DATA) $(RUN) --build --gdb $(RUNFLAGS)
 
-# CASES="gui gui_wm" runs only those cases, because the whole suite takes
-# too long to run for every change.
+# CASES="gui gui_wm" runs only the named cases. The whole suite takes too
+# long to run after every change.
 ifeq ($(ARCH_USERLAND),yes)
 test: kernel initrd $(LIMINE) $(DISK) $(FSCK) $(MKFAT) $(MKGPT) $(NETPEER) $(PKGSIGN)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK=$(DISK) MKFS=$(MKFS) MKFAT=$(MKFAT) MKGPT=$(MKGPT) NETPEER=$(NETPEER) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 else
 # An architecture without user programs boots the kernel with an empty
-# initrd and no disk, where only kernel self tests can run.
+# initrd and no disk. Only the kernel self tests can run there.
 test: kernel $(LIMINE) $(MKFAT)
 	@mkdir -p $(BUILD)/empty/dev $(BUILD)/empty/tmp && tar --format ustar -cf $(INITRD) -C $(BUILD)/empty .
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) DISK= MKFAT=$(MKFAT) tests/run_all.sh $(KERNEL) $(BUILD)/tests tests/cases $(CASES)
 endif
 
-# The host self test of the network peer lifecycle of the boot harness
-# runs a fake QEMU and the real peer tool without a guest
+# check-net tests on the host how the boot test script starts and stops
+# netpeer. It runs the real netpeer with a fake QEMU and boots no guest
 # (docs/design/network.md).
 .PHONY: check-net
 check-net: kernel initrd $(LIMINE) $(NETPEER)
 	@LIMINE=$(LIMINE) INITRD=$(INITRD) NETPEER=$(NETPEER) tests/net/selftest.sh $(BUILD)
 
-# Host fuzzing of the wire parsers and socket validators linked into the
-# kernel, under the sanitizers (docs/design/network.md, N09). FUZZ_SECONDS
-# bounds each of the three seeds (default 30).
+# check-net-fuzz fuzzes the IP, TCP and UDP packet parsers and validation
+# functions of the kernel on the host, compiled with the sanitizers
+# (docs/design/network.md, N09). FUZZ_SECONDS is the run time of each of
+# the three seeds in seconds (default 30).
 .PHONY: check-net-fuzz
 check-net-fuzz:
 	@tests/net/fuzz/run.sh $(BUILD)/network-fuzz
 
-# The cases whose behaviour depends on the processor or the hypervisor run
-# with hardware virtualization, which needs Linux with /dev/kvm.
+# These cases depend on the processor or on the hypervisor. test-kvm runs
+# them with hardware virtualization, which requires Linux with /dev/kvm.
 KVM_CASES := boot cpu exception fork signals smp smp_user vmm sched
 test-kvm:
 	ACCEL=kvm $(MAKE) test CASES="$(KVM_CASES)"
 
-# check runs the host unit tests of the GUI framework, the Lua modules and
-# the package signature code.
+# check runs the tests on the host: the installed headers, the signature
+# code and pkg, libfont, libwire, libcodec, libgui, the Lua modules and the
+# input method engines.
 check: check-headers check-pkg
 	$(MAKE) -C libfont check
 	$(MAKE) -C libwire check
@@ -334,8 +353,8 @@ check: check-headers check-pkg
 	$(MAKE) check-imed
 
 .PHONY: check-lua check-headers check-imed
-# The engines of the input method daemon on the host, with the
-# dictionaries of user/share/ime (docs/design/ime.md).
+# check-imed tests the engines of the input method daemon on the host with
+# the dictionaries in user/share/ime (docs/design/ime.md).
 check-imed:
 	@mkdir -p $(BUILD)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -std=c17 -O1 -g -Wall -o $(BUILD)/host/test_pinyin user/imed/pycore.c \
@@ -345,8 +364,8 @@ check-imed:
 	    user/imed/tests/test_japanese.c
 	$(BUILD)/host/test_japanese user/share/ime/japanese.dict
 
-# Every installed header must compile on its own with the cross compiler,
-# in C17, as tcc will see it on minios (docs/design/tcc.md).
+# check-headers compiles every installed header alone with the cross
+# compiler in C17, as tcc compiles it on minios (docs/design/tcc.md).
 check-headers:
 	@mkdir -p $(BUILD)/headers
 	@status=0; for h in $$(cd libc/include && find . -name '*.h' | sed 's|^\./||') \
@@ -356,9 +375,10 @@ check-headers:
 	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -Ilibprof/include -fsyntax-only $(BUILD)/headers/t.c \
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
-# The host unit test of the Lua modules compiles the interpreter, user/lua
-# and the MIME code with the system compiler and runs the same script as
-# the lua_sys boot test on a scratch directory.
+# check-lua compiles the Lua interpreter and the modules in user/lua with
+# the host compiler, together with libgui, libfont and libcodec. It runs
+# the script of the lua_sys boot test in build/lua/host/tmp, and then the
+# other Lua test scripts.
 LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
                 $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
                 $(filter-out libgui/src/client.c,$(wildcard libgui/src/*.c libgui/src/widgets/*.c)) \
@@ -381,8 +401,8 @@ check-lua:
 	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/worker.lua
 
 # check-pkg tests the SHA-256, SHA-512 and Ed25519 code on the host with
-# the vectors of RFC 6234 and RFC 8032, and the pkg_repo case runs the same
-# test on minios. It then runs the host build of pkg against an
+# the test vectors of RFC 6234 and RFC 8032. The boot test pkg_repo runs
+# the same test on minios. check-pkg then tests PKGHOST with an
 # installation root in build/host/pkgtest.
 check-pkg: $(PKGHOST) $(PKGSIGN)
 	@mkdir -p $(BUILD)/host
@@ -399,10 +419,10 @@ check-sh:
 	    -o $(BUILD)/sh/host/test_parser user/sh/*.c user/sh/tests/test_parser.c
 	$(BUILD)/sh/host/test_parser
 
-# The release pipeline builds the release that VERSION names from a commit,
-# main by default, in a worktree of its own (tools/release.sh,
-# docs/design/build.md). RELEASE_FLAGS passes options such as --ref, --arch
-# or --tag to it.
+# make release builds the release with the version in VERSION. It builds
+# a commit (main by default) in a separate worktree (tools/release.sh,
+# docs/design/build.md). RELEASE_FLAGS passes options such as --ref,
+# --arch or --tag to tools/release.sh.
 release:
 	tools/release.sh $(RELEASE_FLAGS)
 

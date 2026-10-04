@@ -1,10 +1,12 @@
 /* Top level windows: server messages become widget events, focus and
- * hover tracking, Tab traversal, accelerators and mnemonics, and the
- * layout and paint pass with partial redraws. */
+ * hover tracking, Tab traversal, accelerators and mnemonics, drag and
+ * drop, and the layout and paint pass with partial redraws. */
 #include <gui/app.h>
+#include <gui/image.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 struct window {
     struct widget w;
@@ -278,6 +280,152 @@ static void mouse_message(struct widget *window, struct wmsg *m)
         ws->capture = NULL;
 }
 
+/* ---- drag and drop ---- */
+
+int widget_drag_moved(int press_x, int press_y, int x, int y)
+{
+    int dx = x - press_x, dy = y - press_y;
+    return dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD;
+}
+
+int widget_drag_offers(const char *mime) { return gui_drag_offers(mime); }
+
+/* The drag image: a rounded tile with the icon and the label, slightly
+ * transparent, in device pixels at the window's scale. */
+static struct surface drag_image(struct widget *window, const struct image *icon, const char *label, int *lw, int *lh)
+{
+    struct window_state *ws = window_state_of(window);
+    const struct theme *t = app_theme(window->app);
+    int scale = ws->win->scale > 0 ? ws->win->scale : 1;
+    int iw = icon ? image_lw(icon) : 0, ih = icon ? image_lh(icon) : 0;
+    if (iw > 20 || ih > 20)
+        iw = ih = 20;
+    int tw = label && *label ? gfx_text_width_font(t->font, label, -1) : 0;
+    int w = 8 + iw + (iw && tw ? 6 : 0) + tw + 8, h = (ih > t->font->height ? ih : t->font->height) + 10;
+    if (w > 240)
+        w = 240;
+    if (w < 16)
+        w = 16;
+    struct surface s = { calloc((size_t)w * scale * h * scale, 4), w * scale, h * scale, w * scale };
+    if (!s.pixels)
+        return s;
+    /* Pixels the tile does not cover remain the marker and become transparent. */
+    const uint32_t marker = 0x00ff00ff;
+    for (size_t i = 0; i < (size_t)s.width * s.height; i++)
+        s.pixels[i] = marker;
+    struct painter p;
+    painter_init_scaled(&p, &s, t, scale);
+    painter_rounded(&p, 0, 0, w, h, t->color[TC_FIELD], t->color[TC_BORDER]);
+    int x = 8;
+    if (icon) {
+        painter_image_scaled(&p, x, (h - ih) / 2, iw, ih, icon);
+        x += iw + 6;
+    }
+    if (tw)
+        painter_text(&p, x, (h - t->font->height) / 2, label, t->color[TC_TEXT]);
+    for (size_t i = 0; i < (size_t)s.width * s.height; i++)
+        s.pixels[i] = s.pixels[i] == marker ? 0 : (s.pixels[i] & 0x00ffffff) | 0xe0000000u;
+    *lw = w;
+    *lh = h;
+    return s;
+}
+
+int widget_drag_start(struct widget *w, const struct gui_drag_item *items, int nitems, int actions,
+                      const struct image *icon, const char *label)
+{
+    struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
+    if (!ws || !ws->win)
+        return -EINVAL;
+    int iw = 0, ih = 0;
+    struct surface img = icon || (label && *label) ? drag_image(w->window, icon, label, &iw, &ih)
+                                                   : (struct surface){ 0 };
+    /* The image lies below and to the right of the cursor's tip. */
+    int r = gui_drag_start(ws->win, items, nitems, actions, img.pixels ? &img : NULL, -12, -12);
+    free(img.pixels);
+    if (r == 0) {
+        ws->drag_source = w;
+        ws->capture = NULL;
+    }
+    return r;
+}
+
+/* Deliver a drag event from w up through its ancestors; returns the
+ * widget that took it. */
+static struct widget *drag_dispatch(struct widget *w, struct event *e)
+{
+    for (struct widget *t = w; t; t = t->parent) {
+        if (!t->enabled)
+            return NULL;
+        if (t->cls->event && t->cls->event(t, e))
+            return t;
+        e->x += t->x;
+        e->y += t->y;
+    }
+    return NULL;
+}
+
+static void drag_leave(struct window_state *ws)
+{
+    struct widget *t = ws->drop_target;
+    ws->drop_target = NULL;
+    if (t && t->cls->event) {
+        struct drag_event d = { 0 };
+        struct event e = { .type = EV_DRAG_LEAVE, .drag = &d };
+        t->cls->event(t, &e);
+    }
+}
+
+static void drag_message(struct widget *window, struct wmsg *m)
+{
+    struct window_state *ws = window_state_of(window);
+    struct drag_event d = { .actions = m->d, .action = m->c };
+    struct event e = { .drag = &d };
+    if (m->type == WM_DRAG_LEAVE) {
+        drag_leave(ws);
+        return;
+    }
+    if (m->type == WM_DRAG_END) {
+        struct widget *src = ws->drag_source;
+        ws->drag_source = NULL;
+        ws->capture = NULL;
+        d.action = m->a;
+        e.type = EV_DRAG_END;
+        if (src && src->cls->event)
+            src->cls->event(src, &e);
+        return;
+    }
+    if (m->window != ws->win->id)
+        return;                         /* drops on the popup surface are refused */
+    if (m->type == WM_DROP) {
+        struct widget *t = ws->drop_target;
+        if (t && t->cls->event) {
+            int ax, ay;
+            widget_abs(t, &ax, &ay);
+            e.type = EV_DROP;
+            e.x = m->a - ax;
+            e.y = m->b - ay;
+            d.data = gui_drop_data(&d.len, &d.mime);
+            t->cls->event(t, &e);
+        }
+        drag_leave(ws);
+        return;
+    }
+    struct widget *hit = widget_at(window, m->a, m->b);
+    struct widget *taker = NULL;
+    if (hit) {
+        int ax, ay;
+        widget_abs(hit, &ax, &ay);
+        e.type = EV_DRAG_MOVE;
+        e.x = m->a - ax;
+        e.y = m->b - ay;
+        taker = drag_dispatch(hit, &e);
+    }
+    if (ws->drop_target && ws->drop_target != taker)
+        drag_leave(ws);
+    ws->drop_target = taker;
+    gui_drag_accept(taker ? d.accept_mime : NULL, d.accept_actions, d.preferred);
+}
+
 static int mnemonic_of(const struct widget *w)
 {
     const char *t = w->text;
@@ -366,6 +514,13 @@ void window_message(struct widget *window, struct wmsg *m)
         break;
     case WM_TEXT_DELETE:
         text_message(window, m, EV_TEXT_DELETE);
+        break;
+    case WM_DRAG_ENTER:
+    case WM_DRAG_MOTION:
+    case WM_DRAG_LEAVE:
+    case WM_DROP:
+    case WM_DRAG_END:
+        drag_message(window, m);
         break;
     case WM_FOCUS: {
         struct sig_change c = { m->a, NULL };

@@ -117,7 +117,11 @@ The window title is the title set with OSC, followed by " - Terminal".
 
 The window prints `term: shell pid P on /dev/ptsN, CxR cells of WxH`,
 `term: size CxR` on grid changes, `term: view N` on scrolling and
-`term: shell exited, status S`. The `gui_term` case types commands
+`term: shell exited, status S`. Files dropped on the window are typed
+into the program as their paths in single quotes, each followed by a
+space, as a bracketed paste when the program asked for it, and the window
+prints `term: dropped N paths` (`dnd.md`, tested by `gui_dnd`). The
+`gui_term` case types commands
 through the keyboard driver, checks the file the shell writes, the
 background and the antialiased prompt pixels, shrinks the window by
 240 by 96 pixels and checks `stty size` (19 rows, 50 columns), then

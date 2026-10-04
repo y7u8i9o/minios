@@ -288,3 +288,15 @@ msgstr "Не удаётся открыть папку «%s»: %s."
 #: libgui/src/folderview.c:872
 msgid "The file “%s” does not exist."
 msgstr "Файл «%s» не существует."
+
+#: libgui/src/fileops.c:334
+msgid "Copy of %s"
+msgstr "Копия %s"
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be moved: %s."
+msgstr "Не удаётся переместить «%s»: %s."
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be copied: %s."
+msgstr "Не удаётся скопировать «%s»: %s."

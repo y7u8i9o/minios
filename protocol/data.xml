@@ -1,30 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Data transfer (M25): selection (clipboard) and drag and drop with
-     mime types; contents flow through passed pipe descriptors. -->
+     mime types; contents flow through passed pipe descriptors. Version 2
+     adds the drag actions: 1 copy, 2 move. A source that never calls
+     set_actions offers copy, and an offer that never calls set_actions
+     accepts copy and move with copy preferred. -->
 <protocol name="data">
-  <interface name="data_device_manager" version="1">
+  <interface name="data_device_manager" version="2">
     <request name="create_data_source"><arg name="id" type="new_id" interface="data_source"/></request>
     <request name="get_data_device"><arg name="id" type="new_id" interface="data_device"/><arg name="seat" type="object" interface="seat"/></request>
   </interface>
 
-  <interface name="data_source" version="1">
+  <interface name="data_source" version="2">
     <request name="offer"><arg name="mime_type" type="string"/></request>
     <request name="destroy" type="destructor"/>
+    <request name="set_actions"><arg name="actions" type="uint"/></request>
     <event name="send"><arg name="mime_type" type="string"/><arg name="fd" type="fd"/></event>
     <event name="cancelled"/>
     <event name="dnd_drop_performed"/>
     <event name="dnd_finished"/>
+    <event name="action"><arg name="action" type="uint"/></event>
   </interface>
 
-  <interface name="data_offer" version="1">
+  <interface name="data_offer" version="2">
     <request name="accept"><arg name="serial" type="uint"/><arg name="mime_type" type="string" allow-null="true"/></request>
     <request name="receive"><arg name="mime_type" type="string"/><arg name="fd" type="fd"/></request>
     <request name="finish"/>
     <request name="destroy" type="destructor"/>
+    <request name="set_actions"><arg name="actions" type="uint"/><arg name="preferred" type="uint"/></request>
     <event name="offer"><arg name="mime_type" type="string"/></event>
+    <event name="source_actions"><arg name="actions" type="uint"/></event>
+    <event name="action"><arg name="action" type="uint"/></event>
   </interface>
 
-  <interface name="data_device" version="1">
+  <interface name="data_device" version="2">
     <request name="set_selection">
       <arg name="source" type="object" interface="data_source" allow-null="true"/><arg name="serial" type="uint"/>
     </request>

@@ -21,14 +21,18 @@ struct data_source_listener {
     void (*cancelled)(void *user, struct wire_proxy *self);
     void (*dnd_drop_performed)(void *user, struct wire_proxy *self);
     void (*dnd_finished)(void *user, struct wire_proxy *self);
+    void (*action)(void *user, struct wire_proxy *self, uint32_t action);
 };
 static inline int data_source_add_listener(struct wire_proxy *p, const struct data_source_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
 void data_source_offer(struct wire_proxy *data_source, const char * mime_type);
 void data_source_destroy(struct wire_proxy *data_source);
+void data_source_set_actions(struct wire_proxy *data_source, uint32_t actions);
 
 struct data_offer_listener {
     void (*offer)(void *user, struct wire_proxy *self, const char * mime_type);
+    void (*source_actions)(void *user, struct wire_proxy *self, uint32_t actions);
+    void (*action)(void *user, struct wire_proxy *self, uint32_t action);
 };
 static inline int data_offer_add_listener(struct wire_proxy *p, const struct data_offer_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
@@ -36,6 +40,7 @@ void data_offer_accept(struct wire_proxy *data_offer, uint32_t serial, const cha
 void data_offer_receive(struct wire_proxy *data_offer, const char * mime_type, int fd);
 void data_offer_finish(struct wire_proxy *data_offer);
 void data_offer_destroy(struct wire_proxy *data_offer);
+void data_offer_set_actions(struct wire_proxy *data_offer, uint32_t actions, uint32_t preferred);
 
 struct data_device_listener {
     void (*data_offer)(void *user, struct wire_proxy *self, struct wire_proxy * id);

@@ -286,3 +286,15 @@ msgstr "无法打开文件夹“%s”:%s。"
 #: libgui/src/folderview.c:872
 msgid "The file “%s” does not exist."
 msgstr "文件“%s”不存在。"
+
+#: libgui/src/fileops.c:334
+msgid "Copy of %s"
+msgstr "%s 的副本"
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be moved: %s."
+msgstr "无法移动“%s”:%s。"
+
+#: libgui/src/folderview.c:1028
+msgid "“%s” cannot be copied: %s."
+msgstr "无法复制“%s”:%s。"

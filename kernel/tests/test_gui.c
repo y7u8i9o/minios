@@ -1028,9 +1028,33 @@ static void test_comp_data(void)
     ktest_assert(status == 0, "target status 0x%x", status);
     status = proc_reap(src);
     ktest_assert(status == 0, "source status 0x%x", status);
+    kprintf("comp_data: data device ok\n");
+    /* The actions: the target prefers move, Ctrl forces copy while it is
+     * down, and Escape cancels the drag, which the target learns through
+     * leave and the source through cancelled. */
+    src = start_client("drag-source");
+    dst = start_client("drag-target");
+    /* Toplevels 3 and 4 cascade to contents at (100,120) and (130,150). */
+    mouse_move_to(&cx, &cy, 100 + 10, 120 + 100, 0);
+    sleep_ms(100);
+    feed_packet(1, 0, 0);
+    sleep_ms(400);
+    mouse_move_to(&cx, &cy, 130 + 100, 150 + 75, 1);
+    sleep_ms(300);
+    ps2kbd_feed_scancode(0x1d);
+    sleep_ms(300);
+    ps2kbd_feed_scancode(0x9d);
+    sleep_ms(300);
+    press_key(0x01);
+    sleep_ms(300);
+    feed_packet(0, 0, 0);
+    status = proc_reap(dst);
+    ktest_assert(status == 0, "drag target status 0x%x", status);
+    status = proc_reap(src);
+    ktest_assert(status == 0, "drag source status 0x%x", status);
     signal_send(srv, SIGTERM);
     proc_reap(srv);
-    kprintf("comp_data: data device ok\n");
+    kprintf("comp_data: drag actions ok\n");
 }
 KTEST_DEFINE("comp_data", test_comp_data);
 

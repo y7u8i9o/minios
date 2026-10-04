@@ -27,6 +27,8 @@ struct view {
     int header;                 /* 1 for tables */
     long click_ms;              /* last left click, for double clicks */
     int click_row;
+    int press_row, press_x, press_y;    /* a row press that may become a drag */
+    int drop_row;               /* outlined drop target: a row, -1 the view, -2 none */
 };
 
 #define ICON_W 20
@@ -193,6 +195,63 @@ static void view_paint(struct widget *w, struct painter *p)
     painter_pop(p);
     if (sbw)
         scrollbar_paint_track(p, w->w - sbw, top, sbw, w->h - top, v->scroll, v->nflat, rows, 1);
+    if (v->drop_row == -1) {
+        painter_frame(p, 0, 0, w->w, w->h, t->color[TC_ACCENT]);
+        painter_frame(p, 1, 1, w->w - 2, w->h - 2, t->color[TC_ACCENT]);
+    } else if (v->drop_row >= 0) {
+        int idx = flat_index_of(v, v->drop_row);
+        if (idx >= v->scroll && idx <= v->scroll + rows) {
+            painter_push(p, 1, 1 + top, w->w - 2 - sbw, w->h - 2 - top);
+            painter_frame(p, 0, (idx - v->scroll) * lh, w->w - 2 - sbw, lh, t->color[TC_ACCENT]);
+            painter_frame(p, 1, (idx - v->scroll) * lh + 1, w->w - 4 - sbw, lh - 2, t->color[TC_ACCENT]);
+            painter_pop(p);
+        }
+    }
+}
+
+/* The row id under a local position, or -1 below the rows and in the header. */
+static int row_at_y(struct view *v, int y)
+{
+    int top = v->header ? HEADER_H : 0;
+    if (y < top + 1)
+        return -1;
+    int idx = v->scroll + (y - 1 - top) / line_h(&v->w);
+    return idx >= 0 && idx < v->nflat ? v->flat[idx] : -1;
+}
+
+static void set_drop_row(struct view *v, int row)
+{
+    if (v->drop_row != row) {
+        v->drop_row = row;
+        widget_invalidate(&v->w);
+    }
+}
+
+static int view_drag_event(struct widget *w, struct event *e)
+{
+    struct view *v = (struct view *)w;
+    struct sig_drag sd = { row_at_y(v, e->y), e->x, e->y, e->drag };
+    switch (e->type) {
+    case EV_DRAG_MOVE:
+        if (!widget_emit(w, "drag_motion", &sd))
+            return 0;
+        set_drop_row(v, e->drag->accept_mime ? sd.row : -2);
+        return 1;
+    case EV_DROP:
+        sd.row = v->drop_row >= 0 ? v->drop_row : -1;
+        widget_emit(w, "drop", &sd);
+        return 1;
+    case EV_DRAG_LEAVE:
+        set_drop_row(v, -2);
+        widget_emit(w, "drag_leave", &sd);
+        return 1;
+    case EV_DRAG_END:
+        sd.row = -1;
+        widget_emit(w, "drag_end", &sd);
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 static void toggle_expand(struct view *v, int row)
@@ -275,6 +334,12 @@ static int view_event(struct widget *w, struct event *e)
         v->click_row = idx;
         v->click_ms = again ? 0 : now;
         select_flat(v, idx, again ? "activate" : "selected");
+        if (!again) {
+            v->press_row = v->flat[idx];
+            v->press_x = e->x;
+            v->press_y = e->y;
+            widget_capture(w);
+        }
         return 1;
     }
     case EV_MOUSE_MOVE:
@@ -284,10 +349,19 @@ static int view_event(struct widget *w, struct event *e)
             widget_invalidate(w);
             return 1;
         }
+        if (v->press_row >= 0 && (e->button & 1) && widget_drag_moved(v->press_x, v->press_y, e->x, e->y)) {
+            struct sig_drag sd = { v->press_row, e->x, e->y, NULL };
+            v->press_row = -1;
+            widget_emit(w, "drag_begin", &sd);
+            return 1;
+        }
         return 0;
     case EV_MOUSE_UP:
         v->drag_col = -1;
+        v->press_row = -1;
         return 1;
+    case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END:
+        return view_drag_event(w, e);
     case EV_MOUSE_WHEEL:
         v->scroll = clamp_scroll(v, v->scroll + 3 * e->button);
         widget_invalidate(w);
@@ -348,6 +422,8 @@ static struct widget *view_new(const struct widget_class *cls, struct widget *pa
     v->drag_col = -1;
     v->sort_col = -1;
     v->click_row = -1;
+    v->press_row = -1;
+    v->drop_row = -2;
     w->value = -1;
     w->focusable = 1;
     widget_set_stretch(w, 1, 1);

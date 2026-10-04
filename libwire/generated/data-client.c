@@ -41,6 +41,13 @@ void data_source_destroy(struct wire_proxy *data_source)
     wire_proxy_destroy(data_source);
 }
 
+void data_source_set_actions(struct wire_proxy *data_source, uint32_t actions)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = actions;
+    wire_proxy_marshal(data_source, 2, args, NULL);
+}
+
 void data_offer_accept(struct wire_proxy *data_offer, uint32_t serial, const char * mime_type)
 {
     union wire_arg args[2] = { { 0 } };
@@ -68,6 +75,14 @@ void data_offer_destroy(struct wire_proxy *data_offer)
     union wire_arg args[1] = { { 0 } };
     wire_proxy_marshal(data_offer, 3, args, NULL);
     wire_proxy_destroy(data_offer);
+}
+
+void data_offer_set_actions(struct wire_proxy *data_offer, uint32_t actions, uint32_t preferred)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = actions;
+    args[1].u = preferred;
+    wire_proxy_marshal(data_offer, 4, args, NULL);
 }
 
 void data_device_set_selection(struct wire_proxy *data_device, struct wire_proxy * source, uint32_t serial)

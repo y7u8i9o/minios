@@ -45,6 +45,10 @@ serial line to the kernel and the programs.
   occlusion culling of surfaces below opaque (`XRGB8888`) surfaces,
   per rectangle composition (desktop fill, surfaces bottom up with
   alpha blending for `ARGB8888`, the cursor), and frame statistics.
+- `data.c`: the data device, with the selection and its stored copy
+  (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
+  under the cursor, the copy and move actions chosen from both sides and
+  the modifiers, the drop, and the cancel by Escape (`dnd.md`).
 - `trace.c`: the `tracer` global of `protocol/debug.xml`. `start`
   installs libwire's trace hook while at least one tracer runs, sends a
   `client` event for every other connected client, and turns every

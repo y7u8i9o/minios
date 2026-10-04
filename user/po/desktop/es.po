@@ -81,3 +81,19 @@ msgstr "Cambiar el fondo..."
 #: user/desktop/desktop.c:549
 msgid "Settings"
 msgstr "Configuración"
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be moved: %s."
+msgstr "No se puede mover «%s»: %s."
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be copied: %s."
+msgstr "No se puede copiar «%s»: %s."
+
+#: user/desktop/desktop.c:498
+msgid "OK"
+msgstr "Aceptar"
+
+#: user/desktop/desktop.c:499
+msgid "Desktop"
+msgstr "Escritorio"

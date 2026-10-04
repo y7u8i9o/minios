@@ -179,10 +179,21 @@ static void on_src_send(void *user, struct wire_proxy *s, const char *mime, int 
 static void on_src_cancelled(void *user, struct wire_proxy *s) { LOG("source cancelled"); }
 static void on_src_drop(void *user, struct wire_proxy *s) { LOG("source drop performed"); }
 static void on_src_finished(void *user, struct wire_proxy *s) { LOG("source finished"); quit = 1; }
-static const struct data_source_listener source_events = { on_src_send, on_src_cancelled, on_src_drop, on_src_finished };
+static const struct data_source_listener source_events = { on_src_send, on_src_cancelled, on_src_drop, on_src_finished, NULL };
 
 static void on_offer_mime(void *user, struct wire_proxy *o, const char *mime) { strlcpy(offered_mime, mime, sizeof offered_mime); }
-static const struct data_offer_listener offer_events = { on_offer_mime };
+static const struct data_offer_listener offer_events = { on_offer_mime, NULL, NULL };
+
+/* The drag modes: a source allowing copy and move, a target preferring
+ * move. Both end when the drag is cancelled (Escape). */
+static int drag_mode;
+static void on_drag_cancelled(void *user, struct wire_proxy *s) { LOG("source cancelled"); quit = 1; }
+static void on_drag_action(void *user, struct wire_proxy *s, uint32_t action) { LOG("source action %u", action); }
+static const struct data_source_listener drag_source_events = { on_src_send, on_drag_cancelled, on_src_drop, on_src_finished,
+                                                                on_drag_action };
+static void on_offer_source_actions(void *user, struct wire_proxy *o, uint32_t actions) { LOG("offer source actions %u", actions); }
+static void on_offer_action(void *user, struct wire_proxy *o, uint32_t action) { LOG("offer action %u", action); }
+static const struct data_offer_listener drag_offer_events = { on_offer_mime, on_offer_source_actions, on_offer_action };
 
 static void receive_text(struct wire_proxy *offer, const char *what)
 {
@@ -201,16 +212,25 @@ static void receive_text(struct wire_proxy *offer, const char *what)
 static void on_dev_offer(void *user, struct wire_proxy *dev, struct wire_proxy *offer)
 {
     offer->obj.interface = &data_offer_interface;
-    data_offer_add_listener(offer, &offer_events, NULL);
+    data_offer_add_listener(offer, drag_mode ? &drag_offer_events : &offer_events, NULL);
 }
 static void on_dev_enter(void *user, struct wire_proxy *dev, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y, struct wire_proxy *offer)
 {
     drag_offer = offer;
-    if (offer)
+    if (offer) {
         data_offer_accept(offer, serial, offered_mime);
+        if (drag_mode)
+            data_offer_set_actions(offer, 3, 2);
+    }
     LOG("drag enter");
 }
-static void on_dev_leave(void *user, struct wire_proxy *dev) { LOG("drag leave"); drag_offer = NULL; }
+static void on_dev_leave(void *user, struct wire_proxy *dev)
+{
+    LOG("drag leave");
+    drag_offer = NULL;
+    if (drag_mode && strcmp(mode, "drag-target") == 0)
+        quit = 1;
+}
 static void on_dev_motion(void *user, struct wire_proxy *dev, uint32_t time, int32_t x, int32_t y) {}
 static void on_dev_drop(void *user, struct wire_proxy *dev)
 {
@@ -338,7 +358,16 @@ static int run_window(const char *title, uint32_t color, int with_seat, int with
     LOG("window '%s' ready", title);
     int started = 0;
     while (!win.closed && !quit) {
-        if (is_source && !started && last_serial) {
+        if (is_source && drag_mode && !started && last_serial) {
+            /* The first button press starts a drag allowing copy and move. */
+            struct wire_proxy *drag = data_device_manager_create_data_source(data_manager);
+            data_source_add_listener(drag, &drag_source_events, NULL);
+            data_source_offer(drag, "text/plain");
+            data_source_set_actions(drag, 3);
+            data_device_start_drag(data_device, drag, win.surface, NULL, last_serial);
+            LOG("drag requested");
+            started = 1;
+        } else if (is_source && !started && last_serial) {
             /* The first button press starts the selection and a drag. */
             source = data_device_manager_create_data_source(data_manager);
             data_source_add_listener(source, &source_events, NULL);
@@ -385,6 +414,8 @@ int main(int argc, char **argv)
     else if (strcmp(mode, "seat") == 0) r = run_window("seat", 0x00c8f0c8, 1, 0, 0);
     else if (strcmp(mode, "data-source") == 0) r = run_window("source", 0x00ffe0a0, 1, 1, 1);
     else if (strcmp(mode, "data-target") == 0) r = run_window("target", 0x00a0e0ff, 1, 1, 0);
+    else if (strcmp(mode, "drag-source") == 0) r = (drag_mode = 1, run_window("source", 0x00ffe0a0, 1, 1, 1));
+    else if (strcmp(mode, "drag-target") == 0) r = (drag_mode = 1, run_window("target", 0x00a0e0ff, 1, 1, 0));
     else if (strcmp(mode, "hang") == 0) r = run_hang(6000);
     else if (strcmp(mode, "hang-forever") == 0) r = run_hang(0);
     else r = 2;

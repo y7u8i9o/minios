@@ -67,6 +67,8 @@ void widget_remove(struct widget *child)
         if (ws->focus == child) ws->focus = NULL;
         if (ws->capture == child) ws->capture = NULL;
         if (ws->hover == child) ws->hover = NULL;
+        if (ws->drag_source == child) ws->drag_source = NULL;
+        if (ws->drop_target == child) ws->drop_target = NULL;
     }
     widget_relayout(parent);
 }

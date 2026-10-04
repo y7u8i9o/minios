@@ -90,6 +90,16 @@ in local coordinates and every primitive (`fill`, `frame`, `line`,
 `rounded`, `text`, `blit`, `mask`, `focus_ring`) is clipped to the
 widget. Text uses the theme font.
 
+## Drag and drop
+
+Widgets receive `EV_DRAG_MOVE`, `EV_DRAG_LEAVE`, `EV_DROP` and
+`EV_DRAG_END` with a `struct drag_event`; the first widget from the one
+under the cursor up through its ancestors that returns 1 for
+`EV_DRAG_MOVE` is the drop target, and its answer goes to the compositor.
+`widget_drag_start` starts a drag with a drawn image of an icon and a
+label. The mechanism, the widgets that use it and the programs are
+described in `dnd.md`.
+
 ## Partial redraw
 
 `widget_invalidate` marks a widget dirty and its ancestors child dirty.
@@ -187,7 +197,9 @@ draw only the rows in view and retain an internal scroll bar. The tree
 view draws expanders and handles Left, Right and expander clicks; the
 table draws a header row, sorts on header clicks through the model and
 resizes columns by dragging the header borders. `view_refresh` is
-called after the model changed.
+called after the model changed. A row pressed and moved past the drag
+threshold emits `drag_begin`, and drags over a view emit `drag_motion`,
+`drop` and `drag_leave` with the row under the cursor (`dnd.md`).
 
 ### Editor (`src/widgets/editor.c`, `editor_hl.c`)
 
@@ -202,7 +214,10 @@ selection with Shift and the mouse, Ctrl+Z and Ctrl+Y follow the text
 field conventions. A highlighter fills a class per character for each
 line with a state carried across lines; `highlight_c` covers keywords,
 strings, numbers, line and block comments and preprocessor lines,
-`highlight_sh` keywords, strings, variables and comments.
+`highlight_sh` keywords, strings, variables and comments. The selection
+is dragged as `text/plain` from a press inside it, and text dropped on
+the editor is inserted at an accent drop caret; the text field drags its
+selection as well (`dnd.md`).
 
 ### Dialogs and applications
 

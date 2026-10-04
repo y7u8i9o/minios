@@ -16,19 +16,24 @@ struct data_device_manager_impl {
 struct data_source_impl {
     void (*offer)(struct wire_client *client, struct wire_resource *self, const char * mime_type);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_actions)(struct wire_client *client, struct wire_resource *self, uint32_t actions);
 };
 void data_source_send_send(struct wire_resource *data_source, const char * mime_type, int fd);
 void data_source_send_cancelled(struct wire_resource *data_source);
 void data_source_send_dnd_drop_performed(struct wire_resource *data_source);
 void data_source_send_dnd_finished(struct wire_resource *data_source);
+void data_source_send_action(struct wire_resource *data_source, uint32_t action);
 
 struct data_offer_impl {
     void (*accept)(struct wire_client *client, struct wire_resource *self, uint32_t serial, const char * mime_type);
     void (*receive)(struct wire_client *client, struct wire_resource *self, const char * mime_type, int fd);
     void (*finish)(struct wire_client *client, struct wire_resource *self);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_actions)(struct wire_client *client, struct wire_resource *self, uint32_t actions, uint32_t preferred);
 };
 void data_offer_send_offer(struct wire_resource *data_offer, const char * mime_type);
+void data_offer_send_source_actions(struct wire_resource *data_offer, uint32_t actions);
+void data_offer_send_action(struct wire_resource *data_offer, uint32_t action);
 
 struct data_device_impl {
     void (*set_selection)(struct wire_client *client, struct wire_resource *self, struct wire_resource * source, uint32_t serial);

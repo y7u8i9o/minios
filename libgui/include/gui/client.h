@@ -13,6 +13,7 @@
 
 enum wmsg_type {
     WM_KEY = 36, WM_MOUSE, WM_FOCUS, WM_CLOSE, WM_RESIZED, WM_TEXT, WM_PREEDIT, WM_TEXT_DELETE,
+    WM_DRAG_ENTER, WM_DRAG_MOTION, WM_DRAG_LEAVE, WM_DROP, WM_DRAG_END,
 };
 
 #define WMOUSE_MOVE  0
@@ -32,7 +33,15 @@ enum wmsg_type {
  * WM_MOUSE: a = x, b = y in window contents coordinates, c = buttons
  * (WMOUSE_WHEEL: the delta), d = kind. WM_FOCUS: a = 1 gained / 0 lost.
  * WM_RESIZED: a = width, b = height (the surface is already resized).
- * WM_TEXT: text is a UTF-8 commit from the text-input protocol. */
+ * WM_TEXT: text is a UTF-8 commit from the text-input protocol.
+ * WM_DRAG_ENTER, WM_DRAG_MOTION: a drag is over the window; a = x, b = y
+ * in contents coordinates, c = the action the compositor chose (GUI_DND_*,
+ * 0 for none), d = the actions the source allows. The window answers with
+ * gui_drag_accept. A change of the action alone repeats WM_DRAG_MOTION.
+ * WM_DRAG_LEAVE: the drag left the window or was cancelled.
+ * WM_DROP: the data of a drop is ready (gui_drop_data); a, b and c as
+ * above. WM_DRAG_END goes to the window that started a drag: a = the
+ * action performed, 0 when the drag was cancelled. */
 struct wmsg {
     uint32_t type;
     int32_t pid;
@@ -102,6 +111,44 @@ void gui_set_min_size(struct gui_window *w, int width, int height);
  * (terminated when it fits), or -1. */
 int gui_clipboard_set(const char *text, int len);
 int gui_clipboard_get(char *buf, int size);
+/* Drag and drop (docs/design/dnd.md). The actions are copy and move. */
+#define GUI_DND_COPY 1
+#define GUI_DND_MOVE 2
+#define GUI_DND_MAX (16 << 20)      /* bytes of one drop; longer data is cut */
+struct gui_drag_item {
+    const char *mime;
+    const void *data;
+    size_t len;
+};
+/* Start a drag from window w while the mouse button pressed in it is
+ * down. The library copies up to eight items, one per MIME type, and
+ * serves them to the target. actions is a mask of GUI_DND_*. icon is the
+ * drag image in device pixels at the window's scale (ARGB), or NULL;
+ * (hot_x, hot_y) is the point of the icon under the cursor in logical
+ * pixels. The window receives no release of that button: WM_DRAG_END
+ * reports the end of the drag. Returns 0 or a negative errno. */
+int gui_drag_start(struct gui_window *w, const struct gui_drag_item *items, int nitems, int actions,
+                   const struct surface *icon, int hot_x, int hot_y);
+/* 1 while a drag started by this process runs. */
+int gui_dragging(void);
+/* 1 when the drag over a window of this process offers the MIME type. */
+int gui_drag_offers(const char *mime);
+/* The answer to WM_DRAG_ENTER and WM_DRAG_MOTION: the type the window
+ * takes on a drop, or NULL to refuse, the actions it supports and the one
+ * it prefers. */
+void gui_drag_accept(const char *mime, int actions, int preferred);
+/* The data of the drag over a window of this process before the drop,
+ * for a decision such as copy or move. The first call for a type starts
+ * reading it and returns NULL; WM_DRAG_MOTION follows when it has arrived,
+ * and later calls return it, terminated by a NUL byte, until the drag
+ * leaves the window. */
+const char *gui_drag_peek(const char *mime, size_t *len);
+/* The data of the last WM_DROP, terminated by a NUL byte that len does
+ * not count, valid until the next drop. */
+const char *gui_drop_data(size_t *len, const char **mime);
+/* The descriptor of drag data being read, or -1, for callers with their
+ * own poll loop; they call gui_next_event(ev, 0) when it is readable. */
+int gui_transfer_fd(void);
 /* Wait for the next event; timeout_ms < 0 blocks. Returns 1 with the
  * event filled in, 0 on timeout, -1 on error. Pending damage is
  * committed before waiting. */

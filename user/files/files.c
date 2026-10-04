@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <gui/app.h>
+#include <gui/fileops.h>
 #include <gui/folderview.h>
 #include <gui/i18n.h>
 #include <gui/mime.h>
@@ -122,6 +123,13 @@ static void fv_changed(struct folderview *v, void *arg)
 static void fv_selected(struct folderview *v, void *arg)
 {
     update_selection_label();
+}
+
+static void fv_dropped(struct folderview *v, const char *dir, int count, int action, void *arg)
+{
+    char n[16];
+    snprintf(n, sizeof n, "%d", count);
+    log_line(action == GUI_DND_MOVE ? "drop moved %s into %s" : "drop copied %s into %s", n, dir);
 }
 
 static const struct folderview_ops files_ops = { fv_open, fv_changed, fv_selected, NULL, NULL };
@@ -291,7 +299,7 @@ static int on_delete(struct widget *w, void *args, void *arg)
     const char *const buttons[] = { _("Delete"), _("Cancel") };
     if (app_dialog(app, _("Delete"), text, buttons, 2) != 0)
         return 1;
-    int r = fs_remove(path);
+    int r = fileops_remove(path);
     if (r < 0) {
         fail(_("Cannot delete"), r);
         return 1;
@@ -330,7 +338,7 @@ static int on_paste(struct widget *w, void *args, void *arg)
         fail(_("Cannot paste"), EEXIST);
         return 1;
     }
-    int r = clip_cut ? fs_move(clip_path, to) : fs_copy(clip_path, to);
+    int r = clip_cut ? fileops_move(clip_path, to) : fileops_copy(clip_path, to);
     if (r < 0) {
         fail(clip_cut ? _("Cannot move") : _("Cannot copy"), r);
         return 1;
@@ -535,6 +543,7 @@ int main(int argc, char **argv)
     fv = folderview_new(bar, split, _("Files"), &files_ops, NULL);
     if (!fv)
         return 1;
+    folderview_on_dropped(fv, fv_dropped);
     widget_connect(folderview_table(fv), "context", on_context, NULL);
     strlcpy(history[0], cwd(), sizeof history[0]);
     hist_len = 1;

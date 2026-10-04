@@ -28,11 +28,32 @@ void data_source_send_dnd_finished(struct wire_resource *data_source)
     wire_resource_post(data_source, 3, args);
 }
 
+void data_source_send_action(struct wire_resource *data_source, uint32_t action)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = action;
+    wire_resource_post(data_source, 4, args);
+}
+
 void data_offer_send_offer(struct wire_resource *data_offer, const char * mime_type)
 {
     union wire_arg args[1] = { { 0 } };
     args[0].s = mime_type;
     wire_resource_post(data_offer, 0, args);
+}
+
+void data_offer_send_source_actions(struct wire_resource *data_offer, uint32_t actions)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = actions;
+    wire_resource_post(data_offer, 1, args);
+}
+
+void data_offer_send_action(struct wire_resource *data_offer, uint32_t action)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = action;
+    wire_resource_post(data_offer, 2, args);
 }
 
 void data_device_send_data_offer(struct wire_resource *data_device, struct wire_resource * id)

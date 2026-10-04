@@ -1,7 +1,8 @@
 /* term: the terminal window. Each tab runs a program (the shell by
  * default) on a pseudo terminal and paints its emulator (vt.c) with the
  * DejaVu Sans Mono outline font. Keys, the mouse selection, the
- * clipboard, the scrollback bar and the context menu are here.
+ * clipboard, the scrollback bar, the context menu and dropped files,
+ * whose paths are typed quoted for the shell, are here.
  *
  *   term [-d directory] [command [argument...]]
  *
@@ -23,6 +24,7 @@
 #include <sys/ipc.h>
 #include <sys/wait.h>
 #include <gui/app.h>
+#include <gui/fileops.h>
 #include <gui/i18n.h>
 #include <gui/utf8.h>
 #include "term.h"
@@ -358,6 +360,8 @@ static int on_press(struct widget *w, void *args, void *arg);
 static int on_motion(struct widget *w, void *args, void *arg);
 static int on_release(struct widget *w, void *args, void *arg);
 static int on_wheel(struct widget *w, void *args, void *arg);
+static int on_drag_motion(struct widget *w, void *args, void *arg);
+static int on_drop(struct widget *w, void *args, void *arg);
 
 static struct tab *open_tab(char *const argv[], const char *dir)
 {
@@ -396,6 +400,8 @@ static struct tab *open_tab(char *const argv[], const char *dir)
     widget_connect(t->canvas, "motion", on_motion, t);
     widget_connect(t->canvas, "release", on_release, t);
     widget_connect(t->canvas, "wheel", on_wheel, t);
+    widget_connect(t->canvas, "drag_motion", on_drag_motion, t);
+    widget_connect(t->canvas, "drop", on_drop, t);
     tab_list[ntabs++] = t;
     t->pid = fork();
     if (t->pid == 0) {
@@ -672,6 +678,56 @@ static int on_wheel(struct widget *w, void *args, void *arg)
 {
     struct tab *t = arg;
     set_view(t, t->view - 3 * ((struct sig_click *)args)->button);
+    return 1;
+}
+
+/* Dropped files: their paths in single quotes, each followed by a space,
+ * as if typed or pasted. */
+static int on_drag_motion(struct widget *w, void *args, void *arg)
+{
+    struct sig_drag *sd = args;
+    if (widget_drag_offers("text/uri-list")) {
+        sd->drag->accept_mime = "text/uri-list";
+        sd->drag->accept_actions = sd->drag->preferred = GUI_DND_COPY;
+    }
+    return 1;
+}
+
+static int on_drop(struct widget *w, void *args, void *arg)
+{
+    struct tab *t = arg;
+    struct sig_drag *sd = args;
+    char **paths;
+    int n = fileops_parse_uri_list(sd->drag->data, sd->drag->len, &paths);
+    size_t size = 1;
+    for (int i = 0; i < n; i++)
+        size += 4 * strlen(paths[i]) + 3;
+    char *text = malloc(size), *o = text;
+    if (text && n > 0) {
+        for (int i = 0; i < n; i++) {
+            *o++ = '\'';
+            for (const char *p = paths[i]; *p; p++) {
+                if (*p == '\'') {
+                    memcpy(o, "'\\''", 4);       /* end the quote, an escaped quote, quote again */
+                    o += 4;
+                } else {
+                    *o++ = *p;
+                }
+            }
+            *o++ = '\'';
+            *o++ = ' ';
+        }
+        set_view(t, 0);
+        if (t->vt->bracketed_paste)
+            write_all(t->master, "\033[200~", 6);
+        write_all(t->master, text, (size_t)(o - text));
+        if (t->vt->bracketed_paste)
+            write_all(t->master, "\033[201~", 6);
+        printf("term: dropped %d paths\n", n);
+        fflush(stdout);
+    }
+    free(text);
+    fileops_free_paths(paths, n);
     return 1;
 }
 

@@ -3,79 +3,95 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: user/desktop/desktop.c:452
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be moved: %s."
+msgstr ""
+
+#: user/desktop/desktop.c:496
+msgid "“%s” cannot be copied: %s."
+msgstr ""
+
+#: user/desktop/desktop.c:498
+msgid "OK"
+msgstr ""
+
+#: user/desktop/desktop.c:499
+msgid "Desktop"
+msgstr ""
+
+#: user/desktop/desktop.c:591
 msgid "Open with"
 msgstr ""
 
-#: user/desktop/desktop.c:452
+#: user/desktop/desktop.c:591
 msgid "Program:"
 msgstr ""
 
-#: user/desktop/desktop.c:466
+#: user/desktop/desktop.c:605
 msgid "Rename"
 msgstr ""
 
-#: user/desktop/desktop.c:466
+#: user/desktop/desktop.c:605
 msgid "New name:"
 msgstr ""
 
-#: user/desktop/desktop.c:480 user/desktop/desktop.c:483 user/desktop/desktop.c:539
+#: user/desktop/desktop.c:619 user/desktop/desktop.c:622 user/desktop/desktop.c:678
 msgid "Delete"
 msgstr ""
 
-#: user/desktop/desktop.c:480
+#: user/desktop/desktop.c:619
 msgid "Cancel"
 msgstr ""
 
-#: user/desktop/desktop.c:482
+#: user/desktop/desktop.c:621
 msgid "Delete \"%s\"?"
 msgstr ""
 
-#: user/desktop/desktop.c:499 user/desktop/desktop.c:500
+#: user/desktop/desktop.c:638 user/desktop/desktop.c:639
 msgid "New folder"
 msgstr ""
 
-#: user/desktop/desktop.c:500 user/desktop/desktop.c:513
+#: user/desktop/desktop.c:639 user/desktop/desktop.c:652
 msgid "Name:"
 msgstr ""
 
-#: user/desktop/desktop.c:512
+#: user/desktop/desktop.c:651
 msgid "New file.txt"
 msgstr ""
 
-#: user/desktop/desktop.c:513
+#: user/desktop/desktop.c:652
 msgid "New text file"
 msgstr ""
 
-#: user/desktop/desktop.c:535
+#: user/desktop/desktop.c:674
 msgid "Open"
 msgstr ""
 
-#: user/desktop/desktop.c:536
+#: user/desktop/desktop.c:675
 msgid "Open with..."
 msgstr ""
 
-#: user/desktop/desktop.c:538
+#: user/desktop/desktop.c:677
 msgid "Rename..."
 msgstr ""
 
-#: user/desktop/desktop.c:543
+#: user/desktop/desktop.c:682
 msgid "New folder..."
 msgstr ""
 
-#: user/desktop/desktop.c:544
+#: user/desktop/desktop.c:683
 msgid "New text file..."
 msgstr ""
 
-#: user/desktop/desktop.c:546
+#: user/desktop/desktop.c:685
 msgid "Refresh"
 msgstr ""
 
-#: user/desktop/desktop.c:548
+#: user/desktop/desktop.c:687
 msgid "Change wallpaper..."
 msgstr ""
 
-#: user/desktop/desktop.c:549
+#: user/desktop/desktop.c:688
 msgid "Settings"
 msgstr ""
 

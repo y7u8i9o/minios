@@ -33,6 +33,15 @@ struct editor {
     long last_click_ms;         /* The time, position and count of the last left click. */
     int click_x, click_y, clicks;
     struct widget *context_menu;
+    /* Drag and drop: a press inside the selection that may become a drag,
+     * the dragged range and text while the drag runs, and the drop caret
+     * while a drag of text is over the editor. */
+    int drag_pending, press_x, press_y;
+    int drag_out, drag_moved_here;
+    int dl0, dc0, dl1, dc1;
+    char *drag_text;
+    int dropping, drop_l, drop_c;
+    int drop_owner;             /* a "drag_motion" handler took the drag */
 };
 
 static inline const struct font *ed_font(const struct editor *ed)

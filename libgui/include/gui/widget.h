@@ -15,6 +15,25 @@ enum event_type {
     EV_MOUSE_DOWN, EV_MOUSE_UP, EV_MOUSE_MOVE, EV_MOUSE_WHEEL,
     EV_KEY_DOWN, EV_KEY_UP, EV_TEXT, EV_PREEDIT, EV_TEXT_DELETE,
     EV_FOCUS_IN, EV_FOCUS_OUT, EV_ENTER, EV_LEAVE,
+    EV_DRAG_MOVE, EV_DRAG_LEAVE, EV_DROP, EV_DRAG_END,
+};
+
+/* Drag and drop (docs/design/dnd.md). EV_DRAG_MOVE: a drag is over the
+ * widget; a widget that takes drops sets accept_mime (one of the offered
+ * types, see widget_drag_offers) and the actions and returns 1, and a
+ * widget that refuses for its ancestors as well returns 1 without them.
+ * EV_DRAG_LEAVE: the drag no longer targets the widget, after a drop as
+ * well. EV_DROP: the data, delivered to the widget that accepted last.
+ * EV_DRAG_END goes to the widget that started a drag, with the action
+ * performed or 0 when the drag was cancelled. */
+struct drag_event {
+    int actions;                /* allowed by the source (GUI_DND_*) */
+    int action;                 /* chosen by the compositor; performed for EV_DROP and EV_DRAG_END */
+    const char *mime;           /* EV_DROP */
+    const char *data;           /* EV_DROP, terminated by a NUL byte */
+    size_t len;
+    const char *accept_mime;    /* the answer to EV_DRAG_MOVE */
+    int accept_actions, preferred;
 };
 
 struct event {
@@ -25,6 +44,7 @@ struct event {
     int code, ch;               /* keys: scancode, translated character */
     const char *text;           /* EV_TEXT: committed UTF-8, event lifetime */
     int before, after;          /* EV_TEXT_DELETE: UTF-8 bytes around cursor */
+    struct drag_event *drag;    /* the drag events */
 };
 
 /* ---- size hints and layout ---- */
@@ -47,6 +67,10 @@ struct sig_select { int index; };
 struct sig_resize { int w, h; };
 struct sig_scroll { int value; };
 struct sig_paint { struct painter *p; };
+/* Drags of the data views: the row id (-1 for the area below the rows),
+ * local coordinates and the drag event. A "drag_motion" handler may set
+ * row to -1 to mark the whole view as the target. */
+struct sig_drag { int row, x, y; struct drag_event *drag; };
 
 /* A handler returns non zero when it consumed the signal. */
 typedef int (*signal_fn)(struct widget *w, void *args, void *arg);
@@ -138,6 +162,15 @@ void widget_relayout(struct widget *w);
 void widget_focus(struct widget *w);
 struct widget *widget_focused(struct widget *window);
 void widget_capture(struct widget *w);          /* mouse events until release */
+/* Drags. A widget starts one when the pointer has moved more than
+ * DRAG_THRESHOLD logical pixels from the press (widget_drag_moved).
+ * widget_drag_start takes the items of gui_drag_start and draws the drag
+ * image from icon and label (both may be NULL); w receives EV_DRAG_END. */
+#define DRAG_THRESHOLD 4
+int widget_drag_moved(int press_x, int press_y, int x, int y);
+int widget_drag_start(struct widget *w, const struct gui_drag_item *items, int nitems, int actions,
+                      const struct image *icon, const char *label);
+int widget_drag_offers(const char *mime);
 void widget_abs(const struct widget *w, int *x, int *y);   /* position in the window */
 /* A focused text widget reports its caret, in its own coordinates, for
  * the candidates of an input method. */
@@ -163,6 +196,8 @@ struct window_state {
     struct widget *tip;         /* the tooltip label, when shown */
     struct widget *tip_owner;
     struct timer *tip_timer;
+    struct widget *drag_source;     /* started the drag that runs */
+    struct widget *drop_target;     /* accepted the drag over the window last */
 };
 struct window_state *window_state_of(struct widget *window);
 /* Route a server message to the window (also used by the tests). */
@@ -188,7 +223,10 @@ extern const struct widget_class textfield_class;  /* "changed", "activate" (sig
 extern const struct widget_class listview_class;   /* "selected", "activate" (sig_select) */
 extern const struct widget_class scrollbar_class;  /* "scrolled" (sig_scroll) */
 extern const struct widget_class scrollarea_class; /* one child, scrolled by two bars */
-extern const struct widget_class canvas_class;     /* "paint" (sig_paint) */
+/* "paint" (sig_paint); "press", "motion", "release", "wheel" (sig_click);
+ * "key", "keyup"; "text", "preedit"; the drag signals of the data views
+ * (sig_drag, row -1). */
+extern const struct widget_class canvas_class;
 extern const struct widget_class separator_class;
 
 struct widget *box_new(struct widget *parent, int vertical);
@@ -255,7 +293,12 @@ struct widget *statusbar_add(struct widget *bar, int stretch);      /* a label *
 
 /* "selected" and "activate" (sig_select: row id); "activate" also on a
  * double click. A right click selects the row and emits "context"
- * (sig_click, local coordinates) for a popup menu. */
+ * (sig_click, local coordinates) for a popup menu. Drags (sig_drag): a
+ * row pressed and moved past DRAG_THRESHOLD emits "drag_begin", whose
+ * handler calls widget_drag_start; "drag_end" follows. A drag over the
+ * view emits "drag_motion", whose handler accepts as for EV_DRAG_MOVE and
+ * returns 1, then "drop" on the accepted row or view, and "drag_leave".
+ * The accepted row, or the whole view, is outlined in the accent colour. */
 extern const struct widget_class treeview_class;
 extern const struct widget_class table_class;
 struct model;

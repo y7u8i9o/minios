@@ -348,6 +348,27 @@ static void set_pointer_focus(struct csurface *s)
     }
 }
 
+/* A drag takes the pointer: the surface under it learns of the drag
+ * through the data device only, and the origin does not receive the
+ * release of the button that started the drag. */
+static int drag_release_owed;
+
+void seat_drag_started(void)
+{
+    set_pointer_focus(NULL);
+    press_focus = NULL;
+}
+
+/* After the drag the pointer enters the surface under it. A drag that
+ * Escape cancelled still has its button pressed; that release ends the
+ * drag for the seat as well and is not delivered. */
+void seat_drag_ended(int button_pressed)
+{
+    drag_release_owed = button_pressed;
+    if (!button_pressed)
+        set_pointer_focus(scene_surface_at(cursor_x, cursor_y));
+}
+
 void seat_pointer_motion(void)
 {
     if (data_dragging()) {
@@ -414,6 +435,13 @@ void seat_pointer_button(int button, int pressed)
     } else {
         if (data_dragging()) {
             data_pointer_release();
+            return;
+        }
+        if (drag_release_owed) {
+            if (!buttons) {
+                drag_release_owed = 0;
+                set_pointer_focus(scene_surface_at(cursor_x, cursor_y));
+            }
             return;
         }
         /* A drag the client asked for still owes it the release. */
@@ -519,6 +547,8 @@ void seat_key(uint32_t key, int pressed)
         if (keyboard_focus && keyboard_focus->client->keyboard)
             send_modifiers(keyboard_focus->client, serial_for(keyboard_focus->client));
         im_modifiers(modifiers, caps_locked ? KEYMAP_MOD_CAPS : 0, group);
+        if (data_dragging())
+            data_drag_modifiers();
         return;
     }
     if (pressed)
@@ -557,6 +587,13 @@ void seat_key(uint32_t key, int pressed)
                 int err = mime_spawn(argv);
                 comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
             }
+            if (nused < 16)
+                used_keys[nused++] = key;
+            return;
+        }
+        /* Escape cancels a drag, and neither of its key events reaches a client. */
+        if (key == KEY_ESC && data_dragging()) {
+            data_drag_cancel();
             if (nused < 16)
                 used_keys[nused++] = key;
             return;
