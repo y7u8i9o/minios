@@ -1,5 +1,6 @@
 /* Queries and portable exports of an aggregated capture. No device access.
  * Store weights as integers on disk so sub-millisecond work is not rounded. */
+#include <json/json.h>
 #include <prof/profile.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,23 +60,6 @@ uint64_t prof_tree_match_weight(const struct prof_tree *t, int root, const char 
     return weight;
 }
 
-static void json_string(FILE *f, const char *s)
-{
-    fputc('"', f);
-    for (const unsigned char *p = (const unsigned char *)(s ? s : ""); *p; p++) {
-        if (*p == '"' || *p == '\\') {
-            fputc('\\', f);
-            fputc(*p, f);
-        } else if (*p < 32 || *p >= 127) {
-            /* ELF symbol names are bytes, not necessarily valid UTF-8. */
-            fprintf(f, "\\u%04x", *p);
-        } else {
-            fputc(*p, f);
-        }
-    }
-    fputc('"', f);
-}
-
 static void write_json(FILE *f, const struct prof_session *s, const struct prof_stats *st)
 {
     static const char *const names[] = {"cpu", "offcpu", "heap", "io"};
@@ -102,7 +86,7 @@ static void write_json(FILE *f, const struct prof_session *s, const struct prof_
         for (int i = 0; i < t->count; i++) {
             const struct prof_node *n = &t->nodes[i];
             fprintf(f, "%s{\"id\":%d,\"parent\":%d,\"name\":", i ? "," : "", i, n->parent);
-            json_string(f, i ? prof_names_get(t->names, n->name) : "all");
+            json_write_string(f, i ? prof_names_get(t->names, n->name) : "all");
             fprintf(f, ",\"kernel\":%s,\"total\":%llu,\"self\":%llu,\"extra\":%llu,\"self_events\":%u}",
                     n->kernel ? "true" : "false", (unsigned long long)n->total,
                     (unsigned long long)n->self, (unsigned long long)n->extra, n->count);
@@ -113,7 +97,7 @@ static void write_json(FILE *f, const struct prof_session *s, const struct prof_
     for (size_t i = 0; i < s->nthreads; i++) {
         const struct prof_thread_stat *t = &s->threads[i];
         fprintf(f, "%s{\"pid\":%u,\"tid\":%u,\"name\":", i ? "," : "", t->pid, t->tid);
-        json_string(f, t->name);
+        json_write_string(f, t->name);
 #define FIELD(key) fprintf(f, ",\"" #key "\":%llu", (unsigned long long)t->key)
         FIELD(on_cpu_ns); FIELD(off_cpu_ns); FIELD(ready_ns); FIELD(samples);
         FIELD(blocks); FIELD(preempts); FIELD(allocs); FIELD(alloc_bytes);

@@ -6,6 +6,10 @@
  * property names are translated through the table of known keys below.
  * The values are technical data and are shown as the kernel writes them.
  * View > Refresh (F5) reads /dev/devices again and selects the same node.
+ *
+ * sysinfo --json writes the tree to standard output as JSON instead of
+ * opening a window: an array of the categories, each node an object with
+ * its path, title, properties and children.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +19,7 @@
 #include <gui/app.h>
 #include <gui/model.h>
 #include <gui/i18n.h>
+#include <json/json.h>
 
 #define MAX_TEXT (2 * 1024 * 1024)
 
@@ -62,9 +67,11 @@ static const struct { const char *key, *label; } labels[] = {
     { "architecture", N_("Architecture") },
     { "asid_bits", N_("ASID bits") },
     { "asset_tag", N_("Asset tag") },
+    { "available", N_("Available") },
     { "bank", N_("Bank") },
     { "base", N_("Base address") },
     { "bits_per_pixel", N_("Bits per pixel") },
+    { "block_size", N_("Block size") },
     { "boot_cpu", N_("Boot CPU") },
     { "boot_disk", N_("Boot disk") },
     { "boot_disk_guid", N_("Boot disk GUID") },
@@ -128,6 +135,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "family", N_("Family") },
     { "feature_words", N_("Feature words") },
     { "features", N_("Features") },
+    { "filesystem", N_("Filesystem") },
     { "firmware_type", N_("Firmware type") },
     { "first_sector", N_("First sector") },
     { "form_factor", N_("Form factor") },
@@ -205,6 +213,8 @@ static const struct { const char *key, *label; } labels[] = {
     { "model", N_("Model") },
     { "model_name", N_("Model name") },
     { "module_size", N_("Module size") },
+    { "mount_point", N_("Mount point") },
+    { "mounts", N_("Mounts") },
     { "mpidr", N_("MPIDR_EL1") },
     { "msi", N_("MSI") },
     { "msi_mapping", N_("MSI mapping") },
@@ -276,6 +286,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "slots", N_("Slots") },
     { "smbios", N_("SMBIOS") },
     { "socket", N_("Socket") },
+    { "source", N_("Source") },
     { "speed", N_("Speed") },
     { "started", N_("Started") },
     { "state", N_("State") },
@@ -293,6 +304,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "uefi_supported", N_("UEFI supported") },
     { "unique_guid", N_("Unique GUID") },
     { "uptime", N_("Uptime") },
+    { "use", N_("Use") },
     { "usb_version", N_("USB version") },
     { "used", N_("Used") },
     { "uuid", N_("UUID") },
@@ -576,8 +588,55 @@ static int on_quit(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-int main(void)
+static void write_node(struct json_writer *w, int n)
 {
+    json_begin_object(w);
+    json_key(w, "path");
+    json_string(w, nodes[n].path);
+    json_key(w, "title");
+    json_string(w, nodes[n].title);
+    json_key(w, "properties");
+    json_begin_object(w);
+    for (int i = 0; i < nodes[n].nprops; i++) {
+        const struct prop *p = &props[nodes[n].first_prop + i];
+        json_key(w, p->key);
+        json_string(w, p->value);
+    }
+    json_end_object(w);
+    json_key(w, "children");
+    json_begin_array(w);
+    for (int i = 0; i < nodes[n].nchildren; i++)
+        write_node(w, nodes[n].children[i]);
+    json_end_array(w);
+    json_end_object(w);
+}
+
+/* sysinfo --json: the whole tree on standard output. */
+static int write_json(void)
+{
+    if (load() < 0) {
+        fprintf(stderr, "sysinfo: /dev/devices cannot be read\n");
+        return 1;
+    }
+    struct json_writer w;
+    json_init(&w, stdout);
+    json_begin_array(&w);
+    for (int i = 0; i < nroots; i++)
+        write_node(&w, roots[i]);
+    json_end_array(&w);
+    int r = json_finish(&w);
+    clear();
+    return r < 0 ? 1 : 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc == 2 && strcmp(argv[1], "--json") == 0)
+        return write_json();
+    if (argc > 1) {
+        fprintf(stderr, "usage: sysinfo [--json]\n");
+        return 2;
+    }
     app = app_create();
     if (!app)
         return 1;

@@ -1105,3 +1105,31 @@ msgstr "Ядра"
 #: user/apps/sysinfo.c:99
 msgid "Cores enabled"
 msgstr "Включённые ядра"
+
+#: user/apps/sysinfo.c
+msgid "Available"
+msgstr "Доступно"
+
+#: user/apps/sysinfo.c
+msgid "Block size"
+msgstr "Размер блока"
+
+#: user/apps/sysinfo.c
+msgid "Filesystem"
+msgstr "Файловая система"
+
+#: user/apps/sysinfo.c
+msgid "Mount point"
+msgstr "Точка монтирования"
+
+#: user/apps/sysinfo.c
+msgid "Mounts"
+msgstr "Монтирований"
+
+#: user/apps/sysinfo.c
+msgid "Source"
+msgstr "Источник"
+
+#: user/apps/sysinfo.c
+msgid "Use"
+msgstr "Использование"

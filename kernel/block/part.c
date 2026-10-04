@@ -18,6 +18,7 @@
 #include <block/part.h>
 #include <lib/guid.h>
 #include <fs/devfs.h>
+#include <fs/vfs.h>
 #include <lib/crc32.h>
 #include <lib/printf.h>
 #include <lib/string.h>
@@ -404,11 +405,84 @@ static const char *type_name(const char *guid)
     return "unknown";
 }
 
+/* The mounted filesystems, copied by vfs_for_each_mount before part_lock is
+ * taken, since a statfs may sleep. */
+#define DESCRIBE_MOUNTS 32
+
+struct mount_copy {
+    char path[64], source[64], type[16];
+    struct fs_space space;
+};
+
+struct mount_list {
+    struct mount_copy *m;
+    unsigned n;
+};
+
+static void copy_mount(const struct mount_info *m, void *arg)
+{
+    struct mount_list *l = arg;
+    if (l->n == DESCRIBE_MOUNTS)
+        return;
+    struct mount_copy *c = &l->m[l->n++];
+    strlcpy(c->path, m->path, sizeof c->path);
+    /* A device source may be written with /dev/ in front. */
+    strlcpy(c->source, strncmp(m->source, "/dev/", 5) == 0 ? m->source + 5 : m->source, sizeof c->source);
+    strlcpy(c->type, m->type, sizeof c->type);
+    c->space = m->space;
+}
+
+/* The filesystem and the mount points of the block device name. */
+static void describe_mounted(struct devinfo *d, const struct mount_list *l, const char *name)
+{
+    char points[128] = "";
+    const char *type = NULL;
+    for (unsigned i = 0; i < l->n; i++) {
+        if (strcmp(l->m[i].source, name) != 0)
+            continue;
+        type = l->m[i].type;
+        devinfo_append(points, sizeof points, ", ", l->m[i].path);
+    }
+    if (type) {
+        devinfo_prop(d, "filesystem", "%s", type);
+        devinfo_prop(d, "mount_point", "%s", points);
+    }
+}
+
+static void describe_filesystems(struct devinfo *d, const struct mount_list *l)
+{
+    devinfo_node(d, "storage/filesystems", "Mounted filesystems");
+    devinfo_prop(d, "mounts", "%u", l->n);
+    for (unsigned i = 0; i < l->n; i++) {
+        const struct mount_copy *m = &l->m[i];
+        char path[48];
+        ksnprintf(path, sizeof path, "storage/filesystems/%u", i);
+        devinfo_node(d, path, "%s: %s%s%s", m->path, m->type, m->source[0] ? " on " : "", m->source);
+        devinfo_prop(d, "mount_point", "%s", m->path);
+        devinfo_prop(d, "filesystem", "%s", m->type);
+        devinfo_prop(d, "source", "%s", m->source[0] ? m->source : "none");
+        if (!m->space.block_size)
+            continue;
+        uint64_t total = m->space.blocks * m->space.block_size;
+        uint64_t free = m->space.free_blocks * m->space.block_size;
+        devinfo_prop(d, "block_size", "%u bytes", m->space.block_size);
+        devinfo_size(d, "size", total);
+        devinfo_size(d, "used", total - free);
+        devinfo_size(d, "available", free);
+        if (total)
+            devinfo_prop(d, "use", "%lu%%", (unsigned long)((total - free) * 100 / total));
+    }
+}
+
 /* The disks and their partitions. Block devices are never removed, so the
  * list from blockdev_list remains valid. The partitions and the tables
  * are read under part_lock, which a rescan takes to change them. */
 void block_describe(struct devinfo *d)
 {
+    struct mount_copy *copies = kzalloc(DESCRIBE_MOUNTS * sizeof *copies);
+    struct mount_list mounts = { copies, 0 };
+    if (copies)
+        vfs_for_each_mount(copy_mount, &mounts);
     struct blockdev *devs[64];
     int n = blockdev_list(devs, 64);
     unsigned disks = 0;
@@ -442,6 +516,7 @@ void block_describe(struct devinfo *d)
             devinfo_prop(d, "partition_table", "none");
         }
         devinfo_prop(d, "boot_disk", "%s", boot ? "yes" : "no");
+        describe_mounted(d, &mounts, disk->name);
         struct list_head *pos;
         list_for_each(pos, &partitions) {
             struct partition *p = list_entry(pos, struct partition, link);
@@ -462,7 +537,10 @@ void block_describe(struct devinfo *d)
             devinfo_size(d, "size", blockdev_size(&p->bdev));
             devinfo_prop(d, "boot_partition", "%s",
                          memcmp(p->uuid, bootinfo.boot_part_guid, 16) == 0 ? "yes" : "no");
+            describe_mounted(d, &mounts, p->bdev.name);
         }
         spin_unlock(&part_lock);
     }
+    describe_filesystems(d, &mounts);
+    kfree(copies);
 }

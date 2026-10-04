@@ -1,0 +1,3 @@
+^\[\{"path":"system","title":"minios [0-9.]+","properties":\{"os_name":"minios",
+"path":"storage/filesystems","title":"Mounted filesystems","properties":\{"mounts":"[0-9]+"\}
+TEST PASS

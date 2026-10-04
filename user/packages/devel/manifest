@@ -9,6 +9,7 @@ depends libfont-dev
 depends libwire-dev
 depends libaudio-dev
 depends libcodec-dev
+depends libjson-dev
 depends libprof-dev
 depends libedit-dev
 depends lua-dev

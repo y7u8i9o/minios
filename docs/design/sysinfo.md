@@ -32,7 +32,7 @@ The writer grows its buffer from 64 KiB to at most 4 MiB.
 | `pci` | `drivers/pci.c` | IDs with vendor and device names, class, revision, command register, BAR addresses and sizes, interrupt pin, capabilities (power management, MSI, MSI-X, PCI Express link), bound driver |
 | `usb` | `drivers/usb/xhci.c`, `usb.c`, `hid.c` | controllers, every port with its status, devices with their strings and descriptors, interfaces with endpoints, drivers and input devices |
 | `input` | `input/core.c` | every input device with bus, IDs, keys, buttons, axes, repeat, readers |
-| `storage` | `block/part.c` | disks and GPT partitions with types, GUIDs and sizes |
+| `storage` | `block/part.c` | disks and GPT partitions with types, GUIDs and sizes, the filesystem and mount points of each, and every mounted filesystem with its space |
 | `display` | `drivers/fbdev.c`, `virtio_gpu.c` | resolution, scale, pixel format, driver, GPU scanout |
 | `audio` | `audio/pcm.c`, `virtio_snd.c` | PCM devices and their streams |
 | `network` | `net/netif.c` | interfaces with driver, MAC, MTU, IPv4 configuration and counters |
@@ -55,6 +55,9 @@ Drivers record their name for the description: `struct pci_dev.driver`,
   maps the range temporarily and unmaps it.
 - `devinfo_append` and `devinfo_format_size` for lists and sizes in values.
 - `usb_speed_name`.
+- `vfs_for_each_mount` walks the mount table with the mounts pinned, for
+  `/dev/mounts` and the storage part. `struct mount` records the source of
+  the mount.
 - `timer_clock_hz`.
 
 ### Locking
@@ -90,6 +93,11 @@ The program prints `sysinfo: N nodes, M properties, K categories` after
 each read and `sysinfo: PATH, N properties` for each selection. The test
 checks these lines.
 
+`sysinfo --json` writes the tree to standard output instead of opening a
+window, with `libjson` (`json.md`). The document is an array of the
+categories. Each node is an object with `path`, `title`, `properties` (an
+object of the keys and their values) and `children` (an array of nodes).
+
 It is in the package `diagnostics`, in the launcher as "System information",
 with the icon `microchip`.
 
@@ -101,6 +109,8 @@ with the icon `microchip`.
   tables. It writes the text to the serial log with `console_write_user`.
 - `devices_acpi` (aarch64, ACPI tables, GICv2, `nec-usb-xhci`): the same
   checks with the ACPI table list.
+- `sysinfo_json`: runs `sysinfo --json` and checks the start of the
+  document and the node `storage/filesystems`.
 - `gui_sysinfo`: starts the program, selects the firmware node with Down,
   refreshes with F5 and closes the window. The `qmp` script of the case
   saves a screenshot as `sysinfo.ppm` in the case directory, with the

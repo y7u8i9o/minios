@@ -284,6 +284,7 @@ library packages and `tools/mkpkg.sh` the `needs` lines of every package:
     libaudio.so 1
     libgui.so 1
     liblua.so 1
+    libjson.so 1
     libprof.so 1
 
 libc has ABI 2 since the profiler client left it for `libprof.so` (P2 of

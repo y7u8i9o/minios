@@ -61,7 +61,8 @@ static void test_devices(void)
     }
     static const char *const required[] = {
         "system", "firmware", "cpu", "cpu/0", "platform", "memory", "memory/map", "memory/map/0", "pci",
-        "pci/00:00.0", "usb", "usb/xhci0", "input", "storage", "storage/vda", "display", "network", "network/lo",
+        "pci/00:00.0", "usb", "usb/xhci0", "input", "storage", "storage/vda", "storage/filesystems", "display",
+        "network", "network/lo",
     };
     for (size_t i = 0; i < sizeof required / sizeof required[0]; i++)
         ktest_assert(has_node(text, required[i]), "no node %s", required[i]);
@@ -69,6 +70,8 @@ static void test_devices(void)
     ktest_assert(strstr(text, "\ndriver\tusb-hid\n"), "no interface bound to usb-hid");
     ktest_assert(strstr(text, "\ndriver\txhci\n"), "no PCI function bound to xhci");
     ktest_assert(strstr(text, "\ndriver\tvirtio-blk\n"), "no PCI function bound to virtio-blk");
+    /* The root is the mfs of vda, and the disk node names its mount point. */
+    ktest_assert(strstr(text, "\nfilesystem\tmfs\nmount_point\t/\n"), "the root mount is not on its disk");
     /* A machine with ACPI tables lists them, with the MADT among them. */
     if (strstr(text, "\nacpi\tyes\n")) {
         ktest_assert(has_node(text, "firmware/acpi"), "ACPI tables, but no node firmware/acpi");

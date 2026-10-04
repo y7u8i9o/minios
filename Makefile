@@ -54,7 +54,7 @@ REPO     := $(TOP)/build/repo/$(ARCH)
 
 export ARCH TOP BUILD KERNEL LIMINE GENSYMS INITRD DISK MKFS FSCK MKFAT MKGPT NETPEER SWAP DATA PKGSIGN PKGHOST MSGFMT READELF PKG_KEY_FILE PKG_PUB REPO
 
-.PHONY: all kernel libc libfont libwire libaudio libcodec libgui libprof user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
+.PHONY: all kernel libc libfont libwire libaudio libcodec libgui libjson libprof user initrd disk image run gdb test test-kvm check clean clean-data tools repo release check-pkg $(DISK)
 
 all: kernel libc user
 
@@ -152,14 +152,17 @@ libgui: libc libcodec libfont libwire
 libedit: libc
 	$(MAKE) -C libedit
 
-libprof: libc
+libjson: libc
+	$(MAKE) -C libjson
+
+libprof: libc libjson
 	$(MAKE) -C libprof
 
 packages: user
 
 .PHONY: packages
 
-user: libc libfont libwire libaudio libcodec libgui libedit libprof $(PKG_PUB) $(MSGFMT)
+user: libc libfont libwire libaudio libcodec libgui libedit libjson libprof $(PKG_PUB) $(MSGFMT)
 	$(MAKE) -C user
 
 # make repo writes the package repository of the bundled applications to
@@ -372,7 +375,7 @@ check-headers:
 	    $$(cd libgui/include && find . -name '*.h' | sed 's|^\./||') font/font.h wire/client.h wire/common.h wire/server.h audio/audio.h \
 	    codec/codec.h prof/profile.h; do \
 	    printf '#include <%s>\nint check_header_%s;\n' "$$h" "$$(echo $$h | tr -c 'A-Za-z0-9_\n' '_')" > $(BUILD)/headers/t.c; \
-	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -Ilibprof/include -fsyntax-only $(BUILD)/headers/t.c \
+	    $(CC) $(UCFLAGS) -Wno-unused-parameter -Ilibc/include -Ikernel/include -Ilibgui/include -Ilibcodec/include -Ilibfont/include -Ilibwire/include -Ilibaudio/include -Ilibedit/include -Ilibjson/include -Ilibprof/include -fsyntax-only $(BUILD)/headers/t.c \
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
 # check-lua compiles the Lua interpreter and the modules in user/lua with

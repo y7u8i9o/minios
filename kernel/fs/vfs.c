@@ -540,7 +540,7 @@ int vfs_lookup_parent(const char *path, struct inode **dir, char *name, size_t n
 
 /* ---- mounts ---- */
 
-long vfs_format_mounts(char *buf, size_t size)
+int vfs_for_each_mount(void (*fn)(const struct mount_info *m, void *arg), void *arg)
 {
     size_t capacity = 0;
     struct list_head *pos;
@@ -564,27 +564,47 @@ long vfs_format_mounts(char *buf, size_t size)
     }
     spin_unlock(&mount_lock);
 
-    size_t used = 0;
-    long error = 0;
     for (size_t i = 0; i < count; i++) {
         struct mount *m = snapshot[i];
-        struct fs_space space = {0};
+        struct mount_info info = { .path = m->path, .source = m->source, .type = m->sb->type->name };
         if (m->sb->ops->statfs)
-            m->sb->ops->statfs(m->sb, &space);
-        if (!error) {
-            int n = ksnprintf(buf + used, size - used, "%s %s %lu %lu %u\n",
-                m->path, m->sb->type->name, space.blocks, space.free_blocks, space.block_size);
-            if (n < 0 || (size_t)n >= size - used)
-                error = -ENOSPC;
-            else
-                used += (size_t)n;
-        }
+            m->sb->ops->statfs(m->sb, &info.space);
+        fn(&info, arg);
         spin_lock(&mount_lock);
         m->readers--;
         spin_unlock(&mount_lock);
     }
     kfree(snapshot);
-    return error ? error : (long)used;
+    return 0;
+}
+
+/* The text of /dev/mounts, written by vfs_for_each_mount. */
+struct mounts_text {
+    char *buf;
+    size_t size, used;
+    long error;
+};
+
+static void format_mount(const struct mount_info *m, void *arg)
+{
+    struct mounts_text *t = arg;
+    if (t->error)
+        return;
+    int n = ksnprintf(t->buf + t->used, t->size - t->used, "%s %s %lu %lu %u\n", m->path, m->type,
+                      m->space.blocks, m->space.free_blocks, m->space.block_size);
+    if (n < 0 || (size_t)n >= t->size - t->used)
+        t->error = -ENOSPC;
+    else
+        t->used += (size_t)n;
+}
+
+long vfs_format_mounts(char *buf, size_t size)
+{
+    struct mounts_text t = { buf, size, 0, 0 };
+    int r = vfs_for_each_mount(format_mount, &t);
+    if (r < 0)
+        return r;
+    return t.error ? t.error : (long)t.used;
 }
 
 int vfs_mount(const char *fstype, const char *source, const char *target, const char *options)
@@ -616,6 +636,7 @@ int vfs_mount(const char *fstype, const char *source, const char *target, const 
         r = -ENOMEM;
         goto out;
     }
+    strlcpy(m->source, source ? source : "", sizeof m->source);
     r = type->mount(type, source, options ? options : "", &m->sb);
     if (r < 0) {
         kfree(m);

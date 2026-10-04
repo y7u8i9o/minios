@@ -1105,3 +1105,31 @@ msgstr "Núcleos"
 #: user/apps/sysinfo.c:99
 msgid "Cores enabled"
 msgstr "Núcleos habilitados"
+
+#: user/apps/sysinfo.c
+msgid "Available"
+msgstr "Disponible"
+
+#: user/apps/sysinfo.c
+msgid "Block size"
+msgstr "Tamaño de bloque"
+
+#: user/apps/sysinfo.c
+msgid "Filesystem"
+msgstr "Sistema de archivos"
+
+#: user/apps/sysinfo.c
+msgid "Mount point"
+msgstr "Punto de montaje"
+
+#: user/apps/sysinfo.c
+msgid "Mounts"
+msgstr "Montajes"
+
+#: user/apps/sysinfo.c
+msgid "Source"
+msgstr "Origen"
+
+#: user/apps/sysinfo.c
+msgid "Use"
+msgstr "Uso"

@@ -1105,3 +1105,31 @@ msgstr "核心"
 #: user/apps/sysinfo.c:99
 msgid "Cores enabled"
 msgstr "已启用核心"
+
+#: user/apps/sysinfo.c
+msgid "Available"
+msgstr "可用"
+
+#: user/apps/sysinfo.c
+msgid "Block size"
+msgstr "块大小"
+
+#: user/apps/sysinfo.c
+msgid "Filesystem"
+msgstr "文件系统"
+
+#: user/apps/sysinfo.c
+msgid "Mount point"
+msgstr "挂载点"
+
+#: user/apps/sysinfo.c
+msgid "Mounts"
+msgstr "挂载数"
+
+#: user/apps/sysinfo.c
+msgid "Source"
+msgstr "来源"
+
+#: user/apps/sysinfo.c
+msgid "Use"
+msgstr "使用率"

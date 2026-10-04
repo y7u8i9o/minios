@@ -1105,3 +1105,31 @@ msgstr "コア"
 #: user/apps/sysinfo.c:99
 msgid "Cores enabled"
 msgstr "有効なコア"
+
+#: user/apps/sysinfo.c
+msgid "Available"
+msgstr "空き容量"
+
+#: user/apps/sysinfo.c
+msgid "Block size"
+msgstr "ブロックサイズ"
+
+#: user/apps/sysinfo.c
+msgid "Filesystem"
+msgstr "ファイルシステム"
+
+#: user/apps/sysinfo.c
+msgid "Mount point"
+msgstr "マウントポイント"
+
+#: user/apps/sysinfo.c
+msgid "Mounts"
+msgstr "マウント数"
+
+#: user/apps/sysinfo.c
+msgid "Source"
+msgstr "ソース"
+
+#: user/apps/sysinfo.c
+msgid "Use"
+msgstr "使用率"

@@ -8,9 +8,9 @@ CRT0   := $(BUILD)/libc/crt0.o
 # The shared libraries (docs/design/dynlink.md). Programs name them with
 # -l and --as-needed retains only the ones a program references. libedit is
 # static, since a single program uses it.
-SHARED := libc libcodec libfont libwire libaudio libgui liblua libprof
+SHARED := libc libcodec libfont libwire libaudio libgui liblua libjson libprof
 SOS    := $(addprefix $(BUILD)/lib/,$(addsuffix .so,$(SHARED)))
-DYNLIBS := -lgui -lcodec -laudio -lwire -lfont -lprof $(LIBEDIT) -lc
+DYNLIBS := -lgui -lcodec -laudio -lwire -lfont -lprof -ljson $(LIBEDIT) -lc
 # Every program is installed without its debugging sections, while the
 # symbol table remains for the profiler.
 INSTALL = $(OBJCOPY) --strip-debug $(OUT)/$*.elf $@
@@ -61,7 +61,7 @@ LUA_CPP  := -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
             -DLUA_CPATH_DEFAULT='"/usr/lib/lua/5.5/?.so"'
 
 UCPP   := -I../libc/include -I../kernel/include -I../libcodec/include -I../libgui/include -I../libfont/include -I../libwire/include -I../libwire/generated -I../libaudio/include
-UCPP   += -I../libedit/include -I../libprof/include
+UCPP   += -I../libedit/include -I../libjson/include -I../libprof/include
 
 ETC    := $(patsubst etc/%,$(ROOT)/etc/%,$(filter-out $(if $(WITH_TESTS),,etc/tests etc/tests/%),$(wildcard etc/* etc/*/*)))
 FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuSansMono.ttf $(ROOT)/usr/share/fonts/lmroman10-regular.otf $(ROOT)/usr/share/fonts/NotoSans-Regular.ttf $(ROOT)/usr/share/fonts/unifont.otf \
@@ -615,10 +615,10 @@ TCC_TEST_NAMES := 00_assignment 01_comment 02_printf 03_struct 04_for 05_array 0
 # library, where a program compiled on minios can use the toolkit, the
 # protocol library, the audio client, the line editor and the Lua core
 # with the same headers and the same objects as the cross build.
-STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit libprof
+STATIC_LIBS := libc libcodec libgui libfont libwire libaudio libedit libjson libprof
 tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)/usr/lib/crt1.o $(ROOT)/usr/lib/crti.o $(ROOT)/usr/lib/crtn.o $(ROOT)/usr/lib/libm.a
 	@mkdir -p $(ROOT)/usr/include/minios $(ROOT)/usr/include/codec $(ROOT)/usr/include/gui $(ROOT)/usr/include/font $(ROOT)/usr/include/wire \
-	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/include/prof $(ROOT)/usr/lib/tcc/include
+	    $(ROOT)/usr/include/audio $(ROOT)/usr/include/lua $(ROOT)/usr/include/json $(ROOT)/usr/include/prof $(ROOT)/usr/lib/tcc/include
 	@cp -Rp ../libc/include/. $(ROOT)/usr/include/
 	@cp -p ../kernel/include/minios/*.h $(ROOT)/usr/include/minios/
 	@cp -p ../kernel/include/syscall_nums.h $(ROOT)/usr/include/
@@ -626,6 +626,7 @@ tcc-support: $(ROOT)/usr/lib/tcc/libtcc1.a $(ROOT)/usr/lib/tcc/runmain.o $(ROOT)
 	@cp -p ../libfont/include/font/*.h $(ROOT)/usr/include/font/
 	@cp -p ../libwire/include/wire/*.h $(ROOT)/usr/include/wire/
 	@cp -p ../libaudio/include/audio/*.h $(ROOT)/usr/include/audio/
+	@cp -p ../libjson/include/json/*.h $(ROOT)/usr/include/json/
 	@cp -p ../libprof/include/prof/*.h $(ROOT)/usr/include/prof/
 	@cp -p ../libcodec/include/codec/*.h $(ROOT)/usr/include/codec/
 	@cp -p ../libedit/include/edit.h $(ROOT)/usr/include/

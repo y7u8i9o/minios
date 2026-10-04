@@ -624,4 +624,8 @@ These locks are in user space and do not add a kernel lock-order level.
   `pcm_device.owner_lock`, `netif_lock`.
 - No new lock for the PCM device table and the SMBIOS and ACPI copies,
   which are written during start-up and read only afterwards.
+- No new lock for the storage part. `vfs_for_each_mount` pins the mounts
+  under `mount_lock` and calls its function with no lock acquired, as
+  `/dev/mounts` did before. The storage part copies the mounts before it
+  takes `part_lock`.
 

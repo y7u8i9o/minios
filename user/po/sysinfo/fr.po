@@ -1105,3 +1105,31 @@ msgstr "Cœurs"
 #: user/apps/sysinfo.c:99
 msgid "Cores enabled"
 msgstr "Cœurs activés"
+
+#: user/apps/sysinfo.c
+msgid "Available"
+msgstr "Disponible"
+
+#: user/apps/sysinfo.c
+msgid "Block size"
+msgstr "Taille de bloc"
+
+#: user/apps/sysinfo.c
+msgid "Filesystem"
+msgstr "Système de fichiers"
+
+#: user/apps/sysinfo.c
+msgid "Mount point"
+msgstr "Point de montage"
+
+#: user/apps/sysinfo.c
+msgid "Mounts"
+msgstr "Montages"
+
+#: user/apps/sysinfo.c
+msgid "Source"
+msgstr "Source"
+
+#: user/apps/sysinfo.c
+msgid "Use"
+msgstr "Utilisation"

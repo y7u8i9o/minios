@@ -164,6 +164,7 @@ struct mount {
     struct superblock *parent_sb;   /* NULL for the root mount */
     uint64_t parent_ino;
     char path[VFS_PATH_MAX];
+    char source[64];              /* the source string of the mount, such as vda3 */
     unsigned readers;             /* statfs snapshots pin this mount */
     struct list_head link;
 };
@@ -203,6 +204,16 @@ int vfs_umount(const char *target);
 int vfs_sync(void);
 /* Text records: path type total-blocks free-blocks block-size. */
 long vfs_format_mounts(char *buf, size_t size);
+/* One mounted filesystem as vfs_for_each_mount reports it. The strings are
+ * valid during the call. */
+struct mount_info {
+    const char *path, *source, *type;
+    struct fs_space space;
+};
+/* Call fn for every mount, in mount order, with its space from statfs.
+ * The mounts are pinned for the walk and fn runs with no lock acquired.
+ * Returns 0, or -ENOMEM when the snapshot cannot be allocated. */
+int vfs_for_each_mount(void (*fn)(const struct mount_info *m, void *arg), void *arg);
 /* Sync everything and unmount every filesystem that is not busy, most
  * recent first. Used by shutdown. Returns the number of busy mounts. */
 int vfs_umount_all(void);
