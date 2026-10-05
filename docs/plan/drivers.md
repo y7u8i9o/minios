@@ -28,6 +28,11 @@ library for Phytium processors. The USB, storage, network and sound drivers
 are therefore written from the public specifications. Code from Linux is
 not used.
 
+Since 2026-10-05 a driver adapts an existing implementation under a
+permissive licence where the adaptation costs less than new code
+(`release-0.5.0.md`). The xHCI driver of D2 and the NVMe driver of D3
+were written from the specifications before that decision.
+
 ## 2. Fixed decisions
 
 - uACPI is a copy in `third_party/uacpi`, fetched by `tools/fetch_uacpi.sh`
@@ -100,11 +105,12 @@ harness files `usb` and `qmp` attach the USB devices and send the input.
 
 Document: `docs/design/usb.md`.
 
-### D3. NVMe
+### D3. NVMe (completed 2026-10-05)
 
 A driver for NVMe controllers (PCI class 0108 interface 02): the admin
 queue, one I/O queue pair per CPU or one in total, identify, namespaces as
 block devices. Boot test with a QEMU `nvme` device as the root disk.
+Done as R2 of `release-0.5.0.md`. Document: `docs/design/nvme.md`.
 
 ### D4. AHCI
 

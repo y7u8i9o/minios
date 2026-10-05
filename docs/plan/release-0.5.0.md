@@ -28,6 +28,14 @@ the packages from the medium. The kernel starts scripts that begin with
 - The drivers follow the fixed decisions of `drivers.md`: generic code
   built on both architectures, MSI-X, else MSI, else polling, and no code
   from Linux.
+- A driver adapts an existing implementation under a permissive licence
+  (MIT, BSD, ISC or BSD-2-Clause-Patent) where the adaptation costs less
+  than new code (decision of the owner, 2026-10-05). The AHCI driver
+  adapts `AtaAtapiPassThru/AhciMode.c` of edk2. The USB mass storage and
+  hub drivers adapt `msc_host.c` and `hub.c` of TinyUSB. The NVMe driver
+  was written from the specification before this decision and remains.
+  Each adapted file names its origin and version and retains its licence
+  notice.
 - Block devices are named as on Linux: `nvme0n1` for a namespace, `sda`
   and further letters for SATA and USB disks, `sr0` and further numbers
   for CD drives. A partition of a disk whose name ends in a digit has a
@@ -71,7 +79,7 @@ run.
 
 Document: `docs/design/process.md`.
 
-### R2. NVMe (D3)
+### R2. NVMe (D3) (completed 2026-10-05)
 
 A driver for NVMe controllers (PCI class 0108 interface 02): controller
 reset and enable, the admin queue, identify of the controller and of the
@@ -79,9 +87,10 @@ active namespaces, one I/O queue pair, and the commands READ, WRITE and
 FLUSH with PRP lists. Each namespace becomes the block device `nvmeCnN`.
 Completions arrive through MSI-X, MSI or polling.
 
-Boot tests: `nvme` boots with the root disk on a QEMU `nvme` device and
-no virtio disk and runs the `blk` checks against it. `nvme_msi` and
-`nvme_polled` repeat the boot without MSI-X and without any interrupt.
+Boot tests: `nvme` runs the `blk` checks against a QEMU `nvme` device
+with MSI-X. `nvme_polled` repeats them with the kernel option
+`nvme=poll`, because the QEMU device always offers MSI-X and has no MSI.
+`nvme_root` boots without `root=` and mounts the root from the NVMe disk.
 The harness file `diskif` selects the controller of the root disk.
 
 Document: `docs/design/nvme.md`.

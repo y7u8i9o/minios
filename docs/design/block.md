@@ -104,8 +104,9 @@ sector, and it reads the backup header from the last sector when the
 primary one fails these checks. Every used entry whose sectors lie in the
 usable range becomes a `struct partition`, a block device named after the
 disk and its entry number, as `vda1`, whose `rw` adds the first sector of
-the partition and calls the driver of the disk. `blockdev.disk` names the
-disk of a partition. `/dev/partitions` lists one line per partition,
+the partition and calls the driver of the disk. A disk whose name ends in
+a digit gives its partitions a `p` before the number, as `nvme0n1p1`.
+`blockdev.disk` names the disk of a partition. `/dev/partitions` lists one line per partition,
 `name disk partuuid typeuuid bytes`, with the GUIDs in lowercase. A
 partition and its disk have separate buffers in the block cache, which
 means a disk is not written as a whole while one of its partitions is
@@ -116,7 +117,8 @@ GUIDs of the disk the kernel was loaded from (`bootinfo.boot_disk_guid`).
 `mount_root` mounts the device that `root=` names, either as
 `root=PARTUUID=GUID` or as a device name, or the initrd for
 `root=initrd`. Without `root=`, it looks on the boot disk, or on `vda`
-when the boot disk is not among the disks, for the partition whose type
+when the boot disk is not among the disks, or on the first disk that is
+not a CD drive (`BLOCKDEV_CDROM`) when there is no `vda`, for the partition whose type
 is the root type of the Discoverable Partitions Specification for the
 machine (`4f68bce3-e8cd-4db1-96e7-fbcaf984b709` on x86_64,
 `b921b045-1df0-41c3-af44-4c6f280d3fae` on aarch64). A `vda` without a
