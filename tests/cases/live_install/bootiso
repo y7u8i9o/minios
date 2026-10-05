@@ -1,0 +1,6 @@
+#!/bin/sh
+# The boot image of the case is the live medium with the answer file of the
+# case, which makes the live system install without questions and power
+# off.
+set -e
+"$TOP/tools/mklive.sh" "$ARCH" "$BUILD/base" "$BUILD/packages" "$OUT" "$CASE/answers.conf"

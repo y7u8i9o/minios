@@ -79,6 +79,12 @@
 #             PEER_LOG and PEER_READY
 #   post      executable run after QEMU exits with DISK, CDIMG, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
+#   bootiso   executable of the case that writes the image to boot
+#             (optional), in place of the image of tools/mkiso.sh, with OUT,
+#             KERNEL, CMDLINE, ARCH, CASE, TOP and BUILD in the environment
+#   bootcd    "usb" attaches the boot image as a USB CD drive (usb-bot with
+#             scsi-cd on an xHCI controller of its own) instead of the CD
+#             drive of the machine (optional)
 #   diskboot  boots the case's disk instead of the CD (optional), whose
 #             boot loader the firmware loads
 #   boot2     boots a second time, without the CD, when the first boot
@@ -202,7 +208,12 @@ if [ -f "$CASE/nic" ]; then
     fi
 fi
 
-"$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || fail "image build"
+if [ -x "$CASE/bootiso" ]; then
+    OUT="$ISO" KERNEL="$KERNEL" CMDLINE="$CMDLINE" ARCH="${ARCH:-x86_64}" CASE="$CASE" TOP="$TOP" BUILD="$(dirname "$BUILD")" \
+        "$CASE/bootiso" > "$OUTDIR/bootiso.log" 2>&1 || fail "boot image, see $OUTDIR/bootiso.log"
+else
+    "$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || fail "image build"
+fi
 rm -f "$SERIAL"
 DISKFLAGS=""
 LATEFLAGS=""
@@ -471,6 +482,10 @@ check_log() {
         done < "$2"
     fi
 }
+if [ -f "$CASE/bootcd" ] && [ "$(cat "$CASE/bootcd")" = usb ]; then
+    BOOTFLAGS="-device qemu-xhci,id=bootusb -drive file=$ISO,if=none,id=cd0,media=cdrom,readonly=on"
+    BOOTFLAGS="$BOOTFLAGS -device usb-bot,id=bootbot,bus=bootusb.0 -device scsi-cd,bus=bootbot.0,drive=cd0,bootindex=0"
+fi
 [ -f "$CASE/diskboot" ] && BOOTFLAGS="$BOOTFLAGS2"
 run_qemu "$SERIAL" "$BOOTFLAGS" "$DISKFLAGS" "$CASE/stop"
 echo "$?" > "$OUTDIR/exitcode"

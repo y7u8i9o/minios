@@ -1,0 +1,2 @@
+root: mfs on nvme0n1p[0-9]
+greeter: display server running

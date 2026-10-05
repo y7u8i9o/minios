@@ -106,10 +106,11 @@ int main(int argc, char **argv)
         inst_log("no installation medium with a repository for this machine was found");
         return 1;
     }
-    inst_log("the installation medium is %s", medium);
+    if (medium[0])
+        inst_log("the installation medium is %s", medium);
     struct stat st;
-    if (!answers && stat(INST_MEDIUM "/" INST_ANSWERS, &st) == 0)
-        answers = INST_MEDIUM "/" INST_ANSWERS;
+    if (!answers && stat(inst_answers_path(), &st) == 0)
+        answers = inst_answers_path();
     if (answers) {
         if (inst_read_answers(answers, &p) < 0) {
             inst_log("%s cannot be read", answers);

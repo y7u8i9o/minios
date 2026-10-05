@@ -1,0 +1,3 @@
+installer: the live medium MINIOS_LIVE is the medium
+installer: running /usr/bin/limine bios-install /dev/nvme0n1 1$
+installer: done

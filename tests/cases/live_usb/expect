@@ -1,0 +1,7 @@
+MINIOS_LIVE, [0-9]+ blocks, Rock Ridge
+root: iso9660 on sr[0-9]
+live: session of live
+live: doas rule permit nopass
+live: launcher Install minios=/bin/doas /usr/bin/installer-gui --session
+TEST PASS
+greeter: display server running, starting the session of live

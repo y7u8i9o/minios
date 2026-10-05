@@ -102,7 +102,7 @@ $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 # the owner of every installed file, and mkfs sets them in the image
 # (docs/design/packages.md).
 PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/net/http.c lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c
-$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h
+$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/disk.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ $(PKGHOST_SRCS)
 
@@ -227,6 +227,15 @@ INSTALLER := $(BUILD)/installer.img
 .PHONY: installer
 installer: base kernel $(PKGHOST) $(PKGSIGN) $(PKG_KEY_FILE) $(PKG_PUB) $(MKFS) $(MKFAT) $(MKGPT) $(LIMINE)
 	tools/mkinstaller.sh $(ARCH) $(BASE) $(BUILD)/packages $(INSTALLER) 1024
+
+# The live medium (R6 of docs/plan/release-0.5.0.md, docs/design/live.md)
+# is a hybrid ISO image for a CD drive or a USB stick. Its ISO 9660 file
+# system is the root of a live desktop with the installer and a signed
+# repository of every package.
+LIVE := $(BUILD)/minios-live-$(shell cat VERSION)-$(ARCH).iso
+.PHONY: live
+live: base kernel $(PKGHOST) $(PKGSIGN) $(PKG_KEY_FILE) $(PKG_PUB) $(LIMINE)
+	tools/mklive.sh $(ARCH) $(BASE) $(BUILD)/packages $(LIVE)
 
 $(DISK): sysimage
 

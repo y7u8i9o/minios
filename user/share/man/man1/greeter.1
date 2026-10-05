@@ -4,7 +4,7 @@ NAME
     greeter - the graphical login
 
 SYNOPSIS
-    greeter [-s]
+    greeter [-s] [-a NAME]
 
 DESCRIPTION
     init runs the greeter as root on the console, as the console entry of
@@ -38,6 +38,12 @@ DESCRIPTION
 
     -s mirrors the log of the display server to the console, as the boot
     tests read it.
+
+    -a NAME starts the session of the account NAME once without the login
+    window and without a password. The login window follows when that
+    session ends. The live medium uses it for its account live:
+
+        console greeter greeter -a live
 
 SEE ALSO
     login(1), su(1), sudo(1), initctl(1), init.conf(5), index(7)

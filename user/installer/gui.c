@@ -1,13 +1,23 @@
 /* installer-gui: the graphical front end of the installer
- * (docs/design/installer.md, P10 of docs/plan/packaging.md). It is the
- * console program of the installer environment. It starts X12 and shows
- * one page with the choices of struct plan in its own X12 session. The
- * Install button runs the back end of backend.c in a child process, so
- * that the window continues to react, and a timer shows the lines that the
- * back end appends to the log. When the child has ended, the page offers
- * the Power off button. The text installer takes its place when the medium
- * contains an answer file, when there is no display, when X12 does not
- * answer, and when the window is closed. */
+ * (docs/design/installer.md, P10 of docs/plan/packaging.md).
+ *
+ *     installer-gui
+ *     installer-gui --session
+ *
+ * Without arguments it is the console program of the installer
+ * environment. It starts X12 and shows one page with the choices of
+ * struct plan in its own X12 session. The Install button runs the back end
+ * of backend.c in a child process, so that the window continues to react,
+ * and a timer shows the lines that the back end appends to the log. When
+ * the child has ended, the page offers the Power off button. The text
+ * installer takes its place when the medium contains an answer file, when
+ * there is no display, when X12 does not answer, and when the window is
+ * closed.
+ *
+ * With --session it opens its window in the running session of the live
+ * medium (docs/design/live.md), where the live account starts it through
+ * doas. The page then offers Restart after an installation, and closing the
+ * window ends the program and returns to the session. */
 #include "installer.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +44,7 @@ static char disks[MAX_DISKS][16];
 static char keymaps[MAX_KEYMAPS][32];
 static int ndisks, nkeymaps;
 static pid_t child, server = -1;
+static int session;                     /* --session: the window of a live session */
 static struct timer *poll_timer;
 static long log_offset;
 
@@ -113,7 +124,8 @@ static void poll_child(void *arg)
     app_timer_remove(app, poll_timer);
     poll_timer = NULL;
     if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
-        set_status("The installation is complete. Remove the medium and power off.");
+        set_status(session ? "The installation is complete. Restart to boot the installed system."
+                           : "The installation is complete. Remove the medium and power off.");
         widget_set_enabled(poweroff_button, 1);
     } else {
         set_status("The installation failed. The lines above and " INST_LOG " give the reason.");
@@ -181,7 +193,7 @@ static int poweroff_clicked(struct widget *w, void *args, void *arg)
     (void)w; (void)args; (void)arg;
     pid_t pid = fork();
     if (pid == 0) {
-        execl("/usr/bin/initctl", "initctl", "poweroff", (char *)NULL);
+        execl("/usr/bin/initctl", "initctl", session ? "reboot" : "poweroff", (char *)NULL);
         _exit(127);
     }
     return 1;
@@ -230,20 +242,23 @@ static int start_server(void)
     return -1;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    session = argc == 2 && strcmp(argv[1], "--session") == 0;
     mkdir(INST_DIR, 0755);
     if (inst_find_medium(medium, sizeof medium) < 0) {
         inst_log("no installation medium with a repository for this machine was found");
         return 1;
     }
     struct stat st;
-    if (stat(INST_MEDIUM "/" INST_ANSWERS, &st) == 0)
-        fall_back(NULL);        /* the text installer installs without questions */
-    if (access("/dev/fb0", R_OK | W_OK) < 0)
-        fall_back("there is no display");
-    if (start_server() < 0)
-        fall_back("the display server does not answer");
+    if (!session) {
+        if (stat(inst_answers_path(), &st) == 0)
+            fall_back(NULL);    /* the text installer installs without questions */
+        if (access("/dev/fb0", R_OK | W_OK) < 0)
+            fall_back("there is no display");
+        if (start_server() < 0)
+            fall_back("the display server does not answer");
+    }
     long mib[MAX_DISKS];
     ndisks = inst_list_disks(medium, disks, mib, MAX_DISKS);
     load_keymaps();
@@ -251,9 +266,15 @@ int main(void)
     inst_defaults(&def);
 
     app = app_create();
+    if (!app && session) {
+        fprintf(stderr, "installer-gui: the window cannot connect to the display server\n");
+        return 1;
+    }
     if (!app)
         fall_back("the window cannot connect to the display server");
     win = app_window(app, 560, 640, "Install minios");
+    if (!win && session)
+        return 1;
     if (!win)
         fall_back("the window cannot be created");
     widget_connect(win, "close", close_clicked, NULL);
@@ -290,7 +311,7 @@ int main(void)
     struct widget *buttons = box_new(box, 0);
     install_button = button_new(buttons, "Install");
     widget_connect(install_button, "clicked", install_clicked, NULL);
-    poweroff_button = button_new(buttons, "Power off");
+    poweroff_button = button_new(buttons, session ? "Restart" : "Power off");
     widget_set_enabled(poweroff_button, 0);
     widget_connect(poweroff_button, "clicked", poweroff_clicked, NULL);
 
@@ -308,5 +329,7 @@ int main(void)
         int status;
         waitpid(child, &status, 0);
     }
+    if (session)
+        return 0;
     fall_back("the graphical installer has ended");
 }

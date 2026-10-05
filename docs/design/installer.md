@@ -42,11 +42,15 @@ and runs from the initrd.
 `installer-gui`) and their shared declarations (`installer.h`). The installer
 first finds the medium: the partition of the type repo (`6d696e69-6f73-4e70-6b67-7265706f7369`, a type of minios) that contains an mfs
 with `repo/MACHINE/index`, which it mounts on `/run/installer/medium` and
-whose disk it excludes from the targets. When the medium contains
+whose disk it excludes from the targets. On the live medium
+(`live.md`), the root itself is the medium: `/etc/live-medium` names the
+volume identifier of the image, the repository is `/repo/MACHINE`, and a
+disk with that ISO 9660 volume identifier is excluded. When the medium contains
 `installer.conf`, or `-a FILE` names an answer file, it installs without
 questions and powers off afterwards, also after a failure, since init
 would start it again with the same answers. Otherwise it lists the disks
-with their sizes and asks for the disk, the package group, further
+with their sizes (the disks `vdX`, `sdX` and `nvmeCnN` of nonzero size)
+and asks for the disk, the package group, further
 packages, the language, the keyboard layout, the time zone, the size of
 swap, the password of root, the first account with its full name and
 password, shows the disk to be erased and installs after the word `yes`.
@@ -97,7 +101,9 @@ administrator would run:
 6. `lang` and `keymap` go into `/etc/desktop.conf`, and `/etc/localtime`
    becomes a link to the zone. `pkg bootconfig` writes the boot loader
    configuration again, and on x86_64 `limine bios-install` writes the
-   BIOS stage to the disk.
+   BIOS stage to the disk. The GPT index of the BIOS boot partition comes
+   from `disk_partition_index` of `minios/disk.h`, which removes the `p`
+   of a partition name such as `nvme0n1p1`.
 7. The log of the installer, `/run/installer/installer.log`, is copied to
    `/var/log/installer.log` of the target, and both partitions are
    unmounted.
@@ -130,6 +136,11 @@ enabled after a successful installation, and Install again after a
 failure. The window cannot be closed while the child runs. Closing it
 otherwise, or the end of X12, stops X12 and starts the text installer on
 the console.
+
+With `--session` the graphical front end runs in the session of the live
+medium (`live.md`). It neither starts X12 nor replaces itself with the
+text installer, it offers Restart in place of Power off, and closing the
+window ends the program.
 
 ## Changes elsewhere
 

@@ -1,0 +1,5 @@
+#!/bin/sh
+# The target of the installation is an empty disk of 2 GiB.
+set -e
+rm -f "$OUT"
+dd if=/dev/zero of="$OUT" bs=1048576 count=0 seek=2048 2> /dev/null

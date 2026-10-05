@@ -1,0 +1,27 @@
+#!/bin/sh
+# Checks on the host the disk that the installer wrote from the live
+# medium: the account of the answer file, the log of the installer with
+# the live medium, the boot loader configuration and the file system.
+set -e
+WORK="$(dirname "$DISK")/post"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+"$MKGPT" -l "$DISK" > "$WORK/table"
+extract() {
+    first=$(grep " $1 " "$WORK/table" | cut -d' ' -f3)
+    last=$(grep " $1 " "$WORK/table" | cut -d' ' -f4)
+    dd if="$DISK" of="$2" bs=512 skip="$first" count=$((last - first + 1)) 2>/dev/null
+}
+extract esp "$WORK/esp.img"
+extract "root-$ARCH" "$WORK/root.img"
+fail() { echo "post: $1"; exit 1; }
+cat_root() { "$MKFS" --cat "$WORK/root.img" "$1"; }
+cat_root /home/.local/etc/passwd | grep -q '^anna:x:1000:1000:Anna Example:/home/anna:/bin/sh$' || fail "passwd"
+cat_root /home/.local/etc/passwd | grep -q '^live:' && fail "the account live of the medium remains"
+cat_root /var/log/installer.log | grep -q 'the live medium MINIOS_LIVE is the medium' || fail "installer.log"
+cat_root /etc/fstab | grep -q 'seed=/usr/share/live' && fail "the fstab of the live medium was installed"
+root_uuid=$(grep " root-$ARCH " "$WORK/table" | cut -d' ' -f5)
+"$MKFAT" --cat "$WORK/esp.img" /limine.conf | grep -q "cmdline: root=PARTUUID=$root_uuid" || fail "limine.conf"
+"$FSCK" "$WORK/root.img" > "$WORK/fsck.log" || { cat "$WORK/fsck.log"; fail "fsck"; }
+rm -rf "$WORK"
+echo "post: the installed system matches the answers"

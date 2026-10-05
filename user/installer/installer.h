@@ -32,10 +32,21 @@ struct plan {
 /* Messages go to the console and to the log, which the installation
  * copies to /var/log/installer.log of the target. */
 void inst_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-/* Find the installation medium, a partition of the type repo with an mfs
- * that contains repo/MACHINE/index, and mount it on
- * INST_MEDIUM. Returns 0 with the name of its disk in disk, or -1. */
+/* Find the installation medium: the root of the live medium, when
+ * /etc/live-medium exists and /repo/MACHINE/index is there, else a
+ * partition of the type repo with an mfs that contains repo/MACHINE/index,
+ * which is mounted on INST_MEDIUM. Returns 0 with the name of its disk in
+ * disk, "" for a live medium in a CD drive, or -1. */
 int inst_find_medium(char *disk, size_t size);
+/* The directory of the medium that inst_find_medium found: / or
+ * INST_MEDIUM. */
+const char *inst_medium_dir(void);
+/* True for the name of a whole disk: vdX, sdX or nvmeCnN, not a
+ * partition and not a CD drive. */
+int inst_is_disk_name(const char *name);
+/* The path of the answer file INST_ANSWERS on the medium, after
+ * inst_find_medium. */
+const char *inst_answers_path(void);
 /* Read the answer file at path into p. Returns 0 or -1. */
 int inst_read_answers(const char *path, struct plan *p);
 /* Fill the defaults of the choices that are empty. */

@@ -1,0 +1,5 @@
+#!/bin/sh
+# The boot image of the case is the live medium (tools/mklive.sh) with the
+# kernel of the test build and the test on its command line.
+set -e
+"$TOP/tools/mklive.sh" "$ARCH" "$BUILD/base" "$BUILD/packages" "$OUT"

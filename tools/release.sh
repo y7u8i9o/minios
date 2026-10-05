@@ -21,14 +21,15 @@
 # of user/share/sounds are not part of the release.
 #
 # For every architecture the pipeline runs the boot cases with the default
-# build options and builds the installation medium and the package
-# repository with the debugging options off. The release check installs
+# build options and builds the installation medium, the live medium
+# (docs/design/live.md) and the package repository with the debugging
+# options off. The release check installs
 # the system. A copy of the medium that contains an answer file installs
 # onto an empty disk, and the installed disk then boots until the login
 # appears. The results are copied into minios-VERSION in the output
 # directory and consist, for each architecture, of the compressed
-# installation medium without the answer file, the repository the medium
-# contains and the kernel, and once of the public key, BUILDINFO and
+# installation medium without the answer file, the live medium, the
+# repository the medium contains and the kernel, and once of the public key, BUILDINFO and
 # SHA256SUMS. The host checks of make check run once before the first
 # architecture. The package repositories are signed with RELEASE_KEY,
 # $HOME/.config/minios/release-signing.key by default, which the build
@@ -171,7 +172,7 @@ for a in $ARCHES; do
     step "$a release build"
     # shellcheck disable=SC2086
     make -C "$WT" ARCH="$a" BUILD="$RB" REPO="$RB/repo" DATA="$RB/data.img" PKG_KEY="$KEY" \
-        $CONFIG PKG_SERIAL=0 -j"$JOBS" installer repo > "$LOGS/build-$a.log" 2>&1 ||
+        $CONFIG PKG_SERIAL=0 -j"$JOBS" installer live repo > "$LOGS/build-$a.log" 2>&1 ||
         fail "the $a release build" "$LOGS/build-$a.log"
 
     # The repository of the medium is the one the release publishes, the
@@ -265,6 +266,7 @@ mkdir -p "$DIST"
 for a in $ARCHES; do
     RB="$WT/build/release-$a"
     gzip -9 -c "$RB/installer.img" > "$DIST/minios-$VERSION-$a-installer.img.gz"
+    cp "$RB/minios-live-$VERSION-$a.iso" "$DIST/minios-$VERSION-$a-live.iso"
     cp "$RB/kernel.elf" "$DIST/minios-$VERSION-$a-kernel.elf"
     tar -C "$RB/medium-repo" -czf "$DIST/minios-$VERSION-$a-repo.tar.gz" .
     cp "$RB/pkg/signing.pub" "$DIST/minios-$VERSION-signing.pub"

@@ -318,7 +318,10 @@ the account in a process group of its own, with `initgroups`, `setgid`,
 `setuid`, its home and a fresh environment. After the panel's Log out it
 ends that process group, clears both session uids and shows the window
 again. Running the window as a separate process gives every login a new
-connection to X12 and a new toolkit state.
+connection to X12 and a new toolkit state. `greeter -a NAME` starts the session of the
+account `NAME` once without the login window and without a password, and
+the login window follows when that session ends. The live medium uses the
+option for its account `live` (`live.md`).
 
 The panel shows the account name at the end of the Log out row of its
 menu. The settings program gained the Users page (`user/settings/users.c`).

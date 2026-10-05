@@ -1,6 +1,6 @@
 /* greeter: the graphical login (docs/design/users.md).
  *
- *     greeter [-s]
+ *     greeter [-s] [-a NAME]
  *     greeter --window
  *
  * init runs the greeter as root on the console in place of login. It
@@ -12,7 +12,10 @@
  * "startgui -s" as the account in a process group of its own. When the
  * session ends with the panel's Log out, the greeter ends the rest of the
  * group, withdraws the admission and shows the window again. -s mirrors
- * the log of X12 to the console, as the boot tests read it.
+ * the log of X12 to the console, as the boot tests read it. -a NAME starts
+ * the session of the account NAME once without the login window, which
+ * the live medium uses for its account live (docs/design/live.md). The
+ * login window follows when that session ends.
  *
  * Without a display, or when X12 or the login window cannot start, the
  * greeter runs the console login in its place, which lets the default
@@ -676,7 +679,17 @@ int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--window") == 0)
         return window_main();
-    server_log_serial = argc == 2 && strcmp(argv[1], "-s") == 0;
+    const char *autologin = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-s") == 0) {
+            server_log_serial = 1;
+        } else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
+            autologin = argv[++i];
+        } else {
+            fprintf(stderr, "usage: greeter [-s] [-a NAME]\n");
+            return 2;
+        }
+    }
     if (geteuid() != 0) {
         fprintf(stderr, "greeter: must be run by root\n");
         return 1;
@@ -686,6 +699,12 @@ int main(int argc, char **argv)
         fall_back("no display");
     if (start_server() < 0)
         fall_back("the display server does not answer");
+    if (autologin && getpwnam(autologin)) {
+        fprintf(stderr, "greeter: display server running, starting the session of %s\n", autologin);
+        run_session(autologin);
+    } else if (autologin) {
+        fprintf(stderr, "greeter: there is no account %s\n", autologin);
+    }
     fprintf(stderr, "greeter: display server running, showing the login window\n");
     int failures = 0;
     for (;;) {

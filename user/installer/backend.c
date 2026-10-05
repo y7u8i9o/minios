@@ -24,6 +24,7 @@
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <minios/account.h>
+#include <minios/disk.h>
 
 #define TYPE_ESP   "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 #define TYPE_SWAP  "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
@@ -129,8 +130,105 @@ static int mkdirs(const char *path)
     return mkdir(buf, 0755) < 0 && errno != EEXIST ? -1 : 0;
 }
 
+/* The directory of the medium: INST_MEDIUM, where the repo partition of an
+ * installation medium is mounted, or / on the live medium. */
+static char medium_dir[64] = INST_MEDIUM;
+
+const char *inst_medium_dir(void)
+{
+    return medium_dir;
+}
+
+const char *inst_answers_path(void)
+{
+    static char path[96];
+    snprintf(path, sizeof path, "%s/" INST_ANSWERS, strcmp(medium_dir, "/") == 0 ? "" : medium_dir);
+    return path;
+}
+
+int inst_is_disk_name(const char *name)
+{
+    size_t n = strlen(name), i;
+    if ((strncmp(name, "vd", 2) == 0 || strncmp(name, "sd", 2) == 0) && n > 2) {
+        for (i = 2; i < n && name[i] >= 'a' && name[i] <= 'z'; i++)
+            ;
+        return i == n;
+    }
+    if (strncmp(name, "nvme", 4) != 0)
+        return 0;
+    i = 4;
+    size_t start = i;
+    while (i < n && isdigit((unsigned char)name[i]))
+        i++;
+    if (i == start || i >= n || name[i++] != 'n')
+        return 0;
+    start = i;
+    while (i < n && isdigit((unsigned char)name[i]))
+        i++;
+    return i > start && i == n;
+}
+
+/* The volume identifier of an ISO 9660 image at the start of the device
+ * path, without its trailing blanks, or "" when the device has none. */
+static void iso_volume_id(const char *path, char *id, size_t size)
+{
+    unsigned char vd[2048];
+    id[0] = '\0';
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return;
+    ssize_t n = lseek(fd, 16 * 2048, SEEK_SET) == 16 * 2048 ? read(fd, vd, sizeof vd) : -1;
+    close(fd);
+    if (n != (ssize_t)sizeof vd || vd[0] != 1 || memcmp(vd + 1, "CD001", 5) != 0)
+        return;
+    size_t len = 32;
+    while (len && (vd[40 + len - 1] == ' ' || vd[40 + len - 1] == '\0'))
+        len--;
+    snprintf(id, size, "%.*s", (int)len, (const char *)vd + 40);
+}
+
+/* The live medium (docs/design/live.md): the root file system is the
+ * medium, and /etc/live-medium names the volume identifier of its image.
+ * The medium has no disk when it is in a CD drive. When the image was
+ * written to a disk, such as a USB stick, that disk is the medium. */
+static int find_live_medium(char *disk, size_t size)
+{
+    char index[256], volid[64] = "";
+    snprintf(index, sizeof index, "/repo/%s/index", machine());
+    FILE *f = fopen("/etc/live-medium", "r");
+    if (!f)
+        return -1;
+    if (!fgets(volid, sizeof volid, f))
+        volid[0] = '\0';
+    fclose(f);
+    volid[strcspn(volid, "\n")] = '\0';
+    if (!volid[0] || access(index, R_OK) != 0)
+        return -1;
+    snprintf(medium_dir, sizeof medium_dir, "/");
+    disk[0] = '\0';
+    DIR *d = opendir("/dev");
+    struct dirent *e;
+    while (d && (e = readdir(d))) {
+        if (!inst_is_disk_name(e->d_name))
+            continue;
+        char path[32], id[40];
+        snprintf(path, sizeof path, "/dev/%s", e->d_name);
+        iso_volume_id(path, id, sizeof id);
+        if (strcmp(id, volid) == 0) {
+            snprintf(disk, size, "%s", e->d_name);
+            break;
+        }
+    }
+    if (d)
+        closedir(d);
+    inst_log("the live medium %s%s%s is the medium", volid, disk[0] ? " on " : "", disk);
+    return 0;
+}
+
 int inst_find_medium(char *disk, size_t size)
 {
+    if (find_live_medium(disk, size) == 0)
+        return 0;
     FILE *f = fopen("/dev/partitions", "r");
     char line[256], n[32], d[32], u[64], t[64], index[256], mounted[256];
     int found = 0;
@@ -242,13 +340,13 @@ int inst_list_disks(const char *medium_disk, char (*names)[16], long *mib, int m
     struct dirent *e;
     int n = 0;
     while (d && n < max && (e = readdir(d))) {
-        /* A disk is vd and one letter, its partitions add digits. */
-        if (strncmp(e->d_name, "vd", 2) != 0 || strlen(e->d_name) != 3 || strcmp(e->d_name, medium_disk) == 0)
+        /* Disks only: no partitions and no CD drives. */
+        if (!inst_is_disk_name(e->d_name) || strcmp(e->d_name, medium_disk) == 0)
             continue;
         char path[32];
         struct stat st;
         snprintf(path, sizeof path, "/dev/%s", e->d_name);
-        if (stat(path, &st) < 0 || !S_ISBLK(st.st_mode))
+        if (stat(path, &st) < 0 || !S_ISBLK(st.st_mode) || st.st_size == 0)
             continue;
         snprintf(names[n], 16, "%s", e->d_name);
         mib[n] = (long)(st.st_size >> 20);
@@ -264,11 +362,11 @@ int inst_check(const struct plan *p, const char *medium_disk)
     char path[32];
     struct stat st;
     snprintf(path, sizeof path, "/dev/%s", p->disk);
-    if (!p->disk[0] || stat(path, &st) < 0 || !S_ISBLK(st.st_mode)) {
+    if (!p->disk[0] || !inst_is_disk_name(p->disk) || stat(path, &st) < 0 || !S_ISBLK(st.st_mode)) {
         inst_log("the target disk %s does not exist", p->disk[0] ? p->disk : "(none)");
         return -1;
     }
-    if (strcmp(p->disk, medium_disk) == 0) {
+    if (medium_disk[0] && strcmp(p->disk, medium_disk) == 0) {
         inst_log("%s is the installation medium", p->disk);
         return -1;
     }
@@ -478,7 +576,8 @@ int inst_install(const struct plan *p)
     }
 
     inst_log("installing %s %s", p->group, p->packages);
-    snprintf(line, sizeof line, "repo medium file://" INST_MEDIUM "/repo/$arch\n");
+    snprintf(line, sizeof line, "repo medium file://%s/repo/$arch\n",
+             strcmp(medium_dir, "/") == 0 ? "" : medium_dir);
     if (write_text(INST_DIR "/pkg.conf", line) < 0)
         return -1;
     const char *update[] = { "/usr/bin/pkg", "--root", INST_TARGET, "--config", INST_DIR "/pkg.conf", "--keys",
@@ -520,7 +619,8 @@ int inst_install(const struct plan *p)
         return -1;
     if (x86) {
         char index[8];
-        snprintf(index, sizeof index, "%s", bios + strlen(p->disk));
+        const char *n = disk_partition_index(bios, p->disk);
+        snprintf(index, sizeof index, "%s", n ? n : "");
         const char *limine[] = { "/usr/bin/limine", "bios-install", dev, index, NULL };
         if (run(limine) < 0)
             return -1;

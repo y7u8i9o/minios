@@ -164,24 +164,26 @@ Document: `docs/design/iso9660.md`.
 
 `make live` builds `build/minios-live-VERSION-ARCH.iso` with
 `tools/mklive.sh`. The image contains Limine, the kernel and the live
-tree: the group `desktop-system`, the installer and the signed repository
-of the release at `/repo/ARCH`. The kernel command line is
-`root=LABEL=MINIOS_LIVE swap=off live`. The init of the live tree mounts
-tmpfs instances on the writable directories and seeds `/home` from the
-skeleton. The account `live` has no password and belongs to `wheel`. The
-greeter takes `-a NAME`, which starts the session of that account without
-a login, and the live init uses it. The desktop of the live session shows
-the launcher "Install minios", which starts the graphical installer
-through `doas`. The installer finds the repository below the root of a
-live medium, excludes the disk of the medium from the targets, and
-returns to the session after an installation. `make release` builds the
+tree: the groups `desktop-system`, `installer` and `disktools`, and the
+signed repository of the release at `/repo/ARCH`. The kernel command line
+is `root=LABEL=MINIOS_LIVE swap=off`. `/etc/fstab` of the live tree mounts
+tmpfs instances on the writable directories and seeds `/home` from a copy
+of the skeleton with the account `live`. The account `live` has no
+password and belongs to `wheel`. The greeter takes `-a NAME`, which starts
+the session of that account without a login, and the live init uses it.
+The launcher menu of the live session contains the entry "Install
+minios", which starts the graphical installer through `doas` without a
+password. The installer finds the repository below the root of a live
+medium, excludes the disk of the medium from the targets, and returns to
+the session after an installation. An answer file given to `mklive.sh`
+makes the medium install without questions. `make release` builds the
 live medium as well.
 
 Boot tests: `live` boots the image as a CD on the AHCI controller of q35
 and reaches the desktop of `live`. `live_install` installs onto an NVMe
-disk with an answer file from the live session and boots the installed
-disk. `live_usb` boots the image on aarch64 as a USB CD drive and reaches
-the desktop.
+disk with an answer file on the live medium and boots the installed disk.
+`live_usb` boots the image on aarch64 as a USB CD drive and reaches the
+desktop.
 
 Document: `docs/design/live.md`, with changes to
 `docs/design/installer.md`.

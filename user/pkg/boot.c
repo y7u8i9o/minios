@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <minios/disk.h>
 
 /* The first line of a file of the root, without its newline, or "". */
 static void first_line(const char *rel, char *out, size_t size)
@@ -121,9 +122,9 @@ static int partition_of(const char *guid, char *disk, size_t dsize, char *index,
     int found = 0;
     while (f && !found && fgets(line, sizeof line, f))
         if (sscanf(line, "%31s %31s %63s", name, d, uuid) == 3 && strcasecmp(uuid, guid) == 0 &&
-            strncmp(name, d, strlen(d)) == 0) {
+            disk_partition_index(name, d)) {
             snprintf(disk, dsize, "%s", d);
-            snprintf(index, isize, "%s", name + strlen(d));
+            snprintf(index, isize, "%s", disk_partition_index(name, d));
             found = 1;
         }
     if (f)
