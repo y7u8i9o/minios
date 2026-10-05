@@ -47,6 +47,7 @@ usr/bin/pthreadtest
 usr/bin/ptytest
 usr/bin/rlimittest
 usr/bin/shutdowntest
+usr/bin/shebangtest
 usr/bin/sigtest
 usr/bin/smptest
 usr/bin/sockapi

@@ -82,6 +82,39 @@ into kernel memory, builds a new address space, swaps it in, destroys the
 old one and rewrites the syscall frame to enter the new program; it is
 refused with `-EBUSY` while other threads exist.
 
+## Scripts (R1 of release 0.5.0)
+
+`load_image` serves `execve` and the programs that the kernel starts
+itself. A file whose first two bytes are `#!` is a script.
+`read_file_image` stops after the first 256 bytes of a script, since only
+the first line is needed. `script_parse` reads that line. The interpreter
+ends at the first blank or tab. The rest of the line without its
+surrounding blanks is one optional argument, which may contain blanks. A
+carriage return at the end of the line is removed. A line without a
+newline within 256 bytes, in a file that continues, fails with `ENOEXEC`,
+because its interpreter could be cut. A line without an interpreter also
+fails with `ENOEXEC`, and libc then runs the file with `/bin/sh`.
+
+`load_script` builds the argument vector of the interpreter: the
+interpreter path, the optional argument, the path of the script as the
+caller gave it, and the arguments after the first of the caller's vector.
+It then loads the interpreter through `load_image_depth`. An interpreter
+may itself be a script. The fifth script of a chain fails with `ELOOP`.
+The set user id and set group id bits of a script have no effect. The
+bits of the interpreter apply, as for any program. The process takes the
+name of the script. A script needs execute permission like a program
+(`EACCES`), and a missing interpreter fails with `ENOENT`.
+
+The case `shebang` runs `/bin/shebangtest`, which starts its scripts
+through `execve` directly. The program is also the interpreter of these
+scripts: started with an argument that begins with `--echo`, it writes its
+arguments and its effective user id to a file. The test compares the
+vectors of an argument with inner blanks, an empty caller vector, a
+carriage return, a file without a newline, a nested interpreter and a
+chain of four scripts, and checks the errors of a fifth script, a missing
+interpreter, an empty and an overlong line and a script without execute
+permission. A set user id script that uid 1000 runs reports uid 1000.
+
 ## User threads
 
 `thread_create(entry, arg, stack_top)` starts a thread in the calling

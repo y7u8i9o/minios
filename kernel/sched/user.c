@@ -47,8 +47,15 @@ struct exec_ids {
     uint32_t uid, gid;
 };
 
+/* The longest #! line of a script, its newline included (R1). */
+#define SCRIPT_LINE_MAX 256
+/* The deepest chain of scripts whose interpreter is a script again. */
+#define SCRIPT_DEPTH_MAX 4
+
 /* Read a whole regular file with execute permission into kernel memory,
- * and report its set id bits when ids is not NULL. */
+ * and report its set id bits when ids is not NULL. The read of a script
+ * ends after its first SCRIPT_LINE_MAX bytes, since only its #! line is
+ * needed. */
 static int read_file_image(const char *path, void **image_out, size_t *size_out, struct exec_ids *ids)
 {
     struct file *f;
@@ -71,12 +78,20 @@ static int read_file_image(const char *path, void **image_out, size_t *size_out,
     }
     size_t got = 0;
     while (got < size) {
-        long n = file_read(f, (char *)image + got, size - got);
+        size_t want = size - got;
+        if (got < SCRIPT_LINE_MAX && want > SCRIPT_LINE_MAX - got)
+            want = SCRIPT_LINE_MAX - got;
+        long n = file_read(f, (char *)image + got, want);
         if (n <= 0) {
             r = n < 0 ? (int)n : -EIO;
             break;
         }
         got += (size_t)n;
+        if (got >= 2 && got <= SCRIPT_LINE_MAX && memcmp(image, "#!", 2) == 0 &&
+            (got == SCRIPT_LINE_MAX || got == size)) {
+            size = got;
+            break;
+        }
     }
     file_put(f);
     if (r < 0) {
@@ -88,12 +103,118 @@ static int read_file_image(const char *path, void **image_out, size_t *size_out,
     return 0;
 }
 
+/* The #! line of a script: the interpreter and the optional argument,
+ * both pointers into line. */
+struct script_line {
+    char line[SCRIPT_LINE_MAX + 1];
+    char *interp;
+    char *arg;
+};
+
+static bool script_blank(char c)
+{
+    return c == ' ' || c == '\t';
+}
+
+/* Parse the #! line at the start of image. The interpreter ends at the
+ * first blank. The rest of the line without its surrounding blanks is the
+ * argument, which may contain blanks. A line that does not end within
+ * SCRIPT_LINE_MAX bytes before the end of the file is refused, since its
+ * interpreter could be cut. */
+static int script_parse(const char *image, size_t size, struct script_line *s)
+{
+    size_t len = 2;
+    while (len < size && image[len] != '\n')
+        len++;
+    if (len == SCRIPT_LINE_MAX)
+        return -ENOEXEC;
+    memcpy(s->line, image, len);
+    s->line[len] = '\0';
+    char *p = s->line + 2;
+    while (script_blank(*p))
+        p++;
+    if (!*p)
+        return -ENOEXEC;
+    s->interp = p;
+    while (*p && !script_blank(*p))
+        p++;
+    s->arg = NULL;
+    if (*p) {
+        *p++ = '\0';
+        while (script_blank(*p))
+            p++;
+        char *end = p + strlen(p);
+        while (end > p && (script_blank(end[-1]) || end[-1] == '\r'))
+            *--end = '\0';
+        if (*p)
+            s->arg = p;
+    } else if (p > s->interp && p[-1] == '\r') {
+        p[-1] = '\0';
+    }
+    return 0;
+}
+
+static int load_image_depth(const char *path, char *const argv[], char *const envp[],
+                            struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
+                            char *interp, size_t interp_len, struct exec_ids *ids, int depth);
+
+/* Start the interpreter of a script with the argument vector interpreter,
+ * optional argument, path of the script, and the original arguments after
+ * the first. The set id bits of the script are ignored. The bits of the
+ * interpreter apply, as for any program. */
+static int load_script(const char *path, const char *image, size_t size, char *const argv[], char *const envp[],
+                       struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
+                       char *interp, size_t interp_len, struct exec_ids *ids, int depth)
+{
+    if (depth >= SCRIPT_DEPTH_MAX)
+        return -ELOOP;
+    struct script_line *s = kmalloc(sizeof *s);
+    if (!s)
+        return -ENOMEM;
+    int r = script_parse(image, size, s);
+    if (r < 0) {
+        kfree(s);
+        return r;
+    }
+    int argc = 0;
+    while (argv && argv[argc])
+        argc++;
+    char **nargv = kmalloc((size_t)(argc + 4) * sizeof *nargv);
+    if (!nargv) {
+        kfree(s);
+        return -ENOMEM;
+    }
+    int n = 0;
+    nargv[n++] = s->interp;
+    if (s->arg)
+        nargv[n++] = s->arg;
+    nargv[n++] = (char *)path;
+    for (int i = 1; i < argc; i++)
+        nargv[n++] = argv[i];
+    nargv[n] = NULL;
+    if (ids)
+        *ids = (struct exec_ids){ 0 };
+    r = load_image_depth(s->interp, nargv, envp, vm_out, entry, rsp, stack_size, interp, interp_len, ids,
+                         depth + 1);
+    kfree(nargv);
+    kfree(s);
+    return r;
+}
+
 /* Build the address space of a program: its segments, the loader named by
  * PT_INTERP at USER_INTERP_BASE when the program is dynamically linked, and
- * the initial stack. The thread starts in the loader in that case. */
+ * the initial stack. The thread starts in the loader in that case. A file
+ * that begins with #! is a script, whose interpreter is loaded instead. */
 static int load_image(const char *path, char *const argv[], char *const envp[],
                       struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
                       char *interp, size_t interp_len, struct exec_ids *ids)
+{
+    return load_image_depth(path, argv, envp, vm_out, entry, rsp, stack_size, interp, interp_len, ids, 0);
+}
+
+static int load_image_depth(const char *path, char *const argv[], char *const envp[],
+                            struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
+                            char *interp, size_t interp_len, struct exec_ids *ids, int depth)
 {
     void *image;
     size_t size;
@@ -101,6 +222,12 @@ static int load_image(const char *path, char *const argv[], char *const envp[],
     int r = read_file_image(path, &image, &size, ids ? ids : &none);
     if (r < 0)
         return r;
+    if (size >= 2 && memcmp(image, "#!", 2) == 0) {
+        r = load_script(path, image, size, argv, envp, vm_out, entry, rsp, stack_size, interp, interp_len, ids,
+                        depth);
+        kfree(image);
+        return r;
+    }
     struct vmspace *vm = vmspace_create();
     if (!vm) {
         kfree(image);

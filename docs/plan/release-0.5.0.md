@@ -49,7 +49,7 @@ the packages from the medium. The kernel starts scripts that begin with
 
 ## 3. Milestones
 
-### R1. `#!` scripts
+### R1. `#!` scripts (completed 2026-10-05)
 
 `execve` of a file whose first two bytes are `#!` runs the interpreter
 that the first line names. The rest of the line after the interpreter,
@@ -65,7 +65,9 @@ for files without `#!` (`ENOEXEC`).
 Boot test: `shebang` runs scripts through `execve` directly: an argument
 on the `#!` line, arguments after the script, a nested interpreter, a too
 deep nesting, a missing interpreter, a line without a newline, a script
-without execute permission and a set user id script.
+without execute permission and a set user id script. A carriage return
+at the end of the line is removed, which lets scripts with DOS line ends
+run.
 
 Document: `docs/design/process.md`.
 
