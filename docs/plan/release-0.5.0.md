@@ -160,7 +160,7 @@ read only file system now fails with `EROFS`.
 
 Document: `docs/design/iso9660.md`.
 
-### R6. The live medium
+### R6. The live medium (completed 2026-10-05)
 
 `make live` builds `build/minios-live-VERSION-ARCH.iso` with
 `tools/mklive.sh`. The image contains Limine, the kernel and the live
