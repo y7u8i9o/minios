@@ -40,6 +40,17 @@ one a Linux host builds. Before this was stated, a Linux build produced
 libraries whose RELRO range ended in the padding of their last page, which
 `/lib/ld.so` refused (`dynlink.md`).
 
+A GCC for a Linux target also searches the glibc headers in `/usr/include`
+and defines `__linux__`. The native GCC of a Linux host and a Linux cross
+compiler such as `aarch64-linux-gnu-gcc` (`CROSS=aarch64-linux-gnu-`) are
+such compilers. Ported programs test `__linux__` and include Linux headers,
+which sudo does for `<sys/prctl.h>`. `toolchain.mk` detects a Linux target
+from `$(CC) -dumpmachine`. User code is then compiled with `-nostdinc`,
+GCC's own freestanding headers and the Linux and Unix macros undefined,
+which gives the headers and macros of an `$(ARCH)-elf` compiler. On a
+Linux host the host utilities also receive `-D_DEFAULT_SOURCE`, because
+glibc declares `d_type`, the `DT_*` constants and `strlcat` only with it.
+
 Build time options are make variables with defaults in `toolchain.mk` and are
 passed to the compiler as `CONFIG_*` macros, as the following table lists.
 

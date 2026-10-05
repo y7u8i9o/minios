@@ -37,6 +37,12 @@ HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 ifeq ($(HOST_OS),Darwin)
 HOSTCPPFLAGS += -D_DARWIN_C_SOURCE
 endif
+# glibc declares d_type, the DT_* constants and strlcat only with
+# _DEFAULT_SOURCE when _POSIX_C_SOURCE is defined. The host build of pkg
+# uses them.
+ifeq ($(HOST_OS),Linux)
+HOSTCPPFLAGS += -D_DEFAULT_SOURCE
+endif
 QEMU    ?= qemu-system-$(ARCH)
 XORRISO ?= xorriso
 
@@ -122,6 +128,16 @@ UCFLAGS  := -std=c17 -ffreestanding -fno-stack-protector -fPIC $(PREFIX_MAP) \
             $(UARCHFLAGS) -ftree-vectorize -fvect-cost-model=dynamic \
             -O2 -g -fno-omit-frame-pointer \
             -fno-builtin -Wall -Wextra -Wno-unused-parameter
+# The GCC of a Linux distribution searches the glibc headers in
+# /usr/include and defines __linux__. The $(ARCH)-elf GCC does neither.
+# Ported programs such as sudo test __linux__ and then include Linux
+# headers. A GCC for a Linux target, such as the host GCC or
+# aarch64-linux-gnu-gcc, therefore searches only its own freestanding
+# headers, and the Linux and Unix macros are undefined.
+ifneq ($(findstring linux,$(shell $(CC) -dumpmachine)),)
+UCFLAGS  += -nostdinc -isystem $(shell $(CC) -print-file-name=include) \
+            -U__linux__ -U__linux -Ulinux -U__gnu_linux__ -U__unix__ -U__unix -Uunix
+endif
 UASFLAGS := -g $(PREFIX_MAP)
 # ULDFLAGS links a program at address 0x400000 against the shared
 # libraries in build/lib. All relocations are applied when the program is
