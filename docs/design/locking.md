@@ -314,7 +314,9 @@ the framebuffer state and framebuffer write.
   the next. A failed attempt ends the function with the result "not quiet".
   The function therefore never waits for a run-queue lock and adds no
   lock-order level. `waitq_next_user_deadline` takes `timed_lock` alone and
-  reads the deadline of each timed waiter. The block layer counts its
+  reads the deadline of each timed waiter. `timerfd_next_deadline` takes
+  `timerfd_lock` alone and reads the next expiry of each armed timer. The
+  block layer counts its
   transfers with atomic operations, without a lock (`blockdev_busy`).
 - The local slab fast path takes `slab_magazine.lock`. Refill and drain then
   take the corresponding `kmem_cache.lock`; allocation of backing pages may

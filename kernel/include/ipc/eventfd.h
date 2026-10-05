@@ -9,3 +9,6 @@ int timerfd_settime(struct file *f, uint64_t initial_ms, uint64_t interval_ms);
 int timerfd_gettime(struct file *f, uint64_t *remaining_ms, uint64_t *interval_ms);
 /* Called from the timer interrupt on the boot CPU every tick. */
 void timerfd_tick(void);
+/* The next expiry of an armed timerfd in milliseconds of timer_ms, or
+ * UINT64_MAX without an armed timer. Only user processes create timerfds. */
+uint64_t timerfd_next_deadline(void);

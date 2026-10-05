@@ -47,6 +47,20 @@ void timerfd_tick(void)
     spin_unlock(&timerfd_lock);
 }
 
+uint64_t timerfd_next_deadline(void)
+{
+    uint64_t first = UINT64_MAX;
+    spin_lock(&timerfd_lock);
+    struct list_head *pos;
+    list_for_each(pos, &timers) {
+        struct timerfd *t = list_entry(pos, struct timerfd, link);
+        if (t->armed && t->next_ms < first)
+            first = t->next_ms;
+    }
+    spin_unlock(&timerfd_lock);
+    return first;
+}
+
 static long timerfd_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
     struct timerfd *t = f->priv;

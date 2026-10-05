@@ -13,6 +13,7 @@
 #include <sched/sched.h>
 #include <sched/wait.h>
 #include <block/blockdev.h>
+#include <ipc/eventfd.h>
 
 extern const struct ktest __ktests_start[], __ktests_end[];
 
@@ -107,7 +108,9 @@ void ktest_wait_idle(int max_ms)
     struct thread *self = cpu_current()->current;
     uint64_t start = timer_ms();
     /* A timer of a user process that expires inside the wait counts as
-     * pending work, because the fixed wait would have seen its effect. */
+     * pending work, because the fixed wait would have seen its effect. An
+     * armed timerfd counts as well. X12 composes the damage of its clients
+     * only when its frame timerfd expires. */
     uint64_t until_ms = start + (uint64_t)max_ms;
     uint64_t until_tick = timer_ticks() + (uint64_t)max_ms * TIMER_HZ / 1000;
     int quiet = 0;
@@ -115,7 +118,7 @@ void ktest_wait_idle(int max_ms)
     idle_limit_ms += (uint64_t)max_ms;
     for (;;) {
         bool now_quiet = sched_quiet(self, until_tick) && !blockdev_busy() &&
-                         waitq_next_user_deadline() > until_ms;
+                         waitq_next_user_deadline() > until_ms && timerfd_next_deadline() > until_ms;
         quiet = now_quiet ? quiet + 1 : 0;
         uint64_t waited = timer_ms() - start;
         if (quiet == QUIET_SAMPLES || waited >= (uint64_t)max_ms) {

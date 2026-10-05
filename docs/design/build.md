@@ -329,8 +329,14 @@ The kernel tests wait for the processing of their input with
 returns when four samples 2 ms apart find no thread except the test thread
 running or ready on any CPU (`sched_quiet`), no block transfer
 (`blockdev_busy`) and no timer of a user process that expires within
-`max_ms` (the sleepers and `waitq_next_user_deadline`). `max_ms` is the
-fixed wait of the earlier test, so a test never waits longer than before.
+`max_ms` (the sleepers, `waitq_next_user_deadline` and, since the
+release of 0.6.0, the armed timers of `timerfd_next_deadline`). `max_ms`
+is the fixed wait of the earlier test, so a test never waits longer than
+before. X12 composes the damage of its clients only when its frame timer,
+a timerfd of 16 ms, expires. Before the timerfds counted, a wait could end
+between a commit of a client and the next frame, and the aarch64 case `gui`
+then read the screen before the window "beta" appeared on it. A wait while
+X12 runs therefore lasts `max_ms`, as the fixed wait did.
 A wait whose length matters to the test, a wait inside a polling loop and
 the waits of the timer, scheduler, network and audio tests remain
 `sleep_ms`. `ktest_pass` prints the number of waits, the waits that reached
