@@ -25,6 +25,7 @@
 #include <block/part.h>
 #include <lib/guid.h>
 #include <fs/fat.h>
+#include <fs/iso9660.h>
 #include <fs/tmpfs.h>
 #include <fs/devfs.h>
 #include <mm/tlb.h>
@@ -81,9 +82,34 @@ static struct blockdev *first_disk(void)
     return NULL;
 }
 
+/* The device with the ISO 9660 volume identifier label: CD drives first,
+ * then the other disks, which includes an ISO image written to a USB
+ * stick. A USB device may register late, and the search is repeated for
+ * up to ten seconds. */
+static struct blockdev *find_label(const char *label)
+{
+    uint64_t end = timer_ms() + 10000;
+    for (;;) {
+        struct blockdev *devs[32];
+        int n = blockdev_list(devs, 32);
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < n; i++) {
+                bool cd = devs[i]->flags & BLOCKDEV_CDROM;
+                if (devs[i]->disk || cd != (pass == 0) || !blockdev_size(devs[i]))
+                    continue;
+                if (iso9660_has_label(devs[i], label))
+                    return devs[i];
+            }
+        if (timer_ms() >= end)
+            return NULL;
+        sleep_ms(250);
+    }
+}
+
 /* Mount the root (docs/design/block.md). root=initrd selects the initrd,
- * root=PARTUUID=GUID the partition with that unique GUID and root=NAME the
- * device NAME. Without root=, the kernel mounts the root partition of the
+ * root=PARTUUID=GUID the partition with that unique GUID, root=LABEL=ID
+ * the ISO 9660 file system with the volume identifier ID
+ * (docs/design/iso9660.md) and root=NAME the device NAME. Without root=, the kernel mounts the root partition of the
  * Discoverable Partitions Specification on the disk it was loaded from,
  * else on vda, else on the first disk that is not a CD drive, and such a
  * disk without a partition table as a whole. The initrd is the root when
@@ -91,9 +117,18 @@ static struct blockdev *first_disk(void)
 static void mount_root(void)
 {
     char root[64], source[BLOCKDEV_NAME_LEN] = "";
+    const char *fstype = "mfs";
     bool given = cmdline_lookup("root", root, sizeof root);
     bool force_initrd = given && strcmp(root, "initrd") == 0;
-    if (given && !force_initrd) {
+    if (given && strncmp(root, "LABEL=", 6) == 0) {
+        struct blockdev *dev = find_label(root + 6);
+        if (dev) {
+            strlcpy(source, dev->name, sizeof source);
+            fstype = "iso9660";
+        } else {
+            klog_error("root=%s: no ISO 9660 volume with this identifier", root);
+        }
+    } else if (given && !force_initrd) {
         uint8_t uuid[16];
         struct partition *p = NULL;
         if (strncmp(root, "PARTUUID=", 9) != 0)
@@ -114,9 +149,9 @@ static void mount_root(void)
         else if (disk && !part_has_table(disk))
             strlcpy(source, disk->name, sizeof source);
     }
-    int r = source[0] ? vfs_mount("mfs", source, "/", NULL) : -ENODEV;
+    int r = source[0] ? vfs_mount(fstype, source, "/", NULL) : -ENODEV;
     if (r == 0) {
-        klog_info("root: mfs on %s", source);
+        klog_info("root: %s on %s", fstype, source);
         part_retain(blockdev_find(source));
     }
     if (r < 0) {
@@ -222,6 +257,7 @@ __noreturn void kmain(void)
     devfs_init();
     mfs_init();
     fat_init();
+    iso9660_init();
     tmpfs_init();
     arch_init_interrupts();
     tlb_init();

@@ -923,6 +923,13 @@ static int open_common(const char *path, int flags, uint32_t mode, bool exec, st
         r = -ENOTDIR;
         goto fail;
     }
+    /* A regular file that its file system cannot write, on the initrd or
+     * an ISO 9660 volume, is on a read only file system, and POSIX asks
+     * open to report that (R5). */
+    if (acc != O_RDONLY && S_ISREG(ino->mode) && (!ino->fops || !ino->fops->write)) {
+        r = -EROFS;
+        goto fail;
+    }
     if ((flags & O_TRUNC) && S_ISREG(ino->mode)) {
         if (!ino->ops || !ino->ops->truncate) {
             r = -EROFS;

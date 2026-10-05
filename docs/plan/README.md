@@ -27,7 +27,7 @@ its boot tests pass.
 | `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, su, doas and sudo, milestones U0 to U5 | completed 2026-10-03 |
 | `packaging.md` | The base system as packages, partitions, the installer as the release image and offline updates, milestones P0 to P10 | P0 to P10 completed 2026-10-04 |
 | `drivers.md` | ACPI tables on aarch64, xHCI with USB HID, NVMe, AHCI, USB mass storage, e1000e, HD Audio, milestones D1 to D7 | D1 and D2 completed 2026-10-04, D3 to D5 completed 2026-10-05, D6 and D7 planned |
-| `release-0.5.0.md` | Release 0.5.0: `#!` scripts, NVMe, AHCI with CD drives, USB mass storage and hubs, ISO 9660, the live medium, milestones R1 to R6 | R1 to R4 completed 2026-10-05 |
+| `release-0.5.0.md` | Release 0.5.0: `#!` scripts, NVMe, AHCI with CD drives, USB mass storage and hubs, ISO 9660, the live medium, milestones R1 to R6 | R1 to R5 completed 2026-10-05 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 
 Work proceeds one milestone at a time in the order of its plan. A later

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Write an image of the root tree of the build with the volume identifier
+# MINIOS_ROOT, which the kernel mounts as the root through root=LABEL=.
+set -e
+"$XORRISO" -outdev "$OUT" -volid MINIOS_ROOT -rockridge on -joliet off -map "$BUILD/initrd_root" / \
+    -chown_r 0 / -- -chgrp_r 0 / --

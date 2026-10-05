@@ -1,6 +1,7 @@
 #define KLOG_SUBSYS "fat"
 /* FAT12/16/32 (M36): mounting, inodes and the superblock operations. */
 #include "fat.h"
+#include <lib/date.h>
 #include <fs/fat.h>
 #include <drivers/rtc.h>
 #include <drivers/timer.h>
@@ -34,39 +35,13 @@ int fat_rw(struct fat_sb *m, uint64_t off, void *buf, size_t n, bool write)
     return 0;
 }
 
-/* Days since the epoch for a calendar date (proleptic Gregorian). */
-static int64_t days_from_civil(int y, int m, int d)
-{
-    y -= m <= 2;
-    int64_t era = (y >= 0 ? y : y - 399) / 400;
-    int64_t yoe = y - era * 400;
-    int64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
-    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + doe - 719468;
-}
-
 /* Seconds since the epoch from a directory entry's date and time. */
 static int64_t fat_epoch(uint16_t date, uint16_t time)
 {
     int y = 1980 + (date >> 9), mo = (date >> 5) & 15, d = date & 31;
     if (mo < 1 || mo > 12 || d < 1)
         return 0;
-    return days_from_civil(y, mo, d) * 86400 + (time >> 11) * 3600 + ((time >> 5) & 63) * 60 + (time & 31) * 2;
-}
-
-/* Calendar date from days since the epoch (proleptic Gregorian). */
-static void civil_from_days(int64_t z, int *y, int *mo, int *d)
-{
-    z += 719468;
-    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
-    int64_t doe = z - era * 146097;
-    int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    int64_t yy = yoe + era * 400;
-    int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    int64_t mp = (5 * doy + 2) / 153;
-    *d = (int)(doy - (153 * mp + 2) / 5 + 1);
-    *mo = (int)(mp < 10 ? mp + 3 : mp - 9);
-    *y = (int)(yy + (*mo <= 2));
+    return date_days_from_civil(y, mo, d) * 86400 + (time >> 11) * 3600 + ((time >> 5) & 63) * 60 + (time & 31) * 2;
 }
 
 /* Directory entry date and time from nanoseconds since the epoch, clamped
@@ -75,7 +50,7 @@ void fat_time_of(int64_t ns, uint16_t *date, uint16_t *time)
 {
     uint64_t secs = ns < 0 ? 0 : (uint64_t)ns / 1000000000;
     int y, mo, d;
-    civil_from_days((int64_t)(secs / 86400), &y, &mo, &d);
+    date_civil_from_days((int64_t)(secs / 86400), &y, &mo, &d);
     uint64_t sod = secs % 86400;
     if (y < 1980)
         y = 1980;

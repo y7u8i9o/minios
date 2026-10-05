@@ -1,0 +1,4 @@
+MINIOS_ROOT, [0-9]+ blocks, Rock Ridge
+root: iso9660 on sr[0-9]
+process cat .* dynamic, /lib/ld.so
+TEST PASS

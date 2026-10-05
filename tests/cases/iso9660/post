@@ -1,0 +1,9 @@
+#!/bin/sh
+# Compare the manifest that isotest printed with the manifest of the tree.
+grep '^ISO:' "$SERIAL" | tr -d '\r' > "$CDIMG.got"
+if ! diff -u "$CDIMG.manifest" "$CDIMG.got" > "$CDIMG.diff"; then
+    echo "manifest differs:"
+    head -40 "$CDIMG.diff"
+    exit 1
+fi
+echo "manifest of $(wc -l < "$CDIMG.got") entries matches"

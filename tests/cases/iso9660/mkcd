@@ -1,0 +1,14 @@
+#!/bin/sh
+# Write the Rock Ridge image of the case iso9660 to OUT and the manifest
+# of its tree to OUT.manifest (tests/iso_manifest.py). The tree contains
+# long names, names with blanks and UTF-8, modes with set id bits, owners
+# set by xorriso, symbolic links with short and long targets, a file of
+# 3 MiB, a directory of 300 files and a directory 12 levels deep, which
+# xorriso relocates with Rock Ridge CL and RE entries because of
+# deep_paths_off.
+set -e
+TREE="$OUT.tree"
+python3 "$TOP/tests/iso_tree.py" rock "$TREE"
+"$XORRISO" -outdev "$OUT" -volid ISOTEST -rockridge on -joliet off -compliance deep_paths_off \
+    -map "$TREE" / -chown_r 0 / -- -chgrp_r 0 / -- -chown 1000 /owned -- -chgrp 100 /owned -- -commit
+python3 "$TOP/tests/iso_tree.py" manifest "$TREE" "$OUT.manifest" owned=1000:100

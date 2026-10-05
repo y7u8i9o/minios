@@ -6,6 +6,7 @@
  * PC). */
 #define KLOG_SUBSYS "rtc"
 #include <drivers/rtc.h>
+#include <lib/date.h>
 #include <drivers/timer.h>
 #include <arch/platform.h>
 #include <klog.h>
@@ -14,20 +15,9 @@
  * aligned word, so no lock. */
 static uint64_t epoch_offset_ns;
 
-/* Days from 1970-01-01 to the given date, proleptic Gregorian calendar. */
-static int64_t days_from_civil(int64_t y, int m, int d)
-{
-    y -= m <= 2;
-    int64_t era = (y >= 0 ? y : y - 399) / 400;
-    int64_t yoe = y - era * 400;
-    int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + doe - 719468;
-}
-
 int64_t rtc_epoch_seconds(int year, int month, int day, int hour, int minute, int second)
 {
-    return days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second;
+    return date_days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second;
 }
 
 void rtc_init(void)

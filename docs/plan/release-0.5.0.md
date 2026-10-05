@@ -139,15 +139,15 @@ bulk-only specification (`docs/design/usb.md`).
 
 Document: `docs/design/usb.md`.
 
-### R5. ISO 9660
+### R5. ISO 9660 (completed 2026-10-05)
 
 A read only file system `iso9660`: the primary volume descriptor,
 directories with multi-extent files, and the Rock Ridge entries `PX`,
 `PN`, `SL`, `NM`, `TF`, `CE`, `RE` and `CL` with `ST` and `ER` from SUSP.
 Inode numbers are the byte positions of the directory records. Without
 Rock Ridge, names are lowercase and lose their version suffix, and modes
-are 0555 for directories and 0444 for files. `mount -t iso9660 DEVICE
-DIR` mounts a device. `root=LABEL=ID` mounts as the root the first block
+are 0555 for directories and 0444 for files. `mount iso9660 DEVICE DIR`
+mounts a device. `root=LABEL=ID` mounts as the root the first block
 device that contains an ISO 9660 file system with the volume identifier
 `ID`, CD drives first, and waits up to ten seconds for USB devices.
 
@@ -155,7 +155,8 @@ Boot tests: `iso9660` mounts an image with Rock Ridge from a CD drive and
 compares a tree of names, long names, modes, owners, symbolic links,
 times, a large file and a deep directory with the host tree. `iso9660_plain`
 mounts an image without Rock Ridge. `iso9660_root` boots with
-`root=LABEL=` from a CD drive.
+`root=LABEL=` from a CD drive. `open` with write access to a file of a
+read only file system now fails with `EROFS`.
 
 Document: `docs/design/iso9660.md`.
 

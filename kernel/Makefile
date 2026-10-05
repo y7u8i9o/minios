@@ -4,7 +4,7 @@ OUT      := $(BUILD)/kernel
 KERNEL   ?= $(BUILD)/kernel.elf
 GENSYMS  ?= $(BUILD)/host/gensyms
 
-SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat ipc net net/tcp block audio input drivers drivers/virtio drivers/usb debug
+SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat fs/iso9660 ipc net net/tcp block audio input drivers drivers/virtio drivers/usb debug
 ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif

@@ -1,4 +1,5 @@
 #include <arch/platform.h>
+#include <lib/date.h>
 #include <arch/cpu.h>
 #include <drivers/rtc.h>
 #include <mm/vmm.h>
@@ -56,20 +57,6 @@ void platform_test_exit(int code)
  * seconds since the Unix epoch. */
 #define RTCDR      0x00
 
-/* The UTC calendar date of a day number counted from 1970-01-01. */
-static void civil_from_days(int64_t z, struct rtc_date *d)
-{
-    z += 719468;
-    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
-    int64_t doe = z - era * 146097;
-    int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    int64_t mp = (5 * doy + 2) / 153;
-    d->day = (int)(doy - (153 * mp + 2) / 5 + 1);
-    d->month = (int)(mp < 10 ? mp + 3 : mp - 9);
-    d->year = (int)(yoe + era * 400 + (d->month <= 2));
-}
-
 void platform_rtc_read(struct rtc_date *d)
 {
     volatile uint32_t *rtc = vmm_map_mmio(devtree.rtc, 0x1000, VM_KERNEL_RW | VM_NOCACHE);
@@ -78,7 +65,7 @@ void platform_rtc_read(struct rtc_date *d)
         return;
     }
     int64_t seconds = rtc[RTCDR / 4];
-    civil_from_days(seconds / 86400, d);
+    date_civil_from_days(seconds / 86400, &d->year, &d->month, &d->day);
     int64_t rest = seconds % 86400;
     d->hour = (int)(rest / 3600);
     d->minute = (int)(rest / 60 % 60);

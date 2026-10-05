@@ -36,17 +36,19 @@
 #             xHCI controller, or usb@PORT for usb-storage at PORT (such as
 #             1.2, port 2 of a hub on port 1) of the controller of the usb
 #             file
-#   cd        further CD drives on the AHCI controller (optional), one per
-#             line: "empty" for a drive without a medium, or "iso DIR
-#             [VOLUME_ID]" for an ISO 9660 image with Rock Ridge that
-#             xorriso builds from the directory DIR of the case. A line
+#   cd        further CD drives (optional), one per line: "empty" for a
+#             drive without a medium, "iso DIR [VOLUME_ID]" for an ISO 9660
+#             image with Rock Ridge that xorriso builds from the directory
+#             DIR of the case, or "mkcd SCRIPT" for an image that the
+#             executable SCRIPT of the case writes, with OUT (the image),
+#             XORRISO, ARCH, CASE, TOP and BUILD in the environment. A line
 #             that begins with "usb" attaches the drive as a USB CD drive
-#             (usb-bot with scsi-cd) on an xHCI controller of its own. The
-#             images are cd0.iso, cd1.iso and so on in the output
-#             directory, and the post script sees the first as CDIMG. On
-#             x86_64 the drives use the ports 3 to 5 of the q35 controller,
-#             whose port 2 has the boot CD. On aarch64 they use an
-#             ich9-ahci controller of their own
+#             (usb-bot with scsi-cd) on an xHCI controller of its own,
+#             else the drive is on the AHCI controller: ports 3 to 5 of the
+#             q35 controller on x86_64, whose port 2 has the boot CD, or an
+#             ich9-ahci controller of its own on aarch64. The images are
+#             cd0.iso, cd1.iso and so on in the output directory, and the
+#             post script sees the first as CDIMG
 #   usb       an xHCI controller and USB devices on it (optional): one line,
 #             the controller with its properties followed by the devices,
 #             for example "qemu-xhci,msix=off usb-kbd usb-tablet". A device
@@ -149,6 +151,7 @@ clone() {
 cleanup() {
     stop_peer
     rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso" "$OUTDIR"/cd*.iso
+    rm -rf "$OUTDIR"/cd*.iso.*
     [ -n "$QMPSOCK" ] && rm -f "$QMPSOCK"
 }
 trap cleanup EXIT
@@ -305,7 +308,15 @@ if [ -f "$CASE/cd" ]; then
                 "$XORRISO" -as mkisofs -R -V "${volid:-MINIOS_TEST}" -o "$IMG" "$CASE/$dir" > "$OUTDIR/cd$NCD.log" 2>&1 ||
                     fail "cd image, see $OUTDIR/cd$NCD.log"
                 [ -z "$CDIMG" ] && CDIMG="$IMG"
-                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=cd$NCD,media=cdrom,readonly=on $CDDEV,drive=cd$NCD"
+                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=extracd$NCD,media=cdrom,readonly=on $CDDEV,drive=extracd$NCD"
+                ;;
+            mkcd)
+                IMG="$OUTDIR/cd$NCD.iso"
+                rm -rf "$IMG" "$IMG".*
+                OUT="$IMG" XORRISO="$XORRISO" ARCH="${ARCH:-x86_64}" CASE="$CASE" TOP="$TOP" BUILD="$(dirname "$BUILD")" \
+                    "$CASE/$dir" > "$OUTDIR/cd$NCD.log" 2>&1 || fail "cd image, see $OUTDIR/cd$NCD.log"
+                [ -z "$CDIMG" ] && CDIMG="$IMG"
+                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=extracd$NCD,media=cdrom,readonly=on $CDDEV,drive=extracd$NCD"
                 ;;
             *) fail "unknown cd kind $kind" ;;
         esac

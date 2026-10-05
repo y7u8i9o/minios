@@ -1,0 +1,9 @@
+#!/bin/sh
+# Write an image without Rock Ridge for the case iso9660_plain: ISO level 1
+# names, which the file system shows in lowercase without the version
+# suffix, with the modes 0555 and 0444 and the owner root.
+set -e
+TREE="$OUT.tree"
+python3 "$TOP/tests/iso_tree.py" plain "$TREE"
+"$XORRISO" -outdev "$OUT" -volid PLAIN -rockridge off -joliet off -map "$TREE" /
+python3 "$TOP/tests/iso_tree.py" manifest "$TREE" "$OUT.manifest" plain

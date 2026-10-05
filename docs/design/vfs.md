@@ -279,3 +279,11 @@ and `utimensat(AT_SYMLINK_NOFOLLOW)`.
   the read ends and the write ends of 256 pipes in step, forty rounds, so
   both ends of a pipe are closed at the same moment on different CPUs; it
   hung before `pipe_release` contained its own reference across the wakeups.
+
+## Read only files (R5)
+
+`open` with write access to a regular file whose file operations have no
+`write` fails with `EROFS`. The files of the initrd and of an ISO 9660
+volume are such files (`iso9660.md`). Creating a file in a directory
+without `create` fails with `EROFS` as before.
+

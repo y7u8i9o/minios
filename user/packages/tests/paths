@@ -24,6 +24,7 @@ usr/bin/fstest
 usr/bin/gettexttest
 usr/bin/guitest
 usr/bin/hugetest
+usr/bin/isotest
 usr/bin/libcexttest
 usr/bin/libctest
 usr/bin/libmfulltest

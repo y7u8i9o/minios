@@ -1,0 +1,1 @@
+test=run prog=/bin/sh args=/etc/tests/iso9660.sh resident_pages=4

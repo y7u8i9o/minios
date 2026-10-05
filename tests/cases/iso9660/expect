@@ -1,0 +1,5 @@
+iso9660: done
+isotest: [0-9]+ entries, 0 failures
+TEST PASS
+Rock Ridge
+isotest: mmap and offset reads of 3145728 bytes match
