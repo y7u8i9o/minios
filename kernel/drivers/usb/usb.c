@@ -69,7 +69,7 @@ int usb_enumerate(struct usb_device *dev)
     int r = xhci_control(dev, USB_DIR_IN, USB_REQ_GET_DESCRIPTOR, USB_DT_DEVICE << 8, 0, &dev->desc,
                          sizeof dev->desc);
     if (r < 0 || dev->desc.bDescriptorType != USB_DT_DEVICE) {
-        klog_warn("port %u: no device descriptor", dev->port);
+        klog_warn("port %s: no device descriptor", dev->path);
         return r < 0 ? r : -EIO;
     }
     if (!read_string(dev, dev->desc.iProduct, dev->product, sizeof dev->product))
@@ -81,7 +81,7 @@ int usb_enumerate(struct usb_device *dev)
     struct usb_config_descriptor head;
     r = xhci_control(dev, USB_DIR_IN, USB_REQ_GET_DESCRIPTOR, USB_DT_CONFIG << 8, 0, &head, sizeof head);
     if (r < 0 || head.bDescriptorType != USB_DT_CONFIG || head.wTotalLength < sizeof head) {
-        klog_warn("port %u: %s: no configuration descriptor", dev->port, dev->product);
+        klog_warn("port %s: %s: no configuration descriptor", dev->path, dev->product);
         return r < 0 ? r : -EIO;
     }
     unsigned total = MIN((unsigned)head.wTotalLength, 4096u);
@@ -93,12 +93,12 @@ int usb_enumerate(struct usb_device *dev)
         r = xhci_control(dev, USB_TYPE_STANDARD | USB_RECIP_DEVICE, USB_REQ_SET_CONFIGURATION,
                          head.bConfigurationValue, 0, NULL, 0);
     if (r < 0) {
-        klog_warn("port %u: %s: configuration %u not set: %d", dev->port, dev->product,
+        klog_warn("port %s: %s: configuration %u not set: %d", dev->path, dev->product,
                   head.bConfigurationValue, r);
         kfree(cfg);
         return r;
     }
-    klog_info("port %u: %s, %04x:%04x, %s speed, slot %u, %u interface%s", dev->port, dev->product,
+    klog_info("port %s: %s, %04x:%04x, %s speed, slot %u, %u interface%s", dev->path, dev->product,
               dev->desc.idVendor, dev->desc.idProduct, usb_speed_name(dev->speed), dev->slot,
               head.bNumInterfaces, head.bNumInterfaces == 1 ? "" : "s");
 
@@ -112,9 +112,13 @@ int usb_enumerate(struct usb_device *dev)
             continue;
         if (intf->bInterfaceClass == USB_CLASS_HID && hid_probe(dev, cfg, total, intf) == 0)
             bound++;
+        else if (intf->bInterfaceClass == USB_CLASS_MASS_STORAGE && msc_probe(dev, cfg, total, intf) == 0)
+            bound++;
+        else if (intf->bInterfaceClass == USB_CLASS_HUB && hub_probe(dev, cfg, total, intf) == 0)
+            bound++;
     }
     if (!bound)
-        klog_info("port %u: %s: no driver", dev->port, dev->product);
+        klog_info("port %s: %s: no driver", dev->path, dev->product);
     /* The descriptor is retained for /dev/devices and freed with the
      * device. */
     dev->config = cfg;
@@ -124,6 +128,10 @@ int usb_enumerate(struct usb_device *dev)
 
 void usb_disconnect(struct usb_device *dev)
 {
+    if (dev->hub)
+        hub_disconnect(dev);
+    if (dev->msc)
+        msc_disconnect(dev);
     for (unsigned i = 0; i < USB_MAX_HID; i++) {
         if (dev->hid[i])
             hid_disconnect(dev->hid[i]);
@@ -189,6 +197,7 @@ void usb_describe_device(struct devinfo *d, const char *path, const struct usb_d
     devinfo_prop(d, "usb_version", "%x.%02x", dev->desc.bcdUSB >> 8, dev->desc.bcdUSB & 0xff);
     devinfo_prop(d, "speed", "%s", usb_speed_name(dev->speed));
     devinfo_prop(d, "slot", "%u", dev->slot);
+    devinfo_prop(d, "port_path", "%s", dev->path);
     devinfo_prop(d, "device_class", "%02x:%02x:%02x (%s)", dev->desc.bDeviceClass, dev->desc.bDeviceSubClass,
                  dev->desc.bDeviceProtocol, class_name(dev->desc.bDeviceClass));
     devinfo_prop(d, "max_packet_size_0", "%u bytes",
@@ -219,7 +228,12 @@ void usb_describe_device(struct devinfo *d, const char *path, const struct usb_d
             for (unsigned k = 0; k < USB_MAX_HID; k++)
                 if (dev->hid[k] && hid_interface(dev->hid[k]) == i->bInterfaceNumber && i->bAlternateSetting == 0)
                     h = dev->hid[k];
-            devinfo_prop(d, "driver", "%s", h ? "usb-hid" : "none");
+            const char *driver = h ? "usb-hid" : "none";
+            if (i->bAlternateSetting == 0 && i->bInterfaceClass == USB_CLASS_HUB && dev->hub)
+                driver = "usb-hub";
+            else if (i->bAlternateSetting == 0 && i->bInterfaceClass == USB_CLASS_MASS_STORAGE && dev->msc)
+                driver = "usb-storage";
+            devinfo_prop(d, "driver", "%s", driver);
             if (h)
                 hid_describe(d, h);
         } else if (cfg[off + 1] == USB_DT_ENDPOINT && off + sizeof(struct usb_endpoint_descriptor) <= dev->config_len) {
@@ -230,5 +244,7 @@ void usb_describe_device(struct devinfo *d, const char *path, const struct usb_d
                          (e->bEndpointAddress & USB_DIR_IN) ? "IN" : "OUT", e->wMaxPacketSize & 0x7ff, e->bInterval);
         }
     }
+    if (dev->hub)
+        hub_describe(d, path, dev);
 }
 

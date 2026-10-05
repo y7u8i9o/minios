@@ -1,16 +1,20 @@
-# USB: xHCI, enumeration and HID
+# USB: xHCI, enumeration, HID, mass storage and hubs
 
 Since D2 of `docs/plan/drivers.md`, minios drives xHCI host controllers and
 the USB keyboards, mice and tablets connected to them. These devices report
 to the input core and appear as `/dev/input/eventN`, like the PS/2 and
-virtio input devices. The code is generic and runs on both architectures.
+virtio input devices. Since R4 of `docs/plan/release-0.5.0.md` (D5), USB
+disks and CD drives with the bulk-only transport and USB hubs work as
+well. The code is generic and runs on both architectures.
 
 | File | Content |
 |---|---|
 | `kernel/drivers/usb/xhci.c` | the xHCI controller driver and the controller thread |
 | `kernel/drivers/usb/usb.c` | the USB core: descriptors, configuration, binding |
 | `kernel/drivers/usb/hid.c` | the HID class driver and the report descriptor parser |
-| `kernel/drivers/usb/usb.h` | the declarations shared by the three files |
+| `kernel/drivers/usb/msc.c` | the mass storage class driver with the bulk-only transport (R4) |
+| `kernel/drivers/usb/hub.c` | the hub class driver (R4) |
+| `kernel/drivers/usb/usb.h` | the declarations shared by these files |
 | `kernel/include/drivers/usb.h` | `usb_init` and `usb_device_count` |
 
 The driver is written from the eXtensible Host Controller Interface
@@ -18,6 +22,16 @@ specification 1.2, the USB 2.0 specification (chapter 9), the Device Class
 Definition for HID 1.11 and the HID Usage Tables 1.4. No existing USB stack
 was used. TinyUSB has no xHCI driver, and CherryUSB publishes its xHCI driver
 only as a compiled library.
+
+The mass storage and hub drivers of R4 adapt edk2 (BSD-2-Clause-Patent,
+`third_party/edk2/`): `UsbMassBot.c` for the bulk-only transport,
+`UsbHub.c` and the port enumeration of `UsbEnumer.c` for hubs, and the slot
+context of devices behind hubs from `XhcInitializeDeviceSlot` and
+`XhcConfigHubContext` of `XhciSched.c`. TinyUSB's mass storage driver was
+considered first and not used: it is an asynchronous state machine without
+the reset recovery and the status wrapper checks of the bulk-only
+specification, and its configuration repeats TEST UNIT READY without end
+on a CD drive without a medium.
 
 ## Start
 
@@ -148,8 +162,90 @@ product string is read in the first language that string descriptor 0
 lists, and is reduced to ASCII. It names the device in the log and the input
 device. A device without a product string is named `USB device VVVV:PPPP`.
 The core binds the HID driver to the first alternate setting of every HID
-interface. The log line is
+interface, the mass storage driver to every mass storage interface and the
+hub driver to every hub interface. The log line is
 `port 5: QEMU USB Keyboard, 0627:0001, high speed, slot 1, 1 interface`.
+The port of a device behind hubs is a path, as `5.2` for port 2 of the hub
+on root port 5.
+
+## Bulk transfers (R4)
+
+`xhci_bulk_open` configures a bulk endpoint with its own transfer ring and
+a bounce block of 64 KiB, 16 contiguous pages that the buddy allocator
+aligns to their size, so one Normal TRB with interrupt on short packet and
+on completion describes a whole transfer. `xhci_bulk` copies the data,
+queues the TRB, rings the doorbell and waits for the transfer event, which
+gives the completion code and the residual length. A stall returns
+`EPIPE` and leaves the endpoint halted until `xhci_clear_halt` resets the
+endpoint in the controller, moves its dequeue pointer and sends
+CLEAR_FEATURE ENDPOINT_HALT to the device. A transaction error resets the
+endpoint, and a timeout stops it.
+
+The class drivers call `xhci_bulk` and `xhci_control` from the threads of
+the block layer. `xhci.cmd_lock` serializes the commands of a controller,
+and `slot.ctrl_lock` the control transfers of a device. A disconnected
+device is marked `gone` before its drivers unbind. Every wait of a transfer
+on it then ends with `ENODEV`, and no transfer starts.
+
+## Mass storage (R4)
+
+`msc_probe` binds an interface of class 08, subclass 06 (SCSI) and
+protocol 50h (bulk only). It opens the first bulk IN and bulk OUT
+endpoints, with the burst of their SuperSpeed companion descriptors, and
+asks GET MAX LUN. A stall or a value above 15 means one logical unit. Each
+logical unit registers through `block/scsi.c` (`block.md`): a disk as
+`sdX`, a CD drive as `srN`.
+
+A command is the command block wrapper of 31 bytes on bulk OUT, the data
+stage in transfers of at most 64 KiB, which ends early at a short
+transfer, and the command status wrapper of 13 bytes on bulk IN. The
+status stage follows also after a failed data stage, and it is tried three
+times, with a stall of bulk IN cleared in between. A wrapper with a wrong
+signature, tag or length, and the status 2 (phase error), cause a reset
+recovery: the class request Bulk-Only Mass Storage Reset, 100 ms, and the
+clearing of both endpoints. A stalled command block causes a reset
+recovery as well, and a stall in the data stage is cleared. The status 1
+(command failed) becomes the CHECK CONDITION of the SCSI module, which
+asks REQUEST SENSE. `msc.lock` serializes the commands of all logical
+units of an interface.
+
+On disconnection the logical units are detached: their block devices
+remain registered without sectors and fail with `ENODEV`. A disk that
+registers after the partition scan of the boot, such as a USB stick
+connected later, has its partition table read by `part_add_disk`.
+
+## Hubs (R4)
+
+`hub_probe` binds a hub interface. It reads the hub descriptor (type 29h,
+or 2Ah for a SuperSpeed hub), marks the xHCI slot as a hub with its number
+of ports and the think time of its transaction translator (Configure
+Endpoint with the slot context, xHCI 4.6.7), sets the hub depth of a
+SuperSpeed hub, powers every port, waits the power-on time of the
+descriptor (at least 20 ms) and acknowledges the hub status. It then
+enumerates the ports that have a device, and starts the status change
+endpoint, an interrupt IN endpoint with one bit for the hub and one for
+each port. Hubs beyond the fifth tier are refused, and ports above 15,
+which a route string cannot name, are not used.
+
+The report callback of the status change endpoint runs under `xhci.lock`
+and adds the bits to the hub's change map. It marks hub work for the
+controller thread, which calls `hub_service` for every hub. A port whose
+status reports a change of the connection, of the enable state, of the
+over-current state or a completed reset loses its device, and a connected
+device is enumerated again: 100 ms of debounce, a port reset of 20 ms
+followed by the wait for the reset change and 10 ms of recovery, the speed
+from the port status, and up to three attempts. The change bits are
+cleared after the enumeration, as in edk2, which also clears the enable
+change that some hubs set with a reset.
+
+A device behind a hub receives a slot context with the route string (one
+nibble per tier, the port of the hub at that tier), the root port of the
+first hub, and for a low or full speed device behind a high speed hub the
+slot and the port of that hub as its transaction translator. A device
+behind a full or low speed path inherits the translator of its hub. The
+devices of a hub are published under `usb_topology_lock` and appear in
+`/dev/devices` below the hub. A disconnected hub removes the devices
+behind it before its own slot is freed.
 
 ## HID
 
@@ -225,6 +321,9 @@ the controller thread only.
 `hid_free_lock` (spinlock) protects the free list of input devices of
 disconnected interfaces. It is a leaf.
 
+R4 adds `xhci.cmd_lock`, `slot.ctrl_lock` and `msc.lock` (mutexes) and the
+change map of a hub, which `locking.md` describes with their order.
+
 ## Tests
 
 `tests/run_qemu_test.sh` attaches an xHCI controller with USB devices for a
@@ -253,17 +352,35 @@ its input core selected last, and the test accepts either.
 `usb_hid_acpi` is the machine that UTM starts for an aarch64 guest without
 changes to its settings.
 
+The QEMU 8.2 of Ubuntu 24.04 has the properties `msi` and `msix` only on
+`nec-usb-xhci`, not on `qemu-xhci`, and cannot start `usb_hid_msi` and
+`usb_hid_polled`. The same cases with `nec-usb-xhci` pass on such a host.
+
+R4 adds these cases. The harness file `diskif` with `usb` attaches the root
+disk as `usb-storage` on an xHCI controller of its own, and `usb@PORT` on
+the controller of the `usb` file at a port path. A word `DEVICE@PORT` of
+the `usb` file attaches a device at a port path, and a line `usb iso DIR`
+or `usb empty` of the `cd` file a USB CD drive (`usb-bot` with `scsi-cd`).
+
+| Case | Content | Architectures |
+|---|---|---|
+| `usb_storage` | the `blk` checks on a `usb-storage` disk | both |
+| `usb_root` | the root file system on a `usb-storage` disk, without `root=` | both |
+| `usb_cd` | the `cdrom` checks on an ISO image in a USB CD drive and an empty USB CD drive | x86_64 |
+| `usb_hub` | a keyboard on port 1 and a disk on port 2 of a `usb-hub`, the `blk` checks on the disk, and no disconnection | both |
+
 ## Limits
 
-- USB hubs are not supported. A device behind a hub is not enumerated.
-  Real computers often place hubs between the root ports and the devices
-  (D5 of the plan).
-- Only HID interfaces are bound. USB mass storage is D5.
+- Mass storage supports the bulk-only transport with SCSI commands. The
+  USB Attached SCSI protocol and the CBI transport of old floppy drives are
+  not supported.
+- A hub uses its single transaction translator. Multiple translators are
+  not selected.
 - Keyboard LEDs (caps lock, num lock) are not set.
 - The display server opens the input devices at its start. A USB device
   that is connected later, and that is not a reconnected device with a
   reused input device, reaches the console but not the desktop.
-- The super speed endpoint companion descriptor is not read. An interrupt
-  endpoint uses a burst of one packet.
+- The super speed endpoint companion descriptor is read for bulk
+  endpoints only. An interrupt endpoint uses a burst of one packet.
 - A controller that addresses only 32 bits is refused.
-- Isochronous and bulk transfers are not implemented.
+- Isochronous transfers are not implemented.

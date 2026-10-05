@@ -120,12 +120,14 @@ disks, and ATAPI packet commands for CD drives. Boot test with the q35
 SATA controller as the root disk. Done as R3 of `release-0.5.0.md` by
 adapting the AHCI code of edk2. Document: `docs/design/ahci.md`.
 
-### D5. USB mass storage
+### D5. USB mass storage (completed 2026-10-05)
 
 The bulk-only transport of the USB mass storage class with the SCSI
 commands INQUIRY, READ CAPACITY, READ and WRITE, registered as block
 devices. USB hubs, which real computers place between the root ports and
-the devices. Boot tests with `usb-storage` and with `usb-hub`.
+the devices. Boot tests with `usb-storage` and with `usb-hub`. Done as R4
+of `release-0.5.0.md` by adapting the mass storage and hub drivers of
+edk2. Document: `docs/design/usb.md`.
 
 ### D6. e1000e
 

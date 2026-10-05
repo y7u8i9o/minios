@@ -1,0 +1,4 @@
+sr1: QEMU QEMU CD-ROM .*\(usb\), CD drive
+cdrom: sr1 has [0-9]+ sectors
+cdrom: sr2 has no medium
+TEST PASS

@@ -32,7 +32,7 @@ the packages from the medium. The kernel starts scripts that begin with
   (MIT, BSD, ISC or BSD-2-Clause-Patent) where the adaptation costs less
   than new code (decision of the owner, 2026-10-05). The AHCI driver
   adapts `AtaAtapiPassThru/AhciMode.c` of edk2. The USB mass storage and
-  hub drivers adapt `msc_host.c` and `hub.c` of TinyUSB. The NVMe driver
+  hub drivers adapt `UsbMassBot.c` and `UsbHub.c` of edk2. The NVMe driver
   was written from the specification before this decision and remains.
   Each adapted file names its origin and version and retains its licence
   notice.
@@ -115,7 +115,7 @@ aarch64 with an `ich9-ahci` controller on PCI.
 Document: `docs/design/ahci.md`, with `block/scsi.c` in
 `docs/design/block.md`.
 
-### R4. USB mass storage and hubs (D5)
+### R4. USB mass storage and hubs (D5) (completed 2026-10-05)
 
 The xHCI driver gains bulk endpoints. The mass storage driver binds to
 interfaces of class 08, subclass 06 (SCSI) and protocol 50 (bulk only).
@@ -127,10 +127,15 @@ port with a device, enumerates the device with its route string and
 parent port, and reports disconnections. A device that is removed returns
 `ENODEV` for every later request.
 
-Boot tests: `usb_storage` boots with a `usb-storage` disk as the root and
-no virtio disk and runs the `blk` checks. `usb_cd` reads an ISO image in
-a USB CD drive. `usb_hub` attaches a keyboard and a disk behind a
-`usb-hub` and checks both.
+Boot tests: `usb_storage` runs the `blk` checks on a `usb-storage` disk
+without a virtio disk, and `usb_root` mounts the root from it. `usb_cd`
+reads an ISO image in a USB CD drive. `usb_hub` attaches a keyboard and a
+disk behind a `usb-hub` and checks both.
+
+The mass storage and hub drivers adapt `UsbMassBot.c`, `UsbHub.c` and the
+port enumeration of `UsbEnumer.c` of edk2 instead of TinyUSB, whose mass
+storage driver lacks the reset recovery and the status checks of the
+bulk-only specification (`docs/design/usb.md`).
 
 Document: `docs/design/usb.md`.
 

@@ -3,6 +3,7 @@
  * and the HID class driver (hid.c). docs/design/usb.md describes the
  * design. */
 #include <kernel.h>
+#include <sync/mutex.h>
 
 /* Standard requests and descriptor types (USB 2.0 chapter 9). */
 #define USB_DIR_IN              0x80
@@ -23,6 +24,13 @@
 #define USB_DT_REPORT           0x22
 
 #define USB_CLASS_HID           0x03
+#define USB_CLASS_MASS_STORAGE  0x08
+#define USB_CLASS_HUB           0x09
+#define USB_RECIP_ENDPOINT      0x02
+#define USB_REQ_CLEAR_FEATURE   0x01
+#define USB_FEATURE_ENDPOINT_HALT 0
+#define USB_DT_SS_EP_COMPANION  0x30
+#define USB_EP_XFER_BULK        0x02
 
 #define USB_EP_XFER_MASK        0x03
 #define USB_EP_XFER_INT         0x03
@@ -99,17 +107,28 @@ const char *usb_speed_name(enum usb_speed s);
 
 struct xhci;
 struct hid_dev;
+struct usb_hub;
+struct msc_dev;
+struct devinfo;
 
 #define USB_MAX_HID 4                   /* HID interfaces bound per device */
 
 /* A device with an address. It is created by the controller thread when a
- * port connects and destroyed when the port disconnects. The fields,
- * hid[] included, are read and written by that thread only. The report
- * callbacks receive their struct hid_dev as their argument. */
+ * port of the root hub or of a hub connects and destroyed when the port
+ * disconnects. The fields, hid[] included, are read and written by that
+ * thread only, except gone, which xhci.lock protects. The report callbacks
+ * receive their struct hid_dev as their argument. */
 struct usb_device {
     struct xhci *hc;
     unsigned slot;                      /* the xHCI slot ID */
     unsigned port;                      /* the root hub port, from 1 */
+    struct usb_device *parent;          /* the hub the device is connected to, NULL on a root port */
+    unsigned parent_port;               /* the port of the parent hub, from 1 */
+    unsigned depth;                     /* 0 on a root port, 1 behind one hub, ... */
+    uint32_t route;                     /* the route string of the slot context */
+    unsigned tt_slot, tt_port;          /* the transaction translator of a low or full speed device */
+    char path[24];                      /* "2" on root port 2, "2.3" on port 3 of a hub on root port 2 */
+    bool gone;                          /* the device was disconnected; transfers end with ENODEV */
     enum usb_speed speed;
     struct usb_device_descriptor desc;
     char product[64];                   /* the product string, or a name made from the IDs */
@@ -118,6 +137,8 @@ struct usb_device {
     uint8_t *config;                    /* the first configuration descriptor, kmalloc'd, or NULL */
     unsigned config_len;
     struct hid_dev *hid[USB_MAX_HID];
+    struct usb_hub *hub;                /* the hub driver of a hub */
+    struct msc_dev *msc;                /* the mass storage driver */
 };
 
 /* Called by the controller with each completed report of an interrupt IN
@@ -140,6 +161,37 @@ int xhci_control(struct usb_device *dev, uint8_t request_type, uint8_t request, 
 int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descriptor *ep, unsigned len,
                       usb_report_fn fn, void *arg);
 
+/* Configure a bulk endpoint for xhci_bulk. max_burst comes from the
+ * SuperSpeed endpoint companion descriptor, 0 without one. Called by the
+ * controller thread while a class driver binds. */
+int xhci_bulk_open(struct usb_device *dev, const struct usb_endpoint_descriptor *ep, unsigned max_burst);
+/* One bulk transfer of at most XHCI_BULK_MAX bytes on an endpoint of
+ * xhci_bulk_open. *actual receives the bytes transferred. Returns 0,
+ * -EPIPE when the endpoint stalled (xhci_clear_halt clears it),
+ * -ETIMEDOUT, -ENODEV for a disconnected device or -EIO. Called from any
+ * thread; the class driver serializes the transfers of one endpoint. */
+#define XHCI_BULK_MAX 65536
+int xhci_bulk(struct usb_device *dev, uint8_t ep_addr, void *buf, uint32_t len, unsigned timeout_ms,
+              uint32_t *actual);
+/* Clear a halted bulk endpoint in the controller and in the device
+ * (CLEAR_FEATURE ENDPOINT_HALT). */
+int xhci_clear_halt(struct usb_device *dev, uint8_t ep_addr);
+/* Mark the slot of dev as a hub with nports ports, the think time ttt and
+ * multiple transaction translators when mtt is set (xHCI 4.6.7). */
+int xhci_hub_configure(struct usb_device *dev, unsigned nports, unsigned ttt, bool mtt);
+/* Give the device on port of the hub parent an address and enumerate it.
+ * Returns the device, or NULL. Called by the hub driver in the controller
+ * thread. */
+struct usb_device *xhci_attach(struct usb_device *parent, unsigned port, enum usb_speed speed);
+/* Remove a device whose hub port disconnected, with the devices behind
+ * it. Called by the hub driver in the controller thread. */
+void xhci_detach(struct usb_device *dev);
+
+/* The devices of the root ports and of the hubs. A controller thread takes
+ * it to publish a device after its enumeration and to remove it before its
+ * slot is freed, and /dev/devices takes it while it reads the topology. */
+extern struct mutex usb_topology_lock;
+
 /* USB core (usb.c). */
 
 /* Read the descriptors of a device that has an address, select its first
@@ -149,7 +201,6 @@ int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descript
 int usb_enumerate(struct usb_device *dev);
 /* The USB part of a device node of /dev/devices: the descriptors, the
  * interfaces, their endpoints and their drivers (usb.c). */
-struct devinfo;
 void usb_describe_device(struct devinfo *d, const char *path, const struct usb_device *dev);
 /* The properties of a bound HID interface (hid.c). */
 void hid_describe(struct devinfo *d, const struct hid_dev *h);
@@ -162,6 +213,30 @@ unsigned hid_interface(const struct hid_dev *h);
 void usb_disconnect(struct usb_device *dev);
 /* Count a device with an address, or one that lost it (delta -1). */
 void usb_count_device(int delta);
+
+/* Hub class driver (hub.c). */
+
+/* Bind a hub interface: read the hub descriptor, configure the slot,
+ * power the ports, enumerate the devices on them and start the status
+ * change endpoint. */
+int hub_probe(struct usb_device *dev, const uint8_t *cfg, unsigned cfg_len,
+              const struct usb_interface_descriptor *intf);
+/* Handle the port changes that the status change endpoint reported.
+ * Called by the controller thread. */
+void hub_service(struct usb_device *dev);
+/* Remove the devices behind a disconnected hub and free the hub. */
+void hub_disconnect(struct usb_device *dev);
+/* The ports of a hub and the devices on them for /dev/devices. The
+ * caller has locked usb_topology_lock. */
+void hub_describe(struct devinfo *d, const char *path, const struct usb_device *dev);
+
+/* Mass storage class driver (msc.c). */
+
+/* Bind a bulk-only SCSI interface and register its logical units. */
+int msc_probe(struct usb_device *dev, const uint8_t *cfg, unsigned cfg_len,
+              const struct usb_interface_descriptor *intf);
+/* Detach the logical units of a disconnected device. */
+void msc_disconnect(struct usb_device *dev);
 
 /* HID class driver (hid.c). */
 

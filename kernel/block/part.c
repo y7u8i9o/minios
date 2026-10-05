@@ -295,6 +295,10 @@ static const struct file_ops listing_fops = {
     .open = listing_open, .read = listing_read, .release = listing_release,
 };
 
+/* Set once part_scan has read the disks registered at boot. Disks
+ * registered later read their table in part_add_disk. */
+static bool scanned;
+
 void part_scan(void)
 {
     struct blockdev *devs[PART_MAX_DISKS];
@@ -305,6 +309,15 @@ void part_scan(void)
             update_sizes(devs[i]);
         }
     devfs_register("partitions", S_IFCHR | 0444, &listing_fops, NULL, 0);
+    __atomic_store_n(&scanned, true, __ATOMIC_RELEASE);
+}
+
+void part_add_disk(struct blockdev *disk)
+{
+    if (disk->disk || (disk->flags & BLOCKDEV_CDROM) || !__atomic_load_n(&scanned, __ATOMIC_ACQUIRE))
+        return;
+    apply_table(disk);
+    update_sizes(disk);
 }
 
 void part_retain(struct blockdev *dev)

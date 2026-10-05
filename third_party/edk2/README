@@ -1,8 +1,17 @@
 edk2 (https://github.com/tianocore/edk2), revision
 999fd0f12a27709eee04b93e46bd867e6b0163a5 of 2026-10-05.
 
-The AHCI driver of minios, kernel/drivers/ahci.c, adapts
-MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AhciMode.c and AhciMode.h of this
-revision (R3 of docs/plan/release-0.5.0.md). The files are licensed under
-BSD-2-Clause-Patent, whose text is License.txt in this directory. No other
-edk2 file is part of minios.
+minios adapts these files of this revision (docs/plan/release-0.5.0.md):
+
+  kernel/drivers/ahci.c       MdeModulePkg/Bus/Ata/AtaAtapiPassThru/AhciMode.c
+                              and AhciMode.h (R3)
+  kernel/drivers/usb/msc.c    MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassBot.c
+                              and UsbMassBot.h (R4)
+  kernel/drivers/usb/hub.c    MdeModulePkg/Bus/Usb/UsbBusDxe/UsbHub.c, UsbHub.h
+                              and the port enumeration of UsbEnumer.c (R4)
+  kernel/drivers/usb/xhci.c   the slot context of devices behind hubs from
+                              MdeModulePkg/Bus/Pci/XhciDxe/XhciSched.c (R4)
+
+The files are licensed under BSD-2-Clause-Patent, whose text is
+License.txt in this directory. Each adapted source file retains the
+copyright notices of its origin. No other edk2 file is part of minios.

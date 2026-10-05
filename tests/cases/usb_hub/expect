@@ -1,0 +1,7 @@
+port [0-9]+: QEMU USB Hub, .*
+port [0-9]+: hub with 8 ports
+port [0-9]+\.1: QEMU USB Keyboard, 0627:0001
+QEMU USB Keyboard: keyboard, /dev/input/event[0-9]+
+port [0-9]+\.2: QEMU USB HARDDRIVE: bulk-only mass storage, 1 logical unit
+sda: QEMU QEMU HARDDISK .*\(usb\)
+TEST PASS

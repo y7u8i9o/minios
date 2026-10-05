@@ -1,0 +1,3 @@
+port [0-9]+: QEMU USB HARDDRIVE: bulk-only mass storage, 1 logical unit
+sda: QEMU QEMU HARDDISK .*\(usb\), disk, 512 byte sectors, 1048576 sectors
+TEST PASS

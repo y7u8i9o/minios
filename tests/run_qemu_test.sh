@@ -32,12 +32,16 @@
 #   diskif    the controller of the root disk (optional, default virtio):
 #             nvme, optionally followed by properties of the QEMU nvme
 #             device such as ",mdts=2", ahci for the SATA controller (the one of q35,
-#             an ich9-ahci on aarch64) or usb for usb-storage on its own
-#             xHCI controller
+#             an ich9-ahci on aarch64), usb for usb-storage on its own
+#             xHCI controller, or usb@PORT for usb-storage at PORT (such as
+#             1.2, port 2 of a hub on port 1) of the controller of the usb
+#             file
 #   cd        further CD drives on the AHCI controller (optional), one per
 #             line: "empty" for a drive without a medium, or "iso DIR
 #             [VOLUME_ID]" for an ISO 9660 image with Rock Ridge that
-#             xorriso builds from the directory DIR of the case. The
+#             xorriso builds from the directory DIR of the case. A line
+#             that begins with "usb" attaches the drive as a USB CD drive
+#             (usb-bot with scsi-cd) on an xHCI controller of its own. The
 #             images are cd0.iso, cd1.iso and so on in the output
 #             directory, and the post script sees the first as CDIMG. On
 #             x86_64 the drives use the ports 3 to 5 of the q35 controller,
@@ -45,7 +49,9 @@
 #             ich9-ahci controller of their own
 #   usb       an xHCI controller and USB devices on it (optional): one line,
 #             the controller with its properties followed by the devices,
-#             for example "qemu-xhci,msix=off usb-kbd usb-tablet"
+#             for example "qemu-xhci,msix=off usb-kbd usb-tablet". A device
+#             written DEVICE@PORT is attached at PORT, for example
+#             "usb-hub@1 usb-kbd@1.1"
 #   qmp       a script of tests/qmp_input.py (optional), run against the QMP
 #             socket of QEMU while the case boots. It sends keys and pointer
 #             events after the serial log shows a line, and its output is
@@ -196,6 +202,7 @@ fi
 "$TOP/tools/mkiso.sh" "$KERNEL" "$ISO" "$CMDLINE" || fail "image build"
 rm -f "$SERIAL"
 DISKFLAGS=""
+LATEFLAGS=""
 if [ -x "$CASE/mkdisk" ]; then
     rm -f "$OUTDIR/disk2.img"
     DISK="$DISK" OUT="$OUTDIR/disk.img" OUT2="$OUTDIR/disk2.img" MKGPT="$MKGPT" MKFAT="$MKFAT" MKFS="$MKFS" ARCH="${ARCH:-x86_64}" \
@@ -227,7 +234,10 @@ if [ -f "$CASE/usb" ]; then
         if [ -z "$USBFLAGS" ]; then
             USBFLAGS="-device $word,id=usb0"
         else
-            USBFLAGS="$USBFLAGS -device $word,bus=usb0.0"
+            case "$word" in
+                *@*) USBFLAGS="$USBFLAGS -device ${word%@*},bus=usb0.0,port=${word#*@}" ;;
+                *) USBFLAGS="$USBFLAGS -device $word,bus=usb0.0" ;;
+            esac
         fi
     done
 fi
@@ -257,6 +267,10 @@ if [ -f "$OUTDIR/disk.img" ]; then
             fi
             ;;
         usb) ROOTDEV="-device qemu-xhci,id=usbdisk -device usb-storage,drive=vd0,bus=usbdisk.0" ;;
+        usb@*)
+            ROOTDEV=""
+            LATEFLAGS="$LATEFLAGS -device usb-storage,drive=vd0,bus=usb0.0,port=${DISKIF#usb@}"
+            ;;
         *) fail "unknown diskif $DISKIF" ;;
     esac
     DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw $ROOTDEV"
@@ -264,28 +278,42 @@ fi
 CDIMG=""
 if [ -f "$CASE/cd" ]; then
     NCD=0
-    while read -r kind dir volid; do
-        [ -z "$kind" ] && continue
-        if [ "${ARCH:-x86_64}" = x86_64 ]; then
-            CDBUS="ide.$((NCD + 3))"
+    NAHCI=0
+    NUSB=0
+    while read -r w1 w2 w3 w4; do
+        [ -z "$w1" ] && continue
+        if [ "$w1" = usb ]; then
+            kind="$w2" dir="$w3" volid="$w4"
+            [ "$NUSB" = 0 ] && DISKFLAGS="$DISKFLAGS -device qemu-xhci,id=usbcd"
+            CDDEV="-device usb-bot,id=bot$NCD,bus=usbcd.0 -device scsi-cd,bus=bot$NCD.0"
+            NUSB=$((NUSB + 1))
         else
-            [ "$NCD" = 0 ] && DISKFLAGS="$DISKFLAGS -device ich9-ahci,id=cdahci"
-            CDBUS="cdahci.$NCD"
+            kind="$w1" dir="$w2" volid="$w3"
+            if [ "${ARCH:-x86_64}" = x86_64 ]; then
+                CDBUS="ide.$((NAHCI + 3))"
+            else
+                [ "$NAHCI" = 0 ] && DISKFLAGS="$DISKFLAGS -device ich9-ahci,id=cdahci"
+                CDBUS="cdahci.$NAHCI"
+            fi
+            CDDEV="-device ide-cd,bus=$CDBUS"
+            NAHCI=$((NAHCI + 1))
         fi
         case "$kind" in
-            empty) DISKFLAGS="$DISKFLAGS -device ide-cd,bus=$CDBUS" ;;
+            empty) DISKFLAGS="$DISKFLAGS $CDDEV" ;;
             iso)
                 IMG="$OUTDIR/cd$NCD.iso"
                 "$XORRISO" -as mkisofs -R -V "${volid:-MINIOS_TEST}" -o "$IMG" "$CASE/$dir" > "$OUTDIR/cd$NCD.log" 2>&1 ||
                     fail "cd image, see $OUTDIR/cd$NCD.log"
                 [ -z "$CDIMG" ] && CDIMG="$IMG"
-                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=cd$NCD,media=cdrom,readonly=on -device ide-cd,drive=cd$NCD,bus=$CDBUS"
+                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=cd$NCD,media=cdrom,readonly=on $CDDEV,drive=cd$NCD"
                 ;;
             *) fail "unknown cd kind $kind" ;;
         esac
         NCD=$((NCD + 1))
     done < "$CASE/cd"
 fi
+# Devices on the controller of the usb file follow it on the command line.
+USBFLAGS="$USBFLAGS $LATEFLAGS"
 NDISK=1
 if [ -f "$CASE/swap" ]; then
     dd if=/dev/zero of="$OUTDIR/swap.img" bs=1048576 count="$(cat "$CASE/swap")" status=none

@@ -4,7 +4,22 @@
  * array, scratchpad buffers, a command ring and one event ring. A thread
  * per controller handles the ports: it resets a port that connects, gives
  * the device an address and passes it to the USB core (usb.c), and it
- * releases the slot of a device that disconnects. */
+ * releases the slot of a device that disconnects. R4 adds bulk endpoints
+ * for mass storage and the devices behind hubs. The slot context of such a
+ * device (route string, root port, transaction translator) and the hub
+ * fields of a hub's slot follow XhcInitializeDeviceSlot and
+ * XhcConfigHubContext in MdeModulePkg/Bus/Pci/XhciDxe/XhciSched.c of
+ * edk2, revision 999fd0f12a27709eee04b93e46bd867e6b0163a5
+ * (third_party/edk2/README):
+ *
+ *   (C) Copyright 2023 Hewlett Packard Enterprise Development LP
+ *   Copyright (c) 2011 - 2020, Intel Corporation. All rights reserved.
+ *   Copyright (c) Microsoft Corporation.
+ *   Copyright (C) 2022 Advanced Micro Devices, Inc. All rights reserved.
+ *   Copyright (C) 2025 Qualcomm Technologies, Inc. All rights reserved.
+ *   SPDX-License-Identifier: BSD-2-Clause-Patent
+ *
+ * The licence text is third_party/edk2/License.txt. */
 #define KLOG_SUBSYS "xhci"
 #include "usb.h"
 #include <drivers/usb.h>
@@ -114,7 +129,9 @@
 #define CC_STALL        6
 #define CC_SHORT_PACKET 13
 
+#define EP_TYPE_BULK_OUT 2
 #define EP_TYPE_CONTROL 4
+#define EP_TYPE_BULK_IN 6
 #define EP_TYPE_INT_IN  7
 
 #define RING_TRBS       (PAGE_SIZE / 16)        /* one page per ring */
@@ -126,6 +143,7 @@
 #define CTRL_TIMEOUT_MS 2000
 #define POLL_MS         10                      /* event polling period without an interrupt */
 #define EP_RETRIES      5                       /* resets of a failing interrupt endpoint */
+#define BULK_ORDER      4                       /* the bounce block of a bulk endpoint, XHCI_BULK_MAX bytes */
 
 struct trb {
     uint64_t param;
@@ -142,8 +160,8 @@ struct ring {
     uint32_t cycle;
 };
 
-/* An interrupt IN endpoint, or endpoint 0 (index 1), which uses the ring
- * only. */
+/* An interrupt IN endpoint, a bulk endpoint, or endpoint 0 (index 1),
+ * which uses the ring only. */
 struct endpoint {
     struct ring ring;
     usb_report_fn fn;
@@ -154,13 +172,20 @@ struct endpoint {
     bool active;            /* a transfer is queued and its completion is reported */
     bool halted;            /* the transfer failed, and the thread resets the endpoint */
     unsigned failures;      /* consecutive failures, reset by a successful transfer */
+    bool bulk;              /* a bulk endpoint of xhci_bulk_open */
+    struct page *bulk_pages;    /* the bounce block of 2^BULK_ORDER pages */
+    bool done;              /* the bulk transfer completed */
+    uint32_t cc, residual;  /* its completion code and the bytes not transferred */
 };
 
 /* A device slot. dev is filled by the controller thread. The rings, the
- * endpoint state and the control completion fields are protected by
- * xhci.lock. */
+ * endpoint state, the control completion fields and dev.gone are
+ * protected by xhci.lock. ctrl_lock serializes the control transfers of
+ * the slot, which the controller thread and the threads of the class
+ * drivers issue. */
 struct slot {
     struct usb_device dev;
+    struct mutex ctrl_lock;
     void *out_ctx;          /* the device context that the controller writes */
     uintptr_t out_phys;
     void *in_ctx;           /* the input context of the commands */
@@ -207,6 +232,7 @@ struct xhci {
     const char *irq_kind;
 
     struct spinlock lock;
+    struct mutex cmd_lock;                      /* serializes the commands */
     struct waitq waitq;                         /* the thread, the completion waits and usb_init */
     uintptr_t cmd_trb;                          /* the command being waited for */
     bool cmd_done;
@@ -214,6 +240,7 @@ struct xhci {
     unsigned cmd_slot;
     uint64_t port_pending[MAX_PORTS / 64];      /* ports with a status change */
     bool ep_work;                               /* an endpoint is halted */
+    bool hub_work;                              /* a hub reported a port change */
     bool initial_done;                          /* the ports present at boot are enumerated */
     struct slot *slots[MAX_SLOTS + 1];
 
@@ -223,12 +250,12 @@ struct xhci {
 static struct xhci *controllers[MAX_CONTROLLERS];
 static unsigned ncontrollers;                   /* written by usb_init before the threads start */
 
-/* The devices published on the ports of every controller. The controller
- * threads take it to add a device to port_slot[] after its enumeration
- * and to remove it before its slot is freed. usb_describe takes it while
- * it reads the devices. It is a sleeping lock, taken with no spinlock
- * acquired, before xhci.lock. */
-static struct mutex usb_topology_lock;
+/* The devices published on the ports of every controller and of every hub.
+ * The controller threads take it to add a device to port_slot[] or to the
+ * ports of a hub after its enumeration and to remove it before its slot is
+ * freed. usb_describe takes it while it reads the devices. It is a
+ * sleeping lock, taken with no spinlock acquired, before xhci.lock. */
+struct mutex usb_topology_lock;
 
 static inline uint32_t rd(volatile uint8_t *base, unsigned off)
 {
@@ -330,12 +357,24 @@ static bool transfer_event(struct xhci *x, uint32_t status, uint32_t control)
         return true;
     }
     struct endpoint *ep = &s->ep[dci];
+    if (ep->bulk) {
+        ep->cc = cc;
+        ep->residual = residual;
+        ep->done = true;
+        return true;
+    }
     if (!ep->active)
         return false;
     if (cc == CC_SUCCESS || cc == CC_SHORT_PACKET) {
         ep->failures = 0;
         ep->fn(ep->arg, ep->buf, residual <= ep->len ? ep->len - residual : 0);
         queue_interrupt(x, s, dci);
+        /* The report of a hub names ports with a change, which the
+         * controller thread handles. */
+        if (s->dev.hub) {
+            x->hub_work = true;
+            return true;
+        }
         return false;
     }
     ep->active = false;
@@ -404,16 +443,19 @@ static void xhci_irq(struct trapframe *tf, void *arg)
     spin_unlock(&x->lock);
 }
 
-/* Wait until *flag is set or the timeout ends. The events are processed on
- * every pass, which completes the wait also when no interrupt arrives.
- * The caller has acquired x->lock. The wait releases it while it sleeps. */
-static int wait_flag(struct xhci *x, bool *flag, uint64_t timeout_ms)
+/* Wait until *flag is set, the device of gone is disconnected or the
+ * timeout ends. The events are processed on every pass, which completes
+ * the wait also when no interrupt arrives. The caller has acquired
+ * x->lock. The wait releases it while it sleeps. */
+static int wait_flag(struct xhci *x, bool *flag, const bool *gone, uint64_t timeout_ms)
 {
     uint64_t end = timer_ms() + timeout_ms;
     for (;;) {
         process_events(x);
         if (*flag)
             return 0;
+        if (gone && *gone)
+            return -ENODEV;
         uint64_t now = timer_ms();
         if (now >= end)
             return -ETIMEDOUT;
@@ -421,18 +463,20 @@ static int wait_flag(struct xhci *x, bool *flag, uint64_t timeout_ms)
     }
 }
 
-/* Run one command and wait for its completion. Called by the controller
- * thread. */
+/* Run one command and wait for its completion. cmd_lock serializes the
+ * commands of the controller thread and of the class drivers. */
 static int command(struct xhci *x, uint64_t param, uint32_t control, unsigned *slot_out)
 {
+    mutex_lock(&x->cmd_lock);
     spin_lock(&x->lock);
     x->cmd_done = false;
     x->cmd_trb = ring_push(&x->cmd, param, 0, control);
     doorbell(x, 0, 0);
-    int r = wait_flag(x, &x->cmd_done, CMD_TIMEOUT_MS);
+    int r = wait_flag(x, &x->cmd_done, NULL, CMD_TIMEOUT_MS);
     uint32_t cc = x->cmd_cc;
     unsigned slot = x->cmd_slot;
     spin_unlock(&x->lock);
+    mutex_unlock(&x->cmd_lock);
     unsigned type = (control >> 10) & 0x3f;
     if (r < 0) {
         klog_error("command %u: no completion within %u ms", type, CMD_TIMEOUT_MS);
@@ -471,37 +515,75 @@ int xhci_control(struct usb_device *dev, uint8_t request_type, uint8_t request, 
     if (len > PAGE_SIZE)
         return -EINVAL;
     bool in = request_type & USB_DIR_IN;
-    if (!in && len)
-        memcpy(s->ctrl_buf, data, len);
     uint64_t setup = request_type | (uint64_t)request << 8 | (uint64_t)value << 16 |
                      (uint64_t)index << 32 | (uint64_t)len << 48;
     uint32_t trt = len == 0 ? 0 : in ? 3 : 2;   /* no data, OUT data, IN data */
-    struct ring *r = &s->ep[1].ring;
+    struct ring *ring = &s->ep[1].ring;
+    mutex_lock(&s->ctrl_lock);
+    if (!in && len)
+        memcpy(s->ctrl_buf, data, len);
     spin_lock(&x->lock);
+    if (s->dev.gone) {
+        spin_unlock(&x->lock);
+        mutex_unlock(&s->ctrl_lock);
+        return -ENODEV;
+    }
     s->ctrl_done = false;
-    ring_push(r, setup, 8, TRB_TYPE(TRB_SETUP) | TRB_IDT | trt << 16);
+    ring_push(ring, setup, 8, TRB_TYPE(TRB_SETUP) | TRB_IDT | trt << 16);
     if (len)
-        ring_push(r, s->ctrl_phys, len, TRB_TYPE(TRB_DATA) | (in ? TRB_DIR_IN : 0));
+        ring_push(ring, s->ctrl_phys, len, TRB_TYPE(TRB_DATA) | (in ? TRB_DIR_IN : 0));
     /* The status stage goes in the direction opposite to the data. */
-    ring_push(r, 0, 0, TRB_TYPE(TRB_STATUS) | TRB_IOC | (len && in ? 0 : TRB_DIR_IN));
+    ring_push(ring, 0, 0, TRB_TYPE(TRB_STATUS) | TRB_IOC | (len && in ? 0 : TRB_DIR_IN));
     doorbell(x, dev->slot, 1);
-    int err = wait_flag(x, &s->ctrl_done, CTRL_TIMEOUT_MS);
+    int err = wait_flag(x, &s->ctrl_done, &s->dev.gone, CTRL_TIMEOUT_MS);
     uint32_t cc = s->ctrl_cc;
     spin_unlock(&x->lock);
-    if (err < 0) {
+    int r = len;
+    if (err == -ENODEV) {
+        r = err;
+    } else if (err < 0) {
         klog_warn("slot %u: control request %02x:%02x without completion", dev->slot, request_type, request);
         recover_endpoint(x, s, 1, false);
-        return err;
-    }
-    if (cc == CC_STALL) {
+        r = err;
+    } else if (cc == CC_STALL) {
         recover_endpoint(x, s, 1, true);
-        return -EPIPE;
-    }
-    if (cc != CC_SUCCESS && cc != CC_SHORT_PACKET)
-        return -EIO;
-    if (in && len)
+        r = -EPIPE;
+    } else if (cc != CC_SUCCESS && cc != CC_SHORT_PACKET) {
+        r = -EIO;
+    } else if (in && len) {
         memcpy(data, s->ctrl_buf, len);
-    return len;
+    }
+    mutex_unlock(&s->ctrl_lock);
+    return r;
+}
+
+/* Configure the endpoint of index dci with the endpoint context words
+ * epc0, epc1 and epc4 through Configure Endpoint. The slot context comes from
+ * the device context, with the last valid context index raised. */
+static int configure_endpoint(struct xhci *x, struct slot *s, unsigned dci, uint32_t epc0, uint32_t epc1,
+                              uint32_t epc4)
+{
+    struct endpoint *ep = &s->ep[dci];
+    memset(s->in_ctx, 0, PAGE_SIZE);
+    in_ctx(x, s, 0)[1] = 1u | 1u << dci;
+    memcpy(in_ctx(x, s, 1), out_ctx(x, s, 0), x->ctx_size);
+    if (dci > s->max_dci)
+        s->max_dci = dci;
+    uint32_t *slotctx = in_ctx(x, s, 1);
+    slotctx[0] = (slotctx[0] & ~(0x1fu << 27)) | (uint32_t)s->max_dci << 27;
+    uint32_t *epc = in_ctx(x, s, dci + 1);
+    epc[0] = epc0;
+    epc[1] = epc1;
+    uint64_t deq = ep->ring.phys | 1;
+    epc[2] = (uint32_t)deq;
+    epc[3] = (uint32_t)(deq >> 32);
+    epc[4] = epc4;
+    return command(x, s->in_phys, TRB_TYPE(TRB_CONFIGURE_EP) | TRB_SLOT(s->dev.slot), NULL);
+}
+
+static unsigned ep_dci(uint8_t ep_addr)
+{
+    return (ep_addr & 0xf) * 2u + ((ep_addr & USB_DIR_IN) ? 1u : 0u);
 }
 
 /* The Interval field of an endpoint context: the period is 2^Interval
@@ -534,23 +616,9 @@ int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descript
         return -ENOMEM;
     ep->len = MIN(MAX(len, mps), 1024u);
 
-    /* Configure Endpoint adds the endpoint. The slot context comes from the
-     * device context, with the last valid context index raised. */
-    memset(s->in_ctx, 0, PAGE_SIZE);
-    in_ctx(x, s, 0)[1] = 1u | 1u << dci;
-    memcpy(in_ctx(x, s, 1), out_ctx(x, s, 0), x->ctx_size);
-    if (dci > s->max_dci)
-        s->max_dci = dci;
-    uint32_t *slotctx = in_ctx(x, s, 1);
-    slotctx[0] = (slotctx[0] & ~(0x1fu << 27)) | (uint32_t)s->max_dci << 27;
-    uint32_t *epc = in_ctx(x, s, dci + 1);
-    epc[0] = endpoint_interval(dev->speed, epd->bInterval) << 16;
-    epc[1] = 3u << 1 | EP_TYPE_INT_IN << 3 | mps << 16;
-    uint64_t deq = ep->ring.phys | 1;
-    epc[2] = (uint32_t)deq;
-    epc[3] = (uint32_t)(deq >> 32);
-    epc[4] = mps | mps << 16;                   /* average TRB length, maximum ESIT payload */
-    int r = command(x, s->in_phys, TRB_TYPE(TRB_CONFIGURE_EP) | TRB_SLOT(dev->slot), NULL);
+    /* The average TRB length and the maximum ESIT payload are one packet. */
+    int r = configure_endpoint(x, s, dci, endpoint_interval(dev->speed, epd->bInterval) << 16,
+                               3u << 1 | EP_TYPE_INT_IN << 3 | mps << 16, mps | mps << 16);
     if (r < 0)
         return r;
     spin_lock(&x->lock);
@@ -562,11 +630,112 @@ int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descript
     return 0;
 }
 
+int xhci_bulk_open(struct usb_device *dev, const struct usb_endpoint_descriptor *epd, unsigned max_burst)
+{
+    struct xhci *x = dev->hc;
+    struct slot *s = container_of(dev, struct slot, dev);
+    unsigned dci = ep_dci(epd->bEndpointAddress);
+    if ((epd->bEndpointAddress & 0xf) == 0 || (epd->bmAttributes & USB_EP_XFER_MASK) != USB_EP_XFER_BULK)
+        return -EINVAL;
+    struct endpoint *ep = &s->ep[dci];
+    if (ep->ring.trb)
+        return -EBUSY;
+    if (ring_init(&ep->ring) < 0 || !(ep->bulk_pages = pmm_alloc(BULK_ORDER)))
+        return -ENOMEM;
+    ep->buf = phys_to_virt(page_to_phys(ep->bulk_pages));
+    ep->buf_phys = page_to_phys(ep->bulk_pages);
+    unsigned mps = epd->wMaxPacketSize & 0x7ff;
+    unsigned type = (epd->bEndpointAddress & USB_DIR_IN) ? EP_TYPE_BULK_IN : EP_TYPE_BULK_OUT;
+    /* The average TRB length of a bulk endpoint is 3 KiB, as in edk2. */
+    int r = configure_endpoint(x, s, dci, 0, 3u << 1 | type << 3 | (max_burst & 0xff) << 8 | mps << 16, 3072);
+    if (r < 0)
+        return r;
+    spin_lock(&x->lock);
+    ep->bulk = true;
+    spin_unlock(&x->lock);
+    return 0;
+}
+
+int xhci_bulk(struct usb_device *dev, uint8_t ep_addr, void *buf, uint32_t len, unsigned timeout_ms,
+              uint32_t *actual)
+{
+    struct xhci *x = dev->hc;
+    struct slot *s = container_of(dev, struct slot, dev);
+    unsigned dci = ep_dci(ep_addr);
+    struct endpoint *ep = &s->ep[dci];
+    bool in = ep_addr & USB_DIR_IN;
+    *actual = 0;
+    if (dci >= MAX_DCI || !ep->bulk || len > XHCI_BULK_MAX)
+        return -EINVAL;
+    if (!in && len)
+        memcpy(ep->buf, buf, len);
+    spin_lock(&x->lock);
+    if (s->dev.gone) {
+        spin_unlock(&x->lock);
+        return -ENODEV;
+    }
+    ep->done = false;
+    ring_push(&ep->ring, ep->buf_phys, len, TRB_TYPE(TRB_NORMAL) | TRB_IOC | TRB_ISP);
+    doorbell(x, dev->slot, dci);
+    int err = wait_flag(x, &ep->done, &s->dev.gone, timeout_ms);
+    uint32_t cc = ep->cc, residual = ep->residual;
+    spin_unlock(&x->lock);
+    if (err == -ENODEV)
+        return err;
+    if (err < 0) {
+        klog_warn("slot %u: bulk transfer on endpoint %02x without completion", dev->slot, ep_addr);
+        recover_endpoint(x, s, dci, false);
+        return err;
+    }
+    if (cc == CC_STALL)
+        return -EPIPE;
+    if (cc != CC_SUCCESS && cc != CC_SHORT_PACKET) {
+        klog_warn("slot %u: bulk transfer on endpoint %02x: completion code %u", dev->slot, ep_addr, cc);
+        recover_endpoint(x, s, dci, true);
+        return -EIO;
+    }
+    uint32_t n = residual <= len ? len - residual : 0;
+    if (in && n)
+        memcpy(buf, ep->buf, n);
+    *actual = n;
+    return 0;
+}
+
+int xhci_clear_halt(struct usb_device *dev, uint8_t ep_addr)
+{
+    struct xhci *x = dev->hc;
+    struct slot *s = container_of(dev, struct slot, dev);
+    unsigned dci = ep_dci(ep_addr);
+    if (dci >= MAX_DCI || !s->ep[dci].ring.trb)
+        return -EINVAL;
+    recover_endpoint(x, s, dci, true);
+    int r = xhci_control(dev, USB_RECIP_ENDPOINT, USB_REQ_CLEAR_FEATURE, USB_FEATURE_ENDPOINT_HALT, ep_addr,
+                         NULL, 0);
+    return r < 0 ? r : 0;
+}
+
+int xhci_hub_configure(struct usb_device *dev, unsigned nports, unsigned ttt, bool mtt)
+{
+    struct xhci *x = dev->hc;
+    struct slot *s = container_of(dev, struct slot, dev);
+    memset(s->in_ctx, 0, PAGE_SIZE);
+    in_ctx(x, s, 0)[1] = 1u;
+    memcpy(in_ctx(x, s, 1), out_ctx(x, s, 0), x->ctx_size);
+    uint32_t *slotctx = in_ctx(x, s, 1);
+    slotctx[0] |= 1u << 26 | (mtt ? 1u << 25 : 0);
+    slotctx[1] = (slotctx[1] & 0x00ffffffu) | (uint32_t)MIN(nports, 255u) << 24;
+    slotctx[2] = (slotctx[2] & ~(3u << 16)) | (ttt & 3u) << 16;
+    return command(x, s->in_phys, TRB_TYPE(TRB_CONFIGURE_EP) | TRB_SLOT(dev->slot), NULL);
+}
+
 static void slot_free(struct slot *s)
 {
     for (unsigned i = 0; i < MAX_DCI; i++) {
         pmm_free_dma_page(s->ep[i].ring.trb);
-        pmm_free_dma_page(s->ep[i].buf);
+        if (s->ep[i].bulk_pages)
+            pmm_free(s->ep[i].bulk_pages, BULK_ORDER);
+        else
+            pmm_free_dma_page(s->ep[i].buf);
     }
     pmm_free_dma_page(s->out_ctx);
     pmm_free_dma_page(s->in_ctx);
@@ -575,15 +744,20 @@ static void slot_free(struct slot *s)
     kfree(s);
 }
 
-/* Give the device on a port an address and enumerate it. */
-static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
+/* Give a device an address and enumerate it. parent is NULL for a device
+ * on a root port and the hub otherwise, and port is the port of the root
+ * hub or of the parent hub. The slot context of a device behind a hub
+ * carries the route string, the root port and the transaction translator
+ * of a low or full speed device behind a high speed hub
+ * (XhcInitializeDeviceSlot of edk2). Returns the device, or NULL. */
+static struct usb_device *attach(struct xhci *x, struct usb_device *parent, unsigned port, enum usb_speed speed)
 {
     unsigned slot;
     if (command(x, 0, TRB_TYPE(TRB_ENABLE_SLOT), &slot) < 0)
-        return;
+        return NULL;
     if (slot < 1 || slot > x->max_slots) {
         klog_error("port %u: slot %u out of range", port, slot);
-        return;
+        return NULL;
     }
     struct slot *s = kzalloc(sizeof *s);
     if (!s || !(s->out_ctx = pmm_alloc_dma_page(&s->out_phys)) || !(s->in_ctx = pmm_alloc_dma_page(&s->in_phys)) ||
@@ -592,12 +766,30 @@ static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
         if (s)
             slot_free(s);
         command(x, 0, TRB_TYPE(TRB_DISABLE_SLOT) | TRB_SLOT(slot), NULL);
-        return;
+        return NULL;
     }
+    mutex_init(&s->ctrl_lock, "xhci_ctrl");
     s->dev.hc = x;
     s->dev.slot = slot;
-    s->dev.port = port;
-    s->dev.speed = (enum usb_speed)PORTSC_SPEED(portsc);
+    s->dev.speed = speed;
+    if (parent) {
+        s->dev.parent = parent;
+        s->dev.parent_port = port;
+        s->dev.port = parent->port;
+        s->dev.depth = parent->depth + 1;
+        s->dev.route = parent->route | (uint32_t)MIN(port, 15u) << (4 * parent->depth);
+        if ((speed == USB_SPEED_LOW || speed == USB_SPEED_FULL) && parent->speed == USB_SPEED_HIGH) {
+            s->dev.tt_slot = parent->slot;
+            s->dev.tt_port = port;
+        } else {
+            s->dev.tt_slot = parent->tt_slot;
+            s->dev.tt_port = parent->tt_port;
+        }
+        ksnprintf(s->dev.path, sizeof s->dev.path, "%s.%u", parent->path, port);
+    } else {
+        s->dev.port = port;
+        ksnprintf(s->dev.path, sizeof s->dev.path, "%u", port);
+    }
     s->max_dci = 1;
     x->dcbaa[slot] = s->out_phys;
     spin_lock(&x->lock);
@@ -609,8 +801,9 @@ static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
      * until the device descriptor states it. */
     unsigned mps = s->dev.speed == USB_SPEED_SUPER ? 512 : s->dev.speed == USB_SPEED_HIGH ? 64 : 8;
     in_ctx(x, s, 0)[1] = 0x3;
-    in_ctx(x, s, 1)[0] = (uint32_t)s->dev.speed << 20 | 1u << 27;
-    in_ctx(x, s, 1)[1] = port << 16;
+    in_ctx(x, s, 1)[0] = s->dev.route | (uint32_t)s->dev.speed << 20 | 1u << 27;
+    in_ctx(x, s, 1)[1] = s->dev.port << 16;
+    in_ctx(x, s, 1)[2] = s->dev.tt_slot | s->dev.tt_port << 8;
     uint32_t *ep0 = in_ctx(x, s, 2);
     ep0[1] = 3u << 1 | EP_TYPE_CONTROL << 3 | mps << 16;
     uint64_t deq = s->ep[1].ring.phys | 1;
@@ -623,7 +816,7 @@ static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
 
     uint8_t head[8];
     if (xhci_control(&s->dev, USB_DIR_IN, USB_REQ_GET_DESCRIPTOR, USB_DT_DEVICE << 8, 0, head, 8) < 0) {
-        klog_warn("port %u: no device descriptor", port);
+        klog_warn("port %s: no device descriptor", s->dev.path);
         goto fail;
     }
     unsigned real = s->dev.speed == USB_SPEED_SUPER ? 1u << head[7] : head[7];
@@ -636,10 +829,7 @@ static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
     }
     usb_count_device(1);
     usb_enumerate(&s->dev);
-    mutex_lock(&usb_topology_lock);
-    x->port_slot[port] = s;
-    mutex_unlock(&usb_topology_lock);
-    return;
+    return &s->dev;
 fail:
     spin_lock(&x->lock);
     x->slots[slot] = NULL;
@@ -647,27 +837,59 @@ fail:
     command(x, 0, TRB_TYPE(TRB_DISABLE_SLOT) | TRB_SLOT(slot), NULL);
     x->dcbaa[slot] = 0;
     slot_free(s);
+    return NULL;
 }
 
-/* Remove the device of a disconnected port. Its events are ignored from
- * the moment its slot leaves slots[]. */
+struct usb_device *xhci_attach(struct usb_device *parent, unsigned port, enum usb_speed speed)
+{
+    return attach(parent->hc, parent, port, speed);
+}
+
+/* Give the device on a root port an address, enumerate it and publish
+ * it. */
+static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
+{
+    struct usb_device *dev = attach(x, NULL, port, (enum usb_speed)PORTSC_SPEED(portsc));
+    if (!dev)
+        return;
+    mutex_lock(&usb_topology_lock);
+    x->port_slot[port] = container_of(dev, struct slot, dev);
+    mutex_unlock(&usb_topology_lock);
+}
+
+/* Remove a disconnected device. Its transfers end with ENODEV from the
+ * moment it is marked gone, and its events are ignored from the moment
+ * its slot leaves slots[]. The class drivers unbind first. A hub removes
+ * the devices behind it, and mass storage waits for its last command. */
+void xhci_detach(struct usb_device *dev)
+{
+    struct xhci *x = dev->hc;
+    struct slot *s = container_of(dev, struct slot, dev);
+    spin_lock(&x->lock);
+    s->dev.gone = true;
+    for (unsigned i = 0; i < MAX_DCI; i++)
+        s->ep[i].active = false;
+    waitq_wake_all(&x->waitq);
+    spin_unlock(&x->lock);
+    klog_info("port %s: %s disconnected", s->dev.path, s->dev.product);
+    usb_disconnect(&s->dev);
+    spin_lock(&x->lock);
+    x->slots[s->dev.slot] = NULL;
+    spin_unlock(&x->lock);
+    command(x, 0, TRB_TYPE(TRB_DISABLE_SLOT) | TRB_SLOT(s->dev.slot), NULL);
+    x->dcbaa[s->dev.slot] = 0;
+    usb_count_device(-1);
+    slot_free(s);
+}
+
+/* Remove the device of a disconnected root port. */
 static void port_detach(struct xhci *x, unsigned port)
 {
     struct slot *s = x->port_slot[port];
     mutex_lock(&usb_topology_lock);
     x->port_slot[port] = NULL;
     mutex_unlock(&usb_topology_lock);
-    spin_lock(&x->lock);
-    x->slots[s->dev.slot] = NULL;
-    for (unsigned i = 0; i < MAX_DCI; i++)
-        s->ep[i].active = false;
-    spin_unlock(&x->lock);
-    klog_info("port %u: %s disconnected", port, s->dev.product);
-    usb_disconnect(&s->dev);
-    command(x, 0, TRB_TYPE(TRB_DISABLE_SLOT) | TRB_SLOT(s->dev.slot), NULL);
-    x->dcbaa[s->dev.slot] = 0;
-    usb_count_device(-1);
-    slot_free(s);
+    xhci_detach(&s->dev);
 }
 
 static void port_clear_changes(struct xhci *x, unsigned port, uint32_t portsc)
@@ -767,6 +989,19 @@ static void recover_halted(struct xhci *x)
     }
 }
 
+/* Handle the port changes of every hub. Only this thread frees slots, so a
+ * slot read from slots[] remains valid while the thread uses it. */
+static void service_hubs(struct xhci *x)
+{
+    for (unsigned slot = 1; slot <= MAX_SLOTS; slot++) {
+        spin_lock(&x->lock);
+        struct slot *s = x->slots[slot];
+        spin_unlock(&x->lock);
+        if (s && s->dev.hub && !s->dev.gone)
+            hub_service(&s->dev);
+    }
+}
+
 /* The controller thread: the ports present at boot, then every port status
  * change and every halted endpoint. Without an interrupt it also polls the
  * event ring. */
@@ -787,7 +1022,7 @@ static void xhci_thread(void *arg)
             process_events(x);
             for (unsigned i = 0; i < MAX_PORTS / 64; i++)
                 any |= x->port_pending[i] != 0;
-            if (any || x->ep_work)
+            if (any || x->ep_work || x->hub_work)
                 break;
             waitq_wait_timeout(&x->waitq, &x->lock, timer_ms() + (x->irq >= 0 ? 1000 : POLL_MS));
         }
@@ -795,12 +1030,16 @@ static void xhci_thread(void *arg)
         memset(x->port_pending, 0, sizeof x->port_pending);
         work = x->ep_work;
         x->ep_work = false;
+        bool hubs = x->hub_work;
+        x->hub_work = false;
         spin_unlock(&x->lock);
         for (unsigned port = 1; port <= x->max_ports; port++)
             if (pending[port / 64] & (1UL << (port % 64)))
                 handle_port(x, port);
         if (work)
             recover_halted(x);
+        if (hubs)
+            service_hubs(x);
     }
 }
 
@@ -910,6 +1149,7 @@ static struct xhci *xhci_start(struct pci_dev *p, unsigned index)
     x->pci = p;
     x->index = index;
     spinlock_init(&x->lock, "xhci");
+    mutex_init(&x->cmd_lock, "xhci_cmd");
     waitq_init(&x->waitq, "xhci");
     pci_enable_bus_master(p);
     x->cap = vmm_map_mmio(p->bar[0], ALIGN_UP(size, PAGE_SIZE), VM_KERNEL_RW | VM_NOCACHE);
@@ -1012,8 +1252,9 @@ void usb_init(void)
         }
     }
     /* The devices present at boot are input devices before init starts the
-     * display server, which opens the input devices once. */
-    uint64_t deadline = timer_ms() + 2000;
+     * display server, which opens the input devices once, and disks before
+     * the partition scan. Hubs and mass storage need up to five seconds. */
+    uint64_t deadline = timer_ms() + 5000;
     for (unsigned i = 0; i < ncontrollers; i++) {
         struct xhci *x = controllers[i];
         spin_lock(&x->lock);
@@ -1022,7 +1263,7 @@ void usb_init(void)
         bool done = x->initial_done;
         spin_unlock(&x->lock);
         if (!done)
-            klog_warn("xhci%u: the devices present at boot are not enumerated within 2 s", i);
+            klog_warn("xhci%u: the devices present at boot are not enumerated within 5 s", i);
     }
 }
 

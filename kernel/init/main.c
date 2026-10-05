@@ -140,6 +140,10 @@ static void kinit(void *arg)
      * a thread. */
     nvme_init();
     ahci_init();
+    /* The xHCI threads enumerate the USB devices that are connected at
+     * boot: disks before the partition scan, input devices before init
+     * starts the display server. */
+    usb_init();
     /* Reading the partition tables needs a thread, which the block
      * drivers sleep in. */
     part_scan();
@@ -150,9 +154,6 @@ static void kinit(void *arg)
     virtio_snd_init();
     virtio_gpu_init();
     virtio_input_init();
-    /* The xHCI threads enumerate the USB devices that are connected at
-     * boot before init starts the display server. */
-    usb_init();
     swap_start_daemon();
     hung_start_daemon();
     tty_start_daemon();

@@ -659,3 +659,23 @@ These locks are in user space and do not add a kernel lock-order level.
   status that the interrupt handler collects for each port of one
   controller. It is the condition lock of the controller's wait queue,
   which gives `ahci_port.lock -> ahci.lock -> waitq.lock`.
+
+## R4 additions (USB mass storage and hubs)
+
+- `xhci.cmd_lock` (mutex, `drivers/usb/xhci.c`) serializes the commands
+  of one xHCI controller, which the controller thread and the threads of
+  the class drivers issue. It is taken before `xhci.lock`.
+- `slot.ctrl_lock` (mutex, `drivers/usb/xhci.c`) serializes the control
+  transfers of one device slot. A control transfer that ends with a
+  stall or a timeout recovers the endpoint through a command, which gives
+  `slot.ctrl_lock -> xhci.cmd_lock -> xhci.lock`.
+- `msc.lock` (mutex, `drivers/usb/msc.c`) serializes the bulk-only
+  commands of all logical units of one mass storage interface and
+  protects its tag. The SCSI transport takes it under `scsi_device.lock`,
+  and the reset recovery issues control transfers under it, which gives
+  `scsi_device.lock -> msc.lock -> slot.ctrl_lock`.
+- The port change map of a hub (`usb_hub.change`) is written by the
+  report callback under `xhci.lock` and taken by the controller thread
+  with an atomic exchange. The devices on the ports of a hub are
+  published under `usb_topology_lock`, like the devices of the root
+  ports.

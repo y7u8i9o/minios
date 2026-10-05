@@ -28,6 +28,10 @@ extern const uint8_t part_type_root[16], part_type_swap[16];
 /* Read the partition table of every registered disk and register its
  * partitions. Called once, from a thread, since it reads the disks. */
 void part_scan(void);
+/* Read the table of a disk registered after part_scan, such as a USB disk
+ * connected later. Called by blockdev_register; a no-op before the scan,
+ * for a partition and for a CD drive. */
+void part_add_disk(struct blockdev *disk);
 /* Read the table of disk again, after a program wrote it (BLKRRPART).
  * Returns -EBUSY when the root or swap lies on the disk. */
 int part_rescan(struct blockdev *disk);

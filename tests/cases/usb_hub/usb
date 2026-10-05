@@ -1,0 +1,1 @@
+qemu-xhci usb-hub@1 usb-kbd@1.1

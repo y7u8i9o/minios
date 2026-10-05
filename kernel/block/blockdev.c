@@ -104,7 +104,10 @@ int blockdev_register(struct blockdev *dev)
     spin_lock(&blockdev_lock);
     list_add_tail(&dev->link, &blockdevs);
     spin_unlock(&blockdev_lock);
-    return devfs_register(dev->name, S_IFBLK | 0600, &bdev_fops, dev, blockdev_size(dev));
+    int r = devfs_register(dev->name, S_IFBLK | 0600, &bdev_fops, dev, blockdev_size(dev));
+    if (r == 0)
+        part_add_disk(dev);
+    return r;
 }
 
 struct blockdev *blockdev_find(const char *name)
