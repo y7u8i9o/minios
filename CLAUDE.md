@@ -60,7 +60,7 @@ A monolithic x86_64 and aarch64 kernel written in C, booted by Limine, running u
 - "Like X" for a GUI design means the architecture or the idea of X, not its look. Use the minios proportions and palette (36 px header, 6 px corners, 16 px shadow margin, 20 px buttons).
 - Only touch paths inside the repository and the session scratchpad. Never list or search directories elsewhere on the host. When a task needs a file from elsewhere, ask for its exact path.
 - Write command output to one file in the scratchpad that every run overwrites. Never create a log file per run in `build/`. Delete the file when the task is finished.
-- `make test` builds the kernel, the initrd and the images by itself. Do not run `make` before it. Finish all edits first, then run one `make test CASES="..."` with every case chosen from the changed files. Run a second architecture only for a case that the first architecture skips. Host unit tests (`make check-lua`, `make check-sh`, `make -C lib/libgui check`) are preferred where they cover the change.
+- `make test` builds the kernel, the initrd and the images by itself. Do not run `make` before it. Finish all edits first, then run one `make test CASES="..."` with every case chosen from the changed files. Run a second architecture only for a case that the first architecture skips. Host unit tests (`make check-lua`, `make check-sh`, `make -C libgui check`) are preferred where they cover the change.
 
 ## Development environment
 
