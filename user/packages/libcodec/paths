@@ -5,3 +5,4 @@ usr/lib/codecs/bmp.so
 usr/bin/codecs
 usr/share/man/man1/codecs.1
 usr/lib/codecs/jpeg.so
+usr/lib/codecs/gif.so

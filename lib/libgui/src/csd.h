@@ -11,10 +11,10 @@
 #define CSD_RADIUS 6
 #define CSD_BORDER_ZONE 8      /* resize zone outside the frame, inside the margin */
 #define CSD_BUTTON 22
-#define CSD_CORNER 20          /* corner resize zones along the edges */
+#define CSD_CORNER 24          /* corner resize zones along the edges */
+#define CSD_CORNER_REACH 12    /* corner squares outside the frame, inside the margin */
 
 enum csd_zone { CSD_OUTSIDE, CSD_CONTENT, CSD_HEADER_BAR, CSD_CLOSE, CSD_MAXIMIZE, CSD_MINIMIZE, CSD_RESIZE };
-enum { CSD_EDGE_TOP = 1, CSD_EDGE_BOTTOM = 2, CSD_EDGE_LEFT = 4, CSD_EDGE_RIGHT = 8 };
 
 struct csd {
     int enabled;               /* the compositor granted client decorations */
@@ -30,11 +30,11 @@ int csd_header(const struct csd *c);
 void csd_buffer_size(const struct csd *c, int w, int h, int *bw, int *bh);
 struct rect csd_frame(const struct csd *c, int w, int h);
 struct rect csd_content(const struct csd *c, int w, int h);
-/* What lies at (x, y) of the buffer; edges for CSD_RESIZE. */
+/* What lies at (x, y) of the buffer; edges (GUI_EDGE_*) for CSD_RESIZE. */
 enum csd_zone csd_hit(const struct csd *c, int w, int h, int x, int y, int *edges);
 /* Regions in surface coordinates; the number of rectangles. */
 int csd_opaque_region(const struct csd *c, int w, int h, struct rect out[4]);
-int csd_input_region(const struct csd *c, int w, int h, struct rect out[1]);
+int csd_input_region(const struct csd *c, int w, int h, struct rect out[5]);
 /* Paint the chrome (everything but the contents) into buf, scale device
  * pixels per logical pixel; returns the painted device rectangle. */
 struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w, int h);

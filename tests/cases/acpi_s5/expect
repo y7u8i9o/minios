@@ -1,0 +1,4 @@
+acpi_s5: \\_S5 has [0-9]+ values
+acpi_s5: ok
+TEST PASS
+power button through the fixed power button event of ACPI

@@ -39,14 +39,18 @@ assert(thread.send(message))
 
 Each direction has a queue limited to 128 messages and 65536 payload bytes.
 An individual message may contain arbitrary bytes, including NUL, up to 8192
-bytes. Sends copy the data and never wait for queue space. An oversized
-message is an argument error. A full queue returns `nil, message, EAGAIN`.
-Applications must retry, coalesce replaceable updates, or handle the failure.
-The binding never silently drops a successfully queued message.
+bytes. Sends copy the data. An oversized message is an argument error. A
+send without a timeout never waits for queue space. A full queue then
+returns `nil, message, EAGAIN`. A send with a timeout waits for space until
+the timeout passes or a stop is requested, and then returns `EAGAIN`. A
+stop request ends the wait, so a worker that sends while its parent joins it
+cannot wait forever. Applications must retry, coalesce replaceable updates,
+or handle the failure. The binding never silently drops a successfully
+queued message.
 
 | Parent handle | Behavior |
 | --- | --- |
-| `send(bytes)` | Enqueue a command, returning true or `nil, message, errno` |
+| `send(bytes [, timeout_ms = 0])` | Enqueue a command, returning true or `nil, message, errno` |
 | `receive([timeout_ms = 0])` | Receive one result, waiting up to the timeout |
 | `fd()` | Borrow the result queue's descriptor for polling or a GUI watch |
 | `status()` | Return `"running"`, `"done"` or `"error"` |
@@ -54,10 +58,10 @@ The binding never silently drops a successfully queued message.
 | `join()` | Wait for termination, returning true or `nil, traceback` |
 | `close()` | Request shutdown, join and release the handle |
 
-In a worker, `thread.send`, `thread.receive` and `thread.fd` operate on its
-parent connection. `thread.stop_requested()` reads the cancellation flag.
-`thread.active()` counts active workers in the process, excluding the main
-thread. Nested workers are allowed and need the same explicit cleanup.
+In a worker, `thread.send(bytes [, timeout_ms])`, `thread.receive` and
+`thread.fd` operate on its parent connection. `thread.stop_requested()`
+reads the cancellation flag. `thread.active()` counts active workers in the
+process, excluding the main thread. Nested workers are allowed and need the same explicit cleanup.
 
 A receive timeout of 0 is nonblocking, -1 waits indefinitely, and positive
 values are milliseconds. No available message returns `ETIMEDOUT`. Pending
@@ -115,6 +119,8 @@ uses the distinct name `open_fd`.
 | `sys.clock_ns([clock = "monotonic"])` | Integer elapsed-clock nanoseconds, or `"realtime"` for the wall clock |
 | `sys.usage([scope = "process"])` | CPU and resource accounting, also accepts `"thread"` and `"children"` |
 | `sys.thread_id()` | Kernel ID of the calling thread |
+| `sys.crc32(bytes [, crc = 0])` | The CRC-32 of gzip and zlib, continued from `crc` |
+| `sys.isatty(fd)` | True when the descriptor is a terminal |
 
 `sys.poll` accepts up to 1024 entries of the form
 `{fd = descriptor, events = sys.POLLIN | sys.POLLOUT}`. Events default to
@@ -124,7 +130,11 @@ Returned events may include `POLLERR`, `POLLHUP` and `POLLNVAL`. Errors return
 
 Open flags include `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREAT`, `O_TRUNC`,
 `O_APPEND`, `O_EXCL` and `O_NONBLOCK`. `sys.errno` exports `EAGAIN`, `EINTR`,
-`ETIMEDOUT`, `EPIPE` and `EINVAL`. The existing `sys.read(fd [, count])`
+`ETIMEDOUT`, `EPIPE`, `EINVAL`, the file errors `ENOENT`, `EEXIST`,
+`EACCES`, `EPERM`, `EIO`, `ENOSPC`, `ENOTDIR`, `EISDIR`, `ENOTEMPTY`,
+`ENAMETOOLONG`, `EXDEV`, `ESTALE`, `ECANCELED` and `EPROTO`, and the
+network errors `ECONNREFUSED`, `ECONNRESET`, `EHOSTUNREACH`, `ENETUNREACH`
+and `EADDRINUSE`. The existing `sys.read(fd [, count])`
 returns an empty string for would-block or interruption, and nil at EOF.
 Callers needing readiness distinctions should inspect poll events first.
 `sys.sleep(ms)` accepts nonnegative integer milliseconds up to INT_MAX.
@@ -144,7 +154,7 @@ not be used as a CPU utilization measurement.
 
 ## Validation
 
-`make check-lua` runs 147 binding checks and the synthesizer worker test on
+`make check-lua` runs 451 binding checks and the synthesizer worker test on
 the host. `lua_threads` runs the binding checks inside MiniOS, covering
 state isolation, thread IDs, binary messages, queue limits, descriptor
 readiness, timeout and stop behavior, worker errors, GC, simultaneous workers,

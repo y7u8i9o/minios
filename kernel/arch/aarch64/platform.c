@@ -8,6 +8,7 @@
 #include "devtree.h"
 #include "its.h"
 #include "gic.h"
+#include <drivers/acpi.h>
 
 /* PSCI calls through the conduit of the device tree or the FADT: hvc on
  * QEMU virt without EL2 or EL3 firmware, smc where firmware at EL3
@@ -35,16 +36,36 @@ uint32_t platform_psci_version(void)
     return (uint32_t)x0;
 }
 
+/* The FADT of an ARM machine requires PSCI for the power off and the
+ * reset. A call that returns failed. Then the sleep state and the reset
+ * register of ACPI follow, when the machine has them. */
 __noreturn void platform_power_off(void)
 {
     psci_call(PSCI_SYSTEM_OFF);
+    acpi_power_off();
     cpu_halt_forever();
 }
 
 __noreturn void platform_reboot(void)
 {
     psci_call(PSCI_SYSTEM_RESET);
+    acpi_reboot();
     cpu_halt_forever();
+}
+
+/* The architecture has no I/O port space. */
+bool platform_has_ports(void)
+{
+    return false;
+}
+
+uint32_t platform_port_read(uint16_t port, unsigned width)
+{
+    return 0xffffffffu;
+}
+
+void platform_port_write(uint16_t port, unsigned width, uint32_t value)
+{
 }
 
 void platform_test_exit(int code)

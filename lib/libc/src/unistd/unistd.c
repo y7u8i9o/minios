@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -646,10 +647,14 @@ int sleep_ms(unsigned long ms)
     return (int)syscall1(SYS_sleep_ms, ms);
 }
 
+/* sleep returns the unslept seconds, rounded up, when a signal ends the
+ * sleep (POSIX). */
 unsigned sleep(unsigned seconds)
 {
-    sleep_ms((unsigned long)seconds * 1000);
-    return 0;
+    struct timespec request = { .tv_sec = seconds, .tv_nsec = 0 }, remain = { 0, 0 };
+    if (nanosleep(&request, &remain) == 0)
+        return 0;
+    return (unsigned)remain.tv_sec + (remain.tv_nsec > 0);
 }
 
 int usleep(unsigned long usec)

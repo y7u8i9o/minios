@@ -2,9 +2,10 @@
  * protocol/debug.xml). While a tracer is started, the libwire trace hook
  * turns every request X12 decodes and every event it queues into one
  * tracer.message event, with the arguments formatted as text. The traffic
- * of a client that traces is never traced, so that two tracers cannot
- * feed each other. A tracer whose socket backs up gets a count of the
- * messages it missed instead of the messages. X12 is single threaded, so
+ * of a client that traces is never traced. Two tracers therefore cannot
+ * trace the messages of each other without end. A tracer whose socket
+ * buffer is full gets a count of the messages it missed instead of the
+ * messages. X12 is single threaded, so
  * the tables below need no lock. */
 #include <stdio.h>
 #include <string.h>

@@ -27,10 +27,12 @@ The writer grows its buffer from 64 KiB to at most 4 MiB.
 | `system` | `drivers/devinfo.c` | release, build, architecture, CPUs, uptime, clock, bootloader, command line, boot disk, kernel addresses, configuration |
 | `firmware` | `drivers/devinfo.c`, `drivers/acpi_tables.c`, `drivers/smbios.c`, aarch64 `describe.c` | firmware type, ACPI table list, SMBIOS firmware, system, baseboard, chassis, processor sockets and memory modules, device tree model |
 | `cpu` | `arch/x86_64/cpu.c`, `arch/aarch64/describe.c` | x86_64: CPUID vendor, brand, family, features, caches. aarch64: MIDR, ID registers, features, caches. Both: one node per CPU |
-| `platform` | `arch/*/describe.c`, `apic.c`, `gic.c`, `its.c` | interrupt controllers, PCIe window, MSI mapping, serial port, clock device, PSCI, power off and reboot |
+| `platform` | `arch/*/describe.c`, `apic.c`, `gic.c`, `its.c` | interrupt controllers, PCIe window, MSI mapping, serial port, clock device, PSCI, power off and reboot, the ACPI namespace and the power button |
 | `memory` | `drivers/devinfo.c` | RAM, free and used memory, swap, every memory map entry |
 | `pci` | `drivers/pci.c` | IDs with vendor and device names, class, revision, command register, BAR addresses and sizes, interrupt pin, capabilities (power management, MSI, MSI-X, PCI Express link), bound driver |
 | `usb` | `drivers/usb/xhci.c`, `usb.c`, `hid.c` | controllers, every port with its status, devices with their strings and descriptors, interfaces with endpoints, drivers and input devices |
+| `nvme` | `drivers/nvme.c` | NVMe controllers with PCI address, version, model, serial number, firmware revision, interrupt, largest transfer, write cache and namespaces (`nvme.md`) |
+| `ahci` | `drivers/ahci.c` | AHCI controllers with PCI address, version and ports, and each port with a device: block device, kind, model, serial number and firmware revision (`ahci.md`) |
 | `input` | `input/core.c` | every input device with bus, IDs, keys, buttons, axes, repeat, readers |
 | `storage` | `block/part.c` | disks and GPT partitions with types, GUIDs and sizes, the filesystem and mount points of each, and every mounted filesystem with its space |
 | `display` | `drivers/fbdev.c`, `virtio_gpu.c` | resolution, scale, pixel format, driver, GPU scanout |

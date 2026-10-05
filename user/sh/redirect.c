@@ -96,6 +96,23 @@ int redirect_apply(struct redir *r, struct saved_fd **saved)
     return 0;
 }
 
+void redirect_discard(struct saved_fd *saved)
+{
+    fflush(NULL);
+    while (saved) {
+        struct saved_fd *next = saved->next;
+        if (saved->saved >= 0)
+            close(saved->saved);
+        if (saved->writer > 0) {
+            int status;
+            while (waitpid(saved->writer, &status, 0) < 0 && errno == EINTR)
+                ;
+        }
+        free(saved);
+        saved = next;
+    }
+}
+
 void redirect_restore(struct saved_fd *saved)
 {
     fflush(NULL);

@@ -54,6 +54,11 @@ long vma_mmap(struct vmspace *vm, uintptr_t hint, size_t len, unsigned flags);
  * the region, fixed places the region exactly at hint. */
 long vma_mmap_file(struct vmspace *vm, uintptr_t hint, size_t len, unsigned flags, bool fixed,
                    struct file *file, struct mapping *mapping, uint64_t offset);
+/* Map the regular file f privately or, with VM_SHARED in vmflags, shared:
+ * the region takes its own references to the file and its page cache.
+ * Returns the address or -errno. */
+long vma_mmap_regular(struct vmspace *vm, struct file *f, uintptr_t addr, size_t len, unsigned vmflags,
+                      bool fixed, uint64_t off);
 /* Map device memory [pa, pa + len) into a new mmap region. Returns the
  * address or -errno. */
 long vma_map_device(struct vmspace *vm, uintptr_t hint, uintptr_t pa, size_t len, unsigned flags);
@@ -83,6 +88,9 @@ bool vma_range_ok(struct vmspace *vm, uintptr_t addr, size_t len, bool write);
  * present are the error code bits. Used by the trap path and by
  * MADV_WILLNEED. Returns true when the access can be retried. */
 bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool present);
+/* Faults resolved since boot in every process: minor faults from memory,
+ * major faults from swap or a file. */
+void vma_get_fault_counts(uint64_t *minor, uint64_t *major);
 /* madvise on [addr, addr + len) (mm/madvise.c). */
 long vma_madvise(struct vmspace *vm, uintptr_t addr, size_t len, int advice);
 /* Number of frames present in the lower half (M40, counted on demand). */

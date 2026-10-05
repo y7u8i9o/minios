@@ -10,10 +10,6 @@ msgstr ""
 msgid "Open with"
 msgstr "Abrir con"
 
-#: user/desktop/desktop.c:452
-msgid "Program:"
-msgstr "Programa:"
-
 #: user/desktop/desktop.c:466
 msgid "Rename"
 msgstr "Renombrar"
@@ -97,3 +93,7 @@ msgstr "Aceptar"
 #: user/desktop/desktop.c:499
 msgid "Desktop"
 msgstr "Escritorio"
+
+#: user/desktop/desktop.c:601
+msgid "“%s” cannot be started: %s."
+msgstr "No se puede iniciar «%s»: %s."

@@ -7,9 +7,11 @@ image/png png
 image/bmp bmp dib
 image/jpeg jpg jpeg jpe jfif
 image/svg+xml svg
+image/gif gif
 audio/x-wav wav wave
 audio/flac flac
 audio/ogg ogg oga
+audio/mpeg mp3
 application/x-launcher app
 application/x-minios-package mpk
 application/octet-stream bin img

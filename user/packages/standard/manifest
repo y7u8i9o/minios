@@ -6,4 +6,5 @@ depends textutils
 depends locales
 depends edit
 depends games
+depends pfetch
 depends disktools

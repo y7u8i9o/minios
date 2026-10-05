@@ -8,6 +8,10 @@
 typedef uint16_t in_port_t;
 typedef uint32_t in_addr_t;
 
+/* The size of the text of an IPv4 address with its NUL byte, for
+ * inet_ntop. */
+#define INET_ADDRSTRLEN 16
+
 static inline uint16_t htons(uint16_t v)
 {
     return (uint16_t)((v << 8) | (v >> 8));

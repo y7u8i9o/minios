@@ -183,7 +183,7 @@ every other image 0.
 
 The privileged operations require effective uid 0 and fail with `EPERM`
 otherwise, namely `mount`, `umount`, `reboot` (which also remains limited to
-init), `clock_settime`, raising a hard resource limit, `prlimit` on a
+init), `clock_settime`, setting a slew with `adjtime`, raising a hard resource limit, `prlimit` on a
 process whose ids are not all the caller's effective uid, and the
 `NETIOC_CONFIGURE` and `NETIOC_ARP_PROBE` requests of `/dev/net`. Binding
 an AF_INET socket to a port from 1 to 1023 fails with `EACCES` for anyone
@@ -380,12 +380,9 @@ files are part of the root image. The membership of wheel lives in
 file without wheel. `fsinit` adds `wheel:x:10:` with the account of uid
 1000 to such a file when it mounts the volume, unless gid 10 is in use.
 
-The Users page of settings runs `sudo -S -k -p '' /bin/sh -c 'useradd
--c NAME ... && passwd ...'` and `sudo -S -k -p '' /bin/sh -c 'userdel -r
-...'`, where the field Your password gives the first line of the input.
-sudo reads that line, and the rest reaches `passwd`. `-k` makes sudo ask
-even with a valid time stamp, and the empty prompt retains the prompt text
-out of the status line of the page.
+Until 2026-10-05 the Users page of settings ran `sudo -S -k -p ''` with
+the password of a field Your password as the first line of the input.
+Since then it uses the authentication dialog (below).
 
 The programs needed the following additions to the kernel and the libc.
 
@@ -418,6 +415,56 @@ The programs needed the following additions to the kernel and the libc.
   `openpty` with the BSD signature, the `cf*` and `tc*` terminal
   functions, and the headers `paths.h`, `utmp.h`, `poll.h`, `utime.h`,
   `alloca.h`, `net/if.h` and `netinet/tcp.h` (`libc.md`).
+
+## The authentication dialog (2026-10-05)
+
+A program of the desktop runs a command as root through
+`app_run_privileged` of libgui (`lib/libgui/src/command.c`,
+`<gui/privilege.h>`). root runs the command directly. Another user runs
+`sudo -A -p REASON -- COMMAND`, and `/etc/sudo.conf` names
+`/usr/bin/askpass` as the askpass program of sudo. sudo runs askpass with
+the prompt as its argument and the credentials of the user, and reads the
+password from its standard output. Every program that runs `sudo -A`, also
+in the terminal, therefore gets the same dialog. A prompt that gives no
+reason, such as the own prompt of sudo, shows "Authentication is required
+to run a command as root."
+
+askpass (`user/askpass/askpass.c`, package `desktop`) is a layer surface
+of the overlay layer with the size of the screen, in the manner of the
+authentication dialog of GNOME. The screen is dimmed around a card in the
+middle, which shows the reason, the avatar and the full name of the user
+(`painter_avatar`, shared with the greeter), the password field, and the
+buttons Cancel and Authenticate. Enter in the field authenticates, and
+Escape cancels. The window has ARGB buffers (`gui_set_translucent`). Its
+opaque region is the card, and X12 blends the rest, which askpass fills
+with black of alpha 0x80. The overlay receives the keyboard when it maps.
+While an overlay has the keyboard, X12 refuses Alt+Tab and Alt+F4, and a
+click reaches no window below it, including the server side title bars.
+
+sudo runs askpass again after a wrong password, up to three times. Each
+run of sudo has a state file, `/tmp/.askpass-UID-PID` with the pid of
+sudo, which askpass creates at its first prompt. A later prompt that finds
+the file shows "The password was wrong. Try again." Cancel writes the
+word `cancel` into the file and ends askpass with status 1, after which
+sudo fails. `app_run_privileged` reads and removes the file after sudo and
+returns `-ECANCELED` for a cancelled dialog. askpass removes the state
+files of runs of sudo that have ended when it starts.
+
+`app_run_privileged` runs the command with `app_run_command`, which
+collects its output through a pipe watched by the event loop of the
+application. The windows of the application therefore continue to paint
+and to answer X12 while the dialog is open, and X12 does not report the
+program as not responding. The caller waits in a nested loop. A second
+command cannot start during that time (`-EBUSY`). The time stamp of sudo
+applies, so a second change within its validity runs without the dialog.
+
+The Region and language page sets the time zone with `ln -sf ZONE
+/etc/localtime` through `app_run_privileged`. The zones selected while the
+dialog is open are applied after it, the last one once. A cancelled or
+failed change selects the zone of `/etc/localtime` again. The Users page
+adds accounts with `useradd -c NAME ... && passwd ...` and removes them
+with `userdel -r NAME` the same way, and `passwd` reads the password of
+the new account twice from the input.
 
 ## The display of a console session (2026-10-03)
 
@@ -498,6 +545,16 @@ Enter, finds the panel and the desktop running as uid 1000 in
 again, and has `doas -u user` run a settings request of uid 1000, which
 X12 must refuse. `pause=1` leaves the window open for screenshots. `gui_settings`
 opens the Users page with the other pages.
+
+The case `gui_askpass` sets the password of `user`, starts X12 with the
+session uid 1000 and runs `settings region` as `user` through `doas -u`.
+The first change of the time zone shows the dialog, and a pixel above the
+window must lose at least a quarter of its brightness. A wrong password
+shows the dialog again, and the right one sets the zone. The second change
+passes through the time stamp of sudo without a dialog. After `sudo -K`
+the third change shows the dialog, and Escape cancels it. `/etc/localtime`
+must then name the second zone. The qmp file of the case takes a
+screenshot of the dialog.
 
 The case `privilege` drives init on the console with pauses, because
 password prompts discard the input typed before them. root sets the

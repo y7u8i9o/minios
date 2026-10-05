@@ -10,10 +10,6 @@ msgstr ""
 msgid "Open with"
 msgstr "Открыть с помощью"
 
-#: user/desktop/desktop.c:452
-msgid "Program:"
-msgstr "Программа:"
-
 #: user/desktop/desktop.c:466
 msgid "Rename"
 msgstr "Переименовать"
@@ -97,3 +93,7 @@ msgstr "ОК"
 #: user/desktop/desktop.c:499
 msgid "Desktop"
 msgstr "Рабочий стол"
+
+#: user/desktop/desktop.c:601
+msgid "“%s” cannot be started: %s."
+msgstr "Не удаётся запустить «%s»: %s."

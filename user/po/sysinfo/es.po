@@ -1133,3 +1133,35 @@ msgstr "Origen"
 #: user/apps/sysinfo.c
 msgid "Use"
 msgstr "Uso"
+
+#: user/apps/sysinfo.c:62
+msgid "64-bit addresses"
+msgstr "Direcciones de 64 bits"
+
+#: user/apps/sysinfo.c:55
+msgid "AHCI"
+msgstr "AHCI"
+
+#: user/apps/sysinfo.c:55
+msgid "NVMe"
+msgstr "NVMe"
+
+#: user/apps/sysinfo.c:141
+msgid "Firmware revision"
+msgstr "Revisión del firmware"
+
+#: user/apps/sysinfo.c:193
+msgid "Kind"
+msgstr "Clase"
+
+#: user/apps/sysinfo.c:194
+msgid "Largest transfer"
+msgstr "Transferencia máxima"
+
+#: user/apps/sysinfo.c:229
+msgid "Namespaces"
+msgstr "Espacios de nombres"
+
+#: user/apps/sysinfo.c:323
+msgid "Volatile write cache"
+msgstr "Caché de escritura volátil"

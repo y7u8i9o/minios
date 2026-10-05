@@ -4,9 +4,10 @@
  * the errors, and CODEC_PATH. "codectest audio" checks the audio streams
  * and the WAV module, "codectest flac" the FLAC module and "codectest
  * vorbis" the Vorbis decoder, both with the fixtures of
- * tools/gen_codec_fixtures.py, "codectest vorbisenc" the Vorbis encoder
- * and "codectest oggflac" FLAC in Ogg. Any other argument runs every
- * section. "codectest count" prints the number of codecs and is used by
+ * tools/gen_codec_fixtures.py, "codectest vorbisenc" the Vorbis encoder,
+ * "codectest oggflac" FLAC in Ogg, "codectest mp3" the MP3 decoder and
+ * encoder and "codectest gif" the GIF decoder and encoder with
+ * animations. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
  * the child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
@@ -823,6 +824,240 @@ static void test_oggflac(void)
     printf("codectest: oggflac round trips done\n");
 }
 
+/* ---- MP3 ---- */
+
+/* A chord with a tremolo, as the fixtures of the lossy encoders use. */
+static void music(int32_t *s, long frames, int channels, int rate)
+{
+    for (long i = 0; i < frames; i++)
+        for (int c = 0; c < channels; c++) {
+            double t = (double)i / rate;
+            double v = 0.25 * sin(2 * M_PI * (220 + 110 * c) * t) + 0.15 * sin(2 * M_PI * 523.25 * t) +
+                       0.1 * sin(2 * M_PI * 1318.5 * t) * (0.5 + 0.5 * sin(2 * M_PI * 2 * t));
+            s[i * channels + c] = (int32_t)(v * 2147483647.0);
+        }
+}
+
+/* The fixtures of LAME against their decoding by FFmpeg, and round trips
+ * through the encoder at each MPEG version. */
+static void test_mp3(void)
+{
+    const struct codec *mp3 = codec_find("mp3");
+    CHECK(mp3 && mp3->kind == CODEC_AUDIO && (mp3->caps & CODEC_DECODE) && (mp3->caps & CODEC_ENCODE), "mp3 codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/mpeg", CODEC_DECODE) == mp3, "mp3 by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.MP3", CODEC_DECODE) == mp3, "mp3 by extension");
+    if (!mp3)
+        return;
+    static const struct { const char *name; long frames; } files[] = {
+        { "lame", 66150 }, { "vbr22", 26460 }, { "8k", 13248 } };
+    for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
+        char path[96], ref[96];
+        snprintf(path, sizeof path, "/etc/tests/codec-mp3-%s.mp3", files[i].name);
+        snprintf(ref, sizeof ref, "/etc/tests/codec-mp3-%s.ref.flac", files[i].name);
+        struct codec_audio *a, *b;
+        int ea = codec_audio_open_file(path, &a), eb = codec_audio_open_file(ref, &b);
+        CHECK(ea == 0 && eb == 0, "open %s %d, %s %d", path, ea, ref, eb);
+        if (ea || eb) {
+            if (!ea)
+                codec_audio_close(a);
+            if (!eb)
+                codec_audio_close(b);
+            continue;
+        }
+        CHECK(codec_audio_codec(a) == mp3, "%s is identified as MP3", path);
+        const struct codec_audio_format *fa = codec_audio_format(a), *fb = codec_audio_format(b);
+        long total = codec_audio_frames(a);
+        int32_t *sa, *sb;
+        long na = decode_all(a, &sa, &ea), nb = decode_all(b, &sb, &eb);
+        long worst = 0, count = 0;
+        double sum = 0;
+        if (fa->channels == fb->channels && na == nb)
+            for (long k = 0; k < na * fa->channels; k++) {
+                long d = labs((long)(((int64_t)sa[k] + 0x8000) >> 16) - (long)(sb[k] >> 16));
+                worst = d > worst ? d : worst;
+                sum += (double)d * d;
+                count++;
+            }
+        double rms = count ? sqrt(sum / count) : 99;
+        CHECK(ea == 0 && eb == 0 && na == nb && na == files[i].frames && total == na && fa->rate == fb->rate &&
+                  fa->channels == fb->channels,
+              "%s: %ld frames (%ld announced), reference %ld, error %d", path, na, total, nb, ea);
+        CHECK(worst <= 2 && rms < 1, "%s differs from FFmpeg by up to %ld, rms %.3f", path, worst, rms);
+        printf("codectest: mp3 %s %d Hz %d channels %ld frames, largest difference %ld\n", files[i].name, fa->rate,
+               fa->channels, na, worst);
+        free(sa);
+        free(sb);
+        codec_audio_close(a);
+        codec_audio_close(b);
+    }
+
+    static const struct { int rate, channels; const char *options; double min_snr; } runs[] = {
+        { 44100, 2, NULL, 15 }, { 48000, 1, "bitrate=64", 15 }, { 22050, 2, NULL, 15 },
+        { 16000, 1, "bitrate=32", 15 }, { 8000, 1, "bitrate=16", 10 } };
+    for (size_t r = 0; r < sizeof runs / sizeof runs[0]; r++) {
+        struct codec_audio_format f = { runs[r].rate, runs[r].channels, 16 };
+        long n = runs[r].rate + 777;
+        int32_t *in = malloc(sizeof *in * (size_t)n * f.channels), *out = NULL;
+        music(in, n, f.channels, f.rate);
+        uint8_t *file;
+        long size = codec_audio_encode_options(mp3, &f, in, n, runs[r].options, &file);
+        struct codec_audio *a;
+        int err = size > 0 ? codec_audio_open(NULL, file, (size_t)size, NULL, &a) : (int)size;
+        long m = err ? -1 : decode_all(a, &out, &err);
+        double snr = m == n ? snr_db(in, out, n * f.channels) : -99;
+        CHECK(size > 0 && err == 0 && m == n && snr > runs[r].min_snr, "mp3 round trip %d Hz %d channels: %ld of %ld frames, %d dB",
+              f.rate, f.channels, m, n, (int)snr);
+        printf("codectest: mp3 encoder %d Hz %d channels: %ld bytes, %d dB\n", f.rate, f.channels, size, (int)snr);
+        if (m >= 0)
+            codec_audio_close(a);
+        free(in);
+        free(out);
+        if (size > 0)
+            free(file);
+    }
+    struct codec_audio_format bad = { 96000, 2, 16 }, ok = { 44100, 2, 16 };
+    int32_t silence[64] = { 0 };
+    uint8_t *file;
+    CHECK(codec_audio_encode(mp3, &bad, silence, 10, &file) == -EINVAL, "mp3 refuses 96 kHz");
+    CHECK(codec_audio_encode_options(mp3, &ok, silence, 10, "bitrate=100", &file) == -EINVAL, "mp3 refuses 100 kbit/s");
+    /* A cut file ends early without an error. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-mp3-lame.mp3", &d, &len) == 0) {
+        struct codec_audio *a;
+        int32_t *s;
+        int err;
+        if (codec_audio_open(NULL, d, len / 2, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == 0 && n > 20000 && n < 66150, "a cut MP3 file: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        free(d);
+    }
+}
+
+/* ---- GIF ---- */
+
+/* The pixels of one frame of a reference strip, which ImageMagick stacked
+ * from top to bottom. A transparent pixel matches any transparent pixel. */
+static int same_frame(const uint32_t *pixels, const uint32_t *strip, int index, int w, int h)
+{
+    for (int i = 0; i < w * h; i++) {
+        uint32_t a = pixels[i], b = strip[(size_t)index * w * h + i];
+        if (!((a >> 24) == 0 && (b >> 24) == 0) && a != b)
+            return 0;
+    }
+    return 1;
+}
+
+static void test_gif(void)
+{
+    const struct codec *gif = codec_find("gif");
+    CHECK(gif && gif->kind == CODEC_IMAGE && (gif->caps & CODEC_ANIMATED) && (gif->caps & CODEC_ENCODE), "gif codec");
+    CHECK(codec_for_mime(CODEC_IMAGE, "image/gif", CODEC_DECODE) == gif, "gif by MIME type");
+    CHECK(codec_for_path(CODEC_IMAGE, "/home/Cat.GIF", CODEC_DECODE | CODEC_ANIMATED) == gif, "gif by extension");
+    if (!gif)
+        return;
+    static const struct { const char *name; int frames, loops, delays[4]; } files[] = {
+        { "pillow", 4, 3, { 100, 200, 300, 500 } }, { "previous", 4, 0, { 70, 70, 70, 70 } },
+        { "interlaced", 1, 1, { 100 } } };
+    for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
+        char path[96], ref[96];
+        snprintf(path, sizeof path, "/etc/tests/codec-gif-%s.gif", files[i].name);
+        snprintf(ref, sizeof ref, "/etc/tests/codec-gif-%s.ref.png", files[i].name);
+        struct codec_picture strip;
+        struct codec_animation *a;
+        int er = codec_image_load(ref, NULL, &strip), ea = codec_animation_open_file(path, &a);
+        CHECK(er == 0 && ea == 0, "open %s %d %d", path, er, ea);
+        if (er || ea) {
+            if (!er)
+                codec_picture_free(&strip);
+            if (!ea)
+                codec_animation_close(a);
+            continue;
+        }
+        const struct codec_animation_info *info = codec_animation_info(a);
+        int w = info->w, h = info->h, n = 0, delay, r;
+        CHECK(info->frames == files[i].frames && info->loops == files[i].loops && strip.w == w &&
+                  strip.h == h * files[i].frames,
+              "%s: %dx%d, %d frames, loops %d", path, w, h, info->frames, info->loops);
+        uint32_t *pixels = malloc(sizeof *pixels * (size_t)w * h);
+        while ((r = codec_animation_next(a, pixels, &delay)) == 1 && n < files[i].frames) {
+            CHECK(same_frame(pixels, strip.pixels, n, w, h), "%s: frame %d differs from ImageMagick", path, n);
+            CHECK(delay == files[i].delays[n], "%s: frame %d delay %d", path, n, delay);
+            n++;
+        }
+        CHECK(r == 0 && n == files[i].frames, "%s: %d frames, end %d", path, n, r);
+        CHECK(codec_animation_rewind(a) == 0 && codec_animation_next(a, pixels, &delay) == 1 &&
+                  same_frame(pixels, strip.pixels, 0, w, h),
+              "%s: rewind", path);
+        struct image *first = image_load(path);
+        CHECK(first && first->w == w && first->h == h && same_frame(first->pixels, strip.pixels, 0, w, h),
+              "%s: the first frame through libgui", path);
+        image_free(first);
+        printf("codectest: gif %s %dx%d, %d frames, loops %d\n", files[i].name, w, h, n, info->loops);
+        free(pixels);
+        codec_picture_free(&strip);
+        codec_animation_close(a);
+    }
+
+    /* At most 255 colours and transparency: the round trip is exact. */
+    enum { W = 37, H = 23 };
+    static uint32_t frames[3][W * H];
+    for (int k = 0; k < 3; k++)
+        for (int i = 0; i < W * H; i++) {
+            int x = i % W, y = i / W;
+            frames[k][i] = (x + y + k) % 7 == 0 ? 0 : 0xff000000u | (uint32_t)((x / 5 * 30 + k * 20) % 250) << 16 |
+                                                          (uint32_t)(y / 4 * 40) << 8 | (uint32_t)(k * 70);
+        }
+    struct codec_picture pic = { W, H, frames[0] }, back;
+    uint8_t *file;
+    long size = codec_image_encode(gif, &pic, &file);
+    CHECK(size > 0 && codec_image_decode(NULL, file, (size_t)size, NULL, NULL, &back) == 0 && back.w == W &&
+              back.h == H && same_frame(back.pixels, frames[0], 0, W, H),
+          "gif still round trip: %ld bytes", size);
+    if (size > 0) {
+        codec_picture_free(&back);
+        free(file);
+    }
+    struct codec_animation_info info = { W, H, 3, 0 };
+    struct codec_frame f[3] = { { frames[0], 40 }, { frames[1], 120 }, { frames[2], 1000 } };
+    CHECK(codec_animation_save("/tmp/anim.gif", NULL, &info, f, 3) == 0, "save an animation by extension");
+    struct codec_animation *a;
+    if (codec_animation_open_file("/tmp/anim.gif", &a) == 0) {
+        const struct codec_animation_info *got = codec_animation_info(a);
+        CHECK(got->frames == 3 && got->loops == 0, "the saved animation: %d frames, loops %d", got->frames, got->loops);
+        uint32_t pixels[W * H];
+        int delay;
+        for (int k = 0; k < 3; k++)
+            CHECK(codec_animation_next(a, pixels, &delay) == 1 && same_frame(pixels, frames[k], 0, W, H) &&
+                      delay == f[k].delay_ms,
+                  "the saved animation, frame %d: delay %d", k, delay);
+        codec_animation_close(a);
+    } else {
+        CHECK(0, "open the saved animation");
+    }
+    struct codec_animation *none;
+    CHECK(codec_animation_open_file("/usr/share/icons/folder.png", &none) == -ENOTSUP, "a PNG file has no animation");
+    CHECK(codec_animation_encode(codec_find("png"), &info, f, 3, &file) == -ENOTSUP, "the PNG codec has no animations");
+    /* A cut file: the frames before the cut. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-gif-pillow.gif", &d, &len) == 0) {
+        struct codec_animation *c;
+        if (codec_animation_open(NULL, d, len / 2, NULL, &c) == 0) {
+            uint32_t pixels[48 * 32];
+            int delay, k = 0;
+            while (codec_animation_next(c, pixels, &delay) == 1)
+                k++;
+            CHECK(k >= 1 && k < 4, "a cut GIF file: %d frames", k);
+            codec_animation_close(c);
+        }
+        free(d);
+    }
+}
+
 static void list_registry(void)
 {
     int modules = codec_module_count();
@@ -836,7 +1071,7 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac" };
+    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac", "mp3", "gif" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -858,6 +1093,10 @@ int main(int argc, char **argv)
         test_vorbis_encoder();
     if (WANTS("oggflac"))
         test_oggflac();
+    if (WANTS("mp3"))
+        test_mp3();
+    if (WANTS("gif"))
+        test_gif();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

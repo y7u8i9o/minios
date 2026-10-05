@@ -4,11 +4,16 @@
    xfer.py put  [-h HOST] [-p PORT] PATH...
    xfer.py get  [-h HOST] [-p PORT] [-o DIR] NAME...
    xfer.py ls   [-h HOST] [-p PORT] [DIR]
-HOST defaults to 127.0.0.1 (a guest reached through a QEMU port forward,
-which make run --nic user sets up on port 9100), PORT to 9100."""
+HOST defaults to 127.0.0.1, a guest reached through the port forward of
+make run, which forwards host port 9100 to the guest. PORT defaults to 9100
+for put, get and ls, and to 9101 for serve, the port that the guest's xfer
+uses for the host. A server writes an upload to a temporary file and
+renames it over the target only after a complete and correct transfer."""
 import os, socket, sys, zlib, threading, time
 
-HOST, PORT, OUT = '127.0.0.1', 9100, '.'
+HOST, PORT, OUT = '127.0.0.1', None, '.'
+CLIENT_PORT, SERVE_PORT = 9100, 9101
+PART_SUFFIX = '.xfer-part'
 CHUNK = 65536
 
 
@@ -90,40 +95,57 @@ def log(msg):
 
 
 def handle(c, directory):
+    """One request. Names come last on a request line and may contain
+    spaces, so the rest of the line after the fixed fields is the name."""
     with c:
         c.settimeout(30)
-        words = read_line(c).split(None, 2)
+        line = read_line(c)
+        verb, _, rest = line.partition(' ')
         try:
-            if len(words) == 3 and words[0] == 'PUT' and safe(words[2]):
-                name, size = words[2], words[1]
+            if verb == 'PUT' and ' ' in rest and safe(rest.split(' ', 1)[1]):
+                size, name = rest.split(' ', 1)
                 path = os.path.join(directory, name)
+                part = path + PART_SUFFIX
                 os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
                 started = time.time()
-                with open(path, 'wb') as f:
-                    crc = recv_to(c, int(size), f, name)
+                # The upload replaces the target only after it completed.
+                try:
+                    with open(part, 'wb') as f:
+                        crc = recv_to(c, int(size), f, name)
+                    os.replace(part, path)
+                except BaseException:
+                    if os.path.exists(part):
+                        os.unlink(part)
+                    raise
                 c.sendall(f'OK {size} {crc:08x}\n'.encode())
                 log(f'stored {name}, {size} bytes, {int(size) / 1024 / (time.time() - started + 1e-3):.0f} KiB/s')
-            elif len(words) >= 2 and words[0] == 'GET' and safe(' '.join(words[1:])):
-                words = ['GET', ' '.join(words[1:])]
-                path = os.path.join(directory, words[1])
+            elif verb == 'GET' and safe(rest):
+                path = os.path.join(directory, rest)
                 if os.path.isdir(path):
                     c.sendall(b'ERR is a directory\n')
                     return
                 size = os.path.getsize(path)
                 c.sendall(f'OK {size} {file_crc(path):08x}\n'.encode())
-                send_file(c, path, words[1])
-                log(f'served {words[1]}, {size} bytes')
-            elif words and words[0] == 'LIST' and (len(words) == 1 or ' '.join(words[1:]) == '.' or safe(' '.join(words[1:]))):
-                path = directory if len(words) == 1 or ' '.join(words[1:]) == '.' else os.path.join(directory, ' '.join(words[1:]))
+                send_file(c, path, rest)
+                log(f'served {rest}, {size} bytes')
+            elif verb == 'LIST' and (rest in ('', '.') or safe(rest)):
+                path = directory if rest in ('', '.') else os.path.join(directory, rest)
                 names = sorted(os.listdir(path))
                 c.sendall(b'OK\n')
+                # The checksum field is not computed: a listing must not read
+                # the files. GET carries the checksum.
                 for n in names:
                     p = os.path.join(path, n)
+                    if os.path.islink(p):
+                        continue
                     if os.path.isdir(p):
                         c.sendall(f'D {n}\n'.encode())
                     else:
-                        c.sendall(f'F {os.path.getsize(p)} {file_crc(p):08x} {n}\n'.encode())
+                        c.sendall(f'F {os.path.getsize(p)} 00000000 {n}\n'.encode())
                 c.sendall(b'END\n')
+            elif verb == 'MKDIR' and safe(rest):
+                os.makedirs(os.path.join(directory, rest), exist_ok=True)
+                c.sendall(b'OK\n')
             else:
                 c.sendall(b'ERR bad request\n')
         except OSError as e:
@@ -149,7 +171,7 @@ def connect():
         return socket.create_connection((HOST, PORT), timeout=30)
     except OSError as e:
         sys.exit(f'xfer: connect {HOST}:{PORT}: {e.strerror or e}'
-                 + ('; is the guest running "xfer serve" behind the port forward?' if PORT == 9100 else ''))
+                 + ('; is the guest running "xfer serve" behind the port forward?' if PORT == CLIENT_PORT else ''))
 
 
 def put_file(path, rel):
@@ -167,10 +189,24 @@ def put_file(path, rel):
     return 0 if ok else 1
 
 
+def make_remote_dir(rel):
+    """Ask the server to create a directory, empty ones included. An older
+    server answers "ERR bad request", which only means that an empty
+    directory is not created there."""
+    with connect() as s:
+        s.sendall(f'MKDIR {rel}\n'.encode())
+        reply = read_line(s)
+    if reply in ('OK', 'ERR bad request'):
+        return 0
+    log(f'{rel}: {reply}')
+    return 1
+
+
 def put(path, rel=None):
     rel = rel or os.path.basename(path.rstrip('/'))
     if os.path.isdir(path):
-        return max([put(os.path.join(path, n), rel + '/' + n) for n in sorted(os.listdir(path))] or [0])
+        status = make_remote_dir(rel)
+        return max([status] + [put(os.path.join(path, n), rel + '/' + n) for n in sorted(os.listdir(path))])
     return put_file(path, rel)
 
 
@@ -184,7 +220,8 @@ def listing(rel):
             line = read_line(s)
             if line == 'END' or not line:
                 return rows
-            rows.append(line.split(None, 3))
+            # "D name" or "F size crc name"; a name may contain spaces.
+            rows.append(line.split(' ', 1) if line.startswith('D ') else line.split(' ', 3))
 
 
 def get_file(rel):
@@ -210,6 +247,8 @@ def get(rel):
     rows = listing(rel)
     if rows is None:
         return get_file(rel)
+    # The directory is created even when it is empty.
+    os.makedirs(os.path.join(OUT, rel), exist_ok=True)
     return max([get(rel + '/' + (r[1] if r[0] == 'D' else r[3])) for r in rows] or [0])
 
 
@@ -234,6 +273,8 @@ while args and args[0].startswith('-') and len(args[0]) > 1:
     elif flag == '-o': OUT = value
     else: sys.exit(__doc__)
     args = args[2:]
+if PORT is None:
+    PORT = SERVE_PORT if cmd == 'serve' else CLIENT_PORT
 if cmd == 'serve':
     serve(args[0] if args else '.')
 elif cmd == 'put' and args:

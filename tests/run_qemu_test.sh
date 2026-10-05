@@ -127,18 +127,33 @@ PEER_PID="$OUTDIR/peer.pid"
 
 # The peer of a network case is stopped whenever this script ends, after
 # QEMU exited, after the timeout killed it, and on every early failure.
-# A peer that ignores SIGTERM for five seconds is killed.
+# The peer program and the process it recorded in PEER_PID, such as a
+# server that a peer script runs in the background, are both stopped: a
+# process whose parent script ends would otherwise continue under init.
+# A process that ignores SIGTERM for five seconds is killed.
 stop_peer() {
     [ -n "$PEERPID" ] || return 0
-    if kill -0 "$PEERPID" 2>/dev/null; then
-        kill "$PEERPID" 2>/dev/null
-        i=0
-        while kill -0 "$PEERPID" 2>/dev/null && [ "$i" -lt 50 ]; do
-            sleep 0.1
-            i=$((i + 1))
-        done
-        kill -0 "$PEERPID" 2>/dev/null && kill -9 "$PEERPID" 2>/dev/null
+    pids="$PEERPID"
+    if [ -s "$PEER_PID" ]; then
+        recorded=$(cat "$PEER_PID")
+        [ "$recorded" != "$PEERPID" ] && pids="$pids $recorded"
     fi
+    for pid in $pids; do
+        kill "$pid" 2>/dev/null
+    done
+    i=0
+    while [ "$i" -lt 50 ]; do
+        alive=""
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && alive="$alive $pid"
+        done
+        [ -z "$alive" ] && break
+        sleep 0.1
+        i=$((i + 1))
+    done
+    for pid in $pids; do
+        kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+    done
     wait "$PEERPID" 2>/dev/null
     PEERPID=""
 }
@@ -159,6 +174,7 @@ cleanup() {
     rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso" "$OUTDIR"/cd*.iso
     rm -rf "$OUTDIR"/cd*.iso.*
     [ -n "$QMPSOCK" ] && rm -f "$QMPSOCK"
+    [ -n "$VNCSOCK" ] && rm -f "$VNCSOCK"
 }
 trap cleanup EXIT
 
@@ -265,8 +281,42 @@ if [ -f "$CASE/qmp" ]; then
     rm -f "$QMPSOCK"
     QMPFLAGS="-qmp unix:$QMPSOCK,server=on,wait=off"
 fi
+# A case with a vnc file gets a VNC display on a Unix socket. The qmp
+# script reaches it through VNC_SOCKET, for example to change the size of
+# the display.
+VNCSOCK=""
+if [ -f "$CASE/vnc" ]; then
+    VNCSOCK="$OUTDIR/vnc.sock"
+    [ "${#VNCSOCK}" -ge 100 ] && VNCSOCK="/tmp/minios-vnc-$$.sock"
+    rm -f "$VNCSOCK"
+    QMPFLAGS="$QMPFLAGS -vnc unix:$VNCSOCK"
+fi
 [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
 [ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
+# A balloon file attaches virtio-balloon with the id balloon0, which the
+# QMP commands qom-get and qom-set use. The file contains further device
+# options, for example deflate-on-oom=on.
+# A share file gives the guest the scratch folder $OUTDIR/share through
+# virtio-9p with the mount tag host. An executable mkshare of the case
+# fills the folder first, and the post script finds it in SHARE.
+SHAREFLAGS=""
+SHARE=""
+if [ -f "$CASE/share" ]; then
+    SHARE="$OUTDIR/share"
+    rm -rf "$SHARE"
+    mkdir -p "$SHARE"
+    if [ -x "$CASE/mkshare" ]; then
+        SHARE="$SHARE" TOP="$TOP" BUILD="$(dirname "$BUILD")" "$CASE/mkshare" > "$OUTDIR/mkshare.log" 2>&1 ||
+            fail "mkshare, see $OUTDIR/mkshare.log"
+    fi
+    SHAREFLAGS="-fsdev local,id=share0,path=$SHARE,security_model=none -device virtio-9p-pci,fsdev=share0,mount_tag=host"
+fi
+BALLOONFLAGS=""
+if [ -f "$CASE/balloon" ]; then
+    BALLOONFLAGS="-device virtio-balloon-pci,id=balloon0,disable-legacy=on"
+    BALLOONOPTS="$(cat "$CASE/balloon")"
+    [ -n "$BALLOONOPTS" ] && BALLOONFLAGS="$BALLOONFLAGS,$BALLOONOPTS"
+fi
 if [ -f "$OUTDIR/disk.img" ]; then
     DISKIF=virtio
     [ -f "$CASE/diskif" ] && DISKIF="$(cat "$CASE/diskif")"
@@ -415,12 +465,14 @@ case "${ARCH:-x86_64}" in
         # virt has no VGA. ramfb is the boot framebuffer, like std VGA on
         # the PC. virtio-vga is a boot framebuffer and a virtio GPU. edk2
         # sets up no framebuffer on virtio-gpu-pci, and ramfb is added to it.
+        # virtio-gpu-pci comes first, as in tools/run.sh. Its console is then
+        # console 0, which the VNC display of a case shows.
         # virt adds a virtio-net device unless -nic none is given. A case
         # without a nic file gets no network device, like the PC, whose
         # e1000 has no driver.
         [ -f "$CASE/nic" ] || NETFLAGS="-nic none"
         VGAFLAGS="-device ramfb"
-        [ -f "$CASE/vga" ] && [ "$(cat "$CASE/vga")" = virtio ] && VGAFLAGS="$VGAFLAGS -device virtio-gpu-pci"
+        [ -f "$CASE/vga" ] && [ "$(cat "$CASE/vga")" = virtio ] && VGAFLAGS="-device virtio-gpu-pci $VGAFLAGS"
         [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
         [ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
         ;;
@@ -432,12 +484,12 @@ esac
 run_qemu() {
     "$QEMU" $MACHINE -m "${MEM}M" -smp "$CPUS" -accel "$ACCEL" -display none -no-reboot \
         -serial "file:$1" \
-        $3 $SOUNDFLAGS $VGAFLAGS $USBFLAGS $NETFLAGS $RNGFLAGS $QMPFLAGS \
+        $3 $SOUNDFLAGS $VGAFLAGS $USBFLAGS $NETFLAGS $RNGFLAGS $QMPFLAGS $BALLOONFLAGS $SHAREFLAGS \
         $2 >"$OUTDIR/qemu.log" 2>&1 &
     QPID=$!
     QMPPID=""
     if [ -n "$QMPSOCK" ]; then
-        python3 "$TOP/tests/qmp_input.py" "$QMPSOCK" "$1" "$CASE/qmp" > "$OUTDIR/qmp.log" 2>&1 &
+        VNC_SOCKET="$VNCSOCK" python3 "$TOP/tests/qmp_input.py" "$QMPSOCK" "$1" "$CASE/qmp" > "$OUTDIR/qmp.log" 2>&1 &
         QMPPID=$!
     fi
     ELAPSED=0
@@ -510,7 +562,7 @@ if [ -f "$CASE/reject" ]; then
 fi
 if [ -x "$CASE/post" ]; then
     if ! DISK="$OUTDIR/disk.img" DISK2="$DISK2" FATIMG="$FATIMG" FATIMGS="$FATIMGS" CDIMG="$CDIMG" SERIAL="$SERIAL" \
-         PEER_LOG="$PEER_LOG" PEER_READY="$PEER_READY" CAPTURE="$OUTDIR/capture.pcap" \
+         PEER_LOG="$PEER_LOG" PEER_READY="$PEER_READY" CAPTURE="$OUTDIR/capture.pcap" SHARE="$SHARE" \
          EXITCODE="$(cat "$OUTDIR/exitcode")" TOP="$TOP" BUILD="$(dirname "$BUILD")" "$CASE/post"; then
         echo "FAIL $NAME: post check failed"
         STATUS=1

@@ -2,6 +2,7 @@
  * kill, getppid and user threads. Exits 0 on success. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
@@ -112,8 +113,10 @@ int main(int argc, char **argv, char **envp)
     /* A crashing child reports SIGSEGV. */
     pid = fork();
     if (pid == 0) {
-        volatile int *p = (volatile int *)8;
-        *p = 1;
+        /* The address passes through a volatile variable. The compiler then
+         * cannot prove the store invalid at compile time. */
+        volatile uintptr_t bad = 8;
+        *(volatile int *)bad = 1;
         _exit(0);
     }
     wait4(pid, &status, 0, NULL);

@@ -6,12 +6,18 @@
  *   xfer serve [-p PORT] [DIR]                 serve DIR (default .)
  *
  * The host defaults to 10.0.2.2, the host as seen from QEMU user
- * networking, and the port to 9100, so in the guest "xfer put file" sends
- * to a host running "tools/xfer.py serve". Every transfer carries a CRC32
- * that both ends check. Directories are sent file by file with their
- * relative paths; the server accepts only relative paths without "..".
- * A connection that makes no progress for 30 seconds is dropped. The
- * server forks one child per client. See xfer(1). */
+ * networking.  The client port defaults to 9101 and the server port to
+ * 9100: make run forwards host port 9100 to the guest, so a server of the
+ * guest listens on 9100 and a server of the host on 9101.  In the guest
+ * "xfer put file" therefore sends to a host running "tools/xfer.py serve".
+ * Every transfer carries a CRC32 that both ends check.  Directories are
+ * sent file by file with their relative paths, and each directory, empty
+ * ones included, through a MKDIR request; the server accepts only relative
+ * paths without "..".  The server writes an upload to a temporary file and
+ * renames it over the target only after a complete and correct transfer,
+ * so a failed upload leaves an existing file intact.  A connection that
+ * makes no progress for 30 seconds is dropped.  The server forks one child
+ * per client.  See xfer(1). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,35 +32,18 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <minios/crc32.h>
 
 #define DEFAULT_HOST "10.0.2.2"
-#define DEFAULT_PORT "9100"
+#define DEFAULT_PORT "9101"             /* the server of the host */
+#define DEFAULT_SERVE_PORT "9100"       /* the port that make run forwards to the guest */
+#define PART_SUFFIX ".xfer-part"
 #define STALL_MS 30000
 #define CHUNK 65536
 
-static const char *host = DEFAULT_HOST, *port = DEFAULT_PORT;
+static const char *host = DEFAULT_HOST, *port = NULL;     /* NULL: the default of the command */
 static const char *outdir = ".";
 static int failures;
-
-/* ---- CRC32 (IEEE), the checksum of every transfer ---- */
-static uint32_t crc_table[256];
-static void crc_init(void)
-{
-    for (uint32_t i = 0; i < 256; i++) {
-        uint32_t c = i;
-        for (int k = 0; k < 8; k++)
-            c = c & 1 ? 0xedb88320u ^ (c >> 1) : c >> 1;
-        crc_table[i] = c;
-    }
-}
-static uint32_t crc_update(uint32_t crc, const void *buf, size_t n)
-{
-    const unsigned char *p = buf;
-    crc = ~crc;
-    while (n--)
-        crc = crc_table[(crc ^ *p++) & 255] ^ (crc >> 8);
-    return ~crc;
-}
 
 /* ---- bounded socket I/O ---- */
 static uint64_t now_ms(void)
@@ -122,7 +111,7 @@ static int copy(int from, int to, uint64_t n, int from_sock, uint32_t *crc, cons
         ssize_t r = read(from, buf, n < sizeof buf ? (size_t)n : sizeof buf);
         if (r <= 0)
             return -1;
-        *crc = crc_update(*crc, buf, (size_t)r);
+        *crc = crc32(*crc, buf, (size_t)r);
         if (from_sock ? (write(to, buf, (size_t)r) != r) : (send_all(to, buf, (size_t)r) < 0))
             return -1;
         n -= (uint64_t)r;
@@ -216,7 +205,7 @@ static int connect_to(void)
         if (errno == ENETUNREACH || errno == EADDRNOTAVAIL)
             fprintf(stderr, "xfer: the interface has no address; run dhcpc or net config first\n");
         else if (errno == ECONNREFUSED)
-            fprintf(stderr, "xfer: nothing is serving there; on the host run tools/xfer.py serve\n");
+            fprintf(stderr, "xfer: nothing is serving there; on the host run tools/xfer.py serve (port 9101)\n");
         freeaddrinfo(ai);
         return -1;
     }
@@ -225,6 +214,27 @@ static int connect_to(void)
 }
 
 /* ---- client ---- */
+
+/* make_remote_dir asks the server to create the directory rel.  A server
+ * without the MKDIR request answers with an error, which only means that
+ * an empty directory is not created there. */
+static int make_remote_dir(const char *rel)
+{
+    int fd = connect_to();
+    if (fd < 0)
+        return 1;
+    char line[1200];
+    snprintf(line, sizeof line, "MKDIR %s\n", rel);
+    int status = 0;
+    if (send_all(fd, line, strlen(line)) < 0 || read_line(fd, line, sizeof line) < 0)
+        status = 1;
+    else if (strcmp(line, "OK") != 0 && strcmp(line, "ERR bad request") != 0) {
+        fprintf(stderr, "xfer: %s: %s\n", rel, line);
+        status = 1;
+    }
+    close(fd);
+    return status;
+}
 
 static int put_file(const char *path, const char *rel)
 {
@@ -282,7 +292,7 @@ static int put_tree(const char *path, const char *rel, int operand)
     DIR *d = opendir(path);
     if (!d)
         return 1;
-    int status = 0;
+    int status = make_remote_dir(rel);
     struct dirent *e;
     while ((e = readdir(d))) {
         if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
@@ -391,6 +401,11 @@ static int get_tree(const char *rel)
     char *listing = list_dir(rel, &count, 1);
     if (!listing)
         return get_file(rel);   /* not a directory, or the error is printed */
+    /* The directory is created even when it is empty. */
+    char local[1200];
+    make_parents(outdir, rel);
+    snprintf(local, sizeof local, "%s/%s", outdir, rel);
+    mkdir(local, 0755);
     int status = 0;
     char *p = listing;
     for (size_t i = 0; i < count; i++) {
@@ -451,20 +466,31 @@ static void serve_one(int c, const char *dir)
             return;
         }
         make_parents(dir, rel);
+        char part[2200];
         snprintf(path, sizeof path, "%s/%s", dir, rel);
-        int file = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        snprintf(part, sizeof part, "%s%s", path, PART_SUFFIX);
+        /* The upload goes to a temporary file, which replaces the target
+         * only after the transfer completed. */
+        int file = open(part, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         uint32_t crc = 0;
         uint64_t start = now_ms();
-        if (file < 0 || copy(c, file, size, 1, &crc, rel) < 0) {
-            snprintf(text, sizeof text, "ERR %s\n", strerror(errno));
-            if (file >= 0)
-                unlink(path);
+        int ok = file >= 0 && copy(c, file, size, 1, &crc, rel) == 0;
+        int err = errno;
+        if (file >= 0 && close(file) < 0 && ok) {
+            ok = 0;
+            err = errno;
+        }
+        if (ok && rename(part, path) < 0) {
+            ok = 0;
+            err = errno;
+        }
+        if (!ok) {
+            snprintf(text, sizeof text, "ERR %s\n", strerror(err));
+            unlink(part);
         } else {
             snprintf(text, sizeof text, "OK %llu %08x\n", size, crc);
             report("stored", rel, size, start);
         }
-        if (file >= 0)
-            close(file);
         reply(c, text);
     } else if (strncmp(line, "GET ", 4) == 0 && rest_of(line, 1, rel, sizeof rel)) {
         if (!safe_path(rel)) {
@@ -484,7 +510,7 @@ static void serve_one(int c, const char *dir)
             static char buf[CHUNK];
             ssize_t r;
             while ((r = read(file, buf, sizeof buf)) > 0)
-                crc = crc_update(crc, buf, (size_t)r);
+                crc = crc32(crc, buf, (size_t)r);
             lseek(file, 0, SEEK_SET);
             snprintf(text, sizeof text, "OK %llu %08x\n", (unsigned long long)st.st_size, crc);
             uint32_t again = 0;
@@ -522,24 +548,30 @@ static void serve_one(int c, const char *dir)
              * descends into every directory cannot loop. */
             if (lstat(sub, &st) < 0 || S_ISLNK(st.st_mode))
                 continue;
-            if (S_ISDIR(st.st_mode)) {
+            /* The checksum field of a listing is not computed: a listing
+             * must not read the files.  GET carries the checksum. */
+            if (S_ISDIR(st.st_mode))
                 snprintf(line, sizeof line, "D %s\n", e->d_name);
-            } else {
-                uint32_t crc = 0;
-                int file = open(sub, O_RDONLY);
-                static char buf[CHUNK];
-                ssize_t r;
-                while (file >= 0 && (r = read(file, buf, sizeof buf)) > 0)
-                    crc = crc_update(crc, buf, (size_t)r);
-                if (file >= 0)
-                    close(file);
-                snprintf(line, sizeof line, "F %llu %08x %s\n", (unsigned long long)st.st_size, crc,
-                         e->d_name);
-            }
+            else
+                snprintf(line, sizeof line, "F %llu 00000000 %s\n", (unsigned long long)st.st_size, e->d_name);
             reply(c, line);
         }
         closedir(d);
         reply(c, "END\n");
+    } else if (strncmp(line, "MKDIR ", 6) == 0 && rest_of(line, 1, rel, sizeof rel)) {
+        if (!safe_path(rel)) {
+            reply(c, "ERR path must be relative without ..\n");
+            return;
+        }
+        make_parents(dir, rel);
+        snprintf(path, sizeof path, "%s/%s", dir, rel);
+        struct stat st;
+        if (mkdir(path, 0755) < 0 && !(errno == EEXIST && stat(path, &st) == 0 && S_ISDIR(st.st_mode))) {
+            snprintf(text, sizeof text, "ERR %s\n", strerror(errno));
+            reply(c, text);
+        } else {
+            reply(c, "OK\n");
+        }
     } else {
         reply(c, "ERR bad request\n");
     }
@@ -582,13 +614,13 @@ static int usage(void)
             "       xfer get [-h HOST] [-p PORT] [-o DIR] NAME...\n"
             "       xfer ls  [-h HOST] [-p PORT] [DIR]\n"
             "       xfer serve [-p PORT] [DIR]\n"
-            "HOST defaults to %s (the host under QEMU), PORT to %s.\n", DEFAULT_HOST, DEFAULT_PORT);
+            "HOST defaults to %s (the host under QEMU), PORT to %s, and to %s for serve.\n", DEFAULT_HOST,
+            DEFAULT_PORT, DEFAULT_SERVE_PORT);
     return 2;
 }
 
 int main(int argc, char **argv)
 {
-    crc_init();
     if (argc < 2)
         return usage();
     const char *cmd = argv[1];
@@ -600,6 +632,8 @@ int main(int argc, char **argv)
         else return usage();
     }
     int status = 0;
+    if (!port)
+        port = strcmp(cmd, "serve") == 0 ? DEFAULT_SERVE_PORT : DEFAULT_PORT;
     if (strcmp(cmd, "serve") == 0)
         return serve(i < argc ? argv[i] : ".");
     if (strcmp(cmd, "put") == 0) {

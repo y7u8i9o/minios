@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -20,6 +22,19 @@
 const char *root = "";
 /* --arch: the machine packages must be built for, NULL for the running one. */
 const char *target_arch;
+int verbose;
+
+void progress(const char *fmt, ...)
+{
+    if (!verbose)
+        return;
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    putchar('\n');
+    fflush(stdout);
+}
 
 void path_join(char *buf, size_t n, const char *dir, const char *rel)
 {

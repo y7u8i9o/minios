@@ -1,0 +1,4 @@
+name transfer
+summary File transfer between minios and the host over MFT
+launcher Transfer usr/bin/transfer
+depends lua-gui

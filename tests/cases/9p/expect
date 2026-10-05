@@ -1,0 +1,10 @@
+9p\] mount tag host
+9p\] host: 9P2000.L, message size
+9p.sh: read the host files
+9p.sh: wrote, renamed and removed files and folders
+9p.sh: four parallel readers, at most [0-9]+ pending requests
+9p.sh: ran a program from the share
+mmapfiletest: 0 failures
+9p.sh: mapped a file
+9p.sh: done
+TEST PASS

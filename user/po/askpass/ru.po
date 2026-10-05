@@ -1,0 +1,22 @@
+# Russian messages of the askpass domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Authentication is required to run a command as root."
+msgstr "Для выполнения команды от имени root требуется аутентификация."
+
+msgid "Authentication required"
+msgstr "Требуется аутентификация"
+
+msgid "The password was wrong. Try again."
+msgstr "Неверный пароль. Попробуйте ещё раз."
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Authenticate"
+msgstr "Подтвердить"

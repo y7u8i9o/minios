@@ -16,7 +16,7 @@ static int wait_child(pid_t pid)
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 
-static void child_signals(void)
+void child_signals(void)
 {
     signal(SIGINT, SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
@@ -86,12 +86,13 @@ int command_run(int argc, char **argv, int allow_functions)
     if (interactive)
         tcsetpgrp(0, getpgrp());
     if (job.used && job.state == JOB_STOPPED)
-        job_add(pid, job.pids, 1, job.text, JOB_STOPPED, 1);
+        job_add(pid, job.pids, job.statuses, 1, job.text, JOB_STOPPED, 1);
     return result;
 }
 
 static int simple(struct node *n)
 {
+    unsigned long substitutions_before = substitutions;
     struct word *first = n->words;
     while (first && assignment(first->text))
         first = first->next;
@@ -151,6 +152,10 @@ static int simple(struct node *n)
             command_text = old_text;
         }
     } else if (flow != FLOW_NORMAL) {
+        result = last_status;
+    } else if (substitutions != substitutions_before) {
+        /* POSIX 2.9.1: without a command name the status is the one of
+         * the last command substitution. */
         result = last_status;
     }
     fields_free(&args);
@@ -220,7 +225,7 @@ static int pipeline(struct node *first, int background, int one)
     }
     if (background) {
         last_background = pgid;
-        job_add(pgid, pids, count, first->text ? first->text : "pipeline", JOB_RUNNING, interactive);
+        job_add(pgid, pids, NULL, count, first->text ? first->text : "pipeline", JOB_RUNNING, interactive);
         return 0;
     }
     struct job job = {.used = 1, .state = JOB_RUNNING, .pgid = pgid, .npids = count};
@@ -230,7 +235,7 @@ static int pipeline(struct node *first, int background, int one)
     if (interactive)
         tcsetpgrp(0, getpgrp());
     if (job.used && job.state == JOB_STOPPED)
-        job_add(pgid, job.pids, count, job.text, JOB_STOPPED, 1);
+        job_add(pgid, job.pids, job.statuses, count, job.text, JOB_STOPPED, 1);
     return result;
 
 fail:
@@ -363,11 +368,16 @@ static int execute_one(struct node *n)
         result = 1;
     else
         result = compound(n);
-    redirect_restore(saved);
+    if (keep_redirects) {
+        keep_redirects = 0;
+        redirect_discard(saved);
+    } else {
+        redirect_restore(saved);
+    }
     return result;
 }
 
-int opt_errexit, errexit_off;
+int opt_errexit, errexit_off, opt_noglob, opt_pipefail, keep_redirects;
 
 int exec_node(struct node *n)
 {
@@ -375,6 +385,7 @@ int exec_node(struct node *n)
     for (; n && flow == FLOW_NORMAL; n = n->next) {
         result = execute_one(n);
         last_status = result;
+        traps_run_pending();
         if (opt_errexit && result != 0 && errexit_off == 0 && !n->bg) {
             fflush(NULL);
             exit(result);
@@ -434,6 +445,7 @@ char *capture(const char *cmd)
     close(fds[0]);
     if (pid > 0)
         last_status = wait_child(pid);
+    substitutions++;
     while (length && out[length - 1] == '\n')
         length--;
     out[length] = 0;

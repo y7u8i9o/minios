@@ -35,7 +35,26 @@ for _ = 1, 64 do assert(parker:send(string.rep('q', 1024))) end
 value, _, code = parker:send('x')
 check(not value and code == sys.errno.EAGAIN, 'bounded queue backpressure')
 check(not pcall(parker.send, parker, string.rep('x', 8193)), 'oversize message rejected')
+local started = sys.clock_ns()
+value, _, code = parker:send('x', 50)
+check(not value and code == sys.errno.EAGAIN and sys.clock_ns() - started >= 45000000, 'waiting send times out')
 parker:close()
+local flood = assert(thread.spawn(path, 'flood'))
+local received = 0
+while true do
+  local m = flood:receive(2000)
+  if not m then break end
+  received = received + 1
+  check(m:sub(1, 4) == string.format('%04d', received), 'waiting send preserves the order')
+end
+check(received == 300 and flood:join(), 'waiting send delivers every message')
+flood:close()
+local stuck = assert(thread.spawn(path, 'stuck'))
+sys.sleep(100)
+check(stuck:status() == 'running', 'the worker waits for queue space')
+stuck:stop()
+check(stuck:join(), 'a stop ends a waiting send in the worker')
+stuck:close()
 local waiting = assert(thread.spawn(path, 'gc')); assert(waiting:receive(2000))
 waiting = nil; collectgarbage('collect')
 local deadline = sys.uptime() + 2000

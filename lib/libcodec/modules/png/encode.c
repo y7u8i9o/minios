@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <minios/crc32.h>
 
 /* ---- output buffer ---- */
 
@@ -71,27 +72,6 @@ static void put_code(struct out *o, uint32_t code, int n)
 }
 
 /* ---- checksums ---- */
-
-static uint32_t crc_table[256];
-
-static void crc_init(void)
-{
-    if (crc_table[1])
-        return;
-    for (uint32_t n = 0; n < 256; n++) {
-        uint32_t c = n;
-        for (int k = 0; k < 8; k++)
-            c = c & 1 ? 0xedb88320u ^ (c >> 1) : c >> 1;
-        crc_table[n] = c;
-    }
-}
-
-static uint32_t crc_update(uint32_t crc, const uint8_t *p, size_t n)
-{
-    for (size_t i = 0; i < n; i++)
-        crc = crc_table[(crc ^ p[i]) & 0xff] ^ (crc >> 8);
-    return crc;
-}
 
 static uint32_t adler32(const uint8_t *p, size_t n)
 {
@@ -261,14 +241,13 @@ static void put_chunk(struct out *o, const char *type, const uint8_t *body, size
         put_byte(o, body[i]);
     if (o->failed)
         return;
-    put32(o, crc_update(0xffffffffu, o->data + start, n + 4) ^ 0xffffffffu);
+    put32(o, crc32(0, o->data + start, n + 4));
 }
 
 long png_encode(const struct codec_picture *img, uint8_t **result)
 {
     if (!img || img->w <= 0 || img->h <= 0)
         return -EINVAL;
-    crc_init();
     int alpha = 0;
     size_t npix = (size_t)img->w * img->h;
     for (size_t i = 0; i < npix && !alpha; i++)

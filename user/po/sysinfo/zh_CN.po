@@ -1133,3 +1133,35 @@ msgstr "来源"
 #: user/apps/sysinfo.c
 msgid "Use"
 msgstr "使用率"
+
+#: user/apps/sysinfo.c:62
+msgid "64-bit addresses"
+msgstr "64 位地址"
+
+#: user/apps/sysinfo.c:55
+msgid "AHCI"
+msgstr "AHCI"
+
+#: user/apps/sysinfo.c:55
+msgid "NVMe"
+msgstr "NVMe"
+
+#: user/apps/sysinfo.c:141
+msgid "Firmware revision"
+msgstr "固件修订版本"
+
+#: user/apps/sysinfo.c:193
+msgid "Kind"
+msgstr "种类"
+
+#: user/apps/sysinfo.c:194
+msgid "Largest transfer"
+msgstr "最大传输"
+
+#: user/apps/sysinfo.c:229
+msgid "Namespaces"
+msgstr "命名空间"
+
+#: user/apps/sysinfo.c:323
+msgid "Volatile write cache"
+msgstr "易失性写入缓存"

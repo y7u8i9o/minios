@@ -21,6 +21,7 @@
 #else
 #include <sys/ipc.h>
 #endif
+#include <minios/crc32.h>
 #include "lauxlib.h"
 #include "minios.h"
 
@@ -147,6 +148,22 @@ static int usage(lua_State *L)
 #endif
     return 1;
 }
+/* sys.crc32(data [, crc = 0]) continues the CRC-32 crc over data. */
+static int crc32_of(lua_State *L)
+{
+    size_t len;
+    const char *data = luaL_checklstring(L, 1, &len);
+    lua_Integer crc = luaL_optinteger(L, 2, 0);
+    luaL_argcheck(L, crc >= 0 && crc <= 0xffffffff, 2, "not a 32 bit checksum");
+    lua_pushinteger(L, crc32((uint32_t)crc, data, len));
+    return 1;
+}
+/* sys.isatty(fd): true when the descriptor is a terminal. */
+static int is_tty(lua_State *L)
+{
+    lua_pushboolean(L, isatty((int)luaL_checkinteger(L, 1)));
+    return 1;
+}
 static int thread_id(lua_State *L)
 {
 #ifdef MINIOS_HOST
@@ -167,7 +184,8 @@ void minios_sys_extra(lua_State *L)
     static const luaL_Reg funcs[] = {
         {"open_fd", open_fd}, {"nonblock", nonblock}, {"pipe", make_pipe},
         {"write", write_fd}, {"poll", poll_fds}, {"clock_ns", clock_ns},
-        {"usage", usage}, {"thread_id", thread_id}, {NULL, NULL}
+        {"usage", usage}, {"thread_id", thread_id}, {"crc32", crc32_of},
+        {"isatty", is_tty}, {NULL, NULL}
     };
     luaL_setfuncs(L, funcs, 0);
 #define CONST(name) field(L, #name, name)
@@ -176,6 +194,10 @@ void minios_sys_extra(lua_State *L)
     CONST(O_APPEND); CONST(O_EXCL); CONST(O_NONBLOCK);
     lua_newtable(L);
     CONST(EAGAIN); CONST(EINTR); CONST(ETIMEDOUT); CONST(EPIPE); CONST(EINVAL);
+    CONST(ENOENT); CONST(EEXIST); CONST(EACCES); CONST(EPERM); CONST(EIO); CONST(ENOSPC);
+    CONST(ENOTDIR); CONST(EISDIR); CONST(ENOTEMPTY); CONST(ENAMETOOLONG); CONST(EXDEV);
+    CONST(ESTALE); CONST(ECANCELED); CONST(EPROTO); CONST(ECONNREFUSED); CONST(ECONNRESET);
+    CONST(EHOSTUNREACH); CONST(ENETUNREACH); CONST(EADDRINUSE);
     lua_setfield(L, -2, "errno");
 #undef CONST
 }

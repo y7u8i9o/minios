@@ -1,0 +1,22 @@
+# Japanese messages of the askpass domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Authentication is required to run a command as root."
+msgstr "root としてコマンドを実行するには認証が必要です。"
+
+msgid "Authentication required"
+msgstr "認証が必要です"
+
+msgid "The password was wrong. Try again."
+msgstr "パスワードが違います。もう一度入力してください。"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Authenticate"
+msgstr "認証"

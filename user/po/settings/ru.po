@@ -538,11 +538,21 @@ msgstr "Имя"
 msgid "Password"
 msgstr "Пароль"
 
-msgid "Your password"
-msgstr "Ваш пароль"
 
 msgid "Add account"
 msgstr "Добавить учётную запись"
 
 msgid "Remove selected account"
 msgstr "Удалить выбранную учётную запись"
+
+msgid "Authentication is required to change the time zone."
+msgstr "Для изменения часового пояса требуется аутентификация."
+
+msgid "Authentication is required to add an account."
+msgstr "Для добавления учётной записи требуется аутентификация."
+
+msgid "Authentication is required to remove an account."
+msgstr "Для удаления учётной записи требуется аутентификация."
+
+msgid "The change was cancelled"
+msgstr "Изменение отменено"

@@ -2,8 +2,8 @@
  * that it may be replaced to add libraries. This copy opens the same
  * standard libraries under the same selection masks and registers the
  * minios modules of the interpreter in package.preload, where
- * require "fs" and require "sys" find them in every program without a
- * search on the disk. gui, audio and mime are C modules in /usr/lib/lua/5.5
+ * require "fs", require "sys", require "thread" and require "net" find
+ * them in every program without a search on the disk. gui, audio and mime are C modules in /usr/lib/lua/5.5
  * (minios.h). */
 #define linit_c
 #define LUA_LIB
@@ -33,6 +33,7 @@ static const luaL_Reg minios_libs[] = {
     { "fs", luaopen_fs },
     { "sys", luaopen_sys },
     { "thread", luaopen_thread },
+    { "net", luaopen_net },
 #ifdef MINIOS_HOST
     /* The host unit test links the C modules into its program, and its
      * worker states find them here as well. */

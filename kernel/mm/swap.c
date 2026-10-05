@@ -270,7 +270,8 @@ static unsigned evict_batch(void)
     return n;
 }
 
-/* True while kswapd retains frames or buffers of a batch in flight. */
+/* True while kswapd retains the frames or buffers of a batch that is not
+ * written yet. */
 static volatile bool evicting;
 
 void swap_drain(void)
@@ -289,6 +290,13 @@ static void kswapd(void *arg)
             sleep_ms(10);
             continue;
         }
+        /* Pages of a deflatable balloon come before the eviction. */
+        if (pmm_release_pressure(WATERMARK_HIGH - st.free_pages) >= WATERMARK_HIGH - st.free_pages) {
+            spin_lock(&swap_lock);
+            waitq_wake_all(&swap_waitq);
+            spin_unlock(&swap_lock);
+            continue;
+        }
         evicting = true;
         unsigned evicted = evict_batch();
         evicting = false;
@@ -305,6 +313,10 @@ struct page *swap_alloc_user_frame(void)
     for (int tries = 0; tries < 10000; tries++) {
         struct pmm_stats st;
         pmm_get_stats(&st);
+        /* A deflatable balloon refills the reserve before the swap. */
+        if (swapdev && st.free_pages <= WATERMARK_RESERVE &&
+            pmm_release_pressure(WATERMARK_RESERVE + 1 - st.free_pages) > 0)
+            pmm_get_stats(&st);
         if (!swapdev || st.free_pages > WATERMARK_RESERVE) {
             struct page *pg = pmm_alloc_page();
             if (pg)

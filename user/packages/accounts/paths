@@ -10,6 +10,7 @@ usr/bin/id
 usr/bin/whoami
 etc/doas.conf
 etc/sudoers
+etc/sudo.conf
 usr/share/man/man1/login.1
 usr/share/man/man1/passwd.1
 usr/share/man/man1/useradd.1

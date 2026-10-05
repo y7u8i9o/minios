@@ -1,0 +1,30 @@
+STRINGS(1)                  User Commands               STRINGS(1)
+
+NAME
+    strings - print the printable strings of files
+
+SYNOPSIS
+    strings [-adfowT] [-n length] [-t radix] [-e encoding] [-s separator]
+            [file...]
+
+DESCRIPTION
+    strings prints each run of at least four printable characters in the
+    files. Without a file it reads the standard input. The output matches
+    GNU strings.
+
+OPTIONS
+    -a, --all               scan the whole file (default)
+    -d, --data              scan only the loaded sections of ELF files
+    -f, --print-file-name   print the file before every string
+    -n, --bytes=NUMBER      minimum length; -NUMBER is the same
+    -t, --radix=RADIX       print the offset in radix o, d or x
+    -o                      same as -t o
+    -e, --encoding=ENC      s 7 bit, S 8 bit, b and l 16 bit, B and L 32 bit
+    -w, --include-all-whitespace
+                            count all white space as string characters
+    -s, --output-separator=STRING
+                            end each string with STRING instead of a newline
+    -T, --target=BFDNAME    ignored
+
+SEE ALSO
+    nm(1), size(1)

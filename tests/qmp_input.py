@@ -14,6 +14,13 @@ guest and SCRIPT a file with one command per line:
     sleep MS        wait MS milliseconds
     screendump FILE save the screen as a PPM image; a relative FILE is
                     placed in the directory of the serial log
+    qmp CMD [JSON]  run the QMP command CMD with the arguments JSON and
+                    print its result as one line of JSON
+    event NAME      wait until QEMU sends the event NAME and print its data
+                    as one line of JSON
+    vnc-size W H    ask for a display of W by H pixels with the message
+                    SetDesktopSize of a VNC client; the case needs a vnc
+                    file, which sets VNC_SOCKET
 
 The events are sent with input-send-event without a device. QEMU routes
 them to the input device of their type, as it routes the events of a
@@ -24,6 +31,7 @@ import json
 import os
 import re
 import socket
+import struct
 import sys
 import time
 
@@ -47,6 +55,7 @@ class Qmp:
     def __init__(self, path):
         self.sock = connect(path)
         self.file = self.sock.makefile("rw")
+        self.events_seen = []                   # events read while waiting for replies
         self.file.readline()                    # the greeting
         self.call("qmp_capabilities")
 
@@ -66,9 +75,99 @@ class Qmp:
             if "error" in reply:
                 raise RuntimeError(f"{command}: {reply['error']}")
             # An asynchronous event; the reply follows.
+            if "event" in reply:
+                self.events_seen.append(reply)
+
+    def wait_event(self, name):
+        for i, e in enumerate(self.events_seen):
+            if e["event"] == name:
+                del self.events_seen[: i + 1]
+                return e
+        deadline = time.time() + WAIT_SECONDS
+        self.sock.settimeout(WAIT_SECONDS)
+        while time.time() < deadline:
+            line = self.file.readline()
+            if not line:
+                raise EOFError(f"QEMU closed the QMP socket before the event {name}")
+            reply = json.loads(line)
+            if reply.get("event") == name:
+                return reply
+        raise TimeoutError(f"no event {name} after {WAIT_SECONDS} s")
 
     def events(self, events):
         self.call("input-send-event", {"events": events})
+
+
+class Vnc:
+    """A VNC client without a framebuffer: RFB 3.8 without security. The
+    client sends the encoding ExtendedDesktopSize in its list and only sends
+    SetDesktopSize. It never asks for a framebuffer update."""
+
+    EXTENDED_DESKTOP_SIZE = -308
+
+    def __init__(self, path):
+        self.sock = connect(path)
+        self.sock.settimeout(WAIT_SECONDS)
+        version = self.read(12)
+        if not version.startswith(b"RFB "):
+            raise ValueError(f"not a VNC server: {version!r}")
+        self.sock.sendall(b"RFB 003.008\n")
+        types = self.read(self.read(1)[0])
+        if 1 not in types:
+            raise ValueError(f"the VNC server requires security: types {list(types)}")
+        self.sock.sendall(bytes([1]))
+        if struct.unpack(">I", self.read(4))[0] != 0:
+            raise ValueError("the VNC server refused the connection")
+        self.sock.sendall(bytes([1]))                   # ClientInit, shared
+        width, height = struct.unpack(">HH", self.read(4))
+        self.read(16)                                   # the pixel format
+        self.read(struct.unpack(">I", self.read(4))[0])  # the desktop name
+        print(f"vnc: display {width}x{height}", flush=True)
+        self.sock.sendall(struct.pack(">BBHi", 2, 0, 1, self.EXTENDED_DESKTOP_SIZE))
+
+    def read(self, n):
+        data = b""
+        while len(data) < n:
+            chunk = self.sock.recv(n - len(data))
+            if not chunk:
+                raise EOFError("QEMU closed the VNC socket")
+            data += chunk
+        return data
+
+    # The status codes of ExtendedDesktopSize. QEMU answers 4 when it passed
+    # the request to the display device.
+    STATUS = {0: "no error", 1: "resize is administratively prohibited", 2: "out of resources",
+              3: "invalid screen layout", 4: "request forwarded"}
+
+    def set_size(self, width, height):
+        """Sends SetDesktopSize and returns the status of the answer."""
+        screen = struct.pack(">IHHHHI", 0, 0, 0, width, height, 0)
+        self.sock.sendall(struct.pack(">BBHHBB", 251, 0, width, height, 1, 0) + screen)
+        # The answer is a framebuffer update with one ExtendedDesktopSize
+        # rectangle. Its x is the reason (1, a request of this client) and its
+        # y the status. Other messages before it are skipped.
+        while True:
+            kind = self.read(1)[0]
+            if kind == 0:
+                rects = struct.unpack(">xH", self.read(3))[0]
+                for _ in range(rects):
+                    x, y, w, h, encoding = struct.unpack(">HHHHi", self.read(12))
+                    if encoding != self.EXTENDED_DESKTOP_SIZE:
+                        raise ValueError(f"unexpected rectangle with encoding {encoding}")
+                    screens = self.read(4)[0]
+                    self.read(16 * screens)
+                    if x != 1:
+                        continue
+                    text = f"status {y} ({self.STATUS.get(y, 'unknown')}), display {w}x{h}"
+                    if y not in (0, 4):
+                        raise ValueError(f"SetDesktopSize {width}x{height} refused: {text}")
+                    return text
+            elif kind == 2:
+                pass                                    # Bell
+            elif kind == 3:                             # ServerCutText
+                self.read(struct.unpack(">xxxI", self.read(7))[0])
+            else:
+                raise ValueError(f"unexpected VNC message {kind}")
 
 
 def wait_serial(path, pattern):
@@ -87,6 +186,7 @@ def wait_serial(path, pattern):
 
 
 def run(qmp, serial, script):
+    vnc = None
     for raw in script:
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -113,6 +213,19 @@ def run(qmp, serial, script):
                         {"type": "rel", "data": {"axis": "y", "value": int(args[1])}}])
         elif word == "sleep":
             time.sleep(int(args[0]) / 1000)
+        elif word == "qmp":
+            command, _, arguments = rest.partition(" ")
+            result = qmp.call(command, json.loads(arguments) if arguments.strip() else None)
+            print(json.dumps(result, sort_keys=True), flush=True)
+        elif word == "event":
+            e = qmp.wait_event(args[0])
+            print(json.dumps(e.get("data", {}), sort_keys=True), flush=True)
+        elif word == "vnc-size":
+            if vnc is None:
+                if not os.environ.get("VNC_SOCKET"):
+                    raise ValueError("vnc-size needs a vnc file in the case")
+                vnc = Vnc(os.environ["VNC_SOCKET"])
+            print(f"vnc: {vnc.set_size(int(args[0]), int(args[1]))}", flush=True)
         elif word == "screendump":
             path = args[0] if os.path.isabs(args[0]) else os.path.join(os.path.dirname(os.path.abspath(serial)), args[0])
             qmp.call("screendump", {"filename": path})

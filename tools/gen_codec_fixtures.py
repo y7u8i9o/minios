@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Create the audio fixtures of the codec tests (docs/plan/codecs.md).
+"""Create the fixtures of the codec tests (docs/plan/codecs.md).
 
-    tools/gen_codec_fixtures.py
+    tools/gen_codec_fixtures.py [flac | vorbis | oggflac | mp3 | gif]...
+
+Without arguments the script creates every group. The MP3 group needs
+lame and ffmpeg, and the GIF group Pillow and ImageMagick.
 
 The script synthesises deterministic signals, encodes them with the
 reference tools of the host and writes the results to user/etc/tests,
@@ -467,12 +470,129 @@ def oggflac_fixtures(tmp):
     return made
 
 
+def music(frames, channels, rate, seed):
+    """Interleaved 16 bit samples for a lossy encoder: a chord with a slow
+    tremolo that differs per channel, and a little noise."""
+    rnd = random.Random(seed)
+    out = []
+    for i in range(frames):
+        t = i / rate
+        for c in range(channels):
+            v = 0.25 * math.sin(2 * math.pi * (220 + 110 * c) * t) + 0.15 * math.sin(2 * math.pi * 523.25 * t)
+            v += 0.1 * math.sin(2 * math.pi * 1318.5 * t) * (0.5 + 0.5 * math.sin(2 * math.pi * 2 * t))
+            v += 0.01 * (rnd.random() - 0.5)
+            out.append(int(v * 32767))
+    return out
+
+
+def mp3_fixtures(tmp):
+    """MP3 files of the LAME encoder: MPEG-1 at a constant bit rate with an
+    ID3v2 tag, MPEG-2 with a variable bit rate, and MPEG-2.5. FFmpeg
+    decodes each file into 16 bit samples, stored as FLAC files named
+    *.ref.flac. Both LAME and FFmpeg honour the delay and the padding of
+    the LAME tag. LAME writes no tag into the MPEG-2.5 file, whose frames
+    of 144 bytes are too short for it, and every decoder then returns the
+    whole stream. The boot test codec_mp3 compares the decoder of minios
+    with the reference samples."""
+    made = []
+    for name, rate, channels, frames, options in (
+            ("lame", 44100, 2, 66150, ["-b", "128", "--add-id3v2", "--tt", "minios fixture"]),
+            ("vbr22", 22050, 1, 26460, ["-V", "5"]),
+            ("8k", 8000, 1, 12000, ["-b", "16"])):
+        wav = os.path.join(tmp, "mp3-%s.wav" % name)
+        write_wav(wav, music(frames, channels, rate, 70 + rate), channels, 16, rate)
+        dst = os.path.join(OUT, "codec-mp3-%s.mp3" % name)
+        run("lame", "--quiet", *options, wav, dst)
+        ref = os.path.join(OUT, "codec-mp3-%s.ref.flac" % name)
+        run("ffmpeg", "-y", "-loglevel", "error", "-i", dst, "-c:a", "flac", "-sample_fmt", "s16", ref)
+        made += [dst, ref]
+    return made
+
+
+def gif_fixtures(tmp):
+    """GIF files of Pillow and of ImageMagick, and the frames that
+    ImageMagick composes from them (-coalesce), stacked from top to bottom
+    in one PNG file named *.ref.png. The boot test codec_gif compares the
+    decoder of minios with those frames.
+
+    - codec-gif-pillow.gif: Pillow, four frames of 48 by 32 pixels with a
+      transparent colour, the disposals 1, 2, 1 and 2, the delays 100,
+      200, 300 and 500 ms and the loop count 2. Pillow stores the frames
+      after the first as the rectangles that changed.
+    - codec-gif-previous.gif: ImageMagick, a background and three frames
+      at offsets with disposal 3 (restore to previous), delays of 70 ms
+      and repetition without end.
+    - codec-gif-interlaced.gif: Pillow, a still GIF87a image of 64 by 48
+      pixels with 256 colours, interlaced."""
+    from PIL import Image, ImageDraw
+    made = []
+
+    def coalesce(gif, name):
+        ref = os.path.join(OUT, name + ".ref.png")
+        run("magick", gif, "-coalesce", "-append", "PNG32:" + ref)
+        made.extend([gif, ref])
+
+    frames = []
+    for k in range(4):
+        im = Image.new("RGBA", (48, 32), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rectangle([2 + 8 * k, 4, 14 + 8 * k, 20], fill=(220, 40 + 50 * k, 30, 255))
+        d.ellipse([20, 10 + 4 * k, 40, 28], fill=(30, 90, 200 - 40 * k, 255))
+        if k % 2:
+            d.line([0, 31, 47, 0], fill=(250, 250, 250, 255), width=2)
+        frames.append(im)
+    gif = os.path.join(OUT, "codec-gif-pillow.gif")
+    frames[0].save(gif, save_all=True, append_images=frames[1:], duration=[100, 200, 300, 500], loop=2,
+                   disposal=[1, 2, 1, 2])
+    coalesce(gif, "codec-gif-pillow")
+
+    paths = []
+    back = Image.new("RGB", (40, 30), (240, 230, 200))
+    ImageDraw.Draw(back).rectangle([0, 0, 39, 9], fill=(60, 120, 60))
+    paths.append(os.path.join(tmp, "back.png"))
+    back.save(paths[-1])
+    for k in range(3):
+        im = Image.new("RGBA", (12, 10), (0, 0, 0, 0))
+        ImageDraw.Draw(im).ellipse([0, 0, 11, 9], fill=(200, 30 * k, 90, 255))
+        paths.append(os.path.join(tmp, "spot%d.png" % k))
+        im.save(paths[-1])
+    gif = os.path.join(OUT, "codec-gif-previous.gif")
+    run("magick", "-delay", "7", "-loop", "0",
+        "(", paths[0], "-set", "dispose", "none", "-set", "page", "40x30+0+0", ")",
+        "(", paths[1], "-set", "dispose", "previous", "-set", "page", "40x30+4+6", ")",
+        "(", paths[2], "-set", "dispose", "previous", "-set", "page", "40x30+14+12", ")",
+        "(", paths[3], "-set", "dispose", "previous", "-set", "page", "40x30+26+18", ")", gif)
+    coalesce(gif, "codec-gif-previous")
+
+    im = Image.new("RGB", (64, 48))
+    px = im.load()
+    for y in range(48):
+        for x in range(64):
+            px[x, y] = (x * 4, y * 5, (x * y) % 256)
+    gif = os.path.join(OUT, "codec-gif-interlaced.gif")
+    im.quantize(256).save(gif, interlace=True)
+    coalesce(gif, "codec-gif-interlaced")
+    return made
+
+
+GROUPS = {"flac": flac_fixtures, "vorbis": vorbis_fixtures, "oggflac": oggflac_fixtures, "mp3": mp3_fixtures,
+          "gif": gif_fixtures}
+TOOLS = {"flac": ("flac", "ffmpeg"), "vorbis": ("flac", "pkg-config"), "oggflac": ("flac", "ffmpeg"),
+         "mp3": ("lame", "ffmpeg"), "gif": ("magick",)}
+
+
 def main():
-    for tool in ("flac", "ffmpeg", "pkg-config"):
-        need(tool)
+    """The arguments select groups of fixtures, all groups without one."""
+    groups = sys.argv[1:] or list(GROUPS)
+    for g in groups:
+        if g not in GROUPS:
+            sys.exit("gen_codec_fixtures: unknown group %s, known: %s" % (g, " ".join(GROUPS)))
+        for tool in TOOLS[g]:
+            need(tool)
     with tempfile.TemporaryDirectory() as tmp:
-        for path in flac_fixtures(tmp) + vorbis_fixtures(tmp) + oggflac_fixtures(tmp):
-            print("%7d %s" % (os.path.getsize(path), os.path.relpath(path, TOP)))
+        for g in groups:
+            for path in GROUPS[g](tmp):
+                print("%7d %s" % (os.path.getsize(path), os.path.relpath(path, TOP)))
 
 
 if __name__ == "__main__":

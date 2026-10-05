@@ -138,7 +138,7 @@ static void set_keymap(const char *name)
     ksnprintf(command, sizeof command, "mkdir -p /root/.config && echo keymap=%s > /root/.config/desktop.conf", name);
     run("/bin/sh", (char *const[]){ "sh", "-c", command, NULL });
     run("/bin/x12settings", (char *const[]){ "x12settings", "set", "keymap_reload", "1", NULL });
-    sleep_ms(300);
+    ktest_wait_idle(300);
 }
 
 static void test_compositor(void)
@@ -151,19 +151,19 @@ static void test_compositor(void)
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/keymap.txt", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     tap(0x10);                      /* a */
     tap(0x1a);                      /* dead circumflex */
     tap(0x12);                      /* ê */
     altgr(0x0b);                    /* @ */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     set_keymap("ru");
     alt_shift();
     tap(0x10);                      /* й */
     tap(0x21);                      /* а */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);                 /* Ctrl+S */
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct file *f;
     ktest_assert(vfs_open("/keymap.txt", O_RDONLY, 0, &f) == 0, "open /keymap.txt");
     char buf[64];

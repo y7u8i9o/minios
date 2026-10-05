@@ -1,6 +1,7 @@
 /* The x86_64 part of /dev/devices (docs/design/sysinfo.md): the processor
  * from CPUID and the devices of the q35 PC that are outside PCI. */
 #include <drivers/devinfo.h>
+#include <drivers/acpi.h>
 #include <arch/cpu.h>
 #include <drivers/pci.h>
 
@@ -20,6 +21,7 @@ void arch_describe(struct devinfo *d)
     devinfo_prop(d, "serial_console", "COM1, I/O port 0x3f8");
     devinfo_prop(d, "keyboard_controller", "8042, I/O ports 0x60 and 0x64");
     devinfo_prop(d, "real_time_clock", "CMOS, I/O ports 0x70 and 0x71");
-    devinfo_prop(d, "power_off", "ACPI PM1a control, I/O port 0x604 (q35)");
-    devinfo_prop(d, "reboot", "8042 reset line");
+    devinfo_prop(d, "power_off", "%s", acpi_ready() ? "sleep state S5 of ACPI" : "ACPI PM1a control, I/O port 0x604 (q35)");
+    devinfo_prop(d, "reboot", "%s", acpi_reset_method() ? acpi_reset_method() : "8042 reset line");
+    acpi_describe(d);
 }

@@ -1,0 +1,12 @@
+# V4 of docs/plan/release-0.6.0.md. The guest has 512 MiB. A balloon of
+# 128 MiB leaves 384 MiB (402653184 bytes) to the guest.
+wait balloon: ready
+qmp qom-set {"path": "/machine/peripheral/balloon0", "property": "guest-stats-polling-interval", "value": 1}
+qmp balloon {"value": 402653184}
+wait balloon: inflated
+qmp query-balloon
+wait balloon: statistics sent
+qmp qom-get {"path": "/machine/peripheral/balloon0", "property": "guest-stats"}
+qmp balloon {"value": 536870912}
+wait balloon: deflated
+qmp query-balloon

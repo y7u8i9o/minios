@@ -147,6 +147,14 @@ uses the named numbers `IRQ_TIMER`, `IRQ_RESCHED` and `IRQ_TLB_SHOOTDOWN`,
 and allocates numbers for message signalled device interrupts with
 `irq_alloc`, which virtio uses for MSI-X (vectors from 40 upward on x86_64,
 LPIs from 8192 upward on aarch64).
+`irq_route_gsi(gsi, flags, fn, arg)` routes a global system interrupt of
+the firmware, such as the SCI of ACPI or a line of the device tree, with
+the trigger mode and the polarity of `flags` (`IRQ_GSI_LEVEL`,
+`IRQ_GSI_ACTIVE_LOW`), registers `fn` and enables the interrupt. On
+x86_64 it allocates a vector with `irq_alloc` and programs the redirection
+entry of the I/O APIC (`ioapic_route_mode`). On aarch64 the GSI is the
+number of a shared peripheral interrupt, the trigger mode goes to
+`GICD_ICFGR`, and an active low line is refused, because the GIC has none.
 `arch_send_ipi(cpu, irq)` sends an interrupt to a CPU by its kernel id. The
 x86_64 implementation looks up the local APIC id in `c->arch`, the aarch64
 implementation writes the SGI to the MPIDR affinity of the CPU through
@@ -171,12 +179,14 @@ variant of `sleep_ms`.
 
 | Function | Use | PC implementation |
 |---|---|---|
-| `platform_power_off`, `platform_reboot` | the `reboot` system call after the orderly shutdown (`signals.md`) | ACPI PM1a, 8042 reset (`console.md`) |
+| `platform_power_off`, `platform_reboot` | the `reboot` system call after the orderly shutdown (`signals.md`) | sleep state S5 and the reset register of ACPI (`acpi.md`), then the PM1a port of q35 and the 8042 reset (`console.md`) |
 | `platform_test_exit(code)` | the exit of a boot test (`ktest.c`) and of a panic with `CONFIG_PANIC_EXIT` | isa-debug-exit on port `0xf4` |
 | `platform_rtc_read` | `rtc_init` reads the date once (`time.md`) | CMOS clock (`cmos.c`) |
 | `platform_pci_read32`, `platform_pci_write32` | configuration space accesses of `drivers/pci.c` | configuration mechanism 1, ports `0xcf8` and `0xcfc` (`pci_config.c`) |
 | `platform_msi_compose(dev, irq, cpu, ...)` | the MSI-X table entries of `pci_msix_set_vector`, for the target CPU that `pick_msi_cpu` chose | local APIC address `0xfee00000` with the APIC id of `cpu`, vector as data, `dev` unused |
 | `platform_devices_init` | devices that exist only on this platform | PS/2 keyboard and mouse |
+| `platform_has_ports`, `platform_port_read`, `platform_port_write` | the I/O ports of the ACPI interpreter (`acpi.md`) | `in` and `out` instructions; aarch64 has no port space |
+| `platform_power_key_init` | a power button outside ACPI | none; the GPIO key of the PL061 on aarch64 with a device tree |
 
 The console UART implements `<drivers/serial.h>` (`arch/x86_64/serial.c`,
 COM1). The PS/2 scancode and packet decoders are generic

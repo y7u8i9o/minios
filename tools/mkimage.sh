@@ -21,6 +21,37 @@ PKG="$1"; ARCH="$2"; ROOT="$3"; TREE="$4"; DISK="$5"; DISK_MB="$6"; MKFS="$7"; I
 shift 8
 TOP="$(cd "$(dirname "$0")/.." && pwd)"
 
+# The script records a key of its inputs in DISK.key after a build: the
+# checksums of the archives, of user/perms, of this script and of the host
+# programs PKG and MKFS, the arguments, the directories of the homes, and
+# the sizes and times of the files of the homes. The times of directories
+# are left out, because the build recreates the directories. DISK.key also
+# records the modification time of DISK. When the key and the time are
+# unchanged and DISK and INITRD exist, the script ends without work. make
+# run writes into DISK, and a changed time of DISK therefore causes a new
+# build.
+checksum() {
+    if command -v sha256sum > /dev/null 2>&1; then sha256sum; else shasum -a 256; fi
+}
+mtime() {
+    stat -f %m "$1" 2> /dev/null || stat -c %Y "$1"
+}
+KEY=$({
+    echo "$ARCH $DISK_MB $TREE"
+    cat "$@" "$TOP/user/perms" "$0" "$PKG" "$MKFS" | checksum
+    for d in home root; do
+        [ -d "$ROOT/$d" ] || continue
+        find "$ROOT/$d" -type d
+        find "$ROOT/$d" ! -type d -exec ls -ln {} +
+    done
+} | checksum | cut -d' ' -f1)
+if [ -f "$DISK" ] && [ -f "$INITRD" ] && [ -f "$DISK.key" ] &&
+   [ "$(cat "$DISK.key")" = "$KEY $(mtime "$DISK")" ]; then
+    echo "mkimage.sh: $DISK and $INITRD are up to date"
+    exit 0
+fi
+rm -f "$DISK.key"
+
 rm -rf "$TREE"
 mkdir -p "$TREE"
 "$PKG" --root "$TREE" --arch "$ARCH" install "$@" > "$TREE.log" ||
@@ -42,3 +73,4 @@ done
 
 "$MKFS" -p "$PERMS" "$DISK" "$DISK_MB" "$TREE"
 (cd "$TREE" && tar --format ustar --owner=0 --group=0 --exclude ./usr/share/sounds -cf "$INITRD" .)
+echo "$KEY $(mtime "$DISK")" > "$DISK.key"

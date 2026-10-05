@@ -17,14 +17,25 @@ struct elf_info {
     bool secure;                /* AT_SECURE: the program changes the ids (U2) */
 };
 
-/* Load an ELF64 executable (ET_EXEC) into vm: one region per PT_LOAD segment
- * plus a heap region right after the highest segment. */
-int elf_load(struct vmspace *vm, const void *image, size_t size, struct elf_info *info);
+struct file;
 
-/* Load a position independent loader (ET_DYN) at base and record its entry
- * point in info. */
-int elf_load_interp(struct vmspace *vm, const void *image, size_t size, uintptr_t base,
-                    struct elf_info *info);
+/* The number of bytes at the start of an ELF file that the loader needs:
+ * the file header, the program headers and the path of PT_INTERP. head
+ * contains the first n bytes of the file. A result above n asks for more
+ * bytes, and 0 means that the file is not an ELF64 file. */
+size_t elf_head_size(const void *head, size_t n);
+
+/* Load an ELF64 executable (ET_EXEC) of filesize bytes from the open file f
+ * into vm: one file region per PT_LOAD segment, an anonymous region for
+ * its bss, and a heap region right after the highest segment. image
+ * contains the first size bytes of the file (elf_head_size). */
+int elf_load(struct vmspace *vm, struct file *f, uint64_t filesize, const void *image, size_t size,
+             struct elf_info *info);
+
+/* Load a position independent loader (ET_DYN) from f at base and record its
+ * entry point in info. */
+int elf_load_interp(struct vmspace *vm, struct file *f, uint64_t filesize, const void *image, size_t size,
+                    uintptr_t base, struct elf_info *info);
 
 /* Build the main stack of stack_size bytes (already clamped) below
  * USER_STACK_TOP: argc, argv, envp and the auxiliary vector following the

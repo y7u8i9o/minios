@@ -1,0 +1,4 @@
+acpi_s5: reduced hardware, power off through PSCI
+acpi_s5: ok
+TEST PASS
+power button through the power button device of ACPI

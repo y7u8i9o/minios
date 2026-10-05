@@ -39,7 +39,11 @@ that GUI and DSP never compete for CPUs or the shared libc allocator.
 Eight-voice underruns fell from 133 to 4 in this comparison, but remain
 nonzero. Mean render time is already about 8 ms for a 10 ms audio quantum,
 and occasional elapsed render calls reach roughly 47 ms. Further work
-should reduce DSP cost and investigate those remaining long delays. These
+should reduce DSP cost and investigate those remaining long delays. On
+2026-10-05 a scheduler defect was found that delays a woken sleeper by the
+rest of the slice of a busy thread, 40 ms on level 2
+(`docs/postmortems/2026-10-05-sleep-wakeup.md`). The measurement above
+predates the correction and was not repeated. These
 sequential observations are sensitive to host load and are not a precise
 causal speedup ratio or a guarantee of glitch-free playback.
 

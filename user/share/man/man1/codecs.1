@@ -12,19 +12,23 @@ DESCRIPTION
     The formats of minios are modules in /lib/codecs, which the codec
     library loads at run time. Every program that opens images or
     audio reads the formats of all modules. The environment variable
-    CODEC_PATH names another module directory.
+    CODEC_PATH gives another module directory.
 
     Without arguments codecs lists every codec with its capabilities
-    (D decodes, E encodes, S renders at any size), its kind, its
-    module, its description, its MIME types and its extensions.
+    (D decodes, E encodes, S renders at any size, A has animations),
+    its kind, its module, its description, its MIME types and its
+    extensions.
 
-    info names the format of each file, found by its content and then
+    info gives the format of each file, found by its content and then
     by its extension, and describes it: the size of an image and
-    whether it has alpha, or the rate, channels, sample size, frames
-    and duration of audio.
+    whether it has alpha, for an animation its frames, the length of one
+    play and the number of plays, or the rate, channels, sample size,
+    frames and duration of audio.
 
     convert decodes in and encodes it in the format of the extension of
-    out, or with the codec name. Both formats must be of one kind.
+    out, or with the codec name. Both formats must be of one kind. An
+    animation remains an animation when the target format has
+    animations, and becomes its first frame otherwise.
 
 OPTIONS
     -f name      encode with this codec, whatever the extension
@@ -33,7 +37,11 @@ OPTIONS
     -o options   options of the audio encoder as name=value pairs
                  separated by commas. The Vorbis encoder takes
                  quality (-0.1 to 1.0, 0.4 by default) and floor
-                 (1 by default, or 0)
+                 (1 by default, or 0). The MP3 encoder takes
+                 bitrate in kbit/s (32 to 320 at 32, 44.1 and 48 kHz,
+                 8 to 160 at 16, 22.05 and 24 kHz, 8 to 64 at 8,
+                 11.025 and 12 kHz; 128, 64 and 32 for two channels
+                 by default, half of that for one)
 
 EXIT STATUS
     0 on success, 1 when a file cannot be read, identified, decoded,

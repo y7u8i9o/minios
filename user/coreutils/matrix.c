@@ -30,7 +30,7 @@ int main(void)
         len[c] = 4 + rand() % 10;
     }
     printf("\033[2J");
-    for (int frame = 0; ; frame++) {
+    for (;;) {
         for (int c = 0; c < cols; c += 1) {
             int y = head[c];
             if (y >= 0 && y < rows) {

@@ -43,7 +43,7 @@ static int force;
 
 static void usage(void)
 {
-    fputs("usage: pkg [--root DIR] [--arch MACHINE] [--config FILE] [--keys DIR] command...\n"
+    fputs("usage: pkg [--root DIR] [--arch MACHINE] [--config FILE] [--keys DIR] [--verbose] command...\n"
           "       pkg install FILE|NAME[-VERSION]...\n"
           "       pkg check FILE|NAME[-VERSION]...\n"
           "       pkg update\n"
@@ -1080,6 +1080,8 @@ static int fetch_wanted(const struct repo_config *c)
         const struct index_entry *e = wanted[i];
         if (npend == MAX_PENDING)
             return error(NULL, "at most %d packages per command", MAX_PENDING);
+        progress("%s %s %s (%d of %d)", repo_url_is_file(c->repos[e->repo].url) ? "verifying" : "fetching",
+                 e->m.name, e->m.version, i + 1, nwanted);
         char *file = fetched_files[npend];
         int local = repo_local_archive(c, e, file, PKG_PATH_MAX);
         if (local < 0)
@@ -1214,8 +1216,10 @@ static int install(int argc, char **argv, const struct index_entry **upgrades, i
         remove_fetched();
         return 0;
     }
-    if (status == 0)
+    if (status == 0) {
+        progress("checking %d package%s", npend, npend == 1 ? "" : "s");
         status = check_all();
+    }
     struct pending *sorted[MAX_PENDING];
     if (status == 0 && order(sorted) < 0)
         status = -1;
@@ -1225,21 +1229,34 @@ static int install(int argc, char **argv, const struct index_entry **upgrades, i
                 printf("%s %s can be installed\n", pend[i].m.name, pend[i].m.version);
         status = check_local_against_index();
     } else if (status == 0) {
-        for (int i = 0; i < npend && status == 0; i++)
-            if (!sorted[i]->skip && stage(sorted[i]) < 0)
+        int total = 0, done = 0;
+        for (int i = 0; i < npend; i++)
+            total += !pend[i].skip;
+        for (int i = 0; i < npend && status == 0; i++) {
+            if (sorted[i]->skip)
+                continue;
+            progress("unpacking %s %s (%d of %d)", sorted[i]->m.name, sorted[i]->m.version, ++done, total);
+            if (stage(sorted[i]) < 0)
                 status = -1;
-        if (status < 0)
+        }
+        if (status < 0) {
             unstage();
-        else
+        } else {
+            progress("installing the files of %d package%s", total, total == 1 ? "" : "s");
             status = commit(sorted, npend);
+        }
         int kernel = 0, loader = 0;
         for (int i = 0; i < npend; i++)
             if (!pend[i].skip) {
                 kernel |= pend[i].m.kernel[0] != 0;
                 loader |= pend[i].m.bios_stage[0] != 0;
             }
+        if (status == 0 && kernel)
+            progress("writing the boot loader configuration");
         if (status == 0 && kernel && (r = boot_write_config()) < 0)
             status = error(NULL, "cannot write the boot loader configuration: %s", strerror(-r));
+        if (status == 0 && loader)
+            progress("installing the boot loader");
         if (status == 0 && loader && boot_bios_install() < 0)
             status = -1;
         r = db_write_tables();
@@ -1715,8 +1732,15 @@ static int cmd_build(int argc, char **argv)
 int main(int argc, char **argv)
 {
     int i = 1;
-    while (argc > i + 1 && (strcmp(argv[i], "--root") == 0 || strcmp(argv[i], "--arch") == 0 ||
-                            strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--keys") == 0)) {
+    for (;;) {
+        if (i < argc && strcmp(argv[i], "--verbose") == 0) {
+            verbose = 1;
+            i++;
+            continue;
+        }
+        if (!(argc > i + 1 && (strcmp(argv[i], "--root") == 0 || strcmp(argv[i], "--arch") == 0 ||
+                               strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--keys") == 0)))
+            break;
         if (argv[i][2] == 'r')
             root = argv[i + 1];
         else if (argv[i][2] == 'a')

@@ -2,7 +2,8 @@
  * folder view that the file manager shows as well (folderview.c) it adds
  * file type filters, Open or Save and Cancel, and in save mode a name field,
  * a New folder button and a confirmation before an existing file is
- * replaced.  Chosen files are recorded in the recent list. */
+ * replaced.  The folder mode shows only folders and has a New folder
+ * button as well.  Chosen files are recorded in the recent list. */
 #include <gui/app.h>
 #include <gui/folderview.h>
 #include <gui/mime.h>
@@ -57,6 +58,8 @@ static void update_accept(struct chooser *c)
     int on;
     if (c->mode == FILE_CHOOSER_SAVE) {
         on = widget_text(c->name)[0] != '\0';
+    } else if (c->mode == FILE_CHOOSER_FOLDER) {
+        on = 1;                 /* the current folder is a valid choice */
     } else {
         struct widget *loc = widget_find(c->win, "fv-location");
         on = folderview_selected(c->fv) != NULL || (loc->visible && widget_text(loc)[0]);
@@ -140,6 +143,8 @@ static void fv_selected(struct folderview *fv, void *arg)
 static int fv_filter(struct folderview *fv, const char *name, void *arg)
 {
     struct chooser *c = arg;
+    if (c->mode == FILE_CHOOSER_FOLDER)
+        return 0;               /* the folder view filters files only */
     if (!c->nfilters || c->filter->value < 0 || c->filter->value >= c->nfilters)
         return 1;
     const char *p = c->filters[c->filter->value].patterns;
@@ -203,6 +208,10 @@ static int on_accept(struct widget *w, void *args, void *arg)
         return 1;
     }
     const struct folderview_entry *e = folderview_selected(c->fv);
+    if (c->mode == FILE_CHOOSER_FOLDER) {
+        finish(c, e && e->dir ? e->path : folderview_cwd(c->fv));
+        return 1;
+    }
     if (!e)
         return 1;
     char path[PATH_MAX];
@@ -340,7 +349,8 @@ static void build(struct chooser *c)
     struct widget *cancel = button_new(row, _("Cancel"));
     widget_set_id(cancel, "fc-cancel");
     widget_connect(cancel, "clicked", on_cancel, c);
-    c->accept = button_new(row, c->mode == FILE_CHOOSER_SAVE ? _("Save") : _("Open"));
+    c->accept = button_new(row, c->mode == FILE_CHOOSER_SAVE ? _("Save")
+                                : c->mode == FILE_CHOOSER_FOLDER ? _("Choose") : _("Open"));
     widget_set_id(c->accept, "fc-accept");
     widget_connect(c->accept, "clicked", on_accept, c);
     int bw = theme_px(app_theme(c->app), TM_CONTROL_H) * 4;
@@ -351,7 +361,7 @@ static void build(struct chooser *c)
     if (!c->fv)
         return;
     widget_connect(win, "key", on_key, c);
-    if (c->mode == FILE_CHOOSER_SAVE) {
+    if (c->mode != FILE_CHOOSER_OPEN) {
         struct widget *b = button_new(bar, "");
         widget_set_icon(b, icon_get("folder-new"));
         widget_set_tip(b, _("New folder"));
@@ -418,7 +428,7 @@ struct chooser *chooser_open(struct app *a, struct widget *parent, enum file_cho
     c->filters = filters;
     c->nfilters = filters ? nfilters : 0;
     if (!title)
-        title = mode == FILE_CHOOSER_SAVE ? _("Save file") : _("Open file");
+        title = mode == FILE_CHOOSER_SAVE ? _("Save file") : mode == FILE_CHOOSER_FOLDER ? _("Choose folder") : _("Open file");
     strlcpy(c->title, title, sizeof c->title);
     int w = WINDOW_W, h = WINDOW_H;
     if (gui_screen_width() > 0 && w > gui_screen_width() - 40)

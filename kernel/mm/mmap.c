@@ -423,3 +423,30 @@ long vma_map_device(struct vmspace *vm, uintptr_t hint, uintptr_t pa, size_t len
             page_get(phys_to_page(pa + off));
     return va;
 }
+
+/* Map a regular file: the region references the file and its mapping. mmap
+ * and the ELF loader use it. */
+long vma_mmap_regular(struct vmspace *vm, struct file *f, uintptr_t addr, size_t len, unsigned vmflags,
+                      bool fixed, uint64_t off)
+{
+    if (!IS_ALIGNED(off, PAGE_SIZE) || off + len < off)
+        return -EINVAL;
+    if (!f->ops || !f->ops->read)
+        return -ENODEV;
+    int acc = f->flags & O_ACCMODE;
+    if (acc == O_WRONLY)
+        return -EACCES;
+    if ((vmflags & VM_SHARED) && (vmflags & VM_WRITE) &&
+        (acc != O_RDWR || (f->flags & O_APPEND) || !f->ops->write))
+        return -EACCES;
+    struct mapping *m = filemap_get(f->inode);
+    if (!m)
+        return -ENOMEM;
+    file_ref(f);
+    long va = vma_mmap_file(vm, addr, len, vmflags | VM_FILE, fixed, f, m, off);
+    if (va < 0) {
+        file_put(f);
+        filemap_put(m);
+    }
+    return va;
+}

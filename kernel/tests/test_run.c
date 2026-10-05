@@ -8,14 +8,6 @@
 #include <console.h>
 #include <drivers/timer.h>
 
-static long strtol_simple(const char *s)
-{
-    long v = 0;
-    while (*s >= '0' && *s <= '9')
-        v = v * 10 + (*s++ - '0');
-    return v;
-}
-
 /* Run the initrd program named by prog=<path> and expect exit status 0.
  * A program under test prints its own diagnostics and exits non zero on
  * failure. Physical memory must be fully returned afterwards. */
@@ -56,7 +48,7 @@ static void test_run(void)
     char want[16];
     int expected = 0;
     if (cmdline_lookup("status", want, sizeof want) && want[0])
-        expected = (int)strtol_simple(want);
+        expected = (int)strtoull(want, NULL, 10);
     ktest_assert(status == PROC_STATUS_EXITED(expected), "%s failed with status 0x%x", path, status);
     /* Children the program did not wait for were adopted by the kernel
      * process; their memory must be returned before it is counted. */
@@ -66,7 +58,7 @@ static void test_run(void)
      * the kernel that last until shutdown, such as the partitions of a
      * disk it partitioned (docs/design/block.md). */
     char resident[16];
-    long allowed = cmdline_lookup("resident_pages", resident, sizeof resident) && resident[0] ? (long)strtol_simple(resident) : 0;
+    long allowed = cmdline_lookup("resident_pages", resident, sizeof resident) && resident[0] ? (long)strtoull(resident, NULL, 10) : 0;
     swap_drain();
     /* Another CPU may still be finishing the last switch away from an
      * exited thread; give deferred frees a moment before judging. */

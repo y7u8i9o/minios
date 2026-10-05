@@ -47,9 +47,22 @@ must be complete before that call.
 
 ## ELF loading and the initial stack
 
-`sched/elf.c` accepts `ET_EXEC` x86_64 files. Each `PT_LOAD`
-segment becomes a region rounded to pages, populated and filled from the
-file, then protected to the segment's permissions. A one page heap region
+`sched/elf.c` accepts `ET_EXEC` x86_64 files. Since 2026-10-05 exec
+reads only the head of the file (`elf_head_size`: the file header, the
+program headers and the path of `PT_INTERP`, at most 64 KiB), and each
+`PT_LOAD` segment is mapped privately from the file with
+`vma_mmap_regular`, the function `mmap` uses. Its pages are read at their
+first touch, and processes running the same program share the pages they
+do not write. The pages after the file bytes of a segment (its bss) are an
+anonymous region. A writable segment whose file bytes end inside a page
+gets a private copy of that page through `vma_resolve_fault`, and the rest
+of the page is zeroed. The file offset and the address of a segment must
+agree within a page, which the linkers guarantee. The segments are not
+mmap regions: `munmap` and `MAP_FIXED` do not remove them. Before, exec
+read the whole file into kernel memory and copied every segment into
+populated pages, which made every process resident with its whole program
+and bss at its start. The case `mem_release` checks that a program with
+8 MiB of bss starts with less than 4 MiB resident (`libc.md`). A one page heap region
 follows the highest segment; `sbrk` grows it with `vma_brk`. The stack
 region is 1 MiB below `USER_STACK_TOP`, demand paged; `user_stack_setup`
 copies the strings, builds `argc`, `argv`, `NULL`, `envp`, `NULL`, the

@@ -81,6 +81,21 @@ int backend_set_mode(int width, int height, int scale)
     return backend_setup();
 }
 
+int backend_display_fd(void)
+{
+    return fb_fd;
+}
+
+int backend_display_request(int *width, int *height)
+{
+    struct fb_display d;
+    if (ioctl(fb_fd, FBIOGET_DISPLAY, &d) < 0 || d.serial == 0 || d.width == 0 || d.height == 0)
+        return -1;
+    *width = (int)d.width;
+    *height = (int)d.height;
+    return 0;
+}
+
 static inline uint32_t pack(uint32_t c)
 {
     return (((c >> 16) & 0xff) >> (8 - fbinfo.red_size)) << fbinfo.red_shift |

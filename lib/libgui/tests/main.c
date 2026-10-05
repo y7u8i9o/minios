@@ -22,6 +22,8 @@ void run_mime_tests(void);
 void run_svg_tests(void);
 void run_filechooser_tests(void);
 void run_dnd_tests(void);
+void run_appchooser_tests(void);
+void run_resize_tests(void);
 
 int main(void)
 {
@@ -38,6 +40,8 @@ int main(void)
     RUN(run_svg_tests);
     RUN(run_filechooser_tests);
     RUN(run_dnd_tests);
+    RUN(run_appchooser_tests);
+    RUN(run_resize_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

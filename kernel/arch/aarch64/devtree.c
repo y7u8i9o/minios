@@ -54,6 +54,35 @@ static void read_pcie(const void *blob)
     }
 }
 
+/* The power key: the child of gpio-keys with linux,code 116 (KEY_POWER),
+ * whose gpios property gives a PL061 controller and its line. The
+ * interrupt of the controller is a shared peripheral interrupt. */
+static void read_power_key(const void *blob)
+{
+    struct fdt_node keys = { .offset = -1 }, key, pl061;
+    if (!fdt_find_compatible(blob, "gpio-keys", &keys))
+        return;
+    key = keys;
+    while (fdt_find_property(blob, "linux,code", &key)) {
+        int len;
+        const void *code = fdt_prop(blob, &key, "linux,code", &len);
+        const void *gpios = fdt_prop(blob, &key, "gpios", &len);
+        if (!code || fdt_cell(code, 0) != 116 || !gpios || len < 8)
+            continue;
+        uint64_t addr, size;
+        if (!fdt_find_phandle(blob, fdt_cell(gpios, 0), &pl061) || !fdt_is_compatible(blob, &pl061, "arm,pl061") ||
+            !fdt_reg(blob, &pl061, 0, &addr, &size))
+            return;
+        const void *irq = fdt_prop(blob, &pl061, "interrupts", &len);
+        if (!irq || len < 12 || fdt_cell(irq, 0) != 0)
+            return;
+        devtree.pl061 = addr;
+        devtree.pl061_irq = 32 + fdt_cell(irq, 1);
+        devtree.power_line = fdt_cell(gpios, 1);
+        return;
+    }
+}
+
 /* The PSCI conduit of the psci node: "hvc" or "smc". */
 static void read_psci(const void *blob)
 {
@@ -130,6 +159,7 @@ void devtree_init(void)
         devtree.rtc = addr;
     read_pcie(blob);
     read_psci(blob);
+    read_power_key(blob);
     /* The root node is the first node of the structure block. */
     struct fdt_node root = { .offset = 0, .addr_cells = 2, .size_cells = 1 };
     int len;

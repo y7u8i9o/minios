@@ -31,7 +31,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(40);
+    ktest_wait_idle(40);
 }
 
 static void shifted(uint8_t code)
@@ -39,7 +39,7 @@ static void shifted(uint8_t code)
     ps2kbd_feed_scancode(0x2a);
     tap(code);
     ps2kbd_feed_scancode(0xaa);
-    sleep_ms(40);
+    ktest_wait_idle(40);
 }
 
 static const uint8_t letter_code[26] = {
@@ -71,11 +71,11 @@ static void choose(int row, int n)
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, label_right() - INPUT_W / 2, logical_h() - 14, 0);
     mouse_click(1);
-    sleep_ms(800);
+    ktest_wait_idle(800);
     int top = logical_h() - PANEL_H + 4 - (2 * MENU_PAD + n * ROW_H);
     mouse_move_to(&cx, &cy, label_right() - MENU_W / 2, top + MENU_PAD + row * ROW_H + ROW_H / 2, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
 }
 
 static void test_gui_ime_settings(void)
@@ -87,7 +87,7 @@ static void test_gui_ime_settings(void)
     ktest_assert(imed != NULL, "cannot start imed");
     struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", NULL }, env, &kernel_proc);
     ktest_assert(term != NULL, "cannot start the terminal");
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
     sh("settings set ime_page_size 3");
 
     type("echo ");
@@ -99,16 +99,16 @@ static void test_gui_ime_settings(void)
     tap(0x39);                      /* 是 */
     ps2kbd_feed_scancode(0x2a);
     ps2kbd_feed_scancode(0xaa);     /* a Shift tap: the layout */
-    sleep_ms(200);
+    ktest_wait_idle(200);
     tap(0x39);
     shifted(0x34);                  /* > */
     tap(0x35);                      /* / */
     type("imeterm");
     tap(0x1c);
-    sleep_ms(800);
+    ktest_wait_idle(800);
 
     sh("settings set ime_engines japanese");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     choose(1, 2);                   /* layout, japanese: japanese */
 
     struct file *f;

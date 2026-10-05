@@ -68,9 +68,9 @@ static void test_games(void)
     struct proc *p = start("snake > /snake.out");
     wait_raw();
     arrow(0x48);            /* up */
-    sleep_ms(400);
+    ktest_wait_idle(400);
     arrow(0x4d);            /* right */
-    sleep_ms(400);
+    ktest_wait_idle(400);
     type_line("q");
     ktest_assert(proc_reap(p) == 0, "snake status");
     ktest_assert(tty_get_lflag(&console_tty) & ICANON, "snake left the console in raw mode");
@@ -82,9 +82,9 @@ static void test_games(void)
     p = start("2048 > /2048.out");
     wait_raw();
     arrow(0x4b);            /* left */
-    sleep_ms(200);
+    ktest_wait_idle(200);
     arrow(0x50);            /* down */
-    sleep_ms(200);
+    ktest_wait_idle(200);
     type_line("q");
     ktest_assert(proc_reap(p) == 0, "2048 status");
     ktest_assert(tty_get_lflag(&console_tty) & ICANON, "2048 left the console in raw mode");
@@ -94,7 +94,7 @@ static void test_games(void)
 
     p = start("matrix > /matrix.out");
     wait_raw();
-    sleep_ms(500);
+    ktest_wait_idle(500);
     type_line("x");
     ktest_assert(proc_reap(p) == 0, "matrix status");
     ktest_assert(tty_get_lflag(&console_tty) & ICANON, "matrix left the console in raw mode");

@@ -57,6 +57,7 @@ struct conf {
     int pointer_speed;              /* -100..100 */
     int pointer_accel;              /* 0 flat, 1 adaptive, -1 when the file has none */
     int ime_shift_toggle, ime_ctrl_space;   /* the switch keys of the input methods, 1 by default */
+    int display_follow;             /* the mode follows the host window, 1 by default */
 };
 
 static struct app *app;
@@ -65,7 +66,8 @@ static struct wire_proxy *settings;
 static struct entry entries[MAX_ENTRIES];
 static int nentries, selected = -1;
 static struct conf conf = { .mode = MODE_FILL, .color = 0x00306080, .repeat_rate = 30, .repeat_delay = 500,
-                            .pointer_accel = -1, .ime_shift_toggle = 1, .ime_ctrl_space = 1 };  /* solid colour by default */
+                            .pointer_accel = -1, .ime_shift_toggle = 1, .ime_ctrl_space = 1,
+                            .display_follow = 1 };  /* solid colour by default */
 static char conf_text[1024];
 static struct image *wallpaper;
 static struct surface bg;       /* wallpaper scaled to the window */
@@ -334,6 +336,7 @@ static void apply_conf(int first)
         else if (strcmp(line, "pointer_accel") == 0) c.pointer_accel = strcmp(v, "flat") == 0 ? 0 : 1;
         else if (strcmp(line, "ime_shift_toggle") == 0) c.ime_shift_toggle = atoi(v) != 0;
         else if (strcmp(line, "ime_ctrl_space") == 0) c.ime_ctrl_space = atoi(v) != 0;
+        else if (strcmp(line, "display_follow") == 0) c.display_follow = atoi(v) != 0;
     }
     int wall_changed = first || strcmp(c.wallpaper, conf.wallpaper) != 0 || c.mode != conf.mode || c.color != conf.color;
     if (settings && (first || c.color != conf.color))
@@ -358,6 +361,8 @@ static void apply_conf(int first)
         settings_set(settings, "ime_shift_toggle", c.ime_shift_toggle);
     if (settings && (first || c.ime_ctrl_space != conf.ime_ctrl_space))
         settings_set(settings, "ime_ctrl_space", c.ime_ctrl_space);
+    if (settings && (first || c.display_follow != conf.display_follow))
+        settings_set(settings, "display_follow", c.display_follow);
     conf = c;
     if (wall_changed)
         load_wallpaper();
@@ -589,13 +594,18 @@ static int on_open_with(struct widget *w, void *args, void *arg)
 {
     if (selected < 0)
         return 1;
-    char prog[128] = "/bin/";
-    if (!app_prompt(app, _("Open with"), _("Program:"), prog, sizeof prog))
-        return 1;
-    char path[512];
+    char command[MIME_COMMAND], path[512];
     entry_path(selected, path, sizeof path);
-    logline("open %s with %s", path, prog);
-    spawn(prog, path);
+    if (!app_choose_program(app, path, command, sizeof command))
+        return 1;
+    logline("open %s with %s", path, command);
+    int r = mime_run(command, path);
+    if (r < 0) {
+        const char *buttons[] = { _("OK") };
+        char text[400];
+        snprintf(text, sizeof text, _("“%s” cannot be started: %s."), command, strerror(-r));
+        app_dialog(app, _("Open with"), text, buttons, 1);
+    }
     return 1;
 }
 static int on_rename(struct widget *w, void *args, void *arg)

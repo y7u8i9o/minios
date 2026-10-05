@@ -33,7 +33,6 @@ enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
 enum { ANCHOR_NONE, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_LEFT, ANCHOR_RIGHT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_LEFT,
        ANCHOR_TOP_RIGHT, ANCHOR_BOTTOM_RIGHT };
 enum { LAYER_ANCHOR_TOP = 1, LAYER_ANCHOR_BOTTOM = 2, LAYER_ANCHOR_LEFT = 4, LAYER_ANCHOR_RIGHT = 8 };
-enum { EDGE_TOP = 1, EDGE_BOTTOM = 2, EDGE_LEFT = 4, EDGE_RIGHT = 8 };
 enum { ADJUST_FLIP_X = 1, ADJUST_FLIP_Y = 2, ADJUST_SLIDE_X = 4, ADJUST_SLIDE_Y = 8,
        ADJUST_RESIZE_X = 16, ADJUST_RESIZE_Y = 32 };
 
@@ -190,6 +189,7 @@ struct comp_settings {
     int pointer_accel;              /* POINTER_ACCEL_* */
     int ime_shift_toggle;           /* a Shift tap toggles the input method */
     int ime_ctrl_space;             /* Ctrl+Space and Super+Space toggle it */
+    int display_follow;             /* the mode follows the size requests of the host display */
 };
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1
@@ -201,12 +201,14 @@ struct comp_settings {
 extern struct comp_settings settings;
 void debug_init(struct wire_server *srv);
 void debug_screen_changed(void);              /* sends the new size to screencopy clients */
+void debug_setting_changed(const char *key, int value);   /* sends a value to every settings client */
 /* trace.c: the tracer global, and the client events of a running trace
  * (connected 1 when a client appears or reports its pid, 0 when it goes). */
 void trace_init(struct wire_server *srv);
 void trace_client(const struct client *c, int connected);
 void frame_clock_set(int ms);                   /* main.c */
 void seat_repeat_changed(void);                 /* seat.c */
+void seat_tick(long now);
 void scene_stat_values(long *count, long *ms, long *max);   /* scene.c */
 
 /* main.c */
@@ -263,8 +265,17 @@ int backend_can_set_mode(void);
 /* Change the framebuffer mode; screen_w, screen_h, screen_scale and the
  * back buffer follow. */
 int backend_set_mode(int width, int height, int scale);
+/* The descriptor of /dev/fb0. It becomes readable when the host display
+ * requests a size. */
+int backend_display_fd(void);
+/* Reads the last size request of the host display in device pixels.
+ * Returns 0, or -1 when the host made no request. */
+int backend_display_request(int *width, int *height);
 /* main.c: apply a mode to the backend, the shell and every client. */
 int comp_set_mode(int width, int height, int scale);
+/* Applies the last size request of the host display at the chosen scale
+ * when display_follow is set. */
+void comp_follow_display(void);
 /* surface.c: re-announce the output to every bound output resource. */
 void output_changed(void);
 /* shell.c: the screen size changed; re-layout layers, clamp windows. */
@@ -348,6 +359,7 @@ int im_japanese_key(uint32_t key);
 void im_update(void);
 void im_context_changed(void);
 int im_filter_key(uint32_t key, int pressed, int mods);
+int im_busy(void);
 void im_tick(long now);
 void im_modifiers(int depressed, int locked, int group);
 void im_keymap_changed(int fd, uint32_t size);
@@ -360,6 +372,7 @@ void im_surface_gone(struct csurface *s);
 
 void text_init(struct wire_server *srv);
 void text_focus_changed(struct csurface *old, struct csurface *now);
+int text_focus_active(void);
 int text_key(uint32_t key, int pressed, int mods);   /* 1: a composition used the key */
 /* The state of the text input context that has the keyboard focus: 0
  * without one.  Each pointer may be NULL. */

@@ -23,7 +23,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(30);
+    ktest_wait_idle(30);
 }
 
 static const uint8_t letter_code[26] = {
@@ -66,9 +66,9 @@ static void click(int x, int y)
 {
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, x, y, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
 }
 
 static void test_ime_candidates(void)
@@ -80,15 +80,15 @@ static void test_ime_candidates(void)
     struct proc *srv = start_server();
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", "-t", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/imecand.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     const uint8_t ctrl_shift[] = { 0x1d, 0x2a, 0xaa, 0x9d };
     for (size_t i = 0; i < sizeof ctrl_shift; i++)
         ps2kbd_feed_scancode(ctrl_shift[i]);
-    sleep_ms(200);
+    ktest_wait_idle(200);
 
     type("abc");
     sleep_ms(500);
@@ -102,7 +102,7 @@ static void test_ime_candidates(void)
     ktest_assert(highlight(&x0, &y0, &x1, &y1), "no candidate window for de");
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, x0 + 5, (y0 + y1) / 2, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     feed_packet_wheel(0, 0, 0, 1);          /* down: the second page, De */
     sleep_ms(400);
     tap(0x39);
@@ -113,9 +113,9 @@ static void test_ime_candidates(void)
     ktest_assert(highlight(&x0, &y0, &x1, &y1), "no candidate window for fg");
     kprintf("ime_candidates: vertical page at %d,%d\n", x0, y0);
     click(x0 + 10, y1 + 12);                /* the candidate below: fg */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);
-    sleep_ms(500);
+    ktest_wait_idle(500);
 
     struct file *f;
     ktest_assert(vfs_open("/imecand.txt", O_RDONLY, 0, &f) == 0, "open /imecand.txt");

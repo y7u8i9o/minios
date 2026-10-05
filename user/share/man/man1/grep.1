@@ -4,7 +4,7 @@ NAME
     grep - search text with regular expressions
 
 SYNOPSIS
-    grep [-EFinvclrhHw] pattern [file...]
+    grep [-EFinvclrhHqw] pattern [file...]
 
 DESCRIPTION
     Prints matching lines. Patterns are basic regular expressions by default;
@@ -13,7 +13,8 @@ DESCRIPTION
     -l prints matching filenames, -w requires whole words. -r recursively
     searches directories; it follows symbolic links named as operands and
     skips those it finds while descending. -h hides filenames; -H always
-    shows them.
+    shows them. -q prints nothing and exits with status 0 at the first
+    match.
     A file named - means standard input. -- ends options. Matching text is
     red on capable terminals. Exit status: 0 matches, 1 none, 2 an error.
 

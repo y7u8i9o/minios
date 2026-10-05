@@ -2,6 +2,7 @@
  * compressor. The decoder accepts stored, fixed, and dynamic blocks. The
  * gzip program and the package installer use these functions. */
 #include <minios/gzip.h>
+#include <minios/crc32.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -17,13 +18,7 @@ static const short dext[30] = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 
 
 uint32_t gzip_crc32(const uint8_t *p, size_t n)
 {
-    uint32_t crc = 0xffffffffu;
-    for (size_t i = 0; i < n; i++) {
-        crc ^= p[i];
-        for (int k = 0; k < 8; k++)
-            crc = (crc >> 1) ^ (crc & 1 ? 0xedb88320u : 0);
-    }
-    return ~crc;
+    return crc32(0, p, n);
 }
 
 struct bits {

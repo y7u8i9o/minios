@@ -106,6 +106,14 @@ msgstr "保存文件"
 msgid "Open file"
 msgstr "打开文件"
 
+#: lib/libgui/src/filechooser.c
+msgid "Choose"
+msgstr "选择"
+
+#: lib/libgui/src/filechooser.c
+msgid "Choose folder"
+msgstr "选择文件夹"
+
 #: lib/libgui/src/filechooser.c:94
 msgid "The folder “%s” does not exist."
 msgstr "文件夹“%s”不存在。"
@@ -298,3 +306,39 @@ msgstr "无法移动“%s”:%s。"
 #: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be copied: %s."
 msgstr "无法复制“%s”:%s。"
+
+#: lib/libgui/src/appchooser.c:159
+msgid "Recommended applications"
+msgstr "推荐的应用程序"
+
+#: lib/libgui/src/appchooser.c:161
+msgid "Other applications"
+msgstr "其他应用程序"
+
+#: lib/libgui/src/appchooser.c:202
+msgid "The default application cannot be saved: %s."
+msgstr "无法保存默认应用程序：%s。"
+
+#: lib/libgui/src/appchooser.c:264
+msgid "Choose a program"
+msgstr "选择程序"
+
+#: lib/libgui/src/appchooser.c:274
+msgid "“%s” is not a program."
+msgstr "“%s”不是程序。"
+
+#: lib/libgui/src/appchooser.c:301
+msgid "Choose an application to open “%s”."
+msgstr "选择用于打开“%s”的应用程序。"
+
+#: lib/libgui/src/appchooser.c:314
+msgid "Always use for files of type %s"
+msgstr "始终用于 %s 类型的文件"
+
+#: lib/libgui/src/appchooser.c:319
+msgid "Other program..."
+msgstr "其他程序..."
+
+#: lib/libgui/src/appchooser.c:61 lib/libgui/src/appchooser.c:354
+msgid "Open with"
+msgstr "打开方式"

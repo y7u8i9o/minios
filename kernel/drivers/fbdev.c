@@ -13,6 +13,7 @@
 #include <klog.h>
 #include <errno.h>
 #include <drivers/devinfo.h>
+#include <ipc/poll.h>
 
 struct limine_framebuffer fb_screen;
 bool fb_screen_present;
@@ -21,6 +22,12 @@ uint32_t fb_screen_scale = 1;
 /* The file that acquired the display, if any. Protected by fbdev_lock. */
 static DEFINE_SPINLOCK(fbdev_lock);
 static struct file *owner;
+/* The last size request of the host display and the serial of the request
+ * that the owner read. fbdev_lock protects both. */
+static struct fb_display display_request;
+static uint32_t owner_seen;
+/* Poll waiters of /dev/fb0 for size requests. */
+static struct poll_source fb_poll;
 
 /* The GPU driver, registered once at boot and read only afterwards. */
 static struct {
@@ -35,6 +42,7 @@ static struct mutex fb_mode_lock;
 void fb_screen_init(void)
 {
     mutex_init(&fb_mode_lock, "fb_mode");
+    poll_source_init(&fb_poll, "fb0");
     if (!bootinfo.have_framebuffer)
         return;
     fb_screen = bootinfo.framebuffer;
@@ -127,6 +135,24 @@ int fb_set_mode(uint32_t width, uint32_t height, uint32_t scale)
     return r;
 }
 
+void fb_display_changed(uint32_t width, uint32_t height)
+{
+    spin_lock(&fbdev_lock);
+    display_request.width = width;
+    display_request.height = height;
+    display_request.serial++;
+    spin_unlock(&fbdev_lock);
+    klog_info("the host display requests %ux%u", width, height);
+    poll_source_notify(&fb_poll);
+}
+
+void fb_display_get(struct fb_display *out)
+{
+    spin_lock(&fbdev_lock);
+    *out = display_request;
+    spin_unlock(&fbdev_lock);
+}
+
 static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 {
     struct proc *p = thread_current()->proc;
@@ -173,12 +199,26 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
             return -EPERM;
         return fb_set_mode(m.width, m.height, m.scale);
     }
+    case FBIOGET_DISPLAY: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct fb_display), true))
+            return -EFAULT;
+        spin_lock(&fbdev_lock);
+        struct fb_display d = display_request;
+        if (owner == f)
+            owner_seen = d.serial;
+        spin_unlock(&fbdev_lock);
+        memcpy((void *)arg, &d, sizeof d);
+        return 0;
+    }
     case FBIO_ACQUIRE:
         spin_lock(&fbdev_lock);
         if (owner && owner != f) {
             spin_unlock(&fbdev_lock);
             return -EBUSY;
         }
+        /* A new owner learns a request that arrived before it. */
+        if (owner != f)
+            owner_seen = 0;
         owner = f;
         spin_unlock(&fbdev_lock);
         console_set_fb_enabled(false);
@@ -224,10 +264,27 @@ static void fb_release(struct file *f)
     }
 }
 
+/* POLLIN for the display owner while a size request is unread. Other
+ * files of the device never become ready. */
+static int fb_poll_ready(struct file *f)
+{
+    spin_lock(&fbdev_lock);
+    int ready = owner == f && display_request.serial != owner_seen ? POLLIN : 0;
+    spin_unlock(&fbdev_lock);
+    return ready;
+}
+
+static struct poll_source *fb_poll_source(struct file *f)
+{
+    return &fb_poll;
+}
+
 static const struct file_ops fb_fops = {
     .ioctl = fb_ioctl,
     .mmap = fb_mmap,
     .release = fb_release,
+    .poll = fb_poll_ready,
+    .poll_source = fb_poll_source,
 };
 
 void fbdev_init(void)
@@ -274,6 +331,10 @@ void fbdev_describe(struct devinfo *d)
     devinfo_prop(d, "driver", "%s", gpu.ops ? "virtio-gpu" : "boot framebuffer");
     devinfo_prop(d, "device_node", "/dev/fb0");
     devinfo_prop(d, "acquired", "%s", acquired ? "yes, by the display server" : "no");
+    struct fb_display request;
+    fb_display_get(&request);
+    if (request.serial)
+        devinfo_prop(d, "host_request", "%u x %u, %u requests", request.width, request.height, request.serial);
     if (bootinfo.have_framebuffer)
         devinfo_prop(d, "boot_framebuffer", "%lu x %lu, %u bits per pixel, at 0x%lx",
                      (unsigned long)bootinfo.framebuffer.width, (unsigned long)bootinfo.framebuffer.height,

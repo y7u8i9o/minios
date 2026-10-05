@@ -9,8 +9,14 @@ struct rtc_date {
 };
 
 void rtc_init(void);
-/* Nanoseconds between the Unix epoch and the timer's zero. */
-uint64_t rtc_epoch_offset_ns(void);
-void rtc_set_epoch_offset_ns(uint64_t ns);
+/* The realtime clock in nanoseconds since the Unix epoch, with the part of
+ * a slew that is due. */
+uint64_t rtc_realtime_ns(void);
+/* Step the realtime clock to ns. A slew in progress ends. */
+void rtc_set_realtime_ns(uint64_t ns);
+/* Slew the realtime clock by *delta nanoseconds at 500 microseconds per
+ * second, in place of the slew in progress, or only report it when delta
+ * is NULL. Returns the correction that remained of the earlier slew. */
+int64_t rtc_adjust(const int64_t *delta);
 /* Seconds since the Unix epoch for a UTC calendar date. */
 int64_t rtc_epoch_seconds(int year, int month, int day, int hour, int minute, int second);

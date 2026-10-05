@@ -52,12 +52,14 @@ static int selected = -1;
 static const struct { const char *path, *label; } categories[] = {
     { "system", N_("System") },        { "firmware", N_("Firmware") }, { "cpu", N_("Processors") },
     { "platform", N_("Platform") },    { "memory", N_("Memory") },     { "pci", N_("PCI") },
-    { "usb", N_("USB") },              { "input", N_("Input devices") }, { "storage", N_("Storage") },
+    { "usb", N_("USB") },              { "nvme", N_("NVMe") },         { "ahci", N_("AHCI") },
+    { "input", N_("Input devices") },  { "storage", N_("Storage") },
     { "display", N_("Display") },      { "audio", N_("Audio") },       { "network", N_("Network") },
 };
 
 /* The labels of the property keys of /dev/devices. */
 static const struct { const char *key, *label; } labels[] = {
+    { "64_bit_addresses", N_("64-bit addresses") },
     { "acpi", N_("ACPI") },
     { "acquired", N_("Acquired") },
     { "address", N_("Address") },
@@ -136,6 +138,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "feature_words", N_("Feature words") },
     { "features", N_("Features") },
     { "filesystem", N_("Filesystem") },
+    { "firmware", N_("Firmware revision") },
     { "firmware_type", N_("Firmware type") },
     { "first_sector", N_("First sector") },
     { "form_factor", N_("Form factor") },
@@ -187,6 +190,8 @@ static const struct { const char *key, *label; } labels[] = {
     { "key_repeat", N_("Key repeat") },
     { "keyboard_controller", N_("Keyboard controller") },
     { "keys", N_("Keys") },
+    { "kind", N_("Kind") },
+    { "largest_transfer", N_("Largest transfer") },
     { "length", N_("Length") },
     { "level", N_("Level") },
     { "line_size", N_("Line size") },
@@ -221,6 +226,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "msi_x", N_("MSI-X") },
     { "mtu", N_("MTU") },
     { "name", N_("Name") },
+    { "namespaces", N_("Namespaces") },
     { "oem_id", N_("OEM ID") },
     { "oem_revision", N_("OEM revision") },
     { "oem_table_id", N_("OEM table ID") },
@@ -314,6 +320,7 @@ static const struct { const char *key, *label; } labels[] = {
     { "version", N_("Version") },
     { "vhe", N_("Virtualization host extensions") },
     { "virtual_address_bits", N_("Virtual address bits") },
+    { "volatile_write_cache", N_("Volatile write cache") },
     { "ways", N_("Ways") },
 };
 

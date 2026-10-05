@@ -1,0 +1,4 @@
+#!/bin/sh
+# The machine powered off: QEMU ended with status 0, not through the
+# test exit device.
+[ "$EXITCODE" = "0" ] || { echo "  qemu exit code $EXITCODE, expected 0"; exit 1; }

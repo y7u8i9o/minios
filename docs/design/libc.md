@@ -178,6 +178,26 @@ the new block. The smallest payload is 32 bytes. `realloc` grows into a
 free successor in place before it copies. Requests of 256 KiB or more
 are mapped separately as before.
 
+## Returning free memory (2026-10-05)
+
+Until 2026-10-05 the heap never shrank. A process retained every page that its
+small allocations had touched until it exited, and the system monitor
+showed a resident size that rose at the start and never fell. Free memory
+now goes back to the kernel in two ways. A free block at the top of the
+heap of 128 KiB or more shrinks the heap with a negative `sbrk`, down to
+64 KiB. A free block of 64 KiB or more inside the heap gives the whole
+pages of its payload back with `madvise(MADV_DONTNEED)`, apart from its
+links and its footer. The flag `F_RELEASED` marks such a block, so a later
+merge with a neighbour gives back only the pages of the parts that were
+still in use. The kernel maps a zero page at the next touch of a page that
+was given back.
+
+The case `mem_release` runs `/bin/memreleasetest`. It writes 20 MiB of
+blocks of 1000 bytes and frees them below a block that remains in use, and
+the resident size must fall by 16 MiB. After the top block is freed too,
+it must be within 2 MiB of the size at the start. Memory allocated again
+with `calloc` must read as zero.
+
 ## Additions for sed and awk
 
 The ports of FreeBSD sed and the One True AWK (`sedawk.md`) added
@@ -258,3 +278,47 @@ sets the modification time, and `chroot` fails with `ENOSYS`. New
 headers are `paths.h`, `utmp.h` (types only, minios retains no login
 records), `poll.h`, `utime.h`, `alloca.h`, `net/if.h` and
 `netinet/tcp.h`.
+
+## Additions for the binutils
+
+The binutils of 2026-10-05 (`binutils.md`) added `elf.h` with the types
+and constants of the System V ABI and of the processor supplements for
+x86_64 and aarch64, under the names that other systems use. The header
+also contains the ELF32 types, although minios reads and writes ELF64
+files only. `minios/elffile.h` (`src/elffile.c`) is a reader of ELF64
+little-endian files in memory. `elffile_open` checks the file header and
+the section and program header tables against the size of the file. The
+other functions check each offset and size that they follow and return
+NULL for a part outside the file. The reader returns the sections by
+index, name or type, the strings of a string table, the symbols of a
+symbol table, the dynamic entries, and the names of the constants as
+the GNU binutils print them. `pkg` (`user/pkg/elf.c`), the binutils and
+`libprof` use the reader. The dynamic loader `/lib/ld.so` cannot link
+the libc, and it uses only the types of `elf.h`.
+
+## Additions for file transfer (2026-10-05)
+
+`minios/crc32.h` declares `crc32(crc, data, n)`, the CRC-32 of gzip, zlib
+and PNG, which continues the checksum `crc` over `n` more bytes. The
+kernel has the same function in `kernel/lib/crc32.c`. `gzip_crc32`, the
+PNG encoder of libcodec, `xfer` and the host tools `fsck` and `mkgpt`
+used private copies before; the host tools compile `src/crc32.c` with the
+host libc. `errno.h` gained `EPROTO` (71) and `ESTALE` (116) with the
+values of Linux, for the protocol of `filetransfer.md`.
+
+## Additions for MP3 (2026-10-06)
+
+`malloc.h` includes `stdlib.h`. Ported code includes the header for the
+declarations of the allocator, as the MP3 encoder shine does
+(`codecs.md`).
+
+## Interrupted sleeps (2026-10-05)
+
+The system call `sleep_ms` returns `-EINTR` when a signal, a stop or the
+exit of the process ends the sleep, as the other blocking calls do.
+`nanosleep` then returns -1 with `errno` set to `EINTR` and stores the
+requested time minus the time slept in `remain`. `sleep` returns the
+unslept seconds, rounded up, and `usleep` returns -1 with `EINTR`. An
+ignored signal does not end a sleep. Before this change every wake of the
+thread ended the sleep, and the functions reported a complete sleep
+(`docs/postmortems/2026-10-05-sleep-wakeup.md`).

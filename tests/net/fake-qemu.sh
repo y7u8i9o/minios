@@ -4,15 +4,21 @@
 # and behaves as FAKE_QEMU_BEHAVIOUR says: "pass" writes TEST PASS to the
 # serial log and exits, "hang" sleeps until it is killed (the timeout
 # path). It records the arguments in FAKE_QEMU_ARGS when set.
-# The harness asks QEMU what it offers before starting it.
-if [ "$2" = help ]; then
-    case "$1" in
-        -netdev) printf 'Available netdev backend types:\nsocket\nstream\ndgram\nuser\n' ;;
-        -accel)  printf 'Accelerators supported in QEMU binary:\ntcg\n' ;;
-        *)       printf '\n' ;;
-    esac
-    exit 0
-fi
+# The harness asks QEMU what it offers before starting it, for example
+# with "-M none -netdev help". The option before the argument help selects
+# the answer.
+prev=""
+for a in "$@"; do
+    if [ "$a" = help ]; then
+        case "$prev" in
+            -netdev) printf 'Available netdev backend types:\nsocket\nstream\ndgram\nuser\n' ;;
+            -accel)  printf 'Accelerators supported in QEMU binary:\ntcg\n' ;;
+            *)       printf '\n' ;;
+        esac
+        exit 0
+    fi
+    prev="$a"
+done
 SERIAL=""
 prev=""
 for a in "$@"; do

@@ -12,6 +12,7 @@
 #include <fnmatch.h>
 #include <glob.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <ctype.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -330,6 +331,33 @@ static void test_port_additions(void)
         if (opt == 'c') carg = optarg;
     }
     CHECK(seen_a && seen_b && carg && !strcmp(carg, "value") && optind == 4, "getopt parsed options");
+
+    /* getopt_long moves the operands behind the options and accepts unique
+     * prefixes of long options. */
+    static const struct option longopts[] = {
+        { "radix", required_argument, NULL, 't' },
+        { "defined-only", no_argument, NULL, 'U' },
+        { "debug-syms", no_argument, NULL, 'a' },
+        { NULL, 0, NULL, 0 },
+    };
+    char *largs[] = { "nm", "one", "-g", "--rad=x", "two", "--defined", "-t", "d", "--", "-three", NULL };
+    char seen[16] = "";
+    optind = 0;
+    while ((opt = getopt_long(10, largs, "gt:", longopts, NULL)) != -1) {
+        size_t len = strlen(seen);
+        seen[len] = (char)opt;
+        seen[len + 1] = '\0';
+        if (opt == 't')
+            strcat(seen, optarg);
+    }
+    CHECK(!strcmp(seen, "gtxUtd") && optind == 7 && !strcmp(largs[7], "one") && !strcmp(largs[8], "two") &&
+              !strcmp(largs[9], "-three"),
+          "getopt_long permutes and matches prefixes");
+    char *ambiguous[] = { "nm", "--de", NULL };
+    optind = 0;
+    opterr = 0;
+    CHECK(getopt_long(2, ambiguous, "", longopts, NULL) == '?', "getopt_long refuses an ambiguous prefix");
+    opterr = 1;
 
     char *text = NULL;
     CHECK(asprintf(&text, "%s-%d", "id", 42) == 5 && text && !strcmp(text, "id-42"), "asprintf");

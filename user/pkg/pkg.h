@@ -106,6 +106,10 @@ struct record {
 };
 extern const char *root;
 extern const char *target_arch;
+/* --verbose: progress prints a line before each step that can take long,
+ * such as the verification and the unpacking of a package. */
+extern int verbose;
+void progress(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int db_lock(void);
 void db_unlock(void);
 int db_read(const char *name, struct manifest *m);
@@ -168,6 +172,8 @@ const struct index_entry *index_best(const struct index *ix, const char *name, c
 const struct index_entry *index_find(const struct index *ix, const char *name, const char *version);
 const struct index_entry *index_provider(const struct index *ix, const struct pkg_lib *lib);
 int repo_fetch(const struct repo_config *c, const struct index_entry *e, const char *dest);
+/* 1 when the URL of a repository starts with file://. */
+int repo_url_is_file(const char *url);
 int repo_local_archive(const struct repo_config *c, const struct index_entry *e, char *path, size_t n);
 int file_matches(const struct index_entry *e, const char *file, const char *label, const char *repo,
                  char *err, size_t errlen);

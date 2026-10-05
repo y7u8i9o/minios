@@ -100,6 +100,12 @@ void gui_destroy_window(struct gui_window *w);
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);
 /* Surface hints are committed atomically with the next buffer update. */
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count);
+/* Give the window ARGB buffers without an opaque region. X12 copies the
+ * pixels inside a later opaque region (gui_set_opaque_region) and blends
+ * the other pixels with their alpha, as for a dimmed full screen overlay.
+ * The colours of the theme have the alpha 0, so widgets outside the
+ * opaque region are invisible. */
+void gui_set_translucent(struct gui_window *w);
 void gui_set_input_region(struct gui_window *w, const struct rect *rects, int count);
 void gui_move(struct gui_window *w, int x, int y);
 void gui_set_title(struct gui_window *w, const char *title);

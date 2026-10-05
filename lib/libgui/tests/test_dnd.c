@@ -130,10 +130,12 @@ static void test_drops(void)
 /* The centre of a row of the folder view's table, in window coordinates. */
 static void row_point(struct widget *table, int index, int *x, int *y)
 {
-    int ax, ay, lh = widget_theme(table)->font->height + 6;
+    int ax, ay;
+    struct rect r = { 0 };
     widget_abs(table, &ax, &ay);
+    view_row_rect(table, view_row_at(table, index), &r);
     *x = ax + 40;
-    *y = ay + 1 + 24 + index * lh + lh / 2;
+    *y = ay + r.y + r.h / 2;
 }
 
 static void test_folderview(struct app *a)

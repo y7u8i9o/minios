@@ -319,10 +319,14 @@ hairline under it, the title centred in DejaVu Sans 13 px, and three
 with a hover shade. The toolkit handles the pointer over the chrome:
 the header bar starts `toplevel.move` (a double click toggles
 maximized), an 8 px zone outside the frame starts `toplevel.resize`
-with the edges (corners within 20 px take two), the buttons act on
-release. The compositor learns the frame through `set_window_geometry`,
-an opaque region of the frame minus its corner squares, and an input
-region covering the frame and the resize zone. Maximized windows drop
+with the edges (corners within 24 px take two), the buttons act on
+release. A square at each corner reaches 12 px outside the frame and
+6 px inside, over the rounded corner, and takes two edges as well
+(`gui_resize_edges` in `gfx.c`, which the compositor shares). The
+compositor learns the frame through `set_window_geometry`, an opaque
+region of the frame minus its corner squares, and an input region of the
+frame with the resize zone and the four corner squares
+(`gui_resize_region`). Maximized windows drop
 the margins and the corners; the configure states drive `active` and
 `maximized`. A compositor answering `decoration.mode` with server side
 decorations turns all of this off and the window is plain again.

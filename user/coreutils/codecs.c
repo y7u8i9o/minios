@@ -9,7 +9,9 @@
  *
  * -b gives the sample size of converted audio (the source's by default),
  * -s the size at which a vector image is rendered (its own by default),
- * and -o the options of an audio encoder, such as quality=0.6.
+ * and -o the options of an audio encoder, such as quality=0.6. An
+ * animation remains an animation when the target codec encodes animations,
+ * and becomes its first frame otherwise.
  * Exit status 0 on success, 1 on an error, 2 for wrong usage. */
 #include <codec/codec.h>
 #include <errno.h>
@@ -31,13 +33,14 @@ static const char *kind_name(enum codec_kind k)
     return k == CODEC_IMAGE ? "image" : k == CODEC_AUDIO ? "audio" : "?";
 }
 
-/* D decodes, E encodes, S scales (renders at any size). */
-static const char *caps_text(int caps, char out[4])
+/* D decodes, E encodes, S scales (renders at any size), A animates. */
+static const char *caps_text(int caps, char out[5])
 {
     out[0] = caps & CODEC_DECODE ? 'D' : '-';
     out[1] = caps & CODEC_ENCODE ? 'E' : '-';
     out[2] = caps & CODEC_SCALABLE ? 'S' : '-';
-    out[3] = '\0';
+    out[3] = caps & CODEC_ANIMATED ? 'A' : '-';
+    out[4] = '\0';
     return out;
 }
 
@@ -58,13 +61,40 @@ static int list(void)
     int n = codec_count();
     for (int i = 0; i < n; i++) {
         const struct codec *c = codec_get(i);
-        char caps[4];
+        char caps[5];
         printf("%s %-5s %s  %-8s %s\n", caps_text(c->caps, caps), c->name, kind_name(c->kind), module_of(c),
                c->description);
-        printf("            types %s, extensions %s\n", c->mime_types, c->extensions);
+        printf("             types %s, extensions %s\n", c->mime_types, c->extensions);
     }
     printf("%d codecs in %d modules\n", n, codec_module_count());
     return 0;
+}
+
+/* The frames, the repetitions and the length of one play of an animation
+ * with more than one frame, for info. */
+static void describe_animation(const struct codec *c, const uint8_t *data, size_t len, char *out, size_t size)
+{
+    struct codec_animation *a;
+    if (!(c->caps & CODEC_ANIMATED) || codec_animation_open(c, data, len, NULL, &a) < 0)
+        return;
+    const struct codec_animation_info *info = codec_animation_info(a);
+    uint32_t *pixels = malloc(sizeof *pixels * (size_t)info->w * info->h);
+    long ms = 0;
+    int frames = 0, delay;
+    while (pixels && codec_animation_next(a, pixels, &delay) == 1) {
+        frames++;
+        ms += delay;
+    }
+    if (frames > 1) {
+        char loops[32];
+        if (info->loops == 0)
+            snprintf(loops, sizeof loops, "repeats without end");
+        else
+            snprintf(loops, sizeof loops, "plays %d time%s", info->loops, info->loops == 1 ? "" : "s");
+        snprintf(out, size, ", %d frames, %ld.%03ld s, %s", frames, ms / 1000, ms % 1000, loops);
+    }
+    free(pixels);
+    codec_animation_close(a);
 }
 
 static int info(const char *path)
@@ -91,8 +121,10 @@ static int info(const char *path)
             int alpha = 0;
             for (size_t i = 0, n = (size_t)pic.w * pic.h; i < n && !alpha; i++)
                 alpha = pic.pixels[i] >> 24 != 0xff;
-            printf("%s: %s image, %dx%d%s%s\n", path, c->name, pic.w, pic.h, alpha ? ", with alpha" : "",
-                   c->caps & CODEC_SCALABLE ? ", scalable" : "");
+            char animation[96] = "";
+            describe_animation(c, data, len, animation, sizeof animation);
+            printf("%s: %s image, %dx%d%s%s%s\n", path, c->name, pic.w, pic.h, alpha ? ", with alpha" : "",
+                   c->caps & CODEC_SCALABLE ? ", scalable" : "", animation);
             codec_picture_free(&pic);
         }
     } else {
@@ -124,9 +156,72 @@ static int fail(const char *what, const char *path, int err)
     return 1;
 }
 
+/* Converts an animation of more than one frame when both codecs have
+ * animations. Returns 1 when the input is no such animation, then the
+ * caller converts its first frame. */
+static int convert_animation(const struct codec *from, const struct codec *to, const uint8_t *data, size_t len,
+                             const char *in, const char *out)
+{
+    struct codec_animation *a;
+    if (!(from->caps & CODEC_ANIMATED) || !(to->caps & CODEC_ANIMATED) ||
+        codec_animation_open(from, data, len, in, &a) < 0)
+        return 1;
+    struct codec_animation_info info = *codec_animation_info(a);
+    size_t pixels = (size_t)info.w * info.h;
+    struct codec_frame *frames = NULL;
+    uint32_t *canvas = NULL;
+    int count = 0, cap = 0, err = 0, delay, r;
+    for (;;) {
+        if (count == cap) {
+            cap = cap ? cap * 2 : 16;
+            struct codec_frame *f = realloc(frames, sizeof *f * (size_t)cap);
+            if (!f) {
+                err = -ENOMEM;
+                break;
+            }
+            frames = f;
+        }
+        canvas = malloc(sizeof *canvas * pixels);
+        if (!canvas) {
+            err = -ENOMEM;
+            break;
+        }
+        r = codec_animation_next(a, canvas, &delay);
+        if (r <= 0) {
+            free(canvas);
+            err = r;
+            break;
+        }
+        frames[count++] = (struct codec_frame){ canvas, delay };
+    }
+    codec_animation_close(a);
+    int status = 1;
+    if (err < 0) {
+        status = fail("cannot decode", in, err);
+    } else if (count > 1) {
+        info.frames = count;
+        uint8_t *file;
+        long n = codec_animation_encode(to, &info, frames, count, &file);
+        if (n < 0) {
+            status = fail("cannot encode", out, (int)n);
+        } else {
+            err = codec_write_file(out, file, (size_t)n);
+            free(file);
+            status = err < 0 ? fail("cannot write", out, err) : 0;
+        }
+    }
+    for (int i = 0; i < count; i++)
+        free((void *)frames[i].pixels);
+    free(frames);
+    return status;
+}
+
 static int convert_image(const struct codec *from, const struct codec *to, const uint8_t *data, size_t len,
                          const char *in, const char *out, int size)
 {
+    int animated = convert_animation(from, to, data, len, in, out);
+    if (animated != 1)
+        return animated;
     struct codec_image_request req = { size, size, 0 };
     struct codec_picture pic;
     int err = codec_image_decode(from, data, len, in, &req, &pic);

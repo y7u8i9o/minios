@@ -36,11 +36,13 @@ struct thread {
     unsigned cpu;                   /* CPU whose run queue contains or last ran the thread */
     int slice_left;                 /* ms left in the current slice */
     uint64_t wake_at;               /* tick to wake a sleeping thread */
+    unsigned sleep_cpu;             /* CPU whose sleeper list contains the sleeping thread, written under that run-queue lock */
     struct list_head run_link;      /* run queue, sleep list or wait queue */
     struct mpsc_node wake_node;     /* remote runnable notification */
     bool wake_queued;               /* atomically claims wake_node */
     struct waitq *waiting_on;       /* wait queue that contains run_link, wq->lock */
     bool sig_wake;                  /* a signal or exit was sent, atomic, see waitq_signal */
+    uint32_t waitq_pins;            /* waitq_interrupt calls that use waiting_on, atomic */
     uint64_t bounded_since;         /* timer_ms + 1 when a bounded wait began, 0 otherwise, atomic */
     uint64_t hung_reported;         /* bounded_since of the last reported wait, written by hungd */
     struct list_head proc_link;     /* proc->threads, proc->lock */

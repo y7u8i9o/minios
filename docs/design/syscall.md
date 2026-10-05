@@ -60,7 +60,8 @@ and the ownership of U1 `fchmodat` (103), `fchmod` (104), `fchownat`
 (105) and `fchown` (106), on 2026-10-03 (`users.md`). U2 added
 `faccessat` (107), and the ports of su, doas and sudo in U5 added
 `fchdir` (108), `sigpending` (109), `alarm` (110), `setsid` (111) and
-`getsid` (112). Arguments arrive in
+`getsid` (112). V2 of the 0.6.0 release added `adjtime` (113)
+(`time.md`). Arguments arrive in
 rdi, rsi, rdx, r10, r8, r9. `write` accepts descriptors 1 and 2 only until
 the VFS exists and checks that the buffer lies in user space with
 `user_range_ok`. An address that is in range but unmapped still faults in

@@ -46,6 +46,12 @@ int fb_flush(struct fb_rect r);
 int fb_set_mode(uint32_t width, uint32_t height, uint32_t scale);
 /* Best effort flush of the whole screen without interrupts. */
 void fb_panic_flush(void);
+/* The GPU driver reports a new preferred size of the host display. The
+ * display owner learns it through poll and FBIOGET_DISPLAY on /dev/fb0.
+ * Sleeps; not for interrupt handlers. */
+void fb_display_changed(uint32_t width, uint32_t height);
+/* Copies the last size request of the host display. */
+void fb_display_get(struct fb_display *out);
 
 /* Pixel layout helpers shared by the console, the device and the tests.
  * Colors are 0x00RRGGBB; pixels are in the framebuffer's own layout,

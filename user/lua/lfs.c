@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <utime.h>
 #include "lauxlib.h"
 #include "minios.h"
 
@@ -215,6 +216,16 @@ static int fs_mkdir(lua_State *L)
     return result(L, mkdir(luaL_checkstring(L, 1), (mode_t)luaL_optinteger(L, 2, 0755)));
 }
 
+/* fs.utime(path, mtime) sets the modification time in seconds since
+ * 1970. minios stores no access time; the host receives mtime as both. */
+static int fs_utime(lua_State *L)
+{
+    struct utimbuf t;
+    t.modtime = (time_t)luaL_checkinteger(L, 2);
+    t.actime = t.modtime;
+    return result(L, utime(luaL_checkstring(L, 1), &t));
+}
+
 static int fs_rmdir(lua_State *L)
 {
     return result(L, rmdir(luaL_checkstring(L, 1)));
@@ -290,6 +301,7 @@ static const luaL_Reg fs_funcs[] = {
     { "exists", fs_exists },
     { "mkdir", fs_mkdir },
     { "rmdir", fs_rmdir },
+    { "utime", fs_utime },
     { "chdir", fs_chdir },
     { "getcwd", fs_getcwd },
     { "sync", fs_sync },

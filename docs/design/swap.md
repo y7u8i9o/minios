@@ -44,8 +44,10 @@ swapped page back (see below), and the fault handler swaps in.
 ## Eviction
 
 `kswapd`, a kernel thread started once the scheduler runs, polls the free
-page count every 10 ms. Below `WATERMARK_HIGH` (768 pages) it runs
-`evict_batch` until the count recovers. The clock hand is a pair (address
+page count every 10 ms. Below `WATERMARK_HIGH` (768 pages) it first asks
+the pressure source of the allocator for the missing pages (`pmm.md`, the
+balloon of `balloon.md`). When the source returns them, kswapd evicts
+nothing. Otherwise it runs `evict_batch` until the count recovers. The clock hand is a pair (address
 space, address) retained across calls. Address spaces are registered in
 `vmspaces` under `vmspaces_lock`; the hand walks them round robin and
 within one space scans the lower half page tables with a budget of 2048
@@ -64,7 +66,9 @@ time.
 
 User frames are allocated through `swap_alloc_user_frame`, which refuses
 to go below `WATERMARK_RESERVE` (256 pages) while swap is enabled and
-waits on `swap_waitq` for kswapd to make progress. The reserve retains the
+waits on `swap_waitq` for kswapd to make progress. Since V4 of the 0.6.0
+release the function first asks the pressure source to refill the
+reserve. The reserve retains the
 kernel allocations of the swap path itself (request structures, bounce
 buffers) from failing. The fault handler drops the space lock around the
 allocation and re-checks the entry afterwards, so a page that appeared
@@ -79,7 +83,7 @@ the frames, reads the run with one request under `swap_io_lock`, then
 re-locks the space and installs every entry that still refers to the
 expected slot, freeing the slot and counting the swap in. Frames not
 needed any more are returned. `swap_io_lock` serializes swap I/O so a
-read never observes a slot whose write is still in flight.
+read never observes a slot whose write is not finished.
 
 `fork` calls `swap_in_all` and sets `pinned` on the parent until the copy
 is done, because the copy on write sharing walks present entries only.
@@ -107,7 +111,7 @@ copy on write across `fork`), then maps 1.25 times the physical memory,
 fills every page with an offset dependent pattern, verifies it, repeats
 with a second pattern and checks the swap counters. The kernel side
 verifies that every frame and slot is returned after the process exits,
-after waiting for an in flight eviction batch with `swap_drain`.
+after waiting for a pending eviction batch with `swap_drain`.
 
 Since M38 the victim scan also discards clean pages tagged by `MADV_FREE`
 instead of writing them out (see `madvise.md`).

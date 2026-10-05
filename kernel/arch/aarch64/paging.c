@@ -321,10 +321,8 @@ void paging_enable_features(void)
     /* asid_bits=N on the command line uses fewer bits, so that a test can
      * cause rollovers with a few spaces. */
     char val[8];
-    if (cmdline_lookup("asid_bits", val, sizeof val) && val[0] >= '1' && val[0] <= '9') {
-        unsigned bits = (unsigned)(val[0] - '0');
-        if (val[1] >= '0' && val[1] <= '9')
-            bits = bits * 10 + (unsigned)(val[1] - '0');
+    if (cmdline_lookup("asid_bits", val, sizeof val)) {
+        unsigned long long bits = strtoull(val, NULL, 10);
         if (bits >= 2 && bits < asid_bits)
             asid_bits = bits;
     }

@@ -80,7 +80,12 @@ void proc_init(void)
 
 void proc_set_init(struct proc *p)
 {
-    init_proc = p;
+    __atomic_store_n(&init_proc, p, __ATOMIC_RELEASE);
+}
+
+struct proc *proc_init_process(void)
+{
+    return __atomic_load_n(&init_proc, __ATOMIC_ACQUIRE);
 }
 
 struct proc *proc_alloc(const char *name, struct proc *parent)

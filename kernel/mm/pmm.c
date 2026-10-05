@@ -195,6 +195,27 @@ void pmm_reclaim_bootloader(void)
     klog_info("reclaimed %lu bootloader pages, %lu of %lu pages free", reclaimed, free, total);
 }
 
+/* The pressure source. Set once by a driver and read without a lock. */
+static size_t (*pressure_source)(size_t pages);
+
+void pmm_set_pressure_source(size_t (*release)(size_t pages))
+{
+    __atomic_store_n(&pressure_source, release, __ATOMIC_RELEASE);
+}
+
+size_t pmm_release_pressure(size_t pages)
+{
+    size_t (*release)(size_t) = __atomic_load_n(&pressure_source, __ATOMIC_ACQUIRE);
+    return release ? release(pages) : 0;
+}
+
+void pmm_adjust_total(int64_t pages)
+{
+    spin_lock(&pmm_lock);
+    pmm_stats.total_pages = (uint64_t)((int64_t)pmm_stats.total_pages + pages);
+    spin_unlock(&pmm_lock);
+}
+
 struct page *pmm_alloc(unsigned order)
 {
     kassert(order <= PMM_MAX_ORDER);
@@ -203,6 +224,17 @@ struct page *pmm_alloc(unsigned order)
     unsigned o = order;
     while (o <= PMM_MAX_ORDER && list_empty(&free_lists[o]))
         o++;
+    /* An empty allocator asks the pressure source for pages once before
+     * the allocation fails. */
+    if (o > PMM_MAX_ORDER) {
+        spin_unlock(&pmm_lock);
+        if (pmm_release_pressure((size_t)1 << order) == 0)
+            return NULL;
+        spin_lock(&pmm_lock);
+        o = order;
+        while (o <= PMM_MAX_ORDER && list_empty(&free_lists[o]))
+            o++;
+    }
     if (o > PMM_MAX_ORDER) {
         spin_unlock(&pmm_lock);
         return NULL;

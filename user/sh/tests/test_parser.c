@@ -112,6 +112,28 @@ static void execution_tests(void)
     assert(!strcmp(out, "hi"));
     free(out);
     assert(run_line("alias greet='echo hello'; test \"$(greet world)\" = 'hello world'") == 0);
+    /* Without pipefail the last command decides, with it the last failed one. */
+    assert(run_line("false | true") == 0);
+    assert(run_line("set -o pipefail; false | true") == 1);
+    assert(run_line("(exit 3) | (exit 4) | true") == 4);
+    assert(run_line("true | true") == 0);
+    assert(run_line("! false | true") == 0);
+    out = capture("set -o");
+    assert(strstr(out, "pipefail    on") && strstr(out, "errexit     off"));
+    free(out);
+    out = capture("set +o");
+    assert(strstr(out, "set -o pipefail") && strstr(out, "set +o noglob"));
+    free(out);
+    assert(run_line("set +o pipefail; false | true") == 0);
+    assert(run_line("set -o noglob; test \"$(echo /*)\" = '/*'; set +o noglob") == 0);
+    assert(run_line("set -o nosuchoption") == 2);
+    /* A command without a command name returns the status of its last
+     * command substitution, and 0 without a substitution (POSIX 2.9.1). */
+    assert(run_line("x=$(false)") == 1);
+    assert(run_line("x=$(true) y=$(exit 3)") == 3);
+    assert(run_line("false; x=1") == 0);
+    assert(run_line("x=$(false) && echo no") == 1);
+    assert(run_line("x=$(exit 2) true") == 0);
 }
 
 int main(void)

@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+# query-balloon reports the balloon that remained after the deflation under
+# pressure and the program memtouch: 512 MiB minus the pages that the
+# guest printed last.
+import json
+import os
+import re
+import sys
+
+log_dir = os.path.dirname(os.environ["SERIAL"])
+with open(os.environ["SERIAL"], errors="replace") as f:
+    m = re.search(r"balloon_oom: balloon of (\d+) pages reported", f.read())
+lines = open(os.path.join(log_dir, "qmp.log")).read().splitlines()
+actual = None
+for i, line in enumerate(lines):
+    if line == "qmp query-balloon" and i + 1 < len(lines) and lines[i + 1].startswith("{"):
+        actual = json.loads(lines[i + 1]).get("actual")
+expected = 536870912 - int(m.group(1)) * 4096 if m else None
+if actual is None or actual != expected:
+    print(f"post: query-balloon reported {actual}, expected {expected}")
+    sys.exit(1)
+print(f"post: query-balloon reported {actual} bytes for the guest")

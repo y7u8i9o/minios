@@ -22,7 +22,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(40);
+    ktest_wait_idle(40);
 }
 
 /* Set 1 scancodes of the letters a to z. */
@@ -60,52 +60,32 @@ static void taps(uint8_t code, int n)
 }
 
 #define TAB  0x0f
-#define DOWN 0x50                   /* 0xe0 0x50 */
-
-static void down(int n)
-{
-    while (n-- > 0) {
-        ps2kbd_feed_scancode(0xe0);
-        ps2kbd_feed_scancode(DOWN);
-        ps2kbd_feed_scancode(0xe0);
-        ps2kbd_feed_scancode(DOWN | 0x80);
-        sleep_ms(40);
-    }
-}
-
-static void sh(const char *command)
-{
-    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", (char *)command, NULL }, env, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start sh");
-    int status = proc_reap(p);
-    ktest_assert(status == 0, "'%s' status 0x%x", command, status);
-}
 
 static void test_gui_region(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    sh("rm -f /home/.config/desktop.conf /etc/localtime");
+    run_shell("rm -f /home/.config/desktop.conf /etc/localtime");
     struct proc *srv = start_server();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, env, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     struct proc *desktop = proc_create_user("/bin/desktop", (char *const[]){ "desktop", NULL }, env, &kernel_proc);
     ktest_assert(desktop != NULL, "cannot start the desktop");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     struct proc *cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "region", NULL }, env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     tap(TAB);                       /* the language */
-    down(2);                        /* en_US, es_ES, fr_FR */
+    press_down(2);                  /* en_US, es_ES, fr_FR */
     taps(TAB, 2);                   /* the formats, the time zone */
-    down(33);                       /* from UTC to Asia/Tokyo in zones.tab */
-    sleep_ms(300);
+    press_down(33);                 /* from UTC to Asia/Tokyo in zones.tab */
+    ktest_wait_idle(300);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
 
-    sh("grep lang= /home/.config/desktop.conf");
-    sh("echo zone=$(date +%Z)");
-    sh(". /etc/profile; echo profile LANG=$LANG");
+    run_shell("grep lang= /home/.config/desktop.conf");
+    run_shell("echo zone=$(date +%Z)");
+    run_shell(". /etc/profile; echo profile LANG=$LANG");
 
     /* The panel has read the new language within a second.  The launcher
      * finds sysmon by its French title and starts it. */
@@ -117,24 +97,24 @@ static void test_gui_region(void)
     kprintf("gui_region: %d icon pixels\n", icons);
     ktest_assert(icons > 200, "the launcher draws no icons (%d pixels)", icons);
     type("moni");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     tap(0x1c);
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     alt_key(0x3e);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     /* The context menu of the desktop, built again in French. */
     mouse_move_to(&cx, &cy, logical_w() / 2, logical_h() / 2, 0);
     mouse_click(2);
-    sleep_ms(800);
+    ktest_wait_idle(800);
     tap(0x01);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     signal_send(desktop, SIGTERM);
     status = proc_reap(desktop);
     ktest_assert((status & 0x7f) == SIGTERM, "desktop status 0x%x", status);
     signal_send(panel, SIGTERM);
     proc_reap(panel);
     stop_server(srv);
-    sh("rm -f /home/.config/desktop.conf /etc/localtime");
+    run_shell("rm -f /home/.config/desktop.conf /etc/localtime");
     kprintf("gui_region: ok\n");
 }
 KTEST_DEFINE("gui_region", test_gui_region);

@@ -21,7 +21,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(30);
+    ktest_wait_idle(30);
 }
 
 static const uint8_t letter_code[26] = {
@@ -39,7 +39,7 @@ static void keys(const uint8_t *codes, size_t n)
 {
     for (size_t i = 0; i < n; i++)
         ps2kbd_feed_scancode(codes[i]);
-    sleep_ms(200);
+    ktest_wait_idle(200);
 }
 
 static void extended(uint8_t code)
@@ -56,16 +56,16 @@ static void test_ime_protocol(void)
     struct proc *srv = start_server();
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", "-t", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/imeproto.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
 
     const uint8_t ctrl_shift[] = { 0x1d, 0x2a, 0xaa, 0x9d }, shift[] = { 0x2a, 0xaa };
     keys(ctrl_shift, sizeof ctrl_shift);    /* the test engine */
     type("abc");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     tap(0x39);                              /* ABC */
     type("de");
     tap(0x03);                              /* the second candidate: de */
@@ -75,13 +75,13 @@ static void test_ime_protocol(void)
     tap(0x39);
     tap(0x1c);                              /* not used: a new line in gedit */
     tap(0x58);                              /* F12: no reply in time, gedit receives it */
-    sleep_ms(400);
+    ktest_wait_idle(400);
     type("hi");
     keys(shift, sizeof shift);              /* the layout: hi is committed */
     type("x");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);
-    sleep_ms(500);
+    ktest_wait_idle(500);
 
     struct file *f;
     ktest_assert(vfs_open("/imeproto.txt", O_RDONLY, 0, &f) == 0, "open /imeproto.txt");
@@ -97,7 +97,7 @@ static void test_ime_protocol(void)
     ktest_assert(status == 0, "gedit status 0x%x", status);
     signal_send(imed, SIGTERM);
     proc_reap(imed);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     stop_server(srv);
     vfs_unlink("/imeproto.txt");
 }

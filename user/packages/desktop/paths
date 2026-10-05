@@ -1,6 +1,7 @@
 usr/bin/panel
 usr/bin/desktop
 usr/bin/greeter
+usr/bin/askpass
 usr/bin/startgui
 usr/bin/settings
 usr/bin/x12settings

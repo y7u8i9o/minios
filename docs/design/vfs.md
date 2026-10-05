@@ -171,6 +171,17 @@ tmpfs on `/tmp` and on `/run`, which `base-files` creates, at every boot
 through `fsinit`. For a boot test that starts its program without init,
 `/tmp` remains on the root filesystem.
 
+## 9p (V5 of the 0.6.0 release)
+
+`fs/9p/` mounts a folder that the host shares through virtio-9p, with the
+protocol 9P2000.L (`9p.md`). The source of the mount is the mount tag of
+the device, as in `mount -t 9p host /mnt/host`. The inode number is the
+path of the qid of the server. The client stores no data. Reads and writes
+go to the host at once, and every lookup reads the attributes again.
+`read_inode` receives the walked fid of a lookup through a list, because
+the VFS passes only the inode number. `fsinit`
+mounts every share at `/mnt/TAG` after `/etc/fstab`.
+
 ## Mount capacity snapshots
 
 The optional `sb_ops.statfs` fills `struct fs_space` with total blocks,

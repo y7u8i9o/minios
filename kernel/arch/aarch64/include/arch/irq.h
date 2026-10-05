@@ -14,6 +14,13 @@ typedef void (*irq_handler_fn)(struct trapframe *tf, void *arg);
 #define IRQ_SPURIOUS      1023
 
 void irq_register(unsigned irq, irq_handler_fn fn, void *arg);
+/* Route a global system interrupt of the firmware, such as the SCI of ACPI
+ * or a line of the device tree, to fn and enable it. flags are
+ * IRQ_GSI_LEVEL or edge triggered, and IRQ_GSI_ACTIVE_LOW or active high.
+ * Returns the interrupt number or a negative errno value. */
+#define IRQ_GSI_LEVEL      1
+#define IRQ_GSI_ACTIVE_LOW 2
+int irq_route_gsi(unsigned gsi, unsigned flags, irq_handler_fn fn, void *arg);
 void irq_dispatch(struct trapframe *tf);
 int irq_alloc(void);
 void arch_send_ipi(unsigned cpu, unsigned irq);

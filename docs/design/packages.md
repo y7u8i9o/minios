@@ -52,13 +52,16 @@ Three places know the locations of installed packages:
   `/usr/local/lib` and then `~/.local/lib` for a library named in
   `DT_NEEDED` (`lib_dirs` in `user/ld/ld.c`). A name with a slash is still refused, and no
   environment variable changes the list.
-- The panel reads `/var/lib/pkg/launcher` and then `/etc/launcher` or the
-  user's `~/.config/launcher`. `mime_load` reads the system tables and
-  then `/var/lib/pkg/mime.types` and `mime.apps` (`PKG_LAUNCHER`,
-  `PKG_MIME_TYPES` and `PKG_MIME_APPS` in `minios/local.h`). A package
-  handler for a type the system table names is ignored. The user's
-  handler table, which the settings program edits, therefore takes
-  precedence, and `mime_save` writes the system entries only. The installer rewrites the
+- The panel and the application chooser read `/var/lib/pkg/launcher`
+  and then `/etc/launcher` or the user's `~/.config/launcher` through
+  `gui/launcher.h`. `mime_load` reads the system tables and then
+  `/var/lib/pkg/mime.types` and `mime.apps` (`PKG_LAUNCHER`,
+  `PKG_MIME_TYPES` and `PKG_MIME_APPS` in `minios/local.h`).
+  `mime_handler` ignores a package handler for a type with an entry in
+  the system table. The user's handler table, which the settings program
+  and the application chooser edit, therefore takes precedence.
+  `mime_handlers` still lists the package handler, and `mime_save`
+  writes the system entries only. The installer rewrites the
   three files from its records after every installation and removal.
 
 Installing or removing a package needs root (`sudo pkg install NAME` or
@@ -331,9 +334,12 @@ manifest whose configuration files are not in the tree.
 
 ## Bundled application packages
 
-`make user` (also `make packages`) builds fourteen optional applications as
+`make user` (also `make packages`) builds fifteen optional applications as
 packages: `calc`, `code`, `gedit`, `hexview`, `luasynth`, `mandel`, `paint`, `player`,
-`playtone`, `pong`, `sequencer`, `synth`, `unicode` and `view`. The archives
+`playtone`, `pong`, `sequencer`, `synth`, `transfer`, `unicode` and `view`.
+The program of `transfer` is a Lua script in the files of the package
+(`PKG_SCRIPTS` in `user/packages/packages.mk`), and its package has no
+`arch` line. The archives
 are in `build/packages/` on the host and `/usr/share/packages/` in the
 image. They are an offline archive shelf, not installed applications.
 For example, on minios:
@@ -481,8 +487,15 @@ installer also use), mounts its mfs on `/run/update`, writes
 `/run/pkg-update.conf` with the `file://` repository `repo/ARCH` of the
 medium, and runs `pkg update` and `pkg upgrade` with that configuration
 and the keys of `/etc/pkg/keys`. The task ends at once when no such
-partition exists. The output of `pkg` is written to
-`/run/pkg-update.log` and to the console with the prefix `pkg-update:`.
+partition exists. The script runs `pkg` with `--verbose`. With that
+option `pkg` prints a line before each step that can take long: the
+reading of an index, the verification or the download of each package,
+the checks, the unpacking of each package with its number, the
+installation of the files and the boot loader steps. The output of `pkg`
+reaches the console line by line with the prefix `pkg-update:`, and
+`tee` copies it to `/run/pkg-update.log`. The script sets the shell
+option `pipefail` (`sh.md`). The pipeline therefore fails when `pkg`
+fails, although `sed` ends the pipeline.
 When the medium contains the file `video`, which `mkupdate.sh` writes
 from `VIDEO` and `make run` therefore fills with the mode of each run,
 the script replaces the `video=` option of `/etc/kernel/cmdline` with
@@ -638,8 +651,13 @@ of a package name, and URL has the form `http://HOST[:PORT]/PATH`.
 `timeout SECONDS` bounds the connection and every wait for data, 30
 seconds by default. `--config FILE` reads another file, and `--root DIR`
 makes `pkg` read `DIR/etc/pkg.conf` and `DIR/etc/pkg/keys/`. An empty
-target has neither, and `--keys DIR` names the directory of the trusted
-public keys instead of `ROOT/etc/pkg/keys/`.
+target has neither, and `--keys DIR` sets the directory of the trusted
+public keys instead of `ROOT/etc/pkg/keys/`. `--verbose` makes `install`,
+`update` and `upgrade` print a progress line on the standard output
+before each step that can take long. The line of a package step contains
+the number of the package and the total, for example
+`unpacking games 99.0 (1 of 2)`. Without `--verbose` the output is
+unchanged, and scripts that compare it are unaffected.
 
 A URL may also have the form `file:///ABSOLUTE/PATH` for a repository in
 the file system, for example the medium of the installer. The path

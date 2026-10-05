@@ -1,0 +1,281 @@
+#!/bin/lua
+-- Transfer: copies files between minios and the host over MFT 1
+-- (docs/design/filetransfer.md). The commands and their output are those of
+-- tools/transfer.py on the host.
+--
+--     transfer [gui] [HOST[:PORT]]
+--     transfer serve [-p PORT] [DIR]
+--     transfer ls [-h HOST] [-p PORT] [PATH]
+--     transfer get [-h HOST] [-p PORT] [-o DIR] PATH...
+--     transfer put [-h HOST] [-p PORT] [-d PATH] FILE...
+--     transfer mkdir|rm [-h HOST] [-p PORT] PATH...
+--     transfer mv [-h HOST] [-p PORT] FROM TO
+--
+-- HOST defaults to 10.0.2.2, the host in the QEMU user network, and PORT
+-- to 9103, the port of the host server. serve uses the port 9102, which
+-- tools/run.sh forwards from the host, and the current folder by default.
+local mft = require "mft"
+local fs = require "fs"
+local sys = require "sys"
+
+local APPS = os.getenv("TRANSFER_APPS") or "/usr/share/apps/transfer/"
+
+local USAGE = [==[
+usage: transfer [gui] [HOST[:PORT]]
+       transfer serve [-p PORT] [DIR]
+       transfer ls [-h HOST] [-p PORT] [PATH]
+       transfer get [-h HOST] [-p PORT] [-o DIR] PATH...
+       transfer put [-h HOST] [-p PORT] [-d PATH] FILE...
+       transfer mkdir|rm [-h HOST] [-p PORT] PATH...
+       transfer mv [-h HOST] [-p PORT] FROM TO
+]==]
+
+local function usage()
+  io.stderr:write(USAGE)
+  os.exit(2)
+end
+
+local function err(text)
+  io.stderr:write("transfer: " .. text .. "\n")
+end
+
+-- parse(args, letters) returns the options with an argument, such as
+-- "h:p:", and the remaining arguments.
+local function parse(args, letters)
+  local opts, rest, i = {}, {}, 1
+  while i <= #args do
+    local a = args[i]
+    if a == "--" then
+      for k = i + 1, #args do rest[#rest + 1] = args[k] end
+      break
+    end
+    local letter = a:match("^%-(%a)$")
+    if letter then
+      if not letters:find(letter .. ":", 1, true) or i == #args then
+        err("option -" .. letter .. (letters:find(letter .. ":", 1, true) and " requires an argument" or " not recognized"))
+        usage()
+      end
+      opts[letter] = args[i + 1]
+      i = i + 2
+    else
+      rest[#rest + 1] = a
+      i = i + 1
+    end
+  end
+  return opts, rest
+end
+
+local function connect(opts)
+  local host, port = opts.h or mft.DEFAULT_HOST, opts.p or tostring(mft.CLIENT_PORT)
+  local number = math.tointeger(tonumber(port))
+  local client, msg, code
+  if number then
+    client, msg, code = mft.connect(host, number, 10000)
+  else
+    msg, code = "invalid port", "EINVAL"
+  end
+  if not client then
+    err(string.format("%s:%s: %s (%s)", host, port, msg, code))
+    os.exit(1)
+  end
+  return client
+end
+
+local function sort_entries(entries)
+  table.sort(entries, function(a, b)
+    if (a.kind == "d") ~= (b.kind == "d") then return a.kind == "d" end
+    local la, lb = a.name:lower(), b.name:lower()
+    if la ~= lb then return la < lb end
+    return a.name < b.name
+  end)
+  return entries
+end
+
+-- A line of the bytes of the current file, once per second, when
+-- standard error is a terminal.
+local function terminal_progress(label)
+  local tty = sys.isatty(2)
+  local shown, drawn = os.time(), false
+  return function(done, total)
+    local now = os.time()
+    if tty and now - shown >= 1 then
+      shown, drawn = now, true
+      io.stderr:write(string.format("\r%s: %d of %d bytes", label, done, total))
+      io.stderr:flush()
+    end
+  end, function()
+    if drawn then io.stderr:write("\n") end
+  end
+end
+
+-- Runs the steps of a plan and prints one line per copied file. Returns
+-- the number of failures.
+local function run_plan(client, direction, plan)
+  local failures = 0
+  for _, step in ipairs(plan) do
+    local label = direction == "get" and step.src or step.dst
+    local progress, finish = terminal_progress(label)
+    local moved, msg, code = mft.run_step(client, direction, step, { progress = progress })
+    finish()
+    if not moved then
+      err(string.format("%s: %s (%s)", label, msg, code))
+      failures = failures + 1
+      if code == "ECONNRESET" or code == "EPIPE" or code == "EPROTO" or code == "ETIMEDOUT" then break end
+    elseif step.kind == "f" then
+      print(string.format("%s %s, %d bytes", direction == "get" and "downloaded" or "uploaded", label, step.size))
+      io.stdout:flush()
+    end
+  end
+  return failures
+end
+
+local commands = {}
+
+function commands.serve(args)
+  local opts, rest = parse(args, "p:")
+  if #rest > 1 then usage() end
+  local root = rest[1] or "."
+  if root:sub(1, 1) ~= "/" then root = mft.local_join(fs.getcwd(), root) end
+  if root ~= "/" then root = root:gsub("/+$", ""):gsub("/%.$", "") end
+  local st = fs.stat(root)
+  if not st or st.type ~= "directory" then
+    err(string.format("serve %s: %s is not a folder (ENOTDIR)", rest[1] or ".", root))
+    return 1
+  end
+  local net = require "net"
+  local port = math.tointeger(tonumber(opts.p or mft.SERVE_PORT))
+  if not port then usage() end
+  local lfd, bound, errno = net.listen(port)
+  if not lfd then
+    err(string.format("serve %s: %s (%s)", root, bound, mft.code_of(errno)))
+    return 1
+  end
+  print(string.format("serving %s on port %d", root, bound))
+  io.stdout:flush()
+  mft.serve(lfd, root, {
+    session = APPS .. "session.lua",
+    log = function(line)
+      print(line)
+      io.stdout:flush()
+    end,
+  })
+  return 0
+end
+
+function commands.ls(args)
+  local opts, rest = parse(args, "h:p:")
+  if #rest > 1 then usage() end
+  local client = connect(opts)
+  local path = rest[1] or "."
+  local entries, msg, code = client:list(path)
+  client:quit()
+  if not entries then
+    err(string.format("%s: %s (%s)", path, msg, code))
+    return 1
+  end
+  for _, e in ipairs(sort_entries(entries)) do
+    print(string.format("%s %12d %s %s%s", e.kind, e.size, os.date("%Y-%m-%d %H:%M", e.mtime), e.name,
+                        e.kind == "d" and "/" or ""))
+  end
+  return 0
+end
+
+function commands.get(args)
+  local opts, rest = parse(args, "h:p:o:")
+  if #rest == 0 then usage() end
+  local out = opts.o or "."
+  local client = connect(opts)
+  local failures = 0
+  for _, path in ipairs(rest) do
+    local st, msg, code = client:stat(path)
+    local plan
+    if st then plan, msg, code = mft.download_plan(client, path, st.kind, st.size, st.mtime, out) end
+    if not plan then
+      err(string.format("%s: %s (%s)", path, msg, code))
+      failures = failures + 1
+    else
+      failures = failures + run_plan(client, "get", plan)
+    end
+  end
+  client:quit()
+  return failures > 0 and 1 or 0
+end
+
+function commands.put(args)
+  local opts, rest = parse(args, "h:p:d:")
+  if #rest == 0 then usage() end
+  local target = opts.d or "."
+  local client = connect(opts)
+  local failures = 0
+  for _, path in ipairs(rest) do
+    local plan, msg, code = mft.upload_plan(path, target)
+    if not plan then
+      err(string.format("%s: %s (%s)", path, msg, code))
+      failures = failures + 1
+    else
+      failures = failures + run_plan(client, "put", plan)
+    end
+  end
+  client:quit()
+  return failures > 0 and 1 or 0
+end
+
+local function simple(args, request)
+  local opts, rest = parse(args, "h:p:")
+  if #rest == 0 or (request == "mv" and #rest ~= 2) then usage() end
+  local client = connect(opts)
+  local failures = 0
+  if request == "mv" then
+    local ok, msg, code = client:rename(rest[1], rest[2])
+    if not ok then
+      err(string.format("%s: %s (%s)", rest[1], msg, code))
+      failures = 1
+    end
+  else
+    for _, path in ipairs(rest) do
+      local ok, msg, code
+      if request == "mkdir" then ok, msg, code = client:mkdir(path) else ok, msg, code = client:delete(path) end
+      if not ok then
+        err(string.format("%s: %s (%s)", path, msg, code))
+        failures = failures + 1
+      end
+    end
+  end
+  client:quit()
+  return failures > 0 and 1 or 0
+end
+
+function commands.mkdir(args) return simple(args, "mkdir") end
+function commands.rm(args) return simple(args, "rm") end
+function commands.mv(args) return simple(args, "mv") end
+
+function commands.gui(args)
+  if #args > 1 then usage() end
+  local host, port = mft.DEFAULT_HOST, mft.CLIENT_PORT
+  if args[1] then
+    local h, p = args[1]:match("^([^:]*):?(.*)$")
+    host = h
+    if p ~= "" then
+      port = math.tointeger(tonumber(p))
+      if not port then usage() end
+    end
+  end
+  local UI = dofile(APPS .. "ui.lua")
+  local ui = UI.new { host = host, port = port }
+  if args[1] then ui:connect(host, port) end
+  return ui:run()
+end
+
+-- The arguments come from the table arg, which lua and the host test
+-- program both fill.
+local args = {}
+for i = 1, #(arg or {}) do args[i] = arg[i] end
+local name = args[1]
+if name == "--help" or name == "help" then usage() end
+local command = commands[name]
+if command then
+  table.remove(args, 1)
+else
+  command = commands.gui
+end
+os.exit(command(args) or 0)

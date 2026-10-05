@@ -88,7 +88,10 @@ static bool list_contains(const char *list, int len, const char *want)
     return false;
 }
 
-bool fdt_find_compatible(const void *blob, const char *compat, struct fdt_node *node)
+/* The next node after *node, or from the start of the tree when
+ * node->offset is negative, for which match returns true. */
+static bool find_node(const void *blob, struct fdt_node *node,
+                      bool (*match)(const void *blob, const struct fdt_node *n, const void *arg), const void *arg)
 {
     const uint8_t *s = structure(blob);
     uint32_t addr_cells[FDT_MAX_DEPTH], size_cells[FDT_MAX_DEPTH];
@@ -125,15 +128,52 @@ bool fdt_find_compatible(const void *blob, const char *compat, struct fdt_node *
         addr_cells[depth] = v && len == 4 ? be32(v) : 2;
         v = fdt_prop(blob, &here, "#size-cells", &len);
         size_cells[depth] = v && len == 4 ? be32(v) : 1;
-        if (off > start) {
-            const char *list = fdt_prop(blob, &here, "compatible", &len);
-            if (list && list_contains(list, len, compat)) {
-                *node = here;
-                return true;
-            }
+        if (off > start && match(blob, &here, arg)) {
+            *node = here;
+            return true;
         }
         off = skip_name(s, off + 4);
     }
+}
+
+static bool match_compatible(const void *blob, const struct fdt_node *n, const void *arg)
+{
+    int len;
+    const char *list = fdt_prop(blob, n, "compatible", &len);
+    return list && list_contains(list, len, arg);
+}
+
+bool fdt_find_compatible(const void *blob, const char *compat, struct fdt_node *node)
+{
+    return find_node(blob, node, match_compatible, compat);
+}
+
+bool fdt_is_compatible(const void *blob, const struct fdt_node *node, const char *compat)
+{
+    return match_compatible(blob, node, compat);
+}
+
+static bool match_property(const void *blob, const struct fdt_node *n, const void *arg)
+{
+    return fdt_prop(blob, n, arg, NULL) != NULL;
+}
+
+bool fdt_find_property(const void *blob, const char *name, struct fdt_node *node)
+{
+    return find_node(blob, node, match_property, name);
+}
+
+static bool match_phandle(const void *blob, const struct fdt_node *n, const void *arg)
+{
+    int len;
+    const void *v = fdt_prop(blob, n, "phandle", &len);
+    return v && len == 4 && be32(v) == *(const uint32_t *)arg;
+}
+
+bool fdt_find_phandle(const void *blob, uint32_t phandle, struct fdt_node *node)
+{
+    node->offset = -1;
+    return find_node(blob, node, match_phandle, &phandle);
 }
 
 bool fdt_reg(const void *blob, const struct fdt_node *node, int index, uint64_t *addr, uint64_t *size)

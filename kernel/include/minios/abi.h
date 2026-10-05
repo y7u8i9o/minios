@@ -378,6 +378,16 @@ struct fb_mode {
 #define FBIO_RELEASE 0x4602  /* restore the text console */
 #define FBIO_FLUSH   0x4603  /* struct fb_rect: push a rectangle to the display, no-op without FB_CAP_FLUSH */
 #define FBIO_SET_MODE 0x4604 /* struct fb_mode: display owner only; the mapping remains valid, geometry changes */
+#define FBIOGET_DISPLAY 0x4605 /* struct fb_display: the last size request of the host */
+
+/* A size request of the host display (V3 of docs/plan/release-0.6.0.md).
+ * The host sends one when the window of the virtual display changes its
+ * size. /dev/fb0 reports POLLIN to the display owner while a request is
+ * unread. FBIOGET_DISPLAY marks the request read for the owner. */
+struct fb_display {
+    uint32_t width, height; /* pixels, 0 before the first request */
+    uint32_t serial;        /* counts the requests since boot */
+};
 
 /* Raw PCM audio devices.  Clients normally use audiod rather than opening
  * /dev/pcmN directly.  Structures have fixed-width fields so the ABI can be

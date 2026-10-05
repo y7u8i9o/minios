@@ -3,6 +3,7 @@
  * chapter D23), the caches from CLIDR_EL1 and CCSIDR_EL1, and the
  * platform as the device tree or the ACPI tables describe it. */
 #include <drivers/devinfo.h>
+#include <drivers/acpi.h>
 #include <drivers/timer.h>
 #include <arch/smp.h>
 #include <cpu.h>
@@ -283,6 +284,7 @@ static void describe_platform(struct devinfo *d)
     devinfo_prop(d, "psci", "%u.%u through %s", v >> 16, v & 0xffff, devtree.psci_smc ? "smc" : "hvc");
     devinfo_prop(d, "power_off", "PSCI SYSTEM_OFF");
     devinfo_prop(d, "reboot", "PSCI SYSTEM_RESET");
+    acpi_describe(d);
     if (!devtree.from_acpi && (devtree.model[0] || devtree.compatible[0])) {
         devinfo_node(d, "firmware/devicetree", "Device tree");
         devinfo_prop(d, "model", "%s", devtree.model);

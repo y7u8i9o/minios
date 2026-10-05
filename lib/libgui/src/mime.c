@@ -2,6 +2,7 @@
  * one entry per line. */
 #include <gui/mime.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,20 +12,27 @@
 #include <minios/conf.h>
 
 /* local: from the tables of installed packages (PKG_MIME_TYPES and
- * PKG_MIME_APPS), which mime_save leaves out. */
+ * PKG_MIME_APPS), which mime_save leaves out.  The program of a handler
+ * is a command: a program followed by arguments separated by spaces. */
 struct ext_entry { char type[48]; char ext[16]; int local; };
-struct app_entry { char type[48]; char program[64]; int local; };
+struct app_entry { char type[48]; char program[MIME_COMMAND]; int local; };
 
 static struct ext_entry exts[128];
 static int nexts;
 static struct app_entry apps[MIME_MAX];
 static int napps;
+/* The package handlers for types with an entry in the system or user
+ * table.  mime_handler ignores them, and mime_handlers lists them. */
+static struct app_entry shadowed[MIME_MAX];
+static int nshadowed;
 static int loaded;
 /* The handler table: the user's ~/.config/mime.apps when it exists, else
- * /etc/mime.apps, unless mime_load names one. mime_save writes to the
+ * /etc/mime.apps, unless mime_load receives a path. mime_save writes to the
  * user's file in the first case (docs/design/users.md). */
 static char apps_file[256];
 static int apps_named;
+/* The extension table: /etc/mime.types unless mime_load receives a path. */
+static char types_file[256] = "/etc/mime.types";
 
 static int ext_equal(const char *a, const char *b)
 {
@@ -86,12 +94,20 @@ static int load_apps(const char *path, int local)
         char *p = trim(line);
         if (!*p || *p == '#') continue;
         char *type = strtok(p, " \t");
-        char *prog = strtok(NULL, " \t");
-        if (type && prog && napps < MIME_MAX && !(local && find_app(type) >= 0)) {
-            strlcpy(apps[napps].type, type, sizeof apps[0].type);
-            strlcpy(apps[napps].program, prog, sizeof apps[0].program);
-            apps[napps].local = local;
-            napps++;
+        char *prog = strtok(NULL, "");
+        if (!type || !prog || !*(prog = trim(prog)))
+            continue;
+        struct app_entry *e = NULL;
+        if (local && find_app(type) >= 0) {
+            if (nshadowed < MIME_MAX)
+                e = &shadowed[nshadowed++];
+        } else if (napps < MIME_MAX) {
+            e = &apps[napps++];
+        }
+        if (e) {
+            strlcpy(e->type, type, sizeof e->type);
+            strlcpy(e->program, prog, sizeof e->program);
+            e->local = local;
         }
     }
     fclose(f);
@@ -101,8 +117,10 @@ static int load_apps(const char *path, int local)
 int mime_load(const char *types_path, const char *apps_path)
 {
     loaded = 1;
-    nexts = napps = 0;
-    load_types(types_path ? types_path : "/etc/mime.types", 0);
+    nexts = napps = nshadowed = 0;
+    if (types_path)
+        strlcpy(types_file, types_path, sizeof types_file);
+    load_types(types_file, 0);
     if (apps_path) {
         strlcpy(apps_file, apps_path, sizeof apps_file);
         apps_named = 1;
@@ -156,6 +174,39 @@ const char *mime_handler(const char *type)
     return i < 0 ? NULL : apps[i].program;
 }
 
+/* add_handler appends program to list unless list contains it. */
+static int add_handler(const char **list, int n, int max, const char *program)
+{
+    for (int i = 0; i < n; i++)
+        if (strcmp(list[i], program) == 0)
+            return n;
+    if (n < max)
+        list[n++] = program;
+    return n;
+}
+
+int mime_handlers(const char *type, const char **list, int max)
+{
+    ensure();
+    char wild[48] = "";
+    const char *slash = strchr(type, '/');
+    if (slash)
+        snprintf(wild, sizeof wild, "%.*s/*", (int)(slash - type), type);
+    const char *keys[3] = { type, wild, "*" };
+    int n = 0;
+    for (int k = 0; k < 3; k++) {
+        if (!keys[k][0])
+            continue;
+        for (int i = 0; i < napps; i++)
+            if (strcmp(apps[i].type, keys[k]) == 0)
+                n = add_handler(list, n, max, apps[i].program);
+        for (int i = 0; i < nshadowed; i++)
+            if (strcmp(shadowed[i].type, keys[k]) == 0)
+                n = add_handler(list, n, max, shadowed[i].program);
+    }
+    return n;
+}
+
 void mime_set_handler(const char *type, const char *program)
 {
     ensure();
@@ -179,7 +230,7 @@ int mime_save(const char *apps_path)
     FILE *f = fopen(apps_path, "w");
     if (!f)
         return -errno;
-    fprintf(f, "# type program\n");
+    fprintf(f, "# type command\n");
     for (int i = 0; i < napps; i++)
         if (!apps[i].local)
             fprintf(f, "%s %s\n", apps[i].type, apps[i].program);
@@ -226,44 +277,86 @@ pid_t mime_open(const char *path)
     mime_load(NULL, NULL);
     const char *type = mime_type(path, 0);
     char cmd[160];
-    char *argv[4];
     if (strcmp(type, MIME_LAUNCHER) == 0) {
         int r = launcher_command(path, cmd, sizeof cmd);
         if (r < 0)
             return r;
-        argv[0] = strtok(cmd, " ");
-        argv[1] = strtok(NULL, " ");
-        argv[2] = NULL;
-    } else {
-        const char *prog = mime_handler(type);
-        if (!prog)
-            return -ENOENT;
-        strlcpy(cmd, prog, sizeof cmd);
-        argv[0] = cmd;
-        argv[1] = (char *)path;
-        argv[2] = NULL;
+        r = mime_run(cmd, NULL);
+        return r < 0 ? r : 1;
     }
-    int r = mime_spawn(argv);
+    const char *prog = mime_handler(type);
+    if (!prog)
+        return -ENOENT;
+    int r = mime_run(prog, path);
     return r < 0 ? r : 1;
 }
 
+#define RUN_ARGS 16
+
+int mime_run(const char *command, const char *path)
+{
+    char line[MIME_COMMAND], *argv[RUN_ARGS + 2], *save;
+    int n = 0;
+    strlcpy(line, command, sizeof line);
+    for (char *w = strtok_r(line, " ", &save); w && n < RUN_ARGS; w = strtok_r(NULL, " ", &save))
+        argv[n++] = w;
+    if (n == 0)
+        return -EINVAL;
+    if (path)
+        argv[n++] = (char *)path;
+    argv[n] = NULL;
+    return mime_spawn(argv);
+}
+
+/* The grandchild reports a failed exec through a pipe.  The write end of
+ * the pipe has FD_CLOEXEC.  A successful exec closes the write end, and
+ * the parent reads end of file. */
 int mime_spawn(char *const argv[])
 {
-    pid_t pid = fork();
-    if (pid < 0)
+    int fds[2];
+    if (pipe(fds) < 0)
         return -errno;
+    if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) < 0) {
+        int err = errno;
+        close(fds[0]);
+        close(fds[1]);
+        return -err;
+    }
+    pid_t pid = fork();
+    if (pid < 0) {
+        int err = errno;
+        close(fds[0]);
+        close(fds[1]);
+        return -err;
+    }
     if (pid == 0) {
+        close(fds[0]);
         pid_t grandchild = fork();
         if (grandchild == 0) {
             /* The program follows the language of the desktop settings. */
             conf_export_locale();
             execvp(argv[0], argv);
+            int err = errno;
+            ssize_t ignored = write(fds[1], &err, sizeof err);
+            (void)ignored;
             _exit(127);
         }
-        _exit(grandchild < 0 ? 1 : 0);
+        if (grandchild < 0) {
+            int err = errno;
+            ssize_t ignored = write(fds[1], &err, sizeof err);
+            (void)ignored;
+        }
+        _exit(0);
     }
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+    close(fds[1]);
+    int err = 0;
+    ssize_t got;
+    while ((got = read(fds[0], &err, sizeof err)) < 0 && errno == EINTR)
         ;
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -EAGAIN;
+    close(fds[0]);
+    while (waitpid(pid, NULL, 0) < 0 && errno == EINTR)
+        ;
+    if (got == (ssize_t)sizeof err)
+        return err > 0 ? -err : -EAGAIN;
+    return got < 0 ? -EIO : 0;
 }

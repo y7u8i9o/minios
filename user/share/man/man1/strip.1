@@ -1,0 +1,58 @@
+STRIP(1)                  User Commands                   STRIP(1)
+
+NAME
+    strip - remove symbols and sections from ELF files
+
+SYNOPSIS
+    strip [options] file...
+
+DESCRIPTION
+    strip rewrites ELF64 files, and the ELF members of archives, without
+    their symbols and debug sections. The input files are relocatable
+    objects, executables and shared objects of x86_64 and aarch64 in
+    little-endian format. Without -o the program replaces each file.
+
+    Without an option for symbols the program acts as with -s. Executables
+    and shared objects retain their program headers and the file offsets
+    of all allocated sections, so the loaded image does not change. The
+    section header table and the sections without the allocated flag
+    follow the allocated contents.
+
+    A relocatable object receives a new layout. The symbol table is
+    numbered again, and every relocation section receives the new symbol
+    indices. With -s the relocations against removed symbols disappear
+    together with the symbols.
+
+OPTIONS
+    -s, --strip-all
+        Remove all symbols and the debug sections. This is the default.
+    -g, -S, -d, --strip-debug
+        Remove the debug sections, the file symbols and the section
+        symbols of relocatable objects that no relocation uses.
+    --strip-unneeded
+        Remove the debug sections and all symbols that no relocation or
+        dynamic link needs.
+    -R name, --remove-section=name
+        Also remove the sections with this name. The option is repeatable.
+    -N name, --strip-symbol=name
+        Remove the symbols with this name unless a relocation uses them.
+    -K name, --keep-symbol=name
+        Do not remove the symbols with this name when another option
+        removes them.
+    -o file
+        Write the result to file. The option accepts one input file.
+    -p, --preserve-dates
+        Give the output file the access and modification times of the
+        input file.
+    -I bfdname, -O bfdname
+        Select the formats as in objcopy. The output must be an ELF file.
+
+    The arguments of -R, -N and -K accept the wildcards * and ?.
+
+EXAMPLES
+    strip prog
+    strip -g libx.a
+    strip --strip-unneeded -o libx.small.so libx.so
+
+SEE ALSO
+    objcopy(1), readelf(1), ar(1), nm(1)

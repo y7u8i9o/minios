@@ -1,0 +1,3 @@
+fsinit: mounted the host folder host on /mnt/host
+9p_automount: /mnt/host/hello.txt: mounted by fsinit
+TEST PASS

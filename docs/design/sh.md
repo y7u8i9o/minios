@@ -40,7 +40,10 @@ remain literal. Command substitution captures a child's pipe output and
 removes trailing newlines. Parameter operators include defaults,
 assignment, alternate values, errors, length and prefix/suffix removal.
 `arith.c` implements integer precedence, variable lookup, assignment,
-short-circuit boolean operators and the conditional operator.
+short-circuit boolean operators and the conditional operator. The
+expression of `$((...))` undergoes parameter expansion, command
+substitution and quote removal before it is evaluated, as POSIX requires,
+so `$((${n:-7} % 8))` works (2026-10-05).
 
 `vars.c` imports the environment into its own table. Exported updates
 also update `environ`; ordinary shell variables remain private. Function
@@ -62,9 +65,24 @@ tests and resource limits. `help` preserves its historical prefix.
 `set -e` and `set +e` switch the errexit option: a command that fails
 outside a condition of `if`, `while` or `until`, outside the left side
 of `&&` and `||`, and not negated with `!`, exits the shell with its
-status (`errexit_off` in `exec.c` counts those contexts). Any other
-option letter is refused with status 2. `set` alone prints the
-variables; `set --` or a first non option word replaces the positional
+status (`errexit_off` in `exec.c` counts those contexts).
+`set -f` and `set +f` switch off and on pathname expansion
+(`opt_noglob`). `set -o NAME` and `set +o NAME` switch an option by its
+name: `errexit`, `noglob` or `pipefail`. `pipefail` exists only by name.
+With `pipefail` the status of a pipeline is the status of the rightmost
+command that failed, or 0 when every command succeeded. A command that
+a signal ended counts as failed with 128 plus the signal number, SIGPIPE
+included, as in bash. Each job records the exit status of every process
+in `statuses` for that purpose (`jobs.c`).
+
+A command without a command name, such as `x=$(rmdir dir)`, returns the
+status of its last command substitution, and 0 without a substitution
+(POSIX 2.9.1). `capture` counts the substitutions in `substitutions`, and
+`simple` compares the count before and after the expansion. Before V5 of
+the 0.6.0 release such a command always returned 0. `set -o` without a name prints
+each option with `on` or `off`. `set +o` prints the `set` commands that
+restore the current states. Any other option letter or option name is
+refused with status 2. `set` alone prints the variables; `set --` or a first non option word replaces the positional
 parameters. pdpmake in POSIX mode prefixes every command with `set -e;`.
 
 `redirect.c` handles `<`, `>`, `>>`, descriptor-qualified forms, `<&`,
@@ -73,6 +91,21 @@ close-on-exec and are restored even after a failed application. A quoted
 here-document delimiter suppresses expansion; `<<-` strips leading tabs.
 A writer child feeds the here-document pipe so a document larger than
 the pipe capacity cannot block the shell before its reader starts.
+
+`exec` without a command sets `keep_redirects`, and `execute_one` then
+drops the saved descriptors (`redirect_discard`) instead of restoring
+them, so `exec 6>&1 >/dev/null` changes the descriptors of the shell
+itself. `exec` with a command replaces the shell with it and exits with
+127 or 126 when it cannot be executed. `trap` (`trap.c`) records an action
+for `EXIT`, a signal name with or without `SIG`, or a number. A caught
+signal only marks its trap, and `exec_node` runs the marked actions after
+the current command with `$?` retained. An empty action ignores the
+signal, and `-` restores the disposition the shell had before. The `EXIT`
+action runs at the exit of the shell process that set it, through
+`atexit`, and not in the subshells forked from it. `trap` alone prints the
+traps in a form that can be read again. The three builtins were added for
+pfetch (`pfetch.md`), and the case `sh_builtins` runs
+`/etc/tests/shbuiltins.sh`, which uses each of them.
 
 ## Job control
 

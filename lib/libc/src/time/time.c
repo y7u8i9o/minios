@@ -60,8 +60,23 @@ int nanosleep(const struct timespec *request, struct timespec *remain)
         return -1;
     }
     unsigned long ms = (unsigned long)request->tv_sec * 1000 + (unsigned long)((request->tv_nsec + 999999) / 1000000);
-    if (ms && sleep_ms(ms) < 0)
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    if (ms && sleep_ms(ms) < 0) {
+        /* A signal ended the sleep (EINTR).  remain receives the requested
+         * time minus the time slept, as POSIX requires. */
+        if (remain) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            long long left = (long long)request->tv_sec * 1000000000LL + request->tv_nsec -
+                             ((long long)(now.tv_sec - start.tv_sec) * 1000000000LL + (now.tv_nsec - start.tv_nsec));
+            if (left < 0)
+                left = 0;
+            remain->tv_sec = (time_t)(left / 1000000000LL);
+            remain->tv_nsec = (long)(left % 1000000000LL);
+        }
         return -1;
+    }
     if (remain) {
         remain->tv_sec = 0;
         remain->tv_nsec = 0;
@@ -107,4 +122,9 @@ int settimeofday(const struct timeval *tv, const struct timezone *tz)
     }
     struct timespec ts = { tv->tv_sec, tv->tv_usec * 1000 };
     return clock_settime(CLOCK_REALTIME, &ts);
+}
+
+int adjtime(const struct timeval *delta, struct timeval *olddelta)
+{
+    return (int)syscall2(SYS_adjtime, delta, olddelta);
 }

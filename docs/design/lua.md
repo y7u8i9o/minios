@@ -77,7 +77,7 @@ The interpreter links liblua and libc, and libedit statically for its
 prompt. `user/lua/linit.c` replaces the upstream `linit.c`, which the
 upstream file permits. It opens the standard libraries under the same
 selection masks and registers the modules of the interpreter, `fs`,
-`sys` and `thread`, in `package.preload`, where `require "fs"` finds
+`sys`, `thread` and `net`, in `package.preload`, where `require "fs"` finds
 them without a file search. `gui`, `audio` and `mime` are C modules,
 `/usr/lib/lua/5.5/gui.so`, `audio.so` and `mime.so`, which `require`
 loads through `package.cpath`. Each links liblua and its own library,
@@ -101,7 +101,21 @@ that skips `.` and `..`; `list(path)`, a sorted array of names;
 `links`, `blocks`, `blocksize`; `lstat(path)`, the same for a symbolic
 link itself; `exists`; `mkdir(path [, mode])`, `rmdir`,
 `chdir`, `getcwd`, `sync`; `read(path)` for a whole file and
-`write(path, data [, append])`.
+`write(path, data [, append])`; `utime(path, mtime)`, which sets the
+modification time in seconds since 1970.
+
+`net` (`user/lua/lnet.c`) provides IPv4 TCP sockets as plain descriptors,
+which `sys.close` closes and `sys.poll` and `app:watch` wait for:
+`connect(host, port [, timeout_ms])`, `listen(port [, address [,
+backlog]])` returning the descriptor and the bound port (port 0 selects a
+free port), `accept(fd [, timeout_ms])` returning the descriptor, the
+address and the port of the client, `send(fd, data [, timeout_ms])`,
+which sends all of the data, `recv(fd, max [, timeout_ms])`, which returns
+1 to `max` bytes or `nil` alone at the end of the stream,
+`shutdown(fd [, "r" | "w" | "rw"])`, `peer(fd)` and `address(fd)`. A
+timeout of -1 waits without limit, and an expired timeout returns the
+errno `ETIMEDOUT`. Every socket is close-on-exec. The file transfer
+program (`filetransfer.md`) uses the module in its worker threads.
 
 `sys` (`user/lua/lsys.c`) provides `spawn(program, args...)`, which
 starts a program as a child of init through an intermediate child, with
@@ -139,7 +153,8 @@ text, {buttons})` returning the index of the button, `prompt(title,
 label, default)` returning the text or `nil`, `open_file(title, path [,
 filters])` and `save_file(...)` running the file chooser of
 `folderview.md` with filters as an array of `{name, patterns}` and
-returning the chosen path or `nil`, `layer(w, h, options)`,
+returning the chosen path or `nil`, `choose_folder([title [, path]])`
+running the chooser in its folder mode, `layer(w, h, options)`,
 `screen()`, `clipboard([text])` (the three are described below) and
 `destroy()`.
 
@@ -154,7 +169,7 @@ Every widget is a userdata with the methods `on(signal, fn)`, `text`,
 `align` (`fill`, `start`, `center`, `end`), `grid(row, col, rowspan,
 colspan)`, `gridstretch`, `accel`, `padding`, `tip`, `id`, `find`,
 `class`, `invalidate`, `relayout`, `focus`, `focused`, `capture`, `size`,
-`pos`, `parent`, `window`, `destroy`; windows have `close` and `title`;
+`pos`, `abs` (the position in the window), `parent`, `window`, `destroy`; windows have `close` and `title`;
 list views and combo boxes have `add`, `clear`, `count`, `item` and
 `select` (indexes start at 1); tabs have `page(title)` and `select`;
 split panes `position`; scroll bars `set(value, max, page)`; image
@@ -181,7 +196,24 @@ twice is the same object. libgui emits `destroy` when a widget is freed
 widget raises "widget was destroyed". Errors inside handlers are printed
 with a traceback to stderr and the program continues. `gui.test` contains
 `key`, `mouse`, `close`, `paint` and `pixel`, which inject messages into
-a window and read its surface for tests.
+a window and read its surface for tests. The host build adds `drag(win,
+x, y, offers [, actions])`, which returns the answer of the window to a
+drag that offers the MIME types of the list, `drop(win, x, y, mime,
+data, action)`, `dragged()`, which returns the number of drags that the
+program started, the items of the last one and its actions, and
+`drag_end(win, action)`.
+
+Tables, tree views and canvases emit `drag_begin`, `drag_motion`, `drop`,
+`drag_leave` and `drag_end` (`dnd.md`) with a table of `row`, `x`, `y`,
+`actions`, `action`, `mime` and `data`. A `drag_motion` handler that
+takes the drag sets `accept` to the MIME type, `actions` and `preferred`
+to masks of `gui.DND_COPY` and `gui.DND_MOVE`, and optionally `row`, the
+row to outline (-1 for the whole view), in that table and returns true.
+`gui.offers(mime)` tells whether the drag over the window offers a type.
+`view:drag(items, actions [, label [, icon]])` starts a drag from a
+`drag_begin` handler; `items` is a list of `{mime, data}` pairs, the
+preferred type first. `view:rowrect(row)` returns the rectangle of a
+visible row in the coordinates of the view.
 
 The Pong package includes its Lua version at
 `/usr/share/apps/pong.lua`.

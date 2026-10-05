@@ -1,0 +1,3 @@
+#!/bin/sh
+# The file that the boot case 9p_automount reads from /mnt/host.
+printf 'mounted by fsinit\n' > "$SHARE/hello.txt"

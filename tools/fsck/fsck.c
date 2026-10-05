@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <fs/mfs_format.h>
+#include <minios/crc32.h>
 
 #define S_IFMT_  0170000
 #define S_IFDIR_ 0040000
@@ -67,24 +68,6 @@ static int problem(const char *fmt, ...)
     printf("\n");
     unrepaired++;
     return 0;
-}
-
-static uint32_t crc32_update(uint32_t crc, const void *data, size_t n)
-{
-    static uint32_t table[256];
-    if (!table[1]) {
-        for (uint32_t i = 0; i < 256; i++) {
-            uint32_t c = i;
-            for (int k = 0; k < 8; k++)
-                c = (c & 1) ? 0xedb88320u ^ (c >> 1) : c >> 1;
-            table[i] = c;
-        }
-    }
-    const uint8_t *p = data;
-    crc = ~crc;
-    for (size_t i = 0; i < n; i++)
-        crc = table[(crc ^ p[i]) & 0xff] ^ (crc >> 8);
-    return ~crc;
 }
 
 static uint8_t *block(uint64_t n)
@@ -210,9 +193,9 @@ static void replay_journal(void)
     if (valid) {
         struct mfs_journal_header copy = *jh;
         copy.checksum = 0;
-        uint32_t crc = crc32_update(0, &copy, sizeof copy);
+        uint32_t crc = crc32(0, &copy, sizeof copy);
         for (uint32_t i = 0; i < jh->count; i++)
-            crc = crc32_update(crc, block(sb->journal_start + 1 + i), MFS_BLOCK_SIZE);
+            crc = crc32(crc, block(sb->journal_start + 1 + i), MFS_BLOCK_SIZE);
         valid = crc == jh->checksum;
     }
     if (!valid) {

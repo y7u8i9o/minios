@@ -38,6 +38,16 @@ __noreturn void ktest_fail(const char *fmt, ...) __printf(1, 2);
 
 struct proc;
 
+/* ktest_wait_idle waits until the system has processed the input of the
+ * test: four samples 2 ms apart find no thread except the caller running
+ * or ready on any CPU, no block transfer, and no timer of a user process
+ * that expires within max_ms (sched_quiet, blockdev_busy,
+ * waitq_next_user_deadline).  max_ms limits the wait.  A test passes
+ * the fixed wait that the call replaces, so the call never waits longer.
+ * A wait whose length matters to the test, such as the time that a key is
+ * held for the repeat, remains sleep_ms. */
+void ktest_wait_idle(int max_ms);
+
 /* Keyboard helpers shared by typed session tests (tests/test_shell.c). */
 void type_line(const char *s);
 void type_ctrl(char c);

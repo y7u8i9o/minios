@@ -1,0 +1,46 @@
+#!/bin/sh
+# The host side of net_transfer: tools/transfer.py serves a scratch folder
+# for the guest. Once the guest serves on its forwarded port, the host
+# copies a file from the guest and stores two files there, the second one
+# done.txt, which ends the guest script.
+set -eu
+DIR="$OUTDIR/transfer-host"
+rm -rf "$DIR" "$OUTDIR/transfer-upload"
+mkdir -p "$DIR/tree/empty" "$DIR/tree/sub" "$DIR/pulled" "$OUTDIR/transfer-upload"
+printf 'leaf\n' > "$DIR/tree/sub/leaf.txt"
+# big.bin and up-host.bin: 187500 lines "minios transfer", with the
+# modification time 1700000000, which the part files of the guest name.
+python3 - "$DIR/big.bin" "$OUTDIR/transfer-upload/up-host.bin" <<'PY'
+import os, sys
+for path in sys.argv[1:]:
+    with open(path, 'wb') as f:
+        f.write(b'minios transfer\n' * 187500)
+    os.utime(path, (1700000000, 1700000000))
+PY
+printf 'done\n' > "$OUTDIR/transfer-upload/done.txt"
+PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+FWD=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+python3 "$TOP/tools/transfer.py" serve -p "$PORT" "$DIR" > "$PEER_LOG" 2>&1 &
+SERVER=$!
+echo $SERVER > "$PEER_PID"
+i=0
+until grep -q '^serving ' "$PEER_LOG" 2>/dev/null || [ $i -ge 100 ]; do
+    sleep 0.1
+    i=$((i + 1))
+done
+echo "$PORT $FWD" > "$PEER_READY"
+# The guest serves after it has copied its files. Retry until it answers.
+T="python3 $TOP/tools/transfer.py"
+i=0
+while [ $i -lt 240 ]; do
+    if $T ls -p "$FWD" >> "$PEER_LOG" 2>&1; then
+        $T get -p "$FWD" -o "$DIR/pulled" guest.bin >> "$PEER_LOG" 2>&1
+        $T put -p "$FWD" "$OUTDIR/transfer-upload/up-host.bin" >> "$PEER_LOG" 2>&1
+        $T put -p "$FWD" "$OUTDIR/transfer-upload/done.txt" >> "$PEER_LOG" 2>&1
+        echo "host: finished" >> "$PEER_LOG"
+        break
+    fi
+    sleep 1
+    i=$((i + 1))
+done
+wait $SERVER

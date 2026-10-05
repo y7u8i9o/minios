@@ -390,9 +390,20 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
     return true;
 }
 
-/* Account a resolved fault to the current process. */
+/* Resolved faults of every process since boot, for the statistics of the
+ * balloon. Atomic counters without a lock. */
+static uint64_t minor_faults, major_faults;
+
+void vma_get_fault_counts(uint64_t *minor, uint64_t *major)
+{
+    *minor = __atomic_load_n(&minor_faults, __ATOMIC_RELAXED);
+    *major = __atomic_load_n(&major_faults, __ATOMIC_RELAXED);
+}
+
+/* Account a resolved fault to the current process and to the system. */
 static void count_fault(bool major)
 {
+    __atomic_fetch_add(major ? &major_faults : &minor_faults, 1, __ATOMIC_RELAXED);
     struct thread *t = thread_current();
     if (!t)
         return;

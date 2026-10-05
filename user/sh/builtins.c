@@ -5,7 +5,7 @@ static const char *const names[] = {"cd",     "exit",     "pwd",     "export",  
                                     "fg",     "bg",       "wait",    "true",    "false", "ulimit", "help",
                                     "test",   "[",        "echo",    "read",    "shift", "local",  "return",
                                     "source", ".",        "alias",   "unalias", "eval",  "type",   "command",
-                                    "break",  "continue", "history", ":",       "umask", NULL};
+                                    "break",  "continue", "history", ":",       "umask", "exec",  "trap",   NULL};
 
 int is_builtin(const char *name)
 {
@@ -208,6 +208,43 @@ static int describe(const char *name, int path_only)
     return 1;
 }
 
+/* The options of set: the letter, the name for -o and the flag. */
+static const struct shell_option {
+    char letter;
+    const char *name;
+    int *flag;
+} shell_options[] = {
+    { 'e', "errexit", &opt_errexit },
+    { 'f', "noglob", &opt_noglob },
+    { 0, "pipefail", &opt_pipefail },
+};
+#define SHELL_OPTIONS (int)(sizeof shell_options / sizeof shell_options[0])
+
+/* shell_option returns the flag of the option with the letter, or with
+ * the name when the letter is 0.  The result is NULL for an unknown
+ * option. */
+static int *shell_option(char letter, const char *name)
+{
+    for (int i = 0; i < SHELL_OPTIONS; i++)
+        if (letter ? shell_options[i].letter == letter : !strcmp(shell_options[i].name, name))
+            return shell_options[i].flag;
+    return NULL;
+}
+
+/* set -o prints one line with the name and the state of each option.  set
+ * +o prints the set commands that restore the current states. */
+static void shell_options_print(int human)
+{
+    for (int i = 0; i < SHELL_OPTIONS; i++) {
+        int on = *shell_options[i].flag;
+        if (human)
+            printf("%-12s%s\n", shell_options[i].name, on ? "on" : "off");
+        else
+            printf("set %co %s\n", on ? '-' : '+', shell_options[i].name);
+    }
+}
+
+
 int builtin(int argc, char **argv)
 {
     const char *name = argv[0];
@@ -218,6 +255,22 @@ int builtin(int argc, char **argv)
         }
         flow = *name == 'r' ? FLOW_RETURN : FLOW_EXIT;
         return argc > 1 ? atoi(argv[1]) & 255 : last_status;
+    }
+    if (!strcmp(name, "trap"))
+        return builtin_trap(argc, argv);
+    /* exec without a command makes the redirections of the command
+     * permanent. With a command it replaces the shell, which exits when the
+     * command cannot be executed. */
+    if (!strcmp(name, "exec")) {
+        if (argc == 1) {
+            keep_redirects = 1;
+            return 0;
+        }
+        fflush(NULL);
+        child_signals();
+        execvp(argv[1], argv + 1);
+        fprintf(stderr, "exec: %s: %s\n", argv[1], strerror(errno));
+        exit(errno == ENOENT ? 127 : 126);
     }
     if (!strcmp(name, "cd")) {
         const char *dir = argc > 1 ? argv[1] : var_get("HOME");
@@ -272,8 +325,10 @@ int builtin(int argc, char **argv)
         return 0;
     }
     if (!strcmp(name, "set")) {
-        /* Options first: -e and +e; any other letter is refused. Then -- or
-         * the first non option word starts the new positional parameters. */
+        /* Options first: -e, -f and -o NAME, each turned off with + instead
+         * of -.  Any other letter is refused.  -o or +o without a NAME
+         * prints the options.  Then -- or the first non option word starts
+         * the new positional parameters. */
         int i = 1;
         int replace = 0;
         for (; i < argc; i++) {
@@ -286,13 +341,24 @@ int builtin(int argc, char **argv)
                 replace = 1;
                 break;
             }
-            for (const char *p = argv[i] + 1; *p; p++) {
-                if (*p == 'e') {
-                    opt_errexit = argv[i][0] == '-';
-                } else {
-                    fprintf(stderr, "set: unsupported option %c%c\n", argv[i][0], *p);
+            const char *arg = argv[i];
+            int on = arg[0] == '-';
+            for (const char *p = arg + 1; *p; p++) {
+                int *flag = shell_option(*p, NULL);
+                if (*p == 'o' && i + 1 < argc) {
+                    flag = shell_option(0, argv[++i]);
+                    if (!flag) {
+                        fprintf(stderr, "set: unsupported option %s\n", argv[i]);
+                        return 2;
+                    }
+                } else if (*p == 'o') {
+                    shell_options_print(on);
+                    continue;
+                } else if (!flag) {
+                    fprintf(stderr, "set: unsupported option %c%c\n", arg[0], *p);
                     return 2;
                 }
+                *flag = on;
             }
         }
         if (replace) {

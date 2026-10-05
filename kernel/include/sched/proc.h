@@ -131,3 +131,5 @@ uint64_t proc_rlimit_cur(struct proc *p, int resource);
 void proc_exit_check(void);
 /* Registered by kinit once init exists, target of reparenting. */
 void proc_set_init(struct proc *p);
+/* The init process, or NULL before kinit starts it. init never exits. */
+struct proc *proc_init_process(void);

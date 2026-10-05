@@ -3,15 +3,28 @@
 #include <lib/list.h>
 #include <sched/sched.h>
 #include <sched/thread.h>
+#include <sched/proc.h>
 #include <kassert.h>
 #include <sync/rcu.h>
 #include <debug/panic.h>
 #include <arch/cpu.h>
+#include <arch/barrier.h>
 
 void waitq_init(struct waitq *wq, const char *name)
 {
     spinlock_init(&wq->lock, name);
     list_init(&wq->waiters);
+}
+
+/* A wait queue may lie on the stack of its waiter, as in futex_wait. The
+ * waiter therefore returns only when no waitq_interrupt still uses the
+ * queue it found in waiting_on. A waitq_interrupt that pins the thread
+ * after waiting_on was cleared finds NULL, because both sides are
+ * sequentially consistent. */
+static void wait_unpinned(struct thread *t)
+{
+    while (__atomic_load_n(&t->waitq_pins, __ATOMIC_SEQ_CST))
+        cpu_relax();
 }
 
 void waitq_wait(struct waitq *wq, struct spinlock *lock)
@@ -37,6 +50,7 @@ void waitq_wait(struct waitq *wq, struct spinlock *lock)
         list_del(&t->run_link);
         __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);
         spin_unlock(&wq->lock);
+        wait_unpinned(t);
         return;
     }
     sched_lock_current();
@@ -48,6 +62,7 @@ void waitq_wait(struct waitq *wq, struct spinlock *lock)
         spin_unlock(lock);
     sched_switch_locked();
     sched_unlock_current();
+    wait_unpinned(t);
     if (lock)
         spin_lock(lock);
 }
@@ -87,16 +102,19 @@ int waitq_wake_all(struct waitq *wq)
 
 void waitq_interrupt(struct thread *t)
 {
+    /* The pin retains the queue until the lock is released (wait_unpinned). */
+    __atomic_add_fetch(&t->waitq_pins, 1, __ATOMIC_SEQ_CST);
     struct waitq *wq = __atomic_load_n(&t->waiting_on, __ATOMIC_SEQ_CST);
-    if (!wq)
-        return;
-    spin_lock(&wq->lock);
-    if (t->waiting_on == wq) {
-        list_del(&t->run_link);
-        __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);  /* see wake */
-        sched_wake(t);
+    if (wq) {
+        spin_lock(&wq->lock);
+        if (t->waiting_on == wq) {
+            list_del(&t->run_link);
+            __atomic_store_n(&t->waiting_on, NULL, __ATOMIC_SEQ_CST);  /* see wake */
+            sched_wake(t);
+        }
+        spin_unlock(&wq->lock);
     }
-    spin_unlock(&wq->lock);
+    __atomic_sub_fetch(&t->waitq_pins, 1, __ATOMIC_SEQ_CST);
 }
 
 void waitq_wait_bounded(struct waitq *wq, struct spinlock *lock)
@@ -137,6 +155,20 @@ void waitq_wait_timeout(struct waitq *wq, struct spinlock *lock, uint64_t deadli
     spin_lock(&timed_lock);
     list_del(&w.link);
     spin_unlock(&timed_lock);
+}
+
+uint64_t waitq_next_user_deadline(void)
+{
+    uint64_t first = UINT64_MAX;
+    spin_lock(&timed_lock);
+    struct list_head *pos;
+    list_for_each(pos, &timed_waiters) {
+        struct timed_waiter *w = list_entry(pos, struct timed_waiter, link);
+        if (w->t->proc != &kernel_proc && w->deadline_ms < first)
+            first = w->deadline_ms;
+    }
+    spin_unlock(&timed_lock);
+    return first;
 }
 
 void waitq_timeouts_tick(void)

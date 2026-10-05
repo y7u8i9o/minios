@@ -1,0 +1,38 @@
+RANLIB(1)                   User Commands                   RANLIB(1)
+
+NAME
+    ranlib - write the symbol index of archives
+
+SYNOPSIS
+    ranlib [-DUt] archive...
+
+DESCRIPTION
+    ranlib writes the symbol index of each archive. The index lists the
+    defined global symbols of the ELF members in the order of the members
+    and of their symbol tables. The linker reads the index to select
+    the members that satisfy undefined symbols. nm -s prints the index. The command ar s
+    writes the same index.
+
+    ranlib rewrites the archive through a temporary file. The dates and
+    owners of the members are unchanged. An archive without ELF members
+    receives no index.
+
+OPTIONS
+    -D  Write the date 0 into the index member.
+    -U  Write the current time into the index member. This is the
+        default.
+    -t  Rewrite nothing. When the archive has an index that is older
+        than the archive, set the date of the index to the modification
+        time of the archive plus 60 seconds. An archive without an
+        index gives the message "no archive map to update".
+    -h, --help
+        Print the usage and exit.
+    -v, --version
+        Print the version and exit.
+
+EXAMPLES
+    ranlib libm.a
+    ranlib -D libm.a
+
+SEE ALSO
+    ar(1), nm(1), ld(1)

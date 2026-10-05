@@ -85,7 +85,7 @@ static void test_gui_installer(void)
         sleep_ms(100);
     ktest_assert(pixel(42, 50) == 0x00ebebeb, "no installer window: %08x", pixel(42, 50));
     ktest_assert(count_procs("installer", -1) == 0, "the text installer runs");
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     kprintf("gui_installer: window shown\n");
 
     tab(5);                         /* the password of root */

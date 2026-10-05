@@ -781,20 +781,24 @@ static const struct layer_surface_impl layer_handlers = {
  * touches the screen edge, and a surface anchored on two opposite sides
  * starts at the edge of the desktop area. When margins are set, each
  * anchored edge is placed at its margin from the edge of the desktop area
- * instead. */
+ * instead. A surface without an anchor on an axis is centred on the
+ * screen on that axis. */
 static void layer_place(struct csurface *s)
 {
     struct layer *l = s->layer;
     struct rect d = shell_desktop();
     int lr = l->anchor & (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT);
     int tb = l->anchor & (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM);
+    int cx = (screen_w - s->width) / 2, cy = (screen_h - s->height) / 2;
     if (l->has_margin) {
-        s->x = lr == LAYER_ANCHOR_RIGHT ? d.x + d.w - s->width - l->margin[1] : lr ? d.x + l->margin[3] : 0;
-        s->y = tb == LAYER_ANCHOR_BOTTOM ? d.y + d.h - s->height - l->margin[2] : tb ? d.y + l->margin[0] : 0;
+        s->x = lr == LAYER_ANCHOR_RIGHT ? d.x + d.w - s->width - l->margin[1] : lr ? d.x + l->margin[3] : cx;
+        s->y = tb == LAYER_ANCHOR_BOTTOM ? d.y + d.h - s->height - l->margin[2] : tb ? d.y + l->margin[0] : cy;
         return;
     }
-    s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x : 0;
-    s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y : 0;
+    s->x = lr == LAYER_ANCHOR_RIGHT ? screen_w - s->width : lr == (LAYER_ANCHOR_LEFT | LAYER_ANCHOR_RIGHT) ? d.x
+         : lr ? 0 : cx;
+    s->y = tb == LAYER_ANCHOR_BOTTOM ? screen_h - s->height : tb == (LAYER_ANCHOR_TOP | LAYER_ANCHOR_BOTTOM) ? d.y
+         : tb ? 0 : cy;
 }
 
 static void layer_gone(struct wire_resource *r)
@@ -910,7 +914,8 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
     if (serial && acked != serial) {
         /* A state-only configure does not make the already mapped
          * geometry unsafe. Continue accepting matching old-size buffers
-         * while the event is in flight; do not consume the configure. */
+         * until the client has received the event; do not consume the
+         * configure. */
         if (s->mapped && (want_w <= 0 || want_w == s->width) &&
             (want_h <= 0 || want_h == s->height))
             return 1;

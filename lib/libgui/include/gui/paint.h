@@ -40,6 +40,10 @@ int painter_text_height(const struct painter *p);
 /* Character index nearest to a local x offset within text. */
 int painter_text_index(const struct painter *p, const char *text, int n, int px);
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
+/* The avatar of an account: a rounded square of size by size in a colour
+ * that the account name selects, with the first letter of label, which is
+ * the full name, in white. */
+void painter_avatar(struct painter *p, int x, int y, int size, const char *name, const char *label);
 /* Blit a 32 bit surface at (x, y). */
 void painter_blit(struct painter *p, int x, int y, const struct surface *src);
 /* Blend an 8 bit mask. */

@@ -1,0 +1,96 @@
+--- a/pfetch	2026-10-05 02:31:50
++++ b/pfetch	2026-10-05 02:39:50
+@@ -171,6 +171,11 @@
+     # the intention for using it is allowing the user to overwrite the
+     # value on invocation.
+     # shellcheck disable=3028,2039
++    # minios has no hostname command and no /etc/hostname.
++    case $os in
++        (minios) hostname=${HOSTNAME:-$(uname -n)} ;;
++    esac
++
+     hostname=${HOSTNAME:-${hostname:-$(hostname)}}
+ 
+     # If the hostname is still not found, fallback to the contents of the
+@@ -434,6 +439,17 @@
+ 
+         (*BSD* | Minix)
+             host=$(sysctl -n hw.vendor hw.product)
++        ;;
++
++        (minios)
++            # The first product of /dev/devices is the system of the
++            # SMBIOS tables, else the model of the device tree.
++            while IFS='	' read -r key val; do
++                case $key in
++                    (product) host=$val; break ;;
++                    (model) host=${host:-$val} ;;
++                esac
++            done < /dev/devices
+         ;;
+     esac
+ 
+@@ -489,6 +505,15 @@
+             IFS=. read -r s _ < /proc/uptime
+         ;;
+ 
++        (minios)
++            # The system node of /dev/devices: "uptime<tab>N s (...)".
++            while IFS='	' read -r key val; do
++                case $key in
++                    (uptime) s=${val%% *}; break ;;
++                esac
++            done < /dev/devices
++        ;;
++
+         (Darwin* | *BSD* | DragonFly*)
+             s=$(sysctl -n kern.boottime)
+ 
+@@ -589,6 +614,11 @@
+                     nix-store -q --requisites /run/current-system/sw
+                     nix-store -q --requisites ~/.nix-profile
+                 }
++            ;;
++
++            (minios)
++                # One directory per installed package.
++                printf '%s\n' /var/lib/pkg/*/manifest
+             ;;
+ 
+             (Darwin*)
+@@ -734,6 +764,19 @@
+             mem_full=$((mem_full / 1024))
+         ;;
+ 
++        # /dev/meminfo has the lines 'MemTotal: 000 kB' and 'MemFree: 000 kB'.
++        (minios)
++            while IFS=': ' read -r key val _; do
++                case $key in
++                    (MemTotal) mem_full=$val ;;
++                    (MemFree) mem_free=$val ;;
++                esac
++            done < /dev/meminfo
++
++            mem_used=$(((mem_full - mem_free) / 1024))
++            mem_full=$((mem_full / 1024))
++        ;;
++
+         # Used memory is calculated using the following "formula":
+         # (wired + active + occupied) * 4 / 1024
+         (Darwin*)
+@@ -1563,6 +1606,15 @@
+ 				${c2}|||| |||| ||||
+ 				${c2}|||| |||| ||||
+ 				${c2}|||| |||| ||||
++			EOF
++        ;;
++
++        ([Mm]inios*)
++            read_ascii 4 <<-EOF
++				${c4} _ __ ___
++				${c4}| '_ \` _ \\
++				${c4}| | | | | |
++				${c4}|_| |_| |_|
+ 			EOF
+         ;;
+ 

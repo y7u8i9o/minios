@@ -1,0 +1,3 @@
+memreleasetest: [0-9]+ KiB at the start
+memreleasetest: 0 failures
+TEST PASS

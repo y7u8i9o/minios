@@ -17,9 +17,9 @@ static void test_gui_code(void)
     struct proc *cl = proc_create_user("/usr/bin/code", (char *const[]){ "code", "/etc/tests/sample.lua", NULL },
                                        (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start code");
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
     press_key(0x3f);                    /* F5: run */
-    sleep_ms(3000);
+    ktest_wait_idle(3000);
     ctrl_key(0x10);                     /* Ctrl+Q: quit */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "code status 0x%x", status);

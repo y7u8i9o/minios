@@ -161,13 +161,24 @@ int blockdev_list(struct blockdev **devs, int max)
     return n;
 }
 
+/* The number of transfers inside a driver call.  The transfer entry points
+ * change it with atomic operations, without a lock. */
+static unsigned long transfers;
+
+bool blockdev_busy(void)
+{
+    return __atomic_load_n(&transfers, __ATOMIC_RELAXED) != 0;
+}
+
 /* Both transfer entry points time themselves for the profiler, which
  * charges the latency and the bytes to the stack that asked for them. */
 int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf)
 {
     bool timed = profile_wants(PROF_EV_IO);
     uint64_t start = timed ? timer_ns() : 0;
+    __atomic_add_fetch(&transfers, 1, __ATOMIC_RELAXED);
     int r = dev->rw(dev, sector, count, buf, false);
+    __atomic_sub_fetch(&transfers, 1, __ATOMIC_RELAXED);
     if (timed)
         profile_io(false, true, (uint64_t)count * dev->sector_size, start);
     return r;
@@ -177,7 +188,9 @@ int blockdev_write(struct blockdev *dev, uint64_t sector, uint32_t count, const 
 {
     bool timed = profile_wants(PROF_EV_IO);
     uint64_t start = timed ? timer_ns() : 0;
+    __atomic_add_fetch(&transfers, 1, __ATOMIC_RELAXED);
     int r = dev->rw(dev, sector, count, (void *)buf, true);
+    __atomic_sub_fetch(&transfers, 1, __ATOMIC_RELAXED);
     if (timed)
         profile_io(true, true, (uint64_t)count * dev->sector_size, start);
     return r;

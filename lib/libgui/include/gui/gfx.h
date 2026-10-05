@@ -89,3 +89,28 @@ static inline int rect_contains(struct rect r, int x, int y)
 {
     return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 }
+
+/* The edges of a window resize.  The values are those of the resize
+ * request of the window protocol. */
+enum { GUI_EDGE_TOP = 1, GUI_EDGE_BOTTOM = 2, GUI_EDGE_LEFT = 4, GUI_EDGE_RIGHT = 8 };
+
+/* The resize zones around a window frame, for the decorations of the
+ * compositor and of the client library (docs/design/compositor.md):
+ *   margin      the width of the edge zones outside the frame
+ *   inner       the width of the edge zones inside the frame, a border
+ *   corner      the length of a corner zone along each edge, from the corner
+ *   reach       the distance of the corner squares outside the frame
+ *   inset_top   the distance of the top corner squares inside the frame,
+ *               the radius of rounded top corners
+ *   inset_bottom  the same for the bottom corners */
+struct gui_resize_zones {
+    int margin, inner, corner, reach, inset_top, inset_bottom;
+};
+
+/* gui_resize_edges returns the edges that a press at (x, y) resizes for the
+ * frame f, or 0 outside the resize zones. */
+int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int y);
+/* gui_resize_region stores the area of the frame with its resize zones in
+ * out: the frame grown by margin and the four corner squares.  The result
+ * is the number of rectangles, 5. */
+int gui_resize_region(struct rect f, const struct gui_resize_zones *z, struct rect out[5]);

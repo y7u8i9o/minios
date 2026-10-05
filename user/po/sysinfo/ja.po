@@ -1133,3 +1133,35 @@ msgstr "ソース"
 #: user/apps/sysinfo.c
 msgid "Use"
 msgstr "使用率"
+
+#: user/apps/sysinfo.c:62
+msgid "64-bit addresses"
+msgstr "64 ビットアドレス"
+
+#: user/apps/sysinfo.c:55
+msgid "AHCI"
+msgstr "AHCI"
+
+#: user/apps/sysinfo.c:55
+msgid "NVMe"
+msgstr "NVMe"
+
+#: user/apps/sysinfo.c:141
+msgid "Firmware revision"
+msgstr "ファームウェアのリビジョン"
+
+#: user/apps/sysinfo.c:193
+msgid "Kind"
+msgstr "種類"
+
+#: user/apps/sysinfo.c:194
+msgid "Largest transfer"
+msgstr "最大転送サイズ"
+
+#: user/apps/sysinfo.c:229
+msgid "Namespaces"
+msgstr "名前空間"
+
+#: user/apps/sysinfo.c:323
+msgid "Volatile write cache"
+msgstr "揮発性書き込みキャッシュ"

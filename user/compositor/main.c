@@ -108,6 +108,7 @@ static void flush_clients(void)
     }
     hang_tick(now);
     im_tick(now);
+    seat_tick(now);
 }
 
 static void frame(void)
@@ -136,12 +137,18 @@ static void frame(void)
     }
 }
 
+/* The scale of the last mode that a client or the boot chose. The backend
+ * reduces the scale of a small mode to 1. A larger mode that follows the
+ * host display then returns to the chosen scale. */
+static int chosen_scale;
+
 int comp_set_mode(int width, int height, int scale)
 {
     if (width < 640 || height < 480 || scale < 1 || scale > 4)
         return -1;
     if (backend_set_mode(width, height, scale) < 0)
         return -1;
+    chosen_scale = scale;
     settings.display_mode = DISPLAY_MODE_PACK(screen_w * screen_scale, screen_h * screen_scale, screen_scale);
     input_place_cursor(cursor_x >= screen_w ? screen_w - 1 : cursor_x, cursor_y >= screen_h ? screen_h - 1 : cursor_y);
     scene_set_cursor(cursor_x, cursor_y);
@@ -151,6 +158,23 @@ int comp_set_mode(int width, int height, int scale)
     scene_damage_all();
     comp_log("mode %dx%d scale %d", screen_w, screen_h, screen_scale);
     return 0;
+}
+
+void comp_follow_display(void)
+{
+    int width, height;
+    if (backend_display_request(&width, &height) < 0 || !settings.display_follow)
+        return;
+    int scale = chosen_scale ? chosen_scale : screen_scale;
+    if (width == screen_w * screen_scale && height == screen_h * screen_scale && scale == screen_scale)
+        return;
+    comp_log("the host display requests %dx%d", width, height);
+    if (comp_set_mode(width, height, scale) == 0) {
+        /* Every settings client sees the new mode. */
+        debug_setting_changed("display_mode", settings.display_mode);
+        return;
+    }
+    comp_log("mode %dx%d scale %d refused", width, height, scale);
 }
 
 /* x12 [-s] [-v] [socket name] */
@@ -215,11 +239,14 @@ int main(int argc, char **argv)
         int input_index = n;
         int ninput = input_fill_pollfds(pf + n, 16);
         n += ninput;
+        int display_index = n;
+        pf[n++] = (struct pollfd){ backend_display_fd(), POLLIN, 0 };
         int fetch_index = -1;
         if (data_fetch_fd() >= 0) {
             fetch_index = n;
             pf[n++] = (struct pollfd){ data_fetch_fd(), POLLIN, 0 };
         }
+        int first_client = n;
         struct wire_client *clients[OPEN_MAX];
         int nclients = 0;
         for (struct wire_client *c = wire_server_first_client(srv); c && n < OPEN_MAX; c = wire_client_next(c)) {
@@ -240,7 +267,8 @@ int main(int argc, char **argv)
         input_handle(pf + input_index, ninput);
         if (fetch_index >= 0 && (pf[fetch_index].revents & (POLLIN | POLLHUP)))
             data_fetch_read();
-        int first_client = fetch_index >= 0 ? fetch_index + 1 : input_index + ninput;
+        if (pf[display_index].revents & POLLIN)
+            comp_follow_display();
         for (int i = 0; i < nclients; i++)
             if (pf[first_client + i].revents & (POLLIN | POLLHUP)) {
                 if (wire_client_dispatch(clients[i]) < 0)

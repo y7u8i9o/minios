@@ -3,289 +3,281 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: user/files/files.c:104 user/files/files.c:479
+#: user/files/files.c:105 user/files/files.c:487
 msgid "Recent"
 msgstr ""
 
-#: user/files/files.c:105 user/files/files.c:464
+#: user/files/files.c:106 user/files/files.c:472
 msgid "Search"
 msgstr ""
 
-#: user/files/files.c:106 user/files/files.c:478
+#: user/files/files.c:107 user/files/files.c:486 user/files/files.c:526
 msgid "Home"
 msgstr ""
 
-#: user/files/files.c:107
+#: user/files/files.c:108 user/files/files.c:526
 msgid "%s - Files"
 msgstr ""
 
-#: user/files/files.c:113
+#: user/files/files.c:114
 msgid "%d item"
 msgid_plural "%d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/files/files.c:115
+#: user/files/files.c:116
 msgid "%s, %d hidden"
 msgid_plural "%s, %d hidden"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/files/files.c:189 user/files/files.c:190
+#: user/files/files.c:197 user/files/files.c:198
 msgid "New folder"
 msgstr ""
 
-#: user/files/files.c:190 user/files/files.c:208
+#: user/files/files.c:198 user/files/files.c:216
 msgid "Name:"
 msgstr ""
 
-#: user/files/files.c:195
+#: user/files/files.c:203
 msgid "Cannot create the folder"
 msgstr ""
 
-#: user/files/files.c:207
+#: user/files/files.c:215
 msgid "New file.txt"
 msgstr ""
 
-#: user/files/files.c:208
+#: user/files/files.c:216
 msgid "New file"
 msgstr ""
 
-#: user/files/files.c:214
+#: user/files/files.c:222
 msgid "Cannot create the file"
 msgstr ""
 
-#: user/files/files.c:231
-msgid "Open with"
-msgstr ""
-
-#: user/files/files.c:231
-msgid "Program:"
-msgstr ""
-
-#: user/files/files.c:236
+#: user/files/files.c:244
 msgid "Cannot start the program"
 msgstr ""
 
-#: user/files/files.c:250
+#: user/files/files.c:258
 msgid "Cannot start the terminal"
 msgstr ""
 
-#: user/files/files.c:262
+#: user/files/files.c:270
 msgid "Rename"
 msgstr ""
 
-#: user/files/files.c:262
+#: user/files/files.c:270
 msgid "New name:"
 msgstr ""
 
-#: user/files/files.c:271
+#: user/files/files.c:279
 msgid "Cannot rename"
 msgstr ""
 
-#: user/files/files.c:288
+#: user/files/files.c:296
 msgid "Delete \"%s\" and everything in it?"
 msgstr ""
 
-#: user/files/files.c:290
+#: user/files/files.c:298
 msgid "Delete \"%s\"?"
 msgstr ""
 
-#: user/files/files.c:291 user/files/files.c:292 user/files/files.c:455 user/files/files.c:494
+#: user/files/files.c:299 user/files/files.c:300 user/files/files.c:463 user/files/files.c:502
 msgid "Delete"
 msgstr ""
 
-#: user/files/files.c:291
+#: user/files/files.c:299
 msgid "Cancel"
 msgstr ""
 
-#: user/files/files.c:296
+#: user/files/files.c:304
 msgid "Cannot delete"
 msgstr ""
 
-#: user/files/files.c:325
+#: user/files/files.c:333
 msgid "Copy of %s"
 msgstr ""
 
-#: user/files/files.c:330
+#: user/files/files.c:338
 msgid "Cannot paste"
 msgstr ""
 
-#: user/files/files.c:335
+#: user/files/files.c:343
 msgid "Cannot move"
 msgstr ""
 
-#: user/files/files.c:335
+#: user/files/files.c:343
 msgid "Cannot copy"
 msgstr ""
 
-#: user/files/files.c:370
+#: user/files/files.c:378
 msgid "Cannot read the properties"
 msgstr ""
 
-#: user/files/files.c:380 user/files/files.c:456 user/files/files.c:496 user/files/files.c:506
+#: user/files/files.c:388 user/files/files.c:464 user/files/files.c:504 user/files/files.c:514
 msgid "Properties"
 msgstr ""
 
-#: user/files/files.c:385
+#: user/files/files.c:393
 msgid "Name"
 msgstr ""
 
-#: user/files/files.c:386
+#: user/files/files.c:394
 msgid "Location"
 msgstr ""
 
-#: user/files/files.c:387
+#: user/files/files.c:395
 msgid "Type"
 msgstr ""
 
-#: user/files/files.c:389
+#: user/files/files.c:397
 msgid "%d file"
 msgid_plural "%d files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/files/files.c:390
+#: user/files/files.c:398
 msgid "%d folder"
 msgid_plural "%d folders"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/files/files.c:392
+#: user/files/files.c:400
 msgid "Contents"
 msgstr ""
 
-#: user/files/files.c:393 user/files/files.c:397
+#: user/files/files.c:401 user/files/files.c:405
 msgid "Size"
 msgstr ""
 
-#: user/files/files.c:395
+#: user/files/files.c:403
 msgid "%s (%ld byte)"
 msgid_plural "%s (%ld bytes)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/files/files.c:399
+#: user/files/files.c:407
 msgid "Inode"
 msgstr ""
 
-#: user/files/files.c:40 user/files/files.c:403
-msgid "OK"
-msgstr ""
-
-#: user/files/files.c:401
+#: user/files/files.c:409
 msgid "Modified"
 msgstr ""
 
-#: user/files/files.c:41 user/files/files.c:515 user/files/files.c:530
+#: user/files/files.c:41 user/files/files.c:411
+msgid "OK"
+msgstr ""
+
+#: user/files/files.c:42 user/files/files.c:543
 msgid "Files"
 msgstr ""
 
-#: user/files/files.c:446
+#: user/files/files.c:454
 msgid "File"
 msgstr ""
 
-#: user/files/files.c:447 user/files/files.c:499
+#: user/files/files.c:455 user/files/files.c:507
 msgid "New folder..."
 msgstr ""
 
-#: user/files/files.c:448 user/files/files.c:500
+#: user/files/files.c:456 user/files/files.c:508
 msgid "New file..."
 msgstr ""
 
-#: user/files/files.c:450 user/files/files.c:484
+#: user/files/files.c:458 user/files/files.c:492
 msgid "Open"
 msgstr ""
 
-#: user/files/files.c:451 user/files/files.c:485
+#: user/files/files.c:459 user/files/files.c:493
 msgid "Open with..."
 msgstr ""
 
-#: user/files/files.c:452 user/files/files.c:487 user/files/files.c:501
+#: user/files/files.c:460 user/files/files.c:495 user/files/files.c:509
 msgid "Open in terminal"
 msgstr ""
 
-#: user/files/files.c:454 user/files/files.c:493
+#: user/files/files.c:462 user/files/files.c:501
 msgid "Rename..."
 msgstr ""
 
-#: user/files/files.c:458
+#: user/files/files.c:466
 msgid "Close"
 msgstr ""
 
-#: user/files/files.c:459
+#: user/files/files.c:467
 msgid "Edit"
 msgstr ""
 
-#: user/files/files.c:460 user/files/files.c:489
+#: user/files/files.c:468 user/files/files.c:497
 msgid "Copy"
 msgstr ""
 
-#: user/files/files.c:461 user/files/files.c:490
+#: user/files/files.c:469 user/files/files.c:498
 msgid "Cut"
 msgstr ""
 
-#: user/files/files.c:462 user/files/files.c:491 user/files/files.c:503
+#: user/files/files.c:470 user/files/files.c:499 user/files/files.c:511
 msgid "Paste"
 msgstr ""
 
-#: user/files/files.c:465
+#: user/files/files.c:473
 msgid "View"
 msgstr ""
 
-#: user/files/files.c:466 user/files/files.c:505
+#: user/files/files.c:474 user/files/files.c:513
 msgid "Refresh"
 msgstr ""
 
-#: user/files/files.c:467
+#: user/files/files.c:475
 msgid "Show hidden files"
 msgstr ""
 
-#: user/files/files.c:469
+#: user/files/files.c:477
 msgid "Sort by name"
 msgstr ""
 
-#: user/files/files.c:470
+#: user/files/files.c:478
 msgid "Sort by size"
 msgstr ""
 
-#: user/files/files.c:471
+#: user/files/files.c:479
 msgid "Sort by type"
 msgstr ""
 
-#: user/files/files.c:472
+#: user/files/files.c:480
 msgid "Sort by date"
 msgstr ""
 
-#: user/files/files.c:473
+#: user/files/files.c:481
 msgid "Go"
 msgstr ""
 
-#: user/files/files.c:474 user/files/files.c:522
+#: user/files/files.c:482 user/files/files.c:535
 msgid "Back"
 msgstr ""
 
-#: user/files/files.c:475 user/files/files.c:524
+#: user/files/files.c:483 user/files/files.c:537
 msgid "Forward"
 msgstr ""
 
-#: user/files/files.c:476
+#: user/files/files.c:484
 msgid "Parent folder"
 msgstr ""
 
-#: user/files/files.c:480
+#: user/files/files.c:488
 msgid "Root"
 msgstr ""
 
-#: user/files/files.c:481
+#: user/files/files.c:489
 msgid "Location..."
 msgstr ""
 
-#: user/files/files.c:486
+#: user/files/files.c:494
 msgid "Open item location"
 msgstr ""
 
-#: user/files/files.c:83
+#: user/files/files.c:84
 msgid "Cannot open the file"
 msgstr ""
 

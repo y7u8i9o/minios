@@ -125,6 +125,7 @@ layers, each of which overrides the previous one.
 | `--full-screen` | `QEMU_FULLSCREEN=1` | `full-screen=on,zoom-to-fit=on` on the display |
 | `--vga TYPE` | `QEMU_VGA` | `virtio` (default, run time modes through virtio-gpu), `std` or `none` |
 | `--no-tablet` | `QEMU_TABLET=0` | no virtio tablet, and the window grabs the mouse |
+| `--share DIR` | `QEMU_SHARE` | the host folder DIR through virtio-9p with the tag `host`, mounted at `/mnt/host` (`9p.md`) |
 | `--video MODE` | `QEMU_VIDEO` | framebuffer mode `WxH[xBPP][@SCALE]`, applied when the image is built |
 | `--extra ARGS` | `QEMU_EXTRA` | appended to the command line, the same as arguments after `--` |
 | `--gdb` | | `-s -S`, what `make gdb` passes |
@@ -276,7 +277,12 @@ compositor's surface appears at doubled coordinates as uniform 2x2 blocks.
 
 `tests/run_qemu_test.sh` boots one case with `-display none` (and `-vga std`
 unless the case's `vga` file says `virtio`, while a `tablet` file attaches
-a virtio tablet), serial output to
+a virtio tablet, a `vnc` file attaches a VNC display on a Unix
+socket, a `balloon` file attaches virtio-balloon with the id
+`balloon0` and the device options of the file, and a `share` file gives
+the guest the scratch folder `build/tests/<case>/share` through
+virtio-9p with the tag `host`, filled by an executable `mkshare` of the
+case and checked by `post` through `SHARE`), serial output to
 a file and `-device isa-debug-exit,iobase=0xf4,iosize=0x4`. A case directory
 contains `cmdline`, `expect` (one extended regular expression per line, all
 must match the serial log), optionally `reject`, `timeout` and `mem`, the
@@ -285,7 +291,54 @@ cases `swap` and `madvise` boot with 128 MiB on x86_64 and 160 MiB on
 aarch64, where the edk2 firmware and Limine contain the whole initrd in
 memory before the kernel starts and run out of memory at 128 MiB. Any line
 containing `TEST FAIL` fails the case. `tests/run_all.sh` runs every case and
-prints a summary. Test images and logs are written to `build/tests/<case>/`.
+prints a summary. The `qmp` script of a case (`tests/qmp_input.py`) finds
+the VNC socket in `VNC_SOCKET`. Its command `vnc-size W H` sends the
+message `SetDesktopSize` of a VNC client. Test images and logs are written to `build/tests/<case>/`.
+
+`make test` builds the kernel, the packages and the images first.
+`tools/mkimage.sh` writes the root image and the initrd only when an input
+changed. The script records a key of its inputs in `build/disk.img.key`
+after a build: the checksums of the archives, of `user/perms`, of the
+script and of the host programs `pkg` and `mkfs`, the arguments, and the
+files of the homes. The file also records the modification time of
+`build/disk.img`. `make run` writes into the image, and a changed time
+therefore causes a new build. A call of `make test` without changes takes
+about 2 s before the first case instead of about 7 s.
+
+`make test-changed` selects the tests from the changed files
+(`tools/test-changed.py`). The changed files are the differences of the
+working tree from `HEAD` and the untracked files, and with `SINCE=REF`
+also the commits since the common ancestor with `REF`. A changed file
+selects tests in four ways. The files of a case select the case: its
+directory, its kernel test file, its test program and its script, and a
+header of `kernel/tests/` selects the cases of the test files that
+include it. The rules of `tests/map` relate path patterns to cases, host
+checks such as `check-sh`, cases on aarch64 (`aarch64:PATTERN`), the
+cases of a program (`@program`), the cases of the runner `test=run`
+(`@run`) and files without tests (`none`). A fixture in
+`user/etc/tests/` selects the cases whose files contain its name. The
+target runs the host checks first and then one `make test` per
+architecture. A case that does not run on x86_64 runs on its first
+architecture. `LIST=1` prints the selection without running it. A
+changed file without a rule gives a warning.
+`tools/test-changed.py --check` lists the tracked files without a rule
+and fails when the list is not empty.
+
+The kernel tests wait for the processing of their input with
+`ktest_wait_idle(max_ms)` instead of a fixed `sleep_ms`. The function
+returns when four samples 2 ms apart find no thread except the test thread
+running or ready on any CPU (`sched_quiet`), no block transfer
+(`blockdev_busy`) and no timer of a user process that expires within
+`max_ms` (the sleepers and `waitq_next_user_deadline`). `max_ms` is the
+fixed wait of the earlier test, so a test never waits longer than before.
+A wait whose length matters to the test, a wait inside a polling loop and
+the waits of the timer, scheduler, network and audio tests remain
+`sleep_ms`. `ktest_pass` prints the number of waits, the waits that reached
+their limit and the time waited. On 2026-10-05 289 of 433 fixed waits
+became `ktest_wait_idle`, and the sum of the times of the 86 affected cases
+fell from 708 s to 577 s. The map covers every tracked file
+since 2026-10-05. The libraries have one host check target each,
+`check-libfont`, `check-libwire`, `check-libcodec` and `check-libgui`.
 
 Tests use HVF on macOS when the installed QEMU offers it and TCG elsewhere.
 Set `ACCEL` to override that choice. `make test-kvm` runs the cases listed
@@ -297,7 +350,8 @@ uses `QEMU_ACCEL` for an override (see Running above).
 ## Host checks
 
 `make check` runs the font, protocol, GUI, Lua and signature checks on
-the host, and `make check-pkg` alone runs the SHA-256, SHA-512 and Ed25519
+the host, and `make check-binutils` compares the binutils with the GNU
+binutils (`binutils.md`), and `make check-pkg` alone runs the SHA-256, SHA-512 and Ed25519
 vectors of RFC 6234 and RFC 8032 against `lib/libc/src/crypto/`
 (`packages.md`). `make check-sh` checks the shell parser, expansion and
 execution. `make

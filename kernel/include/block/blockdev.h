@@ -41,5 +41,8 @@ void blockdev_next_name(char *name, size_t size, const char *prefix, bool letter
  * pointers therefore remain valid. */
 int blockdev_list(struct blockdev **devs, int max);
 int blockdev_read(struct blockdev *dev, uint64_t sector, uint32_t count, void *buf);
+/* blockdev_busy reports whether a read or a write is inside a driver call.
+ * The boot tests wait for the end of such transfers (ktest_wait_idle). */
+bool blockdev_busy(void);
 int blockdev_write(struct blockdev *dev, uint64_t sector, uint32_t count, const void *buf);
 uint64_t blockdev_size(struct blockdev *dev);

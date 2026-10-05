@@ -33,7 +33,8 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
   shrinks the desktop area for toplevels, and keyboard interactivity;
   `configure(serial, w, h)` follows `set_size`. `set_margin(top, right,
   bottom, left)` measures the anchored edges from the desktop area
-  instead of the screen (`compositor.md`).
+  instead of the screen (`compositor.md`). A surface without an anchor
+  on an axis is centred on that axis.
 - `shell.get_decoration(toplevel)` with `set_mode` (1 server, 2
   client): the compositor draws title bars, boxes and the resize grip
   only in server mode.
@@ -86,9 +87,14 @@ where shapes are curved:
 - maximized windows have square corners and no shadow.
 
 Presses on server decorations never reach the client: the title bar
-moves, the buttons act, an invisible `RESIZE_MARGIN` around the frame and
-the bottom right grip of the contents resize on release with a configure
-of the new size; margins near a corner take both edges. Alt with the
+moves, the buttons act, the 1 px border, an invisible `RESIZE_MARGIN`
+(6 px) around the frame and the bottom right grip of the contents resize
+on release with a configure of the new size. Margins within 24 px of a
+corner take both edges. A square at each corner reaches 12 px outside the
+frame, and at the top corners 8 px inside over the rounded corner, and
+takes both edges as well. The client decorations of libgui use the same
+function, `gui_resize_edges` (`lib/libgui/src/gfx.c`), with their own
+sizes (`gui.md`). Alt with the
 left button moves any toplevel from anywhere, whichever side decorates.
 
 A move or resize the client requested (`toplevel.move`, `toplevel.resize`
@@ -156,7 +162,9 @@ the configure's serial.
 The launcher menu (`launcher.c`) reads `/etc/launcher`, or the user's
 `~/.config/launcher` when it exists, and the tables of installed
 packages, `/var/lib/pkg/launcher` and `~/.local/share/launcher`, each
-time it opens (`users.md`).
+time it opens (`users.md`). The functions of `gui/launcher.h` in libgui
+read the tables. The settings program and the application chooser use
+the same functions. The panel starts an entry through `mime_run`.
 Both files contain `title=program` lines, where the program may be
 followed by arguments separated by spaces (`Screenshot=/bin/screenshot
 -i`). The entries of packages are

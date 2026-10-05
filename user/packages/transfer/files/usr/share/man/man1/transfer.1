@@ -1,0 +1,54 @@
+TRANSFER(1)                 User Commands                TRANSFER(1)
+
+NAME
+    transfer - copy files between minios and the host
+
+SYNOPSIS
+    transfer [gui] [HOST[:PORT]]
+    transfer serve [-p PORT] [DIR]
+    transfer ls [-h HOST] [-p PORT] [PATH]
+    transfer get [-h HOST] [-p PORT] [-o DIR] PATH...
+    transfer put [-h HOST] [-p PORT] [-d PATH] FILE...
+    transfer mkdir|rm [-h HOST] [-p PORT] PATH...
+    transfer mv [-h HOST] [-p PORT] FROM TO
+
+DESCRIPTION
+    transfer copies files and folders over the protocol MFT 1. The host
+    program tools/transfer.py has the same commands and the same window.
+    Without a command, or with gui, transfer opens the window. With
+    HOST[:PORT] the window connects at once.
+
+    The window has a connection bar, a server bar, the pane "This
+    computer" and the pane of the remote folder, the list of transfers
+    and a status line. Upload copies the selected local item into the
+    remote folder, and Download copies the selected remote item into the
+    local folder. A row dragged from one pane to the other is copied as
+    well; a drop on a folder row copies into that folder. Files dragged
+    from Files onto the remote pane are uploaded. Cancel stops the
+    running transfers. Before a copy replaces an item, the window asks.
+
+    HOST defaults to 10.0.2.2, the host in the QEMU user network, and PORT
+    to 9103, the port of "tools/transfer.py serve" on the host. serve
+    makes DIR (default the current folder) available on PORT, by default
+    9102. tools/run.sh forwards host port 9102 to that port, so
+    "tools/transfer.py" on the host connects to it.
+
+    A receiver writes each file to a part file named
+    .NAME.SIZE-MTIME.mft-part in the target folder and renames it after a
+    complete transfer. A cancelled or failed transfer leaves the part
+    file, and the next copy of the same file continues from its end.
+    Every chunk of data carries a CRC-32 that the receiver checks.
+
+    ls lists a remote folder, get downloads files and folders into DIR
+    (default the current folder), put uploads files and folders into the
+    remote folder PATH (default the served folder), mkdir creates remote
+    folders, rm deletes remote files and folders with their contents, and
+    mv renames a remote item. A remote path is relative to the served
+    folder.
+
+EXIT STATUS
+    0 when every operation succeeded, 1 after a failure, 2 for wrong
+    arguments.
+
+SEE ALSO
+    xfer(1)

@@ -3,6 +3,7 @@ etc/profile
 etc/motd
 etc/hosts
 etc/network
+etc/ntp.conf
 etc/skel/**
 usr/share/skel/**
 bin

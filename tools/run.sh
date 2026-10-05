@@ -54,6 +54,9 @@
 #                                            id net0 is added)
 #       --no-tablet        QEMU_TABLET=0     no virtio tablet; the window grabs
 #                                            the mouse and moves it relatively
+#       --share DIR        QEMU_SHARE        share the host folder DIR through
+#                                            virtio-9p with the mount tag host;
+#                                            the guest mounts it at /mnt/host
 #       --video MODE       QEMU_VIDEO        framebuffer mode WxH[xBPP][@SCALE]
 #                                            put on the kernel command line
 #                                            when the image is built (make run,
@@ -127,7 +130,7 @@ die() {
 # file, then put them back.
 VARS="QEMU QEMU_AUDIO QEMU_AUDIO_OPTS QEMU_WAV QEMU_SOUND QEMU_MEM QEMU_SMP QEMU_GIC \
       QEMU_ACCEL QEMU_DISPLAY QEMU_FULLSCREEN QEMU_VGA QEMU_TABLET QEMU_KEYBOARD QEMU_NIC QEMU_VIDEO \
-      QEMU_SERIAL QEMU_EXTRA ISO DISK SWAP DATA"
+      QEMU_SERIAL QEMU_EXTRA QEMU_SHARE ISO DISK SWAP DATA"
 
 CONF="${QEMU_CONF:-$TOP/qemu.conf}"
 # --config must be found before the file is read; other options are parsed
@@ -220,6 +223,8 @@ while [ $# -gt 0 ]; do
         --vga)            QEMU_VGA="$2"; shift ;;
         --vga=*)          QEMU_VGA="${1#*=}" ;;
         --no-tablet)      QEMU_TABLET=0 ;;
+        --share)          QEMU_SHARE="$2"; shift ;;
+        --share=*)        QEMU_SHARE="${1#*=}" ;;
         --no-keyboard)    QEMU_KEYBOARD=0 ;;
         --nic)            QEMU_NIC="$2"; shift ;;
         --nic=*)          QEMU_NIC="${1#*=}" ;;
@@ -468,6 +473,13 @@ else
 fi
 [ -n "$DATA" ] && set -- "$@" -drive "file=$DATA,if=none,id=vd2,format=raw" -device virtio-blk-pci,drive=vd2
 [ "$QEMU_TABLET" != 0 ] && set -- "$@" -device virtio-tablet-pci
+# A shared host folder (docs/design/9p.md). The security model none lets
+# QEMU access the files with the rights of the user who runs it.
+if [ -n "$QEMU_SHARE" ]; then
+    [ -d "$QEMU_SHARE" ] || die "--share: $QEMU_SHARE is not a directory"
+    set -- "$@" -fsdev "local,id=share0,path=$QEMU_SHARE,security_model=none" \
+        -device virtio-9p-pci,fsdev=share0,mount_tag=host
+fi
 # The edk2 firmware of aarch64 has no virtio keyboard driver. A USB
 # keyboard on its own xHCI controller gives the firmware and the Limine
 # menu a keyboard, and the kernel drives it as well (docs/design/usb.md).

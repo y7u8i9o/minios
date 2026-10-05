@@ -164,7 +164,9 @@ static int send_info(struct proc *p, int sig, const siginfo_t *info)
         ((DEFAULT_IGNORE & SIGBIT(sig)) || sig == SIGCONT || is_init));
     if (!ignored && !__atomic_load_n(&p->exiting, __ATOMIC_RELAXED)) {
         p->sig_info[sig] = *info;
-        __atomic_fetch_or(&p->sig_pending, SIGBIT(sig), __ATOMIC_RELEASE);
+        /* Sequentially consistent against sched_sleep_until, which stores
+         * THREAD_SLEEPING and then reads the pending signals. */
+        __atomic_fetch_or(&p->sig_pending, SIGBIT(sig), __ATOMIC_SEQ_CST);
         interrupt_threads(p, sig);
     }
     spin_unlock(&p->lock);

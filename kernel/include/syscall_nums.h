@@ -117,4 +117,5 @@
 #define SYS_alarm         110
 #define SYS_setsid        111
 #define SYS_getsid        112
-#define SYS_MAX           113
+#define SYS_adjtime       113
+#define SYS_MAX           114

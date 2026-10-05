@@ -34,3 +34,4 @@ void lapic_send_ipi(uint32_t lapic_id, uint8_t vector);
 void ioapic_init(void);
 void ioapic_route(unsigned gsi, uint8_t vector, bool masked);
 void ioapic_mask(unsigned gsi, bool masked);
+bool ioapic_route_mode(unsigned gsi, uint8_t vector, bool level, bool active_low);

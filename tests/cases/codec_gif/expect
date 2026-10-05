@@ -1,0 +1,5 @@
+codectest: module gif from /usr/lib/codecs/gif.so
+codectest: gif pillow 48x32, 4 frames, loops 3
+codectest: gif previous 40x30, 4 frames, loops 0
+codectest: 0 failures
+TEST PASS

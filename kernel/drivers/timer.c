@@ -7,6 +7,7 @@
 #include <arch/cpu.h>
 #include <arch/timer.h>
 #include <klog.h>
+#include <errno.h>
 #include <sched/sched.h>
 #include <sched/proc.h>
 #include <debug/profile.h>
@@ -15,10 +16,10 @@
  * TSC on x86_64). clock_base and clock_per_ms are written once by
  * timer_early_init and read only afterwards.
  *
- * Every CPU has its own tick at TIMER_HZ. The boot CPU's
- * interrupt counts ticks and runs the tick handler (sleepers and the
- * scheduler boost), the other CPUs account their running thread's slice
- * through sched_tick_cpu. */
+ * Every CPU has its own tick at TIMER_HZ. Each tick runs the scheduler work
+ * of its CPU: sched_tick on the boot CPU through the tick handler, and
+ * sched_tick_cpu on the other CPUs. The boot CPU also counts the ticks and
+ * runs the timer file descriptors, the alarms and the wait timeouts. */
 static volatile uint64_t ticks;             /* boot CPU interrupts, statistics only */
 static uint64_t clock_base;
 static uint64_t clock_per_ms;
@@ -101,20 +102,44 @@ void timer_set_tick_handler(timer_tick_fn fn)
     tick_handler = fn;
 }
 
+/* sleep_until_tick sleeps until the tick.  A wake before the tick, such as
+ * a stale wake of the scheduler, starts another sleep
+ * (docs/postmortems/2026-10-05-sleep-wakeup.md).  The sleep ends early
+ * only when interrupted returns true; the result is then -EINTR. */
+static int sleep_until_tick(uint64_t until, bool (*interrupted)(void))
+{
+    if (!sched_started()) {
+        /* Busy variant for early boot. */
+        while (timer_ticks() < until) {
+            if (arch_irqs_enabled())
+                arch_wait_for_interrupt();
+            else
+                cpu_relax();
+        }
+        return 0;
+    }
+    while (timer_ticks() < until) {
+        if (!sched_sleep_until(until, interrupted))
+            return -EINTR;
+        if (interrupted && timer_ticks() < until && interrupted())
+            return -EINTR;
+    }
+    return 0;
+}
+
+/* The start lies somewhere inside the current tick; counting from the next
+ * tick boundary makes the sleep last at least ms. */
+static uint64_t deadline_tick(uint64_t ms)
+{
+    return (timer_ns() + 999999) / 1000000 * (TIMER_HZ / 1000) + ms * (TIMER_HZ / 1000);
+}
+
 void sleep_ms(uint64_t ms)
 {
-    /* The start lies somewhere inside the current tick; counting from the
-     * next tick boundary makes the sleep last at least ms. */
-    uint64_t until = (timer_ns() + 999999) / 1000000 * (TIMER_HZ / 1000) + ms * (TIMER_HZ / 1000);
-    if (sched_started()) {
-        sched_sleep_until(until);
-        return;
-    }
-    /* Busy variant for early boot. */
-    while (timer_ticks() < until) {
-        if (arch_irqs_enabled())
-            arch_wait_for_interrupt();
-        else
-            cpu_relax();
-    }
+    sleep_until_tick(deadline_tick(ms), NULL);
+}
+
+int sleep_ms_interruptible(uint64_t ms, bool (*interrupted)(void))
+{
+    return sleep_until_tick(deadline_tick(ms), interrupted);
 }

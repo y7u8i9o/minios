@@ -14,6 +14,7 @@
 #include <sched/wait.h>
 #include <sync/mutex.h>
 #include <lib/string.h>
+#include <sync/atomic.h>
 #include <klog.h>
 #include <errno.h>
 #include <drivers/devinfo.h>
@@ -31,6 +32,8 @@
 #define VIRTIO_GPU_RESP_OK_NODATA              0x1100
 #define VIRTIO_GPU_RESP_OK_DISPLAY_INFO        0x1101
 #define VIRTIO_GPU_RESP_ERR_UNSPEC             0x1200
+
+#define VIRTIO_GPU_EVENT_DISPLAY 1
 
 #define VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM 2     /* bytes B G R X: 0x00RRGGBB as a little endian word */
 #define VIRTIO_GPU_MAX_SCANOUTS 16
@@ -52,6 +55,14 @@ struct virtio_gpu_ctrl_hdr {
 
 struct virtio_gpu_rect {
     uint32_t x, y, width, height;
+} __packed;
+
+/* The device configuration space. */
+struct virtio_gpu_config {
+    uint32_t events_read;
+    uint32_t events_clear;
+    uint32_t num_scanouts;
+    uint32_t num_capsets;
 } __packed;
 
 struct virtio_gpu_resp_display_info {
@@ -131,6 +142,10 @@ struct virtio_gpu {
     uint32_t width, height;         /* of resource */
     uint32_t pending_width, pending_height;
     uint32_t pref_width, pref_height;   /* what the host asked for */
+    /* 1 when the interrupt handler saw a display event that gpu_flushd
+     * has not handled. Atomic, set in the handler and taken by the
+     * thread. */
+    atomic_u32_t display_event;
 };
 
 static struct virtio_gpu *gpu;
@@ -337,13 +352,51 @@ static const struct fb_gpu_ops gpu_ops = {
     .describe = gpu_describe,
 };
 
+/* The host changed the configuration space. The interrupt handler clears
+ * a display event and leaves the control requests to gpu_flushd. */
+static void gpu_config_changed(struct virtio_dev *dev)
+{
+    struct virtio_gpu *g = container_of(dev, struct virtio_gpu, vdev);
+    volatile struct virtio_gpu_config *cfg = (volatile struct virtio_gpu_config *)dev->device_cfg;
+    uint32_t events = cfg->events_read;
+    if (!(events & VIRTIO_GPU_EVENT_DISPLAY))
+        return;
+    cfg->events_clear = VIRTIO_GPU_EVENT_DISPLAY;
+    atomic_u32_store_release(&g->display_event, 1);
+}
+
+/* Reads the display information after a display event and reports the
+ * preferred size of the first scanout. */
+static void display_changed(struct virtio_gpu *g)
+{
+    struct virtio_gpu_ctrl_hdr req = { .type = VIRTIO_GPU_CMD_GET_DISPLAY_INFO };
+    struct virtio_gpu_resp_display_info info;
+    mutex_lock(&g->lock);
+    int r = ctrl_xfer(g, &req, sizeof req, &info, sizeof info, false);
+    bool ok = r == 0 && info.hdr.type == VIRTIO_GPU_RESP_OK_DISPLAY_INFO && info.pmodes[0].enabled;
+    if (ok) {
+        g->pref_width = info.pmodes[0].r.width;
+        g->pref_height = info.pmodes[0].r.height;
+    }
+    uint32_t w = g->pref_width, h = g->pref_height;
+    mutex_unlock(&g->lock);
+    if (!ok) {
+        klog_warn("display event without an enabled scanout");
+        return;
+    }
+    fb_display_changed(w, h);
+}
+
 /* The console draws into the buffer under console_lock and cannot call
- * the device; this thread pushes what it drew. */
+ * the device; this thread pushes what it drew. The thread also handles
+ * the display events of the host. */
 static void gpu_flushd(void *arg)
 {
     struct virtio_gpu *g = arg;
     for (;;) {
         sleep_ms(GPU_FLUSH_MS);
+        if (atomic_u32_exchange_acq_rel(&g->display_event, 0))
+            display_changed(g);
         struct fb_rect r;
         if (console_take_dirty(&r))
             gpu_flush(g, r);
@@ -362,6 +415,7 @@ static void probe(struct pci_dev *pci)
         return;
     if (virtio_pci_setup(pci, &g->vdev) < 0 || virtio_negotiate(&g->vdev, 0) < 0)
         goto fail;
+    g->vdev.config_changed = gpu_config_changed;
     g->ctrlq = virtio_queue_setup(&g->vdev, 0, ctrl_complete);
     if (!g->ctrlq) {
         klog_error("cannot set up the control queue");

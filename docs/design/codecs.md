@@ -34,8 +34,9 @@ number of libgui remains 1.
 A module is a shared object that exports exactly one symbol,
 `codec_module`. This symbol is a `struct codec_module` containing the module
 ABI number (`CODEC_MODULE_ABI`), a name, and a table of `struct codec`.
-The number is 2 since C6 appended `audio_encode_options` to `struct
-codec`, which changed the size of the entries in the table. Modules are compiled with `-fvisibility=hidden`, and
+The number was 2 after C6 appended `audio_encode_options` to `struct
+codec`, which changed the size of the entries in the table. It is 3 since
+the functions of animations were appended (C10). Modules are compiled with `-fvisibility=hidden`, and
 the `CODEC_MODULE` macro gives the table default visibility. The helper
 functions of different modules can therefore never resolve to each
 other. A module links against `libcodec.so`, which provides shared
@@ -45,16 +46,19 @@ Each `struct codec` describes one format with these members:
 
 - `name` and `description`, used by lookups and listings.
 - `kind`, either `CODEC_IMAGE` or `CODEC_AUDIO`.
-- `caps`, a combination of `CODEC_DECODE`, `CODEC_ENCODE` and
-  `CODEC_SCALABLE`. The last one marks a vector format that renders at
-  the size the caller requests, like `GDK_PIXBUF_FORMAT_SCALABLE`.
+- `caps`, a combination of `CODEC_DECODE`, `CODEC_ENCODE`,
+  `CODEC_SCALABLE` and `CODEC_ANIMATED`. `CODEC_SCALABLE` marks a vector
+  format that renders at the size the caller requests, like
+  `GDK_PIXBUF_FORMAT_SCALABLE`. `CODEC_ANIMATED` marks an image format
+  with animations.
 - `mime_types` and `extensions`, each a list separated by spaces.
 - `probe`, which rates the first bytes of some data (at most
   `CODEC_PROBE_LEN`, 512 bytes) from 0 to 100, in the way a gdk-pixbuf
   loader matches its patterns.
 - The functions for its kind: `image_decode` and `image_encode` for
-  images, and `audio_open`, `audio_read`, `audio_close`, `audio_encode`
-  and `audio_encode_options` for audio. A function for a capability the
+  images, `animation_open`, `animation_next`, `animation_close` and
+  `animation_encode` for animations, and `audio_open`, `audio_read`,
+  `audio_close`, `audio_encode` and `audio_encode_options` for audio. A function for a capability the
   codec lacks is NULL, and a codec without encoder options leaves
   `audio_encode_options` NULL.
 
@@ -602,10 +606,138 @@ case `codec_image` checks a round trip within a tolerance of four steps
 per channel, and `codec_tool` converts PNG to JPEG and back with
 `codecs`.
 
+## Animations
+
+An animation (C10) is a sequence of frames on a canvas of `w` by `h`
+pixels. `struct codec_animation_info` gives the size, the number of
+frames, or -1 when it is unknown, and the number of plays, 0 for a
+repetition without end. `codec_animation_open` selects a codec with
+`CODEC_DECODE` and `CODEC_ANIMATED`, by content and then by extension.
+`codec_animation_next` composes the next frame into a buffer of `w * h`
+pixels of the caller and returns the time in milliseconds that the frame
+is shown. It returns 0 after the last frame. A decoder composes frames,
+so every frame covers the whole canvas. `codec_animation_rewind` starts
+again at the first frame: the library closes the state of the codec and
+opens a new one on the same data. `codec_animation_open_file` reads a
+file into memory, which `codec_animation_close` frees.
+
+`codec_animation_encode` and `codec_animation_save` take an array of
+`struct codec_frame`, each with the pixels of a whole canvas and a delay.
+`codec_image_decode` of an animated format returns the first frame. A
+program that knows no animations therefore shows the first frame.
+
+## GIF
+
+`gif.so` (C10) is written for minios. It decodes GIF87a and GIF89a and
+encodes GIF89a.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `gif.so` | `gif`, `image/gif`, `.gif` | decode, encode, animated | `GIF87a` or `GIF89a`, 100 |
+
+The decoder reads the blocks in order. A graphic control extension gives
+the delay, the transparent index and the disposal of the next image. The
+application extension `NETSCAPE2.0` gives the loop count, and the decoder
+also accepts `ANIMEXTS1.0`. Comments and plain text extensions are
+skipped. Each image has its own position and size and the local or the
+global colour table. Its LZW data may be interlaced. The LZW decoder
+handles codes up to 12 bits, clear codes, a full table without a clear
+code, and the code that the decoder defines at the moment it reads it.
+
+The canvas has the size of the logical screen, or the size of the first
+image when the screen has the size 0. It starts transparent, as in web
+browsers, and the background colour of the file is ignored. An image
+outside the canvas is clipped. After a frame, disposal 2 clears the area
+of the frame to transparent, and disposal 3 restores the canvas as it was
+before the frame. A frame is shown for its delay. A delay of 0 or 10 ms
+is shown as 100 ms, as web browsers do. The loop count of `NETSCAPE2.0`
+is the number of repetitions after the first play, as web browsers read
+it: a count of 2 plays the animation three times, and 0 repeats it
+without end. A file without the extension plays once.
+
+A damaged or cut file ends early. The pixels that were decoded before the
+damage are shown, and the frames before it remain valid. The probe
+counts the frames and reads the loop count without decoding.
+
+The encoder writes every frame as an image of the whole canvas with a
+local colour table. A pixel with an alpha below 128 becomes the
+transparent index, and the other pixels become opaque. A frame with at
+most 256 colours, the transparent index included, receives exactly its
+colours. A frame with more colours receives a table chosen by median cut
+over a histogram of 15 bit colours. The box with the largest range along
+one axis, weighted by its pixels, is split at the median of its pixels,
+and each colour of the table is the mean of its box. Each pixel then
+takes the nearest colour of the table. The encoder does not dither. An
+animation receives `NETSCAPE2.0` with its loop count, and each frame a
+graphic control extension with its delay in hundredths of a second. A
+frame with transparent pixels has disposal 2, so that the next frame
+starts on a transparent canvas.
+
+## MP3
+
+`mp3.so` (C9) decodes and encodes MPEG-1, MPEG-2 and MPEG-2.5 Audio
+Layer III. It compiles two imported projects.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `mp3.so` | `mp3`, `audio/mpeg audio/mp3`, `.mp3` | decode, encode | an ID3v2 tag, 90; two frame headers, 80; one frame header, 60 |
+
+The decoder is minimp3 of Lieff (`third_party/minimp3`, CC0), compiled
+without changes for Layer III alone, without SIMD code and with floating
+point output. `minimp3_ex.h` skips ID3v2 and APE tags at the start and an
+ID3v1 tag at the end. It reads the Xing or Info tag of the first frame
+and removes the delay and the padding that the LAME extension of the tag
+records. A file of LAME therefore decodes to the length of its input.
+The samples are converted from floating point to the 32 bit
+representation of libcodec. The sample size of the format is 0, as for
+Vorbis.
+
+The encoder is shine (`third_party/shine`, GNU Library GPL version 2),
+a fixed point encoder without a psychoacoustic model. Each source of
+shine is compiled in its own wrapper file `shine_*.c`, because the
+headers of shine have no include guards. `tools/fetch_mp3.sh` downloads
+both projects at fixed commits and applies `tools/patches/shine.patch`,
+which corrects two defects of shine:
+
+- shine computed the bytes of a frame as a product of two rounded
+  quotients. At 32 kHz and 96 kbit/s the product was 431.99999 instead of
+  432, and every other frame received the padding bit without the padding
+  byte. The patch divides two exact integers.
+- When a frame has more bytes than its granules can carry, 4095 bits per
+  granule and channel, shine planned the remaining stuffing bits as
+  ancillary data, but its formatter never wrote them. The frame was then
+  shorter than its header. This happened for one channel at high bit
+  rates, for example 16 kHz at 128 kbit/s. The formatter now writes the
+  bits as zeros after the main data.
+
+The encoder takes 16 bit samples of one or two channels at the nine rates
+of the three MPEG versions and at a constant bit rate. The option
+`bitrate` selects the rate in kbit/s from the table of the version. The
+default is 128 kbit/s for two channels and 64 kbit/s for one at MPEG-1,
+and half of that at MPEG-2 and MPEG-2.5. Other rates, more channels and
+other bit rates return `-EINVAL`. The encoder adds frames of silence
+until the end of the input has passed the delay of encoder and decoder.
+shine adds 528 samples, and the decoder 529.
+
+The output starts with a frame with an Info tag in the manner of LAME:
+the number of audio frames, the length of the file and a LAME extension
+with the delay and the padding. The encoder string of the extension is
+`minios`. minimp3 reads the extension of every encoder, and a file of
+this encoder decodes to exactly the samples of the input, without a
+shift. FFmpeg reads the extension only for the encoder strings of LAME
+and FFmpeg, and returns the delay and the padding as silence. A decoder
+that does not read the tag decodes its frame as silence. The frame of
+the tag has the lowest bit rate whose frame has room for the tag. shine writes
+the last frame without the bytes after its data, and the encoder
+completes it with zero bytes to the length that its header gives.
+
 ## Programs
 
 `view` lists the files of a directory whose extension a codec can decode
-(`codec_for_path` with `CODEC_DECODE`). It decodes each file by content
+(`codec_for_path` with `CODEC_DECODE`). It plays an animation of more
+than one frame with a timer per frame, decodes the frames into the image
+it shows, and repeats the animation as often as the file states. The
+status bar gives the number of frames. It decodes each file by content
 with a request of 1024 by 1024 pixels, which only vector formats use. The
 Set as wallpaper entry is enabled only for formats without
 `CODEC_SCALABLE`. paint opens every decodable format. It saves in the
@@ -623,20 +755,24 @@ registry in the manner of `gst-inspect` and converts files in the manner
 of `ffmpeg`.
 
 - `codecs` prints one line per codec with its capabilities (`D`, `E`,
-  `S`), its name, its kind, its module file and its description, then a
-  second line with its MIME types and extensions, and finally the
-  totals. A typical line is `DE- bmp   image  bmp.so   Windows bitmap`.
+  `S`, `A`), its name, its kind, its module file and its description,
+  then a second line with its MIME types and extensions, and finally the
+  totals. A typical line is `DE-- bmp   image  bmp.so   Windows bitmap`.
 - `codecs info FILE...` prints the name of the codec that
   `codec_identify` selects and decodes the file. For an image it prints the size and states
-  whether the image has alpha and whether it is scalable. For an audio
+  whether the image has alpha and whether it is scalable. For an
+  animation of more than one frame it adds the frames, the length of one
+  play and the number of plays. For an audio
   stream it prints the rate, the channels, the sample size, the number
   of frames and the duration.
 - `codecs convert [-f NAME] [-b BITS] [-s SIZE] [-o OPTIONS] IN OUT`
   decodes `IN` and encodes it with the codec called `NAME`, or with the
   encoder of the same kind that matches the extension of `OUT`. `-b` sets
   the sample size of converted audio, `-s` the size at which a vector
-  image is rendered, and `-o` the options of an audio encoder. On success
-  it prints `IN (codec) -> OUT (codec)`.
+  image is rendered, and `-o` the options of an audio encoder. An
+  animation remains an animation when the target codec has animations,
+  and becomes its first frame otherwise. On success it prints `IN (codec)
+  -> OUT (codec)`.
 
 The exit status is 0 on success, 1 when a file cannot be read,
 identified, decoded, encoded or written, and 2 for incorrect usage.
@@ -764,3 +900,28 @@ script tests the files with `flac -t` and ffmpeg on the host.
 `gui_images` converts the saved drawing to BMP with `codecs` and shows
 the BMP file in the viewer. Its post script decodes the BMP file with its
 own reader and compares the pixels with the PNG file. `audio_player` covers the player.
+
+With the argument `mp3`, used by the boot test `codec_mp3`, it decodes the
+three MP3 fixtures of LAME and compares them with their decoding by
+FFmpeg: the same number of frames, at most two steps of a 16 bit sample
+apart. It encodes a chord at five rates of the three MPEG versions and
+requires the length of the input and a signal-to-noise ratio of 10 to 15
+dB, and it checks refused rates and bit rates and a cut file.
+
+With the argument `gif`, used by the boot test `codec_gif`, it decodes the
+three GIF fixtures and compares every frame with the frames that
+ImageMagick composes, with the delays, the number of frames and the loop
+count. It checks a rewind, the first frame through libgui, an exact round
+trip of an image with transparency, an animation saved by extension and
+decoded again, the refusal of animations by PNG, and a cut file.
+
+The host test of `make check-libcodec` contains the same checks of the
+fixtures, a GIF of more than 256 colours whose median cut must reach
+28 dB PSNR (Pillow reaches 28.5 dB), and an MP3 file of each of the 216
+combinations of rate, bit rate and channels that MPEG allows. Each of
+these files must decode to the length of its input, and its frames must
+follow each other at the lengths of their headers. FFmpeg decoded all 216
+files without a warning when the patch of shine was written. The boot
+test `codec_tool` converts PNG to GIF and back, copies an animation and
+converts its first frame to PNG, and converts the chime to MP3 and back
+at its original length.

@@ -15,3 +15,7 @@ struct timezone {
 
 int gettimeofday(struct timeval *tv, struct timezone *tz);
 int settimeofday(const struct timeval *tv, const struct timezone *tz);
+/* Slew the realtime clock by delta at 500 microseconds per second, in place
+ * of the slew in progress, and store the correction that remained in
+ * olddelta. Either may be NULL. Changing the clock requires root (BSD). */
+int adjtime(const struct timeval *delta, struct timeval *olddelta);

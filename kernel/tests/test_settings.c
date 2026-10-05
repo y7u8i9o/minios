@@ -28,7 +28,7 @@ static void open_and_close(const char *path, const char *arg0, const char *arg1,
     /* A page that reads more data, or a host running several guests,
      * may map the window later than open_ms. */
     for (int waited = 0; pixel(wx + 2, wy - 10) != 0x00ebebeb && waited < 5000; waited += 100)
-        sleep_ms(100);
+        ktest_wait_idle(100);
     kprintf("gui_settings: %s %s shown\n", arg0, arg1 ? arg1 : "");
     ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s %s window has an active title bar: %08x", arg0,
                  arg1 ? arg1 : "", pixel(wx + 2, wy - 10));
@@ -44,7 +44,7 @@ static void test_gui_settings(void)
     struct proc *desktop = proc_create_user("/bin/desktop", (char *const[]){ "desktop", NULL }, (char *const[]){ NULL },
                                             &kernel_proc);
     ktest_assert(desktop != NULL, "cannot start the desktop");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     char page[32];
     if (cmdline_lookup("page", page, sizeof page) && page[0]) {
         if (strcmp(page, "x12") == 0)

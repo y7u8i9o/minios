@@ -28,7 +28,6 @@ static void user_thread_entry(void *arg)
     user_enter(&frame);
 }
 
-/* Build a new address space from an ELF on the initrd. */
 /* The main stack size for a new image: RLIMIT_STACK of the creating
  * process, limited to between 64 KiB and 1 GiB and page aligned. */
 static size_t stack_size_for(struct proc *p)
@@ -47,16 +46,22 @@ struct exec_ids {
     uint32_t uid, gid;
 };
 
+/* The largest head of an ELF file that exec reads: the file header, the
+ * program headers and the path of the loader. */
+#define EXEC_HEAD_MAX (64 * 1024)
 /* The longest #! line of a script, its newline included (R1). */
 #define SCRIPT_LINE_MAX 256
 /* The deepest chain of scripts whose interpreter is a script again. */
 #define SCRIPT_DEPTH_MAX 4
 
-/* Read a whole regular file with execute permission into kernel memory,
- * and report its set id bits when ids is not NULL. The read of a script
- * ends after its first SCRIPT_LINE_MAX bytes, since only its #! line is
- * needed. */
-static int read_file_image(const char *path, void **image_out, size_t *size_out, struct exec_ids *ids)
+/* Open a regular file with execute permission and read its head into
+ * kernel memory. The head of an ELF file is elf_head_size bytes long. The
+ * segments are mapped from the file afterwards, so the rest of the file is
+ * not read here. The head of a script is its first SCRIPT_LINE_MAX bytes,
+ * since only its #! line is needed. Report the set id bits when ids is not
+ * NULL. The caller puts the file and frees the head. */
+static int open_exec_image(const char *path, struct file **file_out, void **head_out, size_t *head_size,
+                           uint64_t *file_size, struct exec_ids *ids)
 {
     struct file *f;
     int r = vfs_open_exec(path, &f);
@@ -70,36 +75,52 @@ static int read_file_image(const char *path, void **image_out, size_t *size_out,
         ids->gid = f->inode->gid;
         mutex_unlock(&f->inode->lock);
     }
-    size_t size = f->inode->size;
-    void *image = kmalloc(size ? size : 1);
-    if (!image) {
-        file_put(f);
-        return -ENOMEM;
-    }
-    size_t got = 0;
-    while (got < size) {
-        size_t want = size - got;
-        if (got < SCRIPT_LINE_MAX && want > SCRIPT_LINE_MAX - got)
-            want = SCRIPT_LINE_MAX - got;
-        long n = file_read(f, (char *)image + got, want);
-        if (n <= 0) {
-            r = n < 0 ? (int)n : -EIO;
+    uint64_t size = f->inode->size;
+    size_t want = (size_t)MIN(size, (uint64_t)PAGE_SIZE), got = 0;
+    void *head = NULL;
+    for (;;) {
+        void *bigger = kmalloc(want ? want : 1);
+        if (!bigger) {
+            r = -ENOMEM;
             break;
         }
-        got += (size_t)n;
-        if (got >= 2 && got <= SCRIPT_LINE_MAX && memcmp(image, "#!", 2) == 0 &&
-            (got == SCRIPT_LINE_MAX || got == size)) {
-            size = got;
+        if (head) {
+            memcpy(bigger, head, got);
+            kfree(head);
+        }
+        head = bigger;
+        while (got < want) {
+            long n = file_read(f, (char *)head + got, want - got);
+            if (n <= 0) {
+                r = n < 0 ? (int)n : -EIO;
+                break;
+            }
+            got += (size_t)n;
+        }
+        if (r < 0)
+            break;
+        if (got >= 2 && memcmp(head, "#!", 2) == 0) {
+            got = MIN(got, (size_t)SCRIPT_LINE_MAX);
             break;
         }
+        size_t need = elf_head_size(head, got);
+        if (need == 0 || need > size || need > EXEC_HEAD_MAX) {
+            r = -ENOEXEC;
+            break;
+        }
+        if (need <= got)
+            break;
+        want = need;
     }
-    file_put(f);
     if (r < 0) {
-        kfree(image);
+        kfree(head);
+        file_put(f);
         return r;
     }
-    *image_out = image;
-    *size_out = size;
+    *file_out = f;
+    *head_out = head;
+    *head_size = got;
+    *file_size = size;
     return 0;
 }
 
@@ -216,13 +237,16 @@ static int load_image_depth(const char *path, char *const argv[], char *const en
                             struct vmspace **vm_out, uintptr_t *entry, uintptr_t *rsp, size_t stack_size,
                             char *interp, size_t interp_len, struct exec_ids *ids, int depth)
 {
+    struct file *f;
     void *image;
     size_t size;
+    uint64_t file_size;
     struct exec_ids none;
-    int r = read_file_image(path, &image, &size, ids ? ids : &none);
+    int r = open_exec_image(path, &f, &image, &size, &file_size, ids ? ids : &none);
     if (r < 0)
         return r;
     if (size >= 2 && memcmp(image, "#!", 2) == 0) {
+        file_put(f);
         r = load_script(path, image, size, argv, envp, vm_out, entry, rsp, stack_size, interp, interp_len, ids,
                         depth);
         kfree(image);
@@ -231,19 +255,22 @@ static int load_image_depth(const char *path, char *const argv[], char *const en
     struct vmspace *vm = vmspace_create();
     if (!vm) {
         kfree(image);
+        file_put(f);
         return -ENOMEM;
     }
     struct elf_info info = { 0 };
-    r = elf_load(vm, image, size, &info);
+    r = elf_load(vm, f, file_size, image, size, &info);
     kfree(image);
+    file_put(f);
     /* A program that changes the ids gets AT_SECURE, which tells the loader
      * and libc not to trust the environment. elf_load cleared info. */
     info.secure = ids && (ids->setuid || ids->setgid);
     if (r == 0 && info.interp[0]) {
-        r = read_file_image(info.interp, &image, &size, NULL);
+        r = open_exec_image(info.interp, &f, &image, &size, &file_size, NULL);
         if (r == 0) {
-            r = elf_load_interp(vm, image, size, USER_INTERP_BASE, &info);
+            r = elf_load_interp(vm, f, file_size, image, size, USER_INTERP_BASE, &info);
             kfree(image);
+            file_put(f);
         }
         if (r < 0)
             klog_error("%s: loader %s: error %d", path, info.interp, r);

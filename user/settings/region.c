@@ -8,6 +8,8 @@
  * time zone is the target of the symbolic link /etc/localtime, which every
  * program reads again when it changes. */
 #include "settings.h"
+#include <errno.h>
+#include <gui/privilege.h>
 #include <dirent.h>
 #include <locale.h>
 #include <stdio.h>
@@ -175,21 +177,57 @@ static int on_formats(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-/* A new zone replaces the link /etc/localtime. */
+/* A new zone replaces the link /etc/localtime, which belongs to root. ln
+ * runs as root through app_run_privileged, and a user other than root
+ * confirms in the authentication dialog. The zones selected while the
+ * dialog is open are applied after it, the last one once. A cancelled or
+ * failed change selects the zone of /etc/localtime again. */
+static int zone_busy;
+
+static int set_zone(int zone)
+{
+    char target[96], out[256];
+    snprintf(target, sizeof target, "%s/%s", ZONE_DIR, zones[zone]);
+    char *argv[] = { "/usr/bin/ln", "-sf", target, LOCALTIME, NULL };
+    int r = app_run_privileged(app, _("Authentication is required to change the time zone."), argv, "", out,
+                               sizeof out);
+    if (r == 0) {
+        printf("settings: time zone %s\n", zones[zone]);
+        fflush(stdout);
+        return 0;
+    }
+    if (r == -ECANCELED) {
+        printf("settings: time zone %s cancelled\n", zones[zone]);
+        fflush(stdout);
+        return -1;
+    }
+    size_t n = strlen(out);
+    while (n && out[n - 1] == '\n')
+        out[--n] = '\0';
+    const char *last = strrchr(out, '\n');
+    printf("settings: time zone %s failed: %s\n", zones[zone], last ? last + 1 : out);
+    fflush(stdout);
+    const char *buttons[] = { _("OK") };
+    app_dialog(app, _("Region and language"), _("The time zone cannot be set."), buttons, 1);
+    return -1;
+}
+
 static int on_zone(struct widget *w, void *args, void *arg)
 {
-    if (building || w->value < 0 || w->value >= nzones)
+    if (building || zone_busy || w->value < 0 || w->value >= nzones)
         return 1;
-    char target[96];
-    snprintf(target, sizeof target, "%s/%s", ZONE_DIR, zones[w->value]);
-    unlink(LOCALTIME);
-    if (symlink(target, LOCALTIME) < 0) {
-        const char *buttons[] = { _("OK") };
-        app_dialog(app, _("Region and language"), _("The time zone cannot be set."), buttons, 1);
-        return 1;
+    zone_busy = 1;
+    int applied = -1;
+    while (w->value >= 0 && w->value < nzones && w->value != applied) {
+        if (set_zone(w->value) < 0) {
+            building = 1;
+            combobox_select(w, current_zone());
+            building = 0;
+            break;
+        }
+        applied = w->value;
     }
-    printf("settings: time zone %s\n", zones[w->value]);
-    fflush(stdout);
+    zone_busy = 0;
     show_sample();
     return 1;
 }
@@ -257,13 +295,6 @@ static int on_engine_up(struct widget *w, void *args, void *arg)
     return 1;
 }
 
-static int on_switch_key(struct widget *w, void *args, void *arg)
-{
-    if (!building)
-        conf_set(arg, w->value ? "1" : "0");
-    return 1;
-}
-
 static int on_page_size(struct widget *w, void *args, void *arg)
 {
     if (!building)
@@ -296,13 +327,9 @@ static int build_input_methods(struct widget *grid, int r)
         }
         r++;
     }
-    struct widget *shift = checkbox_new(grid, _("A Shift tap toggles the input method"));
-    shift->value = conf_int("ime_shift_toggle", 1) != 0;
-    widget_connect(shift, "toggled", on_switch_key, "ime_shift_toggle");
+    struct widget *shift = conf_checkbox_new(grid, _("A Shift tap toggles the input method"), "ime_shift_toggle", 1);
     widget_set_grid(shift, r++, 0, 1, 2);
-    struct widget *ctrl = checkbox_new(grid, _("Ctrl+Space toggles the input method"));
-    ctrl->value = conf_int("ime_ctrl_space", 1) != 0;
-    widget_connect(ctrl, "toggled", on_switch_key, "ime_ctrl_space");
+    struct widget *ctrl = conf_checkbox_new(grid, _("Ctrl+Space toggles the input method"), "ime_ctrl_space", 1);
     widget_set_grid(ctrl, r++, 0, 1, 2);
     row_label(grid, r, _("Candidates per page"));
     struct widget *size = spinner_new(grid, 2, 9, conf_int("ime_page_size", 5));

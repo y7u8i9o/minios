@@ -56,6 +56,25 @@ and order-zero counts include the per-CPU caches.
     void pmm_get_stats(struct pmm_stats *);
     void pmm_get_free_counts(uint64_t out[PMM_MAX_ORDER + 1]);
     void pmm_dump_stats(void);
+    void pmm_set_pressure_source(size_t (*release)(size_t pages));
+    size_t pmm_release_pressure(size_t pages);
+    void pmm_adjust_total(int64_t pages);
+
+## Pressure source (V4 of the 0.6.0 release)
+
+A driver registers a pressure source with `pmm_set_pressure_source`. The
+balloon driver registers one when the host offers
+`VIRTIO_BALLOON_F_DEFLATE_ON_OOM` (`balloon.md`). `pmm_alloc` calls
+`pmm_release_pressure` once when no free block has the requested order.
+The call releases `pmm_lock` before it asks the source. The allocation
+fails only when the source returns no page or the second search finds no
+block. A source runs in any context and must not sleep or allocate.
+kswapd and `swap_alloc_user_frame` ask the source before they evict or
+wait (`swap.md`).
+
+`pmm_adjust_total` changes `total_pages` under `pmm_lock`. The balloon
+removes its pages from the total while the host has them. `MemTotal` of
+`/dev/meminfo` therefore shrinks by the size of the balloon, as in Linux.
 
 ## Test
 

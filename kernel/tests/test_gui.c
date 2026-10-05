@@ -80,13 +80,13 @@ static void test_gui(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_server();
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(0, 0) == 0x00306080, "desktop pixel %08x", pixel(0, 0));
 
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     /* Window 1 "alpha" 300x200 at (40,60), window 2 "beta" 240x160 at
      * (70,90); beta was created last and is focused. */
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00ff0000, "beta red rect pixel %08x", pixel(120, 130));
@@ -100,21 +100,21 @@ static void test_gui(void)
     mouse_click(1);
     ps2kbd_feed_scancode(0x1e);
     ps2kbd_feed_scancode(0x9e);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     /* Click alpha's contents left of beta (whose frame and its resize
      * border start at x 60): it comes to the front and gets focus. */
     mouse_move_to(&cx, &cy, 50, 200, 0);
     mouse_click(1);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "alpha title bar active after click %08x", pixel(42, 50));
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00dcdcdc, "alpha now covers beta: %08x", pixel(120, 130));
     /* Drag alpha by its title bar 100 pixels to the right. */
     mouse_move_to(&cx, &cy, 150, 50, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(50);
+    ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, 250, 50, 1);
     feed_packet(0, 0, 0);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(140 + 5, 60 + 100) == 0x00dcdcdc, "alpha moved: %08x", pixel(145, 160));
     ktest_assert(pixel(40 + 5, 60 + 100) == 0x00306080 || pixel(40 + 5, 60 + 100) == 0x00c8f0c8,
                  "old alpha area repainted: %08x", pixel(45, 160));
@@ -122,12 +122,12 @@ static void test_gui(void)
      * 19 px from the edge, 16 px above the contents), then beta. */
     mouse_move_to(&cx, &cy, 140 + 300 - 19, 60 - 16, 0);
     mouse_click(1);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     mouse_move_to(&cx, &cy, 70 + 240 - 19, 90 - 16, 0);
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00306080, "desktop after close: %08x", pixel(120, 130));
     uint32_t crc = 0;
     for (int y = 0; y < 64; y++)
@@ -240,7 +240,7 @@ KTEST_DEFINE("gui_term", test_gui_term);
  * 22 px System heading, one 24 px row per entry of user/etc/launcher
  * except Log out, a 9 px rule and the Log out row.  It opens above the
  * 28 px panel.  These values must change with that file. */
-#define LAUNCHER_SYSTEM  11
+#define LAUNCHER_SYSTEM  12
 #define LAUNCHER_CLOCK   2     /* Clock=/bin/clock is the third System entry. */
 #define LAUNCHER_H       (6 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 9 + 24 + 6)
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - LAUNCHER_H)
@@ -261,16 +261,16 @@ static void test_gui_resize(void)
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", "resize", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     /* Window 1 "alpha" 300x200 at (40,60). Drag its bottom right
      * resize border (in the shadow outside the frame) by (100,50). */
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 300 + 3, 60 + 200 + 3, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(50);
+    ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, 40 + 400 + 3, 60 + 250 + 3, 1);
     feed_packet(0, 0, 0);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "resized contents %08x", pixel(390, 280));
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "title bar after resize %08x", pixel(42, 50));
     /* Maximize: second button from the right of the header bar (22 px
@@ -279,7 +279,7 @@ static void test_gui_resize(void)
      * contents). */
     mouse_move_to(&cx, &cy, 40 + 400 - 47, 60 - 16, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(sw - 10, dh - 10) == 0x0040c040, "maximized contents %08x", pixel(sw - 10, dh - 10));
     ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c || pixel(sw / 2, sh - 14) == 0x002e343b,
                  "task bar visible %08x", pixel(sw / 2, sh - 14));
@@ -287,7 +287,7 @@ static void test_gui_resize(void)
      * screen (the maximized frame starts at the top left corner). */
     mouse_move_to(&cx, &cy, sw - 47, 14, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(sw - 10, dh - 10) == 0x00306080, "desktop after restore %08x", pixel(sw - 10, dh - 10));
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "restored contents %08x", pixel(390, 280));
     /* Close button of the header bar. */
@@ -295,7 +295,7 @@ static void test_gui_resize(void)
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x00306080, "desktop after close %08x", pixel(390, 280));
     stop_server(srv);
     kprintf("gui_resize: resize, maximize, restore and close ok\n");
@@ -312,12 +312,12 @@ static void test_gui_wm(void)
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     /* alpha 300x200 at (40,60), beta 240x160 at (70,90) on top and focused. */
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 100, 120, 0);
     feed_packet_wheel(0, 0, 0, 1);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     /* Alt+Tab brings alpha, the lowest window, to the top. */
     alt_key(0x0f);
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "alpha active after alt-tab %08x", pixel(42, 50));
@@ -326,36 +326,36 @@ static void test_gui_wm(void)
      * bar (22 px buttons 6 px apart, close 8 px from the edge). */
     mouse_move_to(&cx, &cy, 40 + 300 - 75, 60 - 16, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(45, 160) == 0x00306080, "alpha hidden %08x", pixel(45, 160));
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00ff0000, "beta visible again %08x", pixel(120, 130));
     /* Its task bar button (the first one) restores it. */
     mouse_move_to(&cx, &cy, 64 + 12 + 40, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(45, 160) == 0x00dcdcdc, "alpha restored %08x", pixel(45, 160));
     /* Bring beta to the top and maximize it: alpha is fully covered. */
     alt_key(0x0f);
     mouse_move_to(&cx, &cy, 70 + 240 - 47, 90 - 16, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(45, 160) == 0x0040c040, "beta covers alpha %08x", pixel(45, 160));
     /* The launcher menu starts the clock; Alt+F4 closes it. */
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     mouse_move_to(&cx, &cy, 40, LAUNCHER_ROW(sh, LAUNCHER_CLOCK), 0);
     mouse_click(1);
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     alt_key(0x3e);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     /* Alt+F4 closes beta, then alpha; the client exits. */
     alt_key(0x3e);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(45, 160) == 0x00306080, "desktop after closing %08x", pixel(45, 160));
     stop_server(srv);
     kprintf("gui_wm: window management ok\n");
@@ -391,13 +391,13 @@ static void test_gui_widgets(void)
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start widgettest");
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 51, 0);
     mouse_click(1);
     press_key(0x1e);
     press_key(0x30);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     ctrl_key(0x1e);
     ctrl_key(0x2e);
     mouse_move_to(&cx, &cy, 40 + 60, 60 + 150, 0);
@@ -405,10 +405,10 @@ static void test_gui_widgets(void)
     ctrl_key(0x2f);
     press_key(0x1c);
     press_key(0x2d);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     mouse_move_to(&cx, &cy, 40 + 277, 60 + 200, 0);
     feed_packet_wheel(0, 0, 0, 1);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     mouse_move_to(&cx, &cy, 40 + 12, 60 + 83, 0);
     mouse_click(1);
     mouse_move_to(&cx, &cy, 40 + 300, 60 + 150, 0);
@@ -417,7 +417,7 @@ static void test_gui_widgets(void)
     ps2kbd_feed_scancode(0x4f);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xcf);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     mouse_move_to(&cx, &cy, 40 + 20, 60 + 19, 0);
     mouse_click(1);
     mouse_move_to(&cx, &cy, 40 + 30, 60 + 45, 0);
@@ -443,11 +443,11 @@ static void test_gui_controls(void)
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "controls", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start widgettest controls");
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 19, 0);
     mouse_click(1);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     mouse_move_to(&cx, &cy, 40 + 50, 60 + 85, 0);
     mouse_click(1);
     mouse_move_to(&cx, &cy, 40 + 394 - 9, 60 + 45, 0);
@@ -460,7 +460,7 @@ static void test_gui_controls(void)
     ps2kbd_feed_scancode(0x4d);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xcd);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 149, 0);
     mouse_click(1);
     int status = proc_reap(cl);
@@ -482,9 +482,9 @@ static void test_gui_editor(void)
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/gedit.c", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     type_line("int x;");
-    sleep_ms(400);
+    ktest_wait_idle(400);
     int blue = 0;
     for (int y = 60 + 82; y < 60 + 101; y++)
         for (int x = 40 + 8; x < 40 + 120; x++) {
@@ -495,7 +495,7 @@ static void test_gui_editor(void)
         }
     ktest_assert(blue > 10, "keyword pixels are blue: %d", blue);
     ctrl_key(0x1f);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     struct file *f;
     ktest_assert(vfs_open("/gedit.c", O_RDONLY, 0, &f) == 0, "open /gedit.c");
     char buf[32];
@@ -507,7 +507,7 @@ static void test_gui_editor(void)
     int cx = logical_w() / 2, cy = logical_h() / 2;
     mouse_move_to(&cx, &cy, 40 + 30, 60 + 92, 0);
     mouse_click(2);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     /* The menu lists Undo, Redo, a separator, Cut and Copy. */
     for (int i = 0; i < 5; i++) {
         ps2kbd_feed_scancode(0xe0);
@@ -517,16 +517,16 @@ static void test_gui_editor(void)
         sleep_ms(50);
     }
     type_line("\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ps2kbd_feed_scancode(0xe0);         /* End */
     ps2kbd_feed_scancode(0x4f);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xcf);
     type_line("\n");
     ctrl_key(0x2f);                     /* Ctrl+V */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);                     /* Ctrl+S */
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(vfs_open("/gedit.c", O_RDONLY, 0, &f) == 0, "open /gedit.c again");
     n = file_read(f, buf, sizeof buf - 1);
     file_put(f);
@@ -590,23 +590,23 @@ static void test_gui_app(void)
     struct proc *cl = proc_create_user("/bin/apptest", (char *const[]){ "apptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start apptest");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 70 + 6 + 194, 90 + 6 + 15, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(70 + 6 + 100, 90 + 6 + 15) == 0x00d0d0d0, "hovered button colour %08x", pixel(176, 111));
     press_key(0x0f);                    /* Tab: focus moves to the field */
-    sleep_ms(150);
+    ktest_wait_idle(150);
     press_key(0x23);                    /* h */
     press_key(0x17);                    /* i */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     /* The list: third entry. */
     mouse_move_to(&cx, &cy, 70 + 100, 90 + 6 + 30 + 6 + 26 + 6 + 1 + 2 * 21 + 10, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     alt_key(0x3e);                      /* close "one" */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     alt_key(0x3e);                      /* close "two": the loop ends */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "apptest status 0x%x", status);
@@ -626,7 +626,7 @@ static void test_gui_calc(void)
     struct proc *cl = proc_create_user("/usr/bin/calc", (char *const[]){ "calc", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start calc");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     ktest_assert(pixel(42, 50) == 0x00ebebeb,
                  "calculator window has an active title bar: %08x", pixel(42, 50));
 
@@ -636,12 +636,12 @@ static void test_gui_calc(void)
     ps2kbd_feed_scancode(0x2a);
     press_key(0x0d);
     ps2kbd_feed_scancode(0xaa);
-    sleep_ms(300);
+    ktest_wait_idle(300);
 
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 150, 79, 0);  /* mode combo in the first row */
     feed_packet_wheel(0, 0, 0, 1);        /* RPN -> Algebraic */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     mouse_move_to(&cx, &cy, 300, 130, 0); /* restore canvas keyboard focus */
     mouse_click(1);
     press_key(0x03);                    /* 2 + 3 * 4 ENTER */
@@ -654,7 +654,7 @@ static void test_gui_calc(void)
     ps2kbd_feed_scancode(0xaa);
     press_key(0x05);
     press_key(0x1c);
-    sleep_ms(300);
+    ktest_wait_idle(300);
 
     alt_key(0x3e);
     int status = proc_reap(cl);
@@ -693,20 +693,20 @@ static void test_gui_mandel(void)
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, mid_x, mid_y, 0);
     feed_packet_wheel(0x00, 0, 0, -1);      /* wheel up: zoom in */
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     mouse_move_to(&cx, &cy, mid_x - 80, mid_y - 60, 0);
     feed_packet(2, 0, 0);
-    sleep_ms(50);
+    ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, mid_x + 80, mid_y + 60, 1);
     feed_packet(0, 0, 0);
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     press_key(0x24);                        /* j */
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     vfs_unlink("/root/mandel.png");
     ctrl_key(0x1f);                         /* Ctrl+S */
-    sleep_ms(800);
+    ktest_wait_idle(800);
     type_line("\n");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     struct file *f;
     ktest_assert(vfs_open("/root/mandel.png", O_RDONLY, 0, &f) == 0, "open /root/mandel.png");
     char sig[8] = { 0 };
@@ -733,11 +733,11 @@ static void test_gui_drag(void)
     struct proc *srv = start_server();
     struct proc *cl = proc_create_user("/bin/term", (char *const[]){ "term", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start term");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 300, 60 - 10, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     uint64_t t0 = timer_ms();
     for (int i = 0; i < 100; i++) {
         feed_packet(1, 1, 0);
@@ -758,7 +758,7 @@ static void test_gui_drag(void)
     kprintf("gui_drag: 200 packets in %lu ms, settled %d\n", (unsigned long)dt, settled);
     ktest_assert(settled, "window did not settle");
     alt_key(0x3e);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     proc_reap(cl);
     stop_server(srv);
     kprintf("gui_drag: drag ok\n");
@@ -773,7 +773,7 @@ static struct proc *start_compositor(void)
     struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", "-v", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     return srv;
 }
 
@@ -784,12 +784,12 @@ static void test_comp_core(void)
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x0000ff00, "green buffer on screen: %08x", pixel(140, 135));
     ktest_assert(pixel(40 + 10, 60 + 10) == 0x000000ff, "partial damage repainted: %08x", pixel(50, 70));
     int status = proc_reap(cl);
     ktest_assert(status == 0, "comptest status 0x%x", status);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00306080, "desktop after the surface was destroyed: %08x", pixel(140, 135));
     signal_send(srv, SIGTERM);
     status = proc_reap(srv);
@@ -809,7 +809,7 @@ static void test_comp_scale(void)
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     ktest_assert(device_pixel(2 * (40 + 100), 2 * (60 + 75)) == 0x0000ff00, "green buffer at doubled position: %08x",
                  device_pixel(280, 270));
     /* Logical (250,135) is right of the 200 wide surface at 40. */
@@ -843,7 +843,7 @@ static void test_gui_dead_client(void)
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     signal_send(cl, SIGKILL);
     proc_reap(cl);
     /* Flood the focused window with more messages than the queue contains. */
@@ -853,9 +853,9 @@ static void test_gui_dead_client(void)
         mouse_click(1);
         press_key(0x1e);
     }
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
     press_key(0x1e);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     struct proc *cl2 = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "core", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl2 != NULL, "cannot start the second client");
@@ -874,7 +874,7 @@ static struct proc *start_client(const char *mode)
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", (char *)mode, NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest %s", mode);
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     return cl;
 }
 
@@ -892,28 +892,28 @@ static void test_comp_shell(void)
     /* Grip drag: +100,+50. */
     mouse_move_to(&cx, &cy, 41 + 200 - 4, 59 + 150 - 4, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(50);
+    ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, 41 + 300 - 4, 59 + 200 - 4, 1);
     feed_packet(0, 0, 0);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(40 + 250, 60 + 175) == 0x00dcdcdc, "resized contents %08x", pixel(290, 235));
     /* Maximize button (second from the right, 14 px buttons 4 px
      * apart), then restore. */
     mouse_move_to(&cx, &cy, 41 + 300 - 27, 59 - 14, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(sw - 10, sh - 10) == 0x00dcdcdc, "maximized contents %08x", pixel(sw - 10, sh - 10));
     mouse_move_to(&cx, &cy, sw - 28, 29 - 14, 0);
     mouse_click(1);
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ktest_assert(pixel(sw - 10, sh - 10) == 0x00306080, "desktop after restore %08x", pixel(sw - 10, sh - 10));
     /* Move by the title bar: +60,+40. */
     mouse_move_to(&cx, &cy, 40 + 100, 59 - 12, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(50);
+    ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, 40 + 160, 59 - 12 + 40, 1);
     feed_packet(0, 0, 0);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(100 + 250, 100 + 175) == 0x00dcdcdc, "moved contents %08x", pixel(350, 275));
     alt_key(0x3e);
     int status = proc_reap(cl);
@@ -934,10 +934,10 @@ static void test_comp_seat(void)
     int cx = sw / 2, cy = sh / 2;
     /* The surface sits at (41,59) inside the server side frame. */
     mouse_move_to(&cx, &cy, 41 + 50, 59 + 40, 0);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     mouse_click(1);
     feed_packet_wheel(0, 0, 0, 1);
-    sleep_ms(150);
+    ktest_wait_idle(150);
     press_key(0x1e);                    /* a */
     ps2kbd_feed_scancode(0x2a);
     press_key(0x1e);                    /* A */
@@ -946,7 +946,7 @@ static void test_comp_seat(void)
     ps2kbd_feed_scancode(0x48);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xc8);         /* up */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "comptest status 0x%x", status);
@@ -1018,11 +1018,11 @@ static void test_comp_data(void)
     int cx = sw / 2, cy = sh / 2;
     /* Press in the source (its visible strip left of the target). */
     mouse_move_to(&cx, &cy, 40 + 10, 60 + 100, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     feed_packet(1, 0, 0);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     mouse_move_to(&cx, &cy, 70 + 100, 90 + 75, 1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     feed_packet(0, 0, 0);
     int status = proc_reap(dst);
     ktest_assert(status == 0, "target status 0x%x", status);
@@ -1036,17 +1036,17 @@ static void test_comp_data(void)
     dst = start_client("drag-target");
     /* Toplevels 3 and 4 cascade to contents at (100,120) and (130,150). */
     mouse_move_to(&cx, &cy, 100 + 10, 120 + 100, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     feed_packet(1, 0, 0);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     mouse_move_to(&cx, &cy, 130 + 100, 150 + 75, 1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ps2kbd_feed_scancode(0x1d);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ps2kbd_feed_scancode(0x9d);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     press_key(0x01);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     feed_packet(0, 0, 0);
     status = proc_reap(dst);
     ktest_assert(status == 0, "drag target status 0x%x", status);
@@ -1067,7 +1067,7 @@ static void test_comp_panel(void)
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel drawn at the bottom: %08x", pixel(sw / 2, sh - 14));
     struct proc *cl = start_client("shell");
     ktest_assert(pixel(64 + 12 + 4, sh - 14) == 0x003f4854, "task button for the active window: %08x", pixel(80, sh - 14));
@@ -1075,10 +1075,10 @@ static void test_comp_panel(void)
     /* Minimize through the task button, restore through it. */
     mouse_move_to(&cx, &cy, 64 + 12 + 40, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00306080, "window hidden after the task click: %08x", pixel(140, 135));
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00dcdcdc, "window restored: %08x", pixel(140, 135));
     /* The launcher menu is opened and dismissed with a click on the
      * desktop, which makes the compositor send popup.done.  It is opened
@@ -1087,18 +1087,18 @@ static void test_comp_panel(void)
      * one, a protocol error that disconnected the panel. */
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     mouse_move_to(&cx, &cy, sw - 100, 100, 0);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel alive after the dismissal: %08x", pixel(sw / 2, sh - 14));
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     type_line("clo\n");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     alt_key(0x3e);                      /* closes the clock, which is on top */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     alt_key(0x3e);                      /* closes the test window */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "comptest status 0x%x", status);
@@ -1172,7 +1172,7 @@ static void test_gui_tools(void)
     }
     cl = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start x12settings");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "x12settings window status 0x%x", status);
@@ -1205,7 +1205,7 @@ static void wait_active(int wx, int wy, const char *what)
         sleep_ms(50);
     ktest_assert(pixel(wx + 2, wy - 10) == 0x00ebebeb, "%s window has an active title bar: %08x", what,
                  pixel(wx + 2, wy - 10));
-    sleep_ms(500);
+    ktest_wait_idle(500);
 }
 
 static void read_head(const char *path, uint8_t *buf, size_t n)
@@ -1263,7 +1263,7 @@ static void test_gui_images(void)
     kprintf("gui_images: capture interface shown\n");
     char pause_arg[8];
     if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
-        sleep_ms(8000);                 /* screenshots of the interface */
+        ktest_wait_idle(8000);                 /* screenshots of the interface */
     press_key(0x1c);
     int thumb_y = sh - 28 - 16 - 71;
     t0 = timer_ms();
@@ -1288,13 +1288,13 @@ static void test_gui_images(void)
     ktest_assert(pixel(5, sh / 2) == 0x00183040, "area selection dims the screen: %08x", pixel(5, sh / 2));
     mouse_move_to(&cx, &cy, 100, 100, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     mouse_move_to(&cx, &cy, 200, 180, 1);
     mouse_move_to(&cx, &cy, 300, 250, 1);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ktest_assert(pixel(200, 180) == 0x00306080, "the dragged area is bright: %08x", pixel(200, 180));
     feed_packet(0, 0, 0);
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
 
     /* The viewer fits the screenshot into its window: the desktop colour
      * of the image and the dark bars beside it. */
@@ -1308,18 +1308,18 @@ static void test_gui_images(void)
     ktest_assert(desk > 20000 && bars > 1000, "fitted screenshot: %d desktop, %d background pixels", desk, bars);
     /* Actual size, zoom in and out, back to the fit, and the next image. */
     press_key(0x02);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     press_key(0x0d);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     press_key(0x0c);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     press_key(0x0b);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0x4d);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xcd);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(count_pixels(40, 60, 640, 480, 0x00306080, 0x00ffffff) > 20000, "viewer after the zoom keys");
     /* Window mode of the capture interface: W retains the active window
      * bright and dims the rest, Enter saves it. */
@@ -1337,9 +1337,9 @@ static void test_gui_images(void)
     ktest_assert(pixel(340, 260) == inside, "window bright in window mode: %08x, not %08x", pixel(340, 260), inside);
     kprintf("gui_images: window mode shown\n");
     if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
-        sleep_ms(8000);
+        ktest_wait_idle(8000);
     press_key(0x1c);
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
 
     /* The active window alone, with its shadow on a transparent
      * background. */
@@ -1380,20 +1380,20 @@ static void test_gui_images(void)
     kprintf("gui_images: drawing at %d,%d\n", left - wx, top - wy);
     mouse_move_to(&cx, &cy, left + 50, top + 50, 0);
     feed_packet(1, 0, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     mouse_move_to(&cx, &cy, left + 250, top + 50, 1);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     feed_packet(0, 0, 0);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(pixel(left + 150, top + 50) == 0, "stroke drawn: %08x", pixel(left + 150, top + 50));
     ctrl_key(0x2c);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(left + 150, top + 50) == 0x00ffffff, "stroke undone: %08x", pixel(left + 150, top + 50));
     ctrl_key(0x15);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(left + 150, top + 50) == 0, "stroke redone: %08x", pixel(left + 150, top + 50));
     ctrl_key(0x1f);
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "paint status 0x%x", status);
@@ -1452,15 +1452,15 @@ static void test_gui_hexview(void)
     ktest_assert(cl != NULL, "cannot start hexview");
     wait_active(40, 60, "hexview");
     ctrl_key(0x21);                     /* Ctrl+F */
-    sleep_ms(600);
+    ktest_wait_idle(600);
     type_line("NEEDLE\n");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     ctrl_key(0x30);                     /* Ctrl+B */
-    sleep_ms(600);
+    ktest_wait_idle(600);
     type_line("de ad be ef\n");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     press_key(0x3d);                    /* F3 */
-    sleep_ms(600);
+    ktest_wait_idle(600);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "hexview status 0x%x", status);
@@ -1496,11 +1496,11 @@ static void test_gui_logview(void)
     ktest_assert(cl != NULL, "cannot start logview");
     wait_active(40, 60, "logview");
     klog_print(LOG_ERROR, "ktest", "logview late error marker");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ctrl_key(0x1f);                     /* Ctrl+S */
-    sleep_ms(600);
+    ktest_wait_idle(600);
     type_line("\n");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     struct file *f;
     ktest_assert(vfs_open("/root/klog.txt", O_RDONLY, 0, &f) == 0, "open /root/klog.txt");
     static char buf[2048];
@@ -1537,9 +1537,7 @@ static void cpustat_sum(uint64_t *busy, uint64_t *idle, unsigned *cpus)
     for (char *p = strchr(text, '\n') + 1; *p; (*cpus)++) {
         uint64_t v[4];
         for (int k = 0; k < 4; k++) {
-            v[k] = 0;
-            while (*p >= '0' && *p <= '9')
-                v[k] = v[k] * 10 + (uint64_t)(*p++ - '0');
+            v[k] = strtoull(p, &p, 10);
             if (*p == ' ')
                 p++;
         }
@@ -1586,28 +1584,28 @@ static void test_gui_sysmon(void)
                                        &kernel_proc);
     ktest_assert(cl != NULL, "cannot start sysmon");
     wait_active(40, 60, "sysmon");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     /* Shift+Tab moves the focus from the process table to the filter. */
     ps2kbd_feed_scancode(0x2a);
     press_key(0x0f);
     ps2kbd_feed_scancode(0xaa);
-    sleep_ms(200);
+    ktest_wait_idle(200);
     type_line("sleep");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     press_key(0x0f);                    /* Tab returns to the table. */
-    sleep_ms(200);
+    ktest_wait_idle(200);
     ps2kbd_feed_scancode(0xe0);         /* Home selects the only row. */
     ps2kbd_feed_scancode(0x47);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xc7);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x25);                     /* Ctrl+K */
     int status = proc_reap(victim);
     kprintf("gui_sysmon: sleep status 0x%x\n", status);
     ktest_assert(status != 0, "sleep exited normally");
 
     ctrl_key(0x03);                     /* Ctrl+2 shows the Resources tab. */
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
     int accent = 0;
     for (int y = 60; y < 60 + 540; y++)
         for (int x = 40; x < 40 + 760; x++)
@@ -1634,14 +1632,14 @@ static void test_gui_sysinfo(void)
                                        &kernel_proc);
     ktest_assert(cl != NULL, "cannot start sysinfo");
     wait_active(40, 60, "sysinfo");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     ps2kbd_feed_scancode(0xe0);         /* Down */
     ps2kbd_feed_scancode(0x50);
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xd0);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     press_key(0x3f);                    /* F5 */
-    sleep_ms(500);
+    ktest_wait_idle(500);
     alt_key(0x3e);                      /* Alt+F4 */
     int status = proc_reap(cl);
     ktest_assert(status == 0, "sysinfo status 0x%x", status);
@@ -1661,10 +1659,10 @@ static void test_gui_locale(void)
     struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
                                         &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, ja, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     char *const *envs[] = { fr, ja };
     for (int i = 0; i < 2; i++) {
         struct proc *cl = proc_create_user("/bin/sysmon", (char *const[]){ "sysmon", NULL }, envs[i], &kernel_proc);
@@ -1677,10 +1675,10 @@ static void test_gui_locale(void)
     int sh = logical_h(), cx = logical_w() / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 30, sh - 14, 0);
     mouse_click(1);
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     kprintf("gui_locale: launcher menu open\n");
     press_key(0x01);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     signal_send(panel, SIGTERM);
     proc_reap(panel);
     signal_send(srv, SIGTERM);
@@ -1766,7 +1764,7 @@ static void test_gui_unicode(void)
     int cx = sw / 2, cy = sh / 2;
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 230, 0);
     mouse_click(1);
-    sleep_ms(400);
+    ktest_wait_idle(400);
     ktest_assert(pixel(42, 50) == 0x00ebebeb, "unicode window survives a grid click: %08x", pixel(42, 50));
     alt_key(0x3e);
     int status = proc_reap(cl);
@@ -1792,10 +1790,9 @@ static bool ksscanf_row(const char *line, int *pid, int *ppid, int *pgid, char *
             p++;
         if (*p < '0' || *p > '9')
             return false;
-        int v = 0;
-        while (*p >= '0' && *p <= '9')
-            v = v * 10 + (*p++ - '0');
-        *fields[i] = v;
+        char *end;
+        *fields[i] = (int)strtoull(p, &end, 10);
+        p = end;
     }
     while (*p == ' ')
         p++;
@@ -1833,10 +1830,10 @@ static void test_gui_desktop(void)
     struct proc *srv = start_compositor();
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct proc *desktop = proc_create_user("/bin/desktop", (char *const[]){ "desktop", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(desktop != NULL, "cannot start the desktop");
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     /* Sample away from the cursor, which sits at the centre. */
     uint32_t mid = pixel(sw / 2 + 100, sh / 2 + 50);
     ktest_assert(mid == 0x00306080, "solid desktop colour by default: %08x", mid);
@@ -1847,7 +1844,7 @@ static void test_gui_desktop(void)
     ktest_assert(cl != NULL, "cannot start settings");
     int status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
-    sleep_ms(1800);
+    ktest_wait_idle(1800);
     mid = pixel(sw / 2 + 100, sh / 2 + 50);
     ktest_assert(mid != 0x00306080, "wallpaper drawn in the middle of the screen: %08x", mid);
     int cx = sw / 2, cy = sh / 2;
@@ -1855,10 +1852,10 @@ static void test_gui_desktop(void)
     mouse_move_to(&cx, &cy, 55, 50, 0);
     mouse_click(1);
     mouse_click(1);
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     ktest_assert(pixel(40 + 2, 60 - 10) == 0x00ebebeb, "clock window opened from the desktop: %08x", pixel(42, 50));
     alt_key(0x3e);
-    sleep_ms(600);
+    ktest_wait_idle(600);
     /* The desktop starts programs as children of init, so the clock is
      * not its zombie; here the kernel process adopted and retains it. */
     ktest_assert(zombies_of(desktop->pid) == 0, "the desktop left a zombie child");
@@ -1866,27 +1863,27 @@ static void test_gui_desktop(void)
     /* Context menus: on the desktop, then on the fourth icon (readme.txt). */
     mouse_move_to(&cx, &cy, 600, 300, 0);
     mouse_click(2);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     mouse_move_to(&cx, &cy, 800, 500, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     mouse_move_to(&cx, &cy, 55, 300, 0);
     mouse_click(2);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     mouse_move_to(&cx, &cy, 800, 500, 0);
     mouse_click(1);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     /* Another setting from the command line. */
     cl = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "wallpaper_mode", "tile", NULL },
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
     status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
-    sleep_ms(1800);
+    ktest_wait_idle(1800);
     /* The settings window (toplevel 2 cascades to 70,90). */
     cl = proc_create_user("/bin/settings", (char *const[]){ "settings", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
-    sleep_ms(1800);
+    ktest_wait_idle(1800);
     ktest_assert(pixel(70 + 2, 90 - 10) == 0x00ebebeb, "settings window has an active title bar: %08x", pixel(72, 80));
     alt_key(0x3e);
     status = proc_reap(cl);

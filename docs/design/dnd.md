@@ -119,6 +119,13 @@ no release follows, and the widget receives `EV_DRAG_END`.
   signals `drag_motion` and `drop`.
 - The text field drags its selection in the same way, except when it is
   masked; it takes no drops.
+- Lua programs receive the signals of tables, tree views and canvases
+  with a table of `row`, `x`, `y`, `actions`, `action`, `mime` and
+  `data` (`lua.md`). A `drag_motion` handler answers through the fields
+  `accept`, `actions`, `preferred` and `row` of that table and returns
+  true. `view:drag(items, actions, label)` starts a drag from a
+  `drag_begin` handler. `view_row_rect` gives the rectangle of a row of a
+  table or tree view.
 
 ## Files and their formats (`lib/libgui/src/fileops.c`, `gui/fileops.h`)
 

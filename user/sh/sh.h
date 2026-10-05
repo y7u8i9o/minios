@@ -89,15 +89,33 @@ struct reader {
 };
 enum exec_flow { FLOW_NORMAL, FLOW_RETURN, FLOW_BREAK, FLOW_CONTINUE, FLOW_EXIT };
 extern int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
+/* The number of command substitutions that ran (capture). A command
+ * without a command name returns the status of its last substitution. */
+extern unsigned long substitutions;
 /* set -e: a failing command outside a condition exits the shell. errexit_off
  * counts the enclosing contexts in which POSIX suspends the option. */
 extern int opt_errexit, errexit_off;
+/* set -f: pathname expansion is off. */
+extern int opt_noglob;
+/* set -o pipefail: the status of a pipeline is the status of the last
+ * command that failed, or 0 when every command succeeded. */
+extern int opt_pipefail;
+/* exec without a command: the redirections of the command remain in
+ * effect after it (execute_one). */
+extern int keep_redirects;
+/* trap.c */
+int builtin_trap(int argc, char **argv);
+void traps_run_pending(void);
+/* The default dispositions for a program the shell executes. */
+void child_signals(void);
 extern char **script_argv;
 extern pid_t last_background;
 extern enum exec_flow flow;
 struct job {
     int used, state;
     pid_t pgid, pids[MAX_CMDS];
+    /* statuses[i] is the exit status of pids[i] after its exit, 0 before. */
+    int statuses[MAX_CMDS];
     int npids;
     char text[64];
 };
@@ -157,6 +175,8 @@ int run_file(const char *path);
 char *capture(const char *cmd);
 int redirect_apply(struct redir *r, struct saved_fd **saved);
 void redirect_restore(struct saved_fd *saved);
+/* Drop the saved descriptors: the redirections remain in effect. */
+void redirect_discard(struct saved_fd *saved);
 int builtin(int argc, char **argv);
 int is_builtin(const char *name);
 int command_run(int argc, char **argv, int allow_functions);
@@ -166,7 +186,8 @@ void jobs_reap(int block);
 int builtin_jobs(void);
 int builtin_bg(const char *arg);
 int builtin_fg(const char *arg);
-int job_add(pid_t pgid, pid_t *pids, int n, const char *text, int state, int announce);
+/* statuses may be NULL for a job whose processes are all running. */
+int job_add(pid_t pgid, pid_t *pids, const int *statuses, int n, const char *text, int state, int announce);
 int wait_foreground(struct job *j);
 char *prompt_render(int secondary);
 void prompt_startup(void);

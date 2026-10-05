@@ -8,7 +8,7 @@ static int job_alive(const struct job *j)
     return 0;
 }
 
-int job_add(pid_t pgid, pid_t *pids, int n, const char *text,
+int job_add(pid_t pgid, pid_t *pids, const int *statuses, int n, const char *text,
                    int state, int announce)
 {
     for (int i = 0; i < MAX_JOBS; i++) {
@@ -18,6 +18,10 @@ int job_add(pid_t pgid, pid_t *pids, int n, const char *text,
             jobs[i].pgid = pgid;
             jobs[i].npids = n;
             memcpy(jobs[i].pids, pids, (size_t)n * sizeof pids[0]);
+            if (statuses)
+                memcpy(jobs[i].statuses, statuses, (size_t)n * sizeof statuses[0]);
+            else
+                memset(jobs[i].statuses, 0, sizeof jobs[i].statuses);
             strlcpy(jobs[i].text, text, sizeof jobs[i].text);
             if (announce) {
                 if (state == JOB_STOPPED)
@@ -43,8 +47,10 @@ static void job_event(struct job *j, pid_t pid, int status)
         return;
     }
     for (int i = 0; i < j->npids; i++)
-        if (j->pids[i] == pid)
+        if (j->pids[i] == pid) {
             j->pids[i] = 0;
+            j->statuses[i] = WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status);
+        }
 }
 
 static void job_drain(struct job *j, int block)
@@ -128,6 +134,14 @@ int wait_foreground(struct job *j)
                 result = WEXITSTATUS(status);
             }
         }
+    }
+    /* With pipefail the rightmost failed command decides, as in bash.  A
+     * command that a SIGPIPE ended counts as failed. */
+    if (opt_pipefail && !job_alive(j)) {
+        result = 0;
+        for (int i = 0; i < j->npids; i++)
+            if (j->statuses[i] != 0)
+                result = j->statuses[i];
     }
     if (!job_alive(j))
         j->used = 0;

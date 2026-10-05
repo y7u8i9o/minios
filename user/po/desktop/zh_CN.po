@@ -10,10 +10,6 @@ msgstr ""
 msgid "Open with"
 msgstr "打开方式"
 
-#: user/desktop/desktop.c:452
-msgid "Program:"
-msgstr "程序："
-
 #: user/desktop/desktop.c:466
 msgid "Rename"
 msgstr "重命名"
@@ -97,3 +93,7 @@ msgstr "确定"
 #: user/desktop/desktop.c:499
 msgid "Desktop"
 msgstr "桌面"
+
+#: user/desktop/desktop.c:601
+msgid "“%s” cannot be started: %s."
+msgstr "无法启动“%s”：%s。"

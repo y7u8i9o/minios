@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include "comp.h"
 
-struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1 };
+struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1, 1 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -145,7 +145,7 @@ void debug_screen_changed(void)
 
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
                                     "display_mode", "pointer_speed", "pointer_accel", "ime_shift_toggle",
-                                    "ime_ctrl_space" };
+                                    "ime_ctrl_space", "display_follow" };
 
 static int *slot(const char *key)
 {
@@ -160,6 +160,7 @@ static int *slot(const char *key)
     if (strcmp(key, "pointer_accel") == 0) return &settings.pointer_accel;
     if (strcmp(key, "ime_shift_toggle") == 0) return &settings.ime_shift_toggle;
     if (strcmp(key, "ime_ctrl_space") == 0) return &settings.ime_ctrl_space;
+    if (strcmp(key, "display_follow") == 0) return &settings.display_follow;
     return NULL;
 }
 
@@ -217,6 +218,7 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.decor_default && value != DECOR_SERVER && value != DECOR_CLIENT) return;
     if (p == &settings.pointer_speed && (value < -100 || value > 100)) return;
     if (p == &settings.pointer_accel && value != POINTER_ACCEL_FLAT && value != POINTER_ACCEL_ADAPTIVE) return;
+    if (p == &settings.display_follow && value != 0 && value != 1) return;
     if (p == &settings.display_mode) {
         if (value == settings.display_mode)
             return;
@@ -235,7 +237,13 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
         scene_damage_all();
     if (p == &settings.repeat_rate || p == &settings.repeat_delay)
         seat_repeat_changed();
-    /* Every settings client sees the change. */
+    debug_setting_changed(key, value);
+    if (p == &settings.display_follow)
+        comp_follow_display();
+}
+
+void debug_setting_changed(const char *key, int value)
+{
     for (struct wire_client *k = wire_server_first_client(server); k; k = wire_client_next(k))
         for (struct wire_resource *r = wire_client_first_resource(k); r; r = r->next)
             if (r->obj.interface == &settings_interface)

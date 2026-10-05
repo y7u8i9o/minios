@@ -1,4 +1,5 @@
 usr/bin/abitest
+usr/bin/adjtimetest
 usr/bin/apptest
 usr/bin/audiocaptest
 usr/bin/audiointtest
@@ -32,6 +33,8 @@ usr/bin/localetest
 usr/bin/luaaudiotest
 usr/bin/madvisetest
 usr/bin/mathvectest
+usr/bin/memreleasetest
+usr/bin/memtouch
 usr/bin/mfstest
 usr/bin/migratetest
 usr/bin/mmapfiletest
@@ -50,6 +53,7 @@ usr/bin/rlimittest
 usr/bin/shutdowntest
 usr/bin/shebangtest
 usr/bin/sigtest
+usr/bin/sleeplattest
 usr/bin/smptest
 usr/bin/sockapi
 usr/bin/socktest

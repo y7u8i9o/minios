@@ -251,6 +251,15 @@ static void clear_dead(struct text_context *t)
     text_input_send_preedit_string(t->res, "", 0, 0);
 }
 
+/* text_focus_active is 1 when the focused surface has an active text
+ * input context, which receives the text of the typed keys. */
+int text_focus_active(void)
+{
+    struct csurface *focus = seat_keyboard_focus();
+    struct text_context *t = focus ? context_of(focus->client) : NULL;
+    return t && t->entered && t->active == focus;
+}
+
 int text_key(uint32_t key, int pressed, int mods)
 {
     struct csurface *focus = seat_keyboard_focus();

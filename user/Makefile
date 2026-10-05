@@ -22,14 +22,16 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter installer installer-gui
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter askpass installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
+# The programs of the package binutils share binutils/lib/ (docs/design/binutils.md).
+BINUTILS := ar as ld nm size strings readelf objdump objcopy strip addr2line ranlib
 APPS   := clock evtest logview profiler screenshot sysinfo sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
 # part, mkfs and mkfat are the host tools of tools/ built for minios, and
 # limine the utility of the boot loader (docs/design/block.md).
 DISKTOOLS := part mkfs mkfat limine
-BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo $(DISKTOOLS))
+BINS   := $(addprefix $(ROOT)/usr/bin/,$(PROGS) $(if $(WITH_TESTS),$(TESTS)) $(UTILS) $(BINUTILS) $(APPS) lua luac sed awk make tar tcc doas su sudo $(DISKTOOLS))
 LIBS   := $(addprefix $(ROOT)/usr/lib/,ld.so $(addsuffix .so,$(SHARED))) $(BUILD)/lib/abi
 # The codec modules (docs/design/codecs.md), loaded by libcodec at run time.
 CODECS := $(addprefix $(ROOT)/usr/lib/codecs/,$(addsuffix .so,$(notdir $(wildcard ../lib/libcodec/modules/*))))
@@ -68,7 +70,16 @@ FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuS
           $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ROOT)/usr/bin/pkg-update $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ROOT)/usr/bin/pkg-update $(ROOT)/usr/bin/pfetch $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+
+# pfetch is the unchanged script of third_party/pfetch with the support
+# for minios of ports/pfetch/minios.patch (docs/design/pfetch.md).
+$(ROOT)/usr/bin/pfetch: ../third_party/pfetch/pfetch ports/pfetch/minios.patch
+	@mkdir -p $(dir $@)
+	cp $< $@.tmp
+	patch -s $@.tmp ports/pfetch/minios.patch
+	chmod 755 $@.tmp
+	mv $@.tmp $@
 
 # pkg-update applies an update medium at boot (docs/design/packages.md).
 $(ROOT)/usr/bin/pkg-update: pkg/pkg-update.sh
@@ -639,13 +650,6 @@ ifneq ($(WITH_TESTS),)
 	@cp -p $(TCC_TESTS)/18_include.h $(TCC_TESTS)/18_include2.h $(ROOT)/usr/share/tcc/tests2/
 endif
 
-# bin/ld is named explicitly, because the pattern rule for program
-# directories would match the loader's directory ld/ for that name.
-$(ROOT)/usr/bin/ld: coreutils/ld.c $(SOS) $(CRT0)
-	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/ld.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
-	$(OBJCOPY) --strip-debug $(OUT)/ld.elf $@
-
 -include $(TCC_GEN)/tcc.d
 
 # The loader is a freestanding position independent object with its own
@@ -703,6 +707,18 @@ $(APPBIN)/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/unicode.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/unicode.elf $@
+
+# readelf and objdump share elfdump.c, objcopy and strip share elfrewrite.c.
+# The static pattern rule is an explicit rule for each program. The pattern
+# rule for program directories therefore never builds bin/ld from the
+# loader's directory ld/.
+BU_LIB := $(wildcard binutils/lib/*.c)
+$(addprefix $(ROOT)/usr/bin/,$(BINUTILS)): $(ROOT)/usr/bin/%: binutils/%.c $(BU_LIB) binutils/lib/binutils.h $(SOS) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/$*.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(INSTALL)
+$(ROOT)/usr/bin/readelf $(ROOT)/usr/bin/objdump: binutils/elfdump.c binutils/elfdump.h
+$(ROOT)/usr/bin/objcopy $(ROOT)/usr/bin/strip: binutils/elfrewrite.c binutils/elfrewrite.h
 
 $(ROOT)/usr/bin/%: coreutils/%.c $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)

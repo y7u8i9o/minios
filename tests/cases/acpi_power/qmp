@@ -1,0 +1,2 @@
+wait acpi_power: ready for the power button
+qmp system_powerdown

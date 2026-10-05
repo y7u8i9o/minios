@@ -330,6 +330,9 @@ static const char *const errors[] = {
     [EALREADY] = "Operation already in progress",
     [EINPROGRESS] = "Operation now in progress",
     [ENOMEDIUM] = "No medium found",
+    [ECANCELED] = "Operation canceled",
+    [EPROTO] = "Protocol error",
+    [ESTALE] = "Stale file handle",
 };
 
 char *strerror(int errnum)

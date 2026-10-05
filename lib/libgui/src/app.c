@@ -185,7 +185,6 @@ struct widget *app_next_window(struct app *a, struct widget *window)
 static struct widget *window_by_id(struct app *a, int id)
 {
     for (int i = 0; i < a->nwindows; i++) {
-        struct window_state *ws = window_state_of(a->windows[i]);
         if (window_owns_id(a->windows[i], id))
             return a->windows[i];
     }

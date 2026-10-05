@@ -1,3 +1,4 @@
+#include <minios/elffile.h>
 #include <minios/local.h>
 #include <prof/profile.h>
 #include <stdio.h>
@@ -63,86 +64,42 @@ const struct prof_event *prof_event_next(const void *buf, size_t bytes, const st
 
 /* ---- ELF symbol tables ---- */
 
-struct elf64_ehdr {
-    unsigned char e_ident[16];
-    uint16_t e_type, e_machine;
-    uint32_t e_version;
-    uint64_t e_entry, e_phoff, e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
-};
-
-struct elf64_shdr {
-    uint32_t sh_name, sh_type;
-    uint64_t sh_flags, sh_addr, sh_offset, sh_size;
-    uint32_t sh_link, sh_info;
-    uint64_t sh_addralign, sh_entsize;
-};
-
-struct elf64_sym {
-    uint32_t st_name;
-    unsigned char st_info, st_other;
-    uint16_t st_shndx;
-    uint64_t st_value, st_size;
-};
-
-#define SHT_SYMTAB 2
-#define STT_FUNC 2
-
-static int read_at(int fd, long off, void *buf, size_t n)
-{
-    if (lseek(fd, off, SEEK_SET) < 0)
-        return -1;
-    size_t got = 0;
-    while (got < n) {
-        ssize_t r = read(fd, (char *)buf + got, n - got);
-        if (r <= 0)
-            return -1;
-        got += (size_t)r;
-    }
-    return 0;
-}
-
 static int cmp_sym(const void *a, const void *b)
 {
     const struct prof_sym *x = a, *y = b;
     return x->addr < y->addr ? -1 : x->addr > y->addr ? 1 : 0;
 }
 
+/* The function symbols of the symbol table of an ELF file, read through
+ * the reader of <minios/elffile.h>.  The strings are copied, and the file
+ * is released before the function returns. */
 struct prof_symtab *prof_symtab_load_elf(const char *path)
 {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0)
+    struct elffile f;
+    void *buf;
+    if (elffile_load(&f, path, &buf) < 0)
         return NULL;
-    struct elf64_ehdr eh;
+    size_t nsyms;
+    const Elf64_Shdr *strsh;
+    const Elf64_Sym *syms = elffile_symbols(&f, elffile_find_type(&f, SHT_SYMTAB), &nsyms, &strsh);
+    const char *strings = strsh ? elffile_section_data(&f, strsh) : NULL;
     struct prof_symtab *t = NULL;
-    struct elf64_shdr *sh = NULL;
-    struct elf64_sym *syms = NULL;
-    if (read_at(fd, 0, &eh, sizeof eh) < 0 || memcmp(eh.e_ident, "\177ELF", 4) != 0 || eh.e_shentsize != sizeof *sh)
+    if (!syms || !strings)
         goto out;
-    sh = malloc((size_t)eh.e_shnum * sizeof *sh);
-    if (!sh || read_at(fd, (long)eh.e_shoff, sh, (size_t)eh.e_shnum * sizeof *sh) < 0)
-        goto out;
-    int symidx = -1;
-    for (int i = 0; i < eh.e_shnum; i++)
-        if (sh[i].sh_type == SHT_SYMTAB)
-            symidx = i;
-    if (symidx < 0 || sh[symidx].sh_link >= eh.e_shnum)
-        goto out;
-    const struct elf64_shdr *symsh = &sh[symidx], *strsh = &sh[symsh->sh_link];
-    size_t nsyms = symsh->sh_size / sizeof *syms;
-    syms = malloc(symsh->sh_size);
     t = calloc(1, sizeof *t);
-    if (!syms || !t)
-        goto fail;
+    if (!t)
+        goto out;
     t->strings = malloc(strsh->sh_size + 1);
-    t->syms = malloc(nsyms * sizeof *t->syms);
-    if (!t->strings || !t->syms || read_at(fd, (long)symsh->sh_offset, syms, symsh->sh_size) < 0 ||
-        read_at(fd, (long)strsh->sh_offset, t->strings, strsh->sh_size) < 0)
-        goto fail;
+    t->syms = malloc((nsyms ? nsyms : 1) * sizeof *t->syms);
+    if (!t->strings || !t->syms) {
+        prof_symtab_free(t);
+        t = NULL;
+        goto out;
+    }
+    memcpy(t->strings, strings, strsh->sh_size);
     t->strings[strsh->sh_size] = '\0';
     for (size_t i = 0; i < nsyms; i++) {
-        if ((syms[i].st_info & 0xf) != STT_FUNC || !syms[i].st_value || syms[i].st_name >= strsh->sh_size)
+        if (ELF64_ST_TYPE(syms[i].st_info) != STT_FUNC || !syms[i].st_value || syms[i].st_name >= strsh->sh_size)
             continue;
         t->syms[t->count].addr = syms[i].st_value;
         t->syms[t->count].size = syms[i].st_size;
@@ -150,14 +107,8 @@ struct prof_symtab *prof_symtab_load_elf(const char *path)
         t->count++;
     }
     qsort(t->syms, t->count, sizeof *t->syms, cmp_sym);
-    goto out;
-fail:
-    prof_symtab_free(t);
-    t = NULL;
 out:
-    free(sh);
-    free(syms);
-    close(fd);
+    free(buf);
     return t;
 }
 

@@ -55,7 +55,7 @@ before the code that uses them.
 | `kbd_lock` (reduced) | spinlock | keyboard modifier state only | M17 |
 | `pty.lock` | spinlock | output ring of one pseudo terminal pair, condition lock of `pty.out_waitq` | M17 |
 | `pty_table_lock` | spinlock | allocation of pseudo terminal pairs | M17 |
-| `tlb_lock` | spinlock | the TLB shootdown request in flight and its statistics, locked by the sender while it waits for acknowledgements | M18 |
+| `tlb_lock` | spinlock | the pending TLB shootdown request and its statistics, locked by the sender while it waits for acknowledgements | M18 |
 | `prof_lock` | spinlock | profiler session reconfiguration; timer samples use per-CPU rings | M41/M45 |
 | `slab_magazine.lock` | per-cache/per-CPU spinlock | one CPU magazine; cross-CPU use occurs only during reclaim | M46 |
 | `pmm_cpu_cache` | per-CPU spinlock | one CPU's cached order-zero physical pages | M46 |
@@ -137,7 +137,7 @@ kswapd and by the fault handler with no spinlock acquired and sleeps on the
 block device below it. Since M18 kswapd has acquired it across the whole
 eviction batch, from before an entry is rewritten to its swap slot until
 the frame data is written, so a swap in on another CPU cannot read a slot
-whose data is still in flight.
+whose data is not written yet.
 
 `signal_send` takes `proc.lock` and then `waitq.lock` through
 `waitq_interrupt`, and `proc_exit_notify` sends `SIGCHLD` with no lock acquired.
@@ -230,8 +230,8 @@ the framebuffer state and framebuffer write.
   calling CPU's `run_queue.lock` while blocking, and
   `futex_bucket.lock -> timed_lock` through
   `waitq_wait_timeout`. It is never taken from an interrupt. The RTC
-  epoch offset is a single 64-bit word written by `rtc_init` and
-  `clock_settime` and read by `clock_gettime`; it needs no lock.
+  epoch offset was a single 64-bit word without a lock until V2 of the
+  0.6.0 release. `clock_lock` protects it since then (V2 additions).
 
 ## M36 additions
 
@@ -309,6 +309,13 @@ the framebuffer state and framebuffer write.
 - Each scheduler path may block while having acquired only its own `run_queue.lock`.
   Work stealing uses `spin_try_lock` for a victim and skips that victim on
   failure, so it never waits while having acquired two run-queue locks.
+- `sched_quiet` (2026-10-05, for the boot tests) takes the run-queue lock of
+  each CPU with `spin_try_lock`, one lock at a time, and releases it before
+  the next. A failed attempt ends the function with the result "not quiet".
+  The function therefore never waits for a run-queue lock and adds no
+  lock-order level. `waitq_next_user_deadline` takes `timed_lock` alone and
+  reads the deadline of each timed waiter. The block layer counts its
+  transfers with atomic operations, without a lock (`blockdev_busy`).
 - The local slab fast path takes `slab_magazine.lock`. Refill and drain then
   take the corresponding `kmem_cache.lock`; allocation of backing pages may
   continue to `pmm_lock`. `slab_reclaim` is an externally serialized
@@ -679,3 +686,82 @@ These locks are in user space and do not add a kernel lock-order level.
   with an atomic exchange. The devices on the ports of a hub are
   published under `usb_topology_lock`, like the devices of the root
   ports.
+
+## V1 additions (ACPI with the AML interpreter)
+
+- `work_lock` (spinlock, `drivers/acpi_kernel.c`) protects the ring of
+  deferred ACPI work, its head and tail, the running flag and the worker
+  thread. Interrupt handlers take it to queue work. It is the condition
+  lock of the two wait queues of the work thread, which gives
+  `work_lock -> waitq.lock`. The work runs without it.
+- `maps_lock` (spinlock) protects the list of device memory that uACPI
+  mapped outside the direct map. `vmm_map_mmio` runs without it.
+- `interrupts_lock` (spinlock) protects the used flags of the interrupt
+  table of uACPI. The handlers read the table without it after the
+  installation.
+- `acpi_event.lock` (spinlock) protects the counter of one event of
+  uACPI and is the condition lock of its wait queue, which gives
+  `acpi_event.lock -> waitq.lock`.
+- The mutexes and spinlocks that uACPI creates are kernel mutexes and
+  spinlocks. uACPI orders them itself. The AML interpreter takes its
+  mutexes in the work thread and in `kinit`, never in an interrupt
+  handler, and calls no kernel function under them that takes a lock of
+  the kernel other than its own and `pmm_lock` and the slab locks of its
+  allocations.
+
+## V2 additions (clock slew)
+
+- `clock_lock` (spinlock, `drivers/rtc.c`) protects the epoch offset of
+  the real time clock, the remaining correction of `adjtime` and the
+  timer value of its last application. It is a leaf lock. The code under
+  it reads the timer and takes no other lock.
+
+## V3 additions (size requests of the host display)
+
+- `fbdev_lock` (spinlock, `drivers/fbdev.c`) also protects the last size
+  request of the host display (`display_request`) and the serial that the
+  display owner read (`owner_seen`). `fb_display_changed` notifies the
+  poll waiters of `/dev/fb0` after it releases the lock.
+- `virtio_dev.irq_lock` also protects `config_generation`. The interrupt
+  handler calls `config_changed` of the driver under it. The callback of
+  the GPU driver takes no lock. It writes the configuration space and
+  sets the atomic flag `display_event`.
+- `display_event` of the GPU driver is an atomic word without a lock. The
+  interrupt handler stores 1 with release order. `gpu_flushd` exchanges
+  it for 0 with acquire and release order.
+
+## V4 additions (memory balloon)
+
+- `balloon.lock` (spinlock, `drivers/virtio/virtio_balloon.c`) protects
+  the list of balloon pages, the size, the target, the frame numbers that
+  wait for their report, the counters and the flags of the thread. It is
+  the condition lock of the wait queue of the thread. The pressure source
+  takes it in any context and calls `pmm_free` and `pmm_adjust_total`
+  under it, which gives `balloon.lock -> pmm_lock`. The thread never
+  allocates memory and never takes the lock of a virtqueue while it has
+  acquired `balloon.lock`. The completion of the statistics queue takes
+  it under the lock of the queue, which gives
+  `virtqueue.lock -> balloon.lock`. The configuration callback takes it
+  under `irq_lock`, which gives `virtio_dev.irq_lock -> balloon.lock`.
+- `pressure_source` of `mm/pmm.c` is a function pointer that a driver sets
+  once with release order. The allocator reads it with acquire order
+  without a lock.
+- The fault counters of `mm/vma.c` are atomic words without a lock.
+
+## V5 additions (virtio-9p and the filesystem 9p)
+
+- The lock of the virtqueue of a virtio-9p device protects the counters
+  of the channel (requests, pending requests, the most pending requests).
+  It is
+  the condition lock of the waiters for answers, as for every virtqueue.
+- `p9_client.fid_lock` (spinlock, `fs/9p/client.c`) protects the bitmap of
+  the fids in use. It is a leaf lock.
+- `p9_sb.lock` (spinlock, `fs/9p/9p.c`) protects the list of the walked
+  fids of the lookups. It is a leaf lock. A lookup takes it under the lock
+  of the directory inode.
+- `p9_sb.open_lock` (mutex) protects the list of open files. `sync` sends
+  `Tfsync` for each file under it. Opening and closing a file take it
+  without an inode lock.
+- A lookup locks the inode of the found file under the lock of the
+  directory to copy the new attributes, when the two inodes differ. This
+  follows the order of the VFS, parent before child.

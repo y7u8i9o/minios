@@ -61,12 +61,18 @@ if [ ! -f "$MEDIUM/repo/$ARCH/index" ]; then
     exit 0
 fi
 echo "repo update file://$MEDIUM/repo/\$arch" > /run/pkg-update.conf
+# pkg --verbose prints a line before each step that can take long. The
+# lines reach the console as pkg prints them, and tee copies them to the
+# log. pipefail gives the pipeline the status of a failed pkg.
+echo "pkg-update: updating the installed packages from $part"
+set -o pipefail
 status=0
-if ! pkg --config /run/pkg-update.conf update > /run/pkg-update.log 2>&1 ||
-   ! pkg --config /run/pkg-update.conf upgrade >> /run/pkg-update.log 2>&1; then
+if ! { pkg --verbose --config /run/pkg-update.conf update &&
+       pkg --verbose --config /run/pkg-update.conf upgrade; } 2>&1 |
+     tee /run/pkg-update.log | sed 's/^/pkg-update: /'; then
     status=1
 fi
-sed 's/^/pkg-update: /' /run/pkg-update.log
+set +o pipefail
 mount -u $MEDIUM
 if [ $status -ne 0 ]; then
     echo "pkg-update: the update failed"

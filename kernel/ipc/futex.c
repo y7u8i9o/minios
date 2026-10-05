@@ -12,6 +12,8 @@
 #include <syscall/syscalls.h>
 #include <drivers/timer.h>
 #include <lib/list.h>
+#include <mm/vmm.h>
+#include <mm/memlayout.h>
 #include <errno.h>
 
 #define FUTEX_BUCKETS 64
@@ -56,10 +58,25 @@ int futex_wait(uintptr_t uaddr, uint32_t value, uint64_t timeout_ms)
     struct futex_bucket *b = bucket_of(t->proc, uaddr);
     uint64_t deadline = timeout_ms ? timer_ms() + timeout_ms : 0;
 
-    spin_lock(&b->lock);
     /* The check of the word happens under the bucket lock so that a wake
-     * after the caller's own check cannot be missed. */
-    if (*(volatile uint32_t *)uaddr != value) {
+     * after the caller's own check cannot be missed. A read of a page that
+     * is not present faults, and the fault may sleep on disk I/O, which a
+     * holder of a spinlock must not. The word is therefore touched before
+     * the lock, and read under the lock only through the page tables. When
+     * its page left again in between, the lock is released and the word
+     * touched again. */
+    uint32_t word;
+    for (;;) {
+        (void)*(volatile uint32_t *)uaddr;
+        spin_lock(&b->lock);
+        uintptr_t pa;
+        if (vmm_translate(t->proc->vm, uaddr, &pa, NULL)) {
+            word = *(volatile uint32_t *)P2V(pa);
+            break;
+        }
+        spin_unlock(&b->lock);
+    }
+    if (word != value) {
         spin_unlock(&b->lock);
         return -EAGAIN;
     }

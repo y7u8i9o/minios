@@ -2,7 +2,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The CRC-32 of the gzip format over n bytes. */
+/* The CRC-32 of the gzip format over n bytes, crc32(0, p, n) of
+ * <minios/crc32.h>. */
 uint32_t gzip_crc32(const uint8_t *p, size_t n);
 /* Compress or decompress a whole buffer; *dst is allocated with malloc.
  * Both return 0, or -1 for invalid data or when memory runs out. */

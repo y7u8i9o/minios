@@ -1,6 +1,6 @@
 # ar and tar
 
-`/bin/ar` is a minios utility in `user/coreutils/ar.c` and `/bin/tar` is
+`/bin/ar` is a minios utility in `user/binutils/ar.c` and `/bin/tar` is
 the tar of sbase, the suckless base utilities, compiled unmodified from
 `third_party/sbase/`. This document records both, the kernel and libc
 additions they needed, and the tests.
@@ -16,14 +16,19 @@ of the GNU binutils: the magic `!<arch>\n`, a 60 byte printable header
 per member, short names terminated by a slash, names longer than 15
 characters in the `//` table referenced as `/offset`, and member data
 padded to an even length with a newline. Archives from the host
-`x86_64-elf-ar` are read and written unchanged, except that a symbol
-table (`/`) is dropped when the archive is rewritten, because nothing
-on minios reads one. BSD `#1/n` names are understood when reading.
+`x86_64-elf-ar` are read and written unchanged. Since 2026-10-05 every
+rewrite writes the symbol index `/` of the defined global symbols of the
+ELF members, as GNU ar does, unless the modifier `S` is given, and the
+operation `s` writes the index alone, as `ranlib` does. The reading and
+writing of archives moved to `user/binutils/lib/archive.c`, which `nm`,
+`ranlib`, `strip` and the other binutils share (`binutils.md`). Until
+then a symbol index was dropped on a rewrite. BSD `#1/n` names are
+understood when reading.
 
 The archive is read whole into memory and the member list is rebuilt
 into a temporary file beside it, which is renamed over the archive. The
-operations are `d`, `p`, `q`, `r`, `t` and `x` with the modifiers `c`,
-`o`, `u`, `s` (accepted) and `v`; `ar(1)` describes them. The member
+operations are `d`, `p`, `q`, `r`, `s`, `t` and `x` with the modifiers
+`c`, `o`, `u`, `s`, `S` and `v`; `ar(1)` describes them. The member
 date is the file's `st_mtime` in seconds, which is what pdpmake reads
 back with `artime`. pdpmake compares that whole second with the
 nanosecond time of the member's file and treats an equal second as out

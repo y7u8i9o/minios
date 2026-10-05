@@ -1,0 +1,5 @@
+codectest: module mp3 from /usr/lib/codecs/mp3.so
+codectest: mp3 lame 44100 Hz 2 channels 66150 frames
+codectest: mp3 8k 8000 Hz 1 channels 13248 frames
+codectest: 0 failures
+TEST PASS

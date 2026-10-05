@@ -194,15 +194,6 @@ static struct widget *container_new(const struct widget_class *cls, struct widge
  * the list a row is focusable and emits "clicked" for a click, Enter or
  * Space, and the arrow keys move between the rows. Above the password the
  * same widget is a header that does not take the focus. */
-static uint32_t avatar_color(const char *name)
-{
-    static const uint32_t colors[] = { 0x003c78c8, 0x00c0504d, 0x009bbb59, 0x008064a2, 0x00f79646, 0x004bacc6 };
-    unsigned h = 0;
-    for (const char *s = name; *s; s++)
-        h = h * 31 + (unsigned char)*s;
-    return colors[h % (sizeof colors / sizeof colors[0])];
-}
-
 static void row_measure(struct widget *w, struct size_hint *h)
 {
     h->min_h = h->pref_h = ROW_H;
@@ -222,15 +213,8 @@ static void row_paint(struct widget *w, struct painter *p)
     } else if (active) {
         painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], t->color[TC_BUTTON_HOVER]);
     }
-    int ay = (w->h - AVATAR) / 2;
-    uint32_t c = avatar_color(names[i]);
-    painter_rounded(p, 8, ay, AVATAR, AVATAR, c, c);
-    char initial[2] = { full_names[i][0], '\0' };
-    if (initial[0] >= 'a' && initial[0] <= 'z')
-        initial[0] = (char)(initial[0] - 'a' + 'A');
+    painter_avatar(p, 8, (w->h - AVATAR) / 2, AVATAR, names[i], full_names[i]);
     int fh = t->metric[TM_FONT_PX];
-    painter_text(p, 8 + (AVATAR - painter_text_width(p, initial, 1)) / 2, ay + (AVATAR - fh) / 2 - 1, initial,
-                 0x00ffffff);
     int tx = 8 + AVATAR + 12, ty = (w->h - 2 * fh - 4) / 2;
     painter_text(p, tx, ty, full_names[i], text);
     painter_text(p, tx, ty + fh + 4, names[i], dim);

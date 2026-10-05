@@ -8,6 +8,7 @@
 #include <mm/tlb.h>
 #include <mm/memlayout.h>
 #include <arch/paging.h>
+#include <lib/string.h>
 #include <lib/cmdline.h>
 #include <drivers/timer.h>
 #include <console.h>
@@ -80,8 +81,8 @@ static void test_smp(void)
 {
     char val[16];
     unsigned expected = 1;
-    if (cmdline_lookup("cpus", val, sizeof val) && val[0] >= '1' && val[0] <= '9')
-        expected = (unsigned)(val[0] - '0');
+    if (cmdline_lookup("cpus", val, sizeof val) && strtoull(val, NULL, 10) >= 1)
+        expected = (unsigned)strtoull(val, NULL, 10);
     kprintf("smp: %u cpus, expecting %u\n", smp_cpu_count(), expected);
     ktest_assert(smp_cpu_count() == expected, "%u cpus, expected %u", smp_cpu_count(), expected);
     ktest_assert(smp_online_mask() == (1UL << expected) - 1, "online mask %lx", smp_online_mask());

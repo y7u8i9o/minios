@@ -1,0 +1,12 @@
+#!/bin/sh
+# The lines of the host server and of the host client in the peer log.
+set -eu
+# The peer log is in the output folder of the case.
+OUTDIR=$(dirname "$PEER_LOG")
+grep -q '^host: finished$' "$PEER_LOG"
+grep -q '^sent big.bin, 3000000 bytes, resumed at 1000000$' "$PEER_LOG"
+grep -q '^stored copy.bin, 3000000 bytes$' "$PEER_LOG"
+grep -q '^stored tree/note.txt, 12 bytes$' "$PEER_LOG"
+grep -q '^downloaded guest.bin, 3000000 bytes$' "$PEER_LOG"
+grep -q '^uploaded up-host.bin, 3000000 bytes$' "$PEER_LOG"
+cmp "$OUTDIR/transfer-host/pulled/guest.bin" "$OUTDIR/transfer-host/big.bin"

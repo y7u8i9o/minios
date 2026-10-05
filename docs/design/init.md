@@ -26,7 +26,8 @@ when `/dev/pcm0` exists, runs `net apply` for the static network entries,
 starts `dhcpc -a` as the `dhcp` service with `restart=failure` (the client
 reads the dhcp entry of `/etc/network` itself and exits with status 0
 when there is nothing to do, so the service stops on a machine without
-a network), and then the shell, since U3 of the multiuser plan `login`
+a network), starts `ntpd` as the `ntp` service when the package `net`
+is installed (`time.md`), and then the shell, since U3 of the multiuser plan `login`
 (`users.md`). Before this, `startgui` started the
 audio server per session and `net apply` forked the DHCP client as an
 unsupervised orphan. When the file cannot be read init parses a
@@ -105,6 +106,11 @@ turns into `shutdown_system`: every running entry gets `SIGTERM` in
 reverse configuration order, init waits up to three seconds for them,
 prints the final line and calls `reboot(2)`, which terminates whatever
 is left, unmounts and stops the machine.
+
+The power button of the machine sends init `SIGUSR1` as well, from the
+kernel (`acpi.md`, V1 of `docs/plan/release-0.6.0.md`). The power button
+of QEMU (`system_powerdown`) and of UTM therefore power minios off in
+order. The case `acpi_power` covers this path.
 
 Three kernel changes came with the new init. A scheduler race between the
 child exit wake and the `SIGCHLD` delivery made a stale wake enqueue a

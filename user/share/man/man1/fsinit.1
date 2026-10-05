@@ -22,6 +22,11 @@ DESCRIPTION
     happens once. fsinit then makes the missing home of every account in
     /etc/passwd whose home lies on the volume, from /etc/skel.
 
+    After the table fsinit mounts every folder that the host shares
+    through virtio-9p. The kernel lists the mount tags in /dev/9p, and
+    each share is mounted at /mnt/TAG with the type 9p. A share that
+    cannot be mounted is reported and does not change the exit status.
+
 OPTIONS
     -f fstab   read fstab instead of /etc/fstab
     -v         report every entry: mounted, skipped, or mounted already

@@ -2,7 +2,8 @@
  * (docs/design/codecs.md), such as PNG, BMP and SVG files. The window
  * shows one image scaled to fit or at a chosen zoom, steps through the
  * other images of its directory, and sets a raster image as the desktop
- * wallpaper.
+ * wallpaper. An animation, such as an animated GIF file, plays with the
+ * delays of its frames and repeats as often as the file states.
  *
  *   view [FILE | DIRECTORY]
  *
@@ -38,6 +39,13 @@ static int nfiles, current = -1;
 static struct image *img;       /* the decoded file */
 static struct image *reduced;   /* img resampled for a zoom below 100 % */
 static int scalable;            /* img came from a vector format */
+static const struct codec *loaded_codec;        /* the codec of img */
+/* The animation of img: its decoder, the timer of the next frame and the
+ * number of plays that have ended. The frames are decoded into the pixels
+ * of img. */
+static struct codec_animation *anim;
+static struct timer *anim_timer;
+static int anim_plays;
 static int opaque;              /* every pixel of img has full alpha */
 /* Zoom in device pixels per 1000 image pixels; 0 fits the image into
  * the window without enlarging it. */
@@ -94,7 +102,12 @@ static void update_status(void)
 {
     char text[64];
     shown_zoom = img ? effective_zoom() : -1;
-    if (img) {
+    if (img && anim) {
+        snprintf(text, sizeof text, "%d x %d, %d frames", img->w, img->h, codec_animation_info(anim)->frames);
+        widget_set_text(st_size, text);
+        snprintf(text, sizeof text, "%d %%", (effective_zoom() + 5) / 10);
+        widget_set_text(st_zoom, text);
+    } else if (img) {
         snprintf(text, sizeof text, "%d x %d", img->w, img->h);
         widget_set_text(st_size, text);
         snprintf(text, sizeof text, "%d %%", (effective_zoom() + 5) / 10);
@@ -183,7 +196,64 @@ static struct image *load_image(const char *path)
     }
     *im = (struct image){ pic.w, pic.h, pic.pixels, 1 };
     scalable = (c->caps & CODEC_SCALABLE) != 0;
+    loaded_codec = c;
     return im;
+}
+
+static int all_opaque(const struct image *im)
+{
+    for (size_t i = 0, n = (size_t)im->w * im->h; i < n; i++)
+        if ((im->pixels[i] >> 24) != 0xff)
+            return 0;
+    return 1;
+}
+
+static void stop_animation(void)
+{
+    if (anim_timer)
+        app_timer_remove(app, anim_timer);
+    anim_timer = NULL;
+    codec_animation_close(anim);
+    anim = NULL;
+}
+
+/* Decodes the next frame into img and plans the frame after it. After the
+ * last play the last frame remains on the screen. */
+static void next_frame(void *arg)
+{
+    anim_timer = NULL;
+    int delay = 0, r = codec_animation_next(anim, img->pixels, &delay);
+    if (r == 0) {
+        int loops = codec_animation_info(anim)->loops;
+        anim_plays++;
+        if ((loops == 0 || anim_plays < loops) && codec_animation_rewind(anim) == 0)
+            r = codec_animation_next(anim, img->pixels, &delay);
+    }
+    if (r <= 0)
+        return;
+    opaque = all_opaque(img);
+    image_free(reduced);
+    reduced = NULL;
+    widget_invalidate(canvas);
+    anim_timer = app_timer_add(app, delay, 0, next_frame, NULL);
+}
+
+/* Starts the animation of the file at path when its codec has animations
+ * and the file has more than one frame. img shows the first frame. */
+static void start_animation(const char *path)
+{
+    if (!loaded_codec || !(loaded_codec->caps & CODEC_ANIMATED) ||
+        codec_animation_open_file(path, &anim) < 0)
+        return;
+    const struct codec_animation_info *info = codec_animation_info(anim);
+    int delay;
+    if (info->frames < 2 || info->w != img->w || info->h != img->h ||
+        codec_animation_next(anim, img->pixels, &delay) != 1) {
+        stop_animation();
+        return;
+    }
+    anim_plays = 0;
+    anim_timer = app_timer_add(app, delay, 0, next_frame, NULL);
 }
 
 static int compare_names(const void *a, const void *b)
@@ -216,6 +286,7 @@ static void file_path(int index, char *out, size_t size)
 
 static void show(int index)
 {
+    stop_animation();
     image_free(img);
     image_free(reduced);
     img = reduced = NULL;
@@ -234,9 +305,9 @@ static void show(int index)
     file_path(index, path, sizeof path);
     errno = 0;
     img = load_image(path);
-    opaque = 1;
-    for (size_t i = 0, n = img ? (size_t)img->w * img->h : 0; i < n && opaque; i++)
-        opaque = (img->pixels[i] >> 24) == 0xff;
+    if (img)
+        start_animation(path);
+    opaque = img ? all_opaque(img) : 1;
     if (img) {
         widget_set_text(st_name, files[index]);
     } else {

@@ -4,7 +4,7 @@ OUT      := $(BUILD)/kernel
 KERNEL   ?= $(BUILD)/kernel.elf
 GENSYMS  ?= $(BUILD)/host/gensyms
 
-SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat fs/iso9660 ipc net net/tcp block audio input drivers drivers/virtio drivers/usb debug
+SUBDIRS  := arch/$(ARCH) init lib mm sync sched syscall fs fs/mfs fs/fat fs/iso9660 fs/9p ipc net net/tcp block audio input drivers drivers/virtio drivers/usb debug
 ifeq ($(strip $(CONFIG_TESTS)),1)
 SUBDIRS  += tests
 endif
@@ -22,18 +22,16 @@ DEPS     := $(OBJS:.o=.d)
 CPPFLAGS := -Iinclude -Iarch/$(ARCH)/include -I../third_party/limine
 LDSCRIPT := arch/$(ARCH)/linker.ld
 
-# uACPI reads the ACPI tables of an aarch64 machine that has no device tree
-# (docs/design/acpi.md). It is built in the barebones mode, which contains
-# the table interface only. Its sources are third party code. They are
+# uACPI reads the ACPI tables and runs the AML code of the machine
+# (docs/design/acpi.md), on both architectures since V1 of
+# docs/plan/release-0.6.0.md. Its sources are third party code. They are
 # compiled without -Werror, so that a warning of a newer compiler in them
 # does not stop the build.
-ifeq ($(ARCH),aarch64)
 UACPI_DIR  := ../third_party/uacpi
 UACPI_OBJS := $(patsubst $(UACPI_DIR)/source/%.c,$(OUT)/uacpi/%.o,$(wildcard $(UACPI_DIR)/source/*.c))
-CPPFLAGS   += -DUACPI_BAREBONES_MODE -I$(UACPI_DIR)/include
+CPPFLAGS   += -I$(UACPI_DIR)/include
 OBJS       += $(UACPI_OBJS)
 DEPS       += $(UACPI_OBJS:.o=.d)
-endif
 
 .PHONY: all clean
 all: $(KERNEL)
@@ -46,7 +44,8 @@ $(OUT)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(KASFLAGS) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
-$(OUT)/uacpi/%.o: $(UACPI_DIR)/source/%.c
+# The objects depend on this Makefile, which selects the mode of uACPI.
+$(OUT)/uacpi/%.o: $(UACPI_DIR)/source/%.c Makefile
 	@mkdir -p $(dir $@)
 	$(CC) $(filter-out -Werror -Wmissing-prototypes,$(KCFLAGS)) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 

@@ -102,6 +102,11 @@ struct virtio_dev {
     uint32_t device_cfg_len;
     struct spinlock irq_lock; /* IRQ traversal versus reset/detach */
     void (*work_notify)(void);
+    /* Called from the interrupt handler under irq_lock when the
+     * configuration generation of the device changed. The device changes
+     * the generation with every change of its configuration space. */
+    void (*config_changed)(struct virtio_dev *dev);
+    uint8_t config_generation;      /* last generation seen, irq_lock */
     unsigned vector;                /* interrupt number from irq_alloc */
     uint64_t features;
     struct virtqueue *queues[4];

@@ -120,10 +120,66 @@ static void push_handler_table(lua_State *L, int index)
     lua_getiuservalue(L, index, 1);
 }
 
+static int is_drag_signal(const char *name)
+{
+    return strncmp(name, "drag_", 5) == 0 || strcmp(name, "drop") == 0;
+}
+
+/* The table of a drag signal of a data view or a canvas (struct sig_drag):
+ * row, x and y, and while a drag runs the allowed actions, the chosen
+ * action and, for a drop, the MIME type and the data. */
+static void push_drag_args(lua_State *L, const struct sig_drag *sd)
+{
+    lua_createtable(L, 0, 7);
+    lua_pushinteger(L, sd->row); lua_setfield(L, -2, "row");
+    lua_pushinteger(L, sd->x); lua_setfield(L, -2, "x");
+    lua_pushinteger(L, sd->y); lua_setfield(L, -2, "y");
+    if (!sd->drag)
+        return;
+    lua_pushinteger(L, sd->drag->actions); lua_setfield(L, -2, "actions");
+    lua_pushinteger(L, sd->drag->action); lua_setfield(L, -2, "action");
+    if (sd->drag->mime) {
+        lua_pushstring(L, sd->drag->mime);
+        lua_setfield(L, -2, "mime");
+    }
+    if (sd->drag->data) {
+        lua_pushlstring(L, sd->drag->data, sd->drag->len);
+        lua_setfield(L, -2, "data");
+    }
+}
+
+/* The handler of drag_motion answers through its table: accept is the
+ * MIME type it takes or nil, actions the actions it supports, preferred
+ * the action it prefers, and row the row it outlines (-1 for the whole
+ * view). The answer is copied, because the window passes it on after the
+ * table is gone. */
+static void read_drag_answer(lua_State *L, int index, struct sig_drag *sd)
+{
+    static char accept[128];
+    if (!sd->drag)
+        return;
+    if (lua_getfield(L, index, "accept") == LUA_TSTRING) {
+        strlcpy(accept, lua_tostring(L, -1), sizeof accept);
+        sd->drag->accept_mime = accept;
+    }
+    lua_pop(L, 1);
+    if (lua_getfield(L, index, "actions") == LUA_TNUMBER)
+        sd->drag->accept_actions = (int)lua_tointeger(L, -1);
+    lua_pop(L, 1);
+    if (lua_getfield(L, index, "preferred") == LUA_TNUMBER)
+        sd->drag->preferred = (int)lua_tointeger(L, -1);
+    lua_pop(L, 1);
+    if (lua_getfield(L, index, "row") == LUA_TNUMBER)
+        sd->row = (int)lua_tointeger(L, -1);
+    lua_pop(L, 1);
+}
+
 static int push_signal_args(lua_State *L, struct widget *w, const char *name, void *args)
 {
     const char *cls = w->cls->name;
-    if (strcmp(name, "clicked") == 0 || strcmp(name, "press") == 0 ||
+    if (is_drag_signal(name)) {
+        push_drag_args(L, args);
+    } else if (strcmp(name, "clicked") == 0 || strcmp(name, "press") == 0 ||
         strcmp(name, "release") == 0 || strcmp(name, "motion") == 0 || strcmp(name, "wheel") == 0) {
         struct sig_click *c = args;
         lua_createtable(L, 0, 3);
@@ -199,9 +255,11 @@ static int trampoline(struct widget *w, void *args, void *arg)
     lua_insert(L, -2);                  /* fn, widget */
     push_signal_args(L, w, name, args);
     int painted = strcmp(name, "paint") == 0;
-    if (painted) {
-        /* A copy below the call survives it, so the painter the handler
-         * may have retained is invalidated afterwards. */
+    int answered = strcmp(name, "drag_motion") == 0;
+    if (painted || answered) {
+        /* A copy below the call survives it. The painter the handler may
+         * have retained is invalidated afterwards, and the answer to a
+         * drag is read from the table. */
         lua_pushvalue(L, -1);
         lua_insert(L, top + 1);
     }
@@ -210,6 +268,8 @@ static int trampoline(struct widget *w, void *args, void *arg)
         consumed = lua_toboolean(L, -1);
     if (painted)
         gui_painter_close(L, top + 1);
+    if (answered && consumed)
+        read_drag_answer(L, top + 1, args);
     lua_settop(L, top);
     return painted ? 1 : consumed;
 }
@@ -449,6 +509,16 @@ static int w_pos(lua_State *L)
     struct widget *w = gui_check_widget(L, 1);
     lua_pushinteger(L, w->x);
     lua_pushinteger(L, w->y);
+    return 2;
+}
+
+/* widget:abs() -> x, y of the widget in the coordinates of its window. */
+static int w_abs(lua_State *L)
+{
+    int x, y;
+    widget_abs(gui_check_widget(L, 1), &x, &y);
+    lua_pushinteger(L, x);
+    lua_pushinteger(L, y);
     return 2;
 }
 
@@ -1016,6 +1086,22 @@ static int w_rows(lua_State *L)
     return 1;
 }
 
+/* view:rowrect(row) -> x, y, w, h of a visible row id in the
+ * coordinates of the view, or nil. */
+static int w_rowrect(lua_State *L)
+{
+    struct rect r;
+    if (!view_row_rect(check_view(L, "rowrect"), (int)luaL_checkinteger(L, 2), &r)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, r.x);
+    lua_pushinteger(L, r.y);
+    lua_pushinteger(L, r.w);
+    lua_pushinteger(L, r.h);
+    return 4;
+}
+
 static int w_selectrow(lua_State *L)
 {
     view_select(check_view(L, "selectrow"), (int)luaL_checkinteger(L, 2));
@@ -1049,6 +1135,40 @@ static int w_column(lua_State *L)
     return 1;
 }
 
+/* view:drag(items, actions [, label [, icon]]) starts a drag from a
+ * drag_begin handler. items is a list of {mime, data} pairs, the
+ * preferred type first, at most eight. actions is a mask of gui.DND_COPY
+ * and gui.DND_MOVE. The widget receives drag_end when the drag ends. */
+static int w_drag(lua_State *L)
+{
+    struct widget *w = gui_check_widget(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    int actions = (int)luaL_checkinteger(L, 3);
+    const char *label = luaL_optstring(L, 4, NULL);
+    const struct image *icon = lua_isnoneornil(L, 5) ? NULL : gui_check_image(L, 5);
+    struct gui_drag_item items[8];
+    int n = (int)luaL_len(L, 2);
+    luaL_argcheck(L, n >= 1 && n <= 8, 2, "one to eight items");
+    for (int i = 0; i < n; i++) {
+        lua_rawgeti(L, 2, i + 1);
+        luaL_checktype(L, -1, LUA_TTABLE);
+        lua_rawgeti(L, -1, 1);
+        lua_rawgeti(L, -2, 2);
+        items[i].mime = luaL_checkstring(L, -2);
+        items[i].data = luaL_checklstring(L, -1, &items[i].len);
+        /* The item tables of argument 2 refer to the strings, so the
+         * pointers are valid during the call. */
+        lua_pop(L, 3);
+    }
+    int r = widget_drag_start(w, items, n, actions, icon, label);
+    if (r < 0) {
+        errno = -r;
+        return minios_errresult(L);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static int w_tostring(lua_State *L)
 {
     struct wref *r = luaL_checkudata(L, 1, GUI_WIDGET_META);
@@ -1066,7 +1186,7 @@ static const luaL_Reg widget_methods[] = {
     { "gridstretch", w_gridstretch }, { "accel", w_accel }, { "padding", w_padding },
     { "tip", w_tip }, { "id", w_id }, { "find", w_find }, { "class", w_class },
     { "invalidate", w_invalidate }, { "relayout", w_relayout }, { "focus", w_focus },
-    { "focused", w_focused }, { "capture", w_capture }, { "size", w_size }, { "pos", w_pos },
+    { "focused", w_focused }, { "capture", w_capture }, { "size", w_size }, { "pos", w_pos }, { "abs", w_abs },
     { "parent", w_parent }, { "window", w_window }, { "destroy", w_destroy },
     { "close", w_close }, { "title", w_title }, { "add", w_add }, { "clear", w_clear },
     { "count", w_count }, { "item", w_item }, { "select", w_select }, { "page", w_page },
@@ -1078,7 +1198,7 @@ static const luaL_Reg widget_methods[] = {
     { "cursor", w_cursor }, { "undo", w_undo }, { "redo", w_redo }, { "search", w_editor_find },
     { "modified", w_modified },
     { "model", w_model }, { "refresh", w_refresh }, { "rows", w_rows }, { "selectrow", w_selectrow },
-    { "expand", w_expand }, { "column", w_column },
+    { "expand", w_expand }, { "column", w_column }, { "drag", w_drag }, { "rowrect", w_rowrect },
     { "__tostring", w_tostring },
     { NULL, NULL }
 };
@@ -1388,6 +1508,8 @@ static int choose_file(lua_State *L, enum file_chooser_mode mode)
 
 static int a_open_file(lua_State *L) { return choose_file(L, FILE_CHOOSER_OPEN); }
 static int a_save_file(lua_State *L) { return choose_file(L, FILE_CHOOSER_SAVE); }
+/* app:choose_folder([title [, initial]]): the chosen folder or nil. */
+static int a_choose_folder(lua_State *L) { return choose_file(L, FILE_CHOOSER_FOLDER); }
 
 static const char *const layer_names[] = { "background", "bottom", "top", "overlay", NULL };
 
@@ -1531,7 +1653,8 @@ static const luaL_Reg app_methods[] = {
     { "window", a_window }, { "modal", a_modal }, { "run", a_run }, { "quit", a_quit },
     { "step", a_step }, { "timer", a_timer }, { "watch", a_watch }, { "theme", a_theme },
     { "dialog", a_dialog }, { "prompt", a_prompt },
-    { "open_file", a_open_file }, { "save_file", a_save_file }, { "destroy", a_destroy },
+    { "open_file", a_open_file }, { "save_file", a_save_file }, { "choose_folder", a_choose_folder },
+    { "destroy", a_destroy },
     { "layer", a_layer }, { "screen", a_screen }, { "clipboard", a_clipboard },
     { NULL, NULL }
 };
@@ -1589,14 +1712,105 @@ static int test_close(lua_State *L)
     return 0;
 }
 
+#ifdef MINIOS_HOST
+#include "fake.h"
+
+/* gui.test.drag(win, x, y, offers [, actions = DND_COPY | DND_MOVE]) moves
+ * a drag that offers the MIME types of the list offers over the window
+ * and returns the answer: the accepted type or nil, the actions and the
+ * preferred action. */
+static int test_drag(lua_State *L)
+{
+    struct widget *win = gui_check_widget(L, 1);
+    static char types[8][64];
+    luaL_checktype(L, 4, LUA_TTABLE);
+    memset(fake_offers, 0, sizeof fake_offers);
+    for (int i = 0; i < 8 && i < (int)luaL_len(L, 4); i++) {
+        lua_rawgeti(L, 4, i + 1);
+        strlcpy(types[i], luaL_checkstring(L, -1), sizeof types[i]);
+        fake_offers[i] = types[i];
+        lua_pop(L, 1);
+    }
+    fake_accept_mime = NULL;
+    fake_accept_actions = fake_accept_preferred = 0;
+    struct wmsg m = { .type = WM_DRAG_MOTION, .window = window_state_of(win)->win->id,
+                      .a = (int32_t)luaL_checkinteger(L, 2), .b = (int32_t)luaL_checkinteger(L, 3),
+                      .d = (int32_t)luaL_optinteger(L, 5, GUI_DND_COPY | GUI_DND_MOVE) };
+    window_message(win, &m);
+    if (fake_accept_mime)
+        lua_pushstring(L, fake_accept_mime);
+    else
+        lua_pushnil(L);
+    lua_pushinteger(L, fake_accept_actions);
+    lua_pushinteger(L, fake_accept_preferred);
+    return 3;
+}
+
+/* gui.test.drop(win, x, y, mime, data, action) drops data of the type
+ * mime at the position of the last gui.test.drag. */
+static int test_drop(lua_State *L)
+{
+    struct widget *win = gui_check_widget(L, 1);
+    fake_drop_mime = luaL_checkstring(L, 4);
+    fake_drop = luaL_checkstring(L, 5);
+    struct wmsg m = { .type = WM_DROP, .window = window_state_of(win)->win->id,
+                      .a = (int32_t)luaL_checkinteger(L, 2), .b = (int32_t)luaL_checkinteger(L, 3),
+                      .c = (int32_t)luaL_checkinteger(L, 6) };
+    window_message(win, &m);
+    fake_drop = fake_drop_mime = NULL;
+    memset(fake_offers, 0, sizeof fake_offers);
+    return 0;
+}
+
+/* gui.test.dragged() returns the drags that the program started so far
+ * and the items of the last one as a list of {mime, data} pairs, and
+ * the allowed actions. */
+static int test_dragged(lua_State *L)
+{
+    lua_pushinteger(L, fake_drag.started);
+    lua_createtable(L, fake_drag.nitems, 0);
+    for (int i = 0; i < fake_drag.nitems; i++) {
+        lua_createtable(L, 2, 0);
+        lua_pushstring(L, fake_drag.mime[i]);
+        lua_rawseti(L, -2, 1);
+        lua_pushstring(L, fake_drag.data[i]);
+        lua_rawseti(L, -2, 2);
+        lua_rawseti(L, -2, i + 1);
+    }
+    lua_pushinteger(L, fake_drag.actions);
+    return 3;
+}
+
+/* gui.test.drag_end(win, action) ends the drag that the window started. */
+static int test_drag_end(lua_State *L)
+{
+    struct widget *win = gui_check_widget(L, 1);
+    struct wmsg m = { .type = WM_DRAG_END, .window = window_state_of(win)->win->id,
+                      .a = (int32_t)luaL_checkinteger(L, 2) };
+    window_message(win, &m);
+    return 0;
+}
+#endif
+
 static const luaL_Reg test_funcs[] = {
     { "key", test_key }, { "mouse", test_mouse }, { "paint", test_paint }, { "pixel", test_pixel },
     { "close", test_close },
+#ifdef MINIOS_HOST
+    { "drag", test_drag }, { "drop", test_drop }, { "dragged", test_dragged }, { "drag_end", test_drag_end },
+#endif
     { NULL, NULL }
 };
 
+/* gui.offers(mime): true while the drag over a window of this program
+ * offers the type, for a drag_motion handler. */
+static int g_offers(lua_State *L)
+{
+    lua_pushboolean(L, widget_drag_offers(luaL_checkstring(L, 1)));
+    return 1;
+}
+
 static const luaL_Reg gui_funcs[] = {
-    { "app", g_app },
+    { "app", g_app }, { "offers", g_offers },
     { "box", g_box }, { "vbox", g_vbox }, { "hbox", g_hbox }, { "grid", g_grid },
     { "label", g_label }, { "button", g_button }, { "checkbox", g_checkbox }, { "radio", g_radio },
     { "textfield", g_textfield }, { "canvas", g_canvas }, { "separator", g_separator },
@@ -1639,5 +1853,9 @@ int luaopen_gui(lua_State *L)
     luaL_newlib(L, test_funcs);
     lua_setfield(L, -2, "test");
     gui_push_constants(L);
+    lua_pushinteger(L, GUI_DND_COPY);
+    lua_setfield(L, -2, "DND_COPY");
+    lua_pushinteger(L, GUI_DND_MOVE);
+    lua_setfield(L, -2, "DND_MOVE");
     return 1;
 }

@@ -1,6 +1,7 @@
 /* Painter: origin translation, clipping and the logical to device pixel
  * scale over gfx primitives. */
 #include <gui/paint.h>
+#include <gui/utf8.h>
 #include <string.h>
 
 void painter_init_scaled(struct painter *p, struct surface *s, const struct theme *theme, int scale)
@@ -228,6 +229,30 @@ int painter_text_index(const struct painter *p, const char *text, int n, int px)
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h)
 {
     painter_frame(p, x, y, w, h, p->theme->color[TC_ACCENT]);
+}
+
+void painter_avatar(struct painter *p, int x, int y, int size, const char *name, const char *label)
+{
+    static const uint32_t colors[] = { 0x003c78c8, 0x00c0504d, 0x009bbb59, 0x008064a2, 0x00f79646, 0x004bacc6 };
+    unsigned h = 0;
+    for (const char *c = name; *c; c++)
+        h = h * 31 + (unsigned char)*c;
+    uint32_t color = colors[h % (sizeof colors / sizeof colors[0])];
+    painter_rounded(p, x, y, size, size, color, color);
+    /* The initial is the first character of the label. A lowercase
+     * ASCII letter becomes uppercase. */
+    char initial[8] = "";
+    int at = 0, len = (int)strlen(label);
+    if (len) {
+        gui_utf8_decode(label, len, &at);
+        memcpy(initial, label, (size_t)at);
+        initial[at] = '\0';
+        if (initial[0] >= 'a' && initial[0] <= 'z')
+            initial[0] = (char)(initial[0] - 'a' + 'A');
+    }
+    int fh = theme_px(p->theme, TM_FONT_PX);
+    painter_text(p, x + (size - painter_text_width(p, initial, -1)) / 2, y + (size - fh) / 2 - 1, initial,
+                 0x00ffffff);
 }
 
 static inline uint32_t blend(uint32_t d, uint32_t c, unsigned a)

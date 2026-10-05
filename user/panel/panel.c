@@ -384,7 +384,9 @@ int main(void)
     layer_surface_add_listener(layer, &layer_events, NULL);
     layer_surface_set_anchor(layer, 2 | 4 | 8);
     layer_surface_set_exclusive_zone(layer, PANEL_H);
-    layer_surface_set_size(layer, screen_w, PANEL_H);
+    /* A width of 0 with the anchors left and right takes the width of the
+     * screen. The compositor then sends the new width after a mode change. */
+    layer_surface_set_size(layer, 0, PANEL_H);
     while (!layer_configured)
         if (wire_display_dispatch(display) < 0)
             return 1;

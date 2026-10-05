@@ -153,6 +153,15 @@ if test -n "$PKGSIGN" && test -n "$MKREPO"; then
     check file-retained "$(ls fr/repo | tr '\n' ' ')" "appb-2.0.mpk index index.sig liba-1.0.mpk "
     check file-tmp "$(ls -d /tmp/pkg-* 2>/dev/null | wc -l | tr -d ' ')" "0"
 
+    # --verbose, also between other options, prints a line before each step.
+    R4="$WORK/root4"
+    mkdir -p "$R4"
+    P4="$PKG --root $R4 --verbose --arch x86_64 --config $WORK/fr/pkg.conf --keys $WORK/fr/keys"
+    check verbose-update "$($P4 update | tr '\n' ',')" \
+        "reading the index of local (1 of 1),local: 2 packages from file://$WORK/fr/repo,"
+    check verbose-install "$($P4 install appb | tr '\n' ',')" \
+        "verifying appb 2.0 (1 of 2),found appb 2.0 from local,verifying liba 1.0 (2 of 2),found liba 1.0 from local,checking 2 packages,unpacking liba 1.0 (1 of 2),unpacking appb 2.0 (2 of 2),installing the files of 2 packages,installed liba 1.0,installed appb 2.0,"
+
     # An archive that changed after the signing is refused and not removed.
     R3="$WORK/root3"
     mkdir -p "$R3"

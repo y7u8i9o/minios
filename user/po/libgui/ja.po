@@ -106,6 +106,14 @@ msgstr "ファイルを保存"
 msgid "Open file"
 msgstr "ファイルを開く"
 
+#: lib/libgui/src/filechooser.c
+msgid "Choose"
+msgstr "選択"
+
+#: lib/libgui/src/filechooser.c
+msgid "Choose folder"
+msgstr "フォルダーを選択"
+
 #: lib/libgui/src/filechooser.c:94
 msgid "The folder “%s” does not exist."
 msgstr "フォルダー「%s」は存在しません。"
@@ -298,3 +306,39 @@ msgstr "「%s」を移動できません: %s。"
 #: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be copied: %s."
 msgstr "「%s」をコピーできません: %s。"
+
+#: lib/libgui/src/appchooser.c:159
+msgid "Recommended applications"
+msgstr "おすすめのアプリケーション"
+
+#: lib/libgui/src/appchooser.c:161
+msgid "Other applications"
+msgstr "その他のアプリケーション"
+
+#: lib/libgui/src/appchooser.c:202
+msgid "The default application cannot be saved: %s."
+msgstr "既定のアプリケーションを保存できません: %s。"
+
+#: lib/libgui/src/appchooser.c:264
+msgid "Choose a program"
+msgstr "プログラムを選択"
+
+#: lib/libgui/src/appchooser.c:274
+msgid "“%s” is not a program."
+msgstr "「%s」はプログラムではありません。"
+
+#: lib/libgui/src/appchooser.c:301
+msgid "Choose an application to open “%s”."
+msgstr "「%s」を開くアプリケーションを選択してください。"
+
+#: lib/libgui/src/appchooser.c:314
+msgid "Always use for files of type %s"
+msgstr "種類 %s のファイルに常に使用する"
+
+#: lib/libgui/src/appchooser.c:319
+msgid "Other program..."
+msgstr "その他のプログラム..."
+
+#: lib/libgui/src/appchooser.c:61 lib/libgui/src/appchooser.c:354
+msgid "Open with"
+msgstr "アプリケーションで開く"

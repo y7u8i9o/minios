@@ -21,7 +21,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(30);
+    ktest_wait_idle(30);
 }
 
 static const uint8_t letter_code[26] = {
@@ -39,7 +39,7 @@ static void shift_tap(void)
 {
     ps2kbd_feed_scancode(0x2a);
     ps2kbd_feed_scancode(0xaa);
-    sleep_ms(200);
+    ktest_wait_idle(200);
 }
 
 static void sh(const char *command)
@@ -65,11 +65,11 @@ static void test_ime_pinyin(void)
     struct proc *srv = start_server();
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/imepy.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
 
     shift_tap();                    /* the pinyin engine */
     type("zhongguo");
@@ -78,7 +78,7 @@ static void test_ime_pinyin(void)
     tap(SPACE);                     /* 你好 */
     tap(COMMA);                     /* ， */
     type("jintiantianqihenhao");
-    sleep_ms(200);
+    ktest_wait_idle(200);
     tap(SPACE);                     /* the sentence 今天天气很好 */
     type("zg");
     tap(SPACE);                     /* 中国 by its initials, first since it was chosen */
@@ -98,9 +98,9 @@ static void test_ime_pinyin(void)
     type("shu");
     shift_tap();                    /* the letters, and the layout */
     type("x");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);
-    sleep_ms(500);
+    ktest_wait_idle(500);
 
     struct file *f;
     ktest_assert(vfs_open("/imepy.txt", O_RDONLY, 0, &f) == 0, "open /imepy.txt");

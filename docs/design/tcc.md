@@ -91,7 +91,7 @@ except for `minios/simd.h`, whose vector types are a gcc extension.
 
 ## ld and as
 
-`ld` (`user/coreutils/ld.c`) and `as` (`user/coreutils/as.c`) run
+`ld` (`user/binutils/ld.c`) and `as` (`user/binutils/as.c`) run
 `/bin/tcc` under the conventional names, for makefiles and scripts that
 call them. `ld` passes `-nostdlib`; nothing is linked beyond what is
 named. It translates the options tcc implements: `-o`, `-L`, `-l`,

@@ -4,894 +4,922 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
 #: user/apps/sysinfo.c:100
-msgid "Configurations"
+msgid "Kernel configuration"
 msgstr ""
 
 #: user/apps/sysinfo.c:101
-msgid "Configured speed"
+msgid "Configuration"
 msgstr ""
 
 #: user/apps/sysinfo.c:102
-msgid "Connected"
+msgid "Configurations"
 msgstr ""
 
 #: user/apps/sysinfo.c:103
-msgid "Context size"
+msgid "Configured speed"
 msgstr ""
 
 #: user/apps/sysinfo.c:104
-msgid "Controllers"
+msgid "Connected"
 msgstr ""
 
 #: user/apps/sysinfo.c:105
-msgid "Cores"
+msgid "Context size"
 msgstr ""
 
 #: user/apps/sysinfo.c:106
-msgid "Cores enabled"
+msgid "Controllers"
 msgstr ""
 
 #: user/apps/sysinfo.c:107
-msgid "CPU ID"
+msgid "Cores"
 msgstr ""
 
 #: user/apps/sysinfo.c:108
-msgid "CPUs"
+msgid "Cores enabled"
 msgstr ""
 
 #: user/apps/sysinfo.c:109
-msgid "Creator"
+msgid "CPU ID"
 msgstr ""
 
 #: user/apps/sysinfo.c:110
-msgid "CTR_EL0"
+msgid "CPUs"
 msgstr ""
 
 #: user/apps/sysinfo.c:111
-msgid "Current exception level"
+msgid "Creator"
 msgstr ""
 
 #: user/apps/sysinfo.c:112
-msgid "Current speed"
+msgid "CTR_EL0"
 msgstr ""
 
 #: user/apps/sysinfo.c:113
-msgid "Source of the description"
+msgid "Current exception level"
 msgstr ""
 
-#: user/apps/sysinfo.c:114 user/apps/sysinfo.c:474
-msgid "Device"
+#: user/apps/sysinfo.c:114
+msgid "Current speed"
 msgstr ""
 
 #: user/apps/sysinfo.c:115
-msgid "Device class"
+msgid "Source of the description"
 msgstr ""
 
-#: user/apps/sysinfo.c:116
-msgid "Device node"
+#: user/apps/sysinfo.c:116 user/apps/sysinfo.c:481
+msgid "Device"
 msgstr ""
 
 #: user/apps/sysinfo.c:117
-msgid "Device release"
+msgid "Device class"
 msgstr ""
 
 #: user/apps/sysinfo.c:118
-msgid "Device tree"
+msgid "Device node"
 msgstr ""
 
 #: user/apps/sysinfo.c:119
-msgid "Devices"
+msgid "Device release"
 msgstr ""
 
 #: user/apps/sysinfo.c:120
-msgid "Direct map base"
+msgid "Device tree"
 msgstr ""
 
 #: user/apps/sysinfo.c:121
-msgid "Disk GUID"
+msgid "Devices"
 msgstr ""
 
 #: user/apps/sysinfo.c:122
-msgid "Disks"
+msgid "Direct map base"
 msgstr ""
 
 #: user/apps/sysinfo.c:123
-msgid "Driver"
+msgid "Disk GUID"
 msgstr ""
 
 #: user/apps/sysinfo.c:124
-msgid "EL0 support"
+msgid "Disks"
 msgstr ""
 
 #: user/apps/sysinfo.c:125
-msgid "EL1 support"
+msgid "Driver"
 msgstr ""
 
 #: user/apps/sysinfo.c:126
-msgid "EL2 support"
+msgid "EL0 support"
 msgstr ""
 
 #: user/apps/sysinfo.c:127
-msgid "EL3 support"
+msgid "EL1 support"
 msgstr ""
 
 #: user/apps/sysinfo.c:128
-msgid "Enabled"
+msgid "EL2 support"
 msgstr ""
 
 #: user/apps/sysinfo.c:129
-msgid "End address"
+msgid "EL3 support"
 msgstr ""
 
 #: user/apps/sysinfo.c:130
-msgid "Endpoints"
+msgid "Enabled"
 msgstr ""
 
 #: user/apps/sysinfo.c:131
-msgid "Entries"
+msgid "End address"
 msgstr ""
 
 #: user/apps/sysinfo.c:132
-msgid "Table entry"
+msgid "Endpoints"
 msgstr ""
 
 #: user/apps/sysinfo.c:133
-msgid "Extended features"
+msgid "Entries"
 msgstr ""
 
 #: user/apps/sysinfo.c:134
-msgid "External clock"
+msgid "Table entry"
 msgstr ""
 
 #: user/apps/sysinfo.c:135
-msgid "Family"
+msgid "Extended features"
 msgstr ""
 
 #: user/apps/sysinfo.c:136
-msgid "Feature words"
+msgid "External clock"
 msgstr ""
 
 #: user/apps/sysinfo.c:137
-msgid "Features"
+msgid "Family"
 msgstr ""
 
 #: user/apps/sysinfo.c:138
-msgid "Filesystem"
+msgid "Feature words"
 msgstr ""
 
 #: user/apps/sysinfo.c:139
-msgid "Firmware type"
+msgid "Features"
 msgstr ""
 
 #: user/apps/sysinfo.c:140
-msgid "First sector"
+msgid "Filesystem"
 msgstr ""
 
 #: user/apps/sysinfo.c:141
-msgid "Form factor"
+msgid "Firmware revision"
 msgstr ""
 
 #: user/apps/sysinfo.c:142
-msgid "Framebuffer"
+msgid "Firmware type"
 msgstr ""
 
 #: user/apps/sysinfo.c:143
-msgid "Framebuffer size"
+msgid "First sector"
 msgstr ""
 
 #: user/apps/sysinfo.c:144
-msgid "Free"
+msgid "Form factor"
 msgstr ""
 
 #: user/apps/sysinfo.c:145
-msgid "Functions"
+msgid "Framebuffer"
 msgstr ""
 
 #: user/apps/sysinfo.c:146
-msgid "GIC CPU interface"
+msgid "Framebuffer size"
 msgstr ""
 
 #: user/apps/sysinfo.c:147
-msgid "GIC distributor"
+msgid "Free"
 msgstr ""
 
 #: user/apps/sysinfo.c:148
-msgid "GIC redistributors"
+msgid "Functions"
 msgstr ""
 
 #: user/apps/sysinfo.c:149
-msgid "GICv2m"
+msgid "GIC CPU interface"
 msgstr ""
 
 #: user/apps/sysinfo.c:150
-msgid "GPU buffer"
+msgid "GIC distributor"
 msgstr ""
 
 #: user/apps/sysinfo.c:151
-msgid "GPU PCI address"
+msgid "GIC redistributors"
 msgstr ""
 
 #: user/apps/sysinfo.c:152
-msgid "GPU preferred mode"
+msgid "GICv2m"
 msgstr ""
 
 #: user/apps/sysinfo.c:153
-msgid "GPU scanout"
+msgid "GPU buffer"
 msgstr ""
 
 #: user/apps/sysinfo.c:154
-msgid "Grabbed"
+msgid "GPU PCI address"
 msgstr ""
 
 #: user/apps/sysinfo.c:155
-msgid "Page granules"
+msgid "GPU preferred mode"
 msgstr ""
 
 #: user/apps/sysinfo.c:156
-msgid "Hardware access flag update"
+msgid "GPU scanout"
 msgstr ""
 
 #: user/apps/sysinfo.c:157
-msgid "Header type"
+msgid "Grabbed"
 msgstr ""
 
 #: user/apps/sysinfo.c:158
-msgid "Hypervisor"
+msgid "Page granules"
 msgstr ""
 
 #: user/apps/sysinfo.c:159
-msgid "ID_AA64ISAR0_EL1"
+msgid "Hardware access flag update"
 msgstr ""
 
 #: user/apps/sysinfo.c:160
-msgid "ID_AA64ISAR1_EL1"
+msgid "Header type"
 msgstr ""
 
 #: user/apps/sysinfo.c:161
-msgid "ID_AA64MMFR0_EL1"
+msgid "Hypervisor"
 msgstr ""
 
 #: user/apps/sysinfo.c:162
-msgid "ID_AA64MMFR1_EL1"
+msgid "ID_AA64ISAR0_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:163
-msgid "ID_AA64MMFR2_EL1"
+msgid "ID_AA64ISAR1_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:164
-msgid "ID_AA64PFR0_EL1"
+msgid "ID_AA64MMFR0_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:165
-msgid "ID_AA64PFR1_EL1"
+msgid "ID_AA64MMFR1_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:166
-msgid "Implementer"
+msgid "ID_AA64MMFR2_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:167
-msgid "Index"
+msgid "ID_AA64PFR0_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:168
-msgid "Initial RAM disk size"
+msgid "ID_AA64PFR1_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:169
-msgid "Input device"
+msgid "Implementer"
 msgstr ""
 
 #: user/apps/sysinfo.c:170
-msgid "Input fields"
+msgid "Index"
 msgstr ""
 
 #: user/apps/sysinfo.c:171
-msgid "Installed"
+msgid "Initial RAM disk size"
 msgstr ""
 
 #: user/apps/sysinfo.c:172
-msgid "Interface"
+msgid "Input device"
 msgstr ""
 
 #: user/apps/sysinfo.c:173
-msgid "Interface class"
+msgid "Input fields"
 msgstr ""
 
 #: user/apps/sysinfo.c:174
-msgid "Interface version"
+msgid "Installed"
 msgstr ""
 
 #: user/apps/sysinfo.c:175
-msgid "Interfaces"
+msgid "Interface"
 msgstr ""
 
 #: user/apps/sysinfo.c:176
-msgid "Interrupt"
+msgid "Interface class"
 msgstr ""
 
 #: user/apps/sysinfo.c:177
-msgid "Interrupt controller"
+msgid "Interface version"
 msgstr ""
 
 #: user/apps/sysinfo.c:178
-msgid "Interrupt pin"
+msgid "Interfaces"
 msgstr ""
 
 #: user/apps/sysinfo.c:179
-msgid "Invariant TSC"
+msgid "Interrupt"
 msgstr ""
 
 #: user/apps/sysinfo.c:180
-msgid "I/O APIC"
+msgid "Interrupt controller"
 msgstr ""
 
 #: user/apps/sysinfo.c:181
-msgid "IPv4 address"
+msgid "Interrupt pin"
 msgstr ""
 
 #: user/apps/sysinfo.c:182
-msgid "ITS"
+msgid "Invariant TSC"
 msgstr ""
 
 #: user/apps/sysinfo.c:183
-msgid "Kernel build number"
+msgid "I/O APIC"
 msgstr ""
 
 #: user/apps/sysinfo.c:184
-msgid "Kernel physical base"
+msgid "IPv4 address"
 msgstr ""
 
 #: user/apps/sysinfo.c:185
-msgid "Kernel version"
+msgid "ITS"
 msgstr ""
 
 #: user/apps/sysinfo.c:186
-msgid "Kernel virtual base"
+msgid "Kernel build number"
 msgstr ""
 
 #: user/apps/sysinfo.c:187
-msgid "Key repeat"
+msgid "Kernel physical base"
 msgstr ""
 
 #: user/apps/sysinfo.c:188
-msgid "Keyboard controller"
+msgid "Kernel version"
 msgstr ""
 
 #: user/apps/sysinfo.c:189
-msgid "Keys"
+msgid "Kernel virtual base"
 msgstr ""
 
 #: user/apps/sysinfo.c:190
-msgid "Length"
+msgid "Key repeat"
 msgstr ""
 
 #: user/apps/sysinfo.c:191
-msgid "Level"
+msgid "Keyboard controller"
 msgstr ""
 
 #: user/apps/sysinfo.c:192
-msgid "Line size"
+msgid "Keys"
 msgstr ""
 
 #: user/apps/sysinfo.c:193
-msgid "Link state"
+msgid "Kind"
 msgstr ""
 
 #: user/apps/sysinfo.c:194
-msgid "Link type"
+msgid "Largest transfer"
 msgstr ""
 
 #: user/apps/sysinfo.c:195
-msgid "Local APIC"
+msgid "Length"
 msgstr ""
 
 #: user/apps/sysinfo.c:196
-msgid "Local APIC mode"
+msgid "Level"
 msgstr ""
 
 #: user/apps/sysinfo.c:197
-msgid "Local APIC timer"
+msgid "Line size"
 msgstr ""
 
 #: user/apps/sysinfo.c:198
-msgid "Local APIC version"
+msgid "Link state"
 msgstr ""
 
 #: user/apps/sysinfo.c:199
-msgid "Locator"
+msgid "Link type"
 msgstr ""
 
 #: user/apps/sysinfo.c:200
-msgid "Logical resolution"
+msgid "Local APIC"
 msgstr ""
 
 #: user/apps/sysinfo.c:201
-msgid "LPIs"
+msgid "Local APIC mode"
 msgstr ""
 
 #: user/apps/sysinfo.c:202
-msgid "MAC address"
+msgid "Local APIC timer"
 msgstr ""
 
 #: user/apps/sysinfo.c:203
-msgid "Machine"
+msgid "Local APIC version"
 msgstr ""
 
 #: user/apps/sysinfo.c:204
-msgid "Managed by the kernel"
+msgid "Locator"
 msgstr ""
 
 #: user/apps/sysinfo.c:205
-msgid "Manufacturer"
+msgid "Logical resolution"
 msgstr ""
 
 #: user/apps/sysinfo.c:206
-msgid "Maximum extended CPUID leaf"
+msgid "LPIs"
 msgstr ""
 
 #: user/apps/sysinfo.c:207
-msgid "Maximum CPUID leaf"
+msgid "MAC address"
 msgstr ""
 
 #: user/apps/sysinfo.c:208
-msgid "Endpoint 0 packet size"
+msgid "Machine"
 msgstr ""
 
 #: user/apps/sysinfo.c:209
-msgid "Maximum speed"
+msgid "Managed by the kernel"
 msgstr ""
 
 #: user/apps/sysinfo.c:210
-msgid "Memory map entries"
+msgid "Manufacturer"
 msgstr ""
 
 #: user/apps/sysinfo.c:211
-msgid "Memory type"
+msgid "Maximum extended CPUID leaf"
 msgstr ""
 
 #: user/apps/sysinfo.c:212
-msgid "MIDR_EL1"
+msgid "Maximum CPUID leaf"
 msgstr ""
 
 #: user/apps/sysinfo.c:213
-msgid "Model"
+msgid "Endpoint 0 packet size"
 msgstr ""
 
 #: user/apps/sysinfo.c:214
-msgid "Model name"
+msgid "Maximum speed"
 msgstr ""
 
 #: user/apps/sysinfo.c:215
-msgid "Module size"
+msgid "Memory map entries"
 msgstr ""
 
 #: user/apps/sysinfo.c:216
-msgid "Mount point"
+msgid "Memory type"
 msgstr ""
 
 #: user/apps/sysinfo.c:217
-msgid "Mounts"
+msgid "MIDR_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:218
-msgid "MPIDR_EL1"
+msgid "Model"
 msgstr ""
 
 #: user/apps/sysinfo.c:219
-msgid "MSI"
+msgid "Model name"
 msgstr ""
 
 #: user/apps/sysinfo.c:220
-msgid "MSI mapping"
+msgid "Module size"
 msgstr ""
 
 #: user/apps/sysinfo.c:221
-msgid "MSI-X"
+msgid "Mount point"
 msgstr ""
 
 #: user/apps/sysinfo.c:222
-msgid "MTU"
+msgid "Mounts"
 msgstr ""
 
 #: user/apps/sysinfo.c:223
-msgid "Name"
+msgid "MPIDR_EL1"
 msgstr ""
 
 #: user/apps/sysinfo.c:224
-msgid "OEM ID"
+msgid "MSI"
 msgstr ""
 
 #: user/apps/sysinfo.c:225
-msgid "OEM revision"
+msgid "MSI mapping"
 msgstr ""
 
 #: user/apps/sysinfo.c:226
-msgid "OEM table ID"
+msgid "MSI-X"
 msgstr ""
 
 #: user/apps/sysinfo.c:227
-msgid "Open readers"
+msgid "MTU"
 msgstr ""
 
 #: user/apps/sysinfo.c:228
-msgid "Opened"
+msgid "Name"
 msgstr ""
 
 #: user/apps/sysinfo.c:229
-msgid "Operating system"
+msgid "Namespaces"
 msgstr ""
 
 #: user/apps/sysinfo.c:230
-msgid "Release"
+msgid "OEM ID"
 msgstr ""
 
 #: user/apps/sysinfo.c:231
-msgid "Over-current"
+msgid "OEM revision"
 msgstr ""
 
 #: user/apps/sysinfo.c:232
-msgid "Page size"
+msgid "OEM table ID"
 msgstr ""
 
 #: user/apps/sysinfo.c:233
-msgid "Privileged access never"
+msgid "Open readers"
 msgstr ""
 
-#: user/apps/sysinfo.c:234 user/apps/sysinfo.c:235
-msgid "Part number"
+#: user/apps/sysinfo.c:234
+msgid "Opened"
+msgstr ""
+
+#: user/apps/sysinfo.c:235
+msgid "Operating system"
 msgstr ""
 
 #: user/apps/sysinfo.c:236
-msgid "Partition table"
+msgid "Release"
 msgstr ""
 
 #: user/apps/sysinfo.c:237
-msgid "Partition type"
+msgid "Over-current"
 msgstr ""
 
 #: user/apps/sysinfo.c:238
-msgid "PCI address"
+msgid "Page size"
 msgstr ""
 
 #: user/apps/sysinfo.c:239
-msgid "PCI Express"
+msgid "Privileged access never"
 msgstr ""
 
-#: user/apps/sysinfo.c:240
-msgid "PCI Express configuration space"
-msgstr ""
-
-#: user/apps/sysinfo.c:241
-msgid "PCI Express link"
+#: user/apps/sysinfo.c:240 user/apps/sysinfo.c:241
+msgid "Part number"
 msgstr ""
 
 #: user/apps/sysinfo.c:242
-msgid "Physical address bits"
+msgid "Partition table"
 msgstr ""
 
 #: user/apps/sysinfo.c:243
-msgid "Pitch"
+msgid "Partition type"
 msgstr ""
 
 #: user/apps/sysinfo.c:244
-msgid "Pixel format"
+msgid "PCI address"
 msgstr ""
 
 #: user/apps/sysinfo.c:245
-msgid "Playback"
+msgid "PCI Express"
 msgstr ""
 
 #: user/apps/sysinfo.c:246
-msgid "Populated"
+msgid "PCI Express configuration space"
 msgstr ""
 
 #: user/apps/sysinfo.c:247
-msgid "Port"
+msgid "PCI Express link"
 msgstr ""
 
 #: user/apps/sysinfo.c:248
-msgid "Ports"
+msgid "Physical address bits"
 msgstr ""
 
 #: user/apps/sysinfo.c:249
-msgid "PORTSC register"
+msgid "Pitch"
 msgstr ""
 
 #: user/apps/sysinfo.c:250
-msgid "Power"
+msgid "Pixel format"
 msgstr ""
 
 #: user/apps/sysinfo.c:251
-msgid "Power management"
+msgid "Playback"
 msgstr ""
 
 #: user/apps/sysinfo.c:252
-msgid "Power off"
+msgid "Populated"
 msgstr ""
 
 #: user/apps/sysinfo.c:253
-msgid "Powered"
+msgid "Port"
 msgstr ""
 
 #: user/apps/sysinfo.c:254
-msgid "Product"
+msgid "Ports"
 msgstr ""
 
 #: user/apps/sysinfo.c:255
-msgid "Product ID"
+msgid "PORTSC register"
 msgstr ""
 
 #: user/apps/sysinfo.c:256
-msgid "Protocol"
+msgid "Power"
 msgstr ""
 
 #: user/apps/sysinfo.c:257
-msgid "PSCI"
+msgid "Power management"
 msgstr ""
 
 #: user/apps/sysinfo.c:258
-msgid "RAM"
+msgid "Power off"
 msgstr ""
 
 #: user/apps/sysinfo.c:259
-msgid "Real time clock device"
+msgid "Powered"
 msgstr ""
 
 #: user/apps/sysinfo.c:260
-msgid "Reboot"
+msgid "Product"
 msgstr ""
 
 #: user/apps/sysinfo.c:261
-msgid "Received"
+msgid "Product ID"
 msgstr ""
 
 #: user/apps/sysinfo.c:262
-msgid "Relative axes"
+msgid "Protocol"
 msgstr ""
 
 #: user/apps/sysinfo.c:263
-msgid "Firmware release"
+msgid "PSCI"
 msgstr ""
 
 #: user/apps/sysinfo.c:264
-msgid "Release date"
+msgid "RAM"
 msgstr ""
 
 #: user/apps/sysinfo.c:265
-msgid "Report IDs"
+msgid "Real time clock device"
 msgstr ""
 
 #: user/apps/sysinfo.c:266
-msgid "Report length"
+msgid "Reboot"
 msgstr ""
 
 #: user/apps/sysinfo.c:267
-msgid "Report protocol"
+msgid "Received"
 msgstr ""
 
 #: user/apps/sysinfo.c:268
-msgid "Resolution"
+msgid "Relative axes"
 msgstr ""
 
 #: user/apps/sysinfo.c:269
-msgid "Revision"
+msgid "Firmware release"
 msgstr ""
 
 #: user/apps/sysinfo.c:270
-msgid "ROM size"
+msgid "Release date"
 msgstr ""
 
 #: user/apps/sysinfo.c:271
-msgid "RSDP address"
+msgid "Report IDs"
 msgstr ""
 
 #: user/apps/sysinfo.c:272
-msgid "RSDP revision"
+msgid "Report length"
 msgstr ""
 
 #: user/apps/sysinfo.c:273
-msgid "Real time clock"
+msgid "Report protocol"
 msgstr ""
 
 #: user/apps/sysinfo.c:274
-msgid "Scratchpad buffers"
+msgid "Resolution"
 msgstr ""
 
 #: user/apps/sysinfo.c:275
-msgid "Sector size"
+msgid "Revision"
 msgstr ""
 
 #: user/apps/sysinfo.c:276
-msgid "Sectors"
+msgid "ROM size"
 msgstr ""
 
 #: user/apps/sysinfo.c:277
-msgid "Sent"
+msgid "RSDP address"
 msgstr ""
 
 #: user/apps/sysinfo.c:278
-msgid "Serial number"
+msgid "RSDP revision"
 msgstr ""
 
 #: user/apps/sysinfo.c:279
-msgid "Serial console"
+msgid "Real time clock"
 msgstr ""
 
 #: user/apps/sysinfo.c:280
-msgid "Sets"
+msgid "Scratchpad buffers"
 msgstr ""
 
 #: user/apps/sysinfo.c:281
-msgid "Shared by"
+msgid "Sector size"
 msgstr ""
 
 #: user/apps/sysinfo.c:282
-msgid "Signature"
+msgid "Sectors"
 msgstr ""
 
 #: user/apps/sysinfo.c:283
-msgid "Size"
+msgid "Sent"
 msgstr ""
 
 #: user/apps/sysinfo.c:284
-msgid "SKU"
+msgid "Serial number"
 msgstr ""
 
 #: user/apps/sysinfo.c:285
-msgid "Slot"
+msgid "Serial console"
 msgstr ""
 
 #: user/apps/sysinfo.c:286
-msgid "Slots"
+msgid "Sets"
 msgstr ""
 
 #: user/apps/sysinfo.c:287
-msgid "SMBIOS"
+msgid "Shared by"
 msgstr ""
 
 #: user/apps/sysinfo.c:288
-msgid "Socket"
+msgid "Signature"
 msgstr ""
 
 #: user/apps/sysinfo.c:289
-msgid "Source"
+msgid "Size"
 msgstr ""
 
 #: user/apps/sysinfo.c:290
-msgid "Speed"
+msgid "SKU"
 msgstr ""
 
 #: user/apps/sysinfo.c:291
-msgid "Started"
+msgid "Slot"
 msgstr ""
 
 #: user/apps/sysinfo.c:292
-msgid "State"
+msgid "Slots"
 msgstr ""
 
 #: user/apps/sysinfo.c:293
-msgid "Stepping"
+msgid "SMBIOS"
 msgstr ""
 
 #: user/apps/sysinfo.c:294
-msgid "Structures"
+msgid "Socket"
 msgstr ""
 
 #: user/apps/sysinfo.c:295
-msgid "Subsystem"
+msgid "Source"
 msgstr ""
 
 #: user/apps/sysinfo.c:296
-msgid "Supported format"
+msgid "Speed"
 msgstr ""
 
 #: user/apps/sysinfo.c:297
-msgid "Free swap"
+msgid "Started"
 msgstr ""
 
 #: user/apps/sysinfo.c:298
-msgid "Total swap"
+msgid "State"
 msgstr ""
 
 #: user/apps/sysinfo.c:299
-msgid "Table size"
+msgid "Stepping"
 msgstr ""
 
 #: user/apps/sysinfo.c:300
-msgid "Tables"
+msgid "Structures"
 msgstr ""
 
 #: user/apps/sysinfo.c:301
-msgid "Threads"
+msgid "Subsystem"
 msgstr ""
 
 #: user/apps/sysinfo.c:302
-msgid "Scheduler tick rate"
+msgid "Supported format"
 msgstr ""
 
 #: user/apps/sysinfo.c:303
-msgid "Type"
+msgid "Free swap"
 msgstr ""
 
 #: user/apps/sysinfo.c:304
-msgid "UEFI supported"
+msgid "Total swap"
 msgstr ""
 
 #: user/apps/sysinfo.c:305
-msgid "Unique GUID"
+msgid "Table size"
 msgstr ""
 
 #: user/apps/sysinfo.c:306
-msgid "Uptime"
+msgid "Tables"
 msgstr ""
 
 #: user/apps/sysinfo.c:307
-msgid "Use"
+msgid "Threads"
 msgstr ""
 
 #: user/apps/sysinfo.c:308
-msgid "USB version"
+msgid "Scheduler tick rate"
 msgstr ""
 
 #: user/apps/sysinfo.c:309
-msgid "Used"
+msgid "Type"
 msgstr ""
 
 #: user/apps/sysinfo.c:310
-msgid "UUID"
+msgid "UEFI supported"
 msgstr ""
 
 #: user/apps/sysinfo.c:311
-msgid "Variant"
+msgid "Unique GUID"
 msgstr ""
 
 #: user/apps/sysinfo.c:312
-msgid "Vendor"
+msgid "Uptime"
 msgstr ""
 
 #: user/apps/sysinfo.c:313
-msgid "Vendor ID"
+msgid "Use"
 msgstr ""
 
 #: user/apps/sysinfo.c:314
-msgid "Version"
+msgid "USB version"
 msgstr ""
 
 #: user/apps/sysinfo.c:315
-msgid "Virtualization host extensions"
+msgid "Used"
 msgstr ""
 
 #: user/apps/sysinfo.c:316
-msgid "Virtual address bits"
+msgid "UUID"
 msgstr ""
 
 #: user/apps/sysinfo.c:317
+msgid "Variant"
+msgstr ""
+
+#: user/apps/sysinfo.c:318
+msgid "Vendor"
+msgstr ""
+
+#: user/apps/sysinfo.c:319
+msgid "Vendor ID"
+msgstr ""
+
+#: user/apps/sysinfo.c:320
+msgid "Version"
+msgstr ""
+
+#: user/apps/sysinfo.c:321
+msgid "Virtualization host extensions"
+msgstr ""
+
+#: user/apps/sysinfo.c:322
+msgid "Virtual address bits"
+msgstr ""
+
+#: user/apps/sysinfo.c:323
+msgid "Volatile write cache"
+msgstr ""
+
+#: user/apps/sysinfo.c:324
 msgid "Ways"
 msgstr ""
 
-#: user/apps/sysinfo.c:328
+#: user/apps/sysinfo.c:335
 msgid "BAR %c"
 msgstr ""
 
-#: user/apps/sysinfo.c:332
+#: user/apps/sysinfo.c:339
 msgid "Endpoint 0x%s"
 msgstr ""
 
-#: user/apps/sysinfo.c:336
+#: user/apps/sysinfo.c:343
 msgid "Absolute axis %s"
 msgstr ""
 
-#: user/apps/sysinfo.c:502
+#: user/apps/sysinfo.c:509
 msgid "Description"
 msgstr ""
 
-#: user/apps/sysinfo.c:509
+#: user/apps/sysinfo.c:516
 msgid "Property"
 msgstr ""
 
-#: user/apps/sysinfo.c:509
+#: user/apps/sysinfo.c:516
 msgid "Value"
 msgstr ""
 
@@ -919,215 +947,219 @@ msgstr ""
 msgid "PCI"
 msgstr ""
 
-#: user/apps/sysinfo.c:548
-msgid "/dev/devices cannot be read"
-msgstr ""
-
 #: user/apps/sysinfo.c:55
 msgid "USB"
 msgstr ""
 
 #: user/apps/sysinfo.c:55
-msgid "Input devices"
+msgid "NVMe"
 msgstr ""
 
 #: user/apps/sysinfo.c:55
+msgid "AHCI"
+msgstr ""
+
+#: user/apps/sysinfo.c:555
+msgid "/dev/devices cannot be read"
+msgstr ""
+
+#: user/apps/sysinfo.c:56
+msgid "Input devices"
+msgstr ""
+
+#: user/apps/sysinfo.c:56
 msgid "Storage"
 msgstr ""
 
-#: user/apps/sysinfo.c:56
+#: user/apps/sysinfo.c:57
 msgid "Display"
 msgstr ""
 
-#: user/apps/sysinfo.c:56
+#: user/apps/sysinfo.c:57
 msgid "Audio"
 msgstr ""
 
-#: user/apps/sysinfo.c:56
+#: user/apps/sysinfo.c:57
 msgid "Network"
 msgstr ""
 
-#: user/apps/sysinfo.c:61
-msgid "ACPI"
-msgstr ""
-
 #: user/apps/sysinfo.c:62
-msgid "Acquired"
+msgid "64-bit addresses"
 msgstr ""
 
 #: user/apps/sysinfo.c:63
-msgid "Address"
+msgid "ACPI"
 msgstr ""
 
 #: user/apps/sysinfo.c:64
-msgid "Alternate setting"
-msgstr ""
-
-#: user/apps/sysinfo.c:644
-msgid "System information"
-msgstr ""
-
-#: user/apps/sysinfo.c:648
-msgid "File"
-msgstr ""
-
-#: user/apps/sysinfo.c:649
-msgid "Quit"
+msgid "Acquired"
 msgstr ""
 
 #: user/apps/sysinfo.c:65
-msgid "AMD features"
+msgid "Address"
 msgstr ""
 
-#: user/apps/sysinfo.c:652
+#: user/apps/sysinfo.c:651
+msgid "System information"
+msgstr ""
+
+#: user/apps/sysinfo.c:655
+msgid "File"
+msgstr ""
+
+#: user/apps/sysinfo.c:656
+msgid "Quit"
+msgstr ""
+
+#: user/apps/sysinfo.c:659
 msgid "View"
 msgstr ""
 
-#: user/apps/sysinfo.c:653
+#: user/apps/sysinfo.c:66
+msgid "Alternate setting"
+msgstr ""
+
+#: user/apps/sysinfo.c:660
 msgid "Refresh"
 msgstr ""
 
-#: user/apps/sysinfo.c:657
+#: user/apps/sysinfo.c:664
 msgid "Expand all"
 msgstr ""
 
-#: user/apps/sysinfo.c:658
+#: user/apps/sysinfo.c:665
 msgid "Collapse all"
 msgstr ""
 
-#: user/apps/sysinfo.c:66
-msgid "APIC ID"
-msgstr ""
-
 #: user/apps/sysinfo.c:67
-msgid "Architecture"
+msgid "AMD features"
 msgstr ""
 
 #: user/apps/sysinfo.c:68
-msgid "ASID bits"
+msgid "APIC ID"
 msgstr ""
 
 #: user/apps/sysinfo.c:69
-msgid "Asset tag"
+msgid "Architecture"
 msgstr ""
 
 #: user/apps/sysinfo.c:70
-msgid "Available"
+msgid "ASID bits"
 msgstr ""
 
 #: user/apps/sysinfo.c:71
-msgid "Bank"
+msgid "Asset tag"
 msgstr ""
 
 #: user/apps/sysinfo.c:72
-msgid "Base address"
+msgid "Available"
 msgstr ""
 
 #: user/apps/sysinfo.c:73
-msgid "Bits per pixel"
+msgid "Bank"
 msgstr ""
 
 #: user/apps/sysinfo.c:74
-msgid "Block size"
+msgid "Base address"
 msgstr ""
 
 #: user/apps/sysinfo.c:75
-msgid "Boot CPU"
+msgid "Bits per pixel"
 msgstr ""
 
 #: user/apps/sysinfo.c:76
-msgid "Boot disk"
+msgid "Block size"
 msgstr ""
 
 #: user/apps/sysinfo.c:77
-msgid "Boot disk GUID"
+msgid "Boot CPU"
 msgstr ""
 
 #: user/apps/sysinfo.c:78
-msgid "Boot framebuffer"
+msgid "Boot disk"
 msgstr ""
 
 #: user/apps/sysinfo.c:79
-msgid "Boot partition"
+msgid "Boot disk GUID"
 msgstr ""
 
 #: user/apps/sysinfo.c:80
-msgid "Boot partition GUID"
+msgid "Boot framebuffer"
 msgstr ""
 
 #: user/apps/sysinfo.c:81
-msgid "Boot protocol"
+msgid "Boot partition"
 msgstr ""
 
 #: user/apps/sysinfo.c:82
-msgid "Bootloader"
+msgid "Boot partition GUID"
 msgstr ""
 
 #: user/apps/sysinfo.c:83
-msgid "Bus"
+msgid "Boot protocol"
 msgstr ""
 
 #: user/apps/sysinfo.c:84
-msgid "Buses"
+msgid "Bootloader"
 msgstr ""
 
 #: user/apps/sysinfo.c:85
-msgid "Buttons"
+msgid "Bus"
 msgstr ""
 
 #: user/apps/sysinfo.c:86
-msgid "Cache size"
+msgid "Buses"
 msgstr ""
 
 #: user/apps/sysinfo.c:87
-msgid "Cache type"
+msgid "Buttons"
 msgstr ""
 
 #: user/apps/sysinfo.c:88
-msgid "Capabilities"
+msgid "Cache size"
 msgstr ""
 
 #: user/apps/sysinfo.c:89
-msgid "Capture"
+msgid "Cache type"
 msgstr ""
 
 #: user/apps/sysinfo.c:90
-msgid "Characteristics"
+msgid "Capabilities"
 msgstr ""
 
 #: user/apps/sysinfo.c:91
-msgid "Chassis type"
+msgid "Capture"
 msgstr ""
 
 #: user/apps/sysinfo.c:92
-msgid "Chipset"
+msgid "Characteristics"
 msgstr ""
 
 #: user/apps/sysinfo.c:93
-msgid "Class"
+msgid "Chassis type"
 msgstr ""
 
 #: user/apps/sysinfo.c:94
-msgid "Clock rate"
+msgid "Chipset"
 msgstr ""
 
 #: user/apps/sysinfo.c:95
-msgid "Command register"
+msgid "Class"
 msgstr ""
 
 #: user/apps/sysinfo.c:96
-msgid "Command line"
+msgid "Clock rate"
 msgstr ""
 
 #: user/apps/sysinfo.c:97
-msgid "Compatible"
+msgid "Command register"
 msgstr ""
 
 #: user/apps/sysinfo.c:98
-msgid "Kernel configuration"
+msgid "Command line"
 msgstr ""
 
 #: user/apps/sysinfo.c:99
-msgid "Configuration"
+msgid "Compatible"
 msgstr ""
 

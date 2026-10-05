@@ -1,2 +1,2 @@
 name binutils
-summary Archiver, assembler and linker
+summary Archiver, assembler, linker and the tools that read and change ELF files

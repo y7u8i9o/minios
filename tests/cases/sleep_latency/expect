@@ -1,0 +1,6 @@
+sleeplattest: [0-9]+ busy processes, overshoot mean -?[0-9]+ us, max [0-9]+ us
+sleeplattest: handled signal ended a 500 ms sleep after [0-9]+ us, [0-9]+ ms remaining
+sleeplattest: ignored signal, 200 ms sleep lasted [0-9]+ us
+sleeplattest: sleep\(3\) interrupted after 100 ms returned 3
+sleeplattest: ok
+TEST PASS

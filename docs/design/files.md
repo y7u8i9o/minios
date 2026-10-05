@@ -27,7 +27,9 @@ sorts through `folderview_sort` and Edit, Search starts a search.
 
 Enter, a double click or Open enter a folder or open a file with its
 handler (`mime_open`), and an opened file is added to the recent list.
-Open with... asks for a program, and Open in terminal starts `term -d`
+Open with... opens the application chooser (`app_choose_program`,
+`framework.md`) and starts the chosen command with `mime_run`. Open in
+terminal starts `term -d`
 in the selected or current folder. In Recent and in a search the entry
 menu offers Open item location, which shows the folder of the entry with
 the entry selected. Back and Forward walk a history of 32 folders, which

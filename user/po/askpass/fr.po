@@ -1,0 +1,22 @@
+# French messages of the askpass domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Authentication is required to run a command as root."
+msgstr "L'authentification est requise pour exécuter une commande en tant que root."
+
+msgid "Authentication required"
+msgstr "Authentification requise"
+
+msgid "The password was wrong. Try again."
+msgstr "Le mot de passe est incorrect. Réessayez."
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Authenticate"
+msgstr "S'authentifier"

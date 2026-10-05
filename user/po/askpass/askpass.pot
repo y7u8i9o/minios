@@ -1,0 +1,25 @@
+# Template of the translatable messages, written by tools/xgettext.py.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: user/askpass/askpass.c:195
+msgid "Authentication is required to run a command as root."
+msgstr ""
+
+#: user/askpass/askpass.c:236
+msgid "Authentication required"
+msgstr ""
+
+#: user/askpass/askpass.c:243
+msgid "The password was wrong. Try again."
+msgstr ""
+
+#: user/askpass/askpass.c:245
+msgid "Cancel"
+msgstr ""
+
+#: user/askpass/askpass.c:249
+msgid "Authenticate"
+msgstr ""
+

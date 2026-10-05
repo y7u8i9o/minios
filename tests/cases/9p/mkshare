@@ -1,0 +1,9 @@
+#!/bin/sh
+# The host side of the boot case 9p: a file, a folder, a symbolic link and
+# a file that the guest removes.
+set -e
+printf 'hello from the host\n' > "$SHARE/hello.txt"
+mkdir "$SHARE/folder"
+printf 'inside\n' > "$SHARE/folder/inner.txt"
+ln -s hello.txt "$SHARE/link"
+printf 'remove me\n' > "$SHARE/old.txt"

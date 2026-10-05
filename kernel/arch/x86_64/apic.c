@@ -169,6 +169,18 @@ void ioapic_route(unsigned gsi, uint8_t vector, bool masked)
     ioapic_write(IOAPIC_REG_REDIR(gsi), vector | (masked ? IOAPIC_MASKED : 0));
 }
 
+/* As ioapic_route, with the trigger mode and the polarity of the firmware:
+ * bit 15 of the redirection entry selects level triggering and bit 13 an
+ * active low input. Returns false for a GSI beyond the I/O APIC. */
+bool ioapic_route_mode(unsigned gsi, uint8_t vector, bool level, bool active_low)
+{
+    if (gsi >= ioapic_entries)
+        return false;
+    ioapic_write(IOAPIC_REG_REDIR(gsi) + 1, lapic_id() << 24);
+    ioapic_write(IOAPIC_REG_REDIR(gsi), vector | (level ? 1u << 15 : 0) | (active_low ? 1u << 13 : 0));
+    return true;
+}
+
 void ioapic_mask(unsigned gsi, bool masked)
 {
     uint32_t lo = ioapic_read(IOAPIC_REG_REDIR(gsi));

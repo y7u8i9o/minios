@@ -12,5 +12,6 @@ depends playtone
 depends pong
 depends sequencer
 depends synth
+depends transfer
 depends unicode
 depends view

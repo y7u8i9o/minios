@@ -1,6 +1,7 @@
 /* MIME tables: extension lookup, handler fallbacks, editing and saving. */
 #include "check.h"
 #include <gui/mime.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -19,9 +20,9 @@ void run_mime_tests(void)
     CHECK(strcmp(mime_type("Clock.app", 0), MIME_LAUNCHER) == 0, "strcmp(mime_type(\"Clock.app\", 0), MIME_LAUNCHER) == 0");
     CHECK(strcmp(mime_type(".hidden", 0), "application/octet-stream") == 0, "strcmp(mime_type(\".hidden\", 0), \"application/octet-stream\") == 0");
     CHECK(strcmp(mime_type("dir", 1), MIME_DIRECTORY) == 0, "strcmp(mime_type(\"dir\", 1), MIME_DIRECTORY) == 0");
-    CHECK(strcmp(mime_handler("text/plain"), "/bin/gedit") == 0, "strcmp(mime_handler(\"text/plain\"), \"/bin/gedit\") == 0");      /* text/* */
+    CHECK(strcmp(mime_handler("text/plain"), "/bin/gedit") == 0, "strcmp(mime_handler(\"text/plain\"), \"/bin/gedit\") == 0");      /* the pattern text/ with an asterisk */
     CHECK(strcmp(mime_handler("image/png"), "/bin/view") == 0, "strcmp(mime_handler(\"image/png\"), \"/bin/view\") == 0");
-    CHECK(strcmp(mime_handler("video/x"), "/bin/hexview") == 0, "strcmp(mime_handler(\"video/x\"), \"/bin/hexview\") == 0");        /* * */
+    CHECK(strcmp(mime_handler("video/x"), "/bin/hexview") == 0, "strcmp(mime_handler(\"video/x\"), \"/bin/hexview\") == 0");        /* the pattern of an asterisk alone */
     CHECK(strcmp(mime_icon(MIME_DIRECTORY), "folder") == 0, "strcmp(mime_icon(MIME_DIRECTORY), \"folder\") == 0");
     CHECK(strcmp(mime_icon("text/plain"), "edit") == 0, "strcmp(mime_icon(\"text/plain\"), \"edit\") == 0");
     mime_set_handler("image/png", "/bin/paint");
@@ -31,6 +32,10 @@ void run_mime_tests(void)
     CHECK(mime_load(types, apps) == 0, "mime_load(types, apps) == 0");
     CHECK(strcmp(mime_handler("image/png"), "/bin/paint") == 0, "strcmp(mime_handler(\"image/png\"), \"/bin/paint\") == 0");
     CHECK(strcmp(mime_handler("audio/x"), "/bin/play") == 0, "strcmp(mime_handler(\"audio/x\"), \"/bin/play\") == 0");
+    /* mime_run reports a failed exec, and the arguments of a command come before the path. */
+    CHECK(mime_run("/nonexistent/program", NULL) == -ENOENT, "a missing program gives -ENOENT");
+    CHECK(mime_run("", NULL) == -EINVAL, "an empty command gives -EINVAL");
+    CHECK(mime_run("/bin/sh -c true", "file") == 0, "a command with arguments starts");
     remove(types);
     remove(apps);
 }

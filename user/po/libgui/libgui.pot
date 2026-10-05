@@ -3,79 +3,123 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:45 lib/libgui/src/folderview.c:554
-msgid "OK"
+#: lib/libgui/src/appchooser.c:159
+msgid "Recommended applications"
 msgstr ""
 
-#: lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:102 lib/libgui/src/filechooser.c:340
+#: lib/libgui/src/appchooser.c:161
+msgid "Other applications"
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:202
+msgid "The default application cannot be saved: %s."
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:264
+msgid "Choose a program"
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:274
+msgid "“%s” is not a program."
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:301
+msgid "Choose an application to open “%s”."
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:314
+msgid "Always use for files of type %s"
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:319
+msgid "Other program..."
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:323 lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:105 lib/libgui/src/filechooser.c:349
 msgid "Cancel"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:100
-msgid "A file named “%s” already exists. Do you want to replace it?"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:102
-msgid "Replace"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:103
-msgid "Replace file"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:246 lib/libgui/src/filechooser.c:357
-msgid "New folder"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:246
-msgid "Folder name:"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:250
-msgid "A folder name cannot contain “/”."
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:256
-msgid "The folder “%s” cannot be created: %s."
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:291
-msgid "Hide hidden files"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:291 lib/libgui/src/filechooser.c:371
-msgid "Show hidden files"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:323
-msgid "Name:"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:343
-msgid "Save"
-msgstr ""
-
-#: lib/libgui/src/filechooser.c:343
+#: lib/libgui/src/appchooser.c:326 lib/libgui/src/filechooser.c:353
 msgid "Open"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:367
+#: lib/libgui/src/appchooser.c:60 lib/libgui/src/dialog.c:86 lib/libgui/src/filechooser.c:46 lib/libgui/src/folderview.c:554
+msgid "OK"
+msgstr ""
+
+#: lib/libgui/src/appchooser.c:61 lib/libgui/src/appchooser.c:354
+msgid "Open with"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:103
+msgid "A file named “%s” already exists. Do you want to replace it?"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:105
+msgid "Replace"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:106
+msgid "Replace file"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:255 lib/libgui/src/filechooser.c:367
+msgid "New folder"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:255
+msgid "Folder name:"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:259
+msgid "A folder name cannot contain “/”."
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:265
+msgid "The folder “%s” cannot be created: %s."
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:300
+msgid "Hide hidden files"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:300 lib/libgui/src/filechooser.c:381
+msgid "Show hidden files"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:332
+msgid "Name:"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:352
+msgid "Save"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:353
+msgid "Choose"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:377
 msgid "Visit file"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:369
+#: lib/libgui/src/filechooser.c:379
 msgid "Copy location"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:431
 msgid "Save file"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:421
+#: lib/libgui/src/filechooser.c:431
+msgid "Choose folder"
+msgstr ""
+
+#: lib/libgui/src/filechooser.c:431
 msgid "Open file"
 msgstr ""
 
-#: lib/libgui/src/filechooser.c:94
+#: lib/libgui/src/filechooser.c:97
 msgid "The folder “%s” does not exist."
 msgstr ""
 

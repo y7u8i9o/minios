@@ -1413,7 +1413,7 @@ uint8_t vfs_mode_to_dtype(uint32_t mode)
 
 int64_t vfs_now(void)
 {
-    return (int64_t)(rtc_epoch_offset_ns() + timer_ns());
+    return (int64_t)rtc_realtime_ns();
 }
 
 void inode_stat(struct inode *ino, struct stat *st)

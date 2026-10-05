@@ -57,8 +57,9 @@ serial line to the kernel and the programs.
   object and the arguments formatted by `wire_format_args`. `client`
   events follow when a client connects, reports its pid through the
   shell or disconnects. The traffic of a client that traces is never
-  traced, so two tracers cannot feed each other, and a flag retains the
-  hook from tracing the events it queues itself. When more than 48 KiB
+  traced. Two tracers therefore cannot trace the messages of each other
+  without end. A flag prevents the trace function from tracing the events
+  that it queues itself. When more than 48 KiB
   are queued to a tracer, its messages are counted instead of queued
   and reported by one `dropped` event once it reads again, so a slow
   tracer never makes libwire drop a message of its own. Up to eight
@@ -107,7 +108,28 @@ from the corresponding edge of that area. A surface anchored to the
 bottom is therefore placed above the panel. A layer surface without
 margins is positioned as before, against the screen edge when it is
 anchored on one side and at the desktop area when it is anchored on two
-opposite sides.
+opposite sides. A layer surface without an anchor on an axis is centred on the
+screen on that axis, as in the layer shell of wlroots. A size of 0 takes
+the dimension of the desktop area. A layer surface of width 0 with the
+anchors left and right therefore receives the new width after a mode
+change. A layer surface with a nonzero width receives that width again.
+
+X12 polls `/dev/fb0` for the size requests of the host display. With the
+setting `display_follow` X12 changes the mode to the requested size
+(`display.md`, V3 of the 0.6.0 release).
+
+While an overlay layer surface has the keyboard focus, Alt+Tab and Alt+F4
+go to the surface instead of cycling or closing the toplevels below it,
+so that the login window and the authentication dialog (`users.md`)
+retain the keyboard. A click on the title bar of a server decorated
+toplevel reaches the title bar only when no surface above it covers the
+point: a toplevel higher in the stack, a layer surface of the top or
+overlay layer, or a popup (`covers_decorations` in `seat.c`). Before
+2026-10-05 X12 compared only the stack positions, which layer surfaces do
+not have, and a title bar below the panel or an overlay took the click.
+
+A window with a text input context receives its key repeats from X12
+instead of libgui (`input.md`).
 
 ## Frame clock and callbacks
 

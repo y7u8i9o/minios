@@ -23,9 +23,52 @@ falls back to 2000-01-01 with a warning.
 `clock_gettime(clock, ts)` returns `CLOCK_MONOTONIC` as the timer's
 nanoseconds since boot (`timer_ns`, the TSC scaled exactly) and
 `CLOCK_REALTIME` as that plus the epoch offset. `clock_settime` accepts
-`CLOCK_REALTIME` and replaces the offset; it does not write the CMOS clock,
-so the change lasts until the next boot. The offset is one 64-bit word
-written at boot and by `clock_settime` and read by `clock_gettime`.
+`CLOCK_REALTIME` and replaces the offset. It does not write the CMOS clock.
+The change therefore lasts until the next boot.
+
+## Slew (V2 of the 0.6.0 release)
+
+`adjtime(delta, olddelta)` corrects the real time clock gradually. The
+kernel (`rtc_adjust` in `kernel/drivers/rtc.c`) records the correction in
+`slew_ns`. Every read of the clock applies the part of the correction that
+is due. The rate is one nanosecond per 2000 nanoseconds of the timer, 500
+microseconds per second. A correction of 100 ms therefore takes 200
+seconds. The step of one read is smaller than the time that passed since
+the last read. The real time clock therefore never runs backwards during a
+negative slew. A new call of `adjtime` replaces the slew in progress and
+returns the remaining correction in `olddelta`. A null `delta` only reports
+the remaining correction. `clock_settime` ends a slew.
+
+`clock_lock` (a spinlock) protects the epoch offset, the remaining
+correction and the time of the last application. `clock_gettime`,
+`clock_settime`, `adjtime` and the time stamps of the VFS (`vfs_now`) read
+the clock through `rtc_realtime_ns`. A correction requires root and fails
+with `EPERM` for other users. A microsecond value outside -999999 to
+999999 fails with `EINVAL`. The system call has the number 113.
+
+## SNTP client
+
+`ntpd` (`user/coreutils/ntpd.c`, package `net`) sets the clock from time
+servers with SNTP version 4 (RFC 4330). `/etc/ntp.conf` lists the servers
+as `server NAME` or `server NAME port N`. The program tries them in order.
+Without a server line it asks `pool.ntp.org`. A query sends one request in
+mode 3 with the local time as the transmit time stamp. The answer must
+have mode 4, version 3 or 4, a leap indicator other than 3, a stratum from
+1 to 15, the transmit time stamp of the request as its originate time
+stamp and a transmit time stamp other than zero. Otherwise the query fails
+with a message such as "not a server answer". The offset of the local
+clock is `((t2 - t1) + (t3 - t4)) / 2` and the round trip delay is
+`(t4 - t1) - (t3 - t2)`. An offset above 128 ms steps the clock with
+`clock_settime`. A smaller offset is corrected with `adjtime`.
+
+init starts `ntpd` as the service `ntp` when the package is installed. The
+service queries every 15 minutes and after a failure every minute. The
+messages go to the system log. Each query writes `/run/ntpd.state` with
+the server, the address, the stratum, the offset and the delay in
+microseconds, the action (`step` or `slew`) and the time of the
+synchronisation, or with an `error` line. `ntpd -1` queries once, prints the
+result and exits with status 0 when the clock was corrected. `ntpd -q`
+prints the state file. `-c FILE` selects another configuration.
 
 ## libc
 
@@ -35,8 +78,8 @@ processor time per process), `difftime`, `nanosleep` (whole milliseconds,
 rounded up, over `sleep_ms`), `gmtime`, `gmtime_r`, `localtime` in the
 local zone described below, `timegm`, `mktime` (normalizing the fields, so
 December 32nd becomes January 1st), `strftime` with the common conversions,
-`asctime` and `ctime`. `sys/time.h` adds `gettimeofday` and
-`settimeofday`. The calendar arithmetic uses the era based civil date
+`asctime` and `ctime`. `sys/time.h` adds `gettimeofday`,
+`settimeofday` and, since V2 of the 0.6.0 release, `adjtime`. The calendar arithmetic uses the era based civil date
 algorithms, which are exact for every year of the proleptic Gregorian
 calendar in both directions.
 
@@ -124,3 +167,16 @@ of 02:30 in October, the zone files of Shanghai, Tokyo, Paris, New York,
 Tehran and Dublin, an unknown zone, `/etc/localtime` as a symbolic link
 that is replaced while the program runs, `TZ` against `/etc/localtime`,
 `date -u` and `date` in Tokyo, and Lua's `os.date` in Moscow.
+
+`adjtime` (`user/tests/adjtimetest.c`): a slew of 100 ms gains 500
+microseconds per second against the monotonic clock, `adjtime` reports the
+remaining correction, a new call replaces the slew, `clock_settime` ends
+it, an invalid microsecond value fails with `EINVAL`, and a user other than
+root can read the slew but not change it.
+
+`ntp` (`user/etc/tests/ntp.sh`): a Python SNTP server on the host
+(`tests/cases/ntp/peer`) answers the guest. The first answer is one hour
+ahead, and `ntpd -1` steps the clock. The second answer is 50 ms ahead of
+the corrected clock, and `ntpd -1` starts a slew. Answers in client mode
+and with a zero transmit time stamp are rejected, and `ntpd -q` prints the
+state of the last query.

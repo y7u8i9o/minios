@@ -26,7 +26,16 @@
  *
  * Blocks of MMAP_THRESHOLD bytes or more (window buffers, images) are
  * mapped on their own and unmapped by free, so their memory goes back to
- * the kernel instead of fragmenting the heap (M33). */
+ * the kernel instead of fragmenting the heap (M33).
+ *
+ * Free memory of the heap goes back to the kernel as well. A free block at
+ * the top of the heap of TRIM_MIN bytes or more shrinks the heap with a
+ * negative sbrk, down to TRIM_KEEP bytes. A free block of RELEASE_MIN bytes
+ * or more inside the heap gives the whole pages of its payload back with
+ * madvise(MADV_DONTNEED), apart from the links at its start and the footer
+ * at its end. The kernel then maps a zero page at the next touch. F_RELEASED
+ * marks a free block whose pages were given back, so that a later merge
+ * gives back only the pages of the parts that were not. */
 
 struct block {
     size_t size;            /* payload bytes, a multiple of 16 */
@@ -36,6 +45,7 @@ struct block {
 
 #define F_MAPPED    1u      /* an mmap block: not in the heap, munmap frees it */
 #define F_PREV_FREE 2u      /* the physical predecessor is free and has a footer */
+#define F_RELEASED  4u      /* a free block whose payload pages were given back */
 
 /* Links of a free block, stored at the start of its payload. */
 struct link {
@@ -46,6 +56,9 @@ struct link {
 #define MIN_PAYLOAD 32          /* the links and the footer */
 #define MIN_GROW (64 * 1024)
 #define MMAP_THRESHOLD (256 * 1024)
+#define RELEASE_MIN (64 * 1024)
+#define TRIM_MIN (128 * 1024)
+#define TRIM_KEEP (64 * 1024)
 #define PAGE 4096
 
 #define SMALL_LIMIT 512         /* exact bins up to here, 16 bytes apart */
@@ -108,7 +121,8 @@ static void split(struct block *b, size_t size)
     struct block *rest = (struct block *)((char *)b + HDR + size);
     rest->size = b->size - size - HDR;
     rest->free = 0;
-    rest->flags = 0;
+    rest->flags = b->flags & F_RELEASED;
+    b->flags &= ~F_RELEASED;
     b->size = size;
     bin_insert(rest);
 }
@@ -191,7 +205,49 @@ static void *malloc_unlocked(size_t size)
     }
     bin_remove(b);
     split(b, size);
+    b->flags &= ~F_RELEASED;
     return payload(b);
+}
+
+/* Give back the whole pages of [from, to) that lie inside the payload of
+ * the free block m, apart from its links and its footer. */
+static void release_span(struct block *m, char *from, char *to)
+{
+    char *lo = (char *)payload(m) + sizeof(struct link), *hi = (char *)footer(m);
+    if (from < lo)
+        from = lo;
+    if (to > hi)
+        to = hi;
+    uintptr_t a = ((uintptr_t)from + PAGE - 1) & ~(uintptr_t)(PAGE - 1);
+    uintptr_t z = (uintptr_t)to & ~(uintptr_t)(PAGE - 1);
+    if (a < z)
+        madvise((void *)a, z - a, MADV_DONTNEED);
+}
+
+/* Shrink the heap when the free block b ends at the break. The block
+ * retains TRIM_KEEP bytes, so that a following allocation needs no sbrk.
+ * Returns 1 when the heap shrank. */
+static int trim(struct block *b)
+{
+    struct block *sentinel = next_block(b);
+    if ((char *)sentinel + HDR != heap_end || b->size < TRIM_MIN || sbrk(0) != heap_end)
+        return 0;
+    size_t cut = (b->size - TRIM_KEEP) & ~(size_t)(PAGE - 1);
+    if (!cut)
+        return 0;
+    bin_remove(b);
+    if (sbrk(-(intptr_t)cut) == (void *)-1) {
+        bin_insert(b);
+        return 0;
+    }
+    heap_end -= cut;
+    b->size -= cut;
+    sentinel = next_block(b);
+    sentinel->size = 0;
+    sentinel->free = 0;
+    sentinel->flags = 0;
+    bin_insert(b);
+    return 1;
 }
 
 static void free_unlocked(void *p)
@@ -201,18 +257,39 @@ static void free_unlocked(void *p)
         munmap(b, HDR + b->size);
         return;
     }
+    /* The parts of the merged block whose pages are still in use: the
+     * block itself with the footer page of its predecessor and the header
+     * of its successor, and each neighbour without F_RELEASED. */
+    char *spans[3][2];
+    int nspans = 0;
     struct block *n = next_block(b);
+    spans[nspans][0] = (char *)b - PAGE;
+    spans[nspans++][1] = (char *)n + HDR + sizeof(struct link);
     if (n->free) {
+        if (!(n->flags & F_RELEASED)) {
+            spans[nspans][0] = (char *)n;
+            spans[nspans++][1] = (char *)next_block(n);
+        }
         bin_remove(n);
         b->size += HDR + n->size;
     }
     if (b->flags & F_PREV_FREE) {
         struct block *prev = (struct block *)((char *)b - HDR - *(size_t *)((char *)b - sizeof(size_t)));
+        if (!(prev->flags & F_RELEASED)) {
+            spans[nspans][0] = (char *)prev;
+            spans[nspans++][1] = (char *)b;
+        }
         bin_remove(prev);
         prev->size += HDR + b->size;
         b = prev;
     }
+    b->flags &= ~F_RELEASED;
     bin_insert(b);
+    if (trim(b) || b->size < RELEASE_MIN)
+        return;
+    for (int i = 0; i < nspans; i++)
+        release_span(b, spans[i][0], spans[i][1]);
+    b->flags |= F_RELEASED;
 }
 
 void *calloc(size_t n, size_t size)

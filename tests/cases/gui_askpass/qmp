@@ -1,0 +1,2 @@
+wait gui_askpass: dimmed
+screendump askpass.ppm

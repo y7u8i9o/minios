@@ -21,6 +21,7 @@
  */
 #include <stdint.h>
 #include <stddef.h>
+#include <elf.h>
 #include <syscall_nums.h>
 #include <minios/abi.h>
 #include <minios/dl.h>
@@ -44,85 +45,6 @@ static char *home_lib;              /* "$HOME/.local/lib/" or NULL */
 #define LIB_LIMIT 0x7e8000000000UL
 #define LIB_ALIGN 0x100000UL
 
-struct ehdr {
-    uint8_t e_ident[16];
-    uint16_t e_type, e_machine;
-    uint32_t e_version;
-    uint64_t e_entry, e_phoff, e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
-};
-struct phdr {
-    uint32_t p_type, p_flags;
-    uint64_t p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align;
-};
-struct dyn { int64_t d_tag; uint64_t d_val; };
-struct sym {
-    uint32_t st_name;
-    uint8_t st_info, st_other;
-    uint16_t st_shndx;
-    uint64_t st_value, st_size;
-};
-struct rela { uint64_t r_offset, r_info; int64_t r_addend; };
-
-#define ET_DYN 3
-#define PT_LOAD 1
-#define PT_DYNAMIC 2
-#define PT_TLS 7
-#define PT_GNU_RELRO 0x6474e552
-#define PF_X 1
-#define PF_W 2
-#define PF_R 4
-#define DT_NULL 0
-#define DT_NEEDED 1
-#define DT_PLTRELSZ 2
-#define DT_PLTGOT 3
-#define DT_HASH 4
-#define DT_STRTAB 5
-#define DT_SYMTAB 6
-#define DT_RELA 7
-#define DT_RELASZ 8
-#define DT_RELAENT 9
-#define DT_STRSZ 10
-#define DT_SYMENT 11
-#define DT_INIT 12
-#define DT_FINI 13
-#define DT_REL 17
-#define DT_RELSZ 18
-#define DT_PLTREL 20
-#define DT_TEXTREL 22
-#define DT_JMPREL 23
-#define DT_BIND_NOW 24
-#define DT_INIT_ARRAY 25
-#define DT_FINI_ARRAY 26
-#define DT_INIT_ARRAYSZ 27
-#define DT_FINI_ARRAYSZ 28
-#define DT_FLAGS 30
-#define DT_PREINIT_ARRAY 32
-#define DT_PREINIT_ARRAYSZ 33
-#define DT_RELRSZ 35
-#define DT_RELR 36
-#define DT_GNU_HASH 0x6ffffef5
-#define DT_VERDEFNUM 0x6ffffffd
-#define DT_VERNEEDNUM 0x6fffffff
-#define DF_BIND_NOW 8
-#define STB_GLOBAL 1
-#define STB_WEAK 2
-#define STT_TLS 6
-#define STT_GNU_IFUNC 10
-#define STV_INTERNAL 1
-#define STV_HIDDEN 2
-#define STV_PROTECTED 3
-#define SHN_UNDEF 0
-#define SHN_ABS 0xfff1
-#define AT_NULL 0
-#define AT_PHDR 3
-#define AT_PHENT 4
-#define AT_PHNUM 5
-#define AT_BASE 7
-#define AT_ENTRY 9
-#define AT_SECURE 23
-
 struct object;
 
 /* The objects a symbol lookup walks, in order. The global scope contains
@@ -140,16 +62,16 @@ struct object {
     uintptr_t base;
     uintptr_t map_start;            /* the reserved span, for unloading */
     size_t map_size;
-    const struct phdr *phdr;
+    const Elf64_Phdr *phdr;
     size_t phnum;
-    const struct dyn *dyn;
+    const Elf64_Dyn *dyn;
     size_t ndyn;
-    const struct sym *symtab;
+    const Elf64_Sym *symtab;
     size_t nsyms, gnu_nsyms;
     const char *strtab;
     size_t strsz;
     const uint32_t *hash, *gnu_hash;
-    const struct rela *rela, *jmprel;
+    const Elf64_Rela *rela, *jmprel;
     size_t relasz, pltrelsz;
     uintptr_t *pltgot;              /* DT_PLTGOT, the table lazy binding fills */
     int bind_now;                   /* DF_BIND_NOW or DT_BIND_NOW */
@@ -178,7 +100,7 @@ static unsigned char *arena;
 static size_t arena_left;
 static int argc_saved;
 static char **argv_saved, **envp_saved;
-extern struct dyn _DYNAMIC[] __attribute__((visibility("hidden")));
+extern Elf64_Dyn _DYNAMIC[] __attribute__((visibility("hidden")));
 
 /* Thread local storage: the dynamic modules occupy vector slots handed
  * out from this table (index is slot + 1); generations never repeat. */
@@ -424,7 +346,7 @@ static int contains(const struct object *o, uintptr_t addr, size_t bytes, unsign
         return 0;
     uint64_t offset = addr - o->base;
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &o->phdr[i];
+        const Elf64_Phdr *p = &o->phdr[i];
         if (p->p_type == PT_LOAD && (p->p_flags & flags) == flags && offset >= p->p_vaddr &&
             within(offset - p->p_vaddr, bytes, p->p_memsz))
             return 1;
@@ -521,7 +443,7 @@ static void validate_hashes(struct object *o)
 /* The TLS segment of an object: its image must lie in a readable load
  * segment; its alignment is a power of two. The module's offset or slot
  * is assigned later, once it is known whether the object is initial. */
-static void parse_tls(struct object *o, const struct phdr *p)
+static void parse_tls(struct object *o, const Elf64_Phdr *p)
 {
     if (o->tls)
         die("multiple TLS segments", o->name);
@@ -544,9 +466,9 @@ static void parse_tls(struct object *o, const struct phdr *p)
  * receive diagnostics instead of being silently ignored. */
 static void parse_dynamic(struct object *o)
 {
-    const struct phdr *dynamic = NULL;
+    const Elf64_Phdr *dynamic = NULL;
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &o->phdr[i];
+        const Elf64_Phdr *p = &o->phdr[i];
         if (p->p_type == PT_TLS)
             parse_tls(o, p);
         if (p->p_type == PT_DYNAMIC) {
@@ -555,47 +477,47 @@ static void parse_dynamic(struct object *o)
             dynamic = p;
         }
     }
-    if (!dynamic || !dynamic->p_memsz || dynamic->p_memsz % sizeof(struct dyn))
+    if (!dynamic || !dynamic->p_memsz || dynamic->p_memsz % sizeof(Elf64_Dyn))
         die("invalid dynamic segment", o->name);
     o->dyn = (const void *)address(o, dynamic->p_vaddr);
     require_range(o, (uintptr_t)o->dyn, dynamic->p_memsz, PF_R);
-    size_t limit = dynamic->p_memsz / sizeof(struct dyn);
+    size_t limit = dynamic->p_memsz / sizeof(Elf64_Dyn);
     size_t syment = 0, relaent = 0, pltrel = 0;
     for (o->ndyn = 0; o->ndyn < limit; o->ndyn++) {
-        const struct dyn *d = &o->dyn[o->ndyn];
+        const Elf64_Dyn *d = &o->dyn[o->ndyn];
         if (d->d_tag == DT_NULL)
             break;
         switch (d->d_tag) {
-        case DT_HASH: o->hash = (const void *)address(o, d->d_val); break;
-        case DT_GNU_HASH: o->gnu_hash = (const void *)address(o, d->d_val); break;
-        case DT_STRTAB: o->strtab = (const void *)address(o, d->d_val); break;
-        case DT_STRSZ: o->strsz = d->d_val; break;
-        case DT_SYMTAB: o->symtab = (const void *)address(o, d->d_val); break;
-        case DT_SYMENT: syment = d->d_val; break;
-        case DT_RELA: o->rela = (const void *)address(o, d->d_val); break;
-        case DT_RELASZ: o->relasz = d->d_val; break;
-        case DT_RELAENT: relaent = d->d_val; break;
-        case DT_JMPREL: o->jmprel = (const void *)address(o, d->d_val); break;
-        case DT_PLTRELSZ: o->pltrelsz = d->d_val; break;
-        case DT_PLTREL: pltrel = d->d_val; break;
-        case DT_PLTGOT: o->pltgot = (void *)address(o, d->d_val); break;
+        case DT_HASH: o->hash = (const void *)address(o, d->d_un.d_val); break;
+        case DT_GNU_HASH: o->gnu_hash = (const void *)address(o, d->d_un.d_val); break;
+        case DT_STRTAB: o->strtab = (const void *)address(o, d->d_un.d_val); break;
+        case DT_STRSZ: o->strsz = d->d_un.d_val; break;
+        case DT_SYMTAB: o->symtab = (const void *)address(o, d->d_un.d_val); break;
+        case DT_SYMENT: syment = d->d_un.d_val; break;
+        case DT_RELA: o->rela = (const void *)address(o, d->d_un.d_val); break;
+        case DT_RELASZ: o->relasz = d->d_un.d_val; break;
+        case DT_RELAENT: relaent = d->d_un.d_val; break;
+        case DT_JMPREL: o->jmprel = (const void *)address(o, d->d_un.d_val); break;
+        case DT_PLTRELSZ: o->pltrelsz = d->d_un.d_val; break;
+        case DT_PLTREL: pltrel = d->d_un.d_val; break;
+        case DT_PLTGOT: o->pltgot = (void *)address(o, d->d_un.d_val); break;
         case DT_BIND_NOW: o->bind_now = 1; break;
-        case DT_FLAGS: if (d->d_val & DF_BIND_NOW) o->bind_now = 1; break;
-        case DT_INIT: o->init = d->d_val ? address(o, d->d_val) : 0; break;
-        case DT_FINI: o->fini = d->d_val ? address(o, d->d_val) : 0; break;
-        case DT_PREINIT_ARRAY: o->preinit_array = (const void *)address(o, d->d_val); break;
-        case DT_PREINIT_ARRAYSZ: o->preinit_size = d->d_val; break;
-        case DT_INIT_ARRAY: o->init_array = (const void *)address(o, d->d_val); break;
-        case DT_INIT_ARRAYSZ: o->init_size = d->d_val; break;
-        case DT_FINI_ARRAY: o->fini_array = (const void *)address(o, d->d_val); break;
-        case DT_FINI_ARRAYSZ: o->fini_size = d->d_val; break;
+        case DT_FLAGS: if (d->d_un.d_val & DF_BIND_NOW) o->bind_now = 1; break;
+        case DT_INIT: o->init = d->d_un.d_val ? address(o, d->d_un.d_val) : 0; break;
+        case DT_FINI: o->fini = d->d_un.d_val ? address(o, d->d_un.d_val) : 0; break;
+        case DT_PREINIT_ARRAY: o->preinit_array = (const void *)address(o, d->d_un.d_val); break;
+        case DT_PREINIT_ARRAYSZ: o->preinit_size = d->d_un.d_val; break;
+        case DT_INIT_ARRAY: o->init_array = (const void *)address(o, d->d_un.d_val); break;
+        case DT_INIT_ARRAYSZ: o->init_size = d->d_un.d_val; break;
+        case DT_FINI_ARRAY: o->fini_array = (const void *)address(o, d->d_un.d_val); break;
+        case DT_FINI_ARRAYSZ: o->fini_size = d->d_un.d_val; break;
         case DT_TEXTREL: die("text relocations are not supported", o->name);
         case DT_REL: case DT_RELSZ: case DT_RELR: case DT_RELRSZ:
-            if (d->d_val)
+            if (d->d_un.d_val)
                 die("REL and RELR relocations are not supported", o->name);
             break;
         case DT_VERDEFNUM: case DT_VERNEEDNUM:
-            if (d->d_val)
+            if (d->d_un.d_val)
                 die("symbol versioning is not supported", o->name);
             break;
         default: break;
@@ -603,12 +525,12 @@ static void parse_dynamic(struct object *o)
     }
     if (o->ndyn == limit)
         die("unterminated dynamic segment", o->name);
-    if (!o->symtab || !o->strtab || !o->strsz || syment != sizeof(struct sym))
+    if (!o->symtab || !o->strtab || !o->strsz || syment != sizeof(Elf64_Sym))
         die("invalid dynamic symbol table", o->name);
     require_range(o, (uintptr_t)o->strtab, o->strsz, PF_R);
     validate_hashes(o);
-    if (o->relasz % sizeof(struct rela) || o->pltrelsz % sizeof(struct rela) ||
-        (o->relasz && relaent != sizeof(struct rela)) || (o->pltrelsz && pltrel != DT_RELA))
+    if (o->relasz % sizeof(Elf64_Rela) || o->pltrelsz % sizeof(Elf64_Rela) ||
+        (o->relasz && relaent != sizeof(Elf64_Rela)) || (o->pltrelsz && pltrel != DT_RELA))
         die("invalid relocation entry size or format", o->name);
     if (o->relasz)
         require_range(o, (uintptr_t)o->rela, o->relasz, PF_R);
@@ -652,11 +574,11 @@ static uint32_t gnu_hash(const char *name)
     return h;
 }
 
-static const struct sym *symbol_match(const struct object *o, uint32_t index, const char *name)
+static const Elf64_Sym *symbol_match(const struct object *o, uint32_t index, const char *name)
 {
     if (index >= o->nsyms)
         die("symbol index outside table", o->name);
-    const struct sym *s = &o->symtab[index];
+    const Elf64_Sym *s = &o->symtab[index];
     unsigned bind = s->st_info >> 4, visibility = s->st_other & 3;
     if (s->st_shndx == SHN_UNDEF || (bind != STB_GLOBAL && bind != STB_WEAK) ||
         visibility == STV_HIDDEN || visibility == STV_INTERNAL)
@@ -664,7 +586,7 @@ static const struct sym *symbol_match(const struct object *o, uint32_t index, co
     return dl_strcmp(string_at(o, s->st_name), name) == 0 ? s : NULL;
 }
 
-static const struct sym *lookup_in(const struct object *o, const char *name)
+static const Elf64_Sym *lookup_in(const struct object *o, const char *name)
 {
     if (o->gnu_hash) {
         const uint32_t *h = o->gnu_hash;
@@ -681,7 +603,7 @@ static const struct sym *lookup_in(const struct object *o, const char *name)
         for (; index < o->gnu_nsyms; index++) {
             uint32_t chain = chains[index - h[1]];
             if ((chain | 1) == (hash | 1)) {
-                const struct sym *s = symbol_match(o, index, name);
+                const Elf64_Sym *s = symbol_match(o, index, name);
                 if (s)
                     return s;
             }
@@ -696,7 +618,7 @@ static const struct sym *lookup_in(const struct object *o, const char *name)
     for (size_t steps = 0; index; steps++) {
         if (steps >= o->nsyms)
             die("cyclic SysV hash chain", o->name);
-        const struct sym *s = symbol_match(o, index, name);
+        const Elf64_Sym *s = symbol_match(o, index, name);
         if (s)
             return s;
         index = chains[index];
@@ -704,7 +626,7 @@ static const struct sym *lookup_in(const struct object *o, const char *name)
     return NULL;
 }
 
-struct definition { const struct object *object; const struct sym *symbol; };
+struct definition { const struct object *object; const Elf64_Sym *symbol; };
 
 /* A separate found/not-found result permits an absolute symbol whose
  * value is zero. The global scope precedes the local one; the program,
@@ -721,7 +643,7 @@ static int lookup(const char *name, const struct object *skip, const struct scop
             const struct object *o = s->objects[i];
             if (o == skip)
                 continue;
-            const struct sym *sym = lookup_in(o, name);
+            const Elf64_Sym *sym = lookup_in(o, name);
             if (sym) {
                 out->object = o;
                 out->symbol = sym;
@@ -734,7 +656,7 @@ static int lookup(const char *name, const struct object *skip, const struct scop
 
 static uintptr_t symbol_address(const struct definition *def)
 {
-    const struct sym *s = def->symbol;
+    const Elf64_Sym *s = def->symbol;
     unsigned type = s->st_info & 15;
     if (type == STT_TLS || type == STT_GNU_IFUNC)
         die("TLS and IFUNC symbols are not supported here", def->object->name);
@@ -749,12 +671,12 @@ static uintptr_t symbol_address(const struct definition *def)
  * protected definition binds within its own object; other definitions
  * interpose in scope order, including the executable's copy-relocation
  * destination. Returns 0 for an undefined weak symbol. */
-static int resolve(const struct object *o, const struct rela *r, uint32_t type, struct definition *def)
+static int resolve(const struct object *o, const Elf64_Rela *r, uint32_t type, struct definition *def)
 {
     uint32_t index = (uint32_t)(r->r_info >> 32);
     if (index >= o->nsyms)
         die("relocation symbol index outside table", o->name);
-    const struct sym *s = &o->symtab[index];
+    const Elf64_Sym *s = &o->symtab[index];
     def->object = o;
     def->symbol = s;
     unsigned visibility = s->st_other & 3;
@@ -781,10 +703,10 @@ static struct dl_tls_module *require_tls(const struct object *o)
  * data object may itself contain relocated pointers. A lazily bound
  * object retains its JUMP_SLOT entries pointing into its own procedure
  * linkage table, rebased, and hands the table to _dl_runtime_resolve. */
-static void apply(struct object *o, const struct rela *table, size_t bytes, int copies)
+static void apply(struct object *o, const Elf64_Rela *table, size_t bytes, int copies)
 {
     for (size_t i = 0; i < bytes / sizeof *table; i++) {
-        const struct rela *r = &table[i];
+        const Elf64_Rela *r = &table[i];
         uint32_t type = (uint32_t)r->r_info;
         if (type == RELOC_NONE || (type == RELOC_COPY) != copies)
             continue;
@@ -823,7 +745,7 @@ static void apply(struct object *o, const struct rela *table, size_t bytes, int 
         struct definition def;
         uintptr_t value = resolve(o, r, type, &def) ? symbol_address(&def) : 0;
         if (type == RELOC_COPY) {
-            const struct sym *s = &o->symtab[(uint32_t)(r->r_info >> 32)];
+            const Elf64_Sym *s = &o->symtab[(uint32_t)(r->r_info >> 32)];
             if (o != objects || def.symbol->st_size < s->st_size)
                 die("invalid copy relocation size or owner", string_at(o, s->st_name));
             require_range(o, where, s->st_size, PF_W);
@@ -846,9 +768,9 @@ static void apply(struct object *o, const struct rela *table, size_t bytes, int 
 uintptr_t _dl_fixup(struct object *o, size_t index)
 {
     dl_lock();
-    if (index >= o->pltrelsz / sizeof(struct rela))
+    if (index >= o->pltrelsz / sizeof(Elf64_Rela))
         die("invalid lazy relocation index", o->name);
-    const struct rela *r = &o->jmprel[index];
+    const Elf64_Rela *r = &o->jmprel[index];
     if ((uint32_t)r->r_info != RELOC_JUMP_SLOT)
         die("lazy relocation is not a jump slot", o->name);
     struct definition def;
@@ -956,15 +878,15 @@ static struct object *load_library(const char *name, int allow_path)
     if (fd < 0)
         die("cannot open library", name);
     struct stat st;
-    if (sys(SYS_fstat, fd, (long)&st, 0, 0, 0, 0) < 0 || st.st_size < (long)sizeof(struct ehdr))
+    if (sys(SYS_fstat, fd, (long)&st, 0, 0, 0, 0) < 0 || st.st_size < (long)sizeof(Elf64_Ehdr))
         die("invalid library file size", path);
-    struct ehdr eh;
+    Elf64_Ehdr eh;
     read_at(fd, 0, &eh, sizeof eh, path);
     if (eh.e_ident[0] != 0x7f || eh.e_ident[1] != 'E' || eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F' ||
         eh.e_ident[4] != 2 || eh.e_ident[5] != 1 || eh.e_ident[6] != 1 ||
         eh.e_type != ET_DYN || eh.e_machine != LD_ARCH_ELF_MACHINE || eh.e_version != 1 || eh.e_ehsize != sizeof eh ||
-        eh.e_phentsize != sizeof(struct phdr) || !eh.e_phnum ||
-        !within(eh.e_phoff, (size_t)eh.e_phnum * sizeof(struct phdr), st.st_size))
+        eh.e_phentsize != sizeof(Elf64_Phdr) || !eh.e_phnum ||
+        !within(eh.e_phoff, (size_t)eh.e_phnum * sizeof(Elf64_Phdr), st.st_size))
         die("invalid ELF64 shared object", path);
     /* An object opened by dlopen retains a copy of its name, since the
      * caller may reuse its buffer for the next dlopen and find_loaded
@@ -980,13 +902,13 @@ static struct object *load_library(const char *name, int allow_path)
     struct object *o = new_object(retained);
     loading = o;
     o->phnum = eh.e_phnum;
-    struct phdr *ph = dl_alloc(o->phnum * sizeof *ph);
+    Elf64_Phdr *ph = dl_alloc(o->phnum * sizeof *ph);
     read_at(fd, eh.e_phoff, ph, o->phnum * sizeof *ph, path);
     o->phdr = ph;
 
     uintptr_t lo = UINTPTR_MAX, hi = 0, alignment = LIB_ALIGN;
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &ph[i];
+        const Elf64_Phdr *p = &ph[i];
         if (p->p_type != PT_LOAD)
             continue;
         if (p->p_filesz > p->p_memsz || !within(p->p_offset, p->p_filesz, st.st_size) ||
@@ -999,7 +921,7 @@ static struct object *load_library(const char *name, int allow_path)
             continue;
         uintptr_t start = ALIGN_DOWN(p->p_vaddr, PAGE), end = ALIGN_UP(p->p_vaddr + p->p_memsz, PAGE);
         for (size_t j = 0; j < i; j++) {
-            const struct phdr *q = &ph[j];
+            const Elf64_Phdr *q = &ph[j];
             if (q->p_type == PT_LOAD && q->p_memsz && start < ALIGN_UP(q->p_vaddr + q->p_memsz, PAGE) &&
                 ALIGN_DOWN(q->p_vaddr, PAGE) < end)
                 die("overlapping load segments", name);
@@ -1018,7 +940,7 @@ static struct object *load_library(const char *name, int allow_path)
     o->map_start = o->base + lo;
     o->map_size = hi - lo;
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &ph[i];
+        const Elf64_Phdr *p = &ph[i];
         if (p->p_type != PT_LOAD || !p->p_memsz)
             continue;
         uintptr_t start = o->base + ALIGN_DOWN(p->p_vaddr, PAGE);
@@ -1056,7 +978,7 @@ static void require_relro(const struct object *o, uintptr_t addr, size_t bytes)
 {
     uint64_t offset = addr - o->base;
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &o->phdr[i];
+        const Elf64_Phdr *p = &o->phdr[i];
         if (p->p_type != PT_LOAD || !(p->p_flags & PF_R) || offset < p->p_vaddr || offset - p->p_vaddr >= p->p_memsz)
             continue;
         uint64_t mapped = ALIGN_UP(p->p_vaddr + p->p_memsz, PAGE) - p->p_vaddr;
@@ -1069,7 +991,7 @@ static void require_relro(const struct object *o, uintptr_t addr, size_t bytes)
 static void protect_relro(struct object *o)
 {
     for (size_t i = 0; i < o->phnum; i++) {
-        const struct phdr *p = &o->phdr[i];
+        const Elf64_Phdr *p = &o->phdr[i];
         if (p->p_type != PT_GNU_RELRO || !p->p_memsz)
             continue;
         uintptr_t addr = address(o, p->p_vaddr);
@@ -1121,10 +1043,10 @@ static void initialize_from(struct object *root)
     while (o) {
         struct object *dependency = NULL;
         while (o->next_needed < o->ndyn) {
-            const struct dyn *d = &o->dyn[o->next_needed++];
+            const Elf64_Dyn *d = &o->dyn[o->next_needed++];
             if (d->d_tag != DT_NEEDED)
                 continue;
-            struct object *child = find_loaded(string_at(o, d->d_val), NULL);
+            struct object *child = find_loaded(string_at(o, d->d_un.d_val), NULL);
             if (child && !child->init_state) {
                 dependency = child;
                 break;
@@ -1382,7 +1304,7 @@ static void *dl_open(const char *name, int mode)
         for (size_t k = 0; k < o->ndyn; k++) {
             if (o->dyn[k].d_tag != DT_NEEDED)
                 continue;
-            const char *needed = string_at(o, o->dyn[k].d_val);
+            const char *needed = string_at(o, o->dyn[k].d_un.d_val);
             if (find_loaded(needed, group))
                 continue;
             scope_add(group, load_library(needed, 0));
@@ -1395,7 +1317,7 @@ static void *dl_open(const char *name, int mode)
         for (size_t k = 0; k < o->ndyn; k++) {
             if (o->dyn[k].d_tag != DT_NEEDED)
                 continue;
-            struct object *dep = find_loaded(string_at(o, o->dyn[k].d_val), group);
+            struct object *dep = find_loaded(string_at(o, o->dyn[k].d_un.d_val), group);
             if (dep)
                 scope_add(group, dep);
         }
@@ -1456,7 +1378,7 @@ static void *dl_sym(void *handle, const char *name)
         lookup(name, NULL, NULL, &def);
     } else {
         const struct object *o = handle;
-        const struct sym *s = lookup_in(o, name);
+        const Elf64_Sym *s = lookup_in(o, name);
         if (s) {
             def.object = o;
             def.symbol = s;
@@ -1530,11 +1452,11 @@ static int dl_close(void *handle)
  * it does not use the general object parser or allocation machinery here. */
 static void relocate_self(uintptr_t base)
 {
-    const struct rela *rel = NULL;
+    const Elf64_Rela *rel = NULL;
     size_t bytes = 0;
-    for (const struct dyn *d = _DYNAMIC; d->d_tag != DT_NULL; d++) {
-        if (d->d_tag == DT_RELA) rel = (const void *)(base + d->d_val);
-        if (d->d_tag == DT_RELASZ) bytes = d->d_val;
+    for (const Elf64_Dyn *d = _DYNAMIC; d->d_tag != DT_NULL; d++) {
+        if (d->d_tag == DT_RELA) rel = (const void *)(base + d->d_un.d_val);
+        if (d->d_tag == DT_RELASZ) bytes = d->d_un.d_val;
     }
     for (size_t i = 0; i < bytes / sizeof *rel; i++) {
         if ((uint32_t)rel[i].r_info == RELOC_NONE)
@@ -1585,7 +1507,7 @@ uintptr_t _dl_main(uintptr_t *sp)
         }
     }
     relocate_self(base);
-    if (!base || !phdr || !phnum || phnum > UINT16_MAX || phent != sizeof(struct phdr) || !entry)
+    if (!base || !phdr || !phnum || phnum > UINT16_MAX || phent != sizeof(Elf64_Phdr) || !entry)
         die("invalid program auxiliary vector", NULL);
     secure = is_secure != 0;
     for (char **env = (char **)(sp + argc + 2); !secure && *env; env++) {
@@ -1601,7 +1523,7 @@ uintptr_t _dl_main(uintptr_t *sp)
     commit_object(prog);
     prog->phdr = (const void *)phdr;
     prog->phnum = phnum;
-    require_range(prog, phdr, phnum * sizeof(struct phdr), PF_R);
+    require_range(prog, phdr, phnum * sizeof(Elf64_Phdr), PF_R);
     require_range(prog, entry, 1, PF_X);
     parse_dynamic(prog);
     /* Appending to the list while walking it gives breadth-first symbol
@@ -1610,7 +1532,7 @@ uintptr_t _dl_main(uintptr_t *sp)
         for (size_t i = 0; i < o->ndyn; i++) {
             if (o->dyn[i].d_tag != DT_NEEDED)
                 continue;
-            const char *name = string_at(o, o->dyn[i].d_val);
+            const char *name = string_at(o, o->dyn[i].d_un.d_val);
             if (!find_loaded(name, NULL))
                 commit_object(load_library(name, 0));
         }

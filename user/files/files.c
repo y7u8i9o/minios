@@ -234,12 +234,12 @@ static int on_open_with(struct widget *w, void *args, void *arg)
     const struct folderview_entry *e = selected_entry();
     if (!e)
         return 1;
-    char program[128] = "/bin/", path[512];
+    char command[MIME_COMMAND], path[512];
     strlcpy(path, e->path, sizeof path);
-    if (!app_prompt(app, _("Open with"), _("Program:"), program, sizeof program) || !program[0])
+    if (!app_choose_program(app, path, command, sizeof command))
         return 1;
-    log_line("open %s with %s", path, program);
-    int r = mime_spawn((char *const[]){ program, path, NULL });
+    log_line("open %s with %s", path, command);
+    int r = mime_run(command, path);
     if (r < 0)
         fail(_("Cannot start the program"), r);
     else

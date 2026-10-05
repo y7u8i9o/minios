@@ -10,7 +10,11 @@ compiled without SSE and x87, so no floating point appears anywhere.
 
 ## Parser (`lib/libfont/src/ttf.c`, `cff.c`)
 
-- `font_open` reads the whole file, accepts the sfnt versions
+- `font_open` maps the file read only, as other systems map their
+  fonts: the processes that use a font share its pages, and only the
+  pages of the glyphs drawn are read. Until 2026-10-05 it read the whole
+  file into the heap of each process, with a buffer that doubled up to
+  8 MiB for the CJK font. A file that cannot be mapped is read. It accepts the sfnt versions
   `0x00010000`, `true` and `OTTO`, and locates `head` (units per em, loca
   format), `hhea` (ascent, descent, line gap, number of horizontal
   metrics), `maxp` (glyph count), `hmtx`, `cmap`, `loca` and `glyf` or

@@ -31,9 +31,12 @@ struct channel {
 };
 /* lock protects both channels and stop/done/ok. refs and active_workers are
  * atomic. Startup strings are immutable, error is published with completion.
- * No Lua allocation or callback occurs while lock is locked. */
+ * No Lua allocation or callback occurs while lock is locked. space is
+ * broadcast with lock locked whenever a receive removes a message, a stop is
+ * requested or the worker ends; a send with a timeout waits on it. */
 struct job {
     pthread_mutex_t lock;
+    pthread_cond_t space;
     unsigned refs;
     int stop, done, ok;
     struct channel input, output;
@@ -70,6 +73,7 @@ static void unref(struct job *j)
 {
     if (__atomic_sub_fetch(&j->refs, 1, __ATOMIC_ACQ_REL)) return;
     free_channel(&j->input); free_channel(&j->output);
+    pthread_cond_destroy(&j->space);
     pthread_mutex_destroy(&j->lock);
     free(j->path); free(j->initial); free(j->package_path); free(j);
 }
@@ -102,6 +106,7 @@ static void stop_job(struct job *j)
     pthread_mutex_lock(&j->lock);
     __atomic_store_n(&j->stop, 1, __ATOMIC_RELEASE);
     notify(j, &j->input); notify(j, &j->output);
+    pthread_cond_broadcast(&j->space);
     pthread_mutex_unlock(&j->lock);
 }
 static struct handle *check_handle(lua_State *L)
@@ -116,17 +121,38 @@ static struct job *check_worker(lua_State *L)
     if (!j) luaL_error(L, "this operation requires a worker thread");
     return j;
 }
+static int send_error(struct job *j, struct channel *c, size_t size)
+{
+    return j->done || (j->stop && c == &j->input) ? EPIPE :
+        c->count == QUEUE_MESSAGES || c->bytes + size > QUEUE_BYTES ? EAGAIN : 0;
+}
+/* The optional argument after the message is a timeout in milliseconds:
+ * 0 (the default) does not wait, -1 waits without limit. A full queue
+ * makes the send wait for space until the timeout passes or a stop is
+ * requested. Then the send fails with EAGAIN. */
 static int send_message(lua_State *L, struct job *j, struct channel *c, int arg)
 {
     size_t size;
     const char *data = luaL_checklstring(L, arg, &size);
     luaL_argcheck(L, size <= MESSAGE_MAX, arg, "message exceeds 8192 bytes");
+    lua_Integer timeout = luaL_optinteger(L, arg + 1, 0);
+    luaL_argcheck(L, timeout >= -1 && timeout <= 2147483647, arg + 1, "invalid timeout");
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += (time_t)(timeout / 1000);
+    deadline.tv_nsec += (long)(timeout % 1000) * 1000000;
+    if (deadline.tv_nsec >= 1000000000) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000; }
     struct message *m = malloc(sizeof *m + size);
     if (!m) return failure(L, ENOMEM);
     m->next = NULL; m->size = size; memcpy(m->data, data, size);
     pthread_mutex_lock(&j->lock);
-    int err = j->done || (j->stop && c == &j->input) ? EPIPE :
-        c->count == QUEUE_MESSAGES || c->bytes + size > QUEUE_BYTES ? EAGAIN : 0;
+    int err = send_error(j, c, size);
+    while (err == EAGAIN && timeout != 0 && !j->stop) {
+        int r = timeout < 0 ? pthread_cond_wait(&j->space, &j->lock)
+                            : pthread_cond_timedwait(&j->space, &j->lock, &deadline);
+        err = send_error(j, c, size);
+        if (r == ETIMEDOUT) break;
+    }
     if (!err) {
         if (c->tail) c->tail->next = m; else c->head = m;
         c->tail = m; c->count++; c->bytes += size;
@@ -165,6 +191,7 @@ static int receive_message(lua_State *L, struct job *j, struct channel *c, int a
             c->count--; c->bytes -= size;
             memcpy(data, m->data, size);
             notify(j, c);
+            pthread_cond_broadcast(&j->space);
             pthread_mutex_unlock(&j->lock);
             free(m);
             luaL_pushresultsize(&b, size);
@@ -226,6 +253,7 @@ static void *worker_main(void *arg)
     pthread_mutex_lock(&j->lock);
     j->ok = status == LUA_OK; j->done = 1;
     notify(j, &j->input); notify(j, &j->output);
+    pthread_cond_broadcast(&j->space);
     pthread_mutex_unlock(&j->lock);
     __atomic_sub_fetch(&active_workers, 1, __ATOMIC_RELAXED);
     unref(j);
@@ -247,6 +275,8 @@ static int spawn(lua_State *L)
     j->input.fd[0] = j->input.fd[1] = j->output.fd[0] = j->output.fd[1] = -1;
     int r = pthread_mutex_init(&j->lock, NULL);
     if (r) { free(j); return failure(L, r); }
+    r = pthread_cond_init(&j->space, NULL);
+    if (r) { pthread_mutex_destroy(&j->lock); free(j); return failure(L, r); }
     j->path = strdup(path); j->package_path = strdup(search);
     j->initial = malloc(size ? size : 1); j->initial_size = size;
     if (!j->path || !j->initial || !j->package_path) { unref(j); return failure(L, ENOMEM); }

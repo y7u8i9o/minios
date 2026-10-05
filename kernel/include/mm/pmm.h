@@ -74,3 +74,16 @@ bool pmm_is_ram(uintptr_t pa);
 /* Copy the per order free block counts into out[PMM_MAX_ORDER + 1]. */
 void pmm_get_free_counts(uint64_t *out);
 void pmm_dump_stats(void);
+
+/* A source of pages under memory pressure (V4 of the 0.6.0 release): the
+ * balloon driver with VIRTIO_BALLOON_F_DEFLATE_ON_OOM. release returns up
+ * to pages pages to the allocator and returns their number. The function
+ * runs in any context, also with spinlocks acquired, but never with
+ * pmm_lock. It must not sleep and must not allocate memory. */
+void pmm_set_pressure_source(size_t (*release)(size_t pages));
+/* Asks the pressure source for pages. Returns the number of pages that it
+ * returned to the allocator, 0 without a source. */
+size_t pmm_release_pressure(size_t pages);
+/* Changes total_pages by pages. A balloon removes its pages from the
+ * total while the host has them. */
+void pmm_adjust_total(int64_t pages);

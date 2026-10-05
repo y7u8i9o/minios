@@ -236,7 +236,8 @@ static void test_iovecs(void)
 {
     int sp[2];
     CHECK(socketpair(AF_UNIX, SOCK_STREAM, 0, sp) == 0, "socketpair");
-    char data[8] = "12345678";
+    char data[8];
+    memcpy(data, "12345678", sizeof data);
     struct iovec big[2] = { { data, (size_t)-1 }, { data, (size_t)-1 } };
     struct msghdr m = { NULL, 0, big, 2, NULL, 0, 0 };
     errno = 0;

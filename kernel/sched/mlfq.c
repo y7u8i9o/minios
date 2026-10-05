@@ -147,6 +147,14 @@ static void drain_inbound_locked(struct run_queues *r)
         }
         if (state == THREAD_NEW || state == THREAD_BLOCKED ||
             state == THREAD_SLEEPING || state == THREAD_STOPPED) {
+            /* Only the CPU of a sleeper list changes that list.  A wake
+             * that reaches another CPU, such as a stale wake queued before
+             * the thread moved, goes on to the CPU of the list. */
+            if (state == THREAD_SLEEPING && t->sleep_cpu != cpu_current()->id) {
+                queue_inbound(t, t->sleep_cpu);
+                node = next;
+                continue;
+            }
             if (state == THREAD_SLEEPING)
                 list_del(&t->run_link);
             if (state != THREAD_NEW && t->level > 0)
@@ -212,7 +220,10 @@ void sched_wake(struct thread *t)
     if (state != THREAD_BLOCKED && state != THREAD_SLEEPING && state != THREAD_STOPPED)
         return;
     profile_ready(t);
-    unsigned target = __atomic_load_n(&t->cpu, __ATOMIC_ACQUIRE);
+    /* A sleeping thread is on the sleeper list of the CPU where it went to
+     * sleep, which can differ from cpu after a stale wake. */
+    unsigned target = state == THREAD_SLEEPING ? __atomic_load_n(&t->sleep_cpu, __ATOMIC_RELAXED)
+                                               : __atomic_load_n(&t->cpu, __ATOMIC_ACQUIRE);
     if (target >= smp_cpu_count())
         target = 0;
     queue_inbound(t, target);
@@ -308,13 +319,24 @@ void sched_preempt(void)
         sched_yield();
 }
 
-void sched_sleep_until(uint64_t tick)
+bool sched_sleep_until(uint64_t tick, bool (*interrupted)(void))
 {
     struct thread *t = thread_current();
     sched_lock_current();
     struct run_queues *r = local_rq();
     t->wake_at = tick;
-    __atomic_store_n(&t->state, THREAD_SLEEPING, __ATOMIC_RELEASE);
+    t->sleep_cpu = cpu_current()->id;
+    /* Sequentially consistent against a signal sender, which stores the
+     * signal and then reads this state in sched_wake.  Either the sender
+     * finds THREAD_SLEEPING and queues a wake, or interrupted finds the
+     * signal.  A wake queued for a sleep that does not happen is stale and
+     * harmless (drain_inbound_locked, sleep_ms). */
+    __atomic_store_n(&t->state, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+    if (interrupted && interrupted()) {
+        __atomic_store_n(&t->state, THREAD_RUNNING, __ATOMIC_RELEASE);
+        sched_unlock_current();
+        return false;
+    }
     struct list_head *pos;
     list_for_each(pos, &r->sleepers) {
         if (list_entry(pos, struct thread, run_link)->wake_at > tick)
@@ -323,25 +345,35 @@ void sched_sleep_until(uint64_t tick)
     list_add_tail(&t->run_link, pos);
     sched_switch_locked();
     sched_unlock_current();
+    return true;
 }
 
-static void wake_sleepers_locked(struct run_queues *r, uint64_t now)
+/* wake_sleepers_locked moves the sleepers whose tick has come to the ready
+ * levels and returns their number. */
+static unsigned wake_sleepers_locked(struct run_queues *r, uint64_t now)
 {
-    while (!list_empty(&r->sleepers)) {
-        struct thread *t = list_first_entry(&r->sleepers, struct thread, run_link);
+    unsigned woken = 0;
+    struct list_head *pos = r->sleepers.next;
+    while (pos != &r->sleepers) {
+        struct thread *t = list_entry(pos, struct thread, run_link);
         if (t->wake_at > now)
             break;
+        pos = pos->next;
+        /* A sleeper with a queued wake is moved by the drain of that wake.
+         * The sleepers behind it are due as well and are woken now. */
         bool expected = false;
         if (!__atomic_compare_exchange_n(&t->wake_queued, &expected, true, false,
                                           __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
-            break;
+            continue;
         list_del(&t->run_link);
         if (t->level > 0)
             t->level--;
         t->slice_left = slice_for(t->level);
         enqueue_locked(r, t);
         __atomic_store_n(&t->wake_queued, false, __ATOMIC_RELEASE);
+        woken++;
     }
+    return woken;
 }
 
 static void boost_locked(struct run_queues *r)
@@ -387,8 +419,13 @@ static void tick_local(void)
     spin_lock(&r->lock);
     drain_inbound_locked(r);
     uint64_t now = timer_ticks();
-    wake_sleepers_locked(r, now);
-    if (cur == c->idle && (r->nr_ready || others_have_ready(c->id)))
+    /* A woken sleeper preempts the running thread, as a wake through
+     * sched_wake does (kick_cpu).  Without the reschedule the sleeper waited
+     * for the rest of the running thread's slice, up to 1280 ms on the lowest
+     * level, and a 10 ms sleep beside busy processes lasted up to 400 ms
+     * (case sleep_latency). */
+    bool woke = wake_sleepers_locked(r, now) != 0;
+    if ((cur == c->idle && (r->nr_ready || others_have_ready(c->id))) || (cur != c->idle && woke))
         __atomic_store_n(&c->need_resched, true, __ATOMIC_RELEASE);
     if (now - r->last_boost >= BOOST_INTERVAL) {
         r->last_boost = now;
@@ -463,6 +500,34 @@ __noreturn void sched_idle_loop(void)
         arch_idle();
         sched_preempt();
     }
+}
+
+bool sched_quiet(const struct thread *self, uint64_t until_tick)
+{
+    unsigned n = smp_cpu_count();
+    for (unsigned i = 0; i < n; i++) {
+        struct run_queues *r = &rq[i];
+        if (!spin_try_lock(&r->lock))
+            return false;
+        struct cpu *c = cpu_by_id(i);
+        bool quiet = r->nr_ready == 0 && mpsc_empty(&r->inbound) &&
+                     (c->current == c->idle || c->current == self);
+        /* The sleepers are sorted by their wake tick. */
+        struct list_head *pos;
+        list_for_each(pos, &r->sleepers) {
+            struct thread *t = list_entry(pos, struct thread, run_link);
+            if (t->wake_at > until_tick)
+                break;
+            if (t->proc != &kernel_proc) {
+                quiet = false;
+                break;
+            }
+        }
+        spin_unlock(&r->lock);
+        if (!quiet)
+            return false;
+    }
+    return true;
 }
 
 void sched_dump(void)

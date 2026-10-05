@@ -1,7 +1,12 @@
 /* M37 test: file backed mappings. Private and shared mappings of a file on
  * the root disk, offsets, aliasing inside one process and across fork,
  * coherence with read and write, writeback, faults beyond the end of the
- * file, mprotect and MAP_FIXED. Exits 0 on success. */
+ * file, mprotect and MAP_FIXED. Exits 0 on success.
+ *
+ *     mmapfiletest [DIR]
+ *
+ * DIR is the directory of the test file, /mmaptest by default. The program
+ * creates it and removes it at the end. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +22,10 @@ static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
 
 #define PG 4096
-#define PATH "/mmaptest/data"
+/* The file of the test: data in the directory of the argument, by
+ * default /mmaptest. The boot case 9p runs the test on a host folder. */
+static const char *dir = "/mmaptest";
+static char path[256];
 #define NPAGES 6                        /* the file is 5.5 pages long */
 #define FILE_SIZE (NPAGES * PG - PG / 2)
 
@@ -28,8 +36,8 @@ static unsigned char pattern(size_t off, unsigned seed)
 
 static void make_file(unsigned seed)
 {
-    int fd = open(PATH, O_CREAT | O_TRUNC | O_RDWR, 0644);
-    CHECK(fd >= 0, "create %s: %s", PATH, strerror(errno));
+    int fd = open(path, O_CREAT | O_TRUNC | O_RDWR, 0644);
+    CHECK(fd >= 0, "create %s: %s", path, strerror(errno));
     unsigned char *buf = malloc(FILE_SIZE);
     for (size_t i = 0; i < FILE_SIZE; i++)
         buf[i] = pattern(i, seed);
@@ -40,7 +48,7 @@ static void make_file(unsigned seed)
 
 static int file_matches(const unsigned char *want, size_t off, size_t n)
 {
-    int fd = open(PATH, O_RDONLY);
+    int fd = open(path, O_RDONLY);
     if (fd < 0)
         return 0;
     unsigned char *buf = malloc(n);
@@ -83,7 +91,7 @@ static void touch_write(void *p) { volatile unsigned char *c = p; *c = 1; }
 static void test_private(void)
 {
     make_file(1);
-    int fd = open(PATH, O_RDONLY);
+    int fd = open(path, O_RDONLY);
     CHECK(fd >= 0, "open for private mapping");
     unsigned char *p = mmap(NULL, NPAGES * PG, PROT_READ, MAP_PRIVATE, fd, 0);
     CHECK(p != MAP_FAILED, "private mapping: %s", strerror(errno));
@@ -140,7 +148,7 @@ static void child_writes_shared(void *arg)
 static void test_shared(void)
 {
     make_file(2);
-    int fd = open(PATH, O_RDWR);
+    int fd = open(path, O_RDWR);
     CHECK(fd >= 0, "open for shared mapping");
     CHECK(mmap(NULL, PG, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 1) == MAP_FAILED && errno == EINVAL,
           "unaligned offset refused");
@@ -148,7 +156,7 @@ static void test_shared(void)
           "shared and private together refused");
     CHECK(mmap(NULL, PG, PROT_READ | PROT_WRITE, 0, fd, 0) == MAP_FAILED && errno == EINVAL,
           "neither shared nor private refused");
-    int ro = open(PATH, O_RDONLY);
+    int ro = open(path, O_RDONLY);
     CHECK(mmap(NULL, PG, PROT_READ | PROT_WRITE, MAP_SHARED, ro, 0) == MAP_FAILED && errno == EACCES,
           "shared writable mapping of a read only descriptor refused");
     unsigned char *rop = mmap(NULL, PG, PROT_READ, MAP_SHARED, ro, 0);
@@ -208,7 +216,7 @@ static void test_shared(void)
     CHECK(file_matches(want, 0, FILE_SIZE), "file contains the shared writes after msync and munmap");
 
     /* Writes without msync are written back by munmap. */
-    fd = open(PATH, O_RDWR);
+    fd = open(path, O_RDWR);
     p = mmap(NULL, NPAGES * PG, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     CHECK(p != MAP_FAILED, "remap shared");
     memset(p + 4 * PG, 0xee, PG);
@@ -219,7 +227,7 @@ static void test_shared(void)
     CHECK(munmap(p, NPAGES * PG) == 0, "munmap dirty shared");
     close(fd);
     CHECK(file_matches(want, 0, FILE_SIZE), "munmap wrote the dirty pages back");
-    int fd2 = open(PATH, O_RDONLY);
+    int fd2 = open(path, O_RDONLY);
     long size = lseek(fd2, 0, SEEK_END);
     close(fd2);
     CHECK(size == FILE_SIZE, "size unchanged by writes to the tail of the last page: %ld", size);
@@ -241,7 +249,7 @@ static void child_sees_private_copy(void *arg)
 static void test_fork_private(void)
 {
     make_file(3);
-    int fd = open(PATH, O_RDONLY);
+    int fd = open(path, O_RDONLY);
     unsigned char *p = mmap(NULL, 2 * PG, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     CHECK(p != MAP_FAILED, "private mapping for fork");
     p[0] = 0xa0;
@@ -315,7 +323,7 @@ static void test_fixed(void)
     memset(a, 0x51, 4 * PG);
     /* Replace the middle two pages with a file mapping. */
     make_file(4);
-    int fd = open(PATH, O_RDONLY);
+    int fd = open(path, O_RDONLY);
     unsigned char *f = mmap(a + PG, 2 * PG, PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, PG);
     CHECK(f == a + PG, "MAP_FIXED placed the mapping: %p vs %p (%s)", (void *)f, (void *)(a + PG), strerror(errno));
     CHECK(a[0] == 0x51 && a[3 * PG] == 0x51, "pages around the fixed mapping retained");
@@ -356,13 +364,13 @@ static void test_anon_shared(void)
 static void test_truncate_and_exec_cleanup(void)
 {
     make_file(5);
-    int fd = open(PATH, O_RDWR);
+    int fd = open(path, O_RDWR);
     unsigned char *p = mmap(NULL, NPAGES * PG, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     CHECK(p != MAP_FAILED, "shared mapping before truncation");
     CHECK(p[PG] == pattern(PG, 5), "content");
     close(fd);
     /* Truncating the file through O_TRUNC drops its cached pages. */
-    fd = open(PATH, O_WRONLY | O_TRUNC);
+    fd = open(path, O_WRONLY | O_TRUNC);
     CHECK(fd >= 0, "reopen with O_TRUNC");
     CHECK(write(fd, "new", 3) == 3, "write after truncation");
     close(fd);
@@ -374,7 +382,7 @@ static void test_truncate_and_exec_cleanup(void)
     make_file(6);
     pid_t pid = fork();
     if (pid == 0) {
-        int f = open(PATH, O_RDWR);
+        int f = open(path, O_RDWR);
         unsigned char *q = mmap(NULL, PG, PROT_READ | PROT_WRITE, MAP_SHARED, f, PG);
         if (q == MAP_FAILED)
             _exit(1);
@@ -391,9 +399,12 @@ static void test_truncate_and_exec_cleanup(void)
 
 int main(int argc, char **argv)
 {
-    printf("mmapfiletest: pid %d\n", getpid());
-    if (mkdir("/mmaptest", 0755) < 0 && errno != EEXIST)
-        CHECK(0, "mkdir /mmaptest: %s", strerror(errno));
+    if (argc > 1)
+        dir = argv[1];
+    snprintf(path, sizeof path, "%s/data", dir);
+    printf("mmapfiletest: pid %d, file %s\n", getpid(), path);
+    if (mkdir(dir, 0755) < 0 && errno != EEXIST)
+        CHECK(0, "mkdir %s: %s", dir, strerror(errno));
     test_private();
     test_shared();
     test_fork_private();
@@ -401,8 +412,8 @@ int main(int argc, char **argv)
     test_fixed();
     test_anon_shared();
     test_truncate_and_exec_cleanup();
-    unlink(PATH);
-    rmdir("/mmaptest");
+    unlink(path);
+    rmdir(dir);
     printf("mmapfiletest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

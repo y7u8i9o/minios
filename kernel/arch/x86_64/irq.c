@@ -49,3 +49,14 @@ void arch_send_ipi(unsigned cpu, unsigned irq)
 {
     lapic_send_ipi(cpu_by_id(cpu)->arch.lapic_id, (uint8_t)irq);
 }
+
+int irq_route_gsi(unsigned gsi, unsigned flags, irq_handler_fn fn, void *arg)
+{
+    int vector = irq_alloc();
+    if (vector < 0)
+        return vector;
+    irq_register((unsigned)vector, fn, arg);
+    if (!ioapic_route_mode(gsi, (uint8_t)vector, flags & IRQ_GSI_LEVEL, flags & IRQ_GSI_ACTIVE_LOW))
+        return -EINVAL;
+    return vector;
+}

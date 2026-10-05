@@ -235,3 +235,33 @@ The scope is images and audio. Compression (gzip) remains in libc.
   decodes on the host.
 - The user chose imported code over an implementation from the standard.
   Arithmetic coding and the EXIF orientation are not supported.
+
+### C9: MP3 through minimp3 and shine (completed 2026-10-06)
+
+- The module `mp3.so` decodes MPEG-1, MPEG-2 and MPEG-2.5 Layer III with
+  minimp3 (CC0) and encodes them with shine (GNU Library GPL version 2),
+  both imported by `tools/fetch_mp3.sh` at fixed commits.
+- The encoder writes an Info tag with a LAME extension, so that a file
+  decodes to the exact length and position of its input. The option
+  `bitrate` selects the bit rate.
+- Changed during the work: shine needed two corrections
+  (`tools/patches/shine.patch`), and the encoder completes the last frame
+  that shine writes too short. All 216 combinations of rate, bit rate and
+  channels decode with minimp3 and FFmpeg.
+- Boot test `codec_mp3`: three fixtures of LAME against FFmpeg, round
+  trips at five rates, refused configurations and a cut file.
+  `codec_tool` converts the chime to MP3 and back.
+
+### C10: GIF and animations (completed 2026-10-06)
+
+- libcodec gained animations: `CODEC_ANIMATED`, the codec functions
+  `animation_open`, `animation_next`, `animation_close` and
+  `animation_encode`, and the library functions `codec_animation_*`. The
+  module ABI is 3.
+- The module `gif.so`, written for minios, decodes GIF87a and GIF89a with
+  transparency, interlacing, the three disposal methods and the loop
+  count, and encodes still images and animations with an exact or a
+  median cut colour table.
+- `view` plays animations, and `codecs` describes and converts them.
+- Boot test `codec_gif`: fixtures of Pillow and ImageMagick against the
+  frames that ImageMagick composes, round trips and a cut file.

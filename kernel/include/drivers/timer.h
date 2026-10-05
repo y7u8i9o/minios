@@ -21,7 +21,12 @@ uint64_t timer_ns(void);
 uint64_t timer_ticks(void);
 /* Number of timer interrupts taken by the boot CPU. */
 uint64_t timer_interrupts(void);
-/* Delay the caller. Busy waits, or blocks once the scheduler is running. */
+/* Delay the caller by at least ms. Busy waits, or blocks once the scheduler
+ * is running. A wake before the deadline starts another sleep. */
 void sleep_ms(uint64_t ms);
+/* sleep_ms_interruptible sleeps like sleep_ms, but ends when interrupted
+ * returns true, such as signal_should_interrupt for a system call.  The
+ * result is 0, or -EINTR after an interruption. */
+int sleep_ms_interruptible(uint64_t ms, bool (*interrupted)(void));
 /* Called from the timer interrupt on every tick, used by the scheduler. */
 void timer_set_tick_handler(timer_tick_fn fn);

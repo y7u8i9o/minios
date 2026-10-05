@@ -51,16 +51,16 @@ KTEST_DEFINE("login_console", test_login);
 static void test_login_gui(void)
 {
     struct proc *p = ktest_start_init();
-    sleep_ms(2500);
+    ktest_wait_idle(2500);
     type_line("user\n");
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     type_line("userpw\n");
     type_line("userpw\n");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     type_line("ls -l /dev/fb0\n");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     type_line("startgui\n");
-    sleep_ms(8000);
+    ktest_wait_idle(8000);
     type_line("initctl poweroff\n");
     int status = proc_reap(p);
     ktest_fail("init exited with status 0x%x", status);

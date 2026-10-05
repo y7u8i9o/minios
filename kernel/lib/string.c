@@ -186,3 +186,30 @@ char *strstr(const char *haystack, const char *needle)
             return (char *)haystack;
     return NULL;
 }
+
+unsigned long long strtoull(const char *s, char **end, int base)
+{
+    const char *p = s;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if ((base == 0 || base == 16) && p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
+        p += 2, base = 16;
+    else if (base == 0)
+        base = p[0] == '0' ? 8 : 10;
+    unsigned long long v = 0;
+    bool overflow = false;
+    const char *first = p;
+    for (;; p++) {
+        int d = *p >= '0' && *p <= '9' ? *p - '0'
+              : *p >= 'a' && *p <= 'z' ? *p - 'a' + 10
+              : *p >= 'A' && *p <= 'Z' ? *p - 'A' + 10 : 99;
+        if (d >= base)
+            break;
+        if (v > (~0ULL - (unsigned)d) / (unsigned)base)
+            overflow = true;
+        v = v * (unsigned)base + (unsigned)d;
+    }
+    if (end)
+        *end = (char *)(p == first ? s : p);
+    return overflow ? ~0ULL : v;
+}

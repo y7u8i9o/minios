@@ -1,6 +1,6 @@
 # Exercise the actual application archives, not copies of base binaries.
 set -e
-names='calc code gedit hexview luasynth mandel paint player playtone pong sequencer synth unicode view'
+names='calc code gedit hexview luasynth mandel paint player playtone pong sequencer synth transfer unicode view'
 # The installed application packages. The base system of the image is
 # installed as packages as well.
 apps() {
@@ -17,7 +17,7 @@ pkg check /usr/share/packages/*.mpk
 test "$(apps)" = ''
 pkg install /usr/share/packages/*.mpk
 count=$(apps | wc -l | tr -d ' ')
-test "$count" = 14 || { echo "FAIL package count: [$count]"; exit 1; }
+test "$count" = 15 || { echo "FAIL package count: [$count]"; exit 1; }
 pkg verify
 echo 'pkg-apps: records verified'
 for name in $names; do
@@ -33,6 +33,9 @@ test -f /usr/share/apps/code.lua
 test -f /usr/share/apps/pong.lua
 grep 'Code=/usr/bin/code' /var/lib/pkg/launcher
 grep 'Unicode viewer=/usr/bin/unicode' /var/lib/pkg/launcher
+grep 'Transfer=/usr/bin/transfer' /var/lib/pkg/launcher
+test "$(man -w transfer)" = /usr/share/man/man1/transfer.1
+test -f /usr/share/lua/5.5/mft.lua
 lua -e 'local s=require "mime"; assert(s.handler("text/x-lua")=="/usr/bin/code"); assert(s.handler("text/plain")=="/usr/bin/gedit"); assert(s.handler("image/png")=="/usr/bin/view"); assert(s.handler("audio/wav")=="/usr/bin/player"); assert(s.handler("application/octet-stream")=="/usr/bin/hexview"); assert(s.handler("inode/directory")=="/bin/files")'
 pkg remove code
 test ! -f /usr/bin/code

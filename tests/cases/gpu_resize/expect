@@ -1,0 +1,10 @@
+virtio-gpu\] 1024x768 scanout
+fbdev\] the host display requests 1600x1000
+x12: the host display requests 1600x1000
+x12: mode 1600x1000 scale 1
+gpu_resize: mode 1600x1000, the panel spans 1600 pixels
+fbdev\] the host display requests 1280x720
+gpu_resize: mode 1280x720, the panel spans 1280 pixels
+fbdev\] the host display requests 1440x900
+gpu_resize: request 1440x900 ignored, mode 1280x720
+TEST PASS

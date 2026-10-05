@@ -22,6 +22,12 @@ struct devtree {
     uint32_t msi_base;              /* translate to ITS device IDs from msi_base */
     uint32_t msi_length;
     uintptr_t rtc;                  /* PL031 */
+    /* The power key of gpio-keys (linux,code 116) on a PL061 GPIO
+     * controller: its registers, its interrupt and the line of the key.
+     * pl061 is 0 without such a key. */
+    uintptr_t pl061;
+    unsigned pl061_irq;
+    unsigned power_line;
     bool psci_smc;                  /* PSCI through smc, else through hvc */
     bool from_acpi;                 /* filled from the ACPI tables */
     char model[64];                 /* model and first compatible string of the root node */

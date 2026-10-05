@@ -1133,3 +1133,35 @@ msgstr "Источник"
 #: user/apps/sysinfo.c
 msgid "Use"
 msgstr "Использование"
+
+#: user/apps/sysinfo.c:62
+msgid "64-bit addresses"
+msgstr "64-битные адреса"
+
+#: user/apps/sysinfo.c:55
+msgid "AHCI"
+msgstr "AHCI"
+
+#: user/apps/sysinfo.c:55
+msgid "NVMe"
+msgstr "NVMe"
+
+#: user/apps/sysinfo.c:141
+msgid "Firmware revision"
+msgstr "Версия прошивки"
+
+#: user/apps/sysinfo.c:193
+msgid "Kind"
+msgstr "Вид"
+
+#: user/apps/sysinfo.c:194
+msgid "Largest transfer"
+msgstr "Наибольшая передача"
+
+#: user/apps/sysinfo.c:229
+msgid "Namespaces"
+msgstr "Пространства имён"
+
+#: user/apps/sysinfo.c:323
+msgid "Volatile write cache"
+msgstr "Энергозависимый кэш записи"

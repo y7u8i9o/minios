@@ -1,0 +1,11 @@
+# V3 of docs/plan/release-0.6.0.md: SetDesktopSize of a VNC client changes
+# the size of the host display. A screendump records each followed mode.
+wait gpu_resize: session ready
+vnc-size 1600 1000
+wait gpu_resize: mode 1600x1000
+screendump resize1.ppm
+vnc-size 1280 720
+wait gpu_resize: mode 1280x720
+screendump resize2.ppm
+wait gpu_resize: the mode no longer follows the window
+vnc-size 1440 900

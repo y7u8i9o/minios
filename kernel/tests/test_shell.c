@@ -30,7 +30,7 @@ static void shell_memory_drain(void)
     struct shell_reclaim reclaim = {0};
     rcu_call(&reclaim.head, shell_reclaim_done);
     while (!__atomic_load_n(&reclaim.done, __ATOMIC_ACQUIRE))
-        sleep_ms(1);
+        ktest_wait_idle(1);
     swap_drain();
 }
 
@@ -151,14 +151,14 @@ static void test_lineedit(void)
     type_line("cho hello");
     type_key(0x47); /* Home */
     type_line("e\n");
-    sleep_ms(200);
+    ktest_wait_idle(200);
     lineedit_wait();
     type_line("hexd\t /dev/null\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_key(0x48); /* Up */
     type_line("\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_line("exit 12\n");
     int status = proc_reap(p);
@@ -184,7 +184,7 @@ static void test_lineedit_screen(void)
     ktest_assert(p != NULL, "cannot start shell");
     lineedit_wait();
     type_line("printf '\\033[2J\\033[H'\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     for (int repetition = 0; repetition < 3; repetition++) {
         type_line("thisisnotacommand\n");
@@ -225,24 +225,24 @@ static void test_lua_prompt(void)
     ktest_assert(p != NULL, "lua did not start");
     lineedit_wait();
     type_line("print(\"answer \" .. 6 * 7)\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_line("print(\"up \" .. string.up\t(\"ok\"))\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_line("n = (n or 0) + 1; print(\"run \" .. n)\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_key(0x48); /* Up recalls the counter line. */
     type_line("\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_line("error(\"discarded\"");
     type_ctrl('c');
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_line("print(\"after \" .. n)\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     lineedit_wait();
     type_ctrl('d');
     int status = proc_reap(p);
@@ -303,9 +303,9 @@ static void test_ctrlc(void)
     ktest_assert(p != NULL, "cannot start /bin/sh");
     /* Let the shell start cat and cat echo its line, then interrupt it
      * while it blocks on the console. */
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     type_ctrl('c');
-    sleep_ms(500);
+    ktest_wait_idle(500);
     type_line("ps\n");
     type_line("kill -2 99999\n");
     type_line("exit 4\n");
@@ -435,21 +435,21 @@ static void test_jobcontrol(void)
     struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", NULL },
                                       (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(p != NULL, "cannot start /bin/sh");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     type_line("yes > /dev/null\n");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     type_ctrl('z');
-    sleep_ms(300);
+    ktest_wait_idle(300);
     type_line("jobs\n");
-    sleep_ms(200);
+    ktest_wait_idle(200);
     type_line("bg\n");
-    sleep_ms(200);
+    ktest_wait_idle(200);
     type_line("jobs\n");
-    sleep_ms(200);
+    ktest_wait_idle(200);
     type_line("fg\n");
-    sleep_ms(300);
+    ktest_wait_idle(300);
     type_ctrl('c');
-    sleep_ms(300);
+    ktest_wait_idle(300);
     type_line("exit 6\n");
     int status = proc_reap(p);
     kprintf("sh exited with status 0x%x\n", status);

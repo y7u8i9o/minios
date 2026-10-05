@@ -20,16 +20,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <gui/utf8.h>
 #include <wctype.h>
 #include <unistd.h>
 #include <gui/i18n.h>
 #include <gui/image.h>
 #include <gui/keymap.h>
-#include <minios/local.h>
+#include <gui/launcher.h>
+#include <gui/mime.h>
 #include <pwd.h>
-#include <minios/conf.h>
 #include "panel.h"
 
 #define MAX_ENTRIES 64
@@ -104,48 +103,29 @@ static const struct image *entry_icon(const char *path)
     return img ? img : icon_load("app-default");
 }
 
-static void load_file(const char *path, enum section section)
+/* add_entries appends the n entries of table to the menu entries in the
+ * given section. */
+static void add_entries(const struct launcher_entry *table, int n, enum section section)
 {
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return;
-    char line[160];
-    while (nentries < MAX_ENTRIES && fgets(line, sizeof line, f)) {
-        char *eq = strchr(line, '='), *nl = strchr(line, '\n');
-        if (nl)
-            *nl = '\0';
-        if (!eq || line[0] == '#')
-            continue;
-        *eq = '\0';
+    for (int i = 0; i < n && nentries < MAX_ENTRIES; i++) {
         struct entry *e = &entries[nentries++];
-        strlcpy(e->title, dgettext("launcher", line), sizeof e->title);
-        strlcpy(e->path, eq + 1, sizeof e->path);
+        strlcpy(e->title, table[i].title, sizeof e->title);
+        strlcpy(e->path, table[i].command, sizeof e->path);
         e->section = strcmp(e->path, "@logout") == 0 ? SEC_LOGOUT : section;
         e->icon = entry_icon(e->path);
     }
-    fclose(f);
 }
 
-static int compare_titles(const void *a, const void *b)
-{
-    const struct entry *x = a, *y = b;
-    return strcasecmp(x->title, y->title);
-}
-
-/* load_entries reads both tables and sorts the entries of packages by
- * title.  The table of packages is read first, and its entries are at the
- * start of the array. */
+/* load_entries reads the tables of packages, sorted by title, and then
+ * the system table in the order of the file. */
 static void load_entries(void)
 {
-    nentries = 0;
-    load_file(PKG_LAUNCHER, SEC_APPS);
-    /* Packages that the user installed into ~/.local. */
+    static struct launcher_entry table[MAX_ENTRIES];
     char path[300];
-    snprintf(path, sizeof path, "%s/.local/share/launcher", conf_home());
-    load_file(path, SEC_APPS);
-    int apps = nentries;
-    qsort(entries, (size_t)apps, sizeof entries[0], compare_titles);
-    load_file(conf_user_file("launcher", "/etc/launcher", path, sizeof path), SEC_SYSTEM);
+    nentries = 0;
+    add_entries(table, launcher_read_apps(table, MAX_ENTRIES), SEC_APPS);
+    int n = launcher_read_table(launcher_system_path(path, sizeof path), 1, table, 0, MAX_ENTRIES - nentries);
+    add_entries(table, n, SEC_SYSTEM);
 }
 
 /* lower decodes UTF-8 text into lower case code points and returns their
@@ -319,19 +299,9 @@ static void launch(const struct entry *e)
         exit(0);                        /* startgui ends the session when the panel exits */
     }
     log_line("launch %s", e->path);
-    pid_t pid = fork();
-    if (pid == 0) {
-        char line[sizeof e->path], *args[8];
-        char *save;
-        int n = 0;
-        strlcpy(line, e->path, sizeof line);
-        for (char *w = strtok_r(line, " ", &save); w && n < 7; w = strtok_r(NULL, " ", &save))
-            args[n++] = w;
-        args[n] = NULL;
-        if (n)
-            execvp(args[0], args);
-        _exit(127);
-    }
+    int r = mime_run(e->path, NULL);
+    if (r < 0)
+        log_line("cannot launch %s: %s", e->path, strerror(-r));
 }
 
 /* The functions below create and remove the popup. */

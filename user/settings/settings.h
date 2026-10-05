@@ -12,8 +12,6 @@
 
 #define WALLPAPER_DIR "/usr/share/wallpapers"
 #define KEYMAP_DIR "/usr/share/keymaps"
-/* The system launcher menu, which a user's ~/.config/launcher replaces. */
-#define LAUNCHER_PATH "/etc/launcher"
 
 extern struct app *app;
 
@@ -28,6 +26,10 @@ int conf_int(const char *key, int fallback);
  * time. */
 /* A labelled row inside a page grid. */
 struct widget *row_label(struct widget *grid, int row, const char *text);
+/* A check box for a key with the values 1 and 0. The box shows the value
+ * of the key, or fallback when the key has no value. A toggle writes the
+ * key. */
+struct widget *conf_checkbox_new(struct widget *parent, const char *text, const char *key, int fallback);
 
 void build_appearance(struct widget *page);
 void build_display(struct widget *page);

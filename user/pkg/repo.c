@@ -160,7 +160,7 @@ static void keys_dir(char *path, size_t n)
 /* A file repository is named file:// followed by an absolute path of
  * plain characters without empty, dot or dot-dot components. */
 #define FILE_URL "file://"
-static int repo_url_is_file(const char *url)
+int repo_url_is_file(const char *url)
 {
     return strncmp(url, FILE_URL, sizeof FILE_URL - 1) == 0;
 }
@@ -920,9 +920,11 @@ int cmd_update(void)
     if (r < 0)
         return report(NULL, "cannot lock %s%s: %s", root, PKG_DB, strerror(-r));
     int status = 0;
-    for (int i = 0; i < c.nrepos; i++)
+    for (int i = 0; i < c.nrepos; i++) {
+        progress("reading the index of %s (%d of %d)", c.repos[i].name, i + 1, c.nrepos);
         if (update_one(&c, i) < 0)
             status = -1;
+    }
     db_unlock();
     return status;
 }

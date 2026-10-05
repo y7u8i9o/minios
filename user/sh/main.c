@@ -6,6 +6,7 @@ static char *history_path;
 #endif
 
 int interactive, last_status, script_argc, flow_count, loop_depth, function_depth;
+unsigned long substitutions;
 char **script_argv;
 pid_t last_background;
 enum exec_flow flow;

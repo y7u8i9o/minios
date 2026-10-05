@@ -19,7 +19,10 @@
  * package prefix .local remains and gains the account databases, and the
  * marker .layout records the conversion. It then makes the missing homes
  * of the accounts of /etc/passwd that lie on the volume. -m DIR converts
- * the directory DIR alone, for the fs_migrate test. */
+ * the directory DIR alone, for the fs_migrate test.
+ *
+ * After the table fsinit mounts the folders that the host shares through
+ * virtio-9p at /mnt/TAG. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -323,6 +326,39 @@ static int process(const struct entry *e)
     return 0;
 }
 
+/* Mounts every folder of the host at /mnt/TAG (docs/design/9p.md). The
+ * kernel lists the mount tags of the virtio-9p devices in /dev/9p. A
+ * mount point that is mounted already is skipped. A failure is reported.
+ * It does not change the exit status, because no share is required for
+ * the boot. */
+static void mount_shares(void)
+{
+    DIR *d = opendir("/dev/9p");
+    if (d == NULL)
+        return;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (de->d_name[0] == '.')
+            continue;
+        char target[300];
+        snprintf(target, sizeof target, "/mnt/%s", de->d_name);
+        if (is_mounted(target)) {
+            note("%s mounted already on %s", de->d_name, target);
+            continue;
+        }
+        if ((mkdir("/mnt", 0755) < 0 && errno != EEXIST) || (mkdir(target, 0755) < 0 && errno != EEXIST)) {
+            fprintf(stderr, "fsinit: %s: %s\n", target, strerror(errno));
+            continue;
+        }
+        if (mount_options(de->d_name, target, "9p", NULL) < 0) {
+            fprintf(stderr, "fsinit: mount the host folder %s on %s: %s\n", de->d_name, target, strerror(errno));
+            continue;
+        }
+        printf("fsinit: mounted the host folder %s on %s\n", de->d_name, target);
+    }
+    closedir(d);
+}
+
 int main(int argc, char **argv)
 {
     const char *table = "/etc/fstab";
@@ -354,6 +390,7 @@ int main(int argc, char **argv)
     FILE *f = fopen(table, "r");
     if (f == NULL) {
         fprintf(stderr, "fsinit: %s: %s\n", table, strerror(errno));
+        mount_shares();
         return 1;
     }
     int status = 0;
@@ -379,5 +416,6 @@ int main(int argc, char **argv)
             status = 1;
     }
     fclose(f);
+    mount_shares();
     return status;
 }

@@ -70,17 +70,17 @@ $(MKFS): tools/mkfs/mkfs.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
-$(FSCK): tools/fsck/fsck.c kernel/include/fs/mfs_format.h
+$(FSCK): tools/fsck/fsck.c lib/libc/src/crc32.c kernel/include/fs/mfs_format.h
 	@mkdir -p $(dir $@)
-	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -idirafter lib/libc/include -o $@ $(filter %.c,$^)
 
 $(MKFAT): tools/mkfat/mkfat.c kernel/include/fs/fat_format.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -Ikernel/include -o $@ $<
 
-$(MKGPT): tools/mkgpt/mkgpt.c
+$(MKGPT): tools/mkgpt/mkgpt.c lib/libc/src/crc32.c
 	@mkdir -p $(dir $@)
-	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -o $@ $<
+	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c99 -Wall -idirafter lib/libc/include -o $@ $^
 
 # netpeer runs on the host. In the network boot tests, the guest
 # communicates with it (docs/design/network.md).
@@ -101,8 +101,10 @@ $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 # into the directory tree of a disk image. `pkg perms` prints the mode and
 # the owner of every installed file, and mkfs sets them in the image
 # (docs/design/packages.md).
-PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/net/http.c lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c
-$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/disk.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h
+PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/crc32.c lib/libc/src/net/http.c lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c \
+                lib/libc/src/elffile.c
+$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/disk.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h \
+            lib/libc/include/elf.h lib/libc/include/minios/elffile.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ $(PKGHOST_SRCS)
 
@@ -353,16 +355,25 @@ KVM_CASES := boot cpu exception fork signals smp smp_user vmm sched
 test-kvm:
 	ACCEL=kvm $(MAKE) test CASES="$(KVM_CASES)"
 
+# test-changed runs the host checks and the boot cases that tests/map and
+# the files of the cases select for the changed files of the working tree
+# (docs/design/build.md). LIST=1 prints the selection without running it,
+# and SINCE=REF adds the commits since the common ancestor with REF.
+.PHONY: test-changed
+test-changed:
+	@python3 tools/test-changed.py $(if $(LIST),,--run) $(if $(SINCE),--since $(SINCE))
+
 # check runs the tests on the host: the installed headers, the signature
 # code and pkg, libfont, libwire, libcodec, libgui, the Lua modules and the
 # input method engines.
-check: check-headers check-pkg
-	$(MAKE) -C lib/libfont check
-	$(MAKE) -C lib/libwire check
-	$(MAKE) -C lib/libcodec check
-	$(MAKE) -C lib/libgui check
+check: check-headers check-pkg check-libfont check-libwire check-libcodec check-libgui
 	$(MAKE) check-lua
 	$(MAKE) check-imed
+
+# The host checks of the libraries, one target each for make test-changed.
+.PHONY: check-libfont check-libwire check-libcodec check-libgui
+check-libfont check-libwire check-libcodec check-libgui:
+	$(MAKE) -C lib/$(patsubst check-%,%,$@) check
 
 .PHONY: check-lua check-headers check-imed
 # check-imed tests the engines of the input method daemon on the host with
@@ -395,22 +406,35 @@ LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.
                 $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
                 $(filter-out lib/libgui/src/client.c,$(wildcard lib/libgui/src/*.c lib/libgui/src/widgets/*.c)) \
                 lib/libgui/tests/fake_client.c lib/libgui/tests/host_compat.c $(wildcard lib/libfont/src/*.c) \
-                $(wildcard lib/libcodec/src/*.c lib/libcodec/modules/*/*.c)
-check-lua:
+                $(wildcard lib/libcodec/src/*.c lib/libcodec/modules/*/*.c) lib/libc/src/crc32.c
+LUA_TEST := $(BUILD)/lua/host/test_modules
+# The headers are listed too, so that a change of an interface rebuilds
+# the program.
+$(LUA_TEST): $(LUA_HOSTSRCS) $(wildcard user/lua/*.h lib/libgui/include/gui/*.h lib/libgui/tests/*.h lib/libc/include/minios/crc32.h)
 	@mkdir -p $(BUILD)/lua/host
 	$(MAKE) -C lib/libgui $(BUILD)/libgui/font.c
 	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DCODEC_BUILTIN -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
 	    -include lib/libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilib/libgui/include -Ilib/libcodec/include -Ilib/libfont/include \
-	    -Ilib/libgui/tests -Ilib/libaudio/include -idirafter kernel/include \
-    -o $(BUILD)/lua/host/test_modules $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
+	    -Ilib/libgui/tests -Ilib/libaudio/include -idirafter kernel/include -idirafter lib/libc/include \
+	    -o $@ $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
+check-lua: $(LUA_TEST)
 	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp
-	$(BUILD)/lua/host/test_modules user/etc/tests/modules.lua $(BUILD)/lua/host/tmp user/etc/mime.types user/etc/mime.apps
-	$(BUILD)/lua/host/test_modules user/lua/tests/gui.lua
-	$(BUILD)/lua/host/test_modules user/lua/tests/audio.lua
-	$(BUILD)/lua/host/test_modules user/etc/tests/threads.lua
-	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/engine.lua
-	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/ui.lua
-	$(BUILD)/lua/host/test_modules user/packages/luasynth/tests/worker.lua
+	$(LUA_TEST) user/etc/tests/modules.lua $(BUILD)/lua/host/tmp user/etc/mime.types user/etc/mime.apps
+	$(LUA_TEST) user/lua/tests/gui.lua
+	$(LUA_TEST) user/lua/tests/audio.lua
+	$(LUA_TEST) user/etc/tests/threads.lua
+	$(LUA_TEST) user/packages/luasynth/tests/engine.lua
+	$(LUA_TEST) user/packages/luasynth/tests/ui.lua
+	$(LUA_TEST) user/packages/luasynth/tests/worker.lua
+
+# check-transfer runs the unit tests of tools/mft.py and tools/transfer.py,
+# then the Lua side of the package transfer against the Python side
+# (docs/design/filetransfer.md).
+.PHONY: check-transfer
+check-transfer: $(LUA_TEST)
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/tests -p 'test_mft.py'
+	$(LUA_TEST) user/packages/transfer/tests/protocol.lua $(BUILD)/lua/host/transfer
+	$(LUA_TEST) user/packages/transfer/tests/window.lua $(BUILD)/lua/host/transfer
 
 # check-pkg tests the SHA-256, SHA-512 and Ed25519 code on the host with
 # the test vectors of RFC 6234 and RFC 8032. The boot test pkg_repo runs
@@ -422,6 +446,25 @@ check-pkg: $(PKGHOST) $(PKGSIGN)
 	    -o $(BUILD)/host/cryptotest user/tests/cryptotest.c $(CRYPTO_SRCS)
 	$(BUILD)/host/cryptotest
 	PKG=$(abspath $(PKGHOST)) PKGSIGN=$(abspath $(PKGSIGN)) MKREPO=$(abspath tools/mkrepo.sh) WORK=$(abspath $(BUILD)/host/pkgtest) sh user/pkg/tests/host.sh
+
+# check-binutils compiles the programs of user/binutils for the host and
+# compares their output with the GNU binutils of the cross toolchains on
+# the files of the current build of both architectures
+# (docs/design/binutils.md). BU_PROGS selects the programs and BU_GROUPS
+# the scripts of user/binutils/tests/.
+BU_PROGS  ?= ar nm size strings readelf objdump objcopy strip addr2line ranlib
+BU_GROUPS ?= nm readelf objcopy addr2line
+.PHONY: check-binutils
+check-binutils:
+	@mkdir -p $(BUILD)/host/binutils
+	@for p in $(BU_PROGS); do \
+	    case $$p in readelf|objdump) extra=user/binutils/elfdump.c ;; \
+	        objcopy|strip) extra=user/binutils/elfrewrite.c ;; *) extra= ;; esac; \
+	    $(HOSTCC) $(HOSTCPPFLAGS) -O1 -g -std=c17 -Wall -Wextra -idirafter lib/libc/include \
+	        -o $(BUILD)/host/binutils/$$p user/binutils/$$p.c $$extra user/binutils/lib/*.c lib/libc/src/elffile.c || exit 1; \
+	done
+	TOP=$(CURDIR) BU=$(BUILD)/host/binutils WORK=$(BUILD)/host/binutils/work/$(firstword $(BU_GROUPS) none) BU_GROUPS="$(BU_GROUPS)" \
+	    sh user/binutils/tests/run.sh
 
 .PHONY: check-sh libedit
 check-sh:

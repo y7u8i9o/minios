@@ -8,7 +8,7 @@
 #include <regex.h>
 #include <term.h>
 
-static int icase, number, invert, count_only, names_only, recursive, word, fixed, extended, color;
+static int icase, number, invert, count_only, names_only, recursive, word, fixed, extended, color, quiet;
 static int name_policy = -1, multiple, found, errors;
 static const char *pattern;
 static regex_t regex;
@@ -75,6 +75,9 @@ static void search(FILE *file, const char *name, int show_name)
             continue;
         found = 1;
         hits++;
+        /* -q: the first match decides the status, as POSIX permits. */
+        if (quiet)
+            exit(0);
         if (names_only) {
             puts(name);
             break;
@@ -210,6 +213,9 @@ int main(int argc, char **argv)
             case 'w':
                 word = 1;
                 break;
+            case 'q':
+                quiet = 1;
+                break;
             default:
                 fprintf(stderr, "grep: unknown option -%c\n", *p);
                 return 2;
@@ -217,7 +223,7 @@ int main(int argc, char **argv)
         }
     }
     if (i == argc) {
-        fprintf(stderr, "usage: grep [-EFinvclrhHw] pattern [file...]\n");
+        fprintf(stderr, "usage: grep [-EFinvclrhHqw] pattern [file...]\n");
         return 2;
     }
     pattern = argv[i++];

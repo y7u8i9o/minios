@@ -18,6 +18,13 @@ bool fdt_valid(const void *blob);
 /* Find the next node after *node (from the start of the tree when
  * node->offset is negative) whose compatible property lists compat. */
 bool fdt_find_compatible(const void *blob, const char *compat, struct fdt_node *node);
+/* Find the next node after *node, in the same manner, that has the
+ * property name, such as "linux,code". */
+bool fdt_find_property(const void *blob, const char *name, struct fdt_node *node);
+/* True if the compatible property of node lists compat. */
+bool fdt_is_compatible(const void *blob, const struct fdt_node *node, const char *compat);
+/* Find the node whose phandle property is phandle. */
+bool fdt_find_phandle(const void *blob, uint32_t phandle, struct fdt_node *node);
 /* The value and the length of a property of a node, or NULL. */
 const void *fdt_prop(const void *blob, const struct fdt_node *node, const char *name, int *len);
 /* Entry index of the reg property of a node. */

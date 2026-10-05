@@ -1,0 +1,6 @@
+root.*@.*minios
+os.*minios [0-9]
+host.*[A-Za-z]
+uptime.*[0-9]+[smh]
+memory.*[0-9]+M / [0-9]+M
+TEST PASS

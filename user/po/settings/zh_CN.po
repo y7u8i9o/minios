@@ -534,11 +534,21 @@ msgstr "名称"
 msgid "Password"
 msgstr "密码"
 
-msgid "Your password"
-msgstr "您的密码"
 
 msgid "Add account"
 msgstr "添加帐户"
 
 msgid "Remove selected account"
 msgstr "删除所选帐户"
+
+msgid "Authentication is required to change the time zone."
+msgstr "更改时区需要认证。"
+
+msgid "Authentication is required to add an account."
+msgstr "添加账户需要认证。"
+
+msgid "Authentication is required to remove an account."
+msgstr "删除账户需要认证。"
+
+msgid "The change was cancelled"
+msgstr "更改已取消"

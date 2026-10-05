@@ -50,6 +50,12 @@ static inline uint32_t atomic_u32_fetch_sub_relaxed(atomic_u32_t *a, uint32_t v)
     return __atomic_fetch_sub(&a->value, v, __ATOMIC_RELAXED);
 }
 
+/* Stores v and returns the previous value. */
+static inline uint32_t atomic_u32_exchange_acq_rel(atomic_u32_t *a, uint32_t v)
+{
+    return __atomic_exchange_n(&a->value, v, __ATOMIC_ACQ_REL);
+}
+
 static inline uint64_t atomic_u64_load_relaxed(const atomic_u64_t *a)
 {
     return __atomic_load_n(&a->value, __ATOMIC_RELAXED);

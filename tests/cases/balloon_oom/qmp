@@ -1,0 +1,6 @@
+# V4 of docs/plan/release-0.6.0.md. The guest has 512 MiB. A balloon of
+# 320 MiB leaves 192 MiB (201326592 bytes) to the guest.
+wait balloon_oom: ready
+qmp balloon {"value": 201326592}
+wait balloon_oom: balloon of [0-9]+ pages reported$
+qmp query-balloon

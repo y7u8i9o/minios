@@ -1,0 +1,54 @@
+OBJDUMP(1)                  User Commands                OBJDUMP(1)
+
+NAME
+    objdump - display information from object files
+
+SYNOPSIS
+    objdump [-afhpxtTrRsw] [-j section]... file...
+
+DESCRIPTION
+    objdump prints headers, symbols, relocations and section contents of
+    ELF64 files of x86_64 and aarch64. The input is an executable, a
+    shared object, a relocatable object or a System V archive of such
+    objects. For an archive, objdump prints the line "In archive NAME:"
+    and the output of each member.
+
+    The output equals the output of GNU objdump (version 2.47) for the
+    implemented options. At least one of the options -a, -f, -h, -p, -x,
+    -t, -T, -r, -R or -s is required.
+
+    Disassembly is not available. The options -d, -D and -S print the
+    message "disassembly is not available" and exit with status 1. A later
+    release adds the disassembler.
+
+OPTIONS
+    -a, --archive-headers   print the archive header of each member. For a
+                            plain file, print the file name
+    -f, --file-headers      print the architecture, the BFD flags and the
+                            start address
+    -h, --section-headers   print the table of sections
+    --headers
+    -p, --private-headers   print the program headers, the dynamic section
+                            and the version definitions and references
+    -x, --all-headers       select -a -f -h -p -r -t
+    -t, --syms              print the symbol table
+    -T, --dynamic-syms      print the dynamic symbol table
+    -r, --reloc             print the relocations of each section
+    -R, --dynamic-reloc     print the dynamic relocations
+    -s, --full-contents     print the contents of the sections in
+                            hexadecimal and as characters
+    -j, --section=NAME      restrict -h, -s, -r, -t and -T to the section
+                            NAME. The option is repeatable
+    -w, --wide              print the section flags on the line of the
+                            section and widen the name column
+    -H, --help              print a usage message
+    -v, --version           print the version of the program
+
+EXAMPLES
+    objdump -h prog
+    objdump -x libjson.so
+    objdump -s -j .rodata prog
+    objdump -t -j .text libedit.a
+
+SEE ALSO
+    readelf(1), nm(1), size(1), strings(1), ar(1)

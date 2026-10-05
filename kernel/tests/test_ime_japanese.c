@@ -20,7 +20,7 @@ static void tap(uint8_t code)
 {
     ps2kbd_feed_scancode(code);
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
-    sleep_ms(30);
+    ktest_wait_idle(30);
 }
 
 static const uint8_t letter_code[26] = {
@@ -38,7 +38,7 @@ static void keys(const uint8_t *codes, size_t n)
 {
     for (size_t i = 0; i < n; i++)
         ps2kbd_feed_scancode(codes[i]);
-    sleep_ms(200);
+    ktest_wait_idle(200);
 }
 
 static void sh(const char *command)
@@ -62,11 +62,11 @@ static void test_ime_japanese(void)
     struct proc *srv = start_server();
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/imejp.txt", NULL },
                                        env, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
 
     const uint8_t ctrl_shift[] = { 0x1d, 0x2a, 0xaa, 0x9d };
     keys(ctrl_shift, sizeof ctrl_shift);    /* pinyin */
@@ -97,9 +97,9 @@ static void test_ime_japanese(void)
     tap(SPACE);
     tap(ESC);
     tap(ENTER);                             /* やま */
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ctrl_key(0x1f);
-    sleep_ms(500);
+    ktest_wait_idle(500);
 
     struct file *f;
     ktest_assert(vfs_open("/imejp.txt", O_RDONLY, 0, &f) == 0, "open /imejp.txt");

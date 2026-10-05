@@ -158,6 +158,11 @@ static void dollar(struct buffer *b, const char *s, size_t *position, int quoted
         int arithmetic = s[p + 1] == '(';
         char *body = sh_slice(s + p + 1 + (arithmetic ? 1 : 0), end - p - 1 - (arithmetic ? 2 : 0));
         if (arithmetic) {
+            /* The expression undergoes parameter expansion, command
+             * substitution and quote removal first (POSIX 2.6.4). */
+            char *expanded = expand_one(body, 0);
+            free(body);
+            body = expanded;
             int error;
             long n = arith_eval(body, &error);
             char tmp[64];
@@ -307,7 +312,7 @@ static void glob_field(struct fields *f, struct buffer *b, size_t start, size_t 
         pattern[n++] = b->s[i];
     }
     glob_t g = {0};
-    if (magic && !glob(pattern, 0, NULL, &g)) {
+    if (magic && !opt_noglob && !glob(pattern, 0, NULL, &g)) {
         for (size_t i = 0; i < g.gl_pathc; i++)
             add_field(f, g.gl_pathv[i], strlen(g.gl_pathv[i]));
     } else

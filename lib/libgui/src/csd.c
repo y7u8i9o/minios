@@ -66,40 +66,34 @@ static struct rect button_rect(const struct csd *c, int w, int h, int n)
                           CSD_BUTTON, CSD_BUTTON };
 }
 
+/* The resize zones of the frame (gui_resize_edges): the edges outside the
+ * frame, and corner squares that reach outside and over the rounded
+ * corners inside. */
+static const struct gui_resize_zones zones = {
+    .margin = CSD_BORDER_ZONE, .inner = 0, .corner = CSD_CORNER, .reach = CSD_CORNER_REACH,
+    .inset_top = CSD_RADIUS, .inset_bottom = CSD_RADIUS,
+};
+
 enum csd_zone csd_hit(const struct csd *c, int w, int h, int x, int y, int *edges)
 {
     *edges = 0;
     if (!c->enabled)
         return CSD_CONTENT;
+    struct rect f = csd_frame(c, w, h);
+    int e = c->maximized ? 0 : gui_resize_edges(f, &zones, x, y);
+    if (e) {
+        *edges = e;
+        return CSD_RESIZE;
+    }
     if (rect_contains(csd_content(c, w, h), x, y))
         return CSD_CONTENT;
-    struct rect f = csd_frame(c, w, h);
     if (rect_contains(f, x, y)) {
         for (int n = 0; n < 3; n++)
             if (rect_contains(button_rect(c, w, h, n), x, y))
                 return n == 0 ? CSD_CLOSE : n == 1 ? CSD_MAXIMIZE : CSD_MINIMIZE;
         return CSD_HEADER_BAR;
     }
-    if (c->maximized)
-        return CSD_OUTSIDE;
-    struct rect zone = { f.x - CSD_BORDER_ZONE, f.y - CSD_BORDER_ZONE, f.w + 2 * CSD_BORDER_ZONE, f.h + 2 * CSD_BORDER_ZONE };
-    if (!rect_contains(zone, x, y))
-        return CSD_OUTSIDE;
-    int e = 0;
-    if (x < f.x) e |= CSD_EDGE_LEFT;
-    if (x >= f.x + f.w) e |= CSD_EDGE_RIGHT;
-    if (y < f.y) e |= CSD_EDGE_TOP;
-    if (y >= f.y + f.h) e |= CSD_EDGE_BOTTOM;
-    if (e & (CSD_EDGE_LEFT | CSD_EDGE_RIGHT)) {
-        if (y < f.y + CSD_CORNER) e |= CSD_EDGE_TOP;
-        if (y >= f.y + f.h - CSD_CORNER) e |= CSD_EDGE_BOTTOM;
-    }
-    if (e & (CSD_EDGE_TOP | CSD_EDGE_BOTTOM)) {
-        if (x < f.x + CSD_CORNER) e |= CSD_EDGE_LEFT;
-        if (x >= f.x + f.w - CSD_CORNER) e |= CSD_EDGE_RIGHT;
-    }
-    *edges = e;
-    return CSD_RESIZE;
+    return CSD_OUTSIDE;
 }
 
 int csd_opaque_region(const struct csd *c, int w, int h, struct rect out[4])
@@ -116,12 +110,14 @@ int csd_opaque_region(const struct csd *c, int w, int h, struct rect out[4])
     return 3;
 }
 
-int csd_input_region(const struct csd *c, int w, int h, struct rect out[1])
+int csd_input_region(const struct csd *c, int w, int h, struct rect out[5])
 {
     struct rect f = csd_frame(c, w, h);
-    int z = c->maximized ? 0 : CSD_BORDER_ZONE;
-    out[0] = (struct rect){ f.x - z, f.y - z, f.w + 2 * z, f.h + 2 * z };
-    return 1;
+    if (c->maximized) {
+        out[0] = f;
+        return 1;
+    }
+    return gui_resize_region(f, &zones, out);
 }
 
 /* ---- painting ---- */

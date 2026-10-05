@@ -3,6 +3,7 @@
 #include <minios/local.h>
 #include "settings.h"
 #include <gui/client.h>
+#include <gui/launcher.h>
 #include <gui/mime.h>
 #include <audio/audio.h>
 #include <fcntl.h>
@@ -276,31 +277,15 @@ void build_filetypes(struct widget *page)
 
 /* ---- launcher ---- */
 
-struct entry { char title[48]; char program[128]; };
-static struct entry entries[32];
+static struct launcher_entry entries[32];
 static int nentries;
 static struct widget *launch_table, *title_field, *program_field;
 
+/* The editor shows the titles as written in the table, untranslated. */
 static void launcher_read(void)
 {
-    nentries = 0;
     char path[256];
-    FILE *f = fopen(conf_user_file("launcher", LAUNCHER_PATH, path, sizeof path), "r");
-    if (!f)
-        return;
-    char line[256];
-    while (fgets(line, sizeof line, f) && nentries < 32) {
-        char *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
-        char *eq = strchr(line, '=');
-        if (line[0] == '#' || !eq)
-            continue;
-        *eq = '\0';
-        strlcpy(entries[nentries].title, line, sizeof entries[0].title);
-        strlcpy(entries[nentries].program, eq + 1, sizeof entries[0].program);
-        nentries++;
-    }
-    fclose(f);
+    nentries = launcher_read_table(launcher_system_path(path, sizeof path), 0, entries, 0, 32);
 }
 static int launcher_write(void)
 {
@@ -310,7 +295,7 @@ static int launcher_write(void)
         return -1;
     fprintf(f, "# Launcher menu of the window server: title=program\n");
     for (int i = 0; i < nentries; i++)
-        fprintf(f, "%s=%s\n", entries[i].title, entries[i].program);
+        fprintf(f, "%s=%s\n", entries[i].title, entries[i].command);
     fclose(f);
     printf("settings: launcher saved with %d entries\n", nentries);
     fflush(stdout);
@@ -321,7 +306,7 @@ static int l_child(struct model *m, int parent, int index) { return index; }
 static int l_columns(struct model *m) { return 2; }
 static const char *l_cell(struct model *m, int row, int col, char *buf, size_t size)
 {
-    return col == 0 ? entries[row].title : entries[row].program;
+    return col == 0 ? entries[row].title : entries[row].command;
 }
 static const char *l_header(struct model *m, int col) { return col == 0 ? _("Menu entry") : _("Program"); }
 static struct model launch_model = { l_rows, l_child, l_columns, l_cell, l_header, NULL, NULL, NULL };
@@ -331,7 +316,7 @@ static int on_entry_selected(struct widget *w, void *args, void *arg)
     int i = ((struct sig_select *)args)->index;
     if (i >= 0 && i < nentries) {
         widget_set_text(title_field, entries[i].title);
-        widget_set_text(program_field, entries[i].program);
+        widget_set_text(program_field, entries[i].command);
     }
     return 1;
 }
@@ -346,7 +331,7 @@ static int on_entry_save(struct widget *w, void *args, void *arg)
         i = nentries++;
     }
     strlcpy(entries[i].title, widget_text(title_field), sizeof entries[i].title);
-    strlcpy(entries[i].program, widget_text(program_field), sizeof entries[i].program);
+    strlcpy(entries[i].command, widget_text(program_field), sizeof entries[i].command);
     launcher_write();
     view_refresh(launch_table);
     return 1;
@@ -376,7 +361,7 @@ static int on_entry_move(struct widget *w, void *args, void *arg)
     int i = launch_table->value, d = (int)(long)arg;
     if (i < 0 || i >= nentries || i + d < 0 || i + d >= nentries)
         return 1;
-    struct entry t = entries[i];
+    struct launcher_entry t = entries[i];
     entries[i] = entries[i + d];
     entries[i + d] = t;
     launch_table->value = i + d;

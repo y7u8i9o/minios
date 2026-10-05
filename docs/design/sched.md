@@ -43,6 +43,24 @@ again.  The case was found with the new init (2026-09-15), the first
 process to sleep in `wait4` with a `SIGCHLD` handler installed: every
 child exit wakes the parent's `child_waitq` and then sends the signal.
 
+A wait queue may lie on the stack of its waiter, as in `futex_wait`.
+`waitq_interrupt` reads `waiting_on` and then acquires the lock of that
+queue. When the waiter was woken in between and returned, the queue was
+gone, and the lock of unrelated stack data was acquired and released. The
+`prof_gui` case ended with "spinlock futex: release by non owner" when it
+killed the profiled processes (2026-10-05). `waitq_interrupt` now pins the
+thread (`waitq_pins`, atomic) before it reads `waiting_on` and unpins it
+after it releases the queue lock, and `waitq_wait` returns only when the
+pins are zero. An interrupt that pins the thread after the wake cleared
+`waiting_on` reads `NULL`, because both sides are sequentially consistent.
+
+`futex_wait` compares the futex word under the bucket spinlock. A word on
+a page that is not present faulted under the lock, and the fault slept on
+disk I/O. Since program data is mapped from the file this happens for a
+futex in the data of a program. The word is now touched before the lock
+and read under the lock through the page tables, and the lock is released
+and the word touched again when the page left in between.
+
 An empty CPU attempts to steal the highest-priority ready thread.  It acquires
 its local lock and uses `spin_try_lock` on each victim; it never waits for a
 second queue lock.  This avoids a lock-order cycle between simultaneous
@@ -85,6 +103,32 @@ sorted sleeper list and perform that CPU's one-second priority boost.  A
 thread that exhausts its slice is demoted at yield; a blocking thread is
 promoted when the target CPU consumes its wake.
 
+A sleeper that the tick wakes preempts the running thread: the tick sets
+`need_resched` when it has woken a sleeper and the CPU runs another thread
+than its idle thread.  A wake through `sched_wake` already did so through
+`kick_cpu`.  Until 2026-10-05 the tick requested a reschedule only on an
+idle CPU.  A woken sleeper then waited for the rest of the slice of the
+running thread, up to 1280 ms on the lowest level.  With one busy process
+per CPU, a 10 ms `usleep` overshot by 163 ms on average and by up to 388 ms.  Every
+timed sleep of the kernel (`sleep_ms`) and of user programs (`sleep`,
+`usleep`, `nanosleep`) was affected whenever the CPUs were busy.  The case
+`sleep_latency` measures fifty 10 ms sleeps beside one busy process per
+CPU and requires an overshoot below 15 ms.  Since the correction the
+overshoot is about 1.2 ms, the resolution of the tick
+(`docs/postmortems/2026-10-05-sleep-wakeup.md`).
+
+`sched_sleep_until(tick, interrupted)` records `sleep_cpu`, the CPU whose
+sleeper list contains the thread, and publishes `THREAD_SLEEPING` with
+sequential consistency before it calls `interrupted`. `sched_wake` sends
+the wake of a sleeper to `sleep_cpu`, and a drain that finds a sleeper of
+another CPU forwards the wake there, because only the CPU of a sleeper list
+changes that list. A wake can end a sleep before its tick. `sleep_ms`
+therefore sleeps again until the deadline, and `sleep_ms_interruptible`
+ends early only when `interrupted` returns true. The system call `sleep_ms`
+passes `signal_should_interrupt` and returns `-EINTR` for a signal, a stop
+or the exit of the process. The kernel test `sched_wake_race` forces stale
+wakes and requires that every sleep lasts its full time.
+
 ## Blocking and lost-wakeup rule
 
 `waitq_wait(wq, lock)` acquires `wq.lock`, links current, then acquires the
@@ -106,6 +150,11 @@ its startup stack in `sched_init_cpu`.  Idle CPUs publish an RCU quiescent
 state before `sti; hlt`.
 
 `sched` covers priorities, sleep, condition variables, semaphores, joining
-and the periodic boost.  `smp` verifies execution on all configured CPUs,
+and the periodic boost.  `sleep_latency` covers the wake-up latency of a
+timed sleep beside busy processes.  `sched_quiet` reports whether no thread
+except a given one runs or is ready on any CPU, and whether no thread of a
+user process sleeps until a tick before a limit.  The boot tests wait
+through it for the processing of their input (`ktest_wait_idle`,
+`build.md`).  `smp` verifies execution on all configured CPUs,
 concurrent workers, migration and TLB shootdown.  `lockfree` additionally
 stresses MPSC publication and per-CPU accounting.

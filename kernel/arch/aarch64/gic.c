@@ -293,6 +293,23 @@ void irq_register(unsigned irq, irq_handler_fn fn, void *arg)
     }
 }
 
+/* A global system interrupt of ACPI or of the device tree is the number of
+ * a shared peripheral interrupt. The GIC has no active low inputs. The
+ * trigger mode is set in GICD_ICFGR while the interrupt is still
+ * disabled. */
+int irq_route_gsi(unsigned gsi, unsigned flags, irq_handler_fn fn, void *arg)
+{
+    if (gsi < 32 || gsi >= nlines)
+        return -EINVAL;
+    if (flags & IRQ_GSI_ACTIVE_LOW)
+        return -EOPNOTSUPP;
+    unsigned off = GICD_ICFGR + (gsi / 16) * 4, shift = (gsi % 16) * 2;
+    uint32_t cfg = rd32(gicd, off) & ~(ICFGR_EDGE << shift);
+    wr32(gicd, off, cfg | ((flags & IRQ_GSI_LEVEL) ? 0 : ICFGR_EDGE << shift));
+    irq_register(gsi, fn, arg);
+    return (int)gsi;
+}
+
 static void dispatch_v2(struct trapframe *tf)
 {
     /* The IAR of an SGI also names the sending CPU, and the end of the

@@ -16,8 +16,9 @@
 
 /* The version of the interface between the library and its modules. The
  * registry does not load a module built for a different version. Version
- * 2 appended audio_encode_options to struct codec. */
-#define CODEC_MODULE_ABI 2
+ * 2 appended audio_encode_options to struct codec. Version 3 appended the
+ * functions of animations. */
+#define CODEC_MODULE_ABI 3
 /* The directory of the modules. The environment variable CODEC_PATH
  * overrides it. */
 #define CODEC_DIR "/usr/lib/codecs"
@@ -29,6 +30,10 @@ enum codec_kind { CODEC_IMAGE = 1, CODEC_AUDIO = 2 };
 /* A vector format that renders at the size of the request, like
  * GDK_PIXBUF_FORMAT_SCALABLE. */
 #define CODEC_SCALABLE 4
+/* An image format with animations: the codec decodes the frames of an
+ * animation one after another, and encodes animations when it has
+ * CODEC_ENCODE as well. image_decode returns the first frame. */
+#define CODEC_ANIMATED 8
 
 struct codec_picture {
     int w, h;
@@ -42,6 +47,22 @@ struct codec_picture {
 struct codec_image_request {
     int width, height;
     uint32_t color;
+};
+
+/* An animation: every frame covers the whole canvas of w by h pixels.
+ * frames is the number of frames, or -1 when it is unknown. loops is the
+ * number of times the animation plays, 0 for a repetition without end. */
+struct codec_animation_info {
+    int w, h;
+    int frames;
+    int loops;
+};
+
+/* A frame for an encoder: w by h pixels of the canvas, and the time in
+ * milliseconds that the frame is shown. */
+struct codec_frame {
+    const uint32_t *pixels;
+    int delay_ms;
 };
 
 /* The format of an audio stream: frames per second, channels, and the
@@ -83,6 +104,16 @@ struct codec {
      * commas, or NULL. A codec without options leaves this NULL. */
     long (*audio_encode_options)(const struct codec_audio_format *fmt, const int32_t *samples, long frames,
                                  const char *options, uint8_t **data);
+    /* Animations (CODEC_ANIMATED). open checks the data, fills in info and
+     * creates a decoder state. next composes the next frame into pixels,
+     * w by h values, stores its delay in milliseconds, and returns 1, 0
+     * after the last frame, or a negative errno value. The data must
+     * remain valid until close. encode writes count frames. */
+    int (*animation_open)(const uint8_t *data, size_t len, struct codec_animation_info *info, void **state);
+    int (*animation_next)(void *state, uint32_t *pixels, int *delay_ms);
+    void (*animation_close)(void *state);
+    long (*animation_encode)(const struct codec_animation_info *info, const struct codec_frame *frames, int count,
+                             uint8_t **data);
 };
 
 /* The one symbol a module exports. */
@@ -146,6 +177,33 @@ long codec_image_encode(const struct codec *c, const struct codec_picture *pic, 
  * of path when name is NULL. */
 int codec_image_save(const struct codec_picture *pic, const char *path, const char *name);
 void codec_picture_free(struct codec_picture *pic);
+
+/* ---- animations ---- */
+
+struct codec_animation;
+/* Open a decoder of the frames of data, with c or with the codec that
+ * codec_identify selects among the animated codecs. The data must remain
+ * valid until the decoder is closed. Returns -ENOTSUP when no animated
+ * codec decodes the data. */
+int codec_animation_open(const struct codec *c, const uint8_t *data, size_t len, const char *path,
+                         struct codec_animation **out);
+/* Open a file. The decoder stores the file contents in memory and
+ * codec_animation_close frees them. */
+int codec_animation_open_file(const char *path, struct codec_animation **out);
+const struct codec_animation_info *codec_animation_info(const struct codec_animation *a);
+const struct codec *codec_animation_codec(const struct codec_animation *a);
+/* Compose the next frame into pixels (w * h values). Returns 1, 0 after
+ * the last frame, or a negative errno value. */
+int codec_animation_next(struct codec_animation *a, uint32_t *pixels, int *delay_ms);
+/* Start again at the first frame, for an animation that repeats. */
+int codec_animation_rewind(struct codec_animation *a);
+void codec_animation_close(struct codec_animation *a);
+long codec_animation_encode(const struct codec *c, const struct codec_animation_info *info,
+                            const struct codec_frame *frames, int count, uint8_t **data);
+/* Save with the codec called name, or with the codec for the extension
+ * of path when name is NULL. */
+int codec_animation_save(const char *path, const char *name, const struct codec_animation_info *info,
+                         const struct codec_frame *frames, int count);
 
 /* ---- audio ---- */
 

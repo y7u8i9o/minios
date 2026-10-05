@@ -222,9 +222,29 @@ selection as well (`dnd.md`).
 ### Dialogs and applications
 
 `app_dialog` and `app_prompt` (`src/dialog.c`) open a second window and
-run nested `app_step` calls until a button is chosen. `app_choose_file`
+run nested `app_step` calls until a button is chosen. `app_run_command`
+(`src/command.c`) runs a program with an input and collects its output
+through a watched pipe in the same nested loop, so the windows continue
+to paint while the caller waits. `app_run_privileged` runs it as root
+through `sudo -A` and the authentication dialog (`users.md`).
+`painter_avatar` draws the avatar of an account for the greeter and that
+dialog. `gui_set_translucent` gives a window ARGB buffers, and X12 blends
+its pixels outside the opaque region with their alpha. `app_choose_file`
 (`src/filechooser.c`) is the file chooser for Open and Save, built on the
-folder view that the file manager shares (`folderview.md`). The applications
+folder view that the file manager shares (`folderview.md`).
+`app_choose_program` (`src/appchooser.c`) is the application chooser for
+Open with in Files and on the desktop. A tree lists the applications of
+the launcher tables (`gui/launcher.h`) in two groups. Recommended
+applications contains the commands of `mime_handlers` for the type of
+the file. The default handler is first and selected. A handler without
+a launcher entry appears under the file name of its program. Other
+applications contains the remaining entries in the order of their
+titles. Entries with an `@` command and duplicate commands are left
+out. The check box Always use makes the chosen command the handler of
+the type and saves the user's handler table. Other program opens the
+file chooser in `/usr/bin`. An executable regular file from it is added
+at the top of Other applications and selected. The caller starts the
+chosen command with `mime_run`. The applications
 moved to the framework: `term` (a canvas over a watched pseudo terminal
 descriptor), `files` (a table over a directory model, tool bar, status
 bar), `view` (a read only editor with menus and a tool bar), `gedit`

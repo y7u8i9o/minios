@@ -139,6 +139,19 @@ with the translated character at every period until the release, a
 keyboard leave or a new `repeat_info`. `app_step` uses the same
 timeout for its own poll.
 
+A window with a text input context is the exception. X12 composes the
+text of its keys, through `text.c` or the input method daemon, and libgui
+therefore does not repeat keys while a window has the context. X12
+repeats them instead. A press of a key other than a modifier in such a
+context becomes the repeat key of the seat. `seat_tick`, called in every
+round of the main loop, sends the press again along the path of a typed
+press, to the daemon first and then to `text_key` and the client, with
+the current modifiers. The release of the key, a press of another key and
+a change of the focus end the repeat. A repeat is skipped while keys wait
+for the daemon. The lists of used and pressed keys of the seat and the
+handled keys of `inputmethod.c` contain each key once, so that one release
+removes a repeated key.
+
 ## Tests
 
 - `input`: presses and releases through the PS/2 driver, a duplicate
@@ -160,5 +173,8 @@ timeout for its own poll.
   fractions accumulating at speed -100.
 - `gui_repeat`: a key pressed for 900 ms in evtest logs a repeat;
   `gui_tools` rejects a repeat for a key released at once.
+- `gui_text_repeat`: X held for 900 ms in gedit with the layout, then A
+  held for 900 ms with the Japanese engine, give between 5 and 20 x and
+  as many あ in the saved file.
 - `gui_tablet`, `comp_seat` and the other GUI cases, which place the
   cursor through the virtual tablet.

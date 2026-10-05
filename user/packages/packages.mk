@@ -1,7 +1,10 @@
 # Optional applications never pass through the base image's bin/ tree.
 # Source manifests supply metadata. Packages default to the OS release number,
 # with explicit versions for independently updated applications.
-PKG_NAMES := calc code gedit hexview luasynth mandel paint player playtone pong sequencer synth unicode view
+PKG_NAMES := calc code gedit hexview luasynth mandel paint player playtone pong sequencer synth transfer unicode view
+# The program of these packages is a script in files/usr/bin, not a
+# compiled program in APPBIN.
+PKG_SCRIPTS := transfer
 PKG_VERSION := $(shell cat ../VERSION)
 PKG_VERSION_luasynth := 0.1.1
 pkg_version = $(or $(PKG_VERSION_$(1)),$(PKG_VERSION))
@@ -35,13 +38,14 @@ $(APPBIN)/luasynth: packages/luasynth/launcher.c $(BUILD)/lib/libc.so $(CRT0)
 	$(OBJCOPY) --strip-debug $(OUT)/luasynth.elf $@
 
 define APP_PACKAGE
-$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(APPBIN)/$(1) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(BUILD)/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
+$(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(if $(filter $(1),$(PKG_SCRIPTS)),,$(APPBIN)/$(1)) packages/$(1)/manifest $(shell find packages/$(1)/files -type f 2>/dev/null) $(BUILD)/lib/abi ../tools/mkpkg.sh ../VERSION packages/packages.mk
 	@rm -rf $(OUT)/packages/$(1)
 	@mkdir -p $(OUT)/packages/$(1)/files/usr/bin $(PKG_OUT)
 	@cat packages/$(1)/manifest > $(OUT)/packages/$(1)/manifest
 	@printf 'version $(call pkg_version,$(1))\n' >> $(OUT)/packages/$(1)/manifest
 	@if [ -d packages/$(1)/files ]; then cp -Rp packages/$(1)/files/. $(OUT)/packages/$(1)/files/; fi
-	@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/usr/bin/$(1)
+	@find $(OUT)/packages/$(1)/files -name .DS_Store -exec rm -f {} +
+	$(if $(filter $(1),$(PKG_SCRIPTS)),,@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/usr/bin/$(1))
 	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(BUILD)/lib/abi
 endef
 $(foreach a,$(PKG_NAMES),$(eval $(call APP_PACKAGE,$(a))))

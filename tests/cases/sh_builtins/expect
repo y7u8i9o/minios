@@ -1,0 +1,10 @@
+usr1 trap ran
+after usr1
+^/etc/mot\*
+^/etc/motd
+visible through 6
+restored
+arith 8
+trap -- .echo exit trap ran. EXIT
+exit trap ran
+TEST PASS

@@ -25,6 +25,59 @@ struct rect rect_union(struct rect a, struct rect b)
     return r;
 }
 
+/* ---- window resize zones ---- */
+
+/* The four corner squares of f, in the order top left, top right, bottom
+ * left, bottom right.  A square reaches z->reach outside the frame and the
+ * inset of its row inside. */
+static void corner_squares(struct rect f, const struct gui_resize_zones *z, struct rect sq[4])
+{
+    int r = z->reach, top = r + z->inset_top, bottom = r + z->inset_bottom;
+    sq[0] = (struct rect){ f.x - r, f.y - r, top, top };
+    sq[1] = (struct rect){ f.x + f.w - z->inset_top, f.y - r, top, top };
+    sq[2] = (struct rect){ f.x - r, f.y + f.h - z->inset_bottom, bottom, bottom };
+    sq[3] = (struct rect){ f.x + f.w - z->inset_bottom, f.y + f.h - z->inset_bottom, bottom, bottom };
+}
+
+int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int y)
+{
+    static const int corner_edges[4] = {
+        GUI_EDGE_TOP | GUI_EDGE_LEFT, GUI_EDGE_TOP | GUI_EDGE_RIGHT,
+        GUI_EDGE_BOTTOM | GUI_EDGE_LEFT, GUI_EDGE_BOTTOM | GUI_EDGE_RIGHT,
+    };
+    struct rect sq[4];
+    corner_squares(f, z, sq);
+    for (int i = 0; i < 4; i++)
+        if (rect_contains(sq[i], x, y))
+            return corner_edges[i];
+    struct rect outer = { f.x - z->margin, f.y - z->margin, f.w + 2 * z->margin, f.h + 2 * z->margin };
+    struct rect inside = { f.x + z->inner, f.y + z->inner, f.w - 2 * z->inner, f.h - 2 * z->inner };
+    if (!rect_contains(outer, x, y) || rect_contains(inside, x, y))
+        return 0;
+    int e = 0;
+    if (x < inside.x) e |= GUI_EDGE_LEFT;
+    if (x >= inside.x + inside.w) e |= GUI_EDGE_RIGHT;
+    if (y < inside.y) e |= GUI_EDGE_TOP;
+    if (y >= inside.y + inside.h) e |= GUI_EDGE_BOTTOM;
+    /* The corner zones continue along the edges. */
+    if (e & (GUI_EDGE_LEFT | GUI_EDGE_RIGHT)) {
+        if (y < f.y + z->corner) e |= GUI_EDGE_TOP;
+        if (y >= f.y + f.h - z->corner) e |= GUI_EDGE_BOTTOM;
+    }
+    if (e & (GUI_EDGE_TOP | GUI_EDGE_BOTTOM)) {
+        if (x < f.x + z->corner) e |= GUI_EDGE_LEFT;
+        if (x >= f.x + f.w - z->corner) e |= GUI_EDGE_RIGHT;
+    }
+    return e;
+}
+
+int gui_resize_region(struct rect f, const struct gui_resize_zones *z, struct rect out[5])
+{
+    out[0] = (struct rect){ f.x - z->margin, f.y - z->margin, f.w + 2 * z->margin, f.h + 2 * z->margin };
+    corner_squares(f, z, out + 1);
+    return 5;
+}
+
 static struct rect clip_to(struct surface *s, int x, int y, int w, int h)
 {
     struct rect whole = { 0, 0, s->width, s->height };

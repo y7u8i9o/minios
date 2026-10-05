@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""The host side of the case ntp: an SNTP server on a free UDP port of
+127.0.0.1, which the guest reaches as 10.0.2.2 through the user network of
+QEMU. The answers follow the order of the requests: the time of the host
+one hour ahead, then 50 ms further ahead, then an answer with the mode of a
+client, then an answer with a transmit time of zero."""
+import os
+import socket
+import struct
+import time
+
+NTP_DELTA = 2208988800
+
+
+def stamp(t):
+    sec = int(t)
+    frac = int((t - sec) * (1 << 32)) & 0xffffffff
+    return struct.pack("!II", sec + NTP_DELTA, frac)
+
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("127.0.0.1", 0))
+port = sock.getsockname()[1]
+with open(os.environ["PEER_LOG"], "a") as log:
+    log.write(f"sntp server on port {port}\n")
+with open(os.environ["PEER_READY"], "w") as f:
+    f.write(f"{port} 0\n")
+count = 0
+while True:
+    data, addr = sock.recvfrom(512)
+    if len(data) < 48:
+        continue
+    count += 1
+    offset = 3600.0 if count == 1 else 3600.05
+    mode = 3 if count == 3 else 4
+    now = time.time() + offset
+    transmit = b"\0" * 8 if count == 4 else stamp(now)
+    reply = bytes([(0 << 6) | (4 << 3) | mode, 2, 6, 0xec]) + b"\0" * 8 + b"LOCL"
+    reply += stamp(now) + data[40:48] + stamp(now) + transmit
+    sock.sendto(reply, addr)
+    with open(os.environ["PEER_LOG"], "a") as log:
+        log.write(f"answer {count}, mode {mode}\n")

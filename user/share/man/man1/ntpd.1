@@ -1,0 +1,41 @@
+NTPD(1)                      User Commands
+
+NAME
+    ntpd - clock synchronisation over SNTP
+
+SYNOPSIS
+    ntpd [-1] [-c FILE]
+    ntpd -q
+
+DESCRIPTION
+    ntpd sets the clock from time servers with the Simple Network Time
+    Protocol, version 4 (RFC 4330). init starts it as the service ntp.
+    The servers come from /etc/ntp.conf, one per line as "server NAME"
+    or "server NAME port N", and are tried in order. Without a server
+    line ntpd asks pool.ntp.org.
+
+    A query sends one request and computes the offset of the local
+    clock and the round trip delay from the four time stamps of the
+    exchange. An answer is refused when it is shorter than 48 bytes,
+    has another mode than server, another version than 3 or 4, a server
+    that reports no synchronization, a stratum outside 1 to 15, an
+    originate time that is not the time of the request, or a transmit
+    time of zero. An offset above 128 ms steps the clock with
+    clock_settime(2). A smaller offset is corrected gradually with
+    adjtime(2), at 500 microseconds per second.
+
+    The service queries every 15 minutes, and every minute after a
+    failure. It writes each result to the system log and the state of
+    the last query to /run/ntpd.state.
+
+OPTIONS
+    -1        query once, correct the clock, print the result and exit
+              with status 0, or 1 when no server answered
+    -c FILE   read the servers from FILE
+    -q        print the state of the last query
+
+FILES
+    /etc/ntp.conf, /run/ntpd.state, /var/log/messages
+
+SEE ALSO
+    date(1), init.conf(5)

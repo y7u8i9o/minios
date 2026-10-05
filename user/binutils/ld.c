@@ -2,11 +2,11 @@
  *
  *     ld [options] file...
  *
- * The objects, archives and libraries named are linked by /bin/tcc with
- * -nostdlib, so nothing is added that was not named: the C runtime objects
+ * The objects, archives and libraries on the command line are linked by
+ * /bin/tcc with -nostdlib, so nothing else is added: the C runtime objects
  * and the libraries have to be given, as with any ld. The options of ld
- * that tcc implements are translated; the ones that name what tcc does
- * anyway (-dynamic-linker /lib/ld.so, -Ttext-segment=0x400000, the hash
+ * that tcc implements are translated; the options that describe what tcc
+ * does anyway (-dynamic-linker /lib/ld.so, -Ttext-segment=0x400000, the hash
  * style, -z options, --as-needed, groups) are accepted and dropped; any
  * other option is an error. */
 #include <stdio.h>

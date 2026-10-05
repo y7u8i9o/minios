@@ -24,7 +24,7 @@ static bool exists(const char *path)
 static bool wait_for(const char *path, bool present)
 {
     for (int i = 0; i < 100 && exists(path) != present; i++)
-        sleep_ms(50);
+        ktest_wait_idle(50);
     return exists(path) == present;
 }
 
@@ -37,7 +37,7 @@ static void test_gui_files(void)
     struct proc *files = proc_create_user("/bin/files", (char *const[]){ "files", "/home/user/desktop", NULL },
                                           (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(files != NULL, "cannot start files");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     ktest_assert(pixel(42, 50) == 0x00ebebeb, "files window has an active title bar: %08x", pixel(42, 50));
     /* Ctrl+N opens the new folder prompt; Ctrl+A replaces its text. */
     type_ctrl('n');
@@ -45,7 +45,7 @@ static void test_gui_files(void)
     type_ctrl('a');
     type_line("testdir\n");
     ktest_assert(wait_for("/home/user/desktop/testdir", true), "the folder was not created");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     /* F2 renames the folder, which the program selected. */
     press_key(0x3c);
     sleep_ms(500);
@@ -53,7 +53,7 @@ static void test_gui_files(void)
     type_line("renamed\n");
     ktest_assert(wait_for("/home/user/desktop/renamed", true), "the folder was not renamed");
     ktest_assert(!exists("/home/user/desktop/testdir"), "the old folder name remains");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     /* Delete asks for confirmation; Enter chooses the Delete button. */
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0x53);
@@ -62,13 +62,13 @@ static void test_gui_files(void)
     sleep_ms(500);
     type_line("\n");
     ktest_assert(wait_for("/home/user/desktop/renamed", false), "the folder was not deleted");
-    sleep_ms(500);
+    ktest_wait_idle(500);
     /* Typing a name searches the folder, and Enter opens the first result
      * with gedit. */
     type_line("readme\n");
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     alt_key(0x3e);                              /* Alt+F4: the editor */
-    sleep_ms(500);
+    ktest_wait_idle(500);
     alt_key(0x3e);                              /* Alt+F4: the file manager */
     int status = proc_reap(files);
     ktest_assert(status == 0, "files status 0x%x", status);
@@ -85,13 +85,13 @@ KTEST_DEFINE("gui_files", test_gui_files);
 static void drag_from_to(int *cx, int *cy, int x0, int y0, int x1, int y1)
 {
     mouse_move_to(cx, cy, x0, y0, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
     feed_packet(1, 0, 0);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     mouse_move_to(cx, cy, x1, y1, 1);
-    sleep_ms(800);                              /* the target reads the paths and answers */
+    ktest_wait_idle(800);                              /* the target reads the paths and answers */
     feed_packet(0, 0, 0);
-    sleep_ms(800);
+    ktest_wait_idle(800);
 }
 
 static void test_gui_dnd(void)
@@ -108,7 +108,7 @@ static void test_gui_dnd(void)
         (char *const[]){ "dndtest", "source", "/tmp/dnd-a.txt", "/tmp/dnd-b.txt", "/tmp/dnd-c.txt", NULL },
         (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(src != NULL, "cannot start the drag source");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     struct proc *dst = proc_create_user("/bin/dndtest", (char *const[]){ "dndtest", "target", "/tmp/dndbox", NULL },
                                         (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(dst != NULL, "cannot start the drop target");
@@ -120,7 +120,7 @@ static void test_gui_dnd(void)
     struct proc *ed = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", NULL },
                                        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(ed != NULL, "cannot start gedit");
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     drag_from_to(&cx, &cy, 50, 150, 500, 400);
     ktest_assert(exists("/tmp/dnd-b.txt"), "the file dropped on gedit was moved");
     /* The terminal (toplevel 4) covers (130,156)-(792,587); the shell
@@ -128,7 +128,7 @@ static void test_gui_dnd(void)
     struct proc *term = proc_create_user("/bin/term", (char *const[]){ "term", NULL },
                                          (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(term != NULL, "cannot start term");
-    sleep_ms(2000);
+    ktest_wait_idle(2000);
     type_line("cp ");
     drag_from_to(&cx, &cy, 50, 150, 600, 450);
     mouse_click(1);                             /* the terminal takes the keyboard again */
@@ -174,12 +174,12 @@ static void test_gui_filechooser(void)
     struct proc *ed = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", NULL },
                                        (char *const[]){ "PATH=/bin", "HOME=/home/user", NULL }, &kernel_proc);
     ktest_assert(ed != NULL, "cannot start gedit");
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     type_ctrl('o');
-    sleep_ms(1000);
+    ktest_wait_idle(1000);
     kprintf("gui_filechooser: open chooser shown\n");
     type_line("/home/user/desktop/readme.txt\n");
-    sleep_ms(800);
+    ktest_wait_idle(800);
     char buf[256];
     read_text("/home/user/.local/share/recent-files", buf, sizeof buf);
     ktest_assert(strcmp(buf, "/home/user/desktop/readme.txt\n") == 0, "recent list '%s'", buf);

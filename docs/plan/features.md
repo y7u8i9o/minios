@@ -542,6 +542,34 @@ files, and the terminal types their quoted paths. Documented in
 `docs/design/dnd.md`, tested by `test_dnd.c` of the libgui host tests and
 the boot cases `comp_data` and `gui_dnd`.
 
+## File transfer (2026-10-05)
+
+Transfer copies files between minios and the host over the protocol MFT 1
+of `docs/design/filetransfer.md`: one TCP session per client, percent
+encoded paths, chunks with a CRC-32, resume from part files, cancellation
+and remote file management. The host program `tools/transfer.py` (Python
+with Tkinter) and the minios program `transfer` (Lua, package
+`transfer`) show the same window with a local and a remote pane, drags
+between the panes and a list of transfers, and offer the same commands.
+Both programs serve a folder and connect at the same time. The Lua
+interpreter gained the module `net`, `sys.crc32`, `sys.isatty`,
+`fs.utime`, a waiting `thread.send`, drags of tables and tree views,
+`app:choose_folder`, `widget:abs` and `view:rowrect`. libgui gained the
+folder mode of the file chooser and `view_row_rect`, and libc `crc32`,
+which replaced five private copies. `xfer` remains. Documented in
+`docs/design/filetransfer.md`, tested by `make check-transfer` and the boot
+cases `net_transfer` and `gui_transfer`. `grep` gained `-q`.
+
+## MP3, GIF and animations (2026-10-06)
+
+The codec module `mp3.so` decodes MP3 with minimp3 and encodes it with
+shine, with an Info tag that gives the exact length. `gif.so` decodes and
+encodes GIF images and animations. libcodec gained an interface for
+animations, `view` plays them, and `codecs` describes and converts them.
+Documented in `docs/design/codecs.md` (C9 and C10 of
+`docs/plan/codecs.md`), tested by `make check-libcodec` and the boot
+cases `codec_mp3`, `codec_gif` and `codec_tool`.
+
 ## System information (2026-10-05)
 
 The kernel describes the machine in the read-only node `/dev/devices`: the

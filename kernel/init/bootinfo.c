@@ -165,18 +165,13 @@ static void boot_parse_video(void)
         bootinfo.fb_scale = (uint32_t)(at[1] - '0');
     /* WxH[xBPP]: Limine may not support the mode, but the GPU driver can
      * set it. */
-    uint32_t w = 0, h = 0;
-    const char *p = val;
-    while (*p >= '0' && *p <= '9')
-        w = w * 10 + (uint32_t)(*p++ - '0');
-    if (*p == 'x') {
-        p++;
-        while (*p >= '0' && *p <= '9')
-            h = h * 10 + (uint32_t)(*p++ - '0');
-    }
+    char *p;
+    unsigned long long w = strtoull(val, &p, 10), h = 0;
+    if (*p == 'x')
+        h = strtoull(p + 1, NULL, 10);
     if (w >= 320 && h >= 200 && w <= 8192 && h <= 8192) {
-        bootinfo.fb_req_width = w;
-        bootinfo.fb_req_height = h;
+        bootinfo.fb_req_width = (uint32_t)w;
+        bootinfo.fb_req_height = (uint32_t)h;
     }
 }
 

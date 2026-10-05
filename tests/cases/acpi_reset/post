@@ -1,0 +1,4 @@
+#!/bin/sh
+# QEMU runs with -no-reboot and reports the reset as the reason of its
+# SHUTDOWN event.
+grep -q '"reason": "guest-reset"' "$(dirname "$SERIAL")/qmp.log" || { echo "  no guest-reset in qmp.log"; exit 1; }

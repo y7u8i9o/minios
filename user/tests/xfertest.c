@@ -19,6 +19,7 @@ static int run(const char *const *args, char *out, size_t size)
     pid_t pid = fork();
     if (pid == 0) {
         dup2(p[1], 1);
+        dup2(p[1], 2);
         close(p[0]); close(p[1]);
         execv(args[0], (char *const *)args);
         _exit(127);
@@ -58,6 +59,7 @@ int main(void)
     mkdir("/tmp/xin", 0755);
     mkdir("/tmp/xin/tree", 0755);
     mkdir("/tmp/xin/tree/sub", 0755);
+    mkdir("/tmp/xin/tree/empty dir", 0755);
     mkdir("/tmp/xsrv", 0755);
     mkdir("/tmp/xout", 0755);
     fill("/tmp/xin/data.bin", 200000, 37);
@@ -73,26 +75,31 @@ int main(void)
     }
     usleep(200000);
     char out[2048];
-    const char *const put[] = {"/bin/xfer", "put", "-h", "127.0.0.1", "/tmp/xin/data.bin", NULL};
+    const char *const put[] = {"/bin/xfer", "put", "-p", "9100", "-h", "127.0.0.1", "/tmp/xin/data.bin", NULL};
     CHECK(run(put, out, sizeof out) == 0 && strstr(out, "sent data.bin, 200000 bytes"), "put a file");
     CHECK(same("/tmp/xin/data.bin", "/tmp/xsrv/data.bin"), "stored bytes match");
-    const char *const puttree[] = {"/bin/xfer", "put", "-h", "localhost", "/tmp/xin/tree/", NULL};
+    const char *const puttree[] = {"/bin/xfer", "put", "-p", "9100", "-h", "localhost", "/tmp/xin/tree/", NULL};
     CHECK(run(puttree, out, sizeof out) == 0, "put a directory");
     CHECK(same("/tmp/xin/tree/sub/b.bin", "/tmp/xsrv/tree/sub/b.bin"), "nested file stored");
     CHECK(same("/tmp/xin/tree/with space.wav", "/tmp/xsrv/tree/with space.wav"), "name with a space stored");
-    const char *const ls[] = {"/bin/xfer", "ls", "-h", "127.0.0.1", "tree/sub", NULL};
+    struct stat st;
+    CHECK(stat("/tmp/xsrv/tree/empty dir", &st) == 0 && S_ISDIR(st.st_mode), "empty directory stored");
+    const char *const ls[] = {"/bin/xfer", "ls", "-p", "9100", "-h", "127.0.0.1", "tree/sub", NULL};
     CHECK(run(ls, out, sizeof out) == 0 && strstr(out, "70000  b.bin") && strstr(out, "0  empty"), "ls");
-    const char *const get[] = {"/bin/xfer", "get", "-h", "127.0.0.1", "-o", "/tmp/xout", "data.bin", "tree", NULL};
+    const char *const get[] = {"/bin/xfer", "get", "-p", "9100", "-h", "127.0.0.1", "-o", "/tmp/xout", "data.bin", "tree", NULL};
     CHECK(run(get, out, sizeof out) == 0, "get a file and a directory");
     CHECK(same("/tmp/xin/data.bin", "/tmp/xout/data.bin") && same("/tmp/xin/tree/sub/b.bin", "/tmp/xout/tree/sub/b.bin") &&
           same("/tmp/xin/tree/a.bin", "/tmp/xout/tree/a.bin") &&
           same("/tmp/xin/tree/with space.wav", "/tmp/xout/tree/with space.wav"), "fetched bytes match");
-    const char *const missing[] = {"/bin/xfer", "get", "-h", "127.0.0.1", "-o", "/tmp/xout", "nothere", NULL};
+    CHECK(stat("/tmp/xout/tree/empty dir", &st) == 0 && S_ISDIR(st.st_mode), "empty directory fetched");
+    const char *const missing[] = {"/bin/xfer", "get", "-p", "9100", "-h", "127.0.0.1", "-o", "/tmp/xout", "nothere", NULL};
     CHECK(run(missing, out, sizeof out) == 1, "missing file reported");
-    const char *const escape[] = {"/bin/xfer", "get", "-h", "127.0.0.1", "-o", "/tmp/xout", "../xin/data.bin", NULL};
+    const char *const escape[] = {"/bin/xfer", "get", "-p", "9100", "-h", "127.0.0.1", "-o", "/tmp/xout", "../xin/data.bin", NULL};
     CHECK(run(escape, out, sizeof out) == 1, "path with .. refused");
-    const char *const refused[] = {"/bin/xfer", "ls", "-h", "127.0.0.1", "-p", "9101", NULL};
-    CHECK(run(refused, out, sizeof out) == 1, "no server reported");
+    /* The client default is 9101, the port of a server of the host, where
+     * nothing listens inside this guest. */
+    const char *const refused[] = {"/bin/xfer", "ls", "-h", "127.0.0.1", NULL};
+    CHECK(run(refused, out, sizeof out) == 1 && strstr(out, "9101"), "no server reported on the default port");
     kill(server, SIGTERM);
     waitpid(server, NULL, 0);
     printf("xfertest: %d failures\n", failures);

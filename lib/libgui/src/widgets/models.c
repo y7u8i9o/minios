@@ -481,6 +481,20 @@ void view_select(struct widget *w, int row)
         select_flat(v, idx, "selected");
 }
 
+int view_row_rect(struct widget *w, int row, struct rect *r)
+{
+    struct view *v = (struct view *)w;
+    int idx = flat_index_of(v, row);
+    if (idx < v->scroll || idx >= v->scroll + rows_visible(v))
+        return 0;
+    int lh = line_h(w);
+    r->x = 1;
+    r->y = 1 + (v->header ? HEADER_H : 0) + (idx - v->scroll) * lh;
+    r->w = w->w - 2;
+    r->h = lh;
+    return 1;
+}
+
 void view_scroll_to(struct widget *w, int row)
 {
     struct view *v = (struct view *)w;

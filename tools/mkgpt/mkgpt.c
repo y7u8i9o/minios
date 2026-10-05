@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <minios/crc32.h>
 #include <ctype.h>
 #include <errno.h>
 #include <unistd.h>
@@ -91,17 +92,6 @@ static __attribute__((noreturn)) void die(const char *fmt, const char *arg)
     fprintf(stderr, fmt, arg);
     fputc('\n', stderr);
     exit(1);
-}
-
-static uint32_t crc32(const uint8_t *p, size_t n)
-{
-    uint32_t c = 0xFFFFFFFFu;
-    while (n--) {
-        c ^= *p++;
-        for (int i = 0; i < 8; i++)
-            c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1)));
-    }
-    return ~c;
 }
 
 static void put16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
@@ -230,7 +220,7 @@ static void write_header(uint8_t *h, uint64_t my, uint64_t alt, uint64_t last_us
     put32(h + 80, NENTRIES);
     put32(h + 84, ENTRY_SIZE);
     put32(h + 88, array_crc);
-    put32(h + 16, crc32(h, 92));
+    put32(h + 16, crc32(0, h, 92));
 }
 
 static uint32_t get32(const uint8_t *p)
@@ -291,7 +281,7 @@ static int read_table(FILE *f, uint64_t total, uint64_t lba, uint8_t hdr[SECTOR]
     uint8_t copy[SECTOR];
     memcpy(copy, hdr, SECTOR);
     put32(copy + 16, 0);
-    if (crc32(copy, size) != get32(hdr + 16))
+    if (crc32(0, copy, size) != get32(hdr + 16))
         return -1;
     if (get32(hdr + 80) != NENTRIES || get32(hdr + 84) != ENTRY_SIZE)
         return -1;
@@ -300,7 +290,7 @@ static int read_table(FILE *f, uint64_t total, uint64_t lba, uint8_t hdr[SECTOR]
         return -1;
     if (read_sectors(f, alba, ARRAY_SECT, array) != 0)
         return -1;
-    if (crc32(array, NENTRIES * ENTRY_SIZE) != get32(hdr + 88))
+    if (crc32(0, array, NENTRIES * ENTRY_SIZE) != get32(hdr + 88))
         return -1;
     return 0;
 }
@@ -490,7 +480,7 @@ int main(int argc, char **argv)
         for (int k = 0; p->type[k] && k < 36; k++)
             put16(e + 56 + 2 * k, (uint8_t)p->type[k]);
     }
-    uint32_t array_crc = crc32(array, NENTRIES * ENTRY_SIZE);
+    uint32_t array_crc = crc32(0, array, NENTRIES * ENTRY_SIZE);
 
     uint8_t mbr[SECTOR] = { 0 };
     mbr[446 + 4] = 0xEE;

@@ -40,5 +40,9 @@ void waitq_signal(struct thread *t);
 /* Like waitq_wait, but the wait ends at deadline_ms (timer_ms clock)
  * as if woken; callers re-check their condition and the time. */
 void waitq_wait_timeout(struct waitq *wq, struct spinlock *lock, uint64_t deadline_ms);
+/* waitq_next_user_deadline returns the earliest deadline (timer_ms clock)
+ * of a thread of a user process in waitq_wait_timeout, or UINT64_MAX.  The
+ * boot tests use it (ktest_wait_idle). */
+uint64_t waitq_next_user_deadline(void);
 /* Called from the timer interrupt on the boot CPU. */
 void waitq_timeouts_tick(void);

@@ -26,6 +26,7 @@
 #include <lib/guid.h>
 #include <fs/fat.h>
 #include <fs/iso9660.h>
+#include <fs/9p.h>
 #include <fs/tmpfs.h>
 #include <fs/devfs.h>
 #include <mm/tlb.h>
@@ -37,6 +38,8 @@
 #include <drivers/pci.h>
 #include <input/input.h>
 #include <drivers/tty.h>
+#include <drivers/virtio/virtio_9p.h>
+#include <drivers/virtio/virtio_balloon.h>
 #include <drivers/virtio/virtio_gpu.h>
 #include <drivers/virtio/virtio_input.h>
 #include <drivers/usb.h>
@@ -58,6 +61,7 @@
 #include <arch/platform.h>
 #include <tests/ktest.h>
 #include <errno.h>
+#include <drivers/acpi.h>
 
 /* The kernel start-up sequence, entered from the architecture's entry code
  * on the boot stack. The arch_init_* steps are described in
@@ -171,6 +175,10 @@ static void mount_root(void)
 static void kinit(void *arg)
 {
     rcu_start_worker();
+    /* The AML code of ACPI sleeps on mutexes and events and therefore
+     * runs in a thread. The power button works from here on. */
+    acpi_init();
+    platform_power_key_init();
     /* The NVMe and AHCI probes wait for the devices and therefore run in
      * a thread. */
     nvme_init();
@@ -189,6 +197,10 @@ static void kinit(void *arg)
     virtio_snd_init();
     virtio_gpu_init();
     virtio_input_init();
+    /* The balloon thread sends its requests with interrupts. */
+    virtio_balloon_init();
+    /* The shares of the host, which fsinit mounts at /mnt/TAG. */
+    virtio_9p_init();
     swap_start_daemon();
     hung_start_daemon();
     tty_start_daemon();
@@ -259,6 +271,7 @@ __noreturn void kmain(void)
     fat_init();
     iso9660_init();
     tmpfs_init();
+    p9fs_init();
     arch_init_interrupts();
     tlb_init();
     timer_init();

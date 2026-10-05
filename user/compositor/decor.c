@@ -30,8 +30,13 @@
 /* Peak darkening of the shadow, out of 256. */
 #define SHADOW_ALPHA          120
 #define SHADOW_ALPHA_INACTIVE 72
-/* Size of the corner zones where a resize takes two edges. */
-#define CORNER 16
+/* The resize zones of the frame (gui_resize_edges): the 1 px border and a
+ * margin outside, corner zones of 24 px along the edges, and corner squares
+ * that reach 12 px outside and over the rounded top corners inside. */
+static const struct gui_resize_zones zones = {
+    .margin = RESIZE_MARGIN, .inner = BORDER, .corner = 24, .reach = 12,
+    .inset_top = RADIUS, .inset_bottom = BORDER,
+};
 #define TITLE_PX 13
 
 static struct toplevel *drag;
@@ -357,27 +362,11 @@ void decor_draw(struct csurface *s, struct rect clip)
     painter_pop(&p);
 }
 
-/* Edges of a resize started at (x, y): the invisible margins around the
- * frame, with corner zones taking two edges. 0 on the title bar. */
+/* Edges of a resize started at (x, y): the border, the invisible margins
+ * around the frame and the corner squares. 0 elsewhere. */
 static int edges_at(const struct csurface *s, int x, int y)
 {
-    struct rect f = decor_frame(s);
-    int e = 0;
-    if (x < s->x) e |= EDGE_LEFT;
-    if (x >= s->x + s->width) e |= EDGE_RIGHT;
-    if (y < f.y + BORDER) e |= EDGE_TOP;
-    if (y >= s->y + s->height) e |= EDGE_BOTTOM;
-    if (!e)
-        return 0;
-    if (e & (EDGE_LEFT | EDGE_RIGHT)) {
-        if (y < f.y + CORNER) e |= EDGE_TOP;
-        if (y >= f.y + f.h - CORNER) e |= EDGE_BOTTOM;
-    }
-    if (e & (EDGE_TOP | EDGE_BOTTOM)) {
-        if (x < f.x + CORNER) e |= EDGE_LEFT;
-        if (x >= f.x + f.w - CORNER) e |= EDGE_RIGHT;
-    }
-    return e;
+    return gui_resize_edges(decor_frame(s), &zones, x, y);
 }
 
 static void start_resize(struct toplevel *t, int edges)
@@ -441,7 +430,7 @@ int decor_press(struct csurface *s, int button)
         return 1;
     }
     if (!t->maximized && rect_contains(grip_rect(s), cursor_x, cursor_y)) {
-        start_resize(t, EDGE_BOTTOM | EDGE_RIGHT);
+        start_resize(t, GUI_EDGE_BOTTOM | GUI_EDGE_RIGHT);
         return 1;
     }
     return 0;
@@ -475,10 +464,10 @@ int decor_release(void)
         resizing = NULL;
         int dx = cursor_x - resize_x0, dy = cursor_y - resize_y0;
         int w = resize_w0, h = resize_h0;
-        if (resize_edges & EDGE_RIGHT) w += dx;
-        if (resize_edges & EDGE_LEFT) { w -= dx; t->s->x = resize_sx + dx; }
-        if (resize_edges & EDGE_BOTTOM) h += dy;
-        if (resize_edges & EDGE_TOP) { h -= dy; t->s->y = resize_sy + dy; }
+        if (resize_edges & GUI_EDGE_RIGHT) w += dx;
+        if (resize_edges & GUI_EDGE_LEFT) { w -= dx; t->s->x = resize_sx + dx; }
+        if (resize_edges & GUI_EDGE_BOTTOM) h += dy;
+        if (resize_edges & GUI_EDGE_TOP) { h -= dy; t->s->y = resize_sy + dy; }
         if (w < 32) w = 32;
         if (h < 32) h = 32;
         toplevel_configure(t, w, h);
@@ -496,14 +485,15 @@ int decor_hit(const struct csurface *s, int x, int y)
         return 0;
     if (rect_contains(surface_rect(s), x, y))
         return !s->toplevel->maximized && rect_contains(grip_rect(s), x, y);
-    struct rect zone = decor_frame(s);
-    if (!s->toplevel->maximized) {
-        zone.x -= RESIZE_MARGIN;
-        zone.y -= RESIZE_MARGIN;
-        zone.w += 2 * RESIZE_MARGIN;
-        zone.h += 2 * RESIZE_MARGIN;
-    }
-    return rect_contains(zone, x, y);
+    struct rect f = decor_frame(s);
+    if (s->toplevel->maximized)
+        return rect_contains(f, x, y);
+    struct rect zone[5];
+    int n = gui_resize_region(f, &zones, zone);
+    for (int i = 0; i < n; i++)
+        if (rect_contains(zone[i], x, y))
+            return 1;
+    return 0;
 }
 
 const struct font *decor_font(void)

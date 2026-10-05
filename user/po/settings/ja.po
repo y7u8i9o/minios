@@ -534,11 +534,21 @@ msgstr "名前"
 msgid "Password"
 msgstr "パスワード"
 
-msgid "Your password"
-msgstr "あなたのパスワード"
 
 msgid "Add account"
 msgstr "アカウントを追加"
 
 msgid "Remove selected account"
 msgstr "選択したアカウントを削除"
+
+msgid "Authentication is required to change the time zone."
+msgstr "タイムゾーンを変更するには認証が必要です。"
+
+msgid "Authentication is required to add an account."
+msgstr "アカウントを追加するには認証が必要です。"
+
+msgid "Authentication is required to remove an account."
+msgstr "アカウントを削除するには認証が必要です。"
+
+msgid "The change was cancelled"
+msgstr "変更はキャンセルされました"

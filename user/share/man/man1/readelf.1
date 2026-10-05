@@ -1,0 +1,73 @@
+READELF(1)                  User Commands                READELF(1)
+
+NAME
+    readelf - display the contents of ELF files
+
+SYNOPSIS
+    readelf [-aeghlSsrdnuVAIW] [--dyn-syms] [--got-contents]
+            [-x section] [-p section] file...
+
+DESCRIPTION
+    readelf prints the headers, tables and sections of ELF64 files of
+    x86_64 and aarch64 in text form. The input is an executable, a
+    shared object, a relocatable object or a System V archive of such
+    objects. For an archive, readelf prints the line "File: archive(member)"
+    before the output of each member. For several files, readelf prints
+    the line "File: file" before the output of each file.
+
+    The output equals the output of GNU readelf -W (version 2.47). readelf
+    always uses the wide format. The option -W is accepted and has no
+    further effect. Without any selecting option, readelf prints a usage
+    message and exits with status 1.
+
+OPTIONS
+    -a, --all             select -h -l -S -s -r -u -d -n -V -A -I -g
+                          and --got-contents
+    -h, --file-header     print the ELF file header
+    -l, --program-headers print the program headers and the mapping of
+    --segments            sections to segments
+    -S, --section-headers print the section headers
+    --sections
+    -e, --headers         select -h -l -S
+    -g, --section-groups  print the section groups
+    -s, --syms            print the symbol tables (.symtab and .dynsym)
+    --symbols
+    --dyn-syms            print the dynamic symbol table only
+    -r, --relocs          print the relocation sections
+    -d, --dynamic         print the dynamic section
+    -n, --notes           print the note sections
+    -u, --unwind          report the unwind information. x86_64 and
+                          aarch64 have no section that readelf decodes
+    -V, --version-info    print the version sections
+    -A, --arch-specific   print the AArch64 build attributes
+    -I, --histogram       print the bucket lengths of the hash sections
+    --got-contents        print the global offset table with the
+                          relocation of each entry
+    -x, --hex-dump=SECTION
+                          print the section as bytes in hexadecimal
+    -p, --string-dump=SECTION
+                          print the strings of the section
+    -W, --wide            accepted for compatibility
+    -H, --help            print a usage message
+    -v, --version         print the version of the program
+
+    SECTION is a section number or a section name. The options -x and -p
+    are repeatable. A section without data gives the message
+    "Section 'NAME' has no data to dump."
+
+LIMITS
+    readelf does not implement the options -t, -c, -D, -w, -R, -z, -j,
+    -C, -U, -X, -T, -L, -P, --lto-syms, --sym-base, --ctf and --sframe.
+    readelf decodes the properties of GNU notes for the x86 and AArch64
+    features only. readelf does not decode relocation sections of the
+    type SHT_RELR, 32-bit files or compressed sections. readelf does not
+    decode the unwind sections of x86_64.
+
+EXAMPLES
+    readelf -h -l -S /bin/sh
+    readelf -s -W libjson.so
+    readelf -x .rodata -p .comment prog
+    readelf -a libedit.a
+
+SEE ALSO
+    objdump(1), nm(1), size(1), strings(1), ar(1)

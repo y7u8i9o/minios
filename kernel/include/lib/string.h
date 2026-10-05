@@ -18,3 +18,8 @@ size_t strlcpy(char *dst, const char *src, size_t size);
 size_t strlcat(char *dst, const char *src, size_t size);
 void *memchr(const void *s, int c, size_t n);
 char *strstr(const char *haystack, const char *needle);
+/* The unsigned number at the start of s after optional spaces, in base 10,
+ * 16 or 8, or with base 0 in the base of its prefix (0x, 0). end receives
+ * the first character after the number, or s without a digit. A value
+ * above the range ends at ULLONG_MAX. */
+unsigned long long strtoull(const char *s, char **end, int base);

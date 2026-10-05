@@ -12,74 +12,11 @@
 #include <uacpi/kernel_api.h>
 
 /* The ACPI tables of an aarch64 machine without a device tree (D1,
- * docs/design/acpi.md). uACPI is built in the barebones mode and reads the
- * tables. This file provides the four kernel functions that the mode needs
- * and fills struct devtree from the tables. Everything here runs once on
- * the boot CPU in devtree_init, before vmm_init, while the page tables of
- * Limine are active. */
-
-/* The memory map types that Limine maps into the direct map under base
- * revision 4. The ACPI tables lie in the ACPI and the reserved mapped
- * regions. */
-static bool in_direct_map(uint64_t pa, uint64_t len)
-{
-    for (size_t i = 0; i < bootinfo.memmap_count; i++) {
-        const struct limine_memmap_entry *e = &bootinfo.memmap[i];
-        switch (e->type) {
-        case LIMINE_MEMMAP_USABLE:
-        case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
-        case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
-        case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
-        case LIMINE_MEMMAP_ACPI_NVS:
-        case LIMINE_MEMMAP_RESERVED_MAPPED:
-            break;
-        default:
-            continue;
-        }
-        if (pa >= e->base && pa + len <= e->base + e->length)
-            return true;
-    }
-    return false;
-}
-
-uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
-{
-    if (!bootinfo.rsdp_phys)
-        return UACPI_STATUS_NOT_FOUND;
-    *out_rsdp_address = bootinfo.rsdp_phys;
-    return UACPI_STATUS_OK;
-}
-
-/* A table is read through the direct map of Limine. A table outside it
- * cannot be read this early, and uACPI then reports the table as
- * missing. */
-void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
-{
-    if (!in_direct_map(addr, len)) {
-        klog_warn("table at %lx, %lu bytes, is outside the direct map", (uintptr_t)addr, (unsigned long)len);
-        return UACPI_MAP_FAILED;
-    }
-    return P2V(addr);
-}
-
-void uacpi_kernel_unmap(void *addr, uacpi_size len)
-{
-}
-
-void uacpi_kernel_log(uacpi_log_level level, const uacpi_char *msg)
-{
-    char line[160];
-    strlcpy(line, msg, sizeof line);
-    size_t n = strlen(line);
-    if (n && line[n - 1] == '\n')
-        line[n - 1] = '\0';
-    switch (level) {
-    case UACPI_LOG_ERROR: klog_error("uacpi: %s", line); break;
-    case UACPI_LOG_WARN:  klog_warn("uacpi: %s", line); break;
-    case UACPI_LOG_INFO:  klog_info("uacpi: %s", line); break;
-    default:              klog_debug("uacpi: %s", line); break;
-    }
-}
+ * docs/design/acpi.md). uACPI reads the tables through its early table
+ * access. This file fills struct devtree from the tables. Everything here
+ * runs once on the boot CPU in devtree_init, before vmm_init, while the
+ * page tables of Limine are active. The kernel functions of uACPI are in
+ * drivers/acpi_kernel.c. */
 
 /* The IORT (IO Remapping Table, Arm DEN 0049). uACPI does not define it.
  * Only the parts that translate PCI requester IDs to ITS device IDs are

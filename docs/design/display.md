@@ -149,7 +149,7 @@ logical coordinates (`pixel` scales by `fb_screen_scale`) so they run at
 any scale.
 
 A run time mode change sends every layer surface a configure while
-clients may still have a frame in flight. The commit rule in
+clients may still send a frame that they drew before the configure. The commit rule in
 `shell.c` therefore accepts a new buffer of the surface's old geometry
 while a configure is unacknowledged, from either half of a client's
 buffer pair; only a buffer of some third size is a protocol error. Before
@@ -165,3 +165,67 @@ the mode does.
 starts at 1024x768 scale 2, guitest announces buffer scale 2, its device
 checkerboard appears 1:1, beta's contents are at doubled coordinates, and
 the title bar border and height are two and forty device rows.
+
+## The window size of the host (V3 of the 0.6.0 release)
+
+QEMU sends a display event when the window of the virtual display changes
+its size. The cocoa and gtk windows send it when the user resizes them,
+and a VNC client sends the message `SetDesktopSize`. The device sets the
+bit `VIRTIO_GPU_EVENT_DISPLAY` in `events_read` of its configuration space
+and raises the configuration interrupt.
+
+The virtio core (`virtio.c`) routes the configuration interrupt to the
+vector of the queues. The handler compares `config_generation` of the
+common configuration with the last generation it saw. A new generation
+calls `config_changed` of the driver under `irq_lock`. The GPU driver
+clears the event with `events_clear` and sets the atomic flag
+`display_event`. The handler sends no control request. The thread
+`gpu_flushd` takes the flag every 20 ms, requests the display
+information and reports the preferred size of scanout 0 with
+`fb_display_changed`.
+
+`fbdev.c` records the last request (`struct fb_display`: width, height
+and a serial) under `fbdev_lock` and logs `the host display requests
+WxH`. `/dev/fb0` then reports `POLLIN` to the display owner. The ioctl
+`FBIOGET_DISPLAY` returns the request and marks the serial read for the
+owner. `FBIO_ACQUIRE` marks no request read. A display server that starts
+after a request therefore learns it at once. The kernel console does not
+follow the requests. The `display` node of `/dev/devices` shows the last
+request as `host_request`.
+
+X12 polls `/dev/fb0` with its clients. `comp_follow_display` reads the
+request and applies it with `comp_set_mode` when the setting
+`display_follow` is 1. The scale is the scale of the last mode that a
+client or the boot chose (`chosen_scale`). The backend reduces the scale
+of a mode below 640x480 logical pixels to 1. A later larger request
+returns to the chosen scale. A request that equals the current mode
+changes nothing. A request larger than the 16 MiB buffer is refused with
+a log line. X12 sends the new `display_mode` to every settings client.
+
+`display_follow` is 1 by default. The desktop forwards the key
+`display_follow` of `desktop.conf`. The Display page of Settings shows it
+as the check box "The resolution follows the size of the window of the
+virtual machine". A change of the setting to 1 applies the last request
+at once.
+
+The panel requests a layer surface of width 0 with the anchors left,
+right and bottom. The compositor then configures the panel with the width
+of the screen after every mode change. Before V3 the panel requested the
+width of the boot mode, and it remained at that width after a mode
+change.
+
+`gpu_resize` (`kernel/tests/test_display.c`) runs with virtio-vga on
+x86_64 and with virtio-gpu-pci on aarch64. It starts X12, the panel and the desktop at 1024x768. The case has a `vnc`
+file, and the runner attaches `-vnc unix:SOCKET`. The QMP script sends
+`SetDesktopSize` for 1600x1000 and for 1280x720 as a VNC client
+(`vnc-size` of `tests/qmp_input.py`) and takes a screendump after each
+mode change. The test requires each mode and the panel colour at both
+ends of the bottom row. It then sets `display_follow` to 0 with
+`settings set`. A third request for 1440x900 arrives in the kernel and
+leaves the mode at 1280x720. The `post` script checks the size of both
+screendumps and the panel colour at both ends of their bottom rows.
+`vnc-size` reads the answer of QEMU and fails unless the status is 0 or 4
+(request forwarded). A VNC display shows console 0. The runner therefore
+attaches virtio-gpu-pci before ramfb on aarch64, as `tools/run.sh` does.
+With ramfb first, QEMU answered status 3 (invalid screen layout), because
+ramfb accepts no size request.

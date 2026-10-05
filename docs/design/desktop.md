@@ -27,7 +27,9 @@ listing, Delete asks for confirmation and removes the entry. A right
 click opens a context menu (`popupmenu_new` and `menu_popup` in
 `lib/libgui/src/widgets/menu.c`, the menu bar's dropdown without a bar):
 
-- On an entry: Open, Open with (program prompt), Rename, Delete.
+- On an entry: Open, Open with (the application chooser of
+  `framework.md`), Rename, Delete. A command that fails to start shows
+  a message with the error.
 - On the desktop: New folder, New text file, Refresh, Change wallpaper
   (starts `settings appearance`), Settings.
 
@@ -75,6 +77,9 @@ it, `stretch` scales both dimensions independently.
   compositor.
 - `display_mode`: `WxH` or `WxH@S`, forwarded as the compositor's packed
   `display_mode` setting; absent means the boot mode (M32).
+- `display_follow`: 1 or 0, forwarded to the compositor. With 1 the mode
+  follows the window size of the host display (`display.md`, V3 of the
+  0.6.0 release). The default is 1.
 
 The keys `lang` and `formats` name locales such as `fr_FR.UTF-8`
 (`locale.md`). `startgui` exports `lang` as `LANG` and `formats` as
@@ -94,23 +99,37 @@ the C locale. `term_font_px` is the font size of the terminal.
   `application/octet-stream` when nothing matches, `inode/directory`
   for directories.
 - `/etc/mime.apps`, or the user's `~/.config/mime.apps` when it exists
-  (`users.md`): `type program` lines. `mime_handler(type)` tries the
+  (`users.md`): `type command` lines. A command is a program followed
+  by arguments separated by spaces. `mime_handler(type)` tries the
   exact type, then `type/*`, then `*`.
 
-`mime_open(path)` starts the handler with the path as its argument and
-returns the child's pid. The tables of installed packages in
-`/var/lib/pkg` (`packages.md`) are read after the system tables. A
-package entry for a type the system table names is ignored, and
-`mime_save` writes the system entries only. A launcher file (`application/x-launcher`,
-extension `.app`) is opened by running the command in its `exec=`
-line instead. `mime_icon(type)` names the icon in `/usr/share/icons`.
-`mime_set_handler` and `mime_save` edit the handler table. The Files
-application (`files.md`) opens files through `mime_open`. Programs are started by
-`mime_spawn`, which forks twice and reaps the intermediate child, so the
-program becomes a child of init and is reaped there when it exits; a
-launcher without a wait loop (Files, the desktop, Settings) therefore
-never accumulates zombies. The `gui_desktop` case checks that the clock
-opened by a double click is not the desktop's zombie.
+`mime_load` with a NULL path reloads the table from the path of an
+earlier call, else from the default path. `mime_open(path)` starts the
+handler through `mime_run` and returns 1 or a negative errno.
+`mime_run(command, path)` splits the command at spaces and appends the
+path to the arguments. The tables of installed packages in
+`/var/lib/pkg` (`packages.md`) are read after the system tables.
+`mime_handler` ignores a package entry for a type with an entry in the
+system or user table. `mime_handlers(type)` lists the commands of the
+type in the order of `mime_handler`, the overridden package entries
+included. The application chooser uses that list for its recommended
+applications. `mime_save` writes the system entries only. A launcher
+file (`application/x-launcher`, extension `.app`) is opened by running
+the command in its `exec=` line instead. `mime_icon(type)` returns the
+icon in `/usr/share/icons`. `mime_set_handler` and `mime_save` edit the
+handler table. The Files application (`files.md`) opens files through
+`mime_open`.
+
+Programs are started by `mime_spawn`. The function forks twice and
+reaps the intermediate child at once. The program becomes a child of
+init and is reaped there when it exits. A launcher without a wait loop
+(Files, the desktop, Settings) therefore never accumulates zombies. The
+`gui_desktop` case checks that the clock opened by a double click is
+not the desktop's zombie. A pipe reports a failed exec to the caller.
+The write end of the pipe has `FD_CLOEXEC`. The grandchild writes the
+errno of a failed `execvp` to the pipe. A successful exec closes the
+write end, and the caller reads end of file. `mime_spawn` returns 0 or
+the negative errno.
 
 ## Settings application
 
@@ -131,7 +150,8 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
   keys in `theme_init_default` (`theme_read_conf`), so they apply to
   programs started afterwards.
 - Display: the current mode, resolution and pixel density
-  (`display_mode`), the frame interval (`frame_ms`) and the decoration
+  (`display_mode`), the check box for `display_follow`, the frame
+  interval (`frame_ms`) and the decoration
   side (`decorations`, `client` or `server`); the desktop pushes the last
   two to X12 like the colour and the key repeat.
 - Keyboard: the layout (`keymap`, the `.mkm` files of

@@ -139,14 +139,14 @@ static void test_gui_tablet(void)
     struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
                                         &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     /* x = ax * sw / 32768, so ax = x * 32768 / sw lands exactly. */
     int x = 300, y = 200;
     virtio_input_feed(EV_ABS, ABS_X, (uint32_t)(x * 32768 / sw));
     virtio_input_feed(EV_ABS, ABS_Y, (uint32_t)((y * 32768 + sh - 1) / sh));
     virtio_input_feed(EV_SYN, SYN_REPORT, 0);
-    sleep_ms(300);
+    ktest_wait_idle(300);
     ktest_assert(pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff,
                  "cursor at %d,%d: %08x %08x", x, y, pixel(x, y), pixel(x + 1, y + 2));
     ktest_assert(pixel(sw / 2, sh / 2) == 0x00306080, "old cursor position repainted: %08x", pixel(sw / 2, sh / 2));
@@ -168,12 +168,12 @@ static void test_gui_scale2(void)
     struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
                                         &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     ktest_assert(pixel(0, 0) == 0x00306080, "desktop pixel %08x", pixel(0, 0));
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     /* Window alpha 300x200 at (40,60), beta 240x160 at (70,90), beta
      * focused. guitest draws device pixels: beta's red rectangle is at
      * device 20..119 x 20..79 inside the surface. */
@@ -225,13 +225,13 @@ static void test_gui_modes(void)
 {
     ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
     struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
-    sleep_ms(1200);
+    ktest_wait_idle(1200);
     struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
-    sleep_ms(500);
+    ktest_wait_idle(500);
     struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });
-    sleep_ms(800);
+    ktest_wait_idle(800);
     struct proc *term = run("/bin/term", (char *const[]){ "term", NULL });
-    sleep_ms(1500);
+    ktest_wait_idle(1500);
     static const char *const modes[] = { "1024x768@1", "2560x1600@2", "1024x768@1", "2560x1600@2", "1920x1200@1", "2560x1600@2" };
     struct pmm_stats st;
     pmm_get_stats(&st);
@@ -263,3 +263,79 @@ static void test_gui_modes(void)
     ktest_assert(proc_reap(srv) == 0, "compositor status");
 }
 KTEST_DEFINE("gui_modes", test_gui_modes);
+
+/* V3 of docs/plan/release-0.6.0.md: the host display requests sizes
+ * through the VNC message SetDesktopSize (tests/cases/gpu_resize/qmp). The
+ * compositor follows the first two requests. The third request arrives
+ * after the setting display_follow was turned off and leaves the mode
+ * unchanged. */
+static void wait_request(uint32_t serial)
+{
+    struct fb_display d;
+    for (int i = 0; i < 300; i++) {
+        fb_display_get(&d);
+        if (d.serial >= serial)
+            return;
+        sleep_ms(100);
+    }
+    ktest_assert(false, "no display request %u after 30 s", serial);
+}
+
+static void wait_mode(uint32_t width, uint32_t height)
+{
+    for (int i = 0; i < 100 && (fb_screen.width != width || fb_screen.height != height); i++)
+        sleep_ms(100);
+    ktest_assert(fb_screen.width == width && fb_screen.height == height, "mode %lux%lu instead of %ux%u",
+                 fb_screen.width, fb_screen.height, width, height);
+    /* The panel and the desktop draw again at the new width. */
+    int sw = logical_w(), sh = logical_h();
+    uint32_t left = 0, right = 0;
+    for (int i = 0; i < 100; i++) {
+        left = pixel(1, sh - 2);
+        right = pixel(sw - 2, sh - 2);
+        if (left == 0x0023272c && right == 0x0023272c)
+            break;
+        sleep_ms(100);
+    }
+    ktest_assert(left == 0x0023272c && right == 0x0023272c, "panel from %08x to %08x at %dx%d", left, right, sw, sh);
+    /* The screendump of the qmp script reads the display of the host. */
+    sleep_ms(500);
+    kprintf("gpu_resize: mode %ux%u, the panel spans %d pixels\n", width, height, sw);
+}
+
+static void test_gpu_resize(void)
+{
+    ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
+    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    ktest_wait_idle(1200);
+    struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
+    ktest_wait_idle(500);
+    struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });
+    ktest_wait_idle(800);
+    struct fb_display d;
+    fb_display_get(&d);
+    uint32_t serial = d.serial;
+    kprintf("gpu_resize: session ready at %lux%lu\n", fb_screen.width, fb_screen.height);
+    wait_request(serial + 1);
+    wait_mode(1600, 1000);
+    wait_request(serial + 2);
+    wait_mode(1280, 720);
+    struct proc *p = run("/bin/settings", (char *const[]){ "settings", "set", "display_follow", "0", NULL });
+    ktest_assert(proc_reap(p) == 0, "settings set display_follow 0 failed");
+    sleep_ms(1000);
+    kprintf("gpu_resize: the mode no longer follows the window\n");
+    wait_request(serial + 3);
+    sleep_ms(2000);
+    fb_display_get(&d);
+    ktest_assert(d.width == 1440 && d.height == 900, "third request %ux%u", d.width, d.height);
+    ktest_assert(fb_screen.width == 1280 && fb_screen.height == 720, "mode %lux%lu after a request without follow",
+                 fb_screen.width, fb_screen.height);
+    kprintf("gpu_resize: request 1440x900 ignored, mode 1280x720\n");
+    signal_send(desktop, SIGTERM);
+    proc_reap(desktop);
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
+    signal_send(srv, SIGTERM);
+    ktest_assert(proc_reap(srv) == 0, "compositor status");
+}
+KTEST_DEFINE("gpu_resize", test_gpu_resize);

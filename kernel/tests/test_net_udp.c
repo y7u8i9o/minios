@@ -151,11 +151,9 @@ static void test_udp_peer(void)
 {
     char port_text[16];
     ktest_assert(cmdline_lookup("netpeer_port", port_text, sizeof port_text), "host port supplied");
-    unsigned port = 0;
-    for (char *p = port_text; *p; p++) {
-        ktest_assert(*p >= '0' && *p <= '9', "numeric port");
-        port = port * 10 + *p - '0';
-    }
+    char *end;
+    unsigned long long port = strtoull(port_text, &end, 10);
+    ktest_assert(end != port_text && *end == '\0', "numeric port");
     ktest_assert(port && port < 65536, "port range");
     struct netif *n = netif_find("eth0");
     ktest_assert(n, "NIC present");

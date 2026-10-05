@@ -1,0 +1,50 @@
+ADDR2LINE(1)                User Commands                ADDR2LINE(1)
+
+NAME
+    addr2line - convert addresses into file names and line numbers
+
+SYNOPSIS
+    addr2line [-afhijps] [-e file] [-j section] [address...]
+
+DESCRIPTION
+    addr2line translates addresses of an ELF64 file into the source file
+    name, the line number and optionally the function name. addr2line reads the
+    DWARF debug information of versions 2, 3, 4 and 5. The addresses are
+    hexadecimal numbers with or without the prefix 0x. Without address
+    arguments, addr2line reads one address from each line of standard
+    input.
+
+    A function that the debug information does not describe receives the
+    name of the nearest symbol of the symbol table. An address that no
+    section contains gives ?? and ??:0. A line number of 0 prints as ?.
+    The output matches the output of the GNU addr2line.
+
+    Compressed debug sections are not supported. addr2line reports them
+    and uses the symbol table only.
+
+OPTIONS
+    -a, --addresses
+        Print the address in hexadecimal before the result.
+    -e file, --exe=file
+        Read the debug information from file. The default is a.out.
+    -f, --functions
+        Print the function name before the file name and the line.
+    -i, --inlines
+        Print the chain of inlined calls. Each line after the first
+        gives the caller of the previous line.
+    -j section, --section=section
+        Read the addresses as offsets in section.
+    -p, --pretty-print
+        Print each result on one line. Inlined callers follow on lines
+        that start with (inlined by).
+    -s, --basenames
+        Print file names without the directory.
+    -h, --help
+        Print the usage and exit.
+
+EXAMPLES
+    addr2line -fip -e a.out 0x401136
+    echo 0x401136 | addr2line -e a.out
+
+SEE ALSO
+    nm(1), objdump(1), readelf(1)

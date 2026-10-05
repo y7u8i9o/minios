@@ -1,0 +1,8 @@
+x12: layer surface [0-9]+ \(askpass\)
+gui_askpass: dimmed [0-9]+ to [0-9]+
+settings: time zone Etc/UTC
+settings: time zone Africa/Cairo
+settings: time zone Africa/Johannesburg cancelled
+link=/usr/share/zoneinfo/Africa/Cairo
+gui_askpass: ok
+TEST PASS

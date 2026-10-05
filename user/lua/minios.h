@@ -1,5 +1,5 @@
 #pragma once
-/* The minios modules of the Lua interpreter. fs, sys and thread are part
+/* The minios modules of the Lua interpreter. fs, sys, thread and net are part
  * of the interpreter and registered in package.preload by linit.c. gui,
  * audio and mime are C modules in /usr/lib/lua/5.5, which require finds
  * through package.cpath and loads with dlopen. A module uses only Lua,
@@ -12,6 +12,7 @@
 int luaopen_fs(lua_State *L);       /* lfs.c: directories, file status */
 int luaopen_sys(lua_State *L);      /* lsys.c: processes and system data */
 int luaopen_thread(lua_State *L);   /* lthread.c: native workers and channels */
+int luaopen_net(lua_State *L);      /* lnet.c: TCP sockets */
 int luaopen_gui(lua_State *L);      /* lgui.c, lpaint.c, limage.c: the libgui application framework, gui.so */
 int luaopen_audio(lua_State *L);    /* laudio.c: playback, capture and mixer, audio.so */
 int luaopen_mime(lua_State *L);     /* lmime.c: MIME types and handlers, mime.so */

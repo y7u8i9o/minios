@@ -46,32 +46,6 @@ static unsigned prot_to_vmflags(int prot)
     return vmflags;
 }
 
-/* Map a regular file: the region references the file and its mapping. */
-static long mmap_regular(struct file *f, struct vmspace *vm, uintptr_t addr, size_t len, unsigned vmflags,
-                         bool fixed, uint64_t off)
-{
-    if (!IS_ALIGNED(off, PAGE_SIZE) || off + len < off)
-        return -EINVAL;
-    if (!f->ops || !f->ops->read)
-        return -ENODEV;
-    int acc = f->flags & O_ACCMODE;
-    if (acc == O_WRONLY)
-        return -EACCES;
-    if ((vmflags & VM_SHARED) && (vmflags & VM_WRITE) &&
-        (acc != O_RDWR || (f->flags & O_APPEND) || !f->ops->write))
-        return -EACCES;
-    struct mapping *m = filemap_get(f->inode);
-    if (!m)
-        return -ENOMEM;
-    file_ref(f);
-    long va = vma_mmap_file(vm, addr, len, vmflags | VM_FILE, fixed, f, m, off);
-    if (va < 0) {
-        file_put(f);
-        filemap_put(m);
-    }
-    return va;
-}
-
 /* Anonymous shared memory is an unnamed shared memory object mapped once;
  * fork then shares the frames. */
 static long mmap_anon_shared(struct vmspace *vm, uintptr_t addr, size_t len, unsigned vmflags)
@@ -136,7 +110,7 @@ long sys_mmap(struct trapframe *tf)
     if (f->ops && f->ops->mmap)
         r = f->ops->mmap(f, vm, addr, len, vmflags, off);
     else if (f->inode && S_ISREG(f->inode->mode))
-        r = mmap_regular(f, vm, addr, len, vmflags, fixed, off);
+        r = vma_mmap_regular(vm, f, addr, len, vmflags, fixed, off);
     else
         r = -ENODEV;
     file_put(f);

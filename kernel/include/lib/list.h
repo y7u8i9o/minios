@@ -51,6 +51,7 @@ static inline bool list_empty(const struct list_head *h)
 
 #define list_entry(ptr, type, member) container_of(ptr, type, member)
 #define list_first_entry(h, type, member) list_entry((h)->next, type, member)
+#define list_last_entry(h, type, member) list_entry((h)->prev, type, member)
 #define list_for_each(pos, h) for (pos = (h)->next; pos != (h); pos = pos->next)
 #define list_for_each_safe(pos, tmp, h) \
     for (pos = (h)->next, tmp = pos->next; pos != (h); pos = tmp, tmp = pos->next)

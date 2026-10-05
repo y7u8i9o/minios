@@ -151,80 +151,84 @@ msgstr ""
 msgid "Adaptive"
 msgstr ""
 
-#: user/settings/region.c:151
+#: user/settings/region.c:153
 msgid "Example: %s, %s"
 msgstr ""
 
-#: user/settings/region.c:187 user/settings/settings.c:93 user/settings/system.c:180
+#: user/settings/region.c:192
+msgid "Authentication is required to change the time zone."
+msgstr ""
+
+#: user/settings/region.c:210 user/settings/settings.c:93 user/settings/system.c:180
 msgid "OK"
 msgstr ""
 
-#: user/settings/region.c:188 user/settings/settings.c:130
+#: user/settings/region.c:211 user/settings/settings.c:130
 msgid "Region and language"
 msgstr ""
 
-#: user/settings/region.c:188
+#: user/settings/region.c:211
 msgid "The time zone cannot be set."
 msgstr ""
 
-#: user/settings/region.c:285
+#: user/settings/region.c:323
 msgid "Input methods"
 msgstr ""
 
-#: user/settings/region.c:292 user/settings/system.c:411
+#: user/settings/region.c:330 user/settings/system.c:411
 msgid "Move up"
 msgstr ""
 
-#: user/settings/region.c:299
+#: user/settings/region.c:337
 msgid "A Shift tap toggles the input method"
 msgstr ""
 
-#: user/settings/region.c:303
+#: user/settings/region.c:341
 msgid "Ctrl+Space toggles the input method"
 msgstr ""
 
-#: user/settings/region.c:307
+#: user/settings/region.c:345
 msgid "Candidates per page"
 msgstr ""
 
-#: user/settings/region.c:311
+#: user/settings/region.c:349
 msgid "Candidate layout"
 msgstr ""
 
-#: user/settings/region.c:313
+#: user/settings/region.c:351
 msgid "Horizontal"
 msgstr ""
 
-#: user/settings/region.c:314
+#: user/settings/region.c:352
 msgid "Vertical"
 msgstr ""
 
-#: user/settings/region.c:337
+#: user/settings/region.c:375
 msgid "Language"
 msgstr ""
 
-#: user/settings/region.c:348
+#: user/settings/region.c:386
 msgid "Formats"
 msgstr ""
 
-#: user/settings/region.c:350
+#: user/settings/region.c:388
 msgid "Same as the language"
 msgstr ""
 
-#: user/settings/region.c:358
-msgid "Time zone"
-msgstr ""
-
-#: user/settings/region.c:366
-msgid "Keyboard layout"
-msgstr ""
-
-#: user/settings/region.c:37
+#: user/settings/region.c:39
 msgid "Chinese (Pinyin)"
 msgstr ""
 
-#: user/settings/region.c:38
+#: user/settings/region.c:396
+msgid "Time zone"
+msgstr ""
+
+#: user/settings/region.c:40
 msgid "Japanese"
+msgstr ""
+
+#: user/settings/region.c:404
+msgid "Keyboard layout"
 msgstr ""
 
 #: user/settings/settings.c:127
@@ -339,7 +343,7 @@ msgstr ""
 msgid "(select a type)"
 msgstr ""
 
-#: user/settings/system.c:273 user/settings/users.c:227
+#: user/settings/system.c:273 user/settings/users.c:191
 msgid "Set"
 msgstr ""
 
@@ -471,99 +475,107 @@ msgstr ""
 msgid "Output volume: %d %%"
 msgstr ""
 
-#: user/settings/users.c:108 user/settings/users.c:145
-msgid "The full name may not contain : ' or \\"
-msgstr ""
-
-#: user/settings/users.c:113
-msgid "Full name changed"
-msgstr ""
-
-#: user/settings/users.c:121
-msgid "The new passwords differ"
-msgstr ""
-
-#: user/settings/users.c:133
+#: user/settings/users.c:101
 msgid "Password changed"
 msgstr ""
 
-#: user/settings/users.c:141
+#: user/settings/users.c:109
 msgid "A name starts with a lowercase letter, then letters, digits, _ or -"
 msgstr ""
 
-#: user/settings/users.c:149
+#: user/settings/users.c:117
 msgid "The new account needs a password"
 msgstr ""
 
-#: user/settings/users.c:161
+#: user/settings/users.c:124
+msgid "Authentication is required to add an account."
+msgstr ""
+
+#: user/settings/users.c:128
 msgid "Account added"
 msgstr ""
 
-#: user/settings/users.c:173
+#: user/settings/users.c:140
 msgid "Select an account first"
 msgstr ""
 
-#: user/settings/users.c:179
+#: user/settings/users.c:146
 msgid "Neither root nor the own account can be removed"
 msgstr ""
 
-#: user/settings/users.c:189
+#: user/settings/users.c:151
+msgid "Authentication is required to remove an account."
+msgstr ""
+
+#: user/settings/users.c:153
 msgid "Account removed"
 msgstr ""
 
-#: user/settings/users.c:211
+#: user/settings/users.c:175
 msgid "Accounts"
 msgstr ""
 
-#: user/settings/users.c:220
+#: user/settings/users.c:184
 msgid "Your account %s"
 msgstr ""
 
-#: user/settings/users.c:224 user/settings/users.c:244
+#: user/settings/users.c:188 user/settings/users.c:208
 msgid "Full name"
 msgstr ""
 
-#: user/settings/users.c:230
+#: user/settings/users.c:194
 msgid "Current password"
 msgstr ""
 
-#: user/settings/users.c:231
+#: user/settings/users.c:195
 msgid "New password"
 msgstr ""
 
-#: user/settings/users.c:232
+#: user/settings/users.c:196
 msgid "Repeat"
 msgstr ""
 
-#: user/settings/users.c:233
+#: user/settings/users.c:197
 msgid "Change password"
 msgstr ""
 
-#: user/settings/users.c:238
+#: user/settings/users.c:202
 msgid "Add or remove accounts"
 msgstr ""
 
-#: user/settings/users.c:241
+#: user/settings/users.c:205
 msgid "Name"
 msgstr ""
 
-#: user/settings/users.c:247
+#: user/settings/users.c:211
 msgid "Password"
 msgstr ""
 
-#: user/settings/users.c:248
-msgid "Your password"
-msgstr ""
-
-#: user/settings/users.c:250
+#: user/settings/users.c:213
 msgid "Add account"
 msgstr ""
 
-#: user/settings/users.c:252
+#: user/settings/users.c:215
 msgid "Remove selected account"
 msgstr ""
 
-#: user/settings/users.c:91
+#: user/settings/users.c:52
+msgid "The change was cancelled"
+msgstr ""
+
+#: user/settings/users.c:59
 msgid "The change failed"
+msgstr ""
+
+#: user/settings/users.c:76 user/settings/users.c:113
+msgid "The full name may not contain : ' or \\"
+msgstr ""
+
+#: user/settings/users.c:81
+msgid "Full name changed"
+msgstr ""
+
+#: user/settings/users.c:89
+msgid "The new passwords differ"
 msgstr ""
 

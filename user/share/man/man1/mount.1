@@ -6,6 +6,7 @@ NAME
 SYNOPSIS
     mount
     mount [-o options] type source target
+    mount [-o options] -t type source target
     mount -u target
 
 DESCRIPTION
@@ -14,11 +15,15 @@ DESCRIPTION
     mounts the filesystem. -o passes a comma separated option string to
     the filesystem, such as uid=1000,gid=1000,umask=077 for fat, which
     sets the owner and the permissions of every file of the volume
-    (fstab(5)). -u unmounts the filesystem at target.
+    (fstab(5)). -t gives the type as an option, and the source and the
+    target are then the only operands. The source of the type 9p is the
+    mount tag of a folder that the host shares through virtio-9p, such as
+    host. -u unmounts the filesystem at target.
 
 EXAMPLES
     mount mfs vdb /mnt
     mount -o uid=1000,gid=1000 fat vdd /mnt/usb
+    mount -t 9p host /mnt/host
     mount -u /mnt
 
 SEE ALSO

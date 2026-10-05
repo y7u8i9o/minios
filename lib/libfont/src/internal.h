@@ -30,6 +30,7 @@ struct ofont {
     char *path;
     uint8_t *data;
     size_t size;
+    int mapped;                 /* data is a read only mapping of the file, not a heap copy */
     int upem, nglyphs;
     int ascent, descent, line_gap;
     int long_loca;

@@ -1,0 +1,3 @@
+sched_wake_race: [0-9]+ rounds, 0 sleeps shorter than 1 ms
+sched_wake_race: ok
+TEST PASS

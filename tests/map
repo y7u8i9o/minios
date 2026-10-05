@@ -1,0 +1,261 @@
+# The rules of tools/test-changed.py: a path pattern and its targets
+# (docs/design/build.md, Tests). The files of a case itself (its directory,
+# its kernel test file, its test program and its script) need no rule.
+# A target is a pattern of case names, a host check check-NAME,
+# aarch64:PATTERN for a case on aarch64, @program for the cases that run
+# the program built from the file, or none. tools/test-changed.py --check
+# requires a rule for every tracked file.
+
+# ---- files without tests ----
+docs/**                         none
+CLAUDE.md                       none
+VERSION                         none
+qemu.conf.example               none
+.gdbinit                        none
+.gitignore                      none
+.gitmodules                     none
+tests/results/**                none
+tests/map                       none
+tools/test-changed.py           none
+tools/run.sh                    none
+tools/push-github.sh            none
+tools/fold-develop.sh           none
+tools/release.sh                none
+tools/version.sh                none
+tools/fetch_*.sh                none
+tools/xgettext.py               none
+user/share/man/**               none
+user/ports/**                   privilege
+
+# ---- test files that no case contains by name ----
+kernel/tests/test_run.c         @run
+tests/release-cases             none
+user/etc/tests/codec-*          codec_*
+user/etc/tests/*.lua            lua* gui_lua*
+
+# ---- build ----
+Makefile                        boot
+toolchain.mk                    boot
+limine.conf                     boot gpt_boot
+user/Makefile                   boot
+user/packages/**                boot pkg pkg_apps
+user/packages/transfer/**       check-transfer net_transfer
+user/perms                      boot privilege perm_user
+tools/mkbase.py                 boot pkg
+tools/mkimage.sh                boot pkg
+tools/mkpkg.sh                  boot pkg pkg_apps
+tools/mkiso.sh                  boot gpt_boot iso9660*
+tools/mkdisk.sh                 offline_update kernel_upgrade install_auto
+tools/mkupdate.sh               offline_update
+tools/mkrepo.sh                 check-pkg pkg_repo
+tools/mkinstaller.sh            install_* gui_installer
+tools/mklive.sh                 live*
+tests/run_qemu_test.sh          boot gpu_resize balloon 9p
+tests/run_all.sh                boot
+tests/iso_tree.py               iso9660*
+tests/qmp_input.py              gui_askpass gui_sysinfo usb_hid* acpi_power acpi_reset gpu_resize
+tests/net/**                    check-net net_harness
+tools/netpeer/**                check-net net_*peer net_harness net_xfer_host
+tools/xfer.py                   net_xfer_host
+tools/mft.py                    check-transfer net_transfer
+tools/transfer.py               check-transfer net_transfer
+tools/tests/test_mft.py         check-transfer
+tools/mkfs/**                   mfs mfs_user boot
+tools/fsck/**                   mfs_journal
+tools/mkfat/**                  fat fat_user
+tools/mkgpt/**                  gpt_boot disk_tools
+tools/msgfmt/**                 gettext gui_locale
+tools/pkgsign/**                check-pkg pkg_repo
+tools/genfont/**                boot console_sgr
+tools/genicons/**               icons
+tools/genkeymap/**              keymap
+tools/gensyms/**                backtrace
+tools/codecref/**               codec_*
+tools/gen_codec_fixtures.py     check-libcodec codec_*
+tools/genime.py                 check-imed ime*
+tools/genunicode.py             unicode_data gui_unicode
+tools/genzoneinfo.py            timezone
+tools/wscan/**                  check-libwire comp_*
+
+# ---- kernel ----
+kernel/Makefile                 boot
+kernel/arch/x86_64/**           boot exception backtrace cpu platform arch timer smp fpu float pagetable asid fork signals devices mathvec
+kernel/arch/aarch64/**          aarch64:boot aarch64:exception aarch64:backtrace aarch64:cpu aarch64:platform aarch64:arch aarch64:timer aarch64:smp aarch64:fpu aarch64:float aarch64:pagetable aarch64:asid aarch64:gicv2 aarch64:acpi* aarch64:fork aarch64:signals
+kernel/include/arch/**          boot exception cpu platform arch aarch64:boot aarch64:arch
+kernel/include/*.h              boot exception backtrace smp fork libc
+kernel/include/minios/**        libc libc_ext abi fdflags user_cred
+kernel/include/syscall_nums.h   libc libc_ext abi
+kernel/init/**                  boot devices
+kernel/lib/**                   boot libc fs smp lockfree net_udp_peer net_tcp_peer gui_sysmon
+kernel/include/lib/**           boot libc fs smp lockfree
+kernel/mm/**                    pmm vmm slab slab_redzone mmap_file munmap_tables madvise hugepages swap mem_release fork pagetable asid balloon_oom
+kernel/include/mm/**            pmm vmm slab slab_redzone mmap_file munmap_tables madvise hugepages swap mem_release fork pagetable asid balloon_oom
+kernel/fs/9p/**                 9p 9p_automount aarch64:9p*
+kernel/fs/**                    fs fs_* mfs* fat* iso9660* symlink pipes pipe_close persist perm_user devices
+kernel/include/fs/**            fs fs_* mfs* fat* iso9660* symlink pipes pipe_close persist perm_user devices
+kernel/net/**                   net_* sockets sockets_api
+kernel/include/net/**           net_* sockets sockets_api
+kernel/sched/**                 sched fork signals pthreads smp smp_user jobcontrol rlimit hung_task timer user_cred shebang dynlink exception mem_release
+kernel/include/sched/**         sched fork signals pthreads smp smp_user jobcontrol rlimit hung_task timer user_cred shebang dynlink exception mem_release
+kernel/ipc/**                   mq pipes pipe_close evfd poll_wake ring pthreads lockfree
+kernel/include/ipc/**           mq pipes pipe_close evfd poll_wake ring pthreads lockfree
+kernel/sync/**                  smp smp_user lockfree pthreads hung_task
+kernel/include/sync/**          smp smp_user lockfree pthreads hung_task
+kernel/syscall/**               libc libc_ext abi fdflags user_cred rlimit mmap_file
+kernel/include/syscall/**       libc libc_ext abi fdflags user_cred rlimit mmap_file
+kernel/block/**                 blk disk_tools gpt_boot nvme* ahci* usb_storage usb_root mfs
+kernel/include/block/**         blk disk_tools gpt_boot nvme* ahci* usb_storage usb_root mfs
+kernel/input/**                 input* kbd mouse* gui_pointer gui_tablet
+kernel/include/input/**         input* kbd mouse* gui_pointer gui_tablet
+kernel/audio/**                 audio_*
+kernel/include/audio/**         audio_*
+kernel/debug/**                 backtrace hung_task profile profreport
+kernel/include/debug/**         backtrace hung_task profile profreport
+kernel/include/tests/**         boot
+kernel/tests/ktest.c            boot
+kernel/include/drivers/**       boot devices
+kernel/drivers/acpi_tables.c    devices devices_acpi sysinfo_json aarch64:acpi*
+kernel/drivers/acpi.c           acpi_* shutdown shutdown_cmd devices aarch64:acpi*
+kernel/drivers/acpi_kernel.c    acpi_* shutdown devices aarch64:acpi*
+kernel/include/drivers/acpi.h   acpi_* aarch64:acpi*
+kernel/drivers/devinfo.c        devices sysinfo_json
+kernel/drivers/smbios.c         devices sysinfo_json
+kernel/drivers/ahci.c           ahci*
+kernel/drivers/nvme.c           nvme*
+kernel/drivers/pci.c            devices nvme ahci usb_root net_nic
+kernel/drivers/console.c        boot console_sgr
+kernel/drivers/fbcon.c          boot console_sgr fb0
+kernel/drivers/font.c           boot console_sgr check-libgui
+kernel/drivers/fbdev.c          fb0 fb_format gpu_mode gui_modes gpu_resize
+kernel/drivers/ps2kbd.c         kbd input_keyboard ctrlc
+kernel/drivers/ps2mouse.c       mouse mouse_wheel
+kernel/drivers/pty.c            pty jobcontrol ctrlc lineedit* gui_term
+kernel/drivers/tty.c            pty jobcontrol ctrlc lineedit* console_sgr shell
+kernel/drivers/rtc.c            time timezone net_clock adjtime ntp
+kernel/drivers/timer.c          timer time sched
+kernel/drivers/usb/**           usb_*
+kernel/drivers/virtio/virtio.c  blk net_virtqueue gpu_mode input_tablet audio_pcm gpu_resize
+kernel/drivers/virtio/virtio_blk.c      blk mfs disk_tools
+kernel/drivers/virtio/virtio_gpu.c      gpu_mode gui_modes gui_scale2 gpu_resize
+kernel/drivers/virtio/virtio_input.c    input_* gui_tablet
+kernel/drivers/virtio/virtio_net.c      net_nic* net_core net_virtqueue
+kernel/drivers/virtio/virtio_rng.c      net_random*
+kernel/drivers/virtio/virtio_balloon.c  balloon balloon_oom aarch64:balloon*
+kernel/drivers/virtio/virtio_9p.c       9p 9p_automount aarch64:9p*
+kernel/drivers/virtio/virtio_snd*       audio_*
+
+# ---- libraries ----
+lib/libc/**                     check-headers libc libc_ext libmfull mathvec float locale gettext timezone time pthreads utils sh_builtins
+lib/libc/src/crypto/**          check-pkg pkg pkg_repo
+lib/libc/include/minios/sha2.h  check-pkg
+lib/libc/include/minios/ed25519.h       check-pkg
+lib/libc/src/elffile.c          check-binutils check-pkg binutils dynlink pkg profile
+lib/libc/include/elf.h          check-binutils check-pkg binutils dynlink pkg profile
+lib/libc/include/minios/elffile.h       check-binutils check-pkg binutils dynlink pkg profile
+lib/libc/src/unistd/getopt*     binutils
+lib/libc/include/getopt.h       check-binutils binutils
+lib/libc/src/gzip.c             check-pkg pkg tar
+lib/libc/src/crc32.c            check-libcodec check-lua check-transfer pkg tar net_xfer mfs_journal gpt_boot
+lib/libc/include/minios/crc32.h check-libcodec check-lua check-transfer pkg tar net_xfer mfs_journal gpt_boot
+lib/libc/src/net/**             net_dns net_dns_cache net_tools net_xfer pkg_repo
+lib/libgui/**                   check-libgui check-lua gui gui_*
+lib/libwire/**                  check-libwire comp_* gui gui_app
+protocol/**                     check-libwire comp_* gui gui_app
+lib/libfont/**                  check-libfont ttf gui_ttf gui_text_repeat
+lib/libcodec/**                 check-libcodec codec_* gui_images audio_player
+lib/libaudio/**                 audio_* gui_mixer
+lib/libedit/**                  lineedit*
+lib/libjson/**                  sysinfo_json profreport
+lib/libprof/**                  profile profreport prof_gui profiler_gui luasynth_profile
+
+# ---- programs ----
+user/apps/**                    @program
+user/coreutils/**               @program utils
+user/binutils/**                check-binutils binutils @program tcc ar make
+user/tests/memtouch.c           balloon_oom 9p
+user/tests/mmapfiletest.c       mmap_file 9p
+user/coreutils/fsinit.c         boot fs fs_migrate 9p_automount
+user/coreutils/mount.c          utils fs 9p
+user/tests/**                   @program
+user/hello/**                   dynlink
+user/audiod/**                  audio_*
+user/calc/**                    gui_calc calculator
+user/compat/**                  boot
+user/compositor/**              comp_* gui gui_*
+user/desktop/**                 gui_desktop gpu_resize
+user/edit/**                    editor
+user/files/**                   gui_files gui_filechooser gui_dnd
+user/greeter/**                 gui_greeter greeter_* login_gui
+user/imed/**                    check-imed ime* gui_ime_settings
+user/init/**                    boot initctl shutdown shutdown_cmd
+user/installer/**               install_* gui_installer live_install
+user/ld/**                      dynlink dlopen abi libc
+user/local/**                   login_console user_cred privilege
+user/lua/**                     check-lua lua* gui_lua* luasynth*
+user/lua/lnet.c                 check-transfer net_transfer
+user/lua/lthread.c              check-transfer
+user/mint/**                    mint
+user/panel/**                   comp_panel gui_modes gpu_resize
+user/pkg/**                     check-pkg pkg pkg_repo pkg_apps offline_update kernel_upgrade
+user/po/**                      gettext gui_locale locale
+user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize
+user/sh/**                      check-sh sh_builtins shell shell2 script script2 shebang jobcontrol
+user/term/**                    gui_term gui_term_scale2
+user/askpass/**                 gui_askpass privilege
+user/skel/**                    login_console gui_desktop
+
+# ---- configuration and data ----
+user/etc/init.conf              boot initctl shutdown shutdown_cmd ntp
+user/etc/profile                shell login_console
+user/etc/launcher               comp_panel gui_desktop
+user/etc/desktop.conf           gui_desktop gui_settings gpu_resize
+user/etc/mime.*                 gui_files gui_desktop check-libgui
+user/etc/fstab                  boot fs
+user/etc/ntp.conf               ntp
+user/etc/doas.conf              privilege
+user/etc/sudoers                privilege
+user/etc/sudo.conf              privilege gui_askpass
+user/etc/network                net_dhcp net_tools
+user/etc/hosts                  net_dns
+user/etc/pkg.conf               pkg_repo offline_update
+user/etc/motd                   login_console
+user/etc/fortunes               utils
+user/share/keymaps/**           keymap input_keyboard
+user/share/zoneinfo/**          timezone
+user/share/i18n/**              locale
+user/share/ime/**               check-imed ime*
+user/share/fonts/**             ttf gui_ttf
+user/share/sounds/**            audio_player gui_mixer
+user/share/icons/**             icons
+user/share/wallpapers/**        gui_desktop
+user/share/apps/**              lua gui_lua
+user/share/lua/**               lua
+
+# ---- third party sources ----
+third_party/*                   none
+third_party/awk/**              awk
+third_party/sed/**              sed
+third_party/make/**             make
+third_party/lua/**              check-lua lua*
+third_party/sbase/**            tar
+third_party/ubase/**            privilege login_console
+third_party/sudo/**             privilege
+third_party/opendoas/**         privilege
+third_party/uacpi/**            acpi_* devices_acpi usb_hid_acpi aarch64:acpi*
+third_party/limine/**           boot gpt_boot
+third_party/edk2/**             aarch64:boot
+third_party/dejavu/**           ttf gui_ttf
+third_party/notosans/**         ttf gui_ttf
+third_party/lmodern/**          ttf gui_ttf
+third_party/unifont/**          ttf gui_ttf
+third_party/droidfallback/**    ttf gui_ttf
+third_party/fontawesome/**      icons
+third_party/stb/**              codec_image
+third_party/minimp3/**          check-libcodec codec_mp3 codec_tool
+third_party/shine/**            check-libcodec codec_mp3 codec_tool
+tools/fetch_mp3.sh              none
+tools/patches/shine.patch       check-libcodec codec_mp3
+third_party/unicode/**          unicode_data gui_unicode
+third_party/pfetch/**           pfetch
+third_party/imedata/**          check-imed ime*
+third_party/tinycc/**           tcc

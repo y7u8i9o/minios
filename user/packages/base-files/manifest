@@ -5,3 +5,4 @@ config etc/profile
 config etc/motd
 config etc/hosts
 config etc/network
+config etc/ntp.conf

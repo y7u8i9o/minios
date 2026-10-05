@@ -1,0 +1,22 @@
+# Spanish messages of the askpass domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Authentication is required to run a command as root."
+msgstr "Se requiere autenticación para ejecutar una orden como root."
+
+msgid "Authentication required"
+msgstr "Autenticación requerida"
+
+msgid "The password was wrong. Try again."
+msgstr "La contraseña es incorrecta. Inténtelo de nuevo."
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Authenticate"
+msgstr "Autenticar"

@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 /* ---- outlines ---- */
 
@@ -110,33 +114,59 @@ static int pick_cmap(struct ofont *f, uint32_t cmap, uint32_t len)
     return 0;
 }
 
-struct ofont *font_open(const char *path)
+/* Read a file that cannot be mapped into the heap. */
+static int read_whole(struct ofont *f, int fd)
 {
-    FILE *fp = fopen(path, "r");
-    if (!fp)
-        return NULL;
-    struct ofont *f = calloc(1, sizeof *f);
-    if (!f) {
-        fclose(fp);
-        return NULL;
-    }
     size_t cap = 65536, n = 0;
     f->data = malloc(cap);
     for (;;) {
         if (!f->data)
-            goto fail;
-        size_t got = fread(f->data + n, 1, cap - n, fp);
-        n += got;
-        if (n < cap)
+            return -1;
+        ssize_t got = read(fd, f->data + n, cap - n);
+        if (got < 0)
+            return -1;
+        n += (size_t)got;
+        if (got == 0)
             break;
-        cap *= 2;
-        f->data = realloc(f->data, cap);
+        if (n == cap) {
+            uint8_t *bigger = realloc(f->data, cap * 2);
+            if (!bigger)
+                return -1;
+            f->data = bigger;
+            cap *= 2;
+        }
     }
-    fclose(fp);
-    fp = NULL;
     f->size = n;
+    return 0;
+}
+
+/* The file is mapped read only, as other systems map their fonts. The
+ * processes that use a font share its pages, and only the pages of the
+ * glyphs drawn are read. A file that cannot be mapped is read instead. */
+struct ofont *font_open(const char *path)
+{
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return NULL;
+    struct ofont *f = calloc(1, sizeof *f);
+    if (!f) {
+        close(fd);
+        return NULL;
+    }
+    struct stat st;
+    void *map = fstat(fd, &st) == 0 && st.st_size > 0 ?
+                mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0) : MAP_FAILED;
+    if (map != MAP_FAILED) {
+        f->data = map;
+        f->size = (size_t)st.st_size;
+        f->mapped = 1;
+    } else if (read_whole(f, fd) < 0) {
+        close(fd);
+        font_close(f);
+        return NULL;
+    }
     f->path = strdup(path);
-    if (n < 12)
+    if (f->size < 12)
         goto invalid;
     uint32_t magic = rd32(f->data);
     if (magic != 0x00010000 && magic != 0x74727565 && magic != 0x4f54544f)
@@ -175,9 +205,6 @@ struct ofont *font_open(const char *path)
     return f;
 invalid:
     errno = EINVAL;
-fail:
-    if (fp)
-        fclose(fp);
     font_close(f);
     return NULL;
 }
@@ -187,7 +214,10 @@ void font_close(struct ofont *f)
     if (!f)
         return;
     cache_free(f);
-    free(f->data);
+    if (f->mapped)
+        munmap(f->data, f->size);
+    else
+        free(f->data);
     free(f->path);
     free(f);
 }

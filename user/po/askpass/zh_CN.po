@@ -1,0 +1,22 @@
+# Simplified Chinese messages of the askpass domain (docs/design/i18n.md).
+# The translation was written without a native speaker and requires a review.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Authentication is required to run a command as root."
+msgstr "以 root 身份运行命令需要认证。"
+
+msgid "Authentication required"
+msgstr "需要认证"
+
+msgid "The password was wrong. Try again."
+msgstr "密码错误。请重试。"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Authenticate"
+msgstr "认证"

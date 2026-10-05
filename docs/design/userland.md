@@ -46,7 +46,7 @@ the reusable [line editor](libedit.md).
 
 Added after M18, all in `user/coreutils/`:
 
-- Text: `grep` (BRE by default, `-E -F -i -n -v -c -l -r -h -H -w`), `tail` (`-n -c -f`), `sort`
+- Text: `grep` (BRE by default, `-E -F -i -n -v -c -l -r -h -H -q -w`), `tail` (`-n -c -f`), `sort`
   (`-r -n -u`), `uniq` (`-c -d`), `tr` (ranges, escapes, `-d -s`), `cut`
   (`-d -f`, `-c`), `rev`, `nl`, `tee` (`-a`), `seq`, `yes`, `printf`,
   `cmp`, `diff` (longest common subsequence, `<`/`>` output), `more`
@@ -192,7 +192,7 @@ the mounted filesystems. See [persistent storage](storage.md).
 
 ## ar and tar
 
-`ar` (`user/coreutils/ar.c`) maintains System V archives and `/bin/tar`
+`ar` (`user/binutils/ar.c`) maintains System V archives and `/bin/tar`
 is the tar of sbase, compiled unmodified from `third_party/sbase`; see
 [ar and tar](artar.md). `gzip` accepts `-f` since the same change. The
 gzip codec is part of libc (`minios/gzip.h`: `gzip_compress`,

@@ -66,6 +66,21 @@ static int write_user(struct vmspace *vm, uintptr_t va, const void *src, size_t 
     return 0;
 }
 
+/* Zero bytes of a present, writable user page through the page tables. */
+static int zero_user(struct vmspace *vm, uintptr_t va, size_t n)
+{
+    while (n) {
+        uintptr_t pa;
+        if (!vmm_translate(vm, va, &pa, NULL))
+            return -EFAULT;
+        size_t chunk = MIN(n, PAGE_SIZE - (va & (PAGE_SIZE - 1)));
+        memset(P2V(pa), 0, chunk);
+        va += chunk;
+        n -= chunk;
+    }
+    return 0;
+}
+
 /* Check the header of an ELF64 image of the given type. */
 static const struct elf64_ehdr *elf_check(const void *image, size_t size, uint16_t type)
 {
@@ -80,20 +95,47 @@ static const struct elf64_ehdr *elf_check(const void *image, size_t size, uint16
     return eh;
 }
 
-/* Map the PT_LOAD segments of an image, each shifted by base, and return
- * the end of the highest one through *highest. */
-static int load_segments(struct vmspace *vm, const void *image, size_t size,
+size_t elf_head_size(const void *head, size_t n)
+{
+    const struct elf64_ehdr *eh = head;
+    if (n < sizeof *eh || memcmp(eh->e_ident, ELFMAG, 4) != 0 || eh->e_ident[4] != ELFCLASS64 ||
+        eh->e_phentsize != sizeof(struct elf64_phdr))
+        return 0;
+    uint64_t need = eh->e_phoff + (uint64_t)eh->e_phnum * sizeof(struct elf64_phdr);
+    if (need > n)
+        return need;
+    for (int i = 0; i < eh->e_phnum; i++) {
+        const struct elf64_phdr *ph = (const struct elf64_phdr *)((const uint8_t *)head + eh->e_phoff) + i;
+        if (ph->p_type == PT_INTERP && ph->p_offset + ph->p_filesz > need)
+            need = ph->p_offset + ph->p_filesz;
+    }
+    return need;
+}
+
+/* Map the PT_LOAD segments of a file, each shifted by base, and return
+ * the end of the highest one through *highest. The bytes of a segment are
+ * mapped privately from the file, as mmap maps them, so that its pages are
+ * read at their first touch and processes share the pages they do not
+ * write. The pages beyond the file bytes of a segment (its bss) are
+ * anonymous. A writable segment whose file bytes end inside a page gets a
+ * private copy of that page, in which the rest is zeroed. head contains
+ * the file header and the program headers. */
+static int load_segments(struct vmspace *vm, struct file *f, uint64_t filesize, const void *head,
                          const struct elf64_ehdr *eh, uintptr_t base, uintptr_t *highest)
 {
     *highest = 0;
     for (int i = 0; i < eh->e_phnum; i++) {
-        const struct elf64_phdr *ph = (const struct elf64_phdr *)((const uint8_t *)image + eh->e_phoff) + i;
+        const struct elf64_phdr *ph = (const struct elf64_phdr *)((const uint8_t *)head + eh->e_phoff) + i;
         if (ph->p_type != PT_LOAD || ph->p_memsz == 0)
             continue;
-        if (ph->p_offset + ph->p_filesz > size || ph->p_filesz > ph->p_memsz)
+        if (ph->p_offset + ph->p_filesz > filesize || ph->p_filesz > ph->p_memsz)
             return -ENOEXEC;
         uintptr_t vaddr = base + ph->p_vaddr;
         if (vaddr < USER_BASE || vaddr + ph->p_memsz - 1 > USER_TOP || vaddr + ph->p_memsz < vaddr)
+            return -ENOEXEC;
+        /* The file offset and the address of a segment must agree within a
+         * page, which the linkers guarantee. */
+        if ((vaddr - ph->p_offset) & (PAGE_SIZE - 1))
             return -ENOEXEC;
         unsigned flags = 0;
         if (ph->p_flags & PF_R)
@@ -104,29 +146,33 @@ static int load_segments(struct vmspace *vm, const void *image, size_t size,
             flags |= VM_EXEC;
         uintptr_t start = ALIGN_DOWN(vaddr, PAGE_SIZE);
         uintptr_t end = ALIGN_UP(vaddr + ph->p_memsz, PAGE_SIZE);
-        int r = vma_add(vm, start, end, flags | VM_WRITE);   /* writable while loading */
-        if (r < 0)
-            return r;
-        r = vma_populate(vm, start, end);
-        if (r < 0)
-            return r;
-        r = write_user(vm, vaddr, (const uint8_t *)image + ph->p_offset, ph->p_filesz);
-        if (r < 0)
-            return r;
-        if (flags & VM_EXEC) {
-            /* The code was written through the data cache. */
-            for (uintptr_t va = start; va < end; va += PAGE_SIZE) {
-                uintptr_t pa;
-                if (vmm_translate(vm, va, &pa, NULL))
-                    paging_sync_icache(pa);
+        uintptr_t file_end = vaddr + ph->p_filesz;
+        uintptr_t map_end = ph->p_filesz ? ALIGN_UP(file_end, PAGE_SIZE) : start;
+        if (map_end > start) {
+            long va = vma_mmap_regular(vm, f, start, map_end - start, flags, true,
+                                       ALIGN_DOWN(ph->p_offset, PAGE_SIZE));
+            if (va < 0)
+                return (int)va;
+            /* A segment is part of the program, not an mmap region:
+             * munmap and MAP_FIXED do not remove it. */
+            spin_lock(&vm->lock);
+            vma_find_locked(vm, start)->flags &= ~VM_MMAP;
+            spin_unlock(&vm->lock);
+            uintptr_t zero_end = MIN(map_end, vaddr + ph->p_memsz);
+            if (file_end < zero_end) {
+                if (!(flags & VM_WRITE))
+                    return -ENOEXEC;
+                if (!vma_resolve_fault(vm, ALIGN_DOWN(file_end, PAGE_SIZE), true, false))
+                    return -ENOMEM;
+                int r = zero_user(vm, file_end, zero_end - file_end);
+                if (r < 0)
+                    return r;
             }
         }
-        if (!(flags & VM_WRITE)) {
-            spin_lock(&vm->lock);
-            struct vma *v = vma_find_locked(vm, start);
-            v->flags = flags;
-            spin_unlock(&vm->lock);
-            vmm_protect(vm, start, end - start, flags | VM_USER);
+        if (end > map_end) {
+            int r = vma_add(vm, map_end, end, flags);
+            if (r < 0)
+                return r;
         }
         if (end > *highest)
             *highest = end;
@@ -134,14 +180,15 @@ static int load_segments(struct vmspace *vm, const void *image, size_t size,
     return *highest ? 0 : -ENOEXEC;
 }
 
-int elf_load(struct vmspace *vm, const void *image, size_t size, struct elf_info *info)
+int elf_load(struct vmspace *vm, struct file *f, uint64_t filesize, const void *image, size_t size,
+             struct elf_info *info)
 {
     const struct elf64_ehdr *eh = elf_check(image, size, ET_EXEC);
     if (!eh)
         return -ENOEXEC;
     memset(info, 0, sizeof *info);
     uintptr_t highest;
-    int r = load_segments(vm, image, size, eh, 0, &highest);
+    int r = load_segments(vm, f, filesize, image, eh, 0, &highest);
     if (r < 0)
         return r;
 
@@ -187,14 +234,14 @@ int elf_load(struct vmspace *vm, const void *image, size_t size, struct elf_info
     return 0;
 }
 
-int elf_load_interp(struct vmspace *vm, const void *image, size_t size, uintptr_t base,
-                    struct elf_info *info)
+int elf_load_interp(struct vmspace *vm, struct file *f, uint64_t filesize, const void *image, size_t size,
+                    uintptr_t base, struct elf_info *info)
 {
     const struct elf64_ehdr *eh = elf_check(image, size, ET_DYN);
     if (!eh)
         return -ENOEXEC;
     uintptr_t highest;
-    int r = load_segments(vm, image, size, eh, base, &highest);
+    int r = load_segments(vm, f, filesize, image, eh, base, &highest);
     if (r < 0)
         return r;
     info->interp_base = base;

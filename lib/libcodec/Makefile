@@ -56,8 +56,8 @@ $(BUILD)/lib/codecs/%.so: $$(call module_objs,$$*) $(SO)
 # directory to find the fixtures in ../../user.
 check:
 	@mkdir -p $(OUT)/host
-	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -Iinclude \
-	    -o $(OUT)/host/test_codec tests/test_codec.c $(SRCS) $(wildcard modules/*/*.c) -lm
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -Iinclude -idirafter ../libc/include \
+	    -o $(OUT)/host/test_codec tests/test_codec.c $(SRCS) $(wildcard modules/*/*.c) ../libc/src/crc32.c -lm
 	$(OUT)/host/test_codec
 
 clean:

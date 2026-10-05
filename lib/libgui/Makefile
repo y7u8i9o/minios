@@ -18,14 +18,14 @@ all: $(LIB) $(SO) $(ABIFILE)
 
 # The host unit tests compile the library, libcodec with its modules
 # (CODEC_BUILTIN) and libfont with the system compiler against a fake
-# client (tests/fake_client.c).
+# client (tests/fake_client.c). The PNG encoder uses the CRC-32 of libc.
 HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c) \
-            $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c)
+            $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c) ../libc/src/crc32.c
 check: $(OUT)/font.c
 	@mkdir -p $(OUT)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -include tests/host_compat.h -Iinclude \
 	    -I../libcodec/include -I../libfont/include -Itests \
-	    -idirafter ../../kernel/include \
+	    -idirafter ../../kernel/include -idirafter ../libc/include \
 	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c
 	$(OUT)/host/test_framework
 

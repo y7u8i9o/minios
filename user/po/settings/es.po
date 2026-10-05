@@ -536,11 +536,21 @@ msgstr "Nombre"
 msgid "Password"
 msgstr "Contraseña"
 
-msgid "Your password"
-msgstr "Su contraseña"
 
 msgid "Add account"
 msgstr "Añadir cuenta"
 
 msgid "Remove selected account"
 msgstr "Eliminar la cuenta seleccionada"
+
+msgid "Authentication is required to change the time zone."
+msgstr "Se requiere autenticación para cambiar la zona horaria."
+
+msgid "Authentication is required to add an account."
+msgstr "Se requiere autenticación para añadir una cuenta."
+
+msgid "Authentication is required to remove an account."
+msgstr "Se requiere autenticación para eliminar una cuenta."
+
+msgid "The change was cancelled"
+msgstr "Se canceló el cambio"

@@ -130,7 +130,7 @@ static void test_input(void)
     spin_unlock(&kbd->lock);
     read_events(f, ev, 64);
     ps2kbd_feed_scancode(0x30);           /* b */
-    sleep_ms(100);
+    ktest_wait_idle(100);
     n = read_events(f, ev, 64);
     ktest_assert(n == 2, "repeat before the delay: %d events", n);
     sleep_ms(400);

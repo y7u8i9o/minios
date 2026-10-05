@@ -75,3 +75,7 @@ int *__errno_location(void);
 #define EINPROGRESS  115
 /* R3: a drive without a medium, with the value of Linux. */
 #define ENOMEDIUM    123
+#define ECANCELED    125              /* POSIX, with the same value as on Linux */
+/* The file transfer protocol MFT reports these two (filetransfer.md). */
+#define EPROTO       71
+#define ESTALE       116

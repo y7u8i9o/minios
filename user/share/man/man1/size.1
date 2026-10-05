@@ -1,0 +1,27 @@
+SIZE(1)                     User Commands                  SIZE(1)
+
+NAME
+    size - print the sizes of the sections of object files
+
+SYNOPSIS
+    size [-ABGdotxf] [--format=format] [--radix=radix] [--common] [file...]
+
+DESCRIPTION
+    size prints the sizes of the sections of ELF64 objects, shared objects,
+    programs and archives of them. The default file is a.out. The output
+    matches GNU size.
+
+FORMATS
+    -B, --format=berkeley   text, data and bss columns (default)
+    -A, --format=sysv       one line per section with size and address
+    -G, --format=gnu        text, data, bss and total columns
+
+OPTIONS
+    -d, -o, -x              print numbers in decimal, octal or hexadecimal
+    --radix=8|10|16         select the radix by its value
+    -t, --totals            print a line with the totals (Berkeley and GNU)
+    --common                add the size of common symbols to bss
+    -f                      ignored
+
+SEE ALSO
+    nm(1), strings(1), readelf(1)

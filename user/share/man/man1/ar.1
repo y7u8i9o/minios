@@ -4,17 +4,20 @@ NAME
     ar - maintain archives of files
 
 SYNOPSIS
-    ar [-]{dpqrtx}[cousv] archive [member...]
+    ar [-]{dpqrstx}[cousSv] archive [member...]
 
 DESCRIPTION
     ar creates and modifies archives in the System V format. One operation
     letter is required. Without member names t, p and x act on every member.
+    Every rewrite of an archive writes a symbol index of the defined global
+    symbols of its ELF objects, as GNU ar does. nm -s prints the index.
 
 OPERATIONS
     d   delete the named members
     p   print the named members to standard output
     q   append the files without checking for duplicates
     r   add the files, replacing members of the same name in place
+    s   write the symbol index without other changes, as ranlib does
     t   list the members
     x   extract the named members into the current directory
 
@@ -22,7 +25,8 @@ MODIFIERS
     c   do not report the creation of a new archive
     o   set the modification time of extracted files from the archive
     u   with r, replace a member only when the file is newer
-    s   accepted; no symbol table is written
+    s   write the symbol index (the default)
+    S   write no symbol index
     v   verbose: a, r, d and x lines for added, replaced, deleted and
         extracted members; mode, owner, size, date and name for t
 
@@ -32,4 +36,4 @@ EXAMPLES
     ar x libm.a a.o
 
 SEE ALSO
-    make(1), tar(1)
+    make(1), nm(1), ranlib(1), tar(1)

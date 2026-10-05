@@ -244,6 +244,11 @@ void build_display(struct widget *page)
     combobox_select(pixel_combo, scale >= 2 ? 1 : 0);
     widget_connect(pixel_combo, "changed", on_res, NULL);
     widget_set_grid(pixel_combo, r++, 1, 1, 1);
+    /* A virtual machine sends the size of its window. The resolution then
+     * changes with the window at the chosen pixel density. */
+    struct widget *follow = conf_checkbox_new(grid, _("The resolution follows the size of the window of the virtual machine"),
+                                              "display_follow", 1);
+    widget_set_grid(follow, r++, 0, 1, 2);
     widget_set_grid(separator_new(grid), r++, 0, 1, 2);
     row_label(grid, r, _("Frame interval (ms)"));
     frame_spin = spinner_new(grid, 4, 200, conf_int("frame_ms", 16));

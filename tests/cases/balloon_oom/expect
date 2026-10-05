@@ -1,0 +1,7 @@
+balloon\] target 0 pages, statistics yes, deflate on OOM yes
+balloon\] 81920 pages, the target
+balloon_oom: [0-9]+ pages allocated, the balloon released
+balloon_oom: memory freed, balloon of [0-9]+ pages reported
+TEST PASS
+memtouch: [0-9]+ MiB written and read
+balloon_oom: memtouch of [0-9]+ MiB without swapping

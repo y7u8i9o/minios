@@ -348,7 +348,11 @@ static void flush_queue(void)
         } else if (k.kind == Q_TOGGLE) {
             im_toggle();
         } else if (k.pressed && k.handled) {
-            if (nhandled < 16)
+            /* A repeated press is listed once, so one release removes it. */
+            int listed = 0;
+            for (int i = 0; i < nhandled; i++)
+                listed |= handled_keys[i] == k.key;
+            if (!listed && nhandled < 16)
                 handled_keys[nhandled++] = k.key;
         } else if (!k.pressed && take_handled(k.key)) {
             continue;
@@ -406,6 +410,12 @@ int im_filter_key(uint32_t key, int pressed, int mods)
                                .time = now, .sent = 1 });
     input_method_send_key(im, serial, (uint32_t)now, key, 1);
     return 1;
+}
+
+/* im_busy is 1 while keys wait in the queue for the daemon. */
+int im_busy(void)
+{
+    return nqueue > 0;
 }
 
 void im_tick(long now)

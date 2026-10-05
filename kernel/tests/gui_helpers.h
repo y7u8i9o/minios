@@ -61,14 +61,14 @@ static inline void mouse_move_to(int *cx, int *cy, int x, int y, int pressed)
     virtio_input_feed(EV_SYN, SYN_REPORT, 0);
     *cx = x;
     *cy = y;
-    sleep_ms(30);
+    ktest_wait_idle(30);
 }
 
 static inline void mouse_click(int buttons)
 {
     feed_packet((uint8_t)buttons, 0, 0);
     feed_packet(0, 0, 0);
-    sleep_ms(100);
+    ktest_wait_idle(100);
 }
 
 /* A logical pixel of the composed screen: the GUI tests describe the
@@ -101,12 +101,54 @@ static inline void press_key(uint8_t code)
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
 }
 
+/* Press the down arrow n times. It is an extended key of set 1. */
+static inline void press_down(int n)
+{
+    while (n-- > 0) {
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0x50);
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0xd0);
+        ktest_wait_idle(40);
+    }
+}
+
+/* Run a shell command as root, with the path /bin and the home /home, and
+ * return its exit status. */
+static inline int shell_status(const char *command)
+{
+    struct proc *p = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", (char *)command, NULL },
+                                      (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start sh");
+    return proc_reap(p);
+}
+
+/* Run a shell command as shell_status does. The command must exit with
+ * status 0. */
+static inline void run_shell(const char *command)
+{
+    int status = shell_status(command);
+    ktest_assert(status == 0, "'%s' status 0x%x", command, status);
+}
+
+/* Run a shell command every 100 ms until it exits with status 0, at most
+ * ms milliseconds. Returns true when it did. */
+static inline bool wait_shell(const char *command, int ms)
+{
+    for (int waited = 0; waited < ms; waited += 100) {
+        if (shell_status(command) == 0)
+            return true;
+        sleep_ms(100);
+    }
+    return false;
+}
+
 static inline void alt_key(uint8_t code)
 {
     ps2kbd_feed_scancode(0x38);
     press_key(code);
     ps2kbd_feed_scancode(0xb8);
-    sleep_ms(150);
+    ktest_wait_idle(150);
 }
 
 /* The compositor and the panel; returns the compositor. */
@@ -115,10 +157,10 @@ static inline struct proc *start_server(void)
     struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     panel_proc = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel_proc != NULL, "cannot start the panel");
-    sleep_ms(600);
+    ktest_wait_idle(600);
     return srv;
 }
 
@@ -142,7 +184,7 @@ static inline void ctrl_key(uint8_t code)
     ps2kbd_feed_scancode(0x1d);
     press_key(code);
     ps2kbd_feed_scancode(0x9d);
-    sleep_ms(150);
+    ktest_wait_idle(150);
 }
 
 /* The number of live processes named name with effective uid uid, or of
@@ -173,9 +215,7 @@ static inline int count_procs(const char *name, int uid)
                 *p++ = '\0';
         }
         if (nf == 8 && strcmp(f[3], "zombie") != 0 && strcmp(f[7], name) == 0) {
-            int u = 0;
-            for (const char *d = f[6]; *d >= '0' && *d <= '9'; d++)
-                u = u * 10 + (*d - '0');
+            int u = (int)strtoull(f[6], NULL, 10);
             if (uid < 0 || u == uid)
                 n++;
         }

@@ -28,6 +28,7 @@ its boot tests pass.
 | `packaging.md` | The base system as packages, partitions, the installer as the release image and offline updates, milestones P0 to P10 | P0 to P10 completed 2026-10-04 |
 | `drivers.md` | ACPI tables on aarch64, xHCI with USB HID, NVMe, AHCI, USB mass storage, e1000e, HD Audio, milestones D1 to D7 | D1 and D2 completed 2026-10-04, D3 to D5 completed 2026-10-05, D6 and D7 planned |
 | `release-0.5.0.md` | Release 0.5.0: `#!` scripts, NVMe, AHCI with CD drives, USB mass storage and hubs, ISO 9660, the live medium, milestones R1 to R6 | completed 2026-10-05 |
+| `release-0.6.0.md` | Release 0.6.0: ACPI power and power button, NTP, the desktop size from the window, the memory balloon, host folders through virtio-9p, milestones V1 to V5 | completed 2026-10-06 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
@@ -98,4 +99,4 @@ with the code.
 
 ## 5. Tooling Requirements
 
-Required: `x86_64-elf-gcc`, `qemu-system-x86_64`, `xorriso` (`make image` builds the boot ISO), `yacc` (the awk grammar) and `python3` (`tools/xfer.py` and the network test scripts). `x86_64-elf-gdb` is needed for `make gdb`.
+Required: `x86_64-elf-gcc`, `qemu-system-x86_64`, `xorriso` (`make image` builds the boot ISO), `yacc` (the awk grammar) and `python3` (`tools/xfer.py`, `tools/transfer.py` with Tkinter for its window, and the network test scripts). `x86_64-elf-gdb` is needed for `make gdb`.

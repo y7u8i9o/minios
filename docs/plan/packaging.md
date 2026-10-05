@@ -84,7 +84,7 @@ installer comes last.
 | minimal | `kernel`, `limine`, `libc`, `init`, `sh`, `coreutils`, `base-files`, `pkg`, `accounts` (login, passwd, useradd, userdel, su, doas, sudo), `keymaps`, `tzdata` |
 | standard | the minimal group, `net` (dhcpc, ping, nc, http, net, xfer), `textutils` (sed, awk, tar, less, man), `locales`, `edit`, `games` |
 | desktop | the standard group, `libwire`, `libfont`, `libcodec` with the PNG, SVG and BMP modules, `codecs-audio`, `libaudio`, `audiod`, `libgui`, `x12`, `desktop` (panel, desktop, greeter, startgui, settings, x12settings), `term`, `files`, `clock`, `imed` with its dictionaries, `fonts`, `theme` (icons and wallpapers), `sounds`, `diagnostics` (sysmon, logview, evtest, wireview, screenshot) |
-| devel | `tcc`, `make`, `binutils` (ar, as, ld), `libc-dev` and one `-dev` package per library with its headers and static archive |
+| devel | `tcc`, `make`, `binutils` (ar, as, ld, and since 2026-10-05 nm, size, strings, readelf, objdump, objcopy, strip, addr2line and ranlib), `libc-dev` and one `-dev` package per library with its headers and static archive |
 | none | `lua`, `lua-gui`, `lua-audio`, `profiler` (libprof, prof and the profiler window), the fourteen applications, and the metapackage `apps` that depends on all of them |
 | none | `tests`, every test program, fixture and script, built only with `CONFIG_TESTS=1` and never placed in a release repository |
 

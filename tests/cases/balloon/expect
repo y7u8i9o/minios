@@ -1,0 +1,7 @@
+balloon\] target 0 pages, statistics yes, deflate on OOM no
+balloon: ready, MemTotal
+balloon\] 32768 pages, the target
+balloon: inflated to 32768 pages
+balloon: statistics sent
+balloon: deflated
+TEST PASS

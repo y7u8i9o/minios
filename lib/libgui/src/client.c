@@ -57,6 +57,7 @@ struct win {
     int press_zone;             /* zone of the current button press */
     uint32_t last_click;        /* release time of the previous header click (double click) */
     int32_t wheel_acc;          /* axis motion below one wheel click, 24.8 pixels */
+    int translucent;            /* ARGB buffers without an opaque region (gui_set_translucent) */
 };
 
 /* Logical origin of the contents inside the surface. */
@@ -459,8 +460,11 @@ static int is_modifier_key(uint32_t key)
 static void on_key(void *user, struct wire_proxy *k, uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
     last_serial = serial;
-    if (state) {
-        if (!is_modifier_key(key) && repeat_rate > 0) {
+    /* X12 composes the text of a window with a text input context, and
+     * X12 repeats its keys (input.md). libgui repeats the other keys. */
+    if (state && !is_modifier_key(key)) {
+        repeat_at = 0;
+        if (repeat_rate > 0 && !text_active) {
             repeat_key = key;
             repeat_at = uptime_ms() + repeat_delay;
         }
@@ -521,6 +525,8 @@ static void on_text_enter(void *user, struct wire_proxy *ti, struct wire_proxy *
 {
     text_win = window_of_surface(surface);
     text_active = text_win != NULL;
+    if (text_active)
+        repeat_at = 0;
 }
 
 static void on_text_leave(void *user, struct wire_proxy *ti, struct wire_proxy *surface)
@@ -1073,7 +1079,8 @@ static void release_old(struct win *wi)
 
 static int pool_alloc(struct win *wi, int w, int h)
 {
-    uint32_t format = wi->csd.enabled ? 2 : 1;      /* ARGB8888 for the chrome's shadow */
+    /* ARGB8888 for the chrome's shadow and for a translucent window. */
+    uint32_t format = wi->csd.enabled || wi->translucent ? 2 : 1;
     size_t size = (size_t)w * h * 4 * 2;
     int fd = memfd_create("gui", MFD_CLOEXEC);
     if (fd < 0 || ftruncate(fd, (long)size) < 0) {
@@ -1152,8 +1159,8 @@ static void surface_resize(struct gui_window *w, int width, int height)
     w->scale = scale;
     pool_alloc(wi, dw, dh);
     surface_set_buffer_scale(wi->surface, scale);
-    struct rect rects[4];
-    int n = csd_opaque_region(&wi->csd, width, height, rects);
+    struct rect rects[5];
+    int n = wi->translucent ? 0 : csd_opaque_region(&wi->csd, width, height, rects);
     struct wire_array region = { rects, sizeof rects[0] * (size_t)n };
     surface_set_opaque_region(wi->surface, &region);
     if (wi->csd.enabled) {
@@ -1578,6 +1585,20 @@ static void offset_region(struct gui_window *w, const struct rect *rects, int co
     content_origin(w, &ox, &oy);
     for (int i = 0; i < count; i++)
         out[i] = (struct rect){ rects[i].x + ox, rects[i].y + oy, rects[i].w, rects[i].h };
+}
+
+void gui_set_translucent(struct gui_window *w)
+{
+    struct win *wi = w->priv;
+    if (wi->translucent)
+        return;
+    wi->translucent = 1;
+    pool_alloc(wi, wi->buf_w, wi->buf_h);
+    struct rect none[1];
+    struct wire_array region = { none, 0 };
+    surface_set_opaque_region(wi->surface, &region);
+    wi->damage = (struct rect){ 0, 0, wi->buf_w, wi->buf_h };
+    wi->has_damage = 1;
 }
 
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count)

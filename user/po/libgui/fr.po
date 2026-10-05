@@ -106,6 +106,14 @@ msgstr "Enregistrer le fichier"
 msgid "Open file"
 msgstr "Ouvrir un fichier"
 
+#: lib/libgui/src/filechooser.c
+msgid "Choose"
+msgstr "Choisir"
+
+#: lib/libgui/src/filechooser.c
+msgid "Choose folder"
+msgstr "Choisir un dossier"
+
 #: lib/libgui/src/filechooser.c:94
 msgid "The folder “%s” does not exist."
 msgstr "Le dossier « %s » n'existe pas."
@@ -299,3 +307,39 @@ msgstr "Impossible de déplacer « %s » : %s."
 #: lib/libgui/src/folderview.c:1028
 msgid "“%s” cannot be copied: %s."
 msgstr "Impossible de copier « %s » : %s."
+
+#: lib/libgui/src/appchooser.c:159
+msgid "Recommended applications"
+msgstr "Applications recommandées"
+
+#: lib/libgui/src/appchooser.c:161
+msgid "Other applications"
+msgstr "Autres applications"
+
+#: lib/libgui/src/appchooser.c:202
+msgid "The default application cannot be saved: %s."
+msgstr "Impossible d'enregistrer l'application par défaut : %s."
+
+#: lib/libgui/src/appchooser.c:264
+msgid "Choose a program"
+msgstr "Choisir un programme"
+
+#: lib/libgui/src/appchooser.c:274
+msgid "“%s” is not a program."
+msgstr "« %s » n'est pas un programme."
+
+#: lib/libgui/src/appchooser.c:301
+msgid "Choose an application to open “%s”."
+msgstr "Choisissez une application pour ouvrir « %s »."
+
+#: lib/libgui/src/appchooser.c:314
+msgid "Always use for files of type %s"
+msgstr "Toujours utiliser pour les fichiers de type %s"
+
+#: lib/libgui/src/appchooser.c:319
+msgid "Other program..."
+msgstr "Autre programme..."
+
+#: lib/libgui/src/appchooser.c:61 lib/libgui/src/appchooser.c:354
+msgid "Open with"
+msgstr "Ouvrir avec"

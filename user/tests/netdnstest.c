@@ -149,7 +149,7 @@ static size_t build_answer(const unsigned char *q, size_t qlen, unsigned char *a
         a[3] = 0x82; /* SERVFAIL */
     } else if (strcmp(name, "loop.test") == 0) {
         /* Owner name pointing at itself. */
-        a[n++] = 0xc0; a[n++] = (unsigned char)n - 1;
+        a[n] = 0xc0; a[n + 1] = (unsigned char)n; n += 2;
         memcpy(a + n, "\0\1\0\1\0\0\0\x3c\0\4\1\2\3\4", 14); n += 14;
         answers = 1;
     } else if (strcmp(name, "big.test") == 0 && !tcp) {

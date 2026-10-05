@@ -138,7 +138,7 @@ static void server_capture(void)
     }
     CHECK(audio_playback_start(tone) == 0 && audio_capture_start(monitor) == 0 &&
           audio_capture_start(input) == 0, "start streams");
-    int tone_periods = 0, silent_inputs = 0, exact_inputs = 0;
+    int tone_periods = 0, silent_inputs = 0;
     for (int i = 0; i < 30; i++) {
         CHECK(audio_capture_read(monitor, captured, quantum) == (ssize_t)quantum, "monitor read %d", i);
         int exact;
@@ -153,7 +153,6 @@ static void server_capture(void)
         peak = analyse(captured, quantum, &exact);
         if (peak == 0)
             silent_inputs++;
-        exact_inputs += exact;
     }
     printf("audiocaptest: %d tone periods on the monitor, %d silent input periods\n",
            tone_periods, silent_inputs);

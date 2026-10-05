@@ -5,7 +5,11 @@ folder view (`gui/folderview.h`, `lib/libgui/src/folderview.c`), in the way
 GNOME Files and the GTK file chooser share their places sidebar and path
 bar. The file chooser (`app_choose_file` in `gui/app.h`,
 `lib/libgui/src/filechooser.c`) wraps it in a modal window, and the Files
-program (`files.md`) wraps it in its main window. Both were built on
+program (`files.md`) wraps it in its main window. The chooser has three
+modes: `FILE_CHOOSER_OPEN`, `FILE_CHOOSER_SAVE` and, since 2026-10-05,
+`FILE_CHOOSER_FOLDER`. The folder mode shows only folders and has a New
+folder button. Its button Choose returns the selected folder, or the
+current folder when no folder is selected. Both were built on
 2026-10-03, when the chooser replaced the path prompt that the programs
 used for Open and Save.
 

@@ -29,6 +29,13 @@ static inline void mpsc_push(struct mpsc_head *q, struct mpsc_node *node)
                                            __ATOMIC_RELEASE, __ATOMIC_RELAXED));
 }
 
+/* mpsc_empty reports whether no node waits.  The result is a sample: a
+ * producer may push a node at any time. */
+static inline bool mpsc_empty(struct mpsc_head *q)
+{
+    return __atomic_load_n(&q->head, __ATOMIC_ACQUIRE) == NULL;
+}
+
 static inline struct mpsc_node *mpsc_take_all(struct mpsc_head *q)
 {
     return __atomic_exchange_n(&q->head, NULL, __ATOMIC_ACQUIRE);

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <drivers/timer.h>
 #include <net/tcp.h>
+#include <lib/string.h>
 #include <lib/cmdline.h>
 #include "net_helpers.h"
 #include "../net/tcp/internal.h"
@@ -21,11 +22,9 @@ static void test_tcp_peer(void)
 {
     char port_text[16];
     ktest_assert(cmdline_lookup("netpeer_port", port_text, sizeof port_text), "host port supplied");
-    unsigned port = 0;
-    for (char *digit = port_text; *digit; digit++) {
-        ktest_assert(*digit >= '0' && *digit <= '9', "numeric host port");
-        port = port * 10 + *digit - '0';
-    }
+    char *end;
+    unsigned long long port = strtoull(port_text, &end, 10);
+    ktest_assert(end != port_text && *end == '\0', "numeric host port");
     ktest_assert(port && port <= 65535, "valid host port");
     struct netif *interface = netif_find("eth0");
     ktest_assert(interface && net_configure(interface, 0x0a00020f, 0xffffff00u, 0x0a000202) == 0,
@@ -81,9 +80,7 @@ static void test_tcp_bulk(void)
 {
     char port_text[16];
     ktest_assert(cmdline_lookup("netpeer_port", port_text, sizeof port_text), "bulk peer port");
-    unsigned port = 0;
-    for (const char *digit = port_text; *digit; digit++)
-        port = port * 10 + *digit - '0';
+    unsigned port = (unsigned)strtoull(port_text, NULL, 10);
     struct netif *interface = netif_find("eth0");
     ktest_assert(interface && net_configure(interface, 0x0a00020f, 0xffffff00u, 0x0a000202) == 0,
                  "bulk native path");

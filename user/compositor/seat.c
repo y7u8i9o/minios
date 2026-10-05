@@ -39,6 +39,13 @@ static char keymap_name[32];
  * of an input method): their release does not reach the client either. */
 static uint32_t used_keys[16];
 static int nused;
+/* The repeat of a key typed into a text input context (input.md). The
+ * compositor composes the text of such a key, through text.c or the
+ * input method daemon, and therefore repeats the key itself. libgui does
+ * not repeat keys while its window has a text input context.
+ * text_repeat_at is 0 while no key repeats. */
+static uint32_t text_repeat_key;
+static long text_repeat_at;
 /* The switch keys of the input methods (docs/design/ime.md).  A Shift tap
  * is a press and a release of Shift without another key between them, a
  * Ctrl+Shift tap a press of both and a release without another key. */
@@ -48,6 +55,32 @@ uint32_t seat_last_serial(void) { return last_serial; }
 int seat_modifiers(void) { return modifiers; }
 struct csurface *seat_keyboard_focus(void) { return keyboard_focus; }
 struct csurface *seat_cursor_surface(void) { return cursor_surface; }
+
+/* Key lists of 16 entries without duplicates. A repeated press does not
+ * add a second entry, so one release removes the key. */
+static int key_listed(const uint32_t *list, int n, uint32_t key)
+{
+    for (int i = 0; i < n; i++)
+        if (list[i] == key)
+            return 1;
+    return 0;
+}
+
+static void key_list_add(uint32_t *list, int *n, uint32_t key)
+{
+    if (*n < 16 && !key_listed(list, *n, key))
+        list[(*n)++] = key;
+}
+
+static int key_list_remove(uint32_t *list, int *n, uint32_t key)
+{
+    for (int i = 0; i < *n; i++)
+        if (list[i] == key) {
+            list[i] = list[--*n];
+            return 1;
+        }
+    return 0;
+}
 int seat_cursor_hidden(void) { return cursor_is_hidden; }
 int seat_translate(uint32_t key, int mods)
 {
@@ -390,6 +423,21 @@ void seat_pointer_motion(void)
     }
 }
 
+/* covers_decorations is 1 when target, the surface under the cursor, lies
+ * above the decorations of the toplevel s. A toplevel covers them when it
+ * is higher in the stack. Layer surfaces of the top and overlay layers,
+ * popups and the other roles lie above every toplevel. */
+static int covers_decorations(const struct csurface *target, const struct csurface *s)
+{
+    if (!target)
+        return 0;
+    if (target->role == ROLE_TOPLEVEL)
+        return target->stack > s->stack;
+    if (target->role == ROLE_LAYER)
+        return target->layer->layer >= 2;
+    return 1;
+}
+
 void seat_pointer_button(int button, int pressed)
 {
     int bit = 1 << (button - 1);
@@ -407,7 +455,7 @@ void seat_pointer_button(int button, int pressed)
         }
         /* Decorations of the toplevel under the cursor. */
         for (struct csurface *s = surface_first(); s; s = s->next)
-            if (decor_hit(s, cursor_x, cursor_y) && !s->toplevel->minimized && (!target || target->stack <= s->stack)) {
+            if (decor_hit(s, cursor_x, cursor_y) && !s->toplevel->minimized && !covers_decorations(target, s)) {
                 if (toplevel_blocked(s->toplevel)) {
                     set_pointer_focus(NULL);
                     return;
@@ -481,6 +529,7 @@ void seat_set_keyboard_focus(struct csurface *s)
     if (keyboard_focus == s)
         return;
     struct csurface *old = keyboard_focus;
+    text_repeat_at = 0;
     if (keyboard_focus && keyboard_focus->client->keyboard)
         keyboard_send_leave(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), keyboard_focus->res);
     keyboard_focus = s;
@@ -554,8 +603,13 @@ void seat_key(uint32_t key, int pressed)
     if (pressed)
         shift_tap = ctrl_shift_tap = 0;
     if (pressed) {
-        if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_TAB) { toplevel_cycle(); return; }
-        if ((modifiers & KEYMAP_MOD_ALT) && key == KEY_F4) {
+        /* An overlay with the keyboard, such as the login window or the
+         * authentication dialog, retains it: Alt+Tab and Alt+F4 go to the
+         * overlay instead of the windows below it. */
+        int overlay = keyboard_focus && keyboard_focus->role == ROLE_LAYER &&
+                      keyboard_focus->layer->layer == LAYER_OVERLAY;
+        if (!overlay && (modifiers & KEYMAP_MOD_ALT) && key == KEY_TAB) { toplevel_cycle(); return; }
+        if (!overlay && (modifiers & KEYMAP_MOD_ALT) && key == KEY_F4) {
             struct toplevel *t = toplevel_focused();
             if (t)
                 toplevel_close(t);
@@ -579,23 +633,19 @@ void seat_key(uint32_t key, int pressed)
             shot = "-a";
         else if (logo_shift && key == KEY_5)
             shot = "-i";
-        int overlay = keyboard_focus && keyboard_focus->role == ROLE_LAYER &&
-                      keyboard_focus->layer->layer == LAYER_OVERLAY;
         if (shot && !(overlay && key == KEY_SYSRQ)) {
             if (!overlay) {
                 char *const argv[] = { "/bin/screenshot", (char *)shot, NULL };
                 int err = mime_spawn(argv);
                 comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
             }
-            if (nused < 16)
-                used_keys[nused++] = key;
+            key_list_add(used_keys, &nused, key);
             return;
         }
         /* Escape cancels a drag, and neither of its key events reaches a client. */
         if (key == KEY_ESC && data_dragging()) {
             data_drag_cancel();
-            if (nused < 16)
-                used_keys[nused++] = key;
+            key_list_add(used_keys, &nused, key);
             return;
         }
         if (key == KEY_ESC && popup_grab_surface()) {
@@ -609,21 +659,49 @@ void seat_key(uint32_t key, int pressed)
         else
             used = im_japanese_key(key);
         if (used) {
-            if (nused < 16)
-                used_keys[nused++] = key;
+            key_list_add(used_keys, &nused, key);
             return;
         }
     } else {
-        for (int i = 0; i < nused; i++)
-            if (used_keys[i] == key) {
-                used_keys[i] = used_keys[--nused];
-                return;
-            }
+        if (key == text_repeat_key)
+            text_repeat_at = 0;
+        /* A key that the client has as down receives its release, also
+         * when a repeat of the key was used by a composition. */
+        if (key_list_remove(used_keys, &nused, key) && !key_listed(pressed_keys, npressed, key))
+            return;
+    }
+    if (pressed) {
+        text_repeat_at = 0;
+        if (text_focus_active() && settings.repeat_rate > 0) {
+            text_repeat_key = key;
+            text_repeat_at = uptime_ms() + settings.repeat_delay;
+        }
     }
     /* The input method daemon sees the key first and may retain it. */
     if (keyboard_focus && keyboard_focus->client->keyboard && im_filter_key(key, pressed, modifiers))
         return;
     seat_deliver_key(key, pressed, modifiers);
+}
+
+/* seat_tick repeats the key of a text input context: the press takes the
+ * path of a typed press again, with the modifiers of the moment. A repeat
+ * is skipped while keys wait for the input method daemon. */
+void seat_tick(long now)
+{
+    if (!text_repeat_at || now < text_repeat_at)
+        return;
+    if (!text_focus_active()) {
+        text_repeat_at = 0;
+        return;
+    }
+    int period = settings.repeat_rate > 0 ? 1000 / settings.repeat_rate : 33;
+    text_repeat_at += period;
+    if (text_repeat_at <= now)
+        text_repeat_at = now + period;
+    if (im_busy())
+        return;
+    if (!im_filter_key(text_repeat_key, 1, modifiers))
+        seat_deliver_key(text_repeat_key, 1, modifiers);
 }
 
 /* seat_deliver_key gives a key to the focused client: to the built-in
@@ -633,23 +711,15 @@ void seat_deliver_key(uint32_t key, int pressed, int mods)
 {
     if (pressed) {
         if (keyboard_focus && keyboard_focus->client->keyboard && text_key(key, 1, mods)) {
-            if (nused < 16)
-                used_keys[nused++] = key;
+            if (!key_listed(pressed_keys, npressed, key))
+                key_list_add(used_keys, &nused, key);
             return;
         }
-        if (npressed < 16)
-            pressed_keys[npressed++] = key;
+        key_list_add(pressed_keys, &npressed, key);
     } else {
-        for (int i = 0; i < nused; i++)
-            if (used_keys[i] == key) {
-                used_keys[i] = used_keys[--nused];
-                return;
-            }
-        for (int i = 0; i < npressed; i++)
-            if (pressed_keys[i] == key) {
-                pressed_keys[i] = pressed_keys[--npressed];
-                break;
-            }
+        int used = key_list_remove(used_keys, &nused, key);
+        if (!key_list_remove(pressed_keys, &npressed, key) && used)
+            return;
     }
     if (keyboard_focus && keyboard_focus->client->keyboard) {
         keyboard_send_key(keyboard_focus->client->keyboard, serial_for(keyboard_focus->client), now_ms(), key, pressed ? 1 : 0);

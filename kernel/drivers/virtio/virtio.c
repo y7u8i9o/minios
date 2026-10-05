@@ -161,6 +161,14 @@ static void virtio_irq(struct trapframe *tf, void *arg)
     }
     if (dev->work_notify)
         dev->work_notify();
+    /* The configuration interrupt shares the vector of the queues. A new
+     * generation tells it apart. */
+    uint8_t generation = dev->common->config_generation;
+    if (generation != dev->config_generation) {
+        dev->config_generation = generation;
+        if (dev->config_changed)
+            dev->config_changed(dev);
+    }
     spin_unlock(&dev->irq_lock);
 }
 
@@ -224,6 +232,7 @@ int virtio_start(struct virtio_dev *dev)
     if (irq < 0)
         return irq;
     dev->vector = (unsigned)irq;
+    dev->config_generation = c->config_generation;
     irq_register(dev->vector, virtio_irq, dev);
     int r = pci_msix_enable(dev->pci);
     if (r < 0)
@@ -310,6 +319,7 @@ int virtio_reset(struct virtio_dev *dev)
     struct virtqueue *old[4];
     spin_lock(&dev->irq_lock);
     dev->work_notify = NULL;
+    dev->config_changed = NULL;
     for (unsigned i = 0; i < ARRAY_SIZE(old); i++) {
         old[i] = dev->queues[i];
         dev->queues[i] = NULL;

@@ -1,0 +1,55 @@
+NM(1)                       User Commands                    NM(1)
+
+NAME
+    nm - list the symbols of object files
+
+SYNOPSIS
+    nm [-aABDfgjnoPprSsuUW] [-t radix] [-f format] [--size-sort] [file...]
+
+DESCRIPTION
+    nm lists the symbols of ELF64 objects, shared objects, programs and
+    archives of them. The default file is a.out. The output matches GNU nm.
+    Each symbol line shows the value, a type letter and the name. Upper
+    case letters mark global symbols and lower case letters mark local
+    symbols.
+
+TYPE LETTERS
+    A   absolute value
+    B   symbol in a section without contents (bss)
+    C   common symbol
+    D   symbol in a writable data section
+    i   indirect function
+    N   symbol in a debugging section
+    n   symbol in a read-only section that is not loaded
+    R   symbol in a read-only data section
+    T   symbol in a code section
+    U   undefined symbol
+    u   unique global symbol
+    V   weak object, W weak symbol; v and w mark undefined weak symbols
+    ?   symbol of unknown kind
+
+OPTIONS
+    -a, --debug-syms        list section and file symbols
+    -A, -o, --print-file-name
+                            print the file before every symbol
+    -B                      same as --format=bsd
+    -D, --dynamic           list the dynamic symbols
+    -f, --format=FORMAT     bsd (default), sysv, posix or just-symbols
+    -g, --extern-only       list global symbols only
+    -j, --just-symbols      same as --format=just-symbols
+    -n, -v, --numeric-sort  sort by address
+    -p, --no-sort           use the order of the symbol table
+    -P, --portability       same as --format=posix
+    -r, --reverse-sort      reverse the sort order
+    -S, --print-size        print the size of defined symbols
+    -s, --print-armap       print the symbol index of archives
+    --size-sort             sort by size
+    -t, --radix=RADIX       print values in radix d, o or x
+    -u, --undefined-only    list undefined symbols only
+    -U, --defined-only      list defined symbols only
+    -W, --no-weak           omit weak symbols
+    --special-syms          include mapping symbols of aarch64
+    --quiet                 omit the message for files without symbols
+
+SEE ALSO
+    size(1), strings(1), ar(1), readelf(1)

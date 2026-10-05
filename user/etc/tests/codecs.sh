@@ -7,17 +7,19 @@ check() {
 mkdir /ct
 cd /ct
 
-# The registry: four modules, one codec each, with their capabilities.
+# The registry: the modules with their codecs and capabilities.
 codecs > list.txt; check list-status "$?" "0"
-check list-total "$(tail -n 1 list.txt)" "8 codecs in 7 modules"
-check list-oggflac "$(grep -c '^DE- oggflac audio  flac.so' list.txt)" "1"
-check list-vorbis "$(grep -c '^DE- vorbis audio  vorbis.so' list.txt)" "1"
-check list-flac "$(grep -c '^DE- flac  audio  flac.so' list.txt)" "1"
-check list-bmp "$(grep -c '^DE- bmp   image  bmp.so' list.txt)" "1"
-check list-jpeg "$(grep -c '^DE- jpeg  image  jpeg.so' list.txt)" "1"
-check list-png "$(grep -c '^DE- png   image  png.so' list.txt)" "1"
-check list-svg "$(grep -c '^D-S svg   image  svg.so' list.txt)" "1"
-check list-wav "$(grep -c '^DE- wav   audio  wav.so' list.txt)" "1"
+check list-total "$(tail -n 1 list.txt)" "10 codecs in 9 modules"
+check list-oggflac "$(grep -c '^DE-- oggflac audio  flac.so' list.txt)" "1"
+check list-vorbis "$(grep -c '^DE-- vorbis audio  vorbis.so' list.txt)" "1"
+check list-flac "$(grep -c '^DE-- flac  audio  flac.so' list.txt)" "1"
+check list-bmp "$(grep -c '^DE-- bmp   image  bmp.so' list.txt)" "1"
+check list-gif "$(grep -c '^DE-A gif   image  gif.so' list.txt)" "1"
+check list-jpeg "$(grep -c '^DE-- jpeg  image  jpeg.so' list.txt)" "1"
+check list-mp3 "$(grep -c '^DE-- mp3   audio  mp3.so' list.txt)" "1"
+check list-png "$(grep -c '^DE-- png   image  png.so' list.txt)" "1"
+check list-svg "$(grep -c '^D-S- svg   image  svg.so' list.txt)" "1"
+check list-wav "$(grep -c '^DE-- wav   audio  wav.so' list.txt)" "1"
 
 # PNG to BMP and back: the same pixels, so the two BMP files are equal.
 codecs convert /usr/share/icons/folder.png f.bmp > out.txt; check to-bmp "$?" "0"
@@ -84,6 +86,30 @@ codecs convert -o quality=2 same.wav bad.ogg 2> err.txt; check quality-range "$?
 codecs convert -o quality=1 same.wav x.flac 2> err.txt; check flac-options "$?" "1"
 check flac-options-text "$(cat err.txt)" "codecs: x.flac: cannot encode: Invalid argument"
 
+# GIF: a still image with alpha, and an animation that remains one.
+codecs convert f.png f.gif > /dev/null; check to-gif "$?" "0"
+check info-gif "$(codecs info f.gif)" "f.gif: gif image, 16x16, with alpha"
+codecs convert f.gif fg.bmp > /dev/null; check from-gif "$?" "0"
+check info-from-gif "$(codecs info fg.bmp)" "fg.bmp: bmp image, 16x16, with alpha"
+check info-anim "$(codecs info /etc/tests/codec-gif-pillow.gif | cut -d: -f2)" \
+    " gif image, 48x32, with alpha, 4 frames, 1.100 s, plays 3 times"
+codecs convert /etc/tests/codec-gif-pillow.gif a.gif > /dev/null; check anim-gif "$?" "0"
+check info-anim-copy "$(codecs info a.gif)" "a.gif: gif image, 48x32, with alpha, 4 frames, 1.100 s, plays 3 times"
+codecs convert /etc/tests/codec-gif-previous.gif p.png > /dev/null; check anim-first-frame "$?" "0"
+check info-first-frame "$(codecs info p.png)" "p.png: png image, 40x30"
+
+# MP3: the chime through the encoder of MPEG-2 has its original length,
+# and the fixture of LAME has the length that its tag gives.
+codecs convert same.wav c.mp3 > /dev/null; check to-mp3 "$?" "0"
+check info-mp3 "$(codecs info c.mp3)" "c.mp3: mp3 audio, 16000 Hz, 1 channel, 32000 frames, 2.000 s"
+codecs convert c.mp3 m.wav > /dev/null; check from-mp3 "$?" "0"
+check info-mp3-wav "$(codecs info m.wav)" "m.wav: wav audio, 16000 Hz, 1 channel, 16 bit, 32000 frames, 2.000 s"
+codecs convert -o bitrate=64 same.wav c64.mp3 > /dev/null; check mp3-bitrate "$?" "0"
+check mp3-size "$(test $(wc -c < c64.mp3) -gt $(wc -c < c.mp3) && echo larger)" "larger"
+codecs convert -o bitrate=100 same.wav bad.mp3 2> err.txt; check mp3-bad-bitrate "$?" "1"
+check info-lame "$(codecs info /etc/tests/codec-mp3-lame.mp3 | cut -d: -f2)" \
+    " mp3 audio, 44100 Hz, 2 channels, 66150 frames, 1.500 s"
+
 # Errors.
 echo "plain text" > note.txt
 codecs info note.txt > out.txt; check unknown-status "$?" "1"
@@ -99,4 +125,6 @@ check missing-text "$(cat err.txt)" "codecs: missing.png: No such file or direct
 
 # The extensions the MIME table gives the formats.
 check mime "$(grep -c '^image/bmp bmp dib$' /etc/mime.types)" "1"
+check mime-gif "$(grep -c '^image/gif gif$' /etc/mime.types)" "1"
+check mime-mp3 "$(grep -c '^audio/mpeg mp3$' /etc/mime.types)" "1"
 echo "codecs: done"
