@@ -1,7 +1,8 @@
 #pragma once
 /* GPT partitions (kernel/block/part.c, docs/design/block.md). Each
  * partition of a disk with a valid GUID partition table is a block device
- * of its own, named after the disk and its index from 1, as vda1. */
+ * of its own, named after the disk and its index from 1, as vda1, with a p
+ * between them when the name of the disk ends in a digit, as nvme0n1p1. */
 #include <kernel.h>
 #include <block/blockdev.h>
 

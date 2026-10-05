@@ -17,8 +17,15 @@ struct blockdev {
     int (*flush)(struct blockdev *dev);
     void *priv;
     struct blockdev *disk;      /* the disk of a partition (block/part.h), NULL for a disk */
+    uint32_t flags;             /* BLOCKDEV_*, set by the driver before registration */
     struct list_head link;
 };
+
+/* A drive with removable media of 2048 byte sectors, which the root
+ * search of a disk image skips. */
+#define BLOCKDEV_CDROM     (1u << 0)
+/* A device that refuses writes with EROFS. */
+#define BLOCKDEV_READONLY  (1u << 1)
 
 void blockdev_init(void);
 /* Register dev and create /dev/<name> backed by the block cache. */

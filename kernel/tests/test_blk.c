@@ -6,10 +6,13 @@
 #include <lib/string.h>
 #include <console.h>
 #include <drivers/timer.h>
+#include <lib/cmdline.h>
+#include <lib/printf.h>
 
-/* M12: raw sector transfers through virtio-blk, the block cache and the
- * /dev/vda file. The case boots with root=initrd so the disk contents
- * may be overwritten freely. */
+/* M12: raw sector transfers through a disk driver, the block cache and
+ * the device file. The disk is vda, or the device that blkdev= names (the
+ * cases of the NVMe, AHCI and USB drivers). The case boots with
+ * root=initrd so the disk contents may be overwritten freely. */
 static void fill(uint8_t *p, size_t n, uint32_t seed)
 {
     for (size_t i = 0; i < n; i++)
@@ -26,9 +29,13 @@ static bool check(const uint8_t *p, size_t n, uint32_t seed)
 
 static void test_blk(void)
 {
-    struct blockdev *dev = blockdev_find("vda");
-    ktest_assert(dev != NULL, "no vda");
-    ktest_assert(dev->sector_size == 512 && dev->nsectors == 512 * 2048, "vda geometry %lu", dev->nsectors);
+    char name[BLOCKDEV_NAME_LEN] = "vda", path[32];
+    if (!cmdline_lookup("blkdev", name, sizeof name) || !name[0])
+        strlcpy(name, "vda", sizeof name);
+    ksnprintf(path, sizeof path, "/dev/%s", name);
+    struct blockdev *dev = blockdev_find(name);
+    ktest_assert(dev != NULL, "no %s", name);
+    ktest_assert(dev->sector_size == 512 && dev->nsectors == 512 * 2048, "%s geometry %lu", name, dev->nsectors);
 
     /* Raw single and multi sector transfers, including one larger than
      * the 8 KiB bounce chunk. */
@@ -83,10 +90,10 @@ static void test_blk(void)
     ktest_assert(b && b->data[0] == (uint8_t)1100, "evicted dirty block written back");
     brelse(b);
 
-    /* /dev/vda through the VFS. */
+    /* The device file through the VFS. */
     struct file *f;
-    ktest_assert(vfs_open("/dev/vda", O_RDWR, 0, &f) == 0, "open /dev/vda");
-    ktest_assert(f->inode->size == 512 * 1024 * 1024 && S_ISBLK(f->inode->mode), "vda inode");
+    ktest_assert(vfs_open(path, O_RDWR, 0, &f) == 0, "open %s", path);
+    ktest_assert(f->inode->size == 512 * 1024 * 1024 && S_ISBLK(f->inode->mode), "%s inode", path);
     ktest_assert(file_lseek(f, 5 * BCACHE_BLOCK_SIZE + 100, SEEK_SET) == 5 * BCACHE_BLOCK_SIZE + 100, "lseek");
     ktest_assert(file_read(f, (char *)r, 1000) == 1000 && check(r, 1000, 3 + 100 * 7), "read via file");
     ktest_assert(file_lseek(f, 7 * BCACHE_BLOCK_SIZE - 10, SEEK_SET) > 0, "lseek 2");

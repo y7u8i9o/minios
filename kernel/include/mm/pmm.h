@@ -44,6 +44,14 @@ void pmm_reclaim_cpu_caches(void);
  * page allocations, each freeable with pmm_free_page or page_put (M39). */
 void pmm_split_block(struct page *head, unsigned order);
 
+/* A zeroed page for a device, through its direct map address, and its
+ * physical address in *phys. Drivers give such pages to controllers as
+ * rings, queues and transfer buffers. NULL on exhaustion. */
+void *pmm_alloc_dma_page(uintptr_t *phys);
+/* Free a page of pmm_alloc_dma_page by its direct map address. NULL is
+ * ignored. */
+void pmm_free_dma_page(void *va);
+
 uintptr_t page_to_phys(const struct page *page);
 struct page *phys_to_page(uintptr_t pa);
 uint64_t page_to_pfn(const struct page *page);

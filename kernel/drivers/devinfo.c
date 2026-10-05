@@ -255,6 +255,7 @@ static void describe_all(struct devinfo *d)
     describe_memory(d);
     pci_describe(d);
     usb_describe(d);
+    nvme_describe(d);
     input_describe(d);
     block_describe(d);
     fbdev_describe(d);

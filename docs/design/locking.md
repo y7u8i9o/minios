@@ -629,3 +629,16 @@ These locks are in user space and do not add a kernel lock-order level.
   `/dev/mounts` did before. The storage part copies the mounts before it
   takes `part_lock`.
 
+
+## R2 additions (NVMe)
+
+- `nvme.io_lock` (mutex, `drivers/nvme.c`) serializes the commands of one
+  NVMe controller: the submission queue tails, the bounce pages and the
+  PRP list page. A block transfer takes it while it has locked a buffer of
+  the block cache, which gives `buf.lock -> nvme.io_lock`. The admin
+  commands of the probe take it as well.
+- `nvme.lock` (spinlock, `drivers/nvme.c`) protects the completion queue
+  heads and phases and the completion records of one controller. The
+  MSI-X handler and the waiting thread take it. It is the condition lock of
+  the controller's wait queue, which gives `nvme.io_lock -> nvme.lock ->
+  waitq.lock`.

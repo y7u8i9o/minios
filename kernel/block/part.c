@@ -189,7 +189,11 @@ static int apply_table(struct blockdev *disk)
             continue;
         if (!(p = kzalloc(sizeof *p)))
             break;
-        ksnprintf(p->bdev.name, sizeof p->bdev.name, "%s%u", disk->name, i + 1);
+        /* The name of a disk that ends in a digit, as nvme0n1, takes a p
+         * before the number of the partition. */
+        size_t dl = strlen(disk->name);
+        bool digit = dl && disk->name[dl - 1] >= '0' && disk->name[dl - 1] <= '9';
+        ksnprintf(p->bdev.name, sizeof p->bdev.name, "%s%s%u", disk->name, digit ? "p" : "", i + 1);
         p->bdev.sector_size = disk->sector_size;
         p->bdev.nsectors = e->last - e->first + 1;
         p->bdev.rw = part_rw;

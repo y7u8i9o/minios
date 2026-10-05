@@ -399,3 +399,20 @@ bool pmm_is_ram(uintptr_t pa)
     uint64_t pfn = pa >> PAGE_SHIFT;
     return pfn < pmm_max_pfn && !(page_array[pfn].flags & PG_RESERVED);
 }
+
+void *pmm_alloc_dma_page(uintptr_t *phys)
+{
+    struct page *pg = pmm_alloc_page();
+    if (!pg)
+        return NULL;
+    *phys = page_to_phys(pg);
+    void *va = phys_to_virt(*phys);
+    memset(va, 0, PAGE_SIZE);
+    return va;
+}
+
+void pmm_free_dma_page(void *va)
+{
+    if (va)
+        pmm_free_page(phys_to_page(virt_to_phys(va)));
+}

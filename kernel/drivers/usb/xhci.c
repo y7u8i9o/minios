@@ -247,27 +247,9 @@ static inline void wr64(volatile uint8_t *base, unsigned off, uint64_t v)
     wr(base, off + 4, (uint32_t)(v >> 32));
 }
 
-/* A zeroed page for the controller, and its physical address. */
-static void *dma_page(uintptr_t *phys)
-{
-    struct page *pg = pmm_alloc_page();
-    if (!pg)
-        return NULL;
-    *phys = page_to_phys(pg);
-    void *va = phys_to_virt(*phys);
-    memset(va, 0, PAGE_SIZE);
-    return va;
-}
-
-static void dma_free(void *va)
-{
-    if (va)
-        pmm_free_page(phys_to_page(virt_to_phys(va)));
-}
-
 static int ring_init(struct ring *r)
 {
-    r->trb = dma_page(&r->phys);
+    r->trb = pmm_alloc_dma_page(&r->phys);
     if (!r->trb)
         return -ENOMEM;
     r->enqueue = 0;
@@ -548,7 +530,7 @@ int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descript
     if (ep->ring.trb)
         return -EBUSY;
     unsigned mps = epd->wMaxPacketSize & 0x7ff;
-    if (ring_init(&ep->ring) < 0 || !(ep->buf = dma_page(&ep->buf_phys)))
+    if (ring_init(&ep->ring) < 0 || !(ep->buf = pmm_alloc_dma_page(&ep->buf_phys)))
         return -ENOMEM;
     ep->len = MIN(MAX(len, mps), 1024u);
 
@@ -583,12 +565,12 @@ int xhci_interrupt_in(struct usb_device *dev, const struct usb_endpoint_descript
 static void slot_free(struct slot *s)
 {
     for (unsigned i = 0; i < MAX_DCI; i++) {
-        dma_free(s->ep[i].ring.trb);
-        dma_free(s->ep[i].buf);
+        pmm_free_dma_page(s->ep[i].ring.trb);
+        pmm_free_dma_page(s->ep[i].buf);
     }
-    dma_free(s->out_ctx);
-    dma_free(s->in_ctx);
-    dma_free(s->ctrl_buf);
+    pmm_free_dma_page(s->out_ctx);
+    pmm_free_dma_page(s->in_ctx);
+    pmm_free_dma_page(s->ctrl_buf);
     kfree(s->dev.config);
     kfree(s);
 }
@@ -604,8 +586,8 @@ static void port_attach(struct xhci *x, unsigned port, uint32_t portsc)
         return;
     }
     struct slot *s = kzalloc(sizeof *s);
-    if (!s || !(s->out_ctx = dma_page(&s->out_phys)) || !(s->in_ctx = dma_page(&s->in_phys)) ||
-        !(s->ctrl_buf = dma_page(&s->ctrl_phys)) || ring_init(&s->ep[1].ring) < 0) {
+    if (!s || !(s->out_ctx = pmm_alloc_dma_page(&s->out_phys)) || !(s->in_ctx = pmm_alloc_dma_page(&s->in_phys)) ||
+        !(s->ctrl_buf = pmm_alloc_dma_page(&s->ctrl_phys)) || ring_init(&s->ep[1].ring) < 0) {
         klog_error("port %u: no memory for slot %u", port, slot);
         if (s)
             slot_free(s);
@@ -883,12 +865,12 @@ static int setup_scratchpad(struct xhci *x)
         return -EINVAL;
     x->scratch_count = count;
     uintptr_t phys;
-    x->scratch = dma_page(&phys);
+    x->scratch = pmm_alloc_dma_page(&phys);
     if (!x->scratch)
         return -ENOMEM;
     for (unsigned i = 0; i < count; i++) {
         uintptr_t p;
-        if (!dma_page(&p))
+        if (!pmm_alloc_dma_page(&p))
             return -ENOMEM;
         x->scratch[i] = p;
     }
@@ -960,7 +942,7 @@ static struct xhci *xhci_start(struct pci_dev *p, unsigned index)
         goto fail;
     }
     wr(x->op, OP_CONFIG, x->max_slots);
-    x->dcbaa = dma_page(&x->dcbaa_phys);
+    x->dcbaa = pmm_alloc_dma_page(&x->dcbaa_phys);
     if (!x->dcbaa || setup_scratchpad(x) < 0 || ring_init(&x->cmd) < 0)
         goto fail;
     wr64(x->op, OP_DCBAAP, x->dcbaa_phys);
@@ -969,8 +951,8 @@ static struct xhci *xhci_start(struct pci_dev *p, unsigned index)
     /* One event ring segment of one page for interrupter 0. ERSTBA is
      * written last, because writing it makes the controller read the
      * segment table. */
-    x->events = dma_page(&x->events_phys);
-    x->erst = dma_page(&x->erst_phys);
+    x->events = pmm_alloc_dma_page(&x->events_phys);
+    x->erst = pmm_alloc_dma_page(&x->erst_phys);
     if (!x->events || !x->erst)
         goto fail;
     x->erst[0] = x->events_phys;

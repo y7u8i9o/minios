@@ -39,6 +39,7 @@
 #include <drivers/virtio/virtio_gpu.h>
 #include <drivers/virtio/virtio_input.h>
 #include <drivers/usb.h>
+#include <drivers/nvme.h>
 #include <drivers/devinfo.h>
 #include <drivers/fbdev.h>
 #include <drivers/pty.h>
@@ -67,14 +68,25 @@ static void boot_apply_cmdline(void)
         klog_set_level(val[0] - '0');
 }
 
-/* First thread. Runs the selected self test, then starts init from the
- * initrd and reaps it, which is fatal. */
+/* The first registered disk that is not a partition and not a CD drive,
+ * or NULL. */
+static struct blockdev *first_disk(void)
+{
+    struct blockdev *devs[32];
+    int n = blockdev_list(devs, 32);
+    for (int i = 0; i < n; i++)
+        if (!devs[i]->disk && !(devs[i]->flags & BLOCKDEV_CDROM))
+            return devs[i];
+    return NULL;
+}
+
 /* Mount the root (docs/design/block.md). root=initrd selects the initrd,
  * root=PARTUUID=GUID the partition with that unique GUID and root=NAME the
  * device NAME. Without root=, the kernel mounts the root partition of the
  * Discoverable Partitions Specification on the disk it was loaded from,
- * or on vda when that disk is not found, and a vda without a partition
- * table as a whole. The initrd is the root when nothing else mounts. */
+ * else on vda, else on the first disk that is not a CD drive, and such a
+ * disk without a partition table as a whole. The initrd is the root when
+ * nothing else mounts. */
 static void mount_root(void)
 {
     char root[64], source[BLOCKDEV_NAME_LEN] = "";
@@ -93,6 +105,8 @@ static void mount_root(void)
         struct blockdev *disk = part_boot_disk();
         if (!disk)
             disk = blockdev_find("vda");
+        if (!disk)
+            disk = first_disk();
         struct partition *p = disk ? part_find_type(disk, part_type_root) : NULL;
         if (p)
             strlcpy(source, p->bdev.name, sizeof source);
@@ -116,9 +130,14 @@ static void mount_root(void)
         panic("cannot mount /dev: %d", r);
 }
 
+/* First thread. Runs the selected self test, then starts init from the
+ * initrd and reaps it, which is fatal. */
 static void kinit(void *arg)
 {
     rcu_start_worker();
+    /* The NVMe probe waits for admin commands and therefore runs in a
+     * thread. */
+    nvme_init();
     /* Reading the partition tables needs a thread, which the block
      * drivers sleep in. */
     part_scan();

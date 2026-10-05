@@ -1,0 +1,1 @@
+test=blk root=initrd blkdev=nvme0n1 nvme=poll

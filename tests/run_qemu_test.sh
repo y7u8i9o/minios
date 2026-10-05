@@ -29,6 +29,11 @@
 #             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
 #   tablet    attaches a virtio-tablet-pci device when present
 #   keyboard  attaches a virtio-keyboard-pci device when present
+#   diskif    the controller of the root disk (optional, default virtio):
+#             nvme, optionally followed by properties of the QEMU nvme
+#             device such as ",mdts=2", ahci for the SATA controller (the one of q35,
+#             an ich9-ahci on aarch64) or usb for usb-storage on its own
+#             xHCI controller
 #   usb       an xHCI controller and USB devices on it (optional): one line,
 #             the controller with its properties followed by the devices,
 #             for example "qemu-xhci,msix=off usb-kbd usb-tablet"
@@ -229,7 +234,22 @@ fi
 [ -f "$CASE/tablet" ] && VGAFLAGS="$VGAFLAGS -device virtio-tablet-pci"
 [ -f "$CASE/keyboard" ] && VGAFLAGS="$VGAFLAGS -device virtio-keyboard-pci"
 if [ -f "$OUTDIR/disk.img" ]; then
-    DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,drive=vd0"
+    DISKIF=virtio
+    [ -f "$CASE/diskif" ] && DISKIF="$(cat "$CASE/diskif")"
+    case "$DISKIF" in
+        virtio) ROOTDEV="-device virtio-blk-pci,drive=vd0" ;;
+        nvme*) ROOTDEV="-device $DISKIF,drive=vd0,serial=minios-root" ;;
+        ahci)
+            if [ "${ARCH:-x86_64}" = x86_64 ]; then
+                ROOTDEV="-device ide-hd,drive=vd0,bus=ide.0"
+            else
+                ROOTDEV="-device ich9-ahci,id=ahci -device ide-hd,drive=vd0,bus=ahci.0"
+            fi
+            ;;
+        usb) ROOTDEV="-device qemu-xhci,id=usbdisk -device usb-storage,drive=vd0,bus=usbdisk.0" ;;
+        *) fail "unknown diskif $DISKIF" ;;
+    esac
+    DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw $ROOTDEV"
 fi
 NDISK=1
 if [ -f "$CASE/swap" ]; then
