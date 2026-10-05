@@ -95,7 +95,7 @@ The harness file `diskif` selects the controller of the root disk.
 
 Document: `docs/design/nvme.md`.
 
-### R3. AHCI with CD drives (D4)
+### R3. AHCI with CD drives (D4) (completed 2026-10-05)
 
 A driver for AHCI controllers (PCI class 0106 interface 01): the HBA
 reset, the ports with a device, the command list and the received FIS
@@ -106,10 +106,11 @@ of `block/scsi.c` and become `srN`. A CD drive reports a missing medium
 as `ENOMEDIUM` and reads the capacity again after a medium change.
 
 Boot tests: `ahci` boots with the root disk on the SATA controller of q35
-and runs the `blk` checks. `ahci_cd` reads the volume descriptors and the
-last sector of an ISO image in a CD drive and checks the capacity, and
-checks a drive without a medium. `ahci_aarch64` runs the root disk test
-on aarch64 with an `ich9-ahci` controller on PCI.
+and runs the `blk` checks. `ahci_polled` repeats them with the kernel
+option `ahci=poll`. `ahci_cd` reads the volume descriptors and the last
+sector of an ISO image in a CD drive and checks the capacity, and checks
+a drive without a medium. `ahci_aarch64` runs the root disk test on
+aarch64 with an `ich9-ahci` controller on PCI.
 
 Document: `docs/design/ahci.md`, with `block/scsi.c` in
 `docs/design/block.md`.

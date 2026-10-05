@@ -46,6 +46,7 @@ void smbios_describe(struct devinfo *d);        /* "firmware/smbios" */
 void pci_describe(struct devinfo *d);           /* "pci" */
 void usb_describe(struct devinfo *d);           /* "usb" */
 void nvme_describe(struct devinfo *d);          /* "nvme" */
+void ahci_describe(struct devinfo *d);          /* "ahci" */
 void input_describe(struct devinfo *d);         /* "input" */
 void block_describe(struct devinfo *d);         /* "storage" */
 void fbdev_describe(struct devinfo *d);         /* "display" */

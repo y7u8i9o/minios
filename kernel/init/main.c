@@ -40,6 +40,7 @@
 #include <drivers/virtio/virtio_input.h>
 #include <drivers/usb.h>
 #include <drivers/nvme.h>
+#include <drivers/ahci.h>
 #include <drivers/devinfo.h>
 #include <drivers/fbdev.h>
 #include <drivers/pty.h>
@@ -135,9 +136,10 @@ static void mount_root(void)
 static void kinit(void *arg)
 {
     rcu_start_worker();
-    /* The NVMe probe waits for admin commands and therefore runs in a
-     * thread. */
+    /* The NVMe and AHCI probes wait for the devices and therefore run in
+     * a thread. */
     nvme_init();
+    ahci_init();
     /* Reading the partition tables needs a thread, which the block
      * drivers sleep in. */
     part_scan();

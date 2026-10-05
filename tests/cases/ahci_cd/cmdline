@@ -1,0 +1,1 @@
+test=cdrom root=initrd cddev=sr0 cdempty=sr1

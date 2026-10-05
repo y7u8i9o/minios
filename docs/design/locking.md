@@ -642,3 +642,20 @@ These locks are in user space and do not add a kernel lock-order level.
   MSI-X handler and the waiting thread take it. It is the condition lock of
   the controller's wait queue, which gives `nvme.io_lock -> nvme.lock ->
   waitq.lock`.
+
+## R3 additions (SCSI devices and AHCI)
+
+- `scsi_device.lock` (mutex, `block/scsi.c`) serializes the commands of one
+  SCSI disk or CD drive and protects its capacity, its medium state and
+  its gone flag. A block transfer takes it while it has locked a buffer of
+  the block cache, which gives `buf.lock -> scsi_device.lock`. The
+  transport of the device is called under it.
+- `ahci_port.lock` (mutex, `drivers/ahci.c`) serializes the commands of one
+  AHCI port and protects its command list, command table and bounce
+  pages. The ATAPI transport takes it under `scsi_device.lock`, which gives
+  `scsi_device.lock -> ahci_port.lock`, and an ATA disk takes it under
+  `buf.lock`.
+- `ahci.lock` (spinlock, `drivers/ahci.c`) protects the port interrupt
+  status that the interrupt handler collects for each port of one
+  controller. It is the condition lock of the controller's wait queue,
+  which gives `ahci_port.lock -> ahci.lock -> waitq.lock`.

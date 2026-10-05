@@ -112,12 +112,13 @@ queue, one I/O queue pair per CPU or one in total, identify, namespaces as
 block devices. Boot test with a QEMU `nvme` device as the root disk.
 Done as R2 of `release-0.5.0.md`. Document: `docs/design/nvme.md`.
 
-### D4. AHCI
+### D4. AHCI (completed 2026-10-05)
 
 A driver for AHCI SATA controllers (PCI class 0106 interface 01): port
 detection, command lists, received FIS areas, READ and WRITE DMA EXT for
 disks, and ATAPI packet commands for CD drives. Boot test with the q35
-SATA controller as the root disk.
+SATA controller as the root disk. Done as R3 of `release-0.5.0.md` by
+adapting the AHCI code of edk2. Document: `docs/design/ahci.md`.
 
 ### D5. USB mass storage
 

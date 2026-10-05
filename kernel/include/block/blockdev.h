@@ -31,6 +31,11 @@ void blockdev_init(void);
 /* Register dev and create /dev/<name> backed by the block cache. */
 int blockdev_register(struct blockdev *dev);
 struct blockdev *blockdev_find(const char *name);
+/* The next free name of a kind of device: sda, sdb, ... for disks of the
+ * SATA and USB drivers (letters true), sr0, sr1, ... for CD drives
+ * (letters false). Each call takes a new name from the sequence of
+ * prefix. */
+void blockdev_next_name(char *name, size_t size, const char *prefix, bool letters);
 /* Fill devs with up to max registered devices in the order of their
  * registration and return the count. Devices are never removed, and the
  * pointers therefore remain valid. */

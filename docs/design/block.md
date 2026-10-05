@@ -95,6 +95,53 @@ count and flags of every buffer; `buf.lock` is a mutex locked between
 ring bookkeeping and is taken from the interrupt handler. See
 `locking.md` for the ordering.
 
+## Partial blocks (R3)
+
+The cache reads and writes only the sectors of a block that exist on the
+device. The last block of a device whose size is not a multiple of
+4 KiB, such as a CD of an odd number of 2048 byte sectors, has fewer
+sectors than the others, and the rest of its buffer is zero.
+
+## SCSI disks and CD drives (R3)
+
+`block/scsi.c` serves the drivers whose devices carry SCSI commands: the
+ATAPI drives of the AHCI driver (`ahci.md`) and, from R4, USB mass
+storage. A transport function runs one command block with a data buffer
+and a direction. It returns 0, `SCSI_CHECK_CONDITION`, or a negative
+errno when the command did not reach the device.
+
+`scsi_attach` asks INQUIRY. A peripheral device of type 0 is a disk and
+receives the next name of the sequence `sda`, `sdb`, ..., which the ATA
+disks of the AHCI driver share (`blockdev_next_name`). A device of type 5
+is a CD drive with 2048 byte sectors and the flags `BLOCKDEV_CDROM` and
+`BLOCKDEV_READONLY`, named `sr0`, `sr1`, ... Other types are refused. The
+block size of a disk comes from its first READ CAPACITY.
+
+After CHECK CONDITION the module asks REQUEST SENSE and reads the fixed or
+the descriptor format. NOT READY with the code 3Ah (medium not present)
+becomes `ENOMEDIUM`. NOT READY with the code 04h (becoming ready) is
+waited for, up to 10 seconds. UNIT ATTENTION, which follows a reset or a
+change of the medium, is answered by TEST UNIT READY and READ CAPACITY
+again. A transfer is then repeated once if the capacity did not change.
+`update_medium` sets the size of the device file and discards the cached
+blocks when the capacity changes. A drive without a medium has no
+sectors and asks again at the next request, since a medium may have
+been inserted.
+
+Transfers use READ (10) and WRITE (10), or READ (16) and WRITE (16) for
+addresses beyond 32 bits, split at the largest transfer of the
+transport. A write to a CD drive fails with `EROFS`. The flush is
+SYNCHRONIZE CACHE (10), and a device that refuses it with ILLEGAL REQUEST
+has no write cache. `scsi_detach` marks a removed device. Its block
+device remains registered without sectors, and every request fails with
+`ENODEV`.
+
+`scsi_device.lock` serializes the commands of a device and protects its
+capacity and medium state (`locking.md`).
+
+`ENOMEDIUM` (123, as on Linux) is new in the kernel and in libc, with the
+message "No medium found".
+
 ## Partitions (P4)
 
 `block/part.c` reads the GUID partition table of every disk once, from

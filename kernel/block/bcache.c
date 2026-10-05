@@ -25,10 +25,22 @@ void bcache_init(void)
               BCACHE_NBUF * BCACHE_BLOCK_SIZE / 1024);
 }
 
+/* The sectors of block that exist on dev. The last block of a device
+ * whose size is not a multiple of the block size, such as a CD of an odd
+ * number of 2048 byte sectors, has fewer sectors than the others. */
+static uint32_t block_sectors(struct blockdev *dev, uint64_t block)
+{
+    uint32_t spb = BCACHE_BLOCK_SIZE / dev->sector_size;
+    uint64_t first = block * spb;
+    if (first >= dev->nsectors)
+        return spb;
+    return (uint32_t)MIN((uint64_t)spb, dev->nsectors - first);
+}
+
 static int write_back(struct buf *b)
 {
     uint32_t spb = BCACHE_BLOCK_SIZE / b->dev->sector_size;
-    int r = blockdev_write(b->dev, b->block * spb, spb, b->data);
+    int r = blockdev_write(b->dev, b->block * spb, block_sectors(b->dev, b->block), b->data);
     if (r == 0) {
         spin_lock(&bcache_lock);
         b->dirty = false;
@@ -101,8 +113,10 @@ struct buf *bread(struct blockdev *dev, uint64_t block)
         return NULL;
     mutex_lock(&b->lock);
     if (!b->valid) {
-        uint32_t spb = BCACHE_BLOCK_SIZE / dev->sector_size;
-        if (blockdev_read(dev, block * spb, spb, b->data) < 0) {
+        uint32_t spb = BCACHE_BLOCK_SIZE / dev->sector_size, n = block_sectors(dev, block);
+        if (n < spb)
+            memset(b->data + (size_t)n * dev->sector_size, 0, (size_t)(spb - n) * dev->sector_size);
+        if (blockdev_read(dev, block * spb, n, b->data) < 0) {
             mutex_unlock(&b->lock);
             spin_lock(&bcache_lock);
             b->refcount--;

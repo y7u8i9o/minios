@@ -8,12 +8,18 @@
 #include <fs/vfs.h>
 #include <fs/devfs.h>
 #include <lib/string.h>
+#include <lib/printf.h>
 #include <klog.h>
 #include <errno.h>
 
-/* Registered devices. Protected by blockdev_lock. */
+/* Registered devices and the name sequences of blockdev_next_name.
+ * Protected by blockdev_lock. */
 static LIST_HEAD(blockdevs);
 static DEFINE_SPINLOCK(blockdev_lock);
+static struct {
+    char prefix[4];
+    unsigned next;
+} name_seqs[4];
 
 void blockdev_init(void)
 {
@@ -115,6 +121,27 @@ struct blockdev *blockdev_find(const char *name)
     }
     spin_unlock(&blockdev_lock);
     return found;
+}
+
+void blockdev_next_name(char *name, size_t size, const char *prefix, bool letters)
+{
+    unsigned n = 0;
+    spin_lock(&blockdev_lock);
+    for (size_t i = 0; i < ARRAY_SIZE(name_seqs); i++) {
+        if (!name_seqs[i].prefix[0])
+            strlcpy(name_seqs[i].prefix, prefix, sizeof name_seqs[i].prefix);
+        if (strcmp(name_seqs[i].prefix, prefix) == 0) {
+            n = name_seqs[i].next++;
+            break;
+        }
+    }
+    spin_unlock(&blockdev_lock);
+    if (!letters)
+        ksnprintf(name, size, "%s%u", prefix, n);
+    else if (n < 26)
+        ksnprintf(name, size, "%s%c", prefix, 'a' + n);
+    else
+        ksnprintf(name, size, "%s%c%c", prefix, 'a' + n / 26 - 1, 'a' + n % 26);
 }
 
 int blockdev_list(struct blockdev **devs, int max)

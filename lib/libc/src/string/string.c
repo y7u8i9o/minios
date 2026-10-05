@@ -329,6 +329,7 @@ static const char *const errors[] = {
     [EHOSTUNREACH] = "No route to host",
     [EALREADY] = "Operation already in progress",
     [EINPROGRESS] = "Operation now in progress",
+    [ENOMEDIUM] = "No medium found",
 };
 
 char *strerror(int errnum)

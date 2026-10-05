@@ -34,6 +34,15 @@
 #             device such as ",mdts=2", ahci for the SATA controller (the one of q35,
 #             an ich9-ahci on aarch64) or usb for usb-storage on its own
 #             xHCI controller
+#   cd        further CD drives on the AHCI controller (optional), one per
+#             line: "empty" for a drive without a medium, or "iso DIR
+#             [VOLUME_ID]" for an ISO 9660 image with Rock Ridge that
+#             xorriso builds from the directory DIR of the case. The
+#             images are cd0.iso, cd1.iso and so on in the output
+#             directory, and the post script sees the first as CDIMG. On
+#             x86_64 the drives use the ports 3 to 5 of the q35 controller,
+#             whose port 2 has the boot CD. On aarch64 they use an
+#             ich9-ahci controller of their own
 #   usb       an xHCI controller and USB devices on it (optional): one line,
 #             the controller with its properties followed by the devices,
 #             for example "qemu-xhci,msix=off usb-kbd usb-tablet"
@@ -60,7 +69,7 @@
 #             "<peer port> <guest port>" to PEER_READY once it listens and
 #             is terminated when QEMU has exited, and the post script sees
 #             PEER_LOG and PEER_READY
-#   post      executable run after QEMU exits with DISK, SERIAL, EXITCODE,
+#   post      executable run after QEMU exits with DISK, CDIMG, SERIAL, EXITCODE,
 #             TOP and BUILD in the environment (optional)
 #   diskboot  boots the case's disk instead of the CD (optional), whose
 #             boot loader the firmware loads
@@ -79,6 +88,7 @@ CASE="$3"
 NAME="$(basename "$CASE")"
 TOP="$(cd "$(dirname "$0")/.." && pwd)"
 QEMU="${QEMU:-qemu-system-${ARCH:-x86_64}}"
+XORRISO="${XORRISO:-xorriso}"
 OUTDIR="$BUILD/$NAME"
 if [ -f "$CASE/arches" ] && ! grep -qx "${ARCH:-x86_64}" "$CASE/arches"; then
     echo "SKIP $NAME (runs on $(tr '\n' ' ' < "$CASE/arches" | sed 's/ *$//') only)"
@@ -132,7 +142,7 @@ clone() {
 }
 cleanup() {
     stop_peer
-    rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso"
+    rm -f "$OUTDIR/disk.img" "$OUTDIR/swap.img" "$OUTDIR/disk2.img" "$OUTDIR"/fat*.img "$OUTDIR/test.iso" "$OUTDIR"/cd*.iso
     [ -n "$QMPSOCK" ] && rm -f "$QMPSOCK"
 }
 trap cleanup EXIT
@@ -250,6 +260,31 @@ if [ -f "$OUTDIR/disk.img" ]; then
         *) fail "unknown diskif $DISKIF" ;;
     esac
     DISKFLAGS="-drive file=$OUTDIR/disk.img,if=none,id=vd0,format=raw $ROOTDEV"
+fi
+CDIMG=""
+if [ -f "$CASE/cd" ]; then
+    NCD=0
+    while read -r kind dir volid; do
+        [ -z "$kind" ] && continue
+        if [ "${ARCH:-x86_64}" = x86_64 ]; then
+            CDBUS="ide.$((NCD + 3))"
+        else
+            [ "$NCD" = 0 ] && DISKFLAGS="$DISKFLAGS -device ich9-ahci,id=cdahci"
+            CDBUS="cdahci.$NCD"
+        fi
+        case "$kind" in
+            empty) DISKFLAGS="$DISKFLAGS -device ide-cd,bus=$CDBUS" ;;
+            iso)
+                IMG="$OUTDIR/cd$NCD.iso"
+                "$XORRISO" -as mkisofs -R -V "${volid:-MINIOS_TEST}" -o "$IMG" "$CASE/$dir" > "$OUTDIR/cd$NCD.log" 2>&1 ||
+                    fail "cd image, see $OUTDIR/cd$NCD.log"
+                [ -z "$CDIMG" ] && CDIMG="$IMG"
+                DISKFLAGS="$DISKFLAGS -drive file=$IMG,if=none,id=cd$NCD,media=cdrom,readonly=on -device ide-cd,drive=cd$NCD,bus=$CDBUS"
+                ;;
+            *) fail "unknown cd kind $kind" ;;
+        esac
+        NCD=$((NCD + 1))
+    done < "$CASE/cd"
 fi
 NDISK=1
 if [ -f "$CASE/swap" ]; then
@@ -420,7 +455,7 @@ if [ -f "$CASE/reject" ]; then
     done < "$CASE/reject"
 fi
 if [ -x "$CASE/post" ]; then
-    if ! DISK="$OUTDIR/disk.img" DISK2="$DISK2" FATIMG="$FATIMG" FATIMGS="$FATIMGS" SERIAL="$SERIAL" \
+    if ! DISK="$OUTDIR/disk.img" DISK2="$DISK2" FATIMG="$FATIMG" FATIMGS="$FATIMGS" CDIMG="$CDIMG" SERIAL="$SERIAL" \
          PEER_LOG="$PEER_LOG" PEER_READY="$PEER_READY" CAPTURE="$OUTDIR/capture.pcap" \
          EXITCODE="$(cat "$OUTDIR/exitcode")" TOP="$TOP" BUILD="$(dirname "$BUILD")" "$CASE/post"; then
         echo "FAIL $NAME: post check failed"

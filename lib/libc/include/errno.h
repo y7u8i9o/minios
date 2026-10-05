@@ -73,3 +73,5 @@ int *__errno_location(void);
 #define EHOSTUNREACH 113
 #define EALREADY     114
 #define EINPROGRESS  115
+/* R3: a drive without a medium, with the value of Linux. */
+#define ENOMEDIUM    123
