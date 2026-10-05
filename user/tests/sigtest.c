@@ -122,15 +122,16 @@ int main(void)
     status = child_status(pid);
     CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 42, "SEGV handler status 0x%x", status);
 
-    /* SIGPIPE terminates a writer without readers by default. */
+    /* SIGPIPE terminates a writer without readers by default. The read end
+     * is closed before the fork. Otherwise a child that runs first writes
+     * while the parent still has a reader. */
     pipe(p);
+    close(p[0]);
     pid = fork();
     if (pid == 0) {
-        close(p[0]);
         write(p[1], "x", 1);
         _exit(1);
     }
-    close(p[0]);
     close(p[1]);
     status = child_status(pid);
     CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGPIPE, "SIGPIPE status 0x%x", status);
