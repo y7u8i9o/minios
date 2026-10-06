@@ -37,7 +37,6 @@ static void test_console_sgr(void)
 }
 KTEST_DEFINE("console_sgr", test_console_sgr);
 
-
 /* The GPU driver took over at boot; the console follows a mode change
  * done from the kernel; fbmodetest changes the mode through the ioctl,
  * draws and flushes. */
@@ -133,9 +132,8 @@ KTEST_DEFINE("input_tablet", test_input_tablet);
 static void test_gui_tablet(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
+    /* The first frame of X12 draws the desktop and the cursor. */
     ktest_wait_idle(1200);
     int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     /* x = ax * sw / 32768, so ax = x * 32768 / sw lands exactly. */
@@ -162,9 +160,8 @@ static void test_gui_scale2(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(fb_screen_scale == 2, "scale %u, expected 2 (video=WxH@2)", fb_screen_scale);
     int S = 2;
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
+    /* The first frame of X12 draws the desktop and the cursor. */
     ktest_wait_idle(1200);
     ktest_assert(device_pixel(0, 0) == 0x00306080, "desktop pixel %08x", device_pixel(0, 0));
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
@@ -225,8 +222,7 @@ static void set_mode(const char *mode)
 static void test_gui_modes(void)
 {
     ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
-    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
-    ktest_wait_idle(1200);
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
     ktest_wait_idle(500);
     struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });

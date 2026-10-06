@@ -93,6 +93,8 @@ void proc_begin_exit(struct proc *p, int status);
 /* Free a zombie's threads and address space, return its status. Waits for
  * the process to exit first. */
 int proc_reap(struct proc *p);
+/* Whether p has exited. A zombie that awaits proc_reap counts as exited. */
+bool proc_exited(struct proc *p);
 /* Reap every child of parent, waiting for each to exit. The kernel tests
  * use it for the children that a program under test left behind, which
  * the kernel process adopts when no init runs. */

@@ -44,6 +44,11 @@ M23 adds the kernel primitives the display server rework relies on.
   both ends of a socket pair. `struct conn` records both under
   `conn.lock`, and `struct unix_sock` retains the listener's under its
   `lock`.
+- `unix_socket_accepting(name)` reports whether a thread waits for
+  connections on the listener bound to `name`. The thread waits in
+  `accept` on the listener's `accept_waitq`, or in a `poll` call that has
+  an entry on the listener's poll source. The GUI boot tests use the
+  result as the readiness signal of X12 (`gui.md`).
 
 ## Anonymous shared memory (`memfd_create`, `ftruncate`)
 
