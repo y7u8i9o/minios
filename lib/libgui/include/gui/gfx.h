@@ -58,6 +58,15 @@ void gfx_text_font_scaled(struct surface *s, const struct font *f, int x, int y,
                           uint32_t bg, int scale);
 int gfx_text_width_font_scaled(const struct font *f, const char *text, int n, int scale);
 int gfx_text_index_font_scaled(const struct font *f, const char *text, int n, int px, int scale);
+/* A line of text shaped once at an integer device scale, for repeated
+ * drawing without shaping again (the titles of X12). The width is in
+ * device pixels; gfx_shaped_draw draws at device pixels as
+ * gfx_text_font_scaled does. NULL without memory. */
+struct gfx_shaped;
+struct gfx_shaped *gfx_text_shape(const struct font *f, const char *text, int scale);
+int gfx_shaped_width(const struct gfx_shaped *t);
+void gfx_shaped_draw(struct surface *s, const struct gfx_shaped *t, int x, int y, uint32_t fg);
+void gfx_shaped_free(struct gfx_shaped *t);
 /* Width of the first n characters (n < 0: the whole string). */
 int gfx_text_width_font(const struct font *f, const char *text, int n);
 /* Index of the character boundary nearest to pixel offset px. */
@@ -77,6 +86,10 @@ void gfx_line(struct surface *s, int x0, int y0, int x1, int y1, uint32_t color)
 /* Draw text with the 8x16 font; bg 0xffffffff means transparent. */
 void gfx_text(struct surface *s, int x, int y, const char *text, uint32_t fg, uint32_t bg);
 int gfx_text_width(const char *text);
+/* An antialiased disc of the colour over the square of size device pixels
+ * at (x, y): the disc of diameter size - inset centred in it, clipped to
+ * clip (device pixels) when not NULL and to s (pixel_disc_table). */
+void gfx_disc(struct surface *s, int x, int y, int size, int inset, uint32_t color, const struct rect *clip);
 /* Copy src into dst at (dx, dy), restricted to the clip rectangle of dst. */
 void gfx_blit(struct surface *dst, int dx, int dy, const struct surface *src, const struct rect *clip);
 /* Copy a rectangle of src to the same place in dst. */

@@ -3,6 +3,7 @@
  * buttons are small circles with symbolic icons, the frame has a
  * hairline outline and a light shadow shifted down. */
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include <gui/paint.h>
 #include <gui/pixel.h>
@@ -18,12 +19,6 @@
 #define BUTTON_BG_HOVER    0x00c9c9c9
 #define BUTTON_BG_BACKDROP 0x00e6e6e6
 #define TITLE_PX 13
-/* Shadow: reach in logical pixels, downward shift, peak alpha out of 255. */
-#define SHADOW_REACH 8
-#define SHADOW_DY 2
-#define SHADOW_PEAK 64
-#define SHADOW_PEAK_BACKDROP 32
-#define OUTLINE_ALPHA 51       /* 20 percent black */
 
 int csd_margin(const struct csd *c)
 {
@@ -123,70 +118,92 @@ int csd_input_region(const struct csd *c, int w, int h, struct rect out[5])
 
 /* ---- painting ---- */
 
-/* Coverage (0..1) of the device pixel (x, y) by the rectangle F with all
- * four corners rounded by r. */
-static float cover(int x, int y, struct rect F, float r)
+/* The chrome around the frame: black with the alpha of the outline, a
+ * ring S device pixels wide just outside the frame, over the shadow. Both
+ * depend only on the distance of a pixel centre to a rounded rectangle,
+ * so they come from two profiles by the squared distance, with 16 bits
+ * per value so that only the final alpha is rounded. half_offset
+ * gives twice the distance of the centre of pixel x to the interval
+ * [lo, hi] of the inner rectangle of a rounded rectangle. With DX and DY
+ * of a pixel, D2 = DX * DX + DY * DY is an integer, and the distance of
+ * the centre to the rounded rectangle is sqrt(D2) / 2 - R. */
+static inline int half_offset(int x, int lo, int hi)
 {
-    if (!rect_contains(F, x, y))
-        return 0;
-    if (r <= 0)
-        return 1;
-    float px = (float)x + 0.5f, py = (float)y + 0.5f, cx, cy;
-    if (px < (float)F.x + r) cx = (float)F.x + r;
-    else if (px > (float)(F.x + F.w) - r) cx = (float)(F.x + F.w) - r;
-    else return 1;
-    if (py < (float)F.y + r) cy = (float)F.y + r;
-    else if (py > (float)(F.y + F.h) - r) cy = (float)(F.y + F.h) - r;
-    else return 1;
-    float dx = px - cx, dy = py - cy;
-    float v = r + 0.5f - sqrtf(dx * dx + dy * dy);
-    return v < 0 ? 0 : v > 1 ? 1 : v;
+    int c = 2 * x + 1;
+    return c < 2 * lo ? 2 * lo - c : c > 2 * hi ? c - 2 * hi : 0;
 }
 
-/* Distance (device pixels, 0 inside) from a pixel centre to the rounded
- * rectangle F. */
-static float distance(int x, int y, struct rect F, float r)
+struct chrome_profile {
+    int S, R, valid;
+    int n_outline, n_shadow;
+    uint16_t *outline, *shadow;     /* alpha by D2, 65535 for opaque */
+};
+/* One profile for active windows and one for the others. The thread that
+ * draws owns them, the only one in a libgui program. */
+static struct chrome_profile profiles[2];
+
+static const struct chrome_profile *chrome_profile(int S, int R, int active)
 {
-    float px = (float)x + 0.5f, py = (float)y + 0.5f;
-    float x0 = (float)F.x + r, y0 = (float)F.y + r, x1 = (float)(F.x + F.w) - r, y1 = (float)(F.y + F.h) - r;
-    float dx = px < x0 ? x0 - px : px > x1 ? px - x1 : 0;
-    float dy = py < y0 ? y0 - py : py > y1 ? py - y1 : 0;
-    float d = sqrtf(dx * dx + dy * dy) - r;
-    return d < 0 ? 0 : d;
+    struct chrome_profile *p = &profiles[active ? 1 : 0];
+    if (p->valid && p->S == S && p->R == R)
+        return p;
+    free(p->outline);
+    free(p->shadow);
+    p->valid = 0;
+    int ro = 2 * (R + S) + 2, rs = 2 * (R + CSD_SHADOW_REACH * S) + 2;
+    p->n_outline = ro * ro;
+    p->n_shadow = rs * rs;
+    p->outline = malloc((size_t)p->n_outline * sizeof p->outline[0]);
+    p->shadow = malloc((size_t)p->n_shadow * sizeof p->shadow[0]);
+    if (!p->outline || !p->shadow)
+        return NULL;
+    float ring = (float)S, reach = (float)(CSD_SHADOW_REACH * S);
+    float peak = (float)(active ? CSD_SHADOW_PEAK : CSD_SHADOW_PEAK_BACKDROP);
+    for (int d2 = 0; d2 < p->n_outline; d2++) {
+        float d = sqrtf((float)d2) / 2.0f - (float)R;
+        d = d < 0 ? 0 : d;
+        float o = d + 0.5f < ring ? 1 : d - 0.5f < ring ? ring - (d - 0.5f) : 0;
+        p->outline[d2] = (uint16_t)((float)CSD_OUTLINE_ALPHA / 255.0f * o * 65535.0f + 0.5f);
+    }
+    for (int d2 = 0; d2 < p->n_shadow; d2++) {
+        float d = sqrtf((float)d2) / 2.0f - (float)R;
+        d = d < 0 ? 0 : d;
+        float t = d >= reach ? 0 : 1.0f - d / reach;
+        p->shadow[d2] = (uint16_t)(peak / 255.0f * t * t * 65535.0f + 0.5f);
+    }
+    p->S = S;
+    p->R = R;
+    p->valid = 1;
+    return p;
 }
 
-/* The chrome under and around the frame at a device pixel: black with
- * the alpha of the outline (a ring one logical pixel wide just outside
- * the frame) over the shadow. */
-static uint32_t chrome_px(int x, int y, struct rect F, float R, int S, int active)
+/* The alpha of the chrome at a device pixel: the outline over the shadow,
+ * which lies CSD_SHADOW_DY logical pixels lower. */
+static uint32_t chrome_alpha(const struct chrome_profile *p, struct rect F, int x, int y)
 {
-    float d = distance(x, y, F, R);
-    float ring = (float)S;
-    float o = d + 0.5f < ring ? 1 : d - 0.5f < ring ? ring - (d - 0.5f) : 0;
-    struct rect shadow = { F.x, F.y + SHADOW_DY * S, F.w, F.h };
-    float ds = distance(x, y, shadow, R), reach = (float)(SHADOW_REACH * S);
-    float t = ds >= reach ? 0 : 1.0f - ds / reach;
-    float as = (float)(active ? SHADOW_PEAK : SHADOW_PEAK_BACKDROP) / 255.0f * t * t;
-    float ao = (float)OUTLINE_ALPHA / 255.0f * o;
-    float a = ao + as * (1.0f - ao);
-    int ai = (int)(a * 255.0f + 0.5f);
-    return (uint32_t)(ai < 0 ? 0 : ai > 255 ? 255 : ai) << 24;
+    int R = p->R, sy = F.y + CSD_SHADOW_DY * p->S;
+    long dx = half_offset(x, F.x + R, F.x + F.w - R);
+    long dy = half_offset(y, F.y + R, F.y + F.h - R), ds = half_offset(y, sy + R, sy + F.h - R);
+    long d2 = dx * dx + dy * dy, d2s = dx * dx + ds * ds;
+    uint64_t ao = d2 < p->n_outline ? p->outline[d2] : 0;
+    uint64_t as = d2s < p->n_shadow ? p->shadow[d2s] : 0;
+    uint64_t a = ao + (as * (65535 - ao) + 32767) / 65535;
+    return (uint32_t)((a * 255 + 32767) / 65535);
 }
 
-/* An opaque colour with coverage cov over the chrome pixel (straight alpha). */
-static uint32_t over(uint32_t chrome, uint32_t rgb, float cov)
+/* An opaque colour with coverage cov (0 to 255) over black chrome of
+ * alpha ac, with straight alpha. */
+static uint32_t over(uint32_t ac, uint32_t rgb, uint32_t cov)
 {
-    if (cov >= 1)
+    if (cov >= 255)
         return 0xff000000u | (rgb & 0x00ffffff);
-    float ac = (float)(chrome >> 24) / 255.0f;
-    float a = cov + ac * (1.0f - cov);
-    if (a <= 0)
+    uint32_t a = cov + pixel_div255(ac * (255 - cov));
+    if (!a)
         return 0;
-    float k = cov / a;
-    uint32_t r = (uint32_t)((float)((rgb >> 16) & 0xff) * k + 0.5f);
-    uint32_t g = (uint32_t)((float)((rgb >> 8) & 0xff) * k + 0.5f);
-    uint32_t b = (uint32_t)((float)(rgb & 0xff) * k + 0.5f);
-    return (uint32_t)(a * 255.0f + 0.5f) << 24 | r << 16 | g << 8 | b;
+    uint32_t r = ((rgb >> 16 & 0xff) * cov + a / 2) / a;
+    uint32_t g = ((rgb >> 8 & 0xff) * cov + a / 2) / a;
+    uint32_t b = ((rgb & 0xff) * cov + a / 2) / a;
+    return a << 24 | r << 16 | g << 8 | b;
 }
 
 static const struct font *title_font;
@@ -199,24 +216,6 @@ static void fonts(void)
     theme_init_default(&csd_theme);
     struct font *f = gfx_font_open_ttf(csd_theme.font_path, TITLE_PX);
     title_font = f ? f : gfx_font_builtin();
-}
-
-/* A disc of the button's diameter less two pixels, antialiased, drawn
- * onto the header colour. */
-static void disc(struct surface *buf, int S, struct rect b, uint32_t color, uint32_t bg)
-{
-    struct rect r = rect_intersect(rect_scale(b, S), (struct rect){ 0, 0, buf->width, buf->height });
-    float cx = (float)(b.x * S) + (float)(b.w * S) / 2.0f, cy = (float)(b.y * S) + (float)(b.h * S) / 2.0f;
-    float rad = (float)((b.w - 2) * S) / 2.0f;
-    for (int y = r.y; y < r.y + r.h; y++)
-        for (int x = r.x; x < r.x + r.w; x++) {
-            float dx = (float)x + 0.5f - cx, dy = (float)y + 0.5f - cy;
-            float c = rad + 0.5f - sqrtf(dx * dx + dy * dy);
-            if (c <= 0)
-                continue;
-            uint32_t a = c >= 1 ? 255 : (uint32_t)(c * 255.0f + 0.5f);
-            buf->pixels[(size_t)y * buf->stride + x] = pixel_blend(bg, color, a);
-        }
 }
 
 static struct rect header_paint(struct surface *buf, int S, const struct csd *c, int w, int h)
@@ -252,7 +251,8 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
         struct rect b = button_rect(c, w, h, n);
         int zone = n == 0 ? CSD_CLOSE : n == 1 ? CSD_MAXIMIZE : CSD_MINIMIZE;
         uint32_t bb = !c->active ? BUTTON_BG_BACKDROP : c->hover == zone ? BUTTON_BG_HOVER : BUTTON_BG;
-        disc(buf, S, b, bb, bg);
+        struct rect d = rect_scale(b, S);
+        gfx_disc(buf, d.x, d.y, d.w, 2 * S, bb, NULL);
         int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         if (n == 0) {
             painter_line(&p, cx - 3, cy - 3, cx + 2, cy + 2, fg);
@@ -285,7 +285,7 @@ struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w
         return (struct rect){ 0, 0, 0, 0 };
     int S = scale;
     struct rect F = rect_scale(csd_frame(c, w, h), S);
-    float R = (float)(radius(c) * S);
+    const struct chrome_profile *prof = chrome_profile(S, radius(c) * S, c->active);
     struct rect all = { 0, 0, buf->width, buf->height };
     /* The margins: shadow and outline, transparent further out. */
     struct rect band[4] = {
@@ -296,7 +296,7 @@ struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w
         struct rect r = rect_intersect(band[i], all);
         for (int y = r.y; y < r.y + r.h; y++)
             for (int x = r.x; x < r.x + r.w; x++)
-                buf->pixels[(size_t)y * buf->stride + x] = chrome_px(x, y, F, R, S, c->active);
+                buf->pixels[(size_t)y * buf->stride + x] = prof ? chrome_alpha(prof, F, x, y) << 24 : 0;
     }
     header_paint(buf, S, c, w, h);
     return all;
@@ -315,7 +315,8 @@ void csd_copy(struct surface *dst, const struct surface *src, struct rect r, int
     int S = scale;
     struct rect F = rect_scale(csd_frame(c, w, h), S);
     int Rd = radius(c) * S;
-    float R = (float)Rd;
+    const struct chrome_profile *prof = chrome_profile(S, Rd, c->active);
+    const uint8_t *corner = pixel_corner_table(Rd);
     for (int y = r.y; y < r.y + r.h; y++) {
         const uint32_t *from = src->pixels + (size_t)y * src->stride;
         uint32_t *to = dst->pixels + (size_t)y * dst->stride;
@@ -333,8 +334,8 @@ void csd_copy(struct surface *dst, const struct surface *src, struct rect r, int
         int corner_row = Rd > 0 && (y < F.y + Rd || y >= F.y + F.h - Rd);
         for (int x = x0; x < x1; x++) {
             if (corner_row && (x < F.x + Rd || x >= F.x + F.w - Rd)) {
-                float cov = cover(x, y, F, R);
-                to[x] = over(chrome_px(x, y, F, R, S, c->active), from[x], cov);
+                uint32_t cov = pixel_round_rect_coverage(corner, Rd, F.x, F.y, F.w, F.h, 15, x, y);
+                to[x] = over(prof ? chrome_alpha(prof, F, x, y) : 0, from[x], cov);
             } else {
                 to[x] = from[x] | 0xff000000u;
             }

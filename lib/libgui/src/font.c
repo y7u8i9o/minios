@@ -229,17 +229,9 @@ static int shape_outline(const struct font *f, const char *text, int n,
     return count < max ? count : max;
 }
 
-static void text_outline(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg,
-                         int scale)
+static void draw_glyphs(struct surface *s, const struct font *f, int x, int y, const struct gui_glyph *sh, int count,
+                        uint32_t fg, int scale)
 {
-    int n = (int)strlen(text);
-    struct gui_glyph *sh = malloc((size_t)(n + 1) * sizeof *sh);
-    if (!sh)
-        return;
-    int32_t width;
-    int count = shape_outline(f, text, n, sh, n, &width, scale);
-    if (bg != 0xffffffffu)
-        gfx_fill_rect(s, x, y, (width + 63) >> 6, f->height * scale, bg);
     for (int i = 0; i < count; i++) {
         const struct font *use = sh[i].font;
         const struct font_glyph *g = font_render(use->outline, sh[i].glyph, use->px * scale);
@@ -249,7 +241,78 @@ static void text_outline(struct surface *s, const struct font *f, int x, int y, 
         int gy = y + f->ascent * scale + g->top;
         gfx_blend_mask(s, gx, gy, g->bitmap, g->width, g->height, fg);
     }
-    free(sh);
+}
+
+/* Shaping takes an array on the stack for the glyphs of short strings,
+ * which are most of the strings of an interface. */
+#define SHAPE_STACK 64
+
+static void text_outline(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg,
+                         int scale)
+{
+    int n = (int)strlen(text);
+    struct gui_glyph local[SHAPE_STACK];
+    struct gui_glyph *sh = n <= SHAPE_STACK ? local : malloc((size_t)(n + 1) * sizeof *sh);
+    if (!sh)
+        return;
+    int32_t width;
+    int count = shape_outline(f, text, n, sh, n, &width, scale);
+    if (bg != 0xffffffffu)
+        gfx_fill_rect(s, x, y, (width + 63) >> 6, f->height * scale, bg);
+    draw_glyphs(s, f, x, y, sh, count, fg, scale);
+    if (sh != local)
+        free(sh);
+}
+
+struct gfx_shaped {
+    const struct font *font;
+    int scale, count;
+    int32_t width;                  /* 26.6 device pixels for an outline font, device pixels else */
+    char *text;                     /* a bitmap font draws the text itself */
+    struct gui_glyph glyphs[];
+};
+
+struct gfx_shaped *gfx_text_shape(const struct font *f, const char *text, int scale)
+{
+    if (scale < 1)
+        scale = 1;
+    int n = (int)strlen(text);
+    struct gfx_shaped *t = calloc(1, sizeof *t + (f->outline ? (size_t)(n + 1) * sizeof t->glyphs[0] : 0));
+    if (!t)
+        return NULL;
+    t->font = f;
+    t->scale = scale;
+    if (f->outline) {
+        t->count = shape_outline(f, text, n, t->glyphs, n, &t->width, scale);
+        return t;
+    }
+    t->text = strdup(text);
+    if (!t->text) {
+        free(t);
+        return NULL;
+    }
+    t->width = gfx_text_width_font_scaled(f, text, -1, scale);
+    return t;
+}
+
+int gfx_shaped_width(const struct gfx_shaped *t)
+{
+    return t->font->outline ? (t->width + 32) >> 6 : t->width;
+}
+
+void gfx_shaped_draw(struct surface *s, const struct gfx_shaped *t, int x, int y, uint32_t fg)
+{
+    if (t->font->outline)
+        draw_glyphs(s, t->font, x, y, t->glyphs, t->count, fg, t->scale);
+    else
+        gfx_text_font_scaled(s, t->font, x, y, t->text, fg, 0xffffffffu, t->scale);
+}
+
+void gfx_shaped_free(struct gfx_shaped *t)
+{
+    if (t)
+        free(t->text);
+    free(t);
 }
 
 void gfx_text_font_scaled(struct surface *s, const struct font *f, int x, int y, const char *text, uint32_t fg,

@@ -322,3 +322,17 @@ frames remain at least that far apart. `comp_idle` measures 17 wakeups in
 five idle seconds with one window, which the pings of the window and the
 connection of `compstat` cause. Before, the periodic timer woke X12
 about 320 times in five seconds.
+
+## G7: decorations without square roots per pixel (2026-10-06)
+
+The antialiased shapes of the decorations come from tables computed once
+per size: `pixel_corner_table` for rounded corners, `pixel_disc_table`
+with `gfx_disc` for the round buttons, and in `csd.c` two profiles of
+the outline and the shadow by the squared distance to the frame. Before
+G7, X12 computed a square root for every pixel of a corner square and of
+a button in every frame that touched them, and libgui computed two
+square roots and float blends for every pixel of its chrome at each
+resize and at each corner of every copy. X12 stores the title of each
+toplevel shaped at the screen scale and draws it with
+`painter_text_shaped`. `text_outline` shapes strings of up to 64
+glyphs into an array on the stack instead of an allocation.

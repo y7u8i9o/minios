@@ -159,7 +159,12 @@ neighbour through the buffer scale and transform), so an unscaled client
 is doubled and a scaled one is sharp. The cursor is an ARGB image at the
 screen scale, shadows are computed in device pixels, and
 `decor_draw` paints frames, buttons and the title through a painter at
-the screen scale. `backend_present` flushes the device rectangles of a
+the screen scale. Since G7 of `docs/plan/compositor-performance.md` the
+rounded corners and the button discs come from the coverage tables of
+`gui/pixel.h` (`pixel_corner_table`, `gfx_disc`), and every toplevel
+stores its title shaped at the screen scale (`gfx_text_shape`), shaped
+again only after a change of the title or of the scale. No square root
+or float blend runs per pixel. `backend_present` flushes the device rectangles of a
 frame in one `FBIO_FLUSH_RECTS` request. On a device with
 `FB_CAP_FLUSH` and the native format, which virtio-gpu offers, the back
 buffer is the framebuffer mapping itself: the device shows nothing

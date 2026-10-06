@@ -84,6 +84,56 @@ void pixel_sample_over(uint32_t *to, const uint32_t *from, long step, int n, str
  * of the walk: pixel_sample_mask followed by pixel_mask. */
 void pixel_mask_sample(uint32_t *to, const uint8_t *mask, int n, uint32_t color, struct pixel_walk *w);
 
+/* Antialiased shapes from coverage tables (G7 of
+ * docs/plan/compositor-performance.md). A coverage is 0 to 255; 255 means
+ * that the shape covers the pixel completely, so a pixel partly covered
+ * has at most 254. The tables are computed once per size with the float
+ * formula c = r + 0.5 - distance of the pixel centre from the centre of
+ * the arc, and cached for the life of the process. The cache belongs to
+ * the thread that draws, which is the only one in a libgui program and in
+ * X12. */
+
+/* The coverage of the r by r pixels of a corner square by a quarter circle
+ * of radius r: entry j * r + i for the pixel i columns and j rows away from
+ * the outer corner. NULL for r < 1 or without memory. */
+const uint8_t *pixel_corner_table(int r);
+/* The coverage of the size by size pixels of a square by the disc of
+ * diameter size - inset centred in it: entry j * size + i. NULL for a size
+ * below 1 or without memory. */
+const uint8_t *pixel_disc_table(int size, int inset);
+
+#define PIXEL_CORNER_TL 1
+#define PIXEL_CORNER_TR 2
+#define PIXEL_CORNER_BL 4
+#define PIXEL_CORNER_BR 8
+/* The coverage of the pixel (x, y) by the rectangle with the left edge x0,
+ * the top edge y0 and the size w by h, whose corners in the mask corners
+ * are rounded with radius r; table is pixel_corner_table(r). */
+static inline uint32_t pixel_round_rect_coverage(const uint8_t *table, int r, int x0, int y0, int w, int h,
+                                                 int corners, int x, int y)
+{
+    if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h)
+        return 0;
+    if (r <= 0 || !table)
+        return 255;
+    int i = x - x0, j = y - y0, left = 1;
+    if (i >= r) {
+        i = x0 + w - 1 - x;
+        left = 0;
+        if (i >= r)
+            return 255;
+    }
+    int top = 1;
+    if (j >= r) {
+        j = y0 + h - 1 - y;
+        top = 0;
+        if (j >= r)
+            return 255;
+    }
+    int corner = top ? (left ? PIXEL_CORNER_TL : PIXEL_CORNER_TR) : (left ? PIXEL_CORNER_BL : PIXEL_CORNER_BR);
+    return corners & corner ? table[j * r + i] : 255;
+}
+
 /* A framebuffer format that is not 0x00RRGGBB in 32 bits: 3 or 4 bytes
  * per pixel, and the size and position of each colour channel. */
 struct pixel_format {

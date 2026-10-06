@@ -89,33 +89,12 @@ static struct rect clip_dev(struct rect logical)
     return rect_intersect(rect_scale(logical, screen_scale), (struct rect){ 0, 0, back.width, back.height });
 }
 
-/* c over d with the coverage t (0 to 1) of the antialiased shapes. */
-static inline uint32_t mix(uint32_t d, uint32_t c, float t)
+/* The coverage (0 to 255) of the device pixel (x, y) by the rectangle F
+ * whose two top corners are rounded with radius r (pixel_corner_table). */
+static uint32_t top_coverage(struct rect F, int r, int x, int y)
 {
-    return pixel_blend(d, c, t >= 1.0f ? 255 : (uint32_t)(t * 255.0f + 0.5f));
-}
-
-/* Coverage (0..1) of the device pixel (x, y) by the rectangle F whose
- * two top corners are rounded with radius r. */
-static float round_coverage(int x, int y, struct rect F, float r)
-{
-    if (!rect_contains(F, x, y))
-        return 0;
-    float px = (float)x + 0.5f, py = (float)y + 0.5f, cx, cy;
-    if (r <= 0)
-        return 1;
-    if (py > (float)F.y + r)
-        return 1;
-    if (px < (float)F.x + r)
-        cx = (float)F.x + r;
-    else if (px > (float)(F.x + F.w) - r)
-        cx = (float)(F.x + F.w) - r;
-    else
-        return 1;
-    cy = (float)F.y + r;
-    float dx = px - cx, dy = py - cy;
-    float c = r + 0.5f - sqrtf(dx * dx + dy * dy);
-    return c < 0 ? 0 : c > 1 ? 1 : c;
+    return pixel_round_rect_coverage(pixel_corner_table(r), r, F.x, F.y, F.w, F.h, PIXEL_CORNER_TL | PIXEL_CORNER_TR,
+                                     x, y);
 }
 
 /* Shadow strength by the squared distance (device pixels) to the
@@ -149,7 +128,6 @@ static void shade_table(int S)
 static void shade_rect(struct rect r, struct rect F, struct rect shape, int R, int peak)
 {
     int x0 = shape.x + R, x1 = shape.x + shape.w - 1 - R, y0 = shape.y + R, y1 = shape.y + shape.h - 1 - R;
-    float Rf = (float)R;
     for (int y = r.y; y < r.y + r.h; y++) {
         int dy = y < y0 ? y0 - y : y > y1 ? y - y1 : 0;
         int in_top = y >= F.y && y < F.y + R;
@@ -157,7 +135,7 @@ static void shade_rect(struct rect r, struct rect F, struct rect shape, int R, i
         for (int x = r.x; x < r.x + r.w; x++) {
             if (in_top && x >= F.x && x < F.x + F.w) {
                 int corner = x < F.x + R || x >= F.x + F.w - R;
-                if (!corner || round_coverage(x, y, F, Rf) >= 1)
+                if (!corner || top_coverage(F, R, x, y) == 255)
                     continue;
             }
             int dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
@@ -206,22 +184,11 @@ static struct rect grip_rect(const struct csurface *s)
     return r;
 }
 
-/* An antialiased disc inside the logical rect b, inset by one pixel. */
+/* An antialiased disc inside the logical square b, inset by one pixel. */
 static void draw_disc(struct rect b, struct rect clip, uint32_t color)
 {
-    int S = screen_scale;
-    struct rect r = clip_dev(rect_intersect(b, clip));
-    float cx = (float)(b.x * S) + (float)(b.w * S) / 2.0f, cy = (float)(b.y * S) + (float)(b.h * S) / 2.0f;
-    float rad = (float)((b.w - 2) * S) / 2.0f;
-    for (int y = r.y; y < r.y + r.h; y++)
-        for (int x = r.x; x < r.x + r.w; x++) {
-            float dx = (float)x + 0.5f - cx, dy = (float)y + 0.5f - cy;
-            float c = rad + 0.5f - sqrtf(dx * dx + dy * dy);
-            if (c <= 0)
-                continue;
-            uint32_t *p = &back.pixels[(size_t)y * back.stride + x];
-            *p = mix(*p, color, c);
-        }
+    struct rect d = rect_scale(b, screen_scale), c = clip_dev(clip);
+    gfx_disc(&back, d.x, d.y, d.w, 2 * screen_scale, color, &c);
 }
 
 /* The title is drawn through a painter at the screen scale with the
@@ -246,6 +213,27 @@ void decor_init(void)
     gfx_text_width_font_scaled(title_font, "The quick brown fox jumps over the lazy dog 0123456789", -1, screen_scale);
 }
 
+/* The title of t shaped at the screen scale, shaped again after a change
+ * of the title or of the scale. NULL without a title. */
+static const struct gfx_shaped *shaped_title(struct toplevel *t)
+{
+    if (!t->title[0])
+        return NULL;
+    if (!t->title_shape || t->title_shape_scale != screen_scale || strcmp(t->title_shape_text, t->title) != 0) {
+        gfx_shaped_free(t->title_shape);
+        t->title_shape = gfx_text_shape(title_font, t->title, screen_scale);
+        t->title_shape_scale = screen_scale;
+        strcpy(t->title_shape_text, t->title);
+    }
+    return t->title_shape;
+}
+
+void decor_free(struct toplevel *t)
+{
+    gfx_shaped_free(t->title_shape);
+    t->title_shape = NULL;
+}
+
 void decor_draw(struct csurface *s, struct rect clip)
 {
     struct rect frame = decor_frame(s);
@@ -264,21 +252,20 @@ void decor_draw(struct csurface *s, struct rect clip)
      * the border colour, the bar inset by the border, blended over the
      * shadow. The rest of the bar and the border are plain fills. */
     struct rect F = rect_scale(frame, screen_scale), inner = { F.x + S, F.y + S, F.w - 2 * S, F.h - S };
-    int rad = radius(s), Rd = rad * S;
-    float R = (float)Rd;
+    int rad = radius(s), Rd = rad * S, Ri = Rd > S ? Rd - S : 0;
     for (int side = 0; side < 2 && rad > 0; side++) {
         struct rect q = { side ? F.x + F.w - Rd : F.x, F.y, Rd, Rd };
         q = rect_intersect(q, clip_dev(c));
         for (int y = q.y; y < q.y + q.h; y++)
             for (int x = q.x; x < q.x + q.w; x++) {
-                float outer = round_coverage(x, y, F, R);
-                if (outer <= 0)
+                uint32_t outer = top_coverage(F, Rd, x, y);
+                if (!outer)
                     continue;
                 uint32_t *p = &back.pixels[(size_t)y * back.stride + x];
-                *p = mix(*p, border, outer);
-                float in = round_coverage(x, y, inner, R > (float)S ? R - (float)S : 0);
-                if (in > 0)
-                    *p = mix(*p, bar, in);
+                *p = pixel_blend(*p, border, outer);
+                uint32_t in = top_coverage(inner, Ri, x, y);
+                if (in)
+                    *p = pixel_blend(*p, bar, in);
             }
     }
 
@@ -299,14 +286,15 @@ void decor_draw(struct csurface *s, struct rect clip)
     /* The title, centred when it fits between the left edge and the
      * buttons, else left aligned and clipped. */
     int left = s->x + 10, right = button_rect(s, 2).x - 10;
-    if (right > left && s->toplevel->title[0]) {
-        int tw = (gfx_text_width_font_scaled(title_font, s->toplevel->title, -1, S) + S - 1) / S;
+    const struct gfx_shaped *title = right > left ? shaped_title(s->toplevel) : NULL;
+    if (title) {
+        int tw = (gfx_shaped_width(title) + S - 1) / S;
         int tx = s->x + (s->width - tw) / 2;
         if (tx < left || tx + tw > right)
             tx = left;
         int ty = s->y - TITLE_H + (TITLE_H - title_font->height) / 2;
         painter_push(&p, left + ox, s->y - TITLE_H + oy, right - left, TITLE_H);
-        painter_text_font(&p, title_font, tx - left, ty - (s->y - TITLE_H), s->toplevel->title, text, 0xffffffffu);
+        painter_text_shaped(&p, tx - left, ty - (s->y - TITLE_H), title, text);
         painter_pop(&p);
     }
 

@@ -283,7 +283,7 @@ loop. The bound of `comp_idle` is 40 wakeups in five seconds, measured
 the input latency of the pointer from 8.2 to 0.7 ms
 (`docs/design/graphics-performance.md`).
 
-### G7. Decorations without square roots per pixel
+### G7. Decorations without square roots per pixel (completed 2026-10-06)
 
 `pixel.c` gains coverage tables for rounded corners and discs. The
 server decorations of X12 and the client decorations of libgui use them,

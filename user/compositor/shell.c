@@ -444,6 +444,7 @@ static void toplevel_gone(struct wire_resource *r)
     for (struct csurface *s = surface_first(); s; s = s->next)
         if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->parent == t)
             s->toplevel->parent = NULL;
+    decor_free(t);
     free(t);
     if (was_active) {
         struct toplevel *next = NULL;

@@ -319,7 +319,15 @@ at the four rounded corners (`CSD_RADIUS` 6). The margins contain the
 outline (one logical pixel of 20 percent black) and the shadow (black,
 `(1 - t)^2` over an 8 px reach, shifted 2 px down, half as strong for
 inactive windows); they are painted once per resize or state change,
-not per frame.
+not per frame. Since G7 of `docs/plan/compositor-performance.md` the
+outline and the shadow come from two profiles of 16 bit alpha values by
+the squared distance of a pixel centre to the frame, in half pixels, and
+the rounded corners and the button discs from the coverage tables of
+`gui/pixel.h`; the corner blend of `csd_copy` uses integer arithmetic.
+Before, every chrome pixel computed two square roots and float blends.
+`make check-libgui` compares the result with the former float code
+(`tests/test_csd.c`): every channel lies within one of it at the scales
+1 to 3.
 
 The header bar is flat (`0xebebeb`, `0xfafafa` in the backdrop), with a
 hairline under it, the title centred in DejaVu Sans 13 px, and three

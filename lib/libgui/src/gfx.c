@@ -194,6 +194,23 @@ void gfx_fill_rect(struct surface *s, int x, int y, int w, int h, uint32_t color
         pixel_fill(s->pixels + (size_t)(r.y + j) * s->stride + r.x, r.w, color);
 }
 
+void gfx_disc(struct surface *s, int x, int y, int size, int inset, uint32_t color, const struct rect *clip)
+{
+    const uint8_t *t = pixel_disc_table(size, inset);
+    struct rect r = clip_to(s, x, y, size, size);
+    if (clip)
+        r = rect_intersect(r, *clip);
+    if (!t)
+        return;
+    for (int j = r.y; j < r.y + r.h; j++) {
+        uint32_t *row = s->pixels + (size_t)j * s->stride;
+        const uint8_t *cov = t + (size_t)(j - y) * size - x;
+        for (int i = r.x; i < r.x + r.w; i++)
+            if (cov[i])
+                row[i] = pixel_blend(row[i], color, cov[i]);
+    }
+}
+
 void gfx_fill(struct surface *s, uint32_t color)
 {
     gfx_fill_rect(s, 0, 0, s->width, s->height, color);

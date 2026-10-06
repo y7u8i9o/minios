@@ -21,6 +21,8 @@
  * through the scalar references of pixel_impl.h. */
 #include <gui/pixel.h>
 #include <minios/simd.h>
+#include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "pixel_impl.h"
@@ -334,6 +336,88 @@ const char *pixel_forms(void)
     return "over simd, mask simd, darken simd";
 }
 #endif
+
+/* ---- coverage tables ---- */
+
+/* The byte of a coverage c: 255 only for a complete one. */
+static uint8_t coverage_byte(float c)
+{
+    if (c >= 1.0f)
+        return 255;
+    if (c <= 0.0f)
+        return 0;
+    int v = (int)(c * 255.0f + 0.5f);
+    return (uint8_t)(v > 254 ? 254 : v);
+}
+
+/* The cached tables by kind and size. A caller may use several tables at
+ * once, so a table is never freed. The sizes in use are few: a handful of
+ * radii and buttons at the scales 1 to 4. When the cache is full, a new
+ * size gets no table, and the shapes of that size lose their antialiasing. */
+#define TABLES 64
+static struct {
+    int kind, a, b;
+    uint8_t *table;
+} tables[TABLES];
+static int ntables;
+
+static const uint8_t *cached(int kind, int a, int b)
+{
+    for (int i = 0; i < ntables; i++)
+        if (tables[i].kind == kind && tables[i].a == a && tables[i].b == b)
+            return tables[i].table;
+    return NULL;
+}
+
+static const uint8_t *remember(int kind, int a, int b, uint8_t *table)
+{
+    if (ntables == TABLES) {
+        free(table);
+        return NULL;
+    }
+    tables[ntables].kind = kind;
+    tables[ntables].a = a;
+    tables[ntables].b = b;
+    tables[ntables++].table = table;
+    return table;
+}
+
+const uint8_t *pixel_corner_table(int r)
+{
+    if (r < 1 || r > 512)
+        return NULL;
+    const uint8_t *t = cached(0, r, 0);
+    if (t || ntables == TABLES)
+        return t;
+    uint8_t *n = malloc((size_t)r * r);
+    if (!n)
+        return NULL;
+    for (int j = 0; j < r; j++)
+        for (int i = 0; i < r; i++) {
+            float dx = (float)i + 0.5f - (float)r, dy = (float)j + 0.5f - (float)r;
+            n[j * r + i] = coverage_byte((float)r + 0.5f - sqrtf(dx * dx + dy * dy));
+        }
+    return remember(0, r, 0, n);
+}
+
+const uint8_t *pixel_disc_table(int size, int inset)
+{
+    if (size < 1 || size > 1024)
+        return NULL;
+    const uint8_t *t = cached(1, size, inset);
+    if (t || ntables == TABLES)
+        return t;
+    uint8_t *n = malloc((size_t)size * size);
+    if (!n)
+        return NULL;
+    float c = (float)size / 2.0f, rad = (float)(size - inset) / 2.0f;
+    for (int j = 0; j < size; j++)
+        for (int i = 0; i < size; i++) {
+            float dx = (float)i + 0.5f - c, dy = (float)j + 0.5f - c;
+            n[j * size + i] = coverage_byte(rad + 0.5f - sqrtf(dx * dx + dy * dy));
+        }
+    return remember(1, size, inset, n);
+}
 
 /* ---- sampling and packing ---- */
 

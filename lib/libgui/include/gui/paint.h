@@ -35,6 +35,8 @@ void painter_rounded(struct painter *p, int x, int y, int w, int h, uint32_t fil
 void painter_text(struct painter *p, int x, int y, const char *text, uint32_t color);
 /* Text with an explicit font and background (0xffffffff: transparent). */
 void painter_text_font(struct painter *p, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg);
+/* Text shaped by gfx_text_shape at the painter's scale, at logical (x, y). */
+void painter_text_shaped(struct painter *p, int x, int y, const struct gfx_shaped *t, uint32_t fg);
 int painter_text_width(const struct painter *p, const char *text, int n);
 int painter_text_height(const struct painter *p);
 /* Character index nearest to a local x offset within text. */

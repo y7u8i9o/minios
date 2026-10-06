@@ -59,7 +59,7 @@ int main(void)
      * y 300. One call flushes the red and the green square. The host
      * shows the blue square only after a later flush. */
     static const uint32_t colors[3] = { 0x00ff0000, 0x0000ff00, 0x000000ff };
-    for (int k = 0; k < 3; k++)
+    for (uint32_t k = 0; k < 3; k++)
         for (uint32_t y = 300; y < 364; y++)
             for (uint32_t x = 300 + 200 * k; x < 364 + 200 * k; x++)
                 fb[y * stride + x] = colors[k];

@@ -95,6 +95,10 @@ struct toplevel {
     int modal;
     struct rect geo;                        /* window geometry inside the surface (client decorations) */
     int geo_set;
+    /* The title as decor.c last shaped it, at the scale title_shape_scale. */
+    struct gfx_shaped *title_shape;
+    char title_shape_text[64];
+    int title_shape_scale;
 };
 
 struct popup {
@@ -343,6 +347,8 @@ struct rect decor_opaque(const struct csurface *s);        /* part of the frame 
 int decor_has(const struct csurface *s);
 void decor_draw_shadow(struct csurface *s, struct rect clip);
 void decor_draw(struct csurface *s, struct rect clip);
+/* Free what decor.c stores for a toplevel that goes away. */
+void decor_free(struct toplevel *t);
 /* Returns 1 when the press at the cursor was consumed by decorations. */
 int decor_press(struct csurface *s, int button);
 int decor_motion(void);

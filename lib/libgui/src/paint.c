@@ -211,6 +211,15 @@ void painter_text_font(struct painter *p, const struct font *f, int x, int y, co
     gfx_text_font_scaled(&v, f, x * s + dx, y * s + dy, text, fg, bg, s);
 }
 
+void painter_text_shaped(struct painter *p, int x, int y, const struct gfx_shaped *t, uint32_t fg)
+{
+    int dx, dy, s = p->scale;
+    struct surface v = view(p, &dx, &dy);
+    if (v.width <= 0 || v.height <= 0)
+        return;
+    gfx_shaped_draw(&v, t, x * s + dx, y * s + dy, fg);
+}
+
 int painter_text_width(const struct painter *p, const char *text, int n)
 {
     int s = p->scale;

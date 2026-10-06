@@ -13,6 +13,15 @@
 #define CSD_BUTTON 22
 #define CSD_CORNER 24          /* corner resize zones along the edges */
 #define CSD_CORNER_REACH 12    /* corner squares outside the frame, inside the margin */
+/* The chrome around the frame: a drop shadow CSD_SHADOW_REACH logical
+ * pixels wide and CSD_SHADOW_DY lower than the frame, with the peak alpha
+ * of an active window and of the others out of 255, and an outline of
+ * CSD_OUTLINE_ALPHA. */
+#define CSD_SHADOW_REACH 8
+#define CSD_SHADOW_DY 2
+#define CSD_SHADOW_PEAK 64
+#define CSD_SHADOW_PEAK_BACKDROP 32
+#define CSD_OUTLINE_ALPHA 51   /* 20 percent black */
 
 enum csd_zone { CSD_OUTSIDE, CSD_CONTENT, CSD_HEADER_BAR, CSD_CLOSE, CSD_MAXIMIZE, CSD_MINIMIZE, CSD_RESIZE };
 
