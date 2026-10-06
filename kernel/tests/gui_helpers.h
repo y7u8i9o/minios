@@ -15,6 +15,7 @@
 #include <lib/string.h>
 #include <lib/crc32.h>
 #include <fs/vfs.h>
+#include <console.h>
 
 static struct proc *panel_proc;
 
