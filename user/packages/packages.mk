@@ -7,6 +7,11 @@ PKG_NAMES := calc code gedit hexview luasynth mandel paint player playtone pong 
 PKG_SCRIPTS := transfer
 PKG_VERSION := $(shell cat ../VERSION)
 PKG_VERSION_luasynth := 0.1.1
+# A development build adds a serial number to the version in the manifest
+# (tools/pkgserial.py), so a rebuilt application is an upgrade on the
+# development disk. The file name retains the plain version. A release
+# sets PKG_SERIAL=0 (Makefile).
+PKG_SERIAL ?= 1
 pkg_version = $(or $(PKG_VERSION_$(1)),$(PKG_VERSION))
 PKG_OUT := $(BUILD)/packages
 PKG_FILES := $(foreach a,$(PKG_NAMES),$(PKG_OUT)/$(a)-$(call pkg_version,$(a)).mpk)
@@ -42,10 +47,10 @@ $(PKG_OUT)/$(1)-$(call pkg_version,$(1)).mpk: $(if $(filter $(1),$(PKG_SCRIPTS))
 	@rm -rf $(OUT)/packages/$(1)
 	@mkdir -p $(OUT)/packages/$(1)/files/usr/bin $(PKG_OUT)
 	@cat packages/$(1)/manifest > $(OUT)/packages/$(1)/manifest
-	@printf 'version $(call pkg_version,$(1))\n' >> $(OUT)/packages/$(1)/manifest
 	@if [ -d packages/$(1)/files ]; then cp -Rp packages/$(1)/files/. $(OUT)/packages/$(1)/files/; fi
 	@find $(OUT)/packages/$(1)/files -name .DS_Store -exec rm -f {} +
 	$(if $(filter $(1),$(PKG_SCRIPTS)),,@cp $(APPBIN)/$(1) $(OUT)/packages/$(1)/files/usr/bin/$(1))
+	@printf 'version %s\n' "$$$$(python3 ../tools/pkgserial.py $(PKG_OUT)/serials $(1) $(call pkg_version,$(1)) $(OUT)/packages/$(1) $(BUILD)/lib/abi $(PKG_SERIAL))" >> $(OUT)/packages/$(1)/manifest
 	READELF=$(READELF) ../tools/mkpkg.sh $(OUT)/packages/$(1) $$@ $(BUILD)/lib/abi
 endef
 $(foreach a,$(PKG_NAMES),$(eval $(call APP_PACKAGE,$(a))))

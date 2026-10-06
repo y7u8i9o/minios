@@ -44,6 +44,7 @@ user/packages/**                boot pkg pkg_apps
 user/packages/transfer/**       check-transfer net_transfer
 user/perms                      boot privilege perm_user
 tools/mkbase.py                 boot pkg
+tools/pkgserial.py              pkg pkg_apps
 tools/mkimage.sh                boot pkg
 tools/mkpkg.sh                  boot pkg pkg_apps
 tools/mkiso.sh                  boot gpt_boot iso9660*

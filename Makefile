@@ -190,6 +190,8 @@ BASE     := $(BUILD)/base
 # sets PKG_SERIAL=0, and every package then has the version in VERSION
 # without a serial number.
 PKG_SERIAL ?= 1
+# The application packages of user/packages/packages.mk use it as well.
+export PKG_SERIAL
 SYSROOT  := $(BUILD)/sysroot
 .PHONY: base sysimage
 base: user kernel

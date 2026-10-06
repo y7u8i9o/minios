@@ -296,7 +296,14 @@ which means a package built against ABI 1 is refused until it is rebuilt.
 libgui has ABI 2 since G8 of `docs/plan/compositor-performance.md`. A
 program that draws without the framework must call `gui_begin_paint`
 before it draws, and `gui_window.surf` moves between buffers.
-`tools/mkbase.py` includes the ABI table in the digest of each base
+Application packages (`user/packages/packages.mk`) receive the same
+serial numbers in a development build through `tools/pkgserial.py`, in
+the version of the manifest while the file name retains the plain
+version. Before, a rebuilt application kept its version. After the ABI
+change of libgui, `pkg-update` on the development disk did not replace
+the installed `player`, which needed libgui ABI 1, refused the new
+libgui and cancelled the whole update. `tools/mkbase.py` includes the
+ABI table in the digest of each base
 package. A changed ABI number therefore packs every base package again
 with new `needs` lines.
 
