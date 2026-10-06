@@ -209,7 +209,7 @@ At 2560x1600@2 the drag composes in 313 instead of 520 ms and the median
 frame of the animation fell from 9.7 to 7.4 ms
 (`docs/design/graphics-performance.md`).
 
-### G4. Several rectangles per flush
+### G4. Several rectangles per flush (completed 2026-10-06)
 
 `FBIO_FLUSH_RECTS` with the capability `FB_CAP_FLUSH_RECTS`.
 `fb_flush_rects` in fbdev. virtio-gpu splits its control transfer into
@@ -222,6 +222,16 @@ not the third. A process that is not the owner receives `EPERM`, a count
 of 33 receives `EINVAL`. The case runs on x86_64 and aarch64.
 
 Document: `docs/design/display.md`, `docs/design/locking.md`.
+
+On aarch64 the screendump showed the square that was not flushed. The
+console marked the whole screen dirty when it scrolled before the
+acquisition, and `gpu_flushd` flushed that rectangle up to 20 ms later
+with the pixels of the owner. Under hardware acceleration the owner had
+drawn its squares by then. The acquisition now discards a pending
+rectangle, and the console reports none while a process owns the
+display. With direct composition in G5 such a flush would have shown
+half composed frames. The post script of `gpu_resize` uses the shared
+`tests/ppm_pixels.py` instead of its own reader.
 
 ### G5. The present path of the compositor
 

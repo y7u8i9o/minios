@@ -290,7 +290,7 @@ void virtq_free_chain(struct virtqueue *vq, uint16_t head)
     vq->active[head] = false;
 }
 
-void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie)
+void virtq_publish(struct virtqueue *vq, uint16_t head, void *cookie)
 {
     kassert(spin_locked_by_current(&vq->lock));
     kassert(head < vq->size && !vq->active[head] && !vq->broken);
@@ -299,8 +299,19 @@ void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie)
     vq->avail->ring[vq->avail->idx % vq->size] = head;
     mb();
     vq->avail->idx++;
+}
+
+void virtq_notify(struct virtqueue *vq)
+{
+    kassert(spin_locked_by_current(&vq->lock));
     mb();
     *vq->notify = vq->index;
+}
+
+void virtq_submit(struct virtqueue *vq, uint16_t head, void *cookie)
+{
+    virtq_publish(vq, head, cookie);
+    virtq_notify(vq);
 }
 
 int virtio_reset(struct virtio_dev *dev)

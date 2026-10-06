@@ -218,6 +218,9 @@ the framebuffer state and framebuffer write.
 - `virtio_gpu->lock` (mutex; the scanout resource ids and every control
   sequence) is taken before the control queue's `vq->lock`. The panic
   path skips the mutex and the flush entirely when the queue lock is already locked.
+  A batch of flush requests (G4 of `docs/plan/compositor-performance.md`)
+  runs under `virtio_gpu->lock` and publishes its requests under
+  `vq->lock`, which it releases only in `waitq_wait`. It adds no lock.
 - `input_dev->lock` (the report assembled between `SYN_REPORT` events) is
   taken under `vq->lock` in the completion callback and alone by
   `virtio_input_feed`.

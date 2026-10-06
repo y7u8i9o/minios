@@ -1,0 +1,4 @@
+# The host image after FBIO_FLUSH_RECTS flushed two of three squares
+# (G4 of docs/plan/compositor-performance.md).
+wait fbmodetest: flushed two of three squares
+screendump flush.ppm

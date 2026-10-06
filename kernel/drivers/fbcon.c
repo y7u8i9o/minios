@@ -69,9 +69,11 @@ static void mark_dirty(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     fb.dirty_y1 = MAX(fb.dirty_y1, y1);
 }
 
+/* While a user process owns the display, the buffer contains its pixels,
+ * which only that process flushes. */
 bool fbcon_take_dirty(struct fb_rect *r)
 {
-    if (!fb.dirty)
+    if (!fb.dirty || fb.disabled)
         return false;
     *r = (struct fb_rect){ fb.dirty_x0, fb.dirty_y0, fb.dirty_x1 - fb.dirty_x0, fb.dirty_y1 - fb.dirty_y0 };
     fb.dirty = false;
@@ -421,8 +423,13 @@ void fbcon_set_enabled(bool enabled)
 {
     if (!fb.present)
         return;
-    /* Called through console_lock by the fb0 device, which takes it. */
+    /* Called through console_lock by the fb0 device, which takes it. A
+     * region that the console drew before the owner acquired the display
+     * is not flushed any more: the flush would show pixels of the owner
+     * that the owner has not flushed yet. */
     fb.disabled = !enabled;
+    if (!enabled)
+        fb.dirty = false;
     if (enabled) {
         fbcon_clear_screen();
         for (uint32_t r = 0; r < fb.rows; r++)

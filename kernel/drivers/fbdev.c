@@ -60,11 +60,16 @@ size_t fb_map_size(void)
     return gpu.ops ? gpu.size : (size_t)fb_screen.pitch * fb_screen.height;
 }
 
+int fb_flush_rects(const struct fb_rect *r, int n)
+{
+    if (!gpu.ops || n <= 0)
+        return 0;
+    return gpu.ops->flush(gpu.priv, r, n);
+}
+
 int fb_flush(struct fb_rect r)
 {
-    if (!gpu.ops)
-        return 0;
-    return gpu.ops->flush(gpu.priv, r);
+    return fb_flush_rects(&r, 1);
 }
 
 void fb_panic_flush(void)
@@ -91,7 +96,7 @@ void fb_gpu_register(const struct fb_gpu_ops *ops, void *priv,
     console_set_screen(screen, fb_screen_scale);
     ops->commit_mode(priv);
     struct fb_rect all = { 0, 0, (int32_t)screen->width, (int32_t)screen->height };
-    ops->flush(priv, all);
+    ops->flush(priv, &all, 1);
     mutex_unlock(&fb_mode_lock);
 }
 
@@ -129,7 +134,7 @@ int fb_set_mode(uint32_t width, uint32_t height, uint32_t scale)
         console_set_screen(&fb_screen, scale);
     }
     struct fb_rect all = { 0, 0, (int32_t)width, (int32_t)height };
-    gpu.ops->flush(gpu.priv, all);
+    gpu.ops->flush(gpu.priv, &all, 1);
     klog_info("mode %ux%u scale %u", width, height, scale);
     mutex_unlock(&fb_mode_lock);
     return r;
@@ -173,7 +178,7 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
             .blue_size = fb_screen.blue_mask_size,
             .blue_shift = fb_screen.blue_mask_shift,
             .scale = (uint8_t)fb_screen_scale,
-            .caps = gpu.ops ? FB_CAP_FLUSH | FB_CAP_SET_MODE : 0,
+            .caps = gpu.ops ? FB_CAP_FLUSH | FB_CAP_SET_MODE | FB_CAP_FLUSH_RECTS : 0,
             .size = (uint32_t)fb_map_size(),
         };
         mutex_unlock(&fb_mode_lock);
@@ -186,6 +191,22 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
         struct fb_rect r;
         memcpy(&r, (const void *)arg, sizeof r);
         return fb_flush(r);
+    }
+    case FBIO_FLUSH_RECTS: {
+        if (!vma_range_ok(p->vm, arg, sizeof(struct fb_flush_rects), false))
+            return -EFAULT;
+        struct fb_flush_rects fr;
+        memcpy(&fr, (const void *)arg, sizeof fr);
+        if (fr.count > FB_FLUSH_MAX || fr.flags)
+            return -EINVAL;
+        /* Another file than the owner could send a half composed frame of
+         * the owner to the display. */
+        spin_lock(&fbdev_lock);
+        bool allowed = !owner || owner == f;
+        spin_unlock(&fbdev_lock);
+        if (!allowed)
+            return -EPERM;
+        return fb_flush_rects(fr.rects, (int)fr.count);
     }
     case FBIO_SET_MODE: {
         if (!vma_range_ok(p->vm, arg, sizeof(struct fb_mode), false))

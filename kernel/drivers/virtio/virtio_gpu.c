@@ -150,11 +150,23 @@ struct virtio_gpu {
 
 static struct virtio_gpu *gpu;
 
+/* One request of a flush batch: a transfer or a flush command and its
+ * response header. */
+struct gpu_batch_req {
+    bool done;
+    union {
+        struct virtio_gpu_transfer_to_host_2d xfer;
+        struct virtio_gpu_resource_flush flush;
+    } req;
+    struct virtio_gpu_ctrl_hdr rsp;
+};
+
+/* The cookie of every control request is its completion flag. */
 static void ctrl_complete(struct virtqueue *vq, uint16_t head, uint32_t len)
 {
-    struct gpu_ctrl *x = vq->cookie[head];
-    if (x)
-        x->done = true;
+    bool *done = vq->cookie[head];
+    if (done)
+        *done = true;
 }
 
 /* Send one control request and wait for the response. With poll the
@@ -189,7 +201,7 @@ static int ctrl_xfer(struct virtio_gpu *g, const void *request, size_t request_l
     vq->desc[ids[1]].addr = virt_to_phys(x->response);
     vq->desc[ids[1]].len = (uint32_t)response_len;
     vq->desc[ids[1]].flags |= VIRTQ_DESC_F_WRITE;
-    virtq_submit(vq, ids[0], x);
+    virtq_submit(vq, ids[0], &x->done);
     if (poll) {
         for (unsigned i = 0; i < 20000000 && !x->done; i++) {
             virtq_poll_locked(vq);
@@ -218,6 +230,48 @@ static int simple_cmd(struct virtio_gpu *g, const void *req, size_t len, bool po
 {
     struct virtio_gpu_ctrl_hdr rsp;
     return ctrl_xfer(g, req, len, &rsp, sizeof rsp, poll);
+}
+
+/* Publish the n requests of a batch, each len bytes long, notify the
+ * device once and wait until every request completed. When the queue has
+ * no free descriptors, the device first works through what is published.
+ * Caller has acquired g->lock. Returns 0 or the first error. A broken
+ * queue never completes its requests: the batch then remains allocated,
+ * because the device may still write the responses. */
+static int ctrl_batch(struct virtio_gpu *g, struct gpu_batch_req *b, int n, size_t len, bool *leak)
+{
+    struct virtqueue *vq = g->ctrlq;
+    spin_lock(&vq->lock);
+    for (int i = 0; i < n; i++) {
+        uint16_t ids[2];
+        while (virtq_alloc_chain(vq, 2, ids) < 0) {
+            if (vq->broken) {
+                spin_unlock(&vq->lock);
+                *leak = true;
+                return -EIO;
+            }
+            virtq_notify(vq);
+            waitq_wait(&vq->waitq, &vq->lock);
+        }
+        b[i].done = false;
+        vq->desc[ids[0]].addr = virt_to_phys(&b[i].req);
+        vq->desc[ids[0]].len = (uint32_t)len;
+        vq->desc[ids[1]].addr = virt_to_phys(&b[i].rsp);
+        vq->desc[ids[1]].len = sizeof b[i].rsp;
+        vq->desc[ids[1]].flags |= VIRTQ_DESC_F_WRITE;
+        virtq_publish(vq, ids[0], &b[i].done);
+    }
+    virtq_notify(vq);
+    for (int i = 0; i < n; i++)
+        while (!b[i].done)
+            waitq_wait(&vq->waitq, &vq->lock);
+    spin_unlock(&vq->lock);
+    for (int i = 0; i < n; i++)
+        if (b[i].rsp.type >= VIRTIO_GPU_RESP_ERR_UNSPEC) {
+            klog_error("command %x failed: %x", b[i].req.xfer.hdr.type, b[i].rsp.type);
+            return -EIO;
+        }
+    return 0;
 }
 
 /* ---- fb_gpu_ops ---- */
@@ -291,24 +345,33 @@ static int gpu_commit_mode(void *priv)
     return r;
 }
 
-/* Transfer a rectangle of the buffer to the host and show it. Caller
- * has acquired g->lock, or is the panic path. */
-static int flush_locked(struct virtio_gpu *g, struct fb_rect r, bool poll)
+/* The part of r inside the resource, false when nothing remains. */
+static bool clip_rect(const struct virtio_gpu *g, struct fb_rect r, struct virtio_gpu_rect *out)
 {
-    if (!g->resource)
-        return -ENODEV;
     int32_t x0 = MAX(r.x, 0), y0 = MAX(r.y, 0);
     int32_t x1 = MIN(r.x + r.w, (int32_t)g->width), y1 = MIN(r.y + r.h, (int32_t)g->height);
     if (x0 >= x1 || y0 >= y1)
+        return false;
+    *out = (struct virtio_gpu_rect){ (uint32_t)x0, (uint32_t)y0, (uint32_t)(x1 - x0), (uint32_t)(y1 - y0) };
+    return true;
+}
+
+/* Transfer a rectangle of the buffer to the host and show it, without
+ * interrupts (panic path). */
+static int flush_poll_locked(struct virtio_gpu *g, struct fb_rect r)
+{
+    struct virtio_gpu_rect rect;
+    if (!g->resource)
+        return -ENODEV;
+    if (!clip_rect(g, r, &rect))
         return 0;
-    struct virtio_gpu_rect rect = { (uint32_t)x0, (uint32_t)y0, (uint32_t)(x1 - x0), (uint32_t)(y1 - y0) };
     struct virtio_gpu_transfer_to_host_2d xfer = {
         .hdr.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D,
         .r = rect,
-        .offset = (uint64_t)y0 * g->width * 4 + (uint64_t)x0 * 4,
+        .offset = (uint64_t)rect.y * g->width * 4 + (uint64_t)rect.x * 4,
         .resource_id = g->resource,
     };
-    int err = simple_cmd(g, &xfer, sizeof xfer, poll);
+    int err = simple_cmd(g, &xfer, sizeof xfer, true);
     if (err < 0)
         return err;
     struct virtio_gpu_resource_flush flush = {
@@ -316,21 +379,64 @@ static int flush_locked(struct virtio_gpu *g, struct fb_rect r, bool poll)
         .r = rect,
         .resource_id = g->resource,
     };
-    return simple_cmd(g, &flush, sizeof flush, poll);
+    return simple_cmd(g, &flush, sizeof flush, true);
 }
 
-static int gpu_flush(void *priv, struct fb_rect r)
+/* Transfer the rectangles of the buffer to the host and show them: all
+ * transfers in one batch, then all flushes in a second one, so that the
+ * host shows only transferred pixels and the thread waits twice per call
+ * whatever the number of rectangles. Caller has acquired g->lock. */
+static int flush_locked(struct virtio_gpu *g, const struct fb_rect *r, int n)
+{
+    if (!g->resource)
+        return -ENODEV;
+    if (n > FB_FLUSH_MAX)
+        return -EINVAL;
+    struct virtio_gpu_rect rects[FB_FLUSH_MAX];
+    int m = 0;
+    for (int i = 0; i < n; i++)
+        if (clip_rect(g, r[i], &rects[m]))
+            m++;
+    if (!m)
+        return 0;
+    struct gpu_batch_req *b = kzalloc((size_t)m * sizeof *b);
+    if (!b)
+        return -ENOMEM;
+    for (int i = 0; i < m; i++)
+        b[i].req.xfer = (struct virtio_gpu_transfer_to_host_2d){
+            .hdr.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D,
+            .r = rects[i],
+            .offset = (uint64_t)rects[i].y * g->width * 4 + (uint64_t)rects[i].x * 4,
+            .resource_id = g->resource,
+        };
+    bool leak = false;
+    int err = ctrl_batch(g, b, m, sizeof b[0].req.xfer, &leak);
+    if (err == 0) {
+        for (int i = 0; i < m; i++)
+            b[i].req.flush = (struct virtio_gpu_resource_flush){
+                .hdr.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH,
+                .r = rects[i],
+                .resource_id = g->resource,
+            };
+        err = ctrl_batch(g, b, m, sizeof b[0].req.flush, &leak);
+    }
+    if (!leak)
+        kfree(b);
+    return err;
+}
+
+static int gpu_flush(void *priv, const struct fb_rect *r, int n)
 {
     struct virtio_gpu *g = priv;
     mutex_lock(&g->lock);
-    int err = flush_locked(g, r, false);
+    int err = flush_locked(g, r, n);
     mutex_unlock(&g->lock);
     return err;
 }
 
 static void gpu_flush_poll(void *priv, struct fb_rect r)
 {
-    flush_locked(priv, r, true);
+    flush_poll_locked(priv, r);
 }
 
 static void gpu_describe(void *priv, struct devinfo *d)
@@ -399,7 +505,7 @@ static void gpu_flushd(void *arg)
             display_changed(g);
         struct fb_rect r;
         if (console_take_dirty(&r))
-            gpu_flush(g, r);
+            gpu_flush(g, &r, 1);
     }
 }
 

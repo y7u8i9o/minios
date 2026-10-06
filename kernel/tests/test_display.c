@@ -83,6 +83,9 @@ static void test_gpu_mode(void)
                  pixel(100, 100), pixel(101, 100));
     ktest_assert(pixel(1279, 799) == 0x00336699, "last pixel of the new mode %08x", pixel(1279, 799));
     kprintf("gpu_mode: user mode change and flush ok\n");
+    /* The qmp script of the case takes a screendump after the line of
+     * fbmodetest about the flushed squares. */
+    sleep_ms(1500);
     ps2kbd_feed_scancode(0x1c);
     ps2kbd_feed_scancode(0x9c);
     int status = proc_reap(p);

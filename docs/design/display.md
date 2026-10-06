@@ -45,12 +45,35 @@ else the Limine mode, else the host's preferred size.
 A mode change creates a second resource over the same block, and the
 scanout switches to it once the console has been re-initialized for the
 new pitch, so the buffer is never interpreted with mixed geometries.
-Flushing a rectangle is `TRANSFER_TO_HOST_2D` followed by
-`RESOURCE_FLUSH`, each a control queue round trip (a request descriptor
-and a response descriptor). The console cannot talk to the device while
-having acquired `console_lock`, so it accumulates a dirty rectangle and the
+Flushing is `TRANSFER_TO_HOST_2D` followed by `RESOURCE_FLUSH` for each
+rectangle (a request descriptor and a response descriptor each). Since
+G4 of `docs/plan/compositor-performance.md` one flush call takes up to
+`FB_FLUSH_MAX` (32) rectangles. The driver publishes the transfers of
+all rectangles, notifies the device once and waits until all are
+complete, then does the same for the flushes. The thread therefore
+waits twice per call, whatever the number of rectangles, and the host
+shows only transferred pixels. `virtq_publish` and `virtq_notify` are
+the two halves of `virtq_submit` for such batches. When the queue has no
+free descriptors, the driver notifies the device and waits for
+completions before it publishes more.
+
+`FBIO_FLUSH_RECTS` (`struct fb_flush_rects`, capability
+`FB_CAP_FLUSH_RECTS`) passes such a set from user space. While a file
+owns the display, only that file may call it (`EPERM`), because a flush
+of another process could show a half composed frame of the owner. A
+count above 32 or nonzero flags give `EINVAL`. `FBIO_FLUSH` with one
+rectangle remains unchanged. The test `gpu_mode` draws three squares,
+flushes two in one call and checks a screendump of the host with
+`tests/ppm_pixels.py`. It runs on x86_64 and on aarch64.
+
+The console cannot talk to the device while having acquired
+`console_lock`, so it accumulates a dirty rectangle and the
 `gpu_flushd` thread fetches it every 20 ms with `console_take_dirty` and
-flushes it. The panic path (`fb_panic_flush`) transfers the whole screen
+flushes it. While a process owns the display, the console reports no
+dirty rectangle, and the acquisition discards a rectangle that is still
+pending. Before G4 that rectangle was flushed up to 20 ms after the
+acquisition, with the pixels of the owner, which the screendump of
+`gpu_mode` showed on aarch64. The panic path (`fb_panic_flush`) transfers the whole screen
 by polling the used ring with a preallocated request, skipping the flush
 when the queue lock is already locked.
 

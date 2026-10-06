@@ -363,11 +363,22 @@ struct fb_info {
     uint32_t caps;          /* FB_CAP_* */
     uint32_t size;          /* bytes mmap may map; the whole GPU buffer with FB_CAP_SET_MODE */
 };
+/* With FB_CAP_FLUSH the mapping is ordinary cacheable RAM, which the device
+ * reads only during a flush. Without it the mapping is video memory, mapped
+ * write combining, which the display scans continuously. */
 #define FB_CAP_FLUSH    1   /* changes reach the display with FBIO_FLUSH (virtio-gpu) */
 #define FB_CAP_SET_MODE 2   /* FBIO_SET_MODE changes the resolution at run time */
+#define FB_CAP_FLUSH_RECTS 4 /* FBIO_FLUSH_RECTS flushes several rectangles in one call */
 
 struct fb_rect {
     int32_t x, y, w, h;
+};
+/* FBIO_FLUSH_RECTS: count rectangles, at most FB_FLUSH_MAX. flags is 0. */
+#define FB_FLUSH_MAX 32
+struct fb_flush_rects {
+    uint32_t count;
+    uint32_t flags;
+    struct fb_rect rects[FB_FLUSH_MAX];
 };
 struct fb_mode {
     uint32_t width, height; /* pixels; width * height * 4 must fit in fb_info.size */
@@ -379,6 +390,11 @@ struct fb_mode {
 #define FBIO_FLUSH   0x4603  /* struct fb_rect: push a rectangle to the display, no-op without FB_CAP_FLUSH */
 #define FBIO_SET_MODE 0x4604 /* struct fb_mode: display owner only; the mapping remains valid, geometry changes */
 #define FBIOGET_DISPLAY 0x4605 /* struct fb_display: the last size request of the host */
+/* struct fb_flush_rects: push several rectangles to the display. While a
+ * file owns the display, only that file may call it (EPERM otherwise). A
+ * count above FB_FLUSH_MAX or nonzero flags give EINVAL. No-op without
+ * FB_CAP_FLUSH. */
+#define FBIO_FLUSH_RECTS 0x4606
 
 /* A size request of the host display (V3 of docs/plan/release-0.6.0.md).
  * The host sends one when the window of the virtual display changes its

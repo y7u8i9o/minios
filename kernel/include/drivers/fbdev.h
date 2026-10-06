@@ -26,7 +26,8 @@ struct fb_gpu_ops {
     int (*prepare_mode)(void *priv, uint32_t width, uint32_t height);
     /* Scan out the prepared resource and drop the previous one. */
     int (*commit_mode)(void *priv);
-    int (*flush)(void *priv, struct fb_rect r);
+    /* Push n rectangles to the display, n from 1 to FB_FLUSH_MAX. */
+    int (*flush)(void *priv, const struct fb_rect *r, int n);
     void (*flush_poll)(void *priv, struct fb_rect r);   /* panic path */
     /* The properties of the GPU for the display node of /dev/devices; may
      * be NULL. */
@@ -41,6 +42,9 @@ bool fb_has_gpu(void);
 size_t fb_map_size(void);
 /* Push a rectangle to the display; 0 without a GPU. */
 int fb_flush(struct fb_rect r);
+/* Push n rectangles (1 to FB_FLUSH_MAX) to the display in one request of
+ * the GPU driver; 0 without a GPU. */
+int fb_flush_rects(const struct fb_rect *r, int n);
 /* Change the resolution (GPU only) and the pixel scale; the console
  * follows. Returns -EOPNOTSUPP without a GPU unless only the scale changes. */
 int fb_set_mode(uint32_t width, uint32_t height, uint32_t scale);

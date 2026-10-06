@@ -4,37 +4,21 @@
 import os
 import sys
 
-PANEL = (0x23, 0x27, 0x2c)
+sys.path.insert(0, os.path.join(os.environ["TOP"], "tests"))
+import ppm_pixels
 
-
-def read_ppm(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    fields, pos = [], 0
-    while len(fields) < 4:
-        while data[pos:pos + 1].isspace():
-            pos += 1
-        end = pos
-        while not data[end:end + 1].isspace():
-            end += 1
-        fields.append(data[pos:end])
-        pos = end
-    if fields[0] != b"P6":
-        raise ValueError(f"{path}: not a binary PPM")
-    return int(fields[1]), int(fields[2]), data[pos + 1:]
+PANEL = 0x23272c
 
 
 def check(name, width, height):
-    path = os.path.join(os.path.dirname(os.environ["SERIAL"]), name)
-    w, h, pixels = read_ppm(path)
+    image = ppm_pixels.read(os.path.join(os.path.dirname(os.environ["SERIAL"]), name))
+    w, h = image.width, image.height
     if (w, h) != (width, height):
         print(f"post: {name} is {w}x{h}, expected {width}x{height}")
         return False
-    row = (h - 2) * w * 3
-    left = tuple(pixels[row + 3:row + 6])
-    right = tuple(pixels[row + (w - 2) * 3:row + (w - 1) * 3])
+    left, right = image.pixel(1, h - 2), image.pixel(w - 2, h - 2)
     if left != PANEL or right != PANEL:
-        print(f"post: {name}: bottom row {left} to {right}, expected the panel colour {PANEL}")
+        print(f"post: {name}: bottom row {left:06x} to {right:06x}, expected the panel colour {PANEL:06x}")
         return False
     print(f"post: {name} is {w}x{h} with the panel across the width")
     return True

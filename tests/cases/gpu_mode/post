@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+# The screendump shows the red and the green square that FBIO_FLUSH_RECTS
+# flushed, and the earlier fill colour where the blue square was drawn
+# without a flush.
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["TOP"], "tests"))
+import ppm_pixels
+
+image = ppm_pixels.read(os.path.join(os.path.dirname(os.environ["SERIAL"]), "flush.ppm"))
+errors = []
+for name, x, want in (("red", 330, 0xff0000), ("green", 530, 0x00ff00), ("unflushed blue", 730, 0x336699)):
+    got = image.pixel(x, 330)
+    if got != want:
+        errors.append(f"{name} square at {x},330: {got:06x}, expected {want:06x}")
+if image.width != 1280 or image.height != 800:
+    errors.append(f"screendump of {image.width}x{image.height}, expected 1280x800")
+for e in errors:
+    print(f"post: {e}")
+if errors:
+    sys.exit(1)
+print("post: the host shows the two flushed squares only")
