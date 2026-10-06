@@ -1143,8 +1143,8 @@ static void test_comp_panel(void)
         proc_reap(more[i]);
     }
     ktest_wait_idle(600);
-    /* The power menu opens above the power button with Log out, Restart
-     * and Shut down, and a click outside it dismisses it. */
+    /* The power menu opens above the power button with Lock, Log out,
+     * Restart and Shut down, and a click outside it dismisses it. */
     mouse_move_to(&cx, &cy, PANEL_POWER_X(sw) + PANEL_POWER_W / 2, PANEL_ROW(sh), 0);
     mouse_click(1);
     ktest_wait_idle(600);

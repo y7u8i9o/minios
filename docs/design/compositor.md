@@ -251,6 +251,21 @@ framebuffer and the compositor's log.
   1024 frames for `x12settings` and `compstat -h` (`x12settings.md`).
   Test: `x12settings_perf`.
 
+## Session lock (S6)
+
+`lock.c` implements the session lock of `protocol/lock.xml`
+(`lock.md`). While the session is locked, `scene.c` shows only the lock
+surface and its popups on a black background, and `seat.c` sends all
+input to them. `seat_set_keyboard_focus` refuses other surfaces, and the
+global shortcuts, the input method keys, the decorations and the not
+responding dialog are disabled. Super+L, a key press after a locker has
+exited, and the setting `lock_timeout` (seconds without input, 0 for
+never) start `/bin/lock` as the session user. The setting is in the list
+of `debug.c`, and the desktop sends it from `desktop.conf`. The `locked`
+event follows the first composed frame of a locked session
+(`lock_frame_done` in `main.c`). Tests: `gui_lock`, `gui_lock_crash`,
+`lock_idle`.
+
 ## Panel popups and session survival
 
 A popup that X12 dismisses (an outside click sends

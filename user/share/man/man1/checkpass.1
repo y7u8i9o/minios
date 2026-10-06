@@ -1,0 +1,21 @@
+CHECKPASS(1)                User Commands
+
+NAME
+    checkpass - check the password of the caller
+
+SYNOPSIS
+    checkpass
+
+DESCRIPTION
+    checkpass reads one line, the password, and compares it with the
+    password of the account of the real user id. It reads from the
+    terminal without echo, or from standard input when that is not a
+    terminal. checkpass is installed set user id root. Only root may read
+    /etc/shadow. A wrong password costs two seconds before checkpass
+    exits.
+
+EXIT STATUS
+    0 for the right password, 1 for a wrong one and 2 for an error.
+
+SEE ALSO
+    lock(1), passwd(1)

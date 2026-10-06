@@ -201,6 +201,18 @@ static int on_decor(struct widget *w, void *args, void *arg)
     return 1;
 }
 
+/* The idle times after which X12 locks the session (docs/design/lock.md),
+ * in seconds. 0 means that the session does not lock itself. */
+static const int lock_times[] = { 0, 60, 300, 600, 900, 1800, 3600 };
+#define NLOCK_TIMES ((int)(sizeof lock_times / sizeof lock_times[0]))
+
+static int on_lock_timeout(struct widget *w, void *args, void *arg)
+{
+    if (!building && w->value >= 0 && w->value < NLOCK_TIMES)
+        conf_set_int("lock_timeout", lock_times[w->value]);
+    return 1;
+}
+
 void build_display(struct widget *page)
 {
     building = 1;
@@ -261,6 +273,23 @@ void build_display(struct widget *page)
     combobox_select(decor_combo, strcmp(conf_get("decorations"), "server") == 0 ? 1 : 0);
     widget_connect(decor_combo, "changed", on_decor, NULL);
     widget_set_grid(decor_combo, r++, 1, 1, 1);
+    widget_set_grid(separator_new(grid), r++, 0, 1, 2);
+    row_label(grid, r, _("Lock the screen"));
+    struct widget *lock_combo = combobox_new(grid);
+    combobox_add(lock_combo, _("Never"));
+    combobox_add(lock_combo, _("After 1 minute"));
+    combobox_add(lock_combo, _("After 5 minutes"));
+    combobox_add(lock_combo, _("After 10 minutes"));
+    combobox_add(lock_combo, _("After 15 minutes"));
+    combobox_add(lock_combo, _("After 30 minutes"));
+    combobox_add(lock_combo, _("After 1 hour"));
+    int timeout = conf_int("lock_timeout", 300), choice = 0;
+    for (int i = 0; i < NLOCK_TIMES; i++)
+        if (lock_times[i] <= timeout)
+            choice = i;
+    combobox_select(lock_combo, choice);
+    widget_connect(lock_combo, "changed", on_lock_timeout, NULL);
+    widget_set_grid(lock_combo, r++, 1, 1, 1);
     building = 0;
 }
 

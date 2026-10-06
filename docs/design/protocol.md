@@ -45,6 +45,8 @@ adds the copy and move actions (`dnd.md`).
 `imed` (`ime.md`).
 `protocol/notify.xml` connects programs and the panel to the notification
 daemon `notifyd` (`notifications.md`).
+`protocol/lock.xml` contains the session lock of X12 and the lock surface
+of the screen locker (`lock.md`).
 `protocol/debug.xml` contains the `debug`, `tracer`, `settings` and
 `screencopy` interfaces of the debugging tools and of `screenshot`
 (`tools.md`, `images.md`). The `debug` interface of version 2 adds the

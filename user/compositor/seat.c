@@ -1,7 +1,9 @@
 /* The seat: pointer focus and events, keyboard focus and events with
  * the keymap descriptor, modifiers, serials, cursor surfaces, and the
- * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, and the switch
- * keys of the input methods). */
+ * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, Super+L, and the
+ * switch keys of the input methods). While the session is locked
+ * (lock.c), every key goes to the lock surface, and only Super+L and the
+ * group switch of the layout remain in effect. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -445,7 +447,7 @@ void seat_pointer_button(int button, int pressed)
     if (pressed) {
         if (data_dragging())
             return;
-        if (hang_press(cursor_x, cursor_y))
+        if (!lock_active() && hang_press(cursor_x, cursor_y))
             return;
         struct csurface *grab = popup_grab_surface();
         struct csurface *target = scene_surface_at(cursor_x, cursor_y);
@@ -453,8 +455,9 @@ void seat_pointer_button(int button, int pressed)
             popup_dismiss_all();
             return;
         }
-        /* Decorations of the toplevel under the cursor. */
-        for (struct csurface *s = surface_first(); s; s = s->next)
+        /* Decorations of the toplevel under the cursor. A locked session
+         * shows no decorations. */
+        for (struct csurface *s = lock_active() ? NULL : surface_first(); s; s = s->next)
             if (decor_hit(s, cursor_x, cursor_y) && !s->toplevel->minimized && !covers_decorations(target, s)) {
                 if (toplevel_blocked(s->toplevel)) {
                     set_pointer_focus(NULL);
@@ -528,6 +531,9 @@ void seat_set_keyboard_focus(struct csurface *s)
 {
     if (keyboard_focus == s)
         return;
+    /* While the session is locked, only the lock surface receives keys. */
+    if (lock_active() && s && s->role != ROLE_LOCK)
+        return;
     struct csurface *old = keyboard_focus;
     text_repeat_at = 0;
     if (keyboard_focus && keyboard_focus->client->keyboard)
@@ -565,7 +571,9 @@ void seat_key(uint32_t key, int pressed)
     uint8_t *mod = modifier_of(key, &side);
     if (mod || key == KEY_CAPSLOCK) {
         if (mod) {
-            if (pressed && !*mod) {
+            if (lock_active()) {
+                shift_tap = ctrl_shift_tap = 0;
+            } else if (pressed && !*mod) {
                 shift_tap = mod == &mod_shift && !mod_ctrl && !mod_alt && !mod_logo && !mod_altgr && !npressed;
                 ctrl_shift_tap = ((mod == &mod_shift && mod_ctrl) || (mod == &mod_ctrl && mod_shift)) && !mod_alt &&
                                  !mod_logo && !mod_altgr && !npressed;
@@ -602,7 +610,22 @@ void seat_key(uint32_t key, int pressed)
     }
     if (pressed)
         shift_tap = ctrl_shift_tap = 0;
-    if (pressed) {
+    /* Super+L locks the session. */
+    if (pressed && key == KEY_L &&
+        (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT | KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) == KEYMAP_MOD_LOGO) {
+        if (!lock_active())
+            lock_start_locker("Super+L");
+        key_list_add(used_keys, &nused, key);
+        return;
+    }
+    /* A locked session without a lock surface uses a key press to start a
+     * new locker. */
+    if (pressed && lock_active() && !lock_surface_mapped()) {
+        lock_key_without_locker();
+        key_list_add(used_keys, &nused, key);
+        return;
+    }
+    if (pressed && !lock_active()) {
         /* An overlay with the keyboard, such as the login window or the
          * authentication dialog, retains it: Alt+Tab and Alt+F4 go to the
          * overlay instead of the windows below it. */
@@ -662,7 +685,7 @@ void seat_key(uint32_t key, int pressed)
             key_list_add(used_keys, &nused, key);
             return;
         }
-    } else {
+    } else if (!pressed) {
         if (key == text_repeat_key)
             text_repeat_at = 0;
         /* A key that the client has as down receives its release, also
@@ -677,8 +700,9 @@ void seat_key(uint32_t key, int pressed)
             text_repeat_at = uptime_ms() + settings.repeat_delay;
         }
     }
-    /* The input method daemon sees the key first and may retain it. */
-    if (keyboard_focus && keyboard_focus->client->keyboard && im_filter_key(key, pressed, modifiers))
+    /* The input method daemon sees the key first and may retain it. The
+     * keys of a locked session do not reach the daemon. */
+    if (!lock_active() && keyboard_focus && keyboard_focus->client->keyboard && im_filter_key(key, pressed, modifiers))
         return;
     seat_deliver_key(key, pressed, modifiers);
 }
@@ -705,7 +729,7 @@ void seat_tick(long now)
         text_repeat_at = now + period;
     if (im_busy())
         return;
-    if (!im_filter_key(text_repeat_key, 1, modifiers))
+    if (lock_active() || !im_filter_key(text_repeat_key, 1, modifiers))
         seat_deliver_key(text_repeat_key, 1, modifiers);
 }
 

@@ -43,9 +43,8 @@ static void test_greeter(void)
     kprintf("gui_greeter: session of uid 1000\n");
     sleep_ms(1500);
 
-    /* Log out is the first row of the power menu (B4 of
-     * docs/plan/desktop-panel.md). */
-    panel_power_choose(sw, sh, 0);
+    /* Log out in the power menu (B4 of docs/plan/desktop-panel.md). */
+    panel_power_choose(sw, sh, POWER_ROW_LOGOUT);
     ktest_assert(wait_procs("panel", -1, 0, 10000), "the session did not end");
     ktest_assert(wait_procs("greeter", 0, 2, 10000), "no login window after the session");
     kprintf("gui_greeter: login window shown again\n");
@@ -82,7 +81,7 @@ static void test_panel_power(void)
     greeter_login_user();
     sleep_ms(1500);
     kprintf("panel_power: session of uid 1000, choosing Shut down\n");
-    panel_power_choose(sw, sh, 2);
+    panel_power_choose(sw, sh, POWER_ROW_SHUTDOWN);
     int status = proc_reap(init);
     ktest_fail("init exited with status 0x%x instead of powering off", status);
 }

@@ -128,6 +128,7 @@ static void flush_clients(void)
     im_tick(now);
     seat_tick(now);
     overlay_tick(now);
+    lock_tick(now);
 }
 
 static void frame(void)
@@ -136,6 +137,7 @@ static void frame(void)
     int presented = scene_has_damage();
     if (presented) {
         scene_compose();
+        lock_frame_done();
         frames_since_report++;
         comp_debug("frame");
     } else {
@@ -184,9 +186,10 @@ static void schedule_frame(void)
  * none. */
 static int poll_timeout(void)
 {
-    long deadlines[4] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline(), overlay_next_deadline() };
+    long deadlines[5] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline(), overlay_next_deadline(),
+                          lock_next_deadline() };
     long next = -1;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
         if (deadlines[i] >= 0 && (next < 0 || deadlines[i] < next))
             next = deadlines[i];
     if (next < 0)
@@ -277,6 +280,7 @@ int main(int argc, char **argv)
     data_init(srv);
     text_init(srv);
     im_init(srv);
+    lock_init(srv);
     debug_init(srv);
     trace_init(srv);
     if (verbose)

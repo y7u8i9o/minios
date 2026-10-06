@@ -187,7 +187,7 @@ lib/libgui/include/gui/pixel.h  pixel aarch64:pixel
 lib/libc/include/minios/simd.h  check-headers mathvec float pixel aarch64:pixel
 lib/libc/include/bits/simd_types.h  check-headers mathvec float pixel aarch64:pixel libc aarch64:libc
 lib/libwire/**                  check-libwire comp_* gui gui_app
-protocol/**                     check-libwire comp_* gui gui_app notify_proto gui_notify
+protocol/**                     check-libwire comp_* gui gui_app notify_proto gui_notify gui_lock* lock_idle
 lib/libfont/**                  check-libfont ttf gui_ttf gui_text_repeat
 lib/libcodec/**                 check-libcodec codec_* gui_images audio_player
 lib/libaudio/**                 audio_* gui_mixer
@@ -208,13 +208,14 @@ user/hello/**                   dynlink
 user/audiod/**                  audio_*
 user/calc/**                    gui_calc calculator
 user/compat/**                  boot
-user/compositor/**              comp_* gui gui_* panel_desktop panel_top aarch64:comp_damage aarch64:gui
+user/compositor/**              comp_* gui gui_* panel_desktop panel_top lock_idle aarch64:comp_damage aarch64:gui
 user/compositor/inputmethod.c   ime*
 user/compositor/main.c          ime* aarch64:comp_idle
 user/desktop/**                 gui_desktop gpu_resize wallpaper_hidpi
 user/edit/**                    editor
 user/files/**                   gui_files gui_filechooser gui_dnd
-user/greeter/**                 gui_greeter greeter_* login_gui
+user/greeter/**                 gui_greeter greeter_* login_gui gui_lock*
+user/lock/**                    gui_lock* lock_idle
 user/imed/**                    check-imed ime* gui_ime_settings
 user/init/**                    boot initctl shutdown shutdown_cmd
 user/installer/**               install_* gui_installer live_install
@@ -224,7 +225,7 @@ user/lua/**                     check-lua lua* gui_lua* luasynth*
 user/lua/lnet.c                 check-transfer net_transfer
 user/lua/lthread.c              check-transfer
 user/mint/**                    mint
-user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top gui_notify
+user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top gui_notify gui_lock
 user/notifyd/**                 notify_proto gui_notify
 user/pkg/**                     check-pkg pkg pkg_repo pkg_https pkg_apps offline_update kernel_upgrade
 user/po/**                      gettext gui_locale locale

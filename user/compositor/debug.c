@@ -8,7 +8,7 @@
 #include "comp.h"
 
 struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1, 1,
-                                   0, 0, 0 };
+                                   0, 0, 0, 0 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -19,6 +19,7 @@ static const char *role_name(enum role r)
     case ROLE_LAYER: return "layer";
     case ROLE_CURSOR: return "cursor";
     case ROLE_DND_ICON: return "dnd-icon";
+    case ROLE_LOCK: return "lock";
     default: return "none";
     }
 }
@@ -113,9 +114,21 @@ static void h_get_surface(struct wire_client *c, struct wire_resource *self, uin
 /* The current buffer of the surface, scaled with nearest neighbour
  * sampling to fit the target buffer with its aspect ratio. The rest of
  * the target is transparent. */
+/* While the session is locked, only root may copy the contents of
+ * windows. */
+static int capture_refused(struct wire_client *c)
+{
+    struct client *cl = wire_client_get_user_data(c);
+    return lock_active() && (!cl || cl->uid != 0);
+}
+
 static void h_capture_surface(struct wire_client *c, struct wire_resource *self, uint32_t id,
                               struct wire_resource *buffer)
 {
+    if (capture_refused(c)) {
+        debug_send_capture_failed(self, id);
+        return;
+    }
     struct csurface *s = surface_by_id(id);
     struct buffer *src = s ? s->current.buffer : NULL, *dst = buffer ? buffer->data : NULL;
     if (!src || !dst || !src->pool->map || !dst->pool->map || src->width <= 0 || src->height <= 0) {
@@ -216,7 +229,7 @@ static void h_capture_window(struct wire_client *c, struct wire_resource *self, 
                              uint32_t window)
 {
     struct toplevel *t = NULL;
-    for (struct csurface *s = surface_first(); s && !t; s = s->next)
+    for (struct csurface *s = surface_first(); s && !t && !capture_refused(c); s = s->next)
         if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->number == (int)window && s->mapped &&
             s->current.buffer && !s->toplevel->minimized)
             t = s->toplevel;
@@ -255,7 +268,8 @@ void debug_screen_changed(void)
 
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
                                     "display_mode", "pointer_speed", "pointer_accel", "ime_shift_toggle",
-                                    "ime_ctrl_space", "display_follow", "debug_damage", "debug_opaque", "debug_fps" };
+                                    "ime_ctrl_space", "display_follow", "debug_damage", "debug_opaque", "debug_fps",
+                                    "lock_timeout" };
 
 static int *slot(const char *key)
 {
@@ -274,6 +288,7 @@ static int *slot(const char *key)
     if (strcmp(key, "debug_damage") == 0) return &settings.debug_damage;
     if (strcmp(key, "debug_opaque") == 0) return &settings.debug_opaque;
     if (strcmp(key, "debug_fps") == 0) return &settings.debug_fps;
+    if (strcmp(key, "lock_timeout") == 0) return &settings.lock_timeout;
     return NULL;
 }
 
@@ -299,6 +314,8 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
         }
         session_uid = value;
         comp_log("session uid %d", value);
+        if (value < 0)
+            lock_session_ended();
         clients_drop_disallowed();
         return;
     }
@@ -321,6 +338,7 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.pointer_speed && (value < -100 || value > 100)) return;
     if (p == &settings.pointer_accel && value != POINTER_ACCEL_FLAT && value != POINTER_ACCEL_ADAPTIVE) return;
     if (p == &settings.display_follow && value != 0 && value != 1) return;
+    if (p == &settings.lock_timeout && (value < 0 || value > 86400)) return;
     if ((p == &settings.debug_damage || p == &settings.debug_opaque || p == &settings.debug_fps) && value != 0 &&
         value != 1)
         return;

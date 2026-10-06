@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod notifyd settings files pkg imed greeter askpass installer installer-gui
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod notifyd settings files pkg imed greeter lock askpass installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 # The programs of the package binutils share binutils/lib/ (docs/design/binutils.md).
 BINUTILS := ar as ld nm size strings readelf objdump objcopy strip addr2line ranlib
@@ -173,7 +173,7 @@ modes: $(BINS) $(ETC) skel-tree $(ROOT)/tmp $(ROOT)/var/log $(ROOT)/var/run $(RO
 	@chmod 1777 $(ROOT)/tmp
 	@chmod 0700 $(ROOT)/root $(ROOT)/home/user
 	@chmod 0600 $(ROOT)/home/.local/etc/shadow $(ROOT)/usr/share/skel/home/.local/etc/shadow
-	@chmod 4755 $(ROOT)/usr/bin/su $(ROOT)/usr/bin/passwd $(ROOT)/usr/bin/doas $(ROOT)/usr/bin/sudo
+	@chmod 4755 $(ROOT)/usr/bin/su $(ROOT)/usr/bin/passwd $(ROOT)/usr/bin/doas $(ROOT)/usr/bin/sudo $(ROOT)/usr/bin/checkpass
 	@chmod 0440 $(ROOT)/etc/sudoers
 
 $(ROOT)/usr/share/fonts/%.ttf: ../third_party/dejavu/%.ttf
@@ -689,6 +689,12 @@ $(ROOT)/usr/bin/installer-gui: installer/gui.c installer/backend.c installer/ins
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/installer-gui.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/installer-gui.elf $@
+
+# The screen locker shares the background and the card of the greeter.
+$(ROOT)/usr/bin/lock: lock/lock.c greeter/screen.c greeter/screen.h $(SOS) $(CRT0)
+	@mkdir -p $(dir $@) $(OUT)
+	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/lock.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
+	$(OBJCOPY) --strip-debug $(OUT)/lock.elf $@
 
 $(ROOT)/usr/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)

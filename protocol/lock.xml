@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The session lock of X12 (S6 of docs/plan/release-0.7.0.md,
+     docs/design/lock.md). The design follows the ext-session-lock protocol
+     of Wayland. A screen locker locks the session and shows a lock
+     surface. While the session is locked, X12 shows only the lock surface
+     and sends all input to it. Only the client that locked the session can
+     unlock it. -->
+<protocol name="lock">
+  <interface name="session_lock_manager" version="1">
+    <!-- Lock the session. X12 answers with locked when the screen shows
+         nothing of the session, or with finished when the request is
+         refused. X12 refuses the request while another locker has locked
+         the session. After a locker has exited without unlocking, X12
+         accepts the next request only from root or from the locker that
+         X12 started itself. -->
+    <request name="lock">
+      <arg name="id" type="new_id" interface="session_lock"/>
+    </request>
+  </interface>
+
+  <interface name="session_lock" version="1">
+    <!-- The surface that covers the screen while the session is locked.
+         A lock has at most one lock surface. -->
+    <request name="get_lock_surface">
+      <arg name="id" type="new_id" interface="lock_surface"/>
+      <arg name="surface" type="object" interface="surface"/>
+    </request>
+    <!-- Unlock the session. The request is valid only after locked. -->
+    <request name="unlock_and_destroy" type="destructor"/>
+    <!-- Destroy the object. A locked session remains locked, and X12
+         shows a black screen until a new locker locks the session. -->
+    <request name="destroy" type="destructor"/>
+
+    <event name="locked"/>
+    <event name="finished"/>
+  </interface>
+
+  <interface name="lock_surface" version="1">
+    <request name="ack_configure"><arg name="serial" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+    <!-- The size of the screen in logical pixels. The client acknowledges
+         the configure before it commits a buffer of that size. -->
+    <event name="configure">
+      <arg name="serial" type="uint"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+  </interface>
+</protocol>

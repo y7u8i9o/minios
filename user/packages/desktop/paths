@@ -3,6 +3,7 @@ usr/bin/notifyd
 usr/bin/notify-send
 usr/bin/desktop
 usr/bin/greeter
+usr/bin/lock
 usr/bin/askpass
 usr/bin/startgui
 usr/bin/settings
@@ -12,3 +13,4 @@ etc/desktop.conf
 etc/mime.types
 etc/mime.apps
 usr/share/man/man1/greeter.1
+usr/share/man/man1/lock.1

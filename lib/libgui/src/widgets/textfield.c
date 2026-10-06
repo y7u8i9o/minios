@@ -49,6 +49,9 @@ static const char *shown(struct textfield *f)
     return m;
 }
 
+/* widget_set_text replaces the text without the knowledge of the field.
+ * The paint and event functions therefore clamp the cursor and the
+ * anchor to the length of the current text before they use them. */
 static void clamp(struct textfield *f)
 {
     int n = len_of(f);
@@ -110,6 +113,7 @@ static void textfield_measure(struct widget *w, struct size_hint *h)
 static void textfield_paint(struct widget *w, struct painter *p)
 {
     struct textfield *f = (struct textfield *)w;
+    clamp(f);
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_FIELD], t->color[w->focused ? TC_ACCENT : TC_BORDER]);
@@ -331,6 +335,7 @@ static void drag_end(struct textfield *f, int action)
 static int textfield_event(struct widget *w, struct event *e)
 {
     struct textfield *f = (struct textfield *)w;
+    clamp(f);
     switch (e->type) {
     case EV_MOUSE_DOWN:
         if (e->button & 2) {

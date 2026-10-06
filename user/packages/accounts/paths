@@ -1,5 +1,6 @@
 usr/bin/login
 usr/bin/passwd
+usr/bin/checkpass
 usr/bin/useradd
 usr/bin/userdel
 usr/bin/su
@@ -13,6 +14,7 @@ etc/sudoers
 etc/sudo.conf
 usr/share/man/man1/login.1
 usr/share/man/man1/passwd.1
+usr/share/man/man1/checkpass.1
 usr/share/man/man1/useradd.1
 usr/share/man/man1/su.1
 usr/share/man/man1/sudo.1

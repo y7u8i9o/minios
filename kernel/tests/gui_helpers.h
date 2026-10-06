@@ -346,11 +346,13 @@ static inline void greeter_login_user(void)
     ktest_assert(wait_procs("desktop", 1000, 1, 5000), "no desktop of uid 1000");
 }
 
-/* The power menu of the panel (user/panel/power.c): 200 pixels wide, three
+/* The power menu of the panel (user/panel/power.c): 200 pixels wide, four
  * rows of 28 pixels with 6 pixels of padding, above the power button and
- * aligned to its right edge. Row 0 is Log out, 1 Restart, 2 Shut down. */
+ * aligned to its right edge. Row 0 is Lock, 1 Log out, 2 Restart and
+ * 3 Shut down. */
 #define POWER_MENU_W 200
-#define POWER_MENU_H (2 * 6 + 3 * 28)
+#define POWER_MENU_H (2 * 6 + 4 * 28)
+enum { POWER_ROW_LOCK, POWER_ROW_LOGOUT, POWER_ROW_RESTART, POWER_ROW_SHUTDOWN };
 static inline void panel_power_choose(int sw, int sh, int row)
 {
     int cx = sw / 2, cy = sh / 2;

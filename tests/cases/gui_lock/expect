@@ -1,0 +1,17 @@
+x12: session uid 0
+x12: locker [0-9]+ started \(Super\+L\)
+x12: client [0-9]+ locks the session
+x12: session locked
+lock: locked
+gui_lock: locked
+x12: lock of client [0-9]+ refused: the session is locked
+gui_lock: second locker refused
+lock: wrong password
+gui_lock: wrong password refused
+lock: unlocked
+x12: session unlocked
+gui_lock: unlocked
+panel: locker started
+gui_lock: locked from the power menu
+gui_lock: ok
+TEST PASS

@@ -63,6 +63,9 @@ struct wire_conn {
     int in_fds[WIRE_MAX_FDS];
     int nin_fds;
     int error;                  /* set once the peer is gone or the stream is corrupt */
+    /* Set when a send fails. The input that the peer sent before it closed
+     * the connection can still be read and dispatched. */
+    int send_failed;
 };
 
 void wire_conn_init(struct wire_conn *c, int fd);

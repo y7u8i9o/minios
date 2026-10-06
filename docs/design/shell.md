@@ -197,14 +197,15 @@ of today in its cell and the background of the popup, moves one month
 forward and back, and closes it.
 
 The power button at the right end of the bar (`power.c`, B4) opens a
-menu of 200 pixels with Log out, Restart and Shut down, each with its
-icon (`app-logout`, `restart`, `power-off`). The row under the pointer is
-highlighted, and the account name of the session is drawn right of Log
-out. Log out exits the panel with status 0, which ends the session
-through `startgui`. Restart and Shut down send `reboot` and `poweroff`
-to init with `init_request` (`init.md`). init accepts them from the user
-of the session. The entry Log out of `/etc/launcher` moved into this
-menu. The launcher still treats `@logout` in a table of the user as the
+menu of 200 pixels with Lock, Log out, Restart and Shut down, each with
+its icon (`lock`, `app-logout`, `restart`, `power-off`). The row under the
+pointer is highlighted, and the account name of the session is drawn right
+of Log out. Lock starts the screen locker `lock` (`lock.md`). Log out
+exits the panel with status 0. This ends the session through `startgui`.
+Restart and Shut down send `reboot` and `poweroff` to init with
+`init_request` (`init.md`). init accepts them from the user of the session.
+The entry Log out of `/etc/launcher` moved into this menu. The launcher
+still treats `@logout` in a table of the user as the
 row at its bottom. `gui_greeter` logs out through the power menu,
 `comp_panel` opens and dismisses it, and `panel_power` boots through
 init and the greeter, logs in and chooses Shut down, after which QEMU

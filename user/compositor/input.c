@@ -182,6 +182,8 @@ static void read_device(struct idev *d)
 {
     struct input_event ev[32];
     ssize_t n = read(d->fd, ev, sizeof ev);
+    if (n > 0)
+        lock_note_input();
     for (ssize_t i = 0; i < n / (ssize_t)sizeof ev[0]; i++)
         handle_event(d, &ev[i]);
 }

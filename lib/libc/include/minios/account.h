@@ -54,6 +54,11 @@ int account_make_home(const char *dir, unsigned uid, unsigned gid);
  * end of the input. */
 int account_read_password(const char *prompt, char *buf, size_t size);
 
+/* Give the calling process the identity of the account name: its groups
+ * from /etc/group, the group gid and the user uid. The process must run as
+ * root. Returns 0 or -1 with errno set. */
+int account_become(const char *name, unsigned uid, unsigned gid);
+
 /* The days since the epoch, for the last change field of /etc/shadow. */
 long account_today(void);
 

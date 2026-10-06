@@ -1,24 +1,26 @@
 /* The power menu of the panel (B4 of docs/plan/desktop-panel.md): the
- * button near the right end of the bar opens a popup with Log out, Restart
- * and Shut down. Log out ends the session: startgui ends it when the panel
- * exits with status 0. Restart and Shut down send reboot and poweroff to
- * init (init_request), which accepts them from the user of the graphical
- * session (docs/design/users.md). */
+ * button near the right end of the bar opens a popup with Lock, Log out,
+ * Restart and Shut down. Lock starts the screen locker lock
+ * (docs/design/lock.md). Log out ends the session: startgui ends it when
+ * the panel exits with status 0. Restart and Shut down send reboot and
+ * poweroff to init (init_request), which accepts them from the user of the
+ * graphical session (docs/design/users.md). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <gui/i18n.h>
+#include <gui/mime.h>
 #include <minios/init.h>
 #include "panel.h"
 
 #define MENU_W 200
 #define ROW_H 28
 #define PAD 6
-#define NROWS 3
+#define NROWS 4
 
-enum { ROW_LOGOUT, ROW_RESTART, ROW_SHUTDOWN };
+enum { ROW_LOCK, ROW_LOGOUT, ROW_RESTART, ROW_SHUTDOWN };
 
 static struct canvas menu;
 static struct wire_proxy *popup;
@@ -53,8 +55,8 @@ void power_draw_button(struct painter *p, int hovered)
 
 static void draw_menu(void)
 {
-    static const char *const icons[NROWS] = { "app-logout", "restart", "power-off" };
-    const char *titles[NROWS] = { _("Log out"), _("Restart"), _("Shut down") };
+    static const char *const icons[NROWS] = { "lock", "app-logout", "restart", "power-off" };
+    const char *titles[NROWS] = { _("Lock"), _("Log out"), _("Restart"), _("Shut down") };
     struct painter p;
     canvas_painter(&p, &menu);
     painter_fill(&p, 0, 0, menu.lw, menu.lh, MENU_BG);
@@ -72,7 +74,8 @@ static void draw_menu(void)
     struct passwd *pw = getpwuid(getuid());
     if (pw) {
         int tw = painter_text_width(&p, pw->pw_name, -1);
-        panel_label(&p, menu.lw - PAD - 8 - tw - 6, PAD, tw + 12, ROW_H, pw->pw_name, MENU_TEXT_DIM, 0);
+        panel_label(&p, menu.lw - PAD - 8 - tw - 6, PAD + ROW_LOGOUT * ROW_H, tw + 12, ROW_H, pw->pw_name,
+                    MENU_TEXT_DIM, 0);
     }
     canvas_commit(&menu);
 }
@@ -156,6 +159,12 @@ void power_pointer_button(uint32_t button, uint32_t state, int x, int y)
         return;
     teardown();
     draw_panel();
+    if (row == ROW_LOCK) {
+        char *const argv[] = { "/bin/lock", NULL };
+        int err = mime_spawn(argv);
+        log_line(err < 0 ? "cannot start the locker" : "locker started");
+        return;
+    }
     if (row == ROW_LOGOUT) {
         log_line("logout");
         exit(0);                        /* startgui ends the session when the panel exits */

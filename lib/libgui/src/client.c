@@ -23,6 +23,7 @@
 #include "seat-client.h"
 #include "data-client.h"
 #include "text-client.h"
+#include "lock-client.h"
 
 #define QUEUE_MAX 256
 
@@ -62,6 +63,8 @@ struct win {
     uint32_t last_click;        /* release time of the previous header click (double click) */
     int32_t wheel_acc;          /* axis motion below one wheel click, 24.8 pixels */
     int translucent;            /* ARGB buffers without an opaque region (gui_set_translucent) */
+    struct wire_proxy *session_lock, *lock_surface;
+    int lock_state;             /* 1 after locked, -1 after finished, 0 before either */
 };
 
 /* Logical origin of the contents inside the surface. */
@@ -1537,6 +1540,38 @@ static void on_layer_closed(void *user, struct wire_proxy *l)
 }
 static const struct layer_surface_listener layer_events = { on_layer_configure, on_layer_closed };
 
+static void on_lock_configure(void *user, struct wire_proxy *l, uint32_t serial, int32_t width, int32_t height)
+{
+    struct gui_window *w = user;
+    lock_surface_ack_configure(l, serial);
+    if (width > 0 && height > 0 && (width != w->width || height != w->height)) {
+        surface_resize(w, width, height);
+        struct wmsg m = { WM_RESIZED, 0, w->id, width, height, 0, 0, "" };
+        push(&m);
+    }
+}
+static const struct lock_surface_listener lock_surface_events = { on_lock_configure };
+
+static void on_locked(void *user, struct wire_proxy *lock)
+{
+    struct gui_window *w = user;
+    ((struct win *)w->priv)->lock_state = 1;
+}
+
+/* X12 refused the lock, or the session ended while it was locked. A lock
+ * window that was shown closes. */
+static void on_lock_finished(void *user, struct wire_proxy *lock)
+{
+    struct gui_window *w = user;
+    struct win *wi = w->priv;
+    if (wi->lock_state == 1) {
+        struct wmsg m = { WM_CLOSE, 0, w->id, 0, 0, 0, 0, "" };
+        push(&m);
+    }
+    wi->lock_state = -1;
+}
+static const struct session_lock_listener session_lock_events = { on_locked, on_lock_finished };
+
 static struct gui_window *window_of_popup(struct wire_proxy *p)
 {
     for (struct gui_window *w = wins; w; w = w->next)
@@ -1611,6 +1646,54 @@ struct gui_window *gui_create_layer_window(int width, int height, int layer, int
      * drawing, not with the grey fill of the new buffer, which would
      * flash over the whole screen for a full screen overlay. */
     return w;
+}
+
+struct gui_window *gui_create_lock_window(void)
+{
+    if (!display)
+        return NULL;
+    struct wire_proxy *manager = gui_bind_global("session_lock_manager", &session_lock_manager_interface, 1);
+    if (!manager)
+        return NULL;
+    struct gui_window *w = window_alloc();
+    if (!w) {
+        wire_proxy_destroy(manager);
+        return NULL;
+    }
+    struct win *wi = w->priv;
+    wi->session_lock = session_lock_manager_lock(manager);
+    session_lock_add_listener(wi->session_lock, &session_lock_events, w);
+    wi->lock_surface = session_lock_get_lock_surface(wi->session_lock, wi->surface);
+    lock_surface_add_listener(wi->lock_surface, &lock_surface_events, w);
+    wire_proxy_destroy(manager);
+    wire_display_flush(display);
+    /* X12 sends locked after it has composed a frame without the session,
+     * or finished at once. The wait ends after 5 seconds. */
+    for (int i = 0; i < 500 && wi->lock_state == 0; i++) {
+        struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
+        poll(&pf, 1, 10);
+        if (dispatch_events() < 0)
+            break;
+    }
+    if (wi->lock_state != 1) {
+        gui_destroy_window(w);
+        return NULL;
+    }
+    if (w->width == 0)
+        surface_resize(w, screen_w, screen_h);
+    return w;
+}
+
+int gui_unlock_session(struct gui_window *w)
+{
+    struct win *wi = w ? w->priv : NULL;
+    if (!wi || !wi->session_lock || wi->lock_state != 1)
+        return -1;
+    session_lock_unlock_and_destroy(wi->session_lock);
+    wi->session_lock = NULL;
+    wi->lock_state = 0;
+    wire_display_flush(display);
+    return 0;
 }
 
 void gui_layer_set_margin(struct gui_window *w, int top, int right, int bottom, int left)
@@ -1751,6 +1834,11 @@ void gui_destroy_window(struct gui_window *w)
         toplevel_destroy(wi->toplevel);
     if (wi->layer)
         layer_surface_destroy(wi->layer);
+    if (wi->lock_surface)
+        lock_surface_destroy(wi->lock_surface);
+    /* A lock that was not unlocked remains in effect without a locker. */
+    if (wi->session_lock)
+        session_lock_destroy(wi->session_lock);
     if (wi->popup)
         popup_destroy(wi->popup);
     if (wi->surface)

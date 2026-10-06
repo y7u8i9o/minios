@@ -168,6 +168,28 @@ struct widget *app_layer_window(struct app *a, int width, int height, int layer,
                                                                         keyboard, ns) : NULL, ns);
 }
 
+struct widget *app_lock_window(struct app *a)
+{
+    if (!a->connected)
+        return NULL;
+    struct gui_window *win = gui_create_lock_window();
+    if (!win)
+        return NULL;
+    struct widget *w = widget_new(&window_class, NULL);
+    if (!w) {
+        gui_destroy_window(win);
+        return NULL;
+    }
+    w->app = a;
+    w->window = w;
+    return register_window(a, w, win, "lock");
+}
+
+int app_unlock(struct widget *window)
+{
+    return gui_unlock_session(window_state_of(window)->win);
+}
+
 struct widget *app_first_window(struct app *a)
 {
     return a->nwindows ? a->windows[0] : NULL;

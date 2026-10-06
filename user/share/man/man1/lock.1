@@ -1,0 +1,29 @@
+LOCK(1)                     User Commands
+
+NAME
+    lock - lock the graphical session
+
+SYNOPSIS
+    lock
+
+DESCRIPTION
+    lock locks the session of the display server X12 and covers the
+    screen. While the session is locked, X12 shows only the lock screen
+    and sends all input to it. The lock screen shows the account of the
+    caller and a password field. The right password, checked by
+    checkpass(1), unlocks the session, and lock exits.
+
+    X12 starts lock for Super+L and after the idle time set on the
+    Display page of the Settings application (the setting lock_timeout of
+    /etc/desktop.conf in seconds, 0 for never). The Lock row of the power
+    menu of the panel starts it as well.
+
+    When lock ends without an unlock, the session remains locked, and X12
+    shows a black screen. A key press then starts lock again.
+
+EXIT STATUS
+    0 after the unlock. 1 when X12 refuses the lock, for example while
+    another instance of lock runs.
+
+SEE ALSO
+    checkpass(1), greeter(1)

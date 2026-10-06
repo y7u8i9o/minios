@@ -170,6 +170,7 @@ static void surface_resource_destroy(struct wire_resource *r)
     data_surface_gone(s);
     shell_surface_gone(s);
     im_surface_gone(s);
+    lock_surface_gone(s);
     if (s->toplevel)
         s->toplevel->s = NULL;
     comp_log("surface %d destroyed", s->id);
@@ -555,6 +556,7 @@ void client_attach(struct wire_client *wc)
     c->uid = peer.uid;
     /* The pid of the socket peer. shell_set_pid of the client replaces it. */
     c->pid = peer.pid;
+    c->peer_pid = peer.pid;
     c->number = next_client++;
     wire_client_set_user_data(wc, c, client_gone);
     hang_client_attached(c);

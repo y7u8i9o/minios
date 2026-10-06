@@ -165,7 +165,7 @@ do-not-disturb state and the history limit.
 
 Document: `docs/design/notifications.md`.
 
-### S6. Screen locker
+### S6. Screen locker (completed 2026-10-06)
 
 X12 gains a session lock protocol. While the session is locked, X12 shows
 only the lock surface on every output, sends all input to it and disables

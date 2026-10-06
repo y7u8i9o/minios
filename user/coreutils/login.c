@@ -104,7 +104,7 @@ static void start_session(const struct account *a)
         fchmod(0, 0620);
     }
     chown(CONSOLE_DISPLAY, a->uid, a->gid);
-    if (initgroups(a->name, a->gid) < 0 || setgid(a->gid) < 0 || setuid(a->uid) < 0) {
+    if (account_become(a->name, a->uid, a->gid) < 0) {
         perror("login: cannot change the identity");
         exit(1);
     }

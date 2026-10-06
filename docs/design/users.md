@@ -227,7 +227,7 @@ The image ships `root` (home `/root`) and `user` (uid and gid 1000, home
 into `/etc/skel`, `/home/user` and `/root`, installs `user/local/` as the
 prefix of the root image and of the seed `/usr/share/skel/home`, writes the
 marker, sets the special modes on the build tree (`/tmp` 1777, the homes
-0700, the shadow file 0600, `su` and `passwd` 4755) and links the
+0700, the shadow file 0600, `su`, `passwd` and `checkpass` 4755) and links the
 databases. The manifest `user/perms` gives `/home/user` to uid 1000.
 
 The data volume's `/etc/fstab` entry carries the option `homes`. After the
@@ -322,6 +322,11 @@ connection to X12 and a new toolkit state. `greeter -a NAME` starts the session 
 account `NAME` once without the login window and without a password, and
 the login window follows when that session ends. The live medium uses the
 option for its account `live` (`live.md`).
+
+The login window and the screen locker `lock` (`lock.md`) share the
+background, the top bar, the card and the account row in
+`user/greeter/screen.c`. `account_become` gives a process the groups, the
+gid and the uid of an account. `login`, the greeter and X12 use it.
 
 The panel shows the account name at the end of the Log out row of its
 menu. The settings program gained the Users page (`user/settings/users.c`).

@@ -23,6 +23,11 @@ struct widget *app_modal_window(struct app *a, struct widget *parent, int width,
  * decorations and its size follows the compositor's configure. */
 struct widget *app_layer_window(struct app *a, int width, int height, int layer, int anchor, int exclusive,
                                 int keyboard, const char *ns);
+/* A window on the lock surface of the session lock (gui_create_lock_window).
+ * Return NULL when X12 refuses the lock. app_unlock unlocks the session
+ * and returns 0, or -1 when the window has no active lock. */
+struct widget *app_lock_window(struct app *a);
+int app_unlock(struct widget *window);
 /* Run until app_quit or the last window closes; returns the exit code. */
 int app_run(struct app *a);
 void app_quit(struct app *a, int code);

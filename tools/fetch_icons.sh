@@ -62,6 +62,7 @@ calendar:calendar-days
 power-off:power-off
 restart:rotate-right
 show-desktop:desktop
+lock:lock
 notifications:bell
 notifications-off:bell-slash
 close:xmark

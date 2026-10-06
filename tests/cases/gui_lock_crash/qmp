@@ -1,0 +1,4 @@
+# A screendump of the black screen after the locker has ended (S6 of
+# docs/plan/release-0.7.0.md).
+wait gui_lock_crash: black screen
+screendump crash.ppm

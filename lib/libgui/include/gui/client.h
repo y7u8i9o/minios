@@ -97,6 +97,15 @@ struct gui_window *gui_create_layer_window(int width, int height, int layer, int
  * desktop area (the screen without the panel). The margins take effect
  * with the next commit. */
 void gui_layer_set_margin(struct gui_window *w, int top, int right, int bottom, int left);
+/* The session lock (protocol/lock.xml, docs/design/lock.md). Lock the
+ * session and create a window on the lock surface, which covers the
+ * screen and receives all input. Return NULL when X12 refuses the lock.
+ * The window closes when the session ends. Destroying the window without
+ * gui_unlock_session leaves the session locked. */
+struct gui_window *gui_create_lock_window(void);
+/* Unlock the session of a lock window. Return 0, or -1 when the window
+ * has no active lock. */
+int gui_unlock_session(struct gui_window *w);
 void gui_destroy_window(struct gui_window *w);
 /* Mark a rectangle (logical pixels) changed; it is committed with the next frame. */
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);

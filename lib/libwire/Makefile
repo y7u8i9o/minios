@@ -18,7 +18,7 @@ all: $(LIB) $(SO) $(ABIFILE)
 
 # Regenerate the marshalling code from the protocol files.
 generate:
-	for p in core shell seat data text debug audio ime notify; do python3 ../../tools/wscan/wscan.py ../../protocol/$$p.xml generated; done
+	for p in core shell seat data text debug audio ime notify lock; do python3 ../../tools/wscan/wscan.py ../../protocol/$$p.xml generated; done
 
 $(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)

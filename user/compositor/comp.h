@@ -12,6 +12,7 @@
 #include "text-server.h"
 #include "debug-server.h"
 #include "ime-server.h"
+#include "lock-server.h"
 
 #define FORMAT_XRGB8888 1
 #define FORMAT_ARGB8888 2
@@ -28,7 +29,7 @@
 #define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
 #define LAYER_OVERLAY 3          /* above the panel, and a keyboard interactive one gets the focus when mapped */
-enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP };
+enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP, ROLE_LOCK };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
 enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
 enum { ANCHOR_NONE, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_LEFT, ANCHOR_RIGHT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_LEFT,
@@ -132,6 +133,14 @@ struct layer {
     int acked_w, acked_h;
 };
 
+/* The lock surface of a session lock (lock.c). It covers the screen. */
+struct lock_surface_state {
+    struct csurface *s;
+    struct wire_resource *res;
+    uint32_t serial, acked_serial;
+    int pending_w, pending_h;
+};
+
 struct csurface {
     struct wire_resource *res;
     struct client *client;
@@ -145,6 +154,7 @@ struct csurface {
     struct toplevel *toplevel;
     struct popup *popup;
     struct layer *layer;
+    struct lock_surface_state *lock;
     int stack;                              /* z order among toplevels, higher on top */
     int hotspot_x, hotspot_y;               /* cursor surfaces and drag icons */
     unsigned commits;                       /* commits since the creation, for x12settings */
@@ -155,6 +165,7 @@ struct client {
     struct wire_client *wc;
     int number;
     unsigned uid;                           /* SO_PEERCRED at connect */
+    int peer_pid;                           /* SO_PEERCRED at connect; set_pid does not change it */
     long stall_since;                       /* uptime when its socket first remained full */
     struct wire_resource *pointer, *keyboard, *data_device;
     struct wire_resource *text_input;
@@ -205,6 +216,7 @@ struct comp_settings {
     int ime_ctrl_space;             /* Ctrl+Space and Super+Space toggle it */
     int display_follow;             /* the mode follows the size requests of the host display */
     int debug_damage, debug_opaque, debug_fps;  /* the debug views of overlay.c */
+    int lock_timeout;               /* seconds without input before the session locks, 0 for never */
 };
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1
@@ -435,6 +447,30 @@ int im_candidates_visible(void);
 void im_place_candidates(void);
 void im_candidates_committed(struct csurface *s, int first_map);
 void im_surface_gone(struct csurface *s);
+/* lock.c: the session lock (docs/design/lock.md). */
+void lock_init(struct wire_server *srv);
+/* 1 while the session is locked, with or without a running locker. */
+int lock_active(void);
+/* The mapped lock surface, or NULL. */
+struct csurface *lock_surface_mapped(void);
+/* Start /bin/lock as the session user, unless a locker already runs.
+ * reason is the cause that X12 writes to the log. */
+void lock_start_locker(const char *reason);
+void lock_surface_committed(struct csurface *s, int first_map);
+void lock_surface_gone(struct csurface *s);
+/* A frame was composed. The locked event follows the first frame of a
+ * locked session. */
+void lock_frame_done(void);
+/* Draw the black screen and its message when no lock surface is mapped. */
+void lock_draw(struct rect clip);
+/* A key press while the session is locked without a lock surface. */
+void lock_key_without_locker(void);
+void lock_note_input(void);
+long lock_next_deadline(void);
+void lock_tick(long now);
+void lock_output_changed(void);
+/* The session ended (session_uid -1). The lock ends with the session. */
+void lock_session_ended(void);
 /* text.c */
 
 void text_init(struct wire_server *srv);

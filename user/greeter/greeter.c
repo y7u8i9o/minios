@@ -35,14 +35,13 @@
 #include <sys/utsname.h>
 #include <time.h>
 #include <gui/app.h>
-#include <gui/image.h>
-#include <gui/wallpaper.h>
 #include <gui/theme.h>
 #include <minios/input.h>
 #include <minios/init.h>
 #include <gui/i18n.h>
 #include <minios/account.h>
 #include <minios/conf.h>
+#include "screen.h"
 
 #define MAX_ACCOUNTS 32
 #define FAILURE_DELAY_MS 1500
@@ -50,15 +49,10 @@
 /* ---- the login window ---- */
 
 /* The login window is a layer surface over the whole screen, laid out in
- * the manner of GDM. A top bar shows the host name, the clock and the
- * power buttons. A card in the middle shows one of three pages: the
- * accounts, the password of the chosen account, and the first password of
- * an account that has none. The background is the desktop colour of
- * /etc/desktop.conf with a gradient, or its wallpaper when one is set. */
-
-#define CARD_W 340
-#define AVATAR 40
-#define ROW_H  52
+ * the manner of GDM (screen.h). A top bar shows the host name, the clock
+ * and the power buttons. A card in the middle shows one of three pages:
+ * the accounts, the password of the chosen account, and the first
+ * password of an account that has none. */
 
 enum page { PAGE_USERS, PAGE_PASSWORD, PAGE_CHOOSE };
 
@@ -72,10 +66,6 @@ static char names[MAX_ACCOUNTS][33];
 static char full_names[MAX_ACCOUNTS][64];
 static int naccounts, selected;
 static int waiting;                     /* after a wrong password */
-static uint32_t desktop_color = 0x00306080;
-static struct image *wallpaper;
-/* The wallpaper at the device size of the screen (wallpaper_render). */
-static struct image *backdrop;
 
 static void load_accounts(void)
 {
@@ -92,102 +82,7 @@ static void load_accounts(void)
     endpwent();
 }
 
-/* The desktop colour and the wallpaper of the system's desktop settings. */
-static void load_background(void)
-{
-    char value[256];
-    if (conf_lookup("/etc/desktop.conf", "desktop_color", value, sizeof value))
-        desktop_color = (uint32_t)strtoul(value, NULL, 0) & 0xffffff;
-    if (conf_lookup("/etc/desktop.conf", "wallpaper", value, sizeof value) && value[0])
-        wallpaper = image_load(value);
-}
-
-/* color with each channel scaled by percent. */
-static uint32_t shade(uint32_t color, int percent)
-{
-    uint32_t r = ((color >> 16) & 0xff) * (uint32_t)percent / 100;
-    uint32_t g = ((color >> 8) & 0xff) * (uint32_t)percent / 100;
-    uint32_t b = (color & 0xff) * (uint32_t)percent / 100;
-    return (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (b > 255 ? 255 : b);
-}
-
 /* ---- the widgets of the window ---- */
-
-/* The backdrop is a vertical box that paints the background. */
-static void backdrop_measure(struct widget *w, struct size_hint *h) { box_class.measure(w, h); }
-static void backdrop_layout(struct widget *w) { box_class.layout(w); }
-
-static void backdrop_paint(struct widget *w, struct painter *p)
-{
-    if (wallpaper) {
-        /* The wallpaper covers the screen and is cut at the longer side,
-         * rendered once at the device size of the screen. */
-        if (backdrop && (backdrop->w != w->w * p->scale || backdrop->h != w->h * p->scale)) {
-            image_free(backdrop);
-            backdrop = NULL;
-        }
-        if (!backdrop)
-            backdrop = wallpaper_render(wallpaper, WALLPAPER_FILL, desktop_color, w->w, w->h, p->scale);
-        if (backdrop) {
-            painter_image(p, 0, 0, backdrop);
-            return;
-        }
-    }
-    for (int y = 0; y < w->h; y += 4)
-        painter_fill(p, 0, y, w->w, 4, shade(desktop_color, 115 - 55 * y / (w->h ? w->h : 1)));
-}
-
-static const struct widget_class backdrop_class = { "greeter-backdrop", sizeof(struct widget), backdrop_measure,
-                                                    backdrop_layout, backdrop_paint, NULL, NULL };
-
-/* The top bar and the card are boxes with a background of the theme. */
-static void bar_paint(struct widget *w, struct painter *p)
-{
-    const struct theme *t = widget_theme(w);
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    painter_fill(p, 0, w->h - 1, w->w, 1, t->color[TC_BORDER]);
-}
-
-static void card_paint(struct widget *w, struct painter *p)
-{
-    const struct theme *t = widget_theme(w);
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_WINDOW], t->color[TC_BORDER]);
-}
-
-/* The clock is centred on the whole bar, whatever the widths of the host
- * name on its left and of the buttons on its right. */
-static struct widget *clock_label;
-
-static void bar_layout(struct widget *w)
-{
-    box_class.layout(w);
-    if (clock_label && clock_label->parent == w)
-        clock_label->x = (w->w - clock_label->w) / 2;
-}
-
-static const struct widget_class bar_class = { "greeter-bar", sizeof(struct widget), backdrop_measure,
-                                               bar_layout, bar_paint, NULL, NULL };
-/* A box that paints nothing, for the buttons beside the centred clock. */
-static const struct widget_class clear_box_class = { "greeter-box", sizeof(struct widget), backdrop_measure,
-                                                     backdrop_layout, NULL, NULL, NULL };
-static const struct widget_class card_class = { "greeter-card", sizeof(struct widget), backdrop_measure,
-                                                backdrop_layout, card_paint, NULL, NULL };
-
-/* A spacer takes the free space of the backdrop and paints nothing. */
-static void spacer_measure(struct widget *w, struct size_hint *h) { (void)w; (void)h; }
-
-static const struct widget_class spacer_class = { "greeter-spacer", sizeof(struct widget), spacer_measure, NULL,
-                                                  NULL, NULL, NULL };
-
-static struct widget *container_new(const struct widget_class *cls, struct widget *parent, int vertical, int padding)
-{
-    struct widget *w = widget_new(cls, parent);
-    if (w) {
-        w->value = vertical;
-        w->padding = padding;
-    }
-    return w;
-}
 
 /* An account row shows an avatar with the initial of the account, the
  * full name and the account name. value is the index of the account. In
@@ -196,8 +91,8 @@ static struct widget *container_new(const struct widget_class *cls, struct widge
  * same widget is a header that does not take the focus. */
 static void row_measure(struct widget *w, struct size_hint *h)
 {
-    h->min_h = h->pref_h = ROW_H;
-    h->min_w = h->pref_w = CARD_W - 40;
+    h->min_h = h->pref_h = SCREEN_ROW_H;
+    h->min_w = h->pref_w = SCREEN_CARD_W - 40;
 }
 
 static void row_paint(struct widget *w, struct painter *p)
@@ -213,11 +108,7 @@ static void row_paint(struct widget *w, struct painter *p)
     } else if (active) {
         painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], t->color[TC_BUTTON_HOVER]);
     }
-    painter_avatar(p, 8, (w->h - AVATAR) / 2, AVATAR, names[i], full_names[i]);
-    int fh = t->metric[TM_FONT_PX];
-    int tx = 8 + AVATAR + 12, ty = (w->h - 2 * fh - 4) / 2;
-    painter_text(p, tx, ty, full_names[i], text);
-    painter_text(p, tx, ty + fh + 4, names[i], dim);
+    screen_paint_account(p, 0, 0, w->h, names[i], full_names[i], text, dim);
     if (w->focused)
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
@@ -278,16 +169,6 @@ static void show_page(enum page page)
         widget_focus(password);
     else
         widget_focus(new_field);
-}
-
-static void tick(void *arg)
-{
-    char text[64];
-    time_t now = time(NULL);
-    struct tm tm;
-    localtime_r(&now, &tm);
-    strftime(text, sizeof text, "%a %d %b  %H:%M", &tm);
-    widget_set_text(clock_label, text);
 }
 
 static void retry(void *arg)
@@ -416,7 +297,7 @@ static int window_main(void)
         return 1;
     textdomain("greeter");
     load_accounts();
-    load_background();
+    screen_load_background();
     if (naccounts == 0)
         return 1;
     struct widget *win = main_win =
@@ -424,37 +305,18 @@ static int window_main(void)
                          0, 1, "greeter");
     if (!win)
         return 1;
-    widget_set_padding(win, 0);
     struct utsname u;
     const char *host = uname(&u) == 0 && u.nodename[0] ? u.nodename : "minios";
 
-    struct widget *back = container_new(&backdrop_class, win, 1, 0);
-    widget_set_stretch(back, 1, 1);
-
     /* The top bar: the host name, the clock in the middle, the power
      * buttons on the right. */
-    struct widget *bar = container_new(&bar_class, back, 0, 4);
-    struct widget *host_label = label_new(bar, host);
-    widget_set_stretch(host_label, 1, 0);
-    clock_label = label_new(bar, "");
-    struct widget *right = container_new(&clear_box_class, bar, 0, 0);
-    widget_set_stretch(right, 1, 0);
-    /* A transparent spacer, which leaves the centred clock visible. */
-    struct widget *gap = widget_new(&spacer_class, right);
-    widget_set_stretch(gap, 1, 0);
+    struct widget *back = screen_backdrop_new(win);
+    struct widget *right = screen_bar_new(back, host);
     struct widget *restart = button_new(right, _("Restart"));
     widget_connect(restart, "clicked", on_power, "reboot");
     struct widget *off = button_new(right, _("Shut down"));
     widget_connect(off, "clicked", on_power, "poweroff");
-
-    struct widget *top = widget_new(&spacer_class, back);
-    widget_set_stretch(top, 0, 1);
-    card = container_new(&card_class, back, 1, 16);
-    widget_set_align(card, ALIGN_CENTER, ALIGN_CENTER);
-    widget_set_min(card, CARD_W, 0);
-    widget_set_max(card, CARD_W, 0);
-    struct widget *bottom = widget_new(&spacer_class, back);
-    widget_set_stretch(bottom, 0, 2);
+    card = screen_card_new(back);
 
     /* The accounts. */
     pages[PAGE_USERS] = box_new(card, 1);
@@ -488,8 +350,7 @@ static int window_main(void)
 
     /* The first account after root is the likely one. */
     selected = naccounts > 1 ? 1 : 0;
-    tick(NULL);
-    app_timer_add(app, 10000, 1, tick, NULL);
+    screen_clock_start(app);
     show_page(PAGE_USERS);
     int r = app_run(app);
     app_destroy(app);
@@ -620,7 +481,7 @@ static void run_session(const char *name)
     pid_t pid = fork();
     if (pid == 0) {
         setsid();
-        if (initgroups(name, gid) < 0 || setgid(gid) < 0 || setuid(uid) < 0)
+        if (account_become(name, uid, gid) < 0)
             _exit(126);
         if (chdir(home) < 0)
             chdir("/");

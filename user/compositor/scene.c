@@ -122,6 +122,11 @@ static int visible(const struct csurface *s)
         return 0;
     if (s->role == ROLE_IME_POPUP && !im_candidates_visible())
         return 0;
+    /* A locked session shows only the lock surface and its popups. */
+    if (lock_active()) {
+        struct csurface *view = lock_surface_mapped();
+        return view && (s == view || (s->role == ROLE_POPUP && s->popup && s->popup->parent == view));
+    }
     return 1;
 }
 
@@ -137,9 +142,12 @@ static long sort_key(const struct csurface *s)
         return s->layer->layer >= 2 ? 3000000L + s->id : s->id;
     case ROLE_TOPLEVEL: return 1000000L + s->stack;
     case ROLE_POPUP:
+        if (s->popup && s->popup->parent && s->popup->parent->role == ROLE_LOCK)
+            return 6500000L + s->id;
         return s->popup && s->popup->parent && s->popup->parent->role == ROLE_LAYER &&
                s->popup->parent->layer->layer >= 2 ? 3500000L + s->id : 2000000L + s->id;
     case ROLE_IME_POPUP: return 4000000L + s->id;
+    case ROLE_LOCK: return 6000000L + s->id;
     case ROLE_DND_ICON: return 5000000L + s->id;
     default: return 2000000L + s->id;
     }
@@ -494,8 +502,9 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             }
         }
     }
+    /* A locked session has a black background. */
     if (!covered)
-        gfx_fill_rect(&back, R.x, R.y, R.w, R.h, (uint32_t)settings.desktop_color);
+        gfx_fill_rect(&back, R.x, R.y, R.w, R.h, lock_active() ? 0 : (uint32_t)settings.desktop_color);
     for (int i = 0; i < n; i++) {
         struct csurface *s = order[i];
         pieces[0] = rect_intersect(extent(s), r);
@@ -519,6 +528,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             hang_draw(s, pieces[k]);
         }
     }
+    lock_draw(r);
     overlay_draw(r, order, n);
     draw_cursor(r);
 }

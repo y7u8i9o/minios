@@ -53,6 +53,9 @@ size_t wire_message_size(const struct wire_message *m, const union wire_arg *arg
 int wire_conn_marshal(struct wire_conn *c, uint32_t id, uint32_t opcode, const struct wire_message *m,
                       const union wire_arg *args)
 {
+    /* After a failed send, new messages are dropped. */
+    if (c->send_failed)
+        return 0;
     size_t size = wire_message_size(m, args);
     int nfds = 0;
     for (const char *s = m->signature; *s; s++)
@@ -116,7 +119,7 @@ int wire_conn_marshal(struct wire_conn *c, uint32_t id, uint32_t opcode, const s
 
 int wire_conn_flush(struct wire_conn *c)
 {
-    if (c->error)
+    if (c->error || c->send_failed)
         return -1;
     size_t off = 0;
     while (off < c->out_len) {
@@ -141,7 +144,13 @@ int wire_conn_flush(struct wire_conn *c)
                 break;
             fprintf(stderr, "wire: send of %zu bytes and %d descriptors failed: %s\n", c->out_len - off, nfds,
                     strerror(errno));
-            c->error = 1;
+            /* The output is dropped. The reads continue, because the peer
+             * may have sent requests before it closed the connection. */
+            c->send_failed = 1;
+            for (int i = 0; i < c->nout_fds; i++)
+                close(c->out_fds[i]);
+            c->nout_fds = 0;
+            c->out_len = 0;
             return -1;
         }
         if (nfds) {

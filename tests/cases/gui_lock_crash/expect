@@ -1,0 +1,13 @@
+x12: session uid 1000
+x12: locker [0-9]+ started \(Super\+L\)
+gui_lock_crash: locked
+x12: the locker exited without unlocking the session
+gui_lock_crash: black screen
+x12: lock of client [0-9]+ refused: a locker started by X12 is expected
+gui_lock_crash: foreign locker refused
+x12: locker [0-9]+ started \(key press\)
+x12: client [0-9]+ resumes the lock
+gui_lock_crash: locker restarted
+lock: unlocked
+gui_lock_crash: ok
+TEST PASS

@@ -4,6 +4,7 @@
 #include <minios/init.h>
 #include <minios/sha2.h>
 #include <shadow.h>
+#include <grp.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -275,6 +276,13 @@ int account_session(int uid)
         errno = EPERM;
         return -1;
     }
+    return 0;
+}
+
+int account_become(const char *name, unsigned uid, unsigned gid)
+{
+    if (initgroups(name, gid) < 0 || setgid(gid) < 0 || setuid(uid) < 0)
+        return -1;
     return 0;
 }
 

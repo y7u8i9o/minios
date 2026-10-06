@@ -573,11 +573,22 @@ static void on_input_method(void *user, struct wire_proxy *s, const char *label)
 }
 static const struct seat_listener seat_events = { on_capabilities, on_seat_name, on_input_method };
 
+/* X12 pings every client of the shell once a second. A client that does
+ * not answer for three seconds counts as not responding (hang.c). */
+static void on_ping(void *user, struct wire_proxy *sh, uint32_t serial)
+{
+    shell_pong(sh, serial);
+}
+static const struct shell_listener shell_events = { on_ping };
+
 static void on_global(void *user, struct wire_proxy *registry, uint32_t name, const char *iface, uint32_t version)
 {
     if (strcmp(iface, "compositor") == 0) compositor = registry_bind(registry, name, iface, version, &compositor_interface, 1);
     else if (strcmp(iface, "shm") == 0) shm = registry_bind(registry, name, iface, version, &shm_interface, 1);
-    else if (strcmp(iface, "shell") == 0) shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
+    else if (strcmp(iface, "shell") == 0) {
+        shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
+        shell_add_listener(shell, &shell_events, NULL);
+    }
     else if (strcmp(iface, "seat") == 0) {
         seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
         seat_add_listener(seat, &seat_events, NULL);

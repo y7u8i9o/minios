@@ -927,6 +927,14 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         want_w = s->layer->pending_w;
         want_h = s->layer->pending_h;
         break;
+    case ROLE_LOCK:
+        if (!s->lock)
+            return 1;
+        serial = s->lock->serial;
+        acked = s->lock->acked_serial;
+        want_w = s->lock->pending_w;
+        want_h = s->lock->pending_h;
+        break;
     default:
         return 1;
     }
@@ -980,6 +988,8 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         s->popup->serial = s->popup->acked_serial = 0;
     } else if (s->role == ROLE_LAYER) {
         s->layer->serial = s->layer->acked_serial = 0;
+    } else if (s->role == ROLE_LOCK) {
+        s->lock->serial = s->lock->acked_serial = 0;
     }
     return 1;
 }
@@ -1060,6 +1070,9 @@ void shell_surface_committed(struct csurface *s, int first_map)
     case ROLE_IME_POPUP:
         im_candidates_committed(s, first_map);
         break;
+    case ROLE_LOCK:
+        lock_surface_committed(s, first_map);
+        break;
     default:
         break;
     }
@@ -1093,6 +1106,7 @@ void shell_output_changed(void)
             clamp_toplevel(s);
         }
     }
+    lock_output_changed();
     scene_damage_all();
 }
 
