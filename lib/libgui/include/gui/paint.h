@@ -39,6 +39,12 @@ void painter_text_font(struct painter *p, const struct font *f, int x, int y, co
 void painter_text_shaped(struct painter *p, int x, int y, const struct gfx_shaped *t, uint32_t fg);
 int painter_text_width(const struct painter *p, const char *text, int n);
 int painter_text_height(const struct painter *p);
+/* Break text into lines no wider than w logical pixels. Lines break at
+ * spaces and at newlines, and a space at a break is dropped. A word wider
+ * than w is broken between characters. The function stores the byte offset
+ * and length of the first max lines in start and len. It returns the
+ * number of lines that the whole text needs, which may exceed max. */
+int painter_wrap(const struct painter *p, const char *text, int w, int *start, int *len, int max);
 /* Character index nearest to a local x offset within text. */
 int painter_text_index(const struct painter *p, const char *text, int n, int px);
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);

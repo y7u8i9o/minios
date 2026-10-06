@@ -1,0 +1,6 @@
+# Screendumps of a pop-up and of the history for inspection (S5 of
+# docs/plan/release-0.7.0.md).
+wait gui_notify: pop-up shown
+screendump popup.ppm
+wait gui_notify: history shown
+screendump history.ppm

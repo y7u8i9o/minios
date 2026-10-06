@@ -62,6 +62,9 @@ calendar:calendar-days
 power-off:power-off
 restart:rotate-right
 show-desktop:desktop
+notifications:bell
+notifications-off:bell-slash
+close:xmark
 app-default:window-maximize
 app-term:terminal
 app-files:folder

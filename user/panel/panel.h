@@ -22,6 +22,7 @@
 #define TASK_GAP 4
 #define CLOCK_W 128                     /* the date and the time */
 #define MIXER_BTN_W 30
+#define NOTIFY_BTN_W 30                 /* the notification bell left of the clock */
 #define POWER_BTN_W 30                  /* the power button left of the show desktop button */
 #define DESKTOP_BTN_W 24                /* the show desktop button at the right edge */
 #define INPUT_W 30                      /* the label of the layout or input method */
@@ -76,6 +77,9 @@ extern int screen_w, screen_h, output_scale;
 extern uint32_t press_serial;
 
 int canvas_create(struct canvas *c, int w, int h);
+/* Give the surface of c a new buffer of w by h logical pixels. The surface
+ * retains its role. */
+int canvas_resize(struct canvas *c, int w, int h);
 void canvas_release_buffer(struct canvas *c);
 void canvas_commit(struct canvas *c);
 void canvas_painter(struct painter *p, struct canvas *c);
@@ -140,6 +144,23 @@ void imemenu_bind(struct wire_proxy *manager);
 void imemenu_toggle(void);
 int imemenu_owns(const struct wire_proxy *surface);
 void imemenu_pointer_button(uint32_t button, uint32_t state, int x, int y);
+/* Notifications (notify.c): the pop-ups of notifyd, and the bell button
+ * left of the clock, which opens the history and the do-not-disturb
+ * switch. */
+int notify_x(void);
+void notify_draw_button(struct painter *p, int hovered);
+int notify_history_is_open(void);
+void notify_history_toggle(void);
+int notify_owns(const struct wire_proxy *surface);
+void notify_pointer_motion(const struct wire_proxy *surface, int x, int y);
+void notify_pointer_button(const struct wire_proxy *surface, uint32_t button, uint32_t state, int x, int y);
+/* Connect to notifyd if the panel is not yet connected. The panel calls
+ * this function at start and then once a second. */
+void notify_connect(void);
+/* Return the notifyd connection to poll, or -1 if there is none.
+ * notify_dispatch handles the input of that connection. */
+int notify_fd(void);
+void notify_dispatch(int revents);
 /* The audio connection to poll while the popup is open, or -1. */
 int mixer_fd(void);
 void mixer_dispatch(int revents);

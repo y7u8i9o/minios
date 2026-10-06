@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The minios notification protocol. notifyd serves it on the socket
+     "notify" (docs/design/notifications.md). The data model follows the
+     freedesktop notification specification. Each notification has a
+     number that is unique while notifyd runs. -->
+<protocol name="notify">
+  <interface name="notify_manager" version="1">
+    <!-- Prepare a notification. The client sets its optional properties
+         and then sends show. -->
+    <request name="create">
+      <arg name="id" type="new_id" interface="notification"/>
+      <arg name="app_name" type="string"/>
+      <arg name="summary" type="string"/>
+      <arg name="body" type="string"/>
+    </request>
+    <!-- The view used by the panel. It shows every notification of the
+         session, the visible pop-ups and the do-not-disturb state. -->
+    <request name="get_display">
+      <arg name="id" type="new_id" interface="notify_display"/>
+    </request>
+  </interface>
+
+  <interface name="notification" version="1">
+    <!-- The name of an icon in /usr/share/icons, without the extension. -->
+    <request name="set_icon"><arg name="icon" type="string"/></request>
+    <!-- 0 low, 1 normal (the default), 2 critical. -->
+    <request name="set_urgency"><arg name="urgency" type="uint"/></request>
+    <!-- Time in milliseconds until the pop-up closes. The value -1 selects
+         the default of the server, and 0 means that the pop-up does not
+         expire. -->
+    <request name="set_timeout"><arg name="timeout" type="int"/></request>
+    <!-- A notification can have at most three actions. A click on the
+         notification itself invokes the key "default", and the panel does
+         not show the label of that action. -->
+    <request name="add_action">
+      <arg name="key" type="string"/>
+      <arg name="label" type="string"/>
+    </request>
+    <!-- Replace the notification with this number instead of adding a new
+         one. -->
+    <request name="set_replaces"><arg name="number" type="uint"/></request>
+    <request name="show"/>
+    <!-- Close the notification and remove it from the history. -->
+    <request name="close"/>
+    <request name="destroy" type="destructor"/>
+
+    <event name="shown"><arg name="number" type="uint"/></event>
+    <event name="action"><arg name="key" type="string"/></event>
+    <!-- reason: 1 the pop-up expired, 2 the user dismissed it or invoked
+         an action, 3 the client closed it, 4 the user removed it from the
+         history. -->
+    <event name="closed"><arg name="reason" type="uint"/></event>
+  </interface>
+
+  <interface name="notify_display" version="1">
+    <!-- The user invoked an action of a notification. -->
+    <request name="invoke">
+      <arg name="number" type="uint"/>
+      <arg name="key" type="string"/>
+    </request>
+    <!-- The user closed the pop-up. The notification remains in the
+         history. -->
+    <request name="dismiss"><arg name="number" type="uint"/></request>
+    <!-- Remove one notification, or all of them, from the history. -->
+    <request name="remove"><arg name="number" type="uint"/></request>
+    <request name="clear"/>
+    <request name="set_dnd"><arg name="on" type="uint"/></request>
+    <request name="destroy" type="destructor"/>
+
+    <!-- A new notification, or new content for an existing number. The
+         argument time is the posting time in seconds since the epoch. The
+         argument actions lists the key and the label of each action, and
+         each of them is followed by a newline. -->
+    <event name="notification">
+      <arg name="number" type="uint"/>
+      <arg name="app_name" type="string"/>
+      <arg name="summary" type="string"/>
+      <arg name="body" type="string"/>
+      <arg name="icon" type="string"/>
+      <arg name="urgency" type="uint"/>
+      <arg name="time" type="uint"/>
+      <arg name="actions" type="string"/>
+    </event>
+    <!-- The pop-up of a notification appears (visible is 1) or disappears
+         (visible is 0). -->
+    <event name="popup">
+      <arg name="number" type="uint"/>
+      <arg name="visible" type="uint"/>
+    </event>
+    <event name="removed"><arg name="number" type="uint"/></event>
+    <event name="dnd"><arg name="on" type="uint"/></event>
+  </interface>
+</protocol>

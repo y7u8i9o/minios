@@ -187,7 +187,7 @@ lib/libgui/include/gui/pixel.h  pixel aarch64:pixel
 lib/libc/include/minios/simd.h  check-headers mathvec float pixel aarch64:pixel
 lib/libc/include/bits/simd_types.h  check-headers mathvec float pixel aarch64:pixel libc aarch64:libc
 lib/libwire/**                  check-libwire comp_* gui gui_app
-protocol/**                     check-libwire comp_* gui gui_app
+protocol/**                     check-libwire comp_* gui gui_app notify_proto gui_notify
 lib/libfont/**                  check-libfont ttf gui_ttf gui_text_repeat
 lib/libcodec/**                 check-libcodec codec_* gui_images audio_player
 lib/libaudio/**                 audio_* gui_mixer
@@ -224,7 +224,8 @@ user/lua/**                     check-lua lua* gui_lua* luasynth*
 user/lua/lnet.c                 check-transfer net_transfer
 user/lua/lthread.c              check-transfer
 user/mint/**                    mint
-user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top
+user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top gui_notify
+user/notifyd/**                 notify_proto gui_notify
 user/pkg/**                     check-pkg pkg pkg_repo pkg_https pkg_apps offline_update kernel_upgrade
 user/po/**                      gettext gui_locale locale
 user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize panel_top

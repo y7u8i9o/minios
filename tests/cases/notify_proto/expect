@@ -1,0 +1,11 @@
+notifyd: started
+notifytest: replacement ok
+notifytest: close ok
+notifytest: expiry ok
+notifytest: action ok
+notifytest: dismiss and remove ok
+notifytest: do not disturb ok
+notifytest: initial state ok
+notifytest: history ok
+notifytest: 0 failures
+TEST PASS

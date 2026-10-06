@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod settings files pkg imed greeter askpass installer installer-gui
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod notifyd settings files pkg imed greeter askpass installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 # The programs of the package binutils share binutils/lib/ (docs/design/binutils.md).
 BINUTILS := ar as ld nm size strings readelf objdump objcopy strip addr2line ranlib

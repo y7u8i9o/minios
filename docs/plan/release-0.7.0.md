@@ -138,22 +138,30 @@ extracts the tables of the standard from FFmpeg 7.1.
 
 Document: `docs/design/codecs.md`.
 
-### S5. Notifications
+### S5. Notifications (completed 2026-10-06)
 
 `notifyd` runs in every graphical session and serves the `notify` protocol
-over libwire. Each notification appears as a pop-up in the top layer, in
-the top right corner of the screen. Several pop-ups are stacked, and they
-close when their timeout expires unless they are marked critical. When the
-user clicks an action, `notifyd` reports it back to the program that sent
-the notification. Programs post notifications with `gui_notify` from
-libgui, and shell scripts use `notify-send`. A new button in the panel
-shows the notification history of the session and a do-not-disturb switch.
+over libwire. It owns the notifications, which includes their history, the
+expiry of their pop-ups, the do-not-disturb state and the delivery of
+actions to the programs that posted them. The panel is its display. It
+shows each visible notification as a card in the top layer at the top
+right corner of the desktop area and stacks several cards. It sends clicks
+on the cards and their action buttons back to `notifyd`. Programs post
+notifications with `gui_notify` or a `notify_client` from libgui, and
+shell scripts use `notify-send`. A new bell button in the panel opens the
+history of the session, together with a do-not-disturb switch.
 
-Boot tests: `gui_notify` posts notifications with `notify-send`, checks the
-pop-up on the screen, clicks an action and checks the history in the panel.
-`notify_proto` tests the protocol with a test client: replacing a
-notification by its identifier, closing, expiry and the do-not-disturb
-state.
+The plan originally gave the drawing of the pop-ups to `notifyd`. The
+panel draws them instead, because it already has the surfaces, the drawing
+code and the pointer handling. As a result, `notifyd` can run without a
+display.
+
+Boot tests: `gui_notify` posts notifications with `notify-send` and checks
+the pop-up on the screen. It invokes an action with the pointer, checks
+expiry and the close button, opens the history and switches on
+do-not-disturb. `notify_proto` checks the protocol with a test client. It
+covers replacement by number, closing, expiry, actions, removal, the
+do-not-disturb state and the history limit.
 
 Document: `docs/design/notifications.md`.
 

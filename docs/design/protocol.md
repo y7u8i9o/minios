@@ -43,6 +43,8 @@ seat of version 2 reports the label of the input method (`ime.md`).
 adds the copy and move actions (`dnd.md`).
 `protocol/ime.xml` connects the compositor and the input method daemon
 `imed` (`ime.md`).
+`protocol/notify.xml` connects programs and the panel to the notification
+daemon `notifyd` (`notifications.md`).
 `protocol/debug.xml` contains the `debug`, `tracer`, `settings` and
 `screencopy` interfaces of the debugging tools and of `screenshot`
 (`tools.md`, `images.md`). The `debug` interface of version 2 adds the

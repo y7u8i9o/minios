@@ -1,0 +1,19 @@
+notifyd: started
+panel: notifications connected
+notifyd: shown 1 'New message' from Mail, urgency 1, timeout 5000
+panel: notification 1 popup shown 'New message'
+gui_notify: pop-up shown
+panel: notification 1 action open
+notifyd: action 1 open
+gui_notify: action invoked
+notifyd: expired 2
+gui_notify: pop-up expired
+panel: notification 3 dismissed
+gui_notify: pop-up dismissed
+panel: notifications history opened, 3 entries
+gui_notify: history shown
+notifyd: do not disturb on
+notifyd: shown 4 'Quiet' from notify-send, urgency 1, timeout 5000, no pop-up
+gui_notify: do not disturb ok
+gui_notify: ok
+TEST PASS

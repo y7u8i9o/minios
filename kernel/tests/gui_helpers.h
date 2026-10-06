@@ -28,13 +28,15 @@ static struct proc *panel_proc;
 #define PANEL_TASK_W 160
 #define PANEL_CLOCK_W 128
 #define PANEL_MIXER_W 30
+#define PANEL_NOTIFY_W 30
 #define PANEL_INPUT_W 30
 #define PANEL_DESKTOP_W 24
 #define PANEL_DESKTOP_X(sw) ((sw) - PANEL_DESKTOP_W)
 #define PANEL_POWER_W 30
 #define PANEL_POWER_X(sw) (PANEL_DESKTOP_X(sw) - 4 - PANEL_POWER_W)
 #define PANEL_CLOCK_X(sw) (PANEL_POWER_X(sw) - PANEL_CLOCK_W)
-#define PANEL_MIXER_X(sw) (PANEL_CLOCK_X(sw) - PANEL_MIXER_W - 4)
+#define PANEL_NOTIFY_X(sw) (PANEL_CLOCK_X(sw) - PANEL_NOTIFY_W - 4)
+#define PANEL_MIXER_X(sw) (PANEL_NOTIFY_X(sw) - PANEL_MIXER_W - 4)
 #define PANEL_INPUT_X(sw) (PANEL_MIXER_X(sw) - PANEL_INPUT_W - 4)
 #define PANEL_BG 0x0023272c
 #define PANEL_BUTTON_ACTIVE 0x003f4854

@@ -31,7 +31,7 @@ static uint32_t drawn_generation;
 
 int mixer_button_x(void)
 {
-    return clock_x() - MIXER_BTN_W - 4;
+    return notify_x() - MIXER_BTN_W - 4;
 }
 
 /* A small speaker glyph: a box, a cone and two arcs. */

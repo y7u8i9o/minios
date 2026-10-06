@@ -226,13 +226,15 @@ and the input method section that `ime.md` describes (`ime_engines`,
 
 ## Session
 
-The panel also carries the audio applet described in `docs/design/audio.md`:
-a speaker button left of the clock opens a popup with the master volume and
-the streams of the audio server.
+The panel also contains the audio applet described in
+`docs/design/audio.md`. A speaker button left of the bell opens a popup
+with the master volume and the streams of the audio server. The bell button
+left of the clock and the pop-ups at the top right belong to the
+notifications (`docs/design/notifications.md`).
 
-`startgui` exports the language and the formats of the configuration
-file, starts X12, the panel, the desktop and the requested program, and
-stops them on logout. The audio server is the `audio` service of
+`startgui` exports the language and the formats of the configuration file.
+It starts X12, the notification daemon, the panel, the desktop and the
+requested program, and it stops them on logout. The audio server is the `audio` service of
 init (`init.md`), started at boot when `/dev/pcm0` exists and living
 across sessions. A desktop or panel that ends abnormally is
 restarted up to three times. The `gui_desktop` boot test covers the

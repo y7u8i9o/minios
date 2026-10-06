@@ -1,9 +1,10 @@
 /* startgui [-s] [program]: start the desktop session (X12, the input
- * method daemon, the panel, the desktop), run the program (the terminal by
- * default) and stop the session on logout. The audio server is a service
- * of init and lives across sessions. With -s the server runs already, as
- * the greeter starts it and retains it across sessions, and startgui starts
- * the session programs alone (docs/design/users.md). */
+ * method daemon, the notification daemon, the panel and the desktop), run
+ * the program (the terminal by default) and stop the session on logout.
+ * The audio server is a service of init and lives across sessions. With -s,
+ * the greeter has already started the server and retains it across
+ * sessions, so startgui starts only the session programs
+ * (docs/design/users.md). */
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -37,6 +38,9 @@ int main(int argc, char **argv)
         sleep_ms(400);
     }
     pid_t ime = spawn("imed");
+    /* The notification daemon starts before the panel, because the panel
+     * displays the notifications of the daemon. */
+    pid_t notifyd = spawn("notifyd");
     pid_t panel = spawn("panel");
     sleep_ms(200);
     pid_t desktop = spawn("desktop");
@@ -65,6 +69,16 @@ int main(int argc, char **argv)
             fprintf(stderr, "startgui: imed ended with status 0x%x, restarting\n", status);
             sleep_ms(200);
             ime = spawn("imed");
+            continue;
+        }
+        if (done == notifyd) {
+            if (++restarts > 3) {
+                notifyd = -1;
+                continue;
+            }
+            fprintf(stderr, "startgui: notifyd ended with status 0x%x, restarting\n", status);
+            sleep_ms(200);
+            notifyd = spawn("notifyd");
             continue;
         }
         if (done == desktop) {
@@ -99,6 +113,10 @@ int main(int argc, char **argv)
     if (ime > 0) {
         kill(ime, SIGTERM);
         waitpid(ime, NULL, 0);
+    }
+    if (notifyd > 0) {
+        kill(notifyd, SIGTERM);
+        waitpid(notifyd, NULL, 0);
     }
     if (server > 0) {
         kill(server, SIGTERM);

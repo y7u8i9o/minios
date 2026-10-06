@@ -1,4 +1,6 @@
 usr/bin/panel
+usr/bin/notifyd
+usr/bin/notify-send
 usr/bin/desktop
 usr/bin/greeter
 usr/bin/askpass

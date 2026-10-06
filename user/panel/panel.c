@@ -41,7 +41,7 @@ static int px, py;                       /* pointer in the panel */
  * one of the HOVER values. */
 enum {
     HOVER_NONE = -1, HOVER_MENU = -2, HOVER_INPUT = -3, HOVER_MIXER = -4, HOVER_CLOCK = -5, HOVER_POWER = -6,
-    HOVER_DESKTOP = -7
+    HOVER_DESKTOP = -7, HOVER_NOTIFY = -8
 };
 static int hover = HOVER_NONE;
 /* Show desktop (B5): the windows that were visible when the desktop was
@@ -98,6 +98,11 @@ static int canvas_alloc(struct canvas *c, int w, int h)
     c->buffer = shm_pool_create_buffer(c->pool, 0, dw, dh, dw * 4, 1);
     surface_set_buffer_scale(c->surface, scale);
     return 0;
+}
+
+int canvas_resize(struct canvas *c, int w, int h)
+{
+    return canvas_alloc(c, w, h);
 }
 
 int canvas_create(struct canvas *c, int w, int h)
@@ -178,6 +183,8 @@ static int hit(int x)
         return HOVER_MIXER;
     if (x >= imemenu_x() && x < imemenu_x() + INPUT_W)
         return input_label[0] ? HOVER_INPUT : HOVER_NONE;
+    if (x >= notify_x() && x < notify_x() + NOTIFY_BTN_W)
+        return HOVER_NOTIFY;
     if (x >= clock_x() && x < clock_x() + CLOCK_W - 4)
         return HOVER_CLOCK;
     if (x >= power_x() && x < power_x() + POWER_BTN_W)
@@ -272,6 +279,7 @@ void draw_panel(void)
         panel_label(&p, imemenu_x(), 0, INPUT_W, h, input_label, PANEL_TEXT, 1);
     }
     mixer_draw_button(&p, hover == HOVER_MIXER);
+    notify_draw_button(&p, hover == HOVER_NOTIFY);
     if (calendar_is_open() || hover == HOVER_CLOCK)
         button(&p, clock_x(), CLOCK_W - 4, calendar_is_open() ? BUTTON_OPEN : BUTTON_HOVER);
     clock_text(drawn_clock, sizeof drawn_clock);
@@ -362,6 +370,10 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
         power_pointer_motion(px, py);
         return;
     }
+    if (notify_owns(pointer_surface)) {
+        notify_pointer_motion(pointer_surface, px, py);
+        return;
+    }
     if (launcher_is_surface(pointer_surface))
         launcher_pointer_motion(px, py);
 }
@@ -385,6 +397,10 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
         power_pointer_button(button, state, px, py);
         return;
     }
+    if (notify_owns(pointer_surface)) {
+        notify_pointer_button(pointer_surface, button, state, px, py);
+        return;
+    }
     if (launcher_is_surface(pointer_surface)) {
         launcher_pointer_button(button, state, px, py);
         return;
@@ -401,6 +417,8 @@ static void on_button(void *user, struct wire_proxy *p, uint32_t serial, uint32_
     } else if (part == HOVER_INPUT) {
         /* The input method label opens the menu of the methods. */
         imemenu_toggle();
+    } else if (part == HOVER_NOTIFY) {
+        notify_history_toggle();
     } else if (part == HOVER_CLOCK) {
         calendar_toggle();
     } else if (part == HOVER_POWER) {
@@ -623,6 +641,7 @@ int main(void)
     while (!layer_configured)
         if (wire_display_dispatch(display) < 0)
             return 1;
+    notify_connect();
     draw_panel();
     log_line("started");
     int tfd = timerfd_create(TFD_NONBLOCK | TFD_CLOEXEC);
@@ -630,16 +649,20 @@ int main(void)
     timerfd_settime(tfd, &spec);
     for (;;) {
         wire_display_flush(display);
-        struct pollfd pf[3] = { { wire_display_fd(display), POLLIN, 0 }, { tfd, POLLIN, 0 }, { mixer_fd(), POLLIN, 0 } };
-        if (poll(pf, pf[2].fd >= 0 ? 3 : 2, 1000) < 0)
+        struct pollfd pf[4] = { { wire_display_fd(display), POLLIN, 0 }, { tfd, POLLIN, 0 }, { mixer_fd(), POLLIN, 0 },
+                                { notify_fd(), POLLIN, 0 } };
+        if (poll(pf, 4, 1000) < 0)
             continue;
         if (pf[2].fd >= 0 && pf[2].revents)
             mixer_dispatch(pf[2].revents);
+        if (pf[3].fd >= 0 && pf[3].revents)
+            notify_dispatch(pf[3].revents);
         while (waitpid(-1, NULL, WNOHANG) > 0)
             ;
         if (pf[1].revents & POLLIN) {
             uint64_t n;
             read(tfd, &n, 8);
+            notify_connect();
             /* A language chosen in Settings applies to the panel and to
              * the programs that it starts from now on. */
             int changed = 0;

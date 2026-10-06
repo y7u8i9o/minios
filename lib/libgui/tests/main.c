@@ -29,6 +29,7 @@ void run_csd_tests(void);
 void run_buffers_tests(void);
 void run_graph_tests(void);
 void run_color_tests(void);
+void run_wrap_tests(void);
 
 int main(void)
 {
@@ -52,6 +53,7 @@ int main(void)
     RUN(run_buffers_tests);
     RUN(run_graph_tests);
     RUN(run_color_tests);
+    RUN(run_wrap_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

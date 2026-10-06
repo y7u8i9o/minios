@@ -231,6 +231,51 @@ int painter_text_height(const struct painter *p)
     return p->theme->font->height;
 }
 
+int painter_wrap(const struct painter *p, const char *text, int w, int *start, int *len, int max)
+{
+    int lines = 0, at = 0, n = (int)strlen(text);
+    while (at < n) {
+        /* Find the longest prefix of the line that fits. Where possible,
+         * the prefix ends before a space or a newline. */
+        int end = at, fit = at, last_space = -1;
+        while (end < n && text[end] != '\n') {
+            int next = end + 1;
+            while (next < n && (text[next] & 0xc0) == 0x80)
+                next++;
+            if (painter_text_width(p, text + at, next - at) > w)
+                break;
+            if (text[end] == ' ')
+                last_space = end;
+            end = next;
+            fit = end;
+        }
+        int line_end, resume;
+        if (end >= n || text[end] == '\n' || (text[end] == ' ' && end > at)) {
+            /* The end of the text, a newline, or a space right after the
+             * part that fits. */
+            line_end = end;
+            resume = end + 1;
+        } else if (last_space > at) {
+            line_end = last_space;
+            resume = last_space + 1;
+        } else {
+            /* The word is wider than the line, or the line has no room for
+             * even one character. */
+            line_end = fit > at ? fit : end + 1;
+            while (line_end < n && (text[line_end] & 0xc0) == 0x80)
+                line_end++;
+            resume = line_end;
+        }
+        if (lines < max) {
+            start[lines] = at;
+            len[lines] = line_end - at;
+        }
+        lines++;
+        at = resume;
+    }
+    return lines;
+}
+
 int painter_text_index(const struct painter *p, const char *text, int n, int px)
 {
     return gfx_text_index_font_scaled(p->theme->font, text, n, px * p->scale, p->scale);
