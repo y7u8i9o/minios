@@ -9,6 +9,7 @@
 #include <gui/fileops.h>
 #include <gui/i18n.h>
 #include <gui/mime.h>
+#include <gui/wallpaper.h>
 #include <debug-client.h>
 #include <dirent.h>
 #include <stdarg.h>
@@ -36,7 +37,6 @@ static const char *desktop_dir(void)
 #define ICON_SIZE 32
 #define MAX_ENTRIES 64
 
-enum { MODE_FILL, MODE_CENTER, MODE_TILE, MODE_STRETCH };
 
 struct entry {
     char name[NAME_MAX + 1];
@@ -48,7 +48,7 @@ struct entry {
 struct conf {
     char wallpaper[128];
     int display_mode;               /* packed WxH@S, 0 when the file has none */
-    int mode;
+    enum wallpaper_mode mode;
     uint32_t color;
     int repeat_rate, repeat_delay;
     int frame_ms;                   /* 0 when the file has none */
@@ -65,12 +65,14 @@ static struct widget *win, *desk, *item_menu, *desk_menu;
 static struct wire_proxy *settings;
 static struct entry entries[MAX_ENTRIES];
 static int nentries, selected = -1;
-static struct conf conf = { .mode = MODE_FILL, .color = 0x00306080, .repeat_rate = 30, .repeat_delay = 500,
+static struct conf conf = { .mode = WALLPAPER_FILL, .color = 0x00306080, .repeat_rate = 30, .repeat_delay = 500,
                             .pointer_accel = -1, .ime_shift_toggle = 1, .ime_ctrl_space = 1,
                             .display_follow = 1 };  /* solid colour by default */
 static char conf_text[1024];
 static struct image *wallpaper;
-static struct surface bg;       /* wallpaper scaled to the window */
+/* The background at the device size of the window and at the scale of
+ * the output (wallpaper_render), NULL until the next paint. */
+static struct image *bg;
 static long last_click_ms;
 static int last_click_entry = -1;
 static int press_entry = -1, press_x, press_y;  /* a press on an icon that may become a drag */
@@ -208,58 +210,6 @@ static void open_entry(int i)
 
 /* ---- wallpaper ---- */
 
-static void scale_wallpaper(int w, int h)
-{
-    if (bg.width == w && bg.height == h && bg.pixels)
-        return;
-    free(bg.pixels);
-    bg.pixels = calloc((size_t)w * h, 4);
-    bg.width = w;
-    bg.height = h;
-    bg.stride = w;
-    if (!bg.pixels)
-        return;
-    for (int i = 0; i < w * h; i++)
-        bg.pixels[i] = conf.color;
-    if (!wallpaper)
-        return;
-    const struct image *im = wallpaper;
-    int dw = w, dh = h, dx = 0, dy = 0;
-    switch (conf.mode) {
-    case MODE_FILL: {
-        /* Scale to cover the window, retaining the aspect ratio (16.16). */
-        long sx = ((long)w << 16) / im->w, sy = ((long)h << 16) / im->h;
-        long s = sx > sy ? sx : sy;
-        dw = (int)((im->w * s) >> 16);
-        dh = (int)((im->h * s) >> 16);
-        dx = (w - dw) / 2;
-        dy = (h - dh) / 2;
-        break;
-    }
-    case MODE_CENTER:
-        dw = im->w; dh = im->h; dx = (w - dw) / 2; dy = (h - dh) / 2;
-        break;
-    case MODE_TILE:
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                bg.pixels[y * w + x] = im->pixels[(y % im->h) * im->w + x % im->w];
-        return;
-    case MODE_STRETCH:
-        break;
-    }
-    for (int y = 0; y < h; y++) {
-        int sy = (int)((long)(y - dy) * im->h / dh);
-        if (y < dy || sy < 0 || sy >= im->h)
-            continue;
-        for (int x = 0; x < w; x++) {
-            int sx = (int)((long)(x - dx) * im->w / dw);
-            if (x < dx || sx < 0 || sx >= im->w)
-                continue;
-            bg.pixels[y * w + x] = im->pixels[sy * im->w + sx];
-        }
-    }
-}
-
 static void load_wallpaper(void)
 {
     image_free(wallpaper);
@@ -268,20 +218,14 @@ static void load_wallpaper(void)
         logline("cannot load wallpaper %s", conf.wallpaper);
     else
         logline("wallpaper %s mode %d", wallpaper ? conf.wallpaper : "none", conf.mode);
-    bg.width = 0;               /* rescale on the next paint */
+    image_free(bg);             /* render again on the next paint */
+    bg = NULL;
     if (desk)
         widget_invalidate(desk);
 }
 
 /* ---- configuration ---- */
 
-static int mode_of(const char *s)
-{
-    if (strcmp(s, "center") == 0) return MODE_CENTER;
-    if (strcmp(s, "tile") == 0) return MODE_TILE;
-    if (strcmp(s, "stretch") == 0) return MODE_STRETCH;
-    return MODE_FILL;
-}
 
 static int read_conf(char *buf, size_t size)
 {
@@ -324,7 +268,7 @@ static void apply_conf(int first)
         *eq = '\0';
         const char *v = eq + 1;
         if (strcmp(line, "wallpaper") == 0) strlcpy(c.wallpaper, v, sizeof c.wallpaper);
-        else if (strcmp(line, "wallpaper_mode") == 0) c.mode = mode_of(v);
+        else if (strcmp(line, "wallpaper_mode") == 0) c.mode = wallpaper_mode_parse(v);
         else if (strcmp(line, "desktop_color") == 0) c.color = (uint32_t)strtoul(v, NULL, 0) & 0xffffff;
         else if (strcmp(line, "repeat_rate") == 0) c.repeat_rate = atoi(v);
         else if (strcmp(line, "repeat_delay") == 0) c.repeat_delay = atoi(v);
@@ -400,9 +344,14 @@ static void poll_conf(void *arg)
 
 static void desk_paint(struct widget *w, struct painter *p)
 {
-    scale_wallpaper(w->w, w->h);
-    if (bg.pixels)
-        painter_blit(p, 0, 0, &bg);
+    if (bg && (bg->w != w->w * p->scale || bg->h != w->h * p->scale || bg->scale != p->scale)) {
+        image_free(bg);
+        bg = NULL;
+    }
+    if (!bg)
+        bg = wallpaper_render(wallpaper, conf.mode, conf.color, w->w, w->h, p->scale);
+    if (bg)
+        painter_image(p, 0, 0, bg);
     else
         painter_fill(p, 0, 0, w->w, w->h, conf.color);
     for (int i = 0; i < nentries; i++) {

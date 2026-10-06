@@ -62,3 +62,15 @@ msgstr[0] "另有 %d 个"
 #: user/panel/panel.c:130
 msgid "Menu"
 msgstr "菜单"
+
+#: user/panel/power.c:57
+msgid "Log out"
+msgstr "注销"
+
+#: user/panel/power.c:57
+msgid "Restart"
+msgstr "重新启动"
+
+#: user/panel/power.c:57
+msgid "Shut down"
+msgstr "关机"

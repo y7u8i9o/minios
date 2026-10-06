@@ -16,6 +16,27 @@
 
 static struct proc *panel_proc;
 
+/* The geometry and the colours of the panel in logical pixels, as
+ * user/panel/panel.h defines them. sw is the logical width of the screen. */
+#define PANEL_H 28
+#define PANEL_ROW(sh) ((sh) - PANEL_H / 2)      /* the middle row of the bar */
+#define PANEL_MENU_X 30                         /* inside the Menu button */
+#define PANEL_TASKS_X (4 + 76 + 8)              /* the first window button */
+#define PANEL_TASK_W 160
+#define PANEL_CLOCK_W 128
+#define PANEL_MIXER_W 30
+#define PANEL_INPUT_W 30
+#define PANEL_DESKTOP_W 24
+#define PANEL_DESKTOP_X(sw) ((sw) - PANEL_DESKTOP_W)
+#define PANEL_POWER_W 30
+#define PANEL_POWER_X(sw) (PANEL_DESKTOP_X(sw) - 4 - PANEL_POWER_W)
+#define PANEL_CLOCK_X(sw) (PANEL_POWER_X(sw) - PANEL_CLOCK_W)
+#define PANEL_MIXER_X(sw) (PANEL_CLOCK_X(sw) - PANEL_MIXER_W - 4)
+#define PANEL_INPUT_X(sw) (PANEL_MIXER_X(sw) - PANEL_INPUT_W - 4)
+#define PANEL_BG 0x0023272c
+#define PANEL_BUTTON_ACTIVE 0x003f4854
+#define PANEL_BUTTON_HOVER 0x00384049
+
 /* GUI tests install the same archive a user installs on the base image. */
 static inline void install_app(const char *name)
 {
@@ -240,4 +261,38 @@ static inline bool wait_procs(const char *name, int uid, int want, int ms)
         sleep_ms(100);
     }
     return false;
+}
+
+/* Log in at the login window of the greeter as the preselected account
+ * user (uid 1000), which has no password: Enter chooses the account, a
+ * second Enter logs in with the empty password, and the greeter asks for
+ * a new password twice before the session starts. Waits for the panel and
+ * the desktop of the session. */
+static inline void greeter_login_user(void)
+{
+    press_key(0x1c);
+    sleep_ms(800);
+    press_key(0x1c);
+    sleep_ms(1500);
+    type_line("userpw\n");
+    sleep_ms(300);
+    type_line("userpw\n");
+    ktest_assert(wait_procs("panel", 1000, 1, 10000), "no panel of uid 1000");
+    ktest_assert(wait_procs("desktop", 1000, 1, 5000), "no desktop of uid 1000");
+}
+
+/* The power menu of the panel (user/panel/power.c): 200 pixels wide, three
+ * rows of 28 pixels with 6 pixels of padding, above the power button and
+ * aligned to its right edge. Row 0 is Log out, 1 Restart, 2 Shut down. */
+#define POWER_MENU_W 200
+#define POWER_MENU_H (2 * 6 + 3 * 28)
+static inline void panel_power_choose(int sw, int sh, int row)
+{
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, PANEL_POWER_X(sw) + PANEL_POWER_W / 2, PANEL_ROW(sh), 0);
+    mouse_click(1);
+    sleep_ms(600);
+    int x0 = PANEL_POWER_X(sw) + PANEL_POWER_W - POWER_MENU_W, y0 = sh - PANEL_H + 4 - POWER_MENU_H;
+    mouse_move_to(&cx, &cy, x0 + 60, y0 + 6 + row * 28 + 14, 0);
+    mouse_click(1);
 }

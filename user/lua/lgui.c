@@ -1254,6 +1254,20 @@ static struct app *check_app(lua_State *L, int index)
 
 static int g_app(lua_State *L)
 {
+    /* The windows of a script carry the name of the script as their
+     * app_id, which selects their icon in the panel, not the name of the
+     * interpreter. */
+#ifndef MINIOS_HOST
+    static char script[128];
+    if (lua_getglobal(L, "arg") == LUA_TTABLE) {
+        if (lua_rawgeti(L, -1, 0) == LUA_TSTRING) {
+            strlcpy(script, lua_tostring(L, -1), sizeof script);
+            setprogname(script);
+        }
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+#endif
 #ifdef MINIOS_HOST
     struct app *a = app_create_detached();
 #else

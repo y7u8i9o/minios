@@ -1,6 +1,7 @@
 /* Editing the account databases and checking passwords
  * (docs/design/users.md). */
 #include <minios/account.h>
+#include <minios/init.h>
 #include <minios/sha2.h>
 #include <shadow.h>
 #include <errno.h>
@@ -12,8 +13,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <termios.h>
 #include <time.h>
 
@@ -267,19 +266,11 @@ int account_session(int uid)
 {
     char request[32];
     if (uid >= 0)
-        snprintf(request, sizeof request, "session %d\n", uid);
+        snprintf(request, sizeof request, "session %d", uid);
     else
-        snprintf(request, sizeof request, "session -\n");
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (fd < 0)
-        return -1;
-    struct sockaddr_un addr = { AF_UNIX, "init" };
+        snprintf(request, sizeof request, "session -");
     char reply[64];
-    ssize_t n = -1;
-    size_t len = strlen(request);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0 && write(fd, request, len) == (ssize_t)len)
-        n = read(fd, reply, sizeof reply - 1);
-    close(fd);
+    long n = init_request(request, reply, sizeof reply);
     if (n < 2 || strncmp(reply, "ok", 2) != 0) {
         errno = EPERM;
         return -1;

@@ -31,3 +31,11 @@ int launcher_read_apps(struct launcher_entry *entries, int max);
 const char *launcher_system_path(char *buf, int size);
 /* launcher_program copies the program of command, its first word, to buf. */
 const char *launcher_program(const char *command, char *buf, int size);
+/* launcher_icon_name copies the name of the icon of a command or a program
+ * to buf: app-NAME when /usr/share/icons/app-NAME.svg exists, otherwise
+ * app-default. NAME is the last part of the path of the program, without
+ * the "@" of a panel action. The panel loads the icons of its menu and of
+ * its window buttons by this name, and the Open with chooser loads the
+ * icons of its applications by it. */
+#define LAUNCHER_ICON_DIR "/usr/share/icons"
+const char *launcher_icon_name(const char *command, char *buf, int size);

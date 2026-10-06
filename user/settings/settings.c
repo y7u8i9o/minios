@@ -14,16 +14,16 @@ struct app *app;
 
 /* ---- the configuration file ---- */
 
-#define NKEYS 23
+#define NKEYS 24
 static const char *const keys[NKEYS] = {
     "wallpaper", "wallpaper_mode", "desktop_color", "repeat_rate", "repeat_delay", "display_mode",
     "frame_ms", "decorations", "keymap", "ui_font", "ui_font_px", "ui_scale", "term_font_px", "pointer_speed",
     "pointer_accel", "lang", "formats", "ime_engines", "ime_shift_toggle", "ime_ctrl_space", "ime_page_size",
-    "ime_orientation", "display_follow",
+    "ime_orientation", "display_follow", "panel_position",
 };
 static char values[NKEYS][128] = {
     "", "fill", "0x306080", "30", "500", "", "16", "client", "us", "DejaVu Sans", "14", "100", "13", "0", "adaptive",
-    "", "", "pinyin,japanese", "1", "1", "5", "horizontal", "1",
+    "", "", "pinyin,japanese", "1", "1", "5", "horizontal", "1", "bottom",
 };
 
 static int key_index(const char *key)

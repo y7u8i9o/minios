@@ -339,3 +339,68 @@ static void test_gpu_resize(void)
     ktest_assert(proc_reap(srv) == 0, "compositor status");
 }
 KTEST_DEFINE("gpu_resize", test_gpu_resize);
+
+/* B1 of docs/plan/desktop-panel.md: the desktop draws the wallpaper at the
+ * device resolution with filtering. The screen is 2560x1600 at scale 2.
+ * A wallpaper of 2560x1600 pixels in vertical stripes of one pixel must
+ * appear pixel for pixel. A wallpaper of 2x2 pixels stretched to the
+ * screen must show interpolated colours between its pixels. */
+static void set_setting(const char *key, const char *value)
+{
+    struct proc *p = run("/bin/settings", (char *const[]){ "settings", "set", (char *)key, (char *)value, NULL });
+    ktest_assert(proc_reap(p) == 0, "settings set %s %s failed", key, value);
+}
+
+static bool stripes_shown(void)
+{
+    uint32_t a = pixel(1000, 800), b = pixel(1001, 800);
+    return (a == 0x00000000 && b == 0x00ffffff) || (a == 0x00ffffff && b == 0x00000000);
+}
+
+static void test_wallpaper_hidpi(void)
+{
+    ktest_assert(fb_screen.width == 2560 && fb_screen_scale == 2, "mode %lux%lu scale %u", fb_screen.width,
+                 fb_screen.height, fb_screen_scale);
+    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    ktest_wait_idle(1200);
+    struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });
+    ktest_wait_idle(800);
+    set_setting("wallpaper_mode", "fill");
+    set_setting("wallpaper", "/etc/tests/wallpaper-stripes.png");
+    for (int i = 0; i < 100 && !stripes_shown(); i++)
+        sleep_ms(100);
+    ktest_assert(stripes_shown(), "stripes of one device pixel: %08x %08x", pixel(1000, 800), pixel(1001, 800));
+    kprintf("wallpaper_hidpi: stripes of one device pixel at 1000,800: %06x %06x\n", pixel(1000, 800),
+            pixel(1001, 800));
+
+    set_setting("wallpaper_mode", "stretch");
+    set_setting("wallpaper", "/etc/tests/wallpaper-2x2.png");
+    uint32_t c = 0;
+    for (int i = 0; i < 100; i++) {
+        c = pixel(1280, 400);
+        if (c != 0x00000000 && c != 0x00ffffff)
+            break;
+        sleep_ms(100);
+    }
+    sleep_ms(500);
+    c = pixel(1280, 400);
+    uint32_t r = c >> 16 & 0xff, g = c >> 8 & 0xff, b = c & 0xff;
+    ktest_assert(r >= 0x60 && r <= 0xa0 && g >= 0x60 && g <= 0xa0 && b < 0x20,
+                 "between the red and the green pixel: %06x", c);
+    uint32_t corner = pixel(2, 2);
+    ktest_assert(corner == 0x00ff0000, "the top left corner is red: %06x", corner);
+    kprintf("wallpaper_hidpi: stretched 2x2 image, %06x between red and green\n", c);
+    /* The default wallpaper for the screendump of the QMP script. */
+    set_setting("wallpaper_mode", "fill");
+    set_setting("wallpaper", "/usr/share/wallpapers/default.png");
+    for (int i = 0; i < 100 && pixel(2, 2) == 0x00ff0000; i++)
+        sleep_ms(100);
+    sleep_ms(1000);
+    kprintf("wallpaper_hidpi: default wallpaper drawn\n");
+    sleep_ms(3000);
+    signal_send(desktop, SIGTERM);
+    proc_reap(desktop);
+    signal_send(srv, SIGTERM);
+    ktest_assert(proc_reap(srv) == 0, "compositor status");
+}
+KTEST_DEFINE("wallpaper_hidpi", test_wallpaper_hidpi);

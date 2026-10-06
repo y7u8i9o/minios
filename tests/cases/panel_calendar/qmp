@@ -1,0 +1,4 @@
+# A screendump of the calendar for inspection (B3 of
+# docs/plan/desktop-panel.md).
+wait panel_calendar: [0-9-]+ shown
+screendump calendar.ppm

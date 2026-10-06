@@ -11,9 +11,6 @@
 #include <fs/vfs.h>
 #include "gui_helpers.h"
 
-#define PANEL_H 28
-#define CLOCK_W 80
-#define MIXER_BTN_W 30
 #define MIXER_W 280
 #define MIXER_ROW_H 44
 #define MIXER_PAD 8
@@ -166,14 +163,14 @@ static void test_gui_mixer(void)
     ktest_assert(cl != NULL, "cannot start synth");
     sleep_ms(1500);
     int cx = sw / 2, cy = sh / 2;
-    int bx = sw - CLOCK_W - MIXER_BTN_W - 4;
-    mouse_move_to(&cx, &cy, bx + MIXER_BTN_W / 2, sh - PANEL_H / 2, 0);
+    int bx = PANEL_MIXER_X(sw);
+    mouse_move_to(&cx, &cy, bx + PANEL_MIXER_W / 2, sh - PANEL_H / 2, 0);
     mouse_click(1);
     sleep_ms(600);
     /* The popup: one master row and one stream row, above the button,
      * extending to the left. */
     int ph = 2 * MIXER_ROW_H + 2 * MIXER_PAD;
-    int px = bx + MIXER_BTN_W - MIXER_W, py = sh - PANEL_H + 4 - ph;
+    int px = bx + PANEL_MIXER_W - MIXER_W, py = sh - PANEL_H + 4 - ph;
     int bar_x = px + MIXER_PAD + 96, bar_w = MIXER_W - MIXER_PAD - 96 - MIXER_PAD;
     int master_y = py + MIXER_PAD + 12 + 4, stream_y = py + MIXER_PAD + MIXER_ROW_H + 12 + 4;
     ktest_assert(pixel(bar_x + bar_w - 20, master_y) == PANEL_ACCENT,
@@ -187,7 +184,7 @@ static void test_gui_mixer(void)
                  "master bar half: %08x", pixel(bar_x + bar_w - 20, master_y));
     ktest_assert(pixel(bar_x + bar_w / 4, master_y) == PANEL_ACCENT,
                  "master bar filled to the left: %08x", pixel(bar_x + bar_w / 4, master_y));
-    mouse_move_to(&cx, &cy, bx + MIXER_BTN_W / 2, sh - PANEL_H / 2, 0);
+    mouse_move_to(&cx, &cy, bx + PANEL_MIXER_W / 2, sh - PANEL_H / 2, 0);
     mouse_click(1);
     sleep_ms(400);
     signal_send(cl, SIGTERM);

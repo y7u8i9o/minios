@@ -1,0 +1,9 @@
+x12: layer surface 1 mapped at 0,0 1024x28
+panel_top: panel at the top
+x12: toplevel 1 .alpha. mapped at 40,58
+panel_top: maximized window below the panel
+panel_top: launcher below its button
+panel: position bottom
+x12: layer surface 1 moved to 0,740 1024x28
+panel_top: panel moved to the bottom
+TEST PASS

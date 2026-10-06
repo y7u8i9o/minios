@@ -1429,6 +1429,9 @@ struct gui_window *gui_create_window(int width, int height, const char *title)
     wi->toplevel = shell_get_toplevel(shell, wi->surface);
     toplevel_add_listener(wi->toplevel, &toplevel_events, NULL);
     toplevel_set_title(wi->toplevel, title);
+    /* The panel shows the icon of the program (launcher_icon_name). */
+    if (getprogname()[0])
+        toplevel_set_app_id(wi->toplevel, getprogname());
     decorate(w, title);
     /* A role must receive and acknowledge its initial configure before
      * the first non-NULL buffer is committed. */
@@ -1449,6 +1452,9 @@ struct gui_window *gui_create_dialog_window(struct gui_window *parent, int width
     wi->toplevel = shell_get_toplevel(shell, wi->surface);
     toplevel_add_listener(wi->toplevel, &toplevel_events, NULL);
     toplevel_set_title(wi->toplevel, title);
+    /* The panel shows the icon of the program (launcher_icon_name). */
+    if (getprogname()[0])
+        toplevel_set_app_id(wi->toplevel, getprogname());
     if (pi && pi->toplevel) {
         toplevel_set_parent(wi->toplevel, pi->toplevel);
         toplevel_set_modal(wi->toplevel, 1);

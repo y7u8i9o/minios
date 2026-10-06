@@ -93,7 +93,11 @@ of the multiuser plan `session UID|-` (`users.md`). Init identifies the
 requesting user through `SO_PEERCRED`. Everyone may ask for `list` and
 `status`, root and the user of the session on the console may power off
 and restart, and everything else is for root. `login` and the greeter
-name the session user, and the end of the console entry clears it. A reload
+name the session user, and the end of the console entry clears it.
+`init_request` of `minios/init.h` in the libc sends one request and reads
+the reply. `initctl`, `account_session` and the greeter use it, and since
+B4 of `docs/plan/desktop-panel.md` the power menu of the panel sends
+`reboot` and `poweroff` through it as the user of the session. A reload
 reads the file again: entries no longer present are stopped and removed,
 new ones start, and an existing entry retains its state with the new
 command taking effect at its next start.

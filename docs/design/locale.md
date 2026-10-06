@@ -23,14 +23,18 @@ start with `#` and lines in upper case are comments. Section titles such as
 |---|---|
 | LC_NUMERIC | `decimal_point`, `thousands_sep`, `grouping` (group sizes from the right, such as "3") |
 | LC_MONETARY | `int_curr_symbol`, `currency_symbol`, `mon_decimal_point`, `mon_thousands_sep`, `mon_grouping`, `positive_sign`, `negative_sign`, `int_frac_digits`, `frac_digits`, `p_cs_precedes`, `p_sep_by_space`, `n_cs_precedes`, `n_sep_by_space`, `p_sign_posn`, `n_sign_posn` |
-| LC_TIME | `abday`, `day`, `abmon`, `mon`, `alt_mon`, `ab_alt_mon`, `am_pm`, `d_t_fmt`, `d_fmt`, `t_fmt`, `t_fmt_ampm`, `date_fmt` |
+| LC_TIME | `abday`, `day`, `abmon`, `mon`, `alt_mon`, `ab_alt_mon`, `am_pm`, `d_t_fmt`, `d_fmt`, `t_fmt`, `t_fmt_ampm`, `date_fmt`, `first_weekday` |
 | LC_MESSAGES | `yesexpr`, `noexpr`, `yesstr`, `nostr`, `language_name`, `territory_name` |
 | LC_COLLATE | `collate` (`latin` or `codepoint`), `collate_after` |
 
 `mon` contains the month names used with a day. `alt_mon` and `ab_alt_mon`
 contain the names used without a day, which differ in Russian (genitive
 "января" and nominative "январь"). A missing `alt_mon` is `mon`. Any other
-missing item takes the value of the C locale. `language_name` and
+missing item takes the value of the C locale. `first_weekday` is the first
+day of the week as one digit, 0 for Sunday to 6 for Saturday, which
+`nl_langinfo(_NL_FIRST_WEEKDAY)` returns. It is 0 in the C locale, in
+`en_US` and in `ja_JP`, and 1 in the other locales. The calendar of the
+panel orders its columns by it (`shell.md`). `language_name` and
 `territory_name` name the locale in its own language for the Settings
 program.
 

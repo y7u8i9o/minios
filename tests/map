@@ -32,6 +32,7 @@ kernel/tests/test_run.c         @run
 tests/release-cases             none
 user/etc/tests/codec-*          codec_*
 user/etc/tests/*.lua            lua* gui_lua*
+user/etc/tests/wallpaper-*      wallpaper_hidpi
 
 # ---- build ----
 Makefile                        boot
@@ -75,6 +76,7 @@ tools/gen_codec_fixtures.py     check-libcodec codec_*
 tools/genime.py                 check-imed ime*
 tools/genunicode.py             unicode_data gui_unicode
 tools/genzoneinfo.py            timezone
+tools/genwallpapers.py          wallpaper_hidpi
 tools/wscan/**                  check-libwire comp_*
 
 # ---- kernel ----
@@ -181,8 +183,8 @@ user/hello/**                   dynlink
 user/audiod/**                  audio_*
 user/calc/**                    gui_calc calculator
 user/compat/**                  boot
-user/compositor/**              comp_* gui gui_*
-user/desktop/**                 gui_desktop gpu_resize
+user/compositor/**              comp_* gui gui_* panel_desktop panel_top
+user/desktop/**                 gui_desktop gpu_resize wallpaper_hidpi
 user/edit/**                    editor
 user/files/**                   gui_files gui_filechooser gui_dnd
 user/greeter/**                 gui_greeter greeter_* login_gui
@@ -195,10 +197,10 @@ user/lua/**                     check-lua lua* gui_lua* luasynth*
 user/lua/lnet.c                 check-transfer net_transfer
 user/lua/lthread.c              check-transfer
 user/mint/**                    mint
-user/panel/**                   comp_panel gui_modes gpu_resize
+user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top
 user/pkg/**                     check-pkg pkg pkg_repo pkg_apps offline_update kernel_upgrade
 user/po/**                      gettext gui_locale locale
-user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize
+user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize panel_top
 user/sh/**                      check-sh sh_builtins shell shell2 script script2 shebang jobcontrol
 user/term/**                    gui_term gui_term_scale2
 user/askpass/**                 gui_askpass privilege
@@ -207,7 +209,7 @@ user/skel/**                    login_console gui_desktop
 # ---- configuration and data ----
 user/etc/init.conf              boot initctl shutdown shutdown_cmd ntp
 user/etc/profile                shell login_console
-user/etc/launcher               comp_panel gui_desktop
+user/etc/launcher               comp_panel gui_desktop gui_wm gui_greeter
 user/etc/desktop.conf           gui_desktop gui_settings gpu_resize
 user/etc/mime.*                 gui_files gui_desktop check-libgui
 user/etc/fstab                  boot fs
@@ -227,7 +229,7 @@ user/share/ime/**               check-imed ime*
 user/share/fonts/**             ttf gui_ttf
 user/share/sounds/**            audio_player gui_mixer
 user/share/icons/**             icons
-user/share/wallpapers/**        gui_desktop
+user/share/wallpapers/**        gui_desktop wallpaper_hidpi
 user/share/apps/**              lua gui_lua
 user/share/lua/**               lua
 

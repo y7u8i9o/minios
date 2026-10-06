@@ -1,0 +1,4 @@
+# B1 of docs/plan/desktop-panel.md: a screendump of the default wallpaper
+# at 2560x1600, scale 2, for inspection.
+wait wallpaper_hidpi: default wallpaper drawn
+screendump default.ppm

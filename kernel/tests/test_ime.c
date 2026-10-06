@@ -63,9 +63,6 @@ static void ctrl_space(void)
 #define SPACE 0x39
 #define ZENKAKU 0x55             /* the scancode of Zenkaku/Hankaku, key 85 */
 /* The panel geometry of user/panel/panel.h. */
-#define CLOCK_W 80
-#define MIXER_W 30
-#define INPUT_W 30
 #define ENTER 0x1c
 
 static void test_ime(void)
@@ -123,8 +120,8 @@ static void test_ime(void)
     ktest_assert(status == 0, "gedit status 0x%x", status);
     /* The menu of the panel label: layout, pinyin, japanese.  The second row
      * selects the pinyin engine. */
-    int cx = logical_w() / 2, cy = logical_h() / 2, right = logical_w() - CLOCK_W - MIXER_W - 4 - 4;
-    mouse_move_to(&cx, &cy, right - INPUT_W / 2, logical_h() - 14, 0);
+    int cx = logical_w() / 2, cy = logical_h() / 2, right = PANEL_INPUT_X(logical_w()) + PANEL_INPUT_W;
+    mouse_move_to(&cx, &cy, right - PANEL_INPUT_W / 2, PANEL_ROW(logical_h()), 0);
     mouse_click(1);
     ktest_wait_idle(800);
     int top = logical_h() - 28 + 4 - (2 * 6 + 3 * 28);

@@ -554,3 +554,19 @@ msgstr "Se requiere autenticación para eliminar una cuenta."
 
 msgid "The change was cancelled"
 msgstr "Se canceló el cambio"
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr "Posición del panel"
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr "Parte inferior de la pantalla"
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
+msgstr "Parte superior de la pantalla"
+
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr "La resolución sigue el tamaño de la ventana de la máquina virtual"

@@ -31,14 +31,16 @@ static uint32_t drawn_generation;
 
 int mixer_button_x(void)
 {
-    return screen_w - CLOCK_W - MIXER_BTN_W - 4;
+    return clock_x() - MIXER_BTN_W - 4;
 }
 
 /* A small speaker glyph: a box, a cone and two arcs. */
-void mixer_draw_button(struct painter *p)
+void mixer_draw_button(struct painter *p, int hovered)
 {
     int x = mixer_button_x(), h = panel.lh;
-    painter_rounded(p, x, 4, MIXER_BTN_W, h - 8, mixer_open ? BUTTON_OPEN : BUTTON_BG, 0xffffffffu);
+    if (mixer_open || hovered)
+        painter_rounded(p, x, BUTTON_Y, MIXER_BTN_W, h - 2 * BUTTON_Y, mixer_open ? BUTTON_OPEN : BUTTON_HOVER,
+                        0xffffffffu);
     int cx = x + MIXER_BTN_W / 2 - 3, cy = h / 2;
     painter_fill(p, cx - 5, cy - 2, 3, 5, PANEL_TEXT);
     for (int i = 0; i < 5; i++)
@@ -204,9 +206,7 @@ static void mixer_show(void)
     }
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, MIXER_W, h);
-    positioner_set_anchor_rect(pos, mixer_button_x(), 4, MIXER_BTN_W, 1);
-    positioner_set_anchor(pos, POS_TOP_RIGHT);       /* top right of the button */
-    positioner_set_gravity(pos, POS_TOP_LEFT);       /* extends up and to the left */
+    panel_place_popup(pos, mixer_button_x(), MIXER_BTN_W, 1);
     popup = shell_get_popup(shell, mixer.surface, panel.surface, pos);
     popup_add_listener(popup, &popup_events, NULL);
     positioner_destroy(pos);

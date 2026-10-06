@@ -5,14 +5,14 @@
  *     initctl reload [FILE]
  *     initctl poweroff|reboot|halt
  *
- * The request is one line on the abstract socket "init"; the reply
- * starts with "ok" or "error: message" followed by the output. */
+ * The request is one line on the abstract socket "init" (init_request of
+ * minios/init.h); the reply starts with "ok" or "error: message" followed
+ * by the output. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/socket.h>
-#include <sys/un.h>
+#include <minios/init.h>
 
 static void usage(void)
 {
@@ -38,30 +38,13 @@ int main(int argc, char **argv)
     }
     if (argc == 1)
         strcpy(request, "list");
-    strcat(request, "\n");
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    struct sockaddr_un addr = { AF_UNIX, "init" };
-    if (fd < 0 || connect(fd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+    static char reply[4096];
+    long n = init_request(request, reply, sizeof reply);
+    if (n < 0) {
         fprintf(stderr, "initctl: cannot reach init: %s\n", strerror(errno));
         return 1;
     }
-    size_t len = strlen(request);
-    if (write(fd, request, len) != (ssize_t)len) {
-        fprintf(stderr, "initctl: write: %s\n", strerror(errno));
-        return 1;
-    }
-    static char reply[4096];
-    size_t got = 0;
-    for (;;) {
-        ssize_t n = read(fd, reply + got, sizeof reply - 1 - got);
-        if (n <= 0)
-            break;
-        got += (size_t)n;
-        if (got == sizeof reply - 1)
-            break;
-    }
-    close(fd);
-    reply[got] = 0;
+    size_t got = (size_t)n;
     if (got == 0) {
         fprintf(stderr, "initctl: no reply from init\n");
         return 1;

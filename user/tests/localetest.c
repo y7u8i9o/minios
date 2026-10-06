@@ -157,12 +157,15 @@ static void test_langinfo(void)
     same(nl_langinfo(YESEXPR), "^[+1yYдД]", "YESEXPR");
     same(nl_langinfo(CRNCYSTR), "+₽", "CRNCYSTR");
     same(nl_langinfo(RADIXCHAR), ",", "RADIXCHAR");
+    same(nl_langinfo(_NL_FIRST_WEEKDAY), "1", "the week of ru_RU begins on Monday");
     setlocale(LC_ALL, "ja_JP.UTF-8");
     same(nl_langinfo(DAY_1), "日曜日", "DAY_1");
+    same(nl_langinfo(_NL_FIRST_WEEKDAY), "0", "the week of ja_JP begins on Sunday");
     same(nl_langinfo(CRNCYSTR), "-￥", "CRNCYSTR of ja_JP");
     CHECK(localeconv()->frac_digits == 0, "frac_digits of ja_JP");
     setlocale(LC_ALL, "C");
     same(nl_langinfo(ABMON_12), "Dec", "ABMON_12 in C");
+    same(nl_langinfo(_NL_FIRST_WEEKDAY), "0", "the week of C begins on Sunday");
     CHECK(localeconv()->frac_digits == __SCHAR_MAX__, "frac_digits of C");
 }
 

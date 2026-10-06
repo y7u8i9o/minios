@@ -11,4 +11,3 @@ Screenshot=/bin/screenshot -i
 Settings=/bin/settings
 X12 settings=/bin/x12settings
 Protocol viewer=/bin/wireview
-Log out=@logout

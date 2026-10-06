@@ -1,0 +1,6 @@
+panel: calendar opened [0-9]{4}-[0-9]{2}
+panel_calendar: [0-9]{4}-[0-9]{2} shown, today marked
+panel: calendar month [0-9]{4}-[0-9]{2}
+panel: calendar closed
+panel_calendar: ok
+TEST PASS

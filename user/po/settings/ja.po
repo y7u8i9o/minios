@@ -552,3 +552,19 @@ msgstr "アカウントを削除するには認証が必要です。"
 
 msgid "The change was cancelled"
 msgstr "変更はキャンセルされました"
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr "パネルの位置"
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr "画面の下"
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
+msgstr "画面の上"
+
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr "解像度を仮想マシンのウィンドウの大きさに合わせる"

@@ -64,3 +64,15 @@ msgstr[2] "ещё %d"
 #: user/panel/panel.c:130
 msgid "Menu"
 msgstr "Меню"
+
+#: user/panel/power.c:57
+msgid "Log out"
+msgstr "Выйти"
+
+#: user/panel/power.c:57
+msgid "Restart"
+msgstr "Перезагрузить"
+
+#: user/panel/power.c:57
+msgid "Shut down"
+msgstr "Выключить"

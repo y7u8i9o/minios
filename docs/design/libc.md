@@ -259,7 +259,13 @@ SHA-256 crypt, `getlogin`, the identity calls from `getuid` to
 `setgroups`, `umask`, `faccessat`, `fchmodat` and `fchownat`, and
 `mount_options` for the option string of `mount`. `minios/conf.h` gained
 `conf_home`, the home of the caller, and `conf_user_file` and
-`conf_user_write_file` for any file of `$HOME/.config`.
+`conf_user_write_file` for any file of `$HOME/.config`. B4 of
+`docs/plan/desktop-panel.md` added `minios/init.h` with `init_request`,
+which sends a request to init on its control socket (`init.md`), and B3
+the item `_NL_FIRST_WEEKDAY` of `langinfo.h` (`locale.md`). B6 added
+`conf_lookup` to `minios/conf.h`, which reads the value of one key of a
+file of `key=value` lines. `conf_export_locale`, the greeter and the key
+map reload of X12 use it in place of their own readers.
 
 The ports of su, doas and sudo in U5 added `syslog.h` (`openlog`,
 `syslog`, `vsyslog`, `setlogmask` and `closelog`, which append to

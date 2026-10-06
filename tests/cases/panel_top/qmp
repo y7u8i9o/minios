@@ -1,0 +1,4 @@
+# A screendump of the panel at the top with the launcher open, for
+# inspection (B6 of docs/plan/desktop-panel.md).
+wait panel_top: launcher below its button
+screendump top.ppm

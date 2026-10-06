@@ -11,6 +11,8 @@
 #include <boot.h>
 #include <fs/vfs.h>
 #include <lib/string.h>
+#include <lib/date.h>
+#include <drivers/rtc.h>
 #include <lib/cmdline.h>
 #include <lib/crc32.h>
 #include <console.h>
@@ -237,12 +239,13 @@ KTEST_DEFINE("gui_term", test_gui_term);
 
 /* Geometry of the launcher popup (user/panel/launcher.c) without
  * installed packages.  The menu has 6 px of padding, a 34 px search row, a
- * 22 px System heading, one 24 px row per entry of user/etc/launcher
- * except Log out, a 9 px rule and the Log out row.  It opens above the
- * 28 px panel.  These values must change with that file. */
+ * 22 px System heading and one 24 px row per entry of user/etc/launcher.
+ * Log out is in the power menu of the panel since B4 of
+ * docs/plan/desktop-panel.md.  It opens above the 28 px panel.  These
+ * values must change with that file. */
 #define LAUNCHER_SYSTEM  12
 #define LAUNCHER_CLOCK   2     /* Clock=/bin/clock is the third System entry. */
-#define LAUNCHER_H       (6 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 9 + 24 + 6)
+#define LAUNCHER_H       (6 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 6)
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - LAUNCHER_H)
 #define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + 34 + 22 + (i) * 24 + 12)
 
@@ -330,7 +333,7 @@ static void test_gui_wm(void)
     ktest_assert(pixel(45, 160) == 0x00306080, "alpha hidden %08x", pixel(45, 160));
     ktest_assert(pixel(70 + 50, 90 + 40) == 0x00ff0000, "beta visible again %08x", pixel(120, 130));
     /* Its task bar button (the first one) restores it. */
-    mouse_move_to(&cx, &cy, 64 + 12 + 40, sh - 14, 0);
+    mouse_move_to(&cx, &cy, PANEL_TASKS_X + 40, PANEL_ROW(sh), 0);
     mouse_click(1);
     ktest_wait_idle(300);
     ktest_assert(pixel(45, 160) == 0x00dcdcdc, "alpha restored %08x", pixel(45, 160));
@@ -1070,16 +1073,71 @@ static void test_comp_panel(void)
     ktest_wait_idle(1000);
     ktest_assert(pixel(sw / 2, sh - 14) == 0x0023272c, "panel drawn at the bottom: %08x", pixel(sw / 2, sh - 14));
     struct proc *cl = start_client("shell");
-    ktest_assert(pixel(64 + 12 + 4, sh - 14) == 0x003f4854, "task button for the active window: %08x", pixel(80, sh - 14));
+    ktest_assert(pixel(PANEL_TASKS_X + 4, PANEL_ROW(sh)) == PANEL_BUTTON_ACTIVE, "task button for the active window: %08x",
+                 pixel(PANEL_TASKS_X + 4, PANEL_ROW(sh)));
     int cx = sw / 2, cy = sh / 2;
     /* Minimize through the task button, restore through it. */
-    mouse_move_to(&cx, &cy, 64 + 12 + 40, sh - 14, 0);
+    mouse_move_to(&cx, &cy, PANEL_TASKS_X + 40, PANEL_ROW(sh), 0);
     mouse_click(1);
     ktest_wait_idle(400);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00306080, "window hidden after the task click: %08x", pixel(140, 135));
+    /* The button of the minimized window is highlighted under the pointer. */
+    ktest_assert(pixel(PANEL_TASKS_X + 4, PANEL_ROW(sh)) == PANEL_BUTTON_HOVER, "highlight under the pointer: %08x",
+                 pixel(PANEL_TASKS_X + 4, PANEL_ROW(sh)));
     mouse_click(1);
     ktest_wait_idle(400);
     ktest_assert(pixel(40 + 100, 60 + 75) == 0x00dcdcdc, "window restored: %08x", pixel(140, 135));
+    /* The button shows the icon of the application (app-default for the
+     * app_id comptest) left of the title. */
+    int light = 0;
+    for (int y = sh - PANEL_H + 6; y < sh - 6; y++)
+        for (int x = PANEL_TASKS_X + 8; x < PANEL_TASKS_X + 24; x++)
+            if ((pixel(x, y) & 0xff) > 0xa0)
+                light++;
+    ktest_assert(light >= 20, "icon on the window button: %d light pixels", light);
+    kprintf("comp_panel: icon of %d pixels on the window button\n", light);
+    /* Two clients with two windows each give five buttons, which do not
+     * fit at 160 pixels left of the input label at a width of 1024. Each
+     * becomes narrower, and the fifth, active button begins at the fifth
+     * position of the narrower width. */
+    struct proc *more[2];
+    for (int i = 0; i < 2; i++) {
+        more[i] = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL }, (char *const[]){ NULL },
+                                   &kernel_proc);
+        ktest_assert(more[i] != NULL, "cannot start guitest");
+        ktest_wait_idle(1000);
+    }
+    int narrow = (PANEL_INPUT_X(sw) - 8 - PANEL_TASKS_X + 4) / 5 - 4;
+    int fifth = PANEL_TASKS_X + 4 * (narrow + 4);
+    ktest_assert(sw == 1024 && narrow < PANEL_TASK_W, "button width %d at a screen width of %d", narrow, sw);
+    ktest_assert(pixel(fifth + 4, PANEL_ROW(sh)) == PANEL_BUTTON_ACTIVE &&
+                     pixel(fifth + narrow - 4, PANEL_ROW(sh)) == PANEL_BUTTON_ACTIVE &&
+                     pixel(fifth + narrow + 2, PANEL_ROW(sh)) != PANEL_BUTTON_ACTIVE,
+                 "the fifth button at %d: %08x %08x %08x", fifth, pixel(fifth + 4, PANEL_ROW(sh)),
+                 pixel(fifth + narrow - 4, PANEL_ROW(sh)), pixel(fifth + narrow + 2, PANEL_ROW(sh)));
+    kprintf("comp_panel: five window buttons of %d pixels\n", narrow);
+    /* The QMP script takes a screendump of the bar for inspection. */
+    sleep_ms(1500);
+    for (int i = 0; i < 2; i++) {
+        signal_send(more[i], SIGTERM);
+        proc_reap(more[i]);
+    }
+    ktest_wait_idle(600);
+    /* The power menu opens above the power button with Log out, Restart
+     * and Shut down, and a click outside it dismisses it. */
+    mouse_move_to(&cx, &cy, PANEL_POWER_X(sw) + PANEL_POWER_W / 2, PANEL_ROW(sh), 0);
+    mouse_click(1);
+    ktest_wait_idle(600);
+    int mx = PANEL_POWER_X(sw) + PANEL_POWER_W - POWER_MENU_W, my = sh - PANEL_H + 4 - POWER_MENU_H;
+    ktest_assert(pixel(mx + 2, my + 2) == 0x00fafbfc, "power menu above its button: %08x", pixel(mx + 2, my + 2));
+    mouse_move_to(&cx, &cy, mx + 60, my + 6 + 28 + 14, 0);
+    ktest_wait_idle(400);
+    kprintf("comp_panel: power menu shown\n");
+    sleep_ms(1500);                     /* the screendump of the QMP script */
+    mouse_move_to(&cx, &cy, sw - 100, 100, 0);
+    mouse_click(1);
+    ktest_wait_idle(400);
+    ktest_assert(pixel(mx + 2, my + 2) != 0x00fafbfc, "power menu dismissed: %08x", pixel(mx + 2, my + 2));
     /* The launcher menu is opened and dismissed with a click on the
      * desktop, which makes the compositor send popup.done.  It is opened
      * again, and the search for "clo" and Enter start the clock.  The
@@ -1109,6 +1167,195 @@ static void test_comp_panel(void)
     kprintf("comp_panel: panel ok\n");
 }
 KTEST_DEFINE("comp_panel", test_comp_panel);
+
+/* B3 of docs/plan/desktop-panel.md: a click on the clock opens the
+ * calendar of the current month above the clock, with today marked in
+ * the accent colour. The forward button shows the next month without the
+ * mark, the back button the current month again, and a second click on
+ * the clock closes it. The test image has no /etc/localtime, so the panel
+ * shows the date in UTC, and the C locale begins the week on Sunday. */
+#define CAL_W (2 * 6 + 7 * 36)
+#define CAL_H (2 * 6 + 32 + 24 + 6 * 28)
+#define CAL_ACCENT 0x005b9cf5
+#define CAL_BG 0x00fafbfc
+
+static void today_cell(int x0, int y0, int *cx, int *cy, int *year, int *month)
+{
+    int64_t days = (int64_t)(rtc_realtime_ns() / 1000000000ULL / 86400);
+    int y, m, d;
+    date_civil_from_days(days, &y, &m, &d);
+    /* 1970-01-01 was a Thursday. */
+    int first = (int)((date_days_from_civil(y, m, 1) + 4) % 7);
+    int slot = first + d - 1;
+    *cx = x0 + 6 + (slot % 7) * 36 + 6;
+    *cy = y0 + 6 + 32 + 24 + (slot / 7) * 28 + 14;
+    *year = y;
+    *month = m;
+}
+
+static void test_panel_calendar(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_compositor();
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(panel != NULL, "cannot start the panel");
+    ktest_wait_idle(1000);
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, PANEL_CLOCK_X(sw) + PANEL_CLOCK_W / 2, PANEL_ROW(sh), 0);
+    mouse_click(1);
+    ktest_wait_idle(600);
+    int x0 = PANEL_CLOCK_X(sw) + PANEL_CLOCK_W - 4 - CAL_W, y0 = sh - PANEL_H + 4 - CAL_H;
+    int tx, ty, year, month;
+    today_cell(x0, y0, &tx, &ty, &year, &month);
+    ktest_assert(pixel(x0 + 2, y0 + 2) == CAL_BG, "calendar above the clock: %08x", pixel(x0 + 2, y0 + 2));
+    ktest_assert(pixel(tx, ty) == CAL_ACCENT, "today marked at %d,%d: %08x", tx, ty, pixel(tx, ty));
+    kprintf("panel_calendar: %04d-%02d shown, today marked\n", year, month);
+    sleep_ms(1500);                     /* the screendump of the QMP script */
+    /* The next month has no mark at the same place. */
+    mouse_move_to(&cx, &cy, x0 + CAL_W - 6 - 16, y0 + 6 + 16, 0);
+    mouse_click(1);
+    ktest_wait_idle(400);
+    ktest_assert(pixel(tx, ty) != CAL_ACCENT, "no mark in the next month: %08x", pixel(tx, ty));
+    mouse_move_to(&cx, &cy, x0 + 6 + 16, y0 + 6 + 16, 0);
+    mouse_click(1);
+    ktest_wait_idle(400);
+    ktest_assert(pixel(tx, ty) == CAL_ACCENT, "today marked again: %08x", pixel(tx, ty));
+    /* A second click on the clock closes the calendar. */
+    mouse_move_to(&cx, &cy, PANEL_CLOCK_X(sw) + PANEL_CLOCK_W / 2, PANEL_ROW(sh), 0);
+    mouse_click(1);
+    ktest_wait_idle(600);
+    ktest_assert(pixel(x0 + 2, y0 + 2) == 0x00306080, "calendar closed: %08x", pixel(x0 + 2, y0 + 2));
+    kprintf("panel_calendar: ok\n");
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+}
+KTEST_DEFINE("panel_calendar", test_panel_calendar);
+
+/* B5 of docs/plan/desktop-panel.md: the show desktop button at the right
+ * edge minimizes the three windows of comptest and guitest, and a second
+ * click restores them with beta, the active window, on top. A window that
+ * opens while the desktop is shown ends the recorded state, so the next
+ * click shows the desktop again and minimizes the new window, the only
+ * visible one, instead of restoring the three. */
+/* The background or the red rectangle of the window beta of guitest. */
+static bool is_beta(uint32_t c)
+{
+    return c == 0x00c8f0c8 || c == 0x00ff0000;
+}
+
+static void click_show_desktop(int sw, int sh, int *cx, int *cy)
+{
+    mouse_move_to(cx, cy, PANEL_DESKTOP_X(sw) + PANEL_DESKTOP_W / 2, PANEL_ROW(sh), 0);
+    mouse_click(1);
+    ktest_wait_idle(800);
+}
+
+static void test_panel_desktop(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_compositor();
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(panel != NULL, "cannot start the panel");
+    ktest_wait_idle(1000);
+    struct proc *shell = start_client("shell");
+    struct proc *two = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(two != NULL, "cannot start guitest");
+    ktest_wait_idle(1200);
+    ktest_assert(is_beta(pixel(70 + 50, 90 + 40)), "beta on top: %08x", pixel(120, 130));
+    int cx = sw / 2, cy = sh / 2;
+    click_show_desktop(sw, sh, &cx, &cy);
+    ktest_assert(pixel(70 + 50, 90 + 40) == 0x00306080 && pixel(40 + 100, 60 + 75) == 0x00306080,
+                 "the desktop where the windows were: %08x %08x", pixel(120, 130), pixel(140, 135));
+    kprintf("panel_desktop: desktop shown\n");
+    click_show_desktop(sw, sh, &cx, &cy);
+    ktest_assert(is_beta(pixel(70 + 50, 90 + 40)), "beta on top again: %08x", pixel(120, 130));
+    kprintf("panel_desktop: windows restored\n");
+    /* A window opened in between ends the recorded state. */
+    click_show_desktop(sw, sh, &cx, &cy);
+    struct proc *late = start_client("shell");
+    ktest_wait_idle(800);
+    click_show_desktop(sw, sh, &cx, &cy);
+    kprintf("panel_desktop: ok\n");
+    signal_send(late, SIGTERM);
+    proc_reap(late);
+    signal_send(two, SIGTERM);
+    proc_reap(two);
+    signal_send(shell, SIGTERM);
+    proc_reap(shell);
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+}
+KTEST_DEFINE("panel_desktop", test_panel_desktop);
+
+/* B6 of docs/plan/desktop-panel.md: with panel_position=top the panel is
+ * at the top edge and the desktop area begins below it. A window cascades
+ * from (40, 30) of that area, so its frame is at (40, 58) and its 200x150
+ * contents under the 28 pixel title bar of the server decorations begin at
+ * (41, 87). Its maximized frame begins below the panel, and the launcher
+ * opens downwards. The setting bottom moves the running panel to the
+ * bottom edge, and the maximized window then begins at the top edge. */
+static void set_panel_position(const char *value)
+{
+    struct proc *p = proc_create_user("/bin/settings", (char *const[]){ "settings", "set", "panel_position", (char *)value, NULL },
+                                      (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(p != NULL && proc_reap(p) == 0, "settings set panel_position %s", value);
+}
+
+static void test_panel_top(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_compositor();
+    set_panel_position("top");
+    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(panel != NULL, "cannot start the panel");
+    ktest_wait_idle(1000);
+    ktest_assert(pixel(sw / 2, PANEL_H / 2) == PANEL_BG && pixel(sw / 2, sh - 14) == 0x00306080,
+                 "panel at the top: %08x, desktop at the bottom: %08x", pixel(sw / 2, PANEL_H / 2), pixel(sw / 2, sh - 14));
+    kprintf("panel_top: panel at the top\n");
+    struct proc *cl = start_client("shell");
+    ktest_assert(pixel(40 + 100, 88 + 75) == 0x00dcdcdc, "window below the panel: %08x", pixel(140, 163));
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 41 + 200 - 27, 87 - 14, 0);
+    mouse_click(1);
+    ktest_wait_idle(600);
+    ktest_assert(pixel(sw / 2, PANEL_H + 5) == 0x00e9ecf0 && pixel(sw - 10, sh - 10) == 0x00dcdcdc,
+                 "maximized below the panel: title %08x, contents %08x", pixel(sw / 2, PANEL_H + 5),
+                 pixel(sw - 10, sh - 10));
+    ktest_assert(pixel(sw / 2, PANEL_H / 2) == PANEL_BG, "panel over the maximized window: %08x", pixel(sw / 2, 14));
+    kprintf("panel_top: maximized window below the panel\n");
+    /* The launcher opens below its button. */
+    mouse_move_to(&cx, &cy, PANEL_MENU_X, PANEL_H / 2, 0);
+    mouse_click(1);
+    ktest_wait_idle(600);
+    ktest_assert(pixel(8, PANEL_H + 4) == 0x00fafbfc, "launcher below its button: %08x", pixel(8, PANEL_H + 4));
+    kprintf("panel_top: launcher below its button\n");
+    sleep_ms(1500);                     /* the screendump of the QMP script */
+    mouse_move_to(&cx, &cy, sw - 100, sh / 2, 0);
+    mouse_click(1);
+    ktest_wait_idle(400);
+    /* The running panel moves to the bottom edge within a second. */
+    set_panel_position("bottom");
+    sleep_ms(1500);
+    ktest_wait_idle(600);
+    ktest_assert(pixel(sw / 2, sh - 14) == PANEL_BG && pixel(sw / 2, 5) == 0x00e9ecf0,
+                 "panel at the bottom: %08x, maximized title at the top: %08x", pixel(sw / 2, sh - 14), pixel(sw / 2, 5));
+    kprintf("panel_top: panel moved to the bottom\n");
+    signal_send(cl, SIGTERM);
+    proc_reap(cl);
+    signal_send(panel, SIGTERM);
+    proc_reap(panel);
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+}
+KTEST_DEFINE("panel_top", test_panel_top);
 
 /* A compositor that dies (here killed) must give the keyboard back to
  * the console: closing its descriptor drops the EVIOCGRAB grab. */

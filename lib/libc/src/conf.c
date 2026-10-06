@@ -54,6 +54,27 @@ const char *conf_write_path(char *buf, size_t size)
     return conf_user_write_file("desktop.conf", buf, size);
 }
 
+char *conf_lookup(const char *path, const char *key, char *buf, size_t size)
+{
+    if (size)
+        buf[0] = '\0';
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return NULL;
+    char line[512];
+    size_t len = strlen(key);
+    int found = 0;
+    while (fgets(line, sizeof line, f)) {
+        line[strcspn(line, "\n")] = '\0';
+        if (strncmp(line, key, len) == 0 && line[len] == '=') {
+            strlcpy(buf, line + len + 1, size);
+            found = 1;
+        }
+    }
+    fclose(f);
+    return found ? buf : NULL;
+}
+
 /* set_var sets or removes one variable and reports a change. */
 static int set_var(const char *name, const char *value)
 {
@@ -72,18 +93,10 @@ static int set_var(const char *name, const char *value)
 
 int conf_export_locale(void)
 {
-    char path[256], line[256], lang[64] = "", formats[64] = "";
-    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
-    if (!f)
-        return 0;
-    while (fgets(line, sizeof line, f)) {
-        line[strcspn(line, "\n")] = '\0';
-        if (strncmp(line, "lang=", 5) == 0)
-            strlcpy(lang, line + 5, sizeof lang);
-        else if (strncmp(line, "formats=", 8) == 0)
-            strlcpy(formats, line + 8, sizeof formats);
-    }
-    fclose(f);
+    char path[256], lang[64], formats[64];
+    conf_read_path(path, sizeof path);
+    conf_lookup(path, "lang", lang, sizeof lang);
+    conf_lookup(path, "formats", formats, sizeof formats);
     if (!lang[0])
         return 0;
     int changed = set_var("LANG", lang);

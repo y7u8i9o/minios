@@ -1,0 +1,6 @@
+# A screendump of the bar with five window buttons, for inspection
+# (B2 of docs/plan/desktop-panel.md).
+wait comp_panel: five window buttons
+screendump panel.ppm
+wait comp_panel: power menu shown
+screendump power.ppm

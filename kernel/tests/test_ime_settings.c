@@ -19,10 +19,6 @@
 static char *const env[] = { "PATH=/bin", "HOME=/home", NULL };
 
 /* The panel geometry of user/panel/panel.h and imemenu.c. */
-#define CLOCK_W 80
-#define MIXER_W 30
-#define INPUT_W 30
-#define PANEL_H 28
 #define MENU_W 220
 #define ROW_H 28
 #define MENU_PAD 6
@@ -62,14 +58,14 @@ static void sh(const char *command)
 
 static int label_right(void)
 {
-    return logical_w() - CLOCK_W - MIXER_W - 4 - 4;
+    return PANEL_INPUT_X(logical_w()) + PANEL_INPUT_W;
 }
 
 /* choose opens the menu of the panel label and clicks method row of n. */
 static void choose(int row, int n)
 {
     int cx = logical_w() / 2, cy = logical_h() / 2;
-    mouse_move_to(&cx, &cy, label_right() - INPUT_W / 2, logical_h() - 14, 0);
+    mouse_move_to(&cx, &cy, label_right() - PANEL_INPUT_W / 2, PANEL_ROW(logical_h()), 0);
     mouse_click(1);
     ktest_wait_idle(800);
     int top = logical_h() - PANEL_H + 4 - (2 * MENU_PAD + n * ROW_H);

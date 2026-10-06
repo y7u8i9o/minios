@@ -114,6 +114,13 @@ the dimension of the desktop area. A layer surface of width 0 with the
 anchors left and right therefore receives the new width after a mode
 change. A layer surface with a nonzero width receives that width again.
 
+A layer surface records the anchor and the exclusive zone of its last
+placement. A commit of a mapped layer that changed either, such as the
+panel that moves to the top edge (B6 of `docs/plan/desktop-panel.md`),
+calls `shell_output_changed`: every layer is placed and configured again
+and maximized windows take the new desktop area, as after a mode change.
+The log line is `layer surface N moved to X,Y WxH`.
+
 X12 polls `/dev/fb0` for the size requests of the host display. With the
 setting `display_follow` X12 changes the mode to the requested size
 (`display.md`, V3 of the 0.6.0 release).

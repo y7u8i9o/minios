@@ -18,6 +18,12 @@ const char *conf_write_path(char *buf, size_t size);
 const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size);
 const char *conf_user_write_file(const char *name, char *buf, size_t size);
 
+/* conf_lookup copies the value of key from the file path of "key=value"
+ * lines to buf, at most size - 1 bytes, and returns buf. A missing file or
+ * key gives NULL, and buf is then the empty string. The last line of a
+ * key counts. */
+char *conf_lookup(const char *path, const char *key, char *buf, size_t size);
+
 /* The home directory of the caller: HOME when it is an absolute path,
  * else the home of the real uid in /etc/passwd, else "/"
  * (docs/design/users.md). */

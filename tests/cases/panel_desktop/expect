@@ -1,0 +1,8 @@
+panel: desktop shown, 3 windows minimized
+panel_desktop: desktop shown
+panel: desktop restored, 3 windows
+panel_desktop: windows restored
+panel: desktop shown, 3 windows minimized
+panel: desktop shown, 1 window minimized
+panel_desktop: ok
+TEST PASS

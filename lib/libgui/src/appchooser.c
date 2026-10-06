@@ -162,17 +162,15 @@ static const char *m_cell(struct model *m, int row, int col, char *buf, size_t s
     return c->apps[row - ROW_APP].title;
 }
 
-/* An application has the icon app-NAME, where NAME is the file name of
- * its program, as in the launcher menu of the panel. */
+/* An application has the icon of launcher_icon_name, as in the launcher
+ * menu of the panel. */
 static const struct image *m_icon(struct model *m, int row)
 {
     struct appchooser *c = m->user;
     if (row < ROW_APP)
         return NULL;
-    char program[LAUNCHER_COMMAND], name[64];
-    launcher_program(c->apps[row - ROW_APP].command, program, sizeof program);
-    snprintf(name, sizeof name, "app-%s", base_name(program));
-    const struct image *img = icon_get(name);
+    char name[LAUNCHER_COMMAND + 8];
+    const struct image *img = icon_get(launcher_icon_name(c->apps[row - ROW_APP].command, name, sizeof name));
     return img ? img : icon_get("app-default");
 }
 

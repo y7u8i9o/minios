@@ -39,6 +39,12 @@ static int on_mode(struct widget *w, void *args, void *arg)
     conf_set("wallpaper_mode", modes[w->value >= 0 && w->value < 4 ? w->value : 0]);
     return 1;
 }
+static int on_panel_position(struct widget *w, void *args, void *arg)
+{
+    if (!building)
+        conf_set("panel_position", w->value == 1 ? "top" : "bottom");
+    return 1;
+}
 static int on_swatch(struct widget *w, void *args, void *arg)
 {
     struct painter *p = ((struct sig_paint *)args)->p;
@@ -170,6 +176,16 @@ void build_appearance(struct widget *page)
     combobox_select(scale_combo, sc >= 150 ? 2 : sc >= 125 ? 1 : 0);
     widget_connect(scale_combo, "changed", on_scale, NULL);
     widget_set_grid(scale_combo, r++, 1, 1, 1);
+    /* The panel reads the setting within a second (B6 of
+     * docs/plan/desktop-panel.md). */
+    widget_set_grid(separator_new(grid), r++, 0, 1, 2);
+    row_label(grid, r, _("Panel position"));
+    struct widget *position = combobox_new(grid);
+    combobox_add(position, _("Bottom of the screen"));
+    combobox_add(position, _("Top of the screen"));
+    combobox_select(position, strcmp(conf_get("panel_position"), "top") == 0 ? 1 : 0);
+    widget_connect(position, "changed", on_panel_position, NULL);
+    widget_set_grid(position, r++, 1, 1, 1);
     building = 0;
 }
 

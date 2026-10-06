@@ -81,6 +81,11 @@ struct toplevel {
     int saved_x, saved_y, saved_w, saved_h;
     uint32_t configure_serial, acked_serial;
     int pending_w, pending_h;               /* size of the last configure */
+    /* The last configures sent, oldest first. A client may acknowledge any
+     * of them. The acknowledged one supersedes the older ones. */
+    struct { uint32_t serial; int w, h; } sent[4];
+    int nsent;
+    int acked_w, acked_h;                   /* size of the acknowledged configure */
     int decor_mode;
     struct wire_resource *decoration;
     int handle_count;
@@ -107,6 +112,7 @@ struct layer {
     struct csurface *s;
     struct wire_resource *res;
     int anchor, exclusive, w, h, interactive;
+    int placed_anchor, placed_exclusive;    /* at the last placement */
     int margin[4];                          /* top, right, bottom, left (layer_place) */
     int has_margin;
     uint32_t layer;

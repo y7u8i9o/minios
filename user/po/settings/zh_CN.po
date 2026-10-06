@@ -552,3 +552,19 @@ msgstr "删除账户需要认证。"
 
 msgid "The change was cancelled"
 msgstr "更改已取消"
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr "面板位置"
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr "屏幕底部"
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
+msgstr "屏幕顶部"
+
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr "分辨率随虚拟机窗口的大小变化"

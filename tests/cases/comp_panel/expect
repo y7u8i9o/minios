@@ -4,11 +4,15 @@ panel: toplevel listed
 panel: task click alpha
 x12: toplevel 1 minimized
 x12: toplevel 1 shown
+comp_panel: icon of [0-9]+ pixels on the window button
+comp_panel: five window buttons of [0-9]+ pixels
+panel: power menu opened
+comp_panel: power menu shown
 panel: menu opened
-x12: popup 3 shown at
-x12: popup 3 dismissed
+x12: popup [0-9]+ shown at
+x12: popup [0-9]+ dismissed
 panel: menu closed
-x12: popup 4 shown at
+x12: popup [0-9]+ shown at
 panel: menu search 'clo'
 panel: launch /bin/clock
 comp_panel: panel ok

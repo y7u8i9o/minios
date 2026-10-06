@@ -7,7 +7,7 @@
 /* String items: the nl_item values of <langinfo.h> first, then items that
  * only localeconv and the C library use. */
 enum {
-    LI_GROUPING = _DATE_FMT + 1,
+    LI_GROUPING = _NL_FIRST_WEEKDAY + 1,
     LI_INT_CURR_SYMBOL,
     LI_CURRENCY_SYMBOL,
     LI_MON_DECIMAL_POINT,

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 #include <minios/conf.h>
 #include <minios/local.h>
 
@@ -54,5 +55,21 @@ const char *launcher_program(const char *command, char *buf, int size)
 {
     strlcpy(buf, command, (size_t)size);
     buf[strcspn(buf, " ")] = '\0';
+    return buf;
+}
+
+const char *launcher_icon_name(const char *command, char *buf, int size)
+{
+    char program[LAUNCHER_COMMAND], path[sizeof program + 32];
+    launcher_program(command, program, sizeof program);
+    const char *base = strrchr(program, '/');
+    base = base ? base + 1 : program;
+    if (base[0] == '@')
+        base++;
+    snprintf(path, sizeof path, LAUNCHER_ICON_DIR "/app-%s.svg", base);
+    if (base[0] && access(path, R_OK) == 0)
+        snprintf(buf, (size_t)size, "app-%s", base);
+    else
+        strlcpy(buf, "app-default", (size_t)size);
     return buf;
 }

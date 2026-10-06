@@ -28,8 +28,9 @@ struct image *image_render_svg(const char *text, size_t len, int px, uint32_t co
 void image_free(struct image *img);
 /* A transparent image of w by h pixels (scale 1); NULL with errno. */
 struct image *image_create(int w, int h);
-/* A copy resampled to w by h pixels: area averages for reductions, the
- * nearest pixel for enlargements. NULL with errno. */
+/* A copy resampled to w by h pixels, each axis separately: area
+ * averages for reductions, bilinear interpolation for enlargements, with
+ * premultiplied alpha. NULL with errno. */
 struct image *image_scale(const struct image *src, int w, int h);
 /* PNG encoding (the png codec): RGB when every pixel is opaque, else RGBA.
  * image_encode_png stores a malloc'ed file in *data and returns its

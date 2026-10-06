@@ -264,7 +264,12 @@ clipboard object are gone. `lib/libgui/src/client.c` implements the same
 - `gui_connect` connects to the `display` socket (non blocking), binds
   the globals, creates a pointer, a keyboard and a data device.
 - A `gui_window` is a surface with the toplevel role and a pool of two
-  buffers in a memfd. The application draws into `gui_window.surf` (a
+  buffers in a memfd. Since B2 of `docs/plan/desktop-panel.md` every
+  window and dialog carries the app_id `getprogname()`, the last part of
+  `argv[0]`, and the panel shows the icon of that program. The `gui`
+  module of Lua sets the program name to the script of `arg[0]` when the
+  script creates its application, so a Lua window carries the name of
+  its script, not the name of the interpreter. The application draws into `gui_window.surf` (a
   private buffer) and marks rectangles with `gui_damage`; `gui_flush`
   (called by `gui_next_event` and by the framework after painting)
   copies the union of the damage since the buffer was last shown into a

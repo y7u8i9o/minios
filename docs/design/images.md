@@ -40,9 +40,15 @@ varied content smaller and are not implemented.
 ## Resampling and drawing
 
 `image_create` allocates a transparent image. `image_scale` resamples an
-image: each destination pixel of a reduction is the average of the source
-pixels its area covers, weighted by alpha, and an enlargement repeats the
-nearest source pixel. `painter_image_scaled` draws an image into a
+image one axis after the other with premultiplied alpha. An axis that
+becomes shorter averages the source pixels that each destination pixel
+covers, weighted by the covered length. An axis that becomes longer
+interpolates linearly between the two nearest source pixels, measured
+from the pixel centres. The function produces one destination row at a
+time and resamples each source row horizontally into a cache of two
+rows, so a large image needs no temporary copy of its own size. Until B1
+of `docs/plan/desktop-panel.md` an enlargement repeated the nearest
+source pixel. `painter_image_scaled` draws an image into a
 rectangle of logical pixels with nearest neighbour sampling and visits
 only the device pixels inside the clip, so the cost depends on the
 visible area and not on the size of the image.

@@ -1,7 +1,7 @@
 /* U4: the graphical login. The greeter starts X12 and its login window,
  * Enter logs in the preselected account user (uid 1000, no password), the
- * session's panel and desktop run as uid 1000, Log out in the panel's menu
- * ends the session, the greeter shows its window again, and X12 then
+ * session's panel and desktop run as uid 1000, Log out in the power menu
+ * of the panel ends the session, the greeter shows its window again, and X12 then
  * refuses a client of uid 1000. pause=1 leaves the login window open for
  * eight seconds, for screenshots. */
 #include <tests/ktest.h>
@@ -19,7 +19,7 @@
 static void test_greeter(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    int sh = logical_h();
+    int sw = logical_w(), sh = logical_h();
     /* The kernel protects pid 1, init, from SIGKILL. A first short process
      * takes that pid, which lets the end of the test kill the greeter. */
     struct proc *first = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", "exit 0", NULL },
@@ -38,30 +38,14 @@ static void test_greeter(void)
     if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);                 /* screenshots of the login window */
 
-    /* Enter chooses the preselected account, user, which has no password.
-     * A second Enter logs in with the empty one, and the greeter asks for a
-     * new password twice before the session starts. */
-    press_key(0x1c);
-    sleep_ms(800);
-    press_key(0x1c);
-    sleep_ms(1500);
-    type_line("userpw\n");
-    sleep_ms(300);
-    type_line("userpw\n");
-    ktest_assert(wait_procs("panel", 1000, 1, 10000), "no panel of uid 1000");
-    ktest_assert(wait_procs("desktop", 1000, 1, 5000), "no desktop of uid 1000");
+    greeter_login_user();
     ktest_assert(count_procs("greeter", -1) == 1, "the login window remains");
     kprintf("gui_greeter: session of uid 1000\n");
     sleep_ms(1500);
 
-    /* Log out is the bottom row of the launcher menu, 42 px above the
-     * bottom of the screen without installed packages (test_gui.c). */
-    int cx = 0, cy = 0;
-    mouse_move_to(&cx, &cy, 30, sh - 14, 0);
-    mouse_click(1);
-    sleep_ms(400);
-    mouse_move_to(&cx, &cy, 40, sh - 42, 0);
-    mouse_click(1);
+    /* Log out is the first row of the power menu (B4 of
+     * docs/plan/desktop-panel.md). */
+    panel_power_choose(sw, sh, 0);
     ktest_assert(wait_procs("panel", -1, 0, 10000), "the session did not end");
     ktest_assert(wait_procs("greeter", 0, 2, 10000), "no login window after the session");
     kprintf("gui_greeter: login window shown again\n");
@@ -78,6 +62,31 @@ static void test_greeter(void)
     proc_reap_children(&kernel_proc);
 }
 KTEST_DEFINE("gui_greeter", test_greeter);
+
+/* B4 of docs/plan/desktop-panel.md: the system boots through init to the
+ * greeter, the account user logs in, and Shut down in the power menu of the
+ * panel powers the machine off through init. QEMU then ends with status 0
+ * (tests/cases/panel_power/post). */
+static void test_panel_power(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    /* init with the configuration of the image, whose console entry is the
+     * greeter. */
+    struct proc *init = proc_create_user("/bin/init", (char *const[]){ "/bin/init", NULL },
+                                         (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
+    ktest_assert(init != NULL, "cannot start /bin/init");
+    proc_set_init(init);
+    ktest_assert(wait_procs("greeter", 0, 2, 30000), "no login window");
+    sleep_ms(1500);
+    greeter_login_user();
+    sleep_ms(1500);
+    kprintf("panel_power: session of uid 1000, choosing Shut down\n");
+    panel_power_choose(sw, sh, 2);
+    int status = proc_reap(init);
+    ktest_fail("init exited with status 0x%x instead of powering off", status);
+}
+KTEST_DEFINE("panel_power", test_panel_power);
 
 /* A normal boot starts the greeter as the console entry of init. */
 static void test_greeter_boot(void)

@@ -554,3 +554,19 @@ msgstr "L'authentification est requise pour supprimer un compte."
 
 msgid "The change was cancelled"
 msgstr "La modification a été annulée"
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr "Position du panneau"
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr "Bas de l'écran"
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
+msgstr "Haut de l'écran"
+
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr "La résolution suit la taille de la fenêtre de la machine virtuelle"

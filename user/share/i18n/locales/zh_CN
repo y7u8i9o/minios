@@ -36,6 +36,7 @@ d_fmt "%Y年%m月%d日"
 t_fmt "%H时%M分%S秒"
 t_fmt_ampm "%p %I时%M分%S秒"
 date_fmt "%Y年 %m月 %d日 %A %H:%M:%S %Z"
+first_weekday "1"
 
 # LC_MESSAGES
 yesexpr "^[+1yY是]"

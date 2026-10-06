@@ -63,3 +63,15 @@ msgstr[1] "%d más"
 #: user/panel/panel.c:130
 msgid "Menu"
 msgstr "Menú"
+
+#: user/panel/power.c:57
+msgid "Log out"
+msgstr "Cerrar sesión"
+
+#: user/panel/power.c:57
+msgid "Restart"
+msgstr "Reiniciar"
+
+#: user/panel/power.c:57
+msgid "Shut down"
+msgstr "Apagar"

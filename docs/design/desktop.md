@@ -54,13 +54,35 @@ entries`, `desktop: wallpaper PATH mode M`, `desktop: config applied`,
 
 ## Wallpaper
 
-Wallpapers are PNG files in `/usr/share/wallpapers` (`default.png`,
-`dusk.png`, generated 320x240 gradients). The desktop scales the image
-to its window once per size change with nearest neighbour sampling
-and 16.16 fixed point ratios. Modes: `fill` scales to cover the window
-retaining the aspect ratio and crops the excess, `center` draws the
-image unscaled in the middle over the desktop colour, `tile` repeats
-it, `stretch` scales both dimensions independently.
+Wallpapers are PNG files in `/usr/share/wallpapers`. `default.png` and
+`dusk.png` are gradients of 2560x1600 pixels, the largest mode of the
+GPU, which `tools/genwallpapers.py` draws. The gradients are dithered
+with a 4x4 ordered pattern, and the band of `default.png` has smoothed
+edges. Until B1 of `docs/plan/desktop-panel.md` the two files had 320x240
+pixels, and the desktop enlarged them eight times on a screen of
+2560x1600 pixels.
+
+`wallpaper_render` of libgui (`gui/wallpaper.h`) draws the background of
+an area: the desktop colour with the image over it in one of four modes.
+`fill` scales the image to cover the area, retaining the aspect ratio,
+and cuts the longer side. `center` draws the image in the middle and
+`tile` repeats it from the top left corner, both with one image pixel
+per logical pixel. `stretch` scales both dimensions independently. The
+result has the device size of the area and the scale of the output, and
+`painter_image` copies it pixel for pixel. The image is scaled with
+`image_scale` (`images.md`), so the wallpaper has the full resolution of
+the device and filtered edges. The desktop renders the background once
+per change of the size, the scale, the image, the mode or the colour. The
+greeter renders the wallpaper of the system settings in the mode `fill`
+in the same way. Before B1 the desktop scaled the image to the logical
+size of its window with the nearest source pixel, and the painter then
+doubled every pixel at scale 2.
+
+`wallpaper_hidpi` boots `video=2560x1600@2`. A wallpaper of 2560x1600
+pixels in vertical stripes of one pixel must appear pixel for pixel, and
+a wallpaper of 2x2 pixels stretched to the screen must show the
+interpolated colour between its red and its green pixel. The QMP script
+then takes a screendump of the default wallpaper for inspection.
 
 ## Configuration file
 
@@ -80,6 +102,9 @@ it, `stretch` scales both dimensions independently.
 - `display_follow`: 1 or 0, forwarded to the compositor. With 1 the mode
   follows the window size of the host display (`display.md`, V3 of the
   0.6.0 release). The default is 1.
+- `panel_position`: `bottom` or `top`, the edge of the screen of the
+  panel (B6 of `docs/plan/desktop-panel.md`). The panel reads it itself
+  with `conf_lookup` once a second. The default is `bottom`.
 
 The keys `lang` and `formats` name locales such as `fr_FR.UTF-8`
 (`locale.md`). `startgui` exports `lang` as `LANG` and `formats` as
@@ -148,7 +173,9 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
   bitmap font), its size (`ui_font_px`) and the interface scale
   (`ui_scale`, 100, 125 or 150 percent). libgui reads the three `ui_`
   keys in `theme_init_default` (`theme_read_conf`), so they apply to
-  programs started afterwards.
+  programs started afterwards. The last row is the panel position
+  (`panel_position`, Bottom of the screen or Top of the screen), which
+  the running panel applies within a second.
 - Display: the current mode, resolution and pixel density
   (`display_mode`), the check box for `display_follow`, the frame
   interval (`frame_ms`) and the decoration

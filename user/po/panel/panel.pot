@@ -15,49 +15,61 @@ msgstr ""
 msgid "Japanese"
 msgstr ""
 
-#: user/panel/launcher.c:213
+#: user/panel/launcher.c:164
 msgid "Applications"
 msgstr ""
 
-#: user/panel/launcher.c:216
+#: user/panel/launcher.c:167
 msgid "System"
 msgstr ""
 
-#: user/panel/launcher.c:249
+#: user/panel/launcher.c:214
 msgid "Search"
 msgstr ""
 
-#: user/panel/mixer.c:118
+#: user/panel/mixer.c:120
 msgid "No audio service"
 msgstr ""
 
-#: user/panel/mixer.c:125
+#: user/panel/mixer.c:127
 msgid "Output"
 msgstr ""
 
-#: user/panel/mixer.c:132
+#: user/panel/mixer.c:134
 msgid "capture %u%%"
 msgstr ""
 
-#: user/panel/mixer.c:133
+#: user/panel/mixer.c:135
 msgid "playing %u%%"
 msgstr ""
 
-#: user/panel/mixer.c:134
+#: user/panel/mixer.c:136
 msgid "paused %u%%"
 msgstr ""
 
-#: user/panel/mixer.c:140
+#: user/panel/mixer.c:142
 msgid "No streams"
 msgstr ""
 
-#: user/panel/mixer.c:142
+#: user/panel/mixer.c:144
 msgid "%d more"
 msgid_plural "%d more"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/panel/panel.c:130
+#: user/panel/panel.c:221
 msgid "Menu"
+msgstr ""
+
+#: user/panel/power.c:57
+msgid "Log out"
+msgstr ""
+
+#: user/panel/power.c:57
+msgid "Restart"
+msgstr ""
+
+#: user/panel/power.c:57
+msgid "Shut down"
 msgstr ""
 

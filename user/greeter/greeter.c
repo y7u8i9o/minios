@@ -36,8 +36,10 @@
 #include <time.h>
 #include <gui/app.h>
 #include <gui/image.h>
+#include <gui/wallpaper.h>
 #include <gui/theme.h>
 #include <minios/input.h>
+#include <minios/init.h>
 #include <gui/i18n.h>
 #include <minios/account.h>
 #include <minios/conf.h>
@@ -72,6 +74,8 @@ static int naccounts, selected;
 static int waiting;                     /* after a wrong password */
 static uint32_t desktop_color = 0x00306080;
 static struct image *wallpaper;
+/* The wallpaper at the device size of the screen (wallpaper_render). */
+static struct image *backdrop;
 
 static void load_accounts(void)
 {
@@ -91,18 +95,11 @@ static void load_accounts(void)
 /* The desktop colour and the wallpaper of the system's desktop settings. */
 static void load_background(void)
 {
-    FILE *f = fopen("/etc/desktop.conf", "r");
-    if (!f)
-        return;
-    char line[256];
-    while (fgets(line, sizeof line, f)) {
-        line[strcspn(line, "\n")] = '\0';
-        if (strncmp(line, "desktop_color=", 14) == 0)
-            desktop_color = (uint32_t)strtoul(line + 14, NULL, 0) & 0xffffff;
-        else if (strncmp(line, "wallpaper=", 10) == 0 && line[10])
-            wallpaper = image_load(line + 10);
-    }
-    fclose(f);
+    char value[256];
+    if (conf_lookup("/etc/desktop.conf", "desktop_color", value, sizeof value))
+        desktop_color = (uint32_t)strtoul(value, NULL, 0) & 0xffffff;
+    if (conf_lookup("/etc/desktop.conf", "wallpaper", value, sizeof value) && value[0])
+        wallpaper = image_load(value);
 }
 
 /* color with each channel scaled by percent. */
@@ -123,15 +120,18 @@ static void backdrop_layout(struct widget *w) { box_class.layout(w); }
 static void backdrop_paint(struct widget *w, struct painter *p)
 {
     if (wallpaper) {
-        /* The wallpaper covers the screen and is cut at the longer side. */
-        int iw = wallpaper->w / wallpaper->scale, ih = wallpaper->h / wallpaper->scale;
-        int sw = w->w, sh = ih * w->w / (iw ? iw : 1);
-        if (sh < w->h) {
-            sh = w->h;
-            sw = iw * w->h / (ih ? ih : 1);
+        /* The wallpaper covers the screen and is cut at the longer side,
+         * rendered once at the device size of the screen. */
+        if (backdrop && (backdrop->w != w->w * p->scale || backdrop->h != w->h * p->scale)) {
+            image_free(backdrop);
+            backdrop = NULL;
         }
-        painter_image_scaled(p, (w->w - sw) / 2, (w->h - sh) / 2, sw, sh, wallpaper);
-        return;
+        if (!backdrop)
+            backdrop = wallpaper_render(wallpaper, WALLPAPER_FILL, desktop_color, w->w, w->h, p->scale);
+        if (backdrop) {
+            painter_image(p, 0, 0, backdrop);
+            return;
+        }
     }
     for (int y = 0; y < w->h; y += 4)
         painter_fill(p, 0, y, w->w, 4, shade(desktop_color, 115 - 55 * y / (w->h ? w->h : 1)));
@@ -649,14 +649,7 @@ static void run_session(const char *name)
 
 static void power(const char *request)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    struct sockaddr_un addr = { AF_UNIX, "init" };
-    char line[32];
-    snprintf(line, sizeof line, "%s\n", request);
-    if (fd >= 0 && connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0)
-        write(fd, line, strlen(line));
-    if (fd >= 0)
-        close(fd);
+    init_request(request, NULL, 0);
 }
 
 int main(int argc, char **argv)

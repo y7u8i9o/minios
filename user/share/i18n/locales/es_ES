@@ -36,6 +36,7 @@ d_fmt "%d/%m/%y"
 t_fmt "%T"
 t_fmt_ampm ""
 date_fmt "%a %d %b %Y %T %Z"
+first_weekday "1"
 
 # LC_MESSAGES
 yesexpr "^[+1sSyY]"

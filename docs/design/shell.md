@@ -14,8 +14,17 @@ compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
   (the client chooses its size), and again with a size on maximize,
   restore, an interactive resize, and with the activated state on
   focus changes; the client answers `ack_configure(serial)` and commits
-  a buffer of that size. The first commit with a buffer places the
-  window in a cascade inside the desktop area and activates it.
+  a buffer of that size. The toplevel records its last four configures,
+  as a layer surface does. The client may acknowledge any of them, and
+  the acknowledged one supersedes the older ones. A buffer of the size of
+  an acknowledged older configure is accepted while the newer one is
+  pending. Until B5 of `docs/plan/desktop-panel.md` only the latest serial
+  was valid. Two configures in quick succession, such as the deactivation
+  and the activation of a window while several windows are activated in
+  turn, then crossed the acknowledgement of the first, and X12
+  disconnected the client with "invalid configure serial". The first
+  commit with a buffer places the window in a cascade inside the desktop
+  area and activates it.
   Requests: `set_title`, `set_app_id`, `set_min_size`, `set_max_size`,
   `move(seat, serial)` and `resize(seat, serial, edges)` (accepted with
   the serial of the last input event, they start the same drags as the
@@ -149,11 +158,87 @@ owner is gone.
 ## Panel (`user/panel/`)
 
 A layer surface anchored to the bottom (28 pixels, exclusive zone)
-built directly on libwire and the libgui painter: a Menu button opening
-the launcher as a grabbed popup, one pill shaped button per toplevel
-from the manager (activate, minimize; the active one carries an accent
-underline, minimized ones dim their title), a clock from a timerfd.
-Text uses the interface font at 13 px. The buffers are allocated at the
+built directly on libwire and the libgui painter. From the left: a Menu
+button with the icon `menu` that opens the launcher as a grabbed popup,
+one button per toplevel from the manager (activate, minimize), the label
+of the input method, the mixer, and the date and the time from a
+timerfd. Text uses the interface font at 13 px.
+
+Since B2 of `docs/plan/desktop-panel.md` the buttons are 20 pixels high
+with corners of 6 pixels. A window button shows the icon of its app_id
+and the title. The panel loads the icon by the name of
+`launcher_icon_name`, in the colour of the text. A button is 160 pixels
+wide when the windows fit, otherwise all buttons become narrower down to
+40 pixels, and below 72 pixels a button shows its icon alone. Buttons
+that do not fit at 40 pixels are not shown. An inactive window button
+has no background. The active one has the colour `0x003f4854` and the
+accent line, and a minimized one draws its icon and title dimmed. The
+button under the pointer is highlighted with `0x00384049`. The function
+`hit` maps a position to the part of the bar, and the drawing, the
+highlight and the clicks use it. The clock shows the abbreviated weekday,
+the day and the abbreviated month in the language of `LC_TIME`, and the
+time without seconds (`%a %e %b %R`, with repeated spaces removed).
+`kernel/tests/gui_helpers.h` repeats the geometry of `panel.h` for the
+boot tests.
+
+A click on the clock opens the calendar (`calendar.c`, B3), a popup of
+264 by 236 pixels above the clock and aligned to its right edge. The
+header shows the month in the form without a day (`ALTMON_1`, the
+nominative in Russian) and the year between the icons `back` and
+`forward`, which show the previous and the next month. The row below
+contains the abbreviated weekdays (`ABDAY_1`) from the first day of the
+week of the locale (`_NL_FIRST_WEEKDAY`, `locale.md`). The days of the
+month follow in six rows of cells of 36 by 28 pixels, so the popup has
+the same size for every month. Today has the accent colour with white
+digits. A second click on the clock, a click outside the popup or Escape
+closes it. The clock has the background of an open button while the
+calendar is open. `panel_calendar` opens the calendar, requires the mark
+of today in its cell and the background of the popup, moves one month
+forward and back, and closes it.
+
+The power button at the right end of the bar (`power.c`, B4) opens a
+menu of 200 pixels with Log out, Restart and Shut down, each with its
+icon (`app-logout`, `restart`, `power-off`). The row under the pointer is
+highlighted, and the account name of the session is drawn right of Log
+out. Log out exits the panel with status 0, which ends the session
+through `startgui`. Restart and Shut down send `reboot` and `poweroff`
+to init with `init_request` (`init.md`). init accepts them from the user
+of the session. The entry Log out of `/etc/launcher` moved into this
+menu. The launcher still treats `@logout` in a table of the user as the
+row at its bottom. `gui_greeter` logs out through the power menu,
+`comp_panel` opens and dismisses it, and `panel_power` boots through
+init and the greeter, logs in and chooses Shut down, after which QEMU
+ends with status 0.
+
+The show desktop button of 24 pixels at the right edge of the bar (B5),
+behind a line and with the icon `show-desktop`, minimizes every visible
+window and records them, the active one last. A second click activates
+the recorded windows in that order, so the formerly active window ends
+on top. The other windows take the order of the window buttons, not their
+former stacking order, which the panel does not know. A window that
+opens in between ends the recorded state, and a closed window leaves
+the record. The button has the background of an open button while the
+desktop is shown. The panel does this through the requests `minimize`
+and `activate` of the toplevel handles, without a change of the
+protocol. `panel_desktop` shows the desktop with three windows, restores
+them with the active window on top, and checks that a new window ends
+the recorded state.
+
+The panel is at the bottom or at the top edge of the screen (B6), as the
+key `panel_position` of `desktop.conf` says (`desktop.md`). The panel
+reads the key at its start and once a second with `conf_lookup` of the
+libc. A change sets the anchors (top or bottom, left and right), the
+exclusive zone and the size of its layer surface again. The configure
+that answers the size request makes the panel commit, and X12 then lays
+out the screen again (`compositor.md`). The line between the bar and the
+desktop is at the edge toward the desktop. `panel_place_popup` places
+every menu of the panel against its button: above it with the gravity
+upwards on a bottom panel, below it with the gravity downwards on a top
+panel. The launcher aligns its left edge with the Menu button, the other
+menus align their right edges with their buttons. `panel_top` starts the
+panel at the top, requires the desktop colour at the bottom, a window
+placed and maximized below the panel and the launcher below its button,
+and moves the running panel to the bottom. The buffers are allocated at the
 output's scale with `set_buffer_scale`; a layer configure with a new
 width (mode change) or a new output scale reallocates them, and the
 panel never commits from an output event, since that would race with
@@ -172,10 +257,14 @@ listed under the heading Applications in the order of their titles. The
 entries of `/etc/launcher` are listed under the heading System in the
 order of the file. The entry with the program `@logout` is drawn in the
 last row below a rule, with the account name of the panel's user at its
-right end (`users.md`). Each entry has a 16 pixel icon
+right end (`users.md`). The system table has no such entry since B4 of
+`docs/plan/desktop-panel.md`, when Log out moved into the power menu. Each entry has a 16 pixel icon
 `/usr/share/icons/app-NAME.svg`, where NAME is the file name of the
-program, or `app-default.svg` when that file does not exist. The panel
-renders the icons at the output scale and caches them by name.
+program, or `app-default.svg` when that file does not exist
+(`launcher_icon_name` of libgui, which the Open with chooser uses as
+well). The panel renders the icons at the output scale and caches them
+by name, scale and colour (`icons.c`): dark for the menus, light for the
+bar.
 
 The first row of the menu is a search field. The popup grab gives the
 menu the keyboard focus, and the panel binds a keyboard for it. Printable

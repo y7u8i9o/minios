@@ -1,6 +1,7 @@
 /* PNG decoding against images written by tools/genicons/genicons.py,
  * whose pixels follow formulas. */
 #include <gui/image.h>
+#include <gui/wallpaper.h>
 #include <gui/paint.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -161,7 +162,8 @@ void run_image_tests(void)
         image_free(flat);
     }
     CHECK(image_save_png(NULL, "/nonexistent/x.png") == -EINVAL, "image_save_png rejects a missing image");
-    /* Reduction averages areas; enlargement repeats pixels. */
+    /* Reduction averages areas; enlargement interpolates between the
+     * centres of the source pixels. */
     struct image *two = image_create(2, 2);
     if (two) {
         two->pixels[0] = 0xff000000;
@@ -172,9 +174,57 @@ void run_image_tests(void)
         CHECK(one && one->pixels[0] == 0xff808080, "2x2 to 1x1 averages: %08x", one ? one->pixels[0] : 0);
         image_free(one);
         struct image *four = image_scale(two, 4, 4);
-        CHECK(four && four->pixels[0] == 0xff000000 && four->pixels[1] == 0xff000000 && four->pixels[2] == 0xffffffff,
-              "2x2 to 4x4 repeats pixels");
+        CHECK(four && four->pixels[0] == 0xff000000 && four->pixels[1] == 0xff404040 && four->pixels[2] == 0xffbfbfbf &&
+                  four->pixels[3] == 0xffffffff,
+              "2x2 to 4x4 interpolates: %08x %08x %08x %08x", four ? four->pixels[0] : 0, four ? four->pixels[1] : 0,
+              four ? four->pixels[2] : 0, four ? four->pixels[3] : 0);
         image_free(four);
+        /* A checkerboard of single pixels reduced by two is grey, and a
+         * transparent pixel does not darken its opaque neighbour. */
+        struct image *board = image_create(4, 4);
+        if (board) {
+            for (int i = 0; i < 16; i++)
+                board->pixels[i] = ((i % 4 + i / 4) & 1) ? 0xffffffff : 0xff000000;
+            struct image *half = image_scale(board, 2, 2);
+            CHECK(half && half->pixels[0] == 0xff808080 && half->pixels[3] == 0xff808080, "checkerboard to grey: %08x",
+                  half ? half->pixels[0] : 0);
+            image_free(half);
+            board->pixels[0] = 0x00000000;
+            board->pixels[1] = 0xffff0000;
+            board->pixels[4] = 0x00000000;
+            board->pixels[5] = 0xffff0000;
+            half = image_scale(board, 2, 2);
+            CHECK(half && half->pixels[0] == 0x80ff0000, "transparent pixels keep the colour: %08x",
+                  half ? half->pixels[0] : 0);
+            image_free(half);
+            image_free(board);
+        }
+        /* The wallpaper: fill covers the area and cuts the longer side,
+         * stretch fills it, a translucent image is drawn over the colour,
+         * and the result has the device size and the scale. */
+        struct image *bar = image_create(2, 1);
+        if (bar) {
+            bar->pixels[0] = 0xffff0000;
+            bar->pixels[1] = 0xff0000ff;
+            struct image *wp = wallpaper_render(bar, WALLPAPER_FILL, 0x00123456, 4, 4, 2);
+            CHECK(wp && wp->w == 8 && wp->h == 8 && wp->scale == 2, "wallpaper size %dx%d scale %d", wp ? wp->w : 0,
+                  wp ? wp->h : 0, wp ? wp->scale : 0);
+            /* The image becomes 16 by 8 pixels, and the area shows its
+             * middle half: the edge pixels lie 1/16 of a source pixel
+             * inside the red and the blue pixel. */
+            CHECK(wp && wp->pixels[0] == 0xffef0010 && wp->pixels[7] == 0xff1000ef && wp->pixels[8 * 7] == 0xffef0010,
+                  "fill cuts the sides: %08x %08x", wp ? wp->pixels[0] : 0, wp ? wp->pixels[7] : 0);
+            image_free(wp);
+            bar->pixels[1] = 0x00000000;
+            wp = wallpaper_render(bar, WALLPAPER_CENTER, 0x00123456, 4, 4, 1);
+            CHECK(wp && wp->pixels[1 * 4 + 1] == 0xffff0000 && wp->pixels[1 * 4 + 2] == 0xff123456 &&
+                      wp->pixels[0] == 0xff123456,
+                  "center places the image over the colour: %08x %08x", wp ? wp->pixels[5] : 0, wp ? wp->pixels[6] : 0);
+            image_free(wp);
+            CHECK(wallpaper_mode_parse("tile") == WALLPAPER_TILE && wallpaper_mode_parse("x") == WALLPAPER_FILL,
+                  "wallpaper modes");
+            image_free(bar);
+        }
         /* The painter draws it 3 times larger, clipped to its surface. */
         struct surface s = { calloc(8 * 8, 4), 8, 8, 8 };
         struct theme t;

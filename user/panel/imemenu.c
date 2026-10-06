@@ -143,9 +143,7 @@ void imemenu_toggle(void)
     }
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, MENU_W, h);
-    positioner_set_anchor_rect(pos, imemenu_x(), 4, INPUT_W, 1);
-    positioner_set_anchor(pos, POS_TOP_RIGHT);       /* the top right of the label */
-    positioner_set_gravity(pos, POS_TOP_LEFT);       /* extends up and to the left */
+    panel_place_popup(pos, imemenu_x(), INPUT_W, 1);
     popup = shell_get_popup(shell, menu.surface, panel.surface, pos);
     popup_add_listener(popup, &popup_events, NULL);
     positioner_destroy(pos);

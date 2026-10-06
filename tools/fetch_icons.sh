@@ -57,6 +57,11 @@ pictures:image
 music:music
 videos:film
 downloads:download
+menu:bars
+calendar:calendar-days
+power-off:power-off
+restart:rotate-right
+show-desktop:desktop
 app-default:window-maximize
 app-term:terminal
 app-files:folder

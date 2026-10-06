@@ -180,6 +180,14 @@ static void send_configure(struct toplevel *t, int w, int h)
     t->configure_serial = comp_serial();
     t->pending_w = w;
     t->pending_h = h;
+    if (t->nsent == 4) {
+        memmove(t->sent, t->sent + 1, 3 * sizeof t->sent[0]);
+        t->nsent = 3;
+    }
+    t->sent[t->nsent].serial = t->configure_serial;
+    t->sent[t->nsent].w = w;
+    t->sent[t->nsent].h = h;
+    t->nsent++;
     toplevel_send_configure(t->res, t->configure_serial, w, h, &a);
     comp_log("toplevel %d configured %dx%d serial %u", t->number, w, h, t->configure_serial);
 }
@@ -371,11 +379,21 @@ static void h_set_minimized(struct wire_client *c, struct wire_resource *self) {
 static void h_ack_configure(struct wire_client *c, struct wire_resource *self, uint32_t serial)
 {
     struct toplevel *t = self->data;
-    if (!t->configure_serial || serial != t->configure_serial) {
+    int i = 0;
+    while (i < t->nsent && t->sent[i].serial != serial)
+        i++;
+    if (!t->configure_serial || i == t->nsent) {
         wire_client_post_error(c, self, 21, "invalid configure serial");
         return;
     }
+    /* Two configures in quick succession, such as the deactivation and
+     * the activation of a window, may cross the acknowledgement of the
+     * first. The client acknowledges any configure that it received. */
     t->acked_serial = serial;
+    t->acked_w = t->sent[i].w;
+    t->acked_h = t->sent[i].h;
+    memmove(t->sent, t->sent + i + 1, (size_t)(t->nsent - i - 1) * sizeof t->sent[0]);
+    t->nsent -= i + 1;
 }
 static void h_toplevel_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
 static void h_set_parent(struct wire_client *c, struct wire_resource *self, struct wire_resource *parent)
@@ -927,10 +945,18 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
         logical_buffer_size(s, b, &bw, &bh);
         if (s->mapped && bw == s->width && bh == s->height)
             return 1;
-        /* A layer whose client acknowledged an older configure commits a
-         * buffer of that configure.  The newer one remains pending. */
+        /* A layer or a toplevel whose client acknowledged an older
+         * configure commits a buffer of that configure.  The newer one
+         * remains pending. */
         if (s->role == ROLE_LAYER && acked && bw == s->layer->acked_w && bh == s->layer->acked_h)
             return 1;
+        if (s->role == ROLE_TOPLEVEL && acked) {
+            int gw = s->toplevel->geo_set ? s->toplevel->geo.w : bw;
+            int gh = s->toplevel->geo_set ? s->toplevel->geo.h : bh;
+            if ((s->toplevel->acked_w <= 0 || gw == s->toplevel->acked_w) &&
+                (s->toplevel->acked_h <= 0 || gh == s->toplevel->acked_h))
+                return 1;
+        }
         wire_client_post_error(c, s->res, 23, "buffer committed before configure acknowledgement");
         return 0;
     }
@@ -948,6 +974,7 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
     }
     if (s->role == ROLE_TOPLEVEL) {
         s->toplevel->configure_serial = s->toplevel->acked_serial = 0;
+        s->toplevel->nsent = 0;
     } else if (s->role == ROLE_POPUP) {
         s->popup->serial = s->popup->acked_serial = 0;
     } else if (s->role == ROLE_LAYER) {
@@ -1003,6 +1030,18 @@ void shell_surface_committed(struct csurface *s, int first_map)
     case ROLE_LAYER: {
         struct layer *l = s->layer;
         layer_place(s);
+        /* A mapped layer that changed its anchor or its exclusive zone,
+         * such as the panel moving to the top of the screen, changes the
+         * desktop area: every layer and window is laid out again. */
+        if (!first_map && (l->anchor != l->placed_anchor || l->exclusive != l->placed_exclusive)) {
+            l->placed_anchor = l->anchor;
+            l->placed_exclusive = l->exclusive;
+            comp_log("layer surface %d moved to %d,%d %dx%d", s->id, s->x, s->y, s->width, s->height);
+            shell_output_changed();
+            break;
+        }
+        l->placed_anchor = l->anchor;
+        l->placed_exclusive = l->exclusive;
         if (first_map) {
             comp_log("layer surface %d mapped at %d,%d %dx%d", s->id, s->x, s->y, s->width, s->height);
             if (l->layer == LAYER_OVERLAY && l->interactive)

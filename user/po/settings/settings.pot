@@ -3,16 +3,8 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: user/settings/look.c:105
+#: user/settings/look.c:111
 msgid "Wallpaper"
-msgstr ""
-
-#: user/settings/look.c:115
-msgid "None (solid colour)"
-msgstr ""
-
-#: user/settings/look.c:119
-msgid "Placement"
 msgstr ""
 
 #: user/settings/look.c:12
@@ -31,123 +23,147 @@ msgstr ""
 msgid "Stretch"
 msgstr ""
 
-#: user/settings/look.c:131
+#: user/settings/look.c:121
+msgid "None (solid colour)"
+msgstr ""
+
+#: user/settings/look.c:125
+msgid "Placement"
+msgstr ""
+
+#: user/settings/look.c:137
 msgid "Desktop colour"
 msgstr ""
 
-#: user/settings/look.c:137
+#: user/settings/look.c:143
 msgid "Red"
 msgstr ""
 
-#: user/settings/look.c:137
+#: user/settings/look.c:143
 msgid "Green"
 msgstr ""
 
-#: user/settings/look.c:137
+#: user/settings/look.c:143
 msgid "Blue"
 msgstr ""
 
-#: user/settings/look.c:145
+#: user/settings/look.c:151
 msgid "Interface font"
 msgstr ""
 
-#: user/settings/look.c:156
+#: user/settings/look.c:162
 msgid "Font size (px)"
 msgstr ""
 
-#: user/settings/look.c:160
+#: user/settings/look.c:166
 msgid "Terminal font size (px)"
 msgstr ""
 
-#: user/settings/look.c:164
+#: user/settings/look.c:170
 msgid "Interface scale"
 msgstr ""
 
-#: user/settings/look.c:166
+#: user/settings/look.c:172
 msgid "100 %"
 msgstr ""
 
-#: user/settings/look.c:167
+#: user/settings/look.c:173
 msgid "125 %"
 msgstr ""
 
-#: user/settings/look.c:168
+#: user/settings/look.c:174
 msgid "150 %"
+msgstr ""
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr ""
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr ""
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
 msgstr ""
 
 #: user/settings/look.c:19
 msgid "Builtin bitmap font"
 msgstr ""
 
-#: user/settings/look.c:215
+#: user/settings/look.c:231
 msgid "unknown"
 msgstr ""
 
-#: user/settings/look.c:220
+#: user/settings/look.c:236
 msgid "%dx%d pixels, scale %d (%dx%d logical), %d Hz"
 msgstr ""
 
-#: user/settings/look.c:223
+#: user/settings/look.c:239
 msgid "Current mode"
 msgstr ""
 
-#: user/settings/look.c:228
+#: user/settings/look.c:244
 msgid "Resolution"
 msgstr ""
 
-#: user/settings/look.c:240
+#: user/settings/look.c:256
 msgid "Pixel density"
 msgstr ""
 
-#: user/settings/look.c:242
+#: user/settings/look.c:258
 msgid "Standard (1 pixel per point)"
 msgstr ""
 
-#: user/settings/look.c:243
+#: user/settings/look.c:259
 msgid "High (2 pixels per point)"
 msgstr ""
 
-#: user/settings/look.c:248
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr ""
+
+#: user/settings/look.c:269
 msgid "Frame interval (ms)"
 msgstr ""
 
-#: user/settings/look.c:252
+#: user/settings/look.c:273
 msgid "Window decorations"
 msgstr ""
 
-#: user/settings/look.c:254
+#: user/settings/look.c:275
 msgid "Drawn by the application (client side)"
 msgstr ""
 
-#: user/settings/look.c:255
+#: user/settings/look.c:276
 msgid "Drawn by X12 (server side)"
 msgstr ""
 
-#: user/settings/look.c:272
+#: user/settings/look.c:293
 msgid "Repeat rate: %d per second"
 msgstr ""
 
-#: user/settings/look.c:274
+#: user/settings/look.c:295
 msgid "Repeat delay: %d ms"
 msgstr ""
 
-#: user/settings/look.c:350
+#: user/settings/look.c:371
 msgid "Layout"
 msgstr ""
 
-#: user/settings/look.c:373
+#: user/settings/look.c:394
 msgid "Pointer speed: %d"
 msgstr ""
 
-#: user/settings/look.c:396
+#: user/settings/look.c:417
 msgid "Acceleration"
 msgstr ""
 
-#: user/settings/look.c:398
+#: user/settings/look.c:419
 msgid "Flat"
 msgstr ""
 
-#: user/settings/look.c:399
+#: user/settings/look.c:420
 msgid "Adaptive"
 msgstr ""
 
@@ -159,11 +175,11 @@ msgstr ""
 msgid "Authentication is required to change the time zone."
 msgstr ""
 
-#: user/settings/region.c:210 user/settings/settings.c:93 user/settings/system.c:180
+#: user/settings/region.c:210 user/settings/settings.c:93 user/settings/system.c:181
 msgid "OK"
 msgstr ""
 
-#: user/settings/region.c:211 user/settings/settings.c:130
+#: user/settings/region.c:211 user/settings/settings.c:144
 msgid "Region and language"
 msgstr ""
 
@@ -171,107 +187,107 @@ msgstr ""
 msgid "The time zone cannot be set."
 msgstr ""
 
-#: user/settings/region.c:323
+#: user/settings/region.c:316
 msgid "Input methods"
 msgstr ""
 
-#: user/settings/region.c:330 user/settings/system.c:411
+#: user/settings/region.c:323 user/settings/system.c:396
 msgid "Move up"
 msgstr ""
 
-#: user/settings/region.c:337
+#: user/settings/region.c:330
 msgid "A Shift tap toggles the input method"
 msgstr ""
 
-#: user/settings/region.c:341
+#: user/settings/region.c:332
 msgid "Ctrl+Space toggles the input method"
 msgstr ""
 
-#: user/settings/region.c:345
+#: user/settings/region.c:334
 msgid "Candidates per page"
 msgstr ""
 
-#: user/settings/region.c:349
+#: user/settings/region.c:338
 msgid "Candidate layout"
 msgstr ""
 
-#: user/settings/region.c:351
+#: user/settings/region.c:340
 msgid "Horizontal"
 msgstr ""
 
-#: user/settings/region.c:352
+#: user/settings/region.c:341
 msgid "Vertical"
 msgstr ""
 
-#: user/settings/region.c:375
+#: user/settings/region.c:364
 msgid "Language"
 msgstr ""
 
-#: user/settings/region.c:386
+#: user/settings/region.c:375
 msgid "Formats"
 msgstr ""
 
-#: user/settings/region.c:388
+#: user/settings/region.c:377
 msgid "Same as the language"
+msgstr ""
+
+#: user/settings/region.c:385
+msgid "Time zone"
 msgstr ""
 
 #: user/settings/region.c:39
 msgid "Chinese (Pinyin)"
 msgstr ""
 
-#: user/settings/region.c:396
-msgid "Time zone"
+#: user/settings/region.c:393
+msgid "Keyboard layout"
 msgstr ""
 
 #: user/settings/region.c:40
 msgid "Japanese"
 msgstr ""
 
-#: user/settings/region.c:404
-msgid "Keyboard layout"
-msgstr ""
-
-#: user/settings/settings.c:127
+#: user/settings/settings.c:141
 msgid "Appearance"
 msgstr ""
 
-#: user/settings/settings.c:128
+#: user/settings/settings.c:142
 msgid "Display"
 msgstr ""
 
-#: user/settings/settings.c:129
+#: user/settings/settings.c:143
 msgid "Keyboard"
 msgstr ""
 
-#: user/settings/settings.c:131
+#: user/settings/settings.c:145
 msgid "Mouse"
 msgstr ""
 
-#: user/settings/settings.c:132
+#: user/settings/settings.c:146
 msgid "Sound"
 msgstr ""
 
-#: user/settings/settings.c:133 user/settings/system.c:181
+#: user/settings/settings.c:147 user/settings/system.c:182
 msgid "Date and time"
 msgstr ""
 
-#: user/settings/settings.c:134
+#: user/settings/settings.c:148
 msgid "File types"
 msgstr ""
 
-#: user/settings/settings.c:135
+#: user/settings/settings.c:149
 msgid "Launcher"
 msgstr ""
 
-#: user/settings/settings.c:136
+#: user/settings/settings.c:150
 msgid "Users"
 msgstr ""
 
-#: user/settings/settings.c:137
+#: user/settings/settings.c:151
 msgid "System"
 msgstr ""
 
-#: user/settings/settings.c:94 user/settings/settings.c:171
+#: user/settings/settings.c:94 user/settings/settings.c:185
 msgid "Settings"
 msgstr ""
 
@@ -279,199 +295,199 @@ msgstr ""
 msgid "The settings file cannot be written."
 msgstr ""
 
-#: user/settings/system.c:108
+#: user/settings/system.c:109
 msgid "Output volume"
 msgstr ""
 
-#: user/settings/system.c:112
+#: user/settings/system.c:113
 msgid "Streams"
 msgstr ""
 
-#: user/settings/system.c:144
+#: user/settings/system.c:145
 msgid "Year"
 msgstr ""
 
-#: user/settings/system.c:144
+#: user/settings/system.c:145
 msgid "Month"
 msgstr ""
 
-#: user/settings/system.c:144
+#: user/settings/system.c:145
 msgid "Day"
 msgstr ""
 
-#: user/settings/system.c:144
+#: user/settings/system.c:145
 msgid "Hour"
 msgstr ""
 
-#: user/settings/system.c:144
+#: user/settings/system.c:145
 msgid "Minute"
 msgstr ""
 
-#: user/settings/system.c:145
+#: user/settings/system.c:146
 msgid "Second"
 msgstr ""
 
-#: user/settings/system.c:181
+#: user/settings/system.c:182
 msgid "The clock could not be set."
 msgstr ""
 
-#: user/settings/system.c:203
+#: user/settings/system.c:204
 msgid "Load current time"
 msgstr ""
 
-#: user/settings/system.c:204
+#: user/settings/system.c:205
 msgid "Set clock"
 msgstr ""
 
-#: user/settings/system.c:221
+#: user/settings/system.c:222
 msgid "Type"
 msgstr ""
 
-#: user/settings/system.c:221 user/settings/system.c:326 user/settings/system.c:403
+#: user/settings/system.c:222 user/settings/system.c:311 user/settings/system.c:388
 msgid "Program"
 msgstr ""
 
-#: user/settings/system.c:250
+#: user/settings/system.c:251
 msgid "New file type"
 msgstr ""
 
-#: user/settings/system.c:250
+#: user/settings/system.c:251
 msgid "Type (for example text/x-log):"
 msgstr ""
 
-#: user/settings/system.c:268
+#: user/settings/system.c:269
 msgid "(select a type)"
 msgstr ""
 
-#: user/settings/system.c:273 user/settings/users.c:191
+#: user/settings/system.c:274 user/settings/users.c:191
 msgid "Set"
 msgstr ""
 
-#: user/settings/system.c:274
+#: user/settings/system.c:275
 msgid "Add type..."
 msgstr ""
 
-#: user/settings/system.c:326 user/settings/system.c:400
+#: user/settings/system.c:311 user/settings/system.c:385
 msgid "Menu entry"
 msgstr ""
 
-#: user/settings/system.c:36
+#: user/settings/system.c:37
 msgid "capture"
 msgstr ""
 
-#: user/settings/system.c:36
+#: user/settings/system.c:37
 msgid "playback"
 msgstr ""
 
-#: user/settings/system.c:37
+#: user/settings/system.c:38
 msgid "%u %%"
 msgstr ""
 
-#: user/settings/system.c:38
+#: user/settings/system.c:39
 msgid "running"
 msgstr ""
 
-#: user/settings/system.c:38
+#: user/settings/system.c:39
 msgid "error"
 msgstr ""
 
-#: user/settings/system.c:38
+#: user/settings/system.c:39
 msgid "paused"
 msgstr ""
 
-#: user/settings/system.c:408
+#: user/settings/system.c:393
 msgid "Save entry"
 msgstr ""
 
-#: user/settings/system.c:409
+#: user/settings/system.c:394
 msgid "New"
 msgstr ""
 
-#: user/settings/system.c:410
+#: user/settings/system.c:395
 msgid "Remove"
 msgstr ""
 
-#: user/settings/system.c:412
+#: user/settings/system.c:397
 msgid "Move down"
 msgstr ""
 
-#: user/settings/system.c:429
+#: user/settings/system.c:414
 msgid "Up %ld:%02ld:%02ld"
 msgstr ""
 
-#: user/settings/system.c:43
-msgid "Stream"
-msgstr ""
-
-#: user/settings/system.c:43
-msgid "Direction"
-msgstr ""
-
-#: user/settings/system.c:43
-msgid "Volume"
-msgstr ""
-
-#: user/settings/system.c:43
-msgid "State"
-msgstr ""
-
-#: user/settings/system.c:442
+#: user/settings/system.c:427
 msgid "Memory %ld of %ld MiB in use, swap %ld of %ld MiB in use"
 msgstr ""
 
-#: user/settings/system.c:458
+#: user/settings/system.c:44
+msgid "Stream"
+msgstr ""
+
+#: user/settings/system.c:44
+msgid "Direction"
+msgstr ""
+
+#: user/settings/system.c:44
+msgid "Volume"
+msgstr ""
+
+#: user/settings/system.c:44
+msgid "State"
+msgstr ""
+
+#: user/settings/system.c:443
 msgid "%s %s (%s) on %s"
 msgstr ""
 
-#: user/settings/system.c:461
+#: user/settings/system.c:446
 msgid "%d processor"
 msgid_plural "%d processors"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/settings/system.c:465
+#: user/settings/system.c:450
 msgid "Display %dx%d pixels at scale %d"
 msgstr ""
 
-#: user/settings/system.c:474
+#: user/settings/system.c:459
 msgid "Tools"
 msgstr ""
 
-#: user/settings/system.c:476
+#: user/settings/system.c:461
 msgid "System monitor"
 msgstr ""
 
-#: user/settings/system.c:477
+#: user/settings/system.c:462
 msgid "Kernel log"
 msgstr ""
 
-#: user/settings/system.c:478
+#: user/settings/system.c:463
 msgid "X12 settings"
 msgstr ""
 
-#: user/settings/system.c:54
+#: user/settings/system.c:55
 msgid "Output volume: %u %%"
 msgstr ""
 
-#: user/settings/system.c:61
+#: user/settings/system.c:62
 msgid "%s: %u %%"
 msgstr ""
 
-#: user/settings/system.c:66 user/settings/system.c:121
+#: user/settings/system.c:67 user/settings/system.c:122
 msgid "Stream volume"
 msgstr ""
 
-#: user/settings/system.c:69
+#: user/settings/system.c:70
 msgid "%d stream"
 msgid_plural "%d streams"
 msgstr[0] ""
 msgstr[1] ""
 
-#: user/settings/system.c:78 user/settings/system.c:130
+#: user/settings/system.c:79 user/settings/system.c:131
 msgid "No audio server"
 msgstr ""
 
-#: user/settings/system.c:92
+#: user/settings/system.c:93
 msgid "Output volume: %d %%"
 msgstr ""
 

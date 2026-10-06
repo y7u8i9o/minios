@@ -62,3 +62,15 @@ msgstr[0] "ほか %d 件"
 #: user/panel/panel.c:130
 msgid "Menu"
 msgstr "メニュー"
+
+#: user/panel/power.c:57
+msgid "Log out"
+msgstr "ログアウト"
+
+#: user/panel/power.c:57
+msgid "Restart"
+msgstr "再起動"
+
+#: user/panel/power.c:57
+msgid "Shut down"
+msgstr "シャットダウン"

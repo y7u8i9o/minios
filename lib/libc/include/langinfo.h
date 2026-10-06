@@ -66,6 +66,9 @@ typedef int nl_item;
 #define CRNCYSTR    78
 /* The default format of date(1). */
 #define _DATE_FMT   79
+/* The first day of the week as one digit, 0 for Sunday to 6 for Saturday,
+ * as CLDR gives it for the territory of the locale. */
+#define _NL_FIRST_WEEKDAY 80
 
 char *nl_langinfo(nl_item item);
 char *nl_langinfo_l(nl_item item, locale_t loc);

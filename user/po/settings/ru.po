@@ -556,3 +556,19 @@ msgstr "Для удаления учётной записи требуется �
 
 msgid "The change was cancelled"
 msgstr "Изменение отменено"
+
+#: user/settings/look.c:182
+msgid "Panel position"
+msgstr "Положение панели"
+
+#: user/settings/look.c:184
+msgid "Bottom of the screen"
+msgstr "Внизу экрана"
+
+#: user/settings/look.c:185
+msgid "Top of the screen"
+msgstr "Вверху экрана"
+
+#: user/settings/look.c:265
+msgid "The resolution follows the size of the window of the virtual machine"
+msgstr "Разрешение следует размеру окна виртуальной машины"

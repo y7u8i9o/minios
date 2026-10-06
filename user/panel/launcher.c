@@ -32,7 +32,6 @@
 #include "panel.h"
 
 #define MAX_ENTRIES 64
-#define MAX_ICONS 64
 
 enum section { SEC_APPS, SEC_SYSTEM, SEC_LOGOUT };
 
@@ -64,44 +63,6 @@ static int modifiers;
 static int group;                   /* the keymap group that the compositor reports */
 static int open_state;
 
-static struct { char name[40]; int scale; struct image *img; } icons[MAX_ICONS];
-static int nicons;
-
-/* icon_load returns the icon NAME rendered at the output scale.  A
- * missing icon is cached as NULL. */
-static const struct image *icon_load(const char *name)
-{
-    int scale = output_scale > 0 ? output_scale : 1;
-    for (int i = 0; i < nicons; i++)
-        if (icons[i].scale == scale && strcmp(icons[i].name, name) == 0)
-            return icons[i].img;
-    if (nicons == MAX_ICONS)
-        return NULL;
-    char path[96];
-    snprintf(path, sizeof path, "/usr/share/icons/%s.svg", name);
-    struct image *img = image_load_svg(path, LAUNCHER_ICON * scale, MENU_ICON);
-    if (img)
-        img->scale = scale;
-    strlcpy(icons[nicons].name, name, sizeof icons[nicons].name);
-    icons[nicons].scale = scale;
-    icons[nicons].img = img;
-    nicons++;
-    return img;
-}
-
-static const struct image *entry_icon(const char *path)
-{
-    char program[96], name[40];
-    strlcpy(program, path, sizeof program);
-    program[strcspn(program, " ")] = '\0';
-    const char *base = strrchr(program, '/');
-    base = base ? base + 1 : program;
-    if (base[0] == '@')
-        base++;
-    snprintf(name, sizeof name, "app-%s", base);
-    const struct image *img = icon_load(name);
-    return img ? img : icon_load("app-default");
-}
 
 /* add_entries appends the n entries of table to the menu entries in the
  * given section. */
@@ -112,7 +73,7 @@ static void add_entries(const struct launcher_entry *table, int n, enum section 
         strlcpy(e->title, table[i].title, sizeof e->title);
         strlcpy(e->path, table[i].command, sizeof e->path);
         e->section = strcmp(e->path, "@logout") == 0 ? SEC_LOGOUT : section;
-        e->icon = entry_icon(e->path);
+        e->icon = panel_app_icon(e->path, MENU_ICON);
     }
 }
 
@@ -239,7 +200,7 @@ static void draw(void)
     /* The search field is drawn in the first row. */
     int fx = MENU_PAD + 2, fy = MENU_PAD + 2, fw = menu_w - 2 * MENU_PAD - 4, fh = LAUNCHER_SEARCH_H - 8;
     painter_rounded(&p, fx, fy, fw, fh, MENU_FIELD, MENU_BORDER);
-    const struct image *glass = icon_load("search");
+    const struct image *glass = panel_icon("search", MENU_ICON);
     int tx = fx + 8;
     if (glass) {
         painter_image(&p, tx, fy + (fh - image_lh(glass)) / 2, glass);
@@ -357,9 +318,7 @@ static void show(void)
         return;
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, menu_w, menu_h);
-    positioner_set_anchor_rect(pos, 4, 4, MENU_BTN_W, 1);
-    positioner_set_anchor(pos, POS_TOP_LEFT);
-    positioner_set_gravity(pos, POS_TOP_RIGHT);    /* The menu extends up and to the right. */
+    panel_place_popup(pos, 4, MENU_BTN_W, 0);
     popup = shell_get_popup(shell, menu.surface, panel.surface, pos);
     popup_add_listener(popup, &popup_events, NULL);
     positioner_destroy(pos);

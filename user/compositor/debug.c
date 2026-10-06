@@ -168,21 +168,10 @@ static int *slot(const char *key)
  * asks for a reload with keymap_reload after changing it. */
 static void reload_keymap(void)
 {
-    char path[256];
-    FILE *f = fopen(conf_read_path(path, sizeof path), "r");
-    if (!f)
-        return;
-    char line[256];
-    while (fgets(line, sizeof line, f)) {
-        char *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
-        if (strncmp(line, "keymap=", 7) == 0 && line[7]) {
-            if (seat_load_keymap(line + 7) < 0)
-                comp_log("keymap %s not found", line + 7);
-            break;
-        }
-    }
-    fclose(f);
+    char path[256], name[128];
+    if (conf_lookup(conf_read_path(path, sizeof path), "keymap", name, sizeof name) && name[0] &&
+        seat_load_keymap(name) < 0)
+        comp_log("keymap %s not found", name);
 }
 
 static void h_set(struct wire_client *c, struct wire_resource *self, const char *key, int32_t value)
