@@ -113,13 +113,15 @@ static void scenario_pointer(int *cx, int *cy)
 
 /* The resize border lies in the shadow outside the frame. X12 applies a
  * resize at the release of the button, so every step is one drag of the
- * corner, alternately 60x40 pixels inwards and back. */
-static void scenario_resize(int *cx, int *cy)
+ * corner, alternately 60x40 pixels inwards and back. After the 20 drags
+ * the window has its first size again. */
+static void resize_drags(int *cx, int *cy, bool reset_stats)
 {
     int x = WIN_X + WIN_W + 3, y = WIN_Y + WIN_H + 3;
     mouse_move_to(cx, cy, x, y, 0);
     ktest_wait_idle(200);
-    run_shell("compstat -r");
+    if (reset_stats)
+        run_shell("compstat -r");
     for (int i = 0; i < 20; i++) {
         int smaller = i % 2 == 0;
         /* The client receives no motion during the grab of the previous
@@ -135,6 +137,11 @@ static void scenario_resize(int *cx, int *cy)
         ktest_wait_idle(300);
     }
     ktest_wait_idle(300);
+}
+
+static void scenario_resize(int *cx, int *cy)
+{
+    resize_drags(cx, cy, true);
     kprintf("comp_bench: resize done\n");
     run_shell("compstat");
     print_usage("resize");
@@ -207,3 +214,69 @@ static void test_comp_idle(void)
     kprintf("comp_idle: ok\n");
 }
 KTEST_DEFINE("comp_idle", test_comp_idle);
+
+/* G8: a window has two buffers in its pool and no private surface. The
+ * compbench window at 2560x1600@2 has a buffer of 1584x1204 device
+ * pixels. Its resident size must be below the G1 baseline of 23 MiB
+ * minus one buffer, with a margin of 1 MiB. After 20 resize drags the
+ * window has its first size again. The contents, a rounded frame corner
+ * and the shadow must then show the pixels of the first frame. The
+ * expect file checks the pool bytes that compbench prints at the close
+ * request. */
+static void test_gui_memory(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    ktest_assert(fb_screen_scale == 2, "the case needs scale 2");
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    ktest_wait_idle(1200);
+    struct proc *win = proc_create_user("/bin/compbench", (char *const[]){ "compbench", "window", NULL },
+                                        (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(win != NULL, "cannot start compbench window");
+    uint64_t t0 = timer_ms();
+    while (!window_at_home() && timer_ms() - t0 < 4000)
+        sleep_ms(50);
+    ktest_assert(window_at_home(), "the compbench window is not shown");
+    ktest_wait_idle(500);
+
+    /* Contents, the top left frame corner, the bottom right frame
+     * corner, and the shadow below the frame. */
+    static const int points[4][2] = {
+        { WIN_X + 400, WIN_Y + 300 },
+        { WIN_X, WIN_Y - 30 },
+        { WIN_X + WIN_W - 1, WIN_Y + WIN_H - 1 },
+        { WIN_X + 300, WIN_Y + WIN_H + 2 },
+    };
+    uint32_t before[4];
+    for (int i = 0; i < 4; i++)
+        before[i] = pixel(points[i][0], points[i][1]);
+    unsigned long ms = 0, rss_kb = 0;
+    proc_table_find("compbench", -1, &ms, &rss_kb);
+    kprintf("gui_memory: compbench has %lu KiB resident before the resizes\n", rss_kb);
+
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    resize_drags(&cx, &cy, false);
+    /* The pointer leaves the frame, which then shows no hover state. */
+    mouse_move_to(&cx, &cy, logical_w() - 20, logical_h() - 20, 0);
+    ktest_wait_idle(500);
+    static const char *what[4] = { "contents", "top left corner", "bottom right corner", "shadow" };
+    for (int i = 0; i < 4; i++) {
+        uint32_t now = pixel(points[i][0], points[i][1]);
+        ktest_assert(now == before[i], "the %s shows %06x after the resizes, %06x before", what[i], now, before[i]);
+    }
+    proc_table_find("compbench", -1, &ms, &rss_kb);
+    unsigned long buffer_kb = (unsigned long)(WIN_W + 32) * 2 * (WIN_H + 30 + 32) * 2 * 4 / 1024;
+    unsigned long bound = 23 * 1024 - buffer_kb + 1024;
+    kprintf("gui_memory: compbench has %lu KiB resident after the resizes, bound %lu KiB\n", rss_kb, bound);
+    ktest_assert(rss_kb < bound, "compbench has %lu KiB resident, more than %lu KiB", rss_kb, bound);
+
+    alt_key(0x3e);
+    int status = proc_reap(win);
+    ktest_assert(status == 0, "compbench window status 0x%x", status);
+    signal_send(srv, SIGTERM);
+    status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+    kprintf("gui_memory: ok\n");
+}
+KTEST_DEFINE("gui_memory", test_gui_memory);

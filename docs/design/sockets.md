@@ -54,6 +54,15 @@ with `mmap(MAP_SHARED)` and can be passed over sockets; the object is
 freed with its last descriptor and mapping. `struct file_ops` gained
 `truncate` for this.
 
+Since G8 of `docs/plan/compositor-performance.md`, a page of a shm
+object gets its frame at the first fault in any process. `ftruncate` and
+`shm_open` allocate only the page array. `mmap` adds a `VM_SHM` region
+that references the file. A fault in such a region calls the `page`
+operation of `struct file_ops`. `shm_page` returns the frame of the
+page and allocates a zero filled frame at the first use. Fork copies the
+region with its file reference, so a page that the child touches first
+is shared with the parent. `mqtest` checks this case.
+
 ## Event and timer descriptors (`kernel/ipc/eventfd.c`, `timerfd.c`)
 
 `eventfd` contains a 64 bit counter: `write` adds, `read` returns and

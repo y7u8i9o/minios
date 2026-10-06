@@ -7,7 +7,8 @@
  *   anim     the whole window is painted again 60 times, every 16 ms
  *   idle     nothing changes for two seconds
  *   window   the window alone, until it is closed, for the scenarios
- *            that the boot test drives and measures with compstat
+ *            that the boot test drives and measures with compstat. The
+ *            client line follows the close request.
  *
  * The window settles for 800 ms, then compbench resets the statistics of
  * X12, runs the scenario, waits 300 ms for the last frame and prints two
@@ -42,11 +43,10 @@ static void on_frame_stat(void *user, struct wire_proxy *p, const char *key, uin
         used += (size_t)n;
 }
 
-static void on_frame_stats_done(void *user, struct wire_proxy *p)
+static void print_client_stats(void)
 {
     struct gui_stats now;
     gui_get_stats(&now);
-    printf("compbench: %s x12%s\n", scenario, line);
     printf("compbench: %s client paints=%llu paint_us=%llu commits=%llu copy_us=%llu copied_bytes=%llu "
            "frame_waits=%llu pool_bytes=%llu\n",
            scenario, (unsigned long long)(now.paints - client_at_start.paints),
@@ -56,6 +56,12 @@ static void on_frame_stats_done(void *user, struct wire_proxy *p)
            (unsigned long long)(now.copied_bytes - client_at_start.copied_bytes),
            (unsigned long long)(now.frame_waits - client_at_start.frame_waits), (unsigned long long)now.pool_bytes);
     fflush(stdout);
+}
+
+static void on_frame_stats_done(void *user, struct wire_proxy *p)
+{
+    printf("compbench: %s x12%s\n", scenario, line);
+    print_client_stats();
     app_quit(app, 0);
 }
 
@@ -75,6 +81,14 @@ static int paint_blinker(struct widget *w, void *args, void *arg)
     struct painter *p = ((struct sig_paint *)args)->p;
     painter_fill(p, 0, 0, w->w, w->h, blink_on ? 0x00000000 : 0x00ffffff);
     return 1;
+}
+
+/* The window scenario prints the client statistics before the window
+ * closes. The case gui_memory reads the pool bytes from them. */
+static int on_close(struct widget *w, void *args, void *arg)
+{
+    print_client_stats();
+    return 0;
 }
 
 static void finish(void *arg)
@@ -156,6 +170,8 @@ int main(int argc, char **argv)
     widget_connect(scene, "paint", paint_scene, NULL);
     if (steps >= 0)
         app_timer_add(app, SETTLE_MS, 0, start, NULL);
+    else
+        widget_connect(window, "close", on_close, NULL);
     int code = app_run(app);
     app_destroy(app);
     return code;

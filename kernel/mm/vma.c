@@ -124,12 +124,14 @@ struct vma *vma_split_locked(struct vmspace *vm, struct vma *v, uintptr_t addr)
     tail->start = addr;
     tail->end = v->end;
     tail->flags = v->flags;
-    if (v->flags & VM_FILE) {
+    if (v->file) {
         tail->file = v->file;
         file_ref(tail->file);
+        tail->offset = v->offset + (addr - v->start);
+    }
+    if (v->mapping) {
         tail->mapping = v->mapping;
         filemap_ref(tail->mapping);
-        tail->offset = v->offset + (addr - v->start);
     }
     /* The tail is linked before v shrinks: a lockless reader
      * (vma_range_ok) meanwhile finds v or the tail covering [addr, end),
@@ -179,7 +181,7 @@ int vma_populate(struct vmspace *vm, uintptr_t start, uintptr_t end)
         spin_lock(&vm->lock);
         struct vma *v = vma_find_locked(vm, va);
         unsigned tables_used = 0;
-        if (!v || (v->flags & VM_FILE)) {
+        if (!v || (v->flags & (VM_FILE | VM_SHM))) {
             r = -EFAULT;
         } else {
             pte_t *entry;
@@ -390,6 +392,40 @@ static bool fault_in_zero_page(struct vmspace *vm, uintptr_t va)
     return true;
 }
 
+/* Map the frame of a shared memory object at va. Called with vm->lock
+ * acquired, returns with it released. The page operation of the object
+ * may allocate, so the lock is released around it. The region may change
+ * meanwhile. The frame is mapped only when the same object still covers
+ * va and the entry is still empty. */
+static bool fault_in_object_page(struct vmspace *vm, struct vma *v, uintptr_t va)
+{
+    struct file *f = v->file;
+    uint64_t pgoff = (v->offset + (va - v->start)) >> PAGE_SHIFT;
+    file_ref(f);
+    spin_unlock(&vm->lock);
+    struct page *pg = f->ops->page ? f->ops->page(f, pgoff) : NULL;
+    bool ok = false, used = false;
+    if (pg) {
+        spin_lock(&vm->lock);
+        v = vma_find_locked(vm, va);
+        pte_t *entry;
+        int w = v ? paging_walk(vm->pt_root, va, true, &entry) : -1;
+        if (v && (v->flags & VM_SHM) && v->file == f && w == 1) {
+            ok = true;
+            if (!pte_mapped(*entry)) {
+                *entry = vma_make_pte(page_to_phys(pg), v->flags);
+                percpu_counter_inc(&vm->resident);
+                used = true;
+            }
+        }
+        spin_unlock(&vm->lock);
+        if (!used)
+            page_put(pg);
+    }
+    file_put(f);
+    return ok;
+}
+
 /* Resolved faults of every process since boot, for the statistics of the
  * balloon. Atomic counters without a lock. */
 static uint64_t minor_faults, major_faults;
@@ -438,6 +474,11 @@ bool vma_resolve_fault(struct vmspace *vm, uintptr_t va, bool write, bool presen
         /* Cannot happen: mprotect makes the entries of a readable region
          * present again. */
         goto out;
+    } else if (v->flags & VM_SHM) {
+        ok = fault_in_object_page(vm, v, va);
+        if (ok)
+            count_fault(false);
+        return ok;
     } else if (v->flags & VM_FILE) {
         ok = filemap_fault(vm, va, write);
         if (ok)
@@ -577,12 +618,14 @@ static int copy_vmas_locked(struct vmspace *vm, struct vmspace *child)
         n->start = v->start;
         n->end = v->end;
         n->flags = v->flags;
-        if (v->flags & VM_FILE) {
+        if (v->file) {
             n->file = v->file;
             file_ref(n->file);
+            n->offset = v->offset;
+        }
+        if (v->mapping) {
             n->mapping = v->mapping;
             filemap_ref(n->mapping);
-            n->offset = v->offset;
         }
         list_add_tail(&n->link, &child->vmas);
     }

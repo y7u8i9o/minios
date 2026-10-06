@@ -54,7 +54,9 @@ struct gui_window {
     int id;
     int width, height;          /* logical pixels */
     int scale;                  /* device pixels per logical pixel (the output's scale) */
-    struct surface surf;        /* width * scale by height * scale device pixels; draw here, then gui_damage */
+    /* width * scale by height * scale device pixels in the shared buffer:
+     * call gui_begin_paint, draw here, then gui_damage. */
+    struct surface surf;
     struct gui_window *next;
     void *priv;                 /* library state */
 };
@@ -169,6 +171,15 @@ int gui_repeat_timeout(void);
 int gui_modifiers(void);
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
+/* Prepare w->surf for drawing (G8 of docs/plan/compositor-performance.md).
+ * The surface lies in a buffer that the compositor reads after a commit,
+ * so a program calls this before it draws. The call moves to a free
+ * buffer, copies the regions that changed meanwhile, and may wait up to
+ * 100 ms for the compositor to release a buffer. */
+void gui_begin_paint(struct gui_window *w);
+/* Whether the last commit of w waits for its frame callback. The
+ * framework paints a window only when it does not. */
+int gui_frame_pending(const struct gui_window *w);
 /* The rendering statistics of the windows of this process since its
  * start (docs/design/graphics-performance.md). Times are microseconds. */
 struct gui_stats {

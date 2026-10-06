@@ -47,7 +47,7 @@ before the code that uses them.
 | `fbdev_lock` | spinlock | owner of the display | M17 |
 | `pcm_device.owner_lock` | spinlock | exclusive owner of one raw PCM device | audio |
 | `virtio_snd.control_lock` | mutex | serializes one sound device's set-params, prepare, start, stop and release commands | audio |
-| `shm_lock` | spinlock | table of named shared memory objects and their reference counts | M17 |
+| `shm_lock` | spinlock | table of named shared memory objects, their reference counts, sizes and page arrays (G8: frames are installed at the first fault, with no vmspace lock acquired) | M17 |
 | `mqueue.lock` | spinlock | ring of one message queue, condition lock of its wait queues | M17 |
 | `mq_table_lock` | spinlock | table of named message queues and their reference counts | M17 |
 | `poll_source.lock` | per-object spinlock | poll waiter entries registered on that object only | M43 |

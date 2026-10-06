@@ -1,5 +1,6 @@
 /* M17 stage 2: message queues, shared memory and poll between a parent
- * and a child. Exits 0 on success. */
+ * and a child. G8 adds a memfd page that the child touches first. Exits 0
+ * on success. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -85,6 +86,22 @@ int main(void)
     close(rep);
     close(shm);
     mq_unlink("test.rep");
+
+    /* A memfd gets the frame of a page at the first use of the page. A
+     * page that the child touches first is shared with the parent. */
+    int mfd = memfd_create("lazy", 0);
+    CHECK(mfd >= 0 && ftruncate(mfd, 4 * 4096) == 0, "memfd of four pages");
+    unsigned *lazy = mmap(NULL, 4 * 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mfd, 0);
+    CHECK(lazy != MAP_FAILED, "map the memfd");
+    lazy[0] = 1;
+    pid = fork();
+    if (pid == 0)
+        _exit(lazy[0] == 1 && lazy[2 * 1024] == 0 && (lazy[3 * 1024] = 0x3333) ? 0 : 5);
+    waitpid(pid, &status, 0);
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0, "memfd child status 0x%x", status);
+    CHECK(lazy[3 * 1024] == 0x3333 && lazy[2 * 1024] == 0, "a page first touched by the child is shared");
+    CHECK(munmap(lazy, 4 * 4096) == 0, "munmap the memfd");
+    close(mfd);
     printf("mqtest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

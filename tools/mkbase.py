@@ -29,8 +29,8 @@ tools/mkpkg.sh. The ABI number of a library is the one of the ABI table
 --abi, and 0 for a library the table does not name, such as a fixture of
 the tests, which no other package is meant to use. A library that an
 unchecked line of the manifest names gets no provides line. A package
-whose manifest and file contents did not change since the last run is not
-packed again. With --serial, which the build of a development tree
+whose manifest, file contents and ABI table did not change since the last
+run is not packed again. With --serial, which the build of a development tree
 gives, the version of a package is V and a serial number that grows each
 time the package is packed again, as 0.3.1.4, which makes a changed
 package an upgrade for pkg on the development disk (P8). --check only
@@ -194,11 +194,14 @@ def manifest_text(name, pkg, version, abi, entries):
     return "\n".join(lines) + "\n"
 
 
-def digest(root, members, manifest):
-    """A digest of the manifest and of the modes and contents of the files.
+def digest(root, members, manifest, abi_text):
+    """A digest of the manifest, of the ABI table and of the modes and
+    contents of the files. tools/mkpkg.sh writes the needs lines from the
+    ABI table, so a changed ABI number packs every package again.
     Modification times are left out, since the build rewrites some files,
     the message catalogues among them, without changing them."""
     h = hashlib.sha256(manifest.encode())
+    h.update(abi_text.encode())
     for path in sorted(members):
         full = os.path.join(root, path)
         st = os.lstat(full)
@@ -266,13 +269,15 @@ def main():
         return 0
 
     abi = abi_table(args.abi)
+    with open(args.abi) as f:
+        abi_text = f.read()
     os.makedirs(args.out, exist_ok=True)
     for name, pkg in packages.items():
         # The digest covers the manifest without the version, which a
         # serial number changes.
         base_manifest = manifest_text(name, pkg, args.version, abi, entries)
         stamp = os.path.join(args.out, f"{name}.stamp")
-        sums = digest(args.root, pkg["members"], base_manifest)
+        sums = digest(args.root, pkg["members"], base_manifest, abi_text)
         unchanged = os.path.exists(stamp) and open(stamp).read() == sums
         version = serial_version(args.out, name, args.version, not unchanged) if args.serial else args.version
         manifest = base_manifest if not args.serial else manifest_text(name, pkg, version, abi, entries)

@@ -76,6 +76,10 @@ struct file_ops {
     int (*poll)(struct file *f);
     struct poll_source *(*poll_source)(struct file *f);
     int (*truncate)(struct file *f, uint64_t size);   /* M23: memfd */
+    /* The frame at page pgoff of a shared memory object, allocated at the
+     * first use. The caller receives one reference. NULL beyond the end
+     * of the object or without memory. Used by VM_SHM regions. */
+    struct page *(*page)(struct file *f, uint64_t pgoff);
     /* FOPS_STREAM: the object has no position, so file_read and
      * file_write call read and write without file.lock and a reader
      * blocked in read does not exclude a writer on the same open file

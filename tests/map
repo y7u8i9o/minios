@@ -102,6 +102,7 @@ kernel/include/net/**           net_* sockets sockets_api
 kernel/sched/**                 sched fork signals pthreads smp smp_user jobcontrol rlimit hung_task timer user_cred shebang dynlink exception mem_release
 kernel/include/sched/**         sched fork signals pthreads smp smp_user jobcontrol rlimit hung_task timer user_cred shebang dynlink exception mem_release
 kernel/ipc/**                   mq pipes pipe_close evfd poll_wake ring pthreads lockfree
+kernel/ipc/shm.c                sockets fdflags gui_memory
 kernel/include/ipc/**           mq pipes pipe_close evfd poll_wake ring pthreads lockfree
 kernel/sync/**                  smp smp_user lockfree pthreads hung_task
 kernel/include/sync/**          smp smp_user lockfree pthreads hung_task
@@ -165,6 +166,7 @@ lib/libc/include/minios/crc32.h check-libcodec check-lua check-transfer pkg tar 
 lib/libc/src/net/**             net_dns net_dns_cache net_tools net_xfer pkg_repo
 lib/libgui/**                   check-libgui check-lua gui gui_*
 lib/libgui/src/pixel.c          pixel aarch64:pixel comp_bench comp_bench_hidpi
+lib/libgui/src/buffers.c        comp_bench_hidpi
 lib/libgui/src/pixel_impl.h     pixel aarch64:pixel
 lib/libgui/include/gui/pixel.h  pixel aarch64:pixel
 lib/libc/include/minios/simd.h  check-headers mathvec float pixel aarch64:pixel

@@ -223,7 +223,7 @@ int vma_munmap(struct vmspace *vm, uintptr_t addr, size_t len)
             __atomic_store_n(&prev->next, next, __ATOMIC_RELEASE);
             list_add_tail(&v->reclaim_link, &dead);
         } else if (s == v->start) {
-            if (v->flags & VM_FILE)
+            if (v->file)
                 v->offset += e - v->start;
             __atomic_store_n(&v->start, e, __ATOMIC_RELEASE);
         } else {

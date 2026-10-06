@@ -285,7 +285,7 @@ library packages and `tools/mkpkg.sh` the `needs` lines of every package:
     libfont.so 1
     libwire.so 1
     libaudio.so 1
-    libgui.so 1
+    libgui.so 2
     liblua.so 1
     libjson.so 1
     libprof.so 1
@@ -293,6 +293,12 @@ library packages and `tools/mkpkg.sh` the `needs` lines of every package:
 libc has ABI 2 since the profiler client left it for `libprof.so` (P2 of
 `docs/plan/packaging.md`). Removing functions is an incompatible change,
 which means a package built against ABI 1 is refused until it is rebuilt.
+libgui has ABI 2 since G8 of `docs/plan/compositor-performance.md`. A
+program that draws without the framework must call `gui_begin_paint`
+before it draws, and `gui_window.surf` moves between buffers.
+`tools/mkbase.py` includes the ABI table in the digest of each base
+package. A changed ABI number therefore packs every base package again
+with new `needs` lines.
 
 The rule has three parts:
 

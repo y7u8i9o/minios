@@ -7,6 +7,7 @@
 #include <gui/client.h>
 #include <gui/keymap.h>
 #include "csd.h"
+#include "buffers.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,34 +26,36 @@
 
 #define QUEUE_MAX 256
 
-struct wbuf {
-    struct wire_proxy *proxy;
-    int busy;                   /* in use by the compositor */
-    struct rect stale;          /* damage not yet copied into it */
-    int has_stale;
+/* A shared memory pool with GUI_SLOTS slots of cap bytes each. Untouched
+ * slot memory takes no physical pages, so the third slot costs memory only
+ * when a window uses it. */
+struct pool {
+    struct wire_proxy *pool;
+    int fd;
+    uint8_t *map;
+    size_t size, cap;
+    struct wire_proxy *proxy[GUI_SLOTS];    /* a buffer per slot, NULL before use */
+    uint32_t format[GUI_SLOTS];
+    int used[GUI_SLOTS];                    /* the slot has held contents */
+    int busy[GUI_SLOTS];                    /* old pools only: the compositor may read the slot */
 };
 
 struct win {
     struct gui_window *w;
     struct wire_proxy *surface, *toplevel, *popup, *layer;
-    struct wire_proxy *pool;
-    int fd;
-    uint8_t *map;
-    size_t map_size;
-    int buf_w, buf_h;           /* size the pool contains */
-    struct wbuf bufs[2];
-    struct rect damage;
-    int has_damage, frame_pending, need_commit;
+    struct pool pool;
+    struct pool *old;           /* previous pools until the compositor releases their buffers */
+    int nold;
+    struct gui_buffers bufs;
+    size_t content_off;         /* offset of gui_window.surf in a slot, in pixels */
+    struct rect_set damage;     /* device pixels of the surface, since the last commit */
+    int frame_pending, need_commit;
+    int chrome_dirty;           /* 1 header bar, 2 the whole chrome, painted by gui_begin_paint */
     struct wire_proxy *frame_cb;    /* The frame callback that is pending, or NULL. */
     int min_w, min_h;
     int buttons;
-    struct wire_proxy *old_pool, *old_bufs[2];
-    uint8_t *old_map;
-    size_t old_map_size;
-    int old_fd;
     int px, py;                 /* last pointer position, surface coordinates */
     struct csd csd;
-    struct surface full;        /* the whole drawing surface; surf views the contents */
     struct wire_proxy *decoration;
     int press_zone;             /* zone of the current button press */
     uint32_t last_click;        /* release time of the previous header click (double click) */
@@ -71,23 +74,20 @@ static void content_origin(struct gui_window *w, int *ox, int *oy)
 
 static void add_damage(struct win *wi, struct rect r)
 {
-    r = rect_intersect(r, (struct rect){ 0, 0, wi->full.width, wi->full.height });
-    if (rect_empty(r))
-        return;
-    wi->damage = wi->has_damage ? rect_union(wi->damage, r) : r;
-    wi->has_damage = 1;
+    r = rect_intersect(r, (struct rect){ 0, 0, wi->bufs.w, wi->bufs.h });
+    if (!rect_empty(r))
+        rect_set_add(&wi->damage, r);
 }
 
-/* Repaint the chrome (or the header bar only) and damage it. */
+/* Mark the chrome (or only the header bar) for repainting. Event handlers
+ * run during a dispatch, when the current slot may be on screen, so the
+ * painting waits for gui_begin_paint. */
 static void chrome_repaint(struct gui_window *w, int header_only)
 {
     struct win *wi = w->priv;
-    if (!wi->csd.enabled || !wi->full.pixels)
+    if (!wi->csd.enabled || !w->surf.pixels)
         return;
-    int s = w->scale > 0 ? w->scale : 1;
-    struct rect r = header_only ? csd_paint_header(&wi->full, s, &wi->csd, w->width, w->height)
-                                : csd_paint(&wi->full, s, &wi->csd, w->width, w->height);
-    add_damage(wi, r);
+    wi->chrome_dirty |= header_only ? 1 : 2;
 }
 
 static struct gui_stats stats;          /* gui_get_stats; the process draws from one thread */
@@ -1059,80 +1059,200 @@ int gui_event_fd(void) { return display ? wire_display_fd(display) : -1; }
 
 /* ---- buffers ---- */
 
-static void release_old(struct win *wi)
+/* ARGB8888 for the chrome's shadow and for a translucent window. */
+static uint32_t buffer_format(const struct win *wi)
 {
-    for (int i = 0; i < 2; i++)
-        if (wi->old_bufs[i]) {
-            buffer_destroy(wi->old_bufs[i]);
-            wi->old_bufs[i] = NULL;
+    return wi->csd.enabled || wi->translucent ? 2 : 1;
+}
+
+static void pool_destroy(struct pool *p)
+{
+    for (int i = 0; i < GUI_SLOTS; i++)
+        if (p->proxy[i])
+            buffer_destroy(p->proxy[i]);
+    if (p->pool)
+        shm_pool_destroy(p->pool);
+    if (p->map)
+        munmap(p->map, p->size);
+    if (p->fd >= 0)
+        close(p->fd);
+    memset(p, 0, sizeof *p);
+    p->fd = -1;
+}
+
+/* Destroy the old pools whose buffers the compositor has released. */
+static void reap_old_pools(struct win *wi)
+{
+    for (int i = 0; i < wi->nold;) {
+        struct pool *p = &wi->old[i];
+        int busy = 0;
+        for (int k = 0; k < GUI_SLOTS; k++)
+            busy |= p->proxy[k] && p->busy[k];
+        if (busy) {
+            i++;
+            continue;
         }
-    if (wi->old_pool) {
-        shm_pool_destroy(wi->old_pool);
-        wi->old_pool = NULL;
-    }
-    if (wi->old_map) {
-        munmap(wi->old_map, wi->old_map_size);
-        wi->old_map = NULL;
-    }
-    if (wi->old_fd >= 0) {
-        close(wi->old_fd);
-        wi->old_fd = -1;
+        pool_destroy(p);
+        wi->old[i] = wi->old[--wi->nold];
     }
 }
 
-static int pool_alloc(struct win *wi, int w, int h)
+/* Replace the pool with one whose slots hold need bytes and a quarter
+ * more, so that a window that grows a little reuses it. The previous pool
+ * remains until the compositor releases its buffers. */
+static int new_pool(struct win *wi, size_t need)
 {
-    /* ARGB8888 for the chrome's shadow and for a translucent window. */
-    uint32_t format = wi->csd.enabled || wi->translucent ? 2 : 1;
-    size_t size = (size_t)w * h * 4 * 2;
+    size_t cap = (need + need / 4 + 65535) & ~(size_t)65535, size = cap * GUI_SLOTS;
     int fd = memfd_create("gui", MFD_CLOEXEC);
     if (fd < 0 || ftruncate(fd, (long)size) < 0) {
-        fprintf(stderr, "gui: cannot allocate a %dx%d buffer pool (%zu bytes): %s\n", w, h, size, strerror(errno));
+        fprintf(stderr, "gui: cannot allocate a buffer pool of %zu bytes: %s\n", size, strerror(errno));
         if (fd >= 0)
             close(fd);
         return -1;
     }
     uint8_t *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) {
-        fprintf(stderr, "gui: cannot map a %zu byte buffer pool: %s\n", size, strerror(errno));
+        fprintf(stderr, "gui: cannot map a buffer pool of %zu bytes: %s\n", size, strerror(errno));
         close(fd);
         return -1;
     }
-    /* The previous pool remains until the new buffer is on screen, so
-     * the compositor never sees the surface without a buffer. */
-    release_old(wi);
-    for (int i = 0; i < 2; i++) {
-        wi->old_bufs[i] = wi->bufs[i].proxy;
-        wi->bufs[i].proxy = NULL;
+    if (wi->pool.pool) {
+        struct pool *old = realloc(wi->old, (size_t)(wi->nold + 1) * sizeof *old);
+        if (!old) {
+            munmap(map, size);
+            close(fd);
+            return -1;
+        }
+        wi->old = old;
+        struct pool *p = &wi->old[wi->nold++];
+        *p = wi->pool;
+        for (int i = 0; i < GUI_SLOTS; i++)
+            p->busy[i] = wi->bufs.slot[i].busy;
     }
-    wi->old_pool = wi->pool;
-    wi->old_map = wi->map;
-    wi->old_map_size = wi->map_size;
-    wi->old_fd = wi->fd;
-    wi->fd = fd;
-    wi->map = map;
-    wi->map_size = size;
-    wi->buf_w = w;
-    wi->buf_h = h;
-    wi->pool = shm_create_pool(shm, fd, (int32_t)size);
-    for (int i = 0; i < 2; i++) {
-        wi->bufs[i].proxy = shm_pool_create_buffer(wi->pool, i * w * h * 4, w, h, w * 4, format);
-        wire_proxy_set_user_data(wi->bufs[i].proxy, &wi->bufs[i]);
-        extern const struct buffer_listener buffer_events;
-        buffer_add_listener(wi->bufs[i].proxy, &buffer_events, &wi->bufs[i]);
-        wi->bufs[i].busy = 0;
-        wi->bufs[i].stale = (struct rect){ 0, 0, w, h };
-        wi->bufs[i].has_stale = 1;
+    memset(&wi->pool, 0, sizeof wi->pool);
+    wi->pool.pool = shm_create_pool(shm, fd, (int32_t)size);
+    wi->pool.fd = fd;
+    wi->pool.map = map;
+    wi->pool.size = size;
+    wi->pool.cap = cap;
+    for (int i = 0; i < GUI_SLOTS; i++) {
+        wi->bufs.slot[i] = (struct gui_slot){ (uint32_t *)(map + (size_t)i * cap), 0, 0, 0, { 0 } };
+    }
+    wi->bufs.nslots = GUI_SLOTS;
+    return 0;
+}
+
+/* Give slot i a buffer of the window geometry and format. A slot whose
+ * geometry changes differs everywhere from the current slot. Returns -1
+ * when the compositor still reads the slot's old buffer. */
+static int ensure_buffer(struct win *wi, int i)
+{
+    struct gui_buffers *b = &wi->bufs;
+    struct gui_slot *s = &b->slot[i];
+    uint32_t format = buffer_format(wi);
+    if (wi->pool.proxy[i] && s->w == b->w && s->h == b->h && wi->pool.format[i] == format)
+        return 0;
+    if (s->busy)
+        return -1;
+    if (wi->pool.proxy[i])
+        buffer_destroy(wi->pool.proxy[i]);
+    extern const struct buffer_listener buffer_events;
+    struct wire_proxy *proxy = shm_pool_create_buffer(wi->pool.pool, (int32_t)((size_t)i * wi->pool.cap), b->w, b->h,
+                                                      b->w * 4, format);
+    buffer_add_listener(proxy, &buffer_events, wi->w);
+    wi->pool.proxy[i] = proxy;
+    wi->pool.format[i] = format;
+    wi->pool.used[i] = 1;
+    if (s->w != b->w || s->h != b->h) {
+        s->w = b->w;
+        s->h = b->h;
+        rect_set_clear(&s->stale);
+        rect_set_add(&s->stale, (struct rect){ 0, 0, b->w, b->h });
     }
     return 0;
 }
 
-static void on_release(void *user, struct wire_proxy *b)
+static void on_release(void *user, struct wire_proxy *proxy)
 {
-    struct wbuf *wb = user;
-    wb->busy = 0;
+    struct gui_window *w = user;
+    struct win *wi = w->priv;
+    for (int i = 0; i < GUI_SLOTS; i++)
+        if (wi->pool.proxy[i] == proxy)
+            wi->bufs.slot[i].busy = 0;
+    for (int k = 0; k < wi->nold; k++)
+        for (int i = 0; i < GUI_SLOTS; i++)
+            if (wi->old[k].proxy[i] == proxy)
+                wi->old[k].busy[i] = 0;
+    reap_old_pools(wi);
 }
 const struct buffer_listener buffer_events = { on_release };
+
+/* Point gui_window.surf at the contents in the current slot. */
+static void point_surface(struct gui_window *w)
+{
+    struct win *wi = w->priv;
+    w->surf.pixels = wi->bufs.slot[wi->bufs.cur].pixels + wi->content_off;
+    w->surf.stride = wi->bufs.w;
+}
+
+/* Paint the chrome that chrome_repaint marked into the current slot. */
+static void paint_chrome(struct gui_window *w)
+{
+    struct win *wi = w->priv;
+    if (!wi->chrome_dirty || !wi->bufs.nslots)
+        return;
+    struct surface full = gui_buffers_surface(&wi->bufs);
+    int s = w->scale > 0 ? w->scale : 1;
+    struct rect r = wi->chrome_dirty & 2 ? csd_paint(&full, s, &wi->csd, w->width, w->height)
+                                         : csd_paint_header(&full, s, &wi->csd, w->width, w->height);
+    add_damage(wi, r);
+    wi->chrome_dirty = 0;
+}
+
+/* Wait up to ms milliseconds for events and dispatch them. */
+static int wait_display(long ms)
+{
+    wire_display_flush(display);
+    struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
+    int r = poll(&pf, 1, ms < 0 ? 0 : (int)ms);
+    if (r < 0 && errno != EINTR)
+        return -1;
+    if (r > 0 && wire_display_dispatch(display) < 0)
+        return -1;
+    return 0;
+}
+
+void gui_begin_paint(struct gui_window *w)
+{
+    struct win *wi = w->priv;
+    struct gui_buffers *b = &wi->bufs;
+    long deadline = -1;
+    while (display && b->nslots && b->committed) {
+        int t = gui_buffers_pick(b, 2);
+        /* The two slots remain busy for 100 ms: a third one helps. */
+        if (t < 0 && deadline >= 0 && uptime_ms() >= deadline)
+            t = gui_buffers_pick(b, GUI_SLOTS);
+        if (t >= 0 && ensure_buffer(wi, t) == 0) {
+            long t0 = uptime_us();
+            stats.copied_bytes += gui_buffers_switch(b, t);
+            stats.copy_us += (uint64_t)(uptime_us() - t0);
+            point_surface(w);
+            break;
+        }
+        if (deadline < 0) {
+            deadline = uptime_ms() + 100;
+            stats.frame_waits++;
+        }
+        if (wait_display(deadline - uptime_ms() > 0 ? deadline - uptime_ms() : 1) < 0)
+            break;
+    }
+    paint_chrome(w);
+}
+
+int gui_frame_pending(const struct gui_window *w)
+{
+    return ((const struct win *)w->priv)->frame_pending;
+}
 
 /* Size the surface and the buffers for contents of width by height
  * logical pixels at the output's scale, with the chrome around them.
@@ -1140,27 +1260,49 @@ const struct buffer_listener buffer_events = { on_release };
 static void surface_resize(struct gui_window *w, int width, int height)
 {
     struct win *wi = w->priv;
+    struct gui_buffers *b = &wi->bufs;
     int scale = output_scale();
     int bw, bh;
     csd_buffer_size(&wi->csd, width, height, &bw, &bh);
     int dw = bw * scale, dh = bh * scale;
-    uint32_t *px = calloc((size_t)dw * dh, 4);
-    if (!px)
-        return;
-    struct surface full = { px, dw, dh, dw };
-    struct rect c = csd_content(&wi->csd, width, height);
-    struct surface view = { px + (size_t)c.y * scale * dw + (size_t)c.x * scale, width * scale, height * scale, dw };
-    gfx_fill(&view, 0x00dcdcdc);
-    if (w->surf.pixels) {
-        gfx_blit(&view, 0, 0, &w->surf, NULL);
-        free(wi->full.pixels);
+    /* The newest contents, copied into the new geometry. They remain
+     * mapped until reap_old_pools, which runs last. */
+    struct surface old = w->surf;
+    int old_committed = b->committed;
+    /* The old contents' origin in the old buffer. The CSD state may have
+     * changed since, so the origin comes from the offset. */
+    int ox = old.stride ? (int)(wi->content_off % (size_t)old.stride) : 0;
+    int oy = old.stride ? (int)(wi->content_off / (size_t)old.stride) : 0;
+    size_t need = (size_t)dw * dh * 4;
+    b->w = dw;
+    b->h = dh;
+    int t = wi->pool.pool && need <= wi->pool.cap ? gui_buffers_pick(b, GUI_SLOTS) : -1;
+    if (t < 0) {
+        if (new_pool(wi, need) < 0)
+            return;
+        t = 0;
     }
-    wi->full = full;
-    w->surf = view;
+    if (ensure_buffer(wi, t) < 0)
+        return;
+    b->cur = t;
+    b->committed = 0;
+    struct rect c = csd_content(&wi->csd, width, height);
+    wi->content_off = (size_t)c.y * scale * dw + (size_t)c.x * scale;
+    w->surf = (struct surface){ b->slot[t].pixels + wi->content_off, width * scale, height * scale, dw };
+    gfx_fill(&w->surf, 0x00dcdcdc);
+    if (old.pixels) {
+        gfx_blit(&w->surf, 0, 0, &old, NULL);
+        /* A commit blended the old bottom corners. The store has their
+         * raw pixels. */
+        if (old_committed)
+            gui_buffers_put_raw_corners(b, &w->surf, -ox, -oy);
+    }
     w->width = width;
     w->height = height;
     w->scale = scale;
-    pool_alloc(wi, dw, dh);
+    gui_buffers_stale_all(b);
+    struct rect corners[4];
+    gui_buffers_set_corners(b, corners, csd_corner_rects(&wi->csd, width, height, scale, corners));
     surface_set_buffer_scale(wi->surface, scale);
     struct rect rects[5];
     int n = wi->translucent ? 0 : csd_opaque_region(&wi->csd, width, height, rects);
@@ -1173,10 +1315,13 @@ static void surface_resize(struct gui_window *w, int width, int height)
         struct rect f = csd_frame(&wi->csd, width, height);
         if (wi->toplevel)
             toplevel_set_window_geometry(wi->toplevel, f.x, f.y, f.w, f.h);
-        csd_paint(&wi->full, scale, &wi->csd, width, height);
+        struct surface full = gui_buffers_surface(b);
+        csd_paint(&full, scale, &wi->csd, width, height);
     }
-    wi->damage = (struct rect){ 0, 0, dw, dh };
-    wi->has_damage = 1;
+    wi->chrome_dirty = 0;
+    rect_set_clear(&wi->damage);
+    rect_set_add(&wi->damage, (struct rect){ 0, 0, dw, dh });
+    reap_old_pools(wi);
 }
 
 static void commit_now(struct gui_window *w);
@@ -1188,57 +1333,54 @@ static void on_frame_done(void *user, struct wire_proxy *cb, uint32_t t)
     wire_proxy_destroy(cb);
     wi->frame_cb = NULL;
     wi->frame_pending = 0;
-    if (wi->need_commit)
-        commit_now(w);
 }
 static const struct callback_listener frame_events = { on_frame_done };
 
+/* Commit the current slot with the damage since the last commit. A
+ * pending frame defers the commit to a later gui_flush, which follows the
+ * frame callback. */
 static void commit_now(struct gui_window *w)
 {
     struct win *wi = w->priv;
-    if (!wi->has_damage)
+    struct gui_buffers *b = &wi->bufs;
+    if (wi->chrome_dirty && !wi->frame_pending)
+        gui_begin_paint(w);
+    if (!wi->damage.n || !b->nslots)
         return;
-    struct wbuf *wb = NULL;
-    for (int i = 0; i < 2; i++)
-        if (!wi->bufs[i].busy) {
-            wb = &wi->bufs[i];
-            break;
-        }
-    if (!wb || wi->frame_pending) {
+    if (wi->frame_pending) {
         if (!wi->need_commit)
             stats.frame_waits++;
         wi->need_commit = 1;
         return;
     }
-    /* Everything changed since this buffer was last shown. */
-    for (int i = 0; i < 2; i++) {
-        struct wbuf *o = &wi->bufs[i];
-        o->stale = o->has_stale ? rect_union(o->stale, wi->damage) : wi->damage;
-        o->has_stale = 1;
-    }
-    int index = (int)(wb - wi->bufs);
-    struct surface dst = { (uint32_t *)(wi->map + (size_t)index * wi->buf_w * wi->buf_h * 4), wi->buf_w, wi->buf_h, wi->buf_w };
-    struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, wi->full.width, wi->full.height });
-    long t0 = uptime_us();
-    csd_copy(&dst, &wi->full, r, w->scale > 0 ? w->scale : 1, &wi->csd, w->width, w->height);
-    stats.copy_us += (uint64_t)(uptime_us() - t0);
-    stats.copied_bytes += (uint64_t)r.w * (uint64_t)r.h * 4;
-    stats.commits++;
-    wb->has_stale = 0;
-    wb->busy = 1;
-    surface_attach(wi->surface, wb->proxy, 0, 0);
-    /* The protocol takes surface (logical) coordinates: round outwards. */
+    if (ensure_buffer(wi, b->cur) < 0)
+        return;
     int s = w->scale > 0 ? w->scale : 1;
-    int lx0 = r.x / s, ly0 = r.y / s, lx1 = (r.x + r.w + s - 1) / s, ly1 = (r.y + r.h + s - 1) / s;
-    surface_damage(wi->surface, lx0, ly0, lx1 - lx0, ly1 - ly0);
+    /* A slot committed again without gui_begin_paint has blended corners
+     * already. */
+    if (!b->committed) {
+        long t0 = uptime_us();
+        gui_buffers_commit(b, &wi->damage);
+        struct surface full = gui_buffers_surface(b);
+        csd_finish_corners(&full, s, &wi->csd, w->width, w->height);
+        stats.copy_us += (uint64_t)(uptime_us() - t0);
+    }
+    surface_attach(wi->surface, wi->pool.proxy[b->cur], 0, 0);
+    /* The protocol takes surface (logical) coordinates: round outwards. */
+    for (int i = 0; i < wi->damage.n; i++) {
+        struct rect r = wi->damage.r[i];
+        int lx0 = r.x / s, ly0 = r.y / s, lx1 = (r.x + r.w + s - 1) / s, ly1 = (r.y + r.h + s - 1) / s;
+        surface_damage(wi->surface, lx0, ly0, lx1 - lx0, ly1 - ly0);
+    }
     struct wire_proxy *cb = surface_frame(wi->surface);
     callback_add_listener(cb, &frame_events, w);
     wi->frame_cb = cb;
     surface_commit(wi->surface);
-    release_old(wi);
+    stats.commits++;
     wi->frame_pending = 1;
-    wi->has_damage = 0;
     wi->need_commit = 0;
+    rect_set_clear(&wi->damage);
+    reap_old_pools(wi);
 }
 
 void gui_get_stats(struct gui_stats *out)
@@ -1247,7 +1389,11 @@ void gui_get_stats(struct gui_stats *out)
     out->pool_bytes = 0;
     for (struct gui_window *w = wins; w; w = w->next) {
         struct win *wi = w->priv;
-        out->pool_bytes += wi->map_size + (wi->old_map ? wi->old_map_size : 0);
+        for (int i = 0; i < GUI_SLOTS; i++)
+            out->pool_bytes += wi->pool.used[i] ? wi->pool.cap : 0;
+        for (int k = 0; k < wi->nold; k++)
+            for (int i = 0; i < GUI_SLOTS; i++)
+                out->pool_bytes += wi->old[k].used[i] ? wi->old[k].cap : 0;
     }
 }
 
@@ -1396,8 +1542,7 @@ static struct gui_window *window_alloc(void)
         free(wi);
         return NULL;
     }
-    wi->fd = -1;
-    wi->old_fd = -1;
+    wi->pool.fd = -1;
     wi->w = w;
     w->priv = wi;
     w->id = next_id++;
@@ -1578,18 +1723,12 @@ void gui_destroy_window(struct gui_window *w)
         popup_destroy(wi->popup);
     if (wi->surface)
         surface_destroy(wi->surface);
-    for (int i = 0; i < 2; i++)
-        if (wi->bufs[i].proxy)
-            buffer_destroy(wi->bufs[i].proxy);
-    if (wi->pool)
-        shm_pool_destroy(wi->pool);
-    if (wi->map)
-        munmap(wi->map, wi->map_size);
-    if (wi->fd >= 0)
-        close(wi->fd);
-    release_old(wi);
+    pool_destroy(&wi->pool);
+    for (int k = 0; k < wi->nold; k++)
+        pool_destroy(&wi->old[k]);
+    free(wi->old);
+    gui_buffers_free(&wi->bufs);
     wire_display_flush(display);
-    free(wi->full.pixels);
     free(wi);
     free(w);
 }
@@ -1624,12 +1763,14 @@ void gui_set_translucent(struct gui_window *w)
     if (wi->translucent)
         return;
     wi->translucent = 1;
-    pool_alloc(wi, wi->buf_w, wi->buf_h);
+    /* The next buffers have the ARGB format. A slot on screen is left
+     * through gui_begin_paint. */
+    if (wi->bufs.committed)
+        gui_begin_paint(w);
     struct rect none[1];
     struct wire_array region = { none, 0 };
     surface_set_opaque_region(wi->surface, &region);
-    wi->damage = (struct rect){ 0, 0, wi->buf_w, wi->buf_h };
-    wi->has_damage = 1;
+    add_damage(wi, (struct rect){ 0, 0, wi->bufs.w, wi->bufs.h });
 }
 
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count)

@@ -17,7 +17,10 @@ the watched descriptors (`app_watch_fd`), dispatch server messages to
 windows by id, run due timers (`app_timer_add`, repeating or one shot),
 destroy windows that were closed, and paint again. The loop ends when
 `app_quit` is called or the last window is closed. Painting once per
-iteration means a burst of input costs one repaint.
+iteration means a burst of input costs one repaint. The loop skips a
+window while its last frame is pending (`gui_frame_pending`). The dirty
+flags collect the changes, and the window paints after the frame
+callback.
 
 `app_create_detached` (used by the host tests) builds an application
 over the fake client in `tests/fake_client.c` with the builtin font.
@@ -104,7 +107,8 @@ described in `dnd.md`.
 
 `widget_invalidate` marks a widget dirty and its ancestors child dirty.
 `window_paint` relayouts when needed (which marks the whole window
-dirty), then walks the tree: a dirty widget and everything below it are
+dirty) and calls `gui_begin_paint`, which moves the window to a free
+buffer (`gui.md`). It then walks the tree: a dirty widget and everything below it are
 repainted, a widget with only dirty descendants recurses without
 painting. The union of the repainted rectangles is sent to the server
 in one `gui_damage`; `app_set_damage_log` prints it for the tests.

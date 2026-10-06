@@ -10,16 +10,17 @@ struct mapping;
 
 /* A region of a user address space. Pages inside an anonymous region are
  * allocated on first touch and zero filled; pages of a file region (VM_FILE)
- * come from the file's mapping (mm/filemap.c). Protected by the owning
- * vmspace's lock. file and mapping are referenced by the region and
- * released by vma_release after the lock is dropped. */
+ * come from the file's mapping (mm/filemap.c). Pages of a shared memory
+ * region (VM_SHM) come from the page operation of its file. Protected by
+ * the owning vmspace's lock. file and mapping are referenced by the region
+ * and released by vma_release after the lock is dropped. */
 struct vma {
     uintptr_t start;
     uintptr_t end;          /* exclusive */
     unsigned flags;         /* VM_READ, VM_WRITE, VM_EXEC and the VM_* region flags */
-    struct file *file;      /* VM_FILE: the open file used for reads and writeback */
+    struct file *file;      /* VM_FILE: the open file used for reads and writeback; VM_SHM: the object */
     struct mapping *mapping;/* VM_FILE: the file's page cache */
-    uint64_t offset;        /* VM_FILE: file offset of start, page aligned */
+    uint64_t offset;        /* VM_FILE, VM_SHM: file offset of start, page aligned */
     struct list_head link;  /* vmspace->vmas, sorted by start */
     struct list_head reclaim_link; /* temporary dead list; never used by RCU readers */
     struct rcu_head rcu;

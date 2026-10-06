@@ -296,7 +296,7 @@ checks of `gui`, `gui_wm` and `comp_shell` show no change.
 
 Document: `docs/design/compositor.md`, `docs/design/gui.md`.
 
-### G8. libgui without the private surface
+### G8. libgui without the private surface (completed 2026-10-06)
 
 A window has two pool buffers and paints into the target buffer.
 `gui_begin_paint` waits for its release, copies the stale rectangles of
@@ -315,6 +315,16 @@ baseline, and correct pixels after 20 resize steps.
 
 Document: `docs/design/gui.md`, `docs/design/framework.md`,
 `docs/design/packages.md`.
+
+Result: a memfd page now gets its frame at the first fault. Before this
+change the kernel allocated every page at `ftruncate`, and the third
+slot and the headroom would have cost memory. At 2560x1600@2 the
+resident size of compbench fell from 23 to 15.6 MiB and that of X12
+from 47 to 31.5 MiB. The client copy time of `anim` fell from 267.2 to
+111.7 ms. `tools/mkbase.py` now packs every base package again when an
+ABI number changes. Before, the unchanged packages retained the old
+`needs` lines and the image installation refused them
+(`docs/design/graphics-performance.md`).
 
 ### G9. The hardware cursor on virtio-gpu
 

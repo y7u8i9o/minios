@@ -336,3 +336,44 @@ resize and at each corner of every copy. X12 stores the title of each
 toplevel shaped at the screen scale and draws it with
 `painter_text_shaped`. `text_outline` shapes strings of up to 64
 glyphs into an array on the stack instead of an allocation.
+
+## G8: libgui without the private surface (2026-10-06)
+
+A window draws straight into a slot of its shared memory pool
+(`lib/libgui/src/buffers.c`, `gui.md`). Before G8, libgui painted into a
+private surface and copied each damaged rectangle into one of two pool
+buffers. A window therefore had three copies of its pixels. Now it has
+two in normal operation. `gui_begin_paint` copies only the regions that
+changed since the target slot was last current. The pool has a third
+slot for the case that the compositor retains both buffers for 100 ms.
+The third slot uses no memory until a window draws into it.
+
+The kernel needed one change for this. A memfd page now gets its frame
+at the first fault (`sockets.md`). Before G8, `ftruncate` allocated and
+zeroed every page, and `mmap` mapped all of them. A three slot pool would
+then have cost more memory than the private surface it replaces.
+
+Measured with `comp_bench_hidpi` at 2560x1600@2. The compbench window
+has a buffer of 1584x1204 device pixels, 7.3 MiB:
+
+| | baseline (G1) | after G8 |
+|---|---|---|
+| compbench resident size | 23 MiB | 15.6 MiB |
+| X12 resident size | 47 MiB | 31.5 MiB |
+| client copy time, `anim` (60 frames) | 267.2 ms | 111.7 ms |
+| client copy time, `blink` (20 frames) | 11.8 ms | 5.0 ms |
+
+X12 maps the whole pool of each client, but only the pages of the used
+slots become resident. The back buffer of X12 disappeared with the
+direct composition of G5. In `blink` the client copies the window
+contents once after the first frame and then 160 device pixels per
+frame. In `anim` the client repaints the scene canvas in every frame and
+copies the region of the previous frame first, because the framework
+cannot know that a widget paints every pixel of its rectangle.
+
+`gui_memory` checks the result: two used slots in the pool, a resident
+size below the baseline minus one buffer with a margin of 1 MiB, and
+unchanged contents, frame corners and shadow after 20 resize drags. A
+narrow window painted its header buttons outside the header rectangle
+and therefore outside the damage that it reported. `csd.c` now clips the
+header to its rectangle. The host test of `buffers.c` found this defect.

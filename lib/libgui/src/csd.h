@@ -49,8 +49,10 @@ int csd_input_region(const struct csd *c, int w, int h, struct rect out[5]);
 struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w, int h);
 /* Repaint the header bar only (title, hover). */
 struct rect csd_paint_header(struct surface *buf, int scale, const struct csd *c, int w, int h);
-/* Copy the device rectangle r of src (the drawing surface: 0x00RRGGBB
- * inside the frame, ARGB chrome around it) into dst, the buffer sent to
- * the compositor: the frame becomes opaque, its rounded corners blend
- * the drawing over the chrome. */
-void csd_copy(struct surface *dst, const struct surface *src, struct rect r, int scale, const struct csd *c, int w, int h);
+/* The squares of the four rounded frame corners in device pixels, or 0
+ * rectangles when the frame has square corners. */
+int csd_corner_rects(const struct csd *c, int w, int h, int scale, struct rect out[4]);
+/* Blend the raw contents of the frame corners in buf over the chrome, in
+ * place: the frame's rounded corners become partly transparent. The
+ * rest of the frame is opaque through the opaque region. */
+void csd_finish_corners(struct surface *buf, int scale, const struct csd *c, int w, int h);

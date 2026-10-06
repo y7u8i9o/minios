@@ -22,6 +22,7 @@
 #define VM_DONTFORK (1u << 12)  /* MADV_DONTFORK: not copied by vmspace_fork (M38) */
 #define VM_SEQUENTIAL (1u << 13) /* MADV_SEQUENTIAL recorded (M38) */
 #define VM_RANDOM   (1u << 14)  /* MADV_RANDOM recorded (M38) */
+#define VM_SHM      (1u << 15)  /* shared memory object: a fault takes the frame from file_ops.page */
 #define VM_PROT_MASK (VM_READ | VM_WRITE | VM_EXEC)
 #define VM_KERNEL_RW (VM_READ | VM_WRITE | VM_GLOBAL)
 

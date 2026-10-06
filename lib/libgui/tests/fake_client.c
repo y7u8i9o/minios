@@ -103,6 +103,8 @@ void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n) { 
 void gui_set_input_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
 
 void gui_flush(void) {}
+void gui_begin_paint(struct gui_window *w) { (void)w; }
+int gui_frame_pending(const struct gui_window *w) { (void)w; return 0; }
 
 static struct gui_stats fake_stats;
 void gui_get_stats(struct gui_stats *out) { *out = fake_stats; }

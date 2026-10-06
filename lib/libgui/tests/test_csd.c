@@ -110,7 +110,8 @@ static void check_scale(int S, int active)
     for (int y = F.y; y < F.y + F.h; y++)
         for (int x = F.x; x < F.x + F.w; x++)
             src.pixels[(size_t)y * bw + x] = (uint32_t)(x * 37 + y * 101) & 0x00ffffff;
-    csd_copy(&dst, &src, (struct rect){ 0, 0, bw, bh }, S, &c, w, h);
+    memcpy(dst.pixels, src.pixels, (size_t)bw * bh * 4);
+    csd_finish_corners(&dst, S, &c, w, h);
     int Rd = CSD_RADIUS * S;
     for (int y = F.y; y < F.y + F.h; y++)
         for (int x = F.x; x < F.x + F.w; x++) {

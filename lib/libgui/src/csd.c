@@ -226,8 +226,12 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
     uint32_t bg = c->active ? HEADER_BG : HEADER_BG_BACKDROP;
     uint32_t line = c->active ? HEADER_LINE : HEADER_LINE_BACKDROP;
     uint32_t fg = c->active ? TITLE_FG : TITLE_FG_BACKDROP;
+    struct rect dh = rect_scale(hdr, S);
     struct painter p;
     painter_init_scaled(&p, buf, &csd_theme, S);
+    /* A window narrower than the button row would otherwise get buttons
+     * in the margin, outside the returned damage. */
+    p.clip = rect_intersect(p.clip, dh);
     painter_fill(&p, hdr.x, hdr.y, hdr.w, hdr.h - 1, bg);
     painter_fill(&p, hdr.x, hdr.y + hdr.h - 1, hdr.w, 1, line);
     /* Title: centred, clipped between the left edge and the buttons. */
@@ -252,7 +256,7 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
         int zone = n == 0 ? CSD_CLOSE : n == 1 ? CSD_MAXIMIZE : CSD_MINIMIZE;
         uint32_t bb = !c->active ? BUTTON_BG_BACKDROP : c->hover == zone ? BUTTON_BG_HOVER : BUTTON_BG;
         struct rect d = rect_scale(b, S);
-        gfx_disc(buf, d.x, d.y, d.w, 2 * S, bb, NULL);
+        gfx_disc(buf, d.x, d.y, d.w, 2 * S, bb, &dh);
         int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         if (n == 0) {
             painter_line(&p, cx - 3, cy - 3, cx + 2, cy + 2, fg);
@@ -269,7 +273,7 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
             painter_fill(&p, cx - 3, cy + 1, 6, 1, fg);
         }
     }
-    return rect_scale(hdr, S);
+    return dh;
 }
 
 struct rect csd_paint_header(struct surface *buf, int scale, const struct csd *c, int w, int h)
@@ -302,42 +306,36 @@ struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w
     return all;
 }
 
-void csd_copy(struct surface *dst, const struct surface *src, struct rect r, int scale, const struct csd *c, int w, int h)
+int csd_corner_rects(const struct csd *c, int w, int h, int scale, struct rect out[4])
 {
-    r = rect_intersect(r, (struct rect){ 0, 0, src->width, src->height });
-    r = rect_intersect(r, (struct rect){ 0, 0, dst->width, dst->height });
-    if (rect_empty(r))
+    int Rd = radius(c) * scale;
+    if (!c->enabled || Rd <= 0)
+        return 0;
+    struct rect F = rect_scale(csd_frame(c, w, h), scale);
+    out[0] = (struct rect){ F.x, F.y, Rd, Rd };
+    out[1] = (struct rect){ F.x + F.w - Rd, F.y, Rd, Rd };
+    out[2] = (struct rect){ F.x, F.y + F.h - Rd, Rd, Rd };
+    out[3] = (struct rect){ F.x + F.w - Rd, F.y + F.h - Rd, Rd, Rd };
+    return 4;
+}
+
+void csd_finish_corners(struct surface *buf, int scale, const struct csd *c, int w, int h)
+{
+    struct rect corners[4];
+    int n = csd_corner_rects(c, w, h, scale, corners);
+    if (!n)
         return;
-    if (!c->enabled) {
-        gfx_copy_rect(dst, src, &r);
-        return;
-    }
-    int S = scale;
-    struct rect F = rect_scale(csd_frame(c, w, h), S);
-    int Rd = radius(c) * S;
-    const struct chrome_profile *prof = chrome_profile(S, Rd, c->active);
-    const uint8_t *corner = pixel_corner_table(Rd);
-    for (int y = r.y; y < r.y + r.h; y++) {
-        const uint32_t *from = src->pixels + (size_t)y * src->stride;
-        uint32_t *to = dst->pixels + (size_t)y * dst->stride;
-        int in_row = y >= F.y && y < F.y + F.h;
-        int x0 = in_row ? (F.x > r.x ? F.x : r.x) : r.x + r.w;
-        int x1 = in_row ? (F.x + F.w < r.x + r.w ? F.x + F.w : r.x + r.w) : r.x + r.w;
-        if (x1 < x0) x1 = x0;
-        /* Chrome outside the frame: as painted. */
-        if (x0 > r.x)
-            memcpy(to + r.x, from + r.x, (size_t)(x0 - r.x) * 4);
-        if (r.x + r.w > x1)
-            memcpy(to + x1, from + x1, (size_t)(r.x + r.w - x1) * 4);
-        if (x1 <= x0)
-            continue;
-        int corner_row = Rd > 0 && (y < F.y + Rd || y >= F.y + F.h - Rd);
-        for (int x = x0; x < x1; x++) {
-            if (corner_row && (x < F.x + Rd || x >= F.x + F.w - Rd)) {
-                uint32_t cov = pixel_round_rect_coverage(corner, Rd, F.x, F.y, F.w, F.h, 15, x, y);
-                to[x] = over(prof ? chrome_alpha(prof, F, x, y) : 0, from[x], cov);
-            } else {
-                to[x] = from[x] | 0xff000000u;
+    struct rect F = rect_scale(csd_frame(c, w, h), scale);
+    int Rd = corners[0].w;
+    const struct chrome_profile *prof = chrome_profile(scale, Rd, c->active);
+    const uint8_t *table = pixel_corner_table(Rd);
+    for (int k = 0; k < n; k++) {
+        struct rect r = rect_intersect(corners[k], (struct rect){ 0, 0, buf->width, buf->height });
+        for (int y = r.y; y < r.y + r.h; y++) {
+            uint32_t *row = buf->pixels + (size_t)y * buf->stride;
+            for (int x = r.x; x < r.x + r.w; x++) {
+                uint32_t cov = pixel_round_rect_coverage(table, Rd, F.x, F.y, F.w, F.h, 15, x, y);
+                row[x] = over(prof ? chrome_alpha(prof, F, x, y) : 0, row[x], cov);
             }
         }
     }

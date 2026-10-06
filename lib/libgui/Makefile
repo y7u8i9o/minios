@@ -7,7 +7,7 @@ SO    := $(BUILD)/lib/libgui.so
 # raised whenever a structure, constant, signature or documented behaviour
 # that programs depend on changes incompatibly, and additions leave it
 # alone.
-ABI   := 1
+ABI   := 2
 ABIFILE := $(BUILD)/lib/libgui.abi
 SRCS  := $(wildcard src/*.c src/widgets/*.c)
 OBJS  := $(patsubst %.c,$(OUT)/%.o,$(SRCS)) $(OUT)/font.o

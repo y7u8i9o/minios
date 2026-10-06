@@ -461,6 +461,7 @@ static void repaint(struct ui *u, struct rect r)
     r = rect_intersect(r, (struct rect){ 0, 0, u->sw, u->sh });
     if (rect_empty(r))
         return;
+    gui_begin_paint(u->win);
     int S = scale;
     struct surface *s = &u->win->surf;
     struct rect R = { r.x * S, r.y * S, r.w * S, r.h * S };
@@ -826,6 +827,7 @@ static void thumbnail(const struct image *img, const char *path)
     struct theme theme;
     theme_init_default(&theme);
     struct painter p;
+    gui_begin_paint(w);
     painter_init_scaled(&p, &w->surf, &theme, w->scale);
     painter_fill(&p, 0, 0, tw + 2, th + 2, 0x00303030);
     painter_image(&p, 1, 1, small);

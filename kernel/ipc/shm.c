@@ -14,9 +14,11 @@
 #define SHM_MAX_PAGES 16384     /* 64 MiB: a double buffered 2560x1600 window at scale 2 needs 33 MiB */
 
 /* A named shared memory object: frames that several address spaces map.
- * The object retains one reference on every frame; mappings add their own
- * so unmapping through vma_unmap_range_locked is uniform. The table and
- * refs are protected by shm_lock. */
+ * A frame is allocated and zero filled at its first use (shm_page). The
+ * object retains one reference on every frame. Each page table entry adds
+ * its own reference, so unmapping through vma_unmap_range_locked is
+ * uniform. The table, refs, npages and the pages array are protected by
+ * shm_lock. */
 struct shm {
     char name[SHM_NAME_MAX];
     int refs;
@@ -52,6 +54,8 @@ static void shm_release(struct file *f)
         shm_free(s);
 }
 
+/* The mapping is a VM_SHM region. Its faults take the frames from
+ * shm_page, so pages that no process touches use no memory. */
 static long shm_mmap(struct file *f, struct vmspace *vm, uintptr_t hint, size_t len, unsigned flags,
                      uint64_t off)
 {
@@ -61,23 +65,46 @@ static long shm_mmap(struct file *f, struct vmspace *vm, uintptr_t hint, size_t 
     spin_unlock(&shm_lock);
     if (off || len > npages * PAGE_SIZE)
         return -EINVAL;
-    long va = vma_mmap(vm, hint, len, flags | VM_SHARED);
+    file_ref(f);
+    long va = vma_mmap_file(vm, hint, len, flags | VM_SHARED | VM_SHM, false, f, NULL, 0);
     if (va < 0)
-        return va;
-    for (size_t i = 0; i < len / PAGE_SIZE; i++) {
-        page_get(s->pages[i]);
-        int r = vmm_map(vm, (uintptr_t)va + i * PAGE_SIZE, page_to_phys(s->pages[i]), PAGE_SIZE,
-                        flags | VM_USER);
-        if (r < 0) {
-            page_put(s->pages[i]);
-            vma_munmap(vm, (uintptr_t)va, len);
-            return r;
-        }
-    }
+        file_put(f);
     return va;
 }
 
-/* Grow an anonymous object (memfd) to size; shrinking is not supported. */
+static struct page *shm_page(struct file *f, uint64_t pgoff)
+{
+    struct shm *s = f->priv;
+    spin_lock(&shm_lock);
+    bool inside = pgoff < s->npages;
+    struct page *pg = inside ? s->pages[pgoff] : NULL;
+    if (pg)
+        page_get(pg);
+    spin_unlock(&shm_lock);
+    if (pg || !inside)
+        return pg;
+    struct page *fresh = pmm_alloc_page();
+    if (!fresh)
+        return NULL;
+    memset(P2V(page_to_phys(fresh)), 0, PAGE_SIZE);
+    spin_lock(&shm_lock);
+    /* Another fault may have installed a frame meanwhile. */
+    pg = s->pages[pgoff];
+    if (!pg) {
+        pg = fresh;
+        fresh = NULL;
+        page_get(pg);           /* the object's reference */
+        s->pages[pgoff] = pg;
+    }
+    page_get(pg);               /* the caller's reference */
+    spin_unlock(&shm_lock);
+    if (fresh)
+        pmm_free_page(fresh);
+    return pg;
+}
+
+/* Grow an anonymous object (memfd) to size; shrinking is not supported.
+ * The new pages get frames at their first use. */
 static int shm_truncate(struct file *f, uint64_t size)
 {
     struct shm *s = f->priv;
@@ -89,17 +116,6 @@ static int shm_truncate(struct file *f, uint64_t size)
     struct page **pages = kzalloc(npages * sizeof *pages);
     if (!pages)
         return -ENOMEM;
-    for (size_t i = s->npages; i < npages; i++) {
-        pages[i] = pmm_alloc_page();
-        if (!pages[i]) {
-            for (size_t j = s->npages; j < i; j++)
-                page_put(pages[j]);
-            kfree(pages);
-            return -ENOMEM;
-        }
-        page_get(pages[i]);
-        memset(P2V(page_to_phys(pages[i])), 0, PAGE_SIZE);
-    }
     spin_lock(&shm_lock);
     memcpy(pages, s->pages, s->npages * sizeof *pages);
     struct page **old = s->pages;
@@ -114,6 +130,7 @@ static const struct file_ops shm_fops = {
     .mmap = shm_mmap,
     .release = shm_release,
     .truncate = shm_truncate,
+    .page = shm_page,
 };
 
 int shm_create_anon(struct file **out)
@@ -169,15 +186,6 @@ int shm_open(const char *name, int flags, size_t size, struct file **out)
         if (!s->pages) {
             kfree(s);
             return -ENOMEM;
-        }
-        for (size_t i = 0; i < s->npages; i++) {
-            s->pages[i] = pmm_alloc_page();
-            if (!s->pages[i]) {
-                shm_free(s);
-                return -ENOMEM;
-            }
-            page_get(s->pages[i]);
-            memset(P2V(page_to_phys(s->pages[i])), 0, PAGE_SIZE);
         }
         spin_lock(&shm_lock);
         struct shm *other = NULL;

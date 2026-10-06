@@ -1,0 +1,5 @@
+gui_memory: compbench has [0-9]+ KiB resident before the resizes
+gui_memory: compbench has [0-9]+ KiB resident after the resizes
+compbench: window client .* pool_bytes=19136512
+gui_memory: ok
+TEST PASS

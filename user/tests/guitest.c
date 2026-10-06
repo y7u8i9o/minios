@@ -31,6 +31,7 @@ static void handle(struct wmsg *ev, int *keys)
         struct gui_window *w = a && ev->window == a->id ? a : b;
         printf("guitest: window %d resized %dx%d\n", ev->window, ev->a, ev->b);
         if (w) {
+            gui_begin_paint(w);
             gfx_fill(&w->surf, gfx_rgb(0x40, 0xc0, 0x40));
             gui_damage(w, 0, 0, w->width, w->height);
         }
@@ -63,6 +64,7 @@ int main(int argc, char **argv)
         a = gui_create_window(80, 40, "clipboard owner");
         if (!a)
             return 1;
+        gui_begin_paint(a);
         gfx_fill(&a->surf, 0x00ffffff);
         gui_damage(a, 0, 0, a->width, a->height);
         struct wmsg focus;
@@ -92,6 +94,7 @@ int main(int argc, char **argv)
         a = gui_create_window(400, 200, "ttf");
         if (!a)
             return 1;
+        gui_begin_paint(a);
         gfx_fill(&a->surf, 0x00ffffff);
         gfx_text_font(&a->surf, f, 10, 10, "AVAST To Wave", 0x00000000, 0xffffffffu);
         gui_damage(a, 0, 0, a->width, a->height);
@@ -113,6 +116,7 @@ int main(int argc, char **argv)
         printf("guitest: cannot create windows\n");
         return 1;
     }
+    gui_begin_paint(a);
     gfx_fill(&a->surf, gfx_rgb(220, 220, 220));
     gfx_text(&a->surf, 10, 10, "window alpha", 0, 0xffffffffu);
     if (a->scale > 1) {
@@ -125,6 +129,7 @@ int main(int argc, char **argv)
     }
     gui_damage(a, 0, 0, a->width, a->height);
     if (b) {
+        gui_begin_paint(b);
         gfx_fill(&b->surf, gfx_rgb(200, 240, 200));
         gfx_fill_rect(&b->surf, 20, 20, 100, 60, gfx_rgb(255, 0, 0));
         gui_damage(b, 0, 0, b->width, b->height);

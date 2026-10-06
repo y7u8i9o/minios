@@ -225,11 +225,22 @@ table is a growable array of pointers.
   in `third_party/dejavu/` (`/usr/share/fonts/sans18.mfnt`, `mono20.mfnt`).
   `gfx_text_font`, `gfx_text_width_font` and `gfx_text_index_font` draw
   and measure with any font; the older 8x16 calls remain.
-- Double buffering: `gui_window.surf` is a private buffer allocated by
-  the library, `gui_window.shared` the mapped surface. `gui_damage`
-  copies the damaged rectangle from the private buffer to the shared
-  surface before notifying the server, so the compositor never sees a
-  partially drawn frame. A resize replaces both buffers.
+- Buffers (G8 of `docs/plan/compositor-performance.md`): a window draws
+  straight into its shared memory pool. There is no private copy. The
+  pool has three slots, each one window buffer plus a quarter for growth.
+  A memfd page gets memory at its first use, so a window normally uses
+  two slots. After a commit the compositor may read the committed slot.
+  `gui_begin_paint` therefore moves the next frame to a free slot. It
+  copies the regions that changed since that slot was last current, and
+  it restores the raw pixels of the rounded frame corners. If both slots
+  remain busy for 100 ms, the third slot is used. A commit blends the
+  frame corners over the chrome and sends one damage rectangle per
+  changed region. `gui_window.surf` points at the contents in the
+  current slot. A resize to a size beyond the slot capacity creates a
+  new pool. The old pool is destroyed after the compositor releases its
+  buffers. The slot logic is in `lib/libgui/src/buffers.c` without
+  protocol calls, and `make check-libgui` tests it against a reference
+  picture.
 - Toolkit (`widgets.c`, `widgets_text.c`, `widgets_menu.c`): `ui->font`
   selects the font (`ui_set_font`), line heights follow it. New widgets:
   scroll bar (`ui_scrollbar`, `ui_scrollbar_set`, thumb dragging, arrows

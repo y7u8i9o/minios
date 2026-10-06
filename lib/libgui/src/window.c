@@ -86,6 +86,7 @@ struct rect window_paint(struct widget *window)
     }
     if (!window->dirty && !window->child_dirty)
         return none;
+    gui_begin_paint(ws->win);
     long t0 = uptime_us();
     struct painter p;
     int scale = ws->win->scale > 0 ? ws->win->scale : 1;
@@ -98,6 +99,7 @@ struct rect window_paint(struct widget *window)
         gui_damage(ws->win, damage.x, damage.y, damage.w, damage.h);
     }
     if (ws->popup_win && ws->popup) {
+        gui_begin_paint(ws->popup_win);
         struct painter pp;
         int pscale = ws->popup_win->scale > 0 ? ws->popup_win->scale : 1;
         painter_init_scaled(&pp, &ws->popup_win->surf, app_theme(window->app), pscale);

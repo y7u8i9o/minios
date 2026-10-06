@@ -276,6 +276,11 @@ void app_set_damage_log(struct app *a, int on)
 static void paint_all(struct app *a)
 {
     for (int i = 0; i < a->nwindows; i++) {
+        /* A window paints after its frame callback. The dirty flags
+         * collect the changes until then. */
+        struct window_state *ws = window_state_of(a->windows[i]);
+        if (ws->win && gui_frame_pending(ws->win))
+            continue;
         struct rect r = window_paint(a->windows[i]);
         if (a->damage_log && !rect_empty(r)) {
             printf("app: damage %d,%d %dx%d\n", r.x, r.y, r.w, r.h);
