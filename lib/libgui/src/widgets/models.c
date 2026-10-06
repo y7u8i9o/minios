@@ -7,7 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 
-long uptime_ms(void);
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 #define INDENT 16

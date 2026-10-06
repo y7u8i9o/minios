@@ -202,9 +202,14 @@ framebuffer and the compositor's log.
   keyboard usable; `startgui` ends the session when any of X12, the
   panel or the program exits.
 - Logging: one `x12: N frames in the last 10 s` line instead of a
-  line per frame; `slow frame` lines remain for compositions over 20
+  line per frame; `slow frame: N us` lines remain for frames over 20
   ms; `frame stats` at exit. Tests: `gui_dead_client`,
   `gui_kbd_restore`.
+- Frame statistics (`stats.c`, G1 of `docs/plan/compositor-performance.md`):
+  counters, times in microseconds and latencies of the frames since the
+  last reset, sent by the `debug` interface of version 2 and printed by
+  `compstat` (`graphics-performance.md`). Tests: `comp_bench`,
+  `comp_bench_hidpi`.
 
 ## Panel popups and session survival
 

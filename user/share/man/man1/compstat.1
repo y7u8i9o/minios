@@ -1,0 +1,44 @@
+COMPSTAT(1)                 User Commands                COMPSTAT(1)
+
+NAME
+    compstat - print or reset the frame statistics of X12
+
+SYNOPSIS
+    compstat [-r] [-p]
+
+DESCRIPTION
+    compstat reads the frame statistics of the display server X12
+    through the debug interface and prints them on one line as
+    key=value pairs. The statistics cover the period since the start
+    of X12 or since the last reset. Times are microseconds.
+
+    frames, rects, pixels
+        compositions, composed damage rectangles and composed device
+        pixels
+    flushes, flush_bytes
+        flushes of the framebuffer and the bytes they copied
+    compose_us, compose_max_us, flush_us, flush_max_us
+        the time spent composing and flushing, in total and for the
+        slowest frame
+    frame_max_us, frame_p50_us, frame_p95_us, frame_p99_us
+        the longest frame and the frame time below which 50, 95 and
+        99 percent of the frames lie
+    damage_latency_us, commit_latency_us, input_latency_us
+        the average time from the first damage, from the earliest
+        commit of a buffer and from the earliest pointer motion to the
+        end of the frame that shows it, each also as a _max_us value
+    wakeups, idle_timers
+        returns of the main loop and frame timer expirations without
+        damage
+    cpu_us
+        the CPU time of X12, with a resolution of one millisecond
+    back_bytes, pool_bytes
+        the bytes of the back buffer and of the mapped client buffers
+
+OPTIONS
+    -r    reset the statistics instead of printing them
+    -p    with -r, print the statistics before the reset
+
+EXAMPLES
+    compstat
+    compstat -r -p

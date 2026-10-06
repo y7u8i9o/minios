@@ -667,6 +667,14 @@ long uptime_ms(void)
     return syscall0(SYS_uptime_ms);
 }
 
+long uptime_us(void)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+        return uptime_ms() * 1000;
+    return (long)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
 int openpty(int *master, int *slave, char *name, const struct termios *termp, const struct winsize *winp)
 {
     int m = open("/dev/ptmx", O_RDWR);

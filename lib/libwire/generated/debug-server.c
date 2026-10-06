@@ -46,6 +46,21 @@ void debug_send_pixel(struct wire_resource *debug, int32_t x, int32_t y, uint32_
     wire_resource_post(debug, 3, args);
 }
 
+void debug_send_frame_stat(struct wire_resource *debug, const char * key, uint32_t high, uint32_t low)
+{
+    union wire_arg args[3] = { { 0 } };
+    args[0].s = key;
+    args[1].u = high;
+    args[2].u = low;
+    wire_resource_post(debug, 4, args);
+}
+
+void debug_send_frame_stats_done(struct wire_resource *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(debug, 5, args);
+}
+
 void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected)
 {
     union wire_arg args[3] = { { 0 } };

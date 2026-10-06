@@ -22,6 +22,13 @@ long uptime_ms(void)
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
+long uptime_us(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
 void fake_push(const struct wmsg *m)
 {
     queue[qtail] = *m;
@@ -96,6 +103,14 @@ void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n) { 
 void gui_set_input_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
 
 void gui_flush(void) {}
+
+static struct gui_stats fake_stats;
+void gui_get_stats(struct gui_stats *out) { *out = fake_stats; }
+void gui_count_paint(long us)
+{
+    fake_stats.paints++;
+    fake_stats.paint_us += (uint64_t)us;
+}
 
 void gui_move(struct gui_window *w, int x, int y) {}
 void gui_set_title(struct gui_window *w, const char *title) {}

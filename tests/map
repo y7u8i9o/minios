@@ -24,6 +24,7 @@ tools/release.sh                none
 tools/version.sh                none
 tools/fetch_*.sh                none
 tools/xgettext.py               none
+tools/benchtable.py             none
 user/share/man/**               none
 user/ports/**                   privilege
 

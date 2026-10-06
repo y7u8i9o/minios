@@ -169,10 +169,25 @@ int gui_repeat_timeout(void);
 int gui_modifiers(void);
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
+/* The rendering statistics of the windows of this process since its
+ * start (docs/design/graphics-performance.md). Times are microseconds. */
+struct gui_stats {
+    uint64_t paints;            /* paints of a window that changed pixels */
+    uint64_t paint_us;
+    uint64_t commits;
+    uint64_t copy_us;           /* copies into the shared buffers at a commit */
+    uint64_t copied_bytes;
+    uint64_t frame_waits;       /* commits deferred to a frame callback or a buffer release */
+    uint64_t pool_bytes;        /* bytes of the shared buffer pools mapped now */
+};
+void gui_get_stats(struct gui_stats *out);
+/* Count one paint of a window that took us microseconds (the framework). */
+void gui_count_paint(long us);
 struct wire_display;
 struct wire_proxy;
 struct wire_interface;
 /* The libwire connection, and a bind of any advertised global by
- * interface name (NULL when the compositor has none). */
+ * interface name (NULL when the compositor has none, or only a lower
+ * version). */
 struct wire_display *gui_display(void);
 struct wire_proxy *gui_bind_global(const char *iface, const struct wire_interface *interface, int version);

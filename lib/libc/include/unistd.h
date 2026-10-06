@@ -44,6 +44,8 @@ int usleep(unsigned long usec);
 int sleep_ms(unsigned long ms);
 /* Milliseconds since boot. */
 long uptime_ms(void);
+/* Microseconds since boot, from CLOCK_MONOTONIC. */
+long uptime_us(void);
 /* Number of processors and the processor currently running the caller. */
 int nproc(void);
 int getcpu(void);

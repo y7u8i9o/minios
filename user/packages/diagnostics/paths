@@ -5,3 +5,5 @@ usr/bin/evtest
 usr/bin/wireview
 usr/bin/screenshot
 usr/share/man/man1/screenshot.1
+usr/bin/compstat
+usr/share/man/man1/compstat.1

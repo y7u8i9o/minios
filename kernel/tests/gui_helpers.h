@@ -209,8 +209,11 @@ static inline void ctrl_key(uint8_t code)
 }
 
 /* The number of live processes named name with effective uid uid, or of
- * any uid when uid is -1, from the table of /dev/proc. */
-static inline int count_procs(const char *name, int uid)
+ * any uid when uid is -1, from the table of /dev/proc. The CPU time in
+ * milliseconds and the resident size in KiB of the first such process go
+ * to ticks and rss_kb when these are not NULL, and remain unchanged when
+ * no process matches. */
+static inline int proc_table_find(const char *name, int uid, unsigned long *ticks, unsigned long *rss_kb)
 {
     size_t size = 8192;
     char *table = kmalloc(size);
@@ -237,8 +240,13 @@ static inline int count_procs(const char *name, int uid)
         }
         if (nf == 8 && strcmp(f[3], "zombie") != 0 && strcmp(f[7], name) == 0) {
             int u = (int)strtoull(f[6], NULL, 10);
-            if (uid < 0 || u == uid)
+            if (uid < 0 || u == uid) {
+                if (n == 0 && ticks)
+                    *ticks = (unsigned long)strtoull(f[4], NULL, 10);
+                if (n == 0 && rss_kb)
+                    *rss_kb = (unsigned long)strtoull(f[5], NULL, 10);
                 n++;
+            }
         }
         if (!end)
             break;
@@ -246,6 +254,11 @@ static inline int count_procs(const char *name, int uid)
     }
     kfree(table);
     return n;
+}
+
+static inline int count_procs(const char *name, int uid)
+{
+    return proc_table_find(name, uid, NULL, NULL);
 }
 
 /* Wait until the count is unchanged for half a second. The greeter forks its

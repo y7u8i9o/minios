@@ -44,23 +44,16 @@ static pid_t send_later(int sig, int ms)
     return child;
 }
 
-static long long now_us(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (long long)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
-}
-
 static void check_signals(void)
 {
     /* A handled signal after 50 ms ends a 500 ms sleep. */
     signal(SIGUSR1, on_usr1);
     pid_t child = send_later(SIGUSR1, 50);
     struct timespec request = { 0, 500000000 }, remain = { 0, 0 };
-    long long start = now_us();
+    long long start = uptime_us();
     int r = nanosleep(&request, &remain);
     int err = errno;
-    long long slept = now_us() - start;
+    long long slept = uptime_us() - start;
     waitpid(child, NULL, 0);
     long long left_ms = (long long)remain.tv_sec * 1000 + remain.tv_nsec / 1000000;
     CHECK(r == -1 && err == EINTR, "nanosleep after a handled signal: %d errno %d", r, err);
@@ -71,9 +64,9 @@ static void check_signals(void)
     /* An ignored signal does not shorten a sleep. */
     signal(SIGUSR2, SIG_IGN);
     child = send_later(SIGUSR2, 20);
-    start = now_us();
+    start = uptime_us();
     r = usleep(200000);
-    slept = now_us() - start;
+    slept = uptime_us() - start;
     waitpid(child, NULL, 0);
     CHECK(r == 0 && slept >= 200000, "an ignored signal shortened a 200 ms sleep to %lld us", slept);
     printf("sleeplattest: ignored signal, 200 ms sleep lasted %lld us\n", slept);
@@ -106,9 +99,9 @@ int main(void)
     sleep(1);
     long long total = 0, worst = 0;
     for (int i = 0; i < SLEEPS; i++) {
-        long long start = now_us();
+        long long start = uptime_us();
         usleep(SLEEP_MS * 1000);
-        long long over = now_us() - start - SLEEP_MS * 1000;
+        long long over = uptime_us() - start - SLEEP_MS * 1000;
         total += over;
         if (over > worst)
             worst = over;

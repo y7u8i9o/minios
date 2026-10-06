@@ -11,12 +11,16 @@ static const struct wire_message debug_requests[] = {
     { "get_stats", "", 0, (const char *const[]){ NULL }, 0 },
     { "get_surfaces", "", 0, (const char *const[]){ NULL }, 0 },
     { "read_pixel", "ii", 2, (const char *const[]){ NULL, NULL }, 0 },
+    { "get_frame_stats", "", 0, (const char *const[]){ NULL }, 0 },
+    { "reset_frame_stats", "", 0, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message debug_events[] = {
     { "stats", "uuuuuuu", 7, (const char *const[]){ NULL, NULL, NULL, NULL, NULL, NULL, NULL }, 0 },
     { "surface", "uussiiiiuu", 10, (const char *const[]){ NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }, 0 },
     { "surfaces_done", "", 0, (const char *const[]){ NULL }, 0 },
     { "pixel", "iiu", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
+    { "frame_stat", "suu", 3, (const char *const[]){ NULL, NULL, NULL }, 0 },
+    { "frame_stats_done", "", 0, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message tracer_requests[] = {
     { "start", "", 0, (const char *const[]){ NULL }, 0 },
@@ -50,7 +54,7 @@ static const struct wire_message settings_events[] = {
     { "value", "si", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "done", "", 0, (const char *const[]){ NULL }, 0 },
 };
-const struct wire_interface debug_interface = { "debug", 1, 3, debug_requests, 4, debug_events };
+const struct wire_interface debug_interface = { "debug", 2, 5, debug_requests, 6, debug_events };
 const struct wire_interface tracer_interface = { "tracer", 1, 3, tracer_requests, 3, tracer_events };
 const struct wire_interface screencopy_interface = { "screencopy", 1, 4, screencopy_requests, 6, screencopy_events };
 const struct wire_interface settings_interface = { "settings", 1, 2, settings_requests, 2, settings_events };

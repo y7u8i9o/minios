@@ -9,7 +9,6 @@
 #include <locale.h>
 #ifdef MINIOS_HOST
 #include <poll.h>
-long uptime_ms(void);
 #else
 #include <sys/ipc.h>
 #endif

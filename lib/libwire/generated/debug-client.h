@@ -13,12 +13,16 @@ struct debug_listener {
     void (*surface)(void *user, struct wire_proxy *self, uint32_t id, uint32_t client, const char * role, const char * title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped, uint32_t format);
     void (*surfaces_done)(void *user, struct wire_proxy *self);
     void (*pixel)(void *user, struct wire_proxy *self, int32_t x, int32_t y, uint32_t value);
+    void (*frame_stat)(void *user, struct wire_proxy *self, const char * key, uint32_t high, uint32_t low);
+    void (*frame_stats_done)(void *user, struct wire_proxy *self);
 };
 static inline int debug_add_listener(struct wire_proxy *p, const struct debug_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
 void debug_get_stats(struct wire_proxy *debug);
 void debug_get_surfaces(struct wire_proxy *debug);
 void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y);
+void debug_get_frame_stats(struct wire_proxy *debug);
+void debug_reset_frame_stats(struct wire_proxy *debug);
 
 struct tracer_listener {
     void (*client)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t connected);

@@ -89,7 +89,7 @@ The starting point on 2026-10-06:
 
 ## 3. Milestones
 
-### G1. Frame statistics and the benchmark cases
+### G1. Frame statistics and the benchmark cases (completed 2026-10-06)
 
 libc gains `uptime_us()`. The new file `user/compositor/stats.c` counts
 frames, rectangles, composed device pixels, flush calls, flushed bytes,
@@ -117,6 +117,27 @@ of the test client.
 
 Document: `docs/design/graphics-performance.md`,
 `docs/design/compositor.md`, `docs/design/protocol.md`.
+
+The implementation differs from the text above in three points. The
+`debug` interface sends one `frame_stat` event per key with the high
+and the low half of the value, then `frame_stats_done`, so a new value
+needs no change of the protocol. X12 applies a resize at the release of
+the button and rejects a buffer size that no configure acknowledged, so
+the resize scenario is 20 corner drags driven by the boot test instead
+of a client scenario. The benchmark runs X12 without the panel, so that
+the clock of the panel does not add frames.
+
+The baseline is in `docs/design/graphics-performance.md`. At 2560x1600@2
+a blink of 2x20 pixels composes 1.9 million device pixels and takes 14.8
+ms, the idle X12 wakes 74 times a second, and the commit latency is 14
+to 23 ms. The CPU time that the kernel charges per tick is too low for
+frames shorter than a tick, so the tables give it for reference only.
+
+`gui_bind_global` now treats a global with a lower advertised version
+as missing, because a bind above that version ends the connection. The
+host builds of libgui and Lua declare `uptime_ms` and `uptime_us` in
+`tests/host_compat.h`, which replaced three local declarations and one
+private copy.
 
 ### G2. memcpy, memmove and memset
 

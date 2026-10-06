@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 
 struct window {
@@ -85,6 +86,7 @@ struct rect window_paint(struct widget *window)
     }
     if (!window->dirty && !window->child_dirty)
         return none;
+    long t0 = uptime_us();
     struct painter p;
     int scale = ws->win->scale > 0 ? ws->win->scale : 1;
     painter_init_scaled(&p, &ws->win->surf, app_theme(window->app), scale);
@@ -107,6 +109,8 @@ struct rect window_paint(struct widget *window)
             gui_damage(ws->popup_win, pd.x, pd.y, pd.w, pd.h);
         }
     }
+    if (has)
+        gui_count_paint(uptime_us() - t0);
     return has ? damage : none;
 }
 

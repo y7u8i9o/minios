@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <gui/utf8.h>
 #include "editor_internal.h"
 #include "editmenu.h"
-long uptime_ms(void);
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 /* ---- lines ---- */

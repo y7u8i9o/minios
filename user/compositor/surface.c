@@ -33,8 +33,10 @@ static void pool_unref(struct pool *p)
 {
     if (--p->refs > 0)
         return;
-    if (p->map)
+    if (p->map) {
         munmap(p->map, p->size);
+        stats_pool_mapped(-(long)p->size);
+    }
     close(p->fd);
     free(p);
 }
@@ -107,6 +109,7 @@ static void h_pool_resize(struct wire_client *c, struct wire_resource *self, int
         return;
     }
     munmap(p->map, p->size);
+    stats_pool_mapped((long)size - (long)p->size);
     p->map = map;
     p->size = (size_t)size;
 }
@@ -131,6 +134,8 @@ static void h_create_pool(struct wire_client *c, struct wire_resource *self, uin
     if (p->map == MAP_FAILED) {
         p->map = NULL;
         wire_client_post_error(c, self, 11, "cannot map the pool");
+    } else {
+        stats_pool_mapped((long)p->size);
     }
     wire_resource_set_listener(r, &pool_handlers, p, pool_resource_destroy);
 }
@@ -341,6 +346,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         }
         s->current.buffer = b;
         if (b) {
+            stats_mark(STATS_COMMIT);
             b->busy = 1;
             int scale = s->current.scale > 0 ? s->current.scale : 1;
             int bw = b->width / scale, bh = b->height / scale;

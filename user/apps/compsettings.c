@@ -22,7 +22,7 @@ static struct app *app;
 static struct wire_proxy *settings, *debug;
 static struct widget *frame_spin, *rate_spin, *delay_spin, *decor_combo, *verbose_box, *red, *green, *blue, *swatch;
 static struct widget *mode_label;
-static struct widget *status_values[8], *table, *surface_count;
+static struct widget *status_values[12], *table, *surface_count;
 static struct widget *px_x, *px_y, *px_value, *px_swatch;
 static struct surf_row rows[64];
 static int nrows, pending_rows;
@@ -148,7 +148,51 @@ static void on_pixel(void *user, struct wire_proxy *p, int32_t x, int32_t y, uin
         widget_invalidate(px_swatch);
     }
 }
-static const struct debug_listener debug_events = { on_stats, on_surface, on_surfaces_done, on_pixel };
+
+/* The frame statistics of debug version 2, collected until frame_stats_done. */
+static struct { const char *key; unsigned long long value; } frame_values[] = {
+    { "frame_p50_us" }, { "frame_p95_us" }, { "frame_p99_us" }, { "frame_max_us" }, { "frames" }, { "flush_us" },
+    { "commit_latency_us" }, { "commit_latency_max_us" }, { "input_latency_us" }, { "input_latency_max_us" },
+    { "back_bytes" }, { "pool_bytes" },
+};
+
+static unsigned long long frame_value(const char *key)
+{
+    for (size_t i = 0; i < sizeof frame_values / sizeof frame_values[0]; i++)
+        if (strcmp(frame_values[i].key, key) == 0)
+            return frame_values[i].value;
+    return 0;
+}
+
+static void on_frame_stat(void *user, struct wire_proxy *p, const char *key, uint32_t high, uint32_t low)
+{
+    for (size_t i = 0; i < sizeof frame_values / sizeof frame_values[0]; i++)
+        if (strcmp(frame_values[i].key, key) == 0)
+            frame_values[i].value = (unsigned long long)high << 32 | low;
+}
+
+static void on_frame_stats_done(void *user, struct wire_proxy *p)
+{
+    char s[96];
+    if (!status_values[8])
+        return;
+    snprintf(s, sizeof s, "%.2f ms median, %.2f ms at 95 %%, %.2f ms at 99 %%, %.2f ms longest",
+             frame_value("frame_p50_us") / 1000.0, frame_value("frame_p95_us") / 1000.0,
+             frame_value("frame_p99_us") / 1000.0, frame_value("frame_max_us") / 1000.0);
+    widget_set_text(status_values[8], s);
+    unsigned long long frames = frame_value("frames");
+    snprintf(s, sizeof s, "%.2f ms average", frames ? frame_value("flush_us") / 1000.0 / (double)frames : 0.0);
+    widget_set_text(status_values[9], s);
+    snprintf(s, sizeof s, "commit %.2f ms (%.2f ms longest), pointer %.2f ms (%.2f ms longest)",
+             frame_value("commit_latency_us") / 1000.0, frame_value("commit_latency_max_us") / 1000.0,
+             frame_value("input_latency_us") / 1000.0, frame_value("input_latency_max_us") / 1000.0);
+    widget_set_text(status_values[10], s);
+    snprintf(s, sizeof s, "%llu KiB back buffer, %llu KiB client buffers", frame_value("back_bytes") / 1024,
+             frame_value("pool_bytes") / 1024);
+    widget_set_text(status_values[11], s);
+}
+static const struct debug_listener debug_events = { on_stats, on_surface, on_surfaces_done, on_pixel, on_frame_stat,
+                                                    on_frame_stats_done };
 
 static int m_rows(struct model *m, int parent) { return parent < 0 ? nrows : 0; }
 static int m_child(struct model *m, int parent, int index) { return index; }
@@ -176,6 +220,7 @@ static void tick(void *arg)
 {
     if (debug) {
         debug_get_stats(debug);
+        debug_get_frame_stats(debug);
         debug_get_surfaces(debug);
         gui_flush();
     }
@@ -219,7 +264,7 @@ int main(int argc, char **argv)
     if (!app)
         return 1;
     settings = gui_bind_global("settings", &settings_interface, 1);
-    debug = gui_bind_global("debug", &debug_interface, 1);
+    debug = gui_bind_global("debug", &debug_interface, 2);
     if (!settings || !debug) {
         fprintf(stderr, "x12settings: X12 has no settings interface\n");
         return 1;
@@ -244,9 +289,10 @@ int main(int argc, char **argv)
 
     struct widget *status = tabs_add(tabs, "Status");
     struct widget *grid = page_grid(status);
-    static const char *const names[8] = { "Uptime", "Compositions", "Composition time", "Longest composition",
-                                          "Clients", "Surfaces", "Frame interval", "Display" };
-    for (int i = 0; i < 8; i++)
+    static const char *const names[12] = { "Uptime", "Compositions", "Composition time", "Longest composition",
+                                           "Clients", "Surfaces", "Frame interval", "Display", "Frame time",
+                                           "Flush time", "Latency", "Pixel memory" };
+    for (int i = 0; i < 12; i++)
         status_values[i] = grid_row(grid, i, names[i], "");
 
     struct widget *surfaces = tabs_add(tabs, "Surfaces");

@@ -9,3 +9,8 @@
 #undef strlcpy
 #define strlcpy gui_host_strlcpy
 size_t gui_host_strlcpy(char *dst, const char *src, size_t size);
+
+/* The clocks of the minios unistd.h, which the host unistd.h lacks. The
+ * fake client defines them with gettimeofday. */
+long uptime_ms(void);
+long uptime_us(void);

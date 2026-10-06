@@ -18,7 +18,6 @@
 
 void client_attach(struct wire_client *wc);
 void surfaces_frame_done(uint32_t time_ms);
-void scene_stats(void);
 
 static struct wire_server *srv;
 static volatile int running = 1;
@@ -120,6 +119,8 @@ static void frame(void)
         scene_compose();
         frames_since_report++;
         comp_debug("frame");
+    } else {
+        stats_idle_timer();
     }
     /* Completion means the back buffer has actually been copied to the
      * framebuffer.  Idle timer ticks are not presentations. */
@@ -218,6 +219,7 @@ int main(int argc, char **argv)
     trace_init(srv);
     if (verbose)
         settings.verbose = 1;
+    stats_reset();
     scene_init();
     decor_init();
     input_place_cursor(screen_w / 2, screen_h / 2);
@@ -259,6 +261,7 @@ int main(int argc, char **argv)
                 continue;
             break;
         }
+        stats_wakeup();
         if (pf[0].revents & POLLIN) {
             struct wire_client *c = wire_server_accept(srv);
             if (c)
@@ -278,7 +281,7 @@ int main(int argc, char **argv)
         if (pf[1].revents & POLLIN)
             frame();
     }
-    scene_stats();
+    stats_log();
     wire_server_destroy(srv);
     input_close();
     backend_release();

@@ -90,6 +90,7 @@ static void chrome_repaint(struct gui_window *w, int header_only)
     add_damage(wi, r);
 }
 
+static struct gui_stats stats;          /* gui_get_stats; the process draws from one thread */
 static struct wire_display *display;
 static struct wire_proxy *compositor, *shm, *shell, *seat, *pointer, *keyboard, *data_manager, *data_device;
 static struct wire_proxy *text_manager, *text_input;
@@ -1032,8 +1033,10 @@ struct wire_display *gui_display(void) { return display; }
 
 struct wire_proxy *gui_bind_global(const char *iface, const struct wire_interface *interface, int version)
 {
+    /* A bind above the advertised version is a protocol error that ends
+     * the connection, so such a global counts as missing. */
     for (int i = 0; i < nglobals; i++)
-        if (strcmp(globals[i].iface, iface) == 0)
+        if (strcmp(globals[i].iface, iface) == 0 && globals[i].version >= (uint32_t)version)
             return registry_bind(registry_proxy, globals[i].name, iface, (uint32_t)version, interface, version);
     return NULL;
 }
@@ -1202,6 +1205,8 @@ static void commit_now(struct gui_window *w)
             break;
         }
     if (!wb || wi->frame_pending) {
+        if (!wi->need_commit)
+            stats.frame_waits++;
         wi->need_commit = 1;
         return;
     }
@@ -1214,7 +1219,11 @@ static void commit_now(struct gui_window *w)
     int index = (int)(wb - wi->bufs);
     struct surface dst = { (uint32_t *)(wi->map + (size_t)index * wi->buf_w * wi->buf_h * 4), wi->buf_w, wi->buf_h, wi->buf_w };
     struct rect r = rect_intersect(wb->stale, (struct rect){ 0, 0, wi->full.width, wi->full.height });
+    long t0 = uptime_us();
     csd_copy(&dst, &wi->full, r, w->scale > 0 ? w->scale : 1, &wi->csd, w->width, w->height);
+    stats.copy_us += (uint64_t)(uptime_us() - t0);
+    stats.copied_bytes += (uint64_t)r.w * (uint64_t)r.h * 4;
+    stats.commits++;
     wb->has_stale = 0;
     wb->busy = 1;
     surface_attach(wi->surface, wb->proxy, 0, 0);
@@ -1230,6 +1239,22 @@ static void commit_now(struct gui_window *w)
     wi->frame_pending = 1;
     wi->has_damage = 0;
     wi->need_commit = 0;
+}
+
+void gui_get_stats(struct gui_stats *out)
+{
+    *out = stats;
+    out->pool_bytes = 0;
+    for (struct gui_window *w = wins; w; w = w->next) {
+        struct win *wi = w->priv;
+        out->pool_bytes += wi->map_size + (wi->old_map ? wi->old_map_size : 0);
+    }
+}
+
+void gui_count_paint(long us)
+{
+    stats.paints++;
+    stats.paint_us += (uint64_t)us;
 }
 
 void gui_flush(void)

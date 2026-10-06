@@ -22,7 +22,6 @@ static int cursor_suppressed;           /* compose without the cursor (screen co
 #define CURSOR_H 18
 #define CURSOR_SHADOW 1
 #define CURSOR_SHADE 154
-static long stat_count, stat_ms, stat_max;
 
 /* Logical rectangle to device pixels. */
 static struct rect dev(struct rect r)
@@ -62,6 +61,7 @@ void scene_damage(struct rect r)
     r = rect_intersect(r, whole);
     if (rect_empty(r))
         return;
+    stats_mark(STATS_DAMAGE);
     for (int i = 0; i < ndamage;) {
         if (rects_touch(damage[i], r)) {
             r = rect_union(damage[i], r);
@@ -404,39 +404,25 @@ static void compose_rect(struct rect r, struct csurface **order, int n, int flus
         }
     }
     draw_cursor(r);
-    if (flush)
+    if (flush) {
+        stats_rect((long)R.w * R.h);
         backend_flush(r);
+    }
 }
 
 void scene_compose(void)
 {
     if (!ndamage)
         return;
-    long t0 = uptime_ms();
+    long t0 = stats_frame_begin();
     struct csurface *order[256];
     int n = scene_order(order, 256);
     for (int d = 0; d < ndamage; d++)
         compose_rect(damage[d], order, n, 1);
     ndamage = 0;
-    long dt = uptime_ms() - t0;
-    stat_count++;
-    stat_ms += dt;
-    if (dt > stat_max)
-        stat_max = dt;
-    if (dt > 20)
-        comp_log("slow frame: %ld ms", dt);
-}
-
-void scene_stat_values(long *count, long *ms, long *max)
-{
-    *count = stat_count;
-    *ms = stat_ms;
-    *max = stat_max;
-}
-
-void scene_stats(void)
-{
-    comp_log("frame stats: %ld compositions, %ld ms total, %ld ms max", stat_count, stat_ms, stat_max);
+    long dt = stats_frame_end(t0);
+    if (dt > 20000)
+        comp_log("slow frame: %ld us", dt);
 }
 
 /* ---- screen capture ---- */

@@ -312,6 +312,13 @@ used private copies before; the host tools compile `src/crc32.c` with the
 host libc. `errno.h` gained `EPROTO` (71) and `ESTALE` (116) with the
 values of Linux, for the protocol of `filetransfer.md`.
 
+## Microseconds since boot (2026-10-06)
+
+`uptime_us()` in `unistd.h` returns the microseconds of `CLOCK_MONOTONIC`,
+beside `uptime_ms()`. The frame statistics of X12 and libgui use it
+(`graphics-performance.md`). It replaced the private helper of
+`sleeplattest`.
+
 ## Additions for MP3 (2026-10-06)
 
 `malloc.h` includes `stdlib.h`. Ported code includes the header for the

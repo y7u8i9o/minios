@@ -25,7 +25,7 @@ static const char *role_name(enum role r)
 static void h_get_stats(struct wire_client *c, struct wire_resource *self)
 {
     long count, ms, max;
-    scene_stat_values(&count, &ms, &max);
+    stats_values(&count, &ms, &max);
     uint32_t clients = 0, surfaces = 0;
     for (struct wire_client *k = wire_server_first_client(server); k; k = wire_client_next(k))
         clients++;
@@ -53,7 +53,18 @@ static void h_read_pixel(struct wire_client *c, struct wire_resource *self, int3
         v = back.pixels[(size_t)(y * screen_scale) * back.stride + (size_t)(x * screen_scale)];
     debug_send_pixel(self, x, y, v);
 }
-static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel };
+
+static void h_get_frame_stats(struct wire_client *c, struct wire_resource *self)
+{
+    stats_send(self);
+}
+
+static void h_reset_frame_stats(struct wire_client *c, struct wire_resource *self)
+{
+    stats_reset();
+}
+static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel, h_get_frame_stats,
+                                                  h_reset_frame_stats };
 
 static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
@@ -257,7 +268,7 @@ static void bind_settings(struct wire_client *c, void *data, uint32_t version, u
 void debug_init(struct wire_server *srv)
 {
     server = srv;
-    wire_global_create(srv, &debug_interface, 1, bind_debug, NULL);
+    wire_global_create(srv, &debug_interface, 2, bind_debug, NULL);
     wire_global_create(srv, &settings_interface, 1, bind_settings, NULL);
     wire_global_create(srv, &screencopy_interface, 1, bind_screencopy, NULL);
 }

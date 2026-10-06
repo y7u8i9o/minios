@@ -46,6 +46,7 @@ static void set_cursor_position(double fx, double fy)
     if (x != cursor_x || y != cursor_y) {
         cursor_x = x;
         cursor_y = y;
+        stats_mark(STATS_INPUT);
         scene_set_cursor(cursor_x, cursor_y);
     }
 }

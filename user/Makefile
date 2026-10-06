@@ -26,7 +26,7 @@ PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop aud
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 # The programs of the package binutils share binutils/lib/ (docs/design/binutils.md).
 BINUTILS := ar as ld nm size strings readelf objdump objcopy strip addr2line ranlib
-APPS   := clock evtest logview profiler screenshot sysinfo sysmon wireview x12settings
+APPS   := clock compstat evtest logview profiler screenshot sysinfo sysmon wireview x12settings
 APPBIN := $(OUT)/app-bin
 # part, mkfs and mkfat are the host tools of tools/ built for minios, and
 # limine the utility of the boot loader (docs/design/block.md).

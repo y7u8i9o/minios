@@ -112,6 +112,7 @@ void backend_flush(struct rect r)
     d = rect_intersect(d, (struct rect){ 0, 0, back.width, back.height });
     if (rect_empty(d))
         return;
+    long t0 = uptime_us();
     for (int j = 0; j < d.h; j++) {
         const uint32_t *from = back.pixels + (size_t)(d.y + j) * back.stride + d.x;
         uint8_t *to = fbmem + (size_t)(d.y + j) * fbinfo.pitch + (size_t)d.x * bpp;
@@ -138,6 +139,12 @@ void backend_flush(struct rect r)
         struct fb_rect fr = { d.x, d.y, d.w, d.h };
         ioctl(fb_fd, FBIO_FLUSH, &fr);
     }
+    stats_flush((long)d.w * d.h * (long)bpp, uptime_us() - t0);
+}
+
+long backend_buffer_bytes(void)
+{
+    return (long)back.width * back.height * 4;
 }
 
 void backend_release(void)

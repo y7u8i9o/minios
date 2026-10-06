@@ -6,6 +6,7 @@ usr/bin/audiointtest
 usr/bin/audiomixtest
 usr/bin/audiotest
 usr/bin/codectest
+usr/bin/compbench
 usr/bin/comptest
 usr/bin/credtest
 usr/bin/cryptotest

@@ -1,0 +1,11 @@
+comp_bench: drag done
+compstat: elapsed_us=
+comp_bench: pointer done
+x12: toplevel 1 configured 700x530
+comp_bench: resize done
+compbench: blink x12 .* frames=20 
+compbench: blink client paints=20 
+compbench: anim x12 
+compbench: idle x12 .* frames=0 
+comp_bench: ok
+TEST PASS

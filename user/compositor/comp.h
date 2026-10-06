@@ -213,9 +213,23 @@ void debug_setting_changed(const char *key, int value);   /* sends a value to ev
 void trace_init(struct wire_server *srv);
 void trace_client(const struct client *c, int connected);
 void frame_clock_set(int ms);                   /* main.c */
+/* stats.c: the frame statistics (docs/design/graphics-performance.md).
+ * The events start the latencies that the next frame ends. */
+enum stats_event { STATS_DAMAGE, STATS_COMMIT, STATS_INPUT, STATS_EVENTS };
+void stats_reset(void);
+void stats_wakeup(void);                        /* one return of poll */
+void stats_idle_timer(void);                    /* a frame timer expiration without damage */
+void stats_mark(enum stats_event e);
+long stats_frame_begin(void);                   /* returns the start time for stats_frame_end */
+void stats_rect(long device_pixels);            /* one composed damage rectangle */
+void stats_flush(long bytes, long us);          /* one flush of the backend */
+long stats_frame_end(long t0);                  /* returns the frame time in microseconds */
+void stats_pool_mapped(long delta);             /* bytes of client pools mapped or unmapped */
+void stats_values(long *count, long *ms, long *max);
+void stats_send(struct wire_resource *r);
+void stats_log(void);
 void seat_repeat_changed(void);                 /* seat.c */
 void seat_tick(long now);
-void scene_stat_values(long *count, long *ms, long *max);   /* scene.c */
 
 /* main.c */
 extern int screen_w, screen_h;
@@ -251,7 +265,6 @@ int scene_has_damage(void);
 void scene_compose(void);
 void scene_set_cursor(int x, int y);
 void scene_cursor_changed(void);
-void scene_stats(void);
 struct csurface *scene_surface_at(int x, int y);           /* content hit, topmost */
 int scene_order(struct csurface **out, int max);           /* bottom to top */
 /* Screen capture: the pointer's rectangle in device pixels (empty when
@@ -267,6 +280,8 @@ int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
 extern struct surface back;
 int backend_init(void);
 void backend_flush(struct rect r);
+/* The bytes of the private back buffer. */
+long backend_buffer_bytes(void);
 int backend_can_set_mode(void);
 /* Change the framebuffer mode; screen_w, screen_h, screen_scale and the
  * back buffer follow. */

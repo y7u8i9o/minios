@@ -140,7 +140,9 @@ output, so the tool also serves as a protocol check for the seat.
 values are set in the Settings program. The Status tab shows the uptime,
 the composition count, the total and average composition time, the
 longest composition, the clients, the surfaces, the frame interval and
-the display mode, refreshed every second through `debug.get_stats`. The
+the display mode, refreshed every second through `debug.get_stats`, and
+the frame time, the flush time, the latencies and the pixel memory of
+`debug.get_frame_stats` (`graphics-performance.md`). The
 Surfaces tab lists the surfaces with role, title, geometry, mapping
 state and buffer format (`debug.get_surfaces`, once per second or on
 Refresh). The Settings tab edits the frame interval, the key repeat rate
@@ -155,6 +157,13 @@ applies one setting and exits, which the `gui_tools` boot test uses.
 Settings keys: `frame_ms` (4 to 200), `desktop_color` (0xRRGGBB),
 `repeat_rate` (1 to 100), `repeat_delay` (50 to 2000), `decorations`
 (0 client, 1 server) and `verbose` (0 or 1).
+
+## compstat
+
+`compstat` prints the frame statistics of X12 on one line as
+`key=value` pairs through `debug.get_frame_stats`. `compstat -r` resets
+them, and `compstat -r -p` prints and then resets them. The keys are
+listed in `graphics-performance.md` and in `compstat(1)`.
 
 ## wireview
 

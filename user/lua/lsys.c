@@ -18,18 +18,13 @@
 
 #ifdef MINIOS_HOST
 /* The host unit test compiles this file with the system libc, which
- * lacks the minios time and processor calls. */
+ * lacks the minios sleep and processor calls. uptime_ms comes from the
+ * fake client of libgui, which the test links. */
 #include <time.h>
 static int sleep_ms(unsigned long ms)
 {
     struct timespec ts = { (time_t)(ms / 1000), (long)(ms % 1000) * 1000000 };
     return nanosleep(&ts, NULL);
-}
-static long uptime_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 static int nproc(void) { return 1; }
 static int getcpu(void) { return 0; }

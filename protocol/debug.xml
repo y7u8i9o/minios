@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Debugging and settings interfaces of the compositor. -->
 <protocol name="debug">
-  <interface name="debug" version="1">
+  <!-- Version 2 adds the frame statistics (docs/design/graphics-performance.md).
+       get_frame_stats sends one frame_stat event per value, then
+       frame_stats_done. A value has 64 bits, sent as its high and its low
+       half. reset_frame_stats sets the counters to zero and starts the
+       period that elapsed_us measures. -->
+  <interface name="debug" version="2">
     <request name="get_stats"/>
     <request name="get_surfaces"/>
     <request name="read_pixel"><arg name="x" type="int"/><arg name="y" type="int"/></request>
+    <request name="get_frame_stats"/>
+    <request name="reset_frame_stats"/>
     <event name="stats">
       <arg name="uptime_ms" type="uint"/><arg name="compositions" type="uint"/><arg name="compose_ms" type="uint"/>
       <arg name="compose_max_ms" type="uint"/><arg name="clients" type="uint"/><arg name="surfaces" type="uint"/>
@@ -17,6 +24,10 @@
     </event>
     <event name="surfaces_done"/>
     <event name="pixel"><arg name="x" type="int"/><arg name="y" type="int"/><arg name="value" type="uint"/></event>
+    <event name="frame_stat">
+      <arg name="key" type="string"/><arg name="high" type="uint"/><arg name="low" type="uint"/>
+    </event>
+    <event name="frame_stats_done"/>
   </interface>
 
   <!-- The protocol traffic of every other client (wireview). start sends

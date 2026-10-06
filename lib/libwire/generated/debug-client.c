@@ -22,6 +22,18 @@ void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y)
     wire_proxy_marshal(debug, 2, args, NULL);
 }
 
+void debug_get_frame_stats(struct wire_proxy *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(debug, 3, args, NULL);
+}
+
+void debug_reset_frame_stats(struct wire_proxy *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(debug, 4, args, NULL);
+}
+
 void tracer_start(struct wire_proxy *tracer)
 {
     union wire_arg args[1] = { { 0 } };
