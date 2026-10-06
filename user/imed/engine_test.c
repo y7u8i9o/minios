@@ -3,8 +3,8 @@
  * are the letters in capitals, in small letters and with a capital first.
  * Space chooses the candidate under the cursor, 1 to 9 choose by number on
  * the page, Enter commits the letters, Escape drops them, and the wheel
- * and the arrows of the window turn the pages.  F12 replies after 300 ms,
- * after the timeout of the compositor. */
+ * and the arrows of the window turn the pages.  F12 replies after 1500 ms,
+ * after the timeout of the compositor (1000 ms). */
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
@@ -53,7 +53,7 @@ static void test_select(void)
 static int test_key(uint32_t key, int ch, int mods)
 {
     if (key == KEY_F12) {
-        usleep(300000);
+        usleep(1500000);
         return 1;
     }
     size_t n = strlen(letters);

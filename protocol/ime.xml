@@ -22,7 +22,7 @@
   <interface name="input_method" version="1">
     <!-- The reply to a key event with a serial other than 0: handled 1
          means that the engine used the key and the client does not
-         receive it.  Without a reply in 150 ms the key goes to the
+         receive it.  Without a reply in 1000 ms the key goes to the
          client. -->
     <request name="key_handled">
       <arg name="serial" type="uint"/><arg name="handled" type="uint"/>

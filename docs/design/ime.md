@@ -71,7 +71,7 @@ active context goes to the daemon as `key` with a serial. The compositor
 contains the key in a queue of 32 entries until `key_handled` arrives. A used
 key and its release do not reach the client. A passed key goes the usual
 way through the dead keys of `text.c` to the client, with the modifiers of
-the moment it was typed. A key without a reply in 150 ms passes, and the
+the moment it was typed. A key without a reply in 1000 ms passes, and the
 compositor logs a timeout. The keys typed after a waiting key wait behind
 it, unsent, and the order remains. The switch keys and the Japanese keys wait
 in the same queue: a switch typed after letters takes effect after the
@@ -80,6 +80,22 @@ switch go where the switch sends them. A key with Ctrl, Alt or Super goes
 to the client at once and to the daemon with serial 0, and the daemon
 commits its composition. The daemon sends the changes of a key before the reply, and
 the compositor therefore applies the text before it passes the key.
+
+A key that passes after the timeout and arrives late at the daemon reaches
+both the client and the engine. The timeout therefore only protects against
+a daemon that no longer answers. The limit was 150 ms until 2026-10-06. The
+first conversion of the Japanese engine took 194 ms under TCG, and the
+tests `ime_japanese` and `ime_pinyin` then received a space in the text and
+keys in the wrong order.
+
+The `key` event carries no modifiers. The daemon applies the modifiers of
+the last `modifiers` event to each key. While keys wait in the queue, the
+compositor therefore defers the changes of the modifiers. It sends a
+waiting key after the modifiers that were down when the key was typed, and
+it sends the current modifiers once the queue is empty. Before 2026-10-06
+the compositor sent each change at once. A Shift+Right typed while a
+conversion waited for its reply then reached the daemon after the release
+of Shift, as a plain Right arrow.
 
 `commit_string`, `preedit_string` and `delete_surrounding_text` apply
 together at `commit`. They reach the focused context while the daemon is
@@ -107,7 +123,7 @@ draws the candidate window and logs a key that took the engine more than
 daemon sends the changes after each event. `imed -t` adds the test engine
 of the boot tests: letters compose, the candidates are the letters in
 capitals, in small letters and with a capital first, and F12 replies after
-300 ms.
+1500 ms, after the timeout of the compositor.
 
 ## Dictionaries
 

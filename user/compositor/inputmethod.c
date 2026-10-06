@@ -6,7 +6,7 @@
  * the order of its set_engines request.  While an engine of the daemon is
  * selected and a text input context has the keyboard focus, the daemon is
  * active: it receives every key of the context and replies whether it
- * used it.  The keys wait in a queue for the reply, at most 150 ms each.
+ * used it.  The keys wait in a queue for the reply, at most 1000 ms each.
  * The queue retains the order of the keys and of the switch keys: a switch
  * waits for the keys typed before it, and the keys typed after a waiting
  * switch wait for it and go where it sends them.
@@ -22,7 +22,11 @@
 
 #define MAX_METHODS 12
 #define MAX_QUEUE 32
-#define KEY_TIMEOUT_MS 150
+/* The first conversion of the Japanese engine reads the Mozc dictionary and
+ * took 194 ms under TCG.  A key that times out goes to the client, while the
+ * daemon still uses the key when its reply arrives late.  The timeout
+ * therefore only protects against a daemon that no longer answers. */
+#define KEY_TIMEOUT_MS 1000
 
 struct method {
     char name[32], label[16], title[64];
@@ -56,6 +60,13 @@ static int nqueue;
 static uint32_t handled_keys[16];                 /* presses that the daemon used: their release is dropped */
 static int nhandled;
 static int flushing;
+/* The modifiers of the seat, and the modifiers that the daemon received
+ * last. The key event carries no modifiers. The daemon applies the last
+ * modifiers it received to each key. A key that waits in the queue
+ * therefore reaches the daemon after the modifiers of the moment the key
+ * was typed. The current modifiers follow once the queue is empty. */
+static int seat_depressed, seat_locked, seat_group;
+static int sent_depressed = -1, sent_locked = -1, sent_group = -1;
 /* The text changes of the daemon that its next commit applies. */
 static char pending_commit[1024], pending_preedit[512];
 static int pending_preedit_set, pending_begin, pending_end;
@@ -303,6 +314,18 @@ static int take_handled(uint32_t key)
     return 0;
 }
 
+/* send_modifiers gives the daemon the modifiers depressed with the locked
+ * modifiers and the group of the seat, unless the daemon has them. */
+static void send_modifiers(int depressed)
+{
+    if (!im || (depressed == sent_depressed && seat_locked == sent_locked && seat_group == sent_group))
+        return;
+    input_method_send_modifiers(im, (uint32_t)depressed, (uint32_t)seat_locked, (uint32_t)seat_group);
+    sent_depressed = depressed;
+    sent_locked = seat_locked;
+    sent_group = seat_group;
+}
+
 static uint32_t next_serial(void)
 {
     if (!++key_serial)
@@ -322,6 +345,8 @@ static void flush_queue(void)
     while (nqueue) {
         struct pending_key *h = &queue[0];
         if (h->kind == Q_KEY && !h->sent && !h->decided) {
+            if (active && h->pressed)
+                send_modifiers(h->mods);
             if (active && h->pressed && !(h->mods & (KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT | KEYMAP_MOD_LOGO))) {
                 h->sent = 1;
                 h->serial = next_serial();
@@ -360,6 +385,8 @@ static void flush_queue(void)
             seat_deliver_key(k.key, k.pressed, k.mods);
         }
     }
+    if (!nqueue)
+        send_modifiers(seat_depressed);
     flushing = 0;
 }
 
@@ -437,8 +464,11 @@ void im_tick(long now)
 
 void im_modifiers(int depressed, int locked, int group)
 {
-    if (im)
-        input_method_send_modifiers(im, (uint32_t)depressed, (uint32_t)locked, (uint32_t)group);
+    seat_depressed = depressed;
+    seat_locked = locked;
+    seat_group = group;
+    if (!nqueue)
+        send_modifiers(depressed);
 }
 
 void im_keymap_changed(int fd, uint32_t size)
@@ -686,6 +716,9 @@ static void h_get_input_method(struct wire_client *c, struct wire_resource *self
     int fd = seat_keymap_fd(&size);
     if (fd >= 0)
         input_method_send_keymap(r, 1, fd, size);
+    /* A new daemon knows no modifiers yet. */
+    sent_depressed = sent_locked = sent_group = -1;
+    send_modifiers(seat_depressed);
     comp_log("ime: input method bound");
 }
 

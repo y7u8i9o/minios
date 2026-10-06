@@ -75,7 +75,7 @@ static void test_ime_protocol(void)
     tap(0x39);
     tap(0x1c);                              /* not used: a new line in gedit */
     tap(0x58);                              /* F12: no reply in time, gedit receives it */
-    ktest_wait_idle(400);
+    ktest_wait_idle(1700);
     type("hi");
     keys(shift, sizeof shift);              /* the layout: hi is committed */
     type("x");
