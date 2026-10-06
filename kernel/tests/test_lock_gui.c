@@ -29,18 +29,6 @@ static void super_l(void)
     ktest_wait_idle(150);
 }
 
-/* Wait until the pixel at x, y equals v (equal 1) or differs from v
- * (equal 0). The wait ends after ms milliseconds at the latest. */
-static bool wait_pixel(int x, int y, uint32_t v, int equal, int ms)
-{
-    for (int t = 0; t < ms; t += 50) {
-        if ((pixel(x, y) == v) == equal)
-            return true;
-        sleep_ms(50);
-    }
-    return false;
-}
-
 /* The panel at the bottom of the screen is hidden while the session is
  * locked. The middle of the panel shows only its background. */
 static bool wait_locked(int sh)

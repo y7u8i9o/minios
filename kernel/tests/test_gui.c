@@ -2111,7 +2111,9 @@ static void test_gui_desktop(void)
     ktest_assert(cl != NULL, "cannot start settings");
     int status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
-    ktest_wait_idle(1800);
+    /* The desktop decodes and scales the image, which takes several
+     * seconds under TCG. */
+    wait_pixel(sw / 2 + 100, sh / 2 + 50, 0x00306080, 0, 10000);
     mid = pixel(sw / 2 + 100, sh / 2 + 50);
     ktest_assert(mid != 0x00306080, "wallpaper drawn in the middle of the screen: %08x", mid);
     int cx = sw / 2, cy = sh / 2;

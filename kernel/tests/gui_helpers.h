@@ -105,6 +105,18 @@ static inline uint32_t pixel(int x, int y)
     return fb_read_rgb(&fb_screen, (uint32_t)x * s, (uint32_t)y * s);
 }
 
+/* Wait until the pixel at x, y equals v (equal 1) or differs from v
+ * (equal 0). The wait ends after ms milliseconds at the latest. */
+static inline bool wait_pixel(int x, int y, uint32_t v, int equal, int ms)
+{
+    for (int t = 0; t < ms; t += 50) {
+        if ((pixel(x, y) == v) == equal)
+            return true;
+        sleep_ms(50);
+    }
+    return false;
+}
+
 /* True when the arrow cursor has its tip at the logical pixel (x, y): a
  * black tip, and white fill one pixel right and two pixels down. The
  * framebuffer does not contain a device cursor (FB_CAP_CURSOR, G9 of

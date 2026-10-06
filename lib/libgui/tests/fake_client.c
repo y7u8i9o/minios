@@ -87,6 +87,17 @@ struct gui_window *gui_create_layer_window(int width, int height, int layer, int
     return gui_create_window(width > 0 ? width : 1024, height > 0 ? height : 740, ns);
 }
 
+/* The fake server has no session lock and refuses every lock. */
+struct gui_window *gui_create_lock_window(void)
+{
+    return NULL;
+}
+
+int gui_unlock_session(struct gui_window *w)
+{
+    return -1;
+}
+
 void gui_destroy_window(struct gui_window *w)
 {
     free(w->surf.pixels);
