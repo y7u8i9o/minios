@@ -298,6 +298,30 @@ int codec_ogg_probe(const uint8_t *data, size_t len, int (*accept)(const uint8_t
 int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));
 uint32_t codec_ogg_crc(const uint8_t *p, size_t n);
 
+/* The MDCT of n samples, where n is a power of two and at least 16. Vorbis
+ * and AAC both use it:
+ *
+ *   y[i] = sum over k < n/2 of X[k] cos(2 pi / n (i + 1/2 + n/4) (k + 1/2))
+ *
+ * codec_imdct computes y (n values) from X (n/2 values). codec_mdct is the
+ * transpose of codec_imdct and folds n samples into n/2 values. Neither
+ * function scales its output. A transform object contains the work space of
+ * the computation, so only one thread may use it at a time. */
+struct codec_mdct {
+    unsigned n;
+    float *twiddle, *post;              /* pre and post rotations */
+    float *fft_cos, *fft_sin;
+    unsigned *bitrev;
+    float *work;
+};
+int codec_mdct_init(struct codec_mdct *m, unsigned n);
+void codec_mdct_free(struct codec_mdct *m);
+void codec_imdct(const struct codec_mdct *m, const float *in, float *out);
+void codec_mdct(const struct codec_mdct *m, const float *in, float *out);
+/* Computes the inverse transform directly from its definition. Tests use it
+ * as a reference. */
+void codec_imdct_direct(unsigned n, const float *in, float *out);
+
 /* The channel order of Vorbis I (section 4.3.9 of its specification),
  * which Opus mapping family 1 also uses. For each position in the WAV
  * channel order, the function stores the Vorbis channel to read from in

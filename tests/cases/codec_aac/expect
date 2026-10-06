@@ -1,0 +1,10 @@
+codectest: module aac from /usr/lib/codecs/aac.so
+codectest: aac stereo.aac 44100 Hz 2 channels 46080 frames
+codectest: aac mono.aac 22050 Hz 1 channels 23552 frames
+codectest: aac transient.aac 48000 Hz 2 channels 49152 frames
+codectest: aac 51.aac 48000 Hz 6 channels 25600 frames
+codectest: aac pns.aac 44100 Hz 2 channels 46080 frames
+codectest: aac stereo.m4a 44100 Hz 2 channels 46080 frames
+codectest: aac faststart.m4a 32000 Hz 1 channels 33792 frames
+codectest: 0 failures
+TEST PASS

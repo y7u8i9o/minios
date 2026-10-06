@@ -228,7 +228,7 @@ struct encoder {
     unsigned channels, rate, floor_type;
     double quality;
     struct vb_setup setup;              /* floors and codebooks as the decoder sees them */
-    struct vb_mdct mdct[2];
+    struct codec_mdct mdct[2];
     float *ramp[2];
     struct code books[NBOOKS];
     struct block *blocks;
@@ -820,7 +820,7 @@ static int analyse(struct encoder *e, struct block *b, const float *const *x, lo
             buf[i] = t >= 0 && t < frames ? x[c][t] : 0;
         }
         vb_window(e->ramp, e->setup.blocksize, buf, n, b->flag, b->prevflag, b->nextflag);
-        vb_mdct(&e->mdct[b->flag], buf, spec);
+        codec_mdct(&e->mdct[b->flag], buf, spec);
         for (unsigned k = 0; k < half; k++)
             spec[k] *= 4.0f / n;
         struct vb_floor_data d;
@@ -1132,7 +1132,7 @@ static void free_encoder(struct encoder *e)
         free(e->books[b].word);
     }
     for (int i = 0; i < 2; i++) {
-        vb_mdct_free(&e->mdct[i]);
+        codec_mdct_free(&e->mdct[i]);
         free(e->ramp[i]);
         if (e->setup.floors && e->setup.floors[i].type == 0) {
             free(e->setup.floors[i].u.f0.map[0]);
@@ -1190,7 +1190,7 @@ long vorbis_encode_options(const struct codec_audio_format *fmt, const int32_t *
                 err = -ENOMEM;
         }
         e.ramp[b] = malloc(sizeof *e.ramp[b] * half);
-        if (!e.ramp[b] || vb_mdct_init(&e.mdct[b], e.setup.blocksize[b]) < 0)
+        if (!e.ramp[b] || codec_mdct_init(&e.mdct[b], e.setup.blocksize[b]) < 0)
             err = -ENOMEM;
         else
             vb_window_ramp(e.ramp[b], half);

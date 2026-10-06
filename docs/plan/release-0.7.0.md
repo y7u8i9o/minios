@@ -117,21 +117,24 @@ output with the samples that ffmpeg decodes with libopus on the host.
 
 Document: `docs/design/codecs.md`.
 
-### S4. AAC-LC in MP4 and ADTS
+### S4. AAC-LC in MP4 and ADTS (completed 2026-10-06)
 
 A libcodec module with a minios implementation of an AAC-LC decoder
-(ISO/IEC 14496-3). It covers the bitstream syntax of single-channel,
-channel-pair and fill elements, section and scale factor data, Huffman
-decoding of the spectral data, inverse quantisation, M/S and intensity
-stereo, TNS, long and short window sequences, and the IMDCT with
-overlap-add. Frames come from two containers: MP4 files, using the boxes
-`ftyp`, `moov`, `trak`, `mdia`, `minf`, `stbl`, `stsd` (`mp4a` with
-`esds`), `stsz`, `stco`, `co64`, `stsc` and `stts`, and the ADTS frames of
-`.aac` files. HE-AAC streams are decoded at the sample rate of their AAC-LC
-core.
+(ISO/IEC 14496-3). The decoder covers the bitstream syntax of
+single-channel, channel-pair and fill elements, section data and scale
+factor data, Huffman decoding of the spectral data, inverse
+quantisation, M/S and intensity stereo, TNS, the long and short window
+sequences, and the IMDCT with overlap-add. Frames come from two
+containers. MP4 files are read through the boxes `ftyp`, `moov`,
+`trak`, `mdia`, `minf`, `stbl`, `stsd` (`mp4a` with `esds`), `stsz`,
+`stco`, `co64`, `stsc` and `stts`. ADTS frames come from `.aac` files.
+HE-AAC streams are decoded at the sample rate of their AAC-LC core.
 
-Boot test: `codec_aac` decodes mono and stereo reference files in both
-containers and compares the output with reference PCM within a tolerance.
+Boot test: `codec_aac` decodes mono, stereo and 5.1 reference files in
+both containers. The files include short windows, TNS, intensity stereo
+and noise substitution. The test compares the output with the output of
+FFmpeg's decoder. As the owner decided, `tools/gen_aac_tables.py`
+extracts the tables of the standard from FFmpeg 7.1.
 
 Document: `docs/design/codecs.md`.
 

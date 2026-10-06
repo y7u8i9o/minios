@@ -42,20 +42,20 @@ static void test_md5(void)
 static void test_imdct(void)
 {
     for (unsigned n = 64; n <= 2048; n *= 2) {
-        struct vb_mdct m;
-        CHECK(vb_mdct_init(&m, n) == 0, "mdct init %u", n);
+        struct codec_mdct m;
+        CHECK(codec_mdct_init(&m, n) == 0, "mdct init %u", n);
         float *in = malloc(sizeof *in * n / 2), *a = malloc(sizeof *a * n), *b = malloc(sizeof *b * n);
         for (unsigned i = 0; i < n / 2; i++)
             in[i] = (float)(sin(i * 1.7) * 0.5 + cos(i * 0.31));
-        vb_imdct(&m, in, a);
-        vb_imdct_direct(n, in, b);
+        codec_imdct(&m, in, a);
+        codec_imdct_direct(n, in, b);
         double err = 0, mag = 0;
         for (unsigned i = 0; i < n; i++) {
             err = fmax(err, fabs((double)a[i] - b[i]));
             mag = fmax(mag, fabs((double)b[i]));
         }
         CHECK(err < 1e-6 * mag * n / 64 + 1e-5, "inverse MDCT of %u: error %g of %g", n, err, mag);
-        vb_mdct_free(&m);
+        codec_mdct_free(&m);
         free(in);
         free(a);
         free(b);

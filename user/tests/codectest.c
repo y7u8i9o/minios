@@ -7,9 +7,10 @@
  * tools/gen_codec_fixtures.py, "codectest vorbisenc" the Vorbis encoder,
  * "codectest oggflac" FLAC in Ogg, "codectest mp3" the MP3 decoder and
  * encoder, "codectest gif" the GIF decoder and encoder with animations,
- * and "codectest opus" the Opus decoder. Any other argument runs every
- * section. "codectest count" prints the number of codecs and is used by the
- * child process that runs with a different CODEC_PATH. */
+ * "codectest opus" the Opus decoder and "codectest aac" the AAC decoder.
+ * Any other argument runs every section. "codectest count" prints the
+ * number of codecs and is used by the child process that runs with a
+ * different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
 #include <errno.h>
@@ -686,6 +687,110 @@ static void test_opus(void)
     }
 }
 
+/* ---- AAC ---- */
+
+/* Both minios and, on the host, ffmpeg decode each fixture. The 16-bit
+ * output of ffmpeg is stored as FLAC. The two decoders compute in floating
+ * point and may round a sample differently, so the samples may differ by
+ * one 16-bit step. The fixtures cover ADTS and MP4, mono, stereo and 5.1,
+ * short windows, TNS, intensity stereo and noise substitution. */
+static void test_aac(void)
+{
+    const struct codec *adts = codec_find("aac"), *mp4 = codec_find("m4a");
+    CHECK(adts && adts->kind == CODEC_AUDIO && adts->caps == CODEC_DECODE, "aac codec");
+    CHECK(mp4 && mp4->kind == CODEC_AUDIO && mp4->caps == CODEC_DECODE, "m4a codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/aac", CODEC_DECODE) == adts, "aac by MIME type");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/mp4", CODEC_DECODE) == mp4, "m4a by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.AAC", CODEC_DECODE) == adts, "aac by extension");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.m4a", CODEC_DECODE) == mp4, "m4a by extension");
+    if (!adts || !mp4)
+        return;
+    static const struct {
+        const char *name, *ref;
+        int rate, channels;
+        long frames;
+    } files[] = {
+        { "stereo.aac", "stereo-aac", 44100, 2, 46080 },   { "mono.aac", "mono-aac", 22050, 1, 23552 },
+        { "transient.aac", "transient-aac", 48000, 2, 49152 }, { "51.aac", "51-aac", 48000, 6, 25600 },
+        { "pns.aac", "pns-aac", 44100, 2, 46080 },         { "stereo.m4a", "stereo-m4a", 44100, 2, 46080 },
+        { "faststart.m4a", "faststart-m4a", 32000, 1, 33792 },
+    };
+    for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
+        char path[96], ref[96];
+        snprintf(path, sizeof path, "/etc/tests/codec-aac-%s", files[i].name);
+        snprintf(ref, sizeof ref, "/etc/tests/codec-aac-%s.ref.flac", files[i].ref);
+        struct codec_audio *a, *b;
+        int ea = codec_audio_open_file(path, &a), eb = codec_audio_open_file(ref, &b);
+        CHECK(ea == 0 && eb == 0, "open %s %d, %s %d", path, ea, ref, eb);
+        if (ea || eb) {
+            if (!ea)
+                codec_audio_close(a);
+            if (!eb)
+                codec_audio_close(b);
+            continue;
+        }
+        const struct codec *expected = strstr(files[i].name, ".m4a") ? mp4 : adts;
+        CHECK(codec_audio_codec(a) == expected, "%s is identified as %s", path, expected->name);
+        const struct codec_audio_format *fa = codec_audio_format(a);
+        CHECK(fa->rate == files[i].rate && fa->channels == files[i].channels, "%s: %d Hz, %d channels", path,
+              fa->rate, fa->channels);
+        long total = codec_audio_frames(a);
+        int32_t *sa, *sb;
+        long na = decode_all(a, &sa, &ea), nb = decode_all(b, &sb, &eb);
+        long worst = 0;
+        double sum = 0;
+        long count = 0;
+        if (na == nb && fa->channels == codec_audio_format(b)->channels)
+            for (long k = 0; k < na * fa->channels; k++) {
+                long d = labs((long)(((int64_t)sa[k] + 0x8000) >> 16) - (long)(sb[k] >> 16));
+                if (d > worst)
+                    worst = d;
+                sum += (double)d * d;
+                count++;
+            }
+        double rms = count ? sqrt(sum / count) : 99;
+        CHECK(ea == 0 && eb == 0 && na == files[i].frames && nb == na && total == na,
+              "%s: %ld frames (%ld announced, %ld expected), reference %ld, error %d", path, na, total,
+              files[i].frames, nb, ea);
+        CHECK(worst <= 1 && rms < 0.5, "%s differs from ffmpeg by up to %ld, rms %.3f", path, worst, rms);
+        printf("codectest: aac %s %d Hz %d channels %ld frames, largest difference %ld, rms %d.%03d\n", files[i].name,
+               fa->rate, fa->channels, na, worst, (int)rms, (int)(rms * 1000) % 1000);
+        free(sa);
+        free(sb);
+        codec_audio_close(a);
+        codec_audio_close(b);
+    }
+
+    /* A damaged frame header or a cut file ends the stream with an error.
+     * The decoder still returns the frames before the damage. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-aac-stereo.aac", &d, &len) == 0) {
+        struct codec_audio *a;
+        int32_t *s;
+        int err;
+        /* The syncword of the tenth frame. */
+        size_t at = 0;
+        for (int frame = 0; frame < 9 && at + 6 < len; frame++)
+            at += (size_t)(d[at + 3] & 3) << 11 | (size_t)d[at + 4] << 3 | d[at + 5] >> 5;
+        d[at] = 0;
+        if (codec_audio_open(adts, d, len, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n == 9 * 1024, "a damaged header: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        d[at] = 0xff;
+        if (codec_audio_open(adts, d, len - 100, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 46080, "a cut file: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        free(d);
+    }
+}
+
 /* ---- the Vorbis encoder ---- */
 
 /* Test signals: a sequence of chords with decaying notes and clicks every
@@ -1169,7 +1274,7 @@ int main(int argc, char **argv)
         return 0;
     }
     static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac", "mp3", "gif",
-                                            "opus" };
+                                            "opus", "aac" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -1197,6 +1302,8 @@ int main(int argc, char **argv)
         test_gif();
     if (WANTS("opus"))
         test_opus();
+    if (WANTS("aac"))
+        test_aac();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

@@ -284,6 +284,7 @@ third_party/fontawesome/**      icons
 third_party/stb/**              codec_image
 third_party/minimp3/**          check-libcodec codec_mp3 codec_tool
 third_party/opus/**             check-libcodec codec_opus
+tools/gen_aac_tables.py         codec_aac
 third_party/shine/**            check-libcodec codec_mp3 codec_tool
 tools/fetch_mp3.sh              none
 tools/patches/shine.patch       check-libcodec codec_mp3

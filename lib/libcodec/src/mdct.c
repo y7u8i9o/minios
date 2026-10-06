@@ -1,20 +1,23 @@
-/* The inverse MDCT of Vorbis,
+/* The inverse MDCT that the audio modules share,
  *
  *   y[n] = sum over k < N/2 of X[k] cos(2 pi / N (n + 1/2 + N/4) (k + 1/2)),
  *
- * for n < N, computed through a DCT-IV of length M = N/2. The DCT-IV is a
- * complex FFT of length M/2 between a rotation of the input pairs
- * (X[2k], X[M-1-2k]) by exp(-i pi (4k + 1) / (4M)) and a rotation of the
- * result by exp(-i pi k / M). The IMDCT then reads the DCT-IV u forwards
- * and backwards with changed signs:
+ * for n < N. The code computes it through a DCT-IV of length M = N/2. The
+ * DCT-IV is a complex FFT of length M/2 between two rotations. The first
+ * rotates the input pairs (X[2k], X[M-1-2k]) by exp(-i pi (4k + 1) / (4M)).
+ * The second rotates the result by exp(-i pi k / M). The IMDCT then reads
+ * the DCT-IV output u forwards and backwards with changed signs:
  *
  *   y[n] = u[n + M/2]            for n < M/2,
  *   y[n] = -u[3M/2 - 1 - n]      for M/2 <= n < 3M/2,
  *   y[n] = -u[n - 3M/2]          for 3M/2 <= n < 2M. */
-#include "vorbis.h"
+#include <codec/codec.h>
+#include <errno.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
-int vb_mdct_init(struct vb_mdct *m, unsigned n)
+int codec_mdct_init(struct codec_mdct *m, unsigned n)
 {
     memset(m, 0, sizeof *m);
     unsigned half = n / 2, quarter = n / 4;
@@ -26,7 +29,7 @@ int vb_mdct_init(struct vb_mdct *m, unsigned n)
     m->bitrev = malloc(sizeof *m->bitrev * quarter);
     m->work = malloc(sizeof *m->work * (2 * quarter + 2 * half));
     if (!m->twiddle || !m->post || !m->fft_cos || !m->fft_sin || !m->bitrev || !m->work) {
-        vb_mdct_free(m);
+        codec_mdct_free(m);
         return -ENOMEM;
     }
     for (unsigned k = 0; k < quarter; k++) {
@@ -50,7 +53,7 @@ int vb_mdct_init(struct vb_mdct *m, unsigned n)
     return 0;
 }
 
-void vb_mdct_free(struct vb_mdct *m)
+void codec_mdct_free(struct codec_mdct *m)
 {
     free(m->twiddle);
     free(m->post);
@@ -62,7 +65,7 @@ void vb_mdct_free(struct vb_mdct *m)
 }
 
 /* An in-place radix-2 FFT of q complex values stored as re, im pairs. */
-static void fft(const struct vb_mdct *m, float *z, unsigned q)
+static void fft(const struct codec_mdct *m, float *z, unsigned q)
 {
     for (unsigned k = 0; k < q; k++) {
         unsigned r = m->bitrev[k];
@@ -90,7 +93,7 @@ static void fft(const struct vb_mdct *m, float *z, unsigned q)
 }
 
 /* The DCT-IV of length n/2 from in to u. */
-static void dct4(const struct vb_mdct *m, const float *in, float *u)
+static void dct4(const struct codec_mdct *m, const float *in, float *u)
 {
     unsigned half = m->n / 2, quarter = m->n / 4;
     float *z = m->work;
@@ -109,7 +112,7 @@ static void dct4(const struct vb_mdct *m, const float *in, float *u)
     }
 }
 
-void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
+void codec_imdct(const struct codec_mdct *m, const float *in, float *out)
 {
     unsigned half = m->n / 2, quarter = m->n / 4;
     float *u = m->work + 2 * quarter;
@@ -123,11 +126,12 @@ void vb_imdct(const struct vb_mdct *m, const float *in, float *out)
         out[n] = -u[n - 3 * h2];
 }
 
-/* The forward MDCT, the transpose of the inverse: the n samples are
- * folded into n/2 values and transformed by the same DCT-IV. With the
- * window of the decoder applied before and after, the overlap and add of
- * the inverse of (4 / n) times this transform restores the samples. */
-void vb_mdct(const struct vb_mdct *m, const float *in, float *out)
+/* The forward MDCT is the transpose of the inverse. It folds the n samples
+ * into n/2 values and transforms them with the same DCT-IV. Apply the
+ * window of the decoder before this transform and again after the inverse
+ * transform. The overlap and add of the inverse of (4 / n) times this
+ * transform then restores the samples. */
+void codec_mdct(const struct codec_mdct *m, const float *in, float *out)
 {
     unsigned half = m->n / 2, quarter = m->n / 4, h = half / 2;
     float *u = m->work + 2 * quarter;
@@ -141,49 +145,7 @@ void vb_mdct(const struct vb_mdct *m, const float *in, float *out)
     dct4(m, copy, out);
 }
 
-void vb_window_ramp(float *ramp, unsigned n)
-{
-    for (unsigned i = 0; i < n; i++) {
-        double x = sin((i + 0.5) / n * M_PI / 2);
-        ramp[i] = (float)sin(M_PI / 2 * x * x);
-    }
-}
-
-void vb_window(float *const ramp[2], const unsigned blocksize[2], float *v, unsigned n, unsigned blockflag,
-               unsigned prevflag, unsigned nextflag)
-{
-    unsigned bs0 = blocksize[0];
-    unsigned ls, le, rs, re;
-    const float *lramp, *rramp;
-    if (blockflag && !prevflag) {
-        ls = n / 4 - bs0 / 4;
-        le = n / 4 + bs0 / 4;
-        lramp = ramp[0];
-    } else {
-        ls = 0;
-        le = n / 2;
-        lramp = ramp[blockflag];
-    }
-    if (blockflag && !nextflag) {
-        rs = n * 3 / 4 - bs0 / 4;
-        re = n * 3 / 4 + bs0 / 4;
-        rramp = ramp[0];
-    } else {
-        rs = n / 2;
-        re = n;
-        rramp = ramp[blockflag];
-    }
-    for (unsigned i = 0; i < ls; i++)
-        v[i] = 0;
-    for (unsigned i = ls; i < le; i++)
-        v[i] *= lramp[i - ls];
-    for (unsigned i = rs; i < re; i++)
-        v[i] *= rramp[re - 1 - i];
-    for (unsigned i = re; i < n; i++)
-        v[i] = 0;
-}
-
-void vb_imdct_direct(unsigned n, const float *in, float *out)
+void codec_imdct_direct(unsigned n, const float *in, float *out)
 {
     unsigned half = n / 2;
     for (unsigned i = 0; i < n; i++) {

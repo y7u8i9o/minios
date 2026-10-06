@@ -12,6 +12,8 @@ audio/x-wav wav wave
 audio/flac flac
 audio/ogg ogg oga
 audio/opus opus
+audio/aac aac adts
+audio/mp4 m4a m4b
 audio/mpeg mp3
 application/x-launcher app
 application/x-minios-package mpk

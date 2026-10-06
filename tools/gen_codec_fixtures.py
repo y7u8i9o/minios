@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create the fixtures of the codec tests (docs/plan/codecs.md).
 
-    tools/gen_codec_fixtures.py [flac | vorbis | oggflac | mp3 | gif | opus]...
+    tools/gen_codec_fixtures.py [flac | vorbis | oggflac | mp3 | gif | opus | aac]...
 
 Without arguments the script creates every group. The MP3 group needs
 lame and ffmpeg, and the GIF group Pillow and ImageMagick.
@@ -611,6 +611,48 @@ def opus_fixtures(tmp):
     return made
 
 
+def aac_fixtures(tmp):
+    """Create AAC-LC files with the native AAC encoder of ffmpeg, in ADTS
+    and in MP4. The files are music in stereo and mono, transients that
+    make the encoder use short windows, TNS and intensity stereo, a 5.1
+    file, a file with perceptual noise substitution, and two MP4 files,
+    one of them with the moov box before the media data. ffmpeg decodes
+    each file into a 16-bit FLAC reference. For MP4 files the reference
+    ignores the edit list, because the decoder of minios returns every
+    frame, including the encoder delay. codec_aac compares the decoder
+    with these references."""
+    made = []
+
+    def source(name, frames, channels, rate, seed, transient):
+        path = os.path.join(tmp, name + ".wav")
+        samples = signal(frames, channels, 16, rate, seed) if transient else music(frames, channels, rate, seed)
+        write_wav(path, samples, channels, 16, rate)
+        return path
+
+    for name, frames, channels, rate, seed, transient, fmt, options in (
+            ("stereo.aac", 44100, 2, 44100, 71, False, "adts", ("-aac_pns", "0")),
+            ("mono.aac", 22050, 1, 22050, 72, False, "adts", ("-aac_pns", "0")),
+            ("transient.aac", 48000, 2, 48000, 73, True, "adts", ("-aac_pns", "0", "-aac_is", "1", "-b:a", "96k")),
+            ("51.aac", 24000, 6, 48000, 74, True, "adts", ("-aac_pns", "0")),
+            ("pns.aac", 44100, 2, 44100, 75, False, "adts", ("-aac_pns", "1", "-b:a", "48k")),
+            ("stereo.m4a", 44100, 2, 44100, 76, False, "ipod", ("-aac_pns", "0")),
+            ("faststart.m4a", 32000, 1, 32000, 77, True, "ipod", ("-aac_pns", "0", "-movflags", "+faststart"))):
+        dst = os.path.join(OUT, "codec-aac-" + name)
+        run("ffmpeg", "-y", "-loglevel", "error", "-i", source(name, frames, channels, rate, seed, transient),
+            "-c:a", "aac", *options, "-f", fmt, dst)
+        made.append(dst)
+        raw = os.path.join(tmp, name + ".raw")
+        ignore = ["-ignore_editlist", "1"] if fmt == "ipod" else []
+        run("ffmpeg", "-y", "-loglevel", "error", *ignore, "-i", dst, "-f", "s16le", raw)
+        ref = os.path.join(OUT, "codec-aac-" + name.replace(".", "-") + ".ref.flac")
+        run("ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", str(channels), "-i", raw,
+            "-c:a", "flac", "-compression_level", "8", ref)
+        made.append(ref)
+    for path in made:
+        run("ffmpeg", "-loglevel", "error", "-xerror", "-i", path, "-f", "null", "-")
+    return made
+
+
 def mp3_fixtures(tmp):
     """MP3 files of the LAME encoder: MPEG-1 at a constant bit rate with an
     ID3v2 tag, MPEG-2 with a variable bit rate, and MPEG-2.5. FFmpeg
@@ -702,9 +744,9 @@ def gif_fixtures(tmp):
 
 
 GROUPS = {"flac": flac_fixtures, "vorbis": vorbis_fixtures, "oggflac": oggflac_fixtures, "mp3": mp3_fixtures,
-          "gif": gif_fixtures, "opus": opus_fixtures}
+          "gif": gif_fixtures, "opus": opus_fixtures, "aac": aac_fixtures}
 TOOLS = {"flac": ("flac", "ffmpeg"), "vorbis": ("flac", "pkg-config"), "oggflac": ("flac", "ffmpeg"),
-         "mp3": ("lame", "ffmpeg"), "gif": ("magick",), "opus": ("ffmpeg",)}
+         "mp3": ("lame", "ffmpeg"), "gif": ("magick",), "opus": ("ffmpeg",), "aac": ("ffmpeg",)}
 
 
 def main():

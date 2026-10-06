@@ -3,3 +3,4 @@ usr/lib/codecs/vorbis.so
 usr/lib/codecs/wav.so
 usr/lib/codecs/mp3.so
 usr/lib/codecs/opus.so
+usr/lib/codecs/aac.so

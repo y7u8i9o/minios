@@ -15,7 +15,7 @@ struct vb_state {
     int headers;                        /* header packets read of the current stream */
     unsigned channels, rate;            /* of the first stream, which later chains must match */
     unsigned maxblock;
-    struct vb_mdct mdct[2];
+    struct codec_mdct mdct[2];
     unsigned mdct_size[2];
     float *ramp[2];                     /* the rising slope of a short and a long window */
     float **coeff, **pcm, **prev;       /* per channel */
@@ -72,7 +72,7 @@ static void free_buffers(struct vb_state *s)
     s->curve = s->scratch = NULL;
     s->ramp[0] = s->ramp[1] = NULL;
     for (int i = 0; i < 2; i++)
-        vb_mdct_free(&s->mdct[i]);
+        codec_mdct_free(&s->mdct[i]);
     s->maxblock = 0;
 }
 
@@ -107,7 +107,7 @@ static int alloc_buffers(struct vb_state *s)
     for (int b = 0; b < 2; b++) {
         unsigned n = s->setup.blocksize[b], ramp = n / 2;
         s->mdct_size[b] = n;
-        if (vb_mdct_init(&s->mdct[b], n) < 0)
+        if (codec_mdct_init(&s->mdct[b], n) < 0)
             return -ENOMEM;
         s->ramp[b] = malloc(sizeof *s->ramp[b] * ramp);
         if (!s->ramp[b])
@@ -214,7 +214,7 @@ static long audio_packet(struct vb_state *s, const uint8_t *data, size_t len)
         vb_floor_render(f, &s->floor_data[c], blockflag, n, s->curve);
         for (unsigned j = 0; j < half; j++)
             s->coeff[c][j] *= s->curve[j];
-        vb_imdct(&s->mdct[blockflag], s->coeff[c], s->pcm[c]);
+        codec_imdct(&s->mdct[blockflag], s->coeff[c], s->pcm[c]);
         vb_window(s->ramp, su->blocksize, s->pcm[c], n, blockflag, prevflag, nextflag);
     }
 

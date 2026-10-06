@@ -121,24 +121,11 @@ int vb_floor0_maps(struct vb_floor0 *f, const unsigned blocksize[2]);
 void vb_residue_decode(const struct vb_setup *s, const struct vb_residue *res, struct vb_reader *r, float **ch,
                        const int *skip, unsigned nch, unsigned n, float *scratch);
 
-/* The inverse MDCT of n/2 coefficients into n samples. */
-struct vb_mdct {
-    unsigned n;
-    float *twiddle, *post;              /* the pre and post rotations */
-    float *fft_cos, *fft_sin;
-    unsigned *bitrev;
-    float *work;
-};
-int vb_mdct_init(struct vb_mdct *m, unsigned n);
-void vb_mdct_free(struct vb_mdct *m);
-void vb_imdct(const struct vb_mdct *m, const float *in, float *out);
-void vb_mdct(const struct vb_mdct *m, const float *in, float *out);    /* n samples to n/2 values */
 /* The rising slope of a window of n/2 samples, and the window of a block
  * of size n with the slopes chosen by the flags of its neighbours. */
 void vb_window_ramp(float *ramp, unsigned n);
 void vb_window(float *const ramp[2], const unsigned blocksize[2], float *v, unsigned n, unsigned blockflag,
                unsigned prevflag, unsigned nextflag);
-void vb_imdct_direct(unsigned n, const float *in, float *out);  /* the definition, for the tests */
 
 /* encode.c */
 long vorbis_encode(const struct codec_audio_format *fmt, const int32_t *samples, long frames, uint8_t **result);

@@ -382,16 +382,18 @@ a book number and the LSP coefficients as vectors, and renders the
 filter curve at the positions of a Bark map, which is computed at setup
 for both block sizes.
 
-`mdct.c` computes the inverse MDCT of a block of size N through a DCT-IV
-of length N/2, which is a complex FFT of length N/4 between a rotation of
-the coefficient pairs and a rotation of the result. The IMDCT reads the
-DCT-IV forwards and backwards with changed signs. The window of a block
-rises and falls with the curve sin(pi/2 sin^2(...)) of the
-specification, and a long block next to a short one uses the short
-slope on that side, centred on its quarter point. The output of a
-packet is the overlap of the previous block, from its centre, with the
-current block, up to its centre, which is N_prev/4 + N/4 samples. The
-first packet of a stream produces no output.
+`codec_imdct` in `src/mdct.c` of `libcodec.so`, which the AAC module
+also uses, computes the inverse MDCT of a block of size N. It does so
+through a DCT-IV of length N/2, which is a complex FFT of length N/4
+between a rotation of the coefficient pairs and a rotation of the
+result. The IMDCT reads the DCT-IV forwards and backwards with changed
+signs. `window.c` of the module computes the windows. The window of a
+block rises and falls along the curve sin(pi/2 sin^2(...)) of the
+specification. A long block next to a short one uses the short slope on
+that side, centred on its quarter point. The output of a packet is the
+overlap of the previous block, from its centre, with the current block,
+up to its centre, which is N_prev/4 + N/4 samples. The first packet of a
+stream produces no output.
 
 The granule positions trim the start and the end of every stream. The
 decoder retains the output of a stream until the first page with a granule
@@ -450,19 +452,19 @@ The granule position of a packet is the centre of its block, limited to
 the length of the input, which makes the decoder return exactly the
 input length without trimming at the start.
 
-Each block is windowed with the window of the decoder (`vb_window`),
-transformed by the forward MDCT (`vb_mdct` in `mdct.c`, which folds the
-samples into the DCT-IV used by the inverse transform) and scaled by
-4/N, the factor at which the overlap and add of the decoder restores the
-input. The floor is a masking estimate. For a band around each floor
-position, the largest magnitude is lowered by a signal-to-noise ratio of
-12 + 36 * quality dB. A band whose power is spectrally flat, which marks
-noise, needs up to 18 dB less, and above 8 kHz the ratio falls by up to
-6 dB. Both allowances shrink with rising quality and vanish at 1.0. The
-estimate never falls below the absolute threshold of hearing in
-Terhardt's approximation, with full scale taken as 96 dB SPL, lowered by
-up to 30 dB at the highest quality and capped at 90 - 70 * quality dB
-SPL.
+The encoder windows each block with the window of the decoder (`vb_window`) and
+transforms it with the forward MDCT. The forward MDCT is `codec_mdct` in
+`libcodec.so`, which folds the samples into the DCT-IV that the inverse
+transform also uses. The coefficients are then scaled by 4/N, the factor with
+which the overlap and add of the decoder restores the input. The floor is a
+masking estimate. For a band around each floor position, the largest magnitude
+is lowered by a signal-to-noise ratio of 12 + 36 * quality dB. A band whose
+power is spectrally flat, which marks noise, needs up to 18 dB less, and above
+8 kHz the ratio falls by up to 6 dB. Both allowances shrink with rising quality
+and vanish at 1.0. The estimate never falls below the absolute threshold of
+hearing in Terhardt's approximation, with full scale taken as 96 dB SPL,
+lowered by up to 30 dB at the highest quality and capped at 90 - 70 * quality
+dB SPL.
 
 Floor 1 has 16 positions for short blocks and 60 for long ones, spaced
 geometrically and coded in an order that halves the intervals, which
@@ -731,6 +733,69 @@ the tag has the lowest bit rate whose frame has room for the tag. shine writes
 the last frame without the bytes after its data, and the encoder
 completes it with zero bytes to the length that its header gives.
 
+## AAC
+
+`aac.so` (S4 of `docs/plan/release-0.7.0.md`) decodes AAC-LC audio
+(ISO/IEC 14496-3) from two containers. The decoder was written for
+minios.
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `aac.so` | `aac`, `audio/aac audio/aacp`, `.aac .adts` | decode | two consecutive ADTS headers, 90; one header, 60 |
+| `aac.so` | `m4a`, `audio/mp4 audio/x-m4a`, `.m4a .m4b .mp4` | decode | an `ftyp` box with the brand `M4A `, `M4B ` or `M4P `, 90; any other `ftyp` box, 40 |
+
+The module consists of the files listed in `modules/aac/aac.h`:
+
+- `tables.c` contains the normative tables of the standard: the Huffman
+  codebooks for scale factors and spectral data, the scale factor band
+  offsets for each sample rate, and the TNS band limits.
+  `tools/gen_aac_tables.py` extracts them from `libavcodec/aactab.c` in
+  FFmpeg 7.1, as the owner decided on 2026-10-06. The script checks the
+  size of every table and verifies that every codebook is a complete
+  prefix code. The generated file is committed, so the build does not
+  need FFmpeg.
+- `huffman.c` builds a binary decoding tree for each codebook, because
+  the AAC codebooks are not canonical.
+- `config.c` parses the AudioSpecificConfig of MP4 files and the program
+  configuration elements. It also defines the channel elements and
+  speaker positions of channel configurations 1 to 7.
+- `decode.c` decodes one raw data block. It reads the single channel,
+  channel pair and LFE elements, including their section data, scale
+  factors, pulse data, TNS data and spectral data. It then applies the
+  pulses, inverse quantisation, perceptual noise substitution, M/S
+  stereo, intensity stereo and TNS. Data stream and fill elements are
+  skipped, so any SBR data is ignored.
+- `filterbank.c` computes the inverse MDCT of the long window or of the
+  eight short windows. It applies the sine or KBD window shapes of the
+  four window sequences and overlaps the result with the previous frame.
+  The transform is `codec_mdct` from `libcodec.so`, which the Vorbis
+  module also uses. It moved there from the Vorbis module in this
+  milestone.
+- `container.c` locates the frames. In ADTS files, it follows the frame
+  headers after an optional ID3v2 tag. In MP4 files, it selects the
+  first audio track with an `mp4a` sample entry and reads the decoder
+  configuration from the `esds` box, which may also be inside a
+  QuickTime `wave` box. It computes the offset and size of every frame
+  from the boxes `stsz`, `stsc` and `stco` or `co64`. It accepts the
+  object type indications 0x40 (MPEG-4 audio) and 0x67 (MPEG-2 AAC-LC).
+- `module.c` registers the two codecs and converts the samples to the
+  32-bit format of libcodec in WAV channel order.
+
+Each frame decodes to 1024 samples per channel. The module does not
+apply the edit list of an MP4 file, so a file decodes to all of its
+frames, including the encoder delay at the start. FFmpeg's encoder adds
+1024 samples of delay. HE-AAC streams are decoded at the sample rate of
+their AAC-LC core, and their SBR data is skipped. The module refuses
+coupling channel elements, gain control, the prediction tools of the
+Main and LTP profiles, and 960-sample frames. In ADTS files it also
+refuses channel configuration 0, in which each frame carries its own
+program configuration element, and frames that contain several raw
+data blocks together with a CRC.
+
+Via LA licenses patents on AAC. Section 6 of the roadmap requires a
+check of the patent situation before the module becomes part of a
+release.
+
 ## Opus
 
 `opus.so` (S3 of `docs/plan/release-0.7.0.md`) decodes Opus audio in Ogg
@@ -978,6 +1043,25 @@ They may differ from the reference by at most one 16-bit step, because
 the two programs round the floating-point output differently. The test
 also checks the lookups by MIME type and extension, a damaged page and a
 cut file.
+
+With the argument `aac`, which the boot test `codec_aac` uses, the
+program decodes seven fixtures that `tools/gen_codec_fixtures.py aac`
+creates with FFmpeg's AAC encoder:
+
+- stereo and mono music in ADTS,
+- transients that make the encoder use short windows,
+- TNS and intensity stereo,
+- a 5.1 file,
+- a file with noise substitution,
+- two MP4 files, one of which places its `moov` box before the media
+  data.
+
+FFmpeg decodes each file into a 16-bit FLAC reference and ignores the
+MP4 edit list. The decoded samples must have the same length as the
+reference and may differ from it by at most one 16-bit step. The test
+also checks the lookups, a damaged ADTS header and a cut file. FFmpeg's
+encoder never writes pulse data, so the fixtures do not cover that part
+of the decoder.
 
 The host test of `make check-libcodec` contains the same checks of the
 fixtures, a GIF of more than 256 colours whose median cut must reach
