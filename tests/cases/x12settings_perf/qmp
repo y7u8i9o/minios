@@ -1,0 +1,4 @@
+# The Performance page after the animation, for a visual check
+# (X2 of docs/plan/x12settings.md).
+wait x12settings_perf: page shown
+screendump perf.ppm

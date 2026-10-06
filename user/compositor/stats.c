@@ -42,6 +42,17 @@ static struct {
 } st;
 
 static long frame_flush_us;             /* flush time of the frame being composed */
+static long frame_pixels;               /* composed device pixels of the frame being composed */
+
+/* The last HISTORY_FRAMES frames for x12settings (debug version 3). A
+ * reset of the statistics does not clear them. history_serial is the
+ * serial of the newest frame, 0 before the first one. */
+#define HISTORY_FRAMES 1024
+struct frame_record {
+    uint32_t serial, end_ms, total_us, compose_us, flush_us, pixels, latency_us;
+};
+static struct frame_record history[HISTORY_FRAMES];
+static uint32_t history_serial;
 static uint64_t pool_bytes;             /* bytes of the mapped client pools */
 
 static long cpu_us(void)
@@ -80,6 +91,7 @@ void stats_mark(enum stats_event e)
 long stats_frame_begin(void)
 {
     frame_flush_us = 0;
+    frame_pixels = 0;
     return uptime_us();
 }
 
@@ -87,6 +99,7 @@ void stats_rect(long device_pixels)
 {
     st.rects++;
     st.pixels += (uint64_t)device_pixels;
+    frame_pixels += device_pixels;
 }
 
 void stats_flush(long rects, long bytes, long us)
@@ -116,17 +129,19 @@ static uint64_t bucket_value(int b)
     return low + ((uint64_t)1 << (e - 3)) / 2;
 }
 
-/* The pending event of l is presented at now. */
-static void latency_end(struct latency *l, long now)
+/* The pending event of l is presented at now. Returns the latency, 0
+ * without a pending event. */
+static uint64_t latency_end(struct latency *l, long now)
 {
     if (!l->since)
-        return;
+        return 0;
     uint64_t v = (uint64_t)(now - l->since);
     l->sum += v;
     l->count++;
     if (v > l->max)
         l->max = v;
     l->since = 0;
+    return v;
 }
 
 void stats_cursor_move(long t0)
@@ -152,8 +167,15 @@ long stats_frame_end(long t0)
     if (total > st.frame_max_us)
         st.frame_max_us = total;
     st.hist[bucket_of(total)]++;
-    for (int i = 0; i < STATS_EVENTS; i++)
-        latency_end(&st.latency[i], now);
+    uint64_t latency = 0;
+    for (int i = 0; i < STATS_EVENTS; i++) {
+        uint64_t v = latency_end(&st.latency[i], now);
+        if (v > latency)
+            latency = v;
+    }
+    struct frame_record *r = &history[history_serial % HISTORY_FRAMES];
+    *r = (struct frame_record){ ++history_serial, (uint32_t)(now / 1000), (uint32_t)total, (uint32_t)compose,
+                                (uint32_t)flush, (uint32_t)frame_pixels, (uint32_t)latency };
     return (long)total;
 }
 
@@ -224,6 +246,18 @@ void stats_send(struct wire_resource *r)
     for (size_t i = 0; i < sizeof values / sizeof values[0]; i++)
         debug_send_frame_stat(r, values[i].key, (uint32_t)(values[i].value >> 32), (uint32_t)values[i].value);
     debug_send_frame_stats_done(r);
+}
+
+void stats_send_history(struct wire_resource *r, uint32_t after)
+{
+    uint32_t first = history_serial >= HISTORY_FRAMES ? history_serial - HISTORY_FRAMES + 1 : 1;
+    if (after + 1 > first)
+        first = after + 1;
+    for (uint32_t s = first; s && s <= history_serial; s++) {
+        const struct frame_record *f = &history[(s - 1) % HISTORY_FRAMES];
+        debug_send_frame(r, f->serial, f->end_ms, f->total_us, f->compose_us, f->flush_us, f->pixels, f->latency_us);
+    }
+    debug_send_frame_history_done(r, history_serial);
 }
 
 void stats_log(void)

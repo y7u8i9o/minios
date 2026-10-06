@@ -46,7 +46,8 @@ adds the copy and move actions (`dnd.md`).
 `protocol/debug.xml` contains the `debug`, `tracer`, `settings` and
 `screencopy` interfaces of the debugging tools and of `screenshot`
 (`tools.md`, `images.md`). The `debug` interface of version 2 adds the
-frame statistics (`graphics-performance.md`). `gui_bind_global` treats a
+frame statistics (`graphics-performance.md`), and version 3 the frame
+history (`x12settings.md`). `gui_bind_global` treats a
 global whose advertised version is lower than the requested one as
 missing, because a bind above the advertised version ends the connection.
 Requests marked `type="destructor"` destroy their object; the server

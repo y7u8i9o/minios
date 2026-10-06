@@ -5,8 +5,15 @@
        get_frame_stats sends one frame_stat event per value, then
        frame_stats_done. A value has 64 bits, sent as its high and its low
        half. reset_frame_stats sets the counters to zero and starts the
-       period that elapsed_us measures. -->
-  <interface name="debug" version="2">
+       period that elapsed_us measures.
+       Version 3 adds the frame history (X2 of docs/plan/x12settings.md).
+       X12 records the last 1024 frames. get_frame_history sends one frame
+       event per recorded frame with a serial above after, oldest first,
+       then frame_history_done with the serial of the newest frame. The
+       serials count the frames since the start of X12, from 1, and a
+       reset of the statistics does not clear the history. latency_us is
+       the longest latency that the frame ended. -->
+  <interface name="debug" version="3">
     <request name="get_stats"/>
     <request name="get_surfaces"/>
     <request name="read_pixel"><arg name="x" type="int"/><arg name="y" type="int"/></request>
@@ -28,6 +35,13 @@
       <arg name="key" type="string"/><arg name="high" type="uint"/><arg name="low" type="uint"/>
     </event>
     <event name="frame_stats_done"/>
+    <request name="get_frame_history"><arg name="after" type="uint"/></request>
+    <event name="frame">
+      <arg name="serial" type="uint"/><arg name="end_ms" type="uint"/><arg name="total_us" type="uint"/>
+      <arg name="compose_us" type="uint"/><arg name="flush_us" type="uint"/><arg name="pixels" type="uint"/>
+      <arg name="latency_us" type="uint"/>
+    </event>
+    <event name="frame_history_done"><arg name="last" type="uint"/></event>
   </interface>
 
   <!-- The protocol traffic of every other client (wireview). start sends

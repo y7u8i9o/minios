@@ -247,7 +247,9 @@ framebuffer and the compositor's log.
   counters, times in microseconds and latencies of the frames since the
   last reset, sent by the `debug` interface of version 2 and printed by
   `compstat` (`graphics-performance.md`). Tests: `comp_bench`,
-  `comp_bench_hidpi`.
+  `comp_bench_hidpi`. Since version 3 the module also records the last
+  1024 frames for `x12settings` and `compstat -h` (`x12settings.md`).
+  Test: `x12settings_perf`.
 
 ## Panel popups and session survival
 

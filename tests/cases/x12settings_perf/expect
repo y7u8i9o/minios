@@ -1,0 +1,5 @@
+compstat: frame [0-9]+ end_ms=[0-9]+ total_us=[0-9]+ compose_us=[0-9]+ flush_us=[0-9]+ pixels=[0-9]+ latency_us=[0-9]+
+compstat: history of ([1-9][0-9]+) frames, the newest [0-9]+
+x12settings: second of [0-9]+ frames, frame time [0-9]+ us average
+x12settings_perf: ok
+TEST PASS

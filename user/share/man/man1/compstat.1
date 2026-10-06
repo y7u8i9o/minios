@@ -5,6 +5,7 @@ NAME
 
 SYNOPSIS
     compstat [-r] [-p]
+    compstat -h
 
 DESCRIPTION
     compstat reads the frame statistics of the display server X12
@@ -43,6 +44,11 @@ DESCRIPTION
 OPTIONS
     -r    reset the statistics instead of printing them
     -p    with -r, print the statistics before the reset
+    -h    print the recorded frames of X12, the last 1024 at most,
+          one per line: serial, end time in milliseconds since boot,
+          frame, compose and flush time, composed device pixels and
+          the longest latency that the frame ended. A last line gives
+          their number. A reset does not clear the record.
 
 EXAMPLES
     compstat

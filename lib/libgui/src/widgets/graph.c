@@ -65,19 +65,26 @@ static int heading_height(const struct painter *p)
 }
 
 /* The title on the left, and the value or the legend on the right. A
- * legend item is a colour square and the label of a series. */
+ * legend item is a colour square and the label of a series. Items that
+ * do not fit beside the title are left out, from the first series on. */
 static void paint_heading(struct graph *g, struct painter *p, int width)
 {
     const struct theme *t = p->theme;
     painter_text(p, 0, 0, g->title, t->color[TC_TEXT]);
+    int left = g->title[0] ? painter_text_width(p, g->title, -1) + 16 : 0;
     if (g->value[0]) {
-        painter_text(p, width - painter_text_width(p, g->value, -1), 0, g->value, t->color[TC_TEXT_DISABLED]);
+        int x = width - painter_text_width(p, g->value, -1);
+        if (x >= left)
+            painter_text(p, x, 0, g->value, t->color[TC_TEXT_DISABLED]);
         return;
     }
     int th = painter_text_height(p), box = th / 2, right = width;
     for (int s = g->nseries - 1; s >= 0; s--) {
         if (!g->series[s].label[0])
             continue;
+        int item = painter_text_width(p, g->series[s].label, -1) + (g->series[s].style != GRAPH_TEXT ? box + 5 : 0);
+        if (right - item < left)
+            break;
         right -= painter_text_width(p, g->series[s].label, -1);
         painter_text(p, right, 0, g->series[s].label, t->color[TC_TEXT_DISABLED]);
         if (g->series[s].style != GRAPH_TEXT) {

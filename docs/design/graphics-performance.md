@@ -60,8 +60,9 @@ the high and low half of the 64 bit value for each key, then
 `frame_stats_done`. `reset_frame_stats` sets everything to zero. The
 command `compstat` prints the values on one line as `key=value` pairs,
 `compstat -r` resets them, and `compstat -r -p` prints and then resets
-them. x12settings shows the frame time, the flush time, the latencies
-and the pixel memory on its Status tab. X12 logs `slow frame: N us` for
+them. Since X2 of `docs/plan/x12settings.md`, x12settings shows every
+value and graphs of the last minute on its Performance page
+(`x12settings.md`). X12 logs `slow frame: N us` for
 a frame over 20 ms and the summary `frame stats` at exit.
 
 ## Statistics of libgui

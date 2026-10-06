@@ -235,6 +235,8 @@ void stats_cursor_move(long t0);                /* a device cursor move that sta
 void stats_pool_mapped(long delta);             /* bytes of client pools mapped or unmapped */
 void stats_values(long *count, long *ms, long *max);
 void stats_send(struct wire_resource *r);
+/* The frame events of the frames after the serial after (debug version 3). */
+void stats_send_history(struct wire_resource *r, uint32_t after);
 void stats_log(void);
 void seat_repeat_changed(void);                 /* seat.c */
 void seat_tick(long now);

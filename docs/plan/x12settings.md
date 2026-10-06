@@ -1,6 +1,6 @@
 # x12settings: inspection and settings of the running X12
 
-`x12settings` (`user/apps/compsettings.c`) changes the running display
+`x12settings` (until X2 `user/apps/compsettings.c`, since then `user/x12settings/`) changes the running display
 server and shows its state. Before this plan it had four tabs: twelve
 status values, a table of surfaces, six of the fifteen setting keys and
 a pixel reader. This plan turns it into a full inspection tool. Each
@@ -73,7 +73,7 @@ unchanged.
 Document: `docs/design/x12settings.md` (new), `docs/design/libc.md`,
 `docs/design/framework.md`.
 
-### X2. The Performance page (about 650 lines)
+### X2. The Performance page (completed 2026-10-06)
 
 Built: a ring of the last 1024 frames in `user/compositor/stats.c`
 (serial, end time, frame time, compose time, flush time, composed
@@ -85,6 +85,16 @@ over the last minute, a table of every statistic, and a reset button.
 Tests: the case `x12settings_perf` makes 20 commits with `comptest`
 and requires 20 history entries from `compstat -h`, then opens the page
 and checks that the frame time graph has drawn a line.
+
+Result: `comptest damage` makes 10 commits with damage and 10 with a
+frame callback only. The second 10 compose no frame, so the case
+requires at least 10 history entries. A pixel count cannot distinguish
+a graph of measured frames from a graph of zeros, because both draw a
+line. The case therefore checks the line that the page prints for a
+second with frames. The host test of the graph widget checks the
+drawing, and the qmp script takes a screendump of the page for a
+visual check. The program moved from `user/apps/compsettings.c` to
+`user/x12settings/` with one file per page.
 
 ### X3. Clients and surfaces (about 1000 lines)
 

@@ -14,6 +14,7 @@ struct debug_impl {
     void (*read_pixel)(struct wire_client *client, struct wire_resource *self, int32_t x, int32_t y);
     void (*get_frame_stats)(struct wire_client *client, struct wire_resource *self);
     void (*reset_frame_stats)(struct wire_client *client, struct wire_resource *self);
+    void (*get_frame_history)(struct wire_client *client, struct wire_resource *self, uint32_t after);
 };
 void debug_send_stats(struct wire_resource *debug, uint32_t uptime_ms, uint32_t compositions, uint32_t compose_ms, uint32_t compose_max_ms, uint32_t clients, uint32_t surfaces, uint32_t frame_ms);
 void debug_send_surface(struct wire_resource *debug, uint32_t id, uint32_t client, const char * role, const char * title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped, uint32_t format);
@@ -21,6 +22,8 @@ void debug_send_surfaces_done(struct wire_resource *debug);
 void debug_send_pixel(struct wire_resource *debug, int32_t x, int32_t y, uint32_t value);
 void debug_send_frame_stat(struct wire_resource *debug, const char * key, uint32_t high, uint32_t low);
 void debug_send_frame_stats_done(struct wire_resource *debug);
+void debug_send_frame(struct wire_resource *debug, uint32_t serial, uint32_t end_ms, uint32_t total_us, uint32_t compose_us, uint32_t flush_us, uint32_t pixels, uint32_t latency_us);
+void debug_send_frame_history_done(struct wire_resource *debug, uint32_t last);
 
 struct tracer_impl {
     void (*start)(struct wire_client *client, struct wire_resource *self);

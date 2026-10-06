@@ -61,6 +61,26 @@ void debug_send_frame_stats_done(struct wire_resource *debug)
     wire_resource_post(debug, 5, args);
 }
 
+void debug_send_frame(struct wire_resource *debug, uint32_t serial, uint32_t end_ms, uint32_t total_us, uint32_t compose_us, uint32_t flush_us, uint32_t pixels, uint32_t latency_us)
+{
+    union wire_arg args[7] = { { 0 } };
+    args[0].u = serial;
+    args[1].u = end_ms;
+    args[2].u = total_us;
+    args[3].u = compose_us;
+    args[4].u = flush_us;
+    args[5].u = pixels;
+    args[6].u = latency_us;
+    wire_resource_post(debug, 6, args);
+}
+
+void debug_send_frame_history_done(struct wire_resource *debug, uint32_t last)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = last;
+    wire_resource_post(debug, 7, args);
+}
+
 void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected)
 {
     union wire_arg args[3] = { { 0 } };

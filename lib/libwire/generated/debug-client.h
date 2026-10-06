@@ -15,6 +15,8 @@ struct debug_listener {
     void (*pixel)(void *user, struct wire_proxy *self, int32_t x, int32_t y, uint32_t value);
     void (*frame_stat)(void *user, struct wire_proxy *self, const char * key, uint32_t high, uint32_t low);
     void (*frame_stats_done)(void *user, struct wire_proxy *self);
+    void (*frame)(void *user, struct wire_proxy *self, uint32_t serial, uint32_t end_ms, uint32_t total_us, uint32_t compose_us, uint32_t flush_us, uint32_t pixels, uint32_t latency_us);
+    void (*frame_history_done)(void *user, struct wire_proxy *self, uint32_t last);
 };
 static inline int debug_add_listener(struct wire_proxy *p, const struct debug_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
@@ -23,6 +25,7 @@ void debug_get_surfaces(struct wire_proxy *debug);
 void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y);
 void debug_get_frame_stats(struct wire_proxy *debug);
 void debug_reset_frame_stats(struct wire_proxy *debug);
+void debug_get_frame_history(struct wire_proxy *debug, uint32_t after);
 
 struct tracer_listener {
     void (*client)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t connected);

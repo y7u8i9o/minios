@@ -63,8 +63,13 @@ static void h_reset_frame_stats(struct wire_client *c, struct wire_resource *sel
 {
     stats_reset();
 }
+static void h_get_frame_history(struct wire_client *c, struct wire_resource *self, uint32_t after)
+{
+    stats_send_history(self, after);
+}
+
 static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel, h_get_frame_stats,
-                                                  h_reset_frame_stats };
+                                                  h_reset_frame_stats, h_get_frame_history };
 
 static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
@@ -268,7 +273,7 @@ static void bind_settings(struct wire_client *c, void *data, uint32_t version, u
 void debug_init(struct wire_server *srv)
 {
     server = srv;
-    wire_global_create(srv, &debug_interface, 2, bind_debug, NULL);
+    wire_global_create(srv, &debug_interface, 3, bind_debug, NULL);
     wire_global_create(srv, &settings_interface, 1, bind_settings, NULL);
     wire_global_create(srv, &screencopy_interface, 1, bind_screencopy, NULL);
 }

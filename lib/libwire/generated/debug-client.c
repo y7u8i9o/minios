@@ -34,6 +34,13 @@ void debug_reset_frame_stats(struct wire_proxy *debug)
     wire_proxy_marshal(debug, 4, args, NULL);
 }
 
+void debug_get_frame_history(struct wire_proxy *debug, uint32_t after)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = after;
+    wire_proxy_marshal(debug, 5, args, NULL);
+}
+
 void tracer_start(struct wire_proxy *tracer)
 {
     union wire_arg args[1] = { { 0 } };

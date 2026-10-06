@@ -696,11 +696,6 @@ $(ROOT)/usr/bin/x12: compositor/*.c $(SOS) $(CRT0)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/x12.elf $@
 
-$(ROOT)/usr/bin/x12settings: apps/compsettings.c $(SOS) $(CRT0)
-	@mkdir -p $(dir $@) $(OUT)
-	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12settings.elf $(ULDFLAGS) $(CRT0) $< $(DYNLIBS) -lgcc
-	$(OBJCOPY) --strip-debug $(OUT)/x12settings.elf $@
-
 # This program is named explicitly to make the generated block table a
 # prerequisite, because the generic rule below tracks only the .c file.
 $(APPBIN)/unicode: apps/unicode.c apps/unicode_blocks.h $(SOS) $(CRT0)
