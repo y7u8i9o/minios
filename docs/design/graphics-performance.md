@@ -411,3 +411,56 @@ runs at the arrival of the input event, at any time within a tick.
 QEMU draws the device cursor in its display window. Its screendump does
 not contain the cursor, so `comp_cursor` checks the cursor that
 `/dev/fb0` recorded.
+
+## Summary of G1 to G9 (2026-10-06)
+
+The baseline is the G1 run. The final values are the range of two runs
+of `comp_bench` and `comp_bench_hidpi` on the code after G9. The cases
+run in parallel QEMU instances under TCG, so times vary by up to a
+factor of two between runs. Counters such as frames, composed pixels
+and wakeups do not vary.
+
+2560x1600 at scale 2:
+
+| scenario and value | baseline | after G9 |
+|---|---|---|
+| drag: compose ms, flush ms | 520.2, 198.5 | 264 to 266, 36 to 38 |
+| drag: frame p50 ms, p95 ms | 9.7, 13.8 | 4.9, 5.4 |
+| pointer: frames, compose and flush ms | 400, 183.7 | 0, 0 |
+| pointer: input latency ms, wakeups | 8.2, 1166 | 0.04 to 0.07, 430 |
+| resize: frames, compose ms, flush ms | 100, 296.2, 130.5 | 40, 188 to 227, 42 to 51 |
+| resize: commit latency ms, wakeups | 17.2, 996 | 7.9, 199 to 205 |
+| blink: composed device pixels | 38.1 million | 3200 |
+| blink: compose ms, flush ms, frame p50 ms | 204.5, 86.5, 14.8 | 1.5 to 2.0, 5.3 to 6.0, 0.3 to 0.4 |
+| blink: commit latency ms, wakeups | 23.3, 168 | 0.4 to 0.5, 26 |
+| anim: frames of 60, frame p50 ms | 51, 9.7 | 59, 3.2 to 3.5 |
+| anim: compose ms, flush ms | 361.1, 134.4 | 152 to 185, 36 to 40 |
+| anim: client copy ms | 267.2 | 81 to 110 |
+| idle: wakeups in 2.3 s, in 5 s with one window | 148, about 320 | 6, 17 to 19 |
+| resident size: X12, compbench | 47 MiB, 23 MiB | 31.6 MiB, 15.6 MiB |
+
+1280x800 at scale 1:
+
+| scenario and value | baseline | after G9 |
+|---|---|---|
+| drag: compose ms, flush ms, frame p50 ms | 149.6, 69.3, 2.9 | 75 to 76, 15 to 19, 1.3 to 1.5 |
+| pointer: frames, compose and flush ms, input latency ms | 400, 172.7, 8.4 | 0, 0, below 0.1 |
+| resize: frames, compose ms, flush ms | 100, 86.8, 46.4 | 40, 61 to 82, 18 to 20 |
+| blink: compose ms, flush ms, commit latency ms | 52.8, 22.3, 13.6 | 1.5 to 1.7, 5.3 to 5.8, 0.4 to 0.5 |
+| anim: compose ms, flush ms, client copy ms | 130.4, 50.6, 86.8 | 45 to 101, 17 to 23, 25 to 44 |
+
+Values that did not improve:
+
+- The commit latency of `anim` remains 13.6 ms. The client commits every
+  16 ms, and the frame clock starts a frame at most every `frame_ms`
+  (16 ms) after the previous one. A commit therefore waits for the next
+  frame time.
+- The client copy of `blink` lies between 5.0 and 13.9 ms, against 11.8
+  ms before. Almost all of it is one copy of the window contents, when
+  the window paints into its second slot for the first time. The later
+  frames copy 160 device pixels each.
+- Since G9 the input latency of `drag` ends at the move of the device
+  cursor. The window follows the pointer with the frames, which the
+  drag rows show.
+- The tick based CPU time of X12 is not comparable between the runs
+  (see G9).
