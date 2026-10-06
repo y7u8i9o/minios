@@ -30,6 +30,7 @@ its boot tests pass.
 | `release-0.5.0.md` | Release 0.5.0: `#!` scripts, NVMe, AHCI with CD drives, USB mass storage and hubs, ISO 9660, the live medium, milestones R1 to R6 | completed 2026-10-05 |
 | `release-0.6.0.md` | Release 0.6.0: ACPI power and power button, NTP, the desktop size from the window, the memory balloon, host folders through virtio-9p, milestones V1 to V5 | completed 2026-10-06 |
 | `desktop-panel.md` | The new panel (icons, calendar, power menu, show desktop, top or bottom) and the wallpaper at device resolution, milestones B1 to B6 | completed 2026-10-06 |
+| `compositor-performance.md` | Measurement, faster string functions, SIMD pixel module, batched flushes, client damage, timing model, decoration tables, libgui without the private surface, hardware cursor, milestones G1 to G9 | proposed 2026-10-06 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 
 Work proceeds one milestone at a time in the order of its plan. A later
