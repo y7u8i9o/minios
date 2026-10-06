@@ -64,7 +64,7 @@ static void ensure_visible(struct listview *l)
         l->scroll = l->w.value - rows + 1;
 }
 
-static void select(struct listview *l, int idx, const char *signal)
+static void select_row(struct listview *l, int idx, const char *signal)
 {
     if (idx < 0 || idx >= l->nitems)
         return;
@@ -99,7 +99,7 @@ static int listview_event(struct widget *w, struct event *e)
         }
         int idx = l->scroll + (e->y - 1) / lh;
         if (idx >= 0 && idx < l->nitems)
-            select(l, idx, "selected");
+            select_row(l, idx, "selected");
         return 1;
     }
     case EV_MOUSE_WHEEL:
@@ -108,15 +108,15 @@ static int listview_event(struct widget *w, struct event *e)
         return 1;
     case EV_KEY_DOWN:
         switch (e->code) {
-        case KEY_UP: select(l, w->value - 1, "selected"); return 1;
-        case KEY_DOWN: select(l, w->value + 1, "selected"); return 1;
-        case KEY_PAGEUP: select(l, w->value - rows < 0 ? 0 : w->value - rows, "selected"); return 1;
-        case KEY_PAGEDOWN: select(l, w->value + rows >= l->nitems ? l->nitems - 1 : w->value + rows, "selected"); return 1;
-        case KEY_HOME: select(l, 0, "selected"); return 1;
-        case KEY_END: select(l, l->nitems - 1, "selected"); return 1;
+        case KEY_UP: select_row(l, w->value - 1, "selected"); return 1;
+        case KEY_DOWN: select_row(l, w->value + 1, "selected"); return 1;
+        case KEY_PAGEUP: select_row(l, w->value - rows < 0 ? 0 : w->value - rows, "selected"); return 1;
+        case KEY_PAGEDOWN: select_row(l, w->value + rows >= l->nitems ? l->nitems - 1 : w->value + rows, "selected"); return 1;
+        case KEY_HOME: select_row(l, 0, "selected"); return 1;
+        case KEY_END: select_row(l, l->nitems - 1, "selected"); return 1;
         }
         if (e->ch == '\n' && w->value >= 0) {
-            select(l, w->value, "activate");
+            select_row(l, w->value, "activate");
             return 1;
         }
         return 0;

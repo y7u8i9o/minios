@@ -16,13 +16,9 @@ UCPP  := -Iinclude -I../libc/include -I../../kernel/include
 # become $(BUILD)/lib/codecs/NAME.so, installed in /usr/lib/codecs.
 MODULES := $(notdir $(wildcard modules/*))
 MODSOS  := $(addprefix $(BUILD)/lib/codecs/,$(addsuffix .so,$(MODULES)))
-# A module can also contain third-party sources. MODULE_SRCS_NAME lists
-# them, and MODULE_CPP_NAME contains the preprocessor flags that the
-# third-party sources and the module's own files both need. The objects of
-# a third-party source tree go under $(OUT)/third_party.
-OPUS_DIR := ../../third_party/opus
-MODULE_SRCS_opus := $(wildcard $(OPUS_DIR)/celt/*.c $(OPUS_DIR)/silk/*.c $(OPUS_DIR)/src/*.c)
-MODULE_CPP_opus  := -DOPUS_BUILD -DVAR_ARRAYS -I$(OPUS_DIR)/include -I$(OPUS_DIR)/celt -I$(OPUS_DIR)/silk
+# The third-party sources of the modules (modules.mk), which the host
+# tests of libgui use as well.
+include modules.mk
 third_party_obj = $(patsubst ../../third_party/%.c,$(OUT)/third_party/%.o,$(1))
 MODOBJS := $(patsubst %.c,$(OUT)/%.o,$(wildcard modules/*/*.c)) \
            $(foreach m,$(MODULES),$(call third_party_obj,$(MODULE_SRCS_$(m))))

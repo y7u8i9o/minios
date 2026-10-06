@@ -14,3 +14,10 @@ size_t gui_host_strlcpy(char *dst, const char *src, size_t size);
  * fake client defines them with gettimeofday. */
 long uptime_ms(void);
 long uptime_us(void);
+
+/* glibc declares FNM_CASEFOLD only for _GNU_SOURCE, which would also
+ * change other declarations of the host headers. The value is the one of
+ * glibc and of the BSDs. */
+#if defined(__linux__) && !defined(FNM_CASEFOLD)
+#define FNM_CASEFOLD (1 << 4)
+#endif

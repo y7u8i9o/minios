@@ -19,14 +19,17 @@ all: $(LIB) $(SO) $(ABIFILE)
 # The host unit tests compile the library, libcodec with its modules
 # (CODEC_BUILTIN) and libfont with the system compiler against a fake
 # client (tests/fake_client.c). The PNG encoder uses the CRC-32 of libc.
-HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c) \
-            $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c) ../libc/src/crc32.c
+# The notification client, like the display client, needs libwire and is
+# left out.
+include ../libcodec/modules.mk
+HOSTSRCS := $(filter-out src/client.c src/notify.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(wildcard tests/*.c) \
+            $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c) $(MODULE_SRCS_opus) ../libc/src/crc32.c
 check: $(OUT)/font.c
 	@mkdir -p $(OUT)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -DPIXEL_EXHAUSTIVE -include tests/host_compat.h -Iinclude \
-	    -I../libcodec/include -I../libfont/include -Itests \
+	    -I../libcodec/include -I../libfont/include -Itests $(MODULE_CPP_opus) \
 	    -idirafter ../../kernel/include -idirafter ../libc/include \
-	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c
+	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c -lm
 	$(OUT)/host/test_framework
 
 # The font is the kernel's, with the array renamed for user space.
