@@ -1,0 +1,4 @@
+pixeltest: forms over (simd|word), mask (simd|word), darken (simd|word)
+pixeltest: over [0-9]+ Mpx/s
+pixeltest: [0-9]+ checks, 0 failures
+TEST PASS

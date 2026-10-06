@@ -339,6 +339,19 @@ aligned and from 5020 to 6759 MB/s at an offset of 4 bytes, and the fill
 from 10126 to 13157 MB/s. On aarch64 with HVF the fill rose from 51 to
 98 GB/s.
 
+## Integer vectors (2026-10-06)
+
+`bits/simd_types.h` gained the integer vector types `simd_u16x8` and
+`simd_u8x16`, and `minios/simd.h` the unaligned `simd_load_u32x4` and
+`simd_store_u32x4` and the attribute `SIMD_WITHIN_PAGE(bytes)`. The pixel
+module of libgui uses them (`graphics-performance.md`).
+`SIMD_WITHIN_PAGE` aligns a function to a power of two above its size,
+so that the function never crosses a page boundary. QEMU under TCG does
+not chain the translated blocks of a loop across a page boundary, which
+made a pixel loop six times slower when the linker happened to place it
+across one. `memmove`, `memset` and the copy loop of `memcpy` carry the
+attribute as well.
+
 ## Microseconds since boot (2026-10-06)
 
 `uptime_us()` in `unistd.h` returns the microseconds of `CLOCK_MONOTONIC`,

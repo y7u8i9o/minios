@@ -151,9 +151,11 @@ static void on_pixel(void *user, struct wire_proxy *p, int32_t x, int32_t y, uin
 
 /* The frame statistics of debug version 2, collected until frame_stats_done. */
 static struct { const char *key; unsigned long long value; } frame_values[] = {
-    { "frame_p50_us" }, { "frame_p95_us" }, { "frame_p99_us" }, { "frame_max_us" }, { "frames" }, { "flush_us" },
-    { "commit_latency_us" }, { "commit_latency_max_us" }, { "input_latency_us" }, { "input_latency_max_us" },
-    { "back_bytes" }, { "pool_bytes" },
+    { "frame_p50_us", 0 }, { "frame_p95_us", 0 }, { "frame_p99_us", 0 }, { "frame_max_us", 0 }, { "frames", 0 },
+    { "flush_us", 0 },
+    { "commit_latency_us", 0 }, { "commit_latency_max_us", 0 }, { "input_latency_us", 0 },
+    { "input_latency_max_us", 0 },
+    { "back_bytes", 0 }, { "pool_bytes", 0 },
 };
 
 static unsigned long long frame_value(const char *key)

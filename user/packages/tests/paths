@@ -46,6 +46,7 @@ usr/bin/nettcpapi
 usr/bin/nettools
 usr/bin/netudpapi
 usr/bin/permtest
+usr/bin/pixeltest
 usr/bin/profreporttest
 usr/bin/proftest
 usr/bin/pthreadtest

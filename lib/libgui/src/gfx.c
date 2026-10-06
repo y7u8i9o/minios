@@ -1,4 +1,5 @@
 #include <gui/gfx.h>
+#include <gui/pixel.h>
 #include <string.h>
 
 struct rect rect_intersect(struct rect a, struct rect b)
@@ -23,6 +24,107 @@ struct rect rect_union(struct rect a, struct rect b)
     int y1 = a.y + a.h > b.y + b.h ? a.y + a.h : b.y + b.h;
     struct rect r = { x0, y0, x1 - x0, y1 - y0 };
     return r;
+}
+
+int rect_subtract(struct rect a, struct rect b, struct rect out[4])
+{
+    struct rect i = rect_intersect(a, b);
+    if (rect_empty(i)) {
+        out[0] = a;
+        return 1;
+    }
+    int n = 0;
+    if (i.y > a.y) out[n++] = (struct rect){ a.x, a.y, a.w, i.y - a.y };
+    if (i.y + i.h < a.y + a.h) out[n++] = (struct rect){ a.x, i.y + i.h, a.w, a.y + a.h - (i.y + i.h) };
+    if (i.x > a.x) out[n++] = (struct rect){ a.x, i.y, i.x - a.x, i.h };
+    if (i.x + i.w < a.x + a.w) out[n++] = (struct rect){ i.x + i.w, i.y, a.x + a.w - (i.x + i.w), i.h };
+    return n;
+}
+
+/* ---- rectangle sets ---- */
+
+void rect_set_clear(struct rect_set *s)
+{
+    s->n = 0;
+}
+
+struct rect rect_set_bounds(const struct rect_set *s)
+{
+    struct rect b = { 0, 0, 0, 0 };
+    for (int i = 0; i < s->n; i++)
+        b = rect_union(b, s->r[i]);
+    return b;
+}
+
+static long area(struct rect r)
+{
+    return rect_empty(r) ? 0 : (long)r.w * r.h;
+}
+
+static void collapse(struct rect_set *s, struct rect extra)
+{
+    struct rect b = rect_union(rect_set_bounds(s), extra);
+    s->n = 1;
+    s->r[0] = b;
+}
+
+/* The pieces of r that no rectangle of the set covers, at most max of
+ * them. Returns their number, or -1 when they do not fit. */
+#define PIECES_MAX (4 * RECT_SET_MAX)
+static int uncovered(const struct rect_set *s, struct rect r, struct rect *pieces)
+{
+    int n = 1;
+    pieces[0] = r;
+    for (int i = 0; i < s->n && n; i++) {
+        struct rect next[PIECES_MAX];
+        int m = 0;
+        for (int k = 0; k < n; k++) {
+            struct rect parts[4];
+            int c = rect_subtract(pieces[k], s->r[i], parts);
+            if (m + c > PIECES_MAX)
+                return -1;
+            for (int j = 0; j < c; j++)
+                next[m++] = parts[j];
+        }
+        for (int k = 0; k < m; k++)
+            pieces[k] = next[k];
+        n = m;
+    }
+    return n;
+}
+
+void rect_set_add(struct rect_set *s, struct rect r)
+{
+    if (rect_empty(r))
+        return;
+    for (;;) {
+        int merged = 0;
+        for (int i = 0; i < s->n; i++) {
+            struct rect e = s->r[i];
+            if (rect_contains(e, r.x, r.y) && rect_contains(e, r.x + r.w - 1, r.y + r.h - 1))
+                return;
+            struct rect u = rect_union(e, r);
+            long covered = area(e) + area(r) - area(rect_intersect(e, r));
+            int inside = rect_contains(r, e.x, e.y) && rect_contains(r, e.x + e.w - 1, e.y + e.h - 1);
+            if (inside || area(u) * 4 <= covered * 5) {
+                /* r takes the place of e, and may now reach others. */
+                s->r[i] = s->r[--s->n];
+                r = u;
+                merged = 1;
+                break;
+            }
+        }
+        if (!merged)
+            break;
+    }
+    struct rect pieces[PIECES_MAX];
+    int n = uncovered(s, r, pieces);
+    if (n < 0 || s->n + n > RECT_SET_MAX) {
+        collapse(s, r);
+        return;
+    }
+    for (int k = 0; k < n; k++)
+        s->r[s->n++] = pieces[k];
 }
 
 /* ---- window resize zones ---- */
@@ -88,11 +190,8 @@ static struct rect clip_to(struct surface *s, int x, int y, int w, int h)
 void gfx_fill_rect(struct surface *s, int x, int y, int w, int h, uint32_t color)
 {
     struct rect r = clip_to(s, x, y, w, h);
-    for (int j = 0; j < r.h; j++) {
-        uint32_t *row = s->pixels + (size_t)(r.y + j) * s->stride + r.x;
-        for (int i = 0; i < r.w; i++)
-            row[i] = color;
-    }
+    for (int j = 0; j < r.h; j++)
+        pixel_fill(s->pixels + (size_t)(r.y + j) * s->stride + r.x, r.w, color);
 }
 
 void gfx_fill(struct surface *s, uint32_t color)

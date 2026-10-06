@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <gui/pixel.h>
 #include "comp.h"
 
 #define MAX_PIECES 64
@@ -21,28 +22,7 @@ static int cursor_suppressed;           /* compose without the cursor (screen co
 #define CURSOR_W 12
 #define CURSOR_H 18
 #define CURSOR_SHADOW 1
-#define CURSOR_SHADE 154
-
-/* Logical rectangle to device pixels. */
-static struct rect dev(struct rect r)
-{
-    int s = screen_scale;
-    return (struct rect){ r.x * s, r.y * s, r.w * s, r.h * s };
-}
-
-static inline uint32_t blend_px(uint32_t d, uint32_t c)
-{
-    uint32_t a = c >> 24;
-    if (a == 255)
-        return c & 0x00ffffff;
-    if (!a)
-        return d;
-    uint32_t ia = 256 - (a + (a >> 7));
-    a += a >> 7;
-    return (((d >> 16 & 0xff) * ia + (c >> 16 & 0xff) * a) >> 8) << 16 |
-           (((d >> 8 & 0xff) * ia + (c >> 8 & 0xff) * a) >> 8) << 8 |
-           (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
-}
+#define CURSOR_KEEP 153
 
 void scene_init(void)
 {
@@ -186,21 +166,6 @@ struct csurface *scene_surface_at(int x, int y)
     return NULL;
 }
 
-static int rect_subtract(struct rect a, struct rect b, struct rect out[4])
-{
-    struct rect i = rect_intersect(a, b);
-    if (rect_empty(i)) {
-        out[0] = a;
-        return 1;
-    }
-    int n = 0;
-    if (i.y > a.y) out[n++] = (struct rect){ a.x, a.y, a.w, i.y - a.y };
-    if (i.y + i.h < a.y + a.h) out[n++] = (struct rect){ a.x, i.y + i.h, a.w, a.y + a.h - (i.y + i.h) };
-    if (i.x > a.x) out[n++] = (struct rect){ a.x, i.y, i.x - a.x, i.h };
-    if (i.x + i.w < a.x + a.w) out[n++] = (struct rect){ i.x + i.w, i.y, a.x + a.w - (i.x + i.w), i.h };
-    return n;
-}
-
 static int pieces_subtract(struct rect *pieces, int *n, struct rect cover)
 {
     struct rect out[MAX_PIECES];
@@ -229,7 +194,7 @@ static void draw_surface(struct csurface *s, struct rect clip)
         return;
     int bs = s->current.scale > 0 ? s->current.scale : 1;
     int S = screen_scale;
-    struct rect R = dev(r);
+    struct rect R = rect_scale(r, screen_scale);
     int ox = s->x * S, oy = s->y * S;               /* the surface's device origin */
     if (bs == S && s->current.transform == 0) {
         /* Rows inside the client's opaque region are copied, the rest
@@ -240,7 +205,7 @@ static void draw_surface(struct csurface *s, struct rect clip)
         else
             for (int q = 0; q < s->current.nopaque; q++) {
                 struct rect o = s->current.opaque[q];
-                o = dev((struct rect){ o.x + s->x, o.y + s->y, o.w, o.h });
+                o = rect_scale((struct rect){ o.x + s->x, o.y + s->y, o.w, o.h }, screen_scale);
                 if (rect_contains(o, R.x, R.y) && rect_contains(o, R.x + R.w - 1, R.y + R.h - 1)) {
                     opaque = R;
                     break;
@@ -262,32 +227,57 @@ static void draw_surface(struct csurface *s, struct rect clip)
                 memcpy(to, from, (size_t)R.w * 4);
                 continue;
             }
-            for (int i = 0; i < x0; i++)
-                to[i] = blend_px(to[i], from[i]);
-            for (int i = x0; i < x1; i++)
-                to[i] = from[i] & 0x00ffffff;
-            for (int i = x1 > x0 ? x1 : x0; i < R.w; i++)
-                to[i] = blend_px(to[i], from[i]);
+            int end = x1 > x0 ? x1 : x0;
+            pixel_over(to, from, x0);
+            pixel_copy_opaque(to + x0, from + x0, x1 - x0);
+            pixel_over(to + end, from + end, R.w - end);
         }
         return;
     }
-    /* Nearest neighbour through the buffer scale and transform. */
+    /* Nearest neighbour through the buffer scale: the buffer pixel u of
+     * the device pixel x is floor((x - ox) * bs / S), which a walk gives
+     * without a division per pixel. */
     int bw = b->width, bh = b->height;
+    const uint8_t *pix = b->pool->map + b->offset;
+    if (s->current.transform == 0) {
+        for (int j = 0; j < R.h; j++) {
+            uint32_t *to = back.pixels + (size_t)(R.y + j) * back.stride + R.x;
+            int v = (R.y - oy + j) * bs / S;
+            if (v < 0 || v >= bh)
+                continue;
+            const uint32_t *row = (const uint32_t *)(pix + (size_t)v * b->stride);
+            struct pixel_walk w;
+            pixel_walk_init(&w, R.x - ox, bs, S);
+            if (b->format == FORMAT_XRGB8888) {
+                pixel_sample(to, row, 1, R.w, &w);
+                pixel_copy_opaque(to, to, R.w);
+            } else {
+                pixel_sample_over(to, row, 1, R.w, &w);
+            }
+        }
+        return;
+    }
+    /* The rotated and flipped transforms, which no client of minios uses,
+     * pixel by pixel. */
     for (int j = 0; j < R.h; j++) {
         uint32_t *to = back.pixels + (size_t)(R.y + j) * back.stride + R.x;
         int v = (R.y - oy + j) * bs / S;
-        for (int i = 0; i < R.w; i++) {
-            int u = (R.x - ox + i) * bs / S, bx, by;
+        struct pixel_walk w;
+        pixel_walk_init(&w, R.x - ox, bs, S);
+        for (int i = 0; i < R.w; i++, pixel_walk_next(&w)) {
+            int u = (int)w.pos, bx, by;
             switch (s->current.transform) {
             case 1: bx = v; by = bh - bs - u; break;
             case 2: bx = bw - bs - u; by = bh - bs - v; break;
-            case 3: bx = bw - bs - v; by = u; break;
-            default: bx = u; by = v; break;
+            default: bx = bw - bs - v; by = u; break;
             }
             if (bx < 0 || by < 0 || bx >= bw || by >= bh)
                 continue;
-            uint32_t c = ((const uint32_t *)(b->pool->map + b->offset + (size_t)by * b->stride))[bx];
-            to[i] = b->format == FORMAT_XRGB8888 ? (c & 0x00ffffff) : blend_px(to[i], c);
+            uint32_t c = ((const uint32_t *)(pix + (size_t)by * b->stride))[bx];
+            if (b->format == FORMAT_XRGB8888)
+                to[i] = c & 0x00ffffff;
+            else if (c >> 24)
+                to[i] = pixel_blend(to[i], c, c >> 24);
         }
     }
 }
@@ -313,33 +303,34 @@ static void draw_cursor(struct rect clip)
     struct rect area = rect_intersect(cursor_rect(), clip);
     if (rect_empty(area))
         return;
-    struct rect R = dev(area);
-    for (int Y = R.y; Y < R.y + R.h && Y < back.height; Y++)
-        for (int X = R.x; X < R.x + R.w && X < back.width; X++) {
-            int i = (X - shown_x * S) / S, j = (Y - shown_y * S) / S;
-            uint32_t *dst = &back.pixels[(size_t)Y * back.stride + X];
+    struct rect R = rect_scale(area, screen_scale);
+    for (int Y = R.y; Y < R.y + R.h && Y < back.height; Y++) {
+        int j = (Y - shown_y * S) / S;
+        struct pixel_walk w;
+        pixel_walk_init(&w, R.x - shown_x * S, 1, S);
+        uint32_t *row = &back.pixels[(size_t)Y * back.stride];
+        for (int X = R.x; X < R.x + R.w && X < back.width; X++, pixel_walk_next(&w)) {
+            int i = (int)w.pos;
             char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
             if (c == 'X') {
-                *dst = 0x00000000;
+                row[X] = 0x00000000;
             } else if (c == 'o') {
-                *dst = 0x00ffffff;
+                row[X] = 0x00ffffff;
             } else if (i >= CURSOR_SHADOW && j >= CURSOR_SHADOW &&
                        shape[j - CURSOR_SHADOW][i - CURSOR_SHADOW] != '.') {
                 /* Drop shadow: the background darkened under the shape
                  * shifted down and right. */
-                uint32_t v = *dst;
-                *dst = ((((v >> 16) & 0xff) * CURSOR_SHADE / 256) << 16) |
-                       ((((v >> 8) & 0xff) * CURSOR_SHADE / 256) << 8) |
-                       ((v & 0xff) * CURSOR_SHADE / 256);
+                row[X] = pixel_shade(row[X], CURSOR_KEEP);
             }
         }
+    }
 }
 
 static void compose_rect(struct rect r, struct csurface **order, int n, int flush)
 {
     struct rect pieces[MAX_PIECES];
     int np = 1;
-    struct rect R = dev(r);
+    struct rect R = rect_scale(r, screen_scale);
     /* The desktop colour under everything, unless one opaque surface
      * covers the whole rectangle (a frame of a large window). */
     int covered = 0;
@@ -432,7 +423,7 @@ struct rect scene_pointer_rect(void)
     struct rect r = cursor_rect();
     if (rect_empty(r))
         return r;
-    return rect_intersect(dev(r), (struct rect){ 0, 0, back.width, back.height });
+    return rect_intersect(rect_scale(r, screen_scale), (struct rect){ 0, 0, back.width, back.height });
 }
 
 /* The back buffer contains the last composed frame. For a copy without the

@@ -17,6 +17,7 @@
 #include <string.h>
 #include <codec/codec.h>
 #include <gui/app.h>
+#include <gui/pixel.h>
 #include <minios/input.h>
 
 #define NEW_W 640
@@ -479,14 +480,9 @@ static int load(const char *name)
         image_free(im);
         return -ENOMEM;
     }
-    for (size_t i = 0, n = (size_t)im->w * im->h; i < n; i++) {
-        uint32_t c = im->pixels[i], a = c >> 24, out = 0;
-        for (int sh = 0; sh < 24; sh += 8) {
-            uint32_t v = (c >> sh) & 0xff;
-            out |= ((v * a + 255 * (255 - a) + 127) / 255) << sh;
-        }
-        s.pixels[i] = out;
-    }
+    /* The image over white. */
+    pixel_fill(s.pixels, im->w * im->h, 0x00ffffffu);
+    pixel_over(s.pixels, im->pixels, im->w * im->h);
     image_free(im);
     replace_image(s);
     strlcpy(path, name, sizeof path);

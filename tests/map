@@ -163,6 +163,11 @@ lib/libc/src/crc32.c            check-libcodec check-lua check-transfer pkg tar 
 lib/libc/include/minios/crc32.h check-libcodec check-lua check-transfer pkg tar net_xfer mfs_journal gpt_boot
 lib/libc/src/net/**             net_dns net_dns_cache net_tools net_xfer pkg_repo
 lib/libgui/**                   check-libgui check-lua gui gui_*
+lib/libgui/src/pixel.c          pixel aarch64:pixel comp_bench comp_bench_hidpi
+lib/libgui/src/pixel_impl.h     pixel aarch64:pixel
+lib/libgui/include/gui/pixel.h  pixel aarch64:pixel
+lib/libc/include/minios/simd.h  check-headers mathvec float pixel aarch64:pixel
+lib/libc/include/bits/simd_types.h  check-headers mathvec float pixel aarch64:pixel libc aarch64:libc
 lib/libwire/**                  check-libwire comp_* gui gui_app
 protocol/**                     check-libwire comp_* gui gui_app
 lib/libfont/**                  check-libfont ttf gui_ttf gui_text_repeat

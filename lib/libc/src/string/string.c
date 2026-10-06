@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <bits/simd_types.h>
+#include <minios/simd.h>
 
 /* memcpy, memmove and memset move 16 bytes per load and store through the
  * vector type of bits/simd_types.h: SSE2 on x86_64, NEON on aarch64. The
@@ -80,7 +80,7 @@ static inline void copy_small(uint8_t *d, const uint8_t *s, size_t n)
  * A store never reaches a source byte that a later load reads when the
  * destination lies below the source, so the regions may overlap in that
  * direction. */
-STRING_NO_CALLS static void copy_up(uint8_t *d, const uint8_t *s, size_t n)
+SIMD_WITHIN_PAGE(512) STRING_NO_CALLS static void copy_up(uint8_t *d, const uint8_t *s, size_t n)
 {
     simd_u64x2 head = load16(s), tail = load16(s + n - 16);
     size_t i = 16 - ((uintptr_t)d & 15);
@@ -100,7 +100,7 @@ STRING_NO_CALLS static void copy_up(uint8_t *d, const uint8_t *s, size_t n)
 /* Copy n >= 16 bytes from the end towards the start, for a destination
  * that overlaps the source from above. The loop stores aligned blocks
  * that end at e and moves e down. */
-STRING_NO_CALLS static void copy_down(uint8_t *d, const uint8_t *s, size_t n)
+SIMD_WITHIN_PAGE(512) STRING_NO_CALLS static void copy_down(uint8_t *d, const uint8_t *s, size_t n)
 {
     simd_u64x2 head = load16(s), tail = load16(s + n - 16);
     size_t e = n - ((uintptr_t)(d + n) & 15);
@@ -126,7 +126,7 @@ STRING_NO_CALLS void *memcpy(void *restrict dst, const void *restrict src, size_
     return dst;
 }
 
-STRING_NO_CALLS void *memmove(void *dst, const void *src, size_t n)
+SIMD_WITHIN_PAGE(512) STRING_NO_CALLS void *memmove(void *dst, const void *src, size_t n)
 {
     uint8_t *d = dst;
     const uint8_t *s = src;
@@ -141,7 +141,7 @@ STRING_NO_CALLS void *memmove(void *dst, const void *src, size_t n)
     return dst;
 }
 
-STRING_NO_CALLS void *memset(void *dst, int c, size_t n)
+SIMD_WITHIN_PAGE(512) STRING_NO_CALLS void *memset(void *dst, int c, size_t n)
 {
     uint8_t *d = dst;
     uint64_t v = 0x0101010101010101ULL * (uint8_t)c;

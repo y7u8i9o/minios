@@ -92,7 +92,10 @@ polls it together with the mouse and the keyboard.
 ## Client library and toolkit
 
 `lib/libgui/` builds `libgui.a`: `gfx` (fill, rectangle, line, 8x16 text,
-clipped blit, rectangle helpers), the client protocol, and `widgets`:
+clipped blit, rectangle helpers, and since G3 of
+`docs/plan/compositor-performance.md` the rectangle set and the row
+operations of `gui/pixel.h`, `graphics-performance.md`), the client
+protocol, and `widgets`:
 a tree of boxes (vertical or horizontal layout with padding, spacing
 and expanding children), labels, buttons, text fields with a cursor,
 list boxes with selection and scrolling, and canvases drawn by a

@@ -53,6 +53,27 @@ static inline void simd_store_f64x2(double *destination, simd_f64x2 value)
     __builtin_memcpy(destination, &value, sizeof(value));
 }
 
+/* A function of at most bytes bytes that is aligned to bytes, a power of
+ * two up to 4096, never crosses a page boundary. QEMU under TCG does not
+ * chain the translated blocks of a loop across a page boundary and looks
+ * the next block up on every pass instead, which made a pixel loop six
+ * times slower (docs/design/graphics-performance.md). The hot loops of
+ * libc and libgui carry this attribute with a bound above their size on
+ * both architectures. */
+#define SIMD_WITHIN_PAGE(bytes) __attribute__((aligned(bytes)))
+
+static inline simd_u32x4 simd_load_u32x4(const uint32_t *source)
+{
+    simd_u32x4 value;
+    __builtin_memcpy(&value, source, sizeof(value));
+    return value;
+}
+
+static inline void simd_store_u32x4(uint32_t *destination, simd_u32x4 value)
+{
+    __builtin_memcpy(destination, &value, sizeof(value));
+}
+
 static inline simd_f32x4 simd_add_f32x4(simd_f32x4 a, simd_f32x4 b) { return a + b; }
 static inline simd_f32x4 simd_sub_f32x4(simd_f32x4 a, simd_f32x4 b) { return a - b; }
 static inline simd_f32x4 simd_mul_f32x4(simd_f32x4 a, simd_f32x4 b) { return a * b; }

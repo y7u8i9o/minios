@@ -161,7 +161,7 @@ the benchmark the flush time at 1280x800 fell from 69 to 52 ms for the
 drag and from 141 to 100 ms for the pointer motion. The other values
 remained within the variation between two runs.
 
-### G3. The pixel module and the rectangle set
+### G3. The pixel module and the rectangle set (completed 2026-10-06)
 
 `minios/simd.h` gains integer vector types. `pixel.c` provides
 `pixel_fill`, `pixel_copy`, `pixel_copy_opaque`, `pixel_over`,
@@ -181,6 +181,33 @@ x86_64 and aarch64 and prints the throughput. `comp_scale`,
 
 Document: `docs/design/graphics-performance.md`, `docs/design/gui.md`,
 `docs/design/images.md`.
+
+The first SSE2 version unpacked the bytes of a pixel into 16 bit lanes
+and ran at a fifth of the speed of the scalar code under TCG, because
+QEMU emulates the unpack, pack and shuffle instructions. The blend now
+masks two channels into 16 bit lanes and needs no such instructions. It
+still lost against scalar code under TCG. The owner chose on 2026-10-06
+that x86_64 measures the vector form and a 64 bit scalar word form at
+the first call and retains the faster one, which replaces the fixed
+decision of a choice at compile time. aarch64 uses NEON. Under TCG the
+choice is the word form for `pixel_over` and `pixel_mask` and the vector
+form for `pixel_darken`. The vector types need no inline assembly,
+because GCC and clang accept `__builtin_shufflevector` and
+`__builtin_convertvector`.
+
+A loop across a page boundary ran six times slower under TCG, because
+QEMU does not chain translated blocks across pages. The hot functions of
+the pixel module and of the string functions of libc are aligned with
+`SIMD_WITHIN_PAGE` so that none crosses a page.
+
+`pixel_copy` and `pixel_scale_int` were not needed: `memcpy` copies rows,
+and the walk gives exact positions for integer factors. The module
+gained `pixel_sample_over` and `pixel_mask_sample` for sampled blends
+and `pixel_forms` for the report of the choice. The private blends of
+`sysmon`, `paint` and the button discs of `csd.c` also use the module.
+At 2560x1600@2 the drag composes in 313 instead of 520 ms and the median
+frame of the animation fell from 9.7 to 7.4 ms
+(`docs/design/graphics-performance.md`).
 
 ### G4. Several rectangles per flush
 

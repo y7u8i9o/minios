@@ -1,5 +1,6 @@
 /* The background of the desktop and of the greeter (gui/wallpaper.h). */
 #include <gui/wallpaper.h>
+#include <gui/pixel.h>
 #include <errno.h>
 #include <string.h>
 
@@ -21,22 +22,9 @@ static void draw_over(struct image *dst, int x, int y, const struct image *src)
         int py = y + j;
         if (py < 0 || py >= dst->h)
             continue;
-        const uint32_t *from = src->pixels + (size_t)j * src->w;
-        uint32_t *row = dst->pixels + (size_t)py * dst->w;
-        for (int i = 0; i < src->w; i++) {
-            int px = x + i;
-            if (px < 0 || px >= dst->w)
-                continue;
-            uint32_t c = from[i], a = c >> 24, d = row[px];
-            if (a == 255) {
-                row[px] = c;
-                continue;
-            }
-            uint32_t r = ((d >> 16 & 0xff) * (255 - a) + (c >> 16 & 0xff) * a) / 255;
-            uint32_t g = ((d >> 8 & 0xff) * (255 - a) + (c >> 8 & 0xff) * a) / 255;
-            uint32_t b = ((d & 0xff) * (255 - a) + (c & 0xff) * a) / 255;
-            row[px] = 0xff000000u | r << 16 | g << 8 | b;
-        }
+        int x0 = x < 0 ? 0 : x, x1 = x + src->w < dst->w ? x + src->w : dst->w;
+        if (x1 > x0)
+            pixel_over(dst->pixels + (size_t)py * dst->w + x0, src->pixels + (size_t)j * src->w + (x0 - x), x1 - x0);
     }
 }
 
@@ -50,8 +38,7 @@ struct image *wallpaper_render(const struct image *img, enum wallpaper_mode mode
     if (!out)
         return NULL;
     out->scale = scale;
-    for (size_t i = 0; i < (size_t)dw * dh; i++)
-        out->pixels[i] = 0xff000000u | (color & 0x00ffffff);
+    pixel_fill(out->pixels, dw * dh, 0xff000000u | (color & 0x00ffffff));
     if (!img || img->w <= 0 || img->h <= 0)
         return out;
     /* The size of img on the device in the mode. */

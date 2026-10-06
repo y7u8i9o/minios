@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include <gui/paint.h>
+#include <gui/pixel.h>
 #include "csd.h"
 
 #define HEADER_BG          0x00ebebeb
@@ -122,11 +123,6 @@ int csd_input_region(const struct csd *c, int w, int h, struct rect out[5])
 
 /* ---- painting ---- */
 
-static struct rect dev(struct rect r, int s)
-{
-    return (struct rect){ r.x * s, r.y * s, r.w * s, r.h * s };
-}
-
 /* Coverage (0..1) of the device pixel (x, y) by the rectangle F with all
  * four corners rounded by r. */
 static float cover(int x, int y, struct rect F, float r)
@@ -209,7 +205,7 @@ static void fonts(void)
  * onto the header colour. */
 static void disc(struct surface *buf, int S, struct rect b, uint32_t color, uint32_t bg)
 {
-    struct rect r = rect_intersect(dev(b, S), (struct rect){ 0, 0, buf->width, buf->height });
+    struct rect r = rect_intersect(rect_scale(b, S), (struct rect){ 0, 0, buf->width, buf->height });
     float cx = (float)(b.x * S) + (float)(b.w * S) / 2.0f, cy = (float)(b.y * S) + (float)(b.h * S) / 2.0f;
     float rad = (float)((b.w - 2) * S) / 2.0f;
     for (int y = r.y; y < r.y + r.h; y++)
@@ -218,11 +214,8 @@ static void disc(struct surface *buf, int S, struct rect b, uint32_t color, uint
             float c = rad + 0.5f - sqrtf(dx * dx + dy * dy);
             if (c <= 0)
                 continue;
-            int a = c >= 1 ? 256 : (int)(c * 256.0f), ia = 256 - a;
-            uint32_t *p = &buf->pixels[(size_t)y * buf->stride + x];
-            *p = ((((bg >> 16) & 0xff) * ia + ((color >> 16) & 0xff) * a) >> 8) << 16 |
-                 ((((bg >> 8) & 0xff) * ia + ((color >> 8) & 0xff) * a) >> 8) << 8 |
-                 (((bg & 0xff) * ia + (color & 0xff) * a) >> 8);
+            uint32_t a = c >= 1 ? 255 : (uint32_t)(c * 255.0f + 0.5f);
+            buf->pixels[(size_t)y * buf->stride + x] = pixel_blend(bg, color, a);
         }
 }
 
@@ -276,7 +269,7 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
             painter_fill(&p, cx - 3, cy + 1, 6, 1, fg);
         }
     }
-    return dev(hdr, S);
+    return rect_scale(hdr, S);
 }
 
 struct rect csd_paint_header(struct surface *buf, int scale, const struct csd *c, int w, int h)
@@ -291,7 +284,7 @@ struct rect csd_paint(struct surface *buf, int scale, const struct csd *c, int w
     if (!c->enabled)
         return (struct rect){ 0, 0, 0, 0 };
     int S = scale;
-    struct rect F = dev(csd_frame(c, w, h), S);
+    struct rect F = rect_scale(csd_frame(c, w, h), S);
     float R = (float)(radius(c) * S);
     struct rect all = { 0, 0, buf->width, buf->height };
     /* The margins: shadow and outline, transparent further out. */
@@ -320,7 +313,7 @@ void csd_copy(struct surface *dst, const struct surface *src, struct rect r, int
         return;
     }
     int S = scale;
-    struct rect F = dev(csd_frame(c, w, h), S);
+    struct rect F = rect_scale(csd_frame(c, w, h), S);
     int Rd = radius(c) * S;
     float R = (float)Rd;
     for (int y = r.y; y < r.y + r.h; y++) {

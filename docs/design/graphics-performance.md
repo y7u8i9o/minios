@@ -163,3 +163,106 @@ rectangles into the framebuffer, fell from 69 to 52 ms for the drag and
 from 141 to 100 ms for the pointer motion at 1280x800. The other values
 remained within the variation between two runs, because the composition
 copies only XRGB rows of clients with `memcpy`.
+
+## G3: the pixel module and the rectangle set (2026-10-06)
+
+`lib/libgui/src/pixel.c` with the header `gui/pixel.h` contains the row
+operations of libgui and X12:
+
+| Function | Operation |
+|---|---|
+| `pixel_fill` | a colour into n pixels |
+| `pixel_copy_opaque` | the colour channels of a row, alpha byte 0 |
+| `pixel_over` | a row with straight alpha over a row |
+| `pixel_mask` | a colour with an 8 bit coverage row over a row |
+| `pixel_darken` | every colour channel times keep / 255 |
+| `pixel_walk_init`, `pixel_walk_next` | the nearest neighbour positions floor((start + i) * num / den) |
+| `pixel_sample`, `pixel_sample_mask` | a row read at the positions of a walk, with a step of 1, -1 or a stride |
+| `pixel_sample_over`, `pixel_mask_sample` | a sampled row blended over a row |
+| `pixel_pack` | conversion into a framebuffer format that is not 0x00RRGGBB |
+
+The inline functions `pixel_div255`, `pixel_blend` and `pixel_shade`
+blend one pixel. Every blend divides by 255 with rounding, so alpha 0
+leaves the destination and alpha 255 gives the source colour exactly.
+A blended pixel retains the alpha byte of the destination. Before G3,
+X12 and the font code divided by 256 with a coverage scaled to 256, the
+painter and the wallpaper divided by 255 without rounding, and the
+decorations used a float factor. The colours of blended pixels changed by
+at most one per channel.
+
+`pixel_over`, `pixel_mask` and `pixel_darken` have two forms with the
+same result. The vector form places red and blue under the mask
+0x00ff00ff and green and alpha shifted down by 8 bits into 16 bit
+lanes, so that one 16 bit multiplication blends two channels without
+unpacking, packing or shuffles. The word form places the four channels
+of one pixel into four 16 bit fields of a 64 bit register. aarch64 uses
+the vector form (NEON). Under QEMU TCG the SSE2 arithmetic of an x86_64
+guest is emulated far more slowly than scalar code, while under KVM it
+runs natively. On x86_64 the first call of a blending function therefore
+measures both forms of each function on rows of 256 pixels, the fastest
+of three runs of four rows, and retains the faster form. `pixel_forms()`
+reports the choice. The owner chose this measurement on 2026-10-06 after
+the first SSE2 version, which unpacked bytes into 16 bit lanes, ran at a
+fifth of the speed of the scalar code under TCG.
+
+Measured by `pixeltest` in megapixels per second over rows of 1024
+pixels with partial alpha and coverage:
+
+| | x86_64 under TCG | aarch64 under HVF |
+|---|---|---|
+| `pixel_over`: vector, word, reference | 58, 180, 187 | 1281, 728, 595 |
+| `pixel_mask`: vector, word, reference | 83, 183, 196 | 1765, 930, 677 |
+| `pixel_darken`: vector, word, reference | 467, 426, 152 | 3495, 1227, 2601 |
+| chosen forms | over word, mask word, darken vector | all vector |
+
+The references are the scalar loops of `src/pixel_impl.h`. Under TCG
+the word form reaches the speed of the reference for `over` and `mask`
+and three times that speed for `darken`. The vector form of `darken`
+uses only 16 bit multiplications, additions, shifts and logical
+operations, which QEMU translates into host vector instructions.
+
+A loop that the linker places across a page boundary ran six times
+slower under TCG than the same loop within one page. QEMU does not chain
+the translated blocks of a loop across a page boundary and looks the
+next block up on every pass. The hot functions of the pixel module and
+of the libc string functions are therefore aligned with
+`SIMD_WITHIN_PAGE` to a power of two above their size on both
+architectures (`libc.md`).
+
+`struct rect_set` in `gui/gfx.h` stores up to 32 disjoint rectangles.
+`rect_set_add` merges a new rectangle with one of the set when their
+bounding box adds at most a quarter of their area, and otherwise adds
+the parts of it that the set does not cover yet. A set that would exceed
+its size becomes the bounding box of everything. `rect_subtract` and
+`rect_scale` are public. They replaced the private copies of X12
+(`rect_subtract` in `scene.c`, `rect_minus` in `decor.c` and the three
+copies of `dev`).
+
+The module replaced the private loops in `scene.c` (the blend, the row
+copies, the divisions per pixel of the scaled path and of the cursor),
+`decor.c`, `backend_fb.c`, `paint.c`, `font.c`, `wallpaper.c`, `gfx.c`
+and `csd.c`, and the private blends of `sysmon` and `paint`. The
+compositing of the SVG codec is a different operation, with a
+destination alpha, and remains.
+
+Tests: `make check-libgui` runs `lib/libgui/tests/test_pixel.c` on the
+host. It compares both forms and the chosen function with the reference
+at every offset from 0 to 7 and every length up to 67, checks every
+triple of alpha, source and destination channel, compares the walk with
+the division and the rectangle set with a bitmap of the union. The case
+`pixel` runs the same file in the guest through `pixeltest`, with a
+sample of the triples, on x86_64 and on aarch64.
+
+Benchmark after G3, compared with the baseline of G1:
+
+| | baseline | after G3 |
+|---|---|---|
+| drag at 1280x800: compose ms, frame p50 ms | 149.6, 2.9 | 83.8, 2.0 |
+| drag at 2560x1600@2: compose ms, frame p50 ms | 520.2, 9.7 | 313.3, 7.4 |
+| resize at 2560x1600@2: compose ms | 296.2 | 205.4 |
+| blink at 2560x1600@2: compose ms, frame p50 ms | 204.5, 14.8 | 152.9, 12.8 |
+| anim at 2560x1600@2: frames of 60, frame p50 ms | 51, 9.7 | 60, 7.4 |
+
+The flush times, the latencies and the wakeups did not change, because
+G4 to G6 address them. blink still composes the whole window, because
+X12 ignores the damage of the client until G5.

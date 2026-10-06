@@ -51,7 +51,13 @@ of `docs/plan/desktop-panel.md` an enlargement repeated the nearest
 source pixel. `painter_image_scaled` draws an image into a
 rectangle of logical pixels with nearest neighbour sampling and visits
 only the device pixels inside the clip, so the cost depends on the
-visible area and not on the size of the image.
+visible area and not on the size of the image. Since G3 of
+`docs/plan/compositor-performance.md` the painter samples images and
+masks with the walk of `gui/pixel.h`, which gives the source position
+floor(x * num / den) of every destination pixel without a division per
+pixel, and blends them with `pixel_over` and `pixel_mask`
+(`graphics-performance.md`). The positions are the same as those of the
+division before.
 
 ## Screen capture
 

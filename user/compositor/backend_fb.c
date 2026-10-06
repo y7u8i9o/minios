@@ -14,6 +14,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <minios/abi.h>
+#include <gui/pixel.h>
 #include "comp.h"
 
 struct surface back;
@@ -23,6 +24,7 @@ static int fb_fd = -1;
 static uint8_t *fbmem;
 static struct fb_info fbinfo;
 static int fb_native;
+static struct pixel_format fb_format;   /* the device format when it is not native */
 static uint8_t *line;                   /* one framebuffer row for scaled flushes */
 static size_t map_size;
 
@@ -40,6 +42,8 @@ static int backend_setup(void)
     screen_h = (int)(fbinfo.height / (uint32_t)screen_scale);
     fb_native = fbinfo.bpp == 32 && fbinfo.red_size == 8 && fbinfo.red_shift == 16 &&
                 fbinfo.green_size == 8 && fbinfo.green_shift == 8 && fbinfo.blue_size == 8 && fbinfo.blue_shift == 0;
+    fb_format = (struct pixel_format){ (int)fbinfo.bpp / 8, fbinfo.red_size, fbinfo.red_shift, fbinfo.green_size,
+                                       fbinfo.green_shift, fbinfo.blue_size, fbinfo.blue_shift };
     free(back.pixels);
     free(line);
     back.width = screen_w * screen_scale;
@@ -96,13 +100,6 @@ int backend_display_request(int *width, int *height)
     return 0;
 }
 
-static inline uint32_t pack(uint32_t c)
-{
-    return (((c >> 16) & 0xff) >> (8 - fbinfo.red_size)) << fbinfo.red_shift |
-           (((c >> 8) & 0xff) >> (8 - fbinfo.green_size)) << fbinfo.green_shift |
-           ((c & 0xff) >> (8 - fbinfo.blue_size)) << fbinfo.blue_shift;
-}
-
 void backend_flush(struct rect r)
 {
     int s = screen_scale;
@@ -120,19 +117,7 @@ void backend_flush(struct rect r)
             memcpy(to, from, (size_t)d.w * 4);
             continue;
         }
-        if (fbinfo.bpp == 32) {
-            uint32_t *out = (uint32_t *)line;
-            for (int i = 0; i < d.w; i++)
-                out[i] = pack(from[i]);
-        } else {
-            uint8_t *out = line;
-            for (int i = 0; i < d.w; i++) {
-                uint32_t pix = pack(from[i]);
-                *out++ = (uint8_t)pix;
-                *out++ = (uint8_t)(pix >> 8);
-                *out++ = (uint8_t)(pix >> 16);
-            }
-        }
+        pixel_pack(line, from, d.w, &fb_format);
         memcpy(to, line, (size_t)d.w * bpp);
     }
     if (fbinfo.caps & FB_CAP_FLUSH) {

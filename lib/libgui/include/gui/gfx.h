@@ -89,6 +89,30 @@ static inline int rect_contains(struct rect r, int x, int y)
 {
     return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 }
+/* r with every coordinate multiplied by s, for logical to device pixels. */
+static inline struct rect rect_scale(struct rect r, int s)
+{
+    return (struct rect){ r.x * s, r.y * s, r.w * s, r.h * s };
+}
+/* a minus b as up to four disjoint rectangles in out. Returns their
+ * number: 1 with a itself when the two do not intersect, 0 when b covers a. */
+int rect_subtract(struct rect a, struct rect b, struct rect out[4]);
+
+/* A set of up to RECT_SET_MAX disjoint rectangles, for damage
+ * (docs/design/graphics-performance.md). rect_set_add merges a new
+ * rectangle with one of the set when their bounding box adds at most a
+ * quarter of their area, and otherwise adds the parts of it that the set
+ * does not cover yet. A set that would exceed its size becomes the
+ * bounding box of everything. The set may therefore cover more than the
+ * union of the added rectangles, but never less. */
+#define RECT_SET_MAX 32
+struct rect_set {
+    int n;
+    struct rect r[RECT_SET_MAX];
+};
+void rect_set_clear(struct rect_set *s);
+void rect_set_add(struct rect_set *s, struct rect r);
+struct rect rect_set_bounds(const struct rect_set *s);
 
 /* The edges of a window resize.  The values are those of the resize
  * request of the window protocol. */

@@ -9,3 +9,5 @@ typedef double simd_f64x2 __attribute__((vector_size(16)));
 typedef int32_t simd_i32x4 __attribute__((vector_size(16)));
 typedef uint32_t simd_u32x4 __attribute__((vector_size(16)));
 typedef uint64_t simd_u64x2 __attribute__((vector_size(16)));
+typedef uint16_t simd_u16x8 __attribute__((vector_size(16)));
+typedef uint8_t simd_u8x16 __attribute__((vector_size(16)));

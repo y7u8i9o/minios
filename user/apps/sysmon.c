@@ -22,6 +22,7 @@
 #include <pwd.h>
 #include <gui/app.h>
 #include <gui/model.h>
+#include <gui/pixel.h>
 #include <gui/i18n.h>
 
 #define MAX_PROCS 64
@@ -449,14 +450,6 @@ static struct model thread_model = { t_rows, t_child, t_columns, t_cell, t_heade
 
 /* The functions below draw the Resources tab. */
 
-static uint32_t blend(uint32_t a, uint32_t b, int alpha)
-{
-    uint32_t r = (((a >> 16) & 255) * (uint32_t)alpha + ((b >> 16) & 255) * (uint32_t)(256 - alpha)) >> 8;
-    uint32_t g = (((a >> 8) & 255) * (uint32_t)alpha + ((b >> 8) & 255) * (uint32_t)(256 - alpha)) >> 8;
-    uint32_t bl = ((a & 255) * (uint32_t)alpha + (b & 255) * (uint32_t)(256 - alpha)) >> 8;
-    return r << 16 | g << 8 | bl;
-}
-
 /* draw_series draws n samples of values scaled to max into the graph
  * rectangle.  The newest sample is at the right edge, and one sample
  * covers w / (HISTORY - 1) pixels.  The area under the line is filled when
@@ -488,7 +481,7 @@ static void draw_frame(struct painter *p, int x, int y, int w, int h)
 {
     const struct theme *t = p->theme;
     painter_fill(p, x, y, w, h, t->color[TC_FIELD]);
-    uint32_t grid = blend(t->color[TC_BORDER], t->color[TC_FIELD], 80);
+    uint32_t grid = pixel_blend(t->color[TC_FIELD], t->color[TC_BORDER], 80);
     for (int k = 1; k < 4; k++)
         painter_fill(p, x + 1, y + h * k / 4, w - 2, 1, grid);
     painter_frame(p, x, y, w, h, t->color[TC_BORDER]);
@@ -558,7 +551,7 @@ static int on_paint_graphs(struct widget *w, void *args, void *arg)
 {
     struct painter *p = ((struct sig_paint *)args)->p;
     const struct theme *t = p->theme;
-    uint32_t accent = t->color[TC_ACCENT], area = blend(accent, t->color[TC_FIELD], 72);
+    uint32_t accent = t->color[TC_ACCENT], area = pixel_blend(t->color[TC_FIELD], accent, 72);
     uint32_t second = t->color[TC_TEXT];
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     int pad = 8, gap = 12, x = pad, width = w->w - 2 * pad;

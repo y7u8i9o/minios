@@ -24,6 +24,7 @@ void run_filechooser_tests(void);
 void run_dnd_tests(void);
 void run_appchooser_tests(void);
 void run_resize_tests(void);
+void run_pixel_tests(void);
 
 int main(void)
 {
@@ -42,6 +43,7 @@ int main(void)
     RUN(run_dnd_tests);
     RUN(run_appchooser_tests);
     RUN(run_resize_tests);
+    RUN(run_pixel_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

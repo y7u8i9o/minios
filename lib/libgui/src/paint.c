@@ -1,6 +1,7 @@
 /* Painter: origin translation, clipping and the logical to device pixel
  * scale over gfx primitives. */
 #include <gui/paint.h>
+#include <gui/pixel.h>
 #include <gui/utf8.h>
 #include <string.h>
 
@@ -255,12 +256,14 @@ void painter_avatar(struct painter *p, int x, int y, int size, const char *name,
                  0x00ffffff);
 }
 
-static inline uint32_t blend(uint32_t d, uint32_t c, unsigned a)
+/* The device pixels px0 to px1 of the destination row that an area of
+ * width W at X0 covers inside the view of width vw. Returns 0 when it
+ * covers none. */
+static int clip_span(long X0, long W, int vw, int *px0, int *px1)
 {
-    uint32_t r = ((d >> 16 & 0xff) * (255 - a) + (c >> 16 & 0xff) * a) / 255;
-    uint32_t g = ((d >> 8 & 0xff) * (255 - a) + (c >> 8 & 0xff) * a) / 255;
-    uint32_t b = ((d & 0xff) * (255 - a) + (c & 0xff) * a) / 255;
-    return r << 16 | g << 8 | b;
+    *px0 = X0 > 0 ? (int)X0 : 0;
+    *px1 = X0 + W < vw ? (int)(X0 + W) : vw;
+    return *px1 > *px0;
 }
 
 void painter_blit(struct painter *p, int x, int y, const struct surface *src)
@@ -274,17 +277,17 @@ void painter_blit(struct painter *p, int x, int y, const struct surface *src)
         return;
     }
     /* Nearest neighbour enlargement of a logical size source. */
+    int X0 = x * s + dx, Y0 = y * s + dy, px0, px1;
+    if (!clip_span(X0, (long)src->width * s, v.width, &px0, &px1))
+        return;
     for (int j = 0; j < src->height * s; j++) {
-        int py = y * s + dy + j;
+        int py = Y0 + j;
         if (py < 0 || py >= v.height)
             continue;
-        const uint32_t *from = src->pixels + (size_t)(j / s) * src->stride;
-        uint32_t *row = v.pixels + (size_t)py * v.stride;
-        for (int i = 0; i < src->width * s; i++) {
-            int px = x * s + dx + i;
-            if (px >= 0 && px < v.width)
-                row[px] = from[i / s];
-        }
+        struct pixel_walk w;
+        pixel_walk_init(&w, px0 - X0, 1, s);
+        pixel_sample(v.pixels + (size_t)py * v.stride + px0, src->pixels + (size_t)(j / s) * src->stride, 1, px1 - px0,
+                     &w);
     }
 }
 
@@ -298,19 +301,16 @@ void painter_mask(struct painter *p, int x, int y, const uint8_t *mask, int w, i
         gfx_blend_mask(&v, x + dx, y + dy, mask, w, h, color);
         return;
     }
+    int X0 = x * s + dx, Y0 = y * s + dy, px0, px1;
+    if (!clip_span(X0, (long)w * s, v.width, &px0, &px1))
+        return;
     for (int j = 0; j < h * s; j++) {
-        int py = y * s + dy + j;
+        int py = Y0 + j;
         if (py < 0 || py >= v.height)
             continue;
-        const uint8_t *m = mask + (size_t)(j / s) * w;
-        uint32_t *row = v.pixels + (size_t)py * v.stride;
-        for (int i = 0; i < w * s; i++) {
-            int px = x * s + dx + i;
-            unsigned a = m[i / s];
-            if (px < 0 || px >= v.width || !a)
-                continue;
-            row[px] = a == 255 ? color : blend(row[px], color, a);
-        }
+        struct pixel_walk wk;
+        pixel_walk_init(&wk, px0 - X0, 1, s);
+        pixel_mask_sample(v.pixels + (size_t)py * v.stride + px0, mask + (size_t)(j / s) * w, px1 - px0, color, &wk);
     }
 }
 
@@ -322,22 +322,17 @@ void painter_image(struct painter *p, int x, int y, const struct image *img)
     int dx, dy, s = p->scale, is = img->scale > 1 ? img->scale : 1;
     int lw = image_lw(img), lh = image_lh(img);
     struct surface v = view(p, &dx, &dy);
+    int X0 = x * s + dx, Y0 = y * s + dy, px0, px1;
+    if (v.width <= 0 || v.height <= 0 || !clip_span(X0, (long)lw * s, v.width, &px0, &px1))
+        return;
     for (int j = 0; j < lh * s; j++) {
-        int py = y * s + dy + j;
+        int py = Y0 + j;
         if (py < 0 || py >= v.height)
             continue;
-        uint32_t *row = v.pixels + (size_t)py * v.stride;
-        const uint32_t *from = img->pixels + (size_t)(j * is / s) * img->w;
-        for (int i = 0; i < lw * s; i++) {
-            int px = x * s + dx + i;
-            if (px < 0 || px >= v.width)
-                continue;
-            uint32_t c = from[i * is / s];
-            unsigned a = c >> 24;
-            if (!a)
-                continue;
-            row[px] = a == 255 ? (c & 0x00ffffff) : blend(row[px], c, a);
-        }
+        struct pixel_walk w;
+        pixel_walk_init(&w, px0 - X0, is, s);
+        pixel_sample_over(v.pixels + (size_t)py * v.stride + px0, img->pixels + (size_t)(j * is / s) * img->w, 1,
+                          px1 - px0, &w);
     }
 }
 
@@ -350,18 +345,15 @@ void painter_image_scaled(struct painter *p, int x, int y, int w, int h, const s
     struct surface v = view(p, &dx, &dy);
     if (v.width <= 0 || v.height <= 0 || w <= 0 || h <= 0)
         return;
-    long long X0 = (long long)x * s + dx, Y0 = (long long)y * s + dy, DW = (long long)w * s, DH = (long long)h * s;
-    long long py0 = Y0 > 0 ? Y0 : 0, py1 = Y0 + DH < v.height ? Y0 + DH : v.height;
-    long long px0 = X0 > 0 ? X0 : 0, px1 = X0 + DW < v.width ? X0 + DW : v.width;
-    for (long long py = py0; py < py1; py++) {
-        uint32_t *row = v.pixels + (size_t)py * v.stride;
-        const uint32_t *from = img->pixels + (size_t)((py - Y0) * img->h / DH) * img->w;
-        for (long long px = px0; px < px1; px++) {
-            uint32_t c = from[(px - X0) * img->w / DW];
-            unsigned a = c >> 24;
-            if (!a)
-                continue;
-            row[px] = a == 255 ? (c & 0x00ffffff) : blend(row[px], c, a);
-        }
+    long X0 = (long)x * s + dx, Y0 = (long)y * s + dy, DW = (long)w * s, DH = (long)h * s;
+    long py0 = Y0 > 0 ? Y0 : 0, py1 = Y0 + DH < v.height ? Y0 + DH : v.height;
+    int px0, px1;
+    if (!clip_span(X0, DW, v.width, &px0, &px1))
+        return;
+    for (long py = py0; py < py1; py++) {
+        struct pixel_walk wk;
+        pixel_walk_init(&wk, px0 - X0, img->w, DW);
+        pixel_sample_over(v.pixels + (size_t)py * v.stride + px0, img->pixels + (size_t)((py - Y0) * img->h / DH) * img->w,
+                          1, px1 - px0, &wk);
     }
 }

@@ -23,7 +23,7 @@ HOSTSRCS := $(filter-out src/client.c,$(SRCS)) $(wildcard ../libfont/src/*.c) $(
             $(wildcard ../libcodec/src/*.c ../libcodec/modules/*/*.c) ../libc/src/crc32.c
 check: $(OUT)/font.c
 	@mkdir -p $(OUT)/host
-	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -include tests/host_compat.h -Iinclude \
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O1 -g -Wall -DMINIOS_HOST -DCODEC_BUILTIN -DPIXEL_EXHAUSTIVE -include tests/host_compat.h -Iinclude \
 	    -I../libcodec/include -I../libfont/include -Itests \
 	    -idirafter ../../kernel/include -idirafter ../libc/include \
 	    -o $(OUT)/host/test_framework $(HOSTSRCS) $(OUT)/font.c

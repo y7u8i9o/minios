@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <gui/paint.h>
+#include <gui/pixel.h>
 #include <gui/keymap.h>
 #include "comp.h"
 
@@ -83,31 +84,15 @@ static int radius(const struct csurface *s)
     return s->toplevel->maximized ? 0 : RADIUS;
 }
 
-static struct rect dev(struct rect r)
-{
-    int S = screen_scale;
-    return (struct rect){ r.x * S, r.y * S, r.w * S, r.h * S };
-}
-
 static struct rect clip_dev(struct rect logical)
 {
-    return rect_intersect(dev(logical), (struct rect){ 0, 0, back.width, back.height });
+    return rect_intersect(rect_scale(logical, screen_scale), (struct rect){ 0, 0, back.width, back.height });
 }
 
+/* c over d with the coverage t (0 to 1) of the antialiased shapes. */
 static inline uint32_t mix(uint32_t d, uint32_t c, float t)
 {
-    if (t >= 1.0f)
-        return c;
-    int a = (int)(t * 256.0f + 0.5f), ia = 256 - a;
-    return ((((d >> 16) & 0xff) * ia + ((c >> 16) & 0xff) * a) >> 8) << 16 |
-           ((((d >> 8) & 0xff) * ia + ((c >> 8) & 0xff) * a) >> 8) << 8 |
-           (((d & 0xff) * ia + (c & 0xff) * a) >> 8);
-}
-
-static inline uint32_t darken(uint32_t c, int a)
-{
-    uint32_t ia = (uint32_t)(256 - a);
-    return ((((c >> 16) & 0xff) * ia) >> 8) << 16 | ((((c >> 8) & 0xff) * ia) >> 8) << 8 | (((c & 0xff) * ia) >> 8);
+    return pixel_blend(d, c, t >= 1.0f ? 255 : (uint32_t)(t * 255.0f + 0.5f));
 }
 
 /* Coverage (0..1) of the device pixel (x, y) by the rectangle F whose
@@ -131,22 +116,6 @@ static float round_coverage(int x, int y, struct rect F, float r)
     float dx = px - cx, dy = py - cy;
     float c = r + 0.5f - sqrtf(dx * dx + dy * dy);
     return c < 0 ? 0 : c > 1 ? 1 : c;
-}
-
-/* a minus b, as up to four rectangles. */
-static int rect_minus(struct rect a, struct rect b, struct rect out[4])
-{
-    struct rect i = rect_intersect(a, b);
-    if (rect_empty(i)) {
-        out[0] = a;
-        return 1;
-    }
-    int n = 0;
-    if (i.y > a.y) out[n++] = (struct rect){ a.x, a.y, a.w, i.y - a.y };
-    if (i.y + i.h < a.y + a.h) out[n++] = (struct rect){ a.x, i.y + i.h, a.w, a.y + a.h - (i.y + i.h) };
-    if (i.x > a.x) out[n++] = (struct rect){ a.x, i.y, i.x - a.x, i.h };
-    if (i.x + i.w < a.x + a.w) out[n++] = (struct rect){ i.x + i.w, i.y, a.x + a.w - (i.x + i.w), i.h };
-    return n;
 }
 
 /* Shadow strength by the squared distance (device pixels) to the
@@ -197,7 +166,7 @@ static void shade_rect(struct rect r, struct rect F, struct rect shape, int R, i
                 continue;
             int a = shade[d2] * peak >> 8;
             if (a)
-                row[x] = darken(row[x], a);
+                row[x] = pixel_shade(row[x], 255u - (uint32_t)a);
         }
     }
 }
@@ -210,13 +179,13 @@ void decor_draw_shadow(struct csurface *s, struct rect clip)
     shade_table(S);
     if (!shade)
         return;
-    struct rect F = dev(decor_frame(s));
+    struct rect F = rect_scale(decor_frame(s), screen_scale);
     struct rect shape = { F.x, F.y + SHADOW_DY * S, F.w, F.h };
     struct rect area = clip_dev(rect_intersect(decor_extent(s), clip));
     /* Only the band outside the frame's opaque part needs work; the
      * contents of a window never do. */
     struct rect pieces[4];
-    int n = rect_minus(area, dev(decor_opaque(s)), pieces);
+    int n = rect_subtract(area, rect_scale(decor_opaque(s), screen_scale), pieces);
     int peak = s->toplevel->activated ? SHADOW_ALPHA : SHADOW_ALPHA_INACTIVE;
     for (int i = 0; i < n; i++)
         if (!rect_empty(pieces[i]))
@@ -294,7 +263,7 @@ void decor_draw(struct csurface *s, struct rect clip)
     /* The corner squares of the title bar: the outer rounded shape in
      * the border colour, the bar inset by the border, blended over the
      * shadow. The rest of the bar and the border are plain fills. */
-    struct rect F = dev(frame), inner = { F.x + S, F.y + S, F.w - 2 * S, F.h - S };
+    struct rect F = rect_scale(frame, screen_scale), inner = { F.x + S, F.y + S, F.w - 2 * S, F.h - S };
     int rad = radius(s), Rd = rad * S;
     float R = (float)Rd;
     for (int side = 0; side < 2 && rad > 0; side++) {

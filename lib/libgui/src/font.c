@@ -1,5 +1,6 @@
 /* Bitmap fonts: the built in 8x16 font and .mfnt files. */
 #include <gui/gfx.h>
+#include <gui/pixel.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -145,30 +146,14 @@ void gfx_font_free(struct font *f)
 
 void gfx_blend_mask(struct surface *s, int x, int y, const uint8_t *mask, int w, int h, uint32_t fg)
 {
-    uint32_t fr = (fg >> 16) & 0xff, fgc = (fg >> 8) & 0xff, fb = fg & 0xff;
+    int x0 = x < 0 ? 0 : x, x1 = x + w < s->width ? x + w : s->width;
+    if (x1 <= x0)
+        return;
     for (int j = 0; j < h; j++) {
         int py = y + j;
         if (py < 0 || py >= s->height)
             continue;
-        const uint8_t *m = mask + (size_t)j * w;
-        uint32_t *row = s->pixels + (size_t)py * s->stride;
-        for (int i = 0; i < w; i++) {
-            int px = x + i;
-            unsigned a = m[i];
-            if (px < 0 || px >= s->width || !a)
-                continue;
-            if (a == 255) {
-                row[px] = fg;
-                continue;
-            }
-            /* a in 0..255 scaled to 0..256 so the blend is a shift. */
-            uint32_t d = row[px], ia = 256 - (a + (a >> 7));
-            a += a >> 7;
-            uint32_t r = ((d >> 16 & 0xff) * ia + fr * a) >> 8;
-            uint32_t g = ((d >> 8 & 0xff) * ia + fgc * a) >> 8;
-            uint32_t b = ((d & 0xff) * ia + fb * a) >> 8;
-            row[px] = r << 16 | g << 8 | b;
-        }
+        pixel_mask(s->pixels + (size_t)py * s->stride + x0, mask + (size_t)j * w + (x0 - x), x1 - x0, fg);
     }
 }
 
