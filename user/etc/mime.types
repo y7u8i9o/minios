@@ -11,6 +11,7 @@ image/gif gif
 audio/x-wav wav wave
 audio/flac flac
 audio/ogg ogg oga
+audio/opus opus
 audio/mpeg mp3
 application/x-launcher app
 application/x-minios-package mpk

@@ -166,3 +166,13 @@ int codec_options_check(const char *options, const char *known)
     }
     return 0;
 }
+
+void codec_vorbis_channel_order(int *order, unsigned channels)
+{
+    static const int maps[9][8] = {
+        { 0 }, { 0 }, { 0, 1 }, { 0, 2, 1 }, { 0, 1, 2, 3 }, { 0, 2, 1, 3, 4 }, { 0, 2, 1, 5, 3, 4 },
+        { 0, 2, 1, 6, 5, 3, 4 }, { 0, 2, 1, 7, 5, 6, 3, 4 },
+    };
+    for (unsigned c = 0; c < 8; c++)
+        order[c] = channels <= 8 ? maps[channels][c] : (int)c;
+}

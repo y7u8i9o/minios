@@ -44,16 +44,6 @@ static int is_vorbis(const uint8_t *p, size_t len)
 
 /* The Vorbis channel order of section 4.3.9 mapped to the order of WAV
  * files for one to eight channels. */
-static void channel_order(int *order, unsigned channels)
-{
-    static const int maps[9][8] = {
-        { 0 }, { 0 }, { 0, 1 }, { 0, 2, 1 }, { 0, 1, 2, 3 }, { 0, 2, 1, 3, 4 }, { 0, 2, 1, 5, 3, 4 },
-        { 0, 2, 1, 6, 5, 3, 4 }, { 0, 2, 1, 7, 5, 6, 3, 4 },
-    };
-    for (unsigned c = 0; c < 8; c++)
-        order[c] = channels <= 8 ? maps[channels][c] : (int)c;
-}
-
 static void free_buffers(struct vb_state *s)
 {
     for (unsigned c = 0; c < s->channels; c++) {
@@ -372,7 +362,7 @@ static int vorbis_open(const uint8_t *data, size_t len, struct codec_audio_forma
     }
     s->channels = info.channels;
     s->rate = info.rate;
-    channel_order(s->order, s->channels);
+    codec_vorbis_channel_order(s->order, s->channels);
     fmt->rate = (int)info.rate;
     fmt->channels = (int)info.channels;
     fmt->bits = 0;                      /* Vorbis has no sample size */

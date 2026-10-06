@@ -9,9 +9,10 @@ cd /ct
 
 # The registry: the modules with their codecs and capabilities.
 codecs > list.txt; check list-status "$?" "0"
-check list-total "$(tail -n 1 list.txt)" "10 codecs in 9 modules"
+check list-total "$(tail -n 1 list.txt)" "11 codecs in 10 modules"
 check list-oggflac "$(grep -c '^DE-- oggflac audio  flac.so' list.txt)" "1"
 check list-vorbis "$(grep -c '^DE-- vorbis audio  vorbis.so' list.txt)" "1"
+check list-opus "$(grep -c '^D--- opus  audio  opus.so' list.txt)" "1"
 check list-flac "$(grep -c '^DE-- flac  audio  flac.so' list.txt)" "1"
 check list-bmp "$(grep -c '^DE-- bmp   image  bmp.so' list.txt)" "1"
 check list-gif "$(grep -c '^DE-A gif   image  gif.so' list.txt)" "1"

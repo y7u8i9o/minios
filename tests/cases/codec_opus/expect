@@ -1,0 +1,9 @@
+codectest: module opus from /usr/lib/codecs/opus.so
+codectest: opus silk 48000 Hz 1 channels 96000 frames
+codectest: opus hybrid 48000 Hz 2 channels 48000 frames
+codectest: opus celt 48000 Hz 2 channels 48000 frames
+codectest: opus 51 48000 Hz 6 channels 24000 frames
+codectest: opus chained 48000 Hz 1 channels 33000 frames
+codectest: opus gain 48000 Hz 2 channels 48000 frames
+codectest: 0 failures
+TEST PASS

@@ -731,6 +731,57 @@ the tag has the lowest bit rate whose frame has room for the tag. shine writes
 the last frame without the bytes after its data, and the encoder
 completes it with zero bytes to the length that its header gives.
 
+## Opus
+
+`opus.so` (S3 of `docs/plan/release-0.7.0.md`) decodes Opus audio in Ogg
+files, as specified by RFC 6716 (the codec) and RFC 7845 (the Ogg
+encapsulation).
+
+| Module | Codec | Capabilities | Probe |
+|---|---|---|---|
+| `opus.so` | `opus`, `audio/opus`, `.opus` | decode | an `OpusHead` packet at the start of the first Ogg stream, 100; in a later stream of a multiplexed file, 90 |
+
+The decoder is the reference implementation, libopus 1.5.2
+(`third_party/opus`, BSD licence). Only the 68 source files that the
+decoder needs are imported, together with their headers, and `ORIGIN`
+records the upstream commit. The code is compiled unchanged as a
+floating-point build with `OPUS_BUILD` and `VAR_ARRAYS`, and without SIMD
+or the deep learning extensions of version 1.5. A few SILK files also
+contain encoder routines, so `celt/entenc.c` is part of the set.
+
+The libcodec Makefile compiles third-party sources into a module through
+the variables `MODULE_SRCS_NAME` and `MODULE_CPP_NAME`. It places their
+objects under `build/libcodec/third_party`.
+
+The module handles the Ogg layer itself:
+
+- Each Opus stream begins with an identification header (`OpusHead`)
+  followed by a comment header (`OpusTags`). The module accepts version 0
+  headers with mapping family 0 (mono or stereo) or family 1 (up to eight
+  channels in the Vorbis channel order). It refuses other families.
+- Audio is always decoded at 48 kHz through the multistream decoder of
+  libopus. The input rate recorded in the header is informational only.
+- The output gain of the header (a Q7.8 value in decibels) is passed to
+  the decoder with `OPUS_SET_GAIN`.
+- The first pre-skip samples of each stream are discarded. On the
+  last page of a stream, the granule position gives the number of samples
+  in the stream, so the module removes the padding that the encoder added
+  to the final packet. If the first page with a granule position shows
+  that the stream starts later than its first packet, the module instead
+  removes the surplus samples at the start. A page with a granule position
+  can shorten the samples decoded before it, so the module returns samples
+  only up to the last such page.
+- For family 1, the channels are converted from the Vorbis order to the
+  WAV order with `codec_vorbis_channel_order`. The Vorbis module
+  uses the same function, which now lives in `libcodec.so`.
+- Chained streams with the same channel count are decoded one after
+  another. A chained stream with a different channel count ends the file,
+  as it does for Vorbis.
+
+The number of frames that `codec_audio_frames` reports is computed when
+the file is opened. For every chained stream, it is the granule position
+of the last page minus the pre-skip.
+
 ## Programs
 
 `view` lists the files of a directory whose extension a codec can decode
@@ -914,6 +965,19 @@ ImageMagick composes, with the delays, the number of frames and the loop
 count. It checks a rewind, the first frame through libgui, an exact round
 trip of an image with transparency, an animation saved by extension and
 decoded again, the refusal of animations by PNG, and a cut file.
+
+With the argument `opus`, used by the boot test `codec_opus`, the program
+decodes six fixtures that `tools/gen_codec_fixtures.py opus` creates with
+ffmpeg and libopus. There is one file each in SILK, hybrid and CELT mode
+(the generator checks the mode of every packet), a 5.1 file with mapping
+family 1, a file with two chained streams, and a copy of the CELT file
+with an output gain of -6 dB. ffmpeg decodes the same files with libopus
+into 16-bit FLAC references. The decoded samples must have exactly the
+length of the source signal, which the trimming at both ends determines.
+They may differ from the reference by at most one 16-bit step, because
+the two programs round the floating-point output differently. The test
+also checks the lookups by MIME type and extension, a damaged page and a
+cut file.
 
 The host test of `make check-libcodec` contains the same checks of the
 fixtures, a GIF of more than 256 colours whose median cut must reach

@@ -102,17 +102,18 @@ or skipped. `hda_pcm_poll` runs the same test without interrupts.
 
 Documents: `docs/design/hda.md`, `docs/design/audio.md`.
 
-### S3. Opus in Ogg
+### S3. Opus in Ogg (completed 2026-10-06)
 
 A libcodec module that decodes Opus streams in Ogg files (RFC 6716 and RFC
-7845) using the libopus decoder. It supports the SILK, CELT and hybrid
+7845) with the libopus decoder. It supports the SILK, CELT and hybrid
 modes, channel mapping families 0 and 1, the pre-skip and the output gain.
-The packets come from the existing Ogg demuxer of libcodec. The module
-provides a probe function and registers the MIME type
-`audio/ogg; codecs=opus` and the extension `.opus`.
+The existing Ogg demuxer of libcodec supplies the packets. The module
+provides a probe function and registers the MIME type `audio/opus` and
+the extension `.opus`.
 
-Boot test: `codec_opus` decodes reference files from the Opus test vectors
-in all three modes and compares checksums of the decoded output.
+Boot test: `codec_opus` decodes reference files in all three modes, a 5.1
+file, a chained file and a file with an output gain. It compares the
+output with the samples that ffmpeg decodes with libopus on the host.
 
 Document: `docs/design/codecs.md`.
 

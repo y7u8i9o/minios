@@ -57,12 +57,12 @@ static int add_module(const struct codec_module *m, const char *path)
 /* The modules compiled into the program, in the order of their names.
  * A new module must be added here as well. */
 extern const struct codec_module codec_module_bmp, codec_module_flac, codec_module_gif, codec_module_jpeg,
-    codec_module_mp3, codec_module_png, codec_module_svg, codec_module_vorbis, codec_module_wav;
+    codec_module_mp3, codec_module_opus, codec_module_png, codec_module_svg, codec_module_vorbis, codec_module_wav;
 
 static void load_all(void)
 {
     const struct codec_module *builtin[] = { &codec_module_bmp, &codec_module_flac, &codec_module_gif,
-                                             &codec_module_jpeg, &codec_module_mp3, &codec_module_png,
+                                             &codec_module_jpeg, &codec_module_mp3, &codec_module_opus, &codec_module_png,
                                              &codec_module_svg, &codec_module_vorbis, &codec_module_wav };
     for (size_t i = 0; i < sizeof builtin / sizeof builtin[0]; i++)
         add_module(builtin[i], "builtin");

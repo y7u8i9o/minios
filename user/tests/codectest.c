@@ -6,9 +6,10 @@
  * vorbis" the Vorbis decoder, both with the fixtures of
  * tools/gen_codec_fixtures.py, "codectest vorbisenc" the Vorbis encoder,
  * "codectest oggflac" FLAC in Ogg, "codectest mp3" the MP3 decoder and
- * encoder and "codectest gif" the GIF decoder and encoder with
- * animations. Any other argument runs every section. "codectest count" prints the number of codecs and is used by
- * the child process that runs with a different CODEC_PATH. */
+ * encoder, "codectest gif" the GIF decoder and encoder with animations,
+ * and "codectest opus" the Opus decoder. Any other argument runs every
+ * section. "codectest count" prints the number of codecs and is used by the
+ * child process that runs with a different CODEC_PATH. */
 #include <codec/codec.h>
 #include <gui/image.h>
 #include <errno.h>
@@ -589,6 +590,102 @@ static void test_vorbis(void)
     }
 }
 
+/* ---- Opus ---- */
+
+/* minios decodes each fixture, and ffmpeg with libopus decodes it on the
+ * host. The reference is the 16-bit output of ffmpeg, stored as FLAC. Both
+ * programs use the same libopus decoder, but they may round the float
+ * samples differently, so the 16-bit results can differ by one step. The
+ * fixtures cover the SILK, hybrid and CELT modes, a 5.1 stream with
+ * mapping family 1, two chained streams and an output gain of -6 dB. */
+static void test_opus(void)
+{
+    const struct codec *opus = codec_find("opus");
+    CHECK(opus && opus->kind == CODEC_AUDIO && opus->caps == CODEC_DECODE, "opus codec");
+    CHECK(codec_for_mime(CODEC_AUDIO, "audio/opus", CODEC_DECODE) == opus, "opus by MIME type");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Talk.OPUS", CODEC_DECODE) == opus, "opus by extension");
+    CHECK(codec_for_path(CODEC_AUDIO, "/home/Song.ogg", CODEC_DECODE) == codec_find("vorbis"),
+          ".ogg remains Vorbis by extension");
+    if (!opus)
+        return;
+    static const struct {
+        const char *name;
+        int channels;
+        long frames;
+    } files[] = {
+        { "silk", 1, 96000 }, { "hybrid", 2, 48000 }, { "celt", 2, 48000 },
+        { "51", 6, 24000 },   { "chained", 1, 33000 }, { "gain", 2, 48000 },
+    };
+    for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) {
+        char path[96], ref[96];
+        snprintf(path, sizeof path, "/etc/tests/codec-opus-%s.opus", files[i].name);
+        snprintf(ref, sizeof ref, "/etc/tests/codec-opus-%s.ref.flac", files[i].name);
+        struct codec_audio *a, *b;
+        int ea = codec_audio_open_file(path, &a), eb = codec_audio_open_file(ref, &b);
+        CHECK(ea == 0 && eb == 0, "open %s %d, %s %d", path, ea, ref, eb);
+        if (ea || eb) {
+            if (!ea)
+                codec_audio_close(a);
+            if (!eb)
+                codec_audio_close(b);
+            continue;
+        }
+        CHECK(codec_audio_codec(a) == opus, "%s is identified as Opus", path);
+        const struct codec_audio_format *fa = codec_audio_format(a);
+        CHECK(fa->rate == 48000 && fa->channels == files[i].channels, "%s: %d Hz, %d channels", path, fa->rate,
+              fa->channels);
+        long total = codec_audio_frames(a);
+        int32_t *sa, *sb;
+        long na = decode_all(a, &sa, &ea), nb = decode_all(b, &sb, &eb);
+        long worst = 0;
+        double sum = 0;
+        long count = 0;
+        if (na == nb && fa->channels == codec_audio_format(b)->channels)
+            for (long k = 0; k < na * fa->channels; k++) {
+                long d = labs((long)(((int64_t)sa[k] + 0x8000) >> 16) - (long)(sb[k] >> 16));
+                if (d > worst)
+                    worst = d;
+                sum += (double)d * d;
+                count++;
+            }
+        double rms = count ? sqrt(sum / count) : 99;
+        CHECK(ea == 0 && eb == 0 && na == files[i].frames && nb == na && total == na,
+              "%s: %ld frames (%ld announced, %ld expected), reference %ld, error %d", path, na, total,
+              files[i].frames, nb, ea);
+        CHECK(worst <= 1 && rms < 0.5, "%s differs from libopus by up to %ld, rms %.3f", path, worst, rms);
+        printf("codectest: opus %s %d Hz %d channels %ld frames, largest difference %ld, rms %d.%03d\n",
+               files[i].name, fa->rate, fa->channels, na, worst, (int)rms, (int)(rms * 1000) % 1000);
+        free(sa);
+        free(sb);
+        codec_audio_close(a);
+        codec_audio_close(b);
+    }
+
+    /* A changed byte in a page makes its CRC check fail. A cut file ends early. */
+    uint8_t *d;
+    size_t len;
+    if (codec_read_file("/etc/tests/codec-opus-celt.opus", &d, &len) == 0) {
+        struct codec_audio *a;
+        int32_t *s;
+        int err;
+        d[len / 2] ^= 0x40;
+        if (codec_audio_open(opus, d, len, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 48000, "a damaged page: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        d[len / 2] ^= 0x40;
+        if (codec_audio_open(opus, d, len - 1000, NULL, &a) == 0) {
+            long n = decode_all(a, &s, &err);
+            CHECK(err == -EBADMSG && n < 48000, "a cut file: %d after %ld frames", err, n);
+            free(s);
+            codec_audio_close(a);
+        }
+        free(d);
+    }
+}
+
 /* ---- the Vorbis encoder ---- */
 
 /* Test signals: a sequence of chords with decaying notes and clicks every
@@ -1071,7 +1168,8 @@ int main(int argc, char **argv)
         printf("%d\n", codec_count());
         return 0;
     }
-    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac", "mp3", "gif" };
+    static const char *const sections[] = { "image", "audio", "flac", "vorbis", "vorbisenc", "oggflac", "mp3", "gif",
+                                            "opus" };
     int known = 0;
     for (size_t i = 0; i < sizeof sections / sizeof sections[0]; i++)
         known |= argc > 1 && strcmp(argv[1], sections[i]) == 0;
@@ -1097,6 +1195,8 @@ int main(int argc, char **argv)
         test_mp3();
     if (WANTS("gif"))
         test_gif();
+    if (WANTS("opus"))
+        test_opus();
     printf("codectest: %d failures\n", failures);
     return failures ? 1 : 0;
 }

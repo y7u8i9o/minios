@@ -298,6 +298,13 @@ int codec_ogg_probe(const uint8_t *data, size_t len, int (*accept)(const uint8_t
 int64_t codec_ogg_total_granule(const uint8_t *data, size_t len, int (*accept)(const uint8_t *packet, size_t len));
 uint32_t codec_ogg_crc(const uint8_t *p, size_t n);
 
+/* The channel order of Vorbis I (section 4.3.9 of its specification),
+ * which Opus mapping family 1 also uses. For each position in the WAV
+ * channel order, the function stores the Vorbis channel to read from in
+ * order[position]. The array order must have room for 8 entries. With more
+ * than 8 channels, the order is the identity. */
+void codec_vorbis_channel_order(int *order, unsigned channels);
+
 /* The writer packs the packets of one logical stream into pages of about
  * 4 KiB. A page carries the granule position of the last packet completed
  * on it. codec_ogg_flush ends the current page, for example after the

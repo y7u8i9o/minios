@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create the fixtures of the codec tests (docs/plan/codecs.md).
 
-    tools/gen_codec_fixtures.py [flac | vorbis | oggflac | mp3 | gif]...
+    tools/gen_codec_fixtures.py [flac | vorbis | oggflac | mp3 | gif | opus]...
 
 Without arguments the script creates every group. The MP3 group needs
 lame and ffmpeg, and the GIF group Pillow and ImageMagick.
@@ -485,6 +485,132 @@ def music(frames, channels, rate, seed):
     return out
 
 
+def ogg_crc(data):
+    """The CRC of an Ogg page (RFC 3533): polynomial 0x04c11db7, initial
+    value 0, no bit reflection. The CRC field of the page must be zero
+    while the CRC is computed."""
+    crc = 0
+    for b in data:
+        crc ^= b << 24
+        for _ in range(8):
+            crc = (crc << 1) ^ 0x04c11db7 if crc & 0x80000000 else crc << 1
+            crc &= 0xffffffff
+    return crc
+
+
+def ogg_packets(path):
+    """The packets of an Ogg file with a single stream, reassembled from
+    their pages."""
+    packets, partial = [], b""
+    for _, _, page in ogg_pages(path):
+        segments = page[26]
+        lacing = page[27:27 + segments]
+        at = 27 + segments
+        for n in lacing:
+            partial += page[at:at + n]
+            at += n
+            if n < 255:
+                packets.append(partial)
+                partial = b""
+    return packets
+
+
+def opus_fixtures(tmp):
+    """Opus files that ffmpeg encodes with libopus: one file for each of the
+    three coding modes, a 5.1 file with mapping family 1, a file with two
+    chained streams, and a file with an output gain in its header. ffmpeg
+    decodes each file with libopus, which applies the pre-skip, the end
+    trimming and the output gain, and stores the result as a 16-bit FLAC
+    reference. The boot test codec_opus compares the decoder of minios with
+    these references."""
+    made = []
+
+    def source(name, frames, channels, rate, seed):
+        path = os.path.join(tmp, name + ".wav")
+        write_wav(path, music(frames, channels, rate, seed), channels, 16, rate)
+        return path
+
+    def encode(wav, dst, *options):
+        run("ffmpeg", "-y", "-loglevel", "error", "-i", wav, "-c:a", "libopus", *options, "-f", "ogg", dst)
+        return dst
+
+    def decode(ogg, channels):
+        raw = os.path.join(tmp, os.path.basename(ogg) + ".raw")
+        run("ffmpeg", "-y", "-loglevel", "error", "-c:a", "libopus", "-i", ogg, "-f", "s16le", "-ac", str(channels),
+            raw)
+        return open(raw, "rb").read()
+
+    def reference(name, data, channels):
+        raw = os.path.join(tmp, name + ".ref.raw")
+        open(raw, "wb").write(data)
+        dst = os.path.join(OUT, name + ".ref.flac")
+        run("ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", "48000", "-ac", str(channels), "-i", raw,
+            "-c:a", "flac", "-compression_level", "8", dst)
+        made.append(dst)
+
+    def check_mode(path, mode):
+        """Check that every audio packet of path uses the coding mode mode.
+        The configuration number in the TOC byte of the packet selects the
+        mode (section 3.1 of RFC 6716)."""
+        for packet in ogg_packets(path)[2:]:
+            config = packet[0] >> 3
+            found = "silk" if config < 12 else "hybrid" if config < 16 else "celt"
+            if found != mode:
+                sys.exit("gen_codec_fixtures: %s has a %s packet, expected %s" % (path, found, mode))
+
+    for name, frames, channels, rate, seed, mode, options in (
+            ("silk", 32000, 1, 16000, 61, "silk", ("-application", "voip", "-b:a", "12k")),
+            ("hybrid", 48000, 2, 48000, 62, "hybrid", ("-application", "voip", "-b:a", "20k")),
+            ("celt", 48000, 2, 48000, 63, "celt", ("-application", "lowdelay", "-b:a", "96k")),
+            ("51", 24000, 6, 48000, 64, None, ("-mapping_family", "1", "-b:a", "256k"))):
+        ogg = encode(source(name, frames, channels, rate, seed), os.path.join(OUT, "codec-opus-%s.opus" % name),
+                     *options)
+        if mode:
+            check_mode(ogg, mode)
+        made.append(ogg)
+        reference("codec-opus-" + name, decode(ogg, channels), channels)
+
+    # Two chained mono streams. ffmpeg decodes only the first stream of a
+    # chained file, so the reference is the concatenation of the two decoded
+    # streams.
+    a = encode(source("chain-a", 12000, 1, 24000, 65), os.path.join(tmp, "chain-a.opus"), "-b:a", "24k")
+    b = encode(source("chain-b", 9000, 1, 48000, 66), os.path.join(tmp, "chain-b.opus"), "-b:a", "48k")
+    chained = os.path.join(OUT, "codec-opus-chained.opus")
+    # ffmpeg gives both streams the same serial number. The code below
+    # assigns a different serial number to the first stream and recomputes
+    # the CRC of each of its pages.
+    a_data = open(a, "rb").read()
+    pages, at = [], 0
+    while at < len(a_data):
+        segments = a_data[at + 26]
+        size = 27 + segments + sum(a_data[at + 27:at + 27 + segments])
+        page = bytearray(a_data[at:at + size])
+        page[14:18] = (7001).to_bytes(4, "little")
+        page[22:26] = b"\0\0\0\0"
+        page[22:26] = ogg_crc(page).to_bytes(4, "little")
+        pages.append(bytes(page))
+        at += size
+    open(chained, "wb").write(b"".join(pages) + open(b, "rb").read())
+    made.append(chained)
+    reference("codec-opus-chained", decode(a, 1) + decode(b, 1), 1)
+
+    # Copy the stereo CELT file and set an output gain of -6 dB (Q7.8) in
+    # its identification header.
+    gain = os.path.join(OUT, "codec-opus-gain.opus")
+    pages = [bytearray(p[2]) for p in ogg_pages(os.path.join(OUT, "codec-opus-celt.opus"))]
+    head = 27 + pages[0][26]
+    pages[0][head + 16:head + 18] = (-6 * 256 & 0xffff).to_bytes(2, "little")
+    pages[0][22:26] = b"\0\0\0\0"
+    pages[0][22:26] = ogg_crc(pages[0]).to_bytes(4, "little")
+    open(gain, "wb").write(b"".join(pages))
+    made.append(gain)
+    reference("codec-opus-gain", decode(gain, 2), 2)
+
+    for path in made:
+        run("ffmpeg", "-loglevel", "error", "-xerror", "-i", path, "-f", "null", "-")
+    return made
+
+
 def mp3_fixtures(tmp):
     """MP3 files of the LAME encoder: MPEG-1 at a constant bit rate with an
     ID3v2 tag, MPEG-2 with a variable bit rate, and MPEG-2.5. FFmpeg
@@ -576,9 +702,9 @@ def gif_fixtures(tmp):
 
 
 GROUPS = {"flac": flac_fixtures, "vorbis": vorbis_fixtures, "oggflac": oggflac_fixtures, "mp3": mp3_fixtures,
-          "gif": gif_fixtures}
+          "gif": gif_fixtures, "opus": opus_fixtures}
 TOOLS = {"flac": ("flac", "ffmpeg"), "vorbis": ("flac", "pkg-config"), "oggflac": ("flac", "ffmpeg"),
-         "mp3": ("lame", "ffmpeg"), "gif": ("magick",)}
+         "mp3": ("lame", "ffmpeg"), "gif": ("magick",), "opus": ("ffmpeg",)}
 
 
 def main():

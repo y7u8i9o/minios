@@ -283,6 +283,7 @@ third_party/droidfallback/**    ttf gui_ttf
 third_party/fontawesome/**      icons
 third_party/stb/**              codec_image
 third_party/minimp3/**          check-libcodec codec_mp3 codec_tool
+third_party/opus/**             check-libcodec codec_opus
 third_party/shine/**            check-libcodec codec_mp3 codec_tool
 tools/fetch_mp3.sh              none
 tools/patches/shine.patch       check-libcodec codec_mp3
