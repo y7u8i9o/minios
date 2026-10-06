@@ -1,6 +1,7 @@
 """make check-publish: runs tools/publish-repo.py against a local server
 that behaves as the generic package registry of Forgejo. The server
-refuses requests without the token, refuses to replace a file, lists
+refuses requests without the token, refuses an upload with a form
+content type as Forgejo does, refuses to replace a file, lists
 the files of a version with their SHA-256 digests, and records every
 change in the order of arrival."""
 import hashlib
@@ -62,7 +63,10 @@ class Registry(http.server.BaseHTTPRequestHandler):
         if not self.authorized():
             return
         data = self.rfile.read(int(self.headers["Content-Length"]))
-        if key is None:
+        kind = self.headers.get("Content-Type", "")
+        if kind.startswith("application/x-www-form-urlencoded") or kind.startswith("multipart/"):
+            self.reply(500, b"request Content-Type isn't multipart/form-data")
+        elif key is None:
             self.reply(400)
         elif key in self.files:
             self.reply(409, b"file exists")

@@ -57,7 +57,12 @@ def main():
     file_url = f"{base}/{package}/{VERSION}"
 
     def request(method, url, data=None):
-        req = urllib.request.Request(url, data=data, method=method, headers={"Authorization": auth})
+        # urllib sends a body as a form without an explicit type. Forgejo
+        # refuses a form upload, so every body is a byte stream.
+        headers = {"Authorization": auth}
+        if data is not None:
+            headers["Content-Type"] = "application/octet-stream"
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 return r.status, r.read()
