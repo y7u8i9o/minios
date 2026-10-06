@@ -34,7 +34,12 @@ static void layout_tree(struct widget *w)
             layout_tree(c);
 }
 
-static void paint_tree(struct widget *w, struct painter *p, int force, struct rect *damage, int *has, struct widget *skip)
+/* Paints the dirty widgets of the tree. The device rectangle of each
+ * repainted subtree goes into rects, which merges close rectangles, so
+ * the server composes only the repainted parts and not their bounding
+ * box. force is set below a repainted widget, whose rectangle already
+ * contains the children. */
+static void paint_tree(struct widget *w, struct painter *p, int force, struct rect_set *rects, struct widget *skip)
 {
     if (!w->visible || w == skip)
         return;
@@ -43,16 +48,14 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
         if (w->cls->paint)
             w->cls->paint(w, p);
         struct rect r = p->clip;
-        if (!rect_empty(r)) {
-            *damage = *has ? rect_union(*damage, r) : r;
-            *has = 1;
-        }
+        if (!rect_empty(r) && !force)
+            rect_set_add(rects, r);
         for (struct widget *c = w->first; c; c = c->next)
-            paint_tree(c, p, 1, damage, has, skip);
+            paint_tree(c, p, 1, rects, skip);
     } else if (w->child_dirty) {
         for (struct widget *c = w->first; c; c = c->next)
             if (c->dirty || c->child_dirty)
-                paint_tree(c, p, 0, damage, has, skip);
+                paint_tree(c, p, 0, rects, skip);
     }
     w->dirty = 0;
     w->child_dirty = 0;
@@ -91,29 +94,28 @@ struct rect window_paint(struct widget *window)
     struct painter p;
     int scale = ws->win->scale > 0 ? ws->win->scale : 1;
     painter_init_scaled(&p, &ws->win->surf, app_theme(window->app), scale);
+    struct rect_set rects = { 0 };
+    paint_tree(window, &p, 0, &rects, ws->popup_win ? ws->popup : NULL);
     struct rect damage = none;
-    int has = 0;
-    paint_tree(window, &p, window->dirty, &damage, &has, ws->popup_win ? ws->popup : NULL);
-    if (has) {
-        damage = device_to_logical(damage, scale);
-        gui_damage(ws->win, damage.x, damage.y, damage.w, damage.h);
+    for (int i = 0; i < rects.n; i++) {
+        struct rect r = device_to_logical(rects.r[i], scale);
+        gui_damage(ws->win, r.x, r.y, r.w, r.h);
+        damage = i ? rect_union(damage, r) : r;
     }
     if (ws->popup_win && ws->popup) {
         gui_begin_paint(ws->popup_win);
         struct painter pp;
         int pscale = ws->popup_win->scale > 0 ? ws->popup_win->scale : 1;
         painter_init_scaled(&pp, &ws->popup_win->surf, app_theme(window->app), pscale);
-        struct rect pd = none;
-        int phas = 0;
-        paint_tree(ws->popup, &pp, 1, &pd, &phas, NULL);
-        if (phas) {
-            pd = device_to_logical(pd, pscale);
-            gui_damage(ws->popup_win, pd.x, pd.y, pd.w, pd.h);
-        }
+        /* The popup is painted whole, and its damage is the surface. */
+        struct rect_set prects = { 0 };
+        paint_tree(ws->popup, &pp, 1, &prects, NULL);
+        if (ws->popup->w > 0 && ws->popup->h > 0)
+            gui_damage(ws->popup_win, 0, 0, ws->popup->w, ws->popup->h);
     }
-    if (has)
+    if (rects.n)
         gui_count_paint(uptime_us() - t0);
-    return has ? damage : none;
+    return damage;
 }
 
 /* ---- events ---- */

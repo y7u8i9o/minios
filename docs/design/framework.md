@@ -110,8 +110,9 @@ described in `dnd.md`.
 dirty) and calls `gui_begin_paint`, which moves the window to a free
 buffer (`gui.md`). It then walks the tree: a dirty widget and everything below it are
 repainted, a widget with only dirty descendants recurses without
-painting. The union of the repainted rectangles is sent to the server
-in one `gui_damage`; `app_set_damage_log` prints it for the tests.
+painting. Each repainted subtree gives one damage rectangle, and close
+rectangles merge in a `rect_set`. `window_paint` returns their union,
+which `app_set_damage_log` prints for the tests.
 
 ## Core widgets (`src/widgets/`)
 

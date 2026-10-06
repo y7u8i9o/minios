@@ -289,6 +289,9 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
 void scene_init(void);
 void scene_damage(struct rect r);
 void scene_damage_all(void);
+/* Damage of the contents of s. The parts that opaque surfaces above s
+ * cover do not change on the screen and are left out. */
+void scene_damage_surface(const struct csurface *s, struct rect r);
 int scene_has_damage(void);
 void scene_compose(void);
 void scene_set_cursor(int x, int y);

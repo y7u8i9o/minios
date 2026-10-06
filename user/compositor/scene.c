@@ -188,6 +188,42 @@ static int pieces_subtract(struct rect *pieces, int *n, struct rect cover)
     return 1;
 }
 
+/* The opaque area of a surface above others: the frame of a decorated
+ * window or an XRGB surface, else the opaque region of an ARGB buffer.
+ * Removes it from the pieces. Returns 0 when the pieces become too many. */
+static int subtract_opaque(struct rect *pieces, int *np, const struct csurface *cover)
+{
+    if (!cover->current.buffer)
+        return 1;
+    if (cover->current.buffer->format == FORMAT_XRGB8888)
+        return pieces_subtract(pieces, np, decor_has(cover) ? decor_opaque(cover) : surface_rect(cover));
+    for (int q = 0; q < cover->current.nopaque && *np; q++) {
+        struct rect o = cover->current.opaque[q];
+        o.x += cover->x;
+        o.y += cover->y;
+        if (!pieces_subtract(pieces, np, o))
+            return 0;
+    }
+    return 1;
+}
+
+void scene_damage_surface(const struct csurface *s, struct rect r)
+{
+    struct csurface *order[256];
+    int n = scene_order(order, 256), i = 0;
+    while (i < n && order[i] != s)
+        i++;
+    struct rect pieces[MAX_PIECES] = { r };
+    int np = 1;
+    for (int j = i + 1; j < n && np; j++)
+        if (!subtract_opaque(pieces, &np, order[j])) {
+            scene_damage(r);
+            return;
+        }
+    for (int k = 0; k < np; k++)
+        scene_damage(pieces[k]);
+}
+
 /* Blit a surface's buffer clipped to clip (logical screen coordinates). */
 static void draw_surface(struct csurface *s, struct rect clip)
 {
@@ -465,30 +501,11 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
         pieces[0] = rect_intersect(extent(s), r);
         np = rect_empty(pieces[0]) ? 0 : 1;
         int exact = 1;
-        for (int j = i + 1; j < n && np; j++) {
-            struct csurface *cover = order[j];
-            if (!cover->current.buffer)
-                continue;
-            if (cover->current.buffer->format == FORMAT_XRGB8888) {
-                struct rect opaque = decor_has(cover) ? decor_opaque(cover) : surface_rect(cover);
-                if (!pieces_subtract(pieces, &np, opaque)) {
-                    exact = 0;
-                    break;
-                }
-            } else {
-                for (int q = 0; q < cover->current.nopaque && np; q++) {
-                    struct rect o = cover->current.opaque[q];
-                    o.x += cover->x;
-                    o.y += cover->y;
-                    if (!pieces_subtract(pieces, &np, o)) {
-                        exact = 0;
-                        break;
-                    }
-                }
-                if (!exact)
-                    break;
+        for (int j = i + 1; j < n && np; j++)
+            if (!subtract_opaque(pieces, &np, order[j])) {
+                exact = 0;
+                break;
             }
-        }
         if (!exact) {
             pieces[0] = rect_intersect(extent(s), r);
             np = 1;

@@ -212,8 +212,11 @@ int comp_set_mode(int width, int height, int scale)
     scene_set_cursor(cursor_x, cursor_y);
     /* The arrow follows the scale. */
     scene_cursor_changed();
-    shell_output_changed();
+    /* The clients learn the new scale before the configure events of the
+     * new size. A client that sized its buffers for the new size at the
+     * old scale could exceed the limit of a memory pool. */
     output_changed();
+    shell_output_changed();
     debug_screen_changed();
     scene_damage_all();
     comp_log("mode %dx%d scale %d", screen_w, screen_h, screen_scale);

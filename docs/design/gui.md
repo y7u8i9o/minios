@@ -241,6 +241,11 @@ table is a growable array of pointers.
   buffers. The slot logic is in `lib/libgui/src/buffers.c` without
   protocol calls, and `make check-libgui` tests it against a reference
   picture.
+- A new output scale applies after all events of the same read, so a
+  configure that X12 sends with the scale change resizes a window once,
+  at its new size and scale. A resize that cannot get memory leaves the
+  previous geometry, and the window commits nothing until a resize
+  succeeds.
 - Toolkit (`widgets.c`, `widgets_text.c`, `widgets_menu.c`): `ui->font`
   selects the font (`ui_set_font`), line heights follow it. New widgets:
   scroll bar (`ui_scrollbar`, `ui_scrollbar_set`, thumb dragging, arrows

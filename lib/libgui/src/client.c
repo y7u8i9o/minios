@@ -50,6 +50,7 @@ struct win {
     size_t content_off;         /* offset of gui_window.surf in a slot, in pixels */
     struct rect_set damage;     /* device pixels of the surface, since the last commit */
     int frame_pending, need_commit;
+    int resize_failed;              /* the buffers do not match the size: commit nothing */
     int chrome_dirty;           /* 1 header bar, 2 the whole chrome, painted by gui_begin_paint */
     struct wire_proxy *frame_cb;    /* The frame callback that is pending, or NULL. */
     int min_w, min_h;
@@ -239,9 +240,26 @@ static int output_scale(void)
     return 1;
 }
 static void surface_resize(struct gui_window *w, int width, int height);
+/* A new output scale is applied after the events of the same read. X12
+ * sends the configure events of a mode change right after the output
+ * events. A window with a configure among them is then resized once, at
+ * its new size and the new scale, and not before at its old size and the
+ * new scale, which could exceed the limit of a memory pool. */
+static int scale_check;
+
 static void on_output_done(void *user, struct wire_proxy *o)
 {
     output_bounds();
+    scale_check = 1;
+}
+
+/* Resizes the windows whose buffers have another scale than the output,
+ * after the events of a read were dispatched. */
+static void apply_output_scale(void)
+{
+    if (!scale_check)
+        return;
+    scale_check = 0;
     int s = output_scale();
     for (struct gui_window *w = wins; w; w = w->next) {
         if (w->scale == s || !w->surf.pixels)
@@ -250,6 +268,14 @@ static void on_output_done(void *user, struct wire_proxy *o)
         struct wmsg m = { WM_RESIZED, 0, w->id, w->width, w->height, 0, 0, "" };
         push(&m);
     }
+}
+
+/* Dispatches the events of one read and then applies a new scale. */
+static int dispatch_events(void)
+{
+    int r = wire_display_dispatch(display);
+    apply_output_scale();
+    return r;
 }
 const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
@@ -992,7 +1018,7 @@ int gui_connect(void)
         wire_display_flush(display);
         struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
         poll(&pf, 1, 2000);
-        if (wire_display_dispatch(display) < 0)
+        if (dispatch_events() < 0)
             return -1;
     }
     if (!compositor || !shm || !shell || !seat) {
@@ -1217,7 +1243,7 @@ static int wait_display(long ms)
     int r = poll(&pf, 1, ms < 0 ? 0 : (int)ms);
     if (r < 0 && errno != EINTR)
         return -1;
-    if (r > 0 && wire_display_dispatch(display) < 0)
+    if (r > 0 && dispatch_events() < 0)
         return -1;
     return 0;
 }
@@ -1268,6 +1294,7 @@ static void surface_resize(struct gui_window *w, int width, int height)
     /* The newest contents, copied into the new geometry. They remain
      * mapped until reap_old_pools, which runs last. */
     struct surface old = w->surf;
+    int old_w = b->w, old_h = b->h;
     int old_committed = b->committed;
     /* The old contents' origin in the old buffer. The CSD state may have
      * changed since, so the origin comes from the offset. */
@@ -1277,13 +1304,18 @@ static void surface_resize(struct gui_window *w, int width, int height)
     b->w = dw;
     b->h = dh;
     int t = wi->pool.pool && need <= wi->pool.cap ? gui_buffers_pick(b, GUI_SLOTS) : -1;
-    if (t < 0) {
-        if (new_pool(wi, need) < 0)
-            return;
+    if (t < 0 && new_pool(wi, need) == 0)
         t = 0;
-    }
-    if (ensure_buffer(wi, t) < 0)
+    if (t < 0 || ensure_buffer(wi, t) < 0) {
+        /* Without buffers of the new size the window commits nothing: a
+         * buffer of the old size would contradict the acknowledged
+         * configure. The next successful resize ends this state. */
+        b->w = old_w;
+        b->h = old_h;
+        wi->resize_failed = 1;
         return;
+    }
+    wi->resize_failed = 0;
     b->cur = t;
     b->committed = 0;
     struct rect c = csd_content(&wi->csd, width, height);
@@ -1345,7 +1377,7 @@ static void commit_now(struct gui_window *w)
     struct gui_buffers *b = &wi->bufs;
     if (wi->chrome_dirty && !wi->frame_pending)
         gui_begin_paint(w);
-    if (!wi->damage.n || !b->nslots)
+    if (!wi->damage.n || !b->nslots || wi->resize_failed)
         return;
     if (wi->frame_pending) {
         if (!wi->need_commit)
@@ -1838,7 +1870,7 @@ static void roundtrip(void)
     for (int i = 0; i < 100 && !sync_done; i++) {
         struct pollfd pf = { wire_display_fd(display), POLLIN, 0 };
         poll(&pf, 1, 10);
-        if (wire_display_dispatch(display) < 0)
+        if (dispatch_events() < 0)
             return;
     }
 }
@@ -2067,7 +2099,7 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
             return 1;
         }
         /* Requests made by listeners (acks, commits) go out before waiting. */
-        if (wire_display_dispatch(display) < 0)
+        if (dispatch_events() < 0)
             return -1;
         gui_flush();
         if (qhead != qtail)
@@ -2088,7 +2120,7 @@ int gui_next_event(struct wmsg *ev, int timeout_ms)
             return -1;
         if (r > 0 && !pf[0].revents)
             continue;               /* drop data arrived */
-        if (wire_display_dispatch(display) < 0)
+        if (dispatch_events() < 0)
             return -1;
         if (timeout_ms > 0 && qhead == qtail) {
             gui_flush();

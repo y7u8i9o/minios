@@ -298,7 +298,7 @@ void perf_frame_stats_done(void)
     char line[96];
     snprintf(line, sizeof line, "Statistics of the last %s", text);
     widget_set_text(period_label, line);
-    fill_table();
+    /* perf_stats, which follows in the same refresh, fills the table. */
 }
 
 void perf_tick(void)

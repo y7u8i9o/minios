@@ -226,6 +226,22 @@ static void draw_task(struct painter *p, int i, int x, int w)
     panel_label(p, tx, BUTTON_Y, x + w - 4 - tx, h - 2 * BUTTON_Y, tasks[i].title, color, 0);
 }
 
+/* The text of the clock: the weekday, the day and the month in the
+ * language of LC_TIME, and the time. %e pads a day of one digit with a
+ * space, which the collapsing of repeated spaces removes. */
+static void clock_text(char *t, size_t size)
+{
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    strftime(t, size, "%a %e %b %R", &tm);
+    for (char *q = t; *q; q++)
+        while (q[0] == ' ' && q[1] == ' ')
+            memmove(q, q + 1, strlen(q));
+}
+
+static char drawn_clock[48];            /* the clock text of the last draw */
+
 void draw_panel(void)
 {
     struct painter p;
@@ -258,18 +274,8 @@ void draw_panel(void)
     mixer_draw_button(&p, hover == HOVER_MIXER);
     if (calendar_is_open() || hover == HOVER_CLOCK)
         button(&p, clock_x(), CLOCK_W - 4, calendar_is_open() ? BUTTON_OPEN : BUTTON_HOVER);
-    time_t now = time(NULL);
-    struct tm tm;
-    localtime_r(&now, &tm);
-    /* The weekday, the day and the month in the language of LC_TIME, and
-     * the time. %e pads a day of one digit with a space, which the
-     * collapsing of repeated spaces removes. */
-    char t[48];
-    strftime(t, sizeof t, "%a %e %b %R", &tm);
-    for (char *q = t; *q; q++)
-        while (q[0] == ' ' && q[1] == ' ')
-            memmove(q, q + 1, strlen(q));
-    panel_label(&p, clock_x(), 0, CLOCK_W - 4, h, t, PANEL_TEXT, 1);
+    clock_text(drawn_clock, sizeof drawn_clock);
+    panel_label(&p, clock_x(), 0, CLOCK_W - 4, h, drawn_clock, PANEL_TEXT, 1);
     power_draw_button(&p, hover == HOVER_POWER);
 
     /* The show desktop button at the right edge, behind a line. */
@@ -636,17 +642,25 @@ int main(void)
             read(tfd, &n, 8);
             /* A language chosen in Settings applies to the panel and to
              * the programs that it starts from now on. */
+            int changed = 0;
             if (conf_export_locale()) {
                 setlocale(LC_ALL, "");
                 log_line("language %s", getenv("LANG"));
+                changed = 1;
             }
             /* A position chosen in Settings applies within a second. */
             int top = position_setting();
             if (top != panel_at_top) {
                 set_position(top);
                 log_line("position %s", top ? "top" : "bottom");
+                changed = 1;
             }
-            draw_panel();
+            /* The panel is drawn again only for a change: the clock
+             * shows minutes, so most seconds change nothing. */
+            char t[sizeof drawn_clock];
+            clock_text(t, sizeof t);
+            if (changed || strcmp(t, drawn_clock) != 0)
+                draw_panel();
         }
         if (pf[0].revents & (POLLIN | POLLHUP))
             if (wire_display_dispatch(display) < 0)

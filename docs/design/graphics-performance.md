@@ -465,3 +465,26 @@ Values that did not improve:
   drag rows show.
 - The tick based CPU time of X12 is not comparable between the runs
   (see G9).
+
+## Idle session (2026-10-06)
+
+An idle session at 2560x1600@2 with panel, desktop, a terminal and the
+Performance page of x12settings composed 5.8 million device pixels per
+second. A temporary log of every commit showed the sources:
+
+- The desktop read its directory every second and repainted its whole
+  surface each time, also where windows covered it. It now repaints only
+  when the entries changed.
+- The panel redrew itself every second, although its clock shows
+  minutes. It now redraws when the clock text or a setting changed.
+- X12 composed the damage of a surface also where opaque surfaces above
+  it covered the surface. `scene_damage_surface` now leaves those parts
+  out. It uses the same opacity rules as the composition.
+- The framework sent the bounding box of all repainted widgets. It now
+  sends a rectangle per repainted widget, which `rect_set` merges when
+  they lie close together.
+
+Afterwards the same session composed 1.7 million device pixels per
+second. All of them come from the Performance page, whose four graphs
+and table change every second. On another page of x12settings the
+session composes nothing.

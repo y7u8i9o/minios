@@ -320,7 +320,7 @@ static void damage_contents(struct csurface *s)
     struct rect area = surface_rect(s);
     for (int i = 0; i < s->pending.ndamage; i++) {
         struct rect d = s->pending.damage[i];
-        scene_damage(rect_intersect((struct rect){ s->x + d.x, s->y + d.y, d.w, d.h }, area));
+        scene_damage_surface(s, rect_intersect((struct rect){ s->x + d.x, s->y + d.y, d.w, d.h }, area));
     }
 }
 
@@ -396,7 +396,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         if (same && !all_changed && s->pending.ndamage) {
             damage_contents(s);
         } else if (same) {
-            scene_damage(surface_rect(s));
+            scene_damage_surface(s, surface_rect(s));
         } else {
             scene_damage(old);
             scene_damage(now);

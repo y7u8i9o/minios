@@ -142,8 +142,13 @@ static int entry_cmp(const void *a, const void *b)
     return strcmp(x->name, y->name);
 }
 
+/* Reads the desktop directory. The desktop is drawn again only when the
+ * entries changed: the directory is read every second. */
 static void refresh(void)
 {
+    static struct entry before[MAX_ENTRIES];
+    int nbefore = nentries;
+    memcpy(before, entries, (size_t)nentries * sizeof entries[0]);
     nentries = 0;
     DIR *d = opendir(desktop_dir());
     if (d) {
@@ -166,7 +171,11 @@ static void refresh(void)
     qsort(entries, (size_t)nentries, sizeof entries[0], entry_cmp);
     if (selected >= nentries)
         selected = -1;
-    if (desk)
+    int same = nentries == nbefore;
+    for (int i = 0; same && i < nentries; i++)
+        same = strcmp(entries[i].name, before[i].name) == 0 && strcmp(entries[i].label, before[i].label) == 0 &&
+               entries[i].dir == before[i].dir && entries[i].icon == before[i].icon;
+    if (desk && !same)
         widget_invalidate(desk);
 }
 
