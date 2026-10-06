@@ -7,51 +7,35 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <pwd.h>
+#include <minios/proctab.h>
 
-/* The account name of the uid column, or the number itself. */
-static const char *user_name(const char *uid_text)
+/* The account name of uid, or the number itself. */
+static const char *user_name(unsigned uid)
 {
-    static char last_uid[16], last_name[32];
-    if (strcmp(uid_text, last_uid) != 0) {
-        char *end;
-        unsigned long uid = strtoul(uid_text, &end, 10);
-        struct passwd *pw = *end ? NULL : getpwuid((uid_t)uid);
-        snprintf(last_name, sizeof last_name, "%s", pw ? pw->pw_name : uid_text);
-        snprintf(last_uid, sizeof last_uid, "%s", uid_text);
+    static unsigned last_uid = (unsigned)-1;
+    static char last_name[32];
+    if (uid != last_uid) {
+        struct passwd *pw = getpwuid((uid_t)uid);
+        if (pw)
+            snprintf(last_name, sizeof last_name, "%s", pw->pw_name);
+        else
+            snprintf(last_name, sizeof last_name, "%u", uid);
+        last_uid = uid;
     }
     return last_name;
 }
 
 int main(void)
 {
-    FILE *file = fopen("/dev/proc", "r");
-    if (!file) {
-        fprintf(stderr, "ps: /dev/proc: %s\n", strerror(errno));
+    static struct proc_entry rows[256];
+    int n = proc_table_read(rows, 256);
+    if (n < 0) {
+        fprintf(stderr, "ps: /dev/proc: %s\n", strerror(-n));
         return 1;
     }
-    char *line = NULL;
-    size_t capacity = 0;
-    int header = 1;
-    while (getline(&line, &capacity, file) >= 0) {
-        char *columns[8], *p = line;
-        int count = 0;
-        while (*p && count < 8) {
-            p += strspn(p, " \t\r\n");
-            if (!*p)
-                break;
-            columns[count++] = p;
-            p += strcspn(p, count == 8 ? "\r\n" : " \t\r\n");
-            if (*p)
-                *p++ = 0;
-        }
-        if (count != 8)
-            continue;
-        printf("%5s %5s %5s %-8s %-8s %8s %8s %s\n", columns[0], columns[1], columns[2],
-               header ? "USER" : user_name(columns[6]), columns[3], columns[4], columns[5], columns[7]);
-        header = 0;
-    }
-    int status = ferror(file) || ferror(stdout);
-    free(line);
-    fclose(file);
-    return status;
+    printf("%5s %5s %5s %-8s %-8s %8s %8s %s\n", "PID", "PPID", "PGID", "USER", "STATE", "TIME", "RSS", "NAME");
+    for (int i = 0; i < n; i++)
+        printf("%5d %5d %5d %-8s %-8s %8lu %8lu %s\n", (int)rows[i].pid, (int)rows[i].ppid, (int)rows[i].pgid,
+               user_name(rows[i].uid), rows[i].state, rows[i].ticks, rows[i].rss_kib, rows[i].name);
+    return ferror(stdout) ? 1 : 0;
 }

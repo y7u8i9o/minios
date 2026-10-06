@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <wire/server.h>
 #include <gui/gfx.h>
+#include <gui/display.h>
 #include "core-server.h"
 #include "shell-server.h"
 #include "seat-server.h"
@@ -206,10 +207,6 @@ struct comp_settings {
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1
 /* display_mode packs width, height (up to 16383) and the pixel scale (1..4). */
-#define DISPLAY_MODE_PACK(w, h, s) (((s) << 28) | ((w) << 14) | (h))
-#define DISPLAY_MODE_W(m) (((m) >> 14) & 0x3fff)
-#define DISPLAY_MODE_H(m) ((m) & 0x3fff)
-#define DISPLAY_MODE_S(m) (((m) >> 28) & 7)
 extern struct comp_settings settings;
 void debug_init(struct wire_server *srv);
 void debug_screen_changed(void);              /* sends the new size to screencopy clients */

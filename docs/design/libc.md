@@ -352,6 +352,17 @@ made a pixel loop six times slower when the linker happened to place it
 across one. `memmove`, `memset` and the copy loop of `memcpy` carry the
 attribute as well.
 
+## The process table (2026-10-06)
+
+`minios/proctab.h` reads the table of `/dev/proc`. `proc_table_read`
+fills an array of `struct proc_entry` with the columns PID, PPID, PGID,
+STATE, TIME, RSS, UID and NAME of every process. `proc_table_find`
+returns the row of one pid, or `-ESRCH`. The functions replaced the
+private parsers of `ps`, `sysmon`, `profiler`, `wireview`, `libprof`,
+`credtest` and `memreleasetest` (X1 of `docs/plan/x12settings.md`).
+`libctest` checks the row of its own process and the row of the
+kernel.
+
 ## Microseconds since boot (2026-10-06)
 
 `uptime_us()` in `unistd.h` returns the microseconds of `CLOCK_MONOTONIC`,

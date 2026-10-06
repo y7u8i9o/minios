@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <minios/proctab.h>
 
 int prof_open(void)
 {
@@ -475,34 +476,14 @@ int prof_resolver_kernel(struct prof_resolver *r)
     return r->kernel ? 0 : -1;
 }
 
-/* The PID PPID PGID STATE TIME RSS UID NAME table of /dev/proc. */
+/* The NAME column of the process table. */
 static int read_proc_name(pid_t pid, char *out, size_t size)
 {
-    FILE *f = fopen("/dev/proc", "r");
-    if (!f)
+    struct proc_entry e;
+    if (proc_table_find(pid, &e) < 0)
         return -1;
-    char line[256];
-    int found = -1;
-    while (found < 0 && fgets(line, sizeof line, f)) {
-        char *end;
-        long p = strtol(line, &end, 10);
-        if (end == line || p != pid)
-            continue;
-        char *tok = end;
-        for (int col = 0; col < 6; col++) {
-            while (*tok == ' ')
-                tok++;
-            while (*tok && *tok != ' ')
-                tok++;
-        }
-        while (*tok == ' ')
-            tok++;
-        tok[strcspn(tok, "\n")] = '\0';
-        snprintf(out, size, "%s", tok);
-        found = 0;
-    }
-    fclose(f);
-    return found;
+    snprintf(out, size, "%s", e.name);
+    return 0;
 }
 
 static struct resolver_proc *resolver_proc(struct prof_resolver *r, pid_t pid)

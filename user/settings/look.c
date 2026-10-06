@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <gui/display.h>
 
 /* ---- appearance ---- */
 
@@ -20,7 +21,7 @@ static const struct { const char *name; const char *path; } fonts[] = {
 };
 #define NFONTS 4
 
-static struct widget *wall_combo, *mode_combo, *red, *green, *blue, *swatch, *font_combo, *size_spin, *scale_combo,
+static struct widget *wall_combo, *mode_combo, *color_button, *font_combo, *size_spin, *scale_combo,
                      *term_spin;
 static char wallpapers[16][128];
 static int nwallpapers;
@@ -45,19 +46,11 @@ static int on_panel_position(struct widget *w, void *args, void *arg)
         conf_set("panel_position", w->value == 1 ? "top" : "bottom");
     return 1;
 }
-static int on_swatch(struct widget *w, void *args, void *arg)
-{
-    struct painter *p = ((struct sig_paint *)args)->p;
-    painter_fill(p, 0, 0, w->w, w->h, (uint32_t)(red->value << 16 | green->value << 8 | blue->value));
-    painter_frame(p, 0, 0, w->w, w->h, 0x00808080);
-    return 1;
-}
 static int on_color(struct widget *w, void *args, void *arg)
 {
-    widget_invalidate(swatch);
     if (building) return 1;
     char text[16];
-    snprintf(text, sizeof text, "0x%02x%02x%02x", red->value, green->value, blue->value);
+    snprintf(text, sizeof text, "0x%06x", colorbutton_color(w));
     conf_set("desktop_color", text);
     return 1;
 }
@@ -135,18 +128,9 @@ void build_appearance(struct widget *page)
     widget_set_grid(mode_combo, r++, 1, 1, 1);
     uint32_t color = (uint32_t)strtoul(conf_get("desktop_color"), NULL, 0);
     row_label(grid, r, _("Desktop colour"));
-    swatch = canvas_new(grid);
-    widget_set_hint(swatch, 0, 22);
-    widget_connect(swatch, "paint", on_swatch, NULL);
-    widget_set_grid(swatch, r++, 1, 1, 1);
-    struct widget **sliders[] = { &red, &green, &blue };
-    const char *names[] = { _("Red"), _("Green"), _("Blue") };
-    for (int i = 0; i < 3; i++) {
-        row_label(grid, r, names[i]);
-        *sliders[i] = slider_new(grid, 0, 255, (int)(color >> (16 - 8 * i)) & 0xff);
-        widget_set_grid(*sliders[i], r++, 1, 1, 1);
-        widget_connect(*sliders[i], "changed", on_color, NULL);
-    }
+    color_button = colorbutton_new(grid, color, _("Desktop colour"));
+    widget_connect(color_button, "changed", on_color, NULL);
+    widget_set_grid(color_button, r++, 1, 1, 1);
     widget_set_grid(separator_new(grid), r++, 0, 1, 2);
     row_label(grid, r, _("Interface font"));
     font_combo = combobox_new(grid);
@@ -191,16 +175,15 @@ void build_appearance(struct widget *page)
 
 /* ---- display ---- */
 
-/* Modes any virtio-gpu scanout accepts; the 16 MiB buffer contains up to 2560x1600. */
-static const char *const resolutions[] = { "1024x768", "1280x800", "1280x1024", "1440x900", "1600x1200",
-                                           "1680x1050", "1920x1080", "1920x1200", "2560x1440", "2560x1600" };
-#define NRES 10
+/* The resolutions of a virtio-gpu scanout (gui/display.h). */
+static const char *const *resolutions;
+static int nres;
 static struct widget *res_combo, *pixel_combo, *frame_spin, *decor_combo, *current_label;
 
 static void apply_display_mode(void)
 {
     if (building) return;
-    if (res_combo->value >= 0 && res_combo->value < NRES) {
+    if (res_combo->value >= 0 && res_combo->value < nres) {
         char text[32];
         snprintf(text, sizeof text, "%s@%d", resolutions[res_combo->value], pixel_combo->value > 0 ? 2 : 1);
         conf_set("display_mode", text);
@@ -244,7 +227,8 @@ void build_display(struct widget *page)
     row_label(grid, r, _("Resolution"));
     res_combo = combobox_new(grid);
     int selected = 0;
-    for (int i = 0; i < NRES; i++) {
+    nres = display_resolutions(&resolutions);
+    for (int i = 0; i < nres; i++) {
         combobox_add(res_combo, resolutions[i]);
         size_t n = strlen(resolutions[i]);
         if (strncmp(resolutions[i], wanted, n) == 0 && (wanted[n] == '@' || wanted[n] == ' ' || wanted[n] == '\0'))

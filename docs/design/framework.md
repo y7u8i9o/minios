@@ -337,3 +337,31 @@ and Shift+Tab with their undo steps, `editor_replace_all`, the clipboard
 functions, the double click and Cut in the context menu. The boot test
 `gui_editor` selects the typed text with Ctrl+A, copies it with the
 context menu and pastes it on a second line.
+
+## Graphs, colours and display modes (X1 of `docs/plan/x12settings.md`)
+
+- `graph_new` (`src/widgets/graph.c`) draws up to four time series. The
+  widget retains the last samples of each series, the newest at the
+  right edge. A heading row shows the title and either a value text or
+  the legend. A framed plot with a grid of four rows shows each series
+  as a line (`GRAPH_LINE`), as a line with the area under it
+  (`GRAPH_AREA`), or only as a legend text (`GRAPH_TEXT`). The scale is
+  fixed, or with automatic scaling the largest retained sample rounded
+  up to 1, 2 or 5 times a power of ten (`graph_nice_max`). A format
+  function writes the scale into the top left corner of the plot. The
+  Resources tab of `sysmon` consists of these graphs. They replaced its
+  private drawing code.
+- `gfx_rgb_to_hsv`, `gfx_hsv_to_rgb` and `gfx_color_parse` in `gui/gfx.h`
+  convert colours. The round trip through HSV changes a channel by at
+  most 3. `make check-libgui` checks every colour.
+- `color_dialog` (`src/widgets/color.c`) is a modal dialog with a field
+  of saturation and value, a hue strip, the old and the new colour, and
+  the hexadecimal value. A typed value is retained exactly, not in its
+  rounded HSV form. `colorbutton_new` shows a swatch with the
+  hexadecimal value, opens the dialog and emits "changed". The desktop
+  colour of the Settings program uses the button instead of three
+  sliders.
+- `gui/display.h` contains the packed form of a display mode, the
+  conversions `display_mode_parse` and `display_mode_format`, and
+  `display_resolutions`, the modes of a virtio-gpu scanout. X12, the
+  desktop, the Settings program and `x12settings` share it.

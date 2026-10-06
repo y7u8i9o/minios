@@ -9,12 +9,9 @@
 #include <gui/app.h>
 #include <gui/client.h>
 #include <gui/model.h>
+#include <gui/display.h>
 #include "debug-client.h"
 
-/* display_mode packs width, height and the pixel scale as in the compositor. */
-#define DISPLAY_MODE_W(m) (((m) >> 14) & 0x3fff)
-#define DISPLAY_MODE_H(m) ((m) & 0x3fff)
-#define DISPLAY_MODE_S(m) (((m) >> 28) & 7)
 
 struct surf_row { unsigned id, client, mapped, format; char role[16], title[48]; int x, y, w, h; };
 

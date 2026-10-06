@@ -151,3 +151,12 @@ int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int
  * out: the frame grown by margin and the four corner squares.  The result
  * is the number of rectangles, 5. */
 int gui_resize_region(struct rect f, const struct gui_resize_zones *z, struct rect out[5]);
+
+/* Colours as 0x00RRGGBB in hue, saturation and value: the hue in degrees
+ * from 0 to 359, saturation and value from 0 to 255. A conversion to HSV
+ * and back changes each channel by at most 3. */
+void gfx_rgb_to_hsv(uint32_t rgb, int *h, int *s, int *v);
+uint32_t gfx_hsv_to_rgb(int h, int s, int v);
+/* Parses "#rrggbb", "0xrrggbb" or "rrggbb" into rgb. Returns 0, or -1
+ * for another text. */
+int gfx_color_parse(const char *text, uint32_t *rgb);

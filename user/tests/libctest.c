@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <unistd.h>
+#include <minios/proctab.h>
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
@@ -160,6 +161,24 @@ static void check_memory_functions(void)
 }
 
 static int atexit_ran;
+/* The process table contains this process with its parent, uid and
+ * name, and the kernel as pid 0. */
+static void check_proc_table(void)
+{
+    struct proc_entry rows[64], self;
+    int n = proc_table_read(rows, 64);
+    int kernel = 0;
+    for (int i = 0; i < n; i++)
+        kernel |= rows[i].pid == 0 && strcmp(rows[i].name, "kernel") == 0;
+    CHECK(n >= 2 && kernel, "proc_table_read: %d rows, kernel row %d", n, kernel);
+    CHECK(proc_table_find(getpid(), &self) == 0 && self.ppid == getppid() && self.uid == geteuid() &&
+              strcmp(self.name, "libctest") == 0 && strcmp(self.state, "running") == 0 && self.rss_kib > 0,
+          "proc_table_find: ppid %d uid %u name %s state %s rss %lu", (int)self.ppid, self.uid, self.name,
+          self.state, self.rss_kib);
+    CHECK(proc_table_find(99999, &self) == -ESRCH, "proc_table_find of a missing pid");
+    CHECK(proc_table_read(rows, 1) == 1, "proc_table_read limits the rows");
+}
+
 static void at_exit(void)
 {
     atexit_ran = 1;
@@ -282,6 +301,7 @@ int main(int argc, char **argv)
     assert(1 + 1 == 2);
 
     check_memory_functions();
+    check_proc_table();
     CHECK(atexit(at_exit) == 0, "atexit");
     printf("libctest: %d failures\n", failures);
     return failures ? 1 : 0;

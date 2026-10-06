@@ -299,3 +299,76 @@ void gfx_copy_rect(struct surface *dst, const struct surface *src, const struct 
         memcpy(dst->pixels + (size_t)(r.y + j) * dst->stride + r.x,
                src->pixels + (size_t)(r.y + j) * src->stride + r.x, (size_t)r.w * 4);
 }
+
+/* ---- colours ---- */
+
+/* a / b rounded to the nearest integer, for a negative a as well. */
+static int div_nearest(int a, int b)
+{
+    return a >= 0 ? (a + b / 2) / b : -((-a + b / 2) / b);
+}
+
+void gfx_rgb_to_hsv(uint32_t rgb, int *h, int *s, int *v)
+{
+    int r = (int)(rgb >> 16 & 0xff), g = (int)(rgb >> 8 & 0xff), b = (int)(rgb & 0xff);
+    int max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    int min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    int d = max - min;
+    *v = max;
+    *s = max ? div_nearest(d * 255, max) : 0;
+    if (!d) {
+        *h = 0;
+        return;
+    }
+    int hue;
+    if (max == r)
+        hue = div_nearest(60 * (g - b), d);
+    else if (max == g)
+        hue = 120 + div_nearest(60 * (b - r), d);
+    else
+        hue = 240 + div_nearest(60 * (r - g), d);
+    *h = (hue % 360 + 360) % 360;
+}
+
+uint32_t gfx_hsv_to_rgb(int h, int s, int v)
+{
+    h = (h % 360 + 360) % 360;
+    s = s < 0 ? 0 : s > 255 ? 255 : s;
+    v = v < 0 ? 0 : v > 255 ? 255 : v;
+    /* The six sectors of 60 degrees: f is the position in the sector. */
+    int sector = h / 60, f = (h % 60) * 255;
+    int p = div_nearest(v * (255 - s), 255);
+    int q = div_nearest(v * (255 * 60 - s * f / 255), 255 * 60);
+    int t = div_nearest(v * (255 * 60 - s * (255 * 60 - f) / 255), 255 * 60);
+    int r, g, b;
+    switch (sector) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q; break;
+    }
+    return (uint32_t)(r << 16 | g << 8 | b);
+}
+
+int gfx_color_parse(const char *text, uint32_t *rgb)
+{
+    if (text[0] == '#')
+        text++;
+    else if (text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))
+        text += 2;
+    uint32_t value = 0;
+    int n = 0;
+    for (; *text; text++, n++) {
+        int c = *text, d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 :
+                           c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        if (d < 0 || n == 6)
+            return -1;
+        value = value << 4 | (uint32_t)d;
+    }
+    if (n != 6)
+        return -1;
+    *rgb = value;
+    return 0;
+}

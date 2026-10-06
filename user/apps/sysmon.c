@@ -24,6 +24,7 @@
 #include <gui/model.h>
 #include <gui/pixel.h>
 #include <gui/i18n.h>
+#include <minios/proctab.h>
 
 #define MAX_PROCS 64
 #define MAX_THREADS 128
@@ -46,7 +47,11 @@ struct thread_row {
 };
 
 static struct app *app;
-static struct widget *win, *tabs, *table, *threads_table, *filter, *graphs;
+static struct widget *win, *tabs, *table, *threads_table, *filter;
+/* The Resources tab: the total CPU share above a graph per processor, the
+ * memory graph and the network graph (gui/widget.h, graph_new). */
+static struct widget *cpu_total_label, *cpu_grid, *cpu_graphs[MAX_CPUS], *mem_graph, *net_graph;
+static int ncpu_graphs;
 static struct widget *st_procs, *st_cpu, *st_mem, *st_up;
 static struct widget *context_menu;
 
@@ -60,14 +65,13 @@ static int selected_pid = -1;
 static struct thread_row threads[MAX_THREADS];
 static int nthreads;
 
-/* Each history array contains up to HISTORY samples, oldest first.  The
- * CPU and memory samples are in tenths of a percent, the network samples
- * in bytes per second. */
+/* The newest sample of each resource. The CPU and memory samples are in
+ * tenths of a percent, the network samples in bytes per second. The
+ * graphs retain the last HISTORY samples. */
 static int ncpus;
-static int cpu_hist[MAX_CPUS][HISTORY], cpu_total_hist[HISTORY];
-static int mem_hist[HISTORY], swap_hist[HISTORY];
-static long rx_hist[HISTORY], tx_hist[HISTORY];
-static int nhist;
+static int cpu_now[MAX_CPUS], cpu_total_now;
+static int mem_now, swap_now;
+static long rx_now, tx_now;
 static unsigned long prev_cpu[MAX_CPUS][3];
 static unsigned long prev_rx, prev_tx;
 static int have_prev_stat;
@@ -138,27 +142,20 @@ static void read_procs(long elapsed)
     memcpy(prev_rows, rows, sizeof rows);
     nprev = nrows;
     nrows = 0;
-    char *text = read_file("/dev/proc", 8192);
-    if (!text)
-        return;
-    for (char *line = strtok(text, "\n"); line && nrows < MAX_PROCS; line = strtok(NULL, "\n")) {
-        if (line[0] == 'P' || strstr(line, "PID"))
-            continue;
+    static struct proc_entry table[MAX_PROCS];
+    int n = proc_table_read(table, MAX_PROCS);
+    for (int k = 0; k < n; k++) {
+        struct proc_entry *e = &table[k];
         struct proc_row r;
-        char *end;
-        r.pid = (int)strtol(line, &end, 10);
-        if (end == line)
-            continue;
-        r.ppid = (int)strtol(end, &end, 10);
-        r.pgid = (int)strtol(end, &end, 10);
-        copy_word(&end, r.state, sizeof r.state);
-        r.ticks = strtol(end, &end, 10);
-        r.rss = strtol(end, &end, 10);
-        r.uid = (unsigned)strtoul(end, &end, 10);
-        copy_word(&end, r.name, sizeof r.name);
+        r.pid = (int)e->pid;
+        r.ppid = (int)e->ppid;
+        r.pgid = (int)e->pgid;
+        snprintf(r.state, sizeof r.state, "%s", e->state);
+        r.ticks = (long)e->ticks;
+        r.rss = (long)e->rss_kib;
+        r.uid = e->uid;
+        snprintf(r.name, sizeof r.name, "%s", e->name);
         user_name(r.uid, r.user, sizeof r.user);
-        if (!r.state[0] || !r.name[0])
-            continue;
         r.cpu = 0;
         for (int i = 0; i < nprev && elapsed > 0; i++)
             if (prev_rows[i].pid == r.pid) {
@@ -168,7 +165,6 @@ static void read_procs(long elapsed)
             }
         rows[nrows++] = r;
     }
-    free(text);
 }
 
 /* read_threads parses the lines of /dev/threads that belong to pid.  The
@@ -211,19 +207,6 @@ static int percent_of(unsigned long part, unsigned long whole)
     return whole ? (int)(part * 1000 / whole) : 0;
 }
 
-static void push_sample(int *hist, int value)
-{
-    if (nhist == HISTORY)
-        memmove(hist, hist + 1, (HISTORY - 1) * sizeof *hist);
-    hist[nhist == HISTORY ? HISTORY - 1 : nhist] = value;
-}
-
-static void push_sample_long(long *hist, long value)
-{
-    if (nhist == HISTORY)
-        memmove(hist, hist + 1, (HISTORY - 1) * sizeof *hist);
-    hist[nhist == HISTORY ? HISTORY - 1 : nhist] = value;
-}
 
 static long meminfo_value(const char *text, const char *key)
 {
@@ -231,7 +214,7 @@ static long meminfo_value(const char *text, const char *key)
     return p ? strtol(p + strlen(key), NULL, 10) : 0;
 }
 
-/* read_resources appends one sample to every history array. */
+/* read_resources takes one sample of every resource. */
 static void read_resources(long elapsed)
 {
     unsigned long cur[MAX_CPUS][3] = { { 0 } };
@@ -259,10 +242,10 @@ static void read_resources(long elapsed)
             busy_all += busy;
             total_all += total;
         }
-        push_sample(cpu_hist[c], have_prev_stat && c < n ? percent_of(busy, total) : 0);
+        cpu_now[c] = have_prev_stat && c < n ? percent_of(busy, total) : 0;
         memcpy(prev_cpu[c], cur[c], sizeof cur[c]);
     }
-    push_sample(cpu_total_hist, have_prev_stat ? percent_of(busy_all, total_all) : 0);
+    cpu_total_now = have_prev_stat ? percent_of(busy_all, total_all) : 0;
 
     text = read_file("/dev/meminfo", 2048);
     if (text) {
@@ -273,8 +256,8 @@ static void read_resources(long elapsed)
         cache_kb = meminfo_value(text, "FileMapped:") * 4;   /* FileMapped counts pages of 4 KiB. */
         free(text);
     }
-    push_sample(mem_hist, percent_of((unsigned long)mem_used_kb, (unsigned long)mem_total_kb));
-    push_sample(swap_hist, percent_of((unsigned long)swap_used_kb, (unsigned long)swap_total_kb));
+    mem_now = percent_of((unsigned long)mem_used_kb, (unsigned long)mem_total_kb);
+    swap_now = percent_of((unsigned long)swap_used_kb, (unsigned long)swap_total_kb);
 
     /* The interface lines of /dev/net have the form
      * "INDEX NAME STATE mtu MTU rx PACKETS/BYTES drop N tx PACKETS/BYTES ...".
@@ -302,13 +285,11 @@ static void read_resources(long elapsed)
     }
     long rx_rate = have_prev_stat && elapsed > 0 ? (long)((rx - prev_rx) * 1000 / (unsigned long)elapsed) : 0;
     long tx_rate = have_prev_stat && elapsed > 0 ? (long)((tx - prev_tx) * 1000 / (unsigned long)elapsed) : 0;
-    push_sample_long(rx_hist, rx_rate);
-    push_sample_long(tx_hist, tx_rate);
+    rx_now = rx_rate;
+    tx_now = tx_rate;
     prev_rx = rx;
     prev_tx = tx;
     have_prev_stat = 1;
-    if (nhist < HISTORY)
-        nhist++;
 }
 
 /* The functions below format values for the tables and the graphs. */
@@ -448,192 +429,75 @@ static const char *t_header(struct model *m, int col)
 
 static struct model thread_model = { t_rows, t_child, t_columns, t_cell, t_header, NULL, NULL, NULL };
 
-/* The functions below draw the Resources tab. */
+/* The functions below update the Resources tab. */
 
-/* draw_series draws n samples of values scaled to max into the graph
- * rectangle.  The newest sample is at the right edge, and one sample
- * covers w / (HISTORY - 1) pixels.  The area under the line is filled when
- * fill is not 0. */
-static void draw_series(struct painter *p, int x, int y, int w, int h, const long *values, int n, long max,
-                        uint32_t line, uint32_t fill)
+static void rate_scale(long bytes, char *buf, size_t size)
 {
-    if (n < 1 || max <= 0 || w < 2 || h < 2)
-        return;
-    int px = 0, py = 0;
-    for (int i = 0; i < n; i++) {
-        int sx = x + w - 1 - (int)((long)(n - 1 - i) * (w - 1) / (HISTORY - 1));
-        long v = values[i] > max ? max : values[i] < 0 ? 0 : values[i];
-        int sy = y + h - 1 - (int)(v * (h - 1) / max);
-        if (i > 0) {
-            if (fill)
-                for (int cx = px; cx <= sx; cx++) {
-                    int cy = sx == px ? sy : py + (sy - py) * (cx - px) / (sx - px);
-                    painter_fill(p, cx, cy, 1, y + h - cy, fill);
-                }
-            painter_line(p, px, py, sx, sy, line);
-        }
-        px = sx;
-        py = sy;
+    format_rate(buf, size, bytes);
+}
+
+/* Creates the graphs of processors that appeared since the last call.
+ * The grid has up to four columns. */
+static void add_cpu_graphs(void)
+{
+    int cols = ncpus < 4 ? ncpus : 4;
+    for (; ncpu_graphs < ncpus && ncpu_graphs < MAX_CPUS; ncpu_graphs++) {
+        struct widget *g = graph_new(cpu_grid, HISTORY);
+        graph_add_series(g, "", 0, GRAPH_AREA);
+        graph_set_scale(g, 1000, 0);
+        widget_set_grid(g, ncpu_graphs / cols, ncpu_graphs % cols, 1, 1);
+        widget_set_stretch(g, 1, 1);
+        cpu_graphs[ncpu_graphs] = g;
     }
+    for (int c = 0; c < cols; c++)
+        grid_set_stretch(cpu_grid, -1, c, 1);
+    for (int r = 0; r < (ncpus + cols - 1) / cols; r++)
+        grid_set_stretch(cpu_grid, r, -1, 1);
+    widget_relayout(cpu_grid);
 }
 
-static void draw_frame(struct painter *p, int x, int y, int w, int h)
+static void update_graphs(void)
 {
-    const struct theme *t = p->theme;
-    painter_fill(p, x, y, w, h, t->color[TC_FIELD]);
-    uint32_t grid = pixel_blend(t->color[TC_FIELD], t->color[TC_BORDER], 80);
-    for (int k = 1; k < 4; k++)
-        painter_fill(p, x + 1, y + h * k / 4, w - 2, 1, grid);
-    painter_frame(p, x, y, w, h, t->color[TC_BORDER]);
-}
-
-/* draw_heading draws a title on the left and a value on the right of a
- * text row and returns the height of the row. */
-static int draw_heading(struct painter *p, int x, int y, int w, const char *title, const char *value)
-{
-    const struct theme *t = p->theme;
-    painter_text(p, x, y, title, t->color[TC_TEXT]);
-    if (value)
-        painter_text(p, x + w - painter_text_width(p, value, -1), y, value, t->color[TC_TEXT_DISABLED]);
-    return painter_text_height(p) + 4;
-}
-
-/* A legend item is a text with a colour swatch in front of it, or
- * without a swatch when swatch is 0. */
-struct legend_item {
-    const char *text;
-    uint32_t swatch;
-};
-
-/* draw_legend draws the items right-aligned at the end of a text row that
- * ends at x + w. */
-static void draw_legend(struct painter *p, int x, int y, int w, const struct legend_item *items, int n)
-{
-    const struct theme *t = p->theme;
-    int th = painter_text_height(p), box = th / 2, right = x + w;
-    for (int i = n - 1; i >= 0; i--) {
-        int tw = painter_text_width(p, items[i].text, -1);
-        right -= tw;
-        painter_text(p, right, y, items[i].text, t->color[TC_TEXT_DISABLED]);
-        if (items[i].swatch) {
-            right -= box + 5;
-            painter_fill(p, right, y + (th - box) / 2, box, box, items[i].swatch);
-        }
-        right -= 16;
-    }
-}
-
-static void to_long(const int *in, long *out, int n)
-{
-    for (int i = 0; i < n; i++)
-        out[i] = in[i];
-}
-
-/* nice_max rounds a rate up to 1, 2 or 5 times a power of ten, with a
- * minimum of 1 KiB/s. */
-static long nice_max(long v)
-{
-    long step = 1;
-    if (v < KIB)
-        return KIB;
-    while (step * 10 <= v)
-        step *= 10;
-    if (v <= step)
-        return step;
-    if (v <= 2 * step)
-        return 2 * step;
-    if (v <= 5 * step)
-        return 5 * step;
-    return 10 * step;
-}
-
-static int on_paint_graphs(struct widget *w, void *args, void *arg)
-{
-    struct painter *p = ((struct sig_paint *)args)->p;
-    const struct theme *t = p->theme;
-    uint32_t accent = t->color[TC_ACCENT], area = pixel_blend(t->color[TC_FIELD], accent, 72);
-    uint32_t second = t->color[TC_TEXT];
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    int pad = 8, gap = 12, x = pad, width = w->w - 2 * pad;
-    int th = painter_text_height(p) + 4;
-    if (width < 40 || w->h < 6 * th)
-        return 1;
-    long buf[HISTORY], buf2[HISTORY];
-    char a[48], b[48], text[128];
-
-    /* The CPU section is 45 percent of the height and contains one graph
-     * per processor, at most four in a row. */
-    int y = pad;
-    int cpu_h = (w->h - 2 * pad - 2 * gap) * 45 / 100;
-    int mem_h = (w->h - 2 * pad - 2 * gap - cpu_h) / 2;
-    format_percent(a, sizeof a, nhist ? cpu_total_hist[nhist - 1] : 0);
-    y += draw_heading(p, x, y, width, _("CPU"), a);
-    int n = ncpus > 0 ? ncpus : 1;
-    int cols = n < 4 ? n : 4, lines = (n + cols - 1) / cols;
-    int cell_w = (width - (cols - 1) * pad) / cols;
-    int cell_h = (cpu_h - th - (lines - 1) * pad) / lines;
-    for (int c = 0; c < n; c++) {
-        int cx = x + (c % cols) * (cell_w + pad), cy = y + (c / cols) * (cell_h + pad);
+    char text[64], a[24], b[24];
+    if (ncpu_graphs < ncpus)
+        add_cpu_graphs();
+    format_percent(a, sizeof a, cpu_total_now);
+    widget_set_text(cpu_total_label, a);
+    for (int c = 0; c < ncpu_graphs; c++) {
+        long v = cpu_now[c];
+        graph_push(cpu_graphs[c], &v);
         snprintf(text, sizeof text, _("CPU %d"), c);
-        format_percent(a, sizeof a, nhist ? cpu_hist[c][nhist - 1] : 0);
-        int hh = cell_h > 3 * th ? draw_heading(p, cx, cy, cell_w, text, a) : 0;
-        draw_frame(p, cx, cy + hh, cell_w, cell_h - hh);
-        to_long(cpu_hist[c], buf, nhist);
-        draw_series(p, cx + 1, cy + hh + 1, cell_w - 2, cell_h - hh - 2, buf, nhist, 1000, accent, area);
+        format_percent(a, sizeof a, cpu_now[c]);
+        graph_set_title(cpu_graphs[c], text, a);
     }
-    y += cpu_h - th + gap;
 
     /* The memory graph fills the used memory and draws the used swap as a
      * line. */
-    char used[64], swap[64], cache[48];
     format_size(a, sizeof a, mem_used_kb);
     format_size(b, sizeof b, mem_total_kb);
-    snprintf(used, sizeof used, _("Used %s of %s"), a, b);
+    snprintf(text, sizeof text, _("Used %s of %s"), a, b);
+    graph_set_label(mem_graph, 0, text);
     format_size(a, sizeof a, swap_used_kb);
     format_size(b, sizeof b, swap_total_kb);
-    snprintf(swap, sizeof swap, _("Swap %s of %s"), a, b);
+    snprintf(text, sizeof text, _("Swap %s of %s"), a, b);
+    graph_set_label(mem_graph, 1, swap_total_kb > 0 ? text : "");
+    graph_set_style(mem_graph, 1, swap_total_kb > 0 ? GRAPH_LINE : GRAPH_TEXT);
     format_size(a, sizeof a, cache_kb);
-    snprintf(cache, sizeof cache, _("File cache %s"), a);
-    struct legend_item mem_items[] = { { used, accent }, { swap, second }, { cache, 0 } };
-    int hh = draw_heading(p, x, y, width, _("Memory"), NULL);
-    if (swap_total_kb > 0)
-        draw_legend(p, x, y, width, mem_items, 3);
-    else {
-        mem_items[1] = mem_items[2];
-        draw_legend(p, x, y, width, mem_items, 2);
-    }
-    draw_frame(p, x, y + hh, width, mem_h - hh);
-    to_long(mem_hist, buf, nhist);
-    draw_series(p, x + 1, y + hh + 1, width - 2, mem_h - hh - 2, buf, nhist, 1000, accent, area);
-    if (swap_total_kb > 0) {
-        to_long(swap_hist, buf2, nhist);
-        draw_series(p, x + 1, y + hh + 1, width - 2, mem_h - hh - 2, buf2, nhist, 1000, second, 0);
-    }
-    y += mem_h + gap;
+    snprintf(text, sizeof text, _("File cache %s"), a);
+    graph_set_label(mem_graph, 2, text);
+    long mem[3] = { mem_now, swap_now, 0 };
+    graph_push(mem_graph, mem);
 
     /* The network graph fills the receive rate and draws the transmit rate
      * as a line, both scaled to the largest rate in the history. */
-    long peak = 0;
-    for (int i = 0; i < nhist; i++) {
-        if (rx_hist[i] > peak) peak = rx_hist[i];
-        if (tx_hist[i] > peak) peak = tx_hist[i];
-    }
-    long max = nice_max(peak);
-    char receive[48], transmit[48];
-    format_rate(a, sizeof a, nhist ? rx_hist[nhist - 1] : 0);
-    snprintf(receive, sizeof receive, _("Receive %s"), a);
-    format_rate(a, sizeof a, nhist ? tx_hist[nhist - 1] : 0);
-    snprintf(transmit, sizeof transmit, _("Transmit %s"), a);
-    struct legend_item net_items[] = { { receive, accent }, { transmit, second } };
-    hh = draw_heading(p, x, y, width, _("Network"), NULL);
-    draw_legend(p, x, y, width, net_items, 2);
-    int net_h = w->h - pad - y;
-    draw_frame(p, x, y + hh, width, net_h - hh);
-    draw_series(p, x + 1, y + hh + 1, width - 2, net_h - hh - 2, rx_hist, nhist, max, accent, area);
-    draw_series(p, x + 1, y + hh + 1, width - 2, net_h - hh - 2, tx_hist, nhist, max, second, 0);
-    format_rate(a, sizeof a, max);
-    painter_text(p, x + 4, y + hh + 2, a, t->color[TC_TEXT_DISABLED]);
-    return 1;
+    format_rate(a, sizeof a, rx_now);
+    snprintf(text, sizeof text, _("Receive %s"), a);
+    graph_set_label(net_graph, 0, text);
+    format_rate(a, sizeof a, tx_now);
+    snprintf(text, sizeof text, _("Transmit %s"), a);
+    graph_set_label(net_graph, 1, text);
+    long net[2] = { rx_now, tx_now };
+    graph_push(net_graph, net);
 }
 
 /* The functions below refresh the window. */
@@ -651,7 +515,7 @@ static void update_status(void)
     char text[64], a[24], b[24];
     snprintf(text, sizeof text, ngettext("%d process", "%d processes", (unsigned long)nrows), nrows);
     widget_set_text(st_procs, text);
-    format_percent(a, sizeof a, nhist ? cpu_total_hist[nhist - 1] : 0);
+    format_percent(a, sizeof a, cpu_total_now);
     snprintf(text, sizeof text, _("CPU %s"), a);
     widget_set_text(st_cpu, text);
     format_size(a, sizeof a, mem_used_kb);
@@ -687,7 +551,7 @@ static void refresh(void)
     refresh_table();
     update_threads();
     update_status();
-    widget_invalidate(graphs);
+    update_graphs();
 }
 
 static void on_tick(void *arg)
@@ -714,7 +578,6 @@ static int on_filter(struct widget *w, void *args, void *arg)
 static int on_tab_changed(struct widget *w, void *args, void *arg)
 {
     update_threads();
-    widget_invalidate(graphs);
     return 1;
 }
 
@@ -853,9 +716,26 @@ int main(void)
     splitpane_set_position(split, 300);
 
     struct widget *resources = tabs_add(tabs, _("Resources"));
-    graphs = canvas_new(resources);
-    widget_set_stretch(graphs, 1, 1);
-    widget_connect(graphs, "paint", on_paint_graphs, NULL);
+    struct widget *cpu_row = box_new(resources, 0);
+    label_new(cpu_row, _("CPU"));
+    widget_set_stretch(label_new(cpu_row, ""), 1, 0);
+    cpu_total_label = label_new(cpu_row, "");
+    cpu_grid = grid_new(resources);
+    widget_set_stretch(cpu_grid, 1, 9);
+    mem_graph = graph_new(resources, HISTORY);
+    graph_set_title(mem_graph, _("Memory"), NULL);
+    graph_add_series(mem_graph, "", 0, GRAPH_AREA);
+    graph_add_series(mem_graph, "", 0, GRAPH_TEXT);
+    graph_add_series(mem_graph, "", 0, GRAPH_TEXT);
+    graph_set_scale(mem_graph, 1000, 0);
+    widget_set_stretch(mem_graph, 1, 5);
+    net_graph = graph_new(resources, HISTORY);
+    graph_set_title(net_graph, _("Network"), NULL);
+    graph_add_series(net_graph, "", 0, GRAPH_AREA);
+    graph_add_series(net_graph, "", 0, GRAPH_LINE);
+    graph_set_scale(net_graph, KIB, 1);
+    graph_set_format(net_graph, rate_scale);
+    widget_set_stretch(net_graph, 1, 5);
 
     context_menu = popupmenu_new(win);
     add_process_items(context_menu, 0);

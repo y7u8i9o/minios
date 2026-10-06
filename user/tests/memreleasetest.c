@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <minios/proctab.h>
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
@@ -23,28 +24,11 @@ static char bss[8 << 20];
 static char *blocks[NBLOCKS];
 
 /* The resident size of this process in KiB, from the RSS column of
- * /dev/proc: PID PPID PGID STATE TIME RSS UID NAME. */
+ * /dev/proc. */
 static long rss_kib(void)
 {
-    static char table[16384];
-    int fd = open("/dev/proc", O_RDONLY);
-    if (fd < 0)
-        return -1;
-    ssize_t n = read(fd, table, sizeof table - 1);
-    close(fd);
-    if (n <= 0)
-        return -1;
-    table[n] = '\0';
-    int self = getpid();
-    for (char *line = table; line && *line;) {
-        char *end = strchr(line, '\n');
-        long pid, ppid, pgid, ticks, rss;
-        char state[16];
-        if (sscanf(line, "%ld %ld %ld %15s %ld %ld", &pid, &ppid, &pgid, state, &ticks, &rss) == 6 && pid == self)
-            return rss;
-        line = end ? end + 1 : NULL;
-    }
-    return -1;
+    struct proc_entry e;
+    return proc_table_find(getpid(), &e) == 0 ? (long)e.rss_kib : -1;
 }
 
 int main(void)

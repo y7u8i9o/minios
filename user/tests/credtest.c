@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <minios/account.h>
+#include <minios/proctab.h>
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
@@ -72,23 +73,8 @@ static void test_root(void)
 /* The row of pid in /dev/proc reports uid in its UID column. */
 static int proc_uid_of(pid_t pid)
 {
-    FILE *f = fopen("/dev/proc", "r");
-    if (!f)
-        return -1;
-    char line[256];
-    int uid = -1;
-    while (fgets(line, sizeof line, f)) {
-        int p, ppid, pgid;
-        char state[16];
-        unsigned long ticks, rss;
-        unsigned u;
-        if (sscanf(line, "%d %d %d %15s %lu %lu %u", &p, &ppid, &pgid, state, &ticks, &rss, &u) == 7 && p == pid) {
-            uid = (int)u;
-            break;
-        }
-    }
-    fclose(f);
-    return uid;
+    struct proc_entry e;
+    return proc_table_find(pid, &e) == 0 ? (int)e.uid : -1;
 }
 
 static int grandchild_ids(void)

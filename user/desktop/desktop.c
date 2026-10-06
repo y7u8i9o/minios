@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <gui/display.h>
 
 /* The folder of the icons, desktop in the home of the user. */
 static const char *desktop_dir(void)
@@ -241,21 +242,6 @@ static int read_conf(char *buf, size_t size)
     return 0;
 }
 
-/* "WxH" or "WxH@S" packed as the compositor's display_mode setting:
- * scale in bits 28..30, width in 14..27, height in 0..13. */
-static int parse_display_mode(const char *v)
-{
-    char *end;
-    long w = strtol(v, &end, 10);
-    if (*end != 'x')
-        return 0;
-    long h = strtol(end + 1, &end, 10);
-    long s = *end == '@' ? strtol(end + 1, NULL, 10) : 1;
-    if (w < 640 || h < 480 || w > 8192 || h > 8192 || s < 1 || s > 4)
-        return 0;
-    return (int)((s << 28) | (w << 14) | h);
-}
-
 static void apply_conf(int first)
 {
     struct conf c = conf;
@@ -272,7 +258,7 @@ static void apply_conf(int first)
         else if (strcmp(line, "desktop_color") == 0) c.color = (uint32_t)strtoul(v, NULL, 0) & 0xffffff;
         else if (strcmp(line, "repeat_rate") == 0) c.repeat_rate = atoi(v);
         else if (strcmp(line, "repeat_delay") == 0) c.repeat_delay = atoi(v);
-        else if (strcmp(line, "display_mode") == 0) c.display_mode = parse_display_mode(v);
+        else if (strcmp(line, "display_mode") == 0) c.display_mode = display_mode_parse(v);
         else if (strcmp(line, "frame_ms") == 0) c.frame_ms = atoi(v);
         else if (strcmp(line, "decorations") == 0) c.decorations = strcmp(v, "server") == 0 ? 1 : strcmp(v, "client") == 0 ? 2 : 0;
         else if (strcmp(line, "keymap") == 0) strlcpy(c.keymap, v, sizeof c.keymap);

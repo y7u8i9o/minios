@@ -16,6 +16,7 @@
 #include <gui/client.h>
 #include <gui/model.h>
 #include <gui/theme.h>
+#include <minios/proctab.h>
 #include "debug-client.h"
 
 /* The last MSG_MAX messages are retained in a ring. A message is addressed
@@ -80,35 +81,13 @@ static struct wclient *client_find(uint32_t number, int create)
     return c;
 }
 
-/* The name of a process from the NAME column of /dev/proc, whose rows are
- * "PID PPID PGID STATE TIME RSS UID NAME". */
+/* The name of a process from the NAME column of /dev/proc. */
 static void process_name(uint32_t pid, char *out, size_t size)
 {
+    struct proc_entry e;
     out[0] = '\0';
-    if (!pid)
-        return;
-    int fd = open("/dev/proc", O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
-        return;
-    static char buf[16384];
-    ssize_t n = read(fd, buf, sizeof buf - 1);
-    close(fd);
-    if (n <= 0)
-        return;
-    buf[n] = '\0';
-    for (char *line = buf; line && *line;) {
-        char *next = strchr(line, '\n');
-        if (next)
-            *next++ = '\0';
-        while (*line == ' ')
-            line++;
-        if ((uint32_t)atoi(line) == pid) {
-            char *name = strrchr(line, ' ');
-            strlcpy(out, name ? name + 1 : line, size);
-            return;
-        }
-        line = next;
-    }
+    if (pid && proc_table_find((pid_t)pid, &e) == 0)
+        strlcpy(out, e.name, size);
 }
 
 static void client_label(const struct wclient *c, char *buf, size_t size)

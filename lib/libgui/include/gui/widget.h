@@ -270,6 +270,63 @@ struct widget *spinner_new(struct widget *parent, int min, int max, int value);
 struct widget *slider_new(struct widget *parent, int min, int max, int value);
 struct widget *progress_new(struct widget *parent);
 
+/* ---- graph (widgets/graph.c) ---- */
+
+/* A graph of up to GRAPH_SERIES time series. It retains the last samples
+ * values of each series, the newest at the right edge. A heading row
+ * shows the title and on the right the value text, or the legend of the
+ * series when no value text is set. A small graph omits the heading row.
+ * Below it, a framed plot with a grid of four rows shows each series by
+ * its style. The vertical scale
+ * is the fixed maximum, or with automatic scaling graph_nice_max of the
+ * largest retained value. With a format function the plot shows the
+ * scale in its top left corner. */
+#define GRAPH_SERIES 4
+enum graph_style {
+    GRAPH_LINE,                 /* a line and a coloured square in the legend */
+    GRAPH_AREA,                 /* the line and the area under it */
+    GRAPH_TEXT,                 /* no line, the label without a square in the legend */
+};
+extern const struct widget_class graph_class;
+struct widget *graph_new(struct widget *parent, int samples);
+/* Adds a series and returns its index, or -1 when GRAPH_SERIES exist.
+ * Colour 0 is the accent colour of the theme for the first series and
+ * the text colour for the others. A series with an empty label has no
+ * legend item. */
+int graph_add_series(struct widget *g, const char *label, uint32_t color, enum graph_style style);
+void graph_set_label(struct widget *g, int series, const char *label);
+void graph_set_style(struct widget *g, int series, enum graph_style style);
+/* Appends one sample to every series. values has one entry per series. */
+void graph_push(struct widget *g, const long *values);
+void graph_clear(struct widget *g);
+/* automatic 0: the scale is max. automatic 1: the scale is
+ * graph_nice_max(largest value, max). */
+void graph_set_scale(struct widget *g, long max, int automatic);
+void graph_set_title(struct widget *g, const char *title, const char *value);
+void graph_set_format(struct widget *g, void (*format)(long value, char *buf, size_t size));
+/* The current scale. */
+long graph_scale(const struct widget *g);
+/* The smallest value of 1, 2 or 5 times a power of ten that is at least
+ * v, and at least minimum. */
+long graph_nice_max(long v, long minimum);
+
+/* ---- colours (widgets/color.c) ---- */
+
+/* A modal dialog that chooses a colour: a field of saturation and value
+ * for the hue of a strip beside it, the old and the new colour, and the
+ * hexadecimal value, which accepts the forms of gfx_color_parse. Returns
+ * 1 and sets *color when the user accepts, 0 otherwise. parent NULL is
+ * the first window of the application. */
+int color_dialog(struct app *a, struct widget *parent, const char *title, uint32_t *color);
+/* A button with a swatch and the hexadecimal value of a colour. It opens
+ * color_dialog with title and emits "changed" (sig_change, value the new
+ * 0x00RRGGBB colour) after an accepted change. */
+extern const struct widget_class color_button_class;
+struct widget *colorbutton_new(struct widget *parent, uint32_t color, const char *title);
+uint32_t colorbutton_color(const struct widget *w);
+/* Sets the colour without a signal. */
+void colorbutton_set(struct widget *w, uint32_t color);
+
 /* ---- containers (widgets/containers.c) ---- */
 
 extern const struct widget_class tabs_class;       /* "changed" (sig_select); value: current page */

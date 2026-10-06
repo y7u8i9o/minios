@@ -22,6 +22,7 @@
 #include <gui/app.h>
 #include <gui/model.h>
 #include <prof/profile.h>
+#include <minios/proctab.h>
 
 #define READ_BYTES 65536
 #define MAX_PROCS 64
@@ -553,31 +554,16 @@ static void tick(void *arg)
 /* The process list behind the target selector. */
 static void load_procs(void)
 {
-    FILE *f = fopen("/dev/proc", "r");
+    static struct proc_entry table[MAX_PROCS];
+    int n = proc_table_read(table, MAX_PROCS);
     nprocs = 0;
-    if (!f)
-        return;
-    char line[256];
-    while (nprocs < MAX_PROCS && fgets(line, sizeof line, f)) {
-        char *end;
-        long pid = strtol(line, &end, 10);
-        if (end == line || pid <= 0)
+    for (int i = 0; i < n; i++) {
+        if (table[i].pid <= 0)
             continue;
-        char *tok = end;
-        for (int col = 0; col < 6; col++) {
-            while (*tok == ' ')
-                tok++;
-            while (*tok && *tok != ' ')
-                tok++;
-        }
-        while (*tok == ' ')
-            tok++;
-        tok[strcspn(tok, "\n")] = '\0';
-        procs[nprocs].pid = (int)pid;
-        snprintf(procs[nprocs].name, sizeof procs[nprocs].name, "%s", tok);
+        procs[nprocs].pid = (int)table[i].pid;
+        snprintf(procs[nprocs].name, sizeof procs[nprocs].name, "%s", table[i].name);
         nprocs++;
     }
-    fclose(f);
     combobox_clear(target_box);
     combobox_add(target_box, "All processes");
     char item[64];
