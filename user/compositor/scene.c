@@ -13,8 +13,8 @@
 
 #define MAX_PIECES 64
 
-static struct rect damage[MAX_DAMAGE * 2];
-static int ndamage;
+/* The damage since the last frame, disjoint rectangles (gui/gfx.h). */
+static struct rect_set damage;
 static int shown_x, shown_y;            /* where the cursor was drawn */
 static int cursor_suppressed;           /* compose without the cursor (screen copies) */
 /* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
@@ -30,11 +30,6 @@ void scene_init(void)
     shown_y = screen_h / 2;
 }
 
-static int rects_touch(struct rect a, struct rect b)
-{
-    return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
-}
-
 void scene_damage(struct rect r)
 {
     struct rect whole = { 0, 0, screen_w, screen_h };
@@ -42,21 +37,7 @@ void scene_damage(struct rect r)
     if (rect_empty(r))
         return;
     stats_mark(STATS_DAMAGE);
-    for (int i = 0; i < ndamage;) {
-        if (rects_touch(damage[i], r)) {
-            r = rect_union(damage[i], r);
-            damage[i] = damage[--ndamage];
-            i = 0;
-        } else {
-            i++;
-        }
-    }
-    if (ndamage == MAX_DAMAGE * 2) {
-        for (int i = 1; i < ndamage; i++)
-            damage[0] = rect_union(damage[0], damage[i]);
-        ndamage = 1;
-    }
-    damage[ndamage++] = r;
+    rect_set_add(&damage, r);
 }
 
 void scene_damage_all(void)
@@ -67,7 +48,7 @@ void scene_damage_all(void)
 
 int scene_has_damage(void)
 {
-    return ndamage > 0;
+    return damage.n > 0;
 }
 
 static struct rect cursor_rect(void)
@@ -197,40 +178,49 @@ static void draw_surface(struct csurface *s, struct rect clip)
     struct rect R = rect_scale(r, screen_scale);
     int ox = s->x * S, oy = s->y * S;               /* the surface's device origin */
     if (bs == S && s->current.transform == 0) {
-        /* Rows inside the client's opaque region are copied, the rest
-         * is blended (an ARGB buffer with client side shadows). */
-        struct rect opaque = { 0, 0, 0, 0 };
-        if (b->format == FORMAT_XRGB8888)
-            opaque = R;
-        else
+        /* Pixels inside the client's opaque region are copied, the rest
+         * is blended (an ARGB buffer with client side shadows). The
+         * rectangles of the region may overlap. */
+        struct rect opaque[MAX_REGION];
+        int nopaque = 0;
+        if (b->format != FORMAT_XRGB8888)
             for (int q = 0; q < s->current.nopaque; q++) {
                 struct rect o = s->current.opaque[q];
-                o = rect_scale((struct rect){ o.x + s->x, o.y + s->y, o.w, o.h }, screen_scale);
-                if (rect_contains(o, R.x, R.y) && rect_contains(o, R.x + R.w - 1, R.y + R.h - 1)) {
-                    opaque = R;
-                    break;
-                }
-                struct rect i = rect_intersect(o, R);
-                if (i.w * i.h > opaque.w * opaque.h)
-                    opaque = i;
+                o = rect_intersect(rect_scale((struct rect){ o.x + s->x, o.y + s->y, o.w, o.h }, S), R);
+                if (!rect_empty(o))
+                    opaque[nopaque++] = o;
             }
         for (int j = 0; j < R.h; j++) {
             int y = R.y + j, sy = y - oy;
             const uint32_t *from = (const uint32_t *)(b->pool->map + b->offset + (size_t)sy * b->stride) + (R.x - ox);
             uint32_t *to = back.pixels + (size_t)y * back.stride + R.x;
-            int x0 = 0, x1 = 0;
-            if (y >= opaque.y && y < opaque.y + opaque.h) {
-                x0 = opaque.x - R.x;
-                x1 = x0 + opaque.w;
-            }
             if (b->format == FORMAT_XRGB8888) {
                 memcpy(to, from, (size_t)R.w * 4);
                 continue;
             }
-            int end = x1 > x0 ? x1 : x0;
-            pixel_over(to, from, x0);
-            pixel_copy_opaque(to + x0, from + x0, x1 - x0);
-            pixel_over(to + end, from + end, R.w - end);
+            /* The opaque spans of the row in the order of their start. */
+            int start[MAX_REGION], end[MAX_REGION], nspans = 0;
+            for (int q = 0; q < nopaque; q++) {
+                if (y < opaque[q].y || y >= opaque[q].y + opaque[q].h)
+                    continue;
+                int k = nspans++;
+                for (; k > 0 && start[k - 1] > opaque[q].x - R.x; k--) {
+                    start[k] = start[k - 1];
+                    end[k] = end[k - 1];
+                }
+                start[k] = opaque[q].x - R.x;
+                end[k] = start[k] + opaque[q].w;
+            }
+            int at = 0;
+            for (int k = 0; k < nspans; k++) {
+                if (end[k] <= at)
+                    continue;
+                int from_x = start[k] > at ? start[k] : at;
+                pixel_over(to + at, from + at, from_x - at);
+                pixel_copy_opaque(to + from_x, from + from_x, end[k] - from_x);
+                at = end[k];
+            }
+            pixel_over(to + at, from + at, R.w - at);
         }
         return;
     }
@@ -282,6 +272,45 @@ static void draw_surface(struct csurface *s, struct rect clip)
     }
 }
 
+/* The default arrow at the screen scale as an ARGB image of
+ * (CURSOR_W + CURSOR_SHADOW) by (CURSOR_H + CURSOR_SHADOW) cells of S by S
+ * device pixels: X is the black outline, o the white fill, and the shape
+ * shifted down and right is the shadow, black with the alpha that leaves
+ * CURSOR_KEEP / 255 of the background. */
+static const uint32_t *arrow_image(void)
+{
+    static const char *shape[CURSOR_H] = {
+        "X...........", "XX..........", "XoX.........", "XooX........", "XoooX.......",
+        "XooooX......", "XoooooX.....", "XooooooX....", "XoooooooX...", "XooooooooX..",
+        "XoooooXXXXX.", "XooXooX.....", "XoX.XooX....", "XX..XooX....", "X....XooX...",
+        ".....XooX...", "......XX....", "............",
+    };
+    static uint32_t *img;
+    static int img_scale;
+    int S = screen_scale, W = (CURSOR_W + CURSOR_SHADOW) * S, H = (CURSOR_H + CURSOR_SHADOW) * S;
+    if (img && img_scale == S)
+        return img;
+    free(img);
+    img = malloc((size_t)W * H * 4);
+    if (!img)
+        return NULL;
+    img_scale = S;
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            int i = x / S, j = y / S;
+            char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
+            uint32_t v = 0;
+            if (c == 'X')
+                v = 0xff000000u;
+            else if (c == 'o')
+                v = 0xffffffffu;
+            else if (i >= CURSOR_SHADOW && j >= CURSOR_SHADOW && shape[j - CURSOR_SHADOW][i - CURSOR_SHADOW] != '.')
+                v = (255u - CURSOR_KEEP) << 24;
+            img[(size_t)y * W + x] = v;
+        }
+    return img;
+}
+
 static void draw_cursor(struct rect clip)
 {
     struct csurface *cursor = seat_cursor_surface();
@@ -291,42 +320,20 @@ static void draw_cursor(struct rect clip)
         draw_surface(cursor, clip);
         return;
     }
-    /* X: black outline, o: white fill, .: transparent. Every cell is an
-     * S by S block of device pixels. */
-    static const char *shape[CURSOR_H] = {
-        "X...........", "XX..........", "XoX.........", "XooX........", "XoooX.......",
-        "XooooX......", "XoooooX.....", "XooooooX....", "XoooooooX...", "XooooooooX..",
-        "XoooooXXXXX.", "XooXooX.....", "XoX.XooX....", "XX..XooX....", "X....XooX...",
-        ".....XooX...", "......XX....", "............",
-    };
-    int S = screen_scale;
+    const uint32_t *img = arrow_image();
+    if (!img)
+        return;
+    int S = screen_scale, W = (CURSOR_W + CURSOR_SHADOW) * S;
     struct rect area = rect_intersect(cursor_rect(), clip);
     if (rect_empty(area))
         return;
-    struct rect R = rect_scale(area, screen_scale);
-    for (int Y = R.y; Y < R.y + R.h && Y < back.height; Y++) {
-        int j = (Y - shown_y * S) / S;
-        struct pixel_walk w;
-        pixel_walk_init(&w, R.x - shown_x * S, 1, S);
-        uint32_t *row = &back.pixels[(size_t)Y * back.stride];
-        for (int X = R.x; X < R.x + R.w && X < back.width; X++, pixel_walk_next(&w)) {
-            int i = (int)w.pos;
-            char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
-            if (c == 'X') {
-                row[X] = 0x00000000;
-            } else if (c == 'o') {
-                row[X] = 0x00ffffff;
-            } else if (i >= CURSOR_SHADOW && j >= CURSOR_SHADOW &&
-                       shape[j - CURSOR_SHADOW][i - CURSOR_SHADOW] != '.') {
-                /* Drop shadow: the background darkened under the shape
-                 * shifted down and right. */
-                row[X] = pixel_shade(row[X], CURSOR_KEEP);
-            }
-        }
-    }
+    struct rect R = rect_scale(area, S);
+    for (int Y = R.y; Y < R.y + R.h; Y++)
+        pixel_over(&back.pixels[(size_t)Y * back.stride + R.x],
+                   img + (size_t)(Y - shown_y * S) * W + (R.x - shown_x * S), R.w);
 }
 
-static void compose_rect(struct rect r, struct csurface **order, int n, int flush)
+static void compose_rect(struct rect r, struct csurface **order, int n)
 {
     struct rect pieces[MAX_PIECES];
     int np = 1;
@@ -395,22 +402,22 @@ static void compose_rect(struct rect r, struct csurface **order, int n, int flus
         }
     }
     draw_cursor(r);
-    if (flush) {
-        stats_rect((long)R.w * R.h);
-        backend_flush(r);
-    }
 }
 
 void scene_compose(void)
 {
-    if (!ndamage)
+    if (!damage.n)
         return;
     long t0 = stats_frame_begin();
     struct csurface *order[256];
     int n = scene_order(order, 256);
-    for (int d = 0; d < ndamage; d++)
-        compose_rect(damage[d], order, n, 1);
-    ndamage = 0;
+    for (int d = 0; d < damage.n; d++) {
+        struct rect R = rect_scale(damage.r[d], screen_scale);
+        compose_rect(damage.r[d], order, n);
+        stats_rect((long)R.w * R.h);
+    }
+    backend_present(damage.r, damage.n);
+    rect_set_clear(&damage);
     long dt = stats_frame_end(t0);
     if (dt > 20000)
         comp_log("slow frame: %ld us", dt);
@@ -439,7 +446,7 @@ void scene_copy_screen(uint8_t *to, int stride, int pointer)
     if (!rect_empty(under)) {
         n = scene_order(order, 256);
         cursor_suppressed = 1;
-        compose_rect(under, order, n, 0);
+        compose_rect(under, order, n);
         cursor_suppressed = 0;
     }
     for (int y = 0; y < back.height; y++) {
@@ -449,7 +456,7 @@ void scene_copy_screen(uint8_t *to, int stride, int pointer)
             row[x] = from[x] | 0xff000000u;
     }
     if (!rect_empty(under))
-        compose_rect(under, order, n, 0);
+        compose_rect(under, order, n);
 }
 
 struct rect scene_window_extent(const struct toplevel *t)

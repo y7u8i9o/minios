@@ -153,14 +153,21 @@ device checkerboard that way).
 
 The compositor's back buffer contains device pixels. Damage, surface
 positions, input and the shell remain logical; `compose_rect` converts
-each rectangle with `dev()`. `draw_surface` copies a buffer whose scale
+each rectangle with `rect_scale`. `draw_surface` copies a buffer whose scale
 equals the screen scale row by row and resamples other buffers (nearest
 neighbour through the buffer scale and transform), so an unscaled client
-is doubled and a scaled one is sharp. The cursor shape is drawn in
-`scale` by `scale` blocks, shadows are computed in device pixels, and
+is doubled and a scaled one is sharp. The cursor is an ARGB image at the
+screen scale, shadows are computed in device pixels, and
 `decor_draw` paints frames, buttons and the title through a painter at
-the screen scale. `backend_flush` copies device rows and flushes the
-device rectangle.
+the screen scale. `backend_present` flushes the device rectangles of a
+frame in one `FBIO_FLUSH_RECTS` request. On a device with
+`FB_CAP_FLUSH` and the native format, which virtio-gpu offers, the back
+buffer is the framebuffer mapping itself: the device shows nothing
+until the flush, so X12 composes there and copies nothing (G5 of
+`docs/plan/compositor-performance.md`). On std VGA and ramfb, which the
+display scans continuously, X12 composes into a private back buffer,
+and `backend_present` copies the device rows of the rectangles into the
+framebuffer, packed into its format when that is not native.
 
 Buffers grow four times at scale 2: a 960x600 terminal needs an 18 MiB
 double buffered pool, so the per object limit of anonymous shared memory

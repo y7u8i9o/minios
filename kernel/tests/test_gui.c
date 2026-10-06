@@ -801,6 +801,26 @@ static void test_comp_core(void)
 }
 KTEST_DEFINE("comp_core", test_comp_core);
 
+/* G5 of docs/plan/compositor-performance.md: comptest checks through the
+ * frame statistics that X12 composes only the damage of a commit and
+ * that commits with only a frame callback compose nothing. The case runs
+ * at 2560x1600@2 on virtio-gpu, where X12 composes into the framebuffer. */
+static void test_comp_damage(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = start_compositor();
+    struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "damage", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start comptest");
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "comptest damage status 0x%x", status);
+    signal_send(srv, SIGTERM);
+    status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+    kprintf("comp_damage: ok\n");
+}
+KTEST_DEFINE("comp_damage", test_comp_damage);
+
 /* video=WxH@2: the compositor composes at half the framebuffer size and
  * writes every logical pixel as a 2x2 block, so the comptest surface
  * appears at doubled coordinates and neighbouring pixels are equal. */

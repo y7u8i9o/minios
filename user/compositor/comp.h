@@ -222,7 +222,7 @@ void stats_idle_timer(void);                    /* a frame timer expiration with
 void stats_mark(enum stats_event e);
 long stats_frame_begin(void);                   /* returns the start time for stats_frame_end */
 void stats_rect(long device_pixels);            /* one composed damage rectangle */
-void stats_flush(long bytes, long us);          /* one flush of the backend */
+void stats_flush(long rects, long bytes, long us);  /* one present of the backend */
 long stats_frame_end(long t0);                  /* returns the frame time in microseconds */
 void stats_pool_mapped(long delta);             /* bytes of client pools mapped or unmapped */
 void stats_values(long *count, long *ms, long *max);
@@ -279,7 +279,10 @@ int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
 /* backend_fb.c */
 extern struct surface back;
 int backend_init(void);
-void backend_flush(struct rect r);
+/* Show the composed rectangles (logical pixels, at most RECT_SET_MAX):
+ * copy them from the back buffer into the framebuffer unless the scene
+ * composes into the framebuffer itself, and flush them in one request. */
+void backend_present(const struct rect *r, int n);
 /* The bytes of the private back buffer. */
 long backend_buffer_bytes(void);
 int backend_can_set_mode(void);

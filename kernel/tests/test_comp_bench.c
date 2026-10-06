@@ -14,6 +14,7 @@
 #include <ipc/signal.h>
 #include <drivers/timer.h>
 #include <console.h>
+#include <lib/crc32.h>
 #include "gui_helpers.h"
 
 /* The compbench window: 760x540 logical pixels of contents, which X12
@@ -47,6 +48,30 @@ static bool window_at_home(void)
     return pixel(WIN_X + 2, WIN_Y - 10) == 0x00ebebeb;
 }
 
+/* The CRC-32 of the guest framebuffer as rows of red, green and blue
+ * bytes, the layout of a PPM image. The qmp script of the case takes a
+ * screendump after the line, and the post script compares the CRC-32 of
+ * the image of the host: every composed pixel must have been flushed. */
+static void print_screen_crc(void)
+{
+    uint32_t w = (uint32_t)fb_screen.width, h = (uint32_t)fb_screen.height;
+    uint8_t *row = kmalloc((size_t)w * 3);
+    ktest_assert(row != NULL, "alloc");
+    uint32_t crc = 0;
+    for (uint32_t y = 0; y < h; y++) {
+        for (uint32_t x = 0; x < w; x++) {
+            uint32_t c = fb_read_rgb(&fb_screen, x, y);
+            row[3 * x] = (uint8_t)(c >> 16);
+            row[3 * x + 1] = (uint8_t)(c >> 8);
+            row[3 * x + 2] = (uint8_t)c;
+        }
+        crc = crc32(crc, row, (size_t)w * 3);
+    }
+    kfree(row);
+    kprintf("comp_bench: screen crc %08x\n", crc);
+    sleep_ms(1500);
+}
+
 static void scenario_drag(int *cx, int *cy)
 {
     mouse_move_to(cx, cy, WIN_X + 300, WIN_Y - 10, 0);
@@ -69,6 +94,7 @@ static void scenario_drag(int *cx, int *cy)
     }
     ktest_assert(settled, "the window did not return to its place");
     ktest_wait_idle(300);
+    print_screen_crc();
     kprintf("comp_bench: drag done\n");
     run_shell("compstat");
     print_usage("drag");

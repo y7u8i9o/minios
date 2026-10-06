@@ -312,6 +312,17 @@ static void h_damage_buffer(struct wire_client *c, struct wire_resource *self, i
     h_damage(c, self, r.x, r.y, r.w, r.h);
 }
 
+/* The damage rectangles of the commit, in surface coordinates, on the
+ * screen, clipped to the surface. */
+static void damage_contents(struct csurface *s)
+{
+    struct rect area = surface_rect(s);
+    for (int i = 0; i < s->pending.ndamage; i++) {
+        struct rect d = s->pending.damage[i];
+        scene_damage(rect_intersect((struct rect){ s->x + d.x, s->y + d.y, d.w, d.h }, area));
+    }
+}
+
 static void h_commit(struct wire_client *c, struct wire_resource *self)
 {
     struct csurface *s = self->data;
@@ -319,6 +330,11 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     if (!surface_commit_allowed(c, s, next))
         return;
     struct rect old = decor_has(s) ? decor_extent(s) : surface_rect(s);
+    /* A new scale, transform or opaque region changes how every pixel of
+     * the buffer is drawn. */
+    int all_changed = s->pending.opaque_set ||
+                      (s->pending.state_set && (s->pending.scale != s->current.scale ||
+                                                s->pending.transform != s->current.transform));
     if (s->pending.state_set) {
         s->current.scale = s->pending.scale;
         s->current.transform = s->pending.transform;
@@ -370,28 +386,31 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
         s->pending.buffer = NULL;
         s->pending.attach_x = s->pending.attach_y = 0;
         /* A new buffer for an unchanged geometry (the usual frame of a
-         * double buffered client) changes the contents only; the
-         * decorations and the shadow around them remain as drawn. */
+         * double buffered client) changes the contents only, where the
+         * client reported damage; the decorations and the shadow around
+         * them remain as drawn. A buffer without damage counts as changed
+         * everywhere. */
         struct rect now = decor_has(s) ? decor_extent(s) : surface_rect(s);
         int same = was_mapped && b && old.x == now.x && old.y == now.y && old.w == now.w && old.h == now.h;
-        if (same) {
+        if (same && !all_changed && s->pending.ndamage) {
+            damage_contents(s);
+        } else if (same) {
             scene_damage(surface_rect(s));
         } else {
             scene_damage(old);
             scene_damage(now);
         }
+    } else if (all_changed && s->mapped) {
+        scene_damage(surface_rect(s));
     } else {
-        for (int i = 0; i < s->pending.ndamage; i++) {
-            struct rect d = s->pending.damage[i];
-            scene_damage((struct rect){ s->x + d.x, s->y + d.y, d.w, d.h });
-        }
+        damage_contents(s);
     }
     s->pending.ndamage = 0;
+    /* A frame callback asks for the next frame and adds no damage; the
+     * frame clock answers it also when nothing is composed (main.c). */
     for (int i = 0; i < s->pending.ncallbacks && s->nframe_cbs < 8; i++)
         s->frame_cbs[s->nframe_cbs++] = s->pending.callbacks[i];
     s->pending.ncallbacks = 0;
-    if (s->nframe_cbs && s->mapped)
-        scene_damage(surface_rect(s));
     comp_debug("surface %d committed", s->id);
 }
 

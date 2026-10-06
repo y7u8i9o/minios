@@ -191,7 +191,7 @@ user/hello/**                   dynlink
 user/audiod/**                  audio_*
 user/calc/**                    gui_calc calculator
 user/compat/**                  boot
-user/compositor/**              comp_* gui gui_* panel_desktop panel_top
+user/compositor/**              comp_* gui gui_* panel_desktop panel_top aarch64:comp_damage aarch64:gui
 user/desktop/**                 gui_desktop gpu_resize wallpaper_hidpi
 user/edit/**                    editor
 user/files/**                   gui_files gui_filechooser gui_dnd

@@ -35,16 +35,24 @@ serial line to the kernel and the programs.
   state (buffer, damage rectangles, frame callbacks) that `commit`
   moves into the current state. A commit with a new buffer releases
   the previous one (`buffer.release`) and damages the old and new
-  extents, or only the contents when the geometry is unchanged (the
-  usual frame of a double buffered client, whose decorations and shadow
-  remain as drawn); a commit without a new buffer damages the listed
-  rectangles. A damage rectangle lying entirely inside one opaque
-  surface skips the desktop fill. Surfaces are placed in a cascade until M25 gives them
+  extents, or, when the geometry is unchanged (the usual frame of a
+  double buffered client, whose decorations and shadow remain as drawn),
+  the damage rectangles of the commit; a buffer without damage
+  rectangles damages the whole surface. A commit without a new buffer
+  damages the listed rectangles. A new scale, transform or opaque region
+  damages the whole surface. A frame callback adds no damage (G5 of
+  `docs/plan/compositor-performance.md`; before, every buffer redrew the
+  whole surface and every frame callback damaged it). A damage rectangle
+  lying entirely inside one opaque surface skips the desktop fill. Surfaces are placed in a cascade until M25 gives them
   roles and positions; a surface is mapped once it has a buffer.
-- `scene.c`: the damage list with merging of touching rectangles,
-  occlusion culling of surfaces below opaque (`XRGB8888`) surfaces,
-  per rectangle composition (desktop fill, surfaces bottom up with
-  alpha blending for `ARGB8888`, the cursor), and frame statistics.
+- `scene.c`: the damage as a `rect_set` of up to 32 disjoint rectangles
+  (`gui/gfx.h`), occlusion culling of surfaces below opaque surfaces,
+  per rectangle composition (desktop fill, surfaces bottom up, the
+  cursor), and one present of all rectangles of a frame through
+  `backend_present`. The opaque region of an `ARGB8888` surface decides
+  its opacity: every opaque span of a row is copied with the alpha
+  cleared, and the rest is blended with `pixel_over`. The built-in arrow
+  is an ARGB image per scale, blended with `pixel_over`.
 - `data.c`: the data device, with the selection and its stored copy
   (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
   under the cursor, the copy and move actions chosen from both sides and
@@ -141,9 +149,10 @@ instead of libgui (`input.md`).
 ## Frame clock and callbacks
 
 The frame timer expires every 16 ms. When damage exists the scene is
-composed and flushed; only after that successful flush does every frame
-callback registered by a commit since the previous frame receive
-`callback.done` with the time in milliseconds. Clients are flushed with
+composed and flushed, and every frame callback registered by a commit
+since the previous frame receives `callback.done` with the time in
+milliseconds after the flush. A callback whose commit added no damage
+receives `done` at the next expiration without a composition (G5). Clients are flushed with
 the presentation event. The framebuffer ABI currently exposes a mapped
 front buffer and has no page-flip or vblank primitive, so this is a
 software presentation clock rather than a claim of hardware vsync.

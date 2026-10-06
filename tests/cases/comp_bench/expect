@@ -1,3 +1,4 @@
+comp_bench: screen crc [0-9a-f]{8}
 comp_bench: drag done
 compstat: elapsed_us=
 comp_bench: pointer done

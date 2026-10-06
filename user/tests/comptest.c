@@ -1,6 +1,7 @@
 /* Compositor test client. Modes: core (M24), shell, seat, data-source,
- * data-target (M25). Every event of interest is logged as
- * "comptest: ..." for the kernel tests. */
+ * data-target (M25), damage (G5 of docs/plan/compositor-performance.md).
+ * Every event of interest is logged as "comptest: ..." for the kernel
+ * tests. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,14 +16,15 @@
 #include "shell-client.h"
 #include "seat-client.h"
 #include "data-client.h"
+#include "debug-client.h"
 
 #define W 200
 #define H 150
 
 static struct wire_display *d;
 static struct wire_proxy *compositor, *shm, *output, *shell, *seat, *data_manager;
-static struct wire_proxy *pointer, *keyboard, *data_device;
-static int frames, releases, formats, modes, out_w, out_h;
+static struct wire_proxy *pointer, *keyboard, *data_device, *debug;
+static int frames, releases, formats, modes, out_w, out_h, out_scale = 1;
 static uint32_t last_frame_time, last_serial;
 static struct keymap *keymap;
 static int modifiers;
@@ -41,6 +43,7 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
     else if (strcmp(iface, "shell") == 0) shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
     else if (strcmp(iface, "seat") == 0) seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
     else if (strcmp(iface, "data_device_manager") == 0) data_manager = registry_bind(registry, name, iface, version, &data_device_manager_interface, 1);
+    else if (strcmp(iface, "debug") == 0 && version >= 2) debug = registry_bind(registry, name, iface, version, &debug_interface, 2);
 }
 static void on_global_remove(void *user, struct wire_proxy *registry, uint32_t name) {}
 static const struct registry_listener registry_events = { on_global, on_global_remove };
@@ -49,7 +52,7 @@ static void on_format(void *user, struct wire_proxy *p, uint32_t format) { forma
 static const struct shm_listener shm_events = { on_format };
 static void on_geometry(void *user, struct wire_proxy *p, int32_t x, int32_t y, int32_t w, int32_t h) { out_w = w; out_h = h; }
 static void on_mode(void *user, struct wire_proxy *p, int32_t w, int32_t h, int32_t refresh) { modes++; }
-static void on_scale(void *user, struct wire_proxy *p, int32_t factor) {}
+static void on_scale(void *user, struct wire_proxy *p, int32_t factor) { out_scale = factor > 0 ? factor : 1; }
 static void on_transform(void *user, struct wire_proxy *p, uint32_t transform) {}
 static void on_output_done(void *user, struct wire_proxy *p) {}
 static const struct output_listener output_events = { on_geometry, on_mode, on_scale, on_transform, on_output_done };
@@ -255,6 +258,31 @@ static void on_dev_selection(void *user, struct wire_proxy *dev, struct wire_pro
 }
 static const struct data_device_listener device_events = { on_dev_offer, on_dev_enter, on_dev_leave, on_dev_motion, on_dev_drop, on_dev_selection };
 
+/* ---- frame statistics of X12 ---- */
+
+static unsigned long long stat_pixels, stat_rects, stat_flush_rects;
+static int stats_done;
+
+static void on_frame_stat(void *user, struct wire_proxy *p, const char *key, uint32_t high, uint32_t low)
+{
+    unsigned long long v = (unsigned long long)high << 32 | low;
+    if (strcmp(key, "pixels") == 0) stat_pixels = v;
+    else if (strcmp(key, "rects") == 0) stat_rects = v;
+    else if (strcmp(key, "flush_rects") == 0) stat_flush_rects = v;
+}
+static void on_frame_stats_done(void *user, struct wire_proxy *p) { stats_done = 1; }
+static const struct debug_listener debug_events = { .frame_stat = on_frame_stat, .frame_stats_done = on_frame_stats_done };
+
+static int read_stats(void)
+{
+    stats_done = 0;
+    debug_get_frame_stats(debug);
+    while (!stats_done)
+        if (wire_display_dispatch(d) < 0)
+            return -1;
+    return 0;
+}
+
 /* ---- modes ---- */
 
 static int run_core(void)
@@ -305,6 +333,84 @@ static int run_core(void)
     shm_pool_destroy(pool);
     wire_display_roundtrip(d);
     return 0;
+}
+
+/* Commit with a frame callback and wait until it completes. */
+static int commit_and_wait(struct wire_proxy *surface)
+{
+    int want = frames + 1;
+    struct wire_proxy *cb = surface_frame(surface);
+    callback_add_listener(cb, &callback_events, NULL);
+    surface_commit(surface);
+    while (frames < want)
+        if (wire_display_dispatch(d) < 0)
+            return -1;
+    return 0;
+}
+
+/* X12 composes only the damage of a commit: ten new buffers with a damage
+ * of one pixel each compose ten rectangles of S by S device pixels at the
+ * output scale S, flushed as ten rectangles. Ten commits that carry only
+ * a frame callback compose nothing and receive their callbacks. */
+static int run_damage(void)
+{
+    if (!debug) {
+        LOG("X12 has no debug interface of version 2");
+        return 1;
+    }
+    debug_add_listener(debug, &debug_events, NULL);
+    int fd = memfd_create("comptest", MFD_CLOEXEC);
+    size_t size = (size_t)W * H * 4 * 2;
+    ftruncate(fd, (long)size);
+    uint32_t *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    for (int i = 0; i < 2 * W * H; i++)
+        map[i] = 0x00808080;
+    struct wire_proxy *pool = shm_create_pool(shm, fd, (int32_t)size);
+    struct wire_proxy *b[2] = { shm_pool_create_buffer(pool, 0, W, H, W * 4, 1),
+                                shm_pool_create_buffer(pool, W * H * 4, W, H, W * 4, 1) };
+    struct wire_proxy *surface = compositor_create_surface(compositor);
+    surface_add_listener(surface, &surface_events, NULL);
+    surface_attach(surface, b[0], 0, 0);
+    surface_damage(surface, 0, 0, W, H);
+    if (commit_and_wait(surface) < 0)
+        return 1;
+    sleep_ms(300);
+    wire_display_roundtrip(d);
+    debug_reset_frame_stats(debug);
+    wire_display_roundtrip(d);
+    /* The pixels lie 10 apart, so that no two of them merge into one
+     * rectangle when two commits fall into one frame. */
+    for (int i = 0; i < 10; i++) {
+        int x = 5 + 10 * i, y = 20;
+        map[y * W + x] = map[W * H + y * W + x] = 0x00ff0000;
+        surface_attach(surface, b[(i + 1) % 2], 0, 0);
+        surface_damage(surface, x, y, 1, 1);
+        if (commit_and_wait(surface) < 0)
+            return 1;
+    }
+    if (read_stats() < 0)
+        return 1;
+    unsigned long long want = 10ull * (unsigned long long)(out_scale * out_scale);
+    LOG("10 buffer commits composed %llu device pixels in %llu rectangles, %llu flushed", stat_pixels, stat_rects,
+        stat_flush_rects);
+    int ok = stat_pixels == want && stat_rects == 10 && stat_flush_rects == 10;
+    debug_reset_frame_stats(debug);
+    wire_display_roundtrip(d);
+    int before = frames;
+    for (int i = 0; i < 10; i++)
+        if (commit_and_wait(surface) < 0)
+            return 1;
+    if (read_stats() < 0)
+        return 1;
+    LOG("10 commits with only a frame callback composed %llu pixels, %d callbacks done", stat_pixels, frames - before);
+    ok = ok && stat_pixels == 0 && frames - before == 10;
+    LOG("damage %s", ok ? "ok" : "wrong");
+    surface_destroy(surface);
+    buffer_destroy(b[0]);
+    buffer_destroy(b[1]);
+    shm_pool_destroy(pool);
+    wire_display_roundtrip(d);
+    return ok ? 0 : 1;
 }
 
 static void on_ping(void *user, struct wire_proxy *sh, uint32_t serial) { shell_pong(sh, serial); }
@@ -416,6 +522,7 @@ int main(int argc, char **argv)
     else if (strcmp(mode, "data-target") == 0) r = run_window("target", 0x00a0e0ff, 1, 1, 0);
     else if (strcmp(mode, "drag-source") == 0) r = (drag_mode = 1, run_window("source", 0x00ffe0a0, 1, 1, 1));
     else if (strcmp(mode, "drag-target") == 0) r = (drag_mode = 1, run_window("target", 0x00a0e0ff, 1, 1, 0));
+    else if (strcmp(mode, "damage") == 0) r = run_damage();
     else if (strcmp(mode, "hang") == 0) r = run_hang(6000);
     else if (strcmp(mode, "hang-forever") == 0) r = run_hang(0);
     else r = 2;

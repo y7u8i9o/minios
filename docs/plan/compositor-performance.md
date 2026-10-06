@@ -233,7 +233,7 @@ display. With direct composition in G5 such a flush would have shown
 half composed frames. The post script of `gpu_resize` uses the shared
 `tests/ppm_pixels.py` instead of its own reader.
 
-### G5. The present path of the compositor
+### G5. The present path of the compositor (completed 2026-10-06)
 
 X12 honours the damage of a client, and a frame callback adds no damage.
 The scene stores its damage in a `rect_set`, composes every rectangle and
@@ -249,6 +249,16 @@ framebuffer with the host screendump. `comp_core`, `comp_scale`,
 `gui_askpass`, `gui_*` and `panel_*` show no change.
 
 Document: `docs/design/compositor.md`, `docs/design/display.md`.
+
+A frame callback without damage receives `done` at the next tick of the
+16 ms timer, without a composition. A new scale, transform or opaque
+region of a surface damages it whole. The screendump comparison runs in
+`comp_bench` as well as in `comp_bench_hidpi`, after the drag, and
+`comp_damage` runs at 2560x1600@2 on virtio-gpu, so that it covers the
+direct composition. The compositor rule of `tests/map` adds `comp_damage`
+and `gui` on aarch64. At 2560x1600@2 the blink composes 1.91 instead of
+38.14 million device pixels, and the drag flushes in 48.5 instead of
+198.5 ms (`docs/design/graphics-performance.md`).
 
 ### G6. The timing model
 

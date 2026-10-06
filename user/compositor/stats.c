@@ -4,9 +4,10 @@
  * x12settings, and the log receives a summary at exit.
  *
  * A frame is one composition of the damage. Its time runs from the start
- * of the composition to the end of the last flush. The flush time is the
- * part spent in backend_flush: the copy into the framebuffer and the flush
- * ioctl. The compose time is the rest of the frame.
+ * of the composition to the end of the flush. The flush time is the part
+ * spent in backend_present: the copy into the framebuffer, unless the
+ * scene composes into it, and the flush ioctl. The compose time is the
+ * rest of the frame.
  *
  * A latency runs from the earliest event that a frame presents to the end
  * of that frame. The events are the first damage after a frame, a commit
@@ -31,7 +32,7 @@ struct latency {
 static struct {
     long reset_at;                      /* microseconds */
     long cpu_at;                        /* CPU time of X12 at the reset, microseconds */
-    uint64_t frames, rects, pixels, flushes, flush_bytes, wakeups, idle_timers;
+    uint64_t frames, rects, pixels, flushes, flush_rects, flush_bytes, wakeups, idle_timers;
     uint64_t compose_us, compose_max_us, flush_us, flush_max_us, frame_max_us;
     uint32_t hist[HIST_BUCKETS];
     struct latency latency[STATS_EVENTS];
@@ -85,9 +86,10 @@ void stats_rect(long device_pixels)
     st.pixels += (uint64_t)device_pixels;
 }
 
-void stats_flush(long bytes, long us)
+void stats_flush(long rects, long bytes, long us)
 {
     st.flushes++;
+    st.flush_rects += (uint64_t)rects;
     st.flush_bytes += (uint64_t)bytes;
     frame_flush_us += us;
 }
@@ -180,6 +182,7 @@ void stats_send(struct wire_resource *r)
         { "rects", st.rects },
         { "pixels", st.pixels },
         { "flushes", st.flushes },
+        { "flush_rects", st.flush_rects },
         { "flush_bytes", st.flush_bytes },
         { "compose_us", st.compose_us },
         { "compose_max_us", st.compose_max_us },

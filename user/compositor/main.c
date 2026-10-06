@@ -122,10 +122,11 @@ static void frame(void)
     } else {
         stats_idle_timer();
     }
-    /* Completion means the back buffer has actually been copied to the
-     * framebuffer.  Idle timer ticks are not presentations. */
-    if (presented)
-        surfaces_frame_done((uint32_t)uptime_ms());
+    /* After a composition the callbacks follow the flush of the frame. A
+     * commit that carried only a frame callback adds no damage, and its
+     * callback completes at the tick without a composition, so that the
+     * client may draw its next frame. */
+    surfaces_frame_done((uint32_t)uptime_ms());
     flush_clients();
     /* One line every ten seconds while frames are composed, instead of
      * a line per frame. */

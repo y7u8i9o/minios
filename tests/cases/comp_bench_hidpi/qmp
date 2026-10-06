@@ -1,0 +1,4 @@
+# The host image after the drag, for the comparison of the post script
+# (G5 of docs/plan/compositor-performance.md).
+wait comp_bench: screen crc
+screendump screen.ppm

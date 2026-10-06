@@ -1,0 +1,5 @@
+comptest: 10 buffer commits composed 40 device pixels in 10 rectangles, 10 flushed
+comptest: 10 commits with only a frame callback composed 0 pixels, 10 callbacks done
+comptest: damage ok
+comp_damage: ok
+TEST PASS

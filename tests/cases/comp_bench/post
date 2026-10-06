@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+# The host shows every composed pixel: the CRC-32 of the screendump equals
+# the CRC-32 of the guest framebuffer that the boot test printed.
+import os
+import re
+import sys
+import zlib
+
+sys.path.insert(0, os.path.join(os.environ["TOP"], "tests"))
+import ppm_pixels
+
+serial = os.environ["SERIAL"]
+with open(serial, errors="replace") as f:
+    m = re.search(r"comp_bench: screen crc ([0-9a-f]{8})", f.read())
+if not m:
+    print("post: no screen crc in the serial log")
+    sys.exit(1)
+image = ppm_pixels.read(os.path.join(os.path.dirname(serial), "screen.ppm"))
+host = zlib.crc32(image.data) & 0xffffffff
+if host != int(m.group(1), 16):
+    print(f"post: the host image has the crc {host:08x}, the guest framebuffer {m.group(1)}")
+    sys.exit(1)
+print(f"post: the host shows the guest framebuffer of {image.width}x{image.height}")

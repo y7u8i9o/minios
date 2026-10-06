@@ -28,7 +28,8 @@ runs from the start of the composition to the end of the last flush.
 | `frames` | compositions |
 | `rects` | composed damage rectangles |
 | `pixels` | composed device pixels, the area of the damage rectangles |
-| `flushes` | calls of `backend_flush` |
+| `flushes` | presents of a frame (`backend_present`), before G5 one per rectangle |
+| `flush_rects` | rectangles of the presents (since G5) |
 | `flush_bytes` | bytes that the flushes copied into the framebuffer |
 | `compose_us`, `compose_max_us` | time of the composition, total and the longest |
 | `flush_us`, `flush_max_us` | time of the flushes, total and the longest |
@@ -43,8 +44,9 @@ runs from the start of the composition to the end of the last flush.
 | `back_bytes` | bytes of the back buffer |
 | `pool_bytes` | bytes of the mapped client pools |
 
-The flush time is the time spent in `backend_flush`: the copy into the
-framebuffer and the `FBIO_FLUSH` ioctl. The compose time is the rest of
+The flush time is the time spent in `backend_present`: the copy into the
+framebuffer, which direct composition omits since G5, and the flush
+ioctl. The compose time is the rest of
 the frame. The percentiles come from a histogram with eight buckets per
 power of two. A percentile is the middle of its bucket, within about six
 percent of the exact value. A latency event that causes no composition is
@@ -266,3 +268,35 @@ Benchmark after G3, compared with the baseline of G1:
 The flush times, the latencies and the wakeups did not change, because
 G4 to G6 address them. blink still composes the whole window, because
 X12 ignores the damage of the client until G5.
+
+## G4 and G5: the flush and the present path (2026-10-06)
+
+G4 flushes several rectangles in one request with two waits
+(`display.md`). G5 composes only the damage of a client, adds no damage
+for frame callbacks, composes on virtio-gpu directly into the
+framebuffer and flushes every frame with one request (`compositor.md`).
+
+At 2560x1600@2, compared with the baseline of G1:
+
+| | baseline | after G5 |
+|---|---|---|
+| blink: composed Mpx, compose ms, frame p50 ms | 38.14, 204.5, 14.8 | 1.91, 5.3, 0.2 |
+| drag: compose ms, flush ms, frame p50 ms | 520.2, 198.5, 9.7 | 287.5, 48.5, 5.4 |
+| resize: compose ms, flush ms | 296.2, 130.5 | 167.5, 39.9 |
+| anim: frames of 60, frame p50 ms | 51, 9.7 | 60, 2.9 |
+| pointer: flush ms for 400 frames | 128.3 | 66.0 |
+
+The blink composes 1.91 instead of 38.14 million device pixels. The
+rest of it comes from libgui, which reports the union of the last two
+frames as the damage of a commit (G8). The flush time fell to a quarter
+for the drag, because the frame needs no copy into the framebuffer and
+one request covers all its rectangles. The commit latency (10 ms) and
+the wakeups did not change, because the 16 ms timer still paces the
+frames until G6.
+
+`comp_damage` checks the damage path exactly: ten buffers with one pixel
+of damage each compose 40 device pixels at scale 2 in ten rectangles,
+and ten commits with only a frame callback compose nothing. The cases
+`comp_bench` and `comp_bench_hidpi` compare the CRC-32 of the guest
+framebuffer with a screendump of the host, which shows that direct
+composition flushes every pixel.
