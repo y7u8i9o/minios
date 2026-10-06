@@ -152,7 +152,8 @@ kernel/drivers/virtio/virtio_snd*       audio_*
 
 # ---- libraries ----
 lib/libc/**                     check-headers libc libc_ext libmfull mathvec float locale gettext timezone time pthreads utils sh_builtins
-lib/libc/src/crypto/**          check-pkg pkg pkg_repo
+lib/libc/src/crypto/**          check-pkg check-crypto pkg pkg_repo
+lib/libc/tests/crypto/**        check-crypto
 lib/libc/src/string/string.c    libc aarch64:libc comp_bench comp_bench_hidpi
 lib/libc/include/minios/sha2.h  check-pkg
 lib/libc/include/minios/ed25519.h       check-pkg

@@ -92,7 +92,7 @@ $(NETPEER): tools/netpeer/netpeer.c tools/netpeer/scripted.c tools/netpeer/scrip
 # repository. It is compiled from the SHA-2 and Ed25519 code of libc. pkg
 # uses the same code on minios to verify signatures.
 CRYPTO_SRCS := lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c lib/libc/src/crypto/shacrypt.c
-CRYPTO_HDRS := lib/libc/include/minios/sha2.h lib/libc/include/minios/ed25519.h
+CRYPTO_HDRS := lib/libc/include/minios/sha2.h lib/libc/include/minios/ed25519.h lib/libc/src/crypto/fe25519.h
 $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ tools/pkgsign/pkgsign.c $(CRYPTO_SRCS)
@@ -368,7 +368,7 @@ test-changed:
 # check runs the tests on the host: the installed headers, the signature
 # code and pkg, libfont, libwire, libcodec, libgui, the Lua modules and the
 # input method engines.
-check: check-headers check-pkg check-libfont check-libwire check-libcodec check-libgui
+check: check-headers check-pkg check-crypto check-libfont check-libwire check-libcodec check-libgui
 	$(MAKE) check-lua
 	$(MAKE) check-imed
 
@@ -376,6 +376,15 @@ check: check-headers check-pkg check-libfont check-libwire check-libcodec check-
 .PHONY: check-libfont check-libwire check-libcodec check-libgui
 check-libfont check-libwire check-libcodec check-libgui:
 	$(MAKE) -C lib/$(patsubst check-%,%,$@) check
+
+# check-crypto compares the cryptographic primitives of libc with the
+# cryptography package of Python on the host (docs/plan/tls.md, T2).
+.PHONY: check-crypto
+check-crypto:
+	@mkdir -p $(BUILD)/host
+	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O2 -g -Wall -Wextra -idirafter lib/libc/include -o $(BUILD)/host/crypto_oracle \
+	    lib/libc/tests/crypto/oracle.c $(wildcard lib/libc/src/crypto/*.c)
+	python3 lib/libc/tests/crypto/check.py $(BUILD)/host/crypto_oracle
 
 .PHONY: check-lua check-headers check-imed
 # check-imed tests the engines of the input method daemon on the host with

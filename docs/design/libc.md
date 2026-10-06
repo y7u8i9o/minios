@@ -364,6 +364,43 @@ seed the call fails with `EAGAIN`. The flags `GRND_NONBLOCK` and
 `getrandom` in `sys/random.h` and `getentropy` in `unistd.h`, which
 refuses more than 256 bytes with `EIO`. `libctest` checks both.
 
+## Cryptographic primitives (T2 of `docs/plan/tls.md`)
+
+`minios/crypto.h` declares the primitives of the TLS client. The code is
+in `lib/libc/src/crypto/`.
+
+- `hash_init`, `hash_update` and `hash_final` select SHA-256, SHA-384 or
+  SHA-512 through `enum hash_alg`. `sha2.c` adds SHA-384.
+- `hmac` and `hkdf_extract`/`hkdf_expand` follow RFC 2104 and RFC 5869.
+  A missing salt counts as a string of zeros of the hash size.
+- `chacha20_poly1305_seal`/`_open` follow RFC 8439. `aes128_gcm_seal`/
+  `_open` follow NIST SP 800-38D with a 96-bit nonce. Both write the
+  16-byte tag after the ciphertext. The open functions compare the tag in
+  constant time and zero the output on a mismatch.
+- `x25519` runs the Montgomery ladder of RFC 7748. The field arithmetic
+  is in `fe25519.h`. `ed25519.c` uses the same header.
+- `ecdsa_verify` checks signatures on P-256 and P-384.
+  `ec_p256_public` and `ec_p256_shared` compute keys and ECDH on P-256.
+  The points use Jacobian coordinates in Montgomery form (`bignum.c`).
+  A peer point off the curve fails.
+- `rsa_verify_pkcs1` and `rsa_verify_pss` verify RSA signatures with
+  moduli from 1024 to 4096 bits. PSS requires a salt of the hash size
+  and MGF1 with the same hash, as TLS 1.3 does.
+- `crypto_memcmp` compares in constant time. `crypto_wipe` clears secrets.
+
+Verification uses only public values. Its running time depends on the
+inputs. The X25519 ladder has no branch on a bit of the secret scalar.
+The P-256 scalar multiplication runs one doubling and one addition for
+every bit and selects the result with a mask. The point addition still
+branches on the point at infinity before the first set bit of the
+scalar, and the modular addition branches on its carry. The TLS client
+therefore offers X25519 first and uses a new P-256 key for every
+connection.
+
+`make check-crypto` builds `lib/libc/tests/crypto/oracle.c` with the
+crypto sources on the host. `check.py` sends random inputs to the oracle
+and compares its results with the `cryptography` package of Python.
+
 ## The process table (2026-10-06)
 
 `minios/proctab.h` reads the table of `/dev/proc`. `proc_table_read`

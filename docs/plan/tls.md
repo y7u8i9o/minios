@@ -34,12 +34,16 @@ and AES-GCM. The client therefore implements:
 and `getentropy`/`getrandom` in libc. Test: `libctest` reads random
 bytes, and two reads differ.
 
-### T2. Cryptographic primitives
+### T2. Cryptographic primitives (completed 2026-10-06)
 
 SHA-384, HMAC, HKDF, ChaCha20-Poly1305, AES-128-GCM, X25519, P-256 and
 P-384 (ECDSA verification, ECDH on P-256), RSA verification with
 PKCS#1 v1.5 and PSS, in `lib/libc/src/crypto/`. Test: a host check with
 the test vectors of the RFCs and of NIST.
+
+Result: `make check-crypto` compares 340 results of the C code with the
+`cryptography` package of Python (OpenSSL) on random inputs, and with
+the vectors of RFC 7748 and RFC 8439. Every check passes.
 
 ### T3. Certificates and the trust store
 

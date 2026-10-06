@@ -1,12 +1,13 @@
 #pragma once
-/* This header declares SHA-256 and SHA-512 (FIPS 180-4, RFC 6234). The
- * package installer checks archive digests with SHA-256, and Ed25519
- * hashes with SHA-512. The same source compiles on the host for
- * tools/pkgsign. */
+/* This header declares SHA-256, SHA-384 and SHA-512 (FIPS 180-4, RFC
+ * 6234). The package installer checks archive digests with SHA-256,
+ * Ed25519 hashes with SHA-512, and TLS uses SHA-384 as well. The same
+ * source compiles on the host for tools/pkgsign. */
 #include <stddef.h>
 #include <stdint.h>
 
 #define SHA256_DIGEST_SIZE 32
+#define SHA384_DIGEST_SIZE 48
 #define SHA512_DIGEST_SIZE 64
 
 /* In both contexts, h is the chaining state, length counts the bytes
@@ -35,6 +36,11 @@ void sha512_init(struct sha512_ctx *c);
 void sha512_update(struct sha512_ctx *c, const void *data, size_t len);
 void sha512_final(struct sha512_ctx *c, uint8_t digest[SHA512_DIGEST_SIZE]);
 void sha512(const void *data, size_t len, uint8_t digest[SHA512_DIGEST_SIZE]);
+
+/* SHA-384 is SHA-512 with other initial values, truncated to 48 bytes. */
+void sha384_init(struct sha512_ctx *c);
+void sha384_final(struct sha512_ctx *c, uint8_t digest[SHA384_DIGEST_SIZE]);
+void sha384(const void *data, size_t len, uint8_t digest[SHA384_DIGEST_SIZE]);
 
 /* SHA-256 crypt: hash key with the "$5$[rounds=N$]salt" setting into out
  * in the form "$5$[rounds=N$]salt$hash". A stored hash may serve as the

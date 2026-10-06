@@ -240,3 +240,29 @@ void sha512(const void *data, size_t len, uint8_t digest[SHA512_DIGEST_SIZE])
     sha512_update(&c, data, len);
     sha512_final(&c, digest);
 }
+
+void sha384_init(struct sha512_ctx *c)
+{
+    static const uint64_t iv[8] = {
+        0xcbbb9d5dc1059ed8ull, 0x629a292a367cd507ull, 0x9159015a3070dd17ull, 0x152fecd8f70e5939ull,
+        0x67332667ffc00b31ull, 0x8eb44a8768581511ull, 0xdb0c2e0d64f98fa7ull, 0x47b5481dbefa4fa4ull,
+    };
+    memcpy(c->h, iv, sizeof iv);
+    c->length = 0;
+    c->used = 0;
+}
+
+void sha384_final(struct sha512_ctx *c, uint8_t digest[SHA384_DIGEST_SIZE])
+{
+    uint8_t full[SHA512_DIGEST_SIZE];
+    sha512_final(c, full);
+    memcpy(digest, full, SHA384_DIGEST_SIZE);
+}
+
+void sha384(const void *data, size_t len, uint8_t digest[SHA384_DIGEST_SIZE])
+{
+    struct sha512_ctx c;
+    sha384_init(&c);
+    sha512_update(&c, data, len);
+    sha384_final(&c, digest);
+}
