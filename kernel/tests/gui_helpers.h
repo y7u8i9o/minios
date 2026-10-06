@@ -109,13 +109,23 @@ static inline void alt_key(uint8_t code)
     sleep_ms(150);
 }
 
+/* The compositor alone, without a panel.  The flag -v turns on the
+ * verbose log of the compositor.  The test waits wait_ms for the first
+ * frame.  A test that needs a panel with its own environment starts the
+ * compositor here and the panel itself. */
+static inline struct proc *start_x12(bool verbose, int wait_ms)
+{
+    char *const plain[] = { "x12", "-s", NULL }, *const loud[] = { "x12", "-s", "-v", NULL };
+    struct proc *srv = proc_create_user("/bin/x12", verbose ? loud : plain, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    sleep_ms(wait_ms);
+    return srv;
+}
+
 /* The compositor and the panel; returns the compositor. */
 static inline struct proc *start_server(void)
 {
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    struct proc *srv = start_x12(false, 600);
     panel_proc = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel_proc != NULL, "cannot start the panel");
     sleep_ms(600);

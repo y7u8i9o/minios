@@ -768,19 +768,10 @@ KTEST_DEFINE("gui_drag", test_gui_drag);
 /* M24: the compositor core with the protocol test client. Surface 1 is
  * placed at (40,60); the client shows red, then green with one blue
  * pixel at (10,10). */
-static struct proc *start_compositor(void)
-{
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", "-v", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(1200);
-    return srv;
-}
-
 static void test_comp_core(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -805,7 +796,7 @@ static void test_comp_scale(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(bootinfo.fb_scale == 2, "fb scale %u, expected 2 (video=WxH@2)", bootinfo.fb_scale);
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -882,7 +873,7 @@ static void test_comp_shell(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *cl = start_client("shell");
     /* Server decorations: the frame cascades to (40,30), so the 200x150
      * contents start at (41,59) under the 28 px title bar. */
@@ -929,7 +920,7 @@ static void test_comp_seat(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *cl = start_client("seat");
     int cx = sw / 2, cy = sh / 2;
     /* The surface sits at (41,59) inside the server side frame. */
@@ -963,7 +954,7 @@ KTEST_DEFINE("comp_seat", test_comp_seat);
 static void test_comp_hang(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     int cx = logical_w() / 2, cy = logical_h() / 2;
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "hang", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1012,7 +1003,7 @@ static void test_comp_data(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *src = start_client("data-source");
     struct proc *dst = start_client("data-target");
     int cx = sw / 2, cy = sh / 2;
@@ -1040,7 +1031,7 @@ static void test_comp_panel(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(1000);
@@ -1095,10 +1086,7 @@ static void test_gui_kbd_restore(void)
     struct proc *first = proc_create_user("/bin/hello", (char *const[]){ "hello", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(first != NULL, "cannot start hello");
     proc_reap(first);
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(800);
+    struct proc *srv = start_x12(false, 800);
     ktest_assert(input_dev_grabbed(ps2kbd_device()), "compositor did not grab the keyboard");
     ktest_assert(input_dev_grabbed(ps2mouse_device()), "compositor did not grab the mouse");
     signal_send(srv, SIGKILL);
@@ -1606,10 +1594,7 @@ static void test_gui_locale(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     char *const fr[] = { "LANG=fr_FR.UTF-8", NULL }, *const ja[] = { "LANG=ja_JP.UTF-8", NULL };
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    struct proc *srv = start_x12(false, 600);
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, ja, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(800);
@@ -1778,7 +1763,7 @@ static void test_gui_desktop(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12(true, 1200);
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(500);
