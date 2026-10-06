@@ -113,8 +113,8 @@ kernel/block/**                 blk disk_tools gpt_boot nvme* ahci* usb_storage 
 kernel/include/block/**         blk disk_tools gpt_boot nvme* ahci* usb_storage usb_root mfs
 kernel/input/**                 input* kbd mouse* gui_pointer gui_tablet
 kernel/include/input/**         input* kbd mouse* gui_pointer gui_tablet
-kernel/audio/**                 audio_*
-kernel/include/audio/**         audio_*
+kernel/audio/**                 audio_* hda_*
+kernel/include/audio/**         audio_* hda_*
 kernel/debug/**                 backtrace hung_task profile profreport
 kernel/include/debug/**         backtrace hung_task profile profreport
 kernel/include/tests/**         boot
@@ -146,6 +146,7 @@ kernel/drivers/virtio/virtio_gpu.c      gpu_mode aarch64:gpu_mode gui_modes gui_
 kernel/drivers/virtio/virtio_input.c    input_* gui_tablet
 kernel/drivers/virtio/virtio_net.c      net_nic* net_core net_virtqueue
 kernel/drivers/e1000e.c                 net_e1000e*
+kernel/drivers/hda.c                    hda_*
 kernel/drivers/virtio/virtio_rng.c      net_random*
 kernel/drivers/virtio/virtio_balloon.c  balloon balloon_oom aarch64:balloon*
 kernel/drivers/virtio/virtio_9p.c       9p 9p_automount aarch64:9p*

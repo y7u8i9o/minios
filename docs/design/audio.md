@@ -34,7 +34,10 @@ effects, or network transport.
 ## Kernel PCM interface
 
 `kernel/audio/pcm.c` registers flat devfs nodes through `struct pcm_device`.
-The first virtio-snd device appears as `/dev/pcm0`; opening it is exclusive
+Drivers take the next free name with `pcm_free_name`. Two drivers provide
+PCM devices: virtio-snd, described below, and Intel HD Audio (`hda.md`),
+which offers playback only and is registered after virtio-snd. The first
+device appears as `/dev/pcm0`; opening it is exclusive
 so that mixing and policy remain in `audiod`.  One open descriptor carries
 both directions: writes feed the playback stream, reads take from the
 capture stream.

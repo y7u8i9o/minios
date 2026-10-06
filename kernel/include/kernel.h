@@ -24,6 +24,8 @@
 #define ALIGN_DOWN(x, a) ((x) & ~((__typeof__(x))(a) - 1))
 #define ALIGN_UP(x, a)   ALIGN_DOWN((x) + ((__typeof__(x))(a) - 1), a)
 #define IS_ALIGNED(x, a) (((x) & ((a) - 1)) == 0)
+/* x / d rounded up, for any positive divisor. */
+#define DIV_ROUND_UP(x, d) (((x) + (d) - 1) / (d))
 #define container_of(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 

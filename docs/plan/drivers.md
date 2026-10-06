@@ -137,10 +137,11 @@ EEPROM, registered with the network core. Boot test with the QEMU `e1000e`
 device against the network peer. Done as S1 of
 `release-0.7.0.md`. Document: `docs/design/e1000e.md`.
 
-### D7. Intel HD Audio
+### D7. Intel HD Audio (completed 2026-10-06)
 
 A driver for Intel HD Audio controllers: the CORB and RIRB command rings,
 codec enumeration, an output path from a converter to a pin, and stream
 descriptors with buffer descriptor lists, exposed as a PCM device to
 `audiod`. Boot test with `intel-hda` and `hda-duplex` and the wav audio
-backend.
+backend. Done as S2 of `release-0.7.0.md`, playback only. Document:
+`docs/design/hda.md`.

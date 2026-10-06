@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+# The 440 Hz square wave of audiotest must reach the host through the HDA
+# codec at the expected frequency and level. The wav backend may resample
+# to its own rate, and isa-debug-exit can leave the RIFF lengths at zero,
+# so the rate is read from the header and the length from the file size.
+import os, struct
+from pathlib import Path
+data = Path(os.environ['SERIAL']).with_name('audio.wav').read_bytes()
+assert len(data) > 44 and data[:4] == b'RIFF' and data[36:40] == b'data', 'no WAV data'
+channels, rate = struct.unpack_from('<HI', data, 22)
+assert channels == 2 and struct.unpack_from('<H', data, 34)[0] == 16, 'not stereo 16-bit'
+left = struct.unpack_from('<' + 'h' * ((len(data) - 44) // 2), data, 44)[::2]
+active = [i for i, v in enumerate(left) if abs(v) > 5000]
+assert active, 'no signal'
+signal = left[active[0]:active[-1] + 1]
+seconds = len(signal) / rate
+crossings = sum(1 for a, b in zip(signal, signal[1:]) if (a < 0) != (b < 0))
+frequency = crossings / 2 / seconds
+assert abs(frequency - 440) < 15, f'frequency {frequency:.1f} Hz'
+# audiotest writes 24 periods of 480 frames, 0.24 s. The end of the last
+# period may be cut when the stream stops, but nothing may be repeated.
+assert 0.21 < seconds < 0.25, f'duration {seconds:.3f} s'
+# A repeated or skipped period shows up as a half-period of the square
+# wave that is much shorter or longer than rate / 880 samples.
+half = rate / 880
+crossing_at = [i for i, (a, b) in enumerate(zip(signal, signal[1:])) if (a < 0) != (b < 0)]
+jumps = [i for i, j in zip(crossing_at, crossing_at[1:]) if abs(j - i - half) > 3]
+assert not jumps, f'phase jumps at {[round(i / rate, 3) for i in jumps]} s'
+assert max(map(abs, signal)) > 8000, 'level too low'
+print(f'hda_pcm_poll post: {frequency:.1f} Hz for {seconds:.3f} s')

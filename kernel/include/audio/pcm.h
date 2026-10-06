@@ -29,6 +29,9 @@ struct pcm_device {
     struct poll_source poll;
 };
 
+/* Store the next unused device name (pcm0, pcm1, ...) in name. Drivers
+ * call this before pcm_register. */
+void pcm_free_name(char *name, size_t size);
 /* Register a flat devfs node, normally pcm0, pcm1, ... */
 int pcm_register(struct pcm_device *dev, const char *name,
                  const struct pcm_ops *ops, void *priv);

@@ -24,7 +24,9 @@
 #   fat       one line per FAT image to attach, "<size_mb> <12|16|32> [dir]"
 #             built by mkfat from the directory under the case (optional),
 #             and the post script sees the first as FATIMG and all as FATIMGS
-#   audio     QEMU audio backend for a virtio-sound device, none or wav
+#   audio     QEMU audio backend for a virtio-sound device, none or wav. An
+#             optional second word, hda, attaches an Intel HD Audio
+#             controller with an hda-duplex codec instead
 #   vga       std (default) or virtio (virtio-vga, the virtio-gpu driver),
 #             on aarch64 ramfb (default) or ramfb with virtio-gpu-pci
 #   tablet    attaches a virtio-tablet-pci device when present
@@ -251,11 +253,16 @@ elif [ -n "$DISK" ] && [ -f "$DISK" ]; then
 fi
 SOUNDFLAGS=""
 if [ -f "$CASE/audio" ]; then
-    AUDIO_BACKEND="$(cat "$CASE/audio")"
+    read -r AUDIO_BACKEND AUDIO_MODEL < "$CASE/audio"
+    case "${AUDIO_MODEL:-virtio}" in
+        virtio) AUDIODEV="-device virtio-sound-pci,audiodev=minios_audio" ;;
+        hda) AUDIODEV="-device intel-hda,id=hda0 -device hda-duplex,bus=hda0.0,audiodev=minios_audio" ;;
+        *) fail "unknown audio model $AUDIO_MODEL" ;;
+    esac
     if [ "$AUDIO_BACKEND" = wav ]; then
-        SOUNDFLAGS="-audiodev wav,id=minios_audio,path=$OUTDIR/audio.wav -device virtio-sound-pci,audiodev=minios_audio"
+        SOUNDFLAGS="-audiodev wav,id=minios_audio,path=$OUTDIR/audio.wav $AUDIODEV"
     elif [ "$AUDIO_BACKEND" = none ]; then
-        SOUNDFLAGS="-audiodev none,id=minios_audio -device virtio-sound-pci,audiodev=minios_audio"
+        SOUNDFLAGS="-audiodev none,id=minios_audio $AUDIODEV"
     else
         echo "FAIL $NAME (unknown audio backend: $AUDIO_BACKEND)"
         exit 1

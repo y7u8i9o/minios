@@ -354,7 +354,7 @@ static void probe(struct pci_dev *pci)
     d->playback.present = true;
     d->capture.present = find_stream(d, streams, VIRTIO_SND_D_INPUT, &d->capture.stream_id) == 0;
     char name[16];
-    ksnprintf(name, sizeof name, "pcm%d", ndevices);
+    pcm_free_name(name, sizeof name);
     if (pcm_register(&d->pcm, name, &snd_pcm_ops, d) < 0)
         return;
     ndevices++;

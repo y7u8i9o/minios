@@ -82,17 +82,20 @@ mode network.
 
 Document: `docs/design/e1000e.md`, `docs/design/network.md`.
 
-### S2. Intel HD Audio (D7)
+### S2. Intel HD Audio (D7) (completed 2026-10-06)
 
 A driver for Intel HD Audio controllers: the CORB and RIRB command rings,
 codec enumeration through the widget graph, an output path from a DAC to
 an output pin, and an output stream descriptor with a buffer descriptor
-list. The driver registers a PCM device with the kernel audio layer, so
-`audiod` uses it in the same way as virtio-snd.
+list. The driver registers a playback PCM device with the kernel audio
+layer, so `audiod` uses it in the same way as virtio-snd. Position updates
+arrive through MSI, or from a polling thread with `hda=poll`.
 
-Boot tests: `hda` plays a test tone through `intel-hda` with `hda-duplex`
-and the wav audio backend, and the post script checks the frequency and
-level of the recorded file. `hda_audiod` plays a file through `audiod`.
+Boot tests: `hda_pcm` plays a test tone through `intel-hda` with
+`hda-duplex` and the wav audio backend, and the post script checks the
+frequency and duration of the recorded tone and that no period was
+repeated or skipped. `hda_pcm_poll` runs the same test without an
+interrupt. `hda_audiod` runs the `audiod` integration test.
 
 Document: `docs/design/hda.md`, `docs/design/audio.md`.
 

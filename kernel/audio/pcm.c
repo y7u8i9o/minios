@@ -99,6 +99,11 @@ static const struct file_ops pcm_fops = {
 static struct pcm_device *registered[PCM_MAX_DEVICES];
 static unsigned nregistered;
 
+void pcm_free_name(char *name, size_t size)
+{
+    ksnprintf(name, size, "pcm%u", nregistered);
+}
+
 int pcm_register(struct pcm_device *dev, const char *name,
                  const struct pcm_ops *ops, void *priv)
 {

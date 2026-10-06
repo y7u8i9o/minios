@@ -1,0 +1,3 @@
+hda.*pcm0.*line out
+audiotest: 0 failures
+TEST PASS

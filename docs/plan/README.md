@@ -26,14 +26,14 @@ its boot tests pass.
 | `codecs.md` | The codec library with loadable format modules for images and audio, milestones C1 to C7 | completed 2026-10-03 |
 | `multiuser.md` | Credentials, ownership, permission enforcement, accounts, console and graphical login, su, doas and sudo, milestones U0 to U5 | completed 2026-10-03 |
 | `packaging.md` | The base system as packages, partitions, the installer as the release image and offline updates, milestones P0 to P10 | P0 to P10 completed 2026-10-04 |
-| `drivers.md` | ACPI tables on aarch64, xHCI with USB HID, NVMe, AHCI, USB mass storage, e1000e, HD Audio, milestones D1 to D7 | D1 and D2 completed 2026-10-04, D3 to D5 completed 2026-10-05, D6 completed 2026-10-06, D7 planned |
+| `drivers.md` | ACPI tables on aarch64, xHCI with USB HID, NVMe, AHCI, USB mass storage, e1000e, HD Audio, milestones D1 to D7 | D1 and D2 completed 2026-10-04, D3 to D5 completed 2026-10-05, D6 and D7 completed 2026-10-06 |
 | `release-0.5.0.md` | Release 0.5.0: `#!` scripts, NVMe, AHCI with CD drives, USB mass storage and hubs, ISO 9660, the live medium, milestones R1 to R6 | completed 2026-10-05 |
 | `release-0.6.0.md` | Release 0.6.0: ACPI power and power button, NTP, the desktop size from the window, the memory balloon, host folders through virtio-9p, milestones V1 to V5 | completed 2026-10-06 |
 | `desktop-panel.md` | The new panel (icons, calendar, power menu, show desktop, top or bottom) and the wallpaper at device resolution, milestones B1 to B6 | completed 2026-10-06 |
 | `compositor-performance.md` | Measurement, faster string functions, SIMD pixel module, batched flushes, client damage, timing model, decoration tables, libgui without the private surface, hardware cursor, milestones G1 to G9 | G1 to G9 completed 2026-10-06 |
 | `x12settings.md` | The inspection and settings tool of X12: performance graphs, clients and surfaces, all live settings, debug views, milestones X1 to X5 | completed 2026-10-06 |
 | `tls.md` | A TLS 1.3 client for HTTPS: entropy for programs, cryptographic primitives, certificates and trust store, the client in `http_get` and `pkg`, the repository on the owner's server, milestones T1 to T5 | T1 to T5 completed 2026-10-06 |
-| `release-0.7.0.md` | Release 0.7.0: e1000e, HD Audio, Opus and AAC-LC decoding, notifications, screen locker, workspaces and snapping, archive manager, PDF viewer, trash and content search in Files, milestones S1 to S12 | S1 completed 2026-10-06 |
+| `release-0.7.0.md` | Release 0.7.0: e1000e, HD Audio, Opus and AAC-LC decoding, notifications, screen locker, workspaces and snapping, archive manager, PDF viewer, trash and content search in Files, milestones S1 to S12 | S1 and S2 completed 2026-10-06 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 | `prose-rewrite.md` | Rewrite English prose of the entire project (source comments, docs, manual pages, messages) to eliminate translation-like defects: noun-of-noun chains, article overuse, bare nouns as subjects, and six other patterns. Checker script, revised Writing rules for CLAUDE.md, milestones W1 to W9 | proposed 2026-10-06, highest priority |
 

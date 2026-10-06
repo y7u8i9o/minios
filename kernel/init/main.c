@@ -44,6 +44,7 @@
 #include <drivers/virtio/virtio_input.h>
 #include <drivers/usb.h>
 #include <drivers/nvme.h>
+#include <drivers/hda.h>
 #include <drivers/ahci.h>
 #include <drivers/devinfo.h>
 #include <drivers/fbdev.h>
@@ -195,6 +196,7 @@ static void kinit(void *arg)
     /* virtio-snd discovery sends synchronous control messages and therefore
      * requires interrupt delivery and a schedulable current thread. */
     virtio_snd_init();
+    hda_init();
     virtio_gpu_init();
     virtio_input_init();
     /* The balloon thread sends its requests with interrupts. */
