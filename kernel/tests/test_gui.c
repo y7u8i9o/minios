@@ -771,15 +771,10 @@ KTEST_DEFINE("gui_drag", test_gui_drag);
 /* M24: the compositor core with the protocol test client. Surface 1 is
  * placed at (40,60); the client shows red, then green with one blue
  * pixel at (10,10). */
-static struct proc *start_compositor(void)
-{
-    return start_x12((char *const[]){ "x12", "-s", "-v", NULL });
-}
-
 static void test_comp_core(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -804,7 +799,7 @@ KTEST_DEFINE("comp_core", test_comp_core);
 static void test_comp_damage(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "damage", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -824,7 +819,7 @@ static void test_comp_scale(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(bootinfo.fb_scale == 2, "fb scale %u, expected 2 (video=WxH@2)", bootinfo.fb_scale);
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -901,7 +896,7 @@ static void test_comp_shell(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = start_client("shell");
     /* Server decorations: the frame cascades to (40,30), so the 200x150
      * contents start at (41,59) under the 28 px title bar. */
@@ -948,7 +943,7 @@ static void test_comp_seat(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = start_client("seat");
     int cx = sw / 2, cy = sh / 2;
     /* The surface sits at (41,59) inside the server side frame. */
@@ -982,7 +977,7 @@ KTEST_DEFINE("comp_seat", test_comp_seat);
 static void test_comp_hang(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     int cx = logical_w() / 2, cy = logical_h() / 2;
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "hang", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
@@ -1031,7 +1026,7 @@ static void test_comp_data(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *src = start_client("data-source");
     struct proc *dst = start_client("data-target");
     int cx = sw / 2, cy = sh / 2;
@@ -1083,7 +1078,7 @@ static void test_comp_panel(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     ktest_wait_idle(1000);
@@ -1213,7 +1208,7 @@ static void test_panel_calendar(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     ktest_wait_idle(1000);
@@ -1273,7 +1268,7 @@ static void test_panel_desktop(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     ktest_wait_idle(1000);
@@ -1328,7 +1323,7 @@ static void test_panel_top(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     set_panel_position("top");
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
@@ -2085,7 +2080,7 @@ static void test_gui_desktop(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start_compositor();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     ktest_wait_idle(500);

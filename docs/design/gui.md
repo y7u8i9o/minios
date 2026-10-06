@@ -321,8 +321,9 @@ boot tests run on X12 and the panel; their expectations use the `x12:`
 and `panel:` log lines.
 
 The boot tests start X12 through `start_x12` in
-`kernel/tests/gui_helpers.h`. `start_server` and `start_compositor` call
-it. `start_x12` returns once `unix_socket_accepting("display")` is true.
+`kernel/tests/gui_helpers.h`. `start_server` calls it, and the tests
+that need the compositor without the panel call it directly. `start_x12`
+returns once `unix_socket_accepting("display")` is true.
 That condition means that the main loop of X12 polls its listening
 socket. A client started earlier finds no socket and exits with
 `no X12 server`. A fixed delay gave this guarantee only on an idle host.

@@ -74,8 +74,8 @@ static void test_ime(void)
     char *const env[] = { "PATH=/bin", "HOME=/home", NULL };
     struct proc *imed = proc_create_user("/bin/imed", (char *const[]){ "imed", NULL }, env, &kernel_proc);
     ktest_assert(imed != NULL, "cannot start imed");
-    struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, env, &kernel_proc);
-    ktest_assert(panel != NULL, "cannot start the panel");
+    /* The panel of start_server serves the input method menu. The menu
+     * receives the methods from the compositor and needs no HOME. */
     ktest_wait_idle(800);
     struct proc *cl = proc_create_user("/usr/bin/gedit", (char *const[]){ "gedit", "/ime.txt", NULL },
                                        env, &kernel_proc);
@@ -128,8 +128,6 @@ static void test_ime(void)
     mouse_move_to(&cx, &cy, right - 110, top + 6 + 28 + 14, 0);
     mouse_click(1);
     ktest_wait_idle(500);
-    signal_send(panel, SIGTERM);
-    proc_reap(panel);
     signal_send(imed, SIGTERM);
     proc_reap(imed);
     stop_server(srv);

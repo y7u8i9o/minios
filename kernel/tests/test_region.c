@@ -65,7 +65,10 @@ static void test_gui_region(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     run_shell("rm -f /home/.config/desktop.conf /etc/localtime");
-    struct proc *srv = start_server();
+    /* The panel reads the language from HOME and starts sysmon through
+     * PATH. The test therefore starts the compositor alone and then the
+     * panel with the environment env. */
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, env, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     struct proc *desktop = proc_create_user("/bin/desktop", (char *const[]){ "desktop", NULL }, env, &kernel_proc);
