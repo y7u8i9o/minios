@@ -5,6 +5,7 @@
  * host name. The functions use the primitives of minios/crypto.h. */
 #include <stddef.h>
 #include <stdint.h>
+#include <minios/crypto.h>
 
 enum x509_key {
     X509_KEY_EC_P256,
@@ -118,6 +119,13 @@ int x509_check_host(const struct x509_cert *c, const char *host);
 /* Verifies that the key of issuer signed the certificate c. Returns
  * X509_OK, X509_ERR_ALGORITHM or X509_ERR_SIGNATURE. */
 int x509_check_signature(const struct x509_cert *c, const struct x509_cert *issuer);
+
+/* Verifies the signature sig over digest with the key of c. An ECDSA
+ * signature is the DER encoding of Ecdsa-Sig-Value. For an RSA key, pss
+ * selects RSA-PSS with a salt of the hash size, and 0 selects PKCS#1
+ * v1.5. Returns X509_OK, X509_ERR_ALGORITHM or X509_ERR_SIGNATURE. */
+int x509_verify_digest(const struct x509_cert *c, enum hash_alg alg, int pss, const uint8_t *digest,
+                       const uint8_t *sig, size_t sig_len);
 
 /* The text of a result of x509_verify_chain, such as "certificate
  * expired". */

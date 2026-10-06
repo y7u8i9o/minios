@@ -152,7 +152,7 @@ kernel/drivers/virtio/virtio_snd*       audio_*
 
 # ---- libraries ----
 lib/libc/**                     check-headers libc libc_ext libmfull mathvec float locale gettext timezone time pthreads utils sh_builtins
-lib/libc/src/crypto/**          check-pkg check-crypto pkg pkg_repo
+lib/libc/src/crypto/**          check-pkg check-crypto pkg pkg_repo pkg_https aarch64:pkg_https
 lib/libc/tests/crypto/**        check-crypto
 lib/libc/src/base64.c           check-crypto
 lib/libc/include/minios/base64.h        check-crypto
@@ -169,7 +169,12 @@ lib/libc/include/getopt.h       check-binutils binutils
 lib/libc/src/gzip.c             check-pkg pkg tar
 lib/libc/src/crc32.c            check-libcodec check-lua check-transfer pkg tar net_xfer mfs_journal gpt_boot
 lib/libc/include/minios/crc32.h check-libcodec check-lua check-transfer pkg tar net_xfer mfs_journal gpt_boot
-lib/libc/src/net/**             net_dns net_dns_cache net_tools net_xfer pkg_repo
+lib/libc/src/net/**             net_dns net_dns_cache net_tools net_xfer pkg_repo pkg_https
+lib/libc/src/net/tls*           check-crypto aarch64:pkg_https
+lib/libc/src/net/netio.*        check-crypto
+lib/libc/include/minios/tls.h   check-crypto pkg_https
+lib/libc/include/minios/http.h  net_tools pkg_repo pkg_https
+tools/gen_tls_fixtures.py       pkg_https
 lib/libgui/**                   check-libgui check-lua gui gui_*
 lib/libgui/src/pixel.c          pixel aarch64:pixel comp_bench comp_bench_hidpi
 lib/libgui/src/buffers.c        comp_bench_hidpi
@@ -216,7 +221,7 @@ user/lua/lnet.c                 check-transfer net_transfer
 user/lua/lthread.c              check-transfer
 user/mint/**                    mint
 user/panel/**                   comp_panel gui_modes gpu_resize panel_calendar panel_power gui_greeter panel_desktop panel_top
-user/pkg/**                     check-pkg pkg pkg_repo pkg_apps offline_update kernel_upgrade
+user/pkg/**                     check-pkg pkg pkg_repo pkg_https pkg_apps offline_update kernel_upgrade
 user/po/**                      gettext gui_locale locale
 user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize panel_top
 user/x12settings/**             x12settings_* gui_tools gui_settings

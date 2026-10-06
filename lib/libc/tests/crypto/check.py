@@ -4,7 +4,9 @@ cryptography package of Python (OpenSSL) on random inputs, and with
 published test vectors. The certificate checks build test chains with
 the cryptography package and verify them with minios/x509.h. They also
 load the CA bundle of third_party/cacert and verify the chain of the
-owner's server at a fixed time. usage: check.py ORACLE TMPDIR"""
+owner's server at a fixed time. The TLS checks replay the trace of RFC
+8448 and connect the client to TLS 1.3 servers of the ssl module of
+Python on 127.0.0.1. usage: check.py ORACLE TMPDIR"""
 import base64
 import datetime
 import hashlib
@@ -12,8 +14,11 @@ import ipaddress
 import hmac as py_hmac
 import os
 import random
+import socket
+import ssl
 import subprocess
 import sys
+import threading
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, x25519
@@ -287,6 +292,96 @@ verify("server chain, other host", "calcraft.org", SERVER_TIME, CHAIN, bundle, "
 verify("server chain, expired", "code.calcraft.org", SERVER_TIME + 60 * DAY, CHAIN, bundle, "certificate expired")
 verify("server chain without the bundle", "code.calcraft.org", SERVER_TIME, CHAIN, pem(root),
        "certificate issuer unknown")
+
+# TLS: the trace of RFC 8448, also with a KeyUpdate of the server.
+TRACE = os.path.join(HERE, "rfc8448.txt")
+check("tls rfc 8448", ask("rfc8448", TRACE), "ok")
+check("tls rfc 8448 key update", ask("rfc8448", TRACE, "keyupdate"), "ok")
+
+
+def key_pem(key):
+    return key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                             serialization.NoEncryption())
+
+
+def tls_server(label, chain, key, groups=None, request_cert=False, tls12=False):
+    """Starts an echo server with the certificate chain and returns its
+    port. The server answers every connection until the client closes."""
+    certfile, keyfile = f"{TMP}/{label}.pem", f"{TMP}/{label}.key"
+    open(certfile, "wb").write(pem(*chain))
+    open(keyfile, "wb").write(key_pem(key))
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(certfile, keyfile)
+    if tls12:
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    else:
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+    if groups:
+        ctx.set_ecdh_curve(groups)
+    if request_cert:
+        ctx.verify_mode = ssl.CERT_OPTIONAL
+        ctx.load_verify_locations(f"{TMP}/tls-root.pem")
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(8)
+
+    def serve():
+        while True:
+            conn, _ = sock.accept()
+            try:
+                with ctx.wrap_socket(conn, server_side=True) as s:
+                    while True:
+                        data = s.recv(65536)
+                        if not data:
+                            break
+                        s.sendall(data)
+            except (ssl.SSLError, OSError):
+                pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    return sock.getsockname()[1]
+
+
+def tls_case(label, port, host, want, suite="0", x25519_only=0, size=1000, store=None):
+    got = ask("tls", str(port), host, store or f"{TMP}/tls-root.pem", suite, str(x25519_only), str(size))
+    check(f"tls {label}", got if not want.endswith("*") else got[:len(want) - 1] + "*", want)
+
+
+open(f"{TMP}/tls-root.pem", "wb").write(pem(root, ec_root))
+# The clock of the oracle is the real time. The chains of the TLS checks
+# are valid from 2026-01-01 to 2027-01-01 at the earliest, so the checks
+# use new chains valid from yesterday for ten years.
+TODAY = datetime.datetime.now(datetime.timezone.utc)
+T0 = TODAY - datetime.timedelta(days=1)
+inter_now = make_cert("Test CA", int_key, "Test Root", root_key, ca=True, pathlen=0, days=(0, 3650),
+                      digest=hashes.SHA384())
+ec_leaf_now = make_cert("example.test", leaf_key, "Test CA", int_key, days=(0, 3650), san=SAN,
+                        digest=hashes.SHA384())
+rsa_leaf_now = make_cert("rsa.test", rsa_leaf_key, "Test Root", root_key, days=(0, 3650), san=["rsa.test"])
+p384_key = ec.generate_private_key(ec.SECP384R1())
+p384_leaf_now = make_cert("p384.test", p384_key, "EC Root", ec_root_key, days=(0, 3650), san=["p384.test"],
+                          digest=hashes.SHA384())
+
+ec_port = tls_server("ec", [ec_leaf_now, inter_now], leaf_key)
+tls_case("p-256 leaf", ec_port, "example.test", "ok 1303 001d 0")
+tls_case("aes-128-gcm", ec_port, "a.example.test", "ok 1301 001d 0", suite="1301")
+tls_case("chacha20-poly1305", ec_port, "example.test", "ok 1303 001d 0", suite="1303")
+tls_case("100000 bytes", ec_port, "example.test", "ok 1303 001d 0", size=100000)
+tls_case("100000 bytes with aes-128-gcm", ec_port, "example.test", "ok 1301 001d 0", suite="1301", size=100000)
+tls_case("other host", ec_port, "example.org", "fail: certificate not valid for the host")
+tls_case("unknown issuer", ec_port, "example.test", "fail: certificate issuer unknown",
+         store=BUNDLE)
+rsa_port = tls_server("rsa", [rsa_leaf_now], rsa_leaf_key)
+tls_case("rsa leaf with rsa-pss", rsa_port, "rsa.test", "ok 1303 001d 0")
+p384_port = tls_server("p384", [p384_leaf_now], p384_key)
+tls_case("p-384 leaf", p384_port, "p384.test", "ok 1303 001d 0")
+p256_port = tls_server("p256group", [ec_leaf_now, inter_now], leaf_key, groups="prime256v1")
+tls_case("secp256r1 key exchange", p256_port, "example.test", "ok 1303 0017 0")
+tls_case("hello retry request", p256_port, "example.test", "ok 1303 0017 1", x25519_only=1)
+req_port = tls_server("request", [ec_leaf_now, inter_now], leaf_key, request_cert=True)
+tls_case("certificate request", req_port, "example.test", "ok 1303 001d 0")
+old_port = tls_server("tls12", [ec_leaf_now, inter_now], leaf_key, tls12=True)
+tls_case("server without tls 1.3", old_port, "example.test", "fail: the server sent the alert *")
 
 proc.stdin.close()
 proc.wait()

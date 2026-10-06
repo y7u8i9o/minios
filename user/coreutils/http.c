@@ -1,8 +1,9 @@
-/* http is a minimal HTTP/1.0 GET client (N11). It speaks plain http://
- * only, without TLS, certificate validation or https://. Redirects are
- * not followed, and -v prints the status line and headers to stderr. The
- * protocol code is the libc client of minios/http.h, which pkg(1) shares.
- *   http [-v] [-t SECONDS] [-o FILE] http://HOST[:PORT]/PATH */
+/* http is a minimal HTTP/1.0 GET client (N11). It speaks http:// and,
+ * through the TLS 1.3 client of libc, https:// with certificate
+ * verification. Redirects are not followed, and -v prints the status line
+ * and headers to stderr. The protocol code is the libc client of
+ * minios/http.h, which pkg(1) shares.
+ *   http [-v] [-t SECONDS] [-o FILE] http[s]://HOST[:PORT]/PATH */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -13,7 +14,7 @@
 
 static int usage(void)
 {
-    fprintf(stderr, "usage: http [-v] [-t SECONDS] [-o FILE] http://HOST[:PORT]/PATH\n");
+    fprintf(stderr, "usage: http [-v] [-t SECONDS] [-o FILE] http[s]://HOST[:PORT]/PATH\n");
     return 2;
 }
 
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
     struct http_url parsed;
     int r = http_parse_url(url, &parsed);
     if (r == -EPROTONOSUPPORT)
-        return fprintf(stderr, "http: only http:// URLs are supported (no TLS)\n"), 2;
+        return fprintf(stderr, "http: only http:// and https:// URLs are supported\n"), 2;
     if (r < 0)
         return fprintf(stderr, "http: malformed URL %s\n", url), 2;
     int fd = 1;

@@ -3,8 +3,12 @@
  * piece of the response, goes through poll with the caller's timeout. The
  * body is checked against Content-Length when the server sends one. A
  * connection closed early and surplus bytes are both errors, so a caller
- * never mistakes a truncated file for a complete one. */
+ * never mistakes a truncated file for a complete one. An https:// URL
+ * runs the request and the response through the TLS client of
+ * minios/tls.h. */
 #include <minios/http.h>
+#include <minios/tls.h>
+#include "netio.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -22,15 +26,21 @@
 int http_parse_url(const char *url, struct http_url *u)
 {
     memset(u, 0, sizeof *u);
-    if (strncmp(url, "http://", 7) != 0)
+    const char *p;
+    if (strncmp(url, "http://", 7) == 0) {
+        p = url + 7;
+    } else if (strncmp(url, "https://", 8) == 0) {
+        p = url + 8;
+        u->tls = 1;
+    } else {
         return -EPROTONOSUPPORT;
-    const char *p = url + 7;
+    }
     size_t n = strcspn(p, "/:");
     if (!n || n >= sizeof u->host)
         return -EINVAL;
     memcpy(u->host, p, n);
     p += n;
-    strcpy(u->port, "80");
+    strcpy(u->port, u->tls ? "443" : "80");
     if (*p == ':') {
         size_t m = strcspn(++p, "/");
         if (!m || m >= sizeof u->port)
@@ -59,18 +69,30 @@ static int fail(struct http_response *res, int err, const char *fmt, ...)
     return err;
 }
 
-/* wait_for waits for events on fd. It returns 1 when fd is ready, 0
- * after timeout seconds, and a negative errno when poll fails. */
-static int wait_for(int fd, short events, int timeout)
+/* A connection to the server: the socket, and the TLS state of an
+ * https:// URL. */
+struct conn {
+    int s;
+    struct tls *tls;
+    int timeout;
+};
+
+/* conn_read returns the number of bytes, 0 at the end of the response, or
+ * a negative errno. */
+static ssize_t conn_read(struct conn *c, void *buf, size_t len)
 {
-    struct pollfd p = { .fd = fd, .events = events };
-    for (;;) {
-        int r = poll(&p, 1, timeout > 0 ? timeout * 1000 : -1);
-        if (r >= 0)
-            return r > 0;
-        if (errno != EINTR)
-            return -errno;
+    if (c->tls)
+        return tls_read(c->tls, buf, len);
+    return net_recv(c->s, buf, len, c->timeout);
+}
+
+static int conn_send(struct conn *c, const void *data, size_t len)
+{
+    if (c->tls) {
+        ssize_t w = tls_write(c->tls, data, len);
+        return w < 0 ? (int)w : 0;
     }
+    return net_send(c->s, data, len, c->timeout);
 }
 
 static int write_all(int fd, const char *data, size_t len)
@@ -110,8 +132,8 @@ static int parse_head(char *head, struct http_response *res)
     return 0;
 }
 
-/* receive reads the response from the connected socket s. */
-static int receive(int s, int fd, int timeout, long long max_body, const char *where, struct http_response *res)
+/* receive reads the response from the connection. */
+static int receive(struct conn *c, int fd, long long max_body, const char *where, struct http_response *res)
 {
     char *buf = malloc(HEAD_MAX);
     if (!buf)
@@ -119,20 +141,17 @@ static int receive(int s, int fd, int timeout, long long max_body, const char *w
     size_t have = 0;
     int in_head = 1, r = 0;
     for (;;) {
-        int ready = wait_for(s, POLLIN, timeout);
-        if (ready < 0) {
-            r = fail(res, ready, "poll: %s", strerror(-ready));
+        ssize_t n = conn_read(c, buf + have, HEAD_MAX - 1 - have);
+        if (n == -ETIMEDOUT) {
+            r = fail(res, -ETIMEDOUT, "%s sent nothing for %d seconds", where, c->timeout);
             break;
         }
-        if (ready == 0) {
-            r = fail(res, -ETIMEDOUT, "%s sent nothing for %d seconds", where, timeout);
+        if (n < 0 && c->tls) {
+            r = fail(res, (int)n, "TLS with %s: %s", where, tls_error(c->tls));
             break;
         }
-        ssize_t n = read(s, buf + have, HEAD_MAX - 1 - have);
         if (n < 0) {
-            if (errno == EINTR || errno == EAGAIN)
-                continue;
-            r = fail(res, -errno, "read from %s: %s", where, strerror(errno));
+            r = fail(res, (int)n, "read from %s: %s", where, strerror((int)-n));
             break;
         }
         if (n == 0) {
@@ -194,7 +213,7 @@ int http_get(const char *url, int fd, int timeout, long long max_body, struct ht
     struct http_url u;
     int r = http_parse_url(url, &u);
     if (r == -EPROTONOSUPPORT)
-        return fail(res, r, "only http:// URLs are supported (there is no TLS)");
+        return fail(res, r, "only http:// and https:// URLs are supported");
     if (r < 0)
         return fail(res, r, "malformed URL %s", url);
     char where[HTTP_HOST_MAX + HTTP_PORT_MAX + 1];
@@ -221,7 +240,7 @@ int http_get(const char *url, int fd, int timeout, long long max_body, struct ht
     r = connect(s, ai->ai_addr, ai->ai_addrlen) < 0 ? -errno : 0;
     freeaddrinfo(ai);
     if (r == -EINPROGRESS) {
-        int ready = wait_for(s, POLLOUT, timeout);
+        int ready = net_wait(s, POLLOUT, timeout);
         if (ready == 0) {
             r = fail(res, -ETIMEDOUT, "connect to %s: no answer in %d seconds", where, timeout);
         } else if (ready < 0) {
@@ -236,29 +255,42 @@ int http_get(const char *url, int fd, int timeout, long long max_body, struct ht
     } else if (r < 0) {
         fail(res, r, "connect to %s: %s", where, strerror(-r));
     }
+    struct conn c = { s, NULL, timeout };
+    if (r == 0 && u.tls) {
+        /* The trust store is needed only for the handshake. */
+        const char *ca = getenv("SSL_CERT_FILE");
+        if (!ca || !*ca)
+            ca = TLS_CA_FILE;
+        struct x509_store store = { 0 };
+        int n = x509_store_load(&store, ca, NULL);
+        if (n < 0) {
+            r = fail(res, n, "trust store %s: %s", ca, strerror(-n));
+        } else {
+            char err[256];
+            r = tls_connect(&c.tls, s, u.host, &store, timeout, err, sizeof err);
+            if (r < 0)
+                fail(res, r, "TLS with %s: %s", where, err);
+        }
+        x509_store_free(&store);
+    }
     if (r == 0) {
         char request[HTTP_PATH_MAX + HTTP_HOST_MAX + 128];
         int len = snprintf(request, sizeof request,
                            "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: minios-http\r\nConnection: close\r\n\r\n",
                            u.path, u.host);
-        for (int done = 0; r == 0 && done < len; ) {
-            int ready = wait_for(s, POLLOUT, timeout);
-            if (ready <= 0) {
-                r = fail(res, ready ? ready : -ETIMEDOUT, "sending the request to %s: %s", where,
-                         ready ? strerror(-ready) : "timed out");
-                break;
-            }
-            ssize_t w = write(s, request + done, (size_t)(len - done));
-            if (w < 0 && errno != EINTR && errno != EAGAIN)
-                r = fail(res, -errno, "sending the request to %s: %s", where, strerror(errno));
-            else if (w > 0)
-                done += (int)w;
-        }
+        r = conn_send(&c, request, (size_t)len);
+        if (r < 0)
+            fail(res, r, "sending the request to %s: %s", where,
+                 c.tls && r == -EPROTO ? tls_error(c.tls) : strerror(-r));
     }
     if (r == 0) {
-        shutdown(s, SHUT_WR);
-        r = receive(s, fd, timeout, max_body, where, res);
+        /* TLS has no half close for the server to see, so only a plain
+         * connection ends its direction early. */
+        if (!c.tls)
+            shutdown(s, SHUT_WR);
+        r = receive(&c, fd, max_body, where, res);
     }
+    tls_close(c.tls);
     close(s);
     return r;
 }

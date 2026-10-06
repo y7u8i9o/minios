@@ -1,8 +1,89 @@
 # TLS client
 
 The TLS client of libc fetches packages over HTTPS (`docs/plan/tls.md`).
-This document describes the parts that exist. The cryptographic
-primitives are described in `libc.md`.
+`http_get` of `minios/http.h` uses the client for `https://` URLs, so
+`http(1)` and `pkg(1)` support HTTPS. The cryptographic primitives are
+described in `libc.md`.
+
+## The client
+
+`minios/tls.h` declares the client. The code is in
+`lib/libc/src/net/tls.c`. The client implements TLS 1.3 of RFC 8446 and
+nothing older:
+
+- Key exchange with X25519 and secp256r1. The first ClientHello carries
+  a share of each group.
+- The suites TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256.
+  The client prefers ChaCha20-Poly1305, because the AES code of libc
+  uses no hardware instructions. Both suites use SHA-256, so the
+  transcript hash is SHA-256 from the first message on.
+- The signature schemes ecdsa_secp256r1_sha256,
+  ecdsa_secp384r1_sha384 and rsa_pss_rsae_sha256/384/512 for the
+  handshake signature. The schemes rsa_pkcs1_sha256/384/512 are offered
+  for certificates only.
+- The extensions server_name (not for an IPv4 address),
+  supported_groups, signature_algorithms, supported_versions, key_share
+  and, after a HelloRetryRequest, cookie.
+
+The client sends no session ID and no change_cipher_spec record. It
+ignores the change_cipher_spec records of servers in middlebox
+compatibility mode.
+
+`tls_connect` runs the handshake on a connected socket:
+
+1. The client sends the ClientHello. A HelloRetryRequest replaces the
+   transcript with the hash of the first ClientHello (RFC 8446, section
+   4.4.1). The second ClientHello carries the requested share and the
+   cookie. A second HelloRetryRequest is an error.
+2. The ServerHello must select TLS 1.3 through supported_versions, an
+   offered suite, and a group with a share of the client. A ServerHello
+   without supported_versions comes from an older server, and the client
+   ends with the alert protocol_version.
+3. The handshake secrets give the keys of the encrypted messages of the
+   server: EncryptedExtensions, an optional CertificateRequest,
+   Certificate, CertificateVerify and Finished.
+4. The certificate chain must verify (`x509_verify_chain`) for the host
+   at the current time. CertificateVerify must carry a valid signature
+   of the leaf key over the transcript. The scheme must fit the key.
+5. The client checks the Finished message of the server, derives the
+   application secrets, and sends an empty Certificate when the server
+   requested one, and its own Finished.
+
+Handshake messages may span records, and a record may contain several
+messages. A message must not span a change of the keys. The client sends
+a fatal alert for every error that it detects. The text of the error
+names the cause, for example "certificate expired" or "the server sent
+the alert handshake_failure".
+
+`tls_read` returns application data. The function also processes the
+handshake messages after the handshake. A NewSessionTicket is ignored,
+because the client does not resume sessions. A KeyUpdate replaces the
+read keys. When the server requests an update, the client sends its own
+KeyUpdate and replaces its write keys. close_notify and the end of the
+TCP stream both end the data with 0. `tls_write` splits the data into
+records of at most 16384 bytes. `tls_close` sends close_notify.
+
+The socket may be non blocking. Every wait goes through `poll` with the
+timeout of `tls_connect`, through the helpers of
+`lib/libc/src/net/netio.c`, which `http.c` also uses.
+
+## HTTPS
+
+`http_parse_url` accepts `https://HOST[:PORT]/PATH` with the default
+port 443. `http_get` loads the trust store for every request. The store
+is `/etc/ssl/cert.pem`, or the file in the environment variable
+`SSL_CERT_FILE`. The store is freed after the handshake. The request and
+the response then run through `tls_write` and `tls_read`. A plain
+connection ends its direction with `shutdown` after the request. A TLS
+connection does not, because the server would not see a TCP half close
+through TLS. The end of the TCP stream without close_notify ends the
+body as for plain HTTP. The check of Content-Length detects a truncated
+body.
+
+`pkg` accepts `https://` URLs in `/etc/pkg.conf`. The signature of the
+index and the digests of the archives remain the trust model of the
+repositories (`packages.md`). TLS additionally hides the transfer and
+authenticates the server.
 
 ## Certificates
 
@@ -103,6 +184,32 @@ critical nameConstraints extension therefore fails with
 `X509_ERR_CRITICAL`.
 
 ## Tests
+
+`make check-crypto` replays the trace of RFC 8448, section 3. The test
+interface of `lib/libc/src/net/tls_internal.h` gives the client the
+ClientHello and the X25519 key of the trace. The records of the server
+of the trace pass through a socketpair. The ClientHello, the Finished
+record, the application data record and the close_notify record of the
+client must equal the trace byte for byte. A second replay injects a
+KeyUpdate that requests an update. The data after the update, the
+KeyUpdate of the client and the data of the client after it must
+decrypt with the updated keys.
+
+The check also connects the client to TLS 1.3 servers of the `ssl`
+module of Python (OpenSSL) on 127.0.0.1: a P-256 leaf below a P-384
+intermediate, an RSA leaf with RSA-PSS, a P-384 leaf, both suites, a
+server restricted to secp256r1 with and without a HelloRetryRequest, a
+server that requests a client certificate, transfers of 100000 bytes, a
+wrong host name, an unknown issuer, and a server without TLS 1.3.
+
+The boot case `pkg_https` serves the repository v1 of `pkg_repo` over
+TLS 1.3 from the host. The certificate of the server comes from
+`tools/gen_tls_fixtures.py`. Its issuer is the test CA
+`/etc/tests/tls-ca.pem`. The guest checks that the system store rejects
+the server, that `pkg` updates and installs with `SSL_CERT_FILE` set to
+the test CA, that `http(1)` fetches the same index through the address
+and through a host name of the certificate, and that another host name
+fails.
 
 `make check-crypto` builds test chains with the `cryptography` package
 of Python and verifies each chain with the oracle

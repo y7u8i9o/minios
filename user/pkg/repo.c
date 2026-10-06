@@ -210,7 +210,7 @@ int config_read(struct repo_config *c)
             if (!name_valid(a))
                 r = report(NULL, "%s line %d: invalid repository name %s", path, n, a);
             else if (repo_url_is_file(b) ? !file_url_valid(b) : http_parse_url(b, &u) < 0)
-                r = report(NULL, "%s line %d: %s is not an http:// or file:/// URL", path, n, b);
+                r = report(NULL, "%s line %d: %s is not an http://, https:// or file:/// URL", path, n, b);
             else if (c->nrepos == PKG_MAX_REPOS)
                 r = report(NULL, "%s line %d: more than %d repositories", path, n, PKG_MAX_REPOS);
             for (int i = 0; r == 0 && i < c->nrepos; i++)

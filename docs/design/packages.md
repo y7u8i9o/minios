@@ -12,8 +12,8 @@ and configuration files, is milestone P0 of `docs/plan/packaging.md`.
 ## Scope
 
 The installer works on archive files of a local filesystem and on
-repositories served over plain HTTP. The network stack has no TLS, so
-the transport is not trusted. A repository's index carries the size and
+repositories served over HTTP or HTTPS (`tls.md`). The transport is not
+trusted, also with HTTPS. A repository's index carries the size and
 SHA-256 digest of every archive and is signed with Ed25519, and `pkg`
 uses nothing from a repository that the signature and the digests do
 not cover (see Repositories below).

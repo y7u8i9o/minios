@@ -52,7 +52,7 @@ static void *http_server(void *arg)
                                .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
     bind(fd, (struct sockaddr *)&name, sizeof name);
     listen(fd, 2);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         int c = accept(fd, NULL, NULL);
         char request[1024];
         ssize_t n = read(c, request, sizeof request - 1);
@@ -136,8 +136,12 @@ int main(void)
     CHECK(run(get, NULL, out, sizeof out) == 0 && strcmp(out, "hello from minios\n") == 0, "http GET body");
     const char *const missing[] = {"/bin/http", "http://localhost:8080/missing", NULL};
     CHECK(run(missing, NULL, out, sizeof out) == 1 && strcmp(out, "missing\n") == 0, "http reports 404");
-    const char *const https[] = {"/bin/http", "https://127.0.0.1/", NULL};
-    CHECK(run(https, NULL, out, sizeof out) == 2, "https refused");
+    const char *const ftp[] = {"/bin/http", "ftp://127.0.0.1/", NULL};
+    CHECK(run(ftp, NULL, out, sizeof out) == 2, "other schemes refused");
+    /* The plain server answers the ClientHello with an HTTP response,
+     * which is no TLS record. */
+    const char *const https[] = {"/bin/http", "https://127.0.0.1:8080/hello", NULL};
+    CHECK(run(https, NULL, out, sizeof out) == 1 && !*out, "https to a plain server fails");
 
     const char *const nc_tcp[] = {"/bin/nc", "127.0.0.1", "8080", NULL};
     CHECK(run(nc_tcp, "GET /hello HTTP/1.0\r\n\r\n", out, sizeof out) == 0 &&

@@ -101,9 +101,11 @@ $(PKGSIGN): tools/pkgsign/pkgsign.c $(CRYPTO_SRCS) $(CRYPTO_HDRS)
 # into the directory tree of a disk image. `pkg perms` prints the mode and
 # the owner of every installed file, and mkfs sets them in the image
 # (docs/design/packages.md).
-PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/crc32.c lib/libc/src/net/http.c lib/libc/src/crypto/sha2.c lib/libc/src/crypto/ed25519.c \
+PKGHOST_SRCS := $(wildcard user/pkg/*.c) lib/libc/src/gzip.c lib/libc/src/crc32.c lib/libc/src/net/http.c \
+                lib/libc/src/net/tls.c lib/libc/src/net/netio.c $(wildcard lib/libc/src/crypto/*.c) lib/libc/src/base64.c \
                 lib/libc/src/elffile.c
-$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/local.h lib/libc/include/minios/disk.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h \
+$(PKGHOST): $(PKGHOST_SRCS) user/pkg/pkg.h $(CRYPTO_HDRS) lib/libc/include/minios/crypto.h lib/libc/include/minios/x509.h \
+            lib/libc/include/minios/tls.h lib/libc/src/net/tls_internal.h lib/libc/src/net/netio.h lib/libc/include/minios/local.h lib/libc/include/minios/disk.h lib/libc/include/minios/gzip.h lib/libc/include/minios/http.h \
             lib/libc/include/elf.h lib/libc/include/minios/elffile.h
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTCPPFLAGS) -O2 -std=c17 -Wall -Wextra -idirafter lib/libc/include -o $@ $(PKGHOST_SRCS)
@@ -383,7 +385,8 @@ check-libfont check-libwire check-libcodec check-libgui:
 check-crypto:
 	@mkdir -p $(BUILD)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O2 -g -Wall -Wextra -idirafter lib/libc/include -o $(BUILD)/host/crypto_oracle \
-	    lib/libc/tests/crypto/oracle.c $(wildcard lib/libc/src/crypto/*.c) lib/libc/src/base64.c
+	    lib/libc/tests/crypto/oracle.c $(wildcard lib/libc/src/crypto/*.c) lib/libc/src/base64.c \
+	    lib/libc/src/net/tls.c lib/libc/src/net/netio.c
 	python3 lib/libc/tests/crypto/check.py $(BUILD)/host/crypto_oracle $(BUILD)/host/crypto_x509
 
 .PHONY: check-lua check-headers check-imed

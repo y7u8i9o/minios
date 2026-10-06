@@ -1174,12 +1174,14 @@ and wakes the caller on the matching reply or on an ICMP error quoting the
 request, with a caller-bounded timeout of at most 60 seconds. There are no
 raw sockets. `nc(1)` relays standard input and output over TCP or UDP as a
 client or a one-connection server. `http(1)` performs one HTTP/1.0 GET over
-plain `http://`; it makes no TLS claim and refuses `https://`. All three
+`http://` or, with the TLS 1.3 client of libc, over `https://`
+(`tls.md`). All three
 resolve names through `getaddrinfo` and print the failure reason. `net_tools`
 runs `nettools` with QEMU user networking: rejected and accepted static
 configuration, the `/dev/net` snapshot, echo to the gateway and to an
-unreachable host, HTTP against a loopback server (200, 404 and the
-`https://` refusal), TCP and UDP relays and a refused connection.
+unreachable host, HTTP against a loopback server (200, 404, the refusal
+of another scheme, and an `https://` request that fails at the plain
+server), TCP and UDP relays and a refused connection.
 
 The HTTP client of `http(1)` is `lib/libc/src/net/http.c` behind
 `minios/http.h`, which `pkg(1)` shares for signed repositories

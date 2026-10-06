@@ -513,31 +513,38 @@ static enum hash_alg hash_of(enum x509_sig alg)
     }
 }
 
+int x509_verify_digest(const struct x509_cert *c, enum hash_alg alg, int pss, const uint8_t *digest,
+                       const uint8_t *sig, size_t sig_len)
+{
+    if (!c->key_supported)
+        return X509_ERR_ALGORITHM;
+    if (c->key_type == X509_KEY_RSA) {
+        int r = pss ? rsa_verify_pss(c->key, c->key_len, c->rsa_e, c->rsa_e_len, alg, digest, sig, sig_len)
+                    : rsa_verify_pkcs1(c->key, c->key_len, c->rsa_e, c->rsa_e_len, alg, digest, sig, sig_len);
+        return r == 0 ? X509_OK : X509_ERR_SIGNATURE;
+    }
+    /* Ecdsa-Sig-Value ::= SEQUENCE { r INTEGER, s INTEGER } */
+    struct der d = { sig, sig + sig_len }, seq, r, s;
+    if (der_expect(&d, TAG_SEQUENCE, &seq) < 0 || d.p != d.end || der_expect(&seq, TAG_INTEGER, &r) < 0 ||
+        der_expect(&seq, TAG_INTEGER, &s) < 0 || seq.p != seq.end)
+        return X509_ERR_SIGNATURE;
+    enum ec_curve curve = c->key_type == X509_KEY_EC_P256 ? EC_P256 : EC_P384;
+    return ecdsa_verify(curve, c->key, c->key_len, digest, hash_size(alg), r.p, der_len(&r), s.p, der_len(&s)) == 0
+               ? X509_OK
+               : X509_ERR_SIGNATURE;
+}
+
 int x509_check_signature(const struct x509_cert *c, const struct x509_cert *issuer)
 {
     if (!c->sig_supported || !issuer->key_supported)
         return X509_ERR_ALGORITHM;
-    enum hash_alg alg = hash_of(c->sig_alg);
-    uint8_t digest[HASH_MAX_SIZE];
-    hash(alg, c->tbs, c->tbs_len, digest);
     int ecdsa = c->sig_alg <= X509_SIG_ECDSA_SHA512;
     if (ecdsa != (issuer->key_type != X509_KEY_RSA))
         return X509_ERR_ALGORITHM;
-    if (!ecdsa)
-        return rsa_verify_pkcs1(issuer->key, issuer->key_len, issuer->rsa_e, issuer->rsa_e_len, alg, digest, c->sig,
-                                c->sig_len) == 0
-                   ? X509_OK
-                   : X509_ERR_SIGNATURE;
-    /* Ecdsa-Sig-Value ::= SEQUENCE { r INTEGER, s INTEGER } */
-    struct der sig = { c->sig, c->sig + c->sig_len }, seq, r, s;
-    if (der_expect(&sig, TAG_SEQUENCE, &seq) < 0 || der_expect(&seq, TAG_INTEGER, &r) < 0 ||
-        der_expect(&seq, TAG_INTEGER, &s) < 0 || seq.p != seq.end)
-        return X509_ERR_SIGNATURE;
-    enum ec_curve curve = issuer->key_type == X509_KEY_EC_P256 ? EC_P256 : EC_P384;
-    return ecdsa_verify(curve, issuer->key, issuer->key_len, digest, hash_size(alg), r.p, der_len(&r), s.p,
-                        der_len(&s)) == 0
-               ? X509_OK
-               : X509_ERR_SIGNATURE;
+    enum hash_alg alg = hash_of(c->sig_alg);
+    uint8_t digest[HASH_MAX_SIZE];
+    hash(alg, c->tbs, c->tbs_len, digest);
+    return x509_verify_digest(issuer, alg, 0, digest, c->sig, c->sig_len);
 }
 
 int x509_check_host(const struct x509_cert *c, const char *host)

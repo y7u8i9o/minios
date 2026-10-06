@@ -1,24 +1,27 @@
 #pragma once
-/* This header declares one HTTP/1.0 GET over plain http://
- * (docs/design/network.md), which http(1) and pkg(1) share. There is no
- * TLS and no https://, redirects are not followed and a chunked body is
- * not decoded. */
+/* This header declares one HTTP/1.0 GET over http:// or https://
+ * (docs/design/network.md), which http(1) and pkg(1) share. https:// uses
+ * the TLS 1.3 client of minios/tls.h and the trust store TLS_CA_FILE, or
+ * the file of the environment variable SSL_CERT_FILE. Redirects are not
+ * followed and a chunked body is not decoded. */
 #include <stddef.h>
 
 #define HTTP_HOST_MAX 256
 #define HTTP_PORT_MAX 8
 #define HTTP_PATH_MAX 1024
 
-/* The port is "80" and the path "/" when the URL names neither. */
+/* The port is "80" for http:// and "443" for https://, and the path is
+ * "/", when the URL contains neither. tls is 1 for https://. */
 struct http_url {
     char host[HTTP_HOST_MAX];
     char port[HTTP_PORT_MAX];
     char path[HTTP_PATH_MAX];
+    int tls;
 };
 
-/* http_parse_url splits http://HOST[:PORT][/PATH]. It returns 0,
- * -EPROTONOSUPPORT for another scheme, or -EINVAL for an empty or
- * oversized host, port or path. */
+/* http_parse_url splits http://HOST[:PORT][/PATH] and
+ * https://HOST[:PORT][/PATH]. It returns 0, -EPROTONOSUPPORT for another
+ * scheme, or -EINVAL for an empty or oversized host, port or path. */
 int http_parse_url(const char *url, struct http_url *u);
 
 /* status contains the status code and remains 0 until the status line has
@@ -41,8 +44,9 @@ struct http_response {
  * arrived, whatever its status, which res->status contains. Otherwise it
  * returns a negative errno and describes the failure in res->error. The
  * errors are -EPROTONOSUPPORT or -EINVAL for the URL, -EHOSTUNREACH when
- * the name does not resolve, the error of connect, -ETIMEDOUT, -EIO for a
- * malformed response or a body that is shorter or longer than its
- * Content-Length, -EFBIG for a body above max_body, and the error of the
- * write to fd. */
+ * the name does not resolve, the error of connect, -ETIMEDOUT, -EPROTO
+ * when the TLS handshake fails or the certificate does not verify, the
+ * error of reading the trust store, -EIO for a malformed response or a
+ * body that is shorter or longer than its Content-Length, -EFBIG for a
+ * body above max_body, and the error of the write to fd. */
 int http_get(const char *url, int fd, int timeout, long long max_body, struct http_response *res);

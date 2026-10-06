@@ -55,12 +55,21 @@ Result: `minios/x509.h`, `/etc/ssl/cert.pem` from the curl bundle of
 2026-09-25, and `docs/design/tls.md`. `make check-crypto` verifies 26
 generated chains and the chain of `code.calcraft.org`. 416 checks pass.
 
-### T4. The TLS 1.3 client
+### T4. The TLS 1.3 client (completed 2026-10-06)
 
 Record layer, handshake, key schedule and alerts, `minios/tls.h`, and
 `https://` in `http_get` and `pkg`. Test: a host check that replays the
 handshake of RFC 8448, and a boot case in which `pkg` installs a package
 from an HTTPS server on the host with a test CA.
+
+Result: `minios/tls.h` and `https://` in `http_get`, `http(1)` and
+`pkg`. `make check-crypto` replays RFC 8448 with and without a KeyUpdate
+and connects to 13 OpenSSL server configurations. The boot case
+`pkg_https` runs on x86_64 and aarch64. A manual run of the host build
+fetched the start pages of `code.calcraft.org`, `curl.se` and
+`www.google.com`. The first of 17 connections to `code.calcraft.org`
+was closed by the server during the handshake without an alert. The
+following 16 succeeded. The cause is not known.
 
 ### T5. The repository on the owner's server
 
