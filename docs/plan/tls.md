@@ -71,10 +71,18 @@ fetched the start pages of `code.calcraft.org`, `curl.se` and
 was closed by the server during the handshake without an alert. The
 following 16 succeeded. The cause is not known.
 
-### T5. The repository on the owner's server
+### T5. The repository on the owner's server (completed 2026-10-06)
 
 `make publish-repo` builds the repositories of both architectures and
 copies them to the server. `/etc/pkg.conf` names the HTTPS URL.
+
+Result: the owner chose the generic package registry of Forgejo on
+2026-10-06. `make publish-repo` uploads with `tools/publish-repo.py`
+and an access token in `PUBLISH_TOKEN`. `/etc/pkg.conf` names
+`https://code.calcraft.org/api/packages/flifez/generic/minios-$arch/repo`.
+`make check-publish` tests the script against a simulated registry. The
+first upload to the server needs the token of the owner and has not run
+yet.
 
 ## Size
 

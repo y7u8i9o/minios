@@ -75,6 +75,7 @@ passed to the compiler as `CONFIG_*` macros, as the following table lists.
 | `make gdb` | boots with `-s -S` and prints the GDB command line |
 | `make test CASES="case ..."` | runs the named cases under `tests/cases/` (without `CASES` every case, which is too slow to use) |
 | `make repo` | `build/repo/`, the signed package repository of the bundled applications (`packages.md`) |
+| `make publish-repo` | builds the repositories of both architectures and uploads them to the package registry of `code.calcraft.org` with the token in `PUBLISH_TOKEN` (`packages.md`) |
 | `make release` | the release of `VERSION` in `build/release/minios-VERSION` (see Releases below) |
 | `make clean` | removes `build/` |
 
@@ -359,7 +360,11 @@ uses `QEMU_ACCEL` for an override (see Running above).
 the host, and `make check-binutils` compares the binutils with the GNU
 binutils (`binutils.md`), and `make check-pkg` alone runs the SHA-256, SHA-512 and Ed25519
 vectors of RFC 6234 and RFC 8032 against `lib/libc/src/crypto/`
-(`packages.md`). `make check-sh` checks the shell parser, expansion and
+(`packages.md`). `make check-crypto` compares the cryptographic
+primitives, the certificate verification and the TLS client with the
+`cryptography` and `ssl` modules of Python (`tls.md`). `make
+check-publish` tests `tools/publish-repo.py` against a simulated
+registry (`packages.md`). `make check-sh` checks the shell parser, expansion and
 execution. `make
 check-net` self-tests the network peer harness with a fake QEMU, and `make
 check-net-fuzz` fuzzes the network parsers under the sanitizers for three

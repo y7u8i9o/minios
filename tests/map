@@ -175,6 +175,8 @@ lib/libc/src/net/netio.*        check-crypto
 lib/libc/include/minios/tls.h   check-crypto pkg_https
 lib/libc/include/minios/http.h  net_tools pkg_repo pkg_https
 tools/gen_tls_fixtures.py       pkg_https
+tools/publish-repo.py           check-publish
+tools/tests/test_publish.py     check-publish
 lib/libgui/**                   check-libgui check-lua gui gui_*
 lib/libgui/src/pixel.c          pixel aarch64:pixel comp_bench comp_bench_hidpi
 lib/libgui/src/buffers.c        comp_bench_hidpi

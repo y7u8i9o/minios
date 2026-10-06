@@ -32,7 +32,7 @@ its boot tests pass.
 | `desktop-panel.md` | The new panel (icons, calendar, power menu, show desktop, top or bottom) and the wallpaper at device resolution, milestones B1 to B6 | completed 2026-10-06 |
 | `compositor-performance.md` | Measurement, faster string functions, SIMD pixel module, batched flushes, client damage, timing model, decoration tables, libgui without the private surface, hardware cursor, milestones G1 to G9 | G1 to G9 completed 2026-10-06 |
 | `x12settings.md` | The inspection and settings tool of X12: performance graphs, clients and surfaces, all live settings, debug views, milestones X1 to X5 | completed 2026-10-06 |
-| `tls.md` | A TLS 1.3 client for HTTPS: entropy for programs, cryptographic primitives, certificates and trust store, the client in `http_get` and `pkg`, the repository on the owner's server, milestones T1 to T5 | T1 to T4 completed 2026-10-06, T5 planned |
+| `tls.md` | A TLS 1.3 client for HTTPS: entropy for programs, cryptographic primitives, certificates and trust store, the client in `http_get` and `pkg`, the repository on the owner's server, milestones T1 to T5 | T1 to T5 completed 2026-10-06 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 | `prose-rewrite.md` | Rewrite English prose of the entire project (source comments, docs, manual pages, messages) to eliminate translation-like defects: noun-of-noun chains, article overuse, bare nouns as subjects, and six other patterns. Checker script, revised Writing rules for CLAUDE.md, milestones W1 to W9 | proposed 2026-10-06, highest priority |
 

@@ -544,17 +544,52 @@ kernel as the second entry, and `kernel.elf.old`.
 
 ## Repositories
 
-A repository is a directory served over HTTP. It contains the archives, a
-file `index` that lists them, and `index.sig`, the Ed25519 signature of
-the index. Each architecture has its own repository (A9). `make repo`
-writes the repository of the bundled applications to `build/repo/x86_64/`
-and `make ARCH=aarch64 repo` to `build/repo/aarch64/`. On the host,
-`python3 -m http.server -d build/repo 8000` serves both to a guest under
-QEMU user networking. The shipped `/etc/pkg.conf` names
-`http://10.0.2.2:8000/$arch`, and `pkg` replaces `$arch` in a repository
-URL with the machine name of the system. An index entry whose `arch`
+A repository is a directory served over HTTP or HTTPS. It contains the
+archives, a file `index` that lists them, and `index.sig`, the Ed25519
+signature of the index. Each architecture has its own repository (A9).
+`make repo` writes the repository of the bundled applications to
+`build/repo/x86_64/` and `make ARCH=aarch64 repo` to `build/repo/aarch64/`.
+On the host, `python3 -m http.server -d build/repo 8000` serves both to a
+guest under QEMU user networking, at `http://10.0.2.2:8000/$arch`. The
+shipped `/etc/pkg.conf` names the published repository
+`https://code.calcraft.org/api/packages/flifez/generic/minios-$arch/repo`
+and contains the local URL as a comment. `pkg` replaces `$arch` in a
+repository URL with the machine name of the system. An index entry whose `arch`
 differs from that machine is skipped, so `search`, `install` and
 `upgrade` see only the packages that run on the system.
+
+### Publishing
+
+`make publish-repo` builds the repositories of both architectures and
+uploads them with `tools/publish-repo.py` to the generic package
+registry of Forgejo on `code.calcraft.org` (`PUBLISH_URL`). The
+repository of an architecture is the package `minios-ARCH` with the
+version `repo`. Its files are reachable under
+`PUBLISH_URL/minios-ARCH/repo/NAME`, which is the layout of a repository
+directory. The environment variable `PUBLISH_TOKEN` must contain an
+access token of Forgejo with the scope `write:package`. `PUBLISH_USER`
+contains the user of the token and is the owner of the URL by default.
+
+The registry does not replace a file. The script compares the SHA-256
+digests of the registry with the local files. It uploads the new and
+changed archives first and deletes a changed archive before its upload.
+Then it replaces `index` and `index.sig`, and at the end it deletes the
+archives that the new index does not list. A guest that reads the
+repository during a run therefore sees a consistent index and its
+archives, except in the moment between the deletion and the upload of
+the index files. pkg then reports a failed download or a wrong
+signature, and a repeated `pkg update` succeeds.
+
+The packages carry the serial versions of a development build unless
+`PKG_SERIAL=0` is set (`docs/design/build.md`). The index is signed with
+the key of the build machine, so only images of this machine trust the
+published repository.
+
+`make check-publish` runs the script against a simulated registry in
+`tools/tests/test_publish.py`. The test checks the order of the
+changes, an unchanged second run, the replacement of a changed archive,
+the removal of an obsolete archive, and the refusal of a missing or
+wrong token.
 
 ### Index format
 

@@ -173,10 +173,28 @@ user: libc libfont libwire libaudio libcodec libgui libedit libjson libprof $(PK
 # build/repo/$(ARCH): the package archives, the index and the signature of
 # the index. The command `python3 -m http.server -d build/repo 8000`
 # serves the repository. A guest downloads it from
-# http://10.0.2.2:8000/$(ARCH), which is the URL in the installed
-# /etc/pkg.conf.
+# http://10.0.2.2:8000/$(ARCH) when /etc/pkg.conf contains that URL.
 repo: user $(PKGSIGN) $(PKG_KEY_FILE)
 	$(MAKE) -C user repo
+
+# make publish-repo builds the repositories of both architectures and
+# uploads them to the generic package registry of Forgejo under
+# PUBLISH_URL (tools/publish-repo.py, docs/design/packages.md). The
+# environment variable PUBLISH_TOKEN must contain an access token with the
+# scope write:package. The installed /etc/pkg.conf reads the repository
+# from PUBLISH_URL/minios-$$arch/repo.
+PUBLISH_URL ?= https://code.calcraft.org/api/packages/flifez/generic
+.PHONY: publish-repo check-publish
+publish-repo:
+	@[ -n "$$PUBLISH_TOKEN" ] || { echo "publish-repo: set PUBLISH_TOKEN to an access token with the scope write:package" >&2; exit 2; }
+	$(MAKE) ARCH=x86_64 repo
+	$(MAKE) ARCH=aarch64 repo
+	python3 tools/publish-repo.py $(PUBLISH_URL) $(TOP)/build/repo/x86_64 x86_64
+	python3 tools/publish-repo.py $(PUBLISH_URL) $(TOP)/build/repo/aarch64 aarch64
+
+# check-publish runs tools/publish-repo.py against a simulated registry.
+check-publish:
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/tests -p 'test_publish.py'
 
 # The kernel and the boot loader files belong to the packages kernel and
 # limine (P6). These packages install the files under /boot, which is the
@@ -370,7 +388,7 @@ test-changed:
 # check runs the tests on the host: the installed headers, the signature
 # code and pkg, libfont, libwire, libcodec, libgui, the Lua modules and the
 # input method engines.
-check: check-headers check-pkg check-crypto check-libfont check-libwire check-libcodec check-libgui
+check: check-headers check-pkg check-crypto check-publish check-libfont check-libwire check-libcodec check-libgui
 	$(MAKE) check-lua
 	$(MAKE) check-imed
 
