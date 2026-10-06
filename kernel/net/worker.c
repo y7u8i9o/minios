@@ -8,7 +8,6 @@
 #include <net/worker.h>
 #include <net/netif.h>
 #include <net/net.h>
-#include <drivers/virtio/virtio_net.h>
 #include <net/clock.h>
 #include <sched/wait.h>
 #include <sched/thread.h>
@@ -33,6 +32,8 @@ struct net_worker {
     struct waitq done_waitq;
     struct thread *thread;
     struct net_worker_stats stats;
+    void (*services[NET_SERVICE_MAX])(void); /* an entry never changes once added */
+    unsigned nservices;
 };
 
 static struct net_worker w = {
@@ -345,10 +346,27 @@ static void netd(void *arg)
         w.stats.batches++;
         spin_unlock(&w.lock);
         run_timers();
-        virtio_net_service();
+        spin_lock(&w.lock);
+        unsigned nservices = w.nservices;
+        spin_unlock(&w.lock);
+        for (unsigned i = 0; i < nservices; i++)
+            w.services[i]();
         run_packets();
         run_requests();
     }
+}
+
+int net_worker_add_service(void (*fn)(void))
+{
+    spin_lock(&w.lock);
+    if (w.nservices == NET_SERVICE_MAX) {
+        spin_unlock(&w.lock);
+        return -ENOSPC;
+    }
+    w.services[w.nservices] = fn;
+    __atomic_store_n(&w.nservices, w.nservices + 1, __ATOMIC_RELEASE);
+    spin_unlock(&w.lock);
+    return 0;
 }
 
 void net_worker_start(void)

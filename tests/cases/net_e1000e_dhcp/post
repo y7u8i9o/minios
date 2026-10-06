@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+# RFC 5227 probes and announcements of the DHCP client are on the wire.
+python3 "$TOP/tests/net/check_capture.py" --require arp-probe --require arp-announce "$CAPTURE"

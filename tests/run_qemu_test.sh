@@ -68,7 +68,9 @@
 #             dgram exchanges raw Ethernet frames with the case's peer program
 #             over UDP on 127.0.0.1, user attaches QEMU's user mode stack,
 #             none attaches nothing. Frames are captured to <out>/capture.pcap
-#             (docs/design/network.md)
+#             (docs/design/network.md). An optional second word selects
+#             the QEMU device model instead of virtio-net-pci, for example
+#             "dgram e1000e"
 #   peer      executable started before QEMU (required for dgram, optional
 #             for user, where a nonzero guest port in PEER_READY is
 #             forwarded to guest port 9100), with NETPEER
@@ -183,7 +185,12 @@ trap cleanup EXIT
 # the nic file must be one this QEMU offers.
 NETFLAGS=""
 if [ -f "$CASE/nic" ]; then
-    NIC="$(cat "$CASE/nic")"
+    read -r NIC NICMODEL < "$CASE/nic"
+    NICMODEL="${NICMODEL:-virtio-net-pci}"
+    case "$NICMODEL" in
+        virtio-net-pci|e1000e) ;;
+        *) fail "unknown nic model $NICMODEL" ;;
+    esac
     case "$NIC" in
         none) ;;
         dgram|user)
@@ -220,7 +227,7 @@ if [ -f "$CASE/nic" ]; then
     fi
     if [ -n "$NETFLAGS" ]; then
         rm -f "$OUTDIR/capture.pcap"
-        NETFLAGS="$NETFLAGS -device virtio-net-pci,netdev=net0,mac=52:54:00:4d:49:4f -object filter-dump,id=dump0,netdev=net0,file=$OUTDIR/capture.pcap"
+        NETFLAGS="$NETFLAGS -device $NICMODEL,netdev=net0,mac=52:54:00:4d:49:4f -object filter-dump,id=dump0,netdev=net0,file=$OUTDIR/capture.pcap"
     fi
 fi
 

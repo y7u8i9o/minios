@@ -1,0 +1,3 @@
+net_e1000e: eth0 link up, MAC from the EEPROM
+net_e1000e: 640 raw frames, reset, ok
+TEST PASS

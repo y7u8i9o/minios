@@ -9,6 +9,7 @@
 #include <ipc/socket.h>
 #include <drivers/virtio/virtio.h>
 #include <drivers/virtio/virtio_net.h>
+#include <drivers/e1000e.h>
 #include <drivers/timer.h>
 #include <lib/string.h>
 #include <errno.h>
@@ -111,11 +112,19 @@ static int raw_batch(struct net_request *r)
     }
     return 0;
 }
-static int stop_nic(struct net_request *r)
+static int stop_virtio(struct net_request *r)
 {
     return virtio_net_stop();
 }
-static void test_nic(void)
+static int stop_e1000e(struct net_request *r)
+{
+    return e1000e_stop();
+}
+
+/* Send 40 batches of 16 raw frames through eth0 to the echo peer, waiting
+ * for each batch to come back, then reset the controller with stop and
+ * verify that every packet buffer was returned to the pool. */
+static void raw_frames(const char *name, int (*stop)(struct net_request *))
 {
     struct netif *n = netif_find("eth0");
     ktest_assert(n && netif_is_up(n), "NIC published");
@@ -135,7 +144,7 @@ static void test_nic(void)
                      batch);
     }
     struct net_request r;
-    net_request_init(&r, stop_nic);
+    net_request_init(&r, stop);
     ktest_assert(net_request_run(&r) == 0 && !netif_is_up(n), "reset stops DMA and interface");
     net_worker_drain();
     pbuf_get_stats(&after);
@@ -143,9 +152,34 @@ static void test_nic(void)
                  "reset returns all packet ownership %u/%u",
                  after.free,
                  before.free);
-    kprintf("net_nic: 640 raw frames, reset, ok\n");
+    kprintf("%s: 640 raw frames, reset, ok\n", name);
+}
+
+static void test_nic(void)
+{
+    raw_frames("net_nic", stop_virtio);
 }
 KTEST_DEFINE("net_nic", test_nic);
+
+/* The net_e1000e case attaches an 82574L with the harness MAC address and
+ * no virtio-net device, so the e1000e becomes eth0. */
+static void test_e1000e(void)
+{
+    static const uint8_t harness_mac[6] = {0x52, 0x54, 0x00, 0x4d, 0x49, 0x4f};
+    struct netif *n = netif_find("eth0");
+    ktest_assert(n && e1000e_present() && strcmp(n->driver, "e1000e") == 0, "eth0 is the e1000e");
+    ktest_assert(e1000e_mac_from_eeprom(), "MAC address read from the EEPROM");
+    ktest_assert(memcmp(n->hwaddr, harness_mac, 6) == 0,
+                 "MAC address %02x:%02x:%02x:%02x:%02x:%02x",
+                 n->hwaddr[0], n->hwaddr[1], n->hwaddr[2], n->hwaddr[3], n->hwaddr[4], n->hwaddr[5]);
+    uint64_t deadline = timer_ms() + 3000;
+    while (!e1000e_link_up() && timer_ms() < deadline)
+        sleep_ms(10);
+    ktest_assert(e1000e_link_up(), "link up");
+    kprintf("net_e1000e: eth0 link up, MAC from the EEPROM\n");
+    raw_frames("net_e1000e", stop_e1000e);
+}
+KTEST_DEFINE("net_e1000e", test_e1000e);
 
 static void test_nic_failure(void)
 {

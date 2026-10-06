@@ -102,7 +102,9 @@ device and without user pointers.
 
 `tests/run_qemu_test.sh` reads two more case files:
 
-- `nic` names the backend of a `virtio-net-pci` device: `dgram` exchanges
+- `nic` names the backend of a network device, `virtio-net-pci` unless an
+  optional second word names another model such as `e1000e`
+  (`e1000e.md`): `dgram` exchanges
   raw Ethernet frames as UDP datagrams with a host peer on 127.0.0.1,
   `user` attaches QEMU's user mode stack (for the DHCP and DNS milestones),
   `none` attaches nothing. The backend must be offered by the QEMU binary
@@ -356,7 +358,10 @@ deadline when the clock is real and an unlimited wait when a test
 controls the clock (a controlled deadline is reached only when the test
 moves time and calls `net_worker_kick`). Producers enqueue and wake under
 the same lock, so work arriving between the check and the sleep is seen.
-Every pass then fires the due timers, processes at most 32 packets, then
+Every pass then fires the due timers, calls the service function of each
+network driver (registered with `net_worker_add_service`; the drivers
+reclaim transmits and collect received frames there), processes at most
+32 packets, then
 at most 32 requests, and checks the timers again, so a flood of input
 cannot postpone a due timer past one batch; the test measures the
 distance in packets and requires at most two batches.

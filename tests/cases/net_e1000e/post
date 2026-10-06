@@ -1,0 +1,8 @@
+#!/bin/sh
+# The peer received and echoed the 640 test frames (type 0x88b5). Frames
+# of other types are not counted: on aarch64 the edk2 firmware sends IPv6
+# neighbor solicitations from the same card before the kernel starts.
+set -eu
+test "$(grep -c ' 88:b5$' "$PEER_LOG")" -eq 640
+grep -q 'summary frames .* echoed ' "$PEER_LOG"
+[ -s "$CAPTURE" ]

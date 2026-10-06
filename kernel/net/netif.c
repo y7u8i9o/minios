@@ -60,6 +60,15 @@ void netif_unregister(struct netif *n)
     spin_unlock(&netif_lock);
 }
 
+void netif_free_name(const char *prefix, char *name)
+{
+    for (unsigned i = 0;; i++) {
+        ksnprintf(name, NETIF_NAME_MAX, "%s%u", prefix, i);
+        if (!netif_find(name))
+            return;
+    }
+}
+
 struct netif *netif_find(const char *name)
 {
     struct netif *found = NULL;

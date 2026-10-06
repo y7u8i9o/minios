@@ -129,12 +129,13 @@ the devices. Boot tests with `usb-storage` and with `usb-hub`. Done as R4
 of `release-0.5.0.md` by adapting the mass storage and hub drivers of
 edk2. Document: `docs/design/usb.md`.
 
-### D6. e1000e
+### D6. e1000e (completed 2026-10-06)
 
 A driver for the Intel 82574L (e1000e) network card: the receive and
 transmit descriptor rings, the link state and the MAC address from the
 EEPROM, registered with the network core. Boot test with the QEMU `e1000e`
-device against the network peer.
+device against the network peer. Done as S1 of
+`release-0.7.0.md`. Document: `docs/design/e1000e.md`.
 
 ### D7. Intel HD Audio
 

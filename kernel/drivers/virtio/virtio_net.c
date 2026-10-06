@@ -325,7 +325,7 @@ void virtio_net_init(void)
         nic.slots[i].data = nic.rx_memory + i * (HEADER + FRAME);
         refill(&nic.slots[i]);
     }
-    memcpy(nic.interface.name, "eth0", 5);
+    netif_free_name("eth", nic.interface.name);
     nic.interface.flags = NETIF_ETHERNET;
     nic.interface.mtu = 1500;
     nic.interface.ops = &operations;
@@ -338,6 +338,8 @@ void virtio_net_init(void)
     if (initialization_fault("started"))
         goto fail;
     nic.interface.driver = "virtio-net";
+    if (net_worker_add_service(virtio_net_service) < 0)
+        goto fail;
     if (netif_register(&nic.interface) < 0)
         goto fail;
     nic.registered = true;

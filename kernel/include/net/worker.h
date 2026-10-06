@@ -14,6 +14,7 @@
 
 #define NET_INPUT_QUEUE_MAX 128     /* packets waiting for the worker */
 #define NET_REQUEST_MAX     64      /* requests waiting for the worker */
+#define NET_SERVICE_MAX     4       /* driver service functions */
 #define NET_BATCH           32      /* packets, then requests, between timer checks */
 
 /* A request: fn runs on the worker with no lock acquired and its return
@@ -82,6 +83,12 @@ void net_worker_kick(void);
 void net_worker_drain(void);
 bool net_worker_is_current(void);
 void net_worker_start(void);
+/* Register a driver's service function. The worker calls each registered
+ * function once per pass, after running timers and before processing
+ * input packets; drivers use it to reclaim transmits and collect received
+ * frames. Registrations cannot be removed. Returns -ENOSPC once
+ * NET_SERVICE_MAX functions are registered. */
+int net_worker_add_service(void (*fn)(void));
 
 struct net_worker_stats {
     uint64_t packets;               /* input packets processed */

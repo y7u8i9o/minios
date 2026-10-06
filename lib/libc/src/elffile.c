@@ -7,6 +7,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+/* Older glibc <elf.h> headers, used by the host build, lack this constant. */
+#ifndef SHT_AARCH64_ATTRIBUTES
+#define SHT_AARCH64_ATTRIBUTES 0x70000003
+#endif
+
 /* range_ok reports whether count entries of size bytes at off lie in the file. */
 static int range_ok(const struct elffile *f, uint64_t off, uint64_t count, uint64_t size)
 {

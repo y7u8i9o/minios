@@ -8,6 +8,7 @@
 #include <net/loopback.h>
 #include <net/ipv4.h>
 #include <drivers/virtio/virtio_net.h>
+#include <drivers/e1000e.h>
 #include <debug/panic.h>
 #include <klog.h>
 
@@ -50,5 +51,6 @@ void net_init(void)
     loopback_init();
     ipv4_init();
     virtio_net_init();
+    e1000e_init();
     netdev_init();
 }

@@ -145,6 +145,7 @@ kernel/drivers/virtio/virtio_blk.c      blk mfs disk_tools
 kernel/drivers/virtio/virtio_gpu.c      gpu_mode aarch64:gpu_mode gui_modes gui_scale2 gpu_resize comp_bench comp_bench_hidpi comp_cursor aarch64:comp_cursor gui_tablet
 kernel/drivers/virtio/virtio_input.c    input_* gui_tablet
 kernel/drivers/virtio/virtio_net.c      net_nic* net_core net_virtqueue
+kernel/drivers/e1000e.c                 net_e1000e*
 kernel/drivers/virtio/virtio_rng.c      net_random*
 kernel/drivers/virtio/virtio_balloon.c  balloon balloon_oom aarch64:balloon*
 kernel/drivers/virtio/virtio_9p.c       9p 9p_automount aarch64:9p*

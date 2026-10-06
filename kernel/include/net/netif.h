@@ -55,6 +55,9 @@ int netif_register(struct netif *n);
 /* Take n down, let the worker finish with its queued packets, remove it. */
 void netif_unregister(struct netif *n);
 struct netif *netif_find(const char *name);
+/* Store the first unused name of the form PREFIX0, PREFIX1, ... in name
+ * (NETIF_NAME_MAX bytes). Drivers call this before netif_register. */
+void netif_free_name(const char *prefix, char *name);
 struct netif *netif_loopback(void);
 int netif_set_up(struct netif *n, bool up);
 bool netif_is_up(const struct netif *n);
