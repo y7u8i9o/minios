@@ -2,75 +2,175 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <bits/simd_types.h>
 
-void *memcpy(void *dst, const void *src, size_t n)
+/* memcpy, memmove and memset move 16 bytes per load and store through the
+ * vector type of bits/simd_types.h: SSE2 on x86_64, NEON on aarch64. The
+ * loads accept any address. The stores of the main loop go to 16 byte
+ * aligned destinations, so the relative alignment of the two regions does
+ * not matter. Under TCG a translated loop of vector moves runs far faster
+ * than rep movsb, which QEMU emulates one byte at a time.
+ *
+ * GCC can recognise a copy or fill loop and replace it with a call of
+ * memcpy or memset. Inside these functions that call would recurse, so
+ * the functions disable the transformation. The fixed size
+ * __builtin_memcpy calls below always expand to single moves. */
+#define STRING_NO_CALLS __attribute__((optimize("no-tree-loop-distribute-patterns")))
+
+static inline simd_u64x2 load16(const uint8_t *p)
 {
-    /* Word copies: under TCG a translated loop of 8 byte moves runs far
-     * faster than rep movsb, which QEMU emulates one byte at a time. */
+    simd_u64x2 v;
+    __builtin_memcpy(&v, p, 16);
+    return v;
+}
+
+static inline void store16(uint8_t *p, simd_u64x2 v)
+{
+    __builtin_memcpy(p, &v, 16);
+}
+
+static inline uint64_t load8(const uint8_t *p)
+{
+    uint64_t v;
+    __builtin_memcpy(&v, p, 8);
+    return v;
+}
+
+static inline void store8(uint8_t *p, uint64_t v)
+{
+    __builtin_memcpy(p, &v, 8);
+}
+
+static inline uint32_t load4(const uint8_t *p)
+{
+    uint32_t v;
+    __builtin_memcpy(&v, p, 4);
+    return v;
+}
+
+static inline void store4(uint8_t *p, uint32_t v)
+{
+    __builtin_memcpy(p, &v, 4);
+}
+
+/* Copy fewer than 16 bytes. Every load precedes every store, so the
+ * regions may overlap. Two moves of 8 or 4 bytes overlap in the middle
+ * when n is not a power of two. */
+static inline void copy_small(uint8_t *d, const uint8_t *s, size_t n)
+{
+    if (n >= 8) {
+        uint64_t a = load8(s), b = load8(s + n - 8);
+        store8(d, a);
+        store8(d + n - 8, b);
+    } else if (n >= 4) {
+        uint32_t a = load4(s), b = load4(s + n - 4);
+        store4(d, a);
+        store4(d + n - 4, b);
+    } else if (n) {
+        uint8_t a = s[0], b = s[n / 2], c = s[n - 1];
+        d[0] = a;
+        d[n / 2] = b;
+        d[n - 1] = c;
+    }
+}
+
+/* Copy n >= 16 bytes from the start towards the end. The first and the
+ * last 16 bytes are loaded before any store and stored after the loop.
+ * The loop stores whole aligned blocks of the destination between them.
+ * A store never reaches a source byte that a later load reads when the
+ * destination lies below the source, so the regions may overlap in that
+ * direction. */
+STRING_NO_CALLS static void copy_up(uint8_t *d, const uint8_t *s, size_t n)
+{
+    simd_u64x2 head = load16(s), tail = load16(s + n - 16);
+    size_t i = 16 - ((uintptr_t)d & 15);
+    for (; i + 64 <= n; i += 64) {
+        simd_u64x2 a = load16(s + i), b = load16(s + i + 16), c = load16(s + i + 32), e = load16(s + i + 48);
+        store16(d + i, a);
+        store16(d + i + 16, b);
+        store16(d + i + 32, c);
+        store16(d + i + 48, e);
+    }
+    for (; i + 16 <= n; i += 16)
+        store16(d + i, load16(s + i));
+    store16(d, head);
+    store16(d + n - 16, tail);
+}
+
+/* Copy n >= 16 bytes from the end towards the start, for a destination
+ * that overlaps the source from above. The loop stores aligned blocks
+ * that end at e and moves e down. */
+STRING_NO_CALLS static void copy_down(uint8_t *d, const uint8_t *s, size_t n)
+{
+    simd_u64x2 head = load16(s), tail = load16(s + n - 16);
+    size_t e = n - ((uintptr_t)(d + n) & 15);
+    for (; e >= 64; e -= 64) {
+        simd_u64x2 a = load16(s + e - 16), b = load16(s + e - 32), c = load16(s + e - 48), f = load16(s + e - 64);
+        store16(d + e - 16, a);
+        store16(d + e - 32, b);
+        store16(d + e - 48, c);
+        store16(d + e - 64, f);
+    }
+    for (; e >= 16; e -= 16)
+        store16(d + e - 16, load16(s + e - 16));
+    store16(d + n - 16, tail);
+    store16(d, head);
+}
+
+STRING_NO_CALLS void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+{
+    if (n < 16)
+        copy_small(dst, src, n);
+    else
+        copy_up(dst, src, n);
+    return dst;
+}
+
+STRING_NO_CALLS void *memmove(void *dst, const void *src, size_t n)
+{
     uint8_t *d = dst;
     const uint8_t *s = src;
-    if ((((uintptr_t)d ^ (uintptr_t)s) & 7) == 0) {
-        while (n && ((uintptr_t)d & 7)) {
-            *d++ = *s++;
-            n--;
-        }
-        while (n >= 32) {
-            ((uint64_t *)d)[0] = ((const uint64_t *)s)[0];
-            ((uint64_t *)d)[1] = ((const uint64_t *)s)[1];
-            ((uint64_t *)d)[2] = ((const uint64_t *)s)[2];
-            ((uint64_t *)d)[3] = ((const uint64_t *)s)[3];
-            d += 32;
-            s += 32;
-            n -= 32;
-        }
-        while (n >= 8) {
-            *(uint64_t *)d = *(const uint64_t *)s;
-            d += 8;
-            s += 8;
-            n -= 8;
-        }
-    }
-    while (n--)
-        *d++ = *s++;
-    return dst;
-}
-
-void *memmove(void *dst, const void *src, size_t n)
-{
-    unsigned char *d = dst;
-    const unsigned char *s = src;
     if (d == s || n == 0)
         return dst;
-    if (d < s || d >= s + n) {
-        while (n--)
-            *d++ = *s++;
-    } else {
-        d += n;
-        s += n;
-        while (n--)
-            *--d = *--s;
-    }
+    if (n < 16)
+        copy_small(d, s, n);
+    else if (d < s || d >= s + n)
+        copy_up(d, s, n);
+    else
+        copy_down(d, s, n);
     return dst;
 }
 
-void *memset(void *dst, int c, size_t n)
+STRING_NO_CALLS void *memset(void *dst, int c, size_t n)
 {
     uint8_t *d = dst;
-    uint64_t v = (uint8_t)c;
-    v |= v << 8;
-    v |= v << 16;
-    v |= v << 32;
-    while (n && ((uintptr_t)d & 7)) {
-        *d++ = (uint8_t)c;
-        n--;
+    uint64_t v = 0x0101010101010101ULL * (uint8_t)c;
+    if (n < 16) {
+        if (n >= 8) {
+            store8(d, v);
+            store8(d + n - 8, v);
+        } else if (n >= 4) {
+            store4(d, (uint32_t)v);
+            store4(d + n - 4, (uint32_t)v);
+        } else if (n) {
+            d[0] = (uint8_t)c;
+            d[n / 2] = (uint8_t)c;
+            d[n - 1] = (uint8_t)c;
+        }
+        return dst;
     }
-    while (n >= 8) {
-        *(uint64_t *)d = v;
-        d += 8;
-        n -= 8;
+    simd_u64x2 w = { v, v };
+    store16(d, w);
+    store16(d + n - 16, w);
+    size_t i = 16 - ((uintptr_t)d & 15);
+    for (; i + 64 <= n; i += 64) {
+        store16(d + i, w);
+        store16(d + i + 16, w);
+        store16(d + i + 32, w);
+        store16(d + i + 48, w);
     }
-    while (n--)
-        *d++ = (uint8_t)c;
+    for (; i + 16 <= n; i += 16)
+        store16(d + i, w);
     return dst;
 }
 

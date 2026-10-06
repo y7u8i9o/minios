@@ -1,6 +1,7 @@
 libctest: fputs to stdout
 libctest: fprintf to stderr
 libctest: puts
+libctest: memcpy [0-9]+ MB/s aligned
 libctest: 0 failures
 libctest: atexit handler ran
 TEST PASS

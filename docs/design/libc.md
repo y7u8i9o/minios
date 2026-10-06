@@ -312,6 +312,33 @@ used private copies before; the host tools compile `src/crc32.c` with the
 host libc. `errno.h` gained `EPROTO` (71) and `ESTALE` (116) with the
 values of Linux, for the protocol of `filetransfer.md`.
 
+## Copy and fill functions (2026-10-06)
+
+`memcpy`, `memmove` and `memset` move 16 bytes per load and store
+through the vector type `simd_u64x2` of `bits/simd_types.h`, which is an
+SSE2 register on x86_64 and a NEON register on aarch64. A copy of 16
+bytes or more loads its first and its last 16 bytes before any store and
+stores them after the main loop. The main loop stores whole aligned
+blocks of the destination with unaligned loads from the source, so the
+relative alignment of the two regions does not matter. Before, `memcpy`
+copied single bytes when the two addresses differed in their low three
+bits, and `memmove` always copied single bytes. A copy of fewer than 16
+bytes uses two overlapping moves of 8 or 4 bytes, or three single bytes.
+Every load precedes every store in that case, so the same code serves
+`memmove`. `memmove` copies downwards when the destination overlaps the
+source from above.
+
+GCC can replace a copy or fill loop with a call of `memcpy` or `memset`.
+Inside these functions the call would recurse, so they carry the
+attribute `optimize("no-tree-loop-distribute-patterns")`. `libctest`
+checks every pair of source and destination offsets from 0 to 31 at 39
+lengths up to 65537 bytes, overlapping `memmove` in both directions and
+`memset` with the guard bytes on both sides, and prints the throughput.
+On x86_64 under TCG the copy of 1 MiB rose from 6469 to 8563 MB/s
+aligned and from 5020 to 6759 MB/s at an offset of 4 bytes, and the fill
+from 10126 to 13157 MB/s. On aarch64 with HVF the fill rose from 51 to
+98 GB/s.
+
 ## Microseconds since boot (2026-10-06)
 
 `uptime_us()` in `unistd.h` returns the microseconds of `CLOCK_MONOTONIC`,

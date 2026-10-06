@@ -153,3 +153,13 @@ Observations:
   expiration of the 16 ms timer.
 - In `anim` at scale 2, the client spends 267 ms copying its private
   surface into the shared buffers, as much as X12 spends composing.
+
+## G2: memcpy, memmove and memset (2026-10-06)
+
+The string functions of libc copy 16 bytes per move at any alignment
+(`libc.md`). The copy of 1 MiB under TCG rose by 32 to 35 percent at
+every alignment. In the benchmark the flush, which copies the composed
+rectangles into the framebuffer, fell from 69 to 52 ms for the drag and
+from 141 to 100 ms for the pointer motion at 1280x800. The other values
+remained within the variation between two runs, because the composition
+copies only XRGB rows of clients with `memcpy`.

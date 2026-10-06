@@ -139,7 +139,7 @@ host builds of libgui and Lua declare `uptime_ms` and `uptime_us` in
 `tests/host_compat.h`, which replaced three local declarations and one
 private copy.
 
-### G2. memcpy, memmove and memset
+### G2. memcpy, memmove and memset (completed 2026-10-06)
 
 `memcpy` aligns the destination and copies 16 bytes per load and store
 at any relative alignment. `memmove` copies backwards in the same way
@@ -152,6 +152,14 @@ overlapping `memmove` in both directions and `memset`, and prints the
 throughput. The case `libc` runs on x86_64 and aarch64.
 
 Document: `docs/design/libc.md`, `docs/design/graphics-performance.md`.
+
+The copy of 1 MiB under TCG on x86_64 rose from 6469 to 8563 MB/s with
+aligned addresses, from 5020 to 6759 MB/s at an offset of 4 bytes and
+from 4562 to 6030 MB/s at an offset of 1 byte. The fill rose from 10126
+to 13157 MB/s. On aarch64 with HVF the fill rose from 51 to 98 GB/s. In
+the benchmark the flush time at 1280x800 fell from 69 to 52 ms for the
+drag and from 141 to 100 ms for the pointer motion. The other values
+remained within the variation between two runs.
 
 ### G3. The pixel module and the rectangle set
 

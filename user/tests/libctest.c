@@ -25,6 +25,140 @@ static int cmp_int(const void *a, const void *b)
     return *(const int *)a - *(const int *)b;
 }
 
+/* memcpy, memmove and memset at every relative alignment (G2 of
+ * docs/plan/compositor-performance.md). Each call is compared with a byte
+ * loop, and the 16 bytes on each side of the destination must remain. */
+#define MEM_GUARD 16
+#define MEM_AREA (MEM_GUARD + 32 + 65537 + MEM_GUARD)
+static unsigned char mem_src[MEM_AREA], mem_dst[MEM_AREA], mem_ref[MEM_AREA];
+
+static const size_t mem_lengths[] = { 0,   1,   2,   3,   4,   5,   7,   8,   9,   12,  15,  16,  17,  24,
+                                      31,  32,  33,  47,  48,  49,  63,  64,  65,  79,  80,  95,  96,  127,
+                                      128, 129, 191, 192, 193, 255, 256, 257, 299, 300, 65537 };
+#define MEM_NLENGTHS (sizeof mem_lengths / sizeof mem_lengths[0])
+
+static void mem_fill(unsigned char *p, size_t n, unsigned seed)
+{
+    for (size_t i = 0; i < n; i++)
+        p[i] = (unsigned char)(i * 7 + seed * 13 + (i >> 8));
+}
+
+/* The reference copy is a loop over volatile bytes, which GCC cannot turn
+ * into a call of the memcpy under test. */
+static void mem_copy_bytes(unsigned char *to, const unsigned char *from, size_t n)
+{
+    volatile unsigned char *t = to;
+    for (size_t i = 0; i < n; i++)
+        t[i] = from[i];
+}
+
+static int mem_same(const unsigned char *a, const unsigned char *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        if (a[i] != b[i])
+            return 0;
+    return 1;
+}
+
+static void check_memcpy(void)
+{
+    mem_fill(mem_src, MEM_AREA, 1);
+    for (size_t so = 0; so < 32; so++)
+        for (size_t dof = 0; dof < 32; dof++)
+            for (size_t k = 0; k < MEM_NLENGTHS; k++) {
+                size_t n = mem_lengths[k];
+                /* The longest length runs at four offset pairs only. */
+                if (n > 300 && (so % 16 || dof % 15))
+                    continue;
+                size_t span = MEM_GUARD + dof + n + MEM_GUARD;
+                mem_fill(mem_dst, span, 2);
+                mem_copy_bytes(mem_ref, mem_dst, span);
+                mem_copy_bytes(mem_ref + MEM_GUARD + dof, mem_src + so, n);
+                void *r = memcpy(mem_dst + MEM_GUARD + dof, mem_src + so, n);
+                if (r != mem_dst + MEM_GUARD + dof || !mem_same(mem_dst, mem_ref, span)) {
+                    CHECK(0, "memcpy source offset %zu, destination offset %zu, length %zu", so, dof, n);
+                    return;
+                }
+            }
+}
+
+static void check_memmove(void)
+{
+    for (size_t a = 0; a < 33; a++)
+        for (size_t b = 0; b < 33; b++)
+            for (size_t k = 0; k < MEM_NLENGTHS; k++) {
+                size_t n = mem_lengths[k];
+                if (n > 300)
+                    continue;
+                size_t span = MEM_GUARD + 33 + n + MEM_GUARD;
+                mem_fill(mem_dst, span, 3);
+                mem_copy_bytes(mem_ref, mem_dst, span);
+                mem_copy_bytes(mem_src, mem_dst + MEM_GUARD + b, n);
+                mem_copy_bytes(mem_ref + MEM_GUARD + a, mem_src, n);
+                void *r = memmove(mem_dst + MEM_GUARD + a, mem_dst + MEM_GUARD + b, n);
+                if (r != mem_dst + MEM_GUARD + a || !mem_same(mem_dst, mem_ref, span)) {
+                    CHECK(0, "memmove destination %zu, source %zu, length %zu", a, b, n);
+                    return;
+                }
+            }
+}
+
+static void check_memset(void)
+{
+    static const int values[] = { 0, 0x5a, 0xff, 0x1a5 };
+    for (size_t v = 0; v < 4; v++)
+        for (size_t dof = 0; dof < 32; dof++)
+            for (size_t k = 0; k < MEM_NLENGTHS; k++) {
+                size_t n = mem_lengths[k];
+                if (n > 300 && dof % 16)
+                    continue;
+                size_t span = MEM_GUARD + dof + n + MEM_GUARD;
+                mem_fill(mem_dst, span, 4);
+                mem_copy_bytes(mem_ref, mem_dst, span);
+                for (size_t i = 0; i < n; i++)
+                    mem_ref[MEM_GUARD + dof + i] = (unsigned char)values[v];
+                void *r = memset(mem_dst + MEM_GUARD + dof, values[v], n);
+                if (r != mem_dst + MEM_GUARD + dof || !mem_same(mem_dst, mem_ref, span)) {
+                    CHECK(0, "memset value 0x%x, offset %zu, length %zu", values[v], dof, n);
+                    return;
+                }
+            }
+}
+
+/* Megabytes per second of 32 copies or fills of 1 MiB. */
+static unsigned mem_rate(int fill, size_t dst_offset)
+{
+    size_t n = (size_t)1 << 20;
+    unsigned char *from = malloc(n + 64), *to = malloc(n + 64);
+    if (!from || !to) {
+        free(from);
+        free(to);
+        return 0;
+    }
+    memset(from, 1, n + 64);
+    memset(to, 2, n + 64);
+    long t0 = uptime_us();
+    for (int i = 0; i < 32; i++) {
+        if (fill)
+            memset(to + dst_offset, i, n);
+        else
+            memcpy(to + dst_offset, from, n);
+    }
+    long us = uptime_us() - t0;
+    free(from);
+    free(to);
+    return us > 0 ? (unsigned)(32ull * 1000000 / (unsigned long long)us) : 0;
+}
+
+static void check_memory_functions(void)
+{
+    check_memcpy();
+    check_memmove();
+    check_memset();
+    printf("libctest: memcpy %u MB/s aligned, %u MB/s at offset 4, %u MB/s at offset 1, memset %u MB/s\n",
+           mem_rate(0, 0), mem_rate(0, 4), mem_rate(0, 1), mem_rate(1, 0));
+}
+
 static int atexit_ran;
 static void at_exit(void)
 {
@@ -147,6 +281,7 @@ int main(int argc, char **argv)
     CHECK(fopen("/nosuch", "r") == NULL && errno == ENOENT, "fopen missing");
     assert(1 + 1 == 2);
 
+    check_memory_functions();
     CHECK(atexit(at_exit) == 0, "atexit");
     printf("libctest: %d failures\n", failures);
     return failures ? 1 : 0;
