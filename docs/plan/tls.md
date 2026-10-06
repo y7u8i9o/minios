@@ -45,11 +45,15 @@ Result: `make check-crypto` compares 340 results of the C code with the
 `cryptography` package of Python (OpenSSL) on random inputs, and with
 the vectors of RFC 7748 and RFC 8439. Every check passes.
 
-### T3. Certificates and the trust store
+### T3. Certificates and the trust store (completed 2026-10-06)
 
 X.509 parsing, chain verification, host name checks and the trust
 store. Test: a host check with the chain of the owner's server, an
 expired certificate, a wrong host name and a broken signature.
+
+Result: `minios/x509.h`, `/etc/ssl/cert.pem` from the curl bundle of
+2026-09-25, and `docs/design/tls.md`. `make check-crypto` verifies 26
+generated chains and the chain of `code.calcraft.org`. 416 checks pass.
 
 ### T4. The TLS 1.3 client
 

@@ -70,7 +70,13 @@ FONTS  := $(ROOT)/usr/share/fonts/DejaVuSans.ttf $(ROOT)/usr/share/fonts/DejaVuS
           $(ROOT)/usr/share/fonts/DroidSansFallbackFull.ttf
 
 .PHONY: all clean
-all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ROOT)/usr/bin/pkg-update $(ROOT)/usr/bin/pfetch $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+all: $(LIBS) $(CODECS) $(LUA_MODS) $(BINS) $(ROOT)/usr/bin/pkg-update $(ROOT)/usr/bin/pfetch $(ROOT)/etc/ssl/cert.pem $(ETC) share-tree locale-tree skel-tree $(FONTS) $(ROOT)/dev $(ROOT)/initrd $(ROOT)/tmp $(ROOT)/run tcc-support links modes
+
+# The trust store of the TLS client is the CA bundle of curl
+# (third_party/cacert/README, docs/design/tls.md).
+$(ROOT)/etc/ssl/cert.pem: ../third_party/cacert/cacert.pem
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 # pfetch is the unchanged script of third_party/pfetch with the support
 # for minios of ports/pfetch/minios.patch (docs/design/pfetch.md).

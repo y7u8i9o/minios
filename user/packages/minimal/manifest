@@ -9,5 +9,6 @@ depends pkg
 depends accounts
 depends keymaps
 depends tzdata
+depends ca-certificates
 depends limine
 depends kernel

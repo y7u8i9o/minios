@@ -237,6 +237,12 @@ int main(int argc, char **argv)
     CHECK(strncmp(buf, "hello", 5) == 0 && strncmp(buf, "help", 4) != 0, "strncmp");
     CHECK(strchr(buf, 'w') == buf + 6 && strrchr(buf, 'l') == buf + 9 && strchr(buf, 'z') == NULL, "strchr");
     CHECK(strstr(buf, "wor") == buf + 6 && strstr(buf, "xyz") == NULL, "strstr");
+    {
+        static const char bin[] = { 'a', 0, 'b', 0, 'b', 'c' };
+        CHECK(memmem(bin, sizeof bin, "\0bc", 3) == bin + 3 && memmem(bin, sizeof bin, "bcd", 3) == NULL &&
+                  memmem(bin, 2, "a", 0) == bin && memmem(bin, 2, "b", 1) == NULL,
+              "memmem");
+    }
     CHECK(strspn("aabbc", "ab") == 4 && strcspn("aabbc", "c") == 4, "strspn");
     CHECK(memcmp("abc", "abd", 3) < 0 && memcmp("abc", "abc", 3) == 0, "memcmp");
     char mv[16] = "0123456789";

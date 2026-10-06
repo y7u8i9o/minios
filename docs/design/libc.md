@@ -401,6 +401,14 @@ connection.
 crypto sources on the host. `check.py` sends random inputs to the oracle
 and compares its results with the `cryptography` package of Python.
 
+## Byte search and base64 (T3 of `docs/plan/tls.md`)
+
+`memmem` in `string.h` returns the first occurrence of a byte string in
+a buffer. An empty needle matches at the start. `base64_decode` in
+`minios/base64.h` decodes the alphabet of RFC 4648 and skips white
+space. The function rejects padding before the end and an incomplete
+last group. The PEM reader of `minios/x509.h` uses both functions.
+
 ## The process table (2026-10-06)
 
 `minios/proctab.h` reads the table of `/dev/proc`. `proc_table_read`

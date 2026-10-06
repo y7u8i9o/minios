@@ -24,6 +24,8 @@ size_t strxfrm_l(char *dst, const char *src, size_t n, struct __locale_struct *l
 char *strchr(const char *s, int c);
 char *strrchr(const char *s, int c);
 char *strstr(const char *h, const char *n);
+/* The first occurrence of the nl bytes of n in the hl bytes of h. */
+void *memmem(const void *h, size_t hl, const void *n, size_t nl);
 size_t strspn(const char *s, const char *accept);
 size_t strcspn(const char *s, const char *reject);
 char *strpbrk(const char *s, const char *accept);

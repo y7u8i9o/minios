@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """make check-crypto: compares the primitives of minios/crypto.h with the
 cryptography package of Python (OpenSSL) on random inputs, and with
-published test vectors. usage: check.py ORACLE"""
+published test vectors. The certificate checks build test chains with
+the cryptography package and verify them with minios/x509.h. They also
+load the CA bundle of third_party/cacert and verify the chain of the
+owner's server at a fixed time. usage: check.py ORACLE TMPDIR"""
+import base64
+import datetime
 import hashlib
+import ipaddress
 import hmac as py_hmac
 import os
 import random
@@ -14,6 +20,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, x25519
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed, decode_dss_signature
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography import x509
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 rng = random.Random(1)
 proc = subprocess.Popen([sys.argv[1]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
@@ -132,6 +140,153 @@ for bits in (2048, 3072, 4096):
         check(f"rsa {bits} pss {hname}", ask("rsa_pss", hname, h(n), h(e), h(digest), h(sig)), "ok")
         other = bytes([digest[0] ^ 1]) + digest[1:]
         check(f"rsa {bits} pss {hname} changed", ask("rsa_pss", hname, h(n), h(e), h(other), h(sig)), "bad")
+
+# Base64, also with invalid text.
+for n in range(0, 40):
+    data = rand(n)
+    check(f"base64 {n}", ask("b64", base64.b64encode(data).decode() or "-"), h(data) if data else "")
+for text in ("abc", "ab=c", "a===", "ab==ab==", "ab*d"):
+    check(f"base64 invalid {text}", ask("b64", text), "bad")
+
+# Certificates. Each case writes a chain and a store as PEM files and
+# compares the result of the oracle with the expected text.
+TMP = sys.argv[2]
+os.makedirs(TMP, exist_ok=True)
+T0 = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+DAY = 86400
+NOW = int(T0.timestamp()) + 10 * DAY
+
+
+def key_usage(sign=False, cert_sign=False, encipher=False):
+    return x509.KeyUsage(digital_signature=sign, content_commitment=False, key_encipherment=encipher,
+                         data_encipherment=False, key_agreement=False, key_cert_sign=cert_sign, crl_sign=cert_sign,
+                         encipher_only=False, decipher_only=False)
+
+
+def make_cert(subject, key, issuer, issuer_key, ca=False, pathlen=None, days=(0, 365), san=None,
+              eku=(ExtendedKeyUsageOID.SERVER_AUTH,), ku=None, extra=None, digest=hashes.SHA256()):
+    b = (x509.CertificateBuilder()
+         .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)]))
+         .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer)]))
+         .public_key(key.public_key()).serial_number(x509.random_serial_number())
+         .not_valid_before(T0 + datetime.timedelta(days=days[0]))
+         .not_valid_after(T0 + datetime.timedelta(days=days[1]))
+         .add_extension(x509.BasicConstraints(ca=ca, path_length=pathlen), critical=True))
+    if ku is None:
+        ku = key_usage(cert_sign=True) if ca else key_usage(sign=True)
+    b = b.add_extension(ku, critical=True)
+    if eku and not ca:
+        b = b.add_extension(x509.ExtendedKeyUsage(list(eku)), critical=False)
+    if san:
+        names = [x509.IPAddress(ipaddress.ip_address(s)) if s[0].isdigit() else x509.DNSName(s) for s in san]
+        b = b.add_extension(x509.SubjectAlternativeName(names), critical=False)
+    if extra:
+        b = b.add_extension(extra, critical=True)
+    return b.sign(issuer_key, digest)
+
+
+def pem(*certs):
+    return b"".join(c.public_bytes(serialization.Encoding.PEM) for c in certs)
+
+
+case_number = 0
+
+
+def verify(label, host, now, chain, store, want):
+    global case_number
+    case_number += 1
+    cpath, spath = f"{TMP}/chain{case_number}.pem", f"{TMP}/store{case_number}.pem"
+    open(cpath, "wb").write(chain if isinstance(chain, bytes) else pem(*chain))
+    open(spath, "wb").write(store if isinstance(store, bytes) else pem(*store))
+    check(f"x509 {label}", ask("verify", host, str(now), cpath, spath), want)
+
+
+root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+root = make_cert("Test Root", root_key, "Test Root", root_key, ca=True)
+int_key = ec.generate_private_key(ec.SECP384R1())
+inter = make_cert("Test CA", int_key, "Test Root", root_key, ca=True, pathlen=0, digest=hashes.SHA384())
+leaf_key = ec.generate_private_key(ec.SECP256R1())
+SAN = ["example.test", "*.example.test", "10.0.2.2"]
+leaf = make_cert("example.test", leaf_key, "Test CA", int_key, days=(5, 100), san=SAN, digest=hashes.SHA384())
+
+verify("valid", "example.test", NOW, [leaf, inter], [root], "ok")
+verify("wildcard", "a.example.test", NOW, [leaf, inter], [root], "ok")
+verify("case and final dot", "A.EXAMPLE.Test.", NOW, [leaf, inter], [root], "ok")
+verify("ip address", "10.0.2.2", NOW, [leaf, inter], [root], "ok")
+verify("other ip address", "10.0.2.3", NOW, [leaf, inter], [root], "certificate not valid for the host")
+verify("two labels for a wildcard", "b.a.example.test", NOW, [leaf, inter], [root],
+       "certificate not valid for the host")
+verify("other host", "example.org", NOW, [leaf, inter], [root], "certificate not valid for the host")
+verify("not yet valid", "example.test", NOW - 9 * DAY, [leaf, inter], [root], "certificate not yet valid")
+verify("expired", "example.test", NOW + 200 * DAY, [leaf, inter], [root], "certificate expired")
+der = bytearray(leaf.public_bytes(serialization.Encoding.DER))
+der[-1] ^= 1
+broken = x509.load_der_x509_certificate(bytes(der))
+verify("broken signature", "example.test", NOW, [broken, inter], [root], "certificate signature invalid")
+verify("missing intermediate", "example.test", NOW, [leaf], [root], "certificate issuer unknown")
+verify("empty store", "example.test", NOW, [leaf, inter], b"", "certificate issuer unknown")
+other_root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+other_root = make_cert("Test Root", other_root_key, "Test Root", other_root_key, ca=True)
+verify("anchor with another key", "example.test", NOW, [leaf, inter], [other_root],
+       "certificate signature invalid")
+verify("order and an unused certificate", "example.test", NOW, [leaf, other_root, inter], [root], "ok")
+
+no_ca = make_cert("Test CA", int_key, "Test Root", root_key, ku=key_usage(cert_sign=True))
+verify("intermediate without cA", "example.test", NOW, [leaf, no_ca], [root], "certificate issuer is no CA")
+old_inter = make_cert("Test CA", int_key, "Test Root", root_key, ca=True, days=(0, 5))
+verify("expired intermediate", "example.test", NOW, [leaf, old_inter], [root], "certificate expired")
+int2_key = ec.generate_private_key(ec.SECP256R1())
+int2 = make_cert("Test CA 2", int2_key, "Test CA", int_key, ca=True, digest=hashes.SHA384())
+leaf2 = make_cert("example.test", leaf_key, "Test CA 2", int2_key, san=SAN)
+verify("path length exceeded", "example.test", NOW, [leaf2, int2, inter], [root], "certificate issuer is no CA")
+inter_free = make_cert("Test CA", int_key, "Test Root", root_key, ca=True, digest=hashes.SHA384())
+verify("two intermediates", "example.test", NOW, [leaf2, int2, inter_free], [root], "ok")
+inter_ku = make_cert("Test CA", int_key, "Test Root", root_key, ca=True, ku=key_usage(sign=True))
+verify("intermediate without keyCertSign", "example.test", NOW, [leaf, inter_ku], [root],
+       "certificate key usage forbids the use")
+
+crit = x509.UnrecognizedExtension(x509.ObjectIdentifier("1.3.6.1.4.1.99999.1"), b"\x05\x00")
+leaf_crit = make_cert("example.test", leaf_key, "Test CA", int_key, san=SAN, extra=crit)
+verify("unknown critical extension", "example.test", NOW, [leaf_crit, inter], [root],
+       "certificate has an unknown critical extension")
+leaf_client = make_cert("example.test", leaf_key, "Test CA", int_key, san=SAN,
+                        eku=(ExtendedKeyUsageOID.CLIENT_AUTH,))
+verify("client usage only", "example.test", NOW, [leaf_client, inter], [root],
+       "certificate key usage forbids the use")
+leaf_enc = make_cert("example.test", leaf_key, "Test CA", int_key, san=SAN, ku=key_usage(encipher=True))
+verify("key usage without digitalSignature", "example.test", NOW, [leaf_enc, inter], [root],
+       "certificate key usage forbids the use")
+leaf_nosan = make_cert("example.test", leaf_key, "Test CA", int_key)
+verify("no subjectAltName", "example.test", NOW, [leaf_nosan, inter], [root], "certificate not valid for the host")
+leaf_tld = make_cert("example.test", leaf_key, "Test CA", int_key, san=["*.test"])
+verify("wildcard over a top level domain", "example.test", NOW, [leaf_tld, inter], [root],
+       "certificate not valid for the host")
+
+# An RSA leaf below a P-384 root, signed with SHA-512, and an RSA leaf
+# below an RSA root with SHA-384.
+ec_root_key = ec.generate_private_key(ec.SECP384R1())
+ec_root = make_cert("EC Root", ec_root_key, "EC Root", ec_root_key, ca=True, digest=hashes.SHA384())
+rsa_leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+rsa_leaf = make_cert("rsa.test", rsa_leaf_key, "EC Root", ec_root_key, san=["rsa.test"], digest=hashes.SHA512())
+verify("rsa leaf below an ec root", "rsa.test", NOW, [rsa_leaf], [root, ec_root], "ok")
+rsa_leaf2 = make_cert("rsa.test", rsa_leaf_key, "Test Root", root_key, san=["rsa.test"], digest=hashes.SHA384())
+verify("rsa leaf below an rsa root", "rsa.test", NOW, [rsa_leaf2], [ec_root, root], "ok")
+
+# The CA bundle of the system and the chain of the owner's server. The
+# server sends Root YE cross-signed by ISRG Root X2, and X2 cross-signed
+# by X1. The path ends at the self-signed X2 of the bundle.
+HERE = os.path.dirname(os.path.abspath(__file__))
+BUNDLE = os.path.join(HERE, "../../../../third_party/cacert/cacert.pem")
+CHAIN = open(os.path.join(HERE, "calcraft.pem"), "rb").read()
+blocks = open(BUNDLE).read().count("-----BEGIN CERTIFICATE-----")
+check("bundle", ask("store", BUNDLE), f"{blocks} 0")
+SERVER_TIME = int(datetime.datetime(2026, 10, 6, tzinfo=datetime.timezone.utc).timestamp())
+bundle = open(BUNDLE, "rb").read()
+verify("server chain", "code.calcraft.org", SERVER_TIME, CHAIN, bundle, "ok")
+verify("server chain, other host", "calcraft.org", SERVER_TIME, CHAIN, bundle, "certificate not valid for the host")
+verify("server chain, expired", "code.calcraft.org", SERVER_TIME + 60 * DAY, CHAIN, bundle, "certificate expired")
+verify("server chain without the bundle", "code.calcraft.org", SERVER_TIME, CHAIN, pem(root),
+       "certificate issuer unknown")
 
 proc.stdin.close()
 proc.wait()

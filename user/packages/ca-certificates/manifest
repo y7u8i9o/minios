@@ -1,0 +1,2 @@
+name ca-certificates
+summary Trust store of the TLS client (CA bundle of Mozilla through curl)

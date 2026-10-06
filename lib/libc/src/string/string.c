@@ -308,6 +308,17 @@ char *strstr(const char *h, const char *n)
     return NULL;
 }
 
+void *memmem(const void *h, size_t hl, const void *n, size_t nl)
+{
+    const uint8_t *hp = h;
+    if (nl == 0)
+        return (void *)hp;
+    for (size_t i = 0; i + nl <= hl; i++)
+        if (hp[i] == *(const uint8_t *)n && memcmp(hp + i, n, nl) == 0)
+            return (void *)(hp + i);
+    return NULL;
+}
+
 size_t strspn(const char *s, const char *accept)
 {
     size_t n = 0;

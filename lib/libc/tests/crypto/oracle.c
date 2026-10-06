@@ -2,11 +2,14 @@
  * "NAME ARG ...", with arguments in hexadecimal ("-" for an empty
  * string), and prints the result in hexadecimal, or "ok" and "bad" for a
  * verification. check.py compares the results with the cryptography
- * package of Python. */
+ * package of Python. The certificate operations take file paths and
+ * print "ok" or the text of x509_strerror. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <minios/base64.h>
 #include <minios/crypto.h>
+#include <minios/x509.h>
 
 #define MAX 4096
 
@@ -33,6 +36,35 @@ static void print_hex(const uint8_t *b, size_t n)
 static enum hash_alg alg_of(const char *name)
 {
     return !strcmp(name, "sha256") ? HASH_SHA256 : !strcmp(name, "sha384") ? HASH_SHA384 : HASH_SHA512;
+}
+
+/* "verify HOST NOW CHAIN STORE": verifies the PEM chain against the PEM
+ * store at the time NOW. */
+static void op_verify(const char *host, const char *now, const char *chain_path, const char *store_path)
+{
+    struct x509_store store = { 0 };
+    if (x509_store_load(&store, store_path, NULL) < 0) {
+        printf("no store\n");
+        return;
+    }
+    static char text[1 << 16];
+    FILE *f = fopen(chain_path, "r");
+    size_t len = f ? fread(text, 1, sizeof text, f) : 0;
+    if (f)
+        fclose(f);
+    uint8_t **ders;
+    size_t *lens;
+    int n = x509_pem_decode(text, len, &ders, &lens, NULL);
+    struct x509_cert chain[16];
+    int r = n > 0 && n <= 16 ? X509_OK : X509_ERR_PARSE;
+    for (int i = 0; r == X509_OK && i < n; i++)
+        r = x509_parse(&chain[i], ders[i], lens[i]);
+    if (r == X509_OK)
+        r = x509_verify_chain(chain, n, &store, host, strtoll(now, NULL, 10));
+    printf("%s\n", r == X509_OK ? "ok" : x509_strerror(r));
+    if (n >= 0)
+        x509_free_ders(ders, lens, n);
+    x509_store_free(&store);
 }
 
 int main(void)
@@ -115,6 +147,21 @@ int main(void)
             int r = op[4] == 'p' && op[5] == 'k' ? rsa_verify_pkcs1(a, ln, b, le, alg, c, d, ls)
                                                  : rsa_verify_pss(a, ln, b, le, alg, c, d, ls);
             printf("%s\n", r == 0 ? "ok" : "bad");
+        } else if (!strcmp(op, "b64")) {
+            const char *t = strcmp(w[1], "-") ? w[1] : "";
+            long len = base64_decode(t, strlen(t), out);
+            if (len < 0)
+                printf("bad\n");
+            else
+                print_hex(out, (size_t)len);
+        } else if (!strcmp(op, "store")) {
+            struct x509_store store = { 0 };
+            int skipped = 0;
+            int added = x509_store_load(&store, w[1], &skipped);
+            printf("%d %d\n", added, skipped);
+            x509_store_free(&store);
+        } else if (!strcmp(op, "verify")) {
+            op_verify(w[1], w[2], w[3], w[4]);
         } else {
             printf("unknown\n");
         }

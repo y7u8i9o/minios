@@ -383,8 +383,8 @@ check-libfont check-libwire check-libcodec check-libgui:
 check-crypto:
 	@mkdir -p $(BUILD)/host
 	$(HOSTCC) $(HOSTCPPFLAGS) -std=c17 -O2 -g -Wall -Wextra -idirafter lib/libc/include -o $(BUILD)/host/crypto_oracle \
-	    lib/libc/tests/crypto/oracle.c $(wildcard lib/libc/src/crypto/*.c)
-	python3 lib/libc/tests/crypto/check.py $(BUILD)/host/crypto_oracle
+	    lib/libc/tests/crypto/oracle.c $(wildcard lib/libc/src/crypto/*.c) lib/libc/src/base64.c
+	python3 lib/libc/tests/crypto/check.py $(BUILD)/host/crypto_oracle $(BUILD)/host/crypto_x509
 
 .PHONY: check-lua check-headers check-imed
 # check-imed tests the engines of the input method daemon on the host with

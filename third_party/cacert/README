@@ -1,0 +1,10 @@
+cacert.pem is the CA bundle that the curl project extracts from the
+root certificate list of Mozilla (certdata.txt of NSS). The file is
+installed as /etc/ssl/cert.pem, the trust store of the TLS client
+(docs/plan/tls.md). The certificate data is licensed under the Mozilla
+Public License 2.0 (https://mozilla.org/MPL/2.0/).
+
+Update: download https://curl.se/ca/cacert.pem and
+https://curl.se/ca/cacert.pem.sha256, check the file with
+"shasum -a 256 -c cacert.pem.sha256", and record the date and the
+checksum in ORIGIN.

@@ -154,6 +154,10 @@ kernel/drivers/virtio/virtio_snd*       audio_*
 lib/libc/**                     check-headers libc libc_ext libmfull mathvec float locale gettext timezone time pthreads utils sh_builtins
 lib/libc/src/crypto/**          check-pkg check-crypto pkg pkg_repo
 lib/libc/tests/crypto/**        check-crypto
+lib/libc/src/base64.c           check-crypto
+lib/libc/include/minios/base64.h        check-crypto
+lib/libc/include/minios/x509.h  check-crypto
+lib/libc/include/minios/crypto.h        check-crypto
 lib/libc/src/string/string.c    libc aarch64:libc comp_bench comp_bench_hidpi
 lib/libc/include/minios/sha2.h  check-pkg
 lib/libc/include/minios/ed25519.h       check-pkg
@@ -251,6 +255,7 @@ user/share/lua/**               lua
 # ---- third party sources ----
 third_party/*                   none
 third_party/awk/**              awk
+third_party/cacert/**           check-crypto
 third_party/sed/**              sed
 third_party/make/**             make
 third_party/lua/**              check-lua lua*
