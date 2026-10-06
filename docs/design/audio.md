@@ -33,14 +33,16 @@ effects, or network transport.
 
 ## Kernel PCM interface
 
-`kernel/audio/pcm.c` registers flat devfs nodes through `struct pcm_device`.
-Drivers take the next free name with `pcm_free_name`. Two drivers provide
-PCM devices: virtio-snd, described below, and Intel HD Audio (`hda.md`),
-which offers playback only and is registered after virtio-snd. The first
-device appears as `/dev/pcm0`; opening it is exclusive
-so that mixing and policy remain in `audiod`.  One open descriptor carries
-both directions: writes feed the playback stream, reads take from the
-capture stream.
+`kernel/audio/pcm.c` creates a devfs node for each PCM device that a driver
+registers. Drivers call `pcm_free_name` to get the next unused name, so the
+first device becomes `/dev/pcm0`, the second `/dev/pcm1`, and so on. Two
+drivers provide PCM devices: virtio-snd, described below, and Intel HD Audio
+(`hda.md`), which supports playback only and registers after virtio-snd.
+
+Only one process can have a PCM device open at a time. This ensures that
+`audiod` alone mixes the streams of all applications and decides what
+reaches the hardware. A single open file serves both directions: writes go
+to the playback stream and reads come from the capture stream.
 
 The public ABI in `sys/audio.h` (`minios/abi.h`, version 2) supports
 capability discovery, parameter selection, prepare, start, drop, drain and

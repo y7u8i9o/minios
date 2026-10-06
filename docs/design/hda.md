@@ -1,123 +1,135 @@
 # The Intel HD Audio driver
 
-Milestone S2 of `docs/plan/release-0.7.0.md` (D7 of `docs/plan/drivers.md`)
+Milestone S2 of `docs/plan/release-0.7.0.md` (D7 in `docs/plan/drivers.md`)
 adds a driver for Intel High Definition Audio controllers in
-`kernel/drivers/hda.c`. QEMU offers HD Audio as `intel-hda` (ICH6) and
-`ich9-intel-hda`, combined with a codec such as `hda-duplex` or
-`hda-output`, and UTM uses it as its default sound device on several machine
-types. The driver follows the *High Definition Audio Specification*,
-revision 1.0a. It registers a playback-only PCM device with the same
-interface as virtio-snd (`audio.md`), so `audiod` and everything above it
-work unchanged.
+`kernel/drivers/hda.c`. QEMU emulates these controllers as `intel-hda` (ICH6)
+and `ich9-intel-hda`, paired with a codec such as `hda-duplex` or
+`hda-output`. The driver is based on the *High Definition Audio
+Specification*, revision 1.0a. It registers a playback-only PCM device that
+behaves like the virtio-snd device described in `audio.md`, so `audiod` and
+the applications above it need no changes.
 
 ## Probe
 
-`hda_init` runs in the start-up thread after `virtio_snd_init` and binds the
-first PCI function of class 04, subclass 03. It maps BAR 0, enables bus
-mastering and resets the controller through `GCTL.CRST`. After the reset the
-codecs announce themselves in `STATESTS`.
+`hda_init` runs in the start-up thread after `virtio_snd_init` and takes the
+first PCI function with class 04h, subclass 03h. It maps BAR 0, enables bus
+mastering and resets the controller by toggling `GCTL.CRST`. When the reset
+completes, each attached codec sets its bit in `STATESTS`.
 
-The driver then sets up the two command rings in one DMA page each, using
-the largest size the controller supports (256 entries on QEMU):
+The driver then sets up the two command rings, each in its own DMA page and
+at the largest size the controller supports (256 entries on QEMU):
 
-- **CORB** (command outbound ring buffer). The driver writes a 32-bit verb
-  and advances `CORBWP`. The reset handshake of `CORBRP` is bounded but not
-  required, because some controllers do not report the reset bit back.
-- **RIRB** (response inbound ring buffer). The controller writes 64-bit
-  responses and advances `RIRBWP`. The driver polls the write pointer
-  rather than taking an interrupt, because codec commands are only sent
-  during probe. Unsolicited responses are skipped. `RIRBCTL.RINTCTL` is
-  set, so the controller flags every response in `RIRBSTS`, and the driver
-  acknowledges the flag after each command: QEMU stops reading the CORB
-  while the response count is reached and not acknowledged. No interrupt
-  results, because `INTCTL.CIE` remains clear.
+- The **CORB** (command outbound ring buffer) carries verbs to the codecs.
+  To send a verb, the driver writes it to the next entry and advances
+  `CORBWP`. The specification describes a handshake for resetting `CORBRP`;
+  the driver waits for it only briefly, because some controllers never
+  report the reset bit back.
+- The **RIRB** (response inbound ring buffer) carries the codec responses
+  back. Codec commands are sent only during probe, so the driver polls
+  `RIRBWP` instead of using an interrupt, and skips unsolicited responses.
+  It does set `RIRBCTL.RINTCTL` and acknowledges the resulting status flag
+  in `RIRBSTS` after every response, because QEMU stops processing the CORB
+  once the response count is reached and the flag is still set. Since
+  `INTCTL.CIE` is never enabled, this does not generate interrupts.
 
-`command` serializes verbs with a mutex and waits up to 50 ms for each
-response.
+`command` serializes verbs with a mutex and allows 50 ms for each response.
 
 ## Codec and output path
 
-For each codec present, the driver looks for the first audio function group
-under the root node, powers it up and reads its widgets: the capabilities,
-the amplifier capabilities (from the widget or, without the override bit,
-from the function group), the pin capabilities and default configuration of
-pins, and the connection list, in short or long form with ranges expanded.
+For each codec that is present, the driver finds the first audio function
+group below the root node, powers it up and reads its widgets. For every
+widget it records the capabilities, the amplifier capabilities (taken from
+the function group unless the widget overrides them), the pin capabilities
+and default configuration of pins, and the connection list. Long-form
+connection lists and ranges are supported.
 
-It then chooses an output pin. Pins whose default configuration says that
-nothing is connected are skipped. Line out is preferred, then speakers,
-then headphones, then any other output-capable pin. From the chosen pin a
-depth-first search through mixers and selectors finds a DAC. Along the
-path the driver:
+Next it chooses an output pin, ignoring pins whose default configuration
+marks them as unconnected. Line out is preferred, followed by speakers,
+headphones and any other output-capable pin. A depth-first search from the
+chosen pin through mixers and selectors then finds a DAC. For every widget
+on that path, the driver:
 
-- powers up every widget (D0);
-- selects the next node of the path on selectors and multi-input pins;
-- sets output amplifiers, and the input amplifier of the used mixer input,
-  to 0 dB unmuted;
-- enables the pin output, with the headphone amplifier if the pin has one,
-  and enables EAPD where the pin supports it;
-- sets the DAC to 48 kHz, 16-bit stereo and connects it to stream tag 1.
+- switches it to power state D0;
+- selects the next widget of the path, if the widget is a selector or a pin
+  with several inputs;
+- sets its output amplifier, and the input amplifier of the mixer input in
+  use, to 0 dB and unmutes it;
+- enables the output of the pin, including the headphone amplifier where the
+  pin has one, and turns on EAPD where the pin supports it;
+- configures the DAC for 48 kHz 16-bit stereo and assigns it stream tag 1.
 
-On QEMU's `hda-duplex` the path is pin 3 (line out) to DAC 2.
+With QEMU's `hda-duplex` codec, the path runs from pin 3 (line out) to
+DAC 2.
 
 ## Playback stream
 
 Playback uses the first output stream descriptor, which follows the input
-descriptors (`GCAP.ISS`). The audio buffer is a physically contiguous 64 KiB
-block. At prepare it is divided into as many periods of the configured size
-as fit, at most 256, and each period becomes one entry of the buffer
-descriptor list with interrupt-on-completion set. This *hardware ring* is
-usually much longer than the PCM ring that the caller configured:
+descriptors (their number is in `GCAP.ISS`). The audio buffer is a single
+physically contiguous 64 KiB block. When the stream is prepared, the driver
+divides the buffer into as many periods of the configured size as will fit,
+up to 256, and creates one buffer descriptor list entry per period with
+interrupt-on-completion enabled. The controller plays this hardware ring in
+a loop.
 
-- The PCM parameters (two to eight periods of 120 to 2048 frames) only limit
-  how many periods may be queued at once.
-- QEMU's codec fetches up to 8 KiB ahead of its audio backend in a single
-  timer tick. With a hardware ring of only four 1920-byte periods, the
-  controller could wrap around completely between two position checks, the
-  driver would miss a cycle, and stale periods were played twice. The long
-  hardware ring makes this impossible.
+The hardware ring is normally much longer than the ring that the PCM
+parameters describe. Those parameters (two to eight periods of 120 to 2048
+frames) only limit how many periods a client may have queued at once. The
+reason for the longer ring is QEMU's codec, which can fetch up to 8 KiB
+ahead of its audio backend in a single timer tick. With a ring of four
+1920-byte periods, the controller sometimes wrapped around completely
+between two position checks. The driver then missed a whole cycle and the
+old periods were played a second time. A 64 KiB ring cannot wrap within one
+such step.
 
-The driver tracks the period the controller is reading from `SDnLPIB`. When
+The driver follows the controller's progress through `SDnLPIB`. Whenever
 the position moves past a period, that period is counted as played if it
-held data, and it is zeroed. Zeroing is safe because the controller is
-already reading a later period, and it means an underrun plays silence
-instead of old samples. Writes fill periods strictly in ring order. When
-nothing is queued on a running stream, the next write goes to the period
-after the one being played.
+contained data, and its samples are cleared to zero. Clearing is safe at
+that point because the controller has already moved on to a later period,
+and it means that an underrun produces silence rather than stale audio.
+Periods are filled strictly in ring order. If nothing is queued while the
+stream is running, the next write goes to the period after the one the
+controller is currently playing.
 
-Position updates come from the stream's interrupt through MSI. Without MSI,
-or with the kernel option `hda=poll`, a kernel thread checks the position
-every 2 ms, which is below the shortest period of 2.5 ms.
+Position updates normally arrive through the stream interrupt, delivered
+by MSI. If MSI is unavailable, or the kernel option `hda=poll` is given, a
+kernel thread checks the position every 2 ms instead. That interval is
+shorter than the smallest period, which lasts 2.5 ms.
 
 ## PCM semantics
 
-The device behaves as virtio-snd does for playback: writes are exactly one
-period, `POLLOUT` reports room for a period, `AUDIO_START` requires two
-queued periods, and an empty ring on a running stream counts as an xrun.
-`AUDIO_GET_INFO` reports playback only, and the capture requests return
-`ENODEV`.
+For playback the device follows the same rules as virtio-snd: each write
+must contain exactly one period, `POLLOUT` means a period can be written,
+`AUDIO_START` requires two queued periods, and running out of queued
+periods while the stream runs counts as an xrun. `AUDIO_GET_INFO` reports
+playback only, and the capture requests fail with `ENODEV`.
 
-`AUDIO_DRAIN` and `AUDIO_DROP` wait until every queued period has been
-fetched. Stopping the stream then would discard what the codec has
-buffered, which on QEMU is up to 8 KiB, or about 40 ms. The driver therefore
-lets the stream run on through silent periods until at least that much more
-has been fetched, and then stops the DMA engine. Both waits are bounded, so
-a controller that stopped reporting positions cannot hang the caller.
+`AUDIO_DRAIN` and `AUDIO_DROP` first wait until the controller has fetched
+every queued period. Stopping the stream at that moment would throw away
+whatever the codec still has buffered, which on QEMU can be up to 8 KiB, or
+roughly 40 ms of audio. The driver therefore keeps the stream running over
+silent periods until at least that much additional data has been fetched,
+and only then stops the DMA engine. Both waits have time limits, so a
+controller that stops reporting its position cannot block the caller
+indefinitely.
 
 ## Tests
 
-The `audio` file of a case takes an optional second word: `hda` attaches
-`intel-hda` with `hda-duplex` instead of virtio-snd.
+The `audio` file of a test case accepts an optional second word. With `hda`,
+the harness attaches `intel-hda` and `hda-duplex` instead of virtio-snd.
 
-- `hda_pcm` runs `audiotest` against the HD Audio device. The post script
-  checks that the recorded 440 Hz square wave lasts 0.24 s, the length that
-  `audiotest` writes, and that no half-period of the wave is shortened or
-  lengthened, which would indicate a repeated or skipped period.
+- `hda_pcm` runs `audiotest` on the HD Audio device. Its post script checks
+  that the recorded 440 Hz square wave lasts 0.24 s, which is exactly what
+  `audiotest` writes, and that every half-period of the wave has the
+  expected length. A repeated or skipped period would show up as a
+  half-period that is too short or too long.
 - `hda_pcm_poll` runs the same test with `hda=poll`.
 - `hda_audiod` runs the `audiod` integration test on HD Audio.
 
 ## Limits
 
-- Playback only; the input converters of the codec are not used.
-- 48 kHz, 16-bit stereo only, which is the format of `audiod`.
-- One controller and one codec path. Jack detection, volume control
-  through the codec amplifiers and HDMI audio are not implemented.
+- Only playback is supported; the codec's input converters are unused.
+- The only format is 48 kHz 16-bit stereo, which is the format `audiod`
+  uses.
+- The driver uses one controller and one output path. Jack detection,
+  volume control through the codec amplifiers and HDMI audio are not
+  implemented.

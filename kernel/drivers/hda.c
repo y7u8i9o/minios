@@ -1,28 +1,28 @@
 /* Driver for Intel High Definition Audio controllers, following the
  * High Definition Audio Specification, revision 1.0a.
  *
- * The controller talks to its codecs through two DMA rings: the driver
- * places verbs in the CORB and the controller returns the codec responses
- * in the RIRB. At probe the driver walks the widget graph of the first
- * audio function group, chooses an output pin, finds a path from a DAC to
- * that pin and unmutes and enables every widget on it.
+ * The driver sends commands (verbs) to the codecs through the CORB ring
+ * and receives their responses through the RIRB ring. During probe it
+ * reads the widget graph of the first audio function group, picks an
+ * output pin, finds a path from a DAC to that pin, and powers up, unmutes
+ * and enables every widget along the path.
  *
- * Playback uses the first output stream descriptor. The audio buffer is
- * one physically contiguous 64 KiB block, divided into as many periods
- * of the configured size as fit (at most 256); each period is one entry
- * of the buffer descriptor list with its interrupt-on-completion bit set.
- * The controller plays this hardware ring cyclically, so periods are
- * filled strictly in ring order, and a period is zeroed after it has been
- * played so that an underrun plays silence.
+ * Playback uses the first output stream descriptor. The audio buffer is a
+ * single physically contiguous 64 KiB block, split into as many periods of
+ * the configured size as will fit (up to 256). Each period is one entry in
+ * the buffer descriptor list, with interrupt-on-completion enabled. Since
+ * the controller plays this ring in a loop, periods are filled strictly in
+ * order, and each period is cleared after it has been played so that an
+ * underrun produces silence.
  *
- * The PCM parameters only limit how many periods may be queued at once.
- * The hardware ring is deliberately much longer: QEMU's codec reads up to
- * 8 KiB ahead of its audio backend in one step, and with a ring of only a
- * few periods the controller could wrap around between two position
- * checks, which the driver cannot detect from LPIB.
+ * The PCM parameters only limit how many periods may be queued at once;
+ * the hardware ring is intentionally much longer. QEMU's codec can fetch
+ * up to 8 KiB ahead of its audio backend in a single step, and with a ring
+ * of only a few periods the controller could wrap around between two
+ * position checks without the driver noticing.
  *
- * The PCM semantics match virtio-snd (docs/design/audio.md), which lets
- * audiod use either device unchanged. Capture is not implemented. */
+ * For playback, the device behaves like virtio-snd (docs/design/audio.md),
+ * so audiod can use either one unchanged. Capture is not implemented. */
 #define KLOG_SUBSYS "hda"
 #include <drivers/hda.h>
 #include <drivers/pci.h>
@@ -169,9 +169,9 @@ struct bdl_entry {
  *
  * cmd_lock serializes codec commands. control_lock serializes the
  * configuration requests of the PCM interface (parameters, prepare,
- * start, stop, close). lock protects the ring state below it, which the
- * interrupt handler updates; the waiters of the write and drain paths
- * sleep on waitq with that lock. */
+ * start, stop and close). lock protects the ring state from `params`
+ * onwards, which the interrupt handler also updates. Writers and the
+ * drain path sleep on waitq under that lock. */
 struct hda {
     struct pci_dev *pci;
     volatile uint8_t *regs;
@@ -249,10 +249,9 @@ static bool wait_bits8(volatile uint8_t *reg, uint8_t mask, uint8_t value, unsig
 
 /* ---- codec commands ---- */
 
-/* Send one verb to the codec and return its response. The controller
- * writes the response into the RIRB; the driver polls the write pointer
- * instead of taking an interrupt, since commands are only sent during
- * probe and configuration. */
+/* Send one verb to the codec and wait for its response. Commands are only
+ * sent during probe, so the driver polls the RIRB write pointer rather
+ * than waiting for an interrupt. */
 static int command(struct hda *h, unsigned nid, uint32_t verb, uint32_t *response)
 {
     uint32_t word = (uint32_t)h->codec << 28 | (uint32_t)nid << 20 | (verb & 0xfffff);
@@ -315,9 +314,9 @@ static struct widget *widget(struct hda *h, unsigned nid)
     return NULL;
 }
 
-/* Read the connection list of w. Short form entries carry 8-bit node IDs,
- * four per response; long form entries carry 16-bit IDs, two per
- * response. Ranges are expanded. */
+/* Read the connection list of w. Each response holds four 8-bit node IDs
+ * in the short form or two 16-bit IDs in the long form. Entries that
+ * denote a range of nodes are expanded. */
 static void read_connections(struct hda *h, struct widget *w)
 {
     uint32_t len = parameter(h, w->nid, PARAM_CONN_LIST_LEN);
@@ -367,8 +366,8 @@ static int read_widgets(struct hda *h)
         w->nid = (uint8_t)nid;
         w->caps = parameter(h, nid, PARAM_WIDGET_CAPS);
         w->type = w->caps >> 20 & 0xf;
-        /* Without the amplifier override bit, a widget uses the default
-         * amplifier parameters of the function group. */
+        /* Unless the widget sets the amplifier override bit, its amplifier
+         * parameters are the defaults of the function group. */
         unsigned amp_node = (w->caps & WCAP_AMP_OVR) ? nid : h->afg;
         if (w->caps & WCAP_OUT_AMP)
             w->out_amp = parameter(h, amp_node, PARAM_OUT_AMP_CAPS);
@@ -384,8 +383,8 @@ static int read_widgets(struct hda *h)
     return 0;
 }
 
-/* Depth-first search from node nid towards a DAC. On success the path
- * array contains the nodes from the pin down to the DAC. */
+/* Search depth-first from node nid for a DAC. On success, h->path lists
+ * the nodes from the pin to the DAC. */
 static bool find_dac(struct hda *h, unsigned nid, unsigned depth)
 {
     struct widget *w = widget(h, nid);
@@ -418,9 +417,9 @@ static const char *pin_device_name(unsigned device)
     }
 }
 
-/* Choose an output pin with a path to a DAC. Line out comes first, then
- * speakers, headphones and any other output-capable pin, skipping pins
- * whose configuration says nothing is connected. */
+/* Choose an output pin that has a path to a DAC, preferring line out,
+ * then speakers, then headphones, then any other output pin. Pins that
+ * their default configuration marks as unconnected are ignored. */
 static int choose_path(struct hda *h)
 {
     static const unsigned preference[] = {0x0, 0x1, 0x2, 0xff};
@@ -449,9 +448,9 @@ static unsigned amp_0db(uint32_t caps)
     return offset <= steps ? offset : steps;
 }
 
-/* Power up every widget on the path, select the path at each selector or
- * mixer input, set the amplifiers to 0 dB unmuted, enable the pin output
- * and connect the DAC to the playback stream. */
+/* Set up every widget on the chosen path: power it up, route selectors
+ * to the next widget, set the amplifiers to 0 dB and unmute them, enable
+ * the pin output, and connect the DAC to the playback stream. */
 static void configure_path(struct hda *h)
 {
     for (unsigned i = 0; i < h->path_len; i++) {
@@ -496,8 +495,9 @@ static int reset_controller(struct hda *h)
     return 0;
 }
 
-/* The largest ring size the controller supports: 256, 16 or 2 entries.
- * Returns the size code for the SIZE register and stores the count. */
+/* Pick the largest ring size the controller supports (256, 16 or 2
+ * entries). Returns the code for the SIZE register and stores the number
+ * of entries in *entries. */
 static uint8_t ring_size(uint8_t reg, unsigned *entries)
 {
     if (reg & 0x40) {
@@ -525,8 +525,8 @@ static int setup_rings(struct hda *h)
     wr32(h, REG_CORBLBASE, (uint32_t)h->corb_phys);
     wr32(h, REG_CORBUBASE, (uint32_t)((uint64_t)h->corb_phys >> 32));
     wr16(h, REG_CORBWP, 0);
-    /* Reset the read pointer. Some controllers do not report the reset
-     * bit back, so the handshake is bounded and not required. */
+    /* Reset the read pointer. Some controllers never report the reset bit
+     * back, so the driver waits only briefly for each step. */
     wr16(h, REG_CORBRP, CORBRP_RST);
     uint64_t end = timer_ms() + 10;
     while (!(rd16(h, REG_CORBRP) & CORBRP_RST) && timer_ms() < end)
@@ -545,10 +545,11 @@ static int setup_rings(struct hda *h)
     wr16(h, REG_RIRBWP, RIRBWP_RST);
     wr16(h, REG_RINTCNT, 1);
     h->rirb_rp = 0;
-    /* With RINTCTL set, the controller flags every RINTCNT responses in
-     * RIRBSTS; command() acknowledges the flag after each response.
-     * QEMU stops reading the CORB while the count is reached and not
-     * acknowledged. No interrupt results, since INTCTL.CIE stays clear. */
+    /* With RINTCTL set, the controller sets a flag in RIRBSTS after every
+     * RINTCNT responses, and command() clears it after each response.
+     * This is needed because QEMU stops processing the CORB while that
+     * flag is set. It causes no interrupts, since INTCTL.CIE is never
+     * enabled. */
     wr8(h, REG_RIRBCTL, DMA_RUN | RIRBCTL_RINTCTL);
     return 0;
 }
@@ -575,8 +576,8 @@ static int stream_reset(struct hda *h)
     return 0;
 }
 
-/* Account for the periods the controller finished since the last call.
- * The caller has acquired h->lock. */
+/* Process the periods the controller has finished since the last call.
+ * The caller must have locked h->lock. */
 static void advance_locked(struct hda *h)
 {
     if (h->state != AUDIO_STATE_RUNNING || !h->period_bytes)
@@ -593,9 +594,9 @@ static void advance_locked(struct hda *h)
             h->queued--;
             h->played_frames += h->params.period_frames;
         }
-        /* The controller is now reading a later period, so the finished
-         * one can be cleared: if the writer falls behind, the controller
-         * plays silence from it instead of stale samples. */
+        /* The controller has moved on to a later period, so this one can
+         * be cleared. If the writer falls behind, the controller then
+         * plays silence instead of stale samples. */
         memset(h->buffer + done * h->period_bytes, 0, h->period_bytes);
         h->hw = (done + 1) % n;
         h->completed++;
@@ -609,10 +610,10 @@ static void advance_locked(struct hda *h)
     }
 }
 
-/* The period a writer may fill next, or -1 when params.periods periods
- * are already queued. When nothing is queued on a running stream, the
- * controller is playing silence, and the writer continues with the period
- * after the one being played. The caller has acquired h->lock. */
+/* Return the period that the next write fills, or -1 if the queue is
+ * full. If nothing is queued while the stream is running, the controller
+ * is playing silence, and the next write goes to the period after the one
+ * it is playing. The caller must have locked h->lock. */
 static int writable_period_locked(struct hda *h)
 {
     if (h->queued >= h->params.periods)
@@ -634,8 +635,8 @@ static void hda_irq(struct trapframe *tf, void *arg)
     spin_unlock(&h->lock);
 }
 
-/* Without an interrupt, a kernel thread checks the stream position every
- * 2 ms, which is well below the shortest period of 2.5 ms. */
+/* Without an interrupt, this kernel thread checks the stream position
+ * every 2 ms, which is shorter than the smallest period (2.5 ms). */
 static void poll_thread(void *arg)
 {
     struct hda *h = arg;
@@ -709,11 +710,11 @@ static int stream_start(struct hda *h)
 /* Let the queued periods play out, then stop the controller.
  *
  * The controller fetches samples before the codec plays them, and
- * stopping the stream discards whatever the codec has buffered. QEMU's
- * codec buffers up to 8 KiB, so after the last queued period has been
- * fetched the stream runs on through silent periods until at least that
- * much more has been fetched. Both waits are bounded, so a controller
- * that stopped delivering positions cannot hang the caller. */
+ * stopping the stream discards anything the codec has buffered, which is
+ * up to 8 KiB on QEMU. After the last queued period has been fetched, the
+ * stream therefore continues over silent periods until at least that much
+ * more has been fetched. Both waits have time limits, so a controller that
+ * stops reporting its position cannot block the caller. */
 static int stream_stop(struct hda *h)
 {
     spin_lock(&h->lock);
@@ -806,10 +807,10 @@ static long hda_write(struct pcm_device *pcm, struct file *f, const char *buf, s
         }
         waitq_wait(&h->waitq, &h->lock);
     }
-    /* The controller does not read this period until has_data is set and
-     * the ring advances to it, so the copy can run without the lock. The
-     * writer is the only owner of the file, since the PCM core makes the
-     * device exclusive. */
+    /* The controller will not play this period before the ring reaches
+     * it, so the copy does not need the lock. There is no concurrent
+     * writer either, because the PCM core lets only one process open the
+     * device. */
     h->write = ((unsigned)slot + 1) % h->hw_periods;
     spin_unlock(&h->lock);
     memcpy(h->buffer + (unsigned)slot * n, buf, n);
@@ -981,8 +982,9 @@ static const struct pcm_ops hda_pcm_ops = {
     .describe = hda_describe,
 };
 
-/* Use MSI when the controller offers it, otherwise a polling thread. The
- * kernel option hda=poll forces polling, which lets a test cover it. */
+/* Use MSI if the controller supports it, and a polling thread otherwise.
+ * The kernel option hda=poll forces polling so that a test can cover that
+ * path. */
 static void setup_interrupt(struct hda *h)
 {
     h->irq = -1;
@@ -1088,8 +1090,8 @@ void hda_init(void)
         struct pci_dev *p = pci_device(i);
         if (!is_hda(p))
             continue;
-        /* A failed probe leaves its memory allocated: the controller may
-         * have been given ring addresses before the failure. */
+        /* If the probe fails, its memory is not freed, because the
+         * controller may already have been given the ring addresses. */
         probe(p);
         return;
     }
