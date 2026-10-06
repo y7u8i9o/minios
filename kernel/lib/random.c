@@ -8,6 +8,7 @@
 #include <sync/spinlock.h>
 #include <klog.h>
 #include <errno.h>
+#include <lib/string.h>
 
 static DEFINE_SPINLOCK(random_lock);
 static bool ready;
@@ -48,6 +49,31 @@ bool random_ready(void)
 {
     return __atomic_load_n(&ready, __ATOMIC_ACQUIRE);
 }
+int random_bytes(void *buf, size_t n)
+{
+    if (!random_ready())
+        return -EAGAIN;
+    uint8_t *out = buf;
+    uint32_t block[16];
+    spin_lock(&random_lock);
+    while (n) {
+        chacha20_block(state, block);
+        /* The first half of each block becomes the new key, the second
+         * half is output: output never reveals a key that was used. */
+        for (unsigned i = 0; i < 8; i++)
+            state[4 + i] = block[i];
+        state[12]++;
+        size_t k = n < 32 ? n : 32;
+        memcpy(out, block + 8, k);
+        out += k;
+        n -= k;
+    }
+    for (unsigned i = 0; i < 16; i++)
+        ((volatile uint32_t *)block)[i] = 0;
+    spin_unlock(&random_lock);
+    return 0;
+}
+
 int random_u32(uint32_t *value)
 {
     if (!random_ready())

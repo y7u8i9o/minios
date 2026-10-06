@@ -129,6 +129,7 @@ static const syscall_fn syscall_table[SYS_MAX] = {
     [SYS_setsid]        = sys_setsid,
     [SYS_getsid]        = sys_getsid,
     [SYS_adjtime]       = sys_adjtime,
+    [SYS_getrandom]     = sys_getrandom,
 };
 
 bool user_range_ok(uintptr_t addr, size_t len, bool write)

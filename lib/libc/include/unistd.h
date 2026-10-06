@@ -160,6 +160,8 @@ ssize_t writev(int fd, const struct iovec *iov, int count);
 #define W_OK 2
 #define R_OK 4
 int access(const char *path, int mode);
+/* len bytes, at most 256, of the kernel generator (sys/random.h). */
+int getentropy(void *buf, size_t len);
 int faccessat(int dirfd, const char *path, int mode, int flags);
 
 /* confstr knows _CS_PATH, the default command search path "/usr/bin". */

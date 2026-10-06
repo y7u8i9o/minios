@@ -12,6 +12,7 @@
 #include <arch/smp.h>
 #include <lib/string.h>
 #include <minios/abi.h>
+#include <lib/random.h>
 
 
 
@@ -130,4 +131,29 @@ long sys_uname(struct trapframe *tf)
     strlcpy(u->version, kernel_version, UTS_LEN);
     strlcpy(u->machine, KERNEL_MACHINE, UTS_LEN);
     return 0;
+}
+
+/* getrandom(buf, len, flags): bytes of the kernel generator
+ * (lib/random.c), at most 256 per call. The flags GRND_NONBLOCK and
+ * GRND_RANDOM change nothing: the generator never blocks after its boot
+ * seed, and without one the call fails with EAGAIN. */
+long sys_getrandom(struct trapframe *tf)
+{
+    uintptr_t buf = SYSARG0(tf);
+    size_t len = SYSARG1(tf);
+    unsigned flags = (unsigned)SYSARG2(tf);
+    if (flags & ~(unsigned)(GRND_NONBLOCK | GRND_RANDOM))
+        return -EINVAL;
+    if (len > 256)
+        len = 256;
+    if (!user_range_ok(buf, len, true))
+        return -EFAULT;
+    uint8_t bytes[256];
+    int r = random_bytes(bytes, len);
+    if (r < 0)
+        return r;
+    memcpy((void *)buf, bytes, len);
+    for (size_t i = 0; i < len; i++)
+        ((volatile uint8_t *)bytes)[i] = 0;
+    return (long)len;
 }

@@ -5,3 +5,5 @@
 void random_init(void);
 bool random_ready(void);
 int random_u32(uint32_t *value);
+/* n bytes of the generator, -EAGAIN before the boot seed. */
+int random_bytes(void *buf, size_t n);

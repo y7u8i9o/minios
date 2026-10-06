@@ -349,6 +349,10 @@ struct utsname {
     char machine[UTS_LEN];
 };
 
+/* getrandom flags (SYS_getrandom). */
+#define GRND_NONBLOCK 1
+#define GRND_RANDOM   2
+
 /* /dev/fb0 */
 struct fb_info {
     uint32_t width, height;

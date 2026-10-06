@@ -77,6 +77,7 @@ long sys_futex(struct trapframe *tf);
 long sys_clock_gettime(struct trapframe *tf);
 long sys_clock_settime(struct trapframe *tf);
 long sys_adjtime(struct trapframe *tf);
+long sys_getrandom(struct trapframe *tf);
 long sys_mq_open(struct trapframe *tf);
 long sys_mq_unlink(struct trapframe *tf);
 long sys_shm_open(struct trapframe *tf);

@@ -118,4 +118,5 @@
 #define SYS_setsid        111
 #define SYS_getsid        112
 #define SYS_adjtime       113
-#define SYS_MAX           114
+#define SYS_getrandom     114
+#define SYS_MAX           115

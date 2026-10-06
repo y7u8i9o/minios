@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <minios/proctab.h>
+#include <sys/random.h>
 
 static int failures;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; printf("FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
@@ -179,6 +180,18 @@ static void check_proc_table(void)
     CHECK(proc_table_read(rows, 1) == 1, "proc_table_read limits the rows");
 }
 
+/* The kernel generator gives different bytes on each call. */
+static void check_random(void)
+{
+    unsigned char a[64], b[64];
+    CHECK(getrandom(a, sizeof a, 0) == (ssize_t)sizeof a && getentropy(b, sizeof b) == 0 && memcmp(a, b, 64) != 0,
+          "getrandom and getentropy give different bytes");
+    unsigned char big[300];
+    CHECK(getrandom(big, sizeof big, 0) == 256, "getrandom gives at most 256 bytes per call");
+    CHECK(getentropy(big, sizeof big) < 0 && errno == EIO, "getentropy refuses more than 256 bytes");
+    CHECK(getrandom(a, 8, 0x80) < 0 && errno == EINVAL, "getrandom refuses unknown flags");
+}
+
 static void at_exit(void)
 {
     atexit_ran = 1;
@@ -302,6 +315,7 @@ int main(int argc, char **argv)
 
     check_memory_functions();
     check_proc_table();
+    check_random();
     CHECK(atexit(at_exit) == 0, "atexit");
     printf("libctest: %d failures\n", failures);
     return failures ? 1 : 0;

@@ -352,6 +352,18 @@ made a pixel loop six times slower when the linker happened to place it
 across one. `memmove`, `memset` and the copy loop of `memcpy` carry the
 attribute as well.
 
+## Random bytes (T1 of `docs/plan/tls.md`)
+
+The system call `getrandom` (114) copies up to 256 bytes of the kernel
+generator into the buffer of the caller. The generator of
+`kernel/lib/random.c` runs ChaCha20 with a boot seed from virtio-rng and
+replaces its key with the first half of every block, so its output never
+reveals a key that produced earlier output (`random_bytes`). Without a
+seed the call fails with `EAGAIN`. The flags `GRND_NONBLOCK` and
+`GRND_RANDOM` change nothing, and other flags give `EINVAL`. libc offers
+`getrandom` in `sys/random.h` and `getentropy` in `unistd.h`, which
+refuses more than 256 bytes with `EIO`. `libctest` checks both.
+
 ## The process table (2026-10-06)
 
 `minios/proctab.h` reads the table of `/dev/proc`. `proc_table_read`
