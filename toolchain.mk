@@ -6,9 +6,11 @@
 # described in docs/plan/arm64.md.
 ARCH ?= x86_64
 
-# A native Linux GCC/binutils toolchain for ARCH produces the same
-# freestanding ELF binaries as the prefixed cross toolchain.  macOS still
-# needs cross tools because its native compiler and linker target Mach-O.
+# A Linux host of the target architecture uses its native GCC and
+# binutils.  The native compiler emits the same freestanding ELF objects as
+# the prefixed cross toolchain once NATIVE_CFLAGS below removes its host
+# defaults.  macOS needs cross tools because its native compiler and linker
+# target Mach-O.
 HOST_OS   := $(shell uname -s)
 HOST_ARCH := $(shell uname -m)
 ifeq ($(origin CROSS),undefined)
@@ -25,6 +27,30 @@ OBJCOPY := $(CROSS)objcopy
 READELF := $(CROSS)readelf
 LIBGCC  := $(shell $(CROSS)gcc -print-libgcc-file-name)
 GDB     := $(CROSS)gdb
+
+# The GCC of a Linux distribution is configured for programs of that
+# distribution.  It searches /usr/include.  It defines __linux__, __unix__
+# and linux.  Ubuntu also enables _FORTIFY_SOURCE, the stack protector,
+# stack clash probes, control flow protection and PIE by default.  The
+# x86_64-elf and aarch64-elf compilers do none of this.  A port such as
+# sudo then includes glibc headers in place of the minios libc.
+# NATIVE_CFLAGS restores the defaults of the cross compiler.  -nostdinc
+# removes the host directories, and -isystem adds the directory of the
+# compiler's own headers (stddef.h, stdarg.h, the intrinsics).  CC carries
+# the flags, so every target rule receives them first.  The flags of a rule
+# follow them and therefore override them, for example -fPIC.
+ifeq ($(CROSS),)
+NATIVE_CFLAGS := -nostdinc -isystem $(shell gcc -print-file-name=include) \
+                 -U__linux__ -U__linux -Ulinux -U__gnu_linux__ -U__unix__ -U__unix -Uunix \
+                 -U_FORTIFY_SOURCE -fno-stack-protector -fno-stack-clash-protection -fno-pie
+ifeq ($(ARCH),x86_64)
+NATIVE_CFLAGS += -fcf-protection=none
+else ifeq ($(ARCH),aarch64)
+NATIVE_CFLAGS += -mbranch-protection=none
+endif
+CC      := gcc $(NATIVE_CFLAGS)
+endif
+
 HOSTCC  ?= cc
 YACC    ?= yacc
 HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
@@ -33,6 +59,12 @@ HOSTCPPFLAGS ?= -D_POSIX_C_SOURCE=200809L
 # and this flag never reaches the freestanding MiniOS build.
 ifeq ($(HOST_OS),Darwin)
 HOSTCPPFLAGS += -D_DARWIN_C_SOURCE
+endif
+# glibc hides DT_DIR and other BSD names under strict POSIX visibility.
+# The host build of pkg reads directory entry types.  _DEFAULT_SOURCE
+# exposes these names.  This flag also never reaches the MiniOS build.
+ifeq ($(HOST_OS),Linux)
+HOSTCPPFLAGS += -D_DEFAULT_SOURCE
 endif
 QEMU    ?= qemu-system-$(ARCH)
 XORRISO ?= xorriso

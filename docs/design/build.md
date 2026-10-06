@@ -7,7 +7,32 @@
 an architecture other than x86_64 builds into `build/$(ARCH)/`. On a Linux host
 of the target architecture it uses the native GCC and GNU binutils, which
 can emit the freestanding ELF files directly. Other hosts default to the
-`$(ARCH)-elf-` cross tools. `YACC` (default
+`$(ARCH)-elf-` cross tools.
+
+The GCC of a Linux distribution is configured for the programs of that
+distribution. It searches `/usr/include` and defines `__linux__`,
+`__unix__` and `linux`. Ubuntu also enables `_FORTIFY_SOURCE`,
+`-fstack-protector-strong`, `-fstack-clash-protection`,
+`-fcf-protection` and PIE by default. The cross compilers do none of
+this. Without a correction the sudo port includes the glibc header
+`<sys/prctl.h>` under `#ifdef __linux__`, and the build fails. For the
+native compiler `toolchain.mk` therefore sets `CC` to `gcc` followed by
+`NATIVE_CFLAGS`:
+
+    -nostdinc -isystem $(gcc -print-file-name=include)
+    -U__linux__ -U__linux -Ulinux -U__gnu_linux__ -U__unix__ -U__unix -Uunix
+    -U_FORTIFY_SOURCE -fno-stack-protector -fno-stack-clash-protection -fno-pie
+    -fcf-protection=none          (x86_64)
+    -mbranch-protection=none      (aarch64)
+
+`-nostdinc` removes the host include directories. `-isystem` adds the
+directory of the compiler's own headers, such as `stddef.h`, `stdarg.h`
+and the intrinsics. minios libc supplies `limits.h`, `stdint.h` and
+`float.h` itself. `CC` carries the flags, so every target rule receives
+them, including the rules of the ports with their own flag sets. The flags
+of a rule follow them and override them, for example `-fPIC`.
+
+`YACC` (default
 `yacc`) generates the awk parser, and Berkeley yacc and bison both work. Set `CROSS`
 explicitly to override either choice (for example, `CROSS=x86_64-elf-`). It
 also selects the host compiler for the helper programs under `tools/`, and
@@ -292,6 +317,11 @@ seeds of `FUZZ_SECONDS` (30) each (`network.md`). On
 Darwin, `toolchain.mk` adds `_DARWIN_C_SOURCE` to `HOSTCPPFLAGS` alongside
 the POSIX feature level. This exposes native socket ancillary-data
 macros, `RLIMIT_NPROC`, and `mkdtemp` without changing guest compiler flags.
+On Linux, `toolchain.mk` adds `_DEFAULT_SOURCE` in the same way. glibc
+hides `DT_DIR` and the other BSD names under strict POSIX visibility, and
+the host build of pkg reads directory entry types. The host test of pkg
+(`user/pkg/tests/host.sh`) expects an unprivileged user. As root, `pkg`
+retains setuid bits, and `chmod 555` does not make a directory read-only.
 The GUI and shell use private names for their host `strlcpy` helpers,
 after including the system header and undefining any fortified macro.
 GUI key fixtures use the input interface's `KEY_*` constants.
