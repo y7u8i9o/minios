@@ -32,6 +32,7 @@ its boot tests pass.
 | `desktop-panel.md` | The new panel (icons, calendar, power menu, show desktop, top or bottom) and the wallpaper at device resolution, milestones B1 to B6 | completed 2026-10-06 |
 | `compositor-performance.md` | Measurement, faster string functions, SIMD pixel module, batched flushes, client damage, timing model, decoration tables, libgui without the private surface, hardware cursor, milestones G1 to G9 | G1 to G7 completed 2026-10-06, G8 and G9 planned |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
+| `prose-rewrite.md` | Rewrite English prose of the entire project (source comments, docs, manual pages, messages) to eliminate translation-like defects: noun-of-noun chains, article overuse, bare nouns as subjects, and six other patterns. Checker script, revised Writing rules for CLAUDE.md, milestones W1 to W9 | proposed 2026-10-06, highest priority |
 
 Work proceeds one milestone at a time in the order of its plan. A later
 milestone is not started before the boot tests of the current one pass.
