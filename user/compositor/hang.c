@@ -76,6 +76,28 @@ void hang_tick(long now)
     }
 }
 
+/* The earliest of: the next ping of a client, the moment at which a
+ * responsive client counts as hung without a pong or with a full socket,
+ * and the end of a snooze. A pong or a socket that drains changes the
+ * state during the dispatch that brings them, and hang_tick runs after
+ * every dispatch. */
+long hang_next_deadline(void)
+{
+    long next = -1;
+    for (struct wire_client *wc = wire_server_first_client(server); wc; wc = wire_client_next(wc)) {
+        struct client *c = wire_client_get_user_data(wc);
+        if (!c || !c->shell_res)
+            continue;
+        long t[4] = { c->ping_sent + PING_INTERVAL, c->unresponsive ? -1 : c->last_pong + HANG_AFTER,
+                      c->unresponsive || !c->stall_since ? -1 : c->stall_since + HANG_AFTER,
+                      c->unresponsive && c->snooze_until ? c->snooze_until : -1 };
+        for (int i = 0; i < 4; i++)
+            if (t[i] >= 0 && (next < 0 || t[i] < next))
+                next = t[i];
+    }
+    return next;
+}
+
 /* The dialog box, centred in the toplevel (logical coordinates). */
 static struct rect box_rect(const struct csurface *s)
 {

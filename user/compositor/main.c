@@ -1,6 +1,14 @@
-/* X12: a listening socket, clients, the input devices (input.c) and a
- * 60 Hz frame clock in one poll loop. Every notable event is logged as
- * "x12: ..." for the tests. */
+/* X12: a listening socket, clients, the input devices (input.c) and the
+ * frame clock in one poll loop. Every notable event is logged as
+ * "x12: ..." for the tests.
+ *
+ * The frame clock runs only while work is pending (G6 of
+ * docs/plan/compositor-performance.md). After each pass of the loop X12
+ * composes at once when damage or a frame callback is pending and
+ * frame_ms have passed since the last frame. Otherwise it arms a one-shot
+ * timer for the rest of the interval. Without pending work the timer is
+ * disarmed, and poll waits until the earliest deadline of the key
+ * repeat, the pings and the input method, or for input and clients. */
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -17,12 +25,13 @@
 #include "comp.h"
 
 void client_attach(struct wire_client *wc);
-void surfaces_frame_done(uint32_t time_ms);
 
 static struct wire_server *srv;
 static volatile int running = 1;
 static uint32_t serial = 1;
 static int frame_fd;
+static int frame_armed;                 /* the one-shot timer runs */
+static long last_frame_us;              /* the start of the last frame */
 int cursor_x, cursor_y;
 
 /* The log goes to /var/log/x12.log (truncated at start); -s mirrors it
@@ -83,10 +92,20 @@ static void on_term(int sig) { running = 0; }
 
 static long frames_since_report, report_at;
 
+static void arm_frame_timer(long ms)
+{
+    struct timerfd_spec spec = { (uint32_t)ms, 0 };
+    timerfd_settime(frame_fd, &spec);
+    frame_armed = ms > 0;
+}
+
+/* The setting frame_ms changed: the next frame follows the new minimum
+ * interval. */
 void frame_clock_set(int ms)
 {
-    struct timerfd_spec spec = { ms, ms };
-    timerfd_settime(frame_fd, &spec);
+    (void)ms;
+    if (frame_armed)
+        arm_frame_timer(0);
 }
 
 /* Flush every client and note since when a socket has remained full; a
@@ -112,8 +131,7 @@ static void flush_clients(void)
 
 static void frame(void)
 {
-    uint64_t expirations;
-    read(frame_fd, &expirations, 8);
+    last_frame_us = uptime_us();
     int presented = scene_has_damage();
     if (presented) {
         scene_compose();
@@ -124,7 +142,7 @@ static void frame(void)
     }
     /* After a composition the callbacks follow the flush of the frame. A
      * commit that carried only a frame callback adds no damage, and its
-     * callback completes at the tick without a composition, so that the
+     * callback completes in a frame without a composition, so that the
      * client may draw its next frame. */
     surfaces_frame_done((uint32_t)uptime_ms());
     flush_clients();
@@ -137,6 +155,42 @@ static void frame(void)
         frames_since_report = 0;
         report_at = now + 10000;
     }
+}
+
+/* Compose now when damage or a frame callback is pending and the minimum
+ * interval since the last frame has passed. Otherwise arm the one-shot
+ * timer for the rest of the interval, or disarm it when nothing is
+ * pending. */
+static void schedule_frame(void)
+{
+    if (!scene_has_damage() && !surfaces_frame_pending()) {
+        if (frame_armed)
+            arm_frame_timer(0);
+        return;
+    }
+    long now = uptime_us(), due = last_frame_us + (long)settings.frame_ms * 1000;
+    if (now >= due) {
+        if (frame_armed)
+            arm_frame_timer(0);
+        frame();
+        return;
+    }
+    if (!frame_armed)
+        arm_frame_timer((due - now + 999) / 1000);
+}
+
+/* The poll timeout until the earliest deadline of the modules, -1 for
+ * none. */
+static int poll_timeout(void)
+{
+    long deadlines[3] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline() }, next = -1;
+    for (int i = 0; i < 3; i++)
+        if (deadlines[i] >= 0 && (next < 0 || deadlines[i] < next))
+            next = deadlines[i];
+    if (next < 0)
+        return -1;
+    long wait = next - uptime_ms();
+    return wait <= 0 ? 0 : wait > 60000 ? 60000 : (int)wait;
 }
 
 /* The scale of the last mode that a client or the boot chose. The backend
@@ -225,8 +279,6 @@ int main(int argc, char **argv)
     decor_init();
     input_place_cursor(screen_w / 2, screen_h / 2);
     frame_fd = timerfd_create(TFD_NONBLOCK | TFD_CLOEXEC);
-    struct timerfd_spec spec = { FRAME_MS, FRAME_MS };
-    timerfd_settime(frame_fd, &spec);
     scene_damage_all();
     report_at = uptime_ms() + 10000;
     settings.display_mode = DISPLAY_MODE_PACK(screen_w * screen_scale, screen_h * screen_scale, screen_scale);
@@ -235,6 +287,9 @@ int main(int argc, char **argv)
     else
         comp_log("started %dx%d", screen_w, screen_h);
     while (running) {
+        /* The work of the previous pass, and at the start the first
+         * frame, before poll waits. */
+        schedule_frame();
         struct pollfd pf[OPEN_MAX];
         int n = 0;
         pf[n++] = (struct pollfd){ wire_server_fd(srv), POLLIN, 0 };
@@ -256,7 +311,7 @@ int main(int argc, char **argv)
             clients[nclients++] = c;
             pf[n++] = (struct pollfd){ wire_client_fd(c), POLLIN, 0 };
         }
-        int r = poll(pf, (unsigned)n, 1000);
+        int r = poll(pf, (unsigned)n, poll_timeout());
         if (r < 0) {
             if (errno == EINTR)
                 continue;
@@ -279,8 +334,11 @@ int main(int argc, char **argv)
                     wire_client_destroy(clients[i]);
             }
         flush_clients();
-        if (pf[1].revents & POLLIN)
-            frame();
+        if (pf[1].revents & POLLIN) {
+            uint64_t expirations;
+            read(frame_fd, &expirations, 8);
+            frame_armed = 0;
+        }
     }
     stats_log();
     wire_server_destroy(srv);

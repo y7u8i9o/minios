@@ -686,6 +686,11 @@ void seat_key(uint32_t key, int pressed)
 /* seat_tick repeats the key of a text input context: the press takes the
  * path of a typed press again, with the modifiers of the moment. A repeat
  * is skipped while keys wait for the input method daemon. */
+long seat_next_deadline(void)
+{
+    return text_repeat_at ? text_repeat_at : -1;
+}
+
 void seat_tick(long now)
 {
     if (!text_repeat_at || now < text_repeat_at)

@@ -39,7 +39,7 @@ runs from the start of the composition to the end of the last flush.
 | `commit_latency_us`, `_max_us` | from the earliest commit of a buffer to the end of the frame that shows it |
 | `input_latency_us`, `_max_us` | from the earliest pointer motion to the end of the frame that shows it |
 | `wakeups` | returns of `poll` in the main loop |
-| `idle_timers` | expirations of the frame timer without damage |
+| `idle_timers` | frames without damage: before G6 the expirations of the periodic timer, since G6 frames that complete only frame callbacks |
 | `cpu_us` | CPU time of X12, tick based (see above) |
 | `back_bytes` | bytes of the back buffer |
 | `pool_bytes` | bytes of the mapped client pools |
@@ -300,3 +300,25 @@ and ten commits with only a frame callback compose nothing. The cases
 `comp_bench` and `comp_bench_hidpi` compare the CRC-32 of the guest
 framebuffer with a screendump of the host, which shows that direct
 composition flushes every pixel.
+
+## G6: the timing model (2026-10-06)
+
+The frame clock runs only while damage or a frame callback is pending,
+and poll waits until the earliest deadline of the key repeat, the pings
+and the input method (`compositor.md`). At 2560x1600@2, compared with
+the baseline of G1:
+
+| | baseline | after G6 |
+|---|---|---|
+| blink: commit latency ms, wakeups | 23.3, 168 | 0.6, 26 |
+| pointer: input latency ms, wakeups | 8.2, 1166 | 0.7, 449 |
+| resize: input latency ms, wakeups | 7.7, 996 | 0.3, 207 |
+| idle for 2.3 s: wakeups | 148 | 6 |
+
+A frame now starts at once when the previous one lies more than
+`frame_ms` back. The drag and the animation still show a latency of 10
+to 16 ms, because their events arrive faster than one per 16 ms and the
+frames remain at least that far apart. `comp_idle` measures 17 wakeups in
+five idle seconds with one window, which the pings of the window and the
+connection of `compstat` cause. Before, the periodic timer woke X12
+about 320 times in five seconds.

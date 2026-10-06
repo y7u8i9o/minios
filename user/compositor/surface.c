@@ -555,8 +555,16 @@ void client_attach(struct wire_client *wc)
     trace_client(c, 1);
 }
 
+/* Whether a committed surface waits for a frame callback. */
+int surfaces_frame_pending(void)
+{
+    for (struct csurface *s = surfaces; s; s = s->next)
+        if (s->nframe_cbs)
+            return 1;
+    return 0;
+}
+
 /* Frame callbacks of committed surfaces, sent after a composition. */
-void surfaces_frame_done(uint32_t time_ms);
 void surfaces_frame_done(uint32_t time_ms)
 {
     for (struct csurface *s = surfaces; s; s = s->next) {

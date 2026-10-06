@@ -418,6 +418,13 @@ int im_busy(void)
     return nqueue > 0;
 }
 
+long im_next_deadline(void)
+{
+    if (nqueue && queue[0].kind == Q_KEY && queue[0].sent && !queue[0].decided)
+        return queue[0].time + KEY_TIMEOUT_MS + 1;
+    return -1;
+}
+
 void im_tick(long now)
 {
     if (nqueue && queue[0].kind == Q_KEY && queue[0].sent && !queue[0].decided &&

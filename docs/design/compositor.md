@@ -148,11 +148,27 @@ instead of libgui (`input.md`).
 
 ## Frame clock and callbacks
 
-The frame timer expires every 16 ms. When damage exists the scene is
-composed and flushed, and every frame callback registered by a commit
-since the previous frame receives `callback.done` with the time in
-milliseconds after the flush. A callback whose commit added no damage
-receives `done` at the next expiration without a composition (G5). Clients are flushed with
+Since G6 of `docs/plan/compositor-performance.md` the frame clock runs
+only while work is pending. After each pass of the main loop,
+`schedule_frame` composes at once when damage or a frame callback is
+pending and `frame_ms` (16 ms by default) have passed since the start of
+the last frame. Otherwise it arms the timerfd once for the rest of the
+interval, and it disarms the timer when nothing is pending. A frame
+composes and flushes the damage, and then every frame callback
+registered by a commit since the previous frame receives `callback.done`
+with the time in milliseconds. A callback whose commit added no damage
+receives `done` in a frame without a composition (G5). `frame_ms` is the
+minimum interval between frames.
+
+The poll timeout is the earliest deadline of the modules with timed
+work: the next key repeat of the text input (`seat_next_deadline`), the
+next ping, hang and end of a snooze (`hang_next_deadline`) and the
+timeout of a key sent to the input method (`im_next_deadline`). Without
+such a deadline poll waits for input and clients alone. Before G6 a
+periodic 16 ms timer woke X12 also when it was idle, about 64 times a
+second, and a commit waited up to 16 ms for the next tick. `comp_idle`
+requires five idle seconds with one window to compose nothing and to
+wake X12 fewer than 40 times. Clients are flushed with
 the presentation event. The framebuffer ABI currently exposes a mapped
 front buffer and has no page-flip or vblank primitive, so this is a
 software presentation clock rather than a claim of hardware vsync.

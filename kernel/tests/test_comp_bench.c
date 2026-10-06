@@ -175,3 +175,35 @@ static void test_comp_bench(void)
     kprintf("comp_bench: ok\n");
 }
 KTEST_DEFINE("comp_bench", test_comp_bench);
+
+/* G6: X12 with one window does nothing for five seconds. compstat then
+ * reports no frame, and only the pings of the window and the connection
+ * of compstat wake X12. The expect file bounds the wakeups. */
+static void test_comp_idle(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    ktest_wait_idle(1200);
+    struct proc *win = proc_create_user("/bin/compbench", (char *const[]){ "compbench", "window", NULL },
+                                        (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(win != NULL, "cannot start compbench window");
+    uint64_t t0 = timer_ms();
+    while (!window_at_home() && timer_ms() - t0 < 4000)
+        sleep_ms(50);
+    ktest_assert(window_at_home(), "the compbench window is not shown");
+    sleep_ms(1000);
+    run_shell("compstat -r");
+    sleep_ms(5000);
+    kprintf("comp_idle: five idle seconds\n");
+    run_shell("compstat");
+    alt_key(0x3e);
+    int status = proc_reap(win);
+    ktest_assert(status == 0, "compbench window status 0x%x", status);
+    signal_send(srv, SIGTERM);
+    status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+    kprintf("comp_idle: ok\n");
+}
+KTEST_DEFINE("comp_idle", test_comp_idle);

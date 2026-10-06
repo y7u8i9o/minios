@@ -179,6 +179,8 @@ void clients_drop_disallowed(void);
 void hang_init(struct wire_server *srv);
 void hang_client_attached(struct client *c);
 void hang_tick(long now);
+/* The uptime in ms at which hang_tick next has work, or -1 for none (G6). */
+long hang_next_deadline(void);
 /* Draw the dimming and the dialog over an unresponsive toplevel. */
 void hang_draw(struct csurface *s, struct rect clip);
 /* A press at (x, y): 1 when it hit an unresponsive window (buttons handled). */
@@ -213,6 +215,10 @@ void debug_setting_changed(const char *key, int value);   /* sends a value to ev
 void trace_init(struct wire_server *srv);
 void trace_client(const struct client *c, int connected);
 void frame_clock_set(int ms);                   /* main.c */
+/* surface.c: whether a surface waits for a frame callback, and the
+ * completion of the callbacks after a frame. */
+int surfaces_frame_pending(void);
+void surfaces_frame_done(uint32_t time_ms);
 /* stats.c: the frame statistics (docs/design/graphics-performance.md).
  * The events start the latencies that the next frame ends. */
 enum stats_event { STATS_DAMAGE, STATS_COMMIT, STATS_INPUT, STATS_EVENTS };
@@ -230,6 +236,8 @@ void stats_send(struct wire_resource *r);
 void stats_log(void);
 void seat_repeat_changed(void);                 /* seat.c */
 void seat_tick(long now);
+/* The uptime in ms of the next key repeat, or -1 for none (G6). */
+long seat_next_deadline(void);
 
 /* main.c */
 extern int screen_w, screen_h;
@@ -385,6 +393,9 @@ void im_context_changed(void);
 int im_filter_key(uint32_t key, int pressed, int mods);
 int im_busy(void);
 void im_tick(long now);
+/* The uptime in ms at which a key sent to the input method times out, or
+ * -1 for none (G6). */
+long im_next_deadline(void);
 void im_modifiers(int depressed, int locked, int group);
 void im_keymap_changed(int fd, uint32_t size);
 void im_cursor_changed(int x, int y, int width, int height);

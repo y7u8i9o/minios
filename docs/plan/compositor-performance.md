@@ -260,7 +260,7 @@ and `gui` on aarch64. At 2560x1600@2 the blink composes 1.91 instead of
 38.14 million device pixels, and the drag flushes in 48.5 instead of
 198.5 ms (`docs/design/graphics-performance.md`).
 
-### G6. The timing model
+### G6. The timing model (completed 2026-10-06)
 
 The periodic timer is replaced by a one-shot timer that X12 arms only
 when work is pending. The seat, hang and input method modules report
@@ -272,6 +272,16 @@ commit to its presentation. `gui_repeat`, `gui_text_repeat`, `ime*`,
 `comp_hang` and `gui_drag` show no change.
 
 Document: `docs/design/compositor.md`.
+
+The first version scheduled a frame only after poll returned. At the
+start, without a client or deadline, poll waited indefinitely and the
+first frame never appeared, which `gui_pointer` and `gui_scale2`
+showed. `schedule_frame` now runs at the start of every pass of the
+loop. The bound of `comp_idle` is 40 wakeups in five seconds, measured
+17. `tests/map` runs `comp_idle` on aarch64 for a change of `main.c`. At
+2560x1600@2 the commit latency of the blink fell from 23.3 to 0.6 ms and
+the input latency of the pointer from 8.2 to 0.7 ms
+(`docs/design/graphics-performance.md`).
 
 ### G7. Decorations without square roots per pixel
 
