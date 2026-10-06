@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/param.h>
+#include <minios/abi.h>
 #include <gui/pixel.h>
 #include "comp.h"
 
@@ -15,8 +17,18 @@
 
 /* The damage since the last frame, disjoint rectangles (gui/gfx.h). */
 static struct rect_set damage;
-static int shown_x, shown_y;            /* where the cursor was drawn */
-static int cursor_suppressed;           /* compose without the cursor (screen copies) */
+static int shown_x, shown_y;            /* the cursor position, logical pixels */
+/* The device cursor (G9 of docs/plan/compositor-performance.md). On a
+ * device with FB_CAP_CURSOR the device shows the cursor image above the
+ * frames. A pointer motion then moves the device cursor and composes
+ * nothing. A cursor image larger than FB_CURSOR_MAX device pixels is
+ * drawn into the frames, as on a device without the capability. */
+static int hw_cursor;                   /* the device shows the cursor, the frames contain none */
+static uint32_t hw_image[FB_CURSOR_MAX * FB_CURSOR_MAX];
+static int hw_w, hw_h, hw_hot_x, hw_hot_y;  /* the image of the device, hw_w 0 when hidden */
+/* -1 for the frames. 0 or 1 while a screen copy composes without or with
+ * the cursor. */
+static int cursor_override = -1;
 /* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
  * retains 60 percent of the background's brightness. */
 #define CURSOR_W 12
@@ -28,6 +40,7 @@ void scene_init(void)
 {
     shown_x = screen_w / 2;
     shown_y = screen_h / 2;
+    scene_cursor_changed();
 }
 
 void scene_damage(struct rect r)
@@ -62,16 +75,20 @@ static struct rect cursor_rect(void)
     return r;
 }
 
+static void cursor_sync(void);
+
 void scene_cursor_changed(void)
 {
+    cursor_sync();
     struct rect r = cursor_rect();
-    if (!rect_empty(r))
+    if (!hw_cursor && !rect_empty(r))
         scene_damage(r);
 }
 
 void scene_set_cursor(int x, int y)
 {
-    scene_cursor_changed();
+    if (!hw_cursor)
+        scene_cursor_changed();
     shown_x = x;
     shown_y = y;
     struct csurface *s = seat_cursor_surface();
@@ -79,7 +96,13 @@ void scene_set_cursor(int x, int y)
         s->x = x - s->hotspot_x;
         s->y = y - s->hotspot_y;
     }
-    scene_cursor_changed();
+    if (hw_cursor) {
+        long t0 = uptime_us();
+        backend_cursor_move(x * screen_scale, y * screen_scale);
+        stats_cursor_move(t0);
+    } else {
+        scene_cursor_changed();
+    }
 }
 
 /* Extent drawn for a surface: its decorations frame when it has one. */
@@ -311,10 +334,87 @@ static const uint32_t *arrow_image(void)
     return img;
 }
 
+/* The cursor as device pixels in rows of FB_CURSOR_MAX pixels, with the
+ * hotspot. Returns 0 for a hidden cursor (w 0) and for an image that fits
+ * FB_CURSOR_MAX. Returns -1 for a larger or transformed cursor surface. */
+static int cursor_image(uint32_t *out, int *w, int *h, int *hot_x, int *hot_y)
+{
+    int S = screen_scale;
+    *w = *h = *hot_x = *hot_y = 0;
+    if (seat_cursor_hidden())
+        return 0;
+    struct csurface *s = seat_cursor_surface();
+    if (s && s->mapped && s->current.buffer) {
+        const struct buffer *b = s->current.buffer;
+        int W = s->width * S, H = s->height * S;
+        if (!b->pool->map || s->current.transform || W <= 0 || H <= 0 || W > FB_CURSOR_MAX || H > FB_CURSOR_MAX)
+            return -1;
+        /* The nearest buffer pixel. The buffer may have another scale
+         * than the screen. */
+        for (int y = 0; y < H; y++) {
+            const uint32_t *row =
+                (const uint32_t *)(b->pool->map + b->offset + (size_t)(y * b->height / H) * b->stride);
+            for (int x = 0; x < W; x++) {
+                uint32_t c = row[x * b->width / W];
+                out[y * FB_CURSOR_MAX + x] = b->format == FORMAT_XRGB8888 ? c | 0xff000000u : c;
+            }
+        }
+        *w = W;
+        *h = H;
+        *hot_x = MIN(MAX(s->hotspot_x * S, 0), W - 1);
+        *hot_y = MIN(MAX(s->hotspot_y * S, 0), H - 1);
+        return 0;
+    }
+    const uint32_t *img = arrow_image();
+    int W = (CURSOR_W + CURSOR_SHADOW) * S, H = (CURSOR_H + CURSOR_SHADOW) * S;
+    if (!img || W > FB_CURSOR_MAX || H > FB_CURSOR_MAX)
+        return -1;
+    for (int y = 0; y < H; y++)
+        memcpy(out + y * FB_CURSOR_MAX, img + (size_t)y * W, (size_t)W * 4);
+    *w = W;
+    *h = H;
+    return 0;
+}
+
+/* Give the device the current cursor image. When the image does not fit
+ * or the device refuses it, the device cursor is hidden and the frames
+ * contain the cursor again. A change between the two damages the cursor
+ * rectangle. */
+static void cursor_sync(void)
+{
+    if (!backend_has_cursor())
+        return;
+    static uint32_t img[FB_CURSOR_MAX * FB_CURSOR_MAX];
+    memset(img, 0, sizeof img);
+    int w, h, hot_x, hot_y;
+    int fits = cursor_image(img, &w, &h, &hot_x, &hot_y) == 0;
+    if (fits && hw_cursor && w == hw_w && h == hw_h && hot_x == hw_hot_x && hot_y == hw_hot_y &&
+        memcmp(img, hw_image, sizeof img) == 0)
+        return;
+    int was = hw_cursor, S = screen_scale;
+    if (fits && backend_cursor_set(img, w, h, FB_CURSOR_MAX, hot_x, hot_y, shown_x * S, shown_y * S) == 0) {
+        hw_cursor = 1;
+        memcpy(hw_image, img, sizeof img);
+        hw_w = w;
+        hw_h = h;
+        hw_hot_x = hot_x;
+        hw_hot_y = hot_y;
+    } else {
+        if (hw_cursor && hw_w)
+            backend_cursor_set(img, 0, 0, FB_CURSOR_MAX, 0, 0, 0, 0);
+        hw_cursor = 0;
+        hw_w = 0;
+    }
+    struct rect r = cursor_rect();
+    if (was != hw_cursor && !rect_empty(r))
+        scene_damage(r);
+}
+
 static void draw_cursor(struct rect clip)
 {
     struct csurface *cursor = seat_cursor_surface();
-    if (seat_cursor_hidden() || cursor_suppressed)
+    int draw = cursor_override >= 0 ? cursor_override : !hw_cursor;
+    if (seat_cursor_hidden() || !draw)
         return;
     if (cursor && cursor->mapped && cursor->current.buffer) {
         draw_surface(cursor, clip);
@@ -433,21 +533,23 @@ struct rect scene_pointer_rect(void)
     return rect_intersect(rect_scale(r, screen_scale), (struct rect){ 0, 0, back.width, back.height });
 }
 
-/* The back buffer contains the last composed frame. For a copy without the
- * pointer, the rectangle under the pointer is composed again without the
- * cursor, the buffer is copied, and the rectangle is composed once more
- * with the cursor. Nothing is flushed in between, and the screen never
- * shows the frame without the pointer. */
+/* The back buffer contains the last composed frame. It contains the
+ * cursor unless the device shows it. When the copy needs the other
+ * state, the rectangle under the pointer is composed again with or
+ * without the cursor, the buffer is copied, and the rectangle is
+ * composed once more as before. Nothing is flushed in between, so the
+ * screen never shows the changed rectangle. */
 void scene_copy_screen(uint8_t *to, int stride, int pointer)
 {
-    struct rect under = pointer ? (struct rect){ 0, 0, 0, 0 } : cursor_rect();
+    int drawn = !hw_cursor;
+    struct rect under = pointer == drawn ? (struct rect){ 0, 0, 0, 0 } : cursor_rect();
     struct csurface *order[256];
     int n = 0;
     if (!rect_empty(under)) {
         n = scene_order(order, 256);
-        cursor_suppressed = 1;
+        cursor_override = pointer;
         compose_rect(under, order, n);
-        cursor_suppressed = 0;
+        cursor_override = -1;
     }
     for (int y = 0; y < back.height; y++) {
         const uint32_t *from = back.pixels + (size_t)y * back.stride;

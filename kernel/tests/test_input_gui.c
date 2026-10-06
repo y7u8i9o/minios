@@ -14,8 +14,7 @@
 
 static void expect_cursor(int x, int y, const char *what)
 {
-    ktest_assert(pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff, "%s: cursor not at %d,%d: %08x %08x",
-                 what, x, y, pixel(x, y), pixel(x + 1, y + 2));
+    ktest_assert(arrow_cursor_at(x, y), "%s: the cursor is not at %d,%d", what, x, y);
 }
 
 static void set_setting(const char *key, const char *value)

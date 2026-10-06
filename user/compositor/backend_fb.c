@@ -151,6 +151,34 @@ void backend_present(const struct rect *r, int n)
     stats_flush((long)fr.count, bytes, uptime_us() - t0);
 }
 
+int backend_has_cursor(void)
+{
+    return (fbinfo.caps & FB_CAP_CURSOR) != 0;
+}
+
+int backend_cursor_set(const uint32_t *image, int w, int h, int stride, int hot_x, int hot_y, int x, int y)
+{
+    static struct fb_cursor c;
+    if (w > FB_CURSOR_MAX || h > FB_CURSOR_MAX)
+        return -1;
+    memset(&c, 0, sizeof c);
+    c.width = (uint32_t)w;
+    c.height = (uint32_t)h;
+    c.hot_x = (uint32_t)hot_x;
+    c.hot_y = (uint32_t)hot_y;
+    c.x = x;
+    c.y = y;
+    for (int j = 0; j < h; j++)
+        memcpy(&c.pixels[j * FB_CURSOR_MAX], image + (size_t)j * stride, (size_t)w * 4);
+    return ioctl(fb_fd, FBIO_CURSOR_SET, &c) < 0 ? -1 : 0;
+}
+
+int backend_cursor_move(int x, int y)
+{
+    struct fb_cursor_pos pos = { x, y };
+    return ioctl(fb_fd, FBIO_CURSOR_MOVE, &pos) < 0 ? -1 : 0;
+}
+
 long backend_buffer_bytes(void)
 {
     return own_back ? (long)back.width * back.height * 4 : 0;

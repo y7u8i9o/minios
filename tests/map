@@ -131,7 +131,7 @@ kernel/drivers/pci.c            devices nvme ahci usb_root net_nic
 kernel/drivers/console.c        boot console_sgr
 kernel/drivers/fbcon.c          boot console_sgr fb0
 kernel/drivers/font.c           boot console_sgr check-libgui
-kernel/drivers/fbdev.c          fb0 fb_format gpu_mode aarch64:gpu_mode gui_modes gpu_resize
+kernel/drivers/fbdev.c          fb0 fb_format gpu_mode aarch64:gpu_mode gui_modes gpu_resize comp_cursor aarch64:comp_cursor gui_tablet
 kernel/drivers/ps2kbd.c         kbd input_keyboard ctrlc
 kernel/drivers/ps2mouse.c       mouse mouse_wheel
 kernel/drivers/pty.c            pty jobcontrol ctrlc lineedit* gui_term
@@ -141,7 +141,7 @@ kernel/drivers/timer.c          timer time sched
 kernel/drivers/usb/**           usb_*
 kernel/drivers/virtio/virtio.c  blk net_virtqueue gpu_mode input_tablet audio_pcm gpu_resize
 kernel/drivers/virtio/virtio_blk.c      blk mfs disk_tools
-kernel/drivers/virtio/virtio_gpu.c      gpu_mode aarch64:gpu_mode gui_modes gui_scale2 gpu_resize comp_bench comp_bench_hidpi
+kernel/drivers/virtio/virtio_gpu.c      gpu_mode aarch64:gpu_mode gui_modes gui_scale2 gpu_resize comp_bench comp_bench_hidpi comp_cursor aarch64:comp_cursor gui_tablet
 kernel/drivers/virtio/virtio_input.c    input_* gui_tablet
 kernel/drivers/virtio/virtio_net.c      net_nic* net_core net_virtqueue
 kernel/drivers/virtio/virtio_rng.c      net_random*

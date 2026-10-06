@@ -12,7 +12,9 @@
  * A latency runs from the earliest event that a frame presents to the end
  * of that frame. The events are the first damage after a frame, a commit
  * with a buffer, and a motion of the pointer. An event that causes no
- * composition is forgotten at the next idle timer expiration. */
+ * composition is forgotten at the next idle timer expiration. A move of
+ * the device cursor (G9) presents a pointer motion without a frame, so
+ * the end of the move ends the input latency. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -34,6 +36,7 @@ static struct {
     long cpu_at;                        /* CPU time of X12 at the reset, microseconds */
     uint64_t frames, rects, pixels, flushes, flush_rects, flush_bytes, wakeups, idle_timers;
     uint64_t compose_us, compose_max_us, flush_us, flush_max_us, frame_max_us;
+    uint64_t cursor_moves, cursor_us;
     uint32_t hist[HIST_BUCKETS];
     struct latency latency[STATS_EVENTS];
 } st;
@@ -113,6 +116,27 @@ static uint64_t bucket_value(int b)
     return low + ((uint64_t)1 << (e - 3)) / 2;
 }
 
+/* The pending event of l is presented at now. */
+static void latency_end(struct latency *l, long now)
+{
+    if (!l->since)
+        return;
+    uint64_t v = (uint64_t)(now - l->since);
+    l->sum += v;
+    l->count++;
+    if (v > l->max)
+        l->max = v;
+    l->since = 0;
+}
+
+void stats_cursor_move(long t0)
+{
+    long now = uptime_us();
+    st.cursor_moves++;
+    st.cursor_us += (uint64_t)(now - t0);
+    latency_end(&st.latency[STATS_INPUT], now);
+}
+
 long stats_frame_end(long t0)
 {
     long now = uptime_us();
@@ -128,17 +152,8 @@ long stats_frame_end(long t0)
     if (total > st.frame_max_us)
         st.frame_max_us = total;
     st.hist[bucket_of(total)]++;
-    for (int i = 0; i < STATS_EVENTS; i++) {
-        struct latency *l = &st.latency[i];
-        if (!l->since)
-            continue;
-        uint64_t v = (uint64_t)(now - l->since);
-        l->sum += v;
-        l->count++;
-        if (v > l->max)
-            l->max = v;
-        l->since = 0;
-    }
+    for (int i = 0; i < STATS_EVENTS; i++)
+        latency_end(&st.latency[i], now);
     return (long)total;
 }
 
@@ -203,6 +218,8 @@ void stats_send(struct wire_resource *r)
         { "cpu_us", (uint64_t)(cpu_us() - st.cpu_at) },
         { "back_bytes", (uint64_t)backend_buffer_bytes() },
         { "pool_bytes", pool_bytes },
+        { "cursor_moves", st.cursor_moves },
+        { "cursor_us", st.cursor_us },
     };
     for (size_t i = 0; i < sizeof values / sizeof values[0]; i++)
         debug_send_frame_stat(r, values[i].key, (uint32_t)(values[i].value >> 32), (uint32_t)values[i].value);

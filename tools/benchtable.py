@@ -24,6 +24,7 @@ COLUMNS = [
     ("input", "input latency ms", lambda v: "%.1f" % (v.get("input_latency_us", 0) / 1000)),
     ("wakeups", "wakeups", lambda v: str(v.get("wakeups", 0))),
     ("cpu", "X12 CPU ms", lambda v: "%.0f" % (v.get("cpu_us", 0) / 1000)),
+    ("cursor", "cursor moves ms", lambda v: "%.1f" % (v.get("cursor_us", 0) / 1000)),
 ]
 PAIRS = re.compile(r"(\w+)=(\d+)")
 

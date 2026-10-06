@@ -45,6 +45,7 @@ before the code that uses them.
 | `proc.lock` (extended) | spinlock | also `sig_pending` and `sig_actions`; `pgid` joins `proc_tree_lock` | M15 |
 | `mouse_lock` | spinlock | mouse producer serialization and condition checks; event indexes are SPSC atomics | M17/M45 |
 | `fbdev_lock` | spinlock | owner of the display | M17 |
+| `fb_cursor_lock` | mutex | the recorded cursor of `/dev/fb0` and the order of the cursor requests to the GPU driver | G9 |
 | `pcm_device.owner_lock` | spinlock | exclusive owner of one raw PCM device | audio |
 | `virtio_snd.control_lock` | mutex | serializes one sound device's set-params, prepare, start, stop and release commands | audio |
 | `shm_lock` | spinlock | table of named shared memory objects, their reference counts, sizes and page arrays (G8: frames are installed at the first fault, with no vmspace lock acquired) | M17 |
@@ -221,6 +222,15 @@ the framebuffer state and framebuffer write.
   A batch of flush requests (G4 of `docs/plan/compositor-performance.md`)
   runs under `virtio_gpu->lock` and publishes its requests under
   `vq->lock`, which it releases only in `waitq_wait`. It adds no lock.
+- `fb_cursor_lock` (mutex, `drivers/fbdev.c`, G9 of
+  `docs/plan/compositor-performance.md`) protects the recorded cursor
+  image, hotspot and position. It also serializes the `cursor_set` and
+  `cursor_move` calls of the GPU driver, so the driver's cursor state
+  and its ring of cursor requests need no lock of their own. A cursor
+  image upload takes `fb_cursor_lock -> virtio_gpu->lock -> vq->lock` for
+  the transfer on the control queue, and every cursor request takes
+  `fb_cursor_lock -> vq->lock` of the cursor queue. `fb_cursor_lock` is
+  never taken together with `fb_mode_lock` or `fbdev_lock`.
 - `input_dev->lock` (the report assembled between `SYN_REPORT` events) is
   taken under `vq->lock` in the completion callback and alone by
   `virtio_input_feed`.

@@ -6,6 +6,7 @@
 #include <fs/devfs.h>
 #include <mm/vma.h>
 #include <mm/memlayout.h>
+#include <mm/slab.h>
 #include <sched/thread.h>
 #include <sched/proc.h>
 #include <sync/mutex.h>
@@ -39,9 +40,15 @@ static struct {
 /* Serializes mode changes against readers of the geometry in ioctls. */
 static struct mutex fb_mode_lock;
 
+/* The cursor of the display owner (G9). fb_cursor_lock protects it and
+ * serializes the cursor calls of the GPU driver. */
+static struct mutex fb_cursor_lock;
+static struct fb_cursor_state cursor;
+
 void fb_screen_init(void)
 {
     mutex_init(&fb_mode_lock, "fb_mode");
+    mutex_init(&fb_cursor_lock, "fb_cursor");
     poll_source_init(&fb_poll, "fb0");
     if (!bootinfo.have_framebuffer)
         return;
@@ -158,6 +165,85 @@ void fb_display_get(struct fb_display *out)
     spin_unlock(&fbdev_lock);
 }
 
+static bool fb_has_cursor(void)
+{
+    return gpu.ops && gpu.ops->cursor_set && gpu.ops->cursor_move;
+}
+
+void fb_cursor_get(struct fb_cursor_state *out)
+{
+    mutex_lock(&fb_cursor_lock);
+    *out = cursor;
+    mutex_unlock(&fb_cursor_lock);
+}
+
+static bool fb_is_owner(struct file *f)
+{
+    spin_lock(&fbdev_lock);
+    bool is_owner = owner == f;
+    spin_unlock(&fbdev_lock);
+    return is_owner;
+}
+
+/* Show the image of c or hide the cursor (width 0). */
+static int cursor_set(const struct fb_cursor *c)
+{
+    if (c->width > FB_CURSOR_MAX || c->height > FB_CURSOR_MAX)
+        return -EINVAL;
+    if (c->width && (c->height == 0 || c->hot_x >= c->width || c->hot_y >= c->height))
+        return -EINVAL;
+    mutex_lock(&fb_cursor_lock);
+    int r;
+    if (!c->width) {
+        r = gpu.ops->cursor_set(gpu.priv, NULL, 0, 0, 0, 0);
+        if (r == 0)
+            cursor.visible = false;
+    } else {
+        /* The device receives the whole square with transparent pixels
+         * outside the image. */
+        for (uint32_t y = 0; y < FB_CURSOR_MAX; y++)
+            for (uint32_t x = 0; x < FB_CURSOR_MAX; x++)
+                cursor.image[y * FB_CURSOR_MAX + x] =
+                    x < c->width && y < c->height ? c->pixels[y * FB_CURSOR_MAX + x] : 0;
+        r = gpu.ops->cursor_set(gpu.priv, cursor.image, c->hot_x, c->hot_y, c->x, c->y);
+        cursor.visible = r == 0;
+        cursor.width = c->width;
+        cursor.height = c->height;
+        cursor.hot_x = c->hot_x;
+        cursor.hot_y = c->hot_y;
+        cursor.x = c->x;
+        cursor.y = c->y;
+    }
+    cursor.sets++;
+    mutex_unlock(&fb_cursor_lock);
+    return r;
+}
+
+static int cursor_move(struct fb_cursor_pos pos)
+{
+    mutex_lock(&fb_cursor_lock);
+    int r = 0;
+    if (cursor.visible) {
+        r = gpu.ops->cursor_move(gpu.priv, pos.x, pos.y);
+        cursor.x = pos.x;
+        cursor.y = pos.y;
+        cursor.moves++;
+    }
+    mutex_unlock(&fb_cursor_lock);
+    return r;
+}
+
+/* The display returns to the console: the cursor of the owner disappears. */
+static void cursor_hide(void)
+{
+    if (!fb_has_cursor())
+        return;
+    mutex_lock(&fb_cursor_lock);
+    if (cursor.visible && gpu.ops->cursor_set(gpu.priv, NULL, 0, 0, 0, 0) == 0)
+        cursor.visible = false;
+    mutex_unlock(&fb_cursor_lock);
+}
+
 static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
 {
     struct proc *p = thread_current()->proc;
@@ -178,7 +264,8 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
             .blue_size = fb_screen.blue_mask_size,
             .blue_shift = fb_screen.blue_mask_shift,
             .scale = (uint8_t)fb_screen_scale,
-            .caps = gpu.ops ? FB_CAP_FLUSH | FB_CAP_SET_MODE | FB_CAP_FLUSH_RECTS : 0,
+            .caps = (gpu.ops ? FB_CAP_FLUSH | FB_CAP_SET_MODE | FB_CAP_FLUSH_RECTS : 0) |
+                    (fb_has_cursor() ? FB_CAP_CURSOR : 0),
             .size = (uint32_t)fb_map_size(),
         };
         mutex_unlock(&fb_mode_lock);
@@ -220,6 +307,32 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
             return -EPERM;
         return fb_set_mode(m.width, m.height, m.scale);
     }
+    case FBIO_CURSOR_SET: {
+        if (!fb_has_cursor())
+            return -ENOTTY;
+        if (!vma_range_ok(p->vm, arg, sizeof(struct fb_cursor), false))
+            return -EFAULT;
+        if (!fb_is_owner(f))
+            return -EPERM;
+        struct fb_cursor *c = kmalloc(sizeof *c);
+        if (!c)
+            return -ENOMEM;
+        memcpy(c, (const void *)arg, sizeof *c);
+        int r = cursor_set(c);
+        kfree(c);
+        return r;
+    }
+    case FBIO_CURSOR_MOVE: {
+        if (!fb_has_cursor())
+            return -ENOTTY;
+        if (!vma_range_ok(p->vm, arg, sizeof(struct fb_cursor_pos), false))
+            return -EFAULT;
+        if (!fb_is_owner(f))
+            return -EPERM;
+        struct fb_cursor_pos pos;
+        memcpy(&pos, (const void *)arg, sizeof pos);
+        return cursor_move(pos);
+    }
     case FBIOGET_DISPLAY: {
         if (!vma_range_ok(p->vm, arg, sizeof(struct fb_display), true))
             return -EFAULT;
@@ -253,6 +366,7 @@ static long fb_ioctl(struct file *f, unsigned long req, uintptr_t arg)
         }
         owner = NULL;
         spin_unlock(&fbdev_lock);
+        cursor_hide();
         console_set_fb_enabled(true);
         klog_info("display released by pid %d", p->pid);
         return 0;
@@ -280,6 +394,7 @@ static void fb_release(struct file *f)
         owner = NULL;
     spin_unlock(&fbdev_lock);
     if (was_owner) {
+        cursor_hide();
         console_set_fb_enabled(true);
         klog_info("display released at close");
     }

@@ -13,6 +13,8 @@
 #include <ipc/signal.h>
 #include <mm/slab.h>
 #include <lib/string.h>
+#include <lib/crc32.h>
+#include <fs/vfs.h>
 
 static struct proc *panel_proc;
 
@@ -98,6 +100,53 @@ static inline uint32_t pixel(int x, int y)
 {
     uint32_t s = fb_screen_scale ? fb_screen_scale : 1;
     return fb_read_rgb(&fb_screen, (uint32_t)x * s, (uint32_t)y * s);
+}
+
+/* True when the arrow cursor has its tip at the logical pixel (x, y): a
+ * black tip, and white fill one pixel right and two pixels down. The
+ * framebuffer does not contain a device cursor (FB_CAP_CURSOR, G9 of
+ * docs/plan/compositor-performance.md). For a device cursor the check
+ * uses the position and the image that /dev/fb0 recorded. A failed check
+ * prints what it found. */
+static inline bool arrow_cursor_at(int x, int y)
+{
+    int32_t s = fb_screen_scale ? (int32_t)fb_screen_scale : 1;
+    struct fb_cursor_state *c = kmalloc(sizeof *c);
+    ktest_assert(c != NULL, "alloc");
+    fb_cursor_get(c);
+    bool ok;
+    if (c->visible) {
+        ok = c->x == x * s && c->y == y * s && c->hot_x == 0 && c->hot_y == 0 && c->image[0] == 0xff000000u &&
+             c->image[2 * s * FB_CURSOR_MAX + s] == 0xffffffffu;
+        if (!ok)
+            kprintf("device cursor at %d,%d, hotspot %u,%u, pixels %08x %08x\n", c->x, c->y, c->hot_x, c->hot_y,
+                    c->image[0], c->image[2 * s * FB_CURSOR_MAX + s]);
+    } else {
+        ok = pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff;
+        if (!ok)
+            kprintf("framebuffer at %d,%d: %08x %08x\n", x, y, pixel(x, y), pixel(x + 1, y + 2));
+    }
+    kfree(c);
+    return ok;
+}
+
+/* The CRC-32 of the file at path and its size in bytes. */
+static inline uint32_t file_crc32(const char *path, long *size)
+{
+    struct file *f;
+    ktest_assert(vfs_open(path, O_RDONLY, 0, &f) == 0, "open %s", path);
+    char *buf = kmalloc(4096);
+    ktest_assert(buf != NULL, "alloc");
+    uint32_t crc = 0;
+    long total = 0, got;
+    while ((got = file_read(f, buf, 4096)) > 0) {
+        crc = crc32(crc, buf, (size_t)got);
+        total += got;
+    }
+    kfree(buf);
+    file_put(f);
+    *size = total;
+    return crc;
 }
 
 /* The desktop's logical size. */

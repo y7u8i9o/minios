@@ -1,5 +1,6 @@
 /* Compositor test client. Modes: core (M24), shell, seat, data-source,
- * data-target (M25), damage (G5 of docs/plan/compositor-performance.md).
+ * data-target (M25), damage (G5 of docs/plan/compositor-performance.md),
+ * cursor (G9).
  * Every event of interest is logged as "comptest: ..." for the kernel
  * tests. */
 #include <stdio.h>
@@ -135,8 +136,40 @@ static void window_create(struct window *win, const char *title, uint32_t color,
 
 /* ---- seat ---- */
 
+/* The mode cursor sets a cursor surface at the first pointer enter: 16
+ * logical pixels square, opaque red, with the hotspot in the middle, in a
+ * buffer at the output scale (G9 of docs/plan/compositor-performance.md). */
+static int cursor_mode;
+static struct wire_proxy *cursor_surface;
+
+static void set_cursor_surface(uint32_t serial)
+{
+    int n = 16 * out_scale;
+    size_t size = (size_t)n * n * 4;
+    int fd = memfd_create("cursor", MFD_CLOEXEC);
+    ftruncate(fd, (long)size);
+    uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    for (int i = 0; i < n * n; i++)
+        px[i] = 0xffff0000u;
+    struct wire_proxy *pool = shm_create_pool(shm, fd, (int32_t)size);
+    struct wire_proxy *buffer = shm_pool_create_buffer(pool, 0, n, n, n * 4, 2);
+    close(fd);
+    cursor_surface = compositor_create_surface(compositor);
+    surface_set_buffer_scale(cursor_surface, out_scale);
+    surface_attach(cursor_surface, buffer, 0, 0);
+    surface_damage(cursor_surface, 0, 0, 16, 16);
+    surface_commit(cursor_surface);
+    pointer_set_cursor(pointer, serial, cursor_surface, 8, 8);
+    LOG("cursor surface set");
+}
+
 static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y)
-{ last_serial = serial; LOG("pointer enter at %d,%d", wire_fixed_to_int(x), wire_fixed_to_int(y)); }
+{
+    last_serial = serial;
+    LOG("pointer enter at %d,%d", wire_fixed_to_int(x), wire_fixed_to_int(y));
+    if (cursor_mode && !cursor_surface)
+        set_cursor_surface(serial);
+}
 static void on_ptr_leave(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s) { LOG("pointer leave"); }
 static void on_ptr_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x, int32_t y)
 { LOG("pointer motion %d,%d", wire_fixed_to_int(x), wire_fixed_to_int(y)); }
@@ -523,6 +556,7 @@ int main(int argc, char **argv)
     else if (strcmp(mode, "drag-source") == 0) r = (drag_mode = 1, run_window("source", 0x00ffe0a0, 1, 1, 1));
     else if (strcmp(mode, "drag-target") == 0) r = (drag_mode = 1, run_window("target", 0x00a0e0ff, 1, 1, 0));
     else if (strcmp(mode, "damage") == 0) r = run_damage();
+    else if (strcmp(mode, "cursor") == 0) r = (cursor_mode = 1, run_window("cursor", 0x00c8c8f0, 1, 0, 0));
     else if (strcmp(mode, "hang") == 0) r = run_hang(6000);
     else if (strcmp(mode, "hang-forever") == 0) r = run_hang(0);
     else r = 2;

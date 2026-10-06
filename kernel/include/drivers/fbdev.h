@@ -32,6 +32,13 @@ struct fb_gpu_ops {
     /* The properties of the GPU for the display node of /dev/devices; may
      * be NULL. */
     void (*describe)(void *priv, struct devinfo *d);
+    /* The cursor (FB_CAP_CURSOR); both may be NULL. cursor_set shows the
+     * image of FB_CURSOR_MAX x FB_CURSOR_MAX pixels (struct fb_cursor)
+     * with the hotspot at (x, y), or hides the cursor when image is NULL.
+     * cursor_move moves a shown cursor. fbdev serializes the two calls
+     * under fb_cursor_lock. */
+    int (*cursor_set)(void *priv, const uint32_t *image, uint32_t hot_x, uint32_t hot_y, int32_t x, int32_t y);
+    int (*cursor_move)(void *priv, int32_t x, int32_t y);
 };
 /* Called once at boot by the GPU driver after prepare_mode for the boot
  * mode: switches the console to screen (a 32 bpp buffer in the direct
@@ -56,6 +63,20 @@ void fb_panic_flush(void);
 void fb_display_changed(uint32_t width, uint32_t height);
 /* Copies the last size request of the host display. */
 void fb_display_get(struct fb_display *out);
+
+/* The cursor that the display owner last set through /dev/fb0, for the
+ * tests. visible is false without FB_CAP_CURSOR, before the first set
+ * and after a hide or a release of the display. The image has
+ * FB_CURSOR_MAX x FB_CURSOR_MAX pixels, zero outside width and height.
+ * The structure has 16 KiB, so a caller allocates it with kmalloc. */
+struct fb_cursor_state {
+    bool visible;
+    uint32_t width, height, hot_x, hot_y;
+    int32_t x, y;
+    uint32_t sets, moves;       /* requests since boot */
+    uint32_t image[FB_CURSOR_MAX * FB_CURSOR_MAX];
+};
+void fb_cursor_get(struct fb_cursor_state *out);
 
 /* Pixel layout helpers shared by the console, the device and the tests.
  * Colors are 0x00RRGGBB; pixels are in the framebuffer's own layout,

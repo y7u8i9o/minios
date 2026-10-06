@@ -1,0 +1,8 @@
+comp_cursor: pointer done
+compstat: elapsed_us=[0-9]+ frames=0 rects=0 pixels=0 flushes=0 
+comp_cursor: [0-9]+ device cursor moves
+comp_cursor: the cursor surface is on the device
+comp_cursor: screenshots [0-9a-f]+ with and [0-9a-f]+ without the pointer
+comp_cursor: the arrow returned
+comp_cursor: ok
+TEST PASS

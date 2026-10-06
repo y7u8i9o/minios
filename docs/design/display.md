@@ -77,6 +77,38 @@ acquisition, with the pixels of the owner, which the screendump of
 by polling the used ring with a preallocated request, skipping the flush
 when the queue lock is already locked.
 
+### The device cursor (G9)
+
+The driver also sets up the cursor queue, queue 1 of the device. When
+the device has no such queue, `/dev/fb0` does not report
+`FB_CAP_CURSOR`, and X12 draws the cursor in software. With the queue, the display owner sets
+the cursor through two requests of `/dev/fb0`:
+
+- `FBIO_CURSOR_SET` (`struct fb_cursor`) passes an image of up to 64x64
+  device pixels in `0xAARRGGBB` with straight alpha, the hotspot in the
+  image and the screen position of the hotspot. Width 0 hides the
+  cursor.
+- `FBIO_CURSOR_MOVE` (`struct fb_cursor_pos`) moves a shown cursor.
+
+Another file than the owner receives `EPERM`. At the first image the
+driver creates resource 3 in the format `B8G8R8A8` with 64x64 pixels and
+a 16 KiB backing. Each image is copied into the backing and transferred
+on the control queue. An `UPDATE_CURSOR` request on the cursor queue
+then defines the cursor. A move is one `MOVE_CURSOR` request. The device
+writes no response to cursor requests. The driver publishes them from a
+ring of 16 slots and does not wait for them. It waits only when the
+slot of the next request is still in use. A move request repeats the
+resource id, because the device hides the cursor for a request with
+resource 0.
+
+`fbdev.c` records the last image, hotspot and position under
+`fb_cursor_lock`. That lock also serializes the cursor calls of the
+driver (`locking.md`). The tests read the record through
+`fb_cursor_get`, because the cursor is not part of the framebuffer.
+QEMU draws the cursor in its display window. A screendump of QEMU
+therefore does not contain it. A release of the display, by
+`FBIO_RELEASE` or at the close of the owner's file, hides the cursor.
+
 ## virtio-input
 
 `drivers/virtio/virtio_input.c` accepts virtio-input devices (0x1052):
@@ -122,8 +154,16 @@ command line `video=` remains the boot and console mode.
 - `input_tablet` (virtio tablet attached): the device probes as an
   absolute pointer; injected absolute, button and wheel events arrive as
   the expected `/dev/input` events with its axis range.
-- `gui_tablet`: the compositor draws the cursor where an absolute event
-  points and repaints the old position.
+- `gui_tablet`: the cursor appears where an absolute event points
+  (`arrow_cursor_at` in `kernel/tests/gui_helpers.h` reads the device
+  cursor or the framebuffer), and the old position shows the desktop.
+- `comp_cursor` (virtio-vga, 2560x1600@2): the device shows the arrow,
+  400 pointer motions compose and flush nothing and move the device
+  cursor, a cursor surface of `comptest cursor` replaces the arrow with
+  its scaled image and hotspot, a screenshot with the pointer differs
+  from one without, the arrow returns when the client exits, and the
+  cursor disappears when X12 releases the display. The case also runs
+  on aarch64.
 - `comp_scale`, `gui` and `gui_desktop` run on virtio-vga; `comp_scale`
   boots `video=2560x1600@2`, a mode only the GPU can set.
 
@@ -157,7 +197,9 @@ each rectangle with `rect_scale`. `draw_surface` copies a buffer whose scale
 equals the screen scale row by row and resamples other buffers (nearest
 neighbour through the buffer scale and transform), so an unscaled client
 is doubled and a scaled one is sharp. The cursor is an ARGB image at the
-screen scale, shadows are computed in device pixels, and
+screen scale. On a device with `FB_CAP_CURSOR` the device shows that
+image, and otherwise X12 composes it (`compositor.md`). Shadows are
+computed in device pixels, and
 `decor_draw` paints frames, buttons and the title through a painter at
 the screen scale. Since G7 of `docs/plan/compositor-performance.md` the
 rounded corners and the button discs come from the coverage tables of

@@ -208,6 +208,8 @@ int comp_set_mode(int width, int height, int scale)
     settings.display_mode = DISPLAY_MODE_PACK(screen_w * screen_scale, screen_h * screen_scale, screen_scale);
     input_place_cursor(cursor_x >= screen_w ? screen_w - 1 : cursor_x, cursor_y >= screen_h ? screen_h - 1 : cursor_y);
     scene_set_cursor(cursor_x, cursor_y);
+    /* The arrow follows the scale. */
+    scene_cursor_changed();
     shell_output_changed();
     output_changed();
     debug_screen_changed();

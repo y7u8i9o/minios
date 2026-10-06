@@ -369,6 +369,7 @@ struct fb_info {
 #define FB_CAP_FLUSH    1   /* changes reach the display with FBIO_FLUSH (virtio-gpu) */
 #define FB_CAP_SET_MODE 2   /* FBIO_SET_MODE changes the resolution at run time */
 #define FB_CAP_FLUSH_RECTS 4 /* FBIO_FLUSH_RECTS flushes several rectangles in one call */
+#define FB_CAP_CURSOR   8   /* FBIO_CURSOR_SET and FBIO_CURSOR_MOVE show a cursor above the framebuffer */
 
 struct fb_rect {
     int32_t x, y, w, h;
@@ -395,6 +396,28 @@ struct fb_mode {
  * count above FB_FLUSH_MAX or nonzero flags give EINVAL. No-op without
  * FB_CAP_FLUSH. */
 #define FBIO_FLUSH_RECTS 0x4606
+
+/* The cursor of a device with FB_CAP_CURSOR (G9 of
+ * docs/plan/compositor-performance.md). The device draws the image above
+ * the framebuffer. The image does not change the framebuffer and needs no
+ * flush. Pixels are 0xAARRGGBB with straight alpha, in rows of
+ * FB_CURSOR_MAX pixels. The hotspot (hot_x, hot_y) is a pixel of the
+ * image. The position (x, y) is the screen pixel under the hotspot. All
+ * values are device pixels. Only the display owner may call the two
+ * requests (EPERM otherwise). The cursor disappears when the owner
+ * releases the display. */
+#define FB_CURSOR_MAX 64
+struct fb_cursor {
+    uint32_t width, height;     /* 1..FB_CURSOR_MAX, or width 0 to hide the cursor */
+    uint32_t hot_x, hot_y;      /* below width and height */
+    int32_t x, y;
+    uint32_t pixels[FB_CURSOR_MAX * FB_CURSOR_MAX];
+};
+struct fb_cursor_pos {
+    int32_t x, y;
+};
+#define FBIO_CURSOR_SET 0x4607  /* struct fb_cursor: set the image and the position, or hide */
+#define FBIO_CURSOR_MOVE 0x4608 /* struct fb_cursor_pos: move a shown cursor */
 
 /* A size request of the host display (V3 of docs/plan/release-0.6.0.md).
  * The host sends one when the window of the virtual display changes its

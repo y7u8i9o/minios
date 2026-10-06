@@ -280,3 +280,110 @@ static void test_gui_memory(void)
     kprintf("gui_memory: ok\n");
 }
 KTEST_DEFINE("gui_memory", test_gui_memory);
+
+/* The device cursor of the case comp_cursor, read through /dev/fb0. */
+static struct fb_cursor_state *cursor_state(void)
+{
+    static struct fb_cursor_state *c;
+    if (!c)
+        c = kmalloc(sizeof *c);
+    ktest_assert(c != NULL, "alloc");
+    fb_cursor_get(c);
+    return c;
+}
+
+/* A screenshot into path, with the pointer when pointer is set. */
+static uint32_t screenshot_crc(const char *path, bool pointer)
+{
+    vfs_unlink(path);
+    char *const with[] = { "screenshot", "-p", (char *)path, NULL };
+    char *const without[] = { "screenshot", (char *)path, NULL };
+    struct proc *p = proc_create_user("/bin/screenshot", pointer ? with : without, (char *const[]){ NULL },
+                                      &kernel_proc);
+    ktest_assert(p != NULL, "cannot start screenshot");
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "screenshot status 0x%x", status);
+    long size;
+    uint32_t crc = file_crc32(path, &size);
+    ktest_assert(size > 0, "%s is empty", path);
+    return crc;
+}
+
+/* G9: on virtio-gpu the device shows the cursor. Pointer motion moves the
+ * device cursor and composes nothing. A cursor surface of a client
+ * replaces the arrow on the device. A screenshot with the pointer
+ * contains it, composed in software, and one without it differs. The
+ * cursor disappears when X12 releases the display. */
+static void test_comp_cursor(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int32_t S = fb_screen_scale ? (int32_t)fb_screen_scale : 1;
+    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
+                                        &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    ktest_wait_idle(1200);
+    struct fb_cursor_state *c = cursor_state();
+    ktest_assert(c->visible && c->width == (uint32_t)(13 * S) && c->height == (uint32_t)(19 * S),
+                 "the device shows no arrow: visible %d, %ux%u", c->visible, c->width, c->height);
+    int cx = logical_w() / 2, cy = logical_h() / 2;
+    ktest_assert(arrow_cursor_at(cx, cy), "the arrow is not at the centre");
+
+    run_shell("compstat -r");
+    uint32_t moves = c->moves;
+    int x = 0, y = 0;
+    for (int i = 0; i < 400; i++) {
+        x = 100 + (i % 20) * 30;
+        y = 100 + (i % 13) * 25;
+        mouse_move_to(&cx, &cy, x, y, 0);
+    }
+    ktest_wait_idle(300);
+    kprintf("comp_cursor: pointer done\n");
+    run_shell("compstat");
+    c = cursor_state();
+    kprintf("comp_cursor: %u device cursor moves\n", c->moves - moves);
+    ktest_assert(c->moves - moves >= 20, "only %u device cursor moves", c->moves - moves);
+    ktest_assert(arrow_cursor_at(x, y), "the arrow is not at %d,%d after the motion", x, y);
+
+    /* The first toplevel appears at (40,60) with 200x150 pixels. */
+    struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "cursor", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start comptest");
+    ktest_wait_idle(1000);
+    mouse_move_to(&cx, &cy, WIN_X + 100, WIN_Y + 75, 0);
+    bool shown = false;
+    for (int i = 0; i < 100 && !shown; i++) {
+        sleep_ms(30);
+        c = cursor_state();
+        shown = c->visible && c->width == (uint32_t)(16 * S) && c->hot_x == (uint32_t)(8 * S) &&
+                c->hot_y == (uint32_t)(8 * S) && c->image[0] == 0xffff0000u && c->x == (WIN_X + 100) * S;
+    }
+    ktest_assert(shown, "the device does not show the cursor surface: %ux%u hotspot %u,%u pixel %08x at %d,%d",
+                 c->width, c->height, c->hot_x, c->hot_y, c->image[0], c->x, c->y);
+    kprintf("comp_cursor: the cursor surface is on the device\n");
+
+    /* The screenshot with the pointer differs only by the composed
+     * cursor. */
+    ktest_wait_idle(300);
+    uint32_t with = screenshot_crc("/cursor-with.png", true);
+    uint32_t without = screenshot_crc("/cursor-without.png", false);
+    ktest_assert(with != without, "the screenshot with the pointer equals the one without");
+    kprintf("comp_cursor: screenshots %08x with and %08x without the pointer\n", with, without);
+    vfs_unlink("/cursor-with.png");
+    vfs_unlink("/cursor-without.png");
+
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "comptest status 0x%x", status);
+    ktest_wait_idle(300);
+    c = cursor_state();
+    ktest_assert(c->visible && c->width == (uint32_t)(13 * S), "the arrow did not return: %ux%u", c->width,
+                 c->height);
+    kprintf("comp_cursor: the arrow returned\n");
+
+    signal_send(srv, SIGTERM);
+    status = proc_reap(srv);
+    ktest_assert(status == 0, "compositor status 0x%x", status);
+    ktest_assert(!cursor_state()->visible, "the cursor remains after the release of the display");
+    kprintf("comp_cursor: ok\n");
+}
+KTEST_DEFINE("comp_cursor", test_comp_cursor);

@@ -234,6 +234,7 @@ long stats_frame_begin(void);                   /* returns the start time for st
 void stats_rect(long device_pixels);            /* one composed damage rectangle */
 void stats_flush(long rects, long bytes, long us);  /* one present of the backend */
 long stats_frame_end(long t0);                  /* returns the frame time in microseconds */
+void stats_cursor_move(long t0);                /* a device cursor move that started at t0 */
 void stats_pool_mapped(long delta);             /* bytes of client pools mapped or unmapped */
 void stats_values(long *count, long *ms, long *max);
 void stats_send(struct wire_resource *r);
@@ -307,6 +308,13 @@ int backend_display_fd(void);
 /* Reads the last size request of the host display in device pixels.
  * Returns 0, or -1 when the host made no request. */
 int backend_display_request(int *width, int *height);
+/* The device cursor (FB_CAP_CURSOR, G9). backend_cursor_set shows the
+ * image of w x h pixels (0xAARRGGBB, straight alpha, rows of stride
+ * pixels) with the hotspot at (hot_x, hot_y) of the image over the device
+ * pixel (x, y), or hides the cursor when w is 0. Both return 0 or -1. */
+int backend_has_cursor(void);
+int backend_cursor_set(const uint32_t *image, int w, int h, int stride, int hot_x, int hot_y, int x, int y);
+int backend_cursor_move(int x, int y);
 /* main.c: apply a mode to the backend, the shell and every client. */
 int comp_set_mode(int width, int height, int scale);
 /* Applies the last size request of the host display at the chosen scale

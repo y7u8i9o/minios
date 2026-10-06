@@ -34,6 +34,11 @@ DESCRIPTION
         the CPU time of X12, with a resolution of one millisecond
     back_bytes, pool_bytes
         the bytes of the back buffer and of the mapped client buffers
+    cursor_moves, cursor_us
+        moves of the device cursor and the time they took. On a
+        device with a hardware cursor, a pointer motion moves that
+        cursor and composes no frame. The end of the move then ends
+        the input latency.
 
 OPTIONS
     -r    reset the statistics instead of printing them

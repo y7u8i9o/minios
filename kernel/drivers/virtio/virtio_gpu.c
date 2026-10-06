@@ -29,12 +29,15 @@
 #define VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D     0x0105
 #define VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING 0x0106
 #define VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING 0x0107
+#define VIRTIO_GPU_CMD_UPDATE_CURSOR           0x0300
+#define VIRTIO_GPU_CMD_MOVE_CURSOR             0x0301
 #define VIRTIO_GPU_RESP_OK_NODATA              0x1100
 #define VIRTIO_GPU_RESP_OK_DISPLAY_INFO        0x1101
 #define VIRTIO_GPU_RESP_ERR_UNSPEC             0x1200
 
 #define VIRTIO_GPU_EVENT_DISPLAY 1
 
+#define VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM 1     /* bytes B G R A: 0xAARRGGBB as a little endian word */
 #define VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM 2     /* bytes B G R X: 0x00RRGGBB as a little endian word */
 #define VIRTIO_GPU_MAX_SCANOUTS 16
 
@@ -43,6 +46,13 @@
 #define GPU_BUFFER_ORDER PMM_MAX_ORDER
 #define GPU_CTRL_MAX 512
 #define GPU_FLUSH_MS 20
+
+/* The cursor (G9 of docs/plan/compositor-performance.md): resource 3
+ * next to the two scanout resources 1 and 2, an image of FB_CURSOR_MAX
+ * square in 16 KiB, and a ring of requests for the cursor queue. */
+#define GPU_CURSOR_RESOURCE 3
+#define GPU_CURSOR_ORDER 2
+#define GPU_CURSOR_SLOTS 16
 
 struct virtio_gpu_ctrl_hdr {
     uint32_t type;
@@ -121,6 +131,26 @@ struct virtio_gpu_resource_attach_backing {
     } entries[1];
 } __packed;
 
+/* A request of the cursor queue. The device writes no response. */
+struct virtio_gpu_update_cursor {
+    struct virtio_gpu_ctrl_hdr hdr;
+    struct {
+        uint32_t scanout_id;
+        uint32_t x, y;
+        uint32_t padding;
+    } pos;
+    uint32_t resource_id;
+    uint32_t hot_x, hot_y;
+    uint32_t padding;
+} __packed;
+
+/* One slot of the cursor ring. done is the completion flag of the queue.
+ * submitted is set at the first use of the slot. */
+struct gpu_cursor_req {
+    bool done, submitted;
+    struct virtio_gpu_update_cursor req;
+};
+
 struct gpu_ctrl {
     bool done;
     uint8_t request[GPU_CTRL_MAX];
@@ -146,6 +176,14 @@ struct virtio_gpu {
      * has not handled. Atomic, set in the handler and taken by the
      * thread. */
     atomic_u32_t display_event;
+    /* The cursor. fbdev serializes gpu_cursor_set and gpu_cursor_move
+     * under fb_cursor_lock. That lock protects these fields. */
+    struct virtqueue *cursorq;      /* NULL when the device has no cursor queue */
+    uint32_t *cursor_image;         /* backing of the cursor resource, NULL before the first image */
+    uint32_t cursor_shown;          /* GPU_CURSOR_RESOURCE while the cursor is shown, else 0 */
+    uint32_t cursor_hot_x, cursor_hot_y;
+    struct gpu_cursor_req *cursor_ring;
+    unsigned cursor_next;
 };
 
 static struct virtio_gpu *gpu;
@@ -450,7 +488,132 @@ static void gpu_describe(void *priv, struct devinfo *d)
     devinfo_prop(d, "gpu_pci_address", "%02x:%02x.%u", g->vdev.pci->bus, g->vdev.pci->slot, g->vdev.pci->func);
 }
 
+/* ---- the cursor ---- */
+
+/* Publish one request on the cursor queue without waiting for it. The
+ * slot of the ring was used GPU_CURSOR_SLOTS requests ago. The device
+ * normally completed it long before. */
+static int cursor_request(struct virtio_gpu *g, uint32_t type, int32_t x, int32_t y)
+{
+    struct gpu_cursor_req *c = &g->cursor_ring[g->cursor_next];
+    g->cursor_next = (g->cursor_next + 1) % GPU_CURSOR_SLOTS;
+    struct virtqueue *vq = g->cursorq;
+    spin_lock(&vq->lock);
+    uint16_t id;
+    while ((c->submitted && !c->done) || virtq_alloc_chain(vq, 1, &id) < 0) {
+        if (vq->broken) {
+            spin_unlock(&vq->lock);
+            return -EIO;
+        }
+        waitq_wait(&vq->waitq, &vq->lock);
+    }
+    c->req = (struct virtio_gpu_update_cursor){
+        .hdr.type = type,
+        .pos = { 0, (uint32_t)MAX(x, 0), (uint32_t)MAX(y, 0), 0 },
+        .resource_id = g->cursor_shown,
+        .hot_x = g->cursor_hot_x,
+        .hot_y = g->cursor_hot_y,
+    };
+    c->done = false;
+    c->submitted = true;
+    vq->desc[id].addr = virt_to_phys(&c->req);
+    vq->desc[id].len = sizeof c->req;
+    virtq_submit(vq, id, &c->done);
+    spin_unlock(&vq->lock);
+    return 0;
+}
+
+/* Create the cursor resource with its backing. Caller has acquired
+ * g->lock. */
+static int cursor_resource_create(struct virtio_gpu *g)
+{
+    struct page *pages = pmm_alloc(GPU_CURSOR_ORDER);
+    if (!pages)
+        return -ENOMEM;
+    uintptr_t phys = page_to_phys(pages);
+    struct virtio_gpu_resource_create_2d create = {
+        .hdr.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D,
+        .resource_id = GPU_CURSOR_RESOURCE,
+        .format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM,
+        .width = FB_CURSOR_MAX,
+        .height = FB_CURSOR_MAX,
+    };
+    int r = simple_cmd(g, &create, sizeof create, false);
+    if (r < 0) {
+        pmm_free(pages, GPU_CURSOR_ORDER);
+        return r;
+    }
+    struct virtio_gpu_resource_attach_backing attach = {
+        .hdr.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING,
+        .resource_id = GPU_CURSOR_RESOURCE,
+        .nr_entries = 1,
+        .entries[0].addr = phys,
+        .entries[0].length = FB_CURSOR_MAX * FB_CURSOR_MAX * 4,
+    };
+    r = simple_cmd(g, &attach, sizeof attach, false);
+    if (r < 0) {
+        struct virtio_gpu_resource_unref unref = {
+            .hdr.type = VIRTIO_GPU_CMD_RESOURCE_UNREF, .resource_id = GPU_CURSOR_RESOURCE,
+        };
+        simple_cmd(g, &unref, sizeof unref, false);
+        pmm_free(pages, GPU_CURSOR_ORDER);
+        return r;
+    }
+    g->cursor_image = phys_to_virt(phys);
+    return 0;
+}
+
+static int gpu_cursor_set(void *priv, const uint32_t *image, uint32_t hot_x, uint32_t hot_y, int32_t x, int32_t y)
+{
+    struct virtio_gpu *g = priv;
+    if (!image) {
+        g->cursor_shown = 0;
+        return cursor_request(g, VIRTIO_GPU_CMD_UPDATE_CURSOR, 0, 0);
+    }
+    mutex_lock(&g->lock);
+    int r = g->cursor_image ? 0 : cursor_resource_create(g);
+    if (r == 0) {
+        /* The device copies the resource into its cursor at the update
+         * request, after the transfer completed. */
+        memcpy(g->cursor_image, image, FB_CURSOR_MAX * FB_CURSOR_MAX * 4);
+        struct virtio_gpu_transfer_to_host_2d xfer = {
+            .hdr.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D,
+            .r = { 0, 0, FB_CURSOR_MAX, FB_CURSOR_MAX },
+            .resource_id = GPU_CURSOR_RESOURCE,
+        };
+        r = simple_cmd(g, &xfer, sizeof xfer, false);
+    }
+    mutex_unlock(&g->lock);
+    if (r < 0)
+        return r;
+    g->cursor_shown = GPU_CURSOR_RESOURCE;
+    g->cursor_hot_x = hot_x;
+    g->cursor_hot_y = hot_y;
+    return cursor_request(g, VIRTIO_GPU_CMD_UPDATE_CURSOR, x, y);
+}
+
+/* A move request repeats the resource, because the device hides the
+ * cursor for a request with resource 0. */
+static int gpu_cursor_move(void *priv, int32_t x, int32_t y)
+{
+    struct virtio_gpu *g = priv;
+    if (!g->cursor_shown)
+        return 0;
+    return cursor_request(g, VIRTIO_GPU_CMD_MOVE_CURSOR, x, y);
+}
+
 static const struct fb_gpu_ops gpu_ops = {
+    .prepare_mode = gpu_prepare_mode,
+    .commit_mode = gpu_commit_mode,
+    .flush = gpu_flush,
+    .flush_poll = gpu_flush_poll,
+    .describe = gpu_describe,
+    .cursor_set = gpu_cursor_set,
+    .cursor_move = gpu_cursor_move,
+};
+
+/* The same operations without a cursor queue. */
+static const struct fb_gpu_ops gpu_ops_no_cursor = {
     .prepare_mode = gpu_prepare_mode,
     .commit_mode = gpu_commit_mode,
     .flush = gpu_flush,
@@ -527,6 +690,11 @@ static void probe(struct pci_dev *pci)
         klog_error("cannot set up the control queue");
         goto fail;
     }
+    /* Without the cursor queue, X12 draws the cursor into the frames. */
+    g->cursor_ring = kzalloc(GPU_CURSOR_SLOTS * sizeof *g->cursor_ring);
+    g->cursorq = g->cursor_ring ? virtio_queue_setup(&g->vdev, 1, ctrl_complete) : NULL;
+    if (!g->cursorq)
+        klog_warn("no cursor queue, the cursor is drawn in software");
     if (virtio_start(&g->vdev) < 0)
         goto fail;
     pci->driver = "virtio-gpu";
@@ -581,7 +749,7 @@ static void probe(struct pci_dev *pci)
         .blue_mask_size = 8, .blue_mask_shift = 0,
     };
     gpu = g;
-    fb_gpu_register(&gpu_ops, g, &screen, g->buf_size);
+    fb_gpu_register(g->cursorq ? &gpu_ops : &gpu_ops_no_cursor, g, &screen, g->buf_size);
     if (!thread_create("gpu_flushd", gpu_flushd, g, 0))
         klog_error("cannot start the flush thread");
     klog_info("%ux%u scanout in a %zu MiB buffer, host prefers %ux%u, vector %u", w, h,

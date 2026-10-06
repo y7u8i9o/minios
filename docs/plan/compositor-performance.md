@@ -326,7 +326,7 @@ ABI number changes. Before, the unchanged packages retained the old
 `needs` lines and the image installation refused them
 (`docs/design/graphics-performance.md`).
 
-### G9. The hardware cursor on virtio-gpu
+### G9. The hardware cursor on virtio-gpu (completed 2026-10-06)
 
 virtio-gpu drives the cursor queue. `FBIO_CURSOR_SET` and
 `FBIO_CURSOR_MOVE` with the capability `FB_CAP_CURSOR` set the image and
@@ -339,6 +339,18 @@ nothing, and a screendump shows the cursor at its position. The cursor
 cases on std VGA show no change.
 
 Document: `docs/design/display.md`, `docs/design/compositor.md`.
+
+Result: QEMU draws the device cursor in its display window, and its
+screendump does not contain the cursor. `comp_cursor` therefore checks
+the cursor that `/dev/fb0` records: the arrow at the pointer position
+after 400 motions without a frame, the scaled image and hotspot of a
+client cursor surface, the arrow after the client exits, and no cursor
+after the release of the display. A screenshot with the pointer must
+differ from one without it. The case runs on x86_64 and aarch64.
+`gui_tablet` and `gui_pointer` check the cursor through
+`arrow_cursor_at`, which reads the device cursor or the framebuffer. At
+2560x1600@2 the input latency of a pointer motion fell from 0.6 to
+0.04 ms (`docs/design/graphics-performance.md`).
 
 ## 4. Size
 

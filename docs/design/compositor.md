@@ -53,6 +53,19 @@ serial line to the kernel and the programs.
   its opacity: every opaque span of a row is copied with the alpha
   cleared, and the rest is blended with `pixel_over`. The built-in arrow
   is an ARGB image per scale, blended with `pixel_over`.
+- The device cursor (G9 of `docs/plan/compositor-performance.md`): on a
+  device with `FB_CAP_CURSOR` the scene gives the cursor image to the
+  device (`display.md`) and composes no cursor. `cursor_sync` builds the
+  image from the arrow or from the buffer of the cursor surface, at the
+  screen scale with nearest neighbour sampling. It sends the image only
+  when the image or the hotspot changed. A commit of a cursor surface,
+  a change of the cursor surface and a mode change call it. A pointer
+  motion calls `backend_cursor_move` and adds no damage. A cursor larger
+  than 64 device pixels or with a transform is composed as on a device
+  without the capability. A change between the two kinds damages the
+  cursor rectangle. A screen copy composes the rectangle under the
+  pointer again with or without the cursor, as the copy requires, and
+  restores the frame before the next flush.
 - `data.c`: the data device, with the selection and its stored copy
   (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
   under the cursor, the copy and move actions chosen from both sides and

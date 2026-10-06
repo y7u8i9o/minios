@@ -37,12 +37,13 @@ runs from the start of the composition to the end of the last flush.
 | `frame_p50_us`, `frame_p95_us`, `frame_p99_us` | percentiles of the frame time |
 | `damage_latency_us`, `_max_us` | from the first damage after a frame to the end of the next frame |
 | `commit_latency_us`, `_max_us` | from the earliest commit of a buffer to the end of the frame that shows it |
-| `input_latency_us`, `_max_us` | from the earliest pointer motion to the end of the frame that shows it |
+| `input_latency_us`, `_max_us` | from the earliest pointer motion to the end of the frame or of the device cursor move that shows it |
 | `wakeups` | returns of `poll` in the main loop |
 | `idle_timers` | frames without damage: before G6 the expirations of the periodic timer, since G6 frames that complete only frame callbacks |
 | `cpu_us` | CPU time of X12, tick based (see above) |
 | `back_bytes` | bytes of the back buffer |
 | `pool_bytes` | bytes of the mapped client pools |
+| `cursor_moves`, `cursor_us` | moves of the device cursor and their time (since G9). A move ends the input latency of the pointer motion. |
 
 The flush time is the time spent in `backend_present`: the copy into the
 framebuffer, which direct composition omits since G5, and the flush
@@ -377,3 +378,36 @@ unchanged contents, frame corners and shadow after 20 resize drags. A
 narrow window painted its header buttons outside the header rectangle
 and therefore outside the damage that it reported. `csd.c` now clips the
 header to its rectangle. The host test of `buffers.c` found this defect.
+
+## G9: the device cursor on virtio-gpu (2026-10-06)
+
+On virtio-gpu the device shows the cursor above the framebuffer
+(`display.md`, `compositor.md`). A pointer motion calls
+`FBIO_CURSOR_MOVE` and composes nothing. Before G9 every motion damaged
+the old and the new cursor rectangle, and a frame composed and flushed
+both.
+
+Measured with `comp_bench_hidpi` at 2560x1600@2. The `pointer` scenario
+moves the pointer 400 times:
+
+| | after G8 | after G9 |
+|---|---|---|
+| frames | 400 | 0 |
+| composed device pixels | 790 400 | 0 |
+| compose and flush time | 112.8 ms | 0 |
+| time of the 400 cursor moves | | 14.5 ms |
+| input latency, average and longest | 0.6 ms, 6.6 ms | 0.04 ms, 0.23 ms |
+
+The input latency now ends with the cursor move instead of a frame
+(`stats.c`). In `resize` the frames fell from 100 to 40, because the
+motions between the corner drags no longer compose.
+
+The tick based CPU time of X12 in `pointer` rose from 4 to 111 ms. The
+value before G9 was too low: the frames alone took 112.8 ms. A frame
+ran directly after the tick that expired the frame timer and ended
+before the next tick, so the kernel rarely charged it. A cursor move
+runs at the arrival of the input event, at any time within a tick.
+
+QEMU draws the device cursor in its display window. Its screendump does
+not contain the cursor, so `comp_cursor` checks the cursor that
+`/dev/fb0` recorded.

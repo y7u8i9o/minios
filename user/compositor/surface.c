@@ -411,6 +411,9 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     for (int i = 0; i < s->pending.ncallbacks && s->nframe_cbs < 8; i++)
         s->frame_cbs[s->nframe_cbs++] = s->pending.callbacks[i];
     s->pending.ncallbacks = 0;
+    /* A device cursor receives the new image of a cursor surface. */
+    if (s->role == ROLE_CURSOR)
+        scene_cursor_changed();
     comp_debug("surface %d committed", s->id);
 }
 
