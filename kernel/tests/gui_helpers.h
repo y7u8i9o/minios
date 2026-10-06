@@ -11,6 +11,7 @@
 #include <sched/user.h>
 #include <sched/proc.h>
 #include <ipc/signal.h>
+#include <ipc/socket.h>
 #include <mm/slab.h>
 #include <lib/string.h>
 
@@ -109,13 +110,29 @@ static inline void alt_key(uint8_t code)
     sleep_ms(150);
 }
 
+/* Start X12 with argv and return once X12 waits for clients on the socket
+ * "display". X12 creates the socket after it opens the framebuffer and the
+ * input devices. X12 accepts clients only in its main loop. A client that
+ * starts before the socket exists fails to connect and exits. A fixed
+ * delay does not guarantee the socket on a loaded host. The wait fails the
+ * test after 10 s or when X12 exits. */
+static inline struct proc *start_x12(char *const argv[])
+{
+    struct proc *srv = proc_create_user("/bin/x12", argv, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    uint64_t deadline = timer_ms() + 10000;
+    while (!unix_socket_accepting("display")) {
+        ktest_assert(!proc_exited(srv), "the compositor exited before it accepted clients");
+        ktest_assert(timer_ms() < deadline, "the compositor accepts no clients after 10 s");
+        sleep_ms(10);
+    }
+    return srv;
+}
+
 /* The compositor and the panel; returns the compositor. */
 static inline struct proc *start_server(void)
 {
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     panel_proc = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel_proc != NULL, "cannot start the panel");
     sleep_ms(600);

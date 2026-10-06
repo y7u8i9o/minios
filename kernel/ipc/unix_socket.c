@@ -663,3 +663,28 @@ static const struct socket_ops unix_ops = {
     .getsockopt = unix_getsockopt,
     .release = unix_release,
 };
+
+bool unix_socket_accepting(const char *name)
+{
+    bool waiting = false;
+    spin_lock(&sock_table_lock);
+    for (int i = 0; i < SOCK_MAX_LISTENERS; i++) {
+        struct unix_sock *l = listeners[i];
+        if (!l || strcmp(l->name, name) != 0)
+            continue;
+        /* A thread blocked in accept waits on accept_waitq. */
+        spin_lock(&l->lock);
+        spin_lock(&l->accept_waitq.lock);
+        waiting = !list_empty(&l->accept_waitq.waiters);
+        spin_unlock(&l->accept_waitq.lock);
+        spin_unlock(&l->lock);
+        /* A thread blocked in poll has an entry on the socket's poll source. */
+        if (!waiting) {
+            spin_lock(&l->sock->poll.lock);
+            waiting = !list_empty(&l->sock->poll.waiters);
+            spin_unlock(&l->sock->poll.lock);
+        }
+    }
+    spin_unlock(&sock_table_lock);
+    return waiting;
+}

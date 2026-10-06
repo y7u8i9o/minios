@@ -16,6 +16,7 @@
 #include <lib/string.h>
 #include <console.h>
 #include <errno.h>
+#include "gui_helpers.h"
 
 static void test_console_sgr(void)
 {
@@ -35,14 +36,6 @@ static void test_console_sgr(void)
     kprintf("console_sgr: ok\n");
 }
 KTEST_DEFINE("console_sgr", test_console_sgr);
-
-static uint32_t pixel(int x, int y)
-{
-    return fb_read_rgb(&fb_screen, (uint32_t)x, (uint32_t)y);
-}
-
-static int logical_w(void) { return (int)(fb_screen.width / (fb_screen_scale ? fb_screen_scale : 1)); }
-static int logical_h(void) { return (int)(fb_screen.height / (fb_screen_scale ? fb_screen_scale : 1)); }
 
 /* The GPU driver took over at boot; the console follows a mode change
  * done from the kernel; fbmodetest changes the mode through the ioctl,
@@ -78,10 +71,10 @@ static void test_gpu_mode(void)
     inode_put(marker);
     ktest_assert(fb_screen.width == 1280 && fb_screen.height == 800, "mode set through the ioctl: %lux%lu",
                  fb_screen.width, fb_screen.height);
-    ktest_assert(pixel(10, 10) == 0x00336699, "fill colour %08x", pixel(10, 10));
-    ktest_assert(pixel(101, 100) == 0x00ff8800 && pixel(100, 100) == 0x000044ff, "pattern %08x %08x",
-                 pixel(100, 100), pixel(101, 100));
-    ktest_assert(pixel(1279, 799) == 0x00336699, "last pixel of the new mode %08x", pixel(1279, 799));
+    ktest_assert(device_pixel(10, 10) == 0x00336699, "fill colour %08x", device_pixel(10, 10));
+    ktest_assert(device_pixel(101, 100) == 0x00ff8800 && device_pixel(100, 100) == 0x000044ff, "pattern %08x %08x",
+                 device_pixel(100, 100), device_pixel(101, 100));
+    ktest_assert(device_pixel(1279, 799) == 0x00336699, "last pixel of the new mode %08x", device_pixel(1279, 799));
     kprintf("gpu_mode: user mode change and flush ok\n");
     ps2kbd_feed_scancode(0x1c);
     ps2kbd_feed_scancode(0x9c);
@@ -136,9 +129,8 @@ KTEST_DEFINE("input_tablet", test_input_tablet);
 static void test_gui_tablet(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
+    /* The first frame of X12 draws the desktop and the cursor. */
     sleep_ms(1200);
     int sw = (int)fb_screen.width, sh = (int)fb_screen.height;
     /* x = ax * sw / 32768, so ax = x * 32768 / sw lands exactly. */
@@ -147,9 +139,10 @@ static void test_gui_tablet(void)
     virtio_input_feed(EV_ABS, ABS_Y, (uint32_t)((y * 32768 + sh - 1) / sh));
     virtio_input_feed(EV_SYN, SYN_REPORT, 0);
     sleep_ms(300);
-    ktest_assert(pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff,
-                 "cursor at %d,%d: %08x %08x", x, y, pixel(x, y), pixel(x + 1, y + 2));
-    ktest_assert(pixel(sw / 2, sh / 2) == 0x00306080, "old cursor position repainted: %08x", pixel(sw / 2, sh / 2));
+    ktest_assert(device_pixel(x, y) == 0x00000000 && device_pixel(x + 1, y + 2) == 0x00ffffff,
+                 "cursor at %d,%d: %08x %08x", x, y, device_pixel(x, y), device_pixel(x + 1, y + 2));
+    ktest_assert(device_pixel(sw / 2, sh / 2) == 0x00306080, "old cursor position repainted: %08x",
+                 device_pixel(sw / 2, sh / 2));
     kprintf("gui_tablet: cursor follows absolute events\n");
     signal_send(srv, SIGTERM);
     int status = proc_reap(srv);
@@ -165,11 +158,10 @@ static void test_gui_scale2(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(fb_screen_scale == 2, "scale %u, expected 2 (video=WxH@2)", fb_screen_scale);
     int S = 2;
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
+    /* The first frame of X12 draws the desktop and the cursor. */
     sleep_ms(1200);
-    ktest_assert(pixel(0, 0) == 0x00306080, "desktop pixel %08x", pixel(0, 0));
+    ktest_assert(device_pixel(0, 0) == 0x00306080, "desktop pixel %08x", device_pixel(0, 0));
     struct proc *cl = proc_create_user("/bin/guitest", (char *const[]){ "guitest", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start guitest");
@@ -177,24 +169,28 @@ static void test_gui_scale2(void)
     /* Window alpha 300x200 at (40,60), beta 240x160 at (70,90), beta
      * focused. guitest draws device pixels: beta's red rectangle is at
      * device 20..119 x 20..79 inside the surface. */
-    ktest_assert(pixel(70 * S + 60, 90 * S + 40) == 0x00ff0000, "beta red rect at device coordinates: %08x",
-                 pixel(70 * S + 60, 90 * S + 40));
+    ktest_assert(device_pixel(70 * S + 60, 90 * S + 40) == 0x00ff0000, "beta red rect at device coordinates: %08x",
+                 device_pixel(70 * S + 60, 90 * S + 40));
     /* alpha's 8x8 device checkerboard at surface device (20,40). */
     int cx = 40 * S + 20, cy = 60 * S + 40;
-    ktest_assert(pixel(cx, cy) == 0x00000000 && pixel(cx + 1, cy) == 0x00ffffff && pixel(cx, cy + 1) == 0x00ffffff &&
-                 pixel(cx + 1, cy + 1) == 0x00000000, "checkerboard copied 1:1: %08x %08x %08x", pixel(cx, cy),
-                 pixel(cx + 1, cy), pixel(cx, cy + 1));
+    ktest_assert(device_pixel(cx, cy) == 0x00000000 && device_pixel(cx + 1, cy) == 0x00ffffff &&
+                 device_pixel(cx, cy + 1) == 0x00ffffff && device_pixel(cx + 1, cy + 1) == 0x00000000,
+                 "checkerboard copied 1:1: %08x %08x %08x", device_pixel(cx, cy), device_pixel(cx + 1, cy),
+                 device_pixel(cx, cy + 1));
     /* Client decorations at the scale: beta's 30 px header bar is
      * 30 * S device rows tall, its last S rows the hairline, sampled at
      * the middle of the window (the corners are rounded); above it the
      * outline blends over the shadow. */
     int top = (90 - 30) * S, mid = (70 + 120) * S;
-    ktest_assert(pixel(mid, top) == 0x00ebebeb && pixel(mid, top + S - 1) == 0x00ebebeb,
-                 "header bar starts at the scaled row: %08x %08x", pixel(mid, top), pixel(mid, top + S - 1));
-    ktest_assert(pixel(mid, 90 * S - S - 1) == 0x00ebebeb, "header bar spans the scaled height: %08x",
-                 pixel(mid, 90 * S - S - 1));
-    ktest_assert(pixel(mid, 90 * S - 1) == 0x00d4d4d4, "hairline row above the contents: %08x", pixel(mid, 90 * S - 1));
-    ktest_assert(pixel(mid, top - 1) != 0x00ebebeb, "above the frame is the outline: %08x", pixel(mid, top - 1));
+    ktest_assert(device_pixel(mid, top) == 0x00ebebeb && device_pixel(mid, top + S - 1) == 0x00ebebeb,
+                 "header bar starts at the scaled row: %08x %08x", device_pixel(mid, top),
+                 device_pixel(mid, top + S - 1));
+    ktest_assert(device_pixel(mid, 90 * S - S - 1) == 0x00ebebeb, "header bar spans the scaled height: %08x",
+                 device_pixel(mid, 90 * S - S - 1));
+    ktest_assert(device_pixel(mid, 90 * S - 1) == 0x00d4d4d4, "hairline row above the contents: %08x",
+                 device_pixel(mid, 90 * S - 1));
+    ktest_assert(device_pixel(mid, top - 1) != 0x00ebebeb, "above the frame is the outline: %08x",
+                 device_pixel(mid, top - 1));
     kprintf("gui_scale2: clients render at scale %d\n", S);
     signal_send(cl, SIGTERM);
     proc_reap(cl);
@@ -224,8 +220,7 @@ static void set_mode(const char *mode)
 static void test_gui_modes(void)
 {
     ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
-    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
-    sleep_ms(1200);
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
     sleep_ms(500);
     struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });
@@ -248,10 +243,10 @@ static void test_gui_modes(void)
     /* The panel is at the bottom, the terminal has a title bar. */
     int sw = logical_w(), sh = logical_h();
     uint32_t S = fb_screen_scale;
-    ktest_assert(pixel(S * (sw / 2), S * (sh - 14)) == 0x0023272c, "panel after the changes: %08x",
-                 pixel(S * (sw / 2), S * (sh - 14)));
-    ktest_assert(pixel(S * 42, S * 50) == 0x00ebebeb || pixel(S * 42, S * 50) == 0x00fafafa,
-                 "terminal title bar after the changes: %08x", pixel(S * 42, S * 50));
+    ktest_assert(device_pixel(S * (sw / 2), S * (sh - 14)) == 0x0023272c, "panel after the changes: %08x",
+                 device_pixel(S * (sw / 2), S * (sh - 14)));
+    ktest_assert(device_pixel(S * 42, S * 50) == 0x00ebebeb || device_pixel(S * 42, S * 50) == 0x00fafafa,
+                 "terminal title bar after the changes: %08x", device_pixel(S * 42, S * 50));
     kprintf("gui_modes: session survived the mode changes\n");
     signal_send(term, SIGTERM);
     proc_reap(term);

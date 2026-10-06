@@ -587,3 +587,17 @@ These locks are in user space and do not add a kernel lock-order level.
   by the `inode.lock` of its cached inode. A directory operation runs
   under the directory mutex and takes the mutex of the child whose link
   count it changes, the parent before the child as in mfs.
+
+## Readiness check of the boot tests (2026-10-06)
+
+- No new lock. `unix_socket_accepting` (`kernel/ipc/unix_socket.c`)
+  takes `sock_table_lock`, then the `unix_sock.lock` of a listener, then
+  the `waitq.lock` of its `accept_waitq`. This order is the existing
+  order `sock_table_lock -> unix_sock.lock -> waitq.lock`. The function
+  releases both inner locks. Then it takes the `poll_source.lock` of the
+  listener's socket inside `sock_table_lock`. `sock_table_lock ->
+  poll_source.lock` is a new nesting. No path takes `sock_table_lock`
+  with a `poll_source.lock` locked: `poll_files` and
+  `poll_source_notify` lock a source only around its waiter list.
+- `proc_exited` (`kernel/sched/proc.c`) reads `proc.state` under
+  `proc_tree_lock` and takes no other lock.

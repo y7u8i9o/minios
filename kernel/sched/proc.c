@@ -232,6 +232,14 @@ int proc_reap(struct proc *p)
     return status;
 }
 
+bool proc_exited(struct proc *p)
+{
+    spin_lock(&proc_tree_lock);
+    bool exited = p->state == PROC_ZOMBIE;
+    spin_unlock(&proc_tree_lock);
+    return exited;
+}
+
 int proc_count_users(void)
 {
     int n = 0;

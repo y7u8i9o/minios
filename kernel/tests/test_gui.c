@@ -770,11 +770,7 @@ KTEST_DEFINE("gui_drag", test_gui_drag);
  * pixel at (10,10). */
 static struct proc *start_compositor(void)
 {
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", "-v", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(1200);
-    return srv;
+    return start_x12((char *const[]){ "x12", "-s", "-v", NULL });
 }
 
 static void test_comp_core(void)
@@ -1095,10 +1091,8 @@ static void test_gui_kbd_restore(void)
     struct proc *first = proc_create_user("/bin/hello", (char *const[]){ "hello", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(first != NULL, "cannot start hello");
     proc_reap(first);
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL },
-                                        (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(800);
+    /* X12 grabs the input devices before it creates its socket. */
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_assert(input_dev_grabbed(ps2kbd_device()), "compositor did not grab the keyboard");
     ktest_assert(input_dev_grabbed(ps2mouse_device()), "compositor did not grab the mouse");
     signal_send(srv, SIGKILL);
@@ -1606,10 +1600,7 @@ static void test_gui_locale(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     char *const fr[] = { "LANG=fr_FR.UTF-8", NULL }, *const ja[] = { "LANG=ja_JP.UTF-8", NULL };
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
-    sleep_ms(600);
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     struct proc *panel = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, ja, &kernel_proc);
     ktest_assert(panel != NULL, "cannot start the panel");
     sleep_ms(800);

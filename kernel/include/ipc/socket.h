@@ -129,3 +129,8 @@ socklen_t socket_addr_min_len(int family);
 /* The Unix backend (ipc/unix_socket.c). */
 int unix_socket_create(struct socket *s);
 int unix_socket_pair(struct socket *a, struct socket *b);
+/* Whether a thread waits for connections on the listener bound to name.
+ * The thread waits in accept or in a poll call that includes the
+ * listener. The boot tests use the result to see that a server has
+ * reached its main loop. */
+bool unix_socket_accepting(const char *name);
