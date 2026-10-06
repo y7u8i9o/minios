@@ -81,6 +81,71 @@ void debug_send_frame_history_done(struct wire_resource *debug, uint32_t last)
     wire_resource_post(debug, 7, args);
 }
 
+void debug_send_client_info(struct wire_resource *debug, uint32_t number, uint32_t pid, uint32_t uid, uint32_t surfaces, uint32_t pool_bytes, uint32_t not_responding)
+{
+    union wire_arg args[6] = { { 0 } };
+    args[0].u = number;
+    args[1].u = pid;
+    args[2].u = uid;
+    args[3].u = surfaces;
+    args[4].u = pool_bytes;
+    args[5].u = not_responding;
+    wire_resource_post(debug, 8, args);
+}
+
+void debug_send_clients_done(struct wire_resource *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(debug, 9, args);
+}
+
+void debug_send_surface_info(struct wire_resource *debug, uint32_t id, uint32_t found, int32_t buffer_width, int32_t buffer_height, int32_t scale, int32_t transform, uint32_t format, uint32_t opaque_rects, uint32_t commits)
+{
+    union wire_arg args[9] = { { 0 } };
+    args[0].u = id;
+    args[1].u = found;
+    args[2].i = buffer_width;
+    args[3].i = buffer_height;
+    args[4].i = scale;
+    args[5].i = transform;
+    args[6].u = format;
+    args[7].u = opaque_rects;
+    args[8].u = commits;
+    wire_resource_post(debug, 10, args);
+}
+
+void debug_send_surface_captured(struct wire_resource *debug, uint32_t id, int32_t width, int32_t height)
+{
+    union wire_arg args[3] = { { 0 } };
+    args[0].u = id;
+    args[1].i = width;
+    args[2].i = height;
+    wire_resource_post(debug, 11, args);
+}
+
+void debug_send_capture_failed(struct wire_resource *debug, uint32_t id)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = id;
+    wire_resource_post(debug, 12, args);
+}
+
+void debug_send_input_method_info(struct wire_resource *debug, uint32_t index, const char * name, const char * title, uint32_t current)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].u = index;
+    args[1].s = name;
+    args[2].s = title;
+    args[3].u = current;
+    wire_resource_post(debug, 13, args);
+}
+
+void debug_send_input_methods_done(struct wire_resource *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_resource_post(debug, 14, args);
+}
+
 void tracer_send_client(struct wire_resource *tracer, uint32_t number, uint32_t pid, uint32_t connected)
 {
     union wire_arg args[3] = { { 0 } };

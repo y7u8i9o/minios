@@ -96,7 +96,7 @@ drawing, and the qmp script takes a screendump of the page for a
 visual check. The program moved from `user/apps/compsettings.c` to
 `user/x12settings/` with one file per page.
 
-### X3. Clients and surfaces (about 1000 lines)
+### X3. Clients and surfaces (completed 2026-10-06)
 
 Built: buffer memory per client in X12, `get_clients`, `get_surface`,
 `capture_surface`, `highlight` and the outline in the scene,
@@ -108,7 +108,7 @@ Tests: the case `x12settings_clients` requires the pid, the program
 and the pool bytes of two `comptest` windows from `compstat -c`, the
 colour of a captured thumbnail and the outline pixels on the screen.
 
-### X4. All live settings (about 450 lines)
+### X4. All live settings (completed 2026-10-06)
 
 Built: the Settings page with every setting key: display mode, follow
 the host display, frame interval, key repeat, pointer speed and
@@ -120,7 +120,7 @@ Tests: the case `x12settings_settings` changes the pointer speed and
 the desktop colour through the window with the keyboard and checks the
 values with `x12settings get` and a screen pixel.
 
-### X5. Debug views (about 500 lines)
+### X5. Debug views (completed 2026-10-06)
 
 Built: the overlay pass of the scene: damaged rectangles flash for 300
 ms, opaque regions are tinted, and a frame counter in the top right
@@ -134,3 +134,13 @@ checks the tinted pixels, and then the cleared pixels after the flash.
 
 About 3400 changed lines with tests and documents: X1 800, X2 650, X3
 1000, X4 450, X5 500.
+
+## 5. Result of X3 to X5
+
+The owner found the division into five milestones excessive. X3 to X5
+were therefore built and tested together in one step, with one case,
+`x12settings_views`, instead of three. Not built as planned:
+
+- `compstat -c`: `x12settings clients` prints the clients with their
+  programs instead.
+- The case `comp_overlay`: `x12settings_views` checks the views.

@@ -29,11 +29,25 @@ void clients_tick(void);
 void clients_surface(uint32_t id, uint32_t client, const char *role, const char *title, int32_t x, int32_t y,
                      int32_t w, int32_t h, uint32_t mapped, uint32_t format);
 void clients_surfaces_done(void);
+void clients_client(uint32_t number, uint32_t pid, uint32_t uid, uint32_t surfaces, uint32_t pool_bytes,
+                    uint32_t not_responding);
+void clients_done(void);
+void clients_surface_info(uint32_t id, uint32_t found, int32_t bw, int32_t bh, int32_t scale, int32_t transform,
+                          uint32_t format, uint32_t opaque, uint32_t commits);
+void clients_captured(uint32_t id, int32_t w, int32_t h);
+void clients_capture_failed(uint32_t id);
+/* "clients", "capture TITLE" and "highlight TITLE [SECONDS]" without a
+ * window. Returns the exit status. */
+int clients_command(int argc, char **argv);
 
 /* live.c: the settings page. live_value applies a value that X12 reports. */
 void live_build(struct widget *tabs);
+void live_tick(void);
 void live_value(const char *key, int32_t value);
+void live_method(uint32_t index, const char *name, const char *title, uint32_t current);
+void live_methods_done(void);
 
-/* inspect.c: the pixel reader. */
+/* inspect.c: the Debug page with the debug views and the pixel reader. */
 void inspect_build(struct widget *tabs);
+void inspect_value(const char *key, int32_t value);
 void inspect_pixel(int32_t x, int32_t y, uint32_t value);

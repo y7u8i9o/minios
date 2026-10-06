@@ -147,6 +147,7 @@ struct csurface {
     struct layer *layer;
     int stack;                              /* z order among toplevels, higher on top */
     int hotspot_x, hotspot_y;               /* cursor surfaces and drag icons */
+    unsigned commits;                       /* commits since the creation, for x12settings */
     struct csurface *next;
 };
 
@@ -203,6 +204,7 @@ struct comp_settings {
     int ime_shift_toggle;           /* a Shift tap toggles the input method */
     int ime_ctrl_space;             /* Ctrl+Space and Super+Space toggle it */
     int display_follow;             /* the mode follows the size requests of the host display */
+    int debug_damage, debug_opaque, debug_fps;  /* the debug views of overlay.c */
 };
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1
@@ -237,6 +239,20 @@ void stats_values(long *count, long *ms, long *max);
 void stats_send(struct wire_resource *r);
 /* The frame events of the frames after the serial after (debug version 3). */
 void stats_send_history(struct wire_resource *r, uint32_t after);
+/* overlay.c: the debug views of x12settings (docs/design/x12settings.md). */
+void overlay_note_damage(struct rect r);
+void overlay_highlight(struct wire_resource *owner, int id);
+void overlay_owner_gone(struct wire_resource *owner);
+void overlay_surface_gone(struct csurface *s);
+void overlay_settings_changed(void);
+void overlay_frame_begin(void);
+long overlay_next_deadline(void);
+void overlay_tick(long now);
+void overlay_draw(struct rect clip, struct csurface **order, int n);
+/* inputmethod.c: the methods of the input method switch for x12settings. */
+int im_method_count(void);
+int im_current_method(void);
+void im_method_info(int index, const char **name, const char **title);
 void stats_log(void);
 void seat_repeat_changed(void);                 /* seat.c */
 void seat_tick(long now);

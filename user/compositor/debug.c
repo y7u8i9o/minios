@@ -7,7 +7,8 @@
 #include <unistd.h>
 #include "comp.h"
 
-struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1, 1 };
+struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1, 1,
+                                   0, 0, 0 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -68,14 +69,107 @@ static void h_get_frame_history(struct wire_client *c, struct wire_resource *sel
     stats_send_history(self, after);
 }
 
+/* The mapped shared memory pools of each client are the shm_pool
+ * resources it holds. */
+static void h_get_clients(struct wire_client *c, struct wire_resource *self)
+{
+    for (struct wire_client *k = wire_server_first_client(server); k; k = wire_client_next(k)) {
+        struct client *cl = wire_client_get_user_data(k);
+        if (!cl)
+            continue;
+        uint64_t pools = 0;
+        for (struct wire_resource *r = wire_client_first_resource(k); r; r = r->next)
+            if (r->obj.interface == &shm_pool_interface && r->data)
+                pools += ((struct pool *)r->data)->size;
+        unsigned surfaces = 0;
+        for (struct csurface *s = surface_first(); s; s = s->next)
+            surfaces += s->client == cl;
+        debug_send_client_info(self, (uint32_t)cl->number, (uint32_t)cl->pid, cl->uid, surfaces,
+                               pools > UINT32_MAX ? UINT32_MAX : (uint32_t)pools, (uint32_t)cl->unresponsive);
+    }
+    debug_send_clients_done(self);
+}
+
+static struct csurface *surface_by_id(uint32_t id)
+{
+    for (struct csurface *s = surface_first(); s; s = s->next)
+        if ((uint32_t)s->id == id)
+            return s;
+    return NULL;
+}
+
+static void h_get_surface(struct wire_client *c, struct wire_resource *self, uint32_t id)
+{
+    struct csurface *s = surface_by_id(id);
+    struct buffer *b = s ? s->current.buffer : NULL;
+    if (!s) {
+        debug_send_surface_info(self, id, 0, 0, 0, 0, 0, 0, 0, 0);
+        return;
+    }
+    debug_send_surface_info(self, id, 1, b ? b->width : 0, b ? b->height : 0, s->current.scale > 0 ? s->current.scale : 1,
+                            s->current.transform, b ? b->format : 0, (uint32_t)s->current.nopaque, s->commits);
+}
+
+/* The current buffer of the surface, scaled with nearest neighbour
+ * sampling to fit the target buffer with its aspect ratio. The rest of
+ * the target is transparent. */
+static void h_capture_surface(struct wire_client *c, struct wire_resource *self, uint32_t id,
+                              struct wire_resource *buffer)
+{
+    struct csurface *s = surface_by_id(id);
+    struct buffer *src = s ? s->current.buffer : NULL, *dst = buffer ? buffer->data : NULL;
+    if (!src || !dst || !src->pool->map || !dst->pool->map || src->width <= 0 || src->height <= 0) {
+        debug_send_capture_failed(self, id);
+        return;
+    }
+    int w = dst->width, h = src->height * dst->width / src->width;
+    if (h > dst->height) {
+        h = dst->height;
+        w = src->width * dst->height / src->height;
+    }
+    for (int y = 0; y < dst->height; y++) {
+        uint32_t *to = (uint32_t *)(dst->pool->map + dst->offset + (size_t)y * dst->stride);
+        const uint32_t *from =
+            y < h ? (const uint32_t *)(src->pool->map + src->offset + (size_t)(y * src->height / h) * src->stride) : NULL;
+        for (int x = 0; x < dst->width; x++) {
+            uint32_t v = from && x < w ? from[x * src->width / w] : 0;
+            to[x] = from && x < w && src->format == FORMAT_XRGB8888 ? v | 0xff000000u : v;
+        }
+    }
+    debug_send_surface_captured(self, id, w, h);
+}
+
+static void h_highlight(struct wire_client *c, struct wire_resource *self, uint32_t id)
+{
+    overlay_highlight(self, (int)id);
+}
+
+static void h_get_input_methods(struct wire_client *c, struct wire_resource *self)
+{
+    int n = im_method_count(), current = im_current_method();
+    for (int i = 0; i < n; i++) {
+        const char *name, *title;
+        im_method_info(i, &name, &title);
+        debug_send_input_method_info(self, (uint32_t)i, name, title, i == current);
+    }
+    debug_send_input_methods_done(self);
+}
+
 static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel, h_get_frame_stats,
-                                                  h_reset_frame_stats, h_get_frame_history };
+                                                  h_reset_frame_stats, h_get_frame_history, h_get_clients,
+                                                  h_get_surface, h_capture_surface, h_highlight,
+                                                  h_get_input_methods };
+
+static void debug_resource_gone(struct wire_resource *r)
+{
+    overlay_owner_gone(r);
+}
 
 static void bind_debug(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
     struct wire_resource *r = wire_resource_create(c, &debug_interface, (int)version, id);
     if (r)
-        wire_resource_set_listener(r, &debug_handlers, NULL, NULL);
+        wire_resource_set_listener(r, &debug_handlers, NULL, debug_resource_gone);
 }
 
 /* ---- screen capture ---- */
@@ -161,7 +255,7 @@ void debug_screen_changed(void)
 
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
                                     "display_mode", "pointer_speed", "pointer_accel", "ime_shift_toggle",
-                                    "ime_ctrl_space", "display_follow" };
+                                    "ime_ctrl_space", "display_follow", "debug_damage", "debug_opaque", "debug_fps" };
 
 static int *slot(const char *key)
 {
@@ -177,6 +271,9 @@ static int *slot(const char *key)
     if (strcmp(key, "ime_shift_toggle") == 0) return &settings.ime_shift_toggle;
     if (strcmp(key, "ime_ctrl_space") == 0) return &settings.ime_ctrl_space;
     if (strcmp(key, "display_follow") == 0) return &settings.display_follow;
+    if (strcmp(key, "debug_damage") == 0) return &settings.debug_damage;
+    if (strcmp(key, "debug_opaque") == 0) return &settings.debug_opaque;
+    if (strcmp(key, "debug_fps") == 0) return &settings.debug_fps;
     return NULL;
 }
 
@@ -224,6 +321,9 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.pointer_speed && (value < -100 || value > 100)) return;
     if (p == &settings.pointer_accel && value != POINTER_ACCEL_FLAT && value != POINTER_ACCEL_ADAPTIVE) return;
     if (p == &settings.display_follow && value != 0 && value != 1) return;
+    if ((p == &settings.debug_damage || p == &settings.debug_opaque || p == &settings.debug_fps) && value != 0 &&
+        value != 1)
+        return;
     if (p == &settings.display_mode) {
         if (value == settings.display_mode)
             return;
@@ -240,6 +340,8 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
         frame_clock_set(settings.frame_ms);
     if (p == &settings.desktop_color)
         scene_damage_all();
+    if (p == &settings.debug_damage || p == &settings.debug_opaque || p == &settings.debug_fps)
+        overlay_settings_changed();
     if (p == &settings.repeat_rate || p == &settings.repeat_delay)
         seat_repeat_changed();
     debug_setting_changed(key, value);

@@ -41,6 +41,40 @@ void debug_get_frame_history(struct wire_proxy *debug, uint32_t after)
     wire_proxy_marshal(debug, 5, args, NULL);
 }
 
+void debug_get_clients(struct wire_proxy *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(debug, 6, args, NULL);
+}
+
+void debug_get_surface(struct wire_proxy *debug, uint32_t id)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = id;
+    wire_proxy_marshal(debug, 7, args, NULL);
+}
+
+void debug_capture_surface(struct wire_proxy *debug, uint32_t id, struct wire_proxy * buffer)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = id;
+    args[1].o = buffer ? buffer->obj.id : 0;
+    wire_proxy_marshal(debug, 8, args, NULL);
+}
+
+void debug_highlight(struct wire_proxy *debug, uint32_t id)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].u = id;
+    wire_proxy_marshal(debug, 9, args, NULL);
+}
+
+void debug_get_input_methods(struct wire_proxy *debug)
+{
+    union wire_arg args[1] = { { 0 } };
+    wire_proxy_marshal(debug, 10, args, NULL);
+}
+
 void tracer_start(struct wire_proxy *tracer)
 {
     union wire_arg args[1] = { { 0 } };

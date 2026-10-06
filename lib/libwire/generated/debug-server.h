@@ -15,6 +15,11 @@ struct debug_impl {
     void (*get_frame_stats)(struct wire_client *client, struct wire_resource *self);
     void (*reset_frame_stats)(struct wire_client *client, struct wire_resource *self);
     void (*get_frame_history)(struct wire_client *client, struct wire_resource *self, uint32_t after);
+    void (*get_clients)(struct wire_client *client, struct wire_resource *self);
+    void (*get_surface)(struct wire_client *client, struct wire_resource *self, uint32_t id);
+    void (*capture_surface)(struct wire_client *client, struct wire_resource *self, uint32_t id, struct wire_resource * buffer);
+    void (*highlight)(struct wire_client *client, struct wire_resource *self, uint32_t id);
+    void (*get_input_methods)(struct wire_client *client, struct wire_resource *self);
 };
 void debug_send_stats(struct wire_resource *debug, uint32_t uptime_ms, uint32_t compositions, uint32_t compose_ms, uint32_t compose_max_ms, uint32_t clients, uint32_t surfaces, uint32_t frame_ms);
 void debug_send_surface(struct wire_resource *debug, uint32_t id, uint32_t client, const char * role, const char * title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped, uint32_t format);
@@ -24,6 +29,13 @@ void debug_send_frame_stat(struct wire_resource *debug, const char * key, uint32
 void debug_send_frame_stats_done(struct wire_resource *debug);
 void debug_send_frame(struct wire_resource *debug, uint32_t serial, uint32_t end_ms, uint32_t total_us, uint32_t compose_us, uint32_t flush_us, uint32_t pixels, uint32_t latency_us);
 void debug_send_frame_history_done(struct wire_resource *debug, uint32_t last);
+void debug_send_client_info(struct wire_resource *debug, uint32_t number, uint32_t pid, uint32_t uid, uint32_t surfaces, uint32_t pool_bytes, uint32_t not_responding);
+void debug_send_clients_done(struct wire_resource *debug);
+void debug_send_surface_info(struct wire_resource *debug, uint32_t id, uint32_t found, int32_t buffer_width, int32_t buffer_height, int32_t scale, int32_t transform, uint32_t format, uint32_t opaque_rects, uint32_t commits);
+void debug_send_surface_captured(struct wire_resource *debug, uint32_t id, int32_t width, int32_t height);
+void debug_send_capture_failed(struct wire_resource *debug, uint32_t id);
+void debug_send_input_method_info(struct wire_resource *debug, uint32_t index, const char * name, const char * title, uint32_t current);
+void debug_send_input_methods_done(struct wire_resource *debug);
 
 struct tracer_impl {
     void (*start)(struct wire_client *client, struct wire_resource *self);

@@ -51,6 +51,7 @@ void scene_damage(struct rect r)
         return;
     stats_mark(STATS_DAMAGE);
     rect_set_add(&damage, r);
+    overlay_note_damage(r);
 }
 
 void scene_damage_all(void)
@@ -501,6 +502,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             hang_draw(s, pieces[k]);
         }
     }
+    overlay_draw(r, order, n);
     draw_cursor(r);
 }
 
@@ -508,6 +510,7 @@ void scene_compose(void)
 {
     if (!damage.n)
         return;
+    overlay_frame_begin();
     long t0 = stats_frame_begin();
     struct csurface *order[256];
     int n = scene_order(order, 256);

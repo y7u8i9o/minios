@@ -12,7 +12,16 @@
        then frame_history_done with the serial of the newest frame. The
        serials count the frames since the start of X12, from 1, and a
        reset of the statistics does not clear the history. latency_us is
-       the longest latency that the frame ended. -->
+       the longest latency that the frame ended.
+       get_clients sends one client_info per client (pool_bytes: the
+       mapped shared memory pools of the client), then clients_done.
+       get_surface sends surface_info, with found 0 for an unknown id.
+       capture_surface scales the current buffer of the surface into the
+       given buffer of 32 bit pixels, then surface_captured with the used
+       size, or capture_failed. highlight outlines the surface on the
+       screen until the next highlight, 0 for none, or until the client
+       disconnects. get_input_methods sends input_method_info per method
+       of the input method switch, then input_methods_done. -->
   <interface name="debug" version="3">
     <request name="get_stats"/>
     <request name="get_surfaces"/>
@@ -42,6 +51,28 @@
       <arg name="latency_us" type="uint"/>
     </event>
     <event name="frame_history_done"><arg name="last" type="uint"/></event>
+    <request name="get_clients"/>
+    <event name="client_info">
+      <arg name="number" type="uint"/><arg name="pid" type="uint"/><arg name="uid" type="uint"/>
+      <arg name="surfaces" type="uint"/><arg name="pool_bytes" type="uint"/><arg name="not_responding" type="uint"/>
+    </event>
+    <event name="clients_done"/>
+    <request name="get_surface"><arg name="id" type="uint"/></request>
+    <event name="surface_info">
+      <arg name="id" type="uint"/><arg name="found" type="uint"/><arg name="buffer_width" type="int"/>
+      <arg name="buffer_height" type="int"/><arg name="scale" type="int"/><arg name="transform" type="int"/>
+      <arg name="format" type="uint"/><arg name="opaque_rects" type="uint"/><arg name="commits" type="uint"/>
+    </event>
+    <request name="capture_surface"><arg name="id" type="uint"/><arg name="buffer" type="object" interface="buffer"/></request>
+    <event name="surface_captured"><arg name="id" type="uint"/><arg name="width" type="int"/><arg name="height" type="int"/></event>
+    <event name="capture_failed"><arg name="id" type="uint"/></event>
+    <request name="highlight"><arg name="id" type="uint"/></request>
+    <request name="get_input_methods"/>
+    <event name="input_method_info">
+      <arg name="index" type="uint"/><arg name="name" type="string"/><arg name="title" type="string"/>
+      <arg name="current" type="uint"/>
+    </event>
+    <event name="input_methods_done"/>
   </interface>
 
   <!-- The protocol traffic of every other client (wireview). start sends

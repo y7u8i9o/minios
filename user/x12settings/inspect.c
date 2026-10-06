@@ -1,10 +1,38 @@
-/* The Inspector page: one pixel of the composed screen. */
+/* The Debug page: the debug views of X12 (overlay.c of the compositor)
+ * and one pixel of the composed screen. */
 #include <stdio.h>
+#include <string.h>
 #include <gui/client.h>
 #include "x12settings.h"
 #include "debug-client.h"
 
 static struct widget *px_x, *px_y, *px_value, *px_swatch;
+static struct widget *view_boxes[3];
+static const char *const view_keys[3] = { "debug_damage", "debug_opaque", "debug_fps" };
+static const char *const view_texts[3] = {
+    "Flash the composed rectangles in red for 300 ms",
+    "Tint the opaque regions of the surfaces in green",
+    "Show the frames of the last second in the top right corner",
+};
+static int applying;
+
+void inspect_value(const char *key, int32_t value)
+{
+    for (int i = 0; i < 3; i++)
+        if (strcmp(key, view_keys[i]) == 0 && view_boxes[i] && view_boxes[i]->value != (value != 0)) {
+            applying = 1;
+            view_boxes[i]->value = value != 0;
+            widget_invalidate(view_boxes[i]);
+            applying = 0;
+        }
+}
+
+static int on_view(struct widget *w, void *args, void *arg)
+{
+    if (!applying)
+        setting_send(view_keys[(long)arg], w->value);
+    return 0;
+}
 static uint32_t pixel_value;
 static int have_pixel;
 
@@ -38,7 +66,14 @@ static int on_px_swatch(struct widget *w, void *args, void *arg)
 
 void inspect_build(struct widget *tabs)
 {
-    struct widget *inspector = tabs_add(tabs, "Inspector");
+    struct widget *inspector = tabs_add(tabs, "Debug");
+    label_new(inspector, "Views of X12");
+    for (long i = 0; i < 3; i++) {
+        view_boxes[i] = checkbox_new(inspector, view_texts[i]);
+        widget_connect(view_boxes[i], "toggled", on_view, (void *)i);
+    }
+    separator_new(inspector);
+    label_new(inspector, "A pixel of the composed screen");
     struct widget *grid = grid_new(inspector);
     widget_set_stretch(grid, 1, 0);
     grid_set_stretch(grid, -1, 1, 1);

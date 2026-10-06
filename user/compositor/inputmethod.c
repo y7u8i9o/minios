@@ -735,3 +735,21 @@ void im_init(struct wire_server *srv)
     rebuild_methods();
     wire_global_create(srv, &input_method_manager_interface, 1, bind_manager, NULL);
 }
+
+int im_method_count(void)
+{
+    if (!nmethods)
+        rebuild_methods();
+    return nmethods;
+}
+
+int im_current_method(void)
+{
+    return current;
+}
+
+void im_method_info(int index, const char **name, const char **title)
+{
+    *name = index >= 0 && index < nmethods ? methods[index].name : "";
+    *title = index >= 0 && index < nmethods ? methods[index].title : "";
+}

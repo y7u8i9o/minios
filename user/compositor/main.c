@@ -127,6 +127,7 @@ static void flush_clients(void)
     hang_tick(now);
     im_tick(now);
     seat_tick(now);
+    overlay_tick(now);
 }
 
 static void frame(void)
@@ -183,8 +184,9 @@ static void schedule_frame(void)
  * none. */
 static int poll_timeout(void)
 {
-    long deadlines[3] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline() }, next = -1;
-    for (int i = 0; i < 3; i++)
+    long deadlines[4] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline(), overlay_next_deadline() };
+    long next = -1;
+    for (int i = 0; i < 4; i++)
         if (deadlines[i] >= 0 && (next < 0 || deadlines[i] < next))
             next = deadlines[i];
     if (next < 0)

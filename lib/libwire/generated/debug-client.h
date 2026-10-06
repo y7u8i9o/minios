@@ -17,6 +17,13 @@ struct debug_listener {
     void (*frame_stats_done)(void *user, struct wire_proxy *self);
     void (*frame)(void *user, struct wire_proxy *self, uint32_t serial, uint32_t end_ms, uint32_t total_us, uint32_t compose_us, uint32_t flush_us, uint32_t pixels, uint32_t latency_us);
     void (*frame_history_done)(void *user, struct wire_proxy *self, uint32_t last);
+    void (*client_info)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t uid, uint32_t surfaces, uint32_t pool_bytes, uint32_t not_responding);
+    void (*clients_done)(void *user, struct wire_proxy *self);
+    void (*surface_info)(void *user, struct wire_proxy *self, uint32_t id, uint32_t found, int32_t buffer_width, int32_t buffer_height, int32_t scale, int32_t transform, uint32_t format, uint32_t opaque_rects, uint32_t commits);
+    void (*surface_captured)(void *user, struct wire_proxy *self, uint32_t id, int32_t width, int32_t height);
+    void (*capture_failed)(void *user, struct wire_proxy *self, uint32_t id);
+    void (*input_method_info)(void *user, struct wire_proxy *self, uint32_t index, const char * name, const char * title, uint32_t current);
+    void (*input_methods_done)(void *user, struct wire_proxy *self);
 };
 static inline int debug_add_listener(struct wire_proxy *p, const struct debug_listener *l, void *user)
 { return wire_proxy_add_listener(p, (const void *)l, user); }
@@ -26,6 +33,11 @@ void debug_read_pixel(struct wire_proxy *debug, int32_t x, int32_t y);
 void debug_get_frame_stats(struct wire_proxy *debug);
 void debug_reset_frame_stats(struct wire_proxy *debug);
 void debug_get_frame_history(struct wire_proxy *debug, uint32_t after);
+void debug_get_clients(struct wire_proxy *debug);
+void debug_get_surface(struct wire_proxy *debug, uint32_t id);
+void debug_capture_surface(struct wire_proxy *debug, uint32_t id, struct wire_proxy * buffer);
+void debug_highlight(struct wire_proxy *debug, uint32_t id);
+void debug_get_input_methods(struct wire_proxy *debug);
 
 struct tracer_listener {
     void (*client)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t connected);

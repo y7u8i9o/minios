@@ -166,6 +166,7 @@ static void surface_resource_destroy(struct wire_resource *r)
     if (s->current.buffer)
         s->current.buffer->busy = 0;
     seat_surface_gone(s);
+    overlay_surface_gone(s);
     data_surface_gone(s);
     shell_surface_gone(s);
     im_surface_gone(s);
@@ -411,6 +412,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     for (int i = 0; i < s->pending.ncallbacks && s->nframe_cbs < 8; i++)
         s->frame_cbs[s->nframe_cbs++] = s->pending.callbacks[i];
     s->pending.ncallbacks = 0;
+    s->commits++;
     /* A device cursor receives the new image of a cursor surface. */
     if (s->role == ROLE_CURSOR)
         scene_cursor_changed();
@@ -551,6 +553,8 @@ void client_attach(struct wire_client *wc)
         return;
     c->wc = wc;
     c->uid = peer.uid;
+    /* The pid of the socket peer. shell_set_pid of the client replaces it. */
+    c->pid = peer.pid;
     c->number = next_client++;
     wire_client_set_user_data(wc, c, client_gone);
     hang_client_attached(c);

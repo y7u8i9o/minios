@@ -1,6 +1,9 @@
 /* x12settings: the state and the settings of the running X12 through
  * the debug and settings interfaces (docs/design/x12settings.md).
- * "x12settings set KEY VALUE" applies one setting without a window. The
+ * "x12settings set KEY VALUE" applies one setting without a window.
+ * "x12settings clients", "x12settings capture TITLE" and "x12settings
+ * highlight TITLE [SECONDS]" print the clients and surfaces, capture a
+ * surface and outline it on the screen. The
  * user's persistent choices belong to the Settings program. This tool
  * changes the running server until it exits. */
 #include <stdio.h>
@@ -24,7 +27,11 @@ void setting_send(const char *key, int value)
 
 /* ---- events ---- */
 
-static void on_value(void *user, struct wire_proxy *p, const char *key, int32_t value) { live_value(key, value); }
+static void on_value(void *user, struct wire_proxy *p, const char *key, int32_t value)
+{
+    live_value(key, value);
+    inspect_value(key, value);
+}
 static void on_settings_done(void *user, struct wire_proxy *p) {}
 static const struct settings_listener settings_events = { on_value, on_settings_done };
 
@@ -61,16 +68,48 @@ static void on_frame(void *user, struct wire_proxy *p, uint32_t serial, uint32_t
 
 static void on_frame_history_done(void *user, struct wire_proxy *p, uint32_t last) { perf_history_done(last); }
 
+static void on_client_info(void *user, struct wire_proxy *p, uint32_t number, uint32_t pid, uint32_t uid,
+                           uint32_t surfaces, uint32_t pool_bytes, uint32_t not_responding)
+{
+    clients_client(number, pid, uid, surfaces, pool_bytes, not_responding);
+}
+
+static void on_clients_done(void *user, struct wire_proxy *p) { clients_done(); }
+
+static void on_surface_info(void *user, struct wire_proxy *p, uint32_t id, uint32_t found, int32_t bw, int32_t bh,
+                            int32_t scale, int32_t transform, uint32_t format, uint32_t opaque, uint32_t commits)
+{
+    clients_surface_info(id, found, bw, bh, scale, transform, format, opaque, commits);
+}
+
+static void on_surface_captured(void *user, struct wire_proxy *p, uint32_t id, int32_t w, int32_t h)
+{
+    clients_captured(id, w, h);
+}
+
+static void on_capture_failed(void *user, struct wire_proxy *p, uint32_t id) { clients_capture_failed(id); }
+
+static void on_input_method_info(void *user, struct wire_proxy *p, uint32_t index, const char *name,
+                                 const char *title, uint32_t current)
+{
+    live_method(index, name, title, current);
+}
+
+static void on_input_methods_done(void *user, struct wire_proxy *p) { live_methods_done(); }
+
 static const struct debug_listener debug_events = {
     .stats = on_stats, .surface = on_surface, .surfaces_done = on_surfaces_done, .pixel = on_pixel,
     .frame_stat = on_frame_stat, .frame_stats_done = on_frame_stats_done, .frame = on_frame,
-    .frame_history_done = on_frame_history_done,
+    .frame_history_done = on_frame_history_done, .client_info = on_client_info, .clients_done = on_clients_done,
+    .surface_info = on_surface_info, .surface_captured = on_surface_captured, .capture_failed = on_capture_failed,
+    .input_method_info = on_input_method_info, .input_methods_done = on_input_methods_done,
 };
 
 static void tick(void *arg)
 {
     perf_tick();
     clients_tick();
+    live_tick();
     gui_flush();
 }
 
@@ -96,6 +135,12 @@ int main(int argc, char **argv)
         fflush(stdout);
         app_destroy(app);
         return 0;
+    }
+    if (argc >= 2 && (strcmp(argv[1], "clients") == 0 || strcmp(argv[1], "capture") == 0 ||
+                      strcmp(argv[1], "highlight") == 0)) {
+        int status = clients_command(argc, argv);
+        app_destroy(app);
+        return status;
     }
     struct widget *win = app_window(app, 760, 560, "X12 settings");
     if (!win)

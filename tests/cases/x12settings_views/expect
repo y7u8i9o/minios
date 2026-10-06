@@ -1,0 +1,6 @@
+x12settings: client [0-9]+ pid [0-9]+ program comptest surfaces 1 pools [1-9][0-9]* bytes
+x12settings: surface [0-9]+ client [0-9]+ role toplevel title "seat"
+x12settings: captured surface [0-9]+ at 213x160, centre 0xc8f0c8
+x12settings: surface [0-9]+ outlined
+x12settings_views: ok
+TEST PASS

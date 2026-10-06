@@ -1,0 +1,5 @@
+# The Clients and Settings pages for a visual check.
+wait x12settings_views: clients shown
+screendump clients.ppm
+wait x12settings_views: settings shown
+screendump settings.ppm

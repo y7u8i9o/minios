@@ -26,8 +26,8 @@ packed display mode or the list of resolutions.
 The program consists of `main.c`, which connects to X12, binds the
 `debug` interface of version 3 and the `settings` interface, dispatches
 their events and builds the window, and of one file per page. The
-window has the tabs Performance (`perf.c`), Surfaces (`clients.c`),
-Settings (`live.c`) and Inspector (`inspect.c`). A timer sends the
+window has the tabs Performance (`perf.c`), Clients (`clients.c`),
+Settings (`live.c`) and Debug (`inspect.c`). A timer sends the
 requests of the pages once per second. The line `x12settings: up ...`
 reports the basic counters at each refresh.
 
@@ -66,3 +66,50 @@ with frames prints `x12settings: second of N frames, ...`.
 The case `x12settings_perf` checks the history after 10 commits of
 `comptest damage` with `compstat -h`, and the printed seconds while
 `compbench anim` runs. Its qmp script takes a screendump of the page.
+
+## Clients page
+
+The debug interface of version 3 reports each client with its pid, uid,
+number of surfaces and the bytes of its mapped shared memory pools
+(`get_clients`). X12 takes the pid from the peer credentials of the
+socket at connect time, and `shell_set_pid` of the client replaces it.
+The page shows a tree of the clients, with the program from the process
+table, and of their surfaces. Selecting a surface requests its details
+(`get_surface`: buffer size, scale, transform, format, opaque rectangles,
+commits), a thumbnail (`capture_surface` scales the current buffer into a
+shared buffer of 240x160 pixels of the tool), and an outline in magenta
+on the screen (`highlight`). The outline disappears when the selection
+changes or the tool disconnects. `x12settings clients`, `x12settings
+capture TITLE` and `x12settings highlight TITLE [SECONDS]` do the same
+without a window.
+
+## Settings page
+
+Every setting of X12 has a control, which sends its value at once: the
+display mode with its scale, following the host window, the frame
+interval, key repeat, the keymap reload, pointer speed and
+acceleration, the input method (the list comes from `get_input_methods`)
+and its two switch keys, the decorations, the desktop colour through
+the colour button, and logging. The controls follow the values that X12
+reports, also after a change by another client.
+
+## Debug page and views
+
+The page switches the three debug views of X12 (`user/compositor/
+overlay.c`), which are the setting keys `debug_damage`, `debug_opaque` and
+`debug_fps`, and contains the pixel reader:
+
+- `debug_damage`: each composed rectangle is tinted red for 300 ms. The
+  flashes are recorded before the frame composes, so the frame draws
+  them, and their expiry damages the rectangles again. Damage that the
+  views add for themselves does not flash.
+- `debug_opaque`: the opaque regions of the surfaces are tinted green.
+- `debug_fps`: a box in the top right corner shows the frames of the last
+  second. The views redraw it once per second when the number changes,
+  and frames that only redraw the views do not count.
+
+The case `x12settings_views` checks the client listing, the capture of a
+`comptest` window, the outline and its removal at the exit of the tool,
+the green tint, the frame counter and the red flash after a new desktop
+colour. Its qmp script takes screendumps of the Clients and Settings
+pages.
