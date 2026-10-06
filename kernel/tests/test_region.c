@@ -77,8 +77,18 @@ static void test_gui_region(void)
     tap(TAB);                       /* the language */
     press_down(2);                  /* en_US, es_ES, fr_FR */
     taps(TAB, 2);                   /* the formats, the time zone */
-    press_down(33);                 /* from UTC to Asia/Tokyo in zones.tab */
-    ktest_wait_idle(300);
+    /* From UTC to Asia/Tokyo in zones.tab. The last two presses follow
+     * each other without a pause, so the last one arrives while ln
+     * applies the zone of the one before. The page must still apply
+     * Asia/Tokyo at the end. */
+    press_down(31);
+    for (int i = 0; i < 2; i++) {
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0x50);
+        ps2kbd_feed_scancode(0xe0);
+        ps2kbd_feed_scancode(0xd0);
+    }
+    ktest_wait_idle(1000);
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);

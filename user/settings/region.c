@@ -219,13 +219,17 @@ static int on_zone(struct widget *w, void *args, void *arg)
     zone_busy = 1;
     int applied = -1;
     while (w->value >= 0 && w->value < nzones && w->value != applied) {
-        if (set_zone(w->value) < 0) {
+        /* The event loop of set_zone handles the keys that arrive while
+         * ln runs, and they change w->value. The applied zone is the one
+         * that set_zone received. */
+        int zone = w->value;
+        if (set_zone(zone) < 0) {
             building = 1;
             combobox_select(w, current_zone());
             building = 0;
             break;
         }
-        applied = w->value;
+        applied = zone;
     }
     zone_busy = 0;
     show_sample();
