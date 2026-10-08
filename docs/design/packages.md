@@ -293,9 +293,13 @@ library packages and `tools/mkpkg.sh` the `needs` lines of every package:
 libc has ABI 2 since the profiler client left it for `libprof.so` (P2 of
 `docs/plan/packaging.md`). Removing functions is an incompatible change,
 which means a package built against ABI 1 is refused until it is rebuilt.
-libgui has ABI 2 since G8 of `docs/plan/compositor-performance.md`. A
+libgui had ABI 2 since G8 of `docs/plan/compositor-performance.md`. A
 program that draws without the framework must call `gui_begin_paint`
-before it draws, and `gui_window.surf` moves between buffers.
+before it draws, and `gui_window.surf` moves between buffers. libgui has
+ABI 3 since K2 of `docs/plan/widgets.md`. `struct gui_stats` received
+the counters of the framework work. `struct widget` and `struct theme`
+grow in later milestones of the same plan. All of them land before the
+next release, so the plan raises the number once.
 Application packages (`user/packages/packages.mk`) receive the same
 serial numbers in a development build through `tools/pkgserial.py`, in
 the version of the manifest while the file name retains the plain

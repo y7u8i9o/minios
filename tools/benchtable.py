@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
-"""Print the results of the boot cases comp_bench and comp_bench_hidpi as
-Markdown tables (docs/design/graphics-performance.md).
+"""Print the results of the boot cases comp_bench, comp_bench_hidpi,
+gui_bench and gui_bench_hidpi as Markdown tables
+(docs/design/graphics-performance.md).
 
 usage: tools/benchtable.py SERIAL_LOG...
 
 Each log is the serial.txt of one case. A table has one row per scenario:
 drag, pointer and resize from the compstat lines that follow the lines
 "comp_bench: NAME done", and blink, anim and idle from the lines of
-compbench. Times are milliseconds with one decimal, pixels are millions
-of device pixels."""
+compbench. The widget scenarios of gui_bench (wheel, type, status, edit,
+scroll and hover) give a second table with the counters of libgui. Times
+are milliseconds with one decimal, pixels are millions of device
+pixels."""
 import re
 import sys
 
 ORDER = ["drag", "pointer", "resize", "blink", "anim", "idle"]
+WIDGET_ORDER = ["wheel", "type", "status", "edit", "scroll", "hover"]
+WIDGET_COLUMNS = [
+    ("paints", lambda v: str(v.get("paints", 0))),
+    ("paint ms", lambda v: "%.1f" % (v.get("paint_us", 0) / 1000)),
+    ("widget paints", lambda v: str(v.get("widget_paints", 0))),
+    ("painted Mpx", lambda v: "%.2f" % (v.get("painted_pixels", 0) / 1e6)),
+    ("layouts", lambda v: str(v.get("layouts", 0))),
+    ("text shapes", lambda v: str(v.get("text_shapes", 0))),
+]
 COLUMNS = [
     ("frames", "frames", lambda v: str(v.get("frames", 0))),
     ("Mpx", "composed Mpx", lambda v: "%.2f" % (v.get("pixels", 0) / 1e6)),
@@ -34,10 +46,10 @@ def values(text):
 
 
 def parse(path):
-    rows, screen, pending = {}, "", None
+    rows, widgets, screen, pending = {}, {}, "", None
     with open(path, errors="replace") as f:
         for line in f:
-            m = re.match(r"comp_bench: screen (\S+) scale (\d+)", line)
+            m = re.match(r"(?:comp|gui)_bench: screen (\S+) scale (\d+)", line)
             if m:
                 screen = "%s at scale %s" % m.groups()
             m = re.match(r"comp_bench: (\w+) done", line)
@@ -52,10 +64,12 @@ def parse(path):
             if m:
                 rows[m.group(1)] = values(m.group(2))
             m = re.match(r"compbench: (\w+) client (.*)", line)
+            if m and m.group(1) in WIDGET_ORDER:
+                widgets[m.group(1)] = values(m.group(2))
             if m and m.group(1) in rows:
                 client = values(m.group(2))
                 rows[m.group(1)]["client_copy_us"] = client.get("copy_us", 0)
-    return screen, rows
+    return screen, rows, widgets
 
 
 def main():
@@ -63,8 +77,16 @@ def main():
         print(__doc__.strip(), file=sys.stderr)
         return 2
     for path in sys.argv[1:]:
-        screen, rows = parse(path)
+        screen, rows, widgets = parse(path)
         print("Screen %s:\n" % screen)
+        if widgets:
+            print("| scenario | " + " | ".join(c[0] for c in WIDGET_COLUMNS) + " |")
+            print("|---" * (len(WIDGET_COLUMNS) + 1) + "|")
+            for name in WIDGET_ORDER:
+                if name in widgets:
+                    print("| %s | %s |" % (name, " | ".join(c[1](widgets[name]) for c in WIDGET_COLUMNS)))
+            print()
+            continue
         print("| scenario | " + " | ".join(c[1] for c in COLUMNS) + " | client copy ms |")
         print("|---" * (len(COLUMNS) + 2) + "|")
         for name in ORDER:

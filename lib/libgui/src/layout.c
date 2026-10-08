@@ -19,6 +19,7 @@ void widget_measure(struct widget *w);
 void widget_measure(struct widget *w)
 {
     struct size_hint h = { 0 };
+    gui_count(GUI_COUNT_LAYOUTS, 1);
     if (w->cls->measure)
         w->cls->measure(w, &h);
     if (w->hint.pref_w) h.pref_w = w->hint.pref_w;

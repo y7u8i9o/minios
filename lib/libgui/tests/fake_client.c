@@ -12,6 +12,7 @@ static struct wmsg queue[256];
 static int qhead, qtail;
 struct rect fake_last_damage;
 int fake_scale = 1;
+uint64_t fake_damage_pixels;
 int fake_damage_count;
 static char clip[WSRV_CLIP_MAX];
 static int clip_len;
@@ -111,6 +112,7 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
     struct rect r = { x, y, width, height };
     fake_last_damage = r;
     fake_damage_count++;
+    fake_damage_pixels += (uint64_t)width * height * w->scale * w->scale;
 }
 void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
 void gui_set_input_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
@@ -125,6 +127,16 @@ void gui_count_paint(long us)
 {
     fake_stats.paints++;
     fake_stats.paint_us += (uint64_t)us;
+}
+
+void gui_count(enum gui_counter counter, uint64_t n)
+{
+    switch (counter) {
+    case GUI_COUNT_WIDGET_PAINTS: fake_stats.widget_paints += n; break;
+    case GUI_COUNT_PAINTED_PIXELS: fake_stats.painted_pixels += n; break;
+    case GUI_COUNT_LAYOUTS: fake_stats.layouts += n; break;
+    case GUI_COUNT_TEXT_SHAPES: fake_stats.text_shapes += n; break;
+    }
 }
 
 void gui_move(struct gui_window *w, int x, int y) {}

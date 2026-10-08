@@ -1,0 +1,8 @@
+compbench: wheel client paints=
+compbench: type client paints=
+compbench: status client paints=
+compbench: edit client paints=
+compbench: scroll client paints=
+compbench: hover client paints=
+gui_bench: ok
+TEST PASS

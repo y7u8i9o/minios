@@ -1438,6 +1438,16 @@ void gui_count_paint(long us)
     stats.paint_us += (uint64_t)us;
 }
 
+void gui_count(enum gui_counter counter, uint64_t n)
+{
+    switch (counter) {
+    case GUI_COUNT_WIDGET_PAINTS: stats.widget_paints += n; break;
+    case GUI_COUNT_PAINTED_PIXELS: stats.painted_pixels += n; break;
+    case GUI_COUNT_LAYOUTS: stats.layouts += n; break;
+    case GUI_COUNT_TEXT_SHAPES: stats.text_shapes += n; break;
+    }
+}
+
 void gui_flush(void)
 {
     for (struct gui_window *w = wins; w; w = w->next)

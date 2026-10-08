@@ -201,10 +201,18 @@ struct gui_stats {
     uint64_t copied_bytes;
     uint64_t frame_waits;       /* commits deferred to a frame callback or a buffer release */
     uint64_t pool_bytes;        /* bytes of the shared buffer pools mapped now */
+    /* The work of the framework (K2 of docs/plan/widgets.md). */
+    uint64_t widget_paints;     /* calls of the paint functions of widgets */
+    uint64_t painted_pixels;    /* device pixels of the damage of the window paints */
+    uint64_t layouts;           /* measurements and layouts of single widgets */
+    uint64_t text_shapes;       /* shapings of a text in an outline font */
 };
 void gui_get_stats(struct gui_stats *out);
 /* Count one paint of a window that took us microseconds (the framework). */
 void gui_count_paint(long us);
+/* Add n to a counter of the framework work. */
+enum gui_counter { GUI_COUNT_WIDGET_PAINTS, GUI_COUNT_PAINTED_PIXELS, GUI_COUNT_LAYOUTS, GUI_COUNT_TEXT_SHAPES };
+void gui_count(enum gui_counter counter, uint64_t n);
 struct wire_display;
 struct wire_proxy;
 struct wire_interface;

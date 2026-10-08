@@ -1,5 +1,6 @@
 /* Bitmap fonts: the built in 8x16 font and .mfnt files. */
 #include <gui/gfx.h>
+#include <gui/client.h>
 #include <gui/pixel.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -173,6 +174,7 @@ static int combining(uint32_t cp)
 static int shape_outline(const struct font *f, const char *text, int n,
                          struct gui_glyph *out, int max, int32_t *width, int scale)
 {
+    gui_count(GUI_COUNT_TEXT_SHAPES, 1);
     int len = n < 0 ? (int)strlen(text) : n, count = 0;
     int32_t pen = 0, base_x = 0, base_advance = 0;
     const struct font *prev_font = NULL;

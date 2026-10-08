@@ -26,6 +26,7 @@ struct window_state *window_state_of(struct widget *window)
 
 static void layout_tree(struct widget *w)
 {
+    gui_count(GUI_COUNT_LAYOUTS, 1);
     if (w->cls->layout)
         w->cls->layout(w);
     w->needs_layout = 0;
@@ -45,8 +46,10 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
         return;
     painter_push(p, w->x, w->y, w->w, w->h);
     if (force || w->dirty) {
-        if (w->cls->paint)
+        if (w->cls->paint) {
             w->cls->paint(w, p);
+            gui_count(GUI_COUNT_WIDGET_PAINTS, 1);
+        }
         struct rect r = p->clip;
         if (!rect_empty(r) && !force)
             rect_set_add(rects, r);
@@ -98,6 +101,7 @@ struct rect window_paint(struct widget *window)
     paint_tree(window, &p, 0, &rects, ws->popup_win ? ws->popup : NULL);
     struct rect damage = none;
     for (int i = 0; i < rects.n; i++) {
+        gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)rects.r[i].w * rects.r[i].h);
         struct rect r = device_to_logical(rects.r[i], scale);
         gui_damage(ws->win, r.x, r.y, r.w, r.h);
         damage = i ? rect_union(damage, r) : r;
@@ -110,8 +114,10 @@ struct rect window_paint(struct widget *window)
         /* The popup is painted whole, and its damage is the surface. */
         struct rect_set prects = { 0 };
         paint_tree(ws->popup, &pp, 1, &prects, NULL);
-        if (ws->popup->w > 0 && ws->popup->h > 0)
+        if (ws->popup->w > 0 && ws->popup->h > 0) {
             gui_damage(ws->popup_win, 0, 0, ws->popup->w, ws->popup->h);
+            gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)pp.s->width * pp.s->height);
+        }
     }
     if (rects.n)
         gui_count_paint(uptime_us() - t0);

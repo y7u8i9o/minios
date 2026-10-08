@@ -78,6 +78,16 @@ the calling process since its start.
 | `copy_us`, `copied_bytes` | the copy into the shared buffer at a commit |
 | `frame_waits` | commits deferred to a frame callback or a buffer release |
 | `pool_bytes` | bytes of the shared buffer pools mapped now |
+| `widget_paints` | calls of the paint functions of widgets |
+| `painted_pixels` | device pixels of the damage of the window paints |
+| `layouts` | measurements and layouts of single widgets |
+| `text_shapes` | shapings of a text in an outline font |
+
+The last four counters arrived with K2 of `docs/plan/widgets.md`. The
+framework counts the paints and the layouts in `window.c` and
+`layout.c` through `gui_count`. `font.c` counts each shaping. The
+counters are deterministic for a given input, so the boot cases assert
+them. Times are printed and never asserted.
 
 ## Benchmark
 
@@ -113,6 +123,27 @@ for `idle`, and the resize of the window.
 
 `tools/benchtable.py` turns the serial logs of the two cases into the
 tables below.
+
+### Widget scenarios (K2 of `docs/plan/widgets.md`)
+
+compbench has six scenarios of the widgets. Each scenario sends its
+input to its own window with `window_message`, one step every 100 ms. The
+counts therefore do not depend on the timing of the pointer.
+
+- `wheel`: a table of 60 rows with 20 visible. 10 wheel steps up at the
+  top, then 20 down. 14 of the 20 change the view, and 6 are at the end.
+- `type`: 20 characters into a text field of 300 pixels.
+- `status`: the label of a status bar is set 20 times.
+- `edit`: 20 characters at line 3500 of an editor with 4000 lines of C
+  and the highlighter.
+- `scroll`: 20 wheel steps in a scroll area with 200 labels.
+- `hover`: the pointer moves across 20 rows of the table.
+
+The boot test `kernel/tests/test_gui_bench.c` starts X12 alone and runs
+the six scenarios. The case `gui_bench` runs at 1280x800 and
+`gui_bench_hidpi` at 2560x1600 with scale 2, both on virtio-gpu.
+`tools/benchtable.py` prints a table of the counters of libgui for each
+case.
 
 ## Baseline (G1, 2026-10-06)
 
@@ -488,3 +519,46 @@ Afterwards the same session composed 1.7 million device pixels per
 second. All of them come from the Performance page, whose four graphs
 and table change every second. On another page of x12settings the
 session composes nothing.
+
+## K2: widget counters, baseline (2026-10-09)
+
+The counters of K2 before the changes of K2. Each row adds up the steps
+of one scenario. A paint is one paint pass of the window that changed
+pixels.
+
+Screen 1280x800 at scale 1:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 30 | 55.3 | 30 | 11.08 | 0 | 1260 |
+| type | 20 | 6.9 | 20 | 0.40 | 0 | 80 |
+| status | 20 | 25.6 | 120 | 8.21 | 240 | 80 |
+| edit | 20 | 454.7 | 20 | 8.21 | 0 | 8080 |
+| scroll | 20 | 54.9 | 4100 | 8.21 | 8220 | 4445 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+Screen 2560x1600 at scale 2:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 30 | 129.3 | 30 | 44.32 | 0 | 1260 |
+| type | 20 | 13.0 | 20 | 1.58 | 0 | 80 |
+| status | 20 | 107.3 | 120 | 32.83 | 240 | 80 |
+| edit | 20 | 530.3 | 20 | 32.83 | 0 | 8080 |
+| scroll | 20 | 166.4 | 4100 | 32.83 | 8220 | 4445 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+The table shows the following defects:
+
+- All 30 wheel steps repaint the table. The 10 steps up at the top and
+  the last 6 steps down change no pixel.
+- A status label update measures and lays out the whole window and
+  repaints all of it: 6 widget paints, 12 layouts and the whole window
+  as damage per step.
+- A wheel step in the scroll area lays out the area and its 200 labels
+  and repaints all of them: 205 widget paints and 411 layouts per step.
+- Each keystroke in the editor repaints the whole editor and shapes 404
+  runs of text. The editor rebuilds its rows and runs the highlighter
+  from the first line (K3).
+- The hover scenario paints nothing, because rows have no hover state
+  yet (K5).

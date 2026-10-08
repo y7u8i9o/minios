@@ -5,6 +5,8 @@ extern struct rect fake_last_damage;
 /* The scale of the output and of the windows created from now on. A test
  * that changes the scale sets it back to 1 at its end. */
 extern int fake_scale;
+/* The device pixels of all damage since the start. */
+extern uint64_t fake_damage_pixels;
 extern int fake_damage_count;
 void fake_push(const struct wmsg *m);
 struct fake_drag {
