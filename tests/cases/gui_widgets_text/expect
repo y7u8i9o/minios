@@ -1,0 +1,11 @@
+widgettest: field 'ab cd'
+widgettest: field ''
+widgettest: field 'ab cd'
+widgettest: field 'ab xcd'
+widgettest: field 'y xcd'
+widgettest: spinner 7
+widgettest: menu Wrap 1
+widgettest: menu Large
+widgettest: done
+gui_widgets_text: ok
+TEST PASS

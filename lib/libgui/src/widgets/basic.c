@@ -1,5 +1,7 @@
 /* Labels, buttons, check boxes, radio buttons, separators, canvases. */
 #include <gui/app.h>
+#include <gui/utf8.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,15 +29,66 @@ static void text_measure(struct widget *w, struct size_hint *h)
 
 /* ---- label ---- */
 
+/* The flags of a label in w->value. */
+#define LABEL_WRAP 1
+#define LABEL_ELLIPSIS 2
+
+/* The lines of a wrapped label at the width width. */
+static int label_lines(struct widget *w, int width, int *start, int *len, int max)
+{
+    struct surface none = { NULL, 0, 0, 0 };
+    struct painter p;
+    painter_init_scaled(&p, &none, widget_theme(w), widget_scale(w));
+    return painter_wrap(&p, widget_text(w), width > 1 ? width : 1, start, len, max);
+}
+
+/* A wrapped label: the lines of painter_wrap, one below the other. */
+static void label_paint_wrapped(struct widget *w, struct painter *p, uint32_t color)
+{
+    int start[64], len[64], th = painter_text_height(p);
+    int n = painter_wrap(p, widget_text(w), w->w > 1 ? w->w : 1, start, len, 64);
+    for (int i = 0; i < n && i < 64; i++) {
+        char line[512];
+        snprintf(line, sizeof line, "%.*s", len[i], widget_text(w) + start[i]);
+        painter_text(p, 0, i * th, line, color);
+    }
+}
+
+/* The longest prefix of the text that fits into the width with an
+ * ellipsis, then the ellipsis. */
+static void label_paint_ellipsis(struct widget *w, struct painter *p, int x, int y, uint32_t color)
+{
+    const char *text = widget_text(w);
+    int avail = w->w - x;
+    if (painter_text_width(p, text, -1) <= avail) {
+        painter_text(p, x, y, text, color);
+        return;
+    }
+    int n = (int)strlen(text), cut = painter_text_index(p, text, n, avail - painter_text_width(p, "\u2026", -1));
+    while (cut > 0 && painter_text_width(p, text, cut) + painter_text_width(p, "\u2026", -1) > avail)
+        cut = gui_utf8_prev_boundary(text, cut);
+    char shown[512];
+    snprintf(shown, sizeof shown, "%.*s\u2026", cut, text);
+    painter_text(p, x, y, shown, color);
+}
+
 static void label_paint(struct widget *w, struct painter *p)
 {
+    uint32_t color = p->theme->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED];
+    if (w->value & LABEL_WRAP) {
+        label_paint_wrapped(w, p, color);
+        return;
+    }
     int x = 0;
     if (w->icon) {
         painter_icon(p, 0, (w->h - image_lh(w->icon)) / 2, w->icon, 0);
         x = image_lw(w->icon) + 4;
     }
     int y = (w->h - painter_text_height(p)) / 2;
-    painter_mnemonic_text(p, x, y, widget_text(w), p->theme->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+    if (w->value & LABEL_ELLIPSIS)
+        label_paint_ellipsis(w, p, x, y, color);
+    else
+        painter_mnemonic_text(p, x, y, widget_text(w), color);
 }
 
 static void label_measure(struct widget *w, struct size_hint *h)
@@ -48,9 +101,44 @@ static void label_measure(struct widget *w, struct size_hint *h)
     h->pref_h = widget_theme(w)->font->height + 2;
     if (w->icon && image_lh(w->icon) > h->pref_h)
         h->pref_h = image_lh(w->icon);
+    int fh = widget_theme(w)->font->height;
+    if (w->value & LABEL_ELLIPSIS)
+        h->min_w = 2 * fh;
+    if (w->value & LABEL_WRAP) {
+        /* The height for the current width, or for the preferred width
+         * before the first layout. The layout measures again when the
+         * width changes the number of lines. */
+        int width = w->w > 0 ? w->w : w->hint.pref_w > 0 ? w->hint.pref_w : 300;
+        int start[1], len[1];
+        h->min_w = 4 * fh;
+        h->pref_w = width < h->pref_w ? width : h->pref_w;
+        h->pref_h = h->min_h = label_lines(w, width, start, len, 0) * fh;
+    }
 }
 
-const struct widget_class label_class = { "label", sizeof(struct widget), label_measure, NULL, label_paint, NULL, NULL };
+/* A wrapped label measures its height for its width. A new width that
+ * changes the number of lines measures the label again. */
+static void label_layout(struct widget *w)
+{
+    int start[1], len[1], fh = widget_theme(w)->font->height;
+    if ((w->value & LABEL_WRAP) && label_lines(w, w->w, start, len, 0) * fh != w->measured.pref_h)
+        widget_relayout(w);
+}
+
+const struct widget_class label_class = { "label", sizeof(struct widget), label_measure, label_layout, label_paint, NULL,
+                                          NULL };
+
+void label_set_wrap(struct widget *w, int wrap)
+{
+    w->value = wrap ? w->value | LABEL_WRAP : w->value & ~LABEL_WRAP;
+    widget_relayout(w);
+}
+
+void label_set_ellipsis(struct widget *w, int ellipsis)
+{
+    w->value = ellipsis ? w->value | LABEL_ELLIPSIS : w->value & ~LABEL_ELLIPSIS;
+    widget_relayout(w);
+}
 
 struct widget *label_new(struct widget *parent, const char *text)
 {

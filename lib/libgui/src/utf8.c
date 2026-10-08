@@ -78,3 +78,43 @@ int gui_utf8_prev_boundary(const char *s, int at)
     return at;
 }
 
+static int is_word(char ch)
+{
+    unsigned char u = (unsigned char)ch;
+    return u >= 0x80 || u == '_' || (u >= '0' && u <= '9') || ((u | 0x20) >= 'a' && (u | 0x20) <= 'z');
+}
+
+int gui_word_left(const char *s, int at)
+{
+    while (at > 0 && s[at - 1] == ' ')
+        at--;
+    if (at > 0 && !is_word(s[at - 1]))
+        return gui_utf8_prev_boundary(s, at);
+    while (at > 0 && is_word(s[at - 1]))
+        at--;
+    return at;
+}
+
+int gui_word_right(const char *s, int len, int at)
+{
+    if (at < len && !is_word(s[at]) && s[at] != ' ')
+        return gui_utf8_next_boundary(s, len, at);
+    while (at < len && is_word(s[at]))
+        at++;
+    while (at < len && s[at] == ' ')
+        at++;
+    return at;
+}
+
+void gui_word_at(const char *s, int len, int at, int *start, int *end)
+{
+    int a = at, b = at;
+    while (a > 0 && is_word(s[a - 1]))
+        a--;
+    while (b < len && is_word(s[b]))
+        b++;
+    if (a == b && b < len)
+        b = gui_utf8_next_boundary(s, len, b);
+    *start = a;
+    *end = b;
+}

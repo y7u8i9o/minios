@@ -349,7 +349,7 @@ The `gui_*` cases that click list rows use the new row height.
 
 Document: `docs/design/widgets.md`.
 
-### K6. Missing functions
+### K6. Missing functions (completed 2026-10-09)
 
 Built:
 

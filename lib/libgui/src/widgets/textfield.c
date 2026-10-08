@@ -26,7 +26,44 @@ struct textfield {
     int drag_pending, press_x, press_y;
     int drag_out, drag_a, drag_b;
     char *drag_text;
+    /* The undo and redo history: the text and the cursor before each
+     * step. merge allows the last step to absorb typed characters. A
+     * masked field records no history. */
+    struct snapshot { char *text; int cursor; } *undo, *redo;
+    int nundo, nredo, merge;
+    char *placeholder;          /* shown in the disabled text colour while the text is empty */
+    struct gui_clicks clicks;
 };
+
+#define HISTORY_MAX 100
+
+static void push_snapshot(struct snapshot **stack, int *n, const char *text, int cursor)
+{
+    if (*n == HISTORY_MAX) {
+        free((*stack)[0].text);
+        memmove(*stack, *stack + 1, (size_t)(HISTORY_MAX - 1) * sizeof **stack);
+        (*n)--;
+    }
+    struct snapshot *grown = realloc(*stack, (size_t)(*n + 1) * sizeof *grown);
+    char *copy = strdup(text);
+    if (!grown || !copy) {
+        free(copy);
+        if (grown)
+            *stack = grown;
+        return;
+    }
+    *stack = grown;
+    grown[(*n)++] = (struct snapshot){ copy, cursor };
+}
+
+static void clear_snapshots(struct snapshot **stack, int *n)
+{
+    for (int i = 0; i < *n; i++)
+        free((*stack)[i].text);
+    free(*stack);
+    *stack = NULL;
+    *n = 0;
+}
 
 static void changed(struct textfield *f)
 {
@@ -109,6 +146,36 @@ static void clamp(struct textfield *f)
     if (f->sel > n) f->sel = n;
 }
 
+/* Records the text before an edit. Typed characters merge into one step
+ * until the cursor moves or another kind of edit happens. */
+static void remember(struct textfield *f, int mergeable)
+{
+    if (f->masked)
+        return;
+    if (!(mergeable && f->merge && f->nundo))
+        push_snapshot(&f->undo, &f->nundo, widget_text(&f->w), f->cursor);
+    clear_snapshots(&f->redo, &f->nredo);
+    f->merge = mergeable;
+}
+
+/* Undo (redo 0) or redo (redo 1) one step. Returns 1 when a step existed. */
+static int restore(struct textfield *f, int redo)
+{
+    struct snapshot **from = redo ? &f->redo : &f->undo, **to = redo ? &f->undo : &f->redo;
+    int *nfrom = redo ? &f->nredo : &f->nundo, *nto = redo ? &f->nundo : &f->nredo;
+    if (!*nfrom)
+        return 0;
+    push_snapshot(to, nto, widget_text(&f->w), f->cursor);
+    struct snapshot s = (*from)[--*nfrom];
+    free(f->w.text);
+    f->w.text = s.text;
+    f->cursor = s.cursor;
+    f->sel = -1;
+    f->merge = 0;
+    changed(f);
+    return 1;
+}
+
 static void sel_range(struct textfield *f, int *a, int *b)
 {
     *a = f->sel < f->cursor ? f->sel : f->cursor;
@@ -181,6 +248,8 @@ static void textfield_paint(struct widget *w, struct painter *p)
         int x0 = painter_text_width(p, text, a), x1 = painter_text_width(p, text, b);
         painter_fill(p, tx + x0, ty - 1, x1 - x0, th + 2, t->color[TC_SELECTION]);
     }
+    if (!text[0] && f->placeholder && !f->preedit[0])
+        painter_text(p, tx, ty, f->placeholder, t->color[TC_TEXT_DISABLED]);
     painter_text(p, tx, ty, text, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     if (f->sel >= 0 && f->sel != f->cursor) {
         /* The selected text again, in the selection text colour. */
@@ -200,7 +269,8 @@ static void textfield_paint(struct widget *w, struct painter *p)
             painter_line(p, cx, ty + th, cx + pw, ty + th, t->color[TC_ACCENT]);
             cx += pw;
         }
-        painter_line(p, cx, ty - 1, cx, ty + th, t->color[TC_TEXT]);
+        if (widget_caret_visible(w))
+            painter_line(p, cx, ty - 1, cx, ty + th, t->color[TC_TEXT]);
     }
     painter_pop(p);
 }
@@ -231,10 +301,16 @@ static int key(struct textfield *f, struct event *e)
             sel_range(f, &a, &b);
             gui_clipboard_set(widget_text(&f->w) + a, b - a);
             if (e->ch == 24) {
+                remember(f, 0);
                 delete_selection(f);
                 changed(f);
             }
         }
+        return 1;
+    }
+    if (ctrl && (e->ch == 26 || e->ch == 25)) {  /* Ctrl+Z, Ctrl+Y */
+        if (restore(f, e->ch == 25))
+            scroll_to_cursor(f);
         return 1;
     }
     if (ctrl && e->ch == 22) {                   /* Ctrl+V */
@@ -244,6 +320,7 @@ static int key(struct textfield *f, struct event *e)
             for (int i = 0; i < n; i++)
                 if (tmp[i] == '\n')
                     tmp[i] = ' ';
+            remember(f, 0);
             delete_selection(f);
             insert(f, tmp, n);
             changed(f);
@@ -253,13 +330,19 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     switch (e->code) {
-    case KEY_LEFT: f->cursor = gui_utf8_prev_boundary(widget_text(&f->w), f->cursor); break;
-    case KEY_RIGHT: f->cursor = gui_utf8_next_boundary(widget_text(&f->w), len, f->cursor); break;
+    case KEY_LEFT:
+        f->cursor = ctrl ? gui_word_left(widget_text(&f->w), f->cursor) : gui_utf8_prev_boundary(widget_text(&f->w), f->cursor);
+        break;
+    case KEY_RIGHT:
+        f->cursor = ctrl ? gui_word_right(widget_text(&f->w), len, f->cursor)
+                         : gui_utf8_next_boundary(widget_text(&f->w), len, f->cursor);
+        break;
     case KEY_HOME: f->cursor = 0; break;
     case KEY_END: f->cursor = len; break;
     default: moved = 0;
     }
     if (moved) {
+        f->merge = 0;
         if (shift) {
             if (f->sel < 0)
                 f->sel = before;
@@ -273,6 +356,7 @@ static int key(struct textfield *f, struct event *e)
         return 1;
     }
     if (e->code == KEY_DELETE) {
+        remember(f, 0);
         if (!delete_selection(f) && f->cursor < len) {
             int next = gui_utf8_next_boundary(f->w.text, len, f->cursor);
             memmove(f->w.text + f->cursor, f->w.text + next, (size_t)(len - next + 1));
@@ -280,6 +364,7 @@ static int key(struct textfield *f, struct event *e)
     } else if (e->ch == '\b') {
         if (f->cursor > 0 && !b.sel)
             b = before_edit(f, gui_utf8_prev_boundary(f->w.text, f->cursor));
+        remember(f, 0);
         if (!delete_selection(f) && f->cursor > 0) {
             int prev = gui_utf8_prev_boundary(f->w.text, f->cursor);
             memmove(f->w.text + prev, f->w.text + f->cursor, (size_t)(len - f->cursor + 1));
@@ -292,6 +377,7 @@ static int key(struct textfield *f, struct event *e)
     } else if (e->ch >= 32 && !ctrl) {
         char ch[4];
         int n = gui_utf8_encode((uint32_t)e->ch, ch);
+        remember(f, !b.sel);
         delete_selection(f);
         insert(f, ch, n);
     } else {
@@ -313,9 +399,16 @@ static void context_action(struct widget *w, enum edit_action a)
         if (f->sel >= 0 && f->sel != f->cursor && !f->masked) {
             sel_range(f, &a0, &b0);
             gui_clipboard_set(widget_text(w) + a0, b0 - a0);
-            if (a == EDIT_CUT && delete_selection(f))
-                changed(f);
+            if (a == EDIT_CUT) {
+                remember(f, 0);
+                if (delete_selection(f))
+                    changed(f);
+            }
         }
+        break;
+    case EDIT_UNDO:
+    case EDIT_REDO:
+        restore(f, a == EDIT_REDO);
         break;
     case EDIT_PASTE: {
         struct event e = { .type = EV_KEY_DOWN, .code = KEY_V, .ch = 22, .mods = WMOD_CTRL };
@@ -323,6 +416,7 @@ static void context_action(struct widget *w, enum edit_action a)
         break;
     }
     case EDIT_DELETE:
+        remember(f, 0);
         if (delete_selection(f))
             changed(f);
         break;
@@ -354,8 +448,14 @@ static void context_menu(struct textfield *f, int x)
     unsigned enabled = EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_SELECT_ALL);
     if (sel)
         enabled |= (f->masked ? 0 : EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY)) | EDIT_BIT(EDIT_DELETE);
+    if (f->nundo)
+        enabled |= EDIT_BIT(EDIT_UNDO);
+    if (f->nredo)
+        enabled |= EDIT_BIT(EDIT_REDO);
     unsigned shown = EDIT_BIT(EDIT_CUT) | EDIT_BIT(EDIT_COPY) | EDIT_BIT(EDIT_PASTE) | EDIT_BIT(EDIT_DELETE) |
                      EDIT_BIT(EDIT_SELECT_ALL);
+    if (!f->masked)
+        shown |= EDIT_BIT(EDIT_UNDO) | EDIT_BIT(EDIT_REDO);
     edit_menu_popup(&f->w, &f->context_menu, x, f->w.h / 2, shown, enabled, context_action);
 }
 
@@ -388,6 +488,7 @@ static void drag_end(struct textfield *f, int action)
     const char *t = widget_text(&f->w);
     if (f->drag_out && action == GUI_DND_MOVE && f->drag_b <= len_of(f) &&
         strncmp(t + f->drag_a, f->drag_text, (size_t)(f->drag_b - f->drag_a)) == 0) {
+        remember(f, 0);
         f->sel = f->drag_a;
         f->cursor = f->drag_b;
         delete_selection(f);
@@ -412,9 +513,22 @@ static int textfield_event(struct widget *w, struct event *e)
         if (!(e->button & 1))
             return 0;
         {
+            /* A double click selects a word, a triple click the text. */
+            int clicks = gui_click_count(&f->clicks, e->x, e->y), p = pos_at(f, e->x), a, b;
+            if (clicks > 1) {
+                f->merge = 0;
+                if (clicks == 2 && !f->masked)
+                    gui_word_at(widget_text(w), len_of(f), p, &a, &b);
+                else
+                    a = 0, b = len_of(f);
+                f->sel = a;
+                f->cursor = b;
+                scroll_to_cursor(f);
+                widget_invalidate(w);
+                return 1;
+            }
             /* A press inside the selection of a field that may copy may
              * drag it; a release without a move clears the selection. */
-            int p = pos_at(f, e->x), a, b;
             sel_range(f, &a, &b);
             if (!f->masked && f->sel >= 0 && a < b && p >= a && p <= b) {
                 f->drag_pending = 1;
@@ -426,6 +540,7 @@ static int textfield_event(struct widget *w, struct event *e)
             f->cursor = p;
         }
         f->sel = -1;
+        f->merge = 0;
         widget_capture(w);
         widget_invalidate(w);
         return 1;
@@ -474,6 +589,7 @@ static int textfield_event(struct widget *w, struct event *e)
             for (int i = 0; i < n; i++)
                 copy[i] = e->text[i] == '\n' || e->text[i] == '\r' ? ' ' : e->text[i];
             struct edit_start b = before_edit(f, f->cursor);
+            remember(f, !b.sel && n == 1);
             delete_selection(f);
             insert(f, copy, n);
             free(copy);
@@ -493,6 +609,7 @@ static int textfield_event(struct widget *w, struct event *e)
             if (b > len) b = len;
             while (a > 0 && ((unsigned char)f->w.text[a] & 0xc0) == 0x80) a--;
             while (b < len && ((unsigned char)f->w.text[b] & 0xc0) == 0x80) b++;
+            remember(f, 0);
             memmove(f->w.text + a, f->w.text + b, (size_t)(len - b + 1));
             f->cursor = a;
             changed(f);
@@ -510,6 +627,9 @@ static void textfield_destroy(struct widget *w)
 {
     struct textfield *f = (struct textfield *)w;
     free(f->drag_text);
+    free(f->placeholder);
+    clear_snapshots(&f->undo, &f->nundo);
+    clear_snapshots(&f->redo, &f->nredo);
     if (f->mask) {
         memset(f->mask, 0, strlen(f->mask));
         free(f->mask);
@@ -518,10 +638,20 @@ static void textfield_destroy(struct widget *w)
 
 const struct widget_class textfield_class = { "textfield", sizeof(struct textfield), textfield_measure, NULL, textfield_paint, textfield_event, textfield_destroy };
 
+void textfield_set_placeholder(struct widget *w, const char *text)
+{
+    struct textfield *f = (struct textfield *)w;
+    free(f->placeholder);
+    f->placeholder = text && *text ? strdup(text) : NULL;
+    widget_invalidate(w);
+}
+
 void textfield_set_masked(struct widget *w, int masked)
 {
     struct textfield *f = (struct textfield *)w;
     f->masked = masked != 0;
+    clear_snapshots(&f->undo, &f->nundo);
+    clear_snapshots(&f->redo, &f->nredo);
     f->scroll_x = 0;
     widget_invalidate(w);
 }

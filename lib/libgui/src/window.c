@@ -343,6 +343,60 @@ static void tip_show(void *arg)
     widget_invalidate(l);
 }
 
+/* ---- the caret blink ---- */
+
+#define BLINK_FOR_MS 10000
+
+static void caret_invalidate(struct window_state *ws)
+{
+    struct widget *o = ws->caret_owner;
+    if (o && o == ws->focus) {
+        struct rect r = ws->caret_rect;
+        widget_invalidate_rect(o, (struct rect){ r.x - 1, r.y, r.w + 2, r.h });
+    }
+}
+
+static void blink(void *arg)
+{
+    struct widget *window = arg;
+    struct window_state *ws = window_state_of(window);
+    int done = !ws->focus || !ws->focus->accepts_text || uptime_ms() - ws->last_input_ms >= BLINK_FOR_MS;
+    if (done) {
+        app_timer_remove(window->app, ws->blink_timer);
+        ws->blink_timer = NULL;
+        if (!ws->caret_hidden)
+            return;
+        ws->caret_hidden = 0;
+    } else {
+        ws->caret_hidden = !ws->caret_hidden;
+    }
+    caret_invalidate(ws);
+}
+
+/* Input shows the caret and restarts the blink of a focused text widget. */
+static void caret_input(struct widget *window)
+{
+    struct window_state *ws = window_state_of(window);
+    ws->last_input_ms = uptime_ms();
+    if (ws->caret_hidden) {
+        ws->caret_hidden = 0;
+        caret_invalidate(ws);
+    }
+    if (!ws->blink_timer && window->app && ws->focus && ws->focus->accepts_text)
+        ws->blink_timer = app_timer_add(window->app, GUI_CARET_BLINK_MS, 1, blink, window);
+}
+
+void window_caret_restart(struct widget *window)
+{
+    caret_input(window);
+}
+
+int widget_caret_visible(const struct widget *w)
+{
+    struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
+    return !ws || ws->focus != w || !ws->caret_hidden;
+}
+
 static void set_hover(struct widget *window, struct widget *w)
 {
     struct window_state *ws = window_state_of(window);
@@ -372,6 +426,8 @@ static void mouse_message(struct widget *window, struct wmsg *m)
 {
     struct window_state *ws = window_state_of(window);
     int from_popup = ws->popup_win && m->window == ws->popup_win->id;
+    if (m->d == WMOUSE_DOWN)
+        caret_input(window);
     struct widget *root = from_popup ? ws->popup : window;
     struct widget *target = ws->capture ? ws->capture : widget_at(root, m->a, m->b);
     if (ws->tip && target == ws->tip)
@@ -612,8 +668,10 @@ static void key_message(struct widget *window, struct wmsg *m)
 {
     struct window_state *ws = window_state_of(window);
     struct event e = { .type = m->b ? EV_KEY_DOWN : EV_KEY_UP, .code = m->a, .ch = m->d, .mods = m->c };
-    if (m->b)
+    if (m->b) {
         tip_hide(window);
+        caret_input(window);
+    }
     if (m->b && m->a == KEY_ESC && ws->popup) {
         window_popup_close(window);
         return;
@@ -642,6 +700,7 @@ static void text_message(struct widget *window, struct wmsg *m, enum event_type 
     if (ws->popup && !inside(ws->popup, target))
         target = ws->popup;
     struct event e = { .type = type, .text = m->text, .before = m->a, .after = m->b };
+    caret_input(window);
     widget_dispatch(target, &e);
 }
 
@@ -741,6 +800,8 @@ static void window_destroy(struct widget *w)
     struct window_state *ws = window_state_of(w);
     if (ws->tip_timer && w->app)
         app_timer_remove(w->app, ws->tip_timer);
+    if (ws->blink_timer && w->app)
+        app_timer_remove(w->app, ws->blink_timer);
     if (ws->popup_win)
         gui_destroy_window(ws->popup_win);
     if (ws->win)

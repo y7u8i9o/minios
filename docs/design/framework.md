@@ -173,6 +173,18 @@ navigation, wheel, internal scroll track), scroll bar
 viewport over its content box, `w->user`, with bars shown when the
 content overflows).
 
+## Caret blink (K6 of `docs/plan/widgets.md`)
+
+Each window has one blink timer for its focused text widget. The timer
+runs with the period `GUI_CARET_BLINK_MS` (530 ms) and flips
+`caret_hidden` in the window state. `widget_text_cursor` records the
+caret rectangle of the focused widget. The blink invalidates only that
+rectangle. A press, a key or a text message shows the caret and restarts
+the blink. A focus change to a widget with `accepts_text` restarts it
+too. The timer ends 10 s after the last input, and the caret is then
+visible. The text field and the editor draw the caret only while
+`widget_caret_visible` returns true.
+
 ## Tests
 
 - `make check` compiles libgui (without `client.c`) and libfont with

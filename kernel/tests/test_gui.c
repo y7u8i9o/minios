@@ -505,6 +505,71 @@ static void test_gui_widgets_look(void)
 }
 KTEST_DEFINE("gui_widgets_look", test_gui_widgets_look);
 
+/* K6 of docs/plan/widgets.md: editing functions of the text field, the
+ * spinner and the menus. widgettest text shows a window 400x300 at
+ * (40,60): menu bar 6..32, text field 38..64, spinner 70..96. The client
+ * logs every change. The expect file of the case checks the log. */
+static void test_gui_widgets_text(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "text", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start widgettest text");
+    ktest_wait_idle(1000);
+    int cx = sw / 2, cy = sh / 2;
+    /* Typing "ab cd", then Ctrl+Z and Ctrl+Y. */
+    mouse_move_to(&cx, &cy, 40 + 200, 60 + 51, 0);
+    mouse_click(1);
+    static const uint8_t typed[] = { 0x1e, 0x30, 0x39, 0x2e, 0x20 };
+    for (size_t i = 0; i < sizeof typed; i++) {
+        press_key(typed[i]);
+        ktest_wait_idle(40);
+    }
+    ctrl_key(0x2c);
+    ctrl_key(0x15);
+    /* Ctrl+Left moves before "cd". An x lands there. */
+    ctrl_ext_key(0x4b);
+    press_key(0x2d);
+    ktest_wait_idle(150);
+    /* A double click on the first letter selects "ab". A y replaces it. */
+    mouse_move_to(&cx, &cy, 40 + 13, 60 + 51, 0);
+    feed_packet(1, 0, 0);
+    feed_packet(0, 0, 0);
+    feed_packet(1, 0, 0);
+    feed_packet(0, 0, 0);
+    ktest_wait_idle(150);
+    press_key(0x15);
+    ktest_wait_idle(150);
+    /* The spinner takes a typed 7 on Enter. */
+    mouse_move_to(&cx, &cy, 40 + 50, 60 + 83, 0);
+    mouse_click(1);
+    press_key(0x08);
+    press_key(0x1c);
+    ktest_wait_idle(150);
+    /* The first item of the menu is a check item. */
+    mouse_move_to(&cx, &cy, 40 + 20, 60 + 19, 0);
+    mouse_click(1);
+    ktest_wait_idle(200);
+    press_down(1);
+    press_key(0x1c);
+    ktest_wait_idle(200);
+    /* The second item opens a submenu. Its second item quits. */
+    mouse_click(1);
+    ktest_wait_idle(200);
+    press_down(2);
+    press_ext_key(0x4d);
+    ktest_wait_idle(200);
+    press_down(1);
+    press_key(0x1c);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "widgettest status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_widgets_text: ok\n");
+}
+KTEST_DEFINE("gui_widgets_text", test_gui_widgets_text);
+
 /* M22: combo box popup, spinner, slider, tabs. Window 400x300 at (40,60):
  * combo 6..32, spinner 38..64, slider 70..96, tabs from 102. */
 static void test_gui_controls(void)
@@ -528,10 +593,7 @@ static void test_gui_controls(void)
     mouse_click(1);
     mouse_move_to(&cx, &cy, 40 + 20, 60 + 115, 0);
     mouse_click(1);
-    ps2kbd_feed_scancode(0xe0);
-    ps2kbd_feed_scancode(0x4d);
-    ps2kbd_feed_scancode(0xe0);
-    ps2kbd_feed_scancode(0xcd);
+    press_ext_key(0x4d);
     ktest_wait_idle(200);
     mouse_move_to(&cx, &cy, 40 + 100, 60 + 149, 0);
     mouse_click(1);

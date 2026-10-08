@@ -177,15 +177,19 @@ static int on_forward(struct widget *w, void *args, void *arg)
     return 1;
 }
 
+/* The check item follows the state of the view, also when Ctrl+H
+ * toggles it without the menu. */
 static int on_toggle_hidden(struct widget *w, void *args, void *arg)
 {
     folderview_set_hidden(fv, !folderview_hidden(fv));
+    menuitem_set_check(w, folderview_hidden(fv));
     return 1;
 }
 
 static int on_sort(struct widget *w, void *args, void *arg)
 {
     folderview_sort(fv, (int)(long)arg, 0);
+    menuitem_set_radio(w, 1);
     return 1;
 }
 
@@ -472,12 +476,12 @@ static void build_menus(void)
     item(edit, _("Search"), "search", on_search, NULL, KEY_F, WMOD_CTRL);
     struct widget *view = menu_new(bar, _("View"));
     item(view, _("Refresh"), "refresh", on_refresh, NULL, KEY_F5, 0);
-    item(view, _("Show hidden files"), NULL, on_toggle_hidden, NULL, KEY_H, WMOD_CTRL);
+    /* The view shows no hidden files at the start. */
+    menuitem_set_check(item(view, _("Show hidden files"), NULL, on_toggle_hidden, NULL, KEY_H, WMOD_CTRL), 0);
     menu_add_separator(view);
-    item(view, _("Sort by name"), NULL, on_sort, (void *)0, 0, 0);
-    item(view, _("Sort by size"), NULL, on_sort, (void *)1, 0, 0);
-    item(view, _("Sort by type"), NULL, on_sort, (void *)2, 0, 0);
-    item(view, _("Sort by date"), NULL, on_sort, (void *)3, 0, 0);
+    static const char *const sorts[] = { N_("Sort by name"), N_("Sort by size"), N_("Sort by type"), N_("Sort by date") };
+    for (long i = 0; i < 4; i++)
+        menuitem_set_radio(item(view, _(sorts[i]), NULL, on_sort, (void *)i, 0, 0), i == 0);
     struct widget *go = menu_new(bar, _("Go"));
     item(go, _("Back"), "back", on_back, NULL, KEY_LEFT, WMOD_ALT);
     item(go, _("Forward"), "forward", on_forward, NULL, KEY_RIGHT, WMOD_ALT);

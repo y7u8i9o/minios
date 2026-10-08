@@ -815,7 +815,7 @@ int main(int argc, char **argv)
         return 1;
     grid_from_canvas();
     app_timer_add(app, 200, 1, on_poll, NULL);
-    app_timer_add(app, 530, 1, on_blink, NULL);
+    app_timer_add(app, GUI_CARET_BLINK_MS, 1, on_blink, NULL);
     app_run(app);
     while (ntabs > 0) {
         struct tab *t = tab_list[ntabs - 1];

@@ -384,51 +384,12 @@ int editor_replace_all(struct widget *w, const char *needle, const char *replace
 
 /* ---- words ---- */
 
-static int is_word(char ch)
-{
-    unsigned char u = (unsigned char)ch;
-    return u >= 0x80 || u == '_' || (u >= '0' && u <= '9') || ((u | 0x20) >= 'a' && (u | 0x20) <= 'z');
-}
-
-/* word_left and word_right return the column of the start of the word
- * before the cursor and of the end of the word after it on line l. */
-static int word_left(struct editor *ed, int l, int c)
-{
-    const char *s = ed->lines[l];
-    while (c > 0 && s[c - 1] == ' ')
-        c--;
-    if (c > 0 && !is_word(s[c - 1]))
-        return gui_utf8_prev_boundary(s, c);
-    while (c > 0 && is_word(s[c - 1]))
-        c--;
-    return c;
-}
-
-static int word_right(struct editor *ed, int l, int c)
-{
-    const char *s = ed->lines[l];
-    int len = llen(ed, l);
-    if (c < len && !is_word(s[c]) && s[c] != ' ')
-        return gui_utf8_next_boundary(s, len, c);
-    while (c < len && is_word(s[c]))
-        c++;
-    while (c < len && s[c] == ' ')
-        c++;
-    return c;
-}
-
 /* select_word selects the word at the cursor, and select_line selects the
  * line of the cursor including its newline. */
 static void select_word(struct editor *ed)
 {
-    const char *s = ed->lines[ed->cl];
-    int len = llen(ed, ed->cl), a = ed->cc, b = ed->cc;
-    while (a > 0 && is_word(s[a - 1]))
-        a--;
-    while (b < len && is_word(s[b]))
-        b++;
-    if (a == b && b < len)
-        b = gui_utf8_next_boundary(s, len, b);
+    int a, b;
+    gui_word_at(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc, &a, &b);
     ed->al = ed->cl;
     ed->ac = a;
     ed->cc = b;
@@ -808,7 +769,8 @@ static void editor_paint(struct widget *w, struct painter *p)
                 painter_line(p, cx, y + lh - 1, cx + pw, y + lh - 1, t->color[TC_ACCENT]);
                 cx += pw;
             }
-            painter_line(p, cx, y, cx, y + lh - 1, t->color[TC_TEXT]);
+            if (widget_caret_visible(w))
+                painter_line(p, cx, y, cx, y + lh - 1, t->color[TC_TEXT]);
         }
         if (ed->dropping && l == ed->drop_l && ed->drop_c >= start &&
             (ed->drop_c < start + len || (ed->drop_c == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
@@ -886,9 +848,9 @@ static int editor_key(struct editor *ed, struct event *e)
         }
     }
     if (ctrl && e->code == KEY_LEFT && ed->cc > 0)
-        ed->cc = word_left(ed, ed->cl, ed->cc);
+        ed->cc = gui_word_left(ed->lines[ed->cl], ed->cc);
     else if (ctrl && e->code == KEY_RIGHT && ed->cc < llen(ed, ed->cl))
-        ed->cc = word_right(ed, ed->cl, ed->cc);
+        ed->cc = gui_word_right(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc);
     else if (e->code == KEY_HOME && !ctrl) {
         /* Home moves to the first character that is not a space, or to
          * column 0 when the cursor is already there. */
@@ -926,10 +888,10 @@ static int editor_key(struct editor *ed, struct event *e)
         /* Ctrl+Backspace and Ctrl+Delete delete to the start of the word
          * before the cursor or to the end of the word after it. */
         if (e->code == KEY_BACKSPACE) {
-            if (ed->cc > 0) delete_range(ed, ed->cl, word_left(ed, ed->cl, ed->cc), ed->cl, ed->cc);
+            if (ed->cc > 0) delete_range(ed, ed->cl, gui_word_left(ed->lines[ed->cl], ed->cc), ed->cl, ed->cc);
             else if (ed->cl > 0) delete_range(ed, ed->cl - 1, llen(ed, ed->cl - 1), ed->cl, 0);
         } else {
-            if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, word_right(ed, ed->cl, ed->cc));
+            if (ed->cc < llen(ed, ed->cl)) delete_range(ed, ed->cl, ed->cc, ed->cl, gui_word_right(ed->lines[ed->cl], llen(ed, ed->cl), ed->cc));
             else if (ed->cl + 1 < ed->nlines) delete_range(ed, ed->cl, ed->cc, ed->cl + 1, 0);
         }
     } else if (e->code == KEY_DELETE) {

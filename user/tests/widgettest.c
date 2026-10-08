@@ -2,7 +2,9 @@
  * widgets log what they receive. With "controls" it builds the M22
  * controls window for gui_controls instead. With "scale" it builds the
  * text field of gui_widgets_scale2. With "look" it shows the controls
- * of gui_widgets_look, whose pixels the kernel test samples. Hints fix
+ * of gui_widgets_look, whose pixels the kernel test samples. With "text"
+ * it builds the menu, the text field and the spinner of gui_widgets_text.
+ * Hints fix
  * the sizes. The kernel
  * test can therefore click at known positions. */
 #include <stdio.h>
@@ -125,6 +127,33 @@ static void build_look(struct widget *win)
     LOG("look ready");
 }
 
+static int menu_wrap(struct widget *w, void *args, void *arg)
+{
+    LOG("menu Wrap %d", menuitem_checked(w));
+    return 1;
+}
+static int menu_small(struct widget *w, void *args, void *arg) { LOG("menu Small"); return 1; }
+static int menu_large(struct widget *w, void *args, void *arg) { LOG("menu Large"); app_quit(app, 0); return 1; }
+
+static void build_text(struct widget *win)
+{
+    struct widget *bar = menubar_new(win);
+    widget_set_hint(bar, 0, 26);
+    struct widget *view = menu_new(bar, "View");
+    struct widget *wrap = menu_add(view, "Wrap", NULL);
+    menuitem_set_check(wrap, 0);
+    widget_connect(wrap, "clicked", menu_wrap, NULL);
+    struct widget *size = menu_add_submenu(view, "Size");
+    widget_connect(menu_add(size, "Small", NULL), "clicked", menu_small, NULL);
+    widget_connect(menu_add(size, "Large", NULL), "clicked", menu_large, NULL);
+    struct widget *field = textfield_new(win, "");
+    widget_set_hint(field, 0, 26);
+    widget_connect(field, "changed", field_changed, NULL);
+    struct widget *spin = spinner_new(win, 0, 10, 5);
+    widget_set_hint(spin, 0, 26);
+    widget_connect(spin, "changed", spin_changed, NULL);
+}
+
 static void build_controls(struct widget *win)
 {
     struct widget *combo = combobox_new(win);
@@ -175,6 +204,8 @@ int main(int argc, char **argv)
         build_scale(win);
     else if (strcmp(mode, "look") == 0)
         build_look(win);
+    else if (strcmp(mode, "text") == 0)
+        build_text(win);
     else
         build_widgets(win);
     app_timer_add(app, 300, 0, log_positions, NULL);

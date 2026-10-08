@@ -131,6 +131,53 @@ disabled look and the pixels of the check mark, the radio dot and the
 chevron. `gui_widgets_look` checks the marks on the screen, and the
 `hover` scenario of `gui_bench` damages exactly two rows per step.
 
+## Editing functions and new widget functions (K6)
+
+- The text field records snapshots of its text and cursor before each
+  edit. Ctrl+Z undoes a step, and Ctrl+Y redoes a step. The context menu
+  has the entries Undo and Redo. Typed characters in a row form one
+  step. The history has at most 100 steps. A masked field records no
+  history.
+- `gui_word_left`, `gui_word_right` and `gui_word_at` in `utf8.c` find
+  word boundaries. The text field and the editor use them for Ctrl+Left
+  and Ctrl+Right, also with Shift, and for the double click.
+- A double click on a text field selects a word. A triple click selects
+  the whole text. `textfield_set_placeholder` sets a text that an empty
+  field shows in the disabled text colour.
+- The caret blinks with the period `GUI_CARET_BLINK_MS` (530 ms).
+  `framework.md` describes the blink. The terminal uses the same period.
+- The spinner accepts typed digits and a minus sign for a negative range.
+  Enter or a loss of the focus commits the typed value, clamped to the
+  range. Escape restores the previous value.
+- `combobox_set_editable` adds a text field to a combo box. An edit emits
+  `changed` with the index -1. A choice from the list sets the field.
+- `label_set_wrap` wraps the text of a label at its width with
+  `painter_wrap`. The label measures its height again when the line
+  count changes. `label_set_ellipsis` ends a text that does not fit with
+  an ellipsis.
+- `progress_set_pulse` turns a progress bar into an indeterminate bar. A
+  block moves along the bar in 40 steps of 50 ms.
+- `menuitem_set_check` and `menuitem_set_radio` turn a menu item into a
+  check item or a radio item. `menuitem_checked` returns its state. A
+  click on a check item toggles the item. A click on a radio item checks
+  the item and clears the other radio items of its menu.
+  `menu_add_submenu` adds an item with a submenu. The drop down shows the
+  submenu in a second column. Right and Enter open the submenu, and Left
+  closes it. The View menu of Files has a check item for hidden files and
+  radio items for the sort order.
+- `imageview_new` and `imageview_set` show an image centred in the
+  widget. A larger image is reduced to fit with its proportions. A
+  smaller image is never enlarged. The reduced image comes from
+  `image_scale` and is cached per size and scale. The Lua binding uses
+  the class.
+
+`lib/libgui/tests/test_functions.c` checks each function. The boot case
+`gui_widgets_text` runs `widgettest text`. The kernel test types into a
+text field, undoes and redoes the text, moves the cursor with Ctrl+Left,
+selects a word with a double click, types a value into a spinner,
+toggles a check menu item and chooses an item of a submenu. The expect
+file checks the log of the client.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

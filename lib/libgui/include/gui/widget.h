@@ -224,6 +224,10 @@ void widget_abs(const struct widget *w, int *x, int *y);   /* position in the wi
 /* A focused text widget reports its caret, in its own coordinates, for
  * the candidates of an input method. */
 void widget_text_cursor(struct widget *w, int x, int y, int width, int height);
+/* Whether a text widget draws its caret now. The caret of the focused
+ * text widget blinks with the period GUI_CARET_BLINK_MS. The blink ends
+ * 10 s after the last input, and the caret then remains visible. */
+int widget_caret_visible(const struct widget *w);
 struct widget *widget_at(struct widget *w, int x, int y);   /* deepest visible child */
 const struct theme *widget_theme(const struct widget *w);
 /* The device pixels per logical pixel of the surface that shows w. The
@@ -260,6 +264,14 @@ struct window_state {
     struct widget *drag_source;     /* started the drag that runs */
     struct widget *drop_target;     /* accepted the drag over the window last */
     int relayout_all;               /* the next paint measures and lays out every widget */
+    /* The caret blink of the focused text widget: the timer, the hidden
+     * phase, the time of the last input, and the caret that the widget
+     * reported last with widget_text_cursor, in its coordinates. */
+    struct timer *blink_timer;
+    int caret_hidden;
+    long last_input_ms;
+    struct widget *caret_owner;
+    struct rect caret_rect;
 };
 struct window_state *window_state_of(struct widget *window);
 /* Route a server message to the window (also used by the tests). */
@@ -284,7 +296,10 @@ extern const struct widget_class label_class;
 extern const struct widget_class button_class;  /* "clicked" (sig_click) */
 extern const struct widget_class checkbox_class;/* "toggled" (sig_change) */
 extern const struct widget_class radio_class;   /* "toggled"; exclusive among siblings */
-extern const struct widget_class textfield_class;  /* "changed", "activate" (sig_change) */
+/* "changed", "activate" (sig_change). Ctrl+Z and Ctrl+Y undo and redo,
+ * Ctrl+Left and Ctrl+Right move by words, a double click selects a word
+ * and a triple click the text. */
+extern const struct widget_class textfield_class;
 /* "selected", "activate" (sig_select); "activate" also on a double click */
 extern const struct widget_class listview_class;
 extern const struct widget_class scrollbar_class;  /* "scrolled" (sig_scroll) */
@@ -300,6 +315,11 @@ struct widget *box_new(struct widget *parent, int vertical);
 struct widget *grid_new(struct widget *parent);
 void grid_set_stretch(struct widget *grid, int row, int col, int stretch);   /* -1 leaves one unchanged */
 struct widget *label_new(struct widget *parent, const char *text);
+/* A wrapped label breaks its text into lines with painter_wrap at its
+ * width, and its height follows the number of lines. A label with an
+ * ellipsis shortens a text that does not fit and ends it with "…". */
+void label_set_wrap(struct widget *w, int wrap);
+void label_set_ellipsis(struct widget *w, int ellipsis);
 struct widget *button_new(struct widget *parent, const char *text);
 struct widget *checkbox_new(struct widget *parent, const char *text);
 struct widget *radio_new(struct widget *parent, const char *text);
@@ -307,6 +327,9 @@ struct widget *textfield_new(struct widget *parent, const char *text);
 /* A masked field shows one '*' per byte of its text and refuses to copy
  * it, for passwords. */
 void textfield_set_masked(struct widget *w, int masked);
+/* Text shown in the disabled text colour while the field is empty. NULL
+ * removes it. */
+void textfield_set_placeholder(struct widget *w, const char *text);
 /* Put the cursor at byte offset cursor, or at the end for -1, and select
  * from anchor to it, or nothing for an anchor of -1. */
 void textfield_select(struct widget *w, int anchor, int cursor);
@@ -358,10 +381,28 @@ struct widget *combobox_new(struct widget *parent);
 void combobox_add(struct widget *w, const char *item);
 void combobox_clear(struct widget *w);
 void combobox_select(struct widget *w, int index);
+/* An editable combo box has a text field. Typing changes its text and
+ * emits "changed" with the index -1, and Enter emits "activate"
+ * (sig_change text). The arrow opens the list. */
+void combobox_set_editable(struct widget *w, int editable);
 const char *combobox_item(const struct widget *w, int index);
 struct widget *spinner_new(struct widget *parent, int min, int max, int value);
 struct widget *slider_new(struct widget *parent, int min, int max, int value);
 struct widget *progress_new(struct widget *parent);
+/* An indeterminate progress bar moves a block back and forth until the
+ * pulse is turned off. */
+void progress_set_pulse(struct widget *w, int pulse);
+
+/* ---- image view (widgets/imageview.c) ---- */
+
+/* An image view shows one image centred, reduced to fit its area with its
+ * proportions, never enlarged. The view scales the image with image_scale
+ * and caches the rendition per size and scale. After the image it emits
+ * "paint" (sig_paint), so a handler can draw over it. The image is not
+ * owned; NULL shows no image. */
+extern const struct widget_class imageview_class;
+struct widget *imageview_new(struct widget *parent);
+void imageview_set(struct widget *w, const struct image *img);
 
 /* ---- graph (widgets/graph.c) ---- */
 
@@ -479,6 +520,14 @@ struct widget *menu_new(struct widget *menubar, const char *title);
 struct widget *menu_add(struct widget *menu, const char *text, const char *icon);
 struct widget *menu_add_separator(struct widget *menu);
 void menubar_open(struct widget *menubar, int index);   /* -1 closes */
+/* An item that opens a submenu, and the submenu for menu_add. */
+struct widget *menu_add_submenu(struct widget *menu, const char *text);
+/* A check item toggles when it is chosen. A radio item is checked when
+ * it is chosen, and the other radio items of its menu are cleared. Both
+ * emit "clicked" after the change. */
+void menuitem_set_check(struct widget *item, int checked);
+void menuitem_set_radio(struct widget *item, int checked);
+int menuitem_checked(const struct widget *item);
 /* A menu without a bar, shown by menu_popup at window coordinates (a
  * context menu); items are added with menu_add. */
 struct widget *popupmenu_new(struct widget *window);

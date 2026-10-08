@@ -13,10 +13,13 @@ static int arrow_w(const struct widget *w)
 
 /* ---- combo box ---- */
 
+/* An editable combo box has a text field as its child, left of the
+ * arrow. */
 struct combo {
     struct widget w;
     char **items;
     int nitems;
+    struct widget *field;
 };
 
 static void combo_measure(struct widget *w, struct size_hint *h)
@@ -39,6 +42,15 @@ static void combo_paint(struct widget *w, struct painter *p)
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_FIELD];
+    if (((struct combo *)w)->field) {
+        /* The field paints the text. The arrow is a button beside it. */
+        int a = arrow_w(w) + 2;
+        painter_rounded(p, w->w - a, 0, a, w->h, w->hover && w->enabled ? t->color[TC_BUTTON_HOVER] : t->color[TC_BUTTON],
+                        t->color[TC_BORDER]);
+        painter_chevron(p, w->w - a + 1, (w->h - a + 2) / 2, a - 2, PAINTER_DOWN,
+                        t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+        return;
+    }
     painter_rounded(p, 0, 0, w->w, w->h, fill, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     painter_push(p, 1, 1, w->w - arrow_w(w) - 1, w->h - 2);
     painter_text(p, 4, (w->h - 2 - painter_text_height(p)) / 2, widget_text(w), t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
@@ -77,7 +89,7 @@ static int combo_event(struct widget *w, struct event *e)
 {
     switch (e->type) {
     case EV_MOUSE_DOWN:
-        if (e->button & 1)
+        if ((e->button & 1) && (!((struct combo *)w)->field || e->x >= w->w - arrow_w(w) - 2))
             combo_open(w);
         return 1;
     case EV_MOUSE_WHEEL:
@@ -101,7 +113,53 @@ static void combo_destroy(struct widget *w)
     combobox_clear(w);
 }
 
-const struct widget_class combobox_class = { "combobox", sizeof(struct combo), combo_measure, NULL, combo_paint, combo_event, combo_destroy };
+static void combo_layout(struct widget *w)
+{
+    struct widget *field = ((struct combo *)w)->field;
+    if (field)
+        widget_set_rect(field, 0, 0, w->w - arrow_w(w) - 4, w->h);
+}
+
+const struct widget_class combobox_class = { "combobox", sizeof(struct combo), combo_measure, combo_layout, combo_paint,
+                                             combo_event, combo_destroy };
+
+/* The text of an editable combo box follows its field. A typed text
+ * selects no item. */
+static int combo_field_changed(struct widget *field, void *args, void *arg)
+{
+    struct widget *w = arg;
+    free(w->text);
+    w->text = strdup(widget_text(field));
+    w->value = -1;
+    struct sig_select s = { -1 };
+    widget_emit(w, "changed", &s);
+    return 1;
+}
+
+static int combo_field_activate(struct widget *field, void *args, void *arg)
+{
+    struct sig_change c = { 0, widget_text(field) };
+    widget_emit(arg, "activate", &c);
+    return 1;
+}
+
+void combobox_set_editable(struct widget *w, int editable)
+{
+    struct combo *c = (struct combo *)w;
+    if (!editable == !c->field)
+        return;
+    if (editable) {
+        c->field = textfield_new(w, widget_text(w));
+        widget_connect(c->field, "changed", combo_field_changed, w);
+        widget_connect(c->field, "activate", combo_field_activate, w);
+        w->focusable = 0;
+    } else {
+        widget_destroy(c->field);
+        c->field = NULL;
+        w->focusable = 1;
+    }
+    widget_relayout(w);
+}
 
 struct widget *combobox_new(struct widget *parent)
 {
@@ -152,6 +210,8 @@ void combobox_select(struct widget *w, int index)
         return;
     w->value = index;
     widget_set_text(w, c->items[index]);
+    if (c->field)
+        widget_set_text(c->field, c->items[index]);
     widget_invalidate(w);
     struct sig_select s = { index };
     widget_emit(w, "changed", &s);
@@ -160,11 +220,52 @@ void combobox_select(struct widget *w, int index)
 /* ---- spinner ---- */
 
 /* hot is the arrow under the pointer: 1 up, -1 down, 0 none. pressed is
- * the arrow pressed by the left button. */
+ * the arrow pressed by the left button. edit is the number that the user
+ * types, shown while editing is set. */
 struct spinner {
     struct widget w;
     int hot, pressed;
+    char edit[12];
+    int editing;
 };
+
+static void spinner_set(struct widget *w, int v);
+
+/* Enter or a change of the focus commits a typed number, clamped to the
+ * range. An empty number leaves the value. */
+static void spinner_commit(struct widget *w)
+{
+    struct spinner *sp = (struct spinner *)w;
+    if (!sp->editing)
+        return;
+    sp->editing = 0;
+    widget_invalidate(w);
+    if (sp->edit[0] && strcmp(sp->edit, "-") != 0)
+        spinner_set(w, atoi(sp->edit));
+}
+
+/* Typed digits and a leading minus sign edit the number. */
+static int spinner_type(struct widget *w, int ch)
+{
+    struct spinner *sp = (struct spinner *)w;
+    size_t n = sp->editing ? strlen(sp->edit) : 0;
+    if (ch == '\b') {
+        if (!sp->editing)
+            snprintf(sp->edit, sizeof sp->edit, "%d", w->value), n = strlen(sp->edit);
+        if (n)
+            sp->edit[n - 1] = '\0';
+    } else if ((ch >= '0' && ch <= '9') || (ch == '-' && n == 0 && w->min < 0)) {
+        if (n + 1 >= sizeof sp->edit)
+            return 1;
+        sp->edit[n] = (char)ch;
+        sp->edit[n + 1] = '\0';
+    } else {
+        return 0;
+    }
+    sp->editing = 1;
+    widget_invalidate(w);
+    return 1;
+}
 
 /* The arrow at a local position, or 0 outside the arrows. */
 static int arrow_at(struct widget *w, int x, int y)
@@ -203,7 +304,13 @@ static void spinner_paint(struct widget *w, struct painter *p)
                     t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     char s[16];
     snprintf(s, sizeof s, "%d", w->value);
-    painter_text(p, 4, (w->h - painter_text_height(p)) / 2, s, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+    const char *shown_text = sp->editing ? sp->edit : s;
+    int ty = (w->h - painter_text_height(p)) / 2;
+    painter_text(p, 4, ty, shown_text, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+    if (sp->editing && w->focused) {
+        int cx = 4 + painter_text_width(p, shown_text, -1);
+        painter_line(p, cx, ty, cx, ty + painter_text_height(p) - 1, t->color[TC_TEXT]);
+    }
     int a = arrow_w(w), ax = w->w - a, half = w->h / 2;
     for (int dir = 1; dir >= -1; dir -= 2) {
         int y = dir > 0 ? 1 : half;
@@ -257,12 +364,30 @@ static int spinner_event(struct widget *w, struct event *e)
         spinner_set(w, w->value - e->button);
         return 1;
     case EV_KEY_DOWN:
+        if (e->mods & (WMOD_CTRL | WMOD_ALT))
+            return 0;
+        if (e->ch == '\n') {
+            int was = sp->editing;
+            spinner_commit(w);
+            return was;
+        }
+        if (e->code == KEY_ESC && sp->editing) {
+            sp->editing = 0;
+            widget_invalidate(w);
+            return 1;
+        }
+        if (e->code == KEY_UP || e->code == KEY_DOWN || e->code == KEY_PAGEUP || e->code == KEY_PAGEDOWN)
+            spinner_commit(w);
         if (e->code == KEY_UP) { spinner_set(w, w->value + 1); return 1; }
         if (e->code == KEY_DOWN) { spinner_set(w, w->value - 1); return 1; }
         if (e->code == KEY_PAGEUP) { spinner_set(w, w->value + 10); return 1; }
         if (e->code == KEY_PAGEDOWN) { spinner_set(w, w->value - 10); return 1; }
-        return 0;
-    case EV_FOCUS_IN: case EV_FOCUS_OUT:
+        return spinner_type(w, e->ch);
+    case EV_FOCUS_OUT:
+        spinner_commit(w);
+        widget_invalidate(w);
+        return 1;
+    case EV_FOCUS_IN:
         widget_invalidate(w);
         return 1;
     default:
@@ -392,10 +517,37 @@ static void progress_measure(struct widget *w, struct size_hint *h)
     h->pref_h = h->min_h = widget_theme(w)->font->height + 2;
 }
 
+/* A pulsing bar moves a block back and forth instead of showing a value.
+ * The timer advances phase every PULSE_MS. */
+#define PULSE_MS 50
+#define PULSE_STEPS 40
+
+struct progress {
+    struct widget w;
+    int pulse, phase;
+    struct timer *timer;
+};
+
+static void pulse_step(void *arg)
+{
+    struct progress *pr = arg;
+    pr->phase = (pr->phase + 1) % (2 * PULSE_STEPS);
+    widget_invalidate(&pr->w);
+}
+
 static void progress_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
+    struct progress *pr = (struct progress *)w;
     painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_TRACK], 0xffffffffu);
+    if (pr->pulse) {
+        if (!pr->timer && w->app)
+            pr->timer = app_timer_add(w->app, PULSE_MS, 1, pulse_step, pr);
+        int bw = w->w / 4, pos = pr->phase < PULSE_STEPS ? pr->phase : 2 * PULSE_STEPS - pr->phase;
+        int x = 1 + (w->w - 2 - bw) * pos / PULSE_STEPS;
+        painter_rounded(p, x, 1, bw, w->h - 2, t->color[w->enabled ? TC_ACCENT : TC_BORDER], PAINTER_NONE);
+        return;
+    }
     int span = w->max > w->min ? (w->w - 2) * (w->value - w->min) / (w->max - w->min) : 0;
     if (span > 0)
         painter_rounded(p, 1, 1, span, w->h - 2, t->color[w->enabled ? TC_ACCENT : TC_BORDER], PAINTER_NONE);
@@ -407,7 +559,26 @@ static void progress_paint(struct widget *w, struct painter *p)
         painter_text(p, (w->w - tw) / 2, (w->h - th) / 2, s, t->color[TC_TEXT]);
 }
 
-const struct widget_class progress_class = { "progress", sizeof(struct widget), progress_measure, NULL, progress_paint, NULL, NULL };
+static void progress_destroy(struct widget *w)
+{
+    struct progress *pr = (struct progress *)w;
+    if (pr->timer && w->app)
+        app_timer_remove(w->app, pr->timer);
+}
+
+const struct widget_class progress_class = { "progress", sizeof(struct progress), progress_measure, NULL, progress_paint,
+                                             NULL, progress_destroy };
+
+void progress_set_pulse(struct widget *w, int pulse)
+{
+    struct progress *pr = (struct progress *)w;
+    pr->pulse = pulse != 0;
+    if (!pr->pulse && pr->timer) {
+        app_timer_remove(w->app, pr->timer);
+        pr->timer = NULL;
+    }
+    widget_invalidate(w);
+}
 
 struct widget *progress_new(struct widget *parent)
 {

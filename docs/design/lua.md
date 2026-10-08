@@ -261,8 +261,8 @@ pixel when enlarging) and retains that rendition in the image until a
 different size, scale or a `pixel` store replaces it. A size of zero
 draws nothing, and a side beyond 16384 device pixels raises an error.
 
-libgui has no image widget, so the binding defines the class
-`imageview`. `gui.imageview(parent [, img])` shows the image centred,
+The class `imageview` comes from libgui (`imageview_new`).
+`gui.imageview(parent [, img])` shows the image centred,
 reduced to fit its area with the proportions retained and never enlarged,
 on the window colour, and then emits `paint`, so a handler can draw
 over it. Its preferred size is the image's logical size.

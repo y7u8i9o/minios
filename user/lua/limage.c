@@ -286,48 +286,8 @@ static const luaL_Reg image_methods[] = {
 
 /* ---- the image view ---- */
 
-/* The image view shows one image centred, reduced to fit its area with
- * the proportions retained and never enlarged. After the image it emits
- * "paint", so a handler can draw over it. */
-struct imageview {
-    struct widget base;
-    struct limage *image;       /* the userdata in the handler table; NULL when none */
-};
-
-static void imageview_measure(struct widget *w, struct size_hint *h)
-{
-    struct limage *li = ((struct imageview *)w)->image;
-    h->pref_w = li ? image_lw(li->img) : 0;
-    h->pref_h = li ? image_lh(li->img) : 0;
-}
-
-static void imageview_paint(struct widget *w, struct painter *p)
-{
-    struct limage *li = ((struct imageview *)w)->image;
-    painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
-    if (li && w->w > 0 && w->h > 0) {
-        int iw = image_lw(li->img), ih = image_lh(li->img), dw = iw, dh = ih;
-        if (dw > w->w) {
-            dw = w->w;
-            dh = (int)((int64_t)ih * dw / iw);
-        }
-        if (dh > w->h) {
-            dh = w->h;
-            dw = (int)((int64_t)iw * dh / ih);
-        }
-        if (dw > 0 && dh > 0) {
-            const struct image *s = limage_sized(li, dw, dh, p->scale);
-            if (s)
-                painter_image(p, (w->w - dw) / 2, (w->h - dh) / 2, s);
-        }
-    }
-    struct sig_paint s = { p };
-    widget_emit(w, "paint", &s);
-}
-
-static const struct widget_class imageview_class = {
-    "imageview", sizeof(struct imageview), imageview_measure, NULL, imageview_paint, NULL, NULL
-};
+/* The image view is the class of libgui. The handler table retains the
+ * image userdata, so the image lives as long as the view shows it. */
 
 /* Retains the image userdata at index (or nil) in the handler table of the
  * widget at index 1, under "image". */
@@ -347,8 +307,7 @@ int gui_widget_image(lua_State *L)
     struct limage *li = lua_isnoneornil(L, 2) ? NULL : check_limage(L, 2);
     lua_settop(L, 2);
     if (w->cls == &imageview_class) {
-        ((struct imageview *)w)->image = li;
-        widget_relayout(w);
+        imageview_set(w, li ? li->img : NULL);
     } else if (strcmp(w->cls->name, "label") == 0 || strcmp(w->cls->name, "button") == 0) {
         widget_set_icon(w, li ? li->img : NULL);
     } else {
@@ -364,10 +323,10 @@ static int g_imageview(lua_State *L)
 {
     struct widget *parent = gui_check_widget(L, 1);
     struct limage *li = lua_isnoneornil(L, 2) ? NULL : check_limage(L, 2);
-    struct widget *w = widget_new(&imageview_class, parent);
+    struct widget *w = imageview_new(parent);
     if (!w)
         return luaL_error(L, "not enough memory");
-    ((struct imageview *)w)->image = li;
+    imageview_set(w, li ? li->img : NULL);
     gui_push_widget(L, w);
     lua_replace(L, 1);
     lua_settop(L, 2);

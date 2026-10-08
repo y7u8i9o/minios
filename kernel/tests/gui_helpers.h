@@ -187,14 +187,20 @@ static inline void press_key(uint8_t code)
     ps2kbd_feed_scancode((uint8_t)(code | 0x80));
 }
 
-/* Press the down arrow n times. It is an extended key of set 1. */
+/* Press an extended key of set 1. The code follows the prefix 0xe0. */
+static inline void press_ext_key(uint8_t code)
+{
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode(code);
+    ps2kbd_feed_scancode(0xe0);
+    ps2kbd_feed_scancode((uint8_t)(code | 0x80));
+}
+
+/* Press the down arrow n times. */
 static inline void press_down(int n)
 {
     while (n-- > 0) {
-        ps2kbd_feed_scancode(0xe0);
-        ps2kbd_feed_scancode(0x50);
-        ps2kbd_feed_scancode(0xe0);
-        ps2kbd_feed_scancode(0xd0);
+        press_ext_key(0x50);
         ktest_wait_idle(40);
     }
 }
@@ -285,6 +291,15 @@ static inline void ctrl_key(uint8_t code)
 {
     ps2kbd_feed_scancode(0x1d);
     press_key(code);
+    ps2kbd_feed_scancode(0x9d);
+    ktest_wait_idle(150);
+}
+
+/* Press an extended key of set 1 with Ctrl. */
+static inline void ctrl_ext_key(uint8_t code)
+{
+    ps2kbd_feed_scancode(0x1d);
+    press_ext_key(code);
     ps2kbd_feed_scancode(0x9d);
     ktest_wait_idle(150);
 }

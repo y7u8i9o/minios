@@ -274,8 +274,10 @@ check(gui.test.pixel(win, 9, 49) == 0xff0000 and gui.test.pixel(win, 10, 50) == 
       gui.test.pixel(win, 5, 45) == back, "the image view centres a small image without enlarging it")
 view:image(img)
 gui.test.paint(win)
-check(gui.test.pixel(win, 0, 44) == 0x000000 and gui.test.pixel(win, 10, 30) == back,
-      "the image view reduces a wide image to the width")
+-- image_scale averages the source pixels. The black corner of the image
+-- therefore becomes a dark grey.
+check(gui.test.pixel(win, 0, 44) < 0x101010 and gui.test.pixel(win, 0, 43) == back and
+      gui.test.pixel(win, 10, 30) == back, "the image view reduces a wide image to the width")
 local box = gui.checkbox(win, "c")
 check(not pcall(box.image, box, img), "an image on a check box raises an error")
 win:close()

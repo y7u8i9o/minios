@@ -180,6 +180,8 @@ int gui_repeat_timeout(void);
 int gui_modifiers(void);
 /* The longest time between two presses of a double click. */
 #define GUI_DOUBLE_CLICK_MS 400
+/* The period of a blinking text caret. */
+#define GUI_CARET_BLINK_MS 530
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
 /* Prepare w->surf for drawing (G8 of docs/plan/compositor-performance.md).

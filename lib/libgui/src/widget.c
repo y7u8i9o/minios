@@ -425,6 +425,8 @@ void widget_text_cursor(struct widget *w, int x, int y, int width, int height)
     struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
     if (!ws || !ws->win || ws->focus != w)
         return;
+    ws->caret_owner = w;
+    ws->caret_rect = (struct rect){ x, y, width, height };
     int ax, ay;
     widget_abs(w, &ax, &ay);
     gui_text_input_set_cursor(ws->win, ax + x, ay + y, width, height);
@@ -443,6 +445,8 @@ struct widget *widget_at(struct widget *w, int x, int y)
 }
 
 /* ---- focus ---- */
+
+void window_caret_restart(struct widget *window);
 
 static int can_focus(const struct widget *w)
 {
@@ -472,6 +476,8 @@ void widget_focus(struct widget *w)
             old->cls->event(old, &e);
         widget_invalidate(old);
     }
+    if (w && w->accepts_text)
+        window_caret_restart(w->window);
     if (w) {
         w->focused = 1;
         struct event e = { .type = EV_FOCUS_IN };
