@@ -38,19 +38,18 @@ int mixer_button_x(void)
 void mixer_draw_button(struct painter *p, int hovered)
 {
     int x = mixer_button_x(), h = panel.lh;
-    if (mixer_open || hovered)
-        painter_rounded(p, x, BUTTON_Y, MIXER_BTN_W, h - 2 * BUTTON_Y, mixer_open ? BUTTON_OPEN : BUTTON_HOVER,
-                        0xffffffffu);
+    painter_button(p, x, BUTTON_Y, MIXER_BTN_W, h - 2 * BUTTON_Y,
+                   PAINTER_FLAT | (mixer_open ? PAINTER_PRESSED : 0) | (hovered ? PAINTER_HOVER : 0));
     int cx = x + MIXER_BTN_W / 2 - 3, cy = h / 2;
-    painter_fill(p, cx - 5, cy - 2, 3, 5, PANEL_TEXT);
+    painter_fill(p, cx - 5, cy - 2, 3, 5, bar_theme.color[TC_TEXT]);
     for (int i = 0; i < 5; i++)
-        painter_fill(p, cx - 2 + i, cy - 2 - i, 1, 5 + 2 * i, PANEL_TEXT);
-    painter_line(p, cx + 5, cy - 3, cx + 6, cy - 1, PANEL_TEXT_DIM);
-    painter_line(p, cx + 6, cy - 1, cx + 6, cy + 1, PANEL_TEXT_DIM);
-    painter_line(p, cx + 6, cy + 1, cx + 5, cy + 3, PANEL_TEXT_DIM);
-    painter_line(p, cx + 8, cy - 5, cx + 9, cy - 2, PANEL_TEXT_DIM);
-    painter_line(p, cx + 9, cy - 2, cx + 9, cy + 2, PANEL_TEXT_DIM);
-    painter_line(p, cx + 9, cy + 2, cx + 8, cy + 5, PANEL_TEXT_DIM);
+        painter_fill(p, cx - 2 + i, cy - 2 - i, 1, 5 + 2 * i, bar_theme.color[TC_TEXT]);
+    painter_line(p, cx + 5, cy - 3, cx + 6, cy - 1, bar_theme.color[TC_TEXT_DISABLED]);
+    painter_line(p, cx + 6, cy - 1, cx + 6, cy + 1, bar_theme.color[TC_TEXT_DISABLED]);
+    painter_line(p, cx + 6, cy + 1, cx + 5, cy + 3, bar_theme.color[TC_TEXT_DISABLED]);
+    painter_line(p, cx + 8, cy - 5, cx + 9, cy - 2, bar_theme.color[TC_TEXT_DISABLED]);
+    painter_line(p, cx + 9, cy - 2, cx + 9, cy + 2, bar_theme.color[TC_TEXT_DISABLED]);
+    painter_line(p, cx + 9, cy + 2, cx + 8, cy + 5, bar_theme.color[TC_TEXT_DISABLED]);
 }
 
 int mixer_is_open(void)
@@ -87,24 +86,16 @@ static void draw_row(struct painter *p, int row, const char *name, const char *d
     int y = MIXER_PAD + row * ROW_H;
     painter_push(p, MIXER_PAD, y, NAME_W - 6, ROW_H);
     int th = painter_text_height(p);
-    painter_text(p, 0, 6, name, running ? MENU_TEXT : MENU_TEXT_DIM);
-    painter_text(p, 0, 6 + th + 2, detail, MENU_TEXT_DIM);
+    painter_text(p, 0, 6, name, running ? menu_theme.color[TC_TEXT] : menu_theme.color[TC_TEXT_DISABLED]);
+    painter_text(p, 0, 6 + th + 2, detail, menu_theme.color[TC_TEXT_DISABLED]);
     painter_pop(p);
     int bx = bar_x(), bw = bar_w();
     int by = y + 12;
     int filled = (int)((unsigned)bw * (volume > 100 ? 100 : volume) / 100);
-    painter_rounded(p, bx, by, bw, BAR_H, METER_BG, 0xffffffffu);
-    if (filled > 0)
-        painter_rounded(p, bx, by, filled, BAR_H, ACCENT, 0xffffffffu);
-    int kx = bx + filled - 5;
-    if (kx < bx) kx = bx;
-    if (kx > bx + bw - 10) kx = bx + bw - 10;
-    painter_rounded(p, kx, by - 3, 10, BAR_H + 6, MENU_BG, MENU_BORDER);
+    painter_slider(p, bx, by, bw, BAR_H, filled, 10, BAR_H + 6, 0);
     int my = by + BAR_H + 8;
-    painter_fill(p, bx, my, bw, METER_H, METER_BG);
     int level = (int)((unsigned)bw * (peak > 32767 ? 32767 : peak) / 32767);
-    if (level > 0)
-        painter_fill(p, bx, my, level, METER_H, METER_FG);
+    painter_meter(p, bx, my, bw, METER_H, 0, level, METER_FG);
 }
 
 static void draw_mixer(void)
@@ -114,10 +105,9 @@ static void draw_mixer(void)
     struct painter p;
     canvas_painter(&p, &mixer);
     int w = mixer.lw, h = mixer.lh;
-    painter_fill(&p, 0, 0, w, h, MENU_BG);
-    painter_frame(&p, 0, 0, w, h, MENU_BORDER);
+    painter_card(&p, 0, 0, w, h, 0);
     if (!view) {
-        panel_label(&p, 0, 0, w, h, _("No audio service"), MENU_TEXT_DIM, 1);
+        panel_label(&p, 0, 0, w, h, _("No audio service"), menu_theme.color[TC_TEXT_DISABLED], 1);
         canvas_commit(&mixer);
         rows = 0;
         return;
@@ -139,10 +129,10 @@ static void draw_mixer(void)
         rows++;
     }
     if (n == 0)
-        panel_label(&p, 0, MIXER_PAD + ROW_H, w, ROW_H, _("No streams"), MENU_TEXT_DIM, 1);
+        panel_label(&p, 0, MIXER_PAD + ROW_H, w, ROW_H, _("No streams"), menu_theme.color[TC_TEXT_DISABLED], 1);
     else if (n > rows - 1) {
         snprintf(detail, sizeof detail, ngettext("%d more", "%d more", n - (rows - 1)), n - (rows - 1));
-        panel_label(&p, 0, h - MIXER_PAD - 14, w, 14, detail, MENU_TEXT_DIM, 1);
+        panel_label(&p, 0, h - MIXER_PAD - 14, w, 14, detail, menu_theme.color[TC_TEXT_DISABLED], 1);
     }
     drawn_generation = audio_mixer_generation(view);
     canvas_commit(&mixer);

@@ -34,24 +34,7 @@
 #define LAUNCHER_RULE_H 9
 #define LAUNCHER_ICON 16
 
-/* Colours: a dark neutral bar, pill shaped buttons, a light menu. */
-#define PANEL_BG        0x0023272c
-#define PANEL_LINE      0x00343a41
-#define PANEL_TEXT      0x00e6e8eb
-#define PANEL_TEXT_DIM  0x00a0a6ae
-#define BUTTON_BG       0x002e343b
-#define BUTTON_HOVER    0x00384049
-#define BUTTON_ACTIVE   0x003f4854
-#define BUTTON_OPEN     0x004a5563
-#define ACCENT          0x005b9cf5
-#define MENU_BG         0x00fafbfc
-#define MENU_BORDER     0x00c5cad1
-#define MENU_HOVER      0x00dce8fa
-#define MENU_TEXT       0x00202428
-#define MENU_TEXT_DIM   0x00858b93
-#define MENU_FIELD      0x00ffffff
-#define MENU_ICON       0x00454b53
-#define METER_BG        0x00e3e6ea
+/* The colour of the level meter of the mixer. */
 #define METER_FG        0x0047b26b
 
 /* Positioner anchors and gravities. */
@@ -72,7 +55,10 @@ struct canvas {
 extern struct wire_display *display;
 extern struct wire_proxy *compositor, *shm, *shell, *seat;
 extern struct canvas panel;
-extern struct theme ui;
+/* The two themes of the panel (panel.c): bar_theme for the dark bar,
+ * menu_theme for the light menus, pop-ups and cards. canvas_painter
+ * selects the theme of a canvas. */
+extern struct theme bar_theme, menu_theme;
 extern int screen_w, screen_h, output_scale;
 extern uint32_t press_serial;
 
@@ -96,8 +82,9 @@ extern int panel_at_top;
  * the popup and the button, else their left edges. */
 void panel_place_popup(struct wire_proxy *pos, int x, int w, int right);
 /* The icons of the panel (icons.c): the SVG icon NAME of /usr/share/icons
- * in color at the output scale, and the icon of the program of a command
- * or an app_id (launcher_icon_name). NULL when the file is missing. */
+ * in color at the output scale from the icon cache of libgui, and the
+ * icon of the program of a command or an app_id (launcher_icon_name).
+ * NULL when the file is missing. */
 const struct image *panel_icon(const char *name, uint32_t color);
 const struct image *panel_app_icon(const char *command, uint32_t color);
 
@@ -136,6 +123,7 @@ int clock_x(void);
 int calendar_is_open(void);
 int calendar_owns(const struct wire_proxy *surface);
 void calendar_toggle(void);
+void calendar_pointer_motion(int x, int y);
 void calendar_pointer_button(uint32_t button, uint32_t state, int x, int y);
 /* The input method menu (imemenu.c): the label of the layout or input
  * method left of the mixer button and a popup that selects one. */

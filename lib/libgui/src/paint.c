@@ -430,6 +430,78 @@ void painter_focus_ring(struct painter *p, int x, int y, int w, int h)
     painter_round_rect(p, x, y, w, h, theme_px(p->theme, TM_RADIUS) - 1, PAINTER_NONE, p->theme->color[TC_ACCENT]);
 }
 
+/* ---- controls ---- */
+
+void painter_button(struct painter *p, int x, int y, int w, int h, int state)
+{
+    const struct theme *t = p->theme;
+    uint32_t fill = state & PAINTER_DISABLED ? t->color[TC_TRACK]
+                    : state & PAINTER_PRESSED ? t->color[TC_BUTTON_PRESSED]
+                    : state & PAINTER_CHECKED ? t->color[TC_BUTTON_CHECKED]
+                    : state & PAINTER_HOVER ? t->color[TC_BUTTON_HOVER]
+                    : state & PAINTER_FLAT ? PAINTER_NONE : t->color[TC_BUTTON];
+    if (fill != PAINTER_NONE)
+        painter_rounded(p, x, y, w, h, fill, PAINTER_NONE);
+}
+
+void painter_field(struct painter *p, int x, int y, int w, int h, int state)
+{
+    const struct theme *t = p->theme;
+    uint32_t fill = state & PAINTER_DISABLED ? t->color[TC_TRACK]
+                    : state & PAINTER_HOVER ? t->color[TC_BUTTON_HOVER] : t->color[TC_FIELD];
+    painter_rounded(p, x, y, w, h, fill, t->color[state & PAINTER_FOCUSED ? TC_ACCENT : TC_BORDER]);
+}
+
+void painter_slider(struct painter *p, int x, int y, int w, int h, int pos, int knob_w, int knob_h, int state)
+{
+    const struct theme *t = p->theme;
+    int disabled = state & PAINTER_DISABLED;
+    painter_rounded(p, x, y, w, h, t->color[TC_TRACK], PAINTER_NONE);
+    if (pos > 0)
+        painter_rounded(p, x, y, pos < w ? pos : w, h, t->color[disabled ? TC_BORDER : TC_ACCENT], PAINTER_NONE);
+    int kx = x + pos - knob_w / 2;
+    if (kx > x + w - knob_w)
+        kx = x + w - knob_w;
+    if (kx < x)
+        kx = x;
+    uint32_t knob = disabled ? t->color[TC_TRACK]
+                    : state & (PAINTER_HOVER | PAINTER_PRESSED) ? t->color[TC_ACCENT] : t->color[TC_THUMB];
+    painter_rounded(p, kx, y + (h - knob_h) / 2, knob_w, knob_h, knob, t->color[TC_BORDER]);
+}
+
+void painter_meter(struct painter *p, int x, int y, int w, int h, int from, int len, uint32_t color)
+{
+    painter_rounded(p, x, y, w, h, p->theme->color[TC_TRACK], PAINTER_NONE);
+    if (from < 0)
+        from = 0;
+    if (len > w - from)
+        len = w - from;
+    if (len > 0)
+        painter_rounded(p, x + from, y, len, h, color, PAINTER_NONE);
+}
+
+void painter_menu_row(struct painter *p, int x, int y, int w, int h, int state)
+{
+    if (state & (PAINTER_HOVER | PAINTER_CHECKED))
+        painter_rounded(p, x, y, w, h, p->theme->color[TC_HIGHLIGHT], PAINTER_NONE);
+}
+
+void painter_card(struct painter *p, int x, int y, int w, int h, int r)
+{
+    painter_round_rect(p, x, y, w, h, r, p->theme->color[TC_WINDOW], p->theme->color[TC_BORDER]);
+}
+
+void painter_switch(struct painter *p, int x, int y, int on, int state)
+{
+    const struct theme *t = p->theme;
+    int w = PAINTER_SWITCH_W, h = PAINTER_SWITCH_H, k = h - 4;
+    uint32_t track = state & PAINTER_DISABLED ? t->color[TC_BORDER] : t->color[on ? TC_ACCENT : TC_TRACK];
+    painter_round_rect(p, x, y, w, h, h / 2, track, PAINTER_NONE);
+    painter_disc(p, on ? x + w - 2 - k : x + 2, y + 2, k, t->color[TC_FIELD]);
+    if (state & PAINTER_FOCUSED)
+        painter_focus_ring(p, x - 2, y - 2, w + 4, h + 4);
+}
+
 void painter_avatar(struct painter *p, int x, int y, int size, const char *name, const char *label)
 {
     static const uint32_t colors[] = { 0x003c78c8, 0x00c0504d, 0x009bbb59, 0x008064a2, 0x00f79646, 0x004bacc6 };

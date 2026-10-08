@@ -89,6 +89,44 @@ int painter_mnemonic_strip(const char *text, char *buf, int size);
 void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, uint32_t color);
 /* A rounded ring in the accent colour around a focused control. */
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
+
+/* The controls of libgui and of the panel. The colours come from the
+ * theme of the painter. state combines the following bits. */
+enum {
+    PAINTER_HOVER = 1,          /* the pointer is over the control */
+    PAINTER_PRESSED = 2,        /* pressed, or the popup of the control is open */
+    PAINTER_CHECKED = 4,        /* on, such as an active task or a checked toggle */
+    PAINTER_DISABLED = 8,
+    PAINTER_FLAT = 16,          /* no background in the idle state */
+    PAINTER_FOCUSED = 32,
+};
+/* The rounded background of a button: TC_TRACK when disabled, else
+ * TC_BUTTON_PRESSED, TC_BUTTON_CHECKED, TC_BUTTON_HOVER or TC_BUTTON in
+ * this order. A flat button in the idle state paints nothing. */
+void painter_button(struct painter *p, int x, int y, int w, int h, int state);
+/* The box of a text field: TC_FIELD, TC_BUTTON_HOVER with the pointer
+ * over the box, TC_TRACK when disabled. The border is TC_ACCENT with the
+ * focus, else TC_BORDER. */
+void painter_field(struct painter *p, int x, int y, int w, int h, int state);
+/* A slider: a track of w by h in TC_TRACK, filled with TC_ACCENT up to
+ * pos, and a knob of knob_w by knob_h centred on pos and inside the
+ * track. The knob is TC_THUMB, or TC_ACCENT with PAINTER_HOVER or
+ * PAINTER_PRESSED, with a border of TC_BORDER. */
+void painter_slider(struct painter *p, int x, int y, int w, int h, int pos, int knob_w, int knob_h, int state);
+/* A meter: a track of w by h in TC_TRACK and a bar of len pixels from the
+ * offset from in color. */
+void painter_meter(struct painter *p, int x, int y, int w, int h, int from, int len, uint32_t color);
+/* The background of a menu row: TC_HIGHLIGHT with PAINTER_HOVER or
+ * PAINTER_CHECKED, else nothing. */
+void painter_menu_row(struct painter *p, int x, int y, int w, int h, int state);
+/* A card: TC_WINDOW with a border of TC_BORDER and corners of radius r. */
+void painter_card(struct painter *p, int x, int y, int w, int h, int r);
+/* A switch of PAINTER_SWITCH_W by PAINTER_SWITCH_H at (x, y): a pill in
+ * TC_ACCENT when on, else TC_TRACK, with a knob of TC_FIELD on the side
+ * of the state. */
+#define PAINTER_SWITCH_W 36
+#define PAINTER_SWITCH_H 18
+void painter_switch(struct painter *p, int x, int y, int on, int state);
 /* The avatar of an account: a rounded square of size by size in a colour
  * that the account name selects, with the first letter of label, which is
  * the full name, in white. */

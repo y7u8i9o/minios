@@ -52,7 +52,7 @@ static struct wire_proxy *pointer_surface;
 uint32_t press_serial;
 static int layer_configured;
 int output_scale = 1;
-struct theme ui;
+struct theme bar_theme, menu_theme;
 static char input_label[16];             /* from the seat: "EN", "FR", "あ", ... */
 
 /* ---- canvases ---- */
@@ -122,7 +122,41 @@ void canvas_commit(struct canvas *c)
 
 void canvas_painter(struct painter *p, struct canvas *c)
 {
-    painter_init_scaled(p, &c->s, &ui, c->scale);
+    painter_init_scaled(p, &c->s, c == &panel ? &bar_theme : &menu_theme, c->scale);
+}
+
+/* The bar is dark with pill shaped buttons. The menus, the pop-ups and
+ * the cards are light. The menu theme shares the font of the bar. */
+static void themes_init(void)
+{
+    struct theme *themes[2] = { &bar_theme, &menu_theme };
+    for (int i = 0; i < 2; i++) {
+        theme_init_default(themes[i]);
+        themes[i]->metric[TM_FONT_PX] = 13;
+        themes[i]->metric[TM_RADIUS] = 6;
+        themes[i]->color[TC_ACCENT] = 0x005b9cf5;
+    }
+    uint32_t *b = bar_theme.color, *m = menu_theme.color;
+    b[TC_WINDOW] = 0x0023272c;
+    b[TC_BORDER] = 0x00343a41;
+    b[TC_TEXT] = 0x00e6e8eb;
+    b[TC_TEXT_DISABLED] = 0x00a0a6ae;
+    b[TC_BUTTON] = 0x002e343b;
+    b[TC_BUTTON_HOVER] = 0x00384049;
+    b[TC_BUTTON_CHECKED] = 0x003f4854;
+    b[TC_BUTTON_PRESSED] = 0x004a5563;
+    m[TC_WINDOW] = 0x00fafbfc;
+    m[TC_BORDER] = 0x00c5cad1;
+    m[TC_HIGHLIGHT] = 0x00dce8fa;
+    m[TC_BUTTON_HOVER] = 0x00dce8fa;
+    m[TC_BUTTON] = 0x00e3e6ea;
+    m[TC_TRACK] = 0x00e3e6ea;
+    m[TC_THUMB] = 0x00fafbfc;
+    m[TC_TEXT] = 0x00202428;
+    m[TC_TEXT_DISABLED] = 0x00858b93;
+    m[TC_FIELD] = 0x00ffffff;
+    theme_apply(&bar_theme);
+    menu_theme.font = bar_theme.font;
 }
 
 /* ---- drawing ---- */
@@ -200,24 +234,20 @@ static int hit(int x)
     return HOVER_NONE;
 }
 
-/* A button background: the colour of its state, none for an idle flat
- * button. */
-static void button(struct painter *p, int x, int w, uint32_t bg)
+/* A button of the bar from x to x + w in the state of painter_button. */
+static void button(struct painter *p, int x, int w, int state)
 {
-    painter_rounded(p, x, BUTTON_Y, w, panel.lh - 2 * BUTTON_Y, bg, 0xffffffffu);
+    painter_button(p, x, BUTTON_Y, w, panel.lh - 2 * BUTTON_Y, state);
 }
 
 static void draw_task(struct painter *p, int i, int x, int w)
 {
     int h = panel.lh;
     int active = tasks[i].active && !tasks[i].minimized;
+    button(p, x, w, PAINTER_FLAT | (active ? PAINTER_CHECKED : 0) | (hover == i ? PAINTER_HOVER : 0));
     if (active)
-        button(p, x, w, BUTTON_ACTIVE);
-    else if (hover == i)
-        button(p, x, w, BUTTON_HOVER);
-    if (active)
-        painter_fill(p, x + 8, h - 6, w - 16, 2, ACCENT);
-    uint32_t color = tasks[i].minimized ? PANEL_TEXT_DIM : PANEL_TEXT;
+        painter_fill(p, x + 8, h - 6, w - 16, 2, bar_theme.color[TC_ACCENT]);
+    uint32_t color = tasks[i].minimized ? bar_theme.color[TC_TEXT_DISABLED] : bar_theme.color[TC_TEXT];
     const struct image *icon = panel_app_icon(tasks[i].app_id, color);
     int icon_w = icon ? image_lw(icon) : 0;
     if (w < TASK_ICON_ONLY_W) {
@@ -254,19 +284,19 @@ void draw_panel(void)
     struct painter p;
     canvas_painter(&p, &panel);
     int w = panel.lw, h = panel.lh;
-    painter_fill(&p, 0, 0, w, h, PANEL_BG);
-    painter_fill(&p, 0, panel_at_top ? h - 1 : 0, w, 1, PANEL_LINE);
+    painter_fill(&p, 0, 0, w, h, bar_theme.color[TC_WINDOW]);
+    painter_fill(&p, 0, panel_at_top ? h - 1 : 0, w, 1, bar_theme.color[TC_BORDER]);
 
     /* The Menu button: the icon and the word. */
-    button(&p, 4, MENU_BTN_W, launcher_is_open() ? BUTTON_OPEN : hover == HOVER_MENU ? BUTTON_HOVER : BUTTON_BG);
-    const struct image *menu_icon = panel_icon("menu", PANEL_TEXT);
+    button(&p, 4, MENU_BTN_W, (launcher_is_open() ? PAINTER_PRESSED : 0) | (hover == HOVER_MENU ? PAINTER_HOVER : 0));
+    const struct image *menu_icon = panel_icon("menu", bar_theme.color[TC_TEXT]);
     int mx = 4 + 10;
     if (menu_icon) {
         painter_image(&p, mx, (h - image_lh(menu_icon)) / 2, menu_icon);
         mx += image_lw(menu_icon) + 2;
     }
-    panel_label(&p, mx, BUTTON_Y, 4 + MENU_BTN_W - 4 - mx, h - 2 * BUTTON_Y, _("Menu"), PANEL_TEXT, 0);
-    painter_fill(&p, TASKS_X - 5, 8, 1, h - 16, PANEL_LINE);
+    panel_label(&p, mx, BUTTON_Y, 4 + MENU_BTN_W - 4 - mx, h - 2 * BUTTON_Y, _("Menu"), bar_theme.color[TC_TEXT], 0);
+    painter_fill(&p, TASKS_X - 5, 8, 1, h - 16, bar_theme.color[TC_BORDER]);
 
     int shown, tw = task_width(&shown);
     for (int i = 0; i < shown; i++)
@@ -274,24 +304,22 @@ void draw_panel(void)
 
     /* The input label, the mixer and the clock at the right end. */
     if (input_label[0]) {
-        if (hover == HOVER_INPUT)
-            button(&p, imemenu_x(), INPUT_W, BUTTON_HOVER);
-        panel_label(&p, imemenu_x(), 0, INPUT_W, h, input_label, PANEL_TEXT, 1);
+        button(&p, imemenu_x(), INPUT_W, PAINTER_FLAT | (hover == HOVER_INPUT ? PAINTER_HOVER : 0));
+        panel_label(&p, imemenu_x(), 0, INPUT_W, h, input_label, bar_theme.color[TC_TEXT], 1);
     }
     mixer_draw_button(&p, hover == HOVER_MIXER);
     notify_draw_button(&p, hover == HOVER_NOTIFY);
-    if (calendar_is_open() || hover == HOVER_CLOCK)
-        button(&p, clock_x(), CLOCK_W - 4, calendar_is_open() ? BUTTON_OPEN : BUTTON_HOVER);
+    button(&p, clock_x(), CLOCK_W - 4,
+           PAINTER_FLAT | (calendar_is_open() ? PAINTER_PRESSED : 0) | (hover == HOVER_CLOCK ? PAINTER_HOVER : 0));
     clock_text(drawn_clock, sizeof drawn_clock);
-    panel_label(&p, clock_x(), 0, CLOCK_W - 4, h, drawn_clock, PANEL_TEXT, 1);
+    panel_label(&p, clock_x(), 0, CLOCK_W - 4, h, drawn_clock, bar_theme.color[TC_TEXT], 1);
     power_draw_button(&p, hover == HOVER_POWER);
 
     /* The show desktop button at the right edge, behind a line. */
     int dx = w - DESKTOP_BTN_W;
-    painter_fill(&p, dx - 2, 8, 1, h - 16, PANEL_LINE);
-    if (desktop_shown || hover == HOVER_DESKTOP)
-        button(&p, dx, DESKTOP_BTN_W, desktop_shown ? BUTTON_OPEN : BUTTON_HOVER);
-    const struct image *desk = panel_icon("show-desktop", PANEL_TEXT);
+    painter_fill(&p, dx - 2, 8, 1, h - 16, bar_theme.color[TC_BORDER]);
+    button(&p, dx, DESKTOP_BTN_W, PAINTER_FLAT | (desktop_shown ? PAINTER_PRESSED : 0) | (hover == HOVER_DESKTOP ? PAINTER_HOVER : 0));
+    const struct image *desk = panel_icon("show-desktop", bar_theme.color[TC_TEXT]);
     if (desk)
         painter_image(&p, dx + (DESKTOP_BTN_W - image_lw(desk)) / 2, (h - image_lh(desk)) / 2, desk);
     canvas_commit(&panel);
@@ -372,6 +400,10 @@ static void on_motion(void *user, struct wire_proxy *p, uint32_t time, int32_t x
     }
     if (notify_owns(pointer_surface)) {
         notify_pointer_motion(pointer_surface, px, py);
+        return;
+    }
+    if (calendar_owns(pointer_surface)) {
+        calendar_pointer_motion(px, py);
         return;
     }
     if (launcher_is_surface(pointer_surface))
@@ -640,10 +672,7 @@ int main(void)
     pointer_add_listener(pointer, &pointer_events, NULL);
     toplevel_manager_add_listener(manager, &manager_events, NULL);
     launcher_init();
-    theme_init_default(&ui);
-    ui.metric[TM_FONT_PX] = 13;
-    ui.metric[TM_RADIUS] = 6;
-    theme_apply(&ui);
+    themes_init();
     if (canvas_create(&panel, screen_w, PANEL_H) < 0)
         return 1;
     layer = shell_get_layer_surface(shell, panel.surface, 2, "panel");

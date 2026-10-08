@@ -155,9 +155,7 @@ struct widget *label_new(struct widget *parent, const char *text)
 static void button_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->pressed ? t->color[TC_BUTTON_PRESSED]
-                    : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_BUTTON];
-    painter_rounded(p, 0, 0, w->w, w->h, fill, 0xffffffffu);
+    painter_button(p, 0, 0, w->w, w->h, widget_paint_state(w));
     char buf[256];
     painter_mnemonic_strip(widget_text(w), buf, sizeof buf);
     int tw = buf[0] ? painter_text_width(p, buf, -1) : 0;
@@ -326,6 +324,34 @@ struct widget *radio_new(struct widget *parent, const char *text)
         w->focusable = 1;
         w->transparent = 1;
         widget_set_text(w, text);
+    }
+    return w;
+}
+
+/* ---- switch ---- */
+
+/* A switch is an on and off control. value is 1 while on. A click, Space
+ * or Enter toggles it and emits "toggled". */
+static void switch_measure(struct widget *w, struct size_hint *h)
+{
+    h->min_w = h->pref_w = PAINTER_SWITCH_W + 4;
+    h->min_h = h->pref_h = PAINTER_SWITCH_H + 4;
+}
+
+static void switch_paint(struct widget *w, struct painter *p)
+{
+    painter_switch(p, 2, (w->h - PAINTER_SWITCH_H) / 2, w->value, widget_paint_state(w));
+}
+
+const struct widget_class switch_class = { "switch", sizeof(struct widget), switch_measure, NULL, switch_paint,
+                                           check_event, NULL };
+
+struct widget *switch_new(struct widget *parent)
+{
+    struct widget *w = widget_new(&switch_class, parent);
+    if (w) {
+        w->focusable = 1;
+        w->transparent = 1;
     }
     return w;
 }

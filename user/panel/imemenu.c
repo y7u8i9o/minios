@@ -86,15 +86,13 @@ static void draw_menu(void)
 {
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_fill(&p, 0, 0, menu.lw, menu.lh, MENU_BG);
-    painter_frame(&p, 0, 0, menu.lw, menu.lh, MENU_BORDER);
+    painter_card(&p, 0, 0, menu.lw, menu.lh, 0);
     for (int i = 0; i < nmethods; i++) {
         int y = PAD + i * ROW_H;
         int mine = strcmp(names[i], current) == 0;
-        if (mine)
-            painter_rounded(&p, PAD, y, menu.lw - 2 * PAD, ROW_H, MENU_HOVER, 0xffffffffu);
-        panel_label(&p, PAD, y, 36, ROW_H, labels[i][0] ? labels[i] : "A", mine ? MENU_TEXT : MENU_TEXT_DIM, 1);
-        panel_label(&p, PAD + 36, y, menu.lw - 2 * PAD - 36, ROW_H, title_of(i), MENU_TEXT, 0);
+        painter_menu_row(&p, PAD, y, menu.lw - 2 * PAD, ROW_H, mine ? PAINTER_CHECKED : 0);
+        panel_label(&p, PAD, y, 36, ROW_H, labels[i][0] ? labels[i] : "A", mine ? menu_theme.color[TC_TEXT] : menu_theme.color[TC_TEXT_DISABLED], 1);
+        panel_label(&p, PAD + 36, y, menu.lw - 2 * PAD - 36, ROW_H, title_of(i), menu_theme.color[TC_TEXT], 0);
     }
     canvas_commit(&menu);
 }

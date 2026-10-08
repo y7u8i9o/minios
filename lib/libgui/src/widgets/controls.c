@@ -41,7 +41,6 @@ static void combo_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_FIELD];
     if (((struct combo *)w)->field) {
         /* The field paints the text. The arrow is a button beside it. */
         int a = arrow_w(w) + 2;
@@ -51,7 +50,7 @@ static void combo_paint(struct widget *w, struct painter *p)
                         t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
         return;
     }
-    painter_rounded(p, 0, 0, w->w, w->h, fill, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_field(p, 0, 0, w->w, w->h, widget_paint_state(w) & ~PAINTER_PRESSED);
     painter_push(p, 1, 1, w->w - arrow_w(w) - 1, w->h - 2);
     painter_text(p, 4, (w->h - 2 - painter_text_height(p)) / 2, widget_text(w), t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     painter_pop(p);
@@ -300,8 +299,7 @@ static void spinner_paint(struct widget *w, struct painter *p)
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     struct spinner *sp = (struct spinner *)w;
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[w->enabled ? TC_FIELD : TC_TRACK],
-                    t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_field(p, 0, 0, w->w, w->h, widget_paint_state(w) & (PAINTER_DISABLED | PAINTER_FOCUSED));
     char s[16];
     snprintf(s, sizeof s, "%d", w->value);
     const char *shown_text = sp->editing ? sp->edit : s;
@@ -314,9 +312,9 @@ static void spinner_paint(struct widget *w, struct painter *p)
     int a = arrow_w(w), ax = w->w - a, half = w->h / 2;
     for (int dir = 1; dir >= -1; dir -= 2) {
         int y = dir > 0 ? 1 : half;
-        if (w->enabled && (sp->pressed == dir || sp->hot == dir))
-            painter_fill(p, ax + 1, y, a - 2, half - 1,
-                         t->color[sp->pressed == dir ? TC_BUTTON_PRESSED : TC_BUTTON_HOVER]);
+        if (w->enabled)
+            painter_button(p, ax + 1, y, a - 2, half - 1,
+                           PAINTER_FLAT | (sp->pressed == dir ? PAINTER_PRESSED : sp->hot == dir ? PAINTER_HOVER : 0));
         painter_chevron(p, ax + (a - half) / 2, y, half, dir > 0 ? PAINTER_UP : PAINTER_DOWN,
                         t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     }
@@ -433,12 +431,10 @@ static void slider_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    int cy = w->h / 2;
-    painter_fill(p, thumb_w(w) / 2, cy - 2, w->w - thumb_w(w), 4, t->color[TC_TRACK]);
-    int tx = slider_thumb_x(w);
-    painter_fill(p, thumb_w(w) / 2, cy - 2, tx, 4, t->color[w->enabled ? TC_ACCENT : TC_BORDER]);
-    uint32_t thumb = !w->enabled ? t->color[TC_TRACK] : w->pressed || w->hover ? t->color[TC_ACCENT] : t->color[TC_THUMB];
-    painter_rounded(p, tx, cy - 8, thumb_w(w), 16, thumb, w->enabled ? PAINTER_NONE : t->color[TC_BORDER]);
+    /* The track runs between the centres of the thumb at both ends. */
+    int tw = thumb_w(w), track = theme_scale_px(t, 4);
+    painter_slider(p, tw / 2, (w->h - track) / 2, w->w - tw, track, slider_thumb_x(w), tw, theme_scale_px(t, 16),
+                   widget_paint_state(w));
     if (w->focused)
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
@@ -539,18 +535,16 @@ static void progress_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     struct progress *pr = (struct progress *)w;
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_TRACK], 0xffffffffu);
+    uint32_t bar = t->color[w->enabled ? TC_ACCENT : TC_BORDER];
     if (pr->pulse) {
         if (!pr->timer && w->app)
             pr->timer = app_timer_add(w->app, PULSE_MS, 1, pulse_step, pr);
         int bw = w->w / 4, pos = pr->phase < PULSE_STEPS ? pr->phase : 2 * PULSE_STEPS - pr->phase;
-        int x = 1 + (w->w - 2 - bw) * pos / PULSE_STEPS;
-        painter_rounded(p, x, 1, bw, w->h - 2, t->color[w->enabled ? TC_ACCENT : TC_BORDER], PAINTER_NONE);
+        painter_meter(p, 0, 0, w->w, w->h, (w->w - bw) * pos / PULSE_STEPS, bw, bar);
         return;
     }
-    int span = w->max > w->min ? (w->w - 2) * (w->value - w->min) / (w->max - w->min) : 0;
-    if (span > 0)
-        painter_rounded(p, 1, 1, span, w->h - 2, t->color[w->enabled ? TC_ACCENT : TC_BORDER], PAINTER_NONE);
+    int span = w->max > w->min ? w->w * (w->value - w->min) / (w->max - w->min) : 0;
+    painter_meter(p, 0, 0, w->w, w->h, 0, span, bar);
     char s[32];
     /* Some languages put a space or the percent sign before the number. */
     snprintf(s, sizeof s, _("%d%%"), w->max > w->min ? 100 * (w->value - w->min) / (w->max - w->min) : 0);

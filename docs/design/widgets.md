@@ -213,6 +213,29 @@ card and an account row. `lib/libgui/tests/test_functions.c` checks the
 opaque region of the card, the centred clock, a click and Enter on an
 account row and the move of the focus with Down.
 
+## Shared paint functions (K8)
+
+The classes of libgui and the panel draw their controls with the
+functions of `paint.c`. Each function takes its colours from the theme
+of the painter. A state argument combines the bits `PAINTER_HOVER`,
+`PAINTER_PRESSED`, `PAINTER_CHECKED`, `PAINTER_DISABLED`, `PAINTER_FLAT`
+and `PAINTER_FOCUSED`. `widget_paint_state(w)` returns the bits of a
+widget.
+
+| Function | Colours | libgui classes |
+|---|---|---|
+| `painter_button` | `TC_TRACK` when disabled, else `TC_BUTTON_PRESSED`, `TC_BUTTON_CHECKED`, `TC_BUTTON_HOVER` or `TC_BUTTON`; nothing for a flat idle button | button, menu bar titles, spinner arrows |
+| `painter_field` | `TC_FIELD`, `TC_BUTTON_HOVER` or `TC_TRACK`; border `TC_ACCENT` with the focus, else `TC_BORDER` | text field, spinner, combo box |
+| `painter_slider` | track `TC_TRACK`, bar `TC_ACCENT`, knob `TC_THUMB` or `TC_ACCENT` with a border `TC_BORDER` | slider |
+| `painter_meter` | track `TC_TRACK`, bar in the colour of the caller | progress bar |
+| `painter_menu_row` | `TC_HIGHLIGHT` for a hovered or checked row | drop down |
+| `painter_card` | `TC_WINDOW` with a border `TC_BORDER` | card |
+| `painter_switch` | `TC_ACCENT` when on, else `TC_TRACK`; knob `TC_FIELD` | switch |
+
+`switch_new` creates an on and off switch. A click, Space or Enter
+toggles the value and emits `toggled`. `lib/libgui/tests/test_functions.c`
+checks the state colours of `painter_button` and of the switch.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

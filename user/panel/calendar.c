@@ -25,6 +25,7 @@ static struct canvas menu;
 static struct wire_proxy *popup;
 static int menu_open;
 static int year, month;                 /* the month shown, month 0 to 11 */
+static int nav_hover;                   /* -1 or 1 for the button under the pointer, else 0 */
 
 int calendar_is_open(void)
 {
@@ -58,15 +59,16 @@ static void draw_menu(void)
 {
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_fill(&p, 0, 0, menu.lw, menu.lh, MENU_BG);
-    painter_frame(&p, 0, 0, menu.lw, menu.lh, MENU_BORDER);
+    painter_card(&p, 0, 0, menu.lw, menu.lh, 0);
 
     /* The header: the month without a day, as the nominative of Russian,
      * and the year. */
     char title[80];
     snprintf(title, sizeof title, "%s %d", nl_langinfo(ALTMON_1 + month), year);
-    panel_label(&p, PAD + NAV_W, PAD, menu.lw - 2 * PAD - 2 * NAV_W, HEAD_H, title, MENU_TEXT, 1);
-    const struct image *back = panel_icon("back", MENU_ICON), *forward = panel_icon("forward", MENU_ICON);
+    panel_label(&p, PAD + NAV_W, PAD, menu.lw - 2 * PAD - 2 * NAV_W, HEAD_H, title, menu_theme.color[TC_TEXT], 1);
+    painter_button(&p, PAD, PAD, NAV_W, HEAD_H, PAINTER_FLAT | (nav_hover < 0 ? PAINTER_HOVER : 0));
+    painter_button(&p, menu.lw - PAD - NAV_W, PAD, NAV_W, HEAD_H, PAINTER_FLAT | (nav_hover > 0 ? PAINTER_HOVER : 0));
+    const struct image *back = panel_icon("back", menu_theme.color[TC_TEXT]), *forward = panel_icon("forward", menu_theme.color[TC_TEXT]);
     if (back)
         painter_image(&p, PAD + (NAV_W - image_lw(back)) / 2, PAD + (HEAD_H - image_lh(back)) / 2, back);
     if (forward)
@@ -76,7 +78,7 @@ static void draw_menu(void)
     int first = first_weekday();
     for (int c = 0; c < 7; c++)
         panel_label(&p, PAD + c * CELL_W, PAD + HEAD_H, CELL_W, DAYS_H, nl_langinfo(ABDAY_1 + (first + c) % 7),
-                    MENU_TEXT_DIM, 1);
+                    menu_theme.color[TC_TEXT_DISABLED], 1);
 
     time_t now = time(NULL);
     struct tm today;
@@ -89,10 +91,10 @@ static void draw_menu(void)
         int x = PAD + (slot % 7) * CELL_W, y = PAD + HEAD_H + DAYS_H + (slot / 7) * CELL_H;
         int is_today = today.tm_year + 1900 == year && today.tm_mon == month && today.tm_mday == d;
         if (is_today)
-            painter_rounded(&p, x + 2, y + 2, CELL_W - 4, CELL_H - 4, ACCENT, 0xffffffffu);
+            painter_rounded(&p, x + 2, y + 2, CELL_W - 4, CELL_H - 4, menu_theme.color[TC_ACCENT], 0xffffffffu);
         char num[4];
         snprintf(num, sizeof num, "%d", d);
-        panel_label(&p, x, y, CELL_W, CELL_H, num, is_today ? 0x00ffffff : MENU_TEXT, 1);
+        panel_label(&p, x, y, CELL_W, CELL_H, num, is_today ? 0x00ffffff : menu_theme.color[TC_TEXT], 1);
     }
     canvas_commit(&menu);
 }
@@ -111,6 +113,7 @@ static void teardown(void)
     if (menu_open)
         log_line("calendar closed");
     menu_open = 0;
+    nav_hover = 0;
 }
 
 static void on_popup_configure(void *user, struct wire_proxy *p, uint32_t serial, int32_t x, int32_t y, int32_t w,
@@ -157,12 +160,29 @@ void calendar_toggle(void)
     wire_display_flush(display);
 }
 
+/* The button of the header at (x, y): -1 back, 1 forward, else 0. */
+static int nav_at(int x, int y)
+{
+    if (y < PAD || y >= PAD + HEAD_H)
+        return 0;
+    return x >= PAD && x < PAD + NAV_W ? -1 : x >= menu.lw - PAD - NAV_W && x < menu.lw - PAD ? 1 : 0;
+}
+
+void calendar_pointer_motion(int x, int y)
+{
+    int n = nav_at(x, y);
+    if (n != nav_hover) {
+        nav_hover = n;
+        draw_menu();
+    }
+}
+
 /* The buttons of the header move one month back or forward. */
 void calendar_pointer_button(uint32_t button, uint32_t state, int x, int y)
 {
-    if (button != 1 || !state || y < PAD || y >= PAD + HEAD_H)
+    if (button != 1 || !state)
         return;
-    int step = x < PAD + NAV_W ? -1 : x >= menu.lw - PAD - NAV_W ? 1 : 0;
+    int step = nav_at(x, y);
     if (!step)
         return;
     month += step;

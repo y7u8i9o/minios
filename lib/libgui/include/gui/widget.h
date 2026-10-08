@@ -227,6 +227,9 @@ void widget_text_cursor(struct widget *w, int x, int y, int width, int height);
 /* Whether a text widget draws its caret now. The caret of the focused
  * text widget blinks with the period GUI_CARET_BLINK_MS. The blink ends
  * 10 s after the last input, and the caret then remains visible. */
+/* The PAINTER_HOVER, PAINTER_PRESSED, PAINTER_DISABLED and
+ * PAINTER_FOCUSED bits (gui/paint.h) of the state of w. */
+int widget_paint_state(const struct widget *w);
 int widget_caret_visible(const struct widget *w);
 struct widget *widget_at(struct widget *w, int x, int y);   /* deepest visible child */
 const struct theme *widget_theme(const struct widget *w);
@@ -300,6 +303,7 @@ extern const struct widget_class label_class;
 extern const struct widget_class button_class;  /* "clicked" (sig_click) */
 extern const struct widget_class checkbox_class;/* "toggled" (sig_change) */
 extern const struct widget_class radio_class;   /* "toggled"; exclusive among siblings */
+extern const struct widget_class switch_class;  /* "toggled"; value: 1 while on */
 /* "changed", "activate" (sig_change). Ctrl+Z and Ctrl+Y undo and redo,
  * Ctrl+Left and Ctrl+Right move by words, a double click selects a word
  * and a triple click the text. */
@@ -327,6 +331,8 @@ void label_set_ellipsis(struct widget *w, int ellipsis);
 struct widget *button_new(struct widget *parent, const char *text);
 struct widget *checkbox_new(struct widget *parent, const char *text);
 struct widget *radio_new(struct widget *parent, const char *text);
+/* An on and off switch (painter_switch). */
+struct widget *switch_new(struct widget *parent);
 struct widget *textfield_new(struct widget *parent, const char *text);
 /* A masked field shows one '*' per byte of its text and refuses to copy
  * it, for passwords. */

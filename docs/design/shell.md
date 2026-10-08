@@ -164,6 +164,26 @@ one button per toplevel from the manager (activate, minimize), the label
 of the input method, the mixer, and the date and the time from a
 timerfd. Text uses the interface font at 13 px.
 
+Since K8 of `docs/plan/widgets.md` the panel draws with the shared
+paint functions of libgui (`widgets.md`). The panel has two themes.
+`bar_theme` is the dark palette of the bar. `menu_theme` is the light
+palette of the menus, the pop-ups and the notification cards.
+`canvas_painter` gives the bar the bar theme and every other canvas the
+menu theme. The two themes have the colours of the former palette, so
+the colours at the sample points of the boot tests are unchanged.
+
+| Part of the panel | Function |
+|---|---|
+| bar buttons, notification actions and close buttons, calendar navigation | `painter_button` |
+| search field of the launcher | `painter_field` |
+| volume bar of the mixer | `painter_slider` |
+| level meter of the mixer | `painter_meter` |
+| rows of the launcher, the power menu and the input method menu | `painter_menu_row` |
+| notification cards and menu backgrounds | `painter_card` |
+| do-not-disturb switch | `painter_switch` |
+
+The navigation buttons of the calendar show the hover state.
+
 Since B2 of `docs/plan/desktop-panel.md` the buttons are 20 pixels high
 with corners of 6 pixels. A window button shows the icon of its app_id
 and the title. The panel loads the icon by the name of
@@ -263,9 +283,9 @@ right end (`users.md`). The system table has no such entry since B4 of
 `/usr/share/icons/app-NAME.svg`, where NAME is the file name of the
 program, or `app-default.svg` when that file does not exist
 (`launcher_icon_name` of libgui, which the Open with chooser uses as
-well). The panel renders the icons at the output scale and caches them
-by name, scale and colour (`icons.c`): dark for the menus, light for the
-bar.
+well). The panel takes the icons from the icon cache of libgui
+(`icon_lookup`) at the output scale: in the text colour of the menu
+theme for the menus, in the text colour of the bar theme for the bar.
 
 The first row of the menu is a search field. The popup grab gives the
 menu the keyboard focus, and the panel binds a keyboard for it. Printable

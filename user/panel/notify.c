@@ -142,36 +142,33 @@ static void draw_card(struct card *c)
     const struct entry *e = c->e;
     struct painter pa, *p = &pa;
     canvas_painter(p, &c->cv);
-    painter_fill(p, 0, 0, CARD_W, c->h, MENU_BG);
-    painter_frame(p, 0, 0, CARD_W, c->h, MENU_BORDER);
+    painter_card(p, 0, 0, CARD_W, c->h, 0);
     if (e->urgency == 2)
         painter_fill(p, 1, 1, 3, c->h - 2, CRITICAL_BAR);
     int y = CARD_PAD, hovered = c == hover_card;
     panel_label(p, CARD_PAD - 6, y, CARD_W - 2 * CARD_PAD - CLOSE_W, LINE_H, e->app[0] ? e->app : _("Notification"),
-                MENU_TEXT_DIM, 0);
-    const struct image *close = panel_icon("close", MENU_ICON);
+                menu_theme.color[TC_TEXT_DISABLED], 0);
+    const struct image *close = panel_icon("close", menu_theme.color[TC_TEXT]);
     if (close) {
         int cx = CARD_W - CARD_PAD - CLOSE_W;
-        if (hovered && hover_button == -2)
-            painter_rounded(p, cx, y - 1, CLOSE_W, CLOSE_W, MENU_HOVER, 0xffffffffu);
+        painter_button(p, cx, y - 1, CLOSE_W, CLOSE_W, PAINTER_FLAT | (hovered && hover_button == -2 ? PAINTER_HOVER : 0));
         painter_image(p, cx + (CLOSE_W - image_lw(close)) / 2, y - 1 + (CLOSE_W - image_lh(close)) / 2, close);
     }
     y += LINE_H;
-    panel_label(p, CARD_PAD - 6, y, CARD_W - 2 * CARD_PAD, LINE_H, e->summary, MENU_TEXT, 0);
+    panel_label(p, CARD_PAD - 6, y, CARD_W - 2 * CARD_PAD, LINE_H, e->summary, menu_theme.color[TC_TEXT], 0);
     y += LINE_H;
     for (int i = 0; i < c->nbody; i++) {
         char line[512];
         int n = c->blen[i] < (int)sizeof line - 1 ? c->blen[i] : (int)sizeof line - 1;
         memcpy(line, e->body + c->bstart[i], (size_t)n);
         line[n] = '\0';
-        panel_label(p, CARD_PAD - 6, y, CARD_W - 2 * CARD_PAD, LINE_H, line, MENU_TEXT, 0);
+        panel_label(p, CARD_PAD - 6, y, CARD_W - 2 * CARD_PAD, LINE_H, line, menu_theme.color[TC_TEXT], 0);
         y += LINE_H;
     }
     int by = y + (ACTION_H - ACTION_BTN_H) / 2;
     for (int i = 0; i < c->nbuttons; i++) {
-        uint32_t bg = hovered && hover_button == i ? MENU_HOVER : METER_BG;
-        painter_rounded(p, c->bx[i], by, c->bw[i], ACTION_BTN_H, bg, 0xffffffffu);
-        panel_label(p, c->bx[i], by, c->bw[i], ACTION_BTN_H, e->labels[c->bidx[i]], MENU_TEXT, 1);
+        painter_button(p, c->bx[i], by, c->bw[i], ACTION_BTN_H, hovered && hover_button == i ? PAINTER_HOVER : 0);
+        panel_label(p, c->bx[i], by, c->bw[i], ACTION_BTN_H, e->labels[c->bidx[i]], menu_theme.color[TC_TEXT], 1);
     }
     canvas_commit(&c->cv);
 }
@@ -311,27 +308,26 @@ static void draw_history(void)
         return;
     struct painter p;
     canvas_painter(&p, &hist);
-    painter_fill(&p, 0, 0, hist.lw, hist.lh, MENU_BG);
-    painter_frame(&p, 0, 0, hist.lw, hist.lh, MENU_BORDER);
+    painter_card(&p, 0, 0, hist.lw, hist.lh, 0);
     int y = HIST_PAD, w = hist.lw - 2 * HIST_PAD;
-    panel_label(&p, HIST_PAD, y, w, HIST_HEAD_H, _("Notifications"), MENU_TEXT, 0);
+    panel_label(&p, HIST_PAD, y, w, HIST_HEAD_H, _("Notifications"), menu_theme.color[TC_TEXT], 0);
     if (entries) {
         const char *clear = _("Clear all");
         int tw = painter_text_width(&p, clear, -1) + 12;
-        panel_label(&p, HIST_PAD + w - tw, y, tw, HIST_HEAD_H, clear, ACCENT, 1);
+        panel_label(&p, HIST_PAD + w - tw, y, tw, HIST_HEAD_H, clear, menu_theme.color[TC_ACCENT], 1);
     }
     y += HIST_HEAD_H;
-    const struct image *close = panel_icon("close", MENU_ICON);
+    const struct image *close = panel_icon("close", menu_theme.color[TC_TEXT]);
     int rows = 0;
     for (struct entry *e = entries; e && rows < HIST_ROWS; e = e->next, rows++) {
-        painter_line(&p, HIST_PAD, y, HIST_PAD + w, y, MENU_BORDER);
+        painter_line(&p, HIST_PAD, y, HIST_PAD + w, y, menu_theme.color[TC_BORDER]);
         char when[16];
         struct tm tm;
         localtime_r(&e->time, &tm);
         strftime(when, sizeof when, "%H:%M", &tm);
         int tw = painter_text_width(&p, when, -1) + 12;
-        panel_label(&p, HIST_PAD, y + 4, w - tw - CLOSE_W, LINE_H, e->summary, MENU_TEXT, 0);
-        panel_label(&p, HIST_PAD + w - tw - CLOSE_W, y + 4, tw, LINE_H, when, MENU_TEXT_DIM, 1);
+        panel_label(&p, HIST_PAD, y + 4, w - tw - CLOSE_W, LINE_H, e->summary, menu_theme.color[TC_TEXT], 0);
+        panel_label(&p, HIST_PAD + w - tw - CLOSE_W, y + 4, tw, LINE_H, when, menu_theme.color[TC_TEXT_DISABLED], 1);
         /* Show the first line of the body, or the application name if the
          * body is empty. */
         int start[1], len[1];
@@ -343,22 +339,19 @@ static void draw_history(void)
         } else {
             strlcpy(line, e->app, sizeof line);
         }
-        panel_label(&p, HIST_PAD, y + 4 + LINE_H, w - CLOSE_W, LINE_H, line, MENU_TEXT_DIM, 0);
+        panel_label(&p, HIST_PAD, y + 4 + LINE_H, w - CLOSE_W, LINE_H, line, menu_theme.color[TC_TEXT_DISABLED], 0);
         if (close)
             painter_image(&p, HIST_PAD + w - CLOSE_W + (CLOSE_W - image_lw(close)) / 2,
                           y + (HIST_ROW_H - image_lh(close)) / 2, close);
         y += HIST_ROW_H;
     }
     if (!rows) {
-        panel_label(&p, HIST_PAD, y, w, HIST_ROW_H, _("No notifications"), MENU_TEXT_DIM, 1);
+        panel_label(&p, HIST_PAD, y, w, HIST_ROW_H, _("No notifications"), menu_theme.color[TC_TEXT_DISABLED], 1);
         y += HIST_ROW_H;
     }
-    painter_line(&p, HIST_PAD, y, HIST_PAD + w, y, MENU_BORDER);
-    panel_label(&p, HIST_PAD, y, w - 50, HIST_FOOT_H, _("Do not disturb"), MENU_TEXT, 0);
-    /* The switch is a pill with a knob. It uses the accent colour while on. */
-    int sx = HIST_PAD + w - 40, sy = y + (HIST_FOOT_H - 18) / 2;
-    painter_rounded(&p, sx, sy, 36, 18, dnd ? ACCENT : METER_BG, 0xffffffffu);
-    painter_rounded(&p, sx + (dnd ? 20 : 2), sy + 2, 14, 14, 0x00ffffff, 0xffffffffu);
+    painter_line(&p, HIST_PAD, y, HIST_PAD + w, y, menu_theme.color[TC_BORDER]);
+    panel_label(&p, HIST_PAD, y, w - 50, HIST_FOOT_H, _("Do not disturb"), menu_theme.color[TC_TEXT], 0);
+    painter_switch(&p, HIST_PAD + w - 40, y + (HIST_FOOT_H - PAINTER_SWITCH_H) / 2, dnd, 0);
     canvas_commit(&hist);
 }
 
@@ -513,14 +506,13 @@ void notify_pointer_button(const struct wire_proxy *surface, uint32_t button, ui
 void notify_draw_button(struct painter *p, int hovered)
 {
     int x = notify_x(), h = panel.lh;
-    if (hist_open || hovered)
-        painter_rounded(p, x, BUTTON_Y, NOTIFY_BTN_W, h - 2 * BUTTON_Y, hist_open ? BUTTON_OPEN : BUTTON_HOVER,
-                        0xffffffffu);
-    const struct image *bell = panel_icon(dnd ? "notifications-off" : "notifications", PANEL_TEXT);
+    painter_button(p, x, BUTTON_Y, NOTIFY_BTN_W, h - 2 * BUTTON_Y,
+                   PAINTER_FLAT | (hist_open ? PAINTER_PRESSED : 0) | (hovered ? PAINTER_HOVER : 0));
+    const struct image *bell = panel_icon(dnd ? "notifications-off" : "notifications", bar_theme.color[TC_TEXT]);
     if (bell)
         painter_image(p, x + (NOTIFY_BTN_W - image_lw(bell)) / 2, (h - image_lh(bell)) / 2, bell);
     if (unseen && !dnd)
-        painter_rounded(p, x + NOTIFY_BTN_W - 10, BUTTON_Y + 3, 6, 6, ACCENT, 0xffffffffu);
+        painter_rounded(p, x + NOTIFY_BTN_W - 10, BUTTON_Y + 3, 6, 6, bar_theme.color[TC_ACCENT], 0xffffffffu);
 }
 
 /* ---- the connection to notifyd ---- */

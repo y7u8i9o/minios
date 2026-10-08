@@ -119,7 +119,7 @@ struct card {
 static void card_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = widget_theme(w);
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_WINDOW], t->color[TC_BORDER]);
+    painter_card(p, 0, 0, w->w, w->h, theme_px(t, TM_RADIUS));
     struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
     if (!ws || !ws->translucent || !ws->win)
         return;

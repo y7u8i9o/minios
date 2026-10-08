@@ -249,6 +249,58 @@ static void test_screen(struct app *a)
     window_close(win);
 }
 
+static int toggled;
+static int on_toggled(struct widget *w, void *args, void *arg)
+{
+    toggled++;
+    return 1;
+}
+
+/* painter_button takes the colour of the state, and a flat idle button
+ * paints nothing. The switch shows its state in the track colour. */
+static void test_controls_paint(struct app *a)
+{
+    const struct theme *t = app_theme(a);
+    struct widget *win = app_window(a, 200, 100, "paint");
+    struct widget *b = button_new(win, "");
+    struct widget *s = switch_new(win);
+    widget_connect(s, "toggled", on_toggled, NULL);
+    window_paint(win);
+    int bx, by, sx, sy;
+    widget_abs(b, &bx, &by);
+    widget_abs(s, &sx, &sy);
+    int px = bx + b->w / 2, py = by + b->h / 2;
+    CHECK(window_pixel(win, px, py) == t->color[TC_BUTTON], "an idle button: %06x", window_pixel(win, px, py));
+    b->hover = 1;
+    widget_invalidate(b);
+    window_paint(win);
+    CHECK(window_pixel(win, px, py) == t->color[TC_BUTTON_HOVER], "a hovered button: %06x", window_pixel(win, px, py));
+    b->pressed = 1;
+    widget_invalidate(b);
+    window_paint(win);
+    CHECK(window_pixel(win, px, py) == t->color[TC_BUTTON_PRESSED], "a pressed button: %06x", window_pixel(win, px, py));
+    widget_set_enabled(b, 0);
+    window_paint(win);
+    CHECK(window_pixel(win, px, py) == t->color[TC_TRACK], "a disabled button: %06x", window_pixel(win, px, py));
+    struct painter p;
+    painter_init(&p, &window_state_of(win)->win->surf, t);
+    painter_fill(&p, 0, 0, 20, 20, 0x00123456);
+    painter_button(&p, 0, 0, 20, 20, PAINTER_FLAT);
+    CHECK(window_pixel(win, 10, 10) == 0x00123456, "a flat idle button paints nothing");
+    painter_button(&p, 0, 0, 20, 20, PAINTER_FLAT | PAINTER_CHECKED | PAINTER_HOVER);
+    CHECK(window_pixel(win, 10, 10) == t->color[TC_BUTTON_CHECKED], "a checked button is checked over hover");
+
+    /* The track left of the knob, then right of the knob. */
+    int ty = sy + s->h / 2;
+    CHECK(window_pixel(win, sx + PAINTER_SWITCH_W - 4, ty) == t->color[TC_TRACK], "a switch that is off: %06x",
+          window_pixel(win, sx + PAINTER_SWITCH_W - 4, ty));
+    click(win, sx + PAINTER_SWITCH_W / 2, ty);
+    window_paint(win);
+    CHECK(s->value == 1 && toggled == 1, "a click turns the switch on");
+    CHECK(window_pixel(win, sx + 8, ty) == t->color[TC_ACCENT], "a switch that is on: %06x", window_pixel(win, sx + 8, ty));
+    window_close(win);
+}
+
 void run_function_tests(void)
 {
     struct app *a = app_create_detached();
@@ -259,5 +311,6 @@ void run_function_tests(void)
     test_menus(a);
     test_imageview(a);
     test_screen(a);
+    test_controls_paint(a);
     app_destroy(a);
 }

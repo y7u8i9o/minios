@@ -73,7 +73,7 @@ static void add_entries(const struct launcher_entry *table, int n, enum section 
         strlcpy(e->title, table[i].title, sizeof e->title);
         strlcpy(e->path, table[i].command, sizeof e->path);
         e->section = strcmp(e->path, "@logout") == 0 ? SEC_LOGOUT : section;
-        e->icon = panel_app_icon(e->path, MENU_ICON);
+        e->icon = panel_app_icon(e->path, menu_theme.color[TC_TEXT]);
     }
 }
 
@@ -194,13 +194,12 @@ static void draw(void)
 {
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_fill(&p, 0, 0, menu_w, menu_h, MENU_BG);
-    painter_frame(&p, 0, 0, menu_w, menu_h, MENU_BORDER);
+    painter_card(&p, 0, 0, menu_w, menu_h, 0);
 
     /* The search field is drawn in the first row. */
     int fx = MENU_PAD + 2, fy = MENU_PAD + 2, fw = menu_w - 2 * MENU_PAD - 4, fh = LAUNCHER_SEARCH_H - 8;
-    painter_rounded(&p, fx, fy, fw, fh, MENU_FIELD, MENU_BORDER);
-    const struct image *glass = panel_icon("search", MENU_ICON);
+    painter_field(&p, fx, fy, fw, fh, 0);
+    const struct image *glass = panel_icon("search", menu_theme.color[TC_TEXT]);
     int tx = fx + 8;
     if (glass) {
         painter_image(&p, tx, fy + (fh - image_lh(glass)) / 2, glass);
@@ -208,37 +207,36 @@ static void draw(void)
     }
     int th = painter_text_height(&p);
     if (query[0]) {
-        painter_text(&p, tx, fy + (fh - th) / 2, query, MENU_TEXT);
+        painter_text(&p, tx, fy + (fh - th) / 2, query, menu_theme.color[TC_TEXT]);
         tx += painter_text_width(&p, query, -1);
     } else {
-        painter_text(&p, tx, fy + (fh - th) / 2, _("Search"), MENU_TEXT_DIM);
+        painter_text(&p, tx, fy + (fh - th) / 2, _("Search"), menu_theme.color[TC_TEXT_DISABLED]);
     }
     if (keyboard_surface == menu.surface)
-        painter_fill(&p, tx + 1, fy + (fh - th) / 2, 1, th, MENU_TEXT);
+        painter_fill(&p, tx + 1, fy + (fh - th) / 2, 1, th, menu_theme.color[TC_TEXT]);
 
     for (int r = 0; r < nrows; r++) {
         struct row *row = &rows[r];
         if (row->y + row->h > menu_h - MENU_PAD && row->entry >= 0 && entries[row->entry].section != SEC_LOGOUT)
             continue;
         if (row->entry < 0) {
-            painter_text(&p, row->x + 8, row->y + row->h - th - 2, row->heading, MENU_TEXT_DIM);
+            painter_text(&p, row->x + 8, row->y + row->h - th - 2, row->heading, menu_theme.color[TC_TEXT_DISABLED]);
             continue;
         }
         const struct entry *e = &entries[row->entry];
         if (e->section == SEC_LOGOUT)
-            painter_fill(&p, MENU_PAD + 4, row->y - LAUNCHER_RULE_H / 2 - 1, menu_w - 2 * MENU_PAD - 8, 1, MENU_BORDER);
-        if (r == selected)
-            painter_rounded(&p, row->x + 2, row->y, row->w - 4, row->h, MENU_HOVER, 0xffffffffu);
+            painter_fill(&p, MENU_PAD + 4, row->y - LAUNCHER_RULE_H / 2 - 1, menu_w - 2 * MENU_PAD - 8, 1, menu_theme.color[TC_BORDER]);
+        painter_menu_row(&p, row->x + 2, row->y, row->w - 4, row->h, r == selected ? PAINTER_HOVER : 0);
         int x = row->x + 8;
         if (e->icon)
             painter_image(&p, x, row->y + (row->h - image_lh(e->icon)) / 2, e->icon);
         x += LAUNCHER_ICON + 8;
-        panel_label(&p, x - 6, row->y, row->w - (x - row->x) - 2, row->h, e->title, MENU_TEXT, 0);
+        panel_label(&p, x - 6, row->y, row->w - (x - row->x) - 2, row->h, e->title, menu_theme.color[TC_TEXT], 0);
         /* The account of the session, at the end of the Log out row. */
         if (e->section == SEC_LOGOUT) {
             const char *who = session_user();
             int ww = painter_text_width(&p, who, -1);
-            painter_text(&p, row->x + row->w - 10 - ww, row->y + (row->h - th) / 2, who, MENU_TEXT_DIM);
+            painter_text(&p, row->x + row->w - 10 - ww, row->y + (row->h - th) / 2, who, menu_theme.color[TC_TEXT_DISABLED]);
         }
     }
     canvas_commit(&menu);

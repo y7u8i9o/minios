@@ -411,7 +411,7 @@ on account rows. The boot cases `gui_greeter`, `greeter_boot`,
 Document: `docs/design/widgets.md`, `docs/design/users.md`,
 `docs/design/lock.md`.
 
-### K8. The panel on the shared paint functions
+### K8. The panel on the shared paint functions (completed 2026-10-09)
 
 Built: these paint functions draw the libgui classes and the panel.
 

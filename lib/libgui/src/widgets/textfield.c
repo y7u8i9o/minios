@@ -236,8 +236,7 @@ static void textfield_paint(struct widget *w, struct painter *p)
     clamp(f);
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[w->enabled ? TC_FIELD : TC_TRACK],
-                    t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_field(p, 0, 0, w->w, w->h, widget_paint_state(w) & (PAINTER_DISABLED | PAINTER_FOCUSED));
     painter_push(p, 1, 1, w->w - 2, w->h - 2);
     const char *text = shown(f);
     int th = painter_text_height(p);

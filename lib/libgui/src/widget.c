@@ -560,3 +560,10 @@ int widget_dispatch(struct widget *w, struct event *e)
     }
     return 0;
 }
+
+int widget_paint_state(const struct widget *w)
+{
+    if (!w->enabled)
+        return PAINTER_DISABLED;
+    return (w->hover ? PAINTER_HOVER : 0) | (w->pressed ? PAINTER_PRESSED : 0) | (w->focused ? PAINTER_FOCUSED : 0);
+}

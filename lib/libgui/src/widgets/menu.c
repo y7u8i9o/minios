@@ -163,8 +163,7 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
             y += ih;
             continue;
         }
-        if (i == c->hover && it->enabled)
-            painter_rounded(p, 3, y + 1, c->w - 6, ih - 2, t->color[TC_HIGHLIGHT], PAINTER_NONE);
+        painter_menu_row(p, 3, y + 1, c->w - 6, ih - 2, i == c->hover && it->enabled ? PAINTER_HOVER : 0);
         int x = menu_pad(w);
         if (mi->kind == ITEM_CHECK && mi->checked)
             painter_check(p, 4, y + (ih - mark) / 2, mark, fg);
@@ -442,9 +441,8 @@ static void menubar_paint(struct widget *w, struct painter *p)
     int x = 0, i = 0;
     for (struct widget *m = w->first; m; m = m->next, i++) {
         int tw = title_width(w, m);
-        if (i == w->value || i == ((struct menubar *)w)->hot)
-            painter_rounded(p, x + 1, 2, tw - 2, w->h - 4, t->color[i == w->value ? TC_HIGHLIGHT : TC_BUTTON_HOVER],
-                            PAINTER_NONE);
+        painter_button(p, x + 1, 2, tw - 2, w->h - 4,
+                       PAINTER_FLAT | (i == w->value ? PAINTER_PRESSED : i == ((struct menubar *)w)->hot ? PAINTER_HOVER : 0));
         painter_mnemonic_text(p, x + menu_pad(w), 4, widget_text(m), t->color[TC_TEXT]);
         x += tw;
     }

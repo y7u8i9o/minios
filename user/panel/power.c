@@ -45,10 +45,9 @@ int power_owns(const struct wire_proxy *surface)
 void power_draw_button(struct painter *p, int hovered)
 {
     int x = power_x(), h = panel.lh;
-    if (menu_open || hovered)
-        painter_rounded(p, x, BUTTON_Y, POWER_BTN_W, h - 2 * BUTTON_Y, menu_open ? BUTTON_OPEN : BUTTON_HOVER,
-                        0xffffffffu);
-    const struct image *icon = panel_icon("power-off", PANEL_TEXT);
+    painter_button(p, x, BUTTON_Y, POWER_BTN_W, h - 2 * BUTTON_Y,
+                   PAINTER_FLAT | (menu_open ? PAINTER_PRESSED : 0) | (hovered ? PAINTER_HOVER : 0));
+    const struct image *icon = panel_icon("power-off", bar_theme.color[TC_TEXT]);
     if (icon)
         painter_image(p, x + (POWER_BTN_W - image_lw(icon)) / 2, (h - image_lh(icon)) / 2, icon);
 }
@@ -59,23 +58,21 @@ static void draw_menu(void)
     const char *titles[NROWS] = { _("Lock"), _("Log out"), _("Restart"), _("Shut down") };
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_fill(&p, 0, 0, menu.lw, menu.lh, MENU_BG);
-    painter_frame(&p, 0, 0, menu.lw, menu.lh, MENU_BORDER);
+    painter_card(&p, 0, 0, menu.lw, menu.lh, 0);
     for (int i = 0; i < NROWS; i++) {
         int y = PAD + i * ROW_H;
-        if (i == hover_row)
-            painter_rounded(&p, PAD, y, menu.lw - 2 * PAD, ROW_H, MENU_HOVER, 0xffffffffu);
-        const struct image *icon = panel_icon(icons[i], MENU_ICON);
+        painter_menu_row(&p, PAD, y, menu.lw - 2 * PAD, ROW_H, i == hover_row ? PAINTER_HOVER : 0);
+        const struct image *icon = panel_icon(icons[i], menu_theme.color[TC_TEXT]);
         if (icon)
             painter_image(&p, PAD + 8, y + (ROW_H - image_lh(icon)) / 2, icon);
-        panel_label(&p, PAD + 32, y, menu.lw - 2 * PAD - 32, ROW_H, titles[i], MENU_TEXT, 0);
+        panel_label(&p, PAD + 32, y, menu.lw - 2 * PAD - 32, ROW_H, titles[i], menu_theme.color[TC_TEXT], 0);
     }
     /* The account of the session right of Log out. */
     struct passwd *pw = getpwuid(getuid());
     if (pw) {
         int tw = painter_text_width(&p, pw->pw_name, -1);
         panel_label(&p, menu.lw - PAD - 8 - tw - 6, PAD + ROW_LOGOUT * ROW_H, tw + 12, ROW_H, pw->pw_name,
-                    MENU_TEXT_DIM, 0);
+                    menu_theme.color[TC_TEXT_DISABLED], 0);
     }
     canvas_commit(&menu);
 }
