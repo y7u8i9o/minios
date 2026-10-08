@@ -20,11 +20,7 @@
 #include <unistd.h>
 #include "dialog.h"
 
-/* tools/xgettext.py extracts these into the libgui domain. */
-#define _(s) dgettext("libgui", s)
-#define N_(s) s
-#undef ngettext
-#define ngettext(s, p, n) dngettext("libgui", s, p, n)
+#include "intl.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 512
@@ -1157,7 +1153,7 @@ static void sidebar_paint(struct widget *w, struct painter *p)
         int x = 12;
         painter_push(p, 0, y, w->w - 8, rh);
         if (icon) {
-            painter_image(p, x, (rh - image_lh(icon)) / 2, icon);
+            painter_icon(p, x, (rh - image_lh(icon)) / 2, icon, 0);
             x += image_lw(icon) + 8;
         }
         painter_text(p, x, (rh - painter_text_height(p)) / 2, fv->place[i].label,
@@ -1314,9 +1310,8 @@ struct pathbar {
 
 static void seg_measure(struct widget *w, struct seg *s)
 {
-    const struct theme *t = widget_theme(w);
     const struct image *icon = s->icon ? icon_get(s->icon) : NULL;
-    s->w = 2 * SEG_PAD + (s->label[0] ? gfx_text_width_font(t->font, s->label, -1) : 0) +
+    s->w = 2 * SEG_PAD + (s->label[0] ? widget_text_width(w, NULL, s->label, -1) : 0) +
            (icon ? image_lw(icon) + (s->label[0] ? 6 : 0) : 0);
 }
 
@@ -1416,7 +1411,7 @@ static void pathbar_paint(struct widget *w, struct painter *p)
         int x = s->x + SEG_PAD;
         const struct image *icon = s->icon ? icon_get(s->icon) : NULL;
         if (icon) {
-            painter_image(p, x, (w->h - image_lh(icon)) / 2, icon);
+            painter_icon(p, x, (w->h - image_lh(icon)) / 2, icon, 0);
             x += image_lw(icon) + 6;
         }
         if (s->label[0])

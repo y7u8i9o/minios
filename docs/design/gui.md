@@ -91,17 +91,15 @@ polls it together with the mouse and the keyboard.
 
 ## Client library and toolkit
 
-`lib/libgui/` builds `libgui.a`: `gfx` (fill, rectangle, line, 8x16 text,
-clipped blit, rectangle helpers, and since G3 of
+`lib/libgui/` builds `libgui.a` and `libgui.so`. The library contains
+`gfx` (fills, lines, text, blits, rectangle helpers, and since G3 of
 `docs/plan/compositor-performance.md` the rectangle set and the row
 operations of `gui/pixel.h`, `graphics-performance.md`), the client
-protocol, and `widgets`:
-a tree of boxes (vertical or horizontal layout with padding, spacing
-and expanding children), labels, buttons, text fields with a cursor,
-list boxes with selection and scrolling, and canvases drawn by a
-callback. `ui_run` redraws on demand, routes mouse and key events to
-widgets, maintains keyboard focus, calls a periodic tick, and stops on
-`WM_CLOSE`; unhandled keys reach `ui->on_key`.
+protocol, the painter, and the application framework with its widget
+tree. `framework.md` describes the framework: the application object,
+the widget tree, the layout, the paint pass and the core widgets.
+`widgets.md` describes the widgets as revised by
+`docs/plan/widgets.md`.
 
 Applications: `term` (the terminal emulator, described in
 `terminal.md`), `clock` (canvas redrawn every second from
@@ -246,19 +244,10 @@ table is a growable array of pointers.
   at its new size and scale. A resize that cannot get memory leaves the
   previous geometry, and the window commits nothing until a resize
   succeeds.
-- Toolkit (`widgets.c`, `widgets_text.c`, `widgets_menu.c`): `ui->font`
-  selects the font (`ui_set_font`), line heights follow it. New widgets:
-  scroll bar (`ui_scrollbar`, `ui_scrollbar_set`, thumb dragging, arrows
-  and page keys, wheel), check box, text area (`ui_textarea`, growable
-  buffer, multi line cursor movement, selection with Shift and the
-  mouse, `readonly`), menu bar (`ui_menubar`, `ui_menu`, `ui_menu_item`,
-  drop downs drawn last, keyboard navigation, Escape). Text fields and
-  areas share the editing code: Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V through
-  the server clipboard; Enter in a field calls `on_select` when set,
-  otherwise `on_change`. List boxes and text areas draw a scroll bar
-  when their contents overflow and react to the wheel. `ui_dialog` and
-  `ui_prompt` open modal windows with their own event loop; `ui_run`
-  ignores events of other windows. `WM_RESIZED` relayouts the tree.
+- Toolkit: the widgets of this stage were replaced by the application
+  framework of M21 and M22. `framework.md` and `widgets.md` describe the
+  current widgets: scroll bars, check boxes, the editor, menus, dialogs
+  and the shared editing commands of text fields and editors.
 
 ### Applications (stage 4)
 
@@ -336,7 +325,8 @@ Toplevels of libgui draw their own chrome, the way GTK 4 does under
 Wayland, in a light style that matches the rest of the toolkit. The
 drawing surface of a window is the whole buffer: a `CSD_MARGIN` (16 px)
 band for the shadow around the frame, and inside the frame a
-`CSD_HEADER` (36 px) header bar above the contents; `gui_window.surf` is a view of the contents, so applications,
+`CSD_HEADER` (30 px) header bar above the contents; `gui_window.surf` is
+a view of the contents, so applications,
 the framework and `gui_damage` retain their contents coordinates, and the
 client layer adds the offset to damage, popup anchors, regions and
 pointer coordinates. The buffers are ARGB; `csd_copy` makes the frame

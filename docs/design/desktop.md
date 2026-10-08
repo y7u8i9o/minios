@@ -168,7 +168,8 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
 `launcher`, `system`).
 
 - Appearance: wallpaper (the files of `/usr/share/wallpapers` or none),
-  placement, desktop colour sliders with a preview, the interface font
+  placement, the desktop colour (a colour button that opens the colour
+  dialog of libgui, `widgets.md`), the interface font
   (`ui_font`: DejaVu Sans, Noto Sans, Latin Modern Roman or the builtin
   bitmap font), its size (`ui_font_px`) and the interface scale
   (`ui_scale`, 100, 125 or 150 percent). libgui reads the three `ui_`

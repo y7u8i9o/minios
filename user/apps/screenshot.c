@@ -29,6 +29,7 @@
 #include <gui/mime.h>
 #include <gui/paint.h>
 #include <gui/theme.h>
+#include <gui/widget.h>
 #include <wire/client.h>
 #include <core-client.h>
 #include <debug-client.h>
@@ -242,7 +243,7 @@ struct ui {
     int hover_btn, press_btn;
     int hover_win, chosen_win;      /* indices into windows[], -1 for none */
     struct rect painted;            /* extent of the marks drawn last, for the next repaint */
-    struct image *icons[BTN_COUNT];
+    const struct image *icons[BTN_COUNT];
     int result;                     /* 1 capture, -1 cancel, 0 running */
 };
 
@@ -723,16 +724,6 @@ static void key(struct ui *u, int code)
     }
 }
 
-static struct image *load_icon(const char *name, int px, uint32_t color)
-{
-    char path[128];
-    snprintf(path, sizeof path, "/usr/share/icons/%s.svg", name);
-    struct image *img = image_load_svg(path, px * scale, color);
-    if (img)
-        img->scale = scale;
-    return img;
-}
-
 /* Run the interface on the frozen screen. Returns 1 with the choice in
  * *u, or -1 when cancelled. */
 static int run_ui(struct ui *u, int quick, int pointer)
@@ -761,7 +752,7 @@ static int run_ui(struct ui *u, int quick, int pointer)
     static const char *const names[BTN_COUNT] = { "rectangle", "wallpaper", "app-default", NULL, "app-evtest", "quit" };
     for (int b = 0; b < BTN_COUNT; b++)
         if (names[b])
-            u->icons[b] = load_icon(names[b], b <= BTN_WINDOW ? 16 : 18, u->theme.color[TC_TEXT] & 0x00ffffffu);
+            u->icons[b] = icon_lookup(names[b], b <= BTN_WINDOW ? 16 : 18, scale, u->theme.color[TC_TEXT] & 0x00ffffffu);
     u->win = gui_create_layer_window(u->sw, u->sh, 3, GUI_ANCHOR_TOP | GUI_ANCHOR_LEFT, 0, 1, "screenshot");
     if (!u->win || u->win->scale != scale)
         return -1;
@@ -787,9 +778,6 @@ static int run_ui(struct ui *u, int quick, int pointer)
     gui_destroy_window(u->win);
     gui_flush();
     wire_display_roundtrip(display);
-    for (int b = 0; b < BTN_COUNT; b++)
-        if (u->icons[b])
-            image_free(u->icons[b]);
     theme_release(&u->theme);
     return u->result > 0 ? 1 : -1;
 }

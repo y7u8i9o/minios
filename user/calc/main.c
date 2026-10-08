@@ -188,6 +188,7 @@ int main(int argc, char **argv)
     widget_connect(mode, "changed", on_mode, NULL);
 
     display = canvas_new(window);
+    display->focusable = 1;
     widget_set_hint(display, 0, 126);
     widget_set_min(display, 200, 110);
     widget_connect(display, "paint", on_display_paint, NULL);

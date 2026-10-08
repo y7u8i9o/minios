@@ -44,14 +44,33 @@ and `image_lh`, the logical size.
 
 ## The icon cache (`lib/libgui/src/widgets/icons.c`)
 
-`icon_get(name)` looks for `<name>.svg` and renders it 16 logical
-pixels high at the scale of the first output, then for `<name>.png`.
-`icon_get_size(name, px)` renders an SVG icon at another logical size
-(the desktop asks for 32) and returns NULL without an SVG, so the
-desktop continues doubling PNG icons. Renders are cached per name and size
-for the process. Font Awesome icons are single colour: the cache fills
-them with the text colour `0x2a2a2a`, `folder` and `open` in amber
-`0xd9a520` and `quit` in red `0xc04040`.
+The key of a cache entry consists of the icon name, the size, the scale
+and the colour. The cache grows by doubling. A full cache never causes a
+NULL result. A missing icon is cached as NULL.
+
+- `icon_lookup(name, px, scale, color)` renders `<name>.svg` `px`
+  logical pixels high at `scale` device pixels per logical pixel in
+  `color`. The function returns NULL without an SVG file.
+- `ICON_COLOR_DEFAULT` selects the colour of the icon theme. Font
+  Awesome icons are single colour. The colour is the text colour
+  `0x2a2a2a`, amber `0xd9a520` for `folder` and `open`, and red
+  `0xc04040` for `quit`.
+- `icon_get(name)` returns the icon 16 logical pixels high at the scale
+  of the first output in the default colour. Without an SVG file the
+  function returns `<name>.png`.
+- `icon_get_size(name, px)` renders an SVG icon at another logical size
+  (the desktop asks for 32). The function returns NULL without an SVG,
+  so the desktop continues doubling PNG icons.
+- `icon_variant(img, scale, color)` returns the rendition of a cached
+  icon at another scale and colour. A PNG icon and an image from
+  elsewhere are returned unchanged.
+- `painter_icon(p, x, y, img, dimmed)` draws the rendition at the scale
+  of the painter in the colour of the icon. A window on a scale 2 output
+  therefore shows sharp icons when the first output has the scale 1.
+- `icon_set_dir(dir)` replaces `/usr/share/icons`. The host tests use
+  their data directory.
+
+`screenshot` takes its button icons from `icon_lookup`.
 
 ## Font Awesome
 
@@ -67,6 +86,8 @@ without an SVG file.
 
 ## Tests
 
+`lib/libgui/tests/test_scale.c` checks the renditions of an icon at
+scale 1 and 2 and in two colours.
 `lib/libgui/tests/test_svg.c` (part of `make check`) renders rectangles,
 nested squares under both fill rules, circles from cubic curves and
 from arcs, colour and opacity attributes, `tests/data/shape.svg` in

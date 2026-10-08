@@ -1,8 +1,9 @@
 /* The colour dialog and the colour button (gui/widget.h). */
 #include <gui/app.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <libintl.h>
+#include "../intl.h"
 
 /* ---- the colour dialog ---- */
 
@@ -16,8 +17,8 @@ struct color_state {
     int h, s, v;
     uint32_t old, rgb;
     int done, accepted;
-    uint32_t field_px[FIELD_W * FIELD_H];
-    int field_hue;                      /* hue of field_px, -1 before the first paint */
+    struct image field_img;             /* the field in device pixels, opaque */
+    int field_hue;                      /* hue of field_img, -1 before the first paint */
 };
 
 /* The text field shows rgb unless it has the keyboard focus. */
@@ -42,20 +43,28 @@ static void set_hsv(struct color_state *c, int h, int s, int v)
 }
 
 /* Saturation grows to the right, value grows upwards. A ring marks the
- * current colour. */
+ * current colour. The field is computed at the device resolution of the
+ * painter. A scale of 2 therefore shows no steps of 2 pixels. */
 static int on_field_paint(struct widget *w, void *args, void *arg)
 {
     struct color_state *c = arg;
     struct painter *p = ((struct sig_paint *)args)->p;
+    int s = p->scale, fw = FIELD_W * s, fh = FIELD_H * s;
+    if (c->field_img.scale != s) {
+        free(c->field_img.pixels);
+        c->field_img = (struct image){ fw, fh, malloc((size_t)fw * fh * 4), s };
+        c->field_hue = -1;
+    }
+    if (!c->field_img.pixels)
+        return 0;
     if (c->field_hue != c->h) {
-        for (int y = 0; y < FIELD_H; y++)
-            for (int x = 0; x < FIELD_W; x++)
-                c->field_px[y * FIELD_W + x] =
-                    gfx_hsv_to_rgb(c->h, x * 255 / (FIELD_W - 1), 255 - y * 255 / (FIELD_H - 1));
+        for (int y = 0; y < fh; y++)
+            for (int x = 0; x < fw; x++)
+                c->field_img.pixels[y * fw + x] =
+                    0xff000000u | gfx_hsv_to_rgb(c->h, x * 255 / (fw - 1), 255 - y * 255 / (fh - 1));
         c->field_hue = c->h;
     }
-    struct surface src = { c->field_px, FIELD_W, FIELD_H, FIELD_W };
-    painter_blit(p, 0, 0, &src);
+    painter_image(p, 0, 0, &c->field_img);
     int x = c->s * (FIELD_W - 1) / 255, y = (255 - c->v) * (FIELD_H - 1) / 255;
     uint32_t ring = c->v > 128 ? 0x00000000 : 0x00ffffff;
     painter_frame(p, x - 4, y - 4, 9, 9, ring);
@@ -141,8 +150,7 @@ static int on_cancel(struct widget *w, void *args, void *arg)
 
 int color_dialog(struct app *a, struct widget *parent, const char *title, uint32_t *color)
 {
-    /* The state is static. A modal dialog runs alone, and the image of the
-     * field has 140 KiB. */
+    /* A modal dialog runs alone. The state is therefore static. */
     static struct color_state c;
     memset(&c, 0, sizeof c);
     c.app = a;
@@ -176,8 +184,8 @@ int color_dialog(struct app *a, struct widget *parent, const char *title, uint32
     widget_connect(c.hex, "activate", on_ok, &c);
     show_hex(&c);
     struct widget *row = box_new(c.win, 0);
-    struct widget *ok = button_new(row, dgettext("libgui", "OK"));
-    struct widget *cancel = button_new(row, dgettext("libgui", "Cancel"));
+    struct widget *ok = button_new(row, _("OK"));
+    struct widget *cancel = button_new(row, _("Cancel"));
     widget_set_stretch(ok, 1, 0);
     widget_set_stretch(cancel, 1, 0);
     widget_connect(ok, "clicked", on_ok, &c);
@@ -188,6 +196,8 @@ int color_dialog(struct app *a, struct widget *parent, const char *title, uint32
         ;
     window_close(c.win);
     app_step(a, 0);
+    free(c.field_img.pixels);
+    c.field_img.pixels = NULL;
     if (c.accepted)
         *color = c.rgb;
     return c.accepted;
@@ -237,13 +247,28 @@ static void color_button_choose(struct widget *w)
     widget_emit(w, "changed", &ch);
 }
 
+/* The button acts on the release of the left button over it, as the
+ * button class does. It shows the pressed state from the press to the
+ * release. */
 static int color_button_event(struct widget *w, struct event *e)
 {
     switch (e->type) {
     case EV_MOUSE_DOWN:
-        if (e->button & 1)
+        if (!(e->button & 1))
+            return 0;
+        w->pressed = 1;
+        widget_capture(w);
+        widget_invalidate(w);
+        return 1;
+    case EV_MOUSE_UP: {
+        if (!w->pressed)
+            return 0;
+        w->pressed = 0;
+        widget_invalidate(w);
+        if (e->x >= 0 && e->y >= 0 && e->x < w->w && e->y < w->h)
             color_button_choose(w);
         return 1;
+    }
     case EV_KEY_DOWN:
         if (e->ch == '\n' || e->ch == ' ') {
             color_button_choose(w);

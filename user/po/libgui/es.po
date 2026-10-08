@@ -343,3 +343,24 @@ msgstr "Otro programa..."
 #: lib/libgui/src/appchooser.c:61 lib/libgui/src/appchooser.c:354
 msgid "Open with"
 msgstr "Abrir con"
+
+#: lib/libgui/src/widgets/menu.c:28
+msgid "Ctrl+"
+msgstr "Ctrl+"
+
+#: lib/libgui/src/widgets/menu.c:28
+msgid "Alt+"
+msgstr "Alt+"
+
+#: lib/libgui/src/widgets/menu.c:29
+msgid "Shift+"
+msgstr "Mayús+"
+
+#: lib/libgui/src/widgets/menu.c:26
+msgid "Del"
+msgstr "Supr"
+
+#: lib/libgui/src/widgets/controls.c:345
+#, c-format
+msgid "%d%%"
+msgstr "%d %%"

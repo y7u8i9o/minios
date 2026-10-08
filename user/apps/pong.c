@@ -108,6 +108,7 @@ int main(void)
         return 1;
     widget_set_padding(win, 0);
     canvas = canvas_new(win);
+    canvas->focusable = 1;
     widget_connect(canvas, "paint", on_paint, NULL);
     widget_connect(canvas, "key", on_keys, (void *)1);
     widget_connect(canvas, "keyup", on_keys, NULL);

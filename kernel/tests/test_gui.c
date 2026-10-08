@@ -436,6 +436,30 @@ static void test_gui_widgets(void)
 }
 KTEST_DEFINE("gui_widgets", test_gui_widgets);
 
+/* K1 of docs/plan/widgets.md at video=2048x1536@2: widgettest places the
+ * boundary between "Wid" and "gets" of its text field at x 200 of the
+ * window, measured at scale 2. A click there and the key x must give
+ * "Widxgets". */
+static void test_gui_widgets_scale(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "scale", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start widgettest scale");
+    ktest_wait_idle(1000);
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 40 + 200, 60 + 19, 0);
+    mouse_click(1);
+    press_key(0x2d);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "widgettest status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_widgets_scale: ok\n");
+}
+KTEST_DEFINE("gui_widgets_scale", test_gui_widgets_scale);
+
 /* M22: combo box popup, spinner, slider, tabs. Window 400x300 at (40,60):
  * combo 6..32, spinner 38..64, slider 70..96, tabs from 102. */
 static void test_gui_controls(void)

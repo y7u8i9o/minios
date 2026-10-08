@@ -187,7 +187,7 @@ static int on_paint(struct widget *w, void *args, void *arg)
     if (t->view == 0 && t->preedit[0]) {
         /* The composition covers the cells from the cursor, underlined. */
         int x = PAD_X + v->cx * cell_w, y = PAD_Y + v->cy * cell_h;
-        int pw = gfx_text_width_font(text_font(), t->preedit, -1);
+        int pw = painter_text_width_font(p, text_font(), t->preedit, -1);
         painter_fill(p, x, y, pw, cell_h, DEFAULT_BG);
         painter_text_font(p, text_font(), x, y, t->preedit, DEFAULT_FG, 0xffffffffu);
         painter_fill(p, x, y + cell_h - 1, pw, 1, DEFAULT_FG);
@@ -388,6 +388,7 @@ static struct tab *open_tab(char *const argv[], const char *dir)
     t->page = tabs_add(tabs, t->title);
     widget_set_padding(t->page, 0);
     t->canvas = canvas_new(t->page);
+    t->canvas->focusable = 1;
     widget_set_stretch(t->canvas, 1, 1);
     widget_connect(t->canvas, "paint", on_paint, t);
     /* Text input: the compositor or the input method commits the text
@@ -632,14 +633,12 @@ static int on_press(struct widget *w, void *args, void *arg)
         t->selecting = 2;
         return 1;
     }
-    long now = uptime_ms();
-    t->clicks = now - t->click_ms < 400 ? t->clicks + 1 : 1;
-    t->click_ms = now;
+    int clicks = gui_click_count(&t->clicks, c->x, c->y);
     int line, col;
     cell_at(t, c->x, c->y, &line, &col);
     t->anchor_y = line;
     t->anchor_x = col;
-    t->sel_mode = t->clicks >= 3 ? 2 : t->clicks == 2 ? 1 : 0;
+    t->sel_mode = clicks == 3 ? 2 : clicks == 2 ? 1 : 0;
     t->selecting = 1;
     if (t->sel_mode)
         extend_selection(t, line, col);

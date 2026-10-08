@@ -847,6 +847,7 @@ int main(int argc, char **argv)
     widget_connect(iter_box, "changed", on_iterations, NULL);
 
     canvas = canvas_new(win);
+    canvas->focusable = 1;
     widget_set_stretch(canvas, 1, 1);
     widget_connect(canvas, "paint", on_paint, NULL);
     widget_connect(canvas, "press", on_press, NULL);

@@ -1,0 +1,5 @@
+widgettest: scale 2
+widgettest: field 'Widxgets'
+widgettest: done
+gui_widgets_scale: ok
+TEST PASS

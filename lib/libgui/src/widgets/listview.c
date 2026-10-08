@@ -8,6 +8,8 @@ struct listview {
     struct widget w;
     char **items;
     int nitems, scroll;
+    struct scroll_track track;
+    struct gui_clicks clicks;
 };
 
 static int line_h(const struct widget *w)
@@ -28,8 +30,6 @@ static void listview_measure(struct widget *w, struct size_hint *h)
     h->min_w = 40;
     h->min_h = line_h(w) + 2;
 }
-
-void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 static void listview_paint(struct widget *w, struct painter *p)
 {
@@ -75,35 +75,31 @@ static void select_row(struct listview *l, int idx, const char *signal)
     widget_emit(&l->w, signal, &s);
 }
 
-static int clamp_scroll(struct listview *l, int v)
-{
-    int top = l->nitems - rows_of(&l->w);
-    if (top < 0) top = 0;
-    return v < 0 ? 0 : v > top ? top : v;
-}
-
 static int listview_event(struct widget *w, struct event *e)
 {
     struct listview *l = (struct listview *)w;
     int lh = line_h(w), rows = rows_of(w);
     switch (e->type) {
-    case EV_MOUSE_DOWN: {
-        if (!(e->button & 1))
-            return 0;
+    case EV_MOUSE_DOWN: case EV_MOUSE_MOVE: case EV_MOUSE_UP: {
         int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
-        if (sbw && e->x >= w->w - sbw) {
-            int mid = 1 + (w->h - 2) * (l->scroll + rows / 2) / (l->nitems ? l->nitems : 1);
-            l->scroll = clamp_scroll(l, l->scroll + (e->y < mid ? -rows : rows));
-            widget_invalidate(w);
+        int before = l->scroll;
+        struct rect track = { w->w - sbw, 0, sbw, w->h };
+        if (sbw && scroll_track_event(&l->track, w, e, track, &l->scroll, l->nitems, rows)) {
+            if (l->scroll != before)
+                widget_invalidate(w);
             return 1;
         }
+        if (e->type != EV_MOUSE_DOWN || !(e->button & 1))
+            return 0;
+        /* A second click on the selected row activates it. */
         int idx = l->scroll + (e->y - 1) / lh;
+        int count = gui_click_count(&l->clicks, e->x, e->y);
         if (idx >= 0 && idx < l->nitems)
-            select_row(l, idx, "selected");
+            select_row(l, idx, count == 2 && idx == w->value ? "activate" : "selected");
         return 1;
     }
     case EV_MOUSE_WHEEL:
-        l->scroll = clamp_scroll(l, l->scroll + 3 * e->button);
+        l->scroll = scroll_clamp(l->scroll + 3 * e->button, l->nitems, rows);
         widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN:
@@ -141,6 +137,7 @@ struct widget *listview_new(struct widget *parent)
     if (w) {
         w->focusable = 1;
         w->value = -1;
+        ((struct listview *)w)->track.grab = -1;
         widget_set_stretch(w, 1, 1);
     }
     return w;

@@ -13,8 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* tools/xgettext.py extracts these into the libgui domain. */
-#define _(s) dgettext("libgui", s)
+#include "intl.h"
 
 static void join(char *out, size_t size, const char *dir, const char *name)
 {

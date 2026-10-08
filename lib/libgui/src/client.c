@@ -373,9 +373,9 @@ static void on_ptr_button(void *user, struct wire_proxy *p, uint32_t serial, uin
     if (state) {
         switch (wi->press_zone) {
         case CSD_HEADER_BAR:
-            /* A second press within 400 ms of a completed click toggles
+            /* A second press within GUI_DOUBLE_CLICK_MS of a completed click toggles
              * maximized; a press repeated during a drag does not. */
-            if (wi->last_click && time - wi->last_click < 400 && wi->toplevel) {
+            if (wi->last_click && time - wi->last_click < GUI_DOUBLE_CLICK_MS && wi->toplevel) {
                 if (wi->csd.maximized) toplevel_unset_maximized(wi->toplevel);
                 else toplevel_set_maximized(wi->toplevel);
                 wi->last_click = 0;

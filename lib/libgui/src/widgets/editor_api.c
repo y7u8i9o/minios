@@ -14,6 +14,7 @@ struct widget *editor_new(struct widget *parent)
     lines_insert(ed, 0, strdup(""));
     ed->rows_dirty = 1;
     ed->wanted_x = -1;
+    ed->track.grab = -1;
     w->focusable = 1;
     w->accepts_text = 1;
     widget_set_stretch(w, 1, 1);

@@ -18,8 +18,6 @@
 #define FONT_PATH "/usr/share/fonts/DejaVuSansMono.ttf"
 #define DEFAULT_PX 13
 
-void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
-
 struct tab {
     struct vt *vt;
     int master;
@@ -31,8 +29,7 @@ struct tab {
     int sel_valid, sel_ay, sel_ax, sel_by, sel_bx;
     int selecting, sel_mode;    /* 0 characters, 1 words, 2 lines */
     int anchor_y, anchor_x;
-    long click_ms;
-    int clicks;
+    struct gui_clicks clicks;   /* for word and line selection */
     char title[64];
     char preedit[256];          /* the composition of an input method at the cursor */
 };

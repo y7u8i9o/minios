@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../intl.h"
 
 #define MENU_PAD 10
 #define ITEM_H_EXTRA 8
@@ -15,17 +16,17 @@ static void accel_label(const struct widget *w, char *buf, size_t size)
 {
     static const char row1[] = "qwertyuiop", row2[] = "asdfghjkl", row3[] = "zxcvbnm", digits[] = "1234567890";
     int k = w->accel_key;
-    char key[8] = "";
+    char key[32] = "";
     buf[0] = '\0';
     if (k >= KEY_Q && k < KEY_Q + 10) snprintf(key, sizeof key, "%c", row1[k - KEY_Q] - 32);
     else if (k >= KEY_A && k < KEY_A + 9) snprintf(key, sizeof key, "%c", row2[k - KEY_A] - 32);
     else if (k >= KEY_Z && k < KEY_Z + 7) snprintf(key, sizeof key, "%c", row3[k - KEY_Z] - 32);
     else if (k >= KEY_1 && k <= KEY_0) snprintf(key, sizeof key, "%c", digits[k - KEY_1]);
     else if (k >= KEY_F1 && k <= KEY_F10) snprintf(key, sizeof key, "F%d", k - KEY_F1 + 1);
-    else if (k == KEY_DELETE) snprintf(key, sizeof key, "Del");
+    else if (k == KEY_DELETE) snprintf(key, sizeof key, "%s", _("Del"));
     else return;
-    snprintf(buf, size, "%s%s%s%s", w->accel_mods & WMOD_CTRL ? "Ctrl+" : "", w->accel_mods & WMOD_ALT ? "Alt+" : "",
-             w->accel_mods & WMOD_SHIFT ? "Shift+" : "", key);
+    snprintf(buf, size, "%s%s%s%s", w->accel_mods & WMOD_CTRL ? _("Ctrl+") : "", w->accel_mods & WMOD_ALT ? _("Alt+") : "",
+             w->accel_mods & WMOD_SHIFT ? _("Shift+") : "", key);
 }
 
 static void item_measure(struct widget *w, struct size_hint *h)
@@ -36,11 +37,12 @@ static void item_measure(struct widget *w, struct size_hint *h)
         h->pref_w = 20;
         return;
     }
-    char accel[24];
+    char accel[48], caption[256];
     accel_label(w, accel, sizeof accel);
-    h->pref_w = gfx_text_width_font(t->font, widget_text(w), -1) + 2 * MENU_PAD + 24;
+    painter_mnemonic_strip(widget_text(w), caption, sizeof caption);
+    h->pref_w = widget_text_width(w, NULL, caption, -1) + 2 * MENU_PAD + 24;
     if (accel[0])
-        h->pref_w += gfx_text_width_font(t->font, accel, -1) + 24;
+        h->pref_w += widget_text_width(w, NULL, accel, -1) + 24;
     h->pref_h = h->min_h = t->font->height + ITEM_H_EXTRA;
 }
 
@@ -87,11 +89,12 @@ static void dropdown_paint(struct widget *w, struct painter *p)
                 painter_fill(p, 1, y, w->w - 2, ih, t->color[TC_HIGHLIGHT]);
             int x = MENU_PAD;
             if (it->icon) {
-                painter_image(p, 4, y + (ih - image_lh(it->icon)) / 2, it->enabled ? it->icon : icon_dimmed(it->icon));
+                painter_icon(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon, !it->enabled);
                 x = 24;
             }
-            painter_text(p, x, y + ITEM_H_EXTRA / 2, widget_text(it), t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
-            char accel[24];
+            painter_mnemonic_text(p, x, y + ITEM_H_EXTRA / 2, widget_text(it),
+                                  t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+            char accel[48];
             accel_label(it, accel, sizeof accel);
             if (accel[0])
                 painter_text(p, w->w - MENU_PAD - painter_text_width(p, accel, -1), y + ITEM_H_EXTRA / 2, accel,
@@ -118,6 +121,22 @@ static struct widget *item_n(struct dropdown *d, int n)
     while (it && n-- > 0)
         it = it->next;
     return it;
+}
+
+/* The next item that can be chosen, searched from n in the direction
+ * step. The search skips separators and disabled items. The function
+ * returns n when no such item exists. */
+static int step_item(struct dropdown *d, int n, int count, int step)
+{
+    for (int k = 1; k <= count; k++) {
+        int i = ((n + step * k) % count + count) % count;
+        if (n < 0 && step < 0)
+            i = ((count - k) % count + count) % count;
+        struct widget *it = item_n(d, i);
+        if (it && it->value != 1 && it->enabled)
+            return i;
+    }
+    return n;
 }
 
 static void activate(struct dropdown *d, int n)
@@ -154,8 +173,14 @@ static int dropdown_event(struct widget *w, struct event *e)
         activate(d, item_at(d, e->y));
         return 1;
     case EV_KEY_DOWN:
-        if (e->code == KEY_DOWN) { d->hover = d->hover + 1 < n ? d->hover + 1 : 0; widget_invalidate(w); return 1; }
-        if (e->code == KEY_UP) { d->hover = d->hover > 0 ? d->hover - 1 : n - 1; widget_invalidate(w); return 1; }
+        if (e->code == KEY_DOWN || e->code == KEY_UP) {
+            int next = step_item(d, d->hover, n, e->code == KEY_DOWN ? 1 : -1);
+            if (next != d->hover) {
+                d->hover = next;
+                widget_invalidate(w);
+            }
+            return 1;
+        }
         if (e->ch == '\n') { activate(d, d->hover); return 1; }
         if ((e->code == KEY_LEFT || e->code == KEY_RIGHT) && d->bar) {
             struct widget *bar = d->bar;
@@ -177,7 +202,9 @@ static const struct widget_class dropdown_class = { "dropdown", sizeof(struct dr
 
 static int title_width(const struct widget *bar, const struct widget *m)
 {
-    return gfx_text_width_font(widget_theme(bar)->font, widget_text(m), -1) + 2 * MENU_PAD;
+    char caption[256];
+    painter_mnemonic_strip(widget_text(m), caption, sizeof caption);
+    return widget_text_width(bar, NULL, caption, -1) + 2 * MENU_PAD;
 }
 
 static void menubar_measure(struct widget *w, struct size_hint *h)
@@ -201,7 +228,7 @@ static void menubar_paint(struct widget *w, struct painter *p)
         int tw = title_width(w, m);
         if (i == w->value)
             painter_fill(p, x, 0, tw, w->h - 1, t->color[TC_HIGHLIGHT]);
-        painter_text(p, x + MENU_PAD, 4, widget_text(m), t->color[TC_TEXT]);
+        painter_mnemonic_text(p, x + MENU_PAD, 4, widget_text(m), t->color[TC_TEXT]);
         x += tw;
     }
 }

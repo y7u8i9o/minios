@@ -1,7 +1,8 @@
 /* Framework test client for the gui_widgets boot test: a window whose
  * widgets log what they receive. With "controls" it builds the M22
- * controls window for gui_controls instead. Sizes are fixed by hints so
- * the kernel test can click at known positions. */
+ * controls window for gui_controls instead. With "scale" it builds the
+ * text field of gui_widgets_scale2. Hints fix the sizes. The kernel
+ * test can therefore click at known positions. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +30,14 @@ static int spin_changed(struct widget *w, void *args, void *arg) { LOG("spinner 
 static int slider_changed(struct widget *w, void *args, void *arg) { LOG("slider %d", w->value); return 0; }
 static int tab_changed(struct widget *w, void *args, void *arg) { LOG("tab %d", w->value); return 0; }
 static int quit_clicked(struct widget *w, void *args, void *arg) { LOG("quit"); app_quit(app, 0); return 1; }
+
+/* The scale mode quits after the first change of its field. */
+static int scale_field_changed(struct widget *w, void *args, void *arg)
+{
+    LOG("field '%s'", widget_text(w));
+    app_quit(app, 0);
+    return 0;
+}
 
 static struct widget *positions[8];
 static int npositions;
@@ -78,6 +87,29 @@ static void build_widgets(struct widget *win)
     positions[npositions++] = bar;
 }
 
+/* The field "Widgets" lies in a row after a gap. The gap places the
+ * boundary between "Wid" and "gets" at x 200 of the window, measured at
+ * the scale of the window. A click there must put the cursor after
+ * "Wid". */
+#define SCALE_BOUNDARY_X 200
+
+static void build_scale(struct widget *win)
+{
+    const struct theme *t = app_theme(app);
+    struct widget *row = box_new(win, 0);
+    widget_set_padding(row, 0);
+    struct widget *gap = label_new(row, "");
+    struct widget *field = textfield_new(row, "Widgets");
+    widget_set_hint(field, 0, 26);
+    widget_connect(field, "changed", scale_field_changed, NULL);
+    /* The window padding, the spacing of the row, and the padding of 4
+     * pixels inside the field precede the text. */
+    int text_x = theme_px(t, TM_PADDING) + theme_px(t, TM_SPACING) + 4;
+    widget_set_hint(gap, SCALE_BOUNDARY_X - text_x - widget_text_width(field, NULL, "Wid", 3), 26);
+    LOG("scale %d", widget_scale(win));
+    positions[npositions++] = field;
+}
+
 static void build_controls(struct widget *win)
 {
     struct widget *combo = combobox_new(win);
@@ -117,13 +149,15 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
-    int controls = argc > 1 && strcmp(argv[1], "controls") == 0;
-    struct widget *win = app_window(app, 400, 300, controls ? "controls" : "widgets");
+    const char *mode = argc > 1 ? argv[1] : "widgets";
+    struct widget *win = app_window(app, 400, 300, mode);
     if (!win)
         return 1;
     LOG("theme font height %d", app_theme(app)->font->height);
-    if (controls)
+    if (strcmp(mode, "controls") == 0)
         build_controls(win);
+    else if (strcmp(mode, "scale") == 0)
+        build_scale(win);
     else
         build_widgets(win);
     app_timer_add(app, 300, 0, log_positions, NULL);

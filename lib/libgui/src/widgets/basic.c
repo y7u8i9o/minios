@@ -3,49 +3,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Caption without the mnemonic marker, with the marker's position. */
-static const char *caption(const struct widget *w, char *buf, size_t size, int *mnemonic)
+/* The width of the caption without the mnemonic marker. */
+static int caption_width(const struct widget *w)
 {
-    const char *t = widget_text(w);
-    size_t j = 0;
-    *mnemonic = -1;
-    for (size_t i = 0; t[i] && j + 1 < size; i++) {
-        if (t[i] == '&' && t[i + 1]) {
-            *mnemonic = (int)j;
-            continue;
-        }
-        buf[j++] = t[i];
-    }
-    buf[j] = '\0';
-    return buf;
+    char buf[256];
+    painter_mnemonic_strip(widget_text(w), buf, sizeof buf);
+    return buf[0] ? widget_text_width(w, NULL, buf, -1) : 0;
 }
 
 static void text_measure(struct widget *w, struct size_hint *h)
 {
     const struct theme *t = widget_theme(w);
-    char buf[256];
-    int mn;
-    caption(w, buf, sizeof buf, &mn);
-    h->pref_w = (buf[0] ? gfx_text_width_font(t->font, buf, -1) : 0) + 2 * theme_px(t, TM_PADDING);
+    int tw = caption_width(w);
+    h->pref_w = tw + 2 * theme_px(t, TM_PADDING);
     if (w->icon)
-        h->pref_w += image_lw(w->icon) + (buf[0] ? 4 : 0);
+        h->pref_w += image_lw(w->icon) + (tw ? 4 : 0);
     h->pref_h = theme_px(t, TM_CONTROL_H);
     if (w->icon && image_lh(w->icon) + 8 > h->pref_h)
         h->pref_h = image_lh(w->icon) + 8;
     h->min_w = h->pref_w;
     h->min_h = t->font->height;
-}
-
-static void draw_caption(struct widget *w, struct painter *p, int x, int y, uint32_t color)
-{
-    char buf[256];
-    int mn;
-    caption(w, buf, sizeof buf, &mn);
-    painter_text(p, x, y, buf, color);
-    if (mn >= 0) {
-        int x0 = x + painter_text_width(p, buf, mn), x1 = x + painter_text_width(p, buf, mn + 1);
-        painter_line(p, x0, y + painter_text_height(p) - 1, x1 - 1, y + painter_text_height(p) - 1, color);
-    }
 }
 
 /* ---- label ---- */
@@ -61,11 +38,11 @@ static void label_paint(struct widget *w, struct painter *p)
     painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
     int x = 0;
     if (w->icon) {
-        painter_image(p, 0, (w->h - image_lh(w->icon)) / 2, w->icon);
+        painter_icon(p, 0, (w->h - image_lh(w->icon)) / 2, w->icon, 0);
         x = image_lw(w->icon) + 4;
     }
     int y = (w->h - painter_text_height(p)) / 2;
-    draw_caption(w, p, x, y, p->theme->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+    painter_mnemonic_text(p, x, y, widget_text(w), p->theme->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
 }
 
 static void label_measure(struct widget *w, struct size_hint *h)
@@ -100,17 +77,17 @@ static void button_paint(struct widget *w, struct painter *p)
                     : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_BUTTON];
     painter_rounded(p, 0, 0, w->w, w->h, fill, 0xffffffffu);
     char buf[256];
-    int mn;
-    caption(w, buf, sizeof buf, &mn);
+    painter_mnemonic_strip(widget_text(w), buf, sizeof buf);
     int tw = buf[0] ? painter_text_width(p, buf, -1) : 0;
     int iw = w->icon ? image_lw(w->icon) + (buf[0] ? 4 : 0) : 0;
     int x = (w->w - tw - iw) / 2;
     if (w->icon) {
-        painter_image(p, x, (w->h - image_lh(w->icon)) / 2, w->enabled ? w->icon : icon_dimmed(w->icon));
+        painter_icon(p, x, (w->h - image_lh(w->icon)) / 2, w->icon, !w->enabled);
         x += iw;
     }
     if (buf[0])
-        draw_caption(w, p, x, (w->h - painter_text_height(p)) / 2, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+        painter_mnemonic_text(p, x, (w->h - painter_text_height(p)) / 2, widget_text(w),
+                              t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     if (w->focused)
         painter_focus_ring(p, 2, 2, w->w - 4, w->h - 4);
 }
@@ -186,7 +163,8 @@ static void check_paint(struct widget *w, struct painter *p)
             painter_line(p, box / 2, by + box - 4, box - 3, by + 3, t->color[TC_TEXT]);
         }
     }
-    draw_caption(w, p, box + 6, (w->h - painter_text_height(p)) / 2, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
+    painter_mnemonic_text(p, box + 6, (w->h - painter_text_height(p)) / 2, widget_text(w),
+                          t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     if (w->focused)
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
@@ -329,9 +307,7 @@ const struct widget_class canvas_class = { "canvas", sizeof(struct widget), canv
 struct widget *canvas_new(struct widget *parent)
 {
     struct widget *w = widget_new(&canvas_class, parent);
-    if (w) {
-        w->focusable = 1;
+    if (w)
         widget_set_stretch(w, 1, 1);
-    }
     return w;
 }

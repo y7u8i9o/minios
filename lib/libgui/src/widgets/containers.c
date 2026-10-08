@@ -51,11 +51,11 @@ static void tabs_layout(struct widget *w)
     }
 }
 
-static int tab_x(struct widget *w, struct painter *p, int index, int *width)
+static int tab_x(struct widget *w, int index, int *width)
 {
     int x = 0, i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
-        int tw = painter_text_width(p, widget_text(c), -1) + 2 * TAB_PAD;
+        int tw = widget_text_width(w, NULL, widget_text(c), -1) + 2 * TAB_PAD;
         if (i == index) {
             *width = tw;
             return x;
@@ -79,7 +79,7 @@ static void tabs_paint(struct widget *w, struct painter *p)
     int i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
         int tw;
-        int x = tab_x(w, p, i, &tw);
+        int x = tab_x(w, i, &tw);
         int current = i == w->value;
         if (current)
             painter_fill(p, x, hh - 3, tw, 3, t->color[TC_ACCENT]);
@@ -88,7 +88,7 @@ static void tabs_paint(struct widget *w, struct painter *p)
     }
     if (w->focused) {
         int tw;
-        int x = tab_x(w, p, w->value, &tw);
+        int x = tab_x(w, w->value, &tw);
         painter_focus_ring(p, x + 2, 2, tw - 4, hh - 5);
     }
 }
@@ -96,13 +96,10 @@ static void tabs_paint(struct widget *w, struct painter *p)
 static int tabs_event(struct widget *w, struct event *e)
 {
     if (e->type == EV_MOUSE_DOWN && (e->button & 1) && e->y < tabs_header_h(w)) {
-        struct painter p;
-        struct surface dummy = { NULL, 0, 0, 0 };
-        painter_init(&p, &dummy, widget_theme(w));
         int i = 0;
         for (struct widget *c = w->first; c; c = c->next, i++) {
             int tw;
-            int x = tab_x(w, &p, i, &tw);
+            int x = tab_x(w, i, &tw);
             if (e->x >= x && e->x < x + tw) {
                 tabs_select(w, i);
                 break;

@@ -178,6 +178,8 @@ int gui_event_fd(void);
 int gui_repeat_timeout(void);
 /* The modifier keys that are pressed now (WMOD_*), for mouse events. */
 int gui_modifiers(void);
+/* The longest time between two presses of a double click. */
+#define GUI_DOUBLE_CLICK_MS 400
 /* Commit pending damage now (done by gui_next_event as well). */
 void gui_flush(void);
 /* Prepare w->surf for drawing (G8 of docs/plan/compositor-performance.md).

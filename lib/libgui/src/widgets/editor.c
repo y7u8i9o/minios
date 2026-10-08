@@ -9,7 +9,6 @@
 #include <gui/utf8.h>
 #include "editor_internal.h"
 #include "editmenu.h"
-void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 
 /* ---- lines ---- */
 
@@ -481,10 +480,10 @@ static int gutter_w(struct editor *ed)
 {
     if (!ed->numbers)
         return 0;
-    int digits = 1;
-    for (int n = ed->nlines; n >= 10; n /= 10)
-        digits++;
-    return digits * ed_font(ed)->advance['0'] + 10;
+    char digits[16];
+    snprintf(digits, sizeof digits, "%d", ed->nlines > 0 ? ed->nlines : 1);
+    memset(digits, '0', strlen(digits));
+    return widget_text_width(&ed->w, ed->font, digits, -1) + 10;
 }
 
 static int text_w(struct editor *ed)
@@ -495,7 +494,6 @@ static int text_w(struct editor *ed)
 
 static void build_rows(struct editor *ed)
 {
-    const struct font *f = ed_font(ed);
     int avail = text_w(ed);
     ed->nrows = 0;
     for (int l = 0; l < ed->nlines; l++) {
@@ -507,7 +505,7 @@ static void build_rows(struct editor *ed)
         }
         int start = 0;
         while (start < len) {
-            int fit = gfx_text_index_font(f, s + start, len - start, avail);
+            int fit = widget_text_index(&ed->w, ed->font, s + start, len - start, avail);
             if (fit <= 0)
                 fit = 1;
             if (start + fit < len) {
@@ -562,8 +560,7 @@ static void scroll_to_cursor(struct editor *ed)
     if (r >= ed->scroll + vis)
         ed->scroll = r - vis + 1;
     if (!ed->wrap) {
-        const struct font *f = ed_font(ed);
-        int cx = gfx_text_width_font(f, ed->lines[ed->cl], ed->cc);
+        int cx = widget_text_width(&ed->w, ed->font, ed->lines[ed->cl], ed->cc);
         int avail = text_w(ed);
         if (cx < ed->scroll_x) ed->scroll_x = cx;
         if (cx > ed->scroll_x + avail - 1) ed->scroll_x = cx - avail + 1;
@@ -649,10 +646,10 @@ static void editor_paint(struct widget *w, struct painter *p)
         if ((l > l0 || (l == l0 && start + len >= c0)) && (l < l1 || (l == l1 && start <= c1)) && !(l0 == l1 && c0 == c1)) {
             int sa = l == l0 && c0 > start ? c0 : start;
             int sb2 = l == l1 && c1 < start + len ? c1 : start + len;
-            int x0 = x + gfx_text_width_font(ed_font(ed), s + start, sa - start);
-            int x1 = x + gfx_text_width_font(ed_font(ed), s + start, sb2 - start);
+            int x0 = x + widget_text_width(w, ed->font, s + start, sa - start);
+            int x1 = x + widget_text_width(w, ed->font, s + start, sb2 - start);
             if (l < l1 && sb2 == start + len)
-                x1 += ed_font(ed)->advance[' '];
+                x1 += widget_text_width(w, ed->font, " ", 1);
             painter_fill(p, x0, y, x1 - x0, lh, t->color[TC_HIGHLIGHT]);
         }
         /* Text in runs of one class. */
@@ -665,16 +662,18 @@ static void editor_paint(struct widget *w, struct painter *p)
                 k++;
             memcpy(buf, s + j, (size_t)(k - j));
             buf[k - j] = '\0';
-            painter_text_font(p, ed_font(ed), x, ty, buf, class_color(t, cls), 0xffffffffu);
-            x += gfx_text_width_font(ed_font(ed), buf, -1);
+            /* Each run starts at the width of the row up to it. The sum
+             * of the rounded widths of single runs would drift. */
+            painter_text_font(p, ed_font(ed), x + widget_text_width(w, ed->font, s + start, j - start), ty, buf,
+                              class_color(t, cls), 0xffffffffu);
             j = k;
         }
         if (w->focused && !ed->readonly && l == ed->cl && ed->cc >= start && (ed->cc < start + len || (ed->cc == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
-            int cx = PAD - ed->scroll_x + gfx_text_width_font(ed_font(ed), s + start, ed->cc - start);
+            int cx = PAD - ed->scroll_x + widget_text_width(w, ed->font, s + start, ed->cc - start);
             widget_text_cursor(w, 1 + gw + cx, 1 + y, 1, lh);
             if (ed->preedit[0]) {
                 painter_text_font(p, ed_font(ed), cx, ty, ed->preedit, t->color[TC_TEXT], 0xffffffffu);
-                int pw = gfx_text_width_font(ed_font(ed), ed->preedit, -1);
+                int pw = widget_text_width(w, ed->font, ed->preedit, -1);
                 painter_line(p, cx, y + lh - 1, cx + pw, y + lh - 1, t->color[TC_ACCENT]);
                 cx += pw;
             }
@@ -682,7 +681,7 @@ static void editor_paint(struct widget *w, struct painter *p)
         }
         if (ed->dropping && l == ed->drop_l && ed->drop_c >= start &&
             (ed->drop_c < start + len || (ed->drop_c == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {
-            int cx = PAD - ed->scroll_x + gfx_text_width_font(ed_font(ed), s + start, ed->drop_c - start);
+            int cx = PAD - ed->scroll_x + widget_text_width(w, ed->font, s + start, ed->drop_c - start);
             painter_fill(p, cx - 1, y, 2, lh, t->color[TC_ACCENT]);
         }
     }
@@ -696,7 +695,7 @@ static void editor_paint(struct widget *w, struct painter *p)
                 continue;
             char num[16];
             snprintf(num, sizeof num, "%d", ed->row_line[r] + 1);
-            int tw = gfx_text_width_font(ed_font(ed), num, -1);
+            int tw = widget_text_width(w, ed->font, num, -1);
             painter_text_font(p, ed_font(ed), gw - 6 - tw, i * lh + 1, num, t->color[TC_TEXT_DISABLED], 0xffffffffu);
         }
         painter_pop(p);
@@ -709,10 +708,9 @@ static void editor_paint(struct widget *w, struct painter *p)
 static void move_vertical(struct editor *ed, int rows)
 {
     ensure_rows(ed);
-    const struct font *f = ed_font(ed);
     int r = row_of(ed, ed->cl, ed->cc);
     if (ed->wanted_x < 0)
-        ed->wanted_x = gfx_text_width_font(f, ed->lines[ed->cl] + ed->row_start[r], ed->cc - ed->row_start[r]);
+        ed->wanted_x = widget_text_width(&ed->w, ed->font, ed->lines[ed->cl] + ed->row_start[r], ed->cc - ed->row_start[r]);
     int nr = r + rows;
     if (nr < 0) nr = 0;
     if (nr >= ed->nrows) nr = ed->nrows - 1;
@@ -723,19 +721,19 @@ static void move_vertical(struct editor *ed, int rows)
     }
     ed->cl = ed->row_line[nr];
     int start = ed->row_start[nr], len = ed->row_len[nr];
-    ed->cc = start + gfx_text_index_font(f, ed->lines[ed->cl] + start, len, ed->wanted_x);
+    ed->cc = start + widget_text_index(&ed->w, ed->font, ed->lines[ed->cl] + start, len, ed->wanted_x);
 }
 
 static void set_pos_from_point(struct editor *ed, int px, int py)
 {
     ensure_rows(ed);
-    const struct font *f = ed_font(ed);
     int r = ed->scroll + (py - 1) / LH(ed);
     if (r < 0) r = 0;
     if (r >= ed->nrows) r = ed->nrows - 1;
     ed->cl = ed->row_line[r];
     int rel = px - 1 - gutter_w(ed) - PAD + ed->scroll_x;
-    ed->cc = ed->row_start[r] + gfx_text_index_font(f, ed->lines[ed->cl] + ed->row_start[r], ed->row_len[r], rel < 0 ? 0 : rel);
+    ed->cc = ed->row_start[r] + widget_text_index(&ed->w, ed->font, ed->lines[ed->cl] + ed->row_start[r], ed->row_len[r],
+                                                  rel < 0 ? 0 : rel);
 }
 
 static int editor_key(struct editor *ed, struct event *e)
@@ -1062,6 +1060,21 @@ static int editor_drag_event(struct editor *ed, struct event *e)
     }
 }
 
+/* The scroll track at the right edge. */
+static int track_event(struct editor *ed, struct event *e)
+{
+    struct widget *w = &ed->w;
+    int sb = theme_px(widget_theme(w), TM_SCROLLBAR);
+    ensure_rows(ed);
+    int before = ed->scroll;
+    struct rect track = { w->w - sb, 0, sb, w->h };
+    if (!scroll_track_event(&ed->track, w, e, track, &ed->scroll, ed->nrows, rows_visible(ed)))
+        return 0;
+    if (ed->scroll != before)
+        widget_invalidate(w);
+    return 1;
+}
+
 static int editor_event(struct widget *w, struct event *e)
 {
     struct editor *ed = (struct editor *)w;
@@ -1073,33 +1086,15 @@ static int editor_event(struct widget *w, struct event *e)
         }
         if (!(e->button & 1))
             return 0;
-        int sb = theme_px(widget_theme(w), TM_SCROLLBAR);
-        if (e->x >= w->w - sb) {
-            ensure_rows(ed);
-            int vis = rows_visible(ed);
-            int mid = 1 + (w->h - 2) * (ed->scroll + vis / 2) / (ed->nrows ? ed->nrows : 1);
-            int top = ed->nrows - vis;
-            ed->scroll += e->y < mid ? -vis : vis;
-            if (ed->scroll > top) ed->scroll = top;
-            if (ed->scroll < 0) ed->scroll = 0;
-            widget_invalidate(w);
+        if (track_event(ed, e))
             return 1;
-        }
-        /* A second and a third click within 400 ms at the same place
-         * select the word and the line. */
-        long now = uptime_ms();
-        if (now - ed->last_click_ms < 400 && abs(e->x - ed->click_x) < 4 && abs(e->y - ed->click_y) < 4)
-            ed->clicks = ed->clicks % 3 + 1;
-        else
-            ed->clicks = 1;
-        ed->last_click_ms = now;
-        ed->click_x = e->x;
-        ed->click_y = e->y;
+        /* A double click selects the word, and a triple click the line. */
+        int clicks = gui_click_count(&ed->clicks, e->x, e->y);
         /* A press inside the selection may drag it; the selection is
          * cleared only when the release shows that it was a click. */
         int pl, pc;
         pos_at_point(ed, e->x, e->y, &pl, &pc);
-        if (ed->clicks == 1 && inside_selection(ed, pl, pc)) {
+        if (clicks == 1 && inside_selection(ed, pl, pc)) {
             ed->drag_pending = 1;
             ed->press_x = e->x;
             ed->press_y = e->y;
@@ -1110,9 +1105,9 @@ static int editor_event(struct widget *w, struct event *e)
         ed->has_sel = 0;
         ed->wanted_x = -1;
         ed->merge = 0;
-        if (ed->clicks == 2)
+        if (clicks == 2)
             select_word(ed);
-        else if (ed->clicks == 3)
+        else if (clicks == 3)
             select_line(ed);
         else
             widget_capture(w);
@@ -1120,6 +1115,8 @@ static int editor_event(struct widget *w, struct event *e)
         return 1;
     }
     case EV_MOUSE_MOVE:
+        if (track_event(ed, e))
+            return 1;
         if (ed->drag_pending) {
             if ((e->button & 1) && widget_drag_moved(ed->press_x, ed->press_y, e->x, e->y)) {
                 ed->drag_pending = 0;
@@ -1137,15 +1134,11 @@ static int editor_event(struct widget *w, struct event *e)
             return 1;
         }
         return 0;
-    case EV_MOUSE_WHEEL: {
+    case EV_MOUSE_WHEEL:
         ensure_rows(ed);
-        int top = ed->nrows - rows_visible(ed);
-        ed->scroll += 3 * e->button;
-        if (ed->scroll > top) ed->scroll = top;
-        if (ed->scroll < 0) ed->scroll = 0;
+        ed->scroll = scroll_clamp(ed->scroll + 3 * e->button, ed->nrows, rows_visible(ed));
         widget_invalidate(w);
         return 1;
-    }
     case EV_KEY_DOWN:
         return editor_key(ed, e);
     case EV_TEXT:
@@ -1173,6 +1166,8 @@ static int editor_event(struct widget *w, struct event *e)
         }
         return 1;
     case EV_MOUSE_UP:
+        if (track_event(ed, e))
+            return 1;
         if (ed->drag_pending) {         /* a click inside the selection */
             ed->drag_pending = 0;
             set_pos_from_point(ed, ed->press_x, ed->press_y);

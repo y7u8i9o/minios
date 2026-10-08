@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../intl.h"
 
 #define ARROW_W 18
 
@@ -20,7 +21,7 @@ static void combo_measure(struct widget *w, struct size_hint *h)
     struct combo *c = (struct combo *)w;
     int tw = 60;
     for (int i = 0; i < c->nitems; i++) {
-        int iw = gfx_text_width_font(t->font, c->items[i], -1);
+        int iw = widget_text_width(w, NULL, c->items[i], -1);
         if (iw > tw)
             tw = iw;
     }
@@ -339,8 +340,9 @@ static void progress_paint(struct widget *w, struct painter *p)
     int span = w->max > w->min ? (w->w - 2) * (w->value - w->min) / (w->max - w->min) : 0;
     if (span > 0)
         painter_fill(p, 1, 1, span, w->h - 2, t->color[TC_ACCENT]);
-    char s[16];
-    snprintf(s, sizeof s, "%d%%", w->max > w->min ? 100 * (w->value - w->min) / (w->max - w->min) : 0);
+    char s[32];
+    /* Some languages put a space or the percent sign before the number. */
+    snprintf(s, sizeof s, _("%d%%"), w->max > w->min ? 100 * (w->value - w->min) / (w->max - w->min) : 0);
     int tw = painter_text_width(p, s, -1), th = painter_text_height(p);
     if (th <= w->h)
         painter_text(p, (w->w - tw) / 2, (w->h - th) / 2, s, t->color[TC_TEXT]);

@@ -25,8 +25,7 @@
 #include "dialog.h"
 #include "filechooser.h"
 
-/* tools/xgettext.py extracts these into the libgui domain. */
-#define _(s) dgettext("libgui", s)
+#include "intl.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 512

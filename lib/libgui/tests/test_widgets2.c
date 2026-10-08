@@ -4,36 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "check.h"
+#include "events.h"
 
 struct app *app_create_detached(void);
-
-/* WM_KEY carries input-core KEY_* values, not PS/2 scancodes. */
-static struct wmsg key_msg(struct widget *win, int code, int ch, int mods)
-{
-    struct wmsg m = { .type = WM_KEY, .window = window_state_of(win)->win->id, .a = code, .b = 1, .c = mods, .d = ch };
-    return m;
-}
-
-static struct wmsg mouse_msg(struct widget *win, int kind, int x, int y, int buttons)
-{
-    struct wmsg m = { .type = WM_MOUSE, .window = window_state_of(win)->win->id, .a = x, .b = y, .c = buttons, .d = kind };
-    return m;
-}
-
-static void click(struct widget *win, int x, int y)
-{
-    struct wmsg d = mouse_msg(win, WMOUSE_DOWN, x, y, 1), u = mouse_msg(win, WMOUSE_UP, x, y, 0);
-    window_message(win, &d);
-    window_message(win, &u);
-}
-
-static void type_text(struct widget *win, const char *s)
-{
-    for (; *s; s++) {
-        struct wmsg m = key_msg(win, *s == '\n' ? KEY_ENTER : 0, *s, 0);
-        window_message(win, &m);
-    }
-}
 
 static int last_value = -1;
 static int on_change(struct widget *w, void *args, void *arg) { last_value = ((struct sig_change *)args)->value; return 0; }
@@ -398,7 +371,8 @@ static void test_editor(struct app *a)
     CHECK(strcmp(t, "one twoone two") == 0, "pasted copy: '%s'", t);
     free(t);
     /* A double click selects a word; a right click inside it opens the
-     * context menu, and Cut is its fourth item after a separator. */
+     * context menu. Down skips the disabled Redo and the separator.
+     * Cut is therefore the second step. */
     int ex, ey;
     widget_abs(ed, &ex, &ey);
     int px = ex + 6, py = ey + 6;
@@ -412,7 +386,7 @@ static void test_editor(struct app *a)
     window_message(win, &ru);
     CHECK(window_state_of(win)->popup != NULL, "right click opens the context menu");
     struct wmsg mdown = key_msg(win, KEY_DOWN, 0, 0), enter = key_msg(win, KEY_ENTER, '\n', 0);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 2; i++)
         window_message(win, &mdown);
     window_message(win, &enter);
     t = editor_text(ed);

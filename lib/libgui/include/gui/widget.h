@@ -168,6 +168,16 @@ void widget_capture(struct widget *w);          /* mouse events until release */
  * image from icon and label (both may be NULL); w receives EV_DRAG_END. */
 #define DRAG_THRESHOLD 4
 int widget_drag_moved(int press_x, int press_y, int x, int y);
+/* Repeated clicks. gui_click_count records a press at (x, y) and returns
+ * the count of the press: 1 for a single click, 2 for a double click and
+ * 3 for a triple click. A press repeats the previous press when it follows
+ * within GUI_DOUBLE_CLICK_MS and lies within DRAG_THRESHOLD of the
+ * previous press. The count after 3 starts again at 1. */
+struct gui_clicks {
+    long ms;
+    int x, y, count;
+};
+int gui_click_count(struct gui_clicks *c, int x, int y);
 int widget_drag_start(struct widget *w, const struct gui_drag_item *items, int nitems, int actions,
                       const struct image *icon, const char *label);
 int widget_drag_offers(const char *mime);
@@ -177,6 +187,18 @@ void widget_abs(const struct widget *w, int *x, int *y);   /* position in the wi
 void widget_text_cursor(struct widget *w, int x, int y, int width, int height);
 struct widget *widget_at(struct widget *w, int x, int y);   /* deepest visible child */
 const struct theme *widget_theme(const struct widget *w);
+/* The device pixels per logical pixel of the surface that shows w. The
+ * value is the scale of the window of w, or of the popup surface for a
+ * widget in a popup. The value is 1 for a widget without a window. */
+int widget_scale(const struct widget *w);
+/* Text measured at the scale of the window of w, with the same results
+ * as painter_text_width and painter_text_index in a paint of w. A NULL
+ * font is the font of the theme. widget_text_width returns the width of
+ * the first n bytes (n < 0: all) in logical pixels rounded up.
+ * widget_text_index returns the character boundary nearest to the
+ * logical offset px. */
+int widget_text_width(const struct widget *w, const struct font *font, const char *text, int n);
+int widget_text_index(const struct widget *w, const struct font *font, const char *text, int n, int px);
 /* Deliver an event to a widget and let it bubble to its ancestors. */
 int widget_dispatch(struct widget *w, struct event *e);
 
@@ -220,12 +242,14 @@ extern const struct widget_class button_class;  /* "clicked" (sig_click) */
 extern const struct widget_class checkbox_class;/* "toggled" (sig_change) */
 extern const struct widget_class radio_class;   /* "toggled"; exclusive among siblings */
 extern const struct widget_class textfield_class;  /* "changed", "activate" (sig_change) */
-extern const struct widget_class listview_class;   /* "selected", "activate" (sig_select) */
+/* "selected", "activate" (sig_select); "activate" also on a double click */
+extern const struct widget_class listview_class;
 extern const struct widget_class scrollbar_class;  /* "scrolled" (sig_scroll) */
 extern const struct widget_class scrollarea_class; /* one child, scrolled by two bars */
 /* "paint" (sig_paint); "press", "motion", "release", "wheel" (sig_click);
  * "key", "keyup"; "text", "preedit"; the drag signals of the data views
- * (sig_drag, row -1). */
+ * (sig_drag, row -1). A canvas is not focusable by default. A program
+ * whose canvas takes keys sets the flag focusable. */
 extern const struct widget_class canvas_class;
 extern const struct widget_class separator_class;
 
@@ -250,6 +274,32 @@ int listview_count(const struct widget *w);
 const char *listview_item(const struct widget *w, int index);
 struct widget *scrollbar_new(struct widget *parent, int vertical);
 void scrollbar_set(struct widget *w, int value, int max, int page);
+
+/* Scroll ranges. A range has the length max, and page units of the range
+ * are visible. The value is the first visible unit, from 0 to max - page.
+ * scroll_clamp returns v limited to that interval. scroll_set stores the
+ * clamped v in *value and returns 1 when *value changed. */
+int scroll_clamp(int v, int max, int page);
+int scroll_set(int *value, int v, int max, int page);
+/* The thumb of a scroll track of len logical pixels. scrollbar_thumb
+ * stores the offset of the thumb along the track in *off and its length in
+ * *len_out. The function returns the distance that the thumb can travel,
+ * or 0 when the whole range is visible. Painting and hit testing use this
+ * geometry. */
+int scrollbar_thumb(int len, int value, int max, int page, int *off, int *len_out);
+/* The track and the thumb of a scroll bar at (x, y). */
+void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
+/* A vertical scroll track inside a widget: the list view, the tree view,
+ * the table and the editor. scroll_track_event handles a mouse event of
+ * the widget w for the track at the local rectangle r. A press before or
+ * after the thumb moves the value by one page. A press on the thumb
+ * captures the mouse, and the motion drags the thumb. The function stores
+ * the new value in *value and returns 1 when the track consumed the event. */
+struct scroll_track {
+    int grab;                   /* the press offset inside the thumb, -1 without a drag */
+};
+int scroll_track_event(struct scroll_track *t, struct widget *w, const struct event *e, struct rect r, int *value,
+                       int max, int page);
 struct widget *scrollarea_new(struct widget *parent);
 struct widget *canvas_new(struct widget *parent);
 struct widget *separator_new(struct widget *parent);
@@ -455,6 +505,26 @@ void highlight_sh(const char *line, int len, unsigned char *classes, int *state,
 const struct image *icon_get(const char *name);
 /* The SVG icon rendered px logical pixels high; NULL without an SVG. */
 const struct image *icon_get_size(const char *name, int px);
+/* The icon cache. The key of an entry consists of name, size, scale and
+ * colour. icon_lookup returns the SVG icon name rendered px logical pixels high at
+ * scale device pixels per logical pixel in color, or NULL without an SVG
+ * file. ICON_COLOR_DEFAULT is the colour of the icon theme: the text
+ * colour, amber for folders and red for the quit mark. The cache grows as
+ * needed. A missing icon is cached as NULL. */
+#define ICON_COLOR_DEFAULT 0xffffffffu
+/* The directory of the icon files, /usr/share/icons by default. The host
+ * tests of libgui use their data directory. The string is not copied. */
+void icon_set_dir(const char *dir);
+const struct image *icon_lookup(const char *name, int px, int scale, uint32_t color);
+/* The rendition of a cached icon at another scale and colour. The result
+ * is img itself for an image that the cache did not create, such as a PNG
+ * icon, and when the SVG file cannot be rendered again. */
+const struct image *icon_variant(const struct image *img, int scale, uint32_t color);
+/* Draws a cached icon at (x, y) at the scale of the painter in the colour
+ * of the icon. With dimmed nonzero, the function draws the copy that
+ * icon_dimmed returns.
+ * Other images are drawn as painter_image draws them. */
+void painter_icon(struct painter *p, int x, int y, const struct image *img, int dimmed);
 /* A copy of an icon with reduced opacity for disabled buttons and menu
  * items, cached per icon. */
 const struct image *icon_dimmed(const struct image *img);

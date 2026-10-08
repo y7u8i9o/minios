@@ -91,7 +91,9 @@ default, the builtin 8x16 font when the file is missing);
 stack: `painter_push(x, y, w, h)` enters a child area, so widgets paint
 in local coordinates and every primitive (`fill`, `frame`, `line`,
 `rounded`, `text`, `blit`, `mask`, `focus_ring`) is clipped to the
-widget. Text uses the theme font.
+widget. Text uses the theme font. Widgets measure text at the scale of
+their window with `widget_text_width` and `widget_text_index`
+(`widgets.md`).
 
 ## Drag and drop
 
@@ -118,11 +120,13 @@ which `app_set_damage_log` prints for the tests.
 
 label, button (`clicked`), check box and radio button (`toggled`, radios
 exclusive among siblings), separator, canvas (`paint`, `press`,
-`release`, `motion`, `wheel`, `key`), text field (`changed`,
+`release`, `motion`, `wheel`, `key`; not focusable unless the program
+sets `focusable`), text field (`changed`,
 `activate`; cursor, selection with Shift and the mouse, Ctrl+A, C, X,
 V through the server clipboard, and a masked mode for passwords that
-shows one `*` per byte and never copies, `textfield_set_masked`), list view (`selected`, `activate`;
-keyboard navigation, wheel, internal scroll bar), scroll bar
+shows one `*` per byte and never copies, `textfield_set_masked`), list
+view (`selected`, `activate` also on a double click; keyboard
+navigation, wheel, internal scroll track), scroll bar
 (`scrolled`; thumb dragging, paging, wheel, keys) and scroll area (a
 viewport over its content box, `w->user`, with bars shown when the
 content overflows).
@@ -134,6 +138,8 @@ content overflows).
   `tests/test_framework.c`: box and grid layout, signal order and
   consumption, partial redraw rectangles, focus traversal, mnemonics,
   clicks, text editing with cut and paste, list navigation.
+  `tests/test_scale.c` runs the widgets at scale 2 (`widgets.md`). The
+  tests share their event messages through `tests/events.c`.
 - `gui_app`: `/bin/apptest` with two windows, a repeating timer that
   stops after three ticks and writes to a pipe, a watched pipe, a
   button, a text field and a list; the kernel injects a click, Tab,
@@ -191,7 +197,8 @@ labels gained `widget_set_icon`.
 `menu_add` / `menu_add_separator`. Opening a title creates a drop down
 popup that paints the items, tracks hover, activates on click or Enter
 (`clicked` on the item), moves between menus with Left and Right, and
-closes with Escape or an outside click.
+closes with Escape or an outside click. Up and Down skip separators and
+disabled items. Titles and items underline their mnemonic.
 
 ### Data views (`src/widgets/models.c`, `gui/model.h`)
 

@@ -38,6 +38,10 @@ void painter_text_font(struct painter *p, const struct font *f, int x, int y, co
 /* Text shaped by gfx_text_shape at the painter's scale, at logical (x, y). */
 void painter_text_shaped(struct painter *p, int x, int y, const struct gfx_shaped *t, uint32_t fg);
 int painter_text_width(const struct painter *p, const char *text, int n);
+/* The width of the first n bytes of text in the font f at the scale of
+ * the painter, in logical pixels rounded up. A NULL font is the font of
+ * the theme. */
+int painter_text_width_font(const struct painter *p, const struct font *f, const char *text, int n);
 int painter_text_height(const struct painter *p);
 /* Break text into lines no wider than w logical pixels. Lines break at
  * spaces and at newlines, and a space at a break is dropped. A word wider
@@ -47,6 +51,15 @@ int painter_text_height(const struct painter *p);
 int painter_wrap(const struct painter *p, const char *text, int w, int *start, int *len, int max);
 /* Character index nearest to a local x offset within text. */
 int painter_text_index(const struct painter *p, const char *text, int n, int px);
+/* The same for the font f. A NULL font is the font of the theme. */
+int painter_text_index_font(const struct painter *p, const struct font *f, const char *text, int n, int px);
+/* A caption with a mnemonic. The marker '&' precedes the mnemonic
+ * character. painter_mnemonic_strip copies text without the marker into
+ * buf and returns the byte offset of the mnemonic character in buf, or -1
+ * without a mnemonic. painter_mnemonic_text draws the caption without the
+ * marker and underlines the mnemonic character. */
+int painter_mnemonic_strip(const char *text, char *buf, int size);
+void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, uint32_t color);
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
 /* The avatar of an account: a rounded square of size by size in a colour
  * that the account name selects, with the first letter of label, which is

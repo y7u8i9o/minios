@@ -222,8 +222,13 @@ void painter_text_shaped(struct painter *p, int x, int y, const struct gfx_shape
 
 int painter_text_width(const struct painter *p, const char *text, int n)
 {
+    return painter_text_width_font(p, NULL, text, n);
+}
+
+int painter_text_width_font(const struct painter *p, const struct font *f, const char *text, int n)
+{
     int s = p->scale;
-    return (gfx_text_width_font_scaled(p->theme->font, text, n, s) + s - 1) / s;
+    return (gfx_text_width_font_scaled(f ? f : p->theme->font, text, n, s) + s - 1) / s;
 }
 
 int painter_text_height(const struct painter *p)
@@ -278,7 +283,39 @@ int painter_wrap(const struct painter *p, const char *text, int w, int *start, i
 
 int painter_text_index(const struct painter *p, const char *text, int n, int px)
 {
-    return gfx_text_index_font_scaled(p->theme->font, text, n, px * p->scale, p->scale);
+    return painter_text_index_font(p, NULL, text, n, px);
+}
+
+int painter_text_index_font(const struct painter *p, const struct font *f, const char *text, int n, int px)
+{
+    return gfx_text_index_font_scaled(f ? f : p->theme->font, text, n, px * p->scale, p->scale);
+}
+
+int painter_mnemonic_strip(const char *text, char *buf, int size)
+{
+    int j = 0, mnemonic = -1;
+    for (int i = 0; text[i] && j + 1 < size; i++) {
+        if (text[i] == '&' && text[i + 1]) {
+            mnemonic = j;
+            continue;
+        }
+        buf[j++] = text[i];
+    }
+    buf[j] = '\0';
+    return mnemonic;
+}
+
+void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, uint32_t color)
+{
+    char buf[256];
+    int mn = painter_mnemonic_strip(text, buf, sizeof buf);
+    painter_text(p, x, y, buf, color);
+    if (mn < 0)
+        return;
+    int end = gui_utf8_next_boundary(buf, (int)strlen(buf), mn);
+    int x0 = x + painter_text_width(p, buf, mn), x1 = x + painter_text_width(p, buf, end);
+    int base = y + painter_text_height(p) - 1;
+    painter_line(p, x0, base, x1 - 1, base, color);
 }
 
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h)

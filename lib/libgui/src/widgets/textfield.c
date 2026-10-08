@@ -93,12 +93,16 @@ static void insert(struct textfield *f, const char *s, int n)
     f->cursor += n;
 }
 
-static void scroll_to_cursor(struct textfield *f, const struct theme *t)
+/* The scroll offset shows the cursor. The offset never leaves free space
+ * after the end of the text. A shorter text therefore scrolls back. */
+static void scroll_to_cursor(struct textfield *f)
 {
-    int cx = gfx_text_width_font(t->font, shown(f), f->cursor);
-    int avail = f->w.w - 2 * PAD;
+    const char *text = shown(f);
+    int cx = widget_text_width(&f->w, NULL, text, f->cursor);
+    int avail = f->w.w - 2 * PAD, end = widget_text_width(&f->w, NULL, text, -1) - avail + 1;
     if (cx < f->scroll_x) f->scroll_x = cx;
     if (cx > f->scroll_x + avail - 1) f->scroll_x = cx - avail + 1;
+    if (f->scroll_x > end) f->scroll_x = end;
     if (f->scroll_x < 0) f->scroll_x = 0;
 }
 
@@ -144,14 +148,12 @@ static void textfield_paint(struct widget *w, struct painter *p)
 
 static int pos_at(struct textfield *f, int px)
 {
-    const struct theme *t = widget_theme(&f->w);
     int rel = px - PAD + f->scroll_x;
-    return gfx_text_index_font(t->font, shown(f), -1, rel < 0 ? 0 : rel);
+    return widget_text_index(&f->w, NULL, shown(f), -1, rel < 0 ? 0 : rel);
 }
 
 static int key(struct textfield *f, struct event *e)
 {
-    const struct theme *t = widget_theme(&f->w);
     int ctrl = e->mods & WMOD_CTRL, shift = e->mods & WMOD_SHIFT;
     int before = f->cursor, len = len_of(f);
     if (e->mods & WMOD_ALT)
@@ -187,7 +189,7 @@ static int key(struct textfield *f, struct event *e)
             changed(f);
         }
         free(tmp);
-        scroll_to_cursor(f, t);
+        scroll_to_cursor(f);
         return 1;
     }
     switch (e->code) {
@@ -204,7 +206,7 @@ static int key(struct textfield *f, struct event *e)
         } else {
             f->sel = -1;
         }
-        scroll_to_cursor(f, t);
+        scroll_to_cursor(f);
         widget_invalidate(&f->w);
         return 1;
     }
@@ -232,7 +234,7 @@ static int key(struct textfield *f, struct event *e)
         return 0;
     }
     changed(f);
-    scroll_to_cursor(f, t);
+    scroll_to_cursor(f);
     return 1;
 }
 
@@ -389,7 +391,7 @@ static int textfield_event(struct widget *w, struct event *e)
                 if (f->sel < 0)
                     f->sel = f->cursor;
                 f->cursor = p;
-                scroll_to_cursor(f, widget_theme(w));
+                scroll_to_cursor(f);
                 widget_invalidate(w);
             }
             return 1;
@@ -411,7 +413,7 @@ static int textfield_event(struct widget *w, struct event *e)
             insert(f, copy, n);
             free(copy);
             changed(f);
-            scroll_to_cursor(f, widget_theme(w));
+            scroll_to_cursor(f);
         }
         return 1;
     case EV_PREEDIT:
@@ -480,6 +482,6 @@ void textfield_select(struct widget *w, int anchor, int cursor)
     int n = len_of(f);
     f->cursor = cursor < 0 || cursor > n ? n : cursor;
     f->sel = anchor < 0 ? -1 : anchor > n ? n : anchor;
-    scroll_to_cursor(f, widget_theme(w));
+    scroll_to_cursor(f);
     widget_invalidate(w);
 }

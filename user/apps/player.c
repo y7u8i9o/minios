@@ -613,6 +613,7 @@ int main(int argc, char **argv)
     time_label = label_new(transport, "0:00 / 0:00");
 
     wave = canvas_new(win);
+    wave->focusable = 1;
     widget_set_stretch(wave, 1, 1);
     widget_set_hint(wave, 0, 120);
     widget_connect(wave, "paint", on_paint, NULL);

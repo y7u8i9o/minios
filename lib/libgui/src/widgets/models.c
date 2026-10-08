@@ -7,8 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 
-void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
-
 #define INDENT 16
 #define HEADER_H 24
 
@@ -24,14 +22,14 @@ struct view {
     int sort_col, sort_desc;
     int drag_col, drag_x0, drag_w0;
     int header;                 /* 1 for tables */
-    long click_ms;              /* last left click, for double clicks */
-    int click_row;
+    struct gui_clicks clicks;   /* the left clicks, for double clicks */
+    int click_row;              /* the flat row of the last left click */
+    struct scroll_track track;
     int press_row, press_x, press_y;    /* a row press that may become a drag */
     int drop_row;               /* outlined drop target: a row, -1 the view, -2 none */
 };
 
 #define ICON_W 20
-#define DOUBLE_CLICK_MS 400
 
 static int line_h(const struct widget *w) { return widget_theme(w)->font->height + 6; }
 
@@ -82,13 +80,6 @@ static int rows_visible(struct view *v)
 {
     int lh = line_h(&v->w);
     return (v->w.h - 2 - (v->header ? HEADER_H : 0)) / lh;
-}
-
-static int clamp_scroll(struct view *v, int s)
-{
-    int top = v->nflat - rows_visible(v);
-    if (top < 0) top = 0;
-    return s < 0 ? 0 : s > top ? top : s;
 }
 
 static int flat_index_of(struct view *v, int row)
@@ -164,7 +155,7 @@ static void view_paint(struct widget *w, struct painter *p)
                 painter_push(p, x, y, v->widths[c] - 1, lh);
                 int tx = 4;
                 if (c == 0 && icon) {
-                    painter_image(p, 4, (lh - image_lh(icon)) / 2, icon);
+                    painter_icon(p, 4, (lh - image_lh(icon)) / 2, icon, 0);
                     tx += ICON_W;
                 }
                 painter_text(p, tx, ty - y, s ? s : "", fg);
@@ -174,7 +165,7 @@ static void view_paint(struct widget *w, struct painter *p)
         } else {
             int x = 4 + v->depth[idx] * INDENT;
             if (icon) {
-                painter_image(p, x + INDENT, y + (lh - image_lh(icon)) / 2, icon);
+                painter_icon(p, x + INDENT, y + (lh - image_lh(icon)) / 2, icon, 0);
                 x += ICON_W;
             }
             if (v->m->rows(v->m, row) > 0) {
@@ -269,6 +260,21 @@ static void toggle_expand(struct view *v, int row)
     refresh(v);
 }
 
+/* The scroll track at the right edge below the header. */
+static int track_event(struct view *v, struct event *e)
+{
+    struct widget *w = &v->w;
+    int rows = rows_visible(v), top = v->header ? HEADER_H : 0;
+    int sbw = v->nflat > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
+    int before = v->scroll;
+    struct rect track = { w->w - sbw, top, sbw, w->h - top };
+    if (!sbw || !scroll_track_event(&v->track, w, e, track, &v->scroll, v->nflat, rows))
+        return 0;
+    if (v->scroll != before)
+        widget_invalidate(w);
+    return 1;
+}
+
 static int view_event(struct widget *w, struct event *e)
 {
     struct view *v = (struct view *)w;
@@ -287,13 +293,8 @@ static int view_event(struct widget *w, struct event *e)
         }
         if (!(e->button & 1))
             return 0;
-        int sbw = v->nflat > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
-        if (sbw && e->x >= w->w - sbw) {
-            int mid = top + 1 + (w->h - 2 - top) * (v->scroll + rows / 2) / (v->nflat ? v->nflat : 1);
-            v->scroll = clamp_scroll(v, v->scroll + (e->y < mid ? -rows : rows));
-            widget_invalidate(w);
+        if (track_event(v, e))
             return 1;
-        }
         if (v->header && e->y < HEADER_H + 1) {
             int x = 1;
             for (int c = 0; c < v->ncols; c++) {
@@ -328,10 +329,8 @@ static int view_event(struct widget *w, struct event *e)
                 return 1;
             }
         }
-        long now = uptime_ms();
-        int again = idx == v->click_row && now - v->click_ms < DOUBLE_CLICK_MS;
+        int again = gui_click_count(&v->clicks, e->x, e->y) == 2 && idx == v->click_row;
         v->click_row = idx;
-        v->click_ms = again ? 0 : now;
         select_flat(v, idx, again ? "activate" : "selected");
         if (!again) {
             v->press_row = v->flat[idx];
@@ -342,6 +341,8 @@ static int view_event(struct widget *w, struct event *e)
         return 1;
     }
     case EV_MOUSE_MOVE:
+        if (track_event(v, e))
+            return 1;
         if (v->drag_col >= 0 && (e->button & 1)) {
             int nw = v->drag_w0 + e->x - v->drag_x0;
             v->widths[v->drag_col] = nw < 20 ? 20 : nw;
@@ -356,13 +357,14 @@ static int view_event(struct widget *w, struct event *e)
         }
         return 0;
     case EV_MOUSE_UP:
+        track_event(v, e);
         v->drag_col = -1;
         v->press_row = -1;
         return 1;
     case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END:
         return view_drag_event(w, e);
     case EV_MOUSE_WHEEL:
-        v->scroll = clamp_scroll(v, v->scroll + 3 * e->button);
+        v->scroll = scroll_clamp(v->scroll + 3 * e->button, v->nflat, rows);
         widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN: {
@@ -421,6 +423,7 @@ static struct widget *view_new(const struct widget_class *cls, struct widget *pa
     v->drag_col = -1;
     v->sort_col = -1;
     v->click_row = -1;
+    v->track.grab = -1;
     v->press_row = -1;
     v->drop_row = -2;
     w->value = -1;
@@ -446,7 +449,7 @@ void view_refresh(struct widget *w)
 {
     struct view *v = (struct view *)w;
     refresh(v);
-    v->scroll = clamp_scroll(v, v->scroll);
+    v->scroll = scroll_clamp(v->scroll, v->nflat, rows_visible(v));
 }
 
 void treeview_expand(struct widget *w, int row, int expanded)

@@ -2,7 +2,7 @@
  * a button is chosen or the window is closed. */
 #include <gui/app.h>
 #include <string.h>
-#include <libintl.h>
+#include "intl.h"
 #include "dialog.h"
 
 struct dialog {
@@ -51,7 +51,10 @@ int dialog_message(struct app *a, struct widget *parent, const char *title, cons
                    const char *const *buttons, int nbuttons)
 {
     const struct theme *t = app_theme(a);
-    int width = gfx_text_width_font(t->font, text, -1) + 40;
+    /* The text is measured at the scale of the parent window. Without a
+     * window the scale is 1. */
+    struct widget *ref = parent ? parent : app_first_window(a);
+    int width = (ref ? widget_text_width(ref, NULL, text, -1) : gfx_text_width_font_scaled(t->font, text, -1, 1)) + 40;
     if (width < 240)
         width = 240;
     struct dialog d = { a, NULL, -1, 0, NULL };
@@ -83,7 +86,7 @@ int dialog_prompt(struct app *a, struct widget *parent, const char *title, const
     d.field = textfield_new(d.win, buf);
     widget_connect(d.field, "activate", on_activate, &d);
     struct widget *row = box_new(d.win, 0);
-    struct widget *ok = button_new(row, dgettext("libgui", "OK")), *cancel = button_new(row, dgettext("libgui", "Cancel"));
+    struct widget *ok = button_new(row, _("OK")), *cancel = button_new(row, _("Cancel"));
     widget_set_stretch(ok, 1, 0);
     widget_set_stretch(cancel, 1, 0);
     widget_connect(ok, "clicked", on_button, &d);

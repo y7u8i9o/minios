@@ -287,6 +287,9 @@ static int w_on(lua_State *L)
     lua_setfield(L, -2, name);
     if (!connected)
         widget_connect(w, name, trampoline, strdup(name));
+    /* A canvas takes the keyboard focus only when it handles keys. */
+    if (w->cls == &canvas_class && (strcmp(name, "key") == 0 || strcmp(name, "keyup") == 0))
+        w->focusable = 1;
     lua_settop(L, 1);
     return 1;
 }

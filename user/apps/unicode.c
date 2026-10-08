@@ -356,7 +356,7 @@ static void draw_glyph(struct painter *p, const struct font *f, uint32_t cp,
     char text[5];
     if (!f || !encode(cp, text))
         return;
-    int tw = gfx_text_width_font(f, text, -1);
+    int tw = painter_text_width_font(p, f, text, -1);
     painter_text_font(p, f, x + (w - tw) / 2, y, text, color, 0xffffffffu);
 }
 
@@ -584,6 +584,7 @@ int main(void)
     struct widget *row = box_new(win, 0);
     widget_set_stretch(row, 1, 1);
     grid = canvas_new(row);
+    grid->focusable = 1;
     widget_set_min(grid, COLS * CELL_W, CELL_H);
     widget_set_stretch(grid, 1, 1);
     widget_connect(grid, "paint", on_paint_grid, NULL);

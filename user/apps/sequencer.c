@@ -332,6 +332,7 @@ int main(int argc, char **argv)
     combobox_select(wave, 1);
 
     grid = canvas_new(win);
+    grid->focusable = 1;
     widget_set_stretch(grid, 1, 1);
     widget_set_hint(grid, 0, 200);
     widget_connect(grid, "paint", on_paint, NULL);

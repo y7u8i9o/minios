@@ -370,6 +370,7 @@ int main(void)
     widget_connect(scope, "paint", on_paint_scope, NULL);
 
     keys = canvas_new(win);
+    keys->focusable = 1;
     widget_set_hint(keys, 0, 100);
     widget_connect(keys, "paint", on_paint, NULL);
     widget_connect(keys, "press", on_press, NULL);

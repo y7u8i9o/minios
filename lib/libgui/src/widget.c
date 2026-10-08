@@ -235,6 +235,32 @@ const struct theme *widget_theme(const struct widget *w)
     return app_theme(w->app);
 }
 
+int widget_scale(const struct widget *w)
+{
+    const struct widget *window = w->window ? w->window : w;
+    if (window->cls != &window_class)
+        return 1;
+    struct window_state *ws = window_state_of((struct widget *)window);
+    struct gui_window *g = ws->win;
+    if (ws->popup_win)
+        for (const struct widget *p = w; p; p = p->parent)
+            if (p == ws->popup)
+                g = ws->popup_win;
+    return g && g->scale > 0 ? g->scale : 1;
+}
+
+int widget_text_width(const struct widget *w, const struct font *font, const char *text, int n)
+{
+    int s = widget_scale(w);
+    return (gfx_text_width_font_scaled(font ? font : widget_theme(w)->font, text, n, s) + s - 1) / s;
+}
+
+int widget_text_index(const struct widget *w, const struct font *font, const char *text, int n, int px)
+{
+    int s = widget_scale(w);
+    return gfx_text_index_font_scaled(font ? font : widget_theme(w)->font, text, n, px * s, s);
+}
+
 /* ---- signals ---- */
 
 void widget_connect(struct widget *w, const char *signal, signal_fn fn, void *arg)

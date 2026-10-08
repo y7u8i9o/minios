@@ -81,6 +81,7 @@ int main(void)
     if (!win)
         return 1;
     struct widget *canvas = canvas_new(win);
+    canvas->focusable = 1;
     widget_set_hint(canvas, 0, 80);
     widget_set_stretch(canvas, 1, 0);
     widget_connect(canvas, "press", on_mouse, "press");

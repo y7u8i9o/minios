@@ -11,6 +11,7 @@ static int next_id = 1;
 static struct wmsg queue[256];
 static int qhead, qtail;
 struct rect fake_last_damage;
+int fake_scale = 1;
 int fake_damage_count;
 static char clip[WSRV_CLIP_MAX];
 static int clip_len;
@@ -43,7 +44,7 @@ int gui_output_count(void) { return 1; }
 int gui_get_output(int index, struct gui_output_info *out)
 {
     if (index || !out) return -1;
-    *out = (struct gui_output_info){ 0, 0, 1024, 768, 1, 0, 60000 };
+    *out = (struct gui_output_info){ 0, 0, 1024, 768, fake_scale, 0, 60000 };
     return 0;
 }
 
@@ -52,8 +53,9 @@ static void alloc_surfaces(struct gui_window *w, int width, int height)
     free(w->surf.pixels);
     w->width = width;
     w->height = height;
-    w->scale = 1;
-    w->surf = (struct surface){ calloc((size_t)width * height, 4), width, height, width };
+    w->scale = fake_scale;
+    int dw = width * fake_scale, dh = height * fake_scale;
+    w->surf = (struct surface){ calloc((size_t)dw * dh, 4), dw, dh, dw };
 }
 
 struct gui_window *gui_create_window(int width, int height, const char *title)

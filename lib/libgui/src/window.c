@@ -205,7 +205,7 @@ static void tip_show(void *arg)
     const struct theme *t = app_theme(window->app);
     int ax, ay;
     widget_abs(o, &ax, &ay);
-    l->w = gfx_text_width_font(t->font, o->tip, -1) + 8;
+    l->w = widget_text_width(window, NULL, o->tip, -1) + 8;
     l->h = t->font->height + 6;
     l->value = 1;                       /* label paints as a tooltip */
     popup_open(window, l, ax, ay + o->h + 2, l->w, l->h, 0);
@@ -296,6 +296,17 @@ int widget_drag_moved(int press_x, int press_y, int x, int y)
     return dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD;
 }
 
+int gui_click_count(struct gui_clicks *c, int x, int y)
+{
+    long now = uptime_ms();
+    int repeat = c->count && now - c->ms < GUI_DOUBLE_CLICK_MS && !widget_drag_moved(c->x, c->y, x, y);
+    c->count = repeat ? c->count % 3 + 1 : 1;
+    c->ms = now;
+    c->x = x;
+    c->y = y;
+    return c->count;
+}
+
 int widget_drag_offers(const char *mime) { return gui_drag_offers(mime); }
 
 /* The drag image: a rounded tile with the icon and the label, slightly
@@ -308,7 +319,7 @@ static struct surface drag_image(struct widget *window, const struct image *icon
     int iw = icon ? image_lw(icon) : 0, ih = icon ? image_lh(icon) : 0;
     if (iw > 20 || ih > 20)
         iw = ih = 20;
-    int tw = label && *label ? gfx_text_width_font(t->font, label, -1) : 0;
+    int tw = label && *label ? widget_text_width(window, NULL, label, -1) : 0;
     int w = 8 + iw + (iw && tw ? 6 : 0) + tw + 8, h = (ih > t->font->height ? ih : t->font->height) + 10;
     if (w > 240)
         w = 240;
