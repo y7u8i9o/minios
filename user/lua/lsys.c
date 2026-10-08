@@ -16,19 +16,6 @@
 #include "lauxlib.h"
 #include "minios.h"
 
-#ifdef MINIOS_HOST
-/* The host unit test compiles this file with the system libc, which
- * lacks the minios sleep and processor calls. uptime_ms comes from the
- * fake client of libgui, which the test links. */
-#include <time.h>
-static int sleep_ms(unsigned long ms)
-{
-    struct timespec ts = { (time_t)(ms / 1000), (long)(ms % 1000) * 1000000 };
-    return nanosleep(&ts, NULL);
-}
-static int nproc(void) { return 1; }
-static int getcpu(void) { return 0; }
-#endif
 
 /* Collects the string arguments from index first into a NULL terminated
  * vector on the C heap. */

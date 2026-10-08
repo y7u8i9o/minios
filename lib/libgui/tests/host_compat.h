@@ -15,6 +15,16 @@ size_t gui_host_strlcpy(char *dst, const char *src, size_t size);
 long uptime_ms(void);
 long uptime_us(void);
 
+/* The sleep and processor calls of the minios unistd.h. glibc declares
+ * a getcpu with two arguments in sched.h. The header is included first,
+ * and the name is then replaced, as for strlcpy. */
+#include <sched.h>
+#undef getcpu
+#define getcpu gui_host_getcpu
+int gui_host_getcpu(void);
+int sleep_ms(unsigned long ms);
+int nproc(void);
+
 /* glibc declares FNM_CASEFOLD only for _GNU_SOURCE, which would also
  * change other declarations of the host headers. The value is the one of
  * glibc and of the BSDs. */

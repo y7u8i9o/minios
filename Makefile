@@ -431,14 +431,19 @@ check-headers:
 	        || { echo "header $$h does not compile alone"; status=1; }; \
 	done; exit $$status
 # check-lua compiles the Lua interpreter and the modules in user/lua with
-# the host compiler, together with libgui, libfont and libcodec. It runs
+# the host compiler, together with libgui, libfont and libcodec. The
+# notification client of libgui needs libwire and is left out, as in the
+# host tests of libgui. The Opus module needs the sources and the flags of
+# lib/libcodec/modules.mk. It runs
 # the script of the lua_sys boot test in build/lua/host/tmp, and then the
 # other Lua test scripts.
+OPUS_DIR := third_party/opus
+include lib/libcodec/modules.mk
 LUA_HOSTSRCS := $(filter-out third_party/lua/src/lua.c third_party/lua/src/luac.c third_party/lua/src/linit.c,$(wildcard third_party/lua/src/*.c)) \
                 $(wildcard user/lua/*.c) user/lua/tests/host_main.c user/lua/tests/fake_audio.c \
-                $(filter-out lib/libgui/src/client.c,$(wildcard lib/libgui/src/*.c lib/libgui/src/widgets/*.c)) \
+                $(filter-out lib/libgui/src/client.c lib/libgui/src/notify.c,$(wildcard lib/libgui/src/*.c lib/libgui/src/widgets/*.c)) \
                 lib/libgui/tests/fake_client.c lib/libgui/tests/host_compat.c $(wildcard lib/libfont/src/*.c) \
-                $(wildcard lib/libcodec/src/*.c lib/libcodec/modules/*/*.c) lib/libc/src/crc32.c
+                $(wildcard lib/libcodec/src/*.c lib/libcodec/modules/*/*.c) $(MODULE_SRCS_opus) lib/libc/src/crc32.c
 LUA_TEST := $(BUILD)/lua/host/test_modules
 # The headers are listed too, so that a change of an interface rebuilds
 # the program.
@@ -447,7 +452,7 @@ $(LUA_TEST): $(LUA_HOSTSRCS) $(wildcard user/lua/*.h lib/libgui/include/gui/*.h 
 	$(MAKE) -C lib/libgui $(BUILD)/libgui/font.c
 	$(HOSTCC) $(HOSTCPPFLAGS) -D_DEFAULT_SOURCE -D_GNU_SOURCE -DMINIOS_HOST -DCODEC_BUILTIN -DLUA_USE_POSIX -std=c17 -O1 -g -Wall \
 	    -include lib/libgui/tests/host_compat.h -Ithird_party/lua/src -Iuser/lua -Ilib/libgui/include -Ilib/libcodec/include -Ilib/libfont/include \
-	    -Ilib/libgui/tests -Ilib/libaudio/include -idirafter kernel/include -idirafter lib/libc/include \
+	    -Ilib/libgui/tests -Ilib/libaudio/include $(MODULE_CPP_opus) -idirafter kernel/include -idirafter lib/libc/include \
 	    -o $@ $(LUA_HOSTSRCS) $(BUILD)/libgui/font.c -lm -pthread
 check-lua: $(LUA_TEST)
 	rm -rf $(BUILD)/lua/host/tmp && mkdir -p $(BUILD)/lua/host/tmp

@@ -54,3 +54,22 @@ const char *conf_home(void)
 {
     return "/nonexistent";
 }
+
+/* The sleep and processor calls of minios on the host: one processor. */
+#include <time.h>
+
+int sleep_ms(unsigned long ms)
+{
+    struct timespec ts = { (time_t)(ms / 1000), (long)(ms % 1000) * 1000000 };
+    return nanosleep(&ts, NULL);
+}
+
+int nproc(void)
+{
+    return 1;
+}
+
+int gui_host_getcpu(void)
+{
+    return 0;
+}
