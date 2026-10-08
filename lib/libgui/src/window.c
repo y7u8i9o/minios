@@ -98,9 +98,9 @@ static void scroll_pixels(struct widget *w, struct painter *p, struct rect_set *
 }
 
 /* Paints the dirty widgets of the tree. The device rectangle of each
- * repainted area goes into rects, which merges close rectangles, so the
+ * repainted area goes into rects. The set merges close rectangles, so the
  * server composes only the repainted parts and not their bounding box.
- * force is set below a repainted widget, whose rectangle already contains
+ * force is set below a repainted widget. The rectangle of that widget already contains
  * the children. A widget with dirty_part repaints its dirty rectangle:
  * its own paint and the children within the rectangle. */
 static void paint_tree(struct widget *w, struct painter *p, int force, struct rect_set *rects, struct widget *skip)

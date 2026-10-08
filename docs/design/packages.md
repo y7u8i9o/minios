@@ -298,7 +298,7 @@ program that draws without the framework must call `gui_begin_paint`
 before it draws, and `gui_window.surf` moves between buffers. libgui has
 ABI 3 since K2 of `docs/plan/widgets.md`. `struct gui_stats` received
 the counters of the framework work. `struct widget` and `struct theme`
-grow in later milestones of the same plan. All of them land before the
+grow in later milestones of the same plan. All these changes are complete before the
 next release, so the plan raises the number once.
 Application packages (`user/packages/packages.mk`) receive the same
 serial numbers in a development build through `tools/pkgserial.py`, in

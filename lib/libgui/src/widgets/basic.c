@@ -225,7 +225,7 @@ struct widget *button_new(struct widget *parent, const char *text)
 /* ---- check box and radio button ---- */
 
 /* The box of a check box and the disc of a radio button, TM_ICON pixels
- * wide. An unchecked box is a field with a border, which turns to the
+ * wide. An unchecked box is a field with a border. The border turns to the
  * accent colour under the pointer. A checked box is filled with the
  * accent colour and shows a check mark or a dot in the selection text
  * colour. A disabled box uses the track colour and the disabled text

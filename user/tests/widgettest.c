@@ -2,11 +2,10 @@
  * widgets log what they receive. With "controls" it builds the M22
  * controls window for gui_controls instead. With "scale" it builds the
  * text field of gui_widgets_scale2. With "look" it shows the controls
- * of gui_widgets_look, whose pixels the kernel test samples. With "text"
- * it builds the menu, the text field and the spinner of gui_widgets_text.
- * Hints fix
- * the sizes. The kernel
- * test can therefore click at known positions. */
+ * of gui_widgets_look. The kernel test samples the pixels of that window.
+ * With "text" it builds the menu, the text field and the spinner of
+ * gui_widgets_text. Hints fix the sizes. The kernel test can therefore
+ * click at known positions. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

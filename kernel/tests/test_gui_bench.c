@@ -1,5 +1,5 @@
 /* K2 of docs/plan/widgets.md: the widget scenarios of compbench. X12 runs
- * alone, and each scenario is one run of compbench, which prints the
+ * alone, and each scenario is one run of compbench. The program prints the
  * counters of libgui for the scenario. The case gui_bench runs at
  * 1280x800 and gui_bench_hidpi at 2560x1600@2, both on virtio-gpu. The
  * expect files check the counters that do not depend on timing. */

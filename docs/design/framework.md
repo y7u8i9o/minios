@@ -111,7 +111,7 @@ described in `dnd.md`.
 
 `widget_invalidate` marks a widget dirty and its ancestors child dirty.
 `window_paint` lays out what changed (Layout of changed widgets, below)
-and calls `gui_begin_paint`, which moves the window to a free
+and calls `gui_begin_paint`. The call moves the window to a free
 buffer (`gui.md`). It then walks the tree: a dirty widget and everything below it are
 repainted, a widget with only dirty descendants recurses without
 painting. Each repainted subtree gives one damage rectangle, and close
@@ -132,7 +132,7 @@ opaque ancestor.
 `widget_scroll_area(w, r, dy)` records a move of the pixels of `r` by
 `dy`. The next paint moves them with `gfx_move_rect` in the window
 surface and repaints the exposed rows. The method relies on
-`gui_buffers_switch`, which gives the current buffer the latest
+`gui_buffers_switch`. The function gives the current buffer the latest
 contents. The moved area is damage for X12. The function repaints `r`
 instead when a popup lies in the window surface, when the widget waits
 for another partial paint, or when the move is not smaller than `r`. The
@@ -153,7 +153,7 @@ first ancestor whose measurement does not change. The layout pass of
 rectangle changed. Layout functions place children with
 `widget_set_rect` and hide them with `widget_show_in_layout`. Both mark a
 changed child as `moved`. A container whose children moved is repainted.
-A resize, a new scale or a new theme calls `window_relayout_all`, which
+A resize, a new scale or a new theme calls `window_relayout_all`. The function
 measures and lays out every widget. Floating popups do not lay out the
 window. Painting skips subtrees outside the clip and clears their marks.
 A scroll area moves its content without a layout.

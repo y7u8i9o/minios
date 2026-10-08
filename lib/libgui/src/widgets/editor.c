@@ -630,8 +630,8 @@ static void invalidate_rows(struct editor *ed, int r0, int r1)
         widget_invalidate_rect(&ed->w, (struct rect){ 1, y0, ed->w.w - 2 - sb, y1 - y0 });
 }
 
-/* A move of the cursor repaints the old and the new row of the cursor,
- * which show the caret and the current line. A scroll or a selection
+/* A move of the cursor repaints the old and the new row of the cursor.
+ * Both rows show the caret and the current line. A scroll or a selection
  * repaints the editor. */
 void cursor_moved(struct editor *ed)
 {
