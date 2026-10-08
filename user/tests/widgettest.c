@@ -1,7 +1,9 @@
 /* Framework test client for the gui_widgets boot test: a window whose
  * widgets log what they receive. With "controls" it builds the M22
  * controls window for gui_controls instead. With "scale" it builds the
- * text field of gui_widgets_scale2. Hints fix the sizes. The kernel
+ * text field of gui_widgets_scale2. With "look" it shows the controls
+ * of gui_widgets_look, whose pixels the kernel test samples. Hints fix
+ * the sizes. The kernel
  * test can therefore click at known positions. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,6 +112,19 @@ static void build_scale(struct widget *win)
     positions[npositions++] = field;
 }
 
+/* A text field at the top of the window, then controls for the look. */
+static void build_look(struct widget *win)
+{
+    struct widget *field = textfield_new(win, "Field");
+    widget_set_hint(field, 0, 26);
+    checkbox_new(win, "Check box");
+    radio_new(win, "Radio button");
+    struct widget *combo = combobox_new(win);
+    combobox_add(combo, "Combo box");
+    spinner_new(win, 0, 10, 5);
+    LOG("look ready");
+}
+
 static void build_controls(struct widget *win)
 {
     struct widget *combo = combobox_new(win);
@@ -158,6 +173,8 @@ int main(int argc, char **argv)
         build_controls(win);
     else if (strcmp(mode, "scale") == 0)
         build_scale(win);
+    else if (strcmp(mode, "look") == 0)
+        build_look(win);
     else
         build_widgets(win);
     app_timer_add(app, 300, 0, log_positions, NULL);

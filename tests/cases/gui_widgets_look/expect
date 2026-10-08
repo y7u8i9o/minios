@@ -1,0 +1,5 @@
+widgettest: look ready
+gui_widgets_look: [0-9]+ antialiased corner pixels
+widgettest: done
+gui_widgets_look: ok
+TEST PASS

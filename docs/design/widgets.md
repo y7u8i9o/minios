@@ -68,6 +68,39 @@ one keystroke.
 The counter `text_shapes` shows no shaping of the same text twice in a
 paint, so the plan's cache of shaped text is not added.
 
+## Metrics and shapes (K4)
+
+The theme has the metrics `TM_RADIUS` (6), `TM_ICON` (16), `TM_ROW_PAD`
+(6) and `TM_INDENT` (16) at scale 100. `theme_scale_px(t, px)` scales the
+remaining sizes, such as the padding of text fields, the arrows of combo
+boxes and spinners, the slider thumb, the tab and menu padding, the
+divider of split panes, the table header, the colour field and the
+minimum thumb of scroll bars. All of them follow `ui_scale`. The colours
+`TC_BUTTON_CHECKED` and the header colours of the client side
+decorations (`TC_HEADER` to `TC_HEADER_BUTTON_BACKDROP`) are part of the
+theme. `csd.c` takes its colours from the theme of the application.
+
+`paint.c` draws the antialiased shapes. No widget and no program contains
+shape code of its own.
+
+| Function | Shape |
+|---|---|
+| `painter_round_rect(p, x, y, w, h, r, fill, border)` | rounded rectangle, corners from `pixel_corner_table` |
+| `painter_rounded` | the same with the theme radius |
+| `painter_disc`, `painter_ring` | disc and ring from `pixel_disc_table` |
+| `painter_stroke` | polyline with the coverage of the distance from the line |
+| `painter_check`, `painter_chevron` | check mark and chevron on `painter_stroke` |
+| `painter_fill_alpha` | translucent fill |
+| `painter_focus_ring` | rounded ring in the accent colour |
+
+The shapes are drawn in device pixels, so that edges at scale 2 are
+sharp. `screenshot` draws its discs and rounded rectangles with these
+functions. `lib/libgui/tests/test_paint.c` compares corners with the
+table at scale 1 and 2, checks the symmetry of chevrons, the extent of
+the check mark and the end points of a stroke, and the metrics at
+`ui_scale` 150. The boot case `gui_widgets_look` finds an antialiased
+pixel at the corner of a text field and takes a screendump.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

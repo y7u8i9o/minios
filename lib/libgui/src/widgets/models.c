@@ -8,8 +8,6 @@
 #include <unistd.h>
 #include "../intmap.h"
 
-#define INDENT 16
-#define HEADER_H 24
 
 struct view {
     struct widget w;
@@ -31,9 +29,22 @@ struct view {
     int drop_row;               /* outlined drop target: a row, -1 the view, -2 none */
 };
 
-#define ICON_W 20
 
-static int line_h(const struct widget *w) { return widget_theme(w)->font->height + 6; }
+static int line_h(const struct widget *w)
+{
+    const struct theme *t = widget_theme(w);
+    return t->font->height + theme_px(t, TM_ROW_PAD);
+}
+
+/* The indentation of a tree level and the width of an icon column. */
+static int indent(const struct widget *w) { return theme_px(widget_theme(w), TM_INDENT); }
+static int icon_w(const struct widget *w) { return theme_px(widget_theme(w), TM_ICON) + 4; }
+
+/* The height of the header row of a table, 0 for a tree view. */
+static int header_h(const struct view *v)
+{
+    return v->header ? theme_scale_px(widget_theme(&v->w), 24) : 0;
+}
 
 static int is_expanded(struct view *v, int row)
 {
@@ -80,7 +91,7 @@ static void refresh(struct view *v)
 static int rows_visible(struct view *v)
 {
     int lh = line_h(&v->w);
-    return (v->w.h - 2 - (v->header ? HEADER_H : 0)) / lh;
+    return (v->w.h - 2 - (header_h(v))) / lh;
 }
 
 static int flat_index_of(struct view *v, int row)
@@ -91,7 +102,7 @@ static int flat_index_of(struct view *v, int row)
 /* The rectangle of the rows below the header and left of the track. */
 static struct rect rows_rect(struct view *v)
 {
-    int top = v->header ? HEADER_H : 0, rows = rows_visible(v);
+    int top = header_h(v), rows = rows_visible(v);
     int sbw = v->nflat > rows ? theme_px(widget_theme(&v->w), TM_SCROLLBAR) : 0;
     return (struct rect){ 1, 1 + top, v->w.w - 2 - sbw, v->w.h - 2 - top };
 }
@@ -143,25 +154,25 @@ static void view_paint(struct widget *w, struct painter *p)
     const struct theme *t = p->theme;
     int lh = line_h(w), rows = rows_visible(v);
     int sbw = v->nflat > rows ? theme_px(t, TM_SCROLLBAR) : 0;
-    int top = v->header ? HEADER_H : 0;
+    int top = header_h(v);
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
     painter_frame(p, 0, 0, w->w, w->h, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     char buf[256];
     if (v->header) {
-        painter_push(p, 1, 1, w->w - 2 - sbw, HEADER_H);
-        painter_fill(p, 0, 0, w->w, HEADER_H, t->color[TC_WINDOW]);
+        painter_push(p, 1, 1, w->w - 2 - sbw, header_h(v));
+        painter_fill(p, 0, 0, w->w, header_h(v), t->color[TC_WINDOW]);
         int x = 0;
         for (int c = 0; c < v->ncols; c++) {
             const char *hd = v->m && v->m->header ? v->m->header(v->m, c) : "";
-            painter_push(p, x, 0, v->widths[c], HEADER_H);
-            painter_text(p, 4, (HEADER_H - painter_text_height(p)) / 2, hd ? hd : "", t->color[TC_TEXT]);
+            painter_push(p, x, 0, v->widths[c], header_h(v));
+            painter_text(p, 4, (header_h(v) - painter_text_height(p)) / 2, hd ? hd : "", t->color[TC_TEXT]);
             if (c == v->sort_col)
-                painter_text(p, v->widths[c] - 14, (HEADER_H - painter_text_height(p)) / 2, v->sort_desc ? "v" : "^", t->color[TC_TEXT]);
+                painter_text(p, v->widths[c] - 14, (header_h(v) - painter_text_height(p)) / 2, v->sort_desc ? "v" : "^", t->color[TC_TEXT]);
             painter_pop(p);
             x += v->widths[c];
-            painter_line(p, x - 1, 0, x - 1, HEADER_H - 1, t->color[TC_BORDER]);
+            painter_line(p, x - 1, 0, x - 1, header_h(v) - 1, t->color[TC_BORDER]);
         }
-        painter_line(p, 0, HEADER_H - 1, w->w, HEADER_H - 1, t->color[TC_BORDER]);
+        painter_line(p, 0, header_h(v) - 1, w->w, header_h(v) - 1, t->color[TC_BORDER]);
         painter_pop(p);
     }
     painter_push(p, 1, 1 + top, w->w - 2 - sbw, w->h - 2 - top);
@@ -185,17 +196,17 @@ static void view_paint(struct widget *w, struct painter *p)
                 int tx = 4;
                 if (c == 0 && icon) {
                     painter_icon(p, 4, (lh - image_lh(icon)) / 2, icon, 0);
-                    tx += ICON_W;
+                    tx += icon_w(w);
                 }
                 painter_text(p, tx, ty - y, s ? s : "", fg);
                 painter_pop(p);
                 x += v->widths[c];
             }
         } else {
-            int x = 4 + v->depth[idx] * INDENT;
+            int x = 4 + v->depth[idx] * indent(w);
             if (icon) {
-                painter_icon(p, x + INDENT, y + (lh - image_lh(icon)) / 2, icon, 0);
-                x += ICON_W;
+                painter_icon(p, x + indent(w), y + (lh - image_lh(icon)) / 2, icon, 0);
+                x += icon_w(w);
             }
             if (v->m->rows(v->m, row) > 0) {
                 int ex = is_expanded(v, row);
@@ -208,7 +219,7 @@ static void view_paint(struct widget *w, struct painter *p)
                 }
             }
             const char *s = v->m->cell(v->m, row, 0, buf, sizeof buf);
-            painter_text(p, x + INDENT, ty, s ? s : "", fg);
+            painter_text(p, x + indent(w), ty, s ? s : "", fg);
         }
     }
     painter_pop(p);
@@ -231,7 +242,7 @@ static void view_paint(struct widget *w, struct painter *p)
 /* The row id under a local position, or -1 below the rows and in the header. */
 static int row_at_y(struct view *v, int y)
 {
-    int top = v->header ? HEADER_H : 0;
+    int top = header_h(v);
     if (y < top + 1)
         return -1;
     int idx = v->scroll + (y - 1 - top) / line_h(&v->w);
@@ -286,7 +297,7 @@ static void toggle_expand(struct view *v, int row)
 static int track_event(struct view *v, struct event *e)
 {
     struct widget *w = &v->w;
-    int rows = rows_visible(v), top = v->header ? HEADER_H : 0;
+    int rows = rows_visible(v), top = header_h(v);
     int sbw = v->nflat > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
     int before = v->scroll;
     struct rect track = { w->w - sbw, top, sbw, w->h - top };
@@ -301,7 +312,7 @@ static int view_event(struct widget *w, struct event *e)
 {
     struct view *v = (struct view *)w;
     int lh = line_h(w), rows = rows_visible(v);
-    int top = v->header ? HEADER_H : 0;
+    int top = header_h(v);
     switch (e->type) {
     case EV_MOUSE_DOWN: {
         if (e->button & 2) {
@@ -317,7 +328,7 @@ static int view_event(struct widget *w, struct event *e)
             return 0;
         if (track_event(v, e))
             return 1;
-        if (v->header && e->y < HEADER_H + 1) {
+        if (v->header && e->y < header_h(v) + 1) {
             int x = 1;
             for (int c = 0; c < v->ncols; c++) {
                 int right = x + v->widths[c];
@@ -345,8 +356,8 @@ static int view_event(struct widget *w, struct event *e)
         if (idx < 0 || idx >= v->nflat)
             return 1;
         if (!v->header) {
-            int ex = 4 + v->depth[idx] * INDENT;
-            if (e->x - 1 >= ex && e->x - 1 < ex + INDENT && v->m->rows(v->m, v->flat[idx]) > 0) {
+            int ex = 4 + v->depth[idx] * indent(w);
+            if (e->x - 1 >= ex && e->x - 1 < ex + indent(w) && v->m->rows(v->m, v->flat[idx]) > 0) {
                 toggle_expand(v, v->flat[idx]);
                 return 1;
             }
@@ -516,7 +527,7 @@ int view_row_rect(struct widget *w, int row, struct rect *r)
         return 0;
     int lh = line_h(w);
     r->x = 1;
-    r->y = 1 + (v->header ? HEADER_H : 0) + (idx - v->scroll) * lh;
+    r->y = 1 + (header_h(v)) + (idx - v->scroll) * lh;
     r->w = w->w - 2;
     r->h = lh;
     return 1;

@@ -4,6 +4,7 @@
 #include <gui/pixel.h>
 #include <gui/utf8.h>
 #include <string.h>
+#include <math.h>
 
 void painter_init_scaled(struct painter *p, struct surface *s, const struct theme *theme, int scale)
 {
@@ -128,79 +129,178 @@ void painter_line(struct painter *p, int x0, int y0, int x1, int y1, uint32_t co
     }
 }
 
-static int isqrt(int n)
+/* The pixel at (x, y) of the view blended with color at coverage a. */
+static void blend_at(struct surface *v, int x, int y, uint32_t color, uint32_t a)
 {
-    int r = 0;
-    while ((r + 1) * (r + 1) <= n)
-        r++;
-    return r;
+    if (a == 0 || x < 0 || y < 0 || x >= v->width || y >= v->height)
+        return;
+    uint32_t *d = v->pixels + (size_t)y * v->stride + x;
+    *d = a >= 255 ? color : pixel_blend(*d, color, a);
 }
 
-/* Pixels left out at both ends of row i (from the top or the bottom) of
- * a corner of radius r: the circle's chord at the row's centre. */
-static int corner_cut(int r, int i)
+/* A rounded rectangle in device pixels of the view: X, Y, W, H, the
+ * radius R and the border width B. The straight parts are filled
+ * directly. The corner squares take their coverage from the tables. */
+static void round_rect(struct surface *v, int X, int Y, int W, int H, int R, int B, uint32_t fill, uint32_t border)
 {
-    int dy = 2 * r - 2 * i - 1;                 /* twice the distance to the centre */
-    int dx = isqrt(4 * r * r - dy * dy);        /* twice the half chord */
-    int cut = r - (dx + 1) / 2;
-    return cut < 0 ? 0 : cut > r ? r : cut;
-}
-
-/* Filled rounded rectangle without a border, in device pixels. */
-static void rounded_fill(struct surface *v, int x, int y, int w, int h, int r, uint32_t fill)
-{
-    if (r > w / 2) r = w / 2;
-    if (r > h / 2) r = h / 2;
-    if (r < 0) r = 0;
-    gfx_fill_rect(v, x + r, y, w - 2 * r, h, fill);
-    gfx_fill_rect(v, x, y + r, r, h - 2 * r, fill);
-    gfx_fill_rect(v, x + w - r, y + r, r, h - 2 * r, fill);
-    for (int i = 0; i < r; i++) {
-        int cut = corner_cut(r, i);
-        gfx_hline(v, x + cut, y + i, w - 2 * cut, fill);
-        gfx_hline(v, x + cut, y + h - 1 - i, w - 2 * cut, fill);
+    if (W <= 0 || H <= 0)
+        return;
+    if (R > W / 2) R = W / 2;
+    if (R > H / 2) R = H / 2;
+    if (R < 0) R = 0;
+    if (border == PAINTER_NONE)
+        B = 0;
+    int Ri = R - B > 0 ? R - B : 0;
+    /* The straight parts: the inside without the corner squares, then the
+     * edges of the border. */
+    if (fill != PAINTER_NONE) {
+        gfx_fill_rect(v, X + B, Y + R, W - 2 * B, H - 2 * R, fill);
+        gfx_fill_rect(v, X + R, Y + B, W - 2 * R, R - B, fill);
+        gfx_fill_rect(v, X + R, Y + H - R, W - 2 * R, R - B, fill);
     }
+    if (B) {
+        gfx_fill_rect(v, X + R, Y, W - 2 * R, B, border);
+        gfx_fill_rect(v, X + R, Y + H - B, W - 2 * R, B, border);
+        gfx_fill_rect(v, X, Y + R, B, H - 2 * R, border);
+        gfx_fill_rect(v, X + W - B, Y + R, B, H - 2 * R, border);
+    }
+    if (!R)
+        return;
+    const uint8_t *outer = pixel_corner_table(R), *inner = Ri ? pixel_corner_table(Ri) : NULL;
+    int corner_x[2] = { X, X + W - R }, corner_y[2] = { Y, Y + H - R };
+    for (int cy = 0; cy < 2; cy++)
+        for (int cx = 0; cx < 2; cx++)
+            for (int y = corner_y[cy]; y < corner_y[cy] + R; y++)
+                for (int x = corner_x[cx]; x < corner_x[cx] + R; x++) {
+                    uint32_t co = pixel_round_rect_coverage(outer, R, X, Y, W, H, 15, x, y);
+                    uint32_t ci = B ? pixel_round_rect_coverage(inner, Ri, X + B, Y + B, W - 2 * B, H - 2 * B, 15, x, y)
+                                    : co;
+                    if (B && fill == PAINTER_NONE) {
+                        blend_at(v, x, y, border, co * (255 - ci) / 255);
+                        continue;
+                    }
+                    if (B)
+                        blend_at(v, x, y, border, co);
+                    if (fill != PAINTER_NONE)
+                        blend_at(v, x, y, fill, ci);
+                }
+}
+
+void painter_round_rect(struct painter *p, int x, int y, int w, int h, int r, uint32_t fill, uint32_t border)
+{
+    int dx, dy, s = p->scale;
+    struct surface v = view(p, &dx, &dy);
+    if (v.width <= 0 || v.height <= 0)
+        return;
+    round_rect(&v, x * s + dx, y * s + dy, w * s, h * s, r * s, s, fill, border);
 }
 
 void painter_rounded(struct painter *p, int x, int y, int w, int h, uint32_t fill, uint32_t border)
 {
-    int r = theme_px(p->theme, TM_RADIUS);
-    if (r > w / 2) r = w / 2;
-    if (r > h / 2) r = h / 2;
+    painter_round_rect(p, x, y, w, h, theme_px(p->theme, TM_RADIUS), fill, border);
+}
+
+void painter_disc(struct painter *p, int x, int y, int size, uint32_t color)
+{
     int dx, dy, s = p->scale;
     struct surface v = view(p, &dx, &dy);
-    if (s > 1) {
-        /* The border is s pixels: the shape in the border colour, then
-         * the inside inset by s. */
-        int X = x * s + dx, Y = y * s + dy, W = w * s, H = h * s, R = r * s;
-        if (border != 0xffffffffu) {
-            rounded_fill(&v, X, Y, W, H, R, border);
-            rounded_fill(&v, X + s, Y + s, W - 2 * s, H - 2 * s, R - s, fill);
-        } else {
-            rounded_fill(&v, X, Y, W, H, R, fill);
-        }
+    if (v.width <= 0 || v.height <= 0)
         return;
+    gfx_disc(&v, x * s + dx, y * s + dy, size * s, 0, color, NULL);
+}
+
+void painter_ring(struct painter *p, int x, int y, int size, int width, uint32_t color)
+{
+    int dx, dy, s = p->scale, S = size * s;
+    struct surface v = view(p, &dx, &dy);
+    const uint8_t *outer = pixel_disc_table(S, 0), *inner = pixel_disc_table(S, 2 * width * s);
+    if (v.width <= 0 || v.height <= 0 || !outer || !inner)
+        return;
+    int X = x * s + dx, Y = y * s + dy;
+    for (int j = 0; j < S; j++)
+        for (int i = 0; i < S; i++)
+            blend_at(&v, X + i, Y + j, color, (uint32_t)outer[j * S + i] * (255 - inner[j * S + i]) / 255);
+}
+
+/* The distance of the point (px, py) from the segment from (ax, ay) to
+ * (bx, by). */
+static float segment_distance(float px, float py, float ax, float ay, float bx, float by)
+{
+    float vx = bx - ax, vy = by - ay, wx = px - ax, wy = py - ay;
+    float len2 = vx * vx + vy * vy, t = len2 > 0 ? (wx * vx + wy * vy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    float ex = wx - t * vx, ey = wy - t * vy;
+    return sqrtf(ex * ex + ey * ey);
+}
+
+/* Each device pixel near the line takes the coverage width / 2 + 0.5 -
+ * distance of its centre, limited to 0 and 1. */
+void painter_stroke(struct painter *p, const float *xy, int n, float width, uint32_t color)
+{
+    int dx, dy, s = p->scale;
+    struct surface v = view(p, &dx, &dy);
+    if (v.width <= 0 || v.height <= 0 || n < 2)
+        return;
+    float half = width * (float)s / 2;
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+    for (int i = 0; i < n; i++) {
+        float px = xy[2 * i] * (float)s + (float)dx, py = xy[2 * i + 1] * (float)s + (float)dy;
+        x0 = px < x0 ? px : x0;
+        y0 = py < y0 ? py : y0;
+        x1 = px > x1 ? px : x1;
+        y1 = py > y1 ? py : y1;
     }
-    /* Fill the inner cross, then the corners row by row. */
-    gfx_fill_rect(&v, x + dx + r, y + dy, w - 2 * r, h, fill);
-    gfx_fill_rect(&v, x + dx, y + dy + r, r, h - 2 * r, fill);
-    gfx_fill_rect(&v, x + dx + w - r, y + dy + r, r, h - 2 * r, fill);
-    for (int i = 0; i < r; i++) {
-        int cut = corner_cut(r, i);
-        gfx_hline(&v, x + dx + cut, y + dy + i, w - 2 * cut, fill);
-        gfx_hline(&v, x + dx + cut, y + dy + h - 1 - i, w - 2 * cut, fill);
-        if (border != 0xffffffffu) {
-            v.pixels[(size_t)(y + dy + i) * v.stride + x + dx + cut] = border;
-            v.pixels[(size_t)(y + dy + i) * v.stride + x + dx + w - 1 - cut] = border;
-            v.pixels[(size_t)(y + dy + h - 1 - i) * v.stride + x + dx + cut] = border;
-            v.pixels[(size_t)(y + dy + h - 1 - i) * v.stride + x + dx + w - 1 - cut] = border;
+    int ix0 = (int)floorf(x0 - half - 1), iy0 = (int)floorf(y0 - half - 1);
+    int ix1 = (int)ceilf(x1 + half + 1), iy1 = (int)ceilf(y1 + half + 1);
+    for (int y = iy0 < 0 ? 0 : iy0; y <= iy1 && y < v.height; y++)
+        for (int x = ix0 < 0 ? 0 : ix0; x <= ix1 && x < v.width; x++) {
+            float d = 1e9f;
+            for (int i = 0; i + 1 < n; i++) {
+                float e = segment_distance((float)x + 0.5f, (float)y + 0.5f, xy[2 * i] * (float)s + (float)dx,
+                                           xy[2 * i + 1] * (float)s + (float)dy, xy[2 * i + 2] * (float)s + (float)dx,
+                                           xy[2 * i + 3] * (float)s + (float)dy);
+                d = e < d ? e : d;
+            }
+            float c = half + 0.5f - d;
+            if (c > 0)
+                blend_at(&v, x, y, color, c >= 1 ? 255 : (uint32_t)(c * 255 + 0.5f));
         }
+}
+
+void painter_check(struct painter *p, int x, int y, int size, uint32_t color)
+{
+    float k = (float)size;
+    float xy[6] = { x + 0.2f * k, y + 0.52f * k, x + 0.42f * k, y + 0.74f * k, x + 0.8f * k, y + 0.28f * k };
+    painter_stroke(p, xy, 3, k / 7 > 1.5f ? k / 7 : 1.5f, color);
+}
+
+void painter_chevron(struct painter *p, int x, int y, int size, enum painter_dir dir, uint32_t color)
+{
+    float k = (float)size, a = 0.3f * k, b = 0.7f * k, c = 0.5f * k, lo = 0.38f * k, hi = 0.62f * k;
+    float xy[6];
+    switch (dir) {
+    case PAINTER_DOWN: xy[0] = a; xy[1] = lo; xy[2] = c; xy[3] = hi; xy[4] = b; xy[5] = lo; break;
+    case PAINTER_UP: xy[0] = a; xy[1] = hi; xy[2] = c; xy[3] = lo; xy[4] = b; xy[5] = hi; break;
+    case PAINTER_LEFT: xy[0] = hi; xy[1] = a; xy[2] = lo; xy[3] = c; xy[4] = hi; xy[5] = b; break;
+    default: xy[0] = lo; xy[1] = a; xy[2] = hi; xy[3] = c; xy[4] = lo; xy[5] = b; break;
     }
-    if (border != 0xffffffffu) {
-        gfx_hline(&v, x + dx + r, y + dy, w - 2 * r, border);
-        gfx_hline(&v, x + dx + r, y + dy + h - 1, w - 2 * r, border);
-        gfx_vline(&v, x + dx, y + dy + r, h - 2 * r, border);
-        gfx_vline(&v, x + dx + w - 1, y + dy + r, h - 2 * r, border);
+    for (int i = 0; i < 6; i += 2) {
+        xy[i] += (float)x;
+        xy[i + 1] += (float)y;
+    }
+    painter_stroke(p, xy, 3, k / 9 > 1.5f ? k / 9 : 1.5f, color);
+}
+
+void painter_fill_alpha(struct painter *p, int x, int y, int w, int h, uint32_t color, int alpha)
+{
+    int dx, dy, s = p->scale;
+    struct surface v = view(p, &dx, &dy);
+    struct rect r = rect_intersect((struct rect){ x * s + dx, y * s + dy, w * s, h * s },
+                                   (struct rect){ 0, 0, v.width, v.height });
+    for (int j = 0; j < r.h; j++) {
+        uint32_t *row = v.pixels + (size_t)(r.y + j) * v.stride + r.x;
+        for (int i = 0; i < r.w; i++)
+            row[i] = pixel_blend(row[i], color, (uint32_t)alpha);
     }
 }
 
@@ -327,7 +427,7 @@ void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, ui
 
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h)
 {
-    painter_frame(p, x, y, w, h, p->theme->color[TC_ACCENT]);
+    painter_round_rect(p, x, y, w, h, theme_px(p->theme, TM_RADIUS) - 1, PAINTER_NONE, p->theme->color[TC_ACCENT]);
 }
 
 void painter_avatar(struct painter *p, int x, int y, int size, const char *name, const char *label)

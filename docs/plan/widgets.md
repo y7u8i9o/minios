@@ -283,7 +283,7 @@ plus one. One keystroke rebuilds the rows of one line. The boot cases
 Document: `docs/design/graphics-performance.md`,
 `docs/design/framework.md` (partial redraw).
 
-### K4. Theme metrics and antialiased shapes
+### K4. Theme metrics and antialiased shapes (completed 2026-10-09)
 
 Built:
 

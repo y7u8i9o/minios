@@ -460,6 +460,36 @@ static void test_gui_widgets_scale(void)
 }
 KTEST_DEFINE("gui_widgets_scale", test_gui_widgets_scale);
 
+/* K4 of docs/plan/widgets.md: the corners of controls are antialiased.
+ * widgettest look shows a text field at (46,66) of the screen. A pixel of
+ * its top left corner has a grey between the border 0xb0 and the window
+ * 0xeb. The QMP script takes a screendump for a visual check. */
+static void test_gui_widgets_look(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    struct proc *srv = start_server();
+    struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "look", NULL },
+                                       (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start widgettest look");
+    ktest_wait_idle(1500);
+    int partial = 0;
+    for (int y = 66; y < 72; y++)
+        for (int x = 46; x < 52; x++) {
+            uint32_t v = pixel(x, y), g = v & 0xff;
+            if (g > 0xb0 && g < 0xeb && (v >> 8 & 0xff) == g && (v >> 16 & 0xff) == g)
+                partial++;
+        }
+    ktest_assert(partial > 0, "no antialiased pixel at the corner of the field");
+    kprintf("gui_widgets_look: %d antialiased corner pixels\n", partial);
+    sleep_ms(1500);                     /* the screendump of the QMP script */
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "widgettest status 0x%x", status);
+    stop_server(srv);
+    kprintf("gui_widgets_look: ok\n");
+}
+KTEST_DEFINE("gui_widgets_look", test_gui_widgets_look);
+
 /* M22: combo box popup, spinner, slider, tabs. Window 400x300 at (40,60):
  * combo 6..32, spinner 38..64, slider 70..96, tabs from 102. */
 static void test_gui_controls(void)

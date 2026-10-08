@@ -7,7 +7,11 @@
 #include <string.h>
 #include "editmenu.h"
 
-#define PAD 4
+/* The space between the frame and the text. */
+static int pad(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 4);
+}
 
 struct textfield {
     struct widget w;
@@ -34,10 +38,10 @@ static void changed(struct textfield *f)
 static const char *shown(struct textfield *f);
 
 /* The x of the caret before the byte offset at, in the coordinates of the
- * field. The text starts at PAD - scroll_x. */
+ * field. The text starts at the padding minus scroll_x. */
 static int caret_x(struct textfield *f, int at)
 {
-    return PAD - f->scroll_x + widget_text_width(&f->w, NULL, shown(f), at);
+    return pad(&f->w) - f->scroll_x + widget_text_width(&f->w, NULL, shown(f), at);
 }
 
 /* The state before an edit or a caret move, for the partial repaint. */
@@ -144,7 +148,7 @@ static void scroll_to_cursor(struct textfield *f)
 {
     const char *text = shown(f);
     int cx = widget_text_width(&f->w, NULL, text, f->cursor);
-    int avail = f->w.w - 2 * PAD, end = widget_text_width(&f->w, NULL, text, -1) - avail + 1;
+    int avail = f->w.w - 2 * pad(&f->w), end = widget_text_width(&f->w, NULL, text, -1) - avail + 1;
     if (cx < f->scroll_x) f->scroll_x = cx;
     if (cx > f->scroll_x + avail - 1) f->scroll_x = cx - avail + 1;
     if (f->scroll_x > end) f->scroll_x = end;
@@ -169,7 +173,7 @@ static void textfield_paint(struct widget *w, struct painter *p)
     painter_push(p, 1, 1, w->w - 2, w->h - 2);
     const char *text = shown(f);
     int th = painter_text_height(p);
-    int ty = (w->h - 2 - th) / 2, tx = PAD - 1 - f->scroll_x;
+    int ty = (w->h - 2 - th) / 2, tx = pad(&f->w) - 1 - f->scroll_x;
     if (f->sel >= 0 && f->sel != f->cursor) {
         int a, b;
         sel_range(f, &a, &b);
@@ -193,7 +197,7 @@ static void textfield_paint(struct widget *w, struct painter *p)
 
 static int pos_at(struct textfield *f, int px)
 {
-    int rel = px - PAD + f->scroll_x;
+    int rel = px - pad(&f->w) + f->scroll_x;
     return widget_text_index(&f->w, NULL, shown(f), -1, rel < 0 ? 0 : rel);
 }
 

@@ -5,7 +5,11 @@
 #include <string.h>
 #include "../intl.h"
 
-#define ARROW_W 18
+/* The width of the arrow part of combo boxes and spinners. */
+static int arrow_w(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 18);
+}
 
 /* ---- combo box ---- */
 
@@ -25,8 +29,8 @@ static void combo_measure(struct widget *w, struct size_hint *h)
         if (iw > tw)
             tw = iw;
     }
-    h->pref_w = tw + ARROW_W + 12;
-    h->min_w = ARROW_W + 20;
+    h->pref_w = tw + arrow_w(w) + 12;
+    h->min_w = arrow_w(w) + 20;
     h->pref_h = h->min_h = theme_px(t, TM_CONTROL_H);
 }
 
@@ -35,10 +39,10 @@ static void combo_paint(struct widget *w, struct painter *p)
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_FIELD], t->color[w->focused ? TC_ACCENT : TC_BORDER]);
-    painter_push(p, 1, 1, w->w - ARROW_W - 1, w->h - 2);
+    painter_push(p, 1, 1, w->w - arrow_w(w) - 1, w->h - 2);
     painter_text(p, 4, (w->h - 2 - painter_text_height(p)) / 2, widget_text(w), t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     painter_pop(p);
-    int ax = w->w - ARROW_W + 4, ay = w->h / 2 - 2;
+    int ax = w->w - arrow_w(w) + 4, ay = w->h / 2 - 2;
     for (int i = 0; i < 5; i++)
         painter_line(p, ax + i, ay + i, ax + 9 - i, ay + i, t->color[TC_TEXT]);
 }
@@ -183,7 +187,7 @@ static void spinner_paint(struct widget *w, struct painter *p)
     char s[16];
     snprintf(s, sizeof s, "%d", w->value);
     painter_text(p, 4, (w->h - painter_text_height(p)) / 2, s, t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
-    int ax = w->w - ARROW_W;
+    int ax = w->w - arrow_w(w);
     painter_line(p, ax, 1, ax, w->h - 2, t->color[TC_BORDER]);
     painter_line(p, ax, w->h / 2, w->w - 2, w->h / 2, t->color[TC_BORDER]);
     for (int i = 0; i < 4; i++) {
@@ -198,7 +202,7 @@ static int spinner_event(struct widget *w, struct event *e)
     case EV_MOUSE_DOWN:
         if (!(e->button & 1))
             return 0;
-        if (e->x >= w->w - ARROW_W)
+        if (e->x >= w->w - arrow_w(w))
             spinner_set(w, w->value + (e->y < w->h / 2 ? 1 : -1));
         return 1;
     case EV_MOUSE_WHEEL:
@@ -234,7 +238,10 @@ struct widget *spinner_new(struct widget *parent, int min, int max, int value)
 
 /* ---- slider ---- */
 
-#define THUMB_W 10
+static int thumb_w(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 10);
+}
 
 static void slider_measure(struct widget *w, struct size_hint *h)
 {
@@ -245,7 +252,7 @@ static void slider_measure(struct widget *w, struct size_hint *h)
 
 static int slider_thumb_x(const struct widget *w)
 {
-    int span = w->w - THUMB_W;
+    int span = w->w - thumb_w(w);
     return w->max > w->min ? span * (w->value - w->min) / (w->max - w->min) : 0;
 }
 
@@ -254,20 +261,20 @@ static void slider_paint(struct widget *w, struct painter *p)
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     int cy = w->h / 2;
-    painter_fill(p, THUMB_W / 2, cy - 2, w->w - THUMB_W, 4, t->color[TC_TRACK]);
+    painter_fill(p, thumb_w(w) / 2, cy - 2, w->w - thumb_w(w), 4, t->color[TC_TRACK]);
     int tx = slider_thumb_x(w);
-    painter_fill(p, THUMB_W / 2, cy - 2, tx, 4, t->color[TC_ACCENT]);
-    painter_rounded(p, tx, cy - 8, THUMB_W, 16, w->pressed ? t->color[TC_BUTTON_PRESSED] : t->color[TC_THUMB], 0xffffffffu);
+    painter_fill(p, thumb_w(w) / 2, cy - 2, tx, 4, t->color[TC_ACCENT]);
+    painter_rounded(p, tx, cy - 8, thumb_w(w), 16, w->pressed ? t->color[TC_BUTTON_PRESSED] : t->color[TC_THUMB], 0xffffffffu);
     if (w->focused)
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
 
 static void slider_set_from_x(struct widget *w, int x)
 {
-    int span = w->w - THUMB_W;
+    int span = w->w - thumb_w(w);
     if (span <= 0)
         return;
-    int pos = x - THUMB_W / 2;
+    int pos = x - thumb_w(w) / 2;
     if (pos < 0) pos = 0;
     if (pos > span) pos = span;
     spinner_set(w, w->min + (pos * (w->max - w->min) + span / 2) / span);

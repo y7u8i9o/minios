@@ -9,16 +9,29 @@
 #include <gui/pixel.h>
 #include "csd.h"
 
-#define HEADER_BG          0x00ebebeb
-#define HEADER_BG_BACKDROP 0x00fafafa
-#define HEADER_LINE        0x00d4d4d4
-#define HEADER_LINE_BACKDROP 0x00e1e1e1
-#define TITLE_FG           0x00323232
-#define TITLE_FG_BACKDROP  0x00929595
-#define BUTTON_BG          0x00d8d8d8
-#define BUTTON_BG_HOVER    0x00c9c9c9
-#define BUTTON_BG_BACKDROP 0x00e6e6e6
 #define TITLE_PX 13
+
+/* The colours of the chrome come from the theme of the application, or
+ * from the default theme before an application exists. */
+static const struct theme *chrome_colors;
+
+void csd_set_theme(const struct theme *t)
+{
+    chrome_colors = t;
+}
+
+static const struct theme *chrome_theme(void)
+{
+    static struct theme fallback;
+    static int ready;
+    if (chrome_colors)
+        return chrome_colors;
+    if (!ready) {
+        theme_init_default(&fallback);
+        ready = 1;
+    }
+    return &fallback;
+}
 
 int csd_margin(const struct csd *c)
 {
@@ -223,9 +236,10 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
     fonts();
     struct rect f = csd_frame(c, w, h);
     struct rect hdr = { f.x, f.y, f.w, CSD_HEADER };
-    uint32_t bg = c->active ? HEADER_BG : HEADER_BG_BACKDROP;
-    uint32_t line = c->active ? HEADER_LINE : HEADER_LINE_BACKDROP;
-    uint32_t fg = c->active ? TITLE_FG : TITLE_FG_BACKDROP;
+    const uint32_t *col = chrome_theme()->color;
+    uint32_t bg = col[c->active ? TC_HEADER : TC_HEADER_BACKDROP];
+    uint32_t line = col[c->active ? TC_HEADER_LINE : TC_HEADER_LINE_BACKDROP];
+    uint32_t fg = col[c->active ? TC_TITLE : TC_TITLE_BACKDROP];
     struct rect dh = rect_scale(hdr, S);
     struct painter p;
     painter_init_scaled(&p, buf, &csd_theme, S);
@@ -254,7 +268,7 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
     for (int n = 0; n < 3; n++) {
         struct rect b = button_rect(c, w, h, n);
         int zone = n == 0 ? CSD_CLOSE : n == 1 ? CSD_MAXIMIZE : CSD_MINIMIZE;
-        uint32_t bb = !c->active ? BUTTON_BG_BACKDROP : c->hover == zone ? BUTTON_BG_HOVER : BUTTON_BG;
+        uint32_t bb = col[!c->active ? TC_HEADER_BUTTON_BACKDROP : c->hover == zone ? TC_HEADER_BUTTON_HOVER : TC_HEADER_BUTTON];
         struct rect d = rect_scale(b, S);
         gfx_disc(buf, d.x, d.y, d.w, 2 * S, bb, &dh);
         int cx = b.x + b.w / 2, cy = b.y + b.h / 2;

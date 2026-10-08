@@ -1,0 +1,4 @@
+# A screendump of the controls for a visual check (K4 and K5 of
+# docs/plan/widgets.md).
+wait gui_widgets_look: [0-9]+ antialiased
+screendump look.ppm

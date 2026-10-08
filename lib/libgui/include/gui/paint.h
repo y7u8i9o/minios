@@ -33,8 +33,32 @@ void painter_push_clip(struct painter *p, int x, int y, int w, int h);
 void painter_fill(struct painter *p, int x, int y, int w, int h, uint32_t color);
 void painter_frame(struct painter *p, int x, int y, int w, int h, uint32_t color);
 void painter_line(struct painter *p, int x0, int y0, int x1, int y1, uint32_t color);
-/* Filled rounded rectangle with the theme radius. */
+/* The colour that paints nothing, for a fill or a border. */
+#define PAINTER_NONE 0xffffffffu
+/* A rectangle with corners of radius r logical pixels, antialiased from
+ * the coverage tables of gui/pixel.h. border is one logical pixel wide
+ * and lies inside the rectangle. fill or border may be PAINTER_NONE. */
+void painter_round_rect(struct painter *p, int x, int y, int w, int h, int r, uint32_t fill, uint32_t border);
+/* painter_round_rect with the theme radius. */
 void painter_rounded(struct painter *p, int x, int y, int w, int h, uint32_t fill, uint32_t border);
+/* An antialiased disc that fills the square of size by size at (x, y). */
+void painter_disc(struct painter *p, int x, int y, int size, uint32_t color);
+/* An antialiased ring in the square of size by size at (x, y): the disc
+ * without the disc that lies width pixels inside it. */
+void painter_ring(struct painter *p, int x, int y, int size, int width, uint32_t color);
+/* An antialiased polyline through the n points xy[2 * i], xy[2 * i + 1]
+ * in logical pixels, width logical pixels wide. (0, 0) is the top left
+ * corner of the local area, so a line along pixel centres has
+ * coordinates of the form k + 0.5. */
+void painter_stroke(struct painter *p, const float *xy, int n, float width, uint32_t color);
+/* A check mark in the square of size by size at (x, y). */
+void painter_check(struct painter *p, int x, int y, int size, uint32_t color);
+/* A chevron in the square of size by size at (x, y), pointing in the
+ * direction dir. */
+enum painter_dir { PAINTER_DOWN, PAINTER_UP, PAINTER_LEFT, PAINTER_RIGHT };
+void painter_chevron(struct painter *p, int x, int y, int size, enum painter_dir dir, uint32_t color);
+/* A fill of color with the opacity alpha (0 to 255) over the pixels. */
+void painter_fill_alpha(struct painter *p, int x, int y, int w, int h, uint32_t color, int alpha);
 void painter_text(struct painter *p, int x, int y, const char *text, uint32_t color);
 /* Text with an explicit font and background (0xffffffff: transparent). */
 void painter_text_font(struct painter *p, const struct font *f, int x, int y, const char *text, uint32_t fg, uint32_t bg);
@@ -63,6 +87,7 @@ int painter_text_index_font(const struct painter *p, const struct font *f, const
  * marker and underlines the mnemonic character. */
 int painter_mnemonic_strip(const char *text, char *buf, int size);
 void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, uint32_t color);
+/* A rounded ring in the accent colour around a focused control. */
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
 /* The avatar of an account: a rounded square of size by size in a colour
  * that the account name selects, with the first letter of label, which is

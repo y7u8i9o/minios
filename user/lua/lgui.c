@@ -1422,10 +1422,11 @@ static int h_remove(lua_State *L)
 static const char *const color_names[TC_COUNT] = {
     "window", "text", "text_disabled", "field", "selection", "selection_text",
     "accent", "border", "highlight", "button", "button_pressed", "track", "thumb",
-    "button_hover",
+    "button_hover", "button_checked", "header", "header_backdrop", "header_line", "header_line_backdrop", "title",
+    "title_backdrop", "header_button", "header_button_hover", "header_button_backdrop",
 };
 static const char *const metric_names[TM_COUNT] = {
-    "padding", "spacing", "border", "radius", "scrollbar", "font_px", "control_h",
+    "padding", "spacing", "border", "radius", "scrollbar", "font_px", "control_h", "icon", "row_pad", "indent",
 };
 
 /* app:theme(): the colours by name, the scaled metrics by name and the

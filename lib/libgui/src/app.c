@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <locale.h>
+#include "csd.h"
 #ifdef MINIOS_HOST
 #include <poll.h>
 #else
@@ -55,6 +56,7 @@ struct app *app_create(void)
     a->connected = 1;
     theme_init_default(&a->theme);
     theme_apply(&a->theme);
+    csd_set_theme(&a->theme);
     return a;
 }
 
@@ -88,6 +90,7 @@ void app_destroy(struct app *a)
         free(w);
         w = n;
     }
+    csd_set_theme(NULL);
     theme_release(&a->theme);
     if (a->connected)
         gui_disconnect();

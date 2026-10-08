@@ -7,9 +7,11 @@
 
 /* ---- the colour dialog ---- */
 
-#define FIELD_W 220
-#define FIELD_H 160
-#define STRIP_W 24
+/* The size of the field of saturation and value and the width of the hue
+ * strip. */
+static int field_w(const struct theme *t) { return theme_scale_px(t, 220); }
+static int field_h(const struct theme *t) { return theme_scale_px(t, 160); }
+static int strip_w(const struct theme *t) { return theme_scale_px(t, 24); }
 
 struct color_state {
     struct app *app;
@@ -49,7 +51,7 @@ static int on_field_paint(struct widget *w, void *args, void *arg)
 {
     struct color_state *c = arg;
     struct painter *p = ((struct sig_paint *)args)->p;
-    int s = p->scale, fw = FIELD_W * s, fh = FIELD_H * s;
+    int s = p->scale, fw = field_w(p->theme) * s, fh = field_h(p->theme) * s;
     if (c->field_img.scale != s) {
         free(c->field_img.pixels);
         c->field_img = (struct image){ fw, fh, malloc((size_t)fw * fh * 4), s };
@@ -65,7 +67,7 @@ static int on_field_paint(struct widget *w, void *args, void *arg)
         c->field_hue = c->h;
     }
     painter_image(p, 0, 0, &c->field_img);
-    int x = c->s * (FIELD_W - 1) / 255, y = (255 - c->v) * (FIELD_H - 1) / 255;
+    int x = c->s * (field_w(p->theme) - 1) / 255, y = (255 - c->v) * (field_h(p->theme) - 1) / 255;
     uint32_t ring = c->v > 128 ? 0x00000000 : 0x00ffffff;
     painter_frame(p, x - 4, y - 4, 9, 9, ring);
     painter_frame(p, 0, 0, w->w, w->h, p->theme->color[TC_BORDER]);
@@ -78,7 +80,8 @@ static int on_field_mouse(struct widget *w, void *args, void *arg)
     struct sig_click *e = args;
     if (!(e->button & 1))
         return 1;
-    set_hsv(c, c->h, e->x * 255 / (FIELD_W - 1), 255 - e->y * 255 / (FIELD_H - 1));
+    const struct theme *t = widget_theme(w);
+    set_hsv(c, c->h, e->x * 255 / (field_w(t) - 1), 255 - e->y * 255 / (field_h(t) - 1));
     return 1;
 }
 
@@ -159,18 +162,18 @@ int color_dialog(struct app *a, struct widget *parent, const char *title, uint32
     gfx_rgb_to_hsv(c.rgb, &c.h, &c.s, &c.v);
     const struct theme *t = app_theme(a);
     int pad = theme_px(t, TM_PADDING);
-    c.win = app_modal_window(a, parent ? parent : app_first_window(a), FIELD_W + STRIP_W + 4 * pad,
-                             FIELD_H + 2 * theme_px(t, TM_CONTROL_H) + 6 * pad, title);
+    c.win = app_modal_window(a, parent ? parent : app_first_window(a), field_w(t) + strip_w(t) + 4 * pad,
+                             field_h(t) + 2 * theme_px(t, TM_CONTROL_H) + 6 * pad, title);
     if (!c.win)
         return 0;
     struct widget *top = box_new(c.win, 0);
     c.field = canvas_new(top);
-    widget_set_hint(c.field, FIELD_W, FIELD_H);
+    widget_set_hint(c.field, field_w(t), field_h(t));
     widget_connect(c.field, "paint", on_field_paint, &c);
     widget_connect(c.field, "press", on_field_mouse, &c);
     widget_connect(c.field, "motion", on_field_mouse, &c);
     c.strip = canvas_new(top);
-    widget_set_hint(c.strip, STRIP_W, FIELD_H);
+    widget_set_hint(c.strip, strip_w(t), field_h(t));
     widget_connect(c.strip, "paint", on_strip_paint, &c);
     widget_connect(c.strip, "press", on_strip_mouse, &c);
     widget_connect(c.strip, "motion", on_strip_mouse, &c);

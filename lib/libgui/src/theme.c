@@ -24,13 +24,26 @@ void theme_init_default(struct theme *t)
     t->color[TC_BUTTON_PRESSED] = 0x00bcbcbc;
     t->color[TC_TRACK] = 0x00dedede;
     t->color[TC_THUMB] = 0x00a8a8a8;
+    t->color[TC_BUTTON_CHECKED] = 0x00c4d6ee;
+    t->color[TC_HEADER] = 0x00ebebeb;
+    t->color[TC_HEADER_BACKDROP] = 0x00fafafa;
+    t->color[TC_HEADER_LINE] = 0x00d4d4d4;
+    t->color[TC_HEADER_LINE_BACKDROP] = 0x00e1e1e1;
+    t->color[TC_TITLE] = 0x00323232;
+    t->color[TC_TITLE_BACKDROP] = 0x00929595;
+    t->color[TC_HEADER_BUTTON] = 0x00d8d8d8;
+    t->color[TC_HEADER_BUTTON_HOVER] = 0x00c9c9c9;
+    t->color[TC_HEADER_BUTTON_BACKDROP] = 0x00e6e6e6;
     t->metric[TM_PADDING] = 6;
     t->metric[TM_SPACING] = 6;
     t->metric[TM_BORDER] = 1;
-    t->metric[TM_RADIUS] = 5;
+    t->metric[TM_RADIUS] = 6;
     t->metric[TM_SCROLLBAR] = 14;
     t->metric[TM_FONT_PX] = 14;
     t->metric[TM_CONTROL_H] = 26;
+    t->metric[TM_ICON] = 16;
+    t->metric[TM_ROW_PAD] = 6;
+    t->metric[TM_INDENT] = 16;
     t->scale = 100;
     strlcpy(t->font_path, "/usr/share/fonts/DejaVuSans.ttf", sizeof t->font_path);
     strlcpy(t->fallback_path, "/usr/share/fonts/DejaVuSansMono.ttf", sizeof t->fallback_path);
@@ -83,7 +96,12 @@ void theme_read_conf(struct theme *t)
 
 int theme_px(const struct theme *t, enum theme_metric m)
 {
-    return (t->metric[m] * t->scale + 50) / 100;
+    return theme_scale_px(t, t->metric[m]);
+}
+
+int theme_scale_px(const struct theme *t, int px)
+{
+    return (px * t->scale + 50) / 100;
 }
 
 void theme_apply(struct theme *t)

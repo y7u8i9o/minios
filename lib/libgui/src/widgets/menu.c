@@ -5,8 +5,17 @@
 #include <string.h>
 #include "../intl.h"
 
-#define MENU_PAD 10
-#define ITEM_H_EXTRA 8
+/* The horizontal padding of titles and items, and the height of an item
+ * above the font height. */
+static int menu_pad(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 10);
+}
+
+static int item_extra(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 8);
+}
 
 /* ---- items and menus ---- */
 
@@ -40,10 +49,10 @@ static void item_measure(struct widget *w, struct size_hint *h)
     char accel[48], caption[256];
     accel_label(w, accel, sizeof accel);
     painter_mnemonic_strip(widget_text(w), caption, sizeof caption);
-    h->pref_w = widget_text_width(w, NULL, caption, -1) + 2 * MENU_PAD + 24;
+    h->pref_w = widget_text_width(w, NULL, caption, -1) + 2 * menu_pad(w) + 24;
     if (accel[0])
         h->pref_w += widget_text_width(w, NULL, accel, -1) + 24;
-    h->pref_h = h->min_h = t->font->height + ITEM_H_EXTRA;
+    h->pref_h = h->min_h = t->font->height + item_extra(w);
 }
 
 const struct widget_class menuitem_class = { "menuitem", sizeof(struct widget), item_measure, NULL, NULL, NULL, NULL };
@@ -97,17 +106,17 @@ static void dropdown_paint(struct widget *w, struct painter *p)
         } else {
             if (i == d->hover && it->enabled)
                 painter_fill(p, 1, y, w->w - 2, ih, t->color[TC_HIGHLIGHT]);
-            int x = MENU_PAD;
+            int x = menu_pad(w);
             if (it->icon) {
                 painter_icon(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon, !it->enabled);
                 x = 24;
             }
-            painter_mnemonic_text(p, x, y + ITEM_H_EXTRA / 2, widget_text(it),
+            painter_mnemonic_text(p, x, y + item_extra(w) / 2, widget_text(it),
                                   t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
             char accel[48];
             accel_label(it, accel, sizeof accel);
             if (accel[0] && d->accel_w)
-                painter_text(p, w->w - MENU_PAD - d->accel_w[i], y + ITEM_H_EXTRA / 2, accel, t->color[TC_TEXT_DISABLED]);
+                painter_text(p, w->w - menu_pad(w) - d->accel_w[i], y + item_extra(w) / 2, accel, t->color[TC_TEXT_DISABLED]);
         }
         y += ih;
     }
@@ -246,7 +255,7 @@ static void menubar_measure(struct widget *w, struct size_hint *h)
     for (struct widget *m = w->first; m; m = m->next) {
         char caption[256];
         painter_mnemonic_strip(widget_text(m), caption, sizeof caption);
-        widths[n] = widget_text_width(w, NULL, caption, -1) + 2 * MENU_PAD;
+        widths[n] = widget_text_width(w, NULL, caption, -1) + 2 * menu_pad(w);
         tw += widths[n++];
     }
     h->pref_w = tw;
@@ -264,7 +273,7 @@ static void menubar_paint(struct widget *w, struct painter *p)
         int tw = title_width(w, m);
         if (i == w->value)
             painter_fill(p, x, 0, tw, w->h - 1, t->color[TC_HIGHLIGHT]);
-        painter_mnemonic_text(p, x + MENU_PAD, 4, widget_text(m), t->color[TC_TEXT]);
+        painter_mnemonic_text(p, x + menu_pad(w), 4, widget_text(m), t->color[TC_TEXT]);
         x += tw;
     }
 }

@@ -157,10 +157,10 @@ static void test_scrollbar(struct app *a, const struct painter *p)
     window_paint(win);
     int sx, sy, off, len;
     widget_abs(sb, &sx, &sy);
-    CHECK(scrollbar_thumb(sb->h, 0, 100, 25, &off, &len) > 0, "the thumb can travel");
+    CHECK(scrollbar_thumb(app_theme(a), sb->h, 0, 100, 25, &off, &len) > 0, "the thumb can travel");
     int mid = (sx + sb->w / 2) * S, top = -1;
     for (int y = sy * S; y < (sy + sb->h) * S && top < 0; y++)
-        if (pixel(win, mid, y) == p->theme->color[TC_THUMB])
+        if (pixel(win, mid, y) != p->theme->color[TC_TRACK])
             top = y;
     CHECK(top == (sy + off) * S, "the painted thumb starts at %d, the geometry gives %d", top, (sy + off) * S);
     click(win, sx + sb->w / 2, sy + off);

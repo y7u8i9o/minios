@@ -339,49 +339,13 @@ static struct rect marks_extent(const struct ui *u, struct painter *p)
     }
 }
 
-/* Set a pixel of the window surface, blending coverage cov of 0..255. */
-static inline void put(struct surface *s, int x, int y, uint32_t c, int cov, struct rect clip)
-{
-    if (!rect_contains(clip, x, y) || cov <= 0)
-        return;
-    uint32_t *d = &s->pixels[(size_t)y * s->stride + x];
-    if (cov >= 255) {
-        *d = c;
-        return;
-    }
-    uint32_t v = *d, r = 0;
-    for (int sh = 0; sh < 24; sh += 8)
-        r |= (((v >> sh & 0xff) * (255 - (uint32_t)cov) + (c >> sh & 0xff) * (uint32_t)cov) / 255) << sh;
-    *d = r;
-}
-
 /* An antialiased disc of radius r logical pixels centred at (cx, cy),
  * with a ring of colour ring at its edge one logical pixel wide. */
-static void disc(struct surface *s, struct rect clip, int cx, int cy, int r, uint32_t fill, uint32_t ring)
+static void disc(struct painter *p, int cx, int cy, int r, uint32_t fill, uint32_t ring)
 {
-    int S = scale, CX = cx * S, CY = cy * S, R = r * S;
-    for (int y = CY - R - 1; y <= CY + R + 1; y++)
-        for (int x = CX - R - 1; x <= CX + R + 1; x++) {
-            /* Squared distance of the pixel centre in quarter pixels. */
-            long dx = 2 * (x - CX) + 1, dy = 2 * (y - CY) + 1, d2 = dx * dx + dy * dy;
-            long out = 2L * R, in = 2L * (R - S);
-            int cov = d2 <= (out - 1) * (out - 1) ? 255 : d2 >= (out + 1) * (out + 1) ? 0 :
-                      (int)(255 * ((out + 1) * (out + 1) - d2) / ((out + 1) * (out + 1) - (out - 1) * (out - 1)));
-            int core = d2 <= (in - 1) * (in - 1) ? 255 : d2 >= (in + 1) * (in + 1) ? 0 :
-                       (int)(255 * ((in + 1) * (in + 1) - d2) / ((in + 1) * (in + 1) - (in - 1) * (in - 1)));
-            put(s, x, y, ring, cov, clip);
-            put(s, x, y, fill, core, clip);
-        }
-}
-
-static void rounded(struct painter *p, struct rect r, int radius, uint32_t fill, uint32_t border)
-{
-    struct theme t = *p->theme;
-    t.metric[TM_RADIUS] = radius * 100 / (t.scale > 0 ? t.scale : 100);
-    const struct theme *retain = p->theme;
-    p->theme = &t;
-    painter_rounded(p, r.x, r.y, r.w, r.h, fill, border);
-    p->theme = retain;
+    painter_disc(p, cx - r, cy - r, 2 * r, ring);
+    if (fill != ring)
+        painter_disc(p, cx - r + 1, cy - r + 1, 2 * r - 2, fill);
 }
 
 static void frame(struct painter *p, struct rect r, int n, uint32_t c)
@@ -403,7 +367,8 @@ static void draw_toolbar(struct ui *u, struct painter *p)
 {
     static const char *const labels[3] = { N_("Selection"), N_("Screen"), N_("Window") };
     const uint32_t *c = p->theme->color;
-    rounded(p, bar_rect(u), 8, c[TC_WINDOW], c[TC_BORDER]);
+    struct rect bar = bar_rect(u);
+    painter_round_rect(p, bar.x, bar.y, bar.w, bar.h, 8, c[TC_WINDOW], c[TC_BORDER]);
     for (int b = 0; b < BTN_COUNT; b++) {
         struct rect r = button_rect(u, b);
         int on = (b <= BTN_WINDOW && (int)u->mode == b) || (b == BTN_POINTER && u->pointer);
@@ -411,14 +376,14 @@ static void draw_toolbar(struct ui *u, struct painter *p)
         if (b == BTN_CAPTURE) {
             int cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = r.w / 2 - 2;
             uint32_t core = hot ? c[TC_SELECTION] : c[TC_ACCENT];
-            struct surface *s = &u->win->surf;
-            disc(s, p->clip, cx, cy, R, c[TC_ACCENT], c[TC_ACCENT]);
-            disc(s, p->clip, cx, cy, R - 2, c[TC_WINDOW], c[TC_WINDOW]);
-            disc(s, p->clip, cx, cy, R - 5, core, core);
+            disc(p, cx, cy, R, c[TC_ACCENT], c[TC_ACCENT]);
+            disc(p, cx, cy, R - 2, c[TC_WINDOW], c[TC_WINDOW]);
+            disc(p, cx, cy, R - 5, core, core);
             continue;
         }
         if (on || hot)
-            rounded(p, r, 6, on ? c[TC_BUTTON_PRESSED] : c[TC_BUTTON_HOVER], on ? c[TC_BORDER] : c[TC_BUTTON_HOVER]);
+            painter_round_rect(p, r.x, r.y, r.w, r.h, 6, on ? c[TC_BUTTON_PRESSED] : c[TC_BUTTON_HOVER],
+                               on ? c[TC_BORDER] : c[TC_BUTTON_HOVER]);
         if (b <= BTN_WINDOW) {
             const char *text = _(labels[b]);
             int th = painter_text_height(p);
@@ -433,7 +398,6 @@ static void draw_toolbar(struct ui *u, struct painter *p)
 
 static void draw_marks(struct ui *u, struct painter *p)
 {
-    struct surface *s = &u->win->surf;
     if (u->mode == MODE_SELECTION && !rect_empty(selection(u))) {
         struct rect sel = selection(u);
         frame(p, sel, 1, C_WHITE);
@@ -442,10 +406,10 @@ static void draw_marks(struct ui *u, struct painter *p)
             for (int j = 0; j < 3; j++)
                 for (int i = 0; i < 3; i++)
                     if ((i != 1 || j != 1) && ((i != 1 && j != 1) || (sel.w > 40 && sel.h > 40)))
-                        disc(s, p->clip, xs[i], ys[j], HANDLE_R, C_WHITE, C_OUTLINE);
+                        disc(p, xs[i], ys[j], HANDLE_R, C_WHITE, C_OUTLINE);
         char buf[32];
         struct rect l = label_rect(u, p);
-        rounded(p, l, 4, p->theme->color[TC_WINDOW], p->theme->color[TC_BORDER]);
+        painter_round_rect(p, l.x, l.y, l.w, l.h, 4, p->theme->color[TC_WINDOW], p->theme->color[TC_BORDER]);
         painter_text(p, l.x + 8, l.y + 4, size_label(u, buf, sizeof buf), p->theme->color[TC_TEXT]);
     } else if (u->mode == MODE_WINDOW) {
         if (u->hover_win >= 0 && u->hover_win != u->chosen_win)

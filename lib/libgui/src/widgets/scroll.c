@@ -24,8 +24,8 @@ int scroll_set(int *value, int v, int max, int page)
 }
 
 /* The thumb lies 2 pixels inside both ends of the track. Its length is
- * the visible part of the range, at least 8 pixels. */
-int scrollbar_thumb(int len, int value, int max, int page, int *off, int *len_out)
+ * the visible part of the range, at least 8 pixels at scale 100. */
+int scrollbar_thumb(const struct theme *t, int len, int value, int max, int page, int *off, int *len_out)
 {
     int track = len - 4;
     if (max <= 0 || page >= max || track <= 0) {
@@ -33,8 +33,8 @@ int scrollbar_thumb(int len, int value, int max, int page, int *off, int *len_ou
         *len_out = 0;
         return 0;
     }
-    int th = track * page / max;
-    if (th < 8) th = 8;
+    int th = track * page / max, min = theme_scale_px(t, 8);
+    if (th < min) th = min;
     if (th > track) th = track;
     *off = 2 + (track - th) * scroll_clamp(value, max, page) / (max - page);
     *len_out = th;
@@ -46,7 +46,7 @@ void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int va
     const struct theme *t = p->theme;
     painter_fill(p, x, y, w, h, t->color[TC_TRACK]);
     int off, th;
-    scrollbar_thumb(vertical ? h : w, value, max, page, &off, &th);
+    scrollbar_thumb(t, vertical ? h : w, value, max, page, &off, &th);
     if (!th)
         return;
     if (vertical)
@@ -56,9 +56,9 @@ void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int va
 }
 
 /* The value for a thumb whose start lies at pos along the track. */
-static int value_at(int pos, int len, int max, int page)
+static int value_at(const struct theme *t, int pos, int len, int max, int page)
 {
-    int off, th, span = scrollbar_thumb(len, 0, max, page, &off, &th);
+    int off, th, span = scrollbar_thumb(t, len, 0, max, page, &off, &th);
     if (span <= 0)
         return 0;
     return scroll_clamp(((pos - 2) * (max - page) + span / 2) / span, max, page);
@@ -73,7 +73,7 @@ int scroll_track_event(struct scroll_track *t, struct widget *w, const struct ev
         if (!(e->button & 1) || !rect_contains(r, e->x, e->y))
             return 0;
         int off, th;
-        if (!scrollbar_thumb(r.h, *value, max, page, &off, &th))
+        if (!scrollbar_thumb(widget_theme(w), r.h, *value, max, page, &off, &th))
             return 1;
         if (pos < off) {
             scroll_set(value, *value - page, max, page);
@@ -88,7 +88,7 @@ int scroll_track_event(struct scroll_track *t, struct widget *w, const struct ev
     case EV_MOUSE_MOVE:
         if (t->grab < 0 || !(e->button & 1))
             return 0;
-        scroll_set(value, value_at(pos - t->grab, r.h, max, page), max, page);
+        scroll_set(value, value_at(widget_theme(w), pos - t->grab, r.h, max, page), max, page);
         return 1;
     case EV_MOUSE_UP:
         if (t->grab < 0)
@@ -141,7 +141,7 @@ static int scrollbar_event(struct widget *w, struct event *e)
         if (!(e->button & 1))
             return 0;
         int off, th;
-        if (!scrollbar_thumb(s->vertical ? w->h : w->w, w->value, w->max, s->page, &off, &th))
+        if (!scrollbar_thumb(widget_theme(w), s->vertical ? w->h : w->w, w->value, w->max, s->page, &off, &th))
             return 1;
         if (pos < off)
             set_value(s, w->value - s->page);
@@ -156,7 +156,7 @@ static int scrollbar_event(struct widget *w, struct event *e)
     case EV_MOUSE_MOVE: {
         if (!(e->button & 1) || !w->window || window_state_of(w->window)->capture != w)
             return 0;
-        set_value(s, value_at(pos - s->grab, s->vertical ? w->h : w->w, w->max, s->page));
+        set_value(s, value_at(widget_theme(w), pos - s->grab, s->vertical ? w->h : w->w, w->max, s->page));
         return 1;
     }
     case EV_MOUSE_WHEEL:

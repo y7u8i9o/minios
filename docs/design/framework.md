@@ -91,7 +91,9 @@ default, the builtin 8x16 font when the file is missing);
 stack: `painter_push(x, y, w, h)` enters a child area, so widgets paint
 in local coordinates and every primitive (`fill`, `frame`, `line`,
 `rounded`, `text`, `blit`, `mask`, `focus_ring`) is clipped to the
-widget. Text uses the theme font. Widgets measure text at the scale of
+widget. The antialiased shapes of K4 (`widgets.md`) draw rounded
+rectangles, discs, rings, strokes, check marks and chevrons. Text uses
+the theme font. Widgets measure text at the scale of
 their window with `widget_text_width` and `widget_text_index`
 (`widgets.md`).
 

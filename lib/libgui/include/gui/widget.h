@@ -324,12 +324,12 @@ void scrollbar_set(struct widget *w, int value, int max, int page);
  * clamped v in *value and returns 1 when *value changed. */
 int scroll_clamp(int v, int max, int page);
 int scroll_set(int *value, int v, int max, int page);
-/* The thumb of a scroll track of len logical pixels. scrollbar_thumb
+/* The thumb of a scroll track of len logical pixels in the theme t. scrollbar_thumb
  * stores the offset of the thumb along the track in *off and its length in
  * *len_out. The function returns the distance that the thumb can travel,
  * or 0 when the whole range is visible. Painting and hit testing use this
  * geometry. */
-int scrollbar_thumb(int len, int value, int max, int page, int *off, int *len_out);
+int scrollbar_thumb(const struct theme *t, int len, int value, int max, int page, int *off, int *len_out);
 /* The track and the thumb of a scroll bar at (x, y). */
 void scrollbar_paint_track(struct painter *p, int x, int y, int w, int h, int value, int max, int page, int vertical);
 /* A vertical scroll track inside a widget: the list view, the tree view,

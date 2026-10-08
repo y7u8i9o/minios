@@ -32,6 +32,10 @@ struct csd {
     char title[64];
 };
 
+struct theme;
+/* The theme whose header colours the chrome uses. NULL selects the
+ * default theme. */
+void csd_set_theme(const struct theme *t);
 int csd_margin(const struct csd *c);
 int csd_header(const struct csd *c);
 /* Buffer size for contents of w by h logical pixels; the frame (the

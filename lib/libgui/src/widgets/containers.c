@@ -7,7 +7,10 @@ void widget_measure(struct widget *w);
 
 /* ---- tabs ---- */
 
-#define TAB_PAD 10
+static int tab_pad(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 10);
+}
 
 struct tabs {
     struct widget w;
@@ -35,7 +38,7 @@ static void tabs_measure(struct widget *w, struct size_hint *h)
         tb->ntitles = n;
         n = 0;
         for (struct widget *c = w->first; c; c = c->next)
-            widths[n++] = widget_text_width(w, NULL, widget_text(c), -1) + 2 * TAB_PAD;
+            widths[n++] = widget_text_width(w, NULL, widget_text(c), -1) + 2 * tab_pad(w);
     }
     for (struct widget *c = w->first; c; c = c->next) {
         widget_measure(c);
@@ -92,7 +95,7 @@ static void tabs_paint(struct widget *w, struct painter *p)
         int current = i == w->value;
         if (current)
             painter_fill(p, x, hh - 3, tw, 3, t->color[TC_ACCENT]);
-        painter_text(p, x + TAB_PAD, (hh - 3 - painter_text_height(p)) / 2, widget_text(c),
+        painter_text(p, x + tab_pad(w), (hh - 3 - painter_text_height(p)) / 2, widget_text(c),
                      t->color[current ? TC_TEXT : TC_TEXT_DISABLED]);
     }
     if (w->focused) {
@@ -174,7 +177,11 @@ void tabs_select(struct widget *tabs, int index)
 
 /* ---- split pane ---- */
 
-#define DIVIDER 6
+/* The width of the divider of a split pane. */
+static int divider(const struct widget *w)
+{
+    return theme_scale_px(widget_theme(w), 6);
+}
 
 struct split {
     struct widget w;
@@ -190,16 +197,16 @@ static void split_measure(struct widget *w, struct size_hint *h)
         if (w->value) { ph += c->measured.pref_h; if (c->measured.pref_w > pw) pw = c->measured.pref_w; }
         else { pw += c->measured.pref_w; if (c->measured.pref_h > ph) ph = c->measured.pref_h; }
     }
-    h->pref_w = pw + (w->value ? 0 : DIVIDER);
-    h->pref_h = ph + (w->value ? DIVIDER : 0);
-    h->min_w = h->min_h = 2 * DIVIDER;
+    h->pref_w = pw + (w->value ? 0 : divider(w));
+    h->pref_h = ph + (w->value ? divider(w) : 0);
+    h->min_w = h->min_h = 2 * divider(w);
 }
 
 static void split_layout(struct widget *w)
 {
     struct split *s = (struct split *)w;
     struct widget *a = w->first, *b = a ? a->next : NULL;
-    int total = (w->value ? w->h : w->w) - DIVIDER;
+    int total = (w->value ? w->h : w->w) - divider(w);
     int pos = s->pos < 0 ? total / 2 : s->pos;
     if (pos < 20) pos = 20;
     if (pos > total - 20) pos = total - 20;
@@ -207,9 +214,9 @@ static void split_layout(struct widget *w)
         widget_set_rect(a, 0, 0, w->value ? w->w : pos, w->value ? pos : w->h);
     if (b) {
         if (w->value)
-            widget_set_rect(b, 0, pos + DIVIDER, w->w, w->h - pos - DIVIDER);
+            widget_set_rect(b, 0, pos + divider(w), w->w, w->h - pos - divider(w));
         else
-            widget_set_rect(b, pos + DIVIDER, 0, w->w - pos - DIVIDER, w->h);
+            widget_set_rect(b, pos + divider(w), 0, w->w - pos - divider(w), w->h);
     }
 }
 
@@ -235,7 +242,7 @@ static int split_event(struct widget *w, struct event *e)
     int start = w->value ? a->h : a->w;
     switch (e->type) {
     case EV_MOUSE_DOWN:
-        if ((e->button & 1) && pos >= start && pos < start + DIVIDER) {
+        if ((e->button & 1) && pos >= start && pos < start + divider(w)) {
             s->drag = 1;
             widget_capture(w);
             return 1;
@@ -243,7 +250,7 @@ static int split_event(struct widget *w, struct event *e)
         return 0;
     case EV_MOUSE_MOVE:
         if (s->drag) {
-            splitpane_set_position(w, pos - DIVIDER / 2);
+            splitpane_set_position(w, pos - divider(w) / 2);
             return 1;
         }
         return 0;
