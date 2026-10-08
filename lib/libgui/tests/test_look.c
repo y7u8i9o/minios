@@ -9,12 +9,6 @@
 
 struct app *app_create_detached(void);
 
-static uint32_t pixel(struct widget *win, int x, int y)
-{
-    struct surface *s = &window_state_of(win)->win->surf;
-    return s->pixels[(size_t)y * s->stride + x] & 0xffffff;
-}
-
 /* The number of pixels of color in the rectangle of w. */
 static int count(struct widget *win, struct widget *w, uint32_t color)
 {
@@ -22,7 +16,7 @@ static int count(struct widget *win, struct widget *w, uint32_t color)
     widget_abs(w, &ax, &ay);
     for (int y = ay; y < ay + w->h; y++)
         for (int x = ax; x < ax + w->w; x++)
-            n += pixel(win, x, y) == color;
+            n += window_pixel(win, x, y) == color;
     return n;
 }
 
@@ -114,21 +108,21 @@ static void test_marks(struct app *a)
     int box = theme_px(t, TM_ICON), x, y;
     widget_abs(radio, &x, &y);
     int cy = y + (radio->h - box) / 2 + box / 2;
-    CHECK(pixel(win, x + box / 2, cy) == t->color[TC_SELECTION_TEXT], "the radio dot: %06x",
-          pixel(win, x + box / 2, cy));
-    CHECK(pixel(win, x + 2, cy) == t->color[TC_ACCENT], "the checked radio disc: %06x", pixel(win, x + 2, cy));
+    CHECK(window_pixel(win, x + box / 2, cy) == t->color[TC_SELECTION_TEXT], "the radio dot: %06x",
+          window_pixel(win, x + box / 2, cy));
+    CHECK(window_pixel(win, x + 2, cy) == t->color[TC_ACCENT], "the checked radio disc: %06x", window_pixel(win, x + 2, cy));
     widget_abs(check, &x, &y);
     int marked = 0, top = y + (check->h - box) / 2;
     for (int j = 0; j < box; j++)
         for (int i = 0; i < box; i++)
-            marked += pixel(win, x + i, top + j) == t->color[TC_SELECTION_TEXT];
+            marked += window_pixel(win, x + i, top + j) == t->color[TC_SELECTION_TEXT];
     CHECK(marked > box / 2, "the check mark: %d pixels", marked);
-    CHECK(pixel(win, x + box / 2, top + 2) == t->color[TC_ACCENT], "the checked box is filled with the accent");
+    CHECK(window_pixel(win, x + box / 2, top + 2) == t->color[TC_ACCENT], "the checked box is filled with the accent");
     widget_abs(combo, &x, &y);
     int a_w = theme_scale_px(t, 18), ink = 0;
     for (int j = 0; j < combo->h; j++)
         for (int i = combo->w - a_w; i < combo->w; i++)
-            ink += pixel(win, x + i, y + j) == t->color[TC_TEXT];
+            ink += window_pixel(win, x + i, y + j) == t->color[TC_TEXT];
     CHECK(ink > 2, "the chevron of the combo box: %d pixels", ink);
     window_close(win);
 }

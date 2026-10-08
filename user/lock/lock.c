@@ -75,7 +75,6 @@ int main(void)
     char name[64], full_name[128];
     snprintf(name, sizeof name, "%s", pw ? pw->pw_name : "?");
     snprintf(full_name, sizeof full_name, "%s", pw && pw->pw_gecos[0] ? pw->pw_gecos : name);
-    screen_load_background();
     window = app_lock_window(app);
     if (!window) {
         fprintf(stderr, "lock: X12 refused the lock\n");
@@ -84,11 +83,11 @@ int main(void)
     }
     struct utsname u;
     const char *host = uname(&u) == 0 && u.nodename[0] ? u.nodename : "minios";
-    struct widget *back = screen_backdrop_new(window);
+    struct widget *back = backdrop_new(window, BACKDROP_DESKTOP);
     screen_bar_new(back, host);
     struct widget *card = screen_card_new(back);
     label_new(card, _("This session is locked."));
-    screen_account_new(card, name, full_name);
+    account_new(card, name, full_name, 0);
     label_new(card, _("Password"));
     password = textfield_new(card, "");
     textfield_set_masked(password, 1);

@@ -82,73 +82,6 @@ static void load_accounts(void)
     endpwent();
 }
 
-/* ---- the widgets of the window ---- */
-
-/* An account row shows an avatar with the initial of the account, the
- * full name and the account name. value is the index of the account. In
- * the list a row is focusable and emits "clicked" for a click, Enter or
- * Space, and the arrow keys move between the rows. Above the password the
- * same widget is a header that does not take the focus. */
-static void row_measure(struct widget *w, struct size_hint *h)
-{
-    h->min_h = h->pref_h = SCREEN_ROW_H;
-    h->min_w = h->pref_w = SCREEN_CARD_W - 40;
-}
-
-static void row_paint(struct widget *w, struct painter *p)
-{
-    const struct theme *t = widget_theme(w);
-    int i = w->value, active = w->focusable && (w->focused || w->hover);
-    if (i < 0 || i >= naccounts)
-        return;
-    uint32_t text = t->color[TC_TEXT], dim = t->color[TC_TEXT_DISABLED];
-    if (w->focusable && w->focused) {
-        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_SELECTION], t->color[TC_SELECTION]);
-        text = dim = t->color[TC_SELECTION_TEXT];
-    } else if (active) {
-        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], t->color[TC_BUTTON_HOVER]);
-    }
-    screen_paint_account(p, 0, 0, w->h, names[i], full_names[i], text, dim);
-    if (w->focused)
-        painter_focus_ring(p, 0, 0, w->w, w->h);
-}
-
-static int row_event(struct widget *w, struct event *e)
-{
-    if (!w->focusable)
-        return 0;
-    if (e->type == EV_MOUSE_UP && e->x >= 0 && e->y >= 0 && e->x < w->w && e->y < w->h) {
-        widget_emit(w, "clicked", NULL);
-        return 1;
-    }
-    if (e->type == EV_KEY_DOWN && (e->code == KEY_ENTER || e->code == KEY_SPACE)) {
-        widget_emit(w, "clicked", NULL);
-        return 1;
-    }
-    if (e->type == EV_KEY_DOWN && (e->code == KEY_UP || e->code == KEY_DOWN)) {
-        int i = w->value + (e->code == KEY_DOWN ? 1 : -1);
-        if (i >= 0 && i < naccounts)
-            widget_focus(rows[i]);
-        return 1;
-    }
-    if (e->type == EV_ENTER || e->type == EV_LEAVE || e->type == EV_FOCUS_IN || e->type == EV_FOCUS_OUT)
-        widget_invalidate(w);
-    return 0;
-}
-
-static const struct widget_class row_class = { "greeter-account", sizeof(struct widget), row_measure, NULL,
-                                               row_paint, row_event, NULL };
-
-static struct widget *row_new(struct widget *parent, int index, int focusable)
-{
-    struct widget *w = widget_new(&row_class, parent);
-    if (w) {
-        w->value = index;
-        w->focusable = focusable ? 1 : 0;
-    }
-    return w;
-}
-
 /* ---- the pages ---- */
 
 static void report(const char *line)
@@ -181,10 +114,11 @@ static void retry(void *arg)
 
 static int on_account(struct widget *w, void *args, void *arg)
 {
-    selected = w->value;
-    pw_header->value = ch_header->value = selected;
-    widget_invalidate(pw_header);
-    widget_invalidate(ch_header);
+    for (int i = 0; i < naccounts; i++)
+        if (rows[i] == w)
+            selected = i;
+    account_set(pw_header, names[selected], full_names[selected]);
+    account_set(ch_header, names[selected], full_names[selected]);
     widget_set_text(password, "");
     widget_set_text(message, "");
     show_page(PAGE_PASSWORD);
@@ -297,7 +231,6 @@ static int window_main(void)
         return 1;
     textdomain("greeter");
     load_accounts();
-    screen_load_background();
     if (naccounts == 0)
         return 1;
     struct widget *win = main_win =
@@ -310,7 +243,7 @@ static int window_main(void)
 
     /* The top bar: the host name, the clock in the middle, the power
      * buttons on the right. */
-    struct widget *back = screen_backdrop_new(win);
+    struct widget *back = backdrop_new(win, BACKDROP_DESKTOP);
     struct widget *right = screen_bar_new(back, host);
     struct widget *restart = button_new(right, _("Restart"));
     widget_connect(restart, "clicked", on_power, "reboot");
@@ -324,13 +257,13 @@ static int window_main(void)
     snprintf(welcome, sizeof welcome, _("Welcome to %s"), host);
     label_new(pages[PAGE_USERS], welcome);
     for (int i = 0; i < naccounts; i++) {
-        rows[i] = row_new(pages[PAGE_USERS], i, 1);
+        rows[i] = account_new(pages[PAGE_USERS], names[i], full_names[i], 1);
         widget_connect(rows[i], "clicked", on_account, NULL);
     }
 
     /* The password of the chosen account. */
     pages[PAGE_PASSWORD] = box_new(card, 1);
-    pw_header = row_new(pages[PAGE_PASSWORD], 0, 0);
+    pw_header = account_new(pages[PAGE_PASSWORD], names[0], full_names[0], 0);
     label_new(pages[PAGE_PASSWORD], _("Password"));
     password = masked_field(pages[PAGE_PASSWORD], on_login);
     message = label_new(pages[PAGE_PASSWORD], "");
@@ -338,7 +271,7 @@ static int window_main(void)
 
     /* The first password of an account that has none. */
     pages[PAGE_CHOOSE] = box_new(card, 1);
-    ch_header = row_new(pages[PAGE_CHOOSE], 0, 0);
+    ch_header = account_new(pages[PAGE_CHOOSE], names[0], full_names[0], 0);
     label_new(pages[PAGE_CHOOSE], _("This account has no password yet."));
     label_new(pages[PAGE_CHOOSE], _("Choose one to log in."));
     label_new(pages[PAGE_CHOOSE], _("New password"));

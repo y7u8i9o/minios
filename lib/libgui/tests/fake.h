@@ -20,3 +20,6 @@ extern const char *fake_peek;
 extern const char *fake_accept_mime;
 extern int fake_accept_actions, fake_accept_preferred;
 extern const char *fake_drop, *fake_drop_mime;
+/* The opaque region set last, and its rectangle count (-1 for none). */
+extern struct rect fake_opaque[8];
+extern int fake_nopaque;

@@ -114,7 +114,15 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
     fake_damage_count++;
     fake_damage_pixels += (uint64_t)width * height * w->scale * w->scale;
 }
-void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
+struct rect fake_opaque[8];
+int fake_nopaque = -1;
+void gui_set_opaque_region(struct gui_window *w, const struct rect *r, int n)
+{
+    (void)w;
+    fake_nopaque = n < 8 ? n : 8;
+    memcpy(fake_opaque, r, (size_t)fake_nopaque * sizeof *r);
+}
+void gui_set_translucent(struct gui_window *w) { (void)w; }
 void gui_set_input_region(struct gui_window *w, const struct rect *r, int n) { (void)w; (void)r; (void)n; }
 
 void gui_flush(void) {}

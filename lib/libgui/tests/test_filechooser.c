@@ -34,21 +34,13 @@ static void folder(const char *rel)
     mkdir(path, 0755);
 }
 
-static void key(struct widget *win, int code, int ch, int mods)
-{
-    struct wmsg m = { .type = WM_KEY, .window = window_state_of(win)->win->id, .a = code, .b = 1, .c = mods, .d = ch };
-    window_message(win, &m);
-    m.b = 0;
-    window_message(win, &m);
-}
-
 static void type(struct widget *win, const char *s)
 {
     for (; *s; s++)
-        key(win, 0, *s, 0);
+        press_key(win, 0, *s, 0);
 }
 
-static void enter(struct widget *win) { key(win, KEY_ENTER, '\n', 0); }
+static void enter(struct widget *win) { press_key(win, KEY_ENTER, '\n', 0); }
 
 static int rows(struct widget *win)
 {
@@ -108,7 +100,7 @@ void run_filechooser_tests(void)
     CHECK(rows(win) == 2, "the image filter leaves sub and a.png: %d", rows(win));
     combobox_select(widget_find(win, "fc-filter"), 1);
     CHECK(rows(win) == 3, "all files: %d", rows(win));
-    key(win, KEY_ESC, 27, 0);
+    press_key(win, KEY_ESC, 27, 0);
     CHECK(chooser_state(c, out, sizeof out) == -1, "Escape cancels");
     chooser_close(c);
 
@@ -119,28 +111,28 @@ void run_filechooser_tests(void)
     window_paint(win);
     table = widget_find(win, "fv-table");
     CHECK(rows(win) == 1, "sub contains deep.png: %d", rows(win));
-    key(win, KEY_UP, 0, WMOD_ALT);
-    key(win, KEY_UP, 0, WMOD_ALT);
+    press_key(win, KEY_UP, 0, WMOD_ALT);
+    press_key(win, KEY_UP, 0, WMOD_ALT);
     CHECK(rows(win) == 4, "Alt+Up twice reaches the home folder: %d", rows(win));
     CHECK(table->value == 1, "the folder just left is selected: %d", table->value);
-    key(win, KEY_DOWN, 0, WMOD_ALT);
-    key(win, KEY_DOWN, 0, WMOD_ALT);
+    press_key(win, KEY_DOWN, 0, WMOD_ALT);
+    press_key(win, KEY_DOWN, 0, WMOD_ALT);
     CHECK(rows(win) == 1, "Alt+Down twice returns to sub: %d", rows(win));
 
     /* Typing over the table searches below the folder. */
-    key(win, KEY_UP, 0, WMOD_ALT);
-    key(win, KEY_UP, 0, WMOD_ALT);
+    press_key(win, KEY_UP, 0, WMOD_ALT);
+    press_key(win, KEY_UP, 0, WMOD_ALT);
     widget_focus(table);
     type(win, "dee");
     struct widget *search = widget_find(win, "fv-search");
     CHECK(search->visible && strcmp(widget_text(search), "dee") == 0, "search field shows '%s'", widget_text(search));
     CHECK(rows(win) == 1, "one result for dee: %d", rows(win));
-    key(win, KEY_ESC, 27, 0);
+    press_key(win, KEY_ESC, 27, 0);
     CHECK(!search->visible && rows(win) == 4, "Escape ends the search: %d rows", rows(win));
 
     /* Ctrl+L and inline completion.  P completes Pictures/ and Enter opens
      * it, then a completes a.png and Enter chooses it. */
-    key(win, KEY_L, 12, WMOD_CTRL);
+    press_key(win, KEY_L, 12, WMOD_CTRL);
     struct widget *loc = widget_find(win, "fv-location");
     path_of(path, sizeof path, "");
     strcat(path, "/");
@@ -152,7 +144,7 @@ void run_filechooser_tests(void)
     CHECK(strcmp(widget_text(loc), path) == 0, "typing over the completion retains it: '%s'", widget_text(loc));
     enter(win);
     CHECK(!loc->visible && rows(win) == 3, "Enter opens Pictures: %d rows", rows(win));
-    key(win, KEY_L, 12, WMOD_CTRL);
+    press_key(win, KEY_L, 12, WMOD_CTRL);
     type(win, "a");
     path_of(path, sizeof path, "Pictures/a.png");
     CHECK(strcmp(widget_text(loc), path) == 0, "a completes to '%s'", widget_text(loc));
@@ -169,7 +161,7 @@ void run_filechooser_tests(void)
     struct widget *name = widget_find(win, "fc-name");
     CHECK(strcmp(widget_text(name), "new.txt") == 0, "name field '%s'", widget_text(name));
     CHECK(widget_focused(win) == name, "the name field has the focus");
-    key(win, 0, 1, WMOD_CTRL);         /* Ctrl+A */
+    press_key(win, 0, 1, WMOD_CTRL);         /* Ctrl+A */
     type(win, "Music");
     enter(win);
     CHECK(chooser_state(c, NULL, 0) == 0 && rows(win) == 0, "a folder name enters the folder: %d rows", rows(win));
@@ -191,7 +183,7 @@ void run_filechooser_tests(void)
     name = widget_find(win, "fc-name");
     int before = rows(win);
     widget_focus(table);
-    key(win, KEY_H, 8, WMOD_CTRL);
+    press_key(win, KEY_H, 8, WMOD_CTRL);
     CHECK(rows(win) == before + 1 + 1, "hidden files: %d after %d", rows(win), before);  /* .hidden, .local */
     view_select(table, rows(win) - 1);
     CHECK(strcmp(widget_text(name), "notes.txt") == 0, "the selected file names the save: '%s'", widget_text(name));

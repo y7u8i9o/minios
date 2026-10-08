@@ -391,6 +391,15 @@ void window_caret_restart(struct widget *window)
     caret_input(window);
 }
 
+void window_set_translucent(struct widget *window)
+{
+    struct window_state *ws = window_state_of(window);
+    ws->translucent = 1;
+    if (ws->win)
+        gui_set_translucent(ws->win);
+    widget_invalidate(window);
+}
+
 int widget_caret_visible(const struct widget *w)
 {
     struct window_state *ws = w->window ? window_state_of(w->window) : NULL;

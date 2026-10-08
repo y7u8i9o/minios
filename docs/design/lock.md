@@ -99,8 +99,10 @@ the Settings application offers Never, 1, 5, 10, 15 and 30 minutes and
 ## The program lock
 
 `user/lock/lock.c` creates the lock window with `app_lock_window`. The
-window has the background, the top bar and the card of the greeter.
-`user/greeter/screen.c` contains these parts, and both programs link it.
+window has the backdrop, the top bar and the card of the greeter. The
+backdrop, the card and the account row are libgui classes
+(`widgets.md`). `user/greeter/screen.c` contains the top bar and the
+placement of the card, and both programs link the file.
 The card shows the account of the real uid, a masked password field and
 the Unlock button.
 

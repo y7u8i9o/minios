@@ -332,9 +332,11 @@ void grid_set_stretch(struct widget *w, int row, int col, int stretch)
     widget_relayout(w);
 }
 
+/* A transparent box paints no background. */
 static void container_paint(struct widget *w, struct painter *p)
 {
-    painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
+    if (!w->transparent)
+        painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
 }
 
 const struct widget_class box_class = { "box", sizeof(struct widget), box_measure, box_layout, container_paint, NULL, NULL };

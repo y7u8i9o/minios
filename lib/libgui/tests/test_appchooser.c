@@ -29,14 +29,6 @@ static void write_file(const char *path, const char *text)
     }
 }
 
-static void key(struct widget *win, int code, int ch)
-{
-    struct wmsg m = { .type = WM_KEY, .window = window_state_of(win)->win->id, .a = code, .b = 1, .d = ch };
-    window_message(win, &m);
-    m.b = 0;
-    window_message(win, &m);
-}
-
 static void click(struct widget *win, const char *id)
 {
     struct sig_click c = { 1, 0, 0 };
@@ -110,8 +102,8 @@ void run_appchooser_tests(void)
     CHECK(rows(win) == 7, "two headings and five applications: %d", rows(win));
     CHECK(selected(win) == 2, "the default handler is selected: %d", selected(win));
     CHECK(widget_find(win, "ac-accept")->enabled, "Open enabled with a selection");
-    key(win, KEY_DOWN, 0);
-    key(win, KEY_ENTER, '\n');
+    press_key(win, KEY_DOWN, 0, 0);
+    press_key(win, KEY_ENTER, '\n', 0);
     CHECK(appchooser_state(c, out, sizeof out) == 1 && strcmp(out, "/usr/bin/edit") == 0,
           "Enter chooses the package editor: %s", out);
     appchooser_close(c);
@@ -121,9 +113,9 @@ void run_appchooser_tests(void)
     win = appchooser_window(c);
     window_paint(win);
     CHECK(rows(win) == 6, "one recommended and three other applications: %d", rows(win));
-    key(win, KEY_DOWN, 0);
+    press_key(win, KEY_DOWN, 0, 0);
     CHECK(!widget_find(win, "ac-accept")->enabled, "Open disabled on a heading");
-    key(win, KEY_DOWN, 0);
+    press_key(win, KEY_DOWN, 0, 0);
     widget_find(win, "ac-always")->value = 1;
     click(win, "ac-accept");
     CHECK(appchooser_state(c, out, sizeof out) == 1 && strcmp(out, "/usr/bin/player") == 0,
@@ -147,7 +139,7 @@ void run_appchooser_tests(void)
     window_paint(win);
     CHECK(rows(win) == 6, "the program is added once: %d", rows(win));
     CHECK(selected(win) == 2, "the program is at the top and selected: %d", selected(win));
-    key(win, KEY_ENTER, '\n');
+    press_key(win, KEY_ENTER, '\n', 0);
     CHECK(appchooser_state(c, out, sizeof out) == 1 && strcmp(out, "/bin/sh") == 0, "Enter chooses /bin/sh: %s", out);
     appchooser_close(c);
 
@@ -155,7 +147,7 @@ void run_appchooser_tests(void)
     c = appchooser_open(a, NULL, notes);
     win = appchooser_window(c);
     window_paint(win);
-    key(win, KEY_ESC, 27);
+    press_key(win, KEY_ESC, 27, 0);
     CHECK(appchooser_state(c, out, sizeof out) == -1, "Escape cancels");
     appchooser_close(c);
 

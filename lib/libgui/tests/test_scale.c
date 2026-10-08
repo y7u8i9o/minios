@@ -15,22 +15,10 @@ void widget_measure(struct widget *w);
 #define S 2
 
 /* The device pixel at (x, y) of the window surface. */
-static uint32_t pixel(struct widget *win, int x, int y)
-{
-    struct surface *s = &window_state_of(win)->win->surf;
-    return s->pixels[(size_t)y * s->stride + x] & 0xffffff;
-}
-
 static void send_text(struct widget *win, const char *text)
 {
     struct wmsg m = { .type = WM_TEXT, .window = window_state_of(win)->win->id };
     strlcpy(m.text, text, sizeof m.text);
-    window_message(win, &m);
-}
-
-static void send_key(struct widget *win, int code, int ch)
-{
-    struct wmsg m = key_msg(win, code, ch, 0);
     window_message(win, &m);
 }
 
@@ -44,7 +32,7 @@ static int caret_column(struct widget *win, struct widget *field, const struct p
     int ty = (field->h - 2 - painter_text_height(p)) / 2;
     int row = (fy + 1 + ty - 1) * S;
     for (int x = fx * S; x < (fx + field->w) * S; x++)
-        if (pixel(win, x, row) == p->theme->color[TC_TEXT])
+        if (window_pixel(win, x, row) == p->theme->color[TC_TEXT])
             return x / S;
     return -1;
 }
@@ -136,16 +124,16 @@ static void test_menu(struct app *a, const struct painter *p)
     int ih = open->measured.pref_h, th = painter_text_height(p), stray = 0;
     for (int y = (dy + 2) * S; y < (dy + ih) * S; y++)
         for (int x = (dx + 10 + ow + 1) * S; x < (dx + d->w - 2) * S; x++)
-            stray += pixel(win, x, y) != p->theme->color[TC_FIELD];
+            stray += window_pixel(win, x, y) != p->theme->color[TC_FIELD];
     CHECK(stray == 0, "%d pixels right of the caption of \"&Open\"", stray);
     int base = dy + 1 + 4 + th - 1, ox = dx + 10 + painter_text_width(p, "O", 1) / 2;
-    CHECK(pixel(win, ox * S, base * S) == p->theme->color[TC_TEXT], "the mnemonic is underlined: %06x",
-          pixel(win, ox * S, base * S));
+    CHECK(window_pixel(win, ox * S, base * S) == p->theme->color[TC_TEXT], "the mnemonic is underlined: %06x",
+          window_pixel(win, ox * S, base * S));
 
     /* Down twice skips the separator and the disabled item. */
-    send_key(win, KEY_DOWN, 0);
-    send_key(win, KEY_DOWN, 0);
-    send_key(win, KEY_ENTER, '\n');
+    send_key(win, KEY_DOWN, 0, 0);
+    send_key(win, KEY_DOWN, 0, 0);
+    send_key(win, KEY_ENTER, '\n', 0);
     CHECK(picked == 3, "Down skips the separator and the disabled item: item %d", picked);
 }
 
@@ -160,7 +148,7 @@ static void test_scrollbar(struct app *a, const struct painter *p)
     CHECK(scrollbar_thumb(app_theme(a), sb->h, 0, 100, 25, &off, &len) > 0, "the thumb can travel");
     int mid = (sx + sb->w / 2) * S, top = -1;
     for (int y = sy * S; y < (sy + sb->h) * S && top < 0; y++)
-        if (pixel(win, mid, y) != p->theme->color[TC_TRACK])
+        if (window_pixel(win, mid, y) != p->theme->color[TC_TRACK])
             top = y;
     CHECK(top == (sy + off) * S, "the painted thumb starts at %d, the geometry gives %d", top, (sy + off) * S);
     click(win, sx + sb->w / 2, sy + off);
@@ -193,13 +181,13 @@ static void test_buttons_and_lists(struct app *a, const struct painter *p)
     struct wmsg down = mouse_msg(win, WMOUSE_DOWN, bx + cb->w / 2, by + cb->h / 2, 1);
     window_message(win, &down);
     window_paint(win);
-    CHECK(pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S) == t->color[TC_BUTTON_PRESSED],
-          "a pressed colour button: %06x", pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S));
+    CHECK(window_pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S) == t->color[TC_BUTTON_PRESSED],
+          "a pressed colour button: %06x", window_pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S));
     /* The release outside the button opens no dialog. */
     struct wmsg up = mouse_msg(win, WMOUSE_UP, bx + cb->w / 2, by + cb->h + 40, 0);
     window_message(win, &up);
     window_paint(win);
-    CHECK(pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S) == t->color[TC_BUTTON], "the button is released");
+    CHECK(window_pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S) == t->color[TC_BUTTON], "the button is released");
 
     int lx, ly, lh = t->font->height + theme_px(t, TM_ROW_PAD);
     widget_abs(list, &lx, &ly);

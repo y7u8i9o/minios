@@ -385,7 +385,7 @@ submenu. `gui_files` and `gui_lua_bindings` run unchanged.
 Document: `docs/design/widgets.md`, `docs/design/framework.md`,
 `docs/design/lua.md` (the image view comes from libgui).
 
-### K7. Classes of the greeter, the screen locker and askpass
+### K7. Classes of the greeter, the screen locker and askpass (completed 2026-10-09)
 
 Built:
 

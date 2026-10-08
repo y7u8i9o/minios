@@ -12,25 +12,13 @@
 
 struct app *app_create_detached(void);
 
-static void key(struct widget *win, int code, int ch, int mods)
-{
-    struct wmsg m = key_msg(win, code, ch, mods);
-    window_message(win, &m);
-}
-
-static uint32_t pixel(struct widget *win, int x, int y)
-{
-    struct surface *s = &window_state_of(win)->win->surf;
-    return s->pixels[(size_t)y * s->stride + x] & 0xffffff;
-}
-
 static int count(struct widget *win, struct widget *w, uint32_t color)
 {
     int ax, ay, n = 0;
     widget_abs(w, &ax, &ay);
     for (int y = ay; y < ay + w->h; y++)
         for (int x = ax; x < ax + w->w; x++)
-            n += pixel(win, x, y) == color;
+            n += window_pixel(win, x, y) == color;
     return n;
 }
 
@@ -46,15 +34,15 @@ static void test_textfield(struct app *a)
     type_text(win, "one two three");
     window_paint(win);
     CHECK(count(win, f, t->color[TC_TEXT_DISABLED]) == 0, "no placeholder with text");
-    key(win, KEY_Z, 26, WMOD_CTRL);
+    send_key(win, KEY_Z, 26, WMOD_CTRL);
     CHECK(strcmp(widget_text(f), "") == 0, "Ctrl+Z undoes the typed text: '%s'", widget_text(f));
-    key(win, KEY_Y, 25, WMOD_CTRL);
+    send_key(win, KEY_Y, 25, WMOD_CTRL);
     CHECK(strcmp(widget_text(f), "one two three") == 0, "Ctrl+Y redoes it: '%s'", widget_text(f));
-    key(win, KEY_LEFT, 0, WMOD_CTRL);
+    send_key(win, KEY_LEFT, 0, WMOD_CTRL);
     type_text(win, "|");
     CHECK(strcmp(widget_text(f), "one two |three") == 0, "Ctrl+Left moves to the word start: '%s'", widget_text(f));
-    key(win, KEY_HOME, 0, 0);
-    key(win, KEY_RIGHT, 0, WMOD_CTRL | WMOD_SHIFT);
+    send_key(win, KEY_HOME, 0, 0);
+    send_key(win, KEY_RIGHT, 0, WMOD_CTRL | WMOD_SHIFT);
     type_text(win, "1 ");
     CHECK(strcmp(widget_text(f), "1 two |three") == 0, "Ctrl+Shift+Right selects a word: '%s'", widget_text(f));
 
@@ -81,7 +69,7 @@ static void test_textfield(struct app *a)
     textfield_set_masked(m, 1);
     widget_focus(m);
     type_text(win, "secret");
-    key(win, KEY_Z, 26, WMOD_CTRL);
+    send_key(win, KEY_Z, 26, WMOD_CTRL);
     CHECK(strcmp(widget_text(m), "secret") == 0, "a masked field has no undo");
     window_close(win);
 }
@@ -175,19 +163,19 @@ static void test_menus(struct app *a)
     struct widget *sub = menu_add_submenu(m, "More");
     widget_connect(menu_add(sub, "Inner", NULL), "clicked", on_pick, (void *)7);
     menu_popup(m, 10, 10);
-    key(win, KEY_DOWN, 0, 0);
-    key(win, KEY_ENTER, '\n', 0);
+    send_key(win, KEY_DOWN, 0, 0);
+    send_key(win, KEY_ENTER, '\n', 0);
     CHECK(menuitem_checked(check), "choosing a check item checks it");
     menu_popup(m, 10, 10);
     for (int i = 0; i < 3; i++)
-        key(win, KEY_DOWN, 0, 0);
-    key(win, KEY_ENTER, '\n', 0);
+        send_key(win, KEY_DOWN, 0, 0);
+    send_key(win, KEY_ENTER, '\n', 0);
     CHECK(menuitem_checked(r2) && !menuitem_checked(r1), "a radio item clears the other");
     menu_popup(m, 10, 10);
     for (int i = 0; i < 4; i++)
-        key(win, KEY_DOWN, 0, 0);
-    key(win, KEY_RIGHT, 0, 0);
-    key(win, KEY_ENTER, '\n', 0);
+        send_key(win, KEY_DOWN, 0, 0);
+    send_key(win, KEY_RIGHT, 0, 0);
+    send_key(win, KEY_ENTER, '\n', 0);
     CHECK(picked == 7, "Right opens the submenu and Enter chooses its item: %d", picked);
     window_close(win);
 }
@@ -206,10 +194,59 @@ static void test_imageview(struct app *a)
     window_paint(win);
     int vx, vy;
     widget_abs(v, &vx, &vy);
-    CHECK(v->w == 50 && pixel(win, vx + 25, vy + 25) == 0xff0000 && pixel(win, vx + 25, vy + 5) != 0xff0000,
+    CHECK(v->w == 50 && window_pixel(win, vx + 25, vy + 25) == 0xff0000 && window_pixel(win, vx + 25, vy + 5) != 0xff0000,
           "the image is reduced to 50x25 and centred");
     window_close(win);
     image_free(img);
+}
+
+static struct widget *account_clicked;
+static int on_account(struct widget *w, void *args, void *arg)
+{
+    account_clicked = w;
+    return 1;
+}
+
+/* The card of a translucent window sets the opaque region without its
+ * corners. Account rows emit "clicked" and move the focus with Down. The
+ * tool bar centres its clock. */
+static void test_screen(struct app *a)
+{
+    struct widget *win = app_window(a, 400, 300, "screen");
+    window_set_translucent(win);
+    struct widget *back = backdrop_new(win, BACKDROP_DIM);
+    struct widget *bar = toolbar_new(back);
+    label_new(bar, "a long host name");
+    struct widget *clock = label_new(bar, "12:00");
+    toolbar_set_center(bar, clock);
+    spacer_new(back);
+    struct widget *card = card_new(back, 200);
+    struct widget *one = account_new(card, "ann", "Ann", 1), *two = account_new(card, "bob", "", 1);
+    spacer_new(back);
+    widget_connect(one, "clicked", on_account, NULL);
+    widget_connect(two, "clicked", on_account, NULL);
+    fake_nopaque = -1;
+    window_paint(win);
+    CHECK(clock->x == (bar->w - clock->w) / 2, "the tool bar centres the clock: %d", clock->x);
+    int cx, cy, r = theme_px(app_theme(a), TM_RADIUS);
+    widget_abs(card, &cx, &cy);
+    CHECK(card->w == 200 && cx == 100, "the card is centred: %d at %d", card->w, cx);
+    CHECK(fake_nopaque == 3 && fake_opaque[0].x == cx && fake_opaque[0].y == cy + r &&
+          fake_opaque[0].w == card->w && fake_opaque[0].h == card->h - 2 * r && fake_opaque[1].x == cx + r &&
+          fake_opaque[1].y == cy && fake_opaque[1].w == card->w - 2 * r && fake_opaque[2].y == cy + card->h - r,
+          "the opaque region is the card without its corners");
+    CHECK(strcmp(account_name(two), "bob") == 0, "the account row records its name");
+    int x, y;
+    widget_abs(two, &x, &y);
+    click(win, x + 10, y + 10);
+    CHECK(account_clicked == two, "a click on an account row emits clicked");
+    widget_focus(one);
+    send_key(win, KEY_DOWN, 0, 0);
+    CHECK(two->focused, "Down moves the focus to the next account row");
+    account_clicked = NULL;
+    send_key(win, KEY_ENTER, '\n', 0);
+    CHECK(account_clicked == two, "Enter on an account row emits clicked");
+    window_close(win);
 }
 
 void run_function_tests(void)
@@ -221,5 +258,6 @@ void run_function_tests(void)
     test_label_progress(a);
     test_menus(a);
     test_imageview(a);
+    test_screen(a);
     app_destroy(a);
 }

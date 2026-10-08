@@ -178,6 +178,41 @@ selects a word with a double click, types a value into a spinner,
 toggles a check menu item and chooses an item of a submenu. The expect
 file checks the log of the client.
 
+## Classes of full screen windows (K7)
+
+`src/widgets/backdrop.c` contains the classes of the greeter, the screen
+locker and askpass.
+
+- `spacer_new(parent)` takes free space with the stretch 1 in both
+  directions and paints nothing.
+- `backdrop_new(window, style)` is a vertical box that fills the window.
+  The function removes the padding of the window. `BACKDROP_DESKTOP`
+  paints the wallpaper of `/etc/desktop.conf` or a gradient of its
+  desktop colour. The backdrop renders the wallpaper at its device size
+  and renders it again after a change of that size. `BACKDROP_DIM` paints
+  black at half opacity.
+- `card_new(parent, width)` is a vertical box of the given width with
+  rounded corners and a padding of 16 pixels, centred in its parent. In a
+  window after `window_set_translucent` the card sets the opaque region
+  of the window to three rectangles. The rectangles cover the card
+  without its rounded corners. Escape in the card emits `cancel`.
+- `account_new(parent, name, full_name, focusable)` shows the avatar, the
+  full name and the account name in a row of `ACCOUNT_ROW_H` (52) pixels.
+  A focusable row shows a hover pill and a selection pill. A click, Enter
+  or Space emits `clicked`. Up and Down move the focus between the
+  focusable rows of one parent. `account_set` changes the account of a
+  row, and `account_name` returns the account name.
+- `toolbar_set_center(toolbar, w)` centres the child `w` on the whole
+  tool bar. The top bar of the greeter and of the screen locker centres
+  its clock with this function.
+- A box with the flag `transparent` paints no background.
+
+The greeter and the screen locker use the classes through
+`user/greeter/screen.c`. askpass uses the backdrop `BACKDROP_DIM`, the
+card and an account row. `lib/libgui/tests/test_functions.c` checks the
+opaque region of the card, the centred clock, a click and Enter on an
+account row and the move of the focus with Down.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

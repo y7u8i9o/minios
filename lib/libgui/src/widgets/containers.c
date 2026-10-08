@@ -321,7 +321,21 @@ static void bar_paint(struct widget *w, struct painter *p)
 static void bar_measure(struct widget *w, struct size_hint *h) { box_class.measure(w, h); }
 static void bar_layout(struct widget *w) { box_class.layout(w); }
 
-const struct widget_class toolbar_class = { "toolbar", sizeof(struct widget), bar_measure, bar_layout, bar_paint, NULL, NULL };
+/* The tool bar can centre one child on its whole width. */
+struct toolbar {
+    struct widget w;
+    struct widget *center;
+};
+
+static void toolbar_layout(struct widget *w)
+{
+    box_class.layout(w);
+    struct widget *c = ((struct toolbar *)w)->center;
+    if (c && c->parent == w)
+        c->x = (w->w - c->w) / 2;
+}
+
+const struct widget_class toolbar_class = { "toolbar", sizeof(struct toolbar), bar_measure, toolbar_layout, bar_paint, NULL, NULL };
 const struct widget_class statusbar_class = { "statusbar", sizeof(struct widget), bar_measure, bar_layout, bar_paint, NULL, NULL };
 
 struct widget *toolbar_new(struct widget *parent)
@@ -332,6 +346,12 @@ struct widget *toolbar_new(struct widget *parent)
         w->padding = 2;
     }
     return w;
+}
+
+void toolbar_set_center(struct widget *toolbar, struct widget *w)
+{
+    ((struct toolbar *)toolbar)->center = w;
+    widget_relayout(toolbar);
 }
 
 struct widget *toolbar_add(struct widget *toolbar, const char *icon, const char *tip)

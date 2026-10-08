@@ -267,6 +267,7 @@ struct window_state {
     /* The caret blink of the focused text widget: the timer, the hidden
      * phase, the time of the last input, and the caret that the widget
      * reported last with widget_text_cursor, in its coordinates. */
+    int translucent;            /* window_set_translucent ran */
     struct timer *blink_timer;
     int caret_hidden;
     long last_input_ms;
@@ -287,6 +288,9 @@ void window_relayout_all(struct widget *window);
 void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height);
 void window_popup_close(struct widget *window);
 int window_owns_id(struct widget *window, int id);
+/* Give the window ARGB buffers without an opaque region
+ * (gui_set_translucent). A card then sets the opaque region. */
+void window_set_translucent(struct widget *window);
 
 /* ---- containers and core widgets (the widgets directory) ---- */
 
@@ -461,6 +465,37 @@ uint32_t colorbutton_color(const struct widget *w);
 /* Sets the colour without a signal. */
 void colorbutton_set(struct widget *w, uint32_t color);
 
+/* ---- full screen windows (widgets/backdrop.c) ---- */
+
+enum { BACKDROP_DESKTOP, BACKDROP_DIM };
+#define ACCOUNT_AVATAR 40       /* the avatar size of an account row */
+#define ACCOUNT_ROW_H  52       /* the height of an account row */
+
+extern const struct widget_class spacer_class;
+extern const struct widget_class backdrop_class;
+extern const struct widget_class card_class;       /* "cancel" on Escape */
+extern const struct widget_class account_class;    /* "clicked" */
+
+/* A widget that takes free space with the stretch 1 in both directions
+ * and paints nothing. */
+struct widget *spacer_new(struct widget *parent);
+/* A vertical box that fills the window and removes the padding of the
+ * window. BACKDROP_DESKTOP paints the wallpaper of /etc/desktop.conf or a
+ * gradient of its desktop colour. BACKDROP_DIM paints black at half
+ * opacity for a translucent window. */
+struct widget *backdrop_new(struct widget *window, int style);
+/* A vertical box of the given width with rounded corners and padding,
+ * centred in its parent. In a translucent window the card sets the
+ * opaque region of the window to its rectangle without the corners. */
+struct widget *card_new(struct widget *parent, int width);
+/* A row with the avatar, the full name and the account name. A focusable
+ * row shows hover and selection pills. A click, Enter or Space emits
+ * "clicked". Up and Down move the focus between the focusable rows of
+ * one parent. */
+struct widget *account_new(struct widget *parent, const char *name, const char *full_name, int focusable);
+void account_set(struct widget *w, const char *name, const char *full_name);
+const char *account_name(const struct widget *w);
+
 /* ---- containers (widgets/containers.c) ---- */
 
 extern const struct widget_class tabs_class;       /* "changed" (sig_select); value: current page */
@@ -477,6 +512,9 @@ struct widget *splitpane_new(struct widget *parent, int vertical);  /* two child
 void splitpane_set_position(struct widget *w, int pos);
 struct widget *toolbar_new(struct widget *parent);
 struct widget *toolbar_add(struct widget *toolbar, const char *icon, const char *tip);  /* a button */
+/* Centre the child w on the whole tool bar. The widths of the other
+ * children do not move w. */
+void toolbar_set_center(struct widget *toolbar, struct widget *w);
 struct widget *statusbar_new(struct widget *parent);
 struct widget *statusbar_add(struct widget *bar, int stretch);      /* a label */
 

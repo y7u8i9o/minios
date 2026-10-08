@@ -36,6 +36,16 @@ int conf_export_locale(void)
     return 0;
 }
 
+/* The host tests read no configuration file. */
+char *conf_lookup(const char *path, const char *key, char *buf, size_t size)
+{
+    (void)path;
+    (void)key;
+    (void)buf;
+    (void)size;
+    return NULL;
+}
+
 const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size)
 {
     strncpy(buf, default_path, size - 1);

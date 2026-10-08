@@ -323,9 +323,11 @@ account `NAME` once without the login window and without a password, and
 the login window follows when that session ends. The live medium uses the
 option for its account `live` (`live.md`).
 
-The login window and the screen locker `lock` (`lock.md`) share the
-background, the top bar, the card and the account row in
-`user/greeter/screen.c`. `account_become` gives a process the groups, the
+The login window and the screen locker `lock` (`lock.md`) build their
+windows from the libgui classes `backdrop`, `card`, `account` and
+`spacer` (`widgets.md`). `user/greeter/screen.c` adds the top bar with
+the centred clock (`toolbar_set_center`) and the placement of the card.
+Both programs link the file. `account_become` gives a process the groups, the
 gid and the uid of an account. `login`, the greeter and X12 use it.
 
 The panel shows the account name at the end of the Log out row of its
@@ -440,9 +442,11 @@ authentication dialog of GNOME. The screen is dimmed around a card in the
 middle, which shows the reason, the avatar and the full name of the user
 (`painter_avatar`, shared with the greeter), the password field, and the
 buttons Cancel and Authenticate. Enter in the field authenticates, and
-Escape cancels. The window has ARGB buffers (`gui_set_translucent`). Its
-opaque region is the card, and X12 blends the rest, which askpass fills
-with black of alpha 0x80. The overlay receives the keyboard when it maps.
+Escape cancels through the signal `cancel` of the card. The window has
+ARGB buffers (`window_set_translucent`). The backdrop of the style
+`BACKDROP_DIM` fills the window with black of alpha 0x80. The card sets
+the opaque region of the window to its rectangle without the rounded
+corners, and X12 blends the rest. The overlay receives the keyboard when it maps.
 While an overlay has the keyboard, X12 refuses Alt+Tab and Alt+F4, and a
 click reaches no window below it, including the server side title bars.
 
