@@ -103,6 +103,17 @@ struct widget {
     unsigned visible : 1, enabled : 1, focusable : 1, focused : 1, hover : 1, pressed : 1;
     unsigned accepts_text : 1;
     unsigned dirty : 1, child_dirty : 1;
+    /* dirty_part: only the ndirty rectangles of dirty_rects (local
+     * coordinates) need a paint. transparent: the widget paints no
+     * background, and its invalidation repaints the area of the nearest
+     * opaque ancestor. */
+    unsigned dirty_part : 1, transparent : 1;
+    struct rect dirty_rects[3];
+    int ndirty;
+    /* A move of the pixels of scroll_rect by scroll_dy logical pixels,
+     * performed at the next paint (widget_scroll_area). */
+    struct rect scroll_rect;
+    int scroll_dy;
     /* The layout marks (framework.md, Layout). needs_measure: the
      * measurement of the widget may have changed. needs_layout: the widget
      * places its children again. child_layout: a descendant has
@@ -164,6 +175,17 @@ int widget_emit(struct widget *w, const char *signal, void *args);
 /* ---- redraw, layout and focus ---- */
 
 void widget_invalidate(struct widget *w);
+/* Invalidates the rectangle r of w, in the local coordinates of w. */
+void widget_invalidate_rect(struct widget *w, struct rect r);
+/* Scrolling by copy. The next paint moves the pixels of the rectangle r
+ * of w (local coordinates) by dy logical pixels within the window surface
+ * and repaints the rows that the move exposes. The caller invalidates
+ * other changed parts, such as a scroll thumb. The function falls back to
+ * a repaint of r when a popup lies in the window surface, when w waits
+ * for another partial paint, or when dy is not smaller than the height
+ * of r. The paint falls back to a repaint when w is repainted whole or
+ * when r is not wholly visible. */
+void widget_scroll_area(struct widget *w, struct rect r, int dy);
 /* The content or the structure of w changed: w is measured, laid out and
  * repainted. The ancestors are measured again up to the first one whose
  * measurement does not change. */

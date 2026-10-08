@@ -597,3 +597,35 @@ Screen 2560x1600 at scale 2:
   labels inside the clip.
 - The edit scenario is unchanged. K3 rebuilds only the changed rows and
   runs the highlighter from the first visible line.
+
+## K3: partial repaints, scrolling by copy and the editor (2026-10-09)
+
+Screen 1280x800 at scale 1:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 14 | 27.2 | 28 | 4.89 | 0 | 80 |
+| type | 20 | 7.3 | 20 | 0.36 | 0 | 100 |
+| status | 20 | 4.7 | 40 | 0.27 | 106 | 40 |
+| edit | 20 | 40.6 | 20 | 0.68 | 0 | 936 |
+| scroll | 20 | 35.3 | 76 | 8.16 | 0 | 16 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+Screen 2560x1600 at scale 2:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 14 | 76.4 | 28 | 19.55 | 0 | 80 |
+| type | 20 | 13.9 | 20 | 1.42 | 0 | 100 |
+| status | 20 | 7.4 | 40 | 1.07 | 106 | 40 |
+| edit | 20 | 37.6 | 20 | 2.72 | 0 | 936 |
+| scroll | 20 | 111.7 | 76 | 32.62 | 0 | 16 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+- A wheel step of the table shapes 6 texts instead of 42. The moved area
+  remains damage for X12, so the painted pixels fall only by the rows
+  that are not drawn.
+- A keystroke in the editor at line 3500 costs 2.0 ms instead of 22.7 ms
+  of paint time. The editor repaints the edited row and runs the
+  highlighter from the first painted line.
+- A scroll step of the scroll area paints 4 widgets instead of 25.

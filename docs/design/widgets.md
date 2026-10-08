@@ -47,6 +47,27 @@ relayout is described in `framework.md`. `lib/libgui/tests/test_perf.c`
 checks the ends of a table and a list view, a status label update and a
 scroll step of a scroll area.
 
+## Partial repaints and the editor (K3)
+
+The text field repaints from the edited column to its end, and a caret
+move repaints the old and the new caret column. A change of the scroll
+offset or a selection repaints the field. The editor wraps only the
+edited lines again. The row index `first_row` gives the rows of a line.
+The states of the highlighter at the line starts are cached up to the
+first edited line, and a paint runs the highlighter from the first
+painted line. An edit inside one line repaints the rows of that line,
+and a cursor move repaints the old and the new cursor row. The tree view
+and the table map row ids to flat rows with a hash map
+(`lib/libgui/src/intmap.c`) and record the expanded rows in a second
+map. The tabs and the menus measure their title widths once per
+measurement. `lib/libgui/tests/test_partial.c` checks the damage of a
+keystroke, the pixels after scrolling by copy at scale 1 and 2, the
+calls of `cell` per wheel step, the highlighter runs and the shapings of
+one keystroke.
+
+The counter `text_shapes` shows no shaping of the same text twice in a
+paint, so the plan's cache of shaped text is not added.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

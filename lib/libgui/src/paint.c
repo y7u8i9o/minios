@@ -39,6 +39,13 @@ void painter_push(struct painter *p, int x, int y, int w, int h)
     p->oy += y * s;
 }
 
+void painter_push_clip(struct painter *p, int x, int y, int w, int h)
+{
+    painter_push(p, x, y, w, h);
+    p->ox -= x * p->scale;
+    p->oy -= y * p->scale;
+}
+
 void painter_pop(struct painter *p)
 {
     if (p->depth == 0)

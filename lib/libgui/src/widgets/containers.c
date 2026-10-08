@@ -12,6 +12,7 @@ void widget_measure(struct widget *w);
 struct tabs {
     struct widget w;
     int autohide;               /* no title row while there is one page */
+    int *title_w, ntitles;      /* the widths of the titles, from the last measurement */
 };
 
 static int tabs_header_h(const struct widget *w)
@@ -23,8 +24,19 @@ static int tabs_header_h(const struct widget *w)
 
 static void tabs_measure(struct widget *w, struct size_hint *h)
 {
+    struct tabs *tb = (struct tabs *)w;
     int hh = tabs_header_h(w);
-    int pw = 0, ph = 0;
+    int pw = 0, ph = 0, n = 0;
+    for (struct widget *c = w->first; c; c = c->next)
+        n++;
+    int *widths = realloc(tb->title_w, (size_t)(n ? n : 1) * sizeof *widths);
+    if (widths) {
+        tb->title_w = widths;
+        tb->ntitles = n;
+        n = 0;
+        for (struct widget *c = w->first; c; c = c->next)
+            widths[n++] = widget_text_width(w, NULL, widget_text(c), -1) + 2 * TAB_PAD;
+    }
     for (struct widget *c = w->first; c; c = c->next) {
         widget_measure(c);
         if (c->measured.pref_w > pw) pw = c->measured.pref_w;
@@ -49,9 +61,10 @@ static void tabs_layout(struct widget *w)
 
 static int tab_x(struct widget *w, int index, int *width)
 {
+    const struct tabs *tb = (const struct tabs *)w;
     int x = 0, i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
-        int tw = widget_text_width(w, NULL, widget_text(c), -1) + 2 * TAB_PAD;
+        int tw = i < tb->ntitles ? tb->title_w[i] : 0;
         if (i == index) {
             *width = tw;
             return x;
@@ -114,7 +127,13 @@ static int tabs_event(struct widget *w, struct event *e)
     return 0;
 }
 
-const struct widget_class tabs_class = { "tabs", sizeof(struct tabs), tabs_measure, tabs_layout, tabs_paint, tabs_event, NULL };
+static void tabs_destroy(struct widget *w)
+{
+    free(((struct tabs *)w)->title_w);
+}
+
+const struct widget_class tabs_class = { "tabs", sizeof(struct tabs), tabs_measure, tabs_layout, tabs_paint, tabs_event,
+                                         tabs_destroy };
 
 struct widget *tabs_new(struct widget *parent)
 {

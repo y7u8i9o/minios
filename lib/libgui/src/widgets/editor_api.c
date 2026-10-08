@@ -13,6 +13,8 @@ struct widget *editor_new(struct widget *parent)
     struct editor *ed = (struct editor *)w;
     lines_insert(ed, 0, strdup(""));
     ed->rows_dirty = 1;
+    ed->edit_old = -1;
+    ed->caret_row = -1;
     ed->wanted_x = -1;
     ed->track.grab = -1;
     w->focusable = 1;
@@ -45,6 +47,7 @@ void editor_set_text(struct widget *w, const char *text)
     ed->has_sel = 0;
     ed->scroll = ed->scroll_x = 0;
     ed->rows_dirty = 1;
+    ed->hl_valid = 0;
     ed->modified = 0;
     widget_invalidate(w);
 }
@@ -98,6 +101,7 @@ void editor_set_highlighter(struct widget *w, highlight_fn fn, void *arg)
     struct editor *ed = (struct editor *)w;
     ed->hl = fn;
     ed->hl_arg = arg;
+    ed->hl_valid = 0;
     widget_invalidate(w);
 }
 

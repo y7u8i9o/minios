@@ -27,6 +27,9 @@ void painter_init_scaled(struct painter *p, struct surface *s, const struct them
 /* Enter a child area: translate the origin and intersect the clip. */
 void painter_push(struct painter *p, int x, int y, int w, int h);
 void painter_pop(struct painter *p);
+/* Intersect the clip with a local rectangle without moving the origin.
+ * painter_pop restores the clip. */
+void painter_push_clip(struct painter *p, int x, int y, int w, int h);
 void painter_fill(struct painter *p, int x, int y, int w, int h, uint32_t color);
 void painter_frame(struct painter *p, int x, int y, int w, int h, uint32_t color);
 void painter_line(struct painter *p, int x0, int y0, int x1, int y1, uint32_t color);

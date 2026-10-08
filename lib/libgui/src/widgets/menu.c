@@ -56,6 +56,7 @@ struct dropdown {
     struct widget *menu;
     struct widget *bar;
     int hover;
+    int *accel_w;               /* the widths of the accelerator labels */
 };
 
 void widget_measure(struct widget *w);
@@ -63,8 +64,17 @@ void widget_measure(struct widget *w);
 static void dropdown_measure(struct widget *w, struct size_hint *h)
 {
     struct dropdown *d = (struct dropdown *)w;
-    int mw = 80, mh = 2;
-    for (struct widget *it = d->menu->first; it; it = it->next) {
+    int mw = 80, mh = 2, n = 0;
+    for (struct widget *it = d->menu->first; it; it = it->next)
+        n++;
+    free(d->accel_w);
+    d->accel_w = calloc((size_t)(n ? n : 1), sizeof *d->accel_w);
+    n = 0;
+    for (struct widget *it = d->menu->first; it; it = it->next, n++) {
+        char accel[48];
+        accel_label(it, accel, sizeof accel);
+        if (d->accel_w && accel[0])
+            d->accel_w[n] = widget_text_width(w, NULL, accel, -1);
         widget_measure(it);
         if (it->measured.pref_w > mw) mw = it->measured.pref_w;
         mh += it->measured.pref_h;
@@ -96,9 +106,8 @@ static void dropdown_paint(struct widget *w, struct painter *p)
                                   t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
             char accel[48];
             accel_label(it, accel, sizeof accel);
-            if (accel[0])
-                painter_text(p, w->w - MENU_PAD - painter_text_width(p, accel, -1), y + ITEM_H_EXTRA / 2, accel,
-                             t->color[TC_TEXT_DISABLED]);
+            if (accel[0] && d->accel_w)
+                painter_text(p, w->w - MENU_PAD - d->accel_w[i], y + ITEM_H_EXTRA / 2, accel, t->color[TC_TEXT_DISABLED]);
         }
         y += ih;
     }
@@ -196,23 +205,50 @@ static int dropdown_event(struct widget *w, struct event *e)
     }
 }
 
-static const struct widget_class dropdown_class = { "dropdown", sizeof(struct dropdown), dropdown_measure, NULL, dropdown_paint, dropdown_event, NULL };
+static void dropdown_destroy(struct widget *w)
+{
+    free(((struct dropdown *)w)->accel_w);
+}
+
+static const struct widget_class dropdown_class = { "dropdown", sizeof(struct dropdown), dropdown_measure, NULL,
+                                                    dropdown_paint, dropdown_event, dropdown_destroy };
 
 /* ---- menu bar ---- */
 
+/* The menu bar measures the widths of its titles once per measurement. */
+struct menubar {
+    struct widget w;
+    int *title_w, ntitles;
+};
+
 static int title_width(const struct widget *bar, const struct widget *m)
 {
-    char caption[256];
-    painter_mnemonic_strip(widget_text(m), caption, sizeof caption);
-    return widget_text_width(bar, NULL, caption, -1) + 2 * MENU_PAD;
+    const struct menubar *mb = (const struct menubar *)bar;
+    int i = 0;
+    for (const struct widget *c = bar->first; c && c != m; c = c->next)
+        i++;
+    return i < mb->ntitles ? mb->title_w[i] : 0;
 }
 
 static void menubar_measure(struct widget *w, struct size_hint *h)
 {
+    struct menubar *mb = (struct menubar *)w;
     const struct theme *t = widget_theme(w);
-    int tw = 0;
+    int tw = 0, n = 0;
     for (struct widget *m = w->first; m; m = m->next)
-        tw += title_width(w, m);
+        n++;
+    int *widths = realloc(mb->title_w, (size_t)(n ? n : 1) * sizeof *widths);
+    if (!widths)
+        return;
+    mb->title_w = widths;
+    mb->ntitles = n;
+    n = 0;
+    for (struct widget *m = w->first; m; m = m->next) {
+        char caption[256];
+        painter_mnemonic_strip(widget_text(m), caption, sizeof caption);
+        widths[n] = widget_text_width(w, NULL, caption, -1) + 2 * MENU_PAD;
+        tw += widths[n++];
+    }
     h->pref_w = tw;
     h->min_w = 20;
     h->pref_h = h->min_h = t->font->height + 8;
@@ -278,7 +314,13 @@ static int menubar_event(struct widget *w, struct event *e)
     return 0;
 }
 
-const struct widget_class menubar_class = { "menubar", sizeof(struct widget), menubar_measure, NULL, menubar_paint, menubar_event, NULL };
+static void menubar_destroy(struct widget *w)
+{
+    free(((struct menubar *)w)->title_w);
+}
+
+const struct widget_class menubar_class = { "menubar", sizeof(struct menubar), menubar_measure, NULL, menubar_paint,
+                                            menubar_event, menubar_destroy };
 
 struct widget *menubar_new(struct widget *parent)
 {

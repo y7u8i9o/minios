@@ -69,6 +69,8 @@ void window_relayout_all(struct widget *window)
 static void clear_marks(struct widget *w)
 {
     w->dirty = 0;
+    w->dirty_part = 0;
+    w->scroll_dy = 0;
     if (!w->child_dirty)
         return;
     w->child_dirty = 0;
@@ -76,11 +78,31 @@ static void clear_marks(struct widget *w)
         clear_marks(c);
 }
 
+/* Performs the pending move of widget_scroll_area. The moved area is
+ * damage for the server. An area that is not wholly visible is repainted
+ * instead, because its hidden pixels are not in the surface. */
+static void scroll_pixels(struct widget *w, struct painter *p, struct rect_set *rects)
+{
+    int s = p->scale;
+    struct rect r = w->scroll_rect;
+    struct rect dev = { p->ox + r.x * s, p->oy + r.y * s, r.w * s, r.h * s };
+    int dy = w->scroll_dy * s;
+    w->scroll_dy = 0;
+    struct rect seen = rect_intersect(dev, p->clip);
+    if (seen.x != dev.x || seen.y != dev.y || seen.w != dev.w || seen.h != dev.h) {
+        widget_invalidate_rect(w, r);
+        return;
+    }
+    gfx_move_rect(p->s, dev, 0, dy);
+    rect_set_add(rects, dev);
+}
+
 /* Paints the dirty widgets of the tree. The device rectangle of each
- * repainted subtree goes into rects, which merges close rectangles, so
- * the server composes only the repainted parts and not their bounding
- * box. force is set below a repainted widget, whose rectangle already
- * contains the children. */
+ * repainted area goes into rects, which merges close rectangles, so the
+ * server composes only the repainted parts and not their bounding box.
+ * force is set below a repainted widget, whose rectangle already contains
+ * the children. A widget with dirty_part repaints its dirty rectangle:
+ * its own paint and the children within the rectangle. */
 static void paint_tree(struct widget *w, struct painter *p, int force, struct rect_set *rects, struct widget *skip)
 {
     if (!w->visible || w == skip)
@@ -92,7 +114,17 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
         painter_pop(p);
         return;
     }
+    if (!force && !w->dirty) {
+        /* A transparent child marked dirty directly needs the background
+         * of this widget below it. */
+        for (struct widget *c = w->first; c; c = c->next)
+            if (c->transparent && c->dirty && c->visible) {
+                c->dirty = 0;
+                widget_invalidate_rect(w, (struct rect){ c->x, c->y, c->w, c->h });
+            }
+    }
     if (force || w->dirty) {
+        w->scroll_dy = 0;
         if (w->cls->paint) {
             w->cls->paint(w, p);
             gui_count(GUI_COUNT_WIDGET_PAINTS, 1);
@@ -102,12 +134,32 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
             rect_set_add(rects, r);
         for (struct widget *c = w->first; c; c = c->next)
             paint_tree(c, p, 1, rects, skip);
-    } else if (w->child_dirty) {
-        for (struct widget *c = w->first; c; c = c->next)
-            if (c->dirty || c->child_dirty)
-                paint_tree(c, p, 0, rects, skip);
+    } else {
+        if (w->scroll_dy)
+            scroll_pixels(w, p, rects);
+        /* The marked children first. A part of them inside the dirty
+         * rectangle is painted again below, over the background. */
+        if (w->child_dirty)
+            for (struct widget *c = w->first; c; c = c->next)
+                if (c->dirty || c->child_dirty || c->dirty_part)
+                    paint_tree(c, p, 0, rects, skip);
+        for (int i = 0; w->dirty_part && i < w->ndirty; i++) {
+            struct rect d = w->dirty_rects[i];
+            painter_push_clip(p, d.x, d.y, d.w, d.h);
+            if (!rect_empty(p->clip)) {
+                if (w->cls->paint) {
+                    w->cls->paint(w, p);
+                    gui_count(GUI_COUNT_WIDGET_PAINTS, 1);
+                }
+                rect_set_add(rects, p->clip);
+                for (struct widget *c = w->first; c; c = c->next)
+                    paint_tree(c, p, 1, rects, skip);
+            }
+            painter_pop(p);
+        }
     }
     w->dirty = 0;
+    w->dirty_part = 0;
     w->child_dirty = 0;
     painter_pop(p);
 }
@@ -269,6 +321,7 @@ static void tip_show(void *arg)
     l->w = widget_text_width(window, NULL, o->tip, -1) + 8;
     l->h = t->font->height + 6;
     l->value = 1;                       /* label paints as a tooltip */
+    l->transparent = 0;                 /* the tooltip paints its own background */
     popup_open(window, l, ax, ay + o->h + 2, l->w, l->h, 0);
     ws->tip = l;
     widget_invalidate(l);

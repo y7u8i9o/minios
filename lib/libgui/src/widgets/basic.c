@@ -35,7 +35,6 @@ static void label_paint(struct widget *w, struct painter *p)
         painter_text(p, 4, 3, widget_text(w), p->theme->color[TC_TEXT]);
         return;
     }
-    painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
     int x = 0;
     if (w->icon) {
         painter_icon(p, 0, (w->h - image_lh(w->icon)) / 2, w->icon, 0);
@@ -62,8 +61,10 @@ const struct widget_class label_class = { "label", sizeof(struct widget), label_
 struct widget *label_new(struct widget *parent, const char *text)
 {
     struct widget *w = widget_new(&label_class, parent);
-    if (w)
+    if (w) {
+        w->transparent = 1;
         widget_set_text(w, text);
+    }
     return w;
 }
 
@@ -72,7 +73,6 @@ struct widget *label_new(struct widget *parent, const char *text)
 static void button_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->pressed ? t->color[TC_BUTTON_PRESSED]
                     : w->hover ? t->color[TC_BUTTON_HOVER] : t->color[TC_BUTTON];
     painter_rounded(p, 0, 0, w->w, w->h, fill, 0xffffffffu);
@@ -136,6 +136,7 @@ struct widget *button_new(struct widget *parent, const char *text)
     struct widget *w = widget_new(&button_class, parent);
     if (w) {
         w->focusable = 1;
+        w->transparent = 1;
         widget_set_text(w, text);
     }
     return w;
@@ -146,7 +147,6 @@ struct widget *button_new(struct widget *parent, const char *text)
 static void check_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     int box = painter_text_height(p) - 2;
     if (box < 10) box = 10;
     int by = (w->h - box) / 2;
@@ -219,6 +219,7 @@ struct widget *checkbox_new(struct widget *parent, const char *text)
     struct widget *w = widget_new(&checkbox_class, parent);
     if (w) {
         w->focusable = 1;
+        w->transparent = 1;
         widget_set_text(w, text);
     }
     return w;
@@ -229,6 +230,7 @@ struct widget *radio_new(struct widget *parent, const char *text)
     struct widget *w = widget_new(&radio_class, parent);
     if (w) {
         w->focusable = 1;
+        w->transparent = 1;
         widget_set_text(w, text);
     }
     return w;
@@ -244,7 +246,6 @@ static void separator_measure(struct widget *w, struct size_hint *h)
 
 static void separator_paint(struct widget *w, struct painter *p)
 {
-    painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
     if (w->w >= w->h)
         painter_line(p, 0, w->h / 2, w->w - 1, w->h / 2, p->theme->color[TC_BORDER]);
     else
@@ -255,7 +256,10 @@ const struct widget_class separator_class = { "separator", sizeof(struct widget)
 
 struct widget *separator_new(struct widget *parent)
 {
-    return widget_new(&separator_class, parent);
+    struct widget *w = widget_new(&separator_class, parent);
+    if (w)
+        w->transparent = 1;
+    return w;
 }
 
 /* ---- canvas ---- */

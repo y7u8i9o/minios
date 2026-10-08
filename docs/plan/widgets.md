@@ -247,7 +247,7 @@ rectangle. A step of a scroll area adds 0 layouts. The boot cases
 Document: `docs/design/graphics-performance.md` (the counters and the
 table before and after), `docs/design/framework.md` (layout).
 
-### K3. Partial repaints, scrolling by copy and the editor
+### K3. Partial repaints, scrolling by copy and the editor (completed 2026-10-09)
 
 Built:
 

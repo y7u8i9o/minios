@@ -116,6 +116,30 @@ painting. Each repainted subtree gives one damage rectangle, and close
 rectangles merge in a `rect_set`. `window_paint` returns their union,
 which `app_set_damage_log` prints for the tests.
 
+## Partial repaints and scrolling by copy (K3 of `docs/plan/widgets.md`)
+
+`widget_invalidate_rect(w, r)` marks a part of a widget. A widget records
+up to three separate dirty rectangles. Overlapping rectangles join, and
+a fourth rectangle joins the third. The paint repaints each rectangle
+separately: the paint function of the widget with the clip of the
+rectangle, then the children inside it. Labels, buttons, check boxes,
+radio buttons and separators have the bit `transparent`. They paint no
+background, and their invalidation becomes a rectangle of the nearest
+opaque ancestor.
+
+`widget_scroll_area(w, r, dy)` records a move of the pixels of `r` by
+`dy`. The next paint moves them with `gfx_move_rect` in the window
+surface and repaints the exposed rows. The method relies on
+`gui_buffers_switch`, which gives the current buffer the latest
+contents. The moved area is damage for X12. The function repaints `r`
+instead when a popup lies in the window surface, when the widget waits
+for another partial paint, or when the move is not smaller than `r`. The
+paint repaints `r` when the widget is repainted whole or when `r` is not
+wholly visible. The list view, the tree view and table, the editor and
+the scroll area scroll this way. Their paint functions draw only the
+rows inside the clip. The scroll area places its content in a viewport
+inside its frame, so the content never covers the frame.
+
 ## Layout of changed widgets (K2 of `docs/plan/widgets.md`)
 
 Measurements are cached. `widget_relayout(w)` sets `needs_measure` on `w`

@@ -300,6 +300,23 @@ void gfx_copy_rect(struct surface *dst, const struct surface *src, const struct 
                src->pixels + (size_t)(r.y + j) * src->stride + r.x, (size_t)r.w * 4);
 }
 
+/* The rows are copied from the top when the pixels move up and from the
+ * bottom when they move down, so that no source row is overwritten before
+ * it is copied. memmove handles the overlap within a row. */
+void gfx_move_rect(struct surface *s, struct rect r, int dx, int dy)
+{
+    int w = r.w - (dx < 0 ? -dx : dx), h = r.h - (dy < 0 ? -dy : dy);
+    if (w <= 0 || h <= 0)
+        return;
+    int sx = dx < 0 ? r.x - dx : r.x, tx = dx < 0 ? r.x : r.x + dx;
+    int sy = dy < 0 ? r.y - dy : r.y, ty = dy < 0 ? r.y : r.y + dy;
+    for (int k = 0; k < h; k++) {
+        int j = dy > 0 ? h - 1 - k : k;
+        memmove(s->pixels + (size_t)(ty + j) * s->stride + tx, s->pixels + (size_t)(sy + j) * s->stride + sx,
+                (size_t)w * 4);
+    }
+}
+
 /* ---- colours ---- */
 
 /* a / b rounded to the nearest integer, for a negative a as well. */

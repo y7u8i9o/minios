@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "../intmap.h"
 
 #define INDENT 16
 #define HEADER_H 24
@@ -14,8 +15,9 @@ struct view {
     struct widget w;
     struct model *m;
     int scroll;                 /* first visible flat row */
-    /* tree: expanded row ids, flattened visible rows */
-    int *expanded, nexpanded;
+    /* tree: the set of expanded row ids, the flattened visible rows and
+     * the map from a row id to its flat row */
+    struct intmap expanded, flat_of;
     int *flat, *depth, nflat;
     /* table: column widths, sort state, header drag */
     int *widths, ncols;
@@ -35,10 +37,7 @@ static int line_h(const struct widget *w) { return widget_theme(w)->font->height
 
 static int is_expanded(struct view *v, int row)
 {
-    for (int i = 0; i < v->nexpanded; i++)
-        if (v->expanded[i] == row)
-            return 1;
-    return 0;
+    return intmap_get(&v->expanded, row, 0);
 }
 
 static void flatten(struct view *v, int parent, int depth)
@@ -54,6 +53,7 @@ static void flatten(struct view *v, int parent, int depth)
         }
         v->flat[v->nflat] = row;
         v->depth[v->nflat] = depth;
+        intmap_put(&v->flat_of, row, v->nflat);
         v->nflat++;
         if (!v->header && is_expanded(v, row))
             flatten(v, row, depth + 1);
@@ -63,6 +63,7 @@ static void flatten(struct view *v, int parent, int depth)
 static void refresh(struct view *v)
 {
     v->nflat = 0;
+    intmap_clear(&v->flat_of);
     flatten(v, -1, 0);
     if (v->header && v->m) {
         int nc = v->m->columns(v->m);
@@ -84,10 +85,33 @@ static int rows_visible(struct view *v)
 
 static int flat_index_of(struct view *v, int row)
 {
-    for (int i = 0; i < v->nflat; i++)
-        if (v->flat[i] == row)
-            return i;
-    return -1;
+    return intmap_get(&v->flat_of, row, -1);
+}
+
+/* The rectangle of the rows below the header and left of the track. */
+static struct rect rows_rect(struct view *v)
+{
+    int top = v->header ? HEADER_H : 0, rows = rows_visible(v);
+    int sbw = v->nflat > rows ? theme_px(widget_theme(&v->w), TM_SCROLLBAR) : 0;
+    return (struct rect){ 1, 1 + top, v->w.w - 2 - sbw, v->w.h - 2 - top };
+}
+
+/* The view scrolled from the first row old: the rows move by copy, and
+ * the track is repainted. A move up exposes the rows at the bottom and
+ * the partly shown row above them. */
+static void scrolled(struct view *v, int old)
+{
+    struct widget *w = &v->w;
+    if (v->drop_row != -2) {
+        widget_invalidate(w);
+        return;
+    }
+    struct rect r = rows_rect(v);
+    int lh = line_h(w), dy = (old - v->scroll) * lh, rem = r.h % lh;
+    widget_scroll_area(w, r, dy);
+    if (dy < 0 && rem)
+        widget_invalidate_rect(w, (struct rect){ r.x, r.y + r.h + dy - rem, r.w, rem });
+    widget_invalidate_rect(w, (struct rect){ r.x + r.w, r.y, w->w - r.x - r.w, r.h });
 }
 
 static void select_flat(struct view *v, int idx, const char *signal)
@@ -141,7 +165,10 @@ static void view_paint(struct widget *w, struct painter *p)
         painter_pop(p);
     }
     painter_push(p, 1, 1 + top, w->w - 2 - sbw, w->h - 2 - top);
-    for (int i = 0; i <= rows && v->scroll + i < v->nflat; i++) {
+    /* Only the rows inside the clip, for a partial paint. */
+    struct rect clip = painter_clip_local(p);
+    int i0 = clip.y > 0 ? clip.y / lh : 0, i1 = rect_empty(p->clip) ? 0 : (clip.y + clip.h + lh - 1) / lh;
+    for (int i = i0; i <= rows && i < i1 && v->scroll + i < v->nflat; i++) {
         int idx = v->scroll + i, row = v->flat[idx];
         int y = i * lh;
         int selected = row == w->value;
@@ -248,17 +275,10 @@ static int view_drag_event(struct widget *w, struct event *e)
 
 static void toggle_expand(struct view *v, int row)
 {
-    int found = -1;
-    for (int i = 0; i < v->nexpanded; i++)
-        if (v->expanded[i] == row)
-            found = i;
-    if (found >= 0) {
-        memmove(v->expanded + found, v->expanded + found + 1, (size_t)(v->nexpanded - found - 1) * sizeof *v->expanded);
-        v->nexpanded--;
-    } else {
-        v->expanded = realloc(v->expanded, (size_t)(v->nexpanded + 1) * sizeof *v->expanded);
-        v->expanded[v->nexpanded++] = row;
-    }
+    if (is_expanded(v, row))
+        intmap_remove(&v->expanded, row);
+    else
+        intmap_put(&v->expanded, row, 1);
     refresh(v);
 }
 
@@ -273,7 +293,7 @@ static int track_event(struct view *v, struct event *e)
     if (!sbw || !scroll_track_event(&v->track, w, e, track, &v->scroll, v->nflat, rows))
         return 0;
     if (v->scroll != before)
-        widget_invalidate(w);
+        scrolled(v, before);
     return 1;
 }
 
@@ -365,10 +385,12 @@ static int view_event(struct widget *w, struct event *e)
         return 1;
     case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END:
         return view_drag_event(w, e);
-    case EV_MOUSE_WHEEL:
+    case EV_MOUSE_WHEEL: {
+        int old = v->scroll;
         if (scroll_set(&v->scroll, v->scroll + 3 * e->button, v->nflat, rows))
-            widget_invalidate(w);
+            scrolled(v, old);
         return 1;
+    }
     case EV_KEY_DOWN: {
         if (e->mods & WMOD_ALT)
             return 0;                   /* accelerators such as Alt+Up */
@@ -406,7 +428,8 @@ static int view_event(struct widget *w, struct event *e)
 static void view_destroy(struct widget *w)
 {
     struct view *v = (struct view *)w;
-    free(v->expanded);
+    intmap_free(&v->expanded);
+    intmap_free(&v->flat_of);
     free(v->flat);
     free(v->depth);
     free(v->widths);
@@ -441,7 +464,7 @@ void view_set_model(struct widget *w, struct model *m)
 {
     struct view *v = (struct view *)w;
     v->m = m;
-    v->nexpanded = 0;
+    intmap_clear(&v->expanded);
     v->scroll = 0;
     w->value = -1;
     refresh(v);

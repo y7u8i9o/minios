@@ -31,6 +31,22 @@ static void listview_measure(struct widget *w, struct size_hint *h)
     h->min_h = line_h(w) + 2;
 }
 
+/* The list scrolled from the first row old: the rows move by copy, and
+ * the track is repainted. A move up exposes the rows at the bottom and
+ * the partly shown row above them. */
+static void scrolled(struct listview *l, int old)
+{
+    struct widget *w = &l->w;
+    int lh = line_h(w), rows = rows_of(w);
+    int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
+    struct rect r = { 1, 1, w->w - 2 - sbw, w->h - 2 };
+    int dy = (old - l->scroll) * lh, rem = r.h % lh;
+    widget_scroll_area(w, r, dy);
+    if (dy < 0 && rem)
+        widget_invalidate_rect(w, (struct rect){ r.x, r.y + r.h + dy - rem, r.w, rem });
+    widget_invalidate_rect(w, (struct rect){ w->w - sbw, 0, sbw, w->h });
+}
+
 static void listview_paint(struct widget *w, struct painter *p)
 {
     struct listview *l = (struct listview *)w;
@@ -41,7 +57,10 @@ static void listview_paint(struct widget *w, struct painter *p)
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
     painter_frame(p, 0, 0, w->w, w->h, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     painter_push(p, 1, 1, w->w - 2 - sbw, w->h - 2);
-    for (int i = 0; i < rows + 1 && l->scroll + i < l->nitems; i++) {
+    /* Only the rows inside the clip, for a partial paint. */
+    struct rect clip = painter_clip_local(p);
+    int i0 = clip.y > 0 ? clip.y / lh : 0, i1 = rect_empty(p->clip) ? 0 : (clip.y + clip.h + lh - 1) / lh;
+    for (int i = i0; i < rows + 1 && i < i1 && l->scroll + i < l->nitems; i++) {
         int idx = l->scroll + i;
         int y = i * lh;
         if (idx == w->value)
@@ -88,7 +107,7 @@ static int listview_event(struct widget *w, struct event *e)
         struct rect track = { w->w - sbw, 0, sbw, w->h };
         if (sbw && scroll_track_event(&l->track, w, e, track, &l->scroll, l->nitems, rows)) {
             if (l->scroll != before)
-                widget_invalidate(w);
+                scrolled(l, before);
             return 1;
         }
         if (e->type != EV_MOUSE_DOWN || !(e->button & 1))
@@ -100,10 +119,12 @@ static int listview_event(struct widget *w, struct event *e)
             select_row(l, idx, count == 2 && idx == w->value ? "activate" : "selected");
         return 1;
     }
-    case EV_MOUSE_WHEEL:
+    case EV_MOUSE_WHEEL: {
+        int old = l->scroll;
         if (scroll_set(&l->scroll, l->scroll + 3 * e->button, l->nitems, rows))
-            widget_invalidate(w);
+            scrolled(l, old);
         return 1;
+    }
     case EV_KEY_DOWN:
         switch (e->code) {
         case KEY_UP: select_row(l, w->value - 1, "selected"); return 1;

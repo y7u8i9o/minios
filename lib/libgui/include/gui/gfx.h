@@ -94,6 +94,10 @@ void gfx_disc(struct surface *s, int x, int y, int size, int inset, uint32_t col
 void gfx_blit(struct surface *dst, int dx, int dy, const struct surface *src, const struct rect *clip);
 /* Copy a rectangle of src to the same place in dst. */
 void gfx_copy_rect(struct surface *dst, const struct surface *src, const struct rect *r);
+/* Move the pixels inside r by (dx, dy) within s. Pixels that the move
+ * takes out of r are dropped, and the area that it exposes retains its
+ * old pixels. r must lie inside s. */
+void gfx_move_rect(struct surface *s, struct rect r, int dx, int dy);
 /* Rectangle helpers. */
 struct rect rect_intersect(struct rect a, struct rect b);
 struct rect rect_union(struct rect a, struct rect b);

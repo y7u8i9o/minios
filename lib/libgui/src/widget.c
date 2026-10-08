@@ -299,13 +299,80 @@ int widget_emit(struct widget *w, const char *signal, void *args)
 
 /* ---- redraw and layout marks ---- */
 
-void widget_invalidate(struct widget *w)
+static void mark_ancestors(struct widget *w)
 {
-    w->dirty = 1;
     for (struct widget *p = w->parent; p && !p->child_dirty; p = p->parent)
         p->child_dirty = 1;
     if (w->window)
         w->window->child_dirty = 1;
+}
+
+void widget_invalidate(struct widget *w)
+{
+    if (w->transparent && w->parent) {
+        widget_invalidate_rect(w->parent, (struct rect){ w->x, w->y, w->w, w->h });
+        return;
+    }
+    w->dirty = 1;
+    mark_ancestors(w);
+}
+
+void widget_invalidate_rect(struct widget *w, struct rect r)
+{
+    if (w->transparent && w->parent) {
+        r.x += w->x;
+        r.y += w->y;
+        widget_invalidate_rect(w->parent, r);
+        return;
+    }
+    r = rect_intersect(r, (struct rect){ 0, 0, w->w, w->h });
+    if (rect_empty(r) || w->dirty)
+        return;
+    if (!w->dirty_part)
+        w->ndirty = 0;
+    w->dirty_part = 1;
+    mark_ancestors(w);
+    /* A rectangle that overlaps a recorded one joins it. Separate
+     * rectangles are painted separately, up to three. */
+    for (int i = 0; i < w->ndirty; i++) {
+        struct rect d = w->dirty_rects[i];
+        if (!rect_empty(rect_intersect(d, r))) {
+            w->dirty_rects[i] = rect_union(d, r);
+            return;
+        }
+    }
+    if (w->ndirty < 3) {
+        w->dirty_rects[w->ndirty++] = r;
+        return;
+    }
+    w->dirty_rects[2] = rect_union(w->dirty_rects[2], r);
+}
+
+void widget_scroll_area(struct widget *w, struct rect r, int dy)
+{
+    struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
+    int ady = dy < 0 ? -dy : dy;
+    int pending = w->scroll_dy && w->scroll_rect.x == r.x && w->scroll_rect.y == r.y && w->scroll_rect.w == r.w &&
+                  w->scroll_rect.h == r.h;
+    /* A popup in the window surface covers pixels of the window, and a
+     * pending partial paint would be moved before it is painted. */
+    if (!ws || (ws->popup && !ws->popup_win) || (w->dirty_part && !pending) || w->transparent) {
+        widget_invalidate_rect(w, r);
+        return;
+    }
+    if (dy == 0)
+        return;
+    w->scroll_rect = r;
+    w->scroll_dy += dy;
+    ady = w->scroll_dy < 0 ? -w->scroll_dy : w->scroll_dy;
+    if (ady >= r.h) {
+        w->scroll_dy = 0;
+        widget_invalidate_rect(w, r);
+        return;
+    }
+    /* The rows that the whole move exposes. */
+    struct rect strip = { r.x, w->scroll_dy < 0 ? r.y + r.h - ady : r.y, r.w, ady };
+    widget_invalidate_rect(w, strip);
 }
 
 void widget_relayout(struct widget *w)

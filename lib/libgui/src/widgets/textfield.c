@@ -31,6 +31,51 @@ static void changed(struct textfield *f)
     widget_emit(&f->w, "changed", &c);
 }
 
+static const char *shown(struct textfield *f);
+
+/* The x of the caret before the byte offset at, in the coordinates of the
+ * field. The text starts at PAD - scroll_x. */
+static int caret_x(struct textfield *f, int at)
+{
+    return PAD - f->scroll_x + widget_text_width(&f->w, NULL, shown(f), at);
+}
+
+/* The state before an edit or a caret move, for the partial repaint. */
+struct edit_start {
+    int x, scroll_x, sel;
+};
+
+static struct edit_start before_edit(struct textfield *f, int at)
+{
+    return (struct edit_start){ caret_x(f, at), f->scroll_x, f->sel >= 0 && f->sel != f->cursor };
+}
+
+/* An edit changed the text from the offset of b.x on. The field repaints
+ * from that column to its end. A glyph may reach 2 pixels to the left of
+ * its position. A changed scroll offset or a selection repaints the whole
+ * field. */
+static void edited(struct textfield *f, struct edit_start b)
+{
+    struct sig_change c = { 0, widget_text(&f->w) };
+    if (f->scroll_x != b.scroll_x || b.sel || f->preedit[0])
+        widget_invalidate(&f->w);
+    else
+        widget_invalidate_rect(&f->w, (struct rect){ b.x - 2, 0, f->w.w - b.x + 2, f->w.h });
+    widget_emit(&f->w, "changed", &c);
+}
+
+/* A caret move repaints the old and the new caret column. */
+static void caret_moved(struct textfield *f, struct edit_start b)
+{
+    if (f->scroll_x != b.scroll_x || b.sel || (f->sel >= 0 && f->sel != f->cursor)) {
+        widget_invalidate(&f->w);
+        return;
+    }
+    int x = caret_x(f, f->cursor);
+    widget_invalidate_rect(&f->w, (struct rect){ b.x - 1, 0, 3, f->w.h });
+    widget_invalidate_rect(&f->w, (struct rect){ x - 1, 0, 3, f->w.h });
+}
+
 static int len_of(struct textfield *f) { return (int)strlen(widget_text(&f->w)); }
 
 /* The text as it is drawn and measured: the text itself, or for a masked
@@ -156,6 +201,7 @@ static int key(struct textfield *f, struct event *e)
 {
     int ctrl = e->mods & WMOD_CTRL, shift = e->mods & WMOD_SHIFT;
     int before = f->cursor, before_sel = f->sel, before_scroll = f->scroll_x, len = len_of(f);
+    struct edit_start b = before_edit(f, f->cursor);
     if (e->mods & WMOD_ALT)
         return 0;                            /* mnemonics and accelerators */
     int moved = 1;
@@ -209,7 +255,7 @@ static int key(struct textfield *f, struct event *e)
         scroll_to_cursor(f);
         /* Home at the start and End at the end change nothing. */
         if (f->cursor != before || f->sel != before_sel || f->scroll_x != before_scroll)
-            widget_invalidate(&f->w);
+            caret_moved(f, b);
         return 1;
     }
     if (e->code == KEY_DELETE) {
@@ -218,6 +264,8 @@ static int key(struct textfield *f, struct event *e)
             memmove(f->w.text + f->cursor, f->w.text + next, (size_t)(len - next + 1));
         }
     } else if (e->ch == '\b') {
+        if (f->cursor > 0 && !b.sel)
+            b = before_edit(f, gui_utf8_prev_boundary(f->w.text, f->cursor));
         if (!delete_selection(f) && f->cursor > 0) {
             int prev = gui_utf8_prev_boundary(f->w.text, f->cursor);
             memmove(f->w.text + prev, f->w.text + f->cursor, (size_t)(len - f->cursor + 1));
@@ -235,8 +283,8 @@ static int key(struct textfield *f, struct event *e)
     } else {
         return 0;
     }
-    changed(f);
     scroll_to_cursor(f);
+    edited(f, b);
     return 1;
 }
 
@@ -411,11 +459,12 @@ static int textfield_event(struct widget *w, struct event *e)
                 return 1;
             for (int i = 0; i < n; i++)
                 copy[i] = e->text[i] == '\n' || e->text[i] == '\r' ? ' ' : e->text[i];
+            struct edit_start b = before_edit(f, f->cursor);
             delete_selection(f);
             insert(f, copy, n);
             free(copy);
-            changed(f);
             scroll_to_cursor(f);
+            edited(f, b);
         }
         return 1;
     case EV_PREEDIT:

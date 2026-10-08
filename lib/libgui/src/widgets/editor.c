@@ -29,11 +29,19 @@ static void lines_delete(struct editor *ed, int at)
 
 int llen(const struct editor *ed, int l) { return (int)strlen(ed->lines[l]); }
 
+static void invalidate_rows(struct editor *ed, int r0, int r1);
+
+/* An edit inside one line repaints the rows of that line, and with
+ * wrapping the rows below it. Other edits repaint the editor. */
 void editor_changed(struct editor *ed)
 {
-    ed->rows_dirty = 1;
     ed->modified = 1;
-    widget_invalidate(&ed->w);
+    if (!ed->rows_dirty && ed->edit_old == 1 && ed->edit_new == 1 && ed->first_row) {
+        int r = ed->first_row[ed->edit_line];
+        invalidate_rows(ed, r, ed->wrap ? ed->scroll + ed->w.h : r + 1);
+    } else {
+        widget_invalidate(&ed->w);
+    }
     struct sig_change c = { ed->cl, NULL };
     widget_emit(&ed->w, "changed", &c);
 }
@@ -42,6 +50,10 @@ void editor_changed(struct editor *ed)
  * the end position. */
 static void raw_insert(struct editor *ed, int l, int c, const char *text, int n, int *el, int *ec)
 {
+    int breaks = 0;
+    for (int i = 0; i < n; i++)
+        breaks += text[i] == '\n';
+    lines_changed(ed, l, 1, 1 + breaks);
     char *line = ed->lines[l];
     int len = llen(ed, l);
     char *tail = strdup(line + c);
@@ -95,6 +107,7 @@ static char *copy_range(struct editor *ed, int l0, int c0, int l1, int c1)
 /* raw_delete removes the range and returns the removed text. */
 static char *raw_delete(struct editor *ed, int l0, int c0, int l1, int c1)
 {
+    lines_changed(ed, l0, l1 - l0 + 1, 1);
     char *out = copy_range(ed, l0, c0, l1, c1);
     char *tail = strdup(ed->lines[l1] + c1);
     ed->lines[l0][c0] = '\0';
@@ -463,17 +476,42 @@ static void indent_lines(struct editor *ed, int l0, int l1, int out)
 
 /* ---- visual rows ---- */
 
+/* Makes room for n more rows. */
+static void reserve_rows(struct editor *ed, int n)
+{
+    if (ed->nrows + n <= ed->rows_cap)
+        return;
+    int cap = ed->rows_cap ? ed->rows_cap : 128;
+    while (cap < ed->nrows + n)
+        cap *= 2;
+    ed->row_line = realloc(ed->row_line, (size_t)cap * sizeof *ed->row_line);
+    ed->row_start = realloc(ed->row_start, (size_t)cap * sizeof *ed->row_start);
+    ed->row_len = realloc(ed->row_len, (size_t)cap * sizeof *ed->row_len);
+    ed->rows_cap = cap;
+}
+
 static void add_row(struct editor *ed, int line, int start, int len)
 {
-    if ((ed->nrows & 127) == 0) {
-        ed->row_line = realloc(ed->row_line, (size_t)(ed->nrows + 128) * sizeof *ed->row_line);
-        ed->row_start = realloc(ed->row_start, (size_t)(ed->nrows + 128) * sizeof *ed->row_start);
-        ed->row_len = realloc(ed->row_len, (size_t)(ed->nrows + 128) * sizeof *ed->row_len);
-    }
+    reserve_rows(ed, 1);
     ed->row_line[ed->nrows] = line;
     ed->row_start[ed->nrows] = start;
     ed->row_len[ed->nrows] = len;
     ed->nrows++;
+}
+
+void lines_changed(struct editor *ed, int l, int old_n, int new_n)
+{
+    if (ed->hl_valid > l)
+        ed->hl_valid = l;
+    if (ed->rows_dirty)
+        return;
+    if (ed->edit_old >= 0) {
+        ed->rows_dirty = 1;
+        return;
+    }
+    ed->edit_line = l;
+    ed->edit_old = old_n;
+    ed->edit_new = new_n;
 }
 
 static int gutter_w(struct editor *ed)
@@ -492,51 +530,99 @@ static int text_w(struct editor *ed)
     return ed->w.w - 2 - gutter_w(ed) - 2 * PAD - sb;
 }
 
+/* Appends the rows of line l for a text width of avail. */
+static void wrap_line(struct editor *ed, int l, int avail)
+{
+    const char *s = ed->lines[l];
+    int len = (int)strlen(s);
+    if (!ed->wrap || avail < 40 || len == 0) {
+        add_row(ed, l, 0, len);
+        return;
+    }
+    int start = 0;
+    while (start < len) {
+        int fit = widget_text_index(&ed->w, ed->font, s + start, len - start, avail);
+        if (fit <= 0)
+            fit = 1;
+        if (start + fit < len) {
+            /* Break after the last space that fits. */
+            int k = fit;
+            while (k > 1 && s[start + k - 1] != ' ')
+                k--;
+            if (k > 1)
+                fit = k;
+        }
+        add_row(ed, l, start, fit);
+        start += fit;
+    }
+}
+
 static void build_rows(struct editor *ed)
 {
     int avail = text_w(ed);
     ed->nrows = 0;
+    ed->first_row = realloc(ed->first_row, (size_t)(ed->nlines + 1) * sizeof *ed->first_row);
     for (int l = 0; l < ed->nlines; l++) {
-        const char *s = ed->lines[l];
-        int len = (int)strlen(s);
-        if (!ed->wrap || avail < 40) {
-            add_row(ed, l, 0, len);
-            continue;
-        }
-        int start = 0;
-        while (start < len) {
-            int fit = widget_text_index(&ed->w, ed->font, s + start, len - start, avail);
-            if (fit <= 0)
-                fit = 1;
-            if (start + fit < len) {
-                /* Break after the last space that fits. */
-                int k = fit;
-                while (k > 1 && s[start + k - 1] != ' ')
-                    k--;
-                if (k > 1)
-                    fit = k;
-            }
-            add_row(ed, l, start, fit);
-            start += fit;
-        }
-        if (len == 0)
-            add_row(ed, l, 0, 0);
+        ed->first_row[l] = ed->nrows;
+        wrap_line(ed, l, avail);
     }
+    ed->first_row[ed->nlines] = ed->nrows;
     ed->rows_dirty = 0;
+    ed->edit_old = -1;
     ed->rows_width = avail;
+}
+
+/* Replaces the rows of the edited lines and moves the rows after them.
+ * Only the edited lines are wrapped again. */
+static void update_rows(struct editor *ed)
+{
+    int l = ed->edit_line, old_n = ed->edit_old, new_n = ed->edit_new, delta = new_n - old_n;
+    ed->edit_old = -1;
+    int r0 = ed->first_row[l], r1 = ed->first_row[l + old_n], total = ed->nrows;
+    /* Wrap the new lines after the existing rows, then move them into
+     * place. */
+    ed->nrows = total;
+    for (int k = 0; k < new_n; k++)
+        wrap_line(ed, l + k, ed->rows_width);
+    int added = ed->nrows - total, tail = total - r1;
+    reserve_rows(ed, added);
+    int *arrays[3] = { ed->row_line, ed->row_start, ed->row_len };
+    for (int a = 0; a < 3; a++) {
+        int *v = arrays[a];
+        int *fresh = malloc((size_t)(added ? added : 1) * sizeof *fresh);
+        memcpy(fresh, v + total, (size_t)added * sizeof *fresh);
+        memmove(v + r0 + added, v + r1, (size_t)tail * sizeof *v);
+        memcpy(v + r0, fresh, (size_t)added * sizeof *fresh);
+        free(fresh);
+    }
+    ed->nrows = r0 + added + tail;
+    for (int r = r0 + added; r < ed->nrows; r++)
+        ed->row_line[r] += delta;
+    /* The row index of the lines. */
+    size_t after = (size_t)(ed->nlines - (l + new_n) + 1) * sizeof *ed->first_row;
+    int *fr = ed->first_row;
+    if (delta < 0)
+        memmove(fr + l + new_n, fr + l + old_n, after);
+    fr = realloc(fr, (size_t)(ed->nlines + 1) * sizeof *fr);
+    if (delta > 0)
+        memmove(fr + l + new_n, fr + l + old_n, after);
+    ed->first_row = fr;
+    int r = r0;
+    for (int k = 0; k < new_n; k++) {
+        fr[l + k] = r;
+        while (r < r0 + added && ed->row_line[r] == l + k)
+            r++;
+    }
+    for (int k = l + new_n; k <= ed->nlines; k++)
+        fr[k] += added - (r1 - r0);
 }
 
 static int row_of(struct editor *ed, int l, int c)
 {
-    int last = 0;
-    for (int r = 0; r < ed->nrows; r++) {
-        if (ed->row_line[r] != l)
-            continue;
-        last = r;
-        if (c >= ed->row_start[r] && c < ed->row_start[r] + ed->row_len[r])
-            return r;
-    }
-    return last;
+    int r = ed->first_row[l], end = ed->first_row[l + 1];
+    while (r + 1 < end && c >= ed->row_start[r] + ed->row_len[r])
+        r++;
+    return r;
 }
 
 static int rows_visible(struct editor *ed)
@@ -549,6 +635,8 @@ static void ensure_rows(struct editor *ed)
 {
     if (ed->rows_dirty || ed->rows_width != text_w(ed))
         build_rows(ed);
+    else if (ed->edit_old >= 0)
+        update_rows(ed);
 }
 
 static void scroll_to_cursor(struct editor *ed)
@@ -569,10 +657,33 @@ static void scroll_to_cursor(struct editor *ed)
     }
 }
 
+/* Repaints the rows r0 to r1 - 1 where they are visible. */
+static void invalidate_rows(struct editor *ed, int r0, int r1)
+{
+    int lh = LH(ed), sb = theme_px(widget_theme(&ed->w), TM_SCROLLBAR);
+    int y0 = 1 + (r0 - ed->scroll) * lh, y1 = 1 + (r1 - ed->scroll) * lh;
+    if (y0 < 1)
+        y0 = 1;
+    if (y1 > y0)
+        widget_invalidate_rect(&ed->w, (struct rect){ 1, y0, ed->w.w - 2 - sb, y1 - y0 });
+}
+
+/* A move of the cursor repaints the old and the new row of the cursor,
+ * which show the caret and the current line. A scroll or a selection
+ * repaints the editor. */
 void cursor_moved(struct editor *ed)
 {
+    int scroll = ed->scroll, scroll_x = ed->scroll_x;
     scroll_to_cursor(ed);
-    widget_invalidate(&ed->w);
+    int row = row_of(ed, ed->cl, ed->cc);
+    if (ed->scroll != scroll || ed->scroll_x != scroll_x || ed->has_sel || ed->sel_shown || ed->caret_row < 0) {
+        widget_invalidate(&ed->w);
+    } else {
+        invalidate_rows(ed, ed->caret_row, ed->caret_row + 1);
+        invalidate_rows(ed, row, row + 1);
+    }
+    ed->caret_row = row;
+    ed->sel_shown = ed->has_sel;
     struct sig_change c = { ed->cl, NULL };
     widget_emit(&ed->w, "cursor", &c);
 }
@@ -599,6 +710,25 @@ static uint32_t current_line_color(const struct theme *t)
     return out;
 }
 
+/* The state of the highlighter at the start of line l. The cache of the
+ * states is extended from its last valid entry. An edit at line N
+ * invalidates the entries after N, so a paint near the edit runs the
+ * highlighter for the visible lines only. */
+static int hl_state_at(struct editor *ed, int l, unsigned char **classes)
+{
+    ed->hl_state = realloc(ed->hl_state, (size_t)(ed->nlines + 1) * sizeof *ed->hl_state);
+    ed->hl_state[0] = 0;
+    for (int k = ed->hl_valid; k < l; k++) {
+        int len = llen(ed, k), state = ed->hl_state[k];
+        *classes = realloc(*classes, (size_t)len + 1);
+        ed->hl(ed->lines[k], len, *classes, &state, ed->hl_arg);
+        ed->hl_state[k + 1] = state;
+    }
+    if (ed->hl_valid < l)
+        ed->hl_valid = l;
+    return ed->hl_state[l];
+}
+
 static void editor_paint(struct widget *w, struct painter *p)
 {
     struct editor *ed = (struct editor *)w;
@@ -614,20 +744,20 @@ static void editor_paint(struct widget *w, struct painter *p)
     }
     int l0, c0, l1, c1;
     sel_range(ed, &l0, &c0, &l1, &c1);
-    /* Highlighter state up to the first visible line. */
-    int state = 0;
     unsigned char *classes = NULL;
-    int first_line = ed->scroll < ed->nrows ? ed->row_line[ed->scroll] : 0;
-    if (ed->hl) {
-        for (int l = 0; l < first_line; l++) {
-            int len = llen(ed, l);
-            classes = realloc(classes, (size_t)len + 1);
-            ed->hl(ed->lines[l], len, classes, &state, ed->hl_arg);
-        }
-    }
+    /* Only the rows inside the clip, for a partial paint. The highlighter
+     * starts at the line of the first painted row. */
+    struct rect clip = painter_clip_local(p);
+    int i0 = clip.y > 1 ? (clip.y - 1) / lh : 0, i1 = (clip.y + clip.h + lh - 1) / lh;
+    /* The text area and the gutter lie left of the track. A clip inside
+     * the track paints no row. */
+    if (clip.x >= w->w - sb)
+        i1 = 0;
+    int first_line = ed->scroll + i0 < ed->nrows ? ed->row_line[ed->scroll + i0] : 0;
+    int state = ed->hl ? hl_state_at(ed, first_line, &classes) : 0;
     int last_hl_line = -1;
     painter_push(p, 1 + gw, 1, w->w - 2 - gw - sb, w->h - 2);
-    for (int i = 0; i <= vis && ed->scroll + i < ed->nrows; i++) {
+    for (int i = i0; i <= vis && i < i1 && ed->scroll + i < ed->nrows; i++) {
         int r = ed->scroll + i, l = ed->row_line[r], start = ed->row_start[r], len = ed->row_len[r];
         const char *s = ed->lines[l];
         int y = i * lh, ty = y + 1;
@@ -637,6 +767,10 @@ static void editor_paint(struct widget *w, struct painter *p)
             classes = realloc(classes, (size_t)ll + 1);
             ed->hl(s, ll, classes, &state, ed->hl_arg);
             last_hl_line = l;
+            if (l == ed->hl_valid) {
+                ed->hl_state[l + 1] = state;
+                ed->hl_valid = l + 1;
+            }
         }
         /* The row of the cursor has a faint background while the editor
          * has the focus and no selection. */
@@ -689,7 +823,7 @@ static void editor_paint(struct widget *w, struct painter *p)
     free(classes);
     if (gw) {
         painter_push(p, 1, 1, gw - 1, w->h - 2);
-        for (int i = 0; i <= vis && ed->scroll + i < ed->nrows; i++) {
+        for (int i = i0; i <= vis && i < i1 && ed->scroll + i < ed->nrows; i++) {
             int r = ed->scroll + i;
             if (ed->row_start[r] != 0)
                 continue;
@@ -1060,6 +1194,21 @@ static int editor_drag_event(struct editor *ed, struct event *e)
     }
 }
 
+/* The editor scrolled from the first row old: the rows and the line
+ * numbers move by copy, and the track is repainted. A move up exposes
+ * the rows at the bottom and the partly shown row above them. */
+static void scrolled(struct editor *ed, int old)
+{
+    struct widget *w = &ed->w;
+    int sb = theme_px(widget_theme(w), TM_SCROLLBAR), lh = LH(ed);
+    struct rect r = { 1, 1, w->w - 2 - sb, w->h - 2 };
+    int dy = (old - ed->scroll) * lh, rem = r.h % lh;
+    widget_scroll_area(w, r, dy);
+    if (dy < 0 && rem)
+        widget_invalidate_rect(w, (struct rect){ r.x, r.y + r.h + dy - rem, r.w, rem });
+    widget_invalidate_rect(w, (struct rect){ w->w - sb, 0, sb, w->h });
+}
+
 /* The scroll track at the right edge. */
 static int track_event(struct editor *ed, struct event *e)
 {
@@ -1071,7 +1220,7 @@ static int track_event(struct editor *ed, struct event *e)
     if (!scroll_track_event(&ed->track, w, e, track, &ed->scroll, ed->nrows, rows_visible(ed)))
         return 0;
     if (ed->scroll != before)
-        widget_invalidate(w);
+        scrolled(ed, before);
     return 1;
 }
 
@@ -1134,11 +1283,13 @@ static int editor_event(struct widget *w, struct event *e)
             return 1;
         }
         return 0;
-    case EV_MOUSE_WHEEL:
+    case EV_MOUSE_WHEEL: {
         ensure_rows(ed);
+        int old = ed->scroll;
         if (scroll_set(&ed->scroll, ed->scroll + 3 * e->button, ed->nrows, rows_visible(ed)))
-            widget_invalidate(w);
+            scrolled(ed, old);
         return 1;
+    }
     case EV_KEY_DOWN:
         return editor_key(ed, e);
     case EV_TEXT:
@@ -1204,6 +1355,8 @@ static void editor_destroy(struct widget *w)
     clear_ops(&ed->undo, &ed->nundo);
     clear_ops(&ed->redo, &ed->nredo);
     free(ed->row_line);
+    free(ed->first_row);
+    free(ed->hl_state);
     free(ed->row_start);
     free(ed->row_len);
     free(ed->drag_text);

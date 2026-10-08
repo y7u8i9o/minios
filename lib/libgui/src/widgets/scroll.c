@@ -207,11 +207,25 @@ void scrollbar_set(struct widget *w, int value, int max, int page)
 
 /* ---- scroll area ---- */
 
+/* The content lies in a viewport inside the frame. The viewport clips
+ * the content, so the content never covers the frame. */
 struct scrollarea {
     struct widget w;
-    struct widget *content, *vbar, *hbar;
+    struct widget *viewport, *content, *vbar, *hbar;
     int ox, oy;
 };
+
+static void viewport_measure(struct widget *w, struct size_hint *h)
+{
+    extern void widget_measure(struct widget *w);
+    for (struct widget *c = w->first; c; c = c->next) {
+        widget_measure(c);
+        *h = c->measured;
+    }
+}
+
+static const struct widget_class viewport_class = { "viewport", sizeof(struct widget), viewport_measure, NULL, NULL,
+                                                    NULL, NULL };
 
 static void scrollarea_measure(struct widget *w, struct size_hint *h)
 {
@@ -224,14 +238,23 @@ static void scrollarea_measure(struct widget *w, struct size_hint *h)
     h->min_w = h->min_h = 40;
 }
 
-/* A scroll moves the content inside the area and repaints the area. The
- * size of the content does not change, so the step needs no layout. */
+/* A scroll moves the content inside the area. The size of the content
+ * does not change, so the step needs no layout. A vertical step moves the
+ * visible pixels by copy and repaints the exposed rows. A horizontal step
+ * repaints the area. */
 static int on_scroll(struct widget *bar, void *args, void *arg)
 {
     struct scrollarea *a = arg;
-    a->content->x = 1 - a->hbar->value;
-    a->content->y = 1 - a->vbar->value;
-    widget_invalidate(&a->w);
+    int dx = -a->hbar->value - a->content->x, dy = -a->vbar->value - a->content->y;
+    a->content->x += dx;
+    a->content->y += dy;
+    if (dx || !dy) {
+        widget_invalidate(&a->w);
+        return 0;
+    }
+    int vw = a->w.w - 2 - (a->vbar->visible ? a->vbar->w : 0);
+    int vh = a->w.h - 2 - (a->hbar->visible ? a->hbar->h : 0);
+    widget_scroll_area(&a->w, (struct rect){ 1, 1, vw, vh }, dy);
     return 0;
 }
 
@@ -252,7 +275,8 @@ static void scrollarea_layout(struct widget *w)
     scrollbar_set(a->hbar, a->hbar->value, cw, vw);
     widget_set_rect(a->vbar, w->w - 1 - sb, 1, sb, vh);
     widget_set_rect(a->hbar, 1, w->h - 1 - sb, vw, sb);
-    widget_set_rect(a->content, 1 - a->hbar->value, 1 - a->vbar->value, cw > vw ? cw : vw, ch > vh ? ch : vh);
+    widget_set_rect(a->viewport, 1, 1, vw, vh);
+    widget_set_rect(a->content, -a->hbar->value, -a->vbar->value, cw > vw ? cw : vw, ch > vh ? ch : vh);
     w->needs_layout = 0;
 }
 
@@ -280,7 +304,8 @@ struct widget *scrollarea_new(struct widget *parent)
     if (!w)
         return NULL;
     struct scrollarea *a = (struct scrollarea *)w;
-    a->content = box_new(w, 1);
+    a->viewport = widget_new(&viewport_class, w);
+    a->content = box_new(a->viewport, 1);
     a->vbar = scrollbar_new(w, 1);
     a->hbar = scrollbar_new(w, 0);
     a->vbar->focusable = a->hbar->focusable = 0;
