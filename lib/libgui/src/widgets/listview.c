@@ -10,11 +10,13 @@ struct listview {
     int nitems, scroll;
     struct scroll_track track;
     struct gui_clicks clicks;
+    int hot;                    /* the row under the pointer, or -1 */
 };
 
 static int line_h(const struct widget *w)
 {
-    return widget_theme(w)->font->height + 4;
+    const struct theme *t = widget_theme(w);
+    return t->font->height + theme_px(t, TM_ROW_PAD);
 }
 
 static int rows_of(const struct widget *w)
@@ -62,10 +64,13 @@ static void listview_paint(struct widget *w, struct painter *p)
     int i0 = clip.y > 0 ? clip.y / lh : 0, i1 = rect_empty(p->clip) ? 0 : (clip.y + clip.h + lh - 1) / lh;
     for (int i = i0; i < rows + 1 && i < i1 && l->scroll + i < l->nitems; i++) {
         int idx = l->scroll + i;
-        int y = i * lh;
-        if (idx == w->value)
-            painter_fill(p, 0, y, w->w, lh, t->color[TC_SELECTION]);
-        painter_text(p, 3, y + 2, l->items[idx], idx == w->value ? t->color[TC_SELECTION_TEXT] : t->color[TC_TEXT]);
+        int y = i * lh, selected = idx == w->value;
+        /* Selected and hovered rows are rounded pills inside the list. */
+        if (selected || (idx == l->hot && w->enabled))
+            painter_rounded(p, 2, y + 1, w->w - 6 - sbw, lh - 2,
+                            t->color[selected ? (w->enabled ? TC_SELECTION : TC_TRACK) : TC_BUTTON_HOVER], PAINTER_NONE);
+        uint32_t fg = !w->enabled ? TC_TEXT_DISABLED : selected ? TC_SELECTION_TEXT : TC_TEXT;
+        painter_text(p, 6, y + (lh - painter_text_height(p)) / 2, l->items[idx], t->color[fg]);
     }
     painter_pop(p);
     if (bar)
@@ -96,10 +101,35 @@ static void select_row(struct listview *l, int idx, const char *signal)
     widget_emit(&l->w, signal, &s);
 }
 
+/* Repaints the row idx where it is visible. */
+static void invalidate_row(struct listview *l, int idx)
+{
+    int lh = line_h(&l->w), i = idx - l->scroll;
+    if (idx >= 0 && i >= 0 && i <= rows_of(&l->w))
+        widget_invalidate_rect(&l->w, (struct rect){ 1, 1 + i * lh, l->w.w - 2, lh });
+}
+
+static void set_hot(struct listview *l, int idx)
+{
+    if (idx == l->hot)
+        return;
+    invalidate_row(l, l->hot);
+    l->hot = idx;
+    invalidate_row(l, idx);
+}
+
 static int listview_event(struct widget *w, struct event *e)
 {
     struct listview *l = (struct listview *)w;
     int lh = line_h(w), rows = rows_of(w);
+    if (e->type == EV_MOUSE_MOVE) {
+        int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
+        int idx = l->scroll + (e->y - 1) / lh;
+        set_hot(l, e->y >= 1 && e->x < w->w - sbw && idx < l->nitems ? idx : -1);
+    } else if (e->type == EV_LEAVE) {
+        set_hot(l, -1);
+        return 1;
+    }
     switch (e->type) {
     case EV_MOUSE_DOWN: case EV_MOUSE_MOVE: case EV_MOUSE_UP: {
         int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
@@ -161,6 +191,7 @@ struct widget *listview_new(struct widget *parent)
         w->focusable = 1;
         w->value = -1;
         ((struct listview *)w)->track.grab = -1;
+        ((struct listview *)w)->hot = -1;
         widget_set_stretch(w, 1, 1);
     }
     return w;

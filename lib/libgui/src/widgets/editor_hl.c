@@ -5,6 +5,11 @@
 #include <string.h>
 #include <ctype.h>
 
+const uint32_t highlight_colors[HL_COUNT] = {
+    [HL_KEYWORD] = 0x001040c0, [HL_STRING] = 0x00b03020, [HL_COMMENT] = 0x00308030,
+    [HL_NUMBER] = 0x00901090,  [HL_PREPROC] = 0x00806020,
+};
+
 static const char *const c_keywords[] = {
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum",
     "extern", "float", "for", "goto", "if", "inline", "int", "long", "register", "return", "short",

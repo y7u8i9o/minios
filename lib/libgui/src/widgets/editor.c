@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <gui/utf8.h>
 #include "editor_internal.h"
+#include <gui/pixel.h>
 #include "editmenu.h"
 
 /* ---- lines ---- */
@@ -692,22 +693,13 @@ void cursor_moved(struct editor *ed)
 
 static uint32_t class_color(const struct theme *t, int cls)
 {
-    switch (cls) {
-    case HL_KEYWORD: return 0x001040c0;
-    case HL_STRING: return 0x00b03020;
-    case HL_COMMENT: return 0x00308030;
-    case HL_NUMBER: return 0x00901090;
-    case HL_PREPROC: return 0x00806020;
-    default: return t->color[TC_TEXT];
-    }
+    return cls > HL_NORMAL && cls < HL_COUNT ? highlight_colors[cls] : t->color[TC_TEXT];
 }
 
+/* The current line: 30 percent of the highlight colour over the field. */
 static uint32_t current_line_color(const struct theme *t)
 {
-    uint32_t a = t->color[TC_HIGHLIGHT], b = t->color[TC_FIELD], out = 0;
-    for (int shift = 0; shift < 24; shift += 8)
-        out |= ((((a >> shift) & 255) * 3 + ((b >> shift) & 255) * 7) / 10) << shift;
-    return out;
+    return pixel_blend(t->color[TC_FIELD], t->color[TC_HIGHLIGHT], 77) & 0xffffff;
 }
 
 /* The state of the highlighter at the start of line l. The cache of the
@@ -736,7 +728,7 @@ static void editor_paint(struct widget *w, struct painter *p)
     ensure_rows(ed);
     int lh = LH(ed), vis = rows_visible(ed), gw = gutter_w(ed);
     int sb = theme_px(t, TM_SCROLLBAR);
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
+    painter_fill(p, 0, 0, w->w, w->h, t->color[w->enabled ? TC_FIELD : TC_TRACK]);
     painter_frame(p, 0, 0, w->w, w->h, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
     if (gw) {
         painter_fill(p, 1, 1, gw, w->h - 2, t->color[TC_WINDOW]);
@@ -776,30 +768,35 @@ static void editor_paint(struct widget *w, struct painter *p)
          * has the focus and no selection. */
         if (w->focused && l == ed->cl && !editor_has_selection(w))
             painter_fill(p, -PAD, y, w->w, lh, current_line_color(t));
-        /* Selection background on this row. */
+        /* Selection background on this row. The selected bytes sa to sb2
+         * are drawn in the selection text colour. */
+        int sa = -1, sb2 = -1;
         if ((l > l0 || (l == l0 && start + len >= c0)) && (l < l1 || (l == l1 && start <= c1)) && !(l0 == l1 && c0 == c1)) {
-            int sa = l == l0 && c0 > start ? c0 : start;
-            int sb2 = l == l1 && c1 < start + len ? c1 : start + len;
+            sa = l == l0 && c0 > start ? c0 : start;
+            sb2 = l == l1 && c1 < start + len ? c1 : start + len;
             int x0 = x + widget_text_width(w, ed->font, s + start, sa - start);
             int x1 = x + widget_text_width(w, ed->font, s + start, sb2 - start);
             if (l < l1 && sb2 == start + len)
                 x1 += widget_text_width(w, ed->font, " ", 1);
-            painter_fill(p, x0, y, x1 - x0, lh, t->color[TC_HIGHLIGHT]);
+            painter_fill(p, x0, y, x1 - x0, lh, t->color[TC_SELECTION]);
         }
-        /* Text in runs of one class. */
+        /* Text in runs of one class and one selection state. */
         int j = start;
         char buf[512];
         while (j < start + len) {
-            int cls = ed->hl ? classes[j] : 0;
+            int cls = ed->hl ? classes[j] : 0, sel = j >= sa && j < sb2;
             int k = j;
-            while (k < start + len && (ed->hl ? classes[k] : 0) == cls && k - j < (int)sizeof buf - 1)
+            while (k < start + len && (ed->hl ? classes[k] : 0) == cls && (k >= sa && k < sb2) == sel &&
+                   k - j < (int)sizeof buf - 1)
                 k++;
             memcpy(buf, s + j, (size_t)(k - j));
             buf[k - j] = '\0';
             /* Each run starts at the width of the row up to it. The sum
              * of the rounded widths of single runs would drift. */
             painter_text_font(p, ed_font(ed), x + widget_text_width(w, ed->font, s + start, j - start), ty, buf,
-                              class_color(t, cls), 0xffffffffu);
+                              !w->enabled ? t->color[TC_TEXT_DISABLED] : sel ? t->color[TC_SELECTION_TEXT]
+                                                                             : class_color(t, cls),
+                              0xffffffffu);
             j = k;
         }
         if (w->focused && !ed->readonly && l == ed->cl && ed->cc >= start && (ed->cc < start + len || (ed->cc == start + len && (r + 1 >= ed->nrows || ed->row_line[r + 1] != l)))) {

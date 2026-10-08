@@ -201,7 +201,7 @@ static void test_buttons_and_lists(struct app *a, const struct painter *p)
     window_paint(win);
     CHECK(pixel(win, (bx + cb->w - 4) * S, (by + cb->h / 2) * S) == t->color[TC_BUTTON], "the button is released");
 
-    int lx, ly, lh = t->font->height + 4;
+    int lx, ly, lh = t->font->height + theme_px(t, TM_ROW_PAD);
     widget_abs(list, &lx, &ly);
     click(win, lx + 20, ly + 1 + lh + lh / 2);
     CHECK(activated == -1 && list->value == 1, "a single click selects the row");

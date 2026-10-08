@@ -117,8 +117,8 @@ static void build_look(struct widget *win)
 {
     struct widget *field = textfield_new(win, "Field");
     widget_set_hint(field, 0, 26);
-    checkbox_new(win, "Check box");
-    radio_new(win, "Radio button");
+    widget_set_value(checkbox_new(win, "Check box"), 1);
+    widget_set_value(radio_new(win, "Radio button"), 1);
     struct widget *combo = combobox_new(win);
     combobox_add(combo, "Combo box");
     spinner_new(win, 0, 10, 5);

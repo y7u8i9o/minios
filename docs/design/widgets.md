@@ -101,6 +101,36 @@ the check mark and the end points of a stroke, and the metrics at
 `ui_scale` 150. The boot case `gui_widgets_look` finds an antialiased
 pixel at the corner of a text field and takes a screendump.
 
+## The look of the widgets (K5)
+
+- Check boxes are rounded boxes with a painted check mark, and radio
+  buttons are discs with a dot. A checked control is filled with the
+  accent colour, and its mark has the selection text colour.
+- Chevrons replace the drawn arrows of the combo box, the spinner, the
+  tree expanders and the sort mark of tables.
+- Check boxes, radio buttons, combo boxes, spinner arrows, the slider
+  thumb, tabs, menu bar titles, table headers and rows show the pointer.
+  A hover move between rows repaints the two rows. Spinner arrows and
+  table headers show the pressed state.
+- Every widget has a disabled look: the track colour as background and
+  the disabled text colour. A disabled widget ignores input.
+- Selected and hovered rows of lists, trees and tables are rounded pills.
+  Icons on selected rows take the selection text colour through
+  `icon_variant`. Rows are the font height plus `TM_ROW_PAD` high, and
+  menu items are `TM_CONTROL_H` high.
+- The editor and the text field draw the selection in `TC_SELECTION` and
+  the selected text in `TC_SELECTION_TEXT`. The current line of the
+  editor is a `pixel_blend` of the highlight colour over the field. The
+  syntax colours are the table `highlight_colors` in `editor_hl.c`.
+- The progress bar is as high as the text of its percentage.
+- Tooltips are the class `tooltip_class` of `window.c`, a rounded box
+  whose padding follows the theme.
+
+`lib/libgui/tests/test_look.c` checks the hover damage of two rows, the
+disabled look and the pixels of the check mark, the radio dot and the
+chevron. `gui_widgets_look` checks the marks on the screen, and the
+`hover` scenario of `gui_bench` damages exactly two rows per step.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

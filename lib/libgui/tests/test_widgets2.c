@@ -38,7 +38,7 @@ static void test_controls(struct app *a)
     CHECK(ws->popup != NULL, "combo popup opened");
     if (ws->popup) {
         window_paint(win);
-        int lh = app_theme(a)->font->height + 4;
+        int lh = app_theme(a)->font->height + theme_px(app_theme(a), TM_ROW_PAD);
         click(win, ws->popup->x + 10, ws->popup->y + 1 + 2 * lh + 2);
         CHECK(ws->popup == NULL, "popup closed after the pick");
         CHECK(combo->value == 2 && last_value == 2, "third item selected: %d", combo->value);

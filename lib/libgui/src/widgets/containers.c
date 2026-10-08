@@ -16,6 +16,7 @@ struct tabs {
     struct widget w;
     int autohide;               /* no title row while there is one page */
     int *title_w, ntitles;      /* the widths of the titles, from the last measurement */
+    int hot;                    /* the title under the pointer, or -1 */
 };
 
 static int tabs_header_h(const struct widget *w)
@@ -92,11 +93,13 @@ static void tabs_paint(struct widget *w, struct painter *p)
     for (struct widget *c = w->first; c; c = c->next, i++) {
         int tw;
         int x = tab_x(w, i, &tw);
-        int current = i == w->value;
+        int current = i == w->value, hot = i == ((struct tabs *)w)->hot && w->enabled;
+        if (hot && !current)
+            painter_rounded(p, x + 2, 2, tw - 4, hh - 6, t->color[TC_BUTTON_HOVER], PAINTER_NONE);
         if (current)
-            painter_fill(p, x, hh - 3, tw, 3, t->color[TC_ACCENT]);
+            painter_fill(p, x, hh - 3, tw, 3, t->color[w->enabled ? TC_ACCENT : TC_BORDER]);
         painter_text(p, x + tab_pad(w), (hh - 3 - painter_text_height(p)) / 2, widget_text(c),
-                     t->color[current ? TC_TEXT : TC_TEXT_DISABLED]);
+                     t->color[(current || hot) && w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
     }
     if (w->focused) {
         int tw;
@@ -105,8 +108,31 @@ static void tabs_paint(struct widget *w, struct painter *p)
     }
 }
 
+/* The title at a local position, or -1. */
+static int tab_at(struct widget *w, int x, int y)
+{
+    if (y < 0 || y >= tabs_header_h(w))
+        return -1;
+    int i = 0;
+    for (struct widget *c = w->first; c; c = c->next, i++) {
+        int tw, tx = tab_x(w, i, &tw);
+        if (x >= tx && x < tx + tw)
+            return i;
+    }
+    return -1;
+}
+
 static int tabs_event(struct widget *w, struct event *e)
 {
+    struct tabs *tb = (struct tabs *)w;
+    if (e->type == EV_MOUSE_MOVE || e->type == EV_LEAVE) {
+        int hot = e->type == EV_MOUSE_MOVE ? tab_at(w, e->x, e->y) : -1;
+        if (hot != tb->hot) {
+            tb->hot = hot;
+            widget_invalidate_rect(w, (struct rect){ 0, 0, w->w, tabs_header_h(w) });
+        }
+        return 0;
+    }
     if (e->type == EV_MOUSE_DOWN && (e->button & 1) && e->y < tabs_header_h(w)) {
         int i = 0;
         for (struct widget *c = w->first; c; c = c->next, i++) {
@@ -142,6 +168,7 @@ struct widget *tabs_new(struct widget *parent)
 {
     struct widget *w = widget_new(&tabs_class, parent);
     if (w) {
+        ((struct tabs *)w)->hot = -1;
         w->focusable = 1;
         widget_set_stretch(w, 1, 1);
     }

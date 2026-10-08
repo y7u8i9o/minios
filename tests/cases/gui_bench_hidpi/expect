@@ -3,6 +3,6 @@ compbench: type client paints=
 compbench: status client paints=
 compbench: edit client paints=
 compbench: scroll client .* layouts=0 
-compbench: hover client paints=
+compbench: hover client paints=20 .* painted_pixels=2669472 
 gui_bench: ok
 TEST PASS

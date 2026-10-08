@@ -1,5 +1,6 @@
 widgettest: look ready
 gui_widgets_look: [0-9]+ antialiased corner pixels
+gui_widgets_look: marks ok
 widgettest: done
 gui_widgets_look: ok
 TEST PASS

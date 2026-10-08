@@ -34,6 +34,7 @@ void run_scale_tests(void);
 void run_perf_tests(void);
 void run_partial_tests(void);
 void run_paint_tests(void);
+void run_look_tests(void);
 
 int main(void)
 {
@@ -62,6 +63,7 @@ int main(void)
     RUN(run_perf_tests);
     RUN(run_partial_tests);
     RUN(run_paint_tests);
+    RUN(run_look_tests);
     printf("libgui tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

@@ -5,16 +5,10 @@
 #include <string.h>
 #include "../intl.h"
 
-/* The horizontal padding of titles and items, and the height of an item
- * above the font height. */
+/* The horizontal padding of titles and items. */
 static int menu_pad(const struct widget *w)
 {
     return theme_scale_px(widget_theme(w), 10);
-}
-
-static int item_extra(const struct widget *w)
-{
-    return theme_scale_px(widget_theme(w), 8);
 }
 
 /* ---- items and menus ---- */
@@ -52,7 +46,7 @@ static void item_measure(struct widget *w, struct size_hint *h)
     h->pref_w = widget_text_width(w, NULL, caption, -1) + 2 * menu_pad(w) + 24;
     if (accel[0])
         h->pref_w += widget_text_width(w, NULL, accel, -1) + 24;
-    h->pref_h = h->min_h = t->font->height + item_extra(w);
+    h->pref_h = h->min_h = theme_px(t, TM_CONTROL_H);
 }
 
 const struct widget_class menuitem_class = { "menuitem", sizeof(struct widget), item_measure, NULL, NULL, NULL, NULL };
@@ -105,18 +99,19 @@ static void dropdown_paint(struct widget *w, struct painter *p)
             painter_line(p, 4, y + ih / 2, w->w - 5, y + ih / 2, t->color[TC_BORDER]);
         } else {
             if (i == d->hover && it->enabled)
-                painter_fill(p, 1, y, w->w - 2, ih, t->color[TC_HIGHLIGHT]);
+                painter_rounded(p, 3, y + 1, w->w - 6, ih - 2, t->color[TC_HIGHLIGHT], PAINTER_NONE);
             int x = menu_pad(w);
             if (it->icon) {
                 painter_icon(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon, !it->enabled);
                 x = 24;
             }
-            painter_mnemonic_text(p, x, y + item_extra(w) / 2, widget_text(it),
+            painter_mnemonic_text(p, x, y + (ih - painter_text_height(p)) / 2, widget_text(it),
                                   t->color[it->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
             char accel[48];
             accel_label(it, accel, sizeof accel);
             if (accel[0] && d->accel_w)
-                painter_text(p, w->w - menu_pad(w) - d->accel_w[i], y + item_extra(w) / 2, accel, t->color[TC_TEXT_DISABLED]);
+                painter_text(p, w->w - menu_pad(w) - d->accel_w[i], y + (ih - painter_text_height(p)) / 2, accel,
+                             t->color[TC_TEXT_DISABLED]);
         }
         y += ih;
     }
@@ -228,6 +223,7 @@ static const struct widget_class dropdown_class = { "dropdown", sizeof(struct dr
 struct menubar {
     struct widget w;
     int *title_w, ntitles;
+    int hot;                    /* the title under the pointer, or -1 */
 };
 
 static int title_width(const struct widget *bar, const struct widget *m)
@@ -271,8 +267,9 @@ static void menubar_paint(struct widget *w, struct painter *p)
     int x = 0, i = 0;
     for (struct widget *m = w->first; m; m = m->next, i++) {
         int tw = title_width(w, m);
-        if (i == w->value)
-            painter_fill(p, x, 0, tw, w->h - 1, t->color[TC_HIGHLIGHT]);
+        if (i == w->value || i == ((struct menubar *)w)->hot)
+            painter_rounded(p, x + 1, 2, tw - 2, w->h - 4, t->color[i == w->value ? TC_HIGHLIGHT : TC_BUTTON_HOVER],
+                            PAINTER_NONE);
         painter_mnemonic_text(p, x + menu_pad(w), 4, widget_text(m), t->color[TC_TEXT]);
         x += tw;
     }
@@ -308,6 +305,21 @@ void menubar_open(struct widget *bar, int index)
 
 static int menubar_event(struct widget *w, struct event *e)
 {
+    struct menubar *mb = (struct menubar *)w;
+    if (e->type == EV_MOUSE_MOVE || e->type == EV_LEAVE) {
+        int hot = -1, x = 0, i = 0;
+        for (struct widget *m = w->first; m && e->type == EV_MOUSE_MOVE; m = m->next, i++) {
+            int tw = title_width(w, m);
+            if (e->x >= x && e->x < x + tw)
+                hot = i;
+            x += tw;
+        }
+        if (hot != mb->hot) {
+            mb->hot = hot;
+            widget_invalidate(w);
+        }
+        return 0;
+    }
     if (e->type == EV_MOUSE_DOWN && (e->button & 1)) {
         int x = 0, i = 0;
         for (struct widget *m = w->first; m; m = m->next, i++) {
@@ -334,8 +346,10 @@ const struct widget_class menubar_class = { "menubar", sizeof(struct menubar), m
 struct widget *menubar_new(struct widget *parent)
 {
     struct widget *w = widget_new(&menubar_class, parent);
-    if (w)
+    if (w) {
         w->value = -1;
+        ((struct menubar *)w)->hot = -1;
+    }
     return w;
 }
 

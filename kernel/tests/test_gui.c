@@ -460,10 +460,14 @@ static void test_gui_widgets_scale(void)
 }
 KTEST_DEFINE("gui_widgets_scale", test_gui_widgets_scale);
 
-/* K4 of docs/plan/widgets.md: the corners of controls are antialiased.
+/* K4 and K5 of docs/plan/widgets.md: the corners of controls are
+ * antialiased, and check boxes and radio buttons show their marks.
  * widgettest look shows a text field at (46,66) of the screen. A pixel of
  * its top left corner has a grey between the border 0xb0 and the window
- * 0xeb. The QMP script takes a screendump for a visual check. */
+ * 0xeb. The checked check box at (46,98) shows white pixels of its check
+ * mark, and the checked radio button at (46,130) a white dot at the
+ * centre of its disc. The QMP script takes a screendump for a visual
+ * check. */
 static void test_gui_widgets_look(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
@@ -471,16 +475,27 @@ static void test_gui_widgets_look(void)
     struct proc *cl = proc_create_user("/bin/widgettest", (char *const[]){ "widgettest", "look", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start widgettest look");
-    ktest_wait_idle(1500);
+    /* The window appears within 10 s also under load. */
     int partial = 0;
-    for (int y = 66; y < 72; y++)
-        for (int x = 46; x < 52; x++) {
-            uint32_t v = pixel(x, y), g = v & 0xff;
-            if (g > 0xb0 && g < 0xeb && (v >> 8 & 0xff) == g && (v >> 16 & 0xff) == g)
-                partial++;
-        }
+    for (int tries = 0; tries < 100 && !partial; tries++) {
+        ktest_wait_idle(100);
+        for (int y = 66; y < 72; y++)
+            for (int x = 46; x < 52; x++) {
+                uint32_t v = pixel(x, y), g = v & 0xff;
+                if (g > 0xb0 && g < 0xeb && (v >> 8 & 0xff) == g && (v >> 16 & 0xff) == g)
+                    partial++;
+            }
+    }
     ktest_assert(partial > 0, "no antialiased pixel at the corner of the field");
+    ktest_wait_idle(300);
     kprintf("gui_widgets_look: %d antialiased corner pixels\n", partial);
+    int mark = 0;
+    for (int y = 98; y < 124; y++)
+        for (int x = 46; x < 62; x++)
+            mark += pixel(x, y) == 0x00ffffff;
+    ktest_assert(mark > 8, "no check mark: %d white pixels", mark);
+    ktest_assert(pixel(54, 143) == 0x00ffffff, "no radio dot: %08x", pixel(54, 143));
+    kprintf("gui_widgets_look: marks ok\n");
     sleep_ms(1500);                     /* the screendump of the QMP script */
     alt_key(0x3e);
     int status = proc_reap(cl);

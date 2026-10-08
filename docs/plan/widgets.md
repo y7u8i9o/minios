@@ -314,7 +314,7 @@ cases and `make check-lua` run unchanged.
 Document: `docs/design/widgets.md` (metrics and shapes),
 `docs/design/framework.md` (theme and painter).
 
-### K5. The new look of the widgets
+### K5. The new look of the widgets (completed 2026-10-09)
 
 Built:
 

@@ -25,6 +25,8 @@ struct view {
     struct gui_clicks clicks;   /* the left clicks, for double clicks */
     int click_row;              /* the flat row of the last left click */
     struct scroll_track track;
+    int hot;                    /* the flat row under the pointer, or -1 */
+    int hot_col, pressed_col;   /* the header cell under the pointer and the pressed one, or -1 */
     int press_row, press_x, press_y;    /* a row press that may become a drag */
     int drop_row;               /* outlined drop target: a row, -1 the view, -2 none */
 };
@@ -74,6 +76,7 @@ static void flatten(struct view *v, int parent, int depth)
 static void refresh(struct view *v)
 {
     v->nflat = 0;
+    v->hot = -1;
     intmap_clear(&v->flat_of);
     flatten(v, -1, 0);
     if (v->header && v->m) {
@@ -148,6 +151,57 @@ static void view_measure(struct widget *w, struct size_hint *h)
     h->min_h = line_h(w) + 2;
 }
 
+/* An icon of a row. A selected row shows the icon in the selection text
+ * colour. */
+static void row_icon(struct painter *p, int x, int y, const struct image *icon, int selected, uint32_t fg)
+{
+    if (selected)
+        painter_image(p, x, y, icon_variant(icon, p->scale, fg));
+    else
+        painter_icon(p, x, y, icon, 0);
+}
+
+/* Repaints the flat row idx where it is visible. */
+static void invalidate_row(struct view *v, int idx)
+{
+    struct rect r = rows_rect(v);
+    int lh = line_h(&v->w), i = idx - v->scroll;
+    if (idx >= 0 && i >= 0 && i <= rows_visible(v))
+        widget_invalidate_rect(&v->w, (struct rect){ r.x, r.y + i * lh, r.w, lh });
+}
+
+static void set_hot(struct view *v, int idx)
+{
+    if (idx == v->hot)
+        return;
+    invalidate_row(v, v->hot);
+    v->hot = idx;
+    invalidate_row(v, idx);
+}
+
+/* The header cell at a local position, or -1. */
+static int header_col_at(struct view *v, int x, int y)
+{
+    if (!v->header || y < 1 || y >= 1 + header_h(v))
+        return -1;
+    int cx = 1;
+    for (int c = 0; c < v->ncols; c++) {
+        if (x >= cx && x < cx + v->widths[c])
+            return c;
+        cx += v->widths[c];
+    }
+    return -1;
+}
+
+static void set_header_state(struct view *v, int hot, int pressed)
+{
+    if (hot == v->hot_col && pressed == v->pressed_col)
+        return;
+    v->hot_col = hot;
+    v->pressed_col = pressed;
+    widget_invalidate_rect(&v->w, (struct rect){ 1, 1, v->w.w - 2, header_h(v) });
+}
+
 static void view_paint(struct widget *w, struct painter *p)
 {
     struct view *v = (struct view *)w;
@@ -165,9 +219,16 @@ static void view_paint(struct widget *w, struct painter *p)
         for (int c = 0; c < v->ncols; c++) {
             const char *hd = v->m && v->m->header ? v->m->header(v->m, c) : "";
             painter_push(p, x, 0, v->widths[c], header_h(v));
-            painter_text(p, 4, (header_h(v) - painter_text_height(p)) / 2, hd ? hd : "", t->color[TC_TEXT]);
-            if (c == v->sort_col)
-                painter_text(p, v->widths[c] - 14, (header_h(v) - painter_text_height(p)) / 2, v->sort_desc ? "v" : "^", t->color[TC_TEXT]);
+            if (w->enabled && (c == v->pressed_col || c == v->hot_col))
+                painter_fill(p, 0, 0, v->widths[c] - 1, header_h(v) - 1,
+                             t->color[c == v->pressed_col ? TC_BUTTON_PRESSED : TC_BUTTON_HOVER]);
+            uint32_t hfg = t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED];
+            painter_text(p, 4, (header_h(v) - painter_text_height(p)) / 2, hd ? hd : "", hfg);
+            if (c == v->sort_col) {
+                int m = theme_px(t, TM_ICON) * 3 / 4;
+                painter_chevron(p, v->widths[c] - m - 4, (header_h(v) - m) / 2, m,
+                                v->sort_desc ? PAINTER_DOWN : PAINTER_UP, hfg);
+            }
             painter_pop(p);
             x += v->widths[c];
             painter_line(p, x - 1, 0, x - 1, header_h(v) - 1, t->color[TC_BORDER]);
@@ -183,9 +244,11 @@ static void view_paint(struct widget *w, struct painter *p)
         int idx = v->scroll + i, row = v->flat[idx];
         int y = i * lh;
         int selected = row == w->value;
-        if (selected)
-            painter_fill(p, 0, y, w->w, lh, t->color[TC_SELECTION]);
-        uint32_t fg = selected ? t->color[TC_SELECTION_TEXT] : t->color[TC_TEXT];
+        /* Selected and hovered rows are rounded pills inside the view. */
+        if (selected || (idx == v->hot && w->enabled))
+            painter_rounded(p, 1, y + 1, w->w - 4 - sbw, lh - 2,
+                            t->color[selected ? (w->enabled ? TC_SELECTION : TC_TRACK) : TC_BUTTON_HOVER], PAINTER_NONE);
+        uint32_t fg = t->color[!w->enabled ? TC_TEXT_DISABLED : selected ? TC_SELECTION_TEXT : TC_TEXT];
         int ty = y + (lh - painter_text_height(p)) / 2;
         const struct image *icon = v->m->icon ? v->m->icon(v->m, row) : NULL;
         if (v->header) {
@@ -195,7 +258,7 @@ static void view_paint(struct widget *w, struct painter *p)
                 painter_push(p, x, y, v->widths[c] - 1, lh);
                 int tx = 4;
                 if (c == 0 && icon) {
-                    painter_icon(p, 4, (lh - image_lh(icon)) / 2, icon, 0);
+                    row_icon(p, 4, (lh - image_lh(icon)) / 2, icon, selected, fg);
                     tx += icon_w(w);
                 }
                 painter_text(p, tx, ty - y, s ? s : "", fg);
@@ -205,18 +268,12 @@ static void view_paint(struct widget *w, struct painter *p)
         } else {
             int x = 4 + v->depth[idx] * indent(w);
             if (icon) {
-                painter_icon(p, x + indent(w), y + (lh - image_lh(icon)) / 2, icon, 0);
+                row_icon(p, x + indent(w), y + (lh - image_lh(icon)) / 2, icon, selected, fg);
                 x += icon_w(w);
             }
             if (v->m->rows(v->m, row) > 0) {
-                int ex = is_expanded(v, row);
-                int cx = x + 4, cy = y + lh / 2;
-                for (int k = 0; k < 5; k++) {
-                    if (ex)
-                        painter_line(p, cx + k, cy - 2 + k, cx + 8 - k, cy - 2 + k, fg);
-                    else
-                        painter_line(p, cx + k, cy - 4 + k, cx + k, cy + 4 - k, fg);
-                }
+                int e = indent(w);
+                painter_chevron(p, x, y + (lh - e) / 2, e, is_expanded(v, row) ? PAINTER_DOWN : PAINTER_RIGHT, fg);
             }
             const char *s = v->m->cell(v->m, row, 0, buf, sizeof buf);
             painter_text(p, x + indent(w), ty, s ? s : "", fg);
@@ -340,6 +397,8 @@ static int view_event(struct widget *w, struct event *e)
                     return 1;
                 }
                 if (e->x >= x && e->x < right) {
+                    set_header_state(v, c, c);
+                    widget_capture(w);
                     if (v->m && v->m->sort) {
                         v->sort_desc = c == v->sort_col ? !v->sort_desc : 0;
                         v->sort_col = c;
@@ -376,6 +435,12 @@ static int view_event(struct widget *w, struct event *e)
     case EV_MOUSE_MOVE:
         if (track_event(v, e))
             return 1;
+        if (!(e->button & 1)) {
+            struct rect r = rows_rect(v);
+            int idx = v->scroll + (e->y - r.y) / lh;
+            set_hot(v, rect_contains(r, e->x, e->y) && idx < v->nflat ? idx : -1);
+            set_header_state(v, header_col_at(v, e->x, e->y), v->pressed_col);
+        }
         if (v->drag_col >= 0 && (e->button & 1)) {
             int nw = v->drag_w0 + e->x - v->drag_x0;
             v->widths[v->drag_col] = nw < 20 ? 20 : nw;
@@ -393,6 +458,11 @@ static int view_event(struct widget *w, struct event *e)
         track_event(v, e);
         v->drag_col = -1;
         v->press_row = -1;
+        set_header_state(v, v->hot_col, -1);
+        return 1;
+    case EV_LEAVE:
+        set_hot(v, -1);
+        set_header_state(v, -1, v->pressed_col);
         return 1;
     case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END:
         return view_drag_event(w, e);
@@ -460,6 +530,7 @@ static struct widget *view_new(const struct widget_class *cls, struct widget *pa
     v->sort_col = -1;
     v->click_row = -1;
     v->track.grab = -1;
+    v->hot = v->hot_col = v->pressed_col = -1;
     v->press_row = -1;
     v->drop_row = -2;
     w->value = -1;

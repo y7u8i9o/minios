@@ -306,6 +306,21 @@ static void tip_hide(struct widget *window)
     ws->tip_owner = NULL;
 }
 
+/* The tooltip: the text in a rounded box of the highlight colour. The
+ * padding and the radius follow the theme. */
+static int tip_pad_x(const struct theme *t) { return theme_scale_px(t, 6); }
+static int tip_pad_y(const struct theme *t) { return theme_scale_px(t, 3); }
+
+static void tooltip_paint(struct widget *w, struct painter *p)
+{
+    const struct theme *t = p->theme;
+    painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_HIGHLIGHT], t->color[TC_BORDER]);
+    painter_text(p, tip_pad_x(t), tip_pad_y(t), widget_text(w), t->color[TC_TEXT]);
+}
+
+static const struct widget_class tooltip_class = { "tooltip", sizeof(struct widget), NULL, NULL, tooltip_paint, NULL,
+                                                   NULL };
+
 static void tip_show(void *arg)
 {
     struct widget *window = arg;
@@ -314,14 +329,15 @@ static void tip_show(void *arg)
     struct widget *o = ws->tip_owner;
     if (!o || !o->tip || ws->popup)
         return;
-    struct widget *l = label_new(NULL, o->tip);
+    struct widget *l = widget_new(&tooltip_class, NULL);
+    if (!l)
+        return;
+    widget_set_text(l, o->tip);
     const struct theme *t = app_theme(window->app);
     int ax, ay;
     widget_abs(o, &ax, &ay);
-    l->w = widget_text_width(window, NULL, o->tip, -1) + 8;
-    l->h = t->font->height + 6;
-    l->value = 1;                       /* label paints as a tooltip */
-    l->transparent = 0;                 /* the tooltip paints its own background */
+    l->w = widget_text_width(window, NULL, o->tip, -1) + 2 * tip_pad_x(t);
+    l->h = t->font->height + 2 * tip_pad_y(t);
     popup_open(window, l, ax, ay + o->h + 2, l->w, l->h, 0);
     ws->tip = l;
     widget_invalidate(l);

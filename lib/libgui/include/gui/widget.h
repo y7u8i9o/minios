@@ -488,7 +488,9 @@ void menu_popup(struct widget *menu, int x, int y);
 
 extern const struct widget_class editor_class;     /* "changed", "cursor" (sig_change value: line) */
 /* Character classes produced by a highlighter. */
-enum hl_class { HL_NORMAL, HL_KEYWORD, HL_STRING, HL_COMMENT, HL_NUMBER, HL_PREPROC };
+enum hl_class { HL_NORMAL, HL_KEYWORD, HL_STRING, HL_COMMENT, HL_NUMBER, HL_PREPROC, HL_COUNT };
+/* The colour of each class. HL_NORMAL uses the text colour of the theme. */
+extern const uint32_t highlight_colors[HL_COUNT];
 /* Fill classes[0..len) for one line; state carries across lines (block
  * comments) and starts at 0 for the first line. */
 typedef void (*highlight_fn)(const char *line, int len, unsigned char *classes, int *state, void *arg);
