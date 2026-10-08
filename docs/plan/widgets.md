@@ -207,7 +207,7 @@ unchanged.
 Document: `docs/design/widgets.md` (new), `docs/design/framework.md`,
 `docs/design/gui.md`, `docs/design/desktop.md`, `docs/design/icons.md`.
 
-### K2. Measurement and repaints without a change
+### K2. Measurement and repaints without a change (completed 2026-10-09)
 
 Built:
 

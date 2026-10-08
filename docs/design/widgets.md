@@ -35,6 +35,18 @@ gutter of the editor has the width of the line count in zeros.
 A text field never scrolls further than the end of its text. A shorter
 text therefore scrolls back into view.
 
+## Repaints without a change (K2)
+
+A widget is invalidated only when its pixels change. A wheel step or a
+page click at the end of a range causes no paint. `scroll_set` reports
+whether a value changed. `scrollbar_set`, `widget_set_enabled`, the
+selection of the selected row, Home and End without a move, and a slider
+release without a press repaint nothing. The programs `hexview`,
+`unicode` and `view` repaint only when the view moved. The local
+relayout is described in `framework.md`. `lib/libgui/tests/test_perf.c`
+checks the ends of a table and a list view, a status label update and a
+scroll step of a scroll area.
+
 ## Mnemonics
 
 A caption marks its mnemonic with `&` before the character.

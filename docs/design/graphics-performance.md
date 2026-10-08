@@ -562,3 +562,38 @@ The table shows the following defects:
   from the first line (K3).
 - The hover scenario paints nothing, because rows have no hover state
   yet (K5).
+
+## K2: no paint without a change (2026-10-09)
+
+The changes are described in `framework.md` (Layout of changed widgets)
+and `widgets.md`. The counters after the changes:
+
+Screen 1280x800 at scale 1:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 14 | 28.7 | 14 | 5.17 | 0 | 588 |
+| type | 20 | 9.3 | 20 | 0.40 | 0 | 80 |
+| status | 20 | 3.5 | 20 | 0.27 | 106 | 40 |
+| edit | 20 | 519.9 | 20 | 8.21 | 0 | 8080 |
+| scroll | 20 | 43.0 | 505 | 8.21 | 0 | 445 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+Screen 2560x1600 at scale 2:
+
+| scenario | paints | paint ms | widget paints | painted Mpx | layouts | text shapes |
+|---|---|---|---|---|---|---|
+| wheel | 14 | 76.3 | 14 | 20.68 | 0 | 588 |
+| type | 20 | 14.5 | 20 | 1.58 | 0 | 80 |
+| status | 20 | 5.3 | 20 | 1.07 | 106 | 40 |
+| edit | 20 | 567.8 | 20 | 32.83 | 0 | 8080 |
+| scroll | 20 | 136.5 | 505 | 32.83 | 0 | 445 |
+| hover | 0 | 0.0 | 0 | 0.00 | 0 | 0 |
+
+- The wheel scenario paints 14 times, once per step that moves the view.
+- A status label update paints the label alone. The damage per step
+  falls from 410400 to 13300 pixels at scale 1.
+- A scroll step of the scroll area needs no layout and paints only the
+  labels inside the clip.
+- The edit scenario is unchanged. K3 rebuilds only the changed rows and
+  runs the highlighter from the first visible line.

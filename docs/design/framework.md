@@ -108,13 +108,29 @@ described in `dnd.md`.
 ## Partial redraw
 
 `widget_invalidate` marks a widget dirty and its ancestors child dirty.
-`window_paint` relayouts when needed (which marks the whole window
-dirty) and calls `gui_begin_paint`, which moves the window to a free
+`window_paint` lays out what changed (Layout of changed widgets, below)
+and calls `gui_begin_paint`, which moves the window to a free
 buffer (`gui.md`). It then walks the tree: a dirty widget and everything below it are
 repainted, a widget with only dirty descendants recurses without
 painting. Each repainted subtree gives one damage rectangle, and close
 rectangles merge in a `rect_set`. `window_paint` returns their union,
 which `app_set_damage_log` prints for the tests.
+
+## Layout of changed widgets (K2 of `docs/plan/widgets.md`)
+
+Measurements are cached. `widget_relayout(w)` sets `needs_measure` on `w`
+and its ancestors and `needs_layout` on `w`, and it invalidates `w`.
+`widget_measure` computes only marked widgets. A measurement that
+changes sets `needs_layout` on the parent. The pass therefore ends at the
+first ancestor whose measurement does not change. The layout pass of
+`window_paint` lays out the marked widgets and the children whose
+rectangle changed. Layout functions place children with
+`widget_set_rect` and hide them with `widget_show_in_layout`. Both mark a
+changed child as `moved`. A container whose children moved is repainted.
+A resize, a new scale or a new theme calls `window_relayout_all`, which
+measures and lays out every widget. Floating popups do not lay out the
+window. Painting skips subtrees outside the clip and clears their marks.
+A scroll area moves its content without a layout.
 
 ## Core widgets (`src/widgets/`)
 
