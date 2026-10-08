@@ -535,8 +535,9 @@ static void test_gui_editor(void)
     mouse_move_to(&cx, &cy, 40 + 30, 60 + 92, 0);
     mouse_click(2);
     ktest_wait_idle(400);
-    /* The menu lists Undo, Redo, a separator, Cut and Copy. */
-    for (int i = 0; i < 5; i++) {
+    /* The menu lists Undo, Redo, a separator, Cut and Copy. Down skips the
+     * disabled Redo and the separator, so Copy is the third step. */
+    for (int i = 0; i < 3; i++) {
         ps2kbd_feed_scancode(0xe0);
         ps2kbd_feed_scancode(0x50);
         ps2kbd_feed_scancode(0xe0);

@@ -155,7 +155,7 @@ Owner decisions of 2026-10-09:
 
 ## 3. Milestones
 
-### K1. Scaled measurement and correctness defects
+### K1. Scaled measurement and correctness defects (completed 2026-10-09)
 
 Built:
 

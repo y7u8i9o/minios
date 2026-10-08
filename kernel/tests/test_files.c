@@ -193,9 +193,16 @@ static void test_gui_filechooser(void)
     kprintf("gui_filechooser: save chooser shown\n");
     type_line("copy\n");
     ktest_assert(wait_for("/home/user/desktop/copy.txt", true), "the copy was not saved");
+    /* gedit creates the file before it writes the text. The test waits
+     * up to 5 s for the text. */
     char original[256], copy[256];
     read_text("/home/user/desktop/readme.txt", original, sizeof original);
-    read_text("/home/user/desktop/copy.txt", copy, sizeof copy);
+    for (int i = 0; i < 100; i++) {
+        read_text("/home/user/desktop/copy.txt", copy, sizeof copy);
+        if (copy[0] && strncmp(original, copy, 16) == 0)
+            break;
+        ktest_wait_idle(50);
+    }
     ktest_assert(copy[0] && strncmp(original, copy, 16) == 0, "the copy does not start like readme.txt");
     read_text("/home/user/.local/share/recent-files", buf, sizeof buf);
     ktest_assert(strcmp(buf, "/home/user/desktop/copy.txt\n/home/user/desktop/readme.txt\n") == 0, "recent list '%s'", buf);
