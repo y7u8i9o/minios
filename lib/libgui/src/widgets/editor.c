@@ -1136,8 +1136,8 @@ static int editor_event(struct widget *w, struct event *e)
         return 0;
     case EV_MOUSE_WHEEL:
         ensure_rows(ed);
-        ed->scroll = scroll_clamp(ed->scroll + 3 * e->button, ed->nrows, rows_visible(ed));
-        widget_invalidate(w);
+        if (scroll_set(&ed->scroll, ed->scroll + 3 * e->button, ed->nrows, rows_visible(ed)))
+            widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN:
         return editor_key(ed, e);

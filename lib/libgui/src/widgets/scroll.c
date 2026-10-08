@@ -194,9 +194,14 @@ struct widget *scrollbar_new(struct widget *parent, int vertical)
 void scrollbar_set(struct widget *w, int value, int max, int page)
 {
     struct scrollbar *s = (struct scrollbar *)w;
-    w->max = max > 0 ? max : 0;
-    s->page = page > 0 ? page : 1;
-    w->value = scroll_clamp(value, w->max, s->page);
+    max = max > 0 ? max : 0;
+    page = page > 0 ? page : 1;
+    value = scroll_clamp(value, max, page);
+    if (w->max == max && s->page == page && w->value == value)
+        return;
+    w->max = max;
+    s->page = page;
+    w->value = value;
     widget_invalidate(w);
 }
 
@@ -219,11 +224,14 @@ static void scrollarea_measure(struct widget *w, struct size_hint *h)
     h->min_w = h->min_h = 40;
 }
 
+/* A scroll moves the content inside the area and repaints the area. The
+ * size of the content does not change, so the step needs no layout. */
 static int on_scroll(struct widget *bar, void *args, void *arg)
 {
     struct scrollarea *a = arg;
+    a->content->x = 1 - a->hbar->value;
+    a->content->y = 1 - a->vbar->value;
     widget_invalidate(&a->w);
-    widget_relayout(&a->w);
     return 0;
 }
 
@@ -238,18 +246,13 @@ static void scrollarea_layout(struct widget *w)
     if (need_v && cw > w->w - 2 - sb) need_h = 1;
     if (need_h && ch > w->h - 2 - sb) need_v = 1;
     int vw = w->w - 2 - (need_v ? sb : 0), vh = w->h - 2 - (need_h ? sb : 0);
-    widget_set_visible(a->vbar, need_v);
-    widget_set_visible(a->hbar, need_h);
+    widget_show_in_layout(a->vbar, need_v);
+    widget_show_in_layout(a->hbar, need_h);
     scrollbar_set(a->vbar, a->vbar->value, ch, vh);
     scrollbar_set(a->hbar, a->hbar->value, cw, vw);
-    a->vbar->x = w->w - 1 - sb; a->vbar->y = 1; a->vbar->w = sb; a->vbar->h = vh;
-    a->hbar->x = 1; a->hbar->y = w->h - 1 - sb; a->hbar->w = vw; a->hbar->h = sb;
-    a->content->x = 1 - a->hbar->value;
-    a->content->y = 1 - a->vbar->value;
-    a->content->w = cw > vw ? cw : vw;
-    a->content->h = ch > vh ? ch : vh;
-    a->content->dirty = 1;
-    a->vbar->dirty = a->hbar->dirty = 1;
+    widget_set_rect(a->vbar, w->w - 1 - sb, 1, sb, vh);
+    widget_set_rect(a->hbar, 1, w->h - 1 - sb, vw, sb);
+    widget_set_rect(a->content, 1 - a->hbar->value, 1 - a->vbar->value, cw > vw ? cw : vw, ch > vh ? ch : vh);
     w->needs_layout = 0;
 }
 

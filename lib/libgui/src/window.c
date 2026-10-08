@@ -24,15 +24,56 @@ struct window_state *window_state_of(struct widget *window)
 
 /* ---- layout and paint ---- */
 
-static void layout_tree(struct widget *w)
+/* Lays out w when force is set. The pass then descends into the children
+ * that moved, that need a layout or that have descendants that need one.
+ * A container whose children moved is repainted, because the areas that
+ * the children left show the container. */
+static void layout_pass(struct widget *w, int force)
 {
-    gui_count(GUI_COUNT_LAYOUTS, 1);
-    if (w->cls->layout)
-        w->cls->layout(w);
+    if (force) {
+        gui_count(GUI_COUNT_LAYOUTS, 1);
+        if (w->cls->layout)
+            w->cls->layout(w);
+    }
     w->needs_layout = 0;
+    w->child_layout = 0;
+    int moved = 0;
+    for (struct widget *c = w->first; c; c = c->next) {
+        int f = c->moved || c->needs_layout;
+        moved |= c->moved;
+        c->moved = 0;
+        if (c->visible && (f || c->child_layout))
+            layout_pass(c, f);
+    }
+    if (force && moved)
+        widget_invalidate(w);
+}
+
+/* Marks every widget of the tree for a new measurement and layout. */
+static void mark_all(struct widget *w)
+{
+    w->needs_measure = 1;
+    w->needs_layout = 1;
     for (struct widget *c = w->first; c; c = c->next)
-        if (c->visible)
-            layout_tree(c);
+        mark_all(c);
+}
+
+void window_relayout_all(struct widget *window)
+{
+    window_state_of(window)->relayout_all = 1;
+    widget_invalidate(window);
+}
+
+/* Clears the paint marks of a subtree that the paint skipped. Without
+ * this, a mark below would stop the propagation of later invalidations. */
+static void clear_marks(struct widget *w)
+{
+    w->dirty = 0;
+    if (!w->child_dirty)
+        return;
+    w->child_dirty = 0;
+    for (struct widget *c = w->first; c; c = c->next)
+        clear_marks(c);
 }
 
 /* Paints the dirty widgets of the tree. The device rectangle of each
@@ -45,6 +86,12 @@ static void paint_tree(struct widget *w, struct painter *p, int force, struct re
     if (!w->visible || w == skip)
         return;
     painter_push(p, w->x, w->y, w->w, w->h);
+    if (rect_empty(p->clip)) {
+        /* Outside the clip, for example a row of a scrolled area. */
+        clear_marks(w);
+        painter_pop(p);
+        return;
+    }
     if (force || w->dirty) {
         if (w->cls->paint) {
             w->cls->paint(w, p);
@@ -82,13 +129,21 @@ struct rect window_paint(struct widget *window)
     struct rect none = { 0, 0, 0, 0 };
     if (!ws->win || ws->closed)
         return none;
-    if (window->needs_layout) {
+    if (ws->relayout_all) {
+        ws->relayout_all = 0;
+        mark_all(window);
+        window->dirty = 1;
+    }
+    if (window->needs_measure || window->needs_layout || window->child_layout) {
         widget_measure(window);
+        if (window->w != ws->win->width || window->h != ws->win->height) {
+            window->needs_layout = 1;
+            window->dirty = 1;
+        }
         window->x = window->y = 0;
         window->w = ws->win->width;
         window->h = ws->win->height;
-        layout_tree(window);
-        window->dirty = 1;
+        layout_pass(window, window->needs_layout);
     }
     if (!window->dirty && !window->child_dirty)
         return none;
@@ -559,7 +614,7 @@ void window_message(struct widget *window, struct wmsg *m)
             widget_relayout(ws->popup);
             break;
         }
-        widget_relayout(window);
+        window_relayout_all(window);
         struct sig_resize r = { m->a, m->b };
         widget_emit(window, "resize", &r);
         break;

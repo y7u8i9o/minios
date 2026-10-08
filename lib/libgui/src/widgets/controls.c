@@ -289,6 +289,8 @@ static int slider_event(struct widget *w, struct event *e)
             slider_set_from_x(w, e->x);
         return w->pressed;
     case EV_MOUSE_UP:
+        if (!w->pressed)
+            return 0;
         w->pressed = 0;
         widget_invalidate(w);
         return 1;

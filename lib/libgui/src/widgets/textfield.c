@@ -155,7 +155,7 @@ static int pos_at(struct textfield *f, int px)
 static int key(struct textfield *f, struct event *e)
 {
     int ctrl = e->mods & WMOD_CTRL, shift = e->mods & WMOD_SHIFT;
-    int before = f->cursor, len = len_of(f);
+    int before = f->cursor, before_sel = f->sel, before_scroll = f->scroll_x, len = len_of(f);
     if (e->mods & WMOD_ALT)
         return 0;                            /* mnemonics and accelerators */
     int moved = 1;
@@ -207,7 +207,9 @@ static int key(struct textfield *f, struct event *e)
             f->sel = -1;
         }
         scroll_to_cursor(f);
-        widget_invalidate(&f->w);
+        /* Home at the start and End at the end change nothing. */
+        if (f->cursor != before || f->sel != before_sel || f->scroll_x != before_scroll)
+            widget_invalidate(&f->w);
         return 1;
     }
     if (e->code == KEY_DELETE) {

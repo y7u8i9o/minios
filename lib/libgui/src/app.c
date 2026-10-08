@@ -103,7 +103,7 @@ void app_theme_changed(struct app *a)
 {
     theme_apply(&a->theme);
     for (int i = 0; i < a->nwindows; i++)
-        widget_relayout(a->windows[i]);
+        window_relayout_all(a->windows[i]);
 }
 
 static struct widget *register_window(struct app *a, struct widget *w, struct gui_window *win, const char *title)

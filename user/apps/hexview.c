@@ -227,6 +227,8 @@ static void scroll_to(long line_offset)
         l = last;
     if (l < 0)
         l = 0;
+    if (top == l * ROW)
+        return;
     top = l * ROW;
     update_scroll();
     widget_invalidate(canvas);

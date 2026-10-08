@@ -14,10 +14,15 @@ static int padding_of(const struct widget *w)
     return w->parent ? 0 : theme_px(widget_theme(w), TM_PADDING);
 }
 
-/* Combine the application's hint with the class measurement. */
+/* Combine the application's hint with the class measurement. A widget
+ * without needs_measure retains its last measurement. A changed
+ * measurement makes the parent place its children again. */
 void widget_measure(struct widget *w);
 void widget_measure(struct widget *w)
 {
+    if (!w->needs_measure)
+        return;
+    w->needs_measure = 0;
     struct size_hint h = { 0 };
     gui_count(GUI_COUNT_LAYOUTS, 1);
     if (w->cls->measure)
@@ -32,7 +37,14 @@ void widget_measure(struct widget *w)
     if (h.pref_h < h.min_h) h.pref_h = h.min_h;
     if (h.max_w && h.pref_w > h.max_w) h.pref_w = h.max_w;
     if (h.max_h && h.pref_h > h.max_h) h.pref_h = h.max_h;
+    if (memcmp(&h, &w->measured, sizeof h) == 0)
+        return;
     w->measured = h;
+    if (w->parent) {
+        w->parent->needs_layout = 1;
+        for (struct widget *p = w->parent->parent; p; p = p->parent)
+            p->child_layout = 1;
+    }
 }
 
 /* Place a child of the given cell with its alignment and margin. */
@@ -59,13 +71,7 @@ static void place(struct widget *c, int cx, int cy, int cw, int ch)
     else if (c->align_x == ALIGN_END) x = cx + cw - w;
     if (c->align_y == ALIGN_CENTER) y = cy + (ch - h) / 2;
     else if (c->align_y == ALIGN_END) y = cy + ch - h;
-    if (c->x != x || c->y != y || c->w != w || c->h != h) {
-        c->x = x;
-        c->y = y;
-        c->w = w;
-        c->h = h;
-        c->dirty = 1;
-    }
+    widget_set_rect(c, x, y, w, h);
 }
 
 /* ---- box ---- */

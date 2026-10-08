@@ -20,6 +20,7 @@ struct widget *widget_new(const struct widget_class *cls, struct widget *parent)
     w->row_span = w->col_span = 1;
     w->padding = -1;
     w->dirty = 1;
+    w->needs_measure = 1;
     w->needs_layout = 1;
     if (parent)
         widget_add(parent, w);
@@ -45,7 +46,13 @@ void widget_add(struct widget *parent, struct widget *child)
         parent->first = child;
     parent->last = child;
     set_window(child, parent->window ? parent->window : parent, parent->app);
-    widget_relayout(parent);
+    /* A floating child (a popup) is placed by its owner and does not change
+     * the layout of the parent. */
+    if (child->floating)
+        widget_relayout(child);
+    else
+        widget_relayout(parent);
+    child->needs_measure = 1;
 }
 
 void widget_remove(struct widget *child)
@@ -70,7 +77,10 @@ void widget_remove(struct widget *child)
         if (ws->drag_source == child) ws->drag_source = NULL;
         if (ws->drop_target == child) ws->drop_target = NULL;
     }
-    widget_relayout(parent);
+    if (child->floating)
+        widget_invalidate(parent);
+    else
+        widget_relayout(parent);
 }
 
 void widget_destroy(struct widget *w)
@@ -158,6 +168,8 @@ void widget_set_visible(struct widget *w, int visible)
 
 void widget_set_enabled(struct widget *w, int enabled)
 {
+    if (w->enabled == !!enabled)
+        return;
     w->enabled = !!enabled;
     widget_invalidate(w);
 }
@@ -298,9 +310,35 @@ void widget_invalidate(struct widget *w)
 
 void widget_relayout(struct widget *w)
 {
-    for (struct widget *p = w; p; p = p->parent)
-        p->needs_layout = 1;
+    w->needs_measure = 1;
+    w->needs_layout = 1;
+    for (struct widget *p = w->parent; p; p = p->parent) {
+        p->needs_measure = 1;
+        p->child_layout = 1;
+    }
     widget_invalidate(w);
+}
+
+void widget_show_in_layout(struct widget *w, int visible)
+{
+    if (w->visible == !!visible)
+        return;
+    w->visible = !!visible;
+    w->moved = 1;
+    w->dirty = 1;
+}
+
+int widget_set_rect(struct widget *w, int x, int y, int width, int height)
+{
+    if (w->x == x && w->y == y && w->w == width && w->h == height)
+        return 0;
+    w->x = x;
+    w->y = y;
+    w->w = width;
+    w->h = height;
+    w->moved = 1;
+    w->dirty = 1;
+    return 1;
 }
 
 /* ---- geometry helpers ---- */

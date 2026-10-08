@@ -89,11 +89,8 @@ static void clamp_pan(void)
     int w = 0, h = 0;
     if (img)
         shown_size(&w, &h);
-    int max_x = w - canvas->w, max_y = h - canvas->h;
-    pan_x = pan_x > max_x ? max_x : pan_x;
-    pan_y = pan_y > max_y ? max_y : pan_y;
-    pan_x = pan_x < 0 ? 0 : pan_x;
-    pan_y = pan_y < 0 ? 0 : pan_y;
+    pan_x = scroll_clamp(pan_x, w, canvas->w);
+    pan_y = scroll_clamp(pan_y, h, canvas->h);
 }
 
 static int shown_zoom = -1;      /* the zoom in the status bar */
@@ -126,6 +123,17 @@ static void update_status(void)
 static void changed(void)
 {
     clamp_pan();
+    update_status();
+    widget_invalidate(canvas);
+}
+
+/* A move of the view from (old_x, old_y). A move against an edge leaves
+ * the clamped position unchanged and repaints nothing. */
+static void panned(int old_x, int old_y)
+{
+    clamp_pan();
+    if (pan_x == old_x && pan_y == old_y)
+        return;
     update_status();
     widget_invalidate(canvas);
 }
@@ -414,24 +422,28 @@ static int on_motion(struct widget *w, void *args, void *arg)
     struct sig_click *c = args;
     if (!drag || !(c->button & 1))
         return 0;
+    int old_x = pan_x, old_y = pan_y;
     pan_x -= c->x - drag_x;
     pan_y -= c->y - drag_y;
     drag_x = c->x;
     drag_y = c->y;
-    changed();
+    panned(old_x, old_y);
     return 1;
 }
 
 static int on_wheel(struct widget *w, void *args, void *arg)
 {
     int delta = ((struct sig_click *)args)->button, mods = gui_modifiers();
-    if (mods & WMOD_CTRL)
+    int old_x = pan_x, old_y = pan_y;
+    if (mods & WMOD_CTRL) {
         zoom_step(delta < 0 ? 1 : -1);
-    else if (mods & WMOD_SHIFT)
+        return 1;
+    }
+    if (mods & WMOD_SHIFT)
         pan_x += delta * 40;
     else
         pan_y += delta * 40;
-    changed();
+    panned(old_x, old_y);
     return 1;
 }
 
@@ -451,8 +463,8 @@ static int on_key(struct widget *w, void *args, void *arg)
     case KEY_RIGHT: case KEY_PAGEDOWN: case KEY_SPACE: step(1); return 1;
     case KEY_HOME: show(nfiles ? 0 : -1); return 1;
     case KEY_END: show(nfiles - 1); return 1;
-    case KEY_UP: pan_y -= 40; changed(); return 1;
-    case KEY_DOWN: pan_y += 40; changed(); return 1;
+    case KEY_UP: pan_y -= 40; panned(pan_x, pan_y + 40); return 1;
+    case KEY_DOWN: pan_y += 40; panned(pan_x, pan_y - 40); return 1;
     }
     if (k->ch == '+' || k->ch == '=')
         zoom_step(1);

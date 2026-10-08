@@ -42,12 +42,8 @@ static void tabs_layout(struct widget *w)
     int hh = tabs_header_h(w), gap = hh ? theme_px(widget_theme(w), TM_SPACING) : 0;
     int i = 0;
     for (struct widget *c = w->first; c; c = c->next, i++) {
-        c->visible = i == w->value;
-        c->x = 0;
-        c->y = hh + gap;
-        c->w = w->w;
-        c->h = w->h - hh - gap;
-        c->dirty = 1;
+        widget_show_in_layout(c, i == w->value);
+        widget_set_rect(c, 0, hh + gap, w->w, w->h - hh - gap);
     }
 }
 
@@ -188,16 +184,13 @@ static void split_layout(struct widget *w)
     int pos = s->pos < 0 ? total / 2 : s->pos;
     if (pos < 20) pos = 20;
     if (pos > total - 20) pos = total - 20;
-    if (a) {
-        a->x = a->y = 0;
-        if (w->value) { a->w = w->w; a->h = pos; }
-        else { a->w = pos; a->h = w->h; }
-        a->dirty = 1;
-    }
+    if (a)
+        widget_set_rect(a, 0, 0, w->value ? w->w : pos, w->value ? pos : w->h);
     if (b) {
-        if (w->value) { b->x = 0; b->y = pos + DIVIDER; b->w = w->w; b->h = w->h - pos - DIVIDER; }
-        else { b->x = pos + DIVIDER; b->y = 0; b->w = w->w - pos - DIVIDER; b->h = w->h; }
-        b->dirty = 1;
+        if (w->value)
+            widget_set_rect(b, 0, pos + DIVIDER, w->w, w->h - pos - DIVIDER);
+        else
+            widget_set_rect(b, pos + DIVIDER, 0, w->w - pos - DIVIDER, w->h);
     }
 }
 

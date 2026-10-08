@@ -68,9 +68,11 @@ static void select_row(struct listview *l, int idx, const char *signal)
 {
     if (idx < 0 || idx >= l->nitems)
         return;
+    int old_value = l->w.value, old_scroll = l->scroll;
     l->w.value = idx;
     ensure_visible(l);
-    widget_invalidate(&l->w);
+    if (l->w.value != old_value || l->scroll != old_scroll)
+        widget_invalidate(&l->w);
     struct sig_select s = { idx };
     widget_emit(&l->w, signal, &s);
 }
@@ -99,8 +101,8 @@ static int listview_event(struct widget *w, struct event *e)
         return 1;
     }
     case EV_MOUSE_WHEEL:
-        l->scroll = scroll_clamp(l->scroll + 3 * e->button, l->nitems, rows);
-        widget_invalidate(w);
+        if (scroll_set(&l->scroll, l->scroll + 3 * e->button, l->nitems, rows))
+            widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN:
         switch (e->code) {

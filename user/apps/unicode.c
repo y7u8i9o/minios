@@ -243,11 +243,7 @@ static int total_rows(void)
 
 static void clamp_top(void)
 {
-    int max = total_rows() - visible_rows();
-    if (top_row > max)
-        top_row = max;
-    if (top_row < 0)
-        top_row = 0;
+    top_row = scroll_clamp(top_row, total_rows(), visible_rows());
 }
 
 static void scroll_to_selection(void)
@@ -490,8 +486,12 @@ static int on_key(struct widget *w, void *args, void *arg)
 
 static int on_wheel(struct widget *w, void *args, void *arg)
 {
+    int old = top_row;
     top_row += 3 * ((struct sig_click *)args)->button;
-    refresh();
+    clamp_top();
+    /* A wheel step at the first or the last row changes nothing. */
+    if (top_row != old)
+        refresh();
     return 1;
 }
 

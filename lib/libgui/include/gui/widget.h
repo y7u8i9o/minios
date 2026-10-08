@@ -102,7 +102,13 @@ struct widget {
     int x, y, w, h;             /* inside the parent */
     unsigned visible : 1, enabled : 1, focusable : 1, focused : 1, hover : 1, pressed : 1;
     unsigned accepts_text : 1;
-    unsigned dirty : 1, child_dirty : 1, needs_layout : 1;
+    unsigned dirty : 1, child_dirty : 1;
+    /* The layout marks (framework.md, Layout). needs_measure: the
+     * measurement of the widget may have changed. needs_layout: the widget
+     * places its children again. child_layout: a descendant has
+     * needs_layout. moved: the rectangle or the visibility changed in the
+     * last layout. */
+    unsigned needs_measure : 1, needs_layout : 1, child_layout : 1, moved : 1;
     unsigned floating : 1;      /* positioned by its owner, skipped by layout (popups) */
     struct size_hint hint;      /* set by the application; measure fills the rest */
     struct size_hint measured;
@@ -158,7 +164,18 @@ int widget_emit(struct widget *w, const char *signal, void *args);
 /* ---- redraw, layout and focus ---- */
 
 void widget_invalidate(struct widget *w);
+/* The content or the structure of w changed: w is measured, laid out and
+ * repainted. The ancestors are measured again up to the first one whose
+ * measurement does not change. */
 void widget_relayout(struct widget *w);
+/* Sets the rectangle of w inside its parent. A changed rectangle marks w
+ * as moved and dirty. Returns 1 when the rectangle changed. Layout
+ * functions place their children with it. */
+int widget_set_rect(struct widget *w, int x, int y, int width, int height);
+/* Shows or hides w from the layout function of its parent. Unlike
+ * widget_set_visible, the function does not lay out the parent again. A
+ * change marks w as moved and dirty. */
+void widget_show_in_layout(struct widget *w, int visible);
 void widget_focus(struct widget *w);
 struct widget *widget_focused(struct widget *window);
 void widget_capture(struct widget *w);          /* mouse events until release */
@@ -220,6 +237,7 @@ struct window_state {
     struct timer *tip_timer;
     struct widget *drag_source;     /* started the drag that runs */
     struct widget *drop_target;     /* accepted the drag over the window last */
+    int relayout_all;               /* the next paint measures and lays out every widget */
 };
 struct window_state *window_state_of(struct widget *window);
 /* Route a server message to the window (also used by the tests). */
@@ -227,6 +245,9 @@ void window_message(struct widget *window, struct wmsg *m);
 /* Layout and paint what changed; returns the damaged rectangle. */
 struct rect window_paint(struct widget *window);
 void window_close(struct widget *window);
+/* Measures and lays out every widget of the window again and repaints the
+ * window: after a resize, a change of the scale or a change of the theme. */
+void window_relayout_all(struct widget *window);
 /* Show w as a floating popup of the window at window coordinates; it is
  * destroyed by window_popup_close, by a click outside it or by Escape. */
 void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height);

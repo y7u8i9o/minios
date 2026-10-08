@@ -80,9 +80,12 @@ static void test_partial_redraw(struct app *a)
     r = window_paint(win);
     CHECK(r.x == b2->x && r.y == b2->y && r.w == b2->w && r.h == b2->h, "only the invalidated button repainted: %d,%d %dx%d", r.x, r.y, r.w, r.h);
     CHECK(fake_last_damage.y == b2->y, "damage sent to the server matches");
+    /* The button fills the width of the window, so a longer text changes
+     * no rectangle. The button alone is repainted. */
     widget_set_text(b1, "first!");
     r = window_paint(win);
-    CHECK(r.w == 300 && r.h == 200, "a text change relayouts and repaints the window");
+    CHECK(r.x == b1->x && r.y == b1->y && r.w == b1->w && r.h == b1->h, "a text change repaints the button: %d,%d %dx%d",
+          r.x, r.y, r.w, r.h);
     window_close(win);
 }
 

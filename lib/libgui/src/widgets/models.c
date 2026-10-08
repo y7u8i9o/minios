@@ -94,11 +94,13 @@ static void select_flat(struct view *v, int idx, const char *signal)
 {
     if (idx < 0 || idx >= v->nflat)
         return;
+    int old_value = v->w.value, old_scroll = v->scroll;
     v->w.value = v->flat[idx];
     int rows = rows_visible(v);
     if (idx < v->scroll) v->scroll = idx;
     if (rows > 0 && idx >= v->scroll + rows) v->scroll = idx - rows + 1;
-    widget_invalidate(&v->w);
+    if (v->w.value != old_value || v->scroll != old_scroll)
+        widget_invalidate(&v->w);
     struct sig_select s = { v->w.value };
     widget_emit(&v->w, signal, &s);
 }
@@ -364,8 +366,8 @@ static int view_event(struct widget *w, struct event *e)
     case EV_DRAG_MOVE: case EV_DROP: case EV_DRAG_LEAVE: case EV_DRAG_END:
         return view_drag_event(w, e);
     case EV_MOUSE_WHEEL:
-        v->scroll = scroll_clamp(v->scroll + 3 * e->button, v->nflat, rows);
-        widget_invalidate(w);
+        if (scroll_set(&v->scroll, v->scroll + 3 * e->button, v->nflat, rows))
+            widget_invalidate(w);
         return 1;
     case EV_KEY_DOWN: {
         if (e->mods & WMOD_ALT)

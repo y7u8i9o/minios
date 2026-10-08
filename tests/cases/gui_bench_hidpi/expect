@@ -1,8 +1,8 @@
-compbench: wheel client paints=
+compbench: wheel client paints=14 
 compbench: type client paints=
 compbench: status client paints=
 compbench: edit client paints=
-compbench: scroll client paints=
+compbench: scroll client .* layouts=0 
 compbench: hover client paints=
 gui_bench: ok
 TEST PASS
