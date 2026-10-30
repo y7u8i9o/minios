@@ -31,12 +31,12 @@
 /* Peak darkening of the shadow, out of 256. */
 #define SHADOW_ALPHA          120
 #define SHADOW_ALPHA_INACTIVE 72
-/* The resize zones of the frame (gui_resize_edges, GUI_RESIZE_*): the
- * edges on the border, and corner squares that reach outside and over the
- * rounded top corners inside. */
+/* The resize zones of the frame (gui_resize_edges): the 1 px border and a
+ * margin outside, corner zones of 24 px along the edges, and corner squares
+ * that reach 12 px outside and over the rounded top corners inside. */
 static const struct gui_resize_zones zones = {
-    .margin = GUI_RESIZE_OUTSIDE, .inner = GUI_RESIZE_INSIDE, .corner = GUI_RESIZE_CORNER,
-    .reach = GUI_RESIZE_REACH, .inset_top = RADIUS, .inset_bottom = GUI_RESIZE_INSIDE,
+    .margin = RESIZE_MARGIN, .inner = BORDER, .corner = 24, .reach = 12,
+    .inset_top = RADIUS, .inset_bottom = BORDER,
 };
 
 static struct toplevel *drag;

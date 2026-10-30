@@ -97,14 +97,14 @@ where shapes are curved:
 - maximized windows have square corners and no shadow.
 
 Presses on server decorations never reach the client: the title bar
-moves, the buttons act, and a zone on the border, 3 px outside and 3 px
-inside the frame, and the bottom right grip of the contents resize on
-release with a configure of the new size. Zones within 16 px of a corner
-take both edges. A square at each corner reaches 3 px outside the frame,
-and at the top corners 8 px inside over the rounded corner, and takes
-both edges as well. The client decorations of libgui use the same
-function, `gui_resize_edges` (`lib/libgui/src/gfx.c`), with the same
-sizes `GUI_RESIZE_*` of `gui/gfx.h` (`gui.md`). Alt with the
+moves, the buttons act, the 1 px border, an invisible `RESIZE_MARGIN`
+(6 px) around the frame and the bottom right grip of the contents resize
+on release with a configure of the new size. Margins within 24 px of a
+corner take both edges. A square at each corner reaches 12 px outside the
+frame, and at the top corners 8 px inside over the rounded corner, and
+takes both edges as well. The client decorations of libgui use the same
+function, `gui_resize_edges` (`lib/libgui/src/gfx.c`), with their own
+sizes (`gui.md`). Alt with the
 left button moves any toplevel from anywhere, whichever side decorates.
 
 A move or resize the client requested (`toplevel.move`, `toplevel.resize`

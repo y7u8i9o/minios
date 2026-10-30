@@ -115,9 +115,15 @@ surface` for a cursor surface and `cursor hidden` for a hidden cursor.
 
 ## Tests
 
-- `gui_cursors`: `ew-resize` over the right edge of a window with server
-  decorations, `grabbing` during a move, `text` over the text field of
-  `apptest`, and `default` over the desktop.
+- `gui_cursors` runs on virtio-gpu and checks the hotspot of the device
+  cursor at each step: a resize cursor at the last pixel of the resize
+  zone outside the right edge of a window with server decorations and of
+  a window with client decorations, and on the 1 pixel border of the
+  server frame; the arrow one pixel beyond each zone, over the contents
+  and over the desktop. X12 logs `grabbing` during a move and `text` over
+  the text field of `apptest`. The test runner only checks that each
+  expected line occurs in the log, not their order, so a check of the
+  log cannot tie a cursor to a step.
 - `comp_cursor`, `gpu_mode`, `gui_pointer`, `gui_tablet`, `input_tablet`
   and `gui_scale2` check the default cursor at the pointer: the black body
   and the white outline in the framebuffer, or the size, the hotspot and

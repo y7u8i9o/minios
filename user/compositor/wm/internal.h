@@ -10,6 +10,7 @@
 #define RADIUS 8                /* rounded top corners of the frame */
 #define SHADOW 14               /* reach of the drop shadow around the frame */
 #define SHADOW_DY 3             /* the shadow is shifted down by this much */
+#define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
 /* window.c */
 void toplevel_move(struct toplevel *t, int x, int y);

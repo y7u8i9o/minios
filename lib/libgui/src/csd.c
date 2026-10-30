@@ -75,12 +75,12 @@ static struct rect button_rect(const struct csd *c, int w, int h, int n)
                           CSD_BUTTON, CSD_BUTTON };
 }
 
-/* The resize zones of the frame (gui_resize_edges, GUI_RESIZE_*): the
- * edges on the border, and corner squares that reach outside and over the
- * rounded corners inside. */
+/* The resize zones of the frame (gui_resize_edges): the edges outside the
+ * frame, and corner squares that reach outside and over the rounded
+ * corners inside. */
 static const struct gui_resize_zones zones = {
-    .margin = GUI_RESIZE_OUTSIDE, .inner = GUI_RESIZE_INSIDE, .corner = GUI_RESIZE_CORNER,
-    .reach = GUI_RESIZE_REACH, .inset_top = CSD_RADIUS, .inset_bottom = CSD_RADIUS,
+    .margin = CSD_BORDER_ZONE, .inner = 0, .corner = CSD_CORNER, .reach = CSD_CORNER_REACH,
+    .inset_top = CSD_RADIUS, .inset_bottom = CSD_RADIUS,
 };
 
 enum csd_zone csd_hit(const struct csd *c, int w, int h, int x, int y, int *edges)

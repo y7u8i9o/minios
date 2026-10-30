@@ -1,23 +1,5 @@
 x12: [0-9]+ cursors
-x12: cursor ew-resize
-gui_cursors: server frame, 2 px outside
-x12: cursor default
-gui_cursors: server frame, 3 px outside
-x12: cursor ew-resize
-gui_cursors: server frame, 3 px inside
-x12: cursor default
-gui_cursors: server frame, 4 px inside
 x12: cursor grabbing
-gui_cursors: moved
-x12: cursor ew-resize
-gui_cursors: client frame, 2 px outside
-x12: cursor default
-gui_cursors: client frame, 3 px outside
-x12: cursor ew-resize
-gui_cursors: client frame, 3 px inside
 x12: cursor text
-gui_cursors: text field
-x12: cursor default
-gui_cursors: desktop
 gui_cursors: ok
 TEST PASS
