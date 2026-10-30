@@ -40,8 +40,20 @@ static struct proc *panel_proc, *sessiond_proc;
 #define PANEL_MIXER_X(sw) (PANEL_NOTIFY_X(sw) - PANEL_MIXER_W - 4)
 #define PANEL_INPUT_X(sw) (PANEL_MIXER_X(sw) - PANEL_INPUT_W - 4)
 #define PANEL_BG 0x0023272c
+/* A notification card of the panel (user/panel/notify.c) at the top right. */
+#define CARD_W 340
+#define CARD_BG 0x00fafbfc
 #define PANEL_BUTTON_ACTIVE 0x003f4854
 #define PANEL_BUTTON_HOVER 0x00384049
+
+/* A program without arguments with PATH and HOME, such as notifyd. */
+static inline struct proc *start_program(const char *path, const char *name)
+{
+    struct proc *p = proc_create_user(path, (char *const[]){ (char *)name, NULL },
+                                      (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start %s", name);
+    return p;
+}
 
 /* GUI tests install the same archive a user installs on the base image. */
 static inline void install_app(const char *name)

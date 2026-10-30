@@ -115,12 +115,15 @@ one commit without attribution lines. Sizes are estimates of new lines.
   `x12_anim` starts with AN3 and covers the window animations. AN4 adds
   the popups and the notifications to the case.
 
-### AN4 Popup fades (about 200 lines)
+### AN4 Popup fades (about 200 lines, completed 2026-10-30)
 
 - Popups (`ROLE_POPUP`: menus, combo box lists, tooltips) fade in over
   90 ms and fade out from a snapshot over 90 ms.
 - Panel menus and notifications are layer surfaces. Layer surfaces with
-  the popup or notification layer fade the same way.
+  the popup or notification layer fade the same way. As implemented: the
+  panel menus are popups of the panel layer and fade as popups. The
+  protocol has no popup or notification layer. X12 therefore selects the
+  layer surfaces of the namespace `notification`.
 
 Tests: a boot case `x12_anim` sets `anim_percent 400`, opens a window,
 samples a pixel at mid animation (alpha between the end values), then

@@ -188,8 +188,14 @@ them:
 A closed window no longer has a buffer. Its fade out therefore uses a
 snapshot.
 `anim_surface_closing` runs before the surface disappears: when the
-toplevel role ends (`toplevel_gone`), when the client attaches a null
-buffer and when the surface ends. The function renders the extent of the
+role ends (`toplevel_gone`, `popup_gone`, `layer_gone`), when X12
+dismisses a popup (`popup_dismiss_all`), when the client attaches a null
+buffer, when the surface ends, and when a buffer of a disconnecting
+client ends. libwire destroys the resources of a client newest first,
+The buffers of a client that exits therefore end before its
+surfaces.
+`wire_client_closing` tells such a buffer from one that the client
+destroys itself. The function renders the extent of the
 window with the identity into an image (`scene_snapshot`, the same
 rendering as the window capture). The snapshot is a `struct csurface`
 with the role `ROLE_SNAPSHOT`, the extent of the window, its visual
@@ -229,13 +235,40 @@ therefore reaches the window at its final place.
 ### Tests
 
 The boot case `x12_anim` (`kernel/tests/test_anim_gui.c`) runs X12 with
-the panel and `anim_percent` 400. comptest maps a server decorated
-window. The test polls the centre of the window contents during each
-animation. It requires a frame other than the two end states, and for
-the map and the close a blend of the desktop colour and the contents
-colour, then the final state. The order is the map, the minimize by the
-button of the decorations, the restore by the window button of the
-panel, and the close by Alt+F4. compstat then reports frames with
-animations. The QMP script of the case takes eight screendumps 100 ms
+notifyd, the panel and `anim_percent` 400. `comptest popup` maps a
+server decorated window and shows a popup over it after 1.5 s for 1.5 s.
+The test polls one pixel during each animation. It requires a frame
+other than the two end states, and for every fade a blend of the two end
+colours in every channel, then the final state. The order is the map of
+the window, the fade in and the fade out of the popup (AN4), the
+minimize by the button of the decorations, the restore by the window
+button of the panel, the close by Alt+F4, and the fade in and the fade
+out of a notification card of the panel (AN4). compstat then reports
+frames with animations. `mouse_click_now` and `alt_key_now` of
+`gui_helpers.h` return without the wait for an idle system. The test
+therefore observes the animation that the input starts. The QMP script of the case takes eight screendumps 100 ms
 apart from the start of the minimize, for review. The last screendumps
 show the start of the restore.
+
+## Popup fades (AN4)
+
+| Event | Effect | Duration | Curve |
+|---|---|---|---|
+| a popup maps (menus, the lists of combo boxes, tooltips) | alpha 0 to 255 | 90 ms | ease-out cubic |
+| a popup ends or X12 dismisses it | a snapshot: alpha to 0 | 90 ms | accelerate |
+| a notification card maps | alpha 0 to 255 | 90 ms | ease-out cubic |
+| a notification card ends | a snapshot: alpha to 0 | 90 ms | accelerate |
+
+The menus of the panel (the launcher, the calendar, the mixer, the power
+menu, the input method menu and the history of the notifications) are
+popups of the layer surface of the panel. The popup fades cover them.
+The plan expected a popup layer and a notification layer. The shell
+protocol has no such layers: the panel and the notification cards both
+use layer 2. X12 records the namespace of `get_layer_surface` in the
+layer (`ns`), and the cards of the namespace `notification` fade
+(`fades` in `anim.c`). The panel, the desktop, the lock surface and the
+candidate window of the input method do not fade.
+
+A popup fades without a scale. Its snapshot has the place of the popup
+in the stacking order, above its parent. A popup takes input from its
+first frame, because its geometry is final at once.

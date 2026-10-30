@@ -1,10 +1,15 @@
 x12: setting anim_percent = 400
 x12_anim: map from 306080 over [0-9a-f]+ to dcdcdc
+x12: popup [0-9]+ shown at 61,79 120x80
+x12_anim: popup in from dcdcdc over [0-9a-f]+ to b03050
+x12_anim: popup out from b03050 over [0-9a-f]+ to dcdcdc
 x12: toplevel 1 minimized
 x12_anim: minimize from dcdcdc over [0-9a-f]+ to 306080
 x12: toplevel 1 shown
 x12_anim: restore from 306080 over [0-9a-f]+ to dcdcdc
 x12_anim: close from dcdcdc over [0-9a-f]+ to 306080
+x12_anim: notification in from 306080 over [0-9a-f]+ to fafbfc
+x12_anim: notification out from fafbfc over [0-9a-f]+ to 306080
 compstat: .*anim_percent=400 animations=0 anim_frames=[1-9]
 x12_anim: ok
 TEST PASS

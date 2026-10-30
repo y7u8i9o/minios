@@ -17,18 +17,9 @@
 #include <fs/vfs.h>
 #include "gui_helpers.h"
 
-#define CARD_W 340
-#define CARD_BG 0x00fafbfc
 #define HIST_W 340
 #define HIST_H(rows) (2 * 6 + 32 + (rows) * 46 + 32)
 
-static struct proc *start_program(const char *path, const char *name)
-{
-    struct proc *p = proc_create_user(path, (char *const[]){ (char *)name, NULL },
-                                      (char *const[]){ "PATH=/bin", "HOME=/home", NULL }, &kernel_proc);
-    ktest_assert(p != NULL, "cannot start %s", name);
-    return p;
-}
 
 static void test_gui_notify(void)
 {

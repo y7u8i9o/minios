@@ -19,6 +19,7 @@
  * the surfaces and share the state of the scene without a lock. */
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "comp.h"
 
@@ -27,6 +28,7 @@
 #define MAP_MS 150
 #define CLOSE_MS 120
 #define MINIMIZE_MS 200
+#define POPUP_MS 90
 #define WINDOW_SCALE 62915
 /* The target of the minimize animation without a button in the panel: a
  * rectangle of the size of a button at the bottom centre of the screen. */
@@ -256,6 +258,24 @@ void anim_window_map(struct csurface *s)
     anim_start(s, &from, VISUAL_IDENTITY, MAP_MS, ANIM_EASE_OUT_CUBIC);
 }
 
+/* Popups (menus, the lists of combo boxes, tooltips) and the layer
+ * surfaces of notifications fade in and out. The namespace of a layer
+ * surface tells a notification from the panel and the desktop. */
+static int fades(const struct csurface *s)
+{
+    if (s->role == ROLE_POPUP)
+        return 1;
+    return s->role == ROLE_LAYER && s->layer && strcmp(s->layer->ns, "notification") == 0;
+}
+
+void anim_popup_map(struct csurface *s)
+{
+    if (!fades(s))
+        return;
+    struct visual from = { 0, ANIM_ONE, 0, 0 };
+    anim_start(s, &from, VISUAL_IDENTITY, POPUP_MS, ANIM_EASE_OUT_CUBIC);
+}
+
 /* A snapshot of the extent of s with the visual parameters and the place
  * of s in the stacking order. The surface itself disappears after the
  * call. NULL without memory. */
@@ -284,21 +304,29 @@ static struct csurface *snapshot_create(struct csurface *s)
     return c;
 }
 
-/* A closing window fades out from a snapshot and shrinks to 0.96. The
- * snapshot starts from the values on the screen. A window that closes
- * during its map animation therefore does not jump. A minimized window
- * disappears without an animation. */
+/* A closing window fades out from a snapshot and shrinks to 0.96. A
+ * popup and a notification fade out from a snapshot. The snapshot starts
+ * from the values on the screen. A surface that closes during its map
+ * animation therefore does not jump. A minimized window disappears
+ * without an animation. */
 void anim_surface_closing(struct csurface *s)
 {
     if (!settings.anim_percent || !s->mapped || !s->current.buffer || !scene_shows(s))
         return;
-    if (s->role != ROLE_TOPLEVEL || !s->toplevel || s->toplevel->minimized)
+    int window = s->role == ROLE_TOPLEVEL && s->toplevel && !s->toplevel->minimized;
+    if (!window && !fades(s))
         return;
     struct csurface *c = snapshot_create(s);
     if (!c)
         return;
-    struct visual to = { 0, WINDOW_SCALE, c->visual.dx, c->visual.dy };
-    anim_start(c, NULL, to, CLOSE_MS, ANIM_ACCELERATE);
+    if (window) {
+        struct visual to = { 0, WINDOW_SCALE, c->visual.dx, c->visual.dy };
+        anim_start(c, NULL, to, CLOSE_MS, ANIM_ACCELERATE);
+        return;
+    }
+    struct visual to = c->visual;
+    to.alpha = 0;
+    anim_start(c, NULL, to, POPUP_MS, ANIM_ACCELERATE);
 }
 
 /* The visual parameters that place the extent of t on its button in the

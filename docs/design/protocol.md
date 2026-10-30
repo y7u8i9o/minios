@@ -90,7 +90,8 @@ libwire generate` regenerates them.
   its callback fires; protocol errors set `wire_display_error`.
 - `wire/server.h`: `struct wire_server` (listening socket, clients,
   globals, serial counter), `struct wire_client` (connection,
-  resources, user data with a destroy hook) and `struct wire_resource`
+  resources, user data with a destroy hook; `wire_client_closing` is 1
+  while `wire_client_destroy` destroys the resources) and `struct wire_resource`
   (id, interface, handlers, data, destroy hook). The registry is
   implemented by the library: `wire_global_create` advertises a global
   to every registry and calls the global's bind function on

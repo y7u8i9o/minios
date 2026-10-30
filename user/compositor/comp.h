@@ -128,6 +128,7 @@ struct layer {
     int margin[4];                          /* top, right, bottom, left (layer_place) */
     int has_margin;
     uint32_t layer;
+    char ns[32];                            /* the namespace of get_layer_surface */
     uint32_t serial;
     uint32_t acked_serial;
     int pending_w, pending_h;
@@ -410,10 +411,12 @@ long anim_frames(void);
 void anim_reset_frames(void);
 /* The snapshots of closed surfaces that fade out, for the scene order. */
 struct csurface *anim_snapshot_first(void);
-/* The effects (docs/design/animations.md). A toplevel maps, a surface
- * is about to disappear (its role, its buffer or the surface ends), and a
- * toplevel is minimized (on 1) or restored (on 0). */
+/* The effects (docs/design/animations.md). A toplevel maps, a popup or a
+ * layer surface maps, a surface is about to disappear (its role, its
+ * buffer or the surface ends, or a popup is dismissed), and a toplevel is
+ * minimized (on 1) or restored (on 0). */
 void anim_window_map(struct csurface *s);
+void anim_popup_map(struct csurface *s);
 void anim_surface_closing(struct csurface *s);
 void anim_window_minimize(struct toplevel *t, int on);
 /* cursor.c: the cursor set of /usr/share/cursors (docs/design/cursors.md).

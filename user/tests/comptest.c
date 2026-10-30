@@ -1,6 +1,6 @@
 /* Compositor test client. Modes: core (M24), shell, seat, data-source,
  * data-target (M25), damage (G5 of docs/plan/compositor-performance.md),
- * cursor (G9).
+ * cursor (G9), popup (AN4 of docs/plan/animation-gpu.md).
  * Every event of interest is logged as "comptest: ..." for the kernel
  * tests. */
 #include <stdio.h>
@@ -449,6 +449,72 @@ static int run_damage(void)
 static void on_ping(void *user, struct wire_proxy *sh, uint32_t serial) { shell_pong(sh, serial); }
 static const struct shell_listener shell_events = { on_ping };
 
+/* Dispatch the events of X12 for ms milliseconds. */
+static int dispatch_for(int ms)
+{
+    long until = uptime_ms() + ms;
+    for (;;) {
+        wire_display_flush(d);
+        long left = until - uptime_ms();
+        if (left <= 0)
+            return 0;
+        struct pollfd pf = { wire_display_fd(d), POLLIN, 0 };
+        if (poll(&pf, 1, (int)left) > 0 && wire_display_dispatch(d) < 0)
+            return -1;
+    }
+}
+
+static void on_popup_configure(void *user, struct wire_proxy *p, uint32_t serial, int32_t x, int32_t y, int32_t w,
+                               int32_t h)
+{
+    popup_ack_configure(p, serial);
+}
+static void on_popup_done(void *user, struct wire_proxy *p) { LOG("popup done"); }
+static const struct popup_listener popup_events = { on_popup_configure, on_popup_done };
+
+/* The window "popup" in 0x00dcdcdc, as in the mode shell. 1.5 s after the
+ * window is ready a popup of 120x80 pixels in 0x00b03050 appears at
+ * (20,20) of the window, without a grab. The popup ends after 1.5 s, and
+ * the window remains until it is closed. The boot case x12_anim observes
+ * the fades of the popup. */
+static int run_popup(void)
+{
+    struct window win = { 0 };
+    window_create(&win, "popup", 0x00dcdcdc, W, H);
+    wire_display_roundtrip(d);
+    wire_display_roundtrip(d);
+    LOG("window 'popup' ready");
+    if (dispatch_for(1500) < 0)
+        return 1;
+    struct wire_proxy *pos = shell_create_positioner(shell);
+    positioner_set_size(pos, 120, 80);
+    positioner_set_anchor_rect(pos, 20, 20, 1, 1);
+    positioner_set_anchor(pos, 5);          /* the top left corner of the anchor */
+    positioner_set_gravity(pos, 8);         /* the popup extends right and down */
+    struct window pop = { 0 };
+    pop.color = 0x00b03050;
+    pop.surface = compositor_create_surface(compositor);
+    struct wire_proxy *popup = shell_get_popup(shell, pop.surface, win.surface, pos);
+    popup_add_listener(popup, &popup_events, NULL);
+    positioner_destroy(pos);
+    wire_display_roundtrip(d);
+    window_resize(&pop, 120, 80);
+    redraw(&pop);
+    LOG("popup shown");
+    if (dispatch_for(1500) < 0)
+        return 1;
+    popup_destroy(popup);
+    surface_destroy(pop.surface);
+    buffer_destroy(pop.buffer);
+    shm_pool_destroy(pop.pool);
+    LOG("popup destroyed");
+    while (!win.closed && !quit)
+        if (wire_display_dispatch(d) < 0)
+            return 1;
+    LOG("window 'popup' done");
+    return 0;
+}
+
 /* A client that maps a window and then stops answering: for hang_ms
  * milliseconds it neither reads nor writes, then it resumes for two
  * seconds and leaves. hang_ms 0 hangs until it is killed. */
@@ -550,6 +616,7 @@ int main(int argc, char **argv)
     int r;
     if (strcmp(mode, "core") == 0) r = run_core();
     else if (strcmp(mode, "shell") == 0) r = run_window("alpha", 0x00dcdcdc, 0, 0, 0);
+    else if (strcmp(mode, "popup") == 0) r = run_popup();
     else if (strcmp(mode, "seat") == 0) r = run_window("seat", 0x00c8f0c8, 1, 0, 0);
     else if (strcmp(mode, "data-source") == 0) r = run_window("source", 0x00ffe0a0, 1, 1, 1);
     else if (strcmp(mode, "data-target") == 0) r = run_window("target", 0x00a0e0ff, 1, 1, 0);

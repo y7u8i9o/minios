@@ -518,8 +518,10 @@ static const struct popup_impl popup_handlers = { h_popup_grab, h_popup_ack, h_p
 static void popup_gone(struct wire_resource *r)
 {
     struct popup *p = r->data;
-    if (p->s->mapped)
+    if (p->s->mapped) {
+        anim_surface_closing(p->s);
         scene_damage(surface_rect(p->s));
+    }
     comp_log("popup %d destroyed", p->s->id);
     p->s->role = ROLE_NONE;
     p->s->popup = NULL;
@@ -563,6 +565,7 @@ void popup_dismiss_all(void)
         if (s->role == ROLE_POPUP && s->mapped) {
             comp_log("popup %d dismissed", s->id);
             popup_send_done(s->popup->res);
+            anim_surface_closing(s);
             s->mapped = 0;
             scene_damage(surface_rect(s));
         }
@@ -664,8 +667,10 @@ static void layer_place(struct csurface *s)
 static void layer_gone(struct wire_resource *r)
 {
     struct layer *l = r->data;
-    if (l->s->mapped)
+    if (l->s->mapped) {
+        anim_surface_closing(l->s);
         scene_damage(surface_rect(l->s));
+    }
     int focused = seat_keyboard_focus() == l->s;
     l->s->role = ROLE_NONE;
     l->s->layer = NULL;
@@ -695,6 +700,7 @@ static void h_get_layer_surface(struct wire_client *c, struct wire_resource *sel
     l->s = s;
     l->res = r;
     l->layer = layer_n;
+    strlcpy(l->ns, ns, sizeof l->ns);
     s->role = ROLE_LAYER;
     s->layer = l;
     wire_resource_set_listener(r, &layer_handlers, l, layer_gone);
@@ -845,8 +851,10 @@ void shell_surface_committed(struct csurface *s, int first_map)
         struct popup *p = s->popup;
         s->x = p->parent->x + p->x;
         s->y = p->parent->y + p->y;
-        if (first_map)
+        if (first_map) {
             comp_log("popup %d shown at %d,%d %dx%d", s->id, s->x, s->y, s->width, s->height);
+            anim_popup_map(s);
+        }
         break;
     }
     case ROLE_LAYER: {
@@ -866,6 +874,7 @@ void shell_surface_committed(struct csurface *s, int first_map)
         l->placed_exclusive = l->exclusive;
         if (first_map) {
             comp_log("layer surface %d mapped at %d,%d %dx%d", s->id, s->x, s->y, s->width, s->height);
+            anim_popup_map(s);
             if (l->layer == LAYER_OVERLAY && l->interactive)
                 seat_set_keyboard_focus(s);
             if (l->exclusive > 0) {
