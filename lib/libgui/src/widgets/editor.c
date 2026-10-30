@@ -1323,4 +1323,4 @@ static void editor_destroy(struct widget *w)
         gfx_font_free(ed->font);
 }
 
-const struct widget_class editor_class = { "editor", sizeof(struct editor), editor_measure, NULL, editor_paint, editor_event, editor_destroy };
+const struct widget_class editor_class = { "editor", sizeof(struct editor), editor_measure, NULL, editor_paint, editor_event, editor_destroy, NULL };

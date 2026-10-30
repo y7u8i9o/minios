@@ -182,7 +182,7 @@ static void listview_destroy(struct widget *w)
     listview_clear(w);
 }
 
-const struct widget_class listview_class = { "listview", sizeof(struct listview), listview_measure, NULL, listview_paint, listview_event, listview_destroy };
+const struct widget_class listview_class = { "listview", sizeof(struct listview), listview_measure, NULL, listview_paint, listview_event, listview_destroy, NULL };
 
 struct widget *listview_new(struct widget *parent)
 {

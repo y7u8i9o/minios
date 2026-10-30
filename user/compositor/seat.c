@@ -29,6 +29,12 @@ static uint32_t cursor_serial, grab_serial;
 static struct client *cursor_client, *grab_client;
 static struct csurface *grab_origin;
 static int cursor_is_hidden;
+/* The cursor (docs/design/cursors.md). client_shape is the shape that the
+ * client under the pointer requested with set_shape, 0 ("default") after
+ * every enter. override_shape is a shape of X12 itself over the window
+ * frames, during a drag and over an unresponsive window, -1 for none. The
+ * override takes precedence over the cursor of the client. */
+static int client_shape, override_shape = -1;
 static struct wire_server *server_of_seat;
 static int keymap_fd = -1;
 static uint32_t keymap_size;
@@ -82,7 +88,46 @@ static int key_list_remove(uint32_t *list, int *n, uint32_t key)
         }
     return 0;
 }
-int seat_cursor_hidden(void) { return cursor_is_hidden; }
+int seat_cursor_hidden(void) { return override_shape < 0 && cursor_is_hidden; }
+
+/* The verbose log writes every change of the cursor on the screen, for
+ * the boot tests. */
+static void log_cursor(void)
+{
+    static int logged = -2;
+    int shape = seat_cursor_hidden() ? -3 : seat_cursor_shape();
+    if (shape == logged)
+        return;
+    logged = shape;
+    comp_debug("cursor %s", shape == -3 ? "hidden" : shape < 0 ? "surface" : cursor_name(shape));
+}
+
+int seat_cursor_shape(void)
+{
+    if (override_shape >= 0)
+        return override_shape;
+    if (cursor_surface && cursor_surface->mapped && cursor_surface->current.buffer)
+        return -1;
+    return client_shape;
+}
+
+/* The override shape from the drag or the window manager, after every
+ * pointer event. */
+void seat_cursor_update(void)
+{
+    const char *name = NULL;
+    if (!lock_active())
+        name = data_dragging() ? data_cursor() : wm_cursor(scene_surface_at(cursor_x, cursor_y));
+    int shape = name ? cursor_lookup(name) : -1;
+    if (name && shape < 0)
+        shape = 0;
+    if (shape != override_shape) {
+        scene_cursor_changed();
+        override_shape = shape;
+        scene_cursor_changed();
+    }
+    log_cursor();
+}
 int seat_translate(uint32_t key, int mods)
 {
     return keymap_translate_group(server_keymap, key, mods | (caps_locked ? KEYMAP_MOD_CAPS : 0), group);
@@ -165,6 +210,7 @@ static void h_set_cursor(struct wire_client *c, struct wire_resource *self, uint
         cursor_surface = NULL;
         cursor_is_hidden = 1;
         scene_cursor_changed();
+        log_cursor();
         return;
     }
     struct csurface *s = surface->data;
@@ -183,9 +229,28 @@ static void h_set_cursor(struct wire_client *c, struct wire_resource *self, uint
     s->x = cursor_x - hx;
     s->y = cursor_y - hy;
     scene_cursor_changed();
+    log_cursor();
+}
+
+static void h_set_shape(struct wire_client *c, struct wire_resource *self, uint32_t serial_, const char *name)
+{
+    struct client *cl = wire_client_get_user_data(c);
+    if (!cl || serial_ != cursor_serial || cl != cursor_client || pointer_focus == NULL || pointer_focus->client != cl)
+        return;
+    int shape = cursor_lookup(name);
+    if (shape < 0) {
+        comp_debug("unknown cursor %s", name);
+        shape = 0;
+    }
+    scene_cursor_changed();
+    cursor_surface = NULL;
+    cursor_is_hidden = 0;
+    client_shape = shape;
+    scene_cursor_changed();
+    log_cursor();
 }
 static void h_pointer_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
-static const struct pointer_impl pointer_handlers = { h_set_cursor, h_pointer_destroy };
+static const struct pointer_impl pointer_handlers = { h_set_cursor, h_pointer_destroy, h_set_shape };
 static void pointer_gone(struct wire_resource *r)
 {
     struct client *cl = wire_client_get_user_data(r->client);
@@ -358,7 +423,7 @@ void seat_init(struct wire_server *srv)
 {
     seat_load_keymap("us");
     server_of_seat = srv;
-    wire_global_create(srv, &seat_interface, 2, bind_seat, NULL);
+    wire_global_create(srv, &seat_interface, 3, bind_seat, NULL);
 }
 
 /* ---- pointer ---- */
@@ -372,6 +437,12 @@ static void set_pointer_focus(struct csurface *s)
         pointer_send_frame(pointer_focus->client->pointer);
     }
     pointer_focus = s;
+    /* The cursor of the previous client does not apply to the new surface. */
+    scene_cursor_changed();
+    cursor_surface = NULL;
+    cursor_is_hidden = 0;
+    client_shape = 0;
+    scene_cursor_changed();
     if (s && s->client->pointer) {
         uint32_t n = serial_for(s->client);
         cursor_serial = n;
@@ -391,6 +462,7 @@ void seat_drag_started(void)
 {
     set_pointer_focus(NULL);
     press_focus = NULL;
+    seat_cursor_update();
 }
 
 /* After the drag the pointer enters the surface under it. A drag that
@@ -401,9 +473,25 @@ void seat_drag_ended(int button_pressed)
     drag_release_owed = button_pressed;
     if (!button_pressed)
         set_pointer_focus(scene_surface_at(cursor_x, cursor_y));
+    seat_cursor_update();
 }
 
+static void pointer_motion(void);
+static void pointer_button(int button, int pressed);
+
 void seat_pointer_motion(void)
+{
+    pointer_motion();
+    seat_cursor_update();
+}
+
+void seat_pointer_button(int button, int pressed)
+{
+    pointer_button(button, pressed);
+    seat_cursor_update();
+}
+
+static void pointer_motion(void)
 {
     if (data_dragging()) {
         data_pointer_motion();
@@ -424,7 +512,7 @@ void seat_pointer_motion(void)
     }
 }
 
-void seat_pointer_button(int button, int pressed)
+static void pointer_button(int button, int pressed)
 {
     int bit = 1 << (button - 1);
     buttons = pressed ? buttons | bit : buttons & ~bit;

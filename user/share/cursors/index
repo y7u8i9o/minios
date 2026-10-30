@@ -1,0 +1,35 @@
+# The cursors of X12, written by tools/gencursors.py (docs/design/cursors.md).
+# NAME X Y: the hotspot in units of the 24 by 24 view box. NAME = TARGET: an alias.
+default 5 3
+pointer 9.75 2.2
+grab 12 12
+grabbing 12 12
+text 12 12
+crosshair 12 12
+move 12 12
+all-scroll 12 12
+not-allowed 12 12
+wait 12 12
+progress 5 3
+help 5 3
+context-menu 5 3
+copy 5 3
+alias 5 3
+no-drop 5 3
+ew-resize 12 12
+ns-resize 12 12
+nwse-resize 12 12
+nesw-resize 12 12
+col-resize 12 12
+row-resize 12 12
+zoom-in 10 10
+zoom-out 10 10
+cell 12 12
+n-resize = ns-resize
+s-resize = ns-resize
+e-resize = ew-resize
+w-resize = ew-resize
+ne-resize = nesw-resize
+sw-resize = nesw-resize
+nw-resize = nwse-resize
+se-resize = nwse-resize

@@ -48,6 +48,7 @@ void hang_tick(long now)
             comp_log("client %d %s", c->number, hung ? "not responding" : "responding again");
             damage_client(c);
             session_client_state(c, !hung);
+            seat_cursor_update();
         }
     }
 }

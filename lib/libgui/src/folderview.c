@@ -1242,7 +1242,7 @@ static void sidebar_destroy(struct widget *w)
 }
 
 static const struct widget_class sidebar_class = {
-    "sidebar", sizeof(struct sidebar), sidebar_measure, NULL, sidebar_paint, sidebar_event, sidebar_destroy,
+    "sidebar", sizeof(struct sidebar), sidebar_measure, NULL, sidebar_paint, sidebar_event, sidebar_destroy, NULL,
 };
 
 static void add_place(struct folderview *fv, const char *label, const char *path, const char *icon, int group)
@@ -1461,7 +1461,7 @@ static int pathbar_event(struct widget *w, struct event *e)
 }
 
 static const struct widget_class pathbar_class = {
-    "pathbar", sizeof(struct pathbar), pathbar_measure, NULL, pathbar_paint, pathbar_event, NULL,
+    "pathbar", sizeof(struct pathbar), pathbar_measure, NULL, pathbar_paint, pathbar_event, NULL, NULL,
 };
 
 /* ---- construction and accessors ---- */

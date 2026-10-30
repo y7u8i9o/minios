@@ -126,7 +126,7 @@ static void label_layout(struct widget *w)
 }
 
 const struct widget_class label_class = { "label", sizeof(struct widget), label_measure, label_layout, label_paint, NULL,
-                                          NULL };
+                                          NULL, NULL };
 
 void label_set_wrap(struct widget *w, int wrap)
 {
@@ -209,7 +209,7 @@ static int button_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class button_class = { "button", sizeof(struct widget), text_measure, NULL, button_paint, button_event, NULL };
+const struct widget_class button_class = { "button", sizeof(struct widget), text_measure, NULL, button_paint, button_event, NULL, NULL };
 
 struct widget *button_new(struct widget *parent, const char *text)
 {
@@ -303,8 +303,8 @@ static void check_measure(struct widget *w, struct size_hint *h)
     h->min_w = h->pref_w;
 }
 
-const struct widget_class checkbox_class = { "checkbox", sizeof(struct widget), check_measure, NULL, check_paint, check_event, NULL };
-const struct widget_class radio_class = { "radio", sizeof(struct widget), check_measure, NULL, check_paint, check_event, NULL };
+const struct widget_class checkbox_class = { "checkbox", sizeof(struct widget), check_measure, NULL, check_paint, check_event, NULL, NULL };
+const struct widget_class radio_class = { "radio", sizeof(struct widget), check_measure, NULL, check_paint, check_event, NULL, NULL };
 
 struct widget *checkbox_new(struct widget *parent, const char *text)
 {
@@ -344,7 +344,7 @@ static void switch_paint(struct widget *w, struct painter *p)
 }
 
 const struct widget_class switch_class = { "switch", sizeof(struct widget), switch_measure, NULL, switch_paint,
-                                           check_event, NULL };
+                                           check_event, NULL, NULL };
 
 struct widget *switch_new(struct widget *parent)
 {
@@ -372,7 +372,7 @@ static void separator_paint(struct widget *w, struct painter *p)
         painter_line(p, w->w / 2, 0, w->w / 2, w->h - 1, p->theme->color[TC_BORDER]);
 }
 
-const struct widget_class separator_class = { "separator", sizeof(struct widget), separator_measure, NULL, separator_paint, NULL, NULL };
+const struct widget_class separator_class = { "separator", sizeof(struct widget), separator_measure, NULL, separator_paint, NULL, NULL, NULL };
 
 struct widget *separator_new(struct widget *parent)
 {
@@ -426,7 +426,7 @@ static int canvas_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class canvas_class = { "canvas", sizeof(struct widget), canvas_measure, NULL, canvas_paint, canvas_event, NULL };
+const struct widget_class canvas_class = { "canvas", sizeof(struct widget), canvas_measure, NULL, canvas_paint, canvas_event, NULL, NULL };
 
 struct widget *canvas_new(struct widget *parent)
 {

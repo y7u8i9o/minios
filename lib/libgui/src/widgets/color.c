@@ -287,7 +287,7 @@ static int color_button_event(struct widget *w, struct event *e)
 }
 
 const struct widget_class color_button_class = { "colorbutton", sizeof(struct color_button), color_button_measure,
-                                                 NULL, color_button_paint, color_button_event, NULL };
+                                                 NULL, color_button_paint, color_button_event, NULL, NULL };
 
 struct widget *colorbutton_new(struct widget *parent, uint32_t color, const char *title)
 {

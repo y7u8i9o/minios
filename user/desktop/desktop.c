@@ -528,7 +528,7 @@ static int desk_event(struct widget *w, struct event *e)
     }
 }
 
-static const struct widget_class desk_class = { "desktop", sizeof(struct widget), NULL, NULL, desk_paint, desk_event, NULL };
+static const struct widget_class desk_class = { "desktop", sizeof(struct widget), NULL, NULL, desk_paint, desk_event, NULL, NULL };
 
 /* ---- menu actions ---- */
 

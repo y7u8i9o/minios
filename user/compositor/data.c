@@ -407,7 +407,17 @@ static void drag_update_action(void)
         if (drag_source->res && drag_source->res->obj.version >= 2)
             data_source_send_action(drag_source->res, a);
         comp_log("drag action %s", action_name(a));
+        seat_cursor_update();
     }
+}
+
+/* The cursor shows the action of the drag over the current target. */
+const char *data_cursor(void)
+{
+    if (!drag_source)
+        return NULL;
+    uint32_t a = drag_choose_action();
+    return a & ACTION_COPY ? "copy" : a & ACTION_MOVE ? "default" : "no-drop";
 }
 
 void data_drag_modifiers(void) { drag_update_action(); }

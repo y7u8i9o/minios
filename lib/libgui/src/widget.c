@@ -224,6 +224,31 @@ void widget_set_padding(struct widget *w, int padding)
     widget_relayout(w);
 }
 
+void widget_set_cursor(struct widget *w, const char *name)
+{
+    w->cursor = name;
+    if (w->window && window_state_of(w->window)->hover)
+        window_update_cursor(w->window);
+}
+
+const char *widget_cursor_at(struct widget *w, int x, int y)
+{
+    for (struct widget *c = w; c; c = c->parent) {
+        if (!c->enabled)
+            return "default";
+        const char *name = c->cls->cursor_at ? c->cls->cursor_at(c, x, y) : NULL;
+        if (name)
+            return name;
+        if (c->cursor)
+            return c->cursor;
+        if (c->accepts_text)
+            return "text";
+        x += c->x;
+        y += c->y;
+    }
+    return "default";
+}
+
 void widget_set_tip(struct widget *w, const char *tip)
 {
     free(w->tip);

@@ -173,6 +173,19 @@ int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int
     return e;
 }
 
+const char *gui_resize_cursor(int edges)
+{
+    int vertical = edges & (GUI_EDGE_TOP | GUI_EDGE_BOTTOM), horizontal = edges & (GUI_EDGE_LEFT | GUI_EDGE_RIGHT);
+    /* Top left and bottom right lie on one diagonal. */
+    if (vertical && horizontal)
+        return ((edges & GUI_EDGE_TOP) != 0) == ((edges & GUI_EDGE_LEFT) != 0) ? "nwse-resize" : "nesw-resize";
+    if (vertical)
+        return "ns-resize";
+    if (horizontal)
+        return "ew-resize";
+    return NULL;
+}
+
 int gui_resize_region(struct rect f, const struct gui_resize_zones *z, struct rect out[5])
 {
     out[0] = (struct rect){ f.x - z->margin, f.y - z->margin, f.w + 2 * z->margin, f.h + 2 * z->margin };

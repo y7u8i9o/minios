@@ -635,7 +635,7 @@ static void textfield_destroy(struct widget *w)
     }
 }
 
-const struct widget_class textfield_class = { "textfield", sizeof(struct textfield), textfield_measure, NULL, textfield_paint, textfield_event, textfield_destroy };
+const struct widget_class textfield_class = { "textfield", sizeof(struct textfield), textfield_measure, NULL, textfield_paint, textfield_event, textfield_destroy, NULL };
 
 void textfield_set_placeholder(struct widget *w, const char *text)
 {

@@ -18,6 +18,7 @@ void seat_send_input_method(struct wire_resource *seat, const char * label);
 struct pointer_impl {
     void (*set_cursor)(struct wire_client *client, struct wire_resource *self, uint32_t serial, struct wire_resource * surface, int32_t hotspot_x, int32_t hotspot_y);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_shape)(struct wire_client *client, struct wire_resource *self, uint32_t serial, const char * name);
 };
 void pointer_send_enter(struct wire_resource *pointer, uint32_t serial, struct wire_resource * surface, int32_t x, int32_t y);
 void pointer_send_leave(struct wire_resource *pointer, uint32_t serial, struct wire_resource * surface);

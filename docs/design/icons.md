@@ -23,7 +23,14 @@ icon files use: the `viewBox` (or `width` and `height`) of the `<svg>`
 element, and every `<path>` with its `d` data, `fill` (`#rgb`,
 `#rrggbb`, `none`, `black`, `white`; other values take `color`),
 `fill-rule` (`nonzero` by default, `evenodd`), `fill-opacity` and
-`opacity`. Comments, processing instructions, closing tags and other
+`opacity`. Since 2026-10-30 a path may also have a stroke: `stroke`
+(colours as for `fill`), `stroke-width`, `stroke-opacity`,
+`stroke-linejoin` (`miter` by default, `round`, `bevel`),
+`stroke-linecap` (`butt` by default, `round`, `square`) and
+`stroke-miterlimit`. The stroke lies over the fill. The stroke of the
+flattened path is a union of polygons, one rectangle per segment and one
+polygon per join and per cap, all with a positive orientation, filled
+with the nonzero rule. The cursors use strokes (`cursors.md`). Comments, processing instructions, closing tags and other
 elements are skipped. Path data supports `M L H V C S Q T A Z` and
 their relative forms; cubic and quadratic curves are flattened into
 segments in proportion to their size, arcs through the endpoint to

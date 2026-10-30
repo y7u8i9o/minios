@@ -92,6 +92,9 @@ struct widget_class {
     void (*paint)(struct widget *w, struct painter *p);
     int (*event)(struct widget *w, struct event *e);  /* returns 1 when consumed */
     void (*destroy)(struct widget *w);
+    /* The cursor at (x, y) of the widget, or NULL for the cursor field and
+     * the parent (docs/design/cursors.md). NULL for most classes. */
+    const char *(*cursor_at)(struct widget *w, int x, int y);
 };
 
 struct widget {
@@ -132,6 +135,7 @@ struct widget {
     char *id;
     char *text;
     char *tip;                  /* tooltip shown after hovering */
+    const char *cursor;         /* a cursor name, not owned; NULL takes the cursor of the parent */
     const struct image *icon;   /* not owned; buttons and labels draw it */
     int value, min, max;        /* generic integer state */
     struct handler *handlers;
@@ -165,6 +169,14 @@ void widget_set_grid(struct widget *w, int row, int col, int row_span, int col_s
 void widget_set_accel(struct widget *w, int key, int mods);
 void widget_set_padding(struct widget *w, int padding);
 void widget_set_tip(struct widget *w, const char *tip);
+/* The pointer cursor over w and the children without a cursor of their
+ * own: a name of /usr/share/cursors such as "crosshair", or NULL. The name
+ * is not copied. */
+void widget_set_cursor(struct widget *w, const char *name);
+/* The cursor at (x, y) of w: the cursor of the class at the position, the
+ * cursor field, "text" for a widget that accepts text, in that order, then
+ * the same for the parent. A disabled widget shows "default". */
+const char *widget_cursor_at(struct widget *w, int x, int y);
 void widget_set_icon(struct widget *w, const struct image *icon);
 
 /* ---- signals ---- */
@@ -276,8 +288,13 @@ struct window_state {
     long last_input_ms;
     struct widget *caret_owner;
     struct rect caret_rect;
+    /* The last pointer position in the window, or in the popup when
+     * mouse_popup is 1, for the cursor. */
+    int mouse_x, mouse_y, mouse_popup;
 };
 struct window_state *window_state_of(struct widget *window);
+/* Send the cursor of the widget under the pointer to the server. */
+void window_update_cursor(struct widget *window);
 /* Route a server message to the window (also used by the tests). */
 void window_message(struct widget *window, struct wmsg *m);
 /* Layout and paint what changed; returns the damaged rectangle. */

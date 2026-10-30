@@ -79,6 +79,17 @@ void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int widt
     (void)window; (void)x; (void)y; (void)width; (void)height;
 }
 
+char fake_cursor[24];
+int fake_busy;
+
+void gui_window_set_cursor(struct gui_window *window, const char *name)
+{
+    (void)window;
+    snprintf(fake_cursor, sizeof fake_cursor, "%s", name && strcmp(name, "default") != 0 ? name : "");
+}
+
+void gui_set_busy(int busy) { fake_busy = busy; }
+
 struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab)
 {
     return NULL;

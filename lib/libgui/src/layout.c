@@ -339,8 +339,8 @@ static void container_paint(struct widget *w, struct painter *p)
         painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
 }
 
-const struct widget_class box_class = { "box", sizeof(struct widget), box_measure, box_layout, container_paint, NULL, NULL };
-const struct widget_class grid_class = { "grid", sizeof(struct grid), grid_measure, grid_layout, container_paint, NULL, grid_destroy };
+const struct widget_class box_class = { "box", sizeof(struct widget), box_measure, box_layout, container_paint, NULL, NULL, NULL };
+const struct widget_class grid_class = { "grid", sizeof(struct grid), grid_measure, grid_layout, container_paint, NULL, grid_destroy, NULL };
 
 struct widget *box_new(struct widget *parent, int vertical)
 {

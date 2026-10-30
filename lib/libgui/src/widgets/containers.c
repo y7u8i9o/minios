@@ -162,7 +162,7 @@ static void tabs_destroy(struct widget *w)
 }
 
 const struct widget_class tabs_class = { "tabs", sizeof(struct tabs), tabs_measure, tabs_layout, tabs_paint, tabs_event,
-                                         tabs_destroy };
+                                         tabs_destroy, NULL };
 
 struct widget *tabs_new(struct widget *parent)
 {
@@ -289,7 +289,21 @@ static int split_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class splitpane_class = { "splitpane", sizeof(struct split), split_measure, split_layout, split_paint, split_event, NULL };
+/* The resize cursor over the divider and during its drag. */
+static const char *split_cursor_at(struct widget *w, int x, int y)
+{
+    struct split *s = (struct split *)w;
+    struct widget *a = w->first;
+    if (!a)
+        return NULL;
+    int pos = w->value ? y : x, start = w->value ? a->h : a->w;
+    if (s->drag || (pos >= start && pos < start + divider(w)))
+        return w->value ? "row-resize" : "col-resize";
+    return NULL;
+}
+
+const struct widget_class splitpane_class = { "splitpane", sizeof(struct split), split_measure, split_layout,
+                                              split_paint, split_event, NULL, split_cursor_at };
 
 struct widget *splitpane_new(struct widget *parent, int vertical)
 {
@@ -335,8 +349,8 @@ static void toolbar_layout(struct widget *w)
         c->x = (w->w - c->w) / 2;
 }
 
-const struct widget_class toolbar_class = { "toolbar", sizeof(struct toolbar), bar_measure, toolbar_layout, bar_paint, NULL, NULL };
-const struct widget_class statusbar_class = { "statusbar", sizeof(struct widget), bar_measure, bar_layout, bar_paint, NULL, NULL };
+const struct widget_class toolbar_class = { "toolbar", sizeof(struct toolbar), bar_measure, toolbar_layout, bar_paint, NULL, NULL, NULL };
+const struct widget_class statusbar_class = { "statusbar", sizeof(struct widget), bar_measure, bar_layout, bar_paint, NULL, NULL, NULL };
 
 struct widget *toolbar_new(struct widget *parent)
 {

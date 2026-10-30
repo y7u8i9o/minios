@@ -81,6 +81,13 @@ void gui_text_input_set(struct gui_window *window, int enabled);
 /* The caret of the focused text widget in window coordinates, where the
  * compositor shows the candidates of an input method. */
 void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int width, int height);
+/* The pointer cursor over the contents of window: a name of
+ * /usr/share/cursors such as "text", NULL or "default" for the arrow
+ * (docs/design/cursors.md). The edges of client decorations show resize
+ * cursors by themselves. */
+void gui_window_set_cursor(struct gui_window *window, const char *name);
+/* While busy is 1, every window of the program shows "progress". */
+void gui_set_busy(int busy);
 /* A layer surface without decorations. layer is 0 for the background, 1
  * for the bottom, 2 for the top and 3 for the overlay layer. anchor is a
  * mask of GUI_ANCHOR_* edges. A dimension of 0 selects the free desktop

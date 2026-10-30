@@ -1,0 +1,7 @@
+x12: [0-9]+ cursors
+x12: cursor ew-resize
+x12: cursor grabbing
+x12: cursor text
+x12: cursor default
+gui_cursors: ok
+TEST PASS

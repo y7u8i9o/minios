@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<path fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3 L12 9.3"/>
+<path fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M12 14.7 L12 21"/>
+<path fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M3 12 L9.3 12"/>
+<path fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M14.7 12 L21 12"/>
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M13.1 12 L13.02 12.42 L12.78 12.78 L12.42 13.02 L12 13.1 L11.58 13.02 L11.22 12.78 L10.98 12.42 L10.9 12 L10.98 11.58 L11.22 11.22 L11.58 10.98 L12 10.9 L12.42 10.98 L12.78 11.22 L13.02 11.58 Z"/>
+<path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3 L12 9.3"/>
+<path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 14.7 L12 21"/>
+<path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M3 12 L9.3 12"/>
+<path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M14.7 12 L21 12"/>
+<path fill="#000" d="M13.1 12 L13.02 12.42 L12.78 12.78 L12.42 13.02 L12 13.1 L11.58 13.02 L11.22 12.78 L10.98 12.42 L10.9 12 L10.98 11.58 L11.22 11.22 L11.58 10.98 L12 10.9 L12.42 10.98 L12.78 11.22 L13.02 11.58 Z"/>
+</svg>

@@ -18,6 +18,7 @@ static const struct wire_message seat_events[] = {
 static const struct wire_message pointer_requests[] = {
     { "set_cursor", "u?oii", 4, (const char *const[]){ NULL, "surface", NULL, NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_shape", "us", 2, (const char *const[]){ NULL, NULL }, 0 },
 };
 static const struct wire_message pointer_events[] = {
     { "enter", "uoff", 4, (const char *const[]){ NULL, "surface", NULL, NULL }, 0 },
@@ -38,6 +39,6 @@ static const struct wire_message keyboard_events[] = {
     { "modifiers", "uuuuu", 5, (const char *const[]){ NULL, NULL, NULL, NULL, NULL }, 0 },
     { "repeat_info", "ii", 2, (const char *const[]){ NULL, NULL }, 0 },
 };
-const struct wire_interface seat_interface = { "seat", 2, 2, seat_requests, 3, seat_events };
-const struct wire_interface pointer_interface = { "pointer", 1, 2, pointer_requests, 6, pointer_events };
+const struct wire_interface seat_interface = { "seat", 3, 2, seat_requests, 3, seat_events };
+const struct wire_interface pointer_interface = { "pointer", 2, 3, pointer_requests, 6, pointer_events };
 const struct wire_interface keyboard_interface = { "keyboard", 1, 1, keyboard_requests, 6, keyboard_events };

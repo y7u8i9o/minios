@@ -323,7 +323,7 @@ static void test_comp_cursor(void)
     ktest_assert(srv != NULL, "cannot start the compositor");
     ktest_wait_idle(1200);
     struct fb_cursor_state *c = cursor_state();
-    ktest_assert(c->visible && c->width == (uint32_t)(13 * S) && c->height == (uint32_t)(19 * S),
+    ktest_assert(c->visible && c->width == (uint32_t)(30 * S) && c->height == (uint32_t)(30 * S),
                  "the device shows no arrow: visible %d, %ux%u", c->visible, c->width, c->height);
     int cx = logical_w() / 2, cy = logical_h() / 2;
     ktest_assert(arrow_cursor_at(cx, cy), "the arrow is not at the centre");
@@ -376,7 +376,7 @@ static void test_comp_cursor(void)
     ktest_assert(status == 0, "comptest status 0x%x", status);
     ktest_wait_idle(300);
     c = cursor_state();
-    ktest_assert(c->visible && c->width == (uint32_t)(13 * S), "the arrow did not return: %ux%u", c->width,
+    ktest_assert(c->visible && c->width == (uint32_t)(30 * S), "the arrow did not return: %ux%u", c->width,
                  c->height);
     kprintf("comp_cursor: the arrow returned\n");
 

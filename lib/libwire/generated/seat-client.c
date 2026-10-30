@@ -43,6 +43,14 @@ void pointer_destroy(struct wire_proxy *pointer)
     wire_proxy_destroy(pointer);
 }
 
+void pointer_set_shape(struct wire_proxy *pointer, uint32_t serial, const char * name)
+{
+    union wire_arg args[2] = { { 0 } };
+    args[0].u = serial;
+    args[1].s = name;
+    wire_proxy_marshal(pointer, 2, args, NULL);
+}
+
 void keyboard_destroy(struct wire_proxy *keyboard)
 {
     union wire_arg args[1] = { { 0 } };

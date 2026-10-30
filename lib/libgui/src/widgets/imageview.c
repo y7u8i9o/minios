@@ -65,7 +65,7 @@ static void imageview_destroy(struct widget *w)
 }
 
 const struct widget_class imageview_class = { "imageview", sizeof(struct imageview), imageview_measure, NULL,
-                                              imageview_paint, NULL, imageview_destroy };
+                                              imageview_paint, NULL, imageview_destroy, NULL };
 
 struct widget *imageview_new(struct widget *parent)
 {

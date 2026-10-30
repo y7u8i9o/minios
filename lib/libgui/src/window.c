@@ -319,7 +319,7 @@ static void tooltip_paint(struct widget *w, struct painter *p)
 }
 
 static const struct widget_class tooltip_class = { "tooltip", sizeof(struct widget), NULL, NULL, tooltip_paint, NULL,
-                                                   NULL };
+                                                   NULL, NULL };
 
 static void tip_show(void *arg)
 {
@@ -431,6 +431,30 @@ static void set_hover(struct widget *window, struct widget *w)
     }
 }
 
+void window_update_cursor(struct widget *window)
+{
+    struct window_state *ws = window_state_of(window);
+    int popup = ws->mouse_popup && ws->popup;
+    struct gui_window *gw = popup ? ws->popup_win : ws->win;
+    if (!gw)
+        return;
+    struct widget *root = popup ? ws->popup : window;
+    struct widget *target = ws->capture ? ws->capture : widget_at(root, ws->mouse_x, ws->mouse_y);
+    const char *name = "default";
+    if (target) {
+        int ax, ay;
+        widget_abs(target, &ax, &ay);
+        if (popup) {
+            int px, py;
+            widget_abs(ws->popup, &px, &py);
+            ax -= px;
+            ay -= py;
+        }
+        name = widget_cursor_at(target, ws->mouse_x - ax, ws->mouse_y - ay);
+    }
+    gui_window_set_cursor(gw, name);
+}
+
 static void mouse_message(struct widget *window, struct wmsg *m)
 {
     struct window_state *ws = window_state_of(window);
@@ -443,6 +467,12 @@ static void mouse_message(struct widget *window, struct wmsg *m)
         target = NULL;
     if (m->d == WMOUSE_MOVE || m->d == WMOUSE_DOWN)
         set_hover(window, ws->capture ? ws->capture : target);
+    if (m->d == WMOUSE_MOVE || m->d == WMOUSE_DOWN || m->d == WMOUSE_UP) {
+        ws->mouse_x = m->a;
+        ws->mouse_y = m->b;
+        ws->mouse_popup = from_popup;
+        window_update_cursor(window);
+    }
     if (m->d == WMOUSE_DOWN) {
         tip_hide(window);
         if (ws->popup && !from_popup && !inside(ws->popup, target)) {
@@ -819,5 +849,5 @@ static void window_destroy(struct widget *w)
 }
 
 const struct widget_class window_class = {
-    "window", sizeof(struct window), window_measure, window_layout, window_paint_bg, NULL, window_destroy,
+    "window", sizeof(struct window), window_measure, window_layout, window_paint_bg, NULL, window_destroy, NULL,
 };

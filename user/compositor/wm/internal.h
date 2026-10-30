@@ -35,5 +35,10 @@ int decor_hit(const struct csurface *s, int x, int y);
 int decor_press(struct csurface *s, int button);
 int decor_motion(void);
 int decor_release(void);
+/* The cursor over the decorations of s at (x, y): a resize cursor over an
+ * edge or the grip, "default" over the title bar. During a drag of the
+ * module, "grabbing" for a move and the resize cursor of the edges, for any
+ * s. NULL elsewhere. */
+const char *decor_cursor(const struct csurface *s, int x, int y);
 /* A toplevel ends. A drag of the toplevel ends with it. */
 void decor_toplevel_gone(struct toplevel *t);

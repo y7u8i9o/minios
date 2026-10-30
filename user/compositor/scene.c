@@ -30,12 +30,6 @@ static int hw_w, hw_h, hw_hot_x, hw_hot_y;  /* the image of the device, hw_w 0 w
 /* -1 for the frames. 0 or 1 while a screen copy composes without or with
  * the cursor. */
 static int cursor_override = -1;
-/* Default arrow cursor: 12x18 shape plus a one pixel drop shadow that
- * retains 60 percent of the background's brightness. */
-#define CURSOR_W 12
-#define CURSOR_H 18
-#define CURSOR_SHADOW 1
-#define CURSOR_KEEP 153
 
 void scene_init(void)
 {
@@ -94,15 +88,32 @@ int scene_has_damage(void)
     return damage.n > 0;
 }
 
+/* The image of a cursor shape in device pixels, with its hotspot at the
+ * pointer (cursor.c). */
+static struct rect shape_device_rect(const struct cursor_image *img)
+{
+    int S = screen_scale;
+    return (struct rect){ shown_x * S - img->hot_x, shown_y * S - img->hot_y, img->w, img->h };
+}
+
+static int div_down(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }
+
+/* The logical rectangle of the cursor: the cursor surface of the client,
+ * or the logical pixels that the image of the shape touches. */
 static struct rect cursor_rect(void)
 {
-    struct csurface *s = seat_cursor_surface();
     if (seat_cursor_hidden())
         return (struct rect){ 0, 0, 0, 0 };
-    if (s && s->mapped && s->current.buffer)
-        return surface_rect(s);
-    struct rect r = { shown_x, shown_y, CURSOR_W + CURSOR_SHADOW, CURSOR_H + CURSOR_SHADOW };
-    return r;
+    int shape = seat_cursor_shape();
+    if (shape < 0)
+        return surface_rect(seat_cursor_surface());
+    const struct cursor_image *img = cursor_image_of(shape);
+    if (!img)
+        return (struct rect){ 0, 0, 0, 0 };
+    struct rect d = shape_device_rect(img);
+    int S = screen_scale, x0 = div_down(d.x, S), y0 = div_down(d.y, S);
+    int x1 = div_down(d.x + d.w + S - 1, S), y1 = div_down(d.y + d.h + S - 1, S);
+    return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
 }
 
 static void cursor_sync(void);
@@ -369,45 +380,6 @@ static void draw_surface(struct csurface *s, struct rect clip)
     }
 }
 
-/* The default arrow at the screen scale as an ARGB image of
- * (CURSOR_W + CURSOR_SHADOW) by (CURSOR_H + CURSOR_SHADOW) cells of S by S
- * device pixels: X is the black outline, o the white fill, and the shape
- * shifted down and right is the shadow, black with the alpha that leaves
- * CURSOR_KEEP / 255 of the background. */
-static const uint32_t *arrow_image(void)
-{
-    static const char *shape[CURSOR_H] = {
-        "X...........", "XX..........", "XoX.........", "XooX........", "XoooX.......",
-        "XooooX......", "XoooooX.....", "XooooooX....", "XoooooooX...", "XooooooooX..",
-        "XoooooXXXXX.", "XooXooX.....", "XoX.XooX....", "XX..XooX....", "X....XooX...",
-        ".....XooX...", "......XX....", "............",
-    };
-    static uint32_t *img;
-    static int img_scale;
-    int S = screen_scale, W = (CURSOR_W + CURSOR_SHADOW) * S, H = (CURSOR_H + CURSOR_SHADOW) * S;
-    if (img && img_scale == S)
-        return img;
-    free(img);
-    img = malloc((size_t)W * H * 4);
-    if (!img)
-        return NULL;
-    img_scale = S;
-    for (int y = 0; y < H; y++)
-        for (int x = 0; x < W; x++) {
-            int i = x / S, j = y / S;
-            char c = i < CURSOR_W && j < CURSOR_H ? shape[j][i] : '.';
-            uint32_t v = 0;
-            if (c == 'X')
-                v = 0xff000000u;
-            else if (c == 'o')
-                v = 0xffffffffu;
-            else if (i >= CURSOR_SHADOW && j >= CURSOR_SHADOW && shape[j - CURSOR_SHADOW][i - CURSOR_SHADOW] != '.')
-                v = (255u - CURSOR_KEEP) << 24;
-            img[(size_t)y * W + x] = v;
-        }
-    return img;
-}
-
 /* The cursor as device pixels in rows of FB_CURSOR_MAX pixels, with the
  * hotspot. Returns 0 for a hidden cursor (w 0) and for an image that fits
  * FB_CURSOR_MAX. Returns -1 for a larger or transformed cursor surface. */
@@ -417,8 +389,9 @@ static int cursor_image(uint32_t *out, int *w, int *h, int *hot_x, int *hot_y)
     *w = *h = *hot_x = *hot_y = 0;
     if (seat_cursor_hidden())
         return 0;
-    struct csurface *s = seat_cursor_surface();
-    if (s && s->mapped && s->current.buffer) {
+    int shape = seat_cursor_shape();
+    if (shape < 0) {
+        struct csurface *s = seat_cursor_surface();
         const struct buffer *b = s->current.buffer;
         int W = s->width * S, H = s->height * S;
         if (!b->pool->map || s->current.transform || W <= 0 || H <= 0 || W > FB_CURSOR_MAX || H > FB_CURSOR_MAX)
@@ -439,14 +412,15 @@ static int cursor_image(uint32_t *out, int *w, int *h, int *hot_x, int *hot_y)
         *hot_y = MIN(MAX(s->hotspot_y * S, 0), H - 1);
         return 0;
     }
-    const uint32_t *img = arrow_image();
-    int W = (CURSOR_W + CURSOR_SHADOW) * S, H = (CURSOR_H + CURSOR_SHADOW) * S;
-    if (!img || W > FB_CURSOR_MAX || H > FB_CURSOR_MAX)
+    const struct cursor_image *img = cursor_image_of(shape);
+    if (!img || img->w > FB_CURSOR_MAX || img->h > FB_CURSOR_MAX)
         return -1;
-    for (int y = 0; y < H; y++)
-        memcpy(out + y * FB_CURSOR_MAX, img + (size_t)y * W, (size_t)W * 4);
-    *w = W;
-    *h = H;
+    for (int y = 0; y < img->h; y++)
+        memcpy(out + y * FB_CURSOR_MAX, img->pixels + (size_t)y * img->w, (size_t)img->w * 4);
+    *w = img->w;
+    *h = img->h;
+    *hot_x = img->hot_x;
+    *hot_y = img->hot_y;
     return 0;
 }
 
@@ -486,25 +460,25 @@ static void cursor_sync(void)
 
 static void draw_cursor(struct rect clip)
 {
-    struct csurface *cursor = seat_cursor_surface();
     int draw = cursor_override >= 0 ? cursor_override : !hw_cursor;
     if (seat_cursor_hidden() || !draw)
         return;
-    if (cursor && cursor->mapped && cursor->current.buffer) {
-        draw_surface(cursor, clip);
+    int shape = seat_cursor_shape();
+    if (shape < 0) {
+        draw_surface(seat_cursor_surface(), clip);
         return;
     }
-    const uint32_t *img = arrow_image();
+    const struct cursor_image *img = cursor_image_of(shape);
     if (!img)
         return;
-    int S = screen_scale, W = (CURSOR_W + CURSOR_SHADOW) * S;
-    struct rect area = rect_intersect(cursor_rect(), clip);
-    if (rect_empty(area))
+    struct rect d = shape_device_rect(img);
+    struct rect R = rect_intersect(rect_intersect(rect_scale(clip, screen_scale), d),
+                                   (struct rect){ 0, 0, back.width, back.height });
+    if (rect_empty(R))
         return;
-    struct rect R = rect_scale(area, S);
     for (int Y = R.y; Y < R.y + R.h; Y++)
         pixel_over(&back.pixels[(size_t)Y * back.stride + R.x],
-                   img + (size_t)(Y - shown_y * S) * W + (R.x - shown_x * S), R.w);
+                   img->pixels + (size_t)(Y - d.y) * img->w + (R.x - d.x), R.w);
 }
 
 static void compose_rect(struct rect r, struct csurface **order, int n)

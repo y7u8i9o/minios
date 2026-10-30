@@ -1070,6 +1070,48 @@ static void test_comp_shell(void)
 }
 KTEST_DEFINE("comp_shell", test_comp_shell);
 
+/* The cursors of /usr/share/cursors (docs/design/cursors.md). X12 logs
+ * every change of the cursor in verbose mode. comptest has server
+ * decorations: the frame at (40,30) is 202 pixels wide, and the contents
+ * of 200x150 start at (41,59) under the title bar. The right edge of the
+ * frame shows ew-resize, a move by the title bar shows grabbing. The
+ * window "one" of apptest is the third toplevel: its frame cascades to
+ * (100,90), the contents start under the 30 pixel header at (100,120), and
+ * the text field at (6,42..68) of the contents asks for the text cursor.
+ * The desktop shows default. */
+static void test_gui_cursors(void)
+{
+    ktest_assert(fb_screen_present, "no framebuffer");
+    int sw = logical_w(), sh = logical_h();
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
+    struct proc *cl = start_client("shell");
+    int cx = sw / 2, cy = sh / 2;
+    mouse_move_to(&cx, &cy, 242 + 3, 59 + 75, 0);
+    ktest_wait_idle(200);
+    mouse_move_to(&cx, &cy, 40 + 100, 59 - 12, 0);
+    feed_packet(1, 0, 0);
+    ktest_wait_idle(50);
+    mouse_move_to(&cx, &cy, 40 + 130, 59 - 12 + 20, 1);
+    feed_packet(0, 0, 0);
+    ktest_wait_idle(300);
+    alt_key(0x3e);
+    int status = proc_reap(cl);
+    ktest_assert(status == 0, "comptest status 0x%x", status);
+    cl = proc_create_user("/bin/apptest", (char *const[]){ "apptest", NULL }, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(cl != NULL, "cannot start apptest");
+    ktest_wait_idle(1500);
+    mouse_move_to(&cx, &cy, 100 + 100, 120 + 55, 0);
+    ktest_wait_idle(300);
+    mouse_move_to(&cx, &cy, sw - 10, sh - 10, 0);
+    ktest_wait_idle(300);
+    signal_send(cl, SIGTERM);
+    proc_reap(cl);
+    signal_send(srv, SIGTERM);
+    proc_reap(srv);
+    kprintf("gui_cursors: ok\n");
+}
+KTEST_DEFINE("gui_cursors", test_gui_cursors);
+
 /* M25: pointer and keyboard events with serials, keymap translation. */
 static void test_comp_seat(void)
 {

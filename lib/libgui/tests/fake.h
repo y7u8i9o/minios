@@ -8,6 +8,10 @@ extern int fake_scale;
 /* The device pixels of all damage since the start. */
 extern uint64_t fake_damage_pixels;
 extern int fake_damage_count;
+/* The cursor of the last gui_window_set_cursor ("" for default), and the
+ * busy state of gui_set_busy. */
+extern char fake_cursor[24];
+extern int fake_busy;
 void fake_push(const struct wmsg *m);
 struct fake_drag {
     int started, window, nitems, actions, icon;

@@ -120,7 +120,7 @@ static void combo_layout(struct widget *w)
 }
 
 const struct widget_class combobox_class = { "combobox", sizeof(struct combo), combo_measure, combo_layout, combo_paint,
-                                             combo_event, combo_destroy };
+                                             combo_event, combo_destroy, NULL };
 
 /* The text of an editable combo box follows its field. A typed text
  * selects no item. */
@@ -393,7 +393,7 @@ static int spinner_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class spinner_class = { "spinner", sizeof(struct spinner), spinner_measure, NULL, spinner_paint, spinner_event, NULL };
+const struct widget_class spinner_class = { "spinner", sizeof(struct spinner), spinner_measure, NULL, spinner_paint, spinner_event, NULL, NULL };
 
 struct widget *spinner_new(struct widget *parent, int min, int max, int value)
 {
@@ -488,7 +488,7 @@ static int slider_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class slider_class = { "slider", sizeof(struct widget), slider_measure, NULL, slider_paint, slider_event, NULL };
+const struct widget_class slider_class = { "slider", sizeof(struct widget), slider_measure, NULL, slider_paint, slider_event, NULL, NULL };
 
 struct widget *slider_new(struct widget *parent, int min, int max, int value)
 {
@@ -561,7 +561,7 @@ static void progress_destroy(struct widget *w)
 }
 
 const struct widget_class progress_class = { "progress", sizeof(struct progress), progress_measure, NULL, progress_paint,
-                                             NULL, progress_destroy };
+                                             NULL, progress_destroy, NULL };
 
 void progress_set_pulse(struct widget *w, int pulse)
 {

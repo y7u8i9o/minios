@@ -516,8 +516,8 @@ static void view_destroy(struct widget *w)
     free(v->widths);
 }
 
-const struct widget_class treeview_class = { "treeview", sizeof(struct view), view_measure, NULL, view_paint, view_event, view_destroy };
-const struct widget_class table_class = { "table", sizeof(struct view), view_measure, NULL, view_paint, view_event, view_destroy };
+const struct widget_class treeview_class = { "treeview", sizeof(struct view), view_measure, NULL, view_paint, view_event, view_destroy, NULL };
+const struct widget_class table_class = { "table", sizeof(struct view), view_measure, NULL, view_paint, view_event, view_destroy, NULL };
 
 static struct widget *view_new(const struct widget_class *cls, struct widget *parent, int header)
 {

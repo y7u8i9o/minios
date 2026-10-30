@@ -301,6 +301,47 @@ static void test_controls_paint(struct app *a)
     window_close(win);
 }
 
+/* The cursor of the widget under the pointer (docs/design/cursors.md):
+ * "text" over a text field, nothing over a button, the cursor of a widget
+ * with widget_set_cursor, "default" over a disabled field, and the resize
+ * cursor over the divider of a split pane. */
+static void move_to(struct widget *win, struct widget *w, int dx, int dy)
+{
+    int x, y;
+    widget_abs(w, &x, &y);
+    struct wmsg m = mouse_msg(win, WMOUSE_MOVE, x + dx, y + dy, 0);
+    window_message(win, &m);
+}
+
+static void test_cursors(struct app *a)
+{
+    struct widget *win = app_window(a, 300, 200, "cursors");
+    struct widget *field = textfield_new(win, "text");
+    struct widget *button = button_new(win, "Button");
+    struct widget *canvas = label_new(win, "canvas");
+    widget_set_cursor(canvas, "crosshair");
+    struct widget *split = splitpane_new(win, 0);
+    widget_set_stretch(split, 1, 1);
+    label_new(split, "left");
+    label_new(split, "right");
+    window_paint(win);
+    move_to(win, field, 4, 4);
+    CHECK(strcmp(fake_cursor, "text") == 0, "text field: '%s'", fake_cursor);
+    move_to(win, button, 4, 4);
+    CHECK(fake_cursor[0] == 0, "button: '%s'", fake_cursor);
+    move_to(win, canvas, 4, 4);
+    CHECK(strcmp(fake_cursor, "crosshair") == 0, "widget_set_cursor: '%s'", fake_cursor);
+    widget_set_enabled(field, 0);
+    move_to(win, field, 4, 4);
+    CHECK(fake_cursor[0] == 0, "disabled text field: '%s'", fake_cursor);
+    move_to(win, split, split->first->w + 2, 4);
+    CHECK(strcmp(fake_cursor, "col-resize") == 0, "split pane divider: '%s'", fake_cursor);
+    move_to(win, split, 2, 4);
+    CHECK(fake_cursor[0] == 0, "split pane child: '%s'", fake_cursor);
+    window_close(win);
+    app_step(a, 0);
+}
+
 void run_function_tests(void)
 {
     struct app *a = app_create_detached();
@@ -312,5 +353,6 @@ void run_function_tests(void)
     test_imageview(a);
     test_screen(a);
     test_controls_paint(a);
+    test_cursors(a);
     app_destroy(a);
 }

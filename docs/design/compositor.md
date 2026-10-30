@@ -86,13 +86,14 @@ serial line to the kernel and the programs.
   cursor), and one present of all rectangles of a frame through
   `backend_present`. The opaque region of an `ARGB8888` surface decides
   its opacity: every opaque span of a row is copied with the alpha
-  cleared, and the rest is blended with `pixel_over`. The built-in arrow
-  is an ARGB image per scale, blended with `pixel_over`.
+  cleared, and the rest is blended with `pixel_over`. A cursor shape of
+  `cursor.c` is an ARGB image per scale with its hotspot, blended with
+  `pixel_over` (`cursors.md`).
 - The device cursor (G9 of `docs/plan/compositor-performance.md`): on a
   device with `FB_CAP_CURSOR` the scene gives the cursor image to the
   device (`display.md`) and composes no cursor. `cursor_sync` builds the
-  image from the arrow or from the buffer of the cursor surface, at the
-  screen scale with nearest neighbour sampling. It sends the image only
+  image from the cursor shape or from the buffer of the cursor surface,
+  the buffer at the screen scale with nearest neighbour sampling. It sends the image only
   when the image or the hotspot changed. A commit of a cursor surface,
   a change of the cursor surface and a mode change call it. A pointer
   motion calls `backend_cursor_move` and adds no damage. A cursor larger
@@ -105,6 +106,8 @@ serial line to the kernel and the programs.
   (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
   under the cursor, the copy and move actions chosen from both sides and
   the modifiers, the drop, and the cancel by Escape (`dnd.md`).
+- `cursor.c`: the cursor set of `/usr/share/cursors`, rendered per
+  scale with a shadow, and the shapes that `seat.c` shows (`cursors.md`).
 - `session.c`: the `session_manager` global of `protocol/session.xml`:
   the session user, the shortcut keys of the session manager, the idle
   time, the request for a new locker, and the states of unresponsive

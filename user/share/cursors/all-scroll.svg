@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M12 2 L7.8 6 L16.2 6 Z"/>
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M12 22 L16.2 18 L7.8 18 Z"/>
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M2 12 L6 16.2 L6 7.8 Z"/>
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M22 12 L18 7.8 L18 16.2 Z"/>
+<path fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" d="M13.9 12 L13.81 12.59 L13.54 13.12 L13.12 13.54 L12.59 13.81 L12 13.9 L11.41 13.81 L10.88 13.54 L10.46 13.12 L10.19 12.59 L10.1 12 L10.19 11.41 L10.46 10.88 L10.88 10.46 L11.41 10.19 L12 10.1 L12.59 10.19 L13.12 10.46 L13.54 10.88 L13.81 11.41 Z"/>
+<path fill="#000" d="M12 2 L7.8 6 L16.2 6 Z"/>
+<path fill="#000" d="M12 22 L16.2 18 L7.8 18 Z"/>
+<path fill="#000" d="M2 12 L6 16.2 L6 7.8 Z"/>
+<path fill="#000" d="M22 12 L18 7.8 L18 16.2 Z"/>
+<path fill="#000" d="M13.9 12 L13.81 12.59 L13.54 13.12 L13.12 13.54 L12.59 13.81 L12 13.9 L11.41 13.81 L10.88 13.54 L10.46 13.12 L10.19 12.59 L10.1 12 L10.19 11.41 L10.46 10.88 L10.88 10.46 L11.41 10.19 L12 10.1 L12.59 10.19 L13.12 10.46 L13.54 10.88 L13.81 11.41 Z"/>
+</svg>

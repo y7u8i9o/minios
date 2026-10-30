@@ -29,6 +29,7 @@ static inline int pointer_add_listener(struct wire_proxy *p, const struct pointe
 { return wire_proxy_add_listener(p, (const void *)l, user); }
 void pointer_set_cursor(struct wire_proxy *pointer, uint32_t serial, struct wire_proxy * surface, int32_t hotspot_x, int32_t hotspot_y);
 void pointer_destroy(struct wire_proxy *pointer);
+void pointer_set_shape(struct wire_proxy *pointer, uint32_t serial, const char * name);
 
 struct keyboard_listener {
     void (*keymap)(void *user, struct wire_proxy *self, uint32_t format, int fd, uint32_t size);

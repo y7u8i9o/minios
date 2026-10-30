@@ -307,6 +307,22 @@ struct rect scene_pointer_rect(void);
 void scene_copy_screen(uint8_t *to, int stride, int pointer);
 struct rect scene_window_extent(const struct toplevel *t);
 int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
+/* cursor.c: the cursor set of /usr/share/cursors (docs/design/cursors.md).
+ * A cursor image has w x h device pixels in rows of w pixels, 0xAARRGGBB
+ * with straight alpha, and the hotspot (hot_x, hot_y) in device pixels. */
+struct cursor_image {
+    const uint32_t *pixels;
+    int w, h, hot_x, hot_y;
+};
+void cursor_init(void);
+/* The shape of a name or of an alias, or -1 for an unknown name. Shape 0
+ * is "default". */
+int cursor_lookup(const char *name);
+/* The name of the file of a shape. */
+const char *cursor_name(int shape);
+/* The image of a shape at the screen scale, NULL only when even the
+ * built-in arrow cannot be allocated. */
+const struct cursor_image *cursor_image_of(int shape);
 /* backend_fb.c */
 extern struct surface back;
 int backend_init(void);
@@ -379,8 +395,14 @@ int seat_validate_grab(struct client *client, struct csurface *origin, uint32_t 
 int seat_validate_drag(struct client *client, struct csurface *origin, uint32_t serial);
 void seat_drag_started(void);
 void seat_drag_ended(int button_pressed);
+/* The cursor surface of the client under the pointer, or NULL. */
 struct csurface *seat_cursor_surface(void);
 int seat_cursor_hidden(void);
+/* The shape to show, or -1 when the cursor surface of the client shows. */
+int seat_cursor_shape(void);
+/* Recompute the cursor of X12 itself after a change of a drag, a window
+ * frame or the responsiveness of a client. */
+void seat_cursor_update(void);
 int seat_translate(uint32_t key, int mods);
 /* The keymap of the seat, for the compositions of dead keys. */
 struct keymap;
@@ -471,6 +493,9 @@ void data_drag_cancel(void);
 void data_drag_modifiers(void);          /* Ctrl and Shift choose copy and move */
 void data_icon_committed(struct csurface *s, int attach_x, int attach_y);
 int data_dragging(void);
+/* The cursor of the running drag: "copy", "default" for a move, or
+ * "no-drop" over a target that accepts no action. */
+const char *data_cursor(void);
 void data_surface_gone(struct csurface *s);
 void data_client_gone(struct client *c);
 int data_fetch_fd(void);                 /* -1 when no transfer is in progress */

@@ -50,6 +50,10 @@ int wm_pointer_motion(void);
 int wm_pointer_release(void);
 /* 1 when a window shortcut consumed the key press. */
 int wm_key(uint32_t key, int mods);
+/* The cursor name of the window manager at the pointer over target (the
+ * surface under the pointer, or NULL), or NULL when the client decides the
+ * cursor (docs/design/cursors.md). */
+const char *wm_cursor(struct csurface *target);
 
 /* ---- drawing ---- */
 

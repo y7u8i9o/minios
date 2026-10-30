@@ -1,6 +1,7 @@
 /* Commands run by an application while its windows continue to handle
  * events, and commands run as root through sudo -A with askpass, the
  * authentication dialog of the desktop (docs/design/users.md). */
+#include <gui/client.h>
 #include <gui/privilege.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -98,6 +99,7 @@ int app_run_command(struct app *a, char *const argv[], const char *input, char *
         write(in[1], input, strlen(input));
     close(in[1]);
     running = 1;
+    gui_set_busy(1);
     struct run r = { res[0], out, size, 0, 0 };
     struct watch *w = app_watch_fd(a, res[0], POLLIN, on_output, &r);
     while (w && !r.done && app_step(a, -1))
@@ -117,6 +119,7 @@ int app_run_command(struct app *a, char *const argv[], const char *input, char *
             break;
         }
     running = 0;
+    gui_set_busy(0);
     if (err)
         return err;
     return WIFEXITED(status) ? WEXITSTATUS(status) : -EINTR;

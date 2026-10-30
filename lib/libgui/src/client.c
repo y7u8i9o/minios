@@ -65,6 +65,7 @@ struct win {
     int translucent;            /* ARGB buffers without an opaque region (gui_set_translucent) */
     struct wire_proxy *session_lock, *lock_surface;
     int lock_state;             /* 1 after locked, -1 after finished, 0 before either */
+    char cursor[24];            /* the cursor of the contents (gui_window_set_cursor), "" for default */
 };
 
 /* Logical origin of the contents inside the surface. */
@@ -130,6 +131,12 @@ static struct wire_proxy *selection_offer, *selection_source;
 static char *clip_text;
 static int clip_len;
 static uint32_t button_serial;      /* of the last button press, for a drag */
+/* The cursor (docs/design/cursors.md): the version of the seat (set_shape
+ * needs 3), the serial of the last enter, the shape that X12 shows for the
+ * pointer window, and the busy state of gui_set_busy. */
+static uint32_t seat_version, enter_serial;
+static char shown_cursor[24];
+static int busy;
 
 static void push(const struct wmsg *m)
 {
@@ -194,7 +201,10 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
     if (strcmp(iface, "compositor") == 0) compositor = registry_bind(registry, name, iface, version, &compositor_interface, 1);
     else if (strcmp(iface, "shm") == 0) shm = registry_bind(registry, name, iface, version, &shm_interface, 1);
     else if (strcmp(iface, "shell") == 0) shell = registry_bind(registry, name, iface, version, &shell_interface, 1);
-    else if (strcmp(iface, "seat") == 0) seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
+    else if (strcmp(iface, "seat") == 0) {
+        seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
+        seat_version = version;
+    }
     else if (strcmp(iface, "data_device_manager") == 0) data_manager = registry_bind(registry, name, iface, version, &data_device_manager_interface, 1);
     else if (strcmp(iface, "text_input_manager") == 0) text_manager = registry_bind(registry, name, iface, version, &text_input_manager_interface, 1);
     else if (strcmp(iface, "output") == 0) {
@@ -304,6 +314,46 @@ static enum csd_zone pointer_zone(struct gui_window *w, int *edges)
     return z;
 }
 
+/* Show the cursor of the zone under the pointer: the busy cursor, a resize
+ * cursor over the edges of the client decorations, the cursor of the
+ * contents, or "default". A press retains the zone it started in. */
+static void apply_cursor(void)
+{
+    if (!pointer_win || !pointer || seat_version < 3)
+        return;
+    struct win *wi = pointer_win->priv;
+    int edges = 0;
+    enum csd_zone z = csd_hit(&wi->csd, pointer_win->width, pointer_win->height, wi->px, wi->py, &edges);
+    if (wi->buttons)
+        z = (enum csd_zone)wi->press_zone;
+    const char *name = "default";
+    if (busy)
+        name = "progress";
+    else if (z == CSD_RESIZE && gui_resize_cursor(edges))
+        name = gui_resize_cursor(edges);
+    else if (z == CSD_CONTENT && wi->cursor[0])
+        name = wi->cursor;
+    if (strcmp(name, shown_cursor) == 0)
+        return;
+    strlcpy(shown_cursor, name, sizeof shown_cursor);
+    pointer_set_shape(pointer, enter_serial, name);
+}
+
+void gui_window_set_cursor(struct gui_window *w, const char *name)
+{
+    struct win *wi = w->priv;
+    strlcpy(wi->cursor, name && strcmp(name, "default") != 0 ? name : "", sizeof wi->cursor);
+    if (w == pointer_win)
+        apply_cursor();
+}
+
+void gui_set_busy(int on)
+{
+    busy = on != 0;
+    apply_cursor();
+    gui_flush();
+}
+
 /* A pointer message to the application in contents coordinates. */
 static void push_mouse(struct gui_window *w, int c, int kind)
 {
@@ -317,6 +367,9 @@ static void push_mouse(struct gui_window *w, int c, int kind)
 static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s, int32_t x, int32_t y)
 {
     last_serial = serial;
+    enter_serial = serial;
+    /* X12 shows "default" after every enter. */
+    strlcpy(shown_cursor, "default", sizeof shown_cursor);
     pointer_win = window_of_surface(s);
     if (pointer_win) {
         struct win *wi = pointer_win->priv;
@@ -325,6 +378,7 @@ static void on_ptr_enter(void *user, struct wire_proxy *p, uint32_t serial, stru
         int edges;
         if (pointer_zone(pointer_win, &edges) == CSD_CONTENT)
             push_mouse(pointer_win, wi->buttons, WMOUSE_MOVE);
+        apply_cursor();
     }
 }
 static void on_ptr_leave(void *user, struct wire_proxy *p, uint32_t serial, struct wire_proxy *s)
@@ -351,6 +405,7 @@ static void on_ptr_motion(void *user, struct wire_proxy *p, uint32_t time, int32
     enum csd_zone z = pointer_zone(pointer_win, &edges);
     if (wi->buttons ? wi->press_zone == CSD_CONTENT : z == CSD_CONTENT)
         push_mouse(pointer_win, wi->buttons, WMOUSE_MOVE);
+    apply_cursor();
 }
 static void drag_end(int action);
 static struct wire_proxy *drag_source;

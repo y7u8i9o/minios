@@ -118,9 +118,10 @@ static inline bool wait_pixel(int x, int y, uint32_t v, int equal, int ms)
     return false;
 }
 
-/* True when the arrow cursor has its tip at the logical pixel (x, y): a
- * black tip, and white fill one pixel right and two pixels down. The
- * framebuffer does not contain a device cursor (FB_CAP_CURSOR, G9 of
+/* True when the default cursor of /usr/share/cursors has its tip at the
+ * logical pixel (x, y): black inside the arrow and the white outline left
+ * of the arrow (docs/design/cursors.md). The framebuffer does not contain
+ * a device cursor (FB_CAP_CURSOR, G9 of
  * docs/plan/compositor-performance.md). For a device cursor the check
  * uses the position and the image that /dev/fb0 recorded. A failed check
  * prints what it found. */
@@ -132,15 +133,27 @@ static inline bool arrow_cursor_at(int x, int y)
     fb_cursor_get(c);
     bool ok;
     if (c->visible) {
-        ok = c->x == x * s && c->y == y * s && c->hot_x == 0 && c->hot_y == 0 && c->image[0] == 0xff000000u &&
-             c->image[2 * s * FB_CURSOR_MAX + s] == 0xffffffffu;
+        /* The image has a border of 3 s for the shadow, and the hotspot is
+         * the tip (5,3) of the view box. The point (6,10) lies inside the
+         * black arrow, and the white outline surrounds the arrow. */
+        uint32_t hot_x = (uint32_t)(8 * s), hot_y = (uint32_t)(6 * s);
+        int white = 0;
+        for (int i = 0; i < 30 * s && i < FB_CURSOR_MAX; i++)
+            for (int j = 0; j < 30 * s && j < FB_CURSOR_MAX; j++)
+                white |= c->image[i * FB_CURSOR_MAX + j] == 0xffffffffu;
+        uint32_t body = c->image[13 * s * FB_CURSOR_MAX + 9 * s];
+        ok = c->x == x * s && c->y == y * s && c->hot_x == hot_x && c->hot_y == hot_y && body == 0xff000000u &&
+             white;
         if (!ok)
-            kprintf("device cursor at %d,%d, hotspot %u,%u, pixels %08x %08x\n", c->x, c->y, c->hot_x, c->hot_y,
-                    c->image[0], c->image[2 * s * FB_CURSOR_MAX + s]);
+            kprintf("device cursor at %d,%d, hotspot %u,%u, body %08x, white %d\n", c->x, c->y, c->hot_x, c->hot_y,
+                    body, white);
     } else {
-        ok = pixel(x, y) == 0x00000000 && pixel(x + 1, y + 2) == 0x00ffffff;
+        /* The hotspot is the tip (5,3) of the view box. The white outline
+         * covers the column left of the tip, and the arrow is black at
+         * (6,10). */
+        ok = pixel(x + 1, y + 7) == 0x00000000 && pixel(x - 1, y + 7) == 0x00ffffff;
         if (!ok)
-            kprintf("framebuffer at %d,%d: %08x %08x\n", x, y, pixel(x, y), pixel(x + 1, y + 2));
+            kprintf("framebuffer at %d,%d: %08x %08x\n", x, y, pixel(x + 1, y + 7), pixel(x - 1, y + 7));
     }
     kfree(c);
     return ok;

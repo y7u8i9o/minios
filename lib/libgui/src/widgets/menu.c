@@ -61,8 +61,8 @@ static void item_measure(struct widget *w, struct size_hint *h)
     h->pref_h = h->min_h = theme_px(t, TM_CONTROL_H);
 }
 
-const struct widget_class menuitem_class = { "menuitem", sizeof(struct menuitem), item_measure, NULL, NULL, NULL, NULL };
-const struct widget_class menu_class = { "menu", sizeof(struct widget), NULL, NULL, NULL, NULL, NULL };
+const struct widget_class menuitem_class = { "menuitem", sizeof(struct menuitem), item_measure, NULL, NULL, NULL, NULL, NULL };
+const struct widget_class menu_class = { "menu", sizeof(struct widget), NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ---- the drop down popup ---- */
 
@@ -389,7 +389,7 @@ static void dropdown_destroy(struct widget *w)
 }
 
 static const struct widget_class dropdown_class = { "dropdown", sizeof(struct dropdown), dropdown_measure, NULL,
-                                                    dropdown_paint, dropdown_event, dropdown_destroy };
+                                                    dropdown_paint, dropdown_event, dropdown_destroy, NULL };
 
 /* ---- menu bar ---- */
 
@@ -508,7 +508,7 @@ static void menubar_destroy(struct widget *w)
 }
 
 const struct widget_class menubar_class = { "menubar", sizeof(struct menubar), menubar_measure, NULL, menubar_paint,
-                                            menubar_event, menubar_destroy };
+                                            menubar_event, menubar_destroy, NULL };
 
 struct widget *menubar_new(struct widget *parent)
 {

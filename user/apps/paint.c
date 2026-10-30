@@ -672,6 +672,7 @@ int main(int argc, char **argv)
     canvas = canvas_new((struct widget *)area->user);
     widget_set_align(canvas, ALIGN_START, ALIGN_START);
     canvas->focusable = 1;
+    widget_set_cursor(canvas, "crosshair");
     widget_connect(canvas, "paint", on_paint, NULL);
     widget_connect(canvas, "press", on_press, NULL);
     widget_connect(canvas, "motion", on_motion, NULL);

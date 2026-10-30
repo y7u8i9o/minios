@@ -435,6 +435,21 @@ int decor_hit(const struct csurface *s, int x, int y)
     return 0;
 }
 
+const char *decor_cursor(const struct csurface *s, int x, int y)
+{
+    if (drag)
+        return "grabbing";
+    if (resizing)
+        return gui_resize_cursor(resize_edges);
+    if (!s || !decor_hit(s, x, y))
+        return NULL;
+    if (!rect_contains(surface_rect(s), x, y)) {
+        int edges = s->toplevel->maximized ? 0 : edges_at(s, x, y);
+        return edges ? gui_resize_cursor(edges) : "default";
+    }
+    return "nwse-resize";               /* the grip in the corner of the contents */
+}
+
 void decor_toplevel_gone(struct toplevel *t)
 {
     if (drag == t)

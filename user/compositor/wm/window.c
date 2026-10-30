@@ -357,6 +357,20 @@ int wm_pointer_release(void)
     return decor_release();
 }
 
+const char *wm_cursor(struct csurface *target)
+{
+    const char *drag = decor_cursor(NULL, cursor_x, cursor_y);
+    if (drag)
+        return drag;
+    for (struct csurface *s = surface_first(); s; s = s->next)
+        if (decor_hit(s, cursor_x, cursor_y) && !s->toplevel->minimized && !covers_decorations(target, s))
+            return decor_cursor(s, cursor_x, cursor_y);
+    /* The contents of a dimmed window show the wait cursor. */
+    if (target && target->role == ROLE_TOPLEVEL && target->client->unresponsive)
+        return "wait";
+    return NULL;
+}
+
 int wm_key(uint32_t key, int mods)
 {
     /* An overlay with the keyboard, such as the login window or the

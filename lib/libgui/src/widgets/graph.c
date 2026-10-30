@@ -164,7 +164,7 @@ static void graph_destroy(struct widget *w)
 }
 
 const struct widget_class graph_class = { "graph", sizeof(struct graph), graph_measure, NULL, graph_paint, NULL,
-                                          graph_destroy };
+                                          graph_destroy, NULL };
 
 struct widget *graph_new(struct widget *parent, int samples)
 {

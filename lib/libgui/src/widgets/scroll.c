@@ -175,7 +175,7 @@ static int scrollbar_event(struct widget *w, struct event *e)
     }
 }
 
-const struct widget_class scrollbar_class = { "scrollbar", sizeof(struct scrollbar), scrollbar_measure, NULL, scrollbar_paint, scrollbar_event, NULL };
+const struct widget_class scrollbar_class = { "scrollbar", sizeof(struct scrollbar), scrollbar_measure, NULL, scrollbar_paint, scrollbar_event, NULL, NULL };
 
 struct widget *scrollbar_new(struct widget *parent, int vertical)
 {
@@ -225,7 +225,7 @@ static void viewport_measure(struct widget *w, struct size_hint *h)
 }
 
 static const struct widget_class viewport_class = { "viewport", sizeof(struct widget), viewport_measure, NULL, NULL,
-                                                    NULL, NULL };
+                                                    NULL, NULL, NULL };
 
 static void scrollarea_measure(struct widget *w, struct size_hint *h)
 {
@@ -296,7 +296,7 @@ static int scrollarea_event(struct widget *w, struct event *e)
     return 0;
 }
 
-const struct widget_class scrollarea_class = { "scrollarea", sizeof(struct scrollarea), scrollarea_measure, scrollarea_layout, scrollarea_paint, scrollarea_event, NULL };
+const struct widget_class scrollarea_class = { "scrollarea", sizeof(struct scrollarea), scrollarea_measure, scrollarea_layout, scrollarea_paint, scrollarea_event, NULL, NULL };
 
 struct widget *scrollarea_new(struct widget *parent)
 {

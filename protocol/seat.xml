@@ -3,7 +3,7 @@
      24.8 fixed point in surface space; every input event carries a
      serial used by grabs, moves and the data device. -->
 <protocol name="seat">
-  <interface name="seat" version="2">
+  <interface name="seat" version="3">
     <request name="get_pointer"><arg name="id" type="new_id" interface="pointer"/></request>
     <request name="get_keyboard"><arg name="id" type="new_id" interface="keyboard"/></request>
     <event name="capabilities"><arg name="capabilities" type="uint"/></event>
@@ -14,12 +14,21 @@
     <event name="input_method"><arg name="label" type="string"/></event>
   </interface>
 
-  <interface name="pointer" version="1">
+  <interface name="pointer" version="2">
     <request name="set_cursor">
       <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface" allow-null="true"/>
       <arg name="hotspot_x" type="int"/><arg name="hotspot_y" type="int"/>
     </request>
     <request name="destroy" type="destructor"/>
+    <!-- Version 2, through seats of version 3 (docs/design/cursors.md): show
+         the cursor NAME of /usr/share/cursors, a name of the CSS cursor
+         property such as "text" or "ew-resize". serial is the serial of the
+         last enter event. An unknown name shows "default". The cursor of a
+         client returns to "default" when the pointer enters another
+         surface. -->
+    <request name="set_shape">
+      <arg name="serial" type="uint"/><arg name="name" type="string"/>
+    </request>
     <event name="enter">
       <arg name="serial" type="uint"/><arg name="surface" type="object" interface="surface"/><arg name="x" type="fixed"/><arg name="y" type="fixed"/>
     </event>

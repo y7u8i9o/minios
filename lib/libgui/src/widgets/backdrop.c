@@ -15,7 +15,7 @@
 static void spacer_measure(struct widget *w, struct size_hint *h) { (void)w; (void)h; }
 
 const struct widget_class spacer_class = { "spacer", sizeof(struct widget), spacer_measure, NULL, NULL, NULL,
-                                           NULL };
+                                           NULL, NULL };
 
 struct widget *spacer_new(struct widget *parent)
 {
@@ -86,7 +86,7 @@ static void backdrop_destroy(struct widget *w)
 }
 
 const struct widget_class backdrop_class = { "backdrop", sizeof(struct backdrop), backdrop_measure,
-                                             backdrop_layout, backdrop_paint, NULL, backdrop_destroy };
+                                             backdrop_layout, backdrop_paint, NULL, backdrop_destroy, NULL };
 
 struct widget *backdrop_new(struct widget *window, int style)
 {
@@ -150,7 +150,7 @@ static int card_event(struct widget *w, struct event *e)
 }
 
 const struct widget_class card_class = { "card", sizeof(struct card), backdrop_measure, backdrop_layout, card_paint,
-                                         card_event, NULL };
+                                         card_event, NULL, NULL };
 
 struct widget *card_new(struct widget *parent, int width)
 {
@@ -236,7 +236,7 @@ static int account_event(struct widget *w, struct event *e)
 }
 
 const struct widget_class account_class = { "account", sizeof(struct account), account_measure, NULL,
-                                            account_paint, account_event, NULL };
+                                            account_paint, account_event, NULL, NULL };
 
 struct widget *account_new(struct widget *parent, const char *name, const char *full_name, int focusable)
 {

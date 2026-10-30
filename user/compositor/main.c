@@ -288,6 +288,7 @@ int main(int argc, char **argv)
     if (verbose)
         settings.verbose = 1;
     stats_reset();
+    cursor_init();
     scene_init();
     wm_init();
     input_place_cursor(screen_w / 2, screen_h / 2);

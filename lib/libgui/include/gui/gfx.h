@@ -151,6 +151,10 @@ struct gui_resize_zones {
 /* gui_resize_edges returns the edges that a press at (x, y) resizes for the
  * frame f, or 0 outside the resize zones. */
 int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int y);
+/* The cursor name of a resize with the edges of gui_resize_edges:
+ * "ns-resize", "ew-resize", "nwse-resize" or "nesw-resize", NULL for 0
+ * (docs/design/cursors.md). */
+const char *gui_resize_cursor(int edges);
 /* gui_resize_region stores the area of the frame with its resize zones in
  * out: the frame grown by margin and the four corner squares.  The result
  * is the number of rectangles, 5. */
