@@ -153,9 +153,7 @@ static void test_comp_bench(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     kprintf("comp_bench: screen %lux%lu scale %u\n", (unsigned long)fb_screen.width, (unsigned long)fb_screen.height,
             (unsigned)(fb_screen_scale ? fb_screen_scale : 1));
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
 
     struct proc *win = proc_create_user("/bin/compbench", (char *const[]){ "compbench", "window", NULL },
@@ -190,9 +188,7 @@ KTEST_DEFINE("comp_bench", test_comp_bench);
 static void test_comp_idle(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct proc *win = proc_create_user("/bin/compbench", (char *const[]){ "compbench", "window", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
@@ -228,9 +224,7 @@ static void test_gui_memory(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     ktest_assert(fb_screen_scale == 2, "the case needs scale 2");
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct proc *win = proc_create_user("/bin/compbench", (char *const[]){ "compbench", "window", NULL },
                                         (char *const[]){ NULL }, &kernel_proc);
@@ -319,9 +313,7 @@ static void test_comp_cursor(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int32_t S = fb_screen_scale ? (int32_t)fb_screen_scale : 1;
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct fb_cursor_state *c = cursor_state();
     ktest_assert(c->visible && c->width == (uint32_t)(26 * S) && c->height == (uint32_t)(26 * S),

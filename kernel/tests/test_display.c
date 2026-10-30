@@ -303,7 +303,7 @@ static void wait_mode(uint32_t width, uint32_t height)
 static void test_gpu_resize(void)
 {
     ktest_assert(fb_screen_present && fb_has_gpu(), "needs virtio-gpu");
-    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct proc *panel = run("/bin/panel", (char *const[]){ "panel", NULL });
     ktest_wait_idle(500);
@@ -358,7 +358,7 @@ static void test_wallpaper_hidpi(void)
 {
     ktest_assert(fb_screen.width == 2560 && fb_screen_scale == 2, "mode %lux%lu scale %u", fb_screen.width,
                  fb_screen.height, fb_screen_scale);
-    struct proc *srv = run("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct proc *desktop = run("/bin/desktop", (char *const[]){ "desktop", NULL });
     ktest_wait_idle(800);

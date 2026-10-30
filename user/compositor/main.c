@@ -4,8 +4,9 @@
  *
  * The frame clock runs only while work is pending (G6 of
  * docs/plan/compositor-performance.md). After each pass of the loop X12
- * composes at once when damage or a frame callback is pending and
- * frame_ms have passed since the last frame. Otherwise it arms a one-shot
+ * composes at once when damage, a frame callback or a running animation
+ * (anim.c) is pending and frame_ms have passed since the last frame.
+ * Otherwise it arms a one-shot
  * timer for the rest of the interval. Without pending work the timer is
  * disarmed, and poll waits until the earliest deadline of the key
  * repeat, the pings, the input method, the debug views and the idle time
@@ -135,6 +136,9 @@ static void flush_clients(void)
 static void frame(void)
 {
     last_frame_us = uptime_us();
+    /* The animations advance to the start of the frame and damage what
+     * they change. */
+    anim_advance(last_frame_us);
     int presented = scene_has_damage();
     if (presented) {
         scene_compose();
@@ -161,13 +165,13 @@ static void frame(void)
     }
 }
 
-/* Compose now when damage or a frame callback is pending and the minimum
- * interval since the last frame has passed. Otherwise arm the one-shot
- * timer for the rest of the interval, or disarm it when nothing is
- * pending. */
+/* Compose now when damage, a frame callback or a running animation is
+ * pending and the minimum interval since the last frame has passed.
+ * Otherwise arm the one-shot timer for the rest of the interval, or
+ * disarm it when nothing is pending. */
 static void schedule_frame(void)
 {
-    if (!scene_has_damage() && !surfaces_frame_pending()) {
+    if (!scene_has_damage() && !surfaces_frame_pending() && !anim_running()) {
         if (frame_armed)
             arm_frame_timer(0);
         return;
@@ -177,10 +181,16 @@ static void schedule_frame(void)
         if (frame_armed)
             arm_frame_timer(0);
         frame();
-        return;
+        /* A running animation needs the next frame after the interval.
+         * Other work arrives with an event, after which the loop calls
+         * this function again. */
+        if (!anim_running())
+            return;
+        now = uptime_us();
+        due = last_frame_us + (long)settings.frame_ms * 1000;
     }
     if (!frame_armed)
-        arm_frame_timer((due - now + 999) / 1000);
+        arm_frame_timer(due > now ? (due - now + 999) / 1000 : 1);
 }
 
 /* The poll timeout until the earliest deadline of the modules, -1 for

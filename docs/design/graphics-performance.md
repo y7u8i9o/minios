@@ -44,6 +44,9 @@ runs from the start of the composition to the end of the last flush.
 | `back_bytes` | bytes of the back buffer |
 | `pool_bytes` | bytes of the mapped client pools |
 | `cursor_moves`, `cursor_us` | moves of the device cursor and their time (since G9). A move ends the input latency of the pointer motion. |
+| `anim_percent` | the setting `anim_percent`: the durations of the animations in percent, 0 without animations (since AN1, `animations.md`) |
+| `animations` | the animations that run at the moment of the request |
+| `anim_frames` | frames that advanced at least one animation |
 
 The flush time is the time spent in `backend_present`: the copy into the
 framebuffer, which direct composition omits since G5, and the flush

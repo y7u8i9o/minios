@@ -1,13 +1,14 @@
 /* Debugging and settings globals: statistics, the surface list, a
  * pixel probe, screen capture, and tunable settings (frame interval,
- * desktop colour, key repeat, decoration default, logging). */
+ * desktop colour, key repeat, decoration default, logging, the speed of
+ * the animations). */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include "comp.h"
 
 struct comp_settings settings = { FRAME_MS, 0x00306080, 30, 500, DECOR_SERVER, 0, 0, 0, POINTER_ACCEL_ADAPTIVE, 1, 1, 1,
-                                   0, 0, 0, 0 };
+                                   0, 0, 0, 0, 100 };
 static struct wire_server *server;
 
 static const char *role_name(enum role r)
@@ -268,7 +269,7 @@ void debug_screen_changed(void)
 static const char *const keys[] = { "frame_ms", "desktop_color", "repeat_rate", "repeat_delay", "decorations", "verbose",
                                     "display_mode", "pointer_speed", "pointer_accel", "ime_shift_toggle",
                                     "ime_ctrl_space", "display_follow", "debug_damage", "debug_opaque", "debug_fps",
-                                    "lock_timeout" };
+                                    "lock_timeout", "anim_percent" };
 
 static int *slot(const char *key)
 {
@@ -288,6 +289,7 @@ static int *slot(const char *key)
     if (strcmp(key, "debug_opaque") == 0) return &settings.debug_opaque;
     if (strcmp(key, "debug_fps") == 0) return &settings.debug_fps;
     if (strcmp(key, "lock_timeout") == 0) return &settings.lock_timeout;
+    if (strcmp(key, "anim_percent") == 0) return &settings.anim_percent;
     return NULL;
 }
 
@@ -304,6 +306,7 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
     if (p == &settings.pointer_accel && value != POINTER_ACCEL_FLAT && value != POINTER_ACCEL_ADAPTIVE) return;
     if (p == &settings.display_follow && value != 0 && value != 1) return;
     if (p == &settings.lock_timeout && (value < 0 || value > 86400)) return;
+    if (p == &settings.anim_percent && (value < 0 || value > 400)) return;
     if ((p == &settings.debug_damage || p == &settings.debug_opaque || p == &settings.debug_fps) && value != 0 &&
         value != 1)
         return;
@@ -327,6 +330,8 @@ static void h_set(struct wire_client *c, struct wire_resource *self, const char 
         overlay_settings_changed();
     if (p == &settings.repeat_rate || p == &settings.repeat_delay)
         seat_repeat_changed();
+    if (p == &settings.anim_percent)
+        anim_percent_changed();
     debug_setting_changed(key, value);
     if (p == &settings.display_follow)
         comp_follow_display();

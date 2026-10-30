@@ -109,6 +109,8 @@ serial line to the kernel and the programs.
   cursor rectangle. A screen copy composes the rectangle under the
   pointer again with or without the cursor, as the copy requires, and
   restores the frame before the next flush.
+- `anim.c`: the animation clock and the animations of surfaces
+  (`animations.md`).
 - `data.c`: the data device, with the selection and its stored copy
   (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
   under the cursor, the copy and move actions chosen from both sides and
@@ -220,7 +222,9 @@ composes and flushes the damage, and then every frame callback
 registered by a commit since the previous frame receives `callback.done`
 with the time in milliseconds. A callback whose commit added no damage
 receives `done` in a frame without a composition (G5). `frame_ms` is the
-minimum interval between frames.
+minimum interval between frames. A running animation counts as pending
+work: each frame advances the animations to its start time first
+(`anim_advance`, `animations.md`).
 
 The poll timeout is the earliest deadline of the modules with timed
 work: the next key repeat of the text input (`seat_next_deadline`), the

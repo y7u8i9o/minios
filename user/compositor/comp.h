@@ -131,6 +131,37 @@ struct layer {
     int acked_w, acked_h;
 };
 
+/* The visual parameters of a surface (docs/design/animations.md). The
+ * scene draws the extent of the surface scaled by scale around the
+ * centre of the extent. The scene moves the result by dx and dy device
+ * pixels. The scene multiplies the alpha of every pixel by alpha / 255.
+ * VISUAL_IDENTITY changes nothing. */
+#define ANIM_ONE 65536                  /* a progress or a scale of 1 in 16.16 fixed point */
+struct visual {
+    uint8_t alpha;
+    int32_t scale;                      /* 16.16 */
+    int dx, dy;                         /* device pixels */
+};
+#define VISUAL_IDENTITY ((struct visual){ 255, ANIM_ONE, 0, 0 })
+
+/* The easing curves of anim.c. */
+enum anim_curve {
+    ANIM_EASE_OUT_CUBIC,                /* 1 - (1 - t)^3: an element enters */
+    ANIM_ACCELERATE,                    /* cubic-bezier(0.4, 0, 1, 1): an element leaves */
+    ANIM_STANDARD,                      /* cubic-bezier(0.2, 0, 0, 1): an element moves on the screen */
+};
+
+/* An animation of the visual parameters of one surface from from to to.
+ * The frame clock advances it (anim.c). */
+struct anim {
+    int running;
+    long start_us;                      /* uptime at the start */
+    long duration_us;                   /* after the setting anim_percent */
+    enum anim_curve curve;
+    int32_t progress;                   /* 0 to ANIM_ONE after the easing curve */
+    struct visual from, to;
+};
+
 /* The lock surface of a session lock (lock.c). It covers the screen. */
 struct lock_surface_state {
     struct csurface *s;
@@ -156,6 +187,8 @@ struct csurface {
     int stack;                              /* z order among toplevels, higher on top */
     int hotspot_x, hotspot_y;               /* cursor surfaces and drag icons */
     unsigned commits;                       /* commits since the creation, for x12settings */
+    struct visual visual;                   /* VISUAL_IDENTITY unless an animation runs */
+    struct anim anim;
     struct csurface *next;
 };
 
@@ -207,6 +240,7 @@ struct comp_settings {
     int display_follow;             /* the mode follows the size requests of the host display */
     int debug_damage, debug_opaque, debug_fps;  /* the debug views of overlay.c */
     int lock_timeout;               /* seconds without input before the session locks, 0 for never */
+    int anim_percent;               /* the durations of the animations in percent, 0 disables them */
 };
 #define POINTER_ACCEL_FLAT 0
 #define POINTER_ACCEL_ADAPTIVE 1
@@ -312,6 +346,36 @@ struct rect scene_pointer_rect(void);
 void scene_copy_screen(uint8_t *to, int stride, int pointer);
 struct rect scene_window_extent(const struct toplevel *t);
 int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
+/* The extent of s on the screen after its visual parameters: wm_extent
+ * for VISUAL_IDENTITY, else the transformed extent rounded outwards to
+ * logical pixels. */
+struct rect scene_visual_extent(const struct csurface *s);
+/* anim.c: the animation clock (docs/design/animations.md). */
+/* The value of an easing curve at the linear progress t, both 0 to
+ * ANIM_ONE. */
+int32_t anim_ease(enum anim_curve curve, int32_t t);
+/* The visual parameters between from (progress 0) and to (ANIM_ONE). */
+struct visual anim_mix(struct visual from, struct visual to, int32_t progress);
+/* Animate the visual parameters of s from from to to over ms
+ * milliseconds, scaled by the setting anim_percent. A running animation
+ * of s ends without a jump: the new one starts from s->visual when from
+ * is NULL. With anim_percent 0, s takes the values of to at once. */
+void anim_start(struct csurface *s, const struct visual *from, struct visual to, int ms, enum anim_curve curve);
+/* End the animation of s in its final state. */
+void anim_finish(struct csurface *s);
+/* 1 while an animation runs. The frame clock then composes a frame per
+ * interval. */
+int anim_running(void);
+/* Advance every animation to the frame time now_us and damage the extent
+ * of each animated surface before and after the step. */
+void anim_advance(long now_us);
+/* The setting anim_percent changed. 0 ends every running animation. */
+void anim_percent_changed(void);
+/* The number of running animations and of the frames that advanced an
+ * animation since the last reset of the statistics. */
+long anim_count(void);
+long anim_frames(void);
+void anim_reset_frames(void);
 /* cursor.c: the cursor set of /usr/share/cursors (docs/design/cursors.md).
  * A cursor image has w x h device pixels in rows of w pixels, 0xAARRGGBB
  * with straight alpha, and the hotspot (hot_x, hot_y) in device pixels. */

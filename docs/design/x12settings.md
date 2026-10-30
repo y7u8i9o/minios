@@ -87,7 +87,8 @@ without a window.
 
 Every setting of X12 has a control, which sends its value at once: the
 display mode with its scale, following the host window, the frame
-interval, key repeat, the keymap reload, pointer speed and
+interval, the duration of the animations in percent (`anim_percent`,
+`animations.md`), key repeat, the keymap reload, pointer speed and
 acceleration, the input method (the list comes from `get_input_methods`)
 and its two switch keys, the decorations, the desktop colour through
 the colour button, and logging. The controls follow the values that X12

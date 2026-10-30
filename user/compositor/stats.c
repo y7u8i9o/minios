@@ -66,6 +66,7 @@ static long cpu_us(void)
 void stats_reset(void)
 {
     memset(&st, 0, sizeof st);
+    anim_reset_frames();
     st.reset_at = uptime_us();
     st.cpu_at = cpu_us();
 }
@@ -242,6 +243,9 @@ void stats_send(struct wire_resource *r)
         { "pool_bytes", pool_bytes },
         { "cursor_moves", st.cursor_moves },
         { "cursor_us", st.cursor_us },
+        { "anim_percent", (uint64_t)settings.anim_percent },
+        { "animations", (uint64_t)anim_count() },
+        { "anim_frames", (uint64_t)anim_frames() },
     };
     for (size_t i = 0; i < sizeof values / sizeof values[0]; i++)
         debug_send_frame_stat(r, values[i].key, (uint32_t)(values[i].value >> 32), (uint32_t)values[i].value);

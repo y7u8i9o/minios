@@ -61,7 +61,7 @@ one commit without attribution lines. Sizes are estimates of new lines.
 
 ## Part 1: CPU animations
 
-### AN1 Animation clock (about 400 lines)
+### AN1 Animation clock (about 400 lines, completed 2026-10-30)
 
 - New `user/compositor/anim.c` with `struct anim` (start in µs, duration,
   easing, progress 0..65536) and fixed point easing curves (ease-out cubic

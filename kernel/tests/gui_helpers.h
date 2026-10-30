@@ -262,16 +262,39 @@ static inline void alt_key(uint8_t code)
  * starts before the socket exists fails to connect and exits. A fixed
  * delay does not guarantee the socket on a loaded host. The wait fails the
  * test after 10 s or when X12 exits. */
-static inline struct proc *start_x12(char *const argv[])
+static inline void wait_x12_socket(struct proc *srv)
 {
-    struct proc *srv = proc_create_user("/bin/x12", argv, (char *const[]){ NULL }, &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
     uint64_t deadline = timer_ms() + 10000;
     while (!unix_socket_accepting("display")) {
         ktest_assert(!proc_exited(srv), "the compositor exited before it accepted clients");
         ktest_assert(timer_ms() < deadline, "the compositor accepts no clients after 10 s");
         sleep_ms(10);
     }
+}
+
+/* Set a setting of the running X12 through the settings interface
+ * (x12settings set KEY VALUE). The command connects as a client of its
+ * own. */
+static inline void x12_setting(const char *key, const char *value)
+{
+    struct proc *p = proc_create_user("/bin/x12settings", (char *const[]){ "x12settings", "set", (char *)key,
+                                                                          (char *)value, NULL },
+                                      (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(p != NULL, "cannot start x12settings");
+    int status = proc_reap(p);
+    ktest_assert(status == 0, "x12settings set %s %s status 0x%x", key, value, status);
+}
+
+/* X12 without animations (docs/design/animations.md): a pixel check
+ * after a map, a close or a minimize sees the final state at once.
+ * x12settings is client 1 of X12, the first client of the test is
+ * client 2. */
+static inline struct proc *start_x12(char *const argv[])
+{
+    struct proc *srv = proc_create_user("/bin/x12", argv, (char *const[]){ NULL }, &kernel_proc);
+    ktest_assert(srv != NULL, "cannot start the compositor");
+    wait_x12_socket(srv);
+    x12_setting("anim_percent", "0");
     return srv;
 }
 

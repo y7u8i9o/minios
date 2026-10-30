@@ -152,6 +152,45 @@ static struct rect extent(const struct csurface *s)
     return wm_extent(s);
 }
 
+static int visual_identity(const struct visual *v)
+{
+    return v->alpha == 255 && v->scale == ANIM_ONE && v->dx == 0 && v->dy == 0;
+}
+
+/* The device position of the edge e of a surface after the scale around
+ * the centre c and the offset d, all in 16.16 device pixels. */
+static int64_t transform_edge(int64_t e, int64_t c, int32_t scale, int d)
+{
+    return c + ((e - c) * scale >> 16) + ((int64_t)d << 16);
+}
+
+static int64_t floor16(int64_t v) { return v >> 16; }
+static int64_t ceil16(int64_t v) { return (v + ANIM_ONE - 1) >> 16; }
+
+/* The transformed extent in device pixels: the device pixels that the
+ * transformed extent touches. */
+static struct rect visual_device_extent(const struct csurface *s)
+{
+    struct rect E = rect_scale(extent(s), screen_scale);
+    int64_t cx = ((int64_t)2 * E.x + E.w) << 15, cy = ((int64_t)2 * E.y + E.h) << 15;
+    const struct visual *v = &s->visual;
+    int64_t x0 = floor16(transform_edge((int64_t)E.x << 16, cx, v->scale, v->dx));
+    int64_t x1 = ceil16(transform_edge((int64_t)(E.x + E.w) << 16, cx, v->scale, v->dx));
+    int64_t y0 = floor16(transform_edge((int64_t)E.y << 16, cy, v->scale, v->dy));
+    int64_t y1 = ceil16(transform_edge((int64_t)(E.y + E.h) << 16, cy, v->scale, v->dy));
+    return (struct rect){ (int)x0, (int)y0, (int)(x1 - x0), (int)(y1 - y0) };
+}
+
+struct rect scene_visual_extent(const struct csurface *s)
+{
+    if (visual_identity(&s->visual))
+        return extent(s);
+    struct rect d = visual_device_extent(s);
+    int S = screen_scale, x0 = div_down(d.x, S), y0 = div_down(d.y, S);
+    int x1 = div_down(d.x + d.w + S - 1, S), y1 = div_down(d.y + d.h + S - 1, S);
+    return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
+}
+
 static int visible(const struct csurface *s)
 {
     if (!s->mapped || !s->current.buffer)

@@ -37,7 +37,7 @@ its boot tests pass.
 | `widgets.md` | The libgui widgets: scaled measurement, repaints without a change, partial repaints and scrolling by copy, theme metrics and antialiased shapes, the new look, missing functions, the shared classes of the greeter, the screen locker, askpass and the panel, milestones K1 to K8 | K1 to K8 completed 2026-10-09 |
 | `rust.md` | Rust in the kernel: toolchain and build, the support crate (bindings, allocator, locks, errors, panics), ISO 9660 in Rust, milestones F1 to F3 | proposed 2026-10-30 |
 | `visual-polish.md` | The checklist of the visible parts of the system for the review of the owner, items A1 to G4 | maintained |
-| `animation-gpu.md` | Animations in X12 on the CPU, then a Venus GPU path: host QEMU with Venus, virtio-gpu 3D and `/dev/gpu0`, a generated Venus encoder and the Vulkan subset `libvk`, compositor shaders, a Vulkan backend for X12, milestones AN1 to AN4 and GV1 to GV5 | proposed 2026-10-30 |
+| `animation-gpu.md` | Animations in X12 on the CPU, then a Venus GPU path: host QEMU with Venus, virtio-gpu 3D and `/dev/gpu0`, a generated Venus encoder and the Vulkan subset `libvk`, compositor shaders, a Vulkan backend for X12, milestones AN1 to AN4 and GV1 to GV5 | proposed 2026-10-30, AN1 completed 2026-10-30 |
 | `roadmap.md` | The releases from 0.5 to 1.0 in overview, the criteria for 1.0 | proposed 2026-10-05 |
 | `prose-rewrite.md` | Rewrite English prose of the entire project (source comments, docs, manual pages, messages) to eliminate translation-like defects: noun-of-noun chains, article overuse, bare nouns as subjects, and six other patterns. Checker script, revised Writing rules for CLAUDE.md, milestones W1 to W9 | proposed 2026-10-06, highest priority |
 

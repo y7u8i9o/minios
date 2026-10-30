@@ -27,7 +27,7 @@ static void run(const char *path, char *const argv[])
 static void test_x12settings_perf(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
-    struct proc *srv = start("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     run("/bin/comptest", (char *const[]){ "comptest", "damage", NULL });
     run_shell("compstat -h");
@@ -67,7 +67,7 @@ static void test_x12settings_views(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
-    struct proc *srv = start("/bin/x12", (char *const[]){ "x12", "-s", NULL });
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     struct proc *win = start("/bin/comptest", (char *const[]){ "comptest", "seat", NULL });
     ktest_wait_idle(1500);

@@ -10,7 +10,7 @@
 
 #define MAX_METHODS 16
 
-static struct widget *mode_label, *res_combo, *scale_combo, *follow_box, *frame_spin;
+static struct widget *mode_label, *res_combo, *scale_combo, *follow_box, *frame_spin, *anim_spin;
 static struct widget *rate_spin, *delay_spin, *speed_slider, *accel_combo;
 static struct widget *method_combo, *shift_box, *ctrl_space_box, *decor_combo, *color_button, *verbose_box;
 static const char *const *resolutions;
@@ -45,6 +45,7 @@ void live_value(const char *key, int32_t value)
         combobox_select(scale_combo, DISPLAY_MODE_S(value) >= 2 ? 1 : 0);
     } else if (strcmp(key, "display_follow") == 0) set_box(follow_box, value);
     else if (strcmp(key, "frame_ms") == 0 && frame_spin) widget_set_value(frame_spin, value);
+    else if (strcmp(key, "anim_percent") == 0 && anim_spin) widget_set_value(anim_spin, value);
     else if (strcmp(key, "repeat_rate") == 0 && rate_spin) widget_set_value(rate_spin, value);
     else if (strcmp(key, "repeat_delay") == 0 && delay_spin) widget_set_value(delay_spin, value);
     else if (strcmp(key, "pointer_speed") == 0 && speed_slider) widget_set_value(speed_slider, value);
@@ -119,6 +120,7 @@ static int on_apply_mode(struct widget *w, void *args, void *arg)
 }
 static int on_follow(struct widget *w, void *args, void *arg) { set("display_follow", w->value); return 0; }
 static int on_frame(struct widget *w, void *args, void *arg) { set("frame_ms", w->value); return 0; }
+static int on_anim(struct widget *w, void *args, void *arg) { set("anim_percent", w->value); return 0; }
 static int on_rate(struct widget *w, void *args, void *arg) { set("repeat_rate", w->value); return 0; }
 static int on_delay(struct widget *w, void *args, void *arg) { set("repeat_delay", w->value); return 0; }
 /* Load the keymap of the configuration file again. */
@@ -203,6 +205,11 @@ void live_build(struct widget *tabs)
     frame_spin = spinner_new(grid, 4, 200, 16);
     widget_connect(frame_spin, "changed", on_frame, NULL);
     field(grid, "Frame interval (ms)", frame_spin);
+    /* The durations of the animations in percent: 0 disables them, 400
+     * shows them four times slower. */
+    anim_spin = spinner_new(grid, 0, 400, 100);
+    widget_connect(anim_spin, "changed", on_anim, NULL);
+    field(grid, "Animation duration (%)", anim_spin);
 
     heading(grid, "Keyboard");
     rate_spin = spinner_new(grid, 1, 100, 30);

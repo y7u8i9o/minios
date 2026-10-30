@@ -15,9 +15,7 @@ static void test_gui_bench(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     kprintf("gui_bench: screen %lux%lu scale %u\n", (unsigned long)fb_screen.width, (unsigned long)fb_screen.height,
             (unsigned)(fb_screen_scale ? fb_screen_scale : 1));
-    struct proc *srv = proc_create_user("/bin/x12", (char *const[]){ "x12", "-s", NULL }, (char *const[]){ NULL },
-                                        &kernel_proc);
-    ktest_assert(srv != NULL, "cannot start the compositor");
+    struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
     ktest_wait_idle(1200);
     const char *scenarios[] = { "wheel", "type", "status", "edit", "scroll", "hover" };
     for (unsigned i = 0; i < sizeof scenarios / sizeof scenarios[0]; i++) {

@@ -438,6 +438,7 @@ static void h_create_surface(struct wire_client *c, struct wire_resource *self, 
     s->client = wire_client_get_user_data(c);
     s->id = next_surface++;
     s->current.scale = s->pending.scale = 1;
+    s->visual = VISUAL_IDENTITY;
     /* Surfaces without a role are cascaded; roles reposition them. */
     int n = (s->id - 1) % 8;
     s->x = 40 + n * 30;

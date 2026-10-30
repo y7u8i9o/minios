@@ -1,7 +1,7 @@
 x12: started 1024x768
-x12: client 1 connected
+x12: client 2 connected
 comptest: 2 formats, output 1024x768, 1 modes
-x12: surface 1 created for client 1
+x12: surface 1 created for client 2
 x12: surface 1 mapped at 40,60 200x150
 comptest: frame 1 at
 x12: buffer released
@@ -9,7 +9,7 @@ comptest: buffer 1 released
 comptest: frame 2, 1 releases
 comptest: done
 x12: surface 1 destroyed
-x12: client 1 disconnected
+x12: client 2 disconnected
 x12: stopped
 comp_core: compositor core ok
 TEST PASS
