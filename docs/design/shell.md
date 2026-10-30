@@ -97,10 +97,10 @@ where shapes are curved:
 - maximized windows have square corners and no shadow.
 
 Presses on server decorations never reach the client: the title bar
-moves, the buttons act, and a zone on the border, 5 px outside and 2 px
+moves, the buttons act, and a zone on the border, 3 px outside and 3 px
 inside the frame, and the bottom right grip of the contents resize on
 release with a configure of the new size. Zones within 16 px of a corner
-take both edges. A square at each corner reaches 5 px outside the frame,
+take both edges. A square at each corner reaches 3 px outside the frame,
 and at the top corners 8 px inside over the rounded corner, and takes
 both edges as well. The client decorations of libgui use the same
 function, `gui_resize_edges` (`lib/libgui/src/gfx.c`), with the same

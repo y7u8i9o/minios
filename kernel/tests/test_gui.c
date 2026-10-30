@@ -194,10 +194,10 @@ static void test_gui_term(void)
     int wx = 40, wy = 60;                       /* 662x431 at the cascade origin */
     ktest_assert(sw == 1024, "test assumes 1024 pixels of width");
     int cx = sw / 2, cy = logical_h() / 2;
-    mouse_move_to(&cx, &cy, wx + 662 + 3, wy + 431 + 3, 0);
+    mouse_move_to(&cx, &cy, wx + 662 + 2, wy + 431 + 2, 0);
     feed_packet(1, 0, 0);
     sleep_ms(50);
-    mouse_move_to(&cx, &cy, wx + 422 + 3, wy + 335 + 3, 1);
+    mouse_move_to(&cx, &cy, wx + 422 + 2, wy + 335 + 2, 1);
     feed_packet(0, 0, 0);
     sleep_ms(500);
     vfs_unlink("/gterm2.txt");
@@ -266,12 +266,12 @@ static void test_gui_resize(void)
     ktest_assert(cl != NULL, "cannot start guitest");
     ktest_wait_idle(800);
     /* Window 1 "alpha" 300x200 at (40,60). Drag its bottom right
-     * resize border (in the shadow outside the frame) by (100,50). */
+     * corner, 2 px outside the frame (GUI_RESIZE_REACH is 3), by (100,50). */
     int cx = sw / 2, cy = sh / 2;
-    mouse_move_to(&cx, &cy, 40 + 300 + 3, 60 + 200 + 3, 0);
+    mouse_move_to(&cx, &cy, 40 + 300 + 2, 60 + 200 + 2, 0);
     feed_packet(1, 0, 0);
     ktest_wait_idle(50);
-    mouse_move_to(&cx, &cy, 40 + 400 + 3, 60 + 250 + 3, 1);
+    mouse_move_to(&cx, &cy, 40 + 400 + 2, 60 + 250 + 2, 1);
     feed_packet(0, 0, 0);
     ktest_wait_idle(500);
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "resized contents %08x", pixel(390, 280));
@@ -1071,14 +1071,28 @@ static void test_comp_shell(void)
 KTEST_DEFINE("comp_shell", test_comp_shell);
 
 /* The cursors of /usr/share/cursors (docs/design/cursors.md). X12 logs
- * every change of the cursor in verbose mode. comptest has server
- * decorations: the frame at (40,30) is 202 pixels wide, and the contents
- * of 200x150 start at (41,59) under the title bar. The right edge of the
- * frame shows ew-resize, a move by the title bar shows grabbing. The
- * window "one" of apptest is the third toplevel: its frame cascades to
- * (100,90), the contents start under the 30 pixel header at (100,120), and
- * the text field at (6,42..68) of the contents asks for the text cursor.
- * The desktop shows default. */
+ * every change of the cursor in verbose mode, and a marker follows each
+ * step. comptest has server decorations: the frame at (40,30) is 202
+ * pixels wide, so its right edge lies at x 242, and the contents of
+ * 200x150 start at (41,59) under the title bar. The window "one" of
+ * apptest has client decorations and is the third toplevel: its frame
+ * cascades to (100,90) with a width of 400, so its right edge lies at x
+ * 500, and the contents start under the 30 pixel header at (100,120).
+ * The resize zones reach 3 pixels outside and 3 inside the edge
+ * (GUI_RESIZE_*): 2 pixels outside and 3 inside resize, 3 outside and 4
+ * inside do not. A move by the title bar shows grabbing, the text field
+ * of apptest at (6,42..68) of its contents shows text, and the desktop
+ * shows default. */
+static void cursor_step(int *cx, int *cy, int x, int y, const char *what)
+{
+    mouse_move_to(cx, cy, x, y, 0);
+    ktest_wait_idle(200);
+    kprintf("gui_cursors: %s\n", what);
+    char pause_arg[8];
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
+        sleep_ms(1500);                 /* a screendump of each step */
+}
+
 static void test_gui_cursors(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
@@ -1086,24 +1100,28 @@ static void test_gui_cursors(void)
     struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
     struct proc *cl = start_client("shell");
     int cx = sw / 2, cy = sh / 2;
-    mouse_move_to(&cx, &cy, 242 + 3, 59 + 75, 0);
-    ktest_wait_idle(200);
+    cursor_step(&cx, &cy, 242 + 2, 59 + 75, "server frame, 2 px outside");
+    cursor_step(&cx, &cy, 242 + 3, 59 + 75, "server frame, 3 px outside");
+    cursor_step(&cx, &cy, 242 - 3, 59 + 75, "server frame, 3 px inside");
+    cursor_step(&cx, &cy, 242 - 4, 59 + 75, "server frame, 4 px inside");
     mouse_move_to(&cx, &cy, 40 + 100, 59 - 12, 0);
     feed_packet(1, 0, 0);
     ktest_wait_idle(50);
     mouse_move_to(&cx, &cy, 40 + 130, 59 - 12 + 20, 1);
     feed_packet(0, 0, 0);
     ktest_wait_idle(300);
+    kprintf("gui_cursors: moved\n");
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "comptest status 0x%x", status);
     cl = proc_create_user("/bin/apptest", (char *const[]){ "apptest", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start apptest");
     ktest_wait_idle(1500);
-    mouse_move_to(&cx, &cy, 100 + 100, 120 + 55, 0);
-    ktest_wait_idle(300);
-    mouse_move_to(&cx, &cy, sw - 10, sh - 10, 0);
-    ktest_wait_idle(300);
+    cursor_step(&cx, &cy, 500 + 2, 120 + 55, "client frame, 2 px outside");
+    cursor_step(&cx, &cy, 500 + 3, 120 + 55, "client frame, 3 px outside");
+    cursor_step(&cx, &cy, 500 - 3, 120 + 55, "client frame, 3 px inside");
+    cursor_step(&cx, &cy, 100 + 100, 120 + 55, "text field");
+    cursor_step(&cx, &cy, sw - 10, sh - 10, "desktop");
     signal_send(cl, SIGTERM);
     proc_reap(cl);
     signal_send(srv, SIGTERM);

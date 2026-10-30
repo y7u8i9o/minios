@@ -111,13 +111,15 @@ static void scenario_pointer(int *cx, int *cy)
     print_usage("pointer");
 }
 
-/* The resize border lies in the shadow outside the frame. X12 applies a
- * resize at the release of the button, so every step is one drag of the
- * corner, alternately 60x40 pixels inwards and back. After the 20 drags
- * the window has its first size again. */
+/* The corner zone of the frame reaches 3 pixels outside (GUI_RESIZE_REACH).
+ * The drags start 1 pixel outside the corner, so the motion of 1 pixel
+ * before each press remains inside the zone. X12 applies a resize at the
+ * release of the button, so every step is one drag of the corner,
+ * alternately 60x40 pixels inwards and back. After the 20 drags the window
+ * has its first size again. */
 static void resize_drags(int *cx, int *cy, bool reset_stats)
 {
-    int x = WIN_X + WIN_W + 3, y = WIN_Y + WIN_H + 3;
+    int x = WIN_X + WIN_W + 1, y = WIN_Y + WIN_H + 1;
     mouse_move_to(cx, cy, x, y, 0);
     ktest_wait_idle(200);
     if (reset_stats)

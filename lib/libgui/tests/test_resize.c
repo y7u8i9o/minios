@@ -40,23 +40,24 @@ void run_resize_tests(void)
     struct csd c = { .enabled = 1, .active = 1 };
     int w = 300, h = 200, edges;
     struct rect cf = csd_frame(&c, w, h);
-    CHECK(csd_hit(&c, w, h, cf.x - 5, cf.y - 5, &edges) == CSD_RESIZE && edges == TL, "csd corner outside: %d", edges);
-    CHECK(csd_hit(&c, w, h, cf.x - 6, cf.y - 6, &edges) == CSD_OUTSIDE, "csd beyond the corner square");
-    CHECK(csd_hit(&c, w, h, cf.x + cf.w + 4, cf.y + 100, &edges) == CSD_RESIZE && edges == GUI_EDGE_RIGHT,
+    CHECK(csd_hit(&c, w, h, cf.x - 3, cf.y - 3, &edges) == CSD_RESIZE && edges == TL, "csd corner outside: %d", edges);
+    CHECK(csd_hit(&c, w, h, cf.x - 4, cf.y - 4, &edges) == CSD_OUTSIDE, "csd beyond the corner square");
+    CHECK(csd_hit(&c, w, h, cf.x + cf.w + 2, cf.y + 100, &edges) == CSD_RESIZE && edges == GUI_EDGE_RIGHT,
           "csd right edge outside: %d", edges);
-    CHECK(csd_hit(&c, w, h, cf.x + cf.w - 2, cf.y + 100, &edges) == CSD_RESIZE && edges == GUI_EDGE_RIGHT,
+    CHECK(csd_hit(&c, w, h, cf.x + cf.w + 3, cf.y + 100, &edges) == CSD_OUTSIDE, "csd beyond the right edge");
+    CHECK(csd_hit(&c, w, h, cf.x + cf.w - 3, cf.y + 100, &edges) == CSD_RESIZE && edges == GUI_EDGE_RIGHT,
           "csd right edge inside: %d", edges);
-    CHECK(csd_hit(&c, w, h, cf.x + cf.w - 3, cf.y + 100, &edges) == CSD_CONTENT, "csd contents next to the edge");
+    CHECK(csd_hit(&c, w, h, cf.x + cf.w - 4, cf.y + 100, &edges) == CSD_CONTENT, "csd contents next to the edge");
     CHECK(csd_hit(&c, w, h, cf.x + 2, cf.y + 2, &edges) == CSD_RESIZE && edges == TL, "csd rounded corner inside: %d", edges);
     CHECK(csd_hit(&c, w, h, cf.x + cf.w - 9, cf.y + 10, &edges) == CSD_CLOSE, "csd close button");
     CHECK(csd_hit(&c, w, h, cf.x + 40, cf.y + 10, &edges) == CSD_HEADER_BAR, "csd header bar");
     CHECK(csd_hit(&c, w, h, cf.x + 40, cf.y + 100, &edges) == CSD_CONTENT, "csd contents");
-    CHECK(csd_hit(&c, w, h, cf.x - 6, cf.y + 100, &edges) == CSD_OUTSIDE, "csd beyond the margin");
+    CHECK(csd_hit(&c, w, h, cf.x - 4, cf.y + 100, &edges) == CSD_OUTSIDE, "csd beyond the margin");
     struct rect input[5];
     int n = csd_input_region(&c, w, h, input);
     in_region = 0;
     for (int i = 0; i < n; i++)
-        in_region |= rect_contains(input[i], cf.x - 5, cf.y - 5);
+        in_region |= rect_contains(input[i], cf.x - 3, cf.y - 3);
     CHECK(n == 5 && in_region, "the csd input region contains the corner square");
     c.maximized = 1;
     CHECK(csd_hit(&c, w, h, 0, 0, &edges) != CSD_RESIZE, "a maximized window has no resize zones");
