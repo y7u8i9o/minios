@@ -6,7 +6,14 @@
  * Path data supports M L H V C S Q T A Z and their relative forms;
  * curves are flattened, edges are scan converted with four sub rows per
  * pixel and exact horizontal coverage (the method of libfont's
- * rasterizer). Font Awesome's icons use nothing beyond this subset. */
+ * rasterizer). Font Awesome's icons use nothing beyond this subset.
+ *
+ * A path may also have a stroke (stroke, stroke-width, stroke-opacity,
+ * stroke-linejoin miter, round or bevel, stroke-linecap butt, round or
+ * square, stroke-miterlimit). The stroke is drawn over the fill. The
+ * stroke of the flattened path is a union of polygons: one rectangle per
+ * segment, one polygon per join and per cap. Every polygon has the same
+ * orientation, so the nonzero rule fills the union once. */
 #include <codec/codec.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,12 +43,25 @@ struct canvas {
     uint32_t *pixels;
 };
 
+/* A subpath of the flattened path for the stroke: count points from
+ * first in the point list of the path. */
+struct subpath {
+    int first, count, closed;
+};
+
 struct path {
     struct edges es;
     const struct canvas *cv;
     float cx, cy, sx, sy;       /* current point, subpath start */
     float qx, qy;               /* last control point for S and T */
     char last;
+    /* The flattened points in pixels, recorded only for a stroke. restart
+     * is 1 after Z: the next line starts a new subpath. */
+    int record, restart;
+    float *pts;                 /* x, y pairs */
+    int npts, cappts;
+    struct subpath *subs;
+    int nsubs, capsubs;
 };
 
 /* ---- edges and rasterization ---- */
@@ -68,12 +88,56 @@ static int add_edge(struct edges *es, int32_t x0, int32_t y0, int32_t x1, int32_
 
 static int32_t fix(float v) { return (int32_t)floorf(v * 64.0f + 0.5f); }
 
+/* Append a point in pixels to the last subpath of the stroke record. */
+static int record_point(struct path *p, float x, float y)
+{
+    if (p->npts == p->cappts) {
+        int cap = p->cappts ? p->cappts * 2 : 128;
+        float *pts = realloc(p->pts, (size_t)cap * 2 * sizeof *pts);
+        if (!pts)
+            return -ENOMEM;
+        p->pts = pts;
+        p->cappts = cap;
+    }
+    p->pts[2 * p->npts] = x;
+    p->pts[2 * p->npts + 1] = y;
+    p->npts++;
+    p->subs[p->nsubs - 1].count++;
+    return 0;
+}
+
+/* Start a subpath of the stroke record at the current point. */
+static int record_move(struct path *p)
+{
+    if (!p->record)
+        return 0;
+    if (p->nsubs == p->capsubs) {
+        int cap = p->capsubs ? p->capsubs * 2 : 8;
+        struct subpath *subs = realloc(p->subs, (size_t)cap * sizeof *subs);
+        if (!subs)
+            return -ENOMEM;
+        p->subs = subs;
+        p->capsubs = cap;
+    }
+    p->subs[p->nsubs++] = (struct subpath){ p->npts, 0, 0 };
+    const struct canvas *c = p->cv;
+    return record_point(p, p->cx * c->sx + c->ox, p->cy * c->sy + c->oy);
+}
+
 /* A line in view box coordinates. */
 static int line_to(struct path *p, float x, float y)
 {
     const struct canvas *c = p->cv;
     int r = add_edge(&p->es, fix((p->cx * c->sx) + c->ox), fix((p->cy * c->sy) + c->oy), fix((x * c->sx) + c->ox),
                      fix((y * c->sy) + c->oy));
+    if (r == 0 && p->record) {
+        if (!p->nsubs || p->restart) {
+            p->restart = 0;
+            r = record_move(p);
+        }
+        if (r == 0)
+            r = record_point(p, x * c->sx + c->ox, y * c->sy + c->oy);
+    }
     p->cx = x;
     p->cy = y;
     return r;
@@ -310,11 +374,18 @@ static int arc(struct path *p, float rx, float ry, float rot, int large, int swe
     return 0;
 }
 
-static int close_path(struct path *p)
+/* Close the subpath for the fill. explicit is 1 for Z: the stroke then
+ * closes the subpath as well. The implicit close before M and at the end
+ * of the data adds no segment to the stroke. */
+static int close_path(struct path *p, int explicit)
 {
-    int r = 0;
+    int r = 0, record = p->record;
+    p->record = record && explicit;
     if (p->cx != p->sx || p->cy != p->sy)
         r = line_to(p, p->sx, p->sy);
+    p->record = record;
+    if (record && explicit && p->nsubs)
+        p->subs[p->nsubs - 1].closed = 1;
     return r;
 }
 
@@ -344,9 +415,12 @@ static int parse_path(struct path *p, const char *d)
         switch (c) {
         case 'M':
             if (!number(&s, &a[0]) || !number(&s, &a[1])) return -EINVAL;
-            r = close_path(p);
+            r = close_path(p, 0);
             p->cx = p->sx = a[0] + ox;
             p->cy = p->sy = a[1] + oy;
+            p->restart = 0;
+            if (r == 0)
+                r = record_move(p);
             break;
         case 'L':
             if (!number(&s, &a[0]) || !number(&s, &a[1])) return -EINVAL;
@@ -394,9 +468,12 @@ static int parse_path(struct path *p, const char *d)
             break;
         }
         case 'Z':
-            r = close_path(p);
+            r = close_path(p, 1);
             p->cx = p->sx;
             p->cy = p->sy;
+            /* A command after Z continues from the start point in a new
+             * subpath of the stroke. */
+            p->restart = 1;
             break;
         default:
             return -EINVAL;
@@ -405,7 +482,156 @@ static int parse_path(struct path *p, const char *d)
             return r;
         p->last = c;
     }
-    return close_path(p);
+    return close_path(p, 0);
+}
+
+/* ---- strokes ---- */
+
+enum { JOIN_MITER, JOIN_ROUND, JOIN_BEVEL };
+enum { CAP_BUTT, CAP_ROUND, CAP_SQUARE };
+
+struct stroke {
+    float hw;                   /* half the width in pixels */
+    int join, cap;
+    float miter_limit;
+};
+
+/* Add a closed polygon of n points (x, y pairs in pixels) with a positive
+ * signed area, so that the union of all polygons fills with the nonzero
+ * rule. */
+static int add_polygon(struct edges *es, const float *xy, int n)
+{
+    float area = 0;
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        area += xy[2 * i] * xy[2 * j + 1] - xy[2 * j] * xy[2 * i + 1];
+    }
+    if (area == 0)
+        return 0;
+    for (int i = 0; i < n; i++) {
+        int a = area > 0 ? i : n - 1 - i, b = area > 0 ? (i + 1) % n : (2 * n - 2 - i) % n;
+        int r = add_edge(es, fix(xy[2 * a]), fix(xy[2 * a + 1]), fix(xy[2 * b]), fix(xy[2 * b + 1]));
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
+
+static int add_circle(struct edges *es, float cx, float cy, float r)
+{
+    float xy[2 * 32];
+    int n = (int)(r * 2) + 8;
+    if (n > 32)
+        n = 32;
+    for (int i = 0; i < n; i++) {
+        float a = 2 * 3.14159265f * (float)i / (float)n;
+        xy[2 * i] = cx + r * cosf(a);
+        xy[2 * i + 1] = cy + r * sinf(a);
+    }
+    return add_polygon(es, xy, n);
+}
+
+/* The join at the vertex (x, y) between a segment with the unit direction
+ * (ax, ay) and the next segment with the unit direction (bx, by). */
+static int add_join(struct edges *es, const struct stroke *st, float x, float y, float ax, float ay, float bx,
+                    float by)
+{
+    float turn = ax * by - ay * bx;
+    if (fabsf(turn) < 1e-4f && ax * bx + ay * by > 0)
+        return 0;
+    if (st->join == JOIN_ROUND)
+        return add_circle(es, x, y, st->hw);
+    /* The outer side lies left of the turn direction. */
+    float side = turn > 0 ? -1.0f : 1.0f;
+    float n0x = -ay * side * st->hw, n0y = ax * side * st->hw;
+    float n1x = -by * side * st->hw, n1y = bx * side * st->hw;
+    float mx = n0x + n1x, my = n0y + n1y, ml = sqrtf(mx * mx + my * my);
+    float cos_half = ml > 0 ? (mx * n0x + my * n0y) / (ml * st->hw) : 0;
+    if (st->join == JOIN_MITER && cos_half > 0 && 1.0f / cos_half <= st->miter_limit) {
+        float len = st->hw / cos_half;
+        float quad[8] = { x, y, x + n0x, y + n0y, x + mx / ml * len, y + my / ml * len, x + n1x, y + n1y };
+        return add_polygon(es, quad, 4);
+    }
+    float tri[6] = { x, y, x + n0x, y + n0y, x + n1x, y + n1y };
+    return add_polygon(es, tri, 3);
+}
+
+/* The cap at the end (x, y) of a segment with the unit direction (dx, dy)
+ * that points out of the line. */
+static int add_cap(struct edges *es, const struct stroke *st, float x, float y, float dx, float dy)
+{
+    if (st->cap == CAP_ROUND)
+        return add_circle(es, x, y, st->hw);
+    if (st->cap != CAP_SQUARE)
+        return 0;
+    float nx = -dy * st->hw, ny = dx * st->hw, ex = dx * st->hw, ey = dy * st->hw;
+    float quad[8] = { x + nx, y + ny, x + nx + ex, y + ny + ey, x - nx + ex, y - ny + ey, x - nx, y - ny };
+    return add_polygon(es, quad, 4);
+}
+
+/* The edges of the stroke of one subpath. Repeated points are dropped. */
+static int stroke_subpath(struct edges *es, const struct stroke *st, const float *src, int count, int closed)
+{
+    /* A move without a drawing command draws nothing. */
+    if (count < 2)
+        return 0;
+    float *pt = malloc((size_t)(count ? count : 1) * 2 * sizeof *pt);
+    if (!pt)
+        return -ENOMEM;
+    int n = 0;
+    for (int i = 0; i < count; i++) {
+        float x = src[2 * i], y = src[2 * i + 1];
+        if (n && fabsf(x - pt[2 * n - 2]) < 1e-3f && fabsf(y - pt[2 * n - 1]) < 1e-3f)
+            continue;
+        pt[2 * n] = x;
+        pt[2 * n + 1] = y;
+        n++;
+    }
+    if (closed && n > 1 && fabsf(pt[0] - pt[2 * n - 2]) < 1e-3f && fabsf(pt[1] - pt[2 * n - 1]) < 1e-3f)
+        n--;
+    int r = 0;
+    if (n == 1) {
+        /* A single point has a cap of each kind but butt. */
+        if (st->cap == CAP_ROUND)
+            r = add_circle(es, pt[0], pt[1], st->hw);
+        else if (st->cap == CAP_SQUARE) {
+            float h = st->hw, sq[8] = { pt[0] - h, pt[1] - h, pt[0] + h, pt[1] - h, pt[0] + h, pt[1] + h, pt[0] - h, pt[1] + h };
+            r = add_polygon(es, sq, 4);
+        }
+        free(pt);
+        return r;
+    }
+    int segments = closed ? n : n - 1;
+    for (int i = 0; i < segments && r == 0; i++) {
+        int j = (i + 1) % n;
+        float dx = pt[2 * j] - pt[2 * i], dy = pt[2 * j + 1] - pt[2 * i + 1], len = sqrtf(dx * dx + dy * dy);
+        dx /= len;
+        dy /= len;
+        float nx = -dy * st->hw, ny = dx * st->hw;
+        float quad[8] = { pt[2 * i] + nx, pt[2 * i + 1] + ny, pt[2 * j] + nx, pt[2 * j + 1] + ny,
+                          pt[2 * j] - nx, pt[2 * j + 1] - ny, pt[2 * i] - nx, pt[2 * i + 1] - ny };
+        r = add_polygon(es, quad, 4);
+        /* The join at the end of this segment with the next one. */
+        if (r == 0 && (closed || j < n - 1)) {
+            int k = (j + 1) % n;
+            float ex = pt[2 * k] - pt[2 * j], ey = pt[2 * k + 1] - pt[2 * j + 1], el = sqrtf(ex * ex + ey * ey);
+            r = add_join(es, st, pt[2 * j], pt[2 * j + 1], dx, dy, ex / el, ey / el);
+        }
+        if (r == 0 && !closed && i == 0)
+            r = add_cap(es, st, pt[0], pt[1], -dx, -dy);
+        if (r == 0 && !closed && j == n - 1)
+            r = add_cap(es, st, pt[2 * j], pt[2 * j + 1], dx, dy);
+    }
+    free(pt);
+    return r;
+}
+
+static int stroke_path(const struct path *p, const struct stroke *st, struct edges *es)
+{
+    int r = 0;
+    for (int i = 0; i < p->nsubs && r == 0; i++)
+        r = stroke_subpath(es, st, p->pts + 2 * p->subs[i].first, p->subs[i].count, p->subs[i].closed);
+    return r;
 }
 
 /* ---- the document ---- */
@@ -542,12 +768,38 @@ static int svg_decode(const uint8_t *text, size_t len, const struct codec_image_
                 if (attribute(p, end, "fill-opacity", val, sizeof val))
                     opacity = opacity * (unsigned)(strtof_c(val, NULL) * 255.0f + 0.5f) / 255;
                 int evenodd = attribute(p, end, "fill-rule", val, sizeof val) && strcmp(val, "evenodd") == 0;
-                if (visible && opacity) {
-                    struct path path = { { NULL, 0, 0 }, &cv, 0, 0, 0, 0, 0, 0, 0 };
+                uint32_t stroke_color = color;
+                int stroked = attribute(p, end, "stroke", val, sizeof val) && parse_color(val, color, &stroke_color);
+                unsigned stroke_opacity = 255;
+                if (attribute(p, end, "opacity", val, sizeof val))
+                    stroke_opacity = (unsigned)(strtof_c(val, NULL) * 255.0f + 0.5f);
+                if (attribute(p, end, "stroke-opacity", val, sizeof val))
+                    stroke_opacity = stroke_opacity * (unsigned)(strtof_c(val, NULL) * 255.0f + 0.5f) / 255;
+                struct stroke st = { 0.5f * cv.sx, JOIN_MITER, CAP_BUTT, 4.0f };
+                if (attribute(p, end, "stroke-width", val, sizeof val))
+                    st.hw = 0.5f * strtof_c(val, NULL) * cv.sx;
+                if (attribute(p, end, "stroke-linejoin", val, sizeof val))
+                    st.join = strcmp(val, "round") == 0 ? JOIN_ROUND : strcmp(val, "bevel") == 0 ? JOIN_BEVEL : JOIN_MITER;
+                if (attribute(p, end, "stroke-linecap", val, sizeof val))
+                    st.cap = strcmp(val, "round") == 0 ? CAP_ROUND : strcmp(val, "square") == 0 ? CAP_SQUARE : CAP_BUTT;
+                if (attribute(p, end, "stroke-miterlimit", val, sizeof val))
+                    st.miter_limit = strtof_c(val, NULL);
+                stroked = stroked && stroke_opacity && st.hw > 0;
+                if ((visible && opacity) || stroked) {
+                    struct path path = { .es = { NULL, 0, 0 }, .cv = &cv, .record = stroked };
                     err = parse_path(&path, d);
-                    if (!err && path.es.n)
+                    if (!err && path.es.n && visible && opacity)
                         err = fill_edges(&path.es, &cv, fill, opacity > 255 ? 255 : opacity, evenodd);
+                    if (!err && stroked) {
+                        struct edges se = { NULL, 0, 0 };
+                        err = stroke_path(&path, &st, &se);
+                        if (!err && se.n)
+                            err = fill_edges(&se, &cv, stroke_color, stroke_opacity > 255 ? 255 : stroke_opacity, 0);
+                        free(se.e);
+                    }
                     free(path.es.e);
+                    free(path.pts);
+                    free(path.subs);
                 }
             }
         }

@@ -1,6 +1,7 @@
 /* The SVG icon renderer: coverage of straight and curved paths, the
- * fill rules, colours, relative commands, arcs, a file in Font
- * Awesome's layout, and painting at the output scale. */
+ * fill rules, colours, relative commands, arcs, strokes with their joins
+ * and caps, a file in Font Awesome's layout, and painting at the output
+ * scale. */
 #include "check.h"
 #include <gui/image.h>
 #include <gui/paint.h>
@@ -69,6 +70,58 @@ void run_svg_tests(void)
         CHECK(alpha(i, 2, 8) == 255, "column inside the centred box");
         image_free(i);
     }
+    /* Strokes on a 20 by 20 view box at 20 px. A horizontal line of width 4
+     * from x 5 to 15 at y 10 covers rows 8 to 11. A butt cap ends at x 15,
+     * and a square or round cap reaches 2 pixels further. */
+    const char *line = "<svg viewBox=\"0 0 20 20\"><path fill=\"none\" stroke=\"#ff0000\" stroke-width=\"4\" %s "
+                       "d=\"M5 10H15\"/></svg>";
+    snprintf(doc, sizeof doc, line, "");
+    i = render(doc, 20);
+    CHECK(i && alpha(i, 10, 8) == 255 && alpha(i, 10, 11) == 255 && rgb(i, 10, 10) == 0xff0000,
+          "the stroke covers rows 8 to 11: %u %u", i ? alpha(i, 10, 8) : 0, i ? alpha(i, 10, 11) : 0);
+    CHECK(i && alpha(i, 10, 7) == 0 && alpha(i, 10, 12) == 0, "rows beyond the half width empty");
+    CHECK(i && alpha(i, 15, 10) == 0 && alpha(i, 4, 10) == 0, "butt caps end at the end points");
+    image_free(i);
+    snprintf(doc, sizeof doc, line, "stroke-linecap=\"square\"");
+    i = render(doc, 20);
+    CHECK(i && alpha(i, 16, 10) == 255 && alpha(i, 3, 10) == 255 && alpha(i, 17, 10) == 0,
+          "square caps reach 2 pixels further: %u %u", i ? alpha(i, 16, 10) : 0, i ? alpha(i, 17, 10) : 0);
+    image_free(i);
+    snprintf(doc, sizeof doc, line, "stroke-linecap=\"round\"");
+    i = render(doc, 20);
+    CHECK(i && alpha(i, 16, 10) > 200 && alpha(i, 16, 8) < 160, "round caps are round: %u %u",
+          i ? alpha(i, 16, 10) : 0, i ? alpha(i, 16, 8) : 0);
+    image_free(i);
+    /* A closed square ring: the stroke covers the edges, the inside
+     * remains empty, and a miter join fills the outer corner while a
+     * round join leaves the corner pixel partly open. */
+    const char *ring = "<svg viewBox=\"0 0 20 20\"><path fill=\"none\" stroke=\"black\" stroke-width=\"4\" %s "
+                       "d=\"M5 5H15V15H5Z\"/></svg>";
+    snprintf(doc, sizeof doc, ring, "");
+    i = render(doc, 20);
+    CHECK(i && alpha(i, 10, 4) == 255 && alpha(i, 10, 10) == 0, "ring edge %u, inside %u", i ? alpha(i, 10, 4) : 0,
+          i ? alpha(i, 10, 10) : 0);
+    CHECK(i && alpha(i, 3, 3) == 255 && alpha(i, 16, 16) == 255, "miter corners filled: %u %u",
+          i ? alpha(i, 3, 3) : 0, i ? alpha(i, 16, 16) : 0);
+    image_free(i);
+    snprintf(doc, sizeof doc, ring, "stroke-linejoin=\"round\"");
+    i = render(doc, 20);
+    CHECK(i && alpha(i, 3, 3) < 200 && alpha(i, 4, 4) == 255, "round corner: %u %u", i ? alpha(i, 3, 3) : 0,
+          i ? alpha(i, 4, 4) : 0);
+    image_free(i);
+    /* The stroke lies over the fill. */
+    i = render("<svg viewBox=\"0 0 20 20\"><path fill=\"white\" stroke=\"black\" stroke-width=\"2\" "
+               "d=\"M5 5H15V15H5Z\"/></svg>", 20);
+    CHECK(i && rgb(i, 10, 10) == 0xffffff && rgb(i, 10, 5) == 0 && alpha(i, 10, 5) == 255,
+          "white fill %06x under the black stroke %06x", i ? rgb(i, 10, 10) : 0, i ? rgb(i, 10, 5) : 0);
+    image_free(i);
+    /* An open path with two segments and a line after Z start new
+     * subpaths: the second line of the document draws a separate stroke. */
+    i = render("<svg viewBox=\"0 0 20 20\"><path fill=\"none\" stroke=\"black\" stroke-width=\"2\" "
+               "d=\"M2 2H8Z L2 18\"/></svg>", 20);
+    CHECK(i && alpha(i, 2, 10) == 255 && alpha(i, 5, 10) == 0, "line after Z from the start point: %u %u",
+          i ? alpha(i, 2, 10) : 0, i ? alpha(i, 5, 10) : 0);
+    image_free(i);
     /* Malformed input is refused. */
     CHECK(render("<svg><path d=\"M0 0\"/></svg>", 16) == NULL, "no view box refused");
     CHECK(render("<svg viewBox=\"0 0 10 10\"><path d=\"M0 0 Q\"/></svg>", 16) == NULL, "short command refused");
