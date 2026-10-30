@@ -75,6 +75,16 @@ void debug_get_input_methods(struct wire_proxy *debug)
     wire_proxy_marshal(debug, 10, args, NULL);
 }
 
+void debug_animate(struct wire_proxy *debug, uint32_t id, uint32_t alpha, int32_t scale, uint32_t duration_ms)
+{
+    union wire_arg args[4] = { { 0 } };
+    args[0].u = id;
+    args[1].u = alpha;
+    args[2].i = scale;
+    args[3].u = duration_ms;
+    wire_proxy_marshal(debug, 11, args, NULL);
+}
+
 void tracer_start(struct wire_proxy *tracer)
 {
     union wire_arg args[1] = { { 0 } };

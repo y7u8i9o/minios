@@ -46,6 +46,13 @@ void pixel_fill(uint32_t *to, int n, uint32_t color);
 void pixel_copy_opaque(uint32_t *to, const uint32_t *from, int n);
 /* to[i] = from[i] over to[i] with the alpha of from[i]. */
 void pixel_over(uint32_t *to, const uint32_t *from, int n);
+/* to[i] = from[i] over to[i] with the alpha of from[i] multiplied by
+ * alpha / 255 (0 to 255): pixel_over for a surface that fades. */
+void pixel_over_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
+/* to[i] = the colour of from[i] over to[i] with the coverage alpha (0 to
+ * 255). The alpha byte of from[i] is ignored: pixel_copy_opaque for a
+ * surface that fades. */
+void pixel_copy_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
 /* to[i] = color over to[i] with the coverage mask[i]. */
 void pixel_mask(uint32_t *to, const uint8_t *mask, int n, uint32_t color);
 /* to[i] = to[i] with each colour channel multiplied by keep / 255. */
@@ -83,6 +90,22 @@ void pixel_sample_over(uint32_t *to, const uint32_t *from, long step, int n, str
 /* color over to[i] with the coverage mask[p] for the next n positions p
  * of the walk: pixel_sample_mask followed by pixel_mask. */
 void pixel_mask_sample(uint32_t *to, const uint8_t *mask, int n, uint32_t color, struct pixel_walk *w);
+
+/* Bilinear samples of an image of w by h pixels in rows of stride pixels,
+ * for fractional scales. to[i] is the image at the position (u + i * du,
+ * v). Positions are 16.16 fixed point, and the centre of the pixel k lies
+ * at the position k. The weights use the upper 8 of the 16 fractional
+ * bits. Pixels outside the image are transparent. The edges of a scaled
+ * image are therefore antialiased. The colours are weighted with their
+ * alpha (premultiplied). A transparent neighbour therefore does not
+ * darken an edge.
+ * The result has straight alpha. With opaque set, the alpha byte of the
+ * image is ignored and counts as 255 (an XRGB image). A position on a
+ * pixel centre gives the pixel exactly. Four opaque neighbours mix in two
+ * steps with rounding. The result differs from the exact mean by one
+ * step per channel at most. */
+void pixel_sample_bilinear(uint32_t *to, const uint32_t *from, int stride, int w, int h, int32_t u, int32_t v,
+                           int32_t du, int n, int opaque);
 
 /* Antialiased shapes from coverage tables (G7 of
  * docs/plan/compositor-performance.md). A coverage is 0 to 255; 255 means

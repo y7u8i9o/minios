@@ -8,5 +8,7 @@ compbench: blink x12 .* frames=20
 compbench: blink client paints=20 
 compbench: anim x12 
 compbench: idle x12 .* frames=0 
+compbench: fade x12 .* anim_frames=[1-9][0-9]*
+compbench: scale x12 .* anim_frames=[1-9][0-9]*
 comp_bench: ok
 TEST PASS

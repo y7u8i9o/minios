@@ -4,10 +4,12 @@
  * the pointer 400 times over it, and resize changes its size 20 times by
  * a drag of its bottom right corner. compstat prints the frame statistics of each of these
  * scenarios. The second part runs the client scenarios of compbench,
- * which print their statistics themselves. The case comp_bench runs at
- * 1280x800 and comp_bench_hidpi at 2560x1600@2, both on virtio-gpu. The
- * values are printed for the record. The expect files check only the
- * counters that do not depend on timing. */
+ * which print their statistics themselves. The scenarios fade and scale
+ * let X12 animate the window of compbench at the normal speed of the
+ * animations. The case comp_bench runs at 1280x800 and comp_bench_hidpi
+ * at 2560x1600@2, both on virtio-gpu. The values are printed for the
+ * record. The expect files check only the counters that do not depend on
+ * timing. */
 #include <drivers/virtio/virtio_gpu.h>
 #include <tests/ktest.h>
 #include <sched/user.h>
@@ -175,6 +177,11 @@ static void test_comp_bench(void)
     const char *scenarios[] = { "blink", "anim", "idle" };
     for (int i = 0; i < 3; i++)
         run_scenario(scenarios[i]);
+    /* The blend path of the animations (AN2 of docs/plan/animation-gpu.md)
+     * at the normal speed. */
+    x12_setting("anim_percent", "100");
+    run_scenario("fade");
+    run_scenario("scale");
     signal_send(srv, SIGTERM);
     status = proc_reap(srv);
     ktest_assert(status == 0, "compositor status 0x%x", status);

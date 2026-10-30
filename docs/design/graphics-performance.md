@@ -102,9 +102,15 @@ one scenario:
 - `blink`: the small canvas changes its colour 20 times, every 100 ms.
 - `anim`: the large canvas changes its colour 60 times, every 16 ms.
 - `idle`: nothing changes for two seconds.
+- `fade` (since AN2 of `docs/plan/animation-gpu.md`): X12 fades the window
+  to the alpha 64 and back twice, 500 ms each way. compbench asks for each
+  animation with the request `animate` of the debug interface of version
+  4 (`animations.md`).
+- `scale` (since AN2): X12 scales the window to 0.7 and back twice, 500 ms
+  each way.
 - `window`: the window alone, until it is closed.
 
-For the first three, compbench waits 800 ms, resets the statistics of
+For all but `window`, compbench waits 800 ms, resets the statistics of
 X12, runs the scenario, waits 300 ms and prints the values of X12 and
 the values of `gui_get_stats` that the scenario added.
 
@@ -118,11 +124,14 @@ The boot test `kernel/tests/test_comp_bench.c` starts X12 alone and a
 - `resize`: 20 drags of the bottom right corner, alternately 60x40
   pixels inwards and back. X12 applies a resize at the release.
 
-It then runs the client scenarios `blink`, `anim` and `idle`. The case
+It then runs the client scenarios `blink`, `anim` and `idle`, and
+`fade` and `scale` with the setting `anim_percent` 100. The test helper
+`start_x12` sets 0 at the start of X12, as for every boot test. The case
 `comp_bench` runs at 1280x800 and `comp_bench_hidpi` at 2560x1600 with
 scale 2, both on virtio-gpu under TCG. The expect files require the
 counters that do not depend on timing: 20 frames for `blink`, 0 frames
-for `idle`, and the resize of the window.
+for `idle`, frames with animations for `fade` and `scale`, and the
+resize of the window.
 
 `tools/benchtable.py` turns the serial logs of the two cases into the
 tables below.
@@ -632,3 +641,29 @@ Screen 2560x1600 at scale 2:
   of paint time. The editor repaints the edited row and runs the
   highlighter from the first painted line.
 - A scroll step of the scroll area paints 4 widgets instead of 25.
+
+## AN2: the fade and the scale scenarios (2026-10-30)
+
+The scenarios `fade` and `scale` of `compbench` (`animations.md`), each
+four animations of 500 ms. The values were measured in a cloud container
+with four processors on x86_64 under TCG, the only environment that was
+available. The numbers at 2560x1600@2 on aarch64 with hvf remain to be
+measured on the Mac of the owner. The frame interval is 16 ms.
+
+| case | scenario | frames | frame p50 | frame max | composed Mpx |
+|---|---|---|---|---|---|
+| comp_bench (1280x800) | fade | 121 | 5.9 ms | 18.5 ms | 57.7 |
+| comp_bench (1280x800) | scale | 97 | 15.9 ms | 44.1 ms | 33.4 |
+| comp_bench_hidpi (2560x1600@2) | fade | 73 | 21.5 ms | 73.8 ms | 139.2 |
+| comp_bench_hidpi (2560x1600@2) | scale | 30 | 63.5 ms | 162.3 ms | 43.8 |
+
+- A fade copies the rows of the image with `pixel_over_alpha`. Its cost
+  per pixel is close to that of `pixel_over`.
+- The first version of `pixel_sample_bilinear` mixed every sample with
+  the premultiplied path: 118 ms per frame at 1280x800 and 557 ms at
+  2560x1600@2. Four opaque neighbours now mix separably in the 16 bit
+  fields of the word form. The frames take 15.9 ms and 63.5 ms.
+- The first measurement also found a defect of the frame clock of AN1:
+  after a frame, `schedule_frame` did not arm the timer for the next
+  frame of a running animation, and the fade composed 9 frames in 2.5 s.
+

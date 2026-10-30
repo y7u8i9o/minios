@@ -20,6 +20,7 @@ struct debug_impl {
     void (*capture_surface)(struct wire_client *client, struct wire_resource *self, uint32_t id, struct wire_resource * buffer);
     void (*highlight)(struct wire_client *client, struct wire_resource *self, uint32_t id);
     void (*get_input_methods)(struct wire_client *client, struct wire_resource *self);
+    void (*animate)(struct wire_client *client, struct wire_resource *self, uint32_t id, uint32_t alpha, int32_t scale, uint32_t duration_ms);
 };
 void debug_send_stats(struct wire_resource *debug, uint32_t uptime_ms, uint32_t compositions, uint32_t compose_ms, uint32_t compose_max_ms, uint32_t clients, uint32_t surfaces, uint32_t frame_ms);
 void debug_send_surface(struct wire_resource *debug, uint32_t id, uint32_t client, const char * role, const char * title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped, uint32_t format);

@@ -83,9 +83,90 @@ share the state of the scene without a lock.
 
 The boot tests start X12 through `start_x12` of
 `kernel/tests/gui_helpers.h`. The helper runs `x12settings set
-anim_percent 0` after X12 accepts clients, so every pixel check sees the
-final state of a map, a close or a minimize at once. x12settings is the
+anim_percent 0` after X12 accepts clients. Every pixel check therefore
+sees the final state of a map, a close or a minimize at once. x12settings is the
 first client of X12 in such a test, and the first client of the test
 itself has the number 2. The cases that start X12 through the greeter run
 with the default speed. Their checks wait for the expected pixels with a
 timeout.
+
+## Visual parameters in the blend path (AN2)
+
+### Pixel functions
+
+`lib/libgui/src/pixel.c` has three functions for the animations
+(`gui/pixel.h`):
+
+- `pixel_over_alpha(to, from, n, alpha)`: `pixel_over` with the alpha of
+  each source pixel multiplied by `alpha / 255`. The vector form computes
+  the product in the low 16 bit lane of each 32 bit lane and divides it
+  by 255 as `pixel_div255`. A group of four transparent source pixels is
+  skipped.
+- `pixel_copy_alpha(to, from, n, alpha)`: the colour of each source pixel
+  over the destination with the coverage `alpha`, the alpha byte of the
+  source ignored.
+- `pixel_sample_bilinear(to, from, stride, w, h, u, v, du, n, opaque)`:
+  bilinear samples along a row for fractional scales. The positions are
+  16.16, and the weights use the upper 8 fractional bits. Pixels outside
+  the image are transparent. A scaled image therefore has antialiased
+  edges.
+  The colours are weighted with their alpha (premultiplied
+  interpolation), and the result has straight alpha. A transparent
+  neighbour therefore does not darken an edge. A position on a pixel
+  centre gives the pixel exactly.
+
+Both alpha functions have a vector and a word form, like `pixel_over`. On
+x86_64 they use the form that the first call measures for `pixel_over`.
+The host tests (`make check-libgui`, `lib/libgui/tests/test_pixel.c`)
+compare every form with the scalar references of `pixel_impl.h` on rows
+of every offset and length, check the end values 0 and 255 against
+`pixel_over` and `pixel_copy_opaque`, and compare the bilinear sampler
+with a reference in double precision within one step per channel. The
+guest program `pixeltest` runs the same file with the code of the cross
+compilers.
+
+### Drawing
+
+A surface with visual parameters other than the identity is drawn from
+an image of its extent (`struct scene_image` in `comp.h`, `scene.c`):
+
+- `render_extent` renders the extent with the identity in device pixels
+  with straight alpha. An undecorated surface whose buffer has the
+  screen scale is copied. An XRGB buffer and the opaque region of an
+  ARGB buffer receive the alpha 255 in the copy, because clients may
+  leave the alpha byte of opaque pixels at 0. Every other surface (a
+  server decorated window, a buffer of another scale or a transform) is
+  drawn twice, over black and over white. The difference of the two
+  results gives the alpha of each pixel. The screen capture of a window
+  (`scene_render_window`) uses the same function.
+- `surface_image` renders the image again when the extent, the screen
+  scale, the commits of the surface or the state of the decorations
+  changed. A transformed surface therefore shows new contents during an
+  animation.
+- `draw_image` maps every destination pixel back into the image: the
+  position c + (X + 1/2 - d - c) / scale - 1/2, with c the centre of the
+  extent and d the offset. A scale of 1 at the screen scale of the image
+  copies rows with `pixel_over_alpha`. Every other scale samples the
+  rows with `pixel_sample_bilinear` in pieces of 256 pixels and blends
+  them with `pixel_over_alpha`.
+
+The server side decorations and the shadow are part of the image. The
+plan intended `decor.c` to draw the shadow and the corner coverage with
+the alpha and the scale of the window. The image draws the title, the
+buttons and the shadow with one transform instead, and `decor.c` remains
+unchanged. The dimming of an unresponsive client is left out while its
+window is transformed.
+
+A transformed surface occludes nothing: `subtract_opaque`, the desktop
+fill of `compose_rect` and `scene_damage_surface` ignore its opaque
+region. A commit of such a surface damages its whole transformed extent.
+The scene frees the image of a surface when the surface returns to the
+identity or is hidden, and when the surface is destroyed.
+
+### Benchmark
+
+The debug interface of version 4 has the request `animate(id, alpha,
+scale, duration_ms)`. X12 animates the surface from its current values
+with the standard curve. `compbench fade` and `compbench scale` use it on
+their own window (`graphics-performance.md`), and `comp_bench` and
+`comp_bench_hidpi` run both scenarios with `anim_percent` 100.

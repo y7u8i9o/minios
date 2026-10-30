@@ -55,6 +55,10 @@ static void (*const over_forms[3])(uint32_t *, const uint32_t *, int) = { pixel_
 static void (*const mask_forms[3])(uint32_t *, const uint8_t *, int, uint32_t) = { pixel_mask_simd, pixel_mask_word,
                                                                                    pixel_mask };
 static void (*const darken_forms[3])(uint32_t *, int, uint32_t) = { pixel_darken_simd, pixel_darken_word, pixel_darken };
+static void (*const over_alpha_forms[3])(uint32_t *, const uint32_t *, int, uint32_t) = {
+    pixel_over_alpha_simd, pixel_over_alpha_word, pixel_over_alpha };
+static void (*const copy_alpha_forms[3])(uint32_t *, const uint32_t *, int, uint32_t) = {
+    pixel_copy_alpha_simd, pixel_copy_alpha_word, pixel_copy_alpha };
 
 /* Every offset from 0 to 7 and every length up to ROW_MAX - 1. Rows of 8
  * pixels with alpha all 0 or all 255 also occur, which the vector code
@@ -63,7 +67,7 @@ static void check_rows(void)
 {
     uint32_t a[ROW_MAX + ROW_PAD], b[ROW_MAX + ROW_PAD], src[ROW_MAX + ROW_PAD];
     uint8_t mask[ROW_MAX + ROW_PAD];
-    int bad_over = 0, bad_mask = 0, bad_fill = 0, bad_copy = 0, bad_darken = 0;
+    int bad_over = 0, bad_mask = 0, bad_fill = 0, bad_copy = 0, bad_darken = 0, bad_over_alpha = 0, bad_copy_alpha = 0;
     for (int round = 0; round < 40; round++)
         for (int off = 0; off < ROW_PAD; off++)
             for (int n = 0; n < ROW_MAX; n++) {
@@ -79,6 +83,8 @@ static void check_rows(void)
                 if (round % 5 == 3)
                     memset(mask, round % 2 ? 0xff : 0, sizeof mask);
                 uint32_t color = random_pixel(), keep = rng() % 256;
+                /* The alpha of a fade: 0, 255 or any value between. */
+                uint32_t k = rng() % 4, alpha = k == 0 ? 0 : k == 1 ? 255 : rng() % 256;
 
                 for (int f = 0; f < 3; f++) {
                     memcpy(b, a, sizeof a);
@@ -95,6 +101,16 @@ static void check_rows(void)
                     darken_forms[f](a + off, n, keep);
                     pixel_darken_ref(b + off, n, keep);
                     bad_darken += memcmp(a, b, sizeof a) != 0;
+
+                    memcpy(b, a, sizeof a);
+                    over_alpha_forms[f](a + off, src + off, n, alpha);
+                    pixel_over_alpha_ref(b + off, src + off, n, alpha);
+                    bad_over_alpha += memcmp(a, b, sizeof a) != 0;
+
+                    memcpy(b, a, sizeof a);
+                    copy_alpha_forms[f](a + off, src + off, n, alpha);
+                    pixel_copy_alpha_ref(b + off, src + off, n, alpha);
+                    bad_copy_alpha += memcmp(a, b, sizeof a) != 0;
                 }
 
                 memcpy(b, a, sizeof a);
@@ -112,6 +128,116 @@ static void check_rows(void)
     CHECK(bad_fill == 0, "pixel_fill differs from the reference in %d rows", bad_fill);
     CHECK(bad_copy == 0, "pixel_copy_opaque differs from the reference in %d rows", bad_copy);
     CHECK(bad_darken == 0, "a form of pixel_darken differs from the reference in %d rows", bad_darken);
+    CHECK(bad_over_alpha == 0, "a form of pixel_over_alpha differs from the reference in %d rows", bad_over_alpha);
+    CHECK(bad_copy_alpha == 0, "a form of pixel_copy_alpha differs from the reference in %d rows", bad_copy_alpha);
+}
+
+/* pixel_over_alpha with the alpha 255 is pixel_over, and with 0 it leaves
+ * the row. pixel_copy_alpha with 255 is pixel_copy_opaque in the colour
+ * channels. */
+static void check_alpha_ends(void)
+{
+    uint32_t a[64], b[64], src[64];
+    int bad = 0;
+    for (int round = 0; round < 50; round++) {
+        random_row(a, 64);
+        random_row(src, 64);
+        memcpy(b, a, sizeof a);
+        pixel_over_alpha(a, src, 64, 255);
+        pixel_over_ref(b, src, 64);
+        bad += memcmp(a, b, sizeof a) != 0;
+        memcpy(b, a, sizeof a);
+        pixel_over_alpha(a, src, 64, 0);
+        pixel_copy_alpha(a, src, 64, 0);
+        bad += memcmp(a, b, sizeof a) != 0;
+        pixel_copy_alpha(a, src, 64, 255);
+        pixel_copy_opaque_ref(b, src, 64);
+        for (int i = 0; i < 64; i++)
+            bad += (a[i] & 0x00ffffffu) != b[i];
+    }
+    CHECK(bad == 0, "the alpha functions differ from pixel_over and pixel_copy_opaque at the end values %d times", bad);
+}
+
+/* The bilinear sample of the reference: the four neighbours, transparent
+ * outside the image, weighted with the 8 bit fractions and with their
+ * alpha, in double precision. */
+static uint32_t bilinear_ref(const uint32_t *img, int stride, int w, int h, long u, long v, int opaque)
+{
+    long x0 = u >> 16, y0 = v >> 16;
+    double fx = (double)(u >> 8 & 0xff) / 256.0, fy = (double)(v >> 8 & 0xff) / 256.0;
+    double weight[4] = { (1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy };
+    long xs[4] = { x0, x0 + 1, x0, x0 + 1 }, ys[4] = { y0, y0, y0 + 1, y0 + 1 };
+    double alpha = 0, c[3] = { 0, 0, 0 };
+    for (int k = 0; k < 4; k++) {
+        if (xs[k] < 0 || ys[k] < 0 || xs[k] >= w || ys[k] >= h)
+            continue;
+        uint32_t p = img[ys[k] * stride + xs[k]];
+        double a = opaque ? 255 : (double)(p >> 24);
+        alpha += a * weight[k];
+        for (int ch = 0; ch < 3; ch++)
+            c[ch] += (double)(p >> (8 * ch) & 0xff) * a * weight[k];
+    }
+    if (alpha <= 0)
+        return 0;
+    uint32_t out = (uint32_t)(alpha + 0.5) << 24;
+    for (int ch = 0; ch < 3; ch++) {
+        double value = c[ch] / alpha + 0.5;
+        out |= (uint32_t)(value > 255 ? 255 : value) << (8 * ch);
+    }
+    return out;
+}
+
+/* Each channel of x and y differs by at most 1. A transparent result has
+ * no colour. */
+static int near_pixel(uint32_t x, uint32_t y)
+{
+    if (x >> 24 == 0 && y >> 24 == 0)
+        return 1;
+    for (int sh = 0; sh < 32; sh += 8) {
+        int d = (int)(x >> sh & 0xff) - (int)(y >> sh & 0xff);
+        if (d < -1 || d > 1)
+            return 0;
+    }
+    return 1;
+}
+
+/* pixel_sample_bilinear against the reference at scales below and above 1
+ * with start positions outside the image. The transparent edges therefore
+ * occur. A start on a pixel centre with the step 1 copies the image. */
+static void check_bilinear(void)
+{
+    enum { W = 23, H = 17, STRIDE = 29 };
+    static uint32_t img[H * STRIDE];
+    uint32_t row[200];
+    int bad = 0, bad_copy = 0, bad_flat = 0;
+    for (int round = 0; round < 20; round++) {
+        for (int i = 0; i < H * STRIDE; i++)
+            img[i] = random_pixel();
+        int opaque = round % 2;
+        for (int step = 0; step < 8; step++) {
+            int32_t du = (int32_t)(rng() % (3 * 65536)) + 4096;
+            int32_t u = (int32_t)(rng() % (40 * 65536)) - 8 * 65536;
+            int32_t v = (int32_t)(rng() % ((H + 4) * 65536)) - 2 * 65536;
+            int n = 1 + (int)(rng() % 200);
+            pixel_sample_bilinear(row, img, STRIDE, W, H, u, v, du, n, opaque);
+            for (int i = 0; i < n; i++)
+                bad += !near_pixel(row[i], bilinear_ref(img, STRIDE, W, H, (long)u + (long)i * du, v, opaque));
+        }
+        for (int y = 0; y < H; y++) {
+            pixel_sample_bilinear(row, img, STRIDE, W, H, 0, y * 65536, 65536, W, opaque);
+            for (int x = 0; x < W; x++)
+                bad_copy += row[x] != (img[y * STRIDE + x] | (opaque ? 0xff000000u : 0));
+        }
+    }
+    /* A plain image remains plain inside, whatever the scale. */
+    for (int i = 0; i < H * STRIDE; i++)
+        img[i] = 0x80336699u;
+    pixel_sample_bilinear(row, img, STRIDE, W, H, 3 * 65536 + 1234, 5 * 65536 + 40000, 19000, 50, 0);
+    for (int i = 0; i < 50; i++)
+        bad_flat += row[i] != 0x80336699u;
+    CHECK(bad == 0, "pixel_sample_bilinear differs from the reference in %d pixels", bad);
+    CHECK(bad_copy == 0, "pixel_sample_bilinear at the pixel centres differs from the image in %d pixels", bad_copy);
+    CHECK(bad_flat == 0, "pixel_sample_bilinear changes a plain image in %d pixels", bad_flat);
 }
 
 /* pixel_div255 is the division by 255 rounded to the nearest integer. */
@@ -283,6 +409,8 @@ void run_pixel_tests(void)
 {
     check_division();
     check_rows();
+    check_alpha_ends();
+    check_bilinear();
     check_blend_values();
     check_walk();
     check_rect_set();

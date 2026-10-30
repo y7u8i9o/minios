@@ -38,6 +38,7 @@ void debug_get_surface(struct wire_proxy *debug, uint32_t id);
 void debug_capture_surface(struct wire_proxy *debug, uint32_t id, struct wire_proxy * buffer);
 void debug_highlight(struct wire_proxy *debug, uint32_t id);
 void debug_get_input_methods(struct wire_proxy *debug);
+void debug_animate(struct wire_proxy *debug, uint32_t id, uint32_t alpha, int32_t scale, uint32_t duration_ms);
 
 struct tracer_listener {
     void (*client)(void *user, struct wire_proxy *self, uint32_t number, uint32_t pid, uint32_t connected);

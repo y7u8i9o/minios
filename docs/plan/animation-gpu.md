@@ -74,7 +74,7 @@ one commit without attribution lines. Sizes are estimates of new lines.
 - Boot tests set `anim_percent 0` through the existing settings interface
   in `kernel/tests/gui_helpers.h`, so pixel checks see final states.
 
-### AN2 Visual parameters in the blend path (about 700 lines)
+### AN2 Visual parameters in the blend path (about 700 lines, completed 2026-10-30)
 
 - `struct csurface` gains `struct visual { uint8_t alpha; int32_t scale
   (16.16); int dx, dy; }` with an identity default.
@@ -86,9 +86,15 @@ one commit without attribution lines. Sizes are estimates of new lines.
   255 or a scale other than 1 occludes nothing: `subtract_opaque`,
   `compose_rect` coverage and `scene_damage_surface` respect the flag.
 - `wm/decor.c` shadow (`pixel_shade`) and corner coverage take the alpha
-  and the scale of the window.
+  and the scale of the window. As implemented: a transformed surface is drawn from
+  an image of its extent. The image contains the decorations and the
+  shadow. `decor.c` therefore remains unchanged
+  (`docs/design/animations.md`).
 - `compbench` gains a fade scenario and a scale scenario.
-  `graphics-performance.md` records the results at 2560x1600@2.
+  `graphics-performance.md` records the results at 2560x1600@2. As
+  implemented: compbench starts the animations with the request
+  `animate` of the debug interface of version 4. The recorded results
+  come from x86_64 under TCG. The aarch64 results with hvf remain open.
 
 ### AN3 Window animations (about 500 lines)
 

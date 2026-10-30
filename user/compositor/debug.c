@@ -168,10 +168,22 @@ static void h_get_input_methods(struct wire_client *c, struct wire_resource *sel
     debug_send_input_methods_done(self);
 }
 
+/* Version 4: compbench animates its own window for the fade and the
+ * scale scenarios (docs/design/animations.md). */
+static void h_animate(struct wire_client *c, struct wire_resource *self, uint32_t id, uint32_t alpha, int32_t scale,
+                      uint32_t duration_ms)
+{
+    struct csurface *s = surface_by_id(id);
+    if (!s || alpha > 255 || scale <= 0 || scale > 4 * ANIM_ONE || duration_ms > 10000)
+        return;
+    struct visual to = { (uint8_t)alpha, scale, 0, 0 };
+    anim_start(s, NULL, to, (int)duration_ms, ANIM_STANDARD);
+}
+
 static const struct debug_impl debug_handlers = { h_get_stats, h_get_surfaces, h_read_pixel, h_get_frame_stats,
                                                   h_reset_frame_stats, h_get_frame_history, h_get_clients,
                                                   h_get_surface, h_capture_surface, h_highlight,
-                                                  h_get_input_methods };
+                                                  h_get_input_methods, h_animate };
 
 static void debug_resource_gone(struct wire_resource *r)
 {
@@ -369,7 +381,7 @@ static void bind_settings(struct wire_client *c, void *data, uint32_t version, u
 void debug_init(struct wire_server *srv)
 {
     server = srv;
-    wire_global_create(srv, &debug_interface, 3, bind_debug, NULL);
+    wire_global_create(srv, &debug_interface, 4, bind_debug, NULL);
     wire_global_create(srv, &settings_interface, 2, bind_settings, NULL);
     wire_global_create(srv, &screencopy_interface, 1, bind_screencopy, NULL);
 }

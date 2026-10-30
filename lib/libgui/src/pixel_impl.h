@@ -12,6 +12,10 @@ void pixel_mask_simd(uint32_t *to, const uint8_t *mask, int n, uint32_t color);
 void pixel_mask_word(uint32_t *to, const uint8_t *mask, int n, uint32_t color);
 void pixel_darken_simd(uint32_t *to, int n, uint32_t keep);
 void pixel_darken_word(uint32_t *to, int n, uint32_t keep);
+void pixel_over_alpha_simd(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
+void pixel_over_alpha_word(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
+void pixel_copy_alpha_simd(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
+void pixel_copy_alpha_word(uint32_t *to, const uint32_t *from, int n, uint32_t alpha);
 
 static inline void pixel_fill_ref(uint32_t *to, int n, uint32_t color)
 {
@@ -32,6 +36,23 @@ static inline void pixel_over_ref(uint32_t *to, const uint32_t *from, int n)
         if (a)
             to[i] = pixel_blend(to[i], c, a);
     }
+}
+
+static inline void pixel_over_alpha_ref(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    for (int i = 0; i < n; i++) {
+        uint32_t c = from[i], a = pixel_div255((c >> 24) * alpha);
+        if (a)
+            to[i] = pixel_blend(to[i], c, a);
+    }
+}
+
+static inline void pixel_copy_alpha_ref(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    if (!alpha)
+        return;
+    for (int i = 0; i < n; i++)
+        to[i] = pixel_blend(to[i], from[i], alpha);
 }
 
 static inline void pixel_mask_ref(uint32_t *to, const uint8_t *mask, int n, uint32_t color)

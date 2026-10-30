@@ -21,8 +21,14 @@
        size, or capture_failed. highlight outlines the surface on the
        screen until the next highlight, 0 for none, or until the client
        disconnects. get_input_methods sends input_method_info per method
-       of the input method switch, then input_methods_done. -->
-  <interface name="debug" version="3">
+       of the input method switch, then input_methods_done.
+       Version 4 adds animate (docs/design/animations.md). X12 animates the
+       visual parameters of the surface id from their current values to
+       the alpha (0 to 255) and the scale (16.16 fixed point, 65536 for
+       1) over duration_ms milliseconds with the standard curve. The
+       setting anim_percent scales the duration. compbench measures the
+       blend path with it. -->
+  <interface name="debug" version="4">
     <request name="get_stats"/>
     <request name="get_surfaces"/>
     <request name="read_pixel"><arg name="x" type="int"/><arg name="y" type="int"/></request>
@@ -73,6 +79,10 @@
       <arg name="current" type="uint"/>
     </event>
     <event name="input_methods_done"/>
+    <request name="animate">
+      <arg name="id" type="uint"/><arg name="alpha" type="uint"/><arg name="scale" type="int"/>
+      <arg name="duration_ms" type="uint"/>
+    </request>
   </interface>
 
   <!-- The protocol traffic of every other client (wireview). start sends

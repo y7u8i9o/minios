@@ -6,6 +6,9 @@
  *   blink    a canvas of 2x20 pixels changes colour 20 times, every 100 ms
  *   anim     the whole window is painted again 60 times, every 16 ms
  *   idle     nothing changes for two seconds
+ *   fade     X12 fades the window to the alpha 64 and back twice, 500 ms
+ *            each way (the debug request animate of version 4)
+ *   scale    X12 scales the window to 0.7 and back twice, 500 ms each way
  *   window   the window alone, until it is closed, for the scenarios
  *            that the boot test drives and measures with compstat. The
  *            client line follows the close request.
@@ -82,8 +85,28 @@ static void on_frame_stats_done(void *user, struct wire_proxy *p)
     app_quit(app, 0);
 }
 
+/* The surface id of the own window, for the debug request animate. */
+static uint32_t own_surface;
+
+static void on_surface(void *user, struct wire_proxy *p, uint32_t id, uint32_t client, const char *role,
+                       const char *title, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t mapped,
+                       uint32_t format)
+{
+    if (strcmp(role, "toplevel") == 0 && strcmp(title, "compbench") == 0 && mapped)
+        own_surface = id;
+}
+
 static const struct debug_listener debug_events = { .frame_stat = on_frame_stat,
-                                                    .frame_stats_done = on_frame_stats_done };
+                                                    .frame_stats_done = on_frame_stats_done,
+                                                    .surface = on_surface };
+
+/* The fade and the scale scenarios: the target values and the duration
+ * of each animation. */
+#define VISUAL_MS 500
+static int visual_scenario(void)
+{
+    return strcmp(scenario, "fade") == 0 || strcmp(scenario, "scale") == 0;
+}
 
 static int paint_scene(struct widget *w, void *args, void *arg)
 {
@@ -240,6 +263,14 @@ static void step(void *arg)
     } else if (strcmp(scenario, "anim") == 0) {
         scene_color = (scene_color + 0x00030507) & 0x00ffffff;
         widget_invalidate(scene);
+    } else if (visual_scenario()) {
+        /* Steps 0 to 3 animate there and back twice. Step 4 waits for the
+         * end of the last animation. */
+        int there = done_steps % 2 == 0, fade = strcmp(scenario, "fade") == 0;
+        if (done_steps < 4 && own_surface) {
+            debug_animate(debug, own_surface, there && fade ? 64 : 255, there && !fade ? 45875 : 65536, VISUAL_MS);
+            gui_flush();
+        }
     } else {
         widget_step(done_steps);
     }
@@ -251,6 +282,8 @@ static void step(void *arg)
 
 static void start(void *arg)
 {
+    if (visual_scenario())
+        debug_get_surfaces(debug);
     debug_reset_frame_stats(debug);
     gui_flush();
     gui_get_stats(&client_at_start);
@@ -263,7 +296,7 @@ static void start(void *arg)
 int main(int argc, char **argv)
 {
     if (argc != 2) {
-        fprintf(stderr, "usage: compbench blink|anim|idle|window|wheel|type|status|edit|scroll|hover\n");
+        fprintf(stderr, "usage: compbench blink|anim|fade|scale|idle|window|wheel|type|status|edit|scroll|hover\n");
         return 2;
     }
     scenario = argv[1];
@@ -273,6 +306,9 @@ int main(int argc, char **argv)
     } else if (strcmp(scenario, "anim") == 0) {
         steps = 60;
         step_ms = 16;
+    } else if (visual_scenario()) {
+        steps = 5;
+        step_ms = VISUAL_MS;
     } else if (strcmp(scenario, "idle") == 0) {
         steps = 0;
         step_ms = 2000;
@@ -292,9 +328,10 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
-    debug = gui_bind_global("debug", &debug_interface, 2);
+    int version = visual_scenario() ? 4 : 2;
+    debug = gui_bind_global("debug", &debug_interface, version);
     if (!debug) {
-        fprintf(stderr, "compbench: X12 has no debug interface of version 2\n");
+        fprintf(stderr, "compbench: X12 has no debug interface of version %d\n", version);
         return 1;
     }
     debug_add_listener(debug, &debug_events, NULL);
@@ -305,7 +342,7 @@ int main(int argc, char **argv)
     struct widget *box = box_new(window, 1);
     widget_set_stretch(box, 1, 1);
     if (strcmp(scenario, "blink") && strcmp(scenario, "anim") && strcmp(scenario, "idle") &&
-        strcmp(scenario, "window")) {
+        strcmp(scenario, "window") && !visual_scenario()) {
         build_widget_scenario(box);
         app_timer_add(app, SETTLE_MS, 0, start, NULL);
         int code = app_run(app);

@@ -166,6 +166,7 @@ static void surface_resource_destroy(struct wire_resource *r)
     if (s->current.buffer)
         s->current.buffer->busy = 0;
     seat_surface_gone(s);
+    scene_surface_gone(s);
     overlay_surface_gone(s);
     data_surface_gone(s);
     shell_surface_gone(s);

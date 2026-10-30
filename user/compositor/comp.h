@@ -162,6 +162,19 @@ struct anim {
     struct visual from, to;
 };
 
+/* An image of the extent of a surface in device pixels with straight
+ * alpha (scene.c). The scene draws a surface with visual parameters other
+ * than the identity from such an image. The key fields record the state
+ * of the surface at the rendering. A change of the key renders the image
+ * again. */
+struct scene_image {
+    uint32_t *pixels;                   /* rows of width pixels */
+    int width, height;
+    int scale;                          /* the screen scale at the rendering */
+    unsigned commits;                   /* the commits of the surface at the rendering */
+    int activated, maximized;           /* the state of the decorations at the rendering */
+};
+
 /* The lock surface of a session lock (lock.c). It covers the screen. */
 struct lock_surface_state {
     struct csurface *s;
@@ -189,6 +202,7 @@ struct csurface {
     unsigned commits;                       /* commits since the creation, for x12settings */
     struct visual visual;                   /* VISUAL_IDENTITY unless an animation runs */
     struct anim anim;
+    struct scene_image *image;              /* NULL for the identity (scene.c) */
     struct csurface *next;
 };
 
@@ -350,6 +364,8 @@ int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
  * for VISUAL_IDENTITY, else the transformed extent rounded outwards to
  * logical pixels. */
 struct rect scene_visual_extent(const struct csurface *s);
+/* Free the image of a surface that goes away. */
+void scene_surface_gone(struct csurface *s);
 /* anim.c: the animation clock (docs/design/animations.md). */
 /* The value of an easing curve at the linear progress t, both 0 to
  * ANIM_ONE. */

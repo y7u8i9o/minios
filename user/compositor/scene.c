@@ -191,6 +191,14 @@ struct rect scene_visual_extent(const struct csurface *s)
     return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
 }
 
+/* A surface with visual parameters other than the identity is drawn from
+ * an image of its extent, scaled, moved and faded. Such a surface
+ * occludes nothing. */
+static int drawn_from_image(const struct csurface *s)
+{
+    return !visual_identity(&s->visual);
+}
+
 static int visible(const struct csurface *s)
 {
     if (!s->mapped || !s->current.buffer)
@@ -280,7 +288,7 @@ static int pieces_subtract(struct rect *pieces, int *n, struct rect cover)
  * Removes it from the pieces. Returns 0 when the pieces become too many. */
 static int subtract_opaque(struct rect *pieces, int *np, const struct csurface *cover)
 {
-    if (!cover->current.buffer)
+    if (!cover->current.buffer || drawn_from_image(cover))
         return 1;
     if (cover->current.buffer->format == FORMAT_XRGB8888)
         return pieces_subtract(pieces, np, wm_opaque(cover));
@@ -296,6 +304,11 @@ static int subtract_opaque(struct rect *pieces, int *np, const struct csurface *
 
 void scene_damage_surface(const struct csurface *s, struct rect r)
 {
+    /* The contents of a transformed surface change the whole image. */
+    if (drawn_from_image(s)) {
+        scene_damage(scene_visual_extent(s));
+        return;
+    }
     struct csurface *order[256];
     int n = scene_order(order, 256), i = 0;
     while (i < n && order[i] != s)
@@ -419,6 +432,215 @@ static void draw_surface(struct csurface *s, struct rect clip)
     }
 }
 
+/* ---- images of surfaces ---- */
+
+/* The extent of s with the identity, rendered into an ARGB image of
+ * W x H device pixels with straight alpha (stride in bytes). An undecorated
+ * surface whose buffer has the screen scale is copied: an XRGB buffer
+ * and the opaque region of an ARGB buffer receive the alpha 255. Every
+ * other surface is drawn alone with its extent at the origin of a
+ * scratch target, twice: over black into the image and over white into
+ * a copy. A pixel with the same value over both backgrounds is opaque.
+ * For other pixels the difference is the amount of background that
+ * shows through, which gives the alpha of the shadow, the rounded corners
+ * and translucent client pixels. The colour is the result over black
+ * divided by that alpha. The surface is moved to the origin for the
+ * drawing and moved back immediately afterwards. Returns 0 or -ENOMEM. */
+static int render_extent(struct csurface *s, uint8_t *to, int stride)
+{
+    struct rect f = extent(s), area = surface_rect(s);
+    int S = screen_scale, W = f.w * S, H = f.h * S;
+    struct buffer *b = s->current.buffer;
+    int bs = s->current.scale > 0 ? s->current.scale : 1;
+    if (b && b->pool->map && bs == S && s->current.transform == 0 && f.x == area.x && f.y == area.y && f.w == area.w &&
+        f.h == area.h) {
+        uint32_t fill = b->format == FORMAT_XRGB8888 ? 0xff000000u : 0;
+        for (int y = 0; y < H; y++) {
+            const uint32_t *from = (const uint32_t *)(b->pool->map + b->offset + (size_t)y * b->stride);
+            uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
+            for (int x = 0; x < W; x++)
+                row[x] = from[x] | fill;
+        }
+        for (int q = 0; q < s->current.nopaque && !fill; q++) {
+            struct rect o = rect_intersect(rect_scale(s->current.opaque[q], S), (struct rect){ 0, 0, W, H });
+            for (int y = o.y; y < o.y + o.h; y++) {
+                uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
+                for (int x = o.x; x < o.x + o.w; x++)
+                    row[x] |= 0xff000000u;
+            }
+        }
+        return 0;
+    }
+    uint32_t *white = malloc((size_t)W * H * 4);
+    if (!white)
+        return -ENOMEM;
+    struct surface saved = back;
+    struct visual visual = s->visual;
+    int sx = s->x, sy = s->y;
+    s->visual = VISUAL_IDENTITY;
+    s->x -= f.x;
+    s->y -= f.y;
+    struct rect clip = { 0, 0, f.w, f.h };
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass)
+            back = (struct surface){ white, W, H, W };
+        else
+            back = (struct surface){ (uint32_t *)to, W, H, stride / 4 };
+        gfx_fill_rect(&back, 0, 0, W, H, pass ? 0x00ffffff : 0);
+        wm_draw_below(s, clip);
+        draw_surface(s, clip);
+    }
+    back = saved;
+    s->visual = visual;
+    s->x = sx;
+    s->y = sy;
+    for (int y = 0; y < H; y++) {
+        uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
+        const uint32_t *over_white = white + (size_t)y * W;
+        for (int x = 0; x < W; x++) {
+            uint32_t b = row[x], w = over_white[x];
+            if (b == w) {
+                row[x] = b | 0xff000000u;
+                continue;
+            }
+            int show = 0;
+            for (int sh = 0; sh < 24; sh += 8) {
+                int d = (int)(w >> sh & 0xff) - (int)(b >> sh & 0xff);
+                if (d > show)
+                    show = d;
+            }
+            uint32_t a = 255u - (uint32_t)show;
+            if (!a) {
+                row[x] = 0;
+                continue;
+            }
+            uint32_t c = a << 24;
+            for (int sh = 0; sh < 24; sh += 8) {
+                uint32_t v = (b >> sh & 0xff) * 255u / a;
+                c |= (v > 255 ? 255 : v) << sh;
+            }
+            row[x] = c;
+        }
+    }
+    free(white);
+    return 0;
+}
+
+static void scene_image_free(struct scene_image *img)
+{
+    if (img) {
+        free(img->pixels);
+        free(img);
+    }
+}
+
+void scene_surface_gone(struct csurface *s)
+{
+    scene_image_free(s->image);
+    s->image = NULL;
+}
+
+/* The image shows the current state of s: the size of the extent, the
+ * screen scale, the contents (the commits) and the colours of the
+ * decorations. A new title without a commit does not render the image
+ * again. The title of a transformed window shows its earlier text until
+ * the next commit. */
+static int image_current(const struct scene_image *img, const struct csurface *s)
+{
+    struct rect e = extent(s);
+    int S = screen_scale;
+    const struct toplevel *t = s->role == ROLE_TOPLEVEL ? s->toplevel : NULL;
+    return img->width == e.w * S && img->height == e.h * S && img->scale == S && img->commits == s->commits &&
+           (!t || (img->activated == t->activated && img->maximized == t->maximized));
+}
+
+/* The image of s for the drawing with its visual parameters, rendered
+ * again after a change. NULL without memory or for an empty extent. */
+static struct scene_image *surface_image(struct csurface *s)
+{
+    if (s->image && image_current(s->image, s))
+        return s->image;
+    struct rect e = extent(s);
+    int S = screen_scale, W = e.w * S, H = e.h * S;
+    if (W <= 0 || H <= 0)
+        return NULL;
+    struct scene_image *img = s->image;
+    if (!img) {
+        img = calloc(1, sizeof *img);
+        if (!img)
+            return NULL;
+        s->image = img;
+    }
+    if (img->width * img->height != W * H || !img->pixels) {
+        free(img->pixels);
+        img->pixels = malloc((size_t)W * H * 4);
+    }
+    if (!img->pixels || render_extent(s, (uint8_t *)img->pixels, W * 4) < 0) {
+        scene_surface_gone(s);
+        return NULL;
+    }
+    const struct toplevel *t = s->role == ROLE_TOPLEVEL ? s->toplevel : NULL;
+    img->width = W;
+    img->height = H;
+    img->scale = S;
+    img->commits = s->commits;
+    img->activated = t ? t->activated : 0;
+    img->maximized = t ? t->maximized : 0;
+    return img;
+}
+
+/* Draw the image of s with its visual parameters inside clip (logical
+ * pixels). The destination pixel X maps to the image position
+ * c + (X + 1/2 - d - c) / scale - 1/2, in device pixels of the extent at
+ * the image scale, with c the centre of the extent and d the offset. A
+ * scale of 1 with the screen scale of the image copies the rows with the
+ * alpha (a fade, or a move by whole device pixels). Every other scale
+ * samples bilinearly. The dimming of an unresponsive client
+ * (wm_draw_above) is left out during the transform. */
+static void draw_image(struct csurface *s, struct rect clip)
+{
+    const struct visual *v = &s->visual;
+    if (!v->alpha || v->scale < 256)
+        return;
+    int S = screen_scale;
+    struct rect D = rect_intersect(rect_intersect(visual_device_extent(s), rect_scale(clip, S)),
+                                   (struct rect){ 0, 0, back.width, back.height });
+    if (rect_empty(D))
+        return;
+    struct scene_image *img = surface_image(s);
+    if (!img)
+        return;
+    struct rect E = rect_scale(extent(s), S);
+    if (v->scale == ANIM_ONE && img->scale == S) {
+        int ox = E.x + v->dx, oy = E.y + v->dy;
+        int x0 = MAX(D.x, ox), x1 = MIN(D.x + D.w, ox + img->width);
+        for (int y = D.y; y < D.y + D.h && x1 > x0; y++) {
+            int iy = y - oy;
+            if (iy >= 0 && iy < img->height)
+                pixel_over_alpha(back.pixels + (size_t)y * back.stride + x0,
+                                 img->pixels + (size_t)iy * img->width + (x0 - ox), x1 - x0, v->alpha);
+        }
+        return;
+    }
+    int64_t cx = ((int64_t)2 * E.x + E.w) << 15, cy = ((int64_t)2 * E.y + E.h) << 15;
+    int64_t inv = ((int64_t)1 << 32) / v->scale, Si = img->scale;
+    int64_t du = inv * Si / S;
+    int64_t ux = cx + (((((int64_t)D.x << 16) + 32768 - ((int64_t)v->dx << 16) - cx) * inv) >> 16);
+    int64_t iu = (ux - ((int64_t)E.x << 16)) * Si / S - 32768;
+    uint32_t tmp[256];
+    for (int y = D.y; y < D.y + D.h; y++) {
+        int64_t vy = cy + (((((int64_t)y << 16) + 32768 - ((int64_t)v->dy << 16) - cy) * inv) >> 16);
+        int64_t iv = (vy - ((int64_t)E.y << 16)) * Si / S - 32768;
+        uint32_t *to = back.pixels + (size_t)y * back.stride + D.x;
+        for (int i = 0; i < D.w; i += 256) {
+            int k = MIN(256, D.w - i);
+            pixel_sample_bilinear(tmp, img->pixels, img->width, img->width, img->height, (int32_t)(iu + i * du),
+                                  (int32_t)iv, (int32_t)du, k, 0);
+            pixel_over_alpha(to + i, tmp, k, v->alpha);
+        }
+    }
+}
+
 /* The cursor as device pixels in rows of FB_CURSOR_MAX pixels, with the
  * hotspot. Returns 0 for a hidden cursor (w 0) and for an image that fits
  * FB_CURSOR_MAX. Returns -1 for a larger or transformed cursor surface. */
@@ -530,7 +752,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
     int covered = 0;
     for (int i = 0; i < n && !covered; i++) {
         struct csurface *s = order[i];
-        if (!s->current.buffer)
+        if (!s->current.buffer || drawn_from_image(s))
             continue;
         if (s->current.buffer->format == FORMAT_XRGB8888) {
             struct rect o = wm_opaque(s);
@@ -549,7 +771,8 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
         gfx_fill_rect(&back, R.x, R.y, R.w, R.h, lock_active() ? 0 : (uint32_t)settings.desktop_color);
     for (int i = 0; i < n; i++) {
         struct csurface *s = order[i];
-        pieces[0] = rect_intersect(extent(s), r);
+        struct rect area = scene_visual_extent(s);
+        pieces[0] = rect_intersect(area, r);
         np = rect_empty(pieces[0]) ? 0 : 1;
         int exact = 1;
         for (int j = i + 1; j < n && np; j++)
@@ -558,10 +781,14 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
                 break;
             }
         if (!exact) {
-            pieces[0] = rect_intersect(extent(s), r);
+            pieces[0] = rect_intersect(area, r);
             np = 1;
         }
         for (int k = 0; k < np; k++) {
+            if (drawn_from_image(s)) {
+                draw_image(s, pieces[k]);
+                continue;
+            }
             wm_draw_below(s, pieces[k]);
             draw_surface(s, pieces[k]);
             wm_draw_above(s, pieces[k]);
@@ -580,6 +807,11 @@ void scene_compose(void)
     long t0 = stats_frame_begin();
     struct csurface *order[256];
     int n = scene_order(order, 256);
+    /* The image of a surface whose animation ended, or of a hidden
+     * surface, is no longer drawn. */
+    for (struct csurface *s = surface_first(); s; s = s->next)
+        if (s->image && (!drawn_from_image(s) || !visible(s)))
+            scene_surface_gone(s);
     for (int d = 0; d < damage.n; d++) {
         struct rect R = rect_scale(damage.r[d], screen_scale);
         compose_rect(damage.r[d], order, n);
@@ -635,63 +867,8 @@ struct rect scene_window_extent(const struct toplevel *t)
     return extent(t->s);
 }
 
-/* The toplevel is drawn alone, with its extent at the origin of a scratch
- * target, twice: over black into the client buffer and over white into a
- * copy. A pixel with the same value over both backgrounds is opaque. For
- * other pixels the difference is the amount of background that shows
- * through, which gives the alpha of the shadow, the rounded corners and
- * translucent client pixels. The colour is the result over black divided
- * by that alpha. The surface is moved to the origin for the drawing and
- * moved back immediately afterwards. */
+/* The toplevel with the identity, as render_extent draws it. */
 int scene_render_window(struct toplevel *t, uint8_t *to, int stride)
 {
-    struct csurface *s = t->s;
-    struct rect f = extent(s);
-    int S = screen_scale, W = f.w * S, H = f.h * S;
-    uint32_t *white = malloc((size_t)W * H * 4);
-    if (!white)
-        return -ENOMEM;
-    struct surface saved = back;
-    int sx = s->x, sy = s->y;
-    s->x -= f.x;
-    s->y -= f.y;
-    struct rect clip = { 0, 0, f.w, f.h };
-    for (int pass = 0; pass < 2; pass++) {
-        if (pass)
-            back = (struct surface){ white, W, H, W };
-        else
-            back = (struct surface){ (uint32_t *)to, W, H, stride / 4 };
-        gfx_fill_rect(&back, 0, 0, W, H, pass ? 0x00ffffff : 0);
-        wm_draw_below(s, clip);
-        draw_surface(s, clip);
-    }
-    back = saved;
-    s->x = sx;
-    s->y = sy;
-    for (int y = 0; y < H; y++) {
-        uint32_t *row = (uint32_t *)(to + (size_t)y * stride);
-        const uint32_t *over_white = white + (size_t)y * W;
-        for (int x = 0; x < W; x++) {
-            uint32_t b = row[x], w = over_white[x];
-            int show = 0;
-            for (int sh = 0; sh < 24; sh += 8) {
-                int d = (int)(w >> sh & 0xff) - (int)(b >> sh & 0xff);
-                if (d > show)
-                    show = d;
-            }
-            uint32_t a = 255u - (uint32_t)show;
-            if (!a) {
-                row[x] = 0;
-                continue;
-            }
-            uint32_t c = a << 24;
-            for (int sh = 0; sh < 24; sh += 8) {
-                uint32_t v = (b >> sh & 0xff) * 255u / a;
-                c |= (v > 255 ? 255 : v) << sh;
-            }
-            row[x] = c;
-        }
-    }
-    free(white);
-    return 0;
+    return render_extent(t->s, to, stride);
 }

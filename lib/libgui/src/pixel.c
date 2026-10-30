@@ -136,6 +136,41 @@ SIMD_WITHIN_PAGE(1024) void pixel_darken_simd(uint32_t *to, int n, uint32_t keep
     pixel_darken_ref(to + i, n - i, keep);
 }
 
+/* The alpha of each pixel of s multiplied by alpha / 255, rounded as
+ * pixel_div255. The product fits into the low 16 bit lane of each 32 bit
+ * lane, and the high lane remains 0. */
+static inline simd_u32x4 scaled_alpha(simd_u32x4 s, uint32_t alpha)
+{
+    return (simd_u32x4)div255((simd_u16x8)(s >> 24) * splat16((uint16_t)alpha));
+}
+
+SIMD_WITHIN_PAGE(1024) void pixel_over_alpha_simd(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    if (!alpha)
+        return;
+    int i = 0;
+    for (; i + 4 <= n; i += 4) {
+        uint64_t q[2];
+        memcpy(q, from + i, 16);
+        if (!((q[0] | q[1]) & ALPHA_LANES))
+            continue;
+        simd_u32x4 d = simd_load_u32x4(to + i), s = simd_load_u32x4(from + i);
+        simd_store_u32x4(to + i, blend4(d, s, scaled_alpha(s, alpha)));
+    }
+    pixel_over_alpha_ref(to + i, from + i, n - i, alpha);
+}
+
+SIMD_WITHIN_PAGE(1024) void pixel_copy_alpha_simd(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    if (!alpha)
+        return;
+    simd_u32x4 a = splat32(alpha);
+    int i = 0;
+    for (; i + 4 <= n; i += 4)
+        simd_store_u32x4(to + i, blend4(simd_load_u32x4(to + i), simd_load_u32x4(from + i), a));
+    pixel_copy_alpha_ref(to + i, from + i, n - i, alpha);
+}
+
 /* ---- the word form ---- */
 
 #define FIELDS 0x00ff00ff00ff00ffull
@@ -195,11 +230,36 @@ SIMD_WITHIN_PAGE(512) WORD_FORM void pixel_darken_word(uint32_t *to, int n, uint
         to[i] = gather(spread(to[i]) * keep, to[i]);
 }
 
+SIMD_WITHIN_PAGE(512) WORD_FORM void pixel_over_alpha_word(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    if (!alpha)
+        return;
+    for (int i = 0; i < n; i++) {
+        uint32_t c = from[i], a = pixel_div255((c >> 24) * alpha), d = to[i];
+        if (a == 255)
+            to[i] = (d & 0xff000000u) | (c & 0x00ffffffu);
+        else if (a)
+            to[i] = gather(spread(d) * (255 - a) + spread(c) * a, d);
+    }
+}
+
+SIMD_WITHIN_PAGE(512) WORD_FORM void pixel_copy_alpha_word(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    if (!alpha)
+        return;
+    for (int i = 0; i < n; i++) {
+        uint32_t c = from[i], d = to[i];
+        to[i] = alpha == 255 ? (d & 0xff000000u) | (c & 0x00ffffffu)
+                             : gather(spread(d) * (255 - alpha) + spread(c) * alpha, d);
+    }
+}
+
 /* ---- the choice of the form ---- */
 
 typedef void (*over_fn)(uint32_t *, const uint32_t *, int);
 typedef void (*mask_fn)(uint32_t *, const uint8_t *, int, uint32_t);
 typedef void (*darken_fn)(uint32_t *, int, uint32_t);
+typedef void (*alpha_fn)(uint32_t *, const uint32_t *, int, uint32_t);
 
 #if defined(__x86_64__)
 /* The chosen forms. Two threads that call a blending function for the
@@ -209,6 +269,9 @@ typedef void (*darken_fn)(uint32_t *, int, uint32_t);
 static over_fn chosen_over;
 static mask_fn chosen_mask;
 static darken_fn chosen_darken;
+/* pixel_over_alpha and pixel_copy_alpha use the form of pixel_over. The
+ * three functions differ only in the alpha of the blend. */
+static alpha_fn chosen_over_alpha, chosen_copy_alpha;
 static const char *chosen_names = "not measured";
 
 #define PROBE_W 256
@@ -283,6 +346,8 @@ static void choose(void)
     __atomic_store_n(&chosen_names, names[over_simd | mask_simd << 1 | darken_simd << 2], __ATOMIC_RELAXED);
     __atomic_store_n(&chosen_mask, mask_simd ? pixel_mask_simd : pixel_mask_word, __ATOMIC_RELAXED);
     __atomic_store_n(&chosen_darken, darken_simd ? pixel_darken_simd : pixel_darken_word, __ATOMIC_RELAXED);
+    __atomic_store_n(&chosen_over_alpha, over_simd ? pixel_over_alpha_simd : pixel_over_alpha_word, __ATOMIC_RELAXED);
+    __atomic_store_n(&chosen_copy_alpha, over_simd ? pixel_copy_alpha_simd : pixel_copy_alpha_word, __ATOMIC_RELAXED);
     __atomic_store_n(&chosen_over, over_simd ? pixel_over_simd : pixel_over_word, __ATOMIC_RELEASE);
 }
 
@@ -310,6 +375,18 @@ void pixel_darken(uint32_t *to, int n, uint32_t keep)
     chosen_darken(to, n, keep);
 }
 
+void pixel_over_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    ensure_chosen();
+    chosen_over_alpha(to, from, n, alpha);
+}
+
+void pixel_copy_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    ensure_chosen();
+    chosen_copy_alpha(to, from, n, alpha);
+}
+
 const char *pixel_forms(void)
 {
     ensure_chosen();
@@ -329,6 +406,16 @@ void pixel_mask(uint32_t *to, const uint8_t *mask, int n, uint32_t color)
 void pixel_darken(uint32_t *to, int n, uint32_t keep)
 {
     pixel_darken_simd(to, n, keep);
+}
+
+void pixel_over_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    pixel_over_alpha_simd(to, from, n, alpha);
+}
+
+void pixel_copy_alpha(uint32_t *to, const uint32_t *from, int n, uint32_t alpha)
+{
+    pixel_copy_alpha_simd(to, from, n, alpha);
 }
 
 const char *pixel_forms(void)
@@ -469,6 +556,82 @@ void pixel_mask_sample(uint32_t *to, const uint8_t *mask, int n, uint32_t color,
         int k = n - i < SAMPLE_CHUNK ? n - i : SAMPLE_CHUNK;
         pixel_sample_mask(buf, mask, k, w);
         pixel_mask(to + i, buf, k, color);
+    }
+}
+
+/* The pixel x of a row, transparent outside the row or without a row. */
+static inline uint32_t row_pixel(const uint32_t *row, int x, int w, uint32_t opaque)
+{
+    return row && x >= 0 && x < w ? row[x] | opaque : 0;
+}
+
+/* The mean of four pixels that are not all opaque, with the weights w
+ * (sum 65536). Each channel is weighted with the alpha of its pixel and
+ * divided by the mixed alpha. */
+static inline uint32_t mix4(const uint32_t p[4], const uint32_t w[4])
+{
+    uint32_t a = 0;
+    for (int k = 0; k < 4; k++)
+        a += (p[k] >> 24) * w[k];
+    if (!a)
+        return 0;
+    uint32_t out = (a + 32768) >> 16 << 24;
+    for (int sh = 0; sh < 24; sh += 8) {
+        uint64_t c = 0;
+        for (int k = 0; k < 4; k++)
+            c += (uint64_t)(p[k] >> sh & 0xff) * (p[k] >> 24) * w[k];
+        uint32_t v = (uint32_t)((c + a / 2) / a);
+        out |= (v > 255 ? 255 : v) << sh;
+    }
+    return out;
+}
+
+/* a + (b - a) * f / 256 in each 16 bit field, rounded. Each field contains
+ * a channel of at most 255. A field of the sum is therefore at most 65408
+ * and does not carry into the next one. */
+static inline uint64_t lerp_fields(uint64_t a, uint64_t b, uint32_t f)
+{
+    return (a * (256 - f) + b * f + 0x0080008000800080ull) >> 8 & FIELDS;
+}
+
+void pixel_sample_bilinear(uint32_t *to, const uint32_t *from, int stride, int w, int h, int32_t u, int32_t v,
+                           int32_t du, int n, int opaque)
+{
+    uint32_t mask = opaque ? 0xff000000u : 0;
+    int y0 = v >> 16;
+    uint32_t fy = (uint32_t)v >> 8 & 0xff;
+    const uint32_t *r0 = y0 >= 0 && y0 < h ? from + (size_t)y0 * stride : NULL;
+    const uint32_t *r1 = y0 + 1 >= 0 && y0 + 1 < h ? from + (size_t)(y0 + 1) * stride : NULL;
+    for (int i = 0; i < n; i++, u += du) {
+        int x0 = u >> 16;
+        uint32_t fx = (uint32_t)u >> 8 & 0xff;
+        if (!fx && !fy && r0 && x0 >= 0 && x0 < w) {
+            to[i] = r0[x0] | mask;
+            continue;
+        }
+        uint32_t p[4];
+        if (r0 && r1 && x0 >= 0 && x0 + 1 < w) {
+            p[0] = r0[x0] | mask;
+            p[1] = r0[x0 + 1] | mask;
+            p[2] = r1[x0] | mask;
+            p[3] = r1[x0 + 1] | mask;
+        } else {
+            p[0] = row_pixel(r0, x0, w, mask);
+            p[1] = row_pixel(r0, x0 + 1, w, mask);
+            p[2] = row_pixel(r1, x0, w, mask);
+            p[3] = row_pixel(r1, x0 + 1, w, mask);
+        }
+        /* Four opaque pixels: the separable form in the fields of a 64
+         * bit word, with the error of one step at most. */
+        if ((p[0] & p[1] & p[2] & p[3]) >> 24 == 255) {
+            uint64_t top = lerp_fields(spread(p[0]), spread(p[1]), fx);
+            uint64_t bottom = lerp_fields(spread(p[2]), spread(p[3]), fx);
+            uint64_t m = lerp_fields(top, bottom, fy);
+            to[i] = (uint32_t)(m | m >> 24);
+            continue;
+        }
+        uint32_t wt[4] = { (256 - fx) * (256 - fy), fx * (256 - fy), (256 - fx) * fy, fx * fy };
+        to[i] = mix4(p, wt);
     }
 }
 
