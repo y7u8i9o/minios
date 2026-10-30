@@ -8,3 +8,4 @@ int conf_export_locale(void);
 const char *conf_user_file(const char *name, const char *default_path, char *buf, size_t size);
 const char *conf_user_write_file(const char *name, char *buf, size_t size);
 const char *conf_home(void);
+char *conf_lookup(const char *path, const char *key, char *buf, size_t size);

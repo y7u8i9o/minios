@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include "../src/filechooser.h"
 #include "check.h"
+#include "events.h"
 
 struct app *app_create_detached(void);
 

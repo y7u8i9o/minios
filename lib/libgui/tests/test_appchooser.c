@@ -15,6 +15,7 @@
 #include <minios/local.h>
 #include "../src/appchooser.h"
 #include "check.h"
+#include "events.h"
 
 struct app *app_create_detached(void);
 
@@ -29,7 +30,7 @@ static void write_file(const char *path, const char *text)
     }
 }
 
-static void click(struct widget *win, const char *id)
+static void press_button(struct widget *win, const char *id)
 {
     struct sig_click c = { 1, 0, 0 };
     widget_emit(widget_find(win, id), "clicked", &c);
@@ -117,7 +118,7 @@ void run_appchooser_tests(void)
     CHECK(!widget_find(win, "ac-accept")->enabled, "Open disabled on a heading");
     press_key(win, KEY_DOWN, 0, 0);
     widget_find(win, "ac-always")->value = 1;
-    click(win, "ac-accept");
+    press_button(win, "ac-accept");
     CHECK(appchooser_state(c, out, sizeof out) == 1 && strcmp(out, "/usr/bin/player") == 0,
           "Open chooses Player: %s", out);
     appchooser_close(c);
