@@ -106,7 +106,20 @@ resource 0.
 driver (`locking.md`). The tests read the record through
 `fb_cursor_get`, because the cursor is not part of the framebuffer.
 QEMU draws the cursor in its display window. A screendump of QEMU
-therefore does not contain it. A release of the display, by
+therefore does not contain it.
+
+The position of a cursor request is the top left corner of the image,
+the hotspot position minus the hotspot, and the request carries the
+hotspot as well. The virtio-gpu driver of Linux sends the same values,
+and the displays of QEMU rely on them. The cocoa window on macOS draws
+the image with its top left corner at the position and ignores the
+hotspot. GTK and SDL show the image as the host cursor with the hotspot.
+A corner left of or above the screen is negative and travels in two's
+complement. Until 2026-10-30 the driver sent the hotspot position. The
+cocoa window then drew a cursor with a hotspot inside the image shifted
+down and right by the hotspot, 13 logical pixels for the resize cursors at
+scale 2, and the window edges seemed to resize at a distance.
+`virtio_gpu_cursor_sent` returns the last position for `comp_cursor`. A release of the display, by
 `FBIO_RELEASE` or at the close of the owner's file, hides the cursor.
 
 ## virtio-input

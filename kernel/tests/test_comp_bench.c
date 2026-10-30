@@ -8,6 +8,7 @@
  * 1280x800 and comp_bench_hidpi at 2560x1600@2, both on virtio-gpu. The
  * values are printed for the record. The expect files check only the
  * counters that do not depend on timing. */
+#include <drivers/virtio/virtio_gpu.h>
 #include <tests/ktest.h>
 #include <sched/user.h>
 #include <sched/proc.h>
@@ -345,6 +346,15 @@ static void test_comp_cursor(void)
     kprintf("comp_cursor: %u device cursor moves\n", c->moves - moves);
     ktest_assert(c->moves - moves >= 20, "only %u device cursor moves", c->moves - moves);
     ktest_assert(arrow_cursor_at(x, y), "the arrow is not at %d,%d after the motion", x, y);
+    /* The device receives the top left corner of the image, the hotspot
+     * position minus the hotspot, as from the Linux driver. The cocoa
+     * window of QEMU draws the image at that corner and ignores the
+     * hotspot (docs/design/display.md). */
+    int32_t sent_x, sent_y;
+    virtio_gpu_cursor_sent(&sent_x, &sent_y);
+    ktest_assert(sent_x == c->x - (int32_t)c->hot_x && sent_y == c->y - (int32_t)c->hot_y,
+                 "the device received %d,%d for the hotspot %u,%u at %d,%d", sent_x, sent_y, c->hot_x, c->hot_y,
+                 c->x, c->y);
 
     /* The first toplevel appears at (40,60) with 200x150 pixels. */
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "cursor", NULL },

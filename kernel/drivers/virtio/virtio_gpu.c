@@ -182,11 +182,18 @@ struct virtio_gpu {
     uint32_t *cursor_image;         /* backing of the cursor resource, NULL before the first image */
     uint32_t cursor_shown;          /* GPU_CURSOR_RESOURCE while the cursor is shown, else 0 */
     uint32_t cursor_hot_x, cursor_hot_y;
+    int32_t cursor_sent_x, cursor_sent_y;   /* the position of the last request, for the tests */
     struct gpu_cursor_req *cursor_ring;
     unsigned cursor_next;
 };
 
 static struct virtio_gpu *gpu;
+
+void virtio_gpu_cursor_sent(int32_t *x, int32_t *y)
+{
+    *x = gpu ? gpu->cursor_sent_x : 0;
+    *y = gpu ? gpu->cursor_sent_y : 0;
+}
 
 /* One request of a flush batch: a transfer or a flush command and its
  * response header. */
@@ -492,9 +499,24 @@ static void gpu_describe(void *priv, struct devinfo *d)
 
 /* Publish one request on the cursor queue without waiting for it. The
  * slot of the ring was used GPU_CURSOR_SLOTS requests ago. The device
- * normally completed it long before. */
+ * normally completed it long before.
+ *
+ * (x, y) is the screen position of the hotspot. The request carries the
+ * top left corner of the image, (x - hot_x, y - hot_y), and the hotspot,
+ * as the virtio-gpu driver of Linux sends them. The displays of QEMU rely
+ * on this convention: the cocoa window draws the image with its top left
+ * corner at the position and ignores the hotspot, while GTK and SDL show
+ * the image as the host cursor at the host pointer with the hotspot. The
+ * position of the hotspot in the request drew the image shifted by the
+ * hotspot in the cocoa window, 13 logical pixels for the resize cursors at
+ * scale 2. A corner left of or above the screen is negative, and the
+ * unsigned field carries it in two's complement, as on Linux. */
 static int cursor_request(struct virtio_gpu *g, uint32_t type, int32_t x, int32_t y)
 {
+    x -= (int32_t)g->cursor_hot_x;
+    y -= (int32_t)g->cursor_hot_y;
+    g->cursor_sent_x = x;
+    g->cursor_sent_y = y;
     struct gpu_cursor_req *c = &g->cursor_ring[g->cursor_next];
     g->cursor_next = (g->cursor_next + 1) % GPU_CURSOR_SLOTS;
     struct virtqueue *vq = g->cursorq;
@@ -509,7 +531,7 @@ static int cursor_request(struct virtio_gpu *g, uint32_t type, int32_t x, int32_
     }
     c->req = (struct virtio_gpu_update_cursor){
         .hdr.type = type,
-        .pos = { 0, (uint32_t)MAX(x, 0), (uint32_t)MAX(y, 0), 0 },
+        .pos = { 0, (uint32_t)x, (uint32_t)y, 0 },
         .resource_id = g->cursor_shown,
         .hot_x = g->cursor_hot_x,
         .hot_y = g->cursor_hot_y,
@@ -568,6 +590,7 @@ static int gpu_cursor_set(void *priv, const uint32_t *image, uint32_t hot_x, uin
     struct virtio_gpu *g = priv;
     if (!image) {
         g->cursor_shown = 0;
+        g->cursor_hot_x = g->cursor_hot_y = 0;
         return cursor_request(g, VIRTIO_GPU_CMD_UPDATE_CURSOR, 0, 0);
     }
     mutex_lock(&g->lock);

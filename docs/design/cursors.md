@@ -51,7 +51,9 @@ the cursor, moved down by one logical pixel, blurred twice with a box of
 the scale as radius, at 30 percent. The image has a border of three
 logical pixels for the shadow. The image is 26 by 26 logical pixels, 52 by
 52 device pixels at scale 2, and fits the device cursor of virtio-gpu (64
-by 64). X12 renders each shape once per scale. Without the index or the
+by 64). The virtio-gpu driver sends the device the top left corner of the
+image, because the cocoa window of QEMU ignores the hotspot
+(`display.md`). X12 renders each shape once per scale. Without the index or the
 file of `default`, X12 draws the former arrow. A shape whose file fails
 shows `default`.
 
