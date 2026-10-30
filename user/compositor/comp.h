@@ -22,7 +22,10 @@
 #define FRAME_MS 16
 
 #define LAYER_OVERLAY 3          /* above the panel, and a keyboard interactive one gets the focus when mapped */
-enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP, ROLE_LOCK };
+/* ROLE_SNAPSHOT: the image of a closed surface while it fades out
+ * (anim.c). A snapshot is not in the list of surface_first. */
+enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP, ROLE_LOCK,
+            ROLE_SNAPSHOT };
 enum { DECOR_SERVER = 1, DECOR_CLIENT = 2 };
 enum { STATE_MAXIMIZED = 1, STATE_ACTIVATED = 2, STATE_MINIMIZED = 3 };
 enum { ANCHOR_NONE, ANCHOR_TOP, ANCHOR_BOTTOM, ANCHOR_LEFT, ANCHOR_RIGHT, ANCHOR_TOP_LEFT, ANCHOR_BOTTOM_LEFT,
@@ -99,6 +102,11 @@ struct toplevel {
     struct gfx_shaped *title_shape;
     char title_shape_text[64];
     int title_shape_scale;
+    /* The button of the toplevel in the panel (set_task_rect of a toplevel
+     * handle), relative to task_surface. The minimize animation moves the
+     * window towards it. task_surface is NULL without a button. */
+    struct csurface *task_surface;
+    struct rect task_rect;
 };
 
 struct popup {
@@ -366,6 +374,14 @@ int scene_render_window(struct toplevel *t, uint8_t *to, int stride);
 struct rect scene_visual_extent(const struct csurface *s);
 /* Free the image of a surface that goes away. */
 void scene_surface_gone(struct csurface *s);
+void scene_image_free(struct scene_image *img);
+/* A new image of the extent of s with the identity, for a snapshot, or
+ * NULL without memory. */
+struct scene_image *scene_snapshot(struct csurface *s);
+/* 1 when the scene shows s. */
+int scene_shows(const struct csurface *s);
+/* The position of s in the stacking order of the scene, higher on top. */
+long scene_sort_key(const struct csurface *s);
 /* anim.c: the animation clock (docs/design/animations.md). */
 /* The value of an easing curve at the linear progress t, both 0 to
  * ANIM_ONE. */
@@ -392,6 +408,14 @@ void anim_percent_changed(void);
 long anim_count(void);
 long anim_frames(void);
 void anim_reset_frames(void);
+/* The snapshots of closed surfaces that fade out, for the scene order. */
+struct csurface *anim_snapshot_first(void);
+/* The effects (docs/design/animations.md). A toplevel maps, a surface
+ * is about to disappear (its role, its buffer or the surface ends), and a
+ * toplevel is minimized (on 1) or restored (on 0). */
+void anim_window_map(struct csurface *s);
+void anim_surface_closing(struct csurface *s);
+void anim_window_minimize(struct toplevel *t, int on);
 /* cursor.c: the cursor set of /usr/share/cursors (docs/design/cursors.md).
  * A cursor image has w x h device pixels in rows of w pixels, 0xAARRGGBB
  * with straight alpha, and the hotspot (hot_x, hot_y) in device pixels. */

@@ -192,18 +192,22 @@ struct rect scene_visual_extent(const struct csurface *s)
 }
 
 /* A surface with visual parameters other than the identity is drawn from
- * an image of its extent, scaled, moved and faded. Such a surface
- * occludes nothing. */
+ * an image of its extent, scaled, moved and faded. A snapshot is always
+ * drawn from its image. Such a surface occludes nothing. */
 static int drawn_from_image(const struct csurface *s)
 {
-    return !visual_identity(&s->visual);
+    return s->role == ROLE_SNAPSHOT || !visual_identity(&s->visual);
 }
 
+/* A minimized toplevel remains visible while its minimize animation
+ * runs. */
 static int visible(const struct csurface *s)
 {
+    if (s->role == ROLE_SNAPSHOT)
+        return !lock_active();
     if (!s->mapped || !s->current.buffer)
         return 0;
-    if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->minimized)
+    if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->minimized && !s->anim.running)
         return 0;
     if (s->role == ROLE_CURSOR)
         return 0;
@@ -236,6 +240,7 @@ static long sort_key(const struct csurface *s)
     case ROLE_IME_POPUP: return 4000000L + s->id;
     case ROLE_LOCK: return 6000000L + s->id;
     case ROLE_DND_ICON: return 5000000L + s->id;
+    case ROLE_SNAPSHOT: return s->stack;    /* the key of the closed surface */
     default: return 2000000L + s->id;
     }
 }
@@ -246,10 +251,23 @@ static int order_cmp(const void *a, const void *b)
     return ka < kb ? -1 : ka > kb ? 1 : 0;
 }
 
+long scene_sort_key(const struct csurface *s)
+{
+    return sort_key(s);
+}
+
+int scene_shows(const struct csurface *s)
+{
+    return visible(s);
+}
+
 int scene_order(struct csurface **out, int max)
 {
     int n = 0;
     for (struct csurface *s = surface_first(); s && n < max; s = s->next)
+        if (visible(s))
+            out[n++] = s;
+    for (struct csurface *s = anim_snapshot_first(); s && n < max; s = s->next)
         if (visible(s))
             out[n++] = s;
     qsort(out, (size_t)n, sizeof out[0], order_cmp);
@@ -260,9 +278,16 @@ struct csurface *scene_surface_at(int x, int y)
 {
     struct csurface *order[256];
     int n = scene_order(order, 256);
-    for (int i = n - 1; i >= 0; i--)
-        if (order[i]->role != ROLE_DND_ICON && surface_accepts_input(order[i], x, y))
-            return order[i];
+    /* Input acts on the final state of the animations: a snapshot and a
+     * minimized toplevel take no input. */
+    for (int i = n - 1; i >= 0; i--) {
+        struct csurface *s = order[i];
+        if (s->role == ROLE_DND_ICON || s->role == ROLE_SNAPSHOT ||
+            (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->minimized))
+            continue;
+        if (surface_accepts_input(s, x, y))
+            return s;
+    }
     return NULL;
 }
 
@@ -526,7 +551,7 @@ static int render_extent(struct csurface *s, uint8_t *to, int stride)
     return 0;
 }
 
-static void scene_image_free(struct scene_image *img)
+void scene_image_free(struct scene_image *img)
 {
     if (img) {
         free(img->pixels);
@@ -558,6 +583,8 @@ static int image_current(const struct scene_image *img, const struct csurface *s
  * again after a change. NULL without memory or for an empty extent. */
 static struct scene_image *surface_image(struct csurface *s)
 {
+    if (s->role == ROLE_SNAPSHOT)
+        return s->image;
     if (s->image && image_current(s->image, s))
         return s->image;
     struct rect e = extent(s);
@@ -586,6 +613,23 @@ static struct scene_image *surface_image(struct csurface *s)
     img->commits = s->commits;
     img->activated = t ? t->activated : 0;
     img->maximized = t ? t->maximized : 0;
+    return img;
+}
+
+struct scene_image *scene_snapshot(struct csurface *s)
+{
+    struct rect e = extent(s);
+    int S = screen_scale, W = e.w * S, H = e.h * S;
+    struct scene_image *img = W > 0 && H > 0 ? calloc(1, sizeof *img) : NULL;
+    if (img)
+        img->pixels = malloc((size_t)W * H * 4);
+    if (!img || !img->pixels || render_extent(s, (uint8_t *)img->pixels, W * 4) < 0) {
+        scene_image_free(img);
+        return NULL;
+    }
+    img->width = W;
+    img->height = H;
+    img->scale = S;
     return img;
 }
 

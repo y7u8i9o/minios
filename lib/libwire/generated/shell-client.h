@@ -110,4 +110,5 @@ void toplevel_handle_activate(struct wire_proxy *toplevel_handle, struct wire_pr
 void toplevel_handle_minimize(struct wire_proxy *toplevel_handle);
 void toplevel_handle_close(struct wire_proxy *toplevel_handle);
 void toplevel_handle_destroy(struct wire_proxy *toplevel_handle);
+void toplevel_handle_set_task_rect(struct wire_proxy *toplevel_handle, struct wire_proxy * surface, int32_t x, int32_t y, int32_t width, int32_t height);
 

@@ -98,6 +98,14 @@ static inline void mouse_click(int buttons)
     ktest_wait_idle(100);
 }
 
+/* A click that returns at once, for a test that observes the animation
+ * that the click starts (docs/design/animations.md). */
+static inline void mouse_click_now(int buttons)
+{
+    feed_packet((uint8_t)buttons, 0, 0);
+    feed_packet(0, 0, 0);
+}
+
 /* A logical pixel of the composed screen: the GUI tests describe the
  * desktop in logical coordinates and run at any pixel scale. */
 static inline uint32_t pixel(int x, int y)
@@ -248,11 +256,17 @@ static inline bool wait_shell(const char *command, int ms)
     return false;
 }
 
-static inline void alt_key(uint8_t code)
+/* Alt and a key, without the wait for an idle system. */
+static inline void alt_key_now(uint8_t code)
 {
     ps2kbd_feed_scancode(0x38);
     press_key(code);
     ps2kbd_feed_scancode(0xb8);
+}
+
+static inline void alt_key(uint8_t code)
+{
+    alt_key_now(code);
     ktest_wait_idle(150);
 }
 

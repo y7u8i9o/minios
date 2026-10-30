@@ -26,11 +26,20 @@
 
 #define MAX_TASKS 16
 
-struct task { struct wire_proxy *handle; char title[48]; char app_id[64]; int active, minimized; };
+/* rect: the button rectangle sent to X12 last (set_task_rect), a width of
+ * 0 for none. */
+struct task {
+    struct wire_proxy *handle;
+    char title[48];
+    char app_id[64];
+    int active, minimized;
+    struct rect rect;
+};
 
 struct wire_display *display;
 struct wire_proxy *compositor, *shm, *shell, *seat;
 static struct wire_proxy *pointer, *manager;
+static uint32_t manager_version;
 struct canvas panel;
 static struct wire_proxy *layer;
 static struct task tasks[MAX_TASKS];
@@ -297,6 +306,25 @@ static void clock_text(char *t, size_t size)
 
 static char drawn_clock[48];            /* the clock text of the last draw */
 
+/* The minimize animation of X12 moves a window towards its button
+ * (toplevel_handle version 2). A button that does not fit in the bar has
+ * no rectangle, and the window moves towards the bottom centre of the
+ * screen. Only a changed rectangle is sent. */
+static void send_task_rects(int w, int shown)
+{
+    if (manager_version < 2)
+        return;
+    for (int i = 0; i < ntasks; i++) {
+        struct rect r = { 0, 0, 0, 0 };
+        if (i < shown)
+            r = (struct rect){ TASKS_X + i * (w + TASK_GAP), BUTTON_Y, w, panel.lh - 2 * BUTTON_Y };
+        if (r.x == tasks[i].rect.x && r.y == tasks[i].rect.y && r.w == tasks[i].rect.w && r.h == tasks[i].rect.h)
+            continue;
+        tasks[i].rect = r;
+        toplevel_handle_set_task_rect(tasks[i].handle, panel.surface, r.x, r.y, r.w, r.h);
+    }
+}
+
 void draw_panel(void)
 {
     struct painter p;
@@ -332,6 +360,7 @@ void draw_panel(void)
     clock_text(drawn_clock, sizeof drawn_clock);
     panel_label(&p, clock_x(), 0, CLOCK_W - 4, h, drawn_clock, bar_theme.color[TC_TEXT], 1);
     power_draw_button(&p, hover == HOVER_POWER);
+    send_task_rects(tw, shown);
 
     /* The show desktop button at the right edge, behind a line. */
     int dx = w - DESKTOP_BTN_W;
@@ -549,6 +578,7 @@ static void on_toplevel(void *user, struct wire_proxy *m, struct wire_proxy *han
         return;
     handle->obj.interface = &toplevel_handle_interface;
     tasks[ntasks].handle = handle;
+    tasks[ntasks].rect = (struct rect){ 0, 0, 0, 0 };
     strcpy(tasks[ntasks].title, "");
     strcpy(tasks[ntasks].app_id, "");
     ntasks++;
@@ -643,7 +673,10 @@ static void on_global(void *user, struct wire_proxy *registry, uint32_t name, co
         seat = registry_bind(registry, name, iface, version, &seat_interface, 1);
         seat_add_listener(seat, &seat_events, NULL);
     }
-    else if (strcmp(iface, "toplevel_manager") == 0) manager = registry_bind(registry, name, iface, version, &toplevel_manager_interface, 1);
+    else if (strcmp(iface, "toplevel_manager") == 0) {
+        manager_version = version < 2 ? version : 2;
+        manager = registry_bind(registry, name, iface, manager_version, &toplevel_manager_interface, manager_version);
+    }
     else if (strcmp(iface, "input_method_manager") == 0)
         imemenu_bind(registry_bind(registry, name, iface, version, &input_method_manager_interface, 1));
     else if (strcmp(iface, "output") == 0) {

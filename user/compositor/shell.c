@@ -65,7 +65,19 @@ static void h_handle_activate(struct wire_client *c, struct wire_resource *self,
 static void h_handle_minimize(struct wire_client *c, struct wire_resource *self) { if (self->data) toplevel_set_minimized(self->data, 1); }
 static void h_handle_close(struct wire_client *c, struct wire_resource *self) { if (self->data) toplevel_close(self->data); }
 static void h_handle_destroy(struct wire_client *c, struct wire_resource *self) { wire_resource_destroy(self); }
-static const struct toplevel_handle_impl handle_handlers = { h_handle_activate, h_handle_minimize, h_handle_close, h_handle_destroy };
+/* Version 2: the button of the toplevel in the panel, for the minimize
+ * animation. */
+static void h_handle_set_task_rect(struct wire_client *c, struct wire_resource *self, struct wire_resource *surface,
+                                   int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    struct toplevel *t = self->data;
+    if (!t)
+        return;
+    t->task_surface = surface && width > 0 && height > 0 ? surface->data : NULL;
+    t->task_rect = (struct rect){ x, y, width, height };
+}
+static const struct toplevel_handle_impl handle_handlers = { h_handle_activate, h_handle_minimize, h_handle_close,
+                                                             h_handle_destroy, h_handle_set_task_rect };
 
 static void handle_gone(struct wire_resource *r)
 {
@@ -78,7 +90,7 @@ static void handle_gone(struct wire_resource *r)
  * handles that refer to it (found by their data pointer). */
 static void manager_announce(struct wire_resource *manager, struct toplevel *t)
 {
-    struct wire_resource *h = wire_resource_create(manager->client, &toplevel_handle_interface, 1, 0);
+    struct wire_resource *h = wire_resource_create(manager->client, &toplevel_handle_interface, manager->obj.version, 0);
     if (!h)
         return;
     wire_resource_set_listener(h, &handle_handlers, t, handle_gone);
@@ -270,8 +282,10 @@ static void toplevel_gone(struct wire_resource *r)
     struct toplevel *t = r->data;
     comp_log("toplevel %d destroyed", t->number);
     for_each_handle(t, handle_closed);
-    if (t->s->mapped)
+    if (t->s->mapped) {
+        anim_surface_closing(t->s);
         damage_surface(t->s);
+    }
     int was_active = t->activated;
     t->s->role = ROLE_NONE;
     t->s->toplevel = NULL;
@@ -897,11 +911,15 @@ void shell_surface_gone(struct csurface *s)
 {
     if (s->role == ROLE_TOPLEVEL && s->toplevel)
         s->toplevel->s = s;
+    /* The buttons of the panel on the surface end with it. */
+    for (struct csurface *o = surface_first(); o; o = o->next)
+        if (o->role == ROLE_TOPLEVEL && o->toplevel && o->toplevel->task_surface == s)
+            o->toplevel->task_surface = NULL;
 }
 
 void shell_init(struct wire_server *srv)
 {
     server = srv;
     wire_global_create(srv, &shell_interface, 1, bind_shell, NULL);
-    wire_global_create(srv, &toplevel_manager_interface, 1, bind_manager, NULL);
+    wire_global_create(srv, &toplevel_manager_interface, 2, bind_manager, NULL);
 }

@@ -1,0 +1,20 @@
+# Screendumps every 100 ms from the start of the minimize animation, for
+# the review of the owner (AN3 of docs/plan/animation-gpu.md).
+# anim_percent 400 makes the minimize last 800 ms. The last screendumps
+# show the start of the restore.
+wait x12_anim: minimize starts
+screendump minimize-0.ppm
+sleep 100
+screendump minimize-1.ppm
+sleep 100
+screendump minimize-2.ppm
+sleep 100
+screendump minimize-3.ppm
+sleep 100
+screendump minimize-4.ppm
+sleep 100
+screendump minimize-5.ppm
+sleep 100
+screendump minimize-6.ppm
+sleep 100
+screendump minimize-7.ppm

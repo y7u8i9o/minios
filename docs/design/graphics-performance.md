@@ -666,4 +666,3 @@ measured on the Mac of the owner. The frame interval is 16 ms.
 - The first measurement also found a defect of the frame clock of AN1:
   after a frame, `schedule_frame` did not arm the timer for the next
   frame of a running animation, and the fade composed 9 frames in 2.5 s.
-

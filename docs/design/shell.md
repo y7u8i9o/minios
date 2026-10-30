@@ -51,7 +51,11 @@ the window manager module `wm/window.c` and `wm/decor.c`
 - `toplevel_manager` (a global): every bound manager receives a
   `toplevel_handle` per toplevel with `title`, `app_id` and `state`
   events (maximized 1, activated 2, minimized 3) and `closed`; handles
-  accept `activate`, `minimize` and `close`.
+  accept `activate`, `minimize` and `close`. Version 2 adds
+  `set_task_rect(surface, x, y, width, height)`: the rectangle of the
+  button of the toplevel relative to a surface of the client, the target
+  of the minimize animation (`animations.md`). A width or a height of 0
+  removes the rectangle. A handle has the version of its manager.
 
 ## Decorations
 
@@ -163,7 +167,10 @@ built directly on libwire and the libgui painter. From the left: a Menu
 button with the icon `menu` that opens the launcher as a grabbed popup,
 one button per toplevel from the manager (activate, minimize), the label
 of the input method, the mixer, and the date and the time from a
-timerfd. Text uses the interface font at 13 px.
+timerfd. Text uses the interface font at 13 px. The panel binds the
+manager of version 2 and sends the rectangle of each window button after
+a change with `set_task_rect`. A button that does not fit in the bar
+receives the empty rectangle.
 
 Since K8 of `docs/plan/widgets.md` the panel draws with the shared
 paint functions of libgui (`widgets.md`). The panel has two themes.

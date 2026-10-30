@@ -170,3 +170,72 @@ scale, duration_ms)`. X12 animates the surface from its current values
 with the standard curve. `compbench fade` and `compbench scale` use it on
 their own window (`graphics-performance.md`), and `comp_bench` and
 `comp_bench_hidpi` run both scenarios with `anim_percent` 100.
+
+## Window animations (AN3)
+
+`anim.c` has the effects, and the window manager and the shell call
+them:
+
+| Event | Effect | Duration | Curve |
+|---|---|---|---|
+| a toplevel maps (`wm_toplevel_committed`) | alpha 0 to 255, scale 0.96 to 1 | 150 ms | ease-out cubic |
+| a toplevel closes | a snapshot: alpha to 0, scale to 0.96 | 120 ms | accelerate |
+| a toplevel is minimized (`toplevel_set_minimized`) | scale and move into the button of the panel, alpha to 0 | 200 ms | standard |
+| a toplevel is restored | from the button back to the identity | 200 ms | standard |
+
+### Snapshots
+
+A closed window no longer has a buffer. Its fade out therefore uses a
+snapshot.
+`anim_surface_closing` runs before the surface disappears: when the
+toplevel role ends (`toplevel_gone`), when the client attaches a null
+buffer and when the surface ends. The function renders the extent of the
+window with the identity into an image (`scene_snapshot`, the same
+rendering as the window capture). The snapshot is a `struct csurface`
+with the role `ROLE_SNAPSHOT`, the extent of the window, its visual
+parameters and its position in the stacking order (`scene_sort_key`).
+Snapshots form a list of their own in `anim.c`. The scene adds the list
+to its order (`scene_order`), and the other modules never see a
+snapshot. A snapshot starts from the values on the screen. A window that
+closes during its map animation therefore does not jump. The last step of
+the animation removes the snapshot and frees its image. A minimized
+window and a window of a locked session disappear without a snapshot.
+
+A client that destroys the attached buffer, for example during a
+resize, does not close the window. That event starts no animation.
+
+### Minimize and restore
+
+The panel sends the rectangle of the button of each window through
+`set_task_rect` of the toplevel handle (`shell.md`). X12 records the
+surface of the panel and the rectangle in the toplevel. The target
+values (`task_visual`) place the centre of the extent on the centre of
+the button, with the larger scale at which the extent fits into the
+button and the alpha 0. Without a button the target is a rectangle of
+160x28 pixels at the bottom centre of the screen.
+
+A minimized toplevel remains visible while its animation runs. The end
+of the animation hides the window and returns its visual parameters to
+the identity. A restore starts from the button, or from the values on
+the screen while the minimize animation still runs.
+
+### Input
+
+Input acts on the final state at once. A snapshot and a minimized
+toplevel take no input (`scene_surface_at`). The geometry of a mapped
+window is final from its first frame. A click during the map animation
+therefore reaches the window at its final place.
+
+### Tests
+
+The boot case `x12_anim` (`kernel/tests/test_anim_gui.c`) runs X12 with
+the panel and `anim_percent` 400. comptest maps a server decorated
+window. The test polls the centre of the window contents during each
+animation. It requires a frame other than the two end states, and for
+the map and the close a blend of the desktop colour and the contents
+colour, then the final state. The order is the map, the minimize by the
+button of the decorations, the restore by the window button of the
+panel, and the close by Alt+F4. compstat then reports frames with
+animations. The QMP script of the case takes eight screendumps 100 ms
+apart from the start of the minimize, for review. The last screendumps
+show the start of the restore.

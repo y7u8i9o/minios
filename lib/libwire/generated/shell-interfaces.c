@@ -95,6 +95,7 @@ static const struct wire_message toplevel_handle_requests[] = {
     { "minimize", "", 0, (const char *const[]){ NULL }, 0 },
     { "close", "", 0, (const char *const[]){ NULL }, 0 },
     { "destroy", "", 0, (const char *const[]){ NULL }, 1 },
+    { "set_task_rect", "oiiii", 5, (const char *const[]){ "surface", NULL, NULL, NULL, NULL }, 0 },
 };
 static const struct wire_message toplevel_handle_events[] = {
     { "title", "s", 1, (const char *const[]){ NULL }, 0 },
@@ -108,5 +109,5 @@ const struct wire_interface popup_interface = { "popup", 1, 3, popup_requests, 2
 const struct wire_interface positioner_interface = { "positioner", 1, 7, positioner_requests, 0, positioner_events };
 const struct wire_interface layer_surface_interface = { "layer_surface", 1, 7, layer_surface_requests, 2, layer_surface_events };
 const struct wire_interface decoration_interface = { "decoration", 1, 2, decoration_requests, 1, decoration_events };
-const struct wire_interface toplevel_manager_interface = { "toplevel_manager", 1, 1, toplevel_manager_requests, 1, toplevel_manager_events };
-const struct wire_interface toplevel_handle_interface = { "toplevel_handle", 1, 4, toplevel_handle_requests, 4, toplevel_handle_events };
+const struct wire_interface toplevel_manager_interface = { "toplevel_manager", 2, 1, toplevel_manager_requests, 1, toplevel_manager_events };
+const struct wire_interface toplevel_handle_interface = { "toplevel_handle", 2, 5, toplevel_handle_requests, 4, toplevel_handle_events };

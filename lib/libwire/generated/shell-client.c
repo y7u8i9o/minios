@@ -363,3 +363,14 @@ void toplevel_handle_destroy(struct wire_proxy *toplevel_handle)
     wire_proxy_destroy(toplevel_handle);
 }
 
+void toplevel_handle_set_task_rect(struct wire_proxy *toplevel_handle, struct wire_proxy * surface, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    union wire_arg args[5] = { { 0 } };
+    args[0].o = surface ? surface->obj.id : 0;
+    args[1].i = x;
+    args[2].i = y;
+    args[3].i = width;
+    args[4].i = height;
+    wire_proxy_marshal(toplevel_handle, 4, args, NULL);
+}
+

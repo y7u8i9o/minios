@@ -113,16 +113,26 @@
     <event name="mode"><arg name="mode" type="uint"/></event>
   </interface>
 
-  <interface name="toplevel_manager" version="1">
+  <!-- Version 2 (AN3 of docs/plan/animation-gpu.md) adds set_task_rect.
+       The panel gives the rectangle of the button of a toplevel, relative
+       to the surface of the panel. The minimize animation of X12 moves the
+       window towards the button and back (docs/design/animations.md). A
+       width or a height of 0 removes the rectangle. A handle has the
+       version of its manager. -->
+  <interface name="toplevel_manager" version="2">
     <request name="destroy" type="destructor"/>
     <event name="toplevel"><arg name="id" type="new_id" interface="toplevel_handle"/></event>
   </interface>
 
-  <interface name="toplevel_handle" version="1">
+  <interface name="toplevel_handle" version="2">
     <request name="activate"><arg name="seat" type="object" interface="seat"/></request>
     <request name="minimize"/>
     <request name="close"/>
     <request name="destroy" type="destructor"/>
+    <request name="set_task_rect">
+      <arg name="surface" type="object" interface="surface"/>
+      <arg name="x" type="int"/><arg name="y" type="int"/><arg name="width" type="int"/><arg name="height" type="int"/>
+    </request>
     <event name="title"><arg name="title" type="string"/></event>
     <event name="app_id"><arg name="app_id" type="string"/></event>
     <event name="state"><arg name="states" type="array"/></event>

@@ -35,11 +35,15 @@ static void s_commit(struct wire_client *c, struct wire_resource *s) { commits++
 static void s_surface_destroy(struct wire_client *c, struct wire_resource *s) { wire_resource_destroy(s); }
 static const struct surface_impl surface_handlers = { s_attach, s_damage, s_frame, s_region, s_commit, s_surface_destroy };
 
+/* The surfaces that ended while their client was closing. */
+static int surfaces_closing;
+static void surface_gone(struct wire_resource *r) { surfaces_closing += wire_client_closing(r->client); }
+
 static void s_create_surface(struct wire_client *c, struct wire_resource *comp, uint32_t id)
 {
     surfaces_created++;
     last_surface = wire_resource_create(c, &surface_interface, 1, id);
-    wire_resource_set_listener(last_surface, &surface_handlers, NULL, NULL);
+    wire_resource_set_listener(last_surface, &surface_handlers, NULL, surface_gone);
 }
 static const struct compositor_impl compositor_handlers = { s_create_surface };
 
@@ -254,6 +258,7 @@ int main(void)
     callback_add_listener(cb2, &callback_impl, NULL);
     pump(d);
     CHECK(frame_done == 2, "sync callback done");
+    CHECK(!wire_client_closing(cl), "a connected client is not closing");
     /* Protocol error: a request with a bad object id. */
     union wire_arg bad[3] = { { .o = 12345 }, { .i = 0 }, { .i = 0 } };
     wire_proxy_marshal(surface, 0, bad, NULL);
@@ -261,6 +266,7 @@ int main(void)
     CHECK(wire_display_error(d) != 0, "protocol error reported to the client");
     wire_display_disconnect(d);
     wire_server_destroy(srv);
+    CHECK(surfaces_closing == 2, "the surfaces ended while their client was closing: %d", surfaces_closing);
     close(fd);
     unlink(path);
     printf("wire tests: %d checks, %d failures\n", checks, failures);

@@ -62,6 +62,10 @@ void wire_client_destroy(struct wire_client *c);
 void wire_client_set_user_data(struct wire_client *c, void *data, wire_client_destroy_fn destroy);
 void *wire_client_get_user_data(struct wire_client *c);
 struct wire_server *wire_client_server(struct wire_client *c);
+/* 1 while wire_client_destroy destroys the resources of the client. The
+ * destroy hook of a resource can tell the end of the client from a
+ * destructor request. */
+int wire_client_closing(struct wire_client *c);
 struct wire_resource *wire_client_find(struct wire_client *c, uint32_t id);
 struct wire_resource *wire_client_first_resource(struct wire_client *c);   /* iterate with ->next */
 void wire_client_post_error(struct wire_client *c, struct wire_resource *r, uint32_t code, const char *message);

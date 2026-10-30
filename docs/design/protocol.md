@@ -40,6 +40,8 @@ adds toplevel parent/modal state and popup configure/acknowledge/grab;
 `protocol/text.xml` has the UTF-8 text input and preedit events, and since
 version 2 the caret rectangle for the candidates of an input method. The
 seat of version 2 reports the label of the input method (`ime.md`).
+The `toplevel_manager` and `toplevel_handle` of version 2 add
+`set_task_rect` for the minimize animation (`shell.md`, `animations.md`).
 `protocol/data.xml` has the selection and drag and drop; its version 2
 adds the copy and move actions (`dnd.md`).
 `protocol/ime.xml` connects the compositor and the input method daemon

@@ -96,7 +96,7 @@ one commit without attribution lines. Sizes are estimates of new lines.
   `animate` of the debug interface of version 4. The recorded results
   come from x86_64 under TCG. The aarch64 results with hvf remain open.
 
-### AN3 Window animations (about 500 lines)
+### AN3 Window animations (about 500 lines, completed 2026-10-30)
 
 - Map: fade in and scale 0.96 to 1 over 150 ms.
 - Close: X12 renders the last frame with `scene_render_window` into a
@@ -109,6 +109,11 @@ one commit without attribution lines. Sizes are estimates of new lines.
   centre of the screen.
 - Input goes to the final state at once. A click during an animation acts
   on the final geometry.
+- As implemented: the request `set_task_rect` belongs to the toplevel
+  handle of the toplevel manager (version 2). A snapshot is a surface of
+  the role `ROLE_SNAPSHOT` in a list of `anim.c`. The boot case
+  `x12_anim` starts with AN3 and covers the window animations. AN4 adds
+  the popups and the notifications to the case.
 
 ### AN4 Popup fades (about 200 lines)
 

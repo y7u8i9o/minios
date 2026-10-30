@@ -189,6 +189,7 @@ size_t wire_client_pending(struct wire_client *c) { return c->conn.out_len; }
 void wire_client_set_user_data(struct wire_client *c, void *data, wire_client_destroy_fn destroy) { c->data = data; c->destroy = destroy; }
 void *wire_client_get_user_data(struct wire_client *c) { return c->data; }
 struct wire_server *wire_client_server(struct wire_client *c) { return c->srv; }
+int wire_client_closing(struct wire_client *c) { return c->dead; }
 
 struct wire_resource *wire_client_find(struct wire_client *c, uint32_t id)
 {

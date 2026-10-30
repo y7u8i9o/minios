@@ -176,6 +176,7 @@ void toplevel_set_minimized(struct toplevel *t, int on)
         return;
     t->minimized = !!on;
     damage_toplevel(t);
+    anim_window_minimize(t, on);
     comp_log("toplevel %d %s", t->number, on ? "minimized" : "shown");
     if (on && t->activated) {
         t->activated = 0;
@@ -260,6 +261,7 @@ void wm_toplevel_committed(struct toplevel *t, int first_map)
         f = toplevel_frame(t);
         comp_log("toplevel %d '%s' mapped at %d,%d %dx%d", t->number, t->title, f.x, f.y, f.w, f.h);
         toplevel_activate(t);
+        anim_window_map(s);
     } else if (t->minimized) {
         s->mapped = 1;      /* the surface retains its buffer, and the scene hides the surface */
     }

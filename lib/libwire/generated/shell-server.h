@@ -88,6 +88,7 @@ struct toplevel_handle_impl {
     void (*minimize)(struct wire_client *client, struct wire_resource *self);
     void (*close)(struct wire_client *client, struct wire_resource *self);
     void (*destroy)(struct wire_client *client, struct wire_resource *self);
+    void (*set_task_rect)(struct wire_client *client, struct wire_resource *self, struct wire_resource * surface, int32_t x, int32_t y, int32_t width, int32_t height);
 };
 void toplevel_handle_send_title(struct wire_resource *toplevel_handle, const char * title);
 void toplevel_handle_send_app_id(struct wire_resource *toplevel_handle, const char * app_id);

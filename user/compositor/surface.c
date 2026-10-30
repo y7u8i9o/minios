@@ -55,6 +55,11 @@ static void buffer_resource_destroy(struct wire_resource *r)
     /* Surfaces still showing it retain the memory through the pool. */
     for (struct csurface *s = surfaces; s; s = s->next) {
         if (s->current.buffer == b) {
+            /* The buffers of a client that disconnects end before its
+             * surfaces. The window closes. A buffer that the client
+             * destroys during a resize closes nothing. */
+            if (s->mapped && wire_client_closing(r->client))
+                anim_surface_closing(s);
             s->current.buffer = NULL;
             s->mapped = 0;
             scene_damage((struct rect){ s->x, s->y, s->width, s->height });
@@ -161,8 +166,10 @@ static void surface_resource_destroy(struct wire_resource *r)
             *pp = s->next;
             break;
         }
-    if (s->mapped)
+    if (s->mapped) {
+        anim_surface_closing(s);
         scene_damage(wm_extent(s));
+    }
     if (s->current.buffer)
         s->current.buffer->busy = 0;
     seat_surface_gone(s);
@@ -358,6 +365,9 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     if (s->pending.has_buffer) {
         struct buffer *prev = s->current.buffer, *b = s->pending.buffer;
         int was_mapped = s->mapped;
+        /* A null buffer unmaps the surface. */
+        if (!b && s->mapped)
+            anim_surface_closing(s);
         if (prev && prev != b && prev->res) {
             prev->busy = 0;
             buffer_send_release(prev->res);
