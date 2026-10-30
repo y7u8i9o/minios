@@ -2,8 +2,8 @@
  * recursive chains, stitching of kernel chains onto the user frames that
  * caused them, the pid filter, the divider, ring overflow, the scheduler,
  * kernel heap and transfer classes, and the aggregation the front ends
- * use: call trees, flame graph layout and folded stacks. Exits 0 on
- * success. */
+ * use: call trees, flame graph layout and folded stacks, and the
+ * mappings of many processes in /dev/maps. Exits 0 on success. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/resource.h>
+#include <signal.h>
 #include <prof/profile.h>
 
 static int failures;
@@ -149,6 +150,66 @@ static void test_symbols(void)
     prof_format_addr(self_syms, kernel_syms, 0, 0x10, 0, text, sizeof text);
     CHECK(strcmp(text, "0x10") == 0, "unknown address remains numeric: %s", text);
     CHECK(prof_is_lock_primitive("pop_cli") && !prof_is_lock_primitive("main"), "lock primitives named");
+}
+
+/* /dev/maps lists the mappings of every process. A fixed buffer of 32 KiB
+ * cut the list after about eleven processes of a desktop session. Forty
+ * forked copies of this process, each with the mappings of its
+ * libraries, produce more than 32 KiB. The last copy must be listed, and
+ * the resolver must name a function of the C library in the last copy. */
+static void test_many_maps(void)
+{
+    enum { COPIES = 40 };
+    pid_t pids[COPIES];
+    int n = 0, ready[2];
+    if (pipe(ready) < 0)
+        return;
+    for (; n < COPIES; n++) {
+        pids[n] = fork();
+        if (pids[n] < 0)
+            break;
+        if (pids[n] == 0) {
+            close(ready[0]);
+            write(ready[1], "r", 1);
+            for (;;)
+                pause();
+        }
+    }
+    close(ready[1]);
+    char c;
+    for (int i = 0; i < n; i++)
+        read(ready[0], &c, 1);
+    close(ready[0]);
+    CHECK(n == COPIES, "forked %d copies", n);
+    int fd = open("/dev/maps", O_RDONLY);
+    size_t total = 0;
+    int last_listed = 0;
+    char line[512], *text = malloc(1 << 20);
+    if (fd >= 0 && text) {
+        ssize_t got;
+        while (total < (1 << 20) - 1 && (got = read(fd, text + total, (1 << 20) - 1 - total)) > 0)
+            total += (size_t)got;
+        text[total] = '\0';
+        for (char *p = text; p && *p; p = strchr(p, '\n') ? strchr(p, '\n') + 1 : NULL) {
+            int pid;
+            snprintf(line, sizeof line, "%.*s", (int)strcspn(p, "\n"), p);
+            if (sscanf(line, "%d", &pid) == 1 && n && pid == pids[n - 1])
+                last_listed = 1;
+        }
+    }
+    if (fd >= 0)
+        close(fd);
+    free(text);
+    CHECK(total > 32768, "the list exceeds 32 KiB: %zu bytes", total);
+    CHECK(last_listed, "the last copy is listed in /dev/maps");
+    struct prof_resolver *r = prof_resolver_new();
+    const char *name = r && n ? prof_resolve(r, pids[n - 1], 0, (uint64_t)(uintptr_t)qsort + 2) : "?";
+    CHECK(strcmp(name, "qsort") == 0, "library function of the last copy: %s", name);
+    prof_resolver_free(r);
+    for (int i = 0; i < n; i++) {
+        kill(pids[i], SIGKILL);
+        waitpid(pids[i], NULL, 0);
+    }
 }
 
 static void test_self_profile(int fd)
@@ -414,6 +475,7 @@ int main(void)
     if (fd < 0 || !buffer)
         return 1;
     test_symbols();
+    test_many_maps();
     test_self_profile(fd);
     test_filter_and_kernel(fd);
     test_scheduler(fd);

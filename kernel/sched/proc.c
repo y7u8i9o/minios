@@ -361,7 +361,7 @@ size_t proc_format_maps(char *buf, size_t size)
 {
     size_t off = 0;
     off += (size_t)ksnprintf(buf + off, size - off, "%5s %16s %16s %10s %s\n", "PID", "START", "END", "OFFSET", "PATH");
-    enum { MAX_ROWS = 64 };
+    enum { MAX_ROWS = 256 };
     static int pids[MAX_ROWS];      /* the device read is serialized by the file lock */
     int n = 0;
     spin_lock(&proc_list_lock);
@@ -404,7 +404,7 @@ size_t proc_format_table(char *buf, size_t size)
     /* Snapshot first: counting resident pages walks page tables and must
      * not run under the process locks. The rows contain pids only, so a
      * process that exits meanwhile is reported without its size. */
-    enum { MAX_ROWS = 64 };
+    enum { MAX_ROWS = 256 };
     static struct proc_row rows[MAX_ROWS];  /* procdev_read is serialized by the file lock */
     int n = 0;
     spin_lock(&proc_tree_lock);

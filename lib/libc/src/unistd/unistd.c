@@ -18,6 +18,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <libc_arch.h>
@@ -649,6 +650,14 @@ int sleep_ms(unsigned long ms)
 
 /* sleep returns the unslept seconds, rounded up, when a signal ends the
  * sleep (POSIX). */
+/* poll without descriptors and without a timeout waits until a signal
+ * interrupts the call, and poll sets errno to EINTR. */
+int pause(void)
+{
+    poll(NULL, 0, -1);
+    return -1;
+}
+
 unsigned sleep(unsigned seconds)
 {
     struct timespec request = { .tv_sec = seconds, .tv_nsec = 0 }, remain = { 0, 0 };

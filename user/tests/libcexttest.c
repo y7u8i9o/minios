@@ -26,6 +26,7 @@
 #include <sys/sysmacros.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <signal.h>
 
 static void test_terminal_libc(void);
 static void test_stdio_additions(void);
@@ -172,8 +173,32 @@ static void test_time_additions(void)
           "UTC timezone state");
 }
 
+static volatile sig_atomic_t usr1_seen;
+static void on_usr1(int sig) { usr1_seen = sig; }
+
+/* pause returns -1 with EINTR after a signal handler ran. A child sends
+ * SIGUSR1 to the parent after 50 ms. */
+static void test_pause(void)
+{
+    struct sigaction sa = { 0 };
+    sa.sa_handler = on_usr1;
+    sigaction(SIGUSR1, &sa, NULL);
+    pid_t parent = getpid(), child = fork();
+    if (child == 0) {
+        sleep_ms(50);
+        kill(parent, SIGUSR1);
+        _exit(0);
+    }
+    errno = 0;
+    int r = pause();
+    CHECK(r == -1 && errno == EINTR && usr1_seen == SIGUSR1, "pause: %d errno %d handler %d", r, errno,
+          (int)usr1_seen);
+    waitpid(child, NULL, 0);
+}
+
 int main(void)
 {
+    test_pause();
     test_setjmp();
     test_locale();
     test_wchar();

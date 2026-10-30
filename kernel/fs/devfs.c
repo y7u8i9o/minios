@@ -345,12 +345,28 @@ static long zero_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     return (long)n;
 }
 
-static long procdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+/* The text devices format their whole text on every read and copy the
+ * part from *pos. A formatter returns size - 1 when the text did not fit.
+ * The buffer then doubles until the text fits, up to TEXT_DEVICE_MAX. A
+ * fixed buffer cut the list of /dev/maps after about eleven processes of
+ * a desktop session, and the profiler lost the libraries of the others. */
+#define TEXT_DEVICE_MAX (1024 * 1024)
+
+static long text_device_read(size_t (*format)(char *buf, size_t size), size_t size, char *buf, size_t n,
+                             uint64_t *pos)
 {
-    char *text = kmalloc(4096);
-    if (!text)
-        return -ENOMEM;
-    size_t len = proc_format_table(text, 4096);
+    char *text;
+    size_t len;
+    for (;;) {
+        text = kmalloc(size);
+        if (!text)
+            return -ENOMEM;
+        len = format(text, size);
+        if (len < size - 1 || size >= TEXT_DEVICE_MAX)
+            break;
+        kfree(text);
+        size *= 2;
+    }
     long r = 0;
     if (*pos < len) {
         size_t avail = len - *pos;
@@ -362,6 +378,11 @@ static long procdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
     }
     kfree(text);
     return r;
+}
+
+static long procdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
+{
+    return text_device_read(proc_format_table, 4096, buf, n, pos);
 }
 
 static long condev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
@@ -386,22 +407,7 @@ static long condev_ioctl(struct file *f, unsigned long req, uintptr_t arg)
  * to resolve addresses inside shared libraries. */
 static long mapsdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
-    enum { MAPS_SIZE = 32768 };
-    char *text = kmalloc(MAPS_SIZE);
-    if (!text)
-        return -ENOMEM;
-    size_t len = proc_format_maps(text, MAPS_SIZE);
-    long r = 0;
-    if (*pos < len) {
-        size_t avail = len - *pos;
-        if (n > avail)
-            n = avail;
-        memcpy(buf, text + *pos, n);
-        *pos += n;
-        r = (long)n;
-    }
-    kfree(text);
-    return r;
+    return text_device_read(proc_format_maps, 32768, buf, n, pos);
 }
 
 static const struct file_ops mapsdev_fops = { .read = mapsdev_read };
@@ -412,22 +418,7 @@ static const struct file_ops procdev_fops = { .read = procdev_read };
  * for finding where a program is blocked. */
 static long threadsdev_read(struct file *f, char *buf, size_t n, uint64_t *pos)
 {
-    enum { THREADS_SIZE = 65536 };
-    char *text = kmalloc(THREADS_SIZE);
-    if (!text)
-        return -ENOMEM;
-    size_t len = proc_format_threads(text, THREADS_SIZE);
-    long r = 0;
-    if (*pos < len) {
-        size_t avail = len - *pos;
-        if (n > avail)
-            n = avail;
-        memcpy(buf, text + *pos, n);
-        *pos += n;
-        r = (long)n;
-    }
-    kfree(text);
-    return r;
+    return text_device_read(proc_format_threads, 65536, buf, n, pos);
 }
 
 static const struct file_ops threadsdev_fops = { .read = threadsdev_read };

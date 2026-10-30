@@ -40,6 +40,9 @@ pid_t getpgrp(void);
 int tcsetpgrp(int fd, pid_t pgrp);
 pid_t tcgetpgrp(int fd);
 unsigned sleep(unsigned seconds);
+/* Wait until a signal handler runs or a signal ends the process. Returns
+ * -1 with errno EINTR. */
+int pause(void);
 int usleep(unsigned long usec);
 int sleep_ms(unsigned long ms);
 /* Milliseconds since boot. */

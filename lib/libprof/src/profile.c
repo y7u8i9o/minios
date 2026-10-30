@@ -175,10 +175,9 @@ struct prof_symtab *prof_symtab_load_kernel(void)
     return t;
 }
 
-void prof_symtab_free(struct prof_symtab *t)
+/* Release the shared libraries attached by prof_symtab_add_maps. */
+static void drop_modules(struct prof_symtab *t)
 {
-    if (!t)
-        return;
     for (size_t i = 0; i < t->nmodules; i++) {
         if (t->modules[i].owner) {
             prof_symtab_free(t->modules[i].syms);
@@ -186,6 +185,15 @@ void prof_symtab_free(struct prof_symtab *t)
         }
     }
     free(t->modules);
+    t->modules = NULL;
+    t->nmodules = 0;
+}
+
+void prof_symtab_free(struct prof_symtab *t)
+{
+    if (!t)
+        return;
+    drop_modules(t);
     free(t->syms);
     free(t->strings);
     free(t);
@@ -422,12 +430,21 @@ int prof_is_lock_primitive(const char *name)
 
 #define RESOLVER_PROCS 64
 #define RESOLVER_CACHE 8192u        /* a power of two, probed linearly */
+/* The shortest interval between two reads of /dev/maps for one process. */
+#define MAPS_REFRESH_MS 1000
 
+/* A process of the resolver. The libraries of the process are read again
+ * from /dev/maps when an address lies outside all known mappings, at most
+ * once per MAPS_REFRESH_MS. A sample taken while ld.so still maps the
+ * libraries otherwise left the libraries of the process unresolved.
+ * generation counts the reads of /dev/maps. */
 struct resolver_proc {
     pid_t pid;
     struct prof_symtab *syms;
     char name[32];
     int tried;
+    long maps_at;
+    unsigned generation;
 };
 
 /* Addresses repeat constantly, so a formatted name is produced once and
@@ -439,6 +456,8 @@ struct resolver_entry {
     pid_t pid;
     int kernel;
     char *name;
+    int unresolved;             /* name is the address: a later read of /dev/maps may resolve it */
+    unsigned generation;        /* the generation of the process at the formatting */
 };
 
 struct prof_resolver {
@@ -498,6 +517,8 @@ static struct resolver_proc *resolver_proc(struct prof_resolver *r, pid_t pid)
     p->tried = 0;
     p->name[0] = '\0';
     p->syms = NULL;
+    p->maps_at = 0;
+    p->generation = 0;
     return p;
 }
 
@@ -527,8 +548,46 @@ static struct prof_symtab *resolver_symtab(struct prof_resolver *r, pid_t pid)
         snprintf(path, sizeof path, "%s/%s", dirs[i], name);
         p->syms = prof_symtab_load_elf(path);
     }
+    /* An executable outside these directories has no table of its own,
+     * but its libraries still resolve. */
+    if (!p->syms)
+        p->syms = calloc(1, sizeof *p->syms);
     prof_symtab_add_maps(p->syms, pid);
+    p->maps_at = uptime_ms();
     return p->syms;
+}
+
+/* Format a user address of pid into buf. Returns 1 when a symbol names the
+ * address. An address outside the known mappings reads /dev/maps again. */
+static int resolve_user(struct prof_resolver *r, pid_t pid, uint64_t addr, char *buf, size_t size,
+                        unsigned *generation)
+{
+    struct prof_symtab *t = resolver_symtab(r, pid);
+    struct resolver_proc *p = resolver_proc(r, pid);
+    int found = prof_symtab_lookup(t, addr, NULL) != NULL;
+    if (!found && t && p) {
+        long now = uptime_ms();
+        if (now - p->maps_at >= MAPS_REFRESH_MS) {
+            drop_modules(t);
+            prof_symtab_add_maps(t, pid);
+            p->maps_at = now;
+            p->generation++;
+            found = prof_symtab_lookup(t, addr, NULL) != NULL;
+        }
+    }
+    *generation = p ? p->generation : 0;
+    prof_format_addr(t, NULL, 0, addr, 0, buf, size);
+    return found;
+}
+
+/* An unresolved entry is formatted again after a new read of /dev/maps,
+ * or when the next read is due. */
+static int entry_stale(struct prof_resolver *r, const struct resolver_entry *e)
+{
+    if (!e->unresolved || e->kernel)
+        return 0;
+    struct resolver_proc *p = resolver_proc(r, e->pid);
+    return p && (p->generation != e->generation || uptime_ms() - p->maps_at >= MAPS_REFRESH_MS);
 }
 
 static size_t cache_slot(uint64_t addr, pid_t pid, int kernel)
@@ -551,10 +610,27 @@ const char *prof_resolve(struct prof_resolver *r, pid_t pid, int kernel, uint64_
     size_t slot = cache_slot(addr, pid, kernel);
     for (size_t i = 0; i < RESOLVER_CACHE; i++) {
         struct resolver_entry *e = &r->cache[(slot + i) & (RESOLVER_CACHE - 1)];
+        if (e->name && e->addr == addr && e->pid == pid && e->kernel == kernel && entry_stale(r, e)) {
+            char buf[160];
+            unsigned generation;
+            int found = resolve_user(r, pid, addr, buf, sizeof buf, &generation);
+            char *copy = strdup(buf);
+            if (copy) {
+                free(e->name);
+                e->name = copy;
+                e->unresolved = !found;
+                e->generation = generation;
+            }
+            return e->name;
+        }
         if (!e->name) {
             char buf[160];
-            const struct prof_symtab *t = kernel ? r->kernel : resolver_symtab(r, pid);
-            prof_format_addr(kernel ? NULL : t, kernel ? t : NULL, kernel, addr, 0, buf, sizeof buf);
+            unsigned generation = 0;
+            int found = 1;
+            if (kernel)
+                prof_format_addr(NULL, r->kernel, 1, addr, 0, buf, sizeof buf);
+            else
+                found = resolve_user(r, pid, addr, buf, sizeof buf, &generation);
             char *copy = strdup(buf);
             if (!copy)
                 return "?";
@@ -572,6 +648,8 @@ const char *prof_resolve(struct prof_resolver *r, pid_t pid, int kernel, uint64_
             e->pid = pid;
             e->kernel = kernel;
             e->name = copy;
+            e->unresolved = !found;
+            e->generation = generation;
             r->cached++;
             return copy;
         }

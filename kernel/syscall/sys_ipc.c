@@ -61,7 +61,9 @@ long sys_poll(struct trapframe *tf)
     long timeout = (long)SYSARG2(tf);
     if (n > OPEN_MAX)
         return -EINVAL;
-    if (!user_range_ok(ufds, n * sizeof(struct pollfd), true))
+    /* poll without descriptors waits for the timeout or a signal and
+     * may pass a null array (pause in libc). */
+    if (n && !user_range_ok(ufds, n * sizeof(struct pollfd), true))
         return -EFAULT;
     struct pollfd pfds[OPEN_MAX];
     struct file *files[OPEN_MAX];
