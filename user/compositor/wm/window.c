@@ -150,6 +150,7 @@ void toplevel_set_maximized(struct toplevel *t, int on)
 {
     if (t->maximized == !!on)
         return;
+    t->anchor_edges = 0;
     damage_toplevel(t);
     if (on) {
         t->saved_x = t->s->x;
@@ -261,6 +262,19 @@ void wm_toplevel_committed(struct toplevel *t, int first_map)
         toplevel_activate(t);
     } else if (t->minimized) {
         s->mapped = 1;      /* the surface retains its buffer, and the scene hides the surface */
+    }
+    /* The first commit of a new size after a resize from the top or the
+     * left edge places the frame at the edges that remained in place. The
+     * core damages the extent before the commit and the extent after this
+     * call, which covers the strip that the window leaves. */
+    struct rect f = toplevel_frame(t);
+    if (t->anchor_edges && (f.w != t->anchor_w || f.h != t->anchor_h)) {
+        if (t->anchor_edges & GUI_EDGE_LEFT)
+            s->x += t->anchor_right - (f.x + f.w);
+        if (t->anchor_edges & GUI_EDGE_TOP)
+            s->y += t->anchor_bottom - (f.y + f.h);
+        t->anchor_edges = 0;
+        clamp_toplevel(s);
     }
 }
 

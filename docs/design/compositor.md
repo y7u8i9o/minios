@@ -26,7 +26,14 @@ a click and the size of a configure. The module has three files:
   Alt+F4, the decision over a button press (`wm_pointer_press`), and the
   dimming of the toplevels of an unresponsive client (`wm_draw_above`).
 - `wm/decor.c`: the server side decorations, the shadow, the move and
-  resize drags, and Alt+drag.
+  resize drags, and Alt+drag. A resize from the top or the left edge
+  records the bottom and right edge of the frame (`anchor_*` of the
+  toplevel) and sends the configure. The first commit of the new size
+  moves the surface so that those edges remain in place
+  (`wm_toplevel_committed`). The commit damages the extent before and
+  after the move, so the strip that the window leaves is repainted.
+  Until 2026-10-30 the release moved the surface at once: the old buffer
+  appeared at the new position, and the strip remained on the screen.
 - `wm/internal.h`: the declarations that the two files share.
 
 The core calls the module for the events of toplevels

@@ -43,7 +43,7 @@ static struct toplevel *drag;
 static int drag_dx, drag_dy;
 static int by_client;                   /* the drag was requested by the client */
 static struct toplevel *resizing;
-static int resize_edges, resize_x0, resize_y0, resize_w0, resize_h0, resize_sx, resize_sy;
+static int resize_edges, resize_x0, resize_y0, resize_w0, resize_h0;
 
 int decor_has(const struct csurface *s)
 {
@@ -321,12 +321,12 @@ static void start_resize(struct toplevel *t, int edges)
     resize_x0 = cursor_x;
     resize_y0 = cursor_y;
     toplevel_configure_size(t, &resize_w0, &resize_h0);
-    resize_sx = t->s->x;
-    resize_sy = t->s->y;
+    t->anchor_edges = 0;
 }
 
 static void start_move(struct toplevel *t)
 {
+    t->anchor_edges = 0;
     drag = t;
     drag_dx = cursor_x - t->s->x;
     drag_dy = cursor_y - t->s->y;
@@ -407,11 +407,21 @@ int decor_release(void)
         int dx = cursor_x - resize_x0, dy = cursor_y - resize_y0;
         int w = resize_w0, h = resize_h0;
         if (resize_edges & GUI_EDGE_RIGHT) w += dx;
-        if (resize_edges & GUI_EDGE_LEFT) { w -= dx; t->s->x = resize_sx + dx; }
+        if (resize_edges & GUI_EDGE_LEFT) w -= dx;
         if (resize_edges & GUI_EDGE_BOTTOM) h += dy;
-        if (resize_edges & GUI_EDGE_TOP) { h -= dy; t->s->y = resize_sy + dy; }
+        if (resize_edges & GUI_EDGE_TOP) h -= dy;
         if (w < 32) w = 32;
         if (h < 32) h = 32;
+        /* A resize from the top or the left edge moves the window when the
+         * client commits the new size (wm_toplevel_committed). A move now
+         * would show the old buffer at the new position, and the commit
+         * would not repaint the strip that the window leaves. */
+        struct rect f = toplevel_frame(t);
+        t->anchor_edges = resize_edges & (GUI_EDGE_TOP | GUI_EDGE_LEFT);
+        t->anchor_right = f.x + f.w;
+        t->anchor_bottom = f.y + f.h;
+        t->anchor_w = f.w;
+        t->anchor_h = f.h;
         toplevel_configure(t, w, h);
         return done;
     }

@@ -293,8 +293,22 @@ static void test_gui_resize(void)
     ktest_wait_idle(500);
     ktest_assert(pixel(sw - 10, dh - 10) == 0x00306080, "desktop after restore %08x", pixel(sw - 10, dh - 10));
     ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "restored contents %08x", pixel(390, 280));
-    /* Close button of the header bar. */
-    mouse_move_to(&cx, &cy, 40 + 400 - 19, 60 - 16, 0);
+    /* Drag the top edge of the frame, 2 px above the header at y 30, 60 px
+     * down. The bottom edge remains, the header moves to y 90, and the
+     * strip that the window leaves shows the desktop again. */
+    mouse_move_to(&cx, &cy, 40 + 200, 30 - 2, 0);
+    feed_packet(1, 0, 0);
+    ktest_wait_idle(50);
+    mouse_move_to(&cx, &cy, 40 + 200, 30 - 2 + 60, 1);
+    feed_packet(0, 0, 0);
+    ktest_wait_idle(500);
+    ktest_assert(pixel(40 + 2, 50) == 0x00306080, "the old title bar remains after a resize from the top %08x",
+                 pixel(42, 50));
+    ktest_assert(pixel(40 + 2, 100) == 0x00ebebeb, "title bar after the resize from the top %08x", pixel(42, 100));
+    ktest_assert(pixel(40 + 350, 60 + 220) == 0x0040c040, "contents after the resize from the top %08x",
+                 pixel(390, 280));
+    /* Close button of the header bar, now 60 px lower. */
+    mouse_move_to(&cx, &cy, 40 + 400 - 19, 120 - 16, 0);
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "guitest status 0x%x", status);

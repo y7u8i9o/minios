@@ -86,6 +86,11 @@ struct toplevel {
     int handle_count;
     int number;                             /* creation order, used by the logs */
     int placed;
+    /* A resize from the top or the left edge (wm/decor.c): the edges
+     * GUI_EDGE_TOP and GUI_EDGE_LEFT that move, the bottom and right edge
+     * of the frame that remain in place, and the frame size before the
+     * resize. The commit of the new size moves the surface. */
+    int anchor_edges, anchor_right, anchor_bottom, anchor_w, anchor_h;
     struct toplevel *parent;
     int modal;
     struct rect geo;                        /* window geometry inside the surface (client decorations) */
