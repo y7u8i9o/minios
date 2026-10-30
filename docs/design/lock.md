@@ -58,38 +58,43 @@ While the session is locked, the following rules apply:
 A lock request is refused while a running locker owns the session. When
 the locker has exited without an unlock, X12 shows the black screen with
 the message "The screen locker has stopped. Press a key to start it
-again." A key press starts a new locker. In this state X12 accepts a lock
-request only from root or from the process that X12 started. X12 compares
-the process id of the client from `SO_PEERCRED` at connect time
-(`client.peer_pid`) with `locker_pid`. A program of the session user
+again." A key press sends `locker_needed` to the session manager, and
+`sessiond` starts a new locker. In this state X12 accepts a lock request
+only from root or from the process that `sessiond` reported with
+`set_locker`. X12 compares the process id of the client from `SO_PEERCRED`
+at connect time (`client.peer_pid`) with `locker_pid`. A program of the session user
 therefore cannot resume an abandoned lock and unlock the session.
 
-When the greeter ends the session (`session_uid` -1), X12 sends
+When the greeter ends the session (session user -1), X12 sends
 `finished` to the owner and unlocks. The processes of the session end
 with the session.
 
 ## Starting the locker
 
-X12 starts `/bin/lock` in three cases:
+The session manager `sessiond` starts `/bin/lock` in three cases
+(`sessiond.md`):
 
-- Super+L.
-- A key press while the session is locked without a locker.
-- `lock_timeout` seconds without input. Each read from an input device
-  counts as input (`lock_note_input` in `input.c`). The value 0 turns the
-  automatic lock off. `lock_next_deadline` gives the poll timeout of the
-  main loop. The idle timeout starts one locker. A further start
-  requires new input.
+- Super+L, the shortcut `lock` that `sessiond` binds.
+- The event `locker_needed`: a key press while the session is locked
+  without a locker.
+- The event `idle`: `lock_timeout` seconds without input. Each read from
+  an input device counts as input (`session_note_input` in `input.c`). The
+  value 0 turns the automatic lock off. `session_next_deadline` gives the
+  poll timeout of the main loop of X12. X12 sends one `idle` event for
+  each period without input.
 
-X12 forks the locker itself and therefore knows the process id. The child
-takes the identity of the session user with `account_become`. The child
-sets `HOME`, `USER`, `LOGNAME` and the language of the desktop settings.
-X12 collects the exit of the locker with `waitpid` once a second and
-before it starts a new locker. Without a session user (`session_uid` -1),
-for example while the login window is shown, X12 starts no locker.
+`sessiond` forks the locker and reports the process id with `set_locker`
+before the child runs `/bin/lock`. The child takes the identity of the
+session user with `account_become`. The child sets `HOME`, `USER`,
+`LOGNAME` and the language of the desktop settings. `sessiond` collects
+the exit of the locker with `waitpid` once a second and before it starts
+a new locker. Without a session user, for example while the login window
+is shown, `sessiond` starts no locker. X12 starts no process. Before
+2026-10-30, X12 forked the locker itself.
 
 The panel starts `/bin/lock` from the Lock row of its power menu. This
-locker is not a child of X12. A crash of this locker leads to the black
-screen, and the next key starts a locker from X12.
+locker is not a child of `sessiond`. A crash of this locker leads to the
+black screen, and the next key starts a locker from `sessiond`.
 
 The desktop reads `lock_timeout` from `desktop.conf` and sends it to X12
 with the other settings. The default is 300 seconds. The Display page of

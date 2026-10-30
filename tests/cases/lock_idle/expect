@@ -1,5 +1,5 @@
 x12: setting lock_timeout = 3
-x12: locker [0-9]+ started \(idle\)
+sessiond: locker [0-9]+ started \(idle\)
 lock_idle: locked after the timeout
 lock: unlocked
 lock_idle: input defers the lock

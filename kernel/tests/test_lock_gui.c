@@ -1,6 +1,7 @@
 /* S6 of docs/plan/release-0.7.0.md: the screen locker. The tests start
- * X12 and the panel without the greeter. A root client selects the session
- * user with the setting session_uid, as the greeter does. The lock screen
+ * X12, the session manager sessiond and the panel without the greeter. A
+ * root client selects the session user with "x12settings session-user", as
+ * the greeter does. sessiond starts the locker. The lock screen
  * of the locker lock has the desktop colour with a gradient. The gradient is
  * darker than the panel at the bottom of the screen. A session without a
  * locker shows black. */
@@ -46,7 +47,7 @@ static void test_gui_lock(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    run_shell("x12settings set session_uid 0");
+    run_shell("x12settings session-user 0");
     run_shell("printf 'secret\\nsecret\\n' | passwd");
     /* A window that logs its keys. Its second window has the focus. */
     struct proc *client = proc_create_user("/bin/sh", (char *const[]){ "sh", "-c", "guitest > /tmp/keys.log", NULL },
@@ -122,7 +123,7 @@ static void test_gui_lock_crash(void)
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    run_shell("x12settings set session_uid 1000");
+    run_shell("x12settings session-user 1000");
     run_shell("printf 'userpw\\nuserpw\\n' | passwd user");
     ktest_wait_idle(600);
     super_l();
@@ -136,7 +137,7 @@ static void test_gui_lock_crash(void)
     kprintf("gui_lock_crash: black screen\n");
     sleep_ms(1500);                     /* the screendump of the QMP script */
 
-    /* Only a locker that X12 started may resume the lock. */
+    /* Only a locker that sessiond started may resume the lock. */
     ktest_assert(shell_status("doas -u user lock") != 0, "a locker of the session user resumed the lock");
     ktest_assert(pixel(5, sh / 2) == 0, "the screen is not black: %08x", pixel(5, sh / 2));
     kprintf("gui_lock_crash: foreign locker refused\n");
@@ -155,14 +156,14 @@ static void test_gui_lock_crash(void)
 }
 KTEST_DEFINE("gui_lock_crash", test_gui_lock_crash);
 
-/* X12 locks the session after lock_timeout seconds without input. root
+/* sessiond locks the session after lock_timeout seconds without input. root
  * has no password on the test image. Enter therefore unlocks the session. */
 static void test_lock_idle(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     int sw = logical_w(), sh = logical_h();
     struct proc *srv = start_server();
-    run_shell("x12settings set session_uid 0");
+    run_shell("x12settings session-user 0");
     run_shell("x12settings set lock_timeout 3");
     ktest_assert(wait_procs("lock", 0, 1, 10000), "no locker after 3 s without input");
     ktest_assert(wait_locked(sh), "the session is not locked");

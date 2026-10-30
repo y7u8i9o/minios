@@ -1102,15 +1102,31 @@ static void test_comp_seat(void)
 }
 KTEST_DEFINE("comp_seat", test_comp_seat);
 
-/* A client that stops answering pings is dimmed and gets the not
- * responding dialog; Wait hides it, the client recovers; a client that
- * hangs for good is killed through Force quit. comptest windows are
- * 200x150, the dialog 184x96 centred with two 76x26 buttons. */
+/* A client that stops answering pings is dimmed by X12, and sessiond shows
+ * the not responding dialog. Wait hides the dialog, and the client
+ * recovers. A client that hangs for good is killed through Force quit.
+ * comptest windows are 200x150. The dialog of sessiond is a layer window
+ * centred on the screen, 108 pixels high, with the label at the top and
+ * Wait and Force quit at the bottom. Wait has the keyboard focus. A click
+ * on the top edge of the dialog gives the dialog the keyboard. The click
+ * lies 100 pixels left of the centre and the probe pixel 100 pixels right
+ * of the centre, so that the cursor never covers the probe pixel. */
+static bool wait_dialog(int shown)
+{
+    int sw = logical_w(), sh = logical_h();
+    uint64_t t0 = timer_ms();
+    while ((pixel(sw / 2 + 100, sh / 2 - 45) != 0x00306080) == !shown && timer_ms() - t0 < 8000)
+        sleep_ms(100);
+    return (pixel(sw / 2 + 100, sh / 2 - 45) != 0x00306080) == shown;
+}
+
 static void test_comp_hang(void)
 {
     ktest_assert(fb_screen_present, "no framebuffer");
     struct proc *srv = start_x12((char *const[]){ "x12", "-s", "-v", NULL });
-    int cx = logical_w() / 2, cy = logical_h() / 2;
+    start_sessiond();
+    int sw = logical_w(), sh = logical_h();
+    int cx = sw / 2, cy = sh / 2;
     struct proc *cl = proc_create_user("/bin/comptest", (char *const[]){ "comptest", "hang", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start comptest");
@@ -1118,14 +1134,20 @@ static void test_comp_hang(void)
     uint64_t t0 = timer_ms();
     while (pixel(45, 65) != 0x0088889f && timer_ms() - t0 < 8000)
         sleep_ms(100);
-    kprintf("comp_hang: dialog after %lu ms\n", timer_ms() - t0);
+    kprintf("comp_hang: dimmed after %lu ms\n", timer_ms() - t0);
     ktest_assert(pixel(45, 65) == 0x0088889f, "hung window dimmed: %08x", pixel(45, 65));
-    ktest_assert(pixel(56, 95) == 0x00f4f5f7, "dialog box drawn: %08x", pixel(56, 95));
+    ktest_assert(wait_dialog(1), "no dialog of sessiond");
     /* Wait: the dialog goes away although the client still hangs. */
-    mouse_move_to(&cx, &cy, 60 + 38, 145 + 13, 0);
+    mouse_move_to(&cx, &cy, sw / 2 - 100, sh / 2 - 50, 0);
     mouse_click(1);
-    sleep_ms(300);
-    ktest_assert(pixel(45, 65) == 0x00d0d0ff, "window shown again after Wait: %08x", pixel(45, 65));
+    ktest_wait_idle(200);
+    press_key(0x1c);
+    ktest_assert(wait_dialog(0), "the dialog remained after Wait");
+    /* The client answers again after six seconds. */
+    t0 = timer_ms();
+    while (pixel(45, 65) != 0x00d0d0ff && timer_ms() - t0 < 10000)
+        sleep_ms(100);
+    ktest_assert(pixel(45, 65) == 0x00d0d0ff, "window shown again after the recovery: %08x", pixel(45, 65));
     int status = proc_reap(cl);
     ktest_assert(status == 0, "hanging client status 0x%x", status);
 
@@ -1137,15 +1159,21 @@ static void test_comp_hang(void)
     while (pixel(75, 95) != 0x0088889f && timer_ms() - t0 < 8000)
         sleep_ms(100);
     ktest_assert(pixel(75, 95) == 0x0088889f, "second hung window dimmed: %08x", pixel(75, 95));
+    ktest_assert(wait_dialog(1), "no dialog for the second client");
     char pause_arg[8];
     if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
         sleep_ms(8000);                 /* screenshots of the dialog */
-    mouse_move_to(&cx, &cy, 174 + 38, 175 + 13, 0);
+    mouse_move_to(&cx, &cy, sw / 2 - 100, sh / 2 - 50, 0);
     mouse_click(1);
+    ktest_wait_idle(200);
+    press_key(0x0f);                    /* Tab: Force quit */
+    press_key(0x1c);
     status = proc_reap(cl);
     ktest_assert(status == PROC_STATUS_SIGNALED(SIGKILL), "force quit killed the client: 0x%x", status);
+    ktest_assert(wait_dialog(0), "the dialog remained after Force quit");
     sleep_ms(300);
     ktest_assert(pixel(75, 95) == 0x00306080, "window gone after Force quit: %08x", pixel(75, 95));
+    stop_sessiond();
     signal_send(srv, SIGTERM);
     proc_reap(srv);
     kprintf("comp_hang: ok\n");

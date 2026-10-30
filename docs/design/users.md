@@ -282,8 +282,9 @@ AF_UNIX sockets report the process at the other end through
 `getsockopt(SOL_SOCKET, SO_PEERCRED)` as a `struct ucred` with its pid,
 effective uid and effective gid (`sockets.md`). X12 reads it for every new
 client (`client_attach`) and admits root, the user who runs the server
-and the session user, `session_uid`, which only a root client may change
-through the setting of the same name (`x12settings set session_uid UID`).
+and the session user. The session user changes through the request
+`set_user` of the session manager interface, which admits only root and
+the user of X12 (`x12settings session-user UID`, `sessiond.md`).
 A change disconnects the clients of a user who is no longer admitted.
 init uses the same option to authorize its control requests (`init.md`).
 

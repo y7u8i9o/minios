@@ -73,4 +73,5 @@ static inline int settings_add_listener(struct wire_proxy *p, const struct setti
 { return wire_proxy_add_listener(p, (const void *)l, user); }
 void settings_set(struct wire_proxy *settings, const char * key, int32_t value);
 void settings_get_all(struct wire_proxy *settings);
+void settings_set_keymap(struct wire_proxy *settings, const char * name);
 

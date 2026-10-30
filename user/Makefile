@@ -22,7 +22,7 @@ TESTS  := $(patsubst tests/%.c,%,$(wildcard tests/*.c))
 # test programs, test fixtures or test data (docs/design/build.md). hello
 # exists for the tests and belongs to the package tests.
 WITH_TESTS := $(filter 1,$(strip $(CONFIG_TESTS)))
-PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 panel desktop audiod notifyd settings files pkg imed greeter lock askpass installer installer-gui
+PROGS  := init sh $(if $(WITH_TESTS),hello) edit mint term x12 sessiond panel desktop audiod notifyd settings files pkg imed greeter lock askpass installer installer-gui
 UTILS  := $(filter-out code,$(patsubst coreutils/%.c,%,$(wildcard coreutils/*.c)))
 # The programs of the package binutils share binutils/lib/ (docs/design/binutils.md).
 BINUTILS := ar as ld nm size strings readelf objdump objcopy strip addr2line ranlib
@@ -703,7 +703,8 @@ $(ROOT)/usr/bin/%: %/*.c $(SOS) $(LIBEDIT) $(CRT0)
 
 # X12 retains its implementation in compositor/ for the continuity of the
 # source history, while the installed server and its visible name are X12.
-$(ROOT)/usr/bin/x12: compositor/*.c $(SOS) $(CRT0)
+# The window manager module of X12 is in compositor/wm/.
+$(ROOT)/usr/bin/x12: compositor/*.c compositor/wm/*.c compositor/*.h compositor/wm/*.h $(SOS) $(CRT0)
 	@mkdir -p $(dir $@) $(OUT)
 	$(CC) $(UCFLAGS) $(UCPP) -o $(OUT)/x12.elf $(ULDFLAGS) $(CRT0) $(filter %.c,$^) $(DYNLIBS) -lgcc
 	$(OBJCOPY) --strip-debug $(OUT)/x12.elf $@

@@ -3,8 +3,9 @@
 M25 gives surfaces roles and delivers input and data transfers; X12 retains
 the protocol interface names stable for clients.
 Protocol definitions: `protocol/shell.xml`, `seat.xml`, `data.xml`;
-compositor modules: `user/compositor/shell.c`, `decor.c`, `seat.c`,
-`data.c`. The panel consists of `user/panel/panel.c`, `launcher.c` and
+compositor modules: `user/compositor/shell.c`, `seat.c`, `data.c`, and
+the window manager module `wm/window.c` and `wm/decor.c`
+(`compositor.md`). The panel consists of `user/panel/panel.c`, `launcher.c` and
 `mixer.c`.
 
 ## Roles (`shell.c`)
@@ -76,7 +77,7 @@ screen; a maximized window's geometry is the desktop area. The commit
 check compares the acknowledged configure with the geometry when one is
 set. The `mapped at` log line reports the frame.
 
-Server side decorations (`decor.c`) remain for clients without their own,
+Server side decorations (`wm/decor.c`) remain for clients without their own,
 drawn into the scene around the surface at the screen scale, antialiased
 where shapes are curved:
 

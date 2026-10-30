@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <minios/abi.h>
+#include <gui/paint.h>
 #include <gui/pixel.h>
 #include "comp.h"
 
@@ -41,6 +42,34 @@ void scene_init(void)
     shown_x = screen_w / 2;
     shown_y = screen_h / 2;
     scene_cursor_changed();
+}
+
+/* The text that X12 draws itself (the title bars and the message of a
+ * locked session without a locker) uses the interface font of the
+ * default theme at 13 pixels. */
+#define SERVER_FONT_PX 13
+static struct theme server_theme;
+static const struct font *server_font;
+
+static void load_server_font(void)
+{
+    if (server_font)
+        return;
+    theme_init_default(&server_theme);
+    struct font *f = gfx_font_open_ttf(server_theme.font_path, SERVER_FONT_PX);
+    server_font = f ? f : gfx_font_builtin();
+}
+
+const struct font *scene_font(void)
+{
+    load_server_font();
+    return server_font;
+}
+
+const struct theme *scene_theme(void)
+{
+    load_server_font();
+    return &server_theme;
 }
 
 void scene_damage(struct rect r)
@@ -109,7 +138,7 @@ void scene_set_cursor(int x, int y)
 /* Extent drawn for a surface: its decorations frame when it has one. */
 static struct rect extent(const struct csurface *s)
 {
-    return decor_has(s) ? decor_extent(s) : surface_rect(s);
+    return wm_extent(s);
 }
 
 static int visible(const struct csurface *s)
@@ -204,7 +233,7 @@ static int subtract_opaque(struct rect *pieces, int *np, const struct csurface *
     if (!cover->current.buffer)
         return 1;
     if (cover->current.buffer->format == FORMAT_XRGB8888)
-        return pieces_subtract(pieces, np, decor_has(cover) ? decor_opaque(cover) : surface_rect(cover));
+        return pieces_subtract(pieces, np, wm_opaque(cover));
     for (int q = 0; q < cover->current.nopaque && *np; q++) {
         struct rect o = cover->current.opaque[q];
         o.x += cover->x;
@@ -491,7 +520,7 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
         if (!s->current.buffer)
             continue;
         if (s->current.buffer->format == FORMAT_XRGB8888) {
-            struct rect o = decor_has(s) ? decor_opaque(s) : surface_rect(s);
+            struct rect o = wm_opaque(s);
             covered = rect_contains(o, r.x, r.y) && rect_contains(o, r.x + r.w - 1, r.y + r.h - 1);
         } else {
             for (int q = 0; q < s->current.nopaque && !covered; q++) {
@@ -520,12 +549,9 @@ static void compose_rect(struct rect r, struct csurface **order, int n)
             np = 1;
         }
         for (int k = 0; k < np; k++) {
-            if (decor_has(s)) {
-                decor_draw_shadow(s, pieces[k]);
-                decor_draw(s, pieces[k]);
-            }
+            wm_draw_below(s, pieces[k]);
             draw_surface(s, pieces[k]);
-            hang_draw(s, pieces[k]);
+            wm_draw_above(s, pieces[k]);
         }
     }
     lock_draw(r);
@@ -623,10 +649,7 @@ int scene_render_window(struct toplevel *t, uint8_t *to, int stride)
         else
             back = (struct surface){ (uint32_t *)to, W, H, stride / 4 };
         gfx_fill_rect(&back, 0, 0, W, H, pass ? 0x00ffffff : 0);
-        if (decor_has(s)) {
-            decor_draw_shadow(s, clip);
-            decor_draw(s, clip);
-        }
+        wm_draw_below(s, clip);
         draw_surface(s, clip);
     }
     back = saved;

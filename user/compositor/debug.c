@@ -1,7 +1,6 @@
 /* Debugging and settings globals: statistics, the surface list, a
  * pixel probe, screen capture, and tunable settings (frame interval,
  * desktop colour, key repeat, decoration default, logging). */
-#include <minios/conf.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -292,42 +291,8 @@ static int *slot(const char *key)
     return NULL;
 }
 
-/* The keymap name lives in the configuration file; the settings client
- * asks for a reload with keymap_reload after changing it. */
-static void reload_keymap(void)
-{
-    char path[256], name[128];
-    if (conf_lookup(conf_read_path(path, sizeof path), "keymap", name, sizeof name) && name[0] &&
-        seat_load_keymap(name) < 0)
-        comp_log("keymap %s not found", name);
-}
-
 static void h_set(struct wire_client *c, struct wire_resource *self, const char *key, int32_t value)
 {
-    /* The session user, which only a root client may name. Clients of a
-     * user who is no longer admitted are disconnected. */
-    if (strcmp(key, "session_uid") == 0) {
-        struct client *cl = wire_client_get_user_data(c);
-        if (!cl || cl->uid != 0 || value < -1) {
-            comp_log("setting session_uid refused");
-            return;
-        }
-        session_uid = value;
-        comp_log("session uid %d", value);
-        if (value < 0)
-            lock_session_ended();
-        clients_drop_disallowed();
-        return;
-    }
-    if (strcmp(key, "keymap_reload") == 0) {
-        reload_keymap();
-        return;
-    }
-    /* The panel indicator selects the next input method with -1. */
-    if (strcmp(key, "input_method") == 0) {
-        im_select(value);
-        return;
-    }
     int *p = slot(key);
     if (!p)
         return;
@@ -381,7 +346,13 @@ static void h_get_all(struct wire_client *c, struct wire_resource *self)
         settings_send_value(self, keys[i], *slot(keys[i]));
     settings_send_done(self);
 }
-static const struct settings_impl settings_handlers = { h_set, h_get_all };
+static void h_set_keymap(struct wire_client *c, struct wire_resource *self, const char *name)
+{
+    if (seat_load_keymap(name) < 0)
+        comp_log("keymap %s not found", name);
+}
+
+static const struct settings_impl settings_handlers = { h_set, h_get_all, h_set_keymap };
 
 static void bind_settings(struct wire_client *c, void *data, uint32_t version, uint32_t id)
 {
@@ -394,6 +365,6 @@ void debug_init(struct wire_server *srv)
 {
     server = srv;
     wire_global_create(srv, &debug_interface, 3, bind_debug, NULL);
-    wire_global_create(srv, &settings_interface, 1, bind_settings, NULL);
+    wire_global_create(srv, &settings_interface, 2, bind_settings, NULL);
     wire_global_create(srv, &screencopy_interface, 1, bind_screencopy, NULL);
 }

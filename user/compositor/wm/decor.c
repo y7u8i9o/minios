@@ -11,7 +11,7 @@
 #include <gui/paint.h>
 #include <gui/pixel.h>
 #include <gui/keymap.h>
-#include "comp.h"
+#include "internal.h"
 
 /* Colours of the active window, then of inactive windows. */
 #define COLOR_TITLE              0x00e9ecf0
@@ -38,7 +38,6 @@ static const struct gui_resize_zones zones = {
     .margin = RESIZE_MARGIN, .inner = BORDER, .corner = 24, .reach = 12,
     .inset_top = RADIUS, .inset_bottom = BORDER,
 };
-#define TITLE_PX 13
 
 static struct toplevel *drag;
 static int drag_dx, drag_dy;
@@ -192,24 +191,14 @@ static void draw_disc(struct rect b, struct rect clip, uint32_t color)
 }
 
 /* The title is drawn through a painter at the screen scale with the
- * interface font, so it is as sharp as the clients' text. */
-static struct theme decor_theme;
+ * interface font of the scene, so it is as sharp as the clients' text. */
 static const struct font *title_font;
-
-static void decor_fonts(void)
-{
-    if (title_font)
-        return;
-    theme_init_default(&decor_theme);
-    struct font *f = gfx_font_open_ttf(decor_theme.font_path, TITLE_PX);
-    title_font = f ? f : gfx_font_builtin();
-}
 
 /* Loading and first rasterizing the font takes a noticeable time, so it
  * happens at startup rather than when the first window maps. */
 void decor_init(void)
 {
-    decor_fonts();
+    title_font = scene_font();
     gfx_text_width_font_scaled(title_font, "The quick brown fox jumps over the lazy dog 0123456789", -1, screen_scale);
 }
 
@@ -240,7 +229,6 @@ void decor_draw(struct csurface *s, struct rect clip)
     struct rect c = rect_intersect(frame, clip);
     if (rect_empty(c))
         return;
-    decor_fonts();
     int S = screen_scale;
     int active = s->toplevel->activated;
     uint32_t bar = active ? COLOR_TITLE : COLOR_TITLE_INACTIVE;
@@ -270,7 +258,7 @@ void decor_draw(struct csurface *s, struct rect clip)
     }
 
     struct painter p;
-    painter_init_scaled(&p, &back, &decor_theme, S);
+    painter_init_scaled(&p, &back, scene_theme(), S);
     painter_push(&p, c.x, c.y, c.w, c.h);
     int ox = -c.x, oy = -c.y;
     int bar_h = TITLE_H + BORDER;
@@ -344,9 +332,6 @@ static void start_move(struct toplevel *t)
     drag_dy = cursor_y - t->s->y;
 }
 
-/* button: 1 = left with the pointer on the decorations; bit 0x100 marks
- * a move requested by the client, 0x200 a resize with the edges in
- * bits 16 and up. */
 int decor_press(struct csurface *s, int button)
 {
     struct toplevel *t = s->toplevel;
@@ -433,9 +418,6 @@ int decor_release(void)
     return 0;
 }
 
-/* Whether the point lies on the decorations of s (not its contents):
- * the frame, the resize margins around it and the grip. */
-int decor_hit(const struct csurface *s, int x, int y);
 int decor_hit(const struct csurface *s, int x, int y)
 {
     if (!decor_has(s))
@@ -453,14 +435,10 @@ int decor_hit(const struct csurface *s, int x, int y)
     return 0;
 }
 
-const struct font *decor_font(void)
+void decor_toplevel_gone(struct toplevel *t)
 {
-    decor_fonts();
-    return title_font;
-}
-
-const struct theme *decor_theme_ptr(void)
-{
-    decor_fonts();
-    return &decor_theme;
+    if (drag == t)
+        drag = NULL;
+    if (resizing == t)
+        resizing = NULL;
 }

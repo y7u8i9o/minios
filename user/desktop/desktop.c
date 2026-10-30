@@ -293,7 +293,7 @@ static void apply_conf(int first)
     if (settings && c.decorations && (first || c.decorations != conf.decorations))
         settings_set(settings, "decorations", c.decorations);
     if (settings && c.keymap[0] && (first || strcmp(c.keymap, conf.keymap) != 0))
-        settings_set(settings, "keymap_reload", 1);
+        settings_set_keymap(settings, c.keymap);
     if (settings && (first || c.pointer_speed != conf.pointer_speed))
         settings_set(settings, "pointer_speed", c.pointer_speed);
     if (settings && c.pointer_accel >= 0 && (first || c.pointer_accel != conf.pointer_accel))
@@ -654,7 +654,7 @@ int main(int argc, char **argv)
     if (!app)
         return 1;
     textdomain("desktop");
-    settings = gui_bind_global("settings", &settings_interface, 1);
+    settings = gui_bind_global("settings", &settings_interface, 2);
     win = app_layer_window(app, 0, 0, 0, GUI_ANCHOR_TOP | GUI_ANCHOR_BOTTOM | GUI_ANCHOR_LEFT | GUI_ANCHOR_RIGHT,
                            0, 1, "desktop");
     if (!win)

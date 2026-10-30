@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <gui/display.h>
+#include <minios/conf.h>
 #include "x12settings.h"
 #include "debug-client.h"
 
@@ -15,6 +16,8 @@ static struct widget *method_combo, *shift_box, *ctrl_space_box, *decor_combo, *
 static const char *const *resolutions;
 static int nres, applying;
 static char method_names[MAX_METHODS][32], pending_names[MAX_METHODS][32];
+/* The names of the methods for ime_control, in the order of the titles. */
+static char method_ids[MAX_METHODS][32], pending_ids[MAX_METHODS][32];
 static int nmethods, npending, current_method, pending_current;
 
 /* ---- values from X12 ---- */
@@ -59,6 +62,7 @@ void live_method(uint32_t index, const char *name, const char *title, uint32_t c
     if (npending == MAX_METHODS)
         return;
     snprintf(pending_names[npending], sizeof pending_names[npending], "%s", title[0] ? title : name);
+    snprintf(pending_ids[npending], sizeof pending_ids[npending], "%s", name);
     if (current)
         pending_current = (int)index;
     npending++;
@@ -73,6 +77,7 @@ void live_methods_done(void)
     applying = 1;
     if (!same && method_combo) {
         memcpy(method_names, pending_names, sizeof method_names);
+        memcpy(method_ids, pending_ids, sizeof method_ids);
         nmethods = npending;
         combobox_clear(method_combo);
         for (int i = 0; i < nmethods; i++)
@@ -116,14 +121,21 @@ static int on_follow(struct widget *w, void *args, void *arg) { set("display_fol
 static int on_frame(struct widget *w, void *args, void *arg) { set("frame_ms", w->value); return 0; }
 static int on_rate(struct widget *w, void *args, void *arg) { set("repeat_rate", w->value); return 0; }
 static int on_delay(struct widget *w, void *args, void *arg) { set("repeat_delay", w->value); return 0; }
-static int on_keymap(struct widget *w, void *args, void *arg) { set("keymap_reload", 1); return 0; }
+/* Load the keymap of the configuration file again. */
+static int on_keymap(struct widget *w, void *args, void *arg)
+{
+    char path[256], name[64];
+    if (conf_lookup(conf_read_path(path, sizeof path), "keymap", name, sizeof name) && name[0])
+        keymap_send(name);
+    return 0;
+}
 static int on_speed(struct widget *w, void *args, void *arg) { set("pointer_speed", w->value); return 0; }
 static int on_accel(struct widget *w, void *args, void *arg) { set("pointer_accel", w->value); return 0; }
 static int on_method(struct widget *w, void *args, void *arg)
 {
-    if (!applying && w->value >= 0) {
+    if (!applying && w->value >= 0 && w->value < nmethods) {
         current_method = w->value;
-        set("input_method", w->value);
+        method_select(method_ids[w->value]);
     }
     return 0;
 }

@@ -183,8 +183,9 @@ entry without a window, `settings PAGE` opens on a page (`appearance`,
   side (`decorations`, `client` or `server`); the desktop pushes the last
   two to X12 like the colour and the key repeat.
 - Keyboard: the layout (`keymap`, the `.mkm` files of
-  `/usr/share/keymaps`; the desktop sends `keymap_reload` and X12 reloads
-  the file, which reaches clients bound afterwards) and the repeat rate
+  `/usr/share/keymaps`; the desktop sends the name with
+  `settings.set_keymap` and X12 loads the file, which reaches clients
+  bound afterwards) and the repeat rate
   and delay.
 - Sound: the master volume and the streams of the audio server with a
   volume slider for the selected stream, through the mixer interface of

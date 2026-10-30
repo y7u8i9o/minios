@@ -34,7 +34,8 @@ frame, set_opaque_region, set_input_region, set_buffer_scale,
 set_buffer_transform, damage_buffer, commit, destroy; enter) and
 `output` (geometry, mode, scale, transform, done). The `shell` global
 also carries the liveness pair `ping` (event) and `pong` (request) and
-`set_pid`, used for the not responding dialog (`compositor.md`). The shell protocol
+`set_pid`, used for the not responding dialog (`compositor.md`,
+`sessiond.md`). The shell protocol
 adds toplevel parent/modal state and popup configure/acknowledge/grab;
 `protocol/text.xml` has the UTF-8 text input and preedit events, and since
 version 2 the caret rectangle for the candidates of an input method. The

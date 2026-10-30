@@ -1,7 +1,7 @@
-x12: client 1 not responding
-x12: client 1: wait
-x12: client 1 responding again
-x12: client 2 not responding
-x12: client 2 force quit
+x12: client [0-9]+ not responding
+sessiond: client [0-9]+: wait
+x12: client [0-9]+ responding again
+x12: client [0-9]+ not responding
+sessiond: client [0-9]+ force quit
 comp_hang: ok
 TEST PASS

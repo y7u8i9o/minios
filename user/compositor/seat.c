@@ -1,9 +1,11 @@
 /* The seat: pointer focus and events, keyboard focus and events with
- * the keymap descriptor, modifiers, serials, cursor surfaces, and the
- * compositor's own shortcuts (Alt+Tab, Alt+F4, Alt drag, Super+L, and the
- * switch keys of the input methods). While the session is locked
- * (lock.c), every key goes to the lock surface, and only Super+L and the
- * group switch of the layout remain in effect. */
+ * the keymap descriptor, modifiers, serials, cursor surfaces and the
+ * switch keys of the input methods. A key press goes first to the window
+ * manager module (Alt+Tab, Alt+F4), then to the shortcuts of the session
+ * manager (session.c), then to the input methods and the client. A button
+ * press goes to the window manager module before the client. While the
+ * session is locked (lock.c), every key goes to the lock surface, and only
+ * the group switch of the layout remains in effect. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,10 +14,7 @@
 #include <sys/mman.h>
 #include <gui/keymap.h>
 #include <minios/input.h>
-#include <gui/mime.h>
 #include "comp.h"
-
-int decor_hit(const struct csurface *s, int x, int y);
 
 static struct csurface *pointer_focus, *keyboard_focus, *press_focus, *cursor_surface;
 static int buttons, modifiers;
@@ -410,7 +409,7 @@ void seat_pointer_motion(void)
         data_pointer_motion();
         return;
     }
-    if (decor_motion())
+    if (wm_pointer_motion())
         return;
     struct csurface *target = press_focus ? press_focus : scene_surface_at(cursor_x, cursor_y);
     if (!press_focus) {
@@ -425,21 +424,6 @@ void seat_pointer_motion(void)
     }
 }
 
-/* covers_decorations is 1 when target, the surface under the cursor, lies
- * above the decorations of the toplevel s. A toplevel covers them when it
- * is higher in the stack. Layer surfaces of the top and overlay layers,
- * popups and the other roles lie above every toplevel. */
-static int covers_decorations(const struct csurface *target, const struct csurface *s)
-{
-    if (!target)
-        return 0;
-    if (target->role == ROLE_TOPLEVEL)
-        return target->stack > s->stack;
-    if (target->role == ROLE_LAYER)
-        return target->layer->layer >= 2;
-    return 1;
-}
-
 void seat_pointer_button(int button, int pressed)
 {
     int bit = 1 << (button - 1);
@@ -447,40 +431,25 @@ void seat_pointer_button(int button, int pressed)
     if (pressed) {
         if (data_dragging())
             return;
-        if (!lock_active() && hang_press(cursor_x, cursor_y))
-            return;
         struct csurface *grab = popup_grab_surface();
         struct csurface *target = scene_surface_at(cursor_x, cursor_y);
         if (grab && (!target || target->role != ROLE_POPUP)) {
             popup_dismiss_all();
             return;
         }
-        /* Decorations of the toplevel under the cursor. A locked session
-         * shows no decorations. */
-        for (struct csurface *s = lock_active() ? NULL : surface_first(); s; s = s->next)
-            if (decor_hit(s, cursor_x, cursor_y) && !s->toplevel->minimized && !covers_decorations(target, s)) {
-                if (toplevel_blocked(s->toplevel)) {
-                    set_pointer_focus(NULL);
-                    return;
-                }
-                toplevel_activate(s->toplevel);
-                decor_press(s, button);
-                return;
-            }
+        /* The window manager decides first. A locked session shows no
+         * windows. */
+        int decision = lock_active() ? WM_PASS : wm_pointer_press(target, button);
+        if (decision == WM_USED)
+            return;
+        if (decision == WM_BLOCKED) {
+            set_pointer_focus(NULL);
+            return;
+        }
         if (target) {
-            if (target->role == ROLE_TOPLEVEL && toplevel_blocked(target->toplevel)) {
-                set_pointer_focus(NULL);
-                return;
-            } else if (target->role == ROLE_TOPLEVEL)
-                toplevel_activate(target->toplevel);
-            else if (target->role == ROLE_LAYER && target->layer->interactive)
+            if (target->role == ROLE_LAYER && target->layer->interactive)
                 seat_set_keyboard_focus(target);
             press_focus = target;
-            if (button == 1 && (modifiers & KEYMAP_MOD_ALT) && target->role == ROLE_TOPLEVEL) {
-                decor_press(target, 1);
-                press_focus = NULL;
-                return;
-            }
         }
         set_pointer_focus(target);
     } else {
@@ -496,7 +465,7 @@ void seat_pointer_button(int button, int pressed)
             return;
         }
         /* A drag the client asked for still owes it the release. */
-        if (decor_release() == 1)
+        if (wm_pointer_release() == 1)
             return;
         if (!buttons)
             press_focus = NULL;
@@ -610,58 +579,19 @@ void seat_key(uint32_t key, int pressed)
     }
     if (pressed)
         shift_tap = ctrl_shift_tap = 0;
-    /* Super+L locks the session. */
-    if (pressed && key == KEY_L &&
-        (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT | KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) == KEYMAP_MOD_LOGO) {
-        if (!lock_active())
-            lock_start_locker("Super+L");
-        key_list_add(used_keys, &nused, key);
-        return;
-    }
-    /* A locked session without a lock surface uses a key press to start a
-     * new locker. */
+    /* A locked session without a lock surface uses a key press to ask
+     * for a new locker. */
     if (pressed && lock_active() && !lock_surface_mapped()) {
         lock_key_without_locker();
         key_list_add(used_keys, &nused, key);
         return;
     }
     if (pressed && !lock_active()) {
-        /* An overlay with the keyboard, such as the login window or the
-         * authentication dialog, retains it: Alt+Tab and Alt+F4 go to the
-         * overlay instead of the windows below it. */
-        int overlay = keyboard_focus && keyboard_focus->role == ROLE_LAYER &&
-                      keyboard_focus->layer->layer == LAYER_OVERLAY;
-        if (!overlay && (modifiers & KEYMAP_MOD_ALT) && key == KEY_TAB) { toplevel_cycle(); return; }
-        if (!overlay && (modifiers & KEYMAP_MOD_ALT) && key == KEY_F4) {
-            struct toplevel *t = toplevel_focused();
-            if (t)
-                toplevel_close(t);
+        if (wm_key(key, modifiers))
             return;
-        }
-        /* The screenshot keys (images.md). Print Screen opens the capture
-         * interface and Shift+Print Screen saves the screen at once, as in
-         * GNOME. Super+Shift+3, 4 and 5 save the screen, select an area and
-         * open the interface, as on macOS. While the interface has the
-         * keyboard focus, Print Screen is passed to it as its capture key.
-         * Alt+SysRq prints the thread table of the kernel and is passed to
-         * the client unchanged. */
-        const char *shot = NULL;
-        int logo_shift = (modifiers & (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT | KEYMAP_MOD_CTRL | KEYMAP_MOD_ALT)) ==
-                         (KEYMAP_MOD_LOGO | KEYMAP_MOD_SHIFT);
-        if (key == KEY_SYSRQ && !(modifiers & KEYMAP_MOD_ALT))
-            shot = modifiers & KEYMAP_MOD_SHIFT ? "-t" : "-i";
-        else if (logo_shift && key == KEY_3)
-            shot = "-t";
-        else if (logo_shift && key == KEY_4)
-            shot = "-a";
-        else if (logo_shift && key == KEY_5)
-            shot = "-i";
-        if (shot && !(overlay && key == KEY_SYSRQ)) {
-            if (!overlay) {
-                char *const argv[] = { "/bin/screenshot", (char *)shot, NULL };
-                int err = mime_spawn(argv);
-                comp_log(err < 0 ? "cannot start /bin/screenshot" : "screenshot started");
-            }
+        /* The shortcuts of the session manager, such as Super+L and the
+         * screenshot keys (docs/design/sessiond.md). */
+        if (session_shortcut(key, modifiers)) {
             key_list_add(used_keys, &nused, key);
             return;
         }

@@ -231,6 +231,7 @@ user/pkg/**                     check-pkg pkg pkg_repo pkg_https pkg_apps offlin
 user/po/**                      gettext gui_locale locale
 user/settings/**                gui_settings gui_ime_settings gui_region gpu_resize panel_top
 user/x12settings/**             x12settings_* gui_tools gui_settings
+user/sessiond/**                comp_hang gui_lock* lock_idle gui_images gui_greeter
 user/sh/**                      check-sh sh_builtins shell shell2 script script2 shebang jobcontrol
 user/term/**                    gui_term gui_term_scale2
 user/askpass/**                 gui_askpass privilege

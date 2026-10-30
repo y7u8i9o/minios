@@ -180,14 +180,15 @@ inside a light grey frame one pixel wide. A click opens the file with
 disappears after five seconds, and the five seconds start again whenever
 the pointer moves over it.
 
-X12 starts the program through `mime_spawn` on the keys of both systems.
+The session manager `sessiond` starts the program on the keys of both
+systems (`sessiond.md`). X12 reports the keys as shortcuts.
 Print Screen (`KEY_SYSRQ`) starts `screenshot -i` and Shift+Print Screen
 starts `screenshot -t`, as in GNOME. Super+Shift+3, Super+Shift+4 and
 Super+Shift+5 start `screenshot -t`, `screenshot -a` and `screenshot -i`,
 as on macOS. X12 does not deliver these keys, or their releases, to the
 focused client. While an overlay layer surface has the keyboard focus,
-X12 passes Print Screen to it as its capture key and ignores the other
-screenshot keys. Alt+SysRq prints the thread table of the kernel
+X12 activates no shortcut and passes Print Screen to the surface as its
+capture key. Alt+SysRq prints the thread table of the kernel
 (`debug.md`), and X12 passes it to the focused client unchanged. The
 launcher menu has a Screenshot entry that starts `screenshot -i`.
 

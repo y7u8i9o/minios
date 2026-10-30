@@ -4,11 +4,12 @@
  *     greeter --window
  *
  * init runs the greeter as root on the console in place of login. It
- * starts X12 and ensures that it continues to run, and in a loop runs the login window as
- * a child, "greeter --window", which shows the accounts, checks the
- * password and reports the result on its standard output: "login NAME",
- * "poweroff" or "reboot". For a login the greeter admits the account to
- * X12 (the setting session_uid), tells init the session user, and runs
+ * starts X12 and the session manager sessiond and restarts both when they
+ * end. In a loop it runs the login window as a child, "greeter --window",
+ * which shows the accounts, checks the password and reports the result on
+ * its standard output: "login NAME", "poweroff" or "reboot". For a login
+ * the greeter admits the account to X12 ("x12settings session-user UID"),
+ * tells init the session user, and runs
  * "startgui -s" as the account in a process group of its own. When the
  * session ends with the panel's Log out, the greeter ends the rest of the
  * group, withdraws the admission and shows the window again. -s mirrors
@@ -292,7 +293,7 @@ static int window_main(void)
 
 /* ---- the supervisor ---- */
 
-static pid_t server = -1;
+static pid_t server = -1, sessiond = -1;
 static int server_log_serial;
 
 static pid_t spawn(char *const argv[], int out_fd)
@@ -316,6 +317,8 @@ static int wait_child(pid_t pid);
 static void fall_back(const char *reason)
 {
     fprintf(stderr, "greeter: %s, starting the console login\n", reason);
+    if (sessiond > 0)
+        kill(sessiond, SIGTERM);
     if (server > 0) {
         kill(server, SIGTERM);
         wait_child(server);
@@ -326,8 +329,15 @@ static void fall_back(const char *reason)
     exit(1);
 }
 
-/* Start X12 and wait until it answers. Returns 0, or -1 when it does not
- * answer within five seconds. */
+/* Start the session manager. sessiond runs as root like the greeter. */
+static void start_sessiond(void)
+{
+    char *argv[] = { "sessiond", NULL };
+    sessiond = spawn(argv, -1);
+}
+
+/* Start X12 and wait until it answers, then start the session manager.
+ * Returns 0, or -1 when X12 does not answer within five seconds. */
 static int start_server(void)
 {
     char *argv[] = { "x12", server_log_serial ? "-s" : NULL, NULL };
@@ -338,15 +348,19 @@ static int start_server(void)
         int ok = fd >= 0 && connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0;
         if (fd >= 0)
             close(fd);
-        if (ok)
+        if (ok) {
+            if (sessiond <= 0)
+                start_sessiond();
             return 0;
+        }
         sleep_ms(100);
     }
     return -1;
 }
 
-/* Wait for pid, restarting X12 when it is the one that ended. Returns the
- * status of pid, or -1 when X12 ended first. */
+/* Wait for pid, restarting X12 or sessiond when one of them ended. Returns
+ * the status of pid, or -1 when X12 ended first. sessiond ends with X12,
+ * and start_server starts sessiond again. */
 static int wait_child(pid_t pid)
 {
     for (;;) {
@@ -354,6 +368,19 @@ static int wait_child(pid_t pid)
         pid_t done = waitpid(-1, &status, 0);
         if (done < 0)
             return -1;
+        if (done == sessiond) {
+            sessiond = -1;
+            if (pid == done)
+                return status;
+            /* A normal exit follows the end of X12. start_server starts
+             * sessiond with the next X12. */
+            if (server > 0 && !(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
+                fprintf(stderr, "greeter: the session manager ended with status 0x%x, restarting\n", status);
+                sleep_ms(200);
+                start_sessiond();
+            }
+            continue;
+        }
         if (done == server) {
             fprintf(stderr, "greeter: the display server ended with status 0x%x, restarting\n", status);
             start_server();
@@ -391,7 +418,7 @@ static void set_session_uid(int uid)
 {
     char value[16];
     snprintf(value, sizeof value, "%d", uid);
-    char *argv[] = { "x12settings", "set", "session_uid", value, NULL };
+    char *argv[] = { "x12settings", "session-user", value, NULL };
     pid_t pid = spawn(argv, -1);
     if (pid > 0)
         wait_child(pid);

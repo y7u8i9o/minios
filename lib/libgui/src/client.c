@@ -274,12 +274,20 @@ static void apply_output_scale(void)
 }
 
 /* Dispatches the events of one read and then applies a new scale. */
+/* The connection to the server failed: a read or a dispatch returned an
+ * error. */
+static int connection_lost;
+
 static int dispatch_events(void)
 {
     int r = wire_display_dispatch(display);
+    if (r < 0)
+        connection_lost = 1;
     apply_output_scale();
     return r;
 }
+
+int gui_connection_lost(void) { return !display || connection_lost; }
 const struct output_listener output_events = { on_geometry, on_mode, on_output_scale, on_output_transform, on_output_done };
 
 /* The zone under the pointer, with the button hover state maintained up to

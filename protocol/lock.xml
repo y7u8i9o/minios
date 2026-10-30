@@ -12,7 +12,8 @@
          refused. X12 refuses the request while another locker has locked
          the session. After a locker has exited without unlocking, X12
          accepts the next request only from root or from the locker that
-         X12 started itself. -->
+         the session manager reported with set_locker
+         (protocol/session.xml). -->
     <request name="lock">
       <arg name="id" type="new_id" interface="session_lock"/>
     </request>

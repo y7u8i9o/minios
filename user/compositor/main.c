@@ -8,7 +8,8 @@
  * frame_ms have passed since the last frame. Otherwise it arms a one-shot
  * timer for the rest of the interval. Without pending work the timer is
  * disarmed, and poll waits until the earliest deadline of the key
- * repeat, the pings and the input method, or for input and clients. */
+ * repeat, the pings, the input method, the debug views and the idle time
+ * of the session, or for input and clients. */
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -128,7 +129,7 @@ static void flush_clients(void)
     im_tick(now);
     seat_tick(now);
     overlay_tick(now);
-    lock_tick(now);
+    session_tick(now);
 }
 
 static void frame(void)
@@ -187,7 +188,7 @@ static void schedule_frame(void)
 static int poll_timeout(void)
 {
     long deadlines[5] = { seat_next_deadline(), hang_next_deadline(), im_next_deadline(), overlay_next_deadline(),
-                          lock_next_deadline() };
+                          session_next_deadline() };
     long next = -1;
     for (int i = 0; i < 5; i++)
         if (deadlines[i] >= 0 && (next < 0 || deadlines[i] < next))
@@ -281,13 +282,14 @@ int main(int argc, char **argv)
     text_init(srv);
     im_init(srv);
     lock_init(srv);
+    session_init(srv);
     debug_init(srv);
     trace_init(srv);
     if (verbose)
         settings.verbose = 1;
     stats_reset();
     scene_init();
-    decor_init();
+    wm_init();
     input_place_cursor(screen_w / 2, screen_h / 2);
     frame_fd = timerfd_create(TFD_NONBLOCK | TFD_CLOEXEC);
     scene_damage_all();

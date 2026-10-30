@@ -64,6 +64,7 @@ static const struct wire_message screencopy_events[] = {
 static const struct wire_message settings_requests[] = {
     { "set", "si", 2, (const char *const[]){ NULL, NULL }, 0 },
     { "get_all", "", 0, (const char *const[]){ NULL }, 0 },
+    { "set_keymap", "s", 1, (const char *const[]){ NULL }, 0 },
 };
 static const struct wire_message settings_events[] = {
     { "value", "si", 2, (const char *const[]){ NULL, NULL }, 0 },
@@ -72,4 +73,4 @@ static const struct wire_message settings_events[] = {
 const struct wire_interface debug_interface = { "debug", 3, 11, debug_requests, 15, debug_events };
 const struct wire_interface tracer_interface = { "tracer", 1, 3, tracer_requests, 3, tracer_events };
 const struct wire_interface screencopy_interface = { "screencopy", 1, 4, screencopy_requests, 6, screencopy_events };
-const struct wire_interface settings_interface = { "settings", 1, 2, settings_requests, 2, settings_events };
+const struct wire_interface settings_interface = { "settings", 2, 3, settings_requests, 2, settings_events };

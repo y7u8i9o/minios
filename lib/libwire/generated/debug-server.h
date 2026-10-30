@@ -62,6 +62,7 @@ void screencopy_send_windows_done(struct wire_resource *screencopy);
 struct settings_impl {
     void (*set)(struct wire_client *client, struct wire_resource *self, const char * key, int32_t value);
     void (*get_all)(struct wire_client *client, struct wire_resource *self);
+    void (*set_keymap)(struct wire_client *client, struct wire_resource *self, const char * name);
 };
 void settings_send_value(struct wire_resource *settings, const char * key, int32_t value);
 void settings_send_done(struct wire_resource *settings);

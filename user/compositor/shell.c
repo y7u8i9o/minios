@@ -1,6 +1,8 @@
 /* Shell roles: toplevels with the configure and ack cycle, popups with
  * positioners and grabs, layer surfaces with exclusive zones,
- * decorations negotiation and the toplevel manager for the panel. */
+ * decorations negotiation and the toplevel manager for the panel. The
+ * window manager module (wm/wm.h) decides the placement, the stacking
+ * order and the states of toplevels. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +10,7 @@
 #include "comp.h"
 
 static struct wire_server *server;
-static int next_stack = 1, next_number = 1;
+static int next_number = 1;
 static struct positioner positioners[32];
 
 /* ---- helpers ---- */
@@ -34,41 +36,9 @@ struct rect shell_desktop(void)
     return d;
 }
 
-struct rect toplevel_frame(const struct toplevel *t)
-{
-    if (decor_has(t->s))
-        return decor_frame(t->s);
-    if (t->geo_set)
-        return (struct rect){ t->s->x + t->geo.x, t->s->y + t->geo.y, t->geo.w, t->geo.h };
-    return surface_rect(t->s);
-}
-
-void toplevel_configure_size(const struct toplevel *t, int *w, int *h)
-{
-    if (!decor_has(t->s) && t->geo_set) {
-        *w = t->geo.w;
-        *h = t->geo.h;
-    } else {
-        *w = t->s->width;
-        *h = t->s->height;
-    }
-}
-
-/* Leave 40 pixels of the frame on screen horizontally and its top row
- * (the title bar) inside the desktop area. */
-static void clamp_toplevel(struct csurface *s)
-{
-    struct rect d = shell_desktop();
-    struct rect f = toplevel_frame(s->toplevel);
-    if (f.x + f.w < d.x + 40) s->x += d.x + 40 - (f.x + f.w);
-    if (f.x > d.x + d.w - 40) s->x -= f.x - (d.x + d.w - 40);
-    if (f.y < d.y) s->y += d.y - f.y;
-    if (f.y > d.y + d.h - TITLE_H) s->y -= f.y - (d.y + d.h - TITLE_H);
-}
-
 static void damage_surface(struct csurface *s)
 {
-    scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
+    scene_damage(wm_extent(s));
 }
 
 /* ---- toplevel manager ---- */
@@ -170,7 +140,7 @@ static void bind_manager(struct wire_client *c, void *data, uint32_t version, ui
 
 /* ---- toplevels ---- */
 
-static void send_configure(struct toplevel *t, int w, int h)
+void shell_configure(struct toplevel *t, int w, int h)
 {
     uint32_t states[2];
     int n = 0;
@@ -198,148 +168,18 @@ void toplevel_configure(struct toplevel *t, int w, int h)
     if (t->min_h && h < t->min_h) h = t->min_h;
     if (t->max_w && w > t->max_w) w = t->max_w;
     if (t->max_h && h > t->max_h) h = t->max_h;
-    send_configure(t, w, h);
+    shell_configure(t, w, h);
 }
 
-struct toplevel *toplevel_focused(void)
+void shell_toplevel_state_changed(struct toplevel *t)
 {
-    struct toplevel *best = NULL;
-    for (struct csurface *s = surface_first(); s; s = s->next)
-        if (s->role == ROLE_TOPLEVEL && s->toplevel->activated)
-            best = s->toplevel;
-    return best;
-}
-
-static struct toplevel *modal_child(struct toplevel *parent)
-{
-    struct toplevel *best = NULL;
-    for (struct csurface *s = surface_first(); s; s = s->next)
-        if (s->role == ROLE_TOPLEVEL && s->mapped && !s->toplevel->minimized && s->toplevel->modal &&
-            s->toplevel->parent == parent && (!best || s->stack > best->s->stack))
-            best = s->toplevel;
-    return best;
-}
-
-int toplevel_blocked(struct toplevel *t)
-{
-    struct toplevel *modal = modal_child(t);
-    if (!modal)
-        return 0;
-    toplevel_activate(modal);
-    return 1;
-}
-
-void toplevel_activate(struct toplevel *t)
-{
-    struct toplevel *modal = modal_child(t);
-    if (modal)
-        t = modal;
-    struct toplevel *old = toplevel_focused();
-    if (old == t && t->s->stack == next_stack - 1)
-        return;
-    int w, h;
-    if (old && old != t) {
-        old->activated = 0;
-        damage_surface(old->s);
-        toplevel_configure_size(old, &w, &h);
-        send_configure(old, w, h);
-        for_each_handle(old, send_handle_state);
-    }
-    t->activated = 1;
-    t->s->stack = next_stack++;
-    damage_surface(t->s);
-    toplevel_configure_size(t, &w, &h);
-    send_configure(t, w, h);
-    for_each_handle(t, send_handle_state);
-    seat_set_keyboard_focus(t->s);
-    comp_log("toplevel %d activated", t->number);
-}
-
-void toplevel_set_maximized(struct toplevel *t, int on)
-{
-    if (t->maximized == !!on)
-        return;
-    struct rect d = shell_desktop();
-    damage_surface(t->s);
-    if (on) {
-        t->saved_x = t->s->x;
-        t->saved_y = t->s->y;
-        toplevel_configure_size(t, &t->saved_w, &t->saved_h);
-        t->maximized = 1;
-        int top = decor_has(t->s) ? TITLE_H + BORDER : 0;
-        int bw = decor_has(t->s) ? BORDER : 0;
-        t->s->x = d.x + bw;
-        t->s->y = d.y + top;
-        send_configure(t, d.w - 2 * bw, d.h - top - bw);
-        comp_log("toplevel %d maximized", t->number);
-    } else {
-        t->maximized = 0;
-        t->s->x = t->saved_x;
-        t->s->y = t->saved_y;
-        send_configure(t, t->saved_w, t->saved_h);
-        comp_log("toplevel %d restored", t->number);
-    }
-    damage_surface(t->s);
     for_each_handle(t, send_handle_state);
 }
 
-void toplevel_set_minimized(struct toplevel *t, int on)
+void shell_request_close(struct toplevel *t)
 {
-    if (t->minimized == !!on)
-        return;
-    t->minimized = !!on;
-    damage_surface(t->s);
-    comp_log("toplevel %d %s", t->number, on ? "minimized" : "shown");
-    if (on && t->activated) {
-        t->activated = 0;
-        int w, h;
-        toplevel_configure_size(t, &w, &h);
-        send_configure(t, w, h);
-        struct toplevel *next = NULL;
-        for (struct csurface *s = surface_first(); s; s = s->next)
-            if (s->role == ROLE_TOPLEVEL && !s->toplevel->minimized && s->mapped && (!next || s->stack > next->s->stack))
-                next = s->toplevel;
-        seat_set_keyboard_focus(NULL);
-        if (next)
-            toplevel_activate(next);
-    } else if (!on) {
-        toplevel_activate(t);
-    }
-    for_each_handle(t, send_handle_state);
-}
-
-void toplevel_close(struct toplevel *t)
-{
-    struct toplevel *modal = modal_child(t);
-    if (modal)
-        t = modal;
     comp_log("toplevel %d close requested", t->number);
     toplevel_send_close(t->res);
-}
-
-void toplevel_move(struct toplevel *t, int x, int y)
-{
-    damage_surface(t->s);
-    t->s->x = x;
-    t->s->y = y;
-    clamp_toplevel(t->s);
-    damage_surface(t->s);
-}
-
-void toplevel_cycle(void)
-{
-    struct toplevel *lowest = NULL;
-    int visible = 0;
-    for (struct csurface *s = surface_first(); s; s = s->next) {
-        if (s->role != ROLE_TOPLEVEL || s->toplevel->minimized || !s->mapped)
-            continue;
-        visible++;
-        if (!lowest || s->stack < lowest->s->stack)
-            lowest = s->toplevel;
-    }
-    comp_log("alt-tab");
-    if (visible >= 2)
-        toplevel_activate(lowest);
 }
 
 static void h_set_title(struct wire_client *c, struct wire_resource *self, const char *title)
@@ -362,16 +202,14 @@ static void h_set_max_size(struct wire_client *c, struct wire_resource *self, in
 static void h_move(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial)
 {
     struct toplevel *t = self->data;
-    /* The button must still be pressed: a request that arrives after the
-     * release (a client that answered late) would drag with no button. */
-    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized && seat_buttons())
-        decor_press(t->s, 1 | 0x100);           /* a move grab from the client */
+    if (seat_validate_grab(t->s->client, t->s, serial))
+        wm_request_move(t);
 }
 static void h_resize(struct wire_client *c, struct wire_resource *self, struct wire_resource *seat, uint32_t serial, uint32_t edges)
 {
     struct toplevel *t = self->data;
-    if (seat_validate_grab(t->s->client, t->s, serial) && !t->maximized && seat_buttons())
-        decor_press(t->s, 1 | 0x200 | (int)(edges << 16));
+    if (seat_validate_grab(t->s->client, t->s, serial))
+        wm_request_resize(t, (int)edges);
 }
 static void h_set_maximized(struct wire_client *c, struct wire_resource *self) { toplevel_set_maximized(self->data, 1); }
 static void h_unset_maximized(struct wire_client *c, struct wire_resource *self) { toplevel_set_maximized(self->data, 0); }
@@ -441,19 +279,8 @@ static void toplevel_gone(struct wire_resource *r)
     seat_surface_gone(t->s);
     if (t->decoration)
         t->decoration->data = NULL;
-    for (struct csurface *s = surface_first(); s; s = s->next)
-        if (s->role == ROLE_TOPLEVEL && s->toplevel && s->toplevel->parent == t)
-            s->toplevel->parent = NULL;
-    decor_free(t);
+    wm_toplevel_destroyed(t, was_active);
     free(t);
-    if (was_active) {
-        struct toplevel *next = NULL;
-        for (struct csurface *s = surface_first(); s; s = s->next)
-            if (s->role == ROLE_TOPLEVEL && !s->toplevel->minimized && s->mapped && (!next || s->stack > next->s->stack))
-                next = s->toplevel;
-        if (next)
-            toplevel_activate(next);
-    }
 }
 
 static void h_get_toplevel(struct wire_client *c, struct wire_resource *self, uint32_t id, struct wire_resource *surface)
@@ -476,9 +303,9 @@ static void h_get_toplevel(struct wire_client *c, struct wire_resource *self, ui
     strcpy(t->title, "untitled");
     s->role = ROLE_TOPLEVEL;
     s->toplevel = t;
-    s->stack = next_stack++;
+    wm_toplevel_created(t);
     wire_resource_set_listener(r, &toplevel_handlers, t, toplevel_gone);
-    send_configure(t, 0, 0);
+    shell_configure(t, 0, 0);
     announce_to_all(t);
 }
 
@@ -997,39 +824,9 @@ int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buf
 void shell_surface_committed(struct csurface *s, int first_map)
 {
     switch (s->role) {
-    case ROLE_TOPLEVEL: {
-        struct toplevel *t = s->toplevel;
-        if (first_map && !t->placed) {
-            /* Placement works on the visible frame: centred on the
-             * parent, or cascading from (40, 30) of the desktop area,
-             * which puts the contents under a 30 pixel toolkit header
-             * bar at y 60. */
-            t->placed = 1;
-            struct rect d = shell_desktop();
-            struct rect f = toplevel_frame(t);
-            int fx, fy;
-            if (t->parent && t->parent->s && t->parent->s->mapped) {
-                struct rect pf = toplevel_frame(t->parent);
-                fx = pf.x + (pf.w - f.w) / 2;
-                fy = pf.y + (pf.h - f.h) / 2;
-            } else {
-                int n = (t->number - 1) % 8;
-                fx = d.x + 40 + n * 30;
-                fy = d.y + 30 + n * 30;
-            }
-            if (fx + f.w > d.x + d.w) fx = d.x + d.w - f.w;
-            if (fy + f.h > d.y + d.h) fy = d.y + d.h - f.h;
-            s->x += fx - f.x;
-            s->y += fy - f.y;
-            clamp_toplevel(s);
-            f = toplevel_frame(t);
-            comp_log("toplevel %d '%s' mapped at %d,%d %dx%d", t->number, t->title, f.x, f.y, f.w, f.h);
-            toplevel_activate(t);
-        } else if (t->minimized) {
-            s->mapped = 1;      /* retains its buffer; hidden by the scene */
-        }
+    case ROLE_TOPLEVEL:
+        wm_toplevel_committed(s->toplevel, first_map);
         break;
-    }
     case ROLE_POPUP: {
         struct popup *p = s->popup;
         s->x = p->parent->x + p->x;
@@ -1091,21 +888,7 @@ void shell_output_changed(void)
                 layer_configure(l);
         }
     }
-    for (struct csurface *s = surface_first(); s; s = s->next) {
-        if (s->role != ROLE_TOPLEVEL || !s->toplevel)
-            continue;
-        struct toplevel *t = s->toplevel;
-        if (t->maximized) {
-            struct rect d = shell_desktop();
-            int top = decor_has(s) ? TITLE_H + BORDER : 0;
-            int bw = decor_has(s) ? BORDER : 0;
-            s->x = d.x + bw;
-            s->y = d.y + top;
-            send_configure(t, d.w - 2 * bw, d.h - top - bw);
-        } else {
-            clamp_toplevel(s);
-        }
-    }
+    wm_output_changed();
     lock_output_changed();
     scene_damage_all();
 }

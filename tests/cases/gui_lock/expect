@@ -1,5 +1,5 @@
 x12: session uid 0
-x12: locker [0-9]+ started \(Super\+L\)
+sessiond: locker [0-9]+ started \(Super\+L\)
 x12: client [0-9]+ locks the session
 x12: session locked
 lock: locked

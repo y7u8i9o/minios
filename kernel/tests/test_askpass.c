@@ -24,7 +24,7 @@ static void test_gui_askpass(void)
     run_shell("rm -f /etc/localtime /tmp/.askpass-*");
     run_shell("printf 'userpw\\nuserpw\\n' | passwd user");
     struct proc *srv = start_server();
-    run_shell("x12settings set session_uid 1000");
+    run_shell("x12settings session-user 1000");
     struct proc *cl = proc_create_user("/bin/doas", (char *const[]){ "doas", "-u", "user", "/bin/settings", "region", NULL },
                                        (char *const[]){ "PATH=/bin", NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start settings");
@@ -67,7 +67,7 @@ static void test_gui_askpass(void)
     alt_key(0x3e);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "settings status 0x%x", status);
-    run_shell("x12settings set session_uid -1");
+    run_shell("x12settings session-user -1");
     stop_server(srv);
     run_shell("rm -f /etc/localtime /home/user/.config/desktop.conf");
     kprintf("gui_askpass: ok\n");

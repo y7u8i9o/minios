@@ -147,12 +147,15 @@ Surfaces tab lists the surfaces with role, title, geometry, mapping
 state and buffer format (`debug.get_surfaces`, once per second or on
 Refresh). The Settings tab edits the frame interval, the key repeat rate
 and delay, the decoration side, the verbose flag and the desktop colour,
-and reloads the keyboard layout named in `/etc/desktop.conf`
-(`keymap_reload`); each change is sent with `settings.set` and the
+and reloads the keyboard layout of the configuration file
+(`settings.set_keymap`); each change is sent with `settings.set` and the
 compositor broadcasts the new value to every bound settings resource.
 The Inspector tab reads the composed colour of a screen pixel
 (`debug.read_pixel`). The command form `x12settings set KEY VALUE`
 applies one setting and exits, which the `gui_tools` boot test uses.
+`x12settings keymap NAME` loads a keymap, and `x12settings session-user
+UID` sets the session user through the session manager interface
+(`sessiond.md`).
 
 Settings keys: `frame_ms` (4 to 200), `desktop_color` (0xRRGGBB),
 `repeat_rate` (1 to 100), `repeat_delay` (50 to 2000), `decorations`

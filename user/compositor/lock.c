@@ -7,26 +7,18 @@
  * Only the locker that locked the session can unlock it.
  *
  * A locker that exits without unlocking leaves the session locked. X12
- * then shows a black screen with a message. A key press starts a new
- * locker. While no locker runs, X12 accepts a lock request only from
- * root or from the locker that X12 started itself.
+ * then shows a black screen with a message. A key press asks the session
+ * manager for a new locker (session.c). While no locker runs, X12 accepts
+ * a lock request only from root or from the locker that the session
+ * manager started and reported with set_locker.
  *
- * X12 starts /bin/lock for Super+L and after lock_timeout seconds without
- * input. The locker runs as the session user. Without a session user
- * (session_uid -1) X12 starts no locker. */
+ * The session manager sessiond starts /bin/lock for Super+L and after
+ * lock_timeout seconds without input (docs/design/sessiond.md). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <pwd.h>
-#include <sys/wait.h>
-#include <minios/account.h>
-#include <minios/conf.h>
 #include <gui/paint.h>
 #include "comp.h"
-
-#define LOCKER_PATH "/bin/lock"
 
 /* The object of one lock request. */
 struct lock_request {
@@ -37,9 +29,7 @@ struct lock_request {
 static int locked;                      /* the session is locked */
 static struct lock_request *owner;      /* the request that locked the session, NULL when no locker owns it */
 static int locked_owed;                 /* owner waits for the locked event */
-static pid_t locker_pid;                /* the locker that X12 started, 0 when none runs */
-static long last_input;                 /* uptime ms of the last input */
-static int idle_done;                   /* the idle timeout started a locker since the last input */
+static int locker_pid;                  /* the locker that the session manager started, 0 for none */
 
 int lock_active(void)
 {
@@ -236,7 +226,7 @@ static void h_lock(struct wire_client *c, struct wire_resource *self, uint32_t i
     if (locked && owner)
         refusal = "the session is locked";
     else if (locked && cl->uid != 0 && (locker_pid <= 0 || cl->peer_pid != locker_pid))
-        refusal = "a locker started by X12 is expected";
+        refusal = "a locker started by the session manager is expected";
     if (refusal) {
         session_lock_send_finished(r);
         comp_log("lock of client %d refused: %s", cl->number, refusal);
@@ -264,7 +254,6 @@ static void bind_manager(struct wire_client *c, void *data, uint32_t version, ui
 void lock_init(struct wire_server *srv)
 {
     wire_global_create(srv, &session_lock_manager_interface, 1, bind_manager, NULL);
-    last_input = uptime_ms();
 }
 
 void lock_frame_done(void)
@@ -289,95 +278,16 @@ void lock_session_ended(void)
 
 /* ---- the locker ---- */
 
-/* Collect the exit of the locker that X12 started. */
-static void reap_locker(void)
+void lock_set_locker(int pid)
 {
-    if (locker_pid <= 0)
-        return;
-    int status;
-    pid_t r = waitpid(locker_pid, &status, WNOHANG);
-    if (r == locker_pid || (r < 0 && errno == ECHILD)) {
-        comp_log("locker %d exited with status %d", (int)locker_pid,
-                 r == locker_pid && WIFEXITED(status) ? WEXITSTATUS(status) : -1);
-        locker_pid = 0;
-    }
-}
-
-void lock_start_locker(const char *reason)
-{
-    reap_locker();
-    if (locker_pid > 0) {
-        comp_log("locker %d runs already", (int)locker_pid);
-        return;
-    }
-    if (session_uid < 0) {
-        comp_log("no session to lock");
-        return;
-    }
-    struct passwd *pw = getpwuid((uid_t)session_uid);
-    if (!pw) {
-        comp_log("no account of uid %d", session_uid);
-        return;
-    }
-    char name[64], home[256];
-    strlcpy(name, pw->pw_name, sizeof name);
-    strlcpy(home, pw->pw_dir[0] ? pw->pw_dir : "/", sizeof home);
-    gid_t gid = pw->pw_gid;
-    pid_t pid = fork();
-    if (pid < 0) {
-        comp_log("cannot start %s: %s", LOCKER_PATH, strerror(errno));
-        return;
-    }
-    if (pid == 0) {
-        if (getuid() != (uid_t)session_uid && account_become(name, (unsigned)session_uid, gid) < 0)
-            _exit(126);
-        if (chdir(home) < 0)
-            chdir("/");
-        setenv("HOME", home, 1);
-        setenv("USER", name, 1);
-        setenv("LOGNAME", name, 1);
-        conf_export_locale();
-        execl(LOCKER_PATH, "lock", (char *)NULL);
-        _exit(127);
-    }
     locker_pid = pid;
-    comp_log("locker %d started (%s)", (int)pid, reason);
+    comp_log("locker %d reported", pid);
 }
 
 void lock_key_without_locker(void)
 {
     if (locked && !owner)
-        lock_start_locker("key press");
-}
-
-void lock_note_input(void)
-{
-    last_input = uptime_ms();
-    idle_done = 0;
-}
-
-long lock_next_deadline(void)
-{
-    long next = -1;
-    if (settings.lock_timeout > 0 && !locked && !idle_done && session_uid >= 0)
-        next = last_input + (long)settings.lock_timeout * 1000;
-    /* The exit of the locker is collected once a second. */
-    if (locker_pid > 0) {
-        long poll = uptime_ms() + 1000;
-        if (next < 0 || poll < next)
-            next = poll;
-    }
-    return next;
-}
-
-void lock_tick(long now)
-{
-    reap_locker();
-    if (settings.lock_timeout > 0 && !locked && !idle_done && session_uid >= 0 &&
-        now - last_input >= (long)settings.lock_timeout * 1000) {
-        idle_done = 1;
-        lock_start_locker("idle");
-    }
+        session_locker_needed();
 }
 
 /* ---- drawing ---- */
@@ -390,11 +300,11 @@ void lock_draw(struct rect clip)
         "The screen locker has stopped.",
         "Press a key to start it again.",
     };
-    const struct font *f = decor_font();
+    const struct font *f = scene_font();
     int S = screen_scale, line_h = f->height + 8;
     int top = (screen_h - 2 * line_h) / 2;
     struct painter p;
-    painter_init_scaled(&p, &back, decor_theme_ptr(), S);
+    painter_init_scaled(&p, &back, scene_theme(), S);
     painter_push(&p, clip.x, clip.y, clip.w, clip.h);
     for (int i = 0; i < 2; i++) {
         int tw = (gfx_text_width_font_scaled(f, lines[i], -1, S) + S - 1) / S;

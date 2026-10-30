@@ -13,20 +13,13 @@
 #include "debug-server.h"
 #include "ime-server.h"
 #include "lock-server.h"
+#include "session-server.h"
 
 #define FORMAT_XRGB8888 1
 #define FORMAT_ARGB8888 2
 #define MAX_DAMAGE 16
 #define MAX_REGION 32
 #define FRAME_MS 16
-#define TITLE_H 28
-#define BORDER 1
-#define GRIP 12
-#define TITLE_BTN 14
-#define RADIUS 8                /* rounded top corners of the frame */
-#define SHADOW 14               /* reach of the drop shadow around the frame */
-#define SHADOW_DY 3             /* the shadow is shifted down by this much */
-#define RESIZE_MARGIN 6         /* invisible resize zone outside the frame */
 
 #define LAYER_OVERLAY 3          /* above the panel, and a keyboard interactive one gets the focus when mapped */
 enum role { ROLE_NONE, ROLE_TOPLEVEL, ROLE_POPUP, ROLE_LAYER, ROLE_CURSOR, ROLE_DND_ICON, ROLE_IME_POPUP, ROLE_LOCK };
@@ -180,12 +173,11 @@ struct client {
     uint32_t ping_serial;
     long ping_sent, last_pong;              /* uptime ms; last_pong is the connect time until the first pong */
     int unresponsive;
-    long snooze_until;                      /* Wait pressed: the overlay remains away until then */
 };
 
 /* Clients may connect from root, from the user running the server and
- * from the session user, which a root client sets with the setting
- * session_uid (-1 for none) when the greeter starts and ends a session
+ * from the session user, which the session manager sets with set_user
+ * (-1 for none) when the greeter starts and ends a session
  * (docs/design/users.md). surface.c. */
 extern int session_uid;
 int client_uid_allowed(unsigned uid);
@@ -198,13 +190,6 @@ void hang_client_attached(struct client *c);
 void hang_tick(long now);
 /* The uptime in ms at which hang_tick next has work, or -1 for none (G6). */
 long hang_next_deadline(void);
-/* Draw the dimming and the dialog over an unresponsive toplevel. */
-void hang_draw(struct csurface *s, struct rect clip);
-/* A press at (x, y): 1 when it hit an unresponsive window (buttons handled). */
-int hang_press(int x, int y);
-/* decor.c: the title font and theme for server side text. */
-const struct font *decor_font(void);
-const struct theme *decor_theme_ptr(void);
 
 /* debug.c: tunable settings */
 struct comp_settings {
@@ -299,6 +284,9 @@ int surface_accepts_input(const struct csurface *s, int x, int y);
 int surface_commit_allowed(struct wire_client *c, struct csurface *s, struct buffer *b);
 /* scene.c */
 void scene_init(void);
+/* The font and the theme of the text that X12 draws itself. */
+const struct font *scene_font(void);
+const struct theme *scene_theme(void);
 void scene_damage(struct rect r);
 void scene_damage_all(void);
 /* Damage of the contents of s. The parts that opaque surfaces above s
@@ -360,38 +348,17 @@ void shell_init(struct wire_server *srv);
 void shell_surface_committed(struct csurface *s, int first_map);
 void shell_surface_gone(struct csurface *s);
 struct rect shell_desktop(void);                           /* area left by layer surfaces */
-/* The visible frame of a toplevel on screen: the server decorations,
- * or the client's window geometry, or the surface. */
-struct rect toplevel_frame(const struct toplevel *t);
-/* The size a configure describes: the surface for server decorations,
- * the window geometry for client ones. */
-void toplevel_configure_size(const struct toplevel *t, int *w, int *h);
-void toplevel_activate(struct toplevel *t);
-void toplevel_set_maximized(struct toplevel *t, int on);
-void toplevel_set_minimized(struct toplevel *t, int on);
-void toplevel_close(struct toplevel *t);
+/* Send a configure of w x h with the current states, without the size
+ * limits of the client. */
+void shell_configure(struct toplevel *t, int w, int h);
+/* Send a configure of w x h within the size limits of the client. */
 void toplevel_configure(struct toplevel *t, int w, int h);
-void toplevel_move(struct toplevel *t, int x, int y);
-struct toplevel *toplevel_focused(void);
-int toplevel_blocked(struct toplevel *t);        /* activates its modal child */
-void toplevel_cycle(void);
+/* Send the states of t to every toplevel handle of t. */
+void shell_toplevel_state_changed(struct toplevel *t);
+/* Send the close event to the client of t. */
+void shell_request_close(struct toplevel *t);
 void popup_dismiss_all(void);
 struct csurface *popup_grab_surface(void);
-/* decor.c */
-void decor_init(void);                                     /* loads the title font */
-struct rect decor_frame(const struct csurface *s);         /* frame including the title bar */
-struct rect decor_extent(const struct csurface *s);        /* frame plus server-side shadow */
-struct rect decor_opaque(const struct csurface *s);        /* part of the frame without rounded corners */
-int decor_has(const struct csurface *s);
-void decor_draw_shadow(struct csurface *s, struct rect clip);
-void decor_draw(struct csurface *s, struct rect clip);
-/* Free what decor.c stores for a toplevel that goes away. */
-void decor_free(struct toplevel *t);
-/* Returns 1 when the press at the cursor was consumed by decorations. */
-int decor_press(struct csurface *s, int button);
-int decor_motion(void);
-int decor_release(void);                 /* 1: server drag ended, 2: client requested drag ended */
-int decor_dragging(void);
 /* seat.c */
 void seat_init(struct wire_server *srv);
 /* Load /usr/share/keymaps/<name>.mkm for the server and for clients bound from now on. */
@@ -453,9 +420,8 @@ void lock_init(struct wire_server *srv);
 int lock_active(void);
 /* The mapped lock surface, or NULL. */
 struct csurface *lock_surface_mapped(void);
-/* Start /bin/lock as the session user, unless a locker already runs.
- * reason is the cause that X12 writes to the log. */
-void lock_start_locker(const char *reason);
+/* The pid of the locker that the session manager started. */
+void lock_set_locker(int pid);
 void lock_surface_committed(struct csurface *s, int first_map);
 void lock_surface_gone(struct csurface *s);
 /* A frame was composed. The locked event follows the first frame of a
@@ -465,12 +431,24 @@ void lock_frame_done(void);
 void lock_draw(struct rect clip);
 /* A key press while the session is locked without a lock surface. */
 void lock_key_without_locker(void);
-void lock_note_input(void);
-long lock_next_deadline(void);
-void lock_tick(long now);
 void lock_output_changed(void);
 /* The session ended (session_uid -1). The lock ends with the session. */
 void lock_session_ended(void);
+/* session.c: the session manager interface (docs/design/sessiond.md). */
+void session_init(struct wire_server *srv);
+/* 1 when the key press with the modifiers mods activated a shortcut of the
+ * session manager. */
+int session_shortcut(uint32_t key, int mods);
+/* A locked session without a locker received a key press. */
+void session_locker_needed(void);
+/* The client c stopped (0) or resumed (1) answering pings, or c
+ * disconnected while c did not answer (1). */
+void session_client_state(const struct client *c, int responding);
+/* Input from the devices: the idle time starts again. */
+void session_note_input(void);
+/* The uptime in ms at which the session becomes idle, or -1 (G6). */
+long session_next_deadline(void);
+void session_tick(long now);
 /* text.c */
 
 void text_init(struct wire_server *srv);
@@ -497,3 +475,6 @@ void data_surface_gone(struct csurface *s);
 void data_client_gone(struct client *c);
 int data_fetch_fd(void);                 /* -1 when no transfer is in progress */
 void data_fetch_read(void);
+
+/* The window manager module. */
+#include "wm/wm.h"

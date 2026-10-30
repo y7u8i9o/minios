@@ -9,7 +9,8 @@
  * lock exits with status 1 when X12 refuses the lock, for example while
  * another locker runs.
  *
- * X12 starts lock for Super+L and after the idle timeout. The power menu
+ * The session manager sessiond starts lock for Super+L and after the idle
+ * timeout (docs/design/sessiond.md). The power menu
  * of the panel starts it as well. The program writes "lock: locked",
  * "lock: wrong password" and "lock: unlocked" to its standard output for
  * the boot tests. */

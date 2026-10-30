@@ -137,3 +137,10 @@ void settings_get_all(struct wire_proxy *settings)
     wire_proxy_marshal(settings, 1, args, NULL);
 }
 
+void settings_set_keymap(struct wire_proxy *settings, const char * name)
+{
+    union wire_arg args[1] = { { 0 } };
+    args[0].s = name;
+    wire_proxy_marshal(settings, 2, args, NULL);
+}
+

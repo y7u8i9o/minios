@@ -18,7 +18,7 @@
 #include <fs/vfs.h>
 #include <console.h>
 
-static struct proc *panel_proc;
+static struct proc *panel_proc, *sessiond_proc;
 
 /* The geometry and the colours of the panel in logical pixels, as
  * user/panel/panel.h defines them. sw is the logical width of the screen. */
@@ -262,10 +262,30 @@ static inline struct proc *start_x12(char *const argv[])
     return srv;
 }
 
-/* The compositor and the panel; returns the compositor. */
+/* The session manager sessiond (docs/design/sessiond.md). It binds the
+ * shortcut keys and starts the locker and the screenshot program. */
+static inline void start_sessiond(void)
+{
+    sessiond_proc = proc_create_user("/bin/sessiond", (char *const[]){ "sessiond", NULL }, (char *const[]){ NULL },
+                                     &kernel_proc);
+    ktest_assert(sessiond_proc != NULL, "cannot start sessiond");
+}
+
+static inline void stop_sessiond(void)
+{
+    if (sessiond_proc) {
+        signal_send(sessiond_proc, SIGTERM);
+        proc_reap(sessiond_proc);
+        sessiond_proc = NULL;
+    }
+}
+
+/* The compositor, the session manager and the panel; returns the
+ * compositor. */
 static inline struct proc *start_server(void)
 {
     struct proc *srv = start_x12((char *const[]){ "x12", "-s", NULL });
+    start_sessiond();
     panel_proc = proc_create_user("/bin/panel", (char *const[]){ "panel", NULL }, (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(panel_proc != NULL, "cannot start the panel");
     ktest_wait_idle(600);
@@ -279,6 +299,7 @@ static inline void stop_server(struct proc *srv)
         proc_reap(panel_proc);
         panel_proc = NULL;
     }
+    stop_sessiond();
     signal_send(srv, SIGTERM);
     int status = proc_reap(srv);
     ktest_assert(status == 0, "compositor status 0x%x", status);

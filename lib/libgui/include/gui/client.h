@@ -172,6 +172,10 @@ int gui_transfer_fd(void);
 int gui_next_event(struct wmsg *ev, int timeout_ms);
 /* Descriptor of the connection, for callers with their own poll loop. */
 int gui_event_fd(void);
+/* 1 after the connection to the server failed. A program without a
+ * window ends its event loop then, because app_step returns 0 without
+ * windows in any case. */
+int gui_connection_lost(void);
 /* Milliseconds until the next key repeat is due, or -1 when no key is
  * pressed; callers with their own poll loop cap their timeout with it and
  * call gui_next_event(ev, 0) afterwards. */

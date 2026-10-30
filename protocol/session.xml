@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The session manager interface of X12 (docs/design/sessiond.md). X12
+     detects the events of a session: shortcut keys, idle time, a locked
+     session without a locker and unresponsive clients. The session
+     manager sessiond decides the actions: X12 starts no programs and
+     ends no processes itself. Only a client of root or of the user that
+     runs X12 may bind the global. -->
+<protocol name="session">
+  <interface name="session_manager" version="1">
+    <!-- Set the session user (-1 for none). X12 admits the clients of
+         this user in addition to root and the user of X12. The clients
+         of a previous session user are disconnected. A session lock ends
+         with the session. -->
+    <request name="set_user"><arg name="uid" type="int"/></request>
+    <!-- The session user, sent when the global is bound and after every
+         change. -->
+    <event name="user"><arg name="uid" type="int"/></event>
+
+    <!-- Bind a key with exactly the modifiers mods (the KEYMAP_MOD_*
+         bits of Shift, Ctrl, Alt and Super). A press of the key sends
+         shortcut with the name, and no client receives the key. X12
+         activates no shortcut while the session is locked or while an
+         overlay layer surface has the keyboard focus. -->
+    <request name="bind_shortcut">
+      <arg name="key" type="uint"/><arg name="mods" type="uint"/><arg name="name" type="string"/>
+    </request>
+    <event name="shortcut"><arg name="name" type="string"/></event>
+
+    <!-- No input for the seconds of the setting lock_timeout while a
+         session user exists and the session is unlocked. X12 sends the
+         event once for each period without input. -->
+    <event name="idle"/>
+    <!-- A key press in a locked session whose locker has exited. -->
+    <event name="locker_needed"/>
+    <!-- The pid of the locker that the session manager started. While
+         the session is locked without a locker, X12 accepts a lock
+         request only from root or from this process. -->
+    <request name="set_locker"><arg name="pid" type="uint"/></request>
+
+    <!-- A client stopped (responding 0) or resumed (responding 1)
+         answering the pings of X12. An unresponsive client that
+         disconnects also sends responding 1. pid is the process of the
+         client, 0 when unknown. title is the title of the topmost toplevel
+         of the client. -->
+    <event name="client_state">
+      <arg name="number" type="uint"/><arg name="pid" type="uint"/><arg name="responding" type="uint"/>
+      <arg name="title" type="string"/>
+    </event>
+    <!-- Disconnect the client with the number of client_state. -->
+    <request name="drop_client"><arg name="number" type="uint"/></request>
+
+    <request name="destroy" type="destructor"/>
+  </interface>
+</protocol>

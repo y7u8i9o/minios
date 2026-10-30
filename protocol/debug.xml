@@ -130,10 +130,12 @@
     <event name="windows_done"/>
   </interface>
 
-  <interface name="settings" version="1">
+  <interface name="settings" version="2">
     <request name="set"><arg name="key" type="string"/><arg name="value" type="int"/></request>
     <request name="get_all"/>
     <event name="value"><arg name="key" type="string"/><arg name="value" type="int"/></event>
     <event name="done"/>
+    <!-- Version 2: load /usr/share/keymaps/NAME.mkm for the seat. -->
+    <request name="set_keymap"><arg name="name" type="string"/></request>
   </interface>
 </protocol>

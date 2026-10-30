@@ -129,15 +129,11 @@ static void test_console(void)
     loadkeys("us");
 }
 
-/* set_keymap writes the keymap setting and asks the compositor to read it.
- * The compositor runs as root without HOME and reads the configuration in
- * root's home (docs/design/users.md). */
+/* set_keymap loads a keymap for the seat of the compositor through the
+ * settings interface. */
 static void set_keymap(const char *name)
 {
-    char command[96];
-    ksnprintf(command, sizeof command, "mkdir -p /root/.config && echo keymap=%s > /root/.config/desktop.conf", name);
-    run("/bin/sh", (char *const[]){ "sh", "-c", command, NULL });
-    run("/bin/x12settings", (char *const[]){ "x12settings", "set", "keymap_reload", "1", NULL });
+    run("/bin/x12settings", (char *const[]){ "x12settings", "keymap", (char *)name, NULL });
     ktest_wait_idle(300);
 }
 

@@ -5,7 +5,42 @@ in `user/compositor/` for source-history continuity, while the installed
 server is `/bin/x12` and its log prefix is `x12:`. It replaces the M17
 window server's core (`wsrv` remains as historical code until M26).
 The server owns the framebuffer, input devices, surface lifecycle,
-window roles, and composition.
+window roles, and composition. The window manager module in
+`user/compositor/wm/` decides the placement, the stacking order and the
+states of windows (below). The session manager `sessiond` decides the
+actions of the session: X12 reports shortcut keys, idle time and
+unresponsive clients, and `sessiond` starts the programs
+(`sessiond.md`).
+
+## Window manager module
+
+The core of X12 reaches the window policy only through `wm/wm.h`. The
+module runs in the thread of the core and shares the data structures of
+`comp.h` without a lock. A separate process would add one message
+exchange to every decision: the position of a new window, the target of
+a click and the size of a configure. The module has three files:
+
+- `wm/window.c`: the placement of a new toplevel (centred on its parent,
+  or a cascade from 40,30 of the desktop area), the stacking order,
+  activation, maximize, minimize, modal windows, close, Alt+Tab and
+  Alt+F4, the decision over a button press (`wm_pointer_press`), and the
+  dimming of the toplevels of an unresponsive client (`wm_draw_above`).
+- `wm/decor.c`: the server side decorations, the shadow, the move and
+  resize drags, and Alt+drag.
+- `wm/internal.h`: the declarations that the two files share.
+
+The core calls the module for the events of toplevels
+(`wm_toplevel_created`, `wm_toplevel_committed`, `wm_toplevel_destroyed`),
+for a change of the desktop area (`wm_output_changed`), for the move and
+resize requests of clients, for button presses, pointer motion, button
+releases and key presses, and for the drawing of each surface
+(`wm_extent`, `wm_opaque`, `wm_draw_below`, `wm_draw_above`). The module
+calls the core for configures (`shell_configure`, `toplevel_configure`),
+the states of toplevel handles (`shell_toplevel_state_changed`), the close
+event (`shell_request_close`), the keyboard focus and the damage. The
+protocol objects, their serials and the validation of commits remain in
+`shell.c`. The title font and the theme of the text that X12 draws itself
+come from `scene_font` and `scene_theme` in `scene.c`.
 
 ## Log
 
@@ -70,6 +105,10 @@ serial line to the kernel and the programs.
   (`gui.md`) and drag and drop: the drag icon, the offers to the surfaces
   under the cursor, the copy and move actions chosen from both sides and
   the modifiers, the drop, and the cancel by Escape (`dnd.md`).
+- `session.c`: the `session_manager` global of `protocol/session.xml`:
+  the session user, the shortcut keys of the session manager, the idle
+  time, the request for a new locker, and the states of unresponsive
+  clients (`sessiond.md`).
 - `trace.c`: the `tracer` global of `protocol/debug.xml`. `start`
   installs libwire's trace hook while at least one tracer runs, sends a
   `client` event for every other connected client, and turns every
@@ -90,10 +129,10 @@ serial line to the kernel and the programs.
   client buffer of the screen size, with or without the pointer,
   `get_windows` lists the toplevels and `capture_window` draws one of
   them alone with its shadow (`scene_copy_screen`,
-  `scene_render_window`, `images.md`). `seat.c` starts `/bin/screenshot`
-  on Print Screen, Shift+Print Screen and Super+Shift+3, 4 and 5, and
-  passes Print Screen to an overlay layer surface that has the keyboard
-  focus.
+  `scene_render_window`, `images.md`). `sessiond` starts `/bin/screenshot`
+  on Print Screen, Shift+Print Screen and Super+Shift+3, 4 and 5
+  (`sessiond.md`). X12 passes Print Screen to an overlay layer surface that
+  has the keyboard focus.
 - `backend_fb.c`: the framebuffer mapping, the 32 bit back buffer and
   the conversion copy for non native pixel layouts (from the window
   server). When `/dev/fb0` reports a scale (`video=WxH@2`), the back
@@ -146,13 +185,13 @@ X12 polls `/dev/fb0` for the size requests of the host display. With the
 setting `display_follow` X12 changes the mode to the requested size
 (`display.md`, V3 of the 0.6.0 release).
 
-While an overlay layer surface has the keyboard focus, Alt+Tab and Alt+F4
-go to the surface instead of cycling or closing the toplevels below it,
-so that the login window and the authentication dialog (`users.md`)
-retain the keyboard. A click on the title bar of a server decorated
+While an overlay layer surface has the keyboard focus, Alt+Tab, Alt+F4
+and the shortcuts of the session manager go to the surface instead of
+their actions, so that the login window and the authentication dialog
+(`users.md`) retain the keyboard. A click on the title bar of a server decorated
 toplevel reaches the title bar only when no surface above it covers the
 point: a toplevel higher in the stack, a layer surface of the top or
-overlay layer, or a popup (`covers_decorations` in `seat.c`). Before
+overlay layer, or a popup (`covers_decorations` in `wm/window.c`). Before
 2026-10-05 X12 compared only the stack positions, which layer surfaces do
 not have, and a title bar below the panel or an overlay took the click.
 
@@ -175,8 +214,9 @@ minimum interval between frames.
 
 The poll timeout is the earliest deadline of the modules with timed
 work: the next key repeat of the text input (`seat_next_deadline`), the
-next ping, hang and end of a snooze (`hang_next_deadline`) and the
-timeout of a key sent to the input method (`im_next_deadline`). Without
+next ping and hang (`hang_next_deadline`), the timeout of a key sent to
+the input method (`im_next_deadline`) and the idle time of the session
+(`session_next_deadline`). Without
 such a deadline poll waits for input and clients alone. Before G6 a
 periodic 16 ms timer woke X12 also when it was idle, about 64 times a
 second, and a commit waited up to 16 ms for the next tick. `comp_idle`
@@ -226,15 +266,15 @@ framebuffer and the compositor's log.
   to every client once a second and the client answers with
   `shell.pong` (libgui does this in its event dispatch). A client that
   has not answered for three seconds, or whose socket has remained full
-  that long, is shown as not responding: its toplevels are dimmed and
-  carry a dialog drawn by the server with "<title> is not responding",
-  Wait and Force quit. Wait hides the dialog for fifteen seconds; Force
-  quit sends `SIGKILL` to the pid the client reported with
-  `shell.set_pid` (libgui sends it at connect) and drops the connection;
-  a client that answers again gets its windows back unchanged. Clicks on
-  a dimmed window go nowhere. Test: `comp_hang` (a `comptest` client
-  that hangs for six seconds, Wait, recovery, then one that hangs for
-  good and is killed through the button).
+  that long, is shown as not responding. The window manager module dims
+  its toplevels, and a click on the dimmed contents reaches no surface.
+  X12 sends `client_state` with the pid that the client reported with
+  `shell.set_pid` (libgui sends the pid at connect) to the session
+  manager. `sessiond` shows the dialog "TITLE is not responding." with
+  Wait and Force quit (`sessiond.md`). A client that answers again gets
+  its windows back unchanged. Test: `comp_hang` (a `comptest` client that
+  hangs for six seconds, Wait, recovery, then one that hangs for good and
+  is killed through Force quit).
 - Closing the `/dev/input` descriptors drops their grabs (M47; before, closing `/dev/kbd` left raw scancode mode, `kbddev_release` in
   `kernel/fs/devfs.c`), so a compositor that dies leaves the console
   keyboard usable; `startgui` ends the session when any of X12, the
@@ -260,8 +300,10 @@ input to them. `seat_set_keyboard_focus` refuses other surfaces, and the
 global shortcuts, the input method keys, the decorations and the not
 responding dialog are disabled. Super+L, a key press after a locker has
 exited, and the setting `lock_timeout` (seconds without input, 0 for
-never) start `/bin/lock` as the session user. The setting is in the list
-of `debug.c`, and the desktop sends it from `desktop.conf`. The `locked`
+never) lead to the events `shortcut "lock"`, `locker_needed` and `idle`
+of the session manager. `sessiond` then starts `/bin/lock` as the session
+user (`sessiond.md`). The setting is in the list of `debug.c`, and the
+desktop sends the setting from `desktop.conf`. The `locked`
 event follows the first composed frame of a locked session
 (`lock_frame_done` in `main.c`). Tests: `gui_lock`, `gui_lock_crash`,
 `lock_idle`.

@@ -1,10 +1,10 @@
-/* startgui [-s] [program]: start the desktop session (X12, the input
- * method daemon, the notification daemon, the panel and the desktop), run
- * the program (the terminal by default) and stop the session on logout.
- * The audio server is a service of init and lives across sessions. With -s,
- * the greeter has already started the server and retains it across
- * sessions, so startgui starts only the session programs
- * (docs/design/users.md). */
+/* startgui [-s] [program]: start the desktop session (X12, the session
+ * manager, the input method daemon, the notification daemon, the panel and
+ * the desktop), run the program (the terminal by default) and stop the
+ * session on logout. The audio server is a service of init and lives
+ * across sessions. With -s, the greeter has already started X12 and the
+ * session manager sessiond and retains both across sessions, so startgui
+ * starts only the session programs (docs/design/users.md). */
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -32,10 +32,11 @@ int main(int argc, char **argv)
         argv++;
     }
     conf_export_locale();
-    pid_t server = -1;
+    pid_t server = -1, sessiond = -1;
     if (!session_only) {
         server = spawn("x12");
         sleep_ms(400);
+        sessiond = spawn("sessiond");
     }
     pid_t ime = spawn("imed");
     /* The notification daemon starts before the panel, because the panel
@@ -61,6 +62,16 @@ int main(int argc, char **argv)
         }
         if (server > 0 && done == server)
             break;
+        if (sessiond > 0 && done == sessiond) {
+            if (++restarts > 3) {
+                sessiond = -1;
+                continue;
+            }
+            fprintf(stderr, "startgui: sessiond ended with status 0x%x, restarting\n", status);
+            sleep_ms(200);
+            sessiond = spawn("sessiond");
+            continue;
+        }
         if (done == ime) {
             if (++restarts > 3) {
                 ime = -1;
@@ -117,6 +128,10 @@ int main(int argc, char **argv)
     if (notifyd > 0) {
         kill(notifyd, SIGTERM);
         waitpid(notifyd, NULL, 0);
+    }
+    if (sessiond > 0) {
+        kill(sessiond, SIGTERM);
+        waitpid(sessiond, NULL, 0);
     }
     if (server > 0) {
         kill(server, SIGTERM);

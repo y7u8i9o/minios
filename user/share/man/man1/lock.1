@@ -13,13 +13,15 @@ DESCRIPTION
     caller and a password field. The right password, checked by
     checkpass(1), unlocks the session, and lock exits.
 
-    X12 starts lock for Super+L and after the idle time set on the
+    The session manager sessiond starts lock for Super+L and after the
+    idle time set on the
     Display page of the Settings application (the setting lock_timeout of
     /etc/desktop.conf in seconds, 0 for never). The Lock row of the power
     menu of the panel starts it as well.
 
     When lock ends without an unlock, the session remains locked, and X12
-    shows a black screen. A key press then starts lock again.
+    shows a black screen. A key press then makes sessiond start lock
+    again.
 
 EXIT STATUS
     0 after the unlock. 1 when X12 refuses the lock, for example while

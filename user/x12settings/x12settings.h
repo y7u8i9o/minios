@@ -12,6 +12,10 @@ extern struct wire_proxy *debug_proxy;     /* debug version 3 */
 
 /* Sends a setting to X12, unless a page applies a value from X12. */
 void setting_send(const char *key, int value);
+/* Loads the keymap NAME for the seat of X12. */
+void keymap_send(const char *name);
+/* Selects the input method with the name of the ime_control interface. */
+void method_select(const char *name);
 
 /* perf.c: the Performance page. perf_tick sends its requests once per
  * second. */

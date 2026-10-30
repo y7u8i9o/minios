@@ -23,7 +23,7 @@ struct csurface *surface_by_resource(struct wire_resource *r)
 void surface_unmap(struct csurface *s)
 {
     if (s->mapped)
-        scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
+        scene_damage(wm_extent(s));
     s->mapped = 0;
 }
 
@@ -162,7 +162,7 @@ static void surface_resource_destroy(struct wire_resource *r)
             break;
         }
     if (s->mapped)
-        scene_damage(decor_has(s) ? decor_extent(s) : surface_rect(s));
+        scene_damage(wm_extent(s));
     if (s->current.buffer)
         s->current.buffer->busy = 0;
     seat_surface_gone(s);
@@ -331,7 +331,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
     struct buffer *next = s->pending.has_buffer ? s->pending.buffer : s->current.buffer;
     if (!surface_commit_allowed(c, s, next))
         return;
-    struct rect old = decor_has(s) ? decor_extent(s) : surface_rect(s);
+    struct rect old = wm_extent(s);
     /* A new scale, transform or opaque region changes how every pixel of
      * the buffer is drawn. */
     int all_changed = s->pending.opaque_set ||
@@ -392,7 +392,7 @@ static void h_commit(struct wire_client *c, struct wire_resource *self)
          * client reported damage; the decorations and the shadow around
          * them remain as drawn. A buffer without damage counts as changed
          * everywhere. */
-        struct rect now = decor_has(s) ? decor_extent(s) : surface_rect(s);
+        struct rect now = wm_extent(s);
         int same = was_mapped && b && old.x == now.x && old.y == now.y && old.w == now.w && old.h == now.h;
         if (same && !all_changed && s->pending.ndamage) {
             damage_contents(s);
@@ -502,6 +502,9 @@ static void client_gone(struct wire_client *wc, void *data)
     struct client *c = data;
     data_client_gone(c);
     text_client_gone(c);
+    /* The session manager closes the dialog of an unresponsive client. */
+    if (c->unresponsive)
+        session_client_state(c, 1);
     comp_log("client %d disconnected", c->number);
     trace_client(c, 0);
     free(c);

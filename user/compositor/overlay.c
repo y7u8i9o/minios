@@ -59,7 +59,7 @@ static struct csurface *find_surface(int id)
  * covers the outline. */
 static struct rect outline_rect(const struct csurface *s)
 {
-    return decor_has(s) ? decor_opaque(s) : surface_rect(s);
+    return wm_opaque(s);
 }
 
 void overlay_highlight(struct wire_resource *owner, int id)

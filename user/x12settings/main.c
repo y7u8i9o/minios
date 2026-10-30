@@ -1,6 +1,9 @@
 /* x12settings: the state and the settings of the running X12 through
  * the debug and settings interfaces (docs/design/x12settings.md).
  * "x12settings set KEY VALUE" applies one setting without a window.
+ * "x12settings keymap NAME" loads a keymap for the seat. "x12settings
+ * session-user UID" sets the session user through the session manager
+ * interface, which admits only root and the user of X12.
  * "x12settings clients", "x12settings capture TITLE" and "x12settings
  * highlight TITLE [SECONDS]" print the clients and surfaces, capture a
  * surface and outline it on the screen. The
@@ -12,10 +15,12 @@
 #include <gui/client.h>
 #include "x12settings.h"
 #include "debug-client.h"
+#include "ime-client.h"
+#include "session-client.h"
 
 struct app *app;
 struct wire_proxy *debug_proxy;
-static struct wire_proxy *settings_proxy;
+static struct wire_proxy *settings_proxy, *ime_control_proxy;
 
 void setting_send(const char *key, int value)
 {
@@ -23,6 +28,43 @@ void setting_send(const char *key, int value)
         return;
     settings_set(settings_proxy, key, value);
     gui_flush();
+}
+
+void keymap_send(const char *name)
+{
+    if (!settings_proxy)
+        return;
+    settings_set_keymap(settings_proxy, name);
+    gui_flush();
+}
+
+static void on_engines(void *user, struct wire_proxy *p, const char *list) {}
+static void on_current(void *user, struct wire_proxy *p, const char *name, const char *label) {}
+static const struct ime_control_listener control_events = { on_engines, on_current };
+
+void method_select(const char *name)
+{
+    if (!ime_control_proxy) {
+        struct wire_proxy *manager = gui_bind_global("input_method_manager", &input_method_manager_interface, 1);
+        if (!manager)
+            return;
+        ime_control_proxy = input_method_manager_get_control(manager);
+        ime_control_add_listener(ime_control_proxy, &control_events, NULL);
+    }
+    ime_control_select(ime_control_proxy, name);
+    gui_flush();
+}
+
+/* Wait briefly for an answer of X12, then end the command. */
+static int command_done(const char *what, const char *value)
+{
+    gui_flush();
+    struct wmsg ev;
+    gui_next_event(&ev, 200);
+    printf("x12settings: %s %s\n", what, value);
+    fflush(stdout);
+    app_destroy(app);
+    return 0;
 }
 
 /* ---- events ---- */
@@ -118,23 +160,32 @@ int main(int argc, char **argv)
     app = app_create();
     if (!app)
         return 1;
-    settings_proxy = gui_bind_global("settings", &settings_interface, 1);
+    settings_proxy = gui_bind_global("settings", &settings_interface, 2);
     debug_proxy = gui_bind_global("debug", &debug_interface, 3);
     if (!settings_proxy || !debug_proxy) {
-        fprintf(stderr, "x12settings: X12 has no settings interface or no debug interface of version 3\n");
+        fprintf(stderr, "x12settings: X12 has no settings interface of version 2 or no debug interface of version 3\n");
         return 1;
     }
     settings_add_listener(settings_proxy, &settings_events, NULL);
     debug_add_listener(debug_proxy, &debug_events, NULL);
     if (argc == 4 && strcmp(argv[1], "set") == 0) {
         settings_set(settings_proxy, argv[2], atoi(argv[3]));
-        gui_flush();
-        struct wmsg ev;
-        gui_next_event(&ev, 200);
-        printf("x12settings: set %s %s\n", argv[2], argv[3]);
-        fflush(stdout);
-        app_destroy(app);
-        return 0;
+        char what[96];
+        snprintf(what, sizeof what, "set %s", argv[2]);
+        return command_done(what, argv[3]);
+    }
+    if (argc == 3 && strcmp(argv[1], "keymap") == 0) {
+        settings_set_keymap(settings_proxy, argv[2]);
+        return command_done("keymap", argv[2]);
+    }
+    if (argc == 3 && strcmp(argv[1], "session-user") == 0) {
+        struct wire_proxy *manager = gui_bind_global("session_manager", &session_manager_interface, 1);
+        if (!manager) {
+            fprintf(stderr, "x12settings: X12 has no session manager interface\n");
+            return 1;
+        }
+        session_manager_set_user(manager, atoi(argv[2]));
+        return command_done("session-user", argv[2]);
     }
     if (argc >= 2 && (strcmp(argv[1], "clients") == 0 || strcmp(argv[1], "capture") == 0 ||
                       strcmp(argv[1], "highlight") == 0)) {
