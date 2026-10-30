@@ -134,26 +134,26 @@ static inline bool arrow_cursor_at(int x, int y)
     bool ok;
     if (c->visible) {
         /* The image has a border of 3 s for the shadow, and the hotspot is
-         * the tip (5,3) of the view box. The point (6,10) lies inside the
+         * the tip (4,2) of the view box. The point (5,8) lies inside the
          * black arrow, and the white outline surrounds the arrow. */
-        uint32_t hot_x = (uint32_t)(8 * s), hot_y = (uint32_t)(6 * s);
+        uint32_t hot_x = (uint32_t)(7 * s), hot_y = (uint32_t)(5 * s);
         int white = 0;
-        for (int i = 0; i < 30 * s && i < FB_CURSOR_MAX; i++)
-            for (int j = 0; j < 30 * s && j < FB_CURSOR_MAX; j++)
+        for (int i = 0; i < 26 * s && i < FB_CURSOR_MAX; i++)
+            for (int j = 0; j < 26 * s && j < FB_CURSOR_MAX; j++)
                 white |= c->image[i * FB_CURSOR_MAX + j] == 0xffffffffu;
-        uint32_t body = c->image[13 * s * FB_CURSOR_MAX + 9 * s];
+        uint32_t body = c->image[11 * s * FB_CURSOR_MAX + 8 * s];
         ok = c->x == x * s && c->y == y * s && c->hot_x == hot_x && c->hot_y == hot_y && body == 0xff000000u &&
              white;
         if (!ok)
             kprintf("device cursor at %d,%d, hotspot %u,%u, body %08x, white %d\n", c->x, c->y, c->hot_x, c->hot_y,
                     body, white);
     } else {
-        /* The hotspot is the tip (5,3) of the view box. The white outline
+        /* The hotspot is the tip (4,2) of the view box. The white outline
          * covers the column left of the tip, and the arrow is black at
-         * (6,10). */
-        ok = pixel(x + 1, y + 7) == 0x00000000 && pixel(x - 1, y + 7) == 0x00ffffff;
+         * (5,8). */
+        ok = pixel(x + 1, y + 6) == 0x00000000 && pixel(x - 1, y + 6) == 0x00ffffff;
         if (!ok)
-            kprintf("framebuffer at %d,%d: %08x %08x\n", x, y, pixel(x + 1, y + 7), pixel(x - 1, y + 7));
+            kprintf("framebuffer at %d,%d: %08x %08x\n", x, y, pixel(x + 1, y + 6), pixel(x - 1, y + 6));
     }
     kfree(c);
     return ok;

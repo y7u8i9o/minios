@@ -9,10 +9,7 @@
 #define CSD_MARGIN 16          /* shadow reach around the frame */
 #define CSD_HEADER 30          /* header bar height, bottom hairline included */
 #define CSD_RADIUS 6
-#define CSD_BORDER_ZONE 8      /* resize zone outside the frame, inside the margin */
 #define CSD_BUTTON 22
-#define CSD_CORNER 24          /* corner resize zones along the edges */
-#define CSD_CORNER_REACH 12    /* corner squares outside the frame, inside the margin */
 /* The chrome around the frame: a drop shadow CSD_SHADOW_REACH logical
  * pixels wide and CSD_SHADOW_DY lower than the frame, with the peak alpha
  * of an active window and of the others out of 255, and an outline of

@@ -8,14 +8,18 @@ no client set a cursor.
 
 ## The set
 
-`tools/gencursors.py` writes the files and the file `index`. Each cursor
-is drawn on a view box of 24 by 24 units. A cursor consists of groups. Each
+`tools/gencursors.py` writes the files and the file `index`. The shapes
+are designed on a grid of 24 by 24 units, and the script scales them into
+a view box of 20 by 20 units, one unit per logical pixel. The outline
+remains one unit wide after the scaling. A cursor consists of groups. Each
 group is drawn first as a white halo, the shapes filled and stroked one
 unit wider on every side, then as the black body. A later group lies over
 an earlier group with its own halo, so a badge remains readable over the
 arrow. White detail lines separate the fingers of the hands. The lens of
-the zoom cursors is white glass without a halo. The left edge of the arrow
-lies on a whole unit, so the outline covers whole pixels at scale 1.
+the zoom cursors is white glass without a halo. The tip and the left edge
+of the arrow lie on whole units, so the outline covers whole pixels at
+scale 1. The first set of 2026-10-30 had cursors of 24 pixels. The owner
+found them too large on the same day.
 
 The names are those of the CSS cursor property:
 
@@ -41,12 +45,12 @@ The cursors need strokes. The SVG renderer of `svg.so` draws `stroke`,
 
 `cursor.c` reads the index at start. A shape is an entry of the index, and
 an alias refers to the entry of its target. Shape 0 is `default`.
-`cursor_image_of` renders the file of a shape with `image_load_svg` at 24
+`cursor_image_of` renders the file of a shape with `image_load_svg` at 20
 logical pixels times the screen scale. A soft shadow follows: the alpha of
 the cursor, moved down by one logical pixel, blurred twice with a box of
 the scale as radius, at 30 percent. The image has a border of three
-logical pixels for the shadow. The image is 30 by 30 logical pixels, 60 by
-60 device pixels at scale 2, and fits the device cursor of virtio-gpu (64
+logical pixels for the shadow. The image is 26 by 26 logical pixels, 52 by
+52 device pixels at scale 2, and fits the device cursor of virtio-gpu (64
 by 64). X12 renders each shape once per scale. Without the index or the
 file of `default`, X12 draws the former arrow. A shape whose file fails
 shows `default`.

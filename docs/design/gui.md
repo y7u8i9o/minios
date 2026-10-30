@@ -350,11 +350,14 @@ hairline under it, the title centred in DejaVu Sans 13 px, and three
 20 px round buttons at the right: close, maximize (a restore glyph when maximized) and minimize,
 with a hover shade. The toolkit handles the pointer over the chrome:
 the header bar starts `toplevel.move` (a double click toggles
-maximized), an 8 px zone outside the frame starts `toplevel.resize`
-with the edges (corners within 24 px take two), the buttons act on
-release. A square at each corner reaches 12 px outside the frame and
-6 px inside, over the rounded corner, and takes two edges as well
-(`gui_resize_edges` in `gfx.c`, which the compositor shares). The
+maximized), a zone on the border, 5 px outside and 2 px inside the
+frame, starts `toplevel.resize` with the edges (corners within 16 px take
+two), the buttons act on release. A square at each corner reaches 5 px
+outside the frame and 6 px inside, over the rounded corner, and takes two
+edges as well (`gui_resize_edges` in `gfx.c` with the sizes
+`GUI_RESIZE_*` of `gfx.h`, which the compositor shares). Before
+2026-10-30 the zones lay only outside the frame and reached 12 px into the
+shadow, so a pointer visibly away from the window resized it. The
 compositor learns the frame through `set_window_geometry`, an opaque
 region of the frame minus its corner squares, and an input region of the
 frame with the resize zone and the four corner squares

@@ -1,10 +1,11 @@
 /* The cursor set of /usr/share/cursors (docs/design/cursors.md).
  *
  * The file index of the directory lists each cursor with its hotspot in
- * units of the 24 by 24 view box, and the aliases. A shape is an entry of
- * the index. cursor_image_of renders the SVG file of a shape at 24
- * logical pixels times the screen scale, adds a soft shadow, and caches
- * the image until the scale changes.
+ * units of the 20 by 20 view box, and the aliases. A shape is an entry of
+ * the index. cursor_image_of renders the SVG file of a shape at 20
+ * logical pixels times the screen scale, one view box unit per logical
+ * pixel, adds a soft shadow, and caches the image until the scale
+ * changes.
  *
  * Without the index or without the file of a shape, X12 shows the arrow
  * of the earlier versions, 12 by 18 logical pixels. Shape 0 is "default"
@@ -18,7 +19,7 @@
 #include "comp.h"
 
 #define CURSOR_DIR "/usr/share/cursors"
-#define CURSOR_PX 24            /* the size of a cursor in logical pixels */
+#define CURSOR_PX 20            /* the size of a cursor in logical pixels and of its view box */
 #define MAX_SHAPES 64
 #define SHADOW_ALPHA 77         /* the peak darkness of the shadow, out of 255 */
 

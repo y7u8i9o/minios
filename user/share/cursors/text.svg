@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-<path fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M12 5.5 L12 18.5"/>
-<path fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" d="M9.2 4.2 L10.6 4.4 L11.5 4.9 L12 5.6 L12.5 4.9 L13.4 4.4 L14.8 4.2"/>
-<path fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" d="M9.2 19.8 L10.6 19.6 L11.5 19.1 L12 18.4 L12.5 19.1 L13.4 19.6 L14.8 19.8"/>
-<path fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 5.5 L12 18.5"/>
-<path fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M9.2 4.2 L10.6 4.4 L11.5 4.9 L12 5.6 L12.5 4.9 L13.4 4.4 L14.8 4.2"/>
-<path fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M9.2 19.8 L10.6 19.6 L11.5 19.1 L12 18.4 L12.5 19.1 L13.4 19.6 L14.8 19.8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+<path fill="none" stroke="#fff" stroke-width="3.33" stroke-linecap="round" stroke-linejoin="round" d="M10 4.58 L10 15.42"/>
+<path fill="none" stroke="#fff" stroke-width="3.17" stroke-linecap="round" stroke-linejoin="round" d="M7.67 3.5 L8.83 3.67 L9.58 4.08 L10 4.67 L10.42 4.08 L11.17 3.67 L12.33 3.5"/>
+<path fill="none" stroke="#fff" stroke-width="3.17" stroke-linecap="round" stroke-linejoin="round" d="M7.67 16.5 L8.83 16.33 L9.58 15.92 L10 15.33 L10.42 15.92 L11.17 16.33 L12.33 16.5"/>
+<path fill="none" stroke="#000" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" d="M10 4.58 L10 15.42"/>
+<path fill="none" stroke="#000" stroke-width="1.17" stroke-linecap="round" stroke-linejoin="round" d="M7.67 3.5 L8.83 3.67 L9.58 4.08 L10 4.67 L10.42 4.08 L11.17 3.67 L12.33 3.5"/>
+<path fill="none" stroke="#000" stroke-width="1.17" stroke-linecap="round" stroke-linejoin="round" d="M7.67 16.5 L8.83 16.33 L9.58 15.92 L10 15.33 L10.42 15.92 L11.17 16.33 L12.33 16.5"/>
 </svg>

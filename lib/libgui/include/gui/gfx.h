@@ -148,6 +148,17 @@ struct gui_resize_zones {
     int margin, inner, corner, reach, inset_top, inset_bottom;
 };
 
+/* The zones of every window frame, the client decorations of csd.c and
+ * the decorations of X12, in logical pixels. The zones lie on the visible
+ * border: 5 pixels outside and 2 inside the edges, and corner zones of 16
+ * pixels along the edges whose squares reach 5 pixels outside. Zones that
+ * reached 12 pixels into the shadow resized windows from a pointer that
+ * was visibly away from the window. */
+#define GUI_RESIZE_OUTSIDE 5
+#define GUI_RESIZE_INSIDE 2
+#define GUI_RESIZE_CORNER 16
+#define GUI_RESIZE_REACH 5
+
 /* gui_resize_edges returns the edges that a press at (x, y) resizes for the
  * frame f, or 0 outside the resize zones. */
 int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int y);

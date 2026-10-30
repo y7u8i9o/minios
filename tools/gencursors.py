@@ -3,8 +3,11 @@
 
 Usage: tools/gencursors.py [DIR]
 
-Every cursor is drawn on a view box of 24 by 24 units. X12 renders the
-view box at 24 logical pixels times the screen scale. A cursor consists
+The shapes below are designed on a grid of 24 by 24 units, and the
+script scales them by SCALE into a view box of SIZE by SIZE units. X12
+renders the view box at SIZE logical pixels times the screen scale, one
+unit per logical pixel. The outline is OUTLINE units wide after the
+scaling, so the outline remains one pixel wide. A cursor consists
 of groups. Each group is drawn twice: first as a white halo, the shapes
 filled and stroked in white OUTLINE units wider on every side, then as the
 black body. A later group therefore lies over an earlier one with its own
@@ -22,6 +25,8 @@ import math
 import os
 import sys
 
+SIZE = 20           # the view box and the size of a cursor in logical pixels
+SCALE = SIZE / 24.0 # from the design grid to the view box
 OUTLINE = 1.0       # the width of the white halo on each side, in view box units
 
 
@@ -60,7 +65,7 @@ def fmt(v):
 
 
 def path(points, closed=True):
-    d = "M" + " L".join("%s %s" % (fmt(x), fmt(y)) for x, y in points)
+    d = "M" + " L".join("%s %s" % (fmt(x * SCALE), fmt(y * SCALE)) for x, y in points)
     return d + (" Z" if closed else "")
 
 
@@ -84,7 +89,7 @@ def glass(points):
 
 
 def svg(groups):
-    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">']
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d">' % (SIZE, SIZE)]
     for group in groups:
         for part in group:
             if part[0] == "fill":
@@ -92,7 +97,8 @@ def svg(groups):
                            % (fmt(2 * OUTLINE), path(part[1])))
             elif part[0] == "line":
                 out.append('<path fill="none" stroke="#fff" stroke-width="%s" stroke-linecap="round" '
-                           'stroke-linejoin="round" d="%s"/>' % (fmt(part[2] + 2 * OUTLINE), path(part[1], False)))
+                           'stroke-linejoin="round" d="%s"/>' % (fmt(part[2] * SCALE + 2 * OUTLINE),
+                                                                 path(part[1], False)))
         for part in group:
             if part[0] == "glass":
                 out.append('<path fill="#fff" d="%s"/>' % path(part[1]))
@@ -100,21 +106,22 @@ def svg(groups):
                 out.append('<path fill="#000" d="%s"/>' % path(part[1]))
             elif part[0] == "line":
                 out.append('<path fill="none" stroke="#000" stroke-width="%s" stroke-linecap="round" '
-                           'stroke-linejoin="round" d="%s"/>' % (fmt(part[2]), path(part[1], False)))
+                           'stroke-linejoin="round" d="%s"/>' % (fmt(part[2] * SCALE), path(part[1], False)))
         for part in group:
             if part[0] == "detail":
                 out.append('<path fill="none" stroke="#fff" stroke-width="%s" stroke-linecap="round" d="%s"/>'
-                           % (fmt(part[2]), path(part[1], False)))
+                           % (fmt(part[2] * SCALE), path(part[1], False)))
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
 
 # ---- shapes ----
 
-# The left edge lies on a whole unit, so that the white outline covers
-# whole pixels at scale 1.
-ARROW = [(5, 3), (5, 19.7), (9.1, 15.9), (11.7, 21.8), (14.4, 20.6), (11.9, 14.9), (17.4, 14.9)]
-ARROW_HOT = (5.0, 3.0)
+# The left edge and the tip lie on whole units of the view box (4.8 and
+# 2.4 times SCALE), so that the white outline covers whole pixels at
+# scale 1.
+ARROW = [(4.8, 2.4), (4.8, 19.7), (9.1, 15.9), (11.7, 21.8), (14.4, 20.6), (11.9, 14.9), (17.4, 14.9)]
+ARROW_HOT = (4.8, 2.4)
 
 
 def arrow():
@@ -285,11 +292,11 @@ def main():
                                                               "cursors")
     os.makedirs(out, exist_ok=True)
     index = ["# The cursors of X12, written by tools/gencursors.py (docs/design/cursors.md).",
-             "# NAME X Y: the hotspot in units of the 24 by 24 view box. NAME = TARGET: an alias."]
+             "# NAME X Y: the hotspot in units of the %d by %d view box. NAME = TARGET: an alias." % (SIZE, SIZE)]
     for name, (groups, (hx, hy)) in CURSORS.items():
         with open(os.path.join(out, name + ".svg"), "w") as f:
             f.write(svg(groups))
-        index.append("%s %s %s" % (name, fmt(hx), fmt(hy)))
+        index.append("%s %s %s" % (name, fmt(hx * SCALE), fmt(hy * SCALE)))
     for name, target in ALIASES.items():
         index.append("%s = %s" % (name, target))
     with open(os.path.join(out, "index"), "w") as f:

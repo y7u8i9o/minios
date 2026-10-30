@@ -129,7 +129,8 @@ static const char *model_cell(struct model *m, int row, int col, char *buf, size
 
 static const char *model_header(struct model *m, int col) { return col ? "Value" : "Name"; }
 
-static struct model rows_model = { model_rows, model_child, model_columns, model_cell, model_header };
+static struct model rows_model = { .rows = model_rows, .child = model_child, .columns = model_columns,
+                                   .cell = model_cell, .header = model_header };
 
 /* The row height of the table: the font height plus 6 (models.c). */
 static int table_row_h(void)
