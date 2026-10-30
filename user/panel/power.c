@@ -17,7 +17,7 @@
 
 #define MENU_W 200
 #define ROW_H 28
-#define PAD 6
+#define PAD PAINTER_MENU_INSET
 #define NROWS 4
 
 enum { ROW_LOCK, ROW_LOGOUT, ROW_RESTART, ROW_SHUTDOWN };
@@ -117,7 +117,7 @@ void power_toggle(void)
         return;
     }
     int h = 2 * PAD + NROWS * ROW_H;
-    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme, PAD)) < 0) {
+    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme)) < 0) {
         teardown();
         return;
     }

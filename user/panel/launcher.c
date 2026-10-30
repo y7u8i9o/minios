@@ -315,7 +315,7 @@ static void show(void)
     layout_size();
     layout_rows();
     if (!menu.surface &&
-        canvas_create_rounded(&menu, menu_w, menu_h, painter_menu_radius(&menu_theme, MENU_PAD)) < 0)
+        canvas_create_rounded(&menu, menu_w, menu_h, painter_menu_radius(&menu_theme)) < 0)
         return;
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, menu_w, menu_h);

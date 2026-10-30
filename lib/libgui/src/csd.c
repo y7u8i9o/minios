@@ -75,6 +75,21 @@ static struct rect button_rect(const struct csd *c, int w, int h, int n)
                           CSD_BUTTON, CSD_BUTTON };
 }
 
+int csd_slot_max(const struct csd *c, int w)
+{
+    int max = button_rect(c, w, 0, 2).x - 12 - (csd_frame(c, w, 0).x + CSD_SLOT_X);
+    return max > 0 ? max : 0;
+}
+
+struct rect csd_slot(const struct csd *c, int w, int h)
+{
+    int sw = c->slot_w < csd_slot_max(c, w) ? c->slot_w : csd_slot_max(c, w);
+    if (!c->enabled || sw <= 0)
+        return (struct rect){ 0, 0, 0, 0 };
+    struct rect f = csd_frame(c, w, h);
+    return (struct rect){ f.x + CSD_SLOT_X, f.y, sw, CSD_HEADER - 1 };
+}
+
 /* The resize zones of the frame (gui_resize_edges): the edges outside the
  * frame, and corner squares that reach outside and over the rounded
  * corners inside. */
@@ -94,7 +109,7 @@ enum csd_zone csd_hit(const struct csd *c, int w, int h, int x, int y, int *edge
         *edges = e;
         return CSD_RESIZE;
     }
-    if (rect_contains(csd_content(c, w, h), x, y))
+    if (rect_contains(csd_content(c, w, h), x, y) || rect_contains(csd_slot(c, w, h), x, y))
         return CSD_CONTENT;
     if (rect_contains(f, x, y)) {
         for (int n = 0; n < 3; n++)
@@ -246,10 +261,17 @@ static struct rect header_paint(struct surface *buf, int S, const struct csd *c,
     /* A window narrower than the button row would otherwise get buttons
      * in the margin, outside the returned damage. */
     p.clip = rect_intersect(p.clip, dh);
-    painter_fill(&p, hdr.x, hdr.y, hdr.w, hdr.h - 1, bg);
+    /* The background leaves the header slot out. The client paints the
+     * slot. */
+    struct rect slot = csd_slot(c, w, h);
+    int bx = slot.w ? slot.x + slot.w : hdr.x;
+    if (slot.w)
+        painter_fill(&p, hdr.x, hdr.y, slot.x - hdr.x, hdr.h - 1, bg);
+    painter_fill(&p, bx, hdr.y, hdr.x + hdr.w - bx, hdr.h - 1, bg);
     painter_fill(&p, hdr.x, hdr.y + hdr.h - 1, hdr.w, 1, line);
-    /* Title: centred, clipped between the left edge and the buttons. */
-    int right = button_rect(c, w, h, 2).x - 12, left = hdr.x + 12;
+    /* Title: centred, clipped between the slot or the left edge and the
+     * buttons. */
+    int right = button_rect(c, w, h, 2).x - 12, left = bx + 12;
     if (right > left && c->title[0]) {
         int tw = (gfx_text_width_font_scaled(title_font, c->title, -1, S) + S - 1) / S;
         int tx = hdr.x + (hdr.w - tw) / 2;

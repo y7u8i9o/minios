@@ -363,6 +363,20 @@ the margins and the corners; the configure states drive `active` and
 `maximized`. A compositor answering `decoration.mode` with server side
 decorations turns all of this off and the window is plain again.
 
+The header bar has a header slot at its left end
+(`gui_window_set_header_slot`). The client paints the slot itself. The
+slot begins 6 px from the left edge of the frame and is 29 px high, the
+header bar without its hairline. The slot ends 12 px before the window
+buttons at the latest. The header bar paints its background and the title
+around the slot. The title is centred on the header bar and moves right
+of the slot when the centred title would overlap the slot. Points in the
+slot are contents points with a negative y. Pointer events, damage
+(`gui_damage`) and popup anchors use these coordinates.
+`gui_window_header_surface` gives the device pixels of the slot in the
+current buffer. A change of the active or the maximized state sends
+`WM_HEADER`, and the client paints the slot again in the colours of the
+new state.
+
 
 The default theme uses the same light neutral greys as the chrome:
 the window body is the header bar's `0xebebeb`, borders `0xb0b0b0`,

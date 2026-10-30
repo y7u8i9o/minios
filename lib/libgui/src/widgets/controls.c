@@ -80,7 +80,13 @@ static void combo_open(struct widget *w)
     widget_abs(w, &ax, &ay);
     int rows = c->nitems < 8 ? c->nitems : 8;
     if (rows < 1) rows = 1;
-    window_popup_open(w->window, list, ax, ay + w->h, w->w, rows * (t->font->height + theme_px(t, TM_ROW_PAD)) + 2);
+    /* The list is rounded like a menu, with PAINTER_MENU_INSET - 1 pixels
+     * above and below the rows. */
+    listview_set_popup(list);
+    int h = rows * (t->font->height + theme_px(t, TM_ROW_PAD)) + 2 * (PAINTER_MENU_INSET - 1);
+    window_popup_open(w->window, list, ax, ay + w->h, w->w, h);
+    struct rect shape = { 0, 0, w->w, h };
+    window_popup_set_shape(w->window, &shape, 1, painter_menu_radius(t));
     widget_focus(list);
 }
 

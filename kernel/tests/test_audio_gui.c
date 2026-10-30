@@ -60,8 +60,9 @@ static void test_audio_player(void)
     ktest_assert(cl != NULL, "cannot start player");
     sleep_ms(1500);
     ktest_assert(pixel(42, 50) == 0x00ebebeb, "player window active: %08x", pixel(42, 50));
-    /* Window 560x300 at (40,60): the waveform canvas fills the middle. */
-    int accent = count_color(40 + 10, 60 + 70, 540, 190, ACCENT);
+    /* Window 560x300 at (40,60): the menu bar lies in the header bar, the transport row
+     * spans 6..32 and the waveform canvas spans 38..271. */
+    int accent = count_color(40 + 10, 60 + 40, 540, 220, ACCENT);
     ktest_assert(accent > 500, "waveform drawn: %d accent pixels", accent);
     sleep_ms(1500);                     /* the 2 s chime ends */
     press_key(0x39);                    /* space: play again from the start */
@@ -87,10 +88,10 @@ static void test_audio_player(void)
         ktest_assert(pixel(72, 80) == 0x00ebebeb, "player window for the track: %08x", pixel(72, 80));
         ktest_assert(timer_ms() - t0 < 5000, "the window must not wait for the load");
         /* The loader thread reads and decodes 38 MB while the window answers. */
-        while (count_color(70 + 10, 90 + 70, 540, 190, ACCENT) <= 500 && timer_ms() - t0 < 90000)
+        while (count_color(70 + 10, 90 + 40, 540, 220, ACCENT) <= 500 && timer_ms() - t0 < 90000)
             sleep_ms(500);
         kprintf("audio_player: track loaded after %lu ms\n", timer_ms() - t0);
-        accent = count_color(70 + 10, 90 + 70, 540, 190, ACCENT);
+        accent = count_color(70 + 10, 90 + 40, 540, 220, ACCENT);
         ktest_assert(accent > 500, "track waveform drawn: %d accent pixels", accent);
         alt_key(0x3e);
         status = proc_reap(cl);
@@ -105,10 +106,10 @@ static void test_audio_player(void)
      * longer than the linear one, and the test waits for the waveform. */
     int wx = 40 + 30 * windows, wy = 60 + 30 * windows;
     uint64_t t1 = timer_ms();
-    while (count_color(wx + 10, wy + 70, 540, 190, ACCENT) <= 500 && timer_ms() - t1 < 20000)
+    while (count_color(wx + 10, wy + 40, 540, 220, ACCENT) <= 500 && timer_ms() - t1 < 20000)
         sleep_ms(100);
     kprintf("audio_player: sinc load after %lu ms\n", timer_ms() - t1);
-    ktest_assert(count_color(wx + 10, wy + 70, 540, 190, ACCENT) > 500, "sinc waveform drawn");
+    ktest_assert(count_color(wx + 10, wy + 40, 540, 220, ACCENT) > 500, "sinc waveform drawn");
     alt_key(0x3e);
     status = proc_reap(cl);
     ktest_assert(status == 0, "player -s status 0x%x", status);

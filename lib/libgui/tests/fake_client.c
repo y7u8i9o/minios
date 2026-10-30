@@ -90,6 +90,46 @@ void gui_window_set_cursor(struct gui_window *window, const char *name)
 
 void gui_set_busy(int busy) { fake_busy = busy; }
 
+/* The header slot of client decorations while fake_header is 1: from x 6,
+ * 30 logical pixels above the contents, 29 pixels high. One buffer serves
+ * every window. */
+int fake_header;
+static int header_w;
+static uint32_t *header_px;
+static size_t header_cap;
+
+int gui_window_set_header_slot(struct gui_window *w, int width, struct rect *slot)
+{
+    if (!fake_header)
+        return -1;
+    int max = w->width - 104;
+    header_w = width < max ? width : max;
+    header_w = header_w > 0 ? header_w : 0;
+    if (slot)
+        *slot = header_w ? (struct rect){ 6, -30, header_w, 29 } : (struct rect){ 0, 0, 0, 0 };
+    return 0;
+}
+
+struct surface gui_window_header_surface(struct gui_window *w)
+{
+    int dw = header_w * w->scale, dh = 29 * w->scale;
+    if (!fake_header || !dw)
+        return (struct surface){ NULL, 0, 0, 0 };
+    size_t need = (size_t)dw * dh;
+    if (need > header_cap) {
+        free(header_px);
+        header_px = calloc(need, 4);
+        header_cap = header_px ? need : 0;
+    }
+    return (struct surface){ header_px, dw, dh, dw };
+}
+
+int gui_window_active(const struct gui_window *w)
+{
+    (void)w;
+    return 1;
+}
+
 struct gui_window *gui_create_popup_window(struct gui_window *parent, int x, int y, int width, int height, int grab)
 {
     return NULL;

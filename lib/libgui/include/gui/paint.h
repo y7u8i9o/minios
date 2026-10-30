@@ -92,10 +92,14 @@ void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, ui
  * disabled text. Small controls mark their focus with the hover grey
  * instead (widget_focus_visible). */
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
-/* The corner radius of a menu whose rows (painter_menu_row) lie inset
- * logical pixels from its edges: the radius of the rows plus the inset,
- * so that the corners of the rows and of the menu are concentric. */
-int painter_menu_radius(const struct theme *t, int inset);
+/* The gap of every menu between its edges and the highlight of its rows
+ * (painter_menu_row), in logical pixels: menu bar and context menus,
+ * combo box lists and the menus of the panel. */
+#define PAINTER_MENU_INSET 4
+/* The corner radius of a menu: the radius of the row highlight plus
+ * PAINTER_MENU_INSET, so that the corners of the rows and of the menu are
+ * concentric. */
+int painter_menu_radius(const struct theme *t);
 /* Make the surface of p transparent outside the union of the n rectangles
  * r, whose corners are rounded by radius: every device pixel receives the
  * coverage of the shape as its alpha, and a pixel on the antialiased edge

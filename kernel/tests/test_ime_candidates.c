@@ -51,7 +51,7 @@ static int highlight(int *x0, int *y0, int *x1, int *y1)
 {
     *x0 = *y0 = 100000;
     *x1 = *y1 = -1;
-    for (int y = 158; y < 500; y++)
+    for (int y = 127; y < 500; y++)
         for (int x = 48; x < 698; x++)
             if (pixel(x, y) == SELECTION) {
                 if (x < *x0) *x0 = x;

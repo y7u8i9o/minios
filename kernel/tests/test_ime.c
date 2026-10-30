@@ -124,8 +124,8 @@ static void test_ime(void)
     mouse_move_to(&cx, &cy, right - PANEL_INPUT_W / 2, PANEL_ROW(logical_h()), 0);
     mouse_click(1);
     ktest_wait_idle(800);
-    int top = logical_h() - 28 + 4 - (2 * 6 + 3 * 28);
-    mouse_move_to(&cx, &cy, right - 110, top + 6 + 28 + 14, 0);
+    int top = logical_h() - 28 + 4 - (2 * 4 + 3 * 28);
+    mouse_move_to(&cx, &cy, right - 110, top + 4 + 28 + 14, 0);
     mouse_click(1);
     ktest_wait_idle(500);
     signal_send(imed, SIGTERM);

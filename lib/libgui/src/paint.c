@@ -481,9 +481,9 @@ void painter_meter(struct painter *p, int x, int y, int w, int h, int from, int 
         painter_rounded(p, x + from, y, len, h, color, PAINTER_NONE);
 }
 
-int painter_menu_radius(const struct theme *t, int inset)
+int painter_menu_radius(const struct theme *t)
 {
-    return theme_px(t, TM_RADIUS) + inset;
+    return theme_px(t, TM_RADIUS) + PAINTER_MENU_INSET;
 }
 
 void painter_round_alpha(struct painter *p, const struct rect *r, int n, int radius, uint32_t edge)

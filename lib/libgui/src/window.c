@@ -175,6 +175,77 @@ static struct rect device_to_logical(struct rect r, int scale)
     return (struct rect){ x0, y0, x1 - x0, y1 - y0 };
 }
 
+void window_set_header(struct widget *window, struct widget *w)
+{
+    struct window_state *ws = window_state_of(window);
+    if (!ws->win || ws->header || w->parent != window || gui_window_set_header_slot(ws->win, 0, NULL) < 0)
+        return;
+    ws->header = w;
+    w->floating = 1;
+    widget_relayout(window);
+}
+
+/* Gives the header slot the preferred width of the header widget and
+ * places the widget on the slot. Without a header widget the slot is
+ * removed. */
+static void header_place(struct widget *window)
+{
+    struct window_state *ws = window_state_of(window);
+    struct widget *h = ws->header;
+    int width = 0;
+    if (h && h->visible) {
+        widget_measure(h);
+        width = h->measured.pref_w;
+    }
+    struct rect slot;
+    if (gui_window_set_header_slot(ws->win, width, &slot) < 0 || !h)
+        return;
+    if (h->x != slot.x || h->y != slot.y || h->w != slot.w || h->h != slot.h) {
+        h->x = slot.x;
+        h->y = slot.y;
+        h->w = slot.w;
+        h->h = slot.h;
+        widget_invalidate(h);
+    }
+}
+
+/* Paints the header widget into the header slot. The rectangles of the
+ * slot surface go to the server as damage in window coordinates. force is
+ * set when the whole window is repainted. */
+static struct rect header_paint(struct widget *window, int force)
+{
+    struct window_state *ws = window_state_of(window);
+    struct widget *h = ws->header;
+    struct rect damage = { 0, 0, 0, 0 };
+    if (!h || !h->visible || (!force && !h->dirty && !h->child_dirty && !h->dirty_part))
+        return damage;
+    struct surface hs = gui_window_header_surface(ws->win);
+    if (!hs.pixels) {
+        clear_marks(h);
+        return damage;
+    }
+    int scale = ws->win->scale > 0 ? ws->win->scale : 1;
+    struct painter p;
+    painter_init_scaled(&p, &hs, app_theme(window->app), scale);
+    /* The surface begins at the top left corner of the slot. */
+    p.ox = -h->x * scale;
+    p.oy = -h->y * scale;
+    struct rect_set rects = { 0 };
+    paint_tree(h, &p, force, &rects, NULL);
+    /* A forced paint records no rectangles. The damage is the slot. */
+    if (force)
+        rect_set_add(&rects, (struct rect){ 0, 0, hs.width, hs.height });
+    for (int i = 0; i < rects.n; i++) {
+        gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)rects.r[i].w * rects.r[i].h);
+        struct rect r = device_to_logical(rects.r[i], scale);
+        r.x += h->x;
+        r.y += h->y;
+        gui_damage(ws->win, r.x, r.y, r.w, r.h);
+        damage = i ? rect_union(damage, r) : r;
+    }
+    return damage;
+}
+
 struct rect window_paint(struct widget *window)
 {
     struct window_state *ws = window_state_of(window);
@@ -186,6 +257,7 @@ struct rect window_paint(struct widget *window)
         mark_all(window);
         window->dirty = 1;
     }
+    header_place(window);
     if (window->needs_measure || window->needs_layout || window->child_layout) {
         widget_measure(window);
         if (window->w != ws->win->width || window->h != ws->win->height) {
@@ -205,13 +277,17 @@ struct rect window_paint(struct widget *window)
     int scale = ws->win->scale > 0 ? ws->win->scale : 1;
     painter_init_scaled(&p, &ws->win->surf, app_theme(window->app), scale);
     struct rect_set rects = { 0 };
+    /* The header widget lies outside the contents. The paint of the tree
+     * finds an empty clip there and only clears its marks, so the header
+     * is painted first. */
+    struct rect damage = header_paint(window, window->dirty);
+    int headed = !rect_empty(damage);
     paint_tree(window, &p, 0, &rects, ws->popup_win ? ws->popup : NULL);
-    struct rect damage = none;
     for (int i = 0; i < rects.n; i++) {
         gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)rects.r[i].w * rects.r[i].h);
         struct rect r = device_to_logical(rects.r[i], scale);
         gui_damage(ws->win, r.x, r.y, r.w, r.h);
-        damage = i ? rect_union(damage, r) : r;
+        damage = i || headed ? rect_union(damage, r) : r;
     }
     if (ws->popup_win && ws->popup) {
         gui_begin_paint(ws->popup_win);
@@ -229,7 +305,7 @@ struct rect window_paint(struct widget *window)
             gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)pp.s->width * pp.s->height);
         }
     }
-    if (rects.n)
+    if (rects.n || headed)
         gui_count_paint(uptime_us() - t0);
     return damage;
 }
@@ -454,6 +530,15 @@ static void set_hover(struct widget *window, struct widget *w)
     }
 }
 
+/* The widget at window coordinates (x, y), in the header slot too. */
+static struct widget *window_widget_at(struct widget *window, int x, int y)
+{
+    struct widget *h = window_state_of(window)->header;
+    if (h && h->visible && rect_contains((struct rect){ h->x, h->y, h->w, h->h }, x, y))
+        return widget_at(h, x - h->x, y - h->y);
+    return widget_at(window, x, y);
+}
+
 void window_update_cursor(struct widget *window)
 {
     struct window_state *ws = window_state_of(window);
@@ -461,8 +546,9 @@ void window_update_cursor(struct widget *window)
     struct gui_window *gw = popup ? ws->popup_win : ws->win;
     if (!gw)
         return;
-    struct widget *root = popup ? ws->popup : window;
-    struct widget *target = ws->capture ? ws->capture : widget_at(root, ws->mouse_x, ws->mouse_y);
+    struct widget *target = ws->capture ? ws->capture
+                            : popup ? widget_at(ws->popup, ws->mouse_x, ws->mouse_y)
+                                    : window_widget_at(window, ws->mouse_x, ws->mouse_y);
     const char *name = "default";
     if (target) {
         int ax, ay;
@@ -498,8 +584,9 @@ static void mouse_message(struct widget *window, struct wmsg *m)
         caret_input(window);
         set_focus_visible(window, 0);
     }
-    struct widget *root = from_popup ? ws->popup : window;
-    struct widget *target = ws->capture ? ws->capture : widget_at(root, m->a, m->b);
+    struct widget *target = ws->capture ? ws->capture
+                            : from_popup ? widget_at(ws->popup, m->a, m->b)
+                                         : window_widget_at(window, m->a, m->b);
     if (ws->tip && target == ws->tip)
         target = NULL;
     if (m->d == WMOUSE_MOVE || m->d == WMOUSE_DOWN)
@@ -815,6 +902,10 @@ void window_message(struct widget *window, struct wmsg *m)
         widget_emit(window, "focus", &c);
         break;
     }
+    case WM_HEADER:
+        if (ws->header)
+            widget_invalidate(ws->header);
+        break;
     case WM_RESIZED: {
         if (ws->popup_win && m->window == ws->popup_win->id) {
             ws->popup->w = m->a;

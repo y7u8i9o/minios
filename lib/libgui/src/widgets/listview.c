@@ -11,6 +11,7 @@ struct listview {
     struct scroll_track track;
     struct gui_clicks clicks;
     int hot;                    /* the row under the pointer, or -1 */
+    int popup;                  /* the rounded form of a combo box popup (listview_set_popup) */
 };
 
 static int line_h(const struct widget *w)
@@ -19,18 +20,53 @@ static int line_h(const struct widget *w)
     return t->font->height + theme_px(t, TM_ROW_PAD);
 }
 
+/* The distance of the rows from the top and the bottom edge: the border,
+ * and in the popup form more space, so that the highlight lies
+ * PAINTER_MENU_INSET pixels from every edge as in a menu. The highlight
+ * starts 1 pixel inside its row. */
+static int pad_of(const struct widget *w)
+{
+    return ((const struct listview *)w)->popup ? PAINTER_MENU_INSET - 1 : 1;
+}
+
+/* The distance of the highlight from the left of the rows, which start
+ * after the border. */
+static int pill_x(const struct widget *w)
+{
+    return ((const struct listview *)w)->popup ? PAINTER_MENU_INSET - 1 : 2;
+}
+
 static int rows_of(const struct widget *w)
 {
     int lh = line_h(w);
-    return lh ? (w->h - 2) / lh : 0;
+    return lh ? (w->h - 2 * pad_of(w)) / lh : 0;
+}
+
+/* The width that the scroll bar takes from the right of the rows, 0
+ * without a scroll bar. In the popup form the bar lies inside the border. */
+static int bar_w(const struct widget *w, int rows)
+{
+    const struct listview *l = (const struct listview *)w;
+    return l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) + (l->popup ? 1 : 0) : 0;
+}
+
+/* The scroll bar, between the rounded corners in the popup form. */
+static struct rect bar_rect(const struct widget *w, int rows)
+{
+    const struct listview *l = (const struct listview *)w;
+    int sbw = theme_px(widget_theme(w), TM_SCROLLBAR);
+    if (!l->popup)
+        return (struct rect){ w->w - sbw, 0, sbw, w->h };
+    int r = painter_menu_radius(widget_theme(w));
+    return (struct rect){ w->w - 1 - sbw, r, sbw, w->h - 2 * r };
 }
 
 static void listview_measure(struct widget *w, struct size_hint *h)
 {
     h->pref_w = 160;
-    h->pref_h = 4 * line_h(w) + 2;
+    h->pref_h = 4 * line_h(w) + 2 * pad_of(w);
     h->min_w = 40;
-    h->min_h = line_h(w) + 2;
+    h->min_h = line_h(w) + 2 * pad_of(w);
 }
 
 /* The list scrolled from the first row old: the rows move by copy, and
@@ -39,26 +75,31 @@ static void listview_measure(struct widget *w, struct size_hint *h)
 static void scrolled(struct listview *l, int old)
 {
     struct widget *w = &l->w;
-    int lh = line_h(w), rows = rows_of(w);
-    int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
-    struct rect r = { 1, 1, w->w - 2 - sbw, w->h - 2 };
+    int lh = line_h(w), rows = rows_of(w), pad = pad_of(w);
+    int sbw = bar_w(w, rows);
+    struct rect r = { 1, pad, w->w - 2 - sbw, w->h - 2 * pad };
     int dy = (old - l->scroll) * lh, rem = r.h % lh;
     widget_scroll_area(w, r, dy);
     if (dy < 0 && rem)
         widget_invalidate_rect(w, (struct rect){ r.x, r.y + r.h + dy - rem, r.w, rem });
-    widget_invalidate_rect(w, (struct rect){ w->w - sbw, 0, sbw, w->h });
+    if (sbw)
+        widget_invalidate_rect(w, bar_rect(w, rows));
 }
 
 static void listview_paint(struct widget *w, struct painter *p)
 {
     struct listview *l = (struct listview *)w;
     const struct theme *t = p->theme;
-    int lh = line_h(w), rows = rows_of(w);
-    int bar = l->nitems > rows;
-    int sbw = bar ? theme_px(t, TM_SCROLLBAR) : 0;
-    painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
-    painter_frame(p, 0, 0, w->w, w->h, t->color[widget_focus_visible(w) ? TC_TEXT_DISABLED : TC_BORDER]);
-    painter_push(p, 1, 1, w->w - 2 - sbw, w->h - 2);
+    int lh = line_h(w), rows = rows_of(w), pad = pad_of(w);
+    int sbw = bar_w(w, rows);
+    uint32_t border = t->color[widget_focus_visible(w) ? TC_TEXT_DISABLED : TC_BORDER];
+    if (l->popup) {
+        painter_round_rect(p, 0, 0, w->w, w->h, painter_menu_radius(t), t->color[TC_FIELD], border);
+    } else {
+        painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
+        painter_frame(p, 0, 0, w->w, w->h, border);
+    }
+    painter_push(p, 1, pad, w->w - 2 - sbw, w->h - 2 * pad);
     /* Only the rows inside the clip, for a partial paint. */
     struct rect clip = painter_clip_local(p);
     int i0 = clip.y > 0 ? clip.y / lh : 0, i1 = rect_empty(p->clip) ? 0 : (clip.y + clip.h + lh - 1) / lh;
@@ -67,14 +108,16 @@ static void listview_paint(struct widget *w, struct painter *p)
         int y = i * lh, selected = idx == w->value;
         /* Selected and hovered rows are rounded pills inside the list. */
         if (selected || (idx == l->hot && w->enabled))
-            painter_rounded(p, 2, y + 1, w->w - 6 - sbw, lh - 2,
+            painter_rounded(p, pill_x(w), y + 1, w->w - 2 - sbw - 2 * pill_x(w), lh - 2,
                             t->color[selected ? (w->enabled ? TC_SELECTION : TC_TRACK) : TC_BUTTON_HOVER], PAINTER_NONE);
         uint32_t fg = !w->enabled ? TC_TEXT_DISABLED : selected ? TC_SELECTION_TEXT : TC_TEXT;
         painter_text(p, 6, y + (lh - painter_text_height(p)) / 2, l->items[idx], t->color[fg]);
     }
     painter_pop(p);
-    if (bar)
-        scrollbar_paint_track(p, w->w - sbw, 0, sbw, w->h, l->scroll, l->nitems, rows, 1);
+    if (sbw) {
+        struct rect b = bar_rect(w, rows);
+        scrollbar_paint_track(p, b.x, b.y, b.w, b.h, l->scroll, l->nitems, rows, 1);
+    }
 }
 
 static void ensure_visible(struct listview *l)
@@ -106,7 +149,7 @@ static void invalidate_row(struct listview *l, int idx)
 {
     int lh = line_h(&l->w), i = idx - l->scroll;
     if (idx >= 0 && i >= 0 && i <= rows_of(&l->w))
-        widget_invalidate_rect(&l->w, (struct rect){ 1, 1 + i * lh, l->w.w - 2, lh });
+        widget_invalidate_rect(&l->w, (struct rect){ 1, pad_of(&l->w) + i * lh, l->w.w - 2, lh });
 }
 
 static void set_hot(struct listview *l, int idx)
@@ -121,20 +164,20 @@ static void set_hot(struct listview *l, int idx)
 static int listview_event(struct widget *w, struct event *e)
 {
     struct listview *l = (struct listview *)w;
-    int lh = line_h(w), rows = rows_of(w);
+    int lh = line_h(w), rows = rows_of(w), pad = pad_of(w);
     if (e->type == EV_MOUSE_MOVE) {
-        int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
-        int idx = l->scroll + (e->y - 1) / lh;
-        set_hot(l, e->y >= 1 && e->x < w->w - sbw && idx < l->nitems ? idx : -1);
+        int sbw = bar_w(w, rows);
+        int idx = l->scroll + (e->y - pad) / lh;
+        set_hot(l, e->y >= pad && e->x < w->w - sbw && idx < l->nitems ? idx : -1);
     } else if (e->type == EV_LEAVE) {
         set_hot(l, -1);
         return 1;
     }
     switch (e->type) {
     case EV_MOUSE_DOWN: case EV_MOUSE_MOVE: case EV_MOUSE_UP: {
-        int sbw = l->nitems > rows ? theme_px(widget_theme(w), TM_SCROLLBAR) : 0;
+        int sbw = bar_w(w, rows);
         int before = l->scroll;
-        struct rect track = { w->w - sbw, 0, sbw, w->h };
+        struct rect track = bar_rect(w, rows);
         if (sbw && scroll_track_event(&l->track, w, e, track, &l->scroll, l->nitems, rows)) {
             if (l->scroll != before)
                 scrolled(l, before);
@@ -143,7 +186,7 @@ static int listview_event(struct widget *w, struct event *e)
         if (e->type != EV_MOUSE_DOWN || !(e->button & 1))
             return 0;
         /* A second click on the selected row activates it. */
-        int idx = l->scroll + (e->y - 1) / lh;
+        int idx = l->scroll + (e->y - pad) / lh;
         int count = gui_click_count(&l->clicks, e->x, e->y);
         if (idx >= 0 && idx < l->nitems)
             select_row(l, idx, count == 2 && idx == w->value ? "activate" : "selected");
@@ -218,6 +261,12 @@ void listview_add(struct widget *w, const char *item)
         return;
     l->items = grown;
     l->items[l->nitems++] = strdup(item);
+    widget_invalidate(w);
+}
+
+void listview_set_popup(struct widget *w)
+{
+    ((struct listview *)w)->popup = 1;
     widget_invalidate(w);
 }
 

@@ -12,6 +12,9 @@ extern int fake_damage_count;
  * busy state of gui_set_busy. */
 extern char fake_cursor[24];
 extern int fake_busy;
+/* 1 gives windows created from now on a header slot
+ * (gui_window_set_header_slot). A test that sets it sets it back to 0. */
+extern int fake_header;
 void fake_push(const struct wmsg *m);
 struct fake_drag {
     int started, window, nitems, actions, icon;

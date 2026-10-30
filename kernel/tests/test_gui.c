@@ -238,16 +238,16 @@ KTEST_DEFINE("gui_term", test_gui_term);
 /* ---- M19 stage 2 ---- */
 
 /* Geometry of the launcher popup (user/panel/launcher.c) without
- * installed packages.  The menu has 6 px of padding, a 34 px search row, a
+ * installed packages.  The menu has 4 px of padding, a 34 px search row, a
  * 22 px System heading and one 24 px row per entry of user/etc/launcher.
  * Log out is in the power menu of the panel since B4 of
  * docs/plan/desktop-panel.md.  It opens above the 28 px panel.  These
  * values must change with that file. */
 #define LAUNCHER_SYSTEM  12
 #define LAUNCHER_CLOCK   2     /* Clock=/bin/clock is the third System entry. */
-#define LAUNCHER_H       (6 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 6)
+#define LAUNCHER_H       (4 + 34 + 22 + LAUNCHER_SYSTEM * 24 + 4)
 #define LAUNCHER_TOP(sh) ((sh) - 28 + 4 - LAUNCHER_H)
-#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 6 + 34 + 22 + (i) * 24 + 12)
+#define LAUNCHER_ROW(sh, i) (LAUNCHER_TOP(sh) + 4 + 34 + 22 + (i) * 24 + 12)
 
 
 
@@ -410,7 +410,7 @@ static void test_gui_widgets(void)
     ktest_assert(cl != NULL, "cannot start widgettest");
     ktest_wait_idle(1000);
     int cx = sw / 2, cy = sh / 2;
-    mouse_move_to(&cx, &cy, 40 + 100, 60 + 51, 0);
+    mouse_move_to(&cx, &cy, 40 + 100, 60 + 19, 0);
     mouse_click(1);
     press_key(0x1e);
     press_key(0x30);
@@ -426,7 +426,7 @@ static void test_gui_widgets(void)
     mouse_move_to(&cx, &cy, 40 + 277, 60 + 200, 0);
     feed_packet_wheel(0, 0, 0, 1);
     ktest_wait_idle(150);
-    mouse_move_to(&cx, &cy, 40 + 12, 60 + 83, 0);
+    mouse_move_to(&cx, &cy, 40 + 12, 60 + 51, 0);
     mouse_click(1);
     mouse_move_to(&cx, &cy, 40 + 300, 60 + 150, 0);
     mouse_click(1);
@@ -435,13 +435,14 @@ static void test_gui_widgets(void)
     ps2kbd_feed_scancode(0xe0);
     ps2kbd_feed_scancode(0xcf);
     ktest_wait_idle(150);
-    mouse_move_to(&cx, &cy, 40 + 20, 60 + 19, 0);
+    /* The menu bar lies in the header bar, 30 px above the contents. */
+    mouse_move_to(&cx, &cy, 40 + 20, 60 - 15, 0);
     mouse_click(1);
-    mouse_move_to(&cx, &cy, 40 + 30, 60 + 45, 0);
+    mouse_move_to(&cx, &cy, 40 + 30, 60 + 12, 0);
     mouse_click(1);
-    mouse_move_to(&cx, &cy, 40 + 20, 60 + 19, 0);
+    mouse_move_to(&cx, &cy, 40 + 20, 60 - 15, 0);
     mouse_click(1);
-    mouse_move_to(&cx, &cy, 40 + 30, 60 + 70, 0);
+    mouse_move_to(&cx, &cy, 40 + 30, 60 + 37, 0);
     mouse_click(1);
     int status = proc_reap(cl);
     ktest_assert(status == 0, "widgettest status 0x%x", status);
@@ -521,7 +522,8 @@ KTEST_DEFINE("gui_widgets_look", test_gui_widgets_look);
 
 /* K6 of docs/plan/widgets.md: editing functions of the text field, the
  * spinner and the menus. widgettest text shows a window 400x300 at
- * (40,60): menu bar 6..32, text field 38..64, spinner 70..96. The client
+ * (40,60): menu bar in the header bar at -30..-1, text field 6..32,
+ * spinner 38..64. The client
  * logs every change. The expect file of the case checks the log. */
 static void test_gui_widgets_text(void)
 {
@@ -534,7 +536,7 @@ static void test_gui_widgets_text(void)
     ktest_wait_idle(1000);
     int cx = sw / 2, cy = sh / 2;
     /* Typing "ab cd", then Ctrl+Z and Ctrl+Y. */
-    mouse_move_to(&cx, &cy, 40 + 200, 60 + 51, 0);
+    mouse_move_to(&cx, &cy, 40 + 200, 60 + 19, 0);
     mouse_click(1);
     static const uint8_t typed[] = { 0x1e, 0x30, 0x39, 0x2e, 0x20 };
     for (size_t i = 0; i < sizeof typed; i++) {
@@ -548,7 +550,7 @@ static void test_gui_widgets_text(void)
     press_key(0x2d);
     ktest_wait_idle(150);
     /* A double click on the first letter selects "ab". A y replaces it. */
-    mouse_move_to(&cx, &cy, 40 + 13, 60 + 51, 0);
+    mouse_move_to(&cx, &cy, 40 + 13, 60 + 19, 0);
     feed_packet(1, 0, 0);
     feed_packet(0, 0, 0);
     feed_packet(1, 0, 0);
@@ -557,13 +559,13 @@ static void test_gui_widgets_text(void)
     press_key(0x15);
     ktest_wait_idle(150);
     /* The spinner takes a typed 7 on Enter. */
-    mouse_move_to(&cx, &cy, 40 + 50, 60 + 83, 0);
+    mouse_move_to(&cx, &cy, 40 + 50, 60 + 51, 0);
     mouse_click(1);
     press_key(0x08);
     press_key(0x1c);
     ktest_wait_idle(150);
     /* The first item of the menu is a check item. */
-    mouse_move_to(&cx, &cy, 40 + 20, 60 + 19, 0);
+    mouse_move_to(&cx, &cy, 40 + 20, 60 - 15, 0);
     mouse_click(1);
     ktest_wait_idle(200);
     press_down(1);
@@ -638,7 +640,7 @@ static void test_gui_editor(void)
     type_line("int x;");
     ktest_wait_idle(400);
     int blue = 0;
-    for (int y = 60 + 82; y < 60 + 101; y++)
+    for (int y = 60 + 51; y < 60 + 70; y++)
         for (int x = 40 + 8; x < 40 + 120; x++) {
             uint32_t v = pixel(x, y);
             int r = v >> 16 & 0xff, g = v >> 8 & 0xff, b = v & 0xff;
@@ -657,7 +659,7 @@ static void test_gui_editor(void)
     ktest_assert(strcmp(buf, "int x;") == 0, "saved text '%s'", buf);
     ctrl_key(0x1e);                     /* Ctrl+A */
     int cx = logical_w() / 2, cy = logical_h() / 2;
-    mouse_move_to(&cx, &cy, 40 + 30, 60 + 92, 0);
+    mouse_move_to(&cx, &cy, 40 + 30, 60 + 61, 0);
     mouse_click(2);
     ktest_wait_idle(400);
     /* The menu lists Undo, Redo, a separator, Cut and Copy. Down skips the
@@ -818,7 +820,7 @@ static void test_gui_calc(void)
 KTEST_DEFINE("gui_calc", test_gui_calc);
 
 /* The Mandelbrot plotter: a 640x480 window at (40,60) whose canvas lies
- * below the menu bar and the tool bar.  The point at the window centre is
+ * below the tool bar. The menu bar lies in the header bar.  The point at the window centre is
  * inside the set and painted black, and the left edge (about -2.2) is
  * outside and coloured.  A wheel step zooms in, a drag with the right
  * button zooms into a rectangle, j shows the Julia set of the centre,
@@ -832,7 +834,7 @@ static void test_gui_mandel(void)
     struct proc *cl = proc_create_user("/usr/bin/mandel", (char *const[]){ "mandel", NULL },
                                        (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start mandel");
-    int mid_x = 40 + 320, mid_y = 60 + 300, edge_x = 40 + 8;
+    int mid_x = 40 + 320, mid_y = 60 + 285, edge_x = 40 + 8;
     uint32_t mid = 1, edge = 0;
     for (int i = 0; i < 300; i++) {
         mid = pixel(mid_x, mid_y);
@@ -1402,7 +1404,7 @@ static void test_comp_panel(void)
     /* The menu has rounded corners (painter_menu_radius); the point 20 px
      * from its left edge lies on the card below the top border. */
     ktest_assert(pixel(mx + 20, my + 2) == 0x00fafbfc, "power menu above its button: %08x", pixel(mx + 20, my + 2));
-    mouse_move_to(&cx, &cy, mx + 60, my + 6 + 28 + 14, 0);
+    mouse_move_to(&cx, &cy, mx + 60, my + 4 + 28 + 14, 0);
     ktest_wait_idle(400);
     kprintf("comp_panel: power menu shown\n");
     sleep_ms(1500);                     /* the screendump of the QMP script */
@@ -1933,7 +1935,7 @@ static void test_gui_images(void)
                           (char *const[]){ NULL }, &kernel_proc);
     ktest_assert(cl != NULL, "cannot start the second view");
     wait_active(100, 120, "second view");
-    int dark = count_pixels(110, 120 + 80, 620, 300, 0, 0x00f0f0f0);
+    int dark = count_pixels(110, 120 + 49, 620, 331, 0, 0x00f0f0f0);
     kprintf("gui_images: saved stroke shows %d dark pixels\n", dark);
     ktest_assert(dark > 200, "saved stroke in the viewer: %d dark pixels", dark);
     alt_key(0x3e);

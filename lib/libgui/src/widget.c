@@ -76,6 +76,7 @@ void widget_remove(struct widget *child)
         if (ws->hover == child) ws->hover = NULL;
         if (ws->drag_source == child) ws->drag_source = NULL;
         if (ws->drop_target == child) ws->drop_target = NULL;
+        if (ws->header == child) ws->header = NULL;
     }
     if (child->floating)
         widget_invalidate(parent);

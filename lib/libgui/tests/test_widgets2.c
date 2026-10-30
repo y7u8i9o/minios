@@ -5,6 +5,7 @@
 #include <string.h>
 #include "check.h"
 #include "events.h"
+#include "fake.h"
 
 struct app *app_create_detached(void);
 
@@ -121,6 +122,29 @@ static void test_containers(struct app *a)
         CHECK(clicks == 1 && window_state_of(win)->popup == NULL, "item activated and menu closed");
     }
     window_close(win);
+
+    /* With a header slot, the menu bar of the window lies in the header
+     * bar. The contents begin with the next child. */
+    fake_header = 1;
+    win = app_window(a, 300, 200, "header");
+    bar = menubar_new(win);
+    file = menu_new(bar, "File");
+    menu_add(file, "Quit", NULL);
+    struct widget *below = label_new(win, "below");
+    window_paint(win);
+    CHECK(window_state_of(win)->header == bar && bar->floating, "menu bar in the header");
+    CHECK(bar->x == 6 && bar->y == -30 && bar->h == 29 && bar->w > 0, "menu bar on the slot: %d,%d %dx%d", bar->x,
+          bar->y, bar->w, bar->h);
+    widget_abs(below, &ax, &ay);
+    CHECK(ay < 20, "contents begin at the top: %d", ay);
+    struct surface hs = gui_window_header_surface(window_state_of(win)->win);
+    const struct theme *t = app_theme(a);
+    CHECK(hs.pixels && (hs.pixels[(size_t)(hs.height - 1) * hs.stride + hs.width - 1] & 0xffffff) ==
+                           (t->color[TC_HEADER] & 0xffffff), "slot painted in the header colour");
+    click(win, bar->x + 10, bar->y + 14);
+    CHECK(window_state_of(win)->popup != NULL && bar->value == 0, "menu opened from the header");
+    window_close(win);
+    fake_header = 0;
 }
 
 /* A tree model over a static table: rows 0..9, rows 1 and 2 are

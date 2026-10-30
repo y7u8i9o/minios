@@ -27,7 +27,7 @@
 #define DESKTOP_BTN_W 24                /* the show desktop button at the right edge */
 #define INPUT_W 30                      /* the label of the layout or input method */
 #define MENU_ITEM_H 24
-#define MENU_PAD 6
+#define MENU_PAD PAINTER_MENU_INSET   /* the gap of the launcher between its edges and its rows */
 #define LAUNCHER_COLUMN_W 200
 #define LAUNCHER_SEARCH_H 34
 #define LAUNCHER_HEADING_H 22
@@ -66,8 +66,7 @@ extern uint32_t press_serial;
 int canvas_create(struct canvas *c, int w, int h);
 /* A canvas with corners rounded by radius: an ARGB buffer whose opaque
  * region excludes the corners. canvas_commit makes the corners
- * transparent (painter_round_alpha). The menus pass painter_menu_radius
- * of the inset of their rows. */
+ * transparent (painter_round_alpha). The menus pass painter_menu_radius. */
 int canvas_create_rounded(struct canvas *c, int w, int h, int radius);
 /* Give the surface of c a new buffer of w by h logical pixels. The surface
  * retains its role. */

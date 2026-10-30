@@ -1557,6 +1557,10 @@ static void on_configure(void *user, struct wire_proxy *t, uint32_t serial, int3
     } else if (chrome_changed) {
         chrome_repaint(w, 0);
     }
+    if (chrome_changed && wi->csd.slot_w) {
+        struct wmsg m = { WM_HEADER, 0, w->id, 0, 0, 0, 0, "" };
+        push(&m);
+    }
 }
 static void on_decor_mode(void *user, struct wire_proxy *d, uint32_t mode)
 {
@@ -1930,15 +1934,52 @@ void gui_damage(struct gui_window *w, int x, int y, int width, int height)
 {
     struct win *wi = w->priv;
     int s = w->scale > 0 ? w->scale : 1;
-    struct rect r = rect_intersect((struct rect){ x * s, y * s, width * s, height * s },
-                                   (struct rect){ 0, 0, w->surf.width, w->surf.height });
-    if (rect_empty(r))
-        return;
     int ox, oy;
     content_origin(w, &ox, &oy);
-    r.x += ox * s;
-    r.y += oy * s;
-    add_damage(wi, r);
+    /* The rectangle in device pixels of the surface, limited to the
+     * contents and to the header slot. */
+    struct rect r = { (x + ox) * s, (y + oy) * s, width * s, height * s };
+    struct rect contents = { ox * s, oy * s, w->surf.width, w->surf.height };
+    struct rect slot = rect_scale(csd_slot(&wi->csd, w->width, w->height), s);
+    add_damage(wi, rect_intersect(r, contents));
+    add_damage(wi, rect_intersect(r, slot));
+}
+
+int gui_window_set_header_slot(struct gui_window *w, int width, struct rect *slot)
+{
+    struct win *wi = w->priv;
+    if (!wi->csd.enabled)
+        return -1;
+    width = width > 0 ? width : 0;
+    if (width != wi->csd.slot_w) {
+        /* The title moves, and the header bar fills the area that the
+         * slot leaves. */
+        wi->csd.slot_w = width;
+        chrome_repaint(w, 1);
+    }
+    int ox, oy;
+    content_origin(w, &ox, &oy);
+    struct rect r = csd_slot(&wi->csd, w->width, w->height);
+    if (slot)
+        *slot = r.w ? (struct rect){ r.x - ox, r.y - oy, r.w, r.h } : (struct rect){ 0, 0, 0, 0 };
+    return 0;
+}
+
+struct surface gui_window_header_surface(struct gui_window *w)
+{
+    struct win *wi = w->priv;
+    int s = w->scale > 0 ? w->scale : 1;
+    struct rect r = rect_scale(csd_slot(&wi->csd, w->width, w->height), s);
+    r = rect_intersect(r, (struct rect){ 0, 0, wi->bufs.w, wi->bufs.h });
+    if (rect_empty(r) || !wi->bufs.nslots)
+        return (struct surface){ NULL, 0, 0, 0 };
+    uint32_t *base = wi->bufs.slot[wi->bufs.cur].pixels;
+    return (struct surface){ base + (size_t)r.y * wi->bufs.w + r.x, r.w, r.h, wi->bufs.w };
+}
+
+int gui_window_active(const struct gui_window *w)
+{
+    return ((const struct win *)w->priv)->csd.active;
 }
 
 /* Regions given in contents coordinates, moved into the surface. */

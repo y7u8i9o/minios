@@ -12,11 +12,11 @@ static int menu_pad(const struct widget *w)
 }
 
 /* The highlight of a row lies MENU_INSET logical pixels from every edge of
- * its column: 1 pixel of border, 1 of space above the first item and 1
- * inside the item. The column is rounded with painter_menu_radius of this
- * inset, so the corners of the column and of the highlight are
- * concentric. */
-#define MENU_INSET 3
+ * its column (PAINTER_MENU_INSET): above the first item the border and
+ * MENU_INSET - 2 pixels of space, and 1 pixel inside the item. The column
+ * is rounded with painter_menu_radius, so the corners of the column and of
+ * the highlight are concentric. */
+#define MENU_INSET PAINTER_MENU_INSET
 
 /* ---- items and menus ---- */
 
@@ -158,7 +158,7 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
     const struct theme *t = p->theme;
     struct widget *w = &d->w;
     painter_push(p, c->x, c->y, c->w, c->h);
-    painter_round_rect(p, 0, 0, c->w, c->h, painter_menu_radius(t, MENU_INSET), t->color[TC_FIELD],
+    painter_round_rect(p, 0, 0, c->w, c->h, painter_menu_radius(t), t->color[TC_FIELD],
                        t->color[TC_BORDER]);
     int y = MENU_INSET - 1, i = 0, mark = theme_px(t, TM_ICON);
     for (struct widget *it = c->menu->first; it; it = it->next, i++) {
@@ -172,15 +172,18 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
         }
         painter_menu_row(p, MENU_INSET, y + 1, c->w - 2 * MENU_INSET, ih - 2,
                          i == c->hover && it->enabled ? PAINTER_HOVER : 0);
-        int x = menu_pad(w);
+        /* The marker or the icon starts at the padding of the captions, and
+         * the caption follows 8 pixels after it. item_measure reserves the
+         * width of both. */
+        int x = menu_pad(w), mx = menu_pad(w);
         if (mi->kind == ITEM_CHECK && mi->checked)
-            painter_check(p, 4, y + (ih - mark) / 2, mark, fg);
+            painter_check(p, mx, y + (ih - mark) / 2, mark, fg);
         else if (mi->kind == ITEM_RADIO && mi->checked)
-            painter_disc(p, 4 + mark / 3, y + (ih - mark / 3) / 2, mark / 3, fg);
+            painter_disc(p, mx + mark / 3, y + (ih - mark / 3) / 2, mark / 3, fg);
         else if (it->icon)
-            painter_icon(p, 4, y + (ih - image_lh(it->icon)) / 2, it->icon, !it->enabled);
+            painter_icon(p, mx, y + (ih - image_lh(it->icon)) / 2, it->icon, !it->enabled);
         if (mi->kind != ITEM_PLAIN || it->icon)
-            x = 24;
+            x = mx + mark + 8;
         painter_mnemonic_text(p, x, y + (ih - painter_text_height(p)) / 2, widget_text(it), fg);
         char accel[48];
         accel_label(it, accel, sizeof accel);
@@ -259,7 +262,7 @@ static void dropdown_show(struct dropdown *d, int x, int y)
     struct rect shape[2];
     for (int i = 0; i < d->ncols; i++)
         shape[i] = (struct rect){ d->col[i].x, d->col[i].y, d->col[i].w, d->col[i].h };
-    window_popup_set_shape(d->w.window, shape, d->ncols, painter_menu_radius(widget_theme(&d->w), MENU_INSET));
+    window_popup_set_shape(d->w.window, shape, d->ncols, painter_menu_radius(widget_theme(&d->w)));
     widget_focus(&d->w);
 }
 
@@ -446,9 +449,37 @@ static void menubar_measure(struct widget *w, struct size_hint *h)
     h->pref_h = h->min_h = t->font->height + 8;
 }
 
+/* In the header bar, a title under the pointer or with an open menu has
+ * a pill as high as the window buttons. */
+#define HEADER_PILL_H 22
+
+/* The menu bar in the header slot of the window (window_set_header) has
+ * the colours of the header bar. */
+static void menubar_paint_header(struct widget *w, struct painter *p, struct window_state *ws)
+{
+    const struct theme *t = p->theme;
+    int active = !ws->win || gui_window_active(ws->win);
+    painter_fill(p, 0, 0, w->w, w->h, t->color[active ? TC_HEADER : TC_HEADER_BACKDROP]);
+    uint32_t text = t->color[active ? TC_TITLE : TC_TITLE_BACKDROP];
+    int py = (w->h - HEADER_PILL_H) / 2, ty = (w->h - t->font->height) / 2;
+    int x = 0, i = 0;
+    for (struct widget *m = w->first; m; m = m->next, i++) {
+        int tw = title_width(w, m);
+        if (i == w->value || i == ((struct menubar *)w)->hot)
+            painter_rounded(p, x + 1, py, tw - 2, HEADER_PILL_H, t->color[TC_HEADER_BUTTON_HOVER], PAINTER_NONE);
+        painter_mnemonic_text(p, x + menu_pad(w), ty, widget_text(m), text);
+        x += tw;
+    }
+}
+
 static void menubar_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
+    struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
+    if (ws && ws->header == w) {
+        menubar_paint_header(w, p, ws);
+        return;
+    }
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
     painter_line(p, 0, w->h - 1, w->w - 1, w->h - 1, t->color[TC_BORDER]);
     int x = 0, i = 0;
@@ -529,6 +560,9 @@ struct widget *menubar_new(struct widget *parent)
     if (w) {
         w->value = -1;
         ((struct menubar *)w)->hot = -1;
+        /* The menu bar of a window moves into the header bar. */
+        if (parent && parent == parent->window)
+            window_set_header(parent, w);
     }
     return w;
 }

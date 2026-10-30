@@ -121,11 +121,12 @@ static void test_menu(struct app *a, const struct painter *p)
     struct widget *d = window_state_of(win)->popup;
     int dx, dy;
     widget_abs(d, &dx, &dy);
-    /* The first item starts 2 pixels below the top edge, and the corners
-     * are rounded with painter_menu_radius of the inset 3 of the rows. */
+    /* The first item starts PAINTER_MENU_INSET - 1 pixels below the top
+     * edge, and the corners are rounded with painter_menu_radius. */
+    int top = PAINTER_MENU_INSET - 1;
     int ih = open->measured.pref_h, th = painter_text_height(p), stray = 0;
-    int r = painter_menu_radius(p->theme, 3);
-    for (int y = (dy + 3) * S; y < (dy + 2 + ih) * S; y++)
+    int r = painter_menu_radius(p->theme);
+    for (int y = (dy + top + 1) * S; y < (dy + top + ih) * S; y++)
         for (int x = (dx + 10 + ow + 1) * S; x < (dx + d->w - r) * S; x++)
             stray += window_pixel(win, x, y) != p->theme->color[TC_FIELD];
     CHECK(stray == 0, "%d pixels right of the caption of \"&Open\"", stray);
@@ -133,7 +134,7 @@ static void test_menu(struct app *a, const struct painter *p)
           window_pixel(win, dx * S, dy * S));
     CHECK(window_pixel(win, (dx + r) * S, (dy + r) * S) == p->theme->color[TC_FIELD],
           "the card inside the corner: %06x", window_pixel(win, (dx + r) * S, (dy + r) * S));
-    int base = dy + 2 + 4 + th - 1, ox = dx + 10 + painter_text_width(p, "O", 1) / 2;
+    int base = dy + top + 4 + th - 1, ox = dx + 10 + painter_text_width(p, "O", 1) / 2;
     CHECK(window_pixel(win, ox * S, base * S) == p->theme->color[TC_TEXT], "the mnemonic is underlined: %06x",
           window_pixel(win, ox * S, base * S));
 

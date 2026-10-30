@@ -13,6 +13,7 @@
 #define CSD_BUTTON 22
 #define CSD_CORNER 24          /* corner resize zones along the edges */
 #define CSD_CORNER_REACH 12    /* corner squares outside the frame, inside the margin */
+#define CSD_SLOT_X 6           /* left end of the header slot in the frame */
 /* The chrome around the frame: a drop shadow CSD_SHADOW_REACH logical
  * pixels wide and CSD_SHADOW_DY lower than the frame, with the peak alpha
  * of an active window and of the others out of 255, and an outline of
@@ -29,6 +30,7 @@ struct csd {
     int enabled;               /* the compositor granted client decorations */
     int maximized, active;
     int hover;                 /* CSD_CLOSE, CSD_MAXIMIZE, CSD_MINIMIZE or 0 */
+    int slot_w;                /* width of the header slot, 0 for none */
     char title[64];
 };
 
@@ -43,7 +45,14 @@ int csd_header(const struct csd *c);
 void csd_buffer_size(const struct csd *c, int w, int h, int *bw, int *bh);
 struct rect csd_frame(const struct csd *c, int w, int h);
 struct rect csd_content(const struct csd *c, int w, int h);
-/* What lies at (x, y) of the buffer; edges (GUI_EDGE_*) for CSD_RESIZE. */
+/* The header slot in buffer coordinates. The client paints the slot. The
+ * header bar leaves the slot out, except for its bottom hairline. The
+ * rectangle is empty without a slot. */
+struct rect csd_slot(const struct csd *c, int w, int h);
+/* The largest slot width of a window w logical pixels wide. */
+int csd_slot_max(const struct csd *c, int w);
+/* What lies at (x, y) of the buffer; edges (GUI_EDGE_*) for CSD_RESIZE.
+ * The header slot is CSD_CONTENT. */
 enum csd_zone csd_hit(const struct csd *c, int w, int h, int x, int y, int *edges);
 /* Regions in surface coordinates; the number of rectangles. */
 int csd_opaque_region(const struct csd *c, int w, int h, struct rect out[4]);

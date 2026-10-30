@@ -21,7 +21,7 @@ static char *const env[] = { "PATH=/bin", "HOME=/home", NULL };
 /* The panel geometry of user/panel/panel.h and imemenu.c. */
 #define MENU_W 220
 #define ROW_H 28
-#define MENU_PAD 6
+#define MENU_PAD 4                  /* PAINTER_MENU_INSET of the input method menu */
 
 static void tap(uint8_t code)
 {

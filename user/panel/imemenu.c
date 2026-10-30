@@ -12,7 +12,7 @@
 
 #define MENU_W 220
 #define ROW_H 28
-#define PAD 6
+#define PAD PAINTER_MENU_INSET
 #define MAX_METHODS 12
 
 static struct wire_proxy *control;
@@ -135,7 +135,7 @@ void imemenu_toggle(void)
         return;
     }
     int h = 2 * PAD + nmethods * ROW_H;
-    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme, PAD)) < 0) {
+    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme)) < 0) {
         teardown();
         return;
     }

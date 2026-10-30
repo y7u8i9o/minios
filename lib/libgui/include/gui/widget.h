@@ -305,10 +305,19 @@ struct window_state {
      * popup_nshape 0. */
     struct rect popup_shape[2];
     int popup_nshape, popup_radius;
+    /* The menu bar in the header slot of the client decorations
+     * (window_set_header), or NULL. The menu bar is a floating child of
+     * the window at negative y. */
+    struct widget *header;
 };
 struct window_state *window_state_of(struct widget *window);
 /* Send the cursor of the widget under the pointer to the server. */
 void window_update_cursor(struct widget *window);
+/* Show w, a child of the window, in the header slot of the client
+ * decorations instead of the layout of the window. The window paints w
+ * there and routes the pointer events of the slot to w. A window without
+ * client decorations, or with a header already, leaves w in its layout. */
+void window_set_header(struct widget *window, struct widget *w);
 /* Route a server message to the window (also used by the tests). */
 void window_message(struct widget *window, struct wmsg *m);
 /* Layout and paint what changed; returns the damaged rectangle. */
@@ -384,6 +393,10 @@ void textfield_select(struct widget *w, int anchor, int cursor);
 struct widget *listview_new(struct widget *parent);
 void listview_clear(struct widget *w);
 void listview_add(struct widget *w, const char *item);
+/* The form of a combo box popup: a rounded card whose highlight lies
+ * PAINTER_MENU_INSET pixels from every edge, concentric as in a menu
+ * (painter_menu_radius). */
+void listview_set_popup(struct widget *w);
 int listview_count(const struct widget *w);
 const char *listview_item(const struct widget *w, int index);
 struct widget *scrollbar_new(struct widget *parent, int vertical);
@@ -597,6 +610,9 @@ int table_column_width(const struct widget *w, int col);
 extern const struct widget_class menubar_class;
 extern const struct widget_class menu_class;
 extern const struct widget_class menuitem_class;   /* "clicked" (sig_click) */
+/* A menu bar created as a direct child of a window lies in the header bar
+ * of the client decorations (window_set_header). Without client
+ * decorations, and in other parents, the menu bar is a row of the layout. */
 struct widget *menubar_new(struct widget *parent);
 struct widget *menu_new(struct widget *menubar, const char *title);
 struct widget *menu_add(struct widget *menu, const char *text, const char *icon);

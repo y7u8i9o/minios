@@ -307,9 +307,11 @@ translated.
 A menu is a rounded card. Its corner radius is the radius of the row
 highlight plus the inset of the rows from the edges of the card
 (`painter_menu_radius`), so the corners of the card and of the highlight
-are concentric. The highlight lies 3 pixels from every edge of a column of
-a drop down (`MENU_INSET` in `menu.c`), so its radius is 9. The
-menus of the panel inset their rows by 6 pixels and have a radius of 12.
+are concentric. Every menu has the same inset, `PAINTER_MENU_INSET` of 4
+pixels, on every side: the drop downs of menu bars and context menus, the
+combo box lists (`listview_set_popup`) and the menus of the panel. The
+radius is therefore 10 everywhere. A first version had an inset of 3 in
+libgui and of 6 in the panel, which gave gaps of two widths.
 A drop down in a compositor popup gives the popup its shape with
 `window_popup_set_shape`: the surface becomes ARGB, `painter_round_alpha`
 makes it transparent outside the rounded columns with an antialiased
@@ -318,6 +320,24 @@ edge in the border colour, and the opaque region excludes the corners
 rounded columns over the window contents. The panel uses
 `canvas_create_rounded` for the same result on its own canvases. Until
 2026-10-30 the menus were square and their highlight rounded.
+
+A menu bar created as a direct child of a window lies in the header bar
+of the client side decorations since 2026-10-30. The window saves one
+row of its height. `menubar_new` calls `window_set_header`. The window
+then marks the menu bar as floating, so the box layout skips the menu
+bar. Each paint gives the header slot of the window the preferred width
+of the menu bar (`gui_window_set_header_slot`) and places the menu bar on
+the slot at a negative y. The paint of the window paints the menu bar
+first, into the surface of the slot (`gui_window_header_surface`). The
+paint of the tree finds an empty clip at the menu bar afterwards. Pointer
+events of the slot reach the menu bar through `window_widget_at`. The
+menu bar in the header bar has the background of the header bar in the
+active and the inactive state, the title colours as its text colours,
+and a pill as high as the window buttons under a hot or open title.
+`WM_HEADER` repaints the menu bar after a change of the state. The drop
+downs begin at the hairline of the header bar. A window without client
+side decorations, and a menu bar inside another container, show the menu
+bar as a row of the layout, as before.
 
 ## Canvases
 

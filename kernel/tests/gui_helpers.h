@@ -319,8 +319,9 @@ static inline void stop_server(struct proc *srv)
 }
 
 /* M22: the framework test client. Window 400x300 at (40,60): menu bar
- * 6..32, text field 38..64, check box 70..96, then a row with the
- * editor (x 12..242), a scroll bar (248..262) and a list (268..388). */
+ * in the header bar at -30..-1, text field 6..32, check box 38..64, then
+ * a row with the editor (x 12..242), a scroll bar (248..262) and a list
+ * (268..388). The drop down of the menu bar begins at -1. */
 static inline void ctrl_key(uint8_t code)
 {
     ps2kbd_feed_scancode(0x1d);
@@ -429,7 +430,7 @@ static inline void greeter_login_user(void)
  * aligned to its right edge. Row 0 is Lock, 1 Log out, 2 Restart and
  * 3 Shut down. */
 #define POWER_MENU_W 200
-#define POWER_MENU_H (2 * 6 + 4 * 28)
+#define POWER_MENU_H (2 * 4 + 4 * 28)            /* PAINTER_MENU_INSET above and below */
 enum { POWER_ROW_LOCK, POWER_ROW_LOGOUT, POWER_ROW_RESTART, POWER_ROW_SHUTDOWN };
 static inline void panel_power_choose(int sw, int sh, int row)
 {
@@ -438,6 +439,6 @@ static inline void panel_power_choose(int sw, int sh, int row)
     mouse_click(1);
     sleep_ms(600);
     int x0 = PANEL_POWER_X(sw) + PANEL_POWER_W - POWER_MENU_W, y0 = sh - PANEL_H + 4 - POWER_MENU_H;
-    mouse_move_to(&cx, &cy, x0 + 60, y0 + 6 + row * 28 + 14, 0);
+    mouse_move_to(&cx, &cy, x0 + 60, y0 + 4 + row * 28 + 14, 0);
     mouse_click(1);
 }

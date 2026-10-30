@@ -13,7 +13,7 @@
 
 enum wmsg_type {
     WM_KEY = 36, WM_MOUSE, WM_FOCUS, WM_CLOSE, WM_RESIZED, WM_TEXT, WM_PREEDIT, WM_TEXT_DELETE,
-    WM_DRAG_ENTER, WM_DRAG_MOTION, WM_DRAG_LEAVE, WM_DROP, WM_DRAG_END,
+    WM_DRAG_ENTER, WM_DRAG_MOTION, WM_DRAG_LEAVE, WM_DROP, WM_DRAG_END, WM_HEADER,
 };
 
 #define WMOUSE_MOVE  0
@@ -41,7 +41,9 @@ enum wmsg_type {
  * WM_DRAG_LEAVE: the drag left the window or was cancelled.
  * WM_DROP: the data of a drop is ready (gui_drop_data); a, b and c as
  * above. WM_DRAG_END goes to the window that started a drag: a = the
- * action performed, 0 when the drag was cancelled. */
+ * action performed, 0 when the drag was cancelled.
+ * WM_HEADER: the header bar of a window with a header slot changed its
+ * state (active, maximized). The window paints the slot again. */
 struct wmsg {
     uint32_t type;
     int32_t pid;
@@ -86,6 +88,19 @@ void gui_text_input_set_cursor(struct gui_window *window, int x, int y, int widt
  * (docs/design/cursors.md). The edges of client decorations show resize
  * cursors by themselves. */
 void gui_window_set_cursor(struct gui_window *window, const char *name);
+/* The header slot: an area at the left end of the header bar of the
+ * client decorations that the window paints itself, for example with its
+ * menu bar. Points in the slot are contents points. Their y coordinate is
+ * negative. width is the requested width in logical pixels, 0 removes the
+ * slot. The function reduces width to the room between the left end and
+ * the window buttons. It stores the slot in contents coordinates in slot
+ * and returns 0, or returns -1 when the window has no header bar. */
+int gui_window_set_header_slot(struct gui_window *window, int width, struct rect *slot);
+/* The device pixels of the header slot, with the scale of the window. The
+ * surface is empty while the window has no slot. */
+struct surface gui_window_header_surface(struct gui_window *window);
+/* 1 when the compositor shows the window as the active window. */
+int gui_window_active(const struct gui_window *window);
 /* While busy is 1, every window of the program shows "progress". */
 void gui_set_busy(int busy);
 /* A layer surface without decorations. layer is 0 for the background, 1
@@ -114,7 +129,8 @@ struct gui_window *gui_create_lock_window(void);
  * has no active lock. */
 int gui_unlock_session(struct gui_window *w);
 void gui_destroy_window(struct gui_window *w);
-/* Mark a rectangle (logical pixels) changed; it is committed with the next frame. */
+/* Mark a rectangle (logical pixels) changed; it is committed with the next
+ * frame. The rectangle can lie in the header slot. */
 void gui_damage(struct gui_window *w, int x, int y, int width, int height);
 /* Surface hints are committed atomically with the next buffer update. */
 void gui_set_opaque_region(struct gui_window *w, const struct rect *rects, int count);

@@ -252,7 +252,9 @@ labels gained `widget_set_icon`.
 popup that paints the items, tracks hover, activates on click or Enter
 (`clicked` on the item), moves between menus with Left and Right, and
 closes with Escape or an outside click. Up and Down skip separators and
-disabled items. Titles and items underline their mnemonic.
+disabled items. Titles and items underline their mnemonic. The menu bar
+of a window lies in the header bar of the client side decorations
+(`docs/design/widgets.md`, section Menus).
 
 ### Data views (`src/widgets/models.c`, `gui/model.h`)
 
