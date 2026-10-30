@@ -575,6 +575,10 @@ static void test_gui_widgets_text(void)
     press_down(2);
     press_ext_key(0x4d);
     ktest_wait_idle(200);
+    kprintf("gui_widgets_text: submenu shown\n");
+    char pause_arg[8];
+    if (cmdline_lookup("pause", pause_arg, sizeof pause_arg) && pause_arg[0] == '1')
+        sleep_ms(1500);                 /* a screendump of the menu */
     press_down(1);
     press_key(0x1c);
     int status = proc_reap(cl);
@@ -1395,7 +1399,9 @@ static void test_comp_panel(void)
     mouse_click(1);
     ktest_wait_idle(600);
     int mx = PANEL_POWER_X(sw) + PANEL_POWER_W - POWER_MENU_W, my = sh - PANEL_H + 4 - POWER_MENU_H;
-    ktest_assert(pixel(mx + 2, my + 2) == 0x00fafbfc, "power menu above its button: %08x", pixel(mx + 2, my + 2));
+    /* The menu has rounded corners (painter_menu_radius); the point 20 px
+     * from its left edge lies on the card below the top border. */
+    ktest_assert(pixel(mx + 20, my + 2) == 0x00fafbfc, "power menu above its button: %08x", pixel(mx + 20, my + 2));
     mouse_move_to(&cx, &cy, mx + 60, my + 6 + 28 + 14, 0);
     ktest_wait_idle(400);
     kprintf("comp_panel: power menu shown\n");

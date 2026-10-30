@@ -194,10 +194,12 @@ static void draw(void)
 {
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_card(&p, 0, 0, menu_w, menu_h, 0);
+    painter_card(&p, 0, 0, menu_w, menu_h, menu.radius);
 
-    /* The search field is drawn in the first row. */
-    int fx = MENU_PAD + 2, fy = MENU_PAD + 2, fw = menu_w - 2 * MENU_PAD - 4, fh = LAUNCHER_SEARCH_H - 8;
+    /* The search field is drawn in the first row. The field and the rows
+     * lie MENU_PAD from the edges, so their corners are concentric with
+     * the corners of the menu. */
+    int fx = MENU_PAD, fy = MENU_PAD, fw = menu_w - 2 * MENU_PAD, fh = LAUNCHER_SEARCH_H - 8;
     painter_field(&p, fx, fy, fw, fh, 0);
     const struct image *glass = panel_icon("search", menu_theme.color[TC_TEXT]);
     int tx = fx + 8;
@@ -226,7 +228,7 @@ static void draw(void)
         const struct entry *e = &entries[row->entry];
         if (e->section == SEC_LOGOUT)
             painter_fill(&p, MENU_PAD + 4, row->y - LAUNCHER_RULE_H / 2 - 1, menu_w - 2 * MENU_PAD - 8, 1, menu_theme.color[TC_BORDER]);
-        painter_menu_row(&p, row->x + 2, row->y, row->w - 4, row->h, r == selected ? PAINTER_HOVER : 0);
+        painter_menu_row(&p, row->x, row->y, row->w, row->h, r == selected ? PAINTER_HOVER : 0);
         int x = row->x + 8;
         if (e->icon)
             painter_image(&p, x, row->y + (row->h - image_lh(e->icon)) / 2, e->icon);
@@ -312,7 +314,8 @@ static void show(void)
     query[0] = '\0';
     layout_size();
     layout_rows();
-    if (!menu.surface && canvas_create(&menu, menu_w, menu_h) < 0)
+    if (!menu.surface &&
+        canvas_create_rounded(&menu, menu_w, menu_h, painter_menu_radius(&menu_theme, MENU_PAD)) < 0)
         return;
     struct wire_proxy *pos = shell_create_positioner(shell);
     positioner_set_size(pos, menu_w, menu_h);

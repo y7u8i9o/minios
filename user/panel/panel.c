@@ -95,8 +95,14 @@ static int canvas_alloc(struct canvas *c, int w, int h)
     c->lh = h;
     c->scale = scale;
     c->pool = shm_create_pool(shm, c->fd, (int32_t)size);
-    c->buffer = shm_pool_create_buffer(c->pool, 0, dw, dh, dw * 4, 1);
+    c->buffer = shm_pool_create_buffer(c->pool, 0, dw, dh, dw * 4, c->radius ? 2 : 1);
     surface_set_buffer_scale(c->surface, scale);
+    if (c->radius) {
+        struct rect region[3];
+        int n = gui_rounded_region((struct rect){ 0, 0, w, h }, c->radius, region);
+        struct wire_array a = { region, (size_t)n * sizeof *region };
+        surface_set_opaque_region(c->surface, &a);
+    }
     return 0;
 }
 
@@ -107,14 +113,26 @@ int canvas_resize(struct canvas *c, int w, int h)
 
 int canvas_create(struct canvas *c, int w, int h)
 {
+    return canvas_create_rounded(c, w, h, 0);
+}
+
+int canvas_create_rounded(struct canvas *c, int w, int h, int radius)
+{
     memset(c, 0, sizeof *c);
     c->fd = -1;
+    c->radius = radius;
     c->surface = compositor_create_surface(compositor);
     return canvas_alloc(c, w, h);
 }
 
 void canvas_commit(struct canvas *c)
 {
+    if (c->radius) {
+        struct painter p;
+        canvas_painter(&p, c);
+        struct rect shape = { 0, 0, c->lw, c->lh };
+        painter_round_alpha(&p, &shape, 1, c->radius, p.theme->color[TC_BORDER]);
+    }
     surface_attach(c->surface, c->buffer, 0, 0);
     surface_damage(c->surface, 0, 0, c->lw, c->lh);
     surface_commit(c->surface);

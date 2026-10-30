@@ -11,6 +11,13 @@ static int menu_pad(const struct widget *w)
     return theme_scale_px(widget_theme(w), 10);
 }
 
+/* The highlight of a row lies MENU_INSET logical pixels from every edge of
+ * its column: 1 pixel of border, 1 of space above the first item and 1
+ * inside the item. The column is rounded with painter_menu_radius of this
+ * inset, so the corners of the column and of the highlight are
+ * concentric. */
+#define MENU_INSET 3
+
 /* ---- items and menus ---- */
 
 /* accel_label writes the name of the accelerator of an item, such as
@@ -106,7 +113,7 @@ static struct widget *item_n(struct widget *menu, int n)
 /* Measures the items of a column and its size. */
 static void measure_column(struct dropdown *d, struct column *c)
 {
-    int mw = 80, mh = 2, n = 0;
+    int mw = 80, mh = 2 * (MENU_INSET - 1), n = 0;
     free(c->accel_w);
     c->accel_w = calloc((size_t)(count_items(c->menu) + 1), sizeof *c->accel_w);
     for (struct widget *it = c->menu->first; it; it = it->next, n++) {
@@ -140,7 +147,7 @@ static void dropdown_measure(struct widget *w, struct size_hint *h)
 /* The top of item n of a column, inside the column. */
 static int item_top(struct column *c, int n)
 {
-    int y = 1;
+    int y = MENU_INSET - 1;
     for (struct widget *it = c->menu->first; it && n-- > 0; it = it->next)
         y += it->measured.pref_h;
     return y;
@@ -151,9 +158,9 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
     const struct theme *t = p->theme;
     struct widget *w = &d->w;
     painter_push(p, c->x, c->y, c->w, c->h);
-    painter_fill(p, 0, 0, c->w, c->h, t->color[TC_FIELD]);
-    painter_frame(p, 0, 0, c->w, c->h, t->color[TC_BORDER]);
-    int y = 1, i = 0, mark = theme_px(t, TM_ICON);
+    painter_round_rect(p, 0, 0, c->w, c->h, painter_menu_radius(t, MENU_INSET), t->color[TC_FIELD],
+                       t->color[TC_BORDER]);
+    int y = MENU_INSET - 1, i = 0, mark = theme_px(t, TM_ICON);
     for (struct widget *it = c->menu->first; it; it = it->next, i++) {
         struct menuitem *mi = (struct menuitem *)it;
         int ih = it->measured.pref_h;
@@ -163,7 +170,8 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
             y += ih;
             continue;
         }
-        painter_menu_row(p, 3, y + 1, c->w - 6, ih - 2, i == c->hover && it->enabled ? PAINTER_HOVER : 0);
+        painter_menu_row(p, MENU_INSET, y + 1, c->w - 2 * MENU_INSET, ih - 2,
+                         i == c->hover && it->enabled ? PAINTER_HOVER : 0);
         int x = menu_pad(w);
         if (mi->kind == ITEM_CHECK && mi->checked)
             painter_check(p, 4, y + (ih - mark) / 2, mark, fg);
@@ -186,10 +194,11 @@ static void paint_column(struct dropdown *d, struct painter *p, struct column *c
     painter_pop(p);
 }
 
+/* The columns cover the drop down. Outside them a compositor popup is
+ * transparent, and a popup inside the window shows the window. */
 static void dropdown_paint(struct widget *w, struct painter *p)
 {
     struct dropdown *d = (struct dropdown *)w;
-    painter_fill(p, 0, 0, w->w, w->h, p->theme->color[TC_WINDOW]);
     for (int i = 0; i < d->ncols; i++)
         paint_column(d, p, &d->col[i]);
 }
@@ -200,7 +209,7 @@ static int item_at(struct column *c, int px, int py)
 {
     if (px < c->x || px >= c->x + c->w)
         return -1;
-    int y = c->y + 1, i = 0;
+    int y = c->y + MENU_INSET - 1, i = 0;
     for (struct widget *it = c->menu->first; it; it = it->next, i++) {
         if (py >= y && py < y + it->measured.pref_h)
             return it->value == 1 ? -1 : i;
@@ -247,6 +256,10 @@ static void dropdown_show(struct dropdown *d, int x, int y)
     struct size_hint h = { 0 };
     dropdown_measure(&d->w, &h);
     window_popup_open(d->w.window, &d->w, x, y, h.pref_w, h.pref_h);
+    struct rect shape[2];
+    for (int i = 0; i < d->ncols; i++)
+        shape[i] = (struct rect){ d->col[i].x, d->col[i].y, d->col[i].w, d->col[i].h };
+    window_popup_set_shape(d->w.window, shape, d->ncols, painter_menu_radius(widget_theme(&d->w), MENU_INSET));
     widget_focus(&d->w);
 }
 

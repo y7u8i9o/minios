@@ -86,7 +86,7 @@ static void draw_menu(void)
 {
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_card(&p, 0, 0, menu.lw, menu.lh, 0);
+    painter_card(&p, 0, 0, menu.lw, menu.lh, menu.radius);
     for (int i = 0; i < nmethods; i++) {
         int y = PAD + i * ROW_H;
         int mine = strcmp(names[i], current) == 0;
@@ -135,7 +135,7 @@ void imemenu_toggle(void)
         return;
     }
     int h = 2 * PAD + nmethods * ROW_H;
-    if (canvas_create(&menu, MENU_W, h) < 0) {
+    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme, PAD)) < 0) {
         teardown();
         return;
     }

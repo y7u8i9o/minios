@@ -173,6 +173,18 @@ int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int
     return e;
 }
 
+int gui_rounded_region(struct rect r, int radius, struct rect out[3])
+{
+    if (radius <= 0 || 2 * radius > r.w || 2 * radius > r.h) {
+        out[0] = r;
+        return 1;
+    }
+    out[0] = (struct rect){ r.x, r.y + radius, r.w, r.h - 2 * radius };
+    out[1] = (struct rect){ r.x + radius, r.y, r.w - 2 * radius, radius };
+    out[2] = (struct rect){ r.x + radius, r.y + r.h - radius, r.w - 2 * radius, radius };
+    return 3;
+}
+
 const char *gui_resize_cursor(int edges)
 {
     int vertical = edges & (GUI_EDGE_TOP | GUI_EDGE_BOTTOM), horizontal = edges & (GUI_EDGE_LEFT | GUI_EDGE_RIGHT);

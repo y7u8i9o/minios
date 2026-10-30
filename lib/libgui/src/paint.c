@@ -481,6 +481,33 @@ void painter_meter(struct painter *p, int x, int y, int w, int h, int from, int 
         painter_rounded(p, x + from, y, len, h, color, PAINTER_NONE);
 }
 
+int painter_menu_radius(const struct theme *t, int inset)
+{
+    return theme_px(t, TM_RADIUS) + inset;
+}
+
+void painter_round_alpha(struct painter *p, const struct rect *r, int n, int radius, uint32_t edge)
+{
+    int s = p->scale, R = radius * s;
+    const uint8_t *table = pixel_corner_table(R);
+    struct surface *sf = p->s;
+    for (int y = 0; y < sf->height; y++) {
+        uint32_t *row = sf->pixels + (size_t)y * sf->stride;
+        for (int x = 0; x < sf->width; x++) {
+            uint32_t a = 0;
+            for (int i = 0; i < n && a < 255; i++) {
+                uint32_t c = pixel_round_rect_coverage(table, R, r[i].x * s, r[i].y * s, r[i].w * s, r[i].h * s,
+                                                       PIXEL_CORNER_TL | PIXEL_CORNER_TR | PIXEL_CORNER_BL |
+                                                           PIXEL_CORNER_BR,
+                                                       x, y);
+                if (c > a)
+                    a = c;
+            }
+            row[x] = a == 255 ? row[x] | 0xff000000u : a << 24 | (edge & 0x00ffffffu);
+        }
+    }
+}
+
 void painter_menu_row(struct painter *p, int x, int y, int w, int h, int state)
 {
     if (state & (PAINTER_HOVER | PAINTER_CHECKED))

@@ -300,6 +300,11 @@ struct window_state {
      * shows its focus mark only while focus_visible is 1
      * (widget_focus_visible). */
     int focus_visible;
+    /* The rounded shape of the popup (window_popup_set_shape): up to two
+     * rectangles in popup coordinates and their corner radius, none for
+     * popup_nshape 0. */
+    struct rect popup_shape[2];
+    int popup_nshape, popup_radius;
 };
 struct window_state *window_state_of(struct widget *window);
 /* Send the cursor of the widget under the pointer to the server. */
@@ -316,6 +321,13 @@ void window_relayout_all(struct widget *window);
  * destroyed by window_popup_close, by a click outside it or by Escape. */
 void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height);
 void window_popup_close(struct widget *window);
+/* Give the open popup a rounded shape: the union of the n (at most 2)
+ * rectangles r in popup coordinates with corners of radius. A compositor
+ * popup becomes an ARGB surface that is transparent outside the shape
+ * (painter_round_alpha), with the shape without its corners as its opaque
+ * region. A popup drawn inside the window paints its rounded shape over
+ * the contents of the window and needs nothing more. */
+void window_popup_set_shape(struct widget *window, const struct rect *r, int n, int radius);
 int window_owns_id(struct widget *window, int id);
 /* Give the window ARGB buffers without an opaque region
  * (gui_set_translucent). A card then sets the opaque region. */

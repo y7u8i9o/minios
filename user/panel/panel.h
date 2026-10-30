@@ -50,6 +50,7 @@ struct canvas {
     struct surface s;
     int fd;
     int lw, lh, scale;
+    int radius;                 /* rounded corners of an ARGB canvas (canvas_create_rounded), 0 for none */
 };
 
 extern struct wire_display *display;
@@ -63,6 +64,11 @@ extern int screen_w, screen_h, output_scale;
 extern uint32_t press_serial;
 
 int canvas_create(struct canvas *c, int w, int h);
+/* A canvas with corners rounded by radius: an ARGB buffer whose opaque
+ * region excludes the corners. canvas_commit makes the corners
+ * transparent (painter_round_alpha). The menus pass painter_menu_radius
+ * of the inset of their rows. */
+int canvas_create_rounded(struct canvas *c, int w, int h, int radius);
 /* Give the surface of c a new buffer of w by h logical pixels. The surface
  * retains its role. */
 int canvas_resize(struct canvas *c, int w, int h);

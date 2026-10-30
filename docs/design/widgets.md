@@ -304,6 +304,21 @@ menu with no item that can be chosen leaves the highlight unchanged. The
 names of the accelerator keys (`Ctrl+`, `Alt+`, `Shift+`, `Del`) are
 translated.
 
+A menu is a rounded card. Its corner radius is the radius of the row
+highlight plus the inset of the rows from the edges of the card
+(`painter_menu_radius`), so the corners of the card and of the highlight
+are concentric. The highlight lies 3 pixels from every edge of a column of
+a drop down (`MENU_INSET` in `menu.c`), so its radius is 9. The
+menus of the panel inset their rows by 6 pixels and have a radius of 12.
+A drop down in a compositor popup gives the popup its shape with
+`window_popup_set_shape`: the surface becomes ARGB, `painter_round_alpha`
+makes it transparent outside the rounded columns with an antialiased
+edge in the border colour, and the opaque region excludes the corners
+(`gui_rounded_region`). A drop down drawn inside its window paints the
+rounded columns over the window contents. The panel uses
+`canvas_create_rounded` for the same result on its own canvases. Until
+2026-10-30 the menus were square and their highlight rounded.
+
 ## Canvases
 
 A canvas is not focusable by default. A click on a canvas therefore

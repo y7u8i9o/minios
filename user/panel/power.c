@@ -58,7 +58,7 @@ static void draw_menu(void)
     const char *titles[NROWS] = { _("Lock"), _("Log out"), _("Restart"), _("Shut down") };
     struct painter p;
     canvas_painter(&p, &menu);
-    painter_card(&p, 0, 0, menu.lw, menu.lh, 0);
+    painter_card(&p, 0, 0, menu.lw, menu.lh, menu.radius);
     for (int i = 0; i < NROWS; i++) {
         int y = PAD + i * ROW_H;
         painter_menu_row(&p, PAD, y, menu.lw - 2 * PAD, ROW_H, i == hover_row ? PAINTER_HOVER : 0);
@@ -117,7 +117,7 @@ void power_toggle(void)
         return;
     }
     int h = 2 * PAD + NROWS * ROW_H;
-    if (canvas_create(&menu, MENU_W, h) < 0) {
+    if (canvas_create_rounded(&menu, MENU_W, h, painter_menu_radius(&menu_theme, PAD)) < 0) {
         teardown();
         return;
     }

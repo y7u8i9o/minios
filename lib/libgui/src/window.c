@@ -221,6 +221,9 @@ struct rect window_paint(struct widget *window)
         /* The popup is painted whole, and its damage is the surface. */
         struct rect_set prects = { 0 };
         paint_tree(ws->popup, &pp, 1, &prects, NULL);
+        if (ws->popup_nshape)
+            painter_round_alpha(&pp, ws->popup_shape, ws->popup_nshape, ws->popup_radius,
+                                app_theme(window->app)->color[TC_BORDER]);
         if (ws->popup->w > 0 && ws->popup->h > 0) {
             gui_damage(ws->popup_win, 0, 0, ws->popup->w, ws->popup->h);
             gui_count(GUI_COUNT_PAINTED_PIXELS, (uint64_t)pp.s->width * pp.s->height);
@@ -239,6 +242,7 @@ static void popup_open(struct widget *window, struct widget *w, int x, int y, in
 {
     window_popup_close(window);
     struct window_state *ws = window_state_of(window);
+    ws->popup_nshape = 0;
     w->floating = 1;
     if (w->parent != window)
         widget_add(window, w);
@@ -261,6 +265,25 @@ static void popup_open(struct widget *window, struct widget *w, int x, int y, in
 void window_popup_open(struct widget *window, struct widget *w, int x, int y, int width, int height)
 {
     popup_open(window, w, x, y, width, height, 1);
+}
+
+void window_popup_set_shape(struct widget *window, const struct rect *r, int n, int radius)
+{
+    struct window_state *ws = window_state_of(window);
+    if (!ws->popup || n < 1 || n > 2)
+        return;
+    memcpy(ws->popup_shape, r, (size_t)n * sizeof *r);
+    ws->popup_nshape = n;
+    ws->popup_radius = radius;
+    if (!ws->popup_win)
+        return;
+    gui_set_translucent(ws->popup_win);
+    struct rect region[6];
+    int count = 0;
+    for (int i = 0; i < n; i++)
+        count += gui_rounded_region(r[i], radius, region + count);
+    gui_set_opaque_region(ws->popup_win, region, count);
+    widget_invalidate(ws->popup);
 }
 
 void window_popup_close(struct widget *window)

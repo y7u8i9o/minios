@@ -123,21 +123,15 @@ static void card_paint(struct widget *w, struct painter *p)
     struct window_state *ws = w->window ? window_state_of(w->window) : NULL;
     if (!ws || !ws->translucent || !ws->win)
         return;
-    /* The opaque region is the card without its rounded corners: a band
-     * of the full width and two narrower bands above and below it. */
+    /* The opaque region is the card without its rounded corners. */
     struct card *c = (struct card *)w;
-    int x, y, r = theme_px(t, TM_RADIUS);
+    int x, y;
     widget_abs(w, &x, &y);
-    if (2 * r > w->w || 2 * r > w->h)
-        r = 0;
-    struct rect region[3] = {
-        { x, y + r, w->w, w->h - 2 * r },
-        { x + r, y, w->w - 2 * r, r },
-        { x + r, y + w->h - r, w->w - 2 * r, r },
-    };
+    struct rect region[3] = { { 0 } };
+    int n = gui_rounded_region((struct rect){ x, y, w->w, w->h }, theme_px(t, TM_RADIUS), region);
     if (memcmp(region, c->shown, sizeof region) != 0) {
         memcpy(c->shown, region, sizeof region);
-        gui_set_opaque_region(ws->win, region, r ? 3 : 1);
+        gui_set_opaque_region(ws->win, region, n);
     }
 }
 

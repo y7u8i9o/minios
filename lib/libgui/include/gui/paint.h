@@ -92,6 +92,16 @@ void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, ui
  * disabled text. Small controls mark their focus with the hover grey
  * instead (widget_focus_visible). */
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
+/* The corner radius of a menu whose rows (painter_menu_row) lie inset
+ * logical pixels from its edges: the radius of the rows plus the inset,
+ * so that the corners of the rows and of the menu are concentric. */
+int painter_menu_radius(const struct theme *t, int inset);
+/* Make the surface of p transparent outside the union of the n rectangles
+ * r, whose corners are rounded by radius: every device pixel receives the
+ * coverage of the shape as its alpha, and a pixel on the antialiased edge
+ * receives the colour edge. A popup of an ARGB surface paints its rounded
+ * card and then calls the function. */
+void painter_round_alpha(struct painter *p, const struct rect *r, int n, int radius, uint32_t edge);
 
 /* The controls of libgui and of the panel. The colours come from the
  * theme of the painter. state combines the following bits. */

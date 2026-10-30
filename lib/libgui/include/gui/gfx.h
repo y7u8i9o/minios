@@ -155,6 +155,11 @@ int gui_resize_edges(struct rect f, const struct gui_resize_zones *z, int x, int
  * "ns-resize", "ew-resize", "nwse-resize" or "nesw-resize", NULL for 0
  * (docs/design/cursors.md). */
 const char *gui_resize_cursor(int edges);
+/* The opaque region of the rectangle r with corners rounded by radius:
+ * a band of the full width and two narrower bands above and below it,
+ * without the corner squares. Returns 3, or 1 for a radius that does not
+ * fit. */
+int gui_rounded_region(struct rect r, int radius, struct rect out[3]);
 /* gui_resize_region stores the area of the frame with its resize zones in
  * out: the frame grown by margin and the four corner squares.  The result
  * is the number of rectangles, 5. */
