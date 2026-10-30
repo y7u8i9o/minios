@@ -228,8 +228,9 @@ static void color_button_paint(struct widget *w, struct painter *p)
     struct color_button *b = (struct color_button *)w;
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
-    painter_rounded(p, 0, 0, w->w, w->h, t->color[w->pressed ? TC_BUTTON_PRESSED : TC_BUTTON],
-                    t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_rounded(p, 0, 0, w->w, w->h,
+                    t->color[w->pressed ? TC_BUTTON_PRESSED : widget_focus_visible(w) ? TC_BUTTON_HOVER : TC_BUTTON],
+                    t->color[TC_BORDER]);
     int th = painter_text_height(p), sw = w->h - 8;
     painter_fill(p, 4, 4, sw, w->h - 8, b->color);
     painter_frame(p, 4, 4, sw, w->h - 8, t->color[TC_BORDER]);

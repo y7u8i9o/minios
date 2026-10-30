@@ -210,7 +210,7 @@ static void view_paint(struct widget *w, struct painter *p)
     int sbw = v->nflat > rows ? theme_px(t, TM_SCROLLBAR) : 0;
     int top = header_h(v);
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
-    painter_frame(p, 0, 0, w->w, w->h, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_frame(p, 0, 0, w->w, w->h, t->color[widget_focus_visible(w) ? TC_TEXT_DISABLED : TC_BORDER]);
     char buf[256];
     if (v->header) {
         painter_push(p, 1, 1, w->w - 2 - sbw, header_h(v));

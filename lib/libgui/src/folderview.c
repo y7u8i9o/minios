@@ -1160,7 +1160,7 @@ static void sidebar_paint(struct widget *w, struct painter *p)
                      t->color[current ? TC_SELECTION_TEXT : TC_TEXT]);
         painter_pop(p);
     }
-    if (w->focused)
+    if (widget_focus_visible(w))
         painter_focus_ring(p, 1, 1, w->w - 2, w->h - 2);
 }
 

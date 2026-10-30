@@ -155,7 +155,7 @@ struct widget *label_new(struct widget *parent, const char *text)
 static void button_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
-    painter_button(p, 0, 0, w->w, w->h, widget_paint_state(w));
+    painter_button(p, 0, 0, w->w, w->h, widget_paint_state(w) | (widget_focus_visible(w) ? PAINTER_HOVER : 0));
     char buf[256];
     painter_mnemonic_strip(widget_text(w), buf, sizeof buf);
     int tw = buf[0] ? painter_text_width(p, buf, -1) : 0;
@@ -168,8 +168,6 @@ static void button_paint(struct widget *w, struct painter *p)
     if (buf[0])
         painter_mnemonic_text(p, x, (w->h - painter_text_height(p)) / 2, widget_text(w),
                               t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
-    if (w->focused)
-        painter_focus_ring(p, 2, 2, w->w - 4, w->h - 4);
 }
 
 static int button_event(struct widget *w, struct event *e)
@@ -239,6 +237,8 @@ static void check_paint(struct widget *w, struct painter *p)
     uint32_t fill = !w->enabled ? t->color[TC_TRACK] : w->value ? t->color[TC_ACCENT] : t->color[TC_FIELD];
     uint32_t border = !w->enabled ? t->color[TC_BORDER] : w->value || w->hover ? t->color[TC_ACCENT] : t->color[TC_BORDER];
     uint32_t mark = w->enabled ? t->color[TC_SELECTION_TEXT] : t->color[TC_TEXT_DISABLED];
+    if (widget_focus_visible(w))
+        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], PAINTER_NONE);
     if (radio) {
         painter_disc(p, 0, by, box, border);
         painter_disc(p, 1, by + 1, box - 2, fill);
@@ -253,8 +253,6 @@ static void check_paint(struct widget *w, struct painter *p)
     }
     painter_mnemonic_text(p, box + 6, (w->h - painter_text_height(p)) / 2, widget_text(w),
                           t->color[w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
-    if (w->focused)
-        painter_focus_ring(p, 0, 0, w->w, w->h);
 }
 
 static void toggle(struct widget *w)

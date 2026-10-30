@@ -91,7 +91,7 @@ shape code of its own.
 | `painter_stroke` | polyline with the coverage of the distance from the line |
 | `painter_check`, `painter_chevron` | check mark and chevron on `painter_stroke` |
 | `painter_fill_alpha` | translucent fill |
-| `painter_focus_ring` | rounded ring in the accent colour |
+| `painter_focus_ring` | rounded hairline in the darker grey `TC_TEXT_DISABLED`, the focus mark of large areas |
 
 The shapes are drawn in device pixels, so that edges at scale 2 are
 sharp. `screenshot` draws its discs and rounded rectangles with these
@@ -235,6 +235,30 @@ widget.
 `switch_new` creates an on and off switch. A click, Space or Enter
 toggles the value and emits `toggled`. `lib/libgui/tests/test_functions.c`
 checks the state colours of `painter_button` and of the switch.
+
+## Focus mark
+
+A widget shows its keyboard focus only after keyboard input, as GNOME and
+browsers do (`widget_focus_visible`). The window state has the flag
+`focus_visible`. A key press sets the flag, except a key typed into a
+widget that accepts text, and Tab sets the flag in every case. A button
+press clears the flag. A change of the flag repaints the focused widget.
+
+The mark is no ring. Small controls show the hover grey `TC_BUTTON_HOVER`:
+buttons, check boxes and radio buttons, sliders, colour buttons and the
+current title of a tab bar. Large areas draw their hairline border in the
+darker grey `TC_TEXT_DISABLED` instead of `TC_BORDER`: list views, tree
+views and tables, folder views and scroll bars (`painter_focus_ring`).
+Text fields, spinners, combo boxes and the editor retain their border in
+the accent colour while focused, because the caret belongs to the focus.
+An account entry of the greeter shows its focus with the selection fill
+alone.
+
+Until 2026-10-30 every focused control drew a ring in the accent blue,
+also after a click. The ring around the current title of a tab bar
+repeated the selection that the blue underline already shows. The host
+check `test_focus_mark` clicks a tab bar, checks that no mark appears,
+presses keys, and checks the hover grey behind the current title.
 
 ## Mnemonics
 

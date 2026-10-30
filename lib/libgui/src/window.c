@@ -455,12 +455,26 @@ void window_update_cursor(struct widget *window)
     gui_window_set_cursor(gw, name);
 }
 
+/* The focus mark appears after keyboard input and disappears at a button
+ * press, so a click on a control marks the control by its state alone. */
+static void set_focus_visible(struct widget *window, int visible)
+{
+    struct window_state *ws = window_state_of(window);
+    if (ws->focus_visible == visible)
+        return;
+    ws->focus_visible = visible;
+    if (ws->focus)
+        widget_invalidate(ws->focus);
+}
+
 static void mouse_message(struct widget *window, struct wmsg *m)
 {
     struct window_state *ws = window_state_of(window);
     int from_popup = ws->popup_win && m->window == ws->popup_win->id;
-    if (m->d == WMOUSE_DOWN)
+    if (m->d == WMOUSE_DOWN) {
         caret_input(window);
+        set_focus_visible(window, 0);
+    }
     struct widget *root = from_popup ? ws->popup : window;
     struct widget *target = ws->capture ? ws->capture : widget_at(root, m->a, m->b);
     if (ws->tip && target == ws->tip)
@@ -715,6 +729,10 @@ static void key_message(struct widget *window, struct wmsg *m)
         window_popup_close(window);
         return;
     }
+    /* Typing into a text widget does not mark the focus; Tab and every
+     * key of another widget do. */
+    if (m->b && (m->a == KEY_TAB || !(ws->focus && ws->focus->accepts_text)))
+        set_focus_visible(window, 1);
     struct widget *target = ws->focus ? ws->focus : window;
     if (ws->popup && !inside(ws->popup, target))
         target = ws->popup;

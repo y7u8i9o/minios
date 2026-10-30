@@ -88,6 +88,9 @@ int painter_text_index_font(const struct painter *p, const struct font *f, const
 int painter_mnemonic_strip(const char *text, char *buf, int size);
 void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, uint32_t color);
 /* A rounded ring in the accent colour around a focused control. */
+/* The focus mark of a large area: a hairline border in the darker grey of
+ * disabled text. Small controls mark their focus with the hover grey
+ * instead (widget_focus_visible). */
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h);
 
 /* The controls of libgui and of the panel. The colours come from the

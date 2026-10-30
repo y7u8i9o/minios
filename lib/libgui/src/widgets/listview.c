@@ -57,7 +57,7 @@ static void listview_paint(struct widget *w, struct painter *p)
     int bar = l->nitems > rows;
     int sbw = bar ? theme_px(t, TM_SCROLLBAR) : 0;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_FIELD]);
-    painter_frame(p, 0, 0, w->w, w->h, t->color[w->focused ? TC_ACCENT : TC_BORDER]);
+    painter_frame(p, 0, 0, w->w, w->h, t->color[widget_focus_visible(w) ? TC_TEXT_DISABLED : TC_BORDER]);
     painter_push(p, 1, 1, w->w - 2 - sbw, w->h - 2);
     /* Only the rows inside the clip, for a partial paint. */
     struct rect clip = painter_clip_local(p);

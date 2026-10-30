@@ -199,8 +199,6 @@ static void account_paint(struct widget *w, struct painter *p)
     int tx = pad + size + theme_scale_px(t, 12), ty = (w->h - 2 * fh - gap) / 2;
     painter_text(p, tx, ty, a->full_name, text);
     painter_text(p, tx, ty + fh + gap, a->name, dim);
-    if (w->focused)
-        painter_focus_ring(p, 0, 0, w->w, w->h);
 }
 
 /* The next focusable account row after w, or before w for dir -1. */

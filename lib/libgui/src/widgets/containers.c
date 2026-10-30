@@ -94,17 +94,14 @@ static void tabs_paint(struct widget *w, struct painter *p)
         int tw;
         int x = tab_x(w, i, &tw);
         int current = i == w->value, hot = i == ((struct tabs *)w)->hot && w->enabled;
-        if (hot && !current)
+        /* A hovered title, and the current title while the bar shows the
+         * keyboard focus, get the hover grey. */
+        if ((hot && !current) || (current && widget_focus_visible(w)))
             painter_rounded(p, x + 2, 2, tw - 4, hh - 6, t->color[TC_BUTTON_HOVER], PAINTER_NONE);
         if (current)
             painter_fill(p, x, hh - 3, tw, 3, t->color[w->enabled ? TC_ACCENT : TC_BORDER]);
         painter_text(p, x + tab_pad(w), (hh - 3 - painter_text_height(p)) / 2, widget_text(c),
                      t->color[(current || hot) && w->enabled ? TC_TEXT : TC_TEXT_DISABLED]);
-    }
-    if (w->focused) {
-        int tw;
-        int x = tab_x(w, w->value, &tw);
-        painter_focus_ring(p, x + 2, 2, tw - 4, hh - 5);
     }
 }
 

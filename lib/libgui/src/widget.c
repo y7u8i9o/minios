@@ -224,6 +224,11 @@ void widget_set_padding(struct widget *w, int padding)
     widget_relayout(w);
 }
 
+int widget_focus_visible(const struct widget *w)
+{
+    return w->focused && w->window && window_state_of(w->window)->focus_visible;
+}
+
 void widget_set_cursor(struct widget *w, const char *name)
 {
     w->cursor = name;

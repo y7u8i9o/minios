@@ -427,7 +427,8 @@ void painter_mnemonic_text(struct painter *p, int x, int y, const char *text, ui
 
 void painter_focus_ring(struct painter *p, int x, int y, int w, int h)
 {
-    painter_round_rect(p, x, y, w, h, theme_px(p->theme, TM_RADIUS) - 1, PAINTER_NONE, p->theme->color[TC_ACCENT]);
+    painter_round_rect(p, x, y, w, h, theme_px(p->theme, TM_RADIUS) - 1, PAINTER_NONE,
+                       p->theme->color[TC_TEXT_DISABLED]);
 }
 
 /* ---- controls ---- */

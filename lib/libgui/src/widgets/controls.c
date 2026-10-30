@@ -431,12 +431,12 @@ static void slider_paint(struct widget *w, struct painter *p)
 {
     const struct theme *t = p->theme;
     painter_fill(p, 0, 0, w->w, w->h, t->color[TC_WINDOW]);
+    if (widget_focus_visible(w))
+        painter_rounded(p, 0, 0, w->w, w->h, t->color[TC_BUTTON_HOVER], PAINTER_NONE);
     /* The track runs between the centres of the thumb at both ends. */
     int tw = thumb_w(w), track = theme_scale_px(t, 4);
     painter_slider(p, tw / 2, (w->h - track) / 2, w->w - tw, track, slider_thumb_x(w), tw, theme_scale_px(t, 16),
                    widget_paint_state(w));
-    if (w->focused)
-        painter_focus_ring(p, 0, 0, w->w, w->h);
 }
 
 static void slider_set_from_x(struct widget *w, int x)

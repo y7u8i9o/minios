@@ -128,7 +128,7 @@ static void scrollbar_paint(struct widget *w, struct painter *p)
 {
     struct scrollbar *s = (struct scrollbar *)w;
     scrollbar_paint_track(p, 0, 0, w->w, w->h, w->value, w->max, s->page, s->vertical);
-    if (w->focused)
+    if (widget_focus_visible(w))
         painter_focus_ring(p, 0, 0, w->w, w->h);
 }
 

@@ -342,6 +342,38 @@ static void test_cursors(struct app *a)
     app_step(a, 0);
 }
 
+/* The focus mark (widget_focus_visible): a click on the tab bar gives it
+ * the keyboard focus without a mark, so the current title shows only its
+ * underline over the window grey. A key shows the mark: the hover grey
+ * behind the current title. The next click hides the mark again. */
+static void test_focus_mark(struct app *a)
+{
+    struct widget *win = app_window(a, 300, 160, "focus");
+    struct widget *tabs = tabs_new(win);
+    widget_set_stretch(tabs, 1, 1);
+    tabs_add(tabs, "First");
+    tabs_add(tabs, "Second");
+    window_paint(win);
+    int tx, ty;
+    widget_abs(tabs, &tx, &ty);
+    const struct theme *t = widget_theme(win);
+    click(win, tx + 6, ty + 6);
+    window_paint(win);
+    CHECK(tabs->focused && !widget_focus_visible(tabs), "a click focuses the tab bar without the mark");
+    CHECK(window_pixel(win, tx + 4, ty + 4) == t->color[TC_WINDOW], "no mark behind the title after a click: %08x",
+          window_pixel(win, tx + 4, ty + 4));
+    press_key(win, KEY_RIGHT, 0, 0);
+    press_key(win, KEY_LEFT, 0, 0);     /* back to the first title */
+    window_paint(win);
+    CHECK(widget_focus_visible(tabs) && tabs->value == 0, "a key shows the mark");
+    CHECK(window_pixel(win, tx + 4, ty + 4) == t->color[TC_BUTTON_HOVER], "hover grey behind the title after a key: %08x",
+          window_pixel(win, tx + 4, ty + 4));
+    click(win, tx + 6, ty + 6);
+    CHECK(!widget_focus_visible(tabs), "the next click hides the mark");
+    window_close(win);
+    app_step(a, 0);
+}
+
 void run_function_tests(void)
 {
     struct app *a = app_create_detached();
@@ -354,5 +386,6 @@ void run_function_tests(void)
     test_screen(a);
     test_controls_paint(a);
     test_cursors(a);
+    test_focus_mark(a);
     app_destroy(a);
 }

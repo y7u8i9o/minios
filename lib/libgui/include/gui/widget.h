@@ -177,6 +177,11 @@ void widget_set_cursor(struct widget *w, const char *name);
  * cursor field, "text" for a widget that accepts text, in that order, then
  * the same for the parent. A disabled widget shows "default". */
 const char *widget_cursor_at(struct widget *w, int x, int y);
+/* 1 when w has the keyboard focus and the window shows it: after keyboard
+ * input, not after a button press. A small control then shows the light
+ * grey of a hovered control, and a large area a darker hairline border
+ * (painter_focus_ring). */
+int widget_focus_visible(const struct widget *w);
 void widget_set_icon(struct widget *w, const struct image *icon);
 
 /* ---- signals ---- */
@@ -291,6 +296,10 @@ struct window_state {
     /* The last pointer position in the window, or in the popup when
      * mouse_popup is 1, for the cursor. */
     int mouse_x, mouse_y, mouse_popup;
+    /* 1 after keyboard input, 0 after a button press: the focused widget
+     * shows its focus mark only while focus_visible is 1
+     * (widget_focus_visible). */
+    int focus_visible;
 };
 struct window_state *window_state_of(struct widget *window);
 /* Send the cursor of the widget under the pointer to the server. */
